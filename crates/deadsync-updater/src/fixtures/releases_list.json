@@ -1,0 +1,128 @@
+[
+  {
+    "tag_name": "v0.3.875",
+    "html_url": "https://github.com/pnn64/deadsync/releases/tag/v0.3.875",
+    "body": "Latest stable.",
+    "published_at": "2026-05-10T12:00:00Z",
+    "draft": false,
+    "prerelease": false,
+    "assets": [
+      {"name": "deadsync-v0.3.875-x86_64-windows.zip", "browser_download_url": "https://github.com/pnn64/deadsync/releases/download/v0.3.875/deadsync-v0.3.875-x86_64-windows.zip", "size": 40000000, "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"},
+      {"name": "deadsync-v0.3.875-x86_64-linux.tar.gz", "browser_download_url": "https://github.com/pnn64/deadsync/releases/download/v0.3.875/deadsync-v0.3.875-x86_64-linux.tar.gz", "size": 41000000, "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111112"}
+    ]
+  },
+  {
+    "tag_name": "v0.3.874-rc1",
+    "html_url": "https://github.com/pnn64/deadsync/releases/tag/v0.3.874-rc1",
+    "body": "Release candidate (prerelease).",
+    "published_at": "2026-05-08T12:00:00Z",
+    "draft": false,
+    "prerelease": true,
+    "assets": [
+      {"name": "deadsync-v0.3.874-rc1-x86_64-windows.zip", "browser_download_url": "https://example.com/a.zip", "size": 1, "digest": null}
+    ]
+  },
+  {
+    "tag_name": "v0.3.874",
+    "html_url": "https://github.com/pnn64/deadsync/releases/tag/v0.3.874",
+    "body": "Prior stable.",
+    "published_at": "2026-05-05T12:00:00Z",
+    "draft": false,
+    "prerelease": false,
+    "assets": [
+      {"name": "deadsync-v0.3.874-x86_64-windows.zip", "browser_download_url": "https://github.com/pnn64/deadsync/releases/download/v0.3.874/deadsync-v0.3.874-x86_64-windows.zip", "size": 39000000, "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"},
+      {"name": "deadsync-v0.3.874-x86_64-linux.tar.gz", "browser_download_url": "https://github.com/pnn64/deadsync/releases/download/v0.3.874/deadsync-v0.3.874-x86_64-linux.tar.gz", "size": 39500000, "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222223"}
+    ]
+  },
+  {
+    "tag_name": "v0.3.873",
+    "html_url": "https://github.com/pnn64/deadsync/releases/tag/v0.3.873",
+    "body": "Older stable with no host asset for this platform mix.",
+    "published_at": "2026-05-01T12:00:00Z",
+    "draft": false,
+    "prerelease": false,
+    "assets": [
+      {"name": "deadsync-v0.3.873-arm64-macos.tar.gz", "browser_download_url": "https://github.com/pnn64/deadsync/releases/download/v0.3.873/deadsync-v0.3.873-arm64-macos.tar.gz", "size": 38000000, "digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"}
+    ]
+  },
+  {
+    "tag_name": "nightly",
+    "html_url": "https://github.com/pnn64/deadsync/releases/tag/nightly",
+    "body": "Non-semver tag; must be skipped.",
+    "published_at": "2026-04-30T12:00:00Z",
+    "draft": false,
+    "prerelease": false,
+    "assets": []
+  },
+  {
+    "tag_name": "v0.3.872",
+    "html_url": "https://github.com/pnn64/deadsync/releases/tag/v0.3.872",
+    "body": "Draft; must be skipped.",
+    "published_at": "2026-04-29T12:00:00Z",
+    "draft": true,
+    "prerelease": false,
+    "assets": [
+      {"name": "deadsync-v0.3.872-x86_64-windows.zip", "browser_download_url": "https://example.com/d.zip", "size": 1, "digest": null}
+    ]
+  },
+  {
+    "tag_name": "v0.3.871",
+    "html_url": "https://github.com/pnn64/deadsync/releases/tag/v0.3.871",
+    "body": "Older stable.",
+    "published_at": "2026-04-28T12:00:00Z",
+    "draft": false,
+    "prerelease": false,
+    "assets": [
+      {"name": "deadsync-v0.3.871-x86_64-windows.zip", "browser_download_url": "https://github.com/pnn64/deadsync/releases/download/v0.3.871/deadsync-v0.3.871-x86_64-windows.zip", "size": 40354865, "digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444"},
+      {"name": "deadsync-v0.3.871-x86_64-linux.tar.gz", "browser_download_url": "https://github.com/pnn64/deadsync/releases/download/v0.3.871/deadsync-v0.3.871-x86_64-linux.tar.gz", "size": 41730850, "digest": "sha256:4444444444444444444444444444444444444444444444444444444444444445"}
+    ]
+  },
+  {
+    "tag_name": "v0.3.870",
+    "html_url": "https://github.com/pnn64/deadsync/releases/tag/v0.3.870",
+    "body": "Older stable.",
+    "published_at": "2026-04-27T12:00:00Z",
+    "draft": false,
+    "prerelease": false,
+    "assets": [
+      {"name": "deadsync-v0.3.870-x86_64-windows.zip", "browser_download_url": "https://github.com/pnn64/deadsync/releases/download/v0.3.870/deadsync-v0.3.870-x86_64-windows.zip", "size": 40000000, "digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555"},
+      {"name": "deadsync-v0.3.870-x86_64-linux.tar.gz", "browser_download_url": "https://github.com/pnn64/deadsync/releases/download/v0.3.870/deadsync-v0.3.870-x86_64-linux.tar.gz", "size": 41000000, "digest": "sha256:5555555555555555555555555555555555555555555555555555555555555556"}
+    ]
+  },
+  {
+    "tag_name": "v0.3.869",
+    "html_url": "https://github.com/pnn64/deadsync/releases/tag/v0.3.869",
+    "body": "Older stable.",
+    "published_at": "2026-04-26T12:00:00Z",
+    "draft": false,
+    "prerelease": false,
+    "assets": [
+      {"name": "deadsync-v0.3.869-x86_64-windows.zip", "browser_download_url": "https://github.com/pnn64/deadsync/releases/download/v0.3.869/deadsync-v0.3.869-x86_64-windows.zip", "size": 40000000, "digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666"},
+      {"name": "deadsync-v0.3.869-x86_64-linux.tar.gz", "browser_download_url": "https://github.com/pnn64/deadsync/releases/download/v0.3.869/deadsync-v0.3.869-x86_64-linux.tar.gz", "size": 41000000, "digest": "sha256:6666666666666666666666666666666666666666666666666666666666666667"}
+    ]
+  },
+  {
+    "tag_name": "v0.3.868",
+    "html_url": "https://github.com/pnn64/deadsync/releases/tag/v0.3.868",
+    "body": "Older stable.",
+    "published_at": "2026-04-25T12:00:00Z",
+    "draft": false,
+    "prerelease": false,
+    "assets": [
+      {"name": "deadsync-v0.3.868-x86_64-windows.zip", "browser_download_url": "https://github.com/pnn64/deadsync/releases/download/v0.3.868/deadsync-v0.3.868-x86_64-windows.zip", "size": 40000000, "digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777"},
+      {"name": "deadsync-v0.3.868-x86_64-linux.tar.gz", "browser_download_url": "https://github.com/pnn64/deadsync/releases/download/v0.3.868/deadsync-v0.3.868-x86_64-linux.tar.gz", "size": 41000000, "digest": "sha256:7777777777777777777777777777777777777777777777777777777777777778"}
+    ]
+  },
+  {
+    "tag_name": "v0.3.867",
+    "html_url": "https://github.com/pnn64/deadsync/releases/tag/v0.3.867",
+    "body": "Older stable.",
+    "published_at": "2026-04-24T12:00:00Z",
+    "draft": false,
+    "prerelease": false,
+    "assets": [
+      {"name": "deadsync-v0.3.867-x86_64-windows.zip", "browser_download_url": "https://github.com/pnn64/deadsync/releases/download/v0.3.867/deadsync-v0.3.867-x86_64-windows.zip", "size": 40000000, "digest": "sha256:8888888888888888888888888888888888888888888888888888888888888888"},
+      {"name": "deadsync-v0.3.867-x86_64-linux.tar.gz", "browser_download_url": "https://github.com/pnn64/deadsync/releases/download/v0.3.867/deadsync-v0.3.867-x86_64-linux.tar.gz", "size": 41000000, "digest": "sha256:8888888888888888888888888888888888888888888888888888888888888889"}
+    ]
+  }
+]

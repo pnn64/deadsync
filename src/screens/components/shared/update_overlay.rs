@@ -207,7 +207,10 @@ pub fn build(phase: &ActionPhase, active_color_index: i32) -> Vec<Actor> {
         body_lines,
         footer,
         progress,
-        show_spinner: matches!(phase, ActionPhase::Checking | ActionPhase::Applying { .. }),
+        show_spinner: matches!(
+            phase,
+            ActionPhase::Checking | ActionPhase::Applying { .. } | ActionPhase::RollbackChecking
+        ),
     };
     render_panel(&content, active_color_index)
 }
@@ -316,6 +319,51 @@ pub fn phase_strings(phase: &ActionPhase) -> (String, Vec<String>, String, Optio
             tr("Updater", "TitleChecking").to_string(),
             vec![tr("Updater", "BodyChecking").to_string()],
             tr("Updater", "FooterPleaseWait").to_string(),
+            None,
+        ),
+        ActionPhase::RollbackChecking => (
+            tr("Updater", "TitleRollback").to_string(),
+            vec![tr("Updater", "BodyRollbackChecking").to_string()],
+            tr("Updater", "FooterPleaseWait").to_string(),
+            None,
+        ),
+        ActionPhase::RollbackPick {
+            candidates,
+            selected,
+        } => {
+            let mut body = Vec::with_capacity(candidates.len() + 1);
+            body.push(
+                tr_fmt(
+                    "Updater",
+                    "BodyRollbackCurrent",
+                    &[("version", &deadsync_version::current_tag())],
+                )
+                .to_string(),
+            );
+            for (i, (info, _asset)) in candidates.iter().enumerate() {
+                let key = if i == *selected {
+                    "BodyRollbackRowSelected"
+                } else {
+                    "BodyRollbackRow"
+                };
+                let mut row = tr_fmt("Updater", key, &[("version", &info.tag)]).to_string();
+                if let Some(date) = format_published_at(info.published_at.as_deref()) {
+                    row.push(' ');
+                    row.push_str(&tr_fmt("Updater", "BodyRollbackRowDate", &[("date", &date)]));
+                }
+                body.push(row);
+            }
+            (
+                tr("Updater", "TitleRollback").to_string(),
+                body,
+                tr("Updater", "FooterRollbackPick").to_string(),
+                None,
+            )
+        }
+        ActionPhase::RollbackEmpty => (
+            tr("Updater", "TitleRollback").to_string(),
+            vec![tr("Updater", "BodyRollbackEmpty").to_string()],
+            tr("Updater", "FooterDismiss").to_string(),
             None,
         ),
         ActionPhase::ConfirmDownload { info, asset } => {
@@ -474,6 +522,7 @@ pub fn handle_input(phase: &ActionPhase, ev: &InputEvent) -> InputOutcome {
         ActionPhase::UpToDate { .. }
         | ActionPhase::AvailableNoInstall { .. }
         | ActionPhase::AppliedRestartRequired { .. }
+        | ActionPhase::RollbackEmpty
         | ActionPhase::Error { .. } => match ev.action {
             VirtualAction::p1_start
             | VirtualAction::p2_start
@@ -484,11 +533,41 @@ pub fn handle_input(phase: &ActionPhase, ev: &InputEvent) -> InputOutcome {
             }
             _ => InputOutcome::Consumed,
         },
-        // Checking / Downloading: Back / Start cancel the in-flight
-        // worker (the worker polls the cancel flag at safe points and
-        // exits to Idle without committing partial state).  All other
-        // input is swallowed so the user can't open menus underneath.
-        ActionPhase::Checking | ActionPhase::Downloading { .. } => match ev.action {
+        // RollbackPick: navigate the version list, confirm the highlighted
+        // entry into the normal download/apply flow, or back out.
+        ActionPhase::RollbackPick { .. } => match ev.action {
+            VirtualAction::p1_up
+            | VirtualAction::p1_menu_up
+            | VirtualAction::p2_up
+            | VirtualAction::p2_menu_up => {
+                action::rollback_move(-1);
+                InputOutcome::Consumed
+            }
+            VirtualAction::p1_down
+            | VirtualAction::p1_menu_down
+            | VirtualAction::p2_down
+            | VirtualAction::p2_menu_down => {
+                action::rollback_move(1);
+                InputOutcome::Consumed
+            }
+            VirtualAction::p1_start | VirtualAction::p2_start => {
+                action::request_rollback_confirm();
+                InputOutcome::Consumed
+            }
+            VirtualAction::p1_back | VirtualAction::p2_back => {
+                action::dismiss();
+                InputOutcome::Consumed
+            }
+            _ => InputOutcome::Consumed,
+        },
+        // Checking / Downloading / RollbackChecking: Back cancels the
+        // in-flight worker (the worker polls the cancel flag at safe
+        // points and exits to Idle without committing partial state).
+        // All other input is swallowed so the user can't open menus
+        // underneath.
+        ActionPhase::Checking
+        | ActionPhase::Downloading { .. }
+        | ActionPhase::RollbackChecking => match ev.action {
             VirtualAction::p1_back | VirtualAction::p2_back => {
                 action::request_cancel();
                 InputOutcome::Consumed
@@ -867,6 +946,122 @@ mod tests {
         };
         let ev = press(VirtualAction::p1_start);
         assert_eq!(handle_input(&phase, &ev), InputOutcome::Consumed);
+    }
+
+    fn rollback_pick(selected: usize) -> ActionPhase {
+        let mk = |maj, min, pat| {
+            let tag = format!("v{maj}.{min}.{pat}");
+            let info = ReleaseInfo {
+                tag: tag.clone(),
+                version: Version::new(maj, min, pat),
+                html_url: format!("https://example/{tag}"),
+                body: String::new(),
+                published_at: Some(format!("2026-04-{pat:02}T04:17:40Z")),
+                assets: vec![ReleaseAsset {
+                    name: format!("deadsync-{tag}.tar.gz"),
+                    browser_download_url: format!("https://example/{tag}/a"),
+                    size: 1024,
+                    digest: None,
+                }],
+            };
+            let asset = info.assets[0].clone();
+            (info, asset)
+        };
+        ActionPhase::RollbackPick {
+            candidates: vec![mk(0, 3, 10), mk(0, 3, 9), mk(0, 3, 8)],
+            selected,
+        }
+    }
+
+    #[test]
+    fn phase_strings_rollback_pick_lists_versions_and_marks_selection() {
+        let (title, body, footer, progress) = phase_strings(&rollback_pick(1));
+        assert!(!title.is_empty());
+        let joined = body.join("\n");
+        for tag in ["v0.3.10", "v0.3.9", "v0.3.8"] {
+            assert!(joined.contains(tag), "body should list {tag}: {joined:?}");
+        }
+        // Each candidate row also surfaces its release date, separated from
+        // the version by a space.
+        for (tag, date) in [
+            ("v0.3.10", "2026-04-10"),
+            ("v0.3.9", "2026-04-09"),
+            ("v0.3.8", "2026-04-08"),
+        ] {
+            assert!(
+                joined.contains(&format!("{tag} ({date})")),
+                "body should show '{tag} ({date})': {joined:?}"
+            );
+        }
+        // The selected (second) row is rendered differently from the
+        // unselected rows: exactly one row carries the selection marker.
+        let marked = body.iter().filter(|l| l.contains('>')).count();
+        assert_eq!(marked, 1, "exactly one selected row: {body:?}");
+        assert!(body[2].contains('>'), "row 1 (0.3.9) selected: {body:?}");
+        assert!(progress.is_none());
+        assert!(!footer.is_empty());
+    }
+
+    #[test]
+    fn phase_strings_rollback_empty_is_friendly() {
+        let (title, body, footer, progress) = phase_strings(&ActionPhase::RollbackEmpty);
+        assert!(!title.is_empty());
+        assert!(!body.join("\n").is_empty());
+        assert!(footer.contains("OK"), "footer was {footer:?}");
+        assert!(progress.is_none());
+    }
+
+    #[test]
+    fn build_rollback_checking_shows_spinner() {
+        let actors = build(&ActionPhase::RollbackChecking, 0);
+        assert!(
+            actors
+                .iter()
+                .any(|a| matches!(a, Actor::Sprite { .. })),
+            "rollback-checking should render the spinner sprite",
+        );
+    }
+
+    #[test]
+    fn handle_input_rollback_checking_cancels_on_back() {
+        let ev = press(VirtualAction::p1_back);
+        assert_eq!(
+            handle_input(&ActionPhase::RollbackChecking, &ev),
+            InputOutcome::Consumed
+        );
+        // Non-back input is swallowed without acting.
+        let ev = press(VirtualAction::p1_up);
+        assert_eq!(
+            handle_input(&ActionPhase::RollbackChecking, &ev),
+            InputOutcome::Consumed
+        );
+    }
+
+    #[test]
+    fn handle_input_rollback_pick_consumes_navigation_and_confirm() {
+        let phase = rollback_pick(0);
+        for action in [
+            VirtualAction::p1_up,
+            VirtualAction::p1_down,
+            VirtualAction::p1_start,
+            VirtualAction::p1_back,
+        ] {
+            let ev = press(action);
+            assert_eq!(
+                handle_input(&phase, &ev),
+                InputOutcome::Consumed,
+                "action {action:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn handle_input_rollback_empty_dismisses() {
+        let ev = press(VirtualAction::p1_start);
+        assert_eq!(
+            handle_input(&ActionPhase::RollbackEmpty, &ev),
+            InputOutcome::Consumed
+        );
     }
 
     #[test]

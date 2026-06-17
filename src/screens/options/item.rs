@@ -21,6 +21,7 @@ pub enum ItemId {
     FoldersOptions,
     ReloadSongsCourses,
     CheckForUpdates,
+    RollBackVersion,
     DownloadVideoSupport,
     Credits,
     Exit,
@@ -286,6 +287,7 @@ pub(super) fn visible_items() -> Vec<&'static Item> {
 fn item_visible(id: ItemId) -> bool {
     match id {
         ItemId::CheckForUpdates => deadsync_updater::apply_supported_for_host(),
+        ItemId::RollBackVersion => deadsync_updater::apply_supported_for_host(),
         ItemId::DownloadVideoSupport => deadsync_updater::ffmpeg::install_supported_for_host(),
         _ => true,
     }
@@ -503,6 +505,14 @@ pub const ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsHelp",
             "CheckForUpdatesHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::RollBackVersion,
+        name: lookup_key("Options", "RollBackVersion"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsHelp",
+            "RollBackVersionHelp",
         ))],
     },
     Item {

@@ -31,8 +31,8 @@ use crate::download::{
 };
 use crate::{
     FetchOutcome, ReleaseAsset, ReleaseInfo, UpdateState, UpdaterError, apply_supported_for_host,
-    check_agent, classify, download_agent, expected_asset_name, fetch_latest_release, host_target,
-    pick_asset_for_host,
+    check_agent, classify, download_agent, expected_asset_name, fetch_latest_release,
+    fetch_releases, host_target, pick_asset_for_host, rollback_candidates,
 };
 
 /// Subdirectory of `cache_dir` where downloaded archives land.
@@ -55,6 +55,26 @@ pub enum ActionPhase {
     /// A check completed and reported the build is current.  Lets the
     /// overlay say "You're up to date" rather than vanishing silently.
     UpToDate { tag: String },
+    /// The rollback flow is fetching the list of prior releases from
+    /// GitHub.  The overlay shows a spinner; cancellable like
+    /// [`ActionPhase::Checking`].
+    RollbackChecking,
+    /// The rollback release list was fetched and the user is choosing
+    /// which prior version to downgrade to.  `candidates` holds the up
+    /// to [`crate::ROLLBACK_VERSION_LIMIT`] eligible releases newest
+    /// first, each paired with its host asset; `selected` is the
+    /// highlighted row.  Confirming transitions into the normal
+    /// [`ActionPhase::ConfirmDownload`] flow.
+    RollbackPick {
+        candidates: Vec<(ReleaseInfo, ReleaseAsset)>,
+        selected: usize,
+    },
+    /// The rollback list was fetched but no prior version is installable
+    /// on this host (e.g. every older release predates the host's
+    /// platform in the release matrix, or the user is already on the
+    /// oldest build).  The overlay shows a friendly message and a single
+    /// dismiss action.
+    RollbackEmpty,
     /// A check completed and reported an update, but this build can't
     /// install it in-place on the current host (e.g. macOS).  We still
     /// surface the new version + the release-page URL so the user can
@@ -260,7 +280,9 @@ fn install_enabled() -> bool {
 /// abandoned.
 pub fn request_cancel() {
     match current() {
-        ActionPhase::Checking | ActionPhase::Downloading { .. } => {
+        ActionPhase::Checking
+        | ActionPhase::RollbackChecking
+        | ActionPhase::Downloading { .. } => {
             // Bump the generation: any in-flight worker's eventual
             // result will be discarded by `set_phase_if_current`.
             let _ = begin_operation();
@@ -448,6 +470,132 @@ fn run_check_now(generation: u64) {
     // the banner, and `replace_snapshot` has its own staleness check.
     crate::state::replace_snapshot(state.clone());
     set_phase_if_current(generation, classify_check_result(state));
+}
+
+/// Pure transition: turn a fetched release list into the rollback
+/// overlay phase for `current` running version, honouring the
+/// install-enabled gate.  Lifted out of the worker so it is unit-testable
+/// without the network.
+pub fn classify_rollback_list(releases: Vec<ReleaseInfo>) -> ActionPhase {
+    classify_rollback_list_with(
+        releases,
+        apply_supported_for_host() && install_enabled(),
+    )
+}
+
+/// Same as [`classify_rollback_list`] but takes the "install allowed"
+/// gate explicitly so tests can exercise both branches.
+pub fn classify_rollback_list_with(
+    releases: Vec<ReleaseInfo>,
+    install_allowed: bool,
+) -> ActionPhase {
+    if !install_allowed {
+        // Either this host can't apply in-place (e.g. macOS) or the
+        // operator opted out of in-app installs; offering a rollback we
+        // can't perform would be a dead end.
+        return ActionPhase::RollbackEmpty;
+    }
+    let target = match host_target() {
+        Some(t) => t,
+        None => return ActionPhase::RollbackEmpty,
+    };
+    let current = deadsync_version::current();
+    let candidates = rollback_candidates(releases, &current, target);
+    if candidates.is_empty() {
+        ActionPhase::RollbackEmpty
+    } else {
+        ActionPhase::RollbackPick {
+            candidates,
+            selected: 0,
+        }
+    }
+}
+
+/// Spawn a worker that fetches the list of prior releases and presents
+/// the rollback picker.  No-op if a worker is already in flight or the
+/// overlay is mid-flow (downloading / applying).
+pub fn request_rollback_check() {
+    let _guard = match WORKER_LOCK.try_lock() {
+        Ok(g) => g,
+        Err(_) => return,
+    };
+    if matches!(
+        current(),
+        ActionPhase::Checking
+            | ActionPhase::RollbackChecking
+            | ActionPhase::Downloading { .. }
+            | ActionPhase::Applying { .. }
+    ) {
+        return;
+    }
+    let generation = begin_operation();
+    set_phase(ActionPhase::RollbackChecking);
+    if let Err(err) = thread::Builder::new()
+        .name("deadsync-updater-rollback".to_owned())
+        .spawn(move || run_rollback_check(generation))
+    {
+        set_phase_if_current(
+            generation,
+            classify_error(&UpdaterError::Io(format!(
+                "spawn rollback-check worker: {err}"
+            ))),
+        );
+    }
+}
+
+fn run_rollback_check(generation: u64) {
+    let agent = check_agent();
+    let releases = match fetch_releases(&agent) {
+        Ok(list) => list,
+        Err(err) => {
+            if worker_should_stop(generation) {
+                return;
+            }
+            log::warn!("Rollback release-list fetch failed: {err}");
+            set_phase_if_current(generation, classify_error(&err));
+            return;
+        }
+    };
+    if worker_should_stop(generation) {
+        log::info!("Rollback check cancelled by user; discarding result");
+        return;
+    }
+    set_phase_if_current(generation, classify_rollback_list(releases));
+}
+
+/// Move the rollback picker's selection by `delta` rows (clamped).
+/// No-op unless the current phase is [`ActionPhase::RollbackPick`].
+pub fn rollback_move(delta: i32) {
+    if let Ok(mut guard) = PHASE.write()
+        && let ActionPhase::RollbackPick {
+            candidates,
+            selected,
+        } = &mut *guard
+        && !candidates.is_empty()
+    {
+        let last = candidates.len() as i32 - 1;
+        let next = (*selected as i32 + delta).clamp(0, last);
+        *selected = next as usize;
+    }
+}
+
+/// Confirm the rollback picker's current selection: transition into the
+/// normal [`ActionPhase::ConfirmDownload`] flow for the chosen prior
+/// release so the existing download → verify → apply path performs the
+/// downgrade unchanged.  No-op unless the current phase is
+/// [`ActionPhase::RollbackPick`].
+pub fn request_rollback_confirm() {
+    if let Ok(mut guard) = PHASE.write()
+        && let ActionPhase::RollbackPick {
+            candidates,
+            selected,
+        } = &*guard
+        && let Some((info, asset)) = candidates.get(*selected)
+    {
+        let info = info.clone();
+        let asset = asset.clone();
+        *guard = ActionPhase::ConfirmDownload { info, asset };
+    }
 }
 
 /// Spawn a worker that downloads + verifies the asset associated with
@@ -974,6 +1122,111 @@ mod tests {
             }
             other => panic!("expected Error, got {other:?}"),
         }
+    }
+
+    /// Build a list of prior releases with a host asset each: one entry
+    /// per supplied `(major, minor, patch)` triple.
+    fn host_releases(versions: &[(u64, u64, u64)]) -> Vec<ReleaseInfo> {
+        let target = host_target().expect("host target for test");
+        versions
+            .iter()
+            .map(|(maj, min, pat)| {
+                let tag = format!("v{maj}.{min}.{pat}");
+                let name = expected_asset_name(&tag, target);
+                release_with_tag(&tag, &name)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn classify_rollback_list_disabled_install_is_empty() {
+        // Even with plenty of older releases, a disabled install gate must
+        // refuse to offer a rollback it can't perform.
+        let releases = if host_target().is_some() {
+            host_releases(&[(0, 0, 1)])
+        } else {
+            Vec::new()
+        };
+        assert_eq!(
+            classify_rollback_list_with(releases, false),
+            ActionPhase::RollbackEmpty
+        );
+    }
+
+    #[test]
+    fn classify_rollback_list_no_older_versions_is_empty() {
+        if host_target().is_none() {
+            return;
+        }
+        // A single release newer than current can't be a rollback target.
+        let cur = version::current();
+        let newer = (cur.major, cur.minor, cur.patch + 1);
+        let phase = classify_rollback_list_with(host_releases(&[newer]), true);
+        assert_eq!(phase, ActionPhase::RollbackEmpty);
+    }
+
+    #[test]
+    fn classify_rollback_list_offers_older_versions() {
+        if host_target().is_none() {
+            return;
+        }
+        // Three clearly-older releases should all become candidates,
+        // newest-first, with the first row selected.
+        let releases = host_releases(&[(0, 0, 1), (0, 0, 3), (0, 0, 2)]);
+        match classify_rollback_list_with(releases, true) {
+            ActionPhase::RollbackPick {
+                candidates,
+                selected,
+            } => {
+                assert_eq!(selected, 0);
+                let tags: Vec<&str> = candidates.iter().map(|(i, _)| i.tag.as_str()).collect();
+                assert_eq!(tags, vec!["v0.0.3", "v0.0.2", "v0.0.1"]);
+            }
+            other => panic!("expected RollbackPick, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn rollback_move_clamps_within_bounds() {
+        if host_target().is_none() {
+            return;
+        }
+        // Serialise behind the worker lock: these tests drive the global
+        // PHASE and must not race other state-machine tests.
+        let _g = WORKER_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let releases = host_releases(&[(0, 0, 1), (0, 0, 2)]);
+        set_phase(classify_rollback_list_with(releases, true));
+        // Up from the top stays at 0.
+        rollback_move(-1);
+        assert!(matches!(
+            current(),
+            ActionPhase::RollbackPick { selected: 0, .. }
+        ));
+        // Down moves to the last row and clamps there.
+        rollback_move(1);
+        rollback_move(1);
+        assert!(matches!(
+            current(),
+            ActionPhase::RollbackPick { selected: 1, .. }
+        ));
+        dismiss();
+    }
+
+    #[test]
+    fn request_rollback_confirm_transitions_to_confirm_download() {
+        if host_target().is_none() {
+            return;
+        }
+        let _g = WORKER_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let releases = host_releases(&[(0, 0, 5), (0, 0, 9)]);
+        set_phase(classify_rollback_list_with(releases, true));
+        request_rollback_confirm();
+        match current() {
+            // Newest-first: selected row 0 is v0.0.9.
+            ActionPhase::ConfirmDownload { info, .. } => assert_eq!(info.tag, "v0.0.9"),
+            other => panic!("expected ConfirmDownload, got {other:?}"),
+        }
+        dismiss();
     }
 
     #[test]

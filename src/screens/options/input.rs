@@ -1187,6 +1187,10 @@ pub(super) fn activate_current_selection(
                     audio::play_sfx("assets/sounds/start.ogg");
                     deadsync_updater::action::request_check_now();
                 }
+                ItemId::RollBackVersion => {
+                    audio::play_sfx("assets/sounds/start.ogg");
+                    deadsync_updater::action::request_rollback_check();
+                }
                 ItemId::DownloadVideoSupport => {
                     audio::play_sfx("assets/sounds/start.ogg");
                     // Probe ffmpeg/ffprobe on a worker thread — the lookup
