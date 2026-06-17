@@ -1,4 +1,4 @@
-use deadsync_chart::{SongData, SyncPref};
+use deadsync_chart::{ChartData, SongData, SyncPref};
 use deadsync_core::input::{InputSource, MAX_COLS, MAX_PLAYERS};
 use deadsync_core::note::NoteType;
 use deadsync_core::song_time::{
@@ -11,7 +11,12 @@ use deadsync_rules::note::{
     HoldData, HoldResult, MineResult, Note, TIMING_WINDOW_SECONDS_HOLD, TIMING_WINDOW_SECONDS_ROLL,
 };
 use deadsync_rules::scroll::ScrollSpeedSetting;
-use deadsync_rules::timing::{FA_PLUS_W010_MS, TimingData, TimingProfile, TimingProfileNs};
+use deadsync_rules::stream::{
+    StreamSegment, measure_densities, stream_sequences_threshold, zmod_stream_totals_full_measures,
+};
+use deadsync_rules::timing::{
+    FA_PLUS_W0_MS, FA_PLUS_W010_MS, TimingData, TimingProfile, TimingProfileNs, WindowCounts,
+};
 use std::collections::VecDeque;
 use std::hash::Hasher;
 use std::path::PathBuf;
@@ -1183,6 +1188,590 @@ pub struct ChartAttackEffects {
     pub turn_bits: u16,
 }
 
+impl ChartAttackEffects {
+    #[inline(always)]
+    pub const fn has_note_masks(self) -> bool {
+        self.insert_mask != 0 || self.remove_mask != 0 || self.holds_mask != 0
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ScoreValidityOptions {
+    pub chart_effects: ChartAttackEffects,
+    pub attack_mode: GameplayAttackMode,
+    pub music_rate: f32,
+}
+
+impl Default for ScoreValidityOptions {
+    fn default() -> Self {
+        Self {
+            chart_effects: ChartAttackEffects::default(),
+            attack_mode: GameplayAttackMode::default(),
+            music_rate: 1.0,
+        }
+    }
+}
+
+pub fn score_invalid_reason_lines_for_options(
+    chart: &ChartData,
+    options: ScoreValidityOptions,
+) -> Vec<&'static str> {
+    let mut reasons = Vec::with_capacity(6);
+    let rate = if options.music_rate.is_finite() && options.music_rate > 0.0 {
+        options.music_rate
+    } else {
+        1.0
+    };
+    if rate < 1.0 {
+        reasons.push("music rate is below 1.0x");
+    }
+
+    let remove_mask = options.chart_effects.remove_mask;
+    if (remove_mask & REMOVE_MASK_BIT_NO_HOLDS) != 0 && chart.stats.holds > 0 {
+        reasons.push("No Holds is enabled on a chart with holds");
+    }
+    if (remove_mask & REMOVE_MASK_BIT_NO_MINES) != 0 && chart.mines_nonfake > 0 {
+        reasons.push("No Mines is enabled on a chart with mines");
+    }
+    if (remove_mask & REMOVE_MASK_BIT_NO_JUMPS) != 0 && chart.stats.jumps > 0 {
+        reasons.push("No Jumps is enabled on a chart with jumps");
+    }
+    if (remove_mask & REMOVE_MASK_BIT_NO_HANDS) != 0 && chart.stats.hands > 0 {
+        reasons.push("No Hands is enabled on a chart with hands");
+    }
+    if (remove_mask & REMOVE_MASK_BIT_NO_QUADS) != 0 && chart.stats.hands > 0 {
+        reasons.push("No Quads is enabled on a chart with quads");
+    }
+    if (remove_mask & REMOVE_MASK_BIT_NO_LIFTS) != 0 && chart.stats.lifts > 0 {
+        reasons.push("No Lifts is enabled on a chart with lifts");
+    }
+    if (remove_mask & REMOVE_MASK_BIT_NO_FAKES) != 0 && chart.stats.fakes > 0 {
+        reasons.push("No Fakes is enabled on a chart with fakes");
+    }
+
+    let holds_mask = options.chart_effects.holds_mask;
+    if (holds_mask & HOLDS_MASK_BIT_NO_ROLLS) != 0 && chart.stats.rolls > 0 {
+        reasons.push("No Rolls is enabled on a chart with rolls");
+    }
+    if (remove_mask & REMOVE_MASK_BIT_LITTLE) != 0 {
+        reasons.push("Little is enabled");
+    }
+
+    let insert_mask = options.chart_effects.insert_mask;
+    if (insert_mask & INSERT_MASK_BIT_ECHO) != 0 {
+        reasons.push("Echo is enabled");
+    }
+    if (holds_mask & HOLDS_MASK_BIT_PLANTED) != 0 {
+        reasons.push("Planted is enabled");
+    }
+    if (holds_mask & HOLDS_MASK_BIT_FLOORED) != 0 {
+        reasons.push("Floored is enabled");
+    }
+    if (holds_mask & HOLDS_MASK_BIT_TWISTER) != 0 {
+        reasons.push("Twister is enabled");
+    }
+
+    match options.attack_mode {
+        GameplayAttackMode::Off => {
+            if chart.has_chart_attacks {
+                reasons.push("AttackMode=Off is enabled on a chart with attacks");
+            }
+        }
+        GameplayAttackMode::On => {}
+        GameplayAttackMode::Random => reasons.push("AttackMode=Random is enabled"),
+    }
+
+    reasons
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CourseDisplayTotals {
+    pub possible_grade_points: i32,
+    pub total_steps: u32,
+    pub holds_total: u32,
+    pub rolls_total: u32,
+    pub mines_total: u32,
+}
+
+pub fn course_display_totals_for_chart(chart: &ChartData) -> CourseDisplayTotals {
+    CourseDisplayTotals {
+        possible_grade_points: chart.possible_grade_points,
+        total_steps: chart.stats.total_steps,
+        holds_total: chart.holds_total,
+        rolls_total: chart.rolls_total,
+        mines_total: chart.mines_total,
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CourseDisplayCarry {
+    // ITGmania keeps the same lifemeter alive between nonstop course songs.
+    pub life: f32,
+    pub judgment_counts: [u32; 6],
+    pub scoring_counts: [u32; 6],
+    pub full_combo_grade: Option<JudgeGrade>,
+    pub current_combo_grade: Option<JudgeGrade>,
+    pub current_combo_window_counts: WindowCounts,
+    pub first_fc_attempt_broken: bool,
+    // Canonical FA+ split (15ms) used for EX scoring/evaluation.
+    pub window_counts: WindowCounts,
+    // Canonical 10ms split used for H.EX scoring/evaluation.
+    pub window_counts_10ms_blue: WindowCounts,
+    // Display split used by gameplay counters (legacy 10ms or custom ms option).
+    pub window_counts_display_blue: WindowCounts,
+    pub holds_held: u32,
+    pub rolls_held: u32,
+    pub mines_avoided: u32,
+    pub holds_held_for_score: u32,
+    pub holds_let_go_for_score: u32,
+    pub rolls_held_for_score: u32,
+    pub rolls_let_go_for_score: u32,
+    pub mines_hit_for_score: u32,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct DisplayWindowCountsSources {
+    pub canonical: WindowCounts,
+    pub ten_ms_blue: WindowCounts,
+    pub display_blue: WindowCounts,
+}
+
+impl Default for DisplayWindowCountsSources {
+    fn default() -> Self {
+        Self {
+            canonical: WindowCounts::default(),
+            ten_ms_blue: WindowCounts::default(),
+            display_blue: WindowCounts::default(),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum DisplayWindowCountsMode {
+    Canonical,
+    TenMsBlue,
+    DisplayBlue,
+    CustomBlue { split_ms: f32 },
+}
+
+impl Default for DisplayWindowCountsMode {
+    fn default() -> Self {
+        Self::Canonical
+    }
+}
+
+#[inline(always)]
+fn display_float_match(a: f32, b: f32) -> bool {
+    (a - b).abs() <= 0.000_1
+}
+
+pub fn display_window_counts_mode(
+    blue_window_ms: Option<f32>,
+    display_blue_window_ms: f32,
+) -> DisplayWindowCountsMode {
+    let Some(ms) = blue_window_ms else {
+        return DisplayWindowCountsMode::Canonical;
+    };
+    let split_ms = judgment::normalized_blue_window_ms(ms);
+    let display_split_ms = judgment::normalized_blue_window_ms(display_blue_window_ms);
+    if display_float_match(split_ms, FA_PLUS_W0_MS) {
+        DisplayWindowCountsMode::Canonical
+    } else if display_float_match(split_ms, FA_PLUS_W010_MS) {
+        DisplayWindowCountsMode::TenMsBlue
+    } else if display_float_match(split_ms, display_split_ms) {
+        DisplayWindowCountsMode::DisplayBlue
+    } else {
+        DisplayWindowCountsMode::CustomBlue { split_ms }
+    }
+}
+
+pub fn display_window_counts_current(
+    sources: DisplayWindowCountsSources,
+    mode: DisplayWindowCountsMode,
+) -> Option<WindowCounts> {
+    match mode {
+        DisplayWindowCountsMode::Canonical => Some(sources.canonical),
+        DisplayWindowCountsMode::TenMsBlue => Some(sources.ten_ms_blue),
+        DisplayWindowCountsMode::DisplayBlue => Some(sources.display_blue),
+        DisplayWindowCountsMode::CustomBlue { .. } => None,
+    }
+}
+
+pub fn display_window_counts_with_carry(
+    current: WindowCounts,
+    carry: CourseDisplayCarry,
+    mode: DisplayWindowCountsMode,
+) -> WindowCounts {
+    let carry_counts = match mode {
+        DisplayWindowCountsMode::Canonical => carry.window_counts,
+        DisplayWindowCountsMode::TenMsBlue => carry.window_counts_10ms_blue,
+        DisplayWindowCountsMode::DisplayBlue | DisplayWindowCountsMode::CustomBlue { .. } => {
+            carry.window_counts_display_blue
+        }
+    };
+    judgment::add_window_counts(current, carry_counts)
+}
+
+pub fn display_judgment_count_for_grade(
+    stage_counts: judgment::JudgeCounts,
+    carry: CourseDisplayCarry,
+    grade: JudgeGrade,
+) -> u32 {
+    let ix = judgment::display_judge_ix(grade);
+    stage_counts[ix].saturating_add(carry.judgment_counts[ix])
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum GameplayScoreDisplayMode {
+    #[default]
+    Normal,
+    Predictive,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CourseDisplayStage {
+    pub life: f32,
+    pub judgment_counts: judgment::JudgeCounts,
+    pub scoring_counts: judgment::JudgeCounts,
+    pub full_combo_grade: Option<JudgeGrade>,
+    pub current_combo_grade: Option<JudgeGrade>,
+    pub current_combo_window_counts: WindowCounts,
+    pub combo: u32,
+    pub first_fc_attempt_broken: bool,
+    pub window_counts: WindowCounts,
+    pub window_counts_10ms_blue: WindowCounts,
+    pub window_counts_display_blue: WindowCounts,
+    pub holds_held: u32,
+    pub rolls_held: u32,
+    pub mines_avoided: u32,
+    pub holds_held_for_score: u32,
+    pub holds_let_go_for_score: u32,
+    pub rolls_held_for_score: u32,
+    pub rolls_let_go_for_score: u32,
+    pub mines_hit_for_score: u32,
+}
+
+pub fn course_display_carry_for_stage(
+    previous: CourseDisplayCarry,
+    stage: CourseDisplayStage,
+) -> CourseDisplayCarry {
+    let mut judgment_counts = [0u32; judgment::JUDGE_GRADE_COUNT];
+    let mut scoring_counts = [0u32; judgment::JUDGE_GRADE_COUNT];
+    let mut ix = 0usize;
+    while ix < judgment::JUDGE_GRADE_COUNT {
+        judgment_counts[ix] =
+            previous.judgment_counts[ix].saturating_add(stage.judgment_counts[ix]);
+        scoring_counts[ix] = previous.scoring_counts[ix].saturating_add(stage.scoring_counts[ix]);
+        ix += 1;
+    }
+
+    let first_fc_attempt_broken = previous.first_fc_attempt_broken || stage.first_fc_attempt_broken;
+    let full_combo_grade = if first_fc_attempt_broken {
+        None
+    } else {
+        match (previous.full_combo_grade, stage.full_combo_grade) {
+            (Some(prev), Some(current)) => Some(prev.max(current)),
+            (Some(prev), None) => Some(prev),
+            (None, current) => current,
+        }
+    };
+
+    CourseDisplayCarry {
+        life: stage.life.clamp(0.0, 1.0),
+        judgment_counts,
+        scoring_counts,
+        full_combo_grade,
+        current_combo_grade: stage.current_combo_grade,
+        current_combo_window_counts: if stage.combo > 0 {
+            stage.current_combo_window_counts
+        } else {
+            WindowCounts::default()
+        },
+        first_fc_attempt_broken,
+        window_counts: judgment::add_window_counts(previous.window_counts, stage.window_counts),
+        window_counts_10ms_blue: judgment::add_window_counts(
+            previous.window_counts_10ms_blue,
+            stage.window_counts_10ms_blue,
+        ),
+        window_counts_display_blue: judgment::add_window_counts(
+            previous.window_counts_display_blue,
+            stage.window_counts_display_blue,
+        ),
+        holds_held: previous.holds_held.saturating_add(stage.holds_held),
+        rolls_held: previous.rolls_held.saturating_add(stage.rolls_held),
+        mines_avoided: previous.mines_avoided.saturating_add(stage.mines_avoided),
+        holds_held_for_score: previous
+            .holds_held_for_score
+            .saturating_add(stage.holds_held_for_score),
+        holds_let_go_for_score: previous
+            .holds_let_go_for_score
+            .saturating_add(stage.holds_let_go_for_score),
+        rolls_held_for_score: previous
+            .rolls_held_for_score
+            .saturating_add(stage.rolls_held_for_score),
+        rolls_let_go_for_score: previous
+            .rolls_let_go_for_score
+            .saturating_add(stage.rolls_let_go_for_score),
+        mines_hit_for_score: previous
+            .mines_hit_for_score
+            .saturating_add(stage.mines_hit_for_score),
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CourseDisplayTiming {
+    pub elapsed_seconds: f32,
+    pub total_seconds: f32,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ExScoreInputs {
+    pub counts: WindowCounts,
+    pub counts_10ms: WindowCounts,
+    pub holds_held_for_score: u32,
+    pub holds_let_go_for_score: u32,
+    pub rolls_held_for_score: u32,
+    pub rolls_let_go_for_score: u32,
+    pub mines_hit_for_score: u32,
+}
+
+pub fn ex_score_data_from_display_inputs(
+    inputs: ExScoreInputs,
+    carry: CourseDisplayCarry,
+    totals: CourseDisplayTotals,
+) -> judgment::ExScoreData {
+    let (holds_held, holds_resolved) = judgment::scored_hold_totals_with_carry(
+        inputs.holds_held_for_score,
+        inputs.holds_let_go_for_score,
+        carry.holds_held_for_score,
+        carry.holds_let_go_for_score,
+    );
+    let (rolls_held, rolls_resolved) = judgment::scored_hold_totals_with_carry(
+        inputs.rolls_held_for_score,
+        inputs.rolls_let_go_for_score,
+        carry.rolls_held_for_score,
+        carry.rolls_let_go_for_score,
+    );
+    judgment::ExScoreData {
+        counts: inputs.counts,
+        counts_10ms: inputs.counts_10ms,
+        holds_held,
+        holds_resolved,
+        rolls_held,
+        rolls_resolved,
+        mines_hit: inputs
+            .mines_hit_for_score
+            .saturating_add(carry.mines_hit_for_score),
+        total_steps: totals.total_steps,
+        holds_total: totals.holds_total,
+        rolls_total: totals.rolls_total,
+        mines_total: totals.mines_total,
+    }
+}
+
+#[inline(always)]
+pub fn effective_ex_score_inputs(
+    live: ExScoreInputs,
+    failed_snapshot: Option<ExScoreInputs>,
+) -> ExScoreInputs {
+    failed_snapshot.unwrap_or(live)
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ItgScoreStage {
+    pub scoring_counts: judgment::JudgeCounts,
+    pub holds_held_for_score: u32,
+    pub holds_let_go_for_score: u32,
+    pub rolls_held_for_score: u32,
+    pub rolls_let_go_for_score: u32,
+    pub mines_hit_for_score: u32,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ItgScoreInputs {
+    pub scoring_counts: judgment::JudgeCounts,
+    pub holds_held_for_score: u32,
+    pub rolls_held_for_score: u32,
+    pub mines_hit_for_score: u32,
+    pub holds_resolved_for_score: u32,
+    pub rolls_resolved_for_score: u32,
+    pub possible_grade_points: i32,
+}
+
+pub fn itg_score_inputs_from_display(
+    stage: ItgScoreStage,
+    carry: CourseDisplayCarry,
+    totals: CourseDisplayTotals,
+) -> ItgScoreInputs {
+    let mut scoring_counts = stage.scoring_counts;
+    let mut ix = 0usize;
+    while ix < judgment::JUDGE_GRADE_COUNT {
+        scoring_counts[ix] = scoring_counts[ix].saturating_add(carry.scoring_counts[ix]);
+        ix += 1;
+    }
+
+    let holds_held_for_score = stage
+        .holds_held_for_score
+        .saturating_add(carry.holds_held_for_score);
+    let rolls_held_for_score = stage
+        .rolls_held_for_score
+        .saturating_add(carry.rolls_held_for_score);
+    ItgScoreInputs {
+        scoring_counts,
+        holds_held_for_score,
+        rolls_held_for_score,
+        mines_hit_for_score: stage
+            .mines_hit_for_score
+            .saturating_add(carry.mines_hit_for_score),
+        holds_resolved_for_score: holds_held_for_score
+            .saturating_add(stage.holds_let_go_for_score)
+            .saturating_add(carry.holds_let_go_for_score),
+        rolls_resolved_for_score: rolls_held_for_score
+            .saturating_add(stage.rolls_let_go_for_score)
+            .saturating_add(carry.rolls_let_go_for_score),
+        possible_grade_points: totals.possible_grade_points,
+    }
+}
+
+pub fn itg_score_percent_from_inputs(inputs: ItgScoreInputs) -> f64 {
+    judgment::calculate_itg_score_percent_from_counts(
+        &inputs.scoring_counts,
+        inputs.holds_held_for_score,
+        inputs.rolls_held_for_score,
+        inputs.mines_hit_for_score,
+        inputs.possible_grade_points,
+    )
+}
+
+pub fn predictive_itg_score_percent_from_inputs(inputs: ItgScoreInputs) -> f64 {
+    let actual = judgment::calculate_itg_grade_points_from_counts(
+        &inputs.scoring_counts,
+        inputs.holds_held_for_score,
+        inputs.rolls_held_for_score,
+        inputs.mines_hit_for_score,
+    );
+    let current_possible = judgment::current_possible_grade_points_from_counts(
+        &inputs.scoring_counts,
+        inputs.holds_resolved_for_score,
+        inputs.rolls_resolved_for_score,
+    );
+    let (kept, _, _) = judgment::predictive_itg_score_percents(
+        current_possible,
+        inputs.possible_grade_points,
+        actual,
+    );
+    kept
+}
+
+pub fn display_itg_score_percent_for_mode(
+    inputs: ItgScoreInputs,
+    mode: GameplayScoreDisplayMode,
+) -> f64 {
+    match mode {
+        GameplayScoreDisplayMode::Normal => itg_score_percent_from_inputs(inputs) * 100.0,
+        GameplayScoreDisplayMode::Predictive => predictive_itg_score_percent_from_inputs(inputs),
+    }
+}
+
+pub fn display_ex_score_percent_for_mode(
+    score: &judgment::ExScoreData,
+    mode: GameplayScoreDisplayMode,
+) -> f64 {
+    match mode {
+        GameplayScoreDisplayMode::Normal => judgment::ex_score_percent(score),
+        GameplayScoreDisplayMode::Predictive => judgment::predictive_ex_score_percents(score).0,
+    }
+}
+
+pub fn display_hard_ex_score_percent_for_mode(
+    score: &judgment::ExScoreData,
+    mode: GameplayScoreDisplayMode,
+) -> f64 {
+    match mode {
+        GameplayScoreDisplayMode::Normal => judgment::hard_ex_score_percent(score),
+        GameplayScoreDisplayMode::Predictive => {
+            judgment::predictive_hard_ex_score_percents(score).0
+        }
+    }
+}
+
+#[inline(always)]
+pub fn stream_segments_for_note_data(
+    notes: &[u8],
+    lanes: usize,
+    constant_bpm: bool,
+) -> (Vec<StreamSegment>, f32, f32) {
+    let densities = measure_densities(notes, lanes);
+    zmod_stream_totals_for_densities(&densities, constant_bpm)
+}
+
+pub fn measure_counter_segments_for_densities(
+    densities: &[usize],
+    notes_threshold: Option<usize>,
+) -> Vec<StreamSegment> {
+    notes_threshold.map_or_else(Vec::new, |threshold| {
+        stream_sequences_threshold(densities, threshold)
+    })
+}
+
+#[inline(always)]
+pub fn zmod_stream_totals_for_densities(
+    densities: &[usize],
+    constant_bpm: bool,
+) -> (Vec<StreamSegment>, f32, f32) {
+    zmod_stream_totals_full_measures(densities, constant_bpm)
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum GameplayTargetScoreSetting {
+    CMinus,
+    C,
+    CPlus,
+    BMinus,
+    B,
+    BPlus,
+    AMinus,
+    A,
+    APlus,
+    SMinus,
+    #[default]
+    S,
+    SPlus,
+    MachineBest,
+    PersonalBest,
+}
+
+pub const fn target_score_setting_percent(setting: GameplayTargetScoreSetting) -> Option<f64> {
+    match setting {
+        GameplayTargetScoreSetting::CMinus => Some(50.0),
+        GameplayTargetScoreSetting::C => Some(55.0),
+        GameplayTargetScoreSetting::CPlus => Some(60.0),
+        GameplayTargetScoreSetting::BMinus => Some(64.0),
+        GameplayTargetScoreSetting::B => Some(68.0),
+        GameplayTargetScoreSetting::BPlus => Some(72.0),
+        GameplayTargetScoreSetting::AMinus => Some(76.0),
+        GameplayTargetScoreSetting::A => Some(80.0),
+        GameplayTargetScoreSetting::APlus => Some(83.0),
+        GameplayTargetScoreSetting::SMinus => Some(86.0),
+        GameplayTargetScoreSetting::S => Some(89.0),
+        GameplayTargetScoreSetting::SPlus => Some(92.0),
+        GameplayTargetScoreSetting::MachineBest | GameplayTargetScoreSetting::PersonalBest => None,
+    }
+}
+
+pub fn resolve_target_score_percent(
+    setting: GameplayTargetScoreSetting,
+    personal_best: Option<f64>,
+    machine_best: Option<f64>,
+) -> f64 {
+    match setting {
+        GameplayTargetScoreSetting::MachineBest => machine_best.or(personal_best),
+        GameplayTargetScoreSetting::PersonalBest => personal_best,
+        fixed => target_score_setting_percent(fixed),
+    }
+    .unwrap_or(89.0)
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct ChartAttackWindow {
     pub start_second: f32,
@@ -1587,6 +2176,13 @@ pub struct SongLuaColumnOffsetWindowRuntime {
     pub easing: Option<String>,
     pub opt1: Option<f32>,
     pub opt2: Option<f32>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SongLuaNoteHideWindowRuntime {
+    pub column: usize,
+    pub start_beat: f32,
+    pub end_beat: f32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -2282,6 +2878,20 @@ pub fn song_lua_extend_column_offset_tails(out: &mut [SongLuaColumnOffsetWindowR
         out[i].sustain_end_second =
             cutoff_second.map_or(default_end, |cutoff| default_end.min(cutoff));
     }
+}
+
+#[inline(always)]
+pub fn song_lua_note_hidden(
+    windows: &[SongLuaNoteHideWindowRuntime],
+    local_col: usize,
+    beat: f32,
+) -> bool {
+    const EPS: f32 = 1.0e-4;
+    windows.iter().any(|window| {
+        window.column == local_col
+            && beat + EPS >= window.start_beat
+            && beat <= window.end_beat + EPS
+    })
 }
 
 #[inline(always)]
@@ -4535,6 +5145,43 @@ pub const fn column_flash_duration(grade: JudgeGrade) -> f32 {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ColumnFlashOptions {
+    pub enabled: bool,
+    pub blue_fantastic: bool,
+    pub white_fantastic: bool,
+    pub excellent: bool,
+    pub great: bool,
+    pub decent: bool,
+    pub way_off: bool,
+    pub miss: bool,
+}
+
+#[inline(always)]
+pub const fn column_flash_enabled_for_options(
+    options: ColumnFlashOptions,
+    grade: JudgeGrade,
+    blue_fantastic: bool,
+) -> bool {
+    if !options.enabled {
+        return false;
+    }
+    match grade {
+        JudgeGrade::Fantastic => {
+            if blue_fantastic {
+                options.blue_fantastic
+            } else {
+                options.white_fantastic
+            }
+        }
+        JudgeGrade::Excellent => options.excellent,
+        JudgeGrade::Great => options.great,
+        JudgeGrade::Decent => options.decent,
+        JudgeGrade::WayOff => options.way_off,
+        JudgeGrade::Miss => options.miss,
+    }
+}
+
 #[derive(Copy, Clone, Debug)]
 pub struct ActiveTapExplosion {
     pub window: &'static str,
@@ -5019,6 +5666,37 @@ pub fn tap_explosion_window_index(window: &str) -> Option<usize> {
         "Held" => Some(6),
         _ => None,
     }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct TapExplosionOptions {
+    pub fantastic: bool,
+    pub excellent: bool,
+    pub great: bool,
+    pub decent: bool,
+    pub way_off: bool,
+    pub miss: bool,
+    pub held: bool,
+    pub holding: bool,
+}
+
+#[inline(always)]
+pub fn tap_explosion_enabled_for_options(options: TapExplosionOptions, window: &str) -> bool {
+    match window {
+        "W0" | "W1" => options.fantastic,
+        "W2" => options.excellent,
+        "W3" => options.great,
+        "W4" => options.decent,
+        "W5" => options.way_off,
+        "Miss" => options.miss,
+        "Held" => options.held,
+        _ => false,
+    }
+}
+
+#[inline(always)]
+pub const fn hold_explosion_enabled_for_options(options: TapExplosionOptions) -> bool {
+    options.holding
 }
 
 #[derive(Clone, Debug)]
@@ -5519,6 +6197,40 @@ pub fn autoplay_random_offset_music_ns_for_window(
 #[inline(always)]
 pub fn active_hold_is_engaged(active: &ActiveHold) -> bool {
     !active.let_go && active.life > 0.0
+}
+
+#[inline(always)]
+pub fn hold_head_render_flags(
+    active_state: Option<&ActiveHold>,
+    current_beat: f32,
+    note_beat: f32,
+) -> (bool, bool) {
+    let reached_receptor = current_beat >= note_beat;
+    let engaged = reached_receptor && active_state.is_some_and(active_hold_is_engaged);
+    let use_active = engaged
+        && active_state.is_some_and(|h| matches!(h.note_type, NoteType::Roll) || h.is_pressed);
+    (engaged, use_active)
+}
+
+#[inline(always)]
+pub fn hold_explosion_active(
+    active_state: Option<&ActiveHold>,
+    current_beat: f32,
+    note_beat: f32,
+) -> bool {
+    current_beat >= note_beat && active_state.is_some_and(active_hold_is_engaged)
+}
+
+#[inline(always)]
+pub fn let_go_head_beat(
+    note_beat: f32,
+    end_beat: f32,
+    last_held_beat: f32,
+    visible_beat: f32,
+) -> f32 {
+    last_held_beat
+        .clamp(note_beat, end_beat)
+        .min(visible_beat.max(note_beat))
 }
 
 #[inline(always)]
@@ -7193,6 +7905,63 @@ pub fn apply_uncommon_masks_with_masks(
     sort_player_notes(notes);
 }
 
+pub fn apply_uncommon_chart_transforms(
+    notes: &mut Vec<Note>,
+    note_ranges: &mut [(usize, usize); MAX_PLAYERS],
+    cols_per_player: usize,
+    num_players: usize,
+    player_effects: &[ChartAttackEffects; MAX_PLAYERS],
+    timing_players: &[&TimingData; MAX_PLAYERS],
+) {
+    if num_players == 0
+        || !player_effects
+            .iter()
+            .take(num_players)
+            .any(|effects| effects.has_note_masks())
+    {
+        return;
+    }
+
+    let mut transformed = Vec::with_capacity(notes.len());
+    let mut transformed_ranges = [(0usize, 0usize); MAX_PLAYERS];
+
+    for player in 0..num_players {
+        let (start, end) = note_ranges[player];
+        let slice_end = end.min(notes.len());
+        let slice_start = start.min(slice_end);
+        let out_start = transformed.len();
+        let effects = player_effects[player];
+        if !effects.has_note_masks() {
+            transformed.extend_from_slice(&notes[slice_start..slice_end]);
+            transformed_ranges[player] = (out_start, transformed.len());
+            continue;
+        }
+
+        let mut player_notes = notes[slice_start..slice_end].to_vec();
+        apply_uncommon_masks_with_masks(
+            &mut player_notes,
+            effects.insert_mask,
+            effects.remove_mask,
+            effects.holds_mask,
+            timing_players[player],
+            player.saturating_mul(cols_per_player),
+            cols_per_player,
+            &[],
+            None,
+            player,
+        );
+        transformed.extend(player_notes);
+        transformed_ranges[player] = (out_start, transformed.len());
+    }
+
+    if num_players == 1 {
+        transformed_ranges[1] = transformed_ranges[0];
+    }
+
+    *notes = transformed;
+    *note_ranges = transformed_ranges;
+}
+
 fn turn_take_from(turn: GameplayTurnOption, cols: usize, seed: u64) -> Option<Vec<usize>> {
     if cols == 0 {
         return None;
@@ -7991,6 +8760,7 @@ pub const fn gameplay_exit_for_kind(kind: ExitTransitionKind) -> GameplayExit {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use deadsync_chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
     use deadsync_core::song_time::{
         INVALID_SONG_TIME_NS, song_time_ns_from_seconds, song_time_ns_to_seconds,
     };
@@ -9911,6 +10681,76 @@ mod tests {
     }
 
     #[test]
+    fn column_flash_options_gate_grade_bits() {
+        let options = ColumnFlashOptions {
+            enabled: true,
+            great: true,
+            miss: true,
+            ..ColumnFlashOptions::default()
+        };
+
+        assert!(column_flash_enabled_for_options(
+            options,
+            JudgeGrade::Great,
+            false
+        ));
+        assert!(column_flash_enabled_for_options(
+            options,
+            JudgeGrade::Miss,
+            false
+        ));
+        assert!(!column_flash_enabled_for_options(
+            options,
+            JudgeGrade::Excellent,
+            false
+        ));
+        assert!(!column_flash_enabled_for_options(
+            ColumnFlashOptions {
+                enabled: false,
+                great: true,
+                ..ColumnFlashOptions::default()
+            },
+            JudgeGrade::Great,
+            false
+        ));
+    }
+
+    #[test]
+    fn column_flash_options_split_fantastic_colors() {
+        let blue_only = ColumnFlashOptions {
+            enabled: true,
+            blue_fantastic: true,
+            ..ColumnFlashOptions::default()
+        };
+        let white_only = ColumnFlashOptions {
+            enabled: true,
+            white_fantastic: true,
+            ..ColumnFlashOptions::default()
+        };
+
+        assert!(column_flash_enabled_for_options(
+            blue_only,
+            JudgeGrade::Fantastic,
+            true
+        ));
+        assert!(!column_flash_enabled_for_options(
+            blue_only,
+            JudgeGrade::Fantastic,
+            false
+        ));
+        assert!(column_flash_enabled_for_options(
+            white_only,
+            JudgeGrade::Fantastic,
+            false
+        ));
+        assert!(!column_flash_enabled_for_options(
+            white_only,
+            JudgeGrade::Fantastic,
+            true
+        ));
+    }
+
+    #[test]
     fn danger_health_state_uses_life_threshold_and_fail_state() {
         assert_eq!(danger_health_state(1.0, false), HealthState::Alive);
         assert_eq!(danger_health_state(0.2, false), HealthState::Alive);
@@ -10716,6 +11556,28 @@ mod tests {
     }
 
     #[test]
+    fn song_lua_note_hide_windows_cover_matching_column_bounds() {
+        let windows = [
+            SongLuaNoteHideWindowRuntime {
+                column: 2,
+                start_beat: 40.0,
+                end_beat: 44.0,
+            },
+            SongLuaNoteHideWindowRuntime {
+                column: 3,
+                start_beat: 48.0,
+                end_beat: 52.0,
+            },
+        ];
+
+        assert!(song_lua_note_hidden(&windows, 2, 40.0));
+        assert!(song_lua_note_hidden(&windows, 2, 44.0));
+        assert!(song_lua_note_hidden(&windows, 2, 39.99995));
+        assert!(!song_lua_note_hidden(&windows, 1, 42.0));
+        assert!(!song_lua_note_hidden(&windows, 2, 44.01));
+    }
+
+    #[test]
     fn song_lua_message_events_offset_event_times_only() {
         let mut events = [
             SongLuaOverlayMessageRuntime {
@@ -11158,6 +12020,52 @@ mod tests {
     }
 
     #[test]
+    fn tap_explosion_options_map_judgment_windows() {
+        let options = TapExplosionOptions {
+            fantastic: true,
+            excellent: true,
+            great: true,
+            decent: true,
+            way_off: true,
+            miss: true,
+            held: true,
+            holding: true,
+        };
+
+        for window in ["W0", "W1", "W2", "W3", "W4", "W5", "Miss", "Held"] {
+            assert!(tap_explosion_enabled_for_options(options, window));
+        }
+        assert!(!tap_explosion_enabled_for_options(options, "Holding"));
+    }
+
+    #[test]
+    fn tap_explosion_options_gate_disabled_windows() {
+        let options = TapExplosionOptions {
+            miss: true,
+            held: true,
+            ..TapExplosionOptions::default()
+        };
+
+        assert!(tap_explosion_enabled_for_options(options, "Miss"));
+        assert!(tap_explosion_enabled_for_options(options, "Held"));
+        assert!(!tap_explosion_enabled_for_options(options, "W0"));
+        assert!(!tap_explosion_enabled_for_options(options, "W1"));
+        assert!(!tap_explosion_enabled_for_options(options, "W3"));
+    }
+
+    #[test]
+    fn hold_explosion_options_use_holding_bit_only() {
+        assert!(hold_explosion_enabled_for_options(TapExplosionOptions {
+            holding: true,
+            ..TapExplosionOptions::default()
+        }));
+        assert!(!hold_explosion_enabled_for_options(TapExplosionOptions {
+            held: true,
+            ..TapExplosionOptions::default()
+        }));
+    }
+
+    #[test]
     fn fantastic_feedback_requires_fa_plus_and_fantastic_grade() {
         let fantastic = test_judgment(JudgeGrade::Fantastic);
         let excellent = test_judgment(JudgeGrade::Excellent);
@@ -11412,6 +12320,799 @@ mod tests {
             },
             miss_because_held: false,
         }
+    }
+
+    fn test_chart(stats: ArrowStats, mines_nonfake: u32, has_chart_attacks: bool) -> ChartData {
+        ChartData {
+            chart_type: String::new(),
+            difficulty: String::new(),
+            description: String::new(),
+            chart_name: String::new(),
+            meter: 0,
+            step_artist: String::new(),
+            music_path: None,
+            short_hash: String::new(),
+            stats,
+            tech_counts: TechCounts::default(),
+            mines_nonfake,
+            stamina_counts: StaminaCounts::default(),
+            total_streams: 0,
+            matrix_rating: 0.0,
+            max_nps: 0.0,
+            sn_detailed_breakdown: String::new(),
+            sn_partial_breakdown: String::new(),
+            sn_simple_breakdown: String::new(),
+            detailed_breakdown: String::new(),
+            partial_breakdown: String::new(),
+            simple_breakdown: String::new(),
+            total_measures: 0,
+            measure_nps_vec: Vec::new(),
+            measure_seconds_vec: Vec::new(),
+            first_second: 0.0,
+            has_note_data: true,
+            has_chart_attacks,
+            possible_grade_points: 0,
+            holds_total: 0,
+            rolls_total: 0,
+            mines_total: 0,
+            display_bpm: None,
+            min_bpm: 0.0,
+            max_bpm: 0.0,
+        }
+    }
+
+    fn test_active_hold(
+        note_type: NoteType,
+        is_pressed: bool,
+        let_go: bool,
+        life: f32,
+    ) -> ActiveHold {
+        ActiveHold {
+            note_index: 42,
+            start_time_ns: 0,
+            end_time_ns: 1_000_000_000,
+            note_type,
+            let_go,
+            is_pressed,
+            life,
+            last_update_time_ns: 0,
+        }
+    }
+
+    #[test]
+    fn score_validity_rejects_rate_below_one() {
+        let chart = test_chart(ArrowStats::default(), 0, false);
+        let reasons = score_invalid_reason_lines_for_options(
+            &chart,
+            ScoreValidityOptions {
+                music_rate: 0.75,
+                ..ScoreValidityOptions::default()
+            },
+        );
+
+        assert_eq!(reasons, vec!["music rate is below 1.0x"]);
+
+        let normalized = score_invalid_reason_lines_for_options(
+            &chart,
+            ScoreValidityOptions {
+                music_rate: f32::NAN,
+                ..ScoreValidityOptions::default()
+            },
+        );
+
+        assert!(normalized.is_empty());
+    }
+
+    #[test]
+    fn score_validity_rejects_matching_remove_masks() {
+        let chart = test_chart(
+            ArrowStats {
+                jumps: 1,
+                hands: 1,
+                holds: 1,
+                rolls: 1,
+                lifts: 1,
+                fakes: 1,
+                ..ArrowStats::default()
+            },
+            1,
+            false,
+        );
+        let reasons = score_invalid_reason_lines_for_options(
+            &chart,
+            ScoreValidityOptions {
+                chart_effects: ChartAttackEffects {
+                    remove_mask: REMOVE_MASK_BIT_NO_HOLDS
+                        | REMOVE_MASK_BIT_NO_MINES
+                        | REMOVE_MASK_BIT_NO_JUMPS
+                        | REMOVE_MASK_BIT_NO_HANDS
+                        | REMOVE_MASK_BIT_NO_QUADS
+                        | REMOVE_MASK_BIT_NO_LIFTS
+                        | REMOVE_MASK_BIT_NO_FAKES
+                        | REMOVE_MASK_BIT_LITTLE,
+                    holds_mask: HOLDS_MASK_BIT_NO_ROLLS,
+                    ..ChartAttackEffects::default()
+                },
+                ..ScoreValidityOptions::default()
+            },
+        );
+
+        assert!(reasons.contains(&"No Holds is enabled on a chart with holds"));
+        assert!(reasons.contains(&"No Mines is enabled on a chart with mines"));
+        assert!(reasons.contains(&"No Jumps is enabled on a chart with jumps"));
+        assert!(reasons.contains(&"No Hands is enabled on a chart with hands"));
+        assert!(reasons.contains(&"No Quads is enabled on a chart with quads"));
+        assert!(reasons.contains(&"No Lifts is enabled on a chart with lifts"));
+        assert!(reasons.contains(&"No Fakes is enabled on a chart with fakes"));
+        assert!(reasons.contains(&"No Rolls is enabled on a chart with rolls"));
+        assert!(reasons.contains(&"Little is enabled"));
+    }
+
+    #[test]
+    fn score_validity_rejects_insert_and_hold_masks() {
+        let chart = test_chart(ArrowStats::default(), 0, false);
+        let reasons = score_invalid_reason_lines_for_options(
+            &chart,
+            ScoreValidityOptions {
+                chart_effects: ChartAttackEffects {
+                    insert_mask: INSERT_MASK_BIT_ECHO,
+                    holds_mask: HOLDS_MASK_BIT_PLANTED
+                        | HOLDS_MASK_BIT_FLOORED
+                        | HOLDS_MASK_BIT_TWISTER,
+                    ..ChartAttackEffects::default()
+                },
+                ..ScoreValidityOptions::default()
+            },
+        );
+
+        assert!(reasons.contains(&"Echo is enabled"));
+        assert!(reasons.contains(&"Planted is enabled"));
+        assert!(reasons.contains(&"Floored is enabled"));
+        assert!(reasons.contains(&"Twister is enabled"));
+    }
+
+    #[test]
+    fn score_validity_rejects_attack_modes() {
+        let chart_attacks = test_chart(ArrowStats::default(), 0, true);
+        let no_chart_attacks = test_chart(ArrowStats::default(), 0, false);
+
+        assert_eq!(
+            score_invalid_reason_lines_for_options(
+                &chart_attacks,
+                ScoreValidityOptions {
+                    attack_mode: GameplayAttackMode::Off,
+                    ..ScoreValidityOptions::default()
+                },
+            ),
+            vec!["AttackMode=Off is enabled on a chart with attacks"]
+        );
+        assert_eq!(
+            score_invalid_reason_lines_for_options(
+                &no_chart_attacks,
+                ScoreValidityOptions {
+                    attack_mode: GameplayAttackMode::Random,
+                    ..ScoreValidityOptions::default()
+                },
+            ),
+            vec!["AttackMode=Random is enabled"]
+        );
+        assert!(
+            score_invalid_reason_lines_for_options(
+                &chart_attacks,
+                ScoreValidityOptions {
+                    attack_mode: GameplayAttackMode::On,
+                    ..ScoreValidityOptions::default()
+                },
+            )
+            .is_empty()
+        );
+    }
+
+    #[test]
+    fn course_display_totals_copy_chart_totals() {
+        let mut chart = test_chart(
+            ArrowStats {
+                total_steps: 123,
+                ..ArrowStats::default()
+            },
+            0,
+            false,
+        );
+        chart.possible_grade_points = 456;
+        chart.holds_total = 7;
+        chart.rolls_total = 8;
+        chart.mines_total = 9;
+
+        let totals = course_display_totals_for_chart(&chart);
+
+        assert_eq!(totals.possible_grade_points, 456);
+        assert_eq!(totals.total_steps, 123);
+        assert_eq!(totals.holds_total, 7);
+        assert_eq!(totals.rolls_total, 8);
+        assert_eq!(totals.mines_total, 9);
+    }
+
+    #[test]
+    fn course_display_carry_merges_stage_counts() {
+        let carry = course_display_carry_for_stage(
+            CourseDisplayCarry {
+                life: 0.25,
+                judgment_counts: [1, 2, 3, 4, 5, 6],
+                scoring_counts: [6, 5, 4, 3, 2, 1],
+                full_combo_grade: Some(JudgeGrade::Great),
+                current_combo_window_counts: WindowCounts {
+                    w1: 9,
+                    ..WindowCounts::default()
+                },
+                window_counts: WindowCounts {
+                    w1: 5,
+                    ..WindowCounts::default()
+                },
+                window_counts_10ms_blue: WindowCounts {
+                    w0: 6,
+                    ..WindowCounts::default()
+                },
+                window_counts_display_blue: WindowCounts {
+                    w2: 7,
+                    ..WindowCounts::default()
+                },
+                holds_held_for_score: 8,
+                holds_let_go_for_score: 9,
+                rolls_held_for_score: 10,
+                rolls_let_go_for_score: 11,
+                mines_hit_for_score: 12,
+                ..CourseDisplayCarry::default()
+            },
+            CourseDisplayStage {
+                life: 1.25,
+                judgment_counts: [10, 20, 30, 40, 50, 60],
+                scoring_counts: [60, 50, 40, 30, 20, 10],
+                full_combo_grade: Some(JudgeGrade::Excellent),
+                current_combo_grade: Some(JudgeGrade::Fantastic),
+                current_combo_window_counts: WindowCounts {
+                    w0: 3,
+                    ..WindowCounts::default()
+                },
+                combo: 0,
+                window_counts: WindowCounts {
+                    w1: 13,
+                    ..WindowCounts::default()
+                },
+                window_counts_10ms_blue: WindowCounts {
+                    w0: 14,
+                    ..WindowCounts::default()
+                },
+                window_counts_display_blue: WindowCounts {
+                    w2: 15,
+                    ..WindowCounts::default()
+                },
+                holds_held_for_score: 16,
+                holds_let_go_for_score: 17,
+                rolls_held_for_score: 18,
+                rolls_let_go_for_score: 19,
+                mines_hit_for_score: 20,
+                ..CourseDisplayStage::default()
+            },
+        );
+
+        assert_eq!(carry.life, 1.0);
+        assert_eq!(carry.judgment_counts, [11, 22, 33, 44, 55, 66]);
+        assert_eq!(carry.scoring_counts, [66, 55, 44, 33, 22, 11]);
+        assert_eq!(carry.full_combo_grade, Some(JudgeGrade::Great));
+        assert_eq!(carry.current_combo_grade, Some(JudgeGrade::Fantastic));
+        assert_eq!(carry.current_combo_window_counts.w0, 0);
+        assert_eq!(carry.current_combo_window_counts.w1, 0);
+        assert_eq!(carry.current_combo_window_counts.miss, 0);
+        assert_eq!(carry.window_counts.w1, 18);
+        assert_eq!(carry.window_counts_10ms_blue.w0, 20);
+        assert_eq!(carry.window_counts_display_blue.w2, 22);
+        assert_eq!(carry.holds_held_for_score, 24);
+        assert_eq!(carry.holds_let_go_for_score, 26);
+        assert_eq!(carry.rolls_held_for_score, 28);
+        assert_eq!(carry.rolls_let_go_for_score, 30);
+        assert_eq!(carry.mines_hit_for_score, 32);
+    }
+
+    #[test]
+    fn course_display_carry_clears_full_combo_after_break() {
+        let carry = course_display_carry_for_stage(
+            CourseDisplayCarry {
+                full_combo_grade: Some(JudgeGrade::Fantastic),
+                ..CourseDisplayCarry::default()
+            },
+            CourseDisplayStage {
+                combo: 4,
+                current_combo_window_counts: WindowCounts {
+                    w1: 4,
+                    ..WindowCounts::default()
+                },
+                first_fc_attempt_broken: true,
+                ..CourseDisplayStage::default()
+            },
+        );
+
+        assert!(carry.full_combo_grade.is_none());
+        assert!(carry.first_fc_attempt_broken);
+        assert_eq!(carry.current_combo_window_counts.w1, 4);
+    }
+
+    #[test]
+    fn display_window_counts_mode_selects_cached_or_custom_splits() {
+        assert_eq!(
+            display_window_counts_mode(None, 10.0),
+            DisplayWindowCountsMode::Canonical
+        );
+        assert_eq!(
+            display_window_counts_mode(Some(FA_PLUS_W0_MS), 10.0),
+            DisplayWindowCountsMode::Canonical
+        );
+        assert_eq!(
+            display_window_counts_mode(Some(FA_PLUS_W010_MS), 15.0),
+            DisplayWindowCountsMode::TenMsBlue
+        );
+        assert_eq!(
+            display_window_counts_mode(Some(12.5), 12.5),
+            DisplayWindowCountsMode::DisplayBlue
+        );
+        assert!(matches!(
+            display_window_counts_mode(Some(12.5), 10.0),
+            DisplayWindowCountsMode::CustomBlue { split_ms }
+                if (split_ms - 12.5).abs() <= 0.000_1
+        ));
+    }
+
+    #[test]
+    fn display_window_counts_current_and_carry_use_selected_bucket() {
+        let sources = DisplayWindowCountsSources {
+            canonical: WindowCounts {
+                w1: 1,
+                ..WindowCounts::default()
+            },
+            ten_ms_blue: WindowCounts {
+                w0: 2,
+                ..WindowCounts::default()
+            },
+            display_blue: WindowCounts {
+                w2: 3,
+                ..WindowCounts::default()
+            },
+        };
+        let carry = CourseDisplayCarry {
+            window_counts: WindowCounts {
+                w1: 10,
+                ..WindowCounts::default()
+            },
+            window_counts_10ms_blue: WindowCounts {
+                w0: 20,
+                ..WindowCounts::default()
+            },
+            window_counts_display_blue: WindowCounts {
+                w2: 30,
+                ..WindowCounts::default()
+            },
+            ..CourseDisplayCarry::default()
+        };
+
+        let canonical = display_window_counts_with_carry(
+            display_window_counts_current(sources, DisplayWindowCountsMode::Canonical).unwrap(),
+            carry,
+            DisplayWindowCountsMode::Canonical,
+        );
+        let ten_ms = display_window_counts_with_carry(
+            display_window_counts_current(sources, DisplayWindowCountsMode::TenMsBlue).unwrap(),
+            carry,
+            DisplayWindowCountsMode::TenMsBlue,
+        );
+        let custom = display_window_counts_with_carry(
+            WindowCounts {
+                miss: 4,
+                ..WindowCounts::default()
+            },
+            carry,
+            DisplayWindowCountsMode::CustomBlue { split_ms: 12.5 },
+        );
+
+        assert_eq!(canonical.w1, 11);
+        assert_eq!(ten_ms.w0, 22);
+        assert!(
+            display_window_counts_current(
+                sources,
+                DisplayWindowCountsMode::CustomBlue { split_ms: 12.5 },
+            )
+            .is_none()
+        );
+        assert_eq!(custom.miss, 4);
+        assert_eq!(custom.w2, 30);
+    }
+
+    #[test]
+    fn display_judgment_count_combines_stage_and_course_carry() {
+        let carry = CourseDisplayCarry {
+            judgment_counts: [10, 20, 30, 40, 50, 60],
+            ..CourseDisplayCarry::default()
+        };
+
+        assert_eq!(
+            display_judgment_count_for_grade([1, 2, 3, 4, 5, 6], carry, JudgeGrade::Great),
+            33
+        );
+    }
+
+    #[test]
+    fn target_score_fixed_grades_map_to_percentages() {
+        assert_eq!(
+            target_score_setting_percent(GameplayTargetScoreSetting::CMinus),
+            Some(50.0)
+        );
+        assert_eq!(
+            target_score_setting_percent(GameplayTargetScoreSetting::S),
+            Some(89.0)
+        );
+        assert_eq!(
+            target_score_setting_percent(GameplayTargetScoreSetting::SPlus),
+            Some(92.0)
+        );
+        assert_eq!(
+            target_score_setting_percent(GameplayTargetScoreSetting::MachineBest),
+            None
+        );
+    }
+
+    #[test]
+    fn target_score_resolves_best_score_settings() {
+        assert_eq!(
+            resolve_target_score_percent(GameplayTargetScoreSetting::MachineBest, Some(91.0), None),
+            91.0
+        );
+        assert_eq!(
+            resolve_target_score_percent(
+                GameplayTargetScoreSetting::MachineBest,
+                Some(91.0),
+                Some(94.0),
+            ),
+            94.0
+        );
+        assert_eq!(
+            resolve_target_score_percent(
+                GameplayTargetScoreSetting::PersonalBest,
+                Some(91.0),
+                Some(94.0),
+            ),
+            91.0
+        );
+    }
+
+    #[test]
+    fn target_score_resolution_defaults_to_s_percent() {
+        assert_eq!(
+            resolve_target_score_percent(GameplayTargetScoreSetting::MachineBest, None, None),
+            89.0
+        );
+        assert_eq!(
+            resolve_target_score_percent(
+                GameplayTargetScoreSetting::PersonalBest,
+                None,
+                Some(94.0)
+            ),
+            89.0
+        );
+    }
+
+    #[test]
+    fn ex_score_data_combines_live_inputs_with_course_carry() {
+        let data = ex_score_data_from_display_inputs(
+            ExScoreInputs {
+                counts: WindowCounts {
+                    w1: 3,
+                    ..WindowCounts::default()
+                },
+                counts_10ms: WindowCounts {
+                    w0: 2,
+                    ..WindowCounts::default()
+                },
+                holds_held_for_score: 4,
+                holds_let_go_for_score: 1,
+                rolls_held_for_score: 5,
+                rolls_let_go_for_score: 2,
+                mines_hit_for_score: 6,
+            },
+            CourseDisplayCarry {
+                holds_held_for_score: 7,
+                holds_let_go_for_score: 3,
+                rolls_held_for_score: 8,
+                rolls_let_go_for_score: 4,
+                mines_hit_for_score: 9,
+                ..CourseDisplayCarry::default()
+            },
+            CourseDisplayTotals {
+                total_steps: 10,
+                holds_total: 11,
+                rolls_total: 12,
+                mines_total: 13,
+                ..CourseDisplayTotals::default()
+            },
+        );
+
+        assert_eq!(data.counts.w1, 3);
+        assert_eq!(data.counts_10ms.w0, 2);
+        assert_eq!(data.holds_held, 11);
+        assert_eq!(data.holds_resolved, 15);
+        assert_eq!(data.rolls_held, 13);
+        assert_eq!(data.rolls_resolved, 19);
+        assert_eq!(data.mines_hit, 15);
+        assert_eq!(data.total_steps, 10);
+        assert_eq!(data.holds_total, 11);
+        assert_eq!(data.rolls_total, 12);
+        assert_eq!(data.mines_total, 13);
+    }
+
+    #[test]
+    fn effective_ex_score_inputs_prefers_failed_snapshot() {
+        let live = ExScoreInputs {
+            counts: WindowCounts {
+                w1: 3,
+                ..WindowCounts::default()
+            },
+            mines_hit_for_score: 4,
+            ..ExScoreInputs::default()
+        };
+        let failed = ExScoreInputs {
+            counts: WindowCounts {
+                w2: 7,
+                ..WindowCounts::default()
+            },
+            mines_hit_for_score: 8,
+            ..ExScoreInputs::default()
+        };
+
+        let selected_live = effective_ex_score_inputs(live, None);
+        let selected_failed = effective_ex_score_inputs(live, Some(failed));
+
+        assert_eq!(selected_live.counts.w1, 3);
+        assert_eq!(selected_live.mines_hit_for_score, 4);
+        assert_eq!(selected_failed.counts.w2, 7);
+        assert_eq!(selected_failed.mines_hit_for_score, 8);
+    }
+
+    #[test]
+    fn itg_score_inputs_combine_stage_and_course_carry() {
+        let inputs = itg_score_inputs_from_display(
+            ItgScoreStage {
+                scoring_counts: [1, 2, 3, 4, 5, 6],
+                holds_held_for_score: 7,
+                holds_let_go_for_score: 8,
+                rolls_held_for_score: 9,
+                rolls_let_go_for_score: 10,
+                mines_hit_for_score: 11,
+            },
+            CourseDisplayCarry {
+                scoring_counts: [10, 20, 30, 40, 50, 60],
+                holds_held_for_score: 12,
+                holds_let_go_for_score: 13,
+                rolls_held_for_score: 14,
+                rolls_let_go_for_score: 15,
+                mines_hit_for_score: 16,
+                ..CourseDisplayCarry::default()
+            },
+            CourseDisplayTotals {
+                possible_grade_points: 500,
+                ..CourseDisplayTotals::default()
+            },
+        );
+
+        assert_eq!(inputs.scoring_counts, [11, 22, 33, 44, 55, 66]);
+        assert_eq!(inputs.holds_held_for_score, 19);
+        assert_eq!(inputs.holds_resolved_for_score, 40);
+        assert_eq!(inputs.rolls_held_for_score, 23);
+        assert_eq!(inputs.rolls_resolved_for_score, 48);
+        assert_eq!(inputs.mines_hit_for_score, 27);
+        assert_eq!(inputs.possible_grade_points, 500);
+    }
+
+    #[test]
+    fn itg_score_percent_helpers_preserve_display_units() {
+        let inputs = ItgScoreInputs {
+            scoring_counts: [1, 0, 0, 0, 0, 0],
+            possible_grade_points: 10,
+            ..ItgScoreInputs::default()
+        };
+
+        assert_eq!(itg_score_percent_from_inputs(inputs), 0.5);
+        assert_eq!(predictive_itg_score_percent_from_inputs(inputs), 100.0);
+    }
+
+    #[test]
+    fn score_display_mode_helpers_select_normal_or_predictive_percent() {
+        let itg_inputs = ItgScoreInputs {
+            scoring_counts: [1, 0, 0, 0, 0, 0],
+            possible_grade_points: 10,
+            ..ItgScoreInputs::default()
+        };
+        assert_eq!(
+            display_itg_score_percent_for_mode(itg_inputs, GameplayScoreDisplayMode::Normal),
+            50.0
+        );
+        assert_eq!(
+            display_itg_score_percent_for_mode(itg_inputs, GameplayScoreDisplayMode::Predictive),
+            100.0
+        );
+
+        let ex_score = judgment::ExScoreData {
+            counts: WindowCounts {
+                w0: 1,
+                w1: 1,
+                w2: 1,
+                w3: 1,
+                miss: 1,
+                ..WindowCounts::default()
+            },
+            counts_10ms: WindowCounts {
+                w0: 1,
+                ..WindowCounts::default()
+            },
+            holds_held: 1,
+            holds_resolved: 2,
+            rolls_held: 1,
+            rolls_resolved: 2,
+            mines_hit: 1,
+            total_steps: 6,
+            holds_total: 2,
+            rolls_total: 2,
+            mines_total: 2,
+        };
+
+        assert_eq!(
+            display_ex_score_percent_for_mode(&ex_score, GameplayScoreDisplayMode::Normal),
+            judgment::ex_score_percent(&ex_score)
+        );
+        assert_eq!(
+            display_ex_score_percent_for_mode(&ex_score, GameplayScoreDisplayMode::Predictive),
+            judgment::predictive_ex_score_percents(&ex_score).0
+        );
+        assert_eq!(
+            display_hard_ex_score_percent_for_mode(&ex_score, GameplayScoreDisplayMode::Normal),
+            judgment::hard_ex_score_percent(&ex_score)
+        );
+        assert_eq!(
+            display_hard_ex_score_percent_for_mode(&ex_score, GameplayScoreDisplayMode::Predictive),
+            judgment::predictive_hard_ex_score_percents(&ex_score).0
+        );
+    }
+
+    fn dense_note_data(measures: usize, rows_per_measure: usize, lanes: usize) -> Vec<u8> {
+        let mut data = Vec::new();
+        let row = match lanes {
+            8 => b"10000000\n".as_slice(),
+            _ => b"1000\n".as_slice(),
+        };
+        for measure in 0..measures {
+            for _ in 0..rows_per_measure {
+                data.extend_from_slice(row);
+            }
+            data.extend_from_slice(if measure + 1 == measures { b";" } else { b"," });
+            data.push(b'\n');
+        }
+        data
+    }
+
+    #[test]
+    fn stream_segments_for_note_data_uses_chart_note_bytes() {
+        let data = dense_note_data(8, 32, 4);
+        let (segments, total_stream, total_break) = stream_segments_for_note_data(&data, 4, true);
+
+        assert_eq!(segments.len(), 1);
+        assert_eq!(segments[0].start, 0);
+        assert_eq!(segments[0].end, 8);
+        assert!(!segments[0].is_break);
+        assert_eq!(total_stream, 16.0);
+        assert_eq!(total_break, 0.0);
+    }
+
+    #[test]
+    fn stream_segments_for_note_data_supports_double_charts() {
+        let data = dense_note_data(3, 16, 8);
+        let (segments, total_stream, total_break) = stream_segments_for_note_data(&data, 8, false);
+
+        assert_eq!(segments.len(), 1);
+        assert_eq!(segments[0].start, 0);
+        assert_eq!(segments[0].end, 3);
+        assert!(!segments[0].is_break);
+        assert_eq!(total_stream, 3.0);
+        assert_eq!(total_break, 0.0);
+    }
+
+    #[test]
+    fn measure_counter_segments_use_optional_threshold() {
+        let densities = [12usize, 12, 0, 16];
+
+        assert!(measure_counter_segments_for_densities(&densities, None).is_empty());
+
+        let segments = measure_counter_segments_for_densities(&densities, Some(12));
+
+        assert_eq!(segments.len(), 2);
+        assert_eq!(segments[0].start, 0);
+        assert_eq!(segments[0].end, 2);
+        assert!(!segments[0].is_break);
+        assert_eq!(segments[1].start, 3);
+        assert_eq!(segments[1].end, 4);
+        assert!(!segments[1].is_break);
+    }
+
+    #[test]
+    fn zmod_stream_totals_for_densities_uses_constant_bpm_policy() {
+        let densities = [32usize; 8];
+        let (segments, total_stream, total_break) =
+            zmod_stream_totals_for_densities(&densities, true);
+
+        assert_eq!(segments.len(), 1);
+        assert_eq!(segments[0].start, 0);
+        assert_eq!(segments[0].end, 8);
+        assert_eq!(total_stream, 16.0);
+        assert_eq!(total_break, 0.0);
+    }
+
+    #[test]
+    fn hold_head_render_flags_wait_for_receptor_and_live_hold() {
+        let active = test_active_hold(NoteType::Hold, true, false, 1.0);
+        let exhausted = test_active_hold(NoteType::Hold, true, false, 0.0);
+        let let_go = test_active_hold(NoteType::Hold, true, true, 1.0);
+
+        assert_eq!(
+            hold_head_render_flags(Some(&active), 99.99, 100.0),
+            (false, false)
+        );
+        assert_eq!(
+            hold_head_render_flags(Some(&active), 100.0, 100.0),
+            (true, true)
+        );
+        assert_eq!(
+            hold_head_render_flags(Some(&exhausted), 100.0, 100.0),
+            (false, false)
+        );
+        assert_eq!(
+            hold_head_render_flags(Some(&let_go), 100.0, 100.0),
+            (false, false)
+        );
+        assert_eq!(hold_head_render_flags(None, 100.0, 100.0), (false, false));
+    }
+
+    #[test]
+    fn hold_head_render_flags_keep_rolls_active_between_taps() {
+        let released_hold = test_active_hold(NoteType::Hold, false, false, 1.0);
+        let released_roll = test_active_hold(NoteType::Roll, false, false, 1.0);
+
+        assert_eq!(
+            hold_head_render_flags(Some(&released_hold), 100.0, 100.0),
+            (true, false)
+        );
+        assert_eq!(
+            hold_head_render_flags(Some(&released_roll), 100.0, 100.0),
+            (true, true)
+        );
+    }
+
+    #[test]
+    fn hold_explosion_active_requires_receptor_and_live_hold() {
+        let active = test_active_hold(NoteType::Hold, true, false, 1.0);
+        let exhausted = test_active_hold(NoteType::Hold, true, false, 0.0);
+        let let_go = test_active_hold(NoteType::Hold, true, true, 1.0);
+
+        assert!(!hold_explosion_active(Some(&active), 99.99, 100.0));
+        assert!(hold_explosion_active(Some(&active), 100.0, 100.0));
+        assert!(!hold_explosion_active(Some(&exhausted), 100.0, 100.0));
+        assert!(!hold_explosion_active(Some(&let_go), 100.0, 100.0));
+        assert!(!hold_explosion_active(None, 100.0, 100.0));
+    }
+
+    #[test]
+    fn let_go_head_beat_stays_at_receptor_until_visible_clock_catches_up() {
+        let waiting = let_go_head_beat(100.0, 108.0, 102.0, 101.25);
+        let caught_up = let_go_head_beat(100.0, 108.0, 102.0, 103.0);
+        let beyond_tail = let_go_head_beat(100.0, 108.0, 110.0, 120.0);
+
+        assert!((waiting - 101.25).abs() <= 1.0e-6);
+        assert!((caught_up - 102.0).abs() <= 1.0e-6);
+        assert!((beyond_tail - 108.0).abs() <= 1.0e-6);
     }
 
     fn test_row_to_beat(last_row: usize) -> Vec<f32> {
@@ -12502,6 +14203,80 @@ mod tests {
                 .life,
             INITIAL_HOLD_LIFE
         );
+    }
+
+    #[test]
+    fn uncommon_chart_transforms_preserve_ranges_without_masks() {
+        let timing = test_timing(ROWS_PER_BEAT as usize);
+        let timing_refs: [&TimingData; MAX_PLAYERS] = std::array::from_fn(|_| &timing);
+        let mut notes = vec![
+            test_note_at(NoteType::Tap, None, false, 0, 0.0),
+            test_note_at(NoteType::Mine, None, false, 0, 0.0),
+        ];
+        notes[0].column = 0;
+        notes[1].column = 4;
+        let mut ranges = [(0, 1), (1, 2)];
+
+        apply_uncommon_chart_transforms(
+            &mut notes,
+            &mut ranges,
+            4,
+            2,
+            &[ChartAttackEffects::default(); MAX_PLAYERS],
+            &timing_refs,
+        );
+
+        assert_eq!(notes.len(), 2);
+        assert_eq!(notes[0].note_type, NoteType::Tap);
+        assert_eq!(notes[0].column, 0);
+        assert_eq!(notes[1].note_type, NoteType::Mine);
+        assert_eq!(notes[1].column, 4);
+        assert_eq!(ranges[0], (0, 1));
+        assert_eq!(ranges[1], (1, 2));
+    }
+
+    #[test]
+    fn uncommon_chart_transforms_rebuild_per_player_ranges() {
+        let timing = test_timing(ROWS_PER_BEAT as usize);
+        let timing_refs: [&TimingData; MAX_PLAYERS] = std::array::from_fn(|_| &timing);
+        let mut notes = vec![
+            test_note_at(NoteType::Tap, None, false, 0, 0.0),
+            test_note_at(NoteType::Mine, None, false, 0, 0.0),
+        ];
+        notes[0].column = 0;
+        notes[1].column = 4;
+        let mut ranges = [(0, 1), (1, 2)];
+        let mut effects = [ChartAttackEffects::default(); MAX_PLAYERS];
+        effects[1].remove_mask = REMOVE_MASK_BIT_NO_MINES;
+
+        apply_uncommon_chart_transforms(&mut notes, &mut ranges, 4, 2, &effects, &timing_refs);
+
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0].column, 0);
+        assert_eq!(ranges[0], (0, 1));
+        assert_eq!(ranges[1], (1, 1));
+    }
+
+    #[test]
+    fn uncommon_chart_transforms_duplicate_single_player_range() {
+        let timing = test_timing(ROWS_PER_BEAT as usize);
+        let timing_refs: [&TimingData; MAX_PLAYERS] = std::array::from_fn(|_| &timing);
+        let mut notes = vec![
+            test_note_at(NoteType::Tap, None, false, 0, 0.0),
+            test_note_at(NoteType::Mine, None, false, 0, 0.0),
+        ];
+        notes[0].column = 0;
+        notes[1].column = 1;
+        let mut ranges = [(0, 2), (0, 0)];
+        let mut effects = [ChartAttackEffects::default(); MAX_PLAYERS];
+        effects[0].remove_mask = REMOVE_MASK_BIT_NO_MINES;
+
+        apply_uncommon_chart_transforms(&mut notes, &mut ranges, 4, 1, &effects, &timing_refs);
+
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0].note_type, NoteType::Tap);
+        assert_eq!(ranges[0], (0, 1));
+        assert_eq!(ranges[1], (0, 1));
     }
 
     #[test]

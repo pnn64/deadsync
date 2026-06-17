@@ -8,20 +8,21 @@ use crate::game::gameplay::{
     TRANSITION_IN_DURATION, VisualEffects,
 };
 use crate::game::gameplay::{
-    active_chart_attack_effects_for_player, active_hold_is_engaged, column_flash_duration,
+    active_chart_attack_effects_for_player, column_flash_duration,
     effective_accel_effects_for_player, effective_appearance_effects_for_player,
     effective_mini_percent_for_player, effective_perspective_effects_for_player,
     effective_scroll_effects_for_player, effective_scroll_speed_for_player,
     effective_spacing_multiplier_for_player, effective_visibility_effects_for_player,
-    effective_visual_effects_for_player, receptor_glow_visual_for_col, row_hides_completed_note,
-    scroll_receptor_y, song_lua_ease_factor,
+    effective_visual_effects_for_player, hold_explosion_active, hold_explosion_enabled_for_options,
+    hold_head_render_flags, let_go_head_beat, receptor_glow_visual_for_col,
+    row_hides_completed_note, scroll_receptor_y, song_lua_ease_factor, song_lua_note_hidden,
+    tap_explosion_options_from_profile,
 };
 use crate::game::parsing::noteskin::{
     ModelDrawState, ModelMeshCache, NUM_QUANTIZATIONS, NoteAnimPart, Noteskin, SpriteSlot,
 };
-use crate::game::parsing::song_lua::SongLuaNoteHideWindow;
 use crate::game::{
-    gameplay::{ActiveHold, PlayerRuntime, State},
+    gameplay::{PlayerRuntime, State},
     scores,
 };
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor_from_draw_cached;
@@ -4095,46 +4096,8 @@ fn notefield_view_proj(
 }
 
 #[inline(always)]
-fn hold_head_render_flags(
-    active_state: Option<&ActiveHold>,
-    current_beat: f32,
-    note_beat: f32,
-) -> (bool, bool) {
-    let reached_receptor = current_beat >= note_beat;
-    let engaged = reached_receptor && active_state.map(active_hold_is_engaged).unwrap_or(false);
-    // ITG keeps rolls on their active art for the full initiated hold span,
-    // even between taps; regular holds only stay active while the lane is held.
-    let use_active = engaged
-        && active_state
-            .map(|h| matches!(h.note_type, NoteType::Roll) || h.is_pressed)
-            .unwrap_or(false);
-    (engaged, use_active)
-}
-
-#[inline(always)]
-fn hold_explosion_active(
-    active_state: Option<&ActiveHold>,
-    current_beat: f32,
-    note_beat: f32,
-) -> bool {
-    current_beat >= note_beat && active_state.is_some_and(active_hold_is_engaged)
-}
-
-#[inline(always)]
 fn hold_explosion_enabled(profile: &profile_data::Profile) -> bool {
-    profile
-        .tap_explosion_active_mask
-        .contains(profile_data::TapExplosionMask::HOLDING)
-}
-
-#[inline(always)]
-fn let_go_head_beat(note_beat: f32, end_beat: f32, last_held_beat: f32, visible_beat: f32) -> f32 {
-    // ITG updates and renders from one song position. deadsync keeps separate
-    // gameplay and display clocks, so a dropped hold head must never render
-    // ahead of the visible beat or it can jump above the receptor.
-    last_held_beat
-        .clamp(note_beat, end_beat)
-        .min(visible_beat.max(note_beat))
+    hold_explosion_enabled_for_options(tap_explosion_options_from_profile(profile))
 }
 
 #[inline(always)]
@@ -4330,22 +4293,8 @@ fn hold_overlaps_visible_window(
 }
 
 #[inline(always)]
-fn song_lua_hides_note_window(
-    windows: &[SongLuaNoteHideWindow],
-    local_col: usize,
-    beat: f32,
-) -> bool {
-    const EPS: f32 = 1.0e-4;
-    windows.iter().any(|window| {
-        window.column == local_col
-            && beat + EPS >= window.start_beat
-            && beat <= window.end_beat + EPS
-    })
-}
-
-#[inline(always)]
 fn song_lua_hides_note(state: &State, player: usize, local_col: usize, beat: f32) -> bool {
-    song_lua_hides_note_window(&state.song_lua_note_hides[player], local_col, beat)
+    song_lua_note_hidden(&state.song_lua_note_hides[player], local_col, beat)
 }
 
 #[inline(always)]
@@ -9716,20 +9665,20 @@ mod tests {
         maybe_mirror_uv_horiz_for_reverse_flipped, move_x_extra, move_y_extra, note_actor_alpha,
         note_alpha, note_glow, note_slot_base_size, note_world_z_for_bumpy, note_x_extra,
         offset_center, player_metric_y, pulse_inner_zoom, pulse_zoom_for_y, push_transform_parts,
-        receptor_row_center, scale_effect_size, scroll_receptor_y, song_lua_hides_note_window,
-        tap_judgment_rows, tap_part_for_note_type, tiny_zoom_for_col, tipsy_y_extra,
-        top_cap_rotation_deg, turn_option_bits, turn_option_name, zmod_indicator_score_color,
-        zmod_mini_indicator_zoom, zmod_subtractive_counter_state, zmod_subtractive_points,
+        receptor_row_center, scale_effect_size, scroll_receptor_y, tap_judgment_rows,
+        tap_part_for_note_type, tiny_zoom_for_col, tipsy_y_extra, top_cap_rotation_deg,
+        turn_option_bits, turn_option_name, zmod_indicator_score_color, zmod_mini_indicator_zoom,
+        zmod_subtractive_counter_state, zmod_subtractive_points,
     };
     use crate::assets;
     use crate::game::gameplay::{
         AccelEffects, ActiveHold, AppearanceEffects, NoteCountStat,
-        SongLuaColumnOffsetWindowRuntime, VisualEffects,
+        SongLuaColumnOffsetWindowRuntime, SongLuaNoteHideWindowRuntime, VisualEffects,
+        song_lua_note_hidden,
     };
     use crate::game::parsing::noteskin::{
         NUM_QUANTIZATIONS, NoteAnimPart, Quantization, Style, load_itg_skin,
     };
-    use crate::game::parsing::song_lua::SongLuaNoteHideWindow;
     use deadsync_core::note::NoteType;
     use deadsync_core::timing::beat_to_note_row;
     use deadsync_present::actors::Actor;
@@ -10224,17 +10173,16 @@ mod tests {
 
     #[test]
     fn song_lua_zoom_hide_window_covers_receptor_beat() {
-        let windows = [SongLuaNoteHideWindow {
-            player: 0,
+        let windows = [SongLuaNoteHideWindowRuntime {
             column: 2,
             start_beat: 40.0,
             end_beat: 44.0,
         }];
 
-        assert!(song_lua_hides_note_window(&windows, 2, 40.0));
-        assert!(song_lua_hides_note_window(&windows, 2, 44.0));
-        assert!(!song_lua_hides_note_window(&windows, 1, 42.0));
-        assert!(!song_lua_hides_note_window(&windows, 2, 44.01));
+        assert!(song_lua_note_hidden(&windows, 2, 40.0));
+        assert!(song_lua_note_hidden(&windows, 2, 44.0));
+        assert!(!song_lua_note_hidden(&windows, 1, 42.0));
+        assert!(!song_lua_note_hidden(&windows, 2, 44.01));
     }
 
     #[test]

@@ -1,6 +1,4 @@
-use crate::game::parsing::song_lua::{
-    SongLuaCapturedActor, SongLuaNoteHideWindow, SongLuaOverlayActor,
-};
+use crate::game::parsing::song_lua::{SongLuaCapturedActor, SongLuaOverlayActor};
 use deadsync_chart::song::sync_pref_offset;
 use deadsync_chart::{ChartData, GameplayChartData, SongData, SyncPref};
 use deadsync_core::input::{InputSource, MAX_COLS, MAX_PLAYERS};
@@ -16,70 +14,84 @@ pub use deadsync_gameplay::{
     ActiveComboMilestone, ActiveHold, ActiveMineExplosion, ActiveTapExplosion, AppearanceEffects,
     AppearanceOverrides, AutosyncMode, COLUMN_FLASH_JUDGMENT_DURATION, COLUMN_FLASH_MISS_DURATION,
     COMBO_HUNDRED_MILESTONE_DURATION, COMBO_THOUSAND_MILESTONE_DURATION, ChartAttackEffects,
-    ColumnCue, ColumnCueColumn, ColumnScrollFlags, ColumnTapJudgment, ComboMilestoneKind,
-    DRAW_DISTANCE_AFTER_TARGETS, DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER, DangerFx, ErrorBarText,
-    ErrorBarTick, ExitTransition, ExitTransitionKind, FantasticFeedbackOptions,
+    ColumnCue, ColumnCueColumn, ColumnFlashOptions, ColumnScrollFlags, ColumnTapJudgment,
+    ComboMilestoneKind, CourseDisplayCarry, CourseDisplayStage, CourseDisplayTiming,
+    CourseDisplayTotals, DRAW_DISTANCE_AFTER_TARGETS, DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER,
+    DangerFx, DisplayWindowCountsMode, DisplayWindowCountsSources, ErrorBarText, ErrorBarTick,
+    ExScoreInputs, ExitTransition, ExitTransitionKind, FantasticFeedbackOptions,
     FinalizedRowOutcome, GAMEPLAY_INPUT_BACKLOG_WARN, GIVE_UP_ABORT_TEXT_SECONDS, GameplayAction,
     GameplayAudioCommand, GameplayAudioSnapshot, GameplayConfig, GameplayExit, GameplayFailType,
     GameplayMiniIndicatorData, GameplayMusicCut, GameplayNoteskinData, GameplayNoteskinEffects,
-    GameplayReceptorGlowBehavior, GameplayReceptorStepBehavior, GameplayStreamClockSnapshot,
-    GameplayTurnOption, GameplayTween, GameplayViewport, HELD_MISS_TOTAL_DURATION,
-    HOLD_JUDGMENT_TOTAL_DURATION, HOLDS_MASK_BIT_FLOORED, HOLDS_MASK_BIT_HOLDS_TO_ROLLS,
-    HOLDS_MASK_BIT_NO_ROLLS, HOLDS_MASK_BIT_PLANTED, HOLDS_MASK_BIT_TWISTER, HealthState,
-    HeldMissRenderInfo, HoldJudgmentRenderInfo, HoldToExitKey, INITIAL_HOLD_LIFE,
-    INSERT_MASK_BIT_BIG, INSERT_MASK_BIT_BMRIZE, INSERT_MASK_BIT_ECHO, INSERT_MASK_BIT_MINES,
-    INSERT_MASK_BIT_QUICK, INSERT_MASK_BIT_SKIPPY, INSERT_MASK_BIT_STOMP, INSERT_MASK_BIT_WIDE,
-    JudgmentRenderInfo, LeadInTiming, MINE_EXPLOSION_DURATION, MINI_PERCENT_MAX, MINI_PERCENT_MIN,
-    MineJudgmentRenderInfo, MiniAttackMode, NoteCountStat, OffsetIndicatorText, PerspectiveEffects,
-    PerspectiveOverrides, PlayerRowScanState, RECEPTOR_GLOW_DURATION, RECEPTOR_STEP_WINDOWS,
+    GameplayReceptorGlowBehavior, GameplayReceptorStepBehavior, GameplayScoreDisplayMode,
+    GameplayStreamClockSnapshot, GameplayTurnOption, GameplayTween, GameplayViewport,
+    HELD_MISS_TOTAL_DURATION, HOLD_JUDGMENT_TOTAL_DURATION, HOLDS_MASK_BIT_FLOORED,
+    HOLDS_MASK_BIT_HOLDS_TO_ROLLS, HOLDS_MASK_BIT_NO_ROLLS, HOLDS_MASK_BIT_PLANTED,
+    HOLDS_MASK_BIT_TWISTER, HealthState, HeldMissRenderInfo, HoldJudgmentRenderInfo, HoldToExitKey,
+    INITIAL_HOLD_LIFE, INSERT_MASK_BIT_BIG, INSERT_MASK_BIT_BMRIZE, INSERT_MASK_BIT_ECHO,
+    INSERT_MASK_BIT_MINES, INSERT_MASK_BIT_QUICK, INSERT_MASK_BIT_SKIPPY, INSERT_MASK_BIT_STOMP,
+    INSERT_MASK_BIT_WIDE, ItgScoreInputs, ItgScoreStage, JudgmentRenderInfo, LeadInTiming,
+    MINE_EXPLOSION_DURATION, MINI_PERCENT_MAX, MINI_PERCENT_MIN, MineJudgmentRenderInfo,
+    MiniAttackMode, NoteCountStat, OffsetIndicatorText, PerspectiveEffects, PerspectiveOverrides,
+    PlayerRowScanState, RECEPTOR_GLOW_DURATION, RECEPTOR_STEP_WINDOWS,
     RECEPTOR_Y_OFFSET_FROM_CENTER, RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, REMOVE_MASK_BIT_LITTLE,
     REMOVE_MASK_BIT_NO_FAKES, REMOVE_MASK_BIT_NO_HANDS, REMOVE_MASK_BIT_NO_HOLDS,
     REMOVE_MASK_BIT_NO_JUMPS, REMOVE_MASK_BIT_NO_LIFTS, REMOVE_MASK_BIT_NO_MINES,
     REMOVE_MASK_BIT_NO_QUADS, REPLAY_EDGE_RATE_PER_SEC, RecordedLaneEdge, ReplayInputEdge,
     ReplayOffsetSnapshot, RowEntry, RowGrid, SPACING_PERCENT_MAX, SPACING_PERCENT_MIN,
     ScrollEffects, ScrollOverrides, ScrollReverseOptions, TAP_EXPLOSION_WINDOWS,
-    TOGGLE_FLASH_DURATION, TOGGLE_FLASH_FADE_START, TurnRng, VisibilityEffects,
-    VisibilityOverrides, VisualEffects, VisualOverrides, active_hold_counts_as_pressed,
-    active_hold_is_engaged, advance_judged_row_cursor, apply_echo_insert, apply_hyper_shuffle,
-    apply_insert_intelligent_taps, apply_mines_insert, apply_stomp_insert,
-    apply_super_shuffle_taps, apply_turn_options, apply_turn_permutation,
-    apply_uncommon_masks_with_masks, apply_wide_insert, approach_attack_mini_percent_to_target,
-    approach_attack_value, approach_f32, assist_clap_cursor_for_row,
-    assist_lookahead_music_horizon_seconds, assist_row_no_offset_for_timing,
-    attack_mini_target_percent, autoplay_random_offset_music_ns_for_window, build_assist_clap_rows,
+    TOGGLE_FLASH_DURATION, TOGGLE_FLASH_FADE_START, TapExplosionOptions, TurnRng,
+    VisibilityEffects, VisibilityOverrides, VisualEffects, VisualOverrides,
+    active_hold_counts_as_pressed, active_hold_is_engaged, advance_judged_row_cursor,
+    apply_echo_insert, apply_hyper_shuffle, apply_insert_intelligent_taps, apply_mines_insert,
+    apply_stomp_insert, apply_super_shuffle_taps, apply_turn_options, apply_turn_permutation,
+    apply_uncommon_chart_transforms, apply_uncommon_masks_with_masks, apply_wide_insert,
+    approach_attack_mini_percent_to_target, approach_attack_value, approach_f32,
+    assist_clap_cursor_for_row, assist_lookahead_music_horizon_seconds,
+    assist_row_no_offset_for_timing, attack_mini_target_percent,
+    autoplay_random_offset_music_ns_for_window, build_assist_clap_rows,
     build_column_cues_for_player, build_note_count_stats, build_row_entry, build_row_grids,
     cell_has_any_note, cell_has_nonfake_note, closest_lane_note_ns, collect_edge_judge_indices,
-    column_cue_is_mine, column_flash_duration, column_scroll_dirs_for_flags,
-    completed_row_final_judgment, completed_row_flash_note_indices_and_judgment,
-    compute_end_times_ns, convert_tap_row_to_mines, convert_taps_to_holds,
-    count_held_tracks_at_row, count_nonempty_tracks_at_row, count_rescore_tracks_on_row,
-    count_tap_or_hold_tracks_at_row, count_tap_tracks_at_row, counts_for_early_rescore,
+    column_cue_is_mine, column_flash_duration, column_flash_enabled_for_options,
+    column_scroll_dirs_for_flags, completed_row_final_judgment,
+    completed_row_flash_note_indices_and_judgment, compute_end_times_ns, convert_tap_row_to_mines,
+    convert_taps_to_holds, count_held_tracks_at_row, count_nonempty_tracks_at_row,
+    count_rescore_tracks_on_row, count_tap_or_hold_tracks_at_row, count_tap_tracks_at_row,
+    counts_for_early_rescore, course_display_carry_for_stage, course_display_totals_for_chart,
     crossed_mine_bounds_ns, crossed_mine_held_start_time, danger_fx_rgba, danger_health_state,
+    display_ex_score_percent_for_mode, display_hard_ex_score_percent_for_mode,
+    display_itg_score_percent_for_mode, display_judgment_count_for_grade,
+    display_window_counts_current, display_window_counts_mode, display_window_counts_with_carry,
     draw_distance_after_targets, draw_distance_before_targets, effective_mini_percent,
     enforce_max_simultaneous_notes, error_bar_average_offset_s, error_bar_long_term_offset_s,
-    error_bar_push_tick, error_bar_window_ix, exit_total_seconds, exit_transition_alpha,
-    finalized_row_outcome_for_cached_row, finalized_row_outcome_for_entry,
-    first_nonempty_track_at_row, first_row_entry_index_at_or_after_time, first_tap_track_at_row,
-    first_time_index_at_or_after, gameplay_exit_for_kind, grade_to_window, hold_to_exit_seconds,
-    input_queue_cap, is_hold_body_at_row, lane_edge_judges_lift, lane_edge_judges_tap,
+    error_bar_push_tick, error_bar_window_ix, ex_score_data_from_display_inputs,
+    exit_total_seconds, exit_transition_alpha, finalized_row_outcome_for_cached_row,
+    finalized_row_outcome_for_entry, first_nonempty_track_at_row,
+    first_row_entry_index_at_or_after_time, first_tap_track_at_row, first_time_index_at_or_after,
+    gameplay_exit_for_kind, grade_to_window, hold_explosion_active,
+    hold_explosion_enabled_for_options, hold_head_render_flags, hold_to_exit_seconds,
+    input_queue_cap, is_hold_body_at_row, itg_score_inputs_from_display,
+    itg_score_percent_from_inputs, lane_edge_judges_lift, lane_edge_judges_tap,
     lane_edge_matches_note_type, lane_note_window_bounds_ns, lane_note_window_bounds_rows,
-    lane_press_started, lane_release_finished, late_note_resolution_window_ns, local_player_col,
-    max_step_distance_ns, mine_window_bounds_ns, mini_value_for_percent,
-    missed_note_cutoff_row_for_timing, music_time_from_stream_position,
-    next_ready_row_in_lookahead, note_has_displayable_hold, note_tracks_held_miss,
-    notes_row_sorted, player_draw_scale_for_mini, player_row_scan_state, player_rows,
-    quantization_index_from_beat, recent_step_tracks, remove_cell_notes, replay_edge_cap,
-    row_entry_for_cached_row, row_entry_index_for_cached_row, row_final_grade_hides_note,
-    scroll_receptor_y, scroll_reverse_percent_for_column, scroll_reverse_scale_for_column,
-    set_added_mine_note, set_added_tap_note, song_audio_end_time_ns, sort_player_notes,
+    lane_press_started, lane_release_finished, late_note_resolution_window_ns, let_go_head_beat,
+    local_player_col, max_step_distance_ns, measure_counter_segments_for_densities,
+    mine_window_bounds_ns, mini_value_for_percent, missed_note_cutoff_row_for_timing,
+    music_time_from_stream_position, next_ready_row_in_lookahead, note_has_displayable_hold,
+    note_tracks_held_miss, notes_row_sorted, player_draw_scale_for_mini, player_row_scan_state,
+    player_rows, predictive_itg_score_percent_from_inputs, quantization_index_from_beat,
+    recent_step_tracks, remove_cell_notes, replay_edge_cap, row_entry_for_cached_row,
+    row_entry_index_for_cached_row, row_final_grade_hides_note, scroll_receptor_y,
+    scroll_reverse_percent_for_column, scroll_reverse_scale_for_column, set_added_mine_note,
+    set_added_tap_note, song_audio_end_time_ns, song_lua_note_hidden, sort_player_notes,
     spacing_multiplier_for_percent, stage_music_cut, step_search_row_bounds, stomp_mirror_track,
-    suppress_final_bad_rescore_visual, tap_judgment_uses_bright_explosion_for_options,
-    timing_row_floor, timing_row_nearest, toggle_flash_alpha, track_held_miss_window_for_player,
-    track_range_has_any_note, trigger_combo_milestone, turn_seed_for_song,
-    update_danger_fx_for_health, visible_notefield_time_ns,
+    suppress_final_bad_rescore_visual, tap_explosion_enabled_for_options,
+    tap_judgment_uses_bright_explosion_for_options, timing_row_floor, timing_row_nearest,
+    toggle_flash_alpha, track_held_miss_window_for_player, track_range_has_any_note,
+    trigger_combo_milestone, turn_seed_for_song, update_danger_fx_for_health,
+    visible_notefield_time_ns, zmod_stream_totals_for_densities,
 };
 use deadsync_gameplay::{
-    StepStatsPlayStyle, step_stats_density_graph_width as gameplay_step_stats_density_graph_width,
+    StepStatsPlayStyle, resolve_target_score_percent,
+    step_stats_density_graph_width as gameplay_step_stats_density_graph_width,
     step_stats_upper_density_graph_width,
 };
 use deadsync_input::InputEdge;
@@ -103,9 +115,7 @@ use deadsync_rules::note::{
 #[cfg(test)]
 use deadsync_rules::note::{HoldLifeAdvance, advance_hold_last_held, advance_hold_life_ns};
 use deadsync_rules::scroll::ScrollSpeedSetting;
-use deadsync_rules::stream::{
-    StreamSegment, measure_densities, stream_sequences_threshold, zmod_stream_totals_full_measures,
-};
+use deadsync_rules::stream::{StreamSegment, measure_densities};
 use deadsync_rules::timing::{BeatInfoCache, TimingData, TimingProfile, TimingProfileNs};
 use deadsync_simfile::timing::rssp_timing_segments_from_deadsync;
 use log::{debug, info, trace, warn};
@@ -151,13 +161,13 @@ use self::attacks::song_lua_ease_window_value;
 use self::attacks::{
     AttackMaskWindow, SongLuaEaseMaskWindow, apply_chart_attacks_transforms,
     base_appearance_effects, begin_outro_attack_clear, build_attack_mask_windows_for_player,
-    build_song_lua_runtime_windows, effective_visual_mask_for_player, player_changes_chart,
-    refresh_active_attack_masks,
+    build_song_lua_runtime_windows, effective_visual_mask_for_player, gameplay_attack_mode,
+    player_changes_chart, refresh_active_attack_masks,
 };
 pub use self::attacks::{
     GameplayCompiledSongLua, GameplaySongLuaData, GameplaySongLuaLayer,
-    SongLuaColumnOffsetWindowRuntime, SongLuaOverlayEaseWindowRuntime,
-    SongLuaOverlayMessageRuntime, SongLuaVisualLayerRuntime,
+    SongLuaColumnOffsetWindowRuntime, SongLuaNoteHideWindowRuntime,
+    SongLuaOverlayEaseWindowRuntime, SongLuaOverlayMessageRuntime, SongLuaVisualLayerRuntime,
     active_chart_attack_effects_for_player, effective_accel_effects_for_player,
     effective_appearance_effects_for_player, effective_mini_percent_for_player,
     effective_perspective_effects_for_player, effective_scroll_effects_for_player,
@@ -238,10 +248,10 @@ use self::offset::{
 use self::rows::finalize_row_judgment;
 use self::rows::update_judged_rows;
 pub use self::stats::{
-    CourseDisplayTotals, course_display_carry_from_state, course_display_totals_for_chart,
-    score_invalid_reason_lines_for_chart, stream_segments_for_results,
+    course_display_carry_from_state, score_invalid_reason_lines_for_chart,
+    stream_segments_for_results,
 };
-use self::stats::{mini_indicator_mode, needs_stream_data, target_score_setting_percent};
+use self::stats::{gameplay_target_score_setting, mini_indicator_mode, needs_stream_data};
 use self::time::{
     INVALID_SONG_TIME_NS, current_music_time_s, normalized_song_rate, scaled_song_delta_ns,
     scaled_song_time_ns, song_time_ns_add_seconds, song_time_ns_delta_seconds,
@@ -362,17 +372,12 @@ pub fn row_hides_completed_note(state: &State, player: usize, row_index: usize) 
 
 #[inline(always)]
 fn song_lua_hides_note_visual(state: &State, player: usize, column: usize, beat: f32) -> bool {
-    const EPS: f32 = 1.0e-4;
     let local_col = if state.cols_per_player == 0 {
         column
     } else {
         column % state.cols_per_player
     };
-    state.song_lua_note_hides[player].iter().any(|window| {
-        window.column == local_col
-            && beat + EPS >= window.start_beat
-            && beat <= window.end_beat + EPS
-    })
+    song_lua_note_hidden(&state.song_lua_note_hides[player], local_col, beat)
 }
 
 #[inline(always)]
@@ -425,85 +430,14 @@ fn assist_row_no_offset_ns(state: &State, music_time_ns: SongTimeNs) -> i32 {
     assist_row_no_offset_for_timing(&state.timing, state.global_offset_seconds, music_time_ns)
 }
 
-fn apply_uncommon_masks_for_player(
-    notes: &mut Vec<Note>,
-    player_profile: &profile_data::Profile,
-    timing_player: &TimingData,
-    col_offset: usize,
-    cols: usize,
-    player: usize,
-) {
-    apply_uncommon_masks_with_masks(
-        notes,
-        player_profile.insert_active_mask.bits(),
-        player_profile.remove_active_mask.bits(),
-        player_profile.holds_active_mask.bits(),
-        timing_player,
-        col_offset,
-        cols,
-        &[],
-        None,
-        player,
-    );
-}
-
 #[inline(always)]
-fn has_uncommon_masks(profile: &profile_data::Profile) -> bool {
-    !profile.insert_active_mask.is_empty()
-        || !profile.remove_active_mask.is_empty()
-        || !profile.holds_active_mask.is_empty()
-}
-
-fn apply_uncommon_chart_transforms(
-    notes: &mut Vec<Note>,
-    note_ranges: &mut [(usize, usize); MAX_PLAYERS],
-    cols_per_player: usize,
-    num_players: usize,
-    player_profiles: &[profile_data::Profile; MAX_PLAYERS],
-    timing_players: &[Arc<TimingData>; MAX_PLAYERS],
-) {
-    if num_players == 0
-        || !player_profiles
-            .iter()
-            .take(num_players)
-            .any(has_uncommon_masks)
-    {
-        return;
+fn chart_effects_from_profile(profile: &profile_data::Profile) -> ChartAttackEffects {
+    ChartAttackEffects {
+        insert_mask: profile.insert_active_mask.bits(),
+        remove_mask: profile.remove_active_mask.bits(),
+        holds_mask: profile.holds_active_mask.bits(),
+        turn_bits: 0,
     }
-
-    let mut transformed = Vec::with_capacity(notes.len());
-    let mut transformed_ranges = [(0usize, 0usize); MAX_PLAYERS];
-
-    for player in 0..num_players {
-        let (start, end) = note_ranges[player];
-        let slice_end = end.min(notes.len());
-        let slice_start = start.min(slice_end);
-        let out_start = transformed.len();
-        if !has_uncommon_masks(&player_profiles[player]) {
-            transformed.extend_from_slice(&notes[slice_start..slice_end]);
-            transformed_ranges[player] = (out_start, transformed.len());
-            continue;
-        }
-        let mut player_notes = notes[slice_start..slice_end].to_vec();
-        apply_uncommon_masks_for_player(
-            &mut player_notes,
-            &player_profiles[player],
-            timing_players[player].as_ref(),
-            player.saturating_mul(cols_per_player),
-            cols_per_player,
-            player,
-        );
-
-        transformed.extend(player_notes);
-        transformed_ranges[player] = (out_start, transformed.len());
-    }
-
-    if num_players == 1 {
-        transformed_ranges[1] = transformed_ranges[0];
-    }
-
-    *notes = transformed;
-    *note_ranges = transformed_ranges;
 }
 
 /// Lead-in/out fade applied to every crossover cue.
@@ -817,17 +751,6 @@ fn compute_column_scroll_dirs(
     )
 }
 
-#[derive(Clone, Copy, Debug, Default)]
-struct ExScoreInputs {
-    counts: deadsync_rules::timing::WindowCounts,
-    counts_10ms: deadsync_rules::timing::WindowCounts,
-    holds_held_for_score: u32,
-    holds_let_go_for_score: u32,
-    rolls_held_for_score: u32,
-    rolls_let_go_for_score: u32,
-    mines_hit_for_score: u32,
-}
-
 type CourseSubmitLife = deadsync_rules::life::LifeMeter;
 
 #[derive(Clone, Debug)]
@@ -886,38 +809,6 @@ pub struct PlayerRuntime {
     pub error_bar_long_avg_tick: Option<ErrorBarTick>,
     pub error_bar_long_avg_visible: bool,
     pub live_timing_stats: deadsync_rules::timing::LiveTimingStats,
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-pub struct CourseDisplayCarry {
-    // ITGmania keeps the same lifemeter alive between nonstop course songs.
-    pub life: f32,
-    pub judgment_counts: [u32; 6],
-    pub scoring_counts: [u32; 6],
-    pub full_combo_grade: Option<JudgeGrade>,
-    pub current_combo_grade: Option<JudgeGrade>,
-    pub current_combo_window_counts: deadsync_rules::timing::WindowCounts,
-    pub first_fc_attempt_broken: bool,
-    // Canonical FA+ split (15ms) used for EX scoring/evaluation.
-    pub window_counts: deadsync_rules::timing::WindowCounts,
-    // Canonical 10ms split used for H.EX scoring/evaluation.
-    pub window_counts_10ms_blue: deadsync_rules::timing::WindowCounts,
-    // Display split used by gameplay counters (legacy 10ms or custom ms option).
-    pub window_counts_display_blue: deadsync_rules::timing::WindowCounts,
-    pub holds_held: u32,
-    pub rolls_held: u32,
-    pub mines_avoided: u32,
-    pub holds_held_for_score: u32,
-    pub holds_let_go_for_score: u32,
-    pub rolls_held_for_score: u32,
-    pub rolls_let_go_for_score: u32,
-    pub mines_hit_for_score: u32,
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-pub struct CourseDisplayTiming {
-    pub elapsed_seconds: f32,
-    pub total_seconds: f32,
 }
 
 fn init_player_runtime() -> PlayerRuntime {
@@ -1311,7 +1202,7 @@ pub struct State {
     pub song_lua_song_foreground: SongLuaCapturedActor,
     pub song_lua_song_foreground_events: Vec<SongLuaOverlayMessageRuntime>,
     pub song_lua_hidden_players: [bool; MAX_PLAYERS],
-    pub song_lua_note_hides: [Vec<SongLuaNoteHideWindow>; MAX_PLAYERS],
+    pub song_lua_note_hides: [Vec<SongLuaNoteHideWindowRuntime>; MAX_PLAYERS],
     pub song_lua_column_offsets: [Vec<SongLuaColumnOffsetWindowRuntime>; MAX_PLAYERS],
     pub song_lua_screen_width: f32,
     pub song_lua_screen_height: f32,
@@ -2835,13 +2726,22 @@ pub fn init(
     let note_build_ms = note_build_started.elapsed().as_secs_f64() * 1000.0;
 
     let transform_started = Instant::now();
+    let uncommon_effects = std::array::from_fn(|player| {
+        if player < num_players {
+            chart_effects_from_profile(&player_profiles[player])
+        } else {
+            ChartAttackEffects::default()
+        }
+    });
+    let timing_player_refs: [&TimingData; MAX_PLAYERS] =
+        std::array::from_fn(|player| timing_players[player].as_ref());
     apply_uncommon_chart_transforms(
         &mut notes,
         &mut note_ranges,
         cols_per_player,
         num_players,
-        &player_profiles,
-        &timing_players,
+        &uncommon_effects,
+        &timing_player_refs,
     );
 
     let song_seed = turn_seed_for_song(&song);
@@ -3328,10 +3228,10 @@ pub fn init(
         if p >= num_players {
             return Vec::new();
         }
-        let Some(threshold) = player_profiles[p].measure_counter.notes_threshold() else {
-            return Vec::new();
-        };
-        stream_sequences_threshold(&measure_densities[p], threshold)
+        measure_counter_segments_for_densities(
+            &measure_densities[p],
+            player_profiles[p].measure_counter.notes_threshold(),
+        )
     });
 
     let mut mini_indicator_stream_segments: [Vec<StreamSegment>; MAX_PLAYERS] =
@@ -3346,20 +3246,18 @@ pub fn init(
         }
         let constant_bpm = !timing_players[p].has_bpm_changes();
         let (stream_segments, total_stream, _total_break) =
-            zmod_stream_totals_full_measures(&measure_densities[p], constant_bpm);
+            zmod_stream_totals_for_densities(&measure_densities[p], constant_bpm);
         mini_indicator_total_stream_measures[p] = total_stream.max(0.0);
         mini_indicator_stream_segments[p] = stream_segments;
 
         let personal_best = mini_indicator_data.personal_best_percent[p];
         let machine_best = mini_indicator_data.machine_best_percent[p];
 
-        let target = match player_profiles[p].target_score {
-            profile_data::TargetScoreSetting::MachineBest => machine_best.or(personal_best),
-            profile_data::TargetScoreSetting::PersonalBest => personal_best,
-            setting => target_score_setting_percent(setting),
-        }
-        .unwrap_or(89.0);
-        mini_indicator_target_score_percent[p] = target;
+        mini_indicator_target_score_percent[p] = resolve_target_score_percent(
+            gameplay_target_score_setting(player_profiles[p].target_score),
+            personal_best,
+            machine_best,
+        );
 
         mini_indicator_rival_score_percent[p] = machine_best
             .unwrap_or(0.0)
@@ -3875,6 +3773,38 @@ fn tap_judgment_uses_bright_explosion(state: &State, player: usize, judgment: &J
 }
 
 #[inline(always)]
+fn column_flash_options_from_profile(profile: &profile_data::Profile) -> ColumnFlashOptions {
+    let mask = profile.column_flash_mask;
+    ColumnFlashOptions {
+        enabled: profile.column_flash_on_miss,
+        blue_fantastic: mask.contains(profile_data::ColumnFlashMask::BLUE_FANTASTIC),
+        white_fantastic: mask.contains(profile_data::ColumnFlashMask::WHITE_FANTASTIC),
+        excellent: mask.contains(profile_data::ColumnFlashMask::EXCELLENT),
+        great: mask.contains(profile_data::ColumnFlashMask::GREAT),
+        decent: mask.contains(profile_data::ColumnFlashMask::DECENT),
+        way_off: mask.contains(profile_data::ColumnFlashMask::WAY_OFF),
+        miss: mask.contains(profile_data::ColumnFlashMask::MISS),
+    }
+}
+
+#[inline(always)]
+pub(crate) fn tap_explosion_options_from_profile(
+    profile: &profile_data::Profile,
+) -> TapExplosionOptions {
+    let mask = profile.tap_explosion_active_mask;
+    TapExplosionOptions {
+        fantastic: mask.contains(profile_data::TapExplosionMask::FANTASTIC),
+        excellent: mask.contains(profile_data::TapExplosionMask::EXCELLENT),
+        great: mask.contains(profile_data::TapExplosionMask::GREAT),
+        decent: mask.contains(profile_data::TapExplosionMask::DECENT),
+        way_off: mask.contains(profile_data::TapExplosionMask::WAY_OFF),
+        miss: mask.contains(profile_data::TapExplosionMask::MISS),
+        held: mask.contains(profile_data::TapExplosionMask::HELD),
+        holding: mask.contains(profile_data::TapExplosionMask::HOLDING),
+    }
+}
+
+#[inline(always)]
 fn trigger_column_flash(state: &mut State, column: usize, grade: JudgeGrade, blue_fantastic: bool) {
     if column >= state.column_flashes.len() {
         return;
@@ -3890,13 +3820,11 @@ fn trigger_column_flash(state: &mut State, column: usize, grade: JudgeGrade, blu
     let Some(profile) = state.player_profiles.get(player) else {
         return;
     };
-    if !profile.column_flash_on_miss
-        || !profile_data::column_flash_mask_enabled(
-            profile.column_flash_mask,
-            grade,
-            blue_fantastic,
-        )
-    {
+    if !column_flash_enabled_for_options(
+        column_flash_options_from_profile(profile),
+        grade,
+        blue_fantastic,
+    ) {
         return;
     }
     state.column_flashes[column] = Some(ActiveColumnFlash {
@@ -3963,7 +3891,10 @@ pub(super) fn trigger_hold_explosion(state: &mut State, column: usize) {
 
 fn spawn_tap_explosion(state: &mut State, column: usize, window_key: &'static str, bright: bool) {
     let player = player_for_col(state, column);
-    if !state.player_profiles[player].tap_explosion_window_enabled(window_key) {
+    let Some(profile) = state.player_profiles.get(player) else {
+        return;
+    };
+    if !tap_explosion_enabled_for_options(tap_explosion_options_from_profile(profile), window_key) {
         return;
     }
     let local_col = if state.cols_per_player == 0 {
@@ -5843,39 +5774,40 @@ mod tests {
         GameplayAudioCommand, GameplaySessionCommand, GameplayTurnOption, HELD_MISS_TOTAL_DURATION,
         HeldMissRenderInfo, HoldJudgmentRenderInfo, HoldToExitKey, INSERT_MASK_BIT_MINES, MAX_COLS,
         MAX_PLAYERS, OFFSET_ADJUST_STEP_SECONDS, REPLAY_EDGE_RATE_PER_SEC, RowEntry, ScrollEffects,
-        ScrollSpeedSetting, SongClockSnapshot, TIMING_WINDOW_SECONDS_HOLD, TickMode,
-        active_hold_counts_as_pressed, advance_hold_last_held, advance_hold_life_ns,
-        advance_judged_row_cursor, apply_autosync_for_row_hits, apply_global_offset_delta,
-        apply_mines_insert, apply_pending_mine_hits, apply_song_offset_delta,
-        apply_time_based_mine_avoidance, apply_time_based_tap_misses,
-        assist_lookahead_music_horizon_seconds, begin_outro_attack_clear, build_assist_clap_rows,
-        build_attack_mask_windows_for_player, build_column_cues_for_player,
-        build_player_judgment_timing, build_row_entry, build_row_grids, closest_lane_note_ns,
-        collect_edge_judge_indices, completed_row_final_judgment,
-        completed_row_flash_note_indices_and_judgment, compute_end_times_ns,
-        count_rescore_tracks_on_row, crossed_mine_bounds_ns, crossed_mine_held_start_time,
-        drain_audio_commands, drain_session_commands, effective_appearance_effects_for_player,
-        effective_mini_percent_for_player, effective_player_global_offset_seconds,
-        effective_scroll_effects_for_player, effective_visibility_effects_for_player,
-        effective_visual_effects_for_player, enforce_max_simultaneous_notes,
-        error_bar_register_tap, finalize_completed_mines, finalize_row_judgment,
-        finalized_row_outcome_for_cached_row, frame_stable_display_music_time_ns, grade_to_window,
-        handle_input, handle_queued_raw_key, hit_mine, input_queue_cap,
-        integrate_active_hold_to_time, judge_a_tap, lane_edge_judges_lift, lane_edge_judges_tap,
-        lane_edge_matches_note_type, lane_note_window_bounds_ns, lane_note_window_bounds_rows,
-        lane_press_started, lane_release_finished, late_note_resolution_window_ns,
-        live_autoplay_enabled_from_flags, max_step_distance_ns, mine_window_bounds_ns,
-        missed_note_cutoff_row_for_timing, music_time_ns_from_song_clock, mutate_timing_arc,
-        next_ready_row_in_lookahead, next_tick_mode, note_has_displayable_hold, note_hit_eval,
-        parse_attack_mods, parse_song_lua_runtime_mods,
-        player_draw_scale_for_tilt_with_visual_mask, player_row_scan_state, process_input_edges,
-        recent_step_tracks, recompute_player_totals, refresh_active_attack_masks,
-        refresh_timing_after_offset_change, render_provisional_early_rescore_feedback,
-        replay_edge_cap, resolve_pending_missed_holds, row_entry_for_cached_row,
-        row_final_grade_hides_note, score_invalid_reason_lines_for_chart, set_final_note_result,
-        settle_completion_rows, song_time_ns_from_seconds, song_time_ns_to_seconds,
-        stage_music_cut, start_active_hold, step_stats_density_graph_width,
-        step_stats_notefield_width, suppress_final_bad_rescore_visual, sync_queued_raw_modifiers,
+        ScrollSpeedSetting, SongClockSnapshot, SongLuaNoteHideWindowRuntime,
+        TIMING_WINDOW_SECONDS_HOLD, TickMode, active_hold_counts_as_pressed,
+        advance_hold_last_held, advance_hold_life_ns, advance_judged_row_cursor,
+        apply_autosync_for_row_hits, apply_global_offset_delta, apply_mines_insert,
+        apply_pending_mine_hits, apply_song_offset_delta, apply_time_based_mine_avoidance,
+        apply_time_based_tap_misses, assist_lookahead_music_horizon_seconds,
+        begin_outro_attack_clear, build_assist_clap_rows, build_attack_mask_windows_for_player,
+        build_column_cues_for_player, build_player_judgment_timing, build_row_entry,
+        build_row_grids, closest_lane_note_ns, collect_edge_judge_indices,
+        completed_row_final_judgment, completed_row_flash_note_indices_and_judgment,
+        compute_end_times_ns, count_rescore_tracks_on_row, crossed_mine_bounds_ns,
+        crossed_mine_held_start_time, drain_audio_commands, drain_session_commands,
+        effective_appearance_effects_for_player, effective_mini_percent_for_player,
+        effective_player_global_offset_seconds, effective_scroll_effects_for_player,
+        effective_visibility_effects_for_player, effective_visual_effects_for_player,
+        enforce_max_simultaneous_notes, error_bar_register_tap, finalize_completed_mines,
+        finalize_row_judgment, finalized_row_outcome_for_cached_row,
+        frame_stable_display_music_time_ns, grade_to_window, handle_input, handle_queued_raw_key,
+        hit_mine, input_queue_cap, integrate_active_hold_to_time, judge_a_tap,
+        lane_edge_judges_lift, lane_edge_judges_tap, lane_edge_matches_note_type,
+        lane_note_window_bounds_ns, lane_note_window_bounds_rows, lane_press_started,
+        lane_release_finished, late_note_resolution_window_ns, live_autoplay_enabled_from_flags,
+        max_step_distance_ns, mine_window_bounds_ns, missed_note_cutoff_row_for_timing,
+        music_time_ns_from_song_clock, mutate_timing_arc, next_ready_row_in_lookahead,
+        next_tick_mode, note_has_displayable_hold, note_hit_eval, parse_attack_mods,
+        parse_song_lua_runtime_mods, player_draw_scale_for_tilt_with_visual_mask,
+        player_row_scan_state, process_input_edges, recent_step_tracks, recompute_player_totals,
+        refresh_active_attack_masks, refresh_timing_after_offset_change,
+        render_provisional_early_rescore_feedback, replay_edge_cap, resolve_pending_missed_holds,
+        row_entry_for_cached_row, row_final_grade_hides_note, score_invalid_reason_lines_for_chart,
+        set_final_note_result, settle_completion_rows, song_time_ns_from_seconds,
+        song_time_ns_to_seconds, stage_music_cut, start_active_hold,
+        step_stats_density_graph_width, step_stats_notefield_width,
+        suppress_final_bad_rescore_visual, sync_queued_raw_modifiers,
         tap_judgment_uses_bright_explosion, tick_mode_status_line, tick_visual_effects,
         trigger_completed_row_tap_explosions, trigger_hold_explosion, trigger_mine_explosion,
         trigger_receptor_step_pulse, trigger_tap_explosion, try_hit_crossed_mines_while_held,
@@ -5883,7 +5815,6 @@ mod tests {
         visible_notefield_time_ns,
     };
     use crate::game::parsing::noteskin::{self, Noteskin, Style};
-    use crate::game::parsing::song_lua::SongLuaNoteHideWindow;
     use crate::game::profile;
     use crate::screens::gameplay as screen_gameplay;
     use deadsync_chart::SongData;
@@ -8258,8 +8189,7 @@ return Def.ActorFrame{}
         )];
         state.row_map_cache = std::array::from_fn(|_| vec![u32::MAX; row_index + 1]);
         state.row_map_cache[0][row_index] = 0;
-        state.song_lua_note_hides[0].push(SongLuaNoteHideWindow {
-            player: 0,
+        state.song_lua_note_hides[0].push(SongLuaNoteHideWindowRuntime {
             column,
             start_beat: 0.0,
             end_beat: 2.0,
@@ -12166,7 +12096,11 @@ return Def.ActorFrame{}
         let cues = super::build_crossover_cues_core(&annos, xover_time, 0, 500, 8, false, 0.0);
         assert_eq!(cues.len(), 1);
         let cue = &cues[0];
-        assert!((cue.start_time - (-0.5)).abs() < 1e-4, "start {}", cue.start_time);
+        assert!(
+            (cue.start_time - (-0.5)).abs() < 1e-4,
+            "start {}",
+            cue.start_time
+        );
         assert!((cue.duration - 0.575).abs() < 1e-4, "dur {}", cue.duration);
         assert_eq!(cue.columns.len(), 2);
         assert_eq!(cue.columns[0].column, 0);
@@ -12218,7 +12152,11 @@ return Def.ActorFrame{}
         let cue = &cues[0];
         // base 0.575 + (cur_arrow 1.0 - prev_arrow 0.0) = 1.575
         assert!((cue.duration - 1.575).abs() < 1e-4, "dur {}", cue.duration);
-        assert!((cue.start_time - (-0.5)).abs() < 1e-4, "start {}", cue.start_time);
+        assert!(
+            (cue.start_time - (-0.5)).abs() < 1e-4,
+            "start {}",
+            cue.start_time
+        );
     }
 
     #[test]
@@ -12234,8 +12172,16 @@ return Def.ActorFrame{}
         // First cue ends at -0.5 + 0.575 = 0.075; the second would start at
         // -0.2, so it is clamped to start at prev_end - fade = 0.0 with its
         // duration shortened accordingly.
-        assert!((cues[1].start_time - 0.0).abs() < 1e-4, "start {}", cues[1].start_time);
-        assert!((cues[1].duration - 0.375).abs() < 1e-4, "dur {}", cues[1].duration);
+        assert!(
+            (cues[1].start_time - 0.0).abs() < 1e-4,
+            "start {}",
+            cues[1].start_time
+        );
+        assert!(
+            (cues[1].duration - 0.375).abs() < 1e-4,
+            "dur {}",
+            cues[1].duration
+        );
     }
 
     #[test]
@@ -12250,7 +12196,11 @@ return Def.ActorFrame{}
         // First cue genuinely starts before t=0 (start_time -0.5), so the
         // pre-roll compensation applies: start += fvt, duration -= fvt (fvt
         // negative => earlier start, longer duration).
-        assert!((cue.start_time - (-0.8)).abs() < 1e-4, "start {}", cue.start_time);
+        assert!(
+            (cue.start_time - (-0.8)).abs() < 1e-4,
+            "start {}",
+            cue.start_time
+        );
         assert!((cue.duration - 0.875).abs() < 1e-4, "dur {}", cue.duration);
     }
 
@@ -12269,7 +12219,11 @@ return Def.ActorFrame{}
         let cues = super::build_crossover_cues_core(&annos, xover_time, 0, 500, 8, false, -0.3);
         assert_eq!(cues.len(), 1);
         let cue = &cues[0];
-        assert!((cue.start_time - 0.5).abs() < 1e-4, "start {}", cue.start_time);
+        assert!(
+            (cue.start_time - 0.5).abs() < 1e-4,
+            "start {}",
+            cue.start_time
+        );
         assert!((cue.duration - 0.575).abs() < 1e-4, "dur {}", cue.duration);
     }
 
@@ -12294,7 +12248,10 @@ return Def.ActorFrame{}
             xover_anno(0.5, 2, 0b0011, true),
         ];
         let cues = super::build_crossover_cues_core(&annos, xover_time, 0, 500, 8, false, 0.0);
-        assert!(cues.is_empty(), "bracket crossover suppressed when excluded");
+        assert!(
+            cues.is_empty(),
+            "bracket crossover suppressed when excluded"
+        );
     }
 
     #[test]
@@ -12322,12 +12279,20 @@ return Def.ActorFrame{}
         // scooby nor its own cue — one plain cue with no appended red column.
         let excluded = super::build_crossover_cues_core(&annos, xover_time, 0, 500, 8, false, 0.0);
         assert_eq!(excluded.len(), 1);
-        assert_eq!(excluded[0].columns.len(), 2, "no scooby when bracket excluded");
+        assert_eq!(
+            excluded[0].columns.len(),
+            2,
+            "no scooby when bracket excluded"
+        );
 
         // Included: the bracket chains as a scooby and is appended in red.
         let included = super::build_crossover_cues_core(&annos, xover_time, 0, 500, 8, true, 0.0);
         assert_eq!(included.len(), 1);
-        assert_eq!(included[0].columns.len(), 3, "scooby appended when bracket included");
+        assert_eq!(
+            included[0].columns.len(),
+            3,
+            "scooby appended when bracket included"
+        );
         assert!(included[0].columns[2].is_mine, "scooby column flagged red");
     }
 }

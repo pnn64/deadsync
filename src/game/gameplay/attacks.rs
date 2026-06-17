@@ -1,8 +1,8 @@
 use crate::game::parsing::song_lua::{
     CompiledSongLua, SongLuaCapturedActor, SongLuaCompileContext, SongLuaDifficulty,
-    SongLuaEaseTarget, SongLuaMessageEvent, SongLuaModWindow, SongLuaNoteHideWindow,
-    SongLuaOverlayActor, SongLuaOverlayEase, SongLuaOverlayMessageCommand, SongLuaOverlayState,
-    SongLuaPlayerContext, SongLuaSpanMode, SongLuaSpeedMod, SongLuaTimeUnit,
+    SongLuaEaseTarget, SongLuaMessageEvent, SongLuaModWindow, SongLuaOverlayActor,
+    SongLuaOverlayEase, SongLuaOverlayMessageCommand, SongLuaOverlayState, SongLuaPlayerContext,
+    SongLuaSpanMode, SongLuaSpeedMod, SongLuaTimeUnit,
 };
 use deadsync_chart::SongData;
 use deadsync_chart::{ChartData, GameplayChartData};
@@ -33,7 +33,9 @@ pub(super) use deadsync_gameplay::{
     AttackMaskWindow, SongLuaEaseMaskTarget, SongLuaEaseMaskWindow, SongLuaPlayerTransform,
     SongLuaPlayerTransformValues, SongLuaRuntimeSpanMode, SongLuaRuntimeTimeUnit,
 };
-pub use deadsync_gameplay::{SongLuaColumnOffsetWindowRuntime, SongLuaOverlayMessageRuntime};
+pub use deadsync_gameplay::{
+    SongLuaColumnOffsetWindowRuntime, SongLuaNoteHideWindowRuntime, SongLuaOverlayMessageRuntime,
+};
 use deadsync_profile as profile_data;
 use deadsync_rules::note::Note;
 use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -51,7 +53,7 @@ use super::{
 };
 
 #[inline(always)]
-fn gameplay_attack_mode(attack_mode: profile_data::AttackMode) -> GameplayAttackMode {
+pub(super) fn gameplay_attack_mode(attack_mode: profile_data::AttackMode) -> GameplayAttackMode {
     match attack_mode {
         profile_data::AttackMode::Off => GameplayAttackMode::Off,
         profile_data::AttackMode::On => GameplayAttackMode::On,
@@ -986,7 +988,7 @@ pub(super) fn build_song_lua_runtime_windows(
     SongLuaCapturedActor,
     Vec<SongLuaOverlayMessageRuntime>,
     [bool; MAX_PLAYERS],
-    [Vec<SongLuaNoteHideWindow>; MAX_PLAYERS],
+    [Vec<SongLuaNoteHideWindowRuntime>; MAX_PLAYERS],
     [Vec<SongLuaColumnOffsetWindowRuntime>; MAX_PLAYERS],
     f32,
     f32,
@@ -1035,7 +1037,7 @@ pub(super) fn build_song_lua_runtime_windows(
     let mut song_foreground = SongLuaCapturedActor::default();
     let mut song_foreground_events = Vec::new();
     let mut hidden_players = [false; MAX_PLAYERS];
-    let mut note_hides: [Vec<SongLuaNoteHideWindow>; MAX_PLAYERS] =
+    let mut note_hides: [Vec<SongLuaNoteHideWindowRuntime>; MAX_PLAYERS] =
         std::array::from_fn(|_| Vec::new());
     let mut column_offsets: [Vec<SongLuaColumnOffsetWindowRuntime>; MAX_PLAYERS] =
         std::array::from_fn(|_| Vec::new());
@@ -1107,7 +1109,11 @@ pub(super) fn build_song_lua_runtime_windows(
         hidden_players[..compiled.hidden_players.len()].copy_from_slice(&compiled.hidden_players);
         for hide in &compiled.note_hides {
             if hide.player < MAX_PLAYERS {
-                note_hides[hide.player].push(*hide);
+                note_hides[hide.player].push(SongLuaNoteHideWindowRuntime {
+                    column: hide.column,
+                    start_beat: hide.start_beat,
+                    end_beat: hide.end_beat,
+                });
             }
         }
 
@@ -1387,7 +1393,7 @@ pub(super) fn player_changes_chart(
     profile: &profile_data::Profile,
 ) -> bool {
     player_chart_changes_for_options(
-        super::has_uncommon_masks(profile),
+        super::chart_effects_from_profile(profile).has_note_masks(),
         super::gameplay_turn_option_from_profile(profile.turn_option),
         chart.chart_attacks.as_deref(),
         gameplay_attack_mode(profile.attack_mode),

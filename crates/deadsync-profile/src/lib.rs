@@ -3544,10 +3544,12 @@ where
         .and_then(|s| s.trim().parse::<u8>().ok())
         .map(clamp_crossover_cue_quantization)
         .unwrap_or(options.crossover_cue_quantization);
-    options.crossover_cue_brackets =
-        load_u8_bool(&mut get, "CrossoverCueBrackets", options.crossover_cue_brackets);
-    options.column_countdown =
-        load_u8_bool(&mut get, "ColumnCountdown", options.column_countdown);
+    options.crossover_cue_brackets = load_u8_bool(
+        &mut get,
+        "CrossoverCueBrackets",
+        options.crossover_cue_brackets,
+    );
+    options.column_countdown = load_u8_bool(&mut get, "ColumnCountdown", options.column_countdown);
     options.judgment_back = load_u8_bool(&mut get, "JudgmentBack", options.judgment_back);
     options.error_ms_display = load_u8_bool(&mut get, "ErrorMSDisplay", options.error_ms_display);
     options.display_scorebox = load_u8_bool(&mut get, "DisplayScorebox", options.display_scorebox);

@@ -123,7 +123,11 @@ pub fn rssp_timing_segments_from_deadsync(
     rssp_timing::TimingSegments {
         beat0_offset_adjust: segments.beat0_offset_adjust,
         bpms: segments.bpms.clone(),
-        stops: segments.stops.iter().map(|s| (s.beat, s.duration)).collect(),
+        stops: segments
+            .stops
+            .iter()
+            .map(|s| (s.beat, s.duration))
+            .collect(),
         delays: segments
             .delays
             .iter()
@@ -152,7 +156,9 @@ pub fn rssp_timing_segments_from_deadsync(
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_time_signatures, rssp_timing_segments_from_deadsync, timing_segments_from_rssp};
+    use super::{
+        parse_time_signatures, rssp_timing_segments_from_deadsync, timing_segments_from_rssp,
+    };
     use deadsync_rules::timing::{SpeedUnit, default_time_signature};
     use rssp::timing as rssp_timing;
 
