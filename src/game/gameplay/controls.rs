@@ -9,9 +9,9 @@ use super::offset::{
 };
 use super::{
     GameplaySessionCommand, MAX_COLS, State, assist_clap_cursor_for_row, assist_row_no_offset,
-    gameplay_tick_mode_from_profile, next_autosync_mode, next_timing_tick_mode, player_note_range,
-    profile_tick_mode_from_gameplay, queue_session_command,
-    timing_tick_mode_debug_label as gameplay_tick_mode_debug_label,
+    autoplay_cursor_for_enable, gameplay_tick_mode_from_profile, next_autosync_mode,
+    next_timing_tick_mode, player_note_range, profile_tick_mode_from_gameplay,
+    queue_session_command, timing_tick_mode_debug_label as gameplay_tick_mode_debug_label,
     timing_tick_mode_status_line as gameplay_tick_mode_status_line,
 };
 
@@ -68,10 +68,10 @@ fn set_autoplay_enabled(state: &mut State, enabled: bool, now_music_time: f32) {
         state.receptor_glow_lift_start_zoom = [1.0; MAX_COLS];
         state.pending_edges.clear();
         for player in 0..state.num_players {
-            let (note_start, note_end) = player_note_range(state, player);
-            state.autoplay_cursor[player] = state.next_tap_miss_cursor[player]
-                .max(note_start)
-                .min(note_end);
+            state.autoplay_cursor[player] = autoplay_cursor_for_enable(
+                state.next_tap_miss_cursor[player],
+                player_note_range(state, player),
+            );
         }
         debug!("Autoplay enabled (F8). Scores for this stage will not be saved.");
         return;

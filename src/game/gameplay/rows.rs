@@ -2,11 +2,11 @@ use deadsync_rules::judgment;
 use deadsync_rules::timing;
 
 use super::{
-    FinalizedRowOutcome, State, active_hold_is_engaged, advance_judged_row_cursor,
-    apply_autosync_for_row_hits, apply_life_change, apply_row_combo_state, autoplay_blocks_scoring,
-    capture_failed_ex_score_inputs, current_music_time_s, error_bar_register_tap,
-    finalized_row_awards_hand, is_player_dead, judge_life_delta, max_step_distance_ns,
-    next_ready_row_in_lookahead, player_col_range, player_row_scan_state,
+    FinalizedRowOutcome, State, advance_judged_row_cursor, apply_autosync_for_row_hits,
+    apply_life_change, apply_row_combo_state, autoplay_blocks_scoring,
+    capture_failed_ex_score_inputs, carried_holds_down_at_row, current_music_time_s,
+    error_bar_register_tap, finalized_row_awards_hand, is_player_dead, judge_life_delta,
+    max_step_distance_ns, next_ready_row_in_lookahead, player_col_range, player_row_scan_state,
     record_current_combo_window_count, record_display_window_counts, set_last_judgment,
     suppress_final_bad_rescore_visual, update_itg_grade_totals,
 };
@@ -65,22 +65,12 @@ pub(super) fn finalize_row_judgment(
         }
         record_current_combo_window_count(p, &final_judgment);
         apply_row_combo_state(p, final_grade, player_row_note_count, 1);
-        let carried_holds_down: usize = state.active_holds[col_start..col_end]
-            .iter()
-            .filter_map(|a| a.as_ref())
-            .filter(|a| active_hold_is_engaged(a))
-            .filter(|a| {
-                let note = &state.notes[a.note_index];
-                if note.row_index >= row_index {
-                    return false;
-                }
-                if let Some(h) = note.hold.as_ref() {
-                    h.last_held_row_index >= row_index
-                } else {
-                    false
-                }
-            })
-            .count();
+        let carried_holds_down = carried_holds_down_at_row(
+            &state.notes,
+            &state.active_holds,
+            (col_start, col_end),
+            row_index,
+        );
         if finalized_row_awards_hand(final_grade, player_row_note_count, carried_holds_down) {
             p.hands_achieved = p.hands_achieved.saturating_add(1);
         }

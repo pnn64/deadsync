@@ -4,8 +4,8 @@ use std::time::Instant;
 use winit::keyboard::KeyCode;
 
 use super::{
-    GameplayOffsetAdjustKey, State, compute_end_times_ns, offset_adjust_delta_for_key,
-    offset_adjust_repeat_ready, offset_adjust_slot_for_key, player_index_for_column,
+    GameplayOffsetAdjustKey, State, clear_offset_adjust_hold_state, compute_end_times_ns,
+    player_index_for_column, start_offset_adjust_hold_state, tick_offset_adjust_hold_state,
 };
 
 #[inline(always)]
@@ -72,22 +72,15 @@ fn offset_adjust_key(code: KeyCode) -> Option<GameplayOffsetAdjustKey> {
 }
 
 #[inline(always)]
-fn offset_adjust_slot(code: KeyCode) -> Option<usize> {
-    offset_adjust_key(code).map(offset_adjust_slot_for_key)
-}
-
-#[inline(always)]
-fn offset_adjust_delta(code: KeyCode) -> Option<f32> {
-    offset_adjust_key(code).map(offset_adjust_delta_for_key)
-}
-
-#[inline(always)]
 pub(super) fn clear_offset_adjust_hold(state: &mut State, code: KeyCode) -> bool {
-    let Some(slot) = offset_adjust_slot(code) else {
+    let Some(key) = offset_adjust_key(code) else {
         return false;
     };
-    state.offset_adjust_held_since[slot] = None;
-    state.offset_adjust_last_at[slot] = None;
+    clear_offset_adjust_hold_state(
+        &mut state.offset_adjust_held_since,
+        &mut state.offset_adjust_last_at,
+        key,
+    );
     true
 }
 
@@ -97,10 +90,13 @@ pub(super) fn start_offset_adjust_hold(
     code: KeyCode,
     at: Instant,
 ) -> Option<f32> {
-    let slot = offset_adjust_slot(code)?;
-    state.offset_adjust_held_since[slot] = Some(at);
-    state.offset_adjust_last_at[slot] = Some(at);
-    offset_adjust_delta(code)
+    let key = offset_adjust_key(code)?;
+    Some(start_offset_adjust_hold_state(
+        &mut state.offset_adjust_held_since,
+        &mut state.offset_adjust_last_at,
+        key,
+        at,
+    ))
 }
 
 #[inline(always)]
@@ -110,24 +106,19 @@ pub(super) fn update_offset_adjust_hold(state: &mut State) {
         GameplayOffsetAdjustKey::Decrease,
         GameplayOffsetAdjustKey::Increase,
     ] {
-        let slot = offset_adjust_slot_for_key(key);
-        let (Some(held_since), Some(last_at)) = (
-            state.offset_adjust_held_since[slot],
-            state.offset_adjust_last_at[slot],
+        let Some(delta) = tick_offset_adjust_hold_state(
+            &state.offset_adjust_held_since,
+            &mut state.offset_adjust_last_at,
+            key,
+            now,
         ) else {
             continue;
         };
-        if !offset_adjust_repeat_ready(now.duration_since(held_since), now.duration_since(last_at))
-        {
-            continue;
-        }
-        let delta = offset_adjust_delta_for_key(key);
         if state.shift_held {
             let _ = apply_global_offset_delta(state, delta);
         } else if state.course_display_totals.is_none() {
             let _ = apply_song_offset_delta(state, delta);
         }
-        state.offset_adjust_last_at[slot] = Some(now);
     }
 }
 

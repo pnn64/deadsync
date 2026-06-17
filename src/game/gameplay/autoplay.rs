@@ -3,9 +3,10 @@ use deadsync_input::{INPUT_SLOT_INVALID, lane_from_column};
 
 use super::input::push_input_edge;
 use super::{
-    MAX_COLS, SongTimeNs, State, autoplay_blocks_scoring_from_flags, handle_hold_let_go,
-    handle_hold_success, judge_a_lift, judge_a_tap, live_autoplay_enabled_from_flags,
-    player_note_range, refresh_roll_life_on_step,
+    ActiveHoldResolution, MAX_COLS, SongTimeNs, State, autoplay_blocks_scoring_from_flags,
+    autoplay_due_active_hold_resolution, handle_hold_let_go, handle_hold_success, judge_a_lift,
+    judge_a_tap, live_autoplay_enabled_from_flags, next_ready_replay_edge, player_note_range,
+    refresh_roll_life_on_step,
 };
 
 #[inline(always)]
@@ -21,20 +22,21 @@ pub(super) fn live_autoplay_enabled(state: &State) -> bool {
 #[inline(always)]
 fn settle_due_autoplay_active_holds(state: &mut State, cutoff_time_ns: SongTimeNs) {
     for column in 0..state.num_cols {
-        let Some(active) = state.active_holds[column].as_ref() else {
+        let Some(resolution) = state.active_holds[column]
+            .as_ref()
+            .and_then(|active| autoplay_due_active_hold_resolution(active, cutoff_time_ns))
+        else {
             continue;
         };
-        if active.end_time_ns > cutoff_time_ns {
-            continue;
-        }
-        let note_index = active.note_index;
-        let end_time_ns = active.end_time_ns;
-        let hold_succeeded = !active.let_go && active.life > 0.0;
         state.active_holds[column] = None;
-        if hold_succeeded {
-            handle_hold_success(state, column, note_index);
-        } else {
-            handle_hold_let_go(state, column, note_index, end_time_ns);
+        match resolution {
+            ActiveHoldResolution::Success { note_index } => {
+                handle_hold_success(state, column, note_index);
+            }
+            ActiveHoldResolution::LetGo {
+                note_index,
+                time_ns,
+            } => handle_hold_let_go(state, column, note_index, time_ns),
         }
     }
 }
@@ -131,12 +133,11 @@ pub(super) fn run_replay(state: &mut State) {
     if !state.autoplay_enabled || !state.replay_mode {
         return;
     }
-    while state.replay_cursor < state.replay_input.len() {
-        let edge = state.replay_input[state.replay_cursor];
-        if edge.event_music_time_ns > state.current_music_time_ns {
-            break;
-        }
-        state.replay_cursor += 1;
+    while let Some(edge) = next_ready_replay_edge(
+        &state.replay_input,
+        &mut state.replay_cursor,
+        state.current_music_time_ns,
+    ) {
         let col = edge.lane_index as usize;
         if col >= state.num_cols {
             continue;

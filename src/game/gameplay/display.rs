@@ -1,6 +1,7 @@
 use deadsync_gameplay::{
     capture_failed_ex_score_inputs as gameplay_capture_failed_ex_score_inputs,
     effective_ex_score_inputs as gameplay_effective_ex_score_inputs,
+    record_combo_window_count_for_judgment, record_display_window_counts_for_judgment,
 };
 use deadsync_profile::ScoreDisplayMode;
 use deadsync_rules::judgment::{self, JudgeGrade, Judgment};
@@ -81,17 +82,9 @@ pub(super) fn record_display_window_counts(
         return;
     }
     let display_window_ms = player_blue_window_ms(state, player_idx);
-    judgment::add_judgment_to_window_counts(
+    record_display_window_counts_for_judgment(
         &mut state.live_window_counts[player_idx],
-        judgment,
-        timing::FA_PLUS_W0_MS,
-    );
-    judgment::add_judgment_to_window_counts(
         &mut state.live_window_counts_10ms_blue[player_idx],
-        judgment,
-        timing::FA_PLUS_W010_MS,
-    );
-    judgment::add_judgment_to_window_counts(
         &mut state.live_window_counts_display_blue[player_idx],
         judgment,
         display_window_ms,
@@ -100,11 +93,7 @@ pub(super) fn record_display_window_counts(
 
 #[inline(always)]
 pub(super) fn record_current_combo_window_count(player: &mut PlayerRuntime, judgment: &Judgment) {
-    judgment::add_judgment_to_window_counts(
-        &mut player.current_combo_window_counts,
-        judgment,
-        timing::FA_PLUS_W0_MS,
-    );
+    record_combo_window_count_for_judgment(&mut player.current_combo_window_counts, judgment);
 }
 
 #[inline(always)]
