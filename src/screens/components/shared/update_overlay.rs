@@ -346,7 +346,11 @@ pub fn phase_strings(phase: &ActionPhase) -> (String, Vec<String>, String, Optio
                 } else {
                     "BodyRollbackRow"
                 };
-                body.push(tr_fmt("Updater", key, &[("version", &info.tag)]).to_string());
+                let mut row = tr_fmt("Updater", key, &[("version", &info.tag)]).to_string();
+                if let Some(date) = format_published_at(info.published_at.as_deref()) {
+                    row.push_str(&tr_fmt("Updater", "BodyRollbackRowDate", &[("date", &date)]));
+                }
+                body.push(row);
             }
             (
                 tr("Updater", "TitleRollback").to_string(),
@@ -951,7 +955,7 @@ mod tests {
                 version: Version::new(maj, min, pat),
                 html_url: format!("https://example/{tag}"),
                 body: String::new(),
-                published_at: None,
+                published_at: Some(format!("2026-04-{pat:02}T04:17:40Z")),
                 assets: vec![ReleaseAsset {
                     name: format!("deadsync-{tag}.tar.gz"),
                     browser_download_url: format!("https://example/{tag}/a"),
@@ -963,7 +967,7 @@ mod tests {
             (info, asset)
         };
         ActionPhase::RollbackPick {
-            candidates: vec![mk(0, 3, 870), mk(0, 3, 869), mk(0, 3, 868)],
+            candidates: vec![mk(0, 3, 10), mk(0, 3, 9), mk(0, 3, 8)],
             selected,
         }
     }
@@ -973,14 +977,18 @@ mod tests {
         let (title, body, footer, progress) = phase_strings(&rollback_pick(1));
         assert!(!title.is_empty());
         let joined = body.join("\n");
-        for tag in ["v0.3.870", "v0.3.869", "v0.3.868"] {
+        for tag in ["v0.3.10", "v0.3.9", "v0.3.8"] {
             assert!(joined.contains(tag), "body should list {tag}: {joined:?}");
+        }
+        // Each candidate row also surfaces its release date.
+        for date in ["2026-04-10", "2026-04-09", "2026-04-08"] {
+            assert!(joined.contains(date), "body should show date {date}: {joined:?}");
         }
         // The selected (second) row is rendered differently from the
         // unselected rows: exactly one row carries the selection marker.
         let marked = body.iter().filter(|l| l.contains('>')).count();
         assert_eq!(marked, 1, "exactly one selected row: {body:?}");
-        assert!(body[2].contains('>'), "row 1 (0.3.869) selected: {body:?}");
+        assert!(body[2].contains('>'), "row 1 (0.3.9) selected: {body:?}");
         assert!(progress.is_none());
         assert!(!footer.is_empty());
     }
