@@ -3,8 +3,12 @@ use deadsync_chart::song::sync_pref_offset;
 use deadsync_chart::{ChartData, GameplayChartData, SongData, SyncPref};
 use deadsync_core::input::{MAX_COLS, MAX_PLAYERS};
 use deadsync_core::note::NoteType;
-pub(crate) use deadsync_core::song_time::SongTimeNs;
+pub(crate) use deadsync_core::song_time::{
+    INVALID_SONG_TIME_NS, SongTimeNs, normalized_song_rate, song_time_ns_delta_seconds,
+    song_time_ns_from_seconds, song_time_ns_invalid, song_time_ns_to_seconds,
+};
 use deadsync_core::timing::beat_to_note_row;
+use deadsync_gameplay::assist_row_no_offset_for_timing;
 pub(crate) use deadsync_gameplay::song_lua_ease_factor;
 pub use deadsync_gameplay::{
     ASSIST_TICK_LOOKAHEAD_MARGIN_SECONDS, AUTOSYNC_OFFSET_SAMPLE_COUNT,
@@ -176,6 +180,7 @@ use deadsync_rules::combo::{ComboState, ComboUpdate};
 use deadsync_rules::judgment::{
     self, JudgeGrade, Judgment, TimingWindow, judgment_time_error_ms_from_music_ns,
 };
+use deadsync_rules::life::LifeMeter;
 use deadsync_rules::note::{HoldData, HoldResult, MineResult, Note, recompute_player_totals};
 #[cfg(test)]
 use deadsync_rules::note::{MAX_HOLD_LIFE, TIMING_WINDOW_SECONDS_HOLD, TIMING_WINDOW_SECONDS_ROLL};
@@ -207,18 +212,12 @@ mod holds;
 mod input;
 #[path = "gameplay/judging.rs"]
 mod judging;
-#[path = "gameplay/life.rs"]
-mod life;
-#[path = "gameplay/note_result.rs"]
-mod note_result;
 #[path = "gameplay/offset.rs"]
 mod offset;
 #[path = "gameplay/rows.rs"]
 mod rows;
 #[path = "gameplay/stats.rs"]
 mod stats;
-#[path = "gameplay/time.rs"]
-mod time;
 
 pub(crate) use self::attacks::song_lua_compile_context;
 #[cfg(test)]
@@ -283,9 +282,6 @@ use self::judging::{
     effective_player_global_offset_seconds, note_hit_eval, player_largest_tap_window_ns,
 };
 pub use self::judging::{player_blue_window_ms, player_fa_plus_window_s};
-pub use self::life::course_stage_life_submit_eligible;
-use self::life::{all_joined_players_failed, apply_life_change, is_player_dead, is_state_dead};
-use self::note_result::{register_provisional_early_result, set_final_note_result};
 use self::offset::update_offset_adjust_hold;
 #[cfg(test)]
 use self::offset::{
@@ -300,14 +296,6 @@ pub use self::stats::{
     stream_segments_for_results,
 };
 use self::stats::{gameplay_target_score_setting, mini_indicator_mode, needs_stream_data};
-use self::time::{
-    INVALID_SONG_TIME_NS, assist_row_no_offset, assist_row_no_offset_ns, current_music_time_s,
-    normalized_song_rate, song_time_ns_delta_seconds,
-};
-pub(crate) use self::time::{
-    song_time_ns_from_seconds, song_time_ns_invalid, song_time_ns_to_seconds,
-};
-
 // Simply Love ScreenGameplay in/default.lua keeps intro cover actors alive for 2.0s.
 pub const TRANSITION_IN_DURATION: f32 = 2.0;
 /// SL/zmod parity: when re-entering Gameplay as a restart, skip the splode +
@@ -494,7 +482,7 @@ fn build_crossover_cues_for_player(
     )
 }
 
-type CourseSubmitLife = deadsync_rules::life::LifeMeter;
+type CourseSubmitLife = LifeMeter;
 
 #[derive(Clone, Debug)]
 pub struct PlayerRuntime {
@@ -605,6 +593,66 @@ fn init_player_runtime() -> PlayerRuntime {
         error_bar_long_avg_tick: None,
         error_bar_long_avg_visible: false,
         live_timing_stats: deadsync_rules::timing::LiveTimingStats::default(),
+    }
+}
+
+#[inline(always)]
+pub(super) fn is_player_dead(p: &PlayerRuntime) -> bool {
+    player_life_is_dead(p.life, p.is_failing)
+}
+
+#[inline(always)]
+pub(super) fn is_state_dead(state: &State, player: usize) -> bool {
+    is_player_dead(&state.players[player])
+}
+
+#[inline(always)]
+pub(super) fn all_joined_players_failed(state: &State) -> bool {
+    let players = std::array::from_fn(|player| PlayerLifeStatus {
+        life: state.players[player].life,
+        is_failing: state.players[player].is_failing,
+    });
+    all_joined_players_failed_for_statuses(&players, state.num_players)
+}
+
+#[inline(always)]
+pub fn course_stage_life_submit_eligible(state: &State, player_idx: usize) -> bool {
+    if player_idx >= state.num_players.min(MAX_PLAYERS) {
+        return true;
+    }
+    course_submit_life_eligible(state.players[player_idx].course_submit_life.as_ref())
+}
+
+#[inline(always)]
+fn player_life_meter(p: &PlayerRuntime) -> LifeMeter {
+    LifeMeter {
+        life: p.life,
+        combo_after_miss: p.combo_after_miss,
+        is_failing: p.is_failing,
+        fail_time: p.fail_time,
+    }
+}
+
+#[inline(always)]
+fn write_player_life_meter(p: &mut PlayerRuntime, meter: LifeMeter) {
+    p.life = meter.life;
+    p.combo_after_miss = meter.combo_after_miss;
+    p.is_failing = meter.is_failing;
+    p.fail_time = meter.fail_time;
+}
+
+pub(super) fn apply_life_change(p: &mut PlayerRuntime, current_music_time: f32, delta: f32) {
+    let mut meter = player_life_meter(p);
+    let result = apply_gameplay_life_delta(
+        &mut meter,
+        &mut p.life_history,
+        p.course_submit_life.as_mut(),
+        current_music_time,
+        delta,
+    );
+    write_player_life_meter(p, meter);
+    if result.failed_now {
+        debug!("Player has failed!");
     }
 }
 
@@ -1644,6 +1692,21 @@ pub fn beat_for_music_time(state: &State, music_time: f32) -> f32 {
 #[inline(always)]
 pub fn current_music_time_seconds(state: &State) -> f32 {
     song_time_ns_to_seconds(state.current_music_time_ns)
+}
+
+#[inline(always)]
+pub(super) fn current_music_time_s(state: &State) -> f32 {
+    current_music_time_seconds(state)
+}
+
+#[inline(always)]
+pub(super) fn assist_row_no_offset(state: &State, music_time: f32) -> i32 {
+    assist_row_no_offset_ns(state, song_time_ns_from_seconds(music_time))
+}
+
+#[inline(always)]
+pub(super) fn assist_row_no_offset_ns(state: &State, music_time_ns: SongTimeNs) -> i32 {
+    assist_row_no_offset_for_timing(&state.timing, state.global_offset_seconds, music_time_ns)
 }
 
 #[inline(always)]
@@ -3168,6 +3231,41 @@ fn trigger_column_flash(state: &mut State, column: usize, grade: JudgeGrade, blu
 #[inline(always)]
 pub(super) fn trigger_column_flash_for_grade(state: &mut State, column: usize, grade: JudgeGrade) {
     trigger_column_flash(state, column, grade, false);
+}
+
+#[inline(always)]
+pub(super) fn register_provisional_early_result(
+    state: &mut State,
+    note_index: usize,
+    judgment: Judgment,
+) {
+    apply_provisional_early_note_result(
+        &mut state.notes,
+        &mut state.row_entries,
+        &state.note_row_entry_indices,
+        note_index,
+        judgment,
+    );
+}
+
+#[inline(always)]
+pub(super) fn set_final_note_result(state: &mut State, note_index: usize, judgment: Judgment) {
+    let update = apply_final_note_result_to_rows(
+        &mut state.notes,
+        &mut state.row_entries,
+        &state.note_row_entry_indices,
+        note_index,
+        judgment,
+        MAX_COLS,
+    );
+    let effects = update.effects;
+    if let Some(column) = effects.trigger_miss_flash_column {
+        trigger_column_flash_for_grade(state, column, judgment.grade);
+    }
+    if let Some(column) = effects.held_miss_column {
+        state.held_miss_judgments[column] =
+            Some(held_miss_render_info(state.total_elapsed_in_screen));
+    }
 }
 
 #[inline(always)]
