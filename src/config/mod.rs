@@ -408,7 +408,7 @@ impl Default for Config {
             windows_gamepad_backend: WindowsPadBackend::RawInput,
             smx_input: false,
             smx_manages_pad_config: false,
-            smx_usb_polling_us: 1000,
+            smx_usb_polling_us: 500,
             smx_panel_lights: false,
             smx_default_pad_config: SmxPadPreset::Low,
             smx_default_light_brightness: 100,

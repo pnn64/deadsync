@@ -1,9 +1,10 @@
 use super::super::*;
 
-// USB polling choice list bounds: index N maps to 500 + N*50 microseconds.
-const USB_POLLING_MIN_US: u16 = 500;
+// USB polling choice list bounds: index N maps to 100 + N*50 microseconds.
+// Displayed as Hz (10000hz down to 1000hz); default is index 8 (500us = 2000hz).
+const USB_POLLING_MIN_US: u16 = 100;
 const USB_POLLING_STEP_US: u16 = 50;
-pub(in crate::screens::options) const USB_POLLING_CHOICE_COUNT: usize = 11;
+pub(in crate::screens::options) const USB_POLLING_CHOICE_COUNT: usize = 19;
 
 /// Choice index for a polling value in microseconds (clamped to the list).
 pub(in crate::screens::options) fn usb_polling_choice_index(value: u16) -> usize {
@@ -330,20 +331,29 @@ pub(in crate::screens::options) const SMX_CONFIG_OPTIONS_ROWS: &[SubRow] = &[
     },
     SubRow {
         id: SubRowId::SmxUsbPolling,
-        // 500-1000us in 50us steps; choice index N maps to 500 + N*50 us.
+        // 100-1000us in 50us steps; choice index N maps to 100 + N*50 us.
+        // Displayed as Hz (10000hz down to 1000hz); default is index 8 (500us = 2000hz).
         label: lookup_key("OptionsInput", "UsbPolling"),
         choices: &[
-            literal_choice("500us"),
-            literal_choice("550us"),
-            literal_choice("600us"),
-            literal_choice("650us"),
-            literal_choice("700us"),
-            literal_choice("750us"),
-            literal_choice("800us"),
-            literal_choice("850us"),
-            literal_choice("900us"),
-            literal_choice("950us"),
-            literal_choice("1000us"),
+            literal_choice("10000hz"),
+            literal_choice("6667hz"),
+            literal_choice("5000hz"),
+            literal_choice("4000hz"),
+            literal_choice("3333hz"),
+            literal_choice("2857hz"),
+            literal_choice("2500hz"),
+            literal_choice("2222hz"),
+            literal_choice("2000hz"),
+            literal_choice("1818hz"),
+            literal_choice("1667hz"),
+            literal_choice("1538hz"),
+            literal_choice("1429hz"),
+            literal_choice("1333hz"),
+            literal_choice("1250hz"),
+            literal_choice("1176hz"),
+            literal_choice("1111hz"),
+            literal_choice("1053hz"),
+            literal_choice("1000hz"),
         ],
         inline: false,
     },
