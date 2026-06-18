@@ -9,5 +9,6 @@
 //! * [`itg`] — readers that turn the ITGmania files into plain structs.
 
 pub mod itg;
+pub mod options;
 pub mod resolver;
 pub mod xml;
