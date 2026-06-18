@@ -108,6 +108,10 @@ Rate-modded plays keep their music rate (DeadSync reads the `xMusic` modifier
 from each score), and your judgment counts, grade, combo lamp, and play date all
 carry across.
 
+For the exact field-by-field mapping (every Simply Love setting and `Stats.xml`
+element and where it lands in DeadSync), see
+[itgmania-import-mapping.md](./itgmania-import-mapping.md).
+
 ## Manual migration
 
 If you prefer to move pieces by hand, the sections below cover each item
