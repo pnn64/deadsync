@@ -169,11 +169,12 @@ pub use deadsync_gameplay::{
     update_danger_fx_for_health, visible_notefield_time_ns, zmod_stream_totals_for_densities,
 };
 use deadsync_gameplay::{
-    StepStatsPlayStyle, resolve_target_score_percent,
+    GameplayTargetScoreSetting, ScoreValidityOptions, StepStatsPlayStyle,
+    resolve_target_score_percent, score_invalid_reason_lines_for_options,
     step_stats_density_graph_width as gameplay_step_stats_density_graph_width,
-    step_stats_upper_density_graph_width,
+    step_stats_upper_density_graph_width, stream_segments_for_note_data,
 };
-use deadsync_input::InputEdge;
+use deadsync_input::{INPUT_SLOT_INVALID, InputEdge, lane_from_column};
 use deadsync_profile as profile_data;
 use deadsync_profile::TimingTickMode as TickMode;
 use deadsync_rules::combo::{ComboState, ComboUpdate};
@@ -186,7 +187,7 @@ use deadsync_rules::note::{HoldData, HoldResult, MineResult, Note, recompute_pla
 use deadsync_rules::note::{MAX_HOLD_LIFE, TIMING_WINDOW_SECONDS_HOLD, TIMING_WINDOW_SECONDS_ROLL};
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::stream::{StreamSegment, measure_densities};
-use deadsync_rules::timing::{BeatInfoCache, TimingData, TimingProfile, TimingProfileNs};
+use deadsync_rules::timing::{self, BeatInfoCache, TimingData, TimingProfile, TimingProfileNs};
 use deadsync_simfile::timing::rssp_timing_segments_from_deadsync;
 use log::{debug, info, trace, warn};
 use std::collections::VecDeque;
@@ -197,18 +198,12 @@ use winit::keyboard::KeyCode;
 
 #[path = "gameplay/attacks.rs"]
 mod attacks;
-#[path = "gameplay/autoplay.rs"]
-mod autoplay;
 #[path = "gameplay/display.rs"]
 mod display;
 #[path = "gameplay/holds.rs"]
 mod holds;
 #[path = "gameplay/input.rs"]
 mod input;
-#[path = "gameplay/rows.rs"]
-mod rows;
-#[path = "gameplay/stats.rs"]
-mod stats;
 
 pub(crate) use self::attacks::song_lua_compile_context;
 #[cfg(test)]
@@ -234,7 +229,6 @@ use self::attacks::{
     build_song_lua_column_offset_windows_for_player, build_song_lua_constant_windows_for_player,
     build_song_lua_ease_windows_for_player, build_song_lua_overlay_ease_windows,
 };
-use self::autoplay::{autoplay_blocks_scoring, live_autoplay_enabled, run_autoplay, run_replay};
 use self::display::{capture_failed_ex_score_inputs, record_display_window_counts};
 pub use self::display::{
     display_carry_for_player, display_ex_score_percent, display_gameplay_ex_score_percent,
@@ -256,17 +250,9 @@ pub use self::input::{
     set_replay_capture_enabled,
 };
 use self::input::{
-    lane_is_pressed, process_input_edges, tick_visual_effects, trigger_receptor_glow_pulse,
-    trigger_receptor_score_pulse,
+    lane_is_pressed, process_input_edges, push_input_edge, tick_visual_effects,
+    trigger_receptor_glow_pulse, trigger_receptor_score_pulse,
 };
-#[cfg(test)]
-use self::rows::finalize_row_judgment;
-use self::rows::update_judged_rows;
-pub use self::stats::{
-    course_display_carry_from_state, score_invalid_reason_lines_for_chart,
-    stream_segments_for_results,
-};
-use self::stats::{gameplay_target_score_setting, mini_indicator_mode, needs_stream_data};
 // Simply Love ScreenGameplay in/default.lua keeps intro cover actors alive for 2.0s.
 pub const TRANSITION_IN_DURATION: f32 = 2.0;
 /// SL/zmod parity: when re-entering Gameplay as a restart, skip the splode +
@@ -383,6 +369,151 @@ fn chart_effects_from_profile(profile: &profile_data::Profile) -> ChartAttackEff
         holds_mask: profile.holds_active_mask.bits(),
         turn_bits: 0,
     }
+}
+
+#[inline(always)]
+fn gameplay_mini_indicator_mode(mode: profile_data::MiniIndicator) -> GameplayMiniIndicatorMode {
+    match mode {
+        profile_data::MiniIndicator::None => GameplayMiniIndicatorMode::None,
+        profile_data::MiniIndicator::SubtractiveScoring => {
+            GameplayMiniIndicatorMode::SubtractiveScoring
+        }
+        profile_data::MiniIndicator::PredictiveScoring => {
+            GameplayMiniIndicatorMode::PredictiveScoring
+        }
+        profile_data::MiniIndicator::PaceScoring => GameplayMiniIndicatorMode::PaceScoring,
+        profile_data::MiniIndicator::RivalScoring => GameplayMiniIndicatorMode::RivalScoring,
+        profile_data::MiniIndicator::Pacemaker => GameplayMiniIndicatorMode::Pacemaker,
+        profile_data::MiniIndicator::StreamProg => GameplayMiniIndicatorMode::StreamProg,
+    }
+}
+
+#[inline(always)]
+fn profile_mini_indicator_mode(mode: GameplayMiniIndicatorMode) -> profile_data::MiniIndicator {
+    match mode {
+        GameplayMiniIndicatorMode::None => profile_data::MiniIndicator::None,
+        GameplayMiniIndicatorMode::SubtractiveScoring => {
+            profile_data::MiniIndicator::SubtractiveScoring
+        }
+        GameplayMiniIndicatorMode::PredictiveScoring => {
+            profile_data::MiniIndicator::PredictiveScoring
+        }
+        GameplayMiniIndicatorMode::PaceScoring => profile_data::MiniIndicator::PaceScoring,
+        GameplayMiniIndicatorMode::RivalScoring => profile_data::MiniIndicator::RivalScoring,
+        GameplayMiniIndicatorMode::Pacemaker => profile_data::MiniIndicator::Pacemaker,
+        GameplayMiniIndicatorMode::StreamProg => profile_data::MiniIndicator::StreamProg,
+    }
+}
+
+#[inline(always)]
+fn mini_indicator_options(profile: &profile_data::Profile) -> GameplayMiniIndicatorOptions {
+    GameplayMiniIndicatorOptions {
+        requested_mode: gameplay_mini_indicator_mode(profile.mini_indicator),
+        measure_counter_enabled: profile.measure_counter != profile_data::MeasureCounter::None,
+        subtractive_scoring: profile.subtractive_scoring,
+        pacemaker: profile.pacemaker,
+    }
+}
+
+#[inline(always)]
+pub(crate) fn mini_indicator_mode(profile: &profile_data::Profile) -> profile_data::MiniIndicator {
+    profile_mini_indicator_mode(mini_indicator_mode_for_options(mini_indicator_options(
+        profile,
+    )))
+}
+
+#[inline(always)]
+pub(crate) fn needs_stream_data(profile: &profile_data::Profile) -> bool {
+    mini_indicator_needs_stream_data(mini_indicator_options(profile))
+}
+
+pub fn stream_segments_for_results(state: &State, player: usize) -> Vec<StreamSegment> {
+    if player >= state.num_players {
+        return Vec::new();
+    }
+    if !state.mini_indicator_stream_segments[player].is_empty() {
+        return state.mini_indicator_stream_segments[player].clone();
+    }
+    let constant_bpm = !state.timing_players[player].has_bpm_changes();
+    let (segments, _, _) = stream_segments_for_note_data(
+        &state.gameplay_charts[player].notes,
+        state.cols_per_player,
+        constant_bpm,
+    );
+    segments
+}
+
+pub fn score_invalid_reason_lines_for_chart(
+    chart: &ChartData,
+    profile: &profile_data::Profile,
+    _scroll_speed: ScrollSpeedSetting,
+    music_rate: f32,
+) -> Vec<&'static str> {
+    score_invalid_reason_lines_for_options(
+        chart,
+        ScoreValidityOptions {
+            chart_effects: chart_effects_from_profile(profile),
+            attack_mode: gameplay_attack_mode(profile.attack_mode),
+            music_rate,
+        },
+    )
+}
+
+#[inline(always)]
+pub(crate) fn gameplay_target_score_setting(
+    setting: profile_data::TargetScoreSetting,
+) -> GameplayTargetScoreSetting {
+    match setting {
+        profile_data::TargetScoreSetting::CMinus => GameplayTargetScoreSetting::CMinus,
+        profile_data::TargetScoreSetting::C => GameplayTargetScoreSetting::C,
+        profile_data::TargetScoreSetting::CPlus => GameplayTargetScoreSetting::CPlus,
+        profile_data::TargetScoreSetting::BMinus => GameplayTargetScoreSetting::BMinus,
+        profile_data::TargetScoreSetting::B => GameplayTargetScoreSetting::B,
+        profile_data::TargetScoreSetting::BPlus => GameplayTargetScoreSetting::BPlus,
+        profile_data::TargetScoreSetting::AMinus => GameplayTargetScoreSetting::AMinus,
+        profile_data::TargetScoreSetting::A => GameplayTargetScoreSetting::A,
+        profile_data::TargetScoreSetting::APlus => GameplayTargetScoreSetting::APlus,
+        profile_data::TargetScoreSetting::SMinus => GameplayTargetScoreSetting::SMinus,
+        profile_data::TargetScoreSetting::S => GameplayTargetScoreSetting::S,
+        profile_data::TargetScoreSetting::SPlus => GameplayTargetScoreSetting::SPlus,
+        profile_data::TargetScoreSetting::MachineBest => GameplayTargetScoreSetting::MachineBest,
+        profile_data::TargetScoreSetting::PersonalBest => GameplayTargetScoreSetting::PersonalBest,
+    }
+}
+
+pub fn course_display_carry_from_state(state: &State) -> [CourseDisplayCarry; MAX_PLAYERS] {
+    let stages = std::array::from_fn(|player| {
+        if player >= state.num_players.min(MAX_PLAYERS) {
+            return CourseDisplayStage::default();
+        }
+        let p = &state.players[player];
+        CourseDisplayStage {
+            life: p.life,
+            judgment_counts: p.judgment_counts,
+            scoring_counts: p.scoring_counts,
+            full_combo_grade: p.full_combo_grade,
+            current_combo_grade: p.current_combo_grade,
+            current_combo_window_counts: p.current_combo_window_counts,
+            combo: p.combo,
+            first_fc_attempt_broken: p.first_fc_attempt_broken,
+            window_counts: state.live_window_counts[player],
+            window_counts_10ms_blue: state.live_window_counts_10ms_blue[player],
+            window_counts_display_blue: state.live_window_counts_display_blue[player],
+            holds_held: p.holds_held,
+            rolls_held: p.rolls_held,
+            mines_avoided: p.mines_avoided,
+            holds_held_for_score: p.holds_held_for_score,
+            holds_let_go_for_score: p.holds_let_go_for_score,
+            rolls_held_for_score: p.rolls_held_for_score,
+            rolls_let_go_for_score: p.rolls_let_go_for_score,
+            mines_hit_for_score: p.mines_hit_for_score,
+        }
+    });
+    course_display_carry_for_stages(
+        state.course_display_carry.as_ref(),
+        stages,
+        state.num_players,
+    )
 }
 
 /// Bails on non-4/8-panel layouts because `rssp` parity only models those.
@@ -2198,6 +2329,117 @@ fn set_autoplay_enabled(state: &mut State, enabled: bool, now_music_time: f32) {
 }
 
 #[inline(always)]
+pub(super) fn autoplay_blocks_scoring(state: &State) -> bool {
+    autoplay_blocks_scoring_from_flags(state.autoplay_enabled, state.replay_mode)
+}
+
+#[inline(always)]
+pub(super) fn live_autoplay_enabled(state: &State) -> bool {
+    live_autoplay_enabled_from_flags(state.autoplay_enabled, state.replay_mode)
+}
+
+#[inline(always)]
+fn settle_due_autoplay_active_holds(state: &mut State, cutoff_time_ns: SongTimeNs) {
+    let mut events = [None; MAX_COLS];
+    let update = collect_due_autoplay_active_hold_resolutions(
+        &mut state.active_holds,
+        state.num_cols,
+        cutoff_time_ns,
+        &mut events,
+    );
+    for event in events.iter().take(update.event_count).flatten() {
+        match event.resolution {
+            ActiveHoldResolution::Success { note_index } => {
+                handle_hold_success(state, event.column, note_index);
+            }
+            ActiveHoldResolution::LetGo {
+                note_index,
+                time_ns,
+            } => handle_hold_let_go(state, event.column, note_index, time_ns),
+        }
+    }
+}
+
+pub(super) fn run_autoplay(state: &mut State, now_music_time_ns: SongTimeNs) {
+    if !state.autoplay_enabled {
+        return;
+    }
+
+    for player in 0..state.num_players {
+        let note_range = player_note_range(state, player);
+        let mut cursor = state.autoplay_cursor[player].max(note_range.0);
+        loop {
+            let mut events = [None; MAX_COLS];
+            let update = collect_next_autoplay_row_events(
+                &state.notes,
+                &state.note_time_cache_ns,
+                note_range,
+                cursor,
+                state.num_cols,
+                now_music_time_ns,
+                &mut events,
+            );
+            cursor = update.cursor;
+            if !update.row_ready {
+                break;
+            }
+            // Finalize any already-ended autoplay holds before a new warped
+            // row on the same lane can replace the active hold slot.
+            settle_due_autoplay_active_holds(state, update.row_time_ns);
+            for event in events.iter().take(update.event_count).flatten() {
+                state.autoplay_used = true;
+                match event.action {
+                    AutoplayNoteAction::Lift => {
+                        let _ = judge_a_lift(state, event.column, update.row_time_ns);
+                    }
+                    AutoplayNoteAction::Tap => {
+                        let _ = judge_a_tap(state, event.column, update.row_time_ns);
+                    }
+                }
+            }
+        }
+        state.autoplay_cursor[player] = cursor;
+    }
+
+    let mut roll_cols = [usize::MAX; MAX_COLS];
+    let roll_count =
+        collect_active_autoplay_roll_columns(&state.active_holds, state.num_cols, &mut roll_cols);
+    for col in roll_cols.into_iter().take(roll_count) {
+        refresh_roll_life_on_step(state, col, state.current_music_time_ns);
+    }
+}
+
+pub(super) fn run_replay(state: &mut State) {
+    if !state.autoplay_enabled || !state.replay_mode {
+        return;
+    }
+    let mut events = [None; MAX_COLS];
+    let event_count = collect_ready_replay_edges(
+        &state.replay_input,
+        &mut state.replay_cursor,
+        state.current_music_time_ns,
+        state.num_cols,
+        &mut events,
+    );
+    for edge in events.into_iter().take(event_count).flatten() {
+        let col = edge.lane_index as usize;
+        let Some(lane) = lane_from_column(col) else {
+            continue;
+        };
+        push_input_edge(
+            state,
+            edge.source,
+            lane,
+            INPUT_SLOT_INVALID,
+            edge.pressed,
+            edge.event_music_time_ns,
+            false,
+        );
+        state.autoplay_used = true;
+    }
+}
+
+#[inline(always)]
 fn update_raw_modifier_state(state: &mut State, code: KeyCode, pressed: bool) {
     match code {
         KeyCode::ShiftLeft | KeyCode::ShiftRight => state.shift_held = pressed,
@@ -3898,6 +4140,133 @@ fn apply_combo_update(p: &mut PlayerRuntime, update: ComboUpdate) {
         &mut p.combo_milestones,
         update,
     );
+}
+
+fn row_finalization_player_state(player: &PlayerRuntime) -> RowFinalizationPlayerState {
+    RowFinalizationPlayerState {
+        combo: player_combo_state(player),
+        current_combo_window_counts: player.current_combo_window_counts,
+        judgment_counts: player.judgment_counts,
+        scoring_counts: player.scoring_counts,
+        hands_achieved: player.hands_achieved,
+    }
+}
+
+fn set_row_finalization_player_state(
+    player: &mut PlayerRuntime,
+    state: RowFinalizationPlayerState,
+) {
+    write_player_combo_state(player, state.combo);
+    player.current_combo_window_counts = state.current_combo_window_counts;
+    player.judgment_counts = state.judgment_counts;
+    player.scoring_counts = state.scoring_counts;
+    player.hands_achieved = state.hands_achieved;
+}
+
+pub(super) fn finalize_row_judgment(
+    state: &mut State,
+    player: usize,
+    row_index: usize,
+    row_entry_index: usize,
+    skip_life_change: bool,
+) {
+    let (col_start, col_end) = player_col_range(state, player);
+    let Some(plan) = row_finalization_plan_for_entry(
+        &state.notes,
+        &state.row_entries[row_entry_index],
+        autoplay_blocks_scoring(state),
+        skip_life_change,
+    ) else {
+        return;
+    };
+    apply_autosync_for_row_hits(state, row_entry_index);
+    let final_judgment = plan.judgment;
+    state.row_entries[row_entry_index].final_outcome = Some(plan.outcome);
+    timing::record_live_timing_stats(
+        &mut state.players[player].live_timing_stats,
+        &final_judgment,
+    );
+    if plan.record_display_window_counts {
+        record_display_window_counts(state, player, &final_judgment);
+    }
+    let current_music_time = current_music_time_s(state);
+    if plan.apply_player_state {
+        let p = &mut state.players[player];
+        let player_dead = is_player_dead(p);
+        let carried_holds_down = carried_holds_down_at_row(
+            &state.notes,
+            &state.active_holds,
+            (col_start, col_end),
+            row_index,
+        );
+        let mut row_state = row_finalization_player_state(p);
+        let update = apply_row_finalization_player_state(
+            &mut row_state,
+            &final_judgment,
+            plan.note_count,
+            carried_holds_down,
+            player_dead,
+        );
+        set_row_finalization_player_state(p, row_state);
+        if update.update_grade_totals {
+            update_itg_grade_totals(p);
+        }
+        if plan.apply_life_change {
+            apply_life_change(p, current_music_time, plan.life_delta);
+        }
+        apply_combo_update(p, update.combo_update);
+    }
+    if plan.show_final_visual {
+        // Arrow Cloud's gameplay HUD uses the row-final JudgmentMessage for
+        // offset/error-bar visuals, not individual note hits inside a chord.
+        set_last_judgment(state, player, final_judgment);
+        error_bar_register_tap(state, player, &final_judgment, current_music_time_s(state));
+    }
+    if plan.capture_failed_ex_score_inputs {
+        capture_failed_ex_score_inputs(state, player);
+    }
+}
+
+pub(super) fn update_judged_rows(state: &mut State) {
+    let lookahead_time_ns = judged_row_lookahead_time_ns(
+        state.current_music_time_ns,
+        &state.timing_profile,
+        state.music_rate,
+    );
+    for player in 0..state.num_players {
+        let (row_start, row_end) = state.row_entry_ranges[player];
+        let row_count = row_end;
+        let mut scan_start = state.judged_row_cursor[player].max(row_start);
+        let mut events = [None; 8];
+        loop {
+            let update = collect_ready_judged_row_events(
+                &state.row_entries,
+                (row_start, row_end),
+                scan_start,
+                lookahead_time_ns,
+                &mut events,
+            );
+            scan_start = update.next_scan_start;
+            for event in events.iter().take(update.event_count).flatten() {
+                finalize_row_judgment(
+                    state,
+                    player,
+                    event.row_index,
+                    event.row_entry_index,
+                    event.skip_life_change,
+                );
+            }
+            if !update.stopped || update.event_count == 0 {
+                break;
+            }
+        }
+        state.judged_row_cursor[player] = advance_judged_row_cursor_for_entries(
+            &state.row_entries,
+            (row_start, row_count),
+            state.judged_row_cursor[player],
+            lookahead_time_ns,
+        );
+    }
 }
 
 #[inline(always)]

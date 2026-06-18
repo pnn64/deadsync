@@ -135,10 +135,16 @@ pub fn display_window_counts(
         display_blue: state.live_window_counts_display_blue[player_idx],
     };
     let (start, end) = state.note_ranges[player_idx];
+    let end = end.min(state.notes.len());
+    let notes = if start < end {
+        &state.notes[start..end]
+    } else {
+        &[]
+    };
     display_window_counts_for_notes(
         sources,
         display_carry_for_player(state, player_idx),
-        &state.notes[start..end],
+        notes,
         blue_window_ms,
         player_blue_window_ms(state, player_idx),
     )
