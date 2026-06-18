@@ -1302,6 +1302,44 @@ pub fn apply_gameplay_life_delta(
     }
 }
 
+#[inline(always)]
+fn player_runtime_life_meter(player: &PlayerRuntime) -> deadsync_rules::life::LifeMeter {
+    deadsync_rules::life::LifeMeter {
+        life: player.life,
+        combo_after_miss: player.combo_after_miss,
+        is_failing: player.is_failing,
+        fail_time: player.fail_time,
+    }
+}
+
+#[inline(always)]
+fn write_player_runtime_life_meter(
+    player: &mut PlayerRuntime,
+    meter: deadsync_rules::life::LifeMeter,
+) {
+    player.life = meter.life;
+    player.combo_after_miss = meter.combo_after_miss;
+    player.is_failing = meter.is_failing;
+    player.fail_time = meter.fail_time;
+}
+
+pub fn apply_player_runtime_life_delta(
+    player: &mut PlayerRuntime,
+    current_music_time: f32,
+    delta: f32,
+) -> GameplayLifeDeltaUpdate {
+    let mut meter = player_runtime_life_meter(player);
+    let update = apply_gameplay_life_delta(
+        &mut meter,
+        &mut player.life_history,
+        player.course_submit_life.as_mut(),
+        current_music_time,
+        delta,
+    );
+    write_player_runtime_life_meter(player, meter);
+    update
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GameplayViewport {
     width: f32,
@@ -7343,6 +7381,118 @@ pub fn hold_judgment_render_info(
 pub const fn held_miss_render_info(started_at_screen_s: f32) -> HeldMissRenderInfo {
     HeldMissRenderInfo {
         started_at_screen_s,
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct PlayerRuntime {
+    pub combo: u32,
+    pub miss_combo: u32,
+    pub full_combo_grade: Option<JudgeGrade>,
+    pub current_combo_grade: Option<JudgeGrade>,
+    pub current_combo_window_counts: WindowCounts,
+    pub first_fc_attempt_broken: bool,
+    pub judgment_counts: judgment::JudgeCounts,
+    pub scoring_counts: judgment::JudgeCounts,
+    pub last_judgment: Option<JudgmentRenderInfo>,
+    pub last_mine_judgment: Option<MineJudgmentRenderInfo>,
+
+    pub life: f32,
+    pub combo_after_miss: u32,
+    pub is_failing: bool,
+    pub fail_time: Option<f32>,
+    pub calories_burned: f32,
+
+    pub earned_grade_points: i32,
+
+    pub combo_milestones: Vec<ActiveComboMilestone>,
+    pub hands_achieved: u32,
+    pub holds_held: u32,
+    pub holds_held_for_score: u32,
+    pub holds_let_go_for_score: u32,
+    pub rolls_held: u32,
+    pub rolls_held_for_score: u32,
+    pub rolls_let_go_for_score: u32,
+    pub mines_hit: u32,
+    pub mines_hit_for_score: u32,
+    pub mines_avoided: u32,
+    pub hands_holding_count_for_stats: i32,
+    pub failed_ex_score_inputs: Option<ExScoreInputs>,
+    pub course_submit_life: Option<deadsync_rules::life::LifeMeter>,
+
+    pub life_history: Vec<(f32, f32)>,
+
+    pub error_bar_mono_ticks: [Option<ErrorBarTick>; 15],
+    pub error_bar_mono_next: usize,
+    pub error_bar_color_ticks: [Option<ErrorBarTick>; 10],
+    pub error_bar_color_next: usize,
+    pub error_bar_color_bar_started_at: Option<f32>,
+    pub error_bar_color_flash_early: [Option<f32>; 6],
+    pub error_bar_color_flash_late: [Option<f32>; 6],
+    pub error_bar_text: Option<ErrorBarText>,
+    pub offset_indicator_text: Option<OffsetIndicatorText>,
+    pub error_bar_avg_ticks: [Option<ErrorBarTick>; 5],
+    pub error_bar_avg_next: usize,
+    pub error_bar_avg_bar_started_at: Option<f32>,
+    pub error_bar_avg_samples: VecDeque<(f32, f32)>,
+    pub error_bar_long_avg_samples: VecDeque<(f32, f32)>,
+    pub error_bar_long_avg_total: f32,
+    pub error_bar_long_avg_tick: Option<ErrorBarTick>,
+    pub error_bar_long_avg_visible: bool,
+    pub live_timing_stats: deadsync_rules::timing::LiveTimingStats,
+}
+
+pub fn init_player_runtime() -> PlayerRuntime {
+    PlayerRuntime {
+        combo: 0,
+        miss_combo: 0,
+        full_combo_grade: None,
+        current_combo_grade: None,
+        current_combo_window_counts: WindowCounts::default(),
+        first_fc_attempt_broken: false,
+        judgment_counts: [0; judgment::JUDGE_GRADE_COUNT],
+        scoring_counts: [0; judgment::JUDGE_GRADE_COUNT],
+        last_judgment: None,
+        last_mine_judgment: None,
+        life: 0.5,
+        combo_after_miss: 0,
+        is_failing: false,
+        fail_time: None,
+        calories_burned: 0.0,
+        earned_grade_points: 0,
+        combo_milestones: Vec::new(),
+        hands_achieved: 0,
+        holds_held: 0,
+        holds_held_for_score: 0,
+        holds_let_go_for_score: 0,
+        rolls_held: 0,
+        rolls_held_for_score: 0,
+        rolls_let_go_for_score: 0,
+        mines_hit: 0,
+        mines_hit_for_score: 0,
+        mines_avoided: 0,
+        hands_holding_count_for_stats: 0,
+        failed_ex_score_inputs: None,
+        course_submit_life: None,
+        life_history: Vec::with_capacity(10000),
+        error_bar_mono_ticks: [None; 15],
+        error_bar_mono_next: 0,
+        error_bar_color_ticks: [None; 10],
+        error_bar_color_next: 0,
+        error_bar_color_bar_started_at: None,
+        error_bar_color_flash_early: [None; 6],
+        error_bar_color_flash_late: [None; 6],
+        error_bar_text: None,
+        offset_indicator_text: None,
+        error_bar_avg_ticks: [None; 5],
+        error_bar_avg_next: 0,
+        error_bar_avg_bar_started_at: None,
+        error_bar_avg_samples: VecDeque::with_capacity(64),
+        error_bar_long_avg_samples: VecDeque::with_capacity(64),
+        error_bar_long_avg_total: 0.0,
+        error_bar_long_avg_tick: None,
+        error_bar_long_avg_visible: false,
+        live_timing_stats: deadsync_rules::timing::LiveTimingStats::default(),
     }
 }
 
@@ -14306,6 +14456,48 @@ mod tests {
         ];
 
         assert!(!all_joined_players_failed(&players, 2));
+    }
+
+    #[test]
+    fn player_runtime_defaults_match_new_song_state() {
+        let player = init_player_runtime();
+
+        assert_eq!(player.combo, 0);
+        assert_eq!(player.miss_combo, 0);
+        assert_eq!(player.life, 0.5);
+        assert_eq!(player.judgment_counts, [0; judgment::JUDGE_GRADE_COUNT]);
+        assert_eq!(player.scoring_counts, [0; judgment::JUDGE_GRADE_COUNT]);
+        assert!(player.combo_milestones.is_empty());
+        assert_eq!(player.hands_holding_count_for_stats, 0);
+        assert!(player.failed_ex_score_inputs.is_none());
+        assert!(player.course_submit_life.is_none());
+        assert_eq!(player.life_history.capacity(), 10000);
+        assert_eq!(player.error_bar_avg_samples.capacity(), 64);
+        assert_eq!(player.error_bar_long_avg_samples.capacity(), 64);
+    }
+
+    #[test]
+    fn player_runtime_life_delta_updates_runtime_fields() {
+        let mut player = init_player_runtime();
+        player.life = 1.0;
+        player.life_history.push((0.0, 1.0));
+        player.course_submit_life = Some(deadsync_rules::life::LifeMeter::course_submit_start());
+
+        let update = apply_player_runtime_life_delta(&mut player, 12.0, -0.6);
+
+        assert_eq!(update, GameplayLifeDeltaUpdate::default());
+        assert_near(player.life, 0.4);
+        assert_eq!(player.life_history.len(), 2);
+        assert_eq!(player.life_history[0], (0.0, 1.0));
+        assert_eq!(player.life_history[1].0, 12.0);
+        assert_near(player.life_history[1].1, 0.4);
+        let course_life = player
+            .course_submit_life
+            .as_ref()
+            .expect("course submit life should remain attached");
+        assert_eq!(course_life.life, 0.0);
+        assert!(course_life.is_failing);
+        assert_eq!(course_life.fail_time, Some(12.0));
     }
 
     #[test]

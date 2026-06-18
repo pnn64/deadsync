@@ -52,7 +52,7 @@ pub use deadsync_gameplay::{
     NoteCountStat, NoteHitEval, OFFSET_ADJUST_REPEAT_DELAY, OFFSET_ADJUST_REPEAT_INTERVAL,
     OFFSET_ADJUST_STEP_SECONDS, OffsetIndicatorText, PendingMissedHoldResolution,
     PerspectiveEffects, PerspectiveOverrides, PlayerJudgmentTiming, PlayerLifeStatus,
-    PlayerRowScanState, PracticePlayerCursors, ProvisionalEarlyHitPlan,
+    PlayerRowScanState, PlayerRuntime, PracticePlayerCursors, ProvisionalEarlyHitPlan,
     ProvisionalEarlyNoteResultUpdate, RECEPTOR_GLOW_DURATION, RECEPTOR_STEP_WINDOWS,
     RECEPTOR_Y_OFFSET_FROM_CENTER, RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, REMOVE_MASK_BIT_LITTLE,
     REMOVE_MASK_BIT_NO_FAKES, REMOVE_MASK_BIT_NO_HANDS, REMOVE_MASK_BIT_NO_HOLDS,
@@ -72,11 +72,11 @@ pub use deadsync_gameplay::{
     apply_gameplay_life_delta, apply_hold_let_go_player_state, apply_hold_let_go_update,
     apply_hold_success_player_state, apply_hold_success_update, apply_hyper_shuffle,
     apply_insert_intelligent_taps, apply_mine_hit_player_state, apply_mines_insert,
-    apply_next_time_based_tap_miss_for_player, apply_provisional_early_note_result,
-    apply_row_finalization_player_state, apply_stomp_insert, apply_super_shuffle_taps,
-    apply_time_based_mine_avoidance_for_players, apply_turn_options, apply_turn_permutation,
-    apply_uncommon_chart_transforms, apply_uncommon_masks_with_masks, apply_wide_insert,
-    approach_attack_mini_percent_to_target, approach_attack_value, approach_f32,
+    apply_next_time_based_tap_miss_for_player, apply_player_runtime_life_delta,
+    apply_provisional_early_note_result, apply_row_finalization_player_state, apply_stomp_insert,
+    apply_super_shuffle_taps, apply_time_based_mine_avoidance_for_players, apply_turn_options,
+    apply_turn_permutation, apply_uncommon_chart_transforms, apply_uncommon_masks_with_masks,
+    apply_wide_insert, approach_attack_mini_percent_to_target, approach_attack_value, approach_f32,
     assist_clap_cursor_for_row, assist_clap_music_seconds_for_row, assist_clap_schedule_update,
     assist_lookahead_future_row, attack_mini_target_percent, autoplay_blocks_scoring_from_flags,
     autoplay_cursor_for_enable, autoplay_due_active_hold_resolution,
@@ -124,14 +124,14 @@ pub use deadsync_gameplay::{
     held_miss_render_info, hit_active_hold_start, hold_explosion_active,
     hold_explosion_enabled_for_options, hold_head_render_flags, hold_judgment_expired_at,
     hold_judgment_render_info, hold_resolution_updates_grade_totals, hold_result_stats_update,
-    hold_to_exit_seconds, input_lane_bit, input_queue_cap, integrate_active_hold_column,
-    is_hold_body_at_row, itg_score_inputs_from_display, itg_score_percent_from_inputs,
-    judged_row_lookahead_time_ns, judgment_render_info, lane_edge_judges_lift,
-    lane_edge_judges_tap, lane_edge_matches_note_type, lane_press_started, lane_release_finished,
-    late_note_resolution_window_ns, let_go_head_beat, live_autoplay_enabled_from_flags,
-    live_input_lane_for_queue, local_column_for_field, local_player_col,
-    mark_crossed_held_mine_candidates, mark_mine_hit_candidate, mark_row_entry_note_finalized,
-    mark_row_entry_provisional_early_result, max_step_distance_ns,
+    hold_to_exit_seconds, init_player_runtime, input_lane_bit, input_queue_cap,
+    integrate_active_hold_column, is_hold_body_at_row, itg_score_inputs_from_display,
+    itg_score_percent_from_inputs, judged_row_lookahead_time_ns, judgment_render_info,
+    lane_edge_judges_lift, lane_edge_judges_tap, lane_edge_matches_note_type, lane_press_started,
+    lane_release_finished, late_note_resolution_window_ns, let_go_head_beat,
+    live_autoplay_enabled_from_flags, live_input_lane_for_queue, local_column_for_field,
+    local_player_col, mark_crossed_held_mine_candidates, mark_mine_hit_candidate,
+    mark_row_entry_note_finalized, mark_row_entry_provisional_early_result, max_step_distance_ns,
     measure_counter_segments_for_densities, mine_can_be_avoided, mine_can_be_hit,
     mine_hit_offset_in_window, mine_hit_side_effect_plan, mine_judgment_render_info,
     mine_window_bounds_ns, mini_indicator_mode_for_options, mini_indicator_needs_stream_data,
@@ -186,7 +186,6 @@ use deadsync_rules::combo::{ComboState, ComboUpdate};
 use deadsync_rules::judgment::{
     self, JudgeGrade, Judgment, TimingWindow, judgment_time_error_ms_from_music_ns,
 };
-use deadsync_rules::life::LifeMeter;
 use deadsync_rules::note::{HoldData, HoldResult, MineResult, Note, recompute_player_totals};
 #[cfg(test)]
 use deadsync_rules::note::{MAX_HOLD_LIFE, TIMING_WINDOW_SECONDS_HOLD, TIMING_WINDOW_SECONDS_ROLL};
@@ -787,120 +786,6 @@ fn build_crossover_cues_for_player(
     )
 }
 
-type CourseSubmitLife = LifeMeter;
-
-#[derive(Clone, Debug)]
-pub struct PlayerRuntime {
-    pub combo: u32,
-    pub miss_combo: u32,
-    pub full_combo_grade: Option<JudgeGrade>,
-    pub current_combo_grade: Option<JudgeGrade>,
-    pub current_combo_window_counts: deadsync_rules::timing::WindowCounts,
-    pub first_fc_attempt_broken: bool,
-    pub judgment_counts: judgment::JudgeCounts,
-    pub scoring_counts: judgment::JudgeCounts,
-    pub last_judgment: Option<JudgmentRenderInfo>,
-    pub last_mine_judgment: Option<MineJudgmentRenderInfo>,
-
-    pub life: f32,
-    pub combo_after_miss: u32,
-    pub is_failing: bool,
-    pub fail_time: Option<f32>,
-    pub calories_burned: f32,
-
-    pub earned_grade_points: i32,
-
-    pub combo_milestones: Vec<ActiveComboMilestone>,
-    pub hands_achieved: u32,
-    pub holds_held: u32,
-    pub holds_held_for_score: u32,
-    pub holds_let_go_for_score: u32,
-    pub rolls_held: u32,
-    pub rolls_held_for_score: u32,
-    pub rolls_let_go_for_score: u32,
-    pub mines_hit: u32,
-    pub mines_hit_for_score: u32,
-    pub mines_avoided: u32,
-    hands_holding_count_for_stats: i32,
-    failed_ex_score_inputs: Option<ExScoreInputs>,
-    course_submit_life: Option<CourseSubmitLife>,
-
-    pub life_history: Vec<(f32, f32)>, // (time, life_value)
-
-    pub error_bar_mono_ticks: [Option<ErrorBarTick>; 15],
-    pub error_bar_mono_next: usize,
-    pub error_bar_color_ticks: [Option<ErrorBarTick>; 10],
-    pub error_bar_color_next: usize,
-    pub error_bar_color_bar_started_at: Option<f32>,
-    pub error_bar_color_flash_early: [Option<f32>; 6],
-    pub error_bar_color_flash_late: [Option<f32>; 6],
-    pub error_bar_text: Option<ErrorBarText>,
-    pub offset_indicator_text: Option<OffsetIndicatorText>,
-    pub error_bar_avg_ticks: [Option<ErrorBarTick>; 5],
-    pub error_bar_avg_next: usize,
-    pub error_bar_avg_bar_started_at: Option<f32>,
-    pub error_bar_avg_samples: VecDeque<(f32, f32)>,
-    pub error_bar_long_avg_samples: VecDeque<(f32, f32)>,
-    pub error_bar_long_avg_total: f32,
-    pub error_bar_long_avg_tick: Option<ErrorBarTick>,
-    pub error_bar_long_avg_visible: bool,
-    pub live_timing_stats: deadsync_rules::timing::LiveTimingStats,
-}
-
-fn init_player_runtime() -> PlayerRuntime {
-    PlayerRuntime {
-        combo: 0,
-        miss_combo: 0,
-        full_combo_grade: None,
-        current_combo_grade: None,
-        current_combo_window_counts: deadsync_rules::timing::WindowCounts::default(),
-        first_fc_attempt_broken: false,
-        judgment_counts: [0; judgment::JUDGE_GRADE_COUNT],
-        scoring_counts: [0; judgment::JUDGE_GRADE_COUNT],
-        last_judgment: None,
-        last_mine_judgment: None,
-        life: 0.5,
-        combo_after_miss: 0,
-        is_failing: false,
-        fail_time: None,
-        calories_burned: 0.0,
-        earned_grade_points: 0,
-        combo_milestones: Vec::new(),
-        hands_achieved: 0,
-        holds_held: 0,
-        holds_held_for_score: 0,
-        holds_let_go_for_score: 0,
-        rolls_held: 0,
-        rolls_held_for_score: 0,
-        rolls_let_go_for_score: 0,
-        mines_hit: 0,
-        mines_hit_for_score: 0,
-        mines_avoided: 0,
-        hands_holding_count_for_stats: 0,
-        failed_ex_score_inputs: None,
-        course_submit_life: None,
-        life_history: Vec::with_capacity(10000),
-        error_bar_mono_ticks: [None; 15],
-        error_bar_mono_next: 0,
-        error_bar_color_ticks: [None; 10],
-        error_bar_color_next: 0,
-        error_bar_color_bar_started_at: None,
-        error_bar_color_flash_early: [None; 6],
-        error_bar_color_flash_late: [None; 6],
-        error_bar_text: None,
-        offset_indicator_text: None,
-        error_bar_avg_ticks: [None; 5],
-        error_bar_avg_next: 0,
-        error_bar_avg_bar_started_at: None,
-        error_bar_avg_samples: VecDeque::with_capacity(64),
-        error_bar_long_avg_samples: VecDeque::with_capacity(64),
-        error_bar_long_avg_total: 0.0,
-        error_bar_long_avg_tick: None,
-        error_bar_long_avg_visible: false,
-        live_timing_stats: deadsync_rules::timing::LiveTimingStats::default(),
-    }
-}
-
 #[inline(always)]
 pub(super) fn is_player_dead(p: &PlayerRuntime) -> bool {
     player_life_is_dead(p.life, p.is_failing)
@@ -928,34 +813,8 @@ pub fn course_stage_life_submit_eligible(state: &State, player_idx: usize) -> bo
     course_submit_life_eligible(state.players[player_idx].course_submit_life.as_ref())
 }
 
-#[inline(always)]
-fn player_life_meter(p: &PlayerRuntime) -> LifeMeter {
-    LifeMeter {
-        life: p.life,
-        combo_after_miss: p.combo_after_miss,
-        is_failing: p.is_failing,
-        fail_time: p.fail_time,
-    }
-}
-
-#[inline(always)]
-fn write_player_life_meter(p: &mut PlayerRuntime, meter: LifeMeter) {
-    p.life = meter.life;
-    p.combo_after_miss = meter.combo_after_miss;
-    p.is_failing = meter.is_failing;
-    p.fail_time = meter.fail_time;
-}
-
 pub(super) fn apply_life_change(p: &mut PlayerRuntime, current_music_time: f32, delta: f32) {
-    let mut meter = player_life_meter(p);
-    let result = apply_gameplay_life_delta(
-        &mut meter,
-        &mut p.life_history,
-        p.course_submit_life.as_mut(),
-        current_music_time,
-        delta,
-    );
-    write_player_life_meter(p, meter);
+    let result = apply_player_runtime_life_delta(p, current_music_time, delta);
     if result.failed_now {
         debug!("Player has failed!");
     }
