@@ -1152,6 +1152,38 @@ fn write_itl_file(profile_id: &str, data: &ItlFileData) {
     }
 }
 
+/// Parses an external `ITL2026.json` (e.g. from an ITGmania/Simply Love profile)
+/// into [`ItlFileData`]. Returns `None` when the text is unparseable or carries
+/// no ITL data. DeadSync's ITL file uses the same schema Simply Love writes
+/// (`pathMap` / `hashMap` / `unlockFolders`), so the data maps directly.
+fn itl_data_from_json(json_text: &str) -> Option<ItlFileData> {
+    let data: ItlFileData = match serde_json::from_str(json_text) {
+        Ok(data) => data,
+        Err(error) => {
+            warn!("Failed to parse imported ITL data: {error}");
+            return None;
+        }
+    };
+    if data.path_map.is_empty() && data.hash_map.is_empty() && data.unlock_folders.is_empty() {
+        return None;
+    }
+    Some(data)
+}
+
+/// Imports an ITGmania/Simply Love `ITL2026.json` (raw text) into a
+/// freshly-created DeadSync profile, writing it to the profile's ITL file.
+/// Returns the number of `hashMap` entries imported (`0` when the file is
+/// missing, empty, or unparseable). Song ranks are recomputed lazily the next
+/// time the profile's ITL cache is loaded.
+pub fn import_itl_json(profile_id: &str, json_text: &str) -> usize {
+    let Some(data) = itl_data_from_json(json_text) else {
+        return 0;
+    };
+    let count = data.hash_map.len();
+    write_itl_file(profile_id, &data);
+    count
+}
+
 fn update_unlock_folders(profile_id: &str, folders: &[String]) {
     if folders.is_empty() {
         return;
@@ -2161,6 +2193,29 @@ mod tests {
 
         assert_eq!(sl.hash_map["sl"].ex, 9437);
         assert_eq!(legacy.hash_map["legacy"].ex, 9437);
+    }
+
+    #[test]
+    fn itl_data_from_json_parses_and_guards() {
+        // A Simply Love ITL2026.json with pathMap, hashMap and unlockFolders.
+        let text = serde_json::to_string(&json!({
+            "pathMap": { "/Songs/ITL Online 2026/Example": "deadbeefcafebabe" },
+            "hashMap": {
+                "deadbeefcafebabe": { "ex": 94.37, "points": 4200, "clearType": 5 }
+            },
+            "unlockFolders": { "/Songs/ITL Online 2026/Example": true }
+        }))
+        .unwrap();
+        let data = itl_data_from_json(&text).expect("parses");
+        assert_eq!(data.hash_map.len(), 1);
+        assert_eq!(data.hash_map["deadbeefcafebabe"].ex, 9437);
+        assert_eq!(data.path_map.len(), 1);
+        assert!(data.unlock_folders["/Songs/ITL Online 2026/Example"]);
+
+        // Empty and malformed inputs yield None (nothing to import).
+        assert!(itl_data_from_json("{}").is_none());
+        assert!(itl_data_from_json("not json").is_none());
+        assert!(itl_data_from_json(r#"{"hashMap":{}}"#).is_none());
     }
 
     #[test]

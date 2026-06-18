@@ -813,6 +813,16 @@ fn import_summary_message(summary: &ImportSummary) -> ImportMessageState {
             .to_string(),
         );
     }
+    if summary.itl_entries_imported > 0 {
+        lines.push(
+            tr_fmt(
+                "Profiles",
+                "ImportSummaryItl",
+                &[("count", &summary.itl_entries_imported.to_string())],
+            )
+            .to_string(),
+        );
+    }
     lines.push(tr("Profiles", "ImportSummaryExNote").to_string());
     ImportMessageState {
         title: tr("Profiles", "ImportSummaryTitle"),

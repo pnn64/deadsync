@@ -64,6 +64,8 @@ pub struct ItgSource {
     /// Favorited song keys (`Pack/SongFolder`) from `favorites.txt`, with any
     /// Simply Love section headers stripped.
     pub favorites: Vec<String>,
+    /// Raw contents of `ITL2026.json` (Simply Love ITL event data), if present.
+    pub itl_json: Option<String>,
 }
 
 impl ItgSource {
@@ -139,6 +141,7 @@ pub fn read_profile_dir(dir: &Path) -> Result<ItgSource, ItgReadError> {
     let simply_love = read_simply_love(dir);
     let songs = read_stats(dir)?;
     let favorites = read_favorites(dir);
+    let itl_json = read_itl_json(dir);
 
     Ok(ItgSource {
         source_dir: dir.to_path_buf(),
@@ -148,6 +151,7 @@ pub fn read_profile_dir(dir: &Path) -> Result<ItgSource, ItgReadError> {
         simply_love,
         songs,
         favorites,
+        itl_json,
     })
 }
 
@@ -250,6 +254,15 @@ fn read_favorites(dir: &Path) -> Vec<String> {
         Ok(text) => parse_favorites_text(&text),
         Err(_) => Vec::new(),
     }
+}
+
+/// Reads the raw `ITL2026.json` (Simply Love ITL event data) from a profile
+/// directory, if present. The contents are parsed downstream by DeadSync's ITL
+/// module, which uses the same schema. Returns `None` when the file is missing
+/// or unreadable.
+fn read_itl_json(dir: &Path) -> Option<String> {
+    let path = find_case_insensitive(dir, "ITL2026.json")?;
+    fs::read_to_string(&path).ok()
 }
 
 /// Finds an avatar image in the profile dir. ITGmania uses `Avatar.png`; some

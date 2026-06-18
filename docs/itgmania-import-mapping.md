@@ -20,6 +20,7 @@ An ITGmania `LocalProfiles/<id>/` directory contains:
 | `Simply Love UserPrefs.ini` | `[Simply Love]` section → player options |
 | `Avatar.png` (or `.jpg`/`.jpeg`) | Profile avatar image |
 | `favorites.txt` | Favorited songs (resolved to chart hashes) |
+| `ITL2026.json` | ITL event progress (scores, points, unlocks) |
 | `Stats.xml` (or `Stats.xml.gz`) | Per-chart high scores |
 
 Reader code: `src/game/import/itg.rs`. Each reader degrades gracefully — a
@@ -100,6 +101,20 @@ grouped under `---Section` headers (custom playlists). DeadSync stores favorites
 
 Section/playlist grouping is **not** preserved (DeadSync has no favorites
 sections); songs not in the library are reported as skipped in the summary.
+
+## 3b. ITL event data
+
+Source: `ITL2026.json` (Simply Love ITL event file). Reader: `read_itl_json` in
+`src/game/import/itg.rs`; import in `src/game/scores/itl.rs`
+(`import_itl_json`).
+
+DeadSync's ITL support uses the **same `ITL2026.json` schema** Simply Love
+writes — `pathMap` (song dir → hash), `hashMap` (hash → per-song event metadata:
+EX, points, clear type, judgments, ranks…), and `unlockFolders`. The importer
+parses the Simply Love file through DeadSync's own `ItlFileData` and writes it
+into the new profile, so your ITL event progress (scores, points, unlocks)
+carries over directly. Song ranks are recomputed when the profile's ITL cache
+next loads. A missing, empty, or unparseable file imports nothing.
 
 ## 4. Player options (Simply Love)
 
@@ -310,7 +325,7 @@ audit notes in the session history for rationale:
   song/difficulty, calorie history.
 - **Per-chart:** `HighScoreList/NumTimesPlayed`, `LastPlayed`, `HighGrade`;
   per-score `MaxCombo`, `Name`, `RadarValues`, `Disqualified`.
-- **Simply Love extras:** `ITL2026.json`, `SL-Scores/*.json`, and favorites
+- **Simply Love extras:** `SL-Scores/*.json`, and favorites
   **section/playlist names** (the songs are imported; the grouping is not).
 - **Player options judged risky:** numeric/`Ghost Data` `TargetScore`,
   `MiniIndicatorColor` (color-name vocabulary), scorebox sub-options

@@ -66,9 +66,10 @@ pub use itl::{
     ensure_itl_wheel_caches_loaded, get_cached_itl_score_for_side, get_cached_itl_score_for_song,
     get_cached_itl_self_score_for_side, get_cached_itl_tournament_overall_ranks_for_side,
     get_cached_itl_tournament_rank_for_side, get_or_fetch_itl_self_score_for_side,
-    get_or_fetch_itl_tournament_rank_for_side, is_itl_song_folder_unlocked_for_side,
-    is_itl_song_folder_unlocked_with_profile, is_itl_unlocks_pack, itl_eval_state_from_gameplay,
-    itl_points_for_chart, save_itl_data_from_gameplay, seed_session_itl_unlock_folders,
+    get_or_fetch_itl_tournament_rank_for_side, import_itl_json,
+    is_itl_song_folder_unlocked_for_side, is_itl_song_folder_unlocked_with_profile,
+    is_itl_unlocks_pack, itl_eval_state_from_gameplay, itl_points_for_chart,
+    save_itl_data_from_gameplay, seed_session_itl_unlock_folders,
     seed_session_online_itl_self_rank, seed_session_online_itl_self_score,
     should_warn_cmod_for_itl_chart,
 };

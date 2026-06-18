@@ -12,7 +12,7 @@ use crate::game::profile::{
     ImportProfileData, create_local_profile_from_import, default_local_profile_options,
     write_imported_favorites,
 };
-use crate::game::scores::import_local_scores;
+use crate::game::scores::{import_itl_json, import_local_scores};
 use crate::game::song::get_song_cache;
 
 use super::itg::{self, ItgReadError, ItgSource};
@@ -41,6 +41,8 @@ pub struct ImportSummary {
     pub favorites_imported: usize,
     /// Favorited songs skipped because the song wasn't in DeadSync's library.
     pub favorites_song_not_found: usize,
+    /// ITL `hashMap` entries imported from `ITL2026.json` (0 if absent).
+    pub itl_entries_imported: usize,
 }
 
 /// Read an ITGmania profile directory and import it into a new local profile.
@@ -144,6 +146,9 @@ pub fn import_from_source<F: FnMut(usize, usize, &str)>(
 
     summary.scores_imported = import_local_scores(&profile_id, &initials, &mut entries);
     write_imported_favorites(&profile_id, &favorite_hashes);
+    if let Some(itl_json) = &source.itl_json {
+        summary.itl_entries_imported = import_itl_json(&profile_id, itl_json);
+    }
     Ok(summary)
 }
 
