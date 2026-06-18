@@ -15,7 +15,7 @@ use std::hash::Hasher;
 use std::path::Path;
 use twox_hash::XxHash64;
 
-use super::utils::pane3_origin_x;
+use super::utils::{arrow_breakdown_rgba, pane3_origin_x};
 
 const DISABLED_WINDOW_RGBA: [f32; 4] = color::JUDGMENT_FA_PLUS_WHITE_EVAL_DIM_RGBA;
 const PANE3_SINGLE_WIDTH: f32 = 230.0;
@@ -386,17 +386,7 @@ pub fn build_column_judgments_pane(
                 }
                 let right_edge_x = col_center_x - 1.0 - max_count_width * 0.5;
 
-                let arrow_color = if arrow_glow_active {
-                    Some(match col_idx {
-                        0 => [1.0, 0.0, 0.0, 1.0],
-                        1 => [0.0, 0.0, 1.0, 1.0],
-                        2 => [0.0, 1.0, 0.0, 1.0],
-                        3 => [1.0, 1.0, 0.0, 1.0],
-                        _ => [1.0, 1.0, 1.0, 1.0],
-                    })
-                } else {
-                    None
-                };
+                let arrow_color = arrow_glow_active.then(|| arrow_breakdown_rgba(col_idx));
 
                 // Noteskin preview arrow (Tap Note, Q4th) above the column.
                 if let Some(ns) = score_info.noteskin.as_ref() {
@@ -901,12 +891,13 @@ pub(crate) fn build_pane3_arrow_preview(
 
 #[cfg(test)]
 mod tests {
-    use super::super::utils::pane3_origin_x;
+    use super::super::utils::{arrow_breakdown_rgba, pane3_origin_x};
     use super::{
-        PANE3_DOUBLE_WIDTH, PANE3_SINGLE_WIDTH, RowCounts, RowKind, column_row_counts, pane3_width,
-        row_disabled,
+        PANE3_DOUBLE_WIDTH, PANE3_SINGLE_WIDTH, RowCounts, RowKind, column_row_counts,
+        pane3_width, row_disabled,
     };
     use crate::screens::evaluation::ColumnJudgments;
+    use deadlib_present::color;
     use deadsync_profile as profile_data;
 
     #[test]
@@ -1006,5 +997,18 @@ mod tests {
             pane3_origin_x(profile_data::PlayerSide::P1, 8),
             pane3_origin_x(profile_data::PlayerSide::P2, 8)
         );
+    }
+
+    #[test]
+    fn pane3_arrow_glow_colors_tint_doubles_p2_columns() {
+        assert_eq!(arrow_breakdown_rgba(0), [1.0, 0.0, 0.0, 1.0]);
+        assert_eq!(arrow_breakdown_rgba(1), [0.0, 0.0, 1.0, 1.0]);
+        assert_eq!(arrow_breakdown_rgba(2), [0.0, 1.0, 0.0, 1.0]);
+        assert_eq!(arrow_breakdown_rgba(3), [1.0, 1.0, 0.0, 1.0]);
+        assert_eq!(arrow_breakdown_rgba(4), color::rgba_hex("#B54DFF"));
+        assert_eq!(arrow_breakdown_rgba(5), color::rgba_hex("#FF8A00"));
+        assert_eq!(arrow_breakdown_rgba(6), color::rgba_hex("#00D7FF"));
+        assert_eq!(arrow_breakdown_rgba(7), [1.0, 1.0, 1.0, 1.0]);
+        assert_eq!(arrow_breakdown_rgba(8), [1.0, 1.0, 1.0, 1.0]);
     }
 }

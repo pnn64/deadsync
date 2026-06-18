@@ -2,6 +2,8 @@ use deadlib_present::color;
 use deadlib_render::MeshVertex;
 use deadsync_rules::timing::{self, HistogramMs, ScatterPoint};
 
+use super::utils::arrow_code_rgba;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TimingHistogramScale {
     Itg,
@@ -97,17 +99,6 @@ fn color_for_abs_ms(
 }
 
 #[inline(always)]
-fn color_for_arrow(direction_code: u8) -> [f32; 4] {
-    match direction_code {
-        1 => [1.0, 0.0, 0.0, 1.0],
-        2 => [0.0, 0.0, 1.0, 1.0],
-        3 => [0.0, 1.0, 0.0, 1.0],
-        4 => [1.0, 1.0, 0.0, 1.0],
-        _ => [1.0, 1.0, 1.0, 1.0],
-    }
-}
-
-#[inline(always)]
 fn color_for_foot(is_stream: bool, is_left_foot: bool) -> [f32; 4] {
     if !is_stream {
         return [0.0, 0.0, 0.0, 1.0];
@@ -136,7 +127,7 @@ fn color_for_scatter(
         ScatterPlotScale::HardEx => {
             color_for_abs_ms(abs_ms, timing_windows_ms, TimingHistogramScale::HardEx)
         }
-        ScatterPlotScale::Arrow => color_for_arrow(sp.direction_code),
+        ScatterPlotScale::Arrow => arrow_code_rgba(sp.direction_code),
         ScatterPlotScale::Foot => color_for_foot(sp.is_stream, sp.is_left_foot),
     }
 }
@@ -147,7 +138,7 @@ fn miss_color_for_scatter(sp: &ScatterPoint, scale: ScatterPlotScale) -> [f32; 4
         ScatterPlotScale::Itg | ScatterPlotScale::Ex | ScatterPlotScale::HardEx => {
             [1.0, 0.0, 0.0, 1.0]
         }
-        ScatterPlotScale::Arrow => color_for_arrow(sp.direction_code),
+        ScatterPlotScale::Arrow => arrow_code_rgba(sp.direction_code),
         ScatterPlotScale::Foot => color_for_foot(sp.is_stream, sp.is_left_foot),
     }
 }
@@ -539,7 +530,7 @@ mod tests {
     }
 
     #[test]
-    fn arrow_scatter_doubles_fifth_column_is_white() {
+    fn arrow_scatter_doubles_fifth_column_uses_p2_color() {
         let mut point = scatter_point(10.0);
         point.direction_code = 5;
         let verts = build_scatter_mesh(
@@ -553,6 +544,11 @@ mod tests {
         );
 
         assert_eq!(verts.len(), 6);
-        assert!(verts.iter().all(|v| v.color == [1.0, 1.0, 1.0, 0.666]));
+        let purple = color::rgba_hex("#B54DFF");
+        assert!(
+            verts
+                .iter()
+                .all(|v| v.color == [purple[0], purple[1], purple[2], 0.666])
+        );
     }
 }
