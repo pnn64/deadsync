@@ -16,23 +16,8 @@ use super::{
 };
 
 #[inline(always)]
-pub(super) const fn next_tick_mode(mode: TickMode) -> TickMode {
-    profile_tick_mode_from_gameplay(next_timing_tick_mode(gameplay_tick_mode_from_profile(mode)))
-}
-
-#[inline(always)]
-pub(super) const fn tick_mode_status_line(mode: TickMode) -> Option<&'static str> {
-    gameplay_tick_mode_status_line(gameplay_tick_mode_from_profile(mode))
-}
-
-#[inline(always)]
-const fn tick_mode_debug_label(mode: TickMode) -> &'static str {
-    gameplay_tick_mode_debug_label(gameplay_tick_mode_from_profile(mode))
-}
-
-#[inline(always)]
 pub fn timing_tick_status_line(state: &State) -> Option<&'static str> {
-    tick_mode_status_line(state.tick_mode)
+    gameplay_tick_mode_status_line(gameplay_tick_mode_from_profile(state.tick_mode))
 }
 
 fn set_tick_mode(state: &mut State, mode: TickMode, now_music_time: f32) {
@@ -49,7 +34,10 @@ fn set_tick_mode(state: &mut State, mode: TickMode, now_music_time: f32) {
     state.assist_last_crossed_row = song_row;
     state.assist_clap_cursor = assist_clap_cursor_for_row(&state.assist_clap_rows, song_row);
 
-    debug!("Timing ticks set to {} (F7).", tick_mode_debug_label(mode));
+    debug!(
+        "Timing ticks set to {} (F7).",
+        gameplay_tick_mode_debug_label(gameplay_tick_mode_from_profile(mode))
+    );
 }
 
 fn set_autoplay_enabled(state: &mut State, enabled: bool, now_music_time: f32) {
@@ -131,7 +119,10 @@ pub fn handle_queued_raw_key(
     }
 
     if code == KeyCode::F7 {
-        set_tick_mode(state, next_tick_mode(state.tick_mode), now_music_time);
+        let next_mode = profile_tick_mode_from_gameplay(next_timing_tick_mode(
+            gameplay_tick_mode_from_profile(state.tick_mode),
+        ));
+        set_tick_mode(state, next_mode, now_music_time);
         return RawKeyAction::None;
     }
 

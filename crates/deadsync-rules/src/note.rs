@@ -411,6 +411,23 @@ mod tests {
     }
 
     #[test]
+    fn roll_life_advance_scales_zero_cross_with_music_rate() {
+        let advanced = advance_hold_life_ns(
+            NoteType::Roll,
+            0.5,
+            false,
+            song_time_ns_from_seconds(0.4),
+            2.0,
+        );
+
+        assert_eq!(advanced.life_after, 0.0);
+        let zero_elapsed = advanced
+            .zero_elapsed_music_ns
+            .expect("roll should cross zero");
+        assert!((song_time_ns_to_seconds(zero_elapsed) - 0.3515).abs() <= 1e-6);
+    }
+
+    #[test]
     fn advance_hold_last_held_keeps_exact_progress_beat() {
         let timing =
             TimingData::from_segments(0.0, 0.0, &TimingSegments::default(), &row_to_beat(96));
@@ -425,5 +442,22 @@ mod tests {
 
         assert_eq!(hold.last_held_row_index, 48);
         assert!((hold.last_held_beat - 0.99).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn advance_hold_last_held_progresses_to_row_boundary() {
+        let timing =
+            TimingData::from_segments(0.0, 0.0, &TimingSegments::default(), &row_to_beat(96));
+        let mut hold = test_hold(0, 0, 96, NoteType::Hold)
+            .hold
+            .expect("test hold has hold data");
+        hold.end_beat = 96.0 / ROWS_PER_BEAT as f32;
+        hold.last_held_row_index = 24;
+        hold.last_held_beat = 24.0 / ROWS_PER_BEAT as f32;
+
+        advance_hold_last_held(&mut hold, &timing, 1.0, 0, 0.0);
+
+        assert_eq!(hold.last_held_row_index, 48);
+        assert!((hold.last_held_beat - 1.0).abs() <= 1e-6);
     }
 }

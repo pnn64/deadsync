@@ -197,14 +197,6 @@ pub fn display_gameplay_itg_score_percent(
 }
 
 #[inline(always)]
-pub(super) fn effective_ex_score_inputs(
-    player: &PlayerRuntime,
-    live: ExScoreInputs,
-) -> ExScoreInputs {
-    gameplay_effective_ex_score_inputs(live, player.failed_ex_score_inputs)
-}
-
-#[inline(always)]
 pub(super) fn capture_failed_ex_score_inputs(state: &mut State, player_idx: usize) {
     if player_idx >= state.num_players || player_idx >= MAX_PLAYERS {
         return;
@@ -234,7 +226,8 @@ pub(crate) fn display_scored_ex_score_data(
     }
     let live = live_ex_score_inputs(state, player_idx);
     let player = &state.players[player_idx];
-    ex_score_data_from_inputs(state, player_idx, effective_ex_score_inputs(player, live))
+    let inputs = gameplay_effective_ex_score_inputs(live, player.failed_ex_score_inputs);
+    ex_score_data_from_inputs(state, player_idx, inputs)
 }
 
 pub fn display_ex_score_percent(state: &State, player_idx: usize) -> f64 {

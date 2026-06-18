@@ -31,11 +31,6 @@ pub(super) fn all_joined_players_failed(state: &State) -> bool {
 }
 
 #[inline(always)]
-pub(super) fn init_course_submit_life(p: &mut PlayerRuntime) {
-    p.course_submit_life = Some(LifeMeter::course_submit_start());
-}
-
-#[inline(always)]
 pub fn course_stage_life_submit_eligible(state: &State, player_idx: usize) -> bool {
     if player_idx >= state.num_players.min(MAX_PLAYERS) {
         return true;

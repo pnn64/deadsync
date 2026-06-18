@@ -1,4 +1,3 @@
-use deadsync_core::song_time::clamp_song_time_ns;
 use log::debug;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
@@ -6,7 +5,7 @@ use std::time::Instant;
 use super::{
     DisplayClockDiagEventKind, DisplayClockHealth, DisplayClockStepEvent, FrameStableDisplayClock,
     SongClockSnapshot, SongTimeNs, State, frame_stable_display_clock_step, normalized_song_rate,
-    scaled_song_delta_ns, song_time_ns_to_seconds,
+    song_clock_music_time_ns, song_time_ns_to_seconds,
 };
 
 const DISPLAY_CLOCK_STUTTER_DIAG_EVENT_COUNT: usize = 32;
@@ -135,12 +134,9 @@ pub(crate) fn music_time_ns_from_song_clock(
                 captured_host_nanos,
             );
         }
-        return clamp_song_time_ns(
-            i128::from(snapshot.song_time_ns) + scaled_song_delta_ns(dt_nanos, slope),
-        );
+        return song_clock_music_time_ns(snapshot, captured_at, captured_host_nanos);
     }
-    let delta_host_nanos = if let Some(age) = snapshot.valid_at.checked_duration_since(captured_at)
-    {
+    if let Some(age) = snapshot.valid_at.checked_duration_since(captured_at) {
         if snapshot.timing_diag_enabled {
             debug!(
                 "AUDIO_DIAG snap_age_ms={:.3} path=instant callback_gap_ms={:.3} snapshot_song_time={:.6} slope={:.6} snapshot_host_nanos={} captured_host_nanos={}",
@@ -152,7 +148,6 @@ pub(crate) fn music_time_ns_from_song_clock(
                 captured_host_nanos,
             );
         }
-        -(age.as_nanos() as i128)
     } else if let Some(lead) = captured_at.checked_duration_since(snapshot.valid_at) {
         if snapshot.timing_diag_enabled {
             debug!(
@@ -165,7 +160,6 @@ pub(crate) fn music_time_ns_from_song_clock(
                 captured_host_nanos,
             );
         }
-        lead.as_nanos() as i128
     } else {
         if snapshot.timing_diag_enabled {
             debug!(
@@ -177,11 +171,8 @@ pub(crate) fn music_time_ns_from_song_clock(
                 captured_host_nanos,
             );
         }
-        0
-    };
-    clamp_song_time_ns(
-        i128::from(snapshot.song_time_ns) + scaled_song_delta_ns(delta_host_nanos, slope),
-    )
+    }
+    song_clock_music_time_ns(snapshot, captured_at, captured_host_nanos)
 }
 
 #[inline(always)]

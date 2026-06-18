@@ -2,10 +2,10 @@ use deadsync_rules::judgment;
 use deadsync_rules::timing;
 
 use super::{
-    FinalizedRowOutcome, State, advance_judged_row_cursor, apply_autosync_for_row_hits,
-    apply_life_change, apply_row_combo_state, autoplay_blocks_scoring,
-    capture_failed_ex_score_inputs, carried_holds_down_at_row, current_music_time_s,
-    error_bar_register_tap, finalized_row_awards_hand, is_player_dead, judge_life_delta,
+    State, advance_judged_row_cursor, apply_autosync_for_row_hits, apply_life_change,
+    apply_row_combo_state, autoplay_blocks_scoring, capture_failed_ex_score_inputs,
+    carried_holds_down_at_row, current_music_time_s, error_bar_register_tap,
+    finalized_row_awards_hand, finalized_row_judgment_for_entry, is_player_dead, judge_life_delta,
     max_step_distance_ns, next_ready_row_in_lookahead, player_col_range, player_row_scan_state,
     record_current_combo_window_count, record_display_window_counts, set_last_judgment,
     suppress_final_bad_rescore_visual, update_itg_grade_totals,
@@ -19,22 +19,16 @@ pub(super) fn finalize_row_judgment(
     skip_life_change: bool,
 ) {
     let (col_start, col_end) = player_col_range(state, player);
-    let mut player_row_note_count = 0u32;
-    let row_notes = state.row_entries[row_entry_index].note_indices();
-    let Some(final_judgment) =
-        judgment::aggregate_row_final_judgment(row_notes.iter().filter_map(|&note_index| {
-            let judgment = state.notes[note_index].result.as_ref()?;
-            player_row_note_count = player_row_note_count.saturating_add(1);
-            Some(judgment)
-        }))
-        .copied()
+    let Some(row_judgment) =
+        finalized_row_judgment_for_entry(&state.notes, &state.row_entries[row_entry_index])
     else {
         return;
     };
     let scoring_blocked = autoplay_blocks_scoring(state);
     apply_autosync_for_row_hits(state, row_entry_index);
+    let final_judgment = row_judgment.judgment;
     let final_grade = final_judgment.grade;
-    state.row_entries[row_entry_index].final_outcome = Some(FinalizedRowOutcome { final_grade });
+    state.row_entries[row_entry_index].final_outcome = Some(row_judgment.outcome);
     timing::record_live_timing_stats(
         &mut state.players[player].live_timing_stats,
         &final_judgment,
@@ -64,14 +58,14 @@ pub(super) fn finalize_row_judgment(
             apply_life_change(p, current_music_time, life_delta);
         }
         record_current_combo_window_count(p, &final_judgment);
-        apply_row_combo_state(p, final_grade, player_row_note_count, 1);
+        apply_row_combo_state(p, final_grade, row_judgment.note_count, 1);
         let carried_holds_down = carried_holds_down_at_row(
             &state.notes,
             &state.active_holds,
             (col_start, col_end),
             row_index,
         );
-        if finalized_row_awards_hand(final_grade, player_row_note_count, carried_holds_down) {
+        if finalized_row_awards_hand(final_grade, row_judgment.note_count, carried_holds_down) {
             p.hands_achieved = p.hands_achieved.saturating_add(1);
         }
     }

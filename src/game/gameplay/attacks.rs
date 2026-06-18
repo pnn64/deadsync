@@ -6,16 +6,12 @@ use crate::game::parsing::song_lua::{
 };
 use deadsync_chart::SongData;
 use deadsync_chart::{ChartData, GameplayChartData};
-#[cfg(test)]
-pub(super) use deadsync_gameplay::parse_attack_mods;
 pub(super) use deadsync_gameplay::parse_song_lua_runtime_mods;
 #[cfg(test)]
 pub(super) use deadsync_gameplay::song_lua_ease_window_value;
-#[cfg(test)]
-pub(super) use deadsync_gameplay::turn_option_bits;
 use deadsync_gameplay::{
     ActiveAttackRefreshInput, ActiveAttackRefreshState, ChartAttackTransformPlayer,
-    ChartAttackWindow, GameplayAttackMode, SongLuaCompilePlayStyle, append_song_lua_ease_targets,
+    GameplayAttackMode, SongLuaCompilePlayStyle, append_song_lua_ease_targets,
     apply_chart_attack_transforms as apply_chart_attack_transforms_to_notes,
     begin_outro_attack_visual_clear, build_attack_mask_windows as build_mask_windows_from_attacks,
     build_attack_windows_for_mode, effective_attack_accel_effects,
@@ -97,22 +93,6 @@ pub struct GameplaySongLuaData {
     pub foreground_layers: Vec<GameplaySongLuaLayer>,
 }
 
-fn build_attack_windows_for_player(
-    chart_attacks: Option<&str>,
-    attack_mode: profile_data::AttackMode,
-    player: usize,
-    base_seed: u64,
-    song_length_seconds: f32,
-) -> Vec<ChartAttackWindow> {
-    build_attack_windows_for_mode(
-        chart_attacks,
-        gameplay_attack_mode(attack_mode),
-        player,
-        base_seed,
-        song_length_seconds,
-    )
-}
-
 pub(super) fn build_attack_mask_windows_for_player(
     chart_attacks: Option<&str>,
     attack_mode: profile_data::AttackMode,
@@ -120,9 +100,9 @@ pub(super) fn build_attack_mask_windows_for_player(
     base_seed: u64,
     song_length_seconds: f32,
 ) -> Vec<AttackMaskWindow> {
-    let attacks = build_attack_windows_for_player(
+    let attacks = build_attack_windows_for_mode(
         chart_attacks,
-        attack_mode,
+        gameplay_attack_mode(attack_mode),
         player,
         base_seed,
         song_length_seconds,

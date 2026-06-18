@@ -3,7 +3,7 @@ use deadsync_input::{INPUT_SLOT_INVALID, InputEdge, InputEvent, VirtualAction, l
 use deadsync_profile as profile_data;
 use log::{debug, warn};
 use std::sync::atomic::{AtomicI64, Ordering};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use super::{
     ASSIST_TICK_SFX_PATH, ExitTransitionKind, GAMEPLAY_INPUT_BACKLOG_WARN,
@@ -11,22 +11,35 @@ use super::{
     GameplayInputPlayerSide, GameplayReceptorGlowBehavior, GameplayReceptorGlowState,
     GameplayReceptorGlowTimers, GameplayReceptorStepBehavior, GameplayUpdatePhaseTimings,
     HoldToExitKey, INVALID_SONG_TIME_NS, LaneInputUpdate, RecordedLaneEdge, SongClockSnapshot,
-    SongTimeNs, State, TickMode, abort_hold_to_exit, active_hold_counts_as_pressed,
-    active_input_slot_lane_is_down, add_elapsed_us, begin_exit_transition, column_flash_expired_at,
-    current_music_time_s, elapsed_us_between, gameplay_input_log_enabled,
-    held_miss_judgment_expired_at, hold_judgment_expired_at, integrate_active_hold_to_time,
-    judge_a_lift, judge_a_tap, lane_edge_judges_lift, lane_edge_judges_tap, lane_press_started,
-    lane_release_finished, live_autoplay_enabled, local_column_for_field,
-    music_time_ns_from_song_clock, normalized_input_slot, player_index_for_column,
-    queue_preloaded_assist_tick, receptor_glow_press_timers, receptor_glow_pulse_timers,
-    receptor_glow_release_timers, receptor_glow_visual, record_step_calories,
-    refresh_roll_life_on_step, remap_live_input_lane, song_time_ns_invalid,
-    song_time_ns_to_seconds, tick_combo_milestones, tick_mine_explosion_slot, tick_positive_timer,
-    tick_receptor_glow_timers, tick_tap_explosion_slot, update_active_input_slot,
+    SongTimeNs, State, TickMode, abort_hold_to_exit, active_input_slot_lane_is_down,
+    add_elapsed_us, begin_exit_transition, column_flash_expired_at, current_music_time_s,
+    gameplay_input_log_enabled, held_miss_judgment_expired_at, hold_judgment_expired_at,
+    integrate_active_hold_to_time, judge_a_lift, judge_a_tap, lane_edge_judges_lift,
+    lane_edge_judges_tap, lane_press_started, lane_release_finished, live_autoplay_enabled,
+    local_column_for_field, music_time_ns_from_song_clock, normalized_input_slot,
+    player_index_for_column, queue_preloaded_assist_tick, receptor_glow_press_timers,
+    receptor_glow_pulse_timers, receptor_glow_release_timers, receptor_glow_visual,
+    record_step_calories, refresh_roll_life_on_step, remap_live_input_lane, song_time_ns_invalid,
+    song_time_ns_to_seconds, sync_active_hold_pressed_column, tick_combo_milestones,
+    tick_mine_explosion_slot, tick_positive_timer, tick_receptor_glow_timers,
+    tick_tap_explosion_slot, update_active_input_slot,
 };
 
 const UNMAPPED_INPUT_CLOCK_WARN_INTERVAL_NS: SongTimeNs = 1_000_000_000;
 static LAST_UNMAPPED_INPUT_CLOCK_WARN_NS: AtomicI64 = AtomicI64::new(i64::MIN);
+
+#[inline(always)]
+fn elapsed_us_between(later: Instant, earlier: Instant) -> u32 {
+    let elapsed = later
+        .checked_duration_since(earlier)
+        .unwrap_or(Duration::ZERO)
+        .as_micros();
+    if elapsed > u128::from(u32::MAX) {
+        u32::MAX
+    } else {
+        elapsed as u32
+    }
+}
 
 #[inline(always)]
 fn should_warn_unmapped_input_clock(song_time_ns: SongTimeNs) -> bool {
@@ -216,10 +229,7 @@ pub fn receptor_glow_visual_for_col(state: &State, col: usize) -> Option<(f32, f
 #[inline(always)]
 pub(super) fn sync_active_hold_pressed_state(state: &mut State, column: usize, lane_pressed: bool) {
     let live_autoplay = live_autoplay_enabled(state);
-    let Some(active) = state.active_holds[column].as_mut() else {
-        return;
-    };
-    active.is_pressed = active_hold_counts_as_pressed(live_autoplay, lane_pressed);
+    sync_active_hold_pressed_column(&mut state.active_holds, column, live_autoplay, lane_pressed);
 }
 
 pub fn queue_input_edge(

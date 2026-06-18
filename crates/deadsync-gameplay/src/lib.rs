@@ -2,8 +2,8 @@ use deadsync_chart::{ChartData, ChartDisplayBpm, SongData, SyncPref};
 use deadsync_core::input::{InputSource, Lane, MAX_COLS, MAX_PLAYERS};
 use deadsync_core::note::NoteType;
 use deadsync_core::song_time::{
-    SongTimeNs, clamp_song_time_ns, normalized_song_rate, scaled_song_time_ns,
-    song_time_ns_add_seconds, song_time_ns_from_seconds, song_time_ns_invalid,
+    SongTimeNs, clamp_song_time_ns, normalized_song_rate, scaled_song_delta_ns,
+    scaled_song_time_ns, song_time_ns_add_seconds, song_time_ns_from_seconds, song_time_ns_invalid,
     song_time_ns_span_seconds, song_time_ns_to_seconds,
 };
 use deadsync_core::timing::{ROWS_PER_BEAT, beat_to_note_row};
@@ -5974,6 +5974,32 @@ pub fn current_song_clock_snapshot(
     }
 }
 
+#[inline(always)]
+pub fn song_clock_music_time_ns(
+    snapshot: SongClockSnapshot,
+    captured_at: Instant,
+    captured_host_nanos: u64,
+) -> SongTimeNs {
+    let slope = normalized_song_rate(snapshot.seconds_per_second);
+    if snapshot.valid_at_host_nanos != 0 && captured_host_nanos != 0 {
+        let dt_nanos = captured_host_nanos as i128 - snapshot.valid_at_host_nanos as i128;
+        return clamp_song_time_ns(
+            i128::from(snapshot.song_time_ns) + scaled_song_delta_ns(dt_nanos, slope),
+        );
+    }
+    let delta_host_nanos = if let Some(age) = snapshot.valid_at.checked_duration_since(captured_at)
+    {
+        -(age.as_nanos() as i128)
+    } else if let Some(lead) = captured_at.checked_duration_since(snapshot.valid_at) {
+        lead.as_nanos() as i128
+    } else {
+        0
+    };
+    clamp_song_time_ns(
+        i128::from(snapshot.song_time_ns) + scaled_song_delta_ns(delta_host_nanos, slope),
+    )
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GameplayMusicCut {
     pub start_sec: f64,
@@ -6354,6 +6380,96 @@ pub fn time_based_tap_miss_judgment(
         grade: JudgeGrade::Miss,
         window: None,
         miss_because_held,
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct TimeBasedTapMissEvent {
+    pub note_index: usize,
+    pub row_index: usize,
+    pub column: usize,
+    pub beat: f32,
+    pub note_time_ns: SongTimeNs,
+    pub judgment: Judgment,
+    pub miss_because_held: bool,
+    pub queue_missed_hold_resolution: bool,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct TimeBasedTapMissStep {
+    pub next_cursor: usize,
+    pub event: Option<TimeBasedTapMissEvent>,
+}
+
+pub fn apply_next_time_based_tap_miss_for_player(
+    notes: &mut [Note],
+    note_time_cache_ns: &[SongTimeNs],
+    tap_miss_held_window: &[bool],
+    hold_decay_active: &mut [bool],
+    decaying_hold_indices: &mut Vec<usize>,
+    cursor: usize,
+    note_range: (usize, usize),
+    cutoff_row: usize,
+    music_time_ns: SongTimeNs,
+    music_rate: f32,
+    score_missed_holds_rolls: bool,
+) -> TimeBasedTapMissStep {
+    let end = note_range.1.min(notes.len()).min(note_time_cache_ns.len());
+    let mut cursor = cursor.max(note_range.0.min(end));
+    while cursor < end {
+        let note_time_ns = note_time_cache_ns[cursor];
+        let (row_index, column, beat) = {
+            let note = &notes[cursor];
+            match time_based_tap_miss_scan(note, cutoff_row) {
+                TimeBasedTapMissScan::Stop => {
+                    return TimeBasedTapMissStep {
+                        next_cursor: cursor,
+                        event: None,
+                    };
+                }
+                TimeBasedTapMissScan::Skip => {
+                    cursor += 1;
+                    continue;
+                }
+                TimeBasedTapMissScan::Miss => (note.row_index, note.column, note.beat),
+            }
+        };
+
+        let miss_because_held = tap_miss_held_window.get(cursor).copied().unwrap_or(false);
+        let judgment = time_based_tap_miss_judgment(
+            notes[cursor].early_result,
+            note_time_ns,
+            music_time_ns,
+            music_rate,
+            miss_because_held,
+        );
+        let queue_missed_hold_resolution = apply_time_based_hold_miss_result(
+            notes[cursor].hold.as_mut(),
+            hold_decay_active,
+            decaying_hold_indices,
+            cursor,
+            music_time_ns,
+            judgment.grade,
+            score_missed_holds_rolls,
+        );
+        return TimeBasedTapMissStep {
+            next_cursor: cursor + 1,
+            event: Some(TimeBasedTapMissEvent {
+                note_index: cursor,
+                row_index,
+                column,
+                beat,
+                note_time_ns,
+                judgment,
+                miss_because_held,
+                queue_missed_hold_resolution,
+            }),
+        };
+    }
+
+    TimeBasedTapMissStep {
+        next_cursor: cursor,
+        event: None,
     }
 }
 
@@ -7828,6 +7944,56 @@ pub fn apply_hold_success_result(
     true
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct HoldResolutionUpdate {
+    pub result: HoldResult,
+    pub stats_update: HoldResultStatsUpdate,
+}
+
+pub fn apply_hold_let_go_update(
+    hold: Option<&mut HoldData>,
+    hold_decay_active: &mut [bool],
+    decaying_hold_indices: &mut Vec<usize>,
+    note_index: usize,
+    note_type: NoteType,
+    let_go_time_ns: SongTimeNs,
+    scoring_blocked: bool,
+    player_dead: bool,
+) -> Option<HoldResolutionUpdate> {
+    if !apply_hold_let_go_result(
+        hold,
+        hold_decay_active,
+        decaying_hold_indices,
+        note_index,
+        let_go_time_ns,
+    ) {
+        return None;
+    }
+    let result = HoldResult::LetGo;
+    Some(HoldResolutionUpdate {
+        result,
+        stats_update: hold_result_stats_update(note_type, result, scoring_blocked, player_dead),
+    })
+}
+
+pub fn apply_hold_success_update(
+    hold: Option<&mut HoldData>,
+    hold_decay_active: &mut [bool],
+    note_index: usize,
+    note_type: NoteType,
+    scoring_blocked: bool,
+    player_dead: bool,
+) -> Option<HoldResolutionUpdate> {
+    if !apply_hold_success_result(hold, hold_decay_active, note_index) {
+        return None;
+    }
+    let result = HoldResult::Held;
+    Some(HoldResolutionUpdate {
+        result,
+        stats_update: hold_result_stats_update(note_type, result, scoring_blocked, player_dead),
+    })
+}
+
 pub fn apply_time_based_hold_miss_result(
     hold: Option<&mut HoldData>,
     hold_decay_active: &mut [bool],
@@ -7907,6 +8073,13 @@ pub enum PendingMissedHoldResolution {
     ScoreLetGo,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PendingMissedHoldResolutionStep {
+    Wait,
+    Remove,
+    Resolve(PendingMissedHoldResolution),
+}
+
 #[inline(always)]
 pub const fn pending_missed_hold_resolution_action(
     hold_result: Option<HoldResult>,
@@ -7923,6 +8096,32 @@ pub const fn pending_missed_hold_resolution_action(
     } else {
         PendingMissedHoldResolution::None
     }
+}
+
+pub fn pending_missed_hold_resolution_for_note(
+    note: Option<&Note>,
+    hold_end_time_ns: Option<SongTimeNs>,
+    current_time_ns: SongTimeNs,
+    num_cols: usize,
+    score_missed_holds_rolls: bool,
+) -> PendingMissedHoldResolutionStep {
+    let Some(end_time_ns) = hold_end_time_ns else {
+        return PendingMissedHoldResolutionStep::Remove;
+    };
+    if current_time_ns < end_time_ns {
+        return PendingMissedHoldResolutionStep::Wait;
+    }
+    let Some(note) = note else {
+        return PendingMissedHoldResolutionStep::Remove;
+    };
+    if note.column >= num_cols {
+        return PendingMissedHoldResolutionStep::Remove;
+    }
+    PendingMissedHoldResolutionStep::Resolve(pending_missed_hold_resolution_action(
+        note.hold.as_ref().and_then(|hold| hold.result),
+        note.result.as_ref().map(|judgment| judgment.grade),
+        score_missed_holds_rolls,
+    ))
 }
 
 pub const fn hold_result_stats_update(
@@ -8032,6 +8231,37 @@ pub fn refresh_roll_life_for_step(
     true
 }
 
+pub fn sync_active_hold_pressed_column(
+    active_holds: &mut [Option<ActiveHold>],
+    column: usize,
+    live_autoplay: bool,
+    lane_pressed: bool,
+) -> bool {
+    let Some(active) = active_holds.get_mut(column).and_then(Option::as_mut) else {
+        return false;
+    };
+    active.is_pressed = active_hold_counts_as_pressed(live_autoplay, lane_pressed);
+    true
+}
+
+pub fn refresh_roll_life_for_active_column(
+    active_holds: &mut [Option<ActiveHold>],
+    notes: &mut [Note],
+    column: usize,
+    event_time_ns: SongTimeNs,
+) -> bool {
+    let Some(active) = active_holds.get_mut(column).and_then(Option::as_mut) else {
+        return false;
+    };
+    let Some(note) = notes.get_mut(active.note_index) else {
+        return false;
+    };
+    let Some(hold) = note.hold.as_mut() else {
+        return false;
+    };
+    refresh_roll_life_for_step(active, hold, event_time_ns)
+}
+
 pub fn advance_active_hold_to_time(
     active: &mut ActiveHold,
     hold: &mut HoldData,
@@ -8097,6 +8327,48 @@ pub fn advance_active_hold_to_time(
         clear_active: resolution.is_some() || active.let_go,
         resolution,
     }
+}
+
+pub fn integrate_active_hold_column(
+    active_holds: &mut [Option<ActiveHold>],
+    notes: &mut [Note],
+    column: usize,
+    timing: &TimingData,
+    target_time_ns: SongTimeNs,
+    music_rate: f32,
+) -> Option<ActiveHoldResolution> {
+    if column >= active_holds.len() || song_time_ns_invalid(target_time_ns) {
+        return None;
+    }
+
+    let advance = {
+        let Some(active) = active_holds[column].as_mut() else {
+            return None;
+        };
+        let note_index = active.note_index;
+        let Some(note) = notes.get_mut(note_index) else {
+            active_holds[column] = None;
+            return None;
+        };
+        let Some(hold) = note.hold.as_mut() else {
+            active_holds[column] = None;
+            return None;
+        };
+        advance_active_hold_to_time(
+            active,
+            hold,
+            timing,
+            note.row_index,
+            note.beat,
+            target_time_ns,
+            music_rate,
+        )
+    };
+
+    if advance.clear_active {
+        active_holds[column] = None;
+    }
+    advance.resolution
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -9017,6 +9289,41 @@ pub fn completed_row_final_judgment<'a>(
             .iter()
             .filter_map(|judgment| *judgment),
     )
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct FinalizedRowJudgment {
+    pub judgment: Judgment,
+    pub note_count: u32,
+    pub outcome: FinalizedRowOutcome,
+}
+
+pub fn finalized_row_judgment_for_entry(
+    notes: &[Note],
+    row_entry: &RowEntry,
+) -> Option<FinalizedRowJudgment> {
+    let mut row_judgments: [Option<&Judgment>; MAX_COLS] = [None; MAX_COLS];
+    let mut row_judgment_count = 0usize;
+
+    for &note_index in row_entry.note_indices() {
+        let judgment = notes.get(note_index)?.result.as_ref()?;
+        debug_assert!(row_judgment_count < row_judgments.len());
+        row_judgments[row_judgment_count] = Some(judgment);
+        row_judgment_count += 1;
+    }
+
+    let judgment = *judgment::aggregate_row_final_judgment(
+        row_judgments[..row_judgment_count]
+            .iter()
+            .filter_map(|judgment| *judgment),
+    )?;
+    Some(FinalizedRowJudgment {
+        judgment,
+        note_count: row_judgment_count as u32,
+        outcome: FinalizedRowOutcome {
+            final_grade: judgment.grade,
+        },
+    })
 }
 
 #[inline(always)]
@@ -10690,6 +10997,16 @@ pub fn mine_can_be_hit(note: &Note) -> bool {
     note.mine_result.is_none() && !note.is_fake && note.can_be_judged
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct MineHitMark {
+    pub row_index: usize,
+    pub column: usize,
+    pub beat: f32,
+    pub note_time_ns: SongTimeNs,
+    pub hit_time_ns: SongTimeNs,
+    pub time_error_ms: f32,
+}
+
 #[inline(always)]
 pub fn apply_mine_hit_result(
     note: &mut Note,
@@ -10706,8 +11023,102 @@ pub fn apply_mine_hit_result(
 }
 
 #[inline(always)]
+pub fn mark_mine_hit_candidate(
+    note: &mut Note,
+    note_time_ns: SongTimeNs,
+    time_error_music_ns: SongTimeNs,
+    mine_window_music_ns: SongTimeNs,
+    music_rate: f32,
+) -> Option<MineHitMark> {
+    if !apply_mine_hit_result(note, time_error_music_ns, mine_window_music_ns) {
+        return None;
+    }
+    Some(MineHitMark {
+        row_index: note.row_index,
+        column: note.column,
+        beat: note.beat,
+        note_time_ns,
+        hit_time_ns: note_time_ns.saturating_add(time_error_music_ns),
+        time_error_ms: judgment::judgment_time_error_ms_from_music_ns(
+            time_error_music_ns,
+            music_rate,
+        ),
+    })
+}
+
+#[inline(always)]
 pub fn pending_mine_hit_ready(note: &Note) -> bool {
     note.mine_result == Some(MineResult::Hit) && !note.is_fake && note.can_be_judged
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PendingMineHitEvent {
+    pub note_index: usize,
+    pub column: usize,
+    pub player: usize,
+}
+
+#[inline(always)]
+pub fn pending_mine_hit_event(
+    notes: &[Note],
+    note_index: usize,
+    num_players: usize,
+    cols_per_player: usize,
+) -> Option<PendingMineHitEvent> {
+    let note = notes.get(note_index)?;
+    if !pending_mine_hit_ready(note) {
+        return None;
+    }
+    Some(PendingMineHitEvent {
+        note_index,
+        column: note.column,
+        player: player_index_for_column(num_players, cols_per_player, note.column),
+    })
+}
+
+pub fn mark_crossed_held_mine_candidates(
+    notes: &mut [Note],
+    mine_note_ix: &[usize],
+    mine_note_time_ns: &[SongTimeNs],
+    column: usize,
+    prev_time_ns: SongTimeNs,
+    current_time_ns: SongTimeNs,
+    mine_window_music_ns: SongTimeNs,
+    music_rate: f32,
+    mut on_mark: impl FnMut(usize, MineHitMark),
+) -> bool {
+    if song_time_ns_invalid(prev_time_ns)
+        || song_time_ns_invalid(current_time_ns)
+        || current_time_ns <= prev_time_ns
+    {
+        return false;
+    }
+
+    let (start_idx, end_idx) =
+        crossed_mine_bounds_ns(mine_note_time_ns, prev_time_ns, current_time_ns);
+    let mut hit_any = false;
+    for i in start_idx..end_idx {
+        let Some(&note_index) = mine_note_ix.get(i) else {
+            continue;
+        };
+        let Some(note) = notes.get_mut(note_index) else {
+            continue;
+        };
+        if !crossed_held_mine_can_hit(note, column) {
+            continue;
+        }
+        let Some(&note_time_ns) = mine_note_time_ns.get(i) else {
+            continue;
+        };
+        let Some(mark) =
+            mark_mine_hit_candidate(note, note_time_ns, 0, mine_window_music_ns, music_rate)
+        else {
+            continue;
+        };
+        on_mark(note_index, mark);
+        hit_any = true;
+    }
+    hit_any
 }
 
 #[inline(always)]
@@ -10741,6 +11152,44 @@ pub fn apply_mine_avoid_result(note: &mut Note) -> bool {
     true
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct MineAvoidancePlayerUpdate {
+    pub mine_end: usize,
+    pub next_mine_avoid_cursor: usize,
+    pub avoided_count: u32,
+}
+
+pub fn apply_time_based_mine_avoidance_for_player(
+    notes: &mut [Note],
+    mine_note_ix: &[usize],
+    mine_cursor: usize,
+    cutoff_row: usize,
+    note_range: (usize, usize),
+    mut on_avoided: impl FnMut(usize, usize, usize),
+) -> MineAvoidancePlayerUpdate {
+    let mine_end = mine_avoid_cursor_end(notes, mine_note_ix, mine_cursor, cutoff_row);
+    let mut avoided_count = 0u32;
+    for &note_idx in &mine_note_ix[mine_cursor.min(mine_note_ix.len())..mine_end] {
+        let note = &mut notes[note_idx];
+        if apply_mine_avoid_result(note) {
+            avoided_count = avoided_count.saturating_add(1);
+            on_avoided(note_idx, note.row_index, note.column);
+        }
+    }
+
+    let next_mine_avoid_cursor = if mine_end < mine_note_ix.len() {
+        mine_note_ix[mine_end]
+    } else {
+        note_range.1.min(notes.len())
+    };
+
+    MineAvoidancePlayerUpdate {
+        mine_end,
+        next_mine_avoid_cursor,
+        avoided_count,
+    }
+}
+
 #[inline(always)]
 pub fn completed_mine_can_be_avoided(note: &Note) -> bool {
     matches!(note.note_type, NoteType::Mine)
@@ -10756,6 +11205,21 @@ pub fn apply_completed_mine_avoid_result(note: &mut Note) -> bool {
     }
     note.mine_result = Some(MineResult::Avoided);
     true
+}
+
+pub fn finalize_completed_mine_avoidance_for_player(
+    notes: &mut [Note],
+    note_range: (usize, usize),
+    mines_total: u32,
+    mines_hit: u32,
+) -> u32 {
+    let end = note_range.1.min(notes.len());
+    let start = note_range.0.min(end);
+    for note in &mut notes[start..end] {
+        apply_completed_mine_avoid_result(note);
+    }
+
+    mines_total.saturating_sub(mines_hit.min(mines_total))
 }
 
 #[inline(always)]
@@ -13054,10 +13518,12 @@ mod tests {
     fn attack_mod_parser_accepts_scroll_perspective_and_approach_prefixes() {
         let mods = parse_attack_mods(
             "C600,*1000 sudden,*1000 -125% suddenoffset,*2.4 150% hiddenoffset,\
-             30% reverse,centered,50% incoming,dark,50% blind,75% cover",
+             150% drunk,200% expand,30% reverse,centered,50% incoming,dark,50% blind,75% cover",
         );
 
         assert_eq!(mods.scroll_speed, Some(ScrollSpeedSetting::CMod(600.0)));
+        assert_eq!(mods.visual.drunk, Some(1.5));
+        assert_eq!(mods.accel.expand, Some(2.0));
         assert_eq!(mods.appearance.sudden, Some(1.0));
         assert_eq!(mods.appearance.sudden_offset, Some(-1.25));
         assert_eq!(mods.appearance.hidden_offset, Some(1.5));
@@ -13099,12 +13565,13 @@ mod tests {
     fn song_lua_runtime_mod_parser_scales_column_moves() {
         let mods = parse_song_lua_runtime_mods(
             "*10000 -80 movey1,*10000 40 movex2,*10000 -314 confusionoffset3,\
-             *10000 -80 tiny",
+             *10000 -628 confusionoffset,*10000 -80 tiny",
         );
 
         assert_eq!(mods.visual.move_y_cols[0], Some(-0.8));
         assert_eq!(mods.visual.move_x_cols[1], Some(0.4));
         assert_eq!(mods.visual.confusion_offset_cols[2], Some(-3.14));
+        assert_eq!(mods.visual.confusion_offset, Some(-6.28));
         assert_eq!(mods.visual.tiny, Some(-0.8));
         assert_eq!(mods.mini_percent, None);
     }
@@ -13807,6 +14274,113 @@ mod tests {
         assert_eq!(judgment.time_error_ms, early.time_error_ms);
         assert_eq!(judgment.window, early.window);
         assert_eq!(judgment.miss_because_held, early.miss_because_held);
+    }
+
+    #[test]
+    fn next_time_based_tap_miss_skips_to_first_miss_event() {
+        let mut judged = test_note_at(NoteType::Tap, None, false, 48, 1.0);
+        judged.result = Some(test_judgment(JudgeGrade::Great));
+        let mut miss = test_note_at(NoteType::Tap, None, false, 96, 2.0);
+        miss.column = 2;
+        let mut stop = test_note_at(NoteType::Tap, None, false, 144, 3.0);
+        stop.column = 3;
+        let mut notes = vec![judged, miss, stop];
+        let note_times = [1_000, 2_000, 3_000];
+        let held_window = [false, true, false];
+        let mut hold_decay = [false; 3];
+        let mut decaying = Vec::new();
+
+        let step = apply_next_time_based_tap_miss_for_player(
+            &mut notes,
+            &note_times,
+            &held_window,
+            &mut hold_decay,
+            &mut decaying,
+            0,
+            (0, 3),
+            144,
+            4_000,
+            1.0,
+            false,
+        );
+
+        let event = step.event.expect("second note should miss");
+        assert_eq!(step.next_cursor, 2);
+        assert_eq!(event.note_index, 1);
+        assert_eq!(event.row_index, 96);
+        assert_eq!(event.column, 2);
+        assert_eq!(event.beat, 2.0);
+        assert_eq!(event.note_time_ns, 2_000);
+        assert_eq!(event.judgment.grade, JudgeGrade::Miss);
+        assert!(event.miss_because_held);
+        assert!(!event.queue_missed_hold_resolution);
+        assert!(notes[1].result.is_none());
+    }
+
+    #[test]
+    fn next_time_based_tap_miss_stops_at_cutoff_without_event() {
+        let mut notes = vec![test_note_at(NoteType::Tap, None, false, 96, 2.0)];
+        let note_times = [2_000];
+        let held_window = [false];
+        let mut hold_decay = [false; 1];
+        let mut decaying = Vec::new();
+
+        let step = apply_next_time_based_tap_miss_for_player(
+            &mut notes,
+            &note_times,
+            &held_window,
+            &mut hold_decay,
+            &mut decaying,
+            0,
+            (0, 1),
+            96,
+            4_000,
+            1.0,
+            false,
+        );
+
+        assert_eq!(step.next_cursor, 0);
+        assert!(step.event.is_none());
+        assert!(notes[0].result.is_none());
+    }
+
+    #[test]
+    fn next_time_based_tap_miss_updates_hold_miss_policy() {
+        let mut notes = vec![test_note_at(
+            NoteType::Hold,
+            Some(test_hold()),
+            false,
+            48,
+            1.0,
+        )];
+        let note_times = [1_000];
+        let held_window = [false];
+        let mut hold_decay = [false; 1];
+        let mut decaying = Vec::new();
+
+        let step = apply_next_time_based_tap_miss_for_player(
+            &mut notes,
+            &note_times,
+            &held_window,
+            &mut hold_decay,
+            &mut decaying,
+            0,
+            (0, 1),
+            96,
+            4_000,
+            1.0,
+            false,
+        );
+
+        let event = step.event.expect("hold head should miss");
+        assert!(event.queue_missed_hold_resolution);
+        assert_eq!(
+            notes[0].hold.as_ref().and_then(|hold| hold.result),
+            Some(HoldResult::Missed)
+        );
+        assert!(hold_decay[0]);
+        assert_eq!(decaying, vec![0]);
+        assert!(notes[0].result.is_none());
     }
 
     #[test]
@@ -17754,6 +18328,102 @@ mod tests {
     }
 
     #[test]
+    fn hold_let_go_update_marks_hold_and_returns_stats() {
+        let mut hold = test_hold();
+        hold.life = 0.4;
+        let mut active = [false; 2];
+        let mut indices = Vec::new();
+
+        let update = apply_hold_let_go_update(
+            Some(&mut hold),
+            &mut active,
+            &mut indices,
+            1,
+            NoteType::Roll,
+            123,
+            false,
+            false,
+        )
+        .expect("let-go update");
+
+        assert_eq!(update.result, HoldResult::LetGo);
+        assert_eq!(update.stats_update.rolls_let_go_for_score, 1);
+        assert!(update.stats_update.update_grade_totals);
+        assert_eq!(hold.result, Some(HoldResult::LetGo));
+        assert_eq!(hold.let_go_started_at, Some(123));
+        assert_eq!(active, [false, true]);
+        assert_eq!(indices, vec![1]);
+    }
+
+    #[test]
+    fn hold_let_go_update_rejects_duplicate_results() {
+        let mut hold = test_hold();
+        hold.result = Some(HoldResult::LetGo);
+        let mut active = [false; 1];
+        let mut indices = Vec::new();
+
+        assert!(
+            apply_hold_let_go_update(
+                Some(&mut hold),
+                &mut active,
+                &mut indices,
+                0,
+                NoteType::Hold,
+                123,
+                false,
+                false,
+            )
+            .is_none()
+        );
+        assert!(indices.is_empty());
+    }
+
+    #[test]
+    fn hold_success_update_marks_hold_and_returns_stats() {
+        let mut hold = test_hold();
+        hold.life = 0.2;
+        hold.let_go_started_at = Some(10);
+        let mut active = [false, true];
+
+        let update = apply_hold_success_update(
+            Some(&mut hold),
+            &mut active,
+            1,
+            NoteType::Hold,
+            false,
+            false,
+        )
+        .expect("success update");
+
+        assert_eq!(update.result, HoldResult::Held);
+        assert_eq!(update.stats_update.holds_held, 1);
+        assert_eq!(update.stats_update.holds_held_for_score, 1);
+        assert!(update.stats_update.update_grade_totals);
+        assert_eq!(hold.result, Some(HoldResult::Held));
+        assert_eq!(hold.let_go_started_at, None);
+        assert_eq!(active, [false, false]);
+    }
+
+    #[test]
+    fn hold_success_update_respects_scoring_blocks() {
+        let mut hold = test_hold();
+        let mut active = [false];
+
+        let update =
+            apply_hold_success_update(Some(&mut hold), &mut active, 0, NoteType::Hold, true, false)
+                .expect("success update");
+
+        assert_eq!(update.result, HoldResult::Held);
+        assert_eq!(
+            update.stats_update,
+            HoldResultStatsUpdate {
+                decrement_hands_holding: true,
+                ..HoldResultStatsUpdate::ZERO
+            }
+        );
+    }
+
+    #[test]
     fn time_based_hold_miss_result_scores_without_marking_missed() {
         let mut hold = test_hold();
         hold.life = 0.4;
@@ -17978,6 +18648,54 @@ mod tests {
                 true,
             ),
             PendingMissedHoldResolution::None,
+        );
+    }
+
+    #[test]
+    fn pending_missed_hold_resolution_step_waits_until_hold_end() {
+        let note = test_note_at(NoteType::Hold, Some(test_hold()), false, 48, 1.0);
+
+        assert_eq!(
+            pending_missed_hold_resolution_for_note(Some(&note), Some(10), 9, MAX_COLS, true),
+            PendingMissedHoldResolutionStep::Wait,
+        );
+    }
+
+    #[test]
+    fn pending_missed_hold_resolution_step_removes_stale_entries() {
+        assert_eq!(
+            pending_missed_hold_resolution_for_note(None, Some(10), 10, MAX_COLS, true),
+            PendingMissedHoldResolutionStep::Remove,
+        );
+        assert_eq!(
+            pending_missed_hold_resolution_for_note(None, None, 10, MAX_COLS, true),
+            PendingMissedHoldResolutionStep::Remove,
+        );
+
+        let mut note = test_note_at(NoteType::Hold, Some(test_hold()), false, 48, 1.0);
+        note.column = MAX_COLS;
+        assert_eq!(
+            pending_missed_hold_resolution_for_note(Some(&note), Some(10), 10, MAX_COLS, true),
+            PendingMissedHoldResolutionStep::Remove,
+        );
+    }
+
+    #[test]
+    fn pending_missed_hold_resolution_step_resolves_action() {
+        let mut missed = test_note_at(NoteType::Hold, Some(test_hold()), false, 48, 1.0);
+        missed.hold.as_mut().unwrap().result = Some(HoldResult::Missed);
+        assert_eq!(
+            pending_missed_hold_resolution_for_note(Some(&missed), Some(10), 10, MAX_COLS, false),
+            PendingMissedHoldResolutionStep::Resolve(
+                PendingMissedHoldResolution::ShowMissedFeedback
+            ),
+        );
+
+        let mut scored = test_note_at(NoteType::Hold, Some(test_hold()), false, 48, 1.0);
+        scored.result = Some(test_judgment(JudgeGrade::Miss));
+        assert_eq!(
+            pending_missed_hold_resolution_for_note(Some(&scored), Some(10), 10, MAX_COLS, true),
+            PendingMissedHoldResolutionStep::Resolve(PendingMissedHoldResolution::ScoreLetGo),
         );
     }
 
@@ -18224,6 +18942,119 @@ mod tests {
     }
 
     #[test]
+    fn sync_active_hold_pressed_column_updates_active_slot() {
+        let active = test_active_hold(NoteType::Hold, false, false, MAX_HOLD_LIFE);
+        let mut active_holds = [Some(active), None];
+
+        assert!(sync_active_hold_pressed_column(
+            &mut active_holds,
+            0,
+            false,
+            true,
+        ));
+        assert!(active_holds[0].as_ref().unwrap().is_pressed);
+
+        assert!(sync_active_hold_pressed_column(
+            &mut active_holds,
+            0,
+            true,
+            false,
+        ));
+        assert!(active_holds[0].as_ref().unwrap().is_pressed);
+
+        assert!(sync_active_hold_pressed_column(
+            &mut active_holds,
+            0,
+            false,
+            false,
+        ));
+        assert!(!active_holds[0].as_ref().unwrap().is_pressed);
+    }
+
+    #[test]
+    fn sync_active_hold_pressed_column_ignores_missing_slots() {
+        let mut active_holds = [None];
+
+        assert!(!sync_active_hold_pressed_column(
+            &mut active_holds,
+            0,
+            false,
+            true,
+        ));
+        assert!(!sync_active_hold_pressed_column(
+            &mut active_holds,
+            2,
+            false,
+            true,
+        ));
+    }
+
+    #[test]
+    fn refresh_roll_life_for_active_column_updates_roll_hold() {
+        let mut active = test_active_hold(NoteType::Roll, true, false, 0.2);
+        active.note_index = 0;
+        active.start_time_ns = 100;
+        active.end_time_ns = 300;
+        active.last_update_time_ns = 120;
+        let mut active_holds = [Some(active)];
+        let mut hold = test_hold();
+        hold.life = 0.2;
+        hold.let_go_started_at = Some(150);
+        let mut notes = [test_note_at(NoteType::Roll, Some(hold), false, 0, 0.0)];
+
+        assert!(refresh_roll_life_for_active_column(
+            &mut active_holds,
+            &mut notes,
+            0,
+            250,
+        ));
+
+        assert_eq!(active_holds[0].as_ref().unwrap().last_update_time_ns, 250);
+        let hold = notes[0].hold.as_ref().unwrap();
+        assert_eq!(hold.life, MAX_HOLD_LIFE);
+        assert_eq!(hold.let_go_started_at, None);
+    }
+
+    #[test]
+    fn refresh_roll_life_for_active_column_ignores_invalid_slots() {
+        let mut active_holds = [None];
+        let mut notes = [test_note_at(
+            NoteType::Roll,
+            Some(test_hold()),
+            false,
+            0,
+            0.0,
+        )];
+        assert!(!refresh_roll_life_for_active_column(
+            &mut active_holds,
+            &mut notes,
+            0,
+            100,
+        ));
+
+        let mut active = test_active_hold(NoteType::Roll, true, false, 0.2);
+        active.note_index = 9;
+        let mut active_holds = [Some(active)];
+        assert!(!refresh_roll_life_for_active_column(
+            &mut active_holds,
+            &mut notes,
+            0,
+            100,
+        ));
+
+        let mut active = test_active_hold(NoteType::Roll, true, false, 0.2);
+        active.note_index = 0;
+        let mut active_holds = [Some(active)];
+        let mut notes = [test_note_at(NoteType::Tap, None, false, 0, 0.0)];
+        assert!(!refresh_roll_life_for_active_column(
+            &mut active_holds,
+            &mut notes,
+            0,
+            100,
+        ));
+    }
+
+    #[test]
     fn advance_active_hold_to_time_resolves_success_at_tail() {
         let timing = test_timing(192);
         let mut active = test_active_hold(NoteType::Hold, true, false, MAX_HOLD_LIFE);
@@ -18332,6 +19163,108 @@ mod tests {
         assert!(hold.last_held_row_index > 0);
         assert!(hold.last_held_beat > 0.0);
         assert_eq!(active.last_update_time_ns, song_time_ns_from_seconds(0.5));
+    }
+
+    #[test]
+    fn integrate_active_hold_column_resolves_and_clears_success() {
+        let timing = test_timing(192);
+        let mut active = test_active_hold(NoteType::Hold, true, false, MAX_HOLD_LIFE);
+        active.note_index = 0;
+        active.start_time_ns = 0;
+        active.end_time_ns = song_time_ns_from_seconds(1.0);
+        active.last_update_time_ns = 0;
+        let mut active_holds = [Some(active), None];
+        let mut note = test_note_at(NoteType::Hold, Some(test_hold()), false, 0, 0.0);
+        note.hold.as_mut().unwrap().end_row_index = 48;
+        note.hold.as_mut().unwrap().end_beat = 1.0;
+        let mut notes = [note];
+
+        let resolution = integrate_active_hold_column(
+            &mut active_holds,
+            &mut notes,
+            0,
+            &timing,
+            song_time_ns_from_seconds(1.0),
+            1.0,
+        );
+
+        assert_eq!(
+            resolution,
+            Some(ActiveHoldResolution::Success { note_index: 0 })
+        );
+        assert!(active_holds[0].is_none());
+        assert_eq!(notes[0].hold.as_ref().unwrap().life, MAX_HOLD_LIFE);
+    }
+
+    #[test]
+    fn integrate_active_hold_column_clears_stale_active_slots() {
+        let timing = test_timing(192);
+        let mut active = test_active_hold(NoteType::Hold, true, false, MAX_HOLD_LIFE);
+        active.note_index = 9;
+        let mut active_holds = [Some(active)];
+        let mut notes = [test_note_at(
+            NoteType::Hold,
+            Some(test_hold()),
+            false,
+            0,
+            0.0,
+        )];
+
+        assert_eq!(
+            integrate_active_hold_column(&mut active_holds, &mut notes, 0, &timing, 100, 1.0),
+            None
+        );
+        assert!(active_holds[0].is_none());
+
+        let mut active = test_active_hold(NoteType::Hold, true, false, MAX_HOLD_LIFE);
+        active.note_index = 0;
+        let mut active_holds = [Some(active)];
+        let mut notes = [test_note_at(NoteType::Tap, None, false, 0, 0.0)];
+
+        assert_eq!(
+            integrate_active_hold_column(&mut active_holds, &mut notes, 0, &timing, 100, 1.0),
+            None
+        );
+        assert!(active_holds[0].is_none());
+    }
+
+    #[test]
+    fn integrate_active_hold_column_ignores_invalid_inputs() {
+        let timing = test_timing(192);
+        let mut active = test_active_hold(NoteType::Hold, true, false, MAX_HOLD_LIFE);
+        active.note_index = 0;
+        let original = active.clone();
+        let mut active_holds = [Some(active)];
+        let mut notes = [test_note_at(
+            NoteType::Hold,
+            Some(test_hold()),
+            false,
+            0,
+            0.0,
+        )];
+
+        assert_eq!(
+            integrate_active_hold_column(&mut active_holds, &mut notes, 2, &timing, 100, 1.0),
+            None
+        );
+        let kept = active_holds[0].as_ref().expect("active hold should remain");
+        assert_eq!(kept.note_index, original.note_index);
+        assert_eq!(kept.last_update_time_ns, original.last_update_time_ns);
+
+        assert_eq!(
+            integrate_active_hold_column(
+                &mut active_holds,
+                &mut notes,
+                0,
+                &timing,
+                INVALID_SONG_TIME_NS,
+                1.0,
+            ),
+            None
+        );
+        let kept = active_holds[0].as_ref().expect("active hold should remain");
+        assert_eq!(kept.note_index, original.note_index);
+        assert_eq!(kept.last_update_time_ns, original.last_update_time_ns);
     }
 
     #[test]
@@ -18913,6 +19846,67 @@ mod tests {
         assert_eq!(snapshot.song_time_ns, song_time_ns_from_seconds(1.45));
         assert_eq!(snapshot.seconds_per_second, 1.5);
         assert!(!snapshot.mapped_audio);
+    }
+
+    #[test]
+    fn song_clock_music_time_reconstructs_past_edge_time() {
+        let base = Instant::now();
+        let snapshot = SongClockSnapshot {
+            song_time_ns: song_time_ns_from_seconds(120.0),
+            seconds_per_second: 1.5,
+            mapped_audio: true,
+            valid_at: base + Duration::from_millis(24),
+            valid_at_host_nanos: 0,
+            timing_diag_enabled: false,
+            timing_diag_callback_gap_ns: 0,
+        };
+
+        let edge_time = song_time_ns_to_seconds(song_clock_music_time_ns(snapshot, base, 0));
+
+        assert!((edge_time - 119.964).abs() < 0.000_5);
+    }
+
+    #[test]
+    fn song_clock_music_time_handles_future_edge_time() {
+        let base = Instant::now();
+        let snapshot = SongClockSnapshot {
+            song_time_ns: song_time_ns_from_seconds(64.0),
+            seconds_per_second: 2.0,
+            mapped_audio: true,
+            valid_at: base,
+            valid_at_host_nanos: 0,
+            timing_diag_enabled: false,
+            timing_diag_callback_gap_ns: 0,
+        };
+
+        let edge_time = song_time_ns_to_seconds(song_clock_music_time_ns(
+            snapshot,
+            base + Duration::from_millis(5),
+            0,
+        ));
+
+        assert!((edge_time - 64.01).abs() < 0.000_5);
+    }
+
+    #[test]
+    fn song_clock_music_time_prefers_host_clock_when_available() {
+        let snapshot = SongClockSnapshot {
+            song_time_ns: song_time_ns_from_seconds(32.0),
+            seconds_per_second: 1.0,
+            mapped_audio: true,
+            valid_at: Instant::now(),
+            valid_at_host_nanos: 2_000_000_000,
+            timing_diag_enabled: false,
+            timing_diag_callback_gap_ns: 0,
+        };
+
+        let edge_time = song_time_ns_to_seconds(song_clock_music_time_ns(
+            snapshot,
+            Instant::now(),
+            1_997_000_000,
+        ));
+
+        assert!((edge_time - 31.997).abs() < 0.000_5);
     }
 
     #[test]
@@ -19667,13 +20661,41 @@ mod tests {
         notes[1].result = Some(test_judgment(JudgeGrade::Great));
         let judgment =
             completed_row_final_judgment(&notes, &row_entry).expect("completed row judgment");
+        let finalized =
+            finalized_row_judgment_for_entry(&notes, &row_entry).expect("finalized row judgment");
         let (indices, len, flash_judgment) =
             completed_row_flash_note_indices_and_judgment(&notes, &row_entry)
                 .expect("completed row flash judgment");
 
         assert_eq!(judgment.grade, JudgeGrade::Great);
+        assert_eq!(finalized.judgment.grade, JudgeGrade::Great);
+        assert_eq!(finalized.note_count, 2);
+        assert_eq!(finalized.outcome.final_grade, JudgeGrade::Great);
         assert_eq!(flash_judgment.grade, JudgeGrade::Great);
         assert_eq!(&indices[..len], &[0, 1]);
+    }
+
+    #[test]
+    fn finalized_row_judgment_rejects_missing_note_indices() {
+        let mut judged = test_note_at(NoteType::Tap, None, false, 48, 1.0);
+        judged.result = Some(test_judgment(JudgeGrade::Great));
+        let notes = [judged];
+        let mut note_indices = [usize::MAX; MAX_COLS];
+        note_indices[0] = 0;
+        note_indices[1] = 99;
+        let row_entry = RowEntry {
+            row_index: 48,
+            time_ns: song_time_ns_from_seconds(1.0),
+            nonmine_note_indices: note_indices,
+            nonmine_note_count: 2,
+            rescore_track_count: 2,
+            unresolved_count: 0,
+            unresolved_nonlift_count: 0,
+            had_provisional_early_hit: false,
+            final_outcome: None,
+        };
+
+        assert!(finalized_row_judgment_for_entry(&notes, &row_entry).is_none());
     }
 
     #[test]
@@ -20371,6 +21393,41 @@ mod tests {
     }
 
     #[test]
+    fn lane_note_window_bounds_use_time_not_frozen_stop_beat() {
+        let timing = TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments {
+                bpms: vec![(0.0, 185.0)],
+                stops: vec![StopSegment {
+                    beat: 32.0,
+                    duration: 0.973,
+                }],
+                ..TimingSegments::default()
+            },
+            &[],
+        );
+        let stop_beat = 32.0;
+        let note_time = timing.get_time_for_beat(stop_beat);
+        let lookahead_time = note_time + 0.5;
+        let lookahead_beat = timing.get_beat_for_time(lookahead_time);
+        let note_times_ns = [song_time_ns_from_seconds(note_time)];
+        let note_indices = [0usize];
+
+        assert!((lookahead_beat - stop_beat).abs() < 0.000_5);
+        assert_eq!(
+            lane_note_window_bounds_ns(
+                &note_indices,
+                &note_times_ns,
+                0,
+                song_time_ns_from_seconds(lookahead_time),
+            ),
+            (0, 1)
+        );
+        assert!(!(stop_beat < lookahead_beat));
+    }
+
+    #[test]
     fn crossed_held_mine_predicate_accepts_judgable_same_column_mine() {
         let mut note = test_note_at(NoteType::Mine, None, false, 48, 1.0);
         note.column = 1;
@@ -20398,6 +21455,117 @@ mod tests {
         assert!(!crossed_held_mine_can_hit(&wrong_column, 1));
         assert!(!crossed_held_mine_can_hit(&already_scored, 1));
         assert!(!crossed_held_mine_can_hit(&unjudgable, 1));
+    }
+
+    #[test]
+    fn crossed_held_mine_marking_marks_crossed_same_column_mines() {
+        let mine_times = [
+            song_time_ns_from_seconds(1.0),
+            song_time_ns_from_seconds(1.5),
+            song_time_ns_from_seconds(2.0),
+        ];
+        let mine_ix = [0, 1, 2];
+        let mut notes = vec![
+            test_note_at(NoteType::Mine, None, false, 48, 1.0),
+            test_note_at(NoteType::Mine, None, false, 72, 1.5),
+            test_note_at(NoteType::Mine, None, false, 96, 2.0),
+        ];
+        for note in &mut notes {
+            note.column = 2;
+        }
+
+        let mut marked = Vec::new();
+        assert!(mark_crossed_held_mine_candidates(
+            &mut notes,
+            &mine_ix,
+            &mine_times,
+            2,
+            mine_times[0],
+            mine_times[2],
+            25_000_000,
+            1.0,
+            |note_index, mark| marked.push((note_index, mark)),
+        ));
+
+        assert_eq!(marked.len(), 2);
+        assert_eq!(marked[0].0, 1);
+        assert_eq!(marked[0].1.note_time_ns, mine_times[1]);
+        assert_eq!(marked[1].0, 2);
+        assert_eq!(marked[1].1.note_time_ns, mine_times[2]);
+        assert_eq!(notes[0].mine_result, None);
+        assert_eq!(notes[1].mine_result, Some(MineResult::Hit));
+        assert_eq!(notes[2].mine_result, Some(MineResult::Hit));
+    }
+
+    #[test]
+    fn crossed_held_mine_marking_filters_invalid_candidates() {
+        let mine_times = [
+            song_time_ns_from_seconds(1.0),
+            song_time_ns_from_seconds(1.5),
+            song_time_ns_from_seconds(2.0),
+        ];
+        let mine_ix = [0, 99, 1, 2];
+        let mut wrong_column = test_note_at(NoteType::Mine, None, false, 72, 1.5);
+        wrong_column.column = 1;
+        let mut already_hit = test_note_at(NoteType::Mine, None, false, 96, 2.0);
+        already_hit.column = 2;
+        already_hit.mine_result = Some(MineResult::Hit);
+        let mut notes = vec![
+            test_note_at(NoteType::Tap, None, false, 48, 1.0),
+            wrong_column,
+            already_hit,
+        ];
+
+        let mut marked = Vec::new();
+        assert!(!mark_crossed_held_mine_candidates(
+            &mut notes,
+            &mine_ix,
+            &mine_times,
+            2,
+            mine_times[0],
+            mine_times[2],
+            25_000_000,
+            1.0,
+            |note_index, mark| marked.push((note_index, mark)),
+        ));
+        assert!(marked.is_empty());
+        assert_eq!(notes[0].mine_result, None);
+        assert_eq!(notes[1].mine_result, None);
+        assert_eq!(notes[2].mine_result, Some(MineResult::Hit));
+    }
+
+    #[test]
+    fn crossed_held_mine_marking_rejects_invalid_ranges() {
+        let mine_times = [song_time_ns_from_seconds(1.0)];
+        let mine_ix = [0];
+        let mut notes = vec![test_note_at(NoteType::Mine, None, false, 48, 1.0)];
+        notes[0].column = 0;
+
+        let mut marked = Vec::new();
+        assert!(!mark_crossed_held_mine_candidates(
+            &mut notes,
+            &mine_ix,
+            &mine_times,
+            0,
+            INVALID_SONG_TIME_NS,
+            mine_times[0],
+            25_000_000,
+            1.0,
+            |note_index, mark| marked.push((note_index, mark)),
+        ));
+        assert!(!mark_crossed_held_mine_candidates(
+            &mut notes,
+            &mine_ix,
+            &mine_times,
+            0,
+            mine_times[0],
+            mine_times[0],
+            25_000_000,
+            1.0,
+            |note_index, mark| marked.push((note_index, mark)),
+        ));
+        assert!(marked.is_empty());
+        assert_eq!(notes[0].mine_result, None);
     }
 
     #[test]
@@ -20475,6 +21643,42 @@ mod tests {
     }
 
     #[test]
+    fn mine_hit_mark_records_marked_note_metadata() {
+        let mut note = test_note_at(NoteType::Mine, None, false, 48, 1.0);
+        note.column = 2;
+        let mark = mark_mine_hit_candidate(&mut note, 1_000_000_000, 20_000_000, 25_000_000, 2.0)
+            .expect("mine should be inside hit window");
+
+        assert_eq!(note.mine_result, Some(MineResult::Hit));
+        assert_eq!(mark.row_index, 48);
+        assert_eq!(mark.column, 2);
+        assert_eq!(mark.beat, 1.0);
+        assert_eq!(mark.note_time_ns, 1_000_000_000);
+        assert_eq!(mark.hit_time_ns, 1_020_000_000);
+        assert!((mark.time_error_ms - 10.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn mine_hit_mark_rejects_invalid_candidates() {
+        let mut late = test_note_at(NoteType::Mine, None, false, 48, 1.0);
+        assert_eq!(
+            mark_mine_hit_candidate(&mut late, 1_000_000_000, 26_000_000, 25_000_000, 1.0),
+            None
+        );
+        assert_eq!(late.mine_result, None);
+
+        let mut already_hit = test_note_at(NoteType::Mine, None, false, 48, 1.0);
+        assert!(
+            mark_mine_hit_candidate(&mut already_hit, 1_000_000_000, 0, 25_000_000, 1.0).is_some()
+        );
+        assert_eq!(
+            mark_mine_hit_candidate(&mut already_hit, 1_000_000_000, 0, 25_000_000, 1.0),
+            None
+        );
+        assert_eq!(already_hit.mine_result, Some(MineResult::Hit));
+    }
+
+    #[test]
     fn pending_mine_hit_ready_requires_marked_real_judgable_hit() {
         let mut note = test_note_at(NoteType::Mine, None, false, 48, 1.0);
         assert!(!pending_mine_hit_ready(&note));
@@ -20491,6 +21695,40 @@ mod tests {
     }
 
     #[test]
+    fn pending_mine_hit_event_routes_ready_hit_to_player() {
+        let mut notes = vec![
+            test_note_at(NoteType::Mine, None, false, 48, 1.0),
+            test_note_at(NoteType::Mine, None, false, 96, 2.0),
+        ];
+        notes[1].column = 5;
+        notes[1].mine_result = Some(MineResult::Hit);
+
+        assert_eq!(
+            pending_mine_hit_event(&notes, 1, 2, 4),
+            Some(PendingMineHitEvent {
+                note_index: 1,
+                column: 5,
+                player: 1,
+            })
+        );
+    }
+
+    #[test]
+    fn pending_mine_hit_event_filters_invalid_entries() {
+        let mut notes = vec![test_note_at(NoteType::Mine, None, false, 48, 1.0)];
+        assert_eq!(pending_mine_hit_event(&notes, 99, 2, 4), None);
+        assert_eq!(pending_mine_hit_event(&notes, 0, 2, 4), None);
+
+        notes[0].mine_result = Some(MineResult::Hit);
+        notes[0].is_fake = true;
+        assert_eq!(pending_mine_hit_event(&notes, 0, 2, 4), None);
+
+        notes[0].is_fake = false;
+        notes[0].can_be_judged = false;
+        assert_eq!(pending_mine_hit_event(&notes, 0, 2, 4), None);
+    }
+
+    #[test]
     fn mine_avoid_result_marks_unresolved_judgable_mines() {
         let mut note = test_note_at(NoteType::Mine, None, false, 48, 1.0);
         assert!(apply_mine_avoid_result(&mut note));
@@ -20501,6 +21739,70 @@ mod tests {
         note.can_be_judged = false;
         assert!(!apply_mine_avoid_result(&mut note));
         assert_eq!(note.mine_result, None);
+    }
+
+    #[test]
+    fn time_based_mine_avoidance_marks_candidates_and_advances_cursors() {
+        let mut notes = vec![
+            test_note_at(NoteType::Mine, None, false, 48, 1.0),
+            test_note_at(NoteType::Mine, None, false, 96, 2.0),
+            test_note_at(NoteType::Mine, None, false, 144, 3.0),
+        ];
+        let mine_ix = [0, 1, 2];
+        let mut avoided = Vec::new();
+
+        let update = apply_time_based_mine_avoidance_for_player(
+            &mut notes,
+            &mine_ix,
+            0,
+            144,
+            (0, 3),
+            |note_idx, row, col| avoided.push((note_idx, row, col)),
+        );
+
+        assert_eq!(
+            update,
+            MineAvoidancePlayerUpdate {
+                mine_end: 2,
+                next_mine_avoid_cursor: 2,
+                avoided_count: 2,
+            }
+        );
+        assert_eq!(avoided, vec![(0, 48, 0), (1, 96, 0)]);
+        assert_eq!(notes[0].mine_result, Some(MineResult::Avoided));
+        assert_eq!(notes[1].mine_result, Some(MineResult::Avoided));
+        assert_eq!(notes[2].mine_result, None);
+    }
+
+    #[test]
+    fn time_based_mine_avoidance_reports_only_new_avoids() {
+        let mut notes = vec![
+            test_note_at(NoteType::Mine, None, false, 48, 1.0),
+            test_note_at(NoteType::Mine, None, false, 96, 2.0),
+            test_note_at(NoteType::Mine, None, false, 144, 3.0),
+        ];
+        notes[0].mine_result = Some(MineResult::Avoided);
+        notes[1].mine_result = Some(MineResult::Hit);
+        notes[2].can_be_judged = false;
+        let mine_ix = [0, 1, 2];
+        let mut avoided = Vec::new();
+
+        let update = apply_time_based_mine_avoidance_for_player(
+            &mut notes,
+            &mine_ix,
+            0,
+            192,
+            (0, 3),
+            |note_idx, row, col| avoided.push((note_idx, row, col)),
+        );
+
+        assert_eq!(update.mine_end, 3);
+        assert_eq!(update.next_mine_avoid_cursor, 3);
+        assert_eq!(update.avoided_count, 0);
+        assert!(avoided.is_empty());
+        assert_eq!(notes[0].mine_result, Some(MineResult::Avoided));
+        assert_eq!(notes[1].mine_result, Some(MineResult::Hit));
+        assert_eq!(notes[2].mine_result, None);
     }
 
     #[test]
@@ -20539,6 +21841,39 @@ mod tests {
         note.note_type = NoteType::Tap;
         assert!(!apply_completed_mine_avoid_result(&mut note));
         assert_eq!(note.mine_result, None);
+    }
+
+    #[test]
+    fn completed_mine_finalization_marks_unresolved_real_mines() {
+        let mut notes = vec![
+            test_note_at(NoteType::Mine, None, false, 48, 1.0),
+            test_note_at(NoteType::Mine, None, false, 96, 2.0),
+            test_note_at(NoteType::Mine, None, true, 144, 3.0),
+            test_note_at(NoteType::Tap, None, false, 192, 4.0),
+        ];
+        notes[1].mine_result = Some(MineResult::Hit);
+
+        let avoided = finalize_completed_mine_avoidance_for_player(&mut notes, (0, 4), 3, 1);
+
+        assert_eq!(avoided, 2);
+        assert_eq!(notes[0].mine_result, Some(MineResult::Avoided));
+        assert_eq!(notes[1].mine_result, Some(MineResult::Hit));
+        assert_eq!(notes[2].mine_result, None);
+        assert_eq!(notes[3].mine_result, None);
+    }
+
+    #[test]
+    fn completed_mine_finalization_clamps_range_and_hit_count() {
+        let mut notes = vec![
+            test_note_at(NoteType::Mine, None, false, 48, 1.0),
+            test_note_at(NoteType::Mine, None, false, 96, 2.0),
+        ];
+
+        let avoided = finalize_completed_mine_avoidance_for_player(&mut notes, (1, 99), 1, 9);
+
+        assert_eq!(avoided, 0);
+        assert_eq!(notes[0].mine_result, None);
+        assert_eq!(notes[1].mine_result, Some(MineResult::Avoided));
     }
 
     #[test]
