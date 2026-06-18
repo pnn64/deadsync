@@ -22,6 +22,7 @@ const STATS_XML: &str = r#"<Stats>
             <Grade>Tier03</Grade>
             <PercentDP>0.9421</PercentDP>
             <DateTime>2023-04-15 21:07:33</DateTime>
+            <Modifiers>Overhead, 1.5xMusic, Reverse</Modifiers>
             <TapNoteScores>
               <W1>410</W1><W2>52</W2><W3>11</W3><W4>3</W4><W5>1</W5>
               <Miss>4</Miss><HitMine>2</HitMine><AvoidMine>7</AvoidMine>
@@ -193,6 +194,7 @@ fn imports_stats_xml_against_library_end_to_end() {
         "EX not recoverable from Stats.xml"
     );
     assert_ne!(entry.played_at_ms, 0, "DateTime parsed");
+    assert_eq!(entry.music_rate, 1.5, "music rate recovered from Modifiers");
 
     // The mapped entry must survive the on-disk bincode round-trip used by the
     // local-score writer.

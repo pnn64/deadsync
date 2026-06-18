@@ -102,6 +102,10 @@ never merges, so a manual top-up afterwards is safe).
 - **Holds and rolls aren't distinguished** in `Stats.xml`; all hold-type
   judgments are folded together, and mine tallies are partial.
 
+Rate-modded plays keep their music rate (DeadSync reads the `xMusic` modifier
+from each score), and your judgment counts, grade, combo lamp, and play date all
+carry across.
+
 ## Manual migration
 
 If you prefer to move pieces by hand, the sections below cover each item

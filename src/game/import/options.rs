@@ -21,6 +21,8 @@
 //!   `MeasureCounter`, `MeasureLines`, `ErrorBarTrim`, `MiniIndicator`,
 //!   `DataVisualizations` -> `step_statistics`
 //! * `PlayerOptionsString` -> turn + scroll (reverse) modifiers
+//! * SelectMultiple flag groups: `Colorful`/`Monochrome`/`Text`/`Highlight`/
+//!   `Average` -> `error_bar_active_mask`; `Flash*` -> `column_flash_mask`
 //! * a set of boolean toggles whose name and meaning match 1:1
 //!
 //! Everything is pure (no disk / engine state) so it can be unit-tested with a
@@ -30,9 +32,10 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 use deadsync_profile::{
-    BackgroundFilter, ComboColors, ComboMode, ErrorBarTrim, LifeMeterType, MeasureCounter,
-    MeasureLines, MiniIndicator, NoteSkin, PlayerOptionsData, ScrollOption, StepStatisticsMask,
-    TurnOption,
+    BackgroundFilter, ColumnFlashMask, ComboColors, ComboMode, ErrorBarMask, ErrorBarTrim,
+    LifeMeterType, MeasureCounter, MeasureLines, MiniIndicator, NoteSkin, PlayerOptionsData,
+    ScrollOption, StepStatisticsMask, TurnOption, error_bar_style_from_mask,
+    error_bar_text_from_mask,
 };
 use deadsync_rules::scroll::ScrollSpeedSetting;
 
@@ -208,12 +211,83 @@ pub fn translate_player_options(map: &SlSettings, base: &PlayerOptionsData) -> P
     }
 
     apply_bool_toggles(&mut out, map);
+    apply_error_bar_flags(&mut out, map);
+    apply_column_flash_flags(&mut out, map);
 
     if let Some(pos) = sl_str(map, "PlayerOptionsString") {
         apply_player_options_string(&mut out, pos);
     }
 
     out
+}
+
+/// Translate Simply Love's `JudgmentFlash` SelectMultiple booleans
+/// (`FlashMiss`/`FlashWayOff`/…/`FlashFantastic`) into a [`ColumnFlashMask`].
+/// Only applied when at least one flag is present so an absent group keeps the
+/// DeadSync default.
+fn apply_column_flash_flags(out: &mut PlayerOptionsData, map: &SlSettings) {
+    let single_bits = [
+        ("FlashMiss", ColumnFlashMask::MISS),
+        ("FlashWayOff", ColumnFlashMask::WAY_OFF),
+        ("FlashDecent", ColumnFlashMask::DECENT),
+        ("FlashGreat", ColumnFlashMask::GREAT),
+        ("FlashExcellent", ColumnFlashMask::EXCELLENT),
+    ];
+
+    let mut mask = ColumnFlashMask::empty();
+    let mut seen = false;
+    for (key, bit) in single_bits {
+        if let Some(v) = sl_bool(map, key) {
+            seen = true;
+            if v {
+                mask |= bit;
+            }
+        }
+    }
+    // Simply Love exposes a single "Fantastic" flash; DeadSync splits fantastic
+    // into blue (W0/FA+) and white (W1) columns, so enable both.
+    if let Some(v) = sl_bool(map, "FlashFantastic") {
+        seen = true;
+        if v {
+            mask |= ColumnFlashMask::BLUE_FANTASTIC | ColumnFlashMask::WHITE_FANTASTIC;
+        }
+    }
+
+    if seen {
+        out.column_flash_mask = mask;
+    }
+}
+
+/// Translate Simply Love's error-bar style SelectMultiple booleans
+/// (`Colorful`/`Monochrome`/`Text`/`Highlight`/`Average`) into the
+/// [`ErrorBarMask`], deriving the legacy `error_bar` / `error_bar_text` fields
+/// from the resulting mask (mirroring the DeadSync profile loader). Only applied
+/// when at least one flag is present.
+fn apply_error_bar_flags(out: &mut PlayerOptionsData, map: &SlSettings) {
+    let flags = [
+        ("Colorful", ErrorBarMask::COLORFUL),
+        ("Monochrome", ErrorBarMask::MONOCHROME),
+        ("Text", ErrorBarMask::TEXT),
+        ("Highlight", ErrorBarMask::HIGHLIGHT),
+        ("Average", ErrorBarMask::AVERAGE),
+    ];
+
+    let mut mask = ErrorBarMask::empty();
+    let mut seen = false;
+    for (key, bit) in flags {
+        if let Some(v) = sl_bool(map, key) {
+            seen = true;
+            if v {
+                mask |= bit;
+            }
+        }
+    }
+
+    if seen {
+        out.error_bar_active_mask = mask;
+        out.error_bar = error_bar_style_from_mask(mask);
+        out.error_bar_text = error_bar_text_from_mask(mask);
+    }
 }
 
 /// Boolean toggles whose Simply Love key and meaning match a DeadSync field 1:1.
@@ -420,6 +494,62 @@ mod tests {
         let none =
             translate_player_options(&sl(&[("DataVisualizations", "Target Score Graph")]), &base);
         assert_eq!(none.step_statistics, StepStatisticsMask::empty());
+    }
+
+    #[test]
+    fn translates_error_bar_flags() {
+        let base = PlayerOptionsData::default();
+        let out = translate_player_options(
+            &sl(&[
+                ("Colorful", "true"),
+                ("Monochrome", "false"),
+                ("Text", "true"),
+                ("Highlight", "false"),
+                ("Average", "false"),
+            ]),
+            &base,
+        );
+        assert!(
+            out.error_bar_active_mask
+                .contains(ErrorBarMask::COLORFUL | ErrorBarMask::TEXT)
+        );
+        assert!(!out.error_bar_active_mask.contains(ErrorBarMask::MONOCHROME));
+        assert_eq!(
+            out.error_bar,
+            error_bar_style_from_mask(out.error_bar_active_mask)
+        );
+        assert!(out.error_bar_text);
+    }
+
+    #[test]
+    fn translates_column_flash_flags_splitting_fantastic() {
+        let base = PlayerOptionsData::default();
+        let out = translate_player_options(
+            &sl(&[
+                ("FlashMiss", "true"),
+                ("FlashWayOff", "false"),
+                ("FlashDecent", "false"),
+                ("FlashGreat", "false"),
+                ("FlashExcellent", "true"),
+                ("FlashFantastic", "true"),
+            ]),
+            &base,
+        );
+        assert!(out.column_flash_mask.contains(ColumnFlashMask::MISS));
+        assert!(out.column_flash_mask.contains(ColumnFlashMask::EXCELLENT));
+        assert!(
+            out.column_flash_mask
+                .contains(ColumnFlashMask::BLUE_FANTASTIC | ColumnFlashMask::WHITE_FANTASTIC)
+        );
+        assert!(!out.column_flash_mask.contains(ColumnFlashMask::WAY_OFF));
+    }
+
+    #[test]
+    fn flag_groups_absent_keep_default() {
+        let base = PlayerOptionsData::default();
+        let out = translate_player_options(&sl(&[("SpeedMod", "300")]), &base);
+        assert_eq!(out.column_flash_mask, base.column_flash_mask);
+        assert_eq!(out.error_bar_active_mask, base.error_bar_active_mask);
     }
 
     #[test]
