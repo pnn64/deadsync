@@ -67,9 +67,11 @@ new DeadSync profile from it in one step.
   **Options → Online Scoring → Score Import**.
 - **Player options** — your Simply Love per-profile mods from
   `Simply Love UserPrefs.ini`: scroll speed and type, mini, spacing, noteskin,
-  note-field offsets, visual delay, tilt, life-meter type, measure counter and
-  lines, combo mode/colors, mini-indicator, error-bar trim, data-visualization
-  mode, and the many on/off display toggles. Settings DeadSync doesn't recognise
+  judgment / held / hold-judgment graphics, combo font, note-field offsets,
+  visual delay, tilt, life-meter type, measure counter and lines, combo
+  mode/colors, mini-indicator, error-bar style and trim, column-flash, data-
+  visualization mode, and the many on/off display toggles. Settings DeadSync
+  doesn't recognise — including custom theme graphics/fonts it doesn't ship —
   are left at their default rather than guessed.
 - **Offline scores** — every high score in `Stats.xml` becomes a DeadSync local
   play, matched to the chart in your library.

@@ -13,6 +13,9 @@
 //! * `SpeedModType` + `SpeedMod` -> [`ScrollSpeedSetting`]
 //! * `Mini` -> `mini_percent`, `Spacing` -> `spacing_percent`
 //! * `NoteSkin` -> `noteskin`
+//! * `JudgmentGraphic` / `HeldGraphic` / `HoldJudgment` -> the matching graphic
+//!   (stock graphics only; custom theme graphics fall back to the default) and
+//!   `ComboFont` -> `combo_font`
 //! * `NoteFieldOffsetX` / `NoteFieldOffsetY` -> note-field offsets
 //! * `VisualDelay` -> `visual_delay_ms`
 //! * `TiltMultiplier`, `MeasureCounterLookahead`
@@ -32,10 +35,10 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 use deadsync_profile::{
-    BackgroundFilter, ColumnFlashMask, ComboColors, ComboMode, ErrorBarMask, ErrorBarTrim,
-    LifeMeterType, MeasureCounter, MeasureLines, MiniIndicator, NoteSkin, PlayerOptionsData,
-    ScrollOption, StepStatisticsMask, TurnOption, error_bar_style_from_mask,
-    error_bar_text_from_mask,
+    BackgroundFilter, ColumnFlashMask, ComboColors, ComboFont, ComboMode, ErrorBarMask,
+    ErrorBarTrim, HeldMissGraphic, HoldJudgmentGraphic, JudgmentGraphic, LifeMeterType,
+    MeasureCounter, MeasureLines, MiniIndicator, NoteSkin, PlayerOptionsData, ScrollOption,
+    StepStatisticsMask, TurnOption, error_bar_style_from_mask, error_bar_text_from_mask,
 };
 use deadsync_rules::scroll::ScrollSpeedSetting;
 
@@ -163,6 +166,23 @@ pub fn translate_player_options(map: &SlSettings, base: &PlayerOptionsData) -> P
     }
     if let Some(skin) = sl_str(map, "NoteSkin") {
         out.noteskin = NoteSkin::new(skin);
+    }
+    // Theme graphic / font names. These resolve only to graphics DeadSync ships
+    // (via the stock-only parse); a Simply Love profile referencing a custom
+    // theme graphic is left at the default rather than pointing at a missing
+    // texture. Simply Love stores the full sprite filename for the three
+    // graphics and the font directory name for ComboFont.
+    if let Some(g) = sl_str(map, "JudgmentGraphic").and_then(JudgmentGraphic::from_stock_name) {
+        out.judgment_graphic = g;
+    }
+    if let Some(g) = sl_str(map, "HeldGraphic").and_then(HeldMissGraphic::from_stock_name) {
+        out.held_miss_graphic = g;
+    }
+    if let Some(g) = sl_str(map, "HoldJudgment").and_then(HoldJudgmentGraphic::from_stock_name) {
+        out.hold_judgment_graphic = g;
+    }
+    if let Some(font) = sl_enum::<ComboFont>(map, "ComboFont") {
+        out.combo_font = font;
     }
     if let Some(x) = sl_str(map, "NoteFieldOffsetX").and_then(leading_i32) {
         out.note_field_offset_x = x;
@@ -439,6 +459,46 @@ mod tests {
             translate_player_options(&sl(&[("Spacing", "-25%"), ("VisualDelay", "12ms")]), &base);
         assert_eq!(out.spacing_percent, -25);
         assert_eq!(out.visual_delay_ms, 12);
+    }
+
+    #[test]
+    fn translates_stock_graphics_and_font() {
+        let base = PlayerOptionsData::default();
+        let out = translate_player_options(
+            &sl(&[
+                ("JudgmentGraphic", "Wendy 2x7 (doubleres).png"),
+                ("HoldJudgment", "ITG2 1x2 (doubleres).png"),
+                ("HeldGraphic", "None"),
+                ("ComboFont", "Bebas Neue"),
+            ]),
+            &base,
+        );
+        assert_eq!(
+            out.judgment_graphic.as_str(),
+            "judgements/Wendy 2x7 (doubleres).png"
+        );
+        assert_eq!(
+            out.hold_judgment_graphic.as_str(),
+            "hold_judgements/ITG2 1x2 (doubleres).png"
+        );
+        assert!(out.held_miss_graphic.is_none());
+        assert_eq!(out.combo_font, ComboFont::BebasNeue);
+    }
+
+    #[test]
+    fn ignores_unknown_custom_graphics() {
+        let mut base = PlayerOptionsData::default();
+        base.judgment_graphic = JudgmentGraphic::new("Wendy");
+        let out = translate_player_options(
+            &sl(&[
+                ("JudgmentGraphic", "MyCustomTheme 2x7 (doubleres).png"),
+                ("ComboFont", "SomeCustomFont"),
+            ]),
+            &base,
+        );
+        // Unknown graphic/font must not fabricate a path — keep the base value.
+        assert_eq!(out.judgment_graphic, base.judgment_graphic);
+        assert_eq!(out.combo_font, base.combo_font);
     }
 
     #[test]
