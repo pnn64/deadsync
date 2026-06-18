@@ -50,6 +50,14 @@ impl<'a> ChartResolver<'a> {
         Self { by_song }
     }
 
+    /// Resolves an ITGmania song directory key (e.g. `"Pack/Song"` from
+    /// `favorites.txt`, or a `Stats.xml` `Dir`) to the matching library song.
+    /// Returns `None` when the song isn't in DeadSync's scanned library.
+    pub fn resolve_song(&self, song_dir: &str) -> Option<&'a SongData> {
+        let (pack, folder) = normalize_song_dir(song_dir)?;
+        self.by_song.get(&(pack, folder)).copied()
+    }
+
     /// Resolves a score key to a chart `short_hash`.
     pub fn resolve(
         &self,

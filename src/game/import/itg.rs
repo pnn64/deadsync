@@ -61,6 +61,9 @@ pub struct ItgSource {
     /// Raw `[Simply Love]` settings from `Simply Love UserPrefs.ini`, if present.
     pub simply_love: HashMap<String, String>,
     pub songs: Vec<ItgSongScores>,
+    /// Favorited song keys (`Pack/SongFolder`) from `favorites.txt`, with any
+    /// Simply Love section headers stripped.
+    pub favorites: Vec<String>,
 }
 
 impl ItgSource {
@@ -135,6 +138,7 @@ pub fn read_profile_dir(dir: &Path) -> Result<ItgSource, ItgReadError> {
     let avatar_path = find_avatar(dir);
     let simply_love = read_simply_love(dir);
     let songs = read_stats(dir)?;
+    let favorites = read_favorites(dir);
 
     Ok(ItgSource {
         source_dir: dir.to_path_buf(),
@@ -143,6 +147,7 @@ pub fn read_profile_dir(dir: &Path) -> Result<ItgSource, ItgReadError> {
         avatar_path,
         simply_love,
         songs,
+        favorites,
     })
 }
 
@@ -214,6 +219,37 @@ fn read_simply_love(dir: &Path) -> HashMap<String, String> {
         }
     }
     HashMap::new()
+}
+
+/// Parses Simply Love `favorites.txt` content into a list of `Pack/SongFolder`
+/// song keys. Section header lines (which begin with `---`, e.g.
+/// `---My Stamina Playlist`) and blank lines are skipped; remaining lines are
+/// the favorited song paths. Order is preserved and duplicates are removed.
+pub fn parse_favorites_text(text: &str) -> Vec<String> {
+    let mut seen = std::collections::HashSet::new();
+    let mut out = Vec::new();
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with("---") {
+            continue;
+        }
+        if seen.insert(trimmed.to_ascii_lowercase()) {
+            out.push(trimmed.to_string());
+        }
+    }
+    out
+}
+
+/// Reads `favorites.txt` from a profile directory. Returns an empty list when
+/// the file is missing (a profile that never favorited anything).
+fn read_favorites(dir: &Path) -> Vec<String> {
+    let Some(path) = find_case_insensitive(dir, "favorites.txt") else {
+        return Vec::new();
+    };
+    match fs::read_to_string(&path) {
+        Ok(text) => parse_favorites_text(&text),
+        Err(_) => Vec::new(),
+    }
 }
 
 /// Finds an avatar image in the profile dir. ITGmania uses `Avatar.png`; some
@@ -453,5 +489,19 @@ mod tests {
         assert_eq!(entry.judgment_counts, [480, 12, 0, 0, 0, 0]);
         assert_eq!(entry.holds_total, 20);
         assert_eq!(entry.mines_avoided, 4);
+    }
+
+    #[test]
+    fn parses_favorites_skipping_headers_and_dupes() {
+        let text = "---My Stamina Playlist\nPack A/Song One\n\nPack B/Song Two\n---Another Section\nPack A/Song One\n  Pack C/Song Three  \n";
+        let favs = parse_favorites_text(text);
+        assert_eq!(
+            favs,
+            vec![
+                "Pack A/Song One".to_string(),
+                "Pack B/Song Two".to_string(),
+                "Pack C/Song Three".to_string(),
+            ]
+        );
     }
 }

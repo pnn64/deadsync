@@ -19,6 +19,7 @@ An ITGmania `LocalProfiles/<id>/` directory contains:
 | `ArrowCloud.ini` | ArrowCloud API key |
 | `Simply Love UserPrefs.ini` | `[Simply Love]` section → player options |
 | `Avatar.png` (or `.jpg`/`.jpeg`) | Profile avatar image |
+| `favorites.txt` | Favorited songs (resolved to chart hashes) |
 | `Stats.xml` (or `Stats.xml.gz`) | Per-chart high scores |
 
 Reader code: `src/game/import/itg.rs`. Each reader degrades gracefully — a
@@ -80,6 +81,25 @@ all that's needed for it.
 
 `Avatar.png` / `avatar.png` / `Avatar.jpg` / `Avatar.jpeg` (first match,
 case-insensitive) is copied into the new profile directory as `profile.png`.
+
+## 3a. Favorites
+
+Source: `favorites.txt` (Simply Love). Reader: `read_favorites` /
+`parse_favorites_text` in `src/game/import/itg.rs`; resolution + write in
+`src/game/import/run.rs` and `src/game/profile.rs`.
+
+Simply Love stores favorites **per song** as `Pack/SongFolder` lines, optionally
+grouped under `---Section` headers (custom playlists). DeadSync stores favorites
+**per chart** (`short_hash`). The importer therefore:
+
+1. Reads each favorited song key, skipping `---` section headers and blanks.
+2. Resolves the song against the scanned library (same `Pack/SongFolder`
+   matching as scores).
+3. Favorites **all of that song's charts'** hashes, so the song shows as
+   favorited regardless of which difficulty is viewed.
+
+Section/playlist grouping is **not** preserved (DeadSync has no favorites
+sections); songs not in the library are reported as skipped in the summary.
 
 ## 4. Player options (Simply Love)
 
@@ -290,7 +310,8 @@ audit notes in the session history for rationale:
   song/difficulty, calorie history.
 - **Per-chart:** `HighScoreList/NumTimesPlayed`, `LastPlayed`, `HighGrade`;
   per-score `MaxCombo`, `Name`, `RadarValues`, `Disqualified`.
-- **Simply Love extras:** `favorites.txt`, `ITL2026.json`, `SL-Scores/*.json`.
+- **Simply Love extras:** `ITL2026.json`, `SL-Scores/*.json`, and favorites
+  **section/playlist names** (the songs are imported; the grouping is not).
 - **Player options judged risky:** numeric/`Ghost Data` `TargetScore`,
   `MiniIndicatorColor` (color-name vocabulary), scorebox sub-options
   (`SBITGScore`/`SBExScore`/`SBEvents`), and SL-only aesthetic effects with no

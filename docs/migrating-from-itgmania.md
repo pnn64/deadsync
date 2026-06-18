@@ -75,6 +75,8 @@ new DeadSync profile from it in one step.
   are left at their default rather than guessed.
 - **Offline scores** — every high score in `Stats.xml` becomes a DeadSync local
   play, matched to the chart in your library.
+- **Favorites** — your favorited songs from `favorites.txt` (those present in
+  your DeadSync library). Custom favorites-section names aren't carried over.
 
 ### Where it looks
 

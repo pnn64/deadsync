@@ -800,6 +800,19 @@ fn import_summary_message(summary: &ImportSummary) -> ImportMessageState {
             .to_string(),
         );
     }
+    if summary.favorites_total > 0 {
+        lines.push(
+            tr_fmt(
+                "Profiles",
+                "ImportSummaryFavorites",
+                &[
+                    ("imported", &summary.favorites_imported.to_string()),
+                    ("total", &summary.favorites_total.to_string()),
+                ],
+            )
+            .to_string(),
+        );
+    }
     lines.push(tr("Profiles", "ImportSummaryExNote").to_string());
     ImportMessageState {
         title: tr("Profiles", "ImportSummaryTitle"),

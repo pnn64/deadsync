@@ -1809,6 +1809,18 @@ fn save_favorites(profile_id: &str, favorites: &HashSet<String>) {
     }
 }
 
+/// Writes imported favorites (chart `short_hash`es) into a freshly-created
+/// profile's `favorites.txt`, merging with anything already present. Used by the
+/// ITGmania importer, which resolves Simply Love song favorites to chart hashes.
+pub fn write_imported_favorites(profile_id: &str, hashes: &HashSet<String>) {
+    if hashes.is_empty() {
+        return;
+    }
+    let mut merged = load_favorites(profile_id);
+    merged.extend(hashes.iter().cloned());
+    save_favorites(profile_id, &merged);
+}
+
 /// Toggle a song's favorite status for the given player side.
 /// Returns `true` if the song is now a favorite, `false` if removed.
 pub fn toggle_favorite(side: PlayerSide, chart_hash: &str) -> bool {

@@ -2,6 +2,7 @@
 //! new DeadSync local profile (metadata, online keys, avatar, Simply Love player
 //! options) plus its offline high-score history.
 
+use std::collections::HashSet;
 use std::path::Path;
 
 use deadsync_profile::{initials_from_name, sanitize_player_initials};
@@ -9,6 +10,7 @@ use deadsync_score::{LocalScoreEntry, local_score_from_itg};
 
 use crate::game::profile::{
     ImportProfileData, create_local_profile_from_import, default_local_profile_options,
+    write_imported_favorites,
 };
 use crate::game::scores::import_local_scores;
 use crate::game::song::get_song_cache;
@@ -33,6 +35,12 @@ pub struct ImportSummary {
     pub charts_chart_not_found: usize,
     /// Records whose grade/percent couldn't be mapped to a DeadSync play.
     pub scores_unmapped: usize,
+    /// Total favorited songs found in `favorites.txt`.
+    pub favorites_total: usize,
+    /// Favorited songs matched to a library song and imported.
+    pub favorites_imported: usize,
+    /// Favorited songs skipped because the song wasn't in DeadSync's library.
+    pub favorites_song_not_found: usize,
 }
 
 /// Read an ITGmania profile directory and import it into a new local profile.
@@ -89,6 +97,7 @@ pub fn import_from_source<F: FnMut(usize, usize, &str)>(
     };
 
     let mut entries: Vec<(String, LocalScoreEntry)> = Vec::new();
+    let mut favorite_hashes: HashSet<String> = HashSet::new();
     {
         let packs = get_song_cache();
         let resolver = ChartResolver::build(&packs);
@@ -116,9 +125,25 @@ pub fn import_from_source<F: FnMut(usize, usize, &str)>(
         }
         // Final tick so the bar reads 100% once every song is processed.
         on_progress(total_songs, total_songs, "");
+
+        // Favorites are per-song in Simply Love but per-chart in DeadSync, so a
+        // resolved song favorites all of its charts' hashes.
+        for fav in &source.favorites {
+            summary.favorites_total += 1;
+            match resolver.resolve_song(fav) {
+                Some(song) => {
+                    summary.favorites_imported += 1;
+                    for chart in &song.charts {
+                        favorite_hashes.insert(chart.short_hash.to_string());
+                    }
+                }
+                None => summary.favorites_song_not_found += 1,
+            }
+        }
     }
 
     summary.scores_imported = import_local_scores(&profile_id, &initials, &mut entries);
+    write_imported_favorites(&profile_id, &favorite_hashes);
     Ok(summary)
 }
 
