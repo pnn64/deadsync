@@ -193,17 +193,12 @@ use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
+use winit::keyboard::KeyCode;
 
 #[path = "gameplay/attacks.rs"]
 mod attacks;
 #[path = "gameplay/autoplay.rs"]
 mod autoplay;
-#[path = "gameplay/autosync.rs"]
-mod autosync;
-#[path = "gameplay/clock.rs"]
-mod clock;
-#[path = "gameplay/controls.rs"]
-mod controls;
 #[path = "gameplay/display.rs"]
 mod display;
 #[path = "gameplay/holds.rs"]
@@ -244,15 +239,6 @@ use self::attacks::{
     build_song_lua_ease_windows_for_player, build_song_lua_overlay_ease_windows,
 };
 use self::autoplay::{autoplay_blocks_scoring, live_autoplay_enabled, run_autoplay, run_replay};
-use self::autosync::apply_autosync_for_row_hits;
-pub use self::clock::{
-    collect_display_clock_stutter_diag_events, display_clock_health,
-    display_clock_stutter_diag_trigger_seq,
-};
-use self::clock::{frame_stable_display_music_time_ns, music_time_ns_from_song_clock};
-pub use self::controls::{
-    RawKeyAction, handle_queued_raw_key, sync_queued_raw_modifiers, timing_tick_status_line,
-};
 use self::display::{capture_failed_ex_score_inputs, record_display_window_counts};
 pub use self::display::{
     display_carry_for_player, display_ex_score_percent, display_gameplay_ex_score_percent,
@@ -282,12 +268,12 @@ use self::judging::{
     effective_player_global_offset_seconds, note_hit_eval, player_largest_tap_window_ns,
 };
 pub use self::judging::{player_blue_window_ms, player_fa_plus_window_s};
-use self::offset::update_offset_adjust_hold;
-#[cfg(test)]
 use self::offset::{
-    apply_global_offset_delta, apply_song_offset_delta, mutate_timing_arc,
-    refresh_timing_after_offset_change,
+    apply_global_offset_delta, apply_song_offset_delta, clear_offset_adjust_hold_key,
+    start_offset_adjust_hold_key, update_offset_adjust_hold,
 };
+#[cfg(test)]
+use self::offset::{mutate_timing_arc, refresh_timing_after_offset_change};
 #[cfg(test)]
 use self::rows::finalize_row_judgment;
 use self::rows::update_judged_rows;
@@ -1710,6 +1696,122 @@ pub(super) fn assist_row_no_offset_ns(state: &State, music_time_ns: SongTimeNs) 
 }
 
 #[inline(always)]
+pub fn display_clock_health(state: &State) -> DisplayClockHealth {
+    state.display_clock.health()
+}
+
+#[inline(always)]
+pub fn display_clock_stutter_diag_trigger_seq(state: &State) -> u64 {
+    state.display_clock_diag.last_trigger_seq()
+}
+
+pub fn collect_display_clock_stutter_diag_events(
+    state: &State,
+    now_host_nanos: u64,
+    window_ns: u64,
+    out: &mut Vec<DisplayClockDiagEvent>,
+) {
+    state
+        .display_clock_diag
+        .collect_recent(now_host_nanos, window_ns, out);
+}
+
+pub(crate) fn music_time_ns_from_song_clock(
+    snapshot: SongClockSnapshot,
+    captured_at: Instant,
+    captured_host_nanos: u64,
+) -> SongTimeNs {
+    let slope = normalized_song_rate(snapshot.seconds_per_second);
+    let snapshot_song_time = song_time_ns_to_seconds(snapshot.song_time_ns);
+    if snapshot.valid_at_host_nanos != 0 && captured_host_nanos != 0 {
+        let dt_nanos = captured_host_nanos as i128 - snapshot.valid_at_host_nanos as i128;
+        if snapshot.timing_diag_enabled {
+            debug!(
+                "AUDIO_DIAG snap_age_ms={:.3} path=host callback_gap_ms={:.3} snapshot_song_time={:.6} slope={:.6} snapshot_host_nanos={} captured_host_nanos={}",
+                dt_nanos as f64 * 1e-6,
+                snapshot.timing_diag_callback_gap_ns as f64 * 1e-6,
+                snapshot_song_time,
+                slope,
+                snapshot.valid_at_host_nanos,
+                captured_host_nanos,
+            );
+        }
+        return song_clock_music_time_ns(snapshot, captured_at, captured_host_nanos);
+    }
+    if let Some(age) = snapshot.valid_at.checked_duration_since(captured_at) {
+        if snapshot.timing_diag_enabled {
+            debug!(
+                "AUDIO_DIAG snap_age_ms={:.3} path=instant callback_gap_ms={:.3} snapshot_song_time={:.6} slope={:.6} snapshot_host_nanos={} captured_host_nanos={}",
+                -(age.as_secs_f64() * 1000.0),
+                snapshot.timing_diag_callback_gap_ns as f64 * 1e-6,
+                snapshot_song_time,
+                slope,
+                snapshot.valid_at_host_nanos,
+                captured_host_nanos,
+            );
+        }
+    } else if let Some(lead) = captured_at.checked_duration_since(snapshot.valid_at) {
+        if snapshot.timing_diag_enabled {
+            debug!(
+                "AUDIO_DIAG snap_age_ms={:.3} path=instant callback_gap_ms={:.3} snapshot_song_time={:.6} slope={:.6} snapshot_host_nanos={} captured_host_nanos={}",
+                lead.as_secs_f64() * 1000.0,
+                snapshot.timing_diag_callback_gap_ns as f64 * 1e-6,
+                snapshot_song_time,
+                slope,
+                snapshot.valid_at_host_nanos,
+                captured_host_nanos,
+            );
+        }
+    } else if snapshot.timing_diag_enabled {
+        debug!(
+            "AUDIO_DIAG snap_age_ms=0.000 path=instant callback_gap_ms={:.3} snapshot_song_time={:.6} slope={:.6} snapshot_host_nanos={} captured_host_nanos={}",
+            snapshot.timing_diag_callback_gap_ns as f64 * 1e-6,
+            snapshot_song_time,
+            slope,
+            snapshot.valid_at_host_nanos,
+            captured_host_nanos,
+        );
+    }
+    song_clock_music_time_ns(snapshot, captured_at, captured_host_nanos)
+}
+
+#[inline(always)]
+fn display_clock_stutter_diag_enabled() -> bool {
+    log::log_enabled!(log::Level::Trace)
+}
+
+fn note_display_clock_diag_event(
+    diag: &mut DisplayClockDiagRing,
+    at_host_nanos: u64,
+    event: DisplayClockStepEvent,
+) {
+    if !display_clock_stutter_diag_enabled() || at_host_nanos == 0 {
+        return;
+    }
+    diag.push(DisplayClockDiagEvent::from_step_event(at_host_nanos, event));
+}
+
+#[inline(always)]
+pub(crate) fn frame_stable_display_music_time_ns(
+    display_clock: &mut FrameStableDisplayClock,
+    diag: &mut DisplayClockDiagRing,
+    at_host_nanos: u64,
+    target_display_time_ns: SongTimeNs,
+    delta_time: f32,
+    seconds_per_second: f32,
+    first_update: bool,
+) -> SongTimeNs {
+    frame_stable_display_clock_step(
+        display_clock,
+        target_display_time_ns,
+        delta_time,
+        seconds_per_second,
+        first_update,
+        |event| note_display_clock_diag_event(diag, at_host_nanos, event),
+    )
+}
+
+#[inline(always)]
 pub fn music_time_from_audio_snapshot(state: &State, audio_snapshot: GameplayAudioSnapshot) -> f32 {
     song_time_ns_to_seconds(
         current_song_clock_snapshot(
@@ -1760,6 +1862,183 @@ pub fn set_music_rate(state: &mut State, rate: f32) -> bool {
     state.notes_end_time_ns = notes_end_time_ns;
     state.music_end_time_ns = music_end_time_ns;
     true
+}
+
+#[inline(always)]
+fn apply_autosync_offset_correction(state: &mut State, note_off_by_ns: SongTimeNs) {
+    let result = apply_autosync_offset_sample(
+        &mut state.autosync_offset_samples,
+        &mut state.autosync_offset_sample_count,
+        state.autosync_mode,
+        note_off_by_ns,
+    );
+    if let Some(stddev) = result.standard_deviation {
+        state.autosync_standard_deviation = stddev;
+    }
+    match result.correction {
+        Some(AutosyncOffsetCorrection::Song(mean)) => {
+            let _ = apply_song_offset_delta(state, mean);
+        }
+        Some(AutosyncOffsetCorrection::Machine(mean)) => {
+            let _ = apply_global_offset_delta(state, mean);
+        }
+        None => {}
+    }
+}
+
+#[inline(always)]
+pub(super) fn apply_autosync_for_row_hits(state: &mut State, row_entry_index: usize) {
+    if !autosync_row_hits_enabled(
+        state.replay_mode,
+        autoplay_blocks_scoring(state),
+        state.autosync_mode,
+        state.course_display_totals.is_some(),
+    ) {
+        return;
+    }
+
+    let mut offsets = [0; MAX_COLS];
+    let count = collect_autosync_row_hit_offsets(
+        &state.notes,
+        &state.row_entries[row_entry_index],
+        &mut offsets,
+    );
+    for note_off_by_ns in offsets.into_iter().take(count) {
+        apply_autosync_offset_correction(state, note_off_by_ns);
+    }
+}
+
+#[inline(always)]
+pub fn timing_tick_status_line(state: &State) -> Option<&'static str> {
+    timing_tick_mode_status_line(gameplay_tick_mode_from_profile(state.tick_mode))
+}
+
+fn set_tick_mode(state: &mut State, mode: TickMode, now_music_time: f32) {
+    if state.tick_mode == mode {
+        return;
+    }
+    state.tick_mode = mode;
+    queue_session_command(
+        state,
+        GameplaySessionCommand::SetTimingTickMode(gameplay_tick_mode_from_profile(mode)),
+    );
+
+    let song_row = assist_row_no_offset(state, now_music_time);
+    state.assist_last_crossed_row = song_row;
+    state.assist_clap_cursor = assist_clap_cursor_for_row(&state.assist_clap_rows, song_row);
+
+    debug!(
+        "Timing ticks set to {} (F7).",
+        timing_tick_mode_debug_label(gameplay_tick_mode_from_profile(mode))
+    );
+}
+
+fn set_autoplay_enabled(state: &mut State, enabled: bool, now_music_time: f32) {
+    if state.autoplay_enabled == enabled {
+        return;
+    }
+    state.autoplay_enabled = enabled;
+
+    if enabled {
+        state.input_slot_count = 0;
+        state.input_lane_counts = [0; MAX_COLS];
+        state.prev_inputs = [false; MAX_COLS];
+        state.receptor_glow_timers = [0.0; MAX_COLS];
+        state.receptor_glow_press_timers = [0.0; MAX_COLS];
+        state.receptor_glow_lift_start_alpha = [0.0; MAX_COLS];
+        state.receptor_glow_lift_start_zoom = [1.0; MAX_COLS];
+        state.pending_edges.clear();
+        for player in 0..state.num_players {
+            state.autoplay_cursor[player] = autoplay_cursor_for_enable(
+                state.next_tap_miss_cursor[player],
+                player_note_range(state, player),
+            );
+        }
+        debug!("Autoplay enabled (F8). Scores for this stage will not be saved.");
+        return;
+    }
+
+    debug!("Autoplay disabled (F8).");
+    let _ = now_music_time;
+}
+
+#[inline(always)]
+fn update_raw_modifier_state(state: &mut State, code: KeyCode, pressed: bool) {
+    match code {
+        KeyCode::ShiftLeft | KeyCode::ShiftRight => state.shift_held = pressed,
+        KeyCode::ControlLeft | KeyCode::ControlRight => state.ctrl_held = pressed,
+        _ => {}
+    }
+}
+
+#[inline(always)]
+fn gameplay_raw_key_input(code: KeyCode) -> GameplayRawKeyInput {
+    match code {
+        KeyCode::KeyR => GameplayRawKeyInput::Restart,
+        KeyCode::F6 => GameplayRawKeyInput::Autosync,
+        KeyCode::F7 => GameplayRawKeyInput::TimingTick,
+        KeyCode::F8 => GameplayRawKeyInput::Autoplay,
+        KeyCode::F11 => GameplayRawKeyInput::OffsetAdjust(GameplayOffsetAdjustKey::Decrease),
+        KeyCode::F12 => GameplayRawKeyInput::OffsetAdjust(GameplayOffsetAdjustKey::Increase),
+        _ => GameplayRawKeyInput::Other,
+    }
+}
+
+pub fn sync_queued_raw_modifiers(state: &mut State, shift_held: bool, ctrl_held: bool) {
+    state.shift_held = shift_held;
+    state.ctrl_held = ctrl_held;
+}
+
+pub enum RawKeyAction {
+    None,
+    Restart,
+}
+
+pub fn handle_queued_raw_key(
+    state: &mut State,
+    code: KeyCode,
+    pressed: bool,
+    timestamp: Instant,
+    now_music_time: f32,
+    allow_commands: bool,
+) -> RawKeyAction {
+    update_raw_modifier_state(state, code, pressed);
+    let plan = gameplay_raw_key_plan(
+        gameplay_raw_key_input(code),
+        pressed,
+        allow_commands,
+        state.ctrl_held,
+        state.shift_held,
+        state.autosync_mode,
+        state.course_display_totals.is_some(),
+        gameplay_tick_mode_from_profile(state.tick_mode),
+        state.autoplay_enabled,
+    );
+    match plan {
+        GameplayRawKeyPlan::Restart => return RawKeyAction::Restart,
+        GameplayRawKeyPlan::SetAutosyncMode(mode) => state.autosync_mode = mode,
+        GameplayRawKeyPlan::SetTimingTickMode(mode) => {
+            set_tick_mode(state, profile_tick_mode_from_gameplay(mode), now_music_time)
+        }
+        GameplayRawKeyPlan::SetAutoplayEnabled(enabled) => {
+            set_autoplay_enabled(state, enabled, now_music_time)
+        }
+        GameplayRawKeyPlan::StartOffsetAdjust { key, target } => {
+            let delta = start_offset_adjust_hold_key(state, key, timestamp);
+            match target {
+                GameplayOffsetAdjustTarget::Global => {
+                    let _ = apply_global_offset_delta(state, delta);
+                }
+                GameplayOffsetAdjustTarget::Song => {
+                    let _ = apply_song_offset_delta(state, delta);
+                }
+                GameplayOffsetAdjustTarget::None => {}
+            }
+        }
+        GameplayRawKeyPlan::ClearOffsetAdjust(key) => clear_offset_adjust_hold_key(state, key),
+        GameplayRawKeyPlan::None => {}
+    }
+    RawKeyAction::None
 }
 
 fn reset_practice_note_results(state: &mut State) {
