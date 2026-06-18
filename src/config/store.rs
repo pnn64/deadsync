@@ -62,6 +62,8 @@ pub(super) fn current_save_content() -> String {
     let additional_song_folders = ADDITIONAL_SONG_FOLDERS.lock().unwrap().clone();
     let smx_p1_serial = SMX_P1_SERIAL.lock().unwrap().clone().unwrap_or_default();
     let smx_p2_serial = SMX_P2_SERIAL.lock().unwrap().clone().unwrap_or_default();
+    let last_profile_p1 = LAST_PROFILE_P1.lock().unwrap().clone().unwrap_or_default();
+    let last_profile_p2 = LAST_PROFILE_P2.lock().unwrap().clone().unwrap_or_default();
     save::build_content(
         &cfg,
         &keymap,
@@ -69,6 +71,8 @@ pub(super) fn current_save_content() -> String {
         additional_song_folders.as_slice(),
         &smx_p1_serial,
         &smx_p2_serial,
+        &last_profile_p1,
+        &last_profile_p2,
     )
 }
 
