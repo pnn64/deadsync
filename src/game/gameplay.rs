@@ -205,10 +205,6 @@ mod display;
 mod holds;
 #[path = "gameplay/input.rs"]
 mod input;
-#[path = "gameplay/judging.rs"]
-mod judging;
-#[path = "gameplay/offset.rs"]
-mod offset;
 #[path = "gameplay/rows.rs"]
 mod rows;
 #[path = "gameplay/stats.rs"]
@@ -263,17 +259,6 @@ use self::input::{
     lane_is_pressed, process_input_edges, tick_visual_effects, trigger_receptor_glow_pulse,
     trigger_receptor_score_pulse,
 };
-use self::judging::{
-    build_final_note_hit_plan, build_player_judgment_timing,
-    effective_player_global_offset_seconds, note_hit_eval, player_largest_tap_window_ns,
-};
-pub use self::judging::{player_blue_window_ms, player_fa_plus_window_s};
-use self::offset::{
-    apply_global_offset_delta, apply_song_offset_delta, clear_offset_adjust_hold_key,
-    start_offset_adjust_hold_key, update_offset_adjust_hold,
-};
-#[cfg(test)]
-use self::offset::{mutate_timing_arc, refresh_timing_after_offset_change};
 #[cfg(test)]
 use self::rows::finalize_row_judgment;
 use self::rows::update_judged_rows;
@@ -750,6 +735,128 @@ pub(crate) const fn profile_tick_mode_from_gameplay(mode: GameplayTimingTickMode
         GameplayTimingTickMode::Assist => TickMode::Assist,
         GameplayTimingTickMode::Hit => TickMode::Hit,
     }
+}
+
+#[inline(always)]
+fn default_fa_plus_window_s(state: &State) -> f32 {
+    state
+        .timing_profile
+        .fa_plus_window_s
+        .unwrap_or(state.timing_profile.windows_s[0])
+}
+
+#[inline(always)]
+fn profile_custom_window_ms(profile: &profile_data::Profile) -> f32 {
+    let ms = profile.custom_fantastic_window_ms;
+    f32::from(profile_data::clamp_custom_fantastic_window_ms(ms))
+}
+
+#[inline(always)]
+fn profile_custom_window_s(profile: &profile_data::Profile) -> f32 {
+    profile_custom_window_ms(profile) / 1000.0
+}
+
+#[inline(always)]
+fn fantastic_window_options(
+    base_fa_plus_s: f32,
+    profile: &profile_data::Profile,
+) -> FantasticWindowOptions {
+    FantasticWindowOptions {
+        base_fa_plus_s,
+        custom_fantastic_window_s: profile
+            .custom_fantastic_window
+            .then(|| profile_custom_window_s(profile)),
+        fa_plus_10ms_blue_window: profile.fa_plus_10ms_blue_window,
+    }
+}
+
+#[inline(always)]
+pub fn player_fa_plus_window_s(state: &State, player_idx: usize) -> f32 {
+    let base = default_fa_plus_window_s(state);
+    if player_idx >= state.num_players {
+        return base;
+    }
+    fantastic_window_seconds(fantastic_window_options(
+        base,
+        &state.player_profiles[player_idx],
+    ))
+}
+
+#[inline(always)]
+pub fn player_blue_window_ms(state: &State, player_idx: usize) -> f32 {
+    let base = default_fa_plus_window_s(state);
+    if player_idx >= state.num_players {
+        return base * 1000.0;
+    }
+    blue_fantastic_window_ms(fantastic_window_options(
+        base,
+        &state.player_profiles[player_idx],
+    ))
+}
+
+#[inline(always)]
+pub(super) fn build_player_judgment_timing(
+    timing_profile: TimingProfile,
+    player_profile: &profile_data::Profile,
+    music_rate: f32,
+) -> PlayerJudgmentTiming {
+    let base_fa_plus_s = timing_profile
+        .fa_plus_window_s
+        .unwrap_or(timing_profile.windows_s[0]);
+    let disabled_windows = player_profile.timing_windows.disabled_windows();
+    build_player_judgment_timing_for_options(
+        timing_profile,
+        fantastic_window_options(base_fa_plus_s, player_profile),
+        disabled_windows,
+        music_rate,
+    )
+}
+
+#[inline(always)]
+pub(super) fn player_largest_tap_window_ns(state: &State, player_idx: usize) -> SongTimeNs {
+    if player_idx >= state.num_players {
+        return 0;
+    }
+    state.player_judgment_timing[player_idx].largest_tap_window_music_ns
+}
+
+#[inline(always)]
+pub(super) fn note_hit_eval(
+    state: &State,
+    player_idx: usize,
+    note_time_ns: SongTimeNs,
+    current_time_ns: SongTimeNs,
+) -> Option<NoteHitEval> {
+    if player_idx >= state.num_players {
+        return None;
+    }
+    let timing = state.player_judgment_timing[player_idx];
+    note_hit_eval_for_timing(timing, note_time_ns, current_time_ns)
+}
+
+#[inline(always)]
+pub(super) fn build_final_note_hit_plan(
+    state: &mut State,
+    player_idx: usize,
+    hit: NoteHitEval,
+    rate: f32,
+) -> FinalNoteHitPlan {
+    let judgment_offset_music_ns = live_autoplay_judgment_offset_music_ns(
+        state,
+        player_idx,
+        hit.window,
+        hit.measured_offset_music_ns,
+    );
+    final_note_hit_plan(hit, judgment_offset_music_ns, rate)
+}
+
+#[inline(always)]
+pub(super) fn effective_player_global_offset_seconds(state: &State, player_idx: usize) -> f32 {
+    gameplay_effective_player_global_offset_seconds(
+        state.global_offset_seconds,
+        &state.player_global_offset_shift_seconds,
+        player_idx,
+    )
 }
 
 pub struct State {
@@ -1861,6 +1968,134 @@ pub fn set_music_rate(state: &mut State, rate: f32) -> bool {
     );
     state.notes_end_time_ns = notes_end_time_ns;
     state.music_end_time_ns = music_end_time_ns;
+    true
+}
+
+#[inline(always)]
+pub(super) fn mutate_timing_arc(
+    timing: &mut Arc<TimingData>,
+    mut apply: impl FnMut(&mut TimingData),
+) {
+    if let Some(inner) = Arc::get_mut(timing) {
+        apply(inner);
+        return;
+    }
+    let mut cloned = (**timing).clone();
+    apply(&mut cloned);
+    *timing = Arc::new(cloned);
+}
+
+#[inline(always)]
+pub(super) fn refresh_timing_after_offset_change(state: &mut State) {
+    let timing_players: [&_; MAX_PLAYERS] =
+        std::array::from_fn(|player| state.timing_players[player].as_ref());
+    refresh_timing_caches_for_offset_change(
+        &state.notes,
+        &timing_players,
+        state.num_players,
+        state.cols_per_player,
+        &mut state.note_time_cache_ns,
+        &mut state.hold_end_time_cache_ns,
+        &mut state.row_entries,
+        &state.mine_note_ix,
+        &mut state.mine_note_time_ns,
+    );
+    state.beat_info_cache.reset(&state.timing);
+
+    let (notes_end_time_ns, music_end_time_ns) = compute_end_times_ns(
+        &state.notes,
+        &state.note_time_cache_ns,
+        &state.hold_end_time_cache_ns,
+        state.music_rate,
+        state.audio_end_time_ns,
+    );
+    state.notes_end_time_ns = notes_end_time_ns;
+    state.music_end_time_ns = music_end_time_ns;
+}
+
+#[inline(always)]
+pub(super) fn clear_offset_adjust_hold_key(state: &mut State, key: GameplayOffsetAdjustKey) {
+    clear_offset_adjust_hold_state(
+        &mut state.offset_adjust_held_since,
+        &mut state.offset_adjust_last_at,
+        key,
+    );
+}
+
+#[inline(always)]
+pub(super) fn start_offset_adjust_hold_key(
+    state: &mut State,
+    key: GameplayOffsetAdjustKey,
+    at: Instant,
+) -> f32 {
+    start_offset_adjust_hold_state(
+        &mut state.offset_adjust_held_since,
+        &mut state.offset_adjust_last_at,
+        key,
+        at,
+    )
+}
+
+#[inline(always)]
+pub(super) fn update_offset_adjust_hold(state: &mut State) {
+    let now = Instant::now();
+    for key in [
+        GameplayOffsetAdjustKey::Decrease,
+        GameplayOffsetAdjustKey::Increase,
+    ] {
+        let Some(delta) = tick_offset_adjust_hold_state(
+            &state.offset_adjust_held_since,
+            &mut state.offset_adjust_last_at,
+            key,
+            now,
+        ) else {
+            continue;
+        };
+        match offset_adjust_target(state.shift_held, state.course_display_totals.is_some()) {
+            GameplayOffsetAdjustTarget::Global => {
+                let _ = apply_global_offset_delta(state, delta);
+            }
+            GameplayOffsetAdjustTarget::Song => {
+                let _ = apply_song_offset_delta(state, delta);
+            }
+            GameplayOffsetAdjustTarget::None => {}
+        }
+    }
+}
+
+#[inline(always)]
+pub(super) fn apply_global_offset_delta(state: &mut State, delta: f32) -> bool {
+    let Some(new_offset) = offset_delta_target_seconds(state.global_offset_seconds, delta) else {
+        return false;
+    };
+    mutate_timing_arc(&mut state.timing, |timing| {
+        timing.set_global_offset_seconds(new_offset)
+    });
+    for (player_idx, timing) in state.timing_players.iter_mut().enumerate() {
+        let effective_offset = new_offset + state.player_global_offset_shift_seconds[player_idx];
+        mutate_timing_arc(timing, |timing| {
+            timing.set_global_offset_seconds(effective_offset)
+        });
+    }
+    refresh_timing_after_offset_change(state);
+    state.global_offset_seconds = new_offset;
+    true
+}
+
+#[inline(always)]
+pub(super) fn apply_song_offset_delta(state: &mut State, delta: f32) -> bool {
+    let Some(new_offset) = offset_delta_target_seconds(state.song_offset_seconds, delta) else {
+        return false;
+    };
+
+    mutate_timing_arc(&mut state.timing, |timing| {
+        timing.shift_song_offset_seconds(delta)
+    });
+    for timing in &mut state.timing_players {
+        mutate_timing_arc(timing, |timing| timing.shift_song_offset_seconds(delta));
+    }
+    refresh_timing_after_offset_change(state);
+    state.song_offset_seconds = new_offset;
     true
 }
 
