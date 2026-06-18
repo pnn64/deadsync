@@ -4546,7 +4546,7 @@ fn show_profile_switch_overlay(state: &mut State) {
     state.last_steps_nav_dir_p2 = None;
     state.last_steps_nav_time_p2 = None;
 
-    let mut overlay = profile_boxes::init();
+    let mut overlay = profile_boxes::init_active();
     overlay.active_color_index = state.active_color_index;
     profile_boxes::set_joined(
         &mut overlay,
@@ -4584,7 +4584,7 @@ pub fn open_late_join_profile_overlay(state: &mut State, joining_side: profile_d
     state.last_steps_nav_dir_p2 = None;
     state.last_steps_nav_time_p2 = None;
 
-    let mut overlay = profile_boxes::init();
+    let mut overlay = profile_boxes::init_late_join(joining_side);
     overlay.active_color_index = state.active_color_index;
     profile_boxes::enter_late_join(&mut overlay, joining_side);
     state.profile_switch_overlay = Some(overlay);

@@ -8,8 +8,8 @@ pub(super) fn build_content(
     additional_song_folders: &[AdditionalSongFolder],
     smx_p1_serial: &str,
     smx_p2_serial: &str,
-    last_profile_p1: &str,
-    last_profile_p2: &str,
+    default_profile_p1: &str,
+    default_profile_p2: &str,
 ) -> String {
     let mut content = String::with_capacity(4096);
     push_saved_options(
@@ -19,8 +19,8 @@ pub(super) fn build_content(
         additional_song_folders,
         smx_p1_serial,
         smx_p2_serial,
-        last_profile_p1,
-        last_profile_p2,
+        default_profile_p1,
+        default_profile_p2,
     );
     push_saved_keymaps(&mut content, keymap);
     push_saved_theme(&mut content, cfg);
@@ -34,8 +34,8 @@ fn push_saved_options(
     additional_song_folders: &[AdditionalSongFolder],
     smx_p1_serial: &str,
     smx_p2_serial: &str,
-    last_profile_p1: &str,
-    last_profile_p2: &str,
+    default_profile_p1: &str,
+    default_profile_p2: &str,
 ) {
     let audio_output_device = cfg
         .audio_output_device_index
@@ -208,8 +208,8 @@ fn push_saved_options(
     );
     push_line(content, "SmxP1Serial", smx_p1_serial);
     push_line(content, "SmxP2Serial", smx_p2_serial);
-    push_line(content, "LastProfileP1", last_profile_p1);
-    push_line(content, "LastProfileP2", last_profile_p2);
+    push_line(content, "DefaultLocalProfileIDP1", default_profile_p1);
+    push_line(content, "DefaultLocalProfileIDP2", default_profile_p2);
     for backend in crate::config::pad_order::all_backends() {
         push_line(
             content,

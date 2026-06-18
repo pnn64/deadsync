@@ -1234,41 +1234,29 @@ fn load_for_side(side: PlayerSide) {
 }
 
 pub fn load() {
-    restore_last_active_profiles();
+    restore_default_profiles();
     load_for_side(PlayerSide::P1);
     load_for_side(PlayerSide::P2);
 }
 
-/// Seeds the session's active profiles from the last logged-in profile ids
-/// persisted in the machine config, so the profile-select screen defaults to the
-/// previous login after a reboot instead of resetting to Guest. Only applies a
-/// saved id when it still refers to an existing local profile; otherwise the
-/// built-in session default is kept.
-fn restore_last_active_profiles() {
-    let (p1, p2) = config::last_active_profiles();
+/// Seeds the session's active profiles from the configured default local
+/// profiles. Only applies a saved id when it still refers to an existing local
+/// profile; otherwise that side starts as Guest.
+fn restore_default_profiles() {
+    let (p1, p2) = config::default_profiles();
     let mut session = lock_session();
     for (side, saved) in [(PlayerSide::P1, p1), (PlayerSide::P2, p2)] {
-        if let Some(id) = saved {
-            if is_local_profile_id(&id) && local_profile_dir(&id).is_dir() {
-                session.active_profiles[side_ix(side)] = ActiveProfile::Local { id };
-            }
-        }
+        session.active_profiles[side_ix(side)] = default_profile_from_id(saved);
     }
 }
 
-/// Persists the currently active profile id of each side to the machine config
-/// so it can be restored on the next boot. Guest sides are stored as empty.
-fn persist_last_active_profiles() {
-    let (p1, p2) = {
-        let session = lock_session();
-        (
-            active_profile_local_id(&session.active_profiles[side_ix(PlayerSide::P1)])
-                .map(str::to_owned),
-            active_profile_local_id(&session.active_profiles[side_ix(PlayerSide::P2)])
-                .map(str::to_owned),
-        )
-    };
-    config::update_last_active_profiles(p1, p2);
+fn default_profile_from_id(id: Option<String>) -> ActiveProfile {
+    match id {
+        Some(id) if is_local_profile_id(&id) && local_profile_dir(&id).is_dir() => {
+            ActiveProfile::Local { id }
+        }
+        _ => ActiveProfile::Guest,
+    }
 }
 
 /// Returns a copy of the currently loaded profile data.
@@ -1352,6 +1340,64 @@ pub fn get_active_profile_for_side(side: PlayerSide) -> ActiveProfile {
 pub fn active_local_profile_id_for_side(side: PlayerSide) -> Option<String> {
     let session = lock_session();
     active_profile_local_id(&session.active_profiles[side_ix(side)]).map(str::to_owned)
+}
+
+pub fn get_default_profile_for_side(side: PlayerSide) -> ActiveProfile {
+    let (p1, p2) = config::default_profiles();
+    default_profile_from_id(match side {
+        PlayerSide::P1 => p1,
+        PlayerSide::P2 => p2,
+    })
+}
+
+pub fn default_local_profile_id_for_side(side: PlayerSide) -> Option<String> {
+    match get_default_profile_for_side(side) {
+        ActiveProfile::Local { id } => Some(id),
+        ActiveProfile::Guest => None,
+    }
+}
+
+pub fn set_default_profile_for_side(side: PlayerSide, profile: ActiveProfile) {
+    let mut defaults = {
+        let (p1, p2) = config::default_profiles();
+        [p1, p2]
+    };
+    let side_idx = side_ix(side);
+    let new_id = active_profile_local_id(&profile)
+        .filter(|id| is_local_profile_id(id) && local_profile_dir(id).is_dir())
+        .map(str::to_owned);
+
+    if let Some(id) = new_id.as_deref() {
+        for (idx, slot) in defaults.iter_mut().enumerate() {
+            if idx != side_idx && slot.as_deref() == Some(id) {
+                *slot = None;
+            }
+        }
+    }
+    defaults[side_idx] = new_id;
+    config::update_default_profiles(defaults[0].clone(), defaults[1].clone());
+}
+
+fn update_default_profiles_from_selection(p1: &ActiveProfile, p2: &ActiveProfile) {
+    let (p1_default, p2_default) = config::default_profiles();
+    let mut defaults = [p1_default, p2_default];
+    let joined_mask = lock_session().joined_mask;
+    for (side, profile) in [(PlayerSide::P1, p1), (PlayerSide::P2, p2)] {
+        if !player_side_is_joined(joined_mask, side) {
+            continue;
+        }
+        let side_idx = side_ix(side);
+        let new_id = active_profile_local_id(profile).map(str::to_owned);
+        if let Some(id) = new_id.as_deref() {
+            for (idx, slot) in defaults.iter_mut().enumerate() {
+                if idx != side_idx && slot.as_deref() == Some(id) {
+                    *slot = None;
+                }
+            }
+        }
+        defaults[side_idx] = new_id;
+    }
+    config::update_default_profiles(defaults[0].clone(), defaults[1].clone());
 }
 
 /// The local profile that owns a given physical pad. `is_p2_side` is the pad's
@@ -1614,13 +1660,16 @@ pub fn set_active_profile_for_side(side: PlayerSide, profile: ActiveProfile) -> 
         *slot = profile;
     }
     load_for_side(side);
-    persist_last_active_profiles();
     get_for_side(side)
 }
 
 pub fn set_active_profiles(p1: ActiveProfile, p2: ActiveProfile) -> [Profile; PLAYER_SLOTS] {
     let _ = set_active_profile_for_side(PlayerSide::P1, p1);
     let _ = set_active_profile_for_side(PlayerSide::P2, p2);
+    update_default_profiles_from_selection(
+        &get_active_profile_for_side(PlayerSide::P1),
+        &get_active_profile_for_side(PlayerSide::P2),
+    );
     [get_for_side(PlayerSide::P1), get_for_side(PlayerSide::P2)]
 }
 
@@ -1773,6 +1822,13 @@ pub fn create_local_profile(display_name: &str) -> Result<String, std::io::Error
     ac.push('\n');
     fs::write(arrowcloud_ini_path(&id), ac)?;
 
+    let (p1_default, p2_default) = config::default_profiles();
+    if p1_default.is_none() {
+        config::update_default_profiles(Some(id.clone()), p2_default);
+    } else if p2_default.is_none() {
+        config::update_default_profiles(p1_default, Some(id.clone()));
+    }
+
     Ok(id)
 }
 
@@ -1845,6 +1901,11 @@ pub fn delete_local_profile(id: &str) -> Result<(), std::io::Error> {
     }
 
     fs::remove_dir_all(&dir)?;
+
+    let (p1_default, p2_default) = config::default_profiles();
+    let next_p1 = p1_default.filter(|profile_id| profile_id != id);
+    let next_p2 = p2_default.filter(|profile_id| profile_id != id);
+    config::update_default_profiles(next_p1, next_p2);
 
     for side in [PlayerSide::P1, PlayerSide::P2] {
         let is_active = active_local_profile_id_for_side(side)

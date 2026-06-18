@@ -102,8 +102,8 @@ fn load_defaults_after_error() {
     ADDITIONAL_SONG_FOLDERS.lock().unwrap().clear();
     *SMX_P1_SERIAL.lock().unwrap() = None;
     *SMX_P2_SERIAL.lock().unwrap() = None;
-    *LAST_PROFILE_P1.lock().unwrap() = None;
-    *LAST_PROFILE_P2.lock().unwrap() = None;
+    *DEFAULT_PROFILE_P1.lock().unwrap() = None;
+    *DEFAULT_PROFILE_P2.lock().unwrap() = None;
     deadsync_audio_stream::set_replaygain_enabled(Config::default().enable_replaygain);
     deadsync_audio_stream::set_preserve_pitch_enabled(Config::default().rate_mod_preserves_pitch);
     pad_order::reset();
@@ -122,10 +122,11 @@ fn load_runtime_state(conf: &SimpleIni) {
             .map(|v| v.trim().to_owned())
             .filter(|v| !v.is_empty())
     };
+    let profile_id = |key, fallback_key| serial(key).or_else(|| serial(fallback_key));
     *SMX_P1_SERIAL.lock().unwrap() = serial("SmxP1Serial");
     *SMX_P2_SERIAL.lock().unwrap() = serial("SmxP2Serial");
-    *LAST_PROFILE_P1.lock().unwrap() = serial("LastProfileP1");
-    *LAST_PROFILE_P2.lock().unwrap() = serial("LastProfileP2");
+    *DEFAULT_PROFILE_P1.lock().unwrap() = profile_id("DefaultLocalProfileIDP1", "LastProfileP1");
+    *DEFAULT_PROFILE_P2.lock().unwrap() = profile_id("DefaultLocalProfileIDP2", "LastProfileP2");
     pad_order::load_order_from_ini(conf);
 }
 

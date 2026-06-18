@@ -20,13 +20,12 @@ pub(super) static SMX_P1_SERIAL: std::sync::LazyLock<Mutex<Option<String>>> =
     std::sync::LazyLock::new(|| Mutex::new(None));
 pub(super) static SMX_P2_SERIAL: std::sync::LazyLock<Mutex<Option<String>>> =
     std::sync::LazyLock::new(|| Mutex::new(None));
-/// Last logged-in local profile id per side (slot 0 = P1, slot 1 = P2). Stored
-/// outside the `Copy` `Config` because ids are owned strings. `None` = that side
-/// was last on Guest (or never logged in). Used to restore the profile-select
-/// default across reboots.
-pub(super) static LAST_PROFILE_P1: std::sync::LazyLock<Mutex<Option<String>>> =
+/// Default local profile id per side (slot 0 = P1, slot 1 = P2). Stored outside
+/// the `Copy` `Config` because ids are owned strings. `None` = that side uses
+/// Guest unless the player chooses a local profile.
+pub(super) static DEFAULT_PROFILE_P1: std::sync::LazyLock<Mutex<Option<String>>> =
     std::sync::LazyLock::new(|| Mutex::new(None));
-pub(super) static LAST_PROFILE_P2: std::sync::LazyLock<Mutex<Option<String>>> =
+pub(super) static DEFAULT_PROFILE_P2: std::sync::LazyLock<Mutex<Option<String>>> =
     std::sync::LazyLock::new(|| Mutex::new(None));
 static SAVE_TX: std::sync::LazyLock<Option<mpsc::Sender<SaveReq>>> =
     std::sync::LazyLock::new(start_save_worker);
@@ -226,14 +225,12 @@ pub fn smx_pad_assignment() -> (Option<String>, Option<String>) {
     )
 }
 
-/// The last logged-in local profile id per side: `(p1, p2)`. Either side is
-/// `None` when it was last on Guest (or never logged in). Used by the profile
-/// module to default the profile-select screen to the previous login after a
-/// reboot.
-pub fn last_active_profiles() -> (Option<String>, Option<String>) {
+/// The default local profile id per side: `(p1, p2)`. Either side is `None`
+/// when it should default to Guest.
+pub fn default_profiles() -> (Option<String>, Option<String>) {
     (
-        LAST_PROFILE_P1.lock().unwrap().clone(),
-        LAST_PROFILE_P2.lock().unwrap().clone(),
+        DEFAULT_PROFILE_P1.lock().unwrap().clone(),
+        DEFAULT_PROFILE_P2.lock().unwrap().clone(),
     )
 }
 

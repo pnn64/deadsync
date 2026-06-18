@@ -398,29 +398,28 @@ fn build_choices() -> Vec<Choice> {
     out
 }
 
-pub fn init() -> State {
+fn selected_index_for(choices: &[Choice], active: profile_data::ActiveProfile) -> usize {
+    match active {
+        profile_data::ActiveProfile::Guest => 0,
+        profile_data::ActiveProfile::Local { id } => choices
+            .iter()
+            .position(|c| match &c.kind {
+                profile_data::ActiveProfile::Local { id: cid } => cid == &id,
+                profile_data::ActiveProfile::Guest => false,
+            })
+            .unwrap_or(0),
+    }
+}
+
+fn init_with_profiles(
+    p1_profile: profile_data::ActiveProfile,
+    p2_profile: profile_data::ActiveProfile,
+) -> State {
     let choices = build_choices();
     let noteskin_cache = NoteskinCache::new(&choices);
     let active_color_index = crate::config::get().simply_love_color;
-
-    let selected_index_for = |active: profile_data::ActiveProfile| -> usize {
-        match active {
-            profile_data::ActiveProfile::Guest => 0,
-            profile_data::ActiveProfile::Local { id } => choices
-                .iter()
-                .position(|c| match &c.kind {
-                    profile_data::ActiveProfile::Local { id: cid } => cid == &id,
-                    profile_data::ActiveProfile::Guest => false,
-                })
-                .unwrap_or(0),
-        }
-    };
-    let p1_selected_index = selected_index_for(profile::get_active_profile_for_side(
-        profile_data::PlayerSide::P1,
-    ));
-    let p2_selected_index = selected_index_for(profile::get_active_profile_for_side(
-        profile_data::PlayerSide::P2,
-    ));
+    let p1_selected_index = selected_index_for(&choices, p1_profile);
+    let p2_selected_index = selected_index_for(&choices, p2_profile);
 
     let mut state = State {
         active_color_index,
@@ -458,6 +457,40 @@ pub fn init() -> State {
         state.p2_selected_index,
     );
     state
+}
+
+pub fn init() -> State {
+    init_with_profiles(
+        profile::get_default_profile_for_side(profile_data::PlayerSide::P1),
+        profile::get_default_profile_for_side(profile_data::PlayerSide::P2),
+    )
+}
+
+pub fn init_active() -> State {
+    init_with_profiles(
+        profile::get_active_profile_for_side(profile_data::PlayerSide::P1),
+        profile::get_active_profile_for_side(profile_data::PlayerSide::P2),
+    )
+}
+
+pub fn init_late_join(joining_side: profile_data::PlayerSide) -> State {
+    let p1_profile = match joining_side {
+        profile_data::PlayerSide::P1 => {
+            profile::get_default_profile_for_side(profile_data::PlayerSide::P1)
+        }
+        profile_data::PlayerSide::P2 => {
+            profile::get_active_profile_for_side(profile_data::PlayerSide::P1)
+        }
+    };
+    let p2_profile = match joining_side {
+        profile_data::PlayerSide::P1 => {
+            profile::get_active_profile_for_side(profile_data::PlayerSide::P2)
+        }
+        profile_data::PlayerSide::P2 => {
+            profile::get_default_profile_for_side(profile_data::PlayerSide::P2)
+        }
+    };
+    init_with_profiles(p1_profile, p2_profile)
 }
 
 pub fn set_joined(state: &mut State, p1_joined: bool, p2_joined: bool) {

@@ -184,13 +184,12 @@ pub fn update_smx_pad_assignment(p1_serial: Option<String>, p2_serial: Option<St
     save_without_keymaps();
 }
 
-/// Persist the last logged-in local profile id per side so the profile-select
-/// screen can default to the previous login after a reboot. `None` means that
-/// side was last on Guest. No-op (and no disk write) when nothing changed.
-pub fn update_last_active_profiles(p1: Option<String>, p2: Option<String>) {
+/// Persist the default local profile id per side. `None` means that side
+/// defaults to Guest. No-op (and no disk write) when nothing changed.
+pub fn update_default_profiles(p1: Option<String>, p2: Option<String>) {
     {
-        let mut a = LAST_PROFILE_P1.lock().unwrap();
-        let mut b = LAST_PROFILE_P2.lock().unwrap();
+        let mut a = DEFAULT_PROFILE_P1.lock().unwrap();
+        let mut b = DEFAULT_PROFILE_P2.lock().unwrap();
         if *a == p1 && *b == p2 {
             return;
         }

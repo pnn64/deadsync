@@ -473,7 +473,7 @@ fn confirm_profile_menu(state: &mut State) -> ScreenAction {
 
     match action {
         ProfileMenuAction::SetP1 => {
-            let _ = profile::set_active_profile_for_side(
+            profile::set_default_profile_for_side(
                 profile_data::PlayerSide::P1,
                 profile_data::ActiveProfile::Local {
                     id: menu.id.clone(),
@@ -485,7 +485,7 @@ fn confirm_profile_menu(state: &mut State) -> ScreenAction {
             ScreenAction::None
         }
         ProfileMenuAction::SetP2 => {
-            let _ = profile::set_active_profile_for_side(
+            profile::set_default_profile_for_side(
                 profile_data::PlayerSide::P2,
                 profile_data::ActiveProfile::Local {
                     id: menu.id.clone(),
@@ -961,8 +961,8 @@ fn make_bullets(lines: &[&str]) -> String {
 }
 
 fn push_desc(ui: &mut Vec<Actor>, state: &State, s: f32, desc_x: f32, list_y: f32) {
-    let p1 = profile::active_local_profile_id_for_side(profile_data::PlayerSide::P1);
-    let p2 = profile::active_local_profile_id_for_side(profile_data::PlayerSide::P2);
+    let p1 = profile::default_local_profile_id_for_side(profile_data::PlayerSide::P1);
+    let p2 = profile::default_local_profile_id_for_side(profile_data::PlayerSide::P2);
     let (title, bullets) = help_for_selected(state, p1.as_deref(), p2.as_deref());
 
     let mut cursor_y = DESC_TITLE_TOP_PAD_PX.mul_add(s, list_y);
@@ -1365,8 +1365,8 @@ fn push_rows(
         black: [0.0, 0.0, 0.0, 1.0],
     };
 
-    let p1 = profile::active_local_profile_id_for_side(profile_data::PlayerSide::P1);
-    let p2 = profile::active_local_profile_id_for_side(profile_data::PlayerSide::P2);
+    let p1 = profile::default_local_profile_id_for_side(profile_data::PlayerSide::P1);
+    let p2 = profile::default_local_profile_id_for_side(profile_data::PlayerSide::P2);
     let p1_id = p1.as_deref();
     let p2_id = p2.as_deref();
 
