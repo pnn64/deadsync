@@ -85,6 +85,12 @@ the GrooveStats key (`is_boogiestats_active()` is just
 `enable_groovestats && enable_boogiestats`), so importing the GrooveStats key is
 all that's needed for it.
 
+**Online scores** (GrooveStats / ArrowCloud history) live on the servers, not in
+the ITGmania profile, so the importer doesn't fetch them — it just carries the
+credentials across. When it does, the import summary nudges the user to run
+**Options → Online Scoring → Score Import**, the existing screen that downloads
+online scores using exactly these `groovestats.ini` / `arrowcloud.ini` keys.
+
 ## 3. Avatar
 
 `Avatar.png` / `avatar.png` / `Avatar.jpg` / `Avatar.jpeg` (first match,
