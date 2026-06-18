@@ -2048,6 +2048,129 @@ pub fn create_local_profile(display_name: &str) -> Result<String, std::io::Error
     Ok(id)
 }
 
+/// Player options seeded from machine defaults for a brand-new local profile,
+/// returned as `(singles, doubles)`. Used as the translation base when importing
+/// Simply Love settings so unspecified options match a freshly created profile.
+pub fn default_local_profile_options() -> (PlayerOptionsData, PlayerOptionsData) {
+    let mut default_profile = Profile::default();
+    default_profile.noteskin = machine_default_noteskin_value();
+    default_profile.pad_light_brightness = machine_default_light_brightness();
+    default_profile.store_current_player_options_for_all_styles();
+    (
+        default_profile.player_options_singles.clone(),
+        default_profile.player_options_doubles.clone(),
+    )
+}
+
+/// Everything needed to materialise a new local profile from an external source
+/// (the ITGmania / Simply Love importer).
+pub struct ImportProfileData<'a> {
+    pub display_name: &'a str,
+    pub weight_pounds: u32,
+    pub birth_year: u32,
+    /// Preferred player initials (e.g. ITGmania `LastUsedHighScoreName`). Falls
+    /// back to initials derived from the display name when empty.
+    pub initials: &'a str,
+    pub groovestats_api_key: &'a str,
+    pub groovestats_username: &'a str,
+    pub groovestats_is_pad_player: bool,
+    pub arrowcloud_api_key: &'a str,
+    /// Source avatar image to copy in as `profile.png`, if any.
+    pub avatar_src: Option<&'a Path>,
+    pub options_singles: &'a PlayerOptionsData,
+    pub options_doubles: &'a PlayerOptionsData,
+}
+
+/// Create a new local profile from imported data, writing `profile.ini`,
+/// `groovestats.ini`, `arrowcloud.ini`, and copying the avatar. Returns the new
+/// profile id. Scores are written separately via
+/// [`crate::game::scores::import_local_scores`].
+pub fn create_local_profile_from_import(
+    data: &ImportProfileData<'_>,
+) -> Result<String, std::io::Error> {
+    let name = data.display_name.trim();
+    if name.is_empty() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "Display name is empty",
+        ));
+    }
+
+    let id = generate_profile_guid();
+    let folder = folder_name_for_display(name, &id, &existing_profile_folder_names());
+    let dir = profile_dir_by_folder(&folder);
+    fs::create_dir_all(&dir)?;
+
+    let initials = {
+        let sanitized = sanitize_player_initials(data.initials);
+        if sanitized.is_empty() {
+            initials_from_name(name)
+        } else {
+            sanitized
+        }
+    };
+    let weight = clamp_weight_pounds(data.weight_pounds.min(i32::MAX as u32) as i32);
+
+    let mut content = String::new();
+    append_player_options_section(
+        &mut content,
+        player_options_section(PlayStyle::Single),
+        data.options_singles,
+    );
+    append_player_options_section(
+        &mut content,
+        player_options_section(PlayStyle::Double),
+        data.options_doubles,
+    );
+    content.push_str("[userprofile]\n");
+    content.push_str(&format!("Guid={id}\n"));
+    content.push_str(&format!("DisplayName={name}\n"));
+    content.push_str(&format!("PlayerInitials={initials}\n"));
+    content.push('\n');
+
+    content.push_str("[Editable]\n");
+    content.push_str(&format!("WeightPounds={weight}\n"));
+    content.push_str(&format!("BirthYear={}\n", data.birth_year));
+    content.push_str("IgnoreStepCountCalories=0\n");
+    content.push('\n');
+
+    let today = Local::now().date_naive().to_string();
+    content.push_str("[Stats]\n");
+    content.push_str(&format!("CaloriesBurnedDate={today}\n"));
+    content.push_str("CaloriesBurnedToday=0\n");
+    content.push('\n');
+    fs::write(dir.join("profile.ini"), content)?;
+
+    let mut gs = String::new();
+    gs.push_str("[GrooveStats]\n");
+    gs.push_str(&format!("ApiKey={}\n", data.groovestats_api_key));
+    gs.push_str(&format!(
+        "IsPadPlayer={}\n",
+        i32::from(data.groovestats_is_pad_player)
+    ));
+    gs.push_str(&format!("Username={}\n", data.groovestats_username));
+    gs.push('\n');
+    fs::write(dir.join("groovestats.ini"), gs)?;
+
+    let mut ac = String::new();
+    ac.push_str("[ArrowCloud]\n");
+    ac.push_str(&format!("ApiKey={}\n", data.arrowcloud_api_key));
+    ac.push('\n');
+    fs::write(dir.join("arrowcloud.ini"), ac)?;
+
+    if let Some(src) = data.avatar_src {
+        if let Err(e) = fs::copy(src, dir.join("profile.png")) {
+            warn!("Failed to copy imported avatar {src:?}: {e}");
+        }
+    }
+
+    // Make the new GUID -> folder mapping visible to later path lookups (scores,
+    // favorites and profile-stats writes all resolve the profile dir by GUID).
+    invalidate_profile_dir_cache();
+
+    Ok(id)
+}
+
 fn rewrite_profile_display_name(path: &Path, display_name: &str) -> Result<(), std::io::Error> {
     let src = fs::read_to_string(path)?;
     fs::write(

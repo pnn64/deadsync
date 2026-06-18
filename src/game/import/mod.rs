@@ -11,4 +11,5 @@
 pub mod itg;
 pub mod options;
 pub mod resolver;
+pub mod run;
 pub mod xml;

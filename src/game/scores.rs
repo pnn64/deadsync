@@ -1237,12 +1237,12 @@ fn append_local_score_on_disk(
     profile_initials: &str,
     chart_hash: &str,
     entry: &mut LocalScoreEntry,
-) {
+) -> bool {
     let shard = score_file_shard(chart_hash);
     let dir = local_scores_root_for_profile(profile_id).join(shard);
     if let Err(e) = fs::create_dir_all(&dir) {
         warn!("Failed to create local scores dir {dir:?}: {e}");
-        return;
+        return false;
     }
 
     // Avoid collisions: keep the GS-like "<hash>-<ms>.bin" filename shape.
@@ -1257,16 +1257,16 @@ fn append_local_score_on_disk(
     let tmp_path = dir.join(format!(".{chart_hash}-{played_at_ms}.tmp"));
     let Some(buf) = encode_local_score_entry(entry) else {
         warn!("Failed to encode local score for chart {chart_hash}");
-        return;
+        return false;
     };
     if let Err(e) = fs::write(&tmp_path, buf) {
         warn!("Failed to write local score temp file {tmp_path:?}: {e}");
-        return;
+        return false;
     }
     if let Err(e) = fs::rename(&tmp_path, &path) {
         warn!("Failed to commit local score file {path:?}: {e}");
         let _ = fs::remove_file(&tmp_path);
-        return;
+        return false;
     }
 
     // Update in-memory cache if it's already loaded for this profile.
@@ -1291,6 +1291,27 @@ fn append_local_score_on_disk(
 
     let cached = cached_score_from_local_header(&header);
     update_machine_cache_if_loaded(chart_hash, cached, profile_initials);
+    true
+}
+
+/// Write a batch of imported local scores for `profile_id`. Each tuple is the
+/// DeadSync chart `short_hash` and the play to record. Returns the number of
+/// plays successfully written to disk.
+///
+/// This reuses the same per-play write path as live gameplay, so the per-profile
+/// best index and any loaded in-memory caches stay correct.
+pub fn import_local_scores(
+    profile_id: &str,
+    profile_initials: &str,
+    scores: &mut [(String, LocalScoreEntry)],
+) -> usize {
+    let mut written = 0usize;
+    for (chart_hash, entry) in scores.iter_mut() {
+        if append_local_score_on_disk(profile_id, profile_initials, chart_hash, entry) {
+            written += 1;
+        }
+    }
+    written
 }
 
 fn judgment_counts_arr(p: &gameplay::PlayerRuntime) -> [u32; 6] {
