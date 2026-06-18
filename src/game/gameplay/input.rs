@@ -3,50 +3,36 @@ use deadsync_input::{INPUT_SLOT_INVALID, InputEdge, InputEvent, VirtualAction, l
 use deadsync_profile as profile_data;
 use log::{debug, warn};
 use std::sync::atomic::{AtomicI64, Ordering};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use super::{
-    ASSIST_TICK_SFX_PATH, ExitTransitionKind, GAMEPLAY_INPUT_BACKLOG_WARN,
-    GAMEPLAY_INPUT_LATENCY_WARN_US, GameplayAction, GameplayInputPlayStyle,
-    GameplayInputPlayerSide, GameplayReceptorGlowBehavior, GameplayReceptorGlowState,
-    GameplayReceptorGlowTimers, GameplayReceptorStepBehavior, GameplayUpdatePhaseTimings,
-    HoldToExitKey, INVALID_SONG_TIME_NS, LaneInputUpdate, RecordedLaneEdge, SongClockSnapshot,
-    SongTimeNs, State, TickMode, abort_hold_to_exit, active_input_slot_lane_is_down,
+    ASSIST_TICK_SFX_PATH, GAMEPLAY_INPUT_BACKLOG_WARN, GAMEPLAY_INPUT_LATENCY_WARN_US,
+    GameplayAction, GameplayInputPlayStyle, GameplayInputPlayerSide, GameplayMenuInput,
+    GameplayMenuInputPlan, GameplayReceptorGlowBehavior, GameplayReceptorGlowState,
+    GameplayReceptorStepBehavior, GameplayUpdatePhaseTimings, INVALID_SONG_TIME_NS,
+    LaneInputUpdate, RecordedLaneEdge, SongClockSnapshot, SongTimeNs, State, TickMode,
+    UNMAPPED_INPUT_CLOCK_WARN_NEVER_NS, abort_hold_to_exit, active_input_slot_lane_is_down,
     add_elapsed_us, begin_exit_transition, column_flash_expired_at, current_music_time_s,
-    gameplay_input_log_enabled, held_miss_judgment_expired_at, hold_judgment_expired_at,
-    integrate_active_hold_to_time, judge_a_lift, judge_a_tap, lane_edge_judges_lift,
-    lane_edge_judges_tap, lane_press_started, lane_release_finished, live_autoplay_enabled,
+    gameplay_input_latency_sample, gameplay_input_log_enabled, gameplay_menu_input_plan,
+    held_miss_judgment_expired_at, hold_judgment_expired_at, integrate_active_hold_to_time,
+    judge_a_lift, judge_a_tap, lane_edge_judges_lift, lane_edge_judges_tap, lane_press_started,
+    lane_release_finished, live_autoplay_enabled, live_input_lane_for_queue,
     local_column_for_field, music_time_ns_from_song_clock, normalized_input_slot,
     player_index_for_column, queue_preloaded_assist_tick, receptor_glow_press_timers,
     receptor_glow_pulse_timers, receptor_glow_release_timers, receptor_glow_visual,
-    record_step_calories, refresh_roll_life_on_step, remap_live_input_lane, song_time_ns_invalid,
-    song_time_ns_to_seconds, sync_active_hold_pressed_column, tick_combo_milestones,
-    tick_mine_explosion_slot, tick_positive_timer, tick_receptor_glow_timers,
-    tick_tap_explosion_slot, update_active_input_slot,
+    record_step_calories, refresh_roll_life_on_step, should_warn_unmapped_input_clock,
+    song_time_ns_invalid, song_time_ns_to_seconds, sync_active_hold_pressed_column,
+    tick_combo_milestones, tick_mine_explosion_slot, tick_positive_timer,
+    tick_receptor_glow_columns, tick_tap_explosion_slot, update_active_input_slot,
 };
 
-const UNMAPPED_INPUT_CLOCK_WARN_INTERVAL_NS: SongTimeNs = 1_000_000_000;
-static LAST_UNMAPPED_INPUT_CLOCK_WARN_NS: AtomicI64 = AtomicI64::new(i64::MIN);
+static LAST_UNMAPPED_INPUT_CLOCK_WARN_NS: AtomicI64 =
+    AtomicI64::new(UNMAPPED_INPUT_CLOCK_WARN_NEVER_NS);
 
 #[inline(always)]
-fn elapsed_us_between(later: Instant, earlier: Instant) -> u32 {
-    let elapsed = later
-        .checked_duration_since(earlier)
-        .unwrap_or(Duration::ZERO)
-        .as_micros();
-    if elapsed > u128::from(u32::MAX) {
-        u32::MAX
-    } else {
-        elapsed as u32
-    }
-}
-
-#[inline(always)]
-fn should_warn_unmapped_input_clock(song_time_ns: SongTimeNs) -> bool {
+fn record_unmapped_input_clock_warning(song_time_ns: SongTimeNs) -> bool {
     let last = LAST_UNMAPPED_INPUT_CLOCK_WARN_NS.load(Ordering::Relaxed);
-    let should_warn = last == i64::MIN
-        || song_time_ns < last
-        || song_time_ns.saturating_sub(last) >= UNMAPPED_INPUT_CLOCK_WARN_INTERVAL_NS;
+    let should_warn = should_warn_unmapped_input_clock(last, song_time_ns);
     if should_warn {
         LAST_UNMAPPED_INPUT_CLOCK_WARN_NS.store(song_time_ns, Ordering::Relaxed);
     }
@@ -75,20 +61,10 @@ fn receptor_step_behavior_for_col(
 }
 
 #[inline(always)]
-fn receptor_glow_timers_for_col(state: &State, col: usize) -> GameplayReceptorGlowTimers {
-    GameplayReceptorGlowTimers {
-        press_timer: state.receptor_glow_press_timers[col],
-        lift_timer: state.receptor_glow_timers[col],
-        lift_start_alpha: state.receptor_glow_lift_start_alpha[col],
-        lift_start_zoom: state.receptor_glow_lift_start_zoom[col],
-    }
-}
-
-#[inline(always)]
 fn set_receptor_glow_timers_for_col(
     state: &mut State,
     col: usize,
-    timers: GameplayReceptorGlowTimers,
+    timers: super::GameplayReceptorGlowTimers,
 ) {
     state.receptor_glow_press_timers[col] = timers.press_timer;
     state.receptor_glow_timers[col] = timers.lift_timer;
@@ -138,6 +114,35 @@ fn input_slot_lane_is_down(
         source,
         input_slot,
     )
+}
+
+#[inline(always)]
+fn gameplay_menu_input(action: VirtualAction) -> Option<GameplayMenuInput> {
+    match action {
+        VirtualAction::p1_start => Some(GameplayMenuInput::P1Start),
+        VirtualAction::p2_start => Some(GameplayMenuInput::P2Start),
+        VirtualAction::p1_back => Some(GameplayMenuInput::P1Back),
+        VirtualAction::p2_back => Some(GameplayMenuInput::P2Back),
+        _ => None,
+    }
+}
+
+#[inline(always)]
+fn apply_gameplay_menu_input_plan(
+    state: &mut State,
+    plan: GameplayMenuInputPlan,
+    timestamp: Instant,
+) {
+    match plan {
+        GameplayMenuInputPlan::None => {}
+        GameplayMenuInputPlan::ArmHold(key) => {
+            state.hold_to_exit_key = Some(key);
+            state.hold_to_exit_start = Some(timestamp);
+            state.hold_to_exit_aborted_at = None;
+        }
+        GameplayMenuInputPlan::AbortHold(_) => abort_hold_to_exit(state, timestamp),
+        GameplayMenuInputPlan::BeginExit(kind) => begin_exit_transition(state, kind),
+    }
 }
 
 pub(super) fn update_lane_input_slot(
@@ -243,19 +248,15 @@ pub fn queue_input_edge(
     stored_at: Instant,
     emitted_at: Instant,
 ) {
-    if state.autoplay_enabled {
-        return;
-    }
-    let Some(lane) = remap_live_input_lane(
+    let Some(lane) = live_input_lane_for_queue(
+        state.autoplay_enabled,
         gameplay_input_play_style(state.session.play_style),
         gameplay_input_player_side(state.session.player_side),
         lane,
+        state.num_cols,
     ) else {
         return;
     };
-    if lane.index() >= state.num_cols {
-        return;
-    }
 
     let queued_at = Instant::now();
     // Live input keeps the physical timestamp and is converted against the
@@ -379,52 +380,16 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> GameplayAction {
     let p2_runtime_player = state.session.p2_runtime_player();
     let p1_menu_active = state.num_players > 1 || !p2_runtime_player;
     let p2_menu_active = state.num_players > 1 || p2_runtime_player;
-    match ev.action {
-        VirtualAction::p1_start if p1_menu_active => {
-            if ev.pressed {
-                state.hold_to_exit_key = Some(HoldToExitKey::Start);
-                state.hold_to_exit_start = Some(ev.timestamp);
-                state.hold_to_exit_aborted_at = None;
-            } else if state.hold_to_exit_key == Some(HoldToExitKey::Start) {
-                abort_hold_to_exit(state, ev.timestamp);
-            }
-        }
-        VirtualAction::p2_start if p2_menu_active => {
-            if ev.pressed {
-                state.hold_to_exit_key = Some(HoldToExitKey::Start);
-                state.hold_to_exit_start = Some(ev.timestamp);
-                state.hold_to_exit_aborted_at = None;
-            } else if state.hold_to_exit_key == Some(HoldToExitKey::Start) {
-                abort_hold_to_exit(state, ev.timestamp);
-            }
-        }
-        VirtualAction::p1_back if p1_menu_active => {
-            if ev.pressed {
-                if !state.config.delayed_back {
-                    begin_exit_transition(state, ExitTransitionKind::Cancel);
-                } else {
-                    state.hold_to_exit_key = Some(HoldToExitKey::Back);
-                    state.hold_to_exit_start = Some(ev.timestamp);
-                    state.hold_to_exit_aborted_at = None;
-                }
-            } else if state.hold_to_exit_key == Some(HoldToExitKey::Back) {
-                abort_hold_to_exit(state, ev.timestamp);
-            }
-        }
-        VirtualAction::p2_back if p2_menu_active => {
-            if ev.pressed {
-                if !state.config.delayed_back {
-                    begin_exit_transition(state, ExitTransitionKind::Cancel);
-                } else {
-                    state.hold_to_exit_key = Some(HoldToExitKey::Back);
-                    state.hold_to_exit_start = Some(ev.timestamp);
-                    state.hold_to_exit_aborted_at = None;
-                }
-            } else if state.hold_to_exit_key == Some(HoldToExitKey::Back) {
-                abort_hold_to_exit(state, ev.timestamp);
-            }
-        }
-        _ => {}
+    if let Some(input) = gameplay_menu_input(ev.action) {
+        let plan = gameplay_menu_input_plan(
+            input,
+            ev.pressed,
+            p1_menu_active,
+            p2_menu_active,
+            state.config.delayed_back,
+            state.hold_to_exit_key,
+        );
+        apply_gameplay_menu_input_plan(state, plan, ev.timestamp);
     }
     GameplayAction::None
 }
@@ -483,7 +448,7 @@ pub(super) fn process_input_edges(
         let edge_judges_lift = lane_edge_judges_lift(edge.pressed, slot_was_down);
         if resolved_from_song_clock
             && !song_clock.mapped_audio
-            && should_warn_unmapped_input_clock(edge.event_music_time_ns)
+            && record_unmapped_input_clock_warning(edge.event_music_time_ns)
         {
             warn!(
                 "GAMEPLAY INPUT CLOCK WARNING: reason=audio_map_unavailable lane={} source={:?} slot={} pressed={} edge_time_s={:.6} song_clock_time_s={:.6} captured_host_nanos={} current_time_s={:.6}",
@@ -512,9 +477,13 @@ pub(super) fn process_input_edges(
                 );
             }
             let processed_at = Instant::now();
-            let capture_to_queue_us = elapsed_us_between(edge.queued_at, edge.captured_at);
-            let queue_to_process_us = elapsed_us_between(processed_at, edge.queued_at);
-            let capture_to_process_us = elapsed_us_between(processed_at, edge.captured_at);
+            let latency = gameplay_input_latency_sample(
+                edge.captured_at,
+                edge.stored_at,
+                edge.emitted_at,
+                edge.queued_at,
+                processed_at,
+            );
             debug!(
                 concat!(
                     "GAMEPLAY INPUT EDGE: lane={} source={:?} slot={} pressed={} ",
@@ -534,9 +503,9 @@ pub(super) fn process_input_edges(
                 song_clock.mapped_audio,
                 event_music_time,
                 current_music_time_s(state),
-                capture_to_queue_us,
-                queue_to_process_us,
-                capture_to_process_us,
+                latency.capture_to_queue_us,
+                latency.queue_to_process_us,
+                latency.capture_to_process_us,
                 state.pending_edges.len(),
             );
         }
@@ -554,31 +523,26 @@ pub(super) fn process_input_edges(
         }
         if trace_enabled {
             let processed_at = Instant::now();
-            let capture_to_store_us = elapsed_us_between(edge.stored_at, edge.captured_at);
-            let store_to_emit_us = elapsed_us_between(edge.emitted_at, edge.stored_at);
-            let emit_to_queue_us = elapsed_us_between(edge.queued_at, edge.emitted_at);
-            let capture_to_queue_us = elapsed_us_between(edge.queued_at, edge.captured_at);
-            let capture_to_process_us = elapsed_us_between(processed_at, edge.captured_at);
-            let queue_to_process_us = elapsed_us_between(processed_at, edge.queued_at);
-            state.update_trace.summary_input_latency.record(
-                capture_to_store_us,
-                store_to_emit_us,
-                emit_to_queue_us,
-                capture_to_process_us,
-                queue_to_process_us,
+            let latency = gameplay_input_latency_sample(
+                edge.captured_at,
+                edge.stored_at,
+                edge.emitted_at,
+                edge.queued_at,
+                processed_at,
             );
-            if capture_to_process_us >= GAMEPLAY_INPUT_LATENCY_WARN_US {
+            state.update_trace.summary.record_input_latency(latency);
+            if latency.capture_to_process_us >= GAMEPLAY_INPUT_LATENCY_WARN_US {
                 debug!(
                     "Gameplay input latency spike: lane={} pressed={} source={:?} capture_store_us={} store_emit_us={} emit_queue_us={} queue_process_us={} capture_queue_us={} capture_process_us={} pending={} now_t={:.3} edge_t={:.3}",
                     lane_idx,
                     edge.pressed,
                     edge.source,
-                    capture_to_store_us,
-                    store_to_emit_us,
-                    emit_to_queue_us,
-                    queue_to_process_us,
-                    capture_to_queue_us,
-                    capture_to_process_us,
+                    latency.capture_to_store_us,
+                    latency.store_to_emit_us,
+                    latency.emit_to_queue_us,
+                    latency.queue_to_process_us,
+                    latency.capture_to_queue_us,
+                    latency.capture_to_process_us,
                     state.pending_edges.len() + 1,
                     current_music_time_s(state),
                     song_time_ns_to_seconds(edge.event_music_time_ns),
@@ -660,15 +624,18 @@ pub(super) fn process_input_edges(
 
 #[inline(always)]
 pub(super) fn tick_visual_effects(state: &mut State, delta_time: f32) {
-    for col in 0..state.num_cols {
-        let timers = tick_receptor_glow_timers(
-            receptor_glow_behavior_for_col(state, col),
-            receptor_glow_timers_for_col(state, col),
-            lane_is_pressed(state, col),
-            delta_time,
-        );
-        set_receptor_glow_timers_for_col(state, col, timers);
-    }
+    tick_receptor_glow_columns(
+        &state.noteskin_effects,
+        state.num_cols,
+        state.num_players,
+        state.cols_per_player,
+        &state.input_lane_counts,
+        &mut state.receptor_glow_press_timers,
+        &mut state.receptor_glow_timers,
+        &mut state.receptor_glow_lift_start_alpha,
+        &mut state.receptor_glow_lift_start_zoom,
+        delta_time,
+    );
     for timer in &mut state.receptor_bop_timers {
         tick_positive_timer(timer, delta_time);
     }

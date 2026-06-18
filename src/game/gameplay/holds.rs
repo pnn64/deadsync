@@ -1,13 +1,13 @@
 use super::{
-    ActiveHoldResolution, HoldJudgmentRenderInfo, HoldResultStatsState, HoldResultStatsUpdate,
-    LIFE_HELD, LIFE_LET_GO, MAX_COLS, PlayerRuntime, SongTimeNs, State,
-    apply_hold_let_go_combo_state, apply_hold_let_go_update, apply_hold_result_stats_update,
-    apply_hold_success_combo_state, apply_hold_success_update, apply_life_change,
-    autoplay_blocks_scoring, capture_failed_ex_score_inputs, current_music_time_s,
-    integrate_active_hold_column, is_state_dead, player_for_col,
-    refresh_roll_life_for_active_column, replaced_active_hold_settle_time, song_time_ns_invalid,
-    started_active_hold_state, sync_active_hold_pressed_state, trigger_hold_explosion,
-    update_itg_grade_totals,
+    ActiveHoldResolution, HoldResolutionPlayerState, HoldResultStatsState, MAX_COLS, MAX_PLAYERS,
+    PlayerRuntime, SongTimeNs, State, apply_combo_update, apply_hold_let_go_player_state,
+    apply_hold_let_go_update, apply_hold_success_player_state, apply_hold_success_update,
+    apply_life_change, autoplay_blocks_scoring, capture_failed_ex_score_inputs,
+    current_music_time_s, hold_judgment_render_info, hold_resolution_updates_grade_totals,
+    integrate_active_hold_column, is_state_dead, live_autoplay_enabled, player_combo_state,
+    player_for_col, refresh_roll_life_for_active_column, settle_replaced_active_hold_column,
+    song_time_ns_invalid, start_active_hold_column, trigger_hold_explosion,
+    update_active_hold_columns, update_itg_grade_totals, write_player_combo_state,
 };
 
 fn hold_result_stats_state(player: &PlayerRuntime) -> HoldResultStatsState {
@@ -32,10 +32,23 @@ fn set_hold_result_stats_state(player: &mut PlayerRuntime, stats: HoldResultStat
     player.rolls_let_go_for_score = stats.rolls_let_go_for_score;
 }
 
-fn apply_hold_result_stats_to_player(player: &mut PlayerRuntime, update: HoldResultStatsUpdate) {
-    let mut stats = hold_result_stats_state(player);
-    apply_hold_result_stats_update(&mut stats, update);
-    set_hold_result_stats_state(player, stats);
+fn hold_resolution_player_state(player: &PlayerRuntime) -> HoldResolutionPlayerState {
+    HoldResolutionPlayerState {
+        stats: hold_result_stats_state(player),
+        combo: player_combo_state(player),
+    }
+}
+
+fn set_hold_resolution_player_state(player: &mut PlayerRuntime, state: HoldResolutionPlayerState) {
+    set_hold_result_stats_state(player, state.stats);
+    write_player_combo_state(player, state.combo);
+}
+
+fn apply_hold_resolution_player_state(
+    player: &mut PlayerRuntime,
+    state: HoldResolutionPlayerState,
+) {
+    set_hold_resolution_player_state(player, state);
 }
 
 pub(super) fn handle_hold_let_go(
@@ -60,24 +73,38 @@ pub(super) fn handle_hold_let_go(
     ) else {
         return;
     };
-    let stats_update = update.stats_update;
-    apply_hold_result_stats_to_player(&mut state.players[player], stats_update);
-    state.hold_judgments[column] = Some(HoldJudgmentRenderInfo {
-        result: update.result,
-        started_at_screen_s: state.total_elapsed_in_screen,
-    });
-    if !scoring_blocked {
+    let mut player_state = hold_resolution_player_state(&state.players[player]);
+    let player_update =
+        apply_hold_let_go_player_state(&mut player_state, update.stats_update, scoring_blocked);
+    apply_hold_resolution_player_state(&mut state.players[player], player_state);
+    if update.effects.show_judgment {
+        state.hold_judgments[column] = Some(hold_judgment_render_info(
+            update.result,
+            state.total_elapsed_in_screen,
+        ));
+    }
+    if player_update.apply_life_change {
         let current_music_time = current_music_time_s(state);
-        apply_life_change(&mut state.players[player], current_music_time, LIFE_LET_GO);
+        apply_life_change(
+            &mut state.players[player],
+            current_music_time,
+            player_update.life_delta,
+        );
+    }
+    if player_update.capture_failed_ex_score_inputs {
         capture_failed_ex_score_inputs(state, player);
     }
-    if stats_update.update_grade_totals && !is_state_dead(state, player) {
+    if hold_resolution_updates_grade_totals(
+        update.result,
+        player_update.stats_update,
+        is_state_dead(state, player),
+    ) {
         update_itg_grade_totals(&mut state.players[player]);
     }
-    if !scoring_blocked {
-        apply_hold_let_go_combo_state(&mut state.players[player]);
+    apply_combo_update(&mut state.players[player], player_update.combo_update);
+    if update.effects.reset_receptor_glow {
+        state.receptor_glow_timers[column] = 0.0;
     }
-    state.receptor_glow_timers[column] = 0.0;
 }
 
 #[inline(always)]
@@ -102,40 +129,33 @@ pub(super) fn start_active_hold(
     end_time_ns: SongTimeNs,
     current_time_ns: SongTimeNs,
 ) {
-    settle_replaced_active_hold(state, column, note_index, start_time_ns);
-    let note_type = state.notes[note_index].note_type;
-    state.active_holds[column] = Some(started_active_hold_state(
-        state.notes[note_index].hold.as_mut(),
-        note_index,
-        note_type,
-        start_time_ns,
-        end_time_ns,
-        current_time_ns,
-    ));
-}
-
-#[inline(always)]
-fn settle_replaced_active_hold(
-    state: &mut State,
-    column: usize,
-    next_note_index: usize,
-    next_start_time_ns: SongTimeNs,
-) {
-    let Some(active) = state.active_holds[column].as_ref() else {
+    if column >= state.num_cols {
         return;
-    };
-    let Some(settle_time_ns) = replaced_active_hold_settle_time(
-        active.note_index,
-        active.end_time_ns,
-        next_note_index,
-        next_start_time_ns,
-    ) else {
-        return;
-    };
+    }
+    let player = player_for_col(state, column);
     // A fast same-column hold jack can hit the next head early while the
     // previous hold is still alive. ITG stores hold state per TapNote; settle
     // the previous non-overlapping hold before replacing this column slot.
-    integrate_active_hold_to_time(state, column, settle_time_ns);
+    if let Some(event) = settle_replaced_active_hold_column(
+        &mut state.active_holds,
+        &mut state.notes,
+        column,
+        note_index,
+        start_time_ns,
+        &state.timing_players[player],
+        state.music_rate,
+    ) {
+        resolve_active_hold(state, event.column, event.resolution);
+    }
+    start_active_hold_column(
+        &mut state.active_holds,
+        &mut state.notes,
+        column,
+        note_index,
+        start_time_ns,
+        end_time_ns,
+        current_time_ns,
+    );
 }
 
 #[inline(always)]
@@ -149,18 +169,13 @@ pub(super) fn integrate_active_hold_to_time(
     }
 
     let player = player_for_col(state, column);
-    let music_rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
-        state.music_rate
-    } else {
-        1.0
-    };
     if let Some(resolution) = integrate_active_hold_column(
         &mut state.active_holds,
         &mut state.notes,
         column,
         &state.timing_players[player],
         target_time_ns,
-        music_rate,
+        state.music_rate,
     ) {
         resolve_active_hold(state, column, resolution);
     }
@@ -181,24 +196,38 @@ pub(super) fn handle_hold_success(state: &mut State, column: usize, note_index: 
     ) else {
         return;
     };
-    let stats_update = update.stats_update;
-    apply_hold_result_stats_to_player(&mut state.players[player], stats_update);
-    if !scoring_blocked {
+    let mut player_state = hold_resolution_player_state(&state.players[player]);
+    let player_update =
+        apply_hold_success_player_state(&mut player_state, update.stats_update, scoring_blocked);
+    apply_hold_resolution_player_state(&mut state.players[player], player_state);
+    if player_update.apply_life_change {
         let current_music_time = current_music_time_s(state);
-        apply_life_change(&mut state.players[player], current_music_time, LIFE_HELD);
+        apply_life_change(
+            &mut state.players[player],
+            current_music_time,
+            player_update.life_delta,
+        );
+    }
+    if player_update.capture_failed_ex_score_inputs {
         capture_failed_ex_score_inputs(state, player);
     }
-    if stats_update.update_grade_totals {
+    if hold_resolution_updates_grade_totals(
+        update.result,
+        player_update.stats_update,
+        is_state_dead(state, player),
+    ) {
         update_itg_grade_totals(&mut state.players[player]);
     }
-    if !scoring_blocked {
-        apply_hold_success_combo_state(&mut state.players[player]);
+    apply_combo_update(&mut state.players[player], player_update.combo_update);
+    if update.effects.trigger_hold_explosion {
+        trigger_hold_explosion(state, column);
     }
-    trigger_hold_explosion(state, column);
-    state.hold_judgments[column] = Some(HoldJudgmentRenderInfo {
-        result: update.result,
-        started_at_screen_s: state.total_elapsed_in_screen,
-    });
+    if update.effects.show_judgment {
+        state.hold_judgments[column] = Some(hold_judgment_render_info(
+            update.result,
+            state.total_elapsed_in_screen,
+        ));
+    }
 }
 
 pub(super) fn refresh_roll_life_on_step(
@@ -219,8 +248,24 @@ pub(super) fn update_active_holds(
     inputs: &[bool; MAX_COLS],
     current_time_ns: SongTimeNs,
 ) {
-    for (column, lane_pressed) in inputs.iter().copied().enumerate().take(state.num_cols) {
-        sync_active_hold_pressed_state(state, column, lane_pressed);
-        integrate_active_hold_to_time(state, column, current_time_ns);
+    let timing_players: [&_; MAX_PLAYERS] =
+        std::array::from_fn(|player| state.timing_players[player].as_ref());
+    let live_autoplay = live_autoplay_enabled(state);
+    let mut events = [None; MAX_COLS];
+    let update = update_active_hold_columns(
+        &mut state.active_holds,
+        &mut state.notes,
+        inputs,
+        state.num_cols,
+        state.cols_per_player,
+        state.num_players,
+        &timing_players,
+        current_time_ns,
+        state.music_rate,
+        live_autoplay,
+        &mut events,
+    );
+    for event in events.iter().take(update.event_count).flatten() {
+        resolve_active_hold(state, event.column, event.resolution);
     }
 }

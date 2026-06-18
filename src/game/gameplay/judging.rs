@@ -1,11 +1,12 @@
 use deadsync_profile as profile_data;
-use deadsync_rules::judgment::Judgment;
 use deadsync_rules::timing::TimingProfile;
 
 use super::{
-    FantasticWindowOptions, NoteHitEval, PlayerJudgmentTiming, SongTimeNs, State,
+    FantasticWindowOptions, FinalNoteHitPlan, NoteHitEval, PlayerJudgmentTiming, SongTimeNs, State,
     blue_fantastic_window_ms, build_player_judgment_timing_for_options, fantastic_window_seconds,
-    final_note_hit_judgment, live_autoplay_judgment_offset_music_ns, note_hit_eval_for_timing,
+    final_note_hit_plan,
+    gameplay_effective_player_global_offset_seconds as effective_global_offset_seconds,
+    live_autoplay_judgment_offset_music_ns, note_hit_eval_for_timing,
 };
 
 #[inline(always)]
@@ -106,27 +107,26 @@ pub(super) fn note_hit_eval(
 }
 
 #[inline(always)]
-pub(super) fn build_final_note_hit_judgment(
+pub(super) fn build_final_note_hit_plan(
     state: &mut State,
     player_idx: usize,
     hit: NoteHitEval,
     rate: f32,
-) -> (Judgment, SongTimeNs) {
+) -> FinalNoteHitPlan {
     let judgment_offset_music_ns = live_autoplay_judgment_offset_music_ns(
         state,
         player_idx,
         hit.window,
         hit.measured_offset_music_ns,
     );
-    final_note_hit_judgment(hit, judgment_offset_music_ns, rate)
+    final_note_hit_plan(hit, judgment_offset_music_ns, rate)
 }
 
 #[inline(always)]
 pub(super) fn effective_player_global_offset_seconds(state: &State, player_idx: usize) -> f32 {
-    let shift = state
-        .player_global_offset_shift_seconds
-        .get(player_idx)
-        .copied()
-        .unwrap_or(0.0);
-    state.global_offset_seconds + shift
+    effective_global_offset_seconds(
+        state.global_offset_seconds,
+        &state.player_global_offset_shift_seconds,
+        player_idx,
+    )
 }

@@ -6,21 +6,27 @@ use crate::game::parsing::song_lua::{
 };
 use deadsync_chart::SongData;
 use deadsync_chart::{ChartData, GameplayChartData};
-pub(super) use deadsync_gameplay::parse_song_lua_runtime_mods;
 #[cfg(test)]
 pub(super) use deadsync_gameplay::song_lua_ease_window_value;
 use deadsync_gameplay::{
     ActiveAttackRefreshInput, ActiveAttackRefreshState, ChartAttackTransformPlayer,
-    GameplayAttackMode, SongLuaCompilePlayStyle, append_song_lua_ease_targets,
+    GameplayAttackMode, SongLuaCompilePlayStyle, SongLuaRuntimeEaseAppend,
+    SongLuaRuntimeEaseTarget, append_song_lua_runtime_ease_window,
     apply_chart_attack_transforms as apply_chart_attack_transforms_to_notes,
     begin_outro_attack_visual_clear, build_attack_mask_windows as build_mask_windows_from_attacks,
-    build_attack_windows_for_mode, effective_attack_accel_effects,
+    build_attack_windows_for_mode, build_song_lua_column_offset_window_runtime,
+    build_song_lua_constant_attack_mask_window, build_song_lua_message_command_indices,
+    build_song_lua_note_hide_window_runtime, build_song_lua_overlay_ease_window_runtime,
+    build_song_lua_overlay_message_runtime, effective_attack_accel_effects,
     effective_attack_perspective_effects, effective_attack_scroll_effects,
     effective_attack_scroll_speed, effective_attack_visibility_effects,
-    effective_attack_visual_effects, group_song_lua_overlay_eases, offset_song_lua_message_events,
-    offset_song_lua_overlay_eases, player_chart_changes_for_options, refresh_active_attack_player,
+    effective_attack_visual_effects,
+    effective_player_global_offset_seconds as gameplay_effective_player_global_offset_seconds,
+    group_song_lua_overlay_eases, offset_song_lua_message_events, offset_song_lua_overlay_eases,
+    player_chart_changes_for_options, refresh_active_attack_player,
     song_lua_compile_player_screen_x as gameplay_song_lua_compile_player_screen_x,
-    song_lua_extend_column_offset_tails, song_lua_extend_ease_tails, song_lua_message_second,
+    song_lua_extend_column_offset_tails, song_lua_extend_ease_tails,
+    song_lua_message_command_index, song_lua_message_second,
     song_lua_sustain_end_second as gameplay_song_lua_sustain_end_second,
     song_lua_target_matches_player, song_lua_time_to_second as gameplay_song_lua_time_to_second,
     song_lua_window_seconds as gameplay_song_lua_window_seconds,
@@ -43,9 +49,9 @@ use std::time::Instant;
 
 use super::{
     AccelEffects, AppearanceEffects, ChartAttackEffects, GameplaySession, GameplayViewport,
-    MAX_PLAYERS, MiniAttackMode, PerspectiveEffects, ScrollEffects, State, VisibilityEffects,
-    VisualEffects, effective_mini_percent, perspective_effects_from_profile,
-    scroll_effects_from_option, spacing_multiplier_for_percent,
+    MAX_PLAYERS, PerspectiveEffects, ScrollEffects, State, VisibilityEffects, VisualEffects,
+    effective_mini_percent, perspective_effects_from_profile, scroll_effects_from_option,
+    spacing_multiplier_for_percent,
 };
 
 #[inline(always)]
@@ -211,31 +217,7 @@ fn build_song_lua_constant_window(
     if end_second <= start_second {
         return None;
     }
-    let mods = parse_song_lua_runtime_mods(&window.mods);
-    if !mods.has_runtime_mask_effect() {
-        return None;
-    }
-    Some(AttackMaskWindow {
-        start_second,
-        end_second,
-        sustain_end_second: f32::MAX,
-        persist_after_end: true,
-        clear_all: mods.clear_all,
-        chart: ChartAttackEffects::default(),
-        accel: mods.accel,
-        visual: mods.visual,
-        visual_speed: mods.visual_speed,
-        appearance: mods.appearance,
-        appearance_speed: mods.appearance_speed,
-        visibility: mods.visibility,
-        scroll: mods.scroll,
-        scroll_approach_speed: mods.scroll_approach_speed,
-        perspective: mods.perspective,
-        scroll_speed: mods.scroll_speed,
-        mini_percent: mods.mini_percent,
-        mini_mode: MiniAttackMode::Delta,
-        mini_speed: mods.mini_speed,
-    })
+    build_song_lua_constant_attack_mask_window(start_second, end_second, &window.mods)
 }
 
 pub(super) fn build_song_lua_constant_windows_for_player(
@@ -262,6 +244,49 @@ pub(super) fn build_song_lua_constant_windows_for_player(
         }
     }
     out
+}
+
+fn song_lua_runtime_ease_target(target: &SongLuaEaseTarget) -> SongLuaRuntimeEaseTarget<'_> {
+    match target {
+        SongLuaEaseTarget::Mod(target_name) => SongLuaRuntimeEaseTarget::Mod(target_name.as_str()),
+        SongLuaEaseTarget::PlayerX => {
+            SongLuaRuntimeEaseTarget::Player(SongLuaEaseMaskTarget::PlayerX)
+        }
+        SongLuaEaseTarget::PlayerY => {
+            SongLuaRuntimeEaseTarget::Player(SongLuaEaseMaskTarget::PlayerY)
+        }
+        SongLuaEaseTarget::PlayerZ => {
+            SongLuaRuntimeEaseTarget::Player(SongLuaEaseMaskTarget::PlayerZ)
+        }
+        SongLuaEaseTarget::PlayerRotationX => {
+            SongLuaRuntimeEaseTarget::Player(SongLuaEaseMaskTarget::PlayerRotationX)
+        }
+        SongLuaEaseTarget::PlayerRotationZ => {
+            SongLuaRuntimeEaseTarget::Player(SongLuaEaseMaskTarget::PlayerRotationZ)
+        }
+        SongLuaEaseTarget::PlayerRotationY => {
+            SongLuaRuntimeEaseTarget::Player(SongLuaEaseMaskTarget::PlayerRotationY)
+        }
+        SongLuaEaseTarget::PlayerSkewX => {
+            SongLuaRuntimeEaseTarget::Player(SongLuaEaseMaskTarget::PlayerSkewX)
+        }
+        SongLuaEaseTarget::PlayerSkewY => {
+            SongLuaRuntimeEaseTarget::Player(SongLuaEaseMaskTarget::PlayerSkewY)
+        }
+        SongLuaEaseTarget::PlayerZoom => {
+            SongLuaRuntimeEaseTarget::Player(SongLuaEaseMaskTarget::PlayerZoom)
+        }
+        SongLuaEaseTarget::PlayerZoomX => {
+            SongLuaRuntimeEaseTarget::Player(SongLuaEaseMaskTarget::PlayerZoomX)
+        }
+        SongLuaEaseTarget::PlayerZoomY => {
+            SongLuaRuntimeEaseTarget::Player(SongLuaEaseMaskTarget::PlayerZoomY)
+        }
+        SongLuaEaseTarget::PlayerZoomZ => {
+            SongLuaRuntimeEaseTarget::Player(SongLuaEaseMaskTarget::PlayerZoomZ)
+        }
+        SongLuaEaseTarget::Function => SongLuaRuntimeEaseTarget::Function,
+    }
 }
 
 pub(super) fn build_song_lua_ease_windows_for_player(
@@ -300,167 +325,34 @@ pub(super) fn build_song_lua_ease_windows_for_player(
         if sustain_end_second <= start_second {
             continue;
         }
-        match &window.target {
-            SongLuaEaseTarget::Mod(target_name) => {
-                if !append_song_lua_ease_targets(
-                    &mut out,
-                    start_second,
-                    end_second,
-                    sustain_end_second,
+        let target = song_lua_runtime_ease_target(&window.target);
+        if append_song_lua_runtime_ease_window(
+            &mut out,
+            start_second,
+            end_second,
+            sustain_end_second,
+            target,
+            window.from,
+            window.to,
+            window.easing.as_deref(),
+            window.opt1,
+            window.opt2,
+        ) == SongLuaRuntimeEaseAppend::Unsupported
+        {
+            unsupported_targets += 1;
+            if let SongLuaEaseTarget::Mod(target_name) = &window.target {
+                debug!(
+                    "Unsupported gameplay lua ease target for player {}: target='{}' start={:.3} limit={:.3} span={:?} from={:.3} to={:.3} easing={:?}",
+                    player + 1,
                     target_name,
+                    window.start,
+                    window.limit,
+                    window.span_mode,
                     window.from,
                     window.to,
-                    window.easing.as_deref(),
-                    window.opt1,
-                    window.opt2,
-                ) {
-                    unsupported_targets += 1;
-                    debug!(
-                        "Unsupported gameplay lua ease target for player {}: target='{}' start={:.3} limit={:.3} span={:?} from={:.3} to={:.3} easing={:?}",
-                        player + 1,
-                        target_name,
-                        window.start,
-                        window.limit,
-                        window.span_mode,
-                        window.from,
-                        window.to,
-                        window.easing
-                    );
-                }
+                    window.easing
+                );
             }
-            SongLuaEaseTarget::PlayerX => out.push(SongLuaEaseMaskWindow {
-                start_second,
-                end_second,
-                sustain_end_second,
-                target: SongLuaEaseMaskTarget::PlayerX,
-                from: window.from,
-                to: window.to,
-                easing: window.easing.clone(),
-                opt1: window.opt1,
-                opt2: window.opt2,
-            }),
-            SongLuaEaseTarget::PlayerY => out.push(SongLuaEaseMaskWindow {
-                start_second,
-                end_second,
-                sustain_end_second,
-                target: SongLuaEaseMaskTarget::PlayerY,
-                from: window.from,
-                to: window.to,
-                easing: window.easing.clone(),
-                opt1: window.opt1,
-                opt2: window.opt2,
-            }),
-            SongLuaEaseTarget::PlayerZ => out.push(SongLuaEaseMaskWindow {
-                start_second,
-                end_second,
-                sustain_end_second,
-                target: SongLuaEaseMaskTarget::PlayerZ,
-                from: window.from,
-                to: window.to,
-                easing: window.easing.clone(),
-                opt1: window.opt1,
-                opt2: window.opt2,
-            }),
-            SongLuaEaseTarget::PlayerRotationX => out.push(SongLuaEaseMaskWindow {
-                start_second,
-                end_second,
-                sustain_end_second,
-                target: SongLuaEaseMaskTarget::PlayerRotationX,
-                from: window.from,
-                to: window.to,
-                easing: window.easing.clone(),
-                opt1: window.opt1,
-                opt2: window.opt2,
-            }),
-            SongLuaEaseTarget::PlayerRotationZ => out.push(SongLuaEaseMaskWindow {
-                start_second,
-                end_second,
-                sustain_end_second,
-                target: SongLuaEaseMaskTarget::PlayerRotationZ,
-                from: window.from,
-                to: window.to,
-                easing: window.easing.clone(),
-                opt1: window.opt1,
-                opt2: window.opt2,
-            }),
-            SongLuaEaseTarget::PlayerRotationY => out.push(SongLuaEaseMaskWindow {
-                start_second,
-                end_second,
-                sustain_end_second,
-                target: SongLuaEaseMaskTarget::PlayerRotationY,
-                from: window.from,
-                to: window.to,
-                easing: window.easing.clone(),
-                opt1: window.opt1,
-                opt2: window.opt2,
-            }),
-            SongLuaEaseTarget::PlayerSkewX => out.push(SongLuaEaseMaskWindow {
-                start_second,
-                end_second,
-                sustain_end_second,
-                target: SongLuaEaseMaskTarget::PlayerSkewX,
-                from: window.from,
-                to: window.to,
-                easing: window.easing.clone(),
-                opt1: window.opt1,
-                opt2: window.opt2,
-            }),
-            SongLuaEaseTarget::PlayerSkewY => out.push(SongLuaEaseMaskWindow {
-                start_second,
-                end_second,
-                sustain_end_second,
-                target: SongLuaEaseMaskTarget::PlayerSkewY,
-                from: window.from,
-                to: window.to,
-                easing: window.easing.clone(),
-                opt1: window.opt1,
-                opt2: window.opt2,
-            }),
-            SongLuaEaseTarget::PlayerZoom => out.push(SongLuaEaseMaskWindow {
-                start_second,
-                end_second,
-                sustain_end_second,
-                target: SongLuaEaseMaskTarget::PlayerZoom,
-                from: window.from,
-                to: window.to,
-                easing: window.easing.clone(),
-                opt1: window.opt1,
-                opt2: window.opt2,
-            }),
-            SongLuaEaseTarget::PlayerZoomX => out.push(SongLuaEaseMaskWindow {
-                start_second,
-                end_second,
-                sustain_end_second,
-                target: SongLuaEaseMaskTarget::PlayerZoomX,
-                from: window.from,
-                to: window.to,
-                easing: window.easing.clone(),
-                opt1: window.opt1,
-                opt2: window.opt2,
-            }),
-            SongLuaEaseTarget::PlayerZoomY => out.push(SongLuaEaseMaskWindow {
-                start_second,
-                end_second,
-                sustain_end_second,
-                target: SongLuaEaseMaskTarget::PlayerZoomY,
-                from: window.from,
-                to: window.to,
-                easing: window.easing.clone(),
-                opt1: window.opt1,
-                opt2: window.opt2,
-            }),
-            SongLuaEaseTarget::PlayerZoomZ => out.push(SongLuaEaseMaskWindow {
-                start_second,
-                end_second,
-                sustain_end_second,
-                target: SongLuaEaseMaskTarget::PlayerZoomZ,
-                from: window.from,
-                to: window.to,
-                easing: window.easing.clone(),
-                opt1: window.opt1,
-                opt2: window.opt2,
-            }),
-            SongLuaEaseTarget::Function => {}
         }
     }
     song_lua_extend_ease_tails(&mut out, constant_windows);
@@ -498,17 +390,17 @@ pub(super) fn build_song_lua_column_offset_windows_for_player(
             global_offset_seconds,
             end_second,
         );
-        out.push(SongLuaColumnOffsetWindowRuntime {
-            column: window.column,
+        out.push(build_song_lua_column_offset_window_runtime(
+            window.column,
             start_second,
             end_second,
             sustain_end_second,
-            from_y: window.from_y,
-            to_y: window.to_y,
-            easing: window.easing.clone(),
-            opt1: window.opt1,
-            opt2: window.opt2,
-        });
+            window.from_y,
+            window.to_y,
+            window.easing.as_deref(),
+            window.opt1,
+            window.opt2,
+        ));
     }
     song_lua_extend_column_offset_tails(&mut out);
     out
@@ -565,18 +457,18 @@ fn build_song_lua_overlay_ease_windows_with_events(
         );
         let cutoff_second =
             song_lua_overlay_ease_cutoff_second(compiled, ease, overlay_events, start_second);
-        out.push(SongLuaOverlayEaseWindowRuntime {
-            overlay_index: ease.overlay_index,
+        out.push(build_song_lua_overlay_ease_window_runtime(
+            ease.overlay_index,
             start_second,
             end_second,
             sustain_end_second,
             cutoff_second,
-            from: ease.from,
-            to: ease.to,
-            easing: ease.easing.clone(),
-            opt1: ease.opt1,
-            opt2: ease.opt2,
-        });
+            ease.from,
+            ease.to,
+            ease.easing.as_deref(),
+            ease.opt1,
+            ease.opt2,
+        ));
     }
     out
 }
@@ -603,31 +495,26 @@ fn build_song_lua_actor_message_events_with_seconds(
     message_seconds: &[Option<f32>],
     commands: &[SongLuaOverlayMessageCommand],
 ) -> Vec<SongLuaOverlayMessageRuntime> {
-    let command_indices = song_lua_message_command_indices(commands);
+    let command_indices = build_song_lua_message_command_indices(
+        commands
+            .iter()
+            .enumerate()
+            .map(|(idx, command)| (idx, command.message.as_str())),
+    );
     let mut out = Vec::new();
     for (idx, message) in messages.iter().enumerate() {
         let Some(event_second) = message_seconds.get(idx).copied().flatten() else {
             continue;
         };
-        let Some(&command_index) = command_indices.get(&message.message.to_ascii_lowercase())
+        let Some(command_index) =
+            song_lua_message_command_index(&command_indices, &message.message)
         else {
             continue;
         };
-        out.push(SongLuaOverlayMessageRuntime {
+        out.push(build_song_lua_overlay_message_runtime(
             event_second,
             command_index,
-        });
-    }
-    out
-}
-
-fn song_lua_message_command_indices(
-    commands: &[SongLuaOverlayMessageCommand],
-) -> BTreeMap<String, usize> {
-    let mut out = BTreeMap::new();
-    for (idx, command) in commands.iter().enumerate() {
-        out.entry(command.message.to_ascii_lowercase())
-            .or_insert(idx);
+        ));
     }
     out
 }
@@ -1089,11 +976,11 @@ pub(super) fn build_song_lua_runtime_windows(
         hidden_players[..compiled.hidden_players.len()].copy_from_slice(&compiled.hidden_players);
         for hide in &compiled.note_hides {
             if hide.player < MAX_PLAYERS {
-                note_hides[hide.player].push(SongLuaNoteHideWindowRuntime {
-                    column: hide.column,
-                    start_beat: hide.start_beat,
-                    end_beat: hide.end_beat,
-                });
+                note_hides[hide.player].push(build_song_lua_note_hide_window_runtime(
+                    hide.column,
+                    hide.start_beat,
+                    hide.end_beat,
+                ));
             }
         }
 
@@ -1102,8 +989,11 @@ pub(super) fn build_song_lua_runtime_windows(
         let mut total_eases = 0usize;
         let mut total_column_offsets = 0usize;
         for player in 0..num_players {
-            let player_global_offset_seconds =
-                machine_global_offset_seconds + player_global_offset_shift_seconds[player];
+            let player_global_offset_seconds = gameplay_effective_player_global_offset_seconds(
+                machine_global_offset_seconds,
+                player_global_offset_shift_seconds,
+                player,
+            );
             constant_windows[player] = build_song_lua_constant_windows_for_player(
                 &compiled,
                 timing_players[player].as_ref(),

@@ -3,8 +3,8 @@ use log::debug;
 use deadsync_rules::life::LifeMeter;
 
 use super::{
-    MAX_PLAYERS, PlayerRuntime, State, apply_gameplay_life_delta, course_submit_life_eligible,
-    player_life_is_dead,
+    MAX_PLAYERS, PlayerLifeStatus, PlayerRuntime, State, all_joined_players_failed_for_statuses,
+    apply_gameplay_life_delta, course_submit_life_eligible, player_life_is_dead,
 };
 
 #[inline(always)]
@@ -19,15 +19,11 @@ pub(super) fn is_state_dead(state: &State, player: usize) -> bool {
 
 #[inline(always)]
 pub(super) fn all_joined_players_failed(state: &State) -> bool {
-    if state.num_players == 0 {
-        return false;
-    }
-    for player in 0..state.num_players {
-        if !is_state_dead(state, player) {
-            return false;
-        }
-    }
-    true
+    let players = std::array::from_fn(|player| PlayerLifeStatus {
+        life: state.players[player].life,
+        is_failing: state.players[player].is_failing,
+    });
+    all_joined_players_failed_for_statuses(&players, state.num_players)
 }
 
 #[inline(always)]

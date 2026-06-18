@@ -1,11 +1,12 @@
 use deadsync_rules::timing::TimingData;
 use std::sync::Arc;
 use std::time::Instant;
-use winit::keyboard::KeyCode;
 
 use super::{
-    GameplayOffsetAdjustKey, State, clear_offset_adjust_hold_state, compute_end_times_ns,
-    player_index_for_column, start_offset_adjust_hold_state, tick_offset_adjust_hold_state,
+    GameplayOffsetAdjustKey, MAX_PLAYERS, State, clear_offset_adjust_hold_state,
+    compute_end_times_ns, offset_adjust_target, offset_delta_target_seconds,
+    refresh_timing_caches_for_offset_change, start_offset_adjust_hold_state,
+    tick_offset_adjust_hold_state,
 };
 
 #[inline(always)]
@@ -24,31 +25,19 @@ pub(super) fn mutate_timing_arc(
 
 #[inline(always)]
 pub(super) fn refresh_timing_after_offset_change(state: &mut State) {
-    let num_players = state.num_players;
-    let cols_per_player = state.cols_per_player;
-    for (time_ns, note) in state.note_time_cache_ns.iter_mut().zip(&state.notes) {
-        let player = player_index_for_column(num_players, cols_per_player, note.column);
-        *time_ns = state.timing_players[player].get_time_for_beat_ns(note.beat);
-    }
-    for (time_opt_ns, note) in state.hold_end_time_cache_ns.iter_mut().zip(&state.notes) {
-        let player = player_index_for_column(num_players, cols_per_player, note.column);
-        *time_opt_ns = note
-            .hold
-            .as_ref()
-            .map(|h| state.timing_players[player].get_time_for_beat_ns(h.end_beat));
-    }
-    for row_entry in &mut state.row_entries {
-        row_entry.time_ns = state.note_time_cache_ns[row_entry.note_indices()[0]];
-    }
-    for player in 0..state.num_players {
-        let mine_note_time_ns = &mut state.mine_note_time_ns[player];
-        mine_note_time_ns.clear();
-        mine_note_time_ns.extend(
-            state.mine_note_ix[player]
-                .iter()
-                .map(|&note_index| state.note_time_cache_ns[note_index]),
-        );
-    }
+    let timing_players: [&_; MAX_PLAYERS] =
+        std::array::from_fn(|player| state.timing_players[player].as_ref());
+    refresh_timing_caches_for_offset_change(
+        &state.notes,
+        &timing_players,
+        state.num_players,
+        state.cols_per_player,
+        &mut state.note_time_cache_ns,
+        &mut state.hold_end_time_cache_ns,
+        &mut state.row_entries,
+        &state.mine_note_ix,
+        &mut state.mine_note_time_ns,
+    );
     state.beat_info_cache.reset(&state.timing);
 
     let (notes_end_time_ns, music_end_time_ns) = compute_end_times_ns(
@@ -63,40 +52,26 @@ pub(super) fn refresh_timing_after_offset_change(state: &mut State) {
 }
 
 #[inline(always)]
-fn offset_adjust_key(code: KeyCode) -> Option<GameplayOffsetAdjustKey> {
-    match code {
-        KeyCode::F11 => Some(GameplayOffsetAdjustKey::Decrease),
-        KeyCode::F12 => Some(GameplayOffsetAdjustKey::Increase),
-        _ => None,
-    }
-}
-
-#[inline(always)]
-pub(super) fn clear_offset_adjust_hold(state: &mut State, code: KeyCode) -> bool {
-    let Some(key) = offset_adjust_key(code) else {
-        return false;
-    };
+pub(super) fn clear_offset_adjust_hold_key(state: &mut State, key: GameplayOffsetAdjustKey) {
     clear_offset_adjust_hold_state(
         &mut state.offset_adjust_held_since,
         &mut state.offset_adjust_last_at,
         key,
     );
-    true
 }
 
 #[inline(always)]
-pub(super) fn start_offset_adjust_hold(
+pub(super) fn start_offset_adjust_hold_key(
     state: &mut State,
-    code: KeyCode,
+    key: GameplayOffsetAdjustKey,
     at: Instant,
-) -> Option<f32> {
-    let key = offset_adjust_key(code)?;
-    Some(start_offset_adjust_hold_state(
+) -> f32 {
+    start_offset_adjust_hold_state(
         &mut state.offset_adjust_held_since,
         &mut state.offset_adjust_last_at,
         key,
         at,
-    ))
+    )
 }
 
 #[inline(always)]
@@ -114,21 +89,23 @@ pub(super) fn update_offset_adjust_hold(state: &mut State) {
         ) else {
             continue;
         };
-        if state.shift_held {
-            let _ = apply_global_offset_delta(state, delta);
-        } else if state.course_display_totals.is_none() {
-            let _ = apply_song_offset_delta(state, delta);
+        match offset_adjust_target(state.shift_held, state.course_display_totals.is_some()) {
+            super::GameplayOffsetAdjustTarget::Global => {
+                let _ = apply_global_offset_delta(state, delta);
+            }
+            super::GameplayOffsetAdjustTarget::Song => {
+                let _ = apply_song_offset_delta(state, delta);
+            }
+            super::GameplayOffsetAdjustTarget::None => {}
         }
     }
 }
 
 #[inline(always)]
 pub(super) fn apply_global_offset_delta(state: &mut State, delta: f32) -> bool {
-    let old_offset = state.global_offset_seconds;
-    let new_offset = old_offset + delta;
-    if (new_offset - old_offset).abs() < 0.000_001_f32 {
+    let Some(new_offset) = offset_delta_target_seconds(state.global_offset_seconds, delta) else {
         return false;
-    }
+    };
     mutate_timing_arc(&mut state.timing, |timing| {
         timing.set_global_offset_seconds(new_offset)
     });
@@ -145,11 +122,9 @@ pub(super) fn apply_global_offset_delta(state: &mut State, delta: f32) -> bool {
 
 #[inline(always)]
 pub(super) fn apply_song_offset_delta(state: &mut State, delta: f32) -> bool {
-    let old_offset = state.song_offset_seconds;
-    let new_offset = old_offset + delta;
-    if (new_offset - old_offset).abs() < 0.000_001_f32 {
+    let Some(new_offset) = offset_delta_target_seconds(state.song_offset_seconds, delta) else {
         return false;
-    }
+    };
 
     mutate_timing_arc(&mut state.timing, |timing| {
         timing.shift_song_offset_seconds(delta)

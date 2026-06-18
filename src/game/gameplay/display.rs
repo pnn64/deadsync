@@ -1,7 +1,7 @@
 use deadsync_gameplay::{
     capture_failed_ex_score_inputs as gameplay_capture_failed_ex_score_inputs,
     effective_ex_score_inputs as gameplay_effective_ex_score_inputs,
-    record_combo_window_count_for_judgment, record_display_window_counts_for_judgment,
+    record_display_window_counts_for_judgment,
 };
 use deadsync_profile::ScoreDisplayMode;
 use deadsync_rules::judgment::{self, JudgeGrade, Judgment};
@@ -9,13 +9,13 @@ use deadsync_rules::timing::{self, WindowCounts};
 
 use super::{
     CourseDisplayCarry, CourseDisplayTotals, DisplayWindowCountsMode, DisplayWindowCountsSources,
-    ExScoreInputs, GameplayScoreDisplayMode, ItgScoreInputs, ItgScoreStage, MAX_PLAYERS,
-    PlayerRuntime, State, display_ex_score_percent_for_mode,
-    display_hard_ex_score_percent_for_mode, display_itg_score_percent_for_mode,
-    display_judgment_count_for_grade, display_window_counts_current, display_window_counts_mode,
-    display_window_counts_with_carry, ex_score_data_from_display_inputs,
-    itg_score_inputs_from_display, itg_score_percent_from_inputs, player_blue_window_ms,
-    predictive_itg_score_percent_from_inputs,
+    ExScoreInputs, GameplayScoreDisplayMode, ItgScoreInputs, ItgScoreStage, MAX_PLAYERS, State,
+    course_display_carry_for_player, course_display_totals_for_player,
+    display_ex_score_percent_for_mode, display_hard_ex_score_percent_for_mode,
+    display_itg_score_percent_for_mode, display_judgment_count_for_grade,
+    display_window_counts_for_notes, display_window_counts_with_carry,
+    ex_score_data_from_display_inputs, ex_score_inputs_from_display, itg_score_inputs_from_display,
+    itg_score_percent_from_inputs, player_blue_window_ms, predictive_itg_score_percent_from_inputs,
 };
 
 #[inline(always)]
@@ -37,17 +37,25 @@ fn display_window_counts_10ms(state: &State, player_idx: usize) -> WindowCounts 
 }
 
 #[inline(always)]
-fn live_ex_score_inputs(state: &State, player_idx: usize) -> ExScoreInputs {
+fn display_score_stage(state: &State, player_idx: usize) -> ItgScoreStage {
     let player = &state.players[player_idx];
-    ExScoreInputs {
-        counts: display_window_counts(state, player_idx, None),
-        counts_10ms: display_window_counts_10ms(state, player_idx),
+    ItgScoreStage {
+        scoring_counts: player.scoring_counts,
         holds_held_for_score: player.holds_held_for_score,
         holds_let_go_for_score: player.holds_let_go_for_score,
         rolls_held_for_score: player.rolls_held_for_score,
         rolls_let_go_for_score: player.rolls_let_go_for_score,
         mines_hit_for_score: player.mines_hit_for_score,
     }
+}
+
+#[inline(always)]
+fn live_ex_score_inputs(state: &State, player_idx: usize) -> ExScoreInputs {
+    ex_score_inputs_from_display(
+        display_window_counts(state, player_idx, None),
+        display_window_counts_10ms(state, player_idx),
+        display_score_stage(state, player_idx),
+    )
 }
 
 #[inline(always)]
@@ -63,13 +71,7 @@ fn ex_score_data_from_inputs(
 
 #[inline(always)]
 pub fn display_carry_for_player(state: &State, player_idx: usize) -> CourseDisplayCarry {
-    if player_idx >= MAX_PLAYERS {
-        return CourseDisplayCarry::default();
-    }
-    state
-        .course_display_carry
-        .as_ref()
-        .map_or(CourseDisplayCarry::default(), |carry| carry[player_idx])
+    course_display_carry_for_player(state.course_display_carry.as_ref(), player_idx)
 }
 
 #[inline(always)]
@@ -92,25 +94,16 @@ pub(super) fn record_display_window_counts(
 }
 
 #[inline(always)]
-pub(super) fn record_current_combo_window_count(player: &mut PlayerRuntime, judgment: &Judgment) {
-    record_combo_window_count_for_judgment(&mut player.current_combo_window_counts, judgment);
-}
-
-#[inline(always)]
 pub fn display_totals_for_player(state: &State, player_idx: usize) -> CourseDisplayTotals {
-    if player_idx >= MAX_PLAYERS {
-        return CourseDisplayTotals::default();
-    }
-    if let Some(totals) = state.course_display_totals.as_ref() {
-        return totals[player_idx];
-    }
-    CourseDisplayTotals {
-        possible_grade_points: state.possible_grade_points[player_idx],
-        total_steps: state.total_steps[player_idx],
-        holds_total: state.holds_total[player_idx],
-        rolls_total: state.rolls_total[player_idx],
-        mines_total: state.mines_total[player_idx],
-    }
+    course_display_totals_for_player(
+        state.course_display_totals.as_ref(),
+        &state.possible_grade_points,
+        &state.total_steps,
+        &state.holds_total,
+        &state.rolls_total,
+        &state.mines_total,
+        player_idx,
+    )
 }
 
 pub fn display_judgment_count(state: &State, player_idx: usize, grade: JudgeGrade) -> u32 {
@@ -136,25 +129,19 @@ pub fn display_window_counts(
     if player_idx >= state.num_players {
         return WindowCounts::default();
     }
-    let mode = display_window_counts_mode(blue_window_ms, player_blue_window_ms(state, player_idx));
     let sources = DisplayWindowCountsSources {
         canonical: state.live_window_counts[player_idx],
         ten_ms_blue: state.live_window_counts_10ms_blue[player_idx],
         display_blue: state.live_window_counts_display_blue[player_idx],
     };
-
-    let current = match display_window_counts_current(sources, mode) {
-        Some(counts) => counts,
-        None => {
-            let split_ms = match mode {
-                DisplayWindowCountsMode::CustomBlue { split_ms } => split_ms,
-                _ => return WindowCounts::default(),
-            };
-            let (start, end) = state.note_ranges[player_idx];
-            timing::compute_window_counts_blue_ms(&state.notes[start..end], split_ms)
-        }
-    };
-    display_window_counts_with_carry(current, display_carry_for_player(state, player_idx), mode)
+    let (start, end) = state.note_ranges[player_idx];
+    display_window_counts_for_notes(
+        sources,
+        display_carry_for_player(state, player_idx),
+        &state.notes[start..end],
+        blue_window_ms,
+        player_blue_window_ms(state, player_idx),
+    )
 }
 
 pub fn display_itg_score_percent(state: &State, player_idx: usize) -> f64 {
@@ -166,16 +153,8 @@ fn display_itg_score_inputs(state: &State, player_idx: usize) -> Option<ItgScore
         return None;
     }
     let carry = display_carry_for_player(state, player_idx);
-    let player = &state.players[player_idx];
     Some(itg_score_inputs_from_display(
-        ItgScoreStage {
-            scoring_counts: player.scoring_counts,
-            holds_held_for_score: player.holds_held_for_score,
-            holds_let_go_for_score: player.holds_let_go_for_score,
-            rolls_held_for_score: player.rolls_held_for_score,
-            rolls_let_go_for_score: player.rolls_let_go_for_score,
-            mines_hit_for_score: player.mines_hit_for_score,
-        },
+        display_score_stage(state, player_idx),
         carry,
         display_totals_for_player(state, player_idx),
     ))

@@ -4,14 +4,15 @@ use std::time::Instant;
 use winit::keyboard::KeyCode;
 
 use super::offset::{
-    apply_global_offset_delta, apply_song_offset_delta, clear_offset_adjust_hold,
-    start_offset_adjust_hold,
+    apply_global_offset_delta, apply_song_offset_delta, clear_offset_adjust_hold_key,
+    start_offset_adjust_hold_key,
 };
 use super::{
+    GameplayOffsetAdjustKey, GameplayOffsetAdjustTarget, GameplayRawKeyInput, GameplayRawKeyPlan,
     GameplaySessionCommand, MAX_COLS, State, assist_clap_cursor_for_row, assist_row_no_offset,
-    autoplay_cursor_for_enable, gameplay_tick_mode_from_profile, next_autosync_mode,
-    next_timing_tick_mode, player_note_range, profile_tick_mode_from_gameplay,
-    queue_session_command, timing_tick_mode_debug_label as gameplay_tick_mode_debug_label,
+    autoplay_cursor_for_enable, gameplay_raw_key_plan, gameplay_tick_mode_from_profile,
+    player_note_range, profile_tick_mode_from_gameplay, queue_session_command,
+    timing_tick_mode_debug_label as gameplay_tick_mode_debug_label,
     timing_tick_mode_status_line as gameplay_tick_mode_status_line,
 };
 
@@ -70,17 +71,24 @@ fn set_autoplay_enabled(state: &mut State, enabled: bool, now_music_time: f32) {
 }
 
 #[inline(always)]
-fn cycle_autosync_mode(state: &mut State) {
-    state.autosync_mode =
-        next_autosync_mode(state.autosync_mode, state.course_display_totals.is_some());
-}
-
-#[inline(always)]
 fn update_raw_modifier_state(state: &mut State, code: KeyCode, pressed: bool) {
     match code {
         KeyCode::ShiftLeft | KeyCode::ShiftRight => state.shift_held = pressed,
         KeyCode::ControlLeft | KeyCode::ControlRight => state.ctrl_held = pressed,
         _ => {}
+    }
+}
+
+#[inline(always)]
+fn gameplay_raw_key_input(code: KeyCode) -> GameplayRawKeyInput {
+    match code {
+        KeyCode::KeyR => GameplayRawKeyInput::Restart,
+        KeyCode::F6 => GameplayRawKeyInput::Autosync,
+        KeyCode::F7 => GameplayRawKeyInput::TimingTick,
+        KeyCode::F8 => GameplayRawKeyInput::Autoplay,
+        KeyCode::F11 => GameplayRawKeyInput::OffsetAdjust(GameplayOffsetAdjustKey::Decrease),
+        KeyCode::F12 => GameplayRawKeyInput::OffsetAdjust(GameplayOffsetAdjustKey::Increase),
+        _ => GameplayRawKeyInput::Other,
     }
 }
 
@@ -103,43 +111,40 @@ pub fn handle_queued_raw_key(
     allow_commands: bool,
 ) -> RawKeyAction {
     update_raw_modifier_state(state, code, pressed);
-    if !pressed {
-        let _ = clear_offset_adjust_hold(state, code);
-        return RawKeyAction::None;
-    }
-    if !allow_commands {
-        return RawKeyAction::None;
-    }
-    if code == KeyCode::KeyR && state.ctrl_held {
-        return RawKeyAction::Restart;
-    }
-    if code == KeyCode::F6 {
-        cycle_autosync_mode(state);
-        return RawKeyAction::None;
-    }
-
-    if code == KeyCode::F7 {
-        let next_mode = profile_tick_mode_from_gameplay(next_timing_tick_mode(
-            gameplay_tick_mode_from_profile(state.tick_mode),
-        ));
-        set_tick_mode(state, next_mode, now_music_time);
-        return RawKeyAction::None;
-    }
-
-    if code == KeyCode::F8 {
-        set_autoplay_enabled(state, !state.autoplay_enabled, now_music_time);
-        return RawKeyAction::None;
-    }
-    let Some(delta) = start_offset_adjust_hold(state, code, timestamp) else {
-        return RawKeyAction::None;
-    };
-
-    if state.shift_held {
-        let _ = apply_global_offset_delta(state, delta);
-        return RawKeyAction::None;
-    }
-    if state.course_display_totals.is_none() {
-        let _ = apply_song_offset_delta(state, delta);
+    let plan = gameplay_raw_key_plan(
+        gameplay_raw_key_input(code),
+        pressed,
+        allow_commands,
+        state.ctrl_held,
+        state.shift_held,
+        state.autosync_mode,
+        state.course_display_totals.is_some(),
+        gameplay_tick_mode_from_profile(state.tick_mode),
+        state.autoplay_enabled,
+    );
+    match plan {
+        GameplayRawKeyPlan::Restart => return RawKeyAction::Restart,
+        GameplayRawKeyPlan::SetAutosyncMode(mode) => state.autosync_mode = mode,
+        GameplayRawKeyPlan::SetTimingTickMode(mode) => {
+            set_tick_mode(state, profile_tick_mode_from_gameplay(mode), now_music_time)
+        }
+        GameplayRawKeyPlan::SetAutoplayEnabled(enabled) => {
+            set_autoplay_enabled(state, enabled, now_music_time)
+        }
+        GameplayRawKeyPlan::StartOffsetAdjust { key, target } => {
+            let delta = start_offset_adjust_hold_key(state, key, timestamp);
+            match target {
+                GameplayOffsetAdjustTarget::Global => {
+                    let _ = apply_global_offset_delta(state, delta);
+                }
+                GameplayOffsetAdjustTarget::Song => {
+                    let _ = apply_song_offset_delta(state, delta);
+                }
+                GameplayOffsetAdjustTarget::None => {}
+            }
+        }
+        GameplayRawKeyPlan::ClearOffsetAdjust(key) => clear_offset_adjust_hold_key(state, key),
+        GameplayRawKeyPlan::None => {}
     }
     RawKeyAction::None
 }

@@ -9,7 +9,7 @@ use deadsync_rules::stream::StreamSegment;
 
 use super::{
     CourseDisplayCarry, CourseDisplayStage, MAX_PLAYERS, ScrollSpeedSetting, State,
-    course_display_carry_for_stage,
+    course_display_carry_for_stages,
 };
 
 #[inline(always)]
@@ -115,40 +115,36 @@ pub(crate) fn gameplay_target_score_setting(
 }
 
 pub fn course_display_carry_from_state(state: &State) -> [CourseDisplayCarry; MAX_PLAYERS] {
-    let mut carry = [CourseDisplayCarry::default(); MAX_PLAYERS];
-    for player in 0..state.num_players.min(MAX_PLAYERS) {
+    let stages = std::array::from_fn(|player| {
+        if player >= state.num_players.min(MAX_PLAYERS) {
+            return CourseDisplayStage::default();
+        }
         let p = &state.players[player];
-        let previous = state
-            .course_display_carry
-            .as_ref()
-            .map_or(CourseDisplayCarry::default(), |old| old[player]);
-        carry[player] = course_display_carry_for_stage(
-            previous,
-            CourseDisplayStage {
-                life: p.life,
-                judgment_counts: p.judgment_counts,
-                scoring_counts: p.scoring_counts,
-                full_combo_grade: p.full_combo_grade,
-                current_combo_grade: p.current_combo_grade,
-                current_combo_window_counts: p.current_combo_window_counts,
-                combo: p.combo,
-                first_fc_attempt_broken: p.first_fc_attempt_broken,
-                window_counts: state.live_window_counts[player],
-                window_counts_10ms_blue: state.live_window_counts_10ms_blue[player],
-                window_counts_display_blue: state.live_window_counts_display_blue[player],
-                holds_held: p.holds_held,
-                rolls_held: p.rolls_held,
-                mines_avoided: p.mines_avoided,
-                holds_held_for_score: p.holds_held_for_score,
-                holds_let_go_for_score: p.holds_let_go_for_score,
-                rolls_held_for_score: p.rolls_held_for_score,
-                rolls_let_go_for_score: p.rolls_let_go_for_score,
-                mines_hit_for_score: p.mines_hit_for_score,
-            },
-        );
-    }
-    if state.num_players == 1 {
-        carry[1] = carry[0];
-    }
-    carry
+        CourseDisplayStage {
+            life: p.life,
+            judgment_counts: p.judgment_counts,
+            scoring_counts: p.scoring_counts,
+            full_combo_grade: p.full_combo_grade,
+            current_combo_grade: p.current_combo_grade,
+            current_combo_window_counts: p.current_combo_window_counts,
+            combo: p.combo,
+            first_fc_attempt_broken: p.first_fc_attempt_broken,
+            window_counts: state.live_window_counts[player],
+            window_counts_10ms_blue: state.live_window_counts_10ms_blue[player],
+            window_counts_display_blue: state.live_window_counts_display_blue[player],
+            holds_held: p.holds_held,
+            rolls_held: p.rolls_held,
+            mines_avoided: p.mines_avoided,
+            holds_held_for_score: p.holds_held_for_score,
+            holds_let_go_for_score: p.holds_let_go_for_score,
+            rolls_held_for_score: p.rolls_held_for_score,
+            rolls_let_go_for_score: p.rolls_let_go_for_score,
+            mines_hit_for_score: p.mines_hit_for_score,
+        }
+    });
+    course_display_carry_for_stages(
+        state.course_display_carry.as_ref(),
+        stages,
+        state.num_players,
+    )
 }

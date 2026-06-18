@@ -1,97 +1,11 @@
 use log::debug;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
 use super::{
-    DisplayClockDiagEventKind, DisplayClockHealth, DisplayClockStepEvent, FrameStableDisplayClock,
-    SongClockSnapshot, SongTimeNs, State, frame_stable_display_clock_step, normalized_song_rate,
-    song_clock_music_time_ns, song_time_ns_to_seconds,
+    DisplayClockDiagEvent, DisplayClockDiagRing, DisplayClockHealth, DisplayClockStepEvent,
+    FrameStableDisplayClock, SongClockSnapshot, SongTimeNs, State, frame_stable_display_clock_step,
+    normalized_song_rate, song_clock_music_time_ns, song_time_ns_to_seconds,
 };
-
-const DISPLAY_CLOCK_STUTTER_DIAG_EVENT_COUNT: usize = 32;
-static DISPLAY_CLOCK_STUTTER_DIAG_TRIGGER_SEQ: AtomicU64 = AtomicU64::new(0);
-
-#[derive(Clone, Copy, Debug)]
-pub struct DisplayClockDiagEvent {
-    pub at_host_nanos: u64,
-    pub kind: DisplayClockDiagEventKind,
-    pub target_time_sec: f32,
-    pub previous_time_sec: f32,
-    pub current_time_sec: f32,
-    pub error_seconds: f32,
-    pub step_seconds: f32,
-    pub limit_seconds: f32,
-}
-
-impl DisplayClockDiagEvent {
-    #[inline(always)]
-    const fn empty() -> Self {
-        Self {
-            at_host_nanos: 0,
-            kind: DisplayClockDiagEventKind::ResetJump,
-            target_time_sec: 0.0,
-            previous_time_sec: 0.0,
-            current_time_sec: 0.0,
-            error_seconds: 0.0,
-            step_seconds: 0.0,
-            limit_seconds: 0.0,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct DisplayClockDiagRing {
-    events: [DisplayClockDiagEvent; DISPLAY_CLOCK_STUTTER_DIAG_EVENT_COUNT],
-    cursor: usize,
-    len: usize,
-    last_trigger_seq: u64,
-}
-
-impl DisplayClockDiagRing {
-    #[inline(always)]
-    pub(crate) const fn new() -> Self {
-        Self {
-            events: [DisplayClockDiagEvent::empty(); DISPLAY_CLOCK_STUTTER_DIAG_EVENT_COUNT],
-            cursor: 0,
-            len: 0,
-            last_trigger_seq: 0,
-        }
-    }
-
-    #[inline(always)]
-    fn push(&mut self, event: DisplayClockDiagEvent) {
-        self.events[self.cursor] = event;
-        self.cursor = (self.cursor + 1) % DISPLAY_CLOCK_STUTTER_DIAG_EVENT_COUNT;
-        self.len = self
-            .len
-            .saturating_add(1)
-            .min(DISPLAY_CLOCK_STUTTER_DIAG_EVENT_COUNT);
-        self.last_trigger_seq =
-            DISPLAY_CLOCK_STUTTER_DIAG_TRIGGER_SEQ.fetch_add(1, Ordering::Relaxed) + 1;
-    }
-
-    fn collect_recent(
-        &self,
-        now_host_nanos: u64,
-        window_ns: u64,
-        out: &mut Vec<DisplayClockDiagEvent>,
-    ) {
-        let start = self
-            .cursor
-            .saturating_add(DISPLAY_CLOCK_STUTTER_DIAG_EVENT_COUNT)
-            .saturating_sub(self.len)
-            % DISPLAY_CLOCK_STUTTER_DIAG_EVENT_COUNT;
-        for i in 0..self.len {
-            let event = self.events[(start + i) % DISPLAY_CLOCK_STUTTER_DIAG_EVENT_COUNT];
-            if event.at_host_nanos == 0 {
-                continue;
-            }
-            if now_host_nanos.saturating_sub(event.at_host_nanos) <= window_ns {
-                out.push(event);
-            }
-        }
-    }
-}
 
 #[inline(always)]
 pub fn display_clock_health(state: &State) -> DisplayClockHealth {
@@ -100,7 +14,7 @@ pub fn display_clock_health(state: &State) -> DisplayClockHealth {
 
 #[inline(always)]
 pub fn display_clock_stutter_diag_trigger_seq(state: &State) -> u64 {
-    state.display_clock_diag.last_trigger_seq
+    state.display_clock_diag.last_trigger_seq()
 }
 
 pub fn collect_display_clock_stutter_diag_events(
@@ -188,16 +102,7 @@ fn note_display_clock_diag_event(
     if !display_clock_stutter_diag_enabled() || at_host_nanos == 0 {
         return;
     }
-    diag.push(DisplayClockDiagEvent {
-        at_host_nanos,
-        kind: event.kind,
-        target_time_sec: event.target_time_sec,
-        previous_time_sec: event.previous_time_sec,
-        current_time_sec: event.current_time_sec,
-        error_seconds: event.error_seconds,
-        step_seconds: event.step_seconds,
-        limit_seconds: event.limit_seconds,
-    });
+    diag.push(DisplayClockDiagEvent::from_step_event(at_host_nanos, event));
 }
 
 #[inline(always)]
