@@ -443,6 +443,9 @@ pub struct State {
     pub song_lua_sound_paths: Vec<PathBuf>,
     smx_sensor_data: [Option<deadsync_smx::SensorTestData>; 2],
     smx_sensor_config: [Option<deadsync_smx::SmxConfig>; 2],
+    // Time banked toward the next throttled sensor refresh (see
+    // `maybe_refresh_smx_sensor_data`). Seeded to fire on the first frame.
+    smx_sensor_refresh_accum: f32,
     song_lua_overlay_order: SongLuaOverlayOrderCache,
     song_lua_background_visual_layer_orders: Vec<SongLuaOverlayOrderCache>,
     song_lua_foreground_visual_layer_orders: Vec<SongLuaOverlayOrderCache>,
@@ -560,6 +563,7 @@ impl State {
             song_lua_sound_paths,
             smx_sensor_data: [None, None],
             smx_sensor_config: [None, None],
+            smx_sensor_refresh_accum: SMX_SENSOR_REFRESH_INTERVAL,
             song_lua_overlay_order,
             song_lua_background_visual_layer_orders,
             song_lua_foreground_visual_layer_orders,
@@ -1779,7 +1783,8 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         state.lobby_music_started = true;
     }
     update_lobby_machine_state(state);
-    refresh_smx_sensor_data(state);
+    maybe_refresh_smx_sensor_data(state, delta_time);
+    smx_profile::maybe_report();
     let previous_song_lua_time = state.current_music_time_display;
     let action = gameplay_update(state, delta_time, audio_snapshot());
     if matches!(action, GameplayAction::None) {
@@ -1886,6 +1891,26 @@ fn smx_fsr_display_pads(state: &State) -> [Option<(usize, usize)>; 2] {
         n += 1;
     }
     out
+}
+
+// The pad streams sensor data at ~30Hz on the wire (the SDK requests it on a
+// fixed interval), so reading it once per render frame is wasted work that
+// scales with the (vsync-off) frame rate and needlessly contends the SDK's
+// shared state lock. Sample on a fixed timer instead. 60Hz comfortably
+// oversamples the 30Hz source while decoupling the read cost from frame rate.
+const SMX_SENSOR_REFRESH_HZ: f32 = 60.0;
+const SMX_SENSOR_REFRESH_INTERVAL: f32 = 1.0 / SMX_SENSOR_REFRESH_HZ;
+
+fn maybe_refresh_smx_sensor_data(state: &mut State, delta_time: f32) {
+    state.smx_sensor_refresh_accum += delta_time;
+    if state.smx_sensor_refresh_accum < SMX_SENSOR_REFRESH_INTERVAL {
+        return;
+    }
+    // Keep the leftover so cadence stays steady, but cap it so a long stall
+    // (load spike, alt-tab) can't bank up a burst of catch-up refreshes.
+    state.smx_sensor_refresh_accum =
+        (state.smx_sensor_refresh_accum - SMX_SENSOR_REFRESH_INTERVAL).min(SMX_SENSOR_REFRESH_INTERVAL);
+    smx_profile::time_read(|| refresh_smx_sensor_data(state));
 }
 
 fn refresh_smx_sensor_data(state: &mut State) {
@@ -9340,13 +9365,15 @@ pub fn push_actors(
             }
             if state.player_profiles[0].smx_fsr_display || state.player_profiles[1].smx_fsr_display
             {
-                push_smx_sensor_display(
-                    &mut actors,
-                    state,
-                    &field_geom,
-                    is_doubles,
-                    is_centered_single,
-                );
+                smx_profile::time_draw(|| {
+                    push_smx_sensor_display(
+                        &mut actors,
+                        state,
+                        &field_geom,
+                        is_doubles,
+                        is_centered_single,
+                    )
+                });
             }
             if state.player_profiles[0].smx_pad_input_display
                 || state.player_profiles[1].smx_pad_input_display
@@ -10235,6 +10262,108 @@ pub fn push_actors(
     state.notefield_actor_scratch = notefield_actor_scratch;
     state.notefield_hud_actor_scratch = notefield_hud_actor_scratch;
     state.player_actor_scratch = player_actor_scratch;
+}
+
+// ─── SMX sensor display profiling ──────────────────────────────────────────────
+//
+// Opt-in, zero-cost-when-off instrumentation to attribute the FSR visualizer's
+// per-frame cost. Enable by running with `DEADSYNC_SMX_PROFILE=1`. Once a second
+// it logs the rolling average and max for two regions:
+//   read  — the throttled SDK get_test_data call (captures shared-state lock
+//           wait + the clone); shows whether lock contention is the cost.
+//   draw  — building the bar/text actors each frame.
+// `n` is the sample count in the window (read should sit near 60/s after the
+// throttle; draw tracks the frame rate).
+mod smx_profile {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::{Mutex, OnceLock};
+    use std::time::Instant;
+
+    struct Bucket {
+        sum_ns: AtomicU64,
+        max_ns: AtomicU64,
+        count: AtomicU64,
+    }
+
+    impl Bucket {
+        const fn new() -> Self {
+            Self {
+                sum_ns: AtomicU64::new(0),
+                max_ns: AtomicU64::new(0),
+                count: AtomicU64::new(0),
+            }
+        }
+
+        fn record(&self, ns: u64) {
+            self.sum_ns.fetch_add(ns, Ordering::Relaxed);
+            self.max_ns.fetch_max(ns, Ordering::Relaxed);
+            self.count.fetch_add(1, Ordering::Relaxed);
+        }
+
+        // Average (µs), max (µs), and sample count over the window, resetting it.
+        fn take(&self) -> (f64, f64, u64) {
+            let sum = self.sum_ns.swap(0, Ordering::Relaxed);
+            let max = self.max_ns.swap(0, Ordering::Relaxed);
+            let count = self.count.swap(0, Ordering::Relaxed);
+            let avg_us = if count == 0 {
+                0.0
+            } else {
+                sum as f64 / count as f64 / 1000.0
+            };
+            (avg_us, max as f64 / 1000.0, count)
+        }
+    }
+
+    static READ: Bucket = Bucket::new();
+    static DRAW: Bucket = Bucket::new();
+
+    fn enabled() -> bool {
+        static ENABLED: OnceLock<bool> = OnceLock::new();
+        *ENABLED.get_or_init(|| {
+            std::env::var("DEADSYNC_SMX_PROFILE").is_ok_and(|v| !v.is_empty() && v != "0")
+        })
+    }
+
+    fn time<T>(bucket: &Bucket, f: impl FnOnce() -> T) -> T {
+        if !enabled() {
+            return f();
+        }
+        let start = Instant::now();
+        let out = f();
+        bucket.record(start.elapsed().as_nanos() as u64);
+        out
+    }
+
+    pub fn time_read<T>(f: impl FnOnce() -> T) -> T {
+        time(&READ, f)
+    }
+
+    pub fn time_draw<T>(f: impl FnOnce() -> T) -> T {
+        time(&DRAW, f)
+    }
+
+    /// Log the rolling window once a second. Cheap no-op when profiling is off.
+    pub fn maybe_report() {
+        if !enabled() {
+            return;
+        }
+        static LAST: OnceLock<Mutex<Instant>> = OnceLock::new();
+        let clock = LAST.get_or_init(|| Mutex::new(Instant::now()));
+        let mut last = clock.lock().unwrap();
+        if last.elapsed().as_secs_f32() < 1.0 {
+            return;
+        }
+        *last = Instant::now();
+        drop(last);
+
+        let (read_avg, read_max, read_n) = READ.take();
+        let (draw_avg, draw_max, draw_n) = DRAW.take();
+        // `warn` so this opt-in diagnostic is visible at the default log level.
+        log::warn!(
+            "smx-profile: read avg={read_avg:.1}us max={read_max:.1}us n={read_n} | \
+             draw avg={draw_avg:.1}us max={draw_max:.1}us n={draw_n}"
+        );
+    }
 }
 
 // ─── SMX sensor display ────────────────────────────────────────────────────────
