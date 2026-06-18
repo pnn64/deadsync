@@ -204,7 +204,7 @@ use std::sync::{
 use std::time::Instant;
 use winit::keyboard::KeyCode;
 
-#[path = "gameplay/attacks.rs"]
+#[path = "gameplay_attacks.rs"]
 mod attacks;
 pub(crate) use self::attacks::song_lua_compile_context;
 #[cfg(test)]

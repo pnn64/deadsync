@@ -192,7 +192,7 @@ starve audio.
   `src/app/mod.rs` (`record_frame_stats_sample`, `push_frame_stats_overlay`,
   the `Ctrl`+`F3` family of handlers).
 - Data sources reused as-is: display-clock health
-  (`src/game/gameplay/clock.rs`) and audio output timing
+  (`src/game/gameplay.rs`) and audio output timing
   (`crates/deadsync-audio*`).
 
 The colors, segment order, marker thresholds, and reference lines are all defined
