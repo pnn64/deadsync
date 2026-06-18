@@ -750,6 +750,13 @@ fn confirm_import_picker(state: &mut State) {
 /// Spawns the native folder picker on a worker thread. The chosen directory (or
 /// `None` if cancelled) is delivered over a channel polled in [`poll_folder_pick`],
 /// so the render loop never blocks on the modal dialog.
+///
+/// The dialog is intentionally not parented to the game window: the winit
+/// `Window` lives in the app shell and isn't threaded down to the screen layer,
+/// and a parent handle can't be sent to this worker thread safely/portably.
+/// Unparented is fine for windowed/borderless modes; over *exclusive* fullscreen
+/// the dialog may surface behind the game. Wiring a parent handle is a possible
+/// future hardening if exclusive fullscreen becomes common.
 fn begin_folder_pick(state: &mut State) {
     if state.folder_pick.is_some() {
         return;
