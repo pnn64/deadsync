@@ -140,6 +140,55 @@ pub fn read_display_name(dir: &Path) -> Option<String> {
     }
 }
 
+/// Cheaply reads the ITGmania profile `Guid` from `Stats.xml` (or `Stats.xml.gz`)
+/// without a full XML parse. The `Guid` lives in `GeneralData` at the very top of
+/// the file, so we only scan the head (bounded) instead of the whole — possibly
+/// many-megabyte — score database. Used by the import picker to flag profiles
+/// that have already been imported. Returns `None` when absent or unreadable.
+pub fn read_source_guid(dir: &Path) -> Option<String> {
+    // GeneralData (and thus Guid) sits before SongScores, well within this cap.
+    const HEAD_CAP: u64 = 256 * 1024;
+    let head = if let Some(path) = find_case_insensitive(dir, "Stats.xml") {
+        read_head(&path, HEAD_CAP)?
+    } else if let Some(path) = find_case_insensitive(dir, "Stats.xml.gz") {
+        read_gz_head(&path, HEAD_CAP)?
+    } else {
+        return None;
+    };
+    extract_guid(&head)
+}
+
+/// Extracts the text inside the first `<Guid>…</Guid>` element. Returns `None`
+/// when the element is absent or empty.
+fn extract_guid(s: &str) -> Option<String> {
+    let start = s.find("<Guid>")? + "<Guid>".len();
+    let rest = &s[start..];
+    let end = rest.find("</Guid>")?;
+    let guid = rest[..end].trim();
+    if guid.is_empty() {
+        None
+    } else {
+        Some(guid.to_string())
+    }
+}
+
+/// Reads up to `cap` bytes from the head of `path` as lossy UTF-8.
+fn read_head(path: &Path, cap: u64) -> Option<String> {
+    let file = fs::File::open(path).ok()?;
+    let mut buf = Vec::new();
+    file.take(cap).read_to_end(&mut buf).ok()?;
+    Some(String::from_utf8_lossy(&buf).into_owned())
+}
+
+/// Decompresses up to `cap` bytes from the head of a gzip file as lossy UTF-8.
+fn read_gz_head(path: &Path, cap: u64) -> Option<String> {
+    let bytes = fs::read(path).ok()?;
+    let decoder = flate2::read::GzDecoder::new(&bytes[..]);
+    let mut buf = Vec::new();
+    decoder.take(cap).read_to_end(&mut buf).ok()?;
+    Some(String::from_utf8_lossy(&buf).into_owned())
+}
+
 /// Reads an entire ITGmania local profile directory into an [`ItgSource`].
 pub fn read_profile_dir(dir: &Path) -> Result<ItgSource, ItgReadError> {
     let editable_path = find_case_insensitive(dir, "Editable.ini")
@@ -584,5 +633,19 @@ mod tests {
         // Absent GeneralData / CurrentCombo / Guid → (0, "").
         let root2 = xml::parse(SAMPLE_STATS).expect("xml");
         assert_eq!(parse_general_data(&root2), (0, String::new()));
+    }
+
+    #[test]
+    fn extracts_guid_from_stats_head() {
+        let head = r#"<Stats><GeneralData>
+            <DisplayName>adstep</DisplayName>
+            <Guid>99f55b745304ebcf</Guid>
+            <CurrentCombo>3</CurrentCombo>
+        </GeneralData>"#;
+        assert_eq!(extract_guid(head).as_deref(), Some("99f55b745304ebcf"));
+        // Missing or empty Guid → None.
+        assert_eq!(extract_guid("<GeneralData></GeneralData>"), None);
+        assert_eq!(extract_guid("<Guid></Guid>"), None);
+        assert_eq!(extract_guid("<Guid>   </Guid>"), None);
     }
 }

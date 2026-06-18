@@ -693,13 +693,17 @@ fn confirm_import_picker(state: &mut State) {
     let (tx, rx) = std::sync::mpsc::channel();
     let progress_tx = tx.clone();
     thread::spawn(move || {
-        let result = import_itg_profile_dir(&dir, |done, total, label| {
-            let _ = progress_tx.send(ImportMsg::Progress {
-                done,
-                total,
-                label: label.to_string(),
-            });
-        });
+        let result = import_itg_profile_dir(
+            &dir,
+            |done, total, label| {
+                let _ = progress_tx.send(ImportMsg::Progress {
+                    done,
+                    total,
+                    label: label.to_string(),
+                });
+            },
+            || false,
+        );
         let outcome = match result {
             Ok(summary) => ImportOutcome::Ok(Box::new(summary)),
             Err(e) => ImportOutcome::Err(e.to_string()),

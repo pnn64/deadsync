@@ -1296,23 +1296,41 @@ fn append_local_score_on_disk(
 }
 
 /// Write a batch of imported local scores for `profile_id`. Each tuple is the
-/// DeadSync chart `short_hash` and the play to record. Returns the number of
-/// plays successfully written to disk.
+/// DeadSync chart `short_hash` and the play to record. Returns `(written,
+/// canceled)`: the number of plays successfully written to disk, and whether the
+/// loop stopped early because `should_cancel` returned `true`.
 ///
 /// This reuses the same per-play write path as live gameplay, so the per-profile
 /// best index and any loaded in-memory caches stay correct.
-pub fn import_local_scores(
+///
+/// `on_progress(done, total)` is invoked after each play is processed (whether or
+/// not it was written), so a caller can drive a progress bar over the disk-write
+/// phase, which dominates import time for large histories. `should_cancel()` is
+/// polled before each write so a long import can be aborted promptly. Pass no-op
+/// closures when progress / cancellation aren't needed.
+pub fn import_local_scores<F, C>(
     profile_id: &str,
     profile_initials: &str,
     scores: &mut [(String, LocalScoreEntry)],
-) -> usize {
+    mut on_progress: F,
+    should_cancel: C,
+) -> (usize, bool)
+where
+    F: FnMut(usize, usize),
+    C: Fn() -> bool,
+{
+    let total = scores.len();
     let mut written = 0usize;
-    for (chart_hash, entry) in scores.iter_mut() {
+    for (idx, (chart_hash, entry)) in scores.iter_mut().enumerate() {
+        if should_cancel() {
+            return (written, true);
+        }
         if append_local_score_on_disk(profile_id, profile_initials, chart_hash, entry) {
             written += 1;
         }
+        on_progress(idx + 1, total);
     }
-    written
+    (written, false)
 }
 
 fn judgment_counts_arr(p: &gameplay::PlayerRuntime) -> [u32; 6] {

@@ -323,29 +323,62 @@ and looks it up in DeadSync's scanned song library to recover the GrooveStats
   `~/Library/Application Support/ITGmania/...`); portable installs aren't found
   automatically.
 
-## Deliberately not (yet) imported
+## Deliberately not imported
 
-Present in an ITGmania profile but currently left to DeadSync defaults — see the
-audit notes in the session history for rationale:
+Everything below is present in an ITGmania / Simply Love profile but **intentionally
+left to DeadSync's defaults**. This is the definitive list; each row records *why*
+it is excluded so the decision is auditable. Items that **are** imported (even
+partially) are noted inline and are not repeated here.
 
-- **Profile/stats:** `CharacterID`, `Voomax`, `IsMale`, lifetime totals
-  (`TotalDancePoints`, `TotalSessions`, step/jump/hold totals), play-count
-  histograms, last song/difficulty, calorie history. (`IgnoreStepCountCalories`
-  and `CurrentCombo` **are** imported; `known_pack_names` is intentionally left
-  to DeadSync's first-load default.)
-- **Per-chart:** `HighScoreList/NumTimesPlayed`, `LastPlayed`, `HighGrade`;
-  per-score `MaxCombo`, `Name`, `RadarValues`, `Disqualified`.
-- **Simply Love extras:** `SL-Scores/*.json`, and favorites
-  **section/playlist names** (the songs are imported; the grouping is not).
-- **Player options with no clean mapping:** `MiniIndicatorColor` (color-name
-  vocabulary vs DeadSync's `Default`/`Detailed`/`Combo`), `PackBanner`/`StepInfo`
-  (interact with `DataVisualizations`), scorebox sub-options
-  (`SBITGScore`/`SBExScore`/`SBEvents`), and SL-only aesthetic/joke effects with
-  no DeadSync equivalent (`TimerMode`, `JudgmentAnimation`, `RailBalance`,
-  `GhostFault`, `BreakUI`, `GrowCombo`, `SpinCombo`, `WildCombo`,
-  `RainbowComboOptions`, `TiltOptions`, `Waterfall`, `FadeFantastic`, `NoBar`,
-  `TrackRecalc`, `TrackFoot`). The numeric/`Ghost Data` parts of `TargetScore`
-  are also dropped (the `Machine best`/`Personal best` values **are** imported).
+**Reason codes**
+
+| Code | Meaning |
+| --- | --- |
+| `NO-TARGET` | DeadSync has no field/feature for this — importing would require a new schema field (and usually UI) with nothing to read it yet. |
+| `NO-MAP` | A target exists but the value vocabularies/semantics don't correspond, so any mapping would be a lossy guess. The translator deliberately never guesses. |
+| `COUNTERPRODUCTIVE` | A faithful import would produce *worse* behavior than DeadSync's default. |
+| `REDUNDANT` | Off by default and/or already covered by a source we do import. |
+| `NOT-MODELED` | DeadSync doesn't implement the underlying feature (courses, characters, unlock system, …). |
+
+### Player options (`Simply Love UserPrefs.ini`)
+
+| Setting(s) | Reason | Detail |
+| --- | --- | --- |
+| `MiniIndicatorColor` | `NO-MAP` | SL is a **fixed-color** picker (`Default`, `Red`, `Blue`, `Yellow`, `Green`, `Magenta`, `White`). DeadSync's enum is a **coloring strategy** (`Default`/`Detailed` = score gradient, `Combo` = match combo color). Only `Default`↔`Default` lines up — a no-op — and every actual color choice has no representation. |
+| `TargetScore` = `SpecifiedValue` (+ `TargetScoreNumber`), `Ghost Data`; `ActionOnMissedTarget` | `NO-MAP` | DeadSync's `target_score` is a grade (`C-`…`S+`) or `Machine/Personal best`; it has no numeric-percent or ghost-data target. **`Machine best` / `Personal best` *are* imported.** |
+| `PackBanner`, `StepInfo` | `NO-MAP` | These would set individual `step_statistics` bits (`PACK_BANNER` / `SONG_INFO`), but they collide with the all-or-nothing `DataVisualizations` → `step_statistics` mapping we already apply. |
+| `SBITGScore`, `SBExScore`, `SBEvents` | `NO-TARGET` | Scorebox sub-toggles with no matching DeadSync field. |
+| `TrackRecalc`, `TrackFoot` | `NO-TARGET` | No corresponding DeadSync option. |
+| `TimerMode`, `JudgmentAnimation`, `RailBalance`, `GhostFault`, `BreakUI`, `GrowCombo`, `SpinCombo`, `WildCombo`, `RainbowComboOptions`, `TiltOptions`, `Waterfall`, `FadeFantastic`, `NoBar` | `NO-TARGET` | SL-only aesthetic / novelty effects DeadSync doesn't implement. |
+
+### Profile metadata & `GeneralData`
+
+| Field(s) | Reason | Detail |
+| --- | --- | --- |
+| `known_pack_names` (derived) | `COUNTERPRODUCTIVE` | DeadSync marks **all** currently-scanned packs as known on a new profile's first load. Importing only the ITGmania-played subset would wrongly flag every other pack as "new". |
+| `CharacterID` | `NOT-MODELED` | DeadSync has no character system. |
+| `Voomax`, `IsMale` | `NO-TARGET` | Calorie-model inputs DeadSync doesn't model (weight + birth year **are** imported, as is `IgnoreStepCountCalories`). |
+| Lifetime totals: `TotalDancePoints`, `TotalSessions`, `TotalSessionSeconds`, `TotalGameplaySeconds`, `TotalTapsAndHolds`, `TotalJumps`, `TotalHolds`, `TotalRolls`, `TotalMines`, `TotalHands`, `TotalLifts`, `NumToasties`, `NumExtraStagesPassed/Failed` | `NO-TARGET` | No lifetime-stats store or display in DeadSync. |
+| Play-count histograms: `NumSongsPlayedBy{PlayMode,Style,Difficulty,Meter}`, `NumTotalSongsPlayed`, `NumStagesPassedBy{PlayMode,Grade}` | `NO-TARGET` | No aggregate play-count store. |
+| `LastDifficulty`, `LastStepsType`, `Song`, `Course`, `LastPlayedDate` | `NO-TARGET` | DeadSync tracks last-played by chart hash internally; ITGmania's last-selection isn't portable. |
+| Calorie history: `CalorieData/CaloriesBurned[@Date]`, `TotalCaloriesBurned`, `GoalType`/`GoalCalories`/`GoalSeconds` | `NO-TARGET` | Only *today's* calories are tracked; cross-machine daily history isn't meaningful. (`CurrentCombo` **is** imported.) |
+| `Unlocks/UnlockEntry` | `NOT-MODELED` | Different unlock system. (ITL unlock folders **are** imported via `ITL2026.json`.) |
+
+### Scores (`Stats.xml`)
+
+| Field(s) | Reason | Detail |
+| --- | --- | --- |
+| Per-chart `HighScoreList/NumTimesPlayed`, `LastPlayed`, `HighGrade` | `NO-TARGET` | DeadSync stores the best score per chart, not play counts / last-played per chart. |
+| Per-score `MaxCombo`, `Name`, `RadarValues`, `Disqualified`, `StageAward`, `PeakComboAward`, checkpoint counts | `NO-TARGET` | Not fields on `LocalScoreEntry`; would need a score-schema change. (Judgments, holds, mines, percent, grade, date, and music rate **are** imported.) |
+| `CourseScores`, `CategoryScores` | `NOT-MODELED` | DeadSync has no course / ranking-category score store. |
+| `ScreenshotData` | `NOT-MODELED` | No screenshot metadata store. |
+
+### Simply Love extras
+
+| Source | Reason | Detail |
+| --- | --- | --- |
+| `SL-Scores/*.json` | `REDUNDANT` | Per-play archive, **off by default** (`WriteCustomScores` theme pref). Richer than `Stats.xml` (rolls-vs-holds split, `MaxCombo`) but would duplicate the best-score data we already import and require play-level dedup. |
+| `favorites.txt` section / playlist names (the `---Section` headers) | `NOT-MODELED` | DeadSync favorites have no section grouping. **The favorited songs themselves are imported.** |
 
 ## Source-of-truth code
 

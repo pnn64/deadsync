@@ -18,6 +18,9 @@ pub struct ItgProfileCandidate {
     pub dir: PathBuf,
     /// `DisplayName` from `Editable.ini`, falling back to the folder name.
     pub display_name: String,
+    /// ITGmania `Stats.xml` `Guid`, when present. Used to detect a profile that
+    /// has already been imported. `None` when the profile has no `Stats.xml`.
+    pub source_guid: Option<String>,
 }
 
 /// Scans the known ITGmania save locations and returns every local profile
@@ -55,7 +58,12 @@ fn collect_from_root(root: &Path, out: &mut Vec<ItgProfileCandidate>, seen: &mut
                 .map(|s| s.to_string_lossy().into_owned())
                 .unwrap_or_default()
         });
-        out.push(ItgProfileCandidate { dir, display_name });
+        let source_guid = itg::read_source_guid(&dir);
+        out.push(ItgProfileCandidate {
+            dir,
+            display_name,
+            source_guid,
+        });
     }
 }
 
