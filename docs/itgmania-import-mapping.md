@@ -178,6 +178,8 @@ rejects unknown vocabularies (unknown → default preserved).
 | `ErrorBarTrim` | `error_bar_trim` | `Off`, `Fantastic`, `Excellent`, `Great` |
 | `MiniIndicator` | `mini_indicator` | `None`, `SubtractiveScoring`, `PredictiveScoring`, `PaceScoring`, `RivalScoring`, `Pacemaker`, `StreamProg` |
 | `DataVisualizations` | `step_statistics` | `None`/`Target Score Graph` → empty; `Step Statistics` → all widgets |
+| `StepStatsExtra` | `step_stats_extra` | `None`, `ErrorStats`, and the GIF widgets (`AmongUs`, `CatJAM`, `Nyan Cat`, `Sonic`, …) |
+| `TargetScore` | `target_score` | only `Machine best` / `Personal best` (SL's `SpecifiedValue`+number and `Ghost Data` have no equivalent → default) |
 
 ### 4.4 SelectMultiple flag groups → bitmasks
 
@@ -335,10 +337,15 @@ audit notes in the session history for rationale:
   per-score `MaxCombo`, `Name`, `RadarValues`, `Disqualified`.
 - **Simply Love extras:** `SL-Scores/*.json`, and favorites
   **section/playlist names** (the songs are imported; the grouping is not).
-- **Player options judged risky:** numeric/`Ghost Data` `TargetScore`,
-  `MiniIndicatorColor` (color-name vocabulary), scorebox sub-options
-  (`SBITGScore`/`SBExScore`/`SBEvents`), and SL-only aesthetic effects with no
-  DeadSync equivalent.
+- **Player options with no clean mapping:** `MiniIndicatorColor` (color-name
+  vocabulary vs DeadSync's `Default`/`Detailed`/`Combo`), `PackBanner`/`StepInfo`
+  (interact with `DataVisualizations`), scorebox sub-options
+  (`SBITGScore`/`SBExScore`/`SBEvents`), and SL-only aesthetic/joke effects with
+  no DeadSync equivalent (`TimerMode`, `JudgmentAnimation`, `RailBalance`,
+  `GhostFault`, `BreakUI`, `GrowCombo`, `SpinCombo`, `WildCombo`,
+  `RainbowComboOptions`, `TiltOptions`, `Waterfall`, `FadeFantastic`, `NoBar`,
+  `TrackRecalc`, `TrackFoot`). The numeric/`Ghost Data` parts of `TargetScore`
+  are also dropped (the `Machine best`/`Personal best` values **are** imported).
 
 ## Source-of-truth code
 
