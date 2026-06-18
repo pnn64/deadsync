@@ -22,6 +22,8 @@ pub struct ItgEditable {
     pub weight_pounds: u32,
     pub birth_year: u32,
     pub last_used_high_score_name: String,
+    /// `IgnoreStepCountCalories` — disables step-count calorie estimation.
+    pub ignore_step_count_calories: bool,
 }
 
 /// GrooveStats + ArrowCloud online keys.
@@ -66,6 +68,14 @@ pub struct ItgSource {
     pub favorites: Vec<String>,
     /// Raw contents of `ITL2026.json` (Simply Love ITL event data), if present.
     pub itl_json: Option<String>,
+    /// `Stats.xml` `GeneralData/CurrentCombo` — the running combo carried between
+    /// songs. `0` when absent.
+    pub current_combo: u32,
+    /// `Stats.xml` `GeneralData/Guid` — ITGmania's stable per-profile identifier.
+    /// Used to derive the imported DeadSync profile's GUID so re-importing the
+    /// same profile yields the same identity. Empty when the `Stats.xml` is
+    /// missing or has no `Guid`.
+    pub guid: String,
 }
 
 impl ItgSource {
@@ -139,7 +149,7 @@ pub fn read_profile_dir(dir: &Path) -> Result<ItgSource, ItgReadError> {
     let online = read_online_keys(dir);
     let avatar_path = find_avatar(dir);
     let simply_love = read_simply_love(dir);
-    let songs = read_stats(dir)?;
+    let stats = read_stats(dir)?;
     let favorites = read_favorites(dir);
     let itl_json = read_itl_json(dir);
 
@@ -149,9 +159,11 @@ pub fn read_profile_dir(dir: &Path) -> Result<ItgSource, ItgReadError> {
         online,
         avatar_path,
         simply_love,
-        songs,
+        songs: stats.songs,
         favorites,
         itl_json,
+        current_combo: stats.current_combo,
+        guid: stats.guid,
     })
 }
 
@@ -170,6 +182,9 @@ fn read_editable(path: &Path) -> ItgEditable {
             .and_then(|s| s.parse::<u32>().ok())
             .unwrap_or(0),
         last_used_high_score_name: get("LastUsedHighScoreName").unwrap_or_default(),
+        ignore_step_count_calories: get("IgnoreStepCountCalories")
+            .map(|s| parse_bool(&s))
+            .unwrap_or(false),
     }
 }
 
@@ -277,19 +292,51 @@ fn find_avatar(dir: &Path) -> Option<PathBuf> {
     None
 }
 
-/// Reads `Stats.xml` (or `Stats.xml.gz`) and returns the parsed song scores.
-/// A missing Stats file is not an error — it yields an empty list.
-fn read_stats(dir: &Path) -> Result<Vec<ItgSongScores>, ItgReadError> {
+/// Parsed contents of `Stats.xml` beyond the per-chart song scores.
+#[derive(Debug, Clone, Default)]
+pub struct ItgStatsData {
+    pub songs: Vec<ItgSongScores>,
+    /// `GeneralData/CurrentCombo`.
+    pub current_combo: u32,
+    /// `GeneralData/Guid` — empty when absent.
+    pub guid: String,
+}
+
+/// Reads `Stats.xml` (or `Stats.xml.gz`) and returns the parsed song scores plus
+/// selected `GeneralData`. A missing Stats file is not an error — it yields an
+/// empty result.
+fn read_stats(dir: &Path) -> Result<ItgStatsData, ItgReadError> {
     let content = if let Some(path) = find_case_insensitive(dir, "Stats.xml") {
         fs::read_to_string(&path)?
     } else if let Some(path) = find_case_insensitive(dir, "Stats.xml.gz") {
         read_gz_to_string(&path)?
     } else {
-        return Ok(Vec::new());
+        return Ok(ItgStatsData::default());
     };
 
     let root = xml::parse(&content).map_err(ItgReadError::Xml)?;
-    Ok(parse_song_scores(&root))
+    let (current_combo, guid) = parse_general_data(&root);
+    Ok(ItgStatsData {
+        songs: parse_song_scores(&root),
+        current_combo,
+        guid,
+    })
+}
+
+/// Extracts `(CurrentCombo, Guid)` from a parsed `Stats.xml` root's
+/// `GeneralData`. Returns `(0, "")` when the node is absent.
+fn parse_general_data(root: &XmlNode) -> (u32, String) {
+    let general = if root.tag == "GeneralData" {
+        root
+    } else {
+        match root.child("GeneralData") {
+            Some(g) => g,
+            None => return (0, String::new()),
+        }
+    };
+    let combo = general.child_parse::<u32>("CurrentCombo").unwrap_or(0);
+    let guid = general.child_text("Guid").trim().to_string();
+    (combo, guid)
 }
 
 fn read_gz_to_string(path: &Path) -> Result<String, std::io::Error> {
@@ -516,5 +563,26 @@ mod tests {
                 "Pack C/Song Three".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn parses_general_data_current_combo() {
+        let xml_text = r#"<Stats>
+  <GeneralData>
+    <DisplayName>Test</DisplayName>
+    <CurrentCombo>137</CurrentCombo>
+    <Guid>99f55b745304ebcf</Guid>
+  </GeneralData>
+  <SongScores></SongScores>
+</Stats>"#;
+        let root = xml::parse(xml_text).expect("xml");
+        assert_eq!(
+            parse_general_data(&root),
+            (137, "99f55b745304ebcf".to_string())
+        );
+
+        // Absent GeneralData / CurrentCombo / Guid → (0, "").
+        let root2 = xml::parse(SAMPLE_STATS).expect("xml");
+        assert_eq!(parse_general_data(&root2), (0, String::new()));
     }
 }

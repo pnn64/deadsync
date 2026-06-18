@@ -910,13 +910,17 @@ fn save_profile_stats_for_side(side: PlayerSide) {
     let Some((profile_id, payload)) = maybe_payload else {
         return;
     };
-    let Some(buf) = encode_profile_stats(&payload) else {
+    write_profile_stats(&profile_id, &payload);
+}
+
+fn write_profile_stats(profile_id: &str, payload: &ProfileStats) {
+    let Some(buf) = encode_profile_stats(payload) else {
         warn!("Failed to encode profile stats for '{}'.", profile_id);
         return;
     };
 
-    let path = profile_stats_path(&profile_id);
-    let tmp_path = profile_stats_tmp_path(&profile_id);
+    let path = profile_stats_path(profile_id);
+    let tmp_path = profile_stats_tmp_path(profile_id);
     if let Some(parent) = path.parent()
         && let Err(e) = fs::create_dir_all(parent)
     {
@@ -935,6 +939,23 @@ fn save_profile_stats_for_side(side: PlayerSide) {
         warn!("Failed to save {}: {}", path.display(), e);
         let _ = fs::remove_file(&tmp_path);
     }
+}
+
+/// Writes [`ProfileStats`] for a freshly-imported profile that isn't loaded into
+/// a player side (used by the ITGmania importer). `known_pack_names` is left
+/// empty so the normal first-load reconciliation still marks the current packs
+/// as known. Does nothing when there's no stat worth persisting.
+pub fn write_imported_profile_stats(profile_id: &str, current_combo: u32) {
+    if current_combo == 0 {
+        return;
+    }
+    write_profile_stats(
+        profile_id,
+        &ProfileStats {
+            current_combo,
+            known_pack_names: HashSet::new(),
+        },
+    );
 }
 
 fn save_groovestats_ini_for_side(side: PlayerSide) {
@@ -2092,10 +2113,17 @@ pub struct ImportProfileData<'a> {
     pub groovestats_username: &'a str,
     pub groovestats_is_pad_player: bool,
     pub arrowcloud_api_key: &'a str,
+    /// Whether step-count calorie estimation is disabled (ITGmania
+    /// `IgnoreStepCountCalories`).
+    pub ignore_step_count_calories: bool,
     /// Source avatar image to copy in as `profile.png`, if any.
     pub avatar_src: Option<&'a Path>,
     pub options_singles: &'a PlayerOptionsData,
     pub options_doubles: &'a PlayerOptionsData,
+    /// Desired profile GUID (canonical identity). For ITGmania imports this is
+    /// derived deterministically from the source profile's `Guid`. When empty or
+    /// not a valid GUID, a fresh one is generated.
+    pub guid: &'a str,
 }
 
 /// Create a new local profile from imported data, writing `profile.ini`,
@@ -2113,7 +2141,11 @@ pub fn create_local_profile_from_import(
         ));
     }
 
-    let id = generate_profile_guid();
+    let id = if is_valid_profile_guid(data.guid.trim()) {
+        data.guid.trim().to_string()
+    } else {
+        generate_profile_guid()
+    };
     let folder = folder_name_for_display(name, &id, &existing_profile_folder_names());
     let dir = profile_dir_by_folder(&folder);
     fs::create_dir_all(&dir)?;
@@ -2148,7 +2180,10 @@ pub fn create_local_profile_from_import(
     content.push_str("[Editable]\n");
     content.push_str(&format!("WeightPounds={weight}\n"));
     content.push_str(&format!("BirthYear={}\n", data.birth_year));
-    content.push_str("IgnoreStepCountCalories=0\n");
+    content.push_str(&format!(
+        "IgnoreStepCountCalories={}\n",
+        i32::from(data.ignore_step_count_calories)
+    ));
     content.push('\n');
 
     let today = Local::now().date_naive().to_string();

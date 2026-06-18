@@ -434,6 +434,33 @@ pub fn is_valid_profile_guid(s: &str) -> bool {
     parts.next().is_none()
 }
 
+/// Fixed namespace UUID for deriving DeadSync profile GUIDs from ITGmania
+/// profile GUIDs. Chosen once and never changed so the mapping stays stable.
+const ITGMANIA_GUID_NAMESPACE: uuid::Uuid =
+    uuid::Uuid::from_u128(0x9d3f7c12_4b8e_5a96_b2d1_e7f4a06c83ddu128);
+
+/// Derives a stable DeadSync profile GUID from an ITGmania profile `Guid`
+/// (the 16-hex string stored in `Stats.xml` `GeneralData/Guid`).
+///
+/// ITGmania GUIDs aren't UUIDs, so they can't be used as DeadSync identities
+/// directly. We map them through a fixed namespace with UUID v5, which is
+/// deterministic: the same ITGmania GUID always yields the same DeadSync GUID
+/// (so re-importing the same profile produces a matching identity), and the
+/// result is a canonical UUID that satisfies [`is_valid_profile_guid`].
+///
+/// Returns `None` when `itg_guid` is blank.
+pub fn profile_guid_from_itgmania_guid(itg_guid: &str) -> Option<String> {
+    let trimmed = itg_guid.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let derived = uuid::Uuid::new_v5(
+        &ITGMANIA_GUID_NAMESPACE,
+        trimmed.to_ascii_lowercase().as_bytes(),
+    );
+    Some(derived.to_string())
+}
+
 const FOLDER_NAME_MAX_LEN: usize = 48;
 
 fn is_windows_reserved_name(name: &str) -> bool {
@@ -6307,6 +6334,27 @@ mod tests {
         assert!(!is_valid_profile_guid(
             "g7c7b8a2-3b73-4e8a-9d7d-cfa7e783c00b"
         )); // non-hex
+    }
+
+    #[test]
+    fn itgmania_guid_maps_to_stable_valid_uuid() {
+        // Blank source → no derived identity.
+        assert_eq!(profile_guid_from_itgmania_guid(""), None);
+        assert_eq!(profile_guid_from_itgmania_guid("   "), None);
+
+        // Deterministic: same ITGmania GUID always yields the same DeadSync GUID.
+        let a = profile_guid_from_itgmania_guid("99f55b745304ebcf").expect("guid");
+        let b = profile_guid_from_itgmania_guid("99f55b745304ebcf").expect("guid");
+        assert_eq!(a, b);
+        // Case/whitespace-insensitive.
+        let c = profile_guid_from_itgmania_guid("  99F55B745304EBCF  ").expect("guid");
+        assert_eq!(a, c);
+        // The derived value is a canonical, accepted DeadSync GUID.
+        assert!(is_valid_profile_guid(&a));
+
+        // Different ITGmania GUIDs map to different DeadSync GUIDs.
+        let other = profile_guid_from_itgmania_guid("0247fbc7e366cf9f").expect("guid");
+        assert_ne!(a, other);
     }
 
     #[test]

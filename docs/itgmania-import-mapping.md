@@ -57,6 +57,13 @@ Source: `Editable.ini` `[Editable]`. Writer: `src/game/profile.rs`
 | `WeightPounds` | weight (lbs) | parsed `u32`, `0` if absent |
 | `BirthYear` | birth year | parsed `u32`, `0` if absent |
 | `LastUsedHighScoreName` | player initials | sanitised; falls back to initials derived from the display name |
+| `IgnoreStepCountCalories` | `ignore_step_count_calories` | disables step-count calorie estimation; parsed as bool |
+
+The `Stats.xml` `GeneralData/CurrentCombo` is imported into the profile's
+`current_combo` (the streak carried between songs) via `ProfileStats`. Known
+packs are **not** imported — DeadSync marks all currently-scanned packs as known
+on a new profile's first load, which is the desired behavior (importing only the
+ITGmania-played subset would wrongly flag the rest as "new").
 
 ## 2. Online service keys
 
@@ -319,10 +326,11 @@ and looks it up in DeadSync's scanned song library to recover the GrooveStats
 Present in an ITGmania profile but currently left to DeadSync defaults — see the
 audit notes in the session history for rationale:
 
-- **Profile/stats:** `IgnoreStepCountCalories`, `CharacterID`, `Voomax`,
-  `IsMale`, `CurrentCombo`, lifetime totals (`TotalDancePoints`,
-  `TotalSessions`, step/jump/hold totals), play-count histograms, last
-  song/difficulty, calorie history.
+- **Profile/stats:** `CharacterID`, `Voomax`, `IsMale`, lifetime totals
+  (`TotalDancePoints`, `TotalSessions`, step/jump/hold totals), play-count
+  histograms, last song/difficulty, calorie history. (`IgnoreStepCountCalories`
+  and `CurrentCombo` **are** imported; `known_pack_names` is intentionally left
+  to DeadSync's first-load default.)
 - **Per-chart:** `HighScoreList/NumTimesPlayed`, `LastPlayed`, `HighGrade`;
   per-score `MaxCombo`, `Name`, `RadarValues`, `Disqualified`.
 - **Simply Love extras:** `SL-Scores/*.json`, and favorites

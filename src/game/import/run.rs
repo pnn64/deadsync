@@ -5,12 +5,14 @@
 use std::collections::HashSet;
 use std::path::Path;
 
-use deadsync_profile::{initials_from_name, sanitize_player_initials};
+use deadsync_profile::{
+    initials_from_name, profile_guid_from_itgmania_guid, sanitize_player_initials,
+};
 use deadsync_score::{LocalScoreEntry, local_score_from_itg};
 
 use crate::game::profile::{
     ImportProfileData, create_local_profile_from_import, default_local_profile_options,
-    write_imported_favorites,
+    write_imported_favorites, write_imported_profile_stats,
 };
 use crate::game::scores::{import_itl_json, import_local_scores};
 use crate::game::song::get_song_cache;
@@ -68,6 +70,12 @@ pub fn import_from_source<F: FnMut(usize, usize, &str)>(
     let options_singles = translate_player_options(&source.simply_love, &base_singles);
     let options_doubles = translate_player_options(&source.simply_love, &base_doubles);
 
+    // Derive a stable DeadSync identity from the ITGmania profile GUID so
+    // re-importing the same profile maps to the same GUID. Falls back to a fresh
+    // GUID (handled by `create_local_profile_from_import`) when the source has no
+    // `Stats.xml`/`Guid`.
+    let profile_guid = profile_guid_from_itgmania_guid(&source.guid).unwrap_or_default();
+
     let data = ImportProfileData {
         display_name: &source.editable.display_name,
         weight_pounds: source.editable.weight_pounds,
@@ -77,9 +85,11 @@ pub fn import_from_source<F: FnMut(usize, usize, &str)>(
         groovestats_username: &source.online.groovestats_username,
         groovestats_is_pad_player: source.online.groovestats_is_pad_player,
         arrowcloud_api_key: &source.online.arrowcloud_api_key,
+        ignore_step_count_calories: source.editable.ignore_step_count_calories,
         avatar_src: source.avatar_path.as_deref(),
         options_singles: &options_singles,
         options_doubles: &options_doubles,
+        guid: &profile_guid,
     };
     let profile_id = create_local_profile_from_import(&data).map_err(ItgReadError::Io)?;
 
@@ -146,6 +156,7 @@ pub fn import_from_source<F: FnMut(usize, usize, &str)>(
 
     summary.scores_imported = import_local_scores(&profile_id, &initials, &mut entries);
     write_imported_favorites(&profile_id, &favorite_hashes);
+    write_imported_profile_stats(&profile_id, source.current_combo);
     if let Some(itl_json) = &source.itl_json {
         summary.itl_entries_imported = import_itl_json(&profile_id, itl_json);
     }
