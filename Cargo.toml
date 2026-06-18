@@ -152,6 +152,10 @@ twox-hash = "2.1.2"
 # Decompression of gzipped ITGmania Stats.xml during profile import
 flate2 = "1.1.9"
 
+# Native folder picker for choosing an ITGmania game directory during import.
+# Default backends: native Win32 / AppKit, GTK3 on Linux (synchronous API).
+rfd = "0.15"
+
 # Localization
 rust-ini = "0.21.3"
 sys-locale = "0.3.2"

@@ -52,7 +52,9 @@ new DeadSync profile from it in one step.
 1. In DeadSync, go to **Options → Manage Local Profiles**.
 2. Select **Import from ITGmania** and press **Start**.
 3. DeadSync scans for ITGmania profiles and lists the ones it finds. Pick the
-   profile you want and press **Start**.
+   profile you want and press **Start**. If yours isn't listed (e.g. a portable
+   install), choose **Browse for game directory…** and select your ITGmania game
+   folder — any profiles found there are added to the list.
 4. The import runs in the background; when it finishes, a summary shows how many
    scores were imported and how many were skipped. The new profile is selected
    in the list.
@@ -90,9 +92,11 @@ The importer auto-detects ITGmania's per-user save directory:
 | Linux   | `~/.itgmania/Save/LocalProfiles/`                            |
 | macOS   | `~/Library/Application Support/ITGmania/Save/LocalProfiles/`  |
 
-If your ITGmania uses a portable/custom save location that isn't found, fall
-back to the manual steps below (the importer always creates a *new* profile and
-never merges, so a manual top-up afterwards is safe).
+If your ITGmania uses a **portable install** (a `Portable.ini` next to the
+executable, so its `Save/` lives in the game folder), nothing is auto-detected.
+Pick **Browse for game directory…** in the import list and select your ITGmania
+game folder — DeadSync applies ITGmania's own rule (portable → `<game>/Save`,
+otherwise the per-user dir) to find the profiles, then adds them to the list.
 
 ### Limitations
 

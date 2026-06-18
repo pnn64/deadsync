@@ -2,7 +2,9 @@ use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::visual_styles;
-use crate::game::import::detect::{ItgProfileCandidate, detect_itg_local_profiles};
+use crate::game::import::detect::{
+    ItgProfileCandidate, detect_itg_local_profiles, detect_itg_profiles_from_game_dir,
+};
 use crate::game::import::run::{ImportSummary, import_itg_profile_dir};
 use crate::game::profile;
 use crate::screens::components::shared::loading_bar;
@@ -20,6 +22,7 @@ use deadsync_audio_stream as audio;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, TryRecvError};
 use std::thread;
@@ -154,10 +157,25 @@ struct DeleteConfirmState {
 }
 
 /// Modal listing ITGmania profiles found on disk, for the user to pick one to
-/// import.
+/// import. A trailing synthetic "Browse for game directory…" row (selectable
+/// index `candidates.len()`) lets the user point at a portable install.
 struct ImportPickerState {
     candidates: Vec<ItgProfileCandidate>,
     selected: usize,
+    /// Transient notice shown under the list (e.g. after a browse found nothing).
+    info: Option<Arc<str>>,
+}
+
+impl ImportPickerState {
+    /// The index of the synthetic "Browse…" row.
+    fn browse_index(&self) -> usize {
+        self.candidates.len()
+    }
+
+    /// `true` when the "Browse…" row is currently selected.
+    fn browse_selected(&self) -> bool {
+        self.selected == self.browse_index()
+    }
 }
 
 /// A running import on a worker thread. The screen polls `rx` each frame and
@@ -178,6 +196,11 @@ enum ImportMsg {
     },
     /// The import finished (success or failure).
     Done(ImportOutcome),
+}
+
+/// A pending native folder-picker dialog running on a worker thread.
+struct FolderPickJob {
+    rx: Receiver<Option<PathBuf>>,
 }
 
 enum ImportOutcome {
@@ -206,6 +229,7 @@ pub struct State {
     delete_confirm: Option<DeleteConfirmState>,
     import_picker: Option<ImportPickerState>,
     import_job: Option<ImportJob>,
+    folder_pick: Option<FolderPickJob>,
     import_message: Option<ImportMessageState>,
     menu_lr_chord: screen_input::MenuLrChordTracker,
     menu_lr_undo: i8,
@@ -227,6 +251,7 @@ pub fn init() -> State {
         delete_confirm: None,
         import_picker: None,
         import_job: None,
+        folder_pick: None,
         import_message: None,
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         menu_lr_undo: 0,
@@ -368,6 +393,7 @@ pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
     update_hold_scroll(state);
     update_name_entry_blink(state, dt);
     poll_import_job(state);
+    poll_folder_pick(state);
     None
 }
 
@@ -640,16 +666,17 @@ fn begin_import_picker(state: &mut State) {
     reset_nav_hold(state);
     audio::play_sfx("assets/sounds/start.ogg");
     let candidates = detect_itg_local_profiles();
-    if candidates.is_empty() {
-        state.import_message = Some(ImportMessageState {
-            title: tr("Profiles", "ImportNoneFoundTitle"),
-            lines: vec![tr("Profiles", "ImportNoneFoundBody").to_string()],
-        });
-        return;
-    }
+    // Always open the picker — even with nothing auto-detected — so the
+    // "Browse for game directory…" row is available (no dead end).
+    let info = if candidates.is_empty() {
+        Some(tr("Profiles", "ImportNoneFoundBody"))
+    } else {
+        None
+    };
     state.import_picker = Some(ImportPickerState {
         candidates,
         selected: 0,
+        info,
     });
 }
 
@@ -662,11 +689,8 @@ fn move_import_picker_selected(state: &mut State, dir: NavDirection) {
     let Some(picker) = state.import_picker.as_mut() else {
         return;
     };
-    let len = picker.candidates.len();
-    if len == 0 {
-        picker.selected = 0;
-        return;
-    }
+    // Selectable rows = candidates + the trailing "Browse…" row.
+    let len = picker.candidates.len() + 1;
     picker.selected = match dir {
         NavDirection::Up => {
             if picker.selected == 0 {
@@ -680,6 +704,16 @@ fn move_import_picker_selected(state: &mut State, dir: NavDirection) {
 }
 
 fn confirm_import_picker(state: &mut State) {
+    // The "Browse…" row opens a native folder picker; keep the picker open.
+    if state
+        .import_picker
+        .as_ref()
+        .is_some_and(ImportPickerState::browse_selected)
+    {
+        begin_folder_pick(state);
+        return;
+    }
+
     let Some(picker) = state.import_picker.take() else {
         return;
     };
@@ -711,6 +745,96 @@ fn confirm_import_picker(state: &mut State) {
         let _ = tx.send(ImportMsg::Done(outcome));
     });
     state.import_job = Some(ImportJob { rx, progress: None });
+}
+
+/// Spawns the native folder picker on a worker thread. The chosen directory (or
+/// `None` if cancelled) is delivered over a channel polled in [`poll_folder_pick`],
+/// so the render loop never blocks on the modal dialog.
+fn begin_folder_pick(state: &mut State) {
+    if state.folder_pick.is_some() {
+        return;
+    }
+    audio::play_sfx("assets/sounds/start.ogg");
+    reset_nav_hold(state);
+    let title = tr("Profiles", "ImportBrowsePrompt").to_string();
+    let (tx, rx) = std::sync::mpsc::channel();
+    thread::spawn(move || {
+        let picked = rfd::FileDialog::new().set_title(title).pick_folder();
+        let _ = tx.send(picked);
+    });
+    state.folder_pick = Some(FolderPickJob { rx });
+}
+
+/// Merges newly-found candidates into the picker, de-duplicating by canonical
+/// path and re-sorting by display name. Returns how many *new* profiles were
+/// added.
+fn merge_import_candidates(
+    picker: &mut ImportPickerState,
+    found: Vec<ItgProfileCandidate>,
+) -> usize {
+    let canon = |p: &std::path::Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    let mut seen: std::collections::HashSet<PathBuf> =
+        picker.candidates.iter().map(|c| canon(&c.dir)).collect();
+    let mut added = 0;
+    for cand in found {
+        if seen.insert(canon(&cand.dir)) {
+            picker.candidates.push(cand);
+            added += 1;
+        }
+    }
+    picker.candidates.sort_by(|a, b| {
+        a.display_name
+            .to_lowercase()
+            .cmp(&b.display_name.to_lowercase())
+    });
+    added
+}
+
+fn poll_folder_pick(state: &mut State) {
+    let Some(job) = state.folder_pick.as_ref() else {
+        return;
+    };
+    let picked = match job.rx.try_recv() {
+        Ok(picked) => picked,
+        Err(TryRecvError::Empty) => return,
+        Err(TryRecvError::Disconnected) => {
+            state.folder_pick = None;
+            return;
+        }
+    };
+    state.folder_pick = None;
+
+    let Some(dir) = picked else {
+        // User cancelled the dialog — leave the picker as-is.
+        return;
+    };
+
+    let found = detect_itg_profiles_from_game_dir(&dir);
+    // Ensure the picker is open (it may have been opened from the menu already).
+    let picker = state
+        .import_picker
+        .get_or_insert_with(|| ImportPickerState {
+            candidates: Vec::new(),
+            selected: 0,
+            info: None,
+        });
+    if found.is_empty() {
+        picker.info = Some(tr_fmt(
+            "Profiles",
+            "ImportBrowseNoneFoundBody",
+            &[("dir", &dir.display().to_string())],
+        ));
+        return;
+    }
+    let added = merge_import_candidates(picker, found);
+    picker.info = Some(tr_fmt(
+        "Profiles",
+        "ImportBrowseFoundBody",
+        &[("count", &added.to_string())],
+    ));
+    // Move the cursor to the first profile so Start imports immediately.
+    picker.selected = 0;
+    audio::play_sfx("assets/sounds/change.ogg");
 }
 
 fn poll_import_job(state: &mut State) {
@@ -913,7 +1037,7 @@ fn undo_profile_menu_move(state: &mut State, undo: i8) {
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
-    if state.import_job.is_some() {
+    if state.import_job.is_some() || state.folder_pick.is_some() {
         return ScreenAction::None;
     }
     if state.import_message.is_some() {
@@ -1538,7 +1662,11 @@ fn push_import_picker_overlay(ui: &mut Vec<Actor>, state: &State) {
     let footer_h = 44.0_f32;
     let total = picker.candidates.len();
     let visible = total.min(IMPORT_PICK_MAX_VISIBLE);
-    let box_h = header_h + (visible as f32) * item_h + footer_h;
+    // The list area always shows at least one row (an empty-state hint), plus a
+    // trailing "Browse…" row, plus an optional info line.
+    let list_rows = visible.max(1);
+    let info_h = if picker.info.is_some() { 24.0 } else { 0.0 };
+    let box_h = header_h + (list_rows as f32) * item_h + item_h + info_h + footer_h;
     let cx = w * 0.5;
     let cy = h * 0.5;
     let top = cy - box_h * 0.5;
@@ -1559,11 +1687,13 @@ fn push_import_picker_overlay(ui: &mut Vec<Actor>, state: &State) {
         horizalign(center)
     ));
 
+    // Window the candidate list around the selection (clamped so the synthetic
+    // "Browse…" row selection still shows the tail of the list).
+    let list_sel = picker.selected.min(total.saturating_sub(1));
     let offset = if total <= IMPORT_PICK_MAX_VISIBLE {
         0
     } else {
-        picker
-            .selected
+        list_sel
             .saturating_sub(IMPORT_PICK_MAX_VISIBLE - 1)
             .min(total - IMPORT_PICK_MAX_VISIBLE)
     };
@@ -1571,37 +1701,96 @@ fn push_import_picker_overlay(ui: &mut Vec<Actor>, state: &State) {
     let list_left = cx - box_w * 0.5 + 24.0;
     let list_w = box_w - 48.0;
 
-    for i in 0..visible {
-        let idx = offset + i;
-        let Some(cand) = picker.candidates.get(idx) else {
-            break;
-        };
-        let row_y = (i as f32).mul_add(item_h, top + header_h);
-        let selected = idx == picker.selected;
-        if selected {
-            ui.push(act!(quad:
-                align(0.0, 0.0):
-                xy(list_left - 8.0, row_y):
-                zoomto(list_w + 16.0, item_h):
-                diffuse(0.17, 0.23, 0.28, 0.95):
-                z(1002)
-            ));
-        }
-        let text_col = if selected {
-            [accent[0], accent[1], accent[2], 1.0]
-        } else {
-            [1.0, 1.0, 1.0, 1.0]
-        };
+    if total == 0 {
+        // Empty-state hint where the list would be.
         ui.push(act!(text:
             align(0.0, 0.5):
-            xy(list_left, row_y + item_h * 0.5):
+            xy(list_left, top + header_h + item_h * 0.5):
             font("miso"):
-            zoom(0.95):
+            zoom(0.9):
             maxwidth(list_w):
-            settext(cand.display_name.clone()):
-            diffuse(text_col[0], text_col[1], text_col[2], text_col[3]):
+            settext(tr("Profiles", "ImportPickEmpty")):
+            diffuse(0.7, 0.7, 0.7, 1.0):
             z(1003):
             horizalign(left)
+        ));
+    } else {
+        for i in 0..visible {
+            let idx = offset + i;
+            let Some(cand) = picker.candidates.get(idx) else {
+                break;
+            };
+            let row_y = (i as f32).mul_add(item_h, top + header_h);
+            let selected = idx == picker.selected;
+            if selected {
+                ui.push(act!(quad:
+                    align(0.0, 0.0):
+                    xy(list_left - 8.0, row_y):
+                    zoomto(list_w + 16.0, item_h):
+                    diffuse(0.17, 0.23, 0.28, 0.95):
+                    z(1002)
+                ));
+            }
+            let text_col = if selected {
+                [accent[0], accent[1], accent[2], 1.0]
+            } else {
+                [1.0, 1.0, 1.0, 1.0]
+            };
+            ui.push(act!(text:
+                align(0.0, 0.5):
+                xy(list_left, row_y + item_h * 0.5):
+                font("miso"):
+                zoom(0.95):
+                maxwidth(list_w):
+                settext(cand.display_name.clone()):
+                diffuse(text_col[0], text_col[1], text_col[2], text_col[3]):
+                z(1003):
+                horizalign(left)
+            ));
+        }
+    }
+
+    // Trailing "Browse for game directory…" row.
+    let browse_y = (list_rows as f32).mul_add(item_h, top + header_h);
+    let browse_selected = picker.browse_selected();
+    if browse_selected {
+        ui.push(act!(quad:
+            align(0.0, 0.0):
+            xy(list_left - 8.0, browse_y):
+            zoomto(list_w + 16.0, item_h):
+            diffuse(0.17, 0.23, 0.28, 0.95):
+            z(1002)
+        ));
+    }
+    let browse_col = if browse_selected {
+        [accent[0], accent[1], accent[2], 1.0]
+    } else {
+        [0.85, 0.85, 0.85, 1.0]
+    };
+    ui.push(act!(text:
+        align(0.0, 0.5):
+        xy(list_left, browse_y + item_h * 0.5):
+        font("miso"):
+        zoom(0.95):
+        maxwidth(list_w):
+        settext(tr("Profiles", "ImportBrowseButton")):
+        diffuse(browse_col[0], browse_col[1], browse_col[2], browse_col[3]):
+        z(1003):
+        horizalign(left)
+    ));
+
+    // Optional info notice (e.g. result of a browse) above the prompt.
+    if let Some(info) = &picker.info {
+        ui.push(act!(text:
+            align(0.5, 1.0):
+            xy(cx, cy + box_h * 0.5 - footer_h + 4.0):
+            font("miso"):
+            zoom(0.8):
+            maxwidth(box_w - 40.0):
+            settext(info.to_string()):
+            diffuse(accent[0], accent[1], accent[2], 1.0):
+            z(1003):
+            horizalign(center)
         ));
     }
 
