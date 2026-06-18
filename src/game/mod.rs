@@ -1,5 +1,6 @@
 pub mod course;
 pub mod gameplay;
+pub mod import;
 pub mod online;
 pub mod pad_profiles;
 pub mod parsing;
