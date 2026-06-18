@@ -11,10 +11,15 @@
 //! DeadSync default:
 //!
 //! * `SpeedModType` + `SpeedMod` -> [`ScrollSpeedSetting`]
-//! * `Mini` -> `mini_percent`
+//! * `Mini` -> `mini_percent`, `Spacing` -> `spacing_percent`
 //! * `NoteSkin` -> `noteskin`
 //! * `NoteFieldOffsetX` / `NoteFieldOffsetY` -> note-field offsets
+//! * `VisualDelay` -> `visual_delay_ms`
 //! * `TiltMultiplier`, `MeasureCounterLookahead`
+//! * enum-valued settings whose value vocabulary matches a DeadSync `FromStr`:
+//!   `BackgroundFilter`, `ComboColors`, `ComboMode`, `LifeMeterType`,
+//!   `MeasureCounter`, `MeasureLines`, `ErrorBarTrim`, `MiniIndicator`,
+//!   `DataVisualizations` -> `step_statistics`
 //! * `PlayerOptionsString` -> turn + scroll (reverse) modifiers
 //! * a set of boolean toggles whose name and meaning match 1:1
 //!
@@ -22,8 +27,13 @@
 //! plain map of strings.
 
 use std::collections::HashMap;
+use std::str::FromStr;
 
-use deadsync_profile::{NoteSkin, PlayerOptionsData, ScrollOption, TurnOption};
+use deadsync_profile::{
+    BackgroundFilter, ComboColors, ComboMode, ErrorBarTrim, LifeMeterType, MeasureCounter,
+    MeasureLines, MiniIndicator, NoteSkin, PlayerOptionsData, ScrollOption, StepStatisticsMask,
+    TurnOption,
+};
 use deadsync_rules::scroll::ScrollSpeedSetting;
 
 /// Settings read from a `[Simply Love]` INI section.
@@ -46,6 +56,14 @@ fn sl_str<'a>(map: &'a SlSettings, key: &str) -> Option<&'a str> {
 
 fn sl_f32(map: &SlSettings, key: &str) -> Option<f32> {
     sl_str(map, key)?.parse::<f32>().ok()
+}
+
+/// Parse a Simply Love value into a DeadSync enum via its [`FromStr`]. Returns
+/// `None` (leaving the caller's default in place) when the key is absent or the
+/// value isn't one DeadSync recognises — the DeadSync `FromStr` impls normalise
+/// case/punctuation and reject unknown vocabularies, so this never guesses.
+fn sl_enum<T: FromStr>(map: &SlSettings, key: &str) -> Option<T> {
+    sl_str(map, key)?.parse::<T>().ok()
 }
 
 /// Parse a signed integer out of a value that may carry trailing units, e.g.
@@ -137,6 +155,9 @@ pub fn translate_player_options(map: &SlSettings, base: &PlayerOptionsData) -> P
     if let Some(mini) = sl_str(map, "Mini").and_then(leading_i32) {
         out.mini_percent = mini;
     }
+    if let Some(spacing) = sl_str(map, "Spacing").and_then(leading_i32) {
+        out.spacing_percent = spacing;
+    }
     if let Some(skin) = sl_str(map, "NoteSkin") {
         out.noteskin = NoteSkin::new(skin);
     }
@@ -146,11 +167,44 @@ pub fn translate_player_options(map: &SlSettings, base: &PlayerOptionsData) -> P
     if let Some(y) = sl_str(map, "NoteFieldOffsetY").and_then(leading_i32) {
         out.note_field_offset_y = y;
     }
+    if let Some(delay) = sl_str(map, "VisualDelay").and_then(leading_i32) {
+        out.visual_delay_ms = delay;
+    }
     if let Some(mult) = sl_f32(map, "TiltMultiplier") {
         out.tilt_multiplier = mult;
     }
     if let Some(look) = sl_str(map, "MeasureCounterLookahead").and_then(leading_i32) {
         out.measure_counter_lookahead = look.clamp(0, i32::from(u8::MAX)) as u8;
+    }
+
+    // Enum-valued settings whose Simply Love vocabulary matches DeadSync's
+    // `FromStr`. Unknown values are ignored (default preserved).
+    if let Some(v) = sl_enum::<BackgroundFilter>(map, "BackgroundFilter") {
+        out.background_filter = v;
+    }
+    if let Some(v) = sl_enum::<ComboColors>(map, "ComboColors") {
+        out.combo_colors = v;
+    }
+    if let Some(v) = sl_enum::<ComboMode>(map, "ComboMode") {
+        out.combo_mode = v;
+    }
+    if let Some(v) = sl_enum::<LifeMeterType>(map, "LifeMeterType") {
+        out.lifemeter_type = v;
+    }
+    if let Some(v) = sl_enum::<MeasureCounter>(map, "MeasureCounter") {
+        out.measure_counter = v;
+    }
+    if let Some(v) = sl_enum::<MeasureLines>(map, "MeasureLines") {
+        out.measure_lines = v;
+    }
+    if let Some(v) = sl_enum::<ErrorBarTrim>(map, "ErrorBarTrim") {
+        out.error_bar_trim = v;
+    }
+    if let Some(v) = sl_enum::<MiniIndicator>(map, "MiniIndicator") {
+        out.mini_indicator = v;
+    }
+    if let Some(v) = sl_enum::<StepStatisticsMask>(map, "DataVisualizations") {
+        out.step_statistics = v;
     }
 
     apply_bool_toggles(&mut out, map);
@@ -191,6 +245,7 @@ fn apply_bool_toggles(out: &mut PlayerOptionsData, map: &SlSettings) {
     set_bool!("SubtractiveScoring" => subtractive_scoring);
     set_bool!("Pacemaker" => pacemaker);
     set_bool!("TrackEarlyJudgments" => track_early_judgments);
+    set_bool!("ScaleGraph" => scale_scatterplot);
     set_bool!("NPSGraphAtTop" => nps_graph_at_top);
     set_bool!("JudgmentTilt" => judgment_tilt);
     set_bool!("ColumnCues" => column_cues);
@@ -301,6 +356,70 @@ mod tests {
         assert_eq!(out.turn_option, TurnOption::Mirror);
         assert!(out.reverse_scroll);
         assert!(out.scroll_option.contains(ScrollOption::Reverse));
+    }
+
+    #[test]
+    fn parses_spacing_and_visual_delay() {
+        let base = PlayerOptionsData::default();
+        let out =
+            translate_player_options(&sl(&[("Spacing", "-25%"), ("VisualDelay", "12ms")]), &base);
+        assert_eq!(out.spacing_percent, -25);
+        assert_eq!(out.visual_delay_ms, 12);
+    }
+
+    #[test]
+    fn translates_enum_settings() {
+        let base = PlayerOptionsData::default();
+        let out = translate_player_options(
+            &sl(&[
+                ("BackgroundFilter", "50"),
+                ("ComboColors", "RainbowScroll"),
+                ("ComboMode", "CurrentCombo"),
+                ("LifeMeterType", "Surround"),
+                ("MeasureCounter", "16th"),
+                ("MeasureLines", "Quarter"),
+                ("ErrorBarTrim", "Great"),
+                ("MiniIndicator", "Pacemaker"),
+                ("ScaleGraph", "true"),
+            ]),
+            &base,
+        );
+        assert_eq!(
+            out.background_filter,
+            BackgroundFilter::from_str("50").unwrap()
+        );
+        assert_eq!(out.combo_colors, ComboColors::RainbowScroll);
+        assert_eq!(out.combo_mode, ComboMode::CurrentCombo);
+        assert_eq!(out.lifemeter_type, LifeMeterType::Surround);
+        assert_eq!(out.measure_counter, MeasureCounter::Sixteenth);
+        assert_eq!(out.measure_lines, MeasureLines::Quarter);
+        assert_eq!(out.error_bar_trim, ErrorBarTrim::Great);
+        assert_eq!(out.mini_indicator, MiniIndicator::Pacemaker);
+        assert!(out.scale_scatterplot);
+    }
+
+    #[test]
+    fn ignores_unknown_enum_values() {
+        let base = PlayerOptionsData::default();
+        let out = translate_player_options(
+            &sl(&[("ComboColors", "NotARealValue"), ("MeasureCounter", "99th")]),
+            &base,
+        );
+        assert_eq!(out.combo_colors, base.combo_colors);
+        assert_eq!(out.measure_counter, base.measure_counter);
+    }
+
+    #[test]
+    fn translates_data_visualizations_legacy_values() {
+        let base = PlayerOptionsData::default();
+
+        let stats =
+            translate_player_options(&sl(&[("DataVisualizations", "Step Statistics")]), &base);
+        assert_eq!(stats.step_statistics, StepStatisticsMask::all_widgets());
+
+        let none =
+            translate_player_options(&sl(&[("DataVisualizations", "Target Score Graph")]), &base);
+        assert_eq!(none.step_statistics, StepStatisticsMask::empty());
     }
 
     #[test]
