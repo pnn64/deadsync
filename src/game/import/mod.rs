@@ -15,3 +15,6 @@ pub mod options;
 pub mod resolver;
 pub mod run;
 pub mod xml;
+
+#[cfg(test)]
+mod pipeline_tests;
