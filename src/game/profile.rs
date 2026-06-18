@@ -1234,8 +1234,41 @@ fn load_for_side(side: PlayerSide) {
 }
 
 pub fn load() {
+    restore_last_active_profiles();
     load_for_side(PlayerSide::P1);
     load_for_side(PlayerSide::P2);
+}
+
+/// Seeds the session's active profiles from the last logged-in profile ids
+/// persisted in the machine config, so the profile-select screen defaults to the
+/// previous login after a reboot instead of resetting to Guest. Only applies a
+/// saved id when it still refers to an existing local profile; otherwise the
+/// built-in session default is kept.
+fn restore_last_active_profiles() {
+    let (p1, p2) = config::last_active_profiles();
+    let mut session = lock_session();
+    for (side, saved) in [(PlayerSide::P1, p1), (PlayerSide::P2, p2)] {
+        if let Some(id) = saved {
+            if is_local_profile_id(&id) && local_profile_dir(&id).is_dir() {
+                session.active_profiles[side_ix(side)] = ActiveProfile::Local { id };
+            }
+        }
+    }
+}
+
+/// Persists the currently active profile id of each side to the machine config
+/// so it can be restored on the next boot. Guest sides are stored as empty.
+fn persist_last_active_profiles() {
+    let (p1, p2) = {
+        let session = lock_session();
+        (
+            active_profile_local_id(&session.active_profiles[side_ix(PlayerSide::P1)])
+                .map(str::to_owned),
+            active_profile_local_id(&session.active_profiles[side_ix(PlayerSide::P2)])
+                .map(str::to_owned),
+        )
+    };
+    config::update_last_active_profiles(p1, p2);
 }
 
 /// Returns a copy of the currently loaded profile data.
@@ -1581,6 +1614,7 @@ pub fn set_active_profile_for_side(side: PlayerSide, profile: ActiveProfile) -> 
         *slot = profile;
     }
     load_for_side(side);
+    persist_last_active_profiles();
     get_for_side(side)
 }
 

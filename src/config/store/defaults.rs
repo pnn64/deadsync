@@ -130,6 +130,10 @@ fn push_default_options(content: &mut String, default: &Config) {
     // No pad→player assignment by default (slots follow the hardware jumper).
     push_line(content, "SmxP1Serial", "");
     push_line(content, "SmxP2Serial", "");
+    // No remembered profile-select login by default (defaults to the machine
+    // default profile / Guest until a profile is logged in).
+    push_line(content, "LastProfileP1", "");
+    push_line(content, "LastProfileP2", "");
     // Persisted pad ordering is empty until pads are seen; seeded at runtime.
     push_line(content, "PadOrderRawInput", "");
     push_line(content, "PadOrderWGI", "");
