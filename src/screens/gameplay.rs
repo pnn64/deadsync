@@ -1908,8 +1908,8 @@ fn maybe_refresh_smx_sensor_data(state: &mut State, delta_time: f32) {
     }
     // Keep the leftover so cadence stays steady, but cap it so a long stall
     // (load spike, alt-tab) can't bank up a burst of catch-up refreshes.
-    state.smx_sensor_refresh_accum =
-        (state.smx_sensor_refresh_accum - SMX_SENSOR_REFRESH_INTERVAL).min(SMX_SENSOR_REFRESH_INTERVAL);
+    state.smx_sensor_refresh_accum = (state.smx_sensor_refresh_accum - SMX_SENSOR_REFRESH_INTERVAL)
+        .min(SMX_SENSOR_REFRESH_INTERVAL);
     smx_profile::time_read(|| refresh_smx_sensor_data(state));
 }
 

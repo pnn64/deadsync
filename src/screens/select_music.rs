@@ -10781,7 +10781,7 @@ fn push_folder_stats_overlay(
 }
 
 #[inline(always)]
-fn solo_scorebox_side(
+fn solo_runtime_side(
     play_style: profile_data::PlayStyle,
     session_side: profile_data::PlayerSide,
 ) -> profile_data::PlayerSide {
@@ -10801,6 +10801,8 @@ pub fn push_actors(
     actors.reserve(256);
     let side = crate::game::profile::get_session_player_side();
     let play_style = crate::game::profile::get_session_play_style();
+    let solo_side = solo_runtime_side(play_style, side);
+    let is_p2_solo = solo_side == profile_data::PlayerSide::P2;
     let is_p2_single = profile_data::is_single_p2_side(play_style, side);
     let is_versus = play_style == profile_data::PlayStyle::Versus;
     let target_chart_type = play_style.chart_type();
@@ -10993,21 +10995,12 @@ pub fn push_actors(
                 true,
             );
         } else {
-            let active_side = if is_p2_single {
-                profile_data::PlayerSide::P2
-            } else {
-                profile_data::PlayerSide::P1
-            };
-            let active_profile = if is_p2_single {
-                &p2_profile
-            } else {
-                &p1_profile
-            };
+            let active_profile = if is_p2_solo { &p2_profile } else { &p1_profile };
             push_folder_stats_overlay(
                 &mut actors,
                 state,
                 asset_manager,
-                active_side,
+                solo_side,
                 active_profile,
                 target_chart_type,
                 immediate_chart_p1,
@@ -11509,7 +11502,7 @@ pub fn push_actors(
             immediate_chart_p2,
         );
     } else {
-        let pane_cx = if is_p2_single {
+        let pane_cx = if is_p2_solo {
             screen_width() * 0.75 + 5.0
         } else {
             screen_width() * 0.25 - 5.0
@@ -11518,12 +11511,8 @@ pub fn push_actors(
             &mut actors,
             pane_cx,
             sel_col_p1,
-            if is_p2_single {
-                profile_data::PlayerSide::P2
-            } else {
-                profile_data::PlayerSide::P1
-            },
-            if is_p2_single {
+            solo_side,
+            if is_p2_solo {
                 p2_profile.player_initials.as_str()
             } else {
                 p1_profile.player_initials.as_str()
@@ -11965,7 +11954,6 @@ pub fn push_actors(
         let p1_gs = scores::is_gs_active_for_side(profile_data::PlayerSide::P1);
         let p2_gs = scores::is_gs_active_for_side(profile_data::PlayerSide::P2);
         let both_gs_versus = is_versus && p1_gs && p2_gs;
-        let solo_side = solo_scorebox_side(play_style, side);
         let force_step_pane =
             cfg.select_music_scorebox_placement == SelectMusicScoreboxPlacement::StepPane;
         let mut push_scorebox = |side: profile_data::PlayerSide,
@@ -12122,7 +12110,7 @@ pub fn push_actors(
     } else {
         let arrow_slot = (sel_p1.saturating_sub(top_index)).min(VISIBLE_STEPS_SLOTS - 1);
         let arrow_y = lst_cy + (arrow_slot as i32 - 2) as f32 * 30.0 + 1.0;
-        let (arrow_x0, arrow_dx, arrow_rot) = if is_p2_single {
+        let (arrow_x0, arrow_dx, arrow_rot) = if is_p2_solo {
             let x0 = lst_cx + 8.0;
             (x0, dx_p2, 180.0)
         } else {
@@ -12542,7 +12530,7 @@ mod tests {
         build_playlist_entries_from_text, build_playlist_song_lookup,
         delayed_selection_updates_blocked, first_song_entry_index, handle_raw_key_event,
         init_placeholder, keymap_has_player_input, reset_preview_after_gameplay,
-        select_music_lobby_lock_text, select_music_lobby_lock_text_for, solo_scorebox_side,
+        select_music_lobby_lock_text, select_music_lobby_lock_text_for, solo_runtime_side,
         steps_index_for_side, sync_low_confidence_warning,
     };
     use crate::config::SelectMusicWheelStyle;
@@ -12586,30 +12574,30 @@ mod tests {
     }
 
     #[test]
-    fn solo_scorebox_side_tracks_double_p2_runtime_side() {
+    fn solo_runtime_side_tracks_double_p2_runtime_side() {
         assert_eq!(
-            solo_scorebox_side(
+            solo_runtime_side(
                 profile_data::PlayStyle::Single,
                 profile_data::PlayerSide::P1
             ),
             profile_data::PlayerSide::P1
         );
         assert_eq!(
-            solo_scorebox_side(
+            solo_runtime_side(
                 profile_data::PlayStyle::Single,
                 profile_data::PlayerSide::P2
             ),
             profile_data::PlayerSide::P2
         );
         assert_eq!(
-            solo_scorebox_side(
+            solo_runtime_side(
                 profile_data::PlayStyle::Double,
                 profile_data::PlayerSide::P1
             ),
             profile_data::PlayerSide::P1
         );
         assert_eq!(
-            solo_scorebox_side(
+            solo_runtime_side(
                 profile_data::PlayStyle::Double,
                 profile_data::PlayerSide::P2
             ),
