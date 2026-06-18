@@ -111,6 +111,20 @@ pub fn is_itg_profile_dir(dir: &Path) -> bool {
     find_case_insensitive(dir, "Editable.ini").is_some()
 }
 
+/// Cheaply reads just the `DisplayName` from a profile's `Editable.ini`,
+/// without parsing the (potentially large) `Stats.xml`. Used to label profiles
+/// in the import picker. Returns `None` when the file is missing or the name is
+/// blank.
+pub fn read_display_name(dir: &Path) -> Option<String> {
+    let path = find_case_insensitive(dir, "Editable.ini")?;
+    let name = read_editable(&path).display_name;
+    if name.trim().is_empty() {
+        None
+    } else {
+        Some(name)
+    }
+}
+
 /// Reads an entire ITGmania local profile directory into an [`ItgSource`].
 pub fn read_profile_dir(dir: &Path) -> Result<ItgSource, ItgReadError> {
     let editable_path = find_case_insensitive(dir, "Editable.ini")
