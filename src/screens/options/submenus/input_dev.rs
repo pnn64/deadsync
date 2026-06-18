@@ -1,21 +1,21 @@
 use super::super::*;
 
-// USB polling choice list bounds: index N maps to 100 + N*50 microseconds.
-// Displayed as Hz (10000hz down to 1000hz); default is index 8 (500us = 2000hz).
+// USB polling choice list bounds: index N maps to 1000 - N*50 microseconds.
+// Displayed as Hz (1000hz up to 10000hz); default is index 10 (500us = 2000hz).
 const USB_POLLING_MIN_US: u16 = 100;
+const USB_POLLING_MAX_US: u16 = 1000;
 const USB_POLLING_STEP_US: u16 = 50;
 pub(in crate::screens::options) const USB_POLLING_CHOICE_COUNT: usize = 19;
 
 /// Choice index for a polling value in microseconds (clamped to the list).
 pub(in crate::screens::options) fn usb_polling_choice_index(value: u16) -> usize {
-    let max = USB_POLLING_MIN_US + USB_POLLING_STEP_US * (USB_POLLING_CHOICE_COUNT as u16 - 1);
-    let v = value.clamp(USB_POLLING_MIN_US, max);
-    ((v - USB_POLLING_MIN_US) / USB_POLLING_STEP_US) as usize
+    let v = value.clamp(USB_POLLING_MIN_US, USB_POLLING_MAX_US);
+    ((USB_POLLING_MAX_US - v) / USB_POLLING_STEP_US) as usize
 }
 
 /// Polling value in microseconds for a choice index (clamped to the list).
 pub(in crate::screens::options) fn usb_polling_value(index: usize) -> u16 {
-    USB_POLLING_MIN_US + (index.min(USB_POLLING_CHOICE_COUNT - 1) as u16) * USB_POLLING_STEP_US
+    USB_POLLING_MAX_US - (index.min(USB_POLLING_CHOICE_COUNT - 1) as u16) * USB_POLLING_STEP_US
 }
 
 /// Live help text for the Assign Pads row: which pad is currently P1 (blue) vs
@@ -331,29 +331,29 @@ pub(in crate::screens::options) const SMX_CONFIG_OPTIONS_ROWS: &[SubRow] = &[
     },
     SubRow {
         id: SubRowId::SmxUsbPolling,
-        // 100-1000us in 50us steps; choice index N maps to 100 + N*50 us.
-        // Displayed as Hz (10000hz down to 1000hz); default is index 8 (500us = 2000hz).
+        // 100-1000us in 50us steps; choice index N maps to 1000 - N*50 us.
+        // Displayed as Hz (1000hz up to 10000hz); default is index 10 (500us = 2000hz).
         label: lookup_key("OptionsInput", "UsbPolling"),
         choices: &[
-            literal_choice("10000hz"),
-            literal_choice("6667hz"),
-            literal_choice("5000hz"),
-            literal_choice("4000hz"),
-            literal_choice("3333hz"),
-            literal_choice("2857hz"),
-            literal_choice("2500hz"),
-            literal_choice("2222hz"),
-            literal_choice("2000hz"),
-            literal_choice("1818hz"),
-            literal_choice("1667hz"),
-            literal_choice("1538hz"),
-            literal_choice("1429hz"),
-            literal_choice("1333hz"),
-            literal_choice("1250hz"),
-            literal_choice("1176hz"),
-            literal_choice("1111hz"),
-            literal_choice("1053hz"),
             literal_choice("1000hz"),
+            literal_choice("1053hz"),
+            literal_choice("1111hz"),
+            literal_choice("1176hz"),
+            literal_choice("1250hz"),
+            literal_choice("1333hz"),
+            literal_choice("1429hz"),
+            literal_choice("1538hz"),
+            literal_choice("1667hz"),
+            literal_choice("1818hz"),
+            literal_choice("2000hz"),
+            literal_choice("2222hz"),
+            literal_choice("2500hz"),
+            literal_choice("2857hz"),
+            literal_choice("3333hz"),
+            literal_choice("4000hz"),
+            literal_choice("5000hz"),
+            literal_choice("6667hz"),
+            literal_choice("10000hz"),
         ],
         inline: false,
     },
