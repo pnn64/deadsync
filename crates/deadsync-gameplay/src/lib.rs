@@ -6401,6 +6401,13 @@ pub struct TimeBasedTapMissStep {
     pub event: Option<TimeBasedTapMissEvent>,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct TimeBasedTapMissPlayerUpdate {
+    pub next_cursor: usize,
+    pub event_count: usize,
+    pub stopped: bool,
+}
+
 pub fn apply_next_time_based_tap_miss_for_player(
     notes: &mut [Note],
     note_time_cache_ns: &[SongTimeNs],
@@ -6470,6 +6477,57 @@ pub fn apply_next_time_based_tap_miss_for_player(
     TimeBasedTapMissStep {
         next_cursor: cursor,
         event: None,
+    }
+}
+
+pub fn collect_time_based_tap_misses_for_player(
+    notes: &mut [Note],
+    note_time_cache_ns: &[SongTimeNs],
+    tap_miss_held_window: &[bool],
+    hold_decay_active: &mut [bool],
+    decaying_hold_indices: &mut Vec<usize>,
+    cursor: usize,
+    note_range: (usize, usize),
+    cutoff_row: usize,
+    music_time_ns: SongTimeNs,
+    music_rate: f32,
+    score_missed_holds_rolls: bool,
+    events: &mut [Option<TimeBasedTapMissEvent>],
+) -> TimeBasedTapMissPlayerUpdate {
+    let end = note_range.1.min(notes.len()).min(note_time_cache_ns.len());
+    let mut cursor = cursor.max(note_range.0.min(end));
+    let mut event_count = 0usize;
+
+    while cursor < end && event_count < events.len() {
+        let step = apply_next_time_based_tap_miss_for_player(
+            notes,
+            note_time_cache_ns,
+            tap_miss_held_window,
+            hold_decay_active,
+            decaying_hold_indices,
+            cursor,
+            note_range,
+            cutoff_row,
+            music_time_ns,
+            music_rate,
+            score_missed_holds_rolls,
+        );
+        cursor = step.next_cursor;
+        let Some(event) = step.event else {
+            return TimeBasedTapMissPlayerUpdate {
+                next_cursor: cursor,
+                event_count,
+                stopped: true,
+            };
+        };
+        events[event_count] = Some(event);
+        event_count += 1;
+    }
+
+    TimeBasedTapMissPlayerUpdate {
+        next_cursor: cursor,
+        event_count,
+        stopped: cursor >= end,
     }
 }
 
@@ -8828,6 +8886,18 @@ pub fn missed_note_cutoff_row_for_timing(timing: &TimingData, cutoff_time_ns: So
 }
 
 #[inline(always)]
+pub fn missed_note_cutoff_row_for_music_time(
+    timing_profile: &TimingProfile,
+    timing: &TimingData,
+    music_rate: f32,
+    music_time_ns: SongTimeNs,
+) -> usize {
+    let cutoff_time_ns =
+        music_time_ns.saturating_sub(max_step_distance_ns(timing_profile, music_rate));
+    missed_note_cutoff_row_for_timing(timing, cutoff_time_ns)
+}
+
+#[inline(always)]
 pub fn timing_row_floor(timing: &TimingData, beat: f32) -> usize {
     let Some(mut row) = timing.get_row_for_beat(beat) else {
         return 0;
@@ -10923,6 +10993,50 @@ pub fn step_search_row_bounds(
     )
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct LaneNoteSearch {
+    pub current_row_index: usize,
+    pub search_start_row: usize,
+    pub search_end_row: usize,
+    pub search_start_idx: usize,
+    pub search_end_idx: usize,
+    pub candidate: Option<(usize, SongTimeNs)>,
+}
+
+pub fn closest_lane_note_search(
+    note_indices: &[usize],
+    notes: &[Note],
+    note_times_ns: &[SongTimeNs],
+    timing: &TimingData,
+    current_time_ns: SongTimeNs,
+) -> LaneNoteSearch {
+    let current_row_index =
+        timing_row_nearest(timing, timing.get_beat_for_time_ns(current_time_ns));
+    let (search_start_row, search_end_row) =
+        step_search_row_bounds(timing, current_time_ns, current_row_index);
+    let (search_start_idx, search_end_idx) =
+        lane_note_window_bounds_rows(note_indices, notes, search_start_row, search_end_row);
+    let candidate = closest_lane_note_ns(
+        note_indices,
+        notes,
+        note_times_ns,
+        timing,
+        current_time_ns,
+        current_row_index,
+        search_start_idx,
+        search_end_idx,
+    );
+
+    LaneNoteSearch {
+        current_row_index,
+        search_start_row,
+        search_end_row,
+        search_start_idx,
+        search_end_idx,
+        candidate,
+    }
+}
+
 #[inline(always)]
 pub fn closest_lane_note_ns(
     note_indices: &[usize],
@@ -11153,10 +11267,18 @@ pub fn apply_mine_avoid_result(note: &mut Note) -> bool {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct MineAvoidedEvent {
+    pub note_index: usize,
+    pub row_index: usize,
+    pub column: usize,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct MineAvoidancePlayerUpdate {
     pub mine_end: usize,
     pub next_mine_avoid_cursor: usize,
     pub avoided_count: u32,
+    pub last_avoided: Option<MineAvoidedEvent>,
 }
 
 pub fn apply_time_based_mine_avoidance_for_player(
@@ -11165,15 +11287,19 @@ pub fn apply_time_based_mine_avoidance_for_player(
     mine_cursor: usize,
     cutoff_row: usize,
     note_range: (usize, usize),
-    mut on_avoided: impl FnMut(usize, usize, usize),
 ) -> MineAvoidancePlayerUpdate {
     let mine_end = mine_avoid_cursor_end(notes, mine_note_ix, mine_cursor, cutoff_row);
     let mut avoided_count = 0u32;
+    let mut last_avoided = None;
     for &note_idx in &mine_note_ix[mine_cursor.min(mine_note_ix.len())..mine_end] {
         let note = &mut notes[note_idx];
         if apply_mine_avoid_result(note) {
             avoided_count = avoided_count.saturating_add(1);
-            on_avoided(note_idx, note.row_index, note.column);
+            last_avoided = Some(MineAvoidedEvent {
+                note_index: note_idx,
+                row_index: note.row_index,
+                column: note.column,
+            });
         }
     }
 
@@ -11187,6 +11313,7 @@ pub fn apply_time_based_mine_avoidance_for_player(
         mine_end,
         next_mine_avoid_cursor,
         avoided_count,
+        last_avoided,
     }
 }
 
@@ -14381,6 +14508,114 @@ mod tests {
         assert!(hold_decay[0]);
         assert_eq!(decaying, vec![0]);
         assert!(notes[0].result.is_none());
+    }
+
+    #[test]
+    fn collect_time_based_tap_misses_fills_bounded_event_buffer() {
+        let mut notes = vec![
+            test_note_at(NoteType::Tap, None, false, 48, 1.0),
+            test_note_at(NoteType::Tap, None, false, 96, 2.0),
+            test_note_at(NoteType::Tap, None, false, 144, 3.0),
+        ];
+        notes[0].column = 0;
+        notes[1].column = 1;
+        notes[2].column = 2;
+        let note_times = [1_000, 2_000, 3_000];
+        let held_window = [false, true, false];
+        let mut hold_decay = [false; 3];
+        let mut decaying = Vec::new();
+        let mut events = [None; 2];
+
+        let first = collect_time_based_tap_misses_for_player(
+            &mut notes,
+            &note_times,
+            &held_window,
+            &mut hold_decay,
+            &mut decaying,
+            0,
+            (0, 3),
+            192,
+            4_000,
+            1.0,
+            false,
+            &mut events,
+        );
+
+        assert_eq!(
+            first,
+            TimeBasedTapMissPlayerUpdate {
+                next_cursor: 2,
+                event_count: 2,
+                stopped: false,
+            }
+        );
+        assert_eq!(events[0].map(|event| event.note_index), Some(0));
+        assert_eq!(events[1].map(|event| event.note_index), Some(1));
+        assert!(events[1].expect("second event").miss_because_held);
+        assert!(notes.iter().all(|note| note.result.is_none()));
+
+        let second = collect_time_based_tap_misses_for_player(
+            &mut notes,
+            &note_times,
+            &held_window,
+            &mut hold_decay,
+            &mut decaying,
+            first.next_cursor,
+            (0, 3),
+            192,
+            4_000,
+            1.0,
+            false,
+            &mut events,
+        );
+
+        assert_eq!(
+            second,
+            TimeBasedTapMissPlayerUpdate {
+                next_cursor: 3,
+                event_count: 1,
+                stopped: true,
+            }
+        );
+        assert_eq!(events[0].map(|event| event.note_index), Some(2));
+    }
+
+    #[test]
+    fn collect_time_based_tap_misses_stops_before_cutoff_row() {
+        let mut notes = vec![
+            test_note_at(NoteType::Tap, None, false, 48, 1.0),
+            test_note_at(NoteType::Tap, None, false, 96, 2.0),
+        ];
+        let note_times = [1_000, 2_000];
+        let held_window = [false, false];
+        let mut hold_decay = [false; 2];
+        let mut decaying = Vec::new();
+        let mut events = [None; 4];
+
+        let update = collect_time_based_tap_misses_for_player(
+            &mut notes,
+            &note_times,
+            &held_window,
+            &mut hold_decay,
+            &mut decaying,
+            0,
+            (0, 2),
+            96,
+            4_000,
+            1.0,
+            false,
+            &mut events,
+        );
+
+        assert_eq!(
+            update,
+            TimeBasedTapMissPlayerUpdate {
+                next_cursor: 1,
+                event_count: 1,
+                stopped: true,
+            }
+        );
+        assert_eq!(events[0].map(|event| event.note_index), Some(0));
     }
 
     #[test]
@@ -20134,6 +20369,20 @@ mod tests {
     }
 
     #[test]
+    fn missed_note_cutoff_row_for_music_time_applies_late_distance() {
+        let timing = test_timing(ROWS_PER_BEAT as usize * 4);
+        let timing_profile = TimingProfile::default_itg_with_fa_plus();
+        let cutoff_time_ns = timing.get_time_for_beat_ns(3.0);
+        let music_time_ns =
+            cutoff_time_ns.saturating_add(max_step_distance_ns(&timing_profile, 1.5));
+
+        assert_eq!(
+            missed_note_cutoff_row_for_music_time(&timing_profile, &timing, 1.5, music_time_ns),
+            missed_note_cutoff_row_for_timing(&timing, cutoff_time_ns),
+        );
+    }
+
+    #[test]
     fn timing_row_floor_steps_back_when_row_is_after_beat() {
         let timing = test_timing(ROWS_PER_BEAT as usize * 2);
 
@@ -21749,16 +21998,9 @@ mod tests {
             test_note_at(NoteType::Mine, None, false, 144, 3.0),
         ];
         let mine_ix = [0, 1, 2];
-        let mut avoided = Vec::new();
 
-        let update = apply_time_based_mine_avoidance_for_player(
-            &mut notes,
-            &mine_ix,
-            0,
-            144,
-            (0, 3),
-            |note_idx, row, col| avoided.push((note_idx, row, col)),
-        );
+        let update =
+            apply_time_based_mine_avoidance_for_player(&mut notes, &mine_ix, 0, 144, (0, 3));
 
         assert_eq!(
             update,
@@ -21766,9 +22008,13 @@ mod tests {
                 mine_end: 2,
                 next_mine_avoid_cursor: 2,
                 avoided_count: 2,
+                last_avoided: Some(MineAvoidedEvent {
+                    note_index: 1,
+                    row_index: 96,
+                    column: 0,
+                }),
             }
         );
-        assert_eq!(avoided, vec![(0, 48, 0), (1, 96, 0)]);
         assert_eq!(notes[0].mine_result, Some(MineResult::Avoided));
         assert_eq!(notes[1].mine_result, Some(MineResult::Avoided));
         assert_eq!(notes[2].mine_result, None);
@@ -21785,21 +22031,14 @@ mod tests {
         notes[1].mine_result = Some(MineResult::Hit);
         notes[2].can_be_judged = false;
         let mine_ix = [0, 1, 2];
-        let mut avoided = Vec::new();
 
-        let update = apply_time_based_mine_avoidance_for_player(
-            &mut notes,
-            &mine_ix,
-            0,
-            192,
-            (0, 3),
-            |note_idx, row, col| avoided.push((note_idx, row, col)),
-        );
+        let update =
+            apply_time_based_mine_avoidance_for_player(&mut notes, &mine_ix, 0, 192, (0, 3));
 
         assert_eq!(update.mine_end, 3);
         assert_eq!(update.next_mine_avoid_cursor, 3);
         assert_eq!(update.avoided_count, 0);
-        assert!(avoided.is_empty());
+        assert_eq!(update.last_avoided, None);
         assert_eq!(notes[0].mine_result, Some(MineResult::Avoided));
         assert_eq!(notes[1].mine_result, Some(MineResult::Hit));
         assert_eq!(notes[2].mine_result, None);
@@ -22004,6 +22243,67 @@ mod tests {
 
         assert_eq!(note_index, 0);
         assert_eq!(err_ns, current_time_ns - note_times_ns[note_index]);
+    }
+
+    #[test]
+    fn closest_lane_note_search_returns_candidate_and_debug_bounds() {
+        let timing = test_timing(144);
+        let notes = vec![
+            test_note_at(NoteType::Tap, None, false, 48, 1.0),
+            test_note_at(NoteType::Tap, None, false, 50, 50.0 / ROWS_PER_BEAT as f32),
+            test_note_at(
+                NoteType::Tap,
+                None,
+                false,
+                120,
+                120.0 / ROWS_PER_BEAT as f32,
+            ),
+        ];
+        let note_indices = [0usize, 1, 2];
+        let note_times_ns = [
+            timing.get_time_for_beat_ns(notes[0].beat),
+            timing.get_time_for_beat_ns(notes[1].beat),
+            timing.get_time_for_beat_ns(notes[2].beat),
+        ];
+        let current_time_ns = note_times_ns[1];
+
+        let search = closest_lane_note_search(
+            &note_indices,
+            &notes,
+            &note_times_ns,
+            &timing,
+            current_time_ns,
+        );
+
+        assert_eq!(search.current_row_index, 50);
+        assert_eq!(search.candidate, Some((1, 0)));
+        assert!(search.search_start_row <= notes[1].row_index);
+        assert!(search.search_end_row > notes[1].row_index);
+        assert!(search.search_start_idx <= 1);
+        assert!(search.search_end_idx > 1);
+    }
+
+    #[test]
+    fn closest_lane_note_search_keeps_bounds_when_no_candidate_is_live() {
+        let timing = test_timing(144);
+        let mut judged_note = test_note_at(NoteType::Tap, None, false, 48, 1.0);
+        judged_note.result = Some(test_judgment(JudgeGrade::Fantastic));
+        let notes = vec![judged_note];
+        let note_indices = [0usize];
+        let note_times_ns = [timing.get_time_for_beat_ns(notes[0].beat)];
+
+        let search = closest_lane_note_search(
+            &note_indices,
+            &notes,
+            &note_times_ns,
+            &timing,
+            note_times_ns[0],
+        );
+
+        assert_eq!(search.current_row_index, 48);
+        assert_eq!(search.search_start_idx, 0);
+        assert_eq!(search.search_end_idx, 1);
+        assert_eq!(search.candidate, None);
     }
 
     #[test]

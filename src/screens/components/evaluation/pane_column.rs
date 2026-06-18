@@ -893,8 +893,8 @@ pub(crate) fn build_pane3_arrow_preview(
 mod tests {
     use super::super::utils::{arrow_breakdown_rgba, pane3_origin_x};
     use super::{
-        PANE3_DOUBLE_WIDTH, PANE3_SINGLE_WIDTH, RowCounts, RowKind, column_row_counts,
-        pane3_width, row_disabled,
+        PANE3_DOUBLE_WIDTH, PANE3_SINGLE_WIDTH, RowCounts, RowKind, column_row_counts, pane3_width,
+        row_disabled,
     };
     use crate::screens::evaluation::ColumnJudgments;
     use deadlib_present::color;

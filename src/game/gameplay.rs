@@ -70,10 +70,10 @@ pub use deadsync_gameplay::{
     build_column_cues_for_player, build_crossover_cues_from_annotations, build_note_count_stats,
     build_player_judgment_timing_for_options, build_replay_input_edges, build_row_entry,
     build_row_grids, carried_holds_down_at_row, cell_has_any_note, cell_has_nonfake_note,
-    clear_offset_adjust_hold_state, closest_lane_note_ns, collect_edge_judge_indices,
-    column_cue_is_mine, column_flash_duration, column_flash_enabled_for_options,
-    column_flash_expired_at, column_scroll_dirs_for_flags, combo_milestone_duration,
-    completed_mine_can_be_avoided, completed_row_final_judgment,
+    clear_offset_adjust_hold_state, closest_lane_note_search, collect_edge_judge_indices,
+    collect_time_based_tap_misses_for_player, column_cue_is_mine, column_flash_duration,
+    column_flash_enabled_for_options, column_flash_expired_at, column_scroll_dirs_for_flags,
+    combo_milestone_duration, completed_mine_can_be_avoided, completed_row_final_judgment,
     completed_row_flash_note_indices_and_judgment, completed_row_hides_note, compute_end_times_ns,
     convert_tap_row_to_mines, convert_taps_to_holds, count_held_tracks_at_row,
     count_nonempty_tracks_at_row, count_rescore_tracks_on_row, count_tap_or_hold_tracks_at_row,
@@ -97,22 +97,22 @@ pub use deadsync_gameplay::{
     hold_head_render_flags, hold_judgment_expired_at, hold_result_stats_update,
     hold_to_exit_seconds, input_lane_bit, input_queue_cap, integrate_active_hold_column,
     is_hold_body_at_row, itg_score_inputs_from_display, itg_score_percent_from_inputs,
-    lane_edge_judges_lift, lane_edge_judges_tap, lane_edge_matches_note_type,
-    lane_note_window_bounds_ns, lane_note_window_bounds_rows, lane_press_started,
+    lane_edge_judges_lift, lane_edge_judges_tap, lane_edge_matches_note_type, lane_press_started,
     lane_release_finished, late_note_resolution_window_ns, let_go_head_beat,
     live_autoplay_enabled_from_flags, local_column_for_field, local_player_col,
     mark_crossed_held_mine_candidates, mark_mine_hit_candidate, mark_row_entry_note_finalized,
     mark_row_entry_provisional_early_result, max_step_distance_ns,
     measure_counter_segments_for_densities, mine_can_be_avoided, mine_can_be_hit,
     mine_hit_offset_in_window, mine_window_bounds_ns, mini_indicator_mode_for_options,
-    mini_indicator_needs_stream_data, mini_value_for_percent, missed_note_cutoff_row_for_timing,
-    music_time_from_stream_position, next_autosync_mode, next_ready_replay_edge,
-    next_ready_row_in_lookahead, next_timing_tick_mode, normalized_input_slot,
-    note_has_displayable_hold, note_hit_eval_for_timing, note_hit_judgment, note_tracks_held_miss,
-    notes_row_sorted, offset_adjust_delta_for_key, offset_adjust_repeat_ready,
-    offset_adjust_slot_for_key, pending_mine_hit_event, pending_missed_hold_resolution_for_note,
-    player_column_range, player_draw_scale_for_mini, player_index_for_column, player_life_is_dead,
-    player_note_range_for_ranges, player_row_scan_state, player_rows, practice_player_cursors,
+    mini_indicator_needs_stream_data, mini_value_for_percent,
+    missed_note_cutoff_row_for_music_time, music_time_from_stream_position, next_autosync_mode,
+    next_ready_replay_edge, next_ready_row_in_lookahead, next_timing_tick_mode,
+    normalized_input_slot, note_has_displayable_hold, note_hit_eval_for_timing, note_hit_judgment,
+    note_tracks_held_miss, notes_row_sorted, offset_adjust_delta_for_key,
+    offset_adjust_repeat_ready, offset_adjust_slot_for_key, pending_mine_hit_event,
+    pending_missed_hold_resolution_for_note, player_column_range, player_draw_scale_for_mini,
+    player_index_for_column, player_life_is_dead, player_note_range_for_ranges,
+    player_row_scan_state, player_rows, practice_player_cursors,
     predictive_itg_score_percent_from_inputs, push_density_life_point,
     quantization_index_from_beat, queue_pending_missed_hold_resolution, recent_step_calories,
     recent_step_tracks, receptor_glow_press_timers, receptor_glow_pulse_timers,
@@ -125,15 +125,15 @@ pub use deadsync_gameplay::{
     scroll_reverse_scale_for_column, set_added_mine_note, set_added_tap_note,
     song_audio_end_time_ns, song_clock_music_time_ns, song_lua_field_note_hidden,
     song_lua_note_hidden, sort_player_notes, spacing_multiplier_for_percent, stage_music_cut,
-    start_offset_adjust_hold_state, started_active_hold_state, step_search_row_bounds,
-    stomp_mirror_track, suppress_final_bad_rescore_visual, sync_active_hold_pressed_column,
+    start_offset_adjust_hold_state, started_active_hold_state, stomp_mirror_track,
+    suppress_final_bad_rescore_visual, sync_active_hold_pressed_column,
     tap_explosion_enabled_for_options, tap_judgment_uses_bright_explosion_for_options,
     tick_combo_milestones, tick_mine_explosion_slot, tick_offset_adjust_hold_state,
     tick_positive_timer, tick_receptor_glow_timers, tick_tap_explosion_slot, timing_row_floor,
-    timing_row_nearest, timing_tick_mode_debug_label, timing_tick_mode_status_line,
-    toggle_flash_alpha, track_held_miss_window_for_player, track_range_has_any_note,
-    trigger_combo_milestone, turn_seed_for_song, update_active_input_slot,
-    update_danger_fx_for_health, visible_notefield_time_ns, zmod_stream_totals_for_densities,
+    timing_tick_mode_debug_label, timing_tick_mode_status_line, toggle_flash_alpha,
+    track_held_miss_window_for_player, track_range_has_any_note, trigger_combo_milestone,
+    turn_seed_for_song, update_active_input_slot, update_danger_fx_for_health,
+    visible_notefield_time_ns, zmod_stream_totals_for_densities,
 };
 use deadsync_gameplay::{
     StepStatsPlayStyle, resolve_target_score_percent,
@@ -3927,27 +3927,15 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time_ns: SongTimeNs
     let hide_early_dw_column_flash = state.player_profiles[player].hide_early_dw_column_flash;
     let scoring_blocked = autoplay_blocks_scoring(state);
     let lane_notes = &state.lane_note_indices[column];
-    let current_row_index = timing_row_nearest(
-        &state.timing_players[player],
-        state.timing_players[player].get_beat_for_time_ns(current_time_ns),
-    );
-    let (search_start_row, search_end_row) = step_search_row_bounds(
-        &state.timing_players[player],
-        current_time_ns,
-        current_row_index,
-    );
-    let (search_start_idx, search_end_idx) =
-        lane_note_window_bounds_rows(lane_notes, &state.notes, search_start_row, search_end_row);
-    if let Some((note_index, _)) = closest_lane_note_ns(
+    let search = closest_lane_note_search(
         lane_notes,
         &state.notes,
         &state.note_time_cache_ns,
         &state.timing_players[player],
         current_time_ns,
-        current_row_index,
-        search_start_idx,
-        search_end_idx,
-    ) {
+    );
+    let current_row_index = search.current_row_index;
+    if let Some((note_index, _)) = search.candidate {
         let note_row_index = state.notes[note_index].row_index;
         let note_type = state.notes[note_index].note_type;
         let time_error_music_ns =
@@ -4341,10 +4329,10 @@ pub fn judge_a_tap(state: &mut State, column: usize, current_time_ns: SongTimeNs
             player,
             column,
             current_row_index,
-            search_start_row,
-            search_end_row,
-            search_start_idx,
-            search_end_idx,
+            search.search_start_row,
+            search.search_end_row,
+            search.search_start_idx,
+            search.search_end_idx,
             lane_notes.len(),
             song_time_ns_to_seconds(current_time_ns),
             current_music_time_s(state),
@@ -4365,27 +4353,14 @@ pub fn judge_a_lift(state: &mut State, column: usize, current_time_ns: SongTimeN
     let hide_early_dw_column_flash = state.player_profiles[player].hide_early_dw_column_flash;
     let scoring_blocked = autoplay_blocks_scoring(state);
     let lane_notes = &state.lane_note_indices[column];
-    let current_row_index = timing_row_nearest(
-        &state.timing_players[player],
-        state.timing_players[player].get_beat_for_time_ns(current_time_ns),
-    );
-    let (search_start_row, search_end_row) = step_search_row_bounds(
-        &state.timing_players[player],
-        current_time_ns,
-        current_row_index,
-    );
-    let (search_start_idx, search_end_idx) =
-        lane_note_window_bounds_rows(lane_notes, &state.notes, search_start_row, search_end_row);
-    let Some((note_index, _)) = closest_lane_note_ns(
+    let search = closest_lane_note_search(
         lane_notes,
         &state.notes,
         &state.note_time_cache_ns,
         &state.timing_players[player],
         current_time_ns,
-        current_row_index,
-        search_start_idx,
-        search_end_idx,
-    ) else {
+    );
+    let Some((note_index, _)) = search.candidate else {
         return false;
     };
     if !lane_edge_matches_note_type(false, state.notes[note_index].note_type) {
@@ -4706,11 +4681,12 @@ fn track_held_miss_windows(
 
 #[inline(always)]
 fn missed_note_cutoff_row(state: &State, player: usize, music_time_ns: SongTimeNs) -> usize {
-    let cutoff_time_ns = music_time_ns.saturating_sub(max_step_distance_ns(
+    missed_note_cutoff_row_for_music_time(
         &state.timing_profile,
+        &state.timing_players[player],
         state.music_rate,
-    ));
-    missed_note_cutoff_row_for_timing(&state.timing_players[player], cutoff_time_ns)
+        music_time_ns,
+    )
 }
 
 #[inline(always)]
@@ -4722,24 +4698,20 @@ fn apply_time_based_mine_avoidance(state: &mut State, music_time_ns: SongTimeNs)
         let mine_cursor = state.next_mine_ix_cursor[player].min(mines_len);
         let cutoff_row = missed_note_cutoff_row(state, player, music_time_ns);
         let note_range = player_note_range(state, player);
-        let mut last_avoided = None;
         let update = apply_time_based_mine_avoidance_for_player(
             &mut state.notes,
             &state.mine_note_ix[player],
             mine_cursor,
             cutoff_row,
             note_range,
-            |_, row_index, column| {
-                last_avoided = Some((row_index, column));
-                if log_mine_avoid {
-                    trace!(
-                        "MINE AVOIDED: Row {row_index}, Col {column}, Time: {music_time_sec:.2}s"
-                    );
-                }
-            },
         );
-        if let Some((_, column)) = last_avoided {
-            set_last_mine_judgment(state, player, column, MineResult::Avoided);
+        if let Some(event) = update.last_avoided {
+            if log_mine_avoid {
+                let row_index = event.row_index;
+                let column = event.column;
+                trace!("MINE AVOIDED: Row {row_index}, Col {column}, Time: {music_time_sec:.2}s");
+            }
+            set_last_mine_judgment(state, player, event.column, MineResult::Avoided);
         }
         if update.avoided_count > 0 {
             state.players[player].mines_avoided = state.players[player]
@@ -4772,8 +4744,9 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_ns: SongTimeNs) {
         let should_score_miss = state.score_missed_holds_rolls[player];
         let cutoff_row = missed_note_cutoff_row(state, player, music_time_ns);
         let mut cursor = state.next_tap_miss_cursor[player].max(note_start);
+        let mut miss_events = [None; 16];
         while cursor < note_end {
-            let step = apply_next_time_based_tap_miss_for_player(
+            let update = collect_time_based_tap_misses_for_player(
                 &mut state.notes,
                 &state.note_time_cache_ns,
                 &state.tap_miss_held_window,
@@ -4785,58 +4758,65 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_ns: SongTimeNs) {
                 music_time_ns,
                 rate,
                 should_score_miss,
+                &mut miss_events,
             );
-            cursor = step.next_cursor;
-            let Some(event) = step.event else {
-                break;
-            };
-            if event.queue_missed_hold_resolution {
-                queue_missed_hold_resolution(state, event.note_index);
-            }
-            set_final_note_result(state, event.note_index, event.judgment);
-            {
-                let judgment_time_error_ms = event.judgment.time_error_ms;
-                if log::log_enabled!(log::Level::Debug) {
-                    let note_time = song_time_ns_to_seconds(event.note_time_ns);
-                    let song_offset_s = state.song_offset_seconds;
-                    let global_offset_s = effective_player_global_offset_seconds(state, player);
-                    let lead_in_s = state.audio_lead_in_seconds.max(0.0);
-                    let stream_pos_s = state.audio_stream_position_seconds;
-                    let expected_stream_for_note_s =
-                        note_time / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
-                    let expected_stream_for_miss_s =
-                        music_time_sec / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
-                    let stream_delta_note_ms = (stream_pos_s - expected_stream_for_note_s) * 1000.0;
-                    let stream_delta_miss_ms = (stream_pos_s - expected_stream_for_miss_s) * 1000.0;
-
-                    debug!(
-                        concat!(
-                            "TIMING MISS: row={}, col={}, beat={:.3}, ",
-                            "song_offset_s={:.4}, global_offset_s={:.4}, ",
-                            "note_time_s={:.6}, miss_time_s={:.6}, ",
-                            "offset_ms={:.2}, miss_because_held={}, rate={:.3}, lead_in_s={:.4}, ",
-                            "stream_pos_s={:.6}, stream_note_s={:.6}, stream_delta_note_ms={:.2}, ",
-                            "stream_miss_s={:.6}, stream_delta_miss_ms={:.2}"
-                        ),
-                        event.row_index,
-                        event.column,
-                        event.beat,
-                        song_offset_s,
-                        global_offset_s,
-                        note_time,
-                        music_time_sec,
-                        judgment_time_error_ms,
-                        event.miss_because_held,
-                        rate,
-                        lead_in_s,
-                        stream_pos_s,
-                        expected_stream_for_note_s,
-                        stream_delta_note_ms,
-                        expected_stream_for_miss_s,
-                        stream_delta_miss_ms,
-                    );
+            cursor = update.next_cursor;
+            for event in miss_events.iter().take(update.event_count).flatten() {
+                let event = *event;
+                if event.queue_missed_hold_resolution {
+                    queue_missed_hold_resolution(state, event.note_index);
                 }
-                debug!("MISSED (time-based): Row {}", event.row_index);
+                set_final_note_result(state, event.note_index, event.judgment);
+                {
+                    let judgment_time_error_ms = event.judgment.time_error_ms;
+                    if log::log_enabled!(log::Level::Debug) {
+                        let note_time = song_time_ns_to_seconds(event.note_time_ns);
+                        let song_offset_s = state.song_offset_seconds;
+                        let global_offset_s = effective_player_global_offset_seconds(state, player);
+                        let lead_in_s = state.audio_lead_in_seconds.max(0.0);
+                        let stream_pos_s = state.audio_stream_position_seconds;
+                        let expected_stream_for_note_s =
+                            note_time / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
+                        let expected_stream_for_miss_s = music_time_sec / rate
+                            + lead_in_s
+                            + global_offset_s * (1.0 - rate) / rate;
+                        let stream_delta_note_ms =
+                            (stream_pos_s - expected_stream_for_note_s) * 1000.0;
+                        let stream_delta_miss_ms =
+                            (stream_pos_s - expected_stream_for_miss_s) * 1000.0;
+
+                        debug!(
+                            concat!(
+                                "TIMING MISS: row={}, col={}, beat={:.3}, ",
+                                "song_offset_s={:.4}, global_offset_s={:.4}, ",
+                                "note_time_s={:.6}, miss_time_s={:.6}, ",
+                                "offset_ms={:.2}, miss_because_held={}, rate={:.3}, lead_in_s={:.4}, ",
+                                "stream_pos_s={:.6}, stream_note_s={:.6}, stream_delta_note_ms={:.2}, ",
+                                "stream_miss_s={:.6}, stream_delta_miss_ms={:.2}"
+                            ),
+                            event.row_index,
+                            event.column,
+                            event.beat,
+                            song_offset_s,
+                            global_offset_s,
+                            note_time,
+                            music_time_sec,
+                            judgment_time_error_ms,
+                            event.miss_because_held,
+                            rate,
+                            lead_in_s,
+                            stream_pos_s,
+                            expected_stream_for_note_s,
+                            stream_delta_note_ms,
+                            expected_stream_for_miss_s,
+                            stream_delta_miss_ms,
+                        );
+                    }
+                    debug!("MISSED (time-based): Row {}", event.row_index);
+                }
+            }
+            if update.stopped || update.event_count == 0 {
+                break;
             }
         }
         state.next_tap_miss_cursor[player] = cursor;

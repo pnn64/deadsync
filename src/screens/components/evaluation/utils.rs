@@ -18,7 +18,10 @@ const ARROW_BREAKDOWN_RGBA: [[f32; 4]; 8] = [
 
 #[inline(always)]
 pub(crate) fn arrow_breakdown_rgba(col_idx: usize) -> [f32; 4] {
-    ARROW_BREAKDOWN_RGBA.get(col_idx).copied().unwrap_or([1.0; 4])
+    ARROW_BREAKDOWN_RGBA
+        .get(col_idx)
+        .copied()
+        .unwrap_or([1.0; 4])
 }
 
 #[inline(always)]
