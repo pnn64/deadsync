@@ -855,7 +855,7 @@ pub fn save_itl_data_from_gameplay(
     gs: &gameplay::State,
 ) -> [Option<ItlEventProgress>; MAX_PLAYERS] {
     let mut progress: [Option<ItlEventProgress>; MAX_PLAYERS] = std::array::from_fn(|_| None);
-    if gs.autoplay_used {
+    if gameplay::autoplay_used(gs) {
         debug!("Skipping ITL save: autoplay or replay was used during this stage.");
         return progress;
     }
@@ -915,14 +915,15 @@ pub fn save_itl_data_from_gameplay(
         let max_points = passing_points.saturating_add(max_scoring_points);
         let judgments = itl_judgments_from_gameplay(gs, player_idx);
         let (start, end) = gs.note_ranges[player_idx];
+        let totals = gameplay::display_totals_for_player(gs, player_idx);
         let ex_percent = judgment::calculate_ex_score_from_notes(
             &gs.notes[start..end],
             &gs.note_time_cache_ns[start..end],
             &gs.hold_end_time_cache_ns[start..end],
-            gs.total_steps[player_idx],
-            gs.holds_total[player_idx],
-            gs.rolls_total[player_idx],
-            gs.mines_total[player_idx],
+            totals.total_steps,
+            totals.holds_total,
+            totals.rolls_total,
+            totals.mines_total,
             gs.players[player_idx]
                 .fail_time
                 .map(gameplay::song_time_ns_from_seconds),
@@ -1040,14 +1041,15 @@ pub fn save_itl_data_from_gameplay(
 
 pub(super) fn current_score_hundredths(gs: &gameplay::State, player_idx: usize) -> u32 {
     let (start, end) = gs.note_ranges[player_idx];
+    let totals = gameplay::display_totals_for_player(gs, player_idx);
     let ex_percent = judgment::calculate_ex_score_from_notes(
         &gs.notes[start..end],
         &gs.note_time_cache_ns[start..end],
         &gs.hold_end_time_cache_ns[start..end],
-        gs.total_steps[player_idx],
-        gs.holds_total[player_idx],
-        gs.rolls_total[player_idx],
-        gs.mines_total[player_idx],
+        totals.total_steps,
+        totals.holds_total,
+        totals.rolls_total,
+        totals.mines_total,
         gs.players[player_idx]
             .fail_time
             .map(gameplay::song_time_ns_from_seconds),
@@ -1841,7 +1843,7 @@ fn itl_eval_state(gs: &gameplay::State, player_idx: usize, data: &ItlFileData) -
     let all_timing_windows_enabled =
         itl_all_timing_windows_enabled(&gs.player_profiles[player_idx]);
     let passed = gameplay_run_passed(
-        gs.song_completed_naturally,
+        gameplay::song_completed_naturally(gs),
         gs.players[player_idx].is_failing,
         gs.players[player_idx].life,
         gs.players[player_idx].fail_time.is_some(),

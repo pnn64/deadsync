@@ -118,9 +118,9 @@ pub struct DensityGraphRenderState {
 impl DensityGraphRenderState {
     fn from_gameplay(state: &gameplay_core::State) -> Self {
         let top_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] = std::array::from_fn(|player| {
-            let graph_w = state.density_graph_top_w[player];
+            let graph_w = state.density_graph.top_w[player];
             let graph_h =
-                state.density_graph_top_h * state.density_graph_top_scale_y[player].clamp(0.0, 1.0);
+                state.density_graph.top_h * state.density_graph.top_scale_y[player].clamp(0.0, 1.0);
             if player >= state.num_players || graph_w <= 0.0 || graph_h <= 0.0 {
                 return None;
             }
@@ -130,8 +130,8 @@ impl DensityGraphRenderState {
                 &chart.measure_nps_vec,
                 chart.max_nps,
                 &chart.measure_seconds_vec,
-                state.density_graph_first_second,
-                state.density_graph_last_second,
+                state.density_graph.first_second,
+                state.density_graph.last_second,
                 graph_w,
                 graph_h,
                 0.0,
@@ -148,8 +148,8 @@ impl DensityGraphRenderState {
 
         let cache: [Option<DensityHistCache>; MAX_PLAYERS] = std::array::from_fn(|player| {
             if player >= state.num_players
-                || state.density_graph_graph_w <= 0.0
-                || state.density_graph_graph_h <= 0.0
+                || state.density_graph.graph_w <= 0.0
+                || state.density_graph.graph_h <= 0.0
             {
                 return None;
             }
@@ -159,10 +159,10 @@ impl DensityGraphRenderState {
                 &chart.measure_nps_vec,
                 chart.max_nps,
                 &chart.measure_seconds_vec,
-                state.density_graph_first_second,
-                state.density_graph_last_second,
-                state.density_graph_scaled_width,
-                state.density_graph_graph_h,
+                state.density_graph.first_second,
+                state.density_graph.last_second,
+                state.density_graph.scaled_width,
+                state.density_graph.graph_h,
                 None,
                 1.0,
             )
@@ -177,7 +177,7 @@ impl DensityGraphRenderState {
                 &mut mesh,
                 cache[player].as_ref(),
                 0.0,
-                state.density_graph_graph_w,
+                state.density_graph.graph_w,
             );
             mesh
         });
@@ -516,16 +516,18 @@ impl State {
             .take_while(|change| change.start_beat <= gameplay.current_beat)
             .count();
         let song_lua_overlay_order = song_lua_overlay_order_cache_from(
-            &gameplay.song_lua_overlays,
-            &gameplay.song_lua_overlay_eases,
+            &gameplay.song_lua_visuals.overlays,
+            &gameplay.song_lua_visuals.overlay_eases,
         );
         let song_lua_background_visual_layer_orders = gameplay
-            .song_lua_background_visual_layers
+            .song_lua_visuals
+            .background_visual_layers
             .iter()
             .map(|layer| song_lua_overlay_order_cache_from(&layer.overlays, &layer.overlay_eases))
             .collect();
         let song_lua_foreground_visual_layer_orders = gameplay
-            .song_lua_foreground_visual_layers
+            .song_lua_visuals
+            .foreground_visual_layers
             .iter()
             .map(|layer| song_lua_overlay_order_cache_from(&layer.overlays, &layer.overlay_eases))
             .collect();
@@ -709,7 +711,7 @@ fn gameplay_mini_indicator_data(
     let mut data = GameplayMiniIndicatorData::default();
     let num_players = session.play_style.player_count();
     for p in 0..num_players {
-        let side = session.runtime_player_side(p);
+        let side = gameplay_core::profile_side_from_gameplay(session.runtime_player_side(p));
         let chart_hash = charts[p].short_hash.as_str();
         let score_type = player_profiles[p].mini_indicator_score_type;
         data.personal_best_percent[p] =
@@ -727,17 +729,18 @@ fn gameplay_scorebox_data(
     let mut data = GameplayScoreboxData::default();
     let num_players = session.play_style.player_count();
     for p in 0..num_players {
-        let side = session.runtime_player_side(p);
+        let gameplay_side = session.runtime_player_side(p);
+        let side = gameplay_core::profile_side_from_gameplay(gameplay_side);
         data.profile_snapshot[profile_data::player_side_index(side)] =
             scores::scorebox_profile_snapshot(
                 &player_profiles[p],
-                session.side_joined(side),
-                session.active_profile_id_for_side(side),
+                session.side_joined(gameplay_side),
+                session.active_profile_id_for_side(gameplay_side),
             );
     }
 
     for p in 0..num_players {
-        let side = session.runtime_player_side(p);
+        let side = gameplay_core::profile_side_from_gameplay(session.runtime_player_side(p));
         let idx = profile_data::player_side_index(side);
         let profile_snapshot = &data.profile_snapshot[idx];
         if !profile_snapshot.display_scorebox || !profile_snapshot.gs_active {
@@ -1690,7 +1693,7 @@ pub fn scorebox_profile_for_side(
 
 pub fn refresh_scorebox_snapshots(state: &mut State) {
     for p in 0..state.num_players {
-        let side = state.session.runtime_player_side(p);
+        let side = gameplay_core::profile_side_from_gameplay(state.session.runtime_player_side(p));
         let idx = profile_data::player_side_index(side);
         let profile_snapshot = &state.scorebox_profile_snapshot[idx];
         if !profile_snapshot.display_scorebox || !profile_snapshot.gs_active {
@@ -1812,15 +1815,15 @@ fn play_song_lua_sound_events(state: &State, previous: f32, now: f32) {
         return;
     }
     play_song_lua_sound_events_for(
-        &state.song_lua_overlays,
-        &state.song_lua_overlay_events,
+        &state.song_lua_visuals.overlays,
+        &state.song_lua_visuals.overlay_events,
         previous,
         now,
     );
-    for layer in &state.song_lua_background_visual_layers {
+    for layer in &state.song_lua_visuals.background_visual_layers {
         play_song_lua_sound_events_for(&layer.overlays, &layer.overlay_events, previous, now);
     }
-    for layer in &state.song_lua_foreground_visual_layers {
+    for layer in &state.song_lua_visuals.foreground_visual_layers {
         play_song_lua_sound_events_for(&layer.overlays, &layer.overlay_events, previous, now);
     }
 }
@@ -2114,7 +2117,7 @@ fn sync_overlay_text(state: &State) -> Option<(Arc<str>, usize)> {
     let mut line_count = 0usize;
     let mut total_len = 0usize;
     let sync_message = sync_offset_overlay_message(state);
-    if state.autoplay_enabled {
+    if gameplay_core::autoplay_enabled(state) {
         let line = state.replay_status_text.as_deref().unwrap_or("AutoPlay");
         lines[line_count] = line;
         line_count += 1;
@@ -2125,7 +2128,9 @@ fn sync_overlay_text(state: &State) -> Option<(Arc<str>, usize)> {
         line_count += 1;
         total_len += line.len();
     }
-    if let Some(line) = crate::game::gameplay::autosync_mode_status_line(state.autosync_mode) {
+    if let Some(line) =
+        crate::game::gameplay::autosync_mode_status_line(gameplay_core::autosync_mode(state))
+    {
         lines[line_count] = line;
         line_count += 1;
         total_len += line.len();
@@ -2152,20 +2157,19 @@ fn sync_overlay_text(state: &State) -> Option<(Arc<str>, usize)> {
 #[inline(always)]
 fn cached_autosync_text(state: &State, old_offset: f32, new_offset: f32) -> Arc<str> {
     let key = AutosyncTextKey {
-        mode: state.autosync_mode as u8,
+        mode: gameplay_core::autosync_mode(state) as u8,
         old_offset_bits: old_offset.to_bits(),
         new_offset_bits: new_offset.to_bits(),
-        stddev_bits: state.autosync_standard_deviation.to_bits(),
-        sample_count: state.autosync_offset_sample_count.min(u16::MAX as usize) as u16,
+        stddev_bits: gameplay_core::autosync_standard_deviation(state).to_bits(),
+        sample_count: gameplay_core::autosync_sample_count(state).min(u16::MAX as usize) as u16,
     };
     cached_text(&AUTOSYNC_TEXT_CACHE, key, TEXT_CACHE_LIMIT, || {
-        let collecting_sample = state
-            .autosync_offset_sample_count
+        let collecting_sample = gameplay_core::autosync_sample_count(state)
             .saturating_add(1)
             .min(crate::game::gameplay::AUTOSYNC_OFFSET_SAMPLE_COUNT);
         format!(
             "Old offset: {old_offset:0.3}\nNew offset: {new_offset:0.3}\nStandard deviation: {stddev:0.3}\nCollecting sample: {collecting_sample} / {max_samples}",
-            stddev = state.autosync_standard_deviation,
+            stddev = gameplay_core::autosync_standard_deviation(state),
             max_samples = crate::game::gameplay::AUTOSYNC_OFFSET_SAMPLE_COUNT,
         )
     })
@@ -2243,16 +2247,17 @@ pub fn prewarm_text_layout(
     if let Some(text) = sync_offset_overlay_message(state) {
         cache.prewarm_text(fonts, "miso", text.as_ref(), None);
     }
-    if state.autosync_mode != crate::game::gameplay::AutosyncMode::Off {
-        let (old_offset, new_offset) =
-            if state.autosync_mode == crate::game::gameplay::AutosyncMode::Machine {
-                (
-                    state.initial_global_offset_seconds,
-                    state.global_offset_seconds,
-                )
-            } else {
-                (state.initial_song_offset_seconds, state.song_offset_seconds)
-            };
+    if gameplay_core::autosync_mode(state) != crate::game::gameplay::AutosyncMode::Off {
+        let (old_offset, new_offset) = if gameplay_core::autosync_mode(state)
+            == crate::game::gameplay::AutosyncMode::Machine
+        {
+            (
+                state.initial_global_offset_seconds,
+                state.global_offset_seconds,
+            )
+        } else {
+            (state.initial_song_offset_seconds, state.song_offset_seconds)
+        };
         let text = cached_autosync_text(state, old_offset, new_offset);
         cache.prewarm_text(fonts, "miso", text.as_ref(), None);
     }
@@ -2694,10 +2699,10 @@ fn song_lua_owns_fg_media(
     layer_local_states: &mut Vec<SongLuaOverlayState>,
     layer_states: &mut Vec<SongLuaOverlayState>,
 ) -> bool {
-    if song_lua_has_visible_tex(&state.song_lua_overlays, overlay_states, path) {
+    if song_lua_has_visible_tex(&state.song_lua_visuals.overlays, overlay_states, path) {
         return true;
     }
-    for layer in &state.song_lua_background_visual_layers {
+    for layer in &state.song_lua_visuals.background_visual_layers {
         if state.current_music_time_display < layer.start_second {
             continue;
         }
@@ -2716,7 +2721,7 @@ fn song_lua_owns_fg_media(
             return true;
         }
     }
-    for layer in &state.song_lua_foreground_visual_layers {
+    for layer in &state.song_lua_visuals.foreground_visual_layers {
         if state.current_music_time_display < layer.start_second {
             continue;
         }
@@ -2772,12 +2777,12 @@ fn build_foreground_media(
 
 #[inline(always)]
 fn song_lua_overlay_space_width(state: &State) -> f32 {
-    state.song_lua_screen_width.max(1.0)
+    state.song_lua_visuals.screen_width.max(1.0)
 }
 
 #[inline(always)]
 fn song_lua_overlay_space_height(state: &State) -> f32 {
-    state.song_lua_screen_height.max(1.0)
+    state.song_lua_visuals.screen_height.max(1.0)
 }
 
 fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlayStateDelta) {
@@ -3646,12 +3651,12 @@ fn song_lua_overlay_state_sets_into(
 ) {
     song_lua_overlay_state_sets_from_into(
         state.current_music_time_display,
-        &state.song_lua_overlays,
-        &state.song_lua_overlay_events,
-        &state.song_lua_overlay_eases,
-        &state.song_lua_overlay_ease_ranges,
-        state.song_lua_screen_width,
-        state.song_lua_screen_height,
+        &state.song_lua_visuals.overlays,
+        &state.song_lua_visuals.overlay_events,
+        &state.song_lua_visuals.overlay_eases,
+        &state.song_lua_visuals.overlay_ease_ranges,
+        state.song_lua_visuals.screen_width,
+        state.song_lua_visuals.screen_height,
         local_out,
         overlay_out,
     );
@@ -4833,7 +4838,7 @@ fn song_lua_message_state(
 }
 
 fn song_lua_player_render_state(state: &State, player_index: usize) -> SongLuaOverlayState {
-    let Some(actor) = state.song_lua_player_actors.get(player_index) else {
+    let Some(actor) = state.song_lua_visuals.player_actors.get(player_index) else {
         return SongLuaOverlayState::default();
     };
     song_lua_message_state(
@@ -4841,7 +4846,8 @@ fn song_lua_player_render_state(state: &State, player_index: usize) -> SongLuaOv
         actor.initial_state,
         &actor.message_commands,
         state
-            .song_lua_player_events
+            .song_lua_visuals
+            .player_events
             .get(player_index)
             .map(Vec::as_slice),
     )
@@ -4863,8 +4869,8 @@ fn song_lua_song_foreground_state_from(
 fn song_lua_song_foreground_state(state: &State) -> SongLuaOverlayState {
     song_lua_song_foreground_state_from(
         state.current_music_time_display,
-        &state.song_lua_song_foreground,
-        state.song_lua_song_foreground_events.as_slice(),
+        &state.song_lua_visuals.song_foreground,
+        state.song_lua_visuals.song_foreground_events.as_slice(),
     )
 }
 
@@ -8600,9 +8606,11 @@ pub fn push_actors(
         &mut song_lua_local_state_scratch,
         &mut song_lua_overlay_state_scratch,
     );
-    let mut proxy_requests =
-        song_lua_proxy_requests(&state.song_lua_overlays, &song_lua_overlay_state_scratch);
-    for layer in &state.song_lua_foreground_visual_layers {
+    let mut proxy_requests = song_lua_proxy_requests(
+        &state.song_lua_visuals.overlays,
+        &song_lua_overlay_state_scratch,
+    );
+    for layer in &state.song_lua_visuals.foreground_visual_layers {
         if state.current_music_time_display < layer.start_second {
             continue;
         }
@@ -8627,7 +8635,12 @@ pub fn push_actors(
     // --- Background and Filter ---
     let underlay_start = actors.len();
     push_background(&mut actors, state, cfg.bg_brightness, cfg.gameplay_bg_color);
-    for (layer_idx, layer) in state.song_lua_background_visual_layers.iter().enumerate() {
+    for (layer_idx, layer) in state
+        .song_lua_visuals
+        .background_visual_layers
+        .iter()
+        .enumerate()
+    {
         if state.current_music_time_display < layer.start_second {
             continue;
         }
@@ -8752,16 +8765,17 @@ pub fn push_actors(
             ));
         }
 
-        if state.autosync_mode != crate::game::gameplay::AutosyncMode::Off {
-            let (old_offset, new_offset) =
-                if state.autosync_mode == crate::game::gameplay::AutosyncMode::Machine {
-                    (
-                        state.initial_global_offset_seconds,
-                        state.global_offset_seconds,
-                    )
-                } else {
-                    (state.initial_song_offset_seconds, state.song_offset_seconds)
-                };
+        if gameplay_core::autosync_mode(state) != crate::game::gameplay::AutosyncMode::Off {
+            let (old_offset, new_offset) = if gameplay_core::autosync_mode(state)
+                == crate::game::gameplay::AutosyncMode::Machine
+            {
+                (
+                    state.initial_global_offset_seconds,
+                    state.global_offset_seconds,
+                )
+            } else {
+                (state.initial_song_offset_seconds, state.song_offset_seconds)
+            };
             let adjustments = cached_autosync_text(state, old_offset, new_offset);
             actors.push(act!(text:
                 font("miso"):
@@ -8785,8 +8799,10 @@ pub fn push_actors(
         let y = screen_height() - 116.0;
         let msg: Option<(String, f32)> = if gameplay_lobby_wait_text(state).is_some() {
             None
-        } else if let (Some(key), Some(start)) = (state.hold_to_exit_key, state.hold_to_exit_start)
-        {
+        } else if let (Some(key), Some(start)) = (
+            state.exit_input.hold_to_exit_key,
+            state.exit_input.hold_to_exit_start,
+        ) {
             let s = match key {
                 crate::game::gameplay::HoldToExitKey::Start => {
                     Some(tr("Gameplay", "ContinueHoldingStartGiveUp"))
@@ -8797,7 +8813,7 @@ pub fn push_actors(
             };
             let alpha = (start.elapsed().as_secs_f32() / HOLD_FADE_IN_S).clamp(0.0, 1.0);
             s.map(|text| (text.to_string(), alpha))
-        } else if let Some(exit) = &state.exit_transition {
+        } else if let Some(exit) = &state.exit_input.exit_transition {
             let t = exit.started_at.elapsed().as_secs_f32();
             match exit.kind {
                 crate::game::gameplay::ExitTransitionKind::Out => {
@@ -8811,7 +8827,7 @@ pub fn push_actors(
                     Some((tr("Gameplay", "ContinueHoldingBackGiveUp").to_string(), 1.0))
                 }
             }
-        } else if let Some(at) = state.hold_to_exit_aborted_at {
+        } else if let Some(at) = state.exit_input.hold_to_exit_aborted_at {
             let alpha = (1.0 - at.elapsed().as_secs_f32() / ABORT_FADE_OUT_S).clamp(0.0, 1.0);
             Some((tr("Gameplay", "DontGoBack").to_string(), alpha))
         } else {
@@ -8856,7 +8872,7 @@ pub fn push_actors(
 
     // Fade-to-black when giving up / backing out (Simply Love parity).
     let overlay_start = actors.len();
-    if let Some(exit) = &state.exit_transition {
+    if let Some(exit) = &state.exit_input.exit_transition {
         let alpha = crate::game::gameplay::exit_transition_alpha(exit);
         if alpha > 0.0 {
             actors.push(act!(quad:
@@ -8938,31 +8954,32 @@ pub fn push_actors(
                 field_scratch,
                 hud_scratch,
             );
-            let player_actor = &state.song_lua_player_actors[player_idx];
+            let player_actor = &state.song_lua_visuals.player_actors[player_idx];
             let player_state = song_lua_player_render_state(state, player_idx);
+            let player_transform = state.song_lua_player_transforms[player_idx];
             let song_lua_active = !state.song.foreground_lua_changes.is_empty();
-            let rotation_x = player_state.rot_x_deg + state.song_lua_player_rotation_x[player_idx];
-            let rotation_z = player_state.rot_z_deg + state.song_lua_player_rotation_z[player_idx];
-            let rotation_y = player_state.rot_y_deg + state.song_lua_player_rotation_y[player_idx];
-            let skew_x = state.song_lua_player_skew_x[player_idx];
-            let skew_y = state.song_lua_player_skew_y[player_idx];
+            let rotation_x = player_state.rot_x_deg + player_transform.rotation_x;
+            let rotation_z = player_state.rot_z_deg + player_transform.rotation_z;
+            let rotation_y = player_state.rot_y_deg + player_transform.rotation_y;
+            let skew_x = player_transform.skew_x;
+            let skew_y = player_transform.skew_y;
             let [player_scale_x, player_scale_y] = song_lua_overlay_axis_scale(player_state);
             let player_scale_z = song_lua_overlay_z_scale(player_state);
-            let zoom_x = player_scale_x * state.song_lua_player_zoom_x[player_idx];
-            let zoom_y = player_scale_y * state.song_lua_player_zoom_y[player_idx];
-            let zoom_z = player_scale_z * state.song_lua_player_zoom_z[player_idx];
+            let zoom_x = player_scale_x * player_transform.zoom_x;
+            let zoom_y = player_scale_y * player_transform.zoom_y;
+            let zoom_z = player_scale_z * player_transform.zoom_z;
             let target_x = song_lua_player_target_x(
-                state.song_lua_player_x[player_idx],
+                player_transform.x,
                 player_state.x,
                 layout_center_x,
                 notefield_view,
             );
-            let target_y = state.song_lua_player_y[player_idx].unwrap_or(player_state.y);
+            let target_y = player_transform.y.unwrap_or(player_state.y);
             let z_shift = song_lua_player_layer_z(
                 song_lua_active,
                 player_actor,
                 player_state,
-                state.song_lua_player_z[player_idx],
+                player_transform.z,
             );
             let player_blend = match player_state.blend {
                 SongLuaOverlayBlendMode::Alpha => None,
@@ -9127,7 +9144,7 @@ pub fn push_actors(
         },
     ];
     let replacement_active_players = song_lua_replacement_active_players(
-        &state.song_lua_overlays,
+        &state.song_lua_visuals.overlays,
         &song_lua_overlay_state_scratch,
         &replacement_proxy_sources,
     );
@@ -9285,10 +9302,10 @@ pub fn push_actors(
             if !state.player_profiles[player_idx].nps_graph_at_top {
                 continue;
             }
-            let graph_w = state.density_graph_top_w[player_idx];
-            let graph_h = state.density_graph_top_h;
+            let graph_w = state.gameplay.density_graph.top_w[player_idx];
+            let graph_h = state.gameplay.density_graph.top_h;
             let graph_mesh_h =
-                graph_h * state.density_graph_top_scale_y[player_idx].clamp(0.0, 1.0);
+                graph_h * state.gameplay.density_graph.top_scale_y[player_idx].clamp(0.0, 1.0);
             if graph_w <= 0.0 || graph_h <= 0.0 || graph_mesh_h <= 0.0 {
                 continue;
             }
@@ -9330,10 +9347,11 @@ pub fn push_actors(
                 });
             }
 
-            let duration =
-                (state.density_graph_last_second - state.density_graph_first_second).max(0.001_f32);
+            let duration = (state.gameplay.density_graph.last_second
+                - state.gameplay.density_graph.first_second)
+                .max(0.001_f32);
             let progress_w = (((state.current_music_time_display
-                - state.density_graph_first_second)
+                - state.gameplay.density_graph.first_second)
                 / duration)
                 * graph_w)
                 .clamp(0.0, graph_w);
@@ -10175,7 +10193,7 @@ pub fn push_actors(
         let mut out = Vec::new();
         push_song_lua_layer_actors(
             &mut out,
-            &state.song_lua_overlays,
+            &state.song_lua_visuals.overlays,
             &mut song_lua_overlay_order,
             &song_lua_local_state_scratch,
             &song_lua_overlay_state_scratch,
@@ -10202,7 +10220,12 @@ pub fn push_actors(
     ) {
         actors.push(actor);
     }
-    for (layer_idx, layer) in state.song_lua_foreground_visual_layers.iter().enumerate() {
+    for (layer_idx, layer) in state
+        .song_lua_visuals
+        .foreground_visual_layers
+        .iter()
+        .enumerate()
+    {
         if state.current_music_time_display < layer.start_second {
             continue;
         }
@@ -10947,8 +10970,10 @@ mod tests {
             player_profiles[1].show_ex_score = true;
             player_profiles[1].groovestats_username = "p2-user".to_string();
             let session = GameplaySession {
-                play_style,
-                player_side: profile_data::PlayerSide::P2,
+                play_style: crate::game::gameplay::gameplay_play_style_from_profile(play_style),
+                player_side: crate::game::gameplay::gameplay_player_side_from_profile(
+                    profile_data::PlayerSide::P2,
+                ),
                 joined_sides: [false, true],
                 active_profile_ids: [None, Some("p2-profile".to_string())],
                 ..GameplaySession::default()

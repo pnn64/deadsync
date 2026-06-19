@@ -1961,7 +1961,7 @@ fn marker_y_for_beat(
     let receptor_y = practice_edit_cursor_y() + offset_y;
     let field_zoom = practice_edit_field_zoom();
     let scroll_speed = practice_edit_scroll_speed(state);
-    let current_beat = state.gameplay.current_beat_visible[player_idx];
+    let current_beat = crate::game::gameplay::visible_beat(&state.gameplay, player_idx);
     let travel = practice_edit_beat_travel(
         beat,
         current_beat,
@@ -2186,13 +2186,14 @@ fn edit_info_text(state: &State) -> String {
         &chart.chart_type,
     );
     status.push('\n');
+    let totals = crate::game::gameplay::display_totals_for_player(&state.gameplay, 0);
     let stat_lines: [(&str, String); 8] = [
         ("InfoNumSteps", chart.stats.total_steps.to_string()),
         ("InfoNumJumps", chart.stats.jumps.to_string()),
         ("InfoNumHands", chart.stats.hands.to_string()),
-        ("InfoNumHolds", state.gameplay.holds_total[0].to_string()),
-        ("InfoNumMines", state.gameplay.mines_total[0].to_string()),
-        ("InfoNumRolls", state.gameplay.rolls_total[0].to_string()),
+        ("InfoNumHolds", totals.holds_total.to_string()),
+        ("InfoNumMines", totals.mines_total.to_string()),
+        ("InfoNumRolls", totals.rolls_total.to_string()),
         ("InfoNumLifts", chart.stats.lifts.to_string()),
         ("InfoNumFakes", chart.stats.fakes.to_string()),
     ];

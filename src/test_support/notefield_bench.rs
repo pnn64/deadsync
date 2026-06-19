@@ -190,12 +190,8 @@ fn prime_visible_window(state: &mut gameplay::State) {
     state.current_beat_display = beat;
     state.current_music_time_ns = time_ns;
     state.current_music_time_display = time;
-    state.current_beat_visible[0] = beat;
-    state.current_beat_visible[1] = beat;
-    state.current_music_time_visible_ns[0] = time_ns;
-    state.current_music_time_visible_ns[1] = time_ns;
-    state.current_music_time_visible[0] = time;
-    state.current_music_time_visible[1] = time;
+    gameplay::set_benchmark_visible_time(state, 0, time_ns, time, beat);
+    gameplay::set_benchmark_visible_time(state, 1, time_ns, time, beat);
 
     for col in 0..MAX_COLS {
         state.tap_explosions[col] = None;

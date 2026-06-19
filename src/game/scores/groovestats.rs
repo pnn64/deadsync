@@ -421,7 +421,7 @@ pub fn groovestats_eval_state_from_gameplay(
         gs.charts[player_idx].as_ref(),
         &gs.player_profiles[player_idx],
         gs.music_rate,
-        gs.autoplay_used,
+        gameplay::autoplay_used(gs),
         gs.course_display_totals.is_some(),
         crate::config::get().autosubmit_course_scores_individually,
     );
@@ -438,12 +438,12 @@ pub fn groovestats_eval_state_from_gameplay(
         gs.players[player_idx].fail_time.is_some(),
     );
     let passed = gameplay_run_passed(
-        gs.song_completed_naturally,
+        gameplay::song_completed_naturally(gs),
         gs.players[player_idx].is_failing,
         gs.players[player_idx].life,
         gs.players[player_idx].fail_time.is_some(),
     );
-    let finished = gs.song_completed_naturally || failed;
+    let finished = gameplay::song_completed_naturally(gs) || failed;
     if state.valid && !finished {
         state.valid = false;
         state
@@ -493,19 +493,20 @@ pub(super) fn groovestats_judgment_counts(
 ) -> GrooveStatsJudgmentCounts {
     let player = &gs.players[player_idx];
     let windows = gs.live_window_counts[player_idx];
+    let totals = gameplay::display_totals_for_player(gs, player_idx);
     let disabled_windows = gs.player_profiles[player_idx]
         .timing_windows
         .disabled_windows();
     groovestats_api::judgment_counts_from_stats(
         windows,
         disabled_windows,
-        gs.total_steps[player_idx],
+        totals.total_steps,
         player.holds_held,
-        gs.holds_total[player_idx],
+        totals.holds_total,
         player.mines_hit,
-        gs.mines_total[player_idx],
+        totals.mines_total,
         player.rolls_held,
-        gs.rolls_total[player_idx],
+        totals.rolls_total,
     )
 }
 
@@ -543,14 +544,15 @@ fn groovestats_comment_string(gs: &gameplay::State, player_idx: usize) -> String
     let counts = groovestats_judgment_counts(gs, player_idx);
     let fa_plus_ex_score = if profile.show_fa_plus_window {
         let (start, end) = gs.note_ranges[player_idx];
+        let totals = gameplay::display_totals_for_player(gs, player_idx);
         Some(judgment::calculate_ex_score_from_notes(
             &gs.notes[start..end],
             &gs.note_time_cache_ns[start..end],
             &gs.hold_end_time_cache_ns[start..end],
-            gs.total_steps[player_idx],
-            gs.holds_total[player_idx],
-            gs.rolls_total[player_idx],
-            gs.mines_total[player_idx],
+            totals.total_steps,
+            totals.holds_total,
+            totals.rolls_total,
+            totals.mines_total,
             gs.players[player_idx]
                 .fail_time
                 .map(gameplay::song_time_ns_from_seconds),
@@ -575,12 +577,13 @@ fn groovestats_payload_for_player(
     if player_idx >= gs.num_players {
         return None;
     }
+    let totals = gameplay::display_totals_for_player(gs, player_idx);
     let score_percent = judgment::calculate_itg_score_percent_from_counts(
         &gs.players[player_idx].scoring_counts,
         gs.players[player_idx].holds_held_for_score,
         gs.players[player_idx].rolls_held_for_score,
         gs.players[player_idx].mines_hit_for_score,
-        gs.possible_grade_points[player_idx],
+        totals.possible_grade_points,
     );
     let score = (score_percent * 10000.0).round().clamp(0.0, 10000.0) as u32;
     let rate = if gs.music_rate.is_finite() && gs.music_rate > 0.0 {
@@ -834,7 +837,7 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
     if !cfg.enable_groovestats || gs.num_players == 0 {
         return;
     }
-    if gs.autoplay_used {
+    if gameplay::autoplay_used(gs) {
         debug!(
             "Skipping {} submit: autoplay/replay was used.",
             active_groovestats_service_name()
@@ -872,12 +875,12 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
             gs.players[player_idx].fail_time.is_some(),
         );
         let passed = gameplay_run_passed(
-            gs.song_completed_naturally,
+            gameplay::song_completed_naturally(gs),
             gs.players[player_idx].is_failing,
             gs.players[player_idx].life,
             gs.players[player_idx].fail_time.is_some(),
         );
-        let finished = gs.song_completed_naturally || failed;
+        let finished = gameplay::song_completed_naturally(gs) || failed;
 
         if let Some(reason) =
             groovestats_submit_invalid_reason(chart, gs.song.has_lua, profile, gs.music_rate)

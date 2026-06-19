@@ -140,15 +140,21 @@ fn gameplay_viewport(metrics: Metrics) -> GameplayViewport {
 
 fn gameplay_session() -> crate::game::gameplay::GameplaySession {
     crate::game::gameplay::GameplaySession {
-        play_style: profile::get_session_play_style(),
-        player_side: profile::get_session_player_side(),
+        play_style: crate::game::gameplay::gameplay_play_style_from_profile(
+            profile::get_session_play_style(),
+        ),
+        player_side: crate::game::gameplay::gameplay_player_side_from_profile(
+            profile::get_session_player_side(),
+        ),
         joined_sides: std::array::from_fn(|idx| {
             profile::is_session_side_joined(profile_data::player_side_for_index(idx))
         }),
         active_profile_ids: std::array::from_fn(|idx| {
             profile::active_local_profile_id_for_side(profile_data::player_side_for_index(idx))
         }),
-        tick_mode: profile::get_session_timing_tick_mode(),
+        tick_mode: crate::game::gameplay::gameplay_tick_mode_from_profile(
+            profile::get_session_timing_tick_mode(),
+        ),
     }
 }
 
@@ -2997,11 +3003,11 @@ fn song_lua_video_paths(
 fn gameplay_song_lua_video_paths(state: &gameplay::State) -> Vec<PathBuf> {
     let mut paths = Vec::new();
     let mut seen = HashSet::new();
-    push_song_lua_video_paths(&state.song_lua_overlays, &mut seen, &mut paths);
-    for layer in &state.song_lua_background_visual_layers {
+    push_song_lua_video_paths(&state.song_lua_visuals.overlays, &mut seen, &mut paths);
+    for layer in &state.song_lua_visuals.background_visual_layers {
         push_song_lua_video_paths(&layer.overlays, &mut seen, &mut paths);
     }
-    for layer in &state.song_lua_foreground_visual_layers {
+    for layer in &state.song_lua_visuals.foreground_visual_layers {
         push_song_lua_video_paths(&layer.overlays, &mut seen, &mut paths);
     }
     paths
@@ -3317,11 +3323,11 @@ fn prewarm_gameplay_assets(
                 }
             }
         };
-    prewarm_song_lua_overlays(&state.song_lua_overlays);
-    for layer in &state.song_lua_background_visual_layers {
+    prewarm_song_lua_overlays(&state.song_lua_visuals.overlays);
+    for layer in &state.song_lua_visuals.background_visual_layers {
         prewarm_song_lua_overlays(&layer.overlays);
     }
-    for layer in &state.song_lua_foreground_visual_layers {
+    for layer in &state.song_lua_visuals.foreground_visual_layers {
         prewarm_song_lua_overlays(&layer.overlays);
     }
 }
@@ -3346,11 +3352,11 @@ fn prewarm_gameplay_sfx(state: &gameplay::State) {
             }
         };
 
-    prewarm_sound_overlays(&state.song_lua_overlays);
-    for layer in &state.song_lua_background_visual_layers {
+    prewarm_sound_overlays(&state.song_lua_visuals.overlays);
+    for layer in &state.song_lua_visuals.background_visual_layers {
         prewarm_sound_overlays(&layer.overlays);
     }
-    for layer in &state.song_lua_foreground_visual_layers {
+    for layer in &state.song_lua_visuals.foreground_visual_layers {
         prewarm_sound_overlays(&layer.overlays);
     }
     for sound_path in &state.song_lua_sound_paths {
@@ -6173,7 +6179,7 @@ impl App {
     }
 
     fn update_combo_carry_from_gameplay(&mut self, gs: &gameplay::State) {
-        if gs.autoplay_used {
+        if crate::game::gameplay::autoplay_used(gs) {
             return;
         }
         let play_style = profile::get_session_play_style();
@@ -6396,10 +6402,10 @@ impl App {
         if self.state.screens.current_screen == CurrentScreen::Gameplay
             && let Some(gs) = self.state.screens.gameplay_state.as_mut()
         {
-            let already_exiting = gs.exit_transition.is_some();
+            let already_exiting = gs.exit_input.exit_transition.is_some();
             crate::game::gameplay::begin_restart_exit(gs);
             crate::screens::gameplay::drain_audio_commands(gs);
-            if !already_exiting && gs.exit_transition.is_some() {
+            if !already_exiting && gs.exit_input.exit_transition.is_some() {
                 self.state.session.gameplay_restart_count = restart_count;
                 self.state.session.restart_pending = true;
             }

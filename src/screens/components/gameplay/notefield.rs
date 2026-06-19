@@ -3240,10 +3240,12 @@ pub fn prewarm_text_layout(
 
     for player in 0..state.num_players {
         let profile = &state.player_profiles[player];
+        let totals = crate::game::gameplay::display_totals_for_player(state, player);
         max_combo = max_combo.max(
-            state.total_steps[player]
-                .saturating_add(state.holds_total[player])
-                .saturating_add(state.rolls_total[player]),
+            totals
+                .total_steps
+                .saturating_add(totals.holds_total)
+                .saturating_add(totals.rolls_total),
         );
 
         if let Some(font_name) = zmod_combo_font_name(profile.combo_font) {
@@ -3563,7 +3565,9 @@ fn zmod_mini_indicator_progress(
         .saturating_add(resolved_rolls) as i32)
         .saturating_mul(HOLD_SCORE_HELD);
 
-    let possible_dp = state.possible_grade_points[player_idx].max(1);
+    let possible_dp = crate::game::gameplay::display_totals_for_player(state, player_idx)
+        .possible_grade_points
+        .max(1);
     let actual_dp = p.earned_grade_points;
 
     // Compute predictive percents for the active score type.
@@ -3824,7 +3828,7 @@ fn zmod_stream_prog_completion(state: &State, player_idx: usize) -> Option<f64> 
         return None;
     }
 
-    let beat_floor = state.current_beat_visible[player_idx].floor();
+    let beat_floor = crate::game::gameplay::visible_beat(state, player_idx).floor();
     if !beat_floor.is_finite() {
         return Some(0.0);
     }
@@ -4294,7 +4298,7 @@ fn hold_overlaps_visible_window(
 
 #[inline(always)]
 fn song_lua_hides_note(state: &State, player: usize, local_col: usize, beat: f32) -> bool {
-    song_lua_note_hidden(&state.song_lua_note_hides[player], local_col, beat)
+    song_lua_note_hidden(&state.song_lua_visuals.note_hides[player], local_col, beat)
 }
 
 #[inline(always)]
@@ -4544,16 +4548,19 @@ pub(crate) fn build_bundles(
             receptor_y_centered,
         )
     });
-    let current_time_ns = state.current_music_time_visible_ns[player_idx];
+    let current_time_ns = crate::game::gameplay::visible_music_time_ns(state, player_idx);
     let current_time = song_time_ns_to_seconds(current_time_ns);
-    let current_beat = state.current_beat_visible[player_idx];
+    let current_beat = crate::game::gameplay::visible_beat(state, player_idx);
     let column_receptor_ys: [f32; MAX_COLS] = from_fn(|i| {
         if i >= num_cols {
             return base_column_receptor_ys[i];
         }
         base_column_receptor_ys[i]
-            + song_lua_column_y_offset(&state.song_lua_column_offsets[player_idx], i, current_time)
-                * field_zoom
+            + song_lua_column_y_offset(
+                &state.song_lua_visuals.column_offsets[player_idx],
+                i,
+                current_time,
+            ) * field_zoom
     });
 
     let elapsed_screen = state.total_elapsed_in_screen;
@@ -4676,8 +4683,7 @@ pub(crate) fn build_bundles(
         // NoteDisplay actors runs faster than wall-clock elapsed.
         let note_display_time_scale = state.num_players as f32 + 1.0;
         // Precompute per-frame values used for converting beat/time to Y positions
-        let display_speed_percent =
-            timing.get_speed_multiplier_ns(state.current_beat_visible[player_idx], current_time_ns);
+        let display_speed_percent = timing.get_speed_multiplier_ns(current_beat, current_time_ns);
         // PARITY[ITGmania ArrowEffects::GetYOffset]: ScreenEdit's editing
         // state uses raw beat spacing instead of displayed beat/speed timing.
         let edit_beat_spacing = view.edit_beat_bars;
@@ -4686,13 +4692,7 @@ pub(crate) fn build_bundles(
                 _ if edit_beat_spacing => {
                     let player_multiplier =
                         scroll_speed.beat_multiplier(state.scroll_reference_bpm, state.music_rate);
-                    (
-                        1.0,
-                        None,
-                        state.current_beat_visible[player_idx],
-                        1.0,
-                        field_zoom * player_multiplier,
-                    )
+                    (1.0, None, current_beat, 1.0, field_zoom * player_multiplier)
                 }
                 ScrollSpeedSetting::CMod(c_bpm) => {
                     let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
@@ -4703,8 +4703,7 @@ pub(crate) fn build_bundles(
                     (rate, Some(c_bpm / 60.0), 0.0, 0.0, field_zoom)
                 }
                 ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
-                    let curr_disp =
-                        timing.get_displayed_beat(state.current_beat_visible[player_idx]);
+                    let curr_disp = timing.get_displayed_beat(current_beat);
                     let player_multiplier =
                         scroll_speed.beat_multiplier(state.scroll_reference_bpm, state.music_rate);
                     (
@@ -9223,7 +9222,7 @@ pub(crate) fn build_bundles(
             let lookahead: u8 = profile.measure_counter_lookahead.min(4);
             let multiplier = profile.measure_counter.multiplier();
 
-            let beat_floor = state.current_beat_visible[player_idx].floor();
+            let beat_floor = current_beat.floor();
             let curr_measure = beat_floor / 4.0;
             let base_index = stream_segment_index_exclusive_end(segs, curr_measure);
 
@@ -9471,7 +9470,7 @@ pub(crate) fn build_bundles(
             }
         }
     }
-    let indicator_beat_push = beat_factor(state.current_beat_visible[player_idx]);
+    let indicator_beat_push = beat_factor(current_beat);
     let mut indicator_col_offsets = [0.0_f32; MAX_COLS];
     fill_lane_col_offsets(
         &mut indicator_col_offsets,

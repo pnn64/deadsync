@@ -32,8 +32,8 @@ use deadsync_gameplay::{
     song_lua_window_seconds as gameplay_song_lua_window_seconds,
 };
 pub(super) use deadsync_gameplay::{
-    AttackMaskWindow, SongLuaEaseMaskTarget, SongLuaEaseMaskWindow, SongLuaPlayerTransform,
-    SongLuaPlayerTransformValues, SongLuaRuntimeSpanMode, SongLuaRuntimeTimeUnit,
+    AttackMaskWindow, SongLuaEaseMaskTarget, SongLuaEaseMaskWindow, SongLuaPlayerTransformValues,
+    SongLuaRuntimeSpanMode, SongLuaRuntimeTimeUnit,
 };
 pub use deadsync_gameplay::{
     SongLuaColumnOffsetWindowRuntime, SongLuaNoteHideWindowRuntime, SongLuaOverlayMessageRuntime,
@@ -48,10 +48,11 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use super::{
-    AccelEffects, AppearanceEffects, ChartAttackEffects, GameplaySession, GameplayViewport,
-    MAX_PLAYERS, PerspectiveEffects, ScrollEffects, State, VisibilityEffects, VisualEffects,
-    effective_mini_percent, perspective_effects_from_profile, scroll_effects_from_option,
-    spacing_multiplier_for_percent,
+    AccelEffects, AppearanceEffects, ChartAttackEffects, GameplayInputPlayStyle,
+    GameplayInputPlayerSide, GameplaySession, GameplayViewport, MAX_PLAYERS, PerspectiveEffects,
+    ScrollEffects, State, VisibilityEffects, VisualEffects, effective_mini_percent,
+    gameplay_is_single_p2_side, perspective_effects_from_profile, scroll_effects_from_option,
+    spacing_multiplier_for_percent, visible_music_time_seconds,
 };
 
 #[inline(always)]
@@ -67,37 +68,23 @@ pub type SongLuaOverlayEaseWindowRuntime = deadsync_gameplay::SongLuaOverlayEase
     crate::game::parsing::song_lua::SongLuaOverlayStateDelta,
 >;
 
-#[derive(Clone, Debug)]
-pub struct SongLuaVisualLayerRuntime {
-    pub start_second: f32,
-    pub screen_width: f32,
-    pub screen_height: f32,
-    pub overlays: Vec<SongLuaOverlayActor>,
-    pub overlay_eases: Vec<SongLuaOverlayEaseWindowRuntime>,
-    pub overlay_ease_ranges: Vec<std::ops::Range<usize>>,
-    pub overlay_events: Vec<Vec<SongLuaOverlayMessageRuntime>>,
-    pub song_foreground: SongLuaCapturedActor,
-    pub song_foreground_events: Vec<SongLuaOverlayMessageRuntime>,
-}
+pub type SongLuaVisualLayerRuntime = deadsync_gameplay::SongLuaVisualLayerRuntime<
+    SongLuaOverlayActor,
+    SongLuaCapturedActor,
+    crate::game::parsing::song_lua::SongLuaOverlayStateDelta,
+>;
 
-#[derive(Clone, Debug)]
-pub struct GameplayCompiledSongLua {
-    pub compiled: CompiledSongLua,
-    pub compile_ms: f64,
-}
+pub type SongLuaRuntimeVisuals = deadsync_gameplay::SongLuaRuntimeVisuals<
+    SongLuaOverlayActor,
+    SongLuaCapturedActor,
+    crate::game::parsing::song_lua::SongLuaOverlayStateDelta,
+>;
 
-#[derive(Clone, Debug)]
-pub struct GameplaySongLuaLayer {
-    pub start_beat: f32,
-    pub compiled: CompiledSongLua,
-}
+pub type GameplayCompiledSongLua = deadsync_gameplay::GameplayCompiledSongLua<CompiledSongLua>;
 
-#[derive(Clone, Debug, Default)]
-pub struct GameplaySongLuaData {
-    pub primary: Option<GameplayCompiledSongLua>,
-    pub background_layers: Vec<GameplaySongLuaLayer>,
-    pub foreground_layers: Vec<GameplaySongLuaLayer>,
-}
+pub type GameplaySongLuaLayer = deadsync_gameplay::GameplaySongLuaLayer<CompiledSongLua>;
+
+pub type GameplaySongLuaData = deadsync_gameplay::GameplaySongLuaData<CompiledSongLua>;
 
 pub(super) fn build_attack_mask_windows_for_player(
     chart_attacks: Option<&str>,
@@ -657,11 +644,11 @@ fn song_lua_speedmod_from_setting(speed: ScrollSpeedSetting) -> SongLuaSpeedMod 
 }
 
 #[inline(always)]
-fn song_lua_compile_play_style(play_style: profile_data::PlayStyle) -> SongLuaCompilePlayStyle {
+fn song_lua_compile_play_style(play_style: GameplayInputPlayStyle) -> SongLuaCompilePlayStyle {
     match play_style {
-        profile_data::PlayStyle::Single => SongLuaCompilePlayStyle::Single,
-        profile_data::PlayStyle::Versus => SongLuaCompilePlayStyle::Versus,
-        profile_data::PlayStyle::Double => SongLuaCompilePlayStyle::Double,
+        GameplayInputPlayStyle::Single => SongLuaCompilePlayStyle::Single,
+        GameplayInputPlayStyle::Versus => SongLuaCompilePlayStyle::Versus,
+        GameplayInputPlayStyle::Double => SongLuaCompilePlayStyle::Double,
     }
 }
 
@@ -670,8 +657,8 @@ fn song_lua_compile_player_screen_x(
     player_index: usize,
     profile: &profile_data::Profile,
     viewport: GameplayViewport,
-    play_style: profile_data::PlayStyle,
-    player_side: profile_data::PlayerSide,
+    play_style: GameplayInputPlayStyle,
+    player_side: GameplayInputPlayerSide,
     center_1player_notefield: bool,
 ) -> f32 {
     gameplay_song_lua_compile_player_screen_x(
@@ -679,7 +666,7 @@ fn song_lua_compile_player_screen_x(
         player_index,
         viewport,
         song_lua_compile_play_style(play_style),
-        profile_data::is_single_p2_side(play_style, player_side),
+        gameplay_is_single_p2_side(play_style, player_side),
         profile.note_field_offset_x as f32,
         center_1player_notefield,
     )
@@ -717,9 +704,9 @@ pub(crate) fn song_lua_compile_context(
     };
     context.music_length_seconds = song.music_length_seconds.max(song.precise_last_second());
     context.style_name = match play_style {
-        profile_data::PlayStyle::Single => "single",
-        profile_data::PlayStyle::Versus => "versus",
-        profile_data::PlayStyle::Double => "double",
+        GameplayInputPlayStyle::Single => "single",
+        GameplayInputPlayStyle::Versus => "versus",
+        GameplayInputPlayStyle::Double => "double",
     }
     .to_string();
     context.global_offset_seconds = machine_global_offset_seconds;
@@ -844,21 +831,7 @@ pub(super) fn build_song_lua_runtime_windows(
 ) -> (
     [Vec<AttackMaskWindow>; MAX_PLAYERS],
     [Vec<SongLuaEaseMaskWindow>; MAX_PLAYERS],
-    Vec<SongLuaOverlayActor>,
-    Vec<SongLuaOverlayEaseWindowRuntime>,
-    Vec<std::ops::Range<usize>>,
-    Vec<Vec<SongLuaOverlayMessageRuntime>>,
-    Vec<SongLuaVisualLayerRuntime>,
-    Vec<SongLuaVisualLayerRuntime>,
-    [SongLuaCapturedActor; MAX_PLAYERS],
-    [Vec<SongLuaOverlayMessageRuntime>; MAX_PLAYERS],
-    SongLuaCapturedActor,
-    Vec<SongLuaOverlayMessageRuntime>,
-    [bool; MAX_PLAYERS],
-    [Vec<SongLuaNoteHideWindowRuntime>; MAX_PLAYERS],
-    [Vec<SongLuaColumnOffsetWindowRuntime>; MAX_PLAYERS],
-    f32,
-    f32,
+    SongLuaRuntimeVisuals,
 ) {
     let mut constant_windows: [Vec<AttackMaskWindow>; MAX_PLAYERS] =
         std::array::from_fn(|_| Vec::new());
@@ -918,21 +891,23 @@ pub(super) fn build_song_lua_runtime_windows(
         return (
             constant_windows,
             ease_windows,
-            overlays,
-            overlay_eases,
-            overlay_ease_ranges,
-            overlay_events,
-            background_visual_layers,
-            foreground_visual_layers,
-            player_actors,
-            player_events,
-            song_foreground,
-            song_foreground_events,
-            hidden_players,
-            note_hides,
-            column_offsets,
-            screen_width,
-            screen_height,
+            SongLuaRuntimeVisuals {
+                overlays,
+                overlay_eases,
+                overlay_ease_ranges,
+                overlay_events,
+                background_visual_layers,
+                foreground_visual_layers,
+                player_actors,
+                player_events,
+                song_foreground,
+                song_foreground_events,
+                hidden_players,
+                note_hides,
+                column_offsets,
+                screen_width,
+                screen_height,
+            },
         );
     }
 
@@ -1096,21 +1071,23 @@ pub(super) fn build_song_lua_runtime_windows(
     (
         constant_windows,
         ease_windows,
-        overlays,
-        overlay_eases,
-        overlay_ease_ranges,
-        overlay_events,
-        background_visual_layers,
-        foreground_visual_layers,
-        player_actors,
-        player_events,
-        song_foreground,
-        song_foreground_events,
-        hidden_players,
-        note_hides,
-        column_offsets,
-        out_screen_width,
-        out_screen_height,
+        SongLuaRuntimeVisuals {
+            overlays,
+            overlay_eases,
+            overlay_ease_ranges,
+            overlay_events,
+            background_visual_layers,
+            foreground_visual_layers,
+            player_actors,
+            player_events,
+            song_foreground,
+            song_foreground_events,
+            hidden_players,
+            note_hides,
+            column_offsets,
+            screen_width: out_screen_width,
+            screen_height: out_screen_height,
+        },
     )
 }
 
@@ -1305,10 +1282,10 @@ pub(super) fn base_appearance_effects(profile: &profile_data::Profile) -> Appear
 #[inline(always)]
 pub(super) fn begin_outro_attack_clear(state: &mut State) {
     begin_outro_attack_visual_clear(
-        &mut state.attacks_cleared_for_outro,
+        &mut state.attacks.cleared_for_outro,
         state.num_players,
-        &state.active_attack_visual,
-        &mut state.outro_attack_visual,
+        &state.attacks.visual,
+        &mut state.attacks.outro_visual,
     );
 }
 
@@ -1323,81 +1300,56 @@ fn store_song_lua_player_transforms(
     player: usize,
     values: SongLuaPlayerTransformValues,
 ) {
-    let SongLuaPlayerTransform {
-        x,
-        y,
-        z,
-        rotation_x,
-        rotation_z,
-        rotation_y,
-        skew_x,
-        skew_y,
-        zoom_x,
-        zoom_y,
-        zoom_z,
-        confusion_y_offset,
-    } = values.resolve();
-    state.song_lua_player_x[player] = x;
-    state.song_lua_player_y[player] = y;
-    state.song_lua_player_z[player] = z;
-    state.song_lua_player_rotation_x[player] = rotation_x;
-    state.song_lua_player_rotation_z[player] = rotation_z;
-    state.song_lua_player_rotation_y[player] = rotation_y;
-    state.song_lua_player_skew_x[player] = skew_x;
-    state.song_lua_player_skew_y[player] = skew_y;
-    state.song_lua_player_zoom_x[player] = zoom_x;
-    state.song_lua_player_zoom_y[player] = zoom_y;
-    state.song_lua_player_zoom_z[player] = zoom_z;
-    state.song_lua_player_confusion_y_offset[player] = confusion_y_offset;
+    state.song_lua_player_transforms[player] = values.resolve();
 }
 
 pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
     for player in 0..state.num_players {
-        let now = state.current_music_time_visible[player];
+        let now = visible_music_time_seconds(state, player);
         let output = refresh_active_attack_player(
             ActiveAttackRefreshInput {
                 now,
                 delta_time,
-                attacks_cleared_for_outro: state.attacks_cleared_for_outro,
+                attacks_cleared_for_outro: state.attacks.cleared_for_outro,
                 base_appearance: base_appearance_effects(&state.player_profiles[player]),
                 base_visual: base_visual_effects(&state.player_profiles[player]),
                 base_scroll: scroll_effects_from_option(
                     state.player_profiles[player].scroll_option,
                 ),
                 base_mini_percent: state.player_profiles[player].mini_percent as f32,
-                attack_windows: &state.attack_mask_windows[player],
-                song_lua_ease_windows: &state.song_lua_ease_windows[player],
+                attack_windows: &state.attacks.mask_windows[player],
+                song_lua_ease_windows: &state.attacks.song_lua_ease_windows[player],
             },
             ActiveAttackRefreshState {
-                attack_current_appearance: state.attack_current_appearance[player],
-                active_attack_visual: state.active_attack_visual[player],
-                active_attack_visibility: state.active_attack_visibility[player],
-                active_attack_scroll: state.active_attack_scroll[player],
-                active_attack_mini_percent: state.active_attack_mini_percent[player],
-                outro_attack_visual: state.outro_attack_visual[player],
+                attack_current_appearance: state.attacks.current_appearance[player],
+                active_attack_visual: state.attacks.visual[player],
+                active_attack_visibility: state.attacks.visibility[player],
+                active_attack_scroll: state.attacks.scroll[player],
+                active_attack_mini_percent: state.attacks.mini_percent[player],
+                outro_attack_visual: state.attacks.outro_visual[player],
             },
         );
-        state.attack_target_appearance[player] = output.attack_target_appearance;
-        state.attack_speed_appearance[player] = output.attack_speed_appearance;
-        state.attack_current_appearance[player] = output.attack_current_appearance;
-        state.outro_attack_visual[player] = output.outro_attack_visual;
-        state.active_attack_clear_all[player] = output.active_attack_clear_all;
-        state.active_attack_chart[player] = output.active_attack_chart;
-        state.active_attack_accel[player] = output.active_attack_accel;
-        state.active_attack_visual[player] = output.active_attack_visual;
-        state.active_attack_appearance[player] = output.active_attack_appearance;
-        state.active_attack_visibility[player] = output.active_attack_visibility;
-        state.active_attack_scroll[player] = output.active_attack_scroll;
-        state.active_attack_perspective[player] = output.active_attack_perspective;
-        state.active_attack_scroll_speed[player] = output.active_attack_scroll_speed;
-        state.active_attack_mini_percent[player] = output.active_attack_mini_percent;
+        state.attacks.target_appearance[player] = output.attack_target_appearance;
+        state.attacks.speed_appearance[player] = output.attack_speed_appearance;
+        state.attacks.current_appearance[player] = output.attack_current_appearance;
+        state.attacks.outro_visual[player] = output.outro_attack_visual;
+        state.attacks.clear_all[player] = output.active_attack_clear_all;
+        state.attacks.chart[player] = output.active_attack_chart;
+        state.attacks.accel[player] = output.active_attack_accel;
+        state.attacks.visual[player] = output.active_attack_visual;
+        state.attacks.appearance[player] = output.active_attack_appearance;
+        state.attacks.visibility[player] = output.active_attack_visibility;
+        state.attacks.scroll[player] = output.active_attack_scroll;
+        state.attacks.perspective[player] = output.active_attack_perspective;
+        state.attacks.scroll_speed[player] = output.active_attack_scroll_speed;
+        state.attacks.mini_percent[player] = output.active_attack_mini_percent;
         store_song_lua_player_transforms(state, player, output.player_transform);
     }
 }
 
 #[inline(always)]
 fn player_attack_base_cleared(state: &State, player_idx: usize) -> bool {
-    player_idx < state.num_players && state.active_attack_clear_all[player_idx]
+    player_idx < state.num_players && state.attacks.clear_all[player_idx]
 }
 
 #[inline(always)]
@@ -1410,7 +1362,7 @@ pub fn effective_accel_effects_for_player(state: &State, player_idx: usize) -> A
         state.player_profiles[player_idx]
             .accel_effects_active_mask
             .bits(),
-        state.active_attack_accel[player_idx],
+        state.attacks.accel[player_idx],
     )
 }
 
@@ -1424,7 +1376,7 @@ pub fn effective_visual_effects_for_player(state: &State, player_idx: usize) -> 
         state.player_profiles[player_idx]
             .visual_effects_active_mask
             .bits(),
-        state.active_attack_visual[player_idx],
+        state.attacks.visual[player_idx],
     )
 }
 
@@ -1436,7 +1388,7 @@ pub fn effective_appearance_effects_for_player(
     if player_idx >= state.num_players {
         return AppearanceEffects::default();
     }
-    state.active_attack_appearance[player_idx]
+    state.attacks.appearance[player_idx]
 }
 
 #[inline(always)]
@@ -1447,7 +1399,7 @@ pub fn effective_visibility_effects_for_player(
     if player_idx >= state.num_players {
         return VisibilityEffects::default();
     }
-    effective_attack_visibility_effects(state.active_attack_visibility[player_idx])
+    effective_attack_visibility_effects(state.attacks.visibility[player_idx])
 }
 
 #[inline(always)]
@@ -1458,7 +1410,7 @@ pub fn active_chart_attack_effects_for_player(
     if player_idx >= state.num_players {
         return ChartAttackEffects::default();
     }
-    state.active_attack_chart[player_idx]
+    state.attacks.chart[player_idx]
 }
 
 #[inline(always)]
@@ -1469,7 +1421,7 @@ pub fn effective_scroll_effects_for_player(state: &State, player_idx: usize) -> 
     effective_attack_scroll_effects(
         player_attack_base_cleared(state, player_idx),
         scroll_effects_from_option(state.player_profiles[player_idx].scroll_option),
-        state.active_attack_scroll[player_idx],
+        state.attacks.scroll[player_idx],
     )
 }
 
@@ -1484,7 +1436,7 @@ pub fn effective_perspective_effects_for_player(
     effective_attack_perspective_effects(
         player_attack_base_cleared(state, player_idx),
         perspective_effects_from_profile(state.player_profiles[player_idx].perspective),
-        state.active_attack_perspective[player_idx],
+        state.attacks.perspective[player_idx],
     )
 }
 
@@ -1499,7 +1451,7 @@ pub fn effective_mini_percent_for_player(state: &State, player_idx: usize) -> f3
         return 0.0;
     }
     effective_mini_percent(
-        state.active_attack_mini_percent[player_idx],
+        state.attacks.mini_percent[player_idx],
         state.player_profiles[player_idx].mini_percent as f32,
         player_attack_base_cleared(state, player_idx),
     )
@@ -1523,7 +1475,7 @@ pub fn effective_scroll_speed_for_player(state: &State, player_idx: usize) -> Sc
     }
     effective_attack_scroll_speed(
         player_attack_base_cleared(state, player_idx),
-        state.active_attack_scroll_speed[player_idx],
+        state.attacks.scroll_speed[player_idx],
         state.scroll_speed[player_idx],
     )
 }

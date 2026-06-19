@@ -2378,13 +2378,14 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 }
             };
             let graph_last_second = chart_last_second;
+            let totals = crate::game::gameplay::display_totals_for_player(&gs, player_idx);
 
             let score_percent = judgment::calculate_itg_score_percent_from_counts(
                 &p.scoring_counts,
                 p.holds_held_for_score,
                 p.rolls_held_for_score,
                 p.mines_hit_for_score,
-                gs.possible_grade_points[player_idx],
+                totals.possible_grade_points,
             );
             let side = if gs.num_players >= 2 {
                 if player_idx == 0 {
@@ -2417,16 +2418,17 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             );
             let personal_record_highlight_rank =
                 score_data::leaderboard_rank_for_score(personal_records.as_slice(), score_percent);
-            let score_valid = gs.score_valid[player_idx] && !gs.autoplay_used;
+            let score_valid = crate::game::gameplay::score_valid_for_player(&gs, player_idx)
+                && !crate::game::gameplay::autoplay_used(&gs);
             // Simply Love's "Disqualified" label is driven by PlayerStageStats:IsDisqualified(),
             // not by our broader local ranking-validity heuristics.
-            let disqualified = gs.autoplay_used;
+            let disqualified = crate::game::gameplay::autoplay_used(&gs);
             let local_score_valid = score_valid && !disqualified;
             let groovestats = scores::groovestats_eval_state_from_gameplay(&gs, player_idx);
             let itl = scores::itl_eval_state_from_gameplay(&gs, player_idx);
             let failed = score_data::gameplay_run_failed(p.is_failing, p.fail_time.is_some());
             let passed = score_data::gameplay_run_passed(
-                gs.song_completed_naturally,
+                crate::game::gameplay::song_completed_naturally(&gs),
                 p.is_failing,
                 p.life,
                 p.fail_time.is_some(),
@@ -2466,7 +2468,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
 
             let mut grade = eval_grade_for_result(
                 p.is_failing,
-                gs.song_completed_naturally,
+                crate::game::gameplay::song_completed_naturally(&gs),
                 disqualified,
                 score_percent,
             );
@@ -2509,23 +2511,23 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 judgment_counts: p.judgment_counts,
                 score_percent,
                 earned_grade_points: p.earned_grade_points,
-                possible_grade_points: gs.possible_grade_points[player_idx],
+                possible_grade_points: totals.possible_grade_points,
                 grade,
                 speed_mod: gs.scroll_speed[player_idx],
                 mods_text: crate::screens::components::gameplay::notefield::gameplay_mods_text(
                     &gs, player_idx,
                 ),
                 hands_achieved: p.hands_achieved,
-                hands_total: gs.hands_total[player_idx],
+                hands_total: crate::game::gameplay::hands_total_for_player(&gs, player_idx),
                 holds_held: p.holds_held,
                 holds_held_for_score: p.holds_held_for_score,
-                holds_total: gs.holds_total[player_idx],
+                holds_total: totals.holds_total,
                 rolls_held: p.rolls_held,
                 rolls_held_for_score: p.rolls_held_for_score,
-                rolls_total: gs.rolls_total[player_idx],
+                rolls_total: totals.rolls_total,
                 mines_hit_for_score: p.mines_hit_for_score,
                 mines_avoided: p.mines_avoided,
-                mines_total: gs.mines_total[player_idx],
+                mines_total: totals.mines_total,
                 timing: stats,
                 arrow_timing,
                 scatter,

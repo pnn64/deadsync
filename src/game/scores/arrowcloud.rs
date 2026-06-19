@@ -234,8 +234,8 @@ fn arrowcloud_lifebar_points(
     let life_history = gs.players[player_idx].life_history.as_slice();
     let (start, end) = gs.note_ranges[player_idx];
     let note_times = &gs.note_time_cache_ns[start..end];
-    let first_second = gs.density_graph_first_second.min(0.0);
-    let last_second = gs.density_graph_last_second.max(first_second);
+    let first_second = gs.density_graph.first_second.min(0.0);
+    let last_second = gs.density_graph.last_second.max(first_second);
     let chart_start_second = note_times
         .iter()
         .find(|&&t| !gameplay::song_time_ns_invalid(t))
@@ -280,8 +280,8 @@ fn arrowcloud_nps_info(
     player_idx: usize,
 ) -> arrowcloud_api::ArrowCloudNpsInfo {
     let chart = gs.charts[player_idx].as_ref();
-    let first_second = gs.density_graph_first_second.min(0.0);
-    let last_second = gs.density_graph_last_second.max(first_second);
+    let first_second = gs.density_graph.first_second.min(0.0);
+    let last_second = gs.density_graph.last_second.max(first_second);
     arrowcloud_api::nps_info_from_measure_data(
         chart.max_nps,
         chart.measure_nps_vec.as_slice(),
@@ -443,6 +443,7 @@ fn arrowcloud_payload_for_player(
         1.0
     };
     let passed = !gameplay_run_failed(player.is_failing, player.fail_time.is_some());
+    let totals = gameplay::display_totals_for_player(gs, player_idx);
 
     Some(ArrowCloudPayload {
         song_name,
@@ -454,25 +455,25 @@ fn arrowcloud_payload_for_player(
         difficulty: chart.meter,
         stepartist: chart.step_artist.clone(),
         radar: ArrowCloudRadar {
-            holds: [submit_stats.holds_held, gs.holds_total[player_idx]],
-            mines: [submit_stats.mines_avoided, gs.mines_total[player_idx]],
-            rolls: [submit_stats.rolls_held, gs.rolls_total[player_idx]],
+            holds: [submit_stats.holds_held, totals.holds_total],
+            mines: [submit_stats.mines_avoided, totals.mines_total],
+            rolls: [submit_stats.rolls_held, totals.rolls_total],
         },
         judgment_counts: arrowcloud_api::judgment_counts_from_stats(
             submit_stats.judgment_counts,
             submit_stats.window_counts,
             submit_stats.holds_held,
-            gs.holds_total[player_idx],
+            totals.holds_total,
             submit_stats.mines_hit,
-            gs.mines_total[player_idx],
+            totals.mines_total,
             submit_stats.rolls_held,
-            gs.rolls_total[player_idx],
+            totals.rolls_total,
         ),
         nps_info: arrowcloud_nps_info(gs, player_idx),
         lifebar_info: arrowcloud_lifebar_points(gs, player_idx),
         modifiers: arrowcloud_api::modifiers_from_profile(profile),
         music_rate,
-        used_autoplay: gs.autoplay_used,
+        used_autoplay: gameplay::autoplay_used(gs),
         passed,
         body_version: ARROWCLOUD_BODY_VERSION,
         arrow_cloud_body_version: ARROWCLOUD_BODY_VERSION,
@@ -584,7 +585,7 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State, pack_group
     if !cfg.enable_arrowcloud || gs.num_players == 0 {
         return;
     }
-    if gs.autoplay_used {
+    if gameplay::autoplay_used(gs) {
         debug!("Skipping ArrowCloud submit: autoplay/replay was used.");
         return;
     }
@@ -608,13 +609,13 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State, pack_group
             gs.players[player_idx].fail_time.is_some(),
         );
         let passed = gameplay_run_passed(
-            gs.song_completed_naturally,
+            gameplay::song_completed_naturally(gs),
             gs.players[player_idx].is_failing,
             gs.players[player_idx].life,
             gs.players[player_idx].fail_time.is_some(),
         );
         let allow_failed_submit = failed && cfg.submit_arrowcloud_fails;
-        let finished = gs.song_completed_naturally || failed;
+        let finished = gameplay::song_completed_naturally(gs) || failed;
         let api_key = gs.player_profiles[player_idx].arrowcloud_api_key.trim();
         if !finished {
             debug!(

@@ -356,19 +356,14 @@ fn step_gameplay(
 }
 
 fn prepare_gameplay_state(state: &mut gameplay::State) {
-    state.autoplay_enabled = false;
-    state.song_completed_naturally = false;
-    state.exit_transition = None;
-    state.hold_to_exit_key = None;
-    state.hold_to_exit_start = None;
-    state.hold_to_exit_aborted_at = None;
+    gameplay::reset_benchmark_stage_runtime(state);
+    state.exit_input.reset();
     state.total_elapsed_in_screen = 0.0;
     state.current_beat = 0.0;
     state.current_music_time_ns = 0;
     state.current_beat_display = 0.0;
     state.current_music_time_display = 0.0;
-    state.current_beat_visible.fill(0.0);
-    state.current_music_time_visible.fill(0.0);
+    gameplay::fill_benchmark_visible_time(state, 0.0);
     state.notes.clear();
     state.note_ranges.fill((0, 0));
     state.row_entry_ranges.fill((0, 0));
@@ -388,7 +383,7 @@ fn prepare_gameplay_state(state: &mut gameplay::State) {
     state.music_end_time_ns = 3_600_000_000_000;
     state.decaying_hold_indices.clear();
     state.hold_decay_active.clear();
-    state.replay_edges.clear();
+    gameplay::clear_recorded_replay_edges(state);
     for note_indices in &mut state.lane_note_indices {
         note_indices.clear();
     }

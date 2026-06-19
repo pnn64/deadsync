@@ -1319,8 +1319,9 @@ fn replay_edges_for_player(gs: &gameplay::State, player: usize) -> Vec<LocalRepl
     };
 
     let mut out = Vec::new();
-    out.reserve(gs.replay_edges.len().min(4096));
-    for e in &gs.replay_edges {
+    let replay_edges = gameplay::recorded_replay_edges(gs);
+    out.reserve(replay_edges.len().min(4096));
+    for e in replay_edges {
         let lane = e.lane_index as usize;
         if lane < col_start
             || lane >= col_end
@@ -1339,7 +1340,7 @@ fn replay_edges_for_player(gs: &gameplay::State, player: usize) -> Vec<LocalRepl
 }
 
 pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
-    if gs.autoplay_used {
+    if gameplay::autoplay_used(gs) {
         debug!("Skipping local score save: autoplay was used during this stage.");
         return;
     }
@@ -1366,7 +1367,7 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
         let Some(profile_id) = profile::active_local_profile_id_for_side(side) else {
             continue;
         };
-        if !gs.score_valid[player_idx] {
+        if !gameplay::score_valid_for_player(gs, player_idx) {
             let reasons = gameplay::score_invalid_reason_lines_for_chart(
                 &gs.charts[player_idx],
                 &gs.player_profiles[player_idx],
@@ -1388,17 +1389,18 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
 
         let chart_hash = gs.charts[player_idx].short_hash.as_str();
         let p = &gs.players[player_idx];
+        let totals = gameplay::display_totals_for_player(gs, player_idx);
 
         let score_percent = judgment::calculate_itg_score_percent_from_counts(
             &p.scoring_counts,
             p.holds_held_for_score,
             p.rolls_held_for_score,
             p.mines_hit_for_score,
-            gs.possible_grade_points[player_idx],
+            totals.possible_grade_points,
         );
 
         let mut grade = if gameplay_run_passed(
-            gs.song_completed_naturally,
+            gameplay::song_completed_naturally(gs),
             p.is_failing,
             p.life,
             p.fail_time.is_some(),
@@ -1417,10 +1419,10 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
             notes,
             note_times,
             hold_end_times,
-            gs.total_steps[player_idx],
-            gs.holds_total[player_idx],
-            gs.rolls_total[player_idx],
-            gs.mines_total[player_idx],
+            totals.total_steps,
+            totals.holds_total,
+            totals.rolls_total,
+            totals.mines_total,
             p.fail_time.map(gameplay::song_time_ns_from_seconds),
             mines_disabled,
         );
@@ -1428,10 +1430,10 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
             notes,
             note_times,
             hold_end_times,
-            gs.total_steps[player_idx],
-            gs.holds_total[player_idx],
-            gs.rolls_total[player_idx],
-            gs.mines_total[player_idx],
+            totals.total_steps,
+            totals.holds_total,
+            totals.rolls_total,
+            totals.mines_total,
             p.fail_time.map(gameplay::song_time_ns_from_seconds),
             mines_disabled,
         );
@@ -1456,11 +1458,11 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
             hard_ex_score_percent,
             judgment_counts: counts,
             holds_held: p.holds_held,
-            holds_total: gs.holds_total[player_idx],
+            holds_total: totals.holds_total,
             rolls_held: p.rolls_held,
-            rolls_total: gs.rolls_total[player_idx],
+            rolls_total: totals.rolls_total,
             mines_avoided: p.mines_avoided,
-            mines_total: gs.mines_total[player_idx],
+            mines_total: totals.mines_total,
             hands_achieved: p.hands_achieved,
             fail_time: p.fail_time,
             beat0_time_ns: gs.timing_players[player_idx].get_time_for_beat_ns(0.0),

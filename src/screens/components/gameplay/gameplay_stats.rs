@@ -274,9 +274,9 @@ fn clip_density_life_points(points: &mut Vec<[f32; 2]>, offset: f32) {
 fn refresh_density_graph_meshes_for_player(state: &mut State, player_idx: usize) {
     let gameplay = &mut state.gameplay;
     let render = &mut state.density_graph;
-    let graph_w = gameplay.density_graph_graph_w;
-    let graph_h = gameplay.density_graph_graph_h;
-    let scaled_width = gameplay.density_graph_scaled_width;
+    let graph_w = gameplay.density_graph.graph_w;
+    let graph_h = gameplay.density_graph.graph_h;
+    let scaled_width = gameplay.density_graph.scaled_width;
     if player_idx >= gameplay.num_players
         || graph_w <= 0.0_f32
         || graph_h <= 0.0_f32
@@ -286,11 +286,11 @@ fn refresh_density_graph_meshes_for_player(state: &mut State, player_idx: usize)
         render.life_mesh[player_idx] = None;
         render.mesh_offset_px[player_idx] = 0;
         render.life_mesh_offset_px[player_idx] = 0;
-        gameplay.density_graph_life_dirty[player_idx] = false;
+        gameplay.density_graph.life_dirty[player_idx] = false;
         return;
     }
 
-    let offset = (gameplay.density_graph_u0 * scaled_width).clamp(0.0_f32, scaled_width);
+    let offset = (gameplay.density_graph.u0 * scaled_width).clamp(0.0_f32, scaled_width);
     let offset_px = offset.floor() as i32;
     let offset_px_f = offset_px as f32;
 
@@ -306,26 +306,26 @@ fn refresh_density_graph_meshes_for_player(state: &mut State, player_idx: usize)
 
     let prev_offset_px = render.life_mesh_offset_px[player_idx];
     let offset_changed = offset_px != prev_offset_px;
-    if !offset_changed && !gameplay.density_graph_life_dirty[player_idx] {
+    if !offset_changed && !gameplay.density_graph.life_dirty[player_idx] {
         return;
     }
 
     render.life_mesh_offset_px[player_idx] = offset_px;
-    gameplay.density_graph_life_dirty[player_idx] = false;
+    gameplay.density_graph.life_dirty[player_idx] = false;
     if offset_px > prev_offset_px {
         clip_density_life_points(
-            &mut gameplay.density_graph_life_points[player_idx],
+            &mut gameplay.density_graph.life_points[player_idx],
             offset_px_f,
         );
     }
-    if gameplay.density_graph_life_points[player_idx].len() < 2 {
+    if gameplay.density_graph.life_points[player_idx].len() < 2 {
         render.life_mesh[player_idx] = None;
         return;
     }
 
     density::update_density_life_mesh(
         &mut render.life_mesh[player_idx],
-        &gameplay.density_graph_life_points[player_idx],
+        &gameplay.density_graph.life_points[player_idx],
         offset_px_f,
         graph_w,
         2.0_f32,
@@ -356,8 +356,8 @@ fn push_density_graph_at(
         47.0 / 255.0, // 0x2F
     ];
 
-    let graph_w = state.density_graph_graph_w;
-    let graph_h = state.density_graph_graph_h;
+    let graph_w = state.gameplay.density_graph.graph_w;
+    let graph_h = state.gameplay.density_graph.graph_h;
     if graph_w <= 0.0_f32 || graph_h <= 0.0_f32 {
         return;
     }
@@ -1005,8 +1005,8 @@ fn song_info_text_zoom(layout: StepStatsPaneLayout) -> f32 {
 }
 
 fn step_stats_density_graph_w(state: &State, sidepane_width: f32, double: bool) -> f32 {
-    if state.density_graph_graph_w > 0.0 {
-        return state.density_graph_graph_w;
+    if state.gameplay.density_graph.graph_w > 0.0 {
+        return state.gameplay.density_graph.graph_w;
     }
     let width = if double {
         sidepane_width * 0.95
@@ -2905,7 +2905,9 @@ fn build_side_pane(
     // Density graph (Simply Love StepStatistics/DensityGraph.lua).
     let graph = step_stats_density_graph_rect(state, layout);
     if wide && mask.contains(profile_data::StepStatisticsMask::DENSITY_GRAPH) {
-        if state.density_graph_graph_w > 0.0_f32 && state.density_graph_graph_h > 0.0_f32 {
+        if state.gameplay.density_graph.graph_w > 0.0_f32
+            && state.gameplay.density_graph.graph_h > 0.0_f32
+        {
             push_density_graph_at(actors, state, player_idx, graph.x, graph.y);
         }
     }

@@ -40,21 +40,24 @@ pub fn fixture() -> GameplayBenchFixture {
     let mut base = notefield_bench::fixture();
     {
         let state = base.state_mut();
-        state.autoplay_enabled = true;
-        state.autosync_mode = gameplay::AutosyncMode::Machine;
+        gameplay::set_benchmark_autoplay_enabled(state, true);
         state.initial_global_offset_seconds = -0.021;
         state.global_offset_seconds = -0.012;
-        state.autosync_standard_deviation = 0.004;
-        state.autosync_offset_sample_count = 11;
+        gameplay::set_benchmark_autosync_state(state, gameplay::AutosyncMode::Machine, 0.004, 11);
         state.music_rate = 1.15;
         state.current_music_time_display = 48.25;
-        state.current_music_time_visible_ns[0] = 48_250_000_000;
-        state.current_music_time_visible[0] = 48.25;
-        state.density_graph_first_second = 0.0;
-        state.density_graph_last_second = 120.0;
-        state.density_graph_top_h = 30.0;
-        state.density_graph_top_w[0] = 214.0;
-        state.density_graph_top_scale_y[0] = 0.85;
+        gameplay::set_benchmark_visible_time(
+            state,
+            0,
+            48_250_000_000,
+            48.25,
+            gameplay::visible_beat(state, 0),
+        );
+        state.density_graph.first_second = 0.0;
+        state.density_graph.last_second = 120.0;
+        state.density_graph.top_h = 30.0;
+        state.density_graph.top_w[0] = 214.0;
+        state.density_graph.top_scale_y[0] = 0.85;
         state.players[0].life = 0.734;
         state.player_profiles[0].nps_graph_at_top = true;
         state.player_profiles[0].show_ex_score = true;
