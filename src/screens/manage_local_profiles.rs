@@ -1993,14 +1993,13 @@ fn push_overlay_error(
 
 const IMPORT_PICK_MAX_VISIBLE: usize = 8;
 
-fn push_import_picker_overlay(ui: &mut Vec<Actor>, state: &State) {
+fn push_import_picker_overlay(ui: &mut Vec<Actor>, state: &State, asset_manager: &AssetManager) {
     let Some(picker) = &state.import_picker else {
         return;
     };
 
     let w = screen_width();
     let h = screen_height();
-    let box_w = 760.0_f32.min(w * 0.92);
     let header_h = 56.0_f32;
     let item_h = 34.0_f32;
     let footer_h = 44.0_f32;
@@ -2009,8 +2008,43 @@ fn push_import_picker_overlay(ui: &mut Vec<Actor>, state: &State) {
     // The list area always shows at least one row (an empty-state hint), plus a
     // trailing "Browse…" row, plus an optional info line.
     let list_rows = visible.max(1);
-    let info_h = if picker.info.is_some() { 24.0 } else { 0.0 };
+    let info_h = if picker.info.is_some() { 26.0 } else { 0.0 };
     let box_h = header_h + (list_rows as f32) * item_h + item_h + info_h + footer_h;
+
+    // Lay the list out as a centered block: a name column whose width is the
+    // widest label (profile names or the "Browse…" row) and, when any profile is
+    // already imported, a tag column that begins just past it so every tag lines
+    // up at the same x. The whole block is centered in the popup.
+    const ROW_ZOOM: f32 = 0.95;
+    const TAG_ZOOM: f32 = 0.82;
+    const ROW_TAG_GAP: f32 = 24.0;
+    const SIDE_PAD: f32 = 56.0;
+    let tag_text = format!("✔ {}", tr("Profiles", "ImportTagImported"));
+    let tag_w = measure_label_width(asset_manager, &tag_text, TAG_ZOOM);
+    // Fixed name-column width: size for the longest name a profile can have
+    // (NAME_MAX_LEN), so the container stays the same width regardless of which
+    // profiles are in the list. "M" is the widest glyph, guaranteeing any name fits.
+    let max_name_ref: String = std::iter::repeat('M').take(NAME_MAX_LEN).collect();
+    let widest_label =
+        measure_label_width(asset_manager, &max_name_ref, ROW_ZOOM).max(measure_label_width(
+            asset_manager,
+            &tr("Profiles", "ImportBrowseButton"),
+            ROW_ZOOM,
+        ));
+    // Always reserve the tag column so the container is the same width whether or
+    // not any profile is currently flagged as imported.
+    let block_w = widest_label + ROW_TAG_GAP + tag_w;
+    let title_w = measure_text_width(
+        asset_manager,
+        current_machine_font_key(FontRole::Header),
+        &tr("Profiles", "ImportPickTitle"),
+        0.72,
+    );
+    let footer_w = measure_label_width(asset_manager, &tr("Profiles", "ImportPickPrompt"), 0.78);
+    let box_w = (block_w + SIDE_PAD)
+        .max(title_w + 40.0)
+        .max(footer_w + 40.0)
+        .clamp(360.0, w * 0.92);
     let cx = w * 0.5;
     let cy = h * 0.5;
     let top = cy - box_h * 0.5;
@@ -2036,21 +2070,24 @@ fn push_import_picker_overlay(ui: &mut Vec<Actor>, state: &State) {
             .min(total - IMPORT_PICK_MAX_VISIBLE)
     };
     let accent = color::simply_love_rgba(state.active_color_index);
-    let list_left = cx - box_w * 0.5 + 24.0;
-    let list_w = box_w - 48.0;
+    // Centered block geometry.
+    let block_left = cx - block_w * 0.5;
+    let tag_x = block_left + widest_label + ROW_TAG_GAP;
+    let hl_left = cx - block_w * 0.5 - 12.0;
+    let hl_w = block_w + 24.0;
 
     if total == 0 {
-        // Empty-state hint where the list would be.
+        // Empty-state hint, centered where the list would be.
         ui.push(act!(text:
-            align(0.0, 0.5):
-            xy(list_left, top + header_h + item_h * 0.5):
+            align(0.5, 0.5):
+            xy(cx, top + header_h + item_h * 0.5):
             font("miso"):
             zoom(0.9):
-            maxwidth(list_w):
+            maxwidth(box_w - 40.0):
             settext(tr("Profiles", "ImportPickEmpty")):
             diffuse(0.7, 0.7, 0.7, 1.0):
             z(1003):
-            horizalign(left)
+            horizalign(center)
         ));
     } else {
         for i in 0..visible {
@@ -2064,8 +2101,8 @@ fn push_import_picker_overlay(ui: &mut Vec<Actor>, state: &State) {
             if selected {
                 ui.push(act!(quad:
                     align(0.0, 0.0):
-                    xy(list_left - 8.0, row_y):
-                    zoomto(list_w + 16.0, item_h):
+                    xy(hl_left, row_y):
+                    zoomto(hl_w, item_h):
                     diffuse(0.17, 0.23, 0.28, 0.95):
                     z(1002)
                 ));
@@ -2079,33 +2116,30 @@ fn push_import_picker_overlay(ui: &mut Vec<Actor>, state: &State) {
             } else {
                 [1.0, 1.0, 1.0, 1.0]
             };
-            let label_w = if imported_as.is_some() {
-                (list_w - 120.0).max(40.0)
-            } else {
-                list_w
-            };
+            // Name in the left column (left-aligned at the block edge).
             ui.push(act!(text:
                 align(0.0, 0.5):
-                xy(list_left, row_y + item_h * 0.5):
+                xy(block_left, row_y + item_h * 0.5):
                 font("miso"):
-                zoom(0.95):
-                maxwidth(label_w):
+                zoom(ROW_ZOOM):
+                maxwidth(widest_label):
                 settext(cand.display_name.clone()):
                 diffuse(text_col[0], text_col[1], text_col[2], text_col[3]):
                 z(1003):
                 horizalign(left)
             ));
-            // Right-aligned "✔ Imported" tag for already-imported profiles.
+            // "✔ Imported" tag in the shared tag column (aligned past the widest
+            // name / the Browse row, so every tag lines up).
             if imported_as.is_some() {
                 ui.push(act!(text:
-                    align(1.0, 0.5):
-                    xy(list_left + list_w, row_y + item_h * 0.5):
+                    align(0.0, 0.5):
+                    xy(tag_x, row_y + item_h * 0.5):
                     font("miso"):
-                    zoom(0.82):
+                    zoom(TAG_ZOOM):
                     settext(format!("✔ {}", tr("Profiles", "ImportTagImported"))):
                     diffuse(0.55, 0.92, 0.55, 0.85):
                     z(1003):
-                    horizalign(right)
+                    horizalign(left)
                 ));
             }
         }
@@ -2117,8 +2151,8 @@ fn push_import_picker_overlay(ui: &mut Vec<Actor>, state: &State) {
     if browse_selected {
         ui.push(act!(quad:
             align(0.0, 0.0):
-            xy(list_left - 8.0, browse_y):
-            zoomto(list_w + 16.0, item_h):
+            xy(hl_left, browse_y):
+            zoomto(hl_w, item_h):
             diffuse(0.17, 0.23, 0.28, 0.95):
             z(1002)
         ));
@@ -2130,21 +2164,23 @@ fn push_import_picker_overlay(ui: &mut Vec<Actor>, state: &State) {
     };
     ui.push(act!(text:
         align(0.0, 0.5):
-        xy(list_left, browse_y + item_h * 0.5):
+        xy(block_left, browse_y + item_h * 0.5):
         font("miso"):
-        zoom(0.95):
-        maxwidth(list_w):
+        zoom(ROW_ZOOM):
+        maxwidth(widest_label):
         settext(tr("Profiles", "ImportBrowseButton")):
         diffuse(browse_col[0], browse_col[1], browse_col[2], browse_col[3]):
         z(1003):
         horizalign(left)
     ));
 
-    // Optional info notice (e.g. result of a browse) above the prompt.
+    // Optional info notice (e.g. result of a browse, or "already imported"),
+    // centered just below the browse row so it sits close to the list.
     if let Some(info) = &picker.info {
+        let info_y = (list_rows as f32 + 1.0).mul_add(item_h, top + header_h) + 6.0;
         ui.push(act!(text:
-            align(0.5, 1.0):
-            xy(cx, cy + box_h * 0.5 - footer_h + 4.0):
+            align(0.5, 0.0):
+            xy(cx, info_y):
             font("miso"):
             zoom(0.8):
             maxwidth(box_w - 40.0):
@@ -2402,12 +2438,11 @@ fn push_import_message_overlay(ui: &mut Vec<Actor>, state: &State, asset_manager
     );
 }
 
-/// Measures the rendered width (logical px) of a ledger label in the `miso`
-/// font at `zoom`, used to align the status column just past the widest label.
-fn measure_label_width(asset_manager: &AssetManager, text: &str, zoom: f32) -> f32 {
+/// Measures the rendered width (logical px) of `text` in `font_key` at `zoom`.
+fn measure_text_width(asset_manager: &AssetManager, font_key: &str, text: &str, zoom: f32) -> f32 {
     let mut out = 0.0_f32;
     asset_manager.with_fonts(|all_fonts| {
-        asset_manager.with_font("miso", |measure_font| {
+        asset_manager.with_font(font_key, |measure_font| {
             let w = deadlib_present::font::measure_line_width_logical(measure_font, text, all_fonts)
                 as f32;
             if w.is_finite() && w > 0.0 {
@@ -2416,6 +2451,11 @@ fn measure_label_width(asset_manager: &AssetManager, text: &str, zoom: f32) -> f
         });
     });
     out
+}
+
+/// Measures the rendered width (logical px) of a `miso` label at `zoom`.
+fn measure_label_width(asset_manager: &AssetManager, text: &str, zoom: f32) -> f32 {
+    measure_text_width(asset_manager, "miso", text, zoom)
 }
 
 fn push_list_chrome(
@@ -2779,7 +2819,7 @@ pub fn push_actors(
     push_profile_menu_overlay(actors, state, s, list_x, list_y);
     push_name_entry_overlay(actors, state);
     push_delete_confirm_overlay(actors, state);
-    push_import_picker_overlay(actors, state);
+    push_import_picker_overlay(actors, state, asset_manager);
     push_import_progress_overlay(actors, state);
     push_import_message_overlay(actors, state, asset_manager);
 
