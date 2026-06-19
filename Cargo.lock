@@ -1157,6 +1157,7 @@ dependencies = [
  "deadsync-updater",
  "deadsync-version",
  "dhat",
+ "flate2",
  "fs_extra",
  "glam",
  "gpu-allocator",

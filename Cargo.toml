@@ -149,6 +149,9 @@ zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2
 bincode = "2.0.1"
 twox-hash = "2.1.2"
 
+# Decompression of gzipped ITGmania Stats.xml during profile import
+flate2 = "1.1.9"
+
 # Localization
 rust-ini = "0.21.3"
 sys-locale = "0.3.2"
