@@ -11,7 +11,7 @@ use crate::screens::components::shared::screen_bar::{
 use crate::screens::components::shared::{screen_bar, visual_style_bg};
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
-use deadlib_platform::dirs;
+
 use deadlib_present::actors::{self, Actor};
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y};
@@ -319,10 +319,7 @@ fn build_choices() -> Vec<Choice> {
         let mut mini_indicator = profile_data::MiniIndicator::None;
         let mut noteskin = profile_data::NoteSkin::default();
         let mut judgment = profile_data::JudgmentGraphic::default();
-        let ini_path = dirs::app_dirs()
-            .profiles_root()
-            .join(&p.id)
-            .join("profile.ini");
+        let ini_path = profile::local_profile_dir_for_id(&p.id).join("profile.ini");
         let mut ini = crate::config::SimpleIni::new();
         if ini.load(&ini_path).is_ok() {
             let get_player_option = |key: &str| ini.get(player_options_section, key);

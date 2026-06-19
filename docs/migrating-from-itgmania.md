@@ -13,8 +13,17 @@ Throughout this doc:
   **Options → Folders → Data Directory → Open**.
 - `<itg profile>` is your ITGmania profile folder
   (`<itg save dir>/LocalProfiles/<id>/`).
-- `<your id>` is the opaque per-profile folder name DeadSync assigned when you
-  created the profile. The id does not need to match ITGmania's.
+- `<your folder>` is the name of your DeadSync profile folder. DeadSync names it
+  after your display name (e.g. `Alice`), so it can change when you rename the
+  profile. The folder name is *not* the profile's identity — see below.
+
+> **Identity lives inside the profile.** Each DeadSync profile carries its own
+> canonical id, a randomly generated GUID stored as `Guid=` under
+> `[userprofile]` in `profile.ini`.
+> DeadSync finds profiles by that embedded GUID, so you are free to rename a
+> profile folder on disk without breaking scores, settings, or online logins.
+> Existing profiles created before this scheme are assigned a GUID automatically
+> the first time DeadSync loads them.
 
 > **Heads up.** DeadSync's **Options → Online Scoring → Score Import** screen
 > only downloads past scores from accounts that are *already* configured (i.e.
@@ -26,7 +35,7 @@ Throughout this doc:
 | Game     | Profile root                                |
 | -------- | ------------------------------------------- |
 | ITGmania | `<itg save dir>/LocalProfiles/<id>/`        |
-| DeadSync | `<data dir>/save/profiles/<id>/`            |
+| DeadSync | `<data dir>/save/profiles/<your folder>/`   |
 
 You can jump straight to DeadSync's profile root from inside the game via
 **Options → Folders → Profiles → Open**.
@@ -51,7 +60,7 @@ Some fields are editable in-game, some live only in the config file:
 **Config file only**
 - Weight (pounds) and birth year. There is no in-game screen for these.
   With the game closed, edit
-  `<data dir>/save/profiles/<your id>/profile.ini` and adjust the values
+  `<data dir>/save/profiles/<your folder>/profile.ini` and adjust the values
   under `[userprofile]`:
 
   ```ini
@@ -71,7 +80,7 @@ folder and DeadSync will pick it up automatically on launch.
 DeadSync prefers `profile.png`; if that is missing it falls back to
 `avatar.png` (matching is case-insensitive, so ITGmania's `Avatar.png` works
 as-is). To bring across your ITGmania avatar, copy `<itg profile>/Avatar.png`
-into `<data dir>/save/profiles/<your id>/` and (optionally) rename it to
+into `<data dir>/save/profiles/<your folder>/` and (optionally) rename it to
 `profile.png`.
 
 ### 4. GrooveStats API key
@@ -79,7 +88,7 @@ into `<data dir>/save/profiles/<your id>/` and (optionally) rename it to
 The key does **not** go in `profile.ini`. It lives in its own file inside the
 profile folder:
 
-- **Path:** `<data dir>/save/profiles/<your id>/groovestats.ini`
+- **Path:** `<data dir>/save/profiles/<your folder>/groovestats.ini`
 - **Contents:**
 
   ```ini
@@ -94,7 +103,7 @@ Use `IsPadPlayer = 1` for pad, `0` for keyboard.
 You have two ways to populate this:
 
 - **Copy from ITGmania.** Place `<itg profile>/GrooveStats.ini` into
-  `<data dir>/save/profiles/<your id>/` and rename it to lowercase
+  `<data dir>/save/profiles/<your folder>/` and rename it to lowercase
   `groovestats.ini`. Same section, same keys, done.
 - **QR-code login.** **Options → Manage Local Profiles → (select profile) →
   Link GrooveStats**. DeadSync writes the resulting key into
@@ -104,7 +113,7 @@ You have two ways to populate this:
 
 Same pattern, sibling file in the profile folder:
 
-- **Path:** `<data dir>/save/profiles/<your id>/arrowcloud.ini`
+- **Path:** `<data dir>/save/profiles/<your folder>/arrowcloud.ini`
 - **Contents:**
 
   ```ini
@@ -115,7 +124,7 @@ Same pattern, sibling file in the profile folder:
 Three ways to populate it:
 
 - **Copy from ITGmania.** If `<itg profile>/ArrowCloud.ini` exists, copy it
-  into `<data dir>/save/profiles/<your id>/` and rename it to lowercase
+  into `<data dir>/save/profiles/<your folder>/` and rename it to lowercase
   `arrowcloud.ini`.
 - **Create by hand.** Make the file above with your key.
 - **QR-code login.** **Options → Manage Local Profiles → (select profile) →
