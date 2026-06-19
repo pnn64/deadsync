@@ -909,7 +909,7 @@ pub fn save_itl_data_from_gameplay(
                 .unwrap_or((0, 0));
         let max_points = passing_points.saturating_add(max_scoring_points);
         let judgments = itl_judgments_from_gameplay(gs, player_idx);
-        let (start, end) = gs.note_ranges[player_idx];
+        let (start, end) = crate::game::gameplay::note_range_for_player(gs, player_idx);
         let totals = gameplay::display_totals_for_player(gs, player_idx);
         let ex_percent = judgment::calculate_ex_score_from_notes(
             &gs.notes[start..end],
@@ -1035,7 +1035,7 @@ pub fn save_itl_data_from_gameplay(
 }
 
 pub(super) fn current_score_hundredths(gs: &gameplay::State, player_idx: usize) -> u32 {
-    let (start, end) = gs.note_ranges[player_idx];
+    let (start, end) = crate::game::gameplay::note_range_for_player(gs, player_idx);
     let totals = gameplay::display_totals_for_player(gs, player_idx);
     let ex_percent = judgment::calculate_ex_score_from_notes(
         &gs.notes[start..end],
@@ -1674,7 +1674,7 @@ fn loaded_chart_no_cmod_for_gameplay(
 
 pub fn should_warn_cmod_for_itl_chart(gs: &gameplay::State, player_idx: usize) -> bool {
     if player_idx >= gs.num_players.min(MAX_PLAYERS)
-        || gs.course_display_totals.is_some()
+        || gameplay::course_display_is_course_stage(gs)
         || !matches!(
             gs.player_profiles[player_idx].scroll_speed,
             ScrollSpeedSetting::CMod(_)
@@ -1828,8 +1828,9 @@ fn itl_eval_state(gs: &gameplay::State, player_idx: usize, data: &ItlFileData) -
     let prev = data.hash_map.get(chart_hash);
     let chart_no_cmod = chart_no_cmod(gs.song.as_ref(), prev);
     let gs_valid = groovestats_eval_state_from_gameplay(gs, player_idx);
-    let rate = if gs.music_rate.is_finite() && gs.music_rate > 0.0 {
-        gs.music_rate
+    let gameplay_music_rate = gameplay::music_rate(gs);
+    let rate = if gameplay_music_rate.is_finite() && gameplay_music_rate > 0.0 {
+        gameplay_music_rate
     } else {
         1.0
     };

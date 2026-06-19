@@ -41,11 +41,7 @@ fn sl_bool(map: &SlSettings, key: &str) -> Option<bool> {
 
 fn sl_str<'a>(map: &'a SlSettings, key: &str) -> Option<&'a str> {
     let v = map.get(key)?.trim();
-    if v.is_empty() {
-        None
-    } else {
-        Some(v)
-    }
+    if v.is_empty() { None } else { Some(v) }
 }
 
 fn sl_f32(map: &SlSettings, key: &str) -> Option<f32> {
@@ -244,7 +240,8 @@ mod tests {
         let out = translate_player_options(&sl(&[("SpeedModType", "C"), ("SpeedMod", "0")]), &base);
         assert_eq!(out.scroll_speed, base.scroll_speed);
 
-        let out2 = translate_player_options(&sl(&[("SpeedModType", "Q"), ("SpeedMod", "2")]), &base);
+        let out2 =
+            translate_player_options(&sl(&[("SpeedModType", "Q"), ("SpeedMod", "2")]), &base);
         assert_eq!(out2.scroll_speed, base.scroll_speed);
     }
 

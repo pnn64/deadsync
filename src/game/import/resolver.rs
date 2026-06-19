@@ -99,7 +99,10 @@ impl<'a> ChartResolver<'a> {
 }
 
 /// Chooses the matching Edit chart by its description, with sensible fallbacks.
-fn pick_edit<'a>(candidates: &[&'a deadsync_chart::ChartData], description: &str) -> Option<&'a str> {
+fn pick_edit<'a>(
+    candidates: &[&'a deadsync_chart::ChartData],
+    description: &str,
+) -> Option<&'a str> {
     if candidates.is_empty() {
         return None;
     }

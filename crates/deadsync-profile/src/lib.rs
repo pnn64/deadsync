@@ -510,7 +510,6 @@ pub fn folder_name_for_display(display_name: &str, fallback: &str, existing: &[S
     fallback.to_string()
 }
 
-
 #[inline(always)]
 pub fn cmp_profile_ids_case_insensitive(a: &str, b: &str) -> core::cmp::Ordering {
     a.chars()
@@ -643,7 +642,9 @@ pub fn read_userprofile_identity(content: &str) -> (Option<String>, Option<Strin
             if seen_section {
                 break; // left the first [userprofile]; nothing more to read
             }
-            in_section = t[1..t.len() - 1].trim().eq_ignore_ascii_case(PROFILE_SECTION);
+            in_section = t[1..t.len() - 1]
+                .trim()
+                .eq_ignore_ascii_case(PROFILE_SECTION);
             seen_section = in_section;
             continue;
         }
@@ -672,8 +673,6 @@ pub fn read_userprofile_identity(content: &str) -> (Option<String>, Option<Strin
 
     (guid, display)
 }
-
-
 
 pub fn find_profile_avatar_path(dir: &Path) -> Option<PathBuf> {
     let Ok(read_dir) = fs::read_dir(dir) else {
@@ -6224,7 +6223,10 @@ mod tests {
         for _ in 0..64 {
             let guid = generate_profile_guid();
             assert_eq!(guid.len(), 36, "guid `{guid}` should be 36 chars");
-            assert!(is_valid_profile_guid(&guid), "guid `{guid}` should be valid");
+            assert!(
+                is_valid_profile_guid(&guid),
+                "guid `{guid}` should be valid"
+            );
             assert!(is_local_profile_id(&guid), "guid should be a usable id");
             // Version nibble (char 14) is '4'; variant nibble (char 19) in 8..=b.
             let bytes = guid.as_bytes();
@@ -6241,10 +6243,18 @@ mod tests {
     fn invalid_profile_guids_are_rejected() {
         assert!(!is_valid_profile_guid(""));
         assert!(!is_valid_profile_guid("00000000"));
-        assert!(!is_valid_profile_guid("17c7b8a2-3b73-4e8a-9d7d-cfa7e783c00")); // short tail
-        assert!(!is_valid_profile_guid("17c7b8a2-3b73-4e8a-9d7d-cfa7e783c00bb")); // long tail
-        assert!(!is_valid_profile_guid("17c7b8a2_3b73_4e8a_9d7d_cfa7e783c00b")); // wrong sep
-        assert!(!is_valid_profile_guid("g7c7b8a2-3b73-4e8a-9d7d-cfa7e783c00b")); // non-hex
+        assert!(!is_valid_profile_guid(
+            "17c7b8a2-3b73-4e8a-9d7d-cfa7e783c00"
+        )); // short tail
+        assert!(!is_valid_profile_guid(
+            "17c7b8a2-3b73-4e8a-9d7d-cfa7e783c00bb"
+        )); // long tail
+        assert!(!is_valid_profile_guid(
+            "17c7b8a2_3b73_4e8a_9d7d_cfa7e783c00b"
+        )); // wrong sep
+        assert!(!is_valid_profile_guid(
+            "g7c7b8a2-3b73-4e8a-9d7d-cfa7e783c00b"
+        )); // non-hex
     }
 
     #[test]
@@ -6314,18 +6324,21 @@ mod tests {
         // and the GUID is normalized to lowercase.
         let src = "[UserProfile]\nGUID=17C7B8A2-3B73-4E8A-9D7D-CFA7E783C00B\nDisplayName=Alice\n";
         let (guid, name) = read_userprofile_identity(src);
-        assert_eq!(guid.as_deref(), Some("17c7b8a2-3b73-4e8a-9d7d-cfa7e783c00b"));
+        assert_eq!(
+            guid.as_deref(),
+            Some("17c7b8a2-3b73-4e8a-9d7d-cfa7e783c00b")
+        );
         assert_eq!(name.as_deref(), Some("Alice"));
 
         // Invalid GUID and empty display name are rejected.
-        let (guid, name) = read_userprofile_identity("[userprofile]\nGuid=not-a-guid\nDisplayName=\n");
+        let (guid, name) =
+            read_userprofile_identity("[userprofile]\nGuid=not-a-guid\nDisplayName=\n");
         assert_eq!(guid, None);
         assert_eq!(name, None);
 
         // Keys outside [userprofile] are ignored.
-        let (guid, _) = read_userprofile_identity(
-            "[Editable]\nGuid=17c7b8a2-3b73-4e8a-9d7d-cfa7e783c00b\n",
-        );
+        let (guid, _) =
+            read_userprofile_identity("[Editable]\nGuid=17c7b8a2-3b73-4e8a-9d7d-cfa7e783c00b\n");
         assert_eq!(guid, None);
     }
 

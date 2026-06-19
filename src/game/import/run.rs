@@ -132,7 +132,11 @@ fn song_label(dir: &str) -> &str {
         .strip_prefix("Songs/")
         .or_else(|| trimmed.strip_prefix("AdditionalSongs/"))
         .unwrap_or(trimmed);
-    if after_root.is_empty() { trimmed } else { after_root }
+    if after_root.is_empty() {
+        trimmed
+    } else {
+        after_root
+    }
 }
 
 #[cfg(test)]

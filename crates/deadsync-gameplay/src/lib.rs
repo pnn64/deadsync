@@ -1338,6 +1338,43 @@ impl GameplayDisplayClockState {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct GameplayBeatPhaseState {
+    is_in_freeze: bool,
+    is_in_delay: bool,
+}
+
+impl GameplayBeatPhaseState {
+    #[inline(always)]
+    pub const fn new(is_in_freeze: bool, is_in_delay: bool) -> Self {
+        Self {
+            is_in_freeze,
+            is_in_delay,
+        }
+    }
+
+    #[inline(always)]
+    pub const fn is_in_freeze(&self) -> bool {
+        self.is_in_freeze
+    }
+
+    #[inline(always)]
+    pub const fn is_in_delay(&self) -> bool {
+        self.is_in_delay
+    }
+
+    #[inline(always)]
+    pub const fn paused(&self) -> bool {
+        self.is_in_freeze || self.is_in_delay
+    }
+
+    #[inline(always)]
+    pub fn set(&mut self, is_in_freeze: bool, is_in_delay: bool) {
+        self.is_in_freeze = is_in_freeze;
+        self.is_in_delay = is_in_delay;
+    }
+}
+
 #[inline(always)]
 fn display_clock_step_event(
     kind: DisplayClockDiagEventKind,
@@ -3327,6 +3364,79 @@ impl Default for DisplayWindowCountsSources {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct GameplayWindowCountsState {
+    pub canonical: [WindowCounts; MAX_PLAYERS],
+    pub ten_ms_blue: [WindowCounts; MAX_PLAYERS],
+    pub display_blue: [WindowCounts; MAX_PLAYERS],
+}
+
+impl GameplayWindowCountsState {
+    #[inline(always)]
+    pub fn sources(&self, player: usize) -> DisplayWindowCountsSources {
+        DisplayWindowCountsSources {
+            canonical: self.canonical(player),
+            ten_ms_blue: self.ten_ms_blue(player),
+            display_blue: self.display_blue(player),
+        }
+    }
+
+    #[inline(always)]
+    pub fn canonical(&self, player: usize) -> WindowCounts {
+        self.canonical.get(player).copied().unwrap_or_default()
+    }
+
+    #[inline(always)]
+    pub fn ten_ms_blue(&self, player: usize) -> WindowCounts {
+        self.ten_ms_blue.get(player).copied().unwrap_or_default()
+    }
+
+    #[inline(always)]
+    pub fn display_blue(&self, player: usize) -> WindowCounts {
+        self.display_blue.get(player).copied().unwrap_or_default()
+    }
+
+    #[inline(always)]
+    pub fn record_judgment(
+        &mut self,
+        player: usize,
+        judgment: &Judgment,
+        display_blue_window_ms: f32,
+    ) {
+        if player >= MAX_PLAYERS {
+            return;
+        }
+        record_display_window_counts_for_judgment(
+            &mut self.canonical[player],
+            &mut self.ten_ms_blue[player],
+            &mut self.display_blue[player],
+            judgment,
+            display_blue_window_ms,
+        );
+    }
+
+    #[inline(always)]
+    pub fn set_player_for_benchmark(
+        &mut self,
+        player: usize,
+        canonical: WindowCounts,
+        ten_ms_blue: WindowCounts,
+        display_blue: WindowCounts,
+    ) {
+        if player >= MAX_PLAYERS {
+            return;
+        }
+        self.canonical[player] = canonical;
+        self.ten_ms_blue[player] = ten_ms_blue;
+        self.display_blue[player] = display_blue;
+    }
+
+    #[inline(always)]
+    pub fn reset(&mut self) {
+        *self = Self::default();
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum DisplayWindowCountsMode {
     Canonical,
@@ -3594,6 +3704,53 @@ pub fn player_course_display_stage(
 pub struct CourseDisplayTiming {
     pub elapsed_seconds: f32,
     pub total_seconds: f32,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct GameplayCourseDisplayState {
+    carry: Option<[CourseDisplayCarry; MAX_PLAYERS]>,
+    totals: Option<[CourseDisplayTotals; MAX_PLAYERS]>,
+    timing: Option<CourseDisplayTiming>,
+}
+
+impl GameplayCourseDisplayState {
+    #[inline(always)]
+    pub fn new(
+        carry: Option<[CourseDisplayCarry; MAX_PLAYERS]>,
+        totals: Option<[CourseDisplayTotals; MAX_PLAYERS]>,
+        timing: Option<CourseDisplayTiming>,
+    ) -> Self {
+        Self {
+            carry,
+            totals,
+            timing,
+        }
+    }
+
+    #[inline(always)]
+    pub fn is_course_stage(&self) -> bool {
+        self.totals.is_some()
+    }
+
+    #[inline(always)]
+    pub fn carry(&self) -> Option<&[CourseDisplayCarry; MAX_PLAYERS]> {
+        self.carry.as_ref()
+    }
+
+    #[inline(always)]
+    pub fn totals(&self) -> Option<&[CourseDisplayTotals; MAX_PLAYERS]> {
+        self.totals.as_ref()
+    }
+
+    #[inline(always)]
+    pub fn timing(&self) -> Option<CourseDisplayTiming> {
+        self.timing
+    }
+
+    #[inline(always)]
+    pub fn carry_for_player(&self, player_idx: usize) -> CourseDisplayCarry {
+        course_display_carry_for_player(self.carry(), player_idx)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -7495,6 +7652,86 @@ pub fn effective_player_global_offset_seconds(
             .unwrap_or(0.0)
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GameplayOffsetState {
+    global_offset_seconds: f32,
+    initial_global_offset_seconds: f32,
+    player_global_offset_shift_seconds: [f32; MAX_PLAYERS],
+    song_offset_seconds: f32,
+    initial_song_offset_seconds: f32,
+}
+
+impl GameplayOffsetState {
+    #[inline(always)]
+    pub const fn new(
+        global_offset_seconds: f32,
+        player_global_offset_shift_seconds: [f32; MAX_PLAYERS],
+        song_offset_seconds: f32,
+    ) -> Self {
+        Self {
+            global_offset_seconds,
+            initial_global_offset_seconds: global_offset_seconds,
+            player_global_offset_shift_seconds,
+            song_offset_seconds,
+            initial_song_offset_seconds: song_offset_seconds,
+        }
+    }
+
+    #[inline(always)]
+    pub fn global_offset_seconds(&self) -> f32 {
+        self.global_offset_seconds
+    }
+
+    #[inline(always)]
+    pub fn initial_global_offset_seconds(&self) -> f32 {
+        self.initial_global_offset_seconds
+    }
+
+    #[inline(always)]
+    pub fn song_offset_seconds(&self) -> f32 {
+        self.song_offset_seconds
+    }
+
+    #[inline(always)]
+    pub fn initial_song_offset_seconds(&self) -> f32 {
+        self.initial_song_offset_seconds
+    }
+
+    #[inline(always)]
+    pub fn player_global_offset_shift_seconds(&self, player_idx: usize) -> f32 {
+        self.player_global_offset_shift_seconds
+            .get(player_idx)
+            .copied()
+            .unwrap_or(0.0)
+    }
+
+    #[inline(always)]
+    pub fn effective_player_global_offset_seconds(&self, player_idx: usize) -> f32 {
+        effective_player_global_offset_seconds(
+            self.global_offset_seconds,
+            &self.player_global_offset_shift_seconds,
+            player_idx,
+        )
+    }
+
+    #[inline(always)]
+    pub fn set_global_offset_seconds(&mut self, seconds: f32) {
+        self.global_offset_seconds = seconds;
+    }
+
+    #[inline(always)]
+    pub fn set_song_offset_seconds(&mut self, seconds: f32) {
+        self.song_offset_seconds = seconds;
+    }
+
+    #[inline(always)]
+    pub fn set_player_global_offset_shift_seconds(&mut self, player_idx: usize, seconds: f32) {
+        if let Some(shift) = self.player_global_offset_shift_seconds.get_mut(player_idx) {
+            *shift = seconds;
+        }
+    }
+}
+
 impl Default for GameplayConfig {
     fn default() -> Self {
         Self {
@@ -7571,6 +7808,74 @@ impl Default for GameplayMiniIndicatorData {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct GameplayMiniIndicatorRuntimeState {
+    stream_segments: [Vec<StreamSegment>; MAX_PLAYERS],
+    total_stream_measures: [f32; MAX_PLAYERS],
+    target_score_percent: [f64; MAX_PLAYERS],
+    rival_score_percent: [f64; MAX_PLAYERS],
+}
+
+impl Default for GameplayMiniIndicatorRuntimeState {
+    fn default() -> Self {
+        Self {
+            stream_segments: std::array::from_fn(|_| Vec::new()),
+            total_stream_measures: [0.0; MAX_PLAYERS],
+            target_score_percent: [89.0; MAX_PLAYERS],
+            rival_score_percent: [0.0; MAX_PLAYERS],
+        }
+    }
+}
+
+impl GameplayMiniIndicatorRuntimeState {
+    pub fn new(
+        stream_segments: [Vec<StreamSegment>; MAX_PLAYERS],
+        total_stream_measures: [f32; MAX_PLAYERS],
+        target_score_percent: [f64; MAX_PLAYERS],
+        rival_score_percent: [f64; MAX_PLAYERS],
+    ) -> Self {
+        Self {
+            stream_segments,
+            total_stream_measures,
+            target_score_percent,
+            rival_score_percent,
+        }
+    }
+
+    #[inline(always)]
+    pub fn stream_segments(&self, player: usize) -> &[StreamSegment] {
+        self.stream_segments.get(player).map_or(&[], Vec::as_slice)
+    }
+
+    #[inline(always)]
+    pub fn total_stream_measures(&self, player: usize) -> f32 {
+        self.total_stream_measures
+            .get(player)
+            .copied()
+            .unwrap_or(0.0)
+    }
+
+    #[inline(always)]
+    pub fn target_score_percent(&self, player: usize) -> f64 {
+        self.target_score_percent
+            .get(player)
+            .copied()
+            .unwrap_or(89.0)
+    }
+
+    #[inline(always)]
+    pub fn rival_score_percent(&self, player: usize) -> f64 {
+        self.rival_score_percent.get(player).copied().unwrap_or(0.0)
+    }
+
+    #[inline(always)]
+    pub fn clear_stream_segments(&mut self) {
+        for segments in &mut self.stream_segments {
+            segments.clear();
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct LeadInTiming {
     pub min_seconds_to_step: f32,
@@ -7583,6 +7888,145 @@ impl Default for LeadInTiming {
             min_seconds_to_step: MIN_SECONDS_TO_STEP,
             min_seconds_to_music: MIN_SECONDS_TO_MUSIC,
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct GameplayAudioClockState {
+    lead_in_seconds: f32,
+    stream_position_seconds: f32,
+    output_delay_seconds: f32,
+}
+
+impl GameplayAudioClockState {
+    #[inline(always)]
+    pub const fn new(
+        lead_in_seconds: f32,
+        stream_position_seconds: f32,
+        output_delay_seconds: f32,
+    ) -> Self {
+        Self {
+            lead_in_seconds,
+            stream_position_seconds,
+            output_delay_seconds,
+        }
+    }
+
+    #[inline(always)]
+    pub fn lead_in_seconds(&self) -> f32 {
+        self.lead_in_seconds
+    }
+
+    #[inline(always)]
+    pub fn positive_lead_in_seconds(&self) -> f32 {
+        self.lead_in_seconds.max(0.0)
+    }
+
+    #[inline(always)]
+    pub fn stream_position_seconds(&self) -> f32 {
+        self.stream_position_seconds
+    }
+
+    #[inline(always)]
+    pub fn output_delay_seconds(&self) -> f32 {
+        self.output_delay_seconds
+    }
+
+    #[inline(always)]
+    pub fn set_lead_in_seconds(&mut self, seconds: f32) {
+        self.lead_in_seconds = seconds;
+    }
+
+    #[inline(always)]
+    pub fn set_stream_position_seconds(&mut self, seconds: f32) {
+        self.stream_position_seconds = seconds;
+    }
+
+    #[inline(always)]
+    pub fn set_output_delay_seconds(&mut self, seconds: f32) {
+        self.output_delay_seconds = seconds.max(0.0);
+    }
+
+    #[inline(always)]
+    pub fn set_audio_snapshot(&mut self, snapshot: GameplayAudioSnapshot) {
+        self.stream_position_seconds = snapshot.stream_clock.stream_seconds;
+        self.output_delay_seconds = snapshot.output_delay_seconds.max(0.0);
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GameplayMusicRateState {
+    rate: f32,
+}
+
+impl GameplayMusicRateState {
+    #[inline(always)]
+    pub fn new(rate: f32) -> Self {
+        Self {
+            rate: normalized_song_rate(rate),
+        }
+    }
+
+    #[inline(always)]
+    pub fn rate(&self) -> f32 {
+        self.rate
+    }
+
+    #[inline(always)]
+    pub fn set_rate(&mut self, rate: f32) -> bool {
+        let normalized = normalized_song_rate(rate);
+        if (normalized - self.rate).abs() <= f32::EPSILON {
+            return false;
+        }
+        self.rate = normalized;
+        true
+    }
+}
+
+impl Default for GameplayMusicRateState {
+    fn default() -> Self {
+        Self { rate: 1.0 }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct GameplaySongPositionState {
+    pub current_beat: f32,
+    pub current_music_time_ns: SongTimeNs,
+    pub current_beat_display: f32,
+    pub current_music_time_display: f32,
+}
+
+impl GameplaySongPositionState {
+    #[inline(always)]
+    pub const fn new(
+        current_beat: f32,
+        current_music_time_ns: SongTimeNs,
+        current_beat_display: f32,
+        current_music_time_display: f32,
+    ) -> Self {
+        Self {
+            current_beat,
+            current_music_time_ns,
+            current_beat_display,
+            current_music_time_display,
+        }
+    }
+
+    #[inline(always)]
+    pub fn set_music_position(&mut self, current_beat: f32, current_music_time_ns: SongTimeNs) {
+        self.current_beat = current_beat;
+        self.current_music_time_ns = current_music_time_ns;
+    }
+
+    #[inline(always)]
+    pub fn set_display_position(
+        &mut self,
+        current_beat_display: f32,
+        current_music_time_display: f32,
+    ) {
+        self.current_beat_display = current_beat_display;
+        self.current_music_time_display = current_music_time_display;
     }
 }
 
@@ -9520,6 +9964,138 @@ pub struct GameplayReceptorGlowTimers {
     pub lift_timer: f32,
     pub lift_start_alpha: f32,
     pub lift_start_zoom: f32,
+}
+
+#[derive(Clone, Debug)]
+pub struct GameplayReceptorFeedbackState {
+    pub glow_lift_timers: [f32; MAX_COLS],
+    pub glow_press_timers: [f32; MAX_COLS],
+    pub glow_lift_start_alpha: [f32; MAX_COLS],
+    pub glow_lift_start_zoom: [f32; MAX_COLS],
+    pub bop_timers: [f32; MAX_COLS],
+    pub bop_behaviors: [GameplayReceptorStepBehavior; MAX_COLS],
+}
+
+impl Default for GameplayReceptorFeedbackState {
+    fn default() -> Self {
+        Self {
+            glow_lift_timers: [0.0; MAX_COLS],
+            glow_press_timers: [0.0; MAX_COLS],
+            glow_lift_start_alpha: [0.0; MAX_COLS],
+            glow_lift_start_zoom: [1.0; MAX_COLS],
+            bop_timers: [0.0; MAX_COLS],
+            bop_behaviors: [GameplayReceptorStepBehavior::identity(); MAX_COLS],
+        }
+    }
+}
+
+impl GameplayReceptorFeedbackState {
+    #[inline(always)]
+    pub fn reset_for_autoplay(&mut self) {
+        self.glow_lift_timers.fill(0.0);
+        self.glow_press_timers.fill(0.0);
+        self.glow_lift_start_alpha.fill(0.0);
+        self.glow_lift_start_zoom.fill(1.0);
+    }
+
+    #[inline(always)]
+    pub fn reset_for_practice(&mut self) {
+        self.glow_lift_timers.fill(0.0);
+        self.glow_press_timers.fill(0.0);
+        self.glow_lift_start_alpha.fill(0.0);
+        self.glow_lift_start_zoom.fill(0.0);
+        self.bop_timers.fill(0.0);
+        self.bop_behaviors
+            .fill(GameplayReceptorStepBehavior::identity());
+    }
+
+    #[inline(always)]
+    pub fn set_glow_timers(&mut self, col: usize, timers: GameplayReceptorGlowTimers) {
+        if col >= MAX_COLS {
+            return;
+        }
+        self.glow_press_timers[col] = timers.press_timer;
+        self.glow_lift_timers[col] = timers.lift_timer;
+        self.glow_lift_start_alpha[col] = timers.lift_start_alpha;
+        self.glow_lift_start_zoom[col] = timers.lift_start_zoom;
+    }
+
+    #[inline(always)]
+    pub fn start_bop(&mut self, col: usize, behavior: GameplayReceptorStepBehavior) {
+        if col < MAX_COLS && (behavior.duration > f32::EPSILON || behavior.interrupts) {
+            self.bop_behaviors[col] = behavior;
+            self.bop_timers[col] = behavior.duration.max(0.0);
+        }
+    }
+
+    #[inline(always)]
+    pub fn clear_lift_glow(&mut self, col: usize) {
+        if let Some(timer) = self.glow_lift_timers.get_mut(col) {
+            *timer = 0.0;
+        }
+    }
+
+    #[inline(always)]
+    pub fn receptor_glow_state(&self, col: usize, lane_pressed: bool) -> GameplayReceptorGlowState {
+        if col >= MAX_COLS {
+            return GameplayReceptorGlowState {
+                lane_pressed,
+                ..GameplayReceptorGlowState::default()
+            };
+        }
+        GameplayReceptorGlowState {
+            press_timer: self.glow_press_timers[col],
+            lift_timer: self.glow_lift_timers[col],
+            lift_start_alpha: self.glow_lift_start_alpha[col],
+            lift_start_zoom: self.glow_lift_start_zoom[col],
+            lane_pressed,
+        }
+    }
+
+    #[inline(always)]
+    pub fn bop_zoom(&self, col: usize) -> f32 {
+        let Some(timer) = self.bop_timers.get(col).copied() else {
+            return 1.0;
+        };
+        if timer > 0.0 {
+            self.bop_behaviors[col].sample_zoom(timer)
+        } else {
+            1.0
+        }
+    }
+
+    #[inline(always)]
+    pub fn set_bop_timer_for_benchmark(&mut self, col: usize, timer: f32) {
+        if let Some(slot) = self.bop_timers.get_mut(col) {
+            *slot = timer;
+        }
+    }
+
+    pub fn tick(
+        &mut self,
+        noteskin_effects: &GameplayNoteskinEffects,
+        num_cols: usize,
+        num_players: usize,
+        cols_per_player: usize,
+        input_lane_counts: &[u16],
+        delta_time: f32,
+    ) {
+        tick_receptor_glow_columns(
+            noteskin_effects,
+            num_cols,
+            num_players,
+            cols_per_player,
+            input_lane_counts,
+            &mut self.glow_press_timers,
+            &mut self.glow_lift_timers,
+            &mut self.glow_lift_start_alpha,
+            &mut self.glow_lift_start_zoom,
+            delta_time,
+        );
+        for timer in &mut self.bop_timers {
+            tick_positive_timer(timer, delta_time);
+        }
+    }
 }
 
 #[inline(always)]
@@ -11951,6 +12527,53 @@ pub fn compute_end_times_ns(
             .saturating_add(max_step_distance_ns)
             .max(audio_end_time_ns),
     )
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct GameplayEndTimingState {
+    notes_end_time_ns: SongTimeNs,
+    music_end_time_ns: SongTimeNs,
+    audio_end_time_ns: SongTimeNs,
+}
+
+impl GameplayEndTimingState {
+    #[inline(always)]
+    pub const fn new(
+        notes_end_time_ns: SongTimeNs,
+        music_end_time_ns: SongTimeNs,
+        audio_end_time_ns: SongTimeNs,
+    ) -> Self {
+        Self {
+            notes_end_time_ns,
+            music_end_time_ns,
+            audio_end_time_ns,
+        }
+    }
+
+    #[inline(always)]
+    pub const fn notes_end_time_ns(&self) -> SongTimeNs {
+        self.notes_end_time_ns
+    }
+
+    #[inline(always)]
+    pub const fn music_end_time_ns(&self) -> SongTimeNs {
+        self.music_end_time_ns
+    }
+
+    #[inline(always)]
+    pub const fn audio_end_time_ns(&self) -> SongTimeNs {
+        self.audio_end_time_ns
+    }
+
+    #[inline(always)]
+    pub fn set_note_and_music_end_times(
+        &mut self,
+        notes_end_time_ns: SongTimeNs,
+        music_end_time_ns: SongTimeNs,
+    ) {
+        self.notes_end_time_ns = notes_end_time_ns;
+        self.music_end_time_ns = music_end_time_ns;
+    }
 }
 
 #[inline(always)]
@@ -15486,6 +16109,156 @@ impl GameplayVisibleTimingState {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GameplayNotefieldMotionState {
+    scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
+    scroll_reference_bpm: f32,
+    field_zoom: [f32; MAX_PLAYERS],
+    scroll_pixels_per_second: [f32; MAX_PLAYERS],
+    scroll_travel_time: [f32; MAX_PLAYERS],
+    draw_distance_before_targets: [f32; MAX_PLAYERS],
+    draw_distance_after_targets: [f32; MAX_PLAYERS],
+    reverse_scroll: [bool; MAX_PLAYERS],
+    column_scroll_dirs: [f32; MAX_COLS],
+}
+
+impl Default for GameplayNotefieldMotionState {
+    fn default() -> Self {
+        Self {
+            scroll_speed: [ScrollSpeedSetting::default(); MAX_PLAYERS],
+            scroll_reference_bpm: 0.0,
+            field_zoom: [1.0; MAX_PLAYERS],
+            scroll_pixels_per_second: [0.0; MAX_PLAYERS],
+            scroll_travel_time: [0.0; MAX_PLAYERS],
+            draw_distance_before_targets: [0.0; MAX_PLAYERS],
+            draw_distance_after_targets: [0.0; MAX_PLAYERS],
+            reverse_scroll: [false; MAX_PLAYERS],
+            column_scroll_dirs: [1.0; MAX_COLS],
+        }
+    }
+}
+
+impl GameplayNotefieldMotionState {
+    #[allow(clippy::too_many_arguments)]
+    #[inline(always)]
+    pub fn new(
+        scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
+        scroll_reference_bpm: f32,
+        field_zoom: [f32; MAX_PLAYERS],
+        scroll_pixels_per_second: [f32; MAX_PLAYERS],
+        scroll_travel_time: [f32; MAX_PLAYERS],
+        draw_distance_before_targets: [f32; MAX_PLAYERS],
+        draw_distance_after_targets: [f32; MAX_PLAYERS],
+        reverse_scroll: [bool; MAX_PLAYERS],
+        column_scroll_dirs: [f32; MAX_COLS],
+    ) -> Self {
+        Self {
+            scroll_speed,
+            scroll_reference_bpm,
+            field_zoom,
+            scroll_pixels_per_second,
+            scroll_travel_time,
+            draw_distance_before_targets,
+            draw_distance_after_targets,
+            reverse_scroll,
+            column_scroll_dirs,
+        }
+    }
+
+    #[inline(always)]
+    pub fn scroll_speed(&self, player: usize) -> ScrollSpeedSetting {
+        self.scroll_speed.get(player).copied().unwrap_or_default()
+    }
+
+    #[inline(always)]
+    pub fn scroll_reference_bpm(&self) -> f32 {
+        self.scroll_reference_bpm
+    }
+
+    #[inline(always)]
+    pub fn field_zoom(&self, player: usize) -> f32 {
+        self.field_zoom.get(player).copied().unwrap_or(1.0)
+    }
+
+    #[inline(always)]
+    pub fn scroll_pixels_per_second(&self, player: usize) -> f32 {
+        self.scroll_pixels_per_second
+            .get(player)
+            .copied()
+            .unwrap_or(0.0)
+    }
+
+    #[inline(always)]
+    pub fn scroll_travel_time(&self, player: usize) -> f32 {
+        self.scroll_travel_time.get(player).copied().unwrap_or(0.0)
+    }
+
+    #[inline(always)]
+    pub fn draw_distance_before_targets(&self, player: usize) -> f32 {
+        self.draw_distance_before_targets
+            .get(player)
+            .copied()
+            .unwrap_or(0.0)
+    }
+
+    #[inline(always)]
+    pub fn draw_distance_after_targets(&self, player: usize) -> f32 {
+        self.draw_distance_after_targets
+            .get(player)
+            .copied()
+            .unwrap_or(0.0)
+    }
+
+    #[inline(always)]
+    pub fn reverse_scroll(&self, player: usize) -> bool {
+        self.reverse_scroll.get(player).copied().unwrap_or(false)
+    }
+
+    #[inline(always)]
+    pub fn column_scroll_dir(&self, col: usize) -> f32 {
+        self.column_scroll_dirs.get(col).copied().unwrap_or(1.0)
+    }
+
+    #[inline(always)]
+    pub const fn column_scroll_dir_count(&self) -> usize {
+        MAX_COLS
+    }
+
+    #[inline(always)]
+    pub fn set_reverse_scroll(&mut self, player: usize, reverse: bool) {
+        if player < MAX_PLAYERS {
+            self.reverse_scroll[player] = reverse;
+        }
+    }
+
+    #[inline(always)]
+    pub fn set_column_scroll_dir(&mut self, col: usize, direction: f32) {
+        if col < MAX_COLS {
+            self.column_scroll_dirs[col] = direction;
+        }
+    }
+
+    #[inline(always)]
+    pub fn set_player_motion(
+        &mut self,
+        player: usize,
+        scroll_pixels_per_second: f32,
+        field_zoom: f32,
+        draw_distance_before_targets: f32,
+        draw_distance_after_targets: f32,
+        scroll_travel_time: f32,
+    ) {
+        if player >= MAX_PLAYERS {
+            return;
+        }
+        self.scroll_pixels_per_second[player] = scroll_pixels_per_second;
+        self.field_zoom[player] = field_zoom;
+        self.draw_distance_before_targets[player] = draw_distance_before_targets;
+        self.draw_distance_after_targets[player] = draw_distance_after_targets;
+        self.scroll_travel_time[player] = scroll_travel_time;
+    }
+}
+
 pub fn next_ready_replay_edge(
     replay_input: &[RecordedLaneEdge],
     replay_cursor: &mut usize,
@@ -15683,6 +16456,467 @@ pub struct NoteCountStat {
     pub notes_upper: usize,
 }
 
+#[derive(Clone, Debug)]
+pub struct GameplayNoteCountStatsState {
+    stats: [Vec<NoteCountStat>; MAX_PLAYERS],
+}
+
+impl Default for GameplayNoteCountStatsState {
+    fn default() -> Self {
+        Self {
+            stats: std::array::from_fn(|_| Vec::new()),
+        }
+    }
+}
+
+impl GameplayNoteCountStatsState {
+    pub fn new(stats: [Vec<NoteCountStat>; MAX_PLAYERS]) -> Self {
+        Self { stats }
+    }
+
+    #[inline(always)]
+    pub fn player_stats(&self, player: usize) -> &[NoteCountStat] {
+        self.stats.get(player).map_or(&[], Vec::as_slice)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GameplayNoteRangeState {
+    ranges: [(usize, usize); MAX_PLAYERS],
+}
+
+impl Default for GameplayNoteRangeState {
+    fn default() -> Self {
+        Self {
+            ranges: [(0, 0); MAX_PLAYERS],
+        }
+    }
+}
+
+impl GameplayNoteRangeState {
+    #[inline(always)]
+    pub const fn new(ranges: [(usize, usize); MAX_PLAYERS]) -> Self {
+        Self { ranges }
+    }
+
+    #[inline(always)]
+    pub const fn ranges(&self) -> &[(usize, usize); MAX_PLAYERS] {
+        &self.ranges
+    }
+
+    #[inline(always)]
+    pub fn range(&self, player: usize) -> (usize, usize) {
+        self.ranges.get(player).copied().unwrap_or((0, 0))
+    }
+
+    #[inline(always)]
+    pub fn set_range_for_benchmark(&mut self, player: usize, range: (usize, usize)) {
+        if let Some(slot) = self.ranges.get_mut(player) {
+            *slot = range;
+        }
+    }
+
+    #[inline(always)]
+    pub fn clear_for_benchmark(&mut self) {
+        self.ranges.fill((0, 0));
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct GameplayLaneIndexState {
+    pub note_indices: [Vec<usize>; MAX_COLS],
+    pub note_row_indices: [Vec<usize>; MAX_COLS],
+    pub hold_indices: [Vec<usize>; MAX_COLS],
+    pub tap_row_hold_roll_flags: Vec<u8>,
+}
+
+impl Default for GameplayLaneIndexState {
+    fn default() -> Self {
+        Self {
+            note_indices: std::array::from_fn(|_| Vec::new()),
+            note_row_indices: std::array::from_fn(|_| Vec::new()),
+            hold_indices: std::array::from_fn(|_| Vec::new()),
+            tap_row_hold_roll_flags: Vec::new(),
+        }
+    }
+}
+
+impl GameplayLaneIndexState {
+    pub fn new(
+        note_indices: [Vec<usize>; MAX_COLS],
+        note_row_indices: [Vec<usize>; MAX_COLS],
+        hold_indices: [Vec<usize>; MAX_COLS],
+        tap_row_hold_roll_flags: Vec<u8>,
+    ) -> Self {
+        Self {
+            note_indices,
+            note_row_indices,
+            hold_indices,
+            tap_row_hold_roll_flags,
+        }
+    }
+
+    #[inline(always)]
+    pub fn note_indices(&self, col: usize) -> &[usize] {
+        self.note_indices.get(col).map_or(&[], Vec::as_slice)
+    }
+
+    #[inline(always)]
+    pub fn note_row_indices(&self, col: usize) -> &[usize] {
+        self.note_row_indices.get(col).map_or(&[], Vec::as_slice)
+    }
+
+    #[inline(always)]
+    pub fn hold_indices(&self, col: usize) -> &[usize] {
+        self.hold_indices.get(col).map_or(&[], Vec::as_slice)
+    }
+
+    #[inline(always)]
+    pub fn tap_row_hold_roll_flags(&self, note_index: usize) -> u8 {
+        self.tap_row_hold_roll_flags
+            .get(note_index)
+            .copied()
+            .unwrap_or(0)
+    }
+
+    #[inline(always)]
+    pub fn clear_for_benchmark(&mut self) {
+        for indices in &mut self.note_indices {
+            indices.clear();
+        }
+        for indices in &mut self.note_row_indices {
+            indices.clear();
+        }
+        for indices in &mut self.hold_indices {
+            indices.clear();
+        }
+        self.tap_row_hold_roll_flags.clear();
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct GameplayRowIndexState {
+    pub row_entry_ranges: [(usize, usize); MAX_PLAYERS],
+    pub judged_row_cursor: [usize; MAX_PLAYERS],
+    pub row_map_cache: [Vec<u32>; MAX_PLAYERS],
+    pub note_row_entry_indices: Vec<u32>,
+}
+
+impl Default for GameplayRowIndexState {
+    fn default() -> Self {
+        Self {
+            row_entry_ranges: [(0, 0); MAX_PLAYERS],
+            judged_row_cursor: [0; MAX_PLAYERS],
+            row_map_cache: std::array::from_fn(|_| Vec::new()),
+            note_row_entry_indices: Vec::new(),
+        }
+    }
+}
+
+impl GameplayRowIndexState {
+    pub fn new(
+        row_entry_ranges: [(usize, usize); MAX_PLAYERS],
+        judged_row_cursor: [usize; MAX_PLAYERS],
+        row_map_cache: [Vec<u32>; MAX_PLAYERS],
+        note_row_entry_indices: Vec<u32>,
+    ) -> Self {
+        Self {
+            row_entry_ranges,
+            judged_row_cursor,
+            row_map_cache,
+            note_row_entry_indices,
+        }
+    }
+
+    #[inline(always)]
+    pub fn clear_for_benchmark(&mut self) {
+        self.row_entry_ranges.fill((0, 0));
+        self.judged_row_cursor.fill(0);
+        for row_map_cache in &mut self.row_map_cache {
+            row_map_cache.clear();
+        }
+        self.note_row_entry_indices.clear();
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct GameplayMineScanState {
+    pub next_tap_miss_cursor: [usize; MAX_PLAYERS],
+    pub next_mine_avoid_cursor: [usize; MAX_PLAYERS],
+    pub mine_note_ix: [Vec<usize>; MAX_PLAYERS],
+    pub mine_note_time_ns: [Vec<SongTimeNs>; MAX_PLAYERS],
+    pub next_mine_ix_cursor: [usize; MAX_PLAYERS],
+    pub pending_mine_hit_indices: Vec<usize>,
+}
+
+impl Default for GameplayMineScanState {
+    fn default() -> Self {
+        Self {
+            next_tap_miss_cursor: [0; MAX_PLAYERS],
+            next_mine_avoid_cursor: [0; MAX_PLAYERS],
+            mine_note_ix: std::array::from_fn(|_| Vec::new()),
+            mine_note_time_ns: std::array::from_fn(|_| Vec::new()),
+            next_mine_ix_cursor: [0; MAX_PLAYERS],
+            pending_mine_hit_indices: Vec::new(),
+        }
+    }
+}
+
+impl GameplayMineScanState {
+    pub fn new(
+        note_range_start: [usize; MAX_PLAYERS],
+        mine_note_ix: [Vec<usize>; MAX_PLAYERS],
+        mine_note_time_ns: [Vec<SongTimeNs>; MAX_PLAYERS],
+    ) -> Self {
+        Self {
+            next_tap_miss_cursor: note_range_start,
+            next_mine_avoid_cursor: note_range_start,
+            mine_note_ix,
+            mine_note_time_ns,
+            next_mine_ix_cursor: [0; MAX_PLAYERS],
+            pending_mine_hit_indices: Vec::new(),
+        }
+    }
+
+    #[inline(always)]
+    pub fn set_next_tap_miss_cursor(&mut self, player: usize, cursor: usize) {
+        if let Some(slot) = self.next_tap_miss_cursor.get_mut(player) {
+            *slot = cursor;
+        }
+    }
+
+    #[inline(always)]
+    pub fn clear_for_benchmark(&mut self) {
+        self.next_tap_miss_cursor.fill(0);
+        self.next_mine_avoid_cursor.fill(0);
+        self.next_mine_ix_cursor.fill(0);
+        for mine_ix in &mut self.mine_note_ix {
+            mine_ix.clear();
+        }
+        for mine_time_ns in &mut self.mine_note_time_ns {
+            mine_time_ns.clear();
+        }
+        self.pending_mine_hit_indices.clear();
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct GameplayHoldRuntimeState {
+    pub decaying_hold_indices: Vec<usize>,
+    pub hold_decay_active: Vec<bool>,
+    pub tap_miss_held_window: Vec<bool>,
+    pub pending_missed_hold_resolution: Vec<bool>,
+    pub pending_missed_hold_indices: Vec<usize>,
+}
+
+impl GameplayHoldRuntimeState {
+    pub fn new(notes_len: usize, decaying_hold_capacity: usize) -> Self {
+        Self {
+            decaying_hold_indices: Vec::with_capacity(decaying_hold_capacity),
+            hold_decay_active: vec![false; notes_len],
+            tap_miss_held_window: vec![false; notes_len],
+            pending_missed_hold_resolution: vec![false; notes_len],
+            pending_missed_hold_indices: Vec::new(),
+        }
+    }
+
+    #[inline(always)]
+    pub fn reset_live_state(&mut self) {
+        self.decaying_hold_indices.clear();
+        self.hold_decay_active.fill(false);
+        self.tap_miss_held_window.fill(false);
+        self.pending_missed_hold_resolution.fill(false);
+        self.pending_missed_hold_indices.clear();
+    }
+
+    #[inline(always)]
+    pub fn clear_for_benchmark(&mut self) {
+        self.decaying_hold_indices.clear();
+        self.hold_decay_active.clear();
+        self.tap_miss_held_window.clear();
+        self.pending_missed_hold_resolution.clear();
+        self.pending_missed_hold_indices.clear();
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct GameplayCueRuntimeState {
+    measure_counter_segments: [Vec<StreamSegment>; MAX_PLAYERS],
+    column_cues: [Vec<ColumnCue>; MAX_PLAYERS],
+    crossover_cues: [Vec<ColumnCue>; MAX_PLAYERS],
+}
+
+impl Default for GameplayCueRuntimeState {
+    fn default() -> Self {
+        Self {
+            measure_counter_segments: std::array::from_fn(|_| Vec::new()),
+            column_cues: std::array::from_fn(|_| Vec::new()),
+            crossover_cues: std::array::from_fn(|_| Vec::new()),
+        }
+    }
+}
+
+impl GameplayCueRuntimeState {
+    pub fn new(
+        measure_counter_segments: [Vec<StreamSegment>; MAX_PLAYERS],
+        column_cues: [Vec<ColumnCue>; MAX_PLAYERS],
+        crossover_cues: [Vec<ColumnCue>; MAX_PLAYERS],
+    ) -> Self {
+        Self {
+            measure_counter_segments,
+            column_cues,
+            crossover_cues,
+        }
+    }
+
+    #[inline(always)]
+    pub fn measure_counter_segments(&self, player: usize) -> &[StreamSegment] {
+        self.measure_counter_segments
+            .get(player)
+            .map_or(&[], Vec::as_slice)
+    }
+
+    #[inline(always)]
+    pub fn column_cues(&self, player: usize) -> &[ColumnCue] {
+        self.column_cues.get(player).map_or(&[], Vec::as_slice)
+    }
+
+    #[inline(always)]
+    pub fn crossover_cues(&self, player: usize) -> &[ColumnCue] {
+        self.crossover_cues.get(player).map_or(&[], Vec::as_slice)
+    }
+
+    #[inline(always)]
+    pub fn set_column_cues_for_benchmark(&mut self, player: usize, cues: Vec<ColumnCue>) {
+        if let Some(slot) = self.column_cues.get_mut(player) {
+            *slot = cues;
+        }
+    }
+
+    #[inline(always)]
+    pub fn clear_for_benchmark(&mut self) {
+        for segments in &mut self.measure_counter_segments {
+            segments.clear();
+        }
+        for cues in &mut self.column_cues {
+            cues.clear();
+        }
+        for cues in &mut self.crossover_cues {
+            cues.clear();
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct GameplayHoldFeedbackState {
+    pub hold_judgments: [Option<HoldJudgmentRenderInfo>; MAX_COLS],
+    pub held_miss_judgments: [Option<HeldMissRenderInfo>; MAX_COLS],
+}
+
+impl GameplayHoldFeedbackState {
+    #[inline(always)]
+    pub fn hold_judgment(&self, col: usize) -> Option<HoldJudgmentRenderInfo> {
+        self.hold_judgments.get(col).copied().flatten()
+    }
+
+    #[inline(always)]
+    pub fn hold_judgments(
+        &self,
+        col_start: usize,
+        num_cols: usize,
+    ) -> &[Option<HoldJudgmentRenderInfo>] {
+        let end = col_start.saturating_add(num_cols).min(MAX_COLS);
+        self.hold_judgments.get(col_start..end).unwrap_or(&[])
+    }
+
+    #[inline(always)]
+    pub fn held_miss_judgments(
+        &self,
+        col_start: usize,
+        num_cols: usize,
+    ) -> &[Option<HeldMissRenderInfo>] {
+        let end = col_start.saturating_add(num_cols).min(MAX_COLS);
+        self.held_miss_judgments.get(col_start..end).unwrap_or(&[])
+    }
+
+    #[inline(always)]
+    pub fn clear(&mut self) {
+        self.hold_judgments.fill(None);
+        self.held_miss_judgments.fill(None);
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct GameplayVisualFeedbackState {
+    pub tap_explosions: [Option<ActiveTapExplosion>; MAX_COLS],
+    pub column_flashes: [Option<ActiveColumnFlash>; MAX_COLS],
+    pub last_tap_judgments: [Option<ColumnTapJudgment>; MAX_COLS],
+    pub mine_explosions: [Option<ActiveMineExplosion>; MAX_COLS],
+}
+
+impl GameplayVisualFeedbackState {
+    #[inline(always)]
+    pub fn tap_explosions(
+        &self,
+        col_start: usize,
+        num_cols: usize,
+    ) -> &[Option<ActiveTapExplosion>] {
+        let end = col_start.saturating_add(num_cols).min(MAX_COLS);
+        self.tap_explosions.get(col_start..end).unwrap_or(&[])
+    }
+
+    #[inline(always)]
+    pub fn column_flashes(
+        &self,
+        col_start: usize,
+        num_cols: usize,
+    ) -> &[Option<ActiveColumnFlash>] {
+        let end = col_start.saturating_add(num_cols).min(MAX_COLS);
+        self.column_flashes.get(col_start..end).unwrap_or(&[])
+    }
+
+    #[inline(always)]
+    pub fn mine_explosions(
+        &self,
+        col_start: usize,
+        num_cols: usize,
+    ) -> &[Option<ActiveMineExplosion>] {
+        let end = col_start.saturating_add(num_cols).min(MAX_COLS);
+        self.mine_explosions.get(col_start..end).unwrap_or(&[])
+    }
+
+    #[inline(always)]
+    pub fn last_tap_judgment(&self, col: usize) -> Option<ColumnTapJudgment> {
+        self.last_tap_judgments.get(col).copied().flatten()
+    }
+
+    #[inline(always)]
+    pub fn mine_started_at_screen_s(&self, col: usize) -> Option<f32> {
+        self.mine_explosions
+            .get(col)
+            .and_then(Option::as_ref)
+            .map(|mine| mine.started_at_screen_s)
+    }
+
+    #[inline(always)]
+    pub fn set_tap_explosion_for_benchmark(
+        &mut self,
+        col: usize,
+        explosion: Option<ActiveTapExplosion>,
+    ) {
+        if let Some(slot) = self.tap_explosions.get_mut(col) {
+            *slot = explosion;
+        }
+    }
+
+    #[inline(always)]
+    pub fn clear(&mut self) {
+        self.tap_explosions.fill(None);
+        self.column_flashes.fill(None);
+        self.mine_explosions.fill(None);
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ExitTransitionKind {
     Out,
@@ -15718,7 +16952,25 @@ pub struct GameplayExitInputState {
     pub ctrl_held: bool,
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct GameplayExitPromptState {
+    pub hold_to_exit_key: Option<HoldToExitKey>,
+    pub hold_to_exit_start: Option<Instant>,
+    pub hold_to_exit_aborted_at: Option<Instant>,
+    pub exit_transition: Option<ExitTransition>,
+}
+
 impl GameplayExitInputState {
+    #[inline(always)]
+    pub fn prompt_state(&self) -> GameplayExitPromptState {
+        GameplayExitPromptState {
+            hold_to_exit_key: self.hold_to_exit_key,
+            hold_to_exit_start: self.hold_to_exit_start,
+            hold_to_exit_aborted_at: self.hold_to_exit_aborted_at,
+            exit_transition: self.exit_transition,
+        }
+    }
+
     #[inline(always)]
     pub fn arm_hold(&mut self, key: HoldToExitKey, at: Instant) {
         self.hold_to_exit_key = Some(key);
@@ -21013,6 +22265,28 @@ mod tests {
     }
 
     #[test]
+    fn beat_phase_state_tracks_freeze_delay_and_pause() {
+        let mut state = GameplayBeatPhaseState::default();
+
+        assert!(!state.is_in_freeze());
+        assert!(!state.is_in_delay());
+        assert!(!state.paused());
+
+        state.set(true, false);
+        assert!(state.is_in_freeze());
+        assert!(!state.is_in_delay());
+        assert!(state.paused());
+
+        state.set(false, true);
+        assert!(!state.is_in_freeze());
+        assert!(state.is_in_delay());
+        assert!(state.paused());
+
+        state.set(false, false);
+        assert!(!state.paused());
+    }
+
+    #[test]
     fn display_clock_diag_ring_collects_recent_events() {
         let step = DisplayClockStepEvent {
             kind: DisplayClockDiagEventKind::TargetJump,
@@ -21553,6 +22827,31 @@ mod tests {
             effective_player_global_offset_seconds(-0.008, &shifts, 9),
             -0.008,
         );
+    }
+
+    #[test]
+    fn offset_state_tracks_initial_current_and_player_shift() {
+        let mut state = GameplayOffsetState::new(-0.008, [0.010, -0.020], 0.125);
+
+        assert_near(state.initial_global_offset_seconds(), -0.008);
+        assert_near(state.global_offset_seconds(), -0.008);
+        assert_near(state.initial_song_offset_seconds(), 0.125);
+        assert_near(state.song_offset_seconds(), 0.125);
+        assert_near(state.effective_player_global_offset_seconds(0), 0.002);
+        assert_near(state.effective_player_global_offset_seconds(1), -0.028);
+        assert_near(state.effective_player_global_offset_seconds(9), -0.008);
+
+        state.set_global_offset_seconds(0.015);
+        state.set_song_offset_seconds(-0.025);
+        state.set_player_global_offset_shift_seconds(1, 0.030);
+        state.set_player_global_offset_shift_seconds(9, 1.0);
+
+        assert_near(state.initial_global_offset_seconds(), -0.008);
+        assert_near(state.global_offset_seconds(), 0.015);
+        assert_near(state.initial_song_offset_seconds(), 0.125);
+        assert_near(state.song_offset_seconds(), -0.025);
+        assert_near(state.effective_player_global_offset_seconds(1), 0.045);
+        assert_near(state.effective_player_global_offset_seconds(9), 0.015);
     }
 
     #[test]
@@ -23649,6 +24948,60 @@ mod tests {
     }
 
     #[test]
+    fn receptor_feedback_state_resets_ticks_and_samples_bop() {
+        let mut state = GameplayReceptorFeedbackState::default();
+        assert_near(state.glow_lift_start_zoom[0], 1.0);
+
+        state.set_glow_timers(
+            0,
+            GameplayReceptorGlowTimers {
+                press_timer: 0.4,
+                lift_timer: 0.5,
+                lift_start_alpha: 0.25,
+                lift_start_zoom: 1.25,
+            },
+        );
+        state.start_bop(
+            0,
+            GameplayReceptorStepBehavior {
+                duration: 0.5,
+                zoom_start: 1.0,
+                zoom_end: 1.5,
+                tween: GameplayTween::Linear,
+                interrupts: true,
+            },
+        );
+        assert_near(state.bop_zoom(0), 1.0);
+
+        let mut effects = GameplayNoteskinEffects::default();
+        effects.set_receptor_glow_behavior(
+            0,
+            GameplayReceptorGlowBehavior {
+                press_duration: 1.0,
+                ..GameplayReceptorGlowBehavior::default()
+            },
+        );
+        state.tick(&effects, 1, 1, 4, &[1], 0.2);
+
+        assert_near(state.glow_press_timers[0], 0.2);
+        assert_near(state.glow_lift_timers[0], 0.0);
+        assert_near(state.bop_timers[0], 0.3);
+        assert!(state.bop_zoom(0) > 1.0);
+
+        state.clear_lift_glow(0);
+        assert_near(state.glow_lift_timers[0], 0.0);
+
+        state.reset_for_practice();
+        assert_near(state.glow_lift_start_zoom[0], 0.0);
+        assert_near(state.bop_timers[0], 0.0);
+        assert_near(state.bop_behaviors[0].duration, 0.0);
+
+        state.glow_lift_start_zoom[0] = 0.0;
+        state.reset_for_autoplay();
+        assert_near(state.glow_lift_start_zoom[0], 1.0);
+    }
+
+    #[test]
     fn autoplay_random_offset_w1_uses_full_window_without_fa_plus() {
         let mut rng = TurnRng::new(1);
         let mut profile = TimingProfile::default_itg_with_fa_plus();
@@ -24818,6 +26171,131 @@ mod tests {
     }
 
     #[test]
+    fn course_display_state_returns_carry_totals_and_timing() {
+        let carry = [
+            CourseDisplayCarry {
+                life: 0.25,
+                judgment_counts: [7, 0, 0, 0, 0, 0],
+                ..CourseDisplayCarry::default()
+            },
+            CourseDisplayCarry {
+                life: 0.75,
+                judgment_counts: [11, 0, 0, 0, 0, 0],
+                ..CourseDisplayCarry::default()
+            },
+        ];
+        let totals = [
+            CourseDisplayTotals {
+                possible_grade_points: 100,
+                total_steps: 25,
+                ..CourseDisplayTotals::default()
+            },
+            CourseDisplayTotals {
+                possible_grade_points: 200,
+                total_steps: 50,
+                ..CourseDisplayTotals::default()
+            },
+        ];
+        let timing = CourseDisplayTiming {
+            elapsed_seconds: 12.5,
+            total_seconds: 90.0,
+        };
+
+        let empty = GameplayCourseDisplayState::default();
+        assert!(!empty.is_course_stage());
+        assert!(empty.totals().is_none());
+        assert!(empty.timing().is_none());
+        assert_eq!(empty.carry_for_player(0).life, 0.0);
+
+        let state = GameplayCourseDisplayState::new(Some(carry), Some(totals), Some(timing));
+
+        assert!(state.is_course_stage());
+        assert_eq!(state.carry_for_player(1).judgment_counts[0], 11);
+        assert_eq!(state.carry_for_player(MAX_PLAYERS).life, 0.0);
+        assert_eq!(state.totals().unwrap()[1].possible_grade_points, 200);
+        assert_eq!(state.totals().unwrap()[1].total_steps, 50);
+        assert_near(state.timing().unwrap().elapsed_seconds, 12.5);
+        assert_near(state.timing().unwrap().total_seconds, 90.0);
+    }
+
+    #[test]
+    fn note_range_state_returns_bounds_and_clears_for_benchmark() {
+        let mut ranges = [(0usize, 0usize); MAX_PLAYERS];
+        ranges[0] = (2, 5);
+        ranges[1] = (8, 13);
+        let mut state = GameplayNoteRangeState::new(ranges);
+
+        assert_eq!(state.range(0), (2, 5));
+        assert_eq!(state.range(1), (8, 13));
+        assert_eq!(state.range(MAX_PLAYERS), (0, 0));
+        assert_eq!(state.ranges(), &ranges);
+
+        state.clear_for_benchmark();
+        assert_eq!(state.ranges(), &[(0, 0); MAX_PLAYERS]);
+    }
+
+    #[test]
+    fn notefield_motion_state_sets_samples_and_bounds() {
+        let mut state = GameplayNotefieldMotionState::default();
+
+        assert_near(state.field_zoom(0), 1.0);
+        assert_near(state.column_scroll_dir(0), 1.0);
+        assert_eq!(state.scroll_speed(0), ScrollSpeedSetting::default());
+        assert_near(state.scroll_reference_bpm(), 0.0);
+        assert_near(state.field_zoom(MAX_PLAYERS), 1.0);
+        assert_near(state.column_scroll_dir(MAX_COLS), 1.0);
+        assert!(!state.reverse_scroll(0));
+        assert_eq!(state.column_scroll_dir_count(), MAX_COLS);
+
+        state.set_reverse_scroll(1, true);
+        state.set_column_scroll_dir(2, -1.0);
+        state.set_player_motion(1, 420.0, 0.75, 1000.0, 240.0, 2.5);
+        state.set_reverse_scroll(MAX_PLAYERS, true);
+        state.set_column_scroll_dir(MAX_COLS, -1.0);
+
+        assert!(state.reverse_scroll(1));
+        assert_near(state.column_scroll_dir(2), -1.0);
+        assert_near(state.scroll_pixels_per_second(1), 420.0);
+        assert_near(state.field_zoom(1), 0.75);
+        assert_near(state.draw_distance_before_targets(1), 1000.0);
+        assert_near(state.draw_distance_after_targets(1), 240.0);
+        assert_near(state.scroll_travel_time(1), 2.5);
+        assert!(!state.reverse_scroll(MAX_PLAYERS));
+        assert_near(state.column_scroll_dir(MAX_COLS), 1.0);
+
+        let configured = GameplayNotefieldMotionState::new(
+            [
+                ScrollSpeedSetting::CMod(620.0),
+                ScrollSpeedSetting::XMod(2.0),
+            ],
+            175.0,
+            [0.5, 0.75],
+            [420.0, 840.0],
+            [1.25, 2.5],
+            [900.0, 1000.0],
+            [120.0, 240.0],
+            [false, true],
+            {
+                let mut dirs = [1.0; MAX_COLS];
+                dirs[2] = -1.0;
+                dirs
+            },
+        );
+
+        assert_eq!(configured.scroll_speed(0), ScrollSpeedSetting::CMod(620.0));
+        assert_near(configured.scroll_reference_bpm(), 175.0);
+        assert!(configured.reverse_scroll(1));
+        assert_near(configured.column_scroll_dir(2), -1.0);
+        assert_near(configured.scroll_pixels_per_second(1), 840.0);
+        assert_near(configured.field_zoom(1), 0.75);
+        assert_near(configured.draw_distance_before_targets(1), 1000.0);
+        assert_near(configured.draw_distance_after_targets(1), 240.0);
+        assert_near(configured.scroll_travel_time(1), 2.5);
+        assert!(!configured.reverse_scroll(MAX_PLAYERS));
+        assert_near(configured.column_scroll_dir(MAX_COLS), 1.0);
+    }
+
+    #[test]
     fn course_life_carry_restores_finite_lifemeter_only() {
         assert_near(
             course_life_after_carry(
@@ -25080,6 +26558,52 @@ mod tests {
     }
 
     #[test]
+    fn window_counts_state_records_sets_and_resets() {
+        let judgment = Judgment {
+            grade: JudgeGrade::Fantastic,
+            time_error_ms: 16.0,
+            time_error_music_ns: 16_000_000,
+            window: Some(TimingWindow::W1),
+            miss_because_held: false,
+        };
+        let mut state = GameplayWindowCountsState::default();
+
+        state.record_judgment(0, &judgment, 20.0);
+
+        assert_eq!(state.canonical(0).w1, 1);
+        assert_eq!(state.ten_ms_blue(0).w1, 1);
+        assert_eq!(state.display_blue(0).w0, 1);
+        assert_eq!(state.sources(MAX_PLAYERS).canonical.w1, 0);
+
+        state.set_player_for_benchmark(
+            1,
+            WindowCounts {
+                w1: 3,
+                ..WindowCounts::default()
+            },
+            WindowCounts {
+                w0: 4,
+                ..WindowCounts::default()
+            },
+            WindowCounts {
+                w2: 5,
+                ..WindowCounts::default()
+            },
+        );
+        let sources = state.sources(1);
+        assert_eq!(sources.canonical.w1, 3);
+        assert_eq!(sources.ten_ms_blue.w0, 4);
+        assert_eq!(sources.display_blue.w2, 5);
+
+        state.reset();
+
+        assert_eq!(state.canonical(0).w1, 0);
+        assert_eq!(state.canonical(1).w1, 0);
+        assert_eq!(state.ten_ms_blue(1).w0, 0);
+        assert_eq!(state.display_blue(1).w2, 0);
+    }
+
+    #[test]
     fn record_combo_window_count_uses_canonical_blue_window() {
         let judgment = Judgment {
             grade: JudgeGrade::Fantastic,
@@ -25230,6 +26754,37 @@ mod tests {
                 ..GameplayMiniIndicatorOptions::default()
             }
         ));
+    }
+
+    #[test]
+    fn mini_indicator_runtime_state_returns_values_and_clears_segments() {
+        let mut segments: [Vec<StreamSegment>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
+        segments[1].push(StreamSegment {
+            start: 2,
+            end: 5,
+            is_break: false,
+        });
+        let mut state = GameplayMiniIndicatorRuntimeState::new(
+            segments,
+            [0.0, 3.5],
+            [89.0, 94.25],
+            [0.0, 92.5],
+        );
+
+        assert_eq!(state.stream_segments(1).len(), 1);
+        assert_eq!(state.total_stream_measures(1), 3.5);
+        assert_eq!(state.target_score_percent(1), 94.25);
+        assert_eq!(state.rival_score_percent(1), 92.5);
+
+        assert!(state.stream_segments(MAX_PLAYERS).is_empty());
+        assert_eq!(state.total_stream_measures(MAX_PLAYERS), 0.0);
+        assert_eq!(state.target_score_percent(MAX_PLAYERS), 89.0);
+        assert_eq!(state.rival_score_percent(MAX_PLAYERS), 0.0);
+
+        state.clear_stream_segments();
+
+        assert!(state.stream_segments(1).is_empty());
+        assert_eq!(state.total_stream_measures(1), 3.5);
     }
 
     #[test]
@@ -27790,6 +29345,90 @@ mod tests {
     }
 
     #[test]
+    fn audio_clock_state_tracks_lead_in_stream_and_output_delay() {
+        let mut state = GameplayAudioClockState::new(-1.25, 2.0, -0.1);
+
+        assert_eq!(state.lead_in_seconds(), -1.25);
+        assert_eq!(state.positive_lead_in_seconds(), 0.0);
+        assert_eq!(state.stream_position_seconds(), 2.0);
+        assert_eq!(state.output_delay_seconds(), -0.1);
+
+        state.set_lead_in_seconds(1.5);
+        state.set_stream_position_seconds(3.25);
+        state.set_output_delay_seconds(-0.5);
+        assert_eq!(state.positive_lead_in_seconds(), 1.5);
+        assert_eq!(state.stream_position_seconds(), 3.25);
+        assert_eq!(state.output_delay_seconds(), 0.0);
+
+        state.set_audio_snapshot(GameplayAudioSnapshot {
+            stream_clock: GameplayStreamClockSnapshot {
+                stream_seconds: 7.5,
+                ..GameplayStreamClockSnapshot::default()
+            },
+            output_delay_seconds: 0.125,
+            ..GameplayAudioSnapshot::default()
+        });
+        assert_eq!(state.stream_position_seconds(), 7.5);
+        assert_eq!(state.output_delay_seconds(), 0.125);
+        assert_eq!(state.lead_in_seconds(), 1.5);
+    }
+
+    #[test]
+    fn music_rate_state_normalizes_and_reports_changes() {
+        let mut state = GameplayMusicRateState::new(f32::NAN);
+        assert_eq!(state.rate(), 1.0);
+        assert!(!state.set_rate(1.0));
+
+        assert!(state.set_rate(1.5));
+        assert_eq!(state.rate(), 1.5);
+        assert!(!state.set_rate(1.5));
+
+        assert!(state.set_rate(-2.0));
+        assert_eq!(state.rate(), 1.0);
+    }
+
+    #[test]
+    fn song_position_state_tracks_music_and_display_positions() {
+        let mut state = GameplaySongPositionState::new(12.0, 1_250_000_000, 11.5, 1.2);
+
+        assert_eq!(state.current_beat, 12.0);
+        assert_eq!(state.current_music_time_ns, 1_250_000_000);
+        assert_eq!(state.current_beat_display, 11.5);
+        assert_eq!(state.current_music_time_display, 1.2);
+
+        state.set_music_position(13.0, 1_300_000_000);
+        state.set_display_position(12.75, 1.275);
+
+        assert_eq!(state.current_beat, 13.0);
+        assert_eq!(state.current_music_time_ns, 1_300_000_000);
+        assert_eq!(state.current_beat_display, 12.75);
+        assert_near(state.current_music_time_display, 1.275);
+    }
+
+    #[test]
+    fn exit_input_prompt_state_snapshots_hold_and_transition() {
+        let mut state = GameplayExitInputState::default();
+        let hold_at = Instant::now();
+        state.arm_hold(HoldToExitKey::Start, hold_at);
+
+        let prompt = state.prompt_state();
+        assert_eq!(prompt.hold_to_exit_key, Some(HoldToExitKey::Start));
+        assert_eq!(prompt.hold_to_exit_start, Some(hold_at));
+        assert!(prompt.hold_to_exit_aborted_at.is_none());
+        assert!(prompt.exit_transition.is_none());
+
+        let exit_at = Instant::now();
+        assert!(state.begin_exit(ExitTransitionKind::Cancel, exit_at));
+        let prompt = state.prompt_state();
+        assert!(prompt.hold_to_exit_key.is_none());
+        assert!(prompt.hold_to_exit_start.is_none());
+        assert_eq!(
+            prompt.exit_transition.map(|transition| transition.kind),
+            Some(ExitTransitionKind::Cancel)
+        );
+    }
+
+    #[test]
     fn current_song_clock_snapshot_falls_back_for_invalid_mapped_slope() {
         let snapshot = current_song_clock_snapshot(
             GameplayAudioSnapshot {
@@ -28165,6 +29804,20 @@ mod tests {
     }
 
     #[test]
+    fn end_timing_state_tracks_note_music_and_audio_end() {
+        let mut state = GameplayEndTimingState::new(10, 20, 30);
+
+        assert_eq!(state.notes_end_time_ns(), 10);
+        assert_eq!(state.music_end_time_ns(), 20);
+        assert_eq!(state.audio_end_time_ns(), 30);
+
+        state.set_note_and_music_end_times(40, 50);
+        assert_eq!(state.notes_end_time_ns(), 40);
+        assert_eq!(state.music_end_time_ns(), 50);
+        assert_eq!(state.audio_end_time_ns(), 30);
+    }
+
+    #[test]
     fn end_times_wait_for_audio_tail() {
         let notes = [test_note_at(NoteType::Tap, None, false, 96, 2.0)];
         let note_times = [song_time_ns_from_seconds(2.0)];
@@ -28367,6 +30020,276 @@ mod tests {
         assert_eq!(stats[1].beat, 2.0);
         assert_eq!(stats[1].notes_lower, 2);
         assert_eq!(stats[1].notes_upper, 3);
+    }
+
+    #[test]
+    fn note_count_stats_state_returns_player_slices() {
+        let mut stats: [Vec<NoteCountStat>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
+        stats[1].push(NoteCountStat {
+            beat: 4.0,
+            notes_lower: 7,
+            notes_upper: 9,
+        });
+        let state = GameplayNoteCountStatsState::new(stats);
+
+        assert!(state.player_stats(0).is_empty());
+        assert_eq!(state.player_stats(1)[0].beat, 4.0);
+        assert_eq!(state.player_stats(1)[0].notes_lower, 7);
+        assert!(state.player_stats(MAX_PLAYERS).is_empty());
+    }
+
+    #[test]
+    fn lane_index_state_returns_slices_flags_and_clears() {
+        let mut note_indices: [Vec<usize>; MAX_COLS] = std::array::from_fn(|_| Vec::new());
+        let mut note_row_indices: [Vec<usize>; MAX_COLS] = std::array::from_fn(|_| Vec::new());
+        let mut hold_indices: [Vec<usize>; MAX_COLS] = std::array::from_fn(|_| Vec::new());
+        note_indices[1].push(7);
+        note_row_indices[1].push(8);
+        hold_indices[1].push(9);
+        let mut state =
+            GameplayLaneIndexState::new(note_indices, note_row_indices, hold_indices, vec![0, 3]);
+
+        assert_eq!(state.note_indices(1), &[7]);
+        assert_eq!(state.note_row_indices(1), &[8]);
+        assert_eq!(state.hold_indices(1), &[9]);
+        assert_eq!(state.tap_row_hold_roll_flags(1), 3);
+        assert!(state.note_indices(MAX_COLS).is_empty());
+        assert_eq!(state.tap_row_hold_roll_flags(99), 0);
+
+        state.clear_for_benchmark();
+
+        assert!(state.note_indices(1).is_empty());
+        assert!(state.note_row_indices(1).is_empty());
+        assert!(state.hold_indices(1).is_empty());
+        assert_eq!(state.tap_row_hold_roll_flags(1), 0);
+    }
+
+    #[test]
+    fn row_index_state_clears_ranges_cursors_and_caches() {
+        let mut row_map_cache: [Vec<u32>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
+        row_map_cache[0].extend([u32::MAX, 4]);
+        let mut state = GameplayRowIndexState::new(
+            [(1, 3), (4, 6)],
+            [2, 5],
+            row_map_cache,
+            vec![0, 1, u32::MAX],
+        );
+
+        assert_eq!(state.row_entry_ranges[0], (1, 3));
+        assert_eq!(state.judged_row_cursor[1], 5);
+        assert_eq!(state.row_map_cache[0][1], 4);
+        assert_eq!(state.note_row_entry_indices[1], 1);
+
+        state.clear_for_benchmark();
+
+        assert_eq!(state.row_entry_ranges, [(0, 0); MAX_PLAYERS]);
+        assert_eq!(state.judged_row_cursor, [0; MAX_PLAYERS]);
+        assert!(state.row_map_cache[0].is_empty());
+        assert!(state.note_row_entry_indices.is_empty());
+    }
+
+    #[test]
+    fn mine_scan_state_initializes_cursor_data_and_clears() {
+        let mut mine_note_ix: [Vec<usize>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
+        let mut mine_note_time_ns: [Vec<SongTimeNs>; MAX_PLAYERS] =
+            std::array::from_fn(|_| Vec::new());
+        mine_note_ix[1].extend([4, 8]);
+        mine_note_time_ns[1].extend([40, 80]);
+        let mut state = GameplayMineScanState::new([2, 5], mine_note_ix, mine_note_time_ns);
+
+        assert_eq!(state.next_tap_miss_cursor, [2, 5]);
+        assert_eq!(state.next_mine_avoid_cursor, [2, 5]);
+        assert_eq!(state.next_mine_ix_cursor, [0; MAX_PLAYERS]);
+        assert_eq!(state.mine_note_ix[1], [4, 8]);
+        assert_eq!(state.mine_note_time_ns[1], [40, 80]);
+
+        state.set_next_tap_miss_cursor(1, 9);
+        state.pending_mine_hit_indices.push(4);
+        state.clear_for_benchmark();
+
+        assert_eq!(state.next_tap_miss_cursor, [0; MAX_PLAYERS]);
+        assert_eq!(state.next_mine_avoid_cursor, [0; MAX_PLAYERS]);
+        assert_eq!(state.next_mine_ix_cursor, [0; MAX_PLAYERS]);
+        assert!(state.mine_note_ix[1].is_empty());
+        assert!(state.mine_note_time_ns[1].is_empty());
+        assert!(state.pending_mine_hit_indices.is_empty());
+    }
+
+    #[test]
+    fn hold_runtime_state_initializes_resets_and_clears() {
+        let mut state = GameplayHoldRuntimeState::new(3, 4);
+        assert_eq!(state.decaying_hold_indices.capacity(), 4);
+        assert_eq!(state.hold_decay_active, [false; 3]);
+        assert_eq!(state.tap_miss_held_window, [false; 3]);
+        assert_eq!(state.pending_missed_hold_resolution, [false; 3]);
+        assert!(state.pending_missed_hold_indices.is_empty());
+
+        state.decaying_hold_indices.extend([1, 2]);
+        state.hold_decay_active[1] = true;
+        state.tap_miss_held_window[2] = true;
+        state.pending_missed_hold_resolution[0] = true;
+        state.pending_missed_hold_indices.push(0);
+        state.reset_live_state();
+
+        assert!(state.decaying_hold_indices.is_empty());
+        assert_eq!(state.hold_decay_active, [false; 3]);
+        assert_eq!(state.tap_miss_held_window, [false; 3]);
+        assert_eq!(state.pending_missed_hold_resolution, [false; 3]);
+        assert!(state.pending_missed_hold_indices.is_empty());
+
+        state.decaying_hold_indices.push(1);
+        state.clear_for_benchmark();
+        assert!(state.decaying_hold_indices.is_empty());
+        assert!(state.hold_decay_active.is_empty());
+        assert!(state.tap_miss_held_window.is_empty());
+        assert!(state.pending_missed_hold_resolution.is_empty());
+    }
+
+    #[test]
+    fn cue_runtime_state_returns_values_sets_cues_and_clears() {
+        let mut measure_counter_segments: [Vec<StreamSegment>; MAX_PLAYERS] =
+            std::array::from_fn(|_| Vec::new());
+        let mut column_cues: [Vec<ColumnCue>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
+        let mut crossover_cues: [Vec<ColumnCue>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
+        measure_counter_segments[0].push(StreamSegment {
+            start: 1,
+            end: 3,
+            is_break: false,
+        });
+        column_cues[0].push(ColumnCue {
+            start_time: 1.0,
+            duration: 2.0,
+            columns: vec![ColumnCueColumn {
+                column: 1,
+                is_mine: false,
+            }],
+        });
+        crossover_cues[1].push(ColumnCue {
+            start_time: 3.0,
+            duration: 4.0,
+            columns: vec![ColumnCueColumn {
+                column: 5,
+                is_mine: true,
+            }],
+        });
+        let mut state =
+            GameplayCueRuntimeState::new(measure_counter_segments, column_cues, crossover_cues);
+
+        assert_eq!(state.measure_counter_segments(0)[0].start, 1);
+        assert_eq!(state.column_cues(0)[0].columns[0].column, 1);
+        assert!(state.column_cues(MAX_PLAYERS).is_empty());
+        assert!(state.crossover_cues(0).is_empty());
+        assert_eq!(state.crossover_cues(1)[0].columns[0].column, 5);
+
+        state.set_column_cues_for_benchmark(
+            1,
+            vec![ColumnCue {
+                start_time: 8.0,
+                duration: 1.0,
+                columns: vec![ColumnCueColumn {
+                    column: 7,
+                    is_mine: false,
+                }],
+            }],
+        );
+        assert_eq!(state.column_cues(1)[0].columns[0].column, 7);
+
+        state.clear_for_benchmark();
+
+        assert!(state.measure_counter_segments(0).is_empty());
+        assert!(state.column_cues(0).is_empty());
+        assert!(state.column_cues(1).is_empty());
+        assert!(state.crossover_cues(1).is_empty());
+    }
+
+    #[test]
+    fn hold_feedback_state_returns_slices_and_clears() {
+        let mut state = GameplayHoldFeedbackState::default();
+        state.hold_judgments[1] = Some(HoldJudgmentRenderInfo {
+            result: HoldResult::Held,
+            started_at_screen_s: 2.0,
+        });
+        state.held_miss_judgments[2] = Some(HeldMissRenderInfo {
+            started_at_screen_s: 3.0,
+        });
+
+        assert_eq!(
+            state.hold_judgment(1).map(|judgment| judgment.result),
+            Some(HoldResult::Held)
+        );
+        assert!(state.hold_judgment(MAX_COLS).is_none());
+        assert_eq!(state.hold_judgments(1, 2).len(), 2);
+        assert_eq!(state.hold_judgments(MAX_COLS, 1).len(), 0);
+        assert_eq!(state.held_miss_judgments(2, 1).len(), 1);
+
+        state.clear();
+
+        assert!(state.hold_judgments.iter().all(Option::is_none));
+        assert!(state.held_miss_judgments.iter().all(Option::is_none));
+    }
+
+    #[test]
+    fn visual_feedback_state_returns_values_sets_taps_and_clears() {
+        let mut state = GameplayVisualFeedbackState::default();
+        state.tap_explosions[1] = Some(ActiveTapExplosion {
+            window: "W1",
+            bright: true,
+            elapsed: 0.1,
+            duration: 0.5,
+            start_beat: 4.0,
+        });
+        state.column_flashes[2] = Some(ActiveColumnFlash {
+            grade: JudgeGrade::Great,
+            blue_fantastic: false,
+            started_at_screen_s: 3.0,
+        });
+        state.last_tap_judgments[3] = Some(ColumnTapJudgment {
+            grade: JudgeGrade::Excellent,
+            blue_fantastic: false,
+            at_screen_s: 7.0,
+        });
+        state.mine_explosions[4] = Some(ActiveMineExplosion {
+            elapsed: 0.0,
+            duration: 1.0,
+            started_at_screen_s: 8.0,
+        });
+
+        assert_eq!(
+            state.tap_explosions(1, 1)[0].map(|explosion| explosion.window),
+            Some("W1")
+        );
+        assert_eq!(
+            state.column_flashes(2, 1)[0].map(|flash| flash.grade),
+            Some(JudgeGrade::Great)
+        );
+        assert_eq!(
+            state.last_tap_judgment(3).map(|judgment| judgment.grade),
+            Some(JudgeGrade::Excellent)
+        );
+        assert_eq!(state.mine_started_at_screen_s(4), Some(8.0));
+        assert!(state.mine_explosions(MAX_COLS, 1).is_empty());
+
+        state.set_tap_explosion_for_benchmark(
+            0,
+            Some(ActiveTapExplosion {
+                window: "W2",
+                bright: false,
+                elapsed: 0.0,
+                duration: 0.25,
+                start_beat: 2.0,
+            }),
+        );
+        assert_eq!(
+            state.tap_explosions(0, 1)[0].map(|explosion| explosion.window),
+            Some("W2")
+        );
+
+        state.clear();
+
+        assert!(state.tap_explosions.iter().all(Option::is_none));
+        assert!(state.column_flashes.iter().all(Option::is_none));
+        assert!(state.mine_explosions.iter().all(Option::is_none));
+        assert!(state.last_tap_judgment(3).is_some());
     }
 
     #[test]

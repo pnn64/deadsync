@@ -25,26 +25,24 @@ mod update;
 
 use deadsync_profile::{
     AccelEffectsMask, ActiveProfile, AppearanceEffectsMask, AttackMode, ColumnFlashBrightness,
-    ColumnFlashMask, ColumnFlashSize, GameplayHudPlayerSnapshot,
-    GameplayHudSnapshot, HideLightType, HoldsMask, InsertMask, LastPlayed,
-    LastPlayedCourse, LifeMeterType, LocalProfileSummary, MeasureCounter, MeasureLines,
-    MiniIndicator, MiniIndicatorColor, MiniIndicatorPosition, MiniIndicatorScoreType,
-    MiniIndicatorSize, MiniIndicatorSubtractiveDisplay, NoteSkin, PLAYER_SLOTS,
-    PlayMode,
-    PlayStyle, PlayerOptionsData, PlayerSide, Profile, ProfileStats, ProfileStatsDecodeError,
-    RemoveMask, ScrollOption, StepStatisticsMask, StepStatsExtra, TargetScoreSetting,
-    TimingTickMode, TimingWindowsOption, TurnOption, VisualEffectsMask, active_profile_is_guest,
+    ColumnFlashMask, ColumnFlashSize, GameplayHudPlayerSnapshot, GameplayHudSnapshot,
+    HideLightType, HoldsMask, InsertMask, LastPlayed, LastPlayedCourse, LifeMeterType,
+    LocalProfileSummary, MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorColor,
+    MiniIndicatorPosition, MiniIndicatorScoreType, MiniIndicatorSize,
+    MiniIndicatorSubtractiveDisplay, NoteSkin, PLAYER_SLOTS, PlayMode, PlayStyle,
+    PlayerOptionsData, PlayerSide, Profile, ProfileStats, ProfileStatsDecodeError, RemoveMask,
+    ScrollOption, StepStatisticsMask, StepStatsExtra, TargetScoreSetting, TimingTickMode,
+    TimingWindowsOption, TurnOption, VisualEffectsMask, active_profile_is_guest,
     active_profile_local_id, add_known_pack_names, append_last_played_course_section,
     append_last_played_section, append_player_options_section, clamp_weight_pounds,
     cmp_profile_ids_case_insensitive, decode_profile_stats as decode_profile_stats_bytes,
     encode_profile_stats, find_profile_avatar_path, folder_name_for_display, generate_profile_guid,
-    initials_from_name, is_local_profile_id, is_valid_profile_guid,
-    joined_player_mask, load_error_bar_options, load_last_played_course_section,
-    load_last_played_section, load_timing_feedback_options, load_visual_player_options,
-    parse_favorited_packs_content, parse_favorites_content,
-    parse_groovestats_is_pad_player, player_options_section, player_side_index as side_ix,
-    player_side_is_joined, push_profile_guid_line, read_userprofile_identity,
-    render_favorited_packs_content, render_favorites_content,
+    initials_from_name, is_local_profile_id, is_valid_profile_guid, joined_player_mask,
+    load_error_bar_options, load_last_played_course_section, load_last_played_section,
+    load_timing_feedback_options, load_visual_player_options, parse_favorited_packs_content,
+    parse_favorites_content, parse_groovestats_is_pad_player, player_options_section,
+    player_side_index as side_ix, player_side_is_joined, push_profile_guid_line,
+    read_userprofile_identity, render_favorited_packs_content, render_favorites_content,
     rewrite_profile_display_name_content, sanitize_player_initials, unknown_pack_names,
     upsert_profile_guid_content,
 };
@@ -1412,7 +1410,11 @@ fn migrate_local_profiles() {
                 continue;
             }
             let path = de.path();
-            let Some(folder) = path.file_name().and_then(|s| s.to_str()).map(str::to_string) else {
+            let Some(folder) = path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .map(str::to_string)
+            else {
                 continue;
             };
             taken.push(folder.clone());
@@ -1474,7 +1476,10 @@ fn migrate_local_profiles() {
             taken.push(folder);
             continue;
         }
-        match fs::rename(profile_dir_by_folder(&folder), profile_dir_by_folder(&desired)) {
+        match fs::rename(
+            profile_dir_by_folder(&folder),
+            profile_dir_by_folder(&desired),
+        ) {
             Ok(()) => {
                 info!("Renamed profile folder '{folder}' -> '{desired}'.");
                 taken.push(desired.clone());
@@ -2376,12 +2381,12 @@ mod tests {
         SimpleIni, TimingWindowsOption, append_player_options_section, heal_default_profile_id,
         load_player_options, parse_groovestats_is_pad_player, player_options_section,
     };
-    use std::collections::HashMap;
     use deadsync_profile::{
         DEFAULT_BIRTH_YEAR, DEFAULT_WEIGHT_POUNDS, ErrorBarMask, ErrorBarStyle,
         LiveTimingStatsMask, NoCmodAlternative, TapExplosionMask, error_bar_mask_from_style,
         error_bar_style_from_mask, error_bar_text_from_mask, normalize_tap_explosion_mask,
     };
+    use std::collections::HashMap;
     use std::str::FromStr;
 
     #[test]

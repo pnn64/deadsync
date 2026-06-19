@@ -232,7 +232,7 @@ fn arrowcloud_lifebar_points(
     player_idx: usize,
 ) -> Vec<arrowcloud_api::ArrowCloudLifePoint> {
     let life_history = gs.players[player_idx].life_history.as_slice();
-    let (start, end) = gs.note_ranges[player_idx];
+    let (start, end) = crate::game::gameplay::note_range_for_player(gs, player_idx);
     let note_times = &gs.note_time_cache_ns[start..end];
     let first_second = gs.density_graph.first_second.min(0.0);
     let last_second = gs.density_graph.last_second.max(first_second);
@@ -258,7 +258,7 @@ fn arrowcloud_timing_data(
     player_idx: usize,
     fail_time_ns: Option<i64>,
 ) -> Vec<ArrowCloudTimingDatum> {
-    let (start, end) = gs.note_ranges[player_idx];
+    let (start, end) = crate::game::gameplay::note_range_for_player(gs, player_idx);
     let notes = &gs.notes[start..end];
     let note_times = &gs.note_time_cache_ns[start..end];
     let col_offset = player_idx.saturating_mul(gs.cols_per_player);
@@ -395,7 +395,7 @@ fn arrowcloud_live_submit_stats(gs: &gameplay::State, player_idx: usize) -> Arro
     let player = &gs.players[player_idx];
     ArrowCloudSubmitStats {
         judgment_counts: player.judgment_counts,
-        window_counts: gs.live_window_counts[player_idx],
+        window_counts: gameplay::live_window_counts(gs, player_idx),
         holds_held: player.holds_held,
         mines_hit: player.mines_hit,
         mines_avoided: player.mines_avoided,
@@ -412,7 +412,7 @@ fn arrowcloud_submit_stats(
     let Some(fail_time_ns) = fail_time_ns else {
         return arrowcloud_live_submit_stats(gs, player_idx);
     };
-    let (start, end) = gs.note_ranges[player_idx];
+    let (start, end) = crate::game::gameplay::note_range_for_player(gs, player_idx);
     arrowcloud_stats_from_results(
         &gs.notes[start..end],
         &gs.note_time_cache_ns[start..end],
@@ -437,8 +437,9 @@ fn arrowcloud_payload_for_player(
     let submit_stats = arrowcloud_submit_stats(gs, player_idx, fail_time_ns);
     let pack = pack_group.trim().to_string();
     let song_name = gs.song.display_full_title(true);
-    let music_rate = if gs.music_rate.is_finite() && gs.music_rate > 0.0 {
-        gs.music_rate as f64
+    let gameplay_music_rate = gameplay::music_rate(gs);
+    let music_rate = if gameplay_music_rate.is_finite() && gameplay_music_rate > 0.0 {
+        gameplay_music_rate as f64
     } else {
         1.0
     };
@@ -589,7 +590,7 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State, pack_group
         debug!("Skipping ArrowCloud submit: autoplay/replay was used.");
         return;
     }
-    if gs.course_display_totals.is_some() && !cfg.autosubmit_course_scores_individually {
+    if gameplay::course_display_is_course_stage(gs) && !cfg.autosubmit_course_scores_individually {
         debug!("Skipping ArrowCloud submit: course per-song autosubmit is disabled.");
         return;
     }

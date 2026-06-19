@@ -9,7 +9,7 @@ use deadlib_present::actors::Actor;
 use deadsync_chart::SongData;
 use deadsync_chart::notes::ParsedNote;
 use deadsync_chart::{ArrowStats, ChartData, GameplayChartData, StaminaCounts, TechCounts};
-use deadsync_core::input::{MAX_COLS, MAX_PLAYERS};
+use deadsync_core::input::MAX_PLAYERS;
 use deadsync_core::note::NoteType;
 use deadsync_core::timing::{ROWS_PER_BEAT, note_row_to_beat};
 use deadsync_profile as profile_data;
@@ -186,21 +186,16 @@ fn prime_visible_window(state: &mut gameplay::State) {
     let time = state.timing_players[0].get_time_for_beat(beat);
     let time_ns = state.timing_players[0].get_time_for_beat_ns(beat);
     state.total_elapsed_in_screen = 7.25;
-    state.current_beat = beat;
-    state.current_beat_display = beat;
-    state.current_music_time_ns = time_ns;
-    state.current_music_time_display = time;
+    gameplay::set_benchmark_song_position(state, beat, time_ns, beat, time);
     gameplay::set_benchmark_visible_time(state, 0, time_ns, time, beat);
     gameplay::set_benchmark_visible_time(state, 1, time_ns, time, beat);
+    gameplay::clear_benchmark_visual_feedback(state);
 
-    for col in 0..MAX_COLS {
-        state.tap_explosions[col] = None;
-        state.active_holds[col] = None;
-    }
+    gameplay::clear_benchmark_active_holds(state);
 
     let lower = beat - WINDOW_BEATS_BEFORE;
     let upper = beat + WINDOW_BEATS_AFTER;
-    let (note_start, note_end) = state.note_ranges[0];
+    let (note_start, note_end) = gameplay::note_range_for_player(state, 0);
     let mut end_cursor = note_start;
 
     for idx in note_start..note_end {
@@ -214,7 +209,7 @@ fn prime_visible_window(state: &mut gameplay::State) {
         end_cursor = idx + 1;
     }
 
-    state.next_tap_miss_cursor[0] = end_cursor.max(note_start);
+    gameplay::set_benchmark_next_tap_miss_cursor(state, 0, end_cursor.max(note_start));
 
     if let Some((note_index, note_type)) = state.notes[note_start..end_cursor]
         .iter()
@@ -228,44 +223,56 @@ fn prime_visible_window(state: &mut gameplay::State) {
         let end_time_ns = state.hold_end_time_cache_ns[note_index]
             .unwrap_or_else(|| gameplay::song_time_ns_from_seconds(time + 1.0));
         let start_time_ns = state.note_time_cache_ns[note_index];
-        state.active_holds[column] = Some(ActiveHold {
-            note_index,
-            start_time_ns,
-            end_time_ns,
-            note_type,
-            let_go: false,
-            is_pressed: true,
-            life: 1.0,
-            last_update_time_ns: time_ns,
-        });
+        gameplay::set_benchmark_active_hold(
+            state,
+            column,
+            Some(ActiveHold {
+                note_index,
+                start_time_ns,
+                end_time_ns,
+                note_type,
+                let_go: false,
+                is_pressed: true,
+                life: 1.0,
+                last_update_time_ns: time_ns,
+            }),
+        );
     }
 
-    state.tap_explosions[0] = Some(ActiveTapExplosion {
-        window: "W1",
-        bright: false,
-        elapsed: 0.08,
-        duration: 0.6,
-        start_beat: beat,
-    });
-    state.column_cues[0] = vec![ColumnCue {
-        start_time: time - 1.4,
-        duration: 8.0,
-        columns: vec![
-            ColumnCueColumn {
-                column: 0,
-                is_mine: false,
-            },
-            ColumnCueColumn {
-                column: 1,
-                is_mine: true,
-            },
-            ColumnCueColumn {
-                column: 3,
-                is_mine: false,
-            },
-        ],
-    }];
-    state.receptor_bop_timers[0] = 0.05;
+    gameplay::set_benchmark_tap_explosion(
+        state,
+        0,
+        Some(ActiveTapExplosion {
+            window: "W1",
+            bright: false,
+            elapsed: 0.08,
+            duration: 0.6,
+            start_beat: beat,
+        }),
+    );
+    gameplay::set_benchmark_column_cues(
+        state,
+        0,
+        vec![ColumnCue {
+            start_time: time - 1.4,
+            duration: 8.0,
+            columns: vec![
+                ColumnCueColumn {
+                    column: 0,
+                    is_mine: false,
+                },
+                ColumnCueColumn {
+                    column: 1,
+                    is_mine: true,
+                },
+                ColumnCueColumn {
+                    column: 3,
+                    is_mine: false,
+                },
+            ],
+        }],
+    );
+    gameplay::set_benchmark_receptor_bop_timer(state, 0, 0.05);
     state.players[0].combo = 327;
     state.players[0].current_combo_grade = Some(JudgeGrade::Fantastic);
     state.players[0].full_combo_grade = Some(JudgeGrade::Fantastic);

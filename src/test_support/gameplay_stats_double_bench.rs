@@ -1,4 +1,5 @@
 use crate::assets::AssetManager;
+use crate::game::gameplay;
 use crate::game::profile;
 use crate::screens::components::gameplay::gameplay_stats;
 use crate::screens::gameplay as gameplay_screen;
@@ -46,7 +47,13 @@ pub fn fixture() -> GameplayStatsDoubleBenchFixture {
         let song = Arc::make_mut(&mut state.song);
         song.banner_path = Some(PathBuf::from("bench/banner.png"));
         state.total_elapsed_in_screen = 9.6;
-        state.current_music_time_display = 64.25;
+        gameplay::set_benchmark_song_position(
+            state,
+            gameplay::current_beat(state),
+            gameplay::current_music_time_ns(state),
+            gameplay::current_beat_display(state),
+            64.25,
+        );
         state.cols_per_player = 8;
         state.num_cols = 8;
         state.players[0].judgment_counts = [22_481, 2_118, 351, 49, 12, 3];
@@ -55,7 +62,7 @@ pub fn fixture() -> GameplayStatsDoubleBenchFixture {
         state.players[0].mines_avoided = 503;
         state.player_profiles[0].show_fa_plus_window = true;
         state.player_profiles[0].fa_plus_10ms_blue_window = true;
-        state.live_window_counts[0] = WindowCounts {
+        let canonical = WindowCounts {
             w0: 18_992,
             w1: 3_489,
             w2: 2_118,
@@ -64,7 +71,7 @@ pub fn fixture() -> GameplayStatsDoubleBenchFixture {
             w5: 12,
             miss: 3,
         };
-        state.live_window_counts_10ms_blue[0] = WindowCounts {
+        let ten_ms_blue = WindowCounts {
             w0: 19_704,
             w1: 2_777,
             w2: 2_118,
@@ -73,7 +80,7 @@ pub fn fixture() -> GameplayStatsDoubleBenchFixture {
             w5: 12,
             miss: 3,
         };
-        state.live_window_counts_display_blue[0] = state.live_window_counts_10ms_blue[0];
+        gameplay::set_benchmark_live_window_counts(state, 0, canonical, ten_ms_blue, ten_ms_blue);
         scorebox_side_snapshot = Some(CachedPlayerLeaderboardData {
             loading: false,
             error: None,

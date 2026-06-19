@@ -317,12 +317,14 @@ impl App {
                 .gameplay_state
                 .as_ref()
                 .map(|state| {
-                    crate::game::gameplay::song_time_ns_to_seconds(state.current_music_time_ns)
+                    crate::game::gameplay::song_time_ns_to_seconds(
+                        crate::game::gameplay::current_music_time_ns(state),
+                    )
                 })
                 .or_else(|| {
                     self.state.screens.practice_state.as_ref().map(|state| {
                         crate::game::gameplay::song_time_ns_to_seconds(
-                            state.gameplay.current_music_time_ns,
+                            crate::game::gameplay::current_music_time_ns(&state.gameplay),
                         )
                     })
                 })

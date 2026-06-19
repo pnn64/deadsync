@@ -1476,6 +1476,6 @@ pub fn effective_scroll_speed_for_player(state: &State, player_idx: usize) -> Sc
     effective_attack_scroll_speed(
         player_attack_base_cleared(state, player_idx),
         state.attacks.scroll_speed[player_idx],
-        state.scroll_speed[player_idx],
+        super::scroll_speed_for_player(state, player_idx),
     )
 }

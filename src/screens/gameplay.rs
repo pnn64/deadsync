@@ -510,23 +510,22 @@ impl State {
             .map(crate::assets::media_path_key);
         let notefield_model_cache =
             notefield_model_cache_from_assets(&noteskin_assets, gameplay.num_players);
-        let background_transition_start_time = gameplay.current_music_time_display;
+        let background_transition_start_time = gameplay_core::current_music_time_display(&gameplay);
         let next_background_change_ix = background_changes
             .iter()
-            .take_while(|change| change.start_beat <= gameplay.current_beat)
+            .take_while(|change| change.start_beat <= gameplay_core::current_beat(&gameplay))
             .count();
+        let song_lua_visuals = gameplay_core::song_lua_visuals(&gameplay);
         let song_lua_overlay_order = song_lua_overlay_order_cache_from(
-            &gameplay.song_lua_visuals.overlays,
-            &gameplay.song_lua_visuals.overlay_eases,
+            &song_lua_visuals.overlays,
+            &song_lua_visuals.overlay_eases,
         );
-        let song_lua_background_visual_layer_orders = gameplay
-            .song_lua_visuals
+        let song_lua_background_visual_layer_orders = song_lua_visuals
             .background_visual_layers
             .iter()
             .map(|layer| song_lua_overlay_order_cache_from(&layer.overlays, &layer.overlay_eases))
             .collect();
-        let song_lua_foreground_visual_layer_orders = gameplay
-            .song_lua_visuals
+        let song_lua_foreground_visual_layer_orders = song_lua_visuals
             .foreground_visual_layers
             .iter()
             .map(|layer| song_lua_overlay_order_cache_from(&layer.overlays, &layer.overlay_eases))
@@ -1788,7 +1787,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     update_lobby_machine_state(state);
     maybe_refresh_smx_sensor_data(state, delta_time);
     smx_profile::maybe_report();
-    let previous_song_lua_time = state.current_music_time_display;
+    let previous_song_lua_time = gameplay_core::current_music_time_display(state);
     let action = gameplay_update(state, delta_time, audio_snapshot());
     if matches!(action, GameplayAction::None) {
         refresh_scorebox_snapshots(state);
@@ -1797,7 +1796,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     play_song_lua_sound_events(
         state,
         previous_song_lua_time,
-        state.current_music_time_display,
+        gameplay_core::current_music_time_display(state),
     );
     map_gameplay_action(action)
 }
@@ -1814,16 +1813,17 @@ fn play_song_lua_sound_events(state: &State, previous: f32, now: f32) {
     if !previous.is_finite() || !now.is_finite() || now < previous {
         return;
     }
+    let song_lua_visuals = gameplay_core::song_lua_visuals(state);
     play_song_lua_sound_events_for(
-        &state.song_lua_visuals.overlays,
-        &state.song_lua_visuals.overlay_events,
+        &song_lua_visuals.overlays,
+        &song_lua_visuals.overlay_events,
         previous,
         now,
     );
-    for layer in &state.song_lua_visuals.background_visual_layers {
+    for layer in &song_lua_visuals.background_visual_layers {
         play_song_lua_sound_events_for(&layer.overlays, &layer.overlay_events, previous, now);
     }
-    for layer in &state.song_lua_visuals.foreground_visual_layers {
+    for layer in &song_lua_visuals.foreground_visual_layers {
         play_song_lua_sound_events_for(&layer.overlays, &layer.overlay_events, previous, now);
     }
 }
@@ -2094,15 +2094,15 @@ fn sync_offset_overlay_message(state: &State) -> Option<String> {
     let mut message = String::new();
     if let Some(global_line) = quantized_offset_change_line(
         "Global Offset",
-        state.initial_global_offset_seconds,
-        state.global_offset_seconds,
+        gameplay_core::initial_global_offset_seconds(state),
+        gameplay_core::global_offset_seconds(state),
     ) {
         message.push_str(&global_line);
     }
     if let Some(song_line) = quantized_offset_change_line(
         "Song offset",
-        state.initial_song_offset_seconds,
-        state.song_offset_seconds,
+        gameplay_core::initial_song_offset_seconds(state),
+        gameplay_core::song_offset_seconds(state),
     ) {
         if !message.is_empty() {
             message.push('\n');
@@ -2211,7 +2211,7 @@ pub fn prewarm_text_layout(
         cache.prewarm_text(fonts, "miso", detail, None);
         for &(_, bpm) in &state.gameplay_charts[player].timing_segments.bpms {
             let text = cached_bpm_text(
-                f64::from(bpm.max(0.0)) * f64::from(state.music_rate),
+                f64::from(bpm.max(0.0)) * f64::from(gameplay_core::music_rate(state)),
                 cfg.show_bpm_decimal,
             );
             cache.prewarm_text(fonts, "miso", text.as_ref(), None);
@@ -2252,11 +2252,14 @@ pub fn prewarm_text_layout(
             == crate::game::gameplay::AutosyncMode::Machine
         {
             (
-                state.initial_global_offset_seconds,
-                state.global_offset_seconds,
+                gameplay_core::initial_global_offset_seconds(state),
+                gameplay_core::global_offset_seconds(state),
             )
         } else {
-            (state.initial_song_offset_seconds, state.song_offset_seconds)
+            (
+                gameplay_core::initial_song_offset_seconds(state),
+                gameplay_core::song_offset_seconds(state),
+            )
         };
         let text = cached_autosync_text(state, old_offset, new_offset);
         cache.prewarm_text(fonts, "miso", text.as_ref(), None);
@@ -2288,7 +2291,7 @@ pub fn in_transition(
         .map(|gs| gs.stage_intro_text.clone())
         .unwrap_or_else(|| Arc::from("EVENT"));
     let intro_color = state.map_or(color::decorative_rgba(0), |gs| {
-        color::decorative_rgba(gs.player_color_index)
+        color::decorative_rgba(gameplay_core::player_color_index(gs))
     });
     let text_target_x = state.map_or(screen_center_x(), |gs| {
         intro_text_target_x(
@@ -2507,7 +2510,8 @@ fn push_bgchange_transition(
     let Some(duration) = bgchange_transition_duration(&state.background_transition) else {
         return;
     };
-    let elapsed = state.current_music_time_display - state.background_transition_start_time;
+    let elapsed =
+        gameplay_core::current_music_time_display(state) - state.background_transition_start_time;
     let progress = (elapsed / duration).clamp(0.0, 1.0);
     if progress >= 1.0 {
         return;
@@ -2626,7 +2630,7 @@ fn push_layer2_bganimations(actors: &mut Vec<Actor>, state: &State) {
         .rev()
         .filter_map(|change| {
             let start = state.timing.get_time_for_beat(change.start_beat);
-            let elapsed = state.current_music_time_display - start;
+            let elapsed = gameplay_core::current_music_time_display(state) - start;
             (elapsed >= 0.0 && elapsed <= FLASH_SECONDS).then_some((change, elapsed))
         })
         .next()
@@ -2699,15 +2703,16 @@ fn song_lua_owns_fg_media(
     layer_local_states: &mut Vec<SongLuaOverlayState>,
     layer_states: &mut Vec<SongLuaOverlayState>,
 ) -> bool {
-    if song_lua_has_visible_tex(&state.song_lua_visuals.overlays, overlay_states, path) {
+    let song_lua_visuals = gameplay_core::song_lua_visuals(state);
+    if song_lua_has_visible_tex(&song_lua_visuals.overlays, overlay_states, path) {
         return true;
     }
-    for layer in &state.song_lua_visuals.background_visual_layers {
-        if state.current_music_time_display < layer.start_second {
+    for layer in &song_lua_visuals.background_visual_layers {
+        if gameplay_core::current_music_time_display(state) < layer.start_second {
             continue;
         }
         song_lua_overlay_state_sets_from_into(
-            state.current_music_time_display,
+            gameplay_core::current_music_time_display(state),
             &layer.overlays,
             &layer.overlay_events,
             &layer.overlay_eases,
@@ -2721,12 +2726,12 @@ fn song_lua_owns_fg_media(
             return true;
         }
     }
-    for layer in &state.song_lua_visuals.foreground_visual_layers {
-        if state.current_music_time_display < layer.start_second {
+    for layer in &song_lua_visuals.foreground_visual_layers {
+        if gameplay_core::current_music_time_display(state) < layer.start_second {
             continue;
         }
         song_lua_overlay_state_sets_from_into(
-            state.current_music_time_display,
+            gameplay_core::current_music_time_display(state),
             &layer.overlays,
             &layer.overlay_events,
             &layer.overlay_eases,
@@ -2744,7 +2749,9 @@ fn song_lua_owns_fg_media(
 }
 
 fn active_foreground_media(state: &State) -> Option<(&Path, Arc<str>)> {
-    let path = state.song.active_foreground_path(state.current_beat)?;
+    let path = state
+        .song
+        .active_foreground_path(gameplay_core::current_beat(state))?;
     Some((path, crate::assets::media_path_key(path)))
 }
 
@@ -2777,12 +2784,14 @@ fn build_foreground_media(
 
 #[inline(always)]
 fn song_lua_overlay_space_width(state: &State) -> f32 {
-    state.song_lua_visuals.screen_width.max(1.0)
+    gameplay_core::song_lua_visuals(state).screen_width.max(1.0)
 }
 
 #[inline(always)]
 fn song_lua_overlay_space_height(state: &State) -> f32 {
-    state.song_lua_visuals.screen_height.max(1.0)
+    gameplay_core::song_lua_visuals(state)
+        .screen_height
+        .max(1.0)
 }
 
 fn apply_song_lua_overlay_delta(state: &mut SongLuaOverlayState, delta: &SongLuaOverlayStateDelta) {
@@ -3649,14 +3658,15 @@ fn song_lua_overlay_state_sets_into(
     local_out: &mut Vec<SongLuaOverlayState>,
     overlay_out: &mut Vec<SongLuaOverlayState>,
 ) {
+    let song_lua_visuals = gameplay_core::song_lua_visuals(state);
     song_lua_overlay_state_sets_from_into(
-        state.current_music_time_display,
-        &state.song_lua_visuals.overlays,
-        &state.song_lua_visuals.overlay_events,
-        &state.song_lua_visuals.overlay_eases,
-        &state.song_lua_visuals.overlay_ease_ranges,
-        state.song_lua_visuals.screen_width,
-        state.song_lua_visuals.screen_height,
+        gameplay_core::current_music_time_display(state),
+        &song_lua_visuals.overlays,
+        &song_lua_visuals.overlay_events,
+        &song_lua_visuals.overlay_eases,
+        &song_lua_visuals.overlay_ease_ranges,
+        song_lua_visuals.screen_width,
+        song_lua_visuals.screen_height,
         local_out,
         overlay_out,
     );
@@ -4838,15 +4848,15 @@ fn song_lua_message_state(
 }
 
 fn song_lua_player_render_state(state: &State, player_index: usize) -> SongLuaOverlayState {
-    let Some(actor) = state.song_lua_visuals.player_actors.get(player_index) else {
+    let song_lua_visuals = gameplay_core::song_lua_visuals(state);
+    let Some(actor) = song_lua_visuals.player_actors.get(player_index) else {
         return SongLuaOverlayState::default();
     };
     song_lua_message_state(
-        state.current_music_time_display,
+        gameplay_core::current_music_time_display(state),
         actor.initial_state,
         &actor.message_commands,
-        state
-            .song_lua_visuals
+        song_lua_visuals
             .player_events
             .get(player_index)
             .map(Vec::as_slice),
@@ -4867,10 +4877,11 @@ fn song_lua_song_foreground_state_from(
 }
 
 fn song_lua_song_foreground_state(state: &State) -> SongLuaOverlayState {
+    let song_lua_visuals = gameplay_core::song_lua_visuals(state);
     song_lua_song_foreground_state_from(
-        state.current_music_time_display,
-        &state.song_lua_visuals.song_foreground,
-        state.song_lua_visuals.song_foreground_events.as_slice(),
+        gameplay_core::current_music_time_display(state),
+        &song_lua_visuals.song_foreground,
+        song_lua_visuals.song_foreground_events.as_slice(),
     )
 }
 
@@ -8598,24 +8609,23 @@ pub fn push_actors(
     let centered_single_notefield = play_style == profile_data::PlayStyle::Single
         && state.num_players == 1
         && center_1player_notefield;
+    let song_lua_visuals = gameplay_core::song_lua_visuals(state);
     let song_lua_space_width = song_lua_overlay_space_width(state);
     let song_lua_space_height = song_lua_overlay_space_height(state);
-    let player_color = color::decorative_rgba(state.player_color_index);
+    let player_color = color::decorative_rgba(gameplay_core::player_color_index(state));
     song_lua_overlay_state_sets_into(
         state,
         &mut song_lua_local_state_scratch,
         &mut song_lua_overlay_state_scratch,
     );
-    let mut proxy_requests = song_lua_proxy_requests(
-        &state.song_lua_visuals.overlays,
-        &song_lua_overlay_state_scratch,
-    );
-    for layer in &state.song_lua_visuals.foreground_visual_layers {
-        if state.current_music_time_display < layer.start_second {
+    let mut proxy_requests =
+        song_lua_proxy_requests(&song_lua_visuals.overlays, &song_lua_overlay_state_scratch);
+    for layer in &song_lua_visuals.foreground_visual_layers {
+        if gameplay_core::current_music_time_display(state) < layer.start_second {
             continue;
         }
         song_lua_overlay_state_sets_from_into(
-            state.current_music_time_display,
+            gameplay_core::current_music_time_display(state),
             &layer.overlays,
             &layer.overlay_events,
             &layer.overlay_eases,
@@ -8635,20 +8645,15 @@ pub fn push_actors(
     // --- Background and Filter ---
     let underlay_start = actors.len();
     push_background(&mut actors, state, cfg.bg_brightness, cfg.gameplay_bg_color);
-    for (layer_idx, layer) in state
-        .song_lua_visuals
-        .background_visual_layers
-        .iter()
-        .enumerate()
-    {
-        if state.current_music_time_display < layer.start_second {
+    for (layer_idx, layer) in song_lua_visuals.background_visual_layers.iter().enumerate() {
+        if gameplay_core::current_music_time_display(state) < layer.start_second {
             continue;
         }
         let Some(order_cache) = song_lua_background_visual_layer_orders.get_mut(layer_idx) else {
             continue;
         };
         song_lua_overlay_state_sets_from_into(
-            state.current_music_time_display,
+            gameplay_core::current_music_time_display(state),
             &layer.overlays,
             &layer.overlay_events,
             &layer.overlay_eases,
@@ -8659,7 +8664,7 @@ pub fn push_actors(
             &mut song_lua_layer_state_scratch,
         );
         let song_foreground_state = song_lua_song_foreground_state_from(
-            state.current_music_time_display,
+            gameplay_core::current_music_time_display(state),
             &layer.song_foreground,
             layer.song_foreground_events.as_slice(),
         );
@@ -8674,8 +8679,8 @@ pub fn push_actors(
             asset_manager,
             layer.screen_width.max(1.0),
             layer.screen_height.max(1.0),
-            state.current_music_time_display,
-            state.current_beat,
+            gameplay_core::current_music_time_display(state),
+            gameplay_core::current_beat(state),
             state.total_elapsed_in_screen,
             &mut song_lua_order_scratch,
             &mut song_lua_capture_state_scratch,
@@ -8770,11 +8775,14 @@ pub fn push_actors(
                 == crate::game::gameplay::AutosyncMode::Machine
             {
                 (
-                    state.initial_global_offset_seconds,
-                    state.global_offset_seconds,
+                    gameplay_core::initial_global_offset_seconds(state),
+                    gameplay_core::global_offset_seconds(state),
                 )
             } else {
-                (state.initial_song_offset_seconds, state.song_offset_seconds)
+                (
+                    gameplay_core::initial_song_offset_seconds(state),
+                    gameplay_core::song_offset_seconds(state),
+                )
             };
             let adjustments = cached_autosync_text(state, old_offset, new_offset);
             actors.push(act!(text:
@@ -8797,12 +8805,12 @@ pub fn push_actors(
         const ABORT_FADE_OUT_S: f32 = 0.5;
 
         let y = screen_height() - 116.0;
+        let exit_prompt = gameplay_core::exit_prompt_state(state);
         let msg: Option<(String, f32)> = if gameplay_lobby_wait_text(state).is_some() {
             None
-        } else if let (Some(key), Some(start)) = (
-            state.exit_input.hold_to_exit_key,
-            state.exit_input.hold_to_exit_start,
-        ) {
+        } else if let (Some(key), Some(start)) =
+            (exit_prompt.hold_to_exit_key, exit_prompt.hold_to_exit_start)
+        {
             let s = match key {
                 crate::game::gameplay::HoldToExitKey::Start => {
                     Some(tr("Gameplay", "ContinueHoldingStartGiveUp"))
@@ -8813,7 +8821,7 @@ pub fn push_actors(
             };
             let alpha = (start.elapsed().as_secs_f32() / HOLD_FADE_IN_S).clamp(0.0, 1.0);
             s.map(|text| (text.to_string(), alpha))
-        } else if let Some(exit) = &state.exit_input.exit_transition {
+        } else if let Some(exit) = &exit_prompt.exit_transition {
             let t = exit.started_at.elapsed().as_secs_f32();
             match exit.kind {
                 crate::game::gameplay::ExitTransitionKind::Out => {
@@ -8827,7 +8835,7 @@ pub fn push_actors(
                     Some((tr("Gameplay", "ContinueHoldingBackGiveUp").to_string(), 1.0))
                 }
             }
-        } else if let Some(at) = state.exit_input.hold_to_exit_aborted_at {
+        } else if let Some(at) = exit_prompt.hold_to_exit_aborted_at {
             let alpha = (1.0 - at.elapsed().as_secs_f32() / ABORT_FADE_OUT_S).clamp(0.0, 1.0);
             Some((tr("Gameplay", "DontGoBack").to_string(), alpha))
         } else {
@@ -8872,7 +8880,7 @@ pub fn push_actors(
 
     // Fade-to-black when giving up / backing out (Simply Love parity).
     let overlay_start = actors.len();
-    if let Some(exit) = &state.exit_input.exit_transition {
+    if let Some(exit) = &gameplay_core::exit_prompt_state(state).exit_transition {
         let alpha = crate::game::gameplay::exit_transition_alpha(exit);
         if alpha > 0.0 {
             actors.push(act!(quad:
@@ -8954,9 +8962,9 @@ pub fn push_actors(
                 field_scratch,
                 hud_scratch,
             );
-            let player_actor = &state.song_lua_visuals.player_actors[player_idx];
+            let player_actor = &song_lua_visuals.player_actors[player_idx];
             let player_state = song_lua_player_render_state(state, player_idx);
-            let player_transform = state.song_lua_player_transforms[player_idx];
+            let player_transform = gameplay_core::song_lua_player_transform(state, player_idx);
             let song_lua_active = !state.song.foreground_lua_changes.is_empty();
             let rotation_x = player_state.rot_x_deg + player_transform.rotation_x;
             let rotation_z = player_state.rot_z_deg + player_transform.rotation_z;
@@ -9144,7 +9152,7 @@ pub fn push_actors(
         },
     ];
     let replacement_active_players = song_lua_replacement_active_players(
-        &state.song_lua_visuals.overlays,
+        &song_lua_visuals.overlays,
         &song_lua_overlay_state_scratch,
         &replacement_proxy_sources,
     );
@@ -9350,7 +9358,7 @@ pub fn push_actors(
             let duration = (state.gameplay.density_graph.last_second
                 - state.gameplay.density_graph.first_second)
                 .max(0.001_f32);
-            let progress_w = (((state.current_music_time_display
+            let progress_w = (((gameplay_core::current_music_time_display(state)
                 - state.gameplay.density_graph.first_second)
                 / duration)
                 * graph_w)
@@ -9421,7 +9429,7 @@ pub fn push_actors(
             );
             let chart = &state.charts[player_idx];
             let difficulty_color =
-                color::difficulty_rgba(&chart.difficulty, state.active_color_index);
+                color::difficulty_rgba(&chart.difficulty, gameplay_core::active_color_index(state));
             let meter_text = cached_meter_text(chart.meter);
             let meter_detail_text =
                 color::difficulty_display_name_for_song(&chart.difficulty, &state.song.title, true);
@@ -9570,9 +9578,12 @@ pub fn push_actors(
         }
         // Current BPM Display (1:1 with Simply Love)
         {
-            let base_bpm = state.timing.get_bpm_for_beat(state.current_beat_display);
-            let rate = if state.music_rate.is_finite() {
-                state.music_rate as f64
+            let base_bpm = state
+                .timing
+                .get_bpm_for_beat(gameplay_core::current_beat_display(state));
+            let music_rate = gameplay_core::music_rate(state);
+            let rate = if music_rate.is_finite() {
+                music_rate as f64
             } else {
                 1.0
             };
@@ -9611,8 +9622,9 @@ pub fn push_actors(
                 align(0.5, 0.5): xy(bpm_x, bpm_center_y):
                 zoom(bpm_final_zoom): horizalign(center): z(90)
             ));
-            let rate = if state.music_rate.is_finite() {
-                state.music_rate
+            let music_rate = gameplay_core::music_rate(state);
+            let rate = if music_rate.is_finite() {
+                music_rate
             } else {
                 1.0
             };
@@ -9639,7 +9651,7 @@ pub fn push_actors(
                 diffuse(0.0, 0.0, 0.0, 1.0): z(91)
             ));
             let progress = song_meter_progress(
-                gameplay_core::song_time_ns_to_seconds(state.current_music_time_ns),
+                gameplay_core::song_time_ns_to_seconds(gameplay_core::current_music_time_ns(state)),
                 state.song.precise_first_second(),
                 state.song.precise_last_second(),
             );
@@ -9662,16 +9674,16 @@ pub fn push_actors(
                 match play_style {
                     profile_data::PlayStyle::Versus => {
                         if player_idx == 0 {
-                            color::decorative_rgba(state.active_color_index)
+                            color::decorative_rgba(gameplay_core::active_color_index(state))
                         } else {
-                            color::decorative_rgba(state.active_color_index - 2)
+                            color::decorative_rgba(gameplay_core::active_color_index(state) - 2)
                         }
                     }
                     _ => {
                         if is_p2_single {
-                            color::decorative_rgba(state.active_color_index - 2)
+                            color::decorative_rgba(gameplay_core::active_color_index(state) - 2)
                         } else {
-                            color::decorative_rgba(state.active_color_index)
+                            color::decorative_rgba(gameplay_core::active_color_index(state))
                         }
                     }
                 }
@@ -9789,9 +9801,11 @@ pub fn push_actors(
                             // Logic Parity:
                             // velocity = -(songposition:GetCurBPS() * 0.5)
                             // if songposition:GetFreeze() or songposition:GetDelay() then velocity = 0 end
-                            let bps =
-                                state.timing.get_bpm_for_beat(state.current_beat_display) / 60.0;
-                            let velocity_x = if state.is_in_freeze || state.is_in_delay {
+                            let bps = state
+                                .timing
+                                .get_bpm_for_beat(gameplay_core::current_beat_display(state))
+                                / 60.0;
+                            let velocity_x = if gameplay_core::beat_phase_paused(state) {
                                 0.0
                             } else {
                                 -(bps * 0.5)
@@ -9973,9 +9987,11 @@ pub fn push_actors(
 
                         // MeterSwoosh
                         if filled_h > 0.0 && !dead {
-                            let bps =
-                                state.timing.get_bpm_for_beat(state.current_beat_display) / 60.0;
-                            let velocity_x = if state.is_in_freeze || state.is_in_delay {
+                            let bps = state
+                                .timing
+                                .get_bpm_for_beat(gameplay_core::current_beat_display(state))
+                                / 60.0;
+                            let velocity_x = if gameplay_core::beat_phase_paused(state) {
                                 0.0
                             } else {
                                 -(bps * 0.5)
@@ -10193,7 +10209,7 @@ pub fn push_actors(
         let mut out = Vec::new();
         push_song_lua_layer_actors(
             &mut out,
-            &state.song_lua_visuals.overlays,
+            &song_lua_visuals.overlays,
             &mut song_lua_overlay_order,
             &song_lua_local_state_scratch,
             &song_lua_overlay_state_scratch,
@@ -10202,8 +10218,8 @@ pub fn push_actors(
             asset_manager,
             song_lua_space_width,
             song_lua_space_height,
-            state.current_music_time_display,
-            state.current_beat,
+            gameplay_core::current_music_time_display(state),
+            gameplay_core::current_beat(state),
             state.total_elapsed_in_screen,
             &mut song_lua_order_scratch,
             &mut song_lua_capture_state_scratch,
@@ -10220,20 +10236,15 @@ pub fn push_actors(
     ) {
         actors.push(actor);
     }
-    for (layer_idx, layer) in state
-        .song_lua_visuals
-        .foreground_visual_layers
-        .iter()
-        .enumerate()
-    {
-        if state.current_music_time_display < layer.start_second {
+    for (layer_idx, layer) in song_lua_visuals.foreground_visual_layers.iter().enumerate() {
+        if gameplay_core::current_music_time_display(state) < layer.start_second {
             continue;
         }
         let Some(order_cache) = song_lua_foreground_visual_layer_orders.get_mut(layer_idx) else {
             continue;
         };
         song_lua_overlay_state_sets_from_into(
-            state.current_music_time_display,
+            gameplay_core::current_music_time_display(state),
             &layer.overlays,
             &layer.overlay_events,
             &layer.overlay_eases,
@@ -10244,7 +10255,7 @@ pub fn push_actors(
             &mut song_lua_layer_state_scratch,
         );
         let song_foreground_state = song_lua_song_foreground_state_from(
-            state.current_music_time_display,
+            gameplay_core::current_music_time_display(state),
             &layer.song_foreground,
             layer.song_foreground_events.as_slice(),
         );
@@ -10261,8 +10272,8 @@ pub fn push_actors(
                 asset_manager,
                 layer.screen_width.max(1.0),
                 layer.screen_height.max(1.0),
-                state.current_music_time_display,
-                state.current_beat,
+                gameplay_core::current_music_time_display(state),
+                gameplay_core::current_beat(state),
                 state.total_elapsed_in_screen,
                 &mut song_lua_order_scratch,
                 &mut song_lua_capture_state_scratch,

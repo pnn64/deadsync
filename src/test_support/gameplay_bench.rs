@@ -41,11 +41,16 @@ pub fn fixture() -> GameplayBenchFixture {
     {
         let state = base.state_mut();
         gameplay::set_benchmark_autoplay_enabled(state, true);
-        state.initial_global_offset_seconds = -0.021;
-        state.global_offset_seconds = -0.012;
+        gameplay::set_benchmark_global_offsets(state, -0.021, -0.012);
         gameplay::set_benchmark_autosync_state(state, gameplay::AutosyncMode::Machine, 0.004, 11);
-        state.music_rate = 1.15;
-        state.current_music_time_display = 48.25;
+        gameplay::set_music_rate(state, 1.15);
+        gameplay::set_benchmark_song_position(
+            state,
+            gameplay::current_beat(state),
+            gameplay::current_music_time_ns(state),
+            gameplay::current_beat_display(state),
+            48.25,
+        );
         gameplay::set_benchmark_visible_time(
             state,
             0,

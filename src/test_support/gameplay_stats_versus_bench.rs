@@ -1,4 +1,5 @@
 use crate::assets::AssetManager;
+use crate::game::gameplay;
 use crate::game::profile;
 use crate::screens::components::gameplay::gameplay_stats;
 use crate::screens::gameplay as gameplay_screen;
@@ -34,9 +35,16 @@ pub fn fixture() -> GameplayStatsVersusBenchFixture {
         state.num_players = 2;
         state.num_cols = 8;
         state.cols_per_player = 4;
-        state.note_ranges[1] = state.note_ranges[0];
+        let p1_range = gameplay::note_range_for_player(&state, 0);
+        gameplay::set_benchmark_note_range(state, 1, p1_range);
         state.total_elapsed_in_screen = 9.6;
-        state.current_music_time_display = 64.25;
+        gameplay::set_benchmark_song_position(
+            state,
+            gameplay::current_beat(state),
+            gameplay::current_music_time_ns(state),
+            gameplay::current_beat_display(state),
+            64.25,
+        );
 
         state.players[0].judgment_counts = [22_481, 2_118, 351, 49, 12, 3];
         state.players[1].judgment_counts = [20_204, 1_804, 404, 88, 23, 7];
@@ -47,7 +55,7 @@ pub fn fixture() -> GameplayStatsVersusBenchFixture {
         state.player_profiles[1].show_fa_plus_window = false;
         state.player_profiles[1].custom_fantastic_window = false;
 
-        state.live_window_counts[0] = WindowCounts {
+        let p1_canonical = WindowCounts {
             w0: 18_992,
             w1: 3_489,
             w2: 2_118,
@@ -56,7 +64,7 @@ pub fn fixture() -> GameplayStatsVersusBenchFixture {
             w5: 12,
             miss: 3,
         };
-        state.live_window_counts_10ms_blue[0] = WindowCounts {
+        let p1_ten_ms_blue = WindowCounts {
             w0: 19_704,
             w1: 2_777,
             w2: 2_118,
@@ -65,8 +73,14 @@ pub fn fixture() -> GameplayStatsVersusBenchFixture {
             w5: 12,
             miss: 3,
         };
-        state.live_window_counts_display_blue[0] = state.live_window_counts_10ms_blue[0];
-        state.live_window_counts[1] = WindowCounts {
+        gameplay::set_benchmark_live_window_counts(
+            state,
+            0,
+            p1_canonical,
+            p1_ten_ms_blue,
+            p1_ten_ms_blue,
+        );
+        let p2_counts = WindowCounts {
             w0: 20_204,
             w1: 0,
             w2: 1_804,
@@ -75,8 +89,7 @@ pub fn fixture() -> GameplayStatsVersusBenchFixture {
             w5: 23,
             miss: 7,
         };
-        state.live_window_counts_10ms_blue[1] = state.live_window_counts[1];
-        state.live_window_counts_display_blue[1] = state.live_window_counts[1];
+        gameplay::set_benchmark_live_window_counts(state, 1, p2_counts, p2_counts, p2_counts);
 
         let song = Arc::make_mut(&mut state.song);
         song.banner_path = Some("bench/banner.png".into());

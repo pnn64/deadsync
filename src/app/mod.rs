@@ -249,7 +249,8 @@ impl GameplayLightTracker {
         state: &crate::game::gameplay::State,
         simplify_bass: bool,
     ) {
-        let now_ns = state.current_music_time_ns.saturating_add(LIGHTS_AHEAD_NS);
+        let now_ns =
+            crate::game::gameplay::current_music_time_ns(state).saturating_add(LIGHTS_AHEAD_NS);
         self.queue_cabinet_blinks(lights, now_ns, simplify_bass);
         self.queue_pad_blinks(lights, state, now_ns);
     }
@@ -3003,11 +3004,12 @@ fn song_lua_video_paths(
 fn gameplay_song_lua_video_paths(state: &gameplay::State) -> Vec<PathBuf> {
     let mut paths = Vec::new();
     let mut seen = HashSet::new();
-    push_song_lua_video_paths(&state.song_lua_visuals.overlays, &mut seen, &mut paths);
-    for layer in &state.song_lua_visuals.background_visual_layers {
+    let song_lua_visuals = crate::game::gameplay::song_lua_visuals(state);
+    push_song_lua_video_paths(&song_lua_visuals.overlays, &mut seen, &mut paths);
+    for layer in &song_lua_visuals.background_visual_layers {
         push_song_lua_video_paths(&layer.overlays, &mut seen, &mut paths);
     }
-    for layer in &state.song_lua_visuals.foreground_visual_layers {
+    for layer in &song_lua_visuals.foreground_visual_layers {
         push_song_lua_video_paths(&layer.overlays, &mut seen, &mut paths);
     }
     paths
@@ -3015,7 +3017,9 @@ fn gameplay_song_lua_video_paths(state: &gameplay::State) -> Vec<PathBuf> {
 
 fn gameplay_overlay_video_paths(state: &gameplay::State) -> Vec<PathBuf> {
     let mut paths = gameplay_song_lua_video_paths(state);
-    if let Some(path) = state.song.active_foreground_path(state.current_beat)
+    if let Some(path) = state
+        .song
+        .active_foreground_path(crate::game::gameplay::current_beat(state))
         && crate::assets::dynamic::is_dynamic_video_path(path)
         && !paths.iter().any(|existing| existing == path)
     {
@@ -3323,11 +3327,12 @@ fn prewarm_gameplay_assets(
                 }
             }
         };
-    prewarm_song_lua_overlays(&state.song_lua_visuals.overlays);
-    for layer in &state.song_lua_visuals.background_visual_layers {
+    let song_lua_visuals = crate::game::gameplay::song_lua_visuals(state);
+    prewarm_song_lua_overlays(&song_lua_visuals.overlays);
+    for layer in &song_lua_visuals.background_visual_layers {
         prewarm_song_lua_overlays(&layer.overlays);
     }
-    for layer in &state.song_lua_visuals.foreground_visual_layers {
+    for layer in &song_lua_visuals.foreground_visual_layers {
         prewarm_song_lua_overlays(&layer.overlays);
     }
 }
@@ -3352,11 +3357,12 @@ fn prewarm_gameplay_sfx(state: &gameplay::State) {
             }
         };
 
-    prewarm_sound_overlays(&state.song_lua_visuals.overlays);
-    for layer in &state.song_lua_visuals.background_visual_layers {
+    let song_lua_visuals = crate::game::gameplay::song_lua_visuals(state);
+    prewarm_sound_overlays(&song_lua_visuals.overlays);
+    for layer in &song_lua_visuals.background_visual_layers {
         prewarm_sound_overlays(&layer.overlays);
     }
-    for layer in &state.song_lua_visuals.foreground_visual_layers {
+    for layer in &song_lua_visuals.foreground_visual_layers {
         prewarm_sound_overlays(&layer.overlays);
     }
     for sound_path in &state.song_lua_sound_paths {
@@ -5176,11 +5182,13 @@ impl App {
             let upload_started = Instant::now();
             let gameplay_time = match current_screen {
                 CurrentScreen::Gameplay => screens.gameplay_state.as_ref().map(|state| {
-                    crate::game::gameplay::song_time_ns_to_seconds(state.current_music_time_ns)
+                    crate::game::gameplay::song_time_ns_to_seconds(
+                        crate::game::gameplay::current_music_time_ns(state),
+                    )
                 }),
                 CurrentScreen::Practice => screens.practice_state.as_ref().map(|state| {
                     crate::game::gameplay::song_time_ns_to_seconds(
-                        state.gameplay.current_music_time_ns,
+                        crate::game::gameplay::current_music_time_ns(&state.gameplay),
                     )
                 }),
                 _ => None,
@@ -5897,13 +5905,20 @@ impl App {
 
     #[inline(always)]
     fn gameplay_global_offset_changed(gs: &gameplay::State) -> bool {
-        sync_offset_delta_seconds(gs.initial_global_offset_seconds, gs.global_offset_seconds)
-            .is_some()
+        sync_offset_delta_seconds(
+            crate::game::gameplay::initial_global_offset_seconds(gs),
+            crate::game::gameplay::global_offset_seconds(gs),
+        )
+        .is_some()
     }
 
     #[inline(always)]
     fn gameplay_song_offset_changed(gs: &gameplay::State) -> bool {
-        sync_offset_delta_seconds(gs.initial_song_offset_seconds, gs.song_offset_seconds).is_some()
+        sync_offset_delta_seconds(
+            crate::game::gameplay::initial_song_offset_seconds(gs),
+            crate::game::gameplay::song_offset_seconds(gs),
+        )
+        .is_some()
     }
 
     #[inline(always)]
@@ -5927,8 +5942,8 @@ impl App {
 
         if let Some(line) = sync_change_line(
             "Global Offset",
-            gs.initial_global_offset_seconds,
-            gs.global_offset_seconds,
+            crate::game::gameplay::initial_global_offset_seconds(gs),
+            crate::game::gameplay::global_offset_seconds(gs),
         ) {
             text.push_str(&line);
             text.push_str("\n\n");
@@ -5936,8 +5951,8 @@ impl App {
 
         if let Some(line) = sync_change_line(
             "Song offset",
-            gs.initial_song_offset_seconds,
-            gs.song_offset_seconds,
+            crate::game::gameplay::initial_song_offset_seconds(gs),
+            crate::game::gameplay::song_offset_seconds(gs),
         ) {
             if config::song_path_is_writable(gs.song.simfile_path.as_path()) {
                 text.push_str("You have changed the timing of\n");
@@ -6078,14 +6093,14 @@ impl App {
             let mut song_offset_change: Option<(PathBuf, f32)> = None;
             if let Some(gs) = self.state.screens.gameplay_state.as_ref() {
                 if let Some(global_offset) = sync_offset_target_seconds(
-                    gs.initial_global_offset_seconds,
-                    gs.global_offset_seconds,
+                    crate::game::gameplay::initial_global_offset_seconds(gs),
+                    crate::game::gameplay::global_offset_seconds(gs),
                 ) {
                     config::update_global_offset(global_offset);
                 }
                 if let Some(delta) = sync_offset_delta_seconds(
-                    gs.initial_song_offset_seconds,
-                    gs.song_offset_seconds,
+                    crate::game::gameplay::initial_song_offset_seconds(gs),
+                    crate::game::gameplay::song_offset_seconds(gs),
                 ) && config::song_path_is_writable(gs.song.simfile_path.as_path())
                 {
                     song_offset_change = Some((gs.song.simfile_path.clone(), delta));
@@ -6332,9 +6347,12 @@ impl App {
                 gs.charts[0].short_hash.clone(),
                 gs.charts[1].short_hash.clone(),
             ];
-            let music_rate = gs.music_rate;
-            let scroll_speed = gs.scroll_speed;
-            let active_color_index = gs.active_color_index;
+            let music_rate = crate::game::gameplay::music_rate(gs);
+            let scroll_speed = [
+                crate::game::gameplay::scroll_speed_for_player(gs, 0),
+                crate::game::gameplay::scroll_speed_for_player(gs, 1),
+            ];
+            let active_color_index = crate::game::gameplay::active_color_index(gs);
             return self.prepare_restart_player_options(
                 song,
                 [chart_hashes[0].as_str(), chart_hashes[1].as_str()],
@@ -6402,10 +6420,10 @@ impl App {
         if self.state.screens.current_screen == CurrentScreen::Gameplay
             && let Some(gs) = self.state.screens.gameplay_state.as_mut()
         {
-            let already_exiting = gs.exit_input.exit_transition.is_some();
+            let already_exiting = crate::game::gameplay::exit_transition_active(gs);
             crate::game::gameplay::begin_restart_exit(gs);
             crate::screens::gameplay::drain_audio_commands(gs);
-            if !already_exiting && gs.exit_input.exit_transition.is_some() {
+            if !already_exiting && crate::game::gameplay::exit_transition_active(gs) {
                 self.state.session.gameplay_restart_count = restart_count;
                 self.state.session.restart_pending = true;
             }
@@ -7058,7 +7076,7 @@ impl App {
             let had_pending_background_change = gs.background_path_dirty;
             let mut background_changed = false;
             while let Some(change) = gs.background_changes.get(gs.next_background_change_ix) {
-                if gs.current_beat < change.start_beat {
+                if crate::game::gameplay::current_beat(gs) < change.start_beat {
                     break;
                 }
                 gs.next_background_change_ix += 1;
@@ -7083,13 +7101,17 @@ impl App {
                     gs.previous_background_texture_key = Some(old_texture_key);
                     gs.background_transition = transition;
                     gs.background_transition_start_time =
-                        crate::game::gameplay::song_time_ns_to_seconds(gs.current_music_time_ns);
+                        crate::game::gameplay::song_time_ns_to_seconds(
+                            crate::game::gameplay::current_music_time_ns(gs),
+                        );
                 }
             }
             (
                 gs.current_background_path.clone(),
                 gs.current_background_key.clone(),
-                crate::game::gameplay::song_time_ns_to_seconds(gs.current_music_time_ns),
+                crate::game::gameplay::song_time_ns_to_seconds(
+                    crate::game::gameplay::current_music_time_ns(gs),
+                ),
                 Self::active_gameplay_background_change(gs)
                     .map(|change| change.rate)
                     .unwrap_or(1.0),
@@ -7201,7 +7223,7 @@ impl App {
         let choice_yes_x = cx - 100.0;
         let choice_no_x = cx + 100.0;
         let cursor_x = [choice_yes_x, choice_no_x][active_choice as usize];
-        let cursor_color = color::simply_love_rgba(gs.active_color_index);
+        let cursor_color = color::simply_love_rgba(crate::game::gameplay::active_color_index(gs));
 
         actors.push(act!(quad:
             align(0.0, 0.0):
@@ -9206,7 +9228,7 @@ impl App {
             if self.state.session.course_run.is_some() {
                 let color_index = self.state.screens.gameplay_state.as_ref().map_or(
                     self.state.screens.select_course_state.active_color_index,
-                    |gs| gs.active_color_index,
+                    |gs| crate::game::gameplay::active_color_index(&gs.gameplay),
                 );
                 if !self.prepare_player_options_for_course_stage(color_index) {
                     self.state.screens.player_options_state = None;
@@ -9293,8 +9315,7 @@ impl App {
         self.state.screens.initials_state.active_color_index = idx;
         self.state.screens.gameover_state.active_color_index = idx;
         if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
-            gs.active_color_index = idx;
-            gs.player_color_index = idx;
+            crate::game::gameplay::set_color_indices(gs, idx, idx);
         }
     }
 
@@ -9581,7 +9602,7 @@ impl App {
                 course_display_carry = Some(
                     crate::game::gameplay::course_display_carry_from_state(&gameplay_results),
                 );
-                let color_idx = gameplay_results.active_color_index;
+                let color_idx = crate::game::gameplay::active_color_index(&gameplay_results);
                 let mut eval_state = evaluation::init(Some(gameplay_results));
                 eval_state.active_color_index = color_idx;
                 let _ = self.append_stage_results_from_eval(&eval_state);
@@ -10028,7 +10049,7 @@ impl App {
             }
             let color_idx = gameplay_results.as_ref().map_or(
                 self.state.screens.evaluation_state.active_color_index,
-                |gs| gs.active_color_index,
+                |gs| crate::game::gameplay::active_color_index(&gs.gameplay),
             );
             self.state.screens.evaluation_state = gameplay_results
                 .map(|gs| evaluation::init(Some(gs)))

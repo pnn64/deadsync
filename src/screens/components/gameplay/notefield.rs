@@ -8,15 +8,19 @@ use crate::game::gameplay::{
     TRANSITION_IN_DURATION, VisualEffects,
 };
 use crate::game::gameplay::{
-    active_chart_attack_effects_for_player, column_flash_duration,
-    effective_accel_effects_for_player, effective_appearance_effects_for_player,
-    effective_mini_percent_for_player, effective_perspective_effects_for_player,
-    effective_scroll_effects_for_player, effective_scroll_speed_for_player,
-    effective_spacing_multiplier_for_player, effective_visibility_effects_for_player,
-    effective_visual_effects_for_player, hold_explosion_active, hold_explosion_enabled_for_options,
-    hold_head_render_flags, let_go_head_beat, receptor_glow_visual_for_col,
-    row_hides_completed_note, scroll_receptor_y, song_lua_ease_factor, song_lua_note_hidden,
-    tap_explosion_options_from_profile,
+    active_chart_attack_effects_for_player, active_hold, active_hold_note_indices,
+    column_flash_duration, column_flashes_for_columns, effective_accel_effects_for_player,
+    effective_appearance_effects_for_player, effective_mini_percent_for_player,
+    effective_perspective_effects_for_player, effective_scroll_effects_for_player,
+    effective_scroll_speed_for_player, effective_spacing_multiplier_for_player,
+    effective_visibility_effects_for_player, effective_visual_effects_for_player,
+    field_zoom_for_player, hold_explosion_active, hold_explosion_enabled_for_options,
+    hold_head_render_flags, let_go_head_beat, mine_explosions_for_columns, music_rate,
+    notefield_column_scroll_dir, notefield_draw_distance_after_targets,
+    notefield_draw_distance_before_targets, notefield_reverse_scroll, receptor_bop_zoom_for_col,
+    receptor_glow_visual_for_col, row_hides_completed_note, scroll_receptor_y,
+    scroll_reference_bpm, song_lua_ease_factor, song_lua_note_hidden, song_lua_visuals,
+    tap_explosion_options_from_profile, tap_explosions_for_columns,
 };
 use crate::game::parsing::noteskin::{
     ModelDrawState, ModelMeshCache, NUM_QUANTIZATIONS, NoteAnimPart, Noteskin, SpriteSlot,
@@ -3234,9 +3238,11 @@ pub fn prewarm_text_layout(
 
     let mut max_combo = 0u32;
     let mut max_measure_len = 0i32;
-    let music_end_seconds = crate::game::gameplay::song_time_ns_to_seconds(state.music_end_time_ns)
-        .ceil()
-        .max(0.0) as i32;
+    let music_end_seconds = crate::game::gameplay::song_time_ns_to_seconds(
+        crate::game::gameplay::music_end_time_ns(state),
+    )
+    .ceil()
+    .max(0.0) as i32;
 
     for player in 0..state.num_players {
         let profile = &state.player_profiles[player];
@@ -3264,7 +3270,7 @@ pub fn prewarm_text_layout(
         );
 
         let mc_font_name = zmod_small_combo_font(profile.combo_font);
-        let segs = &state.measure_counter_segments[player];
+        let segs = crate::game::gameplay::measure_counter_segments(state, player);
         let multiplier = profile.measure_counter.multiplier();
         for (seg_ix, seg) in segs.iter().copied().enumerate() {
             let scaled_len = (((seg.end - seg.start) as f32) * multiplier)
@@ -3314,12 +3320,12 @@ pub fn prewarm_text_layout(
             prewarm_percent(
                 cache,
                 mc_font_name,
-                state.mini_indicator_target_score_percent[player],
+                crate::game::gameplay::mini_indicator_target_score_percent(state, player),
             );
             prewarm_percent(
                 cache,
                 mc_font_name,
-                state.mini_indicator_rival_score_percent[player],
+                crate::game::gameplay::mini_indicator_rival_score_percent(state, player),
             );
             prewarm_neg_u32(cache, mc_font_name, 0);
             prewarm_neg_u32(cache, mc_font_name, max_combo.min(COMBO_PREWARM_CAP));
@@ -3819,11 +3825,12 @@ fn zmod_pacemaker_color(pace: f64, rival_pace: f64) -> [f32; 4] {
 }
 
 fn zmod_stream_prog_completion(state: &State, player_idx: usize) -> Option<f64> {
-    let total_stream = state.mini_indicator_total_stream_measures[player_idx] as f64;
+    let total_stream =
+        crate::game::gameplay::mini_indicator_total_stream_measures(state, player_idx) as f64;
     if total_stream <= 0.0 {
         return None;
     }
-    let segs = &state.mini_indicator_stream_segments[player_idx];
+    let segs = crate::game::gameplay::mini_indicator_stream_segments(state, player_idx);
     if segs.is_empty() {
         return None;
     }
@@ -3922,7 +3929,8 @@ fn zmod_mini_indicator_text(
         profile_data::MiniIndicator::RivalScoring => {
             let pace = progress.current_score_percent.clamp(0.0, 100.0);
             let rival_score =
-                state.mini_indicator_rival_score_percent[player_idx].clamp(0.0, 100.0);
+                crate::game::gameplay::mini_indicator_rival_score_percent(state, player_idx)
+                    .clamp(0.0, 100.0);
             let rival_pace =
                 (progress.current_possible_ratio * 10000.0 * rival_score).floor() / 10000.0;
             let diff = (pace - rival_pace).abs();
@@ -3937,7 +3945,9 @@ fn zmod_mini_indicator_text(
         profile_data::MiniIndicator::Pacemaker => {
             let pace = (progress.current_score_percent.clamp(0.0, 100.0) * 100.0).floor();
             let target_ratio =
-                (state.mini_indicator_target_score_percent[player_idx] / 100.0).clamp(0.0, 1.0);
+                (crate::game::gameplay::mini_indicator_target_score_percent(state, player_idx)
+                    / 100.0)
+                    .clamp(0.0, 1.0);
             let rival_pace =
                 (progress.current_possible_ratio * 1_000_000.0 * target_ratio).floor() / 100.0;
 
@@ -4298,7 +4308,7 @@ fn hold_overlaps_visible_window(
 
 #[inline(always)]
 fn song_lua_hides_note(state: &State, player: usize, local_col: usize, beat: f32) -> bool {
-    song_lua_note_hidden(&state.song_lua_visuals.note_hides[player], local_col, beat)
+    song_lua_note_hidden(&song_lua_visuals(state).note_hides[player], local_col, beat)
 }
 
 #[inline(always)]
@@ -4377,9 +4387,11 @@ pub(crate) fn build_bundles(
     // Use the cached field_zoom from gameplay state so visual layout and
     // scroll math share the exact same scaling as gameplay. Practice edit
     // mode overrides this to match ScreenEdit's half-scale edit field.
-    let field_zoom = view.field_zoom.unwrap_or(state.field_zoom[player_idx]);
-    let draw_distance_before_targets = state.draw_distance_before_targets[player_idx];
-    let draw_distance_after_targets = state.draw_distance_after_targets[player_idx];
+    let field_zoom = view
+        .field_zoom
+        .unwrap_or_else(|| field_zoom_for_player(state, player_idx));
+    let draw_distance_before_targets = notefield_draw_distance_before_targets(state, player_idx);
+    let draw_distance_after_targets = notefield_draw_distance_after_targets(state, player_idx);
     let scroll_speed = view
         .scroll_speed
         .unwrap_or_else(|| effective_scroll_speed_for_player(state, player_idx));
@@ -4534,7 +4546,7 @@ pub(crate) fn build_bundles(
         if i >= num_cols {
             return 1.0;
         }
-        state.column_scroll_dirs[col_start + i]
+        notefield_column_scroll_dir(state, col_start + i)
     });
     let base_column_receptor_ys: [f32; MAX_COLS] = from_fn(|i| {
         if i >= num_cols {
@@ -4557,7 +4569,7 @@ pub(crate) fn build_bundles(
         }
         base_column_receptor_ys[i]
             + song_lua_column_y_offset(
-                &state.song_lua_visuals.column_offsets[player_idx],
+                &song_lua_visuals(state).column_offsets[player_idx],
                 i,
                 current_time,
             ) * field_zoom
@@ -4574,7 +4586,7 @@ pub(crate) fn build_bundles(
     let mini_percent = effective_mini_percent_for_player(state, player_idx);
     let mini = effective_mini_value(profile, visual, mini_percent);
     let spacing_mult = effective_spacing_multiplier_for_player(state, player_idx);
-    let reverse_scroll = state.reverse_scroll[player_idx];
+    let reverse_scroll = notefield_reverse_scroll(state, player_idx);
     let hud_reverse = column_reverse_percent[0] >= 0.999_9;
     let judgment_y_base = hud_y(
         screen_center_y() - TAP_JUDGMENT_OFFSET_FROM_CENTER + notefield_offset_y,
@@ -4657,7 +4669,8 @@ pub(crate) fn build_bundles(
         };
         // ITG's FindFirst/FindLastDisplayedBeat search from m_fSongBeat, while
         // ArrowEffects::GetYOffset uses m_fSongBeatVisible internally.
-        let current_search_beat = timing.get_beat_for_time_ns(state.current_music_time_ns);
+        let current_search_beat =
+            timing.get_beat_for_time_ns(crate::game::gameplay::current_music_time_ns(state));
         // The column swap for Step's hold-turn section is handled at the player bundle
         // level. Keep the actual note/receptor/ghost visuals on the normal noteskin
         // path here; applying an extra local Y turn breaks model-backed arrows and hit
@@ -4690,13 +4703,14 @@ pub(crate) fn build_bundles(
         let (rate, cmod_bps_opt, curr_disp_beat, beatmod_multiplier, post_accel_scale) =
             match scroll_speed {
                 _ if edit_beat_spacing => {
-                    let player_multiplier =
-                        scroll_speed.beat_multiplier(state.scroll_reference_bpm, state.music_rate);
+                    let player_multiplier = scroll_speed
+                        .beat_multiplier(scroll_reference_bpm(state), music_rate(state));
                     (1.0, None, current_beat, 1.0, field_zoom * player_multiplier)
                 }
                 ScrollSpeedSetting::CMod(c_bpm) => {
-                    let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
-                        state.music_rate
+                    let gameplay_music_rate = music_rate(state);
+                    let rate = if gameplay_music_rate.is_finite() && gameplay_music_rate > 0.0 {
+                        gameplay_music_rate
                     } else {
                         1.0
                     };
@@ -4704,8 +4718,8 @@ pub(crate) fn build_bundles(
                 }
                 ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
                     let curr_disp = timing.get_displayed_beat(current_beat);
-                    let player_multiplier =
-                        scroll_speed.beat_multiplier(state.scroll_reference_bpm, state.music_rate);
+                    let player_multiplier = scroll_speed
+                        .beat_multiplier(scroll_reference_bpm(state), music_rate(state));
                     (
                         1.0,
                         None,
@@ -4752,7 +4766,7 @@ pub(crate) fn build_bundles(
             let first_beat_to_draw = find_first_displayed_beat(
                 current_search_beat,
                 draw_distance_after_targets,
-                &state.note_count_stats[player_idx],
+                crate::game::gameplay::note_count_stats(state, player_idx),
                 |beat| {
                     apply_accel_y(
                         raw_travel_offset_for_beat(beat),
@@ -4796,7 +4810,8 @@ pub(crate) fn build_bundles(
                 accel,
             ) * post_accel_scale
         };
-        let (note_start, note_end) = state.note_ranges[player_idx];
+        let (note_start, note_end) =
+            crate::game::gameplay::note_range_for_player(state, player_idx);
         let tipsy_y_for_col = |local_col: usize| -> f32 {
             tipsy_y_extra(local_col, arrow_effect_time, visual) + move_y_extra(visual, local_col)
         };
@@ -4891,7 +4906,7 @@ pub(crate) fn build_bundles(
         // lines, so enter this block when either feature is active.
         if show_measure_lines || profile.measure_cues {
             let edit_bar_speed =
-                edit_bar_scroll_speed(scroll_speed, state.scroll_reference_bpm, state.music_rate);
+                edit_bar_scroll_speed(scroll_speed, scroll_reference_bpm(state), music_rate(state));
             let time_signatures = state
                 .gameplay_charts
                 .get(player_idx)
@@ -5232,12 +5247,16 @@ pub(crate) fn build_bundles(
         }
 
         if profile.column_cues {
-            let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
-                state.music_rate
+            let gameplay_music_rate = music_rate(state);
+            let rate = if gameplay_music_rate.is_finite() && gameplay_music_rate > 0.0 {
+                gameplay_music_rate
             } else {
                 1.0
             };
-            if let Some(cue) = active_column_cue(&state.column_cues[player_idx], current_time) {
+            if let Some(cue) = active_column_cue(
+                crate::game::gameplay::column_cues(state, player_idx),
+                current_time,
+            ) {
                 let duration_real = cue.duration / rate;
                 let elapsed_real = (current_time - cue.start_time) / rate;
                 let alpha_mul = column_cue_alpha(elapsed_real, duration_real);
@@ -5324,12 +5343,16 @@ pub(crate) fn build_bundles(
         }
 
         if profile.crossover_cues {
-            let rate = if state.music_rate.is_finite() && state.music_rate > 0.0 {
-                state.music_rate
+            let gameplay_music_rate = music_rate(state);
+            let rate = if gameplay_music_rate.is_finite() && gameplay_music_rate > 0.0 {
+                gameplay_music_rate
             } else {
                 1.0
             };
-            if let Some(cue) = active_column_cue(&state.crossover_cues[player_idx], current_time) {
+            if let Some(cue) = active_column_cue(
+                crate::game::gameplay::crossover_cues(state, player_idx),
+                current_time,
+            ) {
                 let duration_real = cue.duration / rate;
                 let elapsed_real = (current_time - cue.start_time) / rate;
                 let alpha_mul = column_cue_alpha(elapsed_real, duration_real);
@@ -5419,7 +5442,10 @@ pub(crate) fn build_bundles(
             let lane_width = ScrollSpeedSetting::ARROW_SPACING * field_zoom;
             let flash_layout = column_flash_layout(profile.column_flash_size);
             let flash_height = column_flash_height(flash_layout);
-            for (i, flash_opt) in state.column_flashes[col_start..col_end].iter().enumerate() {
+            for (i, flash_opt) in column_flashes_for_columns(state, col_start, num_cols)
+                .iter()
+                .enumerate()
+            {
                 let Some(flash) = flash_opt else {
                     continue;
                 };
@@ -5479,12 +5505,7 @@ pub(crate) fn build_bundles(
                 &invert_distances[..num_cols],
                 &tornado_bounds[..num_cols],
             );
-            let bop_timer = state.receptor_bop_timers[col];
-            let bop_zoom = if bop_timer > 0.0 {
-                state.receptor_bop_behaviors[col].sample_zoom(bop_timer)
-            } else {
-                1.0
-            };
+            let bop_zoom = receptor_bop_zoom_for_col(state, col);
             let receptor_effect_zoom = arrow_effect_zoom(&visual, i, 0.0);
             if !receptor_hidden_by_song_lua
                 && !profile.hide_targets
@@ -5560,7 +5581,7 @@ pub(crate) fn build_bundles(
             let hold_slot = if receptor_hidden_by_song_lua || !hold_explosion_enabled(profile) {
                 None
             } else {
-                state.active_holds[col].as_ref().and_then(|active| {
+                active_hold(state, col).and_then(|active| {
                     let note = state.notes.get(active.note_index)?;
                     if !hold_explosion_active(Some(active), current_beat, note.beat) {
                         return None;
@@ -5763,7 +5784,7 @@ pub(crate) fn build_bundles(
         }
         // Tap explosions (receptor noteflash / GhostArrow) are independent of
         // the "Hide Combo Explosions" UI option, which only affects combo splodes.
-        for (i, active_opt) in state.tap_explosions[col_start..col_start + num_cols]
+        for (i, active_opt) in tap_explosions_for_columns(state, col_start, num_cols)
             .iter()
             .enumerate()
         {
@@ -5796,9 +5817,10 @@ pub(crate) fn build_bundles(
                     let anim_time = active.elapsed;
                     let slot = &layer.slot;
                     let beat_for_anim = if slot.source.is_beat_based() {
-                        (state.current_beat_display - active.start_beat).max(0.0)
+                        (crate::game::gameplay::current_beat_display(state) - active.start_beat)
+                            .max(0.0)
                     } else {
-                        state.current_beat_display
+                        crate::game::gameplay::current_beat_display(state)
                     };
                     let frame = slot.frame_index(anim_time, beat_for_anim);
                     let uv = slot.uv_for_frame_at(frame, state.total_elapsed_in_screen);
@@ -5879,7 +5901,7 @@ pub(crate) fn build_bundles(
             }
         }
         // Mine explosions
-        for (i, active_opt) in state.mine_explosions[col_start..col_start + num_cols]
+        for (i, active_opt) in mine_explosions_for_columns(state, col_start, num_cols)
             .iter()
             .enumerate()
         {
@@ -6035,9 +6057,8 @@ pub(crate) fn build_bundles(
             // ITG gates reverse noteskin metrics by lane reverse state, not by
             // temporary visual inversion from scroll gimmicks.
             let lane_reverse = col_dir < 0.0;
-            let active_state = state.active_holds[note.column]
-                .as_ref()
-                .filter(|h| h.note_index == note_index);
+            let active_state =
+                active_hold(state, note.column).filter(|h| h.note_index == note_index);
             // ITG keeps early-hit hold heads scrolling as inactive until the head
             // reaches the receptor row; only then does hold-active rendering clamp.
             let (engaged, use_active) =
@@ -7655,17 +7676,18 @@ pub(crate) fn build_bundles(
         for local_col in 0..num_cols {
             let col = col_start + local_col;
             for_each_visible_hold_index(
-                &state.lane_hold_indices[col],
+                crate::game::gameplay::lane_hold_indices(state, col),
                 &state.notes,
                 visible_row_range,
                 |note_index| render_hold(note_index),
             );
         }
-        let extra_hold_indices = state
-            .active_holds
-            .iter()
-            .filter_map(|a| a.as_ref().map(|h| h.note_index))
-            .chain(state.decaying_hold_indices.iter().copied())
+        let extra_hold_indices = active_hold_note_indices(state)
+            .chain(
+                crate::game::gameplay::decaying_hold_indices(state)
+                    .iter()
+                    .copied(),
+            )
             .filter(|&idx| {
                 idx >= note_start
                     && idx < note_end
@@ -7683,7 +7705,7 @@ pub(crate) fn build_bundles(
         // Visible tap and mine notes
         for col_idx in 0..num_cols {
             let col = col_start + col_idx;
-            let column_note_indices = &state.lane_note_row_indices[col];
+            let column_note_indices = crate::game::gameplay::lane_note_row_indices(state, col);
             let dir = column_dirs[col_idx];
             let receptor_y_lane = column_receptor_ys[col_idx];
             let fill_slot = mine_ns.mines.get(col_idx).and_then(|slot| slot.as_ref());
@@ -7950,7 +7972,8 @@ pub(crate) fn build_bundles(
                         return;
                     }
                     let tap_note_part = tap_part_for_note_type(note.note_type);
-                    let tap_row_flags = state.tap_row_hold_roll_flags[note_index];
+                    let tap_row_flags =
+                        crate::game::gameplay::tap_row_hold_roll_flags(state, note_index);
                     let tap_replacement_roll =
                         if matches!(note.note_type, NoteType::Tap | NoteType::Lift) {
                             let same_row_has_hold = tap_row_flags & 0b01 != 0;
@@ -8506,7 +8529,7 @@ pub(crate) fn build_bundles(
         let combo_swoosh_zoom_scale = assets::visual_styles::effect_zoom_scale(combo_swoosh_tex);
         let combo_center_x = playfield_center_x;
         let combo_center_y = zmod_layout.combo_y;
-        let player_color = color::decorative_rgba(state.player_color_index);
+        let player_color = color::decorative_rgba(crate::game::gameplay::player_color_index(state));
         let ease_out_quad = |t: f32| -> f32 {
             let t = t.clamp(0.0, 1.0);
             1.0 - (1.0 - t).powi(2)
@@ -9217,7 +9240,8 @@ pub(crate) fn build_bundles(
 
     // Measure Counter / Measure Breakdown (Zmod parity)
     if profile.measure_counter != profile_data::MeasureCounter::None {
-        let segs: &[StreamSegment] = &state.measure_counter_segments[player_idx];
+        let segs: &[StreamSegment] =
+            crate::game::gameplay::measure_counter_segments(state, player_idx);
         if !segs.is_empty() {
             let lookahead: u8 = profile.measure_counter_lookahead.min(4);
             let multiplier = profile.measure_counter.multiplier();
@@ -9347,11 +9371,15 @@ pub(crate) fn build_bundles(
             {
                 let seg = segs[stream_index];
                 if !seg.is_break {
-                    let cur_bps = state.timing.get_bpm_for_beat(state.current_beat_display) / 60.0;
-                    let rate = state.music_rate;
+                    let cur_bps = state
+                        .timing
+                        .get_bpm_for_beat(crate::game::gameplay::current_beat_display(state))
+                        / 60.0;
+                    let rate = music_rate(state);
                     if cur_bps.is_finite() && cur_bps > 0.0 && rate.is_finite() && rate > 0.0 {
                         let measure_seconds = 4.0 / (cur_bps * rate);
-                        let curr_time = state.current_beat_display / (cur_bps * rate);
+                        let curr_time =
+                            crate::game::gameplay::current_beat_display(state) / (cur_bps * rate);
 
                         let seg_len_s =
                             (((seg.end - seg.start) as f32) * measure_seconds).ceil() as i32;
@@ -9497,9 +9525,10 @@ pub(crate) fn build_bundles(
         } else {
             1.0
         };
-        for (i, held_miss) in state.held_miss_judgments[col_start..col_start + num_cols]
-            .iter()
-            .enumerate()
+        for (i, held_miss) in
+            crate::game::gameplay::held_miss_judgments_for_columns(state, col_start, num_cols)
+                .iter()
+                .enumerate()
         {
             let Some(render_info) = held_miss.as_ref() else {
                 continue;
@@ -9542,9 +9571,10 @@ pub(crate) fn build_bundles(
             ));
         }
     }
-    for (i, hold_judgment) in state.hold_judgments[col_start..col_start + num_cols]
-        .iter()
-        .enumerate()
+    for (i, hold_judgment) in
+        crate::game::gameplay::hold_judgments_for_columns(state, col_start, num_cols)
+            .iter()
+            .enumerate()
     {
         if blind_active {
             continue;

@@ -86,7 +86,11 @@ impl std::fmt::Display for ItgReadError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::NotAProfile(p) => {
-                write!(f, "{} is not an ITGmania profile (no Editable.ini)", p.display())
+                write!(
+                    f,
+                    "{} is not an ITGmania profile (no Editable.ini)",
+                    p.display()
+                )
             }
             Self::Io(e) => write!(f, "I/O error: {e}"),
             Self::Xml(e) => write!(f, "Stats.xml parse error: {e}"),
@@ -109,8 +113,8 @@ pub fn is_itg_profile_dir(dir: &Path) -> bool {
 
 /// Reads an entire ITGmania local profile directory into an [`ItgSource`].
 pub fn read_profile_dir(dir: &Path) -> Result<ItgSource, ItgReadError> {
-    let editable_path =
-        find_case_insensitive(dir, "Editable.ini").ok_or_else(|| ItgReadError::NotAProfile(dir.to_path_buf()))?;
+    let editable_path = find_case_insensitive(dir, "Editable.ini")
+        .ok_or_else(|| ItgReadError::NotAProfile(dir.to_path_buf()))?;
 
     let editable = read_editable(&editable_path);
     let online = read_online_keys(dir);
@@ -152,10 +156,16 @@ fn read_online_keys(dir: &Path) -> ItgOnlineKeys {
     if let Some(path) = find_case_insensitive(dir, "GrooveStats.ini") {
         let mut ini = SimpleIni::new();
         if ini.load(&path).is_ok() {
-            keys.groovestats_api_key =
-                ini.get("GrooveStats", "ApiKey").unwrap_or_default().trim().to_string();
-            keys.groovestats_username =
-                ini.get("GrooveStats", "Username").unwrap_or_default().trim().to_string();
+            keys.groovestats_api_key = ini
+                .get("GrooveStats", "ApiKey")
+                .unwrap_or_default()
+                .trim()
+                .to_string();
+            keys.groovestats_username = ini
+                .get("GrooveStats", "Username")
+                .unwrap_or_default()
+                .trim()
+                .to_string();
             keys.groovestats_is_pad_player = ini
                 .get("GrooveStats", "IsPadPlayer")
                 .map(|s| parse_bool(&s))
@@ -166,8 +176,11 @@ fn read_online_keys(dir: &Path) -> ItgOnlineKeys {
     if let Some(path) = find_case_insensitive(dir, "ArrowCloud.ini") {
         let mut ini = SimpleIni::new();
         if ini.load(&path).is_ok() {
-            keys.arrowcloud_api_key =
-                ini.get("ArrowCloud", "ApiKey").unwrap_or_default().trim().to_string();
+            keys.arrowcloud_api_key = ini
+                .get("ArrowCloud", "ApiKey")
+                .unwrap_or_default()
+                .trim()
+                .to_string();
         }
     }
 

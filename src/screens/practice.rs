@@ -972,7 +972,7 @@ fn stop_playback(state: &mut State) {
     clear_cursor_hold_inputs(state);
     clear_page_hold_inputs(state);
     audio::stop_music();
-    let current_beat = state.gameplay.current_beat.max(MIN_CURSOR_BEAT);
+    let current_beat = gameplay_core::current_beat(&state.gameplay).max(MIN_CURSOR_BEAT);
     let current_time = gameplay_core::music_time_for_beat(&state.gameplay, current_beat);
     // Practice hits mutate note results, which the edit notefield uses for hide logic.
     gameplay_core::reset_practice_playback(&mut state.gameplay, current_time);
@@ -1448,7 +1448,7 @@ fn quantized_music_rate(current: f32, delta: f32) -> f32 {
 }
 
 fn change_music_rate(state: &mut State, delta: f32) -> bool {
-    let current = state.gameplay.music_rate;
+    let current = gameplay_core::music_rate(&state.gameplay);
     let new_rate = quantized_music_rate(current, delta);
     if (new_rate - current).abs() <= f32::EPSILON {
         audio::play_sfx(EDIT_INVALID_SOUND);
@@ -1707,7 +1707,9 @@ fn append_player_markers(
     let col_start = player_idx * state.gameplay.cols_per_player;
     let col_end = (col_start + state.gameplay.cols_per_player)
         .min(state.gameplay.num_cols)
-        .min(state.gameplay.column_scroll_dirs.len());
+        .min(gameplay_core::notefield_column_scroll_dir_count(
+            &state.gameplay,
+        ));
     let num_cols = col_end.saturating_sub(col_start);
     if num_cols == 0 {
         return;
@@ -1956,7 +1958,7 @@ fn marker_y_for_beat(
     offset_y: f32,
     beat: f32,
 ) -> f32 {
-    let dir = state.gameplay.column_scroll_dirs[col_start].signum();
+    let dir = gameplay_core::notefield_column_scroll_dir(&state.gameplay, col_start).signum();
     let dir = if dir.abs() <= f32::EPSILON { 1.0 } else { dir };
     let receptor_y = practice_edit_cursor_y() + offset_y;
     let field_zoom = practice_edit_field_zoom();
@@ -1967,8 +1969,8 @@ fn marker_y_for_beat(
         current_beat,
         field_zoom,
         scroll_speed,
-        state.gameplay.scroll_reference_bpm,
-        state.gameplay.music_rate,
+        gameplay_core::scroll_reference_bpm(&state.gameplay),
+        gameplay_core::music_rate(&state.gameplay),
     );
     receptor_y + dir * travel
 }
@@ -2118,7 +2120,7 @@ fn append_flash_overlay(state: &State, actors: &mut Vec<Actor>) {
 }
 
 fn practice_player_color(state: &State) -> [f32; 4] {
-    color::simply_love_rgba(state.gameplay.active_color_index)
+    color::simply_love_rgba(gameplay_core::active_color_index(&state.gameplay))
 }
 
 fn edit_info_text(state: &State) -> String {

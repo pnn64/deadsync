@@ -2262,7 +2262,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             .take(gs.num_players.min(MAX_PLAYERS))
         {
             let noteskin = gs.noteskin_assets.noteskin[player_idx].take();
-            let (start, end) = gs.note_ranges[player_idx];
+            let (start, end) = crate::game::gameplay::note_range_for_player(&gs, player_idx);
             let notes = &gs.notes[start..end];
             let note_times = &gs.note_time_cache_ns[start..end];
             let hold_end_times = &gs.hold_end_time_cache_ns[start..end];
@@ -2442,7 +2442,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 && groovestats.valid
                 && course_life_submit_eligible
                 && prof.groovestats_is_pad_player
-                && (gs.course_display_totals.is_none()
+                && (!crate::game::gameplay::course_display_is_course_stage(&gs)
                     || cfg.autosubmit_course_scores_individually)
                 && !prof.groovestats_api_key.trim().is_empty();
             let expected_arrowcloud_submit = cfg.enable_arrowcloud
@@ -2450,7 +2450,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 && (passed || (failed && cfg.submit_arrowcloud_fails))
                 && lua_submit_allowed
                 && (course_life_submit_eligible || (failed && cfg.submit_arrowcloud_fails))
-                && (gs.course_display_totals.is_none()
+                && (!crate::game::gameplay::course_display_is_course_stage(&gs)
                     || cfg.autosubmit_course_scores_individually)
                 && !prof.arrowcloud_api_key.trim().is_empty();
             let earned_machine_record = local_score_valid
@@ -2495,6 +2495,12 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 col_offset,
                 prof.show_fa_plus_window,
             );
+            let gameplay_music_rate = crate::game::gameplay::music_rate(&gs);
+            let music_rate = if gameplay_music_rate.is_finite() && gameplay_music_rate > 0.0 {
+                gameplay_music_rate
+            } else {
+                1.0
+            };
 
             *score_info_slot = Some(ScoreInfo {
                 song: gs.song.clone(),
@@ -2513,7 +2519,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 earned_grade_points: p.earned_grade_points,
                 possible_grade_points: totals.possible_grade_points,
                 grade,
-                speed_mod: gs.scroll_speed[player_idx],
+                speed_mod: crate::game::gameplay::scroll_speed_for_player(&gs, player_idx),
                 mods_text: crate::screens::components::gameplay::notefield::gameplay_mods_text(
                     &gs, player_idx,
                 ),
@@ -2535,11 +2541,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 histogram,
                 graph_first_second,
                 graph_last_second,
-                music_rate: if gs.music_rate.is_finite() && gs.music_rate > 0.0 {
-                    gs.music_rate
-                } else {
-                    1.0
-                },
+                music_rate,
                 life_history: p.life_history.clone(),
                 fail_time: p.fail_time,
                 window_counts,

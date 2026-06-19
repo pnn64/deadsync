@@ -349,7 +349,7 @@ fn step_gameplay(
     if measured {
         checksum = mix_checksum(
             checksum,
-            black_box(state.current_music_time_display.to_bits() as u64),
+            black_box(gameplay::current_music_time_display(state).to_bits() as u64),
         );
     }
     checksum
@@ -357,60 +357,25 @@ fn step_gameplay(
 
 fn prepare_gameplay_state(state: &mut gameplay::State) {
     gameplay::reset_benchmark_stage_runtime(state);
-    state.exit_input.reset();
+    gameplay::reset_benchmark_exit_input(state);
     state.total_elapsed_in_screen = 0.0;
-    state.current_beat = 0.0;
-    state.current_music_time_ns = 0;
-    state.current_beat_display = 0.0;
-    state.current_music_time_display = 0.0;
+    gameplay::set_benchmark_song_position(state, 0.0, 0, 0.0, 0.0);
     gameplay::fill_benchmark_visible_time(state, 0.0);
     state.notes.clear();
-    state.note_ranges.fill((0, 0));
-    state.row_entry_ranges.fill((0, 0));
-    state.judged_row_cursor.fill(0);
-    state.next_tap_miss_cursor.fill(0);
-    state.next_mine_avoid_cursor.fill(0);
-    state.next_mine_ix_cursor.fill(0);
+    gameplay::clear_benchmark_note_ranges(state);
+    gameplay::clear_benchmark_mine_scan(state);
     state.row_entries.clear();
-    for row_map_cache in &mut state.row_map_cache {
-        row_map_cache.clear();
-    }
-    state.note_row_entry_indices.clear();
-    state.tap_row_hold_roll_flags.clear();
+    gameplay::clear_benchmark_row_indices(state);
     state.note_time_cache_ns.clear();
     state.hold_end_time_cache_ns.clear();
-    state.notes_end_time_ns = 3_600_000_000_000;
-    state.music_end_time_ns = 3_600_000_000_000;
-    state.decaying_hold_indices.clear();
-    state.hold_decay_active.clear();
+    gameplay::set_benchmark_end_times(state, 3_600_000_000_000, 3_600_000_000_000);
+    gameplay::clear_benchmark_hold_runtime(state);
     gameplay::clear_recorded_replay_edges(state);
-    for note_indices in &mut state.lane_note_indices {
-        note_indices.clear();
-    }
-    for cues in &mut state.column_cues {
-        cues.clear();
-    }
-    for segments in &mut state.measure_counter_segments {
-        segments.clear();
-    }
-    for segments in &mut state.mini_indicator_stream_segments {
-        segments.clear();
-    }
-    for mine_ix in &mut state.mine_note_ix {
-        mine_ix.clear();
-    }
-    for mine_time_ns in &mut state.mine_note_time_ns {
-        mine_time_ns.clear();
-    }
-    for hold in &mut state.active_holds {
-        *hold = None;
-    }
-    for explosion in &mut state.tap_explosions {
-        *explosion = None;
-    }
-    for explosion in &mut state.mine_explosions {
-        *explosion = None;
-    }
+    gameplay::clear_benchmark_lane_indices(state);
+    gameplay::clear_benchmark_cue_runtime(state);
+    gameplay::clear_benchmark_mini_indicator_stream_segments(state);
+    gameplay::clear_benchmark_visual_feedback(state);
+    gameplay::clear_benchmark_active_holds(state);
 }
 
 fn install_bench_keymap() {
@@ -440,7 +405,7 @@ fn checksum_input_event(ev: InputEvent, action: GameplayAction) -> u64 {
 #[inline(always)]
 fn checksum_state(state: &gameplay::State, action: GameplayAction) -> u64 {
     (state.total_elapsed_in_screen.to_bits() as u64)
-        ^ (state.current_music_time_display.to_bits() as u64).rotate_left(13)
+        ^ (gameplay::current_music_time_display(state).to_bits() as u64).rotate_left(13)
         ^ (state.players[0].combo as u64).rotate_left(29)
         ^ (state.players[0].life.to_bits() as u64).rotate_left(41)
         ^ gameplay_action_hash(action)

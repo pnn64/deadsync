@@ -9,9 +9,7 @@
 //! nor the Hard-EX score can be reconstructed from `Stats.xml`. Both are stored
 //! as `0.0`; only the ITG percent and grade carry over.
 
-use crate::{
-    Grade, LOCAL_SCORE_VERSION, LocalScoreEntry, compute_local_lamp, grade_to_code,
-};
+use crate::{Grade, LOCAL_SCORE_VERSION, LocalScoreEntry, compute_local_lamp, grade_to_code};
 use chrono::{NaiveDateTime, TimeZone};
 
 /// A single ITGmania high-score record, parsed from `Stats.xml`.
@@ -107,7 +105,10 @@ pub fn local_score_from_itg(hs: &ImportedHighScore) -> Option<LocalScoreEntry> {
     let grade = grade_from_itg(&hs.grade)?;
 
     let counts = [hs.w1, hs.w2, hs.w3, hs.w4, hs.w5, hs.miss];
-    let holds_total = hs.held.saturating_add(hs.let_go).saturating_add(hs.missed_hold);
+    let holds_total = hs
+        .held
+        .saturating_add(hs.let_go)
+        .saturating_add(hs.missed_hold);
     let mines_total = hs.hit_mine.saturating_add(hs.avoid_mine);
 
     let (lamp_index, lamp_judge_count) = compute_local_lamp(counts, grade, None);

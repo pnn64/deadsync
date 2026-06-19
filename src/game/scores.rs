@@ -1383,8 +1383,8 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
             let reasons = gameplay::score_invalid_reason_lines_for_chart(
                 &gs.charts[player_idx],
                 &gs.player_profiles[player_idx],
-                gs.scroll_speed[player_idx],
-                gs.music_rate,
+                gameplay::scroll_speed_for_player(gs, player_idx),
+                gameplay::music_rate(gs),
             );
             let detail = if reasons.is_empty() {
                 "ranking-invalid modifiers were used".to_string()
@@ -1422,7 +1422,7 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
             Grade::Failed
         };
 
-        let (start, end) = gs.note_ranges[player_idx];
+        let (start, end) = gameplay::note_range_for_player(gs, player_idx);
         let notes = &gs.notes[start..end];
         let note_times = &gs.note_time_cache_ns[start..end];
         let hold_end_times = &gs.hold_end_time_cache_ns[start..end];
@@ -1454,14 +1454,14 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
         grade = promote_quint_grade(grade, ex_score_percent);
 
         let counts = judgment_counts_arr(p);
-        let white_fantastics = Some(gs.live_window_counts[player_idx].w1);
+        let white_fantastics = Some(gameplay::live_window_counts(gs, player_idx).w1);
         let (lamp_index, lamp_judge_count) = compute_local_lamp(counts, grade, white_fantastics);
         let replay = replay_edges_for_player(gs, player_idx);
 
         let mut entry = LocalScoreEntry {
             version: LOCAL_SCORE_VERSION,
             played_at_ms: now_ms,
-            music_rate: gs.music_rate,
+            music_rate: gameplay::music_rate(gs),
             score_percent,
             grade_code: grade_to_code(grade),
             lamp_index,

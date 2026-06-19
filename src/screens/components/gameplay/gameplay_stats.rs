@@ -144,7 +144,7 @@ fn time_remaining_right_text() -> Arc<str> {
 }
 
 fn time_total_text(state: &State) -> Arc<str> {
-    if state.course_display_timing.is_some() {
+    if gameplay::course_display_timing(state).is_some() {
         tr("Gameplay", "TimeCourse")
     } else {
         tr("Gameplay", "TimeSong")
@@ -195,8 +195,9 @@ struct StepStatsTimeDisplay {
 
 #[inline(always)]
 fn step_stats_music_rate(state: &State) -> f32 {
-    if state.music_rate.is_finite() && state.music_rate > 0.0 {
-        state.music_rate
+    let music_rate = gameplay::music_rate(state);
+    if music_rate.is_finite() && music_rate > 0.0 {
+        music_rate
     } else {
         1.0
     }
@@ -204,7 +205,7 @@ fn step_stats_music_rate(state: &State) -> f32 {
 
 fn step_stats_time_display(state: &State, player_idx: usize) -> StepStatsTimeDisplay {
     let rate = step_stats_music_rate(state);
-    let (base_elapsed, total) = state.course_display_timing.map_or_else(
+    let (base_elapsed, total) = gameplay::course_display_timing(state).map_or_else(
         || (0.0, state.song.precise_last_second().max(0.0)),
         |timing| {
             (
@@ -213,7 +214,8 @@ fn step_stats_time_display(state: &State, player_idx: usize) -> StepStatsTimeDis
             )
         },
     );
-    let current_music_seconds = gameplay::song_time_ns_to_seconds(state.current_music_time_ns);
+    let current_music_seconds =
+        gameplay::song_time_ns_to_seconds(gameplay::current_music_time_ns(state));
     let stage_elapsed = state
         .players
         .get(player_idx)
@@ -807,7 +809,8 @@ pub fn prewarm_text_layout(
         }
     }
     let end_seconds = crate::game::gameplay::song_time_ns_to_seconds(
-        state.music_end_time_ns.max(state.notes_end_time_ns),
+        crate::game::gameplay::music_end_time_ns(state)
+            .max(crate::game::gameplay::notes_end_time_ns(state)),
     )
     .ceil()
     .max(0.0) as u32;
@@ -1196,7 +1199,8 @@ pub fn push_versus_step_stats(
                     let row_height = if show_fa_split { 29.0 } else { 35.0 };
                     let disabled_windows = player_profile.timing_windows.disabled_windows();
 
-                    let (start, end) = state.note_ranges[player_idx];
+                    let (start, end) =
+                        crate::game::gameplay::note_range_for_player(state, player_idx);
                     if show_fa_split && end > start {
                         let blue_window_ms = gameplay::player_blue_window_ms(state, player_idx);
                         let wc = gameplay::display_window_counts(
@@ -1752,7 +1756,7 @@ pub fn push_double_step_stats(
             frame_cx,
             frame_cy,
             frame_zoom,
-            state.current_music_time_display,
+            gameplay::current_music_time_display(state),
         ));
     }
 
@@ -2355,7 +2359,7 @@ fn build_scorebox_pane(
         frame_cx,
         frame_cy,
         layout.banner_data_zoom,
-        state.current_music_time_display,
+        gameplay::current_music_time_display(state),
     ));
 }
 
