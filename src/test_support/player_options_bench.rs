@@ -25,7 +25,7 @@ impl PlayerOptionsBenchFixture {
 pub fn fixture() -> PlayerOptionsBenchFixture {
     crate::assets::i18n::init("en");
     let base = notefield_bench::fixture();
-    let song = base.state().song.clone();
+    let song = crate::game::gameplay::song_arc(base.state());
 
     profile::set_session_play_style(profile_data::PlayStyle::Versus);
     profile::set_session_player_side(profile_data::PlayerSide::P1);

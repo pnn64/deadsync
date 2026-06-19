@@ -417,7 +417,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         stop_beat,
     } = state.mode
     else {
-        state.gameplay.total_elapsed_in_screen += delta_time;
+        gameplay_core::advance_screen_elapsed(&mut state.gameplay, delta_time);
         update_cursor_hold(state, delta_time);
         update_page_hold(state, delta_time);
         update_display_scroll(state, delta_time);
@@ -948,7 +948,10 @@ fn start_selection_like_itg(state: &mut State) {
 }
 
 fn snapped_playback_music_time(state: &State, playback_music_time: f32) -> f32 {
-    let Some(music_path) = state.gameplay.charts[0].music_path.as_ref() else {
+    let Some(music_path) = gameplay_core::charts(&state.gameplay)[0]
+        .music_path
+        .as_ref()
+    else {
         return playback_music_time;
     };
     audio::snap_music_start_sec(music_path, f64::from(playback_music_time)) as f32
@@ -1477,8 +1480,10 @@ fn set_music_rate_flash(state: &mut State, key: &str, rate: f32) {
 }
 
 fn effective_bpm_str(state: &State, rate: f32) -> String {
-    let song = &state.gameplay.song;
-    let chart = state.gameplay.charts.first().map(|c| c.as_ref());
+    let song = gameplay_core::song(&state.gameplay);
+    let chart = gameplay_core::charts(&state.gameplay)
+        .first()
+        .map(|c| c.as_ref());
     let is_random = chart
         .is_some_and(|c| matches!(c.display_bpm, Some(deadsync_chart::ChartDisplayBpm::Random)));
     if is_random {
@@ -1521,17 +1526,13 @@ fn fmt_music_rate(rate: f32) -> String {
 fn seek_chart_note(state: &mut State, dir: i32) {
     let current = state.cursor_beat;
     let target = if dir < 0 {
-        state
-            .gameplay
-            .notes
+        gameplay_core::notes(&state.gameplay)
             .iter()
             .filter(|note| note.can_be_judged && note.beat < current - BEAT_EPSILON)
             .map(|note| note.beat)
             .max_by(|a, b| a.total_cmp(b))
     } else {
-        state
-            .gameplay
-            .notes
+        gameplay_core::notes(&state.gameplay)
             .iter()
             .filter(|note| note.can_be_judged && note.beat > current + BEAT_EPSILON)
             .map(|note| note.beat)
@@ -1651,22 +1652,24 @@ fn selection_range(state: &State) -> Option<(f32, f32)> {
 }
 
 fn edit_reverse_scroll(state: &State) -> bool {
-    state.gameplay.player_profiles.first().is_some_and(|p| {
-        p.scroll_option
-            .contains(profile_data::ScrollOption::Reverse)
-    })
+    gameplay_core::player_profiles(&state.gameplay)
+        .first()
+        .is_some_and(|p| {
+            p.scroll_option
+                .contains(profile_data::ScrollOption::Reverse)
+        })
 }
 
 fn max_play_beat(state: &State) -> f32 {
-    let note_beat = state
-        .gameplay
-        .notes
+    let note_beat = gameplay_core::notes(&state.gameplay)
         .iter()
         .map(|note| note.hold.as_ref().map_or(note.beat, |hold| hold.end_beat))
         .fold(MIN_CURSOR_BEAT, f32::max);
     let song_beat = gameplay_core::beat_for_music_time(
         &state.gameplay,
-        state.gameplay.song.music_length_seconds.max(0.0),
+        gameplay_core::song(&state.gameplay)
+            .music_length_seconds
+            .max(0.0),
     );
     note_beat.max(song_beat).max(MIN_CURSOR_BEAT)
 }
@@ -1700,13 +1703,13 @@ fn append_player_markers(
     play_style: profile_data::PlayStyle,
     center_1player_notefield: bool,
 ) {
-    if player_idx >= state.gameplay.num_players {
+    if player_idx >= gameplay_core::num_players(&state.gameplay) {
         return;
     }
 
-    let col_start = player_idx * state.gameplay.cols_per_player;
-    let col_end = (col_start + state.gameplay.cols_per_player)
-        .min(state.gameplay.num_cols)
+    let col_start = player_idx * gameplay_core::cols_per_player(&state.gameplay);
+    let col_end = (col_start + gameplay_core::cols_per_player(&state.gameplay))
+        .min(gameplay_core::num_cols(&state.gameplay))
         .min(gameplay_core::notefield_column_scroll_dir_count(
             &state.gameplay,
         ));
@@ -1715,7 +1718,7 @@ fn append_player_markers(
         return;
     }
 
-    let profile = &state.gameplay.player_profiles[player_idx];
+    let profile = &gameplay_core::player_profiles(&state.gameplay)[player_idx];
     let offset_sign = match placement {
         MarkerPlacement::P1 => -1.0,
         MarkerPlacement::P2 => 1.0,
@@ -1723,12 +1726,12 @@ fn append_player_markers(
     let offset_x = offset_sign * profile.note_field_offset_x.clamp(0, 50) as f32;
     let offset_y = profile.note_field_offset_y.clamp(-50, 50) as f32;
     let clamped_width = screen_width().clamp(640.0, 854.0);
-    let centered_one_side = state.gameplay.num_players == 1
+    let centered_one_side = gameplay_core::num_players(&state.gameplay) == 1
         && play_style == profile_data::PlayStyle::Single
         && center_1player_notefield;
-    let centered_both_sides =
-        state.gameplay.num_players == 1 && play_style == profile_data::PlayStyle::Double;
-    let base_x = if state.gameplay.num_players == 2 {
+    let centered_both_sides = gameplay_core::num_players(&state.gameplay) == 1
+        && play_style == profile_data::PlayStyle::Double;
+    let base_x = if gameplay_core::num_players(&state.gameplay) == 2 {
         match placement {
             MarkerPlacement::P1 => screen_center_x() - clamped_width * 0.25,
             MarkerPlacement::P2 => screen_center_x() + clamped_width * 0.25,
@@ -1754,7 +1757,8 @@ fn append_player_markers(
         width,
         zoom: field_zoom,
     };
-    let marker_phase = (state.gameplay.total_elapsed_in_screen * std::f32::consts::PI).sin();
+    let marker_phase =
+        (gameplay_core::total_elapsed_in_screen(&state.gameplay) * std::f32::consts::PI).sin();
     let marker_shade = 0.75 + marker_phase * 0.25;
     let cursor_y = marker_y_for_beat(state, player_idx, col_start, offset_y, state.cursor_beat);
     append_timing_segment_labels(state, actors, geom);
@@ -1786,8 +1790,13 @@ fn append_player_markers(
 }
 
 fn append_timing_segment_labels(state: &State, actors: &mut Vec<Actor>, geom: PracticeFieldGeom) {
-    let timing = &state.gameplay.gameplay_charts[geom.player_idx].timing_segments;
-    let glow_alpha = timing_label_glow_alpha(state.gameplay.total_elapsed_in_screen);
+    let Some(gameplay_chart) = gameplay_core::gameplay_chart(&state.gameplay, geom.player_idx)
+    else {
+        return;
+    };
+    let timing = &gameplay_chart.timing_segments;
+    let glow_alpha =
+        timing_label_glow_alpha(gameplay_core::total_elapsed_in_screen(&state.gameplay));
     append_timing_labels_from_segments(state, actors, geom, timing, glow_alpha);
 }
 
@@ -2124,8 +2133,8 @@ fn practice_player_color(state: &State) -> [f32; 4] {
 }
 
 fn edit_info_text(state: &State) -> String {
-    let chart = &state.gameplay.charts[0];
-    let song = &state.gameplay.song;
+    let chart = &gameplay_core::charts(&state.gameplay)[0];
+    let song = gameplay_core::song(&state.gameplay);
     let current_second = gameplay_core::music_time_for_beat(&state.gameplay, state.cursor_beat);
     let difficulty = color::difficulty_display_name_for_song(&chart.difficulty, &song.title, true);
     let snap = SNAP_LABELS[state.snap_index];

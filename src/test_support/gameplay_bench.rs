@@ -58,20 +58,20 @@ pub fn fixture() -> GameplayBenchFixture {
             48.25,
             gameplay::visible_beat(state, 0),
         );
-        state.density_graph.first_second = 0.0;
-        state.density_graph.last_second = 120.0;
-        state.density_graph.top_h = 30.0;
-        state.density_graph.top_w[0] = 214.0;
-        state.density_graph.top_scale_y[0] = 0.85;
-        state.players[0].life = 0.734;
-        state.player_profiles[0].nps_graph_at_top = true;
-        state.player_profiles[0].show_ex_score = true;
-        state.player_profiles[0].show_hard_ex_score = true;
-        state.player_profiles[0].show_life_percent = true;
-        state.player_profiles[0].hide_score = false;
-        state.player_profiles[0].hide_lifebar = false;
-        state.player_profiles[0].hide_song_bg = false;
-        state.player_profiles[0].step_statistics = profile_data::StepStatisticsMask::empty();
+        gameplay::set_benchmark_density_graph_top(state, 0.0, 120.0, 0, 214.0, 30.0, 0.85);
+        gameplay::update_benchmark_player(state, 0, |player| {
+            player.life = 0.734;
+        });
+        gameplay::update_benchmark_player_profile(state, 0, |profile| {
+            profile.nps_graph_at_top = true;
+            profile.show_ex_score = true;
+            profile.show_hard_ex_score = true;
+            profile.show_life_percent = true;
+            profile.hide_score = false;
+            profile.hide_lifebar = false;
+            profile.hide_song_bg = false;
+            profile.step_statistics = profile_data::StepStatisticsMask::empty();
+        });
     }
     let (state, noteskin_assets, _) = base.into_parts();
     let mut state = gameplay_screen::State::from_gameplay(state, noteskin_assets);

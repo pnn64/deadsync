@@ -31,9 +31,9 @@ pub use deadsync_gameplay::{
     GameplayAutosyncRuntimeState, GameplayBeatPhaseState, GameplayCapacityTraceEvent,
     GameplayCapacityTraceKind, GameplayCapacityTraceSnapshot, GameplayChartTotalsState,
     GameplayCommandQueue, GameplayConfig, GameplayCourseDisplayState, GameplayCueRuntimeState,
-    GameplayDangerFxState, GameplayDensityGraphState, GameplayDisplayClockState,
-    GameplayEndTimingState, GameplayExit, GameplayExitInputState, GameplayExitPromptState,
-    GameplayFailType, GameplayHoldFeedbackState, GameplayHoldRuntimeState,
+    GameplayDangerFxState, GameplayDensityGraphState, GameplayDensityGraphView,
+    GameplayDisplayClockState, GameplayEndTimingState, GameplayExit, GameplayExitInputState,
+    GameplayExitPromptState, GameplayFailType, GameplayHoldFeedbackState, GameplayHoldRuntimeState,
     GameplayInputLatencySample, GameplayInputLatencyTrace, GameplayInputPlayStyle,
     GameplayInputPlayerSide, GameplayInputState, GameplayLaneIndexState, GameplayLifeDeltaUpdate,
     GameplayMenuInput, GameplayMenuInputPlan, GameplayMineScanState, GameplayMiniIndicatorData,
@@ -56,13 +56,13 @@ pub use deadsync_gameplay::{
     HoldResultStatsState, HoldToExitKey, INITIAL_HOLD_LIFE, INSERT_MASK_BIT_BIG,
     INSERT_MASK_BIT_BMRIZE, INSERT_MASK_BIT_ECHO, INSERT_MASK_BIT_MINES, INSERT_MASK_BIT_QUICK,
     INSERT_MASK_BIT_SKIPPY, INSERT_MASK_BIT_STOMP, INSERT_MASK_BIT_WIDE, ItgScoreInputs,
-    ItgScoreStage, JudgmentRenderInfo, LaneInputUpdate, LeadInTiming, MAX_ACTIVE_INPUT_SLOTS,
-    MINE_EXPLOSION_DURATION, MINI_PERCENT_MAX, MINI_PERCENT_MIN, MineHitPlayerState,
-    MineHitPlayerUpdate, MineHitSideEffectPlan, MineJudgmentRenderInfo, MiniAttackMode,
-    NoteCountStat, NoteHitEval, OFFSET_ADJUST_REPEAT_DELAY, OFFSET_ADJUST_REPEAT_INTERVAL,
-    OFFSET_ADJUST_STEP_SECONDS, OffsetIndicatorText, PendingMissedHoldResolution,
-    PerspectiveEffects, PerspectiveOverrides, PlayerJudgmentTiming, PlayerRowScanState,
-    PlayerRuntime, PracticePlayerCursors, ProvisionalEarlyHitPlan,
+    ItgScoreStage, JudgmentRenderInfo, LaneInputUpdate, LeadInTiming, M_MOD_HIGH_CAP,
+    MAX_ACTIVE_INPUT_SLOTS, MINE_EXPLOSION_DURATION, MINI_PERCENT_MAX, MINI_PERCENT_MIN,
+    MineHitPlayerState, MineHitPlayerUpdate, MineHitSideEffectPlan, MineJudgmentRenderInfo,
+    MiniAttackMode, NoteCountStat, NoteHitEval, OFFSET_ADJUST_REPEAT_DELAY,
+    OFFSET_ADJUST_REPEAT_INTERVAL, OFFSET_ADJUST_STEP_SECONDS, OffsetIndicatorText,
+    PendingMissedHoldResolution, PerspectiveEffects, PerspectiveOverrides, PlayerJudgmentTiming,
+    PlayerRowScanState, PlayerRuntime, PracticePlayerCursors, ProvisionalEarlyHitPlan,
     ProvisionalEarlyNoteResultUpdate, RECEPTOR_GLOW_DURATION, RECEPTOR_STEP_WINDOWS,
     RECEPTOR_Y_OFFSET_FROM_CENTER, RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, REMOVE_MASK_BIT_LITTLE,
     REMOVE_MASK_BIT_NO_FAKES, REMOVE_MASK_BIT_NO_HANDS, REMOVE_MASK_BIT_NO_HOLDS,
@@ -239,20 +239,6 @@ use self::attacks::{
     build_song_lua_column_offset_windows_for_player, build_song_lua_constant_windows_for_player,
     build_song_lua_ease_windows_for_player, build_song_lua_overlay_ease_windows,
 };
-// Simply Love ScreenGameplay in/default.lua keeps intro cover actors alive for 2.0s.
-pub const TRANSITION_IN_DURATION: f32 = 2.0;
-/// SL/zmod parity: when re-entering Gameplay as a restart, skip the splode +
-/// stage-text in-transition (`ScreenGameplay in/default.lua` calls
-/// `Hide` immediately when `SL.Global.GameplayReloadCheck` is true). Use a
-/// short fade-from-black so the new gameplay frame doesn't pop in.
-pub const TRANSITION_IN_RESTART_DURATION: f32 = 0.2;
-// Simply Love ScreenGameplay out.lua: sleep(0.5), linear(1.0).
-pub const TRANSITION_OUT_DELAY: f32 = 0.5;
-pub const TRANSITION_OUT_FADE_DURATION: f32 = 1.0;
-pub const TRANSITION_OUT_DURATION: f32 = TRANSITION_OUT_DELAY + TRANSITION_OUT_FADE_DURATION;
-const M_MOD_HIGH_CAP: f32 = 600.0;
-pub const SCOREBOX_NUM_ENTRIES: usize = 5;
-
 const ASSIST_TICK_SFX_PATH: &str = "assets/sounds/assist_tick.ogg";
 
 #[inline(always)]
@@ -500,6 +486,10 @@ pub fn clear_benchmark_lane_indices(state: &mut State) {
 
 pub fn clear_benchmark_row_indices(state: &mut State) {
     state.row_indices.clear_for_benchmark();
+}
+
+pub fn clear_benchmark_row_entries(state: &mut State) {
+    state.row_entries.clear();
 }
 
 pub fn clear_benchmark_mine_scan(state: &mut State) {
@@ -1158,6 +1148,11 @@ pub(crate) const fn profile_side_from_gameplay(
 }
 
 #[inline(always)]
+pub fn runtime_profile_side(state: &State, player: usize) -> profile_data::PlayerSide {
+    profile_side_from_gameplay(state.session.runtime_player_side(player))
+}
+
+#[inline(always)]
 pub(crate) const fn gameplay_tick_mode_from_profile(mode: TickMode) -> GameplayTimingTickMode {
     match mode {
         TickMode::Off => GameplayTimingTickMode::Off,
@@ -1340,6 +1335,131 @@ pub fn current_music_time_display(state: &State) -> f32 {
     state.song_position.current_music_time_display
 }
 
+#[inline(always)]
+pub fn timing_for_player(state: &State, player: usize) -> Option<&TimingData> {
+    state.timing_players.get(player).map(Arc::as_ref)
+}
+
+#[inline(always)]
+pub fn timing(state: &State) -> &TimingData {
+    &state.timing
+}
+
+#[inline(always)]
+pub fn song(state: &State) -> &SongData {
+    &state.song
+}
+
+#[inline(always)]
+pub fn song_arc(state: &State) -> Arc<SongData> {
+    Arc::clone(&state.song)
+}
+
+#[inline(always)]
+pub fn notes(state: &State) -> &[Note] {
+    &state.notes
+}
+
+#[inline(always)]
+pub fn players(state: &State) -> &[PlayerRuntime; MAX_PLAYERS] {
+    &state.players
+}
+
+#[inline(always)]
+pub fn player(state: &State, player_idx: usize) -> Option<&PlayerRuntime> {
+    state.players.get(player_idx)
+}
+
+#[inline(always)]
+pub fn player_profiles(state: &State) -> &[profile_data::Profile; MAX_PLAYERS] {
+    &state.player_profiles
+}
+
+#[inline(always)]
+pub fn player_profile(state: &State, player_idx: usize) -> Option<&profile_data::Profile> {
+    state.player_profiles.get(player_idx)
+}
+
+#[inline(always)]
+pub fn gameplay_chart(state: &State, player: usize) -> Option<&GameplayChartData> {
+    state.gameplay_charts.get(player).map(Arc::as_ref)
+}
+
+#[inline(always)]
+pub fn gameplay_charts(state: &State) -> &[Arc<GameplayChartData>; MAX_PLAYERS] {
+    &state.gameplay_charts
+}
+
+#[inline(always)]
+pub fn chart(state: &State, player: usize) -> Option<&ChartData> {
+    state.charts.get(player).map(Arc::as_ref)
+}
+
+#[inline(always)]
+pub fn charts(state: &State) -> &[Arc<ChartData>; MAX_PLAYERS] {
+    &state.charts
+}
+
+#[inline(always)]
+pub const fn num_players(state: &State) -> usize {
+    state.num_players
+}
+
+pub fn set_benchmark_num_players(state: &mut State, num_players: usize) {
+    state.num_players = num_players;
+}
+
+#[inline(always)]
+pub const fn num_cols(state: &State) -> usize {
+    state.num_cols
+}
+
+#[inline(always)]
+pub const fn cols_per_player(state: &State) -> usize {
+    state.cols_per_player
+}
+
+pub fn set_benchmark_num_cols(state: &mut State, num_cols: usize) {
+    state.num_cols = num_cols;
+}
+
+pub fn set_benchmark_cols_per_player(state: &mut State, cols_per_player: usize) {
+    state.cols_per_player = cols_per_player;
+}
+
+pub fn set_benchmark_song_banner_path(state: &mut State, banner_path: Option<PathBuf>) {
+    Arc::make_mut(&mut state.song).banner_path = banner_path;
+}
+
+pub fn clear_benchmark_notes(state: &mut State) {
+    state.notes.clear();
+}
+
+pub fn update_benchmark_player(
+    state: &mut State,
+    player_idx: usize,
+    update: impl FnOnce(&mut PlayerRuntime),
+) {
+    if let Some(player) = state.players.get_mut(player_idx) {
+        update(player);
+    }
+}
+
+pub fn update_benchmark_player_profile(
+    state: &mut State,
+    player_idx: usize,
+    update: impl FnOnce(&mut profile_data::Profile),
+) {
+    if let Some(profile) = state.player_profiles.get_mut(player_idx) {
+        update(profile);
+    }
+}
+
+#[inline(always)]
+pub fn timing_profile_windows_s(state: &State) -> [f32; 5] {
+    state.timing_profile.windows_s
+}
+
 pub fn set_benchmark_song_position(
     state: &mut State,
     current_beat: f32,
@@ -1356,22 +1476,22 @@ pub fn set_benchmark_song_position(
 }
 
 pub struct State {
-    pub song: Arc<SongData>,
-    pub charts: [Arc<ChartData>; MAX_PLAYERS],
-    pub gameplay_charts: [Arc<GameplayChartData>; MAX_PLAYERS],
-    pub num_cols: usize,
-    pub cols_per_player: usize,
-    pub num_players: usize,
-    pub viewport: GameplayViewport,
-    pub session: GameplaySession,
-    pub config: GameplayConfig,
+    song: Arc<SongData>,
+    charts: [Arc<ChartData>; MAX_PLAYERS],
+    gameplay_charts: [Arc<GameplayChartData>; MAX_PLAYERS],
+    num_cols: usize,
+    cols_per_player: usize,
+    num_players: usize,
+    viewport: GameplayViewport,
+    session: GameplaySession,
+    config: GameplayConfig,
     commands: GameplayCommandQueue,
-    pub timing: Arc<TimingData>,
-    pub timing_players: [Arc<TimingData>; MAX_PLAYERS],
-    pub beat_info_cache: BeatInfoCache,
-    pub timing_profile: TimingProfile,
+    timing: Arc<TimingData>,
+    timing_players: [Arc<TimingData>; MAX_PLAYERS],
+    beat_info_cache: BeatInfoCache,
+    timing_profile: TimingProfile,
     player_judgment_timing: [PlayerJudgmentTiming; MAX_PLAYERS],
-    pub notes: Vec<Note>,
+    notes: Vec<Note>,
     note_ranges: GameplayNoteRangeState,
     note_count_stats: GameplayNoteCountStatsState,
     audio_clock: GameplayAudioClockState,
@@ -1379,20 +1499,20 @@ pub struct State {
     display_clock_state: GameplayDisplayClockState,
     lane_indices: GameplayLaneIndexState,
     row_indices: GameplayRowIndexState,
-    pub note_time_cache_ns: Vec<SongTimeNs>,
-    pub hold_end_time_cache_ns: Vec<Option<SongTimeNs>>,
+    note_time_cache_ns: Vec<SongTimeNs>,
+    hold_end_time_cache_ns: Vec<Option<SongTimeNs>>,
     end_timing: GameplayEndTimingState,
     music_rate: GameplayMusicRateState,
     offsets: GameplayOffsetState,
     autosync: GameplayAutosyncRuntimeState,
     visible_timing: GameplayVisibleTimingState,
     mine_scan: GameplayMineScanState,
-    pub row_entries: Vec<RowEntry>,
+    row_entries: Vec<RowEntry>,
     cue_runtime: GameplayCueRuntimeState,
     mini_indicator: GameplayMiniIndicatorRuntimeState,
     hold_runtime: GameplayHoldRuntimeState,
 
-    pub players: [PlayerRuntime; MAX_PLAYERS],
+    players: [PlayerRuntime; MAX_PLAYERS],
     hold_feedback: GameplayHoldFeedbackState,
     beat_phase: GameplayBeatPhaseState,
 
@@ -1402,13 +1522,13 @@ pub struct State {
     course_display: GameplayCourseDisplayState,
     window_counts: GameplayWindowCountsState,
 
-    pub player_profiles: [profile_data::Profile; MAX_PLAYERS],
+    player_profiles: [profile_data::Profile; MAX_PLAYERS],
     // Gameplay-thread song-lua caches are built at song load and read every
     // frame by render, so overlay evaluation stays local to each overlay.
     song_lua_visuals: SongLuaRuntimeVisuals,
     song_lua_player_transforms: deadsync_gameplay::SongLuaPlayerTransforms,
     attacks: GameplayAttackRuntimeState,
-    pub noteskin_effects: GameplayNoteskinEffects,
+    noteskin_effects: GameplayNoteskinEffects,
     active_color_index: i32,
     player_color_index: i32,
     notefield_motion: GameplayNotefieldMotionState,
@@ -1416,11 +1536,11 @@ pub struct State {
     visual_feedback: GameplayVisualFeedbackState,
     active_holds: [Option<ActiveHold>; MAX_COLS],
 
-    pub total_elapsed_in_screen: f32,
+    total_elapsed_in_screen: f32,
 
     danger_fx: GameplayDangerFxState,
 
-    pub density_graph: GameplayDensityGraphState,
+    density_graph: GameplayDensityGraphState,
 
     exit_input: GameplayExitInputState,
     offset_adjust_hold: GameplayOffsetAdjustHoldState,
@@ -1446,6 +1566,67 @@ pub(super) fn queue_audio_command(state: &mut State, command: GameplayAudioComma
 #[inline(always)]
 pub fn drain_session_commands(state: &mut State) -> std::vec::Drain<'_, GameplaySessionCommand> {
     state.commands.drain_session()
+}
+
+#[inline(always)]
+pub fn total_elapsed_in_screen(state: &State) -> f32 {
+    state.total_elapsed_in_screen
+}
+
+#[inline(always)]
+pub fn advance_screen_elapsed(state: &mut State, delta_time: f32) {
+    state.total_elapsed_in_screen += delta_time;
+}
+
+#[inline(always)]
+pub fn set_benchmark_screen_elapsed(state: &mut State, elapsed: f32) {
+    state.total_elapsed_in_screen = elapsed;
+}
+
+#[inline(always)]
+pub fn density_graph_view(state: &State) -> GameplayDensityGraphView {
+    GameplayDensityGraphView {
+        first_second: state.density_graph.first_second,
+        last_second: state.density_graph.last_second,
+        duration: state.density_graph.duration,
+        graph_w: state.density_graph.graph_w,
+        graph_h: state.density_graph.graph_h,
+        scaled_width: state.density_graph.scaled_width,
+        u0: state.density_graph.u0,
+        u_window: state.density_graph.u_window,
+        top_h: state.density_graph.top_h,
+        top_w: state.density_graph.top_w,
+        top_scale_y: state.density_graph.top_scale_y,
+    }
+}
+
+#[inline(always)]
+pub fn density_graph_life_dirty(state: &State, player: usize) -> bool {
+    player < MAX_PLAYERS && state.density_graph.life_dirty[player]
+}
+
+#[inline(always)]
+pub fn set_density_graph_life_dirty(state: &mut State, player: usize, dirty: bool) {
+    if player < MAX_PLAYERS {
+        state.density_graph.life_dirty[player] = dirty;
+    }
+}
+
+#[inline(always)]
+pub fn density_graph_life_points(state: &State, player: usize) -> Option<&[[f32; 2]]> {
+    state
+        .density_graph
+        .life_points
+        .get(player)
+        .map(Vec::as_slice)
+}
+
+#[inline(always)]
+pub fn density_graph_life_points_mut(
+    state: &mut State,
+    player: usize,
+) -> Option<&mut Vec<[f32; 2]>> {
+    state.density_graph.life_points.get_mut(player)
 }
 
 #[inline(always)]
@@ -3063,6 +3244,51 @@ pub fn fill_benchmark_visible_time(state: &mut State, music_time_seconds: f32) {
             .visible_timing
             .set_player_time(player, music_time_ns, music_time_seconds, 0.0);
     }
+}
+
+pub fn set_benchmark_density_graph_top(
+    state: &mut State,
+    first_second: f32,
+    last_second: f32,
+    player: usize,
+    top_w: f32,
+    top_h: f32,
+    top_scale_y: f32,
+) {
+    state.density_graph.first_second = first_second;
+    state.density_graph.last_second = last_second;
+    state.density_graph.duration = (last_second - first_second).max(0.001);
+    if player < MAX_PLAYERS {
+        state.density_graph.top_h = top_h;
+        state.density_graph.top_w[player] = top_w;
+        state.density_graph.top_scale_y[player] = top_scale_y;
+    }
+}
+
+#[inline(always)]
+pub fn note_time_cache_ns(state: &State) -> &[SongTimeNs] {
+    &state.note_time_cache_ns
+}
+
+#[inline(always)]
+pub fn hold_end_time_cache_ns(state: &State) -> &[Option<SongTimeNs>] {
+    &state.hold_end_time_cache_ns
+}
+
+#[inline(always)]
+pub fn note_time_cache_ns_at(state: &State, index: usize) -> Option<SongTimeNs> {
+    state.note_time_cache_ns.get(index).copied()
+}
+
+#[inline(always)]
+pub fn hold_end_time_cache_ns_at(state: &State, index: usize) -> Option<Option<SongTimeNs>> {
+    state.hold_end_time_cache_ns.get(index).copied()
+}
+
+#[inline(always)]
+pub fn clear_benchmark_note_timing_caches(state: &mut State) {
+    state.note_time_cache_ns.clear();
+    state.hold_end_time_cache_ns.clear();
 }
 
 #[inline(always)]

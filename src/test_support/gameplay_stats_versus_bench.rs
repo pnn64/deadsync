@@ -32,12 +32,12 @@ pub fn fixture() -> GameplayStatsVersusBenchFixture {
     let mut base = notefield_bench::fixture();
     {
         let state = base.state_mut();
-        state.num_players = 2;
-        state.num_cols = 8;
-        state.cols_per_player = 4;
+        gameplay::set_benchmark_num_players(state, 2);
+        gameplay::set_benchmark_num_cols(state, 8);
+        gameplay::set_benchmark_cols_per_player(state, 4);
         let p1_range = gameplay::note_range_for_player(&state, 0);
         gameplay::set_benchmark_note_range(state, 1, p1_range);
-        state.total_elapsed_in_screen = 9.6;
+        gameplay::set_benchmark_screen_elapsed(state, 9.6);
         gameplay::set_benchmark_song_position(
             state,
             gameplay::current_beat(state),
@@ -46,14 +46,22 @@ pub fn fixture() -> GameplayStatsVersusBenchFixture {
             64.25,
         );
 
-        state.players[0].judgment_counts = [22_481, 2_118, 351, 49, 12, 3];
-        state.players[1].judgment_counts = [20_204, 1_804, 404, 88, 23, 7];
-        state.player_profiles[0].step_statistics = profile_data::StepStatisticsMask::all_widgets();
-        state.player_profiles[1].step_statistics = profile_data::StepStatisticsMask::all_widgets();
-        state.player_profiles[0].show_fa_plus_window = true;
-        state.player_profiles[0].fa_plus_10ms_blue_window = true;
-        state.player_profiles[1].show_fa_plus_window = false;
-        state.player_profiles[1].custom_fantastic_window = false;
+        gameplay::update_benchmark_player(state, 0, |player| {
+            player.judgment_counts = [22_481, 2_118, 351, 49, 12, 3];
+        });
+        gameplay::update_benchmark_player(state, 1, |player| {
+            player.judgment_counts = [20_204, 1_804, 404, 88, 23, 7];
+        });
+        gameplay::update_benchmark_player_profile(state, 0, |profile| {
+            profile.step_statistics = profile_data::StepStatisticsMask::all_widgets();
+            profile.show_fa_plus_window = true;
+            profile.fa_plus_10ms_blue_window = true;
+        });
+        gameplay::update_benchmark_player_profile(state, 1, |profile| {
+            profile.step_statistics = profile_data::StepStatisticsMask::all_widgets();
+            profile.show_fa_plus_window = false;
+            profile.custom_fantastic_window = false;
+        });
 
         let p1_canonical = WindowCounts {
             w0: 18_992,
@@ -91,8 +99,7 @@ pub fn fixture() -> GameplayStatsVersusBenchFixture {
         };
         gameplay::set_benchmark_live_window_counts(state, 1, p2_counts, p2_counts, p2_counts);
 
-        let song = Arc::make_mut(&mut state.song);
-        song.banner_path = Some("bench/banner.png".into());
+        gameplay::set_benchmark_song_banner_path(state, Some("bench/banner.png".into()));
     }
 
     let (state, noteskin_assets, _) = base.into_parts();

@@ -10,7 +10,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
-const SCOREBOX_NUM_ENTRIES: usize = 5;
+pub(crate) const SCOREBOX_NUM_ENTRIES: usize = 5;
 const SCOREBOX_FETCH_NUM_ENTRIES: usize = 13;
 const SCOREBOX_LOOP_SECONDS: f32 = 5.0;
 const SCOREBOX_TRANSITION_SECONDS: f32 = 1.0;

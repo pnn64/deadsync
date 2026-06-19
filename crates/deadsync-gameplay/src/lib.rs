@@ -57,6 +57,7 @@ pub const UNMAPPED_INPUT_CLOCK_WARN_NEVER_NS: SongTimeNs = i64::MIN;
 pub const MAX_ACTIVE_INPUT_SLOTS: usize = 128;
 pub const AUTOSYNC_OFFSET_SAMPLE_COUNT: usize = 24;
 pub const AUTOSYNC_STDDEV_MAX_SECONDS: f32 = 0.03;
+pub const M_MOD_HIGH_CAP: f32 = 600.0;
 const REPLAY_EDGE_FLOOR_PER_LANE: usize = 64;
 pub const REPLAY_EDGE_RATE_PER_SEC: usize = 256;
 pub const INITIAL_HOLD_LIFE: f32 = 1.0;
@@ -2006,6 +2007,28 @@ pub struct DensityGraphWindow {
     pub graph_h: f32,
     pub scaled_width: f32,
     pub u_window: f32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GameplayDensityGraphView {
+    pub first_second: f32,
+    pub last_second: f32,
+    pub duration: f32,
+    pub graph_w: f32,
+    pub graph_h: f32,
+    pub scaled_width: f32,
+    pub u0: f32,
+    pub u_window: f32,
+    pub top_h: f32,
+    pub top_w: [f32; MAX_PLAYERS],
+    pub top_scale_y: [f32; MAX_PLAYERS],
+}
+
+impl GameplayDensityGraphView {
+    #[inline(always)]
+    pub fn top_mesh_h(self, player: usize) -> f32 {
+        self.top_h * self.top_scale_y[player].clamp(0.0, 1.0)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -18224,6 +18247,26 @@ mod tests {
         assert!(state.life_points.iter().all(|points| points.is_empty()));
         assert_eq!(state.life_dirty, [false; MAX_PLAYERS]);
         assert_eq!(state.top_scale_y, [1.0; MAX_PLAYERS]);
+    }
+
+    #[test]
+    fn density_graph_view_top_mesh_height_clamps_scale() {
+        let view = GameplayDensityGraphView {
+            first_second: 0.0,
+            last_second: 60.0,
+            duration: 60.0,
+            graph_w: 100.0,
+            graph_h: 40.0,
+            scaled_width: 100.0,
+            u0: 0.0,
+            u_window: 1.0,
+            top_h: 24.0,
+            top_w: [100.0, 80.0],
+            top_scale_y: [1.25, -0.5],
+        };
+
+        assert_eq!(view.top_mesh_h(0), 24.0);
+        assert_eq!(view.top_mesh_h(1), 0.0);
     }
 
     #[test]

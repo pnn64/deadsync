@@ -43,9 +43,8 @@ pub fn fixture() -> GameplayStatsBenchFixture {
     let scorebox_side_snapshot;
     {
         let state = base.state_mut();
-        let song = Arc::make_mut(&mut state.song);
-        song.banner_path = Some(PathBuf::from("bench/banner.png"));
-        state.total_elapsed_in_screen = 9.6;
+        gameplay::set_benchmark_song_banner_path(state, Some(PathBuf::from("bench/banner.png")));
+        gameplay::set_benchmark_screen_elapsed(state, 9.6);
         gameplay::set_benchmark_song_position(
             state,
             gameplay::current_beat(state),
@@ -53,12 +52,16 @@ pub fn fixture() -> GameplayStatsBenchFixture {
             gameplay::current_beat_display(state),
             64.25,
         );
-        state.players[0].judgment_counts = [22_481, 2_118, 351, 49, 12, 3];
-        state.players[0].holds_held = 146;
-        state.players[0].rolls_held = 31;
-        state.players[0].mines_avoided = 503;
-        state.player_profiles[0].show_fa_plus_window = true;
-        state.player_profiles[0].fa_plus_10ms_blue_window = true;
+        gameplay::update_benchmark_player(state, 0, |player| {
+            player.judgment_counts = [22_481, 2_118, 351, 49, 12, 3];
+            player.holds_held = 146;
+            player.rolls_held = 31;
+            player.mines_avoided = 503;
+        });
+        gameplay::update_benchmark_player_profile(state, 0, |profile| {
+            profile.show_fa_plus_window = true;
+            profile.fa_plus_10ms_blue_window = true;
+        });
         let canonical = WindowCounts {
             w0: 18_992,
             w1: 3_489,

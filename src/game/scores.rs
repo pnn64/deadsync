@@ -1319,15 +1319,15 @@ fn judgment_counts_arr(p: &gameplay::PlayerRuntime) -> [u32; 6] {
 }
 
 fn replay_edges_for_player(gs: &gameplay::State, player: usize) -> Vec<LocalReplayEdge> {
-    if player >= gs.num_players {
+    if player >= gameplay::num_players(gs) {
         return Vec::new();
     }
 
-    let (col_start, col_end) = if gs.num_players <= 1 {
-        (0usize, gs.num_cols)
+    let (col_start, col_end) = if gameplay::num_players(gs) <= 1 {
+        (0usize, gameplay::num_cols(gs))
     } else {
-        let start = player.saturating_mul(gs.cols_per_player);
-        (start, start.saturating_add(gs.cols_per_player))
+        let start = player.saturating_mul(gameplay::cols_per_player(gs));
+        (start, start.saturating_add(gameplay::cols_per_player(gs)))
     };
 
     let mut out = Vec::new();
@@ -1365,8 +1365,8 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
     // Parameter retained for parity with Simply Love helpers; currently unused.
     let mines_disabled = false;
 
-    for player_idx in 0..gs.num_players {
-        let side = if gs.num_players >= 2 {
+    for player_idx in 0..gameplay::num_players(gs) {
+        let side = if gameplay::num_players(gs) >= 2 {
             if player_idx == 0 {
                 profile_data::PlayerSide::P1
             } else {
@@ -1381,8 +1381,8 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
         };
         if !gameplay::score_valid_for_player(gs, player_idx) {
             let reasons = gameplay::score_invalid_reason_lines_for_chart(
-                &gs.charts[player_idx],
-                &gs.player_profiles[player_idx],
+                &gameplay::charts(gs)[player_idx],
+                &gameplay::player_profiles(gs)[player_idx],
                 gameplay::scroll_speed_for_player(gs, player_idx),
                 gameplay::music_rate(gs),
             );
@@ -1399,8 +1399,8 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
             continue;
         }
 
-        let chart_hash = gs.charts[player_idx].short_hash.as_str();
-        let p = &gs.players[player_idx];
+        let chart_hash = gameplay::charts(gs)[player_idx].short_hash.as_str();
+        let p = &gameplay::players(gs)[player_idx];
         let totals = gameplay::display_totals_for_player(gs, player_idx);
 
         let score_percent = judgment::calculate_itg_score_percent_from_counts(
@@ -1423,9 +1423,9 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
         };
 
         let (start, end) = gameplay::note_range_for_player(gs, player_idx);
-        let notes = &gs.notes[start..end];
-        let note_times = &gs.note_time_cache_ns[start..end];
-        let hold_end_times = &gs.hold_end_time_cache_ns[start..end];
+        let notes = &gameplay::notes(gs)[start..end];
+        let note_times = &gameplay::note_time_cache_ns(gs)[start..end];
+        let hold_end_times = &gameplay::hold_end_time_cache_ns(gs)[start..end];
 
         let ex_score_percent = judgment::calculate_ex_score_from_notes(
             notes,
@@ -1477,13 +1477,17 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
             mines_total: totals.mines_total,
             hands_achieved: p.hands_achieved,
             fail_time: p.fail_time,
-            beat0_time_ns: gs.timing_players[player_idx].get_time_for_beat_ns(0.0),
+            beat0_time_ns: gameplay::timing_for_player(gs, player_idx)
+                .map(|timing| timing.get_time_for_beat_ns(0.0))
+                .unwrap_or(0),
             replay,
         };
 
         append_local_score_on_disk(
             &profile_id,
-            gs.player_profiles[player_idx].player_initials.as_str(),
+            gameplay::player_profiles(gs)[player_idx]
+                .player_initials
+                .as_str(),
             chart_hash,
             &mut entry,
         );
@@ -1495,7 +1499,7 @@ pub(super) fn gameplay_side_for_player(
     gs: &gameplay::State,
     player_idx: usize,
 ) -> profile_data::PlayerSide {
-    if gs.num_players >= 2 {
+    if gameplay::num_players(gs) >= 2 {
         profile_data::player_side_for_index(player_idx)
     } else {
         profile::get_session_player_side()

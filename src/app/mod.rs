@@ -289,23 +289,24 @@ impl GameplayLightTracker {
         state: &crate::game::gameplay::State,
         now_ns: SongTimeNs,
     ) {
-        let notes_ptr = state.notes.as_ptr() as usize;
+        let notes = crate::game::gameplay::notes(state);
+        let notes_ptr = notes.as_ptr() as usize;
         let reset = self.pad_notes_ptr != notes_ptr
-            || self.pad_notes_len != state.notes.len()
+            || self.pad_notes_len != notes.len()
             || now_ns < self.pad_last_time_ns
             || now_ns.saturating_sub(self.pad_last_time_ns) > LIGHTS_MAX_CATCHUP_NS;
         if reset {
             self.pad_notes_ptr = notes_ptr;
-            self.pad_notes_len = state.notes.len();
-            self.pad_cursor = state.note_time_cache_ns.partition_point(|&t| t <= now_ns);
+            self.pad_notes_len = notes.len();
+            self.pad_cursor =
+                crate::game::gameplay::note_time_cache_ns(state).partition_point(|&t| t <= now_ns);
             self.pad_last_time_ns = now_ns;
             return;
         }
 
-        while self.pad_cursor < state.notes.len()
-            && state.note_time_cache_ns[self.pad_cursor] <= now_ns
-        {
-            let note = &state.notes[self.pad_cursor];
+        let note_time_cache_ns = crate::game::gameplay::note_time_cache_ns(state);
+        while self.pad_cursor < notes.len() && note_time_cache_ns[self.pad_cursor] <= now_ns {
+            let note = &notes[self.pad_cursor];
             if gameplay_note_lights(note) {
                 blink_pad_lights(lights, state, note.column);
             }
@@ -739,11 +740,13 @@ fn pad_light_for_col(
     state: &crate::game::gameplay::State,
     column: usize,
 ) -> Option<(LightPlayer, ButtonLight)> {
-    if state.cols_per_player == 0 {
+    if crate::game::gameplay::cols_per_player(state) == 0 {
         return None;
     }
-    let local = column % state.cols_per_player;
-    let (player, local_col) = if state.cols_per_player >= 8 && state.num_players == 1 {
+    let local = column % crate::game::gameplay::cols_per_player(state);
+    let (player, local_col) = if crate::game::gameplay::cols_per_player(state) >= 8
+        && crate::game::gameplay::num_players(state) == 1
+    {
         let player = if local < 4 {
             LightPlayer::P1
         } else {
@@ -751,7 +754,7 @@ fn pad_light_for_col(
         };
         (player, local % 4)
     } else {
-        let player_ix = column / state.cols_per_player;
+        let player_ix = column / crate::game::gameplay::cols_per_player(state);
         let player = match player_ix {
             0 => LightPlayer::P1,
             1 => LightPlayer::P2,
@@ -889,7 +892,9 @@ enum LightButtonSource {
 
 fn hide_flags_for_gameplay(state: &crate::game::gameplay::State) -> [HideFlags; 2] {
     std::array::from_fn(|player| {
-        hide_flags_from_profile(state.player_profiles[player].hide_light_type)
+        hide_flags_from_profile(
+            crate::game::gameplay::player_profiles(state)[player].hide_light_type,
+        )
     })
 }
 
@@ -3017,8 +3022,7 @@ fn gameplay_song_lua_video_paths(state: &gameplay::State) -> Vec<PathBuf> {
 
 fn gameplay_overlay_video_paths(state: &gameplay::State) -> Vec<PathBuf> {
     let mut paths = gameplay_song_lua_video_paths(state);
-    if let Some(path) = state
-        .song
+    if let Some(path) = crate::game::gameplay::song(state)
         .active_foreground_path(crate::game::gameplay::current_beat(state))
         && crate::assets::dynamic::is_dynamic_video_path(path)
         && !paths.iter().any(|existing| existing == path)
@@ -3110,22 +3114,23 @@ fn prewarm_gameplay_assets(
             }
         }
 
+        let song = crate::game::gameplay::song(state);
         let mut paths = Vec::with_capacity(
             1usize
                 .saturating_add(state.background_changes.len())
-                .saturating_add(state.song.background_layer2_changes.len())
-                .saturating_add(state.song.foreground_changes.len()),
+                .saturating_add(song.background_layer2_changes.len())
+                .saturating_add(song.foreground_changes.len()),
         );
-        if let Some(path) = state.song.background_path.as_ref() {
+        if let Some(path) = song.background_path.as_ref() {
             paths.push(path);
         }
         for change in &state.background_changes {
             push_bgchange_paths(&mut paths, change);
         }
-        for change in &state.song.background_layer2_changes {
+        for change in &song.background_layer2_changes {
             push_bgchange_paths(&mut paths, change);
         }
-        for change in &state.song.foreground_changes {
+        for change in &song.foreground_changes {
             paths.push(&change.path);
         }
         paths
@@ -3432,22 +3437,23 @@ fn gameplay_media_keys(state: &gameplay::State) -> Vec<String> {
         }
     }
 
+    let song = crate::game::gameplay::song(state);
     let mut keys = Vec::with_capacity(
         1usize
             .saturating_add(state.background_changes.len())
-            .saturating_add(state.song.background_layer2_changes.len())
-            .saturating_add(state.song.foreground_changes.len()),
+            .saturating_add(song.background_layer2_changes.len())
+            .saturating_add(song.foreground_changes.len()),
     );
-    if let Some(path) = state.song.background_path.as_ref() {
+    if let Some(path) = song.background_path.as_ref() {
         keys.push(path.to_string_lossy().into_owned());
     }
     for change in &state.background_changes {
         push_bgchange_keys(&mut keys, change);
     }
-    for change in &state.song.background_layer2_changes {
+    for change in &song.background_layer2_changes {
         push_bgchange_keys(&mut keys, change);
     }
-    for change in &state.song.foreground_changes {
+    for change in &song.foreground_changes {
         keys.push(change.path.to_string_lossy().into_owned());
     }
     keys
@@ -5929,7 +5935,7 @@ impl App {
     #[inline(always)]
     fn gameplay_song_offset_saveable(gs: &gameplay::State) -> bool {
         Self::gameplay_song_offset_changed(gs)
-            && config::song_path_is_writable(gs.song.simfile_path.as_path())
+            && config::song_path_is_writable(crate::game::gameplay::song(gs).simfile_path.as_path())
     }
 
     #[inline(always)]
@@ -5954,15 +5960,16 @@ impl App {
             crate::game::gameplay::initial_song_offset_seconds(gs),
             crate::game::gameplay::song_offset_seconds(gs),
         ) {
-            if config::song_path_is_writable(gs.song.simfile_path.as_path()) {
+            let song = crate::game::gameplay::song(gs);
+            if config::song_path_is_writable(song.simfile_path.as_path()) {
                 text.push_str("You have changed the timing of\n");
-                text.push_str(&gs.song.display_full_title(false));
+                text.push_str(&song.display_full_title(false));
                 text.push_str(":\n\n");
                 text.push_str(&line);
                 text.push_str("\n\n");
             } else {
                 text.push_str("Song offset changes for\n");
-                text.push_str(&gs.song.display_full_title(false));
+                text.push_str(&song.display_full_title(false));
                 text.push_str("\nwill be discarded because the song folder is read-only.\n\n");
             }
         }
@@ -6101,9 +6108,11 @@ impl App {
                 if let Some(delta) = sync_offset_delta_seconds(
                     crate::game::gameplay::initial_song_offset_seconds(gs),
                     crate::game::gameplay::song_offset_seconds(gs),
-                ) && config::song_path_is_writable(gs.song.simfile_path.as_path())
-                {
-                    song_offset_change = Some((gs.song.simfile_path.clone(), delta));
+                ) && config::song_path_is_writable(
+                    crate::game::gameplay::song(gs).simfile_path.as_path(),
+                ) {
+                    song_offset_change =
+                        Some((crate::game::gameplay::song(gs).simfile_path.clone(), delta));
                 }
             }
             if let Some((simfile_path, delta)) = song_offset_change
@@ -6201,8 +6210,8 @@ impl App {
         let player_side = profile::get_session_player_side();
         match play_style {
             profile_data::PlayStyle::Versus => {
-                for idx in 0..gs.num_players.min(MAX_PLAYERS) {
-                    let combo = gs.players[idx].combo;
+                for idx in 0..crate::game::gameplay::num_players(gs).min(MAX_PLAYERS) {
+                    let combo = crate::game::gameplay::players(gs)[idx].combo;
                     self.state.session.combo_carry[idx] = combo;
                     let side = if idx == 0 {
                         profile_data::PlayerSide::P1
@@ -6213,10 +6222,10 @@ impl App {
                 }
             }
             profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
-                if gs.num_players == 0 {
+                if crate::game::gameplay::num_players(gs) == 0 {
                     return;
                 }
-                let combo = gs.players[0].combo;
+                let combo = crate::game::gameplay::players(gs)[0].combo;
                 self.state.session.combo_carry[profile_data::player_side_index(player_side)] =
                     combo;
                 profile::update_current_combo_for_side(player_side, combo);
@@ -6342,10 +6351,10 @@ impl App {
 
     fn prepare_player_options_for_gameplay_restart(&mut self) -> bool {
         if let Some(gs) = self.state.screens.gameplay_state.as_ref() {
-            let song = gs.song.clone();
+            let song = crate::game::gameplay::song_arc(gs);
             let chart_hashes = [
-                gs.charts[0].short_hash.clone(),
-                gs.charts[1].short_hash.clone(),
+                crate::game::gameplay::charts(gs)[0].short_hash.clone(),
+                crate::game::gameplay::charts(gs)[1].short_hash.clone(),
             ];
             let music_rate = crate::game::gameplay::music_rate(gs);
             let scroll_speed = [
@@ -6478,8 +6487,8 @@ impl App {
         let Some(gs) = self.state.screens.gameplay_state.as_ref() else {
             return false;
         };
-        (0..gs.num_players.min(MAX_PLAYERS)).any(|player_idx| {
-            let p = &gs.players[player_idx];
+        (0..crate::game::gameplay::num_players(gs).min(MAX_PLAYERS)).any(|player_idx| {
+            let p = &crate::game::gameplay::players(gs)[player_idx];
             p.is_failing || p.life <= 0.0 || p.fail_time.is_some()
         })
     }
@@ -7025,8 +7034,7 @@ impl App {
         state: &mut gameplay::State,
         show_video_backgrounds: bool,
     ) -> Option<PathBuf> {
-        let path = state
-            .song
+        let path = crate::game::gameplay::song(state)
             .gameplay_background_path_for_changes(
                 &state.background_changes,
                 state.next_background_change_ix,
@@ -7776,7 +7784,7 @@ impl App {
             .screens
             .gameplay_state
             .as_ref()
-            .map(|gs| gs.num_players)
+            .map(|gs| crate::game::gameplay::num_players(gs))
             .unwrap_or(1);
         let two_player = matches!(
             play_style,
@@ -9536,7 +9544,7 @@ impl App {
                         backend,
                         &overlay_video_paths,
                     );
-                    if let Some(path) = gs.song.banner_path.as_ref() {
+                    if let Some(path) = crate::game::gameplay::song(&gs).banner_path.as_ref() {
                         media_cache::ensure_banner_texture(&mut self.asset_manager, backend, path);
                     }
                 }
@@ -9549,9 +9557,10 @@ impl App {
                     &mut gs,
                 );
                 let text_prewarm_ms = text_prewarm_started.elapsed().as_secs_f64() * 1000.0;
+                let song = crate::game::gameplay::song(&gs);
                 debug!(
                     "Practice transition timing: song='{}' payload_ms={payload_ms:.3} init_ms={init_ms:.3} sfx_prewarm_ms={sfx_prewarm_ms:.3} asset_prewarm_ms={asset_prewarm_ms:.3} text_prewarm_ms={text_prewarm_ms:.3}",
-                    gs.song.title
+                    song.title
                 );
                 commands.push(Command::SetPackBanner(gs.pack_banner_path.clone()));
                 let show_video_backgrounds = config::get().show_video_backgrounds;
@@ -9728,16 +9737,20 @@ impl App {
                             .as_ref()
                             .filter(|current| {
                                 can_reuse_quick_restart_payload(
-                                    current.song.as_ref(),
+                                    crate::game::gameplay::song(current),
                                     [
-                                        current.charts[0].short_hash.as_str(),
-                                        current.charts[1].short_hash.as_str(),
+                                        crate::game::gameplay::charts(current)[0]
+                                            .short_hash
+                                            .as_str(),
+                                        crate::game::gameplay::charts(current)[1]
+                                            .short_hash
+                                            .as_str(),
                                     ],
                                     song_arc.as_ref(),
                                     [charts[0].short_hash.as_str(), charts[1].short_hash.as_str()],
                                 )
                             })
-                            .map(|current| current.gameplay_charts.clone())
+                            .map(|current| crate::game::gameplay::gameplay_charts(current).clone())
                     } else {
                         None
                     };
@@ -9965,7 +9978,7 @@ impl App {
                         backend,
                         &overlay_video_paths,
                     );
-                    if let Some(path) = gs.song.banner_path.as_ref() {
+                    if let Some(path) = crate::game::gameplay::song(&gs).banner_path.as_ref() {
                         media_cache::ensure_banner_texture(&mut self.asset_manager, backend, path);
                     }
                 }
@@ -9979,10 +9992,11 @@ impl App {
                 );
                 let text_prewarm_ms = text_prewarm_started.elapsed().as_secs_f64() * 1000.0;
                 let total_ms = gameplay_entry_started.elapsed().as_secs_f64() * 1000.0;
+                let song = crate::game::gameplay::song(&gs);
                 if total_ms >= 50.0 {
                     info!(
                         "Gameplay transition timing: song='{}' restart={} payload_source={} payload_ms={payload_ms:.3} init_ms={init_ms:.3} sfx_prewarm_ms={sfx_prewarm_ms:.3} asset_prewarm_ms={asset_prewarm_ms:.3} text_prewarm_ms={text_prewarm_ms:.3} elapsed_ms={total_ms:.3}",
-                        gs.song.title,
+                        song.title,
                         prev == CurrentScreen::Gameplay,
                         if reusing_gameplay_payload {
                             "reuse"
@@ -9993,7 +10007,7 @@ impl App {
                 } else {
                     debug!(
                         "Gameplay transition timing: song='{}' restart={} payload_source={} payload_ms={payload_ms:.3} init_ms={init_ms:.3} sfx_prewarm_ms={sfx_prewarm_ms:.3} asset_prewarm_ms={asset_prewarm_ms:.3} text_prewarm_ms={text_prewarm_ms:.3} elapsed_ms={total_ms:.3}",
-                        gs.song.title,
+                        song.title,
                         prev == CurrentScreen::Gameplay,
                         if reusing_gameplay_payload {
                             "reuse"
@@ -10043,7 +10057,7 @@ impl App {
                 self.update_combo_carry_from_gameplay(gs);
             }
             if let (Some(backend), Some(gs)) = (self.backend.as_mut(), gameplay_results.as_ref())
-                && let Some(path) = gs.song.banner_path.as_ref()
+                && let Some(path) = crate::game::gameplay::song(gs).banner_path.as_ref()
             {
                 media_cache::ensure_banner_texture(&mut self.asset_manager, backend, path);
             }

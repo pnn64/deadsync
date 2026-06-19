@@ -15,6 +15,7 @@ use crate::game::parsing::song_lua::{
 use crate::game::{profile, scores};
 use crate::screens::components::gameplay::{gameplay_stats, notefield, step_stats_gifs};
 use crate::screens::components::shared::banner as shared_banner;
+use crate::screens::components::shared::gs_scorebox;
 use crate::screens::components::shared::lobby_hud;
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor_from_draw;
 use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenBarParams};
@@ -100,11 +101,21 @@ use crate::game::gameplay::{
     GameplayReceptorStepBehavior, GameplaySession, GameplaySessionCommand, GameplaySongLuaData,
     GameplaySongLuaLayer, GameplayTween, RECEPTOR_Y_OFFSET_FROM_CENTER,
     RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, ReplayInputEdge, ReplayOffsetSnapshot,
-    SCOREBOX_NUM_ENTRIES, TRANSITION_IN_DURATION, TRANSITION_IN_RESTART_DURATION,
-    TRANSITION_OUT_DELAY, TRANSITION_OUT_DURATION, TRANSITION_OUT_FADE_DURATION,
     effective_visibility_effects_for_player, handle_input as gameplay_handle_input,
     scroll_receptor_y, timing_tick_status_line, toggle_flash_text, update as gameplay_update,
 };
+
+// Simply Love ScreenGameplay in/default.lua keeps intro cover actors alive for 2.0s.
+const TRANSITION_IN_DURATION: f32 = 2.0;
+/// SL/zmod parity: when re-entering Gameplay as a restart, skip the splode +
+/// stage-text in-transition (`ScreenGameplay in/default.lua` calls
+/// `Hide` immediately when `SL.Global.GameplayReloadCheck` is true). Use a
+/// short fade-from-black so the new gameplay frame doesn't pop in.
+const TRANSITION_IN_RESTART_DURATION: f32 = 0.2;
+// Simply Love ScreenGameplay out.lua: sleep(0.5), linear(1.0).
+const TRANSITION_OUT_DELAY: f32 = 0.5;
+const TRANSITION_OUT_FADE_DURATION: f32 = 1.0;
+const TRANSITION_OUT_DURATION: f32 = TRANSITION_OUT_DELAY + TRANSITION_OUT_FADE_DURATION;
 
 pub struct DensityGraphRenderState {
     pub cache: [Option<DensityHistCache>; MAX_PLAYERS],
@@ -117,21 +128,21 @@ pub struct DensityGraphRenderState {
 
 impl DensityGraphRenderState {
     fn from_gameplay(state: &gameplay_core::State) -> Self {
+        let graph = gameplay_core::density_graph_view(state);
         let top_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] = std::array::from_fn(|player| {
-            let graph_w = state.density_graph.top_w[player];
-            let graph_h =
-                state.density_graph.top_h * state.density_graph.top_scale_y[player].clamp(0.0, 1.0);
-            if player >= state.num_players || graph_w <= 0.0 || graph_h <= 0.0 {
+            let graph_w = graph.top_w[player];
+            let graph_h = graph.top_mesh_h(player);
+            if player >= gameplay_core::num_players(state) || graph_w <= 0.0 || graph_h <= 0.0 {
                 return None;
             }
 
-            let chart = state.charts[player].as_ref();
+            let chart = gameplay_core::charts(state)[player].as_ref();
             let verts = density::build_density_histogram_mesh(
                 &chart.measure_nps_vec,
                 chart.max_nps,
                 &chart.measure_seconds_vec,
-                state.density_graph.first_second,
-                state.density_graph.last_second,
+                graph.first_second,
+                graph.last_second,
                 graph_w,
                 graph_h,
                 0.0,
@@ -147,29 +158,29 @@ impl DensityGraphRenderState {
         });
 
         let cache: [Option<DensityHistCache>; MAX_PLAYERS] = std::array::from_fn(|player| {
-            if player >= state.num_players
-                || state.density_graph.graph_w <= 0.0
-                || state.density_graph.graph_h <= 0.0
+            if player >= gameplay_core::num_players(state)
+                || graph.graph_w <= 0.0
+                || graph.graph_h <= 0.0
             {
                 return None;
             }
 
-            let chart = state.charts[player].as_ref();
+            let chart = gameplay_core::charts(state)[player].as_ref();
             density::build_density_histogram_cache(
                 &chart.measure_nps_vec,
                 chart.max_nps,
                 &chart.measure_seconds_vec,
-                state.density_graph.first_second,
-                state.density_graph.last_second,
-                state.density_graph.scaled_width,
-                state.density_graph.graph_h,
+                graph.first_second,
+                graph.last_second,
+                graph.scaled_width,
+                graph.graph_h,
                 None,
                 1.0,
             )
         });
 
         let mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] = std::array::from_fn(|player| {
-            if player >= state.num_players || cache[player].is_none() {
+            if player >= gameplay_core::num_players(state) || cache[player].is_none() {
                 return None;
             }
             let mut mesh = None;
@@ -177,7 +188,7 @@ impl DensityGraphRenderState {
                 &mut mesh,
                 cache[player].as_ref(),
                 0.0,
-                state.density_graph.graph_w,
+                graph.graph_w,
             );
             mesh
         });
@@ -494,22 +505,21 @@ impl State {
     ) -> Self {
         let density_graph = DensityGraphRenderState::from_gameplay(&gameplay);
         let step_stats_extra_resolved =
-            step_stats_gifs::resolve_random_extras(&gameplay.player_profiles);
-        let song_full_title: Arc<str> = Arc::from(
-            gameplay
-                .song
-                .display_full_title(crate::config::get().translated_titles),
-        );
-        let song_banner_key = gameplay
-            .song
+            step_stats_gifs::resolve_random_extras(&gameplay_core::player_profiles(&gameplay));
+        let song = gameplay_core::song(&gameplay);
+        let song_full_title: Arc<str> =
+            Arc::from(song.display_full_title(crate::config::get().translated_titles));
+        let song_banner_key = song
             .banner_path
             .as_deref()
             .map(crate::assets::media_path_key);
         let pack_banner_key = pack_banner_path
             .as_deref()
             .map(crate::assets::media_path_key);
-        let notefield_model_cache =
-            notefield_model_cache_from_assets(&noteskin_assets, gameplay.num_players);
+        let notefield_model_cache = notefield_model_cache_from_assets(
+            &noteskin_assets,
+            gameplay_core::num_players(&gameplay),
+        );
         let background_transition_start_time = gameplay_core::current_music_time_display(&gameplay);
         let next_background_change_ix = background_changes
             .iter()
@@ -752,7 +762,7 @@ fn gameplay_scorebox_data(
         data.side_snapshot[idx] = scores::get_or_fetch_player_leaderboards_for_profile(
             chart_hash,
             profile_snapshot,
-            SCOREBOX_NUM_ENTRIES,
+            gs_scorebox::SCOREBOX_NUM_ENTRIES,
         );
     }
     data
@@ -1211,10 +1221,10 @@ fn intro_text_target_x(
     player_side: profile_data::PlayerSide,
     center_1player_notefield: bool,
 ) -> f32 {
-    let centered_notefield = state.num_players == 1
+    let centered_notefield = gameplay_core::num_players(state) == 1
         && (play_style == profile_data::PlayStyle::Double
             || (play_style == profile_data::PlayStyle::Single && center_1player_notefield));
-    if !centered_notefield || state.cols_per_player == 0 {
+    if !centered_notefield || gameplay_core::cols_per_player(state) == 0 {
         return screen_center_x();
     }
 
@@ -1224,17 +1234,17 @@ fn intro_text_target_x(
         profile_data::PlayerSide::P1 => -1.0,
         profile_data::PlayerSide::P2 => 1.0,
     };
-    let notefield_width = state.cols_per_player as f32 * 64.0;
+    let notefield_width = gameplay_core::cols_per_player(state) as f32 * 64.0;
     screen_center_x()
         + (notefield_width * 0.5 + intro_text_width(asset_manager, text) * INTRO_TEXT_GETWIDTH_PAD)
             * side_sign
 }
 
 fn gameplay_player_index_for_side(state: &State, side: profile_data::PlayerSide) -> Option<usize> {
-    if state.num_players >= 2 {
+    if gameplay_core::num_players(state) >= 2 {
         return Some(profile_data::player_side_index(side));
     }
-    if state.num_players == 0 || profile::get_session_player_side() != side {
+    if gameplay_core::num_players(state) == 0 || profile::get_session_player_side() != side {
         return None;
     }
     Some(0)
@@ -1327,7 +1337,7 @@ fn difficulty_meter_hits_targets(
     meter_x: f32,
     meter_y: f32,
 ) -> bool {
-    if player_idx >= state.num_players
+    if player_idx >= gameplay_core::num_players(state)
         || !field_x.is_finite()
         || !field_w.is_finite()
         || !meter_x.is_finite()
@@ -1340,9 +1350,9 @@ fn difficulty_meter_hits_targets(
         return false;
     }
 
-    let col_start = player_idx.saturating_mul(state.cols_per_player);
-    let num_cols = (col_start + state.cols_per_player)
-        .min(state.num_cols)
+    let col_start = player_idx.saturating_mul(gameplay_core::cols_per_player(state));
+    let num_cols = (col_start + gameplay_core::cols_per_player(state))
+        .min(gameplay_core::num_cols(state))
         .saturating_sub(col_start);
     if num_cols == 0 {
         return false;
@@ -1691,8 +1701,8 @@ pub fn scorebox_profile_for_side(
 }
 
 pub fn refresh_scorebox_snapshots(state: &mut State) {
-    for p in 0..state.num_players {
-        let side = gameplay_core::profile_side_from_gameplay(state.session.runtime_player_side(p));
+    for p in 0..gameplay_core::num_players(state) {
+        let side = gameplay_core::runtime_profile_side(state, p);
         let idx = profile_data::player_side_index(side);
         let profile_snapshot = &state.scorebox_profile_snapshot[idx];
         if !profile_snapshot.display_scorebox || !profile_snapshot.gs_active {
@@ -1704,14 +1714,14 @@ pub fn refresh_scorebox_snapshots(state: &mut State) {
         if !needs_refresh {
             continue;
         }
-        let chart_hash = state.charts[p].short_hash.trim();
+        let chart_hash = gameplay_core::charts(state)[p].short_hash.trim();
         if chart_hash.is_empty() {
             continue;
         }
         if let Some(fresh) = scores::get_or_fetch_player_leaderboards_for_profile(
             chart_hash,
             profile_snapshot,
-            SCOREBOX_NUM_ENTRIES,
+            gs_scorebox::SCOREBOX_NUM_ENTRIES,
         ) {
             if !fresh.loading {
                 state.scorebox_side_snapshot[idx] = Some(fresh);
@@ -1867,7 +1877,9 @@ fn play_song_lua_sound_events_for(
 /// further work.
 fn smx_fsr_display_pads(state: &State) -> [Option<(usize, usize)>; 2] {
     let mut out = [None, None];
-    if !state.player_profiles[0].smx_fsr_display && !state.player_profiles[1].smx_fsr_display {
+    if !gameplay_core::player_profiles(state)[0].smx_fsr_display
+        && !gameplay_core::player_profiles(state)[1].smx_fsr_display
+    {
         return out;
     }
     if !crate::config::get().smx_input {
@@ -1875,7 +1887,7 @@ fn smx_fsr_display_pads(state: &State) -> [Option<(usize, usize)>; 2] {
     }
     if profile::get_session_play_style() == profile_data::PlayStyle::Double {
         // One player drives both pads; key the sensor arrays by SDK pad.
-        if state.player_profiles[0].smx_fsr_display {
+        if gameplay_core::player_profiles(state)[0].smx_fsr_display {
             out = [Some((0, 0)), Some((1, 1))];
         }
         return out;
@@ -1887,7 +1899,7 @@ fn smx_fsr_display_pads(state: &State) -> [Option<(usize, usize)>; 2] {
         let Some(pidx) = gameplay_player_index_for_side(state, side) else {
             continue;
         };
-        if !state.player_profiles[pidx].smx_fsr_display {
+        if !gameplay_core::player_profiles(state)[pidx].smx_fsr_display {
             continue;
         }
         out[n] = Some((pidx, profile_data::player_side_index(side)));
@@ -2194,8 +2206,8 @@ pub fn prewarm_text_layout(
         let text = cached_life_percent_text(tenths as f32 / 10.0);
         cache.prewarm_text(fonts, "miso", text.as_ref(), None);
     }
-    for player in 0..state.num_players {
-        let chart = &state.charts[player];
+    for player in 0..gameplay_core::num_players(state) {
+        let chart = &gameplay_core::charts(state)[player];
         let meter_text = cached_meter_text(chart.meter);
         cache.prewarm_text(
             fonts,
@@ -2205,11 +2217,14 @@ pub fn prewarm_text_layout(
         );
         let detail = color::difficulty_display_name_for_song(
             &chart.difficulty,
-            &state.song.title,
+            &gameplay_core::song(state).title,
             cfg.zmod_rating_box_text,
         );
         cache.prewarm_text(fonts, "miso", detail, None);
-        for &(_, bpm) in &state.gameplay_charts[player].timing_segments.bpms {
+        let Some(gameplay_chart) = gameplay_core::gameplay_chart(state, player) else {
+            continue;
+        };
+        for &(_, bpm) in &gameplay_chart.timing_segments.bpms {
             let text = cached_bpm_text(
                 f64::from(bpm.max(0.0)) * f64::from(gameplay_core::music_rate(state)),
                 cfg.show_bpm_decimal,
@@ -2459,7 +2474,7 @@ fn push_current_bgchange_media(
     }
     let change = active_background_change(state);
     if change.is_some_and(|change| change.effect_is("SongBgWithMovieViz")) {
-        if let Some(path) = state.song.background_path.as_ref() {
+        if let Some(path) = gameplay_core::song(state).background_path.as_ref() {
             actors.push(background_media_sprite(
                 crate::assets::media_path_key(path),
                 bgchange_tint(change, bg_brightness),
@@ -2623,13 +2638,12 @@ fn apply_bgchange_transition(
 
 fn push_layer2_bganimations(actors: &mut Vec<Actor>, state: &State) {
     const FLASH_SECONDS: f32 = 0.6;
-    let Some((change, elapsed)) = state
-        .song
+    let Some((change, elapsed)) = gameplay_core::song(state)
         .background_layer2_changes
         .iter()
         .rev()
         .filter_map(|change| {
-            let start = state.timing.get_time_for_beat(change.start_beat);
+            let start = gameplay_core::timing(state).get_time_for_beat(change.start_beat);
             let elapsed = gameplay_core::current_music_time_display(state) - start;
             (elapsed >= 0.0 && elapsed <= FLASH_SECONDS).then_some((change, elapsed))
         })
@@ -2749,9 +2763,8 @@ fn song_lua_owns_fg_media(
 }
 
 fn active_foreground_media(state: &State) -> Option<(&Path, Arc<str>)> {
-    let path = state
-        .song
-        .active_foreground_path(gameplay_core::current_beat(state))?;
+    let path =
+        gameplay_core::song(state).active_foreground_path(gameplay_core::current_beat(state))?;
     Some((path, crate::assets::media_path_key(path)))
 }
 
@@ -8607,7 +8620,7 @@ pub fn push_actors(
     let center_1player_notefield =
         cfg.center_1player_notefield || notefield_view.force_center_1player;
     let centered_single_notefield = play_style == profile_data::PlayStyle::Single
-        && state.num_players == 1
+        && gameplay_core::num_players(state) == 1
         && center_1player_notefield;
     let song_lua_visuals = gameplay_core::song_lua_visuals(state);
     let song_lua_space_width = song_lua_overlay_space_width(state);
@@ -8681,7 +8694,7 @@ pub fn push_actors(
             layer.screen_height.max(1.0),
             gameplay_core::current_music_time_display(state),
             gameplay_core::current_beat(state),
-            state.total_elapsed_in_screen,
+            gameplay_core::total_elapsed_in_screen(state),
             &mut song_lua_order_scratch,
             &mut song_lua_capture_state_scratch,
             &mut song_lua_capture_order_scratch,
@@ -8689,16 +8702,17 @@ pub fn push_actors(
     }
     song_lua_capture_new_actors(&mut underlay_proxy_source, &mut actors, underlay_start);
     let cover_alpha = |player_idx: usize| -> f32 {
-        if player_idx >= state.num_players {
+        if player_idx >= gameplay_core::num_players(state) {
             return 0.0;
         }
-        let profile_cover = f32::from(state.player_profiles[player_idx].hide_song_bg);
+        let profile_cover =
+            f32::from(gameplay_core::player_profiles(state)[player_idx].hide_song_bg);
         profile_cover
             .max(effective_visibility_effects_for_player(state, player_idx).cover)
             .clamp(0.0, 1.0)
     };
     let left_cover = cover_alpha(0);
-    let right_cover = if state.num_players > 1 {
+    let right_cover = if gameplay_core::num_players(state) > 1 {
         cover_alpha(1)
     } else {
         left_cover
@@ -8900,15 +8914,14 @@ pub fn push_actors(
         let receptor_ns = state.noteskin_assets.receptor_noteskin[player_idx]
             .as_deref()
             .unwrap_or(ns);
-        let cols = state
-            .cols_per_player
+        let cols = gameplay_core::cols_per_player(state)
             .min(ns.column_xs.len())
             .min(receptor_ns.receptor_off.len());
         if cols == 0 {
             return 256.0;
         }
         let spacing_mult = crate::game::gameplay::spacing_multiplier_for_percent(
-            state.player_profiles[player_idx].spacing_percent,
+            gameplay_core::player_profiles(state)[player_idx].spacing_percent,
         );
         let mut min_x = f32::INFINITY;
         let mut max_x = f32::NEG_INFINITY;
@@ -8965,7 +8978,7 @@ pub fn push_actors(
             let player_actor = &song_lua_visuals.player_actors[player_idx];
             let player_state = song_lua_player_render_state(state, player_idx);
             let player_transform = gameplay_core::song_lua_player_transform(state, player_idx);
-            let song_lua_active = !state.song.foreground_lua_changes.is_empty();
+            let song_lua_active = !gameplay_core::song(state).foreground_lua_changes.is_empty();
             let rotation_x = player_state.rot_x_deg + player_transform.rotation_x;
             let rotation_z = player_state.rot_z_deg + player_transform.rotation_z;
             let rotation_y = player_state.rot_y_deg + player_transform.rotation_y;
@@ -9093,13 +9106,13 @@ pub fn push_actors(
         profile_data::PlayStyle::Versus => {
             let (p1_x, p1_player_source, p1_sources) = build_player_bundle(
                 0,
-                &state.player_profiles[0],
+                &gameplay_core::player_profiles(state)[0],
                 notefield::FieldPlacement::P1,
                 proxy_requests.players[0],
             );
             let (p2_x, p2_player_source, p2_sources) = build_player_bundle(
                 1,
-                &state.player_profiles[1],
+                &gameplay_core::player_profiles(state)[1],
                 notefield::FieldPlacement::P2,
                 proxy_requests.players[1],
             );
@@ -9121,7 +9134,7 @@ pub fn push_actors(
             };
             let (nf_x, nf_player_source, nf_sources) = build_player_bundle(
                 0,
-                &state.player_profiles[0],
+                &gameplay_core::player_profiles(state)[0],
                 placement,
                 proxy_requests.players[0],
             );
@@ -9164,7 +9177,7 @@ pub fn push_actors(
         let sh = screen_height();
         let cx = screen_center_x();
 
-        for player_idx in 0..state.num_players {
+        for player_idx in 0..gameplay_core::num_players(state) {
             let Some(rgba) = crate::game::gameplay::danger_overlay_rgba(state, player_idx) else {
                 continue;
             };
@@ -9202,10 +9215,12 @@ pub fn push_actors(
     // Background filter per-player (Simply Love parity): draw behind each notefield, not full-screen.
     let underlay_start = actors.len();
     for &(player_idx, field_x) in &per_player_fields {
-        if player_idx == usize::MAX || player_idx >= state.num_players {
+        if player_idx == usize::MAX || player_idx >= gameplay_core::num_players(state) {
             continue;
         }
-        let filter_alpha = state.player_profiles[player_idx].background_filter.alpha();
+        let filter_alpha = gameplay_core::player_profiles(state)[player_idx]
+            .background_filter
+            .alpha();
         if filter_alpha <= 0.0 {
             continue;
         }
@@ -9305,15 +9320,15 @@ pub fn push_actors(
 
         let is_ultrawide = screen_width() / screen_height().max(1.0) > (21.0 / 9.0);
         let graph_center_shift = widescale(45.0, 95.0);
+        let graph = gameplay_core::density_graph_view(&state.gameplay);
 
         for &(player_idx, player_side, field_x, _, _, _) in &players[..player_count] {
-            if !state.player_profiles[player_idx].nps_graph_at_top {
+            if !gameplay_core::player_profiles(state)[player_idx].nps_graph_at_top {
                 continue;
             }
-            let graph_w = state.gameplay.density_graph.top_w[player_idx];
-            let graph_h = state.gameplay.density_graph.top_h;
-            let graph_mesh_h =
-                graph_h * state.gameplay.density_graph.top_scale_y[player_idx].clamp(0.0, 1.0);
+            let graph_w = graph.top_w[player_idx];
+            let graph_h = graph.top_h;
+            let graph_mesh_h = graph.top_mesh_h(player_idx);
             if graph_w <= 0.0 || graph_h <= 0.0 || graph_mesh_h <= 0.0 {
                 continue;
             }
@@ -9328,11 +9343,12 @@ pub fn push_actors(
             let y_bottom = 71.0;
             let y_top = y_bottom - graph_h;
             let y_mesh_top = y_bottom - graph_mesh_h;
-            let graph_bg_alpha = if state.player_profiles[player_idx].transparent_density_graph_bg {
-                0.5
-            } else {
-                1.0
-            };
+            let graph_bg_alpha =
+                if gameplay_core::player_profiles(state)[player_idx].transparent_density_graph_bg {
+                    0.5
+                } else {
+                    1.0
+                };
 
             actors.push(act!(quad:
                 align(0.0, 0.0): xy(x, y_top):
@@ -9355,11 +9371,9 @@ pub fn push_actors(
                 });
             }
 
-            let duration = (state.gameplay.density_graph.last_second
-                - state.gameplay.density_graph.first_second)
-                .max(0.001_f32);
+            let duration = (graph.last_second - graph.first_second).max(0.001_f32);
             let progress_w = (((gameplay_core::current_music_time_display(state)
-                - state.gameplay.density_graph.first_second)
+                - graph.first_second)
                 / duration)
                 * graph_w)
                 .clamp(0.0, graph_w);
@@ -9389,7 +9403,8 @@ pub fn push_actors(
                         Some((player_side, field_x - half_w, field_x + half_w));
                 }
             }
-            if state.player_profiles[0].smx_fsr_display || state.player_profiles[1].smx_fsr_display
+            if gameplay_core::player_profiles(state)[0].smx_fsr_display
+                || gameplay_core::player_profiles(state)[1].smx_fsr_display
             {
                 smx_profile::time_draw(|| {
                     push_smx_sensor_display(
@@ -9401,8 +9416,8 @@ pub fn push_actors(
                     )
                 });
             }
-            if state.player_profiles[0].smx_pad_input_display
-                || state.player_profiles[1].smx_pad_input_display
+            if gameplay_core::player_profiles(state)[0].smx_pad_input_display
+                || gameplay_core::player_profiles(state)[1].smx_pad_input_display
             {
                 push_smx_pad_input_display(
                     &mut actors,
@@ -9417,7 +9432,7 @@ pub fn push_actors(
         for &(player_idx, player_side, field_x, diff_x, score_x_normal, score_x_other) in
             &players[..player_count]
         {
-            let profile = &state.player_profiles[player_idx];
+            let profile = &gameplay_core::player_profiles(state)[player_idx];
             let diff_x = difficulty_meter_x(
                 state,
                 profile,
@@ -9427,12 +9442,15 @@ pub fn push_actors(
                 notefield_width(player_idx),
                 diff_x,
             );
-            let chart = &state.charts[player_idx];
+            let chart = &gameplay_core::charts(state)[player_idx];
             let difficulty_color =
                 color::difficulty_rgba(&chart.difficulty, gameplay_core::active_color_index(state));
             let meter_text = cached_meter_text(chart.meter);
-            let meter_detail_text =
-                color::difficulty_display_name_for_song(&chart.difficulty, &state.song.title, true);
+            let meter_detail_text = color::difficulty_display_name_for_song(
+                &chart.difficulty,
+                &gameplay_core::song(state).title,
+                true,
+            );
 
             // Difficulty Box
             let y = DIFFICULTY_METER_Y;
@@ -9459,8 +9477,9 @@ pub fn push_actors(
 
             // Score Display
             let note_field_is_centered = (field_x - screen_center_x()).abs() < 1.0;
-            let nps_graph_at_top = state.player_profiles[player_idx].nps_graph_at_top;
-            let single_score_swapped = state.num_players == 1
+            let nps_graph_at_top =
+                gameplay_core::player_profiles(state)[player_idx].nps_graph_at_top;
+            let single_score_swapped = gameplay_core::num_players(state) == 1
                 && play_style != profile_data::PlayStyle::Double
                 && nps_graph_at_top
                 && !note_field_is_centered;
@@ -9468,7 +9487,7 @@ pub fn push_actors(
                 == profile_data::ScorePosition::StepStatistics
                 && !profile.step_statistics.is_empty()
                 && play_style == profile_data::PlayStyle::Single
-                && state.num_cols <= 4;
+                && gameplay_core::num_cols(state) <= 4;
             let score_in_versus_step_stats = profile.score_position
                 == profile_data::ScorePosition::StepStatistics
                 && !profile.step_statistics.is_empty()
@@ -9494,7 +9513,7 @@ pub fn push_actors(
             let score_y = step_stats_score_pos.map_or(56.0, |pos| pos.score_y);
             let score_zoom = step_stats_score_pos.map_or(0.5, |_| 0.2);
             let hide_score_for_top_graph =
-                state.num_players > 1 && nps_graph_at_top && !is_ultrawide;
+                gameplay_core::num_players(state) > 1 && nps_graph_at_top && !is_ultrawide;
 
             if !profile.hide_score && !hide_score_for_top_graph && !score_in_versus_step_stats {
                 let show_ex_score = profile.show_ex_score;
@@ -9578,8 +9597,7 @@ pub fn push_actors(
         }
         // Current BPM Display (1:1 with Simply Love)
         {
-            let base_bpm = state
-                .timing
+            let base_bpm = gameplay_core::timing(state)
                 .get_bpm_for_beat(gameplay_core::current_beat_display(state));
             let music_rate = gameplay_core::music_rate(state);
             let rate = if music_rate.is_finite() {
@@ -9606,9 +9624,9 @@ pub fn push_actors(
             let rate_final_zoom = 0.5 * frame_zoom;
             let mut bpm_x = screen_center_x();
             let note_field_is_centered = (playfield_center_x - screen_center_x()).abs() < 1.0;
-            if state.num_players == 1
+            if gameplay_core::num_players(state) == 1
                 && note_field_is_centered
-                && state.player_profiles[0].nps_graph_at_top
+                && gameplay_core::player_profiles(state)[0].nps_graph_at_top
             {
                 let side_shift = if player_side == profile_data::PlayerSide::P1 {
                     0.3
@@ -9652,8 +9670,8 @@ pub fn push_actors(
             ));
             let progress = song_meter_progress(
                 gameplay_core::song_time_ns_to_seconds(gameplay_core::current_music_time_ns(state)),
-                state.song.precise_first_second(),
-                state.song.precise_last_second(),
+                gameplay_core::song(state).precise_first_second(),
+                gameplay_core::song(state).precise_last_second(),
             );
             if progress > f32::EPSILON {
                 actors.push(act!(quad:
@@ -9706,11 +9724,11 @@ pub fn push_actors(
                 }
             };
             let fill_life_color = |player_idx: usize, life: f32, dead: bool| -> [f32; 4] {
-                let profile = &state.player_profiles[player_idx];
+                let profile = &gameplay_core::player_profiles(state)[player_idx];
                 let is_hot = !dead && life >= 1.0;
                 if is_hot {
                     if profile.rainbow_max {
-                        rainbow_life_color(state.total_elapsed_in_screen)
+                        rainbow_life_color(gameplay_core::total_elapsed_in_screen(state))
                     } else {
                         [1.0, 1.0, 1.0, 1.0]
                     }
@@ -9741,17 +9759,17 @@ pub fn push_actors(
             };
 
             for &(player_idx, side) in &life_players[..life_player_count] {
-                if state.player_profiles[player_idx].hide_lifebar {
+                if gameplay_core::player_profiles(state)[player_idx].hide_lifebar {
                     continue;
                 }
 
                 // Latch-to-zero for rendering the very frame we die.
-                let dead =
-                    state.players[player_idx].is_failing || state.players[player_idx].life <= 0.0;
+                let player = &gameplay_core::players(state)[player_idx];
+                let dead = player.is_failing || player.life <= 0.0;
                 let life_for_render = if dead {
                     0.0
                 } else {
-                    state.players[player_idx].life.clamp(0.0, 1.0)
+                    player.life.clamp(0.0, 1.0)
                 };
                 let is_hot = !dead && life_for_render >= 1.0;
                 let life_color = fill_life_color(player_idx, life_for_render, dead);
@@ -9768,7 +9786,7 @@ pub fn push_actors(
                     0.0
                 };
 
-                match state.player_profiles[player_idx].lifemeter_type {
+                match gameplay_core::player_profiles(state)[player_idx].lifemeter_type {
                     profile_data::LifeMeterType::Standard => {
                         let w = 136.0;
                         let h = 18.0;
@@ -9801,8 +9819,7 @@ pub fn push_actors(
                             // Logic Parity:
                             // velocity = -(songposition:GetCurBPS() * 0.5)
                             // if songposition:GetFreeze() or songposition:GetDelay() then velocity = 0 end
-                            let bps = state
-                                .timing
+                            let bps = gameplay_core::timing(state)
                                 .get_bpm_for_beat(gameplay_core::current_beat_display(state))
                                 / 60.0;
                             let velocity_x = if gameplay_core::beat_phase_paused(state) {
@@ -9833,7 +9850,7 @@ pub fn push_actors(
                             ));
                         }
 
-                        if state.player_profiles[player_idx].show_life_percent
+                        if gameplay_core::player_profiles(state)[player_idx].show_life_percent
                             && show_standard_life_percent
                             && !is_hot
                         {
@@ -9895,17 +9912,24 @@ pub fn push_actors(
                             break;
                         }
 
-                        let mut surround_color =
-                            if state.player_profiles[player_idx].responsive_colors {
-                                let mut c = responsive_life_color(life_for_render);
-                                c[3] = 0.2;
-                                c
-                            } else {
-                                [0.2, 0.2, 0.2, 1.0]
-                            };
-                        if life_for_render >= 1.0 && state.player_profiles[player_idx].rainbow_max {
-                            let mut c = rainbow_life_color(state.total_elapsed_in_screen);
-                            c[3] = if state.player_profiles[player_idx].responsive_colors {
+                        let mut surround_color = if gameplay_core::player_profiles(state)
+                            [player_idx]
+                            .responsive_colors
+                        {
+                            let mut c = responsive_life_color(life_for_render);
+                            c[3] = 0.2;
+                            c
+                        } else {
+                            [0.2, 0.2, 0.2, 1.0]
+                        };
+                        if life_for_render >= 1.0
+                            && gameplay_core::player_profiles(state)[player_idx].rainbow_max
+                        {
+                            let mut c =
+                                rainbow_life_color(gameplay_core::total_elapsed_in_screen(state));
+                            c[3] = if gameplay_core::player_profiles(state)[player_idx]
+                                .responsive_colors
+                            {
                                 0.2
                             } else {
                                 1.0
@@ -9987,8 +10011,7 @@ pub fn push_actors(
 
                         // MeterSwoosh
                         if filled_h > 0.0 && !dead {
-                            let bps = state
-                                .timing
+                            let bps = gameplay_core::timing(state)
                                 .get_bpm_for_beat(gameplay_core::current_beat_display(state))
                                 / 60.0;
                             let velocity_x = if gameplay_core::beat_phase_paused(state) {
@@ -10009,7 +10032,9 @@ pub fn push_actors(
                             ));
                         }
 
-                        if state.player_profiles[player_idx].show_life_percent && !is_hot {
+                        if gameplay_core::player_profiles(state)[player_idx].show_life_percent
+                            && !is_hot
+                        {
                             let life_text_color = player_life_color(player_idx);
                             let text_y = cy + bar_h * 0.5 - (bar_h * life_for_render);
                             let (outer_x, inner_x, text_x, align_x) =
@@ -10048,7 +10073,8 @@ pub fn push_actors(
         let intro_text = state.stage_intro_text.as_ref();
         let is_restart_label = intro_text.starts_with("RESTART ");
         if !intro_text.is_empty()
-            && (is_restart_label || state.total_elapsed_in_screen >= INTRO_TEXT_SETTLE_SECONDS)
+            && (is_restart_label
+                || gameplay_core::total_elapsed_in_screen(state) >= INTRO_TEXT_SETTLE_SECONDS)
         {
             let text_x = intro_text_target_x(
                 state,
@@ -10135,23 +10161,23 @@ pub fn push_actors(
             right_avatar,
         }));
         let show_step_stats = match play_style {
-            profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => state
-                .player_profiles
-                .first()
-                .is_some_and(|p| !p.step_statistics.is_empty()),
-            profile_data::PlayStyle::Versus => {
-                state
-                    .player_profiles
+            profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
+                gameplay_core::player_profiles(state)
                     .first()
                     .is_some_and(|p| !p.step_statistics.is_empty())
-                    || state
-                        .player_profiles
+            }
+            profile_data::PlayStyle::Versus => {
+                gameplay_core::player_profiles(state)
+                    .first()
+                    .is_some_and(|p| !p.step_statistics.is_empty())
+                    || gameplay_core::player_profiles(state)
                         .get(1)
                         .is_some_and(|p| !p.step_statistics.is_empty())
             }
         };
         if show_step_stats {
-            if state.num_cols <= 4 && play_style != profile_data::PlayStyle::Versus {
+            if gameplay_core::num_cols(state) <= 4 && play_style != profile_data::PlayStyle::Versus
+            {
                 gameplay_stats::push_step_stats(
                     &mut actors,
                     state,
@@ -10220,7 +10246,7 @@ pub fn push_actors(
             song_lua_space_height,
             gameplay_core::current_music_time_display(state),
             gameplay_core::current_beat(state),
-            state.total_elapsed_in_screen,
+            gameplay_core::total_elapsed_in_screen(state),
             &mut song_lua_order_scratch,
             &mut song_lua_capture_state_scratch,
             &mut song_lua_capture_order_scratch,
@@ -10274,7 +10300,7 @@ pub fn push_actors(
                 layer.screen_height.max(1.0),
                 gameplay_core::current_music_time_display(state),
                 gameplay_core::current_beat(state),
-                state.total_elapsed_in_screen,
+                gameplay_core::total_elapsed_in_screen(state),
                 &mut song_lua_order_scratch,
                 &mut song_lua_capture_state_scratch,
                 &mut song_lua_capture_order_scratch,
@@ -10523,7 +10549,7 @@ fn push_smx_sensor_display(
     if is_centered_single {
         // Big FSR group stacked over the mini-pad in the open side gutter.
         for pad in 0..2usize {
-            if !state.player_profiles[pad].smx_fsr_display {
+            if !gameplay_core::player_profiles(state)[pad].smx_fsr_display {
                 continue;
             }
             let Some((side, field_left, field_right)) = field_geom[pad] else {
@@ -10541,7 +10567,7 @@ fn push_smx_sensor_display(
         // 3/5 down the screen (under the judgement), clear of the gutters. Gated
         // on the doubles player's toggle (profile 0); sensor arrays are keyed by
         // SDK pad here (see on_enter).
-        if !state.player_profiles[0].smx_fsr_display {
+        if !gameplay_core::player_profiles(state)[0].smx_fsr_display {
             return;
         }
         let Some((_, field_left, _)) = field_geom[0] else {
@@ -10561,7 +10587,7 @@ fn push_smx_sensor_display(
     }
 
     for pad in 0..2usize {
-        if !state.player_profiles[pad].smx_fsr_display {
+        if !gameplay_core::player_profiles(state)[pad].smx_fsr_display {
             continue;
         }
         // Place this pad's group just outside the outer edge of its notefield.
@@ -10777,7 +10803,9 @@ fn push_smx_pad_input_display(
     if is_centered_single {
         // Big mini-pad stacked under the FSR group in the open side gutter.
         for slot in 0..2usize {
-            if slot * 4 >= state.num_cols || !state.player_profiles[slot].smx_pad_input_display {
+            if slot * 4 >= gameplay_core::num_cols(state)
+                || !gameplay_core::player_profiles(state)[slot].smx_pad_input_display
+            {
                 continue;
             }
             let Some((side, field_left, field_right)) = field_geom[slot] else {
@@ -10793,7 +10821,7 @@ fn push_smx_pad_input_display(
         // One player drives both pads. Show both mini-pads (pad 0 left, pad 1
         // right) beside each other, centered on the playfield directly under the
         // FSR pair. Gated on the doubles player's toggle (profile 0).
-        if !state.player_profiles[0].smx_pad_input_display {
+        if !gameplay_core::player_profiles(state)[0].smx_pad_input_display {
             return;
         }
         let Some((_, field_left, _)) = field_geom[0] else {
@@ -10811,7 +10839,7 @@ fn push_smx_pad_input_display(
         // When the FSR pair is also shown, center each mini under its FSR group
         // above it; otherwise use the natural (tighter) mini-pair spacing so a
         // mini-only display doesn't look oddly spread out.
-        let fsr_active = state.player_profiles[0].smx_fsr_display;
+        let fsr_active = gameplay_core::player_profiles(state)[0].smx_fsr_display;
         let fsr_group_w = smx_fsr_group_w();
         let fsr_start_x = center_x - (fsr_group_w * 2.0 + group_gap) * 0.5;
         for half in 0..2usize {
@@ -10832,7 +10860,9 @@ fn push_smx_pad_input_display(
     // outside the inner edge of that player's notefield (mirrors the FSR display
     // on the outer edge).
     for slot in 0..2usize {
-        if slot * 4 >= state.num_cols || !state.player_profiles[slot].smx_pad_input_display {
+        if slot * 4 >= gameplay_core::num_cols(state)
+            || !gameplay_core::player_profiles(state)[slot].smx_pad_input_display
+        {
             continue;
         }
         let Some((side, field_left, field_right)) = field_geom[slot] else {

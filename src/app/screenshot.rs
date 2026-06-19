@@ -53,10 +53,8 @@ fn sanitize_song_title(title: &str) -> String {
 fn current_song_title(state: &super::AppState) -> Option<(String, Option<u32>)> {
     match state.screens.current_screen {
         CurrentScreen::Gameplay => state.screens.gameplay_state.as_ref().map(|gs| {
-            let title = gs.gameplay.song.title.clone();
-            let meter = gs
-                .gameplay
-                .charts
+            let title = crate::game::gameplay::song(&gs.gameplay).title.clone();
+            let meter = crate::game::gameplay::charts(&gs.gameplay)
                 .iter()
                 .find(|c| c.meter > 0)
                 .map(|c| c.meter);

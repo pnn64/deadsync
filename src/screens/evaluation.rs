@@ -2246,7 +2246,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
 
     if let Some(mut gs) = gameplay_results {
         let cfg = crate::config::get();
-        stage_duration_seconds = gs.total_elapsed_in_screen;
+        stage_duration_seconds = crate::game::gameplay::total_elapsed_in_screen(&gs);
 
         // Persist one score file per play (per local profile), including fails and replay lane
         // input, unless the run was disqualified (autoplay/replay).
@@ -2255,19 +2255,19 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         scores::submit_groovestats_payloads_from_gameplay(&gs);
         scores::submit_arrowcloud_payloads_from_gameplay(&gs, gs.pack_group.as_ref());
 
-        let cols_per_player = gs.cols_per_player;
+        let cols_per_player = crate::game::gameplay::cols_per_player(&gs);
         for (player_idx, score_info_slot) in score_info
             .iter_mut()
             .enumerate()
-            .take(gs.num_players.min(MAX_PLAYERS))
+            .take(crate::game::gameplay::num_players(&gs).min(MAX_PLAYERS))
         {
             let noteskin = gs.noteskin_assets.noteskin[player_idx].take();
             let (start, end) = crate::game::gameplay::note_range_for_player(&gs, player_idx);
-            let notes = &gs.notes[start..end];
-            let note_times = &gs.note_time_cache_ns[start..end];
-            let hold_end_times = &gs.hold_end_time_cache_ns[start..end];
-            let p = &gs.players[player_idx];
-            let prof = &gs.player_profiles[player_idx];
+            let notes = &crate::game::gameplay::notes(&gs)[start..end];
+            let note_times = &crate::game::gameplay::note_time_cache_ns(&gs)[start..end];
+            let hold_end_times = &crate::game::gameplay::hold_end_time_cache_ns(&gs)[start..end];
+            let p = &crate::game::gameplay::players(&gs)[player_idx];
+            let prof = &crate::game::gameplay::player_profiles(&gs)[player_idx];
             let col_offset = player_idx.saturating_mul(cols_per_player);
             let stream_segments =
                 crate::game::gameplay::stream_segments_for_results(&gs, player_idx);
@@ -2356,7 +2356,8 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                     tw[idx - 1]
                 }
             };
-            let graph_first_second = 0.0_f32.min(gs.timing.get_time_for_beat(0.0));
+            let graph_first_second =
+                0.0_f32.min(crate::game::gameplay::timing(&gs).get_time_for_beat(0.0));
             let chart_last_second = {
                 let mut latest_ns: i64 = i64::MIN;
                 for (idx, &t_ns) in note_times.iter().enumerate() {
@@ -2371,7 +2372,8 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                     }
                 }
                 if latest_ns == i64::MIN {
-                    (gs.song.total_length_seconds.max(0) as f32).max(graph_first_second + 0.001)
+                    (crate::game::gameplay::song(&gs).total_length_seconds.max(0) as f32)
+                        .max(graph_first_second + 0.001)
                 } else {
                     crate::game::gameplay::song_time_ns_to_seconds(latest_ns)
                         .max(graph_first_second + 0.001)
@@ -2387,7 +2389,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 p.mines_hit_for_score,
                 totals.possible_grade_points,
             );
-            let side = if gs.num_players >= 2 {
+            let side = if crate::game::gameplay::num_players(&gs) >= 2 {
                 if player_idx == 0 {
                     profile_data::PlayerSide::P1
                 } else {
@@ -2396,23 +2398,27 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             } else {
                 profile::get_session_player_side()
             };
-            let machine_records = if let Some(records) =
-                machine_records_by_hash.get(&gs.charts[player_idx].short_hash)
+            let machine_records = if let Some(records) = machine_records_by_hash
+                .get(&crate::game::gameplay::charts(&gs)[player_idx].short_hash)
             {
                 records.clone()
             } else {
                 let records = scores::get_machine_leaderboard_local(
-                    &gs.charts[player_idx].short_hash,
+                    &crate::game::gameplay::charts(&gs)[player_idx].short_hash,
                     usize::MAX,
                 );
-                machine_records_by_hash
-                    .insert(gs.charts[player_idx].short_hash.clone(), records.clone());
+                machine_records_by_hash.insert(
+                    crate::game::gameplay::charts(&gs)[player_idx]
+                        .short_hash
+                        .clone(),
+                    records.clone(),
+                );
                 records
             };
             let machine_record_highlight_rank =
                 score_data::leaderboard_rank_for_score(machine_records.as_slice(), score_percent);
             let personal_records = scores::get_personal_leaderboard_local_for_side(
-                &gs.charts[player_idx].short_hash,
+                &crate::game::gameplay::charts(&gs)[player_idx].short_hash,
                 side,
                 usize::MAX,
             );
@@ -2433,8 +2439,13 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 p.life,
                 p.fail_time.is_some(),
             );
-            let chart_hash = gs.charts[player_idx].short_hash.as_str();
-            let lua_submit_allowed = score_data::lua_submit_allowed(gs.song.has_lua, chart_hash);
+            let chart_hash = crate::game::gameplay::charts(&gs)[player_idx]
+                .short_hash
+                .as_str();
+            let lua_submit_allowed = score_data::lua_submit_allowed(
+                crate::game::gameplay::song(&gs).has_lua,
+                chart_hash,
+            );
             let course_life_submit_eligible =
                 crate::game::gameplay::course_stage_life_submit_eligible(&gs, player_idx);
             let expected_groovestats_submit = cfg.enable_groovestats
@@ -2503,8 +2514,8 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             };
 
             *score_info_slot = Some(ScoreInfo {
-                song: gs.song.clone(),
-                chart: gs.charts[player_idx].clone(),
+                song: crate::game::gameplay::song_arc(&gs),
+                chart: crate::game::gameplay::charts(&gs)[player_idx].clone(),
                 course_graph_stages: Vec::new(),
                 side,
                 profile_name: prof.display_name.clone(),

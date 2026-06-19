@@ -170,8 +170,10 @@ pub fn fixture() -> NotefieldBenchFixture {
     );
 
     prime_visible_window(&mut state);
-    let notefield_model_cache =
-        gameplay_screen::notefield_model_cache_from_assets(&noteskin_assets, state.num_players);
+    let notefield_model_cache = gameplay_screen::notefield_model_cache_from_assets(
+        &noteskin_assets,
+        gameplay::num_players(&state),
+    );
 
     NotefieldBenchFixture {
         state,
@@ -183,9 +185,12 @@ pub fn fixture() -> NotefieldBenchFixture {
 
 fn prime_visible_window(state: &mut gameplay::State) {
     let beat = VISIBLE_BEAT;
-    let time = state.timing_players[0].get_time_for_beat(beat);
-    let time_ns = state.timing_players[0].get_time_for_beat_ns(beat);
-    state.total_elapsed_in_screen = 7.25;
+    let timing = gameplay::timing_for_player(state, 0)
+        .expect("notefield bench fixture initializes P1 timing");
+    let time = timing.get_time_for_beat(beat);
+    let time_ns = timing.get_time_for_beat_ns(beat);
+    let elapsed = 7.25;
+    gameplay::set_benchmark_screen_elapsed(state, elapsed);
     gameplay::set_benchmark_song_position(state, beat, time_ns, beat, time);
     gameplay::set_benchmark_visible_time(state, 0, time_ns, time, beat);
     gameplay::set_benchmark_visible_time(state, 1, time_ns, time, beat);
@@ -196,10 +201,11 @@ fn prime_visible_window(state: &mut gameplay::State) {
     let lower = beat - WINDOW_BEATS_BEFORE;
     let upper = beat + WINDOW_BEATS_AFTER;
     let (note_start, note_end) = gameplay::note_range_for_player(state, 0);
+    let notes = gameplay::notes(state);
     let mut end_cursor = note_start;
 
     for idx in note_start..note_end {
-        let note = &state.notes[idx];
+        let note = &notes[idx];
         if note.beat < lower {
             continue;
         }
@@ -210,8 +216,9 @@ fn prime_visible_window(state: &mut gameplay::State) {
     }
 
     gameplay::set_benchmark_next_tap_miss_cursor(state, 0, end_cursor.max(note_start));
+    let notes = gameplay::notes(state);
 
-    if let Some((note_index, note_type)) = state.notes[note_start..end_cursor]
+    if let Some((note_index, note_type)) = notes[note_start..end_cursor]
         .iter()
         .enumerate()
         .find_map(|(ix, note)| {
@@ -219,10 +226,12 @@ fn prime_visible_window(state: &mut gameplay::State) {
                 .then_some((note_start + ix, note.note_type))
         })
     {
-        let column = state.notes[note_index].column;
-        let end_time_ns = state.hold_end_time_cache_ns[note_index]
+        let column = notes[note_index].column;
+        let end_time_ns = gameplay::hold_end_time_cache_ns_at(state, note_index)
+            .flatten()
             .unwrap_or_else(|| gameplay::song_time_ns_from_seconds(time + 1.0));
-        let start_time_ns = state.note_time_cache_ns[note_index];
+        let start_time_ns = gameplay::note_time_cache_ns_at(state, note_index)
+            .unwrap_or_else(|| gameplay::song_time_ns_from_seconds(time));
         gameplay::set_benchmark_active_hold(
             state,
             column,
@@ -273,28 +282,30 @@ fn prime_visible_window(state: &mut gameplay::State) {
         }],
     );
     gameplay::set_benchmark_receptor_bop_timer(state, 0, 0.05);
-    state.players[0].combo = 327;
-    state.players[0].current_combo_grade = Some(JudgeGrade::Fantastic);
-    state.players[0].full_combo_grade = Some(JudgeGrade::Fantastic);
-    state.players[0].error_bar_color_bar_started_at = Some(state.total_elapsed_in_screen - 0.06);
-    state.players[0].error_bar_color_ticks[0] = Some(ErrorBarTick {
-        started_at: state.total_elapsed_in_screen - 0.04,
-        offset_s: -0.011,
-        window: TimingWindow::W1,
+    gameplay::update_benchmark_player(state, 0, |player| {
+        player.combo = 327;
+        player.current_combo_grade = Some(JudgeGrade::Fantastic);
+        player.full_combo_grade = Some(JudgeGrade::Fantastic);
+        player.error_bar_color_bar_started_at = Some(elapsed - 0.06);
+        player.error_bar_color_ticks[0] = Some(ErrorBarTick {
+            started_at: elapsed - 0.04,
+            offset_s: -0.011,
+            window: TimingWindow::W1,
+        });
+        player.error_bar_color_ticks[1] = Some(ErrorBarTick {
+            started_at: elapsed - 0.08,
+            offset_s: 0.019,
+            window: TimingWindow::W2,
+        });
+        player.error_bar_text = Some(ErrorBarText {
+            started_at: elapsed - 0.05,
+            early: true,
+            offset_ms: 12.0,
+            scaled: false,
+            scale_start_ms: 10.0,
+        });
+        player.last_judgment = None;
     });
-    state.players[0].error_bar_color_ticks[1] = Some(ErrorBarTick {
-        started_at: state.total_elapsed_in_screen - 0.08,
-        offset_s: 0.019,
-        window: TimingWindow::W2,
-    });
-    state.players[0].error_bar_text = Some(ErrorBarText {
-        started_at: state.total_elapsed_in_screen - 0.05,
-        early: true,
-        offset_ms: 12.0,
-        scaled: false,
-        scale_start_ms: 10.0,
-    });
-    state.players[0].last_judgment = None;
 }
 
 fn bench_song() -> SongData {

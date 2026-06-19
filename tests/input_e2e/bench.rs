@@ -358,16 +358,15 @@ fn step_gameplay(
 fn prepare_gameplay_state(state: &mut gameplay::State) {
     gameplay::reset_benchmark_stage_runtime(state);
     gameplay::reset_benchmark_exit_input(state);
-    state.total_elapsed_in_screen = 0.0;
+    gameplay::set_benchmark_screen_elapsed(state, 0.0);
     gameplay::set_benchmark_song_position(state, 0.0, 0, 0.0, 0.0);
     gameplay::fill_benchmark_visible_time(state, 0.0);
-    state.notes.clear();
+    gameplay::clear_benchmark_notes(state);
     gameplay::clear_benchmark_note_ranges(state);
     gameplay::clear_benchmark_mine_scan(state);
-    state.row_entries.clear();
+    gameplay::clear_benchmark_row_entries(state);
     gameplay::clear_benchmark_row_indices(state);
-    state.note_time_cache_ns.clear();
-    state.hold_end_time_cache_ns.clear();
+    gameplay::clear_benchmark_note_timing_caches(state);
     gameplay::set_benchmark_end_times(state, 3_600_000_000_000, 3_600_000_000_000);
     gameplay::clear_benchmark_hold_runtime(state);
     gameplay::clear_recorded_replay_edges(state);
@@ -404,10 +403,10 @@ fn checksum_input_event(ev: InputEvent, action: GameplayAction) -> u64 {
 
 #[inline(always)]
 fn checksum_state(state: &gameplay::State, action: GameplayAction) -> u64 {
-    (state.total_elapsed_in_screen.to_bits() as u64)
+    (gameplay::total_elapsed_in_screen(state).to_bits() as u64)
         ^ (gameplay::current_music_time_display(state).to_bits() as u64).rotate_left(13)
-        ^ (state.players[0].combo as u64).rotate_left(29)
-        ^ (state.players[0].life.to_bits() as u64).rotate_left(41)
+        ^ (gameplay::players(state)[0].combo as u64).rotate_left(29)
+        ^ (gameplay::players(state)[0].life.to_bits() as u64).rotate_left(41)
         ^ gameplay_action_hash(action)
 }
 
