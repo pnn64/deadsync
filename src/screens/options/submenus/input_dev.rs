@@ -1,22 +1,5 @@
 use super::super::*;
 
-// USB polling choice list bounds: index N maps to 500 + N*50 microseconds.
-const USB_POLLING_MIN_US: u16 = 500;
-const USB_POLLING_STEP_US: u16 = 50;
-pub(in crate::screens::options) const USB_POLLING_CHOICE_COUNT: usize = 11;
-
-/// Choice index for a polling value in microseconds (clamped to the list).
-pub(in crate::screens::options) fn usb_polling_choice_index(value: u16) -> usize {
-    let max = USB_POLLING_MIN_US + USB_POLLING_STEP_US * (USB_POLLING_CHOICE_COUNT as u16 - 1);
-    let v = value.clamp(USB_POLLING_MIN_US, max);
-    ((v - USB_POLLING_MIN_US) / USB_POLLING_STEP_US) as usize
-}
-
-/// Polling value in microseconds for a choice index (clamped to the list).
-pub(in crate::screens::options) fn usb_polling_value(index: usize) -> u16 {
-    USB_POLLING_MIN_US + (index.min(USB_POLLING_CHOICE_COUNT - 1) as u16) * USB_POLLING_STEP_US
-}
-
 /// Live help text for the Assign Pads row: which pad is currently P1 (blue) vs
 /// P2 (red) by slot, plus a same-jumper warning when the pads are ambiguous and
 /// not yet assigned.
@@ -328,25 +311,6 @@ pub(in crate::screens::options) const SMX_CONFIG_OPTIONS_ROWS: &[SubRow] = &[
         choices: &[localized_choice("OptionsInput", "SmxSwapPadsAction")],
         inline: false,
     },
-    SubRow {
-        id: SubRowId::SmxUsbPolling,
-        // 500-1000us in 50us steps; choice index N maps to 500 + N*50 us.
-        label: lookup_key("OptionsInput", "UsbPolling"),
-        choices: &[
-            literal_choice("500us"),
-            literal_choice("550us"),
-            literal_choice("600us"),
-            literal_choice("650us"),
-            literal_choice("700us"),
-            literal_choice("750us"),
-            literal_choice("800us"),
-            literal_choice("850us"),
-            literal_choice("900us"),
-            literal_choice("950us"),
-            literal_choice("1000us"),
-        ],
-        inline: false,
-    },
 ];
 
 pub(in crate::screens::options) const SMX_CONFIG_OPTIONS_ITEMS: &[Item] = &[
@@ -412,14 +376,6 @@ pub(in crate::screens::options) const SMX_CONFIG_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsInputHelp",
             "SmxSwapPadsHelp",
-        ))],
-    },
-    Item {
-        id: ItemId::InpSmxUsbPolling,
-        name: lookup_key("OptionsInput", "UsbPolling"),
-        help: &[HelpEntry::Paragraph(lookup_key(
-            "OptionsInputHelp",
-            "UsbPollingHelp",
         ))],
     },
     Item {

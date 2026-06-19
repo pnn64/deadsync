@@ -9,7 +9,7 @@ deadsync-input = { path = "../deadsync-input" }
 deadsync-input-native = { path = "../deadsync-input-native" }
 deadlib-platform = { path = "../deadlib-platform" }
 log = "0.4.32"
-rustmaniax-sdk = "1.4.0"
+rustmaniax-sdk = "2.0.0"
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

@@ -512,12 +512,6 @@ pub fn init() -> State {
     set_choice_by_id(
         &mut state.sub[SubmenuKind::SmxConfig].choice_indices,
         SMX_CONFIG_OPTIONS_ROWS,
-        SubRowId::SmxUsbPolling,
-        usb_polling_choice_index(cfg.smx_usb_polling_us),
-    );
-    set_choice_by_id(
-        &mut state.sub[SubmenuKind::SmxConfig].choice_indices,
-        SMX_CONFIG_OPTIONS_ROWS,
         SubRowId::SmxDefaultPadConfig,
         cfg.smx_default_pad_config.index(),
     );

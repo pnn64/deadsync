@@ -136,21 +136,6 @@ pub fn update_smx_default_pad_config(preset: crate::config::SmxPadPreset) {
     save_without_keymaps();
 }
 
-/// Persist the SMX USB polling interval (microseconds) and apply it live to the
-/// running SMX manager.
-pub fn update_smx_usb_polling(micros: u16) {
-    let micros = micros.clamp(500, 1000);
-    {
-        let mut cfg = lock_config();
-        if cfg.smx_usb_polling_us == micros {
-            return;
-        }
-        cfg.smx_usb_polling_us = micros;
-    }
-    deadsync_smx::set_usb_polling_us(micros);
-    save_without_keymaps();
-}
-
 /// Persist the machine-default pad-light brightness (0..=100). This seeds new
 /// player profiles; it does not retroactively change existing profiles, so there
 /// is nothing to push to the SDK here (the per-slot live value is resolved from

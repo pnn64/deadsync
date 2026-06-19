@@ -232,10 +232,6 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "SmxManagesPadConfig")
         .and_then(|v| v.parse::<u8>().ok())
         .map_or(default.smx_manages_pad_config, |v| v != 0);
-    cfg.smx_usb_polling_us = conf
-        .get("Options", "SmxUsbPollingUs")
-        .and_then(|v| v.parse::<u16>().ok())
-        .map_or(default.smx_usb_polling_us, |v| v.clamp(500, 1000));
     cfg.smx_panel_lights = conf
         .get("Options", "SmxPanelLights")
         .and_then(|v| parse_loose_bool_str(&v))

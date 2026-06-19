@@ -194,7 +194,6 @@ fn push_saved_options(
     push_line(content, "GamepadBackend", cfg.windows_gamepad_backend);
     push_bool(content, "SmxInput", cfg.smx_input);
     push_bool(content, "SmxManagesPadConfig", cfg.smx_manages_pad_config);
-    push_line(content, "SmxUsbPollingUs", cfg.smx_usb_polling_us);
     push_bool(content, "SmxPanelLights", cfg.smx_panel_lights);
     push_line(
         content,

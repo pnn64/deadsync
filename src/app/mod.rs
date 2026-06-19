@@ -10861,7 +10861,6 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         let proxy_sys = proxy.clone();
         let (p1_serial, p2_serial) = config::smx_pad_assignment();
         if deadsync_smx::init(deadsync_smx::InitConfig {
-            usb_polling_us: config.smx_usb_polling_us,
             p1_serial,
             p2_serial,
         }) {

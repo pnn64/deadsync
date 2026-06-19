@@ -115,7 +115,6 @@ fn push_default_options(content: &mut String, default: &Config) {
         "SmxManagesPadConfig",
         default.smx_manages_pad_config,
     );
-    push_line(content, "SmxUsbPollingUs", default.smx_usb_polling_us);
     push_bool(content, "SmxPanelLights", default.smx_panel_lights);
     push_line(
         content,
