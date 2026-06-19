@@ -5,6 +5,7 @@ use deadsync_rules::judgment::JudgeGrade;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_score::ScoreImportEndpoint;
 use std::collections::HashSet;
+use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -12,8 +13,6 @@ use std::str::FromStr;
 pub mod pad_config;
 
 pub const PLAYER_SLOTS: usize = 2;
-pub const DEFAULT_PROFILE_ID: &str = "00000000";
-pub const LOCAL_PROFILE_MAX_ID: u32 = 99_999_999;
 pub const SESSION_JOINED_MASK_P1: u8 = 1 << 0;
 pub const SESSION_JOINED_MASK_P2: u8 = 1 << 1;
 pub const DEFAULT_WEIGHT_POUNDS: i32 = 120;
@@ -397,16 +396,127 @@ pub fn is_local_profile_id(s: &str) -> bool {
     !s.is_empty() && s.len() <= 64 && s != "." && s != ".." && !s.contains(['/', '\\', '\0'])
 }
 
+/// INI section holding profile identity and display fields.
+pub const PROFILE_SECTION: &str = "userprofile";
+/// INI key (under `[userprofile]`) holding the profile's canonical GUID.
+pub const PROFILE_GUID_KEY: &str = "Guid";
+/// INI key (under `[userprofile]`) holding the human-readable display name.
+pub const PROFILE_DISPLAY_NAME_KEY: &str = "DisplayName";
+
+/// Stable per-profile identity so the on-disk folder can be freely renamed
+/// without losing scores, settings, or online logins.
+pub fn generate_profile_guid() -> String {
+    uuid::Uuid::new_v4().to_string()
+}
+
+/// Append the canonical `Guid` line to in-progress `[userprofile]` content, so
+/// every writer stays consistent with `PROFILE_GUID_KEY` and spacing.
+pub fn push_profile_guid_line(out: &mut String, guid: &str) {
+    out.push_str(PROFILE_GUID_KEY);
+    out.push('=');
+    out.push_str(guid);
+    out.push('\n');
+}
+
+/// Recognise an already-assigned identity; `generate_profile_guid` always emits
+/// this canonical dashed-lowercase form.
+pub fn is_valid_profile_guid(s: &str) -> bool {
+    let groups = [8usize, 4, 4, 4, 12];
+    let mut parts = s.split('-');
+    for &len in &groups {
+        let Some(part) = parts.next() else {
+            return false;
+        };
+        if part.len() != len || !part.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return false;
+        }
+    }
+    parts.next().is_none()
+}
+
+const FOLDER_NAME_MAX_LEN: usize = 48;
+
+fn is_windows_reserved_name(name: &str) -> bool {
+    const RESERVED: [&str; 22] = [
+        "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
+        "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    ];
+    RESERVED.iter().any(|r| name.eq_ignore_ascii_case(r))
+}
+
+/// Derive a safe single-segment folder name from a display name. `None` (caller
+/// falls back to the GUID) when nothing usable survives sanitizing or the result
+/// would hit a Windows reserved device name.
+pub fn sanitize_folder_base(display_name: &str) -> Option<String> {
+    let mut out = String::with_capacity(display_name.len());
+    let mut last_was_space = false;
+    for ch in display_name.chars() {
+        let mapped = match ch {
+            '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' | '\0' => None,
+            c if c.is_control() => None,
+            c if c.is_whitespace() => Some(' '),
+            c => Some(c),
+        };
+        let Some(c) = mapped else {
+            continue;
+        };
+        if c == ' ' {
+            if last_was_space || out.is_empty() {
+                continue;
+            }
+            last_was_space = true;
+        } else {
+            last_was_space = false;
+        }
+        out.push(c);
+        if out.len() >= FOLDER_NAME_MAX_LEN {
+            break;
+        }
+    }
+
+    let trimmed = out.trim_matches(|c: char| c == ' ' || c == '.');
+    if trimmed.is_empty() || is_windows_reserved_name(trimmed) {
+        return None;
+    }
+    Some(trimmed.to_string())
+}
+
+/// Largest numeric suffix tried before giving up and using the fallback.
+const FOLDER_NAME_MAX_SUFFIX: u32 = 9999;
+
+/// Collision-free folder name derived from `display_name`. Returns `fallback`
+/// (which the caller guarantees is collision-free, e.g. the profile GUID or its
+/// current folder) when the display name yields nothing usable or every suffix
+/// up to `FOLDER_NAME_MAX_SUFFIX` is taken. Matching against `existing` is
+/// case-insensitive.
+pub fn folder_name_for_display(display_name: &str, fallback: &str, existing: &[String]) -> String {
+    let taken = |candidate: &str| existing.iter().any(|e| e.eq_ignore_ascii_case(candidate));
+
+    let Some(base) = sanitize_folder_base(display_name) else {
+        return fallback.to_string();
+    };
+
+    if !taken(&base) {
+        return base;
+    }
+    let mut candidate = String::with_capacity(base.len() + 5);
+    for n in 2..=FOLDER_NAME_MAX_SUFFIX {
+        candidate.clear();
+        let _ = write!(candidate, "{base}-{n}");
+        if !taken(&candidate) {
+            return candidate;
+        }
+    }
+    fallback.to_string()
+}
+
+
 #[inline(always)]
 pub fn cmp_profile_ids_case_insensitive(a: &str, b: &str) -> core::cmp::Ordering {
     a.chars()
         .flat_map(char::to_lowercase)
         .cmp(b.chars().flat_map(char::to_lowercase))
         .then_with(|| a.cmp(b))
-}
-
-pub fn next_local_profile_id(existing: Vec<u32>) -> Option<String> {
-    next_local_profile_number(existing, LOCAL_PROFILE_MAX_ID).map(|n| format!("{n:08}"))
 }
 
 pub fn rewrite_profile_display_name_content(src: &str, display_name: &str) -> String {
@@ -466,6 +576,105 @@ pub fn rewrite_profile_display_name_content(src: &str, display_name: &str) -> St
     out
 }
 
+/// Backfill identity into a legacy `profile.ini`: ensure a single canonical
+/// `Guid` under the first `[userprofile]`, replacing any stale value and
+/// creating the section when missing. Extra `[userprofile]` sections (if any)
+/// are left untouched.
+pub fn upsert_profile_guid_content(src: &str, guid: &str) -> String {
+    let mut out = String::with_capacity(src.len() + guid.len() + 32);
+    let mut in_userprofile = false;
+    let mut wrote_guid = false;
+
+    for raw_line in src.lines() {
+        let trimmed = raw_line.trim();
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            // Section had no Guid: keep it inside before moving on.
+            if in_userprofile && !wrote_guid {
+                push_profile_guid_line(&mut out, guid);
+                wrote_guid = true;
+            }
+            let section = trimmed[1..trimmed.len() - 1].trim();
+            in_userprofile = !wrote_guid && section.eq_ignore_ascii_case(PROFILE_SECTION);
+            out.push_str(raw_line);
+            out.push('\n');
+            if in_userprofile {
+                push_profile_guid_line(&mut out, guid);
+                wrote_guid = true;
+            }
+            continue;
+        }
+
+        // Stale Guid in the canonical section: superseded by the one above.
+        if in_userprofile
+            && let Some(eq) = trimmed.find('=')
+            && trimmed[..eq].trim().eq_ignore_ascii_case(PROFILE_GUID_KEY)
+        {
+            continue;
+        }
+
+        out.push_str(raw_line);
+        out.push('\n');
+    }
+
+    if !wrote_guid {
+        if !out.is_empty() && !out.ends_with('\n') {
+            out.push('\n');
+        }
+        out.push_str("[userprofile]\n");
+        push_profile_guid_line(&mut out, guid);
+    }
+
+    out
+}
+
+/// Scan `profile.ini` content for the `[userprofile]` `Guid` and `DisplayName`
+/// in a single pass without a full INI parse. Section/key matching is
+/// case-insensitive; the GUID is validated and lowercased so identity keys never
+/// diverge by case. Only the first `[userprofile]` section is consulted.
+pub fn read_userprofile_identity(content: &str) -> (Option<String>, Option<String>) {
+    let mut in_section = false;
+    let mut seen_section = false;
+    let mut guid = None;
+    let mut display = None;
+
+    for line in content.lines() {
+        let t = line.trim();
+        if t.starts_with('[') && t.ends_with(']') {
+            if seen_section {
+                break; // left the first [userprofile]; nothing more to read
+            }
+            in_section = t[1..t.len() - 1].trim().eq_ignore_ascii_case(PROFILE_SECTION);
+            seen_section = in_section;
+            continue;
+        }
+        if !in_section {
+            continue;
+        }
+        let Some(eq) = t.find('=') else {
+            continue;
+        };
+        let key = t[..eq].trim();
+        let val = t[eq + 1..].trim();
+        if guid.is_none() && key.eq_ignore_ascii_case(PROFILE_GUID_KEY) {
+            if is_valid_profile_guid(val) {
+                guid = Some(val.to_ascii_lowercase());
+            }
+        } else if display.is_none()
+            && key.eq_ignore_ascii_case(PROFILE_DISPLAY_NAME_KEY)
+            && !val.is_empty()
+        {
+            display = Some(val.to_string());
+        }
+        if guid.is_some() && display.is_some() {
+            break;
+        }
+    }
+
+    (guid, display)
+}
+
+
+
 pub fn find_profile_avatar_path(dir: &Path) -> Option<PathBuf> {
     let Ok(read_dir) = fs::read_dir(dir) else {
         return None;
@@ -488,35 +697,6 @@ pub fn find_profile_avatar_path(dir: &Path) -> Option<PathBuf> {
         }
     }
     avatar
-}
-
-fn next_local_profile_number(mut nums: Vec<u32>, max: u32) -> Option<u32> {
-    nums.retain(|&n| n <= max);
-    nums.sort_unstable();
-    nums.dedup();
-
-    let mut first_free = 0_u32;
-    for &n in &nums {
-        if n == first_free {
-            first_free += 1;
-        } else if n > first_free {
-            break;
-        }
-    }
-
-    let mut next = nums.last().copied().unwrap_or(0);
-    if !nums.is_empty() {
-        next = next.saturating_add(1);
-    }
-    if next > max {
-        if first_free > max {
-            None
-        } else {
-            Some(first_free)
-        }
-    } else {
-        Some(next)
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -5943,8 +6123,6 @@ mod tests {
     #[test]
     fn player_side_indices_and_joined_masks_are_stable() {
         assert_eq!(PLAYER_SLOTS, 2);
-        assert_eq!(DEFAULT_PROFILE_ID, "00000000");
-        assert_eq!(LOCAL_PROFILE_MAX_ID, 99_999_999);
         assert_eq!(player_side_index(PlayerSide::P1), 0);
         assert_eq!(player_side_index(PlayerSide::P2), 1);
         assert_eq!(player_side_number(PlayerSide::P1), 1);
@@ -6039,6 +6217,116 @@ mod tests {
         assert!(!is_local_profile_id("a\\b"));
         assert!(!is_local_profile_id("a\0b"));
         assert!(!is_local_profile_id(&"a".repeat(65)));
+    }
+
+    #[test]
+    fn generated_profile_guid_is_valid_uuid_v4() {
+        for _ in 0..64 {
+            let guid = generate_profile_guid();
+            assert_eq!(guid.len(), 36, "guid `{guid}` should be 36 chars");
+            assert!(is_valid_profile_guid(&guid), "guid `{guid}` should be valid");
+            assert!(is_local_profile_id(&guid), "guid should be a usable id");
+            // Version nibble (char 14) is '4'; variant nibble (char 19) in 8..=b.
+            let bytes = guid.as_bytes();
+            assert_eq!(bytes[14], b'4');
+            assert!(matches!(bytes[19], b'8' | b'9' | b'a' | b'b'));
+        }
+        // Distinct draws should not collide.
+        let a = generate_profile_guid();
+        let b = generate_profile_guid();
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn invalid_profile_guids_are_rejected() {
+        assert!(!is_valid_profile_guid(""));
+        assert!(!is_valid_profile_guid("00000000"));
+        assert!(!is_valid_profile_guid("17c7b8a2-3b73-4e8a-9d7d-cfa7e783c00")); // short tail
+        assert!(!is_valid_profile_guid("17c7b8a2-3b73-4e8a-9d7d-cfa7e783c00bb")); // long tail
+        assert!(!is_valid_profile_guid("17c7b8a2_3b73_4e8a_9d7d_cfa7e783c00b")); // wrong sep
+        assert!(!is_valid_profile_guid("g7c7b8a2-3b73-4e8a-9d7d-cfa7e783c00b")); // non-hex
+    }
+
+    #[test]
+    fn sanitize_folder_base_strips_invalid_chars_and_collapses_space() {
+        assert_eq!(sanitize_folder_base("Alice").as_deref(), Some("Alice"));
+        assert_eq!(
+            sanitize_folder_base("  Bob   Smith  ").as_deref(),
+            Some("Bob Smith")
+        );
+        assert_eq!(
+            sanitize_folder_base("a/b:c*?\"<>|d").as_deref(),
+            Some("abcd")
+        );
+        assert_eq!(sanitize_folder_base("...").as_deref(), None);
+        assert_eq!(sanitize_folder_base("").as_deref(), None);
+        assert_eq!(sanitize_folder_base("   ").as_deref(), None);
+        // Windows reserved device names are rejected (callers fall back to GUID).
+        assert_eq!(sanitize_folder_base("CON").as_deref(), None);
+        assert_eq!(sanitize_folder_base("lpt1").as_deref(), None);
+    }
+
+    #[test]
+    fn folder_name_for_display_resolves_collisions_and_falls_back_to_guid() {
+        let guid = "17c7b8a2-3b73-4e8a-9d7d-cfa7e783c00b";
+        let existing = vec!["Alice".to_string(), "alice-2".to_string()];
+        assert_eq!(folder_name_for_display("Bob", guid, &existing), "Bob");
+        // Case-insensitive collision -> next free suffix.
+        assert_eq!(folder_name_for_display("alice", guid, &existing), "alice-3");
+        // Unusable display name -> GUID.
+        assert_eq!(folder_name_for_display("***", guid, &existing), guid);
+    }
+
+    #[test]
+    fn upsert_profile_guid_inserts_replaces_and_creates_section() {
+        let guid = "17c7b8a2-3b73-4e8a-9d7d-cfa7e783c00b";
+
+        // Inserts into an existing [userprofile] section as the first key.
+        let src = "[userprofile]\nDisplayName=Alice\nPlayerInitials=ALC\n";
+        let out = upsert_profile_guid_content(src, guid);
+        assert_eq!(
+            out,
+            format!("[userprofile]\nGuid={guid}\nDisplayName=Alice\nPlayerInitials=ALC\n")
+        );
+        assert_eq!(read_userprofile_identity(&out).0.as_deref(), Some(guid));
+
+        // Replaces a pre-existing Guid value, keeping a single key.
+        let src = "[userprofile]\nGuid=old-value\nDisplayName=Bob\n".to_string();
+        let out = upsert_profile_guid_content(&src, guid);
+        assert_eq!(out.matches("Guid=").count(), 1);
+        assert_eq!(read_userprofile_identity(&out).0.as_deref(), Some(guid));
+
+        // Creates the section when missing.
+        let src = "[Editable]\nWeightPounds=0\n";
+        let out = upsert_profile_guid_content(src, guid);
+        assert!(out.contains("[userprofile]\nGuid="));
+        assert_eq!(read_userprofile_identity(&out).0.as_deref(), Some(guid));
+
+        // Only the first [userprofile] section gets a Guid; extras stay intact.
+        let src = "[userprofile]\nDisplayName=A\n[userprofile]\nDisplayName=B\n";
+        let out = upsert_profile_guid_content(src, guid);
+        assert_eq!(out.matches("Guid=").count(), 1);
+    }
+
+    #[test]
+    fn read_userprofile_identity_is_case_insensitive_and_lowercases_guid() {
+        // Mixed-case section/key headers and an upper-case GUID still resolve,
+        // and the GUID is normalized to lowercase.
+        let src = "[UserProfile]\nGUID=17C7B8A2-3B73-4E8A-9D7D-CFA7E783C00B\nDisplayName=Alice\n";
+        let (guid, name) = read_userprofile_identity(src);
+        assert_eq!(guid.as_deref(), Some("17c7b8a2-3b73-4e8a-9d7d-cfa7e783c00b"));
+        assert_eq!(name.as_deref(), Some("Alice"));
+
+        // Invalid GUID and empty display name are rejected.
+        let (guid, name) = read_userprofile_identity("[userprofile]\nGuid=not-a-guid\nDisplayName=\n");
+        assert_eq!(guid, None);
+        assert_eq!(name, None);
+
+        // Keys outside [userprofile] are ignored.
+        let (guid, _) = read_userprofile_identity(
+            "[Editable]\nGuid=17c7b8a2-3b73-4e8a-9d7d-cfa7e783c00b\n",
+        );
+        assert_eq!(guid, None);
     }
 
     #[test]
@@ -6175,27 +6463,6 @@ mod tests {
                 PROFILE_STATS_VERSION_V1 + 1
             ))
         );
-    }
-
-    #[test]
-    fn next_local_profile_id_prefers_append_then_wraps_to_gaps() {
-        assert_eq!(next_local_profile_id(Vec::new()), Some("00000000".into()));
-        assert_eq!(
-            next_local_profile_id(vec![0, 1, 1, 2]),
-            Some("00000003".into())
-        );
-        assert_eq!(next_local_profile_id(vec![0, 2]), Some("00000003".into()));
-        assert_eq!(
-            next_local_profile_id(vec![0, LOCAL_PROFILE_MAX_ID]),
-            Some("00000001".into())
-        );
-    }
-
-    #[test]
-    fn next_local_profile_number_reports_full_small_ranges() {
-        assert_eq!(next_local_profile_number(vec![0, 1, 2], 2), None);
-        assert_eq!(next_local_profile_number(vec![0, 2], 2), Some(1));
-        assert_eq!(next_local_profile_number(vec![0, 9], 2), Some(1));
     }
 
     #[test]

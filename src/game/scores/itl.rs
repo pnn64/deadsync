@@ -9,7 +9,6 @@ use crate::game::online::downloads;
 use crate::game::profile;
 use crate::game::song::{get_song_cache, song_cache_generation};
 use chrono::Local;
-use deadlib_platform::dirs;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_online::groovestats::{
     GrooveStatsSubmitApiAchievement, GrooveStatsSubmitApiEvent, GrooveStatsSubmitApiPlayer,
@@ -202,18 +201,14 @@ struct ItlPointTotals {
 }
 
 fn online_itl_self_score_index_path_for_profile(profile_id: &str) -> PathBuf {
-    dirs::app_dirs()
-        .profiles_root()
-        .join(profile_id)
+    profile::local_profile_dir_for_id(profile_id)
         .join("scores")
         .join("gs")
         .join("itl_self.bin")
 }
 
 fn online_itl_self_rank_index_path_for_profile(profile_id: &str) -> PathBuf {
-    dirs::app_dirs()
-        .profiles_root()
-        .join(profile_id)
+    profile::local_profile_dir_for_id(profile_id)
         .join("scores")
         .join("gs")
         .join("itl_rank.bin")

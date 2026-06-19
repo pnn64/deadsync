@@ -84,9 +84,7 @@ static GS_SCORE_CACHE: std::sync::LazyLock<Mutex<GsScoreCacheState>> =
     std::sync::LazyLock::new(|| Mutex::new(GsScoreCacheState::default()));
 
 fn gs_scores_dir_for_profile(profile_id: &str) -> PathBuf {
-    dirs::app_dirs()
-        .profiles_root()
-        .join(profile_id)
+    profile::local_profile_dir_for_id(profile_id)
         .join("scores")
         .join("gs")
 }
@@ -437,9 +435,7 @@ static MACHINE_LOCAL_SCORE_CACHE: std::sync::LazyLock<Mutex<MachineLocalScoreCac
     std::sync::LazyLock::new(|| Mutex::new(MachineLocalScoreCacheState::default()));
 
 fn local_scores_root_for_profile(profile_id: &str) -> PathBuf {
-    dirs::app_dirs()
-        .profiles_root()
-        .join(profile_id)
+    profile::local_profile_dir_for_id(profile_id)
         .join("scores")
         .join("local")
 }
@@ -659,8 +655,7 @@ pub fn played_chart_counts_for_machine() -> Vec<(String, u32)> {
 
 /// Returns chart hashes ordered by latest local play time for a single profile.
 pub fn recent_played_chart_hashes_for_profile(profile_id: &str) -> Vec<String> {
-    let profiles_root = dirs::app_dirs().profiles_root();
-    let local_root = profiles_root.join(profile_id).join("scores").join("local");
+    let local_root = local_scores_root_for_profile(profile_id);
     if !local_root.is_dir() {
         return Vec::new();
     }
@@ -682,8 +677,7 @@ pub fn recent_played_chart_hashes_for_profile(profile_id: &str) -> Vec<String> {
 /// Returns `(chart_hash, play_count)` pairs for a single profile, ordered by
 /// play count descending.
 pub fn played_chart_counts_for_profile(profile_id: &str) -> Vec<(String, u32)> {
-    let profiles_root = dirs::app_dirs().profiles_root();
-    let local_root = profiles_root.join(profile_id).join("scores").join("local");
+    let local_root = local_scores_root_for_profile(profile_id);
     if !local_root.is_dir() {
         return Vec::new();
     }
@@ -724,10 +718,7 @@ fn ensure_local_score_cache_loaded(profile_id: &str) {
 }
 
 fn profile_initials_for_id(profile_id: &str) -> Option<String> {
-    let ini_path = dirs::app_dirs()
-        .profiles_root()
-        .join(profile_id)
-        .join("profile.ini");
+    let ini_path = profile::local_profile_dir_for_id(profile_id).join("profile.ini");
     if !ini_path.is_file() {
         return None;
     }
