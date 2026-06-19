@@ -1253,6 +1253,22 @@ pub fn all_joined_players_failed(
 }
 
 #[inline(always)]
+pub const fn player_life_status(player: &PlayerRuntime) -> PlayerLifeStatus {
+    PlayerLifeStatus {
+        life: player.life,
+        is_failing: player.is_failing,
+    }
+}
+
+pub fn all_joined_player_runtimes_failed(
+    players: &[PlayerRuntime; MAX_PLAYERS],
+    num_players: usize,
+) -> bool {
+    let statuses = std::array::from_fn(|player| player_life_status(&players[player]));
+    all_joined_players_failed(&statuses, num_players)
+}
+
+#[inline(always)]
 pub fn course_submit_life_eligible(life: Option<&deadsync_rules::life::LifeMeter>) -> bool {
     life.is_none_or(|life| !life.is_failing && life.fail_time.is_none() && life.life > 0.0)
 }
@@ -1338,6 +1354,11 @@ pub fn apply_player_runtime_life_delta(
     );
     write_player_runtime_life_meter(player, meter);
     update
+}
+
+#[inline(always)]
+pub fn player_runtime_is_dead(player: &PlayerRuntime) -> bool {
+    player_life_is_dead(player.life, player.is_failing)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -3061,6 +3082,35 @@ pub fn course_display_carry_for_player(
         return CourseDisplayCarry::default();
     }
     carry.map_or(CourseDisplayCarry::default(), |carry| carry[player_idx])
+}
+
+pub fn player_course_display_stage(
+    player: &PlayerRuntime,
+    window_counts: WindowCounts,
+    window_counts_10ms_blue: WindowCounts,
+    window_counts_display_blue: WindowCounts,
+) -> CourseDisplayStage {
+    CourseDisplayStage {
+        life: player.life,
+        judgment_counts: player.judgment_counts,
+        scoring_counts: player.scoring_counts,
+        full_combo_grade: player.full_combo_grade,
+        current_combo_grade: player.current_combo_grade,
+        current_combo_window_counts: player.current_combo_window_counts,
+        combo: player.combo,
+        first_fc_attempt_broken: player.first_fc_attempt_broken,
+        window_counts,
+        window_counts_10ms_blue,
+        window_counts_display_blue,
+        holds_held: player.holds_held,
+        rolls_held: player.rolls_held,
+        mines_avoided: player.mines_avoided,
+        holds_held_for_score: player.holds_held_for_score,
+        holds_let_go_for_score: player.holds_let_go_for_score,
+        rolls_held_for_score: player.rolls_held_for_score,
+        rolls_let_go_for_score: player.rolls_let_go_for_score,
+        mines_hit_for_score: player.mines_hit_for_score,
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -7496,6 +7546,213 @@ pub fn init_player_runtime() -> PlayerRuntime {
     }
 }
 
+pub fn init_player_runtime_for_practice(judge_start_music_time: f32) -> PlayerRuntime {
+    let mut player = init_player_runtime();
+    player
+        .life_history
+        .push((judge_start_music_time, player.life));
+    player
+}
+
+pub fn init_player_runtime_for_song(
+    init_music_time: f32,
+    in_course_stage: bool,
+    course_carry: Option<CourseDisplayCarry>,
+    carry_combo_between_songs: bool,
+    replay_mode: bool,
+    combo_carry: u32,
+) -> PlayerRuntime {
+    let mut player = init_player_runtime();
+    if in_course_stage {
+        player.course_submit_life = Some(deadsync_rules::life::LifeMeter::course_submit_start());
+    }
+    player.life = course_life_after_carry(player.life, course_carry);
+    apply_course_combo_carry(
+        &mut player,
+        carry_combo_between_songs,
+        replay_mode,
+        combo_carry,
+        course_carry,
+    );
+    player.life_history.push((init_music_time, player.life));
+    player
+}
+
+#[inline(always)]
+pub const fn player_life(player: &PlayerRuntime) -> f32 {
+    player.life
+}
+
+#[inline(always)]
+pub fn add_player_step_calories(player: &mut PlayerRuntime, calories: f32) {
+    player.calories_burned += calories;
+}
+
+#[inline(always)]
+pub fn tick_player_combo_milestones(player: &mut PlayerRuntime, delta_time: f32) {
+    tick_combo_milestones(&mut player.combo_milestones, delta_time);
+}
+
+#[inline(always)]
+pub fn record_player_live_timing_stats(player: &mut PlayerRuntime, judgment: &Judgment) {
+    deadsync_rules::timing::record_live_timing_stats(&mut player.live_timing_stats, judgment);
+}
+
+#[inline(always)]
+pub const fn player_mines_hit(player: &PlayerRuntime) -> u32 {
+    player.mines_hit
+}
+
+#[inline(always)]
+pub fn add_player_mines_avoided(player: &mut PlayerRuntime, count: u32) {
+    player.mines_avoided = player.mines_avoided.saturating_add(count);
+}
+
+#[inline(always)]
+pub fn set_player_mines_avoided(player: &mut PlayerRuntime, count: u32) {
+    player.mines_avoided = count;
+}
+
+#[inline(always)]
+pub fn set_player_last_judgment(
+    player: &mut PlayerRuntime,
+    judgment: Judgment,
+    started_at_screen_s: f32,
+) {
+    player.last_judgment = Some(judgment_render_info(judgment, started_at_screen_s));
+}
+
+#[inline(always)]
+pub fn set_player_last_mine_judgment(
+    player: &mut PlayerRuntime,
+    result: MineResult,
+    column: usize,
+    started_at_screen_s: f32,
+) {
+    player.last_mine_judgment = Some(mine_judgment_render_info(
+        result,
+        column,
+        started_at_screen_s,
+    ));
+}
+
+#[inline(always)]
+pub fn player_combo_state(player: &PlayerRuntime) -> ComboState {
+    ComboState {
+        combo: player.combo,
+        miss_combo: player.miss_combo,
+        full_combo_grade: player.full_combo_grade,
+        current_combo_grade: player.current_combo_grade,
+        first_fc_attempt_broken: player.first_fc_attempt_broken,
+    }
+}
+
+#[inline(always)]
+pub fn write_player_combo_state(player: &mut PlayerRuntime, state: ComboState) {
+    player.combo = state.combo;
+    player.miss_combo = state.miss_combo;
+    player.full_combo_grade = state.full_combo_grade;
+    player.current_combo_grade = state.current_combo_grade;
+    player.first_fc_attempt_broken = state.first_fc_attempt_broken;
+}
+
+#[inline(always)]
+pub fn apply_combo_update(player: &mut PlayerRuntime, update: ComboUpdate) {
+    apply_combo_update_feedback(
+        &mut player.current_combo_window_counts,
+        &mut player.combo_milestones,
+        update,
+    );
+}
+
+#[inline(always)]
+pub fn update_itg_grade_totals(player: &mut PlayerRuntime) {
+    player.earned_grade_points = judgment::calculate_itg_grade_points_from_counts(
+        &player.scoring_counts,
+        player.holds_held_for_score,
+        player.rolls_held_for_score,
+        player.mines_hit_for_score,
+    );
+}
+
+#[inline(always)]
+pub fn apply_course_combo_carry(
+    player: &mut PlayerRuntime,
+    carry_combo_between_songs: bool,
+    replay_mode: bool,
+    combo_carry: u32,
+    course_carry: Option<CourseDisplayCarry>,
+) {
+    let mut state = CourseComboCarryState {
+        combo: player.combo,
+        full_combo_grade: player.full_combo_grade,
+        current_combo_grade: player.current_combo_grade,
+        current_combo_window_counts: player.current_combo_window_counts,
+        first_fc_attempt_broken: player.first_fc_attempt_broken,
+    };
+    apply_course_combo_carry_state(
+        &mut state,
+        carry_combo_between_songs,
+        replay_mode,
+        combo_carry,
+        course_carry,
+    );
+    player.combo = state.combo;
+    player.full_combo_grade = state.full_combo_grade;
+    player.current_combo_grade = state.current_combo_grade;
+    player.current_combo_window_counts = state.current_combo_window_counts;
+    player.first_fc_attempt_broken = state.first_fc_attempt_broken;
+}
+
+#[inline(always)]
+pub fn player_score_stage(player: &PlayerRuntime) -> ItgScoreStage {
+    ItgScoreStage {
+        scoring_counts: player.scoring_counts,
+        holds_held_for_score: player.holds_held_for_score,
+        holds_let_go_for_score: player.holds_let_go_for_score,
+        rolls_held_for_score: player.rolls_held_for_score,
+        rolls_let_go_for_score: player.rolls_let_go_for_score,
+        mines_hit_for_score: player.mines_hit_for_score,
+    }
+}
+
+#[inline(always)]
+pub fn player_display_judgment_count(
+    player: &PlayerRuntime,
+    carry: CourseDisplayCarry,
+    grade: JudgeGrade,
+) -> u32 {
+    display_judgment_count_for_grade(player.judgment_counts, carry, grade)
+}
+
+#[inline(always)]
+pub fn player_live_timing_snapshot(
+    player: &PlayerRuntime,
+) -> deadsync_rules::timing::LiveTimingSnapshot {
+    deadsync_rules::timing::live_timing_stats_snapshot(&player.live_timing_stats)
+}
+
+#[inline(always)]
+pub fn player_course_submit_life_eligible(player: &PlayerRuntime) -> bool {
+    course_submit_life_eligible(player.course_submit_life.as_ref())
+}
+
+#[inline(always)]
+pub fn capture_player_failed_ex_score_inputs(
+    player: &mut PlayerRuntime,
+    live: ExScoreInputs,
+) -> bool {
+    capture_failed_ex_score_inputs(&mut player.failed_ex_score_inputs, player.fail_time, live)
+}
+
+#[inline(always)]
+pub fn player_effective_ex_score_inputs(
+    player: &PlayerRuntime,
+    live: ExScoreInputs,
+) -> ExScoreInputs {
+    effective_ex_score_inputs(live, player.failed_ex_score_inputs)
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct FinalNoteResultEffects {
     pub mark_row_finalized: bool,
@@ -9095,6 +9352,32 @@ pub struct MineHitPlayerState {
     pub combo: ComboState,
 }
 
+#[inline(always)]
+pub fn mine_hit_player_state(player: &PlayerRuntime) -> MineHitPlayerState {
+    MineHitPlayerState {
+        mines_hit: player.mines_hit,
+        mines_hit_for_score: player.mines_hit_for_score,
+        combo: player_combo_state(player),
+    }
+}
+
+#[inline(always)]
+pub fn write_mine_hit_player_state(player: &mut PlayerRuntime, state: MineHitPlayerState) {
+    player.mines_hit = state.mines_hit;
+    player.mines_hit_for_score = state.mines_hit_for_score;
+    write_player_combo_state(player, state.combo);
+}
+
+#[inline(always)]
+pub fn apply_mine_hit_player_update(
+    player: &mut PlayerRuntime,
+    state: MineHitPlayerState,
+    update: MineHitPlayerUpdate,
+) {
+    write_mine_hit_player_state(player, state);
+    apply_combo_update(player, update.combo_update);
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct MineHitPlayerUpdate {
     pub counted_hit: bool,
@@ -9338,6 +9621,11 @@ pub fn danger_health_state(life: f32, is_failing: bool) -> HealthState {
 }
 
 #[inline(always)]
+pub fn player_health_state(player: &PlayerRuntime) -> HealthState {
+    danger_health_state(player.life, player.is_failing)
+}
+
+#[inline(always)]
 pub fn danger_fx_rgba(fx: &DangerFx, now: f32) -> [f32; 4] {
     danger_anim_rgba(&fx.anim, now)
 }
@@ -9475,6 +9763,50 @@ pub fn apply_hold_result_stats_update(
 pub struct HoldResolutionPlayerState {
     pub stats: HoldResultStatsState,
     pub combo: ComboState,
+}
+
+pub fn hold_result_stats_state(player: &PlayerRuntime) -> HoldResultStatsState {
+    HoldResultStatsState {
+        hands_holding_count_for_stats: player.hands_holding_count_for_stats,
+        holds_held: player.holds_held,
+        holds_held_for_score: player.holds_held_for_score,
+        holds_let_go_for_score: player.holds_let_go_for_score,
+        rolls_held: player.rolls_held,
+        rolls_held_for_score: player.rolls_held_for_score,
+        rolls_let_go_for_score: player.rolls_let_go_for_score,
+    }
+}
+
+pub fn set_hold_result_stats_state(player: &mut PlayerRuntime, stats: HoldResultStatsState) {
+    player.hands_holding_count_for_stats = stats.hands_holding_count_for_stats;
+    player.holds_held = stats.holds_held;
+    player.holds_held_for_score = stats.holds_held_for_score;
+    player.holds_let_go_for_score = stats.holds_let_go_for_score;
+    player.rolls_held = stats.rolls_held;
+    player.rolls_held_for_score = stats.rolls_held_for_score;
+    player.rolls_let_go_for_score = stats.rolls_let_go_for_score;
+}
+
+pub fn hold_resolution_player_state(player: &PlayerRuntime) -> HoldResolutionPlayerState {
+    HoldResolutionPlayerState {
+        stats: hold_result_stats_state(player),
+        combo: player_combo_state(player),
+    }
+}
+
+pub fn set_hold_resolution_player_state(
+    player: &mut PlayerRuntime,
+    state: HoldResolutionPlayerState,
+) {
+    set_hold_result_stats_state(player, state.stats);
+    write_player_combo_state(player, state.combo);
+}
+
+pub fn apply_hold_resolution_player_state(
+    player: &mut PlayerRuntime,
+    state: HoldResolutionPlayerState,
+) {
+    set_hold_resolution_player_state(player, state);
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -11663,6 +11995,27 @@ pub struct RowFinalizationPlayerState {
     pub judgment_counts: judgment::JudgeCounts,
     pub scoring_counts: judgment::JudgeCounts,
     pub hands_achieved: u32,
+}
+
+pub fn row_finalization_player_state(player: &PlayerRuntime) -> RowFinalizationPlayerState {
+    RowFinalizationPlayerState {
+        combo: player_combo_state(player),
+        current_combo_window_counts: player.current_combo_window_counts,
+        judgment_counts: player.judgment_counts,
+        scoring_counts: player.scoring_counts,
+        hands_achieved: player.hands_achieved,
+    }
+}
+
+pub fn set_row_finalization_player_state(
+    player: &mut PlayerRuntime,
+    state: RowFinalizationPlayerState,
+) {
+    write_player_combo_state(player, state.combo);
+    player.current_combo_window_counts = state.current_combo_window_counts;
+    player.judgment_counts = state.judgment_counts;
+    player.scoring_counts = state.scoring_counts;
+    player.hands_achieved = state.hands_achieved;
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -14477,6 +14830,41 @@ mod tests {
     }
 
     #[test]
+    fn practice_player_runtime_records_start_life() {
+        let player = init_player_runtime_for_practice(42.0);
+
+        assert_eq!(player.life, 0.5);
+        assert_eq!(player_life(&player), 0.5);
+        assert_eq!(player.life_history, vec![(42.0, 0.5)]);
+    }
+
+    #[test]
+    fn song_player_runtime_applies_course_and_combo_carry() {
+        let carry = CourseDisplayCarry {
+            life: 0.75,
+            full_combo_grade: Some(JudgeGrade::Excellent),
+            current_combo_grade: Some(JudgeGrade::Great),
+            current_combo_window_counts: WindowCounts {
+                w2: 3,
+                ..WindowCounts::default()
+            },
+            first_fc_attempt_broken: true,
+            ..CourseDisplayCarry::default()
+        };
+
+        let player = init_player_runtime_for_song(12.5, true, Some(carry), true, false, 42);
+
+        assert_eq!(player.life, 0.75);
+        assert_eq!(player.life_history, vec![(12.5, 0.75)]);
+        assert!(player.course_submit_life.is_some());
+        assert_eq!(player.combo, 42);
+        assert_eq!(player.full_combo_grade, Some(JudgeGrade::Excellent));
+        assert_eq!(player.current_combo_grade, Some(JudgeGrade::Great));
+        assert_eq!(player.current_combo_window_counts.w2, 3);
+        assert!(player.first_fc_attempt_broken);
+    }
+
+    #[test]
     fn player_runtime_life_delta_updates_runtime_fields() {
         let mut player = init_player_runtime();
         player.life = 1.0;
@@ -14498,6 +14886,392 @@ mod tests {
         assert_eq!(course_life.life, 0.0);
         assert!(course_life.is_failing);
         assert_eq!(course_life.fail_time, Some(12.0));
+    }
+
+    #[test]
+    fn player_runtime_dead_policy_uses_runtime_life_fields() {
+        let mut player = init_player_runtime();
+        assert!(!player_runtime_is_dead(&player));
+
+        player.life = 0.0;
+        assert!(player_runtime_is_dead(&player));
+
+        player.life = 1.0;
+        player.is_failing = true;
+        assert!(player_runtime_is_dead(&player));
+    }
+
+    #[test]
+    fn player_runtime_combo_state_round_trips_runtime_fields() {
+        let mut player = init_player_runtime();
+        player.combo = 12;
+        player.miss_combo = 3;
+        player.full_combo_grade = Some(JudgeGrade::Excellent);
+        player.current_combo_grade = Some(JudgeGrade::Great);
+        player.first_fc_attempt_broken = true;
+
+        let state = player_combo_state(&player);
+        assert_eq!(state.combo, 12);
+        assert_eq!(state.miss_combo, 3);
+        assert_eq!(state.full_combo_grade, Some(JudgeGrade::Excellent));
+        assert_eq!(state.current_combo_grade, Some(JudgeGrade::Great));
+        assert!(state.first_fc_attempt_broken);
+
+        write_player_combo_state(
+            &mut player,
+            ComboState {
+                combo: 100,
+                miss_combo: 0,
+                full_combo_grade: Some(JudgeGrade::Fantastic),
+                current_combo_grade: Some(JudgeGrade::Fantastic),
+                first_fc_attempt_broken: false,
+            },
+        );
+
+        assert_eq!(player.combo, 100);
+        assert_eq!(player.miss_combo, 0);
+        assert_eq!(player.full_combo_grade, Some(JudgeGrade::Fantastic));
+        assert_eq!(player.current_combo_grade, Some(JudgeGrade::Fantastic));
+        assert!(!player.first_fc_attempt_broken);
+    }
+
+    #[test]
+    fn player_runtime_combo_update_applies_feedback_state() {
+        let mut player = init_player_runtime();
+        player.current_combo_window_counts.w1 = 7;
+
+        apply_combo_update(
+            &mut player,
+            ComboUpdate {
+                combo_broken: true,
+                hit_hundred_milestone: true,
+                ..ComboUpdate::default()
+            },
+        );
+
+        assert_eq!(player.current_combo_window_counts.w1, 0);
+        assert_eq!(player.combo_milestones.len(), 1);
+        assert_eq!(player.combo_milestones[0].kind, ComboMilestoneKind::Hundred);
+    }
+
+    #[test]
+    fn player_runtime_feedback_adapters_write_runtime_fields() {
+        let mut player = init_player_runtime();
+        add_player_step_calories(&mut player, 12.5);
+        add_player_step_calories(&mut player, 0.25);
+        assert_near(player.calories_burned, 12.75);
+
+        add_player_mines_avoided(&mut player, 2);
+        add_player_mines_avoided(&mut player, u32::MAX);
+        assert_eq!(player.mines_avoided, u32::MAX);
+        set_player_mines_avoided(&mut player, 9);
+        assert_eq!(player.mines_avoided, 9);
+        player.mines_hit = 4;
+        assert_eq!(player_mines_hit(&player), 4);
+
+        player.combo_milestones.push(ActiveComboMilestone {
+            kind: ComboMilestoneKind::Hundred,
+            elapsed: 0.0,
+        });
+        tick_player_combo_milestones(&mut player, 0.25);
+        assert_near(player.combo_milestones[0].elapsed, 0.25);
+
+        let judgment = Judgment {
+            time_error_ms: 3.0,
+            time_error_music_ns: 3_000_000,
+            grade: JudgeGrade::Excellent,
+            window: Some(TimingWindow::W2),
+            miss_because_held: false,
+        };
+        record_player_live_timing_stats(&mut player, &judgment);
+        assert_near(player_live_timing_snapshot(&player).all.mean_ms, 3.0);
+
+        set_player_last_judgment(&mut player, judgment, 5.0);
+        assert_eq!(
+            player
+                .last_judgment
+                .as_ref()
+                .map(|info| info.judgment.grade),
+            Some(JudgeGrade::Excellent)
+        );
+        assert_eq!(
+            player
+                .last_judgment
+                .as_ref()
+                .map(|info| info.started_at_screen_s),
+            Some(5.0)
+        );
+
+        set_player_last_mine_judgment(&mut player, MineResult::Hit, 3, 6.5);
+        assert_eq!(
+            player.last_mine_judgment.as_ref().map(|info| info.result),
+            Some(MineResult::Hit)
+        );
+        assert_eq!(
+            player.last_mine_judgment.as_ref().map(|info| info.column),
+            Some(3)
+        );
+        assert_eq!(
+            player
+                .last_mine_judgment
+                .as_ref()
+                .map(|info| info.started_at_screen_s),
+            Some(6.5)
+        );
+    }
+
+    #[test]
+    fn update_itg_grade_totals_writes_runtime_score_points() {
+        let mut player = init_player_runtime();
+        player.scoring_counts[judgment::judge_grade_ix(JudgeGrade::Fantastic)] = 2;
+        player.scoring_counts[judgment::judge_grade_ix(JudgeGrade::Great)] = 1;
+        player.scoring_counts[judgment::judge_grade_ix(JudgeGrade::Miss)] = 1;
+        player.holds_held_for_score = 3;
+        player.rolls_held_for_score = 2;
+        player.mines_hit_for_score = 1;
+
+        update_itg_grade_totals(&mut player);
+
+        assert_eq!(player.earned_grade_points, 19);
+    }
+
+    #[test]
+    fn apply_course_combo_carry_writes_runtime_combo_fields() {
+        let mut player = init_player_runtime();
+        player.combo = 4;
+        let carry = CourseDisplayCarry {
+            full_combo_grade: Some(JudgeGrade::Excellent),
+            current_combo_grade: Some(JudgeGrade::Great),
+            current_combo_window_counts: WindowCounts {
+                w2: 3,
+                ..WindowCounts::default()
+            },
+            first_fc_attempt_broken: true,
+            ..CourseDisplayCarry::default()
+        };
+
+        apply_course_combo_carry(&mut player, true, false, 37, Some(carry));
+
+        assert_eq!(player.combo, 37);
+        assert_eq!(player.full_combo_grade, Some(JudgeGrade::Excellent));
+        assert_eq!(player.current_combo_grade, Some(JudgeGrade::Great));
+        assert_eq!(player.current_combo_window_counts.w2, 3);
+        assert!(player.first_fc_attempt_broken);
+    }
+
+    #[test]
+    fn player_display_adapters_read_runtime_fields() {
+        let mut player = init_player_runtime();
+        player.scoring_counts[judgment::judge_grade_ix(JudgeGrade::Excellent)] = 2;
+        player.judgment_counts[judgment::judge_grade_ix(JudgeGrade::Great)] = 4;
+        player.holds_held_for_score = 3;
+        player.holds_let_go_for_score = 4;
+        player.rolls_held_for_score = 5;
+        player.rolls_let_go_for_score = 6;
+        player.mines_hit_for_score = 7;
+
+        let stage = player_score_stage(&player);
+        assert_eq!(
+            stage.scoring_counts[judgment::judge_grade_ix(JudgeGrade::Excellent)],
+            2
+        );
+        assert_eq!(stage.holds_held_for_score, 3);
+        assert_eq!(stage.holds_let_go_for_score, 4);
+        assert_eq!(stage.rolls_held_for_score, 5);
+        assert_eq!(stage.rolls_let_go_for_score, 6);
+        assert_eq!(stage.mines_hit_for_score, 7);
+        assert_eq!(
+            player_display_judgment_count(
+                &player,
+                CourseDisplayCarry {
+                    judgment_counts: [1; judgment::JUDGE_GRADE_COUNT],
+                    ..CourseDisplayCarry::default()
+                },
+                JudgeGrade::Great,
+            ),
+            5
+        );
+
+        let carry_stage = player_course_display_stage(
+            &player,
+            WindowCounts {
+                w1: 8,
+                ..WindowCounts::default()
+            },
+            WindowCounts {
+                w0: 1,
+                ..WindowCounts::default()
+            },
+            WindowCounts {
+                w2: 2,
+                ..WindowCounts::default()
+            },
+        );
+        assert_eq!(carry_stage.life, 0.5);
+        assert_eq!(
+            carry_stage.scoring_counts[judgment::judge_grade_ix(JudgeGrade::Excellent)],
+            2
+        );
+        assert_eq!(carry_stage.window_counts.w1, 8);
+        assert_eq!(carry_stage.window_counts_10ms_blue.w0, 1);
+        assert_eq!(carry_stage.window_counts_display_blue.w2, 2);
+        assert_eq!(carry_stage.holds_held_for_score, 3);
+        assert_eq!(carry_stage.mines_hit_for_score, 7);
+
+        let mut players = std::array::from_fn(|_| init_player_runtime());
+        players[0].life = 0.0;
+        assert!(all_joined_player_runtimes_failed(&players, 1));
+        assert!(!all_joined_player_runtimes_failed(&players, 2));
+        assert_eq!(player_health_state(&players[0]), HealthState::Dead);
+        assert_eq!(player_health_state(&players[1]), HealthState::Alive);
+
+        assert!(player_course_submit_life_eligible(&player));
+
+        player.course_submit_life = Some(deadsync_rules::life::LifeMeter {
+            life: 0.0,
+            ..deadsync_rules::life::LifeMeter::course_submit_start()
+        });
+        assert!(!player_course_submit_life_eligible(&player));
+
+        deadsync_rules::timing::record_live_timing_stats(
+            &mut player.live_timing_stats,
+            &Judgment {
+                time_error_ms: -12.0,
+                time_error_music_ns: -12_000_000,
+                grade: JudgeGrade::Great,
+                window: Some(TimingWindow::W3),
+                miss_because_held: false,
+            },
+        );
+        let timing = player_live_timing_snapshot(&player);
+        assert_near(timing.all.mean_ms, -12.0);
+        assert_near(timing.recent.mean_abs_ms, 12.0);
+
+        let live = ExScoreInputs {
+            holds_held_for_score: 9,
+            ..ExScoreInputs::default()
+        };
+        assert_eq!(
+            player_effective_ex_score_inputs(&player, live).holds_held_for_score,
+            9
+        );
+
+        player.fail_time = Some(33.0);
+        assert!(capture_player_failed_ex_score_inputs(&mut player, live));
+        let updated_live = ExScoreInputs {
+            holds_held_for_score: 12,
+            ..ExScoreInputs::default()
+        };
+        assert_eq!(
+            player_effective_ex_score_inputs(&player, updated_live).holds_held_for_score,
+            9
+        );
+        assert!(!capture_player_failed_ex_score_inputs(
+            &mut player,
+            updated_live
+        ));
+    }
+
+    #[test]
+    fn hold_resolution_player_state_round_trips_runtime_fields() {
+        let mut player = init_player_runtime();
+        player.hands_holding_count_for_stats = 2;
+        player.holds_held = 3;
+        player.holds_held_for_score = 4;
+        player.holds_let_go_for_score = 5;
+        player.rolls_held = 6;
+        player.rolls_held_for_score = 7;
+        player.rolls_let_go_for_score = 8;
+        player.combo = 99;
+        player.miss_combo = 1;
+
+        let mut state = hold_resolution_player_state(&player);
+        assert_eq!(state.stats.hands_holding_count_for_stats, 2);
+        assert_eq!(state.stats.holds_held, 3);
+        assert_eq!(state.stats.holds_held_for_score, 4);
+        assert_eq!(state.stats.holds_let_go_for_score, 5);
+        assert_eq!(state.stats.rolls_held, 6);
+        assert_eq!(state.stats.rolls_held_for_score, 7);
+        assert_eq!(state.stats.rolls_let_go_for_score, 8);
+        assert_eq!(state.combo.combo, 99);
+        assert_eq!(state.combo.miss_combo, 1);
+
+        state.stats.hands_holding_count_for_stats = 0;
+        state.stats.holds_held = 13;
+        state.stats.rolls_let_go_for_score = 21;
+        state.combo.combo = 100;
+        state.combo.miss_combo = 0;
+        apply_hold_resolution_player_state(&mut player, state);
+
+        assert_eq!(player.hands_holding_count_for_stats, 0);
+        assert_eq!(player.holds_held, 13);
+        assert_eq!(player.rolls_let_go_for_score, 21);
+        assert_eq!(player.combo, 100);
+        assert_eq!(player.miss_combo, 0);
+    }
+
+    #[test]
+    fn row_finalization_player_state_round_trips_runtime_fields() {
+        let mut player = init_player_runtime();
+        player.combo = 32;
+        player.current_combo_window_counts.w2 = 4;
+        player.judgment_counts[0] = 1;
+        player.scoring_counts[1] = 2;
+        player.hands_achieved = 3;
+
+        let mut state = row_finalization_player_state(&player);
+        assert_eq!(state.combo.combo, 32);
+        assert_eq!(state.current_combo_window_counts.w2, 4);
+        assert_eq!(state.judgment_counts[0], 1);
+        assert_eq!(state.scoring_counts[1], 2);
+        assert_eq!(state.hands_achieved, 3);
+
+        state.combo.combo = 64;
+        state.current_combo_window_counts.w3 = 5;
+        state.judgment_counts[2] = 7;
+        state.scoring_counts[3] = 8;
+        state.hands_achieved = 9;
+        set_row_finalization_player_state(&mut player, state);
+
+        assert_eq!(player.combo, 64);
+        assert_eq!(player.current_combo_window_counts.w3, 5);
+        assert_eq!(player.judgment_counts[2], 7);
+        assert_eq!(player.scoring_counts[3], 8);
+        assert_eq!(player.hands_achieved, 9);
+    }
+
+    #[test]
+    fn mine_hit_player_state_round_trips_runtime_fields() {
+        let mut player = init_player_runtime();
+        player.mines_hit = 2;
+        player.mines_hit_for_score = 1;
+        player.combo = 100;
+        player.current_combo_window_counts.w1 = 3;
+
+        let mut state = mine_hit_player_state(&player);
+        assert_eq!(state.mines_hit, 2);
+        assert_eq!(state.mines_hit_for_score, 1);
+        assert_eq!(state.combo.combo, 100);
+
+        state.mines_hit = 3;
+        state.mines_hit_for_score = 2;
+        state.combo.combo = 0;
+        apply_mine_hit_player_update(
+            &mut player,
+            state,
+            MineHitPlayerUpdate {
+                combo_update: ComboUpdate {
+                    combo_broken: true,
+                    ..ComboUpdate::default()
+                },
+                ..MineHitPlayerUpdate::default()
+            },
+        );
+
+        assert_eq!(player.mines_hit, 3);
+        assert_eq!(player.mines_hit_for_score, 2);
+        assert_eq!(player.combo, 0);
+        assert_eq!(player.current_combo_window_counts.w1, 0);
     }
 
     #[test]
