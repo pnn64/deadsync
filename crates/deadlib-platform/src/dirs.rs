@@ -29,10 +29,6 @@ impl AppDirs {
         self.data_dir.join("save").join("profiles")
     }
 
-    pub fn profile_dir(&self, id: &str) -> PathBuf {
-        self.profiles_root().join(id)
-    }
-
     pub fn screenshots_dir(&self) -> PathBuf {
         self.data_dir.join("save").join("screenshots")
     }

@@ -397,6 +397,104 @@ pub fn is_local_profile_id(s: &str) -> bool {
     !s.is_empty() && s.len() <= 64 && s != "." && s != ".." && !s.contains(['/', '\\', '\0'])
 }
 
+/// INI key (under `[userprofile]`) holding the profile's canonical GUID.
+pub const PROFILE_GUID_KEY: &str = "Guid";
+
+/// Stable per-profile identity so the on-disk folder can be freely renamed
+/// without losing scores, settings, or online logins.
+pub fn generate_profile_guid() -> String {
+    uuid::Uuid::new_v4().to_string()
+}
+
+/// Recognise an already-assigned identity; `generate_profile_guid` always emits
+/// this canonical dashed-lowercase form.
+pub fn is_valid_profile_guid(s: &str) -> bool {
+    let groups = [8usize, 4, 4, 4, 12];
+    let mut parts = s.split('-');
+    for &len in &groups {
+        let Some(part) = parts.next() else {
+            return false;
+        };
+        if part.len() != len || !part.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return false;
+        }
+    }
+    parts.next().is_none()
+}
+
+const FOLDER_NAME_MAX_LEN: usize = 48;
+
+fn is_windows_reserved_name(name: &str) -> bool {
+    const RESERVED: [&str; 22] = [
+        "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
+        "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    ];
+    RESERVED.iter().any(|r| name.eq_ignore_ascii_case(r))
+}
+
+/// Derive a safe single-segment folder name from a display name. `None` (caller
+/// falls back to the GUID) when nothing usable survives sanitizing or the result
+/// would hit a Windows reserved device name.
+pub fn sanitize_folder_base(display_name: &str) -> Option<String> {
+    let mut out = String::with_capacity(display_name.len());
+    let mut last_was_space = false;
+    for ch in display_name.chars() {
+        let mapped = match ch {
+            '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' | '\0' => None,
+            c if c.is_control() => None,
+            c if c.is_whitespace() => Some(' '),
+            c => Some(c),
+        };
+        let Some(c) = mapped else {
+            continue;
+        };
+        if c == ' ' {
+            if last_was_space || out.is_empty() {
+                continue;
+            }
+            last_was_space = true;
+        } else {
+            last_was_space = false;
+        }
+        out.push(c);
+        if out.len() >= FOLDER_NAME_MAX_LEN {
+            break;
+        }
+    }
+
+    let trimmed = out.trim_matches(|c: char| c == ' ' || c == '.');
+    if trimmed.is_empty() || is_windows_reserved_name(trimmed) {
+        return None;
+    }
+    Some(trimmed.to_string())
+}
+
+/// Collision-free folder name for a profile; falls back to `guid` (assumed
+/// unique) when the display name yields nothing usable or every suffix is taken.
+pub fn folder_name_for_display(display_name: &str, guid: &str, existing: &[String]) -> String {
+    let taken = |candidate: &str| {
+        existing
+            .iter()
+            .any(|e| e.eq_ignore_ascii_case(candidate))
+    };
+
+    let Some(base) = sanitize_folder_base(display_name) else {
+        return guid.to_string();
+    };
+
+    if !taken(&base) {
+        return base;
+    }
+    for n in 2..=9999u32 {
+        let candidate = format!("{base}-{n}");
+        if !taken(&candidate) {
+            return candidate;
+        }
+    }
+    guid.to_string()
+}
+
+
 #[inline(always)]
 pub fn cmp_profile_ids_case_insensitive(a: &str, b: &str) -> core::cmp::Ordering {
     a.chars()
@@ -460,6 +558,67 @@ pub fn rewrite_profile_display_name_content(src: &str, display_name: &str) -> St
     } else if in_userprofile && !wrote_display {
         out.push_str("DisplayName=");
         out.push_str(display_name);
+        out.push('\n');
+    }
+
+    out
+}
+
+/// Backfill identity into a legacy `profile.ini`: ensure a single canonical
+/// `Guid` under `[userprofile]`, replacing any stale value and creating the
+/// section when missing.
+pub fn upsert_profile_guid_content(src: &str, guid: &str) -> String {
+    let mut out = String::with_capacity(src.len() + guid.len() + 32);
+    let mut in_userprofile = false;
+    let mut saw_userprofile = false;
+    let mut wrote_guid = false;
+
+    for raw_line in src.lines() {
+        let trimmed = raw_line.trim();
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            // Section had no Guid: keep it inside before moving on.
+            if in_userprofile && !wrote_guid {
+                out.push_str(PROFILE_GUID_KEY);
+                out.push('=');
+                out.push_str(guid);
+                out.push('\n');
+                wrote_guid = true;
+            }
+            let section = trimmed[1..trimmed.len() - 1].trim();
+            in_userprofile = section.eq_ignore_ascii_case("userprofile");
+            out.push_str(raw_line);
+            out.push('\n');
+            if in_userprofile {
+                saw_userprofile = true;
+                out.push_str(PROFILE_GUID_KEY);
+                out.push('=');
+                out.push_str(guid);
+                out.push('\n');
+                wrote_guid = true;
+            }
+            continue;
+        }
+
+        // Stale Guid: superseded by the one written above.
+        if in_userprofile && let Some(eq) = trimmed.find('=') {
+            let key = trimmed[..eq].trim();
+            if key.eq_ignore_ascii_case(PROFILE_GUID_KEY) {
+                continue;
+            }
+        }
+
+        out.push_str(raw_line);
+        out.push('\n');
+    }
+
+    if !saw_userprofile {
+        if !out.is_empty() && !out.ends_with('\n') {
+            out.push('\n');
+        }
+        out.push_str("[userprofile]\n");
+        out.push_str(PROFILE_GUID_KEY);
+        out.push('=');
+        out.push_str(guid);
         out.push('\n');
     }
 
@@ -6039,6 +6198,108 @@ mod tests {
         assert!(!is_local_profile_id("a\\b"));
         assert!(!is_local_profile_id("a\0b"));
         assert!(!is_local_profile_id(&"a".repeat(65)));
+    }
+
+    #[test]
+    fn generated_profile_guid_is_valid_uuid_v4() {
+        for _ in 0..64 {
+            let guid = generate_profile_guid();
+            assert_eq!(guid.len(), 36, "guid `{guid}` should be 36 chars");
+            assert!(is_valid_profile_guid(&guid), "guid `{guid}` should be valid");
+            assert!(is_local_profile_id(&guid), "guid should be a usable id");
+            // Version nibble (char 14) is '4'; variant nibble (char 19) in 8..=b.
+            let bytes = guid.as_bytes();
+            assert_eq!(bytes[14], b'4');
+            assert!(matches!(bytes[19], b'8' | b'9' | b'a' | b'b'));
+        }
+        // Distinct draws should not collide.
+        let a = generate_profile_guid();
+        let b = generate_profile_guid();
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn invalid_profile_guids_are_rejected() {
+        assert!(!is_valid_profile_guid(""));
+        assert!(!is_valid_profile_guid("00000000"));
+        assert!(!is_valid_profile_guid("17c7b8a2-3b73-4e8a-9d7d-cfa7e783c00")); // short tail
+        assert!(!is_valid_profile_guid("17c7b8a2-3b73-4e8a-9d7d-cfa7e783c00bb")); // long tail
+        assert!(!is_valid_profile_guid("17c7b8a2_3b73_4e8a_9d7d_cfa7e783c00b")); // wrong sep
+        assert!(!is_valid_profile_guid("g7c7b8a2-3b73-4e8a-9d7d-cfa7e783c00b")); // non-hex
+    }
+
+    #[test]
+    fn sanitize_folder_base_strips_invalid_chars_and_collapses_space() {
+        assert_eq!(sanitize_folder_base("Alice").as_deref(), Some("Alice"));
+        assert_eq!(
+            sanitize_folder_base("  Bob   Smith  ").as_deref(),
+            Some("Bob Smith")
+        );
+        assert_eq!(
+            sanitize_folder_base("a/b:c*?\"<>|d").as_deref(),
+            Some("abcd")
+        );
+        assert_eq!(sanitize_folder_base("...").as_deref(), None);
+        assert_eq!(sanitize_folder_base("").as_deref(), None);
+        assert_eq!(sanitize_folder_base("   ").as_deref(), None);
+        // Windows reserved device names are rejected (callers fall back to GUID).
+        assert_eq!(sanitize_folder_base("CON").as_deref(), None);
+        assert_eq!(sanitize_folder_base("lpt1").as_deref(), None);
+    }
+
+    #[test]
+    fn folder_name_for_display_resolves_collisions_and_falls_back_to_guid() {
+        let guid = "17c7b8a2-3b73-4e8a-9d7d-cfa7e783c00b";
+        let existing = vec!["Alice".to_string(), "alice-2".to_string()];
+        assert_eq!(folder_name_for_display("Bob", guid, &existing), "Bob");
+        // Case-insensitive collision -> next free suffix.
+        assert_eq!(folder_name_for_display("alice", guid, &existing), "alice-3");
+        // Unusable display name -> GUID.
+        assert_eq!(folder_name_for_display("***", guid, &existing), guid);
+    }
+
+    #[test]
+    fn upsert_profile_guid_inserts_replaces_and_creates_section() {
+        let guid = "17c7b8a2-3b73-4e8a-9d7d-cfa7e783c00b";
+
+        // Inserts into an existing [userprofile] section as the first key.
+        let src = "[userprofile]\nDisplayName=Alice\nPlayerInitials=ALC\n";
+        let out = upsert_profile_guid_content(src, guid);
+        assert_eq!(
+            out,
+            format!("[userprofile]\nGuid={guid}\nDisplayName=Alice\nPlayerInitials=ALC\n")
+        );
+        assert_eq!(read_userprofile_guid(&out).as_deref(), Some(guid));
+
+        // Replaces a pre-existing Guid value, keeping a single key.
+        let src = format!("[userprofile]\nGuid=old-value\nDisplayName=Bob\n");
+        let out = upsert_profile_guid_content(&src, guid);
+        assert_eq!(out.matches("Guid=").count(), 1);
+        assert_eq!(read_userprofile_guid(&out).as_deref(), Some(guid));
+
+        // Creates the section when missing.
+        let src = "[Editable]\nWeightPounds=0\n";
+        let out = upsert_profile_guid_content(src, guid);
+        assert!(out.contains("[userprofile]\nGuid="));
+        assert_eq!(read_userprofile_guid(&out).as_deref(), Some(guid));
+    }
+
+    fn read_userprofile_guid(content: &str) -> Option<String> {
+        let mut in_section = false;
+        for line in content.lines() {
+            let t = line.trim();
+            if t.starts_with('[') && t.ends_with(']') {
+                in_section = t[1..t.len() - 1].trim().eq_ignore_ascii_case("userprofile");
+                continue;
+            }
+            if in_section
+                && let Some(eq) = t.find('=')
+                && t[..eq].trim().eq_ignore_ascii_case(PROFILE_GUID_KEY)
+            {
+                return Some(t[eq + 1..].trim().to_string());
+            }
+        }
+        None
     }
 
     #[test]

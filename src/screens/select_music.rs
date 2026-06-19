@@ -2976,7 +2976,7 @@ fn build_playlist_library(grouped_entries: &[MusicWheelEntry]) -> Vec<PlaylistCa
             continue;
         }
         let playlist_dir = find_child_dir_ci(
-            dirs::app_dirs().profile_dir(&profile_id).as_path(),
+            profile::local_profile_dir_for_id(&profile_id).as_path(),
             "playlists",
         );
         let Some(playlist_dir) = playlist_dir else {
