@@ -448,21 +448,34 @@ fn tool_is_available(name: &str) -> bool {
     if resolve_tool_path(name).is_some() {
         return true;
     }
-    Command::new(name)
-        .arg("-version")
+    let mut cmd = Command::new(name);
+    cmd.arg("-version")
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
+        .stderr(Stdio::null());
+    suppress_console(&mut cmd);
+    cmd.status()
         .map(|status| status.success())
         .unwrap_or(false)
 }
 
 fn tool_command(name: &str) -> Command {
-    resolve_tool_path(name)
+    let mut cmd = resolve_tool_path(name)
         .map(Command::new)
-        .unwrap_or_else(|| Command::new(name))
+        .unwrap_or_else(|| Command::new(name));
+    suppress_console(&mut cmd);
+    cmd
 }
+
+#[cfg(windows)]
+fn suppress_console(cmd: &mut Command) {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    cmd.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(windows))]
+fn suppress_console(_cmd: &mut Command) {}
 
 fn resolve_tool_path(name: &str) -> Option<PathBuf> {
     let runtime_bin = std::env::current_dir().ok().map(|dir| dir.join("bin"));
