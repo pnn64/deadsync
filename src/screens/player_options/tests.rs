@@ -1415,7 +1415,7 @@ pub(super) mod tests {
     fn held_arcade_start_keeps_advancing_rows() {
         ensure_i18n();
         let base = notefield_bench::fixture();
-        let song = base.state().song.clone();
+        let song = base.state().song_arc();
 
         profile::set_session_play_style(PlayStyle::Single);
         profile::set_session_player_side(PlayerSide::P1);
@@ -1451,7 +1451,7 @@ pub(super) mod tests {
     fn held_arcade_start_stops_at_exit_row() {
         ensure_i18n();
         let base = notefield_bench::fixture();
-        let song = base.state().song.clone();
+        let song = base.state().song_arc();
 
         profile::set_session_play_style(PlayStyle::Single);
         profile::set_session_player_side(PlayerSide::P1);
@@ -1484,7 +1484,7 @@ pub(super) mod tests {
 
     fn setup_state() -> (super::State, AssetManager) {
         let base = notefield_bench::fixture();
-        let song = base.state().song.clone();
+        let song = base.state().song_arc();
         profile::set_session_play_style(PlayStyle::Single);
         profile::set_session_player_side(PlayerSide::P1);
         profile::set_session_joined(true, false);
@@ -1498,7 +1498,7 @@ pub(super) mod tests {
 
     fn setup_versus_state() -> (super::State, AssetManager) {
         let base = notefield_bench::fixture();
-        let song = base.state().song.clone();
+        let song = base.state().song_arc();
         profile::set_session_play_style(PlayStyle::Versus);
         profile::set_session_player_side(PlayerSide::P1);
         profile::set_session_joined(true, true);

@@ -396,13 +396,13 @@ fn groovestats_manual_qr_url_from_gameplay(
     gs: &gameplay::State,
     player_idx: usize,
 ) -> Option<String> {
-    if player_idx >= gameplay::num_players(gs) {
+    if player_idx >= gs.num_players() {
         return None;
     }
     let payload = groovestats_payload_for_player(gs, player_idx)?;
     groovestats_api::manual_qr_url(
         groovestats_api::qr_base_url(),
-        gameplay::charts(gs)[player_idx].short_hash.as_str(),
+        gs.charts()[player_idx].short_hash.as_str(),
         &payload.judgment_counts,
         &payload.rescore_counts,
         payload.rate,
@@ -414,36 +414,36 @@ pub fn groovestats_eval_state_from_gameplay(
     gs: &gameplay::State,
     player_idx: usize,
 ) -> GrooveStatsEvalState {
-    if player_idx >= gameplay::num_players(gs).min(MAX_PLAYERS) {
+    if player_idx >= gs.num_players().min(MAX_PLAYERS) {
         return GrooveStatsEvalState::default();
     }
     let mut state = groovestats_eval_state(
-        gameplay::charts(gs)[player_idx].as_ref(),
-        &gameplay::player_profiles(gs)[player_idx],
-        gameplay::music_rate(gs),
-        gameplay::autoplay_used(gs),
-        gameplay::course_display_is_course_stage(gs),
+        gs.charts()[player_idx].as_ref(),
+        &gs.profiles()[player_idx],
+        gs.music_rate(),
+        gs.autoplay_used(),
+        gs.course_display_is_course_stage(),
         crate::config::get().autosubmit_course_scores_individually,
     );
     if state.valid
-        && gameplay::song(gs).has_lua
-        && !lua_chart_submit_allowed(gameplay::charts(gs)[player_idx].short_hash.as_str())
+        && gs.song().has_lua
+        && !lua_chart_submit_allowed(gs.charts()[player_idx].short_hash.as_str())
     {
         state.valid = false;
         state.reason_lines.push("simfile relies on lua".to_string());
         return state;
     }
     let failed = gameplay_run_failed(
-        gameplay::players(gs)[player_idx].is_failing,
-        gameplay::players(gs)[player_idx].fail_time.is_some(),
+        gs.players()[player_idx].is_failing,
+        gs.players()[player_idx].fail_time.is_some(),
     );
     let passed = gameplay_run_passed(
-        gameplay::song_completed_naturally(gs),
-        gameplay::players(gs)[player_idx].is_failing,
-        gameplay::players(gs)[player_idx].life,
-        gameplay::players(gs)[player_idx].fail_time.is_some(),
+        gs.song_completed_naturally(),
+        gs.players()[player_idx].is_failing,
+        gs.players()[player_idx].life,
+        gs.players()[player_idx].fail_time.is_some(),
     );
-    let finished = gameplay::song_completed_naturally(gs) || failed;
+    let finished = gs.song_completed_naturally() || failed;
     if state.valid && !finished {
         state.valid = false;
         state
@@ -458,7 +458,7 @@ pub fn groovestats_eval_state_from_gameplay(
             .push("Only passing scores are submitted.".to_string());
         return state;
     }
-    if state.valid && !gameplay::course_stage_life_submit_eligible(gs, player_idx) {
+    if state.valid && !gs.course_stage_life_submit_eligible(player_idx) {
         state.valid = false;
         state
             .reason_lines
@@ -491,12 +491,10 @@ pub(super) fn groovestats_judgment_counts(
     gs: &gameplay::State,
     player_idx: usize,
 ) -> GrooveStatsJudgmentCounts {
-    let player = &gameplay::players(gs)[player_idx];
-    let windows = gameplay::live_window_counts(gs, player_idx);
-    let totals = gameplay::display_totals_for_player(gs, player_idx);
-    let disabled_windows = gameplay::player_profiles(gs)[player_idx]
-        .timing_windows
-        .disabled_windows();
+    let player = &gs.players()[player_idx];
+    let windows = gs.live_window_counts(player_idx);
+    let totals = gs.display_totals_for_player(player_idx);
+    let disabled_windows = gs.profiles()[player_idx].timing_windows.disabled_windows();
     groovestats_api::judgment_counts_from_stats(
         windows,
         disabled_windows,
@@ -522,9 +520,9 @@ fn groovestats_warn_submit_skip(side: profile_data::PlayerSide, chart_hash: &str
 }
 
 fn groovestats_rescore_counts(gs: &gameplay::State, player_idx: usize) -> GrooveStatsRescoreCounts {
-    let (start, end) = crate::game::gameplay::note_range_for_player(gs, player_idx);
+    let (start, end) = gs.note_range_for_player(player_idx);
     let mut counts = GrooveStatsRescoreCounts::default();
-    for note in &gameplay::notes(gs)[start..end] {
+    for note in &gs.notes()[start..end] {
         let Some(final_result) = note.result.as_ref() else {
             continue;
         };
@@ -540,22 +538,22 @@ fn groovestats_rescore_counts(gs: &gameplay::State, player_idx: usize) -> Groove
 }
 
 fn groovestats_comment_string(gs: &gameplay::State, player_idx: usize) -> String {
-    let profile = &gameplay::player_profiles(gs)[player_idx];
+    let profile = &gs.profiles()[player_idx];
     let counts = groovestats_judgment_counts(gs, player_idx);
     let fa_plus_ex_score = if profile.show_fa_plus_window {
-        let (start, end) = crate::game::gameplay::note_range_for_player(gs, player_idx);
-        let totals = gameplay::display_totals_for_player(gs, player_idx);
+        let (start, end) = gs.note_range_for_player(player_idx);
+        let totals = gs.display_totals_for_player(player_idx);
         Some(judgment::calculate_ex_score_from_notes(
-            &gameplay::notes(gs)[start..end],
-            &gameplay::note_time_cache_ns(gs)[start..end],
-            &gameplay::hold_end_time_cache_ns(gs)[start..end],
+            &gs.notes()[start..end],
+            &gs.note_time_cache_ns()[start..end],
+            &gs.hold_end_time_cache_ns()[start..end],
             totals.total_steps,
             totals.holds_total,
             totals.rolls_total,
             totals.mines_total,
-            gameplay::players(gs)[player_idx]
+            gs.players()[player_idx]
                 .fail_time
-                .map(gameplay::song_time_ns_from_seconds),
+                .map(deadsync_core::song_time::song_time_ns_from_seconds),
             false,
         ))
     } else {
@@ -564,7 +562,7 @@ fn groovestats_comment_string(gs: &gameplay::State, player_idx: usize) -> String
     groovestats_api::submit_comment(
         &counts,
         fa_plus_ex_score,
-        gameplay::music_rate(gs),
+        gs.music_rate(),
         profile.timing_windows,
         profile.scroll_speed,
     )
@@ -574,19 +572,19 @@ fn groovestats_payload_for_player(
     gs: &gameplay::State,
     player_idx: usize,
 ) -> Option<GrooveStatsSubmitPlayerPayload> {
-    if player_idx >= gameplay::num_players(gs) {
+    if player_idx >= gs.num_players() {
         return None;
     }
-    let totals = gameplay::display_totals_for_player(gs, player_idx);
+    let totals = gs.display_totals_for_player(player_idx);
     let score_percent = judgment::calculate_itg_score_percent_from_counts(
-        &gameplay::players(gs)[player_idx].scoring_counts,
-        gameplay::players(gs)[player_idx].holds_held_for_score,
-        gameplay::players(gs)[player_idx].rolls_held_for_score,
-        gameplay::players(gs)[player_idx].mines_hit_for_score,
+        &gs.players()[player_idx].scoring_counts,
+        gs.players()[player_idx].holds_held_for_score,
+        gs.players()[player_idx].rolls_held_for_score,
+        gs.players()[player_idx].mines_hit_for_score,
         totals.possible_grade_points,
     );
     let score = (score_percent * 10000.0).round().clamp(0.0, 10000.0) as u32;
-    let gameplay_music_rate = gameplay::music_rate(gs);
+    let gameplay_music_rate = gs.music_rate();
     let rate = if gameplay_music_rate.is_finite() && gameplay_music_rate > 0.0 {
         (gameplay_music_rate * 100.0)
             .round()
@@ -600,13 +598,11 @@ fn groovestats_payload_for_player(
         judgment_counts: groovestats_judgment_counts(gs, player_idx),
         rescore_counts: groovestats_rescore_counts(gs, player_idx),
         used_cmod: matches!(
-            gameplay::player_profiles(gs)[player_idx].scroll_speed,
+            gs.profiles()[player_idx].scroll_speed,
             ScrollSpeedSetting::CMod(_)
         ),
         comment: groovestats_comment_string(gs, player_idx),
-        player_options: groovestats_api::player_options_json(
-            &gameplay::player_profiles(gs)[player_idx],
-        ),
+        player_options: groovestats_api::player_options_json(&gs.profiles()[player_idx]),
     })
 }
 
@@ -831,74 +827,65 @@ fn groovestats_retry_request(
 }
 
 pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
-    for player_idx in 0..gameplay::num_players(gs).min(MAX_PLAYERS) {
+    for player_idx in 0..gs.num_players().min(MAX_PLAYERS) {
         let side = gameplay_side_for_player(gs, player_idx);
-        groovestats_reset_submit_ui_status(
-            side,
-            gameplay::charts(gs)[player_idx].short_hash.as_str(),
-        );
-        groovestats_reset_submit_event_ui(
-            side,
-            gameplay::charts(gs)[player_idx].short_hash.as_str(),
-        );
-        groovestats_reset_submit_retry(side, gameplay::charts(gs)[player_idx].short_hash.as_str());
+        groovestats_reset_submit_ui_status(side, gs.charts()[player_idx].short_hash.as_str());
+        groovestats_reset_submit_event_ui(side, gs.charts()[player_idx].short_hash.as_str());
+        groovestats_reset_submit_retry(side, gs.charts()[player_idx].short_hash.as_str());
     }
 
     let cfg = crate::config::get();
-    if !cfg.enable_groovestats || gameplay::num_players(gs) == 0 {
+    if !cfg.enable_groovestats || gs.num_players() == 0 {
         return;
     }
-    if gameplay::autoplay_used(gs) {
+    if gs.autoplay_used() {
         debug!(
             "Skipping {} submit: autoplay/replay was used.",
             active_groovestats_service_name()
         );
         return;
     }
-    if gameplay::course_display_is_course_stage(gs) && !cfg.autosubmit_course_scores_individually {
+    if gs.course_display_is_course_stage() && !cfg.autosubmit_course_scores_individually {
         debug!(
             "Skipping {} submit: course per-song autosubmit is disabled.",
             active_groovestats_service_name()
         );
         return;
     }
-    let mut body = JsonMap::with_capacity(gameplay::num_players(gs).min(MAX_PLAYERS));
-    let mut headers = Vec::with_capacity(gameplay::num_players(gs).min(MAX_PLAYERS));
-    let mut query = Vec::with_capacity(gameplay::num_players(gs).min(MAX_PLAYERS) + 1);
-    let mut players = Vec::with_capacity(gameplay::num_players(gs).min(MAX_PLAYERS));
+    let mut body = JsonMap::with_capacity(gs.num_players().min(MAX_PLAYERS));
+    let mut headers = Vec::with_capacity(gs.num_players().min(MAX_PLAYERS));
+    let mut query = Vec::with_capacity(gs.num_players().min(MAX_PLAYERS) + 1);
+    let mut players = Vec::with_capacity(gs.num_players().min(MAX_PLAYERS));
     query.push((
         "maxLeaderboardResults".to_string(),
         GROOVESTATS_SUBMIT_MAX_ENTRIES.to_string(),
     ));
 
-    for player_idx in 0..gameplay::num_players(gs).min(MAX_PLAYERS) {
+    for player_idx in 0..gs.num_players().min(MAX_PLAYERS) {
         let side = gameplay_side_for_player(gs, player_idx);
         let slot = if side == profile_data::PlayerSide::P1 {
             1
         } else {
             2
         };
-        let profile = &gameplay::player_profiles(gs)[player_idx];
-        let chart = gameplay::charts(gs)[player_idx].as_ref();
+        let profile = &gs.profiles()[player_idx];
+        let chart = gs.charts()[player_idx].as_ref();
         let chart_hash = chart.short_hash.as_str();
         let failed = gameplay_run_failed(
-            gameplay::players(gs)[player_idx].is_failing,
-            gameplay::players(gs)[player_idx].fail_time.is_some(),
+            gs.players()[player_idx].is_failing,
+            gs.players()[player_idx].fail_time.is_some(),
         );
         let passed = gameplay_run_passed(
-            gameplay::song_completed_naturally(gs),
-            gameplay::players(gs)[player_idx].is_failing,
-            gameplay::players(gs)[player_idx].life,
-            gameplay::players(gs)[player_idx].fail_time.is_some(),
+            gs.song_completed_naturally(),
+            gs.players()[player_idx].is_failing,
+            gs.players()[player_idx].life,
+            gs.players()[player_idx].fail_time.is_some(),
         );
-        let finished = gameplay::song_completed_naturally(gs) || failed;
+        let finished = gs.song_completed_naturally() || failed;
 
-        if let Some(reason) = groovestats_submit_invalid_reason(
-            chart,
-            gameplay::song(gs).has_lua,
-            profile,
-            gameplay::music_rate(gs),
-        ) {
+        if let Some(reason) =
+            groovestats_submit_invalid_reason(chart, gs.song().has_lua, profile, gs.music_rate())
+        {
             groovestats_warn_submit_skip(side, chart_hash, reason.as_str());
             continue;
         }
@@ -924,7 +911,7 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
             );
             continue;
         }
-        if !gameplay::course_stage_life_submit_eligible(gs, player_idx) {
+        if !gs.course_stage_life_submit_eligible(player_idx) {
             groovestats_warn_submit_skip(
                 side,
                 chart_hash,

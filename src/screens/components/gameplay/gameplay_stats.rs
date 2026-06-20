@@ -2,7 +2,6 @@ use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::{LookupKey, lookup_key, tr};
 use crate::assets::{FontRole, current_machine_font_key};
-use crate::game::gameplay;
 use crate::game::profile;
 use crate::screens::components::gameplay::step_stats_gifs;
 use crate::screens::components::shared::gs_scorebox;
@@ -16,6 +15,9 @@ use deadlib_present::font;
 use deadlib_present::space::*;
 use deadlib_render::BlendMode;
 use deadsync_core::input::MAX_PLAYERS;
+use deadsync_gameplay::{
+    FantasticWindowOptions, GameplayScoreDisplayMode, blue_fantastic_window_ms,
+};
 use deadsync_profile as profile_data;
 use deadsync_rules::judgment::{self, JudgeGrade};
 use deadsync_rules::timing::LiveTimingSnapshot;
@@ -56,6 +58,31 @@ static LIVE_TIMING_LABELS: LazyLock<[Arc<str>; 3]> = LazyLock::new(|| {
         Arc::<str>::from("Max (64n/All [ms])"),
     ]
 });
+
+#[inline(always)]
+const fn score_display_mode(mode: profile_data::ScoreDisplayMode) -> GameplayScoreDisplayMode {
+    match mode {
+        profile_data::ScoreDisplayMode::Normal => GameplayScoreDisplayMode::Normal,
+        profile_data::ScoreDisplayMode::Predictive => GameplayScoreDisplayMode::Predictive,
+    }
+}
+
+#[inline(always)]
+fn player_blue_window_ms(state: &State, player_idx: usize) -> f32 {
+    let base = state.default_fa_plus_window_s();
+    let Some(profile) = state.profiles().get(player_idx) else {
+        return base * 1000.0;
+    };
+    blue_fantastic_window_ms(FantasticWindowOptions {
+        base_fa_plus_s: base,
+        custom_fantastic_window_s: profile.custom_fantastic_window.then(|| {
+            f32::from(profile_data::clamp_custom_fantastic_window_ms(
+                profile.custom_fantastic_window_ms,
+            )) / 1000.0
+        }),
+        fa_plus_10ms_blue_window: profile.fa_plus_10ms_blue_window,
+    })
+}
 
 #[derive(Clone, Copy)]
 struct LabeledColor {
@@ -144,7 +171,7 @@ fn time_remaining_right_text() -> Arc<str> {
 }
 
 fn time_total_text(state: &State) -> Arc<str> {
-    if gameplay::course_display_timing(state).is_some() {
+    if state.course_display_timing().is_some() {
         tr("Gameplay", "TimeCourse")
     } else {
         tr("Gameplay", "TimeSong")
@@ -158,7 +185,7 @@ fn cached_str_ref(text: &str) -> Arc<str> {
 
 #[inline(always)]
 fn step_stats_player_idx(state: &State, player_side: profile_data::PlayerSide) -> usize {
-    match (gameplay::num_players(state), player_side) {
+    match (state.num_players(), player_side) {
         (2, profile_data::PlayerSide::P2) => 1,
         _ => 0,
     }
@@ -170,7 +197,8 @@ fn step_stats_mask(
     player_side: profile_data::PlayerSide,
 ) -> profile_data::StepStatisticsMask {
     let player_idx = step_stats_player_idx(state, player_side);
-    gameplay::player_profiles(state)
+    state
+        .profiles()
         .get(player_idx)
         .map_or(profile_data::StepStatisticsMask::empty(), |p| {
             p.step_statistics
@@ -179,9 +207,10 @@ fn step_stats_mask(
 
 #[inline(always)]
 fn any_step_stats_enabled(state: &State, bit: profile_data::StepStatisticsMask) -> bool {
-    gameplay::player_profiles(state)
+    state
+        .profiles()
         .iter()
-        .take(gameplay::num_players(state))
+        .take(state.num_players())
         .any(|p| p.step_statistics.contains(bit))
 }
 
@@ -193,7 +222,7 @@ struct StepStatsTimeDisplay {
 
 #[inline(always)]
 fn step_stats_music_rate(state: &State) -> f32 {
-    let music_rate = gameplay::music_rate(state);
+    let music_rate = state.music_rate();
     if music_rate.is_finite() && music_rate > 0.0 {
         music_rate
     } else {
@@ -203,8 +232,8 @@ fn step_stats_music_rate(state: &State) -> f32 {
 
 fn step_stats_time_display(state: &State, player_idx: usize) -> StepStatsTimeDisplay {
     let rate = step_stats_music_rate(state);
-    let (base_elapsed, total) = gameplay::course_display_timing(state).map_or_else(
-        || (0.0, gameplay::song(state).precise_last_second().max(0.0)),
+    let (base_elapsed, total) = state.course_display_timing().map_or_else(
+        || (0.0, state.song().precise_last_second().max(0.0)),
         |timing| {
             (
                 timing.elapsed_seconds.max(0.0),
@@ -213,8 +242,9 @@ fn step_stats_time_display(state: &State, player_idx: usize) -> StepStatsTimeDis
         },
     );
     let current_music_seconds =
-        gameplay::song_time_ns_to_seconds(gameplay::current_music_time_ns(state));
-    let stage_elapsed = gameplay::players(state)
+        deadsync_core::song_time::song_time_ns_to_seconds(state.current_music_time_ns());
+    let stage_elapsed = state
+        .players()
         .get(player_idx)
         .and_then(|player| player.fail_time)
         .unwrap_or(current_music_seconds)
@@ -227,12 +257,12 @@ fn step_stats_time_display(state: &State, player_idx: usize) -> StepStatsTimeDis
 }
 
 fn step_stats_hmr_categories(state: &State, player_idx: usize) -> [(usize, u32, u32); 3] {
-    if player_idx >= gameplay::num_players(state) || player_idx >= MAX_PLAYERS {
+    if player_idx >= state.num_players() || player_idx >= MAX_PLAYERS {
         return [(0, 0, 0), (1, 0, 0), (2, 0, 0)];
     }
-    let p = &gameplay::players(state)[player_idx];
-    let carry = gameplay::display_carry_for_player(state, player_idx);
-    let totals = gameplay::display_totals_for_player(state, player_idx);
+    let p = &state.players()[player_idx];
+    let carry = state.display_carry_for_player(player_idx);
+    let totals = state.display_totals_for_player(player_idx);
     [
         (
             0usize,
@@ -272,7 +302,7 @@ fn clip_density_life_points(points: &mut Vec<[f32; 2]>, offset: f32) {
 
 fn refresh_density_graph_meshes_for_player(state: &mut State, player_idx: usize) {
     let graph = state.gameplay.density_graph_view();
-    let num_players = gameplay::num_players(&state.gameplay);
+    let num_players = state.gameplay.num_players();
     let render = &mut state.density_graph;
     let graph_w = graph.graph_w;
     let graph_h = graph.graph_h;
@@ -341,7 +371,7 @@ fn refresh_density_graph_meshes_for_player(state: &mut State, player_idx: usize)
 }
 
 pub fn refresh_density_graph_meshes(state: &mut State) {
-    for player_idx in 0..gameplay::num_players(state) {
+    for player_idx in 0..state.num_players() {
         refresh_density_graph_meshes_for_player(state, player_idx);
     }
 }
@@ -353,7 +383,7 @@ fn push_density_graph_at(
     x0: f32,
     y0: f32,
 ) {
-    if player_idx >= gameplay::num_players(state) {
+    if player_idx >= state.num_players() {
         return;
     }
 
@@ -370,7 +400,7 @@ fn push_density_graph_at(
         return;
     }
 
-    let bg_alpha = if gameplay::player_profiles(state)[player_idx].transparent_density_graph_bg {
+    let bg_alpha = if state.profiles()[player_idx].transparent_density_graph_bg {
         0.5
     } else {
         1.0
@@ -730,8 +760,8 @@ pub fn prewarm_text_layout(
     state: &State,
 ) {
     let mut max_count = 0u32;
-    for player in 0..gameplay::num_players(state) {
-        let totals = gameplay::display_totals_for_player(state, player);
+    for player in 0..state.num_players() {
+        let totals = state.display_totals_for_player(player);
         max_count = max_count
             .max(totals.total_steps)
             .max(totals.holds_total)
@@ -774,8 +804,8 @@ pub fn prewarm_text_layout(
         bright.as_ref(),
         None,
     );
-    for player in 0..gameplay::num_players(state) {
-        let totals = gameplay::display_totals_for_player(state, player);
+    for player in 0..state.num_players() {
+        let totals = state.display_totals_for_player(player);
         for count in [
             totals.total_steps,
             totals.holds_total,
@@ -814,9 +844,8 @@ pub fn prewarm_text_layout(
             }
         }
     }
-    let end_seconds = crate::game::gameplay::song_time_ns_to_seconds(
-        crate::game::gameplay::music_end_time_ns(state)
-            .max(crate::game::gameplay::notes_end_time_ns(state)),
+    let end_seconds = deadsync_core::song_time::song_time_ns_to_seconds(
+        state.music_end_time_ns().max(state.notes_end_time_ns()),
     )
     .ceil()
     .max(0.0) as u32;
@@ -865,10 +894,10 @@ pub fn prewarm_text_layout(
     {
         cache.prewarm_text(fonts, "miso", label.as_ref(), None);
     }
-    for player in 0..gameplay::num_players(state) {
-        let chart = &gameplay::charts(state)[player];
+    for player in 0..state.num_players() {
+        let chart = &state.charts()[player];
         cache.prewarm_text(fonts, "miso", state.song_full_title.as_ref(), None);
-        cache.prewarm_text(fonts, "miso", gameplay::song(state).artist.as_str(), None);
+        cache.prewarm_text(fonts, "miso", state.song().artist.as_str(), None);
         cache.prewarm_text(fonts, "miso", state.pack_group.as_ref(), None);
         cache.prewarm_text(fonts, "miso", chart.description.as_str(), None);
         let peak = cached_peak_nps_text(chart.max_nps.max(0.0) as f32);
@@ -919,7 +948,7 @@ pub fn push_step_stats(
     );
     if mask.contains(profile_data::StepStatisticsMask::STEP_COUNTS) {
         let player_idx = step_stats_player_idx(state, player_side);
-        if gameplay::player_profiles(state)[player_idx].display_scorebox {
+        if state.profiles()[player_idx].display_scorebox {
             build_scorebox_pane(actors, state, layout, wide, player_side);
         } else {
             build_holds_mines_rolls_pane(actors, state, asset_manager, layout, wide, player_side);
@@ -978,7 +1007,7 @@ fn step_stats_pane_layout(
     }
 
     // zmod ultrawide versus override.
-    if is_ultrawide && gameplay::num_players(state) > 1 {
+    if is_ultrawide && state.num_players() > 1 {
         sidepane_width = sw * 0.2;
         sidepane_center_x = match player_side {
             profile_data::PlayerSide::P1 => sidepane_width * 0.5,
@@ -1043,13 +1072,12 @@ fn push_peak_nps_on_graph(
     graph: StepStatsGraphRect,
     zoom: f32,
 ) {
-    if player_idx >= gameplay::num_players(state) {
+    if player_idx >= state.num_players() {
         return;
     }
 
-    let scaled_peak = (gameplay::charts(state)[player_idx].max_nps as f32
-        * step_stats_music_rate(state))
-    .max(0.0);
+    let scaled_peak =
+        (state.charts()[player_idx].max_nps as f32 * step_stats_music_rate(state)).max(0.0);
     let peak_nps_text = cached_peak_nps_text(scaled_peak);
     let align_left = player_side == profile_data::PlayerSide::P2;
     let x = if align_left {
@@ -1101,28 +1129,22 @@ pub fn push_versus_step_stats(
     if is_ultrawide {
         return;
     }
-    if gameplay::num_players(state) < 2 {
+    if state.num_players() < 2 {
         return;
     }
     let show_judgments_for: [bool; 2] = [
-        gameplay::player_profiles(state)[0]
+        state.profiles()[0]
             .step_statistics
             .contains(profile_data::StepStatisticsMask::JUDGMENT_COUNTER),
-        gameplay::player_profiles(state)[1]
+        state.profiles()[1]
             .step_statistics
             .contains(profile_data::StepStatisticsMask::JUDGMENT_COUNTER),
     ];
     let show_score_for: [bool; 2] = [
-        gameplay::player_profiles(state)[0].score_position
-            == profile_data::ScorePosition::StepStatistics
-            && !gameplay::player_profiles(state)[0]
-                .step_statistics
-                .is_empty(),
-        gameplay::player_profiles(state)[1].score_position
-            == profile_data::ScorePosition::StepStatistics
-            && !gameplay::player_profiles(state)[1]
-                .step_statistics
-                .is_empty(),
+        state.profiles()[0].score_position == profile_data::ScorePosition::StepStatistics
+            && !state.profiles()[0].step_statistics.is_empty(),
+        state.profiles()[1].score_position == profile_data::ScorePosition::StepStatistics
+            && !state.profiles()[1].step_statistics.is_empty(),
     ];
     let show_song_banner =
         any_step_stats_enabled(state, profile_data::StepStatisticsMask::SONG_BANNER);
@@ -1137,8 +1159,8 @@ pub fn push_versus_step_stats(
 
     let center_x = screen_center_x();
 
-    let total_tapnotes = (0..gameplay::num_players(state))
-        .map(|player| gameplay::display_totals_for_player(state, player).total_steps)
+    let total_tapnotes = (0..state.num_players())
+        .map(|player| state.display_totals_for_player(player).total_steps)
         .max()
         .unwrap_or(0) as f32;
     let digits = if total_tapnotes > 0.0 {
@@ -1206,21 +1228,20 @@ pub fn push_versus_step_stats(
                     let anchor_x = if is_p1 { anchor_p1 } else { anchor_p2 };
                     let group_origin_y = screen_center_y() + group_y;
 
-                    let player_profile = &gameplay::player_profiles(state)[player_idx];
+                    let player_profile = &state.profiles()[player_idx];
                     let show_fa_plus_window = player_profile.show_fa_plus_window;
                     let show_fa_split =
                         show_fa_plus_window || player_profile.custom_fantastic_window;
                     let row_height = if show_fa_split { 29.0 } else { 35.0 };
                     let disabled_windows = player_profile.timing_windows.disabled_windows();
 
-                    let (start, end) =
-                        crate::game::gameplay::note_range_for_player(state, player_idx);
+                    let (start, end) = state.note_range_for_player(player_idx);
                     if show_fa_split && end > start {
-                        let blue_window_ms = gameplay::player_blue_window_ms(state, player_idx);
-                        let wc = gameplay::display_window_counts(
-                            state,
+                        let blue_window_ms = player_blue_window_ms(state, player_idx);
+                        let wc = state.display_window_counts(
                             player_idx,
                             Some(blue_window_ms),
+                            blue_window_ms,
                         );
                         let counts = [wc.w0, wc.w1, wc.w2, wc.w3, wc.w4, wc.w5, wc.miss];
                         let bright_colors = [
@@ -1274,20 +1295,12 @@ pub fn push_versus_step_stats(
                         }
                     } else {
                         let counts = [
-                            gameplay::display_judgment_count(
-                                state,
-                                player_idx,
-                                JudgeGrade::Fantastic,
-                            ),
-                            gameplay::display_judgment_count(
-                                state,
-                                player_idx,
-                                JudgeGrade::Excellent,
-                            ),
-                            gameplay::display_judgment_count(state, player_idx, JudgeGrade::Great),
-                            gameplay::display_judgment_count(state, player_idx, JudgeGrade::Decent),
-                            gameplay::display_judgment_count(state, player_idx, JudgeGrade::WayOff),
-                            gameplay::display_judgment_count(state, player_idx, JudgeGrade::Miss),
+                            state.display_judgment_count(player_idx, JudgeGrade::Fantastic),
+                            state.display_judgment_count(player_idx, JudgeGrade::Excellent),
+                            state.display_judgment_count(player_idx, JudgeGrade::Great),
+                            state.display_judgment_count(player_idx, JudgeGrade::Decent),
+                            state.display_judgment_count(player_idx, JudgeGrade::WayOff),
+                            state.display_judgment_count(player_idx, JudgeGrade::Miss),
                         ];
                         for (row_i, count) in counts.iter().copied().enumerate() {
                             let disabled = standard_row_disabled(disabled_windows, row_i);
@@ -1327,7 +1340,7 @@ pub fn push_versus_step_stats(
     }
 
     for (player_idx, show) in show_judgments_for.iter().copied().enumerate() {
-        let player_profile = &gameplay::player_profiles(state)[player_idx];
+        let player_profile = &state.profiles()[player_idx];
         if !show && !show_score_for[player_idx] {
             continue;
         }
@@ -1336,22 +1349,23 @@ pub fn push_versus_step_stats(
         }
 
         let (score_text, score_color) = if player_profile.show_ex_score {
+            let blue_window_ms = player_blue_window_ms(state, player_idx);
             (
                 cached_score_2dp(
-                    gameplay::display_gameplay_ex_score_percent(
-                        state,
-                        player_idx,
-                        player_profile.score_display_mode,
-                    )
-                    .max(0.0),
+                    state
+                        .display_gameplay_ex_score_percent(
+                            player_idx,
+                            score_display_mode(player_profile.score_display_mode),
+                            blue_window_ms,
+                        )
+                        .max(0.0),
                 ),
                 color::JUDGMENT_RGBA[0],
             )
         } else {
-            let score_percent = gameplay::display_gameplay_itg_score_percent(
-                state,
+            let score_percent = state.display_gameplay_itg_score_percent(
                 player_idx,
-                player_profile.score_display_mode,
+                score_display_mode(player_profile.score_display_mode),
             );
             (cached_score_2dp(score_percent), [1.0, 1.0, 1.0, 1.0])
         };
@@ -1368,10 +1382,11 @@ pub fn push_versus_step_stats(
         ));
 
         if player_profile.show_ex_score && player_profile.show_hard_ex_score {
-            let hard_ex_percent = gameplay::display_gameplay_hard_ex_score_percent(
-                state,
+            let blue_window_ms = player_blue_window_ms(state, player_idx);
+            let hard_ex_percent = state.display_gameplay_hard_ex_score_percent(
                 player_idx,
-                player_profile.score_display_mode,
+                score_display_mode(player_profile.score_display_mode),
+                blue_window_ms,
             );
             let hex = color::HARD_EX_SCORE_RGBA;
             if player_idx == 0 {
@@ -1424,10 +1439,11 @@ pub fn push_double_step_stats(
     if is_ultrawide {
         return;
     }
-    if gameplay::cols_per_player(state) <= 4 {
+    if state.cols_per_player() <= 4 {
         return;
     }
-    let mask = gameplay::player_profiles(state)
+    let mask = state
+        .profiles()
         .first()
         .map_or(profile_data::StepStatisticsMask::empty(), |p| {
             p.step_statistics
@@ -1435,9 +1451,7 @@ pub fn push_double_step_stats(
     if mask.is_empty() {
         return;
     }
-    let display_scorebox = gameplay::player_profiles(state)
-        .first()
-        .is_some_and(|p| p.display_scorebox);
+    let display_scorebox = state.profiles().first().is_some_and(|p| p.display_scorebox);
 
     let Some(notefield_width) = notefield_width(state) else {
         return;
@@ -1528,19 +1542,19 @@ pub fn push_double_step_stats(
         let origin_y = pane_cy + (40.0 * banner_data_zoom);
         let base_zoom = 0.8 * banner_data_zoom;
 
-        let total_tapnotes = gameplay::display_totals_for_player(state, 0).total_steps as f32;
+        let total_tapnotes = state.display_totals_for_player(0).total_steps as f32;
         let digits = if total_tapnotes > 0.0 {
             (total_tapnotes.log10().floor() as usize + 1).max(4)
         } else {
             4
         };
-        let show_fa_plus_window = gameplay::player_profiles(state)[0].show_fa_plus_window;
-        let player_profile = &gameplay::player_profiles(state)[0];
+        let show_fa_plus_window = state.profiles()[0].show_fa_plus_window;
+        let player_profile = &state.profiles()[0];
         let show_fa_split = show_fa_plus_window || player_profile.custom_fantastic_window;
         let show_blue_ms_label = player_profile.custom_fantastic_window
             || (show_fa_plus_window && player_profile.fa_plus_10ms_blue_window);
         let disabled_windows = player_profile.timing_windows.disabled_windows();
-        let blue_window_ms = gameplay::player_blue_window_ms(state, 0);
+        let blue_window_ms = player_blue_window_ms(state, 0);
         let blue_window_label = cached_blue_window_label(blue_window_ms.round() as i32);
         let row_height = if show_fa_split { 29.0 } else { 35.0 };
         let y_base = -280.0;
@@ -1561,12 +1575,12 @@ pub fn push_double_step_stats(
 
                 if show_standard_judgments {
                     let counts = [
-                        gameplay::display_judgment_count(state, 0, JudgeGrade::Fantastic),
-                        gameplay::display_judgment_count(state, 0, JudgeGrade::Excellent),
-                        gameplay::display_judgment_count(state, 0, JudgeGrade::Great),
-                        gameplay::display_judgment_count(state, 0, JudgeGrade::Decent),
-                        gameplay::display_judgment_count(state, 0, JudgeGrade::WayOff),
-                        gameplay::display_judgment_count(state, 0, JudgeGrade::Miss),
+                        state.display_judgment_count(0, JudgeGrade::Fantastic),
+                        state.display_judgment_count(0, JudgeGrade::Excellent),
+                        state.display_judgment_count(0, JudgeGrade::Great),
+                        state.display_judgment_count(0, JudgeGrade::Decent),
+                        state.display_judgment_count(0, JudgeGrade::WayOff),
+                        state.display_judgment_count(0, JudgeGrade::Miss),
                     ];
                     let labels: Vec<Arc<str>> = (0..6).map(judgment_label).collect();
                     for row_i in 0..labels.len() {
@@ -1634,7 +1648,7 @@ pub fn push_double_step_stats(
                         }
                     }
                 } else {
-                    let wc = gameplay::display_window_counts(state, 0, Some(blue_window_ms));
+                    let wc = state.display_window_counts(0, Some(blue_window_ms), blue_window_ms);
                     let counts = [wc.w0, wc.w1, wc.w2, wc.w3, wc.w4, wc.w5, wc.miss];
                     let bright_colors = [
                         color::JUDGMENT_RGBA[0],
@@ -1908,8 +1922,7 @@ fn build_banner(
     player_side: profile_data::PlayerSide,
 ) {
     if let Some(banner_key) = &state.song_banner_key {
-        let local_banner_x =
-            song_banner_local_x(layout, wide, player_side, gameplay::num_players(state));
+        let local_banner_x = song_banner_local_x(layout, wide, player_side, state.num_players());
         let local_banner_y = -200.0;
         let banner_x = layout.sidepane_center_x + (local_banner_x * layout.banner_data_zoom);
         let banner_y = layout.sidepane_center_y + (local_banner_y * layout.banner_data_zoom);
@@ -2011,12 +2024,12 @@ fn build_steps_info(
     let note_field_is_centered = layout.note_field_is_centered;
     let banner_data_zoom = layout.banner_data_zoom;
 
-    let player_idx = match (gameplay::num_players(state), player_side) {
+    let player_idx = match (state.num_players(), player_side) {
         (2, profile_data::PlayerSide::P2) => 1,
         _ => 0,
     };
     let course_info = state.course_display_info.as_ref();
-    let chart = &gameplay::charts(state)[player_idx];
+    let chart = &state.charts()[player_idx];
     let desc = chart.description.trim();
     let cred = chart.step_artist.trim();
 
@@ -2087,7 +2100,7 @@ fn build_steps_info(
     ));
     let y_artist = origin_y + (row_h * 2.0 * group_zoom);
     actors.push(act!(text:
-        font("miso"): settext(cached_str_ref(gameplay::song(state).artist.as_str())):
+        font("miso"): settext(cached_str_ref(state.song().artist.as_str())):
         align(0.0, 0.5): xy(values_x, y_artist):
         maxwidth(maxwidth):
         zoom(group_zoom): z(z):
@@ -2213,13 +2226,13 @@ fn push_holds_mines_rolls_pane_at(
 }
 
 fn notefield_width(state: &State) -> Option<f32> {
-    if gameplay::cols_per_player(state) == 0 {
+    if state.cols_per_player() == 0 {
         return None;
     }
     // Simply Love GetNotefieldWidth() parity: dance single/versus are 256
     // and double is 512. This is independent of Mini, Spacing, and noteskin
     // render scale, so step-stat panes do not drift with visual modifiers.
-    Some(gameplay::cols_per_player(state) as f32 * 64.0)
+    Some(state.cols_per_player() as f32 * 64.0)
 }
 
 fn build_holds_mines_rolls_pane(
@@ -2360,7 +2373,7 @@ fn build_scorebox_pane(
     if layout.note_field_is_centered && wide {
         local_x += 2.0 * x_sign;
     }
-    if layout.is_ultrawide && gameplay::num_players(state) > 1 {
+    if layout.is_ultrawide && state.num_players() > 1 {
         local_x = -local_x;
     }
     let frame_cx = layout.sidepane_center_x + (local_x * layout.banner_data_zoom);
@@ -2390,11 +2403,11 @@ fn push_live_timing_stats_at(
     zoom: f32,
     z: i16,
 ) {
-    if player_idx >= gameplay::num_players(state) {
+    if player_idx >= state.num_players() {
         return;
     }
 
-    let profile = &gameplay::player_profiles(state)[player_idx];
+    let profile = &state.profiles()[player_idx];
     if !profile.live_timing_stats {
         return;
     }
@@ -2405,7 +2418,7 @@ fn push_live_timing_stats_at(
         return;
     }
 
-    let stats = gameplay::display_live_timing_stats(state, player_idx);
+    let stats = state.display_live_timing_stats(player_idx);
     let compact = enabled_count >= 3;
     let row_h = if compact { row_h * 0.68 } else { row_h };
     let zoom = if compact { zoom * 0.82 } else { zoom };
@@ -2479,7 +2492,7 @@ fn build_side_pane(
         profile_data::PlayerSide::P2 => -1.0,
     };
     let player_idx = step_stats_player_idx(state, player_side);
-    let judgments_local_x = if layout.is_ultrawide && gameplay::num_players(state) > 1 {
+    let judgments_local_x = if layout.is_ultrawide && state.num_players() > 1 {
         154.0 * x_sign
     } else if layout.note_field_is_centered && wide {
         -156.0 * x_sign
@@ -2492,7 +2505,7 @@ fn build_side_pane(
     let parent_local_zoom = 0.8;
     let final_text_base_zoom = layout.banner_data_zoom * parent_local_zoom;
 
-    let total_tapnotes = gameplay::display_totals_for_player(state, player_idx).total_steps as f32;
+    let total_tapnotes = state.display_totals_for_player(player_idx).total_steps as f32;
     let digits = if total_tapnotes > 0.0 {
         (total_tapnotes.log10().floor() as usize + 1).max(4)
     } else {
@@ -2503,13 +2516,13 @@ fn build_side_pane(
     const LABEL_DIGIT_STEP: f32 = 16.0;
     const NUMBER_TO_LABEL_GAP: f32 = 8.0;
     let base_numbers_local_x_offset = base_label_local_x_offset - NUMBER_TO_LABEL_GAP;
-    let show_fa_plus_window = gameplay::player_profiles(state)[player_idx].show_fa_plus_window;
-    let player_profile = &gameplay::player_profiles(state)[player_idx];
+    let show_fa_plus_window = state.profiles()[player_idx].show_fa_plus_window;
+    let player_profile = &state.profiles()[player_idx];
     let show_fa_split = show_fa_plus_window || player_profile.custom_fantastic_window;
     let show_blue_ms_label = player_profile.custom_fantastic_window
         || (show_fa_plus_window && player_profile.fa_plus_10ms_blue_window);
     let disabled_windows = player_profile.timing_windows.disabled_windows();
-    let blue_window_ms = gameplay::player_blue_window_ms(state, player_idx);
+    let blue_window_ms = player_blue_window_ms(state, player_idx);
     let blue_window_label = cached_blue_window_label(blue_window_ms.round() as i32);
     actors.reserve(if show_fa_split {
         22 + usize::from(show_blue_ms_label)
@@ -2541,7 +2554,7 @@ fn build_side_pane(
             // Standard ITG-style rows: Fantastic..Miss using aggregate grade counts.
             for (index, grade) in JUDGMENT_ORDER.iter().enumerate() {
                 let info = judgment_info(*grade);
-                let count = gameplay::display_judgment_count(state, player_idx, *grade);
+                let count = state.display_judgment_count(player_idx, *grade);
                 let disabled = standard_row_disabled(disabled_windows, index);
 
                 let local_y = y_base + (index as f32 * row_height);
@@ -2622,7 +2635,7 @@ fn build_side_pane(
         } else if show_judgments {
             // FA+ mode: split Fantastic into W0 (blue) and W1 (white) using per-note windows,
             // matching Simply Love's FA+ Step Statistics semantics.
-            let wc = gameplay::display_window_counts(state, player_idx, Some(blue_window_ms));
+            let wc = state.display_window_counts(player_idx, Some(blue_window_ms), blue_window_ms);
             let fantastic_color = judgment_info(JudgeGrade::Fantastic).color;
             let excellent_color = judgment_info(JudgeGrade::Excellent).color;
             let great_color = judgment_info(JudgeGrade::Great).color;
@@ -2787,7 +2800,7 @@ fn build_side_pane(
 
             let red_color = color::rgba_hex("#ff3030");
             let white_color = [1.0, 1.0, 1.0, 1.0];
-            let remaining_color = if gameplay::players(state)[player_idx].is_failing {
+            let remaining_color = if state.players()[player_idx].is_failing {
                 red_color
             } else {
                 white_color

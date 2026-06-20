@@ -3,23 +3,14 @@ use crate::assets;
 use crate::game::gameplay::{
     AccelEffects, AppearanceEffects, COMBO_HUNDRED_MILESTONE_DURATION,
     COMBO_THOUSAND_MILESTONE_DURATION, ComboMilestoneKind, HELD_MISS_TOTAL_DURATION,
-    HOLD_JUDGMENT_TOTAL_DURATION, NoteCountStat, RECEPTOR_Y_OFFSET_FROM_CENTER,
-    RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, SongLuaColumnOffsetWindowRuntime, VisualEffects,
+    HOLD_JUDGMENT_TOTAL_DURATION, NoteCountStat, PerspectiveEffects, RECEPTOR_Y_OFFSET_FROM_CENTER,
+    RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, ScrollEffects, SongLuaColumnOffsetWindowRuntime,
+    VisualEffects,
 };
 use crate::game::gameplay::{
-    active_chart_attack_effects_for_player, column_flash_duration, column_flashes_for_columns,
-    effective_accel_effects_for_player, effective_appearance_effects_for_player,
-    effective_mini_percent_for_player, effective_perspective_effects_for_player,
-    effective_scroll_effects_for_player, effective_scroll_speed_for_player,
-    effective_spacing_multiplier_for_player, effective_visibility_effects_for_player,
-    effective_visual_effects_for_player, field_zoom_for_player, hold_explosion_active,
-    hold_explosion_enabled_for_options, hold_head_render_flags, let_go_head_beat,
-    mine_explosions_for_columns, music_rate, notefield_column_scroll_dir,
-    notefield_draw_distance_after_targets, notefield_draw_distance_before_targets,
-    notefield_reverse_scroll, notes, player_profiles, receptor_bop_zoom_for_col,
-    receptor_glow_visual_for_col, row_hides_completed_note, scroll_receptor_y,
-    scroll_reference_bpm, song_lua_ease_factor, song_lua_note_hidden, song_lua_visuals,
-    tap_explosion_options_from_profile, tap_explosions_for_columns, timing_profile_windows_s,
+    column_flash_duration, hold_explosion_active, hold_explosion_enabled_for_options,
+    hold_head_render_flags, let_go_head_beat, scroll_receptor_y, song_lua_ease_factor,
+    song_lua_note_hidden,
 };
 use crate::game::parsing::noteskin::{
     ModelDrawState, ModelMeshCache, NUM_QUANTIZATIONS, NoteAnimPart, Noteskin, SpriteSlot,
@@ -41,6 +32,10 @@ use deadsync_core::input::{MAX_COLS, MAX_PLAYERS};
 use deadsync_core::note::NoteType;
 use deadsync_core::song_time::SongTimeNs;
 use deadsync_core::timing::{beat_to_note_row, note_row_to_beat};
+use deadsync_gameplay::{
+    FantasticWindowOptions, TapExplosionOptions, blue_fantastic_window_ms,
+    spacing_multiplier_for_percent,
+};
 use deadsync_profile as profile_data;
 use deadsync_rules::judgment::{self, HOLD_SCORE_HELD, JudgeGrade, Judgment, TimingWindow};
 use deadsync_rules::note::{HoldResult, MineResult, Note};
@@ -55,6 +50,56 @@ use std::hash::{BuildHasherDefault, Hasher};
 use std::sync::Arc;
 use std::time::Instant;
 use twox_hash::XxHash64;
+
+#[inline(always)]
+fn scroll_effects_from_option(scroll: profile_data::ScrollOption) -> ScrollEffects {
+    use profile_data::ScrollOption;
+    ScrollEffects::from_flags(
+        scroll.contains(ScrollOption::Reverse),
+        scroll.contains(ScrollOption::Split),
+        scroll.contains(ScrollOption::Alternate),
+        scroll.contains(ScrollOption::Cross),
+        scroll.contains(ScrollOption::Centered),
+    )
+}
+
+#[inline(always)]
+fn perspective_effects_from_profile(perspective: profile_data::Perspective) -> PerspectiveEffects {
+    let (tilt, skew) = perspective.tilt_skew();
+    PerspectiveEffects { tilt, skew }
+}
+
+#[inline(always)]
+fn tap_explosion_options_from_profile(profile: &profile_data::Profile) -> TapExplosionOptions {
+    let mask = profile.tap_explosion_active_mask;
+    TapExplosionOptions {
+        fantastic: mask.contains(profile_data::TapExplosionMask::FANTASTIC),
+        excellent: mask.contains(profile_data::TapExplosionMask::EXCELLENT),
+        great: mask.contains(profile_data::TapExplosionMask::GREAT),
+        decent: mask.contains(profile_data::TapExplosionMask::DECENT),
+        way_off: mask.contains(profile_data::TapExplosionMask::WAY_OFF),
+        miss: mask.contains(profile_data::TapExplosionMask::MISS),
+        held: mask.contains(profile_data::TapExplosionMask::HELD),
+        holding: mask.contains(profile_data::TapExplosionMask::HOLDING),
+    }
+}
+
+#[inline(always)]
+fn player_blue_window_ms(state: &State, player_idx: usize) -> f32 {
+    let base = state.default_fa_plus_window_s();
+    let Some(profile) = state.profiles().get(player_idx) else {
+        return base * 1000.0;
+    };
+    blue_fantastic_window_ms(FantasticWindowOptions {
+        base_fa_plus_s: base,
+        custom_fantastic_window_s: profile.custom_fantastic_window.then(|| {
+            f32::from(profile_data::clamp_custom_fantastic_window_ms(
+                profile.custom_fantastic_window_ms,
+            )) / 1000.0
+        }),
+        fa_plus_10ms_blue_window: profile.fa_plus_10ms_blue_window,
+    })
+}
 
 // --- CONSTANTS ---
 
@@ -1073,14 +1118,84 @@ fn profile_error_bar_mask(profile: &profile_data::Profile) -> profile_data::Erro
 }
 
 #[inline(always)]
+fn effective_accel_effects_for_player(state: &State, player_idx: usize) -> AccelEffects {
+    if player_idx >= state.num_players() || player_idx >= MAX_PLAYERS {
+        return AccelEffects::default();
+    }
+    state.effective_accel_effects_for_player_with_mask(
+        player_idx,
+        state.profiles()[player_idx]
+            .accel_effects_active_mask
+            .bits(),
+    )
+}
+
+#[inline(always)]
+fn effective_visual_effects_for_player(state: &State, player_idx: usize) -> VisualEffects {
+    if player_idx >= state.num_players() || player_idx >= MAX_PLAYERS {
+        return VisualEffects::default();
+    }
+    state.effective_visual_effects_for_player_with_mask(
+        player_idx,
+        state.profiles()[player_idx]
+            .visual_effects_active_mask
+            .bits(),
+    )
+}
+
+#[inline(always)]
+fn effective_scroll_effects_for_player(state: &State, player_idx: usize) -> ScrollEffects {
+    if player_idx >= state.num_players() || player_idx >= MAX_PLAYERS {
+        return ScrollEffects::default();
+    }
+    state.effective_scroll_effects_for_player_with_base(
+        player_idx,
+        scroll_effects_from_option(state.profiles()[player_idx].scroll_option),
+    )
+}
+
+#[inline(always)]
+fn effective_perspective_effects_for_player(
+    state: &State,
+    player_idx: usize,
+) -> PerspectiveEffects {
+    if player_idx >= state.num_players() || player_idx >= MAX_PLAYERS {
+        return PerspectiveEffects::default();
+    }
+    state.effective_perspective_effects_for_player_with_base(
+        player_idx,
+        perspective_effects_from_profile(state.profiles()[player_idx].perspective),
+    )
+}
+
+#[inline(always)]
+fn effective_mini_percent_for_player(state: &State, player_idx: usize) -> f32 {
+    if player_idx >= state.num_players() || player_idx >= MAX_PLAYERS {
+        return 0.0;
+    }
+    state.effective_mini_percent_for_player_with_base(
+        player_idx,
+        state.profiles()[player_idx].mini_percent as f32,
+    )
+}
+
+#[inline(always)]
+fn effective_spacing_multiplier_for_player(state: &State, player_idx: usize) -> f32 {
+    if player_idx >= state.num_players() {
+        return 1.0;
+    }
+    spacing_multiplier_for_percent(state.profiles()[player_idx].spacing_percent)
+}
+
+#[inline(always)]
 fn gameplay_mods_text_key(state: &State, player_idx: usize) -> GameplayModsTextKey {
-    let profile = &player_profiles(state)[player_idx];
-    let chart_attack = active_chart_attack_effects_for_player(state, player_idx);
-    let scroll_speed = effective_scroll_speed_for_player(state, player_idx);
+    let profile = &state.profiles()[player_idx];
+    let chart_attack = state.active_chart_attack_effects_for_player(player_idx);
+    let scroll_speed = state.effective_scroll_speed_for_player(player_idx);
     let accel = effective_accel_effects_for_player(state, player_idx);
     let visual = effective_visual_effects_for_player(state, player_idx);
-    let appearance = effective_appearance_effects_for_player(state, player_idx);
-    let visibility = effective_visibility_effects_for_player(state, player_idx);
+    let appearance = state.effective_appearance_effects_for_player(player_idx);
+    let visibility = state.effective_visibility_effects_for_player(player_idx);
     let scroll = effective_scroll_effects_for_player(state, player_idx);
     let perspective = effective_perspective_effects_for_player(state, player_idx);
     let display_mini = (effective_mini_percent_for_player(state, player_idx)
@@ -2454,7 +2569,7 @@ pub(crate) fn gameplay_mods_text(state: &State, player_idx: usize) -> Arc<str> {
     cached_text(&GAMEPLAY_MODS_CACHE, key, TEXT_CACHE_LIMIT, || {
         let mut parts = Vec::with_capacity(32);
         parts.push(format_speed_mod_for_display(
-            effective_scroll_speed_for_player(state, player_idx),
+            state.effective_scroll_speed_for_player(player_idx),
         ));
 
         for (percent, name) in
@@ -2497,13 +2612,13 @@ pub(crate) fn gameplay_mods_text(state: &State, player_idx: usize) -> Arc<str> {
         append_mod_part(&mut parts, key.blind, "Blind");
         append_mod_part(&mut parts, key.cover, "Hide BG");
 
-        if let Some(name) = attack_mode_name(player_profiles(state)[player_idx].attack_mode) {
+        if let Some(name) = attack_mode_name(state.profiles()[player_idx].attack_mode) {
             parts.push(name.to_string());
         }
         append_turn_parts(&mut parts, key.turn_bits);
         push_transform_parts(&mut parts, key.insert_mask, key.remove_mask, key.holds_mask);
         append_perspective_parts(&mut parts, key.perspective_tilt, key.perspective_skew);
-        parts.push(player_profiles(state)[player_idx].noteskin.to_string());
+        parts.push(state.profiles()[player_idx].noteskin.to_string());
         if key.visual_delay_ms != 0 {
             parts.push(format!("{}ms VisualDelay", key.visual_delay_ms));
         }
@@ -3240,15 +3355,14 @@ pub fn prewarm_text_layout(
 
     let mut max_combo = 0u32;
     let mut max_measure_len = 0i32;
-    let music_end_seconds = crate::game::gameplay::song_time_ns_to_seconds(
-        crate::game::gameplay::music_end_time_ns(state),
-    )
-    .ceil()
-    .max(0.0) as i32;
+    let music_end_seconds =
+        deadsync_core::song_time::song_time_ns_to_seconds(state.music_end_time_ns())
+            .ceil()
+            .max(0.0) as i32;
 
-    for player in 0..crate::game::gameplay::num_players(state) {
-        let profile = &player_profiles(state)[player];
-        let totals = crate::game::gameplay::display_totals_for_player(state, player);
+    for player in 0..state.num_players() {
+        let profile = &state.profiles()[player];
+        let totals = state.display_totals_for_player(player);
         max_combo = max_combo.max(
             totals
                 .total_steps
@@ -3350,13 +3464,14 @@ fn zmod_combo_quint_active(
     player_idx: usize,
     profile: &profile_data::Profile,
 ) -> bool {
-    if !profile.show_fa_plus_window || player_idx >= crate::game::gameplay::num_players(state) {
+    if !profile.show_fa_plus_window || player_idx >= state.num_players() {
         return false;
     }
     let counts = if profile.combo_mode == profile_data::ComboMode::FullCombo {
-        crate::game::gameplay::display_window_counts(state, player_idx, None)
+        let blue_window_ms = player_blue_window_ms(state, player_idx);
+        state.display_window_counts(player_idx, None, blue_window_ms)
     } else {
-        crate::game::gameplay::players(state)[player_idx].current_combo_window_counts
+        state.players()[player_idx].current_combo_window_counts
     };
     counts.w0 > 0
         && counts.w1 == 0
@@ -3573,7 +3688,8 @@ fn zmod_mini_indicator_progress(
         .saturating_add(resolved_rolls) as i32)
         .saturating_mul(HOLD_SCORE_HELD);
 
-    let possible_dp = crate::game::gameplay::display_totals_for_player(state, player_idx)
+    let possible_dp = state
+        .display_totals_for_player(player_idx)
         .possible_grade_points
         .max(1);
     let actual_dp = p.earned_grade_points;
@@ -3608,7 +3724,8 @@ fn zmod_mini_indicator_progress(
             )
         }
         profile_data::MiniIndicatorScoreType::Ex | profile_data::MiniIndicatorScoreType::HardEx => {
-            let score = crate::game::gameplay::display_scored_ex_score_data(state, player_idx);
+            let blue_window_ms = player_blue_window_ms(state, player_idx);
+            let score = state.display_scored_ex_score_data(player_idx, blue_window_ms);
             let white_count = score.counts.w1;
             let fantastic_total = score.counts.w0.saturating_add(score.counts.w1);
             let white_10ms_count = fantastic_total.saturating_sub(score.counts_10ms.w0);
@@ -3836,7 +3953,7 @@ fn zmod_stream_prog_completion(state: &State, player_idx: usize) -> Option<f64> 
         return None;
     }
 
-    let beat_floor = crate::game::gameplay::visible_beat(state, player_idx).floor();
+    let beat_floor = state.visible_beat(player_idx).floor();
     if !beat_floor.is_finite() {
         return Some(0.0);
     }
@@ -4307,7 +4424,11 @@ fn hold_overlaps_visible_window(
 
 #[inline(always)]
 fn song_lua_hides_note(state: &State, player: usize, local_col: usize, beat: f32) -> bool {
-    song_lua_note_hidden(&song_lua_visuals(state).note_hides[player], local_col, beat)
+    song_lua_note_hidden(
+        &state.song_lua_visuals().note_hides[player],
+        local_col,
+        beat,
+    )
 }
 
 #[inline(always)]
@@ -4372,7 +4493,7 @@ pub(crate) fn build_bundles(
     // --- Playfield Positioning (1:1 with Simply Love) ---
     // In P2-only single-player, we still have a single player runtime (index 0),
     // but need to place the notefield on the P2 side of the screen.
-    let player_idx = if crate::game::gameplay::num_players(state) == 1 {
+    let player_idx = if state.num_players() == 1 {
         0
     } else {
         match placement {
@@ -4380,7 +4501,7 @@ pub(crate) fn build_bundles(
             FieldPlacement::P2 => 1,
         }
     };
-    if player_idx >= crate::game::gameplay::num_players(state) {
+    if player_idx >= state.num_players() {
         return BuiltNotefield::empty(screen_center_x());
     }
     // Use the cached field_zoom from gameplay state so visual layout and
@@ -4388,15 +4509,15 @@ pub(crate) fn build_bundles(
     // mode overrides this to match ScreenEdit's half-scale edit field.
     let field_zoom = view
         .field_zoom
-        .unwrap_or_else(|| field_zoom_for_player(state, player_idx));
-    let draw_distance_before_targets = notefield_draw_distance_before_targets(state, player_idx);
-    let draw_distance_after_targets = notefield_draw_distance_after_targets(state, player_idx);
+        .unwrap_or_else(|| state.field_zoom_for_player(player_idx));
+    let draw_distance_before_targets = state.notefield_draw_distance_before_targets(player_idx);
+    let draw_distance_after_targets = state.notefield_draw_distance_after_targets(player_idx);
     let scroll_speed = view
         .scroll_speed
-        .unwrap_or_else(|| effective_scroll_speed_for_player(state, player_idx));
-    let col_start = player_idx * crate::game::gameplay::cols_per_player(state);
-    let col_end = (col_start + crate::game::gameplay::cols_per_player(state))
-        .min(crate::game::gameplay::num_cols(state))
+        .unwrap_or_else(|| state.effective_scroll_speed_for_player(player_idx));
+    let col_start = player_idx * state.cols_per_player();
+    let col_end = (col_start + state.cols_per_player())
+        .min(state.num_cols())
         .min(MAX_COLS);
     let num_cols = col_end.saturating_sub(col_start);
     if num_cols == 0 {
@@ -4449,7 +4570,7 @@ pub(crate) fn build_bundles(
         };
     actors.reserve(actor_cap);
     hud_actors.reserve(hud_cap);
-    let p = &crate::game::gameplay::players(state)[player_idx];
+    let p = &state.players()[player_idx];
     let mut model_cache = model_caches[player_idx].borrow_mut();
 
     // NoteFieldOffsetX is stored as a non-negative magnitude; for a single P1-style field,
@@ -4486,12 +4607,12 @@ pub(crate) fn build_bundles(
         as f32;
     let logical_screen_width = screen_width();
     let clamped_width = logical_screen_width.clamp(640.0, 854.0);
-    let centered_one_side = crate::game::gameplay::num_players(state) == 1
+    let centered_one_side = state.num_players() == 1
         && play_style == profile_data::PlayStyle::Single
         && center_1player_notefield;
-    let centered_both_sides = crate::game::gameplay::num_players(state) == 1
-        && play_style == profile_data::PlayStyle::Double;
-    let base_playfield_center_x = if crate::game::gameplay::num_players(state) == 2 {
+    let centered_both_sides =
+        state.num_players() == 1 && play_style == profile_data::PlayStyle::Double;
+    let base_playfield_center_x = if state.num_players() == 2 {
         match placement {
             FieldPlacement::P1 => screen_center_x() - (clamped_width * 0.25),
             FieldPlacement::P2 => screen_center_x() + (clamped_width * 0.25),
@@ -4507,8 +4628,7 @@ pub(crate) fn build_bundles(
     let playfield_center_x = base_playfield_center_x + notefield_offset_x;
     // Simply Love's GetNotefieldX helper reports base center for centered one-player fields,
     // ignoring NoteFieldOffsetX for layout decisions.
-    let layout_center_x = if crate::game::gameplay::num_players(state) == 1
-        && (centered_both_sides || centered_one_side)
+    let layout_center_x = if state.num_players() == 1 && (centered_both_sides || centered_one_side)
     {
         screen_center_x()
     } else {
@@ -4547,7 +4667,7 @@ pub(crate) fn build_bundles(
         if i >= num_cols {
             return 1.0;
         }
-        notefield_column_scroll_dir(state, col_start + i)
+        state.notefield_column_scroll_dir(col_start + i)
     });
     let base_column_receptor_ys: [f32; MAX_COLS] = from_fn(|i| {
         if i >= num_cols {
@@ -4561,16 +4681,16 @@ pub(crate) fn build_bundles(
             receptor_y_centered,
         )
     });
-    let current_time_ns = crate::game::gameplay::visible_music_time_ns(state, player_idx);
+    let current_time_ns = state.visible_music_time_ns(player_idx);
     let current_time = song_time_ns_to_seconds(current_time_ns);
-    let current_beat = crate::game::gameplay::visible_beat(state, player_idx);
+    let current_beat = state.visible_beat(player_idx);
     let column_receptor_ys: [f32; MAX_COLS] = from_fn(|i| {
         if i >= num_cols {
             return base_column_receptor_ys[i];
         }
         base_column_receptor_ys[i]
             + song_lua_column_y_offset(
-                &song_lua_visuals(state).column_offsets[player_idx],
+                &state.song_lua_visuals().column_offsets[player_idx],
                 i,
                 current_time,
             ) * field_zoom
@@ -4582,12 +4702,12 @@ pub(crate) fn build_bundles(
     let arrow_effect_time = arrow_effect_game_time_seconds();
     let accel = effective_accel_effects_for_player(state, player_idx);
     let visual = effective_visual_effects_for_player(state, player_idx);
-    let appearance = effective_appearance_effects_for_player(state, player_idx);
-    let visibility = effective_visibility_effects_for_player(state, player_idx);
+    let appearance = state.effective_appearance_effects_for_player(player_idx);
+    let visibility = state.effective_visibility_effects_for_player(player_idx);
     let mini_percent = effective_mini_percent_for_player(state, player_idx);
     let mini = effective_mini_value(profile, visual, mini_percent);
     let spacing_mult = effective_spacing_multiplier_for_player(state, player_idx);
-    let reverse_scroll = notefield_reverse_scroll(state, player_idx);
+    let reverse_scroll = state.notefield_reverse_scroll(player_idx);
     let hud_reverse = column_reverse_percent[0] >= 0.999_9;
     let judgment_y_base = hud_y(
         screen_center_y() - TAP_JUDGMENT_OFFSET_FROM_CENTER + notefield_offset_y,
@@ -4672,8 +4792,7 @@ pub(crate) fn build_bundles(
         };
         // ITG's FindFirst/FindLastDisplayedBeat search from m_fSongBeat, while
         // ArrowEffects::GetYOffset uses m_fSongBeatVisible internally.
-        let current_search_beat =
-            timing.get_beat_for_time_ns(crate::game::gameplay::current_music_time_ns(state));
+        let current_search_beat = timing.get_beat_for_time_ns(state.current_music_time_ns());
         // The column swap for Step's hold-turn section is handled at the player bundle
         // level. Keep the actual note/receptor/ghost visuals on the normal noteskin
         // path here; applying an extra local Y turn breaks model-backed arrows and hit
@@ -4697,7 +4816,7 @@ pub(crate) fn build_bundles(
         // ITG NoteField currently advances NoteDisplay resources twice per frame for
         // the master field (and once per additional field), so model/tween time in
         // NoteDisplay actors runs faster than wall-clock elapsed.
-        let note_display_time_scale = crate::game::gameplay::num_players(state) as f32 + 1.0;
+        let note_display_time_scale = state.num_players() as f32 + 1.0;
         // Precompute per-frame values used for converting beat/time to Y positions
         let display_speed_percent = timing.get_speed_multiplier_ns(current_beat, current_time_ns);
         // PARITY[ITGmania ArrowEffects::GetYOffset]: ScreenEdit's editing
@@ -4707,11 +4826,11 @@ pub(crate) fn build_bundles(
             match scroll_speed {
                 _ if edit_beat_spacing => {
                     let player_multiplier = scroll_speed
-                        .beat_multiplier(scroll_reference_bpm(state), music_rate(state));
+                        .beat_multiplier(state.scroll_reference_bpm(), state.music_rate());
                     (1.0, None, current_beat, 1.0, field_zoom * player_multiplier)
                 }
                 ScrollSpeedSetting::CMod(c_bpm) => {
-                    let gameplay_music_rate = music_rate(state);
+                    let gameplay_music_rate = state.music_rate();
                     let rate = if gameplay_music_rate.is_finite() && gameplay_music_rate > 0.0 {
                         gameplay_music_rate
                     } else {
@@ -4722,7 +4841,7 @@ pub(crate) fn build_bundles(
                 ScrollSpeedSetting::XMod(_) | ScrollSpeedSetting::MMod(_) => {
                     let curr_disp = timing.get_displayed_beat(current_beat);
                     let player_multiplier = scroll_speed
-                        .beat_multiplier(scroll_reference_bpm(state), music_rate(state));
+                        .beat_multiplier(state.scroll_reference_bpm(), state.music_rate());
                     (
                         1.0,
                         None,
@@ -4813,8 +4932,7 @@ pub(crate) fn build_bundles(
                 accel,
             ) * post_accel_scale
         };
-        let (note_start, note_end) =
-            crate::game::gameplay::note_range_for_player(state, player_idx);
+        let (note_start, note_end) = state.note_range_for_player(player_idx);
         let tipsy_y_for_col = |local_col: usize| -> f32 {
             tipsy_y_extra(local_col, arrow_effect_time, visual) + move_y_extra(visual, local_col)
         };
@@ -4908,8 +5026,11 @@ pub(crate) fn build_bundles(
         // Measure Cues reuse the same playfield geometry as the white measure
         // lines, so enter this block when either feature is active.
         if show_measure_lines || profile.measure_cues {
-            let edit_bar_speed =
-                edit_bar_scroll_speed(scroll_speed, scroll_reference_bpm(state), music_rate(state));
+            let edit_bar_speed = edit_bar_scroll_speed(
+                scroll_speed,
+                state.scroll_reference_bpm(),
+                state.music_rate(),
+            );
             let time_signatures = state
                 .gameplay_chart(player_idx)
                 .map(|chart| chart.timing_segments.time_signatures.as_slice())
@@ -5248,7 +5369,7 @@ pub(crate) fn build_bundles(
         }
 
         if profile.column_cues {
-            let gameplay_music_rate = music_rate(state);
+            let gameplay_music_rate = state.music_rate();
             let rate = if gameplay_music_rate.is_finite() && gameplay_music_rate > 0.0 {
                 gameplay_music_rate
             } else {
@@ -5341,7 +5462,7 @@ pub(crate) fn build_bundles(
         }
 
         if profile.crossover_cues {
-            let gameplay_music_rate = music_rate(state);
+            let gameplay_music_rate = state.music_rate();
             let rate = if gameplay_music_rate.is_finite() && gameplay_music_rate > 0.0 {
                 gameplay_music_rate
             } else {
@@ -5437,7 +5558,8 @@ pub(crate) fn build_bundles(
             let lane_width = ScrollSpeedSetting::ARROW_SPACING * field_zoom;
             let flash_layout = column_flash_layout(profile.column_flash_size);
             let flash_height = column_flash_height(flash_layout);
-            for (i, flash_opt) in column_flashes_for_columns(state, col_start, num_cols)
+            for (i, flash_opt) in state
+                .column_flashes_for_columns(col_start, num_cols)
                 .iter()
                 .enumerate()
             {
@@ -5500,7 +5622,7 @@ pub(crate) fn build_bundles(
                 &invert_distances[..num_cols],
                 &tornado_bounds[..num_cols],
             );
-            let bop_zoom = receptor_bop_zoom_for_col(state, col);
+            let bop_zoom = state.receptor_bop_zoom(col);
             let receptor_effect_zoom = arrow_effect_zoom(&visual, i, 0.0);
             if !receptor_hidden_by_song_lua
                 && !profile.hide_targets
@@ -5577,7 +5699,7 @@ pub(crate) fn build_bundles(
                 None
             } else {
                 state.active_hold(col).and_then(|active| {
-                    let note = notes(state).get(active.note_index)?;
+                    let note = state.notes().get(active.note_index)?;
                     if !hold_explosion_active(Some(active), current_beat, note.beat) {
                         return None;
                     }
@@ -5700,7 +5822,7 @@ pub(crate) fn build_bundles(
             if !receptor_hidden_by_song_lua
                 && !profile.hide_targets
                 && receptor_alpha > f32::EPSILON
-                && let Some((alpha, zoom)) = receptor_glow_visual_for_col(state, col)
+                && let Some((alpha, zoom)) = state.receptor_glow_visual_for_col(col)
                 && let Some(glow_slot) = receptor_ns
                     .receptor_glow
                     .get(i)
@@ -5781,7 +5903,8 @@ pub(crate) fn build_bundles(
         }
         // Tap explosions (receptor noteflash / GhostArrow) are independent of
         // the "Hide Combo Explosions" UI option, which only affects combo splodes.
-        for (i, active_opt) in tap_explosions_for_columns(state, col_start, num_cols)
+        for (i, active_opt) in state
+            .tap_explosions_for_columns(col_start, num_cols)
             .iter()
             .enumerate()
         {
@@ -5897,7 +6020,8 @@ pub(crate) fn build_bundles(
             }
         }
         // Mine explosions
-        for (i, active_opt) in mine_explosions_for_columns(state, col_start, num_cols)
+        for (i, active_opt) in state
+            .mine_explosions_for_columns(col_start, num_cols)
             .iter()
             .enumerate()
         {
@@ -5995,7 +6119,7 @@ pub(crate) fn build_bundles(
             }
         }
         let mut render_hold = |note_index: usize| {
-            let note = &notes(state)[note_index];
+            let note = &state.notes()[note_index];
             if note.column < col_start || note.column >= col_end {
                 return;
             }
@@ -7674,7 +7798,7 @@ pub(crate) fn build_bundles(
             let col = col_start + local_col;
             for_each_visible_hold_index(
                 state.lane_hold_indices(col),
-                notes(state),
+                state.notes(),
                 visible_row_range,
                 |note_index| render_hold(note_index),
             );
@@ -7685,7 +7809,7 @@ pub(crate) fn build_bundles(
             .filter(|&idx| {
                 idx >= note_start
                     && idx < note_end
-                    && !hold_overlaps_visible_window(idx, notes(state), visible_row_range)
+                    && !hold_overlaps_visible_window(idx, state.notes(), visible_row_range)
             });
         for note_index in extra_hold_indices {
             render_hold(note_index);
@@ -7713,13 +7837,13 @@ pub(crate) fn build_bundles(
                 .and_then(|slot| slot.as_ref());
             for_each_visible_note_index(
                 column_note_indices,
-                notes(state),
+                state.notes(),
                 // ITGmania gets tap candidates from a row-keyed TrackMap via
                 // GetTapNoteRangeInclusive, then NoteDisplay::IsOnScreen
                 // performs the exact ArrowEffects visibility check below.
                 visible_row_range,
                 |note_index| {
-                    let note = &notes(state)[note_index];
+                    let note = &state.notes()[note_index];
                     if matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
                         return;
                     }
@@ -7732,7 +7856,7 @@ pub(crate) fn build_bundles(
                                 return;
                             }
                         } else if note.result.is_some()
-                            && row_hides_completed_note(state, player_idx, note.row_index)
+                            && state.row_hides_completed_note(player_idx, note.row_index)
                         {
                             return;
                         }
@@ -8738,22 +8862,21 @@ pub(crate) fn build_bundles(
             styles[style_count] = profile_data::ErrorBarStyle::Average;
             style_count += 1;
         }
-        let blue_fantastic_window_s =
-            Some(crate::game::gameplay::player_blue_window_ms(state, player_idx) / 1000.0);
+        let blue_fantastic_window_s = Some(player_blue_window_ms(state, player_idx) / 1000.0);
 
         for style in styles.into_iter().take(style_count) {
             match style {
                 profile_data::ErrorBarStyle::Monochrome => {
                     let bar_h = error_bar_max_h;
                     let max_window_ix = error_bar_trim_max_window_ix(profile.error_bar_trim);
-                    let max_offset_s = timing_profile_windows_s(state)[max_window_ix];
+                    let max_offset_s = state.timing_profile_windows_s()[max_window_ix];
                     let wscale = if max_offset_s.is_finite() && max_offset_s > 0.0 {
                         (ERROR_BAR_WIDTH_MONOCHROME * 0.5) / max_offset_s
                     } else {
                         0.0
                     };
                     let (bounds_s, bounds_len) = error_bar_boundaries_s(
-                        timing_profile_windows_s(state),
+                        state.timing_profile_windows_s(),
                         blue_fantastic_window_s,
                         profile.show_fa_plus_window,
                         profile.error_bar_trim,
@@ -8870,14 +8993,14 @@ pub(crate) fn build_bundles(
                 }
                 profile_data::ErrorBarStyle::Colorful => {
                     let max_window_ix = error_bar_trim_max_window_ix(profile.error_bar_trim);
-                    let max_offset_s = timing_profile_windows_s(state)[max_window_ix];
+                    let max_offset_s = state.timing_profile_windows_s()[max_window_ix];
                     let wscale = if max_offset_s.is_finite() && max_offset_s > 0.0 {
                         (ERROR_BAR_WIDTH_COLORFUL * 0.5) / max_offset_s
                     } else {
                         0.0
                     };
                     let (bounds_s, bounds_len) = error_bar_boundaries_s(
-                        timing_profile_windows_s(state),
+                        state.timing_profile_windows_s(),
                         blue_fantastic_window_s,
                         profile.show_fa_plus_window,
                         profile.error_bar_trim,
@@ -8963,14 +9086,14 @@ pub(crate) fn build_bundles(
                 }
                 profile_data::ErrorBarStyle::Highlight => {
                     let max_window_ix = error_bar_trim_max_window_ix(profile.error_bar_trim);
-                    let max_offset_s = timing_profile_windows_s(state)[max_window_ix];
+                    let max_offset_s = state.timing_profile_windows_s()[max_window_ix];
                     let wscale = if max_offset_s.is_finite() && max_offset_s > 0.0 {
                         (ERROR_BAR_WIDTH_COLORFUL * 0.5) / max_offset_s
                     } else {
                         0.0
                     };
                     let (bounds_s, bounds_len) = error_bar_boundaries_s(
-                        timing_profile_windows_s(state),
+                        state.timing_profile_windows_s(),
                         blue_fantastic_window_s,
                         profile.show_fa_plus_window,
                         profile.error_bar_trim,
@@ -9068,7 +9191,7 @@ pub(crate) fn build_bundles(
                 }
                 profile_data::ErrorBarStyle::Average => {
                     let max_window_ix = error_bar_trim_max_window_ix(profile.error_bar_trim);
-                    let max_offset_s = timing_profile_windows_s(state)[max_window_ix];
+                    let max_offset_s = state.timing_profile_windows_s()[max_window_ix];
                     let wscale = if max_offset_s.is_finite() && max_offset_s > 0.0 {
                         (ERROR_BAR_WIDTH_AVERAGE * 0.5 * avg_error_bar_mini_scale) / max_offset_s
                     } else {
@@ -9138,7 +9261,7 @@ pub(crate) fn build_bundles(
             && let Some(long_tick) = p.error_bar_long_avg_tick
         {
             let max_window_ix = error_bar_trim_max_window_ix(profile.error_bar_trim);
-            let max_offset_s = timing_profile_windows_s(state)[max_window_ix];
+            let max_offset_s = state.timing_profile_windows_s()[max_window_ix];
             let bar_width = if show_error_bar_average {
                 ERROR_BAR_WIDTH_AVERAGE
             } else if show_error_bar_colorful {
@@ -9202,7 +9325,7 @@ pub(crate) fn build_bundles(
                     error_bar_text_scalable_zoom(
                         text.offset_ms.abs(),
                         text.scale_start_ms,
-                        timing_profile_windows_s(state)[0] * 1000.0,
+                        state.timing_profile_windows_s()[0] * 1000.0,
                     )
                 } else {
                     ERROR_BAR_TEXT_ZOOM
@@ -9367,7 +9490,7 @@ pub(crate) fn build_bundles(
                         .timing()
                         .get_bpm_for_beat(state.current_beat_display())
                         / 60.0;
-                    let rate = music_rate(state);
+                    let rate = state.music_rate();
                     if cur_bps.is_finite() && cur_bps > 0.0 && rate.is_finite() && rate > 0.0 {
                         let measure_seconds = 4.0 / (cur_bps * rate);
                         let curr_time = state.current_beat_display() / (cur_bps * rate);
@@ -9516,10 +9639,10 @@ pub(crate) fn build_bundles(
         } else {
             1.0
         };
-        for (i, held_miss) in
-            crate::game::gameplay::held_miss_judgments_for_columns(state, col_start, num_cols)
-                .iter()
-                .enumerate()
+        for (i, held_miss) in state
+            .held_miss_judgments_for_columns(col_start, num_cols)
+            .iter()
+            .enumerate()
         {
             let Some(render_info) = held_miss.as_ref() else {
                 continue;
@@ -9562,10 +9685,10 @@ pub(crate) fn build_bundles(
             ));
         }
     }
-    for (i, hold_judgment) in
-        crate::game::gameplay::hold_judgments_for_columns(state, col_start, num_cols)
-            .iter()
-            .enumerate()
+    for (i, hold_judgment) in state
+        .hold_judgments_for_columns(col_start, num_cols)
+        .iter()
+        .enumerate()
     {
         if blind_active {
             continue;

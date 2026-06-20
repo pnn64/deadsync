@@ -850,15 +850,16 @@ pub fn save_itl_data_from_gameplay(
     gs: &gameplay::State,
 ) -> [Option<ItlEventProgress>; MAX_PLAYERS] {
     let mut progress: [Option<ItlEventProgress>; MAX_PLAYERS] = std::array::from_fn(|_| None);
-    if gameplay::autoplay_used(gs) {
+    if gs.autoplay_used() {
         debug!("Skipping ITL save: autoplay or replay was used during this stage.");
         return progress;
     }
 
-    for (player_idx, chart) in gameplay::charts(gs)
+    for (player_idx, chart) in gs
+        .charts()
         .iter()
         .enumerate()
-        .take(gameplay::num_players(gs).min(MAX_PLAYERS))
+        .take(gs.num_players().min(MAX_PLAYERS))
     {
         let side = gameplay_side_for_player(gs, player_idx);
         let Some(profile_id) = profile::active_local_profile_id_for_side(side) else {
@@ -886,7 +887,7 @@ pub fn save_itl_data_from_gameplay(
         }
         let prev_totals = itl_point_totals(&data);
 
-        let song = gameplay::song(gs);
+        let song = gs.song();
         let Some(song_dir) = itl_song_dir(song) else {
             continue;
         };
@@ -901,7 +902,7 @@ pub fn save_itl_data_from_gameplay(
 
         let prev = data.hash_map.get(chart_hash).cloned();
         let (passing_points, max_scoring_points) =
-            parse_itl_points(gameplay::charts(gs)[player_idx].chart_name.as_str())
+            parse_itl_points(gs.charts()[player_idx].chart_name.as_str())
                 .or_else(|| {
                     prev.as_ref()
                         .map(|entry| (entry.passing_points, entry.max_scoring_points))
@@ -909,19 +910,19 @@ pub fn save_itl_data_from_gameplay(
                 .unwrap_or((0, 0));
         let max_points = passing_points.saturating_add(max_scoring_points);
         let judgments = itl_judgments_from_gameplay(gs, player_idx);
-        let (start, end) = crate::game::gameplay::note_range_for_player(gs, player_idx);
-        let totals = gameplay::display_totals_for_player(gs, player_idx);
+        let (start, end) = gs.note_range_for_player(player_idx);
+        let totals = gs.display_totals_for_player(player_idx);
         let ex_percent = judgment::calculate_ex_score_from_notes(
-            &gameplay::notes(gs)[start..end],
-            &gameplay::note_time_cache_ns(gs)[start..end],
-            &gameplay::hold_end_time_cache_ns(gs)[start..end],
+            &gs.notes()[start..end],
+            &gs.note_time_cache_ns()[start..end],
+            &gs.hold_end_time_cache_ns()[start..end],
             totals.total_steps,
             totals.holds_total,
             totals.rolls_total,
             totals.mines_total,
-            gameplay::players(gs)[player_idx]
+            gs.players()[player_idx]
                 .fail_time
-                .map(gameplay::song_time_ns_from_seconds),
+                .map(deadsync_core::song_time::song_time_ns_from_seconds),
             false,
         );
         let current_run_ex = ex_hundredths(ex_percent);
@@ -937,7 +938,7 @@ pub fn save_itl_data_from_gameplay(
             max_scoring_points,
             max_points,
             rank: None,
-            steps_type: itl_steps_type(gameplay::charts(gs)[player_idx].as_ref()).to_string(),
+            steps_type: itl_steps_type(gs.charts()[player_idx].as_ref()).to_string(),
             passes: prev
                 .as_ref()
                 .map_or(1, |entry| entry.passes.saturating_add(1)),
@@ -1035,19 +1036,19 @@ pub fn save_itl_data_from_gameplay(
 }
 
 pub(super) fn current_score_hundredths(gs: &gameplay::State, player_idx: usize) -> u32 {
-    let (start, end) = crate::game::gameplay::note_range_for_player(gs, player_idx);
-    let totals = gameplay::display_totals_for_player(gs, player_idx);
+    let (start, end) = gs.note_range_for_player(player_idx);
+    let totals = gs.display_totals_for_player(player_idx);
     let ex_percent = judgment::calculate_ex_score_from_notes(
-        &gameplay::notes(gs)[start..end],
-        &gameplay::note_time_cache_ns(gs)[start..end],
-        &gameplay::hold_end_time_cache_ns(gs)[start..end],
+        &gs.notes()[start..end],
+        &gs.note_time_cache_ns()[start..end],
+        &gs.hold_end_time_cache_ns()[start..end],
         totals.total_steps,
         totals.holds_total,
         totals.rolls_total,
         totals.mines_total,
-        gameplay::players(gs)[player_idx]
+        gs.players()[player_idx]
             .fail_time
-            .map(gameplay::song_time_ns_from_seconds),
+            .map(deadsync_core::song_time::song_time_ns_from_seconds),
         false,
     );
     ex_hundredths(ex_percent)
@@ -1057,7 +1058,7 @@ pub(super) fn current_score_hundredths_for_submit(
     gs: &gameplay::State,
     player_idx: usize,
 ) -> Option<u32> {
-    itl_all_timing_windows_enabled(&gameplay::player_profiles(gs)[player_idx])
+    itl_all_timing_windows_enabled(&gs.profiles()[player_idx])
         .then(|| current_score_hundredths(gs, player_idx))
 }
 
@@ -1662,7 +1663,7 @@ fn loaded_chart_no_cmod_for_gameplay(
     player_idx: usize,
     profile_id: &str,
 ) -> Option<bool> {
-    let song = gameplay::song(gs);
+    let song = gs.song();
     let song_dir = itl_song_dir(song)?;
     let state = ITL_SCORE_CACHE.lock().unwrap();
     let data = state.loaded_profiles.get(profile_id)?;
@@ -1671,15 +1672,15 @@ fn loaded_chart_no_cmod_for_gameplay(
     }
     let prev = data
         .hash_map
-        .get(gameplay::charts(gs)[player_idx].short_hash.as_str());
+        .get(gs.charts()[player_idx].short_hash.as_str());
     Some(chart_no_cmod(song, prev))
 }
 
 pub fn should_warn_cmod_for_itl_chart(gs: &gameplay::State, player_idx: usize) -> bool {
-    if player_idx >= gameplay::num_players(gs).min(MAX_PLAYERS)
-        || gameplay::course_display_is_course_stage(gs)
+    if player_idx >= gs.num_players().min(MAX_PLAYERS)
+        || gs.course_display_is_course_stage()
         || !matches!(
-            gameplay::player_profiles(gs)[player_idx].scroll_speed,
+            gs.profiles()[player_idx].scroll_speed,
             ScrollSpeedSetting::CMod(_)
         )
     {
@@ -1694,7 +1695,7 @@ pub fn should_warn_cmod_for_itl_chart(gs: &gameplay::State, player_idx: usize) -
         return no_cmod;
     }
 
-    let song = gameplay::song(gs);
+    let song = gs.song();
     let Some(group_name) = itl_group_name(song) else {
         return false;
     };
@@ -1806,10 +1807,10 @@ fn itl_all_timing_windows_enabled(profile: &profile_data::Profile) -> bool {
 
 fn itl_eval_state(gs: &gameplay::State, player_idx: usize, data: &ItlFileData) -> ItlEvalState {
     let used_cmod = matches!(
-        gameplay::player_profiles(gs)[player_idx].scroll_speed,
+        gs.profiles()[player_idx].scroll_speed,
         ScrollSpeedSetting::CMod(_)
     );
-    let song = gameplay::song(gs);
+    let song = gs.song();
     let Some(song_dir) = itl_song_dir(song) else {
         return ItlEvalState {
             active: false,
@@ -1829,27 +1830,24 @@ fn itl_eval_state(gs: &gameplay::State, player_idx: usize, data: &ItlFileData) -
         };
     }
 
-    let chart_hash = gameplay::charts(gs)[player_idx].short_hash.as_str();
+    let chart_hash = gs.charts()[player_idx].short_hash.as_str();
     let prev = data.hash_map.get(chart_hash);
     let chart_no_cmod = chart_no_cmod(song, prev);
     let gs_valid = groovestats_eval_state_from_gameplay(gs, player_idx);
-    let gameplay_music_rate = gameplay::music_rate(gs);
+    let gameplay_music_rate = gs.music_rate();
     let rate = if gameplay_music_rate.is_finite() && gameplay_music_rate > 0.0 {
         gameplay_music_rate
     } else {
         1.0
     };
-    let remove_mask = gameplay::player_profiles(gs)[player_idx]
-        .remove_active_mask
-        .bits();
+    let remove_mask = gs.profiles()[player_idx].remove_active_mask.bits();
     let mines_enabled = (remove_mask & (1u8 << 1)) == 0;
-    let all_timing_windows_enabled =
-        itl_all_timing_windows_enabled(&gameplay::player_profiles(gs)[player_idx]);
+    let all_timing_windows_enabled = itl_all_timing_windows_enabled(&gs.profiles()[player_idx]);
     let passed = gameplay_run_passed(
-        gameplay::song_completed_naturally(gs),
-        gameplay::players(gs)[player_idx].is_failing,
-        gameplay::players(gs)[player_idx].life,
-        gameplay::players(gs)[player_idx].fail_time.is_some(),
+        gs.song_completed_naturally(),
+        gs.players()[player_idx].is_failing,
+        gs.players()[player_idx].life,
+        gs.players()[player_idx].fail_time.is_some(),
     );
 
     let mut reason_lines = Vec::with_capacity(5);
@@ -1886,7 +1884,7 @@ fn itl_eval_state(gs: &gameplay::State, player_idx: usize, data: &ItlFileData) -
 }
 
 pub fn itl_eval_state_from_gameplay(gs: &gameplay::State, player_idx: usize) -> ItlEvalState {
-    if player_idx >= gameplay::num_players(gs).min(MAX_PLAYERS) {
+    if player_idx >= gs.num_players().min(MAX_PLAYERS) {
         return ItlEvalState::default();
     }
     let side = gameplay_side_for_player(gs, player_idx);

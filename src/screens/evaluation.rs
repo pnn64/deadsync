@@ -31,6 +31,7 @@ use deadsync_chart::ChartData;
 use deadsync_chart::SongData;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_core::note::NoteType;
+use deadsync_gameplay::{FantasticWindowOptions, blue_fantastic_window_ms};
 use deadsync_online::lobbies as lobby_data;
 use deadsync_rules::judgment::{self, JudgeGrade, Judgment, TimingWindow};
 use deadsync_rules::note::Note;
@@ -53,6 +54,23 @@ use chrono::Local;
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
+
+#[inline(always)]
+fn player_blue_window_ms(gs: &crate::game::gameplay::State, player_idx: usize) -> f32 {
+    let base = gs.default_fa_plus_window_s();
+    let Some(profile) = gs.profiles().get(player_idx) else {
+        return base * 1000.0;
+    };
+    blue_fantastic_window_ms(FantasticWindowOptions {
+        base_fa_plus_s: base,
+        custom_fantastic_window_s: profile.custom_fantastic_window.then(|| {
+            f32::from(profile_data::clamp_custom_fantastic_window_ms(
+                profile.custom_fantastic_window_ms,
+            )) / 1000.0
+        }),
+        fa_plus_10ms_blue_window: profile.fa_plus_10ms_blue_window,
+    })
+}
 const TRANSITION_OUT_DURATION: f32 = 0.4;
 // Simply Love ScreenEvaluationStage in/default.lua (non-SRPG9 branch)
 const EVAL_STAGE_IN_BLACK_DELAY_SECONDS: f32 = 0.2;
@@ -2255,22 +2273,21 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         scores::submit_groovestats_payloads_from_gameplay(&gs);
         scores::submit_arrowcloud_payloads_from_gameplay(&gs, gs.pack_group.as_ref());
 
-        let cols_per_player = crate::game::gameplay::cols_per_player(&gs);
+        let cols_per_player = gs.cols_per_player();
         for (player_idx, score_info_slot) in score_info
             .iter_mut()
             .enumerate()
-            .take(crate::game::gameplay::num_players(&gs).min(MAX_PLAYERS))
+            .take(gs.num_players().min(MAX_PLAYERS))
         {
             let noteskin = gs.noteskin_assets.noteskin[player_idx].take();
-            let (start, end) = crate::game::gameplay::note_range_for_player(&gs, player_idx);
-            let notes = &crate::game::gameplay::notes(&gs)[start..end];
-            let note_times = &crate::game::gameplay::note_time_cache_ns(&gs)[start..end];
-            let hold_end_times = &crate::game::gameplay::hold_end_time_cache_ns(&gs)[start..end];
-            let p = &crate::game::gameplay::players(&gs)[player_idx];
-            let prof = &crate::game::gameplay::player_profiles(&gs)[player_idx];
+            let (start, end) = gs.note_range_for_player(player_idx);
+            let notes = &gs.notes()[start..end];
+            let note_times = &gs.note_time_cache_ns()[start..end];
+            let hold_end_times = &gs.hold_end_time_cache_ns()[start..end];
+            let p = &gs.players()[player_idx];
+            let prof = &gs.profiles()[player_idx];
             let col_offset = player_idx.saturating_mul(cols_per_player);
-            let stream_segments =
-                crate::game::gameplay::stream_segments_for_results(&gs, player_idx);
+            let stream_segments = gs.stream_segments_for_results(player_idx);
 
             // Compute timing statistics across all non-miss tap judgments
             let stats = timing_stats::compute_note_timing_stats(notes);
@@ -2356,31 +2373,29 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                     tw[idx - 1]
                 }
             };
-            let graph_first_second =
-                0.0_f32.min(crate::game::gameplay::timing(&gs).get_time_for_beat(0.0));
+            let graph_first_second = 0.0_f32.min(gs.timing().get_time_for_beat(0.0));
             let chart_last_second = {
                 let mut latest_ns: i64 = i64::MIN;
                 for (idx, &t_ns) in note_times.iter().enumerate() {
-                    if !crate::game::gameplay::song_time_ns_invalid(t_ns) && t_ns > latest_ns {
+                    if !deadsync_core::song_time::song_time_ns_invalid(t_ns) && t_ns > latest_ns {
                         latest_ns = t_ns;
                     }
                     if let Some(end_ns) = hold_end_times.get(idx).copied().flatten()
-                        && !crate::game::gameplay::song_time_ns_invalid(end_ns)
+                        && !deadsync_core::song_time::song_time_ns_invalid(end_ns)
                         && end_ns > latest_ns
                     {
                         latest_ns = end_ns;
                     }
                 }
                 if latest_ns == i64::MIN {
-                    (crate::game::gameplay::song(&gs).total_length_seconds.max(0) as f32)
-                        .max(graph_first_second + 0.001)
+                    (gs.song().total_length_seconds.max(0) as f32).max(graph_first_second + 0.001)
                 } else {
-                    crate::game::gameplay::song_time_ns_to_seconds(latest_ns)
+                    deadsync_core::song_time::song_time_ns_to_seconds(latest_ns)
                         .max(graph_first_second + 0.001)
                 }
             };
             let graph_last_second = chart_last_second;
-            let totals = crate::game::gameplay::display_totals_for_player(&gs, player_idx);
+            let totals = gs.display_totals_for_player(player_idx);
 
             let score_percent = judgment::calculate_itg_score_percent_from_counts(
                 &p.scoring_counts,
@@ -2389,7 +2404,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 p.mines_hit_for_score,
                 totals.possible_grade_points,
             );
-            let side = if crate::game::gameplay::num_players(&gs) >= 2 {
+            let side = if gs.num_players() >= 2 {
                 if player_idx == 0 {
                     profile_data::PlayerSide::P1
                 } else {
@@ -2398,62 +2413,51 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             } else {
                 profile::get_session_player_side()
             };
-            let machine_records = if let Some(records) = machine_records_by_hash
-                .get(&crate::game::gameplay::charts(&gs)[player_idx].short_hash)
+            let machine_records = if let Some(records) =
+                machine_records_by_hash.get(&gs.charts()[player_idx].short_hash)
             {
                 records.clone()
             } else {
                 let records = scores::get_machine_leaderboard_local(
-                    &crate::game::gameplay::charts(&gs)[player_idx].short_hash,
+                    &gs.charts()[player_idx].short_hash,
                     usize::MAX,
                 );
-                machine_records_by_hash.insert(
-                    crate::game::gameplay::charts(&gs)[player_idx]
-                        .short_hash
-                        .clone(),
-                    records.clone(),
-                );
+                machine_records_by_hash
+                    .insert(gs.charts()[player_idx].short_hash.clone(), records.clone());
                 records
             };
             let machine_record_highlight_rank =
                 score_data::leaderboard_rank_for_score(machine_records.as_slice(), score_percent);
             let personal_records = scores::get_personal_leaderboard_local_for_side(
-                &crate::game::gameplay::charts(&gs)[player_idx].short_hash,
+                &gs.charts()[player_idx].short_hash,
                 side,
                 usize::MAX,
             );
             let personal_record_highlight_rank =
                 score_data::leaderboard_rank_for_score(personal_records.as_slice(), score_percent);
-            let score_valid = crate::game::gameplay::score_valid_for_player(&gs, player_idx)
-                && !crate::game::gameplay::autoplay_used(&gs);
+            let score_valid = gs.score_valid_for_player(player_idx) && !gs.autoplay_used();
             // Simply Love's "Disqualified" label is driven by PlayerStageStats:IsDisqualified(),
             // not by our broader local ranking-validity heuristics.
-            let disqualified = crate::game::gameplay::autoplay_used(&gs);
+            let disqualified = gs.autoplay_used();
             let local_score_valid = score_valid && !disqualified;
             let groovestats = scores::groovestats_eval_state_from_gameplay(&gs, player_idx);
             let itl = scores::itl_eval_state_from_gameplay(&gs, player_idx);
             let failed = score_data::gameplay_run_failed(p.is_failing, p.fail_time.is_some());
             let passed = score_data::gameplay_run_passed(
-                crate::game::gameplay::song_completed_naturally(&gs),
+                gs.song_completed_naturally(),
                 p.is_failing,
                 p.life,
                 p.fail_time.is_some(),
             );
-            let chart_hash = crate::game::gameplay::charts(&gs)[player_idx]
-                .short_hash
-                .as_str();
-            let lua_submit_allowed = score_data::lua_submit_allowed(
-                crate::game::gameplay::song(&gs).has_lua,
-                chart_hash,
-            );
-            let course_life_submit_eligible =
-                crate::game::gameplay::course_stage_life_submit_eligible(&gs, player_idx);
+            let chart_hash = gs.charts()[player_idx].short_hash.as_str();
+            let lua_submit_allowed = score_data::lua_submit_allowed(gs.song().has_lua, chart_hash);
+            let course_life_submit_eligible = gs.course_stage_life_submit_eligible(player_idx);
             let expected_groovestats_submit = cfg.enable_groovestats
                 && passed
                 && groovestats.valid
                 && course_life_submit_eligible
                 && prof.groovestats_is_pad_player
-                && (!crate::game::gameplay::course_display_is_course_stage(&gs)
+                && (!gs.course_display_is_course_stage()
                     || cfg.autosubmit_course_scores_individually)
                 && !prof.groovestats_api_key.trim().is_empty();
             let expected_arrowcloud_submit = cfg.enable_arrowcloud
@@ -2461,7 +2465,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 && (passed || (failed && cfg.submit_arrowcloud_fails))
                 && lua_submit_allowed
                 && (course_life_submit_eligible || (failed && cfg.submit_arrowcloud_fails))
-                && (!crate::game::gameplay::course_display_is_course_stage(&gs)
+                && (!gs.course_display_is_course_stage()
                     || cfg.autosubmit_course_scores_individually)
                 && !prof.arrowcloud_api_key.trim().is_empty();
             let earned_machine_record = local_score_valid
@@ -2479,7 +2483,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
 
             let mut grade = eval_grade_for_result(
                 p.is_failing,
-                crate::game::gameplay::song_completed_naturally(&gs),
+                gs.song_completed_naturally(),
                 disqualified,
                 score_percent,
             );
@@ -2487,13 +2491,14 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             // Per-window counts for the FA+ pane should reflect tracked
             // gameplay counts. These continue after failure but skip live
             // autoplay, matching Simply Love's JudgmentMessage guards.
-            let window_counts = crate::game::gameplay::display_window_counts(&gs, player_idx, None);
-            let window_counts_10ms = crate::game::gameplay::display_window_counts(
-                &gs,
+            let blue_window_ms = player_blue_window_ms(&gs, player_idx);
+            let window_counts = gs.display_window_counts(player_idx, None, blue_window_ms);
+            let window_counts_10ms = gs.display_window_counts(
                 player_idx,
                 Some(timing_stats::FA_PLUS_W010_MS),
+                blue_window_ms,
             );
-            let ex_data = crate::game::gameplay::display_scored_ex_score_data(&gs, player_idx);
+            let ex_data = gs.display_scored_ex_score_data(player_idx, blue_window_ms);
             let ex_score_percent = judgment::ex_score_percent(&ex_data);
             let hard_ex_score_percent = judgment::hard_ex_score_percent(&ex_data);
 
@@ -2506,7 +2511,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 col_offset,
                 prof.show_fa_plus_window,
             );
-            let gameplay_music_rate = crate::game::gameplay::music_rate(&gs);
+            let gameplay_music_rate = gs.music_rate();
             let music_rate = if gameplay_music_rate.is_finite() && gameplay_music_rate > 0.0 {
                 gameplay_music_rate
             } else {
@@ -2515,7 +2520,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
 
             *score_info_slot = Some(ScoreInfo {
                 song: gs.song_arc(),
-                chart: crate::game::gameplay::charts(&gs)[player_idx].clone(),
+                chart: gs.charts()[player_idx].clone(),
                 course_graph_stages: Vec::new(),
                 side,
                 profile_name: prof.display_name.clone(),
@@ -2530,12 +2535,12 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
                 earned_grade_points: p.earned_grade_points,
                 possible_grade_points: totals.possible_grade_points,
                 grade,
-                speed_mod: crate::game::gameplay::scroll_speed_for_player(&gs, player_idx),
+                speed_mod: gs.scroll_speed_for_player(player_idx),
                 mods_text: crate::screens::components::gameplay::notefield::gameplay_mods_text(
                     &gs, player_idx,
                 ),
                 hands_achieved: p.hands_achieved,
-                hands_total: crate::game::gameplay::hands_total_for_player(&gs, player_idx),
+                hands_total: gs.hands_total_for_player(player_idx),
                 holds_held: p.holds_held,
                 holds_held_for_score: p.holds_held_for_score,
                 holds_total: totals.holds_total,

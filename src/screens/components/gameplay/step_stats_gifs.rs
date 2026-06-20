@@ -93,7 +93,7 @@ pub fn push_step_stats_extra(
         zoom = actor_frame_zoom * (if wide { 1.3 } else { 0.3 });
     }
 
-    let frame = frame_for_extra(extra, crate::game::gameplay::current_beat(state));
+    let frame = frame_for_extra(extra, state.current_beat());
     if layout.crop {
         actors.push(act!(sprite(layout.texture):
             align(align_x, 0.5):

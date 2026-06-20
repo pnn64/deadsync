@@ -15,6 +15,10 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use deadsync_gameplay::{
+    ChartAttackEffects, GameplayAttackMode, ScoreValidityOptions,
+    score_invalid_reason_lines_for_options,
+};
 use deadsync_online::arrowcloud::{self as arrowcloud_api, ARROWCLOUD_BULK_MAX_HASHES};
 use deadsync_online::boxed_request_error;
 use deadsync_online::groovestats::{self as groovestats_api, GrooveStatsSubmitApiPlayer};
@@ -28,6 +32,40 @@ mod itl;
 #[inline(always)]
 fn active_groovestats_service() -> groovestats_api::Service {
     online_groovestats::active_service()
+}
+
+#[inline(always)]
+fn gameplay_attack_mode(attack_mode: profile_data::AttackMode) -> GameplayAttackMode {
+    match attack_mode {
+        profile_data::AttackMode::Off => GameplayAttackMode::Off,
+        profile_data::AttackMode::On => GameplayAttackMode::On,
+        profile_data::AttackMode::Random => GameplayAttackMode::Random,
+    }
+}
+
+#[inline(always)]
+fn chart_effects_from_profile(profile: &profile_data::Profile) -> ChartAttackEffects {
+    ChartAttackEffects {
+        insert_mask: profile.insert_active_mask.bits(),
+        remove_mask: profile.remove_active_mask.bits(),
+        holds_mask: profile.holds_active_mask.bits(),
+        turn_bits: 0,
+    }
+}
+
+fn score_invalid_reason_lines_for_profile(
+    chart: &deadsync_chart::ChartData,
+    profile: &profile_data::Profile,
+    music_rate: f32,
+) -> Vec<&'static str> {
+    score_invalid_reason_lines_for_options(
+        chart,
+        ScoreValidityOptions {
+            chart_effects: chart_effects_from_profile(profile),
+            attack_mode: gameplay_attack_mode(profile.attack_mode),
+            music_rate,
+        },
+    )
 }
 
 pub use arrowcloud::{
@@ -1319,25 +1357,25 @@ fn judgment_counts_arr(p: &gameplay::PlayerRuntime) -> [u32; 6] {
 }
 
 fn replay_edges_for_player(gs: &gameplay::State, player: usize) -> Vec<LocalReplayEdge> {
-    if player >= gameplay::num_players(gs) {
+    if player >= gs.num_players() {
         return Vec::new();
     }
 
-    let (col_start, col_end) = if gameplay::num_players(gs) <= 1 {
-        (0usize, gameplay::num_cols(gs))
+    let (col_start, col_end) = if gs.num_players() <= 1 {
+        (0usize, gs.num_cols())
     } else {
-        let start = player.saturating_mul(gameplay::cols_per_player(gs));
-        (start, start.saturating_add(gameplay::cols_per_player(gs)))
+        let start = player.saturating_mul(gs.cols_per_player());
+        (start, start.saturating_add(gs.cols_per_player()))
     };
 
     let mut out = Vec::new();
-    let replay_edges = gameplay::recorded_replay_edges(gs);
+    let replay_edges = gs.recorded_replay_edges();
     out.reserve(replay_edges.len().min(4096));
     for e in replay_edges {
         let lane = e.lane_index as usize;
         if lane < col_start
             || lane >= col_end
-            || gameplay::song_time_ns_invalid(e.event_music_time_ns)
+            || deadsync_core::song_time::song_time_ns_invalid(e.event_music_time_ns)
         {
             continue;
         }
@@ -1352,7 +1390,7 @@ fn replay_edges_for_player(gs: &gameplay::State, player: usize) -> Vec<LocalRepl
 }
 
 pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
-    if gameplay::autoplay_used(gs) {
+    if gs.autoplay_used() {
         debug!("Skipping local score save: autoplay was used during this stage.");
         return;
     }
@@ -1365,8 +1403,8 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
     // Parameter retained for parity with Simply Love helpers; currently unused.
     let mines_disabled = false;
 
-    for player_idx in 0..gameplay::num_players(gs) {
-        let side = if gameplay::num_players(gs) >= 2 {
+    for player_idx in 0..gs.num_players() {
+        let side = if gs.num_players() >= 2 {
             if player_idx == 0 {
                 profile_data::PlayerSide::P1
             } else {
@@ -1379,12 +1417,11 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
         let Some(profile_id) = profile::active_local_profile_id_for_side(side) else {
             continue;
         };
-        if !gameplay::score_valid_for_player(gs, player_idx) {
-            let reasons = gameplay::score_invalid_reason_lines_for_chart(
-                &gameplay::charts(gs)[player_idx],
-                &gameplay::player_profiles(gs)[player_idx],
-                gameplay::scroll_speed_for_player(gs, player_idx),
-                gameplay::music_rate(gs),
+        if !gs.score_valid_for_player(player_idx) {
+            let reasons = score_invalid_reason_lines_for_profile(
+                &gs.charts()[player_idx],
+                &gs.profiles()[player_idx],
+                gs.music_rate(),
             );
             let detail = if reasons.is_empty() {
                 "ranking-invalid modifiers were used".to_string()
@@ -1399,9 +1436,9 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
             continue;
         }
 
-        let chart_hash = gameplay::charts(gs)[player_idx].short_hash.as_str();
-        let p = &gameplay::players(gs)[player_idx];
-        let totals = gameplay::display_totals_for_player(gs, player_idx);
+        let chart_hash = gs.charts()[player_idx].short_hash.as_str();
+        let p = &gs.players()[player_idx];
+        let totals = gs.display_totals_for_player(player_idx);
 
         let score_percent = judgment::calculate_itg_score_percent_from_counts(
             &p.scoring_counts,
@@ -1412,7 +1449,7 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
         );
 
         let mut grade = if gameplay_run_passed(
-            gameplay::song_completed_naturally(gs),
+            gs.song_completed_naturally(),
             p.is_failing,
             p.life,
             p.fail_time.is_some(),
@@ -1422,10 +1459,10 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
             Grade::Failed
         };
 
-        let (start, end) = gameplay::note_range_for_player(gs, player_idx);
-        let notes = &gameplay::notes(gs)[start..end];
-        let note_times = &gameplay::note_time_cache_ns(gs)[start..end];
-        let hold_end_times = &gameplay::hold_end_time_cache_ns(gs)[start..end];
+        let (start, end) = gs.note_range_for_player(player_idx);
+        let notes = &gs.notes()[start..end];
+        let note_times = &gs.note_time_cache_ns()[start..end];
+        let hold_end_times = &gs.hold_end_time_cache_ns()[start..end];
 
         let ex_score_percent = judgment::calculate_ex_score_from_notes(
             notes,
@@ -1435,7 +1472,8 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
             totals.holds_total,
             totals.rolls_total,
             totals.mines_total,
-            p.fail_time.map(gameplay::song_time_ns_from_seconds),
+            p.fail_time
+                .map(deadsync_core::song_time::song_time_ns_from_seconds),
             mines_disabled,
         );
         let hard_ex_score_percent = judgment::calculate_hard_ex_score_from_notes(
@@ -1446,7 +1484,8 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
             totals.holds_total,
             totals.rolls_total,
             totals.mines_total,
-            p.fail_time.map(gameplay::song_time_ns_from_seconds),
+            p.fail_time
+                .map(deadsync_core::song_time::song_time_ns_from_seconds),
             mines_disabled,
         );
 
@@ -1454,14 +1493,14 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
         grade = promote_quint_grade(grade, ex_score_percent);
 
         let counts = judgment_counts_arr(p);
-        let white_fantastics = Some(gameplay::live_window_counts(gs, player_idx).w1);
+        let white_fantastics = Some(gs.live_window_counts(player_idx).w1);
         let (lamp_index, lamp_judge_count) = compute_local_lamp(counts, grade, white_fantastics);
         let replay = replay_edges_for_player(gs, player_idx);
 
         let mut entry = LocalScoreEntry {
             version: LOCAL_SCORE_VERSION,
             played_at_ms: now_ms,
-            music_rate: gameplay::music_rate(gs),
+            music_rate: gs.music_rate(),
             score_percent,
             grade_code: grade_to_code(grade),
             lamp_index,
@@ -1486,9 +1525,7 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
 
         append_local_score_on_disk(
             &profile_id,
-            gameplay::player_profiles(gs)[player_idx]
-                .player_initials
-                .as_str(),
+            gs.profiles()[player_idx].player_initials.as_str(),
             chart_hash,
             &mut entry,
         );
@@ -1500,7 +1537,7 @@ pub(super) fn gameplay_side_for_player(
     gs: &gameplay::State,
     player_idx: usize,
 ) -> profile_data::PlayerSide {
-    if gameplay::num_players(gs) >= 2 {
+    if gs.num_players() >= 2 {
         profile_data::player_side_for_index(player_idx)
     } else {
         profile::get_session_player_side()

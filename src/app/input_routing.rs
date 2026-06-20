@@ -144,15 +144,9 @@ impl App {
             return;
         };
         let allow_commands = self.state.gameplay_offset_save_prompt.is_none();
-        crate::game::gameplay::sync_queued_raw_modifiers(
-            gs,
-            self.state.shell.shift_held,
-            self.state.shell.ctrl_held,
-        );
-        let now_music_time = crate::game::gameplay::music_time_from_audio_snapshot(
-            gs,
-            crate::screens::gameplay::audio_snapshot(),
-        );
+        gs.set_raw_modifier_state(self.state.shell.shift_held, self.state.shell.ctrl_held);
+        let now_music_time =
+            gs.music_time_from_audio_snapshot(crate::screens::gameplay::audio_snapshot());
         let action = crate::game::gameplay::handle_queued_raw_key(
             gs,
             ev.code,

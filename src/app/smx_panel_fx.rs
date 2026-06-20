@@ -135,13 +135,13 @@ impl SmxPanelDriver {
     pub fn update(&mut self, state: &State) {
         // Re-arm on entering gameplay or when the chart's note buffer changes (a restart or
         // a new song), so stale `*_at_screen_s` values do not swallow the first event.
-        let notes_ptr = crate::game::gameplay::notes(state).as_ptr() as usize;
+        let notes_ptr = state.notes().as_ptr() as usize;
         if !self.active || notes_ptr != self.notes_ptr {
             self.activate(state);
         }
 
-        let cpp = crate::game::gameplay::cols_per_player(state);
-        let np = crate::game::gameplay::num_players(state);
+        let cpp = state.cols_per_player();
+        let np = state.num_players();
         let cols = cpp.saturating_mul(np).min(MAX_COLS);
         for col in 0..cols {
             // Resolve the panel once and translate the chart pad index to the physical SMX
@@ -197,13 +197,12 @@ impl SmxPanelDriver {
 
     fn activate(&mut self, state: &State) {
         self.active = true;
-        self.notes_ptr = crate::game::gameplay::notes(state).as_ptr() as usize;
+        self.notes_ptr = state.notes().as_ptr() as usize;
         // Resolve the chart-pad -> physical-slot map once per song (the session play style
         // and side are fixed for the run), keeping the per-frame loop off the session lock.
         let play_style = profile::get_session_play_style();
         let session_side = profile::get_session_player_side();
-        let doubles = crate::game::gameplay::cols_per_player(state) >= 8
-            && crate::game::gameplay::num_players(state) == 1;
+        let doubles = state.cols_per_player() >= 8 && state.num_players() == 1;
         self.slot_for_pad =
             std::array::from_fn(|pad| physical_slot(play_style, session_side, doubles, pad));
         self.prev_flash = [NO_EVENT; MAX_COLS];

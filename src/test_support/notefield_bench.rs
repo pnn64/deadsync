@@ -170,10 +170,8 @@ pub fn fixture() -> NotefieldBenchFixture {
     );
 
     prime_visible_window(&mut state);
-    let notefield_model_cache = gameplay_screen::notefield_model_cache_from_assets(
-        &noteskin_assets,
-        gameplay::num_players(&state),
-    );
+    let notefield_model_cache =
+        gameplay_screen::notefield_model_cache_from_assets(&noteskin_assets, state.num_players());
 
     NotefieldBenchFixture {
         state,
@@ -191,18 +189,18 @@ fn prime_visible_window(state: &mut gameplay::State) {
     let time = timing.get_time_for_beat(beat);
     let time_ns = timing.get_time_for_beat_ns(beat);
     let elapsed = 7.25;
-    gameplay::set_benchmark_screen_elapsed(state, elapsed);
-    gameplay::set_benchmark_song_position(state, beat, time_ns, beat, time);
-    gameplay::set_benchmark_visible_time(state, 0, time_ns, time, beat);
-    gameplay::set_benchmark_visible_time(state, 1, time_ns, time, beat);
+    state.set_screen_elapsed(elapsed);
+    state.set_song_position_for_benchmark(beat, time_ns, beat, time);
+    state.set_visible_time(0, time_ns, time, beat);
+    state.set_visible_time(1, time_ns, time, beat);
     state.clear_visual_feedback();
 
     state.clear_active_holds();
 
     let lower = beat - WINDOW_BEATS_BEFORE;
     let upper = beat + WINDOW_BEATS_AFTER;
-    let (note_start, note_end) = gameplay::note_range_for_player(state, 0);
-    let notes = gameplay::notes(state);
+    let (note_start, note_end) = state.note_range_for_player(0);
+    let notes = state.notes();
     let mut end_cursor = note_start;
 
     for idx in note_start..note_end {
@@ -217,7 +215,7 @@ fn prime_visible_window(state: &mut gameplay::State) {
     }
 
     state.set_next_tap_miss_cursor(0, end_cursor.max(note_start));
-    let notes = gameplay::notes(state);
+    let notes = state.notes();
 
     if let Some((note_index, note_type)) = notes[note_start..end_cursor]
         .iter()
@@ -228,11 +226,13 @@ fn prime_visible_window(state: &mut gameplay::State) {
         })
     {
         let column = notes[note_index].column;
-        let end_time_ns = gameplay::hold_end_time_cache_ns_at(state, note_index)
+        let end_time_ns = state
+            .hold_end_time_cache_ns_at(note_index)
             .flatten()
-            .unwrap_or_else(|| gameplay::song_time_ns_from_seconds(time + 1.0));
-        let start_time_ns = gameplay::note_time_cache_ns_at(state, note_index)
-            .unwrap_or_else(|| gameplay::song_time_ns_from_seconds(time));
+            .unwrap_or_else(|| deadsync_core::song_time::song_time_ns_from_seconds(time + 1.0));
+        let start_time_ns = state
+            .note_time_cache_ns_at(note_index)
+            .unwrap_or_else(|| deadsync_core::song_time::song_time_ns_from_seconds(time));
         state.set_active_hold(
             column,
             Some(ActiveHold {
@@ -248,8 +248,7 @@ fn prime_visible_window(state: &mut gameplay::State) {
         );
     }
 
-    gameplay::set_benchmark_tap_explosion(
-        state,
+    state.set_tap_explosion(
         0,
         Some(ActiveTapExplosion {
             window: "W1",
@@ -280,8 +279,8 @@ fn prime_visible_window(state: &mut gameplay::State) {
             ],
         }],
     );
-    gameplay::set_benchmark_receptor_bop_timer(state, 0, 0.05);
-    gameplay::update_benchmark_player(state, 0, |player| {
+    state.set_receptor_bop_timer_for_benchmark(0, 0.05);
+    state.update_player(0, |player| {
         player.combo = 327;
         player.current_combo_grade = Some(JudgeGrade::Fantastic);
         player.full_combo_grade = Some(JudgeGrade::Fantastic);

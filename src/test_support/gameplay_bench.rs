@@ -40,29 +40,22 @@ pub fn fixture() -> GameplayBenchFixture {
     let mut base = notefield_bench::fixture();
     {
         let state = base.state_mut();
-        gameplay::set_benchmark_autoplay_enabled(state, true);
-        gameplay::set_benchmark_global_offsets(state, -0.021, -0.012);
-        gameplay::set_benchmark_autosync_state(state, gameplay::AutosyncMode::Machine, 0.004, 11);
+        state.set_autoplay_enabled_for_benchmark(true);
+        state.set_global_offsets(-0.021, -0.012);
+        state.set_autosync_state_for_benchmark(gameplay::AutosyncMode::Machine, 0.004, 11);
         gameplay::set_music_rate(state, 1.15);
-        gameplay::set_benchmark_song_position(
-            state,
-            gameplay::current_beat(state),
-            gameplay::current_music_time_ns(state),
+        state.set_song_position_for_benchmark(
+            state.current_beat(),
+            state.current_music_time_ns(),
             state.current_beat_display(),
             48.25,
         );
-        gameplay::set_benchmark_visible_time(
-            state,
-            0,
-            48_250_000_000,
-            48.25,
-            gameplay::visible_beat(state, 0),
-        );
-        gameplay::set_benchmark_density_graph_top(state, 0.0, 120.0, 0, 214.0, 30.0, 0.85);
-        gameplay::update_benchmark_player(state, 0, |player| {
+        state.set_visible_time(0, 48_250_000_000, 48.25, state.visible_beat(0));
+        state.set_density_graph_top_for_benchmark(0.0, 120.0, 0, 214.0, 30.0, 0.85);
+        state.update_player(0, |player| {
             player.life = 0.734;
         });
-        gameplay::update_benchmark_player_profile(state, 0, |profile| {
+        state.update_profile(0, |profile| {
             profile.nps_graph_at_top = true;
             profile.show_ex_score = true;
             profile.show_hard_ex_score = true;

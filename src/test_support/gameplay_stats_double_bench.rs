@@ -1,5 +1,4 @@
 use crate::assets::AssetManager;
-use crate::game::gameplay;
 use crate::game::profile;
 use crate::screens::components::gameplay::gameplay_stats;
 use crate::screens::gameplay as gameplay_screen;
@@ -44,24 +43,23 @@ pub fn fixture() -> GameplayStatsDoubleBenchFixture {
     let scorebox_side_snapshot;
     {
         let state = base.state_mut();
-        gameplay::set_benchmark_song_banner_path(state, Some(PathBuf::from("bench/banner.png")));
-        gameplay::set_benchmark_screen_elapsed(state, 9.6);
-        gameplay::set_benchmark_song_position(
-            state,
-            gameplay::current_beat(state),
-            gameplay::current_music_time_ns(state),
+        state.set_song_banner_path(Some(PathBuf::from("bench/banner.png")));
+        state.set_screen_elapsed(9.6);
+        state.set_song_position_for_benchmark(
+            state.current_beat(),
+            state.current_music_time_ns(),
             state.current_beat_display(),
             64.25,
         );
-        gameplay::set_benchmark_cols_per_player(state, 8);
-        gameplay::set_benchmark_num_cols(state, 8);
-        gameplay::update_benchmark_player(state, 0, |player| {
+        state.set_cols_per_player(8);
+        state.set_num_cols(8);
+        state.update_player(0, |player| {
             player.judgment_counts = [22_481, 2_118, 351, 49, 12, 3];
             player.holds_held = 146;
             player.rolls_held = 31;
             player.mines_avoided = 503;
         });
-        gameplay::update_benchmark_player_profile(state, 0, |profile| {
+        state.update_profile(0, |profile| {
             profile.show_fa_plus_window = true;
             profile.fa_plus_10ms_blue_window = true;
         });
@@ -83,7 +81,7 @@ pub fn fixture() -> GameplayStatsDoubleBenchFixture {
             w5: 12,
             miss: 3,
         };
-        gameplay::set_benchmark_live_window_counts(state, 0, canonical, ten_ms_blue, ten_ms_blue);
+        state.set_live_window_counts(0, canonical, ten_ms_blue, ten_ms_blue);
         scorebox_side_snapshot = Some(CachedPlayerLeaderboardData {
             loading: false,
             error: None,

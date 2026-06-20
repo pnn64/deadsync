@@ -235,7 +235,7 @@ fn run_benchmark(args: &Args) -> BenchmarkResult {
 
 fn reset_fixture(fixture: &mut notefield_bench::NotefieldBenchFixture, no_replay: bool) {
     prepare_gameplay_state(fixture.state_mut());
-    gameplay::set_replay_capture_enabled(fixture.state_mut(), !no_replay);
+    fixture.state_mut().set_replay_capture_enabled(!no_replay);
     input::clear_debounce_state();
 }
 
@@ -356,20 +356,20 @@ fn step_gameplay(
 }
 
 fn prepare_gameplay_state(state: &mut gameplay::State) {
-    gameplay::reset_benchmark_stage_runtime(state);
-    gameplay::reset_benchmark_exit_input(state);
-    gameplay::set_benchmark_screen_elapsed(state, 0.0);
-    gameplay::set_benchmark_song_position(state, 0.0, 0, 0.0, 0.0);
-    gameplay::fill_benchmark_visible_time(state, 0.0);
-    gameplay::clear_benchmark_notes(state);
+    state.reset_stage_runtime_for_benchmark();
+    state.reset_exit_input();
+    state.set_screen_elapsed(0.0);
+    state.set_song_position_for_benchmark(0.0, 0, 0.0, 0.0);
+    state.fill_visible_time_for_benchmark(0.0);
+    state.clear_notes();
     state.clear_note_ranges();
     state.clear_mine_scan();
     state.clear_row_entries();
     state.clear_row_indices();
-    gameplay::clear_benchmark_note_timing_caches(state);
-    gameplay::set_benchmark_end_times(state, 3_600_000_000_000, 3_600_000_000_000);
+    state.clear_note_timing_caches();
+    state.set_end_times(3_600_000_000_000, 3_600_000_000_000);
     state.clear_hold_runtime();
-    gameplay::clear_recorded_replay_edges(state);
+    state.clear_recorded_replay_edges();
     state.clear_lane_indices();
     state.clear_cue_runtime();
     state.clear_mini_indicator_stream_segments();

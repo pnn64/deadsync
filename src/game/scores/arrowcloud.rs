@@ -6,6 +6,7 @@ use super::{
 use crate::game::gameplay;
 use crate::game::profile;
 use deadsync_core::{input::MAX_PLAYERS, note::NoteType};
+use deadsync_gameplay::{FantasticWindowOptions, blue_fantastic_window_ms};
 use deadsync_online::arrowcloud::{
     self as arrowcloud_api, ArrowCloudPayload, ArrowCloudRadar, ArrowCloudSubmitRequestError,
     ArrowCloudTimingDatum,
@@ -29,6 +30,23 @@ use std::time::{Duration, Instant};
 const ARROWCLOUD_BODY_VERSION: &str = "1.4";
 const ARROWCLOUD_ENGINE_NAME: &str = "DeadSync";
 const ARROWCLOUD_ENGINE_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+#[inline(always)]
+fn player_blue_window_ms(gs: &gameplay::State, player_idx: usize) -> f32 {
+    let base = gs.default_fa_plus_window_s();
+    let Some(profile) = gs.profiles().get(player_idx) else {
+        return base * 1000.0;
+    };
+    blue_fantastic_window_ms(FantasticWindowOptions {
+        base_fa_plus_s: base,
+        custom_fantastic_window_s: profile.custom_fantastic_window.then(|| {
+            f32::from(profile_data::clamp_custom_fantastic_window_ms(
+                profile.custom_fantastic_window_ms,
+            )) / 1000.0
+        }),
+        fa_plus_10ms_blue_window: profile.fa_plus_10ms_blue_window,
+    })
+}
 
 #[derive(Debug, Clone)]
 struct ArrowCloudSubmitUiEntry {
@@ -231,17 +249,17 @@ fn arrowcloud_lifebar_points(
     gs: &gameplay::State,
     player_idx: usize,
 ) -> Vec<arrowcloud_api::ArrowCloudLifePoint> {
-    let life_history = gameplay::players(gs)[player_idx].life_history.as_slice();
-    let (start, end) = crate::game::gameplay::note_range_for_player(gs, player_idx);
-    let note_times = &gameplay::note_time_cache_ns(gs)[start..end];
+    let life_history = gs.players()[player_idx].life_history.as_slice();
+    let (start, end) = gs.note_range_for_player(player_idx);
+    let note_times = &gs.note_time_cache_ns()[start..end];
     let graph = gs.density_graph_view();
     let first_second = graph.first_second.min(0.0);
     let last_second = graph.last_second.max(first_second);
     let chart_start_second = note_times
         .iter()
-        .find(|&&t| !gameplay::song_time_ns_invalid(t))
+        .find(|&&t| !deadsync_core::song_time::song_time_ns_invalid(t))
         .copied()
-        .map(gameplay::song_time_ns_to_seconds)
+        .map(deadsync_core::song_time::song_time_ns_to_seconds)
         .unwrap_or(first_second);
 
     arrowcloud_api::lifebar_points(
@@ -259,19 +277,19 @@ fn arrowcloud_timing_data(
     player_idx: usize,
     fail_time_ns: Option<i64>,
 ) -> Vec<ArrowCloudTimingDatum> {
-    let (start, end) = crate::game::gameplay::note_range_for_player(gs, player_idx);
-    let notes = &gameplay::notes(gs)[start..end];
-    let note_times = &gameplay::note_time_cache_ns(gs)[start..end];
-    let col_offset = player_idx.saturating_mul(gameplay::cols_per_player(gs));
-    let stream_segments = gameplay::stream_segments_for_results(gs, player_idx);
+    let (start, end) = gs.note_range_for_player(player_idx);
+    let notes = &gs.notes()[start..end];
+    let note_times = &gs.note_time_cache_ns()[start..end];
+    let col_offset = player_idx.saturating_mul(gs.cols_per_player());
+    let stream_segments = gs.stream_segments_for_results(player_idx);
     let scatter = timing::build_scatter_points(
         notes,
         note_times,
         col_offset,
-        gameplay::cols_per_player(gs),
+        gs.cols_per_player(),
         &stream_segments,
     );
-    let fail_time_s = fail_time_ns.map(gameplay::song_time_ns_to_seconds);
+    let fail_time_s = fail_time_ns.map(deadsync_core::song_time::song_time_ns_to_seconds);
     arrowcloud_api::timing_data_from_scatter(&scatter, fail_time_s)
 }
 
@@ -280,7 +298,7 @@ fn arrowcloud_nps_info(
     gs: &gameplay::State,
     player_idx: usize,
 ) -> arrowcloud_api::ArrowCloudNpsInfo {
-    let chart = gameplay::charts(gs)[player_idx].as_ref();
+    let chart = gs.charts()[player_idx].as_ref();
     let graph = gs.density_graph_view();
     let first_second = graph.first_second.min(0.0);
     let last_second = graph.last_second.max(first_second);
@@ -306,7 +324,9 @@ struct ArrowCloudSubmitStats {
 #[inline(always)]
 fn arrowcloud_time_in_submit_window(time_ns: i64, fail_time_ns: Option<i64>) -> bool {
     match fail_time_ns {
-        Some(fail_time) => !gameplay::song_time_ns_invalid(time_ns) && time_ns <= fail_time,
+        Some(fail_time) => {
+            !deadsync_core::song_time::song_time_ns_invalid(time_ns) && time_ns <= fail_time
+        }
         None => true,
     }
 }
@@ -394,10 +414,10 @@ fn arrowcloud_stats_from_results(
 
 #[inline(always)]
 fn arrowcloud_live_submit_stats(gs: &gameplay::State, player_idx: usize) -> ArrowCloudSubmitStats {
-    let player = &gameplay::players(gs)[player_idx];
+    let player = &gs.players()[player_idx];
     ArrowCloudSubmitStats {
         judgment_counts: player.judgment_counts,
-        window_counts: gameplay::live_window_counts(gs, player_idx),
+        window_counts: gs.live_window_counts(player_idx),
         holds_held: player.holds_held,
         mines_hit: player.mines_hit,
         mines_avoided: player.mines_avoided,
@@ -414,11 +434,11 @@ fn arrowcloud_submit_stats(
     let Some(fail_time_ns) = fail_time_ns else {
         return arrowcloud_live_submit_stats(gs, player_idx);
     };
-    let (start, end) = crate::game::gameplay::note_range_for_player(gs, player_idx);
+    let (start, end) = gs.note_range_for_player(player_idx);
     arrowcloud_stats_from_results(
-        &gameplay::notes(gs)[start..end],
-        &gameplay::note_time_cache_ns(gs)[start..end],
-        &gameplay::hold_end_time_cache_ns(gs)[start..end],
+        &gs.notes()[start..end],
+        &gs.note_time_cache_ns()[start..end],
+        &gs.hold_end_time_cache_ns()[start..end],
         Some(fail_time_ns),
     )
 }
@@ -429,25 +449,27 @@ fn arrowcloud_payload_for_player(
     player_idx: usize,
     pack_group: &str,
 ) -> Option<ArrowCloudPayload> {
-    if player_idx >= gameplay::num_players(gs) {
+    if player_idx >= gs.num_players() {
         return None;
     }
-    let chart = gameplay::charts(gs)[player_idx].as_ref();
-    let profile = &gameplay::player_profiles(gs)[player_idx];
-    let player = &gameplay::players(gs)[player_idx];
-    let fail_time_ns = player.fail_time.map(gameplay::song_time_ns_from_seconds);
+    let chart = gs.charts()[player_idx].as_ref();
+    let profile = &gs.profiles()[player_idx];
+    let player = &gs.players()[player_idx];
+    let fail_time_ns = player
+        .fail_time
+        .map(deadsync_core::song_time::song_time_ns_from_seconds);
     let submit_stats = arrowcloud_submit_stats(gs, player_idx, fail_time_ns);
     let pack = pack_group.trim().to_string();
-    let song = gameplay::song(gs);
+    let song = gs.song();
     let song_name = song.display_full_title(true);
-    let gameplay_music_rate = gameplay::music_rate(gs);
+    let gameplay_music_rate = gs.music_rate();
     let music_rate = if gameplay_music_rate.is_finite() && gameplay_music_rate > 0.0 {
         gameplay_music_rate as f64
     } else {
         1.0
     };
     let passed = !gameplay_run_failed(player.is_failing, player.fail_time.is_some());
-    let totals = gameplay::display_totals_for_player(gs, player_idx);
+    let totals = gs.display_totals_for_player(player_idx);
 
     Some(ArrowCloudPayload {
         song_name,
@@ -477,7 +499,7 @@ fn arrowcloud_payload_for_player(
         lifebar_info: arrowcloud_lifebar_points(gs, player_idx),
         modifiers: arrowcloud_api::modifiers_from_profile(profile),
         music_rate,
-        used_autoplay: gameplay::autoplay_used(gs),
+        used_autoplay: gs.autoplay_used(),
         passed,
         body_version: ARROWCLOUD_BODY_VERSION,
         arrow_cloud_body_version: ARROWCLOUD_BODY_VERSION,
@@ -578,30 +600,30 @@ fn spawn_arrowcloud_submit_jobs(jobs: Vec<ArrowCloudSubmitJob>) {
 }
 
 pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State, pack_group: &str) {
-    for player_idx in 0..gameplay::num_players(gs).min(MAX_PLAYERS) {
+    for player_idx in 0..gs.num_players().min(MAX_PLAYERS) {
         let side = gameplay_side_for_player(gs, player_idx);
-        let chart_hash = gameplay::charts(gs)[player_idx].short_hash.as_str();
+        let chart_hash = gs.charts()[player_idx].short_hash.as_str();
         arrowcloud_reset_submit_ui_status(side, chart_hash);
         arrowcloud_reset_submit_retry(side, chart_hash);
     }
 
     let cfg = crate::config::get();
-    if !cfg.enable_arrowcloud || gameplay::num_players(gs) == 0 {
+    if !cfg.enable_arrowcloud || gs.num_players() == 0 {
         return;
     }
-    if gameplay::autoplay_used(gs) {
+    if gs.autoplay_used() {
         debug!("Skipping ArrowCloud submit: autoplay/replay was used.");
         return;
     }
-    if gameplay::course_display_is_course_stage(gs) && !cfg.autosubmit_course_scores_individually {
+    if gs.course_display_is_course_stage() && !cfg.autosubmit_course_scores_individually {
         debug!("Skipping ArrowCloud submit: course per-song autosubmit is disabled.");
         return;
     }
-    let mut jobs = Vec::with_capacity(gameplay::num_players(gs).min(MAX_PLAYERS));
-    for player_idx in 0..gameplay::num_players(gs).min(MAX_PLAYERS) {
+    let mut jobs = Vec::with_capacity(gs.num_players().min(MAX_PLAYERS));
+    for player_idx in 0..gs.num_players().min(MAX_PLAYERS) {
         let side = gameplay_side_for_player(gs, player_idx);
-        let chart_hash = gameplay::charts(gs)[player_idx].short_hash.as_str();
-        if gameplay::song(gs).has_lua && !lua_chart_submit_allowed(chart_hash) {
+        let chart_hash = gs.charts()[player_idx].short_hash.as_str();
+        if gs.song().has_lua && !lua_chart_submit_allowed(chart_hash) {
             debug!(
                 "Skipping ArrowCloud submit for {:?} ({}): simfile relies on lua.",
                 side, chart_hash
@@ -609,20 +631,18 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State, pack_group
             continue;
         }
         let failed = gameplay_run_failed(
-            gameplay::players(gs)[player_idx].is_failing,
-            gameplay::players(gs)[player_idx].fail_time.is_some(),
+            gs.players()[player_idx].is_failing,
+            gs.players()[player_idx].fail_time.is_some(),
         );
         let passed = gameplay_run_passed(
-            gameplay::song_completed_naturally(gs),
-            gameplay::players(gs)[player_idx].is_failing,
-            gameplay::players(gs)[player_idx].life,
-            gameplay::players(gs)[player_idx].fail_time.is_some(),
+            gs.song_completed_naturally(),
+            gs.players()[player_idx].is_failing,
+            gs.players()[player_idx].life,
+            gs.players()[player_idx].fail_time.is_some(),
         );
         let allow_failed_submit = failed && cfg.submit_arrowcloud_fails;
-        let finished = gameplay::song_completed_naturally(gs) || failed;
-        let api_key = gameplay::player_profiles(gs)[player_idx]
-            .arrowcloud_api_key
-            .trim();
+        let finished = gs.song_completed_naturally() || failed;
+        let api_key = gs.profiles()[player_idx].arrowcloud_api_key.trim();
         if !finished {
             debug!(
                 "Skipping ArrowCloud submit for {:?} ({}): stage was not completed.",
@@ -636,7 +656,7 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State, pack_group
             }
             continue;
         }
-        if !gameplay::course_stage_life_submit_eligible(gs, player_idx) && !allow_failed_submit {
+        if !gs.course_stage_life_submit_eligible(player_idx) && !allow_failed_submit {
             arrowcloud_warn_submit_skip(
                 side,
                 chart_hash,
@@ -656,10 +676,14 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State, pack_group
             continue;
         }
         let profile_id = profile::active_local_profile_id_for_side(side);
-        let itg_percent = gameplay::display_itg_score_percent(gs, player_idx).clamp(0.0, 100.0);
-        let ex_percent = gameplay::display_ex_score_percent(gs, player_idx).clamp(0.0, 100.0);
-        let hard_ex_percent =
-            gameplay::display_hard_ex_score_percent(gs, player_idx).clamp(0.0, 100.0);
+        let itg_percent = gs.display_itg_score_percent(player_idx).clamp(0.0, 100.0);
+        let blue_window_ms = player_blue_window_ms(gs, player_idx);
+        let ex_percent = gs
+            .display_ex_score_percent(player_idx, blue_window_ms)
+            .clamp(0.0, 100.0);
+        let hard_ex_percent = gs
+            .display_hard_ex_score_percent(player_idx, blue_window_ms)
+            .clamp(0.0, 100.0);
 
         arrowcloud_store_submit_retry(ArrowCloudSubmitRetryEntry {
             side,
@@ -1070,7 +1094,7 @@ mod tests {
 
     #[test]
     fn arrowcloud_submit_stats_caps_failed_runs_at_fail_time() {
-        let ns = gameplay::song_time_ns_from_seconds;
+        let ns = deadsync_core::song_time::song_time_ns_from_seconds;
         let notes = vec![
             sample_note(
                 0,

@@ -1713,6 +1713,17 @@ pub fn offset_delta_target_seconds(old_offset: f32, delta: f32) -> Option<f32> {
 }
 
 #[inline(always)]
+fn mutate_timing_arc(timing: &mut Arc<TimingData>, mut apply: impl FnMut(&mut TimingData)) {
+    if let Some(inner) = Arc::get_mut(timing) {
+        apply(inner);
+        return;
+    }
+    let mut cloned = (**timing).clone();
+    apply(&mut cloned);
+    *timing = Arc::new(cloned);
+}
+
+#[inline(always)]
 pub const fn player_life_is_dead(life: f32, is_failing: bool) -> bool {
     is_failing || life <= 0.0
 }
@@ -5981,6 +5992,14 @@ pub struct ActiveAttackRefreshInput<'a> {
     pub base_mini_percent: f32,
     pub attack_windows: &'a [AttackMaskWindow],
     pub song_lua_ease_windows: &'a [SongLuaEaseMaskWindow],
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct AttackBaseEffects {
+    pub appearance: AppearanceEffects,
+    pub visual: VisualEffects,
+    pub scroll: ScrollEffects,
+    pub mini_percent: f32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -17253,6 +17272,33 @@ impl<Profile, InputEdge, OverlayActor, CapturedActor, StateDelta>
     }
 
     #[inline(always)]
+    pub fn current_music_time_seconds(&self) -> f32 {
+        song_time_ns_to_seconds(self.clock.song_position.current_music_time_ns)
+    }
+
+    #[inline(always)]
+    pub fn display_clock_health(&self) -> DisplayClockHealth {
+        self.clock.display_clock.health()
+    }
+
+    #[inline(always)]
+    pub fn display_clock_stutter_diag_trigger_seq(&self) -> u64 {
+        self.clock.display_clock.diag_trigger_seq()
+    }
+
+    #[inline(always)]
+    pub fn collect_display_clock_stutter_diag_events(
+        &self,
+        now_host_nanos: u64,
+        window_ns: u64,
+        out: &mut Vec<DisplayClockDiagEvent>,
+    ) {
+        self.clock
+            .display_clock
+            .collect_diag_events(now_host_nanos, window_ns, out);
+    }
+
+    #[inline(always)]
     pub const fn current_beat_display(&self) -> f32 {
         self.clock.song_position.current_beat_display
     }
@@ -17273,6 +17319,29 @@ impl<Profile, InputEdge, OverlayActor, CapturedActor, StateDelta>
     #[inline(always)]
     pub fn timing(&self) -> &TimingData {
         &self.timing_runtime.timing
+    }
+
+    #[inline(always)]
+    pub fn music_time_for_beat(&self, beat: f32) -> f32 {
+        self.timing_runtime.timing.get_time_for_beat(beat)
+    }
+
+    #[inline(always)]
+    pub fn beat_for_music_time(&self, music_time: f32) -> f32 {
+        self.timing_runtime.timing.get_beat_for_time(music_time)
+    }
+
+    #[inline(always)]
+    pub fn music_time_from_audio_snapshot(&self, audio_snapshot: GameplayAudioSnapshot) -> f32 {
+        song_time_ns_to_seconds(
+            current_song_clock_snapshot(
+                audio_snapshot,
+                self.music_rate(),
+                self.clock.audio_clock.lead_in_seconds(),
+                self.clock.offsets.global_offset_seconds(),
+            )
+            .song_time_ns,
+        )
     }
 
     #[inline(always)]
@@ -17416,6 +17485,117 @@ impl<Profile, InputEdge, OverlayActor, CapturedActor, StateDelta>
             .set_note_and_music_end_times(notes_end_time_ns, music_end_time_ns);
     }
 
+    pub fn set_music_rate_with_player_judgment_timing(
+        &mut self,
+        rate: f32,
+        player_judgment_timing: [PlayerJudgmentTiming; MAX_PLAYERS],
+    ) -> bool {
+        if !self.clock.music_rate.set_rate(rate) {
+            return false;
+        }
+        self.timing_runtime.player_judgment_timing = player_judgment_timing;
+        let normalized = self.music_rate();
+        let (notes_end_time_ns, music_end_time_ns) = compute_end_times_ns(
+            &self.chart_runtime.notes,
+            &self.chart_runtime.note_time_cache_ns,
+            &self.chart_runtime.hold_end_time_cache_ns,
+            normalized,
+            self.clock.end_timing.audio_end_time_ns(),
+        );
+        self.clock
+            .end_timing
+            .set_note_and_music_end_times(notes_end_time_ns, music_end_time_ns);
+        true
+    }
+
+    pub fn refresh_timing_after_offset_change(&mut self) {
+        let timing_players: [&_; MAX_PLAYERS] =
+            std::array::from_fn(|player| self.timing_runtime.timing_players[player].as_ref());
+        refresh_timing_caches_for_offset_change(
+            &self.chart_runtime.notes,
+            &timing_players,
+            self.setup.num_players,
+            self.setup.cols_per_player,
+            &mut self.chart_runtime.note_time_cache_ns,
+            &mut self.chart_runtime.hold_end_time_cache_ns,
+            &mut self.chart_runtime.row_entries,
+            &self.chart_runtime.mine_scan.mine_note_ix,
+            &mut self.chart_runtime.mine_scan.mine_note_time_ns,
+        );
+        self.timing_runtime
+            .beat_info_cache
+            .reset(&self.timing_runtime.timing);
+
+        let (notes_end_time_ns, music_end_time_ns) = compute_end_times_ns(
+            &self.chart_runtime.notes,
+            &self.chart_runtime.note_time_cache_ns,
+            &self.chart_runtime.hold_end_time_cache_ns,
+            self.music_rate(),
+            self.clock.end_timing.audio_end_time_ns(),
+        );
+        self.clock
+            .end_timing
+            .set_note_and_music_end_times(notes_end_time_ns, music_end_time_ns);
+    }
+
+    #[inline(always)]
+    pub fn apply_global_offset_delta(&mut self, delta: f32) -> bool {
+        let Some(new_offset) =
+            offset_delta_target_seconds(self.clock.offsets.global_offset_seconds(), delta)
+        else {
+            return false;
+        };
+        mutate_timing_arc(&mut self.timing_runtime.timing, |timing| {
+            timing.set_global_offset_seconds(new_offset)
+        });
+        for (player_idx, timing) in self.timing_runtime.timing_players.iter_mut().enumerate() {
+            let effective_offset = new_offset
+                + self
+                    .clock
+                    .offsets
+                    .player_global_offset_shift_seconds(player_idx);
+            mutate_timing_arc(timing, |timing| {
+                timing.set_global_offset_seconds(effective_offset)
+            });
+        }
+        self.refresh_timing_after_offset_change();
+        self.clock.offsets.set_global_offset_seconds(new_offset);
+        true
+    }
+
+    #[inline(always)]
+    pub fn apply_song_offset_delta(&mut self, delta: f32) -> bool {
+        let Some(new_offset) =
+            offset_delta_target_seconds(self.clock.offsets.song_offset_seconds(), delta)
+        else {
+            return false;
+        };
+
+        mutate_timing_arc(&mut self.timing_runtime.timing, |timing| {
+            timing.shift_song_offset_seconds(delta)
+        });
+        for timing in &mut self.timing_runtime.timing_players {
+            mutate_timing_arc(timing, |timing| timing.shift_song_offset_seconds(delta));
+        }
+        self.refresh_timing_after_offset_change();
+        self.clock.offsets.set_song_offset_seconds(new_offset);
+        true
+    }
+
+    #[inline(always)]
+    pub fn apply_autosync_offset_correction(&mut self, note_off_by_ns: SongTimeNs) {
+        let result = self.apply_autosync_offset_sample(note_off_by_ns);
+        match result.correction {
+            Some(AutosyncOffsetCorrection::Song(mean)) => {
+                let _ = self.apply_song_offset_delta(mean);
+            }
+            Some(AutosyncOffsetCorrection::Machine(mean)) => {
+                let _ = self.apply_global_offset_delta(mean);
+            }
+            None => {}
+        }
+    }
+
     #[inline(always)]
     pub fn set_global_offsets(
         &mut self,
@@ -17430,6 +17610,21 @@ impl<Profile, InputEdge, OverlayActor, CapturedActor, StateDelta>
         self.clock
             .offsets
             .set_global_offset_seconds(global_offset_seconds);
+    }
+
+    pub fn set_song_position_for_benchmark(
+        &mut self,
+        current_beat: f32,
+        current_music_time_ns: SongTimeNs,
+        current_beat_display: f32,
+        current_music_time_display: f32,
+    ) {
+        self.clock
+            .song_position
+            .set_music_position(current_beat, current_music_time_ns);
+        self.clock
+            .song_position
+            .set_display_position(current_beat_display, current_music_time_display);
     }
 
     pub fn stream_segments_for_results(&self, player: usize) -> Vec<StreamSegment> {
@@ -17457,6 +17652,56 @@ impl<Profile, InputEdge, OverlayActor, CapturedActor, StateDelta>
             &self.mods.attacks.visual,
             &mut self.mods.attacks.outro_visual,
         );
+    }
+
+    pub fn refresh_player_attacks(
+        &mut self,
+        player: usize,
+        now: f32,
+        delta_time: f32,
+        base: AttackBaseEffects,
+    ) {
+        if player >= self.setup.num_players || player >= MAX_PLAYERS {
+            return;
+        }
+
+        let output = refresh_active_attack_player(
+            ActiveAttackRefreshInput {
+                now,
+                delta_time,
+                attacks_cleared_for_outro: self.mods.attacks.cleared_for_outro,
+                base_appearance: base.appearance,
+                base_visual: base.visual,
+                base_scroll: base.scroll,
+                base_mini_percent: base.mini_percent,
+                attack_windows: &self.mods.attacks.mask_windows[player],
+                song_lua_ease_windows: &self.mods.attacks.song_lua_ease_windows[player],
+            },
+            ActiveAttackRefreshState {
+                attack_current_appearance: self.mods.attacks.current_appearance[player],
+                active_attack_visual: self.mods.attacks.visual[player],
+                active_attack_visibility: self.mods.attacks.visibility[player],
+                active_attack_scroll: self.mods.attacks.scroll[player],
+                active_attack_mini_percent: self.mods.attacks.mini_percent[player],
+                outro_attack_visual: self.mods.attacks.outro_visual[player],
+            },
+        );
+
+        self.mods.attacks.target_appearance[player] = output.attack_target_appearance;
+        self.mods.attacks.speed_appearance[player] = output.attack_speed_appearance;
+        self.mods.attacks.current_appearance[player] = output.attack_current_appearance;
+        self.mods.attacks.outro_visual[player] = output.outro_attack_visual;
+        self.mods.attacks.clear_all[player] = output.active_attack_clear_all;
+        self.mods.attacks.chart[player] = output.active_attack_chart;
+        self.mods.attacks.accel[player] = output.active_attack_accel;
+        self.mods.attacks.visual[player] = output.active_attack_visual;
+        self.mods.attacks.appearance[player] = output.active_attack_appearance;
+        self.mods.attacks.visibility[player] = output.active_attack_visibility;
+        self.mods.attacks.scroll[player] = output.active_attack_scroll;
+        self.mods.attacks.perspective[player] = output.active_attack_perspective;
+        self.mods.attacks.scroll_speed[player] = output.active_attack_scroll_speed;
+        self.mods.attacks.mini_percent[player] = output.active_attack_mini_percent;
+        self.mods.song_lua_player_transforms[player] = output.player_transform.resolve();
     }
 
     #[inline(always)]
@@ -17581,6 +17826,14 @@ impl<Profile, InputEdge, OverlayActor, CapturedActor, StateDelta>
             self.player_attack_base_cleared(player_idx),
             self.mods.attacks.scroll_speed[player_idx],
             base_scroll_speed,
+        )
+    }
+
+    #[inline(always)]
+    pub fn effective_scroll_speed_for_player(&self, player_idx: usize) -> ScrollSpeedSetting {
+        self.effective_scroll_speed_for_player_with_base(
+            player_idx,
+            self.scroll_speed_for_player(player_idx),
         )
     }
 
@@ -18199,6 +18452,73 @@ impl<Profile, InputEdge, OverlayActor, CapturedActor, StateDelta>
     }
 
     #[inline(always)]
+    pub fn disable_score_for_practice(&mut self) {
+        self.progress.stage.disable_score();
+        self.progress.replay.disable_replay_mode();
+    }
+
+    pub fn reset_practice_playback(&mut self, judge_start_music_time: f32) {
+        let judge_start_ns = song_time_ns_from_seconds(judge_start_music_time);
+        reset_practice_notes_and_rows(
+            &mut self.chart_runtime.notes,
+            &mut self.chart_runtime.row_entries,
+            &self.chart_runtime.note_time_cache_ns,
+        );
+        self.disable_score_for_practice();
+
+        self.progress.stage.reset_for_practice();
+        self.display.hold_feedback.clear();
+        self.display.visual_feedback.clear();
+        self.hold_runtime.active_holds.fill(None);
+        self.display.receptor_feedback.reset_for_practice();
+        self.hold_runtime.reset_live_state();
+        self.reset_live_input_state();
+        self.clear_pending_input_edges();
+        self.progress.replay.reset_for_restart();
+        self.chart_runtime
+            .mine_scan
+            .pending_mine_hit_indices
+            .clear();
+        self.control.exit_input.reset();
+        self.progress.window_counts.reset();
+
+        let mine_note_time_ns = std::array::from_fn(|player| {
+            self.chart_runtime.mine_scan.mine_note_time_ns[player].as_slice()
+        });
+        let mine_note_ix = std::array::from_fn(|player| {
+            self.chart_runtime.mine_scan.mine_note_ix[player].as_slice()
+        });
+        let cursors = practice_cursors_for_players(
+            &self.chart_runtime.note_time_cache_ns,
+            self.chart_runtime.note_ranges.ranges(),
+            &self.chart_runtime.row_entries,
+            &self.chart_runtime.row_indices.row_entry_ranges,
+            mine_note_time_ns,
+            mine_note_ix,
+            self.setup.num_players,
+            judge_start_ns,
+        );
+        for player in 0..self.setup.num_players {
+            self.players_runtime.players[player] =
+                init_player_runtime_for_practice(judge_start_music_time);
+
+            self.chart_runtime.mine_scan.next_tap_miss_cursor[player] = cursors.note_cursor[player];
+            self.control
+                .autoplay_runtime
+                .set_cursor(player, cursors.note_cursor[player]);
+            self.chart_runtime.row_indices.judged_row_cursor[player] = cursors.row_cursor[player];
+            self.chart_runtime.mine_scan.next_mine_ix_cursor[player] =
+                cursors.mine_ix_cursor[player];
+            self.chart_runtime.mine_scan.next_mine_avoid_cursor[player] =
+                cursors.mine_avoid_cursor[player];
+        }
+
+        let song_row = self.assist_row_no_offset(judge_start_music_time);
+        self.control.assist_clap.reset_for_row(song_row);
+        self.boundary.total_elapsed_in_screen = 0.0;
+    }
+
+    #[inline(always)]
     pub fn runtime_player_side(&self, player: usize) -> GameplayInputPlayerSide {
         self.setup.session.runtime_player_side(player)
     }
@@ -18209,6 +18529,11 @@ impl<Profile, InputEdge, OverlayActor, CapturedActor, StateDelta>
             .timing_profile
             .fa_plus_window_s
             .unwrap_or(self.timing_runtime.timing_profile.windows_s[0])
+    }
+
+    #[inline(always)]
+    pub fn timing_profile_windows_s(&self) -> [f32; 5] {
+        self.timing_runtime.timing_profile.windows_s
     }
 
     #[inline(always)]
@@ -18241,6 +18566,20 @@ impl<Profile, InputEdge, OverlayActor, CapturedActor, StateDelta>
         self.clock
             .offsets
             .effective_player_global_offset_seconds(player_idx)
+    }
+
+    #[inline(always)]
+    pub fn assist_row_no_offset_ns(&self, music_time_ns: SongTimeNs) -> i32 {
+        assist_row_no_offset_for_timing(
+            &self.timing_runtime.timing,
+            self.clock.offsets.global_offset_seconds(),
+            music_time_ns,
+        )
+    }
+
+    #[inline(always)]
+    pub fn assist_row_no_offset(&self, music_time: f32) -> i32 {
+        self.assist_row_no_offset_ns(song_time_ns_from_seconds(music_time))
     }
 
     #[inline(always)]
@@ -18456,6 +18795,17 @@ impl<Profile, InputEdge, OverlayActor, CapturedActor, StateDelta>
     }
 
     #[inline(always)]
+    pub fn sync_active_hold_pressed_state(&mut self, column: usize, lane_pressed: bool) {
+        let live_autoplay = self.live_autoplay_enabled();
+        sync_active_hold_pressed_column(
+            &mut self.hold_runtime.active_holds,
+            column,
+            live_autoplay,
+            lane_pressed,
+        );
+    }
+
+    #[inline(always)]
     pub fn set_receptor_glow_timers(&mut self, col: usize, timers: GameplayReceptorGlowTimers) {
         self.display.receptor_feedback.set_glow_timers(col, timers);
     }
@@ -18490,6 +18840,15 @@ impl<Profile, InputEdge, OverlayActor, CapturedActor, StateDelta>
                 .receptor_feedback
                 .receptor_glow_state(col, self.lane_is_pressed(col)),
         )
+    }
+
+    #[inline(always)]
+    pub fn receptor_glow_visual_for_col(&self, col: usize) -> Option<(f32, f32)> {
+        let behavior = self
+            .display
+            .noteskin_effects
+            .receptor_glow_behavior_for_player(self.player_for_col(col));
+        self.receptor_glow_visual(col, behavior)
     }
 
     #[inline(always)]
@@ -18672,6 +19031,22 @@ impl<Profile, InputEdge, OverlayActor, CapturedActor, StateDelta>
     }
 
     #[inline(always)]
+    pub fn live_autoplay_enabled(&self) -> bool {
+        live_autoplay_enabled_from_flags(
+            self.progress.stage.autoplay_enabled,
+            self.progress.replay.mode,
+        )
+    }
+
+    #[inline(always)]
+    pub fn autoplay_blocks_scoring(&self) -> bool {
+        autoplay_blocks_scoring_from_flags(
+            self.progress.stage.autoplay_enabled,
+            self.progress.replay.mode,
+        )
+    }
+
+    #[inline(always)]
     pub fn set_stage_autoplay_enabled(&mut self, enabled: bool) -> bool {
         if self.progress.stage.autoplay_enabled == enabled {
             return false;
@@ -18837,6 +19212,108 @@ impl<Profile, InputEdge, OverlayActor, CapturedActor, StateDelta>
     #[inline(always)]
     pub fn push_audio_command(&mut self, command: GameplayAudioCommand) {
         self.boundary.commands.push_audio(command);
+    }
+
+    #[inline(always)]
+    pub fn queue_play_music_command(&mut self, path: PathBuf, cut: GameplayMusicCut, rate: f32) {
+        self.push_audio_command(GameplayAudioCommand::PlayMusic {
+            path,
+            cut,
+            looping: false,
+            rate,
+        });
+    }
+
+    pub fn set_current_music_time_ns(&mut self, music_time_ns: SongTimeNs) {
+        self.clock.song_position.current_music_time_ns = music_time_ns;
+        let display_time_ns = self.clock.display_clock.reset(music_time_ns);
+        self.clock.song_position.current_music_time_display =
+            song_time_ns_to_seconds(display_time_ns);
+
+        let beat_info = self
+            .timing_runtime
+            .timing
+            .get_beat_info_from_time_ns_cached(
+                music_time_ns,
+                &mut self.timing_runtime.beat_info_cache,
+            );
+        self.clock.song_position.current_beat = beat_info.beat;
+        self.clock.song_position.current_beat_display = self
+            .timing_runtime
+            .timing
+            .get_beat_for_time_ns(display_time_ns);
+        self.display
+            .beat_phase
+            .set(beat_info.is_in_freeze, beat_info.is_in_delay);
+
+        for player in 0..self.setup.num_players {
+            let delay = self.clock.visible_timing.visual_delay_seconds(player);
+            let visible_time_ns = visible_notefield_time_ns(music_time_ns, delay);
+            self.clock.visible_timing.set_player_time(
+                player,
+                visible_time_ns,
+                song_time_ns_to_seconds(visible_time_ns),
+                self.timing_runtime.timing_players[player].get_beat_for_time_ns(visible_time_ns),
+            );
+        }
+    }
+
+    pub fn start_stage_music(&mut self) {
+        let start_time = -self.clock.audio_clock.positive_lead_in_seconds();
+        self.set_current_music_time_ns(song_time_ns_from_seconds(start_time));
+        self.boundary.total_elapsed_in_screen = 0.0;
+
+        let Some(music_path) = self.source.charts[0].music_path.clone() else {
+            return;
+        };
+        let lead_in = self.clock.audio_clock.positive_lead_in_seconds();
+        let rate = normalized_song_rate(self.music_rate());
+        self.queue_play_music_command(music_path, stage_music_cut(lead_in), rate);
+    }
+
+    pub fn seek_practice_display(&mut self, music_time: f32) {
+        self.set_current_music_time_ns(song_time_ns_from_seconds(music_time));
+    }
+
+    pub fn start_practice_music_at(
+        &mut self,
+        playback_music_time: f32,
+        judge_start_music_time: f32,
+    ) {
+        self.reset_practice_playback(judge_start_music_time);
+
+        self.clock
+            .audio_clock
+            .set_lead_in_seconds((-playback_music_time).max(0.0));
+        self.set_current_music_time_ns(song_time_ns_from_seconds(playback_music_time));
+
+        let Some(music_path) = self.source.charts[0].music_path.clone() else {
+            return;
+        };
+        let rate = normalized_song_rate(self.music_rate());
+        self.queue_play_music_command(
+            music_path,
+            GameplayMusicCut {
+                start_sec: f64::from(playback_music_time),
+                length_sec: f64::INFINITY,
+                ..Default::default()
+            },
+            rate,
+        );
+    }
+
+    #[inline(always)]
+    pub fn begin_exit_transition(&mut self, kind: ExitTransitionKind) -> bool {
+        if !self.control.exit_input.begin_exit(kind, Instant::now()) {
+            return false;
+        }
+        self.push_audio_command(GameplayAudioCommand::StopMusic);
+        true
+    }
+
+    #[inline(always)]
+    pub fn begin_restart_exit(&mut self) -> bool {
+        self.begin_exit_transition(ExitTransitionKind::Cancel)
     }
 
     #[inline(always)]

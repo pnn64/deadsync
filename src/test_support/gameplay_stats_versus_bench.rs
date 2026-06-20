@@ -1,5 +1,4 @@
 use crate::assets::AssetManager;
-use crate::game::gameplay;
 use crate::game::profile;
 use crate::screens::components::gameplay::gameplay_stats;
 use crate::screens::gameplay as gameplay_screen;
@@ -32,32 +31,31 @@ pub fn fixture() -> GameplayStatsVersusBenchFixture {
     let mut base = notefield_bench::fixture();
     {
         let state = base.state_mut();
-        gameplay::set_benchmark_num_players(state, 2);
-        gameplay::set_benchmark_num_cols(state, 8);
-        gameplay::set_benchmark_cols_per_player(state, 4);
-        let p1_range = gameplay::note_range_for_player(&state, 0);
+        state.set_num_players(2);
+        state.set_num_cols(8);
+        state.set_cols_per_player(4);
+        let p1_range = state.note_range_for_player(0);
         state.set_note_range(1, p1_range);
-        gameplay::set_benchmark_screen_elapsed(state, 9.6);
-        gameplay::set_benchmark_song_position(
-            state,
-            gameplay::current_beat(state),
-            gameplay::current_music_time_ns(state),
+        state.set_screen_elapsed(9.6);
+        state.set_song_position_for_benchmark(
+            state.current_beat(),
+            state.current_music_time_ns(),
             state.current_beat_display(),
             64.25,
         );
 
-        gameplay::update_benchmark_player(state, 0, |player| {
+        state.update_player(0, |player| {
             player.judgment_counts = [22_481, 2_118, 351, 49, 12, 3];
         });
-        gameplay::update_benchmark_player(state, 1, |player| {
+        state.update_player(1, |player| {
             player.judgment_counts = [20_204, 1_804, 404, 88, 23, 7];
         });
-        gameplay::update_benchmark_player_profile(state, 0, |profile| {
+        state.update_profile(0, |profile| {
             profile.step_statistics = profile_data::StepStatisticsMask::all_widgets();
             profile.show_fa_plus_window = true;
             profile.fa_plus_10ms_blue_window = true;
         });
-        gameplay::update_benchmark_player_profile(state, 1, |profile| {
+        state.update_profile(1, |profile| {
             profile.step_statistics = profile_data::StepStatisticsMask::all_widgets();
             profile.show_fa_plus_window = false;
             profile.custom_fantastic_window = false;
@@ -81,13 +79,7 @@ pub fn fixture() -> GameplayStatsVersusBenchFixture {
             w5: 12,
             miss: 3,
         };
-        gameplay::set_benchmark_live_window_counts(
-            state,
-            0,
-            p1_canonical,
-            p1_ten_ms_blue,
-            p1_ten_ms_blue,
-        );
+        state.set_live_window_counts(0, p1_canonical, p1_ten_ms_blue, p1_ten_ms_blue);
         let p2_counts = WindowCounts {
             w0: 20_204,
             w1: 0,
@@ -97,9 +89,9 @@ pub fn fixture() -> GameplayStatsVersusBenchFixture {
             w5: 23,
             miss: 7,
         };
-        gameplay::set_benchmark_live_window_counts(state, 1, p2_counts, p2_counts, p2_counts);
+        state.set_live_window_counts(1, p2_counts, p2_counts, p2_counts);
 
-        gameplay::set_benchmark_song_banner_path(state, Some("bench/banner.png".into()));
+        state.set_song_banner_path(Some("bench/banner.png".into()));
     }
 
     let (state, noteskin_assets, _) = base.into_parts();
