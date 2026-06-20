@@ -185,7 +185,8 @@ pub fn fixture() -> NotefieldBenchFixture {
 
 fn prime_visible_window(state: &mut gameplay::State) {
     let beat = VISIBLE_BEAT;
-    let timing = gameplay::timing_for_player(state, 0)
+    let timing = state
+        .timing_for_player(0)
         .expect("notefield bench fixture initializes P1 timing");
     let time = timing.get_time_for_beat(beat);
     let time_ns = timing.get_time_for_beat_ns(beat);
@@ -194,9 +195,9 @@ fn prime_visible_window(state: &mut gameplay::State) {
     gameplay::set_benchmark_song_position(state, beat, time_ns, beat, time);
     gameplay::set_benchmark_visible_time(state, 0, time_ns, time, beat);
     gameplay::set_benchmark_visible_time(state, 1, time_ns, time, beat);
-    gameplay::clear_benchmark_visual_feedback(state);
+    state.clear_visual_feedback();
 
-    gameplay::clear_benchmark_active_holds(state);
+    state.clear_active_holds();
 
     let lower = beat - WINDOW_BEATS_BEFORE;
     let upper = beat + WINDOW_BEATS_AFTER;
@@ -215,7 +216,7 @@ fn prime_visible_window(state: &mut gameplay::State) {
         end_cursor = idx + 1;
     }
 
-    gameplay::set_benchmark_next_tap_miss_cursor(state, 0, end_cursor.max(note_start));
+    state.set_next_tap_miss_cursor(0, end_cursor.max(note_start));
     let notes = gameplay::notes(state);
 
     if let Some((note_index, note_type)) = notes[note_start..end_cursor]
@@ -232,8 +233,7 @@ fn prime_visible_window(state: &mut gameplay::State) {
             .unwrap_or_else(|| gameplay::song_time_ns_from_seconds(time + 1.0));
         let start_time_ns = gameplay::note_time_cache_ns_at(state, note_index)
             .unwrap_or_else(|| gameplay::song_time_ns_from_seconds(time));
-        gameplay::set_benchmark_active_hold(
-            state,
+        state.set_active_hold(
             column,
             Some(ActiveHold {
                 note_index,
@@ -259,8 +259,7 @@ fn prime_visible_window(state: &mut gameplay::State) {
             start_beat: beat,
         }),
     );
-    gameplay::set_benchmark_column_cues(
-        state,
+    state.set_column_cues(
         0,
         vec![ColumnCue {
             start_time: time - 1.4,

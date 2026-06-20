@@ -417,7 +417,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         stop_beat,
     } = state.mode
     else {
-        gameplay_core::advance_screen_elapsed(&mut state.gameplay, delta_time);
+        state.gameplay.advance_screen_elapsed(delta_time);
         update_cursor_hold(state, delta_time);
         update_page_hold(state, delta_time);
         update_display_scroll(state, delta_time);
@@ -1757,8 +1757,7 @@ fn append_player_markers(
         width,
         zoom: field_zoom,
     };
-    let marker_phase =
-        (gameplay_core::total_elapsed_in_screen(&state.gameplay) * std::f32::consts::PI).sin();
+    let marker_phase = (state.gameplay.total_elapsed_in_screen() * std::f32::consts::PI).sin();
     let marker_shade = 0.75 + marker_phase * 0.25;
     let cursor_y = marker_y_for_beat(state, player_idx, col_start, offset_y, state.cursor_beat);
     append_timing_segment_labels(state, actors, geom);
@@ -1790,13 +1789,11 @@ fn append_player_markers(
 }
 
 fn append_timing_segment_labels(state: &State, actors: &mut Vec<Actor>, geom: PracticeFieldGeom) {
-    let Some(gameplay_chart) = gameplay_core::gameplay_chart(&state.gameplay, geom.player_idx)
-    else {
+    let Some(gameplay_chart) = state.gameplay.gameplay_chart(geom.player_idx) else {
         return;
     };
     let timing = &gameplay_chart.timing_segments;
-    let glow_alpha =
-        timing_label_glow_alpha(gameplay_core::total_elapsed_in_screen(&state.gameplay));
+    let glow_alpha = timing_label_glow_alpha(state.gameplay.total_elapsed_in_screen());
     append_timing_labels_from_segments(state, actors, geom, timing, glow_alpha);
 }
 
@@ -2129,7 +2126,7 @@ fn append_flash_overlay(state: &State, actors: &mut Vec<Actor>) {
 }
 
 fn practice_player_color(state: &State) -> [f32; 4] {
-    color::simply_love_rgba(gameplay_core::active_color_index(&state.gameplay))
+    color::simply_love_rgba(state.gameplay.active_color_index())
 }
 
 fn edit_info_text(state: &State) -> String {

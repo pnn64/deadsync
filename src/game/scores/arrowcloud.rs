@@ -234,7 +234,7 @@ fn arrowcloud_lifebar_points(
     let life_history = gameplay::players(gs)[player_idx].life_history.as_slice();
     let (start, end) = crate::game::gameplay::note_range_for_player(gs, player_idx);
     let note_times = &gameplay::note_time_cache_ns(gs)[start..end];
-    let graph = gameplay::density_graph_view(gs);
+    let graph = gs.density_graph_view();
     let first_second = graph.first_second.min(0.0);
     let last_second = graph.last_second.max(first_second);
     let chart_start_second = note_times
@@ -281,7 +281,7 @@ fn arrowcloud_nps_info(
     player_idx: usize,
 ) -> arrowcloud_api::ArrowCloudNpsInfo {
     let chart = gameplay::charts(gs)[player_idx].as_ref();
-    let graph = gameplay::density_graph_view(gs);
+    let graph = gs.density_graph_view();
     let first_second = graph.first_second.min(0.0);
     let last_second = graph.last_second.max(first_second);
     arrowcloud_api::nps_info_from_measure_data(

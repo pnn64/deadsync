@@ -12,8 +12,7 @@ use deadsync_rules::note::HoldResult;
 use deadsync_smx::panels::{PADS, Rgb, SmxPanelLights, smx_panel_for_col};
 
 use crate::game::gameplay::{
-    ColumnTapJudgment, HoldJudgmentRenderInfo, State, active_hold, active_hold_is_engaged,
-    hold_judgment, last_tap_judgment, mine_started_at_screen_s,
+    ColumnTapJudgment, HoldJudgmentRenderInfo, State, active_hold_is_engaged,
 };
 use crate::game::profile;
 
@@ -152,14 +151,14 @@ impl SmxPanelDriver {
             let panel = smx_panel_for_col(cpp, np, col).map(|(pad, p)| (self.slot_for_pad[pad], p));
 
             if let Some((color, dur)) =
-                tap_flash(last_tap_judgment(state, col), &mut self.prev_flash[col])
+                tap_flash(state.last_tap_judgment(col), &mut self.prev_flash[col])
             {
                 if let Some((pad, p)) = panel {
                     self.lights.flash(pad, p, color, dur);
                 }
             }
 
-            let engaged = active_hold(state, col).is_some_and(active_hold_is_engaged);
+            let engaged = state.active_hold(col).is_some_and(active_hold_is_engaged);
             if let Some(now_engaged) = hold_edge(engaged, &mut self.prev_engaged[col]) {
                 if let Some((pad, p)) = panel {
                     if now_engaged {
@@ -171,14 +170,14 @@ impl SmxPanelDriver {
             }
 
             if let Some(color) =
-                hold_outcome_flash(hold_judgment(state, col), &mut self.prev_hold_judged[col])
+                hold_outcome_flash(state.hold_judgment(col), &mut self.prev_hold_judged[col])
             {
                 if let Some((pad, p)) = panel {
                     self.lights.flash(pad, p, color, FLASH_SECONDS_JUDGMENT);
                 }
             }
 
-            let mine_at = mine_started_at_screen_s(state, col);
+            let mine_at = state.mine_started_at_screen_s(col);
             if let Some(color) = mine_flash(mine_at, &mut self.prev_mine[col]) {
                 if let Some((pad, p)) = panel {
                     self.lights.flash(pad, p, color, MINE_FLASH_SECONDS);

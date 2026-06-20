@@ -271,7 +271,7 @@ fn clip_density_life_points(points: &mut Vec<[f32; 2]>, offset: f32) {
 }
 
 fn refresh_density_graph_meshes_for_player(state: &mut State, player_idx: usize) {
-    let graph = gameplay::density_graph_view(&state.gameplay);
+    let graph = state.gameplay.density_graph_view();
     let num_players = gameplay::num_players(&state.gameplay);
     let render = &mut state.density_graph;
     let graph_w = graph.graph_w;
@@ -286,7 +286,9 @@ fn refresh_density_graph_meshes_for_player(state: &mut State, player_idx: usize)
         render.life_mesh[player_idx] = None;
         render.mesh_offset_px[player_idx] = 0;
         render.life_mesh_offset_px[player_idx] = 0;
-        gameplay::set_density_graph_life_dirty(&mut state.gameplay, player_idx, false);
+        state
+            .gameplay
+            .set_density_graph_life_dirty(player_idx, false);
         return;
     }
 
@@ -306,20 +308,20 @@ fn refresh_density_graph_meshes_for_player(state: &mut State, player_idx: usize)
 
     let prev_offset_px = render.life_mesh_offset_px[player_idx];
     let offset_changed = offset_px != prev_offset_px;
-    if !offset_changed && !gameplay::density_graph_life_dirty(&state.gameplay, player_idx) {
+    if !offset_changed && !state.gameplay.density_graph_life_dirty(player_idx) {
         return;
     }
 
     render.life_mesh_offset_px[player_idx] = offset_px;
-    gameplay::set_density_graph_life_dirty(&mut state.gameplay, player_idx, false);
+    state
+        .gameplay
+        .set_density_graph_life_dirty(player_idx, false);
     if offset_px > prev_offset_px {
-        if let Some(points) =
-            gameplay::density_graph_life_points_mut(&mut state.gameplay, player_idx)
-        {
+        if let Some(points) = state.gameplay.density_graph_life_points_mut(player_idx) {
             clip_density_life_points(points, offset_px_f);
         }
     }
-    let Some(points) = gameplay::density_graph_life_points(&state.gameplay, player_idx) else {
+    let Some(points) = state.gameplay.density_graph_life_points(player_idx) else {
         render.life_mesh[player_idx] = None;
         return;
     };
@@ -361,7 +363,7 @@ fn push_density_graph_at(
         47.0 / 255.0, // 0x2F
     ];
 
-    let graph = gameplay::density_graph_view(&state.gameplay);
+    let graph = state.gameplay.density_graph_view();
     let graph_w = graph.graph_w;
     let graph_h = graph.graph_h;
     if graph_w <= 0.0_f32 || graph_h <= 0.0_f32 {
@@ -1012,7 +1014,7 @@ fn song_info_text_zoom(layout: StepStatsPaneLayout) -> f32 {
 }
 
 fn step_stats_density_graph_w(state: &State, sidepane_width: f32, double: bool) -> f32 {
-    let graph_w = gameplay::density_graph_view(&state.gameplay).graph_w;
+    let graph_w = state.gameplay.density_graph_view().graph_w;
     if graph_w > 0.0 {
         return graph_w;
     }
@@ -1766,7 +1768,7 @@ pub fn push_double_step_stats(
             frame_cx,
             frame_cy,
             frame_zoom,
-            gameplay::current_music_time_display(state),
+            state.current_music_time_display(),
         ));
     }
 
@@ -2031,8 +2033,7 @@ fn build_steps_info(
     let desc_text = if cycle_len == 0 {
         ""
     } else {
-        let idx = ((gameplay::total_elapsed_in_screen(&state.gameplay) / 2.0).floor() as usize)
-            % cycle_len;
+        let idx = ((state.gameplay.total_elapsed_in_screen() / 2.0).floor() as usize) % cycle_len;
         cycle[idx].unwrap_or("")
     };
 
@@ -2371,7 +2372,7 @@ fn build_scorebox_pane(
         frame_cx,
         frame_cy,
         layout.banner_data_zoom,
-        gameplay::current_music_time_display(state),
+        state.current_music_time_display(),
     ));
 }
 
@@ -2921,7 +2922,7 @@ fn build_side_pane(
     // Density graph (Simply Love StepStatistics/DensityGraph.lua).
     let graph = step_stats_density_graph_rect(state, layout);
     if wide && mask.contains(profile_data::StepStatisticsMask::DENSITY_GRAPH) {
-        let graph_view = gameplay::density_graph_view(&state.gameplay);
+        let graph_view = state.gameplay.density_graph_view();
         if graph_view.graph_w > 0.0_f32 && graph_view.graph_h > 0.0_f32 {
             push_density_graph_at(actors, state, player_idx, graph.x, graph.y);
         }

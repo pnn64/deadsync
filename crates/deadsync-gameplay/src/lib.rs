@@ -1,10 +1,10 @@
-use deadsync_chart::{ChartData, ChartDisplayBpm, SongData, SyncPref};
+use deadsync_chart::{ChartData, ChartDisplayBpm, GameplayChartData, SongData, SyncPref};
 use deadsync_core::input::{InputSource, Lane, MAX_COLS, MAX_PLAYERS};
 use deadsync_core::note::NoteType;
 use deadsync_core::song_time::{
-    SongTimeNs, clamp_song_time_ns, normalized_song_rate, scaled_song_delta_ns,
-    scaled_song_time_ns, song_time_ns_add_seconds, song_time_ns_from_seconds, song_time_ns_invalid,
-    song_time_ns_span_seconds, song_time_ns_to_seconds,
+    INVALID_SONG_TIME_NS, SongTimeNs, clamp_song_time_ns, normalized_song_rate,
+    scaled_song_delta_ns, scaled_song_time_ns, song_time_ns_add_seconds, song_time_ns_from_seconds,
+    song_time_ns_invalid, song_time_ns_span_seconds, song_time_ns_to_seconds,
 };
 use deadsync_core::timing::{ROWS_PER_BEAT, beat_to_note_row};
 use deadsync_rules::combo::{self, ComboState, ComboUpdate};
@@ -18,14 +18,17 @@ use deadsync_rules::stream::{
     StreamSegment, measure_densities, stream_sequences_threshold, zmod_stream_totals_full_measures,
 };
 use deadsync_rules::timing::{
-    FA_PLUS_W0_MS, FA_PLUS_W010_MS, TimingData, TimingProfile, TimingProfileNs, WindowCounts,
-    classify_offset_ns_with_disabled_windows, largest_enabled_tap_window_ns,
+    BeatInfoCache, FA_PLUS_W0_MS, FA_PLUS_W010_MS, TimingData, TimingProfile, TimingProfileNs,
+    WindowCounts, classify_offset_ns_with_disabled_windows, largest_enabled_tap_window_ns,
 };
 use std::collections::{BTreeMap, VecDeque};
 use std::hash::Hasher;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{
+    Arc,
+    atomic::{AtomicU64, Ordering},
+};
 use std::time::{Duration, Instant};
 use twox_hash::XxHash64;
 
@@ -1555,6 +1558,12 @@ pub enum GameplayRawKeyInput {
     OffsetAdjust(GameplayOffsetAdjustKey),
     #[default]
     Other,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GameplayRawModifierKey {
+    Shift,
+    Ctrl,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -4242,6 +4251,26 @@ pub fn build_attack_windows_for_mode(
     }
 }
 
+pub fn build_attack_mask_windows_for_mode(
+    chart_attacks: Option<&str>,
+    attack_mode: GameplayAttackMode,
+    player: usize,
+    base_seed: u64,
+    song_length_seconds: f32,
+) -> Vec<AttackMaskWindow> {
+    let attacks = build_attack_windows_for_mode(
+        chart_attacks,
+        attack_mode,
+        player,
+        base_seed,
+        song_length_seconds,
+    );
+    if attacks.is_empty() {
+        return Vec::new();
+    }
+    build_attack_mask_windows(&attacks)
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct ParsedAttackMods {
     pub insert_mask: u8,
@@ -6028,6 +6057,13 @@ impl Default for GameplayAttackRuntimeState {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct GameplayModRuntimeState<OverlayActor, CapturedActor, StateDelta> {
+    pub song_lua_visuals: SongLuaRuntimeVisuals<OverlayActor, CapturedActor, StateDelta>,
+    pub song_lua_player_transforms: SongLuaPlayerTransforms,
+    pub attacks: GameplayAttackRuntimeState,
+}
+
 pub fn apply_song_lua_player_eases(
     player: &mut SongLuaPlayerTransformValues,
     windows: &[SongLuaEaseMaskWindow],
@@ -7662,6 +7698,23 @@ pub struct GameplayConfig {
     pub delayed_back: bool,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct GameplaySetupRuntimeState {
+    pub num_cols: usize,
+    pub cols_per_player: usize,
+    pub num_players: usize,
+    pub viewport: GameplayViewport,
+    pub session: GameplaySession,
+    pub config: GameplayConfig,
+}
+
+#[derive(Clone, Debug)]
+pub struct GameplaySourceRuntimeState {
+    pub song: Arc<SongData>,
+    pub charts: [Arc<ChartData>; MAX_PLAYERS],
+    pub gameplay_charts: [Arc<GameplayChartData>; MAX_PLAYERS],
+}
+
 #[inline(always)]
 pub fn effective_player_global_offset_seconds(
     global_offset_seconds: f32,
@@ -8012,6 +8065,26 @@ impl Default for GameplayMusicRateState {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct GameplayClockRuntimeState {
+    pub audio_clock: GameplayAudioClockState,
+    pub song_position: GameplaySongPositionState,
+    pub display_clock: GameplayDisplayClockState,
+    pub end_timing: GameplayEndTimingState,
+    pub music_rate: GameplayMusicRateState,
+    pub offsets: GameplayOffsetState,
+    pub visible_timing: GameplayVisibleTimingState,
+}
+
+#[derive(Clone, Debug)]
+pub struct GameplayTimingRuntimeState {
+    pub timing: Arc<TimingData>,
+    pub timing_players: [Arc<TimingData>; MAX_PLAYERS],
+    pub beat_info_cache: BeatInfoCache,
+    pub timing_profile: TimingProfile,
+    pub player_judgment_timing: [PlayerJudgmentTiming; MAX_PLAYERS],
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct GameplaySongPositionState {
     pub current_beat: f32,
@@ -8240,6 +8313,39 @@ impl GameplayCommandQueue {
     #[inline(always)]
     pub fn drain_session(&mut self) -> std::vec::Drain<'_, GameplaySessionCommand> {
         self.session.drain(..)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct GameplayBoundaryRuntimeState {
+    pub commands: GameplayCommandQueue,
+    pub total_elapsed_in_screen: f32,
+}
+
+impl GameplayBoundaryRuntimeState {
+    #[inline(always)]
+    pub fn new(audio_command_capacity: usize, session_command_capacity: usize) -> Self {
+        Self {
+            commands: GameplayCommandQueue::with_capacity(
+                audio_command_capacity,
+                session_command_capacity,
+            ),
+            total_elapsed_in_screen: 0.0,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct GameplayPendingInputState<T> {
+    pub edges: VecDeque<T>,
+}
+
+impl<T> GameplayPendingInputState<T> {
+    #[inline(always)]
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            edges: VecDeque::with_capacity(capacity),
+        }
     }
 }
 
@@ -8596,6 +8702,16 @@ pub struct PlayerRuntime {
     pub error_bar_long_avg_tick: Option<ErrorBarTick>,
     pub error_bar_long_avg_visible: bool,
     pub live_timing_stats: deadsync_rules::timing::LiveTimingStats,
+}
+
+#[derive(Clone, Debug)]
+pub struct GameplayPlayersRuntimeState {
+    pub players: [PlayerRuntime; MAX_PLAYERS],
+}
+
+#[derive(Clone, Debug)]
+pub struct GameplayProfilesRuntimeState<T> {
+    pub profiles: [T; MAX_PLAYERS],
 }
 
 pub fn init_player_runtime() -> PlayerRuntime {
@@ -16083,6 +16199,15 @@ impl GameplayChartTotalsState {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct GameplayProgressRuntimeState {
+    pub chart_totals: GameplayChartTotalsState,
+    pub stage: GameplayStageRuntimeState,
+    pub replay: GameplayReplayRuntimeState,
+    pub course_display: GameplayCourseDisplayState,
+    pub window_counts: GameplayWindowCountsState,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GameplayVisibleTimingState {
     pub global_visual_delay_seconds: f32,
@@ -16723,8 +16848,22 @@ impl GameplayMineScanState {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct GameplayChartRuntimeState {
+    pub notes: Vec<Note>,
+    pub note_ranges: GameplayNoteRangeState,
+    pub note_count_stats: GameplayNoteCountStatsState,
+    pub lane_indices: GameplayLaneIndexState,
+    pub row_indices: GameplayRowIndexState,
+    pub note_time_cache_ns: Vec<SongTimeNs>,
+    pub hold_end_time_cache_ns: Vec<Option<SongTimeNs>>,
+    pub mine_scan: GameplayMineScanState,
+    pub row_entries: Vec<RowEntry>,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct GameplayHoldRuntimeState {
+    pub active_holds: [Option<ActiveHold>; MAX_COLS],
     pub decaying_hold_indices: Vec<usize>,
     pub hold_decay_active: Vec<bool>,
     pub tap_miss_held_window: Vec<bool>,
@@ -16735,6 +16874,7 @@ pub struct GameplayHoldRuntimeState {
 impl GameplayHoldRuntimeState {
     pub fn new(notes_len: usize, decaying_hold_capacity: usize) -> Self {
         Self {
+            active_holds: std::array::from_fn(|_| None),
             decaying_hold_indices: Vec::with_capacity(decaying_hold_capacity),
             hold_decay_active: vec![false; notes_len],
             tap_miss_held_window: vec![false; notes_len],
@@ -16745,6 +16885,7 @@ impl GameplayHoldRuntimeState {
 
     #[inline(always)]
     pub fn reset_live_state(&mut self) {
+        self.active_holds.fill(None);
         self.decaying_hold_indices.clear();
         self.hold_decay_active.fill(false);
         self.tap_miss_held_window.fill(false);
@@ -16754,6 +16895,7 @@ impl GameplayHoldRuntimeState {
 
     #[inline(always)]
     pub fn clear_for_benchmark(&mut self) {
+        self.active_holds.fill(None);
         self.decaying_hold_indices.clear();
         self.hold_decay_active.clear();
         self.tap_miss_held_window.clear();
@@ -16940,6 +17082,23 @@ impl GameplayVisualFeedbackState {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct GameplayDisplayRuntimeState {
+    pub cue_runtime: GameplayCueRuntimeState,
+    pub mini_indicator: GameplayMiniIndicatorRuntimeState,
+    pub hold_feedback: GameplayHoldFeedbackState,
+    pub beat_phase: GameplayBeatPhaseState,
+    pub noteskin_effects: GameplayNoteskinEffects,
+    pub active_color_index: i32,
+    pub player_color_index: i32,
+    pub notefield_motion: GameplayNotefieldMotionState,
+    pub receptor_feedback: GameplayReceptorFeedbackState,
+    pub visual_feedback: GameplayVisualFeedbackState,
+    pub danger_fx: GameplayDangerFxState,
+    pub density_graph: GameplayDensityGraphState,
+    pub toggle_flash: GameplayToggleFlashState,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ExitTransitionKind {
     Out,
@@ -17043,6 +17202,1729 @@ impl GameplayExitInputState {
         self.exit_transition = None;
         self.shift_held = false;
         self.ctrl_held = false;
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct GameplayControlRuntimeState {
+    pub exit_input: GameplayExitInputState,
+    pub offset_adjust_hold: GameplayOffsetAdjustHoldState,
+    pub input_state: GameplayInputState,
+    pub autoplay_runtime: GameplayAutoplayRuntimeState,
+    pub autosync: GameplayAutosyncRuntimeState,
+    pub tick_mode: GameplayTimingTickMode,
+    pub assist_clap: GameplayAssistClapState,
+    pub update_trace: GameplayUpdateTraceState,
+}
+
+pub struct GameplayRuntimeState<Profile, InputEdge, OverlayActor, CapturedActor, StateDelta> {
+    pub source: GameplaySourceRuntimeState,
+    pub setup: GameplaySetupRuntimeState,
+    pub boundary: GameplayBoundaryRuntimeState,
+    pub timing_runtime: GameplayTimingRuntimeState,
+    pub chart_runtime: GameplayChartRuntimeState,
+    pub clock: GameplayClockRuntimeState,
+    pub hold_runtime: GameplayHoldRuntimeState,
+    pub players_runtime: GameplayPlayersRuntimeState,
+    pub display: GameplayDisplayRuntimeState,
+    pub progress: GameplayProgressRuntimeState,
+    pub profiles_runtime: GameplayProfilesRuntimeState<Profile>,
+    pub mods: GameplayModRuntimeState<OverlayActor, CapturedActor, StateDelta>,
+    pub control: GameplayControlRuntimeState,
+    pub pending_input: GameplayPendingInputState<InputEdge>,
+}
+
+impl<Profile, InputEdge, OverlayActor, CapturedActor, StateDelta>
+    GameplayRuntimeState<Profile, InputEdge, OverlayActor, CapturedActor, StateDelta>
+{
+    #[inline(always)]
+    pub fn music_rate(&self) -> f32 {
+        self.clock.music_rate.rate()
+    }
+
+    #[inline(always)]
+    pub const fn current_beat(&self) -> f32 {
+        self.clock.song_position.current_beat
+    }
+
+    #[inline(always)]
+    pub const fn current_music_time_ns(&self) -> SongTimeNs {
+        self.clock.song_position.current_music_time_ns
+    }
+
+    #[inline(always)]
+    pub const fn current_beat_display(&self) -> f32 {
+        self.clock.song_position.current_beat_display
+    }
+
+    #[inline(always)]
+    pub const fn current_music_time_display(&self) -> f32 {
+        self.clock.song_position.current_music_time_display
+    }
+
+    #[inline(always)]
+    pub fn timing_for_player(&self, player: usize) -> Option<&TimingData> {
+        self.timing_runtime
+            .timing_players
+            .get(player)
+            .map(Arc::as_ref)
+    }
+
+    #[inline(always)]
+    pub fn timing(&self) -> &TimingData {
+        &self.timing_runtime.timing
+    }
+
+    #[inline(always)]
+    pub fn song(&self) -> &SongData {
+        &self.source.song
+    }
+
+    #[inline(always)]
+    pub fn song_arc(&self) -> Arc<SongData> {
+        Arc::clone(&self.source.song)
+    }
+
+    #[inline(always)]
+    pub fn notes(&self) -> &[Note] {
+        &self.chart_runtime.notes
+    }
+
+    #[inline(always)]
+    pub fn players(&self) -> &[PlayerRuntime; MAX_PLAYERS] {
+        &self.players_runtime.players
+    }
+
+    #[inline(always)]
+    pub fn player(&self, player_idx: usize) -> Option<&PlayerRuntime> {
+        self.players_runtime.players.get(player_idx)
+    }
+
+    #[inline(always)]
+    pub fn profiles(&self) -> &[Profile; MAX_PLAYERS] {
+        &self.profiles_runtime.profiles
+    }
+
+    #[inline(always)]
+    pub fn profile(&self, player_idx: usize) -> Option<&Profile> {
+        self.profiles_runtime.profiles.get(player_idx)
+    }
+
+    #[inline(always)]
+    pub fn gameplay_chart(&self, player: usize) -> Option<&GameplayChartData> {
+        self.source.gameplay_charts.get(player).map(Arc::as_ref)
+    }
+
+    #[inline(always)]
+    pub fn gameplay_charts(&self) -> &[Arc<GameplayChartData>; MAX_PLAYERS] {
+        &self.source.gameplay_charts
+    }
+
+    #[inline(always)]
+    pub fn chart(&self, player: usize) -> Option<&ChartData> {
+        self.source.charts.get(player).map(Arc::as_ref)
+    }
+
+    #[inline(always)]
+    pub fn charts(&self) -> &[Arc<ChartData>; MAX_PLAYERS] {
+        &self.source.charts
+    }
+
+    #[inline(always)]
+    pub const fn num_players(&self) -> usize {
+        self.setup.num_players
+    }
+
+    #[inline(always)]
+    pub fn set_num_players(&mut self, num_players: usize) {
+        self.setup.num_players = num_players;
+    }
+
+    #[inline(always)]
+    pub const fn num_cols(&self) -> usize {
+        self.setup.num_cols
+    }
+
+    #[inline(always)]
+    pub fn set_num_cols(&mut self, num_cols: usize) {
+        self.setup.num_cols = num_cols;
+    }
+
+    #[inline(always)]
+    pub const fn cols_per_player(&self) -> usize {
+        self.setup.cols_per_player
+    }
+
+    #[inline(always)]
+    pub fn set_cols_per_player(&mut self, cols_per_player: usize) {
+        self.setup.cols_per_player = cols_per_player;
+    }
+
+    #[inline(always)]
+    pub fn set_song_banner_path(&mut self, banner_path: Option<PathBuf>) {
+        Arc::make_mut(&mut self.source.song).banner_path = banner_path;
+    }
+
+    #[inline(always)]
+    pub fn clear_notes(&mut self) {
+        self.chart_runtime.notes.clear();
+    }
+
+    #[inline(always)]
+    pub fn update_player(&mut self, player_idx: usize, update: impl FnOnce(&mut PlayerRuntime)) {
+        if let Some(player) = self.players_runtime.players.get_mut(player_idx) {
+            update(player);
+        }
+    }
+
+    #[inline(always)]
+    pub fn update_profile(&mut self, player_idx: usize, update: impl FnOnce(&mut Profile)) {
+        if let Some(profile) = self.profiles_runtime.profiles.get_mut(player_idx) {
+            update(profile);
+        }
+    }
+
+    #[inline(always)]
+    pub fn row_hides_completed_note(&self, player: usize, row_index: usize) -> bool {
+        completed_row_hides_note(
+            &self.chart_runtime.row_entries,
+            &self.chart_runtime.row_indices.row_map_cache[player],
+            row_index,
+        )
+    }
+
+    #[inline(always)]
+    pub const fn song_lua_visuals(
+        &self,
+    ) -> &SongLuaRuntimeVisuals<OverlayActor, CapturedActor, StateDelta> {
+        &self.mods.song_lua_visuals
+    }
+
+    #[inline(always)]
+    pub fn song_lua_player_transform(&self, player: usize) -> SongLuaPlayerTransform {
+        self.mods
+            .song_lua_player_transforms
+            .get(player)
+            .copied()
+            .unwrap_or_default()
+    }
+
+    #[inline(always)]
+    pub fn set_end_times(&mut self, notes_end_time_ns: SongTimeNs, music_end_time_ns: SongTimeNs) {
+        self.clock
+            .end_timing
+            .set_note_and_music_end_times(notes_end_time_ns, music_end_time_ns);
+    }
+
+    #[inline(always)]
+    pub fn set_global_offsets(
+        &mut self,
+        initial_global_offset_seconds: f32,
+        global_offset_seconds: f32,
+    ) {
+        self.clock.offsets = GameplayOffsetState::new(
+            initial_global_offset_seconds,
+            [0.0; MAX_PLAYERS],
+            self.clock.offsets.song_offset_seconds(),
+        );
+        self.clock
+            .offsets
+            .set_global_offset_seconds(global_offset_seconds);
+    }
+
+    pub fn stream_segments_for_results(&self, player: usize) -> Vec<StreamSegment> {
+        if player >= self.setup.num_players {
+            return Vec::new();
+        }
+        let mini_indicator_segments = self.mini_indicator_stream_segments(player);
+        if !mini_indicator_segments.is_empty() {
+            return mini_indicator_segments.to_vec();
+        }
+        let constant_bpm = !self.timing_runtime.timing_players[player].has_bpm_changes();
+        let (segments, _, _) = stream_segments_for_note_data(
+            &self.source.gameplay_charts[player].notes,
+            self.setup.cols_per_player,
+            constant_bpm,
+        );
+        segments
+    }
+
+    #[inline(always)]
+    pub fn begin_outro_attack_clear(&mut self) {
+        begin_outro_attack_visual_clear(
+            &mut self.mods.attacks.cleared_for_outro,
+            self.setup.num_players,
+            &self.mods.attacks.visual,
+            &mut self.mods.attacks.outro_visual,
+        );
+    }
+
+    #[inline(always)]
+    pub fn player_attack_base_cleared(&self, player_idx: usize) -> bool {
+        player_idx < self.setup.num_players && self.mods.attacks.clear_all[player_idx]
+    }
+
+    #[inline(always)]
+    pub fn effective_accel_effects_for_player_with_mask(
+        &self,
+        player_idx: usize,
+        profile_mask_bits: u8,
+    ) -> AccelEffects {
+        if player_idx >= self.setup.num_players {
+            return AccelEffects::default();
+        }
+        effective_attack_accel_effects(
+            self.player_attack_base_cleared(player_idx),
+            profile_mask_bits,
+            self.mods.attacks.accel[player_idx],
+        )
+    }
+
+    #[inline(always)]
+    pub fn effective_visual_effects_for_player_with_mask(
+        &self,
+        player_idx: usize,
+        profile_mask_bits: u16,
+    ) -> VisualEffects {
+        if player_idx >= self.setup.num_players {
+            return VisualEffects::default();
+        }
+        effective_attack_visual_effects(
+            self.player_attack_base_cleared(player_idx),
+            profile_mask_bits,
+            self.mods.attacks.visual[player_idx],
+        )
+    }
+
+    #[inline(always)]
+    pub fn effective_appearance_effects_for_player(&self, player_idx: usize) -> AppearanceEffects {
+        if player_idx >= self.setup.num_players {
+            return AppearanceEffects::default();
+        }
+        self.mods.attacks.appearance[player_idx]
+    }
+
+    #[inline(always)]
+    pub fn effective_visibility_effects_for_player(&self, player_idx: usize) -> VisibilityEffects {
+        if player_idx >= self.setup.num_players {
+            return VisibilityEffects::default();
+        }
+        effective_attack_visibility_effects(self.mods.attacks.visibility[player_idx])
+    }
+
+    #[inline(always)]
+    pub fn active_chart_attack_effects_for_player(&self, player_idx: usize) -> ChartAttackEffects {
+        if player_idx >= self.setup.num_players {
+            return ChartAttackEffects::default();
+        }
+        self.mods.attacks.chart[player_idx]
+    }
+
+    #[inline(always)]
+    pub fn effective_scroll_effects_for_player_with_base(
+        &self,
+        player_idx: usize,
+        base_scroll: ScrollEffects,
+    ) -> ScrollEffects {
+        if player_idx >= self.setup.num_players {
+            return ScrollEffects::default();
+        }
+        effective_attack_scroll_effects(
+            self.player_attack_base_cleared(player_idx),
+            base_scroll,
+            self.mods.attacks.scroll[player_idx],
+        )
+    }
+
+    #[inline(always)]
+    pub fn effective_perspective_effects_for_player_with_base(
+        &self,
+        player_idx: usize,
+        base_perspective: PerspectiveEffects,
+    ) -> PerspectiveEffects {
+        if player_idx >= self.setup.num_players {
+            return PerspectiveEffects::default();
+        }
+        effective_attack_perspective_effects(
+            self.player_attack_base_cleared(player_idx),
+            base_perspective,
+            self.mods.attacks.perspective[player_idx],
+        )
+    }
+
+    #[inline(always)]
+    pub fn effective_mini_percent_for_player_with_base(
+        &self,
+        player_idx: usize,
+        base_mini_percent: f32,
+    ) -> f32 {
+        if player_idx >= self.setup.num_players {
+            return 0.0;
+        }
+        effective_mini_percent(
+            self.mods.attacks.mini_percent[player_idx],
+            base_mini_percent,
+            self.player_attack_base_cleared(player_idx),
+        )
+    }
+
+    #[inline(always)]
+    pub fn effective_scroll_speed_for_player_with_base(
+        &self,
+        player_idx: usize,
+        base_scroll_speed: ScrollSpeedSetting,
+    ) -> ScrollSpeedSetting {
+        if player_idx >= self.setup.num_players {
+            return ScrollSpeedSetting::default();
+        }
+        effective_attack_scroll_speed(
+            self.player_attack_base_cleared(player_idx),
+            self.mods.attacks.scroll_speed[player_idx],
+            base_scroll_speed,
+        )
+    }
+
+    #[inline(always)]
+    pub fn mini_indicator_stream_segments(&self, player: usize) -> &[StreamSegment] {
+        self.display.mini_indicator.stream_segments(player)
+    }
+
+    #[inline(always)]
+    pub fn mini_indicator_total_stream_measures(&self, player: usize) -> f32 {
+        self.display.mini_indicator.total_stream_measures(player)
+    }
+
+    #[inline(always)]
+    pub fn mini_indicator_target_score_percent(&self, player: usize) -> f64 {
+        self.display.mini_indicator.target_score_percent(player)
+    }
+
+    #[inline(always)]
+    pub fn mini_indicator_rival_score_percent(&self, player: usize) -> f64 {
+        self.display.mini_indicator.rival_score_percent(player)
+    }
+
+    #[inline(always)]
+    pub fn clear_mini_indicator_stream_segments(&mut self) {
+        self.display.mini_indicator.clear_stream_segments();
+    }
+
+    #[inline(always)]
+    pub fn note_count_stats(&self, player: usize) -> &[NoteCountStat] {
+        self.chart_runtime.note_count_stats.player_stats(player)
+    }
+
+    #[inline(always)]
+    pub fn lane_hold_indices(&self, col: usize) -> &[usize] {
+        self.chart_runtime.lane_indices.hold_indices(col)
+    }
+
+    #[inline(always)]
+    pub fn active_hold(&self, col: usize) -> Option<&ActiveHold> {
+        self.hold_runtime
+            .active_holds
+            .get(col)
+            .and_then(Option::as_ref)
+    }
+
+    #[inline(always)]
+    pub fn active_hold_note_indices(&self) -> impl Iterator<Item = usize> + '_ {
+        self.hold_runtime
+            .active_holds
+            .iter()
+            .filter_map(|active| active.as_ref().map(|hold| hold.note_index))
+    }
+
+    #[inline(always)]
+    pub const fn active_color_index(&self) -> i32 {
+        self.display.active_color_index
+    }
+
+    #[inline(always)]
+    pub const fn player_color_index(&self) -> i32 {
+        self.display.player_color_index
+    }
+
+    #[inline(always)]
+    pub fn set_color_indices(&mut self, active_color_index: i32, player_color_index: i32) {
+        self.display.active_color_index = active_color_index;
+        self.display.player_color_index = player_color_index;
+    }
+
+    #[inline(always)]
+    pub fn lane_note_row_indices(&self, col: usize) -> &[usize] {
+        self.chart_runtime.lane_indices.note_row_indices(col)
+    }
+
+    #[inline(always)]
+    pub fn tap_row_hold_roll_flags(&self, note_index: usize) -> u8 {
+        self.chart_runtime
+            .lane_indices
+            .tap_row_hold_roll_flags(note_index)
+    }
+
+    #[inline(always)]
+    pub fn clear_lane_indices(&mut self) {
+        self.chart_runtime.lane_indices.clear_for_benchmark();
+    }
+
+    #[inline(always)]
+    pub fn clear_row_indices(&mut self) {
+        self.chart_runtime.row_indices.clear_for_benchmark();
+    }
+
+    #[inline(always)]
+    pub fn clear_row_entries(&mut self) {
+        self.chart_runtime.row_entries.clear();
+    }
+
+    #[inline(always)]
+    pub fn clear_mine_scan(&mut self) {
+        self.chart_runtime.mine_scan.clear_for_benchmark();
+    }
+
+    #[inline(always)]
+    pub fn clear_note_ranges(&mut self) {
+        self.chart_runtime.note_ranges.clear_for_benchmark();
+    }
+
+    #[inline(always)]
+    pub fn set_note_range(&mut self, player: usize, range: (usize, usize)) {
+        self.chart_runtime
+            .note_ranges
+            .set_range_for_benchmark(player, range);
+    }
+
+    #[inline(always)]
+    pub fn set_next_tap_miss_cursor(&mut self, player: usize, cursor: usize) {
+        self.chart_runtime
+            .mine_scan
+            .set_next_tap_miss_cursor(player, cursor);
+    }
+
+    #[inline(always)]
+    pub fn decaying_hold_indices(&self) -> &[usize] {
+        &self.hold_runtime.decaying_hold_indices
+    }
+
+    #[inline(always)]
+    pub fn clear_hold_runtime(&mut self) {
+        self.hold_runtime.clear_for_benchmark();
+    }
+
+    #[inline(always)]
+    pub fn clear_active_holds(&mut self) {
+        self.hold_runtime.active_holds.fill(None);
+    }
+
+    #[inline(always)]
+    pub fn set_active_hold(&mut self, col: usize, active_hold: Option<ActiveHold>) {
+        if let Some(slot) = self.hold_runtime.active_holds.get_mut(col) {
+            *slot = active_hold;
+        }
+    }
+
+    #[inline(always)]
+    pub fn measure_counter_segments(&self, player: usize) -> &[StreamSegment] {
+        self.display.cue_runtime.measure_counter_segments(player)
+    }
+
+    #[inline(always)]
+    pub fn column_cues(&self, player: usize) -> &[ColumnCue] {
+        self.display.cue_runtime.column_cues(player)
+    }
+
+    #[inline(always)]
+    pub fn crossover_cues(&self, player: usize) -> &[ColumnCue] {
+        self.display.cue_runtime.crossover_cues(player)
+    }
+
+    #[inline(always)]
+    pub fn set_column_cues(&mut self, player: usize, cues: Vec<ColumnCue>) {
+        self.display
+            .cue_runtime
+            .set_column_cues_for_benchmark(player, cues);
+    }
+
+    #[inline(always)]
+    pub fn clear_cue_runtime(&mut self) {
+        self.display.cue_runtime.clear_for_benchmark();
+    }
+
+    #[inline(always)]
+    pub fn hold_judgment(&self, col: usize) -> Option<HoldJudgmentRenderInfo> {
+        self.display.hold_feedback.hold_judgment(col)
+    }
+
+    #[inline(always)]
+    pub fn hold_judgments_for_columns(
+        &self,
+        col_start: usize,
+        num_cols: usize,
+    ) -> &[Option<HoldJudgmentRenderInfo>] {
+        self.display
+            .hold_feedback
+            .hold_judgments(col_start, num_cols)
+    }
+
+    #[inline(always)]
+    pub fn held_miss_judgments_for_columns(
+        &self,
+        col_start: usize,
+        num_cols: usize,
+    ) -> &[Option<HeldMissRenderInfo>] {
+        self.display
+            .hold_feedback
+            .held_miss_judgments(col_start, num_cols)
+    }
+
+    #[inline(always)]
+    pub fn tap_explosions_for_columns(
+        &self,
+        col_start: usize,
+        num_cols: usize,
+    ) -> &[Option<ActiveTapExplosion>] {
+        self.display
+            .visual_feedback
+            .tap_explosions(col_start, num_cols)
+    }
+
+    #[inline(always)]
+    pub fn column_flashes_for_columns(
+        &self,
+        col_start: usize,
+        num_cols: usize,
+    ) -> &[Option<ActiveColumnFlash>] {
+        self.display
+            .visual_feedback
+            .column_flashes(col_start, num_cols)
+    }
+
+    #[inline(always)]
+    pub fn mine_explosions_for_columns(
+        &self,
+        col_start: usize,
+        num_cols: usize,
+    ) -> &[Option<ActiveMineExplosion>] {
+        self.display
+            .visual_feedback
+            .mine_explosions(col_start, num_cols)
+    }
+
+    #[inline(always)]
+    pub fn last_tap_judgment(&self, col: usize) -> Option<ColumnTapJudgment> {
+        self.display.visual_feedback.last_tap_judgment(col)
+    }
+
+    #[inline(always)]
+    pub fn mine_started_at_screen_s(&self, col: usize) -> Option<f32> {
+        self.display.visual_feedback.mine_started_at_screen_s(col)
+    }
+
+    #[inline(always)]
+    pub fn clear_visual_feedback(&mut self) {
+        self.display.visual_feedback.clear();
+    }
+
+    #[inline(always)]
+    pub fn set_tap_explosion(&mut self, col: usize, explosion: Option<ActiveTapExplosion>) {
+        self.display
+            .visual_feedback
+            .set_tap_explosion_for_benchmark(col, explosion);
+    }
+
+    pub fn course_display_carry(&self) -> [CourseDisplayCarry; MAX_PLAYERS] {
+        let stages = std::array::from_fn(|player| {
+            if player >= self.setup.num_players.min(MAX_PLAYERS) {
+                return Default::default();
+            }
+            player_course_display_stage(
+                &self.players_runtime.players[player],
+                self.progress.window_counts.canonical(player),
+                self.progress.window_counts.ten_ms_blue(player),
+                self.progress.window_counts.display_blue(player),
+            )
+        });
+        course_display_carry_for_stages(
+            self.progress.course_display.carry(),
+            stages,
+            self.setup.num_players,
+        )
+    }
+
+    #[inline(always)]
+    pub fn display_carry_for_player(&self, player_idx: usize) -> CourseDisplayCarry {
+        self.progress.course_display.carry_for_player(player_idx)
+    }
+
+    #[inline(always)]
+    pub fn note_range_for_player(&self, player_idx: usize) -> (usize, usize) {
+        player_note_range_for_ranges(
+            self.chart_runtime.note_ranges.ranges(),
+            self.setup.num_players,
+            player_idx,
+        )
+    }
+
+    #[inline(always)]
+    pub fn live_window_counts(&self, player_idx: usize) -> WindowCounts {
+        self.progress.window_counts.canonical(player_idx)
+    }
+
+    #[inline(always)]
+    pub fn set_live_window_counts(
+        &mut self,
+        player_idx: usize,
+        canonical: WindowCounts,
+        ten_ms_blue: WindowCounts,
+        display_blue: WindowCounts,
+    ) {
+        self.progress.window_counts.set_player_for_benchmark(
+            player_idx,
+            canonical,
+            ten_ms_blue,
+            display_blue,
+        );
+    }
+
+    #[inline(always)]
+    pub fn display_totals_for_player(&self, player_idx: usize) -> CourseDisplayTotals {
+        self.progress
+            .chart_totals
+            .display_totals(self.progress.course_display.totals(), player_idx)
+    }
+
+    #[inline(always)]
+    pub fn course_display_is_course_stage(&self) -> bool {
+        self.progress.course_display.is_course_stage()
+    }
+
+    #[inline(always)]
+    pub fn course_display_timing(&self) -> Option<CourseDisplayTiming> {
+        self.progress.course_display.timing()
+    }
+
+    #[inline(always)]
+    pub fn field_zoom_for_player(&self, player_idx: usize) -> f32 {
+        self.display.notefield_motion.field_zoom(player_idx)
+    }
+
+    #[inline(always)]
+    pub fn notefield_draw_distance_before_targets(&self, player_idx: usize) -> f32 {
+        self.display
+            .notefield_motion
+            .draw_distance_before_targets(player_idx)
+    }
+
+    #[inline(always)]
+    pub fn notefield_draw_distance_after_targets(&self, player_idx: usize) -> f32 {
+        self.display
+            .notefield_motion
+            .draw_distance_after_targets(player_idx)
+    }
+
+    #[inline(always)]
+    pub fn notefield_column_scroll_dir(&self, col: usize) -> f32 {
+        self.display.notefield_motion.column_scroll_dir(col)
+    }
+
+    #[inline(always)]
+    pub fn notefield_column_scroll_dir_count(&self) -> usize {
+        self.display.notefield_motion.column_scroll_dir_count()
+    }
+
+    #[inline(always)]
+    pub fn notefield_reverse_scroll(&self, player_idx: usize) -> bool {
+        self.display.notefield_motion.reverse_scroll(player_idx)
+    }
+
+    #[inline(always)]
+    pub fn scroll_speed_for_player(&self, player_idx: usize) -> ScrollSpeedSetting {
+        self.display.notefield_motion.scroll_speed(player_idx)
+    }
+
+    #[inline(always)]
+    pub fn scroll_reference_bpm(&self) -> f32 {
+        self.display.notefield_motion.scroll_reference_bpm()
+    }
+
+    #[inline(always)]
+    pub fn notes_end_time_ns(&self) -> SongTimeNs {
+        self.clock.end_timing.notes_end_time_ns()
+    }
+
+    #[inline(always)]
+    pub fn music_end_time_ns(&self) -> SongTimeNs {
+        self.clock.end_timing.music_end_time_ns()
+    }
+
+    #[inline(always)]
+    pub fn is_in_freeze(&self) -> bool {
+        self.display.beat_phase.is_in_freeze()
+    }
+
+    #[inline(always)]
+    pub fn is_in_delay(&self) -> bool {
+        self.display.beat_phase.is_in_delay()
+    }
+
+    #[inline(always)]
+    pub fn beat_phase_paused(&self) -> bool {
+        self.display.beat_phase.paused()
+    }
+
+    #[inline(always)]
+    pub fn hands_total_for_player(&self, player_idx: usize) -> u32 {
+        self.progress
+            .chart_totals
+            .hands_total
+            .get(player_idx)
+            .copied()
+            .unwrap_or(0)
+    }
+
+    pub fn display_judgment_count(&self, player_idx: usize, grade: JudgeGrade) -> u32 {
+        if player_idx >= self.setup.num_players {
+            return 0;
+        }
+        player_display_judgment_count(
+            &self.players_runtime.players[player_idx],
+            self.display_carry_for_player(player_idx),
+            grade,
+        )
+    }
+
+    pub fn display_live_timing_stats(
+        &self,
+        player_idx: usize,
+    ) -> deadsync_rules::timing::LiveTimingSnapshot {
+        if player_idx >= self.setup.num_players {
+            return deadsync_rules::timing::LiveTimingSnapshot::default();
+        }
+        player_live_timing_snapshot(&self.players_runtime.players[player_idx])
+    }
+
+    pub fn display_window_counts_10ms(&self, player_idx: usize) -> WindowCounts {
+        if player_idx >= self.setup.num_players {
+            return WindowCounts::default();
+        }
+        let current = self.progress.window_counts.ten_ms_blue(player_idx);
+        display_window_counts_with_carry(
+            current,
+            self.display_carry_for_player(player_idx),
+            DisplayWindowCountsMode::TenMsBlue,
+        )
+    }
+
+    #[inline(always)]
+    pub fn display_score_stage(&self, player_idx: usize) -> ItgScoreStage {
+        player_score_stage(&self.players_runtime.players[player_idx])
+    }
+
+    pub fn display_window_counts(
+        &self,
+        player_idx: usize,
+        blue_window_ms: Option<f32>,
+        player_blue_window_ms: f32,
+    ) -> WindowCounts {
+        if player_idx >= self.setup.num_players {
+            return WindowCounts::default();
+        }
+        let sources = self.progress.window_counts.sources(player_idx);
+        let (start, end) = self.note_range_for_player(player_idx);
+        let end = end.min(self.chart_runtime.notes.len());
+        let notes = if start < end {
+            &self.chart_runtime.notes[start..end]
+        } else {
+            &[]
+        };
+        display_window_counts_for_notes(
+            sources,
+            self.display_carry_for_player(player_idx),
+            notes,
+            blue_window_ms,
+            player_blue_window_ms,
+        )
+    }
+
+    pub fn live_ex_score_inputs(
+        &self,
+        player_idx: usize,
+        player_blue_window_ms: f32,
+    ) -> ExScoreInputs {
+        ex_score_inputs_from_display(
+            self.display_window_counts(player_idx, None, player_blue_window_ms),
+            self.display_window_counts_10ms(player_idx),
+            self.display_score_stage(player_idx),
+        )
+    }
+
+    #[inline(always)]
+    pub fn ex_score_data_from_inputs(
+        &self,
+        player_idx: usize,
+        inputs: ExScoreInputs,
+    ) -> judgment::ExScoreData {
+        ex_score_data_from_display_inputs(
+            inputs,
+            self.display_carry_for_player(player_idx),
+            self.display_totals_for_player(player_idx),
+        )
+    }
+
+    pub fn display_itg_score_inputs(&self, player_idx: usize) -> Option<ItgScoreInputs> {
+        if player_idx >= self.setup.num_players {
+            return None;
+        }
+        Some(itg_score_inputs_from_display(
+            self.display_score_stage(player_idx),
+            self.display_carry_for_player(player_idx),
+            self.display_totals_for_player(player_idx),
+        ))
+    }
+
+    pub fn display_itg_score_percent(&self, player_idx: usize) -> f64 {
+        self.display_itg_score_inputs(player_idx)
+            .map_or(0.0, itg_score_percent_from_inputs)
+    }
+
+    pub fn display_predictive_itg_score_percent(&self, player_idx: usize) -> f64 {
+        self.display_itg_score_inputs(player_idx)
+            .map_or(0.0, predictive_itg_score_percent_from_inputs)
+    }
+
+    pub fn display_gameplay_itg_score_percent(
+        &self,
+        player_idx: usize,
+        mode: GameplayScoreDisplayMode,
+    ) -> f64 {
+        self.display_itg_score_inputs(player_idx)
+            .map_or(0.0, |inputs| {
+                display_itg_score_percent_for_mode(inputs, mode)
+            })
+    }
+
+    pub fn capture_failed_ex_score_inputs(
+        &mut self,
+        player_idx: usize,
+        player_blue_window_ms: f32,
+    ) {
+        if player_idx >= self.setup.num_players || player_idx >= MAX_PLAYERS {
+            return;
+        }
+        let live = self.live_ex_score_inputs(player_idx, player_blue_window_ms);
+        capture_player_failed_ex_score_inputs(&mut self.players_runtime.players[player_idx], live);
+    }
+
+    pub fn display_ex_score_data(
+        &self,
+        player_idx: usize,
+        player_blue_window_ms: f32,
+    ) -> judgment::ExScoreData {
+        if player_idx >= self.setup.num_players {
+            return judgment::ExScoreData::default();
+        }
+        self.ex_score_data_from_inputs(
+            player_idx,
+            self.live_ex_score_inputs(player_idx, player_blue_window_ms),
+        )
+    }
+
+    pub fn display_scored_ex_score_data(
+        &self,
+        player_idx: usize,
+        player_blue_window_ms: f32,
+    ) -> judgment::ExScoreData {
+        if player_idx >= self.setup.num_players {
+            return judgment::ExScoreData::default();
+        }
+        let live = self.live_ex_score_inputs(player_idx, player_blue_window_ms);
+        let inputs =
+            player_effective_ex_score_inputs(&self.players_runtime.players[player_idx], live);
+        self.ex_score_data_from_inputs(player_idx, inputs)
+    }
+
+    pub fn display_ex_score_percent(&self, player_idx: usize, player_blue_window_ms: f32) -> f64 {
+        judgment::ex_score_percent(
+            &self.display_scored_ex_score_data(player_idx, player_blue_window_ms),
+        )
+    }
+
+    pub fn display_gameplay_ex_score_percent(
+        &self,
+        player_idx: usize,
+        mode: GameplayScoreDisplayMode,
+        player_blue_window_ms: f32,
+    ) -> f64 {
+        let score = self.display_scored_ex_score_data(player_idx, player_blue_window_ms);
+        display_ex_score_percent_for_mode(&score, mode)
+    }
+
+    pub fn display_hard_ex_score_percent(
+        &self,
+        player_idx: usize,
+        player_blue_window_ms: f32,
+    ) -> f64 {
+        judgment::hard_ex_score_percent(
+            &self.display_scored_ex_score_data(player_idx, player_blue_window_ms),
+        )
+    }
+
+    pub fn display_gameplay_hard_ex_score_percent(
+        &self,
+        player_idx: usize,
+        mode: GameplayScoreDisplayMode,
+        player_blue_window_ms: f32,
+    ) -> f64 {
+        let score = self.display_scored_ex_score_data(player_idx, player_blue_window_ms);
+        display_hard_ex_score_percent_for_mode(&score, mode)
+    }
+
+    #[inline(always)]
+    pub fn player_is_dead(&self, player: usize) -> bool {
+        player_runtime_is_dead(&self.players_runtime.players[player])
+    }
+
+    #[inline(always)]
+    pub fn all_joined_players_failed(&self) -> bool {
+        all_joined_player_runtimes_failed(&self.players_runtime.players, self.setup.num_players)
+    }
+
+    #[inline(always)]
+    pub fn course_stage_life_submit_eligible(&self, player_idx: usize) -> bool {
+        if player_idx >= self.setup.num_players.min(MAX_PLAYERS) {
+            return true;
+        }
+        player_course_submit_life_eligible(&self.players_runtime.players[player_idx])
+    }
+
+    #[inline(always)]
+    pub fn runtime_player_side(&self, player: usize) -> GameplayInputPlayerSide {
+        self.setup.session.runtime_player_side(player)
+    }
+
+    #[inline(always)]
+    pub fn default_fa_plus_window_s(&self) -> f32 {
+        self.timing_runtime
+            .timing_profile
+            .fa_plus_window_s
+            .unwrap_or(self.timing_runtime.timing_profile.windows_s[0])
+    }
+
+    #[inline(always)]
+    pub fn player_largest_tap_window_ns(&self, player_idx: usize) -> SongTimeNs {
+        if player_idx >= self.setup.num_players {
+            return 0;
+        }
+        self.timing_runtime.player_judgment_timing[player_idx].largest_tap_window_music_ns
+    }
+
+    #[inline(always)]
+    pub fn note_hit_eval(
+        &self,
+        player_idx: usize,
+        note_time_ns: SongTimeNs,
+        current_time_ns: SongTimeNs,
+    ) -> Option<NoteHitEval> {
+        if player_idx >= self.setup.num_players {
+            return None;
+        }
+        note_hit_eval_for_timing(
+            self.timing_runtime.player_judgment_timing[player_idx],
+            note_time_ns,
+            current_time_ns,
+        )
+    }
+
+    #[inline(always)]
+    pub fn effective_player_global_offset_seconds(&self, player_idx: usize) -> f32 {
+        self.clock
+            .offsets
+            .effective_player_global_offset_seconds(player_idx)
+    }
+
+    #[inline(always)]
+    pub fn global_offset_seconds(&self) -> f32 {
+        self.clock.offsets.global_offset_seconds()
+    }
+
+    #[inline(always)]
+    pub fn initial_global_offset_seconds(&self) -> f32 {
+        self.clock.offsets.initial_global_offset_seconds()
+    }
+
+    #[inline(always)]
+    pub fn song_offset_seconds(&self) -> f32 {
+        self.clock.offsets.song_offset_seconds()
+    }
+
+    #[inline(always)]
+    pub fn initial_song_offset_seconds(&self) -> f32 {
+        self.clock.offsets.initial_song_offset_seconds()
+    }
+
+    #[inline(always)]
+    pub fn set_replay_capture_enabled(&mut self, enabled: bool) {
+        self.progress.replay.capture_enabled = enabled;
+    }
+
+    #[inline(always)]
+    pub fn replay_capture_enabled(&self) -> bool {
+        self.progress.replay.capture_enabled
+    }
+
+    #[inline(always)]
+    pub fn recorded_replay_edges(&self) -> &[RecordedLaneEdge] {
+        &self.progress.replay.edges
+    }
+
+    #[inline(always)]
+    pub fn clear_recorded_replay_edges(&mut self) {
+        self.progress.replay.edges.clear();
+    }
+
+    #[inline(always)]
+    pub fn autoplay_enabled(&self) -> bool {
+        self.progress.stage.autoplay_enabled
+    }
+
+    #[inline(always)]
+    pub fn autoplay_used(&self) -> bool {
+        self.progress.stage.autoplay_used
+    }
+
+    #[inline(always)]
+    pub fn score_valid_for_player(&self, player: usize) -> bool {
+        self.progress
+            .stage
+            .score_valid
+            .get(player)
+            .copied()
+            .unwrap_or(false)
+    }
+
+    #[inline(always)]
+    pub fn song_completed_naturally(&self) -> bool {
+        self.progress.stage.song_completed_naturally
+    }
+
+    #[inline(always)]
+    pub fn reset_stage_runtime_for_benchmark(&mut self) {
+        self.progress.stage.autoplay_enabled = false;
+        self.progress.stage.song_completed_naturally = false;
+    }
+
+    #[inline(always)]
+    pub fn reset_exit_input(&mut self) {
+        self.control.exit_input.reset();
+    }
+
+    #[inline(always)]
+    pub fn set_autoplay_enabled_for_benchmark(&mut self, enabled: bool) {
+        self.progress.stage.autoplay_enabled = enabled;
+    }
+
+    #[inline(always)]
+    pub fn autosync_mode(&self) -> AutosyncMode {
+        self.control.autosync.mode
+    }
+
+    #[inline(always)]
+    pub fn autosync_standard_deviation(&self) -> f32 {
+        self.control.autosync.standard_deviation
+    }
+
+    #[inline(always)]
+    pub fn autosync_sample_count(&self) -> usize {
+        self.control.autosync.offset_sample_count
+    }
+
+    #[inline(always)]
+    pub fn set_autosync_state_for_benchmark(
+        &mut self,
+        mode: AutosyncMode,
+        standard_deviation: f32,
+        sample_count: usize,
+    ) {
+        self.control.autosync.mode = mode;
+        self.control.autosync.standard_deviation = standard_deviation;
+        self.control.autosync.offset_sample_count = sample_count.min(AUTOSYNC_OFFSET_SAMPLE_COUNT);
+    }
+
+    #[inline(always)]
+    pub fn visible_music_time_ns(&self, player: usize) -> SongTimeNs {
+        self.clock
+            .visible_timing
+            .current_music_time_ns
+            .get(player)
+            .copied()
+            .unwrap_or(INVALID_SONG_TIME_NS)
+    }
+
+    #[inline(always)]
+    pub fn visible_music_time_seconds(&self, player: usize) -> f32 {
+        self.clock
+            .visible_timing
+            .current_music_time
+            .get(player)
+            .copied()
+            .unwrap_or(0.0)
+    }
+
+    #[inline(always)]
+    pub fn visible_beat(&self, player: usize) -> f32 {
+        self.clock
+            .visible_timing
+            .current_beat
+            .get(player)
+            .copied()
+            .unwrap_or(0.0)
+    }
+
+    #[inline(always)]
+    pub fn set_visible_time(
+        &mut self,
+        player: usize,
+        music_time_ns: SongTimeNs,
+        music_time_seconds: f32,
+        beat: f32,
+    ) {
+        self.clock
+            .visible_timing
+            .set_player_time(player, music_time_ns, music_time_seconds, beat);
+    }
+
+    #[inline(always)]
+    pub fn fill_visible_time_for_benchmark(&mut self, music_time_seconds: f32) {
+        let music_time_ns = song_time_ns_from_seconds(music_time_seconds);
+        for player in 0..MAX_PLAYERS {
+            self.set_visible_time(player, music_time_ns, music_time_seconds, 0.0);
+        }
+    }
+
+    pub fn set_density_graph_top_for_benchmark(
+        &mut self,
+        first_second: f32,
+        last_second: f32,
+        player: usize,
+        top_w: f32,
+        top_h: f32,
+        top_scale_y: f32,
+    ) {
+        self.display.density_graph.first_second = first_second;
+        self.display.density_graph.last_second = last_second;
+        self.display.density_graph.duration = (last_second - first_second).max(0.001);
+        if player < MAX_PLAYERS {
+            self.display.density_graph.top_h = top_h;
+            self.display.density_graph.top_w[player] = top_w;
+            self.display.density_graph.top_scale_y[player] = top_scale_y;
+        }
+    }
+
+    #[inline(always)]
+    pub fn note_time_cache_ns(&self) -> &[SongTimeNs] {
+        &self.chart_runtime.note_time_cache_ns
+    }
+
+    #[inline(always)]
+    pub fn hold_end_time_cache_ns(&self) -> &[Option<SongTimeNs>] {
+        &self.chart_runtime.hold_end_time_cache_ns
+    }
+
+    #[inline(always)]
+    pub fn note_time_cache_ns_at(&self, index: usize) -> Option<SongTimeNs> {
+        self.chart_runtime.note_time_cache_ns.get(index).copied()
+    }
+
+    #[inline(always)]
+    pub fn hold_end_time_cache_ns_at(&self, index: usize) -> Option<Option<SongTimeNs>> {
+        self.chart_runtime
+            .hold_end_time_cache_ns
+            .get(index)
+            .copied()
+    }
+
+    #[inline(always)]
+    pub fn clear_note_timing_caches(&mut self) {
+        self.chart_runtime.note_time_cache_ns.clear();
+        self.chart_runtime.hold_end_time_cache_ns.clear();
+    }
+
+    #[inline(always)]
+    pub fn lane_is_pressed(&self, col: usize) -> bool {
+        self.control.input_state.lane_is_pressed(col)
+    }
+
+    #[inline(always)]
+    pub fn set_receptor_glow_timers(&mut self, col: usize, timers: GameplayReceptorGlowTimers) {
+        self.display.receptor_feedback.set_glow_timers(col, timers);
+    }
+
+    #[inline(always)]
+    pub fn receptor_glow_press_timer(&self, col: usize) -> f32 {
+        self.display
+            .receptor_feedback
+            .glow_press_timers
+            .get(col)
+            .copied()
+            .unwrap_or(0.0)
+    }
+
+    #[inline(always)]
+    pub fn start_receptor_bop(&mut self, col: usize, behavior: GameplayReceptorStepBehavior) {
+        self.display.receptor_feedback.start_bop(col, behavior);
+    }
+
+    #[inline(always)]
+    pub fn receptor_glow_visual(
+        &self,
+        col: usize,
+        behavior: GameplayReceptorGlowBehavior,
+    ) -> Option<(f32, f32)> {
+        if col >= self.setup.num_cols {
+            return None;
+        }
+        receptor_glow_visual(
+            behavior,
+            self.display
+                .receptor_feedback
+                .receptor_glow_state(col, self.lane_is_pressed(col)),
+        )
+    }
+
+    #[inline(always)]
+    pub fn receptor_bop_zoom(&self, col: usize) -> f32 {
+        self.display.receptor_feedback.bop_zoom(col)
+    }
+
+    #[inline(always)]
+    pub fn set_receptor_bop_timer_for_benchmark(&mut self, col: usize, timer: f32) {
+        self.display
+            .receptor_feedback
+            .set_bop_timer_for_benchmark(col, timer);
+    }
+
+    #[inline(always)]
+    pub fn pending_input_is_empty(&self) -> bool {
+        self.pending_input.edges.is_empty()
+    }
+
+    #[inline(always)]
+    pub fn pending_input_len(&self) -> usize {
+        self.pending_input.edges.len()
+    }
+
+    #[inline(always)]
+    pub fn push_pending_input_edge(&mut self, edge: InputEdge) {
+        self.pending_input.edges.push_back(edge);
+    }
+
+    #[inline(always)]
+    pub fn pop_pending_input_edge(&mut self) -> Option<InputEdge> {
+        self.pending_input.edges.pop_front()
+    }
+
+    #[inline(always)]
+    pub fn clear_pending_input_edges(&mut self) {
+        self.pending_input.edges.clear();
+    }
+
+    #[inline(always)]
+    pub fn push_recorded_replay_edge(&mut self, edge: RecordedLaneEdge) {
+        self.progress.replay.edges.push(edge);
+    }
+
+    #[inline(always)]
+    pub fn toggle_flash_text(&self) -> Option<(&'static str, f32)> {
+        self.display.toggle_flash.visible_text()
+    }
+
+    #[inline(always)]
+    pub fn exit_transition_active(&self) -> bool {
+        self.control.exit_input.exit_transition.is_some()
+    }
+
+    #[inline(always)]
+    pub fn exit_prompt_state(&self) -> GameplayExitPromptState {
+        self.control.exit_input.prompt_state()
+    }
+
+    pub fn danger_overlay_rgba(&self, player: usize, hide_lifebar: bool) -> Option<[f32; 4]> {
+        if player >= self.setup.num_players || hide_lifebar {
+            return None;
+        }
+        let rgba = self
+            .display
+            .danger_fx
+            .rgba(player, self.boundary.total_elapsed_in_screen);
+        if rgba[3] > 0.0 { Some(rgba) } else { None }
+    }
+
+    #[inline(always)]
+    pub fn lane_pressed(&self, col: usize) -> bool {
+        col < self.setup.num_cols && self.lane_is_pressed(col)
+    }
+
+    #[inline(always)]
+    pub fn player_for_col(&self, col: usize) -> usize {
+        player_index_for_column(self.setup.num_players, self.setup.cols_per_player, col)
+    }
+
+    #[inline(always)]
+    pub const fn player_col_range(&self, player: usize) -> (usize, usize) {
+        player_column_range(self.setup.cols_per_player, player)
+    }
+
+    #[inline(always)]
+    pub fn record_step_calories_for_player(
+        &mut self,
+        player: usize,
+        event_music_time_ns: SongTimeNs,
+        weight_pounds: i32,
+    ) {
+        let (start, end) = self.player_col_range(player);
+        let calories = recent_step_calories(
+            &self.control.input_state.lane_pressed_since_ns,
+            start,
+            end,
+            event_music_time_ns,
+            weight_pounds,
+        );
+        add_player_step_calories(&mut self.players_runtime.players[player], calories);
+    }
+
+    #[inline(always)]
+    pub fn clear_offset_adjust_hold_key(&mut self, key: GameplayOffsetAdjustKey) {
+        self.control.offset_adjust_hold.clear(key);
+    }
+
+    #[inline(always)]
+    pub fn start_offset_adjust_hold_key(
+        &mut self,
+        key: GameplayOffsetAdjustKey,
+        at: Instant,
+    ) -> f32 {
+        self.control.offset_adjust_hold.start(key, at)
+    }
+
+    #[inline(always)]
+    pub fn tick_offset_adjust_hold_key(
+        &mut self,
+        key: GameplayOffsetAdjustKey,
+        now: Instant,
+    ) -> Option<f32> {
+        self.control.offset_adjust_hold.tick(key, now)
+    }
+
+    #[inline(always)]
+    pub fn offset_adjust_target(&self) -> GameplayOffsetAdjustTarget {
+        offset_adjust_target(
+            self.control.exit_input.shift_held,
+            self.progress.course_display.is_course_stage(),
+        )
+    }
+
+    #[inline(always)]
+    pub fn apply_autosync_offset_sample(
+        &mut self,
+        note_off_by_ns: SongTimeNs,
+    ) -> AutosyncSampleResult {
+        self.control.autosync.apply_offset_sample(note_off_by_ns)
+    }
+
+    #[inline(always)]
+    pub fn autosync_row_hits_enabled(&self, scoring_blocked: bool) -> bool {
+        autosync_row_hits_enabled(
+            self.progress.replay.mode,
+            scoring_blocked,
+            self.control.autosync.mode,
+            self.progress.course_display.is_course_stage(),
+        )
+    }
+
+    #[inline(always)]
+    pub fn timing_tick_status_line(&self) -> Option<&'static str> {
+        timing_tick_mode_status_line(self.control.tick_mode)
+    }
+
+    #[inline(always)]
+    pub fn tick_mode(&self) -> GameplayTimingTickMode {
+        self.control.tick_mode
+    }
+
+    #[inline(always)]
+    pub fn set_tick_mode(&mut self, mode: GameplayTimingTickMode) -> bool {
+        if self.control.tick_mode == mode {
+            return false;
+        }
+        self.control.tick_mode = mode;
+        true
+    }
+
+    #[inline(always)]
+    pub fn reset_assist_clap_for_row(&mut self, song_row: i32) {
+        self.control.assist_clap.reset_for_row(song_row);
+    }
+
+    #[inline(always)]
+    pub fn stage_autoplay_enabled(&self) -> bool {
+        self.progress.stage.autoplay_enabled
+    }
+
+    #[inline(always)]
+    pub fn set_stage_autoplay_enabled(&mut self, enabled: bool) -> bool {
+        if self.progress.stage.autoplay_enabled == enabled {
+            return false;
+        }
+        self.progress.stage.autoplay_enabled = enabled;
+        true
+    }
+
+    #[inline(always)]
+    pub fn reset_live_input_state(&mut self) {
+        self.control.input_state.reset_live_state();
+    }
+
+    #[inline(always)]
+    pub fn lane_input_counts(&self) -> &[u16; MAX_COLS] {
+        self.control.input_state.lane_counts()
+    }
+
+    #[inline(always)]
+    pub fn input_slot_lane_is_down(
+        &self,
+        lane_idx: usize,
+        source: InputSource,
+        input_slot: u32,
+    ) -> bool {
+        self.control
+            .input_state
+            .slot_lane_is_down(lane_idx, source, input_slot)
+    }
+
+    #[inline(always)]
+    pub fn update_input_slot(
+        &mut self,
+        lane_idx: usize,
+        source: InputSource,
+        input_slot: u32,
+        pressed: bool,
+    ) -> LaneInputUpdate {
+        self.control
+            .input_state
+            .update_slot(lane_idx, source, input_slot, pressed)
+    }
+
+    #[inline(always)]
+    pub fn press_input_lane(&mut self, lane_idx: usize, event_music_time_ns: SongTimeNs) {
+        self.control
+            .input_state
+            .press_lane(lane_idx, event_music_time_ns);
+    }
+
+    #[inline(always)]
+    pub fn release_input_lane(&mut self, lane_idx: usize) {
+        self.control.input_state.release_lane(lane_idx);
+    }
+
+    pub fn current_lane_inputs(&self) -> [bool; MAX_COLS] {
+        std::array::from_fn(|col| col < self.setup.num_cols && self.lane_is_pressed(col))
+    }
+
+    pub fn held_mine_crossing_start_times(
+        &self,
+        current_inputs: &[bool; MAX_COLS],
+        previous_music_time_ns: SongTimeNs,
+        current_music_time_ns: SongTimeNs,
+    ) -> [Option<SongTimeNs>; MAX_COLS] {
+        std::array::from_fn(|col| {
+            if col >= self.setup.num_cols {
+                return None;
+            }
+            crossed_mine_held_start_time(
+                current_inputs[col],
+                self.control.input_state.prev_inputs[col],
+                self.control.input_state.lane_pressed_since_ns[col],
+                previous_music_time_ns,
+                current_music_time_ns,
+            )
+        })
+    }
+
+    #[inline(always)]
+    pub fn set_previous_lane_inputs(&mut self, inputs: [bool; MAX_COLS]) {
+        self.control.input_state.prev_inputs = inputs;
+    }
+
+    #[inline(always)]
+    pub fn reset_receptor_feedback_for_autoplay(&mut self) {
+        self.display.receptor_feedback.reset_for_autoplay();
+    }
+
+    #[inline(always)]
+    pub fn set_autoplay_cursor_for_enable(
+        &mut self,
+        player: usize,
+        next_tap_miss_cursor: usize,
+        note_range: (usize, usize),
+    ) {
+        self.control.autoplay_runtime.set_cursor_for_enable(
+            player,
+            next_tap_miss_cursor,
+            note_range,
+        );
+    }
+
+    #[inline(always)]
+    pub fn autoplay_cursor(&self, player: usize) -> usize {
+        self.control.autoplay_runtime.cursor(player)
+    }
+
+    #[inline(always)]
+    pub fn set_autoplay_cursor(&mut self, player: usize, cursor: usize) {
+        self.control.autoplay_runtime.set_cursor(player, cursor);
+    }
+
+    #[inline(always)]
+    pub fn mark_autoplay_used(&mut self) {
+        self.progress.stage.autoplay_used = true;
+    }
+
+    #[inline(always)]
+    pub fn set_raw_modifier_state(&mut self, shift_held: bool, ctrl_held: bool) {
+        self.control.exit_input.shift_held = shift_held;
+        self.control.exit_input.ctrl_held = ctrl_held;
+    }
+
+    #[inline(always)]
+    pub fn set_raw_modifier_key(&mut self, key: GameplayRawModifierKey, pressed: bool) {
+        match key {
+            GameplayRawModifierKey::Shift => self.control.exit_input.shift_held = pressed,
+            GameplayRawModifierKey::Ctrl => self.control.exit_input.ctrl_held = pressed,
+        }
+    }
+
+    #[inline(always)]
+    pub fn raw_key_plan(
+        &self,
+        input: GameplayRawKeyInput,
+        pressed: bool,
+        allow_commands: bool,
+    ) -> GameplayRawKeyPlan {
+        gameplay_raw_key_plan(
+            input,
+            pressed,
+            allow_commands,
+            self.control.exit_input.ctrl_held,
+            self.control.exit_input.shift_held,
+            self.control.autosync.mode,
+            self.progress.course_display.is_course_stage(),
+            self.control.tick_mode,
+            self.progress.stage.autoplay_enabled,
+        )
+    }
+
+    #[inline(always)]
+    pub fn set_autosync_mode(&mut self, mode: AutosyncMode) {
+        self.control.autosync.mode = mode;
+    }
+
+    #[inline(always)]
+    pub fn drain_audio_commands(&mut self) -> std::vec::Drain<'_, GameplayAudioCommand> {
+        self.boundary.commands.drain_audio()
+    }
+
+    #[inline(always)]
+    pub fn push_audio_command(&mut self, command: GameplayAudioCommand) {
+        self.boundary.commands.push_audio(command);
+    }
+
+    #[inline(always)]
+    pub fn drain_session_commands(&mut self) -> std::vec::Drain<'_, GameplaySessionCommand> {
+        self.boundary.commands.drain_session()
+    }
+
+    #[inline(always)]
+    pub fn push_session_command(&mut self, command: GameplaySessionCommand) {
+        self.boundary.commands.push_session(command);
+    }
+
+    #[inline(always)]
+    pub const fn total_elapsed_in_screen(&self) -> f32 {
+        self.boundary.total_elapsed_in_screen
+    }
+
+    #[inline(always)]
+    pub fn advance_screen_elapsed(&mut self, delta_time: f32) {
+        self.boundary.total_elapsed_in_screen += delta_time;
+    }
+
+    #[inline(always)]
+    pub fn set_screen_elapsed(&mut self, elapsed: f32) {
+        self.boundary.total_elapsed_in_screen = elapsed;
+    }
+
+    #[inline(always)]
+    pub const fn density_graph_view(&self) -> GameplayDensityGraphView {
+        GameplayDensityGraphView {
+            first_second: self.display.density_graph.first_second,
+            last_second: self.display.density_graph.last_second,
+            duration: self.display.density_graph.duration,
+            graph_w: self.display.density_graph.graph_w,
+            graph_h: self.display.density_graph.graph_h,
+            scaled_width: self.display.density_graph.scaled_width,
+            u0: self.display.density_graph.u0,
+            u_window: self.display.density_graph.u_window,
+            top_h: self.display.density_graph.top_h,
+            top_w: self.display.density_graph.top_w,
+            top_scale_y: self.display.density_graph.top_scale_y,
+        }
+    }
+
+    #[inline(always)]
+    pub const fn density_graph_life_dirty(&self, player: usize) -> bool {
+        player < MAX_PLAYERS && self.display.density_graph.life_dirty[player]
+    }
+
+    #[inline(always)]
+    pub fn set_density_graph_life_dirty(&mut self, player: usize, dirty: bool) {
+        if player < MAX_PLAYERS {
+            self.display.density_graph.life_dirty[player] = dirty;
+        }
+    }
+
+    #[inline(always)]
+    pub fn density_graph_life_points(&self, player: usize) -> Option<&[[f32; 2]]> {
+        self.display
+            .density_graph
+            .life_points
+            .get(player)
+            .map(Vec::as_slice)
+    }
+
+    #[inline(always)]
+    pub fn density_graph_life_points_mut(&mut self, player: usize) -> Option<&mut Vec<[f32; 2]>> {
+        self.display.density_graph.life_points.get_mut(player)
+    }
+
+    pub fn capacity_trace_snapshot(&self) -> GameplayCapacityTraceSnapshot {
+        let mut snapshot = GameplayCapacityTraceSnapshot {
+            pending_edges_capacity: self.pending_input.edges.capacity(),
+            pending_edges_len: self.pending_input.edges.len(),
+            replay_edges_capacity: self.progress.replay.edges.capacity(),
+            replay_edges_len: self.progress.replay.edges.len(),
+            decaying_hold_capacity: self.hold_runtime.decaying_hold_indices.capacity(),
+            decaying_hold_len: self.hold_runtime.decaying_hold_indices.len(),
+            num_players: self.setup.num_players,
+            ..GameplayCapacityTraceSnapshot::default()
+        };
+        for player in 0..self.setup.num_players.min(MAX_PLAYERS) {
+            snapshot.density_life_capacity[player] =
+                self.display.density_graph.life_points[player].capacity();
+            snapshot.density_life_len[player] =
+                self.display.density_graph.life_points[player].len();
+        }
+        snapshot
     }
 }
 

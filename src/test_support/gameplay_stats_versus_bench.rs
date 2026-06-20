@@ -36,13 +36,13 @@ pub fn fixture() -> GameplayStatsVersusBenchFixture {
         gameplay::set_benchmark_num_cols(state, 8);
         gameplay::set_benchmark_cols_per_player(state, 4);
         let p1_range = gameplay::note_range_for_player(&state, 0);
-        gameplay::set_benchmark_note_range(state, 1, p1_range);
+        state.set_note_range(1, p1_range);
         gameplay::set_benchmark_screen_elapsed(state, 9.6);
         gameplay::set_benchmark_song_position(
             state,
             gameplay::current_beat(state),
             gameplay::current_music_time_ns(state),
-            gameplay::current_beat_display(state),
+            state.current_beat_display(),
             64.25,
         );
 

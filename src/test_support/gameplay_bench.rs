@@ -48,7 +48,7 @@ pub fn fixture() -> GameplayBenchFixture {
             state,
             gameplay::current_beat(state),
             gameplay::current_music_time_ns(state),
-            gameplay::current_beat_display(state),
+            state.current_beat_display(),
             48.25,
         );
         gameplay::set_benchmark_visible_time(

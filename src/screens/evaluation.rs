@@ -2246,7 +2246,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
 
     if let Some(mut gs) = gameplay_results {
         let cfg = crate::config::get();
-        stage_duration_seconds = crate::game::gameplay::total_elapsed_in_screen(&gs);
+        stage_duration_seconds = gs.total_elapsed_in_screen();
 
         // Persist one score file per play (per local profile), including fails and replay lane
         // input, unless the run was disqualified (autoplay/replay).
@@ -2514,7 +2514,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             };
 
             *score_info_slot = Some(ScoreInfo {
-                song: crate::game::gameplay::song_arc(&gs),
+                song: gs.song_arc(),
                 chart: crate::game::gameplay::charts(&gs)[player_idx].clone(),
                 course_graph_stages: Vec::new(),
                 side,

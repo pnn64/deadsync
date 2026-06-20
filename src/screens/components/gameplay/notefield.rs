@@ -7,20 +7,19 @@ use crate::game::gameplay::{
     RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, SongLuaColumnOffsetWindowRuntime, VisualEffects,
 };
 use crate::game::gameplay::{
-    active_chart_attack_effects_for_player, active_hold, active_hold_note_indices,
-    column_flash_duration, column_flashes_for_columns, effective_accel_effects_for_player,
-    effective_appearance_effects_for_player, effective_mini_percent_for_player,
-    effective_perspective_effects_for_player, effective_scroll_effects_for_player,
-    effective_scroll_speed_for_player, effective_spacing_multiplier_for_player,
-    effective_visibility_effects_for_player, effective_visual_effects_for_player,
-    field_zoom_for_player, hold_explosion_active, hold_explosion_enabled_for_options,
-    hold_head_render_flags, let_go_head_beat, mine_explosions_for_columns, music_rate,
-    notefield_column_scroll_dir, notefield_draw_distance_after_targets,
-    notefield_draw_distance_before_targets, notefield_reverse_scroll, notes, player_profiles,
-    receptor_bop_zoom_for_col, receptor_glow_visual_for_col, row_hides_completed_note,
-    scroll_receptor_y, scroll_reference_bpm, song_lua_ease_factor, song_lua_note_hidden,
-    song_lua_visuals, tap_explosion_options_from_profile, tap_explosions_for_columns,
-    timing_for_player, timing_profile_windows_s, total_elapsed_in_screen,
+    active_chart_attack_effects_for_player, column_flash_duration, column_flashes_for_columns,
+    effective_accel_effects_for_player, effective_appearance_effects_for_player,
+    effective_mini_percent_for_player, effective_perspective_effects_for_player,
+    effective_scroll_effects_for_player, effective_scroll_speed_for_player,
+    effective_spacing_multiplier_for_player, effective_visibility_effects_for_player,
+    effective_visual_effects_for_player, field_zoom_for_player, hold_explosion_active,
+    hold_explosion_enabled_for_options, hold_head_render_flags, let_go_head_beat,
+    mine_explosions_for_columns, music_rate, notefield_column_scroll_dir,
+    notefield_draw_distance_after_targets, notefield_draw_distance_before_targets,
+    notefield_reverse_scroll, notes, player_profiles, receptor_bop_zoom_for_col,
+    receptor_glow_visual_for_col, row_hides_completed_note, scroll_receptor_y,
+    scroll_reference_bpm, song_lua_ease_factor, song_lua_note_hidden, song_lua_visuals,
+    tap_explosion_options_from_profile, tap_explosions_for_columns, timing_profile_windows_s,
 };
 use crate::game::parsing::noteskin::{
     ModelDrawState, ModelMeshCache, NUM_QUANTIZATIONS, NoteAnimPart, Noteskin, SpriteSlot,
@@ -3273,7 +3272,7 @@ pub fn prewarm_text_layout(
         );
 
         let mc_font_name = zmod_small_combo_font(profile.combo_font);
-        let segs = crate::game::gameplay::measure_counter_segments(state, player);
+        let segs = state.measure_counter_segments(player);
         let multiplier = profile.measure_counter.multiplier();
         for (seg_ix, seg) in segs.iter().copied().enumerate() {
             let scaled_len = (((seg.end - seg.start) as f32) * multiplier)
@@ -3323,12 +3322,12 @@ pub fn prewarm_text_layout(
             prewarm_percent(
                 cache,
                 mc_font_name,
-                crate::game::gameplay::mini_indicator_target_score_percent(state, player),
+                state.mini_indicator_target_score_percent(player),
             );
             prewarm_percent(
                 cache,
                 mc_font_name,
-                crate::game::gameplay::mini_indicator_rival_score_percent(state, player),
+                state.mini_indicator_rival_score_percent(player),
             );
             prewarm_neg_u32(cache, mc_font_name, 0);
             prewarm_neg_u32(cache, mc_font_name, max_combo.min(COMBO_PREWARM_CAP));
@@ -3441,12 +3440,12 @@ fn zmod_resolved_combo_color(
                     p.full_combo_grade,
                     Some(JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great)
                 ) {
-                    zmod_combo_rainbow_color(total_elapsed_in_screen(state), false, p.combo)
+                    zmod_combo_rainbow_color(state.total_elapsed_in_screen(), false, p.combo)
                 } else {
                     [1.0, 1.0, 1.0, 1.0]
                 }
             } else {
-                zmod_combo_rainbow_color(total_elapsed_in_screen(state), false, p.combo)
+                zmod_combo_rainbow_color(state.total_elapsed_in_screen(), false, p.combo)
             }
         }
         profile_data::ComboColors::RainbowScroll => {
@@ -3455,12 +3454,12 @@ fn zmod_resolved_combo_color(
                     p.full_combo_grade,
                     Some(JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great)
                 ) {
-                    zmod_combo_rainbow_color(total_elapsed_in_screen(state), true, p.combo)
+                    zmod_combo_rainbow_color(state.total_elapsed_in_screen(), true, p.combo)
                 } else {
                     [1.0, 1.0, 1.0, 1.0]
                 }
             } else {
-                zmod_combo_rainbow_color(total_elapsed_in_screen(state), true, p.combo)
+                zmod_combo_rainbow_color(state.total_elapsed_in_screen(), true, p.combo)
             }
         }
         profile_data::ComboColors::Glow => {
@@ -3472,7 +3471,7 @@ fn zmod_resolved_combo_color(
             if let Some(grade) = combo_grade {
                 let (color1, color2) =
                     zmod_combo_glow_pair(grade, quint_active && grade == JudgeGrade::Fantastic);
-                zmod_combo_glow_color(color1, color2, total_elapsed_in_screen(state))
+                zmod_combo_glow_color(color1, color2, state.total_elapsed_in_screen())
             } else {
                 [1.0, 1.0, 1.0, 1.0]
             }
@@ -3828,12 +3827,11 @@ fn zmod_pacemaker_color(pace: f64, rival_pace: f64) -> [f32; 4] {
 }
 
 fn zmod_stream_prog_completion(state: &State, player_idx: usize) -> Option<f64> {
-    let total_stream =
-        crate::game::gameplay::mini_indicator_total_stream_measures(state, player_idx) as f64;
+    let total_stream = state.mini_indicator_total_stream_measures(player_idx) as f64;
     if total_stream <= 0.0 {
         return None;
     }
-    let segs = crate::game::gameplay::mini_indicator_stream_segments(state, player_idx);
+    let segs = state.mini_indicator_stream_segments(player_idx);
     if segs.is_empty() {
         return None;
     }
@@ -3931,9 +3929,9 @@ fn zmod_mini_indicator_text(
         }
         profile_data::MiniIndicator::RivalScoring => {
             let pace = progress.current_score_percent.clamp(0.0, 100.0);
-            let rival_score =
-                crate::game::gameplay::mini_indicator_rival_score_percent(state, player_idx)
-                    .clamp(0.0, 100.0);
+            let rival_score = state
+                .mini_indicator_rival_score_percent(player_idx)
+                .clamp(0.0, 100.0);
             let rival_pace =
                 (progress.current_possible_ratio * 10000.0 * rival_score).floor() / 10000.0;
             let diff = (pace - rival_pace).abs();
@@ -3948,9 +3946,7 @@ fn zmod_mini_indicator_text(
         profile_data::MiniIndicator::Pacemaker => {
             let pace = (progress.current_score_percent.clamp(0.0, 100.0) * 100.0).floor();
             let target_ratio =
-                (crate::game::gameplay::mini_indicator_target_score_percent(state, player_idx)
-                    / 100.0)
-                    .clamp(0.0, 1.0);
+                (state.mini_indicator_target_score_percent(player_idx) / 100.0).clamp(0.0, 1.0);
             let rival_pace =
                 (progress.current_possible_ratio * 1_000_000.0 * target_ratio).floor() / 100.0;
 
@@ -4580,7 +4576,7 @@ pub(crate) fn build_bundles(
             ) * field_zoom
     });
 
-    let elapsed_screen = total_elapsed_in_screen(state);
+    let elapsed_screen = state.total_elapsed_in_screen();
     // ITG's default ArrowEffects timer is RageTimer::GetTimeSinceStart, not
     // music time or time since entering gameplay.
     let arrow_effect_time = arrow_effect_game_time_seconds();
@@ -4646,7 +4642,7 @@ pub(crate) fn build_bundles(
                 .as_deref()
                 .or_else(|| noteskin_assets.noteskin[player_idx].as_deref())
         };
-        let Some(timing) = timing_for_player(state, player_idx) else {
+        let Some(timing) = state.timing_for_player(player_idx) else {
             return BuiltNotefield::empty(screen_center_x());
         };
         let target_arrow_px = TARGET_ARROW_PIXEL_SIZE * field_zoom;
@@ -4773,7 +4769,7 @@ pub(crate) fn build_bundles(
             let first_beat_to_draw = find_first_displayed_beat(
                 current_search_beat,
                 draw_distance_after_targets,
-                crate::game::gameplay::note_count_stats(state, player_idx),
+                state.note_count_stats(player_idx),
                 |beat| {
                     apply_accel_y(
                         raw_travel_offset_for_beat(beat),
@@ -4914,7 +4910,8 @@ pub(crate) fn build_bundles(
         if show_measure_lines || profile.measure_cues {
             let edit_bar_speed =
                 edit_bar_scroll_speed(scroll_speed, scroll_reference_bpm(state), music_rate(state));
-            let time_signatures = crate::game::gameplay::gameplay_chart(state, player_idx)
+            let time_signatures = state
+                .gameplay_chart(player_idx)
                 .map(|chart| chart.timing_segments.time_signatures.as_slice())
                 .unwrap_or(&[]);
             let edit_candidate_step_rows = edit_bar_candidate_step_rows(time_signatures);
@@ -5159,17 +5156,17 @@ pub(crate) fn build_bundles(
                 const CUE_DELAY: (f32, f32, f32) = (1.0, 0.45, 0.75);
                 const CUE_STOP: (f32, f32, f32) = (1.0, 0.0, 0.0);
 
-                let (bpms, stops, delays, scrolls) =
-                    crate::game::gameplay::gameplay_chart(state, player_idx)
-                        .map(|chart| {
-                            (
-                                chart.timing_segments.bpms.as_slice(),
-                                chart.timing_segments.stops.as_slice(),
-                                chart.timing_segments.delays.as_slice(),
-                                chart.timing_segments.scrolls.as_slice(),
-                            )
-                        })
-                        .unwrap_or((&[], &[], &[], &[]));
+                let (bpms, stops, delays, scrolls) = state
+                    .gameplay_chart(player_idx)
+                    .map(|chart| {
+                        (
+                            chart.timing_segments.bpms.as_slice(),
+                            chart.timing_segments.stops.as_slice(),
+                            chart.timing_segments.delays.as_slice(),
+                            chart.timing_segments.scrolls.as_slice(),
+                        )
+                    })
+                    .unwrap_or((&[], &[], &[], &[]));
 
                 // Thickness keys off the cue beat's position on the same 0.5-beat
                 // grid the gameplay measure lines use, mirroring the editor's
@@ -5257,10 +5254,7 @@ pub(crate) fn build_bundles(
             } else {
                 1.0
             };
-            if let Some(cue) = active_column_cue(
-                crate::game::gameplay::column_cues(state, player_idx),
-                current_time,
-            ) {
+            if let Some(cue) = active_column_cue(state.column_cues(player_idx), current_time) {
                 let duration_real = cue.duration / rate;
                 let elapsed_real = (current_time - cue.start_time) / rate;
                 let alpha_mul = column_cue_alpha(elapsed_real, duration_real);
@@ -5353,10 +5347,7 @@ pub(crate) fn build_bundles(
             } else {
                 1.0
             };
-            if let Some(cue) = active_column_cue(
-                crate::game::gameplay::crossover_cues(state, player_idx),
-                current_time,
-            ) {
+            if let Some(cue) = active_column_cue(state.crossover_cues(player_idx), current_time) {
                 let duration_real = cue.duration / rate;
                 let elapsed_real = (current_time - cue.start_time) / rate;
                 let alpha_mul = column_cue_alpha(elapsed_real, duration_real);
@@ -5525,11 +5516,11 @@ pub(crate) fn build_bundles(
                 let receptor_rotation =
                     receptor_slot.def.rotation_deg as f32 + receptor_reverse.base_rotation_z();
                 let receptor_frame =
-                    receptor_slot.frame_index(total_elapsed_in_screen(state), current_beat);
+                    receptor_slot.frame_index(state.total_elapsed_in_screen(), current_beat);
                 let receptor_uv =
-                    receptor_slot.uv_for_frame_at(receptor_frame, total_elapsed_in_screen(state));
+                    receptor_slot.uv_for_frame_at(receptor_frame, state.total_elapsed_in_screen());
                 let receptor_draw =
-                    receptor_slot.model_draw_at(total_elapsed_in_screen(state), current_beat);
+                    receptor_slot.model_draw_at(state.total_elapsed_in_screen(), current_beat);
                 // ITG Sprite::SetTexture uses source-frame dimensions for draw size,
                 // so receptor and overlay keep their authored ratio (e.g. 64 vs 74 in
                 // dance/default) instead of being normalized to arrow height.
@@ -5585,7 +5576,7 @@ pub(crate) fn build_bundles(
             let hold_slot = if receptor_hidden_by_song_lua || !hold_explosion_enabled(profile) {
                 None
             } else {
-                active_hold(state, col).and_then(|active| {
+                state.active_hold(col).and_then(|active| {
                     let note = notes(state).get(active.note_index)?;
                     if !hold_explosion_active(Some(active), current_beat, note.beat) {
                         return None;
@@ -5599,12 +5590,13 @@ pub(crate) fn build_bundles(
             };
             if let Some(hold_slot) = hold_slot {
                 let draw = song_lua_note_model_draw(
-                    hold_slot.model_draw_at(total_elapsed_in_screen(state), current_beat),
+                    hold_slot.model_draw_at(state.total_elapsed_in_screen(), current_beat),
                     note_rotation_y,
                 );
                 let hold_frame =
-                    hold_slot.frame_index(total_elapsed_in_screen(state), current_beat);
-                let hold_uv = hold_slot.uv_for_frame_at(hold_frame, total_elapsed_in_screen(state));
+                    hold_slot.frame_index(state.total_elapsed_in_screen(), current_beat);
+                let hold_uv =
+                    hold_slot.uv_for_frame_at(hold_frame, state.total_elapsed_in_screen());
                 let base_size = scale_hold_explosion(hold_slot, receptor_effect_zoom);
                 let hold_size = [
                     base_size[0] * draw.zoom[0].max(0.0),
@@ -5619,7 +5611,7 @@ pub(crate) fn build_bundles(
                 let color = draw.tint;
                 let glow = hold_slot.model_glow_with_draw(
                     draw,
-                    total_elapsed_in_screen(state),
+                    state.total_elapsed_in_screen(),
                     current_beat,
                     color[3],
                 );
@@ -5717,11 +5709,11 @@ pub(crate) fn build_bundles(
                 let alpha = alpha * receptor_alpha;
                 if alpha > f32::EPSILON {
                     let glow_frame =
-                        glow_slot.frame_index(total_elapsed_in_screen(state), current_beat);
+                        glow_slot.frame_index(state.total_elapsed_in_screen(), current_beat);
                     let glow_uv =
-                        glow_slot.uv_for_frame_at(glow_frame, total_elapsed_in_screen(state));
+                        glow_slot.uv_for_frame_at(glow_frame, state.total_elapsed_in_screen());
                     let glow_draw =
-                        glow_slot.model_draw_at(total_elapsed_in_screen(state), current_beat);
+                        glow_slot.model_draw_at(state.total_elapsed_in_screen(), current_beat);
                     let base_glow_size =
                         scale_explosion(logical_slot_size(glow_slot), receptor_effect_zoom);
                     let behavior = receptor_ns.receptor_glow_behavior;
@@ -5822,13 +5814,12 @@ pub(crate) fn build_bundles(
                     let anim_time = active.elapsed;
                     let slot = &layer.slot;
                     let beat_for_anim = if slot.source.is_beat_based() {
-                        (crate::game::gameplay::current_beat_display(state) - active.start_beat)
-                            .max(0.0)
+                        (state.current_beat_display() - active.start_beat).max(0.0)
                     } else {
-                        crate::game::gameplay::current_beat_display(state)
+                        state.current_beat_display()
                     };
                     let frame = slot.frame_index(anim_time, beat_for_anim);
-                    let uv = slot.uv_for_frame_at(frame, total_elapsed_in_screen(state));
+                    let uv = slot.uv_for_frame_at(frame, state.total_elapsed_in_screen());
                     let size = scale_explosion(logical_slot_size(slot), explosion_effect_zoom);
                     let explosion_visual = layer.animation.state_at(active.elapsed);
                     if !explosion_visual.visible {
@@ -5936,7 +5927,7 @@ pub(crate) fn build_bundles(
                     continue;
                 }
                 let frame = slot.frame_index(active.elapsed, current_beat);
-                let uv = slot.uv_for_frame_at(frame, total_elapsed_in_screen(state));
+                let uv = slot.uv_for_frame_at(frame, state.total_elapsed_in_screen());
                 let size = scale_explosion(logical_slot_size(slot), explosion_effect_zoom);
                 let glow = explosion_visual.glow;
                 let glow_strength = glow[0].abs() + glow[1].abs() + glow[2].abs() + glow[3].abs();
@@ -6062,8 +6053,9 @@ pub(crate) fn build_bundles(
             // ITG gates reverse noteskin metrics by lane reverse state, not by
             // temporary visual inversion from scroll gimmicks.
             let lane_reverse = col_dir < 0.0;
-            let active_state =
-                active_hold(state, note.column).filter(|h| h.note_index == note_index);
+            let active_state = state
+                .active_hold(note.column)
+                .filter(|h| h.note_index == note_index);
             // ITG keeps early-hit hold heads scrolling as inactive until the head
             // reaches the receptor row; only then does hold-active rendering clamp.
             let (engaged, use_active) =
@@ -6147,25 +6139,25 @@ pub(crate) fn build_bundles(
             };
             let hold_part_phase = ns.part_uv_phase(
                 hold_head_part,
-                total_elapsed_in_screen(state),
+                state.total_elapsed_in_screen(),
                 current_beat,
                 note.beat,
             );
             let hold_body_phase = ns.part_uv_phase(
                 hold_body_part,
-                total_elapsed_in_screen(state),
+                state.total_elapsed_in_screen(),
                 current_beat,
                 note.beat,
             );
             let mut hold_topcap_phase = ns.part_uv_phase(
                 hold_topcap_part,
-                total_elapsed_in_screen(state),
+                state.total_elapsed_in_screen(),
                 current_beat,
                 note.beat,
             );
             let mut hold_bottomcap_phase = ns.part_uv_phase(
                 hold_bottomcap_part,
-                total_elapsed_in_screen(state),
+                state.total_elapsed_in_screen(),
                 current_beat,
                 note.beat,
             );
@@ -6267,7 +6259,7 @@ pub(crate) fn build_bundles(
                     let body_uv_elapsed = if body_slot.model.is_some() {
                         hold_body_phase
                     } else {
-                        total_elapsed_in_screen(state)
+                        state.total_elapsed_in_screen()
                     };
                     let body_uv = maybe_flip_uv_vert(
                         translated_uv_rect(
@@ -6787,7 +6779,7 @@ pub(crate) fn build_bundles(
                     let cap_uv_elapsed = if cap_slot.model.is_some() {
                         hold_topcap_phase
                     } else {
-                        total_elapsed_in_screen(state)
+                        state.total_elapsed_in_screen()
                     };
                     let cap_uv = maybe_flip_uv_vert(
                         translated_uv_rect(
@@ -7032,7 +7024,7 @@ pub(crate) fn build_bundles(
                     let cap_uv_elapsed = if cap_slot.model.is_some() {
                         hold_bottomcap_phase
                     } else {
-                        total_elapsed_in_screen(state)
+                        state.total_elapsed_in_screen()
                     };
                     let cap_uv = maybe_flip_uv_vert(
                         translated_uv_rect(
@@ -7310,7 +7302,7 @@ pub(crate) fn build_bundles(
                 };
                 let head_center = [head_center_x, head_draw_y];
                 let head_world_z = world_z_for_raw_travel(local_col, head_anchor_travel);
-                let elapsed = total_elapsed_in_screen(state);
+                let elapsed = state.total_elapsed_in_screen();
                 let head_layers = if use_active {
                     visuals
                         .head_active_layers
@@ -7681,18 +7673,15 @@ pub(crate) fn build_bundles(
         for local_col in 0..num_cols {
             let col = col_start + local_col;
             for_each_visible_hold_index(
-                crate::game::gameplay::lane_hold_indices(state, col),
+                state.lane_hold_indices(col),
                 notes(state),
                 visible_row_range,
                 |note_index| render_hold(note_index),
             );
         }
-        let extra_hold_indices = active_hold_note_indices(state)
-            .chain(
-                crate::game::gameplay::decaying_hold_indices(state)
-                    .iter()
-                    .copied(),
-            )
+        let extra_hold_indices = state
+            .active_hold_note_indices()
+            .chain(state.decaying_hold_indices().iter().copied())
             .filter(|&idx| {
                 idx >= note_start
                     && idx < note_end
@@ -7701,7 +7690,7 @@ pub(crate) fn build_bundles(
         for note_index in extra_hold_indices {
             render_hold(note_index);
         }
-        let elapsed = total_elapsed_in_screen(state);
+        let elapsed = state.total_elapsed_in_screen();
         let note_display_time = elapsed * note_display_time_scale;
         let mine_fill_phase = current_beat.rem_euclid(1.0);
         let draw_hold_same_row = ns.note_display_metrics.draw_hold_head_for_taps_on_same_row;
@@ -7710,7 +7699,7 @@ pub(crate) fn build_bundles(
         // Visible tap and mine notes
         for col_idx in 0..num_cols {
             let col = col_start + col_idx;
-            let column_note_indices = crate::game::gameplay::lane_note_row_indices(state, col);
+            let column_note_indices = state.lane_note_row_indices(col);
             let dir = column_dirs[col_idx];
             let receptor_y_lane = column_receptor_ys[col_idx];
             let fill_slot = mine_ns.mines.get(col_idx).and_then(|slot| slot.as_ref());
@@ -7977,8 +7966,7 @@ pub(crate) fn build_bundles(
                         return;
                     }
                     let tap_note_part = tap_part_for_note_type(note.note_type);
-                    let tap_row_flags =
-                        crate::game::gameplay::tap_row_hold_roll_flags(state, note_index);
+                    let tap_row_flags = state.tap_row_hold_roll_flags(note_index);
                     let tap_replacement_roll =
                         if matches!(note.note_type, NoteType::Tap | NoteType::Lift) {
                             let same_row_has_hold = tap_row_flags & 0b01 != 0;
@@ -8534,7 +8522,7 @@ pub(crate) fn build_bundles(
         let combo_swoosh_zoom_scale = assets::visual_styles::effect_zoom_scale(combo_swoosh_tex);
         let combo_center_x = playfield_center_x;
         let combo_center_y = zmod_layout.combo_y;
-        let player_color = color::decorative_rgba(crate::game::gameplay::player_color_index(state));
+        let player_color = color::decorative_rgba(state.player_color_index());
         let ease_out_quad = |t: f32| -> f32 {
             let t = t.clamp(0.0, 1.0);
             1.0 - (1.0 - t).powi(2)
@@ -9245,8 +9233,7 @@ pub(crate) fn build_bundles(
 
     // Measure Counter / Measure Breakdown (Zmod parity)
     if profile.measure_counter != profile_data::MeasureCounter::None {
-        let segs: &[StreamSegment] =
-            crate::game::gameplay::measure_counter_segments(state, player_idx);
+        let segs: &[StreamSegment] = state.measure_counter_segments(player_idx);
         if !segs.is_empty() {
             let lookahead: u8 = profile.measure_counter_lookahead.min(4);
             let multiplier = profile.measure_counter.multiplier();
@@ -9376,14 +9363,14 @@ pub(crate) fn build_bundles(
             {
                 let seg = segs[stream_index];
                 if !seg.is_break {
-                    let cur_bps = crate::game::gameplay::timing(state)
-                        .get_bpm_for_beat(crate::game::gameplay::current_beat_display(state))
+                    let cur_bps = state
+                        .timing()
+                        .get_bpm_for_beat(state.current_beat_display())
                         / 60.0;
                     let rate = music_rate(state);
                     if cur_bps.is_finite() && cur_bps > 0.0 && rate.is_finite() && rate > 0.0 {
                         let measure_seconds = 4.0 / (cur_bps * rate);
-                        let curr_time =
-                            crate::game::gameplay::current_beat_display(state) / (cur_bps * rate);
+                        let curr_time = state.current_beat_display() / (cur_bps * rate);
 
                         let seg_len_s =
                             (((seg.end - seg.start) as f32) * measure_seconds).ceil() as i32;
@@ -9468,13 +9455,13 @@ pub(crate) fn build_bundles(
             let elapsed = (elapsed_screen - render_info.started_at_screen_s).max(0.0);
             if elapsed < 0.9 {
                 let zoom = if elapsed < 0.1 {
-                    let t = elapsed / 0.1;
+                    let t: f32 = elapsed / 0.1;
                     let ease_t = 1.0 - (1.0 - t).powi(2);
                     0.8 + (0.75 - 0.8) * ease_t
                 } else if elapsed < 0.7 {
                     0.75
                 } else {
-                    let t = (elapsed - 0.7) / 0.2;
+                    let t: f32 = (elapsed - 0.7) / 0.2;
                     let ease_t = t.powi(2);
                     0.75 * (1.0 - ease_t)
                 } * judgment_zoom_mod;

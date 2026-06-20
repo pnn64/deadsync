@@ -13,14 +13,10 @@ use deadsync_gameplay::{
     GameplayAttackMode, SongLuaCompilePlayStyle, SongLuaRuntimeEaseAppend,
     SongLuaRuntimeEaseTarget, append_song_lua_runtime_ease_window,
     apply_chart_attack_transforms as apply_chart_attack_transforms_to_notes,
-    begin_outro_attack_visual_clear, build_attack_mask_windows as build_mask_windows_from_attacks,
-    build_attack_windows_for_mode, build_song_lua_column_offset_window_runtime,
+    build_attack_mask_windows_for_mode, build_song_lua_column_offset_window_runtime,
     build_song_lua_constant_attack_mask_window, build_song_lua_message_command_indices,
     build_song_lua_note_hide_window_runtime, build_song_lua_overlay_ease_window_runtime,
-    build_song_lua_overlay_message_runtime, effective_attack_accel_effects,
-    effective_attack_perspective_effects, effective_attack_scroll_effects,
-    effective_attack_scroll_speed, effective_attack_visibility_effects,
-    effective_attack_visual_effects,
+    build_song_lua_overlay_message_runtime,
     effective_player_global_offset_seconds as gameplay_effective_player_global_offset_seconds,
     group_song_lua_overlay_eases, offset_song_lua_message_events, offset_song_lua_overlay_eases,
     player_chart_changes_for_options, refresh_active_attack_player,
@@ -50,9 +46,9 @@ use std::time::Instant;
 use super::{
     AccelEffects, AppearanceEffects, ChartAttackEffects, GameplayInputPlayStyle,
     GameplayInputPlayerSide, GameplaySession, GameplayViewport, MAX_PLAYERS, PerspectiveEffects,
-    ScrollEffects, State, VisibilityEffects, VisualEffects, effective_mini_percent,
-    gameplay_is_single_p2_side, perspective_effects_from_profile, scroll_effects_from_option,
-    spacing_multiplier_for_percent, visible_music_time_seconds,
+    ScrollEffects, State, VisibilityEffects, VisualEffects, gameplay_is_single_p2_side,
+    perspective_effects_from_profile, scroll_effects_from_option, spacing_multiplier_for_percent,
+    visible_music_time_seconds,
 };
 
 #[inline(always)]
@@ -80,6 +76,12 @@ pub type SongLuaRuntimeVisuals = deadsync_gameplay::SongLuaRuntimeVisuals<
     crate::game::parsing::song_lua::SongLuaOverlayStateDelta,
 >;
 
+pub type GameplayModRuntimeState = deadsync_gameplay::GameplayModRuntimeState<
+    SongLuaOverlayActor,
+    SongLuaCapturedActor,
+    crate::game::parsing::song_lua::SongLuaOverlayStateDelta,
+>;
+
 pub type GameplayCompiledSongLua = deadsync_gameplay::GameplayCompiledSongLua<CompiledSongLua>;
 
 pub type GameplaySongLuaLayer = deadsync_gameplay::GameplaySongLuaLayer<CompiledSongLua>;
@@ -93,17 +95,13 @@ pub(super) fn build_attack_mask_windows_for_player(
     base_seed: u64,
     song_length_seconds: f32,
 ) -> Vec<AttackMaskWindow> {
-    let attacks = build_attack_windows_for_mode(
+    build_attack_mask_windows_for_mode(
         chart_attacks,
         gameplay_attack_mode(attack_mode),
         player,
         base_seed,
         song_length_seconds,
-    );
-    if attacks.is_empty() {
-        return Vec::new();
-    }
-    build_mask_windows_from_attacks(&attacks)
+    )
 }
 
 #[inline(always)]
@@ -1281,12 +1279,7 @@ pub(super) fn base_appearance_effects(profile: &profile_data::Profile) -> Appear
 
 #[inline(always)]
 pub(super) fn begin_outro_attack_clear(state: &mut State) {
-    begin_outro_attack_visual_clear(
-        &mut state.attacks.cleared_for_outro,
-        state.num_players,
-        &state.attacks.visual,
-        &mut state.attacks.outro_visual,
-    );
+    state.begin_outro_attack_clear();
 }
 
 #[inline(always)]
@@ -1300,83 +1293,76 @@ fn store_song_lua_player_transforms(
     player: usize,
     values: SongLuaPlayerTransformValues,
 ) {
-    state.song_lua_player_transforms[player] = values.resolve();
+    state.mods.song_lua_player_transforms[player] = values.resolve();
 }
 
 pub(super) fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
-    for player in 0..state.num_players {
+    for player in 0..state.setup.num_players {
         let now = visible_music_time_seconds(state, player);
         let output = refresh_active_attack_player(
             ActiveAttackRefreshInput {
                 now,
                 delta_time,
-                attacks_cleared_for_outro: state.attacks.cleared_for_outro,
-                base_appearance: base_appearance_effects(&state.player_profiles[player]),
-                base_visual: base_visual_effects(&state.player_profiles[player]),
+                attacks_cleared_for_outro: state.mods.attacks.cleared_for_outro,
+                base_appearance: base_appearance_effects(&state.profiles_runtime.profiles[player]),
+                base_visual: base_visual_effects(&state.profiles_runtime.profiles[player]),
                 base_scroll: scroll_effects_from_option(
-                    state.player_profiles[player].scroll_option,
+                    state.profiles_runtime.profiles[player].scroll_option,
                 ),
-                base_mini_percent: state.player_profiles[player].mini_percent as f32,
-                attack_windows: &state.attacks.mask_windows[player],
-                song_lua_ease_windows: &state.attacks.song_lua_ease_windows[player],
+                base_mini_percent: state.profiles_runtime.profiles[player].mini_percent as f32,
+                attack_windows: &state.mods.attacks.mask_windows[player],
+                song_lua_ease_windows: &state.mods.attacks.song_lua_ease_windows[player],
             },
             ActiveAttackRefreshState {
-                attack_current_appearance: state.attacks.current_appearance[player],
-                active_attack_visual: state.attacks.visual[player],
-                active_attack_visibility: state.attacks.visibility[player],
-                active_attack_scroll: state.attacks.scroll[player],
-                active_attack_mini_percent: state.attacks.mini_percent[player],
-                outro_attack_visual: state.attacks.outro_visual[player],
+                attack_current_appearance: state.mods.attacks.current_appearance[player],
+                active_attack_visual: state.mods.attacks.visual[player],
+                active_attack_visibility: state.mods.attacks.visibility[player],
+                active_attack_scroll: state.mods.attacks.scroll[player],
+                active_attack_mini_percent: state.mods.attacks.mini_percent[player],
+                outro_attack_visual: state.mods.attacks.outro_visual[player],
             },
         );
-        state.attacks.target_appearance[player] = output.attack_target_appearance;
-        state.attacks.speed_appearance[player] = output.attack_speed_appearance;
-        state.attacks.current_appearance[player] = output.attack_current_appearance;
-        state.attacks.outro_visual[player] = output.outro_attack_visual;
-        state.attacks.clear_all[player] = output.active_attack_clear_all;
-        state.attacks.chart[player] = output.active_attack_chart;
-        state.attacks.accel[player] = output.active_attack_accel;
-        state.attacks.visual[player] = output.active_attack_visual;
-        state.attacks.appearance[player] = output.active_attack_appearance;
-        state.attacks.visibility[player] = output.active_attack_visibility;
-        state.attacks.scroll[player] = output.active_attack_scroll;
-        state.attacks.perspective[player] = output.active_attack_perspective;
-        state.attacks.scroll_speed[player] = output.active_attack_scroll_speed;
-        state.attacks.mini_percent[player] = output.active_attack_mini_percent;
+        state.mods.attacks.target_appearance[player] = output.attack_target_appearance;
+        state.mods.attacks.speed_appearance[player] = output.attack_speed_appearance;
+        state.mods.attacks.current_appearance[player] = output.attack_current_appearance;
+        state.mods.attacks.outro_visual[player] = output.outro_attack_visual;
+        state.mods.attacks.clear_all[player] = output.active_attack_clear_all;
+        state.mods.attacks.chart[player] = output.active_attack_chart;
+        state.mods.attacks.accel[player] = output.active_attack_accel;
+        state.mods.attacks.visual[player] = output.active_attack_visual;
+        state.mods.attacks.appearance[player] = output.active_attack_appearance;
+        state.mods.attacks.visibility[player] = output.active_attack_visibility;
+        state.mods.attacks.scroll[player] = output.active_attack_scroll;
+        state.mods.attacks.perspective[player] = output.active_attack_perspective;
+        state.mods.attacks.scroll_speed[player] = output.active_attack_scroll_speed;
+        state.mods.attacks.mini_percent[player] = output.active_attack_mini_percent;
         store_song_lua_player_transforms(state, player, output.player_transform);
     }
 }
 
 #[inline(always)]
-fn player_attack_base_cleared(state: &State, player_idx: usize) -> bool {
-    player_idx < state.num_players && state.attacks.clear_all[player_idx]
-}
-
-#[inline(always)]
 pub fn effective_accel_effects_for_player(state: &State, player_idx: usize) -> AccelEffects {
-    if player_idx >= state.num_players {
+    if player_idx >= state.setup.num_players || player_idx >= MAX_PLAYERS {
         return AccelEffects::default();
     }
-    effective_attack_accel_effects(
-        player_attack_base_cleared(state, player_idx),
-        state.player_profiles[player_idx]
+    state.effective_accel_effects_for_player_with_mask(
+        player_idx,
+        state.profiles_runtime.profiles[player_idx]
             .accel_effects_active_mask
             .bits(),
-        state.attacks.accel[player_idx],
     )
 }
 
 #[inline(always)]
 pub fn effective_visual_effects_for_player(state: &State, player_idx: usize) -> VisualEffects {
-    if player_idx >= state.num_players {
+    if player_idx >= state.setup.num_players || player_idx >= MAX_PLAYERS {
         return VisualEffects::default();
     }
-    effective_attack_visual_effects(
-        player_attack_base_cleared(state, player_idx),
-        state.player_profiles[player_idx]
+    state.effective_visual_effects_for_player_with_mask(
+        player_idx,
+        state.profiles_runtime.profiles[player_idx]
             .visual_effects_active_mask
             .bits(),
-        state.attacks.visual[player_idx],
     )
 }
 
@@ -1385,10 +1371,7 @@ pub fn effective_appearance_effects_for_player(
     state: &State,
     player_idx: usize,
 ) -> AppearanceEffects {
-    if player_idx >= state.num_players {
-        return AppearanceEffects::default();
-    }
-    state.attacks.appearance[player_idx]
+    state.effective_appearance_effects_for_player(player_idx)
 }
 
 #[inline(always)]
@@ -1396,10 +1379,7 @@ pub fn effective_visibility_effects_for_player(
     state: &State,
     player_idx: usize,
 ) -> VisibilityEffects {
-    if player_idx >= state.num_players {
-        return VisibilityEffects::default();
-    }
-    effective_attack_visibility_effects(state.attacks.visibility[player_idx])
+    state.effective_visibility_effects_for_player(player_idx)
 }
 
 #[inline(always)]
@@ -1407,21 +1387,17 @@ pub fn active_chart_attack_effects_for_player(
     state: &State,
     player_idx: usize,
 ) -> ChartAttackEffects {
-    if player_idx >= state.num_players {
-        return ChartAttackEffects::default();
-    }
-    state.attacks.chart[player_idx]
+    state.active_chart_attack_effects_for_player(player_idx)
 }
 
 #[inline(always)]
 pub fn effective_scroll_effects_for_player(state: &State, player_idx: usize) -> ScrollEffects {
-    if player_idx >= state.num_players {
+    if player_idx >= state.setup.num_players || player_idx >= MAX_PLAYERS {
         return ScrollEffects::default();
     }
-    effective_attack_scroll_effects(
-        player_attack_base_cleared(state, player_idx),
-        scroll_effects_from_option(state.player_profiles[player_idx].scroll_option),
-        state.attacks.scroll[player_idx],
+    state.effective_scroll_effects_for_player_with_base(
+        player_idx,
+        scroll_effects_from_option(state.profiles_runtime.profiles[player_idx].scroll_option),
     )
 }
 
@@ -1430,13 +1406,12 @@ pub fn effective_perspective_effects_for_player(
     state: &State,
     player_idx: usize,
 ) -> PerspectiveEffects {
-    if player_idx >= state.num_players {
+    if player_idx >= state.setup.num_players || player_idx >= MAX_PLAYERS {
         return PerspectiveEffects::default();
     }
-    effective_attack_perspective_effects(
-        player_attack_base_cleared(state, player_idx),
-        perspective_effects_from_profile(state.player_profiles[player_idx].perspective),
-        state.attacks.perspective[player_idx],
+    state.effective_perspective_effects_for_player_with_base(
+        player_idx,
+        perspective_effects_from_profile(state.profiles_runtime.profiles[player_idx].perspective),
     )
 }
 
@@ -1447,13 +1422,12 @@ pub(super) fn effective_visual_mask_for_player(state: &State, player_idx: usize)
 
 #[inline(always)]
 pub fn effective_mini_percent_for_player(state: &State, player_idx: usize) -> f32 {
-    if player_idx >= state.num_players {
+    if player_idx >= state.setup.num_players || player_idx >= MAX_PLAYERS {
         return 0.0;
     }
-    effective_mini_percent(
-        state.attacks.mini_percent[player_idx],
-        state.player_profiles[player_idx].mini_percent as f32,
-        player_attack_base_cleared(state, player_idx),
+    state.effective_mini_percent_for_player_with_base(
+        player_idx,
+        state.profiles_runtime.profiles[player_idx].mini_percent as f32,
     )
 }
 
@@ -1462,20 +1436,16 @@ pub fn effective_mini_percent_for_player(state: &State, player_idx: usize) -> f3
 /// `1.0 + spacing_percent / 100`.
 #[inline(always)]
 pub fn effective_spacing_multiplier_for_player(state: &State, player_idx: usize) -> f32 {
-    if player_idx >= state.num_players {
+    if player_idx >= state.setup.num_players {
         return 1.0;
     }
-    spacing_multiplier_for_percent(state.player_profiles[player_idx].spacing_percent)
+    spacing_multiplier_for_percent(state.profiles_runtime.profiles[player_idx].spacing_percent)
 }
 
 #[inline(always)]
 pub fn effective_scroll_speed_for_player(state: &State, player_idx: usize) -> ScrollSpeedSetting {
-    if player_idx >= state.num_players {
-        return ScrollSpeedSetting::default();
-    }
-    effective_attack_scroll_speed(
-        player_attack_base_cleared(state, player_idx),
-        state.attacks.scroll_speed[player_idx],
+    state.effective_scroll_speed_for_player_with_base(
+        player_idx,
         super::scroll_speed_for_player(state, player_idx),
     )
 }

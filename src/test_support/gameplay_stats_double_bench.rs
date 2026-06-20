@@ -50,7 +50,7 @@ pub fn fixture() -> GameplayStatsDoubleBenchFixture {
             state,
             gameplay::current_beat(state),
             gameplay::current_music_time_ns(state),
-            gameplay::current_beat_display(state),
+            state.current_beat_display(),
             64.25,
         );
         gameplay::set_benchmark_cols_per_player(state, 8);

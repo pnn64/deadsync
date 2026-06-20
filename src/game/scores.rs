@@ -1477,7 +1477,8 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
             mines_total: totals.mines_total,
             hands_achieved: p.hands_achieved,
             fail_time: p.fail_time,
-            beat0_time_ns: gameplay::timing_for_player(gs, player_idx)
+            beat0_time_ns: gs
+                .timing_for_player(player_idx)
                 .map(|timing| timing.get_time_for_beat_ns(0.0))
                 .unwrap_or(0),
             replay,

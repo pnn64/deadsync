@@ -349,7 +349,7 @@ fn step_gameplay(
     if measured {
         checksum = mix_checksum(
             checksum,
-            black_box(gameplay::current_music_time_display(state).to_bits() as u64),
+            black_box(state.current_music_time_display().to_bits() as u64),
         );
     }
     checksum
@@ -362,19 +362,19 @@ fn prepare_gameplay_state(state: &mut gameplay::State) {
     gameplay::set_benchmark_song_position(state, 0.0, 0, 0.0, 0.0);
     gameplay::fill_benchmark_visible_time(state, 0.0);
     gameplay::clear_benchmark_notes(state);
-    gameplay::clear_benchmark_note_ranges(state);
-    gameplay::clear_benchmark_mine_scan(state);
-    gameplay::clear_benchmark_row_entries(state);
-    gameplay::clear_benchmark_row_indices(state);
+    state.clear_note_ranges();
+    state.clear_mine_scan();
+    state.clear_row_entries();
+    state.clear_row_indices();
     gameplay::clear_benchmark_note_timing_caches(state);
     gameplay::set_benchmark_end_times(state, 3_600_000_000_000, 3_600_000_000_000);
-    gameplay::clear_benchmark_hold_runtime(state);
+    state.clear_hold_runtime();
     gameplay::clear_recorded_replay_edges(state);
-    gameplay::clear_benchmark_lane_indices(state);
-    gameplay::clear_benchmark_cue_runtime(state);
-    gameplay::clear_benchmark_mini_indicator_stream_segments(state);
-    gameplay::clear_benchmark_visual_feedback(state);
-    gameplay::clear_benchmark_active_holds(state);
+    state.clear_lane_indices();
+    state.clear_cue_runtime();
+    state.clear_mini_indicator_stream_segments();
+    state.clear_visual_feedback();
+    state.clear_active_holds();
 }
 
 fn install_bench_keymap() {
@@ -403,10 +403,10 @@ fn checksum_input_event(ev: InputEvent, action: GameplayAction) -> u64 {
 
 #[inline(always)]
 fn checksum_state(state: &gameplay::State, action: GameplayAction) -> u64 {
-    (gameplay::total_elapsed_in_screen(state).to_bits() as u64)
-        ^ (gameplay::current_music_time_display(state).to_bits() as u64).rotate_left(13)
-        ^ (gameplay::players(state)[0].combo as u64).rotate_left(29)
-        ^ (gameplay::players(state)[0].life.to_bits() as u64).rotate_left(41)
+    (state.total_elapsed_in_screen().to_bits() as u64)
+        ^ (state.current_music_time_display().to_bits() as u64).rotate_left(13)
+        ^ (state.players()[0].combo as u64).rotate_left(29)
+        ^ (state.players()[0].life.to_bits() as u64).rotate_left(41)
         ^ gameplay_action_hash(action)
 }
 
