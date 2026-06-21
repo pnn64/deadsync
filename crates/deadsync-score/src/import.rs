@@ -40,6 +40,34 @@ pub struct ImportedHighScore {
     pub missed_hold: u32,
     /// `<SurviveSeconds>` — how long the player lasted before failing (if any).
     pub survive_seconds: f32,
+    /// `<Modifiers>` text, e.g. `"1.5xMusic, Overhead"`. Used to recover the
+    /// music rate; empty/absent means the default rate of 1.0.
+    pub modifiers: String,
+}
+
+/// Recovers the music rate from an ITGmania `<Modifiers>` string.
+///
+/// ITGmania serialises a non-default rate as a `"<rate>xMusic"` token (see
+/// `itgmania/src/SongOptions.cpp` `GetMods`), e.g. `"1.5xMusic"`. The token is
+/// comma/space separated from the other modifiers. Returns `1.0` when no rate
+/// token is present or it can't be parsed into a positive number.
+pub fn music_rate_from_modifiers(modifiers: &str) -> f32 {
+    for token in modifiers.split([',', ' ', '\t']) {
+        let token = token.trim();
+        if token.len() < 7 {
+            continue;
+        }
+        let (num, suffix) = token.split_at(token.len() - 6);
+        if !suffix.eq_ignore_ascii_case("xmusic") {
+            continue;
+        }
+        if let Ok(rate) = num.parse::<f32>() {
+            if rate.is_finite() && rate > 0.0 {
+                return rate;
+            }
+        }
+    }
+    1.0
 }
 
 /// Maps an ITGmania `<Grade>` string to a DeadSync [`Grade`].
@@ -99,6 +127,7 @@ pub fn parse_itg_datetime_ms(date_time: &str) -> Option<i64> {
 /// * Holds and rolls are not distinguished in `Stats.xml`; all hold-type tallies
 ///   are folded into the hold fields (`rolls_* = 0`).
 /// * `score_percent` is taken from `PercentDP` directly (both are 0.0–1.0).
+/// * `music_rate` is recovered from the `<Modifiers>` rate token (default 1.0).
 /// * EX / Hard-EX are unrecoverable → `0.0`.
 /// * The lamp is recomputed from the judgment counts (W0 split unknown).
 pub fn local_score_from_itg(hs: &ImportedHighScore) -> Option<LocalScoreEntry> {
@@ -122,7 +151,7 @@ pub fn local_score_from_itg(hs: &ImportedHighScore) -> Option<LocalScoreEntry> {
     Some(LocalScoreEntry {
         version: LOCAL_SCORE_VERSION,
         played_at_ms: parse_itg_datetime_ms(&hs.date_time).unwrap_or(0),
-        music_rate: 1.0,
+        music_rate: music_rate_from_modifiers(&hs.modifiers),
         score_percent: hs.percent_dp.clamp(0.0, 1.0),
         grade_code: grade_to_code(grade),
         lamp_index,
@@ -208,6 +237,7 @@ mod tests {
             let_go: 0,
             missed_hold: 0,
             survive_seconds: 0.0,
+            modifiers: String::new(),
         };
         let e = local_score_from_itg(&hs).expect("entry");
         assert_eq!(e.grade_code, grade_to_code(Grade::Tier01));
@@ -220,6 +250,7 @@ mod tests {
         assert!((e.score_percent - 0.9912).abs() < 1e-9);
         assert_eq!(e.ex_score_percent, 0.0);
         assert_eq!(e.fail_time, None);
+        assert_eq!(e.music_rate, 1.0);
         // No misses/way-offs/etc beyond excellents → "excellent" lamp tier.
         assert_eq!(e.lamp_index, Some(2));
         assert_eq!(e.lamp_judge_count, None); // 12 excellents > 9 → no judge count
@@ -254,5 +285,31 @@ mod tests {
         let e = local_score_from_itg(&hs).expect("entry");
         assert_eq!(e.holds_held, 10);
         assert_eq!(e.holds_total, 15);
+    }
+
+    #[test]
+    fn parses_music_rate_from_modifiers() {
+        assert_eq!(music_rate_from_modifiers(""), 1.0);
+        assert_eq!(music_rate_from_modifiers("Overhead, Mirror"), 1.0);
+        assert_eq!(music_rate_from_modifiers("1.5xMusic"), 1.5);
+        assert_eq!(
+            music_rate_from_modifiers("Overhead, 2.0xMusic, Mirror"),
+            2.0
+        );
+        assert_eq!(music_rate_from_modifiers("0.8xmusic"), 0.8);
+        // Malformed / non-positive rate falls back to 1.0.
+        assert_eq!(music_rate_from_modifiers("xMusic"), 1.0);
+        assert_eq!(music_rate_from_modifiers("0xMusic"), 1.0);
+    }
+
+    #[test]
+    fn applies_music_rate_to_entry() {
+        let hs = ImportedHighScore {
+            grade: "Grade_Tier03".into(),
+            modifiers: "1.5xMusic, Reverse".into(),
+            ..Default::default()
+        };
+        let e = local_score_from_itg(&hs).expect("entry");
+        assert_eq!(e.music_rate, 1.5);
     }
 }

@@ -327,6 +327,7 @@ fn parse_high_score(node: &XmlNode) -> ImportedHighScore {
         let_go: hold_count("LetGo"),
         missed_hold: hold_count("MissedHold"),
         survive_seconds: node.child_parse::<f32>("SurviveSeconds").unwrap_or(0.0),
+        modifiers: node.child_text("Modifiers").to_string(),
     }
 }
 

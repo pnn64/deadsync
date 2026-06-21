@@ -11,19 +11,35 @@
 //! DeadSync default:
 //!
 //! * `SpeedModType` + `SpeedMod` -> [`ScrollSpeedSetting`]
-//! * `Mini` -> `mini_percent`
+//! * `Mini` -> `mini_percent`, `Spacing` -> `spacing_percent`
 //! * `NoteSkin` -> `noteskin`
+//! * `JudgmentGraphic` / `HeldGraphic` / `HoldJudgment` -> the matching graphic
+//!   (stock graphics only; custom theme graphics fall back to the default) and
+//!   `ComboFont` -> `combo_font`
 //! * `NoteFieldOffsetX` / `NoteFieldOffsetY` -> note-field offsets
+//! * `VisualDelay` -> `visual_delay_ms`
 //! * `TiltMultiplier`, `MeasureCounterLookahead`
+//! * enum-valued settings whose value vocabulary matches a DeadSync `FromStr`:
+//!   `BackgroundFilter`, `ComboColors`, `ComboMode`, `LifeMeterType`,
+//!   `MeasureCounter`, `MeasureLines`, `ErrorBarTrim`, `MiniIndicator`,
+//!   `DataVisualizations` -> `step_statistics`
 //! * `PlayerOptionsString` -> turn + scroll (reverse) modifiers
+//! * SelectMultiple flag groups: `Colorful`/`Monochrome`/`Text`/`Highlight`/
+//!   `Average` -> `error_bar_active_mask`; `Flash*` -> `column_flash_mask`
 //! * a set of boolean toggles whose name and meaning match 1:1
 //!
 //! Everything is pure (no disk / engine state) so it can be unit-tested with a
 //! plain map of strings.
 
 use std::collections::HashMap;
+use std::str::FromStr;
 
-use deadsync_profile::{NoteSkin, PlayerOptionsData, ScrollOption, TurnOption};
+use deadsync_profile::{
+    BackgroundFilter, ColumnFlashMask, ComboColors, ComboFont, ComboMode, ErrorBarMask,
+    ErrorBarTrim, HeldMissGraphic, HoldJudgmentGraphic, JudgmentGraphic, LifeMeterType,
+    MeasureCounter, MeasureLines, MiniIndicator, NoteSkin, PlayerOptionsData, ScrollOption,
+    StepStatisticsMask, TurnOption, error_bar_style_from_mask, error_bar_text_from_mask,
+};
 use deadsync_rules::scroll::ScrollSpeedSetting;
 
 /// Settings read from a `[Simply Love]` INI section.
@@ -46,6 +62,14 @@ fn sl_str<'a>(map: &'a SlSettings, key: &str) -> Option<&'a str> {
 
 fn sl_f32(map: &SlSettings, key: &str) -> Option<f32> {
     sl_str(map, key)?.parse::<f32>().ok()
+}
+
+/// Parse a Simply Love value into a DeadSync enum via its [`FromStr`]. Returns
+/// `None` (leaving the caller's default in place) when the key is absent or the
+/// value isn't one DeadSync recognises — the DeadSync `FromStr` impls normalise
+/// case/punctuation and reject unknown vocabularies, so this never guesses.
+fn sl_enum<T: FromStr>(map: &SlSettings, key: &str) -> Option<T> {
+    sl_str(map, key)?.parse::<T>().ok()
 }
 
 /// Parse a signed integer out of a value that may carry trailing units, e.g.
@@ -137,14 +161,37 @@ pub fn translate_player_options(map: &SlSettings, base: &PlayerOptionsData) -> P
     if let Some(mini) = sl_str(map, "Mini").and_then(leading_i32) {
         out.mini_percent = mini;
     }
+    if let Some(spacing) = sl_str(map, "Spacing").and_then(leading_i32) {
+        out.spacing_percent = spacing;
+    }
     if let Some(skin) = sl_str(map, "NoteSkin") {
         out.noteskin = NoteSkin::new(skin);
+    }
+    // Theme graphic / font names. These resolve only to graphics DeadSync ships
+    // (via the stock-only parse); a Simply Love profile referencing a custom
+    // theme graphic is left at the default rather than pointing at a missing
+    // texture. Simply Love stores the full sprite filename for the three
+    // graphics and the font directory name for ComboFont.
+    if let Some(g) = sl_str(map, "JudgmentGraphic").and_then(JudgmentGraphic::from_stock_name) {
+        out.judgment_graphic = g;
+    }
+    if let Some(g) = sl_str(map, "HeldGraphic").and_then(HeldMissGraphic::from_stock_name) {
+        out.held_miss_graphic = g;
+    }
+    if let Some(g) = sl_str(map, "HoldJudgment").and_then(HoldJudgmentGraphic::from_stock_name) {
+        out.hold_judgment_graphic = g;
+    }
+    if let Some(font) = sl_enum::<ComboFont>(map, "ComboFont") {
+        out.combo_font = font;
     }
     if let Some(x) = sl_str(map, "NoteFieldOffsetX").and_then(leading_i32) {
         out.note_field_offset_x = x;
     }
     if let Some(y) = sl_str(map, "NoteFieldOffsetY").and_then(leading_i32) {
         out.note_field_offset_y = y;
+    }
+    if let Some(delay) = sl_str(map, "VisualDelay").and_then(leading_i32) {
+        out.visual_delay_ms = delay;
     }
     if let Some(mult) = sl_f32(map, "TiltMultiplier") {
         out.tilt_multiplier = mult;
@@ -153,13 +200,114 @@ pub fn translate_player_options(map: &SlSettings, base: &PlayerOptionsData) -> P
         out.measure_counter_lookahead = look.clamp(0, i32::from(u8::MAX)) as u8;
     }
 
+    // Enum-valued settings whose Simply Love vocabulary matches DeadSync's
+    // `FromStr`. Unknown values are ignored (default preserved).
+    if let Some(v) = sl_enum::<BackgroundFilter>(map, "BackgroundFilter") {
+        out.background_filter = v;
+    }
+    if let Some(v) = sl_enum::<ComboColors>(map, "ComboColors") {
+        out.combo_colors = v;
+    }
+    if let Some(v) = sl_enum::<ComboMode>(map, "ComboMode") {
+        out.combo_mode = v;
+    }
+    if let Some(v) = sl_enum::<LifeMeterType>(map, "LifeMeterType") {
+        out.lifemeter_type = v;
+    }
+    if let Some(v) = sl_enum::<MeasureCounter>(map, "MeasureCounter") {
+        out.measure_counter = v;
+    }
+    if let Some(v) = sl_enum::<MeasureLines>(map, "MeasureLines") {
+        out.measure_lines = v;
+    }
+    if let Some(v) = sl_enum::<ErrorBarTrim>(map, "ErrorBarTrim") {
+        out.error_bar_trim = v;
+    }
+    if let Some(v) = sl_enum::<MiniIndicator>(map, "MiniIndicator") {
+        out.mini_indicator = v;
+    }
+    if let Some(v) = sl_enum::<StepStatisticsMask>(map, "DataVisualizations") {
+        out.step_statistics = v;
+    }
+
     apply_bool_toggles(&mut out, map);
+    apply_error_bar_flags(&mut out, map);
+    apply_column_flash_flags(&mut out, map);
 
     if let Some(pos) = sl_str(map, "PlayerOptionsString") {
         apply_player_options_string(&mut out, pos);
     }
 
     out
+}
+
+/// Translate Simply Love's `JudgmentFlash` SelectMultiple booleans
+/// (`FlashMiss`/`FlashWayOff`/…/`FlashFantastic`) into a [`ColumnFlashMask`].
+/// Only applied when at least one flag is present so an absent group keeps the
+/// DeadSync default.
+fn apply_column_flash_flags(out: &mut PlayerOptionsData, map: &SlSettings) {
+    let single_bits = [
+        ("FlashMiss", ColumnFlashMask::MISS),
+        ("FlashWayOff", ColumnFlashMask::WAY_OFF),
+        ("FlashDecent", ColumnFlashMask::DECENT),
+        ("FlashGreat", ColumnFlashMask::GREAT),
+        ("FlashExcellent", ColumnFlashMask::EXCELLENT),
+    ];
+
+    let mut mask = ColumnFlashMask::empty();
+    let mut seen = false;
+    for (key, bit) in single_bits {
+        if let Some(v) = sl_bool(map, key) {
+            seen = true;
+            if v {
+                mask |= bit;
+            }
+        }
+    }
+    // Simply Love exposes a single "Fantastic" flash; DeadSync splits fantastic
+    // into blue (W0/FA+) and white (W1) columns, so enable both.
+    if let Some(v) = sl_bool(map, "FlashFantastic") {
+        seen = true;
+        if v {
+            mask |= ColumnFlashMask::BLUE_FANTASTIC | ColumnFlashMask::WHITE_FANTASTIC;
+        }
+    }
+
+    if seen {
+        out.column_flash_mask = mask;
+    }
+}
+
+/// Translate Simply Love's error-bar style SelectMultiple booleans
+/// (`Colorful`/`Monochrome`/`Text`/`Highlight`/`Average`) into the
+/// [`ErrorBarMask`], deriving the legacy `error_bar` / `error_bar_text` fields
+/// from the resulting mask (mirroring the DeadSync profile loader). Only applied
+/// when at least one flag is present.
+fn apply_error_bar_flags(out: &mut PlayerOptionsData, map: &SlSettings) {
+    let flags = [
+        ("Colorful", ErrorBarMask::COLORFUL),
+        ("Monochrome", ErrorBarMask::MONOCHROME),
+        ("Text", ErrorBarMask::TEXT),
+        ("Highlight", ErrorBarMask::HIGHLIGHT),
+        ("Average", ErrorBarMask::AVERAGE),
+    ];
+
+    let mut mask = ErrorBarMask::empty();
+    let mut seen = false;
+    for (key, bit) in flags {
+        if let Some(v) = sl_bool(map, key) {
+            seen = true;
+            if v {
+                mask |= bit;
+            }
+        }
+    }
+
+    if seen {
+        out.error_bar_active_mask = mask;
+        out.error_bar = error_bar_style_from_mask(mask);
+        out.error_bar_text = error_bar_text_from_mask(mask);
+    }
 }
 
 /// Boolean toggles whose Simply Love key and meaning match a DeadSync field 1:1.
@@ -191,6 +339,7 @@ fn apply_bool_toggles(out: &mut PlayerOptionsData, map: &SlSettings) {
     set_bool!("SubtractiveScoring" => subtractive_scoring);
     set_bool!("Pacemaker" => pacemaker);
     set_bool!("TrackEarlyJudgments" => track_early_judgments);
+    set_bool!("ScaleGraph" => scale_scatterplot);
     set_bool!("NPSGraphAtTop" => nps_graph_at_top);
     set_bool!("JudgmentTilt" => judgment_tilt);
     set_bool!("ColumnCues" => column_cues);
@@ -301,6 +450,166 @@ mod tests {
         assert_eq!(out.turn_option, TurnOption::Mirror);
         assert!(out.reverse_scroll);
         assert!(out.scroll_option.contains(ScrollOption::Reverse));
+    }
+
+    #[test]
+    fn parses_spacing_and_visual_delay() {
+        let base = PlayerOptionsData::default();
+        let out =
+            translate_player_options(&sl(&[("Spacing", "-25%"), ("VisualDelay", "12ms")]), &base);
+        assert_eq!(out.spacing_percent, -25);
+        assert_eq!(out.visual_delay_ms, 12);
+    }
+
+    #[test]
+    fn translates_stock_graphics_and_font() {
+        let base = PlayerOptionsData::default();
+        let out = translate_player_options(
+            &sl(&[
+                ("JudgmentGraphic", "Wendy 2x7 (doubleres).png"),
+                ("HoldJudgment", "ITG2 1x2 (doubleres).png"),
+                ("HeldGraphic", "None"),
+                ("ComboFont", "Bebas Neue"),
+            ]),
+            &base,
+        );
+        assert_eq!(
+            out.judgment_graphic.as_str(),
+            "judgements/Wendy 2x7 (doubleres).png"
+        );
+        assert_eq!(
+            out.hold_judgment_graphic.as_str(),
+            "hold_judgements/ITG2 1x2 (doubleres).png"
+        );
+        assert!(out.held_miss_graphic.is_none());
+        assert_eq!(out.combo_font, ComboFont::BebasNeue);
+    }
+
+    #[test]
+    fn ignores_unknown_custom_graphics() {
+        let mut base = PlayerOptionsData::default();
+        base.judgment_graphic = JudgmentGraphic::new("Wendy");
+        let out = translate_player_options(
+            &sl(&[
+                ("JudgmentGraphic", "MyCustomTheme 2x7 (doubleres).png"),
+                ("ComboFont", "SomeCustomFont"),
+            ]),
+            &base,
+        );
+        // Unknown graphic/font must not fabricate a path — keep the base value.
+        assert_eq!(out.judgment_graphic, base.judgment_graphic);
+        assert_eq!(out.combo_font, base.combo_font);
+    }
+
+    #[test]
+    fn translates_enum_settings() {
+        let base = PlayerOptionsData::default();
+        let out = translate_player_options(
+            &sl(&[
+                ("BackgroundFilter", "50"),
+                ("ComboColors", "RainbowScroll"),
+                ("ComboMode", "CurrentCombo"),
+                ("LifeMeterType", "Surround"),
+                ("MeasureCounter", "16th"),
+                ("MeasureLines", "Quarter"),
+                ("ErrorBarTrim", "Great"),
+                ("MiniIndicator", "Pacemaker"),
+                ("ScaleGraph", "true"),
+            ]),
+            &base,
+        );
+        assert_eq!(
+            out.background_filter,
+            BackgroundFilter::from_str("50").unwrap()
+        );
+        assert_eq!(out.combo_colors, ComboColors::RainbowScroll);
+        assert_eq!(out.combo_mode, ComboMode::CurrentCombo);
+        assert_eq!(out.lifemeter_type, LifeMeterType::Surround);
+        assert_eq!(out.measure_counter, MeasureCounter::Sixteenth);
+        assert_eq!(out.measure_lines, MeasureLines::Quarter);
+        assert_eq!(out.error_bar_trim, ErrorBarTrim::Great);
+        assert_eq!(out.mini_indicator, MiniIndicator::Pacemaker);
+        assert!(out.scale_scatterplot);
+    }
+
+    #[test]
+    fn ignores_unknown_enum_values() {
+        let base = PlayerOptionsData::default();
+        let out = translate_player_options(
+            &sl(&[("ComboColors", "NotARealValue"), ("MeasureCounter", "99th")]),
+            &base,
+        );
+        assert_eq!(out.combo_colors, base.combo_colors);
+        assert_eq!(out.measure_counter, base.measure_counter);
+    }
+
+    #[test]
+    fn translates_data_visualizations_legacy_values() {
+        let base = PlayerOptionsData::default();
+
+        let stats =
+            translate_player_options(&sl(&[("DataVisualizations", "Step Statistics")]), &base);
+        assert_eq!(stats.step_statistics, StepStatisticsMask::all_widgets());
+
+        let none =
+            translate_player_options(&sl(&[("DataVisualizations", "Target Score Graph")]), &base);
+        assert_eq!(none.step_statistics, StepStatisticsMask::empty());
+    }
+
+    #[test]
+    fn translates_error_bar_flags() {
+        let base = PlayerOptionsData::default();
+        let out = translate_player_options(
+            &sl(&[
+                ("Colorful", "true"),
+                ("Monochrome", "false"),
+                ("Text", "true"),
+                ("Highlight", "false"),
+                ("Average", "false"),
+            ]),
+            &base,
+        );
+        assert!(
+            out.error_bar_active_mask
+                .contains(ErrorBarMask::COLORFUL | ErrorBarMask::TEXT)
+        );
+        assert!(!out.error_bar_active_mask.contains(ErrorBarMask::MONOCHROME));
+        assert_eq!(
+            out.error_bar,
+            error_bar_style_from_mask(out.error_bar_active_mask)
+        );
+        assert!(out.error_bar_text);
+    }
+
+    #[test]
+    fn translates_column_flash_flags_splitting_fantastic() {
+        let base = PlayerOptionsData::default();
+        let out = translate_player_options(
+            &sl(&[
+                ("FlashMiss", "true"),
+                ("FlashWayOff", "false"),
+                ("FlashDecent", "false"),
+                ("FlashGreat", "false"),
+                ("FlashExcellent", "true"),
+                ("FlashFantastic", "true"),
+            ]),
+            &base,
+        );
+        assert!(out.column_flash_mask.contains(ColumnFlashMask::MISS));
+        assert!(out.column_flash_mask.contains(ColumnFlashMask::EXCELLENT));
+        assert!(
+            out.column_flash_mask
+                .contains(ColumnFlashMask::BLUE_FANTASTIC | ColumnFlashMask::WHITE_FANTASTIC)
+        );
+        assert!(!out.column_flash_mask.contains(ColumnFlashMask::WAY_OFF));
+    }
+
+    #[test]
+    fn flag_groups_absent_keep_default() {
+        let base = PlayerOptionsData::default();
+        let out = translate_player_options(&sl(&[("SpeedMod", "300")]), &base);
+        assert_eq!(out.column_flash_mask, base.column_flash_mask);
+        assert_eq!(out.error_bar_active_mask, base.error_bar_active_mask);
     }
 
     #[test]
