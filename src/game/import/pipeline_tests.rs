@@ -202,3 +202,21 @@ fn imports_stats_xml_against_library_end_to_end() {
     let decoded = decode_local_score_entry(&bytes).expect("decode");
     assert_eq!(&decoded, entry);
 }
+
+#[test]
+fn resolves_favorite_song_to_chart_hashes() {
+    let packs = library();
+    let resolver = ChartResolver::build(&packs);
+
+    // Simply Love favorites.txt stores "Pack/SongFolder" keys.
+    let song = resolver
+        .resolve_song("My Pack/Cool Song")
+        .expect("favorite song resolves");
+    let hashes: Vec<&str> = song.charts.iter().map(|c| c.short_hash.as_str()).collect();
+    assert_eq!(hashes, vec!["abc123def456"]);
+
+    assert!(
+        resolver.resolve_song("Ghost Pack/Ghost Song").is_none(),
+        "unknown favorite song does not resolve"
+    );
+}

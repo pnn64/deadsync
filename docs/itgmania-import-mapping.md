@@ -19,6 +19,8 @@ An ITGmania `LocalProfiles/<id>/` directory contains:
 | `ArrowCloud.ini` | ArrowCloud API key |
 | `Simply Love UserPrefs.ini` | `[Simply Love]` section → player options |
 | `Avatar.png` (or `.jpg`/`.jpeg`) | Profile avatar image |
+| `favorites.txt` | Favorited songs (resolved to chart hashes) |
+| `ITL2026.json` | ITL event progress (scores, points, unlocks) |
 | `Stats.xml` (or `Stats.xml.gz`) | Per-chart high scores |
 
 Reader code: `src/game/import/itg.rs`. Each reader degrades gracefully — a
@@ -55,6 +57,13 @@ Source: `Editable.ini` `[Editable]`. Writer: `src/game/profile.rs`
 | `WeightPounds` | weight (lbs) | parsed `u32`, `0` if absent |
 | `BirthYear` | birth year | parsed `u32`, `0` if absent |
 | `LastUsedHighScoreName` | player initials | sanitised; falls back to initials derived from the display name |
+| `IgnoreStepCountCalories` | `ignore_step_count_calories` | disables step-count calorie estimation; parsed as bool |
+
+The `Stats.xml` `GeneralData/CurrentCombo` is imported into the profile's
+`current_combo` (the streak carried between songs) via `ProfileStats`. Known
+packs are **not** imported — DeadSync marks all currently-scanned packs as known
+on a new profile's first load, which is the desired behavior (importing only the
+ITGmania-played subset would wrongly flag the rest as "new").
 
 ## 2. Online service keys
 
@@ -80,6 +89,39 @@ all that's needed for it.
 
 `Avatar.png` / `avatar.png` / `Avatar.jpg` / `Avatar.jpeg` (first match,
 case-insensitive) is copied into the new profile directory as `profile.png`.
+
+## 3a. Favorites
+
+Source: `favorites.txt` (Simply Love). Reader: `read_favorites` /
+`parse_favorites_text` in `src/game/import/itg.rs`; resolution + write in
+`src/game/import/run.rs` and `src/game/profile.rs`.
+
+Simply Love stores favorites **per song** as `Pack/SongFolder` lines, optionally
+grouped under `---Section` headers (custom playlists). DeadSync stores favorites
+**per chart** (`short_hash`). The importer therefore:
+
+1. Reads each favorited song key, skipping `---` section headers and blanks.
+2. Resolves the song against the scanned library (same `Pack/SongFolder`
+   matching as scores).
+3. Favorites **all of that song's charts'** hashes, so the song shows as
+   favorited regardless of which difficulty is viewed.
+
+Section/playlist grouping is **not** preserved (DeadSync has no favorites
+sections); songs not in the library are reported as skipped in the summary.
+
+## 3b. ITL event data
+
+Source: `ITL2026.json` (Simply Love ITL event file). Reader: `read_itl_json` in
+`src/game/import/itg.rs`; import in `src/game/scores/itl.rs`
+(`import_itl_json`).
+
+DeadSync's ITL support uses the **same `ITL2026.json` schema** Simply Love
+writes — `pathMap` (song dir → hash), `hashMap` (hash → per-song event metadata:
+EX, points, clear type, judgments, ranks…), and `unlockFolders`. The importer
+parses the Simply Love file through DeadSync's own `ItlFileData` and writes it
+into the new profile, so your ITL event progress (scores, points, unlocks)
+carries over directly. Song ranks are recomputed when the profile's ITL cache
+next loads. A missing, empty, or unparseable file imports nothing.
 
 ## 4. Player options (Simply Love)
 
@@ -136,6 +178,8 @@ rejects unknown vocabularies (unknown → default preserved).
 | `ErrorBarTrim` | `error_bar_trim` | `Off`, `Fantastic`, `Excellent`, `Great` |
 | `MiniIndicator` | `mini_indicator` | `None`, `SubtractiveScoring`, `PredictiveScoring`, `PaceScoring`, `RivalScoring`, `Pacemaker`, `StreamProg` |
 | `DataVisualizations` | `step_statistics` | `None`/`Target Score Graph` → empty; `Step Statistics` → all widgets |
+| `StepStatsExtra` | `step_stats_extra` | `None`, `ErrorStats`, and the GIF widgets (`AmongUs`, `CatJAM`, `Nyan Cat`, `Sonic`, …) |
+| `TargetScore` | `target_score` | only `Machine best` / `Personal best` (SL's `SpecifiedValue`+number and `Ghost Data` have no equivalent → default) |
 
 ### 4.4 SelectMultiple flag groups → bitmasks
 
@@ -279,22 +323,62 @@ and looks it up in DeadSync's scanned song library to recover the GrooveStats
   `~/Library/Application Support/ITGmania/...`); portable installs aren't found
   automatically.
 
-## Deliberately not (yet) imported
+## Deliberately not imported
 
-Present in an ITGmania profile but currently left to DeadSync defaults — see the
-audit notes in the session history for rationale:
+Everything below is present in an ITGmania / Simply Love profile but **intentionally
+left to DeadSync's defaults**. This is the definitive list; each row records *why*
+it is excluded so the decision is auditable. Items that **are** imported (even
+partially) are noted inline and are not repeated here.
 
-- **Profile/stats:** `IgnoreStepCountCalories`, `CharacterID`, `Voomax`,
-  `IsMale`, `CurrentCombo`, lifetime totals (`TotalDancePoints`,
-  `TotalSessions`, step/jump/hold totals), play-count histograms, last
-  song/difficulty, calorie history.
-- **Per-chart:** `HighScoreList/NumTimesPlayed`, `LastPlayed`, `HighGrade`;
-  per-score `MaxCombo`, `Name`, `RadarValues`, `Disqualified`.
-- **Simply Love extras:** `favorites.txt`, `ITL2026.json`, `SL-Scores/*.json`.
-- **Player options judged risky:** numeric/`Ghost Data` `TargetScore`,
-  `MiniIndicatorColor` (color-name vocabulary), scorebox sub-options
-  (`SBITGScore`/`SBExScore`/`SBEvents`), and SL-only aesthetic effects with no
-  DeadSync equivalent.
+**Reason codes**
+
+| Code | Meaning |
+| --- | --- |
+| `NO-TARGET` | DeadSync has no field/feature for this — importing would require a new schema field (and usually UI) with nothing to read it yet. |
+| `NO-MAP` | A target exists but the value vocabularies/semantics don't correspond, so any mapping would be a lossy guess. The translator deliberately never guesses. |
+| `COUNTERPRODUCTIVE` | A faithful import would produce *worse* behavior than DeadSync's default. |
+| `REDUNDANT` | Off by default and/or already covered by a source we do import. |
+| `NOT-MODELED` | DeadSync doesn't implement the underlying feature (courses, characters, unlock system, …). |
+
+### Player options (`Simply Love UserPrefs.ini`)
+
+| Setting(s) | Reason | Detail |
+| --- | --- | --- |
+| `MiniIndicatorColor` | `NO-MAP` | SL is a **fixed-color** picker (`Default`, `Red`, `Blue`, `Yellow`, `Green`, `Magenta`, `White`). DeadSync's enum is a **coloring strategy** (`Default`/`Detailed` = score gradient, `Combo` = match combo color). Only `Default`↔`Default` lines up — a no-op — and every actual color choice has no representation. |
+| `TargetScore` = `SpecifiedValue` (+ `TargetScoreNumber`), `Ghost Data`; `ActionOnMissedTarget` | `NO-MAP` | DeadSync's `target_score` is a grade (`C-`…`S+`) or `Machine/Personal best`; it has no numeric-percent or ghost-data target. **`Machine best` / `Personal best` *are* imported.** |
+| `PackBanner`, `StepInfo` | `NO-MAP` | These would set individual `step_statistics` bits (`PACK_BANNER` / `SONG_INFO`), but they collide with the all-or-nothing `DataVisualizations` → `step_statistics` mapping we already apply. |
+| `SBITGScore`, `SBExScore`, `SBEvents` | `NO-TARGET` | Scorebox sub-toggles with no matching DeadSync field. |
+| `TrackRecalc`, `TrackFoot` | `NO-TARGET` | No corresponding DeadSync option. |
+| `TimerMode`, `JudgmentAnimation`, `RailBalance`, `GhostFault`, `BreakUI`, `GrowCombo`, `SpinCombo`, `WildCombo`, `RainbowComboOptions`, `TiltOptions`, `Waterfall`, `FadeFantastic`, `NoBar` | `NO-TARGET` | SL-only aesthetic / novelty effects DeadSync doesn't implement. |
+
+### Profile metadata & `GeneralData`
+
+| Field(s) | Reason | Detail |
+| --- | --- | --- |
+| `known_pack_names` (derived) | `COUNTERPRODUCTIVE` | DeadSync marks **all** currently-scanned packs as known on a new profile's first load. Importing only the ITGmania-played subset would wrongly flag every other pack as "new". |
+| `CharacterID` | `NOT-MODELED` | DeadSync has no character system. |
+| `Voomax`, `IsMale` | `NO-TARGET` | Calorie-model inputs DeadSync doesn't model (weight + birth year **are** imported, as is `IgnoreStepCountCalories`). |
+| Lifetime totals: `TotalDancePoints`, `TotalSessions`, `TotalSessionSeconds`, `TotalGameplaySeconds`, `TotalTapsAndHolds`, `TotalJumps`, `TotalHolds`, `TotalRolls`, `TotalMines`, `TotalHands`, `TotalLifts`, `NumToasties`, `NumExtraStagesPassed/Failed` | `NO-TARGET` | No lifetime-stats store or display in DeadSync. |
+| Play-count histograms: `NumSongsPlayedBy{PlayMode,Style,Difficulty,Meter}`, `NumTotalSongsPlayed`, `NumStagesPassedBy{PlayMode,Grade}` | `NO-TARGET` | No aggregate play-count store. |
+| `LastDifficulty`, `LastStepsType`, `Song`, `Course`, `LastPlayedDate` | `NO-TARGET` | DeadSync tracks last-played by chart hash internally; ITGmania's last-selection isn't portable. |
+| Calorie history: `CalorieData/CaloriesBurned[@Date]`, `TotalCaloriesBurned`, `GoalType`/`GoalCalories`/`GoalSeconds` | `NO-TARGET` | Only *today's* calories are tracked; cross-machine daily history isn't meaningful. (`CurrentCombo` **is** imported.) |
+| `Unlocks/UnlockEntry` | `NOT-MODELED` | Different unlock system. (ITL unlock folders **are** imported via `ITL2026.json`.) |
+
+### Scores (`Stats.xml`)
+
+| Field(s) | Reason | Detail |
+| --- | --- | --- |
+| Per-chart `HighScoreList/NumTimesPlayed`, `LastPlayed`, `HighGrade` | `NO-TARGET` | DeadSync stores the best score per chart, not play counts / last-played per chart. |
+| Per-score `MaxCombo`, `Name`, `RadarValues`, `Disqualified`, `StageAward`, `PeakComboAward`, checkpoint counts | `NO-TARGET` | Not fields on `LocalScoreEntry`; would need a score-schema change. (Judgments, holds, mines, percent, grade, date, and music rate **are** imported.) |
+| `CourseScores`, `CategoryScores` | `NOT-MODELED` | DeadSync has no course / ranking-category score store. |
+| `ScreenshotData` | `NOT-MODELED` | No screenshot metadata store. |
+
+### Simply Love extras
+
+| Source | Reason | Detail |
+| --- | --- | --- |
+| `SL-Scores/*.json` | `REDUNDANT` | Per-play archive, **off by default** (`WriteCustomScores` theme pref). Richer than `Stats.xml` (rolls-vs-holds split, `MaxCombo`) but would duplicate the best-score data we already import and require play-level dedup. |
+| `favorites.txt` section / playlist names (the `---Section` headers) | `NOT-MODELED` | DeadSync favorites have no section grouping. **The favorited songs themselves are imported.** |
 
 ## Source-of-truth code
 

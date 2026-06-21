@@ -22,6 +22,8 @@ pub struct ItgEditable {
     pub weight_pounds: u32,
     pub birth_year: u32,
     pub last_used_high_score_name: String,
+    /// `IgnoreStepCountCalories` — disables step-count calorie estimation.
+    pub ignore_step_count_calories: bool,
 }
 
 /// GrooveStats + ArrowCloud online keys.
@@ -61,6 +63,19 @@ pub struct ItgSource {
     /// Raw `[Simply Love]` settings from `Simply Love UserPrefs.ini`, if present.
     pub simply_love: HashMap<String, String>,
     pub songs: Vec<ItgSongScores>,
+    /// Favorited song keys (`Pack/SongFolder`) from `favorites.txt`, with any
+    /// Simply Love section headers stripped.
+    pub favorites: Vec<String>,
+    /// Raw contents of `ITL2026.json` (Simply Love ITL event data), if present.
+    pub itl_json: Option<String>,
+    /// `Stats.xml` `GeneralData/CurrentCombo` — the running combo carried between
+    /// songs. `0` when absent.
+    pub current_combo: u32,
+    /// `Stats.xml` `GeneralData/Guid` — ITGmania's stable per-profile identifier.
+    /// Used to derive the imported DeadSync profile's GUID so re-importing the
+    /// same profile yields the same identity. Empty when the `Stats.xml` is
+    /// missing or has no `Guid`.
+    pub guid: String,
 }
 
 impl ItgSource {
@@ -125,6 +140,55 @@ pub fn read_display_name(dir: &Path) -> Option<String> {
     }
 }
 
+/// Cheaply reads the ITGmania profile `Guid` from `Stats.xml` (or `Stats.xml.gz`)
+/// without a full XML parse. The `Guid` lives in `GeneralData` at the very top of
+/// the file, so we only scan the head (bounded) instead of the whole — possibly
+/// many-megabyte — score database. Used by the import picker to flag profiles
+/// that have already been imported. Returns `None` when absent or unreadable.
+pub fn read_source_guid(dir: &Path) -> Option<String> {
+    // GeneralData (and thus Guid) sits before SongScores, well within this cap.
+    const HEAD_CAP: u64 = 256 * 1024;
+    let head = if let Some(path) = find_case_insensitive(dir, "Stats.xml") {
+        read_head(&path, HEAD_CAP)?
+    } else if let Some(path) = find_case_insensitive(dir, "Stats.xml.gz") {
+        read_gz_head(&path, HEAD_CAP)?
+    } else {
+        return None;
+    };
+    extract_guid(&head)
+}
+
+/// Extracts the text inside the first `<Guid>…</Guid>` element. Returns `None`
+/// when the element is absent or empty.
+fn extract_guid(s: &str) -> Option<String> {
+    let start = s.find("<Guid>")? + "<Guid>".len();
+    let rest = &s[start..];
+    let end = rest.find("</Guid>")?;
+    let guid = rest[..end].trim();
+    if guid.is_empty() {
+        None
+    } else {
+        Some(guid.to_string())
+    }
+}
+
+/// Reads up to `cap` bytes from the head of `path` as lossy UTF-8.
+fn read_head(path: &Path, cap: u64) -> Option<String> {
+    let file = fs::File::open(path).ok()?;
+    let mut buf = Vec::new();
+    file.take(cap).read_to_end(&mut buf).ok()?;
+    Some(String::from_utf8_lossy(&buf).into_owned())
+}
+
+/// Decompresses up to `cap` bytes from the head of a gzip file as lossy UTF-8.
+fn read_gz_head(path: &Path, cap: u64) -> Option<String> {
+    let bytes = fs::read(path).ok()?;
+    let decoder = flate2::read::GzDecoder::new(&bytes[..]);
+    let mut buf = Vec::new();
+    decoder.take(cap).read_to_end(&mut buf).ok()?;
+    Some(String::from_utf8_lossy(&buf).into_owned())
+}
+
 /// Reads an entire ITGmania local profile directory into an [`ItgSource`].
 pub fn read_profile_dir(dir: &Path) -> Result<ItgSource, ItgReadError> {
     let editable_path = find_case_insensitive(dir, "Editable.ini")
@@ -134,7 +198,9 @@ pub fn read_profile_dir(dir: &Path) -> Result<ItgSource, ItgReadError> {
     let online = read_online_keys(dir);
     let avatar_path = find_avatar(dir);
     let simply_love = read_simply_love(dir);
-    let songs = read_stats(dir)?;
+    let stats = read_stats(dir)?;
+    let favorites = read_favorites(dir);
+    let itl_json = read_itl_json(dir);
 
     Ok(ItgSource {
         source_dir: dir.to_path_buf(),
@@ -142,7 +208,11 @@ pub fn read_profile_dir(dir: &Path) -> Result<ItgSource, ItgReadError> {
         online,
         avatar_path,
         simply_love,
-        songs,
+        songs: stats.songs,
+        favorites,
+        itl_json,
+        current_combo: stats.current_combo,
+        guid: stats.guid,
     })
 }
 
@@ -161,6 +231,9 @@ fn read_editable(path: &Path) -> ItgEditable {
             .and_then(|s| s.parse::<u32>().ok())
             .unwrap_or(0),
         last_used_high_score_name: get("LastUsedHighScoreName").unwrap_or_default(),
+        ignore_step_count_calories: get("IgnoreStepCountCalories")
+            .map(|s| parse_bool(&s))
+            .unwrap_or(false),
     }
 }
 
@@ -216,6 +289,46 @@ fn read_simply_love(dir: &Path) -> HashMap<String, String> {
     HashMap::new()
 }
 
+/// Parses Simply Love `favorites.txt` content into a list of `Pack/SongFolder`
+/// song keys. Section header lines (which begin with `---`, e.g.
+/// `---My Stamina Playlist`) and blank lines are skipped; remaining lines are
+/// the favorited song paths. Order is preserved and duplicates are removed.
+pub fn parse_favorites_text(text: &str) -> Vec<String> {
+    let mut seen = std::collections::HashSet::new();
+    let mut out = Vec::new();
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with("---") {
+            continue;
+        }
+        if seen.insert(trimmed.to_ascii_lowercase()) {
+            out.push(trimmed.to_string());
+        }
+    }
+    out
+}
+
+/// Reads `favorites.txt` from a profile directory. Returns an empty list when
+/// the file is missing (a profile that never favorited anything).
+fn read_favorites(dir: &Path) -> Vec<String> {
+    let Some(path) = find_case_insensitive(dir, "favorites.txt") else {
+        return Vec::new();
+    };
+    match fs::read_to_string(&path) {
+        Ok(text) => parse_favorites_text(&text),
+        Err(_) => Vec::new(),
+    }
+}
+
+/// Reads the raw `ITL2026.json` (Simply Love ITL event data) from a profile
+/// directory, if present. The contents are parsed downstream by DeadSync's ITL
+/// module, which uses the same schema. Returns `None` when the file is missing
+/// or unreadable.
+fn read_itl_json(dir: &Path) -> Option<String> {
+    let path = find_case_insensitive(dir, "ITL2026.json")?;
+    fs::read_to_string(&path).ok()
+}
+
 /// Finds an avatar image in the profile dir. ITGmania uses `Avatar.png`; some
 /// setups also drop a generic image. We accept common names case-insensitively.
 fn find_avatar(dir: &Path) -> Option<PathBuf> {
@@ -228,19 +341,51 @@ fn find_avatar(dir: &Path) -> Option<PathBuf> {
     None
 }
 
-/// Reads `Stats.xml` (or `Stats.xml.gz`) and returns the parsed song scores.
-/// A missing Stats file is not an error — it yields an empty list.
-fn read_stats(dir: &Path) -> Result<Vec<ItgSongScores>, ItgReadError> {
+/// Parsed contents of `Stats.xml` beyond the per-chart song scores.
+#[derive(Debug, Clone, Default)]
+pub struct ItgStatsData {
+    pub songs: Vec<ItgSongScores>,
+    /// `GeneralData/CurrentCombo`.
+    pub current_combo: u32,
+    /// `GeneralData/Guid` — empty when absent.
+    pub guid: String,
+}
+
+/// Reads `Stats.xml` (or `Stats.xml.gz`) and returns the parsed song scores plus
+/// selected `GeneralData`. A missing Stats file is not an error — it yields an
+/// empty result.
+fn read_stats(dir: &Path) -> Result<ItgStatsData, ItgReadError> {
     let content = if let Some(path) = find_case_insensitive(dir, "Stats.xml") {
         fs::read_to_string(&path)?
     } else if let Some(path) = find_case_insensitive(dir, "Stats.xml.gz") {
         read_gz_to_string(&path)?
     } else {
-        return Ok(Vec::new());
+        return Ok(ItgStatsData::default());
     };
 
     let root = xml::parse(&content).map_err(ItgReadError::Xml)?;
-    Ok(parse_song_scores(&root))
+    let (current_combo, guid) = parse_general_data(&root);
+    Ok(ItgStatsData {
+        songs: parse_song_scores(&root),
+        current_combo,
+        guid,
+    })
+}
+
+/// Extracts `(CurrentCombo, Guid)` from a parsed `Stats.xml` root's
+/// `GeneralData`. Returns `(0, "")` when the node is absent.
+fn parse_general_data(root: &XmlNode) -> (u32, String) {
+    let general = if root.tag == "GeneralData" {
+        root
+    } else {
+        match root.child("GeneralData") {
+            Some(g) => g,
+            None => return (0, String::new()),
+        }
+    };
+    let combo = general.child_parse::<u32>("CurrentCombo").unwrap_or(0);
+    let guid = general.child_text("Guid").trim().to_string();
+    (combo, guid)
 }
 
 fn read_gz_to_string(path: &Path) -> Result<String, std::io::Error> {
@@ -453,5 +598,54 @@ mod tests {
         assert_eq!(entry.judgment_counts, [480, 12, 0, 0, 0, 0]);
         assert_eq!(entry.holds_total, 20);
         assert_eq!(entry.mines_avoided, 4);
+    }
+
+    #[test]
+    fn parses_favorites_skipping_headers_and_dupes() {
+        let text = "---My Stamina Playlist\nPack A/Song One\n\nPack B/Song Two\n---Another Section\nPack A/Song One\n  Pack C/Song Three  \n";
+        let favs = parse_favorites_text(text);
+        assert_eq!(
+            favs,
+            vec![
+                "Pack A/Song One".to_string(),
+                "Pack B/Song Two".to_string(),
+                "Pack C/Song Three".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn parses_general_data_current_combo() {
+        let xml_text = r#"<Stats>
+  <GeneralData>
+    <DisplayName>Test</DisplayName>
+    <CurrentCombo>137</CurrentCombo>
+    <Guid>99f55b745304ebcf</Guid>
+  </GeneralData>
+  <SongScores></SongScores>
+</Stats>"#;
+        let root = xml::parse(xml_text).expect("xml");
+        assert_eq!(
+            parse_general_data(&root),
+            (137, "99f55b745304ebcf".to_string())
+        );
+
+        // Absent GeneralData / CurrentCombo / Guid → (0, "").
+        let root2 = xml::parse(SAMPLE_STATS).expect("xml");
+        assert_eq!(parse_general_data(&root2), (0, String::new()));
+    }
+
+    #[test]
+    fn extracts_guid_from_stats_head() {
+        let head = r#"<Stats><GeneralData>
+            <DisplayName>adstep</DisplayName>
+            <Guid>99f55b745304ebcf</Guid>
+            <CurrentCombo>3</CurrentCombo>
+        </GeneralData>"#;
+        assert_eq!(extract_guid(head).as_deref(), Some("99f55b745304ebcf"));
+        // Missing or empty Guid → None.
+        assert_eq!(extract_guid("<GeneralData></GeneralData>"), None);
+        assert_eq!(extract_guid("<Guid></Guid>"), None);
+        assert_eq!(extract_guid("<Guid>   </Guid>"), None);
     }
 }

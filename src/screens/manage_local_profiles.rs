@@ -693,13 +693,17 @@ fn confirm_import_picker(state: &mut State) {
     let (tx, rx) = std::sync::mpsc::channel();
     let progress_tx = tx.clone();
     thread::spawn(move || {
-        let result = import_itg_profile_dir(&dir, |done, total, label| {
-            let _ = progress_tx.send(ImportMsg::Progress {
-                done,
-                total,
-                label: label.to_string(),
-            });
-        });
+        let result = import_itg_profile_dir(
+            &dir,
+            |done, total, label| {
+                let _ = progress_tx.send(ImportMsg::Progress {
+                    done,
+                    total,
+                    label: label.to_string(),
+                });
+            },
+            || false,
+        );
         let outcome = match result {
             Ok(summary) => ImportOutcome::Ok(Box::new(summary)),
             Err(e) => ImportOutcome::Err(e.to_string()),
@@ -796,6 +800,29 @@ fn import_summary_message(summary: &ImportSummary) -> ImportMessageState {
                 "Profiles",
                 "ImportSummarySkipped",
                 &[("skipped", &skipped.to_string())],
+            )
+            .to_string(),
+        );
+    }
+    if summary.favorites_total > 0 {
+        lines.push(
+            tr_fmt(
+                "Profiles",
+                "ImportSummaryFavorites",
+                &[
+                    ("imported", &summary.favorites_imported.to_string()),
+                    ("total", &summary.favorites_total.to_string()),
+                ],
+            )
+            .to_string(),
+        );
+    }
+    if summary.itl_entries_imported > 0 {
+        lines.push(
+            tr_fmt(
+                "Profiles",
+                "ImportSummaryItl",
+                &[("count", &summary.itl_entries_imported.to_string())],
             )
             .to_string(),
         );
