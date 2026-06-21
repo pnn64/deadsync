@@ -57,6 +57,16 @@ enum BannerImageKind {
     PackBanner,
 }
 
+/// Outcome of a per-frame still-image banner pump for the *selected* banner.
+pub(crate) enum BannerImageSync {
+    /// No change this frame; keep displaying the current banner key.
+    Unchanged,
+    /// The selected banner's texture is uploaded; display this key.
+    Ready(String),
+    /// The selected banner failed to decode; fall back to the color banner.
+    Fallback,
+}
+
 struct PreparedGameplayBackground {
     key: String,
     path: PathBuf,
@@ -140,6 +150,7 @@ pub(crate) struct DynamicMedia {
     desired_wheel_item_paths: Vec<PathBuf>,
     pending_banner_image_preps: HashSet<PathBuf>,
     retained_image_upload_keys: HashSet<String>,
+    failed_selected_banner_path: Option<PathBuf>,
     banner_image_prep_tx: mpsc::Sender<BannerImagePrepResult>,
     banner_image_prep_rx: mpsc::Receiver<BannerImagePrepResult>,
     current_dynamic_cdtitle: Option<(String, PathBuf)>,
@@ -174,6 +185,7 @@ impl DynamicMedia {
             desired_wheel_item_paths: Vec::new(),
             pending_banner_image_preps: HashSet::new(),
             retained_image_upload_keys: HashSet::new(),
+            failed_selected_banner_path: None,
             banner_image_prep_tx,
             banner_image_prep_rx,
             current_dynamic_cdtitle: None,
@@ -262,6 +274,7 @@ impl DynamicMedia {
 
     pub(crate) fn destroy_banner(&mut self, assets: &mut AssetManager, backend: &mut Backend) {
         self.desired_banner_path = None;
+        self.failed_selected_banner_path = None;
         self.destroy_current_dynamic_banner(assets, backend);
     }
 
@@ -397,10 +410,15 @@ impl DynamicMedia {
     ) -> Option<String> {
         let Some(path) = path_opt else {
             self.desired_banner_path = None;
+            self.failed_selected_banner_path = None;
             return None;
         };
 
         let key = path.to_string_lossy().into_owned();
+        if self.desired_banner_path.as_deref() != Some(path.as_path()) {
+            // Selection changed: allow a previously-failed path to be retried.
+            self.failed_selected_banner_path = None;
+        }
         self.desired_banner_path = Some(path.clone());
 
         if let Some(current) = self.current_dynamic_banner.as_ref()
@@ -437,18 +455,19 @@ impl DynamicMedia {
     /// finished decodes (queueing GPU uploads through the deferred queue),
     /// discards results whose path is no longer desired (coalescing rapid
     /// selection changes), and spawns at most one decode for the latest desired
-    /// selection. Returns `Some(key)` when the selected banner's texture is ready
-    /// so the caller can swap `current_banner_key`.
+    /// selection. Returns a [`BannerImageSync`] describing whether the caller
+    /// should swap `current_banner_key` to a ready texture, fall back to the
+    /// color banner (decode failure), or leave it unchanged.
     pub(crate) fn sync_active_banner_image(
         &mut self,
         assets: &mut AssetManager,
         backend: &mut Backend,
-    ) -> Option<String> {
+    ) -> BannerImageSync {
         self.drain_banner_image_preps(assets);
         self.release_orphan_banner_uploads(assets, backend);
 
         // Selected banner: spawn/adopt for the latest desired path.
-        let mut ready_key = None;
+        let mut result = BannerImageSync::Unchanged;
         if let Some(path) = self.desired_banner_path.clone() {
             let key = path.to_string_lossy().into_owned();
             if assets.has_uploaded_texture_key(&key) {
@@ -459,7 +478,11 @@ impl DynamicMedia {
                 {
                     self.adopt_banner_key(assets, backend, key.clone(), path);
                 }
-                ready_key = Some(key);
+                result = BannerImageSync::Ready(key);
+            } else if self.failed_selected_banner_path.as_deref() == Some(path.as_path()) {
+                // Decode failed for the current selection: show the color banner
+                // instead of leaving the previous selection's banner up.
+                result = BannerImageSync::Fallback;
             } else if !assets.has_pending_texture_upload(&key)
                 && !self.pending_banner_image_preps.contains(&path)
             {
@@ -497,7 +520,7 @@ impl DynamicMedia {
             self.spawn_banner_image_prep(BannerImageKind::WheelItem, &path);
         }
 
-        ready_key
+        result
     }
 
     fn adopt_pack_banner_key(
@@ -612,6 +635,13 @@ impl DynamicMedia {
                     self.pending_banner_image_preps.remove(&path);
                     if self.banner_image_still_desired(kind, &path) {
                         warn!("Failed to load banner image '{}': {msg}", path.display());
+                        // For the selected banner, remember the failure so the
+                        // per-frame pump falls back to the color banner instead of
+                        // leaving the previous selection's banner displayed. Pack
+                        // and wheel-item failures only log (matching prior behavior).
+                        if kind == BannerImageKind::Selected {
+                            self.failed_selected_banner_path = Some(path);
+                        }
                     }
                 }
             }
@@ -1754,5 +1784,32 @@ mod tests {
 
         assert!(!media.pending_banner_image_preps.contains(Path::new(&key)));
         assert!(!assets.has_pending_texture_upload(&key));
+        // Pack failures only log; they must not arm the selected-banner fallback.
+        assert!(media.failed_selected_banner_path.is_none());
+    }
+
+    #[test]
+    fn failed_selected_banner_prep_arms_color_fallback() {
+        let mut assets = AssetManager::new();
+        let mut media = DynamicMedia::new();
+        let key = "broken-banner.png".to_string();
+        media.desired_banner_path = Some(PathBuf::from(&key));
+        media.pending_banner_image_preps.insert(PathBuf::from(&key));
+        media
+            .banner_image_prep_tx
+            .send(BannerImagePrepResult::Failed {
+                kind: BannerImageKind::Selected,
+                path: PathBuf::from(&key),
+                msg: "corrupt".to_string(),
+            })
+            .unwrap();
+
+        media.drain_banner_image_preps(&mut assets);
+
+        assert!(!media.pending_banner_image_preps.contains(Path::new(&key)));
+        assert_eq!(
+            media.failed_selected_banner_path.as_deref(),
+            Some(Path::new(&key))
+        );
     }
 }

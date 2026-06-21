@@ -13,7 +13,7 @@ mod screenshot;
 mod smx_panel_fx;
 
 use self::commands::Command;
-use self::dynamic_media::DynamicMedia;
+use self::dynamic_media::{BannerImageSync, DynamicMedia};
 use self::input_routing::{GameplayQueuedEvent, gameplay_raw_key_event};
 use self::screen_nav::TransitionState;
 use self::screenshot::{ScreenshotPreviewState, should_auto_screenshot_eval};
@@ -5177,7 +5177,7 @@ impl App {
         } else {
             Vec::new()
         };
-        let mut selected_banner_key_update: Option<String> = None;
+        let mut selected_banner_sync = BannerImageSync::Unchanged;
         if let Some(backend) = &mut self.backend {
             let upload_started = Instant::now();
             let gameplay_time = match current_screen {
@@ -5215,7 +5215,7 @@ impl App {
                         backend,
                         desired_path,
                     );
-                    selected_banner_key_update = self
+                    selected_banner_sync = self
                         .dynamic_media
                         .sync_active_banner_image(&mut self.asset_manager, backend);
                 }
@@ -5242,7 +5242,7 @@ impl App {
                         backend,
                         desired_path,
                     );
-                    selected_banner_key_update = self
+                    selected_banner_sync = self
                         .dynamic_media
                         .sync_active_banner_image(&mut self.asset_manager, backend);
                 }
@@ -5293,7 +5293,20 @@ impl App {
             );
             upload_us = elapsed_us_since(upload_started);
         }
-        if let Some(key) = selected_banner_key_update {
+        let banner_key_update = match selected_banner_sync {
+            BannerImageSync::Ready(key) => Some(key),
+            BannerImageSync::Fallback => {
+                let color_index = match current_screen {
+                    CurrentScreen::SelectCourse => {
+                        self.state.screens.select_course_state.active_color_index
+                    }
+                    _ => self.state.screens.select_music_state.active_color_index,
+                };
+                Some(format!("banner{}.png", color_index.rem_euclid(12) + 1))
+            }
+            BannerImageSync::Unchanged => None,
+        };
+        if let Some(key) = banner_key_update {
             match current_screen {
                 CurrentScreen::SelectCourse => {
                     self.state.screens.select_course_state.current_banner_key = key;
