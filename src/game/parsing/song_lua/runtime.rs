@@ -1,35 +1,13 @@
 use mlua::{Lua, MultiValue, Table, Value};
 
+use deadsync_song_lua::{
+    SONG_LUA_BROADCASTS_KEY, SONG_LUA_RUNTIME_BEAT_KEY, SONG_LUA_RUNTIME_BPS_KEY,
+    SONG_LUA_RUNTIME_DELTA_BEAT_KEY, SONG_LUA_RUNTIME_DELTA_SECONDS_KEY, SONG_LUA_RUNTIME_KEY,
+    SONG_LUA_RUNTIME_RATE_KEY, SONG_LUA_RUNTIME_SECONDS_KEY, SONG_LUA_SIDE_EFFECT_COUNT_KEY,
+    song_display_bps, song_elapsed_seconds_for_beat, song_music_rate,
+};
+
 use super::types::SongLuaCompileContext;
-
-pub(super) const SONG_LUA_RUNTIME_KEY: &str = "__songlua_compile_song_runtime";
-pub(super) const SONG_LUA_RUNTIME_BEAT_KEY: &str = "__songlua_song_beat";
-pub(super) const SONG_LUA_RUNTIME_SECONDS_KEY: &str = "__songlua_music_seconds";
-const SONG_LUA_RUNTIME_DELTA_BEAT_KEY: &str = "__songlua_song_delta_beat";
-const SONG_LUA_RUNTIME_DELTA_SECONDS_KEY: &str = "__songlua_music_delta_seconds";
-const SONG_LUA_RUNTIME_BPS_KEY: &str = "__songlua_song_bps";
-const SONG_LUA_RUNTIME_RATE_KEY: &str = "__songlua_music_rate";
-pub(super) const SONG_LUA_SIDE_EFFECT_COUNT_KEY: &str = "__songlua_side_effect_count";
-pub(super) const SONG_LUA_BROADCASTS_KEY: &str = "__songlua_broadcast_messages";
-
-#[inline(always)]
-pub(super) fn song_display_bps(context: &SongLuaCompileContext) -> f32 {
-    (context.song_display_bpms[0].max(context.song_display_bpms[1]) / 60.0).max(f32::EPSILON)
-}
-
-#[inline(always)]
-pub(super) fn song_music_rate(context: &SongLuaCompileContext) -> f32 {
-    if context.song_music_rate.is_finite() && context.song_music_rate > 0.0 {
-        context.song_music_rate
-    } else {
-        1.0
-    }
-}
-
-#[inline(always)]
-pub(super) fn song_elapsed_seconds_for_beat(beat: f32, song_bps: f32, music_rate: f32) -> f32 {
-    beat / (song_bps.max(f32::EPSILON) * music_rate.max(f32::EPSILON))
-}
 
 pub(super) fn create_song_runtime_table(
     lua: &Lua,

@@ -1122,7 +1122,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.4.1239"
+version = "0.4.1291"
 dependencies = [
  "bincode",
  "bitflags 2.13.0",
@@ -1154,6 +1154,7 @@ dependencies = [
  "deadsync-score",
  "deadsync-simfile",
  "deadsync-smx",
+ "deadsync-song-lua",
  "deadsync-updater",
  "deadsync-version",
  "dhat",
@@ -1285,6 +1286,7 @@ dependencies = [
  "deadsync-profile",
  "deadsync-rules",
  "deadsync-simfile",
+ "deadsync-song-lua",
  "log",
  "rssp",
  "twox-hash",
@@ -1412,6 +1414,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "deadsync-song-lua"
+version = "0.1.0"
+dependencies = [
+ "deadlib-present",
+ "deadsync-profile",
+]
+
+[[package]]
 name = "deadsync-updater"
 version = "0.1.0"
 dependencies = [
@@ -1432,7 +1442,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.4.1239"
+version = "0.4.1291"
 dependencies = [
  "log",
  "semver",

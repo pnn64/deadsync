@@ -11,6 +11,12 @@ use std::time::Instant;
 
 use deadlib_present::actors::{TextAlign, TextAttribute};
 use deadlib_present::anim::{EffectClock, EffectMode};
+use deadsync_song_lua::{
+    SONG_LUA_BROADCASTS_KEY, SONG_LUA_RUNTIME_BEAT_KEY, SONG_LUA_RUNTIME_KEY,
+    SONG_LUA_RUNTIME_SECONDS_KEY, SONG_LUA_SIDE_EFFECT_COUNT_KEY, display_bpms_text,
+    format_song_options_text, player_short_name, song_display_bps, song_elapsed_seconds_for_beat,
+    song_music_rate,
+};
 
 mod actor_host;
 mod compat;
@@ -59,21 +65,17 @@ use self::overlay::{
     parse_overlay_text_align, parse_overlay_text_glow_mode,
 };
 use self::runtime::{
-    SONG_LUA_BROADCASTS_KEY, SONG_LUA_RUNTIME_BEAT_KEY, SONG_LUA_RUNTIME_KEY,
-    SONG_LUA_RUNTIME_SECONDS_KEY, SONG_LUA_SIDE_EFFECT_COUNT_KEY,
     compile_song_runtime_delta_values, compile_song_runtime_values, create_song_position_table,
     create_song_runtime_table, note_song_lua_side_effect, read_song_lua_broadcasts,
     record_song_lua_broadcast, set_compile_song_runtime_beat,
-    set_compile_song_runtime_delta_values, set_compile_song_runtime_values, song_display_bps,
-    song_elapsed_seconds_for_beat, song_lua_runtime_number, song_lua_side_effect_count,
-    song_music_rate,
+    set_compile_song_runtime_delta_values, set_compile_song_runtime_values,
+    song_lua_runtime_number, song_lua_side_effect_count,
 };
-use self::sl::{create_sl_table, player_short_name};
+use self::sl::create_sl_table;
 use self::song_tables::{
     create_course_table, create_display_bpms_table, create_enabled_players_table,
     create_player_tables, create_song_options_table, create_song_table, create_songman_table,
-    create_style_table, create_trail_table, display_bpms_for_args, display_bpms_text,
-    format_song_options_text, set_string_method,
+    create_style_table, create_trail_table, display_bpms_for_args, set_string_method,
 };
 pub use self::types::{
     CompiledSongLua, SongLuaCapturedActor, SongLuaColumnOffsetWindow, SongLuaCompileContext,

@@ -1,10 +1,12 @@
 use mlua::{Lua, MultiValue, Table, Value};
 
+use deadsync_song_lua::{player_short_name, song_lua_speedmod_parts, song_music_rate_value};
+
 use super::theme_colors::{
     DDR_DIFF_COLORS, ITG_DIFF_COLORS, SL_COLORS, SL_DECORATIVE_COLORS, SL_FA_PLUS_COLORS,
     SL_JUDGMENT_COLORS, SONG_LUA_ACTIVE_COLOR_INDEX, create_color_array,
 };
-use super::types::{SongLuaCompileContext, SongLuaPlayerContext, SongLuaSpeedMod};
+use super::types::{SongLuaCompileContext, SongLuaPlayerContext};
 use super::util::{create_bool_array, create_string_array};
 use super::{LUA_PLAYERS, SONG_LUA_NOTE_COLUMNS};
 
@@ -74,14 +76,6 @@ pub(super) fn init_sl_streams(lua: &Lua, table: &Table) -> mlua::Result<()> {
     Ok(())
 }
 
-pub(super) fn player_short_name(player: usize) -> &'static str {
-    match player {
-        0 => "P1",
-        1 => "P2",
-        _ => unreachable!("song lua only exposes two player numbers"),
-    }
-}
-
 fn create_sl_global_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.set("GameMode", "ITG")?;
@@ -125,7 +119,7 @@ fn create_sl_player_table(lua: &Lua, player: &SongLuaPlayerContext) -> mlua::Res
 
 fn create_sl_player_mods(lua: &Lua, player: &SongLuaPlayerContext) -> mlua::Result<Table> {
     let table = lua.create_table()?;
-    let (speed_type, speed_value) = speedmod_parts(player.speedmod);
+    let (speed_type, speed_value) = song_lua_speedmod_parts(player.speedmod);
     table.set("DataVisualizations", "None")?;
     table.set("ShowFaPlusWindow", false)?;
     table.set("ShowExScore", false)?;
@@ -416,19 +410,3 @@ fn create_sl_metrics(lua: &Lua, mode: &str) -> mlua::Result<Table> {
     Ok(table)
 }
 
-fn speedmod_parts(speedmod: SongLuaSpeedMod) -> (&'static str, f32) {
-    match speedmod {
-        SongLuaSpeedMod::X(value) => ("X", value),
-        SongLuaSpeedMod::C(value) => ("C", value),
-        SongLuaSpeedMod::M(value) => ("M", value),
-        SongLuaSpeedMod::A(value) => ("A", value),
-    }
-}
-
-fn song_music_rate_value(value: f32) -> f32 {
-    if value.is_finite() && value > 0.0 {
-        value
-    } else {
-        1.0
-    }
-}

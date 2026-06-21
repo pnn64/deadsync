@@ -24,15 +24,6 @@ pub(super) fn create_song_options_table(lua: &Lua, music_rate: f32) -> mlua::Res
     Ok(table)
 }
 
-pub(super) fn format_song_options_text(music_rate: f32) -> String {
-    let rate = if music_rate.is_finite() && music_rate > 0.0 {
-        music_rate
-    } else {
-        1.0
-    };
-    format!("{rate}xMusic")
-}
-
 pub(super) struct PlayerLuaTables {
     pub(super) player_states: [Table; LUA_PLAYERS],
     pub(super) steps: [Table; LUA_PLAYERS],
@@ -216,7 +207,7 @@ pub(super) fn create_steps_table(
             .map(|path| file_path_string(path.as_path()))
             .unwrap_or_default(),
     )?;
-    let meter = difficulty_meter(difficulty);
+    let meter = difficulty.meter();
     table.set(
         "GetMeter",
         lua.create_function(move |_, _args: MultiValue| Ok(meter))?,
@@ -319,24 +310,6 @@ fn read_bpms_table(value: Value) -> Option<[f32; 2]> {
     ])
 }
 
-pub(super) fn display_bpms_text(bpms: [f32; 2], rate: f32) -> String {
-    let lower = format_display_bpm(bpms[0], rate);
-    if (bpms[0] - bpms[1]).abs() <= f32::EPSILON {
-        lower
-    } else {
-        format!("{lower} - {}", format_display_bpm(bpms[1], rate))
-    }
-}
-
-fn format_display_bpm(value: f32, rate: f32) -> String {
-    let text = if (rate - 1.0).abs() <= f32::EPSILON {
-        format!("{value:.0}")
-    } else {
-        format!("{value:.1}")
-    };
-    text.strip_suffix(".0").unwrap_or(&text).to_string()
-}
-
 pub(super) fn create_radar_values_table(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.set(
@@ -376,18 +349,6 @@ pub(super) fn set_path_methods(
         lua.create_function(move |_, _args: MultiValue| Ok(has_file))?,
     )?;
     Ok(())
-}
-
-#[inline(always)]
-fn difficulty_meter(difficulty: SongLuaDifficulty) -> i32 {
-    match difficulty {
-        SongLuaDifficulty::Beginner => 1,
-        SongLuaDifficulty::Easy => 4,
-        SongLuaDifficulty::Medium => 7,
-        SongLuaDifficulty::Hard => 10,
-        SongLuaDifficulty::Challenge => 12,
-        SongLuaDifficulty::Edit => 0,
-    }
 }
 
 fn create_player_options_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua::Result<Table> {
