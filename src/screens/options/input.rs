@@ -386,9 +386,6 @@ pub(super) fn apply_submenu_choice_delta(
         if row.id == SubRowId::SmxManagesPadConfig {
             config::update_smx_manages_pad_config(yes_no_from_choice(new_index));
         }
-        if row.id == SubRowId::SmxUsbPolling {
-            config::update_smx_usb_polling(usb_polling_value(new_index));
-        }
         if row.id == SubRowId::SmxDefaultPadConfig {
             config::update_smx_default_pad_config(crate::config::SmxPadPreset::from_index(
                 new_index,

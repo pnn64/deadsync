@@ -154,8 +154,6 @@ pub struct Config {
     /// SMX pad (this pad's saved default → a global default → the built-in
     /// `smx_default_pad_config` preset). See `App::apply_smx_managed_preset`.
     pub smx_manages_pad_config: bool,
-    /// USB polling interval for the SMX manager, in microseconds (500–1000).
-    pub smx_usb_polling_us: u16,
     /// Light SMX pad panels with the per-arrow judgement colour during gameplay,
     /// plus a sustained colour for held freezes and rolls.
     pub smx_panel_lights: bool,
@@ -408,7 +406,6 @@ impl Default for Config {
             windows_gamepad_backend: WindowsPadBackend::RawInput,
             smx_input: false,
             smx_manages_pad_config: false,
-            smx_usb_polling_us: 1000,
             smx_panel_lights: false,
             smx_default_pad_config: SmxPadPreset::Low,
             smx_default_light_brightness: 100,
