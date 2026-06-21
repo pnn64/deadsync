@@ -662,6 +662,12 @@ pub fn init() -> State {
     set_choice_by_id(
         &mut state.sub[SubmenuKind::Machine].choice_indices,
         MACHINE_OPTIONS_ROWS,
+        SubRowId::ThemeVariant,
+        cfg.srpg_variant.choice_index(),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Machine].choice_indices,
+        MACHINE_OPTIONS_ROWS,
         SubRowId::Replays,
         usize::from(cfg.machine_enable_replays),
     );

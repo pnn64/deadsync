@@ -291,7 +291,8 @@ pub struct LeaderboardApiPlayer {
     pub gs_leaderboard: Vec<LeaderboardApiEntry>,
     #[serde(rename = "exLeaderboard", default)]
     pub ex_leaderboard: Vec<LeaderboardApiEntry>,
-    pub rpg: Option<LeaderboardEventData>,
+    #[serde(rename = "rpg")]
+    pub srpg: Option<LeaderboardEventData>,
     pub itl: Option<LeaderboardEventData>,
 }
 
@@ -301,7 +302,7 @@ pub struct LeaderboardEventData {
     #[serde(default)]
     pub name: String,
     #[serde(rename = "rpgLeaderboard", default)]
-    pub rpg_leaderboard: Vec<LeaderboardApiEntry>,
+    pub srpg_leaderboard: Vec<LeaderboardApiEntry>,
     #[serde(rename = "itlLeaderboard", default)]
     pub itl_leaderboard: Vec<LeaderboardApiEntry>,
 }
@@ -454,7 +455,7 @@ pub fn fetched_player_leaderboards_from_api(
             is_ranked: _is_ranked,
             gs_leaderboard,
             ex_leaderboard,
-            rpg,
+            srpg,
             itl,
         } = player;
 
@@ -471,15 +472,16 @@ pub fn fetched_player_leaderboards_from_api(
             push_leaderboard_pane(&mut panes, "GrooveStats", ex_leaderboard, true);
         }
 
-        if let Some(rpg) = rpg
-            && !rpg.rpg_leaderboard.is_empty()
+        if let Some(srpg) = srpg
+            && !srpg.srpg_leaderboard.is_empty()
         {
-            let name = if rpg.name.trim().is_empty() {
-                "RPG"
-            } else {
-                rpg.name.as_str()
-            };
-            push_leaderboard_pane(&mut panes, name, rpg.rpg_leaderboard, false);
+            let name =
+                if srpg.name.trim().is_empty() || srpg.name.trim().eq_ignore_ascii_case("rpg") {
+                    "SRPG"
+                } else {
+                    srpg.name.as_str()
+                };
+            push_leaderboard_pane(&mut panes, name, srpg.srpg_leaderboard, false);
         }
         if let Some(itl) = itl
             && !itl.itl_leaderboard.is_empty()
@@ -1150,7 +1152,8 @@ pub struct GrooveStatsSubmitApiPlayer {
     pub gs_leaderboard: Vec<LeaderboardApiEntry>,
     #[serde(rename = "exLeaderboard", default)]
     pub ex_leaderboard: Vec<LeaderboardApiEntry>,
-    pub rpg: Option<GrooveStatsSubmitApiEvent>,
+    #[serde(rename = "rpg")]
+    pub srpg: Option<GrooveStatsSubmitApiEvent>,
     pub itl: Option<GrooveStatsSubmitApiEvent>,
 }
 
@@ -1161,6 +1164,8 @@ pub struct GrooveStatsSubmitApiEvent {
     pub name: String,
     #[serde(default, deserialize_with = "de_i32_from_string_or_number")]
     pub score_delta: i32,
+    #[serde(default, deserialize_with = "de_i32_from_string_or_number")]
+    pub rate_delta: i32,
     #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
     pub top_score_points: u32,
     #[serde(default, deserialize_with = "de_u32_from_string_or_number")]
@@ -1185,6 +1190,8 @@ pub struct GrooveStatsSubmitApiEvent {
     pub previous_point_total: u32,
     #[serde(rename = "itlLeaderboard", default)]
     pub itl_leaderboard: Vec<LeaderboardApiEntry>,
+    #[serde(rename = "rpgLeaderboard", default)]
+    pub srpg_leaderboard: Vec<LeaderboardApiEntry>,
     #[serde(default)]
     pub is_doubles: bool,
     pub progress: Option<GrooveStatsSubmitApiProgress>,
@@ -1894,16 +1901,16 @@ mod tests {
         assert_eq!(player.ex_leaderboard[0].name, "BLAKE");
         assert!(player.ex_leaderboard[0].is_self);
 
-        let rpg = player.rpg.expect("rpg");
-        assert_eq!(rpg.name, "RPG");
-        assert_eq!(rpg.rpg_leaderboard[0].name, "CASEY");
-        assert!(rpg.itl_leaderboard.is_empty());
+        let srpg = player.srpg.expect("srpg");
+        assert_eq!(srpg.name, "RPG");
+        assert_eq!(srpg.srpg_leaderboard[0].name, "CASEY");
+        assert!(srpg.itl_leaderboard.is_empty());
 
         let itl = player.itl.expect("itl");
         assert_eq!(itl.name, "ITL");
         assert_eq!(itl.itl_leaderboard[0].name, "DREW");
         assert!(itl.itl_leaderboard[0].is_fail);
-        assert!(itl.rpg_leaderboard.is_empty());
+        assert!(itl.srpg_leaderboard.is_empty());
     }
 
     #[test]
@@ -2071,14 +2078,14 @@ mod tests {
                     is_ranked: true,
                     gs_leaderboard: vec![leaderboard_entry(3, "PerfectTaste", 9876.0, true)],
                     ex_leaderboard: vec![leaderboard_entry(2, "PerfectTaste", 9912.0, true)],
-                    rpg: Some(LeaderboardEventData {
+                    srpg: Some(LeaderboardEventData {
                         name: " ".to_string(),
-                        rpg_leaderboard: vec![leaderboard_entry(4, "RPG", 9000.0, false)],
+                        srpg_leaderboard: vec![leaderboard_entry(4, "RPG", 9000.0, false)],
                         itl_leaderboard: Vec::new(),
                     }),
                     itl: Some(LeaderboardEventData {
                         name: String::new(),
-                        rpg_leaderboard: Vec::new(),
+                        srpg_leaderboard: Vec::new(),
                         itl_leaderboard: vec![leaderboard_entry(42, "PerfectTaste", 8765.0, true)],
                     }),
                 }),
@@ -2098,7 +2105,7 @@ mod tests {
         assert!(fetched.data.panes[0].is_ex);
         assert_eq!(fetched.data.panes[1].name, "GrooveStats");
         assert!(!fetched.data.panes[1].is_ex);
-        assert_eq!(fetched.data.panes[2].name, "RPG");
+        assert_eq!(fetched.data.panes[2].name, "SRPG");
         assert_eq!(fetched.data.panes[3].name, "ITL");
         assert!(fetched.data.panes[3].is_ex);
     }
@@ -2111,9 +2118,9 @@ mod tests {
                     is_ranked: true,
                     gs_leaderboard: vec![leaderboard_entry(3, "PerfectTaste", 9876.0, true)],
                     ex_leaderboard: vec![leaderboard_entry(2, "PerfectTaste", 9912.0, true)],
-                    rpg: Some(LeaderboardEventData {
+                    srpg: Some(LeaderboardEventData {
                         name: "RPG".to_string(),
-                        rpg_leaderboard: vec![leaderboard_entry(4, "RPG", 9000.0, false)],
+                        srpg_leaderboard: vec![leaderboard_entry(4, "RPG", 9000.0, false)],
                         itl_leaderboard: Vec::new(),
                     }),
                     itl: None,
@@ -2139,7 +2146,7 @@ mod tests {
         assert_eq!(fetched.data.panes[0].name, "GrooveStats");
         assert_eq!(fetched.data.panes[1].name, "GrooveStats");
         assert_eq!(fetched.data.panes[2].name, "ArrowCloud");
-        assert_eq!(fetched.data.panes[3].name, "RPG");
+        assert_eq!(fetched.data.panes[3].name, "SRPG");
     }
 
     #[test]
@@ -2160,10 +2167,10 @@ mod tests {
                         comments: Some("[DS], 2e".to_string()),
                     }],
                     ex_leaderboard: Vec::new(),
-                    rpg: None,
+                    srpg: None,
                     itl: Some(LeaderboardEventData {
                         name: "ITL Online 2026".to_string(),
-                        rpg_leaderboard: Vec::new(),
+                        srpg_leaderboard: Vec::new(),
                         itl_leaderboard: vec![LeaderboardApiEntry {
                             rank: 42,
                             name: "PerfectTaste".to_string(),
@@ -2218,7 +2225,7 @@ mod tests {
                         is_fail: false,
                         comments: None,
                     }],
-                    rpg: None,
+                    srpg: None,
                     itl: None,
                 }),
             },
@@ -2375,7 +2382,7 @@ mod tests {
             result: result.to_string(),
             gs_leaderboard,
             ex_leaderboard,
-            rpg: None,
+            srpg: None,
             itl: None,
         }
     }

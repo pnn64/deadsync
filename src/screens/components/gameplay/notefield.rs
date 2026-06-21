@@ -1,18 +1,6 @@
 use crate::act;
 use crate::assets;
 use crate::game::GameplayCoreState as State;
-use deadsync_gameplay::{
-    AccelEffects, AppearanceEffects, COMBO_HUNDRED_MILESTONE_DURATION,
-    COMBO_THOUSAND_MILESTONE_DURATION, ColumnCue, ComboMilestoneKind, FantasticWindowOptions,
-    HELD_MISS_TOTAL_DURATION, HOLD_JUDGMENT_TOTAL_DURATION, NoteCountStat, PerspectiveEffects,
-    PlayerRuntime, RECEPTOR_Y_OFFSET_FROM_CENTER, RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE,
-    ScrollEffects, SongLuaColumnOffsetWindowRuntime, VisualEffects,
-    blue_fantastic_window_ms, column_flash_duration, hold_explosion_active,
-    hold_explosion_enabled_for_options, hold_head_render_flags, let_go_head_beat,
-    perspective_effects_from_profile, scroll_effects_from_option, scroll_receptor_y,
-    song_lua_ease_factor, song_lua_note_hidden, spacing_multiplier_for_percent,
-    tap_explosion_options_from_profile,
-};
 use crate::game::parsing::noteskin::{
     ModelDrawState, ModelMeshCache, NUM_QUANTIZATIONS, NoteAnimPart, Noteskin, SpriteSlot,
 };
@@ -30,6 +18,17 @@ use deadsync_core::input::{MAX_COLS, MAX_PLAYERS};
 use deadsync_core::note::NoteType;
 use deadsync_core::song_time::SongTimeNs;
 use deadsync_core::timing::{beat_to_note_row, note_row_to_beat};
+use deadsync_gameplay::{
+    AccelEffects, AppearanceEffects, COMBO_HUNDRED_MILESTONE_DURATION,
+    COMBO_THOUSAND_MILESTONE_DURATION, ColumnCue, ComboMilestoneKind, FantasticWindowOptions,
+    HELD_MISS_TOTAL_DURATION, HOLD_JUDGMENT_TOTAL_DURATION, NoteCountStat, PerspectiveEffects,
+    PlayerRuntime, RECEPTOR_Y_OFFSET_FROM_CENTER, RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE,
+    ScrollEffects, SongLuaColumnOffsetWindowRuntime, VisualEffects, blue_fantastic_window_ms,
+    column_flash_duration, hold_explosion_active, hold_explosion_enabled_for_options,
+    hold_head_render_flags, let_go_head_beat, perspective_effects_from_profile,
+    scroll_effects_from_option, scroll_receptor_y, song_lua_ease_factor, song_lua_note_hidden,
+    spacing_multiplier_for_percent, tap_explosion_options_from_profile,
+};
 use deadsync_profile as profile_data;
 use deadsync_rules::judgment::{self, HOLD_SCORE_HELD, JudgeGrade, Judgment, TimingWindow};
 use deadsync_rules::note::{HoldResult, MineResult, Note};
@@ -9770,11 +9769,6 @@ mod tests {
         zmod_subtractive_counter_state, zmod_subtractive_points,
     };
     use crate::assets;
-    use deadsync_gameplay::{
-        AccelEffects, ActiveHold, AppearanceEffects, NoteCountStat,
-        SongLuaColumnOffsetWindowRuntime, SongLuaNoteHideWindowRuntime, VisualEffects,
-        song_lua_note_hidden,
-    };
     use crate::game::parsing::noteskin::{
         NUM_QUANTIZATIONS, NoteAnimPart, Quantization, Style, load_itg_skin,
     };
@@ -9783,6 +9777,11 @@ mod tests {
     use deadlib_render::BlendMode;
     use deadsync_core::note::NoteType;
     use deadsync_core::timing::beat_to_note_row;
+    use deadsync_gameplay::{
+        AccelEffects, ActiveHold, AppearanceEffects, NoteCountStat,
+        SongLuaColumnOffsetWindowRuntime, SongLuaNoteHideWindowRuntime, VisualEffects,
+        song_lua_note_hidden,
+    };
     use deadsync_profile as profile_data;
     use deadsync_rules::judgment::{self, JudgeGrade, Judgment, TimingWindow};
     use deadsync_rules::note::{MineResult, Note};

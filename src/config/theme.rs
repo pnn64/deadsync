@@ -430,6 +430,10 @@ impl VisualStyle {
             Self::Srpg9 => "SRPG9",
         }
     }
+
+    pub const fn is_srpg(self) -> bool {
+        matches!(self, Self::Srpg9)
+    }
 }
 
 impl FromStr for VisualStyle {
@@ -453,9 +457,56 @@ impl FromStr for VisualStyle {
             "stars" | "star" => Ok(Self::Stars),
             "thonk" => Ok(Self::Thonk),
             "technique" => Ok(Self::Technique),
-            "srpg9" | "srpg" => Ok(Self::Srpg9),
+            "srpg9" | "srpg10" | "srpg" => Ok(Self::Srpg9),
             _ => Err(()),
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SrpgVariant {
+    #[default]
+    Srpg9,
+    Srpg10,
+}
+
+impl SrpgVariant {
+    pub const ALL: [Self; 2] = [Self::Srpg9, Self::Srpg10];
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Srpg9 => "SRPG9",
+            Self::Srpg10 => "SRPG10",
+        }
+    }
+
+    pub const fn asset_folder(self) -> &'static str {
+        match self {
+            Self::Srpg9 => "srpg9",
+            Self::Srpg10 => "srpg10",
+        }
+    }
+
+    pub fn from_visual_style_str(s: &str) -> Option<Self> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "srpg9" | "srpg" => Some(Self::Srpg9),
+            "srpg10" => Some(Self::Srpg10),
+            _ => None,
+        }
+    }
+}
+
+impl FromStr for SrpgVariant {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::from_visual_style_str(s).ok_or(())
     }
 }
 
@@ -1136,6 +1187,24 @@ mod tests {
         assert_eq!(MACHINE_FONT_VARIANTS.len(), 2);
         assert!(MACHINE_FONT_VARIANTS.contains(&MachineFont::Wendy));
         assert!(MACHINE_FONT_VARIANTS.contains(&MachineFont::Mega));
+    }
+
+    #[test]
+    fn visual_style_srpg10_alias_uses_srpg_family_icon() {
+        assert_eq!(VisualStyle::from_str("SRPG10"), Ok(VisualStyle::Srpg9));
+    }
+
+    #[test]
+    fn srpg_variant_round_trips() {
+        for value in SrpgVariant::ALL {
+            assert_eq!(SrpgVariant::from_str(value.as_str()), Ok(value));
+        }
+    }
+
+    #[test]
+    fn srpg_variant_accepts_import_aliases() {
+        assert_eq!(SrpgVariant::from_str("SRPG"), Ok(SrpgVariant::Srpg9));
+        assert_eq!(SrpgVariant::from_str("SRPG10"), Ok(SrpgVariant::Srpg10));
     }
 
     #[test]

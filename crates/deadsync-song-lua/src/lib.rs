@@ -483,7 +483,6 @@ pub fn parse_overlay_text_glow_mode(raw: &str) -> Option<SongLuaTextGlowMode> {
     }
 }
 
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SongLuaOverlayState {
     pub x: f32,
@@ -1830,6 +1829,3 @@ pub struct SongLuaColumnOffsetWindow {
     pub opt1: Option<f32>,
     pub opt2: Option<f32>,
 }
-
-
-

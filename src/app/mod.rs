@@ -77,8 +77,8 @@ use deadsync_core::{input::MAX_PLAYERS, song_time::SongTimeNs, timing::ROWS_PER_
 use deadsync_gameplay::{
     CourseDisplayTiming, CourseDisplayTotals, GameplayConfig, GameplayFailType, GameplaySession,
     GameplayViewport, LeadInTiming, ReplayInputEdge, ReplayOffsetSnapshot,
-    course_display_totals_for_chart, gameplay_player_side_from_profile,
-    gameplay_play_style_from_profile, gameplay_tick_mode_from_profile,
+    course_display_totals_for_chart, gameplay_play_style_from_profile,
+    gameplay_player_side_from_profile, gameplay_tick_mode_from_profile,
 };
 use deadsync_input as logical_input;
 use deadsync_input::RawKeyboardEvent;
@@ -328,11 +328,7 @@ fn gameplay_note_lights(note: &Note) -> bool {
         )
 }
 
-fn blink_pad_lights(
-    lights: &mut lights::Manager,
-    state: &GameplayCoreState,
-    column: usize,
-) {
+fn blink_pad_lights(lights: &mut lights::Manager, state: &GameplayCoreState, column: usize) {
     if let Some((player, button)) = pad_light_for_col(state, column) {
         lights.blink_button(player, button);
     }
@@ -539,6 +535,9 @@ fn itl_event_intro_name(pack_group: &str) -> Option<String> {
 fn event_intro_name_for_pack(pack_group: &str) -> Option<String> {
     let name = pack_group.trim();
     let lower = name.to_ascii_lowercase();
+    if lower.contains("stamina rpg 10") || lower.contains("srpg10") {
+        return Some("Stamina RPG 10".to_string());
+    }
     if lower.contains("stamina rpg 9") || lower.contains("srpg9") {
         return Some("Stamina RPG 9".to_string());
     }
@@ -7156,26 +7155,26 @@ impl App {
             self.state.screens.current_screen,
             CurrentScreen::Gameplay | CurrentScreen::Practice
         ) {
-            crate::screens::components::shared::visual_style_bg::set_srpg9_background_key(None);
+            crate::screens::components::shared::visual_style_bg::set_srpg_background_key(None);
             return;
         }
 
         let cfg = config::get();
-        let path = (cfg.visual_style == config::VisualStyle::Srpg9 && cfg.show_video_backgrounds)
+        let path = (cfg.visual_style.is_srpg() && cfg.show_video_backgrounds)
             .then(visual_styles::shared_background_video_asset_path)
             .flatten()
             .map(|path| dirs::app_dirs().resolve_asset_path(path));
 
         let Some(backend) = self.backend.as_mut() else {
-            crate::screens::components::shared::visual_style_bg::set_srpg9_background_key(None);
+            crate::screens::components::shared::visual_style_bg::set_srpg_background_key(None);
             return;
         };
 
         let key =
             self.dynamic_media
                 .set_background(&mut self.asset_manager, backend, path, ui_time_sec);
-        let srpg9_key = if key == "__black" { None } else { Some(key) };
-        crate::screens::components::shared::visual_style_bg::set_srpg9_background_key(srpg9_key);
+        let srpg_key = if key == "__black" { None } else { Some(key) };
+        crate::screens::components::shared::visual_style_bg::set_srpg_background_key(srpg_key);
     }
 
     fn append_gameplay_offset_prompt_actors(&self, actors: &mut Vec<Actor>) {
@@ -9607,10 +9606,8 @@ impl App {
                     })
                     .collect::<Vec<_>>()
             });
-            let replay_offsets = replay_pending.as_ref().map(|payload| {
-                ReplayOffsetSnapshot {
-                    beat0_time_ns: payload.replay_beat0_time_ns,
-                }
+            let replay_offsets = replay_pending.as_ref().map(|payload| ReplayOffsetSnapshot {
+                beat0_time_ns: payload.replay_beat0_time_ns,
             });
             let replay_status_text = replay_pending.as_ref().map(|payload| {
                 Arc::<str>::from(format!(

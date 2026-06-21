@@ -1136,6 +1136,10 @@ impl AssetManager {
                 "srpg9_logo_alt.png".to_string(),
             ),
             (
+                "srpg10_logo_alt.png".to_string(),
+                "srpg10_logo_alt.png".to_string(),
+            ),
+            (
                 "combo_explosion.png".to_string(),
                 "combo_explosion.png".to_string(),
             ),
@@ -1209,7 +1213,7 @@ impl AssetManager {
             ),
         ];
 
-        for asset in &visual_styles::ASSETS {
+        for asset in visual_styles::all_assets() {
             textures_to_load.push((
                 asset.select_color.to_string(),
                 asset.select_color.to_string(),

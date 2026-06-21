@@ -4,11 +4,16 @@ use deadsync_core::input::{InputSource, Lane, MAX_COLS, MAX_PLAYERS};
 use deadsync_core::note::NoteType;
 use deadsync_core::song_time::{
     INVALID_SONG_TIME_NS, SongTimeNs, clamp_song_time_ns, normalized_song_rate,
-    scaled_song_delta_ns, scaled_song_time_ns, song_time_ns_add_seconds, song_time_ns_from_seconds,
-    song_time_ns_delta_seconds, song_time_ns_invalid, song_time_ns_span_seconds,
-    song_time_ns_to_seconds,
+    scaled_song_delta_ns, scaled_song_time_ns, song_time_ns_add_seconds,
+    song_time_ns_delta_seconds, song_time_ns_from_seconds, song_time_ns_invalid,
+    song_time_ns_span_seconds, song_time_ns_to_seconds,
 };
 use deadsync_core::timing::{ROWS_PER_BEAT, beat_to_note_row};
+use deadsync_input::{
+    INPUT_SLOT_INVALID, InputEdge as GameplayInputEdge, InputEvent, VirtualAction,
+    lane_from_action, lane_from_column,
+};
+use deadsync_profile as profile_data;
 use deadsync_rules::combo::{self, ComboState, ComboUpdate};
 use deadsync_rules::judgment::{self, JudgeGrade, Judgment, TimingWindow};
 use deadsync_rules::note::{
@@ -20,17 +25,12 @@ use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::stream::{
     StreamSegment, measure_densities, stream_sequences_threshold, zmod_stream_totals_full_measures,
 };
-use deadsync_simfile::timing::rssp_timing_segments_from_deadsync;
-use deadsync_input::{
-    INPUT_SLOT_INVALID, InputEdge as GameplayInputEdge, InputEvent, VirtualAction,
-    lane_from_action, lane_from_column,
-};
-use deadsync_profile as profile_data;
 use deadsync_rules::timing::{
     BeatInfoCache, FA_PLUS_W0_MS, FA_PLUS_W010_MS, TimingData, TimingProfile, TimingProfileNs,
     TimingSegments, WindowCounts, classify_offset_ns_with_disabled_windows,
     largest_enabled_tap_window_ns,
 };
+use deadsync_simfile::timing::rssp_timing_segments_from_deadsync;
 use std::collections::{BTreeMap, VecDeque};
 use std::hash::Hasher;
 use std::path::PathBuf;
@@ -483,19 +483,27 @@ fn trace_capacity_growth<InputEdge, OverlayActor, CapturedActor, StateDelta>(
         match event.kind {
             GameplayCapacityTraceKind::PendingEdges => log::debug!(
                 "Gameplay vec growth frame={frame}: pending_edges capacity {} -> {} (len={})",
-                event.old_capacity, event.new_capacity, event.len
+                event.old_capacity,
+                event.new_capacity,
+                event.len
             ),
             GameplayCapacityTraceKind::ReplayEdges => log::debug!(
                 "Gameplay vec growth frame={frame}: replay_edges capacity {} -> {} (len={})",
-                event.old_capacity, event.new_capacity, event.len
+                event.old_capacity,
+                event.new_capacity,
+                event.len
             ),
             GameplayCapacityTraceKind::DecayingHoldIndices => log::debug!(
                 "Gameplay vec growth frame={frame}: decaying_hold_indices capacity {} -> {} (len={})",
-                event.old_capacity, event.new_capacity, event.len
+                event.old_capacity,
+                event.new_capacity,
+                event.len
             ),
             GameplayCapacityTraceKind::DensityGraphLifePoints(player) => log::debug!(
                 "Gameplay vec growth frame={frame}: density_graph_life_points[{player}] capacity {} -> {} (len={})",
-                event.old_capacity, event.new_capacity, event.len
+                event.old_capacity,
+                event.new_capacity,
+                event.len
             ),
         }
     }
@@ -529,7 +537,9 @@ pub fn trace_gameplay_update<InputEdge, OverlayActor, CapturedActor, StateDelta>
     if pending_len >= GAMEPLAY_INPUT_BACKLOG_WARN {
         log::debug!(
             "Gameplay input backlog: frame={}, pending_edges={}, replay_edges={}",
-            frame_counter, pending_len, replay_edges_len
+            frame_counter,
+            pending_len,
+            replay_edges_len
         );
     }
 
@@ -883,9 +893,7 @@ pub const fn gameplay_player_side_from_profile(
 }
 
 #[inline(always)]
-pub const fn profile_side_from_gameplay(
-    side: GameplayInputPlayerSide,
-) -> profile_data::PlayerSide {
+pub const fn profile_side_from_gameplay(side: GameplayInputPlayerSide) -> profile_data::PlayerSide {
     match side {
         GameplayInputPlayerSide::P1 => profile_data::PlayerSide::P1,
         GameplayInputPlayerSide::P2 => profile_data::PlayerSide::P2,
@@ -2616,7 +2624,12 @@ pub fn song_lua_time_to_second_like<Unit>(
 where
     Unit: SongLuaRuntimeTimeUnitLike,
 {
-    song_lua_time_to_second(unit.as_runtime_time_unit(), value, timing_player, global_offset_seconds)
+    song_lua_time_to_second(
+        unit.as_runtime_time_unit(),
+        value,
+        timing_player,
+        global_offset_seconds,
+    )
 }
 
 #[inline(always)]
@@ -2794,16 +2807,22 @@ pub fn build_song_lua_constant_windows_for_player<Window: SongLuaModWindowLike>(
     let mut out = Vec::new();
     for window in time_mods {
         if song_lua_target_matches_player(window.player(), player)
-            && let Some(window) =
-                build_song_lua_constant_window_from_mod(window, timing_player, global_offset_seconds)
+            && let Some(window) = build_song_lua_constant_window_from_mod(
+                window,
+                timing_player,
+                global_offset_seconds,
+            )
         {
             out.push(window);
         }
     }
     for window in beat_mods {
         if song_lua_target_matches_player(window.player(), player)
-            && let Some(window) =
-                build_song_lua_constant_window_from_mod(window, timing_player, global_offset_seconds)
+            && let Some(window) = build_song_lua_constant_window_from_mod(
+                window,
+                timing_player,
+                global_offset_seconds,
+            )
         {
             out.push(window);
         }
@@ -4910,7 +4929,9 @@ pub fn chart_effects_from_profile(profile: &profile_data::Profile) -> ChartAttac
 }
 
 #[inline(always)]
-pub fn perspective_effects_from_profile(perspective: profile_data::Perspective) -> PerspectiveEffects {
+pub fn perspective_effects_from_profile(
+    perspective: profile_data::Perspective,
+) -> PerspectiveEffects {
     let (tilt, skew) = perspective.tilt_skew();
     PerspectiveEffects { tilt, skew }
 }
@@ -5756,8 +5777,12 @@ pub fn build_song_lua_runtime_visuals<OverlayActor, CapturedActor, StateDelta>(
     overlay_eases: Vec<SongLuaOverlayEaseWindowRuntime<StateDelta>>,
     overlay_ease_ranges: Vec<std::ops::Range<usize>>,
     overlay_events: Vec<Vec<SongLuaOverlayMessageRuntime>>,
-    background_visual_layers: Vec<SongLuaVisualLayerRuntime<OverlayActor, CapturedActor, StateDelta>>,
-    foreground_visual_layers: Vec<SongLuaVisualLayerRuntime<OverlayActor, CapturedActor, StateDelta>>,
+    background_visual_layers: Vec<
+        SongLuaVisualLayerRuntime<OverlayActor, CapturedActor, StateDelta>,
+    >,
+    foreground_visual_layers: Vec<
+        SongLuaVisualLayerRuntime<OverlayActor, CapturedActor, StateDelta>,
+    >,
     player_actors: [CapturedActor; MAX_PLAYERS],
     player_events: [Vec<SongLuaOverlayMessageRuntime>; MAX_PLAYERS],
     song_foreground: CapturedActor,
@@ -6336,7 +6361,7 @@ pub fn song_lua_compiled_overlay_ease_cutoff_second<Kind>(
                 .blocks
                 .iter()
                 .map(move |block| (event_second, block.start, &block.delta))
-    });
+        });
     song_lua_overlay_ease_cutoff_second(start_second, &ease.from, &ease.to, blocks)
 }
 
@@ -6440,7 +6465,8 @@ where
         timing_player,
         global_offset_seconds,
     );
-    let overlay_events = build_song_lua_overlay_message_events_with_seconds(compiled, &message_seconds);
+    let overlay_events =
+        build_song_lua_overlay_message_events_with_seconds(compiled, &message_seconds);
     let overlay_eases = build_song_lua_overlay_ease_windows_with_events(
         compiled,
         timing_player,
@@ -6468,7 +6494,9 @@ where
 pub fn log_song_lua_runtime_debug<Kind: std::fmt::Debug>(
     song_title: &str,
     compiled: &deadsync_song_lua::CompiledSongLua<deadsync_song_lua::SongLuaOverlayActor<Kind>>,
-    overlay_eases: &[SongLuaOverlayEaseWindowRuntime<deadsync_song_lua::SongLuaOverlayStateDelta>],
+    overlay_eases: &[SongLuaOverlayEaseWindowRuntime<
+        deadsync_song_lua::SongLuaOverlayStateDelta,
+    >],
     messages: &[deadsync_song_lua::SongLuaMessageEvent],
     hidden_players: &[bool; MAX_PLAYERS],
     total_constant: usize,
@@ -6531,7 +6559,11 @@ pub fn log_song_lua_runtime_debug<Kind: std::fmt::Debug>(
             compiled.info.skipped_message_command_captures.join(" | ")
         );
     }
-    if !compiled.info.unsupported_function_action_captures.is_empty() {
+    if !compiled
+        .info
+        .unsupported_function_action_captures
+        .is_empty()
+    {
         log::debug!(
             "Song lua unsupported function action captures for '{}': {}",
             song_title,
@@ -7265,12 +7297,8 @@ where
         if !song_lua_target_matches_player(window.player(), player) {
             continue;
         }
-        if append_song_lua_ease_window_for(
-            &mut out,
-            window,
-            timing_player,
-            global_offset_seconds,
-        ) == SongLuaRuntimeEaseAppend::Unsupported
+        if append_song_lua_ease_window_for(&mut out, window, timing_player, global_offset_seconds)
+            == SongLuaRuntimeEaseAppend::Unsupported
         {
             unsupported_targets += 1;
             unsupported_window(window);
@@ -10206,13 +10234,17 @@ pub const fn mini_indicator_mode_for_options(
 }
 
 #[inline(always)]
-pub fn gameplay_mini_indicator_mode(mode: profile_data::MiniIndicator) -> GameplayMiniIndicatorMode {
+pub fn gameplay_mini_indicator_mode(
+    mode: profile_data::MiniIndicator,
+) -> GameplayMiniIndicatorMode {
     match mode {
         profile_data::MiniIndicator::None => GameplayMiniIndicatorMode::None,
         profile_data::MiniIndicator::SubtractiveScoring => {
             GameplayMiniIndicatorMode::SubtractiveScoring
         }
-        profile_data::MiniIndicator::PredictiveScoring => GameplayMiniIndicatorMode::PredictiveScoring,
+        profile_data::MiniIndicator::PredictiveScoring => {
+            GameplayMiniIndicatorMode::PredictiveScoring
+        }
         profile_data::MiniIndicator::PaceScoring => GameplayMiniIndicatorMode::PaceScoring,
         profile_data::MiniIndicator::RivalScoring => GameplayMiniIndicatorMode::RivalScoring,
         profile_data::MiniIndicator::Pacemaker => GameplayMiniIndicatorMode::Pacemaker,
@@ -10221,9 +10253,7 @@ pub fn gameplay_mini_indicator_mode(mode: profile_data::MiniIndicator) -> Gamepl
 }
 
 #[inline(always)]
-pub fn profile_mini_indicator_mode(
-    mode: GameplayMiniIndicatorMode,
-) -> profile_data::MiniIndicator {
+pub fn profile_mini_indicator_mode(mode: GameplayMiniIndicatorMode) -> profile_data::MiniIndicator {
     match mode {
         GameplayMiniIndicatorMode::None => profile_data::MiniIndicator::None,
         GameplayMiniIndicatorMode::SubtractiveScoring => {
@@ -10251,7 +10281,9 @@ pub fn mini_indicator_options(profile: &profile_data::Profile) -> GameplayMiniIn
 
 #[inline(always)]
 pub fn mini_indicator_mode(profile: &profile_data::Profile) -> profile_data::MiniIndicator {
-    profile_mini_indicator_mode(mini_indicator_mode_for_options(mini_indicator_options(profile)))
+    profile_mini_indicator_mode(mini_indicator_mode_for_options(mini_indicator_options(
+        profile,
+    )))
 }
 
 #[inline(always)]
@@ -12175,13 +12207,14 @@ pub fn build_player_judgment_timing(
     player_profile: &profile_data::Profile,
     music_rate: f32,
 ) -> PlayerJudgmentTiming {
-    let base_fa_plus_s = timing_profile.fa_plus_window_s.unwrap_or(timing_profile.windows_s[0]);
-    let custom_fantastic_window_s = player_profile
-        .custom_fantastic_window
-        .then_some(profile_data::clamp_custom_fantastic_window_ms(
-            player_profile.custom_fantastic_window_ms,
-        ) as f32
-            / 1000.0);
+    let base_fa_plus_s = timing_profile
+        .fa_plus_window_s
+        .unwrap_or(timing_profile.windows_s[0]);
+    let custom_fantastic_window_s = player_profile.custom_fantastic_window.then_some(
+        profile_data::clamp_custom_fantastic_window_ms(player_profile.custom_fantastic_window_ms)
+            as f32
+            / 1000.0,
+    );
     build_player_judgment_timing_for_options(
         timing_profile,
         FantasticWindowOptions {
@@ -12397,7 +12430,11 @@ pub fn process_input_edges<OverlayActor, CapturedActor, StateDelta>(
             if input_log {
                 log::debug!(
                     "GAMEPLAY INPUT EDGE DROP: reason=lane_out_of_range lane={} num_cols={} source={:?} slot={} pressed={}",
-                    lane_idx, state.setup.num_cols, edge.source, edge.input_slot, edge.pressed,
+                    lane_idx,
+                    state.setup.num_cols,
+                    edge.source,
+                    edge.input_slot,
+                    edge.pressed,
                 );
             }
             continue;
@@ -12701,8 +12738,9 @@ fn queue_live_input_event<OverlayActor, CapturedActor, StateDelta>(
     let Some(lane) = lane_from_action(ev.action) else {
         return;
     };
-    state.queue_live_input_edge(lane, |lane, queued_at, event_music_time_ns, record_replay| {
-        GameplayInputEdge {
+    state.queue_live_input_edge(
+        lane,
+        |lane, queued_at, event_music_time_ns, record_replay| GameplayInputEdge {
             lane,
             input_slot: ev.input_slot,
             pressed: ev.pressed,
@@ -12714,8 +12752,8 @@ fn queue_live_input_event<OverlayActor, CapturedActor, StateDelta>(
             emitted_at: ev.emitted_at,
             queued_at,
             event_music_time_ns,
-        }
-    });
+        },
+    );
 }
 
 pub fn handle_core_input<OverlayActor, CapturedActor, StateDelta>(
@@ -20388,7 +20426,9 @@ pub fn init_gameplay_runtime<InputEdge, OverlayKind>(
     pack_sync_pref: SyncPref,
     mini_indicator_data: GameplayMiniIndicatorData,
     noteskin_data: GameplayNoteskinData,
-    song_lua_data: GameplaySongLuaData<deadsync_song_lua::CompiledSongLua<deadsync_song_lua::SongLuaOverlayActor<OverlayKind>>>,
+    song_lua_data: GameplaySongLuaData<
+        deadsync_song_lua::CompiledSongLua<deadsync_song_lua::SongLuaOverlayActor<OverlayKind>>,
+    >,
     active_color_index: i32,
     music_rate: f32,
     mut scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
@@ -21604,7 +21644,6 @@ impl<InputEdge, OverlayActor, CapturedActor, StateDelta>
         self.set_music_rate_with_player_judgment_timing(rate, player_judgment_timing)
     }
 
-
     pub fn error_bar_register_tap(
         &mut self,
         player: usize,
@@ -21950,12 +21989,7 @@ impl<InputEdge, OverlayActor, CapturedActor, StateDelta>
     }
 
     #[inline(always)]
-    pub fn trigger_column_flash(
-        &mut self,
-        column: usize,
-        grade: JudgeGrade,
-        blue_fantastic: bool,
-    ) {
+    pub fn trigger_column_flash(&mut self, column: usize, grade: JudgeGrade, blue_fantastic: bool) {
         if column >= self.display.visual_feedback.column_flashes.len() {
             return;
         }
@@ -22089,8 +22123,11 @@ impl<InputEdge, OverlayActor, CapturedActor, StateDelta>
             return;
         };
         let mut player_state = hold_resolution_player_state(&self.players_runtime.players[player]);
-        let player_update =
-            apply_hold_success_player_state(&mut player_state, update.stats_update, scoring_blocked);
+        let player_update = apply_hold_success_player_state(
+            &mut player_state,
+            update.stats_update,
+            scoring_blocked,
+        );
         apply_hold_resolution_player_state(&mut self.players_runtime.players[player], player_state);
         if player_update.apply_life_change {
             let current_music_time = self.current_music_time_seconds();
@@ -22211,11 +22248,7 @@ impl<InputEdge, OverlayActor, CapturedActor, StateDelta>
         }
     }
 
-    pub fn update_active_holds(
-        &mut self,
-        inputs: &[bool; MAX_COLS],
-        current_time_ns: SongTimeNs,
-    ) {
+    pub fn update_active_holds(&mut self, inputs: &[bool; MAX_COLS], current_time_ns: SongTimeNs) {
         let timing_players: [&_; MAX_PLAYERS] =
             std::array::from_fn(|player| self.timing_runtime.timing_players[player].as_ref());
         let live_autoplay = self.live_autoplay_enabled();
@@ -22281,21 +22314,16 @@ impl<InputEdge, OverlayActor, CapturedActor, StateDelta>
     }
 
     #[inline(always)]
-    pub fn spawn_tap_explosion(
-        &mut self,
-        column: usize,
-        window_key: &'static str,
-        bright: bool,
-    ) {
+    pub fn spawn_tap_explosion(&mut self, column: usize, window_key: &'static str, bright: bool) {
         let player = self.player_for_col(column);
         if !self.tap_explosion_enabled_for_player(player, window_key) {
             return;
         }
         let local_col = local_column_for_field(self.setup.cols_per_player, column);
-        let spawn_duration =
-            self.display
-                .noteskin_effects
-                .tap_explosion_duration(player, local_col, window_key, bright);
+        let spawn_duration = self
+            .display
+            .noteskin_effects
+            .tap_explosion_duration(player, local_col, window_key, bright);
         if let Some(duration) = spawn_duration {
             self.display.visual_feedback.tap_explosions[column] = Some(ActiveTapExplosion {
                 window: window_key,
@@ -22310,7 +22338,10 @@ impl<InputEdge, OverlayActor, CapturedActor, StateDelta>
     #[inline(always)]
     pub fn trigger_mine_explosion(&mut self, column: usize) {
         let player = self.player_for_col(column);
-        let duration = self.display.noteskin_effects.mine_explosion_duration(player);
+        let duration = self
+            .display
+            .noteskin_effects
+            .mine_explosion_duration(player);
         self.display.visual_feedback.mine_explosions[column] = Some(ActiveMineExplosion {
             elapsed: 0.0,
             duration,
@@ -22452,7 +22483,10 @@ impl<InputEdge, OverlayActor, CapturedActor, StateDelta>
         }
         for slot in &mut self.display.hold_feedback.held_miss_judgments {
             if let Some(render_info) = slot
-                && held_miss_judgment_expired_at(*render_info, self.boundary.total_elapsed_in_screen)
+                && held_miss_judgment_expired_at(
+                    *render_info,
+                    self.boundary.total_elapsed_in_screen,
+                )
             {
                 *slot = None;
             }
@@ -22584,10 +22618,8 @@ impl<InputEdge, OverlayActor, CapturedActor, StateDelta>
                         note_time / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
                     let expected_stream_for_miss_s =
                         music_time_sec / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
-                    let stream_delta_note_ms =
-                        (stream_pos_s - expected_stream_for_note_s) * 1000.0;
-                    let stream_delta_miss_ms =
-                        (stream_pos_s - expected_stream_for_miss_s) * 1000.0;
+                    let stream_delta_note_ms = (stream_pos_s - expected_stream_for_note_s) * 1000.0;
+                    let stream_delta_miss_ms = (stream_pos_s - expected_stream_for_miss_s) * 1000.0;
 
                     log::debug!(
                         concat!(
@@ -22905,11 +22937,8 @@ impl<InputEdge, OverlayActor, CapturedActor, StateDelta>
                 .enumerate()
             {
                 if let Some(crossed_from_ns) = crossed_from_ns {
-                    let _ = self.try_hit_crossed_mines_while_held(
-                        col,
-                        crossed_from_ns,
-                        music_time_ns,
-                    );
+                    let _ =
+                        self.try_hit_crossed_mines_while_held(col, crossed_from_ns, music_time_ns);
                 }
             }
         }
@@ -23011,7 +23040,8 @@ impl<InputEdge, OverlayActor, CapturedActor, StateDelta>
         let input_log = gameplay_input_log_enabled();
         let player = self.player_for_col(column);
         let rescore_early_hits = self.profiles_runtime.profiles[player].rescore_early_hits;
-        let hide_early_dw_judgments = self.profiles_runtime.profiles[player].hide_early_dw_judgments;
+        let hide_early_dw_judgments =
+            self.profiles_runtime.profiles[player].hide_early_dw_judgments;
         let hide_early_dw_flash = self.profiles_runtime.profiles[player].hide_early_dw_flash;
         let hide_early_dw_column_flash =
             self.profiles_runtime.profiles[player].hide_early_dw_column_flash;
@@ -23200,7 +23230,10 @@ impl<InputEdge, OverlayActor, CapturedActor, StateDelta>
                             );
                         }
                         if plan.capture_failed_ex_score_inputs {
-                            self.capture_failed_ex_score_inputs(player, self.player_blue_window_ms(player));
+                            self.capture_failed_ex_score_inputs(
+                                player,
+                                self.player_blue_window_ms(player),
+                            );
                         }
                         self.render_provisional_early_rescore_feedback(
                             player,
@@ -23399,7 +23432,8 @@ impl<InputEdge, OverlayActor, CapturedActor, StateDelta>
         let timing_hit_log = timing_hit_log_enabled();
         let player = self.player_for_col(column);
         let rescore_early_hits = self.profiles_runtime.profiles[player].rescore_early_hits;
-        let hide_early_dw_judgments = self.profiles_runtime.profiles[player].hide_early_dw_judgments;
+        let hide_early_dw_judgments =
+            self.profiles_runtime.profiles[player].hide_early_dw_judgments;
         let hide_early_dw_flash = self.profiles_runtime.profiles[player].hide_early_dw_flash;
         let hide_early_dw_column_flash =
             self.profiles_runtime.profiles[player].hide_early_dw_column_flash;
@@ -23469,7 +23503,10 @@ impl<InputEdge, OverlayActor, CapturedActor, StateDelta>
                         );
                     }
                     if plan.capture_failed_ex_score_inputs {
-                        self.capture_failed_ex_score_inputs(player, self.player_blue_window_ms(player));
+                        self.capture_failed_ex_score_inputs(
+                            player,
+                            self.player_blue_window_ms(player),
+                        );
                     }
                     self.render_provisional_early_rescore_feedback(
                         player,
@@ -23536,7 +23573,6 @@ impl<InputEdge, OverlayActor, CapturedActor, StateDelta>
         true
     }
 
-
     pub fn track_held_miss_windows(
         &mut self,
         inputs: &[bool; MAX_COLS],
@@ -23569,7 +23605,9 @@ impl<InputEdge, OverlayActor, CapturedActor, StateDelta>
         self.boundary.total_elapsed_in_screen += delta_time;
         if exit.started_at.elapsed().as_secs_f32() >= exit_total_seconds(exit.kind) {
             self.control.exit_input.clear_exit();
-            return Some(GameplayAction::NavigateNoFade(gameplay_exit_for_kind(exit.kind)));
+            return Some(GameplayAction::NavigateNoFade(gameplay_exit_for_kind(
+                exit.kind,
+            )));
         }
         Some(GameplayAction::None)
     }
@@ -23783,11 +23821,7 @@ impl<InputEdge, OverlayActor, CapturedActor, StateDelta>
             None
         };
         let mut replay_events = [None; MAX_COLS];
-        self.run_autoplay_or_replay_phase(
-            music_time_ns,
-            &mut replay_events,
-            handle_replay_edge,
-        );
+        self.run_autoplay_or_replay_phase(music_time_ns, &mut replay_events, handle_replay_edge);
         if let Some(started) = autoplay_started {
             phase_timings.autoplay_us = elapsed_us_since(started);
         }
@@ -23822,7 +23856,12 @@ impl<InputEdge, OverlayActor, CapturedActor, StateDelta>
             return action;
         }
 
-        self.finalize_update_trace(delta_time, music_time_sec, frame_trace_started, phase_timings);
+        self.finalize_update_trace(
+            delta_time,
+            music_time_sec,
+            frame_trace_started,
+            phase_timings,
+        );
         GameplayAction::None
     }
 
@@ -23862,7 +23901,11 @@ impl<InputEdge, OverlayActor, CapturedActor, StateDelta>
     }
 
     #[inline(always)]
-    pub fn schedule_assist_clap_row(&mut self, clap_row: usize, assist_tick_sfx_path: &'static str) {
+    pub fn schedule_assist_clap_row(
+        &mut self,
+        clap_row: usize,
+        assist_tick_sfx_path: &'static str,
+    ) {
         let Some(music_seconds) =
             assist_clap_music_seconds_for_row(&self.timing_runtime.timing, clap_row)
         else {
@@ -23922,12 +23965,7 @@ impl<InputEdge, OverlayActor, CapturedActor, StateDelta>
     }
 
     #[inline(always)]
-    pub fn set_last_mine_judgment(
-        &mut self,
-        player_idx: usize,
-        column: usize,
-        result: MineResult,
-    ) {
+    pub fn set_last_mine_judgment(&mut self, player_idx: usize, column: usize, result: MineResult) {
         set_player_last_mine_judgment(
             &mut self.players_runtime.players[player_idx],
             result,
@@ -26639,14 +26677,8 @@ impl<InputEdge, OverlayActor, CapturedActor, StateDelta>
     }
 }
 
-
 #[inline(always)]
-pub fn effective_visual_effects_for_player<
-    InputEdge,
-    OverlayActor,
-    CapturedActor,
-    StateDelta,
->(
+pub fn effective_visual_effects_for_player<InputEdge, OverlayActor, CapturedActor, StateDelta>(
     state: &GameplayRuntimeState<
         profile_data::Profile,
         InputEdge,
@@ -26668,12 +26700,7 @@ pub fn effective_visual_effects_for_player<
 }
 
 #[inline(always)]
-pub fn effective_scroll_effects_for_player<
-    InputEdge,
-    OverlayActor,
-    CapturedActor,
-    StateDelta,
->(
+pub fn effective_scroll_effects_for_player<InputEdge, OverlayActor, CapturedActor, StateDelta>(
     state: &GameplayRuntimeState<
         profile_data::Profile,
         InputEdge,
@@ -26718,12 +26745,7 @@ pub fn effective_perspective_effects_for_player<
 }
 
 #[inline(always)]
-pub fn effective_visual_mask_for_player<
-    InputEdge,
-    OverlayActor,
-    CapturedActor,
-    StateDelta,
->(
+pub fn effective_visual_mask_for_player<InputEdge, OverlayActor, CapturedActor, StateDelta>(
     state: &GameplayRuntimeState<
         profile_data::Profile,
         InputEdge,
@@ -26747,12 +26769,7 @@ pub fn effective_visual_mask_for_player<
 }
 
 #[inline(always)]
-pub fn effective_mini_percent_for_player<
-    InputEdge,
-    OverlayActor,
-    CapturedActor,
-    StateDelta,
->(
+pub fn effective_mini_percent_for_player<InputEdge, OverlayActor, CapturedActor, StateDelta>(
     state: &GameplayRuntimeState<
         profile_data::Profile,
         InputEdge,
@@ -26787,20 +26804,10 @@ pub fn player_draw_scale_for_tilt_with_visual_mask(
     visual_mask: u16,
     mini_percent: f32,
 ) -> f32 {
-    player_draw_scale_for_visual_mask(
-        tilt,
-        mini_percent,
-        profile.mini_percent as f32,
-        visual_mask,
-    )
+    player_draw_scale_for_visual_mask(tilt, mini_percent, profile.mini_percent as f32, visual_mask)
 }
 
-pub fn refresh_active_attack_masks<
-    InputEdge,
-    OverlayActor,
-    CapturedActor,
-    StateDelta,
->(
+pub fn refresh_active_attack_masks<InputEdge, OverlayActor, CapturedActor, StateDelta>(
     state: &mut GameplayRuntimeState<
         profile_data::Profile,
         InputEdge,
@@ -26828,12 +26835,7 @@ pub fn refresh_active_attack_masks<
 }
 
 #[inline(always)]
-pub fn song_lua_hides_note_visual<
-    InputEdge,
-    OverlayActor,
-    CapturedActor,
-    StateDelta,
->(
+pub fn song_lua_hides_note_visual<InputEdge, OverlayActor, CapturedActor, StateDelta>(
     state: &GameplayRuntimeState<
         profile_data::Profile,
         InputEdge,

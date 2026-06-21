@@ -211,6 +211,12 @@ pub(super) fn submenu_visible_row_indices(
             )
             .unwrap_or(1)
                 == 0;
+            let show_theme_variant = get_choice_by_id(
+                &state.sub[SubmenuKind::Machine].choice_indices,
+                MACHINE_OPTIONS_ROWS,
+                SubRowId::VisualStyle,
+            )
+            .is_some_and(|idx| VisualStyle::from_choice(idx).is_srpg());
             let show_default_sync_offset = get_choice_by_id(
                 &state.sub[SubmenuKind::Machine].choice_indices,
                 MACHINE_OPTIONS_ROWS,
@@ -226,7 +232,9 @@ pub(super) fn submenu_visible_row_indices(
             rows.iter()
                 .enumerate()
                 .filter_map(|(idx, row)| {
-                    if row.id == SubRowId::PreferredColor && !show_preferred_color {
+                    if row.id == SubRowId::ThemeVariant && !show_theme_variant {
+                        None
+                    } else if row.id == SubRowId::PreferredColor && !show_preferred_color {
                         None
                     } else if row.id == SubRowId::PreferredStyle && !show_preferred_style {
                         None

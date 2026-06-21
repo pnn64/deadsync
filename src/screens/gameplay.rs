@@ -42,22 +42,21 @@ use deadsync_core::input::MAX_PLAYERS;
 use deadsync_core::song_time::song_time_ns_to_seconds;
 use deadsync_gameplay::{
     AUTOSYNC_OFFSET_SAMPLE_COUNT, AutosyncMode, CourseDisplayCarry, CourseDisplayTiming,
-    CourseDisplayTotals, ExitTransitionKind, FantasticWindowOptions, GameplayAction, GameplayAudioCommand,
-    GameplayAudioSnapshot, GameplayConfig, GameplayExit, GameplayInputPlayStyle,
-    GameplayInputPlayerSide, GameplayMiniIndicatorData, GameplayMusicCut,
+    CourseDisplayTotals, ExitTransitionKind, FantasticWindowOptions, GameplayAction,
+    GameplayAudioCommand, GameplayAudioSnapshot, GameplayConfig, GameplayExit,
+    GameplayInputPlayStyle, GameplayInputPlayerSide, GameplayMiniIndicatorData, GameplayMusicCut,
     GameplayNoteskinData, GameplayNoteskinEffects, GameplayReceptorGlowBehavior,
-    GameplayReceptorStepBehavior, GameplaySession,
-    GameplaySessionCommand, GameplayStreamClockSnapshot, GameplayTween, GameplayViewport,
-    HoldToExitKey, LeadInTiming, MINE_EXPLOSION_DURATION, RECEPTOR_STEP_WINDOWS,
-    RECEPTOR_Y_OFFSET_FROM_CENTER, RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE,
-    ReplayInputEdge, ReplayOffsetSnapshot, SongLuaCompilePlayStyle,
-    SongLuaOverlayMessageRuntime, TAP_EXPLOSION_WINDOWS, autosync_mode_status_line,
-    blue_fantastic_window_ms, exit_transition_alpha, gameplay_is_single_p2_side,
-    gameplay_runtime_charts, gameplay_runtime_profiles, handle_core_input, profile_side_from_gameplay,
-    profile_tick_mode_from_gameplay, score_display_mode_from_profile, scroll_effects_from_option,
-    scroll_receptor_y, song_lua_ease_factor, song_lua_sound_paths,
+    GameplayReceptorStepBehavior, GameplaySession, GameplaySessionCommand,
+    GameplayStreamClockSnapshot, GameplayTween, GameplayViewport, HoldToExitKey, LeadInTiming,
+    MINE_EXPLOSION_DURATION, RECEPTOR_STEP_WINDOWS, RECEPTOR_Y_OFFSET_FROM_CENTER,
+    RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, ReplayInputEdge, ReplayOffsetSnapshot,
+    SongLuaCompilePlayStyle, SongLuaOverlayMessageRuntime, TAP_EXPLOSION_WINDOWS,
+    autosync_mode_status_line, blue_fantastic_window_ms, exit_transition_alpha,
+    gameplay_is_single_p2_side, gameplay_runtime_charts, gameplay_runtime_profiles,
+    handle_core_input, profile_side_from_gameplay, profile_tick_mode_from_gameplay,
+    score_display_mode_from_profile, scroll_effects_from_option, scroll_receptor_y,
     song_lua_compile_player_screen_x as gameplay_song_lua_compile_player_screen_x,
-    spacing_multiplier_for_percent, update_core,
+    song_lua_ease_factor, song_lua_sound_paths, spacing_multiplier_for_percent, update_core,
 };
 use deadsync_input::{InputEdge, InputEvent, VirtualAction};
 use deadsync_online::lobbies as lobby_data;
@@ -468,9 +467,7 @@ fn noteskin_effects_from_assets(
             .as_deref()
             .or_else(|| assets.noteskin[player].as_deref())
             .and_then(|ns| ns.mine_hit_explosion.as_ref())
-            .map_or(MINE_EXPLOSION_DURATION, |explosion| {
-                explosion.duration()
-            });
+            .map_or(MINE_EXPLOSION_DURATION, |explosion| explosion.duration());
         effects.set_mine_explosion_duration(player, mine_duration);
     }
     effects
@@ -1920,12 +1917,9 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     maybe_refresh_smx_sensor_data(state, delta_time);
     smx_profile::maybe_report();
     let previous_song_lua_time = state.current_music_time_display();
-    let action = update_core(
-        state,
-        delta_time,
-        audio_snapshot(),
-        || deadlib_platform::host_time::instant_nanos(Instant::now()),
-    );
+    let action = update_core(state, delta_time, audio_snapshot(), || {
+        deadlib_platform::host_time::instant_nanos(Instant::now())
+    });
     if matches!(action, GameplayAction::None) {
         refresh_scorebox_snapshots(state);
     }
@@ -2387,18 +2381,17 @@ pub fn prewarm_text_layout(
         cache.prewarm_text(fonts, "miso", text.as_ref(), None);
     }
     if state.autosync_mode() != AutosyncMode::Off {
-        let (old_offset, new_offset) =
-            if state.autosync_mode() == AutosyncMode::Machine {
-                (
-                    state.initial_global_offset_seconds(),
-                    state.global_offset_seconds(),
-                )
-            } else {
-                (
-                    state.initial_song_offset_seconds(),
-                    state.song_offset_seconds(),
-                )
-            };
+        let (old_offset, new_offset) = if state.autosync_mode() == AutosyncMode::Machine {
+            (
+                state.initial_global_offset_seconds(),
+                state.global_offset_seconds(),
+            )
+        } else {
+            (
+                state.initial_song_offset_seconds(),
+                state.song_offset_seconds(),
+            )
+        };
         let text = cached_autosync_text(state, old_offset, new_offset);
         cache.prewarm_text(fonts, "miso", text.as_ref(), None);
     }
@@ -8908,18 +8901,17 @@ pub fn push_actors(
         }
 
         if state.autosync_mode() != AutosyncMode::Off {
-            let (old_offset, new_offset) =
-                if state.autosync_mode() == AutosyncMode::Machine {
-                    (
-                        state.initial_global_offset_seconds(),
-                        state.global_offset_seconds(),
-                    )
-                } else {
-                    (
-                        state.initial_song_offset_seconds(),
-                        state.song_offset_seconds(),
-                    )
-                };
+            let (old_offset, new_offset) = if state.autosync_mode() == AutosyncMode::Machine {
+                (
+                    state.initial_global_offset_seconds(),
+                    state.global_offset_seconds(),
+                )
+            } else {
+                (
+                    state.initial_song_offset_seconds(),
+                    state.song_offset_seconds(),
+                )
+            };
             let adjustments = cached_autosync_text(state, old_offset, new_offset);
             actors.push(act!(text:
                 font("miso"):
@@ -8948,12 +8940,8 @@ pub fn push_actors(
             (exit_prompt.hold_to_exit_key, exit_prompt.hold_to_exit_start)
         {
             let s = match key {
-                HoldToExitKey::Start => {
-                    Some(tr("Gameplay", "ContinueHoldingStartGiveUp"))
-                }
-                HoldToExitKey::Back => {
-                    Some(tr("Gameplay", "ContinueHoldingBackGiveUp"))
-                }
+                HoldToExitKey::Start => Some(tr("Gameplay", "ContinueHoldingStartGiveUp")),
+                HoldToExitKey::Back => Some(tr("Gameplay", "ContinueHoldingBackGiveUp")),
             };
             let alpha = (start.elapsed().as_secs_f32() / HOLD_FADE_IN_S).clamp(0.0, 1.0);
             s.map(|text| (text.to_string(), alpha))
@@ -9043,9 +9031,8 @@ pub fn push_actors(
         if cols == 0 {
             return 256.0;
         }
-        let spacing_mult = spacing_multiplier_for_percent(
-            state.profiles()[player_idx].spacing_percent,
-        );
+        let spacing_mult =
+            spacing_multiplier_for_percent(state.profiles()[player_idx].spacing_percent);
         let mut min_x = f32::INFINITY;
         let mut max_x = f32::NEG_INFINITY;
         for x in ns.column_xs.iter().take(cols) {
@@ -14543,5 +14530,3 @@ mod tests {
         assert_eq!(gameplay_lobby_wait_text_for(&joined, true, None), None);
     }
 }
-
-

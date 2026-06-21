@@ -409,4 +409,3 @@ fn create_sl_metrics(lua: &Lua, mode: &str) -> mlua::Result<Table> {
     }
     Ok(table)
 }
-

@@ -1,6 +1,5 @@
 use super::{
-    GameplayCoreState,
-    gameplay_run_failed, gameplay_run_passed, gameplay_side_for_player,
+    GameplayCoreState, gameplay_run_failed, gameplay_run_passed, gameplay_side_for_player,
     get_or_fetch_player_leaderboards_for_side, invalidate_player_leaderboards_for_side,
     lua_chart_submit_allowed,
 };
@@ -413,7 +412,10 @@ fn arrowcloud_stats_from_results(
 }
 
 #[inline(always)]
-fn arrowcloud_live_submit_stats(gs: &GameplayCoreState, player_idx: usize) -> ArrowCloudSubmitStats {
+fn arrowcloud_live_submit_stats(
+    gs: &GameplayCoreState,
+    player_idx: usize,
+) -> ArrowCloudSubmitStats {
     let player = &gs.players()[player_idx];
     ArrowCloudSubmitStats {
         judgment_counts: player.judgment_counts,

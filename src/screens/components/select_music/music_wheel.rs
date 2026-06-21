@@ -2,7 +2,7 @@ use crate::act;
 use crate::assets::{FontRole, current_machine_font_key};
 use crate::config::{
     self, DefaultSyncOffset, MachineBarColor, SelectMusicItlRankMode, SelectMusicItlWheelMode,
-    SelectMusicSongSelectBgMode, VisualStyle,
+    SelectMusicSongSelectBgMode,
 };
 use crate::game::profile;
 use crate::game::scores;
@@ -456,13 +456,12 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
     let cfg = config::get();
     let translated_titles = cfg.translated_titles;
     let effective_bar_color = cfg.machine_bar_color.resolve(cfg.visual_style);
-    let song_bg_alpha = if cfg.visual_style == VisualStyle::Srpg9
-        || effective_bar_color == MachineBarColor::Transparent
-    {
-        0.5
-    } else {
-        1.0
-    };
+    let song_bg_alpha =
+        if cfg.visual_style.is_srpg() || effective_bar_color == MachineBarColor::Transparent {
+            0.5
+        } else {
+            1.0
+        };
     let section_bg_alpha = if effective_bar_color == MachineBarColor::Transparent {
         0.5
     } else {

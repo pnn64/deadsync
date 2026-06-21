@@ -5,14 +5,14 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 pub use deadsync_song_lua::{
-    overlay_delta_from_blocks, overlay_delta_intersection, overlay_state_after_blocks,
-    parse_overlay_blend_mode, parse_overlay_effect_clock, parse_overlay_effect_mode,
-    parse_overlay_text_align, parse_overlay_text_glow_mode, SongLuaOverlayBlendMode,
-    SongLuaOverlayActor as GenericSongLuaOverlayActor, SongLuaOverlayCommandBlock,
-    SongLuaOverlayEase, SongLuaOverlayMeshVertex,
+    SongLuaOverlayActor as GenericSongLuaOverlayActor, SongLuaOverlayBlendMode,
+    SongLuaOverlayCommandBlock, SongLuaOverlayEase, SongLuaOverlayMeshVertex,
     SongLuaOverlayMessageCommand, SongLuaOverlayModelDraw,
     SongLuaOverlayModelLayer as GenericSongLuaOverlayModelLayer, SongLuaOverlayState,
-    SongLuaOverlayStateDelta, SongLuaProxyTarget, SongLuaTextGlowMode,
+    SongLuaOverlayStateDelta, SongLuaProxyTarget, SongLuaTextGlowMode, overlay_delta_from_blocks,
+    overlay_delta_intersection, overlay_state_after_blocks, parse_overlay_blend_mode,
+    parse_overlay_effect_clock, parse_overlay_effect_mode, parse_overlay_text_align,
+    parse_overlay_text_glow_mode,
 };
 
 #[derive(Debug, Clone)]
@@ -69,15 +69,13 @@ pub type SongLuaOverlayModelLayer = GenericSongLuaOverlayModelLayer<TexturedMesh
 
 pub type SongLuaOverlayActor = GenericSongLuaOverlayActor<SongLuaOverlayKind>;
 
-
-
 #[cfg(test)]
 mod tests {
     use super::{
         SongLuaOverlayBlendMode, parse_overlay_blend_mode, parse_overlay_effect_clock,
         parse_overlay_effect_mode,
     };
-    
+
     #[test]
     fn parse_overlay_blend_mode_accepts_stepmania_add_name() {
         assert_eq!(
@@ -118,6 +116,3 @@ mod tests {
         assert_eq!(parse_overlay_effect_clock("music"), Some(EffectClock::Time));
     }
 }
-
-
-

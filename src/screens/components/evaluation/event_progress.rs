@@ -13,6 +13,7 @@ use deadsync_score as score_data;
 use super::utils::format_machine_record_date;
 
 const ITL_PINK: [f32; 4] = [1.0, 0.2, 0.406, 1.0];
+const SRPG_YELLOW: [f32; 4] = [1.0, 0.972, 0.792, 1.0];
 const POSITIVE_GREEN: [f32; 4] = [0.0, 1.0, 0.0, 1.0];
 const NEGATIVE_RED: [f32; 4] = [1.0, 0.0, 0.0, 1.0];
 const WHITE: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
@@ -36,9 +37,34 @@ const TIER_GOLD: [f32; 4] = color::rgba_hex("#F6AB2D");
 const TIER_PRISMATIC: [f32; 4] = color::rgba_hex("#8731D2");
 
 #[inline(always)]
-fn header_name(name: &str, is_doubles: bool) -> String {
-    let mut text = name.replacen("ITL Online", "ITL", 1);
-    if is_doubles && !text.contains("Doubles") {
+fn event_color(kind: score_data::EventProgressKind) -> [f32; 4] {
+    match kind {
+        score_data::EventProgressKind::Itl => ITL_PINK,
+        score_data::EventProgressKind::Srpg => SRPG_YELLOW,
+    }
+}
+
+#[inline(always)]
+fn event_badge(kind: score_data::EventProgressKind) -> &'static str {
+    match kind {
+        score_data::EventProgressKind::Itl => "EX",
+        score_data::EventProgressKind::Srpg => "SRPG",
+    }
+}
+
+#[inline(always)]
+fn header_name(progress: &score_data::EventProgress) -> String {
+    let mut text = match progress.kind {
+        score_data::EventProgressKind::Itl => progress.name.replacen("ITL Online", "ITL", 1),
+        score_data::EventProgressKind::Srpg => {
+            if progress.name.trim().eq_ignore_ascii_case("rpg") {
+                "SRPG".to_string()
+            } else {
+                progress.name.clone()
+            }
+        }
+    };
+    if progress.is_doubles && !text.contains("Doubles") {
         text.push_str(" Doubles");
     }
     text
@@ -62,6 +88,18 @@ fn format_signed_points(value: i32) -> String {
 }
 
 #[inline(always)]
+fn format_rate_hundredths(value: u32) -> String {
+    format!("{}.{:02}", value / 100, value % 100)
+}
+
+#[inline(always)]
+fn format_signed_rate_hundredths(value: i32) -> String {
+    let sign = if value < 0 { '-' } else { '+' };
+    let abs = value.unsigned_abs();
+    format!("({sign}{}.{:02})", abs / 100, abs % 100)
+}
+
+#[inline(always)]
 fn clear_type_name(clear_type: u8) -> &'static str {
     match clear_type {
         0 => "No Play",
@@ -75,7 +113,7 @@ fn clear_type_name(clear_type: u8) -> &'static str {
 }
 
 #[inline(always)]
-fn build_box_body(progress: &score_data::ItlEventProgress) -> String {
+fn build_itl_box_body(progress: &score_data::EventProgress) -> String {
     format!(
         "EX Score: {} {}\n\
          Points: {} {}\n\n\
@@ -99,7 +137,71 @@ fn build_box_body(progress: &score_data::ItlEventProgress) -> String {
 }
 
 #[inline(always)]
-fn build_stat_improvements(progress: &score_data::ItlEventProgress) -> Option<String> {
+fn srpg_stat_lines(progress: &score_data::EventProgress) -> (Vec<String>, Vec<String>) {
+    let srpg_stats = ["tp", "lp", "bb", "gold", "jp"];
+    let show_qualifier_pair = progress.stat_improvements.len() >= 5;
+    let mut qualifier = Vec::with_capacity(2);
+    let mut stats = Vec::with_capacity(progress.stat_improvements.len());
+    for improvement in &progress.stat_improvements {
+        if improvement.gained == 0
+            || !srpg_stats
+                .iter()
+                .any(|stat| improvement.name.eq_ignore_ascii_case(stat))
+        {
+            continue;
+        }
+        let line = format!(
+            "+{} {}",
+            improvement.gained,
+            improvement.name.to_uppercase()
+        );
+        if show_qualifier_pair
+            && (improvement.name.eq_ignore_ascii_case("tp")
+                || improvement.name.eq_ignore_ascii_case("lp"))
+        {
+            qualifier.push(line);
+        } else {
+            stats.push(line);
+        }
+    }
+    (qualifier, stats)
+}
+
+#[inline(always)]
+fn build_srpg_box_body(progress: &score_data::EventProgress) -> String {
+    let mut body = format!(
+        "Score: {} {}\n\
+         Rate: {} {}\n",
+        format_pct_hundredths(progress.score_hundredths),
+        format_signed_pct_hundredths(progress.score_delta_hundredths),
+        format_rate_hundredths(progress.rate_hundredths.unwrap_or(100)),
+        format_signed_rate_hundredths(progress.rate_delta_hundredths.unwrap_or(0)),
+    );
+    let (qualifier, stats) = srpg_stat_lines(progress);
+    if !qualifier.is_empty() || !stats.is_empty() {
+        body.push('\n');
+    }
+    if !qualifier.is_empty() {
+        body.push_str(qualifier.join(" ").as_str());
+        body.push('\n');
+    }
+    for line in stats {
+        body.push_str(line.as_str());
+        body.push('\n');
+    }
+    body.trim_end().to_string()
+}
+
+#[inline(always)]
+fn build_box_body(progress: &score_data::EventProgress) -> String {
+    match progress.kind {
+        score_data::EventProgressKind::Itl => build_itl_box_body(progress),
+        score_data::EventProgressKind::Srpg => build_srpg_box_body(progress),
+    }
+}
+
+#[inline(always)]
+fn build_itl_stat_improvements(progress: &score_data::EventProgress) -> Option<String> {
     let (Some(before), Some(after)) = (progress.clear_type_before, progress.clear_type_after)
     else {
         return None;
@@ -114,7 +216,7 @@ fn build_stat_improvements(progress: &score_data::ItlEventProgress) -> Option<St
 }
 
 #[inline(always)]
-fn build_overlay_body(progress: &score_data::ItlEventProgress) -> String {
+fn build_itl_overlay_body(progress: &score_data::EventProgress) -> String {
     let mut text = format!(
         "EX Score: {} {}\n\
          Points: {} {}\n\n\
@@ -137,7 +239,7 @@ fn build_overlay_body(progress: &score_data::ItlEventProgress) -> String {
         format_signed_points(progress.total_delta),
         progress.total_passes,
     );
-    if let Some(improvement) = build_stat_improvements(progress) {
+    if let Some(improvement) = build_itl_stat_improvements(progress) {
         text.push_str("\n\n");
         text.push_str(improvement.as_str());
     }
@@ -145,10 +247,44 @@ fn build_overlay_body(progress: &score_data::ItlEventProgress) -> String {
 }
 
 #[inline(always)]
+fn build_srpg_overlay_body(progress: &score_data::EventProgress) -> String {
+    let mut text = format!(
+        "Skill Improvements\n\n\
+         {} {} at\n\
+         {}x {} rate",
+        format_pct_hundredths(progress.score_hundredths),
+        format_signed_pct_hundredths(progress.score_delta_hundredths),
+        format_rate_hundredths(progress.rate_hundredths.unwrap_or(100)),
+        format_signed_rate_hundredths(progress.rate_delta_hundredths.unwrap_or(0)),
+    );
+    let (qualifier, stats) = srpg_stat_lines(progress);
+    if !qualifier.is_empty() || !stats.is_empty() {
+        text.push_str("\n\n");
+    }
+    if !qualifier.is_empty() {
+        text.push_str(qualifier.join(" ").as_str());
+        text.push('\n');
+    }
+    for line in stats {
+        text.push_str(line.as_str());
+        text.push('\n');
+    }
+    text.trim_end().to_string()
+}
+
+#[inline(always)]
+fn build_overlay_body(progress: &score_data::EventProgress) -> String {
+    match progress.kind {
+        score_data::EventProgressKind::Itl => build_itl_overlay_body(progress),
+        score_data::EventProgressKind::Srpg => build_srpg_overlay_body(progress),
+    }
+}
+
+#[inline(always)]
 fn active_overlay_page(
-    progress: &score_data::ItlEventProgress,
+    progress: &score_data::EventProgress,
     page_idx: usize,
-) -> Option<&score_data::ItlOverlayPage> {
+) -> Option<&score_data::EventOverlayPage> {
     progress
         .overlay_pages
         .get(page_idx)
@@ -376,7 +512,7 @@ fn push_attr(
     }
 }
 
-fn build_body_attributes(text: &str) -> Vec<TextAttribute> {
+fn build_body_attributes(text: &str, default_number_color: [f32; 4]) -> Vec<TextAttribute> {
     let mut attrs = Vec::new();
     let bytes = text.as_bytes();
     let mut i = 0usize;
@@ -405,7 +541,7 @@ fn build_body_attributes(text: &str) -> Vec<TextAttribute> {
             let color = match bytes[start] {
                 b'+' => POSITIVE_GREEN,
                 b'-' => NEGATIVE_RED,
-                _ => ITL_PINK,
+                _ => default_number_color,
             };
             push_attr(&mut attrs, text, start, j - start, color);
             i = j;
@@ -508,6 +644,7 @@ fn build_body_text(
     wrap_width: f32,
     pane_height: f32,
     row_height: f32,
+    default_number_color: [f32; 4],
     z: i16,
 ) -> Actor {
     let layout = body_layout(
@@ -535,7 +672,7 @@ fn build_body_text(
         ..
     } = &mut actor
     {
-        *attributes = build_body_attributes(content.as_str());
+        *attributes = build_body_attributes(content.as_str(), default_number_color);
     }
     actor
 }
@@ -701,10 +838,11 @@ fn build_upper_panel(
     center_y: f32,
     pane_width: f32,
     pane_height: f32,
-    progress: &score_data::ItlEventProgress,
+    progress: &score_data::EventProgress,
     z: i16,
 ) -> Actor {
     let border_width = 2.0;
+    let event_color = event_color(progress.kind);
     let mut children = Vec::with_capacity(4);
     children.push(act!(quad:
         align(0.5, 0.5):
@@ -722,7 +860,7 @@ fn build_upper_panel(
     ));
     children.push(build_upper_header_text(
         asset_manager,
-        header_name(progress.name.as_str(), progress.is_doubles),
+        header_name(progress),
         pane_width,
         -pane_height * 0.5 + 15.0,
         2,
@@ -733,6 +871,7 @@ fn build_upper_panel(
         pane_width - border_width,
         pane_height,
         UPPER_ROW_HEIGHT,
+        event_color,
         2,
     ));
 
@@ -753,11 +892,13 @@ fn build_overlay_panel(
     pane_width: f32,
     pane_height: f32,
     song: Option<&SongData>,
-    progress: &score_data::ItlEventProgress,
+    progress: &score_data::EventProgress,
     page_idx: usize,
     z: i16,
 ) -> Actor {
     let border_width = 2.0;
+    let event_color = event_color(progress.kind);
+    let badge = event_badge(progress.kind);
     let header_y = -pane_height * 0.5 + 12.0;
     let header_bar_y = -pane_height * 0.5 + OVERLAY_ROW_HEIGHT * 0.5;
     let has_more_info = progress.overlay_pages.len() > 1;
@@ -767,7 +908,7 @@ fn build_overlay_panel(
         align(0.5, 0.5):
         xy(0.0, 0.0):
         setsize(pane_width + border_width, pane_height + border_width + 1.0):
-        diffuse(ITL_PINK[0], ITL_PINK[1], ITL_PINK[2], ITL_PINK[3]):
+        diffuse(event_color[0], event_color[1], event_color[2], event_color[3]):
         z(0)
     ));
     children.push(act!(quad:
@@ -781,7 +922,7 @@ fn build_overlay_panel(
         align(0.5, 0.5):
         xy(0.0, header_bar_y):
         setsize(pane_width + border_width, OVERLAY_ROW_HEIGHT + border_width + 1.0):
-        diffuse(ITL_PINK[0], ITL_PINK[1], ITL_PINK[2], ITL_PINK[3]):
+        diffuse(event_color[0], event_color[1], event_color[2], event_color[3]):
         z(2)
     ));
     children.push(act!(quad:
@@ -800,14 +941,14 @@ fn build_overlay_panel(
         z(3)
     ));
     children.push(build_header_text(
-        header_name(progress.name.as_str(), progress.is_doubles),
+        header_name(progress),
         pane_width,
         header_y,
         4,
     ));
     children.push(act!(text:
-        font(current_machine_font_key_for_text(FontRole::Header, "EX")):
-        settext("EX"):
+        font(current_machine_font_key_for_text(FontRole::Header, badge)):
+        settext(badge):
         align(0.5, 0.5):
         xy(pane_width * 0.5 - 18.0, header_y):
         zoom(0.5):
@@ -815,7 +956,7 @@ fn build_overlay_panel(
         z(4)
     ));
     match active_overlay_page(progress, page_idx) {
-        Some(score_data::ItlOverlayPage::Leaderboard(entries)) => {
+        Some(score_data::EventOverlayPage::Leaderboard(entries)) => {
             children.extend(build_overlay_leaderboard(
                 entries.as_slice(),
                 pane_width,
@@ -826,12 +967,13 @@ fn build_overlay_panel(
                 children.extend(build_overlay_banner_and_song(song, 4));
             }
         }
-        Some(score_data::ItlOverlayPage::Text(text)) => children.push(build_body_text(
+        Some(score_data::EventOverlayPage::Text(text)) => children.push(build_body_text(
             asset_manager,
             text.clone(),
             pane_width,
             pane_height,
             OVERLAY_ROW_HEIGHT,
+            event_color,
             4,
         )),
         None => children.push(build_body_text(
@@ -840,6 +982,7 @@ fn build_overlay_panel(
             pane_width,
             pane_height,
             OVERLAY_ROW_HEIGHT,
+            event_color,
             4,
         )),
     }
@@ -861,7 +1004,7 @@ fn build_overlay_panel(
             align(0.5, 0.5):
             xy(0.0, nav_y - 2.0):
             zoom(1.0):
-            diffuse(ITL_PINK[0], ITL_PINK[1], ITL_PINK[2], ITL_PINK[3]):
+            diffuse(event_color[0], event_color[1], event_color[2], event_color[3]):
             horizalign(center):
             z(4)
         ));
@@ -886,12 +1029,15 @@ fn build_overlay_panel(
     }
 }
 
-pub fn build_itl_progress_box(
+pub fn build_event_progress_boxes(
     asset_manager: &AssetManager,
     side: profile_data::PlayerSide,
     single_player: bool,
-    progress: &score_data::ItlEventProgress,
+    progress: &[score_data::EventProgress],
 ) -> Vec<Actor> {
+    if progress.is_empty() {
+        return Vec::new();
+    }
     let upper_origin_x = match side {
         profile_data::PlayerSide::P1 => screen_center_x() - 155.0,
         profile_data::PlayerSide::P2 => screen_center_x() + 155.0,
@@ -906,26 +1052,36 @@ pub fn build_itl_progress_box(
     } else {
         (upper_origin_x + 211.0 * dir, 274.0, 118.0, 180.0)
     };
-    vec![build_upper_panel(
-        asset_manager,
-        center_x,
-        center_y,
-        pane_width,
-        pane_height,
-        progress,
-        104,
-    )]
+    let stack_gap = 8.0;
+    let visible = progress.len().min(2);
+    let first_offset = if single_player {
+        0.0
+    } else {
+        -((visible - 1) as f32) * (pane_height + stack_gap) * 0.5
+    };
+    progress
+        .iter()
+        .take(visible)
+        .enumerate()
+        .map(|(idx, event)| {
+            build_upper_panel(
+                asset_manager,
+                center_x,
+                center_y + first_offset + idx as f32 * (pane_height + stack_gap),
+                pane_width,
+                pane_height,
+                event,
+                104,
+            )
+        })
+        .collect()
 }
 
-pub fn build_itl_event_overlay(
+pub fn build_event_overlay(
     asset_manager: &AssetManager,
     single_player: bool,
     song: Option<&SongData>,
-    panels: &[(
-        profile_data::PlayerSide,
-        &score_data::ItlEventProgress,
-        usize,
-    )],
+    panels: &[(profile_data::PlayerSide, &score_data::EventProgress, usize)],
 ) -> Vec<Actor> {
     if panels.is_empty() {
         return Vec::new();
