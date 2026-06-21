@@ -1,9 +1,13 @@
 # Migrating from ITGmania to DeadSync
 
-There is no automatic ITGmania → DeadSync profile import. The two games use
-different on-disk formats, and DeadSync does not read ITGmania's `Stats.xml`.
-This guide explains what carries over by hand, what doesn't, and exactly which
-files to copy or edit.
+DeadSync can **automatically import** an ITGmania + Simply Love local profile —
+including your player options and offline scores — from inside the game. This is
+the recommended path; see [Automatic import](#automatic-import-recommended)
+below.
+
+If you'd rather move individual pieces by hand (or the automatic importer can't
+find your ITGmania install), the rest of this guide explains what carries over
+manually, what doesn't, and exactly which files to copy or edit.
 
 Throughout this doc:
 
@@ -40,7 +44,65 @@ Throughout this doc:
 You can jump straight to DeadSync's profile root from inside the game via
 **Options → Folders → Profiles → Open**.
 
-## What you can actually migrate
+## Automatic import (recommended)
+
+DeadSync can read an ITGmania `LocalProfiles/<id>/` folder and create a brand
+new DeadSync profile from it in one step.
+
+1. In DeadSync, go to **Options → Manage Local Profiles**.
+2. Select **Import from ITGmania** and press **Start**.
+3. DeadSync scans for ITGmania profiles and lists the ones it finds. Pick the
+   profile you want and press **Start**.
+4. The import runs in the background; when it finishes, a summary shows how many
+   scores were imported and how many were skipped. The new profile is selected
+   in the list.
+
+### What it brings across
+
+- **Profile** — display name, weight, birth year, player initials, and your
+  avatar (`Avatar.png`).
+- **Online keys** — GrooveStats (API key, username, pad-player flag) and
+  ArrowCloud, written into the new profile's `groovestats.ini` /
+  `arrowcloud.ini`. Your online history can then be pulled via
+  **Options → Online Scoring → Score Import**.
+- **Player options** — your Simply Love per-profile mods (scroll speed and type,
+  mini, noteskin, note-field offsets, turn/reverse and other toggles) from
+  `Simply Love UserPrefs.ini`.
+- **Offline scores** — every high score in `Stats.xml` becomes a DeadSync local
+  play, matched to the chart in your library.
+
+### Where it looks
+
+The importer auto-detects ITGmania's per-user save directory:
+
+| OS      | Scanned location                                              |
+| ------- | ------------------------------------------------------------ |
+| Windows | `%APPDATA%\ITGmania\Save\LocalProfiles\`                      |
+| Linux   | `~/.itgmania/Save/LocalProfiles/`                            |
+| macOS   | `~/Library/Application Support/ITGmania/Save/LocalProfiles/`  |
+
+If your ITGmania uses a portable/custom save location that isn't found, fall
+back to the manual steps below (the importer always creates a *new* profile and
+never merges, so a manual top-up afterwards is safe).
+
+### Limitations
+
+- **Scores only attach to charts that exist in DeadSync's library.** ITGmania's
+  `Stats.xml` keys a chart by its song folder + steps type + difficulty, not by
+  hash, so DeadSync looks the chart up in your scanned songs to recover the
+  GrooveStats hash. Scan your packs *before* importing, and add your ITGmania
+  `Songs` folder (see [Songs folder](#7-songs-folder)) so more scores match.
+  Charts that aren't found are counted as skipped in the summary, not imported.
+- **EX / Hard-EX scores can't be recovered.** ITGmania doesn't store the FA+
+  (W0) split, so imported plays show the ITG percent and grade but start with an
+  EX score of 0.
+- **Holds and rolls aren't distinguished** in `Stats.xml`; all hold-type
+  judgments are folded together, and mine tallies are partial.
+
+## Manual migration
+
+If you prefer to move pieces by hand, the sections below cover each item
+individually.
 
 ### 1. Create a fresh DeadSync profile
 
@@ -136,8 +198,11 @@ Three ways to populate it:
   dropping the API key into the matching `.ini` (above) reconnects you to your
   existing online account. After that, **Options → Online Scoring →
   Score Import** can download your history.
-- **Offline scores** from ITGmania's `Stats.xml` have **no migration path**.
-  DeadSync does not read `Stats.xml`. Those scores stay in ITGmania.
+- **Offline scores** from ITGmania's `Stats.xml` are brought across by the
+  [automatic importer](#automatic-import-recommended) — there's no manual
+  equivalent, because each play has to be matched to a chart in your library to
+  recover its hash. If you migrate by hand, run the importer afterwards to pull
+  in your offline history (remember it creates a separate new profile).
 
 ### 7. Songs folder
 
@@ -166,6 +231,19 @@ Save and relaunch. DeadSync will scan those roots in addition to its default
 `songs/` folder.
 
 ## Quick checklist
+
+**Fastest path**
+
+- [ ] Scan your packs first — add your ITGmania `Songs` folder via
+      `AdditionalSongFoldersReadOnly` in `deadsync.ini`, or move packs into
+      `<data dir>/songs/`, so imported scores match.
+- [ ] **Options → Manage Local Profiles → Import from ITGmania**, pick your
+      profile, and let it copy the profile, options, avatar, online keys and
+      offline scores.
+- [ ] Run **Options → Online Scoring → Score Import** to pull down your online
+      history.
+
+**Manual path (if the importer can't find your install)**
 
 - [ ] Create a profile via **Options → Manage Local Profiles → Create**.
 - [ ] Drop ITGmania's `Avatar.png` into the new profile folder (rename to

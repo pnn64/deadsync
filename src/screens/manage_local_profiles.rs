@@ -2,7 +2,10 @@ use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::visual_styles;
+use crate::game::import::detect::{ItgProfileCandidate, detect_itg_local_profiles};
+use crate::game::import::run::{ImportSummary, import_itg_profile_dir};
 use crate::game::profile;
+use crate::screens::components::shared::loading_bar;
 use crate::screens::components::shared::screen_bar::{
     self, ScreenBarPosition, ScreenBarTitlePlacement,
 };
@@ -18,6 +21,8 @@ use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
 use std::sync::Arc;
+use std::sync::mpsc::{Receiver, TryRecvError};
+use std::thread;
 use std::time::{Duration, Instant};
 use winit::keyboard::KeyCode;
 
@@ -68,6 +73,7 @@ const PROFILE_MENU_BORDER: f32 = 3.0;
 #[derive(Clone, Debug)]
 enum RowKind {
     CreateNew,
+    ImportItg,
     Profile { id: String, display_name: String },
     Exit,
 }
@@ -147,6 +153,45 @@ struct DeleteConfirmState {
     error: Option<Arc<str>>,
 }
 
+/// Modal listing ITGmania profiles found on disk, for the user to pick one to
+/// import.
+struct ImportPickerState {
+    candidates: Vec<ItgProfileCandidate>,
+    selected: usize,
+}
+
+/// A running import on a worker thread. The screen polls `rx` each frame and
+/// keeps the latest per-song progress snapshot for the progress bar.
+struct ImportJob {
+    rx: Receiver<ImportMsg>,
+    /// Latest `(done, total, song label)` reported by the worker, if any.
+    progress: Option<(usize, usize, Arc<str>)>,
+}
+
+/// Messages sent from the import worker thread to the screen.
+enum ImportMsg {
+    /// Per-song progress: `done` of `total` songs processed, current song label.
+    Progress {
+        done: usize,
+        total: usize,
+        label: String,
+    },
+    /// The import finished (success or failure).
+    Done(ImportOutcome),
+}
+
+enum ImportOutcome {
+    Ok(Box<ImportSummary>),
+    Err(String),
+}
+
+/// A simple centered message modal: an import summary, "none found", or an
+/// error. Dismissed with Start/Back.
+struct ImportMessageState {
+    title: Arc<str>,
+    lines: Vec<String>,
+}
+
 pub struct State {
     pub selected: usize,
     prev_selected: usize,
@@ -159,6 +204,9 @@ pub struct State {
     name_entry: Option<NameEntryState>,
     profile_menu: Option<ProfileMenuState>,
     delete_confirm: Option<DeleteConfirmState>,
+    import_picker: Option<ImportPickerState>,
+    import_job: Option<ImportJob>,
+    import_message: Option<ImportMessageState>,
     menu_lr_chord: screen_input::MenuLrChordTracker,
     menu_lr_undo: i8,
 }
@@ -177,6 +225,9 @@ pub fn init() -> State {
         name_entry: None,
         profile_menu: None,
         delete_confirm: None,
+        import_picker: None,
+        import_job: None,
+        import_message: None,
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         menu_lr_undo: 0,
     }
@@ -187,6 +238,9 @@ fn build_rows() -> Vec<Row> {
     let mut out = Vec::with_capacity(profiles.len() + 2);
     out.push(Row {
         kind: RowKind::CreateNew,
+    });
+    out.push(Row {
+        kind: RowKind::ImportItg,
     });
     for p in profiles {
         out.push(Row {
@@ -313,6 +367,7 @@ fn update_name_entry_blink(state: &mut State, dt: f32) {
 pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
     update_hold_scroll(state);
     update_name_entry_blink(state, dt);
+    poll_import_job(state);
     None
 }
 
@@ -579,6 +634,210 @@ fn cancel_delete_confirm(state: &mut State) {
     reset_nav_hold(state);
 }
 
+/* ----------------------------- ITGmania import ---------------------------- */
+
+fn begin_import_picker(state: &mut State) {
+    reset_nav_hold(state);
+    audio::play_sfx("assets/sounds/start.ogg");
+    let candidates = detect_itg_local_profiles();
+    if candidates.is_empty() {
+        state.import_message = Some(ImportMessageState {
+            title: tr("Profiles", "ImportNoneFoundTitle"),
+            lines: vec![tr("Profiles", "ImportNoneFoundBody").to_string()],
+        });
+        return;
+    }
+    state.import_picker = Some(ImportPickerState {
+        candidates,
+        selected: 0,
+    });
+}
+
+fn cancel_import_picker(state: &mut State) {
+    state.import_picker = None;
+    reset_nav_hold(state);
+}
+
+fn move_import_picker_selected(state: &mut State, dir: NavDirection) {
+    let Some(picker) = state.import_picker.as_mut() else {
+        return;
+    };
+    let len = picker.candidates.len();
+    if len == 0 {
+        picker.selected = 0;
+        return;
+    }
+    picker.selected = match dir {
+        NavDirection::Up => {
+            if picker.selected == 0 {
+                len - 1
+            } else {
+                picker.selected - 1
+            }
+        }
+        NavDirection::Down => (picker.selected + 1) % len,
+    };
+}
+
+fn confirm_import_picker(state: &mut State) {
+    let Some(picker) = state.import_picker.take() else {
+        return;
+    };
+    let Some(candidate) = picker.candidates.get(picker.selected) else {
+        return;
+    };
+    let dir = candidate.dir.clone();
+    audio::play_sfx("assets/sounds/start.ogg");
+    reset_nav_hold(state);
+
+    let (tx, rx) = std::sync::mpsc::channel();
+    let progress_tx = tx.clone();
+    thread::spawn(move || {
+        let result = import_itg_profile_dir(&dir, |done, total, label| {
+            let _ = progress_tx.send(ImportMsg::Progress {
+                done,
+                total,
+                label: label.to_string(),
+            });
+        });
+        let outcome = match result {
+            Ok(summary) => ImportOutcome::Ok(Box::new(summary)),
+            Err(e) => ImportOutcome::Err(e.to_string()),
+        };
+        let _ = tx.send(ImportMsg::Done(outcome));
+    });
+    state.import_job = Some(ImportJob { rx, progress: None });
+}
+
+fn poll_import_job(state: &mut State) {
+    let Some(job) = state.import_job.as_mut() else {
+        return;
+    };
+    // Drain all pending messages this frame: update the progress snapshot, and
+    // finalize when the Done message arrives.
+    let mut outcome: Option<ImportOutcome> = None;
+    loop {
+        match job.rx.try_recv() {
+            Ok(ImportMsg::Progress { done, total, label }) => {
+                job.progress = Some((done, total, Arc::from(label.as_str())));
+            }
+            Ok(ImportMsg::Done(o)) => {
+                outcome = Some(o);
+                break;
+            }
+            Err(TryRecvError::Empty) => return,
+            Err(TryRecvError::Disconnected) => {
+                state.import_job = None;
+                state.import_message = Some(ImportMessageState {
+                    title: tr("Profiles", "ImportFailedTitle"),
+                    lines: vec![tr("Profiles", "ImportFailedBody").to_string()],
+                });
+                return;
+            }
+        }
+    }
+    let Some(outcome) = outcome else {
+        return;
+    };
+    state.import_job = None;
+    match outcome {
+        ImportOutcome::Ok(summary) => {
+            audio::play_sfx("assets/sounds/start.ogg");
+            refresh_rows(state);
+            select_profile_row(state, &summary.profile_id);
+            state.import_message = Some(import_summary_message(&summary));
+        }
+        ImportOutcome::Err(e) => {
+            state.import_message = Some(ImportMessageState {
+                title: tr("Profiles", "ImportFailedTitle"),
+                lines: vec![e],
+            });
+        }
+    }
+}
+
+fn select_profile_row(state: &mut State, profile_id: &str) {
+    if let Some(pos) = state
+        .rows
+        .iter()
+        .position(|r| matches!(&r.kind, RowKind::Profile { id, .. } if id == profile_id))
+    {
+        state.selected = pos;
+        state.prev_selected = pos;
+    }
+}
+
+fn import_summary_message(summary: &ImportSummary) -> ImportMessageState {
+    let mut lines = Vec::new();
+    lines.push(
+        tr_fmt(
+            "Profiles",
+            "ImportSummaryName",
+            &[("name", &summary.display_name)],
+        )
+        .to_string(),
+    );
+    lines.push(
+        tr_fmt(
+            "Profiles",
+            "ImportSummaryScores",
+            &[
+                ("imported", &summary.scores_imported.to_string()),
+                ("total", &summary.scores_total.to_string()),
+            ],
+        )
+        .to_string(),
+    );
+    let skipped =
+        summary.charts_song_not_found + summary.charts_chart_not_found + summary.scores_unmapped;
+    if skipped > 0 {
+        lines.push(
+            tr_fmt(
+                "Profiles",
+                "ImportSummarySkipped",
+                &[("skipped", &skipped.to_string())],
+            )
+            .to_string(),
+        );
+    }
+    lines.push(tr("Profiles", "ImportSummaryExNote").to_string());
+    ImportMessageState {
+        title: tr("Profiles", "ImportSummaryTitle"),
+        lines,
+    }
+}
+
+fn dismiss_import_message(state: &mut State) {
+    state.import_message = None;
+    reset_nav_hold(state);
+    audio::play_sfx("assets/sounds/start.ogg");
+}
+
+fn handle_import_picker_input(state: &mut State, ev: &InputEvent) {
+    if !ev.pressed {
+        return;
+    }
+    match ev.action {
+        VirtualAction::p1_back | VirtualAction::p2_back => cancel_import_picker(state),
+        VirtualAction::p1_up
+        | VirtualAction::p1_menu_up
+        | VirtualAction::p2_up
+        | VirtualAction::p2_menu_up => {
+            move_import_picker_selected(state, NavDirection::Up);
+            audio::play_sfx("assets/sounds/change.ogg");
+        }
+        VirtualAction::p1_down
+        | VirtualAction::p1_menu_down
+        | VirtualAction::p2_down
+        | VirtualAction::p2_menu_down => {
+            move_import_picker_selected(state, NavDirection::Down);
+            audio::play_sfx("assets/sounds/change.ogg");
+        }
+        VirtualAction::p1_start | VirtualAction::p2_start => confirm_import_picker(state),
+        _ => {}
+    }
+}
+
 #[inline(always)]
 fn activate_selected_row(state: &mut State) -> ScreenAction {
     let total = state.rows.len();
@@ -590,6 +849,10 @@ fn activate_selected_row(state: &mut State) -> ScreenAction {
     match start_row {
         RowKind::CreateNew => {
             begin_name_entry_create(state);
+            ScreenAction::None
+        }
+        RowKind::ImportItg => {
+            begin_import_picker(state);
             ScreenAction::None
         }
         RowKind::Exit => {
@@ -623,6 +886,24 @@ fn undo_profile_menu_move(state: &mut State, undo: i8) {
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+    if state.import_job.is_some() {
+        return ScreenAction::None;
+    }
+    if state.import_message.is_some() {
+        if ev.pressed
+            && matches!(
+                ev.action,
+                VirtualAction::p1_start
+                    | VirtualAction::p2_start
+                    | VirtualAction::p1_back
+                    | VirtualAction::p2_back
+            )
+        {
+            dismiss_import_message(state);
+        }
+        return ScreenAction::None;
+    }
+
     let three_key_action = screen_input::three_key_menu_action(&mut state.menu_lr_chord, ev);
     if screen_input::dedicated_three_key_nav_enabled() {
         match ev.action {
@@ -649,6 +930,21 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             _ => {}
         }
         if let Some((_, nav)) = three_key_action {
+            if state.import_picker.is_some() {
+                match nav {
+                    screen_input::ThreeKeyMenuAction::Prev => {
+                        move_import_picker_selected(state, NavDirection::Up);
+                        audio::play_sfx("assets/sounds/change.ogg");
+                    }
+                    screen_input::ThreeKeyMenuAction::Next => {
+                        move_import_picker_selected(state, NavDirection::Down);
+                        audio::play_sfx("assets/sounds/change.ogg");
+                    }
+                    screen_input::ThreeKeyMenuAction::Confirm => confirm_import_picker(state),
+                    screen_input::ThreeKeyMenuAction::Cancel => cancel_import_picker(state),
+                }
+                return ScreenAction::None;
+            }
             if state.name_entry.is_some() {
                 match nav {
                     screen_input::ThreeKeyMenuAction::Confirm => confirm_name_entry(state),
@@ -721,6 +1017,10 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 }
             };
         }
+    }
+    if state.import_picker.is_some() {
+        handle_import_picker_input(state, ev);
+        return ScreenAction::None;
     }
     if state.name_entry.is_some() {
         match ev.action {
@@ -925,6 +1225,13 @@ fn help_for_selected(state: &State, p1_id: Option<&str>, p2_id: Option<&str>) ->
             (title.to_string(), bullets)
         }
         RowKind::Exit => (tr("Profiles", "ReturnToOptions").to_string(), String::new()),
+        RowKind::ImportItg => {
+            let title = tr("Profiles", "ImportItgTitle");
+            let b1 = tr("Profiles", "ImportItgHelp1");
+            let b2 = tr("Profiles", "ImportItgHelp2");
+            let bullets = make_bullets(&[&b1, &b2]);
+            (title.to_string(), bullets)
+        }
         RowKind::Profile { id, display_name } => {
             let title =
                 tr_fmt("Profiles", "LocalProfileFormat", &[("name", display_name)]).to_string();
@@ -1189,6 +1496,230 @@ fn push_overlay_error(
     ));
 }
 
+const IMPORT_PICK_MAX_VISIBLE: usize = 8;
+
+fn push_import_picker_overlay(ui: &mut Vec<Actor>, state: &State) {
+    let Some(picker) = &state.import_picker else {
+        return;
+    };
+
+    let w = screen_width();
+    let h = screen_height();
+    let box_w = 760.0_f32.min(w * 0.92);
+    let header_h = 56.0_f32;
+    let item_h = 34.0_f32;
+    let footer_h = 44.0_f32;
+    let total = picker.candidates.len();
+    let visible = total.min(IMPORT_PICK_MAX_VISIBLE);
+    let box_h = header_h + (visible as f32) * item_h + footer_h;
+    let cx = w * 0.5;
+    let cy = h * 0.5;
+    let top = cy - box_h * 0.5;
+
+    push_overlay_backdrop(ui, w, h);
+    push_overlay_box(ui, cx, cy, box_w, box_h);
+
+    let title = tr("Profiles", "ImportPickTitle");
+    ui.push(act!(text:
+        align(0.5, 0.0):
+        xy(cx, top + 14.0):
+        font("miso"):
+        zoom(1.05):
+        maxwidth(box_w - 40.0):
+        settext(title):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(1002):
+        horizalign(center)
+    ));
+
+    let offset = if total <= IMPORT_PICK_MAX_VISIBLE {
+        0
+    } else {
+        picker
+            .selected
+            .saturating_sub(IMPORT_PICK_MAX_VISIBLE - 1)
+            .min(total - IMPORT_PICK_MAX_VISIBLE)
+    };
+    let accent = color::simply_love_rgba(state.active_color_index);
+    let list_left = cx - box_w * 0.5 + 24.0;
+    let list_w = box_w - 48.0;
+
+    for i in 0..visible {
+        let idx = offset + i;
+        let Some(cand) = picker.candidates.get(idx) else {
+            break;
+        };
+        let row_y = (i as f32).mul_add(item_h, top + header_h);
+        let selected = idx == picker.selected;
+        if selected {
+            ui.push(act!(quad:
+                align(0.0, 0.0):
+                xy(list_left - 8.0, row_y):
+                zoomto(list_w + 16.0, item_h):
+                diffuse(0.17, 0.23, 0.28, 0.95):
+                z(1002)
+            ));
+        }
+        let text_col = if selected {
+            [accent[0], accent[1], accent[2], 1.0]
+        } else {
+            [1.0, 1.0, 1.0, 1.0]
+        };
+        ui.push(act!(text:
+            align(0.0, 0.5):
+            xy(list_left, row_y + item_h * 0.5):
+            font("miso"):
+            zoom(0.95):
+            maxwidth(list_w):
+            settext(cand.display_name.clone()):
+            diffuse(text_col[0], text_col[1], text_col[2], text_col[3]):
+            z(1003):
+            horizalign(left)
+        ));
+    }
+
+    let prompt = tr("Profiles", "ImportPickPrompt");
+    ui.push(act!(text:
+        align(0.5, 1.0):
+        xy(cx, cy + box_h * 0.5 - 12.0):
+        font("miso"):
+        zoom(0.85):
+        maxwidth(box_w - 40.0):
+        settext(prompt):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(1003):
+        horizalign(center)
+    ));
+}
+
+fn push_import_progress_overlay(ui: &mut Vec<Actor>, state: &State) {
+    let Some(job) = state.import_job.as_ref() else {
+        return;
+    };
+    let w = screen_width();
+    let h = screen_height();
+    let box_w = 560.0_f32.min(w * 0.92);
+    let box_h = 150.0_f32;
+    let cx = w * 0.5;
+    let cy = h * 0.5;
+    let top = cy - box_h * 0.5;
+
+    push_overlay_backdrop(ui, w, h);
+    push_overlay_box(ui, cx, cy, box_w, box_h);
+
+    // Heading.
+    ui.push(act!(text:
+        align(0.5, 0.0):
+        xy(cx, top + 16.0):
+        font("miso"):
+        zoom(1.05):
+        maxwidth(box_w - 40.0):
+        settext(tr("Profiles", "ImportInProgress")):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(1002):
+        horizalign(center)
+    ));
+
+    // Until the first song is reported (file read + resolver build), there's no
+    // determinate progress yet — leave just the heading. Once songs start
+    // processing, show the progress bar + current song label.
+    if let Some((done, total, label)) = &job.progress {
+        let progress = if *total > 0 {
+            (*done as f32 / *total as f32).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        let accent = color::simply_love_rgba(state.active_color_index);
+        let bar_w = (box_w - 64.0).max(0.0);
+        ui.push(loading_bar::build(loading_bar::LoadingBarParams {
+            align: [0.5, 0.5],
+            offset: [cx, cy],
+            width: bar_w,
+            height: 22.0,
+            progress,
+            label: crate::screens::progress_count_text(*done, *total).into(),
+            fill_rgba: [accent[0], accent[1], accent[2], 1.0],
+            bg_rgba: [0.0, 0.0, 0.0, 1.0],
+            border_rgba: [1.0, 1.0, 1.0, 1.0],
+            text_rgba: [1.0, 1.0, 1.0, 1.0],
+            text_zoom: 0.8,
+            z: 1002,
+        }));
+
+        if !label.is_empty() {
+            ui.push(act!(text:
+                align(0.5, 0.5):
+                xy(cx, cy + 34.0):
+                font("miso"):
+                zoom(0.78):
+                maxwidth(box_w - 40.0):
+                settext(label.to_string()):
+                diffuse(0.8, 0.8, 0.8, 1.0):
+                z(1003):
+                horizalign(center)
+            ));
+        }
+    }
+}
+
+fn push_import_message_overlay(ui: &mut Vec<Actor>, state: &State) {
+    let Some(message) = &state.import_message else {
+        return;
+    };
+
+    let w = screen_width();
+    let h = screen_height();
+    let box_w = 760.0_f32.min(w * 0.92);
+    let line_h = 28.0_f32;
+    let header_h = 52.0_f32;
+    let footer_h = 44.0_f32;
+    let box_h = header_h + (message.lines.len().max(1) as f32) * line_h + footer_h;
+    let cx = w * 0.5;
+    let cy = h * 0.5;
+    let top = cy - box_h * 0.5;
+
+    push_overlay_backdrop(ui, w, h);
+    push_overlay_box(ui, cx, cy, box_w, box_h);
+
+    ui.push(act!(text:
+        align(0.5, 0.0):
+        xy(cx, top + 14.0):
+        font("miso"):
+        zoom(1.05):
+        maxwidth(box_w - 40.0):
+        settext(message.title.clone()):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(1002):
+        horizalign(center)
+    ));
+
+    for (i, line) in message.lines.iter().enumerate() {
+        let line_y = (i as f32).mul_add(line_h, top + header_h);
+        ui.push(act!(text:
+            align(0.5, 0.0):
+            xy(cx, line_y):
+            font("miso"):
+            zoom(0.9):
+            maxwidth(box_w - 48.0):
+            settext(line.clone()):
+            diffuse(1.0, 1.0, 1.0, 1.0):
+            z(1002):
+            horizalign(center)
+        ));
+    }
+
+    ui.push(act!(text:
+        align(0.5, 1.0):
+        xy(cx, cy + box_h * 0.5 - 12.0):
+        font("miso"):
+        zoom(0.85):
+        settext(tr("Profiles", "ImportMessageDismiss")):
+        diffuse(1.0, 1.0, 1.0, 1.0):
+        z(1002):
+        horizalign(center)
+    ));
+}
+
 fn push_list_chrome(
     ui: &mut Vec<Actor>,
     col_active_bg: [f32; 4],
@@ -1228,6 +1759,7 @@ struct RowColors {
 fn row_label(kind: &RowKind) -> Arc<str> {
     match kind {
         RowKind::CreateNew => tr("Profiles", "CreateProfileButton"),
+        RowKind::ImportItg => tr("Profiles", "ImportItgButton"),
         RowKind::Exit => tr("Common", "Exit"),
         RowKind::Profile { display_name, .. } => Arc::from(display_name.as_str()),
     }
@@ -1549,6 +2081,9 @@ pub fn push_actors(
     push_profile_menu_overlay(actors, state, s, list_x, list_y);
     push_name_entry_overlay(actors, state);
     push_delete_confirm_overlay(actors, state);
+    push_import_picker_overlay(actors, state);
+    push_import_progress_overlay(actors, state);
+    push_import_message_overlay(actors, state);
 
     for actor in &mut actors[ui_start..] {
         actor.mul_alpha(alpha_multiplier);

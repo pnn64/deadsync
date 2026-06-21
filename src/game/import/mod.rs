@@ -7,9 +7,14 @@
 //! Submodules:
 //! * [`xml`] — a tiny dependency-free XML reader for `Stats.xml`.
 //! * [`itg`] — readers that turn the ITGmania files into plain structs.
+//! * [`detect`] — auto-discovery of ITGmania local profiles on disk.
 
+pub mod detect;
 pub mod itg;
 pub mod options;
 pub mod resolver;
 pub mod run;
 pub mod xml;
+
+#[cfg(test)]
+mod pipeline_tests;
