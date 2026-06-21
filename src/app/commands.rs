@@ -167,17 +167,22 @@ impl App {
     pub(super) fn apply_banner(&mut self, path_opt: Option<PathBuf>) {
         if let Some(backend) = self.backend.as_mut() {
             if let Some(path) = path_opt {
-                let key =
+                if let Some(key) =
                     self.dynamic_media
-                        .set_banner(&mut self.asset_manager, backend, Some(path));
-                match self.state.screens.current_screen {
-                    CurrentScreen::SelectCourse => {
-                        self.state.screens.select_course_state.current_banner_key = key;
-                    }
-                    _ => {
-                        self.state.screens.select_music_state.current_banner_key = key;
+                        .set_banner(&mut self.asset_manager, backend, Some(path))
+                {
+                    match self.state.screens.current_screen {
+                        CurrentScreen::SelectCourse => {
+                            self.state.screens.select_course_state.current_banner_key = key;
+                        }
+                        _ => {
+                            self.state.screens.select_music_state.current_banner_key = key;
+                        }
                     }
                 }
+                // Otherwise the banner is still decoding/uploading asynchronously;
+                // keep showing the previous banner key until it becomes ready
+                // (handled per-frame by `sync_active_banner_image`).
             } else {
                 self.dynamic_media
                     .destroy_banner(&mut self.asset_manager, backend);

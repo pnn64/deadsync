@@ -10672,7 +10672,7 @@ fn push_folder_stats_overlay(
     ));
     if let Some(path) = banner_path.as_deref() {
         let key = media_path_key_string(path);
-        if asset_manager.has_texture_key(&key) {
+        if asset_manager.has_uploaded_texture_key(&key) {
             children.push(act!(sprite(key):
                 align(0.5, 0.5):
                 xy(cx, cy):

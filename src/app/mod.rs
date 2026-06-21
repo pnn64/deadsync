@@ -5177,6 +5177,7 @@ impl App {
         } else {
             Vec::new()
         };
+        let mut selected_banner_key_update: Option<String> = None;
         if let Some(backend) = &mut self.backend {
             let upload_started = Instant::now();
             let gameplay_time = match current_screen {
@@ -5214,6 +5215,9 @@ impl App {
                         backend,
                         desired_path,
                     );
+                    selected_banner_key_update = self
+                        .dynamic_media
+                        .sync_active_banner_image(&mut self.asset_manager, backend);
                 }
                 CurrentScreen::SelectCourse => {
                     let state = &screens.select_course_state;
@@ -5238,6 +5242,9 @@ impl App {
                         backend,
                         desired_path,
                     );
+                    selected_banner_key_update = self
+                        .dynamic_media
+                        .sync_active_banner_image(&mut self.asset_manager, backend);
                 }
                 CurrentScreen::Evaluation => {
                     let desired_path = if show_select_music_video_banners {
@@ -5285,6 +5292,17 @@ impl App {
                 },
             );
             upload_us = elapsed_us_since(upload_started);
+        }
+        if let Some(key) = selected_banner_key_update {
+            match current_screen {
+                CurrentScreen::SelectCourse => {
+                    self.state.screens.select_course_state.current_banner_key = key;
+                }
+                CurrentScreen::SelectMusic => {
+                    self.state.screens.select_music_state.current_banner_key = key;
+                }
+                _ => {}
+            }
         }
         let fonts = self.asset_manager.fonts();
         let build_screen_started = Instant::now();

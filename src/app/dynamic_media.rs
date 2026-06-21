@@ -34,6 +34,29 @@ enum BannerVideoPrepResult {
     Failed { path: PathBuf, msg: String },
 }
 
+struct PreparedBannerImage {
+    kind: BannerImageKind,
+    key: String,
+    path: PathBuf,
+    rgba: RgbaImage,
+}
+
+enum BannerImagePrepResult {
+    Ready(PreparedBannerImage),
+    Failed {
+        kind: BannerImageKind,
+        path: PathBuf,
+        msg: String,
+    },
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum BannerImageKind {
+    Selected,
+    WheelItem,
+    PackBanner,
+}
+
 struct PreparedGameplayBackground {
     key: String,
     path: PathBuf,
@@ -112,6 +135,13 @@ pub(crate) struct DynamicMedia {
     pending_banner_video_preps: HashSet<PathBuf>,
     banner_video_prep_tx: mpsc::Sender<BannerVideoPrepResult>,
     banner_video_prep_rx: mpsc::Receiver<BannerVideoPrepResult>,
+    desired_banner_path: Option<PathBuf>,
+    desired_pack_banner_path: Option<PathBuf>,
+    desired_wheel_item_paths: Vec<PathBuf>,
+    pending_banner_image_preps: HashSet<PathBuf>,
+    retained_image_upload_keys: HashSet<String>,
+    banner_image_prep_tx: mpsc::Sender<BannerImagePrepResult>,
+    banner_image_prep_rx: mpsc::Receiver<BannerImagePrepResult>,
     current_dynamic_cdtitle: Option<(String, PathBuf)>,
     current_dynamic_pack_banner: Option<(String, PathBuf)>,
     dynamic_pack_banner_keys: std::collections::HashSet<String>,
@@ -131,6 +161,7 @@ pub(crate) struct DynamicMedia {
 impl DynamicMedia {
     pub(crate) fn new() -> Self {
         let (banner_video_prep_tx, banner_video_prep_rx) = mpsc::channel();
+        let (banner_image_prep_tx, banner_image_prep_rx) = mpsc::channel();
         let (gameplay_background_prep_tx, gameplay_background_prep_rx) = mpsc::channel();
         Self {
             current_dynamic_banner: None,
@@ -138,6 +169,13 @@ impl DynamicMedia {
             pending_banner_video_preps: HashSet::new(),
             banner_video_prep_tx,
             banner_video_prep_rx,
+            desired_banner_path: None,
+            desired_pack_banner_path: None,
+            desired_wheel_item_paths: Vec::new(),
+            pending_banner_image_preps: HashSet::new(),
+            retained_image_upload_keys: HashSet::new(),
+            banner_image_prep_tx,
+            banner_image_prep_rx,
             current_dynamic_cdtitle: None,
             current_dynamic_pack_banner: None,
             dynamic_pack_banner_keys: std::collections::HashSet::new(),
@@ -223,6 +261,7 @@ impl DynamicMedia {
     }
 
     pub(crate) fn destroy_banner(&mut self, assets: &mut AssetManager, backend: &mut Backend) {
+        self.desired_banner_path = None;
         self.destroy_current_dynamic_banner(assets, backend);
     }
 
@@ -280,57 +319,33 @@ impl DynamicMedia {
         backend: &mut Backend,
         path_opt: Option<PathBuf>,
     ) {
-        let banner_cache_opts = media_cache::banner_cache_options();
-        if let Some(path) = path_opt {
-            if self
-                .current_dynamic_pack_banner
-                .as_ref()
-                .is_some_and(|(key, p)| p == &path && assets.has_texture_key(key))
-            {
-                return;
-            }
+        let Some(path) = path_opt else {
+            self.desired_pack_banner_path = None;
+            self.clear_current_pack_banner(assets, backend);
+            return;
+        };
 
-            let key = path.to_string_lossy().into_owned();
-            if banner_cache_opts.enabled
-                && self.dynamic_pack_banner_keys.contains(&key)
-                && assets.has_texture_key(&key)
-            {
-                self.current_dynamic_pack_banner = Some((key, path));
-                return;
-            }
+        let key = path.to_string_lossy().into_owned();
+        self.desired_pack_banner_path = Some(path.clone());
 
-            if banner_cache_opts.enabled {
-                self.current_dynamic_pack_banner = None;
-            } else if let Some((old_key, _)) = self.current_dynamic_pack_banner.take() {
-                self.dynamic_pack_banner_keys.remove(&old_key);
-                self.release_texture_key(assets, backend, old_key);
-            }
+        if self
+            .current_dynamic_pack_banner
+            .as_ref()
+            .is_some_and(|(owned, p)| p == &path && assets.has_uploaded_texture_key(owned))
+        {
+            return;
+        }
 
-            let rgba = match media_cache::load_banner_source_rgba(&path) {
-                Ok(rgba) => rgba,
-                Err(e) => {
-                    warn!(
-                        "Failed to load pack banner '{}': {e}. Skipping.",
-                        path.display()
-                    );
-                    return;
-                }
-            };
+        if assets.has_uploaded_texture_key(&key) {
+            self.adopt_pack_banner_key(assets, backend, key, path);
+        }
+        // Otherwise the decode + upload happens asynchronously in
+        // `sync_active_banner_image`; the previous pack banner keeps showing.
+    }
 
-            match backend.create_texture(&rgba, SamplerDesc::default()) {
-                Ok(texture) => {
-                    assets.insert_texture(key.clone(), texture, rgba.width(), rgba.height());
-                    register_texture_dims(&key, rgba.width(), rgba.height());
-                    if banner_cache_opts.enabled {
-                        self.dynamic_pack_banner_keys.insert(key.clone());
-                    }
-                    self.current_dynamic_pack_banner = Some((key, path));
-                }
-                Err(e) => {
-                    warn!("Failed to create GPU texture for pack banner {path:?}: {e}. Skipping.");
-                }
-            }
-        } else if banner_cache_opts.enabled {
+    fn clear_current_pack_banner(&mut self, assets: &mut AssetManager, backend: &mut Backend) {
+        if media_cache::banner_cache_options().enabled {
+            // Keep the cached texture resident; just drop the current selection.
             self.current_dynamic_pack_banner = None;
         } else if let Some((key, _)) = self.current_dynamic_pack_banner.take() {
             self.dynamic_pack_banner_keys.remove(&key);
@@ -344,15 +359,17 @@ impl DynamicMedia {
         backend: &mut Backend,
         paths: Vec<PathBuf>,
     ) {
-        let mut desired = HashSet::with_capacity(paths.len());
+        let mut desired_keys = HashSet::with_capacity(paths.len());
+        let mut desired_paths = Vec::with_capacity(paths.len());
         for path in paths {
             let key = path.to_string_lossy().into_owned();
-            if desired.insert(key) {
-                media_cache::ensure_banner_texture(assets, backend, &path);
+            if desired_keys.insert(key) {
+                desired_paths.push(path);
             }
         }
+        self.desired_wheel_item_paths = desired_paths;
 
-        let old = std::mem::replace(&mut self.wheel_item_background_keys, desired);
+        let old = std::mem::replace(&mut self.wheel_item_background_keys, desired_keys);
         let mut release_keys = Vec::with_capacity(old.len());
         for key in old {
             if !self.wheel_item_background_keys.contains(&key) {
@@ -362,63 +379,250 @@ impl DynamicMedia {
         for key in dynamic::dedupe_dynamic_keys(release_keys) {
             self.release_texture_key(assets, backend, key);
         }
+        // Decoding + GPU upload of the newly-visible backgrounds happens
+        // asynchronously in `sync_active_banner_image`.
     }
 
+    /// Registers the desired selected-banner path and adopts the texture
+    /// immediately if it is already on the GPU (cache hit). Decoding and GPU
+    /// upload otherwise happen asynchronously via `sync_active_banner_image`, so
+    /// this never blocks the main thread on a decode. Returns the key to display
+    /// right now: `Some(key)` only when an uploaded texture is available to adopt,
+    /// otherwise `None` (caller keeps showing the previous banner / fallback).
     pub(crate) fn set_banner(
         &mut self,
         assets: &mut AssetManager,
         backend: &mut Backend,
         path_opt: Option<PathBuf>,
-    ) -> String {
-        const FALLBACK_KEY: &str = "banner1.png";
+    ) -> Option<String> {
+        let Some(path) = path_opt else {
+            self.desired_banner_path = None;
+            return None;
+        };
 
-        if let Some(path) = path_opt {
+        let key = path.to_string_lossy().into_owned();
+        self.desired_banner_path = Some(path.clone());
+
+        if let Some(current) = self.current_dynamic_banner.as_ref()
+            && current.path == path
+            && assets.has_uploaded_texture_key(&current.key)
+        {
+            return Some(current.key.clone());
+        }
+
+        if assets.has_uploaded_texture_key(&key) {
+            self.adopt_banner_key(assets, backend, key.clone(), path);
+            return Some(key);
+        }
+
+        None
+    }
+
+    fn adopt_banner_key(
+        &mut self,
+        assets: &mut AssetManager,
+        backend: &mut Backend,
+        key: String,
+        path: PathBuf,
+    ) {
+        if let Some(old) = self.current_dynamic_banner.take()
+            && old.key != key
+        {
+            self.release_texture_key(assets, backend, old.key);
+        }
+        self.current_dynamic_banner = Some(DynamicBannerState { key, path });
+    }
+
+    /// Per-frame pump for the asynchronous still-image banner subsystem. Drains
+    /// finished decodes (queueing GPU uploads through the deferred queue),
+    /// discards results whose path is no longer desired (coalescing rapid
+    /// selection changes), and spawns at most one decode for the latest desired
+    /// selection. Returns `Some(key)` when the selected banner's texture is ready
+    /// so the caller can swap `current_banner_key`.
+    pub(crate) fn sync_active_banner_image(
+        &mut self,
+        assets: &mut AssetManager,
+        backend: &mut Backend,
+    ) -> Option<String> {
+        self.drain_banner_image_preps(assets);
+        self.release_orphan_banner_uploads(assets, backend);
+
+        // Selected banner: spawn/adopt for the latest desired path.
+        let mut ready_key = None;
+        if let Some(path) = self.desired_banner_path.clone() {
             let key = path.to_string_lossy().into_owned();
-            if let Some(current) = self.current_dynamic_banner.as_ref()
-                && current.path == path
-                && assets.has_texture_key(&current.key)
+            if assets.has_uploaded_texture_key(&key) {
+                if !self
+                    .current_dynamic_banner
+                    .as_ref()
+                    .is_some_and(|state| state.key == key)
+                {
+                    self.adopt_banner_key(assets, backend, key.clone(), path);
+                }
+                ready_key = Some(key);
+            } else if !assets.has_pending_texture_upload(&key)
+                && !self.pending_banner_image_preps.contains(&path)
             {
-                return current.key.clone();
+                self.spawn_banner_image_prep(BannerImageKind::Selected, &path);
             }
-            self.destroy_current_dynamic_banner(assets, backend);
-            let rgba = match media_cache::load_banner_source_rgba(&path) {
-                Ok(rgba) => rgba,
-                Err(e) => {
-                    warn!(
-                        "Failed to load banner '{}': {e}. Using fallback.",
-                        path.display()
-                    );
-                    return FALLBACK_KEY.to_string();
-                }
-            };
+        }
 
-            match backend.create_texture(&rgba, SamplerDesc::default()) {
-                Ok(texture) => {
-                    assets.set_texture_for_key(
-                        backend,
-                        key.clone(),
-                        texture,
-                        rgba.width(),
-                        rgba.height(),
-                    );
-                    register_texture_dims(&key, rgba.width(), rgba.height());
-                    self.current_dynamic_banner = Some(DynamicBannerState {
-                        key: key.clone(),
-                        path,
-                    });
-                    key
+        // Pack banner: spawn for the latest desired pack path when not ready.
+        if let Some(path) = self.desired_pack_banner_path.clone() {
+            let key = path.to_string_lossy().into_owned();
+            if assets.has_uploaded_texture_key(&key) {
+                if !self
+                    .current_dynamic_pack_banner
+                    .as_ref()
+                    .is_some_and(|(owned, _)| owned == &key)
+                {
+                    self.adopt_pack_banner_key(assets, backend, key, path);
                 }
-                Err(e) => {
-                    warn!(
-                        "Failed to create GPU texture for banner '{}': {e}. Using fallback.",
-                        key
-                    );
-                    FALLBACK_KEY.to_string()
+            } else if !assets.has_pending_texture_upload(&key)
+                && !self.pending_banner_image_preps.contains(&path)
+            {
+                self.spawn_banner_image_prep(BannerImageKind::PackBanner, &path);
+            }
+        }
+
+        // Wheel-item backgrounds: spawn for any desired path not yet loading.
+        for path in self.desired_wheel_item_paths.clone() {
+            let key = path.to_string_lossy().into_owned();
+            if assets.has_uploaded_texture_key(&key)
+                || assets.has_pending_texture_upload(&key)
+                || self.pending_banner_image_preps.contains(&path)
+            {
+                continue;
+            }
+            self.spawn_banner_image_prep(BannerImageKind::WheelItem, &path);
+        }
+
+        ready_key
+    }
+
+    fn adopt_pack_banner_key(
+        &mut self,
+        assets: &mut AssetManager,
+        backend: &mut Backend,
+        key: String,
+        path: PathBuf,
+    ) {
+        let banner_cache_opts = media_cache::banner_cache_options();
+        if let Some((old_key, _)) = self.current_dynamic_pack_banner.take()
+            && old_key != key
+            && !banner_cache_opts.enabled
+        {
+            // With the cache enabled the previous texture stays resident; only
+            // release it when caching is off (matches the legacy behavior).
+            self.dynamic_pack_banner_keys.remove(&old_key);
+            self.release_texture_key(assets, backend, old_key);
+        }
+        if banner_cache_opts.enabled {
+            self.dynamic_pack_banner_keys.insert(key.clone());
+        }
+        self.current_dynamic_pack_banner = Some((key, path));
+    }
+
+    fn spawn_banner_image_prep(&mut self, kind: BannerImageKind, path: &Path) {
+        if !self.pending_banner_image_preps.insert(path.to_path_buf()) {
+            return;
+        }
+        let key = path.to_string_lossy().into_owned();
+        let path = path.to_path_buf();
+        let tx = self.banner_image_prep_tx.clone();
+        thread::spawn(move || {
+            let result = match media_cache::load_banner_source_rgba(&path) {
+                Ok(rgba) => BannerImagePrepResult::Ready(PreparedBannerImage {
+                    kind,
+                    key,
+                    path,
+                    rgba,
+                }),
+                Err(msg) => BannerImagePrepResult::Failed { kind, path, msg },
+            };
+            let _ = tx.send(result);
+        });
+    }
+
+    /// Releases textures that were uploaded for a selected/pack banner but never
+    /// adopted because the selection moved on before the upload landed. Keys that
+    /// are still desired (in flight) or still owned/displayed (guarded by
+    /// `texture_key_in_use`) are kept; everything else is released so handles
+    /// cannot leak during fast scrolling.
+    fn release_orphan_banner_uploads(&mut self, assets: &mut AssetManager, backend: &mut Backend) {
+        if self.retained_image_upload_keys.is_empty() {
+            return;
+        }
+        let desired_selected = self
+            .desired_banner_path
+            .as_ref()
+            .map(|p| p.to_string_lossy().into_owned());
+        let desired_pack = self
+            .desired_pack_banner_path
+            .as_ref()
+            .map(|p| p.to_string_lossy().into_owned());
+        let candidates: Vec<String> = self
+            .retained_image_upload_keys
+            .iter()
+            .filter(|key| {
+                Some(key.as_str()) != desired_selected.as_deref()
+                    && Some(key.as_str()) != desired_pack.as_deref()
+            })
+            .cloned()
+            .collect();
+        for key in candidates {
+            if self.texture_key_in_use(&key) {
+                // Still the displayed banner; it will be released when replaced.
+                continue;
+            }
+            self.retained_image_upload_keys.remove(&key);
+            self.release_texture_key(assets, backend, key);
+        }
+    }
+
+    fn drain_banner_image_preps(&mut self, assets: &mut AssetManager) {
+        while let Ok(result) = self.banner_image_prep_rx.try_recv() {
+            match result {
+                BannerImagePrepResult::Ready(prepared) => {
+                    self.pending_banner_image_preps.remove(&prepared.path);
+                    if !self.banner_image_still_desired(prepared.kind, &prepared.path) {
+                        // Stale: selection moved on while this was decoding. Drop it.
+                        continue;
+                    }
+                    // Hand the decoded image to the GPU through the deferred upload
+                    // queue. Dims are registered at queue time so `cover_uv` crops
+                    // stay correct, and the texture is not adopted/displayed until
+                    // the upload actually lands (gated on `has_uploaded_texture_key`
+                    // in `sync_active_banner_image`), avoiding any blank frame.
+                    //
+                    // Track selected/pack uploads so a banner that finishes
+                    // uploading but gets scrolled past before it is adopted can
+                    // still be released (see `release_orphan_banner_uploads`).
+                    // Wheel-item keys are owned by `wheel_item_background_keys` and
+                    // released by `set_wheel_item_backgrounds` instead.
+                    if matches!(
+                        prepared.kind,
+                        BannerImageKind::Selected | BannerImageKind::PackBanner
+                    ) {
+                        self.retained_image_upload_keys.insert(prepared.key.clone());
+                    }
+                    assets.queue_texture_upload(prepared.key, prepared.rgba);
+                }
+                BannerImagePrepResult::Failed { kind, path, msg } => {
+                    self.pending_banner_image_preps.remove(&path);
+                    if self.banner_image_still_desired(kind, &path) {
+                        warn!("Failed to load banner image '{}': {msg}", path.display());
+                    }
                 }
             }
-        } else {
-            self.destroy_current_dynamic_banner(assets, backend);
-            FALLBACK_KEY.to_string()
+        }
+    }
+
+    fn banner_image_still_desired(&self, kind: BannerImageKind, path: &Path) -> bool {
+        match kind {
+            BannerImageKind::Selected => self.desired_banner_path.as_deref() == Some(path),
+            BannerImageKind::PackBanner => self.desired_pack_banner_path.as_deref() == Some(path),
+            BannerImageKind::WheelItem => self.desired_wheel_item_paths.iter().any(|p| p == path),
         }
     }
 
@@ -1460,5 +1664,95 @@ mod tests {
 
         assert!(!media.pending_banner_video_preps.contains(Path::new(&key)));
         assert!(!media.active_banner_videos.contains_key(&key));
+    }
+
+    fn ready_banner_image(kind: BannerImageKind, key: &str) -> BannerImagePrepResult {
+        BannerImagePrepResult::Ready(PreparedBannerImage {
+            kind,
+            key: key.to_string(),
+            path: PathBuf::from(key),
+            rgba: image::RgbaImage::new(2, 2),
+        })
+    }
+
+    #[test]
+    fn banner_image_prep_queues_upload_for_desired_selection() {
+        let mut assets = AssetManager::new();
+        let mut media = DynamicMedia::new();
+        let key = "banner.png".to_string();
+        media.desired_banner_path = Some(PathBuf::from(&key));
+        media.pending_banner_image_preps.insert(PathBuf::from(&key));
+        media
+            .banner_image_prep_tx
+            .send(ready_banner_image(BannerImageKind::Selected, &key))
+            .unwrap();
+
+        media.drain_banner_image_preps(&mut assets);
+
+        assert!(!media.pending_banner_image_preps.contains(Path::new(&key)));
+        assert!(assets.has_pending_texture_upload(&key));
+        assert!(media.retained_image_upload_keys.contains(&key));
+    }
+
+    #[test]
+    fn banner_image_prep_discarded_when_no_longer_desired() {
+        let mut assets = AssetManager::new();
+        let mut media = DynamicMedia::new();
+        let stale = "old.png".to_string();
+        media.desired_banner_path = Some(PathBuf::from("new.png"));
+        media
+            .pending_banner_image_preps
+            .insert(PathBuf::from(&stale));
+        media
+            .banner_image_prep_tx
+            .send(ready_banner_image(BannerImageKind::Selected, &stale))
+            .unwrap();
+
+        media.drain_banner_image_preps(&mut assets);
+
+        assert!(!media.pending_banner_image_preps.contains(Path::new(&stale)));
+        assert!(!assets.has_pending_texture_upload(&stale));
+        assert!(!assets.has_texture_key(&stale));
+        assert!(!media.retained_image_upload_keys.contains(&stale));
+    }
+
+    #[test]
+    fn wheel_item_prep_queues_upload_for_visible_path() {
+        let mut assets = AssetManager::new();
+        let mut media = DynamicMedia::new();
+        let key = "wheel-bg.png".to_string();
+        media.desired_wheel_item_paths = vec![PathBuf::from(&key)];
+        media.pending_banner_image_preps.insert(PathBuf::from(&key));
+        media
+            .banner_image_prep_tx
+            .send(ready_banner_image(BannerImageKind::WheelItem, &key))
+            .unwrap();
+
+        media.drain_banner_image_preps(&mut assets);
+
+        assert!(!media.pending_banner_image_preps.contains(Path::new(&key)));
+        assert!(assets.has_pending_texture_upload(&key));
+    }
+
+    #[test]
+    fn failed_banner_image_prep_clears_pending_key() {
+        let mut assets = AssetManager::new();
+        let mut media = DynamicMedia::new();
+        let key = "broken.png".to_string();
+        media.desired_pack_banner_path = Some(PathBuf::from(&key));
+        media.pending_banner_image_preps.insert(PathBuf::from(&key));
+        media
+            .banner_image_prep_tx
+            .send(BannerImagePrepResult::Failed {
+                kind: BannerImageKind::PackBanner,
+                path: PathBuf::from(&key),
+                msg: "failed".to_string(),
+            })
+            .unwrap();
+
+        media.drain_banner_image_preps(&mut assets);
+
+        assert!(!media.pending_banner_image_preps.contains(Path::new(&key)));
+        assert!(!assets.has_pending_texture_upload(&key));
     }
 }
