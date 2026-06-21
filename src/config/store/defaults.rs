@@ -40,6 +40,7 @@ fn push_default_options(content: &mut String, default: &Config) {
     );
     push_bool(content, "BannerCache", default.banner_cache);
     push_bool(content, "CacheSongs", default.cachesongs);
+    push_line(content, "NeverCacheList", "");
     push_bool(content, "CDTitleCache", default.cdtitle_cache);
     push_bool(content, "Center1Player", default.center_1player_notefield);
     push_line(

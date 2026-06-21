@@ -14,6 +14,12 @@ pub(super) static MACHINE_DEFAULT_NOTESKIN: std::sync::LazyLock<Mutex<String>> =
     std::sync::LazyLock::new(|| Mutex::new(DEFAULT_MACHINE_NOTESKIN.to_string()));
 pub(super) static ADDITIONAL_SONG_FOLDERS: std::sync::LazyLock<Mutex<Vec<AdditionalSongFolder>>> =
     std::sync::LazyLock::new(|| Mutex::new(Vec::new()));
+/// Pack group (song-folder) names that must never be cached to disk. Stored
+/// outside the `Copy` `Config` because the entries are owned strings. Mirrors
+/// ITGMania's `NeverCacheList` preference — useful for WIP packs whose files
+/// change frequently and would otherwise serve stale cached data.
+pub(super) static NEVER_CACHE_LIST: std::sync::LazyLock<Mutex<Vec<String>>> =
+    std::sync::LazyLock::new(|| Mutex::new(Vec::new()));
 /// SMX pad → player serial assignment (slot 0 = P1, slot 1 = P2). Stored outside
 /// the `Copy` `Config` because serials are owned strings. `None` = follow jumper.
 pub(super) static SMX_P1_SERIAL: std::sync::LazyLock<Mutex<Option<String>>> =
@@ -236,6 +242,27 @@ pub fn default_profiles() -> (Option<String>, Option<String>) {
 
 pub fn additional_song_folder_roots() -> Vec<AdditionalSongFolder> {
     ADDITIONAL_SONG_FOLDERS.lock().unwrap().clone()
+}
+
+/// The configured `NeverCacheList` pack group names.
+pub fn never_cache_list() -> Vec<String> {
+    NEVER_CACHE_LIST.lock().unwrap().clone()
+}
+
+/// Returns true when the given pack group (song-folder) name is listed in
+/// `NeverCacheList` and therefore must skip the on-disk song cache entirely
+/// (both reads and writes). Matching is case-insensitive and ignores
+/// surrounding whitespace.
+pub fn group_is_never_cached(group: &str) -> bool {
+    let group = group.trim();
+    if group.is_empty() {
+        return false;
+    }
+    NEVER_CACHE_LIST
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|entry| entry.eq_ignore_ascii_case(group))
 }
 
 pub fn song_path_is_writable(path: &Path) -> bool {

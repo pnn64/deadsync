@@ -234,6 +234,16 @@ where
         let pack_idx = loaded_packs.len();
         loaded_packs.push(current_pack);
 
+        // Honor NeverCacheList: WIP packs listed here always re-parse from disk
+        // and never read or write the on-disk song cache.
+        let pack_never_cache = crate::config::group_is_never_cached(&pack.group_name)
+            || crate::config::group_is_never_cached(&pack_display);
+        if pack_never_cache {
+            debug!("Skipping song cache for pack '{pack_display}' (NeverCacheList).");
+        }
+        let pack_fastload = fastload && !pack_never_cache;
+        let pack_cachesongs = cachesongs && !pack_never_cache;
+
         for song in pack.songs {
             let simfile_path = song.simfile;
             let song_display = song_progress_name(&simfile_path);
@@ -266,8 +276,8 @@ where
                 let Some(tx) = tx_opt.as_ref() else {
                     match process_song(
                         simfile_path.clone(),
-                        fastload,
-                        cachesongs,
+                        pack_fastload,
+                        pack_cachesongs,
                         global_offset_seconds,
                     ) {
                         Ok((song_data, is_hit)) => {
@@ -300,8 +310,8 @@ where
                     let out = catch_unwind(AssertUnwindSafe(|| {
                         process_song(
                             simfile_path_owned.clone(),
-                            fastload,
-                            cachesongs,
+                            pack_fastload,
+                            pack_cachesongs,
                             global_offset_seconds,
                         )
                         .map(|(data, is_hit)| (Arc::new(data), is_hit))
@@ -313,8 +323,8 @@ where
             } else {
                 match process_song(
                     simfile_path.clone(),
-                    fastload,
-                    cachesongs,
+                    pack_fastload,
+                    pack_cachesongs,
                     global_offset_seconds,
                 ) {
                     Ok((song_data, is_hit)) => {

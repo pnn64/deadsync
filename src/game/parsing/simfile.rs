@@ -22,6 +22,20 @@ mod scan;
 pub(crate) use scan::collect_song_scan_roots;
 pub use scan::{reload_song_dirs_with_progress_counts, scan_and_load_songs_with_progress_counts};
 
+/// Returns true when the pack (song-folder group) that owns this simfile is
+/// listed in `NeverCacheList` and so must skip the on-disk cache entirely.
+///
+/// The group folder is the simfile's pack directory, i.e. the parent of the
+/// song directory: `.../Songs/<Group>/<Song>/file.sm`.
+fn song_group_is_never_cached(simfile_path: &Path) -> bool {
+    simfile_path
+        .parent()
+        .and_then(Path::parent)
+        .and_then(Path::file_name)
+        .and_then(|name| name.to_str())
+        .is_some_and(config::group_is_never_cached)
+}
+
 pub(super) fn compute_song_cache_path(path: &Path) -> Option<PathBuf> {
     let cache_dir = dirs::app_dirs().song_cache_dir();
     match song_cache_path(&cache_dir, path) {
@@ -91,7 +105,7 @@ fn load_gameplay_charts_from_cache(
 pub fn reload_song_in_cache(simfile_path: &Path) -> Result<Arc<SongData>, String> {
     let config = config::get();
     let global_offset_seconds = config.global_offset_seconds;
-    let cachesongs = config.cachesongs;
+    let cachesongs = config.cachesongs && !song_group_is_never_cached(simfile_path);
     let cache_path = cachesongs
         .then(|| compute_song_cache_path(simfile_path))
         .flatten();
@@ -162,8 +176,9 @@ pub fn load_gameplay_charts(
 ) -> Result<Vec<GameplayChartData>, String> {
     let started = Instant::now();
     let config = config::get();
-    let allow_cache_read = config.fastload || config.cachesongs;
-    let allow_cache_write = config.cachesongs;
+    let never_cache = song_group_is_never_cached(&song.simfile_path);
+    let allow_cache_read = (config.fastload || config.cachesongs) && !never_cache;
+    let allow_cache_write = config.cachesongs && !never_cache;
     let verify_cache_freshness = !config.fastload;
     let load_started = Instant::now();
     if allow_cache_read
@@ -221,7 +236,8 @@ pub fn load_sync_analysis_chart(
     chart_ix: usize,
 ) -> Result<GameplayChartData, String> {
     let config = config::get();
-    let allow_cache_read = config.fastload || config.cachesongs;
+    let allow_cache_read = (config.fastload || config.cachesongs)
+        && !song_group_is_never_cached(&song.simfile_path);
     let verify_cache_freshness = !config.fastload;
     if allow_cache_read
         && let Some(mut charts) =

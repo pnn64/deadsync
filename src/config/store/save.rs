@@ -6,6 +6,7 @@ pub(super) fn build_content(
     keymap: &Keymap,
     machine_default_noteskin: &str,
     additional_song_folders: &[AdditionalSongFolder],
+    never_cache_list: &[String],
     smx_p1_serial: &str,
     smx_p2_serial: &str,
     default_profile_p1: &str,
@@ -17,6 +18,7 @@ pub(super) fn build_content(
         cfg,
         machine_default_noteskin,
         additional_song_folders,
+        never_cache_list,
         smx_p1_serial,
         smx_p2_serial,
         default_profile_p1,
@@ -32,6 +34,7 @@ fn push_saved_options(
     cfg: &Config,
     machine_default_noteskin: &str,
     additional_song_folders: &[AdditionalSongFolder],
+    never_cache_list: &[String],
     smx_p1_serial: &str,
     smx_p2_serial: &str,
     default_profile_p1: &str,
@@ -74,6 +77,7 @@ fn push_saved_options(
     push_line(content, "GameplayBgColor", cfg.gameplay_bg_color.to_hex());
     push_bool(content, "BannerCache", cfg.banner_cache);
     push_bool(content, "CacheSongs", cfg.cachesongs);
+    push_line(content, "NeverCacheList", never_cache_list.join(","));
     push_bool(content, "CDTitleCache", cfg.cdtitle_cache);
     push_bool(content, "Center1Player", cfg.center_1player_notefield);
     push_line(

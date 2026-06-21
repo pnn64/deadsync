@@ -60,6 +60,7 @@ pub(super) fn current_save_content() -> String {
     let keymap = deadsync_input::get_keymap();
     let machine_default_noteskin = MACHINE_DEFAULT_NOTESKIN.lock().unwrap().clone();
     let additional_song_folders = ADDITIONAL_SONG_FOLDERS.lock().unwrap().clone();
+    let never_cache_list = NEVER_CACHE_LIST.lock().unwrap().clone();
     let smx_p1_serial = SMX_P1_SERIAL.lock().unwrap().clone().unwrap_or_default();
     let smx_p2_serial = SMX_P2_SERIAL.lock().unwrap().clone().unwrap_or_default();
     let default_profile_p1 = DEFAULT_PROFILE_P1
@@ -77,6 +78,7 @@ pub(super) fn current_save_content() -> String {
         &keymap,
         &machine_default_noteskin,
         additional_song_folders.as_slice(),
+        never_cache_list.as_slice(),
         &smx_p1_serial,
         &smx_p2_serial,
         &default_profile_p1,
