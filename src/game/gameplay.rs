@@ -1,7 +1,3 @@
-#[cfg(test)]
-use crate::game::parsing::song_lua::{
-    SongLuaCompileContext, SongLuaDifficulty, SongLuaPlayerContext, SongLuaSpeedMod,
-};
 use deadsync_chart::song::sync_pref_offset;
 use deadsync_chart::{ChartData, GameplayChartData, SongData, SyncPref};
 use deadsync_core::input::{InputSource, Lane, MAX_COLS, MAX_PLAYERS};
@@ -17,11 +13,11 @@ pub use deadsync_gameplay::{
     AUTOSYNC_STDDEV_MAX_SECONDS, AccelEffects, AccelOverrides, ActiveColumnFlash,
     ActiveComboMilestone, ActiveHold, ActiveHoldAdvance, ActiveHoldResolution, ActiveInputSlot,
     ActiveMineExplosion, ActiveTapExplosion, AppearanceEffects, AppearanceOverrides,
-    AttackBaseEffects, AutoplayNoteAction, AutoplayNoteEvent, AutoplayRowEventsUpdate,
+    AutoplayNoteAction, AutoplayNoteEvent, AutoplayRowEventsUpdate,
     AutosyncMode, COLUMN_FLASH_JUDGMENT_DURATION, COLUMN_FLASH_MISS_DURATION,
     COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO, COMBO_HUNDRED_MILESTONE_DURATION,
     COMBO_THOUSAND_MILESTONE_DURATION, CROSSOVER_CUE_FADE_SECONDS, ChartAttackEffects,
-    ChartAttackTransformPlayer, ColumnCue, ColumnCueColumn, ColumnFlashOptions, ColumnScrollFlags,
+    ColumnCue, ColumnCueColumn, ColumnFlashOptions, ColumnScrollFlags,
     ColumnTapJudgment, ComboMilestoneKind, CourseDisplayCarry, CourseDisplayTiming,
     CourseDisplayTotals, CrossoverRow, DRAW_DISTANCE_AFTER_TARGETS,
     DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER, DensityGraphWindow, DisplayClockDiagEvent,
@@ -41,6 +37,8 @@ pub use deadsync_gameplay::{
     GameplayExitInputState, GameplayExitPromptState, GameplayFailType, GameplayHoldFeedbackState,
     GameplayHoldRuntimeState, GameplayInputLatencySample, GameplayInputLatencyTrace,
     GameplayInputPlayStyle, GameplayInputPlayerSide, GameplayInputState, GameplayLaneIndexState,
+    gameplay_player_side_from_profile, gameplay_play_style_from_profile,
+    gameplay_tick_mode_from_profile,
     GameplayLifeDeltaUpdate, GameplayMenuInput, GameplayMenuInputPlan, GameplayMineScanState,
     GameplayMiniIndicatorData, GameplayMiniIndicatorMode, GameplayMiniIndicatorOptions,
     GameplayMiniIndicatorRuntimeState, GameplayMusicCut, GameplayMusicRateState,
@@ -81,16 +79,16 @@ pub use deadsync_gameplay::{
     SPACING_PERCENT_MIN, ScrollEffects, ScrollOverrides, ScrollReverseOptions, SongClockSnapshot,
     SongLuaColumnOffsetWindowRuntime, SongLuaNoteHideWindowRuntime, SongLuaOverlayMessageRuntime,
     TAP_EXPLOSION_WINDOWS, TOGGLE_FLASH_DURATION, TOGGLE_FLASH_FADE_START, TapExplosionOptions,
-    TurnRng, UNMAPPED_INPUT_CLOCK_WARN_NEVER_NS, VisibilityEffects, VisibilityOverrides,
+    TurnRng, VisibilityEffects, VisibilityOverrides,
     VisualEffects, VisualOverrides, active_hold_counts_as_pressed, active_hold_is_engaged,
     active_input_slot_lane_is_down, add_elapsed_us, add_player_mines_avoided,
     add_player_step_calories, advance_active_hold_to_time, advance_judged_row_cursor_for_entries,
-    apply_chart_attack_transforms, apply_combo_update, apply_echo_insert, apply_final_note_result,
+    apply_combo_update, apply_echo_insert, apply_final_note_result,
     apply_final_note_result_to_rows, apply_gameplay_life_delta, apply_hold_let_go_player_state,
     apply_hold_let_go_update, apply_hold_resolution_player_state, apply_hold_success_player_state,
     apply_hold_success_update, apply_hyper_shuffle, apply_insert_intelligent_taps,
     apply_mine_hit_player_state, apply_mine_hit_player_update, apply_mines_insert,
-    apply_next_time_based_tap_miss_for_player, apply_player_runtime_life_delta,
+    apply_life_change, apply_next_time_based_tap_miss_for_player,
     apply_provisional_early_note_result, apply_row_finalization_player_state, apply_stomp_insert,
     apply_super_shuffle_taps, apply_time_based_mine_avoidance_for_players, apply_turn_options,
     apply_turn_permutation, apply_uncommon_chart_transforms, apply_uncommon_masks_with_masks,
@@ -100,9 +98,9 @@ pub use deadsync_gameplay::{
     autoplay_due_active_hold_resolution, autoplay_judgment_offset_music_ns,
     autoplay_random_offset_music_ns_for_window, autosync_mean_ns, autosync_mode_status_line,
     autosync_row_hits_enabled, autosync_stddev_seconds, blue_fantastic_window_ms,
-    build_assist_clap_rows, build_attack_mask_windows_for_mode, build_column_cues_for_player,
-    build_crossover_cues_from_annotations, build_note_count_stats,
-    build_player_judgment_timing_for_options, build_replay_input_edges, build_row_entry,
+    build_assist_clap_rows, build_column_cues_for_player,
+    build_note_count_stats,
+    build_player_judgment_timing, build_replay_input_edges, build_row_entry,
     build_row_grids, carried_holds_down_at_row, cell_has_any_note, cell_has_nonfake_note,
     clear_offset_adjust_hold_state, closest_lane_note_search, collect_active_autoplay_roll_columns,
     collect_autosync_row_hit_offsets, collect_due_autoplay_active_hold_resolutions,
@@ -132,6 +130,7 @@ pub use deadsync_gameplay::{
     gameplay_is_single_p2_side, gameplay_menu_input_plan, gameplay_player_side_for_index,
     gameplay_player_side_index, gameplay_raw_key_action_for_plan, gameplay_runtime_player_is_p2,
     gameplay_runtime_player_side, gameplay_update_hot_phase, grade_to_window,
+    frame_stable_display_music_time_ns,
     held_miss_judgment_expired_at, held_miss_render_info, hit_active_hold_start,
     hold_explosion_active, hold_explosion_enabled_for_options, hold_head_render_flags,
     hold_judgment_expired_at, hold_judgment_render_info, hold_resolution_player_state,
@@ -145,20 +144,21 @@ pub use deadsync_gameplay::{
     mark_row_entry_provisional_early_result, max_step_distance_ns,
     measure_counter_segments_for_densities, mine_can_be_avoided, mine_can_be_hit,
     mine_hit_offset_in_window, mine_hit_player_state, mine_hit_side_effect_plan,
-    mine_judgment_render_info, mine_window_bounds_ns, mini_indicator_mode_for_options,
-    mini_indicator_needs_stream_data, mini_value_for_visual_mask,
+    mine_judgment_render_info, mine_window_bounds_ns,
     missed_note_cutoff_rows_for_players, music_time_from_stream_position, next_autosync_mode,
     next_ready_row_in_lookahead, next_timing_tick_mode, normalized_input_slot,
     note_has_displayable_hold, note_hit_judgment, note_tracks_held_miss, notes_row_sorted,
     offset_adjust_delta_for_key, offset_adjust_repeat_ready, offset_adjust_slot_for_key,
     offset_adjust_target, player_chart_changes_for_options, player_column_range,
-    player_combo_state, player_course_display_stage, player_draw_scale_for_visual_mask,
+    player_combo_state, player_course_display_stage,
     player_health_state, player_index_for_column, player_life, player_mines_hit,
     player_note_range_for_ranges, player_row_scan_state, player_rows, player_runtime_is_dead,
     practice_player_cursors, provisional_early_hit_plan, push_density_life_point,
     quantization_index_from_beat, queue_pending_missed_hold_resolution, recent_step_calories,
-    recent_step_tracks, receptor_glow_press_timers, receptor_glow_pulse_timers,
+    profile_side_from_gameplay, profile_tick_mode_from_gameplay, recent_step_tracks,
+    receptor_glow_press_timers, receptor_glow_pulse_timers,
     receptor_glow_release_timers, receptor_glow_visual, record_player_live_timing_stats,
+    record_unmapped_input_clock_warning,
     reference_bpm_from_display_tag, refresh_roll_life_for_active_column,
     refresh_roll_life_for_step, register_provisional_early_note_result, remap_live_input_lane,
     remove_cell_notes, replay_edge_cap, row_entry_for_cached_row, row_entry_index_for_cached_row,
@@ -167,8 +167,8 @@ pub use deadsync_gameplay::{
     scroll_receptor_y, scroll_reverse_percent_for_column, scroll_reverse_scale_for_column,
     set_added_mine_note, set_added_tap_note, set_player_last_judgment,
     set_player_last_mine_judgment, set_player_mines_avoided, set_row_finalization_player_state,
-    settle_replaced_active_hold_column, should_warn_unmapped_input_clock, song_audio_end_time_ns,
-    song_clock_music_time_ns, song_lua_field_note_hidden, song_lua_note_hidden,
+    settle_replaced_active_hold_column, song_audio_end_time_ns,
+    music_time_ns_from_song_clock, song_lua_field_note_hidden, song_lua_note_hidden,
     song_lua_player_transforms_default, sort_player_notes, spacing_multiplier_for_percent,
     stage_music_cut, start_active_hold_column, start_offset_adjust_hold_state, stomp_mirror_track,
     suppress_final_bad_rescore_visual, tap_explosion_enabled_for_options,
@@ -181,37 +181,48 @@ pub use deadsync_gameplay::{
     zmod_stream_totals_for_densities,
 };
 use deadsync_gameplay::{
-    AttackMaskWindow, GameplayTargetScoreSetting, ScoreValidityOptions, StepStatsPlayStyle,
-    resolve_target_score_percent, score_invalid_reason_lines_for_options,
+    AttackMaskWindow, base_appearance_effects,
+    apply_chart_attacks_transforms, build_crossover_cues_for_player,
+    chart_effects_from_profile, column_flash_options_from_profile, gameplay_attack_mode,
+    gameplay_turn_option_from_profile, effective_mini_percent_for_player,
+    effective_mini_value_with_visual_mask,
+    effective_perspective_effects_for_player, effective_scroll_effects_for_player,
+    effective_visual_mask_for_player,
+    player_draw_scale_for_tilt_with_visual_mask, refresh_active_attack_masks,
+    needs_stream_data, mini_indicator_mode, player_changes_chart, build_attack_mask_windows_for_player,
+    gameplay_target_score_setting, score_invalid_reason_lines_for_chart, resolve_target_score_percent,
+    blue_fantastic_window_ms_from_profile, gameplay_input_log_enabled,
+    log_tap_judge_candidate, log_timing_hit_detail,
+    step_stats_play_style,
     step_stats_density_graph_width as gameplay_step_stats_density_graph_width,
-    step_stats_upper_density_graph_width,
+    step_stats_upper_density_graph_width, tap_explosion_options_from_profile,
+    tap_judgment_uses_bright_explosion_from_profile,
+    timing_hit_log_enabled,
 };
 #[cfg(test)]
+use deadsync_gameplay::effective_visual_effects_for_player;
+#[cfg(test)]
 use deadsync_gameplay::{
-    SongLuaCompilePlayStyle, SongLuaEaseMaskTarget,
-    song_lua_compile_player_screen_x as gameplay_song_lua_compile_player_screen_x,
+    SongLuaEaseMaskTarget,
     song_lua_ease_window_value,
 };
 use deadsync_input::{
     INPUT_SLOT_INVALID, InputEdge, InputEvent, VirtualAction, lane_from_action, lane_from_column,
 };
 use deadsync_profile as profile_data;
-use deadsync_profile::TimingTickMode as TickMode;
-use deadsync_rules::judgment::{
-    self, JudgeGrade, Judgment, TimingWindow, judgment_time_error_ms_from_music_ns,
+#[cfg(test)]
+use deadsync_gameplay::{
+    build_song_lua_column_offset_windows_for_player, build_song_lua_constant_windows_for_player,
 };
+use deadsync_rules::judgment::{self, JudgeGrade, Judgment, TimingWindow};
 use deadsync_rules::note::{HoldData, HoldResult, MineResult, Note, recompute_player_totals};
 #[cfg(test)]
 use deadsync_rules::note::{MAX_HOLD_LIFE, TIMING_WINDOW_SECONDS_HOLD, TIMING_WINDOW_SECONDS_ROLL};
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::stream::{StreamSegment, measure_densities};
 use deadsync_rules::timing::{BeatInfoCache, TimingData, TimingProfile, TimingProfileNs};
-use deadsync_simfile::timing::rssp_timing_segments_from_deadsync;
 use log::{debug, info, trace, warn};
-use std::sync::{
-    Arc,
-    atomic::{AtomicI64, Ordering},
-};
+use std::sync::Arc;
 use std::time::Instant;
 use winit::keyboard::KeyCode;
 
@@ -248,709 +259,24 @@ pub(crate) type GameplaySongLuaLayer =
 
 pub(crate) type GameplaySongLuaData =
     deadsync_gameplay::GameplaySongLuaData<crate::game::parsing::song_lua::CompiledSongLua>;
-use self::attacks::build_song_lua_runtime_windows;
+use self::attacks::{
+    build_song_lua_runtime_windows,
+    trigger_completed_row_tap_explosions,
+};
 #[cfg(test)]
 use self::attacks::{
-    build_song_lua_column_offset_windows_for_player, build_song_lua_constant_windows_for_player,
     build_song_lua_ease_windows_for_player, build_song_lua_overlay_ease_windows,
+    song_lua_compile_context, test_song_lua_double_context,
 };
 const ASSIST_TICK_SFX_PATH: &str = "assets/sounds/assist_tick.ogg";
 
 #[inline(always)]
-fn scroll_effects_from_option(scroll: profile_data::ScrollOption) -> ScrollEffects {
-    use profile_data::ScrollOption;
-    ScrollEffects::from_flags(
-        scroll.contains(ScrollOption::Reverse),
-        scroll.contains(ScrollOption::Split),
-        scroll.contains(ScrollOption::Alternate),
-        scroll.contains(ScrollOption::Cross),
-        scroll.contains(ScrollOption::Centered),
-    )
-}
-
-#[inline(always)]
-fn perspective_effects_from_profile(perspective: profile_data::Perspective) -> PerspectiveEffects {
-    let (tilt, skew) = perspective.tilt_skew();
-    PerspectiveEffects { tilt, skew }
-}
-
-#[inline(always)]
-fn base_appearance_effects(profile: &profile_data::Profile) -> AppearanceEffects {
-    AppearanceEffects::from_mask_bits(profile.appearance_effects_active_mask.bits())
-}
-
-#[inline(always)]
-fn base_visual_effects(profile: &profile_data::Profile) -> VisualEffects {
-    VisualEffects::from_mask_bits(profile.visual_effects_active_mask.bits())
-}
-
-fn refresh_active_attack_masks(state: &mut State, delta_time: f32) {
-    for player in 0..state.setup.num_players {
-        let now = state.visible_music_time_seconds(player);
-        let profile = &state.profiles_runtime.profiles[player];
-        state.refresh_player_attacks(
-            player,
-            now,
-            delta_time,
-            AttackBaseEffects {
-                appearance: base_appearance_effects(profile),
-                visual: base_visual_effects(profile),
-                scroll: scroll_effects_from_option(profile.scroll_option),
-                mini_percent: profile.mini_percent as f32,
-            },
-        );
-    }
-}
-
-#[inline(always)]
-fn gameplay_attack_mode(attack_mode: profile_data::AttackMode) -> GameplayAttackMode {
-    match attack_mode {
-        profile_data::AttackMode::Off => GameplayAttackMode::Off,
-        profile_data::AttackMode::On => GameplayAttackMode::On,
-        profile_data::AttackMode::Random => GameplayAttackMode::Random,
-    }
-}
-
-fn build_attack_mask_windows_for_player(
-    chart_attacks: Option<&str>,
-    attack_mode: profile_data::AttackMode,
-    player: usize,
-    base_seed: u64,
-    song_length_seconds: f32,
-) -> Vec<AttackMaskWindow> {
-    build_attack_mask_windows_for_mode(
-        chart_attacks,
-        gameplay_attack_mode(attack_mode),
-        player,
-        base_seed,
-        song_length_seconds,
-    )
-}
-
-fn player_changes_chart(chart: &GameplayChartData, profile: &profile_data::Profile) -> bool {
-    player_chart_changes_for_options(
-        chart_effects_from_profile(profile).has_note_masks(),
-        gameplay_turn_option_from_profile(profile.turn_option),
-        chart.chart_attacks.as_deref(),
-        gameplay_attack_mode(profile.attack_mode),
-    )
-}
-
-fn apply_chart_attacks_transforms(
-    notes: &mut Vec<Note>,
-    note_ranges: &mut [(usize, usize); MAX_PLAYERS],
-    gameplay_charts: &[Arc<GameplayChartData>; MAX_PLAYERS],
-    cols_per_player: usize,
-    num_players: usize,
-    player_attack_modes: &[GameplayAttackMode; MAX_PLAYERS],
-    timing_players: &[Arc<TimingData>; MAX_PLAYERS],
-    base_seed: u64,
-    song_length_seconds: f32,
-) {
-    let players = std::array::from_fn(|player| ChartAttackTransformPlayer {
-        chart_attacks: gameplay_charts[player].chart_attacks.as_deref(),
-        attack_mode: player_attack_modes[player],
-        timing_player: timing_players[player].as_ref(),
-    });
-    apply_chart_attack_transforms(
-        notes,
-        note_ranges,
-        cols_per_player,
-        num_players,
-        &players,
-        base_seed,
-        song_length_seconds,
-    );
-}
-
-#[inline(always)]
-#[cfg(test)]
-fn song_lua_difficulty_from_chart(difficulty: &str) -> SongLuaDifficulty {
-    if difficulty.eq_ignore_ascii_case("beginner") {
-        SongLuaDifficulty::Beginner
-    } else if difficulty.eq_ignore_ascii_case("easy") || difficulty.eq_ignore_ascii_case("basic") {
-        SongLuaDifficulty::Easy
-    } else if difficulty.eq_ignore_ascii_case("medium")
-        || difficulty.eq_ignore_ascii_case("standard")
-    {
-        SongLuaDifficulty::Medium
-    } else if difficulty.eq_ignore_ascii_case("hard")
-        || difficulty.eq_ignore_ascii_case("difficult")
-    {
-        SongLuaDifficulty::Hard
-    } else if difficulty.eq_ignore_ascii_case("edit") {
-        SongLuaDifficulty::Edit
-    } else {
-        SongLuaDifficulty::Challenge
-    }
-}
-
-#[inline(always)]
-#[cfg(test)]
-fn song_lua_speedmod_from_setting(speed: ScrollSpeedSetting) -> SongLuaSpeedMod {
-    match speed {
-        ScrollSpeedSetting::XMod(value) => SongLuaSpeedMod::X(value),
-        ScrollSpeedSetting::CMod(value) => SongLuaSpeedMod::C(value),
-        ScrollSpeedSetting::MMod(value) => SongLuaSpeedMod::M(value),
-    }
-}
-
-#[inline(always)]
-#[cfg(test)]
-fn song_lua_compile_play_style(play_style: GameplayInputPlayStyle) -> SongLuaCompilePlayStyle {
-    match play_style {
-        GameplayInputPlayStyle::Single => SongLuaCompilePlayStyle::Single,
-        GameplayInputPlayStyle::Versus => SongLuaCompilePlayStyle::Versus,
-        GameplayInputPlayStyle::Double => SongLuaCompilePlayStyle::Double,
-    }
-}
-
-#[cfg(test)]
-fn song_lua_compile_player_screen_x(
-    num_players: usize,
-    player_index: usize,
-    profile: &profile_data::Profile,
-    viewport: GameplayViewport,
-    play_style: GameplayInputPlayStyle,
-    player_side: GameplayInputPlayerSide,
-    center_1player_notefield: bool,
-) -> f32 {
-    gameplay_song_lua_compile_player_screen_x(
-        num_players,
-        player_index,
-        viewport,
-        song_lua_compile_play_style(play_style),
-        gameplay_is_single_p2_side(play_style, player_side),
-        profile.note_field_offset_x as f32,
-        center_1player_notefield,
-    )
-}
-
-#[cfg(test)]
-fn song_lua_compile_context(
-    song: &SongData,
-    charts: &[Arc<ChartData>; MAX_PLAYERS],
-    num_players: usize,
-    player_profiles: &[profile_data::Profile; MAX_PLAYERS],
-    scroll_speed: &[ScrollSpeedSetting; MAX_PLAYERS],
-    music_rate: f32,
-    machine_global_offset_seconds: f32,
-    viewport: GameplayViewport,
-    session: &GameplaySession,
-    center_1player_notefield: bool,
-) -> SongLuaCompileContext {
-    let play_style = session.play_style;
-    let player_side = session.player_side;
-    let mut context = SongLuaCompileContext::new(
-        song.simfile_path
-            .parent()
-            .map(|path| path.to_path_buf())
-            .unwrap_or_default(),
-        song.title.clone(),
-    );
-    context.song_display_bpms =
-        song.display_bpm_pair_or(charts.first().map(|chart| chart.as_ref()), [60.0, 60.0]);
-    context.song_music_rate = if music_rate.is_finite() && music_rate > 0.0 {
-        music_rate
-    } else {
-        1.0
-    };
-    context.music_length_seconds = song.music_length_seconds.max(song.precise_last_second());
-    context.style_name = match play_style {
-        GameplayInputPlayStyle::Single => "single",
-        GameplayInputPlayStyle::Versus => "versus",
-        GameplayInputPlayStyle::Double => "double",
-    }
-    .to_string();
-    context.global_offset_seconds = machine_global_offset_seconds;
-    context.screen_width = viewport.width();
-    context.screen_height = viewport.height();
-    context.confusion_offset_available = true;
-    context.confusion_available = true;
-    context.amod_available = false;
-    context.players = std::array::from_fn(|player| SongLuaPlayerContext {
-        enabled: player < num_players,
-        difficulty: if player < num_players {
-            song_lua_difficulty_from_chart(&charts[player].difficulty)
-        } else {
-            SongLuaDifficulty::default_enabled()
-        },
-        display_bpms: if player < num_players {
-            song.display_bpm_pair_or(Some(charts[player].as_ref()), [60.0, 60.0])
-        } else {
-            [60.0, 60.0]
-        },
-        speedmod: if player < num_players {
-            song_lua_speedmod_from_setting(scroll_speed[player])
-        } else {
-            SongLuaSpeedMod::default()
-        },
-        noteskin_name: if player < num_players {
-            player_profiles[player].noteskin.to_string()
-        } else {
-            profile_data::NoteSkin::default().to_string()
-        },
-        screen_x: if player < num_players {
-            song_lua_compile_player_screen_x(
-                num_players,
-                player,
-                &player_profiles[player],
-                viewport,
-                play_style,
-                player_side,
-                center_1player_notefield,
-            )
-        } else {
-            viewport.center_x()
-        },
-        screen_y: viewport.center_y(),
-    });
-    context
-}
-
-#[cfg(test)]
-#[inline(always)]
-fn effective_visual_effects_for_player(state: &State, player_idx: usize) -> VisualEffects {
-    if player_idx >= state.setup.num_players || player_idx >= MAX_PLAYERS {
-        return VisualEffects::default();
-    }
-    state.effective_visual_effects_for_player_with_mask(
-        player_idx,
-        state.profiles_runtime.profiles[player_idx]
-            .visual_effects_active_mask
-            .bits(),
-    )
-}
-
-#[inline(always)]
-fn effective_scroll_effects_for_player(state: &State, player_idx: usize) -> ScrollEffects {
-    if player_idx >= state.setup.num_players || player_idx >= MAX_PLAYERS {
-        return ScrollEffects::default();
-    }
-    state.effective_scroll_effects_for_player_with_base(
-        player_idx,
-        scroll_effects_from_option(state.profiles_runtime.profiles[player_idx].scroll_option),
-    )
-}
-
-#[inline(always)]
-fn effective_perspective_effects_for_player(
-    state: &State,
-    player_idx: usize,
-) -> PerspectiveEffects {
-    if player_idx >= state.setup.num_players || player_idx >= MAX_PLAYERS {
-        return PerspectiveEffects::default();
-    }
-    state.effective_perspective_effects_for_player_with_base(
-        player_idx,
-        perspective_effects_from_profile(state.profiles_runtime.profiles[player_idx].perspective),
-    )
-}
-
-#[inline(always)]
-fn effective_visual_mask_for_player(state: &State, player_idx: usize) -> u16 {
-    if player_idx >= state.setup.num_players || player_idx >= MAX_PLAYERS {
-        return 0;
-    }
-    state
-        .effective_visual_effects_for_player_with_mask(
-            player_idx,
-            state.profiles_runtime.profiles[player_idx]
-                .visual_effects_active_mask
-                .bits(),
-        )
-        .to_mask_bits()
-}
-
-#[inline(always)]
-fn effective_mini_percent_for_player(state: &State, player_idx: usize) -> f32 {
-    if player_idx >= state.setup.num_players || player_idx >= MAX_PLAYERS {
-        return 0.0;
-    }
-    state.effective_mini_percent_for_player_with_base(
-        player_idx,
-        state.profiles_runtime.profiles[player_idx].mini_percent as f32,
-    )
-}
-
-#[inline(always)]
-fn effective_mini_value_with_visual_mask(
-    profile: &profile_data::Profile,
-    visual_mask: u16,
-    mini_percent: f32,
-) -> f32 {
-    mini_value_for_visual_mask(mini_percent, profile.mini_percent as f32, visual_mask)
-}
-
-#[inline(always)]
-fn player_draw_scale_for_tilt_with_visual_mask(
-    tilt: f32,
-    profile: &profile_data::Profile,
-    visual_mask: u16,
-    mini_percent: f32,
-) -> f32 {
-    player_draw_scale_for_visual_mask(tilt, mini_percent, profile.mini_percent as f32, visual_mask)
-}
-
-#[inline(always)]
-fn song_lua_hides_note_visual(state: &State, player: usize, column: usize, beat: f32) -> bool {
-    song_lua_field_note_hidden(
-        &state.mods.song_lua_visuals.note_hides[player],
-        state.setup.cols_per_player,
-        column,
-        beat,
-    )
-}
-
-#[inline(always)]
-fn trigger_completed_row_tap_explosions(state: &mut State, player: usize, row_index: usize) {
-    let Some(plan) = ({
-        let Some(row_entry) = row_entry_for_cached_row(
-            &state.chart_runtime.row_entries,
-            &state.chart_runtime.row_indices.row_map_cache[player],
-            row_index,
-        ) else {
-            return;
-        };
-        completed_row_tap_feedback_plan(&state.chart_runtime.notes, row_entry)
-    }) else {
-        return;
-    };
-
-    for &note_index in &plan.note_indices[..plan.note_count] {
-        let note = &state.chart_runtime.notes[note_index];
-        let column = note.column;
-        if song_lua_hides_note_visual(state, player, column, note.beat) {
-            if let Some(window_key) = plan.receptor_window {
-                trigger_receptor_score_pulse(state, column, window_key);
-            }
-            continue;
-        }
-        trigger_tap_judgment_explosion(state, player, column, &plan.judgment);
-    }
-}
-
-fn gameplay_turn_option_from_profile(turn: profile_data::TurnOption) -> GameplayTurnOption {
-    match turn {
-        profile_data::TurnOption::None => GameplayTurnOption::None,
-        profile_data::TurnOption::Mirror => GameplayTurnOption::Mirror,
-        profile_data::TurnOption::LRMirror => GameplayTurnOption::LRMirror,
-        profile_data::TurnOption::UDMirror => GameplayTurnOption::UDMirror,
-        profile_data::TurnOption::Left => GameplayTurnOption::Left,
-        profile_data::TurnOption::Right => GameplayTurnOption::Right,
-        profile_data::TurnOption::Shuffle => GameplayTurnOption::Shuffle,
-        profile_data::TurnOption::Blender => GameplayTurnOption::Blender,
-        profile_data::TurnOption::Random => GameplayTurnOption::Random,
-    }
-}
-
-#[inline(always)]
-fn chart_effects_from_profile(profile: &profile_data::Profile) -> ChartAttackEffects {
-    ChartAttackEffects {
-        insert_mask: profile.insert_active_mask.bits(),
-        remove_mask: profile.remove_active_mask.bits(),
-        holds_mask: profile.holds_active_mask.bits(),
-        turn_bits: 0,
-    }
-}
-
-#[inline(always)]
-fn gameplay_mini_indicator_mode(mode: profile_data::MiniIndicator) -> GameplayMiniIndicatorMode {
-    match mode {
-        profile_data::MiniIndicator::None => GameplayMiniIndicatorMode::None,
-        profile_data::MiniIndicator::SubtractiveScoring => {
-            GameplayMiniIndicatorMode::SubtractiveScoring
-        }
-        profile_data::MiniIndicator::PredictiveScoring => {
-            GameplayMiniIndicatorMode::PredictiveScoring
-        }
-        profile_data::MiniIndicator::PaceScoring => GameplayMiniIndicatorMode::PaceScoring,
-        profile_data::MiniIndicator::RivalScoring => GameplayMiniIndicatorMode::RivalScoring,
-        profile_data::MiniIndicator::Pacemaker => GameplayMiniIndicatorMode::Pacemaker,
-        profile_data::MiniIndicator::StreamProg => GameplayMiniIndicatorMode::StreamProg,
-    }
-}
-
-#[inline(always)]
-fn profile_mini_indicator_mode(mode: GameplayMiniIndicatorMode) -> profile_data::MiniIndicator {
-    match mode {
-        GameplayMiniIndicatorMode::None => profile_data::MiniIndicator::None,
-        GameplayMiniIndicatorMode::SubtractiveScoring => {
-            profile_data::MiniIndicator::SubtractiveScoring
-        }
-        GameplayMiniIndicatorMode::PredictiveScoring => {
-            profile_data::MiniIndicator::PredictiveScoring
-        }
-        GameplayMiniIndicatorMode::PaceScoring => profile_data::MiniIndicator::PaceScoring,
-        GameplayMiniIndicatorMode::RivalScoring => profile_data::MiniIndicator::RivalScoring,
-        GameplayMiniIndicatorMode::Pacemaker => profile_data::MiniIndicator::Pacemaker,
-        GameplayMiniIndicatorMode::StreamProg => profile_data::MiniIndicator::StreamProg,
-    }
-}
-
-#[inline(always)]
-fn mini_indicator_options(profile: &profile_data::Profile) -> GameplayMiniIndicatorOptions {
-    GameplayMiniIndicatorOptions {
-        requested_mode: gameplay_mini_indicator_mode(profile.mini_indicator),
-        measure_counter_enabled: profile.measure_counter != profile_data::MeasureCounter::None,
-        subtractive_scoring: profile.subtractive_scoring,
-        pacemaker: profile.pacemaker,
-    }
-}
-
-#[inline(always)]
-fn mini_indicator_mode(profile: &profile_data::Profile) -> profile_data::MiniIndicator {
-    profile_mini_indicator_mode(mini_indicator_mode_for_options(mini_indicator_options(
-        profile,
-    )))
-}
-
-#[inline(always)]
-fn needs_stream_data(profile: &profile_data::Profile) -> bool {
-    mini_indicator_needs_stream_data(mini_indicator_options(profile))
-}
-
-fn score_invalid_reason_lines_for_chart(
-    chart: &ChartData,
-    profile: &profile_data::Profile,
-    _scroll_speed: ScrollSpeedSetting,
-    music_rate: f32,
-) -> Vec<&'static str> {
-    score_invalid_reason_lines_for_options(
-        chart,
-        ScoreValidityOptions {
-            chart_effects: chart_effects_from_profile(profile),
-            attack_mode: gameplay_attack_mode(profile.attack_mode),
-            music_rate,
-        },
-    )
-}
-
-#[inline(always)]
-fn gameplay_target_score_setting(
-    setting: profile_data::TargetScoreSetting,
-) -> GameplayTargetScoreSetting {
-    match setting {
-        profile_data::TargetScoreSetting::CMinus => GameplayTargetScoreSetting::CMinus,
-        profile_data::TargetScoreSetting::C => GameplayTargetScoreSetting::C,
-        profile_data::TargetScoreSetting::CPlus => GameplayTargetScoreSetting::CPlus,
-        profile_data::TargetScoreSetting::BMinus => GameplayTargetScoreSetting::BMinus,
-        profile_data::TargetScoreSetting::B => GameplayTargetScoreSetting::B,
-        profile_data::TargetScoreSetting::BPlus => GameplayTargetScoreSetting::BPlus,
-        profile_data::TargetScoreSetting::AMinus => GameplayTargetScoreSetting::AMinus,
-        profile_data::TargetScoreSetting::A => GameplayTargetScoreSetting::A,
-        profile_data::TargetScoreSetting::APlus => GameplayTargetScoreSetting::APlus,
-        profile_data::TargetScoreSetting::SMinus => GameplayTargetScoreSetting::SMinus,
-        profile_data::TargetScoreSetting::S => GameplayTargetScoreSetting::S,
-        profile_data::TargetScoreSetting::SPlus => GameplayTargetScoreSetting::SPlus,
-        profile_data::TargetScoreSetting::MachineBest => GameplayTargetScoreSetting::MachineBest,
-        profile_data::TargetScoreSetting::PersonalBest => GameplayTargetScoreSetting::PersonalBest,
-    }
-}
-
-#[inline(always)]
-pub(super) fn record_display_window_counts(
-    state: &mut State,
-    player_idx: usize,
-    judgment: &Judgment,
-) {
-    if player_idx >= state.setup.num_players || player_idx >= MAX_PLAYERS {
-        return;
-    }
-    let display_window_ms = player_blue_window_ms(state, player_idx);
-    state
-        .progress
-        .window_counts
-        .record_judgment(player_idx, judgment, display_window_ms);
-}
-
-#[inline(always)]
-pub(super) fn capture_failed_ex_score_inputs(state: &mut State, player_idx: usize) {
-    state.capture_failed_ex_score_inputs(player_idx, player_blue_window_ms(state, player_idx));
-}
-
-/// Bails on non-4/8-panel layouts because `rssp` parity only models those.
-#[allow(clippy::too_many_arguments)]
-fn build_crossover_cues_for_player(
-    notes: &[Note],
-    note_range: (usize, usize),
-    timing_segments: &deadsync_rules::timing::TimingSegments,
-    timing_player: &TimingData,
-    cols_per_player: usize,
-    col_start: usize,
-    duration_ms: u16,
-    quantization: u8,
-    include_brackets: bool,
-    first_visible_time: f32,
-) -> Vec<ColumnCue> {
-    let (start, end) = note_range;
-    if start >= end {
-        return Vec::new();
-    }
-    let rssp_segments = rssp_timing_segments_from_deadsync(timing_segments);
-    let rssp_timing = rssp::timing::timing_data_from_segments(0.0, 0.0, &rssp_segments);
-    let annos: Vec<CrossoverRow> = match cols_per_player {
-        4 => {
-            let (rows, row_to_beat) =
-                deadsync_gameplay::build_crossover_rows::<4>(notes, note_range, col_start);
-            let Some(mut scratch) = rssp::step_parity::timing_rows_scratch::<4>() else {
-                return Vec::new();
-            };
-            rssp::step_parity::annotate_timing_rows::<4>(
-                &rows,
-                &row_to_beat,
-                &rssp_timing,
-                &mut scratch,
-            )
-        }
-        8 => {
-            let (rows, row_to_beat) =
-                deadsync_gameplay::build_crossover_rows::<8>(notes, note_range, col_start);
-            let Some(mut scratch) = rssp::step_parity::timing_rows_scratch::<8>() else {
-                return Vec::new();
-            };
-            rssp::step_parity::annotate_timing_rows::<8>(
-                &rows,
-                &row_to_beat,
-                &rssp_timing,
-                &mut scratch,
-            )
-        }
-        _ => return Vec::new(),
-    }
-    .iter()
-    .map(|anno| CrossoverRow {
-        beat: anno.beat,
-        column_mask: anno.column_mask,
-        crossover: anno.row_tech.crossovers > 0,
-        bracket: anno.foot_count() > 1,
-    })
-    .collect();
-    build_crossover_cues_from_annotations(
-        &annos,
-        timing_player,
-        col_start,
-        duration_ms,
-        quantization,
-        include_brackets,
-        first_visible_time,
-    )
-}
-
-pub(super) fn apply_life_change(p: &mut PlayerRuntime, current_music_time: f32, delta: f32) {
-    let result = apply_player_runtime_life_delta(p, current_music_time, delta);
-    if result.failed_now {
-        debug!("Player has failed!");
-    }
-}
-
-#[inline(always)]
-pub(crate) const fn gameplay_play_style_from_profile(
-    play_style: profile_data::PlayStyle,
-) -> GameplayInputPlayStyle {
-    match play_style {
-        profile_data::PlayStyle::Single => GameplayInputPlayStyle::Single,
-        profile_data::PlayStyle::Versus => GameplayInputPlayStyle::Versus,
-        profile_data::PlayStyle::Double => GameplayInputPlayStyle::Double,
-    }
-}
-
-#[inline(always)]
-pub(crate) const fn gameplay_player_side_from_profile(
-    side: profile_data::PlayerSide,
-) -> GameplayInputPlayerSide {
-    match side {
-        profile_data::PlayerSide::P1 => GameplayInputPlayerSide::P1,
-        profile_data::PlayerSide::P2 => GameplayInputPlayerSide::P2,
-    }
-}
-
-#[inline(always)]
-pub(crate) const fn profile_side_from_gameplay(
-    side: GameplayInputPlayerSide,
-) -> profile_data::PlayerSide {
-    match side {
-        GameplayInputPlayerSide::P1 => profile_data::PlayerSide::P1,
-        GameplayInputPlayerSide::P2 => profile_data::PlayerSide::P2,
-    }
-}
-
-#[inline(always)]
-pub(crate) const fn gameplay_tick_mode_from_profile(mode: TickMode) -> GameplayTimingTickMode {
-    match mode {
-        TickMode::Off => GameplayTimingTickMode::Off,
-        TickMode::Assist => GameplayTimingTickMode::Assist,
-        TickMode::Hit => GameplayTimingTickMode::Hit,
-    }
-}
-
-#[inline(always)]
-pub(crate) const fn profile_tick_mode_from_gameplay(mode: GameplayTimingTickMode) -> TickMode {
-    match mode {
-        GameplayTimingTickMode::Off => TickMode::Off,
-        GameplayTimingTickMode::Assist => TickMode::Assist,
-        GameplayTimingTickMode::Hit => TickMode::Hit,
-    }
-}
-
-#[inline(always)]
-fn default_fa_plus_window_s(state: &State) -> f32 {
-    state.default_fa_plus_window_s()
-}
-
-#[inline(always)]
-fn profile_custom_window_ms(profile: &profile_data::Profile) -> f32 {
-    let ms = profile.custom_fantastic_window_ms;
-    f32::from(profile_data::clamp_custom_fantastic_window_ms(ms))
-}
-
-#[inline(always)]
-fn profile_custom_window_s(profile: &profile_data::Profile) -> f32 {
-    profile_custom_window_ms(profile) / 1000.0
-}
-
-#[inline(always)]
-fn fantastic_window_options(
-    base_fa_plus_s: f32,
-    profile: &profile_data::Profile,
-) -> FantasticWindowOptions {
-    FantasticWindowOptions {
-        base_fa_plus_s,
-        custom_fantastic_window_s: profile
-            .custom_fantastic_window
-            .then(|| profile_custom_window_s(profile)),
-        fa_plus_10ms_blue_window: profile.fa_plus_10ms_blue_window,
-    }
-}
-
-#[inline(always)]
 fn player_blue_window_ms(state: &State, player_idx: usize) -> f32 {
-    let base = default_fa_plus_window_s(state);
+    let base = state.default_fa_plus_window_s();
     if player_idx >= state.setup.num_players {
         return base * 1000.0;
     }
-    blue_fantastic_window_ms(fantastic_window_options(
-        base,
-        &state.profiles_runtime.profiles[player_idx],
-    ))
-}
-
-#[inline(always)]
-pub(super) fn build_player_judgment_timing(
-    timing_profile: TimingProfile,
-    player_profile: &profile_data::Profile,
-    music_rate: f32,
-) -> PlayerJudgmentTiming {
-    let base_fa_plus_s = timing_profile
-        .fa_plus_window_s
-        .unwrap_or(timing_profile.windows_s[0]);
-    let disabled_windows = player_profile.timing_windows.disabled_windows();
-    build_player_judgment_timing_for_options(
-        timing_profile,
-        fantastic_window_options(base_fa_plus_s, player_profile),
-        disabled_windows,
-        music_rate,
-    )
+    blue_fantastic_window_ms_from_profile(base, &state.profiles_runtime.profiles[player_idx])
 }
 
 #[inline(always)]
@@ -987,13 +313,9 @@ pub type State = GameplayRuntimeState<
     crate::game::parsing::song_lua::SongLuaOverlayStateDelta,
 >;
 
-fn gameplay_capacity_trace_snapshot(state: &State) -> GameplayCapacityTraceSnapshot {
-    state.capacity_trace_snapshot()
-}
-
 fn trace_capacity_growth(state: &mut State) {
     let frame = state.control.update_trace.summary.frame_counter;
-    let snapshot = gameplay_capacity_trace_snapshot(state);
+    let snapshot = state.capacity_trace_snapshot();
     let mut events = [None; 3 + MAX_PLAYERS];
     let event_count = state
         .control
@@ -1469,11 +791,6 @@ fn live_autoplay_judgment_offset_music_ns(
 }
 
 #[inline(always)]
-fn abort_hold_to_exit(state: &mut State, at: Instant) {
-    state.control.exit_input.abort_hold(at);
-}
-
-#[inline(always)]
 fn player_for_col(state: &State, col: usize) -> usize {
     state.player_for_col(col)
 }
@@ -1488,11 +805,6 @@ fn record_step_calories(state: &mut State, lane_idx: usize, event_music_time_ns:
     let player = player_for_col(state, lane_idx);
     let weight_pounds = state.profiles_runtime.profiles[player].calculated_weight_pounds();
     state.record_step_calories_for_player(player, event_music_time_ns, weight_pounds);
-}
-
-#[inline(always)]
-fn player_note_range(state: &State, player: usize) -> (usize, usize) {
-    state.note_range_for_player(player)
 }
 
 fn update_density_graph(
@@ -1557,89 +869,6 @@ fn update_density_graph(
     }
 }
 
-fn music_time_ns_from_song_clock(
-    snapshot: SongClockSnapshot,
-    captured_at: Instant,
-    captured_host_nanos: u64,
-) -> SongTimeNs {
-    let slope = normalized_song_rate(snapshot.seconds_per_second);
-    let snapshot_song_time = song_time_ns_to_seconds(snapshot.song_time_ns);
-    if snapshot.valid_at_host_nanos != 0 && captured_host_nanos != 0 {
-        let dt_nanos = captured_host_nanos as i128 - snapshot.valid_at_host_nanos as i128;
-        if snapshot.timing_diag_enabled {
-            debug!(
-                "AUDIO_DIAG snap_age_ms={:.3} path=host callback_gap_ms={:.3} snapshot_song_time={:.6} slope={:.6} snapshot_host_nanos={} captured_host_nanos={}",
-                dt_nanos as f64 * 1e-6,
-                snapshot.timing_diag_callback_gap_ns as f64 * 1e-6,
-                snapshot_song_time,
-                slope,
-                snapshot.valid_at_host_nanos,
-                captured_host_nanos,
-            );
-        }
-        return song_clock_music_time_ns(snapshot, captured_at, captured_host_nanos);
-    }
-    if let Some(age) = snapshot.valid_at.checked_duration_since(captured_at) {
-        if snapshot.timing_diag_enabled {
-            debug!(
-                "AUDIO_DIAG snap_age_ms={:.3} path=instant callback_gap_ms={:.3} snapshot_song_time={:.6} slope={:.6} snapshot_host_nanos={} captured_host_nanos={}",
-                -(age.as_secs_f64() * 1000.0),
-                snapshot.timing_diag_callback_gap_ns as f64 * 1e-6,
-                snapshot_song_time,
-                slope,
-                snapshot.valid_at_host_nanos,
-                captured_host_nanos,
-            );
-        }
-    } else if let Some(lead) = captured_at.checked_duration_since(snapshot.valid_at) {
-        if snapshot.timing_diag_enabled {
-            debug!(
-                "AUDIO_DIAG snap_age_ms={:.3} path=instant callback_gap_ms={:.3} snapshot_song_time={:.6} slope={:.6} snapshot_host_nanos={} captured_host_nanos={}",
-                lead.as_secs_f64() * 1000.0,
-                snapshot.timing_diag_callback_gap_ns as f64 * 1e-6,
-                snapshot_song_time,
-                slope,
-                snapshot.valid_at_host_nanos,
-                captured_host_nanos,
-            );
-        }
-    } else if snapshot.timing_diag_enabled {
-        debug!(
-            "AUDIO_DIAG snap_age_ms=0.000 path=instant callback_gap_ms={:.3} snapshot_song_time={:.6} slope={:.6} snapshot_host_nanos={} captured_host_nanos={}",
-            snapshot.timing_diag_callback_gap_ns as f64 * 1e-6,
-            snapshot_song_time,
-            slope,
-            snapshot.valid_at_host_nanos,
-            captured_host_nanos,
-        );
-    }
-    song_clock_music_time_ns(snapshot, captured_at, captured_host_nanos)
-}
-
-#[inline(always)]
-fn display_clock_stutter_diag_enabled() -> bool {
-    log::log_enabled!(log::Level::Trace)
-}
-
-#[inline(always)]
-fn frame_stable_display_music_time_ns(
-    display_clock_state: &mut GameplayDisplayClockState,
-    at_host_nanos: u64,
-    target_display_time_ns: SongTimeNs,
-    delta_time: f32,
-    seconds_per_second: f32,
-    first_update: bool,
-) -> SongTimeNs {
-    display_clock_state.step(
-        at_host_nanos,
-        target_display_time_ns,
-        delta_time,
-        seconds_per_second,
-        first_update,
-        display_clock_stutter_diag_enabled(),
-    )
-}
-
 fn refresh_seek_dependent_state(state: &mut State) {
     refresh_active_attack_masks(state, 0.0);
     let current_bpm = state
@@ -1680,20 +909,6 @@ pub(crate) fn set_music_rate(state: &mut State, rate: f32) -> bool {
 pub(crate) fn seek_practice_display(state: &mut State, music_time: f32) {
     state.seek_practice_display(music_time);
     refresh_seek_dependent_state(state);
-}
-
-#[inline(always)]
-pub(super) fn clear_offset_adjust_hold_key(state: &mut State, key: GameplayOffsetAdjustKey) {
-    state.clear_offset_adjust_hold_key(key);
-}
-
-#[inline(always)]
-pub(super) fn start_offset_adjust_hold_key(
-    state: &mut State,
-    key: GameplayOffsetAdjustKey,
-    at: Instant,
-) -> f32 {
-    state.start_offset_adjust_hold_key(key, at)
 }
 
 #[inline(always)]
@@ -1763,7 +978,7 @@ fn set_autoplay_enabled(state: &mut State, enabled: bool, now_music_time: f32) {
             state.set_autoplay_cursor_for_enable(
                 player,
                 state.chart_runtime.mine_scan.next_tap_miss_cursor[player],
-                player_note_range(state, player),
+                state.note_range_for_player(player),
             );
         }
         debug!("Autoplay enabled (F8). Scores for this stage will not be saved.");
@@ -1802,7 +1017,7 @@ pub(super) fn run_autoplay(state: &mut State, now_music_time_ns: SongTimeNs) {
     }
 
     for player in 0..state.setup.num_players {
-        let note_range = player_note_range(state, player);
+        let note_range = state.note_range_for_player(player);
         let mut cursor = state.autoplay_cursor(player).max(note_range.0);
         loop {
             let mut events = [None; MAX_COLS];
@@ -1921,7 +1136,7 @@ pub(crate) fn handle_queued_raw_key(
             set_autoplay_enabled(state, enabled, now_music_time)
         }
         GameplayRawKeyPlan::StartOffsetAdjust { key, target } => {
-            let delta = start_offset_adjust_hold_key(state, key, timestamp);
+            let delta = state.start_offset_adjust_hold_key(key, timestamp);
             match target {
                 GameplayOffsetAdjustTarget::Global => {
                     let _ = state.apply_global_offset_delta(delta);
@@ -1932,23 +1147,10 @@ pub(crate) fn handle_queued_raw_key(
                 GameplayOffsetAdjustTarget::None => {}
             }
         }
-        GameplayRawKeyPlan::ClearOffsetAdjust(key) => clear_offset_adjust_hold_key(state, key),
+        GameplayRawKeyPlan::ClearOffsetAdjust(key) => state.clear_offset_adjust_hold_key(key),
         GameplayRawKeyPlan::None => {}
     }
     action
-}
-
-static LAST_UNMAPPED_INPUT_CLOCK_WARN_NS: AtomicI64 =
-    AtomicI64::new(UNMAPPED_INPUT_CLOCK_WARN_NEVER_NS);
-
-#[inline(always)]
-fn record_unmapped_input_clock_warning(song_time_ns: SongTimeNs) -> bool {
-    let last = LAST_UNMAPPED_INPUT_CLOCK_WARN_NS.load(Ordering::Relaxed);
-    let should_warn = should_warn_unmapped_input_clock(last, song_time_ns);
-    if should_warn {
-        LAST_UNMAPPED_INPUT_CLOCK_WARN_NS.store(song_time_ns, Ordering::Relaxed);
-    }
-    should_warn
 }
 
 #[inline(always)]
@@ -1972,15 +1174,6 @@ fn receptor_step_behavior_for_col(
         .display
         .noteskin_effects
         .receptor_step_behavior_for_col(player, local_col, window)
-}
-
-#[inline(always)]
-fn set_receptor_glow_timers_for_col(
-    state: &mut State,
-    col: usize,
-    timers: GameplayReceptorGlowTimers,
-) {
-    state.set_receptor_glow_timers(col, timers);
 }
 
 #[inline(always)]
@@ -2021,7 +1214,7 @@ fn apply_gameplay_menu_input_plan(
         GameplayMenuInputPlan::ArmHold(key) => {
             state.control.exit_input.arm_hold(key, timestamp);
         }
-        GameplayMenuInputPlan::AbortHold(_) => abort_hold_to_exit(state, timestamp),
+        GameplayMenuInputPlan::AbortHold(_) => state.control.exit_input.abort_hold(timestamp),
         GameplayMenuInputPlan::BeginExit(kind) => {
             state.begin_exit_transition(kind);
         }
@@ -2050,7 +1243,7 @@ pub(super) fn update_lane_input_slot(
 #[inline(always)]
 pub(super) fn trigger_receptor_glow_pulse(state: &mut State, col: usize) {
     let behavior = receptor_glow_behavior_for_col(state, col);
-    set_receptor_glow_timers_for_col(state, col, receptor_glow_pulse_timers(behavior));
+    state.set_receptor_glow_timers(col, receptor_glow_pulse_timers(behavior));
 }
 
 #[inline(always)]
@@ -2076,14 +1269,14 @@ pub(super) fn trigger_receptor_score_pulse(state: &mut State, col: usize, window
 #[inline(always)]
 fn start_receptor_glow_press(state: &mut State, col: usize) {
     let behavior = receptor_glow_behavior_for_col(state, col);
-    set_receptor_glow_timers_for_col(state, col, receptor_glow_press_timers(behavior));
+    state.set_receptor_glow_timers(col, receptor_glow_press_timers(behavior));
 }
 
 #[inline(always)]
 fn release_receptor_glow(state: &mut State, col: usize) {
     let behavior = receptor_glow_behavior_for_col(state, col);
     let timers = receptor_glow_release_timers(behavior, state.receptor_glow_press_timer(col));
-    set_receptor_glow_timers_for_col(state, col, timers);
+    state.set_receptor_glow_timers(col, timers);
 }
 
 fn queue_input_edge(
@@ -2521,14 +1714,6 @@ pub(crate) fn start_practice_music_at(
 ) {
     state.start_practice_music_at(playback_music_time, judge_start_music_time);
     refresh_seek_dependent_state(state);
-}
-
-fn step_stats_play_style(play_style: GameplayInputPlayStyle) -> StepStatsPlayStyle {
-    match play_style {
-        GameplayInputPlayStyle::Single => StepStatsPlayStyle::Single,
-        GameplayInputPlayStyle::Double => StepStatsPlayStyle::Double,
-        GameplayInputPlayStyle::Versus => StepStatsPlayStyle::Versus,
-    }
 }
 
 pub(crate) fn init(
@@ -3610,7 +2795,7 @@ pub(crate) fn init(
         pending_input: GameplayPendingInputState::with_capacity(pending_edges_capacity),
     };
     state.control.update_trace =
-        GameplayUpdateTraceState::from_capacity_snapshot(&gameplay_capacity_trace_snapshot(&state));
+        GameplayUpdateTraceState::from_capacity_snapshot(&state.capacity_trace_snapshot());
     refresh_active_attack_masks(&mut state, 0.0);
     let current_bpm = state
         .timing_runtime
@@ -3639,160 +2824,11 @@ pub(crate) fn init(
     state
 }
 
-#[inline(always)]
-fn timing_hit_log_enabled() -> bool {
-    log::log_enabled!(log::Level::Debug)
-}
-
-#[inline(always)]
-pub(super) fn gameplay_input_log_enabled() -> bool {
-    log::log_enabled!(log::Level::Debug)
-}
-
-#[inline(always)]
-fn log_tap_judge_candidate(
-    enabled: bool,
-    reason: &str,
-    player: usize,
-    column: usize,
-    current_row_index: usize,
-    current_time_ns: SongTimeNs,
-    note_index: usize,
-    note: &Note,
-    note_time_ns: SongTimeNs,
-    rate: f32,
-) {
-    if !enabled {
-        return;
-    }
-    let offset_music_ns = current_time_ns.saturating_sub(note_time_ns);
-    debug!(
-        concat!(
-            "GAMEPLAY TAP JUDGE: reason={}, player={}, lane={}, note_index={}, ",
-            "note_col={}, note_type={:?}, note_row={}, current_row={}, beat={:.3}, ",
-            "quant={}, fake={}, can_be_judged={}, result_set={}, early_result_set={}, ",
-            "note_time_s={:.6}, event_time_s={:.6}, offset_ms={:.2}, rate={:.3}"
-        ),
-        reason,
-        player,
-        column,
-        note_index,
-        note.column,
-        note.note_type,
-        note.row_index,
-        current_row_index,
-        note.beat,
-        note.quantization_idx,
-        note.is_fake,
-        note.can_be_judged,
-        note.result.is_some(),
-        note.early_result.is_some(),
-        song_time_ns_to_seconds(note_time_ns),
-        song_time_ns_to_seconds(current_time_ns),
-        judgment_time_error_ms_from_music_ns(offset_music_ns, rate),
-        rate,
-    );
-}
-
-#[inline(always)]
-fn log_timing_hit_detail(
-    enabled: bool,
-    stream_pos_s: f32,
-    grade: JudgeGrade,
-    row_index: usize,
-    col: usize,
-    beat: f32,
-    song_offset_s: f32,
-    global_offset_s: f32,
-    note_time_ns: SongTimeNs,
-    event_time_ns: SongTimeNs,
-    music_now_s: f32,
-    rate: f32,
-    lead_in_s: f32,
-) {
-    if !enabled {
-        return;
-    }
-    let note_time_s = song_time_ns_to_seconds(note_time_ns);
-    let event_time_s = song_time_ns_to_seconds(event_time_ns);
-    let expected_stream_for_note_s =
-        note_time_s / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
-    let expected_stream_for_hit_s =
-        event_time_s / rate + lead_in_s + global_offset_s * (1.0 - rate) / rate;
-    let stream_delta_note_ms = (stream_pos_s - expected_stream_for_note_s) * 1000.0;
-    let stream_delta_hit_ms = (stream_pos_s - expected_stream_for_hit_s) * 1000.0;
-    debug!(
-        concat!(
-            "TIMING HIT: grade={:?}, row={}, col={}, beat={:.3}, ",
-            "song_offset_s={:.4}, global_offset_s={:.4}, ",
-            "note_time_s={:.6}, event_time_s={:.6}, music_now_s={:.6}, ",
-            "offset_ms={:.2}, rate={:.3}, lead_in_s={:.4}, ",
-            "stream_pos_s={:.6}, stream_note_s={:.6}, stream_delta_note_ms={:.2}, ",
-            "stream_hit_s={:.6}, stream_delta_hit_ms={:.2}"
-        ),
-        grade,
-        row_index,
-        col,
-        beat,
-        song_offset_s,
-        global_offset_s,
-        note_time_s,
-        event_time_s,
-        music_now_s,
-        ((event_time_s - note_time_s) / rate) * 1000.0,
-        rate,
-        lead_in_s,
-        stream_pos_s,
-        expected_stream_for_note_s,
-        stream_delta_note_ms,
-        expected_stream_for_hit_s,
-        stream_delta_hit_ms,
-    );
-}
-
 fn tap_judgment_uses_bright_explosion(state: &State, player: usize, judgment: &Judgment) -> bool {
     let Some(profile) = state.profiles_runtime.profiles.get(player) else {
         return false;
     };
-    tap_judgment_uses_bright_explosion_for_options(
-        FantasticFeedbackOptions {
-            show_fa_plus_window: profile.show_fa_plus_window,
-            fa_plus_10ms_blue_window: profile.fa_plus_10ms_blue_window,
-            split_15_10ms: profile.split_15_10ms,
-            custom_fantastic_window: profile.custom_fantastic_window,
-        },
-        judgment,
-    )
-}
-
-#[inline(always)]
-fn column_flash_options_from_profile(profile: &profile_data::Profile) -> ColumnFlashOptions {
-    let mask = profile.column_flash_mask;
-    ColumnFlashOptions {
-        enabled: profile.column_flash_on_miss,
-        blue_fantastic: mask.contains(profile_data::ColumnFlashMask::BLUE_FANTASTIC),
-        white_fantastic: mask.contains(profile_data::ColumnFlashMask::WHITE_FANTASTIC),
-        excellent: mask.contains(profile_data::ColumnFlashMask::EXCELLENT),
-        great: mask.contains(profile_data::ColumnFlashMask::GREAT),
-        decent: mask.contains(profile_data::ColumnFlashMask::DECENT),
-        way_off: mask.contains(profile_data::ColumnFlashMask::WAY_OFF),
-        miss: mask.contains(profile_data::ColumnFlashMask::MISS),
-    }
-}
-
-#[inline(always)]
-fn tap_explosion_options_from_profile(profile: &profile_data::Profile) -> TapExplosionOptions {
-    let mask = profile.tap_explosion_active_mask;
-    TapExplosionOptions {
-        fantastic: mask.contains(profile_data::TapExplosionMask::FANTASTIC),
-        excellent: mask.contains(profile_data::TapExplosionMask::EXCELLENT),
-        great: mask.contains(profile_data::TapExplosionMask::GREAT),
-        decent: mask.contains(profile_data::TapExplosionMask::DECENT),
-        way_off: mask.contains(profile_data::TapExplosionMask::WAY_OFF),
-        miss: mask.contains(profile_data::TapExplosionMask::MISS),
-        held: mask.contains(profile_data::TapExplosionMask::HELD),
-        holding: mask.contains(profile_data::TapExplosionMask::HOLDING),
-    }
+    tap_judgment_uses_bright_explosion_from_profile(profile, judgment)
 }
 
 #[inline(always)]
@@ -3999,7 +3035,7 @@ pub(super) fn handle_hold_let_go(
         );
     }
     if player_update.capture_failed_ex_score_inputs {
-        capture_failed_ex_score_inputs(state, player);
+        state.capture_failed_ex_score_inputs(player, player_blue_window_ms(state, player));
     }
     if hold_resolution_updates_grade_totals(
         update.result,
@@ -4121,7 +3157,7 @@ pub(super) fn handle_hold_success(state: &mut State, column: usize, note_index: 
         );
     }
     if player_update.capture_failed_ex_score_inputs {
-        capture_failed_ex_score_inputs(state, player);
+        state.capture_failed_ex_score_inputs(player, player_blue_window_ms(state, player));
     }
     if hold_resolution_updates_grade_totals(
         update.result,
@@ -4207,7 +3243,11 @@ pub(super) fn finalize_row_judgment(
     state.chart_runtime.row_entries[row_entry_index].final_outcome = Some(plan.outcome);
     record_player_live_timing_stats(&mut state.players_runtime.players[player], &final_judgment);
     if plan.record_display_window_counts {
-        record_display_window_counts(state, player, &final_judgment);
+        state.progress.window_counts.record_judgment(
+            player,
+            &final_judgment,
+            player_blue_window_ms(state, player),
+        );
     }
     let current_music_time = state.current_music_time_seconds();
     if plan.apply_player_state {
@@ -4248,7 +3288,7 @@ pub(super) fn finalize_row_judgment(
         );
     }
     if plan.capture_failed_ex_score_inputs {
-        capture_failed_ex_score_inputs(state, player);
+        state.capture_failed_ex_score_inputs(player, player_blue_window_ms(state, player));
     }
 }
 
@@ -4375,7 +3415,7 @@ fn apply_pending_mine_hits(state: &mut State) {
                 );
             }
             if side_effect_plan.capture_failed_ex_score_inputs {
-                capture_failed_ex_score_inputs(state, player);
+                state.capture_failed_ex_score_inputs(player, player_blue_window_ms(state, player));
             }
             let mut player_state = mine_hit_player_state(&state.players_runtime.players[player]);
             let player_update = apply_mine_hit_player_state(
@@ -4920,7 +3960,7 @@ fn judge_a_tap(state: &mut State, column: usize, current_time_ns: SongTimeNs) ->
                         );
                     }
                     if plan.capture_failed_ex_score_inputs {
-                        capture_failed_ex_score_inputs(state, player);
+                        state.capture_failed_ex_score_inputs(player, player_blue_window_ms(state, player));
                     }
                     render_provisional_early_rescore_feedback(
                         state,
@@ -5192,7 +4232,7 @@ fn judge_a_lift(state: &mut State, column: usize, current_time_ns: SongTimeNs) -
                     );
                 }
                 if plan.capture_failed_ex_score_inputs {
-                    capture_failed_ex_score_inputs(state, player);
+                    state.capture_failed_ex_score_inputs(player, player_blue_window_ms(state, player));
                 }
                 render_provisional_early_rescore_feedback(
                     state,
@@ -5326,15 +4366,6 @@ fn decay_let_go_hold_life(state: &mut State) {
         &mut state.hold_runtime.decaying_hold_indices,
         state.clock.song_position.current_music_time_ns,
         rate,
-    );
-}
-
-#[inline(always)]
-fn queue_missed_hold_resolution(state: &mut State, note_index: usize) {
-    queue_pending_missed_hold_resolution(
-        &mut state.hold_runtime.pending_missed_hold_resolution,
-        &mut state.hold_runtime.pending_missed_hold_indices,
-        note_index,
     );
 }
 
@@ -5504,7 +4535,11 @@ fn apply_time_based_tap_misses(state: &mut State, music_time_ns: SongTimeNs) {
             let player = player_event.player;
             let event = player_event.event;
             if event.queue_missed_hold_resolution {
-                queue_missed_hold_resolution(state, event.note_index);
+                queue_pending_missed_hold_resolution(
+                    &mut state.hold_runtime.pending_missed_hold_resolution,
+                    &mut state.hold_runtime.pending_missed_hold_indices,
+                    event.note_index,
+                );
             }
             set_final_note_result(state, event.note_index, event.judgment);
             {
@@ -9042,7 +8077,7 @@ return Def.ActorFrame{}
         };
 
         let constants =
-            super::build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
+            build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
         let (windows, unsupported) =
             super::build_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0, &constants);
 
@@ -9128,7 +8163,7 @@ return Def.ActorFrame{}
         };
 
         let constants =
-            super::build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
+            build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
         let (windows, unsupported) =
             super::build_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0, &constants);
 
@@ -9221,7 +8256,7 @@ return Def.ActorFrame{}
             ..Default::default()
         };
         state.mods.attacks.mask_windows[0] =
-            super::build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
+            build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
 
         state.clock.visible_timing.current_music_time[0] = 2.0;
         refresh_active_attack_masks(&mut state, 0.0);
@@ -9251,7 +8286,7 @@ return Def.ActorFrame{}
             ..Default::default()
         };
         state.mods.attacks.mask_windows[0] =
-            super::build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
+            build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
 
         state.clock.visible_timing.current_music_time[0] = 0.016;
         refresh_active_attack_masks(&mut state, 0.016);
@@ -9295,7 +8330,7 @@ return Def.ActorFrame{}
             ..Default::default()
         };
         state.mods.attacks.mask_windows[0] =
-            super::build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
+            build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
 
         state.clock.visible_timing.current_music_time[0] = 0.016;
         refresh_active_attack_masks(&mut state, 0.016);
@@ -9407,7 +8442,7 @@ return Def.ActorFrame{}
             ..Default::default()
         };
         state.mods.attacks.mask_windows[0] =
-            super::build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
+            build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
 
         state.clock.visible_timing.current_music_time[0] = 0.6;
         refresh_active_attack_masks(&mut state, 0.0);
@@ -9434,23 +8469,7 @@ return Def.ActorFrame{}
             return;
         };
         let entry = root.join("lua/default.lua");
-        let mut context =
-            crate::game::parsing::song_lua::SongLuaCompileContext::new(&root, "Riddle");
-        context.style_name = "double".to_string();
-        context.players = [
-            crate::game::parsing::song_lua::SongLuaPlayerContext {
-                enabled: true,
-                difficulty: crate::game::parsing::song_lua::SongLuaDifficulty::Challenge,
-                speedmod: crate::game::parsing::song_lua::SongLuaSpeedMod::X(2.0),
-                ..crate::game::parsing::song_lua::SongLuaPlayerContext::default()
-            },
-            crate::game::parsing::song_lua::SongLuaPlayerContext {
-                enabled: false,
-                difficulty: crate::game::parsing::song_lua::SongLuaDifficulty::Challenge,
-                speedmod: crate::game::parsing::song_lua::SongLuaSpeedMod::X(2.0),
-                ..crate::game::parsing::song_lua::SongLuaPlayerContext::default()
-            },
-        ];
+        let context = super::test_song_lua_double_context(&root, "Riddle");
         let compiled = crate::game::parsing::song_lua::compile_song_lua(&entry, &context).unwrap();
         assert!(compiled.beat_mods.iter().any(|window| {
             (window.start - 70.5).abs() <= 0.001 && window.mods.contains("80% confusionoffset")
@@ -9464,7 +8483,7 @@ return Def.ActorFrame{}
             TimingData::from_segments(0.036, 0.0, &timing_segments, &test_row_to_beat(72 * 48));
         let mut state = regression_state(std::array::from_fn(|_| profile_data::Profile::default()));
         state.mods.attacks.mask_windows[0] =
-            super::build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
+            build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
 
         state.clock.visible_timing.current_music_time[0] = timing.get_time_for_beat(70.75);
         refresh_active_attack_masks(&mut state, 0.0);
@@ -9490,23 +8509,7 @@ return Def.ActorFrame{}
             return;
         };
         let entry = root.join("template/main.lua");
-        let mut context =
-            crate::game::parsing::song_lua::SongLuaCompileContext::new(&root, "KENPO SAITO");
-        context.style_name = "double".to_string();
-        context.players = [
-            crate::game::parsing::song_lua::SongLuaPlayerContext {
-                enabled: true,
-                difficulty: crate::game::parsing::song_lua::SongLuaDifficulty::Challenge,
-                speedmod: crate::game::parsing::song_lua::SongLuaSpeedMod::X(2.0),
-                ..crate::game::parsing::song_lua::SongLuaPlayerContext::default()
-            },
-            crate::game::parsing::song_lua::SongLuaPlayerContext {
-                enabled: false,
-                difficulty: crate::game::parsing::song_lua::SongLuaDifficulty::Challenge,
-                speedmod: crate::game::parsing::song_lua::SongLuaSpeedMod::X(2.0),
-                ..crate::game::parsing::song_lua::SongLuaPlayerContext::default()
-            },
-        ];
+        let context = super::test_song_lua_double_context(&root, "KENPO SAITO");
         let compiled = crate::game::parsing::song_lua::compile_song_lua(&entry, &context).unwrap();
         assert!(compiled.eases.iter().any(|window| {
             matches!(
@@ -9563,7 +8566,7 @@ return Def.ActorFrame{}
         let timing =
             TimingData::from_segments(0.0, 0.0, &timing_segments, &test_row_to_beat(200 * 48));
         let constants =
-            super::build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
+            build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
         let (windows, unsupported) =
             super::build_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0, &constants);
         assert_eq!(unsupported, 0);
@@ -9650,7 +8653,7 @@ return Def.ActorFrame{}
         };
 
         let windows =
-            super::build_song_lua_column_offset_windows_for_player(&compiled, &timing, 0, 0.0);
+            build_song_lua_column_offset_windows_for_player(&compiled, &timing, 0, 0.0);
 
         assert_eq!(windows.len(), 2);
         assert_eq!(windows[0].sustain_end_second, 2.0);

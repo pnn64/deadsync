@@ -7,7 +7,11 @@ license = "GPL-3.0"
 [dependencies]
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-core = { path = "../deadsync-core" }
+deadsync-profile = { path = "../deadsync-profile" }
 deadsync-rules = { path = "../deadsync-rules" }
+deadsync-simfile = { path = "../deadsync-simfile" }
+rssp = { git = "https://github.com/pnn64/rssp", branch = "main" }
+log = "0.4.32"
 twox-hash = "2.1.2"
 
 [lints.clippy]

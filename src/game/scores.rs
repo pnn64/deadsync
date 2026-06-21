@@ -16,7 +16,7 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use deadsync_gameplay::{
-    ChartAttackEffects, GameplayAttackMode, ScoreValidityOptions,
+    gameplay_attack_mode, chart_effects_from_profile, ScoreValidityOptions,
     score_invalid_reason_lines_for_options,
 };
 use deadsync_online::arrowcloud::{self as arrowcloud_api, ARROWCLOUD_BULK_MAX_HASHES};
@@ -32,25 +32,6 @@ mod itl;
 #[inline(always)]
 fn active_groovestats_service() -> groovestats_api::Service {
     online_groovestats::active_service()
-}
-
-#[inline(always)]
-fn gameplay_attack_mode(attack_mode: profile_data::AttackMode) -> GameplayAttackMode {
-    match attack_mode {
-        profile_data::AttackMode::Off => GameplayAttackMode::Off,
-        profile_data::AttackMode::On => GameplayAttackMode::On,
-        profile_data::AttackMode::Random => GameplayAttackMode::Random,
-    }
-}
-
-#[inline(always)]
-fn chart_effects_from_profile(profile: &profile_data::Profile) -> ChartAttackEffects {
-    ChartAttackEffects {
-        insert_mask: profile.insert_active_mask.bits(),
-        remove_mask: profile.remove_active_mask.bits(),
-        holds_mask: profile.holds_active_mask.bits(),
-        turn_bits: 0,
-    }
 }
 
 fn score_invalid_reason_lines_for_profile(
