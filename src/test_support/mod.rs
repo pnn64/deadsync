@@ -4,6 +4,8 @@ pub mod density_graph_bench;
 pub mod density_graph_life_bench;
 pub mod evaluation_bench;
 pub mod gameplay_bench;
+#[cfg(test)]
+mod gameplay_regression_tests;
 pub mod gameplay_stats_bench;
 pub mod gameplay_stats_double_bench;
 pub mod gameplay_stats_versus_bench;

@@ -1,9 +1,9 @@
 use super::{
+    GameplayCoreState,
     cache_gs_score_for_profile, chart_stats_for_imported_score, gameplay_run_failed,
     gameplay_run_passed, gameplay_side_for_player, get_or_fetch_player_leaderboards_for_side,
     invalidate_player_leaderboards_for_side, itl, lua_chart_submit_allowed, submit_record_banner,
 };
-use crate::game::gameplay;
 use crate::game::online::groovestats as online_groovestats;
 use crate::game::profile;
 use deadsync_core::input::MAX_PLAYERS;
@@ -393,7 +393,7 @@ fn groovestats_eval_state(
 }
 
 fn groovestats_manual_qr_url_from_gameplay(
-    gs: &gameplay::State,
+    gs: &GameplayCoreState,
     player_idx: usize,
 ) -> Option<String> {
     if player_idx >= gs.num_players() {
@@ -411,7 +411,7 @@ fn groovestats_manual_qr_url_from_gameplay(
 }
 
 pub fn groovestats_eval_state_from_gameplay(
-    gs: &gameplay::State,
+    gs: &GameplayCoreState,
     player_idx: usize,
 ) -> GrooveStatsEvalState {
     if player_idx >= gs.num_players().min(MAX_PLAYERS) {
@@ -488,7 +488,7 @@ fn groovestats_submit_invalid_reason(
 
 #[inline(always)]
 pub(super) fn groovestats_judgment_counts(
-    gs: &gameplay::State,
+    gs: &GameplayCoreState,
     player_idx: usize,
 ) -> GrooveStatsJudgmentCounts {
     let player = &gs.players()[player_idx];
@@ -519,7 +519,7 @@ fn groovestats_warn_submit_skip(side: profile_data::PlayerSide, chart_hash: &str
     );
 }
 
-fn groovestats_rescore_counts(gs: &gameplay::State, player_idx: usize) -> GrooveStatsRescoreCounts {
+fn groovestats_rescore_counts(gs: &GameplayCoreState, player_idx: usize) -> GrooveStatsRescoreCounts {
     let (start, end) = gs.note_range_for_player(player_idx);
     let mut counts = GrooveStatsRescoreCounts::default();
     for note in &gs.notes()[start..end] {
@@ -537,7 +537,7 @@ fn groovestats_rescore_counts(gs: &gameplay::State, player_idx: usize) -> Groove
     counts
 }
 
-fn groovestats_comment_string(gs: &gameplay::State, player_idx: usize) -> String {
+fn groovestats_comment_string(gs: &GameplayCoreState, player_idx: usize) -> String {
     let profile = &gs.profiles()[player_idx];
     let counts = groovestats_judgment_counts(gs, player_idx);
     let fa_plus_ex_score = if profile.show_fa_plus_window {
@@ -569,7 +569,7 @@ fn groovestats_comment_string(gs: &gameplay::State, player_idx: usize) -> String
 }
 
 fn groovestats_payload_for_player(
-    gs: &gameplay::State,
+    gs: &GameplayCoreState,
     player_idx: usize,
 ) -> Option<GrooveStatsSubmitPlayerPayload> {
     if player_idx >= gs.num_players() {
@@ -826,7 +826,7 @@ fn groovestats_retry_request(
     }
 }
 
-pub fn submit_groovestats_payloads_from_gameplay(gs: &gameplay::State) {
+pub fn submit_groovestats_payloads_from_gameplay(gs: &GameplayCoreState) {
     for player_idx in 0..gs.num_players().min(MAX_PLAYERS) {
         let side = gameplay_side_for_player(gs, player_idx);
         groovestats_reset_submit_ui_status(side, gs.charts()[player_idx].short_hash.as_str());

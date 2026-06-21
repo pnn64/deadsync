@@ -1,9 +1,9 @@
 use crate::config::SimpleIni;
-use crate::game::gameplay;
 use crate::game::online::groovestats as online_groovestats;
 use crate::game::profile;
 use crate::game::song::get_song_cache;
 use crate::game::stage_stats;
+use super::GameplayCoreState;
 use deadlib_platform::dirs;
 use deadsync_profile::Profile;
 use log::{debug, warn};
@@ -16,7 +16,7 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use deadsync_gameplay::{
-    gameplay_attack_mode, chart_effects_from_profile, ScoreValidityOptions,
+    PlayerRuntime, gameplay_attack_mode, chart_effects_from_profile, ScoreValidityOptions,
     score_invalid_reason_lines_for_options,
 };
 use deadsync_online::arrowcloud::{self as arrowcloud_api, ARROWCLOUD_BULK_MAX_HASHES};
@@ -1352,11 +1352,11 @@ where
     (written, false)
 }
 
-fn judgment_counts_arr(p: &gameplay::PlayerRuntime) -> [u32; 6] {
+fn judgment_counts_arr(p: &PlayerRuntime) -> [u32; 6] {
     p.judgment_counts
 }
 
-fn replay_edges_for_player(gs: &gameplay::State, player: usize) -> Vec<LocalReplayEdge> {
+fn replay_edges_for_player(gs: &GameplayCoreState, player: usize) -> Vec<LocalReplayEdge> {
     if player >= gs.num_players() {
         return Vec::new();
     }
@@ -1389,7 +1389,7 @@ fn replay_edges_for_player(gs: &gameplay::State, player: usize) -> Vec<LocalRepl
     out
 }
 
-pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
+pub fn save_local_scores_from_gameplay(gs: &GameplayCoreState) {
     if gs.autoplay_used() {
         debug!("Skipping local score save: autoplay was used during this stage.");
         return;
@@ -1534,7 +1534,7 @@ pub fn save_local_scores_from_gameplay(gs: &gameplay::State) {
 
 #[inline(always)]
 pub(super) fn gameplay_side_for_player(
-    gs: &gameplay::State,
+    gs: &GameplayCoreState,
     player_idx: usize,
 ) -> profile_data::PlayerSide {
     if gs.num_players() >= 2 {

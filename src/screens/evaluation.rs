@@ -56,7 +56,7 @@ use chrono::Local;
 const TRANSITION_IN_DURATION: f32 = 0.4;
 
 #[inline(always)]
-fn player_blue_window_ms(gs: &crate::game::gameplay::State, player_idx: usize) -> f32 {
+fn player_blue_window_ms(gs: &gameplay::State, player_idx: usize) -> f32 {
     let base = gs.default_fa_plus_window_s();
     let Some(profile) = gs.profiles().get(player_idx) else {
         return base * 1000.0;

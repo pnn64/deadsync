@@ -1,7 +1,6 @@
 use crate::act;
 use crate::assets::i18n::{self, LookupKey, lookup_key};
 use crate::assets::{AssetManager, FontRole, current_machine_font_key};
-use crate::game::gameplay::{self as gameplay_core};
 use crate::game::profile;
 use crate::screens::gameplay as gameplay_screen;
 use crate::screens::{Screen, ScreenAction};
@@ -11,7 +10,7 @@ use deadlib_present::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
 use deadsync_audio_stream as audio;
-use deadsync_gameplay::spacing_multiplier_for_percent;
+use deadsync_gameplay::{GameplayAction, handle_core_input, spacing_multiplier_for_percent, update_core};
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
@@ -425,19 +424,20 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         return ScreenAction::None;
     };
 
-    let action = gameplay_core::update(
+    let action = update_core(
         &mut state.gameplay,
         delta_time,
         gameplay_screen::audio_snapshot(),
+        || deadlib_platform::host_time::instant_nanos(std::time::Instant::now()),
     );
-    if matches!(action, gameplay_core::GameplayAction::None) {
+    if matches!(action, GameplayAction::None) {
         gameplay_screen::refresh_scorebox_snapshots(&mut state.gameplay);
     }
     gameplay_screen::drain_core_commands(&mut state.gameplay);
     let current_time = state.gameplay.current_music_time_seconds();
     let stop_time = state.gameplay.music_time_for_beat(stop_beat);
     if current_time >= stop_time + LOOP_AFTER_SECONDS
-        || !matches!(action, gameplay_core::GameplayAction::None)
+        || !matches!(action, GameplayAction::None)
     {
         start_playback(state, start_beat, stop_beat);
     }
@@ -457,7 +457,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             return ScreenAction::None;
         }
         if matches!(state.mode, Mode::Playing { .. }) && ev.action.is_gameplay_arrow() {
-            let _ = gameplay_core::handle_input(&mut state.gameplay, ev);
+            let _ = handle_core_input(&mut state.gameplay, ev);
         }
         return ScreenAction::None;
     }
@@ -469,7 +469,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 ScreenAction::None
             }
             _ => {
-                let _ = gameplay_core::handle_input(&mut state.gameplay, ev);
+                let _ = handle_core_input(&mut state.gameplay, ev);
                 ScreenAction::None
             }
         },
@@ -960,7 +960,7 @@ fn start_playback(state: &mut State, start_beat: f32, stop_beat: f32) {
     clear_page_hold_inputs(state);
     let start_time = state.gameplay.music_time_for_beat(start_beat);
     let playback_time = snapped_playback_music_time(state, start_time - LEAD_IN_SECONDS);
-    gameplay_core::start_practice_music_at(&mut state.gameplay, playback_time, start_time);
+    state.gameplay.start_practice_music_at(playback_time, start_time);
     crate::screens::gameplay::drain_core_commands(&mut state.gameplay);
     state.mode = Mode::Playing {
         start_beat,
@@ -1386,7 +1386,7 @@ fn set_cursor(state: &mut State, beat: f32) {
 fn snap_display_to_cursor(state: &mut State) {
     state.display_beat = state.cursor_beat;
     let music_time = state.gameplay.music_time_for_beat(state.display_beat);
-    gameplay_core::seek_practice_display(&mut state.gameplay, music_time);
+    state.gameplay.seek_practice_display(music_time);
 }
 
 /// Ease the displayed scroll position toward the cursor so seeking through the
@@ -1403,7 +1403,7 @@ fn update_display_scroll(state: &mut State, delta_time: f32) {
     }
     state.display_beat = next;
     let music_time = state.gameplay.music_time_for_beat(state.display_beat);
-    gameplay_core::seek_practice_display(&mut state.gameplay, music_time);
+    state.gameplay.seek_practice_display(music_time);
 }
 
 /// Pure easing step for [`update_display_scroll`], split out for testing.
@@ -1456,7 +1456,7 @@ fn change_music_rate(state: &mut State, delta: f32) -> bool {
         set_music_rate_flash(state, "FlashMusicRateLimit", current);
         return false;
     }
-    let changed = gameplay_core::set_music_rate(&mut state.gameplay, new_rate);
+    let changed = state.gameplay.set_music_rate(new_rate);
     profile::set_session_music_rate(new_rate);
     audio::set_music_rate(new_rate);
     if changed {

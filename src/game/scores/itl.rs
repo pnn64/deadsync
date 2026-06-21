@@ -1,10 +1,11 @@
 use super::{
+    GameplayCoreState,
     GrooveStatsSubmitPlayerJob, gameplay_run_passed, gameplay_side_for_player,
     get_cached_player_leaderboard_itl_self_rank_for_side,
     get_or_fetch_player_leaderboards_for_side, groovestats_eval_state_from_gameplay,
     groovestats_judgment_counts,
 };
-use crate::game::gameplay;
+
 use crate::game::online::downloads;
 use crate::game::profile;
 use crate::game::song::{get_song_cache, song_cache_generation};
@@ -847,7 +848,7 @@ pub fn get_cached_itl_tournament_overall_ranks_for_side(
 }
 
 pub fn save_itl_data_from_gameplay(
-    gs: &gameplay::State,
+    gs: &GameplayCoreState,
 ) -> [Option<ItlEventProgress>; MAX_PLAYERS] {
     let mut progress: [Option<ItlEventProgress>; MAX_PLAYERS] = std::array::from_fn(|_| None);
     if gs.autoplay_used() {
@@ -1035,7 +1036,7 @@ pub fn save_itl_data_from_gameplay(
     progress
 }
 
-pub(super) fn current_score_hundredths(gs: &gameplay::State, player_idx: usize) -> u32 {
+pub(super) fn current_score_hundredths(gs: &GameplayCoreState, player_idx: usize) -> u32 {
     let (start, end) = gs.note_range_for_player(player_idx);
     let totals = gs.display_totals_for_player(player_idx);
     let ex_percent = judgment::calculate_ex_score_from_notes(
@@ -1055,7 +1056,7 @@ pub(super) fn current_score_hundredths(gs: &gameplay::State, player_idx: usize) 
 }
 
 pub(super) fn current_score_hundredths_for_submit(
-    gs: &gameplay::State,
+    gs: &GameplayCoreState,
     player_idx: usize,
 ) -> Option<u32> {
     itl_all_timing_windows_enabled(&gs.profiles()[player_idx])
@@ -1691,7 +1692,7 @@ fn delta_i32(current: u32, previous: u32) -> i32 {
 }
 
 fn loaded_chart_no_cmod_for_gameplay(
-    gs: &gameplay::State,
+    gs: &GameplayCoreState,
     player_idx: usize,
     profile_id: &str,
 ) -> Option<bool> {
@@ -1708,7 +1709,7 @@ fn loaded_chart_no_cmod_for_gameplay(
     Some(chart_no_cmod(song, prev))
 }
 
-pub fn should_warn_cmod_for_itl_chart(gs: &gameplay::State, player_idx: usize) -> bool {
+pub fn should_warn_cmod_for_itl_chart(gs: &GameplayCoreState, player_idx: usize) -> bool {
     if player_idx >= gs.num_players().min(MAX_PLAYERS)
         || gs.course_display_is_course_stage()
         || !matches!(
@@ -1808,7 +1809,7 @@ fn itl_clear_type(judgments: &ItlJudgments) -> u8 {
     clear_type
 }
 
-fn itl_judgments_from_gameplay(gs: &gameplay::State, player_idx: usize) -> ItlJudgments {
+fn itl_judgments_from_gameplay(gs: &GameplayCoreState, player_idx: usize) -> ItlJudgments {
     let counts = groovestats_judgment_counts(gs, player_idx);
     ItlJudgments {
         w0: counts.fantastic_plus,
@@ -1837,7 +1838,7 @@ fn itl_all_timing_windows_enabled(profile: &profile_data::Profile) -> bool {
         .all(|disabled| !*disabled)
 }
 
-fn itl_eval_state(gs: &gameplay::State, player_idx: usize, data: &ItlFileData) -> ItlEvalState {
+fn itl_eval_state(gs: &GameplayCoreState, player_idx: usize, data: &ItlFileData) -> ItlEvalState {
     let used_cmod = matches!(
         gs.profiles()[player_idx].scroll_speed,
         ScrollSpeedSetting::CMod(_)
@@ -1915,7 +1916,7 @@ fn itl_eval_state(gs: &gameplay::State, player_idx: usize, data: &ItlFileData) -
     }
 }
 
-pub fn itl_eval_state_from_gameplay(gs: &gameplay::State, player_idx: usize) -> ItlEvalState {
+pub fn itl_eval_state_from_gameplay(gs: &GameplayCoreState, player_idx: usize) -> ItlEvalState {
     if player_idx >= gs.num_players().min(MAX_PLAYERS) {
         return ItlEvalState::default();
     }

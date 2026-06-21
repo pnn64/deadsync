@@ -39,14 +39,27 @@ use deadsync_chart::{
     SyncPref,
 };
 use deadsync_core::input::MAX_PLAYERS;
+use deadsync_core::song_time::song_time_ns_to_seconds;
 use deadsync_gameplay::{
-    FantasticWindowOptions, GameplayAudioSnapshot, GameplayConfig, GameplayMiniIndicatorData,
-    GameplayMusicCut, GameplayScoreDisplayMode, GameplayStreamClockSnapshot, GameplayViewport,
-    LeadInTiming, ScrollEffects, SongLuaCompilePlayStyle, blue_fantastic_window_ms,
-    gameplay_is_single_p2_side,
+    AUTOSYNC_OFFSET_SAMPLE_COUNT, AutosyncMode, CourseDisplayCarry, CourseDisplayTiming,
+    CourseDisplayTotals, ExitTransitionKind, FantasticWindowOptions, GameplayAction, GameplayAudioCommand,
+    GameplayAudioSnapshot, GameplayConfig, GameplayExit, GameplayInputPlayStyle,
+    GameplayInputPlayerSide, GameplayMiniIndicatorData, GameplayMusicCut,
+    GameplayNoteskinData, GameplayNoteskinEffects, GameplayReceptorGlowBehavior,
+    GameplayReceptorStepBehavior, GameplaySession,
+    GameplaySessionCommand, GameplayStreamClockSnapshot, GameplayTween, GameplayViewport,
+    HoldToExitKey, LeadInTiming, MINE_EXPLOSION_DURATION, RECEPTOR_STEP_WINDOWS,
+    RECEPTOR_Y_OFFSET_FROM_CENTER, RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE,
+    ReplayInputEdge, ReplayOffsetSnapshot, SongLuaCompilePlayStyle,
+    SongLuaOverlayMessageRuntime, TAP_EXPLOSION_WINDOWS, autosync_mode_status_line,
+    blue_fantastic_window_ms, exit_transition_alpha, gameplay_is_single_p2_side,
+    gameplay_runtime_charts, gameplay_runtime_profiles, handle_core_input, profile_side_from_gameplay,
+    profile_tick_mode_from_gameplay, score_display_mode_from_profile, scroll_effects_from_option,
+    scroll_receptor_y, song_lua_ease_factor, song_lua_sound_paths,
     song_lua_compile_player_screen_x as gameplay_song_lua_compile_player_screen_x,
+    spacing_multiplier_for_percent, update_core,
 };
-use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_input::{InputEdge, InputEvent, VirtualAction};
 use deadsync_online::lobbies as lobby_data;
 use deadsync_profile as profile_data;
 use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -61,7 +74,17 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 
+pub use crate::game::GameplayCoreState;
+
 const TEXT_CACHE_LIMIT: usize = 8192;
+type SongLuaOverlayEaseWindowRuntime =
+    deadsync_gameplay::SongLuaOverlayEaseWindowRuntime<SongLuaOverlayStateDelta>;
+type GameplayCompiledSongLua =
+    deadsync_gameplay::GameplayCompiledSongLua<crate::game::parsing::song_lua::CompiledSongLua>;
+type GameplaySongLuaLayer =
+    deadsync_gameplay::GameplaySongLuaLayer<crate::game::parsing::song_lua::CompiledSongLua>;
+type GameplaySongLuaData =
+    deadsync_gameplay::GameplaySongLuaData<crate::game::parsing::song_lua::CompiledSongLua>;
 const INTRO_TEXT_SETTLE_SECONDS: f32 = 1.49; // 0.5 + 0.66 + 0.33 (SL OnCommand chain)
 const INTRO_TEXT_GETWIDTH_PAD: f32 = 0.25;
 const DIFFICULTY_METER_Y: f32 = 56.0;
@@ -71,27 +94,7 @@ const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0;
 pub use crate::screens::components::gameplay::notefield::ViewOverride as NotefieldViewOverride;
 
 #[inline(always)]
-const fn score_display_mode(mode: profile_data::ScoreDisplayMode) -> GameplayScoreDisplayMode {
-    match mode {
-        profile_data::ScoreDisplayMode::Normal => GameplayScoreDisplayMode::Normal,
-        profile_data::ScoreDisplayMode::Predictive => GameplayScoreDisplayMode::Predictive,
-    }
-}
-
-#[inline(always)]
-fn scroll_effects_from_option(scroll: profile_data::ScrollOption) -> ScrollEffects {
-    use profile_data::ScrollOption;
-    ScrollEffects::from_flags(
-        scroll.contains(ScrollOption::Reverse),
-        scroll.contains(ScrollOption::Split),
-        scroll.contains(ScrollOption::Alternate),
-        scroll.contains(ScrollOption::Cross),
-        scroll.contains(ScrollOption::Centered),
-    )
-}
-
-#[inline(always)]
-fn player_blue_window_ms(state: &gameplay_core::State, player_idx: usize) -> f32 {
+fn player_blue_window_ms(state: &GameplayCoreState, player_idx: usize) -> f32 {
     let base = state.default_fa_plus_window_s();
     let Some(profile) = state.profiles().get(player_idx) else {
         return base * 1000.0;
@@ -139,12 +142,12 @@ const fn song_lua_speedmod_from_setting(speed: ScrollSpeedSetting) -> SongLuaSpe
 
 #[inline(always)]
 const fn song_lua_compile_play_style(
-    play_style: gameplay_core::GameplayInputPlayStyle,
+    play_style: GameplayInputPlayStyle,
 ) -> SongLuaCompilePlayStyle {
     match play_style {
-        gameplay_core::GameplayInputPlayStyle::Single => SongLuaCompilePlayStyle::Single,
-        gameplay_core::GameplayInputPlayStyle::Versus => SongLuaCompilePlayStyle::Versus,
-        gameplay_core::GameplayInputPlayStyle::Double => SongLuaCompilePlayStyle::Double,
+        GameplayInputPlayStyle::Single => SongLuaCompilePlayStyle::Single,
+        GameplayInputPlayStyle::Versus => SongLuaCompilePlayStyle::Versus,
+        GameplayInputPlayStyle::Double => SongLuaCompilePlayStyle::Double,
     }
 }
 
@@ -153,8 +156,8 @@ fn song_lua_compile_player_screen_x(
     player_index: usize,
     profile: &profile_data::Profile,
     viewport: GameplayViewport,
-    play_style: gameplay_core::GameplayInputPlayStyle,
-    player_side: gameplay_core::GameplayInputPlayerSide,
+    play_style: GameplayInputPlayStyle,
+    player_side: GameplayInputPlayerSide,
     center_1player_notefield: bool,
 ) -> f32 {
     gameplay_song_lua_compile_player_screen_x(
@@ -198,9 +201,9 @@ fn song_lua_compile_context(
     };
     context.music_length_seconds = song.music_length_seconds.max(song.precise_last_second());
     context.style_name = match play_style {
-        gameplay_core::GameplayInputPlayStyle::Single => "single",
-        gameplay_core::GameplayInputPlayStyle::Versus => "versus",
-        gameplay_core::GameplayInputPlayStyle::Double => "double",
+        GameplayInputPlayStyle::Single => "single",
+        GameplayInputPlayStyle::Versus => "versus",
+        GameplayInputPlayStyle::Double => "double",
     }
     .to_string();
     context.global_offset_seconds = machine_global_offset_seconds;
@@ -273,17 +276,6 @@ impl Default for GameplayScoreboxData {
     }
 }
 
-use crate::game::gameplay::{
-    self as gameplay_core, CourseDisplayCarry, CourseDisplayTiming, CourseDisplayTotals,
-    GameplayAction, GameplayAudioCommand, GameplayCompiledSongLua, GameplayExit,
-    GameplayNoteskinData, GameplayNoteskinEffects, GameplayReceptorGlowBehavior,
-    GameplayReceptorStepBehavior, GameplaySession, GameplaySessionCommand, GameplaySongLuaData,
-    GameplaySongLuaLayer, GameplayTween, RECEPTOR_Y_OFFSET_FROM_CENTER,
-    RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, ReplayInputEdge, ReplayOffsetSnapshot,
-    handle_input as gameplay_handle_input, profile_side_from_gameplay, scroll_receptor_y,
-    update as gameplay_update,
-};
-
 // Simply Love ScreenGameplay in/default.lua keeps intro cover actors alive for 2.0s.
 const TRANSITION_IN_DURATION: f32 = 2.0;
 /// SL/zmod parity: when re-entering Gameplay as a restart, skip the splode +
@@ -306,7 +298,7 @@ pub struct DensityGraphRenderState {
 }
 
 impl DensityGraphRenderState {
-    fn from_gameplay(state: &gameplay_core::State) -> Self {
+    fn from_gameplay(state: &GameplayCoreState) -> Self {
         let graph = state.density_graph_view();
         let top_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] = std::array::from_fn(|player| {
             let graph_w = graph.top_w[player];
@@ -435,7 +427,7 @@ fn noteskin_effects_from_assets(
                 gameplay_receptor_glow_behavior(ns.receptor_glow_behavior),
             );
             for col in 0..cols {
-                for window in gameplay_core::RECEPTOR_STEP_WINDOWS {
+                for window in RECEPTOR_STEP_WINDOWS {
                     effects.set_receptor_step_behavior(
                         player,
                         col,
@@ -457,7 +449,7 @@ fn noteskin_effects_from_assets(
         };
         if let Some(ns) = tap_ns {
             for col in 0..cols {
-                for window in gameplay_core::TAP_EXPLOSION_WINDOWS {
+                for window in TAP_EXPLOSION_WINDOWS {
                     for bright in [false, true] {
                         effects.set_tap_explosion_duration(
                             player,
@@ -476,7 +468,7 @@ fn noteskin_effects_from_assets(
             .as_deref()
             .or_else(|| assets.noteskin[player].as_deref())
             .and_then(|ns| ns.mine_hit_explosion.as_ref())
-            .map_or(gameplay_core::MINE_EXPLOSION_DURATION, |explosion| {
+            .map_or(MINE_EXPLOSION_DURATION, |explosion| {
                 explosion.duration()
             });
         effects.set_mine_explosion_duration(player, mine_duration);
@@ -548,7 +540,7 @@ fn song_lua_sort_static_children(overlays: &[SongLuaOverlayActor], children: &mu
 
 fn song_lua_overlay_order_cache_from(
     overlays: &[SongLuaOverlayActor],
-    overlay_eases: &[crate::game::gameplay::SongLuaOverlayEaseWindowRuntime],
+    overlay_eases: &[SongLuaOverlayEaseWindowRuntime],
 ) -> SongLuaOverlayOrderCache {
     let mut child_lists = vec![Vec::new(); overlays.len() + 1];
     for (idx, overlay) in overlays.iter().enumerate() {
@@ -597,7 +589,7 @@ fn song_lua_overlay_order_cache_from(
 }
 
 pub struct State {
-    pub(crate) gameplay: gameplay_core::State,
+    pub(crate) gameplay: GameplayCoreState,
     pub(crate) noteskin_assets: GameplayNoteskinAssets,
     pub density_graph: DensityGraphRenderState,
     pub step_stats_extra_resolved: [profile_data::StepStatsExtra; MAX_PLAYERS],
@@ -650,7 +642,7 @@ pub struct State {
 
 impl State {
     pub fn from_gameplay(
-        gameplay: gameplay_core::State,
+        gameplay: GameplayCoreState,
         noteskin_assets: GameplayNoteskinAssets,
     ) -> Self {
         Self::from_gameplay_with_screen_data(
@@ -668,7 +660,7 @@ impl State {
     }
 
     fn from_gameplay_with_screen_data(
-        gameplay: gameplay_core::State,
+        gameplay: GameplayCoreState,
         noteskin_assets: GameplayNoteskinAssets,
         song_lua_sound_paths: Vec<PathBuf>,
         background_changes: Vec<SongBackgroundChange>,
@@ -801,7 +793,7 @@ impl State {
 }
 
 impl Deref for State {
-    type Target = gameplay_core::State;
+    type Target = GameplayCoreState;
 
     fn deref(&self) -> &Self::Target {
         &self.gameplay
@@ -894,7 +886,7 @@ fn gameplay_mini_indicator_data(
     let mut data = GameplayMiniIndicatorData::default();
     let num_players = session.play_style.player_count();
     for p in 0..num_players {
-        let side = gameplay_core::profile_side_from_gameplay(session.runtime_player_side(p));
+        let side = profile_side_from_gameplay(session.runtime_player_side(p));
         let chart_hash = charts[p].short_hash.as_str();
         let score_type = player_profiles[p].mini_indicator_score_type;
         data.personal_best_percent[p] =
@@ -913,7 +905,7 @@ fn gameplay_scorebox_data(
     let num_players = session.play_style.player_count();
     for p in 0..num_players {
         let gameplay_side = session.runtime_player_side(p);
-        let side = gameplay_core::profile_side_from_gameplay(gameplay_side);
+        let side = profile_side_from_gameplay(gameplay_side);
         data.profile_snapshot[profile_data::player_side_index(side)] =
             scores::scorebox_profile_snapshot(
                 &player_profiles[p],
@@ -923,7 +915,7 @@ fn gameplay_scorebox_data(
     }
 
     for p in 0..num_players {
-        let side = gameplay_core::profile_side_from_gameplay(session.runtime_player_side(p));
+        let side = profile_side_from_gameplay(session.runtime_player_side(p));
         let idx = profile_data::player_side_index(side);
         let profile_snapshot = &data.profile_snapshot[idx];
         if !profile_snapshot.display_scorebox || !profile_snapshot.gs_active {
@@ -977,29 +969,6 @@ pub(crate) fn notefield_model_cache_from_assets(
     });
     prewarm_notefield_model_cache_slots(&cache, assets, num_players);
     cache
-}
-
-pub(crate) fn gameplay_runtime_profiles(
-    player_profiles: &[profile_data::Profile; MAX_PLAYERS],
-    session: &GameplaySession,
-) -> [profile_data::Profile; MAX_PLAYERS] {
-    let mut runtime_profiles = (*player_profiles).clone();
-    if session.p2_runtime_player() {
-        runtime_profiles[0] = runtime_profiles[1].clone();
-    }
-    runtime_profiles
-}
-
-pub(crate) fn gameplay_runtime_charts(
-    charts: &[Arc<ChartData>; MAX_PLAYERS],
-    session: &GameplaySession,
-) -> [Arc<ChartData>; MAX_PLAYERS] {
-    let mut runtime_charts: [Arc<ChartData>; MAX_PLAYERS] =
-        std::array::from_fn(|player| charts[player].clone());
-    if session.p2_runtime_player() {
-        runtime_charts[0] = runtime_charts[1].clone();
-    }
-    runtime_charts
 }
 
 pub(crate) fn gameplay_noteskin_assets(
@@ -1201,29 +1170,6 @@ fn gameplay_song_lua_data(
     }
 }
 
-fn extend_song_lua_sound_paths(out: &mut Vec<PathBuf>, paths: &[PathBuf]) {
-    for path in paths {
-        if !out.contains(path) {
-            out.push(path.clone());
-        }
-    }
-}
-
-fn song_lua_sound_paths(data: &GameplaySongLuaData) -> Vec<PathBuf> {
-    let mut out = Vec::new();
-    if let Some(primary) = data.primary.as_ref() {
-        extend_song_lua_sound_paths(&mut out, &primary.compiled.sound_paths);
-    }
-    for layer in data
-        .background_layers
-        .iter()
-        .chain(data.foreground_layers.iter())
-    {
-        extend_song_lua_sound_paths(&mut out, &layer.compiled.sound_paths);
-    }
-    out
-}
-
 fn build_background_changes(
     song: &SongData,
     gameplay_chart: &GameplayChartData,
@@ -1311,7 +1257,10 @@ pub fn init(
         gameplay_mini_indicator_data(&runtime_charts, &runtime_profiles, &session);
     let scorebox_data = gameplay_scorebox_data(&runtime_charts, &runtime_profiles, &session);
     State::from_gameplay_with_screen_data(
-        gameplay_core::init(
+        deadsync_gameplay::init_gameplay_runtime::<
+            InputEdge,
+            crate::game::parsing::song_lua::SongLuaOverlayKind,
+        >(
             song,
             charts,
             gameplay_charts,
@@ -1809,7 +1758,7 @@ pub fn audio_snapshot() -> GameplayAudioSnapshot {
     }
 }
 
-pub fn drain_core_audio_commands(state: &mut gameplay_core::State) {
+pub fn drain_core_audio_commands(state: &mut GameplayCoreState) {
     for command in state.drain_audio_commands() {
         match command {
             GameplayAudioCommand::StopMusic => {
@@ -1845,12 +1794,12 @@ pub fn drain_core_audio_commands(state: &mut gameplay_core::State) {
     }
 }
 
-pub fn drain_core_session_commands(state: &mut gameplay_core::State) {
+pub fn drain_core_session_commands(state: &mut GameplayCoreState) {
     for command in state.drain_session_commands() {
         match command {
             GameplaySessionCommand::SetTimingTickMode(mode) => {
                 crate::game::profile::set_session_timing_tick_mode(
-                    gameplay_core::profile_tick_mode_from_gameplay(mode),
+                    profile_tick_mode_from_gameplay(mode),
                 );
             }
         }
@@ -1903,7 +1852,7 @@ pub fn refresh_scorebox_snapshots(state: &mut State) {
     }
 }
 
-pub fn drain_core_commands(state: &mut gameplay_core::State) {
+pub fn drain_core_commands(state: &mut GameplayCoreState) {
     drain_core_audio_commands(state);
     drain_core_session_commands(state);
 }
@@ -1927,7 +1876,7 @@ pub fn on_enter(state: &mut State) {
     }
 
     set_all_local_lobby_players_ready(state, true);
-    crate::game::gameplay::start_stage_music(state);
+    state.start_stage_music();
     drain_audio_commands(state);
     state.lobby_music_started = true;
 }
@@ -1963,7 +1912,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
 
         clear_lobby_disconnect_holds(state);
         set_all_local_lobby_players_ready(state, true);
-        crate::game::gameplay::start_stage_music(state);
+        state.start_stage_music();
         drain_audio_commands(state);
         state.lobby_music_started = true;
     }
@@ -1971,7 +1920,12 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     maybe_refresh_smx_sensor_data(state, delta_time);
     smx_profile::maybe_report();
     let previous_song_lua_time = state.current_music_time_display();
-    let action = gameplay_update(state, delta_time, audio_snapshot());
+    let action = update_core(
+        state,
+        delta_time,
+        audio_snapshot(),
+        || deadlib_platform::host_time::instant_nanos(Instant::now()),
+    );
     if matches!(action, GameplayAction::None) {
         refresh_scorebox_snapshots(state);
     }
@@ -2013,7 +1967,7 @@ fn play_song_lua_sound_events(state: &State, previous: f32, now: f32) {
 
 fn play_song_lua_sound_events_for(
     overlays: &[SongLuaOverlayActor],
-    overlay_events: &[Vec<crate::game::gameplay::SongLuaOverlayMessageRuntime>],
+    overlay_events: &[Vec<SongLuaOverlayMessageRuntime>],
     previous: f32,
     now: f32,
 ) {
@@ -2139,7 +2093,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         }
         return ScreenAction::None;
     }
-    let action = gameplay_handle_input(state, ev);
+    let action = handle_core_input(state, ev);
     drain_audio_commands(state);
     map_gameplay_action(action)
 }
@@ -2311,7 +2265,7 @@ fn sync_overlay_text(state: &State) -> Option<(Arc<str>, usize)> {
         line_count += 1;
         total_len += line.len();
     }
-    if let Some(line) = crate::game::gameplay::autosync_mode_status_line(state.autosync_mode()) {
+    if let Some(line) = autosync_mode_status_line(state.autosync_mode()) {
         lines[line_count] = line;
         line_count += 1;
         total_len += line.len();
@@ -2348,11 +2302,11 @@ fn cached_autosync_text(state: &State, old_offset: f32, new_offset: f32) -> Arc<
         let collecting_sample = state
             .autosync_sample_count()
             .saturating_add(1)
-            .min(crate::game::gameplay::AUTOSYNC_OFFSET_SAMPLE_COUNT);
+            .min(AUTOSYNC_OFFSET_SAMPLE_COUNT);
         format!(
             "Old offset: {old_offset:0.3}\nNew offset: {new_offset:0.3}\nStandard deviation: {stddev:0.3}\nCollecting sample: {collecting_sample} / {max_samples}",
             stddev = state.autosync_standard_deviation(),
-            max_samples = crate::game::gameplay::AUTOSYNC_OFFSET_SAMPLE_COUNT,
+            max_samples = AUTOSYNC_OFFSET_SAMPLE_COUNT,
         )
     })
 }
@@ -2432,9 +2386,9 @@ pub fn prewarm_text_layout(
     if let Some(text) = sync_offset_overlay_message(state) {
         cache.prewarm_text(fonts, "miso", text.as_ref(), None);
     }
-    if state.autosync_mode() != crate::game::gameplay::AutosyncMode::Off {
+    if state.autosync_mode() != AutosyncMode::Off {
         let (old_offset, new_offset) =
-            if state.autosync_mode() == crate::game::gameplay::AutosyncMode::Machine {
+            if state.autosync_mode() == AutosyncMode::Machine {
                 (
                     state.initial_global_offset_seconds(),
                     state.global_offset_seconds(),
@@ -3735,8 +3689,8 @@ fn song_lua_overlay_compose_state(
 fn song_lua_overlay_local_states_into(
     now: f32,
     overlays: &[SongLuaOverlayActor],
-    overlay_events: &[Vec<crate::game::gameplay::SongLuaOverlayMessageRuntime>],
-    overlay_eases: &[crate::game::gameplay::SongLuaOverlayEaseWindowRuntime],
+    overlay_events: &[Vec<SongLuaOverlayMessageRuntime>],
+    overlay_eases: &[SongLuaOverlayEaseWindowRuntime],
     overlay_ease_ranges: &[std::ops::Range<usize>],
     out: &mut Vec<SongLuaOverlayState>,
 ) {
@@ -3807,8 +3761,8 @@ fn song_lua_overlay_states_from_local_into(
 fn song_lua_overlay_state_sets_from_into(
     now: f32,
     overlays: &[SongLuaOverlayActor],
-    overlay_events: &[Vec<crate::game::gameplay::SongLuaOverlayMessageRuntime>],
-    overlay_eases: &[crate::game::gameplay::SongLuaOverlayEaseWindowRuntime],
+    overlay_events: &[Vec<SongLuaOverlayMessageRuntime>],
+    overlay_eases: &[SongLuaOverlayEaseWindowRuntime],
     overlay_ease_ranges: &[std::ops::Range<usize>],
     screen_width: f32,
     screen_height: f32,
@@ -4920,7 +4874,7 @@ fn song_lua_overlay_apply_blocks(
             continue;
         }
         let target = song_lua_overlay_state_with_delta(current, &block.delta);
-        let t = crate::game::gameplay::song_lua_ease_factor(
+        let t = song_lua_ease_factor(
             block.easing.as_deref(),
             ((elapsed - block.start) / block.duration).clamp(0.0, 1.0),
             block.opt1,
@@ -4934,7 +4888,7 @@ fn song_lua_overlay_apply_blocks(
 fn apply_song_lua_overlay_runtime_eases_for(
     now: f32,
     overlay_index: usize,
-    overlay_eases: &[crate::game::gameplay::SongLuaOverlayEaseWindowRuntime],
+    overlay_eases: &[SongLuaOverlayEaseWindowRuntime],
     overlay_ease_ranges: &[std::ops::Range<usize>],
     mut current: SongLuaOverlayState,
 ) -> SongLuaOverlayState {
@@ -4958,7 +4912,7 @@ fn apply_song_lua_overlay_runtime_eases_for(
             apply_song_lua_overlay_delta(&mut current, &ease.to);
             continue;
         }
-        let t = crate::game::gameplay::song_lua_ease_factor(
+        let t = song_lua_ease_factor(
             ease.easing.as_deref(),
             ((now - ease.start_second) / (ease.end_second - ease.start_second)).clamp(0.0, 1.0),
             ease.opt1,
@@ -4975,8 +4929,8 @@ fn song_lua_overlay_render_state_from(
     now: f32,
     overlay_index: usize,
     overlay: &SongLuaOverlayActor,
-    overlay_events: &[Vec<crate::game::gameplay::SongLuaOverlayMessageRuntime>],
-    overlay_eases: &[crate::game::gameplay::SongLuaOverlayEaseWindowRuntime],
+    overlay_events: &[Vec<SongLuaOverlayMessageRuntime>],
+    overlay_eases: &[SongLuaOverlayEaseWindowRuntime],
     overlay_ease_ranges: &[std::ops::Range<usize>],
 ) -> SongLuaOverlayState {
     let current = song_lua_message_state(
@@ -4998,7 +4952,7 @@ fn song_lua_message_state(
     now: f32,
     initial_state: SongLuaOverlayState,
     message_commands: &[SongLuaOverlayMessageCommand],
-    events: Option<&[crate::game::gameplay::SongLuaOverlayMessageRuntime]>,
+    events: Option<&[SongLuaOverlayMessageRuntime]>,
 ) -> SongLuaOverlayState {
     let Some(events) = events else {
         return initial_state;
@@ -5045,7 +4999,7 @@ fn song_lua_player_render_state(state: &State, player_index: usize) -> SongLuaOv
 fn song_lua_song_foreground_state_from(
     now: f32,
     song_foreground: &SongLuaCapturedActor,
-    events: &[crate::game::gameplay::SongLuaOverlayMessageRuntime],
+    events: &[SongLuaOverlayMessageRuntime],
 ) -> SongLuaOverlayState {
     song_lua_message_state(
         now,
@@ -8953,9 +8907,9 @@ pub fn push_actors(
             ));
         }
 
-        if state.autosync_mode() != crate::game::gameplay::AutosyncMode::Off {
+        if state.autosync_mode() != AutosyncMode::Off {
             let (old_offset, new_offset) =
-                if state.autosync_mode() == crate::game::gameplay::AutosyncMode::Machine {
+                if state.autosync_mode() == AutosyncMode::Machine {
                     (
                         state.initial_global_offset_seconds(),
                         state.global_offset_seconds(),
@@ -8994,10 +8948,10 @@ pub fn push_actors(
             (exit_prompt.hold_to_exit_key, exit_prompt.hold_to_exit_start)
         {
             let s = match key {
-                crate::game::gameplay::HoldToExitKey::Start => {
+                HoldToExitKey::Start => {
                     Some(tr("Gameplay", "ContinueHoldingStartGiveUp"))
                 }
-                crate::game::gameplay::HoldToExitKey::Back => {
+                HoldToExitKey::Back => {
                     Some(tr("Gameplay", "ContinueHoldingBackGiveUp"))
                 }
             };
@@ -9006,14 +8960,14 @@ pub fn push_actors(
         } else if let Some(exit) = &exit_prompt.exit_transition {
             let t = exit.started_at.elapsed().as_secs_f32();
             match exit.kind {
-                crate::game::gameplay::ExitTransitionKind::Out => {
+                ExitTransitionKind::Out => {
                     let alpha = (1.0 - t / ABORT_FADE_OUT_S).clamp(0.0, 1.0);
                     Some((
                         tr("Gameplay", "ContinueHoldingStartGiveUp").to_string(),
                         alpha,
                     ))
                 }
-                crate::game::gameplay::ExitTransitionKind::Cancel => {
+                ExitTransitionKind::Cancel => {
                     Some((tr("Gameplay", "ContinueHoldingBackGiveUp").to_string(), 1.0))
                 }
             }
@@ -9063,7 +9017,7 @@ pub fn push_actors(
     // Fade-to-black when giving up / backing out (Simply Love parity).
     let overlay_start = actors.len();
     if let Some(exit) = &state.exit_prompt_state().exit_transition {
-        let alpha = crate::game::gameplay::exit_transition_alpha(exit);
+        let alpha = exit_transition_alpha(exit);
         if alpha > 0.0 {
             actors.push(act!(quad:
                 align(0.0, 0.0): xy(0.0, 0.0):
@@ -9089,7 +9043,7 @@ pub fn push_actors(
         if cols == 0 {
             return 256.0;
         }
-        let spacing_mult = crate::game::gameplay::spacing_multiplier_for_percent(
+        let spacing_mult = spacing_multiplier_for_percent(
             state.profiles()[player_idx].spacing_percent,
         );
         let mut min_x = f32::INFINITY;
@@ -9686,7 +9640,7 @@ pub fn push_actors(
                     let blue_window_ms = player_blue_window_ms(state, player_idx);
                     let ex_percent = state.display_gameplay_ex_score_percent(
                         player_idx,
-                        score_display_mode(profile.score_display_mode),
+                        score_display_mode_from_profile(profile.score_display_mode),
                         blue_window_ms,
                     );
                     (
@@ -9696,7 +9650,7 @@ pub fn push_actors(
                 } else {
                     let score_percent = state.display_gameplay_itg_score_percent(
                         player_idx,
-                        score_display_mode(profile.score_display_mode),
+                        score_display_mode_from_profile(profile.score_display_mode),
                     );
                     (cached_score_2dp(score_percent), [1.0, 1.0, 1.0, 1.0])
                 };
@@ -9716,7 +9670,7 @@ pub fn push_actors(
                     let blue_window_ms = player_blue_window_ms(state, player_idx);
                     let hard_ex_percent = state.display_gameplay_hard_ex_score_percent(
                         player_idx,
-                        score_display_mode(profile.score_display_mode),
+                        score_display_mode_from_profile(profile.score_display_mode),
                         blue_window_ms,
                     );
                     let hex = color::HARD_EX_SCORE_RGBA;
@@ -9834,7 +9788,7 @@ pub fn push_actors(
                 diffuse(0.0, 0.0, 0.0, 1.0): z(91)
             ));
             let progress = song_meter_progress(
-                gameplay_core::song_time_ns_to_seconds(state.current_music_time_ns()),
+                song_time_ns_to_seconds(state.current_music_time_ns()),
                 state.song().precise_first_second(),
                 state.song().precise_last_second(),
             );
@@ -11163,8 +11117,8 @@ mod tests {
             player_profiles[1].show_ex_score = true;
             player_profiles[1].groovestats_username = "p2-user".to_string();
             let session = GameplaySession {
-                play_style: crate::game::gameplay::gameplay_play_style_from_profile(play_style),
-                player_side: crate::game::gameplay::gameplay_player_side_from_profile(
+                play_style: deadsync_gameplay::gameplay_play_style_from_profile(play_style),
+                player_side: deadsync_gameplay::gameplay_player_side_from_profile(
                     profile_data::PlayerSide::P2,
                 ),
                 joined_sides: [false, true],
@@ -14589,3 +14543,5 @@ mod tests {
         assert_eq!(gameplay_lobby_wait_text_for(&joined, true, None), None);
     }
 }
+
+

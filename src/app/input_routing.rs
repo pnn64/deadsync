@@ -1,11 +1,15 @@
 use super::{App, CurrentScreen, TransitionState};
 use crate::config;
+use deadsync_gameplay::{
+    GameplayOffsetAdjustKey, GameplayRawKeyInput, GameplayRawModifierKey, RawKeyAction,
+};
 use deadsync_input as logical_input;
 use deadsync_input::InputEvent;
 use deadsync_input::RawKeyboardEvent;
 use std::error::Error;
 use std::time::Instant;
 use winit::event_loop::ActiveEventLoop;
+use winit::keyboard::KeyCode;
 
 #[derive(Clone, Copy, Debug)]
 pub(super) struct GameplayRawKeyEvent {
@@ -32,8 +36,6 @@ pub(super) fn screen_accepts_queued_input(
 
 #[inline(always)]
 pub(super) fn gameplay_raw_key_event(raw_key: &RawKeyboardEvent) -> Option<GameplayQueuedEvent> {
-    use winit::keyboard::KeyCode;
-
     if raw_key.repeat {
         return None;
     }
@@ -55,6 +57,28 @@ pub(super) fn gameplay_raw_key_event(raw_key: &RawKeyboardEvent) -> Option<Gamep
         pressed: raw_key.pressed,
         timestamp: raw_key.timestamp,
     }))
+}
+
+#[inline(always)]
+fn gameplay_raw_modifier_key(code: KeyCode) -> Option<GameplayRawModifierKey> {
+    match code {
+        KeyCode::ShiftLeft | KeyCode::ShiftRight => Some(GameplayRawModifierKey::Shift),
+        KeyCode::ControlLeft | KeyCode::ControlRight => Some(GameplayRawModifierKey::Ctrl),
+        _ => None,
+    }
+}
+
+#[inline(always)]
+fn gameplay_raw_key_input(code: KeyCode) -> GameplayRawKeyInput {
+    match code {
+        KeyCode::KeyR => GameplayRawKeyInput::Restart,
+        KeyCode::F6 => GameplayRawKeyInput::Autosync,
+        KeyCode::F7 => GameplayRawKeyInput::TimingTick,
+        KeyCode::F8 => GameplayRawKeyInput::Autoplay,
+        KeyCode::F11 => GameplayRawKeyInput::OffsetAdjust(GameplayOffsetAdjustKey::Decrease),
+        KeyCode::F12 => GameplayRawKeyInput::OffsetAdjust(GameplayOffsetAdjustKey::Increase),
+        _ => GameplayRawKeyInput::Other,
+    }
 }
 
 impl App {
@@ -147,16 +171,16 @@ impl App {
         gs.set_raw_modifier_state(self.state.shell.shift_held, self.state.shell.ctrl_held);
         let now_music_time =
             gs.music_time_from_audio_snapshot(crate::screens::gameplay::audio_snapshot());
-        let action = crate::game::gameplay::handle_queued_raw_key(
-            gs,
-            ev.code,
+        let action = gs.handle_queued_raw_key_input(
+            gameplay_raw_key_input(ev.code),
+            gameplay_raw_modifier_key(ev.code),
             ev.pressed,
             ev.timestamp,
             now_music_time,
             allow_commands,
         );
         crate::screens::gameplay::drain_audio_commands(gs);
-        if matches!(action, crate::game::gameplay::RawKeyAction::Restart)
+        if matches!(action, RawKeyAction::Restart)
             && config::get().keyboard_features
             && self.state.session.course_run.is_none()
         {

@@ -7,6 +7,7 @@ license = "GPL-3.0"
 [dependencies]
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-core = { path = "../deadsync-core" }
+deadsync-input = { path = "../deadsync-input" }
 deadsync-profile = { path = "../deadsync-profile" }
 deadsync-rules = { path = "../deadsync-rules" }
 deadsync-simfile = { path = "../deadsync-simfile" }

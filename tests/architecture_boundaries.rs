@@ -4,11 +4,6 @@ use std::path::{Path, PathBuf};
 
 const GAME_UPWARD_DEP_BASELINE: &[(&str, &str, usize)] = &[
     ("src/game/course.rs", "config", 1),
-    ("src/game/gameplay.rs", "assets", 1),
-    ("src/game/gameplay.rs", "config", 8),
-    ("src/game/gameplay.rs", "screens", 3),
-    ("src/game/gameplay/attacks.rs", "config", 2),
-    ("src/game/gameplay/input.rs", "config", 1),
     ("src/game/online/arrowcloud.rs", "config", 1),
     ("src/game/online/downloads.rs", "config", 2),
     ("src/game/online/groovestats.rs", "config", 2),

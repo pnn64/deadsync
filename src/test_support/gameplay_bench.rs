@@ -1,9 +1,10 @@
 use crate::assets::AssetManager;
-use crate::game::{gameplay, profile};
+use crate::game::profile;
 use crate::screens::gameplay as gameplay_screen;
 use crate::test_support::{compose_scenarios, notefield_bench};
 use deadlib_present::actors::Actor;
 use deadlib_render::MeshVertex;
+use deadsync_gameplay::AutosyncMode;
 use deadsync_profile as profile_data;
 use std::sync::Arc;
 
@@ -42,8 +43,8 @@ pub fn fixture() -> GameplayBenchFixture {
         let state = base.state_mut();
         state.set_autoplay_enabled_for_benchmark(true);
         state.set_global_offsets(-0.021, -0.012);
-        state.set_autosync_state_for_benchmark(gameplay::AutosyncMode::Machine, 0.004, 11);
-        gameplay::set_music_rate(state, 1.15);
+        state.set_autosync_state_for_benchmark(AutosyncMode::Machine, 0.004, 11);
+        state.set_music_rate(1.15);
         state.set_song_position_for_benchmark(
             state.current_beat(),
             state.current_music_time_ns(),

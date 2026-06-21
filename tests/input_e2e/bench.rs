@@ -1,6 +1,6 @@
-use deadsync::game::gameplay::{self, GameplayAction, GameplayExit};
 use deadsync::test_support::notefield_bench;
 use deadsync_core::input::InputSource;
+use deadsync_gameplay::{GameplayAction, GameplayAudioSnapshot, GameplayExit, handle_core_input, update_core};
 use deadsync_input as input;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputBinding, InputEvent, Keymap, PadDir, PadEvent, PadId, VirtualAction};
@@ -241,7 +241,7 @@ fn reset_fixture(fixture: &mut notefield_bench::NotefieldBenchFixture, no_replay
 
 fn run_workload(
     args: &Args,
-    state: &mut gameplay::State,
+    state: &mut notefield_bench::GameplayCoreState,
     total_events: u64,
     measured: bool,
 ) -> u64 {
@@ -293,7 +293,7 @@ fn scenario_pressed(scenario: Scenario, event_ix: u64) -> bool {
 }
 
 fn run_key_event(
-    state: &mut gameplay::State,
+    state: &mut notefield_bench::GameplayCoreState,
     timestamp: Instant,
     host_nanos: u64,
     pressed: bool,
@@ -307,14 +307,14 @@ fn run_key_event(
         host_nanos,
     };
     input::map_raw_key_event_with(black_box(&ev), |iev| {
-        let action = gameplay::handle_input(state, black_box(&iev));
+        let action = handle_core_input(state, black_box(&iev));
         checksum = mix_checksum(checksum, checksum_input_event(iev, action));
     });
     checksum
 }
 
 fn run_pad_event(
-    state: &mut gameplay::State,
+    state: &mut notefield_bench::GameplayCoreState,
     timestamp: Instant,
     host_nanos: u64,
     pressed: bool,
@@ -328,22 +328,23 @@ fn run_pad_event(
         pressed,
     };
     input::map_pad_event_with(black_box(&ev), |iev| {
-        let action = gameplay::handle_input(state, black_box(&iev));
+        let action = handle_core_input(state, black_box(&iev));
         checksum = mix_checksum(checksum, checksum_input_event(iev, action));
     });
     checksum
 }
 
 fn step_gameplay(
-    state: &mut gameplay::State,
+    state: &mut notefield_bench::GameplayCoreState,
     delta_time: f32,
     checksum: u64,
     measured: bool,
 ) -> u64 {
-    let action = gameplay::update(
+    let action = update_core(
         state,
         delta_time,
-        gameplay::GameplayAudioSnapshot::default(),
+        GameplayAudioSnapshot::default(),
+        || deadlib_platform::host_time::instant_nanos(Instant::now()),
     );
     let mut checksum = mix_checksum(checksum, checksum_state(state, action));
     if measured {
@@ -355,7 +356,7 @@ fn step_gameplay(
     checksum
 }
 
-fn prepare_gameplay_state(state: &mut gameplay::State) {
+fn prepare_gameplay_state(state: &mut notefield_bench::GameplayCoreState) {
     state.reset_stage_runtime_for_benchmark();
     state.reset_exit_input();
     state.set_screen_elapsed(0.0);
@@ -402,7 +403,7 @@ fn checksum_input_event(ev: InputEvent, action: GameplayAction) -> u64 {
 }
 
 #[inline(always)]
-fn checksum_state(state: &gameplay::State, action: GameplayAction) -> u64 {
+fn checksum_state(state: &notefield_bench::GameplayCoreState, action: GameplayAction) -> u64 {
     (state.total_elapsed_in_screen().to_bits() as u64)
         ^ (state.current_music_time_display().to_bits() as u64).rotate_left(13)
         ^ (state.players()[0].combo as u64).rotate_left(29)

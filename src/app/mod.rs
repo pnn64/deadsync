@@ -21,7 +21,7 @@ use crate::act;
 use crate::assets::{AssetManager, PRESENT_TEXTURE_CONTEXT, TextureUploadBudget, visual_styles};
 use crate::config::{self, DisplayMode};
 use crate::game::parsing::simfile as song_loading;
-use crate::game::{profile, scores, stage_stats};
+use crate::game::{GameplayCoreState, profile, scores, stage_stats};
 use crate::screens::{
     DensityGraphSlot, DensityGraphSource, Screen as CurrentScreen, ScreenAction,
     SongOffsetSyncChange, credits, evaluation, evaluation_summary, gameover, gameplay, init,
@@ -74,7 +74,12 @@ use deadsync_chart::song::sync_pref_offset;
 use deadsync_chart::{STANDARD_DIFFICULTY_COUNT, STANDARD_DIFFICULTY_NAMES};
 use deadsync_core::note::NoteType;
 use deadsync_core::{input::MAX_PLAYERS, song_time::SongTimeNs, timing::ROWS_PER_BEAT};
-use deadsync_gameplay::{GameplayConfig, GameplayFailType, GameplayViewport, LeadInTiming};
+use deadsync_gameplay::{
+    CourseDisplayTiming, CourseDisplayTotals, GameplayConfig, GameplayFailType, GameplaySession,
+    GameplayViewport, LeadInTiming, ReplayInputEdge, ReplayOffsetSnapshot,
+    course_display_totals_for_chart, gameplay_player_side_from_profile,
+    gameplay_play_style_from_profile, gameplay_tick_mode_from_profile,
+};
 use deadsync_input as logical_input;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, PadEvent, VirtualAction};
@@ -138,23 +143,17 @@ fn gameplay_viewport(metrics: Metrics) -> GameplayViewport {
     GameplayViewport::new(metrics.right - metrics.left, metrics.top - metrics.bottom)
 }
 
-fn gameplay_session() -> crate::game::gameplay::GameplaySession {
-    crate::game::gameplay::GameplaySession {
-        play_style: crate::game::gameplay::gameplay_play_style_from_profile(
-            profile::get_session_play_style(),
-        ),
-        player_side: crate::game::gameplay::gameplay_player_side_from_profile(
-            profile::get_session_player_side(),
-        ),
+fn gameplay_session() -> GameplaySession {
+    GameplaySession {
+        play_style: gameplay_play_style_from_profile(profile::get_session_play_style()),
+        player_side: gameplay_player_side_from_profile(profile::get_session_player_side()),
         joined_sides: std::array::from_fn(|idx| {
             profile::is_session_side_joined(profile_data::player_side_for_index(idx))
         }),
         active_profile_ids: std::array::from_fn(|idx| {
             profile::active_local_profile_id_for_side(profile_data::player_side_for_index(idx))
         }),
-        tick_mode: crate::game::gameplay::gameplay_tick_mode_from_profile(
-            profile::get_session_timing_tick_mode(),
-        ),
+        tick_mode: gameplay_tick_mode_from_profile(profile::get_session_timing_tick_mode()),
     }
 }
 
@@ -246,7 +245,7 @@ impl GameplayLightTracker {
     fn queue_blinks(
         &mut self,
         lights: &mut lights::Manager,
-        state: &crate::game::gameplay::State,
+        state: &GameplayCoreState,
         simplify_bass: bool,
     ) {
         let now_ns = state
@@ -287,7 +286,7 @@ impl GameplayLightTracker {
     fn queue_pad_blinks(
         &mut self,
         lights: &mut lights::Manager,
-        state: &crate::game::gameplay::State,
+        state: &GameplayCoreState,
         now_ns: SongTimeNs,
     ) {
         let notes = state.notes();
@@ -331,7 +330,7 @@ fn gameplay_note_lights(note: &Note) -> bool {
 
 fn blink_pad_lights(
     lights: &mut lights::Manager,
-    state: &crate::game::gameplay::State,
+    state: &GameplayCoreState,
     column: usize,
 ) {
     if let Some((player, button)) = pad_light_for_col(state, column) {
@@ -737,7 +736,7 @@ const fn cabinet_light_for_col(local_col: usize) -> Option<CabinetLight> {
 }
 
 fn pad_light_for_col(
-    state: &crate::game::gameplay::State,
+    state: &GameplayCoreState,
     column: usize,
 ) -> Option<(LightPlayer, ButtonLight)> {
     if state.cols_per_player() == 0 {
@@ -888,7 +887,7 @@ enum LightButtonSource {
     Menu(LightPlayer, ButtonLight),
 }
 
-fn hide_flags_for_gameplay(state: &crate::game::gameplay::State) -> [HideFlags; 2] {
+fn hide_flags_for_gameplay(state: &GameplayCoreState) -> [HideFlags; 2] {
     std::array::from_fn(|player| hide_flags_from_profile(state.profiles()[player].hide_light_type))
 }
 
@@ -963,7 +962,7 @@ struct CourseRunState {
     course_stepchart_label: String,
     song_stub: Arc<deadsync_chart::SongData>,
     stages: Vec<CourseStageRuntime>,
-    course_display_totals: [crate::game::gameplay::CourseDisplayTotals; MAX_PLAYERS],
+    course_display_totals: [CourseDisplayTotals; MAX_PLAYERS],
     next_stage_index: usize,
     stage_summaries: Vec<stage_stats::StageSummary>,
     stage_eval_pages: Vec<evaluation::State>,
@@ -2338,8 +2337,7 @@ fn build_course_run_from_selection(
     if stages.is_empty() {
         return None;
     }
-    let mut course_display_totals =
-        [crate::game::gameplay::CourseDisplayTotals::default(); MAX_PLAYERS];
+    let mut course_display_totals = [CourseDisplayTotals::default(); MAX_PLAYERS];
     for stage in &stages {
         for (player_idx, total) in course_display_totals.iter_mut().enumerate() {
             let Some(chart) = stage
@@ -2348,7 +2346,7 @@ fn build_course_run_from_selection(
             else {
                 continue;
             };
-            let add = crate::game::gameplay::course_display_totals_for_chart(chart);
+            let add = course_display_totals_for_chart(chart);
             total.possible_grade_points = total
                 .possible_grade_points
                 .saturating_add(add.possible_grade_points);
@@ -2419,10 +2417,8 @@ fn course_total_seconds(course: &CourseRunState) -> f32 {
     course.stages.iter().map(course_stage_seconds).sum()
 }
 
-fn course_display_timing_for_run(
-    course: &CourseRunState,
-) -> crate::game::gameplay::CourseDisplayTiming {
-    crate::game::gameplay::CourseDisplayTiming {
+fn course_display_timing_for_run(course: &CourseRunState) -> CourseDisplayTiming {
+    CourseDisplayTiming {
         elapsed_seconds: course
             .stages
             .iter()
@@ -9603,7 +9599,7 @@ impl App {
                     .replay
                     .iter()
                     .copied()
-                    .map(|e| crate::game::gameplay::ReplayInputEdge {
+                    .map(|e| ReplayInputEdge {
                         lane_index: e.lane_index,
                         pressed: e.pressed,
                         source: e.source,
@@ -9612,7 +9608,7 @@ impl App {
                     .collect::<Vec<_>>()
             });
             let replay_offsets = replay_pending.as_ref().map(|payload| {
-                crate::game::gameplay::ReplayOffsetSnapshot {
+                ReplayOffsetSnapshot {
                     beat0_time_ns: payload.replay_beat0_time_ns,
                 }
             });
@@ -11492,9 +11488,8 @@ mod tests {
             500,
         ));
 
-        let mut course_display_totals =
-            [crate::game::gameplay::CourseDisplayTotals::default(); MAX_PLAYERS];
-        course_display_totals[0] = crate::game::gameplay::CourseDisplayTotals {
+        let mut course_display_totals = [CourseDisplayTotals::default(); MAX_PLAYERS];
+        course_display_totals[0] = CourseDisplayTotals {
             possible_grade_points: 1000,
             total_steps: 40,
             holds_total: 4,

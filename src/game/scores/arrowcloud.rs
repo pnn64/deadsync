@@ -1,9 +1,9 @@
 use super::{
+    GameplayCoreState,
     gameplay_run_failed, gameplay_run_passed, gameplay_side_for_player,
     get_or_fetch_player_leaderboards_for_side, invalidate_player_leaderboards_for_side,
     lua_chart_submit_allowed,
 };
-use crate::game::gameplay;
 use crate::game::profile;
 use deadsync_core::{input::MAX_PLAYERS, note::NoteType};
 use deadsync_gameplay::{FantasticWindowOptions, blue_fantastic_window_ms};
@@ -32,7 +32,7 @@ const ARROWCLOUD_ENGINE_NAME: &str = "DeadSync";
 const ARROWCLOUD_ENGINE_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[inline(always)]
-fn player_blue_window_ms(gs: &gameplay::State, player_idx: usize) -> f32 {
+fn player_blue_window_ms(gs: &GameplayCoreState, player_idx: usize) -> f32 {
     let base = gs.default_fa_plus_window_s();
     let Some(profile) = gs.profiles().get(player_idx) else {
         return base * 1000.0;
@@ -246,7 +246,7 @@ struct ArrowCloudSubmitError {
 
 #[inline(always)]
 fn arrowcloud_lifebar_points(
-    gs: &gameplay::State,
+    gs: &GameplayCoreState,
     player_idx: usize,
 ) -> Vec<arrowcloud_api::ArrowCloudLifePoint> {
     let life_history = gs.players()[player_idx].life_history.as_slice();
@@ -273,7 +273,7 @@ fn arrowcloud_lifebar_points(
 
 #[inline(always)]
 fn arrowcloud_timing_data(
-    gs: &gameplay::State,
+    gs: &GameplayCoreState,
     player_idx: usize,
     fail_time_ns: Option<i64>,
 ) -> Vec<ArrowCloudTimingDatum> {
@@ -295,7 +295,7 @@ fn arrowcloud_timing_data(
 
 #[inline(always)]
 fn arrowcloud_nps_info(
-    gs: &gameplay::State,
+    gs: &GameplayCoreState,
     player_idx: usize,
 ) -> arrowcloud_api::ArrowCloudNpsInfo {
     let chart = gs.charts()[player_idx].as_ref();
@@ -413,7 +413,7 @@ fn arrowcloud_stats_from_results(
 }
 
 #[inline(always)]
-fn arrowcloud_live_submit_stats(gs: &gameplay::State, player_idx: usize) -> ArrowCloudSubmitStats {
+fn arrowcloud_live_submit_stats(gs: &GameplayCoreState, player_idx: usize) -> ArrowCloudSubmitStats {
     let player = &gs.players()[player_idx];
     ArrowCloudSubmitStats {
         judgment_counts: player.judgment_counts,
@@ -427,7 +427,7 @@ fn arrowcloud_live_submit_stats(gs: &gameplay::State, player_idx: usize) -> Arro
 
 #[inline(always)]
 fn arrowcloud_submit_stats(
-    gs: &gameplay::State,
+    gs: &GameplayCoreState,
     player_idx: usize,
     fail_time_ns: Option<i64>,
 ) -> ArrowCloudSubmitStats {
@@ -445,7 +445,7 @@ fn arrowcloud_submit_stats(
 
 #[inline(always)]
 fn arrowcloud_payload_for_player(
-    gs: &gameplay::State,
+    gs: &GameplayCoreState,
     player_idx: usize,
     pack_group: &str,
 ) -> Option<ArrowCloudPayload> {
@@ -599,7 +599,7 @@ fn spawn_arrowcloud_submit_jobs(jobs: Vec<ArrowCloudSubmitJob>) {
     });
 }
 
-pub fn submit_arrowcloud_payloads_from_gameplay(gs: &gameplay::State, pack_group: &str) {
+pub fn submit_arrowcloud_payloads_from_gameplay(gs: &GameplayCoreState, pack_group: &str) {
     for player_idx in 0..gs.num_players().min(MAX_PLAYERS) {
         let side = gameplay_side_for_player(gs, player_idx);
         let chart_hash = gs.charts()[player_idx].short_hash.as_str();

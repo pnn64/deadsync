@@ -1,24 +1,22 @@
 use crate::act;
 use crate::assets;
-use crate::game::gameplay::{
+use crate::game::GameplayCoreState as State;
+use deadsync_gameplay::{
     AccelEffects, AppearanceEffects, COMBO_HUNDRED_MILESTONE_DURATION,
-    COMBO_THOUSAND_MILESTONE_DURATION, ComboMilestoneKind, HELD_MISS_TOTAL_DURATION,
-    HOLD_JUDGMENT_TOTAL_DURATION, NoteCountStat, PerspectiveEffects, RECEPTOR_Y_OFFSET_FROM_CENTER,
-    RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, ScrollEffects, SongLuaColumnOffsetWindowRuntime,
-    VisualEffects,
-};
-use crate::game::gameplay::{
-    column_flash_duration, hold_explosion_active, hold_explosion_enabled_for_options,
-    hold_head_render_flags, let_go_head_beat, scroll_receptor_y, song_lua_ease_factor,
-    song_lua_note_hidden,
+    COMBO_THOUSAND_MILESTONE_DURATION, ColumnCue, ComboMilestoneKind, FantasticWindowOptions,
+    HELD_MISS_TOTAL_DURATION, HOLD_JUDGMENT_TOTAL_DURATION, NoteCountStat, PerspectiveEffects,
+    PlayerRuntime, RECEPTOR_Y_OFFSET_FROM_CENTER, RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE,
+    ScrollEffects, SongLuaColumnOffsetWindowRuntime, VisualEffects,
+    blue_fantastic_window_ms, column_flash_duration, hold_explosion_active,
+    hold_explosion_enabled_for_options, hold_head_render_flags, let_go_head_beat,
+    perspective_effects_from_profile, scroll_effects_from_option, scroll_receptor_y,
+    song_lua_ease_factor, song_lua_note_hidden, spacing_multiplier_for_percent,
+    tap_explosion_options_from_profile,
 };
 use crate::game::parsing::noteskin::{
     ModelDrawState, ModelMeshCache, NUM_QUANTIZATIONS, NoteAnimPart, Noteskin, SpriteSlot,
 };
-use crate::game::{
-    gameplay::{PlayerRuntime, State},
-    scores,
-};
+use crate::game::scores;
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor_from_draw_cached;
 use crate::screens::gameplay::GameplayNoteskinAssets;
 use deadlib_present::actors::{Actor, SizeSpec};
@@ -32,10 +30,6 @@ use deadsync_core::input::{MAX_COLS, MAX_PLAYERS};
 use deadsync_core::note::NoteType;
 use deadsync_core::song_time::SongTimeNs;
 use deadsync_core::timing::{beat_to_note_row, note_row_to_beat};
-use deadsync_gameplay::{
-    FantasticWindowOptions, TapExplosionOptions, blue_fantastic_window_ms,
-    spacing_multiplier_for_percent,
-};
 use deadsync_profile as profile_data;
 use deadsync_rules::judgment::{self, HOLD_SCORE_HELD, JudgeGrade, Judgment, TimingWindow};
 use deadsync_rules::note::{HoldResult, MineResult, Note};
@@ -50,39 +44,6 @@ use std::hash::{BuildHasherDefault, Hasher};
 use std::sync::Arc;
 use std::time::Instant;
 use twox_hash::XxHash64;
-
-#[inline(always)]
-fn scroll_effects_from_option(scroll: profile_data::ScrollOption) -> ScrollEffects {
-    use profile_data::ScrollOption;
-    ScrollEffects::from_flags(
-        scroll.contains(ScrollOption::Reverse),
-        scroll.contains(ScrollOption::Split),
-        scroll.contains(ScrollOption::Alternate),
-        scroll.contains(ScrollOption::Cross),
-        scroll.contains(ScrollOption::Centered),
-    )
-}
-
-#[inline(always)]
-fn perspective_effects_from_profile(perspective: profile_data::Perspective) -> PerspectiveEffects {
-    let (tilt, skew) = perspective.tilt_skew();
-    PerspectiveEffects { tilt, skew }
-}
-
-#[inline(always)]
-fn tap_explosion_options_from_profile(profile: &profile_data::Profile) -> TapExplosionOptions {
-    let mask = profile.tap_explosion_active_mask;
-    TapExplosionOptions {
-        fantastic: mask.contains(profile_data::TapExplosionMask::FANTASTIC),
-        excellent: mask.contains(profile_data::TapExplosionMask::EXCELLENT),
-        great: mask.contains(profile_data::TapExplosionMask::GREAT),
-        decent: mask.contains(profile_data::TapExplosionMask::DECENT),
-        way_off: mask.contains(profile_data::TapExplosionMask::WAY_OFF),
-        miss: mask.contains(profile_data::TapExplosionMask::MISS),
-        held: mask.contains(profile_data::TapExplosionMask::HELD),
-        holding: mask.contains(profile_data::TapExplosionMask::HOLDING),
-    }
-}
 
 #[inline(always)]
 fn player_blue_window_ms(state: &State, player_idx: usize) -> f32 {
@@ -2632,10 +2593,7 @@ pub(crate) fn gameplay_mods_text(state: &State, player_idx: usize) -> Arc<str> {
 }
 
 #[inline(always)]
-fn active_column_cue(
-    cues: &[crate::game::gameplay::ColumnCue],
-    current_time: f32,
-) -> Option<&crate::game::gameplay::ColumnCue> {
+fn active_column_cue(cues: &[ColumnCue], current_time: f32) -> Option<&ColumnCue> {
     if cues.is_empty() {
         return None;
     }
@@ -9812,7 +9770,7 @@ mod tests {
         zmod_subtractive_counter_state, zmod_subtractive_points,
     };
     use crate::assets;
-    use crate::game::gameplay::{
+    use deadsync_gameplay::{
         AccelEffects, ActiveHold, AppearanceEffects, NoteCountStat,
         SongLuaColumnOffsetWindowRuntime, SongLuaNoteHideWindowRuntime, VisualEffects,
         song_lua_note_hidden,

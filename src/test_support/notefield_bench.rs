@@ -1,6 +1,3 @@
-use crate::game::gameplay::{
-    self, ActiveHold, ActiveTapExplosion, ColumnCue, ColumnCueColumn, ErrorBarText, ErrorBarTick,
-};
 use crate::game::parsing::noteskin::{ModelMeshCache, ModelMeshCacheStats};
 use crate::game::profile;
 use crate::screens::components::gameplay::notefield::{self, FieldPlacement};
@@ -12,6 +9,12 @@ use deadsync_chart::{ArrowStats, ChartData, GameplayChartData, StaminaCounts, Te
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_core::note::NoteType;
 use deadsync_core::timing::{ROWS_PER_BEAT, note_row_to_beat};
+use deadsync_gameplay::{
+    ActiveHold, ActiveTapExplosion, ColumnCue, ColumnCueColumn, ErrorBarText, ErrorBarTick,
+    GameplayConfig, GameplayMiniIndicatorData, GameplaySession, GameplaySongLuaData,
+    GameplayViewport, gameplay_runtime_profiles,
+};
+use deadsync_input::InputEdge;
 use deadsync_profile as profile_data;
 use deadsync_rules::judgment::{JudgeGrade, TimingWindow};
 use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -24,20 +27,21 @@ pub const SCENARIO_NAME: &str = "notefield";
 const VISIBLE_BEAT: f32 = 48.0;
 const WINDOW_BEATS_BEFORE: f32 = 8.0;
 const WINDOW_BEATS_AFTER: f32 = 24.0;
+pub use crate::game::GameplayCoreState;
 
 pub struct NotefieldBenchFixture {
-    state: gameplay::State,
+    state: GameplayCoreState,
     noteskin_assets: gameplay_screen::GameplayNoteskinAssets,
     notefield_model_cache: [RefCell<ModelMeshCache>; MAX_PLAYERS],
     profile: profile_data::Profile,
 }
 
 impl NotefieldBenchFixture {
-    pub fn state(&self) -> &gameplay::State {
+    pub fn state(&self) -> &GameplayCoreState {
         &self.state
     }
 
-    pub fn state_mut(&mut self) -> &mut gameplay::State {
+    pub fn state_mut(&mut self) -> &mut GameplayCoreState {
         &mut self.state
     }
 
@@ -70,7 +74,7 @@ impl NotefieldBenchFixture {
     pub fn into_parts(
         self,
     ) -> (
-        gameplay::State,
+        GameplayCoreState,
         gameplay_screen::GameplayNoteskinAssets,
         profile_data::Profile,
     ) {
@@ -129,8 +133,8 @@ pub fn fixture() -> NotefieldBenchFixture {
     player_profiles[0].error_bar_text = true;
     player_profiles[0].measure_lines = profile_data::MeasureLines::Eighth;
 
-    let session = gameplay::GameplaySession::default();
-    let runtime_profiles = gameplay_screen::gameplay_runtime_profiles(&player_profiles, &session);
+    let session = GameplaySession::default();
+    let runtime_profiles = gameplay_runtime_profiles(&player_profiles, &session);
     let noteskin_assets = gameplay_screen::gameplay_noteskin_assets(
         profile_data::PlayStyle::Single.cols_per_player(),
         profile_data::PlayStyle::Single.player_count(),
@@ -142,17 +146,20 @@ pub fn fixture() -> NotefieldBenchFixture {
         &runtime_profiles,
     );
 
-    let mut state = gameplay::init(
+    let mut state = deadsync_gameplay::init_gameplay_runtime::<
+        InputEdge,
+        crate::game::parsing::song_lua::SongLuaOverlayKind,
+    >(
         song,
         charts,
         gameplay_charts,
-        gameplay::GameplayViewport::default(),
+        GameplayViewport::default(),
         session,
-        gameplay::GameplayConfig::default(),
+        GameplayConfig::default(),
         deadsync_chart::SyncPref::Default,
-        gameplay::GameplayMiniIndicatorData::default(),
+        GameplayMiniIndicatorData::default(),
         noteskin_data,
-        gameplay::GameplaySongLuaData::default(),
+        GameplaySongLuaData::<crate::game::parsing::song_lua::CompiledSongLua>::default(),
         0,
         1.0,
         [
@@ -181,7 +188,7 @@ pub fn fixture() -> NotefieldBenchFixture {
     }
 }
 
-fn prime_visible_window(state: &mut gameplay::State) {
+fn prime_visible_window(state: &mut GameplayCoreState) {
     let beat = VISIBLE_BEAT;
     let timing = state
         .timing_for_player(0)

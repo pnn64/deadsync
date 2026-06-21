@@ -6,15 +6,13 @@
 //! decisions are pure helpers (`tap_flash`, `hold_edge`, `hold_outcome_flash`, `mine_flash`)
 //! so they can be unit-tested without constructing a whole gameplay `State`.
 
+use deadsync_gameplay::{ColumnTapJudgment, HoldJudgmentRenderInfo, active_hold_is_engaged};
 use deadsync_profile::{PlayStyle, PlayerSide, player_side_index, runtime_player_side};
 use deadsync_rules::judgment::JudgeGrade;
 use deadsync_rules::note::HoldResult;
 use deadsync_smx::panels::{PADS, Rgb, SmxPanelLights, smx_panel_for_col};
 
-use crate::game::gameplay::{
-    ColumnTapJudgment, HoldJudgmentRenderInfo, State, active_hold_is_engaged,
-};
-use crate::game::profile;
+use crate::game::{GameplayCoreState, profile};
 
 const MAX_COLS: usize = deadsync_core::input::MAX_COLS;
 
@@ -43,7 +41,7 @@ fn physical_slot(
 /// Sentinel `*_at_screen_s` meaning "nothing seen yet for this column".
 const NO_EVENT: f32 = f32::NEG_INFINITY;
 
-/// Tap flash durations, matching the on-screen column flash (`gameplay.rs:650`).
+/// Tap flash durations, matching the on-screen column flash timing from gameplay runtime state.
 const FLASH_SECONDS_MISS: f32 = 0.16;
 const FLASH_SECONDS_JUDGMENT: f32 = 0.33;
 /// Fantastic colour for the bright FA+ inner window.
@@ -84,7 +82,7 @@ fn flash_duration(grade: JudgeGrade) -> f32 {
 
 /// Colour for a tap judgement flash.
 ///
-/// `blue_fantastic` is the flag gameplay records on `ActiveColumnFlash` (`gameplay.rs:6772`):
+/// `blue_fantastic` is the flag gameplay records on `ActiveColumnFlash`:
 /// `true` for the blue (outer) Fantastic, `false` for the bright FA+ inner window (white). All
 /// other grades use the pad palette. The pad uses its own saturated palette rather than the
 /// on-screen colours, which wash out on the LED diffuser.
@@ -132,7 +130,7 @@ impl Default for SmxPanelDriver {
 impl SmxPanelDriver {
     /// Called each frame while on a gameplay screen with the feature enabled. Diffs the
     /// per-column flash, active-hold, hold-judgement, and mine state and emits panel events.
-    pub fn update(&mut self, state: &State) {
+    pub fn update(&mut self, state: &GameplayCoreState) {
         // Re-arm on entering gameplay or when the chart's note buffer changes (a restart or
         // a new song), so stale `*_at_screen_s` values do not swallow the first event.
         let notes_ptr = state.notes().as_ptr() as usize;
@@ -195,7 +193,7 @@ impl SmxPanelDriver {
         }
     }
 
-    fn activate(&mut self, state: &State) {
+    fn activate(&mut self, state: &GameplayCoreState) {
         self.active = true;
         self.notes_ptr = state.notes().as_ptr() as usize;
         // Resolve the chart-pad -> physical-slot map once per song (the session play style

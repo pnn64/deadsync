@@ -16,7 +16,7 @@ use deadlib_present::space::*;
 use deadlib_render::BlendMode;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{
-    FantasticWindowOptions, GameplayScoreDisplayMode, blue_fantastic_window_ms,
+    FantasticWindowOptions, blue_fantastic_window_ms, score_display_mode_from_profile,
 };
 use deadsync_profile as profile_data;
 use deadsync_rules::judgment::{self, JudgeGrade};
@@ -58,14 +58,6 @@ static LIVE_TIMING_LABELS: LazyLock<[Arc<str>; 3]> = LazyLock::new(|| {
         Arc::<str>::from("Max (64n/All [ms])"),
     ]
 });
-
-#[inline(always)]
-const fn score_display_mode(mode: profile_data::ScoreDisplayMode) -> GameplayScoreDisplayMode {
-    match mode {
-        profile_data::ScoreDisplayMode::Normal => GameplayScoreDisplayMode::Normal,
-        profile_data::ScoreDisplayMode::Predictive => GameplayScoreDisplayMode::Predictive,
-    }
-}
 
 #[inline(always)]
 fn player_blue_window_ms(state: &State, player_idx: usize) -> f32 {
@@ -1355,7 +1347,7 @@ pub fn push_versus_step_stats(
                     state
                         .display_gameplay_ex_score_percent(
                             player_idx,
-                            score_display_mode(player_profile.score_display_mode),
+                            score_display_mode_from_profile(player_profile.score_display_mode),
                             blue_window_ms,
                         )
                         .max(0.0),
@@ -1365,7 +1357,7 @@ pub fn push_versus_step_stats(
         } else {
             let score_percent = state.display_gameplay_itg_score_percent(
                 player_idx,
-                score_display_mode(player_profile.score_display_mode),
+                score_display_mode_from_profile(player_profile.score_display_mode),
             );
             (cached_score_2dp(score_percent), [1.0, 1.0, 1.0, 1.0])
         };
@@ -1385,7 +1377,7 @@ pub fn push_versus_step_stats(
             let blue_window_ms = player_blue_window_ms(state, player_idx);
             let hard_ex_percent = state.display_gameplay_hard_ex_score_percent(
                 player_idx,
-                score_display_mode(player_profile.score_display_mode),
+                score_display_mode_from_profile(player_profile.score_display_mode),
                 blue_window_ms,
             );
             let hex = color::HARD_EX_SCORE_RGBA;
