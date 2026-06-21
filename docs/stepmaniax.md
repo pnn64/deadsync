@@ -28,6 +28,7 @@ report.
 - [8. Architecture (for contributors)](#8-architecture-for-contributors)
 - [9. Diagnostics & bug reports](#9-diagnostics--bug-reports)
 - [10. Troubleshooting cheatsheet](#10-troubleshooting-cheatsheet)
+- [11. Pad light GIF animations](#11-pad-light-gif-animations)
 
 ---
 
@@ -564,3 +565,254 @@ for dev in /sys/class/hidraw/hidraw*; do
   fi
 done
 ```
+
+---
+
+## 11. Pad light GIF animations
+
+DeadSync drives the SMX pad LEDs directly and supports a library of animated
+GIFs for backgrounds, judgement feedback, and press feedback. All GIF loading
+and decoding happens at startup (or when options change); nothing touches the
+filesystem during gameplay.
+
+### 11a. GIF format
+
+Every GIF is a standard animated GIF with one special convention: a **marker
+row** at the bottom of each frame. Each pixel in that row at x=0 or x=1 with
+alpha=255 and R>=128 (white-ish) flags a timing or playback event.
+
+**Full-pad backgrounds** (used for `default`, `gameplay`, `results`, etc.):
+
+| Canvas size | Pad layout |
+| --- | --- |
+| 23x24 | 25-LED pads (SMX Gen 5+, the common format) |
+| 14x15 | 16-LED pads (older gen) |
+
+The 23x24 canvas is a 3x3 grid of 7x7 panel slots with 1px gaps between them,
+plus a 24th row for the marker row. The 14x15 canvas uses 4x4 slots with 1px
+gaps. Each panel block maps directly to its physical LED layout. The 25-LED
+inner-ring LEDs sit at odd-x, odd-y positions inside each slot.
+
+**Per-panel judgement/press GIFs** (tap grades, freezes, rolls, press):
+
+| Canvas size | Pad layout |
+| --- | --- |
+| 7x8 | 25-LED (7x7 panel + 1-row marker row) |
+| 4x5 | 16-LED (4x4 panel + 1-row marker row) |
+
+A bare 7x7 or 4x4 (no marker row) is also accepted and simply loops the whole
+sequence with no outro.
+
+**Marker row flags:**
+
+| Column | Meaning |
+| --- | --- |
+| x=0 | Loop point: playback returns here after the last frame |
+| x=1 | Loop end (per-panel GIFs only): frames after this form an **outro** played on panel release |
+
+For a sustain animation (freeze, roll) the section from `loop_frame` to
+`loop_end` loops while the note is held; frames after `loop_end` play as an
+outro when the panel is released. For a one-shot animation (tap judgement,
+press) the sequence plays once and stops; the outro is played if it exists.
+
+**BPM variants** (full-pad backgrounds only): You can author multiple GIFs for
+the same role, each tagged with a beat count and reference BPM. DeadSync picks
+the variant whose reference BPM is closest to the song's BPM, so the animation
+stays beat-locked across tempo ranges. An untagged file is used as a single
+variant when only one BPM is needed.
+
+Example: `gameplay_25@4b120.gif` and `gameplay_25@4b240.gif` give DeadSync two
+120-BPM and 240-BPM variants for the `gameplay` role; it picks whichever is
+closer to the song tempo at resolution time.
+
+All GIFs run at the real-time duration encoded in their GIF frame delay fields;
+DeadSync does not re-time them. The pad's hardware LED update rate is capped at
+30Hz, so author GIFs at 30fps or slower for smooth playback.
+
+---
+
+### 11b. File locations
+
+DeadSync looks for GIFs in two directory trees rooted at the app's assets path:
+
+```
+assets/
+  smx-pad-lights/       <- full-pad background GIFs
+    common/
+      basic/            <- shipped default pack (the final fallback)
+    dance/
+      <your-pack>/      <- user-authored packs
+  smx-judge-lights/     <- per-panel judgement/press GIFs
+    common/
+      basic/
+    dance/
+      <your-pack>/
+```
+
+**Per-song and per-pack backgrounds:** DeadSync also checks `smx-pad-lights/`
+inside the song's folder and its parent pack folder before consulting the global
+registry. This lets you ship a custom background alongside a simfile.
+
+```
+Songs/
+  MyPack/
+    smx-pad-lights/           <- applies to every song in MyPack
+      default_25.gif
+    MySong/
+      smx-pad-lights/         <- applies only to MySong, overrides MyPack level
+        gameplay_25.gif
+```
+
+The scoped lookup uses the same role names and BPM-variant filename conventions
+as the global registry.
+
+**Filename convention:**
+
+```
+{role}_{size}[@{beats}b{bpm}].gif      <- background with optional BPM tag
+{role}_{size}[@{grade}].gif            <- grade-specific background
+```
+
+- `{role}` is one of the role names listed in [§11c](#11c-role-names-and-fallback-chains).
+- `{size}` is `25` (25-LED pads) or `16` (16-LED pads). DeadSync tries the
+  requested size first, then the other size as a fallback.
+- The optional `@` suffix always comes **after** the size.
+  - `@{beats}b{bpm}`: BPM variant tag (backgrounds only). `{beats}` is the loop
+    length in beats; `{bpm}` is the reference tempo (both numeric).
+  - `@{grade}`: grade suffix for results backgrounds (e.g. `@S+`, `@B-`,
+    `@*****`). The grade tag starts with a letter or `*` (not a digit), so
+    DeadSync can always distinguish it from a BPM tag.
+
+Examples:
+- `default_25.gif`
+- `gameplay_25@4b120.gif`
+- `results_25.gif`
+- `results_25@S+.gif`
+- `results_25@B-.gif`
+- `results_25@*****.gif`
+- `fantastic_blue_25.gif`
+- `press_25.gif`
+
+---
+
+### 11c. Role names and fallback chains
+
+#### Full-pad backgrounds (`smx-pad-lights/`)
+
+These set the background for an entire pad (all 9 panels) based on the current
+screen. DeadSync resolves the background through this chain for each screen:
+
+1. Per-song `smx-pad-lights/<role>` (song folder)
+2. Per-pack `smx-pad-lights/<role>` (pack folder)
+3. Global registry: selected pack's `<role>`
+4. Global registry: `basic` pack's `<role>`
+5. Global registry: selected pack's `default`
+6. Global registry: `basic` pack's `default`
+
+The table below lists **role names** (the internal key used for lookup). The
+corresponding filename is `{role}_{size}.gif` — for grade-tagged roles like
+`results@S+` the `@` suffix goes after the `_size` in the filename:
+`results_25@S+.gif`.
+
+| Role | When active |
+| --- | --- |
+| `default` | All screens not covered by a more specific role; also the ultimate fallback |
+| `gameplay` | During a song (Gameplay screen) |
+| `song_select` | Song/course selection screen |
+| `results` | Evaluation/results screen (grade unknown or no grade-specific gif found) |
+| `results@*****` | Results screen, Quint (5-star) grade |
+| `results@****` | Results screen, Quad (4-star) grade |
+| `results@***` | Results screen, Triple (3-star) grade |
+| `results@**` | Results screen, Double (2-star) grade |
+| `results@*` | Results screen, Single (1-star) grade |
+| `results@S+` | Results screen, S+ grade |
+| `results@S` | Results screen, S grade |
+| `results@S-` | Results screen, S- grade |
+| `results@A+` | Results screen, A+ grade |
+| `results@A` | Results screen, A grade |
+| `results@A-` | Results screen, A- grade |
+| `results@B+` | Results screen, B+ grade |
+| `results@B` | Results screen, B grade |
+| `results@B-` | Results screen, B- grade |
+| `results@C+` | Results screen, C+ grade |
+| `results@C` | Results screen, C grade |
+| `results@C-` | Results screen, C- grade |
+| `results@D` | Results screen, D grade |
+| `results@F` | Results screen, F grade |
+
+**Grade fallback chain for `results@<grade>` roles:**
+
+Grade-specific results backgrounds fall back gracefully so you only have to
+author what you want to customize:
+
+```
+results@S+  -->  results@S  -->  results  -->  default
+results@S-  -->  results@S  -->  results  -->  default
+results@A+  -->  results@A  -->  results  -->  default
+results@A-  -->  results@A  -->  results  -->  default
+results@B+  -->  results@B  -->  results  -->  default
+results@B-  -->  results@B  -->  results  -->  default
+results@C+  -->  results@C  -->  results  -->  default
+results@C-  -->  results@C  -->  results  -->  default
+results@*****  -->  results  -->  default   (no base-letter fallback)
+results@****   -->  results  -->  default
+results@***    -->  results  -->  default
+results@**     -->  results  -->  default
+results@*      -->  results  -->  default
+results@S      -->  results  -->  default
+results@D      -->  results  -->  default
+results@F      -->  results  -->  default
+```
+
+So authoring `results_25@A.gif` covers A+, A, and A- automatically unless you
+also provide the `+`/`-` variants.
+
+#### Per-panel judgement/press GIFs (`smx-judge-lights/`)
+
+These animate individual panels on top of (or instead of) the background.
+
+| Name | When played |
+| --- | --- |
+| `fantastic_blue` | Fantastic judgment (FA+ blue window) |
+| `fantastic_white` | Fantastic judgment (standard white window) |
+| `excellent` | Excellent judgment |
+| `great` | Great judgment |
+| `decent` | Decent judgment |
+| `way_off` | Way Off judgment |
+| `miss` | Miss judgment |
+| `mine` | Mine explosion |
+| `ok` | Freeze/roll/lift held successfully (on release) |
+| `bad` | Freeze/roll/lift dropped |
+| `freeze` | Looping sustain while a freeze note is held |
+| `roll` | Looping sustain while a roll note is held |
+| `press` | Generic press feedback: any panel press with no note (outside gameplay) |
+
+`press` also plays during gameplay on any panel that has no note — the
+judgement and sustain layers draw on top of it, so it is always overridden by
+real hits. Outside gameplay and practice the `press` gif fires on every raw SMX
+panel press, giving tactile feedback while navigating menus.
+
+Judgement packs follow the same `common/basic` fallback as backgrounds: a
+selected pack is tried first, then `basic` as the ultimate fallback.
+
+---
+
+### 11d. Authoring GIFs
+
+The **stepmaniax-gif-maker** is a desktop tool for authoring and previewing SMX
+pad GIFs. It renders frames in real time to a connected SMX pad over USB, so
+you see exactly what will appear on the hardware while you edit.
+
+Features include:
+
+- Full-pad and single-panel authoring modes
+- Loop and outro region markers
+- HSV adjustment (hue shift, saturation and value gain + bias) per frame or
+  across all frames, with live preview
+- BPM-variant export
+- Hold playback simulation for reviewing sustain/outro animations
+
+The tool is part of the
+[`stepmaniax-gif-maker`](https://github.com/fchorney/stepmaniax-gif-maker)
+project (separate repo). Build and run it with a connected SMX pad to author
+or tweak animations before dropping them into your DeadSync assets folder.

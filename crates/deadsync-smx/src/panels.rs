@@ -159,6 +159,10 @@ pub struct PanelFx {
     /// Smoothed live tempo estimate in beats per second, used to cap a
     /// beat-locked background's frame rate (see `beat_frame`).
     beat_rate: f32,
+    /// Per-slot blackout: when set, all frame bytes for that slot are zeroed after
+    /// compositing, showing solid black regardless of any effects or background.
+    /// Used to blank an unused pad in single-player mode.
+    blackout: [bool; PADS],
     /// Reused output buffer. `tick` overwrites every byte each call, so it never needs
     /// clearing and we avoid re-zeroing 1350 bytes per frame.
     frame: [u8; FRAME_BYTES],
@@ -178,7 +182,16 @@ impl PanelFx {
             beat: 0.0,
             prev_beat: 0.0,
             beat_rate: 0.0,
+            blackout: [false; PADS],
             frame: [0u8; FRAME_BYTES],
+        }
+    }
+
+    /// Force a pad slot to solid black regardless of any effects or background.
+    /// Persists across `clear_panels` / `clear_all` since it is a mode, not an effect.
+    pub fn set_pad_blackout(&mut self, pad: usize, on: bool) {
+        if pad < PADS {
+            self.blackout[pad] = on;
         }
     }
 
@@ -305,6 +318,12 @@ impl PanelFx {
                     let o = base + led * 3;
                     self.frame[o..o + 3].copy_from_slice(&rgb);
                 }
+            }
+            // Blackout overrides the composite: zero all bytes for this slot so
+            // the pad shows solid black regardless of any effects or background.
+            if self.blackout[pad] {
+                let start = pad * BYTES_PER_PAD;
+                self.frame[start..start + BYTES_PER_PAD].fill(0);
             }
         }
         &self.frame
@@ -636,6 +655,8 @@ enum Ev {
     /// Enter (true) or leave (false) active panel effect ownership. Leaving hands the pad
     /// back to its firmware idle lighting.
     Active(bool),
+    /// Force a pad slot to solid black (true) or restore normal compositing (false).
+    Blackout { pad: u8, on: bool },
     Shutdown,
 }
 
@@ -759,6 +780,12 @@ impl SmxPanelLights {
         self.send(Ev::Active(active));
     }
 
+    /// Force pad slot `pad` to solid black (`on = true`) or restore normal compositing.
+    /// Persists until explicitly cleared; use to blank an unused pad in single-player mode.
+    pub fn set_pad_blackout(&self, pad: usize, on: bool) {
+        self.send(Ev::Blackout { pad: pad as u8, on });
+    }
+
     fn send(&self, ev: Ev) {
         if let Some(tx) = &self.tx {
             let _ = tx.send(ev);
@@ -860,6 +887,7 @@ fn handle(fx: &mut PanelFx, active: &mut bool, ev: Ev) -> bool {
             drive,
         } => fx.play_press_overlay(pad.into(), panel.into(), anim, drive),
         Ev::PressRelease { pad, panel } => fx.release_press_overlay(pad.into(), panel.into()),
+        Ev::Blackout { pad, on } => fx.set_pad_blackout(pad.into(), on),
         Ev::Active(a) => {
             *active = a;
             if a {

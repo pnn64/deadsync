@@ -329,18 +329,56 @@ struct BeatSpec {
 /// Parse a GIF file stem like `song_select_25@1b120` into its base name, pad
 /// size, and optional beat-lock spec. Returns `None` for stems that don't
 /// follow the `<name>_<16|25>[@<beats>b<bpm>]` convention.
-fn parse_stem(stem: &str) -> Option<(&str, PadSize, Option<BeatSpec>)> {
-    let (base, beats) = match stem.split_once('@') {
-        Some((base, tail)) => (base, Some(parse_beats(tail)?)),
-        None => (stem, None),
+fn parse_stem(stem: &str) -> Option<(String, PadSize, Option<BeatSpec>)> {
+    // Format: <role>_<16|25>[@<tag>]
+    //
+    // We locate the size marker first (rightmost _16/_25 that is followed by
+    // nothing or an @-tag), then classify the tag:
+    //
+    //   - tag starts with a digit, '-', or '.': BPM spec (<N>b[<bpm>]); parse
+    //     or reject if malformed.
+    //   - tag starts with anything else (letter, '*', …): role modifier (e.g. a
+    //     grade suffix: @S+, @B+, @*****); appended to the role name.
+    //
+    // This order is necessary because grade letters include 'B', which is also
+    // the beat/bpm separator, so splitting on '@' first and checking for 'b'/'B'
+    // would misclassify @B+ as a malformed BPM spec.
+    fn find_size_pos(stem: &str, suffix: &str) -> Option<usize> {
+        let mut end = stem.len();
+        loop {
+            let pos = stem[..end].rfind(suffix)?;
+            let after = &stem[pos + suffix.len()..];
+            if after.is_empty() || after.starts_with('@') {
+                return Some(pos);
+            }
+            if pos == 0 {
+                return None;
+            }
+            end = pos;
+        }
+    }
+    let (size_pos, size) = match (find_size_pos(stem, "_25"), find_size_pos(stem, "_16")) {
+        (Some(p25), Some(p16)) if p25 >= p16 => (p25, PadSize::Leds25),
+        (Some(_), Some(p16)) => (p16, PadSize::Leds16),
+        (Some(p25), None) => (p25, PadSize::Leds25),
+        (None, Some(p16)) => (p16, PadSize::Leds16),
+        (None, None) => return None,
     };
-    let (name, size) = base.rsplit_once('_')?;
-    let size = match size {
-        "16" => PadSize::Leds16,
-        "25" => PadSize::Leds25,
-        _ => return None,
-    };
-    (!name.is_empty()).then_some((name, size, beats))
+    let name_base = &stem[..size_pos];
+    if name_base.is_empty() {
+        return None;
+    }
+    let rest = &stem[size_pos + 3..]; // characters after "_25" or "_16"
+    if rest.is_empty() {
+        return Some((name_base.to_owned(), size, None));
+    }
+    let tag = rest.strip_prefix('@')?;
+    let looks_like_bpm = matches!(tag.chars().next(), Some(c) if c.is_ascii_digit() || c == '-' || c == '.');
+    if looks_like_bpm {
+        Some((name_base.to_owned(), size, Some(parse_beats(tag)?)))
+    } else {
+        Some((format!("{name_base}@{tag}"), size, None))
+    }
 }
 
 /// Parse the `<beats>b<bpm>` tail of a beat-lock suffix (e.g. `1b120` = one
@@ -619,7 +657,7 @@ fn read_named_gif(path: &Path) -> Option<(Vec<u8>, String, PadSize, Option<BeatS
         return None;
     };
     match fs::read(path) {
-        Ok(bytes) => Some((bytes, name.to_owned(), size, beats)),
+        Ok(bytes) => Some((bytes, name, size, beats)),
         Err(e) => {
             log::warn!("SMX gifs: failed to read {}: {e}; skipped", path.display());
             None
@@ -738,39 +776,52 @@ mod tests {
     #[test]
     fn stem_parsing_extracts_name_size_and_beats() {
         let spec = |beats, ref_bpm| BeatSpec { beats, ref_bpm };
+        let s = |name: &str| name.to_owned();
         // The full form: beats at an authored reference bpm.
         assert_eq!(
             parse_stem("song_select_25@1B120"),
-            Some(("song_select", PadSize::Leds25, Some(spec(1.0, Some(120.0)))))
+            Some((s("song_select"), PadSize::Leds25, Some(spec(1.0, Some(120.0)))))
         );
         assert_eq!(
             parse_stem("song_select_25@0.5B90"),
-            Some(("song_select", PadSize::Leds25, Some(spec(0.5, Some(90.0)))))
+            Some((s("song_select"), PadSize::Leds25, Some(spec(0.5, Some(90.0)))))
         );
         // Bare beat counts (no bpm) are accepted too.
         assert_eq!(
             parse_stem("song_select_25@2b"),
-            Some(("song_select", PadSize::Leds25, Some(spec(2.0, None))))
+            Some((s("song_select"), PadSize::Leds25, Some(spec(2.0, None))))
         );
-        assert_eq!(parse_stem("bad_16"), Some(("bad", PadSize::Leds16, None)));
+        assert_eq!(parse_stem("bad_16"), Some((s("bad"), PadSize::Leds16, None)));
         assert_eq!(
             parse_stem("fantastic_blue_25"),
-            Some(("fantastic_blue", PadSize::Leds25, None))
+            Some((s("fantastic_blue"), PadSize::Leds25, None))
+        );
+        // Grade-modifier role tags: @<grade> after the size becomes part of the name.
+        assert_eq!(
+            parse_stem("results_25@S+"),
+            Some((s("results@S+"), PadSize::Leds25, None))
+        );
+        assert_eq!(
+            parse_stem("results_25@B+"),
+            Some((s("results@B+"), PadSize::Leds25, None))
+        );
+        assert_eq!(
+            parse_stem("results_25@*****"),
+            Some((s("results@*****"), PadSize::Leds25, None))
         );
     }
 
     #[test]
     fn stem_parsing_rejects_malformed_stems() {
         for bad in [
-            "default",       // no size suffix
-            "default_24",    // unknown size
-            "_25",           // empty name
-            "default_25@b",      // empty beat count
-            "default_25@2",      // missing 'B'
+            "default",           // no size suffix
+            "default_24",        // unknown size
+            "_25",               // empty name
+            "default_25@2",      // digit-starting tag with no 'b' separator
             "default_25@0B120",  // beats must be positive
-            "default_25@-1B120",
+            "default_25@-1B120", // negative beats
             "default_25@1B0",    // bpm, when given, must be positive
-            "default_25@1B-120",
+            "default_25@1B-120", // negative bpm
             "default_25@1Bfast", // bpm must be numeric
         ] {
             assert_eq!(parse_stem(bad), None, "{bad:?} should be rejected");

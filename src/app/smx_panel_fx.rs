@@ -458,6 +458,29 @@ impl SmxPanelDriver {
         self.judgement_gifs = gifs;
     }
 
+    /// Force pad slot `pad` to solid black (`on = true`) or restore normal compositing.
+    /// Call from the app layer to blank the unused pad in single-player mode.
+    pub fn set_pad_blackout(&self, pad: usize, on: bool) {
+        self.lights.set_pad_blackout(pad, on);
+    }
+
+    /// Handle a raw SMX panel press/release outside gameplay. Plays the `press` gif on
+    /// contact and releases it on lift. No-op when the worker is idle or no press gif is
+    /// configured; always safe to call regardless of current screen.
+    pub fn on_raw_panel(&self, pad: usize, panel: usize, pressed: bool) {
+        if !self.worker_active {
+            return;
+        }
+        if pressed {
+            if let Some(anim) = self.judgement_gifs.press.clone() {
+                self.lights
+                    .play_press_overlay(pad, panel, anim, OverlayDrive::Sustain { resume: false });
+            }
+        } else {
+            self.lights.release_press_overlay(pad, panel);
+        }
+    }
+
     /// Feed the current song beat position. Dropped unless the active background is
     /// beat-locked, so callers can push it every frame without flooding the worker.
     pub fn set_beat(&self, beat: f32) {

@@ -4159,7 +4159,9 @@ pub struct App {
     /// no allocation) so a per-song/per-pack background is re-resolved when the
     /// highlighted (song select) or playing (gameplay) song changes. Reset on a
     /// song rescan, so a recycled pointer can't be mistaken for the same song.
-    smx_bg_synced: Option<(bool, Option<&'static str>, config::SmxPackName, Option<usize>)>,
+    smx_bg_synced: Option<(bool, Option<&'static str>, config::SmxPackName, Option<usize>, Option<u32>)>,
+    /// Per-slot blackout state last sent to the SMX lights worker; `[P1_slot, P2_slot]`.
+    smx_blackout_synced: [bool; 2],
     /// Decoded per-song / per-pack pad background variants, keyed by their
     /// `smx-pad-lights/` folder and role. An empty vec is the negative entry
     /// (folder scanned, no matching gif) so a folder is touched only once; the
@@ -4826,6 +4828,7 @@ impl App {
             config.smx_input && config.smx_panel_lights,
         );
         self.sync_smx_pad_gifs(config.smx_pad_gifs, config.smx_pad_gifs_pack);
+        self.sync_smx_pad_blackout(config.smx_input && config.smx_panel_lights);
         if config.smx_pad_gifs && self.state.screens.current_screen == CurrentScreen::SelectMusic {
             // One f32 per frame; the driver drops it unless the background is
             // actually beat-locked.
@@ -4940,13 +4943,34 @@ impl App {
         let song = role.and_then(|_| self.current_smx_song());
         let song_id = song.as_ref().map(|s| std::sync::Arc::as_ptr(s) as usize);
 
-        let synced = Some((enabled, role, pack, song_id));
+        // On results screens, include the grade in the key so a new result re-resolves
+        // to a grade-specific gif even when the role and song haven't changed.
+        let eval_grade = if matches!(
+            self.state.screens.current_screen,
+            CurrentScreen::Evaluation
+                | CurrentScreen::EvaluationSummary
+                | CurrentScreen::Initials
+        ) {
+            self.state
+                .screens
+                .evaluation_state
+                .score_info
+                .iter()
+                .flatten()
+                .map(|si| si.grade)
+                .min_by_key(|g| g.to_sprite_state())
+        } else {
+            None
+        };
+        let eval_grade_key = eval_grade.map(|g| g.to_sprite_state());
+
+        let synced = Some((enabled, role, pack, song_id, eval_grade_key));
         if self.smx_bg_synced == synced {
             return;
         }
         let pack_changed = self
             .smx_bg_synced
-            .is_none_or(|(e, _, p, _)| e != enabled || p != pack);
+            .is_none_or(|(e, _, p, _, _)| e != enabled || p != pack);
         self.smx_bg_synced = synced;
 
         let song_dir = song
@@ -4975,16 +4999,28 @@ impl App {
                 .and_then(|dir| self.resolve_scoped_smx_background(dir, role, song_bpm));
             scoped.or_else(|| {
                 let registry = self.smx_gif_registry();
-                registry
-                    .background(pack_str, role, deadsync_smx::gifs::PadSize::Leds25, song_bpm)
-                    .or_else(|| {
-                        registry.background(
-                            pack_str,
-                            "default",
-                            deadsync_smx::gifs::PadSize::Leds25,
-                            song_bpm,
-                        )
+                let size = deadsync_smx::gifs::PadSize::Leds25;
+                // On results screens, try grade-specific roles before the plain role.
+                // Fallback chain: results@S+ -> results@S -> results -> default.
+                let grade_anim = if role == "results" {
+                    eval_grade.and_then(|grade| {
+                        let suffix = grade.gif_suffix();
+                        let specific = format!("results@{suffix}");
+                        registry
+                            .background(pack_str, &specific, size, song_bpm)
+                            .or_else(|| {
+                                grade.gif_base().and_then(|base| {
+                                    let base_role = format!("results@{}", base.gif_suffix());
+                                    registry.background(pack_str, &base_role, size, song_bpm)
+                                })
+                            })
                     })
+                } else {
+                    None
+                };
+                grade_anim
+                    .or_else(|| registry.background(pack_str, role, size, song_bpm))
+                    .or_else(|| registry.background(pack_str, "default", size, song_bpm))
             })
         });
         let background = anim.map(|anim| {
@@ -5012,17 +5048,53 @@ impl App {
         }
     }
 
+    /// Black out the unused pad slot when a single player is in game mode.
+    /// In Versus / Doubles both pads are in use; in Single play the non-session slot
+    /// gets solid black so only the pad the player stands on is lit.
+    fn sync_smx_pad_blackout(&mut self, enabled: bool) {
+        let in_game = enabled
+            && !matches!(
+                self.state.screens.current_screen,
+                CurrentScreen::Menu
+                    | CurrentScreen::Init
+                    | CurrentScreen::SmxAssignPads
+                    | CurrentScreen::TestLights
+                    | CurrentScreen::ManageLocalProfiles
+                    | CurrentScreen::Credits
+                    | CurrentScreen::OverscanAdjustment
+                    | CurrentScreen::Mappings
+            );
+        let blackout: [bool; 2] = if in_game {
+            let play_style = profile::get_session_play_style();
+            let session_side = profile::get_session_player_side();
+            if matches!(play_style, profile_data::PlayStyle::Single) {
+                let used = profile_data::player_side_index(session_side);
+                std::array::from_fn(|slot| slot != used)
+            } else {
+                [false; 2]
+            }
+        } else {
+            [false; 2]
+        };
+        if blackout != self.smx_blackout_synced {
+            self.smx_blackout_synced = blackout;
+            for (pad, &on) in blackout.iter().enumerate() {
+                self.smx_panels.set_pad_blackout(pad, on);
+            }
+        }
+    }
+
     /// The song whose per-song/per-pack SMX background applies on the current
     /// screen: the playing song in gameplay/practice, the highlighted song on
     /// song select. `None` elsewhere or with no song. A cheap `Arc` clone.
     fn current_smx_song(&self) -> Option<std::sync::Arc<deadsync_chart::SongData>> {
         let screens = &self.state.screens;
         match screens.current_screen {
-            CurrentScreen::Gameplay => screens.gameplay_state.as_ref().map(|gs| gs.song.clone()),
+            CurrentScreen::Gameplay => screens.gameplay_state.as_ref().map(|gs| gs.song_arc()),
             CurrentScreen::Practice => screens
                 .practice_state
                 .as_ref()
-                .map(|ps| ps.gameplay.song.clone()),
+                .map(|ps| ps.gameplay.song_arc()),
             CurrentScreen::SelectMusic => {
                 select_music::highlighted_song(&screens.select_music_state)
             }
@@ -5693,6 +5765,7 @@ impl App {
             smx_light_brightness: [100, 100],
             smx_gifs: None,
             smx_bg_synced: None,
+            smx_blackout_synced: [false; 2],
             smx_scoped_bg_cache: std::collections::HashMap::new(),
             smx_scoped_bg_generation: 0,
             asset_manager: AssetManager::new(),
@@ -9082,6 +9155,24 @@ impl App {
 
     #[inline(always)]
     fn handle_pad_event(&mut self, event_loop: &ActiveEventLoop, ev: PadEvent) {
+        // Press-feedback gif: on any SMX panel press/release outside gameplay, play
+        // the pack's `press` animation on that panel's low-priority layer. Gated on
+        // pad_gifs so no-op when the feature is disabled; gated on non-gameplay so
+        // the judgement/sustain layers (which are higher priority) own gameplay fully.
+        let cfg = config::get();
+        if cfg.smx_input
+            && cfg.smx_panel_lights
+            && cfg.smx_pad_gifs
+            && !matches!(
+                self.state.screens.current_screen,
+                CurrentScreen::Gameplay | CurrentScreen::Practice
+            )
+        {
+            if let PadEvent::RawButton { id, code, pressed, .. } = ev {
+                self.smx_panels.on_raw_panel(id.0 as usize, code.0 as usize, pressed);
+            }
+        }
+
         if !input_routing::screen_accepts_queued_input(
             self.state.screens.current_screen,
             &self.state.shell.transition,
