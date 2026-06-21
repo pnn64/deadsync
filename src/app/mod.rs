@@ -10615,6 +10615,17 @@ impl ApplicationHandler<UserEvent> for App {
                 }
             }
             WindowEvent::Focused(focused) => {
+                #[cfg(target_os = "windows")]
+                if matches!(
+                    self.state.shell.display_mode,
+                    DisplayMode::Fullscreen(config::FullscreenType::Exclusive)
+                ) {
+                    if !focused {
+                        window.set_minimized(true);
+                    } else if window.is_minimized().unwrap_or(false) {
+                        window.set_minimized(false);
+                    }
+                }
                 self.apply_window_focus_change(focused, Instant::now(), Some(&window));
             }
             WindowEvent::Occluded(occluded) => {
