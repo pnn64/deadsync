@@ -463,11 +463,8 @@ impl GameplayUpdateTraceState {
     }
 }
 
-fn trace_capacity_growth<InputEdge, OverlayActor, CapturedActor, StateDelta>(
-    state: &mut GameplayRuntimeState<
-        profile_data::Profile,
-        InputEdge,
-        OverlayActor,
+fn trace_capacity_growth<OverlayActor, CapturedActor, StateDelta>(
+    state: &mut GameplayRuntimeState<profile_data::Profile, OverlayActor,
         CapturedActor,
         StateDelta,
     >,
@@ -509,11 +506,8 @@ fn trace_capacity_growth<InputEdge, OverlayActor, CapturedActor, StateDelta>(
     }
 }
 
-pub fn trace_gameplay_update<InputEdge, OverlayActor, CapturedActor, StateDelta>(
-    state: &mut GameplayRuntimeState<
-        profile_data::Profile,
-        InputEdge,
-        OverlayActor,
+pub fn trace_gameplay_update<OverlayActor, CapturedActor, StateDelta>(
+    state: &mut GameplayRuntimeState<profile_data::Profile, OverlayActor,
         CapturedActor,
         StateDelta,
     >,
@@ -12408,10 +12402,7 @@ pub fn gameplay_input_log_enabled() -> bool {
 }
 
 pub fn process_input_edges<OverlayActor, CapturedActor, StateDelta>(
-    state: &mut GameplayRuntimeState<
-        profile_data::Profile,
-        GameplayInputEdge,
-        OverlayActor,
+    state: &mut GameplayRuntimeState<profile_data::Profile, OverlayActor,
         CapturedActor,
         StateDelta,
     >,
@@ -12664,10 +12655,7 @@ pub fn process_input_edges<OverlayActor, CapturedActor, StateDelta>(
 
 #[inline(always)]
 pub fn handle_replay_edge<OverlayActor, CapturedActor, StateDelta>(
-    state: &mut GameplayRuntimeState<
-        profile_data::Profile,
-        GameplayInputEdge,
-        OverlayActor,
+    state: &mut GameplayRuntimeState<profile_data::Profile, OverlayActor,
         CapturedActor,
         StateDelta,
     >,
@@ -12695,7 +12683,6 @@ pub fn handle_replay_edge<OverlayActor, CapturedActor, StateDelta>(
 pub fn update_core<OverlayActor, CapturedActor, StateDelta>(
     state: &mut GameplayRuntimeState<
         profile_data::Profile,
-        GameplayInputEdge,
         OverlayActor,
         CapturedActor,
         StateDelta,
@@ -12704,14 +12691,7 @@ pub fn update_core<OverlayActor, CapturedActor, StateDelta>(
     audio_snapshot: GameplayAudioSnapshot,
     fallback_host_nanos: impl FnOnce() -> u64,
 ) -> GameplayAction {
-    state.update_gameplay_frame(
-        delta_time,
-        audio_snapshot,
-        ASSIST_TICK_SFX_PATH,
-        fallback_host_nanos,
-        process_input_edges,
-        handle_replay_edge,
-    )
+    state.update_gameplay_frame(delta_time, audio_snapshot, ASSIST_TICK_SFX_PATH, fallback_host_nanos)
 }
 
 #[inline(always)]
@@ -12728,7 +12708,6 @@ fn gameplay_menu_input(action: VirtualAction) -> Option<GameplayMenuInput> {
 fn queue_live_input_event<OverlayActor, CapturedActor, StateDelta>(
     state: &mut GameplayRuntimeState<
         profile_data::Profile,
-        GameplayInputEdge,
         OverlayActor,
         CapturedActor,
         StateDelta,
@@ -12759,7 +12738,6 @@ fn queue_live_input_event<OverlayActor, CapturedActor, StateDelta>(
 pub fn handle_core_input<OverlayActor, CapturedActor, StateDelta>(
     state: &mut GameplayRuntimeState<
         profile_data::Profile,
-        GameplayInputEdge,
         OverlayActor,
         CapturedActor,
         StateDelta,
@@ -20376,7 +20354,7 @@ pub struct GameplayControlRuntimeState {
     pub update_trace: GameplayUpdateTraceState,
 }
 
-pub struct GameplayRuntimeState<Profile, InputEdge, OverlayActor, CapturedActor, StateDelta> {
+pub struct GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta> {
     pub source: GameplaySourceRuntimeState,
     pub setup: GameplaySetupRuntimeState,
     pub boundary: GameplayBoundaryRuntimeState,
@@ -20390,7 +20368,7 @@ pub struct GameplayRuntimeState<Profile, InputEdge, OverlayActor, CapturedActor,
     pub profiles_runtime: GameplayProfilesRuntimeState<Profile>,
     pub mods: GameplayModRuntimeState<OverlayActor, CapturedActor, StateDelta>,
     pub control: GameplayControlRuntimeState,
-    pub pending_input: GameplayPendingInputState<InputEdge>,
+    pub pending_input: GameplayPendingInputState<GameplayInputEdge>,
 }
 
 pub fn gameplay_runtime_profiles(
@@ -20416,7 +20394,7 @@ pub fn gameplay_runtime_charts(
     runtime_charts
 }
 
-pub fn init_gameplay_runtime<InputEdge, OverlayKind>(
+pub fn init_gameplay_runtime<OverlayKind>(
     song: Arc<SongData>,
     charts: [Arc<ChartData>; MAX_PLAYERS],
     gameplay_charts: [Arc<GameplayChartData>; MAX_PLAYERS],
@@ -20440,10 +20418,7 @@ pub fn init_gameplay_runtime<InputEdge, OverlayKind>(
     course_display_totals: Option<[CourseDisplayTotals; MAX_PLAYERS]>,
     course_display_timing: Option<CourseDisplayTiming>,
     mut combo_carry: [u32; MAX_PLAYERS],
-) -> GameplayRuntimeState<
-    profile_data::Profile,
-    InputEdge,
-    deadsync_song_lua::SongLuaOverlayActor<OverlayKind>,
+) -> GameplayRuntimeState<profile_data::Profile, deadsync_song_lua::SongLuaOverlayActor<OverlayKind>,
     deadsync_song_lua::SongLuaCapturedActor,
     deadsync_song_lua::SongLuaOverlayStateDelta,
 >
@@ -21532,8 +21507,8 @@ where
     state
 }
 
-impl<InputEdge, OverlayActor, CapturedActor, StateDelta>
-    GameplayRuntimeState<profile_data::Profile, InputEdge, OverlayActor, CapturedActor, StateDelta>
+impl<OverlayActor, CapturedActor, StateDelta>
+    GameplayRuntimeState<profile_data::Profile, OverlayActor, CapturedActor, StateDelta>
 {
     #[inline(always)]
     pub fn player_blue_window_ms(&self, player_idx: usize) -> f32 {
@@ -22872,7 +22847,6 @@ impl<InputEdge, OverlayActor, CapturedActor, StateDelta>
         &mut self,
         now_music_time_ns: SongTimeNs,
         replay_events: &mut [Option<RecordedLaneEdge>; MAX_COLS],
-        mut handle_replay_edge: impl FnMut(&mut Self, RecordedLaneEdge),
     ) {
         if self.progress.replay.mode {
             let event_count = self.collect_ready_replay_edges(replay_events);
@@ -23597,8 +23571,8 @@ impl<InputEdge, OverlayActor, CapturedActor, StateDelta>
     }
 }
 
-impl<InputEdge, OverlayActor, CapturedActor, StateDelta>
-    GameplayRuntimeState<profile_data::Profile, InputEdge, OverlayActor, CapturedActor, StateDelta>
+impl<OverlayActor, CapturedActor, StateDelta>
+    GameplayRuntimeState<profile_data::Profile, OverlayActor, CapturedActor, StateDelta>
 {
     pub fn update_exit_transition(&mut self, delta_time: f32) -> Option<GameplayAction> {
         let exit = self.control.exit_input.exit_transition?;
@@ -23759,13 +23733,6 @@ impl<InputEdge, OverlayActor, CapturedActor, StateDelta>
         audio_snapshot: GameplayAudioSnapshot,
         assist_sfx_path: &'static str,
         fallback_host_nanos: impl FnOnce() -> u64,
-        mut process_input_edges: impl FnMut(
-            &mut Self,
-            bool,
-            &mut GameplayUpdatePhaseTimings,
-            SongClockSnapshot,
-        ),
-        handle_replay_edge: impl FnMut(&mut Self, RecordedLaneEdge),
     ) -> GameplayAction {
         if let Some(action) = self.update_exit_transition(delta_time) {
             return action;
@@ -23821,7 +23788,7 @@ impl<InputEdge, OverlayActor, CapturedActor, StateDelta>
             None
         };
         let mut replay_events = [None; MAX_COLS];
-        self.run_autoplay_or_replay_phase(music_time_ns, &mut replay_events, handle_replay_edge);
+        self.run_autoplay_or_replay_phase(music_time_ns, &mut replay_events);
         if let Some(started) = autoplay_started {
             phase_timings.autoplay_us = elapsed_us_since(started);
         }
@@ -25825,7 +25792,7 @@ impl<InputEdge, OverlayActor, CapturedActor, StateDelta>
     pub fn queue_live_input_edge(
         &mut self,
         lane: Lane,
-        build_edge: impl FnOnce(Lane, Instant, SongTimeNs, bool) -> InputEdge,
+        build_edge: impl FnOnce(Lane, Instant, SongTimeNs, bool) -> GameplayInputEdge,
     ) -> bool {
         let Some(lane) = self.live_input_lane_for_queue(lane) else {
             return false;
@@ -25844,14 +25811,14 @@ impl<InputEdge, OverlayActor, CapturedActor, StateDelta>
     pub fn queue_current_time_input_edge(
         &mut self,
         lane: Lane,
-        build_edge: impl FnOnce(Instant) -> InputEdge,
+        build_edge: impl FnOnce(Instant) -> GameplayInputEdge,
     ) -> bool {
         let now = Instant::now();
         self.queue_pending_input_edge(lane.index(), build_edge(now))
     }
 
     #[inline(always)]
-    pub fn queue_pending_input_edge(&mut self, lane_idx: usize, edge: InputEdge) -> bool {
+    pub fn queue_pending_input_edge(&mut self, lane_idx: usize, edge: GameplayInputEdge) -> bool {
         if lane_idx >= self.num_cols() {
             return false;
         }
@@ -25871,12 +25838,12 @@ impl<InputEdge, OverlayActor, CapturedActor, StateDelta>
     }
 
     #[inline(always)]
-    pub fn push_pending_input_edge(&mut self, edge: InputEdge) {
+    pub fn push_pending_input_edge(&mut self, edge: GameplayInputEdge) {
         self.pending_input.edges.push_back(edge);
     }
 
     #[inline(always)]
-    pub fn pop_pending_input_edge(&mut self) -> Option<InputEdge> {
+    pub fn pop_pending_input_edge(&mut self) -> Option<GameplayInputEdge> {
         self.pending_input.edges.pop_front()
     }
 
@@ -26678,11 +26645,8 @@ impl<InputEdge, OverlayActor, CapturedActor, StateDelta>
 }
 
 #[inline(always)]
-pub fn effective_visual_effects_for_player<InputEdge, OverlayActor, CapturedActor, StateDelta>(
-    state: &GameplayRuntimeState<
-        profile_data::Profile,
-        InputEdge,
-        OverlayActor,
+pub fn effective_visual_effects_for_player<OverlayActor, CapturedActor, StateDelta>(
+    state: &GameplayRuntimeState<profile_data::Profile, OverlayActor,
         CapturedActor,
         StateDelta,
     >,
@@ -26700,11 +26664,8 @@ pub fn effective_visual_effects_for_player<InputEdge, OverlayActor, CapturedActo
 }
 
 #[inline(always)]
-pub fn effective_scroll_effects_for_player<InputEdge, OverlayActor, CapturedActor, StateDelta>(
-    state: &GameplayRuntimeState<
-        profile_data::Profile,
-        InputEdge,
-        OverlayActor,
+pub fn effective_scroll_effects_for_player<OverlayActor, CapturedActor, StateDelta>(
+    state: &GameplayRuntimeState<profile_data::Profile, OverlayActor,
         CapturedActor,
         StateDelta,
     >,
@@ -26720,16 +26681,11 @@ pub fn effective_scroll_effects_for_player<InputEdge, OverlayActor, CapturedActo
 }
 
 #[inline(always)]
-pub fn effective_perspective_effects_for_player<
-    InputEdge,
-    OverlayActor,
+pub fn effective_perspective_effects_for_player<OverlayActor,
     CapturedActor,
     StateDelta,
 >(
-    state: &GameplayRuntimeState<
-        profile_data::Profile,
-        InputEdge,
-        OverlayActor,
+    state: &GameplayRuntimeState<profile_data::Profile, OverlayActor,
         CapturedActor,
         StateDelta,
     >,
@@ -26745,11 +26701,8 @@ pub fn effective_perspective_effects_for_player<
 }
 
 #[inline(always)]
-pub fn effective_visual_mask_for_player<InputEdge, OverlayActor, CapturedActor, StateDelta>(
-    state: &GameplayRuntimeState<
-        profile_data::Profile,
-        InputEdge,
-        OverlayActor,
+pub fn effective_visual_mask_for_player<OverlayActor, CapturedActor, StateDelta>(
+    state: &GameplayRuntimeState<profile_data::Profile, OverlayActor,
         CapturedActor,
         StateDelta,
     >,
@@ -26769,11 +26722,8 @@ pub fn effective_visual_mask_for_player<InputEdge, OverlayActor, CapturedActor, 
 }
 
 #[inline(always)]
-pub fn effective_mini_percent_for_player<InputEdge, OverlayActor, CapturedActor, StateDelta>(
-    state: &GameplayRuntimeState<
-        profile_data::Profile,
-        InputEdge,
-        OverlayActor,
+pub fn effective_mini_percent_for_player<OverlayActor, CapturedActor, StateDelta>(
+    state: &GameplayRuntimeState<profile_data::Profile, OverlayActor,
         CapturedActor,
         StateDelta,
     >,
@@ -26807,11 +26757,8 @@ pub fn player_draw_scale_for_tilt_with_visual_mask(
     player_draw_scale_for_visual_mask(tilt, mini_percent, profile.mini_percent as f32, visual_mask)
 }
 
-pub fn refresh_active_attack_masks<InputEdge, OverlayActor, CapturedActor, StateDelta>(
-    state: &mut GameplayRuntimeState<
-        profile_data::Profile,
-        InputEdge,
-        OverlayActor,
+pub fn refresh_active_attack_masks<OverlayActor, CapturedActor, StateDelta>(
+    state: &mut GameplayRuntimeState<profile_data::Profile, OverlayActor,
         CapturedActor,
         StateDelta,
     >,
@@ -26835,11 +26782,8 @@ pub fn refresh_active_attack_masks<InputEdge, OverlayActor, CapturedActor, State
 }
 
 #[inline(always)]
-pub fn song_lua_hides_note_visual<InputEdge, OverlayActor, CapturedActor, StateDelta>(
-    state: &GameplayRuntimeState<
-        profile_data::Profile,
-        InputEdge,
-        OverlayActor,
+pub fn song_lua_hides_note_visual<OverlayActor, CapturedActor, StateDelta>(
+    state: &GameplayRuntimeState<profile_data::Profile, OverlayActor,
         CapturedActor,
         StateDelta,
     >,

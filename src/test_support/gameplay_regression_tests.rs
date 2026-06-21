@@ -151,7 +151,6 @@ use deadsync_gameplay::{
 use deadsync_gameplay::{
     build_song_lua_column_offset_windows_for_player, build_song_lua_constant_windows_for_player,
 };
-use deadsync_input::InputEdge;
 use deadsync_profile as profile_data;
 use deadsync_rules::judgment::{self, JudgeGrade, Judgment, TimingWindow};
 #[cfg(test)]
@@ -159,7 +158,6 @@ use deadsync_rules::note::{MAX_HOLD_LIFE, TIMING_WINDOW_SECONDS_HOLD, TIMING_WIN
 
 pub type State = GameplayRuntimeState<
     profile_data::Profile,
-    InputEdge,
     deadsync_song_lua::SongLuaOverlayActor<crate::game::parsing::song_lua::SongLuaOverlayKind>,
     deadsync_song_lua::SongLuaCapturedActor,
     deadsync_song_lua::SongLuaOverlayStateDelta,
@@ -398,7 +396,7 @@ mod tests {
     use deadsync_core::input::{InputSource, Lane};
     use deadsync_core::note::NoteType;
     use deadsync_core::timing::{ROWS_PER_BEAT, beat_to_note_row};
-    use deadsync_input::{InputEdge, InputEvent, VirtualAction};
+    use deadsync_input::{InputEvent, VirtualAction};
     use deadsync_profile as profile_data;
     use deadsync_rules::judgment::{self, JudgeGrade, Judgment, TimingWindow};
     use deadsync_rules::note::{HoldData, HoldResult, MineResult, Note};
@@ -506,7 +504,7 @@ mod tests {
         course_display_timing: Option<super::CourseDisplayTiming>,
         combo_carry: [u32; MAX_PLAYERS],
     ) -> super::State {
-        deadsync_gameplay::init_gameplay_runtime::<InputEdge, SongLuaOverlayKind>(
+        deadsync_gameplay::init_gameplay_runtime::<SongLuaOverlayKind>(
             song,
             charts,
             gameplay_charts,

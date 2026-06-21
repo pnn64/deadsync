@@ -11,7 +11,6 @@ pub mod stage_stats;
 
 pub type GameplayCoreState = deadsync_gameplay::GameplayRuntimeState<
     deadsync_profile::Profile,
-    deadsync_input::InputEdge,
     parsing::song_lua::SongLuaOverlayActor,
     deadsync_song_lua::SongLuaCapturedActor,
     deadsync_song_lua::SongLuaOverlayStateDelta,

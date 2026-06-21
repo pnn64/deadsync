@@ -14,7 +14,6 @@ use deadsync_gameplay::{
     GameplayConfig, GameplayMiniIndicatorData, GameplaySession, GameplaySongLuaData,
     GameplayViewport, gameplay_runtime_profiles,
 };
-use deadsync_input::InputEdge;
 use deadsync_profile as profile_data;
 use deadsync_rules::judgment::{JudgeGrade, TimingWindow};
 use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -147,7 +146,6 @@ pub fn fixture() -> NotefieldBenchFixture {
     );
 
     let mut state = deadsync_gameplay::init_gameplay_runtime::<
-        InputEdge,
         crate::game::parsing::song_lua::SongLuaOverlayKind,
     >(
         song,

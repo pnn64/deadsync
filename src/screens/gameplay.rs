@@ -58,7 +58,7 @@ use deadsync_gameplay::{
     song_lua_compile_player_screen_x as gameplay_song_lua_compile_player_screen_x,
     song_lua_ease_factor, song_lua_sound_paths, spacing_multiplier_for_percent, update_core,
 };
-use deadsync_input::{InputEdge, InputEvent, VirtualAction};
+use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_online::lobbies as lobby_data;
 use deadsync_profile as profile_data;
 use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -1255,7 +1255,6 @@ pub fn init(
     let scorebox_data = gameplay_scorebox_data(&runtime_charts, &runtime_profiles, &session);
     State::from_gameplay_with_screen_data(
         deadsync_gameplay::init_gameplay_runtime::<
-            InputEdge,
             crate::game::parsing::song_lua::SongLuaOverlayKind,
         >(
             song,
