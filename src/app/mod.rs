@@ -5063,6 +5063,10 @@ impl App {
                     | CurrentScreen::Credits
                     | CurrentScreen::OverscanAdjustment
                     | CurrentScreen::Mappings
+                    | CurrentScreen::Options
+                    | CurrentScreen::PlayerOptions
+                    | CurrentScreen::ConfigurePads
+                    | CurrentScreen::Input
             );
         let blackout: [bool; 2] = if in_game {
             let play_style = profile::get_session_play_style();
@@ -9160,16 +9164,20 @@ impl App {
         // pad_gifs so no-op when the feature is disabled; gated on non-gameplay so
         // the judgement/sustain layers (which are higher priority) own gameplay fully.
         let cfg = config::get();
-        if cfg.smx_input
-            && cfg.smx_panel_lights
-            && cfg.smx_pad_gifs
-            && !matches!(
-                self.state.screens.current_screen,
-                CurrentScreen::Gameplay | CurrentScreen::Practice
-            )
-        {
+        if cfg.smx_input && cfg.smx_panel_lights && cfg.smx_pad_gifs {
             if let PadEvent::RawButton { id, code, pressed, .. } = ev {
-                self.smx_panels.on_raw_panel(id.0 as usize, code.0 as usize, pressed);
+                let pad_slot = id.0 as usize;
+                let is_gameplay = matches!(
+                    self.state.screens.current_screen,
+                    CurrentScreen::Gameplay | CurrentScreen::Practice
+                );
+                // During gameplay, only fire press feedback on the blacked-out (unused) pad.
+                // Outside gameplay, fire on all pads.
+                let is_blacked_out =
+                    self.smx_blackout_synced.get(pad_slot).copied().unwrap_or(false);
+                if !is_gameplay || is_blacked_out {
+                    self.smx_panels.on_raw_panel(pad_slot, code.0 as usize, pressed);
+                }
             }
         }
 
