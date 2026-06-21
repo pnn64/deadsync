@@ -100,6 +100,7 @@ fn publish_keymap(conf: &SimpleIni) {
 fn load_defaults_after_error() {
     *MACHINE_DEFAULT_NOTESKIN.lock().unwrap() = DEFAULT_MACHINE_NOTESKIN.to_string();
     ADDITIONAL_SONG_FOLDERS.lock().unwrap().clear();
+    NEVER_CACHE_LIST.lock().unwrap().clear();
     *SMX_P1_SERIAL.lock().unwrap() = None;
     *SMX_P2_SERIAL.lock().unwrap() = None;
     *DEFAULT_PROFILE_P1.lock().unwrap() = None;
@@ -116,6 +117,7 @@ fn load_runtime_state(conf: &SimpleIni) {
         .unwrap_or_else(|| DEFAULT_MACHINE_NOTESKIN.to_string());
     *MACHINE_DEFAULT_NOTESKIN.lock().unwrap() = noteskin;
     *ADDITIONAL_SONG_FOLDERS.lock().unwrap() = load_additional_song_folders(conf);
+    *NEVER_CACHE_LIST.lock().unwrap() = load_never_cache_list(conf);
     // SMX pad assignment serials: missing/blank means "no assignment" (jumper).
     let serial = |key| {
         conf.get("Options", key)
@@ -177,6 +179,16 @@ fn push_additional_song_folders(raw: &str, writable: bool, out: &mut Vec<Additio
                 writable,
             }),
     );
+}
+
+fn load_never_cache_list(conf: &SimpleIni) -> Vec<String> {
+    conf.get("Options", "NeverCacheList")
+        .unwrap_or_default()
+        .split(',')
+        .map(str::trim)
+        .filter(|entry| !entry.is_empty())
+        .map(str::to_string)
+        .collect()
 }
 
 fn load_additional_song_folders(conf: &SimpleIni) -> Vec<AdditionalSongFolder> {
@@ -267,5 +279,21 @@ AdditionalSongFoldersReadOnly= , G:\\ro , \n");
                 folder("D:\\b", true),
             ]
         );
+    }
+
+    #[test]
+    fn never_cache_list_parses_and_trims_entries() {
+        let conf = ini("[Options]\nNeverCacheList= WIP Pack , ,Another \n");
+
+        assert_eq!(
+            load_never_cache_list(&conf),
+            vec!["WIP Pack".to_string(), "Another".to_string()]
+        );
+    }
+
+    #[test]
+    fn never_cache_list_empty_when_missing_or_blank() {
+        assert!(load_never_cache_list(&ini("[Options]\n")).is_empty());
+        assert!(load_never_cache_list(&ini("[Options]\nNeverCacheList=\n")).is_empty());
     }
 }

@@ -29,7 +29,8 @@ pub use self::null_or_die_cfg::null_or_die_bias_cfg;
 pub use self::pad_order::pad_index_for_uuid;
 pub use self::runtime::{
     additional_song_folder_roots, audio_mix_levels, default_profiles, flush_pending_saves, get,
-    machine_default_noteskin, smx_pad_assignment, song_path_is_writable,
+    group_is_never_cached, machine_default_noteskin, never_cache_list, smx_pad_assignment,
+    song_path_is_writable,
 };
 pub use self::theme::{
     AUTO_SS_CLEARS, AUTO_SS_FAILS, AUTO_SS_FLAG_NAMES, AUTO_SS_NUM_FLAGS, AUTO_SS_PBS,
@@ -55,7 +56,8 @@ use self::null_or_die_cfg::{
 };
 use self::runtime::{
     ADDITIONAL_SONG_FOLDERS, DEFAULT_PROFILE_P1, DEFAULT_PROFILE_P2, MACHINE_DEFAULT_NOTESKIN,
-    SMX_P1_SERIAL, SMX_P2_SERIAL, lock_config, queue_save_write, sync_audio_mix_levels_from_config,
+    NEVER_CACHE_LIST, SMX_P1_SERIAL, SMX_P2_SERIAL, lock_config, queue_save_write,
+    sync_audio_mix_levels_from_config,
 };
 use self::store::{normalize_machine_default_noteskin, save_without_keymaps};
 use deadlib_platform::logging;
