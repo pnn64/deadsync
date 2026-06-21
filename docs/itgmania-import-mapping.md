@@ -85,6 +85,12 @@ the GrooveStats key (`is_boogiestats_active()` is just
 `enable_groovestats && enable_boogiestats`), so importing the GrooveStats key is
 all that's needed for it.
 
+**Online scores** (GrooveStats / ArrowCloud history) live on the servers, not in
+the ITGmania profile, so the importer doesn't fetch them — it just carries the
+credentials across. When it does, the import summary nudges the user to run
+**Options → Online Scoring → Score Import**, the existing screen that downloads
+online scores using exactly these `groovestats.ini` / `arrowcloud.ini` keys.
+
 ## 3. Avatar
 
 `Avatar.png` / `avatar.png` / `Avatar.jpg` / `Avatar.jpeg` (first match,
@@ -318,10 +324,12 @@ and looks it up in DeadSync's scanned song library to recover the GrooveStats
 - **EX / Hard-EX can't be reconstructed** — ITGmania records only bucketed
   judgments (no W0 split, no per-tap timing), so EX starts at 0.
 - **Holds vs rolls aren't distinguished**, and mine tallies are partial.
-- **Auto-detection** covers the per-user save dirs only
+- **Auto-detection** covers the per-user save dirs
   (`%APPDATA%\ITGmania\Save\LocalProfiles`, `~/.itgmania/...`,
-  `~/Library/Application Support/ITGmania/...`); portable installs aren't found
-  automatically.
+  `~/Library/Application Support/ITGmania/...`). **Portable installs** aren't
+  auto-detected, but **"Browse for game directory…"** in the import picker opens
+  a native folder dialog and resolves profiles from the chosen game folder using
+  ITGmania's own `Portable.ini` rule (`detect.rs`).
 
 ## Deliberately not imported
 
