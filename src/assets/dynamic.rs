@@ -16,13 +16,35 @@ static BANNER_CACHE_TMP_COUNTER: AtomicU64 = AtomicU64::new(1);
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct BannerCacheOptions {
     pub(crate) enabled: bool,
+    /// When set, the longest side of the decoded image is clamped to this many
+    /// pixels (preserving aspect ratio) before it is cached or uploaded.
+    pub(crate) max_dim: Option<u32>,
 }
 
 fn banner_cache_opthash(opts: BannerCacheOptions) -> u64 {
     let mut hasher = XxHash64::with_seed(0);
-    hasher.write_u8(1);
+    hasher.write_u8(2);
     hasher.write_u8(u8::from(opts.enabled));
+    hasher.write_u32(opts.max_dim.unwrap_or(0));
     hasher.finish()
+}
+
+/// Downscale `img` so its longest side is at most `max_dim` pixels, preserving
+/// aspect ratio. Images already within the limit (or when no limit is given)
+/// are returned untouched.
+pub(crate) fn downscale_to_max_dim(img: RgbaImage, max_dim: Option<u32>) -> RgbaImage {
+    let Some(max_dim) = max_dim.filter(|d| *d > 0) else {
+        return img;
+    };
+    let (w, h) = img.dimensions();
+    let longest = w.max(h);
+    if longest <= max_dim {
+        return img;
+    }
+    let scale = f64::from(max_dim) / f64::from(longest);
+    let new_w = ((f64::from(w) * scale).round() as u32).max(1);
+    let new_h = ((f64::from(h) * scale).round() as u32).max(1);
+    image::imageops::resize(&img, new_w, new_h, image::imageops::FilterType::Lanczos3)
 }
 
 const BANNER_CACHE_MAGIC: [u8; 8] = *b"DSBNR02\0";
@@ -272,13 +294,15 @@ pub(crate) fn ensure_cached_dynamic_image_on_disk(
 
 fn build_cached_banner_rgba(
     path: &Path,
-    _opts: BannerCacheOptions,
+    opts: BannerCacheOptions,
 ) -> image::ImageResult<RgbaImage> {
-    if is_dynamic_video_path(path) {
-        return video::load_poster(path)
-            .map_err(|e| image::ImageError::IoError(std::io::Error::other(e)));
-    }
-    Ok(open_image_fallback_quiet(path)?.to_rgba8())
+    let rgba = if is_dynamic_video_path(path) {
+        video::load_poster(path)
+            .map_err(|e| image::ImageError::IoError(std::io::Error::other(e)))?
+    } else {
+        open_image_fallback_quiet(path)?.to_rgba8()
+    };
+    Ok(downscale_to_max_dim(rgba, opts.max_dim))
 }
 
 pub(crate) fn dedupe_dynamic_keys(keys: Vec<String>) -> Vec<String> {
@@ -290,4 +314,46 @@ pub(crate) fn dedupe_dynamic_keys(keys: Vec<String>) -> Vec<String> {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{BannerCacheOptions, banner_cache_opthash, downscale_to_max_dim};
+    use image::RgbaImage;
+
+    #[test]
+    fn downscale_clamps_longest_side_and_keeps_aspect() {
+        let img = RgbaImage::new(3483, 1368);
+        let out = downscale_to_max_dim(img, Some(1536));
+        assert_eq!(out.width(), 1536);
+        // 1368 * 1536 / 3483 ≈ 603, aspect ratio preserved.
+        assert_eq!(out.height(), 603);
+    }
+
+    #[test]
+    fn downscale_leaves_small_images_untouched() {
+        let img = RgbaImage::new(418, 164);
+        let out = downscale_to_max_dim(img, Some(1536));
+        assert_eq!(out.dimensions(), (418, 164));
+    }
+
+    #[test]
+    fn downscale_noop_without_limit() {
+        let img = RgbaImage::new(4000, 4000);
+        let out = downscale_to_max_dim(img, None);
+        assert_eq!(out.dimensions(), (4000, 4000));
+    }
+
+    #[test]
+    fn max_dim_changes_cache_opthash() {
+        let without = banner_cache_opthash(BannerCacheOptions {
+            enabled: true,
+            max_dim: None,
+        });
+        let with = banner_cache_opthash(BannerCacheOptions {
+            enabled: true,
+            max_dim: Some(1536),
+        });
+        assert_ne!(without, with);
+    }
 }

@@ -9526,7 +9526,11 @@ impl App {
                         &overlay_video_paths,
                     );
                     if let Some(path) = gs.song().banner_path.as_ref() {
-                        media_cache::ensure_banner_texture(&mut self.asset_manager, backend, path);
+                        media_cache::ensure_banner_art_texture(
+                            &mut self.asset_manager,
+                            backend,
+                            path,
+                        );
                     }
                 }
                 let asset_prewarm_ms = asset_prewarm_started.elapsed().as_secs_f64() * 1000.0;
@@ -9954,7 +9958,11 @@ impl App {
                         &overlay_video_paths,
                     );
                     if let Some(path) = gs.song().banner_path.as_ref() {
-                        media_cache::ensure_banner_texture(&mut self.asset_manager, backend, path);
+                        media_cache::ensure_banner_art_texture(
+                            &mut self.asset_manager,
+                            backend,
+                            path,
+                        );
                     }
                 }
                 let asset_prewarm_ms = asset_prewarm_started.elapsed().as_secs_f64() * 1000.0;
@@ -10034,7 +10042,7 @@ impl App {
             if let (Some(backend), Some(gs)) = (self.backend.as_mut(), gameplay_results.as_ref())
                 && let Some(path) = gs.song().banner_path.as_ref()
             {
-                media_cache::ensure_banner_texture(&mut self.asset_manager, backend, path);
+                media_cache::ensure_banner_art_texture(&mut self.asset_manager, backend, path);
             }
             let color_idx = gameplay_results.as_ref().map_or(
                 self.state.screens.evaluation_state.active_color_index,
@@ -10087,7 +10095,11 @@ impl App {
             if let Some(backend) = self.backend.as_mut() {
                 for stage in display_stages.iter() {
                     if let Some(path) = stage.song.banner_path.as_ref() {
-                        media_cache::ensure_banner_texture(&mut self.asset_manager, backend, path);
+                        media_cache::ensure_banner_art_texture(
+                            &mut self.asset_manager,
+                            backend,
+                            path,
+                        );
                     }
                 }
             }
@@ -10118,7 +10130,11 @@ impl App {
             if let Some(backend) = self.backend.as_mut() {
                 for stage in display_stages.iter() {
                     if let Some(path) = stage.song.banner_path.as_ref() {
-                        media_cache::ensure_banner_texture(&mut self.asset_manager, backend, path);
+                        media_cache::ensure_banner_art_texture(
+                            &mut self.asset_manager,
+                            backend,
+                            path,
+                        );
                     }
                 }
             }

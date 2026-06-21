@@ -11,10 +11,25 @@ use std::{
     time::Instant,
 };
 
+/// Maximum length (in pixels) of the longest side of a cached banner image.
+/// Banner art is drawn at roughly 320 virtual px wide, which is at most ~1440
+/// device px on a 4K display, so 1536 keeps it crisp everywhere while preventing
+/// oversized source art from slowing things down.
+const BANNER_MAX_DIMENSION: u32 = 1536;
+
 #[inline(always)]
 pub(crate) fn banner_cache_options() -> dynamic::BannerCacheOptions {
     dynamic::BannerCacheOptions {
         enabled: crate::config::get().banner_cache,
+        max_dim: None,
+    }
+}
+
+#[inline(always)]
+pub(crate) fn banner_art_cache_options() -> dynamic::BannerCacheOptions {
+    dynamic::BannerCacheOptions {
+        enabled: crate::config::get().banner_cache,
+        max_dim: Some(BANNER_MAX_DIMENSION),
     }
 }
 
@@ -22,25 +37,46 @@ pub(crate) fn banner_cache_options() -> dynamic::BannerCacheOptions {
 pub(crate) fn cdtitle_cache_options() -> dynamic::BannerCacheOptions {
     dynamic::BannerCacheOptions {
         enabled: crate::config::get().cdtitle_cache,
+        max_dim: None,
     }
 }
 
-pub(crate) fn load_banner_source_rgba(path: &Path) -> Result<RgbaImage, String> {
-    let opts = banner_cache_options();
+fn load_dynamic_image_rgba(
+    path: &Path,
+    opts: dynamic::BannerCacheOptions,
+    cache_dir: &Path,
+) -> Result<RgbaImage, String> {
     if opts.enabled {
-        return dynamic::load_or_build_cached_dynamic_image(
-            path,
-            opts,
-            &dirs::app_dirs().banner_cache_dir(),
-        )
-        .map_err(|e| e.to_string());
+        return dynamic::load_or_build_cached_dynamic_image(path, opts, cache_dir)
+            .map_err(|e| e.to_string());
     }
-    if dynamic::is_dynamic_video_path(path) {
-        return video::load_poster(path);
-    }
-    open_image_fallback(path)
-        .map(|img| img.to_rgba8())
-        .map_err(|e| e.to_string())
+    let rgba = if dynamic::is_dynamic_video_path(path) {
+        video::load_poster(path)?
+    } else {
+        open_image_fallback(path)
+            .map(|img| img.to_rgba8())
+            .map_err(|e| e.to_string())?
+    };
+    Ok(dynamic::downscale_to_max_dim(rgba, opts.max_dim))
+}
+
+/// Loads an image at full resolution.
+pub(crate) fn load_banner_source_rgba(path: &Path) -> Result<RgbaImage, String> {
+    load_dynamic_image_rgba(
+        path,
+        banner_cache_options(),
+        &dirs::app_dirs().banner_cache_dir(),
+    )
+}
+
+/// Loads banner art, downscaling oversized source images to keep wheel scrolling
+/// smooth.
+pub(crate) fn load_banner_art_rgba(path: &Path) -> Result<RgbaImage, String> {
+    load_dynamic_image_rgba(
+        path,
+        banner_art_cache_options(),
+        &dirs::app_dirs().banner_cache_dir(),
+    )
 }
 
 pub(crate) fn load_cdtitle_source_rgba(path: &Path) -> Result<RgbaImage, String> {
@@ -74,6 +110,31 @@ pub(crate) fn ensure_banner_texture(assets: &mut AssetManager, backend: &mut Bac
 
     if let Err(e) = assets.update_texture_for_key(backend, &key, &rgba) {
         warn!("Failed to create GPU texture for image {path:?}: {e}. Skipping.");
+    }
+}
+
+/// Like [`ensure_banner_texture`], but downscales oversized banner art so that
+/// uploading it does not stall the frame (see [`load_banner_art_rgba`]).
+pub(crate) fn ensure_banner_art_texture(
+    assets: &mut AssetManager,
+    backend: &mut Backend,
+    path: &Path,
+) {
+    let key = path.to_string_lossy().into_owned();
+    if assets.has_texture_key(&key) {
+        return;
+    }
+
+    let rgba = match load_banner_art_rgba(path) {
+        Ok(rgba) => rgba,
+        Err(e) => {
+            warn!("Failed to load banner art {path:?}: {e}. Skipping.");
+            return;
+        }
+    };
+
+    if let Err(e) = assets.update_texture_for_key(backend, &key, &rgba) {
+        warn!("Failed to create GPU texture for banner art {path:?}: {e}. Skipping.");
     }
 }
 
@@ -317,7 +378,7 @@ fn prewarm_dynamic_image_jobs_with_progress<F>(
 }
 
 pub(crate) fn artwork_cache_jobs(banner_paths: &[PathBuf], cdtitle_paths: &[PathBuf]) -> usize {
-    let banner_opts = banner_cache_options();
+    let banner_opts = banner_art_cache_options();
     let cdtitle_opts = cdtitle_cache_options();
     let total_paths = banner_paths.len().saturating_add(cdtitle_paths.len());
     let mut unique = HashSet::<String>::with_capacity(total_paths);
@@ -347,7 +408,7 @@ pub(crate) fn prewarm_artwork_cache_with_progress<F>(
 ) where
     F: FnMut(usize, usize, Option<&Path>),
 {
-    let banner_opts = banner_cache_options();
+    let banner_opts = banner_art_cache_options();
     let cdtitle_opts = cdtitle_cache_options();
     let total_paths = banner_paths.len().saturating_add(cdtitle_paths.len());
     let mut unique = HashSet::<String>::with_capacity(total_paths);

@@ -306,7 +306,7 @@ impl DynamicMedia {
                 self.release_texture_key(assets, backend, old_key);
             }
 
-            let rgba = match media_cache::load_banner_source_rgba(&path) {
+            let rgba = match media_cache::load_banner_art_rgba(&path) {
                 Ok(rgba) => rgba,
                 Err(e) => {
                     warn!(
@@ -348,7 +348,7 @@ impl DynamicMedia {
         for path in paths {
             let key = path.to_string_lossy().into_owned();
             if desired.insert(key) {
-                media_cache::ensure_banner_texture(assets, backend, &path);
+                media_cache::ensure_banner_art_texture(assets, backend, &path);
             }
         }
 
@@ -381,7 +381,7 @@ impl DynamicMedia {
                 return current.key.clone();
             }
             self.destroy_current_dynamic_banner(assets, backend);
-            let rgba = match media_cache::load_banner_source_rgba(&path) {
+            let rgba = match media_cache::load_banner_art_rgba(&path) {
                 Ok(rgba) => rgba,
                 Err(e) => {
                     warn!(
@@ -1257,7 +1257,7 @@ fn prepare_banner_video(key: String, path: PathBuf) -> BannerVideoPrepResult {
         };
     }
 
-    let poster = match media_cache::load_banner_source_rgba(&path) {
+    let poster = match media_cache::load_banner_art_rgba(&path) {
         Ok(rgba) => rgba,
         Err(msg) => {
             return BannerVideoPrepResult::Failed { path, msg };

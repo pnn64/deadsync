@@ -1050,7 +1050,10 @@ mod tests {
         let dir = TempDir::new("cache-hit-no-prune");
         let src = dir.path().join("banner.png");
         let cache_dir = dir.path().join("cache");
-        let opts = BannerCacheOptions { enabled: true };
+        let opts = BannerCacheOptions {
+            enabled: true,
+            max_dim: None,
+        };
         let expected = test_rgba([1, 2, 3, 4]);
 
         write_test_png(&src, [1, 2, 3, 4]);
@@ -1077,7 +1080,10 @@ mod tests {
         let dir = TempDir::new("cache-write-prune");
         let src = dir.path().join("banner.png");
         let cache_dir = dir.path().join("cache");
-        let opts = BannerCacheOptions { enabled: true };
+        let opts = BannerCacheOptions {
+            enabled: true,
+            max_dim: None,
+        };
         let current = test_rgba([4, 3, 2, 1]);
 
         write_test_png(&src, [4, 3, 2, 1]);
