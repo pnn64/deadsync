@@ -1,0 +1,17 @@
+[package]
+name = "deadsync-noteskin"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0"
+
+[dependencies]
+bincode = "2.0.1"
+log = "0.4.33"
+mlua = { version = "0.11.6", features = ["lua54", "vendored"] }
+serde = { version = "1.0.228", features = ["derive"] }
+twox-hash = "2.1.2"
+
+[lints.clippy]
+perf = { level = "warn", priority = -1 }
+
+inline_always = "allow"

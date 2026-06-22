@@ -1122,7 +1122,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.4.1393"
+version = "0.4.1406"
 dependencies = [
  "bincode",
  "bitflags 2.13.0",
@@ -1149,6 +1149,7 @@ dependencies = [
  "deadsync-input-native",
  "deadsync-lights",
  "deadsync-net",
+ "deadsync-noteskin",
  "deadsync-online",
  "deadsync-profile",
  "deadsync-rules",
@@ -1352,6 +1353,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "deadsync-noteskin"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "log",
+ "mlua",
+ "serde",
+ "twox-hash",
+]
+
+[[package]]
 name = "deadsync-online"
 version = "0.1.0"
 dependencies = [
@@ -1453,7 +1465,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.4.1393"
+version = "0.4.1406"
 dependencies = [
  "log",
  "semver",

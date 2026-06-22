@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use log::warn;
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -14,7 +12,7 @@ static CHILD_DIR_CACHE: OnceLock<Mutex<HashMap<(String, String), Option<PathBuf>
 static FILE_PREFIX_CACHE: OnceLock<Mutex<HashMap<(String, String), Option<PathBuf>>>> =
     OnceLock::new();
 
-pub(crate) fn clear_lookup_caches() {
+pub fn clear_lookup_caches() {
     if let Some(cache) = CHILD_DIR_CACHE.get() {
         cache
             .lock()
@@ -357,7 +355,10 @@ mod tests {
     use super::{clear_lookup_caches, find_file_with_prefix, resolve_skin_dir};
     use std::fs;
     use std::path::PathBuf;
+    use std::sync::Mutex;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    static LOOKUP_CACHE_TEST_LOCK: Mutex<()> = Mutex::new(());
 
     fn temp_root(name: &str) -> PathBuf {
         let suffix = SystemTime::now()
@@ -375,6 +376,9 @@ mod tests {
 
     #[test]
     fn clear_lookup_caches_rechecks_missing_skin_dirs() {
+        let _guard = LOOKUP_CACHE_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         clear_lookup_caches();
         let root = temp_root("skin-dir");
         fs::create_dir_all(root.join("dance")).unwrap();
@@ -397,6 +401,9 @@ mod tests {
 
     #[test]
     fn clear_lookup_caches_rechecks_missing_file_prefixes() {
+        let _guard = LOOKUP_CACHE_TEST_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         clear_lookup_caches();
         let root = temp_root("file-prefix");
         let dir = root.join("dance/default");

@@ -19,6 +19,20 @@ pub struct ModelMeshCacheStats {
     pub saturated_misses: u64,
 }
 
+/// Per-player notefield model geometry cache.
+///
+/// Owner: gameplay screen logic, one cache per active player notefield.
+/// Threading: single game/render frame path; callers hold it behind `RefCell`.
+/// Lifetime: gameplay screen/session, cleared or rebuilt at song transitions.
+/// Capacity: fixed entry cap; default starts empty, gameplay prewarms with 96.
+/// Warmup: `notefield_model_cache_from_assets` prewarms visible model slots.
+/// Miss: builds CPU vertex data from an already-loaded `SpriteSlot`, with no
+/// disk I/O, parsing, GPU upload, or asset registration.
+/// Eviction: none during gameplay; once full, insertions saturate and count a
+/// `saturated_misses` event instead of pruning.
+/// Destruction: entries drop with the gameplay screen or explicit cache clear.
+/// Instrumentation: hit, miss, and saturated miss counters.
+/// Worst-case frame cost: one bounded model vertex conversion per miss.
 pub(crate) struct ModelMeshCache {
     entries: HashMap<ModelMeshCacheKey, Arc<[TexturedMeshVertex]>, BuildHasherDefault<XxHash64>>,
     stats: ModelMeshCacheStats,
