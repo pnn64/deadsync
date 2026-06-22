@@ -1375,6 +1375,9 @@ pub fn init(
     );
     let player_profiles = player_profiles.map(GameplayProfile::from);
     let song_lua_sound_paths = song_lua_sound_paths(&song_lua_data);
+    let song_lua_runtime_builder = deadsync_gameplay::CompiledSongLuaRuntimeBuilder {
+        data: song_lua_data.into_runtime_data(),
+    };
     let background_chart = if session.p2_runtime_player() {
         &gameplay_charts[1]
     } else {
@@ -1393,6 +1396,7 @@ pub fn init(
         deadsync_gameplay::init_gameplay_runtime::<
             crate::game::parsing::song_lua::SongLuaOverlayKind,
             _,
+            _,
         >(
             song,
             charts,
@@ -1403,7 +1407,7 @@ pub fn init(
             pack_sync_pref,
             mini_indicator_data,
             noteskin_data,
-            song_lua_data.into_runtime_data(),
+            song_lua_runtime_builder,
             gameplay_crossover_annotations_for_player,
             active_color_index,
             music_rate,

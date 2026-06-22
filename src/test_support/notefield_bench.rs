@@ -146,8 +146,12 @@ pub fn fixture() -> NotefieldBenchFixture {
         &runtime_profiles,
     );
 
+    let song_lua_runtime_builder = deadsync_gameplay::CompiledSongLuaRuntimeBuilder {
+        data: GameplaySongLuaData::<crate::game::parsing::song_lua::CompiledSongLua>::default(),
+    };
     let mut state = deadsync_gameplay::init_gameplay_runtime::<
         crate::game::parsing::song_lua::SongLuaOverlayKind,
+        _,
         _,
     >(
         song,
@@ -159,7 +163,7 @@ pub fn fixture() -> NotefieldBenchFixture {
         deadsync_chart::SyncPref::Default,
         GameplayMiniIndicatorData::default(),
         noteskin_data,
-        GameplaySongLuaData::<crate::game::parsing::song_lua::CompiledSongLua>::default(),
+        song_lua_runtime_builder,
         deadsync_gameplay::empty_crossover_annotations,
         0,
         1.0,

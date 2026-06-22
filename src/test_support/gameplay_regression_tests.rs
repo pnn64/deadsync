@@ -594,7 +594,10 @@ mod tests {
         course_display_timing: Option<super::CourseDisplayTiming>,
         combo_carry: [u32; MAX_PLAYERS],
     ) -> super::State {
-        deadsync_gameplay::init_gameplay_runtime::<SongLuaOverlayKind, _>(
+        let song_lua_runtime_builder = deadsync_gameplay::CompiledSongLuaRuntimeBuilder {
+            data: song_lua_data,
+        };
+        deadsync_gameplay::init_gameplay_runtime::<SongLuaOverlayKind, _, _>(
             song,
             charts,
             gameplay_charts,
@@ -604,7 +607,7 @@ mod tests {
             pack_sync_pref,
             mini_indicator_data,
             noteskin_data,
-            song_lua_data,
+            song_lua_runtime_builder,
             deadsync_gameplay::empty_crossover_annotations,
             active_color_index,
             music_rate,

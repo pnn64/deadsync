@@ -5740,6 +5740,18 @@ pub struct SongLuaRuntimeVisuals<OverlayActor, CapturedActor, StateDelta> {
     pub screen_height: f32,
 }
 
+pub type SongLuaRuntimeBuildOutput<OverlayActor, CapturedActor, StateDelta> = (
+    [Vec<AttackMaskWindow>; MAX_PLAYERS],
+    [Vec<SongLuaEaseMaskWindow>; MAX_PLAYERS],
+    SongLuaRuntimeVisuals<OverlayActor, CapturedActor, StateDelta>,
+);
+
+pub type CompiledSongLuaRuntimeBuildOutput<Kind> = SongLuaRuntimeBuildOutput<
+    deadsync_song_lua::SongLuaOverlayActor<Kind>,
+    deadsync_song_lua::SongLuaCapturedActor,
+    deadsync_song_lua::SongLuaOverlayStateDelta,
+>;
+
 pub fn build_song_lua_runtime_visuals<OverlayActor, CapturedActor, StateDelta>(
     overlays: Vec<OverlayActor>,
     overlay_eases: Vec<SongLuaOverlayEaseWindowRuntime<StateDelta>>,
@@ -5796,6 +5808,31 @@ pub struct SongLuaRuntimeWindowBuild<'a> {
     pub screen_width: f32,
     pub screen_height: f32,
     pub player_actor_defaults: [SongLuaPlayerActorDefault; MAX_PLAYERS],
+}
+
+pub trait SongLuaRuntimeBuilder<Kind> {
+    fn build_song_lua_runtime(
+        self,
+        params: SongLuaRuntimeWindowBuild<'_>,
+    ) -> CompiledSongLuaRuntimeBuildOutput<Kind>;
+}
+
+pub struct CompiledSongLuaRuntimeBuilder<Kind> {
+    pub data: GameplaySongLuaData<
+        deadsync_song_lua::CompiledSongLua<deadsync_song_lua::SongLuaOverlayActor<Kind>>,
+    >,
+}
+
+impl<Kind> SongLuaRuntimeBuilder<Kind> for CompiledSongLuaRuntimeBuilder<Kind>
+where
+    Kind: Clone + std::fmt::Debug,
+{
+    fn build_song_lua_runtime(
+        self,
+        params: SongLuaRuntimeWindowBuild<'_>,
+    ) -> CompiledSongLuaRuntimeBuildOutput<Kind> {
+        build_song_lua_runtime_windows_for_data(params, self.data)
+    }
 }
 
 pub fn build_song_lua_runtime_window_build<'a, Profile: GameplayProfileData>(
@@ -20142,7 +20179,7 @@ pub fn gameplay_runtime_charts(
     runtime_charts
 }
 
-pub fn init_gameplay_runtime<OverlayKind, Profile>(
+pub fn init_gameplay_runtime<OverlayKind, Profile, BuildSongLuaRuntime>(
     song: Arc<SongData>,
     charts: [Arc<ChartData>; MAX_PLAYERS],
     gameplay_charts: [Arc<GameplayChartData>; MAX_PLAYERS],
@@ -20152,9 +20189,7 @@ pub fn init_gameplay_runtime<OverlayKind, Profile>(
     pack_sync_pref: SyncPref,
     mini_indicator_data: GameplayMiniIndicatorData,
     noteskin_data: GameplayNoteskinData,
-    song_lua_data: GameplaySongLuaData<
-        deadsync_song_lua::CompiledSongLua<deadsync_song_lua::SongLuaOverlayActor<OverlayKind>>,
-    >,
+    build_song_lua_runtime: BuildSongLuaRuntime,
     build_crossover_annotations: CrossoverAnnotationBuilder,
     active_color_index: i32,
     music_rate: f32,
@@ -20176,6 +20211,7 @@ pub fn init_gameplay_runtime<OverlayKind, Profile>(
 where
     Profile: GameplayProfileData,
     OverlayKind: Clone + std::fmt::Debug,
+    BuildSongLuaRuntime: SongLuaRuntimeBuilder<OverlayKind>,
 {
     log::debug!("Initializing Gameplay Screen...");
     let init_started = Instant::now();
@@ -20779,21 +20815,18 @@ where
     let current_beat_visible: [f32; MAX_PLAYERS] = std::array::from_fn(|player| {
         timing_players[player].get_beat_for_time_ns(current_music_time_visible_ns[player])
     });
-    let (song_lua_mask_windows, song_lua_ease_windows, song_lua_visuals) =
-        build_song_lua_runtime_windows_for_data(
-            build_song_lua_runtime_window_build(
-                song.title.as_str(),
-                &timing_players,
-                num_players,
-                &player_profiles,
-                config.global_offset_seconds,
-                viewport,
-                &session,
-                config.center_1player_notefield,
-                &player_global_offset_shift_seconds,
-            ),
-            song_lua_data,
-        );
+    let (song_lua_mask_windows, song_lua_ease_windows, song_lua_visuals) = build_song_lua_runtime
+        .build_song_lua_runtime(build_song_lua_runtime_window_build(
+            song.title.as_str(),
+            &timing_players,
+            num_players,
+            &player_profiles,
+            config.global_offset_seconds,
+            viewport,
+            &session,
+            config.center_1player_notefield,
+            &player_global_offset_shift_seconds,
+        ));
     let attack_mask_windows: [Vec<AttackMaskWindow>; MAX_PLAYERS] = std::array::from_fn(|player| {
         if player >= num_players {
             return Vec::new();
