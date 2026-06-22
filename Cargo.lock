@@ -1122,7 +1122,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.4.1390"
+version = "0.4.1391"
 dependencies = [
  "bincode",
  "bitflags 2.13.0",
@@ -1143,6 +1143,7 @@ dependencies = [
  "deadsync-chart",
  "deadsync-core",
  "deadsync-gameplay",
+ "deadsync-import",
  "deadsync-input",
  "deadsync-input-fsr",
  "deadsync-input-native",
@@ -1158,7 +1159,6 @@ dependencies = [
  "deadsync-updater",
  "deadsync-version",
  "dhat",
- "flate2",
  "fs_extra",
  "glam",
  "gpu-allocator",
@@ -1288,6 +1288,17 @@ dependencies = [
  "deadsync-rules",
  "log",
  "twox-hash",
+]
+
+[[package]]
+name = "deadsync-import"
+version = "0.1.0"
+dependencies = [
+ "deadsync-chart",
+ "deadsync-profile",
+ "deadsync-rules",
+ "deadsync-score",
+ "flate2",
 ]
 
 [[package]]
@@ -1440,7 +1451,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.4.1390"
+version = "0.4.1391"
 dependencies = [
  "log",
  "semver",

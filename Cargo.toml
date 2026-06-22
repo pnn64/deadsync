@@ -20,6 +20,7 @@ members = [
     "crates/deadsync-chart",
     "crates/deadsync-core",
     "crates/deadsync-gameplay",
+    "crates/deadsync-import",
     "crates/deadsync-input",
     "crates/deadsync-input-fsr",
     "crates/deadsync-input-native",
@@ -51,7 +52,7 @@ resolver = "3"
 # `version.workspace = true`, so `env!("CARGO_PKG_VERSION")` and
 # `deadsync_version::current()` always agree. Bump THIS line on release.
 [workspace.package]
-version = "0.4.1390"
+version = "0.4.1391"
 
 [[bin]]
 name = "compose_bench"
@@ -97,6 +98,7 @@ deadsync-audio-stream = { path = "crates/deadsync-audio-stream" }
 deadsync-chart = { path = "crates/deadsync-chart" }
 deadsync-core = { path = "crates/deadsync-core" }
 deadsync-gameplay = { path = "crates/deadsync-gameplay" }
+deadsync-import = { path = "crates/deadsync-import" }
 deadsync-input = { path = "crates/deadsync-input" }
 deadsync-input-fsr = { path = "crates/deadsync-input-fsr" }
 deadsync-input-native = { path = "crates/deadsync-input-native" }
@@ -150,9 +152,6 @@ zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2
 # Song cache
 bincode = "2.0.1"
 twox-hash = "2.1.2"
-
-# Decompression of gzipped ITGmania Stats.xml during profile import
-flate2 = "1.1.9"
 
 # Native folder picker for choosing an ITGmania game directory during import.
 # Default backends: native Win32 / AppKit, GTK3 on Linux (synchronous API).

@@ -1,7 +1,7 @@
 //! End-to-end integration test for the import pipeline: a fixture `Stats.xml`
 //! string is parsed, resolved against an in-memory song library, and mapped into
-//! [`LocalScoreEntry`] records — the same sequence [`super::run`] performs, but
-//! without touching any global engine state or the filesystem.
+//! [`LocalScoreEntry`] records, matching root import orchestration without
+//! touching any global engine state or the filesystem.
 
 use std::path::PathBuf;
 use std::sync::Arc;

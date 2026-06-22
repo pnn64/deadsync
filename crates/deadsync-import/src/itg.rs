@@ -3,7 +3,7 @@
 //!
 //! Nothing here touches DeadSync state — these functions only turn files on disk
 //! into plain Rust structs. Mapping into DeadSync types happens in the
-//! orchestration layer (`super::run`) and in `deadsync_score::import`.
+//! root import orchestration layer and in `deadsync_score::import`.
 
 use std::collections::HashMap;
 use std::fs;
@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use deadsync_score::ImportedHighScore;
 
 use super::xml::{self, XmlNode};
-use crate::config::SimpleIni;
+use crate::ini::SimpleIni;
 
 /// Editable profile metadata from `Editable.ini`.
 #[derive(Debug, Clone, Default)]
