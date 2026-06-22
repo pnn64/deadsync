@@ -8,6 +8,7 @@ use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 pub mod import;
+pub mod stage_stats;
 pub use import::{ImportedHighScore, grade_from_itg, local_score_from_itg, parse_itg_datetime_ms};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
