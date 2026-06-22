@@ -84,50 +84,30 @@ type SongLuaOverlayEaseWindowRuntime =
     deadsync_gameplay::SongLuaOverlayEaseWindowRuntime<SongLuaOverlayStateDelta>;
 
 #[derive(Clone, Debug)]
-struct GameplayCompiledSongLua {
-    compiled: CompiledSongLua,
-    compile_ms: f64,
+pub(crate) struct GameplayCompiledSongLua {
+    pub(crate) compiled: CompiledSongLua,
+    pub(crate) compile_ms: f64,
 }
 
 #[derive(Clone, Debug)]
-struct GameplaySongLuaLayer {
-    start_beat: f32,
-    compiled: CompiledSongLua,
+pub(crate) struct GameplaySongLuaLayer {
+    pub(crate) start_beat: f32,
+    pub(crate) compiled: CompiledSongLua,
 }
 
 #[derive(Clone, Debug, Default)]
-struct GameplaySongLuaData {
-    primary: Option<GameplayCompiledSongLua>,
-    background_layers: Vec<GameplaySongLuaLayer>,
-    foreground_layers: Vec<GameplaySongLuaLayer>,
+pub(crate) struct GameplaySongLuaData {
+    pub(crate) primary: Option<GameplayCompiledSongLua>,
+    pub(crate) background_layers: Vec<GameplaySongLuaLayer>,
+    pub(crate) foreground_layers: Vec<GameplaySongLuaLayer>,
 }
 
-impl GameplaySongLuaData {
-    fn into_runtime_data(self) -> deadsync_gameplay::GameplaySongLuaData<CompiledSongLua> {
-        deadsync_gameplay::GameplaySongLuaData {
-            primary: self
-                .primary
-                .map(|primary| deadsync_gameplay::GameplayCompiledSongLua {
-                    compiled: primary.compiled,
-                    compile_ms: primary.compile_ms,
-                }),
-            background_layers: self
-                .background_layers
-                .into_iter()
-                .map(|layer| deadsync_gameplay::GameplaySongLuaLayer {
-                    start_beat: layer.start_beat,
-                    compiled: layer.compiled,
-                })
-                .collect(),
-            foreground_layers: self
-                .foreground_layers
-                .into_iter()
-                .map(|layer| deadsync_gameplay::GameplaySongLuaLayer {
-                    start_beat: layer.start_beat,
-                    compiled: layer.compiled,
-                })
-                .collect(),
-        }
+impl deadsync_gameplay::SongLuaRuntimeBuilder<SongLuaOverlayKind> for GameplaySongLuaData {
+    fn build_song_lua_runtime(
+        self,
+        params: deadsync_gameplay::SongLuaRuntimeWindowBuild<'_>,
+    ) -> deadsync_gameplay::CompiledSongLuaRuntimeBuildOutput<SongLuaOverlayKind> {
+        build_song_lua_runtime_windows_for_data(params, self)
     }
 }
 const INTRO_TEXT_SETTLE_SECONDS: f32 = 1.49; // 0.5 + 0.66 + 0.33 (SL OnCommand chain)
@@ -1301,6 +1281,240 @@ fn song_lua_sound_paths(data: &GameplaySongLuaData) -> Vec<PathBuf> {
     out
 }
 
+fn build_song_lua_runtime_windows_for_data(
+    params: deadsync_gameplay::SongLuaRuntimeWindowBuild<'_>,
+    song_lua_data: GameplaySongLuaData,
+) -> deadsync_gameplay::CompiledSongLuaRuntimeBuildOutput<SongLuaOverlayKind> {
+    let mut constant_windows: [Vec<deadsync_gameplay::AttackMaskWindow>; MAX_PLAYERS] =
+        std::array::from_fn(|_| Vec::new());
+    let mut ease_windows: [Vec<deadsync_gameplay::SongLuaEaseMaskWindow>; MAX_PLAYERS] =
+        std::array::from_fn(|_| Vec::new());
+    let mut overlays = Vec::new();
+    let mut overlay_eases = Vec::new();
+    let mut overlay_ease_ranges = Vec::new();
+    let mut overlay_events = Vec::new();
+    let mut background_visual_layers = Vec::new();
+    let mut foreground_visual_layers = Vec::new();
+    let mut player_actors: [SongLuaCapturedActor; MAX_PLAYERS] = std::array::from_fn(|player| {
+        let default = params.player_actor_defaults[player];
+        SongLuaCapturedActor {
+            initial_state: SongLuaOverlayState {
+                x: default.x,
+                y: default.y,
+                ..SongLuaOverlayState::default()
+            },
+            message_commands: Vec::new(),
+        }
+    });
+    let mut player_events: [Vec<SongLuaOverlayMessageRuntime>; MAX_PLAYERS] =
+        std::array::from_fn(|_| Vec::new());
+    let mut song_foreground = SongLuaCapturedActor::default();
+    let mut song_foreground_events = Vec::new();
+    let mut hidden_players = [false; MAX_PLAYERS];
+    let mut note_hides: [Vec<deadsync_gameplay::SongLuaNoteHideWindowRuntime>; MAX_PLAYERS] =
+        std::array::from_fn(|_| Vec::new());
+    let mut column_offsets: [Vec<deadsync_gameplay::SongLuaColumnOffsetWindowRuntime>;
+        MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
+
+    if song_lua_data.primary.is_none()
+        && song_lua_data.background_layers.is_empty()
+        && song_lua_data.foreground_layers.is_empty()
+    {
+        return (
+            constant_windows,
+            ease_windows,
+            deadsync_gameplay::build_song_lua_runtime_visuals(
+                overlays,
+                overlay_eases,
+                overlay_ease_ranges,
+                overlay_events,
+                background_visual_layers,
+                foreground_visual_layers,
+                player_actors,
+                player_events,
+                song_foreground,
+                song_foreground_events,
+                hidden_players,
+                note_hides,
+                column_offsets,
+                params.screen_width,
+                params.screen_height,
+            ),
+        );
+    }
+
+    let mut out_screen_width = params.screen_width;
+    let mut out_screen_height = params.screen_height;
+
+    if let Some(primary) = song_lua_data.primary.as_ref() {
+        let compiled = &primary.compiled;
+        let runtime_started = Instant::now();
+        overlays = compiled.overlays.clone();
+        let message_seconds = deadsync_gameplay::build_song_lua_message_seconds(
+            compiled.messages.iter().map(|message| message.beat),
+            params.timing_players[0],
+            params.machine_global_offset_seconds,
+        );
+        overlay_events = deadsync_gameplay::build_song_lua_overlay_message_events_with_seconds(
+            compiled,
+            &message_seconds,
+        );
+        let overlay_runtime_eases =
+            deadsync_gameplay::build_song_lua_overlay_ease_windows_with_events(
+                compiled,
+                params.timing_players[0],
+                params.machine_global_offset_seconds,
+                &overlay_events,
+            );
+        (overlay_eases, overlay_ease_ranges) = deadsync_gameplay::group_song_lua_overlay_eases(
+            compiled.overlays.len(),
+            overlay_runtime_eases,
+        );
+        deadsync_gameplay::apply_song_lua_player_actor_overrides(
+            &mut player_actors,
+            &compiled.player_actors,
+        );
+        player_events = deadsync_gameplay::build_song_lua_player_message_events(
+            &compiled.player_actors,
+            |actor| {
+                deadsync_gameplay::build_song_lua_actor_message_events_for_commands(
+                    &compiled.messages,
+                    &message_seconds,
+                    &actor.message_commands,
+                )
+            },
+        );
+        song_foreground = compiled.song_foreground.clone();
+        song_foreground_events =
+            deadsync_gameplay::build_song_lua_actor_message_events_for_commands(
+                &compiled.messages,
+                &message_seconds,
+                &compiled.song_foreground.message_commands,
+            );
+        hidden_players = deadsync_gameplay::build_song_lua_hidden_players(&compiled.hidden_players);
+        note_hides = deadsync_gameplay::build_song_lua_note_hide_windows_for_players(
+            compiled
+                .note_hides
+                .iter()
+                .map(|hide| (hide.player, hide.column, hide.start_beat, hide.end_beat)),
+        );
+
+        let mut unsupported_targets = 0usize;
+        let mut total_constant = 0usize;
+        let mut total_eases = 0usize;
+        let mut total_column_offsets = 0usize;
+        for player in 0..params.num_players {
+            let player_global_offset_seconds =
+                deadsync_gameplay::effective_player_global_offset_seconds(
+                    params.machine_global_offset_seconds,
+                    params.player_global_offset_shift_seconds,
+                    player,
+                );
+            let player_windows = deadsync_gameplay::build_song_lua_player_runtime_windows(
+                &compiled.time_mods,
+                &compiled.beat_mods,
+                &compiled.eases,
+                &compiled.column_offsets,
+                params.timing_players[player],
+                player,
+                player_global_offset_seconds,
+                |window| deadsync_gameplay::log_unsupported_song_lua_ease_target(player, window),
+            );
+            unsupported_targets += player_windows.unsupported_targets;
+            total_constant += player_windows.constant_windows.len();
+            total_eases += player_windows.ease_windows.len();
+            total_column_offsets += player_windows.column_offsets.len();
+            constant_windows[player] = player_windows.constant_windows;
+            ease_windows[player] = player_windows.ease_windows;
+            column_offsets[player] = player_windows.column_offsets;
+        }
+
+        let runtime_ms = runtime_started.elapsed().as_secs_f64() * 1000.0;
+        if deadsync_gameplay::song_lua_runtime_summary_is_notable(
+            compiled,
+            overlay_eases.len(),
+            total_constant,
+            total_eases,
+            total_column_offsets,
+            unsupported_targets,
+        ) {
+            deadsync_gameplay::log_song_lua_runtime_summary(
+                params.song_title,
+                compiled,
+                overlay_eases.len(),
+                total_constant,
+                total_eases,
+                total_column_offsets,
+                unsupported_targets,
+                primary.compile_ms,
+                runtime_ms,
+            );
+            deadsync_gameplay::log_song_lua_runtime_debug(
+                params.song_title,
+                compiled,
+                &overlay_eases,
+                &compiled.messages,
+                &hidden_players,
+                total_constant,
+                total_eases,
+                total_column_offsets,
+                unsupported_targets,
+            );
+        }
+
+        out_screen_width = compiled.screen_width;
+        out_screen_height = compiled.screen_height;
+    }
+
+    for layer_data in &song_lua_data.background_layers {
+        let compiled = &layer_data.compiled;
+        if let Some(layer) = deadsync_gameplay::build_song_lua_compiled_visual_layer_runtime(
+            params.song_title,
+            layer_data.start_beat,
+            compiled,
+            params.timing_players[0],
+            params.machine_global_offset_seconds,
+        ) {
+            background_visual_layers.push(layer);
+        }
+    }
+
+    for layer_data in &song_lua_data.foreground_layers {
+        let compiled = &layer_data.compiled;
+        if let Some(layer) = deadsync_gameplay::build_song_lua_compiled_visual_layer_runtime(
+            params.song_title,
+            layer_data.start_beat,
+            compiled,
+            params.timing_players[0],
+            params.machine_global_offset_seconds,
+        ) {
+            foreground_visual_layers.push(layer);
+        }
+    }
+
+    (
+        constant_windows,
+        ease_windows,
+        deadsync_gameplay::build_song_lua_runtime_visuals(
+            overlays,
+            overlay_eases,
+            overlay_ease_ranges,
+            overlay_events,
+            background_visual_layers,
+            foreground_visual_layers,
+            player_actors,
+            player_events,
+            song_foreground,
+            song_foreground_events,
+            hidden_players,
+            note_hides,
+            column_offsets,
+            out_screen_width,
+            out_screen_height,
+        ),
+    )
+}
+
 fn build_background_changes(
     song: &SongData,
     gameplay_chart: &GameplayChartData,
@@ -1375,9 +1589,6 @@ pub fn init(
     );
     let player_profiles = player_profiles.map(GameplayProfile::from);
     let song_lua_sound_paths = song_lua_sound_paths(&song_lua_data);
-    let song_lua_runtime_builder = deadsync_gameplay::CompiledSongLuaRuntimeBuilder {
-        data: song_lua_data.into_runtime_data(),
-    };
     let background_chart = if session.p2_runtime_player() {
         &gameplay_charts[1]
     } else {
@@ -1407,7 +1618,7 @@ pub fn init(
             pack_sync_pref,
             mini_indicator_data,
             noteskin_data,
-            song_lua_runtime_builder,
+            song_lua_data,
             gameplay_crossover_annotations_for_player,
             active_color_index,
             music_rate,

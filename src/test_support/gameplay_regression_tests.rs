@@ -581,7 +581,7 @@ mod tests {
         pack_sync_pref: deadsync_chart::SyncPref,
         mini_indicator_data: super::GameplayMiniIndicatorData,
         noteskin_data: super::GameplayNoteskinData,
-        song_lua_data: deadsync_gameplay::GameplaySongLuaData<CompiledSongLua>,
+        song_lua_data: screen_gameplay::GameplaySongLuaData,
         active_color_index: i32,
         music_rate: f32,
         scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
@@ -594,9 +594,6 @@ mod tests {
         course_display_timing: Option<super::CourseDisplayTiming>,
         combo_carry: [u32; MAX_PLAYERS],
     ) -> super::State {
-        let song_lua_runtime_builder = deadsync_gameplay::CompiledSongLuaRuntimeBuilder {
-            data: song_lua_data,
-        };
         deadsync_gameplay::init_gameplay_runtime::<SongLuaOverlayKind, _, _>(
             song,
             charts,
@@ -607,7 +604,7 @@ mod tests {
             pack_sync_pref,
             mini_indicator_data,
             noteskin_data,
-            song_lua_runtime_builder,
+            song_lua_data,
             deadsync_gameplay::empty_crossover_annotations,
             active_color_index,
             music_rate,
@@ -1086,7 +1083,7 @@ mod tests {
             deadsync_chart::SyncPref::Default,
             super::GameplayMiniIndicatorData::default(),
             noteskin_data,
-            deadsync_gameplay::GameplaySongLuaData::<CompiledSongLua>::default(),
+            screen_gameplay::GameplaySongLuaData::default(),
             5,
             1.0,
             [
@@ -1281,15 +1278,14 @@ return Def.ActorFrame{}
                                 compile_song_lua(&change.path, &context)
                                     .expect("generated song lua should compile")
                             })
-                            .map(|compiled| deadsync_gameplay::GameplayCompiledSongLua {
+                            .map(|compiled| screen_gameplay::GameplayCompiledSongLua {
                                 compiled,
                                 compile_ms: 0.0,
                             });
-                        let song_lua_data =
-                            deadsync_gameplay::GameplaySongLuaData::<CompiledSongLua> {
-                                primary,
-                                ..Default::default()
-                            };
+                        let song_lua_data = screen_gameplay::GameplaySongLuaData {
+                            primary,
+                            ..Default::default()
+                        };
                         let mut state = screen_gameplay::State::from_gameplay(
                             init(
                                 song,

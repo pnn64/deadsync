@@ -11,8 +11,7 @@ use deadsync_core::note::NoteType;
 use deadsync_core::timing::{ROWS_PER_BEAT, note_row_to_beat};
 use deadsync_gameplay::{
     ActiveHold, ActiveTapExplosion, ColumnCue, ColumnCueColumn, ErrorBarText, ErrorBarTick,
-    GameplayConfig, GameplayMiniIndicatorData, GameplaySession, GameplaySongLuaData,
-    GameplayViewport,
+    GameplayConfig, GameplayMiniIndicatorData, GameplaySession, GameplayViewport,
 };
 use deadsync_profile as profile_data;
 use deadsync_rules::judgment::{JudgeGrade, TimingWindow};
@@ -146,9 +145,6 @@ pub fn fixture() -> NotefieldBenchFixture {
         &runtime_profiles,
     );
 
-    let song_lua_runtime_builder = deadsync_gameplay::CompiledSongLuaRuntimeBuilder {
-        data: GameplaySongLuaData::<crate::game::parsing::song_lua::CompiledSongLua>::default(),
-    };
     let mut state = deadsync_gameplay::init_gameplay_runtime::<
         crate::game::parsing::song_lua::SongLuaOverlayKind,
         _,
@@ -163,7 +159,7 @@ pub fn fixture() -> NotefieldBenchFixture {
         deadsync_chart::SyncPref::Default,
         GameplayMiniIndicatorData::default(),
         noteskin_data,
-        song_lua_runtime_builder,
+        gameplay_screen::GameplaySongLuaData::default(),
         deadsync_gameplay::empty_crossover_annotations,
         0,
         1.0,
