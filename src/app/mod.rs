@@ -9175,7 +9175,9 @@ impl App {
                 // Outside gameplay, fire on all pads.
                 let is_blacked_out =
                     self.smx_blackout_synced.get(pad_slot).copied().unwrap_or(false);
-                if !is_gameplay || is_blacked_out {
+                if (!is_gameplay || is_blacked_out)
+                    && code.0 as usize != deadsync_smx::CENTER_PANEL
+                {
                     self.smx_panels.on_raw_panel(pad_slot, code.0 as usize, pressed);
                 }
             }
