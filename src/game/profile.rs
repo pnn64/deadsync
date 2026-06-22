@@ -1973,6 +1973,21 @@ pub fn set_active_profiles(p1: ActiveProfile, p2: ActiveProfile) -> [Profile; PL
     [get_for_side(PlayerSide::P1), get_for_side(PlayerSide::P2)]
 }
 
+pub fn load_default_profiles_for_joined_sides() -> [Profile; PLAYER_SLOTS] {
+    let (p1, p2) = config::default_profiles();
+    let defaults = [p1, p2];
+    let joined_mask = lock_session().joined_mask;
+    for side in [PlayerSide::P1, PlayerSide::P2] {
+        if !player_side_is_joined(joined_mask, side) {
+            continue;
+        }
+        let active = default_profile_from_id(defaults[side_ix(side)].clone());
+        lock_session().active_profiles[side_ix(side)] = active;
+        load_for_side(side);
+    }
+    [get_for_side(PlayerSide::P1), get_for_side(PlayerSide::P2)]
+}
+
 pub fn scan_local_profiles() -> Vec<LocalProfileSummary> {
     let Ok(read_dir) = fs::read_dir(profiles_root()) else {
         return Vec::new();

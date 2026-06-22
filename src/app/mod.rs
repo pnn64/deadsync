@@ -6767,10 +6767,23 @@ impl App {
 
         profile::set_session_joined(true, true);
         profile::set_session_play_style(profile_data::PlayStyle::Versus);
-        let guest_profile =
-            profile::set_active_profile_for_side(join_side, profile_data::ActiveProfile::Guest);
+        let show_select_profile = config::get().machine_show_select_profile;
+        let join_profile = if show_select_profile {
+            profile_data::ActiveProfile::Guest
+        } else {
+            profile::get_default_profile_for_side(join_side)
+        };
+        let joined_profile = profile::set_active_profile_for_side(join_side, join_profile);
         self.state.session.combo_carry[profile_data::player_side_index(join_side)] =
-            guest_profile.current_combo;
+            joined_profile.current_combo;
+        if let Some(backend) = self.backend.as_mut() {
+            self.dynamic_media.set_profile_avatar_for_side(
+                &mut self.asset_manager,
+                backend,
+                join_side,
+                joined_profile.avatar_path.clone(),
+            );
+        }
 
         if screen == CurrentScreen::SelectStyle {
             self.state.screens.select_style_state.selected_index = 1;
@@ -6780,7 +6793,7 @@ impl App {
             // Per Simply-Love-SM5#741: when the Select Profile screen is on,
             // prompt the late-joining player with the profile-select widget
             // instead of silently leaving them as Guest.
-            if config::get().machine_show_select_profile {
+            if show_select_profile {
                 crate::screens::select_music::open_late_join_profile_overlay(
                     &mut self.state.screens.select_music_state,
                     join_side,
@@ -9056,6 +9069,35 @@ impl App {
         debug!("Session timer started.");
     }
 
+    fn sync_profile_load_state(
+        &mut self,
+        profiles: &[profile_data::Profile; profile_data::PLAYER_SLOTS],
+    ) {
+        self.state.session.combo_carry = [profiles[0].current_combo, profiles[1].current_combo];
+        let play_style = profile::get_session_play_style();
+        let active_side = profile::get_session_player_side();
+        let active_ix = profile_data::player_side_index(active_side);
+        self.state.session.preferred_difficulty_index = profiles[active_ix]
+            .last_played(play_style)
+            .difficulty_index
+            .min(STANDARD_DIFFICULTY_COUNT.saturating_sub(1));
+
+        if let Some(backend) = self.backend.as_mut() {
+            self.dynamic_media.set_profile_avatar_for_side(
+                &mut self.asset_manager,
+                backend,
+                profile_data::PlayerSide::P1,
+                profiles[0].avatar_path.clone(),
+            );
+            self.dynamic_media.set_profile_avatar_for_side(
+                &mut self.asset_manager,
+                backend,
+                profile_data::PlayerSide::P2,
+                profiles[1].avatar_path.clone(),
+            );
+        }
+    }
+
     fn handle_screen_state_on_fade(&mut self, prev: CurrentScreen, target: CurrentScreen) {
         if prev == CurrentScreen::SelectColor {
             let idx = self.state.screens.select_color_state.active_color_index;
@@ -9178,6 +9220,8 @@ impl App {
             };
             self.state.screens.profile_load_state = profile_load::init();
             self.state.screens.profile_load_state.active_color_index = current_color_index;
+            let profiles = profile::load_default_profiles_for_joined_sides();
+            self.sync_profile_load_state(&profiles);
             profile_load::on_enter(&mut self.state.screens.profile_load_state);
         } else if target == CurrentScreen::PlayerOptions {
             if prev == CurrentScreen::SelectCourse {
