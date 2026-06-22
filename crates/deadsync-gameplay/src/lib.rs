@@ -5855,14 +5855,37 @@ pub trait SongLuaOverlayDeltaOverlap {
     fn overlaps_song_lua_delta(&self, other: &Self) -> bool;
 }
 
-pub fn song_lua_overlay_ease_cutoff_second<'a, Delta>(
+pub type SongLuaOverlayDeltaMask = u128;
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct SongLuaRuntimeOverlayStateDelta<Delta> {
+    pub overlap_mask: SongLuaOverlayDeltaMask,
+    pub delta: Delta,
+}
+
+impl SongLuaOverlayDeltaOverlap for SongLuaOverlayDeltaMask {
+    #[inline(always)]
+    fn overlaps_song_lua_delta(&self, other: &Self) -> bool {
+        self & other != 0
+    }
+}
+
+impl<Delta> SongLuaOverlayDeltaOverlap for SongLuaRuntimeOverlayStateDelta<Delta> {
+    #[inline(always)]
+    fn overlaps_song_lua_delta(&self, other: &Self) -> bool {
+        self.overlap_mask
+            .overlaps_song_lua_delta(&other.overlap_mask)
+    }
+}
+
+pub fn song_lua_overlay_ease_cutoff_second<Delta>(
     start_second: f32,
     from: &Delta,
     to: &Delta,
-    blocks: impl IntoIterator<Item = (f32, f32, &'a Delta)>,
+    blocks: impl IntoIterator<Item = (f32, f32, Delta)>,
 ) -> Option<f32>
 where
-    Delta: SongLuaOverlayDeltaOverlap + 'a,
+    Delta: SongLuaOverlayDeltaOverlap,
 {
     const SAME_TICK_CUTOFF_EPSILON: f32 = 0.001;
 
@@ -5871,7 +5894,7 @@ where
         if !event_second.is_finite() || event_second < start_second {
             continue;
         }
-        if !from.overlaps_song_lua_delta(delta) && !to.overlaps_song_lua_delta(delta) {
+        if !from.overlaps_song_lua_delta(&delta) && !to.overlaps_song_lua_delta(&delta) {
             continue;
         }
         let block_second = event_second + block_start.max(0.0);
@@ -5913,12 +5936,6 @@ pub struct SongLuaRuntimeOverlayEaseWindow<Delta> {
     pub easing: Option<String>,
     pub opt1: Option<f32>,
     pub opt2: Option<f32>,
-}
-
-impl SongLuaOverlayDeltaOverlap for deadsync_song_lua::SongLuaOverlayStateDelta {
-    fn overlaps_song_lua_delta(&self, other: &Self) -> bool {
-        song_lua_overlay_delta_overlaps(self, other)
-    }
 }
 
 impl<Delta> SongLuaOverlayEaseWindowLike<Delta> for SongLuaRuntimeOverlayEaseWindow<Delta> {
@@ -5965,74 +5982,6 @@ impl<Delta> SongLuaOverlayEaseWindowLike<Delta> for SongLuaRuntimeOverlayEaseWin
     fn opt2(&self) -> Option<f32> {
         self.opt2
     }
-}
-
-fn song_lua_overlay_delta_overlaps(
-    left: &deadsync_song_lua::SongLuaOverlayStateDelta,
-    right: &deadsync_song_lua::SongLuaOverlayStateDelta,
-) -> bool {
-    macro_rules! overlap {
-        ($field:ident) => {
-            if left.$field.is_some() && right.$field.is_some() {
-                return true;
-            }
-        };
-    }
-    overlap!(x);
-    overlap!(y);
-    overlap!(z);
-    overlap!(halign);
-    overlap!(valign);
-    overlap!(text_align);
-    overlap!(uppercase);
-    overlap!(shadow_len);
-    overlap!(shadow_color);
-    overlap!(glow);
-    overlap!(diffuse);
-    overlap!(visible);
-    overlap!(cropleft);
-    overlap!(cropright);
-    overlap!(croptop);
-    overlap!(cropbottom);
-    overlap!(fadeleft);
-    overlap!(faderight);
-    overlap!(fadetop);
-    overlap!(fadebottom);
-    overlap!(mask_source);
-    overlap!(mask_dest);
-    overlap!(zoom);
-    overlap!(zoom_x);
-    overlap!(zoom_y);
-    overlap!(zoom_z);
-    overlap!(basezoom);
-    overlap!(basezoom_x);
-    overlap!(basezoom_y);
-    overlap!(rot_x_deg);
-    overlap!(rot_y_deg);
-    overlap!(rot_z_deg);
-    overlap!(skew_x);
-    overlap!(skew_y);
-    overlap!(blend);
-    overlap!(vibrate);
-    overlap!(effect_magnitude);
-    overlap!(effect_mode);
-    overlap!(effect_color1);
-    overlap!(effect_color2);
-    overlap!(effect_period);
-    overlap!(effect_timing);
-    overlap!(vert_spacing);
-    overlap!(wrap_width_pixels);
-    overlap!(max_width);
-    overlap!(max_height);
-    overlap!(max_w_pre_zoom);
-    overlap!(max_h_pre_zoom);
-    overlap!(texture_wrapping);
-    overlap!(texcoord_offset);
-    overlap!(custom_texture_rect);
-    overlap!(texcoord_velocity);
-    overlap!(size);
-    overlap!(stretch_rect);
-    false
 }
 
 pub fn build_song_lua_overlay_ease_window_for<Ease, Delta>(

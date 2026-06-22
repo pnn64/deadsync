@@ -488,5 +488,5 @@ pub type GameplayCoreState = deadsync_gameplay::GameplayRuntimeState<
     GameplayProfile,
     parsing::song_lua::SongLuaOverlayActor,
     deadsync_song_lua::SongLuaCapturedActor,
-    deadsync_song_lua::SongLuaOverlayStateDelta,
+    deadsync_gameplay::SongLuaRuntimeOverlayStateDelta<deadsync_song_lua::SongLuaOverlayStateDelta>,
 >;

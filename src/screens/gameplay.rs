@@ -81,7 +81,9 @@ pub use crate::game::GameplayCoreState;
 
 const TEXT_CACHE_LIMIT: usize = 8192;
 type SongLuaOverlayEaseWindowRuntime =
-    deadsync_gameplay::SongLuaOverlayEaseWindowRuntime<SongLuaOverlayStateDelta>;
+    deadsync_gameplay::SongLuaOverlayEaseWindowRuntime<SongLuaRuntimeOverlayStateDelta>;
+type SongLuaRuntimeOverlayStateDelta =
+    deadsync_gameplay::SongLuaRuntimeOverlayStateDelta<SongLuaOverlayStateDelta>;
 
 #[derive(Clone, Debug)]
 pub(crate) struct GameplayCompiledSongLua {
@@ -106,7 +108,7 @@ impl
     deadsync_gameplay::SongLuaRuntimeBuilder<
         SongLuaOverlayActor,
         SongLuaCapturedActor,
-        SongLuaOverlayStateDelta,
+        SongLuaRuntimeOverlayStateDelta,
     > for GameplaySongLuaData
 {
     fn build_song_lua_runtime(
@@ -115,7 +117,7 @@ impl
     ) -> deadsync_gameplay::SongLuaRuntimeBuildOutput<
         SongLuaOverlayActor,
         SongLuaCapturedActor,
-        SongLuaOverlayStateDelta,
+        SongLuaRuntimeOverlayStateDelta,
     > {
         build_song_lua_runtime_windows_for_data(params, self)
     }
@@ -341,9 +343,115 @@ pub(crate) fn song_lua_runtime_column_offset_windows(
         .collect()
 }
 
+fn song_lua_overlay_delta_mask(
+    delta: &SongLuaOverlayStateDelta,
+) -> deadsync_gameplay::SongLuaOverlayDeltaMask {
+    let mut mask = 0u128;
+    let mut bit = 0u32;
+    macro_rules! field {
+        ($field:ident) => {{
+            if delta.$field.is_some() {
+                mask |= 1u128 << bit;
+            }
+            bit += 1;
+        }};
+    }
+
+    field!(x);
+    field!(y);
+    field!(z);
+    field!(z_bias);
+    field!(draw_order);
+    field!(draw_by_z_position);
+    field!(halign);
+    field!(valign);
+    field!(text_align);
+    field!(uppercase);
+    field!(shadow_len);
+    field!(shadow_color);
+    field!(glow);
+    field!(fov);
+    field!(vanishpoint);
+    field!(diffuse);
+    field!(vertex_colors);
+    field!(visible);
+    field!(cropleft);
+    field!(cropright);
+    field!(croptop);
+    field!(cropbottom);
+    field!(fadeleft);
+    field!(faderight);
+    field!(fadetop);
+    field!(fadebottom);
+    field!(mask_source);
+    field!(mask_dest);
+    field!(depth_test);
+    field!(zoom);
+    field!(zoom_x);
+    field!(zoom_y);
+    field!(zoom_z);
+    field!(basezoom);
+    field!(basezoom_x);
+    field!(basezoom_y);
+    field!(basezoom_z);
+    field!(rot_x_deg);
+    field!(rot_y_deg);
+    field!(rot_z_deg);
+    field!(skew_x);
+    field!(skew_y);
+    field!(blend);
+    field!(vibrate);
+    field!(effect_magnitude);
+    field!(effect_clock);
+    field!(effect_mode);
+    field!(effect_color1);
+    field!(effect_color2);
+    field!(effect_period);
+    field!(effect_offset);
+    field!(effect_timing);
+    field!(rainbow);
+    field!(rainbow_scroll);
+    field!(text_jitter);
+    field!(text_distortion);
+    field!(text_glow_mode);
+    field!(mult_attrs_with_diffuse);
+    field!(sprite_animate);
+    field!(sprite_loop);
+    field!(sprite_playback_rate);
+    field!(sprite_state_delay);
+    field!(sprite_state_index);
+    field!(vert_spacing);
+    field!(wrap_width_pixels);
+    field!(max_width);
+    field!(max_height);
+    field!(max_w_pre_zoom);
+    field!(max_h_pre_zoom);
+    field!(max_dimension_uses_zoom);
+    field!(texture_filtering);
+    field!(texture_wrapping);
+    field!(texcoord_offset);
+    field!(custom_texture_rect);
+    field!(texcoord_velocity);
+    field!(size);
+    field!(stretch_rect);
+    field!(sound_play);
+
+    let _ = bit;
+    mask
+}
+
+fn song_lua_runtime_overlay_state_delta(
+    delta: SongLuaOverlayStateDelta,
+) -> SongLuaRuntimeOverlayStateDelta {
+    SongLuaRuntimeOverlayStateDelta {
+        overlap_mask: song_lua_overlay_delta_mask(&delta),
+        delta,
+    }
+}
+
 fn song_lua_runtime_overlay_ease_window(
     ease: &deadsync_song_lua::SongLuaOverlayEase,
-) -> deadsync_gameplay::SongLuaRuntimeOverlayEaseWindow<SongLuaOverlayStateDelta> {
+) -> deadsync_gameplay::SongLuaRuntimeOverlayEaseWindow<SongLuaRuntimeOverlayStateDelta> {
     deadsync_gameplay::SongLuaRuntimeOverlayEaseWindow {
         overlay_index: ease.overlay_index,
         unit: song_lua_runtime_time_unit(ease.unit),
@@ -351,8 +459,8 @@ fn song_lua_runtime_overlay_ease_window(
         limit: ease.limit,
         span_mode: song_lua_runtime_span_mode(ease.span_mode),
         sustain: ease.sustain,
-        from: ease.from.clone(),
-        to: ease.to.clone(),
+        from: song_lua_runtime_overlay_state_delta(ease.from),
+        to: song_lua_runtime_overlay_state_delta(ease.to),
         easing: ease.easing.clone(),
         opt1: ease.opt1,
         opt2: ease.opt2,
@@ -772,7 +880,7 @@ fn song_lua_overlay_order_cache_from(
     }
     for ease in overlay_eases {
         if ease.overlay_index < dynamic_actor_draw_order.len()
-            && (ease.from.draw_order.is_some() || ease.to.draw_order.is_some())
+            && (ease.from.delta.draw_order.is_some() || ease.to.delta.draw_order.is_some())
         {
             dynamic_actor_draw_order[ease.overlay_index] = true;
         }
@@ -1507,6 +1615,8 @@ fn song_lua_compiled_overlay_ease_cutoff_second(
 ) -> Option<f32> {
     let overlay = compiled.overlays.get(ease.overlay_index)?;
     let events = overlay_events.get(ease.overlay_index)?;
+    let from_mask = song_lua_overlay_delta_mask(&ease.from);
+    let to_mask = song_lua_overlay_delta_mask(&ease.to);
     let blocks = events
         .iter()
         .filter_map(|event| {
@@ -1514,15 +1624,18 @@ fn song_lua_compiled_overlay_ease_cutoff_second(
             Some((event.event_second, command))
         })
         .flat_map(|(event_second, command)| {
-            command
-                .blocks
-                .iter()
-                .map(move |block| (event_second, block.start, &block.delta))
+            command.blocks.iter().map(move |block| {
+                (
+                    event_second,
+                    block.start,
+                    song_lua_overlay_delta_mask(&block.delta),
+                )
+            })
         });
     deadsync_gameplay::song_lua_overlay_ease_cutoff_second(
         start_second,
-        &ease.from,
-        &ease.to,
+        &from_mask,
+        &to_mask,
         blocks,
     )
 }
@@ -1605,7 +1718,7 @@ fn build_song_lua_compiled_visual_layer_runtime(
     deadsync_gameplay::SongLuaVisualLayerRuntime<
         SongLuaOverlayActor,
         SongLuaCapturedActor,
-        SongLuaOverlayStateDelta,
+        SongLuaRuntimeOverlayStateDelta,
     >,
 > {
     let start_second = deadsync_gameplay::song_lua_time_to_second_like(
@@ -1876,7 +1989,7 @@ fn build_song_lua_runtime_windows_for_data(
 ) -> deadsync_gameplay::SongLuaRuntimeBuildOutput<
     SongLuaOverlayActor,
     SongLuaCapturedActor,
-    SongLuaOverlayStateDelta,
+    SongLuaRuntimeOverlayStateDelta,
 > {
     let mut constant_windows: [Vec<deadsync_gameplay::AttackMaskWindow>; MAX_PLAYERS] =
         std::array::from_fn(|_| Vec::new());
@@ -5839,11 +5952,11 @@ fn apply_song_lua_overlay_runtime_eases_for(
             continue;
         }
         if now >= ease.sustain_end_second {
-            apply_song_lua_overlay_delta(&mut current, &ease.to);
+            apply_song_lua_overlay_delta(&mut current, &ease.to.delta);
             continue;
         }
         if ease.end_second <= ease.start_second || now >= ease.end_second {
-            apply_song_lua_overlay_delta(&mut current, &ease.to);
+            apply_song_lua_overlay_delta(&mut current, &ease.to.delta);
             continue;
         }
         let t = song_lua_ease_factor(
@@ -5852,9 +5965,9 @@ fn apply_song_lua_overlay_runtime_eases_for(
             ease.opt1,
             ease.opt2,
         );
-        let from_state = song_lua_overlay_state_with_delta(current, &ease.from);
-        let to_state = song_lua_overlay_state_with_delta(current, &ease.to);
-        current = song_lua_overlay_state_lerp(from_state, to_state, t, &ease.to);
+        let from_state = song_lua_overlay_state_with_delta(current, &ease.from.delta);
+        let to_state = song_lua_overlay_state_with_delta(current, &ease.to.delta);
+        current = song_lua_overlay_state_lerp(from_state, to_state, t, &ease.to.delta);
     }
     current
 }

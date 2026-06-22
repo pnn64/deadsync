@@ -160,7 +160,7 @@ pub type State = GameplayRuntimeState<
     GameplayProfile,
     deadsync_song_lua::SongLuaOverlayActor<crate::game::parsing::song_lua::SongLuaOverlayKind>,
     deadsync_song_lua::SongLuaCapturedActor,
-    deadsync_song_lua::SongLuaOverlayStateDelta,
+    deadsync_gameplay::SongLuaRuntimeOverlayStateDelta<deadsync_song_lua::SongLuaOverlayStateDelta>,
 >;
 
 #[inline(always)]
