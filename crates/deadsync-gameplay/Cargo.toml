@@ -9,9 +9,7 @@ deadsync-chart = { path = "../deadsync-chart" }
 deadsync-core = { path = "../deadsync-core" }
 deadsync-input = { path = "../deadsync-input" }
 deadsync-rules = { path = "../deadsync-rules" }
-deadsync-simfile = { path = "../deadsync-simfile" }
 deadsync-song-lua = { path = "../deadsync-song-lua" }
-rssp = { git = "https://github.com/pnn64/rssp", branch = "main" }
 log = "0.4.33"
 twox-hash = "2.1.2"
 

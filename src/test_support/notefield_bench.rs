@@ -160,6 +160,7 @@ pub fn fixture() -> NotefieldBenchFixture {
         GameplayMiniIndicatorData::default(),
         noteskin_data,
         GameplaySongLuaData::<crate::game::parsing::song_lua::CompiledSongLua>::default(),
+        deadsync_gameplay::empty_crossover_annotations,
         0,
         1.0,
         [

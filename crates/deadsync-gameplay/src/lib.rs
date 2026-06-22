@@ -29,7 +29,6 @@ use deadsync_rules::timing::{
     TimingSegments, WindowCounts, classify_offset_ns_with_disabled_windows,
     largest_enabled_tap_window_ns,
 };
-use deadsync_simfile::timing::rssp_timing_segments_from_deadsync;
 use std::collections::{BTreeMap, VecDeque};
 use std::hash::Hasher;
 use std::path::PathBuf;
@@ -5904,113 +5903,6 @@ pub fn song_lua_speedmod_from_scroll_speed(
     }
 }
 
-pub fn build_song_lua_compile_context<Profile: GameplayProfileData>(
-    song: &SongData,
-    charts: &[Arc<ChartData>; MAX_PLAYERS],
-    num_players: usize,
-    player_profiles: &[Profile; MAX_PLAYERS],
-    scroll_speed: &[ScrollSpeedSetting; MAX_PLAYERS],
-    music_rate: f32,
-    machine_global_offset_seconds: f32,
-    viewport: GameplayViewport,
-    session: &GameplaySession,
-    center_1player_notefield: bool,
-) -> deadsync_song_lua::SongLuaCompileContext {
-    let mut context = deadsync_song_lua::SongLuaCompileContext::new(
-        song.simfile_path
-            .parent()
-            .map(|path| path.to_path_buf())
-            .unwrap_or_default(),
-        song.title.clone(),
-    );
-    context.song_display_bpms =
-        song.display_bpm_pair_or(charts.first().map(|chart| chart.as_ref()), [60.0, 60.0]);
-    context.song_music_rate = if music_rate.is_finite() && music_rate > 0.0 {
-        music_rate
-    } else {
-        1.0
-    };
-    context.music_length_seconds = song.music_length_seconds.max(song.precise_last_second());
-    context.style_name = match session.play_style {
-        GameplayInputPlayStyle::Single => "single",
-        GameplayInputPlayStyle::Versus => "versus",
-        GameplayInputPlayStyle::Double => "double",
-    }
-    .to_string();
-    context.global_offset_seconds = machine_global_offset_seconds;
-    context.screen_width = viewport.width();
-    context.screen_height = viewport.height();
-    context.confusion_offset_available = true;
-    context.confusion_available = true;
-    context.amod_available = false;
-
-    let note_field_offsets_x = std::array::from_fn(|player| {
-        if player < num_players {
-            player_profiles[player].note_field_offset_x()
-        } else {
-            0.0
-        }
-    });
-    let actor_defaults = build_song_lua_player_actor_defaults_like(
-        num_players,
-        viewport,
-        session.play_style,
-        gameplay_is_single_p2_side(session.play_style, session.player_side),
-        note_field_offsets_x,
-        center_1player_notefield,
-    );
-    context.players = std::array::from_fn(|player| deadsync_song_lua::SongLuaPlayerContext {
-        enabled: player < num_players,
-        difficulty: if player < num_players {
-            deadsync_song_lua::SongLuaDifficulty::from_chart_name(&charts[player].difficulty)
-        } else {
-            deadsync_song_lua::SongLuaDifficulty::default_enabled()
-        },
-        display_bpms: if player < num_players {
-            song.display_bpm_pair_or(Some(charts[player].as_ref()), [60.0, 60.0])
-        } else {
-            [60.0, 60.0]
-        },
-        speedmod: if player < num_players {
-            song_lua_speedmod_from_scroll_speed(scroll_speed[player])
-        } else {
-            deadsync_song_lua::SongLuaSpeedMod::default()
-        },
-        noteskin_name: if player < num_players {
-            player_profiles[player].noteskin_name()
-        } else {
-            DEFAULT_NOTESKIN_NAME.to_string()
-        },
-        screen_x: actor_defaults[player].x,
-        screen_y: actor_defaults[player].y,
-    });
-    context
-}
-
-/// Bails on non-4/8-panel layouts because `rssp` parity only models those.
-pub fn test_song_lua_double_context(
-    root: &std::path::Path,
-    title: &str,
-) -> deadsync_song_lua::SongLuaCompileContext {
-    let mut context = deadsync_song_lua::SongLuaCompileContext::new(root, title);
-    context.style_name = "double".to_string();
-    context.players = [
-        deadsync_song_lua::SongLuaPlayerContext {
-            enabled: true,
-            difficulty: deadsync_song_lua::SongLuaDifficulty::Challenge,
-            speedmod: deadsync_song_lua::SongLuaSpeedMod::X(2.0),
-            ..deadsync_song_lua::SongLuaPlayerContext::default()
-        },
-        deadsync_song_lua::SongLuaPlayerContext {
-            enabled: false,
-            difficulty: deadsync_song_lua::SongLuaDifficulty::Challenge,
-            speedmod: deadsync_song_lua::SongLuaSpeedMod::X(2.0),
-            ..deadsync_song_lua::SongLuaPlayerContext::default()
-        },
-    ];
-    context
-}
-
 pub fn build_song_lua_runtime_windows_for_data<Kind>(
     params: SongLuaRuntimeWindowBuild<'_>,
     song_lua_data: GameplaySongLuaData<
@@ -10903,9 +10795,23 @@ pub fn build_crossover_rows<const LANES: usize>(
     (row_arrays, row_to_beat)
 }
 
+pub type CrossoverAnnotationBuilder =
+    fn(&[Note], (usize, usize), &TimingSegments, usize, usize) -> Vec<CrossoverRow>;
+
 #[inline(always)]
-#[allow(clippy::too_many_arguments)]
-pub fn build_crossover_cues_for_player(
+pub fn empty_crossover_annotations(
+    _notes: &[Note],
+    _note_range: (usize, usize),
+    _timing_segments: &TimingSegments,
+    _cols_per_player: usize,
+    _col_start: usize,
+) -> Vec<CrossoverRow> {
+    Vec::new()
+}
+
+#[inline(always)]
+pub fn build_crossover_cues_for_player_annotations(
+    build_annotations: CrossoverAnnotationBuilder,
     notes: &[Note],
     note_range: (usize, usize),
     timing_segments: &TimingSegments,
@@ -10921,43 +10827,13 @@ pub fn build_crossover_cues_for_player(
     if start >= end {
         return Vec::new();
     }
-    let rssp_segments = rssp_timing_segments_from_deadsync(timing_segments);
-    let rssp_timing = rssp::timing::timing_data_from_segments(0.0, 0.0, &rssp_segments);
-    let annos: Vec<CrossoverRow> = match cols_per_player {
-        4 => {
-            let (rows, row_to_beat) = build_crossover_rows::<4>(notes, note_range, col_start);
-            let Some(mut scratch) = rssp::step_parity::timing_rows_scratch::<4>() else {
-                return Vec::new();
-            };
-            rssp::step_parity::annotate_timing_rows::<4>(
-                &rows,
-                &row_to_beat,
-                &rssp_timing,
-                &mut scratch,
-            )
-        }
-        8 => {
-            let (rows, row_to_beat) = build_crossover_rows::<8>(notes, note_range, col_start);
-            let Some(mut scratch) = rssp::step_parity::timing_rows_scratch::<8>() else {
-                return Vec::new();
-            };
-            rssp::step_parity::annotate_timing_rows::<8>(
-                &rows,
-                &row_to_beat,
-                &rssp_timing,
-                &mut scratch,
-            )
-        }
-        _ => return Vec::new(),
-    }
-    .iter()
-    .map(|anno| CrossoverRow {
-        beat: anno.beat,
-        column_mask: anno.column_mask,
-        crossover: anno.row_tech.crossovers > 0,
-        bracket: anno.foot_count() > 1,
-    })
-    .collect();
+    let annos = build_annotations(
+        notes,
+        note_range,
+        timing_segments,
+        cols_per_player,
+        col_start,
+    );
 
     build_crossover_cues_from_annotations(
         &annos,
@@ -20316,6 +20192,7 @@ pub fn init_gameplay_runtime<OverlayKind, Profile>(
     song_lua_data: GameplaySongLuaData<
         deadsync_song_lua::CompiledSongLua<deadsync_song_lua::SongLuaOverlayActor<OverlayKind>>,
     >,
+    build_crossover_annotations: CrossoverAnnotationBuilder,
     active_color_index: i32,
     music_rate: f32,
     mut scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
@@ -21006,7 +20883,8 @@ where
             continue;
         }
         let col_start = player.saturating_mul(cols_per_player);
-        crossover_cues[player] = build_crossover_cues_for_player(
+        crossover_cues[player] = build_crossover_cues_for_player_annotations(
+            build_crossover_annotations,
             &notes,
             note_ranges[player],
             &gameplay_charts[player].timing_segments,

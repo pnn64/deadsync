@@ -412,9 +412,10 @@ mod tests {
     use deadsync_rules::note::{HoldData, HoldResult, MineResult, Note};
     use deadsync_rules::timing::{DelaySegment, TimingData, TimingSegments};
     use deadsync_song_lua::{
-        SongLuaColumnOffsetWindow, SongLuaEaseTarget, SongLuaEaseWindow, SongLuaMessageEvent,
-        SongLuaModWindow, SongLuaOverlayCommandBlock, SongLuaOverlayEase,
-        SongLuaOverlayMessageCommand, SongLuaOverlayState, SongLuaSpanMode, SongLuaTimeUnit,
+        SongLuaColumnOffsetWindow, SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget,
+        SongLuaEaseWindow, SongLuaMessageEvent, SongLuaModWindow, SongLuaOverlayCommandBlock,
+        SongLuaOverlayEase, SongLuaOverlayMessageCommand, SongLuaOverlayState,
+        SongLuaPlayerContext, SongLuaSpanMode, SongLuaSpeedMod, SongLuaTimeUnit,
     };
     use std::sync::{Arc, LazyLock, Mutex};
     use std::time::Instant;
@@ -483,6 +484,26 @@ mod tests {
             player,
             global_offset_seconds,
         )
+    }
+
+    fn test_song_lua_double_context(root: &std::path::Path, title: &str) -> SongLuaCompileContext {
+        let mut context = SongLuaCompileContext::new(root, title);
+        context.style_name = "double".to_string();
+        context.players = [
+            SongLuaPlayerContext {
+                enabled: true,
+                difficulty: SongLuaDifficulty::Challenge,
+                speedmod: SongLuaSpeedMod::X(2.0),
+                ..SongLuaPlayerContext::default()
+            },
+            SongLuaPlayerContext {
+                enabled: false,
+                difficulty: SongLuaDifficulty::Challenge,
+                speedmod: SongLuaSpeedMod::X(2.0),
+                ..SongLuaPlayerContext::default()
+            },
+        ];
+        context
     }
 
     #[inline(always)]
@@ -584,6 +605,7 @@ mod tests {
             mini_indicator_data,
             noteskin_data,
             song_lua_data,
+            deadsync_gameplay::empty_crossover_annotations,
             active_color_index,
             music_rate,
             scroll_speed,
@@ -1236,12 +1258,11 @@ return Def.ActorFrame{}
                             session.play_style.player_count(),
                             &runtime_profiles,
                         );
-                        let gameplay_profiles = player_profiles.clone().map(GameplayProfile::from);
-                        let context = deadsync_gameplay::build_song_lua_compile_context(
+                        let context = screen_gameplay::song_lua_compile_context(
                             song.as_ref(),
                             &charts,
                             session.play_style.player_count(),
-                            &gameplay_profiles,
+                            &player_profiles,
                             &scroll_speed,
                             1.0,
                             0.0,
@@ -4091,7 +4112,7 @@ return Def.ActorFrame{}
             return;
         };
         let entry = root.join("lua/default.lua");
-        let context = deadsync_gameplay::test_song_lua_double_context(&root, "Riddle");
+        let context = test_song_lua_double_context(&root, "Riddle");
         let compiled = compile_song_lua(&entry, &context).unwrap();
         assert!(compiled.beat_mods.iter().any(|window| {
             (window.start - 70.5).abs() <= 0.001 && window.mods.contains("80% confusionoffset")
@@ -4131,7 +4152,7 @@ return Def.ActorFrame{}
             return;
         };
         let entry = root.join("template/main.lua");
-        let context = deadsync_gameplay::test_song_lua_double_context(&root, "KENPO SAITO");
+        let context = test_song_lua_double_context(&root, "KENPO SAITO");
         let compiled = compile_song_lua(&entry, &context).unwrap();
         assert!(compiled.eases.iter().any(|window| {
             matches!(

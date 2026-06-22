@@ -970,10 +970,12 @@ fn deterministic_gameplay_crate_stays_runtime_independent() {
             "deadsync-online",
             "deadlib-present",
             "deadsync-profile",
+            "deadsync-simfile",
             "deadlib-render",
             "deadlib-renderer",
             "deadsync-score",
             "deadlib-video",
+            "rssp",
         ] {
             let count = manifest.match_indices(token).count();
             if count != 0 {
@@ -1001,10 +1003,12 @@ fn deterministic_gameplay_crate_stays_runtime_independent() {
                 "deadsync_online",
                 "deadlib_present",
                 "deadsync_profile",
+                "deadsync_simfile",
                 "deadlib_render",
                 "deadlib_renderer",
                 "deadsync_score",
                 "deadlib_video",
+                "rssp::",
                 "std::fs",
                 "std::io",
             ] {

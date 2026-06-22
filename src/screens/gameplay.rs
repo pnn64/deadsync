@@ -45,7 +45,7 @@ use deadsync_core::input::MAX_PLAYERS;
 use deadsync_core::song_time::song_time_ns_to_seconds;
 use deadsync_gameplay::{
     AUTOSYNC_OFFSET_SAMPLE_COUNT, AutosyncMode, CourseDisplayCarry, CourseDisplayTiming,
-    CourseDisplayTotals, ExitTransitionKind, FantasticWindowOptions, GameplayAction,
+    CourseDisplayTotals, CrossoverRow, ExitTransitionKind, FantasticWindowOptions, GameplayAction,
     GameplayAudioCommand, GameplayAudioSnapshot, GameplayConfig, GameplayExit,
     GameplayInputPlayStyle, GameplayInputPlayerSide, GameplayMiniIndicatorData, GameplayMusicCut,
     GameplayNoteskinData, GameplayNoteskinEffects, GameplayReceptorGlowBehavior,
@@ -54,15 +54,18 @@ use deadsync_gameplay::{
     MINE_EXPLOSION_DURATION, RECEPTOR_STEP_WINDOWS, RECEPTOR_Y_OFFSET_FROM_CENTER,
     RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, ReplayInputEdge, ReplayOffsetSnapshot,
     SongLuaCompilePlayStyle, SongLuaOverlayMessageRuntime, TAP_EXPLOSION_WINDOWS,
-    autosync_mode_status_line, blue_fantastic_window_ms, exit_transition_alpha,
-    gameplay_is_single_p2_side, gameplay_runtime_charts, handle_core_input, scroll_receptor_y,
+    autosync_mode_status_line, blue_fantastic_window_ms, build_crossover_rows,
+    exit_transition_alpha, gameplay_is_single_p2_side, gameplay_runtime_charts, handle_core_input,
+    scroll_receptor_y,
     song_lua_compile_player_screen_x as gameplay_song_lua_compile_player_screen_x,
     song_lua_ease_factor, song_lua_sound_paths, spacing_multiplier_for_percent, update_core,
 };
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_online::lobbies as lobby_data;
 use deadsync_profile as profile_data;
+use deadsync_rules::note::Note;
 use deadsync_rules::scroll::ScrollSpeedSetting;
+use deadsync_rules::timing::TimingSegments;
 use deadsync_score as score_data;
 use deadsync_smx::{self, SensorTestMode};
 use glam::{Mat4 as Matrix4, Vec3 as Vector3, Vec4 as Vector4};
@@ -171,7 +174,7 @@ fn song_lua_compile_player_screen_x(
     )
 }
 
-fn song_lua_compile_context(
+pub(crate) fn song_lua_compile_context(
     song: &SongData,
     charts: &[Arc<ChartData>; MAX_PLAYERS],
     num_players: usize,
@@ -945,6 +948,58 @@ pub(crate) fn gameplay_runtime_profile_data(
     runtime_profiles
 }
 
+pub(crate) fn gameplay_crossover_annotations_for_player(
+    notes: &[Note],
+    note_range: (usize, usize),
+    timing_segments: &TimingSegments,
+    cols_per_player: usize,
+    col_start: usize,
+) -> Vec<CrossoverRow> {
+    let (start, end) = note_range;
+    if start >= end {
+        return Vec::new();
+    }
+    let rssp_segments =
+        deadsync_simfile::timing::rssp_timing_segments_from_deadsync(timing_segments);
+    let rssp_timing = rssp::timing::timing_data_from_segments(0.0, 0.0, &rssp_segments);
+    let annotations = match cols_per_player {
+        4 => {
+            let (rows, row_to_beat) = build_crossover_rows::<4>(notes, note_range, col_start);
+            let Some(mut scratch) = rssp::step_parity::timing_rows_scratch::<4>() else {
+                return Vec::new();
+            };
+            rssp::step_parity::annotate_timing_rows::<4>(
+                &rows,
+                &row_to_beat,
+                &rssp_timing,
+                &mut scratch,
+            )
+        }
+        8 => {
+            let (rows, row_to_beat) = build_crossover_rows::<8>(notes, note_range, col_start);
+            let Some(mut scratch) = rssp::step_parity::timing_rows_scratch::<8>() else {
+                return Vec::new();
+            };
+            rssp::step_parity::annotate_timing_rows::<8>(
+                &rows,
+                &row_to_beat,
+                &rssp_timing,
+                &mut scratch,
+            )
+        }
+        _ => return Vec::new(),
+    };
+    annotations
+        .iter()
+        .map(|annotation| CrossoverRow {
+            beat: annotation.beat,
+            column_mask: annotation.column_mask,
+            crossover: annotation.row_tech.crossovers > 0,
+            bracket: annotation.foot_count() > 1,
+        })
+        .collect()
+}
+
 fn prewarm_notefield_model_cache_slots(
     cache: &[RefCell<ModelMeshCache>; MAX_PLAYERS],
     assets: &GameplayNoteskinAssets,
@@ -1284,6 +1339,7 @@ pub fn init(
             mini_indicator_data,
             noteskin_data,
             song_lua_data,
+            gameplay_crossover_annotations_for_player,
             active_color_index,
             music_rate,
             scroll_speed,
