@@ -5692,33 +5692,6 @@ impl<Compiled> Default for GameplaySongLuaData<Compiled> {
     }
 }
 
-fn extend_song_lua_sound_paths(out: &mut Vec<PathBuf>, paths: &[PathBuf]) {
-    for path in paths {
-        if !out.contains(path) {
-            out.push(path.clone());
-        }
-    }
-}
-
-pub fn song_lua_sound_paths<Kind>(
-    data: &GameplaySongLuaData<
-        deadsync_song_lua::CompiledSongLua<deadsync_song_lua::SongLuaOverlayActor<Kind>>,
-    >,
-) -> Vec<PathBuf> {
-    let mut out = Vec::new();
-    if let Some(primary) = data.primary.as_ref() {
-        extend_song_lua_sound_paths(&mut out, &primary.compiled.sound_paths);
-    }
-    for layer in data
-        .background_layers
-        .iter()
-        .chain(data.foreground_layers.iter())
-    {
-        extend_song_lua_sound_paths(&mut out, &layer.compiled.sound_paths);
-    }
-    out
-}
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct SongLuaOverlayEaseWindowRuntime<StateDelta> {
     pub overlay_index: usize,
@@ -5891,16 +5864,6 @@ where
         },
         y: viewport.center_y(),
     })
-}
-
-pub fn song_lua_speedmod_from_scroll_speed(
-    speed: ScrollSpeedSetting,
-) -> deadsync_song_lua::SongLuaSpeedMod {
-    match speed {
-        ScrollSpeedSetting::XMod(value) => deadsync_song_lua::SongLuaSpeedMod::X(value),
-        ScrollSpeedSetting::CMod(value) => deadsync_song_lua::SongLuaSpeedMod::C(value),
-        ScrollSpeedSetting::MMod(value) => deadsync_song_lua::SongLuaSpeedMod::M(value),
-    }
 }
 
 pub fn build_song_lua_runtime_windows_for_data<Kind>(

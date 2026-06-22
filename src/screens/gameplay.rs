@@ -7,8 +7,8 @@ use crate::game::parsing::noteskin::{
     self, ModelDrawState, ModelMeshCache, ModelMeshCacheStats, Noteskin, SpriteSlot, Style,
 };
 use crate::game::parsing::song_lua::{
-    SongLuaCapturedActor, SongLuaCompileContext, SongLuaDifficulty, SongLuaOverlayActor,
-    SongLuaOverlayBlendMode, SongLuaOverlayCommandBlock, SongLuaOverlayKind,
+    CompiledSongLua, SongLuaCapturedActor, SongLuaCompileContext, SongLuaDifficulty,
+    SongLuaOverlayActor, SongLuaOverlayBlendMode, SongLuaOverlayCommandBlock, SongLuaOverlayKind,
     SongLuaOverlayMeshVertex, SongLuaOverlayMessageCommand, SongLuaOverlayModelDraw,
     SongLuaOverlayModelLayer, SongLuaOverlayState, SongLuaOverlayStateDelta, SongLuaPlayerContext,
     SongLuaProxyTarget, SongLuaSpeedMod, SongLuaTextGlowMode, compile_song_lua,
@@ -58,7 +58,7 @@ use deadsync_gameplay::{
     exit_transition_alpha, gameplay_is_single_p2_side, gameplay_runtime_charts, handle_core_input,
     scroll_receptor_y,
     song_lua_compile_player_screen_x as gameplay_song_lua_compile_player_screen_x,
-    song_lua_ease_factor, song_lua_sound_paths, spacing_multiplier_for_percent, update_core,
+    song_lua_ease_factor, spacing_multiplier_for_percent, update_core,
 };
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_online::lobbies as lobby_data;
@@ -82,12 +82,54 @@ pub use crate::game::GameplayCoreState;
 const TEXT_CACHE_LIMIT: usize = 8192;
 type SongLuaOverlayEaseWindowRuntime =
     deadsync_gameplay::SongLuaOverlayEaseWindowRuntime<SongLuaOverlayStateDelta>;
-type GameplayCompiledSongLua =
-    deadsync_gameplay::GameplayCompiledSongLua<crate::game::parsing::song_lua::CompiledSongLua>;
-type GameplaySongLuaLayer =
-    deadsync_gameplay::GameplaySongLuaLayer<crate::game::parsing::song_lua::CompiledSongLua>;
-type GameplaySongLuaData =
-    deadsync_gameplay::GameplaySongLuaData<crate::game::parsing::song_lua::CompiledSongLua>;
+
+#[derive(Clone, Debug)]
+struct GameplayCompiledSongLua {
+    compiled: CompiledSongLua,
+    compile_ms: f64,
+}
+
+#[derive(Clone, Debug)]
+struct GameplaySongLuaLayer {
+    start_beat: f32,
+    compiled: CompiledSongLua,
+}
+
+#[derive(Clone, Debug, Default)]
+struct GameplaySongLuaData {
+    primary: Option<GameplayCompiledSongLua>,
+    background_layers: Vec<GameplaySongLuaLayer>,
+    foreground_layers: Vec<GameplaySongLuaLayer>,
+}
+
+impl GameplaySongLuaData {
+    fn into_runtime_data(self) -> deadsync_gameplay::GameplaySongLuaData<CompiledSongLua> {
+        deadsync_gameplay::GameplaySongLuaData {
+            primary: self
+                .primary
+                .map(|primary| deadsync_gameplay::GameplayCompiledSongLua {
+                    compiled: primary.compiled,
+                    compile_ms: primary.compile_ms,
+                }),
+            background_layers: self
+                .background_layers
+                .into_iter()
+                .map(|layer| deadsync_gameplay::GameplaySongLuaLayer {
+                    start_beat: layer.start_beat,
+                    compiled: layer.compiled,
+                })
+                .collect(),
+            foreground_layers: self
+                .foreground_layers
+                .into_iter()
+                .map(|layer| deadsync_gameplay::GameplaySongLuaLayer {
+                    start_beat: layer.start_beat,
+                    compiled: layer.compiled,
+                })
+                .collect(),
+        }
+    }
+}
 const INTRO_TEXT_SETTLE_SECONDS: f32 = 1.49; // 0.5 + 0.66 + 0.33 (SL OnCommand chain)
 const INTRO_TEXT_GETWIDTH_PAD: f32 = 0.25;
 const DIFFICULTY_METER_Y: f32 = 56.0;
@@ -1236,6 +1278,29 @@ fn gameplay_song_lua_data(
     }
 }
 
+fn extend_song_lua_sound_paths(out: &mut Vec<PathBuf>, paths: &[PathBuf]) {
+    for path in paths {
+        if !out.contains(path) {
+            out.push(path.clone());
+        }
+    }
+}
+
+fn song_lua_sound_paths(data: &GameplaySongLuaData) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    if let Some(primary) = data.primary.as_ref() {
+        extend_song_lua_sound_paths(&mut out, &primary.compiled.sound_paths);
+    }
+    for layer in data
+        .background_layers
+        .iter()
+        .chain(data.foreground_layers.iter())
+    {
+        extend_song_lua_sound_paths(&mut out, &layer.compiled.sound_paths);
+    }
+    out
+}
+
 fn build_background_changes(
     song: &SongData,
     gameplay_chart: &GameplayChartData,
@@ -1338,7 +1403,7 @@ pub fn init(
             pack_sync_pref,
             mini_indicator_data,
             noteskin_data,
-            song_lua_data,
+            song_lua_data.into_runtime_data(),
             gameplay_crossover_annotations_for_player,
             active_color_index,
             music_rate,
