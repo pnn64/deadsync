@@ -5,7 +5,7 @@ edition = "2024"
 license = "GPL-3.0"
 
 [dependencies]
-log = "0.4.32"
+log = "0.4.33"
 semver = "1.0.28"
 
 [lints.clippy]

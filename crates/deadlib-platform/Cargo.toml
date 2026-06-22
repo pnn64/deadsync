@@ -8,7 +8,7 @@ license = "GPL-3.0"
 chrono = "0.4.45"
 directories = "6.0.0"
 env_logger = "0.11.10"
-log = "0.4.32"
+log = "0.4.33"
 winit = "0.30.13"
 
 [target.'cfg(windows)'.dependencies]

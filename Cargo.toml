@@ -51,7 +51,7 @@ resolver = "3"
 # `version.workspace = true`, so `env!("CARGO_PKG_VERSION")` and
 # `deadsync_version::current()` always agree. Bump THIS line on release.
 [workspace.package]
-version = "0.4.1379"
+version = "0.4.1381"
 
 [[bin]]
 name = "compose_bench"
@@ -117,7 +117,7 @@ deadsync-updater = { path = "crates/deadsync-updater" }
 deadsync-version = { path = "crates/deadsync-version" }
 deadlib-video = { path = "crates/deadlib-video" }
 winit = "0.30.13"
-log = "0.4.32"
+log = "0.4.33"
 image = "0.25.10"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
@@ -156,7 +156,7 @@ flate2 = "1.1.9"
 
 # Native folder picker for choosing an ITGmania game directory during import.
 # Default backends: native Win32 / AppKit, GTK3 on Linux (synchronous API).
-rfd = "0.15"
+rfd = "0.17.2"
 
 # Localization
 rust-ini = "0.21.3"

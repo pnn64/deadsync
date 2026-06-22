@@ -6,7 +6,7 @@ license = "GPL-3.0"
 
 [dependencies]
 deadsync-input = { path = "../deadsync-input" }
-log = "0.4.32"
+log = "0.4.33"
 winit = "0.30.13"
 
 [target.'cfg(unix)'.dependencies]
