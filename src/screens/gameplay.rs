@@ -102,11 +102,21 @@ pub(crate) struct GameplaySongLuaData {
     pub(crate) foreground_layers: Vec<GameplaySongLuaLayer>,
 }
 
-impl deadsync_gameplay::SongLuaRuntimeBuilder<SongLuaOverlayKind> for GameplaySongLuaData {
+impl
+    deadsync_gameplay::SongLuaRuntimeBuilder<
+        SongLuaOverlayActor,
+        SongLuaCapturedActor,
+        SongLuaOverlayStateDelta,
+    > for GameplaySongLuaData
+{
     fn build_song_lua_runtime(
         self,
         params: deadsync_gameplay::SongLuaRuntimeWindowBuild<'_>,
-    ) -> deadsync_gameplay::CompiledSongLuaRuntimeBuildOutput<SongLuaOverlayKind> {
+    ) -> deadsync_gameplay::SongLuaRuntimeBuildOutput<
+        SongLuaOverlayActor,
+        SongLuaCapturedActor,
+        SongLuaOverlayStateDelta,
+    > {
         build_song_lua_runtime_windows_for_data(params, self)
     }
 }
@@ -173,6 +183,179 @@ const fn song_lua_compile_play_style(
         GameplayInputPlayStyle::Single => SongLuaCompilePlayStyle::Single,
         GameplayInputPlayStyle::Versus => SongLuaCompilePlayStyle::Versus,
         GameplayInputPlayStyle::Double => SongLuaCompilePlayStyle::Double,
+    }
+}
+
+const fn song_lua_runtime_time_unit(
+    unit: deadsync_song_lua::SongLuaTimeUnit,
+) -> deadsync_gameplay::SongLuaRuntimeTimeUnit {
+    match unit {
+        deadsync_song_lua::SongLuaTimeUnit::Beat => deadsync_gameplay::SongLuaRuntimeTimeUnit::Beat,
+        deadsync_song_lua::SongLuaTimeUnit::Second => {
+            deadsync_gameplay::SongLuaRuntimeTimeUnit::Second
+        }
+    }
+}
+
+const fn song_lua_runtime_span_mode(
+    span_mode: deadsync_song_lua::SongLuaSpanMode,
+) -> deadsync_gameplay::SongLuaRuntimeSpanMode {
+    match span_mode {
+        deadsync_song_lua::SongLuaSpanMode::Len => deadsync_gameplay::SongLuaRuntimeSpanMode::Len,
+        deadsync_song_lua::SongLuaSpanMode::End => deadsync_gameplay::SongLuaRuntimeSpanMode::End,
+    }
+}
+
+fn song_lua_runtime_ease_target(
+    target: &deadsync_song_lua::SongLuaEaseTarget,
+) -> deadsync_gameplay::SongLuaRuntimeEaseTargetOwned {
+    match target {
+        deadsync_song_lua::SongLuaEaseTarget::Mod(target_name) => {
+            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Mod(target_name.clone())
+        }
+        deadsync_song_lua::SongLuaEaseTarget::PlayerX => {
+            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Player(
+                deadsync_gameplay::SongLuaEaseMaskTarget::PlayerX,
+            )
+        }
+        deadsync_song_lua::SongLuaEaseTarget::PlayerY => {
+            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Player(
+                deadsync_gameplay::SongLuaEaseMaskTarget::PlayerY,
+            )
+        }
+        deadsync_song_lua::SongLuaEaseTarget::PlayerZ => {
+            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Player(
+                deadsync_gameplay::SongLuaEaseMaskTarget::PlayerZ,
+            )
+        }
+        deadsync_song_lua::SongLuaEaseTarget::PlayerRotationX => {
+            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Player(
+                deadsync_gameplay::SongLuaEaseMaskTarget::PlayerRotationX,
+            )
+        }
+        deadsync_song_lua::SongLuaEaseTarget::PlayerRotationY => {
+            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Player(
+                deadsync_gameplay::SongLuaEaseMaskTarget::PlayerRotationY,
+            )
+        }
+        deadsync_song_lua::SongLuaEaseTarget::PlayerRotationZ => {
+            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Player(
+                deadsync_gameplay::SongLuaEaseMaskTarget::PlayerRotationZ,
+            )
+        }
+        deadsync_song_lua::SongLuaEaseTarget::PlayerSkewX => {
+            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Player(
+                deadsync_gameplay::SongLuaEaseMaskTarget::PlayerSkewX,
+            )
+        }
+        deadsync_song_lua::SongLuaEaseTarget::PlayerSkewY => {
+            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Player(
+                deadsync_gameplay::SongLuaEaseMaskTarget::PlayerSkewY,
+            )
+        }
+        deadsync_song_lua::SongLuaEaseTarget::PlayerZoom => {
+            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Player(
+                deadsync_gameplay::SongLuaEaseMaskTarget::PlayerZoom,
+            )
+        }
+        deadsync_song_lua::SongLuaEaseTarget::PlayerZoomX => {
+            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Player(
+                deadsync_gameplay::SongLuaEaseMaskTarget::PlayerZoomX,
+            )
+        }
+        deadsync_song_lua::SongLuaEaseTarget::PlayerZoomY => {
+            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Player(
+                deadsync_gameplay::SongLuaEaseMaskTarget::PlayerZoomY,
+            )
+        }
+        deadsync_song_lua::SongLuaEaseTarget::PlayerZoomZ => {
+            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Player(
+                deadsync_gameplay::SongLuaEaseMaskTarget::PlayerZoomZ,
+            )
+        }
+        deadsync_song_lua::SongLuaEaseTarget::Function => {
+            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Function
+        }
+    }
+}
+
+pub(crate) fn song_lua_runtime_mod_windows(
+    windows: &[deadsync_song_lua::SongLuaModWindow],
+) -> Vec<deadsync_gameplay::SongLuaRuntimeModWindow> {
+    windows
+        .iter()
+        .map(|window| deadsync_gameplay::SongLuaRuntimeModWindow {
+            player: window.player,
+            unit: song_lua_runtime_time_unit(window.unit),
+            start: window.start,
+            limit: window.limit,
+            span_mode: song_lua_runtime_span_mode(window.span_mode),
+            mods: window.mods.clone(),
+        })
+        .collect()
+}
+
+pub(crate) fn song_lua_runtime_ease_windows(
+    windows: &[deadsync_song_lua::SongLuaEaseWindow],
+) -> Vec<deadsync_gameplay::SongLuaRuntimeEaseWindow> {
+    windows
+        .iter()
+        .map(|window| deadsync_gameplay::SongLuaRuntimeEaseWindow {
+            player: window.player,
+            unit: song_lua_runtime_time_unit(window.unit),
+            start: window.start,
+            limit: window.limit,
+            span_mode: song_lua_runtime_span_mode(window.span_mode),
+            target: song_lua_runtime_ease_target(&window.target),
+            from: window.from,
+            to: window.to,
+            easing: window.easing.clone(),
+            sustain: window.sustain,
+            opt1: window.opt1,
+            opt2: window.opt2,
+        })
+        .collect()
+}
+
+pub(crate) fn song_lua_runtime_column_offset_windows(
+    windows: &[deadsync_song_lua::SongLuaColumnOffsetWindow],
+) -> Vec<deadsync_gameplay::SongLuaRuntimeColumnOffsetWindow> {
+    windows
+        .iter()
+        .map(
+            |window| deadsync_gameplay::SongLuaRuntimeColumnOffsetWindow {
+                player: window.player,
+                unit: song_lua_runtime_time_unit(window.unit),
+                start: window.start,
+                limit: window.limit,
+                span_mode: song_lua_runtime_span_mode(window.span_mode),
+                column: window.column,
+                from_y: window.from_y,
+                to_y: window.to_y,
+                easing: window.easing.clone(),
+                sustain: window.sustain,
+                opt1: window.opt1,
+                opt2: window.opt2,
+            },
+        )
+        .collect()
+}
+
+fn song_lua_runtime_overlay_ease_window(
+    ease: &deadsync_song_lua::SongLuaOverlayEase,
+) -> deadsync_gameplay::SongLuaRuntimeOverlayEaseWindow<SongLuaOverlayStateDelta> {
+    deadsync_gameplay::SongLuaRuntimeOverlayEaseWindow {
+        overlay_index: ease.overlay_index,
+        unit: song_lua_runtime_time_unit(ease.unit),
+        start: ease.start,
+        limit: ease.limit,
+        span_mode: song_lua_runtime_span_mode(ease.span_mode),
+        sustain: ease.sustain,
+        from: ease.from.clone(),
+        to: ease.to.clone(),
+        easing: ease.easing.clone(),
+        opt1: ease.opt1,
+        opt2: ease.opt2,
     }
 }
 
@@ -1352,8 +1535,9 @@ pub(crate) fn build_song_lua_overlay_ease_windows_with_events(
 ) -> Vec<SongLuaOverlayEaseWindowRuntime> {
     let mut out = Vec::new();
     for ease in &compiled.overlay_eases {
+        let runtime_ease = song_lua_runtime_overlay_ease_window(ease);
         if let Some(window) = deadsync_gameplay::build_song_lua_overlay_ease_window_for(
-            ease,
+            &runtime_ease,
             timing_player,
             global_offset_seconds,
             |start_second| {
@@ -1400,8 +1584,9 @@ pub(crate) fn build_compiled_song_lua_ease_windows_for_player(
     global_offset_seconds: f32,
     constant_windows: &[deadsync_gameplay::AttackMaskWindow],
 ) -> (Vec<deadsync_gameplay::SongLuaEaseMaskWindow>, usize) {
+    let eases = song_lua_runtime_ease_windows(&compiled.eases);
     deadsync_gameplay::build_song_lua_ease_windows_for_player(
-        &compiled.eases,
+        &eases,
         timing_player,
         player,
         global_offset_seconds,
@@ -1668,9 +1853,9 @@ fn log_song_lua_runtime_summary(
 
 fn log_unsupported_song_lua_ease_target(
     player: usize,
-    window: &deadsync_song_lua::SongLuaEaseWindow,
+    window: &deadsync_gameplay::SongLuaRuntimeEaseWindow,
 ) {
-    if let deadsync_song_lua::SongLuaEaseTarget::Mod(target_name) = &window.target {
+    if let deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Mod(target_name) = &window.target {
         log::debug!(
             "Unsupported gameplay lua ease target for player {}: target='{}' start={:.3} limit={:.3} span={:?} from={:.3} to={:.3} easing={:?}",
             player + 1,
@@ -1688,7 +1873,11 @@ fn log_unsupported_song_lua_ease_target(
 fn build_song_lua_runtime_windows_for_data(
     params: deadsync_gameplay::SongLuaRuntimeWindowBuild<'_>,
     song_lua_data: GameplaySongLuaData,
-) -> deadsync_gameplay::CompiledSongLuaRuntimeBuildOutput<SongLuaOverlayKind> {
+) -> deadsync_gameplay::SongLuaRuntimeBuildOutput<
+    SongLuaOverlayActor,
+    SongLuaCapturedActor,
+    SongLuaOverlayStateDelta,
+> {
     let mut constant_windows: [Vec<deadsync_gameplay::AttackMaskWindow>; MAX_PLAYERS] =
         std::array::from_fn(|_| Vec::new());
     let mut ease_windows: [Vec<deadsync_gameplay::SongLuaEaseMaskWindow>; MAX_PLAYERS] =
@@ -1803,6 +1992,10 @@ fn build_song_lua_runtime_windows_for_data(
         let mut total_constant = 0usize;
         let mut total_eases = 0usize;
         let mut total_column_offsets = 0usize;
+        let time_mods = song_lua_runtime_mod_windows(&compiled.time_mods);
+        let beat_mods = song_lua_runtime_mod_windows(&compiled.beat_mods);
+        let eases = song_lua_runtime_ease_windows(&compiled.eases);
+        let column_offsets_src = song_lua_runtime_column_offset_windows(&compiled.column_offsets);
         for player in 0..params.num_players {
             let player_global_offset_seconds =
                 deadsync_gameplay::effective_player_global_offset_seconds(
@@ -1811,10 +2004,10 @@ fn build_song_lua_runtime_windows_for_data(
                     player,
                 );
             let player_windows = deadsync_gameplay::build_song_lua_player_runtime_windows(
-                &compiled.time_mods,
-                &compiled.beat_mods,
-                &compiled.eases,
-                &compiled.column_offsets,
+                &time_mods,
+                &beat_mods,
+                &eases,
+                &column_offsets_src,
                 params.timing_players[player],
                 player,
                 player_global_offset_seconds,
@@ -2004,11 +2197,7 @@ pub fn init(
         gameplay_mini_indicator_data(&runtime_charts, &runtime_profile_data, &session);
     let scorebox_data = gameplay_scorebox_data(&runtime_charts, &runtime_profile_data, &session);
     State::from_gameplay_with_screen_data(
-        deadsync_gameplay::init_gameplay_runtime::<
-            crate::game::parsing::song_lua::SongLuaOverlayKind,
-            _,
-            _,
-        >(
+        deadsync_gameplay::init_gameplay_runtime(
             song,
             charts,
             gameplay_charts,

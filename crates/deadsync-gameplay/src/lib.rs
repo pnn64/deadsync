@@ -2634,16 +2634,6 @@ impl SongLuaRuntimeTimeUnitLike for SongLuaRuntimeTimeUnit {
     }
 }
 
-impl SongLuaRuntimeTimeUnitLike for deadsync_song_lua::SongLuaTimeUnit {
-    #[inline(always)]
-    fn as_runtime_time_unit(self) -> SongLuaRuntimeTimeUnit {
-        match self {
-            deadsync_song_lua::SongLuaTimeUnit::Beat => SongLuaRuntimeTimeUnit::Beat,
-            deadsync_song_lua::SongLuaTimeUnit::Second => SongLuaRuntimeTimeUnit::Second,
-        }
-    }
-}
-
 pub trait SongLuaRuntimeSpanModeLike {
     fn as_runtime_span_mode(self) -> SongLuaRuntimeSpanMode;
 }
@@ -2652,16 +2642,6 @@ impl SongLuaRuntimeSpanModeLike for SongLuaRuntimeSpanMode {
     #[inline(always)]
     fn as_runtime_span_mode(self) -> SongLuaRuntimeSpanMode {
         self
-    }
-}
-
-impl SongLuaRuntimeSpanModeLike for deadsync_song_lua::SongLuaSpanMode {
-    #[inline(always)]
-    fn as_runtime_span_mode(self) -> SongLuaRuntimeSpanMode {
-        match self {
-            deadsync_song_lua::SongLuaSpanMode::Len => SongLuaRuntimeSpanMode::Len,
-            deadsync_song_lua::SongLuaSpanMode::End => SongLuaRuntimeSpanMode::End,
-        }
     }
 }
 
@@ -2830,6 +2810,48 @@ pub trait SongLuaModWindowLike {
     fn mods(&self) -> &str;
 }
 
+#[derive(Clone, Debug)]
+pub struct SongLuaRuntimeModWindow {
+    pub player: Option<u8>,
+    pub unit: SongLuaRuntimeTimeUnit,
+    pub start: f32,
+    pub limit: f32,
+    pub span_mode: SongLuaRuntimeSpanMode,
+    pub mods: String,
+}
+
+impl SongLuaModWindowLike for SongLuaRuntimeModWindow {
+    #[inline(always)]
+    fn player(&self) -> Option<u8> {
+        self.player
+    }
+
+    #[inline(always)]
+    fn unit(&self) -> SongLuaRuntimeTimeUnit {
+        self.unit
+    }
+
+    #[inline(always)]
+    fn start(&self) -> f32 {
+        self.start
+    }
+
+    #[inline(always)]
+    fn limit(&self) -> f32 {
+        self.limit
+    }
+
+    #[inline(always)]
+    fn span_mode(&self) -> SongLuaRuntimeSpanMode {
+        self.span_mode
+    }
+
+    #[inline(always)]
+    fn mods(&self) -> &str {
+        &self.mods
+    }
+}
+
 #[inline(always)]
 fn build_song_lua_constant_window_from_mod<Window: SongLuaModWindowLike>(
     window: &Window,
@@ -2881,15 +2903,46 @@ pub fn build_song_lua_constant_windows_for_player<Window: SongLuaModWindowLike>(
     out
 }
 
-impl SongLuaModWindowLike for deadsync_song_lua::SongLuaModWindow {
+pub trait SongLuaColumnOffsetWindowLike {
+    fn player(&self) -> usize;
+    fn unit(&self) -> SongLuaRuntimeTimeUnit;
+    fn start(&self) -> f32;
+    fn limit(&self) -> f32;
+    fn span_mode(&self) -> SongLuaRuntimeSpanMode;
+    fn column(&self) -> usize;
+    fn from_y(&self) -> f32;
+    fn to_y(&self) -> f32;
+    fn easing(&self) -> Option<&str>;
+    fn sustain(&self) -> Option<f32>;
+    fn opt1(&self) -> Option<f32>;
+    fn opt2(&self) -> Option<f32>;
+}
+
+#[derive(Clone, Debug)]
+pub struct SongLuaRuntimeColumnOffsetWindow {
+    pub player: usize,
+    pub unit: SongLuaRuntimeTimeUnit,
+    pub start: f32,
+    pub limit: f32,
+    pub span_mode: SongLuaRuntimeSpanMode,
+    pub column: usize,
+    pub from_y: f32,
+    pub to_y: f32,
+    pub easing: Option<String>,
+    pub sustain: Option<f32>,
+    pub opt1: Option<f32>,
+    pub opt2: Option<f32>,
+}
+
+impl SongLuaColumnOffsetWindowLike for SongLuaRuntimeColumnOffsetWindow {
     #[inline(always)]
-    fn player(&self) -> Option<u8> {
+    fn player(&self) -> usize {
         self.player
     }
 
     #[inline(always)]
     fn unit(&self) -> SongLuaRuntimeTimeUnit {
-        self.unit.as_runtime_time_unit()
+        self.unit
     }
 
     #[inline(always)]
@@ -2904,28 +2957,43 @@ impl SongLuaModWindowLike for deadsync_song_lua::SongLuaModWindow {
 
     #[inline(always)]
     fn span_mode(&self) -> SongLuaRuntimeSpanMode {
-        self.span_mode.as_runtime_span_mode()
+        self.span_mode
     }
 
     #[inline(always)]
-    fn mods(&self) -> &str {
-        &self.mods
+    fn column(&self) -> usize {
+        self.column
     }
-}
 
-pub trait SongLuaColumnOffsetWindowLike {
-    fn player(&self) -> usize;
-    fn unit(&self) -> SongLuaRuntimeTimeUnit;
-    fn start(&self) -> f32;
-    fn limit(&self) -> f32;
-    fn span_mode(&self) -> SongLuaRuntimeSpanMode;
-    fn column(&self) -> usize;
-    fn from_y(&self) -> f32;
-    fn to_y(&self) -> f32;
-    fn easing(&self) -> Option<&str>;
-    fn sustain(&self) -> Option<f32>;
-    fn opt1(&self) -> Option<f32>;
-    fn opt2(&self) -> Option<f32>;
+    #[inline(always)]
+    fn from_y(&self) -> f32 {
+        self.from_y
+    }
+
+    #[inline(always)]
+    fn to_y(&self) -> f32 {
+        self.to_y
+    }
+
+    #[inline(always)]
+    fn easing(&self) -> Option<&str> {
+        self.easing.as_deref()
+    }
+
+    #[inline(always)]
+    fn sustain(&self) -> Option<f32> {
+        self.sustain
+    }
+
+    #[inline(always)]
+    fn opt1(&self) -> Option<f32> {
+        self.opt1
+    }
+
+    #[inline(always)]
+    fn opt2(&self) -> Option<f32> {
+        self.opt2
+    }
 }
 
 pub fn build_song_lua_column_offset_windows_for_player<Window: SongLuaColumnOffsetWindowLike>(
@@ -2973,68 +3041,6 @@ pub fn build_song_lua_column_offset_windows_for_player<Window: SongLuaColumnOffs
     }
     song_lua_extend_column_offset_tails(&mut out);
     out
-}
-
-impl SongLuaColumnOffsetWindowLike for deadsync_song_lua::SongLuaColumnOffsetWindow {
-    #[inline(always)]
-    fn player(&self) -> usize {
-        self.player
-    }
-
-    #[inline(always)]
-    fn unit(&self) -> SongLuaRuntimeTimeUnit {
-        self.unit.as_runtime_time_unit()
-    }
-
-    #[inline(always)]
-    fn start(&self) -> f32 {
-        self.start
-    }
-
-    #[inline(always)]
-    fn limit(&self) -> f32 {
-        self.limit
-    }
-
-    #[inline(always)]
-    fn span_mode(&self) -> SongLuaRuntimeSpanMode {
-        self.span_mode.as_runtime_span_mode()
-    }
-
-    #[inline(always)]
-    fn column(&self) -> usize {
-        self.column
-    }
-
-    #[inline(always)]
-    fn from_y(&self) -> f32 {
-        self.from_y
-    }
-
-    #[inline(always)]
-    fn to_y(&self) -> f32 {
-        self.to_y
-    }
-
-    #[inline(always)]
-    fn easing(&self) -> Option<&str> {
-        self.easing.as_deref()
-    }
-
-    #[inline(always)]
-    fn sustain(&self) -> Option<f32> {
-        self.sustain
-    }
-
-    #[inline(always)]
-    fn opt1(&self) -> Option<f32> {
-        self.opt1
-    }
-
-    #[inline(always)]
-    fn opt2(&self) -> Option<f32> {
-        self.opt2
-    }
 }
 
 pub struct SongLuaPlayerRuntimeWindows {
@@ -5397,6 +5403,13 @@ pub enum SongLuaRuntimeEaseTarget<'a> {
     Function,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum SongLuaRuntimeEaseTargetOwned {
+    Mod(String),
+    Player(SongLuaEaseMaskTarget),
+    Function,
+}
+
 pub trait SongLuaRuntimeEaseTargetLike {
     fn as_runtime_ease_target(&self) -> SongLuaRuntimeEaseTarget<'_>;
 }
@@ -5408,49 +5421,16 @@ impl<'a> SongLuaRuntimeEaseTargetLike for SongLuaRuntimeEaseTarget<'a> {
     }
 }
 
-impl SongLuaRuntimeEaseTargetLike for deadsync_song_lua::SongLuaEaseTarget {
+impl SongLuaRuntimeEaseTargetLike for SongLuaRuntimeEaseTargetOwned {
     fn as_runtime_ease_target(&self) -> SongLuaRuntimeEaseTarget<'_> {
         match self {
-            deadsync_song_lua::SongLuaEaseTarget::Mod(target_name) => {
+            SongLuaRuntimeEaseTargetOwned::Mod(target_name) => {
                 SongLuaRuntimeEaseTarget::Mod(target_name.as_str())
             }
-            deadsync_song_lua::SongLuaEaseTarget::PlayerX => {
-                SongLuaRuntimeEaseTarget::Player(SongLuaEaseMaskTarget::PlayerX)
+            SongLuaRuntimeEaseTargetOwned::Player(target) => {
+                SongLuaRuntimeEaseTarget::Player(*target)
             }
-            deadsync_song_lua::SongLuaEaseTarget::PlayerY => {
-                SongLuaRuntimeEaseTarget::Player(SongLuaEaseMaskTarget::PlayerY)
-            }
-            deadsync_song_lua::SongLuaEaseTarget::PlayerZ => {
-                SongLuaRuntimeEaseTarget::Player(SongLuaEaseMaskTarget::PlayerZ)
-            }
-            deadsync_song_lua::SongLuaEaseTarget::PlayerRotationX => {
-                SongLuaRuntimeEaseTarget::Player(SongLuaEaseMaskTarget::PlayerRotationX)
-            }
-            deadsync_song_lua::SongLuaEaseTarget::PlayerRotationZ => {
-                SongLuaRuntimeEaseTarget::Player(SongLuaEaseMaskTarget::PlayerRotationZ)
-            }
-            deadsync_song_lua::SongLuaEaseTarget::PlayerRotationY => {
-                SongLuaRuntimeEaseTarget::Player(SongLuaEaseMaskTarget::PlayerRotationY)
-            }
-            deadsync_song_lua::SongLuaEaseTarget::PlayerSkewX => {
-                SongLuaRuntimeEaseTarget::Player(SongLuaEaseMaskTarget::PlayerSkewX)
-            }
-            deadsync_song_lua::SongLuaEaseTarget::PlayerSkewY => {
-                SongLuaRuntimeEaseTarget::Player(SongLuaEaseMaskTarget::PlayerSkewY)
-            }
-            deadsync_song_lua::SongLuaEaseTarget::PlayerZoom => {
-                SongLuaRuntimeEaseTarget::Player(SongLuaEaseMaskTarget::PlayerZoom)
-            }
-            deadsync_song_lua::SongLuaEaseTarget::PlayerZoomX => {
-                SongLuaRuntimeEaseTarget::Player(SongLuaEaseMaskTarget::PlayerZoomX)
-            }
-            deadsync_song_lua::SongLuaEaseTarget::PlayerZoomY => {
-                SongLuaRuntimeEaseTarget::Player(SongLuaEaseMaskTarget::PlayerZoomY)
-            }
-            deadsync_song_lua::SongLuaEaseTarget::PlayerZoomZ => {
-                SongLuaRuntimeEaseTarget::Player(SongLuaEaseMaskTarget::PlayerZoomZ)
-            }
-            deadsync_song_lua::SongLuaEaseTarget::Function => SongLuaRuntimeEaseTarget::Function,
+            SongLuaRuntimeEaseTargetOwned::Function => SongLuaRuntimeEaseTarget::Function,
         }
     }
 }
@@ -5682,12 +5662,6 @@ pub type SongLuaRuntimeBuildOutput<OverlayActor, CapturedActor, StateDelta> = (
     SongLuaRuntimeVisuals<OverlayActor, CapturedActor, StateDelta>,
 );
 
-pub type CompiledSongLuaRuntimeBuildOutput<Kind> = SongLuaRuntimeBuildOutput<
-    deadsync_song_lua::SongLuaOverlayActor<Kind>,
-    deadsync_song_lua::SongLuaCapturedActor,
-    deadsync_song_lua::SongLuaOverlayStateDelta,
->;
-
 pub fn build_song_lua_runtime_visuals<OverlayActor, CapturedActor, StateDelta>(
     overlays: Vec<OverlayActor>,
     overlay_eases: Vec<SongLuaOverlayEaseWindowRuntime<StateDelta>>,
@@ -5746,11 +5720,11 @@ pub struct SongLuaRuntimeWindowBuild<'a> {
     pub player_actor_defaults: [SongLuaPlayerActorDefault; MAX_PLAYERS],
 }
 
-pub trait SongLuaRuntimeBuilder<Kind> {
+pub trait SongLuaRuntimeBuilder<OverlayActor, CapturedActor, StateDelta> {
     fn build_song_lua_runtime(
         self,
         params: SongLuaRuntimeWindowBuild<'_>,
-    ) -> CompiledSongLuaRuntimeBuildOutput<Kind>;
+    ) -> SongLuaRuntimeBuildOutput<OverlayActor, CapturedActor, StateDelta>;
 }
 
 pub fn build_song_lua_runtime_window_build<'a, Profile: GameplayProfileData>(
@@ -5926,21 +5900,34 @@ pub trait SongLuaOverlayEaseWindowLike<Delta> {
     fn opt2(&self) -> Option<f32>;
 }
 
+#[derive(Clone, Debug)]
+pub struct SongLuaRuntimeOverlayEaseWindow<Delta> {
+    pub overlay_index: usize,
+    pub unit: SongLuaRuntimeTimeUnit,
+    pub start: f32,
+    pub limit: f32,
+    pub span_mode: SongLuaRuntimeSpanMode,
+    pub sustain: Option<f32>,
+    pub from: Delta,
+    pub to: Delta,
+    pub easing: Option<String>,
+    pub opt1: Option<f32>,
+    pub opt2: Option<f32>,
+}
+
 impl SongLuaOverlayDeltaOverlap for deadsync_song_lua::SongLuaOverlayStateDelta {
     fn overlaps_song_lua_delta(&self, other: &Self) -> bool {
         song_lua_overlay_delta_overlaps(self, other)
     }
 }
 
-impl SongLuaOverlayEaseWindowLike<deadsync_song_lua::SongLuaOverlayStateDelta>
-    for deadsync_song_lua::SongLuaOverlayEase
-{
+impl<Delta> SongLuaOverlayEaseWindowLike<Delta> for SongLuaRuntimeOverlayEaseWindow<Delta> {
     fn overlay_index(&self) -> usize {
         self.overlay_index
     }
 
     fn unit(&self) -> SongLuaRuntimeTimeUnit {
-        self.unit.as_runtime_time_unit()
+        self.unit
     }
 
     fn start(&self) -> f32 {
@@ -5952,18 +5939,18 @@ impl SongLuaOverlayEaseWindowLike<deadsync_song_lua::SongLuaOverlayStateDelta>
     }
 
     fn span_mode(&self) -> SongLuaRuntimeSpanMode {
-        self.span_mode.as_runtime_span_mode()
+        self.span_mode
     }
 
     fn sustain(&self) -> Option<f32> {
         self.sustain
     }
 
-    fn from(&self) -> &deadsync_song_lua::SongLuaOverlayStateDelta {
+    fn from(&self) -> &Delta {
         &self.from
     }
 
-    fn to(&self) -> &deadsync_song_lua::SongLuaOverlayStateDelta {
+    fn to(&self) -> &Delta {
         &self.to
     }
 
@@ -6373,8 +6360,24 @@ pub trait SongLuaEaseWindowLike {
     fn opt2(&self) -> Option<f32>;
 }
 
-impl SongLuaEaseWindowLike for deadsync_song_lua::SongLuaEaseWindow {
-    type Target = deadsync_song_lua::SongLuaEaseTarget;
+#[derive(Clone, Debug)]
+pub struct SongLuaRuntimeEaseWindow {
+    pub player: Option<u8>,
+    pub unit: SongLuaRuntimeTimeUnit,
+    pub start: f32,
+    pub limit: f32,
+    pub span_mode: SongLuaRuntimeSpanMode,
+    pub target: SongLuaRuntimeEaseTargetOwned,
+    pub from: f32,
+    pub to: f32,
+    pub easing: Option<String>,
+    pub sustain: Option<f32>,
+    pub opt1: Option<f32>,
+    pub opt2: Option<f32>,
+}
+
+impl SongLuaEaseWindowLike for SongLuaRuntimeEaseWindow {
+    type Target = SongLuaRuntimeEaseTargetOwned;
 
     #[inline(always)]
     fn player(&self) -> Option<u8> {
@@ -6383,7 +6386,7 @@ impl SongLuaEaseWindowLike for deadsync_song_lua::SongLuaEaseWindow {
 
     #[inline(always)]
     fn unit(&self) -> SongLuaRuntimeTimeUnit {
-        self.unit.as_runtime_time_unit()
+        self.unit
     }
 
     #[inline(always)]
@@ -6398,7 +6401,7 @@ impl SongLuaEaseWindowLike for deadsync_song_lua::SongLuaEaseWindow {
 
     #[inline(always)]
     fn span_mode(&self) -> SongLuaRuntimeSpanMode {
-        self.span_mode.as_runtime_span_mode()
+        self.span_mode
     }
 
     #[inline(always)]
@@ -19494,7 +19497,13 @@ pub fn gameplay_runtime_charts(
     runtime_charts
 }
 
-pub fn init_gameplay_runtime<OverlayKind, Profile, BuildSongLuaRuntime>(
+pub fn init_gameplay_runtime<
+    Profile,
+    BuildSongLuaRuntime,
+    OverlayActor,
+    CapturedActor,
+    StateDelta,
+>(
     song: Arc<SongData>,
     charts: [Arc<ChartData>; MAX_PLAYERS],
     gameplay_charts: [Arc<GameplayChartData>; MAX_PLAYERS],
@@ -19517,16 +19526,10 @@ pub fn init_gameplay_runtime<OverlayKind, Profile, BuildSongLuaRuntime>(
     course_display_totals: Option<[CourseDisplayTotals; MAX_PLAYERS]>,
     course_display_timing: Option<CourseDisplayTiming>,
     mut combo_carry: [u32; MAX_PLAYERS],
-) -> GameplayRuntimeState<
-    Profile,
-    deadsync_song_lua::SongLuaOverlayActor<OverlayKind>,
-    deadsync_song_lua::SongLuaCapturedActor,
-    deadsync_song_lua::SongLuaOverlayStateDelta,
->
+) -> GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>
 where
     Profile: GameplayProfileData,
-    OverlayKind: Clone + std::fmt::Debug,
-    BuildSongLuaRuntime: SongLuaRuntimeBuilder<OverlayKind>,
+    BuildSongLuaRuntime: SongLuaRuntimeBuilder<OverlayActor, CapturedActor, StateDelta>,
 {
     log::debug!("Initializing Gameplay Screen...");
     let init_started = Instant::now();

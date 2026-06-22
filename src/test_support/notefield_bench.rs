@@ -145,11 +145,7 @@ pub fn fixture() -> NotefieldBenchFixture {
         &runtime_profiles,
     );
 
-    let mut state = deadsync_gameplay::init_gameplay_runtime::<
-        crate::game::parsing::song_lua::SongLuaOverlayKind,
-        _,
-        _,
-    >(
+    let mut state = deadsync_gameplay::init_gameplay_runtime(
         song,
         charts,
         gameplay_charts,

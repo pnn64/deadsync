@@ -144,10 +144,6 @@ use deadsync_gameplay::{
     effective_scroll_effects_for_player, refresh_active_attack_masks,
     score_invalid_reason_lines_for_chart,
 };
-#[cfg(test)]
-use deadsync_gameplay::{
-    build_song_lua_column_offset_windows_for_player, build_song_lua_constant_windows_for_player,
-};
 pub use deadsync_input::InputEdge;
 use deadsync_profile as profile_data;
 use deadsync_rules::judgment::{self, JudgeGrade, Judgment, TimingWindow};
@@ -463,9 +459,11 @@ mod tests {
         player: usize,
         global_offset_seconds: f32,
     ) -> Vec<deadsync_gameplay::AttackMaskWindow> {
+        let time_mods = screen_gameplay::song_lua_runtime_mod_windows(&compiled.time_mods);
+        let beat_mods = screen_gameplay::song_lua_runtime_mod_windows(&compiled.beat_mods);
         deadsync_gameplay::build_song_lua_constant_windows_for_player(
-            &compiled.time_mods,
-            &compiled.beat_mods,
+            &time_mods,
+            &beat_mods,
             timing_player,
             player,
             global_offset_seconds,
@@ -478,8 +476,10 @@ mod tests {
         player: usize,
         global_offset_seconds: f32,
     ) -> Vec<deadsync_gameplay::SongLuaColumnOffsetWindowRuntime> {
+        let column_offsets =
+            screen_gameplay::song_lua_runtime_column_offset_windows(&compiled.column_offsets);
         deadsync_gameplay::build_song_lua_column_offset_windows_for_player(
-            &compiled.column_offsets,
+            &column_offsets,
             timing_player,
             player,
             global_offset_seconds,
@@ -594,7 +594,7 @@ mod tests {
         course_display_timing: Option<super::CourseDisplayTiming>,
         combo_carry: [u32; MAX_PLAYERS],
     ) -> super::State {
-        deadsync_gameplay::init_gameplay_runtime::<SongLuaOverlayKind, _, _>(
+        deadsync_gameplay::init_gameplay_runtime(
             song,
             charts,
             gameplay_charts,
