@@ -2938,7 +2938,7 @@ pub fn on_enter(state: &mut State) {
     clear_lobby_disconnect_holds(state);
 
     for (store_idx, sdk_pad) in smx_fsr_display_pads(state).into_iter().flatten() {
-        // deadsync_smx::set_test_mode(sdk_pad, SensorTestMode::CalibratedValues); // testing latency impact
+        deadsync_smx::set_test_mode(sdk_pad, SensorTestMode::CalibratedValues);
         state.smx_sensor_config[store_idx] = deadsync_smx::get_config(sdk_pad);
     }
 
