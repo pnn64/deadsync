@@ -255,6 +255,8 @@ dirs-sys = { path = "vendor/dirs-sys-win7" }
 # windows-sys 0.61. Windows 7 only provides that API from ole32.dll, so the
 # local patch resolves it at runtime.
 rfd = { path = "vendor/rfd-win7" }
+# Temporary: use local rustmaniax-sdk for sensor round-trip profiler testing.
+rustmaniax-sdk = { path = "/Users/fchorney/Documents/repos/personal/rustmaniax-sdk" }
 
 [build-dependencies]
 fs_extra = "1.3.0"
