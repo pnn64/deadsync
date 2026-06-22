@@ -313,17 +313,14 @@ impl PanelFx {
                 // gif lets the layers under it show through its black LEDs.
                 let p = &*p;
                 let base = pad * BYTES_PER_PAD + panel * (LEDS_PER_PANEL * 3);
+                // When blacked out, suppress the background so overlays (e.g.
+                // press feedback) still composite on top of black.
+                let bg = if self.blackout[pad] { &None } else { &self.background };
                 for led in 0..LEDS_PER_PANEL {
-                    let rgb = composite_led(p, &self.background, bg_frame, panel, led);
+                    let rgb = composite_led(p, bg, bg_frame, panel, led);
                     let o = base + led * 3;
                     self.frame[o..o + 3].copy_from_slice(&rgb);
                 }
-            }
-            // Blackout overrides the composite: zero all bytes for this slot so
-            // the pad shows solid black regardless of any effects or background.
-            if self.blackout[pad] {
-                let start = pad * BYTES_PER_PAD;
-                self.frame[start..start + BYTES_PER_PAD].fill(0);
             }
         }
         &self.frame
