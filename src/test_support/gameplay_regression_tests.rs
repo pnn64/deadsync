@@ -3370,7 +3370,7 @@ return Def.ActorFrame{}
             ..Default::default()
         };
         let (windows, unsupported) =
-            deadsync_gameplay::build_compiled_song_lua_ease_windows_for_player(
+            screen_gameplay::build_compiled_song_lua_ease_windows_for_player(
                 &compiled,
                 &timing,
                 0,
@@ -3443,8 +3443,7 @@ return Def.ActorFrame{}
             ..Default::default()
         };
 
-        let windows =
-            deadsync_gameplay::build_song_lua_overlay_ease_windows(&compiled, &timing, 0.0);
+        let windows = screen_gameplay::build_song_lua_overlay_ease_windows(&compiled, &timing, 0.0);
 
         assert_eq!(windows.len(), 1);
         assert_eq!(windows[0].cutoff_second, Some(4.0));
@@ -3507,8 +3506,7 @@ return Def.ActorFrame{}
             ..Default::default()
         };
 
-        let windows =
-            deadsync_gameplay::build_song_lua_overlay_ease_windows(&compiled, &timing, 0.0);
+        let windows = screen_gameplay::build_song_lua_overlay_ease_windows(&compiled, &timing, 0.0);
 
         assert_eq!(windows.len(), 1);
         assert_eq!(windows[0].cutoff_second, None);
@@ -3571,8 +3569,7 @@ return Def.ActorFrame{}
             ..Default::default()
         };
 
-        let windows =
-            deadsync_gameplay::build_song_lua_overlay_ease_windows(&compiled, &timing, 0.0);
+        let windows = screen_gameplay::build_song_lua_overlay_ease_windows(&compiled, &timing, 0.0);
 
         assert_eq!(windows.len(), 1);
         assert_eq!(windows[0].end_second, 2.0);
@@ -3650,7 +3647,7 @@ return Def.ActorFrame{}
         };
 
         let (windows, unsupported) =
-            deadsync_gameplay::build_compiled_song_lua_ease_windows_for_player(
+            screen_gameplay::build_compiled_song_lua_ease_windows_for_player(
                 &compiled,
                 &timing,
                 0,
@@ -3718,7 +3715,7 @@ return Def.ActorFrame{}
 
         let constants = build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
         let (windows, unsupported) =
-            deadsync_gameplay::build_compiled_song_lua_ease_windows_for_player(
+            screen_gameplay::build_compiled_song_lua_ease_windows_for_player(
                 &compiled, &timing, 0, 0.0, &constants,
             );
 
@@ -3799,7 +3796,7 @@ return Def.ActorFrame{}
 
         let constants = build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
         let (windows, unsupported) =
-            deadsync_gameplay::build_compiled_song_lua_ease_windows_for_player(
+            screen_gameplay::build_compiled_song_lua_ease_windows_for_player(
                 &compiled, &timing, 0, 0.0, &constants,
             );
 
@@ -4008,7 +4005,7 @@ return Def.ActorFrame{}
             ..Default::default()
         };
         let (windows, unsupported) =
-            deadsync_gameplay::build_compiled_song_lua_ease_windows_for_player(
+            screen_gameplay::build_compiled_song_lua_ease_windows_for_player(
                 &compiled,
                 &timing,
                 0,
@@ -4207,7 +4204,7 @@ return Def.ActorFrame{}
             TimingData::from_segments(0.0, 0.0, &timing_segments, &test_row_to_beat(200 * 48));
         let constants = build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
         let (windows, unsupported) =
-            deadsync_gameplay::build_compiled_song_lua_ease_windows_for_player(
+            screen_gameplay::build_compiled_song_lua_ease_windows_for_player(
                 &compiled, &timing, 0, 0.0, &constants,
             );
         assert_eq!(unsupported, 0);
@@ -4413,7 +4410,7 @@ return Def.ActorFrame{}
         };
 
         let (windows, unsupported) =
-            deadsync_gameplay::build_compiled_song_lua_ease_windows_for_player(
+            screen_gameplay::build_compiled_song_lua_ease_windows_for_player(
                 &compiled,
                 &timing,
                 0,
@@ -4524,7 +4521,7 @@ return Def.ActorFrame{}
         };
 
         let (windows, unsupported) =
-            deadsync_gameplay::build_compiled_song_lua_ease_windows_for_player(
+            screen_gameplay::build_compiled_song_lua_ease_windows_for_player(
                 &compiled,
                 &timing,
                 0,
@@ -4573,7 +4570,7 @@ return Def.ActorFrame{}
         };
 
         let (windows, unsupported) =
-            deadsync_gameplay::build_compiled_song_lua_ease_windows_for_player(
+            screen_gameplay::build_compiled_song_lua_ease_windows_for_player(
                 &compiled,
                 &timing,
                 0,
