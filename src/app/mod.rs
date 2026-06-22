@@ -7315,11 +7315,20 @@ impl App {
             CurrentScreen::Gameplay => {
                 if let Some(gs) = &mut self.state.screens.gameplay_state {
                     crate::screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(gs);
+                    let smx_overlay_alpha = match self.state.shell.transition {
+                        TransitionState::FadingIn { elapsed, duration } => {
+                            (elapsed / duration).clamp(0.0, 1.0)
+                        }
+                        _ => 1.0,
+                    };
                     gameplay::push_actors(
                         &mut actors,
                         gs,
                         &self.asset_manager,
-                        gameplay::ActorViewOverride::default(),
+                        gameplay::ActorViewOverride {
+                            smx_overlay_alpha,
+                            ..Default::default()
+                        },
                     );
                 }
             }

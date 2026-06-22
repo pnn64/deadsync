@@ -564,10 +564,23 @@ pub(crate) fn song_lua_compile_context(
     context
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug)]
 pub struct ActorViewOverride {
     pub notefield: NotefieldViewOverride,
     pub hide_gameplay_hud: bool,
+    /// Alpha multiplier applied to SMX overlay actors (FSR sensor display and pad
+    /// input display). Used to fade them in with the screen transition.
+    pub smx_overlay_alpha: f32,
+}
+
+impl Default for ActorViewOverride {
+    fn default() -> Self {
+        Self {
+            notefield: NotefieldViewOverride::default(),
+            hide_gameplay_hud: false,
+            smx_overlay_alpha: 1.0,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -10565,7 +10578,9 @@ pub fn push_actors(
                         Some((player_side, field_x - half_w, field_x + half_w));
                 }
             }
+            let smx_overlay_alpha = view.smx_overlay_alpha;
             if state.profiles()[0].smx_fsr_display || state.profiles()[1].smx_fsr_display {
+                let before = actors.len();
                 smx_profile::time_draw(|| {
                     push_smx_sensor_display(
                         &mut actors,
@@ -10575,10 +10590,16 @@ pub fn push_actors(
                         is_centered_single,
                     )
                 });
+                if smx_overlay_alpha < 1.0 {
+                    for a in &mut actors[before..] {
+                        a.mul_alpha(smx_overlay_alpha);
+                    }
+                }
             }
             if state.profiles()[0].smx_pad_input_display
                 || state.profiles()[1].smx_pad_input_display
             {
+                let before = actors.len();
                 push_smx_pad_input_display(
                     &mut actors,
                     state,
@@ -10586,6 +10607,11 @@ pub fn push_actors(
                     is_doubles,
                     is_centered_single,
                 );
+                if smx_overlay_alpha < 1.0 {
+                    for a in &mut actors[before..] {
+                        a.mul_alpha(smx_overlay_alpha);
+                    }
+                }
             }
         }
 
