@@ -5,8 +5,7 @@
 
 use crate::game::profile::local_profile_dir_for_id;
 use deadsync_profile::pad_config::{
-    PadConfigProfile, delete_config, parse, rename_config, serialize, set_default_config,
-    upsert_config,
+    PadConfigProfile, delete_path, load_path, rename_path, save_path, set_default_path, upsert_path,
 };
 use log::warn;
 use std::path::PathBuf;
@@ -16,15 +15,12 @@ fn padconfig_path(profile_id: &str) -> PathBuf {
 }
 
 pub fn load(profile_id: &str) -> Vec<PadConfigProfile> {
-    match std::fs::read_to_string(padconfig_path(profile_id)) {
-        Ok(content) => parse(&content),
-        Err(_) => Vec::new(),
-    }
+    load_path(&padconfig_path(profile_id)).unwrap_or_default()
 }
 
 pub fn save(profile_id: &str, profiles: &[PadConfigProfile]) {
     let path = padconfig_path(profile_id);
-    if let Err(e) = std::fs::write(&path, serialize(profiles)) {
+    if let Err(e) = save_path(&path, profiles) {
         warn!("Failed to save {}: {e}", path.display());
     }
 }
@@ -39,9 +35,9 @@ pub fn upsert(
     make_default: bool,
     settings: Vec<(String, String)>,
 ) {
-    let mut list = load(profile_id);
-    if upsert_config(
-        &mut list,
+    let path = padconfig_path(profile_id);
+    if let Err(e) = upsert_path(
+        &path,
         name,
         backend,
         pad_type,
@@ -49,27 +45,27 @@ pub fn upsert(
         make_default,
         settings,
     ) {
-        save(profile_id, &list);
+        warn!("Failed to save {}: {e}", path.display());
     }
 }
 
 pub fn set_default(profile_id: &str, serial: &str, name: &str) {
-    let mut list = load(profile_id);
-    if set_default_config(&mut list, serial, name) {
-        save(profile_id, &list);
+    let path = padconfig_path(profile_id);
+    if let Err(e) = set_default_path(&path, serial, name) {
+        warn!("Failed to save {}: {e}", path.display());
     }
 }
 
 pub fn rename(profile_id: &str, old: &str, new: &str) {
-    let mut list = load(profile_id);
-    if rename_config(&mut list, old, new) {
-        save(profile_id, &list);
+    let path = padconfig_path(profile_id);
+    if let Err(e) = rename_path(&path, old, new) {
+        warn!("Failed to save {}: {e}", path.display());
     }
 }
 
 pub fn delete(profile_id: &str, name: &str) {
-    let mut list = load(profile_id);
-    if delete_config(&mut list, name) {
-        save(profile_id, &list);
+    let path = padconfig_path(profile_id);
+    if let Err(e) = delete_path(&path, name) {
+        warn!("Failed to save {}: {e}", path.display());
     }
 }
