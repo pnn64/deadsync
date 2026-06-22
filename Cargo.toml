@@ -256,7 +256,7 @@ dirs-sys = { path = "vendor/dirs-sys-win7" }
 # local patch resolves it at runtime.
 rfd = { path = "vendor/rfd-win7" }
 # Temporary: use local rustmaniax-sdk for sensor round-trip profiler testing.
-rustmaniax-sdk = { git = "https://github.com/fchorney/rustmaniax-sdk", rev = "92b9c71eb2692c592d46dbbabf1d1e02bd861b70" }
+rustmaniax-sdk = { git = "https://github.com/fchorney/rustmaniax-sdk", rev = "bb38a7e415c56a5a3ce0e0b1f504c5fe0e33392f" }
 
 [build-dependencies]
 fs_extra = "1.3.0"

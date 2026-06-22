@@ -4371,7 +4371,7 @@ dependencies = [
 [[package]]
 name = "rustmaniax-sdk"
 version = "2.0.0"
-source = "git+https://github.com/fchorney/rustmaniax-sdk?rev=92b9c71eb2692c592d46dbbabf1d1e02bd861b70#92b9c71eb2692c592d46dbbabf1d1e02bd861b70"
+source = "git+https://github.com/fchorney/rustmaniax-sdk?rev=bb38a7e415c56a5a3ce0e0b1f504c5fe0e33392f#bb38a7e415c56a5a3ce0e0b1f504c5fe0e33392f"
 dependencies = [
  "bitflags 2.13.0",
  "bytemuck",
