@@ -1,7 +1,7 @@
 use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
-use crate::assets::{FontRole, current_machine_font_key};
+use crate::assets::{FontRole, current_machine_font_key, visual_styles};
 use crate::game::profile;
 use crate::game::scores;
 use crate::game::stage_stats;
@@ -19,6 +19,7 @@ const TRANSITION_OUT_DURATION: f32 = 0.4;
 
 // Simply Love: ScreenGameOver TimerSeconds = 23 (non-SRPG9)
 const GAMEOVER_SECONDS: f32 = 23.0;
+const SRPG10_GAMEOVER_SECONDS: f32 = 135.0;
 
 // Layout (Simply Love)
 const SIDE_BG_W: f32 = 160.0;
@@ -196,10 +197,19 @@ pub fn init_blank() -> State {
 
 pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
     state.elapsed = (state.elapsed + dt).max(0.0);
-    if state.elapsed >= GAMEOVER_SECONDS {
+    if state.elapsed >= gameover_seconds() {
         return Some(ScreenAction::Navigate(Screen::Menu));
     }
     None
+}
+
+#[inline(always)]
+fn gameover_seconds() -> f32 {
+    if visual_styles::srpg10_active() {
+        SRPG10_GAMEOVER_SECONDS
+    } else {
+        GAMEOVER_SECONDS
+    }
 }
 
 pub fn handle_input(_state: &mut State, ev: &InputEvent) -> ScreenAction {

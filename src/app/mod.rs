@@ -6525,12 +6525,21 @@ impl App {
         // is immediately replaced by a course summary, this is the cue tied to
         // the player's actual exit from gameplay.
         let failed = crate::screens::evaluation::all_joined_players_failed(&eval_snapshot);
-        let folder = if failed {
-            "assets/sounds/evaluation_fail"
+        if visual_styles::srpg10_active() {
+            let sfx = if failed {
+                visual_styles::SRPG10_EVAL_FAILED_SFX
+            } else {
+                visual_styles::SRPG10_EVAL_PASSED_SFX
+            };
+            deadsync_audio_stream::play_screen_sfx(sfx);
         } else {
-            "assets/sounds/evaluation_pass"
-        };
-        crate::assets::audio_folder::play_random_screen_sfx(folder);
+            let folder = if failed {
+                "assets/sounds/evaluation_fail"
+            } else {
+                "assets/sounds/evaluation_pass"
+            };
+            crate::assets::audio_folder::play_random_screen_sfx(folder);
+        }
 
         if self
             .state
@@ -8875,6 +8884,10 @@ impl App {
         let prev_course_music = prev == CurrentScreen::SelectCourse;
         let target_credits_music = target == CurrentScreen::Credits;
         let prev_credits_music = prev == CurrentScreen::Credits;
+        let target_srpg10_gameover_music =
+            target == CurrentScreen::GameOver && visual_styles::srpg10_active();
+        let prev_srpg10_gameover_music =
+            prev == CurrentScreen::GameOver && visual_styles::srpg10_active();
         let keep_preview = (prev == CurrentScreen::SelectMusic
             && target == CurrentScreen::PlayerOptions)
             || (prev == CurrentScreen::PlayerOptions && target == CurrentScreen::SelectMusic);
@@ -8908,6 +8921,14 @@ impl App {
                     volume: 1.0,
                 });
             }
+        } else if target_srpg10_gameover_music {
+            if !prev_srpg10_gameover_music {
+                commands.push(Command::PlayMusic {
+                    path: visual_styles::srpg10_gameover_music_path(),
+                    looped: false,
+                    volume: 1.0,
+                });
+            }
         } else if (prev_menu_music || prev_course_music || prev_credits_music)
             && target != CurrentScreen::Gameplay
         {
@@ -8919,7 +8940,11 @@ impl App {
         if matches!(prev, CurrentScreen::Gameplay | CurrentScreen::Practice)
             && !matches!(target, CurrentScreen::Gameplay | CurrentScreen::Practice)
         {
-            if !target_menu_music && !target_course_music && !target_credits_music {
+            if !target_menu_music
+                && !target_course_music
+                && !target_credits_music
+                && !target_srpg10_gameover_music
+            {
                 commands.push(Command::StopMusic);
             }
             if let Some(backend) = self.backend.as_mut() {

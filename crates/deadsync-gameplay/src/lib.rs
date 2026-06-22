@@ -464,7 +464,9 @@ impl GameplayUpdateTraceState {
 }
 
 fn trace_capacity_growth<OverlayActor, CapturedActor, StateDelta>(
-    state: &mut GameplayRuntimeState<profile_data::Profile, OverlayActor,
+    state: &mut GameplayRuntimeState<
+        profile_data::Profile,
+        OverlayActor,
         CapturedActor,
         StateDelta,
     >,
@@ -507,7 +509,9 @@ fn trace_capacity_growth<OverlayActor, CapturedActor, StateDelta>(
 }
 
 pub fn trace_gameplay_update<OverlayActor, CapturedActor, StateDelta>(
-    state: &mut GameplayRuntimeState<profile_data::Profile, OverlayActor,
+    state: &mut GameplayRuntimeState<
+        profile_data::Profile,
+        OverlayActor,
         CapturedActor,
         StateDelta,
     >,
@@ -12402,7 +12406,9 @@ pub fn gameplay_input_log_enabled() -> bool {
 }
 
 pub fn process_input_edges<OverlayActor, CapturedActor, StateDelta>(
-    state: &mut GameplayRuntimeState<profile_data::Profile, OverlayActor,
+    state: &mut GameplayRuntimeState<
+        profile_data::Profile,
+        OverlayActor,
         CapturedActor,
         StateDelta,
     >,
@@ -12655,7 +12661,9 @@ pub fn process_input_edges<OverlayActor, CapturedActor, StateDelta>(
 
 #[inline(always)]
 pub fn handle_replay_edge<OverlayActor, CapturedActor, StateDelta>(
-    state: &mut GameplayRuntimeState<profile_data::Profile, OverlayActor,
+    state: &mut GameplayRuntimeState<
+        profile_data::Profile,
+        OverlayActor,
         CapturedActor,
         StateDelta,
     >,
@@ -12691,7 +12699,12 @@ pub fn update_core<OverlayActor, CapturedActor, StateDelta>(
     audio_snapshot: GameplayAudioSnapshot,
     fallback_host_nanos: impl FnOnce() -> u64,
 ) -> GameplayAction {
-    state.update_gameplay_frame(delta_time, audio_snapshot, ASSIST_TICK_SFX_PATH, fallback_host_nanos)
+    state.update_gameplay_frame(
+        delta_time,
+        audio_snapshot,
+        ASSIST_TICK_SFX_PATH,
+        fallback_host_nanos,
+    )
 }
 
 #[inline(always)]
@@ -20418,7 +20431,9 @@ pub fn init_gameplay_runtime<OverlayKind>(
     course_display_totals: Option<[CourseDisplayTotals; MAX_PLAYERS]>,
     course_display_timing: Option<CourseDisplayTiming>,
     mut combo_carry: [u32; MAX_PLAYERS],
-) -> GameplayRuntimeState<profile_data::Profile, deadsync_song_lua::SongLuaOverlayActor<OverlayKind>,
+) -> GameplayRuntimeState<
+    profile_data::Profile,
+    deadsync_song_lua::SongLuaOverlayActor<OverlayKind>,
     deadsync_song_lua::SongLuaCapturedActor,
     deadsync_song_lua::SongLuaOverlayStateDelta,
 >
@@ -26646,10 +26661,7 @@ impl<OverlayActor, CapturedActor, StateDelta>
 
 #[inline(always)]
 pub fn effective_visual_effects_for_player<OverlayActor, CapturedActor, StateDelta>(
-    state: &GameplayRuntimeState<profile_data::Profile, OverlayActor,
-        CapturedActor,
-        StateDelta,
-    >,
+    state: &GameplayRuntimeState<profile_data::Profile, OverlayActor, CapturedActor, StateDelta>,
     player_idx: usize,
 ) -> VisualEffects {
     if player_idx >= state.setup.num_players || player_idx >= MAX_PLAYERS {
@@ -26665,10 +26677,7 @@ pub fn effective_visual_effects_for_player<OverlayActor, CapturedActor, StateDel
 
 #[inline(always)]
 pub fn effective_scroll_effects_for_player<OverlayActor, CapturedActor, StateDelta>(
-    state: &GameplayRuntimeState<profile_data::Profile, OverlayActor,
-        CapturedActor,
-        StateDelta,
-    >,
+    state: &GameplayRuntimeState<profile_data::Profile, OverlayActor, CapturedActor, StateDelta>,
     player_idx: usize,
 ) -> ScrollEffects {
     if player_idx >= state.setup.num_players || player_idx >= MAX_PLAYERS {
@@ -26681,14 +26690,8 @@ pub fn effective_scroll_effects_for_player<OverlayActor, CapturedActor, StateDel
 }
 
 #[inline(always)]
-pub fn effective_perspective_effects_for_player<OverlayActor,
-    CapturedActor,
-    StateDelta,
->(
-    state: &GameplayRuntimeState<profile_data::Profile, OverlayActor,
-        CapturedActor,
-        StateDelta,
-    >,
+pub fn effective_perspective_effects_for_player<OverlayActor, CapturedActor, StateDelta>(
+    state: &GameplayRuntimeState<profile_data::Profile, OverlayActor, CapturedActor, StateDelta>,
     player_idx: usize,
 ) -> PerspectiveEffects {
     if player_idx >= state.setup.num_players || player_idx >= MAX_PLAYERS {
@@ -26702,10 +26705,7 @@ pub fn effective_perspective_effects_for_player<OverlayActor,
 
 #[inline(always)]
 pub fn effective_visual_mask_for_player<OverlayActor, CapturedActor, StateDelta>(
-    state: &GameplayRuntimeState<profile_data::Profile, OverlayActor,
-        CapturedActor,
-        StateDelta,
-    >,
+    state: &GameplayRuntimeState<profile_data::Profile, OverlayActor, CapturedActor, StateDelta>,
     player_idx: usize,
 ) -> u16 {
     if player_idx >= state.setup.num_players || player_idx >= MAX_PLAYERS {
@@ -26723,10 +26723,7 @@ pub fn effective_visual_mask_for_player<OverlayActor, CapturedActor, StateDelta>
 
 #[inline(always)]
 pub fn effective_mini_percent_for_player<OverlayActor, CapturedActor, StateDelta>(
-    state: &GameplayRuntimeState<profile_data::Profile, OverlayActor,
-        CapturedActor,
-        StateDelta,
-    >,
+    state: &GameplayRuntimeState<profile_data::Profile, OverlayActor, CapturedActor, StateDelta>,
     player_idx: usize,
 ) -> f32 {
     if player_idx >= state.setup.num_players || player_idx >= MAX_PLAYERS {
@@ -26758,7 +26755,9 @@ pub fn player_draw_scale_for_tilt_with_visual_mask(
 }
 
 pub fn refresh_active_attack_masks<OverlayActor, CapturedActor, StateDelta>(
-    state: &mut GameplayRuntimeState<profile_data::Profile, OverlayActor,
+    state: &mut GameplayRuntimeState<
+        profile_data::Profile,
+        OverlayActor,
         CapturedActor,
         StateDelta,
     >,
@@ -26783,10 +26782,7 @@ pub fn refresh_active_attack_masks<OverlayActor, CapturedActor, StateDelta>(
 
 #[inline(always)]
 pub fn song_lua_hides_note_visual<OverlayActor, CapturedActor, StateDelta>(
-    state: &GameplayRuntimeState<profile_data::Profile, OverlayActor,
-        CapturedActor,
-        StateDelta,
-    >,
+    state: &GameplayRuntimeState<profile_data::Profile, OverlayActor, CapturedActor, StateDelta>,
     player: usize,
     column: usize,
     beat: f32,

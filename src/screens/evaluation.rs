@@ -20,7 +20,9 @@ use deadsync_score as score_data;
 
 use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
-use crate::assets::{FontRole, current_machine_font_key, current_machine_font_key_for_text};
+use crate::assets::{
+    FontRole, current_machine_font_key, current_machine_font_key_for_text, visual_styles,
+};
 use crate::game::online;
 use crate::game::parsing::noteskin::Noteskin;
 use crate::game::scores;
@@ -82,6 +84,10 @@ const EVAL_STAGE_IN_TEXT_FADE_OUT_SECONDS: f32 = 0.4;
 const EVAL_STAGE_IN_TOTAL_SECONDS: f32 = EVAL_STAGE_IN_TEXT_FADE_IN_SECONDS
     + EVAL_STAGE_IN_TEXT_HOLD_SECONDS
     + EVAL_STAGE_IN_TEXT_FADE_OUT_SECONDS;
+const SRPG10_EVAL_FAILED_SECONDS: f32 = 3.0;
+const SRPG10_EVAL_PASSED_SECONDS: f32 = 1.0;
+const SRPG10_EVAL_Z: i16 = 1250;
+const SRPG10_EVAL_ZOOM: f32 = 480.0 / 1080.0;
 const GRAPH_BARELY_SAMPLE_COUNT: usize = 100;
 const GRAPH_BARELY_LIFE_MAX: f32 = 0.1;
 const GRAPH_BARELY_ANIM_DELAY_SECONDS: f32 = 2.0;
@@ -3502,17 +3508,127 @@ const fn stage_in_stinger_texture_key(failed: bool, disqualified: bool) -> Optio
     }
 }
 
-fn build_stage_in_stinger(state: &State) -> Vec<Actor> {
-    if state.screen_elapsed > EVAL_STAGE_IN_TOTAL_SECONDS {
-        return vec![];
-    }
-
+fn stage_in_result(state: &State) -> (bool, bool) {
     let failed = all_joined_players_failed(state);
     let disqualified = state
         .score_info
         .iter()
         .flatten()
         .any(|score| score.disqualified);
+    (failed, disqualified)
+}
+
+#[inline(always)]
+fn stage_in_stinger_seconds(failed: bool) -> f32 {
+    if visual_styles::srpg10_active() {
+        if failed {
+            SRPG10_EVAL_FAILED_SECONDS
+        } else {
+            SRPG10_EVAL_PASSED_SECONDS
+        }
+    } else {
+        EVAL_STAGE_IN_TOTAL_SECONDS
+    }
+}
+
+fn build_srpg10_failed_stinger() -> Vec<Actor> {
+    vec![
+        act!(sprite(visual_styles::SRPG10_EVAL_PAINT):
+            align(0.5, 0.5):
+            xy(screen_center_x(), screen_center_y()):
+            zoomto(screen_width() + 350.0, screen_height() + 200.0):
+            z(SRPG10_EVAL_Z):
+            decelerate(0.75): zoomto(screen_width() + 250.0, screen_height()):
+            sleep(SRPG10_EVAL_FAILED_SECONDS - 1.25):
+            linear(0.5): alpha(0.0):
+            linear(0.0): visible(false)
+        ),
+        act!(quad:
+            align(0.5, 0.5):
+            xy(screen_center_x(), screen_center_y()):
+            zoomto(screen_width(), screen_height()):
+            diffuse(0.0, 0.0, 0.0, 0.8):
+            z(SRPG10_EVAL_Z + 1):
+            sleep(1.5):
+            linear(0.375): alpha(1.0):
+            sleep(0.625):
+            linear(0.5): alpha(0.0):
+            linear(0.0): visible(false)
+        ),
+        act!(sprite(visual_styles::SRPG10_EVAL_RED_LINES):
+            align(0.5, 0.5):
+            xy(screen_center_x(), screen_center_y()):
+            zoom(SRPG10_EVAL_ZOOM):
+            z(SRPG10_EVAL_Z + 2):
+            alpha(0.0):
+            accelerate(0.1): alpha(1.0):
+            sleep(SRPG10_EVAL_FAILED_SECONDS - 0.6):
+            linear(0.5): alpha(0.0):
+            linear(0.0): visible(false)
+        ),
+        act!(sprite(visual_styles::SRPG10_EVAL_EXPEDITION_FAILED):
+            align(0.5, 0.5):
+            xy(screen_center_x(), screen_center_y()):
+            zoom(SRPG10_EVAL_ZOOM):
+            z(SRPG10_EVAL_Z + 3):
+            alpha(0.0):
+            linear(0.375): alpha(1.0):
+            sleep(SRPG10_EVAL_FAILED_SECONDS - 0.875):
+            linear(0.5): alpha(0.0):
+            linear(0.0): visible(false)
+        ),
+    ]
+}
+
+fn build_srpg10_passed_stinger() -> Vec<Actor> {
+    vec![
+        act!(sprite(visual_styles::SRPG10_EVAL_PASS_BG):
+            align(0.5, 0.5):
+            xy(screen_center_x(), screen_center_y()):
+            zoom(SRPG10_EVAL_ZOOM):
+            z(SRPG10_EVAL_Z):
+            sleep(0.5):
+            linear(0.5): alpha(0.0):
+            linear(0.0): visible(false)
+        ),
+        act!(sprite(visual_styles::SRPG10_EVAL_GOLD_LEAF_BG):
+            align(0.5, 0.5):
+            xy(screen_center_x(), screen_center_y()):
+            zoom(SRPG10_EVAL_ZOOM):
+            z(SRPG10_EVAL_Z + 1):
+            decelerate(0.1): zoom(0.5):
+            sleep(0.4):
+            linear(0.5): alpha(0.0):
+            linear(0.0): visible(false)
+        ),
+        act!(sprite(visual_styles::SRPG10_EVAL_VICTORY):
+            align(0.5, 0.5):
+            xy(screen_center_x(), screen_center_y()):
+            zoom(0.5):
+            z(SRPG10_EVAL_Z + 2):
+            decelerate(0.1): zoom(0.3):
+            sleep(0.4):
+            linear(0.5): alpha(0.0):
+            linear(0.0): visible(false)
+        ),
+    ]
+}
+
+fn build_stage_in_stinger(state: &State) -> Vec<Actor> {
+    let (failed, disqualified) = stage_in_result(state);
+    let failed = failed || disqualified;
+    if state.screen_elapsed > stage_in_stinger_seconds(failed) {
+        return vec![];
+    }
+
+    if visual_styles::srpg10_active() {
+        return if failed {
+            build_srpg10_failed_stinger()
+        } else {
+            build_srpg10_passed_stinger()
+        };
+    }
+
     let texture_key = stage_in_stinger_texture_key(failed, disqualified);
     let mut actors = vec![act!(quad:
         align(0.0, 0.0): xy(0.0, 0.0):
@@ -3567,7 +3683,8 @@ pub(crate) fn auto_screenshot_ready(state: &State) -> bool {
 fn auto_screenshot_phase(state: &State) -> AutoScreenshotPhase {
     let elapsed = state.screen_elapsed;
 
-    if elapsed < auto_screenshot_intro_done_seconds() {
+    let (failed, disqualified) = stage_in_result(state);
+    if elapsed < auto_screenshot_intro_done_seconds(failed || disqualified) {
         return AutoScreenshotPhase::IntroPlaying;
     }
 
@@ -3583,8 +3700,8 @@ fn auto_screenshot_phase(state: &State) -> AutoScreenshotPhase {
 }
 
 #[inline(always)]
-fn auto_screenshot_intro_done_seconds() -> f32 {
-    EVAL_STAGE_IN_TOTAL_SECONDS.max(eval_panes::pane_stats::rolling_numbers_approach_seconds())
+fn auto_screenshot_intro_done_seconds(failed: bool) -> f32 {
+    stage_in_stinger_seconds(failed).max(eval_panes::pane_stats::rolling_numbers_approach_seconds())
 }
 
 /// True if any player expected a GrooveStats submit and the response

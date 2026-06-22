@@ -230,6 +230,26 @@ pub const SRPG10_ASSETS: Assets = Assets {
     shared_background_size: [2581, 1452],
 };
 
+pub const SRPG10_TITLE_LOGO: &str = "srpg10_logo_main.png";
+pub const SRPG10_EVAL_FAILED_SFX: &str = "assets/sounds/srpg10_eval_failed.ogg";
+pub const SRPG10_EVAL_PASSED_SFX: &str = "assets/sounds/srpg10_eval_passed.ogg";
+pub const SRPG10_GAMEOVER_MUSIC: &str = "assets/music/SRPG10-GameOver.ogg";
+pub const SRPG10_EVAL_PAINT: &str = "visual_styles/srpg10/eval/paint.png";
+pub const SRPG10_EVAL_RED_LINES: &str = "visual_styles/srpg10/eval/red_lines.png";
+pub const SRPG10_EVAL_EXPEDITION_FAILED: &str = "visual_styles/srpg10/eval/expedition_failed.png";
+pub const SRPG10_EVAL_PASS_BG: &str = "visual_styles/srpg10/eval/pass_bg.png";
+pub const SRPG10_EVAL_GOLD_LEAF_BG: &str = "visual_styles/srpg10/eval/gold_leaf_background.png";
+pub const SRPG10_EVAL_VICTORY: &str = "visual_styles/srpg10/eval/victory.png";
+
+pub const SRPG10_EVAL_TEXTURES: [&str; 6] = [
+    SRPG10_EVAL_PAINT,
+    SRPG10_EVAL_RED_LINES,
+    SRPG10_EVAL_EXPEDITION_FAILED,
+    SRPG10_EVAL_PASS_BG,
+    SRPG10_EVAL_GOLD_LEAF_BG,
+    SRPG10_EVAL_VICTORY,
+];
+
 #[inline(always)]
 pub fn current_style() -> VisualStyle {
     std::panic::catch_unwind(|| config::get().visual_style).unwrap_or(VisualStyle::Hearts)
@@ -259,8 +279,18 @@ pub fn current_assets() -> &'static Assets {
     for_style_and_variant(current_style(), current_srpg_variant())
 }
 
+#[inline(always)]
+pub fn srpg10_active() -> bool {
+    current_style().is_srpg() && current_srpg_variant() == SrpgVariant::Srpg10
+}
+
 pub fn all_assets() -> impl Iterator<Item = &'static Assets> {
     ASSETS.iter().chain(std::iter::once(&SRPG10_ASSETS))
+}
+
+#[inline(always)]
+pub fn title_logo_texture_key() -> Option<&'static str> {
+    srpg10_active().then_some(SRPG10_TITLE_LOGO)
 }
 
 #[inline(always)]
@@ -332,6 +362,21 @@ pub fn menu_music_asset_path() -> &'static str {
     current_assets().menu_music
 }
 
+#[inline(always)]
+pub fn srpg10_gameover_music_path() -> std::path::PathBuf {
+    deadlib_platform::dirs::app_dirs().resolve_asset_path(SRPG10_GAMEOVER_MUSIC)
+}
+
+#[inline(always)]
+pub fn srpg10_faction_name(color_index: i32) -> &'static str {
+    match color_index.rem_euclid(12) {
+        0..=2 => "Unaffiliated",
+        3..=5 => "Democratic People's Republic of Timing",
+        6..=8 => "Footspeed Empire",
+        _ => "Stamina Nation",
+    }
+}
+
 /// Returns the absolute path to the menu music file that should play for the
 /// current visual style. If the user has dropped one or more `.ogg` files
 /// into `{data_dir}/assets/music/menu/{style}/` (lowercase style name) a
@@ -364,6 +409,7 @@ pub fn bundled_music_paths() -> Vec<std::path::PathBuf> {
     let mut rels: BTreeSet<&'static str> = all_assets().map(|assets| assets.menu_music).collect();
     rels.insert("assets/music/select_course (loop).ogg");
     rels.insert("assets/music/credits.ogg");
+    rels.insert(SRPG10_GAMEOVER_MUSIC);
 
     let dirs = deadlib_platform::dirs::app_dirs();
     rels.into_iter()
