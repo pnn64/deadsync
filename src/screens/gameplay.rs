@@ -13,7 +13,10 @@ use crate::game::parsing::song_lua::{
     SongLuaOverlayModelLayer, SongLuaOverlayState, SongLuaOverlayStateDelta, SongLuaPlayerContext,
     SongLuaProxyTarget, SongLuaSpeedMod, SongLuaTextGlowMode, compile_song_lua,
 };
-use crate::game::{profile, scores};
+use crate::game::{
+    GameplayProfile, profile, profile_side_from_gameplay, profile_tick_mode_from_gameplay,
+    score_display_mode_from_profile, scores, scroll_effects_from_option,
+};
 use crate::screens::components::gameplay::{gameplay_stats, notefield, step_stats_gifs};
 use crate::screens::components::shared::banner as shared_banner;
 use crate::screens::components::shared::gs_scorebox;
@@ -52,9 +55,7 @@ use deadsync_gameplay::{
     RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, ReplayInputEdge, ReplayOffsetSnapshot,
     SongLuaCompilePlayStyle, SongLuaOverlayMessageRuntime, TAP_EXPLOSION_WINDOWS,
     autosync_mode_status_line, blue_fantastic_window_ms, exit_transition_alpha,
-    gameplay_is_single_p2_side, gameplay_runtime_charts, gameplay_runtime_profiles,
-    handle_core_input, profile_side_from_gameplay, profile_tick_mode_from_gameplay,
-    score_display_mode_from_profile, scroll_effects_from_option, scroll_receptor_y,
+    gameplay_is_single_p2_side, gameplay_runtime_charts, handle_core_input, scroll_receptor_y,
     song_lua_compile_player_screen_x as gameplay_song_lua_compile_player_screen_x,
     song_lua_ease_factor, song_lua_sound_paths, spacing_multiplier_for_percent, update_core,
 };
@@ -669,8 +670,10 @@ impl State {
         scorebox_data: GameplayScoreboxData,
     ) -> Self {
         let density_graph = DensityGraphRenderState::from_gameplay(&gameplay);
+        let step_stats_profiles =
+            std::array::from_fn(|player| gameplay.profiles()[player].0.clone());
         let step_stats_extra_resolved =
-            step_stats_gifs::resolve_random_extras(&gameplay.profiles());
+            step_stats_gifs::resolve_random_extras(&step_stats_profiles);
         let song = gameplay.song();
         let song_full_title: Arc<str> =
             Arc::from(song.display_full_title(crate::config::get().translated_titles));
@@ -929,6 +932,17 @@ fn gameplay_scorebox_data(
         );
     }
     data
+}
+
+pub(crate) fn gameplay_runtime_profile_data(
+    player_profiles: &[profile_data::Profile; MAX_PLAYERS],
+    session: &GameplaySession,
+) -> [profile_data::Profile; MAX_PLAYERS] {
+    let mut runtime_profiles = (*player_profiles).clone();
+    if session.p2_runtime_player() {
+        runtime_profiles[0] = runtime_profiles[1].clone();
+    }
+    runtime_profiles
 }
 
 fn prewarm_notefield_model_cache_slots(
@@ -1223,11 +1237,12 @@ pub fn init(
         crate::game::random_movies::random_movie_paths(&song, random_background_movies_enabled());
     let cols_per_player = session.play_style.cols_per_player();
     let num_players = session.play_style.player_count();
-    let runtime_profiles = gameplay_runtime_profiles(&player_profiles, &session);
+    let runtime_profile_data = gameplay_runtime_profile_data(&player_profiles, &session);
     let runtime_charts = gameplay_runtime_charts(&charts, &session);
-    let noteskin_assets = gameplay_noteskin_assets(cols_per_player, num_players, &runtime_profiles);
+    let noteskin_assets =
+        gameplay_noteskin_assets(cols_per_player, num_players, &runtime_profile_data);
     let noteskin_data =
-        noteskin_assets.gameplay_data(cols_per_player, num_players, &runtime_profiles);
+        noteskin_assets.gameplay_data(cols_per_player, num_players, &runtime_profile_data);
     let song_lua_data = gameplay_song_lua_data(
         &song,
         &charts,
@@ -1238,6 +1253,7 @@ pub fn init(
         &session,
         &config,
     );
+    let player_profiles = player_profiles.map(GameplayProfile::from);
     let song_lua_sound_paths = song_lua_sound_paths(&song_lua_data);
     let background_chart = if session.p2_runtime_player() {
         &gameplay_charts[1]
@@ -1251,11 +1267,12 @@ pub fn init(
         course_banner_path.as_ref(),
     );
     let mini_indicator_data =
-        gameplay_mini_indicator_data(&runtime_charts, &runtime_profiles, &session);
-    let scorebox_data = gameplay_scorebox_data(&runtime_charts, &runtime_profiles, &session);
+        gameplay_mini_indicator_data(&runtime_charts, &runtime_profile_data, &session);
+    let scorebox_data = gameplay_scorebox_data(&runtime_charts, &runtime_profile_data, &session);
     State::from_gameplay_with_screen_data(
         deadsync_gameplay::init_gameplay_runtime::<
             crate::game::parsing::song_lua::SongLuaOverlayKind,
+            _,
         >(
             song,
             charts,
@@ -11103,8 +11120,8 @@ mod tests {
             player_profiles[1].show_ex_score = true;
             player_profiles[1].groovestats_username = "p2-user".to_string();
             let session = GameplaySession {
-                play_style: deadsync_gameplay::gameplay_play_style_from_profile(play_style),
-                player_side: deadsync_gameplay::gameplay_player_side_from_profile(
+                play_style: crate::game::gameplay_play_style_from_profile(play_style),
+                player_side: crate::game::gameplay_player_side_from_profile(
                     profile_data::PlayerSide::P2,
                 ),
                 joined_sides: [false, true],
@@ -11112,7 +11129,7 @@ mod tests {
                 ..GameplaySession::default()
             };
 
-            let runtime_profiles = gameplay_runtime_profiles(&player_profiles, &session);
+            let runtime_profiles = gameplay_runtime_profile_data(&player_profiles, &session);
             let runtime_charts = gameplay_runtime_charts(&charts, &session);
             assert_eq!(runtime_charts[0].short_hash, "p2-hash");
 

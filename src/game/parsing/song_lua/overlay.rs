@@ -75,6 +75,7 @@ mod tests {
         SongLuaOverlayBlendMode, parse_overlay_blend_mode, parse_overlay_effect_clock,
         parse_overlay_effect_mode,
     };
+    use deadlib_present::anim::{EffectClock, EffectMode};
 
     #[test]
     fn parse_overlay_blend_mode_accepts_stepmania_add_name() {

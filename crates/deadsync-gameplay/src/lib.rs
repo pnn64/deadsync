@@ -13,7 +13,6 @@ use deadsync_input::{
     INPUT_SLOT_INVALID, InputEdge as GameplayInputEdge, InputEvent, VirtualAction,
     lane_from_action, lane_from_column,
 };
-use deadsync_profile as profile_data;
 use deadsync_rules::combo::{self, ComboState, ComboUpdate};
 use deadsync_rules::judgment::{self, JudgeGrade, Judgment, TimingWindow};
 use deadsync_rules::note::{
@@ -463,14 +462,11 @@ impl GameplayUpdateTraceState {
     }
 }
 
-fn trace_capacity_growth<OverlayActor, CapturedActor, StateDelta>(
-    state: &mut GameplayRuntimeState<
-        profile_data::Profile,
-        OverlayActor,
-        CapturedActor,
-        StateDelta,
-    >,
-) {
+fn trace_capacity_growth<Profile, OverlayActor, CapturedActor, StateDelta>(
+    state: &mut GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>,
+) where
+    Profile: GameplayProfileData,
+{
     let frame = state.control.update_trace.summary.frame_counter;
     let snapshot = state.capacity_trace_snapshot();
     let mut events = [None; 3 + MAX_PLAYERS];
@@ -508,18 +504,15 @@ fn trace_capacity_growth<OverlayActor, CapturedActor, StateDelta>(
     }
 }
 
-pub fn trace_gameplay_update<OverlayActor, CapturedActor, StateDelta>(
-    state: &mut GameplayRuntimeState<
-        profile_data::Profile,
-        OverlayActor,
-        CapturedActor,
-        StateDelta,
-    >,
+pub fn trace_gameplay_update<Profile, OverlayActor, CapturedActor, StateDelta>(
+    state: &mut GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>,
     delta_time: f32,
     music_time_sec: f32,
     total_us: u32,
     phases: GameplayUpdatePhaseTimings,
-) {
+) where
+    Profile: GameplayProfileData,
+{
     let pending_len = state.pending_input_len();
     let replay_edges_len = state.recorded_replay_edges().len();
     let decaying_len = state.decaying_hold_indices().len();
@@ -862,40 +855,11 @@ impl GameplayInputPlayStyle {
     }
 }
 
-#[inline(always)]
-pub const fn gameplay_play_style_from_profile(
-    play_style: profile_data::PlayStyle,
-) -> GameplayInputPlayStyle {
-    match play_style {
-        profile_data::PlayStyle::Single => GameplayInputPlayStyle::Single,
-        profile_data::PlayStyle::Versus => GameplayInputPlayStyle::Versus,
-        profile_data::PlayStyle::Double => GameplayInputPlayStyle::Double,
-    }
-}
-
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum GameplayInputPlayerSide {
     #[default]
     P1,
     P2,
-}
-
-#[inline(always)]
-pub const fn gameplay_player_side_from_profile(
-    side: profile_data::PlayerSide,
-) -> GameplayInputPlayerSide {
-    match side {
-        profile_data::PlayerSide::P1 => GameplayInputPlayerSide::P1,
-        profile_data::PlayerSide::P2 => GameplayInputPlayerSide::P2,
-    }
-}
-
-#[inline(always)]
-pub const fn profile_side_from_gameplay(side: GameplayInputPlayerSide) -> profile_data::PlayerSide {
-    match side {
-        GameplayInputPlayerSide::P1 => profile_data::PlayerSide::P1,
-        GameplayInputPlayerSide::P2 => profile_data::PlayerSide::P2,
-    }
 }
 
 #[inline(always)]
@@ -905,6 +869,118 @@ pub const fn gameplay_player_side_index(side: GameplayInputPlayerSide) -> usize 
         GameplayInputPlayerSide::P2 => 1,
     }
 }
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum GameplayErrorBarTrim {
+    #[default]
+    Off,
+    Fantastic,
+    Excellent,
+    Great,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct GameplayErrorBarOptions {
+    pub mask_bits: u8,
+    pub text_scalable: bool,
+    pub text_threshold_ms: u32,
+    pub show_fa_plus_window: bool,
+    pub trim: GameplayErrorBarTrim,
+    pub multi_tick: bool,
+    pub error_ms_display: bool,
+    pub short_average_enabled: bool,
+    pub short_average_intensity: f32,
+    pub long_average_enabled: bool,
+    pub long_average_threshold_ms: u32,
+    pub long_average_intensity: f32,
+    pub long_average_min_samples: u32,
+    pub average_interval_ms: u32,
+}
+
+pub const GAMEPLAY_ERROR_BAR_COLORFUL: u8 = 1 << 0;
+pub const GAMEPLAY_ERROR_BAR_MONOCHROME: u8 = 1 << 1;
+pub const GAMEPLAY_ERROR_BAR_TEXT: u8 = 1 << 2;
+pub const GAMEPLAY_ERROR_BAR_HIGHLIGHT: u8 = 1 << 3;
+pub const GAMEPLAY_ERROR_BAR_AVERAGE: u8 = 1 << 4;
+
+pub trait GameplayProfileData: Clone {
+    fn insert_mask_bits(&self) -> u8;
+    fn remove_mask_bits(&self) -> u8;
+    fn holds_mask_bits(&self) -> u8;
+    fn appearance_mask_bits(&self) -> u8;
+    fn visual_mask_bits(&self) -> u16;
+    fn turn_option(&self) -> GameplayTurnOption;
+    fn attack_mode(&self) -> GameplayAttackMode;
+    fn perspective_effects(&self) -> PerspectiveEffects;
+    fn scroll_effects(&self) -> ScrollEffects;
+    fn mini_indicator_options(&self) -> GameplayMiniIndicatorOptions;
+    fn target_score(&self) -> GameplayTargetScoreSetting;
+    fn timing_disabled_windows(&self) -> [bool; 5];
+    fn column_flash_options(&self) -> ColumnFlashOptions;
+    fn tap_explosion_options(&self) -> TapExplosionOptions;
+    fn fantastic_options(&self, base_fa_plus_s: f32) -> FantasticWindowOptions;
+    fn fantastic_feedback_options(&self) -> FantasticFeedbackOptions;
+    fn error_bar_options(&self) -> GameplayErrorBarOptions;
+    fn measure_counter_threshold(&self) -> Option<usize>;
+    fn step_statistics_density_graph(&self) -> bool;
+    fn note_field_offset_x(&self) -> f32;
+    fn noteskin_name(&self) -> String;
+    fn mini_percent(&self) -> f32;
+    fn global_offset_shift_ms(&self) -> i32;
+    fn visual_delay_ms(&self) -> i32;
+    fn reverse_scroll(&self) -> bool;
+    fn column_cues(&self) -> bool;
+    fn crossover_cues(&self) -> bool;
+    fn crossover_cue_duration_ms(&self) -> u16;
+    fn crossover_cue_quantization(&self) -> u8;
+    fn crossover_cue_brackets(&self) -> bool;
+    fn nps_graph_at_top(&self) -> bool;
+    fn carry_combo_between_songs(&self) -> bool;
+    fn calculated_weight_pounds(&self) -> i32;
+    fn hide_lifebar(&self) -> bool;
+    fn hide_danger(&self) -> bool;
+    fn rescore_early_hits(&self) -> bool;
+    fn hide_early_dw_judgments(&self) -> bool;
+    fn hide_early_dw_flash(&self) -> bool;
+    fn hide_early_dw_column_flash(&self) -> bool;
+
+    #[inline(always)]
+    fn chart_effects(&self) -> ChartAttackEffects {
+        ChartAttackEffects {
+            insert_mask: self.insert_mask_bits(),
+            remove_mask: self.remove_mask_bits(),
+            holds_mask: self.holds_mask_bits(),
+            turn_bits: 0,
+        }
+    }
+
+    #[inline(always)]
+    fn appearance_effects(&self) -> AppearanceEffects {
+        AppearanceEffects::from_mask_bits(self.appearance_mask_bits())
+    }
+
+    #[inline(always)]
+    fn visual_effects(&self) -> VisualEffects {
+        VisualEffects::from_mask_bits(self.visual_mask_bits())
+    }
+
+    #[inline(always)]
+    fn effective_mini_value_with_visual_mask(&self, visual_mask: u16, mini_percent: f32) -> f32 {
+        mini_value_for_visual_mask(mini_percent, self.mini_percent(), visual_mask)
+    }
+
+    #[inline(always)]
+    fn draw_scale_for_tilt_with_visual_mask(
+        &self,
+        tilt: f32,
+        visual_mask: u16,
+        mini_percent: f32,
+    ) -> f32 {
+        player_draw_scale_for_visual_mask(tilt, mini_percent, self.mini_percent(), visual_mask)
+    }
+}
+
+pub const DEFAULT_NOTESKIN_NAME: &str = "cel";
 
 #[inline(always)]
 pub const fn gameplay_player_side_for_index(player_idx: usize) -> GameplayInputPlayerSide {
@@ -1811,28 +1887,6 @@ pub const fn timing_tick_mode_debug_label(mode: GameplayTimingTickMode) -> &'sta
         GameplayTimingTickMode::Off => "off",
         GameplayTimingTickMode::Assist => "assist tick",
         GameplayTimingTickMode::Hit => "hit tick",
-    }
-}
-
-#[inline(always)]
-pub const fn gameplay_tick_mode_from_profile(
-    mode: profile_data::TimingTickMode,
-) -> GameplayTimingTickMode {
-    match mode {
-        profile_data::TimingTickMode::Off => GameplayTimingTickMode::Off,
-        profile_data::TimingTickMode::Assist => GameplayTimingTickMode::Assist,
-        profile_data::TimingTickMode::Hit => GameplayTimingTickMode::Hit,
-    }
-}
-
-#[inline(always)]
-pub const fn profile_tick_mode_from_gameplay(
-    mode: GameplayTimingTickMode,
-) -> profile_data::TimingTickMode {
-    match mode {
-        GameplayTimingTickMode::Off => profile_data::TimingTickMode::Off,
-        GameplayTimingTickMode::Assist => profile_data::TimingTickMode::Assist,
-        GameplayTimingTickMode::Hit => profile_data::TimingTickMode::Hit,
     }
 }
 
@@ -4009,17 +4063,17 @@ pub fn score_invalid_reason_lines_for_options(
     reasons
 }
 
-pub fn score_invalid_reason_lines_for_chart(
+pub fn score_invalid_reason_lines_for_chart<Profile: GameplayProfileData>(
     chart: &ChartData,
-    profile: &profile_data::Profile,
+    profile: &Profile,
     _scroll_speed: ScrollSpeedSetting,
     music_rate: f32,
 ) -> Vec<&'static str> {
     score_invalid_reason_lines_for_options(
         chart,
         ScoreValidityOptions {
-            chart_effects: chart_effects_from_profile(profile),
-            attack_mode: gameplay_attack_mode(profile.attack_mode),
+            chart_effects: profile.chart_effects(),
+            attack_mode: profile.attack_mode(),
             music_rate,
         },
     )
@@ -4345,16 +4399,6 @@ pub enum GameplayScoreDisplayMode {
     #[default]
     Normal,
     Predictive,
-}
-
-#[inline(always)]
-pub const fn score_display_mode_from_profile(
-    mode: profile_data::ScoreDisplayMode,
-) -> GameplayScoreDisplayMode {
-    match mode {
-        profile_data::ScoreDisplayMode::Normal => GameplayScoreDisplayMode::Normal,
-        profile_data::ScoreDisplayMode::Predictive => GameplayScoreDisplayMode::Predictive,
-    }
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -4801,28 +4845,6 @@ pub enum GameplayTargetScoreSetting {
     PersonalBest,
 }
 
-#[inline(always)]
-pub fn gameplay_target_score_setting(
-    setting: profile_data::TargetScoreSetting,
-) -> GameplayTargetScoreSetting {
-    match setting {
-        profile_data::TargetScoreSetting::CMinus => GameplayTargetScoreSetting::CMinus,
-        profile_data::TargetScoreSetting::C => GameplayTargetScoreSetting::C,
-        profile_data::TargetScoreSetting::CPlus => GameplayTargetScoreSetting::CPlus,
-        profile_data::TargetScoreSetting::BMinus => GameplayTargetScoreSetting::BMinus,
-        profile_data::TargetScoreSetting::B => GameplayTargetScoreSetting::B,
-        profile_data::TargetScoreSetting::BPlus => GameplayTargetScoreSetting::BPlus,
-        profile_data::TargetScoreSetting::AMinus => GameplayTargetScoreSetting::AMinus,
-        profile_data::TargetScoreSetting::A => GameplayTargetScoreSetting::A,
-        profile_data::TargetScoreSetting::APlus => GameplayTargetScoreSetting::APlus,
-        profile_data::TargetScoreSetting::SMinus => GameplayTargetScoreSetting::SMinus,
-        profile_data::TargetScoreSetting::S => GameplayTargetScoreSetting::S,
-        profile_data::TargetScoreSetting::SPlus => GameplayTargetScoreSetting::SPlus,
-        profile_data::TargetScoreSetting::MachineBest => GameplayTargetScoreSetting::MachineBest,
-        profile_data::TargetScoreSetting::PersonalBest => GameplayTargetScoreSetting::PersonalBest,
-    }
-}
-
 pub const fn target_score_setting_percent(setting: GameplayTargetScoreSetting) -> Option<f64> {
     match setting {
         GameplayTargetScoreSetting::CMinus => Some(50.0),
@@ -4908,65 +4930,53 @@ pub const RANDOM_ATTACK_MOD_POOL: [&str; 29] = [
 ];
 
 #[inline(always)]
-pub fn gameplay_attack_mode(attack_mode: profile_data::AttackMode) -> GameplayAttackMode {
-    match attack_mode {
-        profile_data::AttackMode::Off => GameplayAttackMode::Off,
-        profile_data::AttackMode::On => GameplayAttackMode::On,
-        profile_data::AttackMode::Random => GameplayAttackMode::Random,
-    }
+pub fn chart_effects_from_profile<Profile: GameplayProfileData>(
+    profile: &Profile,
+) -> ChartAttackEffects {
+    profile.chart_effects()
 }
 
 #[inline(always)]
-pub fn chart_effects_from_profile(profile: &profile_data::Profile) -> ChartAttackEffects {
-    ChartAttackEffects {
-        insert_mask: profile.insert_active_mask.bits(),
-        remove_mask: profile.remove_active_mask.bits(),
-        holds_mask: profile.holds_active_mask.bits(),
-        turn_bits: 0,
-    }
-}
-
-#[inline(always)]
-pub fn perspective_effects_from_profile(
-    perspective: profile_data::Perspective,
+pub fn perspective_effects_from_profile<Profile: GameplayProfileData>(
+    profile: &Profile,
 ) -> PerspectiveEffects {
-    let (tilt, skew) = perspective.tilt_skew();
-    PerspectiveEffects { tilt, skew }
+    profile.perspective_effects()
 }
 
 #[inline(always)]
-pub fn scroll_effects_from_option(scroll: profile_data::ScrollOption) -> ScrollEffects {
-    use profile_data::ScrollOption;
-    ScrollEffects::from_flags(
-        scroll.contains(ScrollOption::Reverse),
-        scroll.contains(ScrollOption::Split),
-        scroll.contains(ScrollOption::Alternate),
-        scroll.contains(ScrollOption::Cross),
-        scroll.contains(ScrollOption::Centered),
-    )
+pub fn scroll_effects_from_flags(
+    reverse: bool,
+    split: bool,
+    alternate: bool,
+    cross: bool,
+    centered: bool,
+) -> ScrollEffects {
+    ScrollEffects::from_flags(reverse, split, alternate, cross, centered)
 }
 
 #[inline(always)]
-pub fn base_appearance_effects(profile: &profile_data::Profile) -> AppearanceEffects {
-    AppearanceEffects::from_mask_bits(profile.appearance_effects_active_mask.bits())
+pub fn base_appearance_effects<Profile: GameplayProfileData>(
+    profile: &Profile,
+) -> AppearanceEffects {
+    profile.appearance_effects()
 }
 
 #[inline(always)]
-pub fn base_visual_effects(profile: &profile_data::Profile) -> VisualEffects {
-    VisualEffects::from_mask_bits(profile.visual_effects_active_mask.bits())
+pub fn base_visual_effects<Profile: GameplayProfileData>(profile: &Profile) -> VisualEffects {
+    profile.visual_effects()
 }
 
 #[inline(always)]
 pub fn build_attack_mask_windows_for_player(
     chart_attacks: Option<&str>,
-    attack_mode: profile_data::AttackMode,
+    attack_mode: GameplayAttackMode,
     player: usize,
     base_seed: u64,
     song_length_seconds: f32,
 ) -> Vec<AttackMaskWindow> {
     build_attack_mask_windows_for_mode(
         chart_attacks,
-        gameplay_attack_mode(attack_mode),
+        attack_mode,
         player,
         base_seed,
         song_length_seconds,
@@ -4974,27 +4984,15 @@ pub fn build_attack_mask_windows_for_player(
 }
 
 #[inline(always)]
-pub fn gameplay_turn_option_from_profile(turn: profile_data::TurnOption) -> GameplayTurnOption {
-    match turn {
-        profile_data::TurnOption::None => GameplayTurnOption::None,
-        profile_data::TurnOption::Mirror => GameplayTurnOption::Mirror,
-        profile_data::TurnOption::LRMirror => GameplayTurnOption::LRMirror,
-        profile_data::TurnOption::UDMirror => GameplayTurnOption::UDMirror,
-        profile_data::TurnOption::Left => GameplayTurnOption::Left,
-        profile_data::TurnOption::Right => GameplayTurnOption::Right,
-        profile_data::TurnOption::Shuffle => GameplayTurnOption::Shuffle,
-        profile_data::TurnOption::Blender => GameplayTurnOption::Blender,
-        profile_data::TurnOption::Random => GameplayTurnOption::Random,
-    }
-}
-
-#[inline(always)]
-pub fn player_changes_chart(chart: &GameplayChartData, profile: &profile_data::Profile) -> bool {
+pub fn player_changes_chart<Profile: GameplayProfileData>(
+    chart: &GameplayChartData,
+    profile: &Profile,
+) -> bool {
     player_chart_changes_for_options(
-        chart_effects_from_profile(profile).has_note_masks(),
-        gameplay_turn_option_from_profile(profile.turn_option),
+        profile.chart_effects().has_note_masks(),
+        profile.turn_option(),
         chart.chart_attacks.as_deref(),
-        gameplay_attack_mode(profile.attack_mode),
+        profile.attack_mode(),
     )
 }
 
@@ -5828,11 +5826,11 @@ pub struct SongLuaRuntimeWindowBuild<'a> {
     pub player_actor_defaults: [SongLuaPlayerActorDefault; MAX_PLAYERS],
 }
 
-pub fn build_song_lua_runtime_window_build<'a>(
+pub fn build_song_lua_runtime_window_build<'a, Profile: GameplayProfileData>(
     song_title: &'a str,
     timing_players: &'a [Arc<TimingData>; MAX_PLAYERS],
     num_players: usize,
-    player_profiles: &[profile_data::Profile; MAX_PLAYERS],
+    player_profiles: &[Profile; MAX_PLAYERS],
     machine_global_offset_seconds: f32,
     viewport: GameplayViewport,
     session: &GameplaySession,
@@ -5842,7 +5840,7 @@ pub fn build_song_lua_runtime_window_build<'a>(
     let timing_player_refs = std::array::from_fn(|player| timing_players[player].as_ref());
     let note_field_offsets_x = std::array::from_fn(|player| {
         if player < num_players {
-            player_profiles[player].note_field_offset_x as f32
+            player_profiles[player].note_field_offset_x()
         } else {
             0.0
         }
@@ -5906,11 +5904,11 @@ pub fn song_lua_speedmod_from_scroll_speed(
     }
 }
 
-pub fn build_song_lua_compile_context(
+pub fn build_song_lua_compile_context<Profile: GameplayProfileData>(
     song: &SongData,
     charts: &[Arc<ChartData>; MAX_PLAYERS],
     num_players: usize,
-    player_profiles: &[profile_data::Profile; MAX_PLAYERS],
+    player_profiles: &[Profile; MAX_PLAYERS],
     scroll_speed: &[ScrollSpeedSetting; MAX_PLAYERS],
     music_rate: f32,
     machine_global_offset_seconds: f32,
@@ -5948,7 +5946,7 @@ pub fn build_song_lua_compile_context(
 
     let note_field_offsets_x = std::array::from_fn(|player| {
         if player < num_players {
-            player_profiles[player].note_field_offset_x as f32
+            player_profiles[player].note_field_offset_x()
         } else {
             0.0
         }
@@ -5979,9 +5977,9 @@ pub fn build_song_lua_compile_context(
             deadsync_song_lua::SongLuaSpeedMod::default()
         },
         noteskin_name: if player < num_players {
-            player_profiles[player].noteskin.to_string()
+            player_profiles[player].noteskin_name()
         } else {
-            profile_data::NoteSkin::default().to_string()
+            DEFAULT_NOTESKIN_NAME.to_string()
         },
         screen_x: actor_defaults[player].x,
         screen_y: actor_defaults[player].y,
@@ -10232,60 +10230,21 @@ pub const fn mini_indicator_mode_for_options(
 }
 
 #[inline(always)]
-pub fn gameplay_mini_indicator_mode(
-    mode: profile_data::MiniIndicator,
+pub fn mini_indicator_options<Profile: GameplayProfileData>(
+    profile: &Profile,
+) -> GameplayMiniIndicatorOptions {
+    profile.mini_indicator_options()
+}
+
+#[inline(always)]
+pub fn mini_indicator_mode<Profile: GameplayProfileData>(
+    profile: &Profile,
 ) -> GameplayMiniIndicatorMode {
-    match mode {
-        profile_data::MiniIndicator::None => GameplayMiniIndicatorMode::None,
-        profile_data::MiniIndicator::SubtractiveScoring => {
-            GameplayMiniIndicatorMode::SubtractiveScoring
-        }
-        profile_data::MiniIndicator::PredictiveScoring => {
-            GameplayMiniIndicatorMode::PredictiveScoring
-        }
-        profile_data::MiniIndicator::PaceScoring => GameplayMiniIndicatorMode::PaceScoring,
-        profile_data::MiniIndicator::RivalScoring => GameplayMiniIndicatorMode::RivalScoring,
-        profile_data::MiniIndicator::Pacemaker => GameplayMiniIndicatorMode::Pacemaker,
-        profile_data::MiniIndicator::StreamProg => GameplayMiniIndicatorMode::StreamProg,
-    }
+    mini_indicator_mode_for_options(mini_indicator_options(profile))
 }
 
 #[inline(always)]
-pub fn profile_mini_indicator_mode(mode: GameplayMiniIndicatorMode) -> profile_data::MiniIndicator {
-    match mode {
-        GameplayMiniIndicatorMode::None => profile_data::MiniIndicator::None,
-        GameplayMiniIndicatorMode::SubtractiveScoring => {
-            profile_data::MiniIndicator::SubtractiveScoring
-        }
-        GameplayMiniIndicatorMode::PredictiveScoring => {
-            profile_data::MiniIndicator::PredictiveScoring
-        }
-        GameplayMiniIndicatorMode::PaceScoring => profile_data::MiniIndicator::PaceScoring,
-        GameplayMiniIndicatorMode::RivalScoring => profile_data::MiniIndicator::RivalScoring,
-        GameplayMiniIndicatorMode::Pacemaker => profile_data::MiniIndicator::Pacemaker,
-        GameplayMiniIndicatorMode::StreamProg => profile_data::MiniIndicator::StreamProg,
-    }
-}
-
-#[inline(always)]
-pub fn mini_indicator_options(profile: &profile_data::Profile) -> GameplayMiniIndicatorOptions {
-    GameplayMiniIndicatorOptions {
-        requested_mode: gameplay_mini_indicator_mode(profile.mini_indicator),
-        measure_counter_enabled: profile.measure_counter != profile_data::MeasureCounter::None,
-        subtractive_scoring: profile.subtractive_scoring,
-        pacemaker: profile.pacemaker,
-    }
-}
-
-#[inline(always)]
-pub fn mini_indicator_mode(profile: &profile_data::Profile) -> profile_data::MiniIndicator {
-    profile_mini_indicator_mode(mini_indicator_mode_for_options(mini_indicator_options(
-        profile,
-    )))
-}
-
-#[inline(always)]
-pub fn needs_stream_data(profile: &profile_data::Profile) -> bool {
+pub fn needs_stream_data<Profile: GameplayProfileData>(profile: &Profile) -> bool {
     mini_indicator_needs_stream_data(mini_indicator_options(profile))
 }
 
@@ -11965,18 +11924,10 @@ pub struct ColumnFlashOptions {
 }
 
 #[inline(always)]
-pub fn column_flash_options_from_profile(profile: &profile_data::Profile) -> ColumnFlashOptions {
-    let mask = profile.column_flash_mask;
-    ColumnFlashOptions {
-        enabled: profile.column_flash_on_miss,
-        blue_fantastic: mask.contains(profile_data::ColumnFlashMask::BLUE_FANTASTIC),
-        white_fantastic: mask.contains(profile_data::ColumnFlashMask::WHITE_FANTASTIC),
-        excellent: mask.contains(profile_data::ColumnFlashMask::EXCELLENT),
-        great: mask.contains(profile_data::ColumnFlashMask::GREAT),
-        decent: mask.contains(profile_data::ColumnFlashMask::DECENT),
-        way_off: mask.contains(profile_data::ColumnFlashMask::WAY_OFF),
-        miss: mask.contains(profile_data::ColumnFlashMask::MISS),
-    }
+pub fn column_flash_options_from_profile<Profile: GameplayProfileData>(
+    profile: &Profile,
+) -> ColumnFlashOptions {
+    profile.column_flash_options()
 }
 
 #[inline(always)]
@@ -12112,28 +12063,11 @@ pub struct FantasticWindowOptions {
 }
 
 #[inline(always)]
-pub fn profile_custom_window_ms(profile: &profile_data::Profile) -> f32 {
-    let ms = profile.custom_fantastic_window_ms;
-    f32::from(profile_data::clamp_custom_fantastic_window_ms(ms))
-}
-
-#[inline(always)]
-pub fn profile_custom_window_s(profile: &profile_data::Profile) -> f32 {
-    profile_custom_window_ms(profile) / 1000.0
-}
-
-#[inline(always)]
-pub fn fantastic_window_options(
+pub fn fantastic_window_options<Profile: GameplayProfileData>(
     base_fa_plus_s: f32,
-    profile: &profile_data::Profile,
+    profile: &Profile,
 ) -> FantasticWindowOptions {
-    FantasticWindowOptions {
-        base_fa_plus_s,
-        custom_fantastic_window_s: profile
-            .custom_fantastic_window
-            .then(|| profile_custom_window_s(profile)),
-        fa_plus_10ms_blue_window: profile.fa_plus_10ms_blue_window,
-    }
+    profile.fantastic_options(base_fa_plus_s)
 }
 
 #[inline(always)]
@@ -12155,9 +12089,9 @@ pub fn blue_fantastic_window_ms(options: FantasticWindowOptions) -> f32 {
 }
 
 #[inline(always)]
-pub fn blue_fantastic_window_ms_from_profile(
+pub fn blue_fantastic_window_ms_from_profile<Profile: GameplayProfileData>(
     base_fa_plus_s: f32,
-    profile: &profile_data::Profile,
+    profile: &Profile,
 ) -> f32 {
     blue_fantastic_window_ms(fantastic_window_options(base_fa_plus_s, profile))
 }
@@ -12200,27 +12134,18 @@ pub fn build_player_judgment_timing_for_options(
 }
 
 #[inline(always)]
-pub fn build_player_judgment_timing(
+pub fn build_player_judgment_timing<Profile: GameplayProfileData>(
     timing_profile: TimingProfile,
-    player_profile: &profile_data::Profile,
+    player_profile: &Profile,
     music_rate: f32,
 ) -> PlayerJudgmentTiming {
     let base_fa_plus_s = timing_profile
         .fa_plus_window_s
         .unwrap_or(timing_profile.windows_s[0]);
-    let custom_fantastic_window_s = player_profile.custom_fantastic_window.then_some(
-        profile_data::clamp_custom_fantastic_window_ms(player_profile.custom_fantastic_window_ms)
-            as f32
-            / 1000.0,
-    );
     build_player_judgment_timing_for_options(
         timing_profile,
-        FantasticWindowOptions {
-            base_fa_plus_s,
-            custom_fantastic_window_s,
-            fa_plus_10ms_blue_window: player_profile.fa_plus_10ms_blue_window,
-        },
-        player_profile.timing_windows.disabled_windows(),
+        player_profile.fantastic_options(base_fa_plus_s),
+        player_profile.timing_disabled_windows(),
         music_rate,
     )
 }
@@ -12405,17 +12330,14 @@ pub fn gameplay_input_log_enabled() -> bool {
     log::log_enabled!(log::Level::Debug)
 }
 
-pub fn process_input_edges<OverlayActor, CapturedActor, StateDelta>(
-    state: &mut GameplayRuntimeState<
-        profile_data::Profile,
-        OverlayActor,
-        CapturedActor,
-        StateDelta,
-    >,
+pub fn process_input_edges<Profile, OverlayActor, CapturedActor, StateDelta>(
+    state: &mut GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>,
     trace_enabled: bool,
     phase_timings: &mut GameplayUpdatePhaseTimings,
     song_clock: SongClockSnapshot,
-) {
+) where
+    Profile: GameplayProfileData,
+{
     if state.pending_input_is_empty() {
         return;
     }
@@ -12660,15 +12582,12 @@ pub fn process_input_edges<OverlayActor, CapturedActor, StateDelta>(
 }
 
 #[inline(always)]
-pub fn handle_replay_edge<OverlayActor, CapturedActor, StateDelta>(
-    state: &mut GameplayRuntimeState<
-        profile_data::Profile,
-        OverlayActor,
-        CapturedActor,
-        StateDelta,
-    >,
+pub fn handle_replay_edge<Profile, OverlayActor, CapturedActor, StateDelta>(
+    state: &mut GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>,
     edge: RecordedLaneEdge,
-) {
+) where
+    Profile: GameplayProfileData,
+{
     let col = edge.lane_index as usize;
     let Some(lane) = lane_from_column(col) else {
         return;
@@ -12688,17 +12607,15 @@ pub fn handle_replay_edge<OverlayActor, CapturedActor, StateDelta>(
     });
 }
 
-pub fn update_core<OverlayActor, CapturedActor, StateDelta>(
-    state: &mut GameplayRuntimeState<
-        profile_data::Profile,
-        OverlayActor,
-        CapturedActor,
-        StateDelta,
-    >,
+pub fn update_core<Profile, OverlayActor, CapturedActor, StateDelta>(
+    state: &mut GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>,
     delta_time: f32,
     audio_snapshot: GameplayAudioSnapshot,
     fallback_host_nanos: impl FnOnce() -> u64,
-) -> GameplayAction {
+) -> GameplayAction
+where
+    Profile: GameplayProfileData,
+{
     state.update_gameplay_frame(
         delta_time,
         audio_snapshot,
@@ -12718,15 +12635,12 @@ fn gameplay_menu_input(action: VirtualAction) -> Option<GameplayMenuInput> {
     }
 }
 
-fn queue_live_input_event<OverlayActor, CapturedActor, StateDelta>(
-    state: &mut GameplayRuntimeState<
-        profile_data::Profile,
-        OverlayActor,
-        CapturedActor,
-        StateDelta,
-    >,
+fn queue_live_input_event<Profile, OverlayActor, CapturedActor, StateDelta>(
+    state: &mut GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>,
     ev: &InputEvent,
-) {
+) where
+    Profile: GameplayProfileData,
+{
     let Some(lane) = lane_from_action(ev.action) else {
         return;
     };
@@ -12748,15 +12662,13 @@ fn queue_live_input_event<OverlayActor, CapturedActor, StateDelta>(
     );
 }
 
-pub fn handle_core_input<OverlayActor, CapturedActor, StateDelta>(
-    state: &mut GameplayRuntimeState<
-        profile_data::Profile,
-        OverlayActor,
-        CapturedActor,
-        StateDelta,
-    >,
+pub fn handle_core_input<Profile, OverlayActor, CapturedActor, StateDelta>(
+    state: &mut GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>,
     ev: &InputEvent,
-) -> GameplayAction {
+) -> GameplayAction
+where
+    Profile: GameplayProfileData,
+{
     if state.exit_transition_active() {
         return GameplayAction::None;
     }
@@ -12872,19 +12784,11 @@ pub fn log_timing_hit_detail(
 }
 
 #[inline(always)]
-pub fn tap_judgment_uses_bright_explosion_from_profile(
-    profile: &profile_data::Profile,
+pub fn tap_judgment_uses_bright_explosion_from_profile<Profile: GameplayProfileData>(
+    profile: &Profile,
     judgment: &Judgment,
 ) -> bool {
-    tap_judgment_uses_bright_explosion_for_options(
-        FantasticFeedbackOptions {
-            show_fa_plus_window: profile.show_fa_plus_window,
-            fa_plus_10ms_blue_window: profile.fa_plus_10ms_blue_window,
-            split_15_10ms: profile.split_15_10ms,
-            custom_fantastic_window: profile.custom_fantastic_window,
-        },
-        judgment,
-    )
+    tap_judgment_uses_bright_explosion_for_options(profile.fantastic_feedback_options(), judgment)
 }
 
 pub fn tap_judgment_uses_bright_explosion_for_options(
@@ -13616,18 +13520,10 @@ pub struct TapExplosionOptions {
 }
 
 #[inline(always)]
-pub fn tap_explosion_options_from_profile(profile: &profile_data::Profile) -> TapExplosionOptions {
-    let mask = profile.tap_explosion_active_mask;
-    TapExplosionOptions {
-        fantastic: mask.contains(profile_data::TapExplosionMask::FANTASTIC),
-        excellent: mask.contains(profile_data::TapExplosionMask::EXCELLENT),
-        great: mask.contains(profile_data::TapExplosionMask::GREAT),
-        decent: mask.contains(profile_data::TapExplosionMask::DECENT),
-        way_off: mask.contains(profile_data::TapExplosionMask::WAY_OFF),
-        miss: mask.contains(profile_data::TapExplosionMask::MISS),
-        held: mask.contains(profile_data::TapExplosionMask::HELD),
-        holding: mask.contains(profile_data::TapExplosionMask::HOLDING),
-    }
+pub fn tap_explosion_options_from_profile<Profile: GameplayProfileData>(
+    profile: &Profile,
+) -> TapExplosionOptions {
+    profile.tap_explosion_options()
 }
 
 #[inline(always)]
@@ -20384,10 +20280,10 @@ pub struct GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta
     pub pending_input: GameplayPendingInputState<GameplayInputEdge>,
 }
 
-pub fn gameplay_runtime_profiles(
-    player_profiles: &[profile_data::Profile; MAX_PLAYERS],
+pub fn gameplay_runtime_profiles<Profile: GameplayProfileData>(
+    player_profiles: &[Profile; MAX_PLAYERS],
     session: &GameplaySession,
-) -> [profile_data::Profile; MAX_PLAYERS] {
+) -> [Profile; MAX_PLAYERS] {
     let mut runtime_profiles = (*player_profiles).clone();
     if session.p2_runtime_player() {
         runtime_profiles[0] = runtime_profiles[1].clone();
@@ -20407,7 +20303,7 @@ pub fn gameplay_runtime_charts(
     runtime_charts
 }
 
-pub fn init_gameplay_runtime<OverlayKind>(
+pub fn init_gameplay_runtime<OverlayKind, Profile>(
     song: Arc<SongData>,
     charts: [Arc<ChartData>; MAX_PLAYERS],
     gameplay_charts: [Arc<GameplayChartData>; MAX_PLAYERS],
@@ -20423,7 +20319,7 @@ pub fn init_gameplay_runtime<OverlayKind>(
     active_color_index: i32,
     music_rate: f32,
     mut scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
-    mut player_profiles: [profile_data::Profile; MAX_PLAYERS],
+    mut player_profiles: [Profile; MAX_PLAYERS],
     replay_edges: Option<Vec<ReplayInputEdge>>,
     replay_offsets: Option<ReplayOffsetSnapshot>,
     lead_in_timing: Option<LeadInTiming>,
@@ -20432,12 +20328,13 @@ pub fn init_gameplay_runtime<OverlayKind>(
     course_display_timing: Option<CourseDisplayTiming>,
     mut combo_carry: [u32; MAX_PLAYERS],
 ) -> GameplayRuntimeState<
-    profile_data::Profile,
+    Profile,
     deadsync_song_lua::SongLuaOverlayActor<OverlayKind>,
     deadsync_song_lua::SongLuaCapturedActor,
     deadsync_song_lua::SongLuaOverlayStateDelta,
 >
 where
+    Profile: GameplayProfileData,
     OverlayKind: Clone + std::fmt::Debug,
 {
     log::debug!("Initializing Gameplay Screen...");
@@ -20473,11 +20370,11 @@ where
         if player >= num_players {
             return 1.0;
         }
-        let visual_mask = player_profiles[player].visual_effects_active_mask.bits();
+        let visual_mask = player_profiles[player].visual_mask_bits();
         let mini_value = effective_mini_value_with_visual_mask(
             &player_profiles[player],
             visual_mask,
-            player_profiles[player].mini_percent as f32,
+            player_profiles[player].mini_percent(),
         );
         let mut z = 1.0 - mini_value * 0.5;
         if z.abs() < 0.01 {
@@ -20496,7 +20393,7 @@ where
             return 0.0;
         }
         player_profiles[player]
-            .global_offset_shift_ms
+            .global_offset_shift_ms()
             .clamp(-100, 100) as f32
             / 1000.0
     });
@@ -20654,7 +20551,7 @@ where
     }
     let player_turn_options: [GameplayTurnOption; MAX_PLAYERS] = std::array::from_fn(|player| {
         if player < num_players {
-            gameplay_turn_option_from_profile(player_profiles[player].turn_option)
+            player_profiles[player].turn_option()
         } else {
             GameplayTurnOption::None
         }
@@ -20669,7 +20566,7 @@ where
     );
     let player_attack_modes: [GameplayAttackMode; MAX_PLAYERS] = std::array::from_fn(|player| {
         if player < num_players {
-            gameplay_attack_mode(player_profiles[player].attack_mode)
+            player_profiles[player].attack_mode()
         } else {
             GameplayAttackMode::Off
         }
@@ -20879,9 +20776,9 @@ where
         }
         let profile = &player_profiles[player];
         player_draw_scale_for_tilt_with_visual_mask(
-            profile.perspective.tilt_skew().0,
+            profile.perspective_effects().tilt,
             profile,
-            profile.visual_effects_active_mask.bits(),
+            profile.visual_mask_bits(),
             0.0,
         )
     });
@@ -20895,10 +20792,7 @@ where
         if player >= num_players {
             return draw_distance_after_targets(viewport.height(), 1.0, 0.0);
         }
-        let centered_percent = if player_profiles[player]
-            .scroll_option
-            .contains(profile_data::ScrollOption::Centered)
-        {
+        let centered_percent = if player_profiles[player].scroll_effects().centered > 0.5 {
             1.0
         } else {
             0.0
@@ -20942,18 +20836,10 @@ where
         let end = (start + cols_per_player).min(num_cols).min(MAX_COLS);
         let local_dirs = column_scroll_dirs_for_flags(
             ColumnScrollFlags {
-                reverse: player_profile
-                    .scroll_option
-                    .contains(profile_data::ScrollOption::Reverse),
-                split: player_profile
-                    .scroll_option
-                    .contains(profile_data::ScrollOption::Split),
-                alternate: player_profile
-                    .scroll_option
-                    .contains(profile_data::ScrollOption::Alternate),
-                cross: player_profile
-                    .scroll_option
-                    .contains(profile_data::ScrollOption::Cross),
+                reverse: player_profile.scroll_effects().reverse > 0.5,
+                split: player_profile.scroll_effects().split > 0.5,
+                alternate: player_profile.scroll_effects().alternate > 0.5,
+                cross: player_profile.scroll_effects().cross > 0.5,
             },
             cols_per_player,
         );
@@ -21037,7 +20923,7 @@ where
         if player >= num_players {
             return 0.0;
         }
-        let ms = player_profiles[player].visual_delay_ms.clamp(-100, 100);
+        let ms = player_profiles[player].visual_delay_ms().clamp(-100, 100);
         ms as f32 / 1000.0
     });
     let init_music_time = -start_delay;
@@ -21072,12 +20958,13 @@ where
         if player >= num_players {
             return Vec::new();
         }
-        let mut windows = if player_profiles[player].attack_mode == profile_data::AttackMode::Off {
+        let attack_mode = player_profiles[player].attack_mode();
+        let mut windows = if attack_mode == GameplayAttackMode::Off {
             Vec::new()
         } else {
             build_attack_mask_windows_for_player(
                 gameplay_charts[player].chart_attacks.as_deref(),
-                player_profiles[player].attack_mode,
+                attack_mode,
                 player,
                 song_seed,
                 attack_song_length_seconds,
@@ -21090,11 +20977,11 @@ where
         if player >= num_players {
             return false;
         }
-        player_profiles[player].reverse_scroll
+        player_profiles[player].reverse_scroll()
     });
     let mut column_cues: [Vec<ColumnCue>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
     for player in 0..num_players {
-        if !player_profiles[player].column_cues {
+        if !player_profiles[player].column_cues() {
             continue;
         }
         let col_start = player.saturating_mul(cols_per_player);
@@ -21115,7 +21002,7 @@ where
 
     let mut crossover_cues: [Vec<ColumnCue>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
     for player in 0..num_players {
-        if !player_profiles[player].crossover_cues {
+        if !player_profiles[player].crossover_cues() {
             continue;
         }
         let col_start = player.saturating_mul(cols_per_player);
@@ -21126,9 +21013,9 @@ where
             &timing_players[player],
             cols_per_player,
             col_start,
-            player_profiles[player].crossover_cue_duration_ms,
-            player_profiles[player].crossover_cue_quantization,
-            player_profiles[player].crossover_cue_brackets,
+            player_profiles[player].crossover_cue_duration_ms(),
+            player_profiles[player].crossover_cue_quantization(),
+            player_profiles[player].crossover_cue_brackets(),
             current_music_time_visible[player],
         );
     }
@@ -21150,7 +21037,7 @@ where
         }
         measure_counter_segments_for_densities(
             &measure_densities[p],
-            player_profiles[p].measure_counter.notes_threshold(),
+            player_profiles[p].measure_counter_threshold(),
         )
     });
 
@@ -21161,7 +21048,7 @@ where
     let mut mini_indicator_rival_score_percent = [0.0_f64; MAX_PLAYERS];
 
     for p in 0..num_players {
-        if mini_indicator_mode(&player_profiles[p]) == profile_data::MiniIndicator::None {
+        if mini_indicator_mode(&player_profiles[p]) == GameplayMiniIndicatorMode::None {
             continue;
         }
         let constant_bpm = !timing_players[p].has_bpm_changes();
@@ -21174,7 +21061,7 @@ where
         let machine_best = mini_indicator_data.machine_best_percent[p];
 
         mini_indicator_target_score_percent[p] = resolve_target_score_percent(
-            gameplay_target_score_setting(player_profiles[p].target_score),
+            player_profiles[p].target_score(),
             personal_best,
             machine_best,
         );
@@ -21187,10 +21074,10 @@ where
     let hud_prep_ms = hud_prep_started.elapsed().as_secs_f64() * 1000.0;
 
     let graph_prep_started = Instant::now();
-    let wants_density_graph = player_profiles.iter().take(num_players).any(|p| {
-        p.step_statistics
-            .contains(profile_data::StepStatisticsMask::DENSITY_GRAPH)
-    });
+    let wants_density_graph = player_profiles
+        .iter()
+        .take(num_players)
+        .any(GameplayProfileData::step_statistics_density_graph);
     let gameplay_play_style = step_stats_play_style(play_style);
     let wide = viewport.is_wide();
     let density_graph_enabled = wide && wants_density_graph;
@@ -21237,7 +21124,7 @@ where
     let density_graph_u0 = 0.0_f32;
     let density_graph_top_h = 30.0_f32;
     let density_graph_top_w: [f32; MAX_PLAYERS] = std::array::from_fn(|p| {
-        if p >= num_players || !player_profiles[p].nps_graph_at_top {
+        if p >= num_players || !player_profiles[p].nps_graph_at_top() {
             return 0.0;
         }
         step_stats_upper_density_graph_width(gameplay_play_style)
@@ -21245,8 +21132,8 @@ where
     let density_graph_top_scale_y: [f32; MAX_PLAYERS] = {
         let mut scale = [1.0_f32; MAX_PLAYERS];
         if num_players == 2
-            && player_profiles[0].nps_graph_at_top
-            && player_profiles[1].nps_graph_at_top
+            && player_profiles[0].nps_graph_at_top()
+            && player_profiles[1].nps_graph_at_top()
         {
             let p1_peak = charts[0].max_nps as f32;
             let p2_peak = charts[1].max_nps as f32;
@@ -21294,7 +21181,7 @@ where
             init_music_time,
             in_course_stage,
             course_carry,
-            player_profiles[p].carry_combo_between_songs,
+            player_profiles[p].carry_combo_between_songs(),
             replay_mode,
             combo_carry[p],
         );
@@ -21522,8 +21409,10 @@ where
     state
 }
 
-impl<OverlayActor, CapturedActor, StateDelta>
-    GameplayRuntimeState<profile_data::Profile, OverlayActor, CapturedActor, StateDelta>
+impl<Profile, OverlayActor, CapturedActor, StateDelta>
+    GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>
+where
+    Profile: GameplayProfileData,
 {
     #[inline(always)]
     pub fn player_blue_window_ms(&self, player_idx: usize) -> f32 {
@@ -21567,23 +21456,16 @@ impl<OverlayActor, CapturedActor, StateDelta>
             let scroll = effective_scroll_effects_for_player(self, player);
             let visual_mask = effective_visual_mask_for_player(self, player);
             let mini_percent = effective_mini_percent_for_player(self, player);
-            let mini = effective_mini_value_with_visual_mask(
-                &self.profiles_runtime.profiles[player],
-                visual_mask,
-                mini_percent,
-            );
+            let mini = self.profiles_runtime.profiles[player]
+                .effective_mini_value_with_visual_mask(visual_mask, mini_percent);
             let mut field_zoom = 1.0 - mini * 0.5;
             if field_zoom.abs() < 0.01 {
                 field_zoom = 0.01;
             }
 
             let perspective = effective_perspective_effects_for_player(self, player);
-            let draw_scale = player_draw_scale_for_tilt_with_visual_mask(
-                perspective.tilt,
-                &self.profiles_runtime.profiles[player],
-                visual_mask,
-                mini_percent,
-            );
+            let draw_scale = self.profiles_runtime.profiles[player]
+                .draw_scale_for_tilt_with_visual_mask(perspective.tilt, visual_mask, mini_percent);
             let draw_distance_before =
                 draw_distance_before_targets(self.setup.viewport.height(), draw_scale);
             let draw_distance_after = draw_distance_after_targets(
@@ -21640,40 +21522,26 @@ impl<OverlayActor, CapturedActor, StateDelta>
         judgment: &Judgment,
         tap_music_time_s: f32,
     ) {
-        let prof = &self.profiles_runtime.profiles[player];
-        let mut error_bar_mask = prof.error_bar_active_mask;
-        if error_bar_mask.is_empty() {
-            error_bar_mask =
-                profile_data::error_bar_mask_from_style(prof.error_bar, prof.error_bar_text);
-        }
-        let show_text = error_bar_mask.contains(profile_data::ErrorBarMask::TEXT);
-        let show_monochrome = error_bar_mask.contains(profile_data::ErrorBarMask::MONOCHROME);
-        let show_colorful = error_bar_mask.contains(profile_data::ErrorBarMask::COLORFUL);
-        let show_highlight = error_bar_mask.contains(profile_data::ErrorBarMask::HIGHLIGHT);
-        let show_average = error_bar_mask.contains(profile_data::ErrorBarMask::AVERAGE);
-        let show_text_scalable = prof.text_error_bar_scalable;
-        let text_error_bar_threshold_ms =
-            profile_data::clamp_text_error_bar_threshold_ms(prof.text_error_bar_threshold_ms);
-        let show_fa_plus_window = prof.show_fa_plus_window;
+        let options = self.profiles_runtime.profiles[player].error_bar_options();
+        let show_text = options.mask_bits & GAMEPLAY_ERROR_BAR_TEXT != 0;
+        let show_monochrome = options.mask_bits & GAMEPLAY_ERROR_BAR_MONOCHROME != 0;
+        let show_colorful = options.mask_bits & GAMEPLAY_ERROR_BAR_COLORFUL != 0;
+        let show_highlight = options.mask_bits & GAMEPLAY_ERROR_BAR_HIGHLIGHT != 0;
+        let show_average = options.mask_bits & GAMEPLAY_ERROR_BAR_AVERAGE != 0;
+        let show_text_scalable = options.text_scalable;
+        let text_error_bar_threshold_ms = options.text_threshold_ms;
+        let show_fa_plus_window = options.show_fa_plus_window;
         let blue_fantastic_window_s = self.player_blue_window_ms(player) / 1000.0;
-        let error_bar_trim = prof.error_bar_trim;
-        let error_bar_multi_tick = prof.error_bar_multi_tick;
-        let error_ms_display = prof.error_ms_display;
-        let short_avg_enabled = prof.short_average_error_bar_enabled;
-        let short_avg_intensity =
-            profile_data::clamp_average_error_bar_intensity(prof.average_error_bar_intensity);
-        let long_avg_enabled = prof.long_error_bar_enabled;
-        let long_avg_threshold_s =
-            profile_data::clamp_long_error_bar_threshold_ms(prof.long_error_bar_threshold_ms)
-                as f32
-                / 1000.0;
-        let long_avg_intensity =
-            profile_data::clamp_long_error_bar_intensity(prof.long_error_bar_intensity);
-        let long_avg_min_samples =
-            profile_data::clamp_long_error_bar_min_samples(prof.long_error_bar_min_samples)
-                as usize;
-        let average_interval_ms =
-            profile_data::clamp_average_error_bar_interval_ms(prof.average_error_bar_interval_ms);
+        let error_bar_trim = options.trim;
+        let error_bar_multi_tick = options.multi_tick;
+        let error_ms_display = options.error_ms_display;
+        let short_avg_enabled = options.short_average_enabled;
+        let short_avg_intensity = options.short_average_intensity;
+        let long_avg_enabled = options.long_average_enabled;
+        let long_avg_threshold_s = options.long_average_threshold_ms as f32 / 1000.0;
+        let long_avg_intensity = options.long_average_intensity;
+        let long_avg_min_samples = options.long_average_min_samples as usize;
+        let average_interval_ms = options.average_interval_ms;
         let Some(window) = judgment.window else {
             return;
         };
@@ -21718,10 +21586,10 @@ impl<OverlayActor, CapturedActor, StateDelta>
         }
 
         let max_window_ix = match error_bar_trim {
-            profile_data::ErrorBarTrim::Off => 4,
-            profile_data::ErrorBarTrim::Fantastic => 0,
-            profile_data::ErrorBarTrim::Excellent => 1,
-            profile_data::ErrorBarTrim::Great => 2,
+            GameplayErrorBarTrim::Off => 4,
+            GameplayErrorBarTrim::Fantastic => 0,
+            GameplayErrorBarTrim::Excellent => 1,
+            GameplayErrorBarTrim::Great => 2,
         };
         let max_offset_s = self.timing_runtime.timing_profile.windows_s[max_window_ix];
         let clamped_offset_s = if max_offset_s.is_finite() && max_offset_s > 0.0 {
@@ -22423,13 +22291,13 @@ impl<OverlayActor, CapturedActor, StateDelta>
     pub fn update_danger_fx(&mut self) {
         let now = self.boundary.total_elapsed_in_screen;
         for player in 0..self.setup.num_players {
-            if self.profiles_runtime.profiles[player].hide_lifebar {
+            if self.profiles_runtime.profiles[player].hide_lifebar() {
                 self.display.danger_fx.reset_player(player);
                 continue;
             }
 
             let health = player_health_state(&self.players_runtime.players[player]);
-            let hide_danger = self.profiles_runtime.profiles[player].hide_danger;
+            let hide_danger = self.profiles_runtime.profiles[player].hide_danger();
             self.display
                 .danger_fx
                 .update_player(player, health, now, hide_danger);
@@ -23028,12 +22896,12 @@ impl<OverlayActor, CapturedActor, StateDelta>
         let timing_hit_log = timing_hit_log_enabled();
         let input_log = gameplay_input_log_enabled();
         let player = self.player_for_col(column);
-        let rescore_early_hits = self.profiles_runtime.profiles[player].rescore_early_hits;
+        let rescore_early_hits = self.profiles_runtime.profiles[player].rescore_early_hits();
         let hide_early_dw_judgments =
-            self.profiles_runtime.profiles[player].hide_early_dw_judgments;
-        let hide_early_dw_flash = self.profiles_runtime.profiles[player].hide_early_dw_flash;
+            self.profiles_runtime.profiles[player].hide_early_dw_judgments();
+        let hide_early_dw_flash = self.profiles_runtime.profiles[player].hide_early_dw_flash();
         let hide_early_dw_column_flash =
-            self.profiles_runtime.profiles[player].hide_early_dw_column_flash;
+            self.profiles_runtime.profiles[player].hide_early_dw_column_flash();
         let scoring_blocked = self.autoplay_blocks_scoring();
         let lane_notes = &self.chart_runtime.lane_indices.note_indices[column];
         let search = closest_lane_note_search(
@@ -23420,12 +23288,12 @@ impl<OverlayActor, CapturedActor, StateDelta>
         let rate = normalized_song_rate(self.music_rate());
         let timing_hit_log = timing_hit_log_enabled();
         let player = self.player_for_col(column);
-        let rescore_early_hits = self.profiles_runtime.profiles[player].rescore_early_hits;
+        let rescore_early_hits = self.profiles_runtime.profiles[player].rescore_early_hits();
         let hide_early_dw_judgments =
-            self.profiles_runtime.profiles[player].hide_early_dw_judgments;
-        let hide_early_dw_flash = self.profiles_runtime.profiles[player].hide_early_dw_flash;
+            self.profiles_runtime.profiles[player].hide_early_dw_judgments();
+        let hide_early_dw_flash = self.profiles_runtime.profiles[player].hide_early_dw_flash();
         let hide_early_dw_column_flash =
-            self.profiles_runtime.profiles[player].hide_early_dw_column_flash;
+            self.profiles_runtime.profiles[player].hide_early_dw_column_flash();
         let scoring_blocked = self.autoplay_blocks_scoring();
         let lane_notes = &self.chart_runtime.lane_indices.note_indices[column];
         let search = closest_lane_note_search(
@@ -23586,8 +23454,10 @@ impl<OverlayActor, CapturedActor, StateDelta>
     }
 }
 
-impl<OverlayActor, CapturedActor, StateDelta>
-    GameplayRuntimeState<profile_data::Profile, OverlayActor, CapturedActor, StateDelta>
+impl<Profile, OverlayActor, CapturedActor, StateDelta>
+    GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>
+where
+    Profile: GameplayProfileData,
 {
     pub fn update_exit_transition(&mut self, delta_time: f32) -> Option<GameplayAction> {
         let exit = self.control.exit_input.exit_transition?;
@@ -24225,12 +24095,12 @@ impl<OverlayActor, CapturedActor, StateDelta>
     }
 
     #[inline(always)]
-    pub fn profiles(&self) -> &[profile_data::Profile; MAX_PLAYERS] {
+    pub fn profiles(&self) -> &[Profile; MAX_PLAYERS] {
         &self.profiles_runtime.profiles
     }
 
     #[inline(always)]
-    pub fn profile(&self, player_idx: usize) -> Option<&profile_data::Profile> {
+    pub fn profile(&self, player_idx: usize) -> Option<&Profile> {
         self.profiles_runtime.profiles.get(player_idx)
     }
 
@@ -24302,11 +24172,7 @@ impl<OverlayActor, CapturedActor, StateDelta>
     }
 
     #[inline(always)]
-    pub fn update_profile(
-        &mut self,
-        player_idx: usize,
-        update: impl FnOnce(&mut profile_data::Profile),
-    ) {
+    pub fn update_profile(&mut self, player_idx: usize, update: impl FnOnce(&mut Profile)) {
         if let Some(profile) = self.profiles_runtime.profiles.get_mut(player_idx) {
             update(profile);
         }
@@ -26660,109 +26526,117 @@ impl<OverlayActor, CapturedActor, StateDelta>
 }
 
 #[inline(always)]
-pub fn effective_visual_effects_for_player<OverlayActor, CapturedActor, StateDelta>(
-    state: &GameplayRuntimeState<profile_data::Profile, OverlayActor, CapturedActor, StateDelta>,
+pub fn effective_visual_effects_for_player<Profile, OverlayActor, CapturedActor, StateDelta>(
+    state: &GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>,
     player_idx: usize,
-) -> VisualEffects {
+) -> VisualEffects
+where
+    Profile: GameplayProfileData,
+{
     if player_idx >= state.setup.num_players || player_idx >= MAX_PLAYERS {
         return VisualEffects::default();
     }
     state.effective_visual_effects_for_player_with_mask(
         player_idx,
-        state.profiles_runtime.profiles[player_idx]
-            .visual_effects_active_mask
-            .bits(),
+        state.profiles_runtime.profiles[player_idx].visual_mask_bits(),
     )
 }
 
 #[inline(always)]
-pub fn effective_scroll_effects_for_player<OverlayActor, CapturedActor, StateDelta>(
-    state: &GameplayRuntimeState<profile_data::Profile, OverlayActor, CapturedActor, StateDelta>,
+pub fn effective_scroll_effects_for_player<Profile, OverlayActor, CapturedActor, StateDelta>(
+    state: &GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>,
     player_idx: usize,
-) -> ScrollEffects {
+) -> ScrollEffects
+where
+    Profile: GameplayProfileData,
+{
     if player_idx >= state.setup.num_players || player_idx >= MAX_PLAYERS {
         return ScrollEffects::default();
     }
     state.effective_scroll_effects_for_player_with_base(
         player_idx,
-        scroll_effects_from_option(state.profiles_runtime.profiles[player_idx].scroll_option),
+        state.profiles_runtime.profiles[player_idx].scroll_effects(),
     )
 }
 
 #[inline(always)]
-pub fn effective_perspective_effects_for_player<OverlayActor, CapturedActor, StateDelta>(
-    state: &GameplayRuntimeState<profile_data::Profile, OverlayActor, CapturedActor, StateDelta>,
+pub fn effective_perspective_effects_for_player<Profile, OverlayActor, CapturedActor, StateDelta>(
+    state: &GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>,
     player_idx: usize,
-) -> PerspectiveEffects {
+) -> PerspectiveEffects
+where
+    Profile: GameplayProfileData,
+{
     if player_idx >= state.setup.num_players || player_idx >= MAX_PLAYERS {
         return PerspectiveEffects::default();
     }
     state.effective_perspective_effects_for_player_with_base(
         player_idx,
-        perspective_effects_from_profile(state.profiles_runtime.profiles[player_idx].perspective),
+        state.profiles_runtime.profiles[player_idx].perspective_effects(),
     )
 }
 
 #[inline(always)]
-pub fn effective_visual_mask_for_player<OverlayActor, CapturedActor, StateDelta>(
-    state: &GameplayRuntimeState<profile_data::Profile, OverlayActor, CapturedActor, StateDelta>,
+pub fn effective_visual_mask_for_player<Profile, OverlayActor, CapturedActor, StateDelta>(
+    state: &GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>,
     player_idx: usize,
-) -> u16 {
+) -> u16
+where
+    Profile: GameplayProfileData,
+{
     if player_idx >= state.setup.num_players || player_idx >= MAX_PLAYERS {
         return 0;
     }
     state
         .effective_visual_effects_for_player_with_mask(
             player_idx,
-            state.profiles_runtime.profiles[player_idx]
-                .visual_effects_active_mask
-                .bits(),
+            state.profiles_runtime.profiles[player_idx].visual_mask_bits(),
         )
         .to_mask_bits()
 }
 
 #[inline(always)]
-pub fn effective_mini_percent_for_player<OverlayActor, CapturedActor, StateDelta>(
-    state: &GameplayRuntimeState<profile_data::Profile, OverlayActor, CapturedActor, StateDelta>,
+pub fn effective_mini_percent_for_player<Profile, OverlayActor, CapturedActor, StateDelta>(
+    state: &GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>,
     player_idx: usize,
-) -> f32 {
+) -> f32
+where
+    Profile: GameplayProfileData,
+{
     if player_idx >= state.setup.num_players || player_idx >= MAX_PLAYERS {
         return 0.0;
     }
     state.effective_mini_percent_for_player_with_base(
         player_idx,
-        state.profiles_runtime.profiles[player_idx].mini_percent as f32,
+        state.profiles_runtime.profiles[player_idx].mini_percent(),
     )
 }
 
 #[inline(always)]
-pub fn effective_mini_value_with_visual_mask(
-    profile: &profile_data::Profile,
+pub fn effective_mini_value_with_visual_mask<Profile: GameplayProfileData>(
+    profile: &Profile,
     visual_mask: u16,
     mini_percent: f32,
 ) -> f32 {
-    mini_value_for_visual_mask(mini_percent, profile.mini_percent as f32, visual_mask)
+    profile.effective_mini_value_with_visual_mask(visual_mask, mini_percent)
 }
 
 #[inline(always)]
-pub fn player_draw_scale_for_tilt_with_visual_mask(
+pub fn player_draw_scale_for_tilt_with_visual_mask<Profile: GameplayProfileData>(
     tilt: f32,
-    profile: &profile_data::Profile,
+    profile: &Profile,
     visual_mask: u16,
     mini_percent: f32,
 ) -> f32 {
-    player_draw_scale_for_visual_mask(tilt, mini_percent, profile.mini_percent as f32, visual_mask)
+    profile.draw_scale_for_tilt_with_visual_mask(tilt, visual_mask, mini_percent)
 }
 
-pub fn refresh_active_attack_masks<OverlayActor, CapturedActor, StateDelta>(
-    state: &mut GameplayRuntimeState<
-        profile_data::Profile,
-        OverlayActor,
-        CapturedActor,
-        StateDelta,
-    >,
+pub fn refresh_active_attack_masks<Profile, OverlayActor, CapturedActor, StateDelta>(
+    state: &mut GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>,
     delta_time: f32,
-) {
+) where
+    Profile: GameplayProfileData,
+{
     for player in 0..state.setup.num_players {
         let now = state.visible_music_time_seconds(player);
         let profile = &state.profiles_runtime.profiles[player];
@@ -26773,20 +26647,23 @@ pub fn refresh_active_attack_masks<OverlayActor, CapturedActor, StateDelta>(
             AttackBaseEffects {
                 appearance: base_appearance_effects(profile),
                 visual: base_visual_effects(profile),
-                scroll: scroll_effects_from_option(profile.scroll_option),
-                mini_percent: profile.mini_percent as f32,
+                scroll: profile.scroll_effects(),
+                mini_percent: profile.mini_percent(),
             },
         );
     }
 }
 
 #[inline(always)]
-pub fn song_lua_hides_note_visual<OverlayActor, CapturedActor, StateDelta>(
-    state: &GameplayRuntimeState<profile_data::Profile, OverlayActor, CapturedActor, StateDelta>,
+pub fn song_lua_hides_note_visual<Profile, OverlayActor, CapturedActor, StateDelta>(
+    state: &GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>,
     player: usize,
     column: usize,
     beat: f32,
-) -> bool {
+) -> bool
+where
+    Profile: GameplayProfileData,
+{
     song_lua_field_note_hidden(
         &state.song_lua_visuals().note_hides[player],
         state.setup.cols_per_player,

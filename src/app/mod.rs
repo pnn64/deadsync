@@ -21,7 +21,10 @@ use crate::act;
 use crate::assets::{AssetManager, PRESENT_TEXTURE_CONTEXT, TextureUploadBudget, visual_styles};
 use crate::config::{self, DisplayMode};
 use crate::game::parsing::simfile as song_loading;
-use crate::game::{GameplayCoreState, profile, scores, stage_stats};
+use crate::game::{
+    GameplayCoreState, gameplay_play_style_from_profile, gameplay_player_side_from_profile,
+    gameplay_tick_mode_from_profile, profile, scores, stage_stats,
+};
 use crate::screens::{
     DensityGraphSlot, DensityGraphSource, Screen as CurrentScreen, ScreenAction,
     SongOffsetSyncChange, credits, evaluation, evaluation_summary, gameover, gameplay, init,
@@ -77,8 +80,7 @@ use deadsync_core::{input::MAX_PLAYERS, song_time::SongTimeNs, timing::ROWS_PER_
 use deadsync_gameplay::{
     CourseDisplayTiming, CourseDisplayTotals, GameplayConfig, GameplayFailType, GameplaySession,
     GameplayViewport, LeadInTiming, ReplayInputEdge, ReplayOffsetSnapshot,
-    course_display_totals_for_chart, gameplay_play_style_from_profile,
-    gameplay_player_side_from_profile, gameplay_tick_mode_from_profile,
+    course_display_totals_for_chart,
 };
 use deadsync_input as logical_input;
 use deadsync_input::RawKeyboardEvent;

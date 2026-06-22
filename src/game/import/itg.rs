@@ -677,7 +677,11 @@ mod tests {
         let stats = read_stats(&dir).expect("read_stats must not fail on invalid UTF-8");
         assert_eq!(stats.songs.len(), 1);
         // The invalid byte is replaced (U+FFFD) rather than aborting the import.
-        assert!(stats.songs[0].dir.starts_with("Songs/Easy As Pie 6/Helt Seri"));
+        assert!(
+            stats.songs[0]
+                .dir
+                .starts_with("Songs/Easy As Pie 6/Helt Seri")
+        );
         assert_eq!(stats.songs[0].steps[0].high_scores.len(), 1);
 
         let _ = fs::remove_dir_all(&dir);

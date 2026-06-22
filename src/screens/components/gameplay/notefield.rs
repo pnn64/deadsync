@@ -1,10 +1,12 @@
 use crate::act;
 use crate::assets;
-use crate::game::GameplayCoreState as State;
 use crate::game::parsing::noteskin::{
     ModelDrawState, ModelMeshCache, NUM_QUANTIZATIONS, NoteAnimPart, Noteskin, SpriteSlot,
 };
 use crate::game::scores;
+use crate::game::{
+    GameplayCoreState as State, scroll_effects_from_option, tap_explosion_options_from_profile,
+};
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor_from_draw_cached;
 use crate::screens::gameplay::GameplayNoteskinAssets;
 use deadlib_present::actors::{Actor, SizeSpec};
@@ -25,9 +27,8 @@ use deadsync_gameplay::{
     PlayerRuntime, RECEPTOR_Y_OFFSET_FROM_CENTER, RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE,
     ScrollEffects, SongLuaColumnOffsetWindowRuntime, VisualEffects, blue_fantastic_window_ms,
     column_flash_duration, hold_explosion_active, hold_explosion_enabled_for_options,
-    hold_head_render_flags, let_go_head_beat, perspective_effects_from_profile,
-    scroll_effects_from_option, scroll_receptor_y, song_lua_ease_factor, song_lua_note_hidden,
-    spacing_multiplier_for_percent, tap_explosion_options_from_profile,
+    hold_head_render_flags, let_go_head_beat, perspective_effects_from_profile, scroll_receptor_y,
+    song_lua_ease_factor, song_lua_note_hidden, spacing_multiplier_for_percent,
 };
 use deadsync_profile as profile_data;
 use deadsync_rules::judgment::{self, HOLD_SCORE_HELD, JudgeGrade, Judgment, TimingWindow};
@@ -1124,7 +1125,7 @@ fn effective_perspective_effects_for_player(
     }
     state.effective_perspective_effects_for_player_with_base(
         player_idx,
-        perspective_effects_from_profile(state.profiles()[player_idx].perspective),
+        perspective_effects_from_profile(&state.profiles()[player_idx]),
     )
 }
 

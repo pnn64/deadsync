@@ -104,14 +104,12 @@ pub use deadsync_gameplay::{
     finalized_row_outcome_for_cached_row, finalized_row_outcome_for_entry,
     first_nonempty_track_at_row, first_row_entry_index_at_or_after_time, first_tap_track_at_row,
     first_time_index_at_or_after, gameplay_input_latency_sample, gameplay_is_single_p2_side,
-    gameplay_play_style_from_profile, gameplay_player_side_for_index,
-    gameplay_player_side_from_profile, gameplay_player_side_index, gameplay_runtime_player_is_p2,
-    gameplay_runtime_player_side, gameplay_runtime_profiles, gameplay_tick_mode_from_profile,
-    gameplay_update_hot_phase, hold_explosion_active, hold_explosion_enabled_for_options,
-    hold_head_render_flags, hold_result_stats_update, init_player_runtime,
-    init_player_runtime_for_song, input_lane_bit, input_queue_cap, is_hold_body_at_row,
-    judged_row_lookahead_time_ns, judgment_render_info, lane_edge_judges_lift,
-    lane_edge_judges_tap, lane_press_started, lane_release_finished,
+    gameplay_player_side_for_index, gameplay_player_side_index, gameplay_runtime_player_is_p2,
+    gameplay_runtime_player_side, gameplay_runtime_profiles, gameplay_update_hot_phase,
+    hold_explosion_active, hold_explosion_enabled_for_options, hold_head_render_flags,
+    hold_result_stats_update, init_player_runtime, init_player_runtime_for_song, input_lane_bit,
+    input_queue_cap, is_hold_body_at_row, judged_row_lookahead_time_ns, judgment_render_info,
+    lane_edge_judges_lift, lane_edge_judges_tap, lane_press_started, lane_release_finished,
     late_note_resolution_window_ns, let_go_head_beat, local_column_for_field, local_player_col,
     mark_row_entry_note_finalized, mark_row_entry_provisional_early_result, max_step_distance_ns,
     measure_counter_segments_for_densities, mine_can_be_avoided, mine_can_be_hit,
@@ -123,9 +121,8 @@ pub use deadsync_gameplay::{
     player_chart_changes_for_options, player_column_range, player_combo_state,
     player_course_display_stage, player_index_for_column, player_note_range_for_ranges,
     player_row_scan_state, player_rows, player_runtime_is_dead, practice_player_cursors,
-    process_input_edges, profile_side_from_gameplay, profile_tick_mode_from_gameplay,
-    quantization_index_from_beat, recent_step_calories, recent_step_tracks, receptor_glow_visual,
-    record_unmapped_input_clock_warning, reference_bpm_from_display_tag,
+    process_input_edges, quantization_index_from_beat, recent_step_calories, recent_step_tracks,
+    receptor_glow_visual, record_unmapped_input_clock_warning, reference_bpm_from_display_tag,
     refresh_roll_life_for_step, register_provisional_early_note_result, remap_live_input_lane,
     remove_cell_notes, replay_edge_cap, row_entry_for_cached_row, row_entry_index_for_cached_row,
     row_final_grade_hides_note, row_finalization_plan, row_finalization_player_state,
@@ -151,20 +148,34 @@ use deadsync_gameplay::{
 use deadsync_gameplay::{
     build_song_lua_column_offset_windows_for_player, build_song_lua_constant_windows_for_player,
 };
+pub use deadsync_input::InputEdge;
 use deadsync_profile as profile_data;
 use deadsync_rules::judgment::{self, JudgeGrade, Judgment, TimingWindow};
 #[cfg(test)]
 use deadsync_rules::note::{MAX_HOLD_LIFE, TIMING_WINDOW_SECONDS_HOLD, TIMING_WINDOW_SECONDS_ROLL};
+pub use deadsync_rules::scroll::ScrollSpeedSetting;
+
+pub use crate::game::{
+    GameplayProfile, gameplay_play_style_from_profile, gameplay_player_side_from_profile,
+    gameplay_tick_mode_from_profile, profile_side_from_gameplay, profile_tick_mode_from_gameplay,
+};
 
 pub type State = GameplayRuntimeState<
-    profile_data::Profile,
+    GameplayProfile,
     deadsync_song_lua::SongLuaOverlayActor<crate::game::parsing::song_lua::SongLuaOverlayKind>,
     deadsync_song_lua::SongLuaCapturedActor,
     deadsync_song_lua::SongLuaOverlayStateDelta,
 >;
 
+#[inline(always)]
+pub fn set_music_rate(state: &mut State, rate: f32) -> bool {
+    state.set_music_rate(rate)
+}
+
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     fn assert_valid_hot_state_for_tests(state: &State, delta_time: f32, music_time_sec: f32) {
         debug_assert!(
             delta_time.is_finite() && delta_time >= 0.0,
@@ -380,10 +391,9 @@ mod tests {
         GameplayTimingTickMode, HELD_MISS_TOTAL_DURATION, HeldMissRenderInfo,
         HoldJudgmentRenderInfo, HoldToExitKey, MAX_COLS, MAX_PLAYERS, OFFSET_ADJUST_STEP_SECONDS,
         RowEntry, ScrollSpeedSetting, SongLuaNoteHideWindowRuntime, TIMING_WINDOW_SECONDS_HOLD,
-        build_attack_mask_windows_for_player, build_row_entry, crossed_mine_held_start_time,
-        effective_mini_percent_for_player, effective_scroll_effects_for_player,
-        effective_visual_effects_for_player, max_step_distance_ns, process_input_edges,
-        refresh_active_attack_masks, score_invalid_reason_lines_for_chart,
+        build_row_entry, crossed_mine_held_start_time, effective_mini_percent_for_player,
+        effective_scroll_effects_for_player, effective_visual_effects_for_player,
+        max_step_distance_ns, process_input_edges, refresh_active_attack_masks,
         song_time_ns_from_seconds,
     };
     use crate::game::parsing::noteskin::{self, Noteskin, Style};
@@ -415,6 +425,65 @@ mod tests {
     type CompiledSongLua = deadsync_song_lua::CompiledSongLua<SongLuaOverlayActor>;
 
     static SESSION_TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+    fn score_invalid_reason_lines_for_chart(
+        chart: &deadsync_chart::ChartData,
+        profile: &profile_data::Profile,
+        scroll_speed: ScrollSpeedSetting,
+        music_rate: f32,
+    ) -> Vec<&'static str> {
+        deadsync_gameplay::score_invalid_reason_lines_for_chart(
+            chart,
+            &GameplayProfile(profile.clone()),
+            scroll_speed,
+            music_rate,
+        )
+    }
+
+    fn build_attack_mask_windows_for_player(
+        chart_attacks: Option<&str>,
+        attack_mode: profile_data::AttackMode,
+        player: usize,
+        base_seed: u64,
+        song_length_seconds: f32,
+    ) -> Vec<deadsync_gameplay::AttackMaskWindow> {
+        deadsync_gameplay::build_attack_mask_windows_for_player(
+            chart_attacks,
+            crate::game::gameplay_attack_mode(attack_mode),
+            player,
+            base_seed,
+            song_length_seconds,
+        )
+    }
+
+    fn build_song_lua_constant_windows_for_player(
+        compiled: &CompiledSongLua,
+        timing_player: &TimingData,
+        player: usize,
+        global_offset_seconds: f32,
+    ) -> Vec<deadsync_gameplay::AttackMaskWindow> {
+        deadsync_gameplay::build_song_lua_constant_windows_for_player(
+            &compiled.time_mods,
+            &compiled.beat_mods,
+            timing_player,
+            player,
+            global_offset_seconds,
+        )
+    }
+
+    fn build_song_lua_column_offset_windows_for_player(
+        compiled: &CompiledSongLua,
+        timing_player: &TimingData,
+        player: usize,
+        global_offset_seconds: f32,
+    ) -> Vec<deadsync_gameplay::SongLuaColumnOffsetWindowRuntime> {
+        deadsync_gameplay::build_song_lua_column_offset_windows_for_player(
+            &compiled.column_offsets,
+            timing_player,
+            player,
+            global_offset_seconds,
+        )
+    }
 
     #[inline(always)]
     fn gameplay_menu_input(action: VirtualAction) -> Option<super::GameplayMenuInput> {
@@ -504,7 +573,7 @@ mod tests {
         course_display_timing: Option<super::CourseDisplayTiming>,
         combo_carry: [u32; MAX_PLAYERS],
     ) -> super::State {
-        deadsync_gameplay::init_gameplay_runtime::<SongLuaOverlayKind>(
+        deadsync_gameplay::init_gameplay_runtime::<SongLuaOverlayKind, _>(
             song,
             charts,
             gameplay_charts,
@@ -518,7 +587,7 @@ mod tests {
             active_color_index,
             music_rate,
             scroll_speed,
-            player_profiles,
+            player_profiles.map(GameplayProfile::from),
             replay_edges,
             replay_offsets,
             lead_in_timing,
@@ -1158,18 +1227,21 @@ return Def.ActorFrame{}
                             &player_profiles,
                             &session,
                         );
-                        let runtime_profiles =
-                            gameplay_runtime_profiles(&player_profiles, &session);
+                        let runtime_profiles = screen_gameplay::gameplay_runtime_profile_data(
+                            &player_profiles,
+                            &session,
+                        );
                         let noteskin_assets = screen_gameplay::gameplay_noteskin_assets(
                             session.play_style.cols_per_player(),
                             session.play_style.player_count(),
                             &runtime_profiles,
                         );
+                        let gameplay_profiles = player_profiles.clone().map(GameplayProfile::from);
                         let context = deadsync_gameplay::build_song_lua_compile_context(
                             song.as_ref(),
                             &charts,
                             session.play_style.player_count(),
-                            &player_profiles,
+                            &gameplay_profiles,
                             &scroll_speed,
                             1.0,
                             0.0,

@@ -12,7 +12,7 @@ use deadsync_core::timing::{ROWS_PER_BEAT, note_row_to_beat};
 use deadsync_gameplay::{
     ActiveHold, ActiveTapExplosion, ColumnCue, ColumnCueColumn, ErrorBarText, ErrorBarTick,
     GameplayConfig, GameplayMiniIndicatorData, GameplaySession, GameplaySongLuaData,
-    GameplayViewport, gameplay_runtime_profiles,
+    GameplayViewport,
 };
 use deadsync_profile as profile_data;
 use deadsync_rules::judgment::{JudgeGrade, TimingWindow};
@@ -133,7 +133,8 @@ pub fn fixture() -> NotefieldBenchFixture {
     player_profiles[0].measure_lines = profile_data::MeasureLines::Eighth;
 
     let session = GameplaySession::default();
-    let runtime_profiles = gameplay_runtime_profiles(&player_profiles, &session);
+    let runtime_profiles =
+        gameplay_screen::gameplay_runtime_profile_data(&player_profiles, &session);
     let noteskin_assets = gameplay_screen::gameplay_noteskin_assets(
         profile_data::PlayStyle::Single.cols_per_player(),
         profile_data::PlayStyle::Single.player_count(),
@@ -147,6 +148,7 @@ pub fn fixture() -> NotefieldBenchFixture {
 
     let mut state = deadsync_gameplay::init_gameplay_runtime::<
         crate::game::parsing::song_lua::SongLuaOverlayKind,
+        _,
     >(
         song,
         charts,
@@ -164,7 +166,9 @@ pub fn fixture() -> NotefieldBenchFixture {
             ScrollSpeedSetting::CMod(620.0),
             ScrollSpeedSetting::CMod(620.0),
         ],
-        player_profiles.clone(),
+        player_profiles
+            .clone()
+            .map(crate::game::GameplayProfile::from),
         None,
         None,
         None,
