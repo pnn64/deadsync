@@ -356,7 +356,7 @@ pub struct ItgStatsData {
 /// empty result.
 fn read_stats(dir: &Path) -> Result<ItgStatsData, ItgReadError> {
     let content = if let Some(path) = find_case_insensitive(dir, "Stats.xml") {
-        fs::read_to_string(&path)?
+        String::from_utf8_lossy(&fs::read(&path)?).into_owned()
     } else if let Some(path) = find_case_insensitive(dir, "Stats.xml.gz") {
         read_gz_to_string(&path)?
     } else {
@@ -391,9 +391,9 @@ fn parse_general_data(root: &XmlNode) -> (u32, String) {
 fn read_gz_to_string(path: &Path) -> Result<String, std::io::Error> {
     let bytes = fs::read(path)?;
     let mut decoder = flate2::read::GzDecoder::new(&bytes[..]);
-    let mut out = String::new();
-    decoder.read_to_string(&mut out)?;
-    Ok(out)
+    let mut out = Vec::new();
+    decoder.read_to_end(&mut out)?;
+    Ok(String::from_utf8_lossy(&out).into_owned())
 }
 
 /// Extracts `<SongScores>` from a parsed `Stats.xml` root (`<Stats>`).
@@ -647,5 +647,39 @@ mod tests {
         assert_eq!(extract_guid("<GeneralData></GeneralData>"), None);
         assert_eq!(extract_guid("<Guid></Guid>"), None);
         assert_eq!(extract_guid("<Guid>   </Guid>"), None);
+    }
+
+    #[test]
+    fn read_stats_tolerates_non_utf8_bytes() {
+        // ITGmania declares UTF-8 but can write raw filesystem bytes into a song
+        // `Dir` — e.g. a Latin-1 `0xF6` ("ö") in "Helt Seriöst".
+        let dir = std::env::temp_dir().join(format!(
+            "deadsync-itg-nonutf8-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&dir).expect("temp dir");
+
+        let mut bytes = b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Stats>\n<SongScores>\n<Song Dir='Songs/Easy As Pie 6/Helt Seri".to_vec();
+        bytes.push(0xF6); // raw Latin-1 'ö', invalid as UTF-8
+        bytes.extend_from_slice(
+            b"st/'>\n<Steps StepsType='dance-single' Difficulty='Hard'>\n\
+              <HighScoreList>\n<HighScore>\n<Grade>Tier01</Grade>\n\
+              <PercentDP>0.99</PercentDP>\n<DateTime>2024-01-01 00:00:00</DateTime>\n\
+              <TapNoteScores><W1>100</W1></TapNoteScores>\n</HighScore>\n\
+              </HighScoreList>\n</Steps>\n</Song>\n</SongScores>\n</Stats>\n",
+        );
+        fs::write(dir.join("Stats.xml"), &bytes).expect("write Stats.xml");
+
+        let stats = read_stats(&dir).expect("read_stats must not fail on invalid UTF-8");
+        assert_eq!(stats.songs.len(), 1);
+        // The invalid byte is replaced (U+FFFD) rather than aborting the import.
+        assert!(stats.songs[0].dir.starts_with("Songs/Easy As Pie 6/Helt Seri"));
+        assert_eq!(stats.songs[0].steps[0].high_scores.len(), 1);
+
+        let _ = fs::remove_dir_all(&dir);
     }
 }
