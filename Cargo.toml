@@ -26,6 +26,7 @@ members = [
     "crates/deadsync-input-native",
     "crates/deadsync-lights",
     "crates/deadsync-net",
+    "crates/deadsync-notefield",
     "crates/deadsync-noteskin",
     "crates/deadsync-online",
     "crates/deadlib-platform",
@@ -53,7 +54,7 @@ resolver = "3"
 # `version.workspace = true`, so `env!("CARGO_PKG_VERSION")` and
 # `deadsync_version::current()` always agree. Bump THIS line on release.
 [workspace.package]
-version = "0.4.1406"
+version = "0.4.1407"
 
 [[bin]]
 name = "compose_bench"
@@ -105,6 +106,7 @@ deadsync-input-fsr = { path = "crates/deadsync-input-fsr" }
 deadsync-input-native = { path = "crates/deadsync-input-native" }
 deadsync-lights = { path = "crates/deadsync-lights" }
 deadsync-net = { path = "crates/deadsync-net" }
+deadsync-notefield = { path = "crates/deadsync-notefield" }
 deadsync-noteskin = { path = "crates/deadsync-noteskin" }
 deadsync-online = { path = "crates/deadsync-online" }
 deadlib-platform = { path = "crates/deadlib-platform" }

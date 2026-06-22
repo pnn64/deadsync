@@ -30,6 +30,10 @@ use deadsync_gameplay::{
     hold_head_render_flags, let_go_head_beat, perspective_effects_from_profile, scroll_receptor_y,
     song_lua_ease_factor, song_lua_note_hidden, spacing_multiplier_for_percent,
 };
+use deadsync_notefield::{
+    bottom_cap_uv_window, clipped_hold_body_bounds, hold_body_segment_budget, hold_draw_span,
+    hold_segment_pose, hold_tail_cap_bounds,
+};
 use deadsync_profile as profile_data;
 use deadsync_rules::judgment::{self, HOLD_SCORE_HELD, JudgeGrade, Judgment, TimingWindow};
 use deadsync_rules::note::{HoldResult, MineResult, Note};
@@ -1440,90 +1444,6 @@ fn offset_center(
 }
 
 #[inline(always)]
-fn hold_tail_cap_bounds(
-    body_tail_y: f32,
-    cap_height: f32,
-    rendered_body_top: Option<f32>,
-    rendered_body_bottom: Option<f32>,
-) -> Option<(f32, f32)> {
-    let default_bounds = (body_tail_y, body_tail_y + cap_height);
-    let rb = match (rendered_body_top, rendered_body_bottom) {
-        (Some(t), Some(b)) if b > t + 0.5 => b,
-        _ => return Some(default_bounds),
-    };
-
-    let dist = body_tail_y - rb;
-    if dist < -2.0 || dist > cap_height + 2.0 {
-        return Some(default_bounds);
-    }
-
-    Some((rb, rb + cap_height))
-}
-
-#[inline(always)]
-fn clipped_hold_body_bounds(
-    body_top: f32,
-    body_bottom: f32,
-    natural_top: f32,
-    natural_bottom: f32,
-) -> Option<(f32, f32)> {
-    let clipped_top = body_top.max(natural_top);
-    let clipped_bottom = body_bottom.min(natural_bottom);
-    (clipped_bottom > clipped_top).then_some((clipped_top, clipped_bottom))
-}
-
-#[inline(always)]
-fn hold_draw_span(y_head: f32, y_tail: f32) -> Option<(f32, f32)> {
-    let mut top = y_head.min(y_tail);
-    let mut bottom = y_head.max(y_tail);
-    if bottom < -200.0 || top > screen_height() + 200.0 {
-        return None;
-    }
-    top = top.max(-400.0);
-    bottom = bottom.min(screen_height() + 400.0);
-    (bottom >= top).then_some((top, bottom))
-}
-
-const HOLD_BODY_LEGACY_SEGMENT_LIMIT: usize = 512;
-const HOLD_BODY_SEGMENT_SAFETY_MAX: usize = 65_536;
-
-#[inline(always)]
-fn hold_body_segment_budget(visible_span: f32, segment_height: f32) -> (usize, bool) {
-    let estimated = if visible_span <= f32::EPSILON || segment_height <= f32::EPSILON {
-        1
-    } else {
-        (visible_span / segment_height).ceil() as usize
-    };
-    let max_segments = estimated
-        .saturating_add(2)
-        .clamp(2048, HOLD_BODY_SEGMENT_SAFETY_MAX);
-    (max_segments, estimated <= HOLD_BODY_LEGACY_SEGMENT_LIMIT)
-}
-
-#[inline(always)]
-fn bottom_cap_uv_window(
-    v_base0: f32,
-    v_base1: f32,
-    draw_height: f32,
-    cap_span: f32,
-    anchor_to_top: bool,
-) -> Option<(f32, f32)> {
-    if cap_span <= f32::EPSILON || draw_height <= f32::EPSILON {
-        return None;
-    }
-    // ITG DrawHoldPart computes add_to_tex_coord from the visible cap height.
-    let tex_add = if anchor_to_top {
-        0.0
-    } else {
-        (1.0 - draw_height / cap_span).clamp(0.0, 1.0)
-    };
-    let v_span = v_base1 - v_base0;
-    let t0 = tex_add;
-    let t1 = (draw_height / cap_span) + tex_add;
-    Some((v_base0 + v_span * t0, v_base0 + v_span * t1))
-}
-
-#[inline(always)]
 fn sm_scale(v: f32, in0: f32, in1: f32, out0: f32, out1: f32) -> f32 {
     let denom = in1 - in0;
     if denom.abs() < 1e-6 {
@@ -2004,23 +1924,6 @@ fn player_metric_y(
         1.0,
         center_y + normal_offset + notefield_offset_y,
         center_y + reverse_offset + notefield_offset_y,
-    )
-}
-
-#[inline(always)]
-fn hold_segment_pose(top: [f32; 2], bottom: [f32; 2]) -> ([f32; 2], f32, f32) {
-    let dx = bottom[0] - top[0];
-    let dy = bottom[1] - top[1];
-    let length = dx.hypot(dy);
-    let rotation_deg = if length <= f32::EPSILON {
-        0.0
-    } else {
-        dx.atan2(dy).to_degrees()
-    };
-    (
-        [(top[0] + bottom[0]) * 0.5, (top[1] + bottom[1]) * 0.5],
-        length,
-        rotation_deg,
     )
 }
 
@@ -6178,7 +6081,7 @@ pub(crate) fn build_bundles(
                     hold_end_y + note_display.stop_drawing_hold_body_offset_from_tail,
                 )
             };
-            let (top, bottom, draw_body_or_cap) = hold_draw_span(y_head, y_tail)
+            let (top, bottom, draw_body_or_cap) = hold_draw_span(y_head, y_tail, screen_height())
                 .map_or((0.0, 0.0, false), |(top, bottom)| (top, bottom, true));
             let let_go_gray = ns.hold_let_go_gray_percent.clamp(0.0, 1.0);
             let hold_life = hold.life.clamp(0.0, 1.0);
@@ -10440,7 +10343,7 @@ mod tests {
 
     #[test]
     fn collapsed_hold_draw_span_still_draws_caps() {
-        assert_eq!(hold_draw_span(120.0, 120.0), Some((120.0, 120.0)));
+        assert_eq!(hold_draw_span(120.0, 120.0, 480.0), Some((120.0, 120.0)));
     }
 
     #[test]
