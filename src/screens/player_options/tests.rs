@@ -9,12 +9,12 @@ pub(super) mod tests {
         HUD_OFFSET_MAX, HUD_OFFSET_MIN, HUD_OFFSET_ZERO_INDEX, HideMask, NAV_INITIAL_HOLD_DELAY,
         NavDirection, NumericBinding, NumericInit, P1, P2, PlayerOptionMasks, Row, RowBehavior,
         RowId, RowMap, ScrollMask, SpeedMod, SpeedModType, compute_row_window, count_visible_rows,
-        effective_scroll_speed_with_alt, handle_arcade_start_event, handle_nav_event,
-        handle_start_event, hud_offset_choices, init_cycle_row_from_binding,
-        init_numeric_row_from_binding, is_row_visible, judgment_tilt_options_visible,
-        on_start_press, player_option_column_x, repeat_held_arcade_start, row_f_pos_for_index,
-        row_visibility, session_active_players, sync_profile_scroll_speed, sync_speed_mod_type_row,
-        update,
+        effective_scroll_speed_for_chart, effective_scroll_speed_with_alt,
+        handle_arcade_start_event, handle_nav_event, handle_start_event, hud_offset_choices,
+        init_cycle_row_from_binding, init_numeric_row_from_binding, is_row_visible,
+        judgment_tilt_options_visible, on_start_press, player_option_column_x,
+        repeat_held_arcade_start, row_f_pos_for_index, row_visibility, session_active_players,
+        sync_profile_scroll_speed, sync_speed_mod_type_row, update,
     };
     use crate::assets::AssetManager;
     use crate::assets::i18n::{LookupKey, lookup_key};
@@ -215,6 +215,75 @@ pub(super) mod tests {
                 rate
             ),
             ScrollSpeedSetting::XMod(2.0)
+        );
+    }
+
+    #[test]
+    fn xmod_tagged_chart_forces_xmod_preserving_on_screen_speed() {
+        let (reference_bpm, rate) = (150.0, 1.0);
+
+        // CMod on an xmod chart → equivalent XMod (C600 == X4.0 at 150 BPM).
+        let cmod = SpeedMod {
+            mod_type: SpeedModType::C,
+            value: 600.0,
+        };
+        assert_eq!(
+            effective_scroll_speed_for_chart(
+                &cmod,
+                NoCmodAlternative::None,
+                false,
+                true,
+                reference_bpm,
+                rate
+            ),
+            ScrollSpeedSetting::XMod(4.0)
+        );
+
+        // MMod on an xmod chart → equivalent XMod (M600 == X4.0 at 150 BPM).
+        let mmod = SpeedMod {
+            mod_type: SpeedModType::M,
+            value: 600.0,
+        };
+        assert_eq!(
+            effective_scroll_speed_for_chart(
+                &mmod,
+                NoCmodAlternative::None,
+                false,
+                true,
+                reference_bpm,
+                rate
+            ),
+            ScrollSpeedSetting::XMod(4.0)
+        );
+
+        // Already on XMod → unchanged.
+        let xmod = SpeedMod {
+            mod_type: SpeedModType::X,
+            value: 2.0,
+        };
+        assert_eq!(
+            effective_scroll_speed_for_chart(
+                &xmod,
+                NoCmodAlternative::None,
+                false,
+                true,
+                reference_bpm,
+                rate
+            ),
+            ScrollSpeedSetting::XMod(2.0)
+        );
+
+        // Not an xmod chart → defers to the no-cmod logic (here: unchanged CMod).
+        assert_eq!(
+            effective_scroll_speed_for_chart(
+                &cmod,
+                NoCmodAlternative::None,
+                false,
+                false,
+                reference_bpm,
+                rate
+            ),
+            ScrollSpeedSetting::CMod(600.0)
         );
     }
 

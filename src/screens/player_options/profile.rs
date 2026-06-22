@@ -164,20 +164,50 @@ pub(super) fn effective_scroll_speed_with_alt(
     }
 }
 
+/// Resolve the scroll speed a single player will actually use for a chart,
+/// applying both the XMod-tag force and the no-cmod alternative.
+///
+/// XMod-tagged charts demand XMod: any non-XMod `base` (CMod or MMod) is converted
+/// to the equivalent XMod, preserving on-screen scroll speed. This is unconditional
+/// (it ignores the `NoCmodAlternative` preference) and takes precedence over the
+/// no-cmod substitution. When the chart is not XMod-tagged, this defers to
+/// [`effective_scroll_speed_with_alt`].
+pub(super) fn effective_scroll_speed_for_chart(
+    base: &SpeedMod,
+    alt: deadsync_profile::NoCmodAlternative,
+    is_no_cmod: bool,
+    is_xmod: bool,
+    reference_bpm: f32,
+    rate: f32,
+) -> ScrollSpeedSetting {
+    if is_xmod && base.mod_type != SpeedModType::X {
+        return scroll_speed_for_mod(&convert_speed_mod_to_type(
+            base,
+            SpeedModType::X,
+            reference_bpm,
+            rate,
+        ));
+    }
+    effective_scroll_speed_with_alt(base, alt, is_no_cmod, reference_bpm, rate)
+}
+
 /// Resolve the scroll speed each player will actually use for the upcoming
 /// play, applying the "No CMod alternative" substitution for charts tagged
-/// "no cmod".
+/// "no cmod" and forcing XMod for charts tagged "xmod".
 ///
 /// For any player who is on CMod, is about to play a no-cmod chart, and has a
 /// non-`None` alternative configured, their CMod speed is converted (preserving
-/// on-screen speed) to the chosen X/M type. The substitution is written into
+/// on-screen speed) to the chosen X/M type. For charts tagged "xmod", any player
+/// not already on XMod is converted to the equivalent XMod regardless of their
+/// alternative preference. The substitution is written into
 /// the (non-persisted) `player_profiles[..].scroll_speed` snapshot as well as
 /// returned, so both the arrow-scroll path (which reads the returned array) and
 /// the score-validity path (which reads `player_profiles`) observe the same
 /// effective speed. The persisted profile is never touched, so returning to
-/// song select restores CMod automatically.
+/// song select restores the player's real mod automatically.
 pub fn apply_no_cmod_alternative(state: &mut State) -> [ScrollSpeedSetting; PLAYER_SLOTS] {
     let is_no_cmod = state.song.is_no_cmod();
+    let is_xmod = state.song.is_xmod();
     let reference_bpm = reference_bpm_for_song(
         &state.song,
         resolve_p1_chart(&state.song, &state.chart_steps_index),
@@ -188,10 +218,11 @@ pub fn apply_no_cmod_alternative(state: &mut State) -> [ScrollSpeedSetting; PLAY
         1.0
     };
     std::array::from_fn(|player_idx| {
-        let effective = effective_scroll_speed_with_alt(
+        let effective = effective_scroll_speed_for_chart(
             &state.speed_mod[player_idx],
             state.player_profiles[player_idx].no_cmod_alternative,
             is_no_cmod,
+            is_xmod,
             reference_bpm,
             rate,
         );
