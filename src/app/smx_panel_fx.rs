@@ -147,10 +147,10 @@ pub struct SmxPanelDriver {
     gameplay_active: bool,
     /// The worker owns the pad lights (gameplay effects or a background).
     worker_active: bool,
-    /// Background currently applied to the worker, for change detection.
-    background: Option<(Arc<FullPadAnim>, Clock)>,
-    /// Judgement animations; empty (all `None`) means solid colours throughout.
-    judgement_gifs: JudgementGifs,
+    /// Per-slot background currently applied to the worker, for change detection.
+    backgrounds: [Option<(Arc<FullPadAnim>, Clock)>; PADS],
+    /// Per-slot judgement animations; empty (all `None`) means solid colours throughout.
+    judgement_gifs: [JudgementGifs; PADS],
     notes_ptr: usize,
     /// Chart pad index -> physical SMX slot, resolved once per activation from the
     /// session play style and side so the per-frame loop stays branch-free.
@@ -171,8 +171,8 @@ impl Default for SmxPanelDriver {
             lights: SmxPanelLights::new(),
             gameplay_active: false,
             worker_active: false,
-            background: None,
-            judgement_gifs: JudgementGifs::default(),
+            backgrounds: std::array::from_fn(|_| None),
+            judgement_gifs: std::array::from_fn(|_| JudgementGifs::default()),
             notes_ptr: 0,
             slot_for_pad: std::array::from_fn(|pad| pad),
             prev_flash: [NO_EVENT; MAX_COLS],
@@ -221,7 +221,7 @@ impl SmxPanelDriver {
             if let Some((grade, blue)) =
                 tap_event(state.last_tap_judgment(col), &mut self.prev_flash[col])
                 && let Some((pad, p)) = panel
-                && let Some(anim) = self.judgement_gifs.for_grade(grade, blue)
+                && let Some(anim) = self.judgement_gifs[pad].for_grade(grade, blue)
             {
                 self.lights
                     .play_overlay(pad, p, anim.clone(), OverlayDrive::OneShot { pressed });
@@ -236,7 +236,7 @@ impl SmxPanelDriver {
                     let kind = state.active_hold(col).map(|h| h.note_type);
                     // First engage: play the intro, then loop (freeze) or drain
                     // into the outro (roll). No gif = no effect on this column.
-                    if let Some(anim) = sustain_anim(&self.judgement_gifs, kind) {
+                    if let Some(anim) = sustain_anim(&self.judgement_gifs[pad], kind) {
                         self.lights.play_overlay(pad, p, anim.clone(), sustain_drive(kind, false));
                         self.prev_hold_fx[col] = HoldFx::Overlay;
                     }
@@ -264,7 +264,7 @@ impl SmxPanelDriver {
                 let kind = state.active_hold(col).map(|h| h.note_type);
                 if kind == Some(NoteType::Roll) {
                     if press_edge == Some(true)
-                        && let Some(anim) = sustain_anim(&self.judgement_gifs, kind)
+                        && let Some(anim) = sustain_anim(&self.judgement_gifs[pad], kind)
                     {
                         self.lights
                             .play_overlay(pad, p, anim.clone(), OverlayDrive::Roll { resume: true });
@@ -272,7 +272,7 @@ impl SmxPanelDriver {
                 } else if released {
                     self.lights.release_overlay(pad, p);
                 } else if press_edge == Some(true)
-                    && let Some(anim) = sustain_anim(&self.judgement_gifs, kind)
+                    && let Some(anim) = sustain_anim(&self.judgement_gifs[pad], kind)
                 {
                     self.lights.play_overlay(
                         pad,
@@ -288,8 +288,8 @@ impl SmxPanelDriver {
                 && let Some((pad, p)) = panel
             {
                 let anim = match result {
-                    HoldResult::Held => self.judgement_gifs.ok.as_ref(),
-                    _ => self.judgement_gifs.bad.as_ref(),
+                    HoldResult::Held => self.judgement_gifs[pad].ok.as_ref(),
+                    _ => self.judgement_gifs[pad].bad.as_ref(),
                 };
                 if let Some(anim) = anim {
                     self.lights
@@ -299,7 +299,7 @@ impl SmxPanelDriver {
 
             if mine_event(state.mine_started_at_screen_s(col), &mut self.prev_mine[col])
                 && let Some((pad, p)) = panel
-                && let Some(anim) = &self.judgement_gifs.mine
+                && let Some(anim) = &self.judgement_gifs[pad].mine
             {
                 self.lights
                     .play_overlay(pad, p, anim.clone(), OverlayDrive::OneShot { pressed });
@@ -311,9 +311,9 @@ impl SmxPanelDriver {
             // while a freeze/roll is engaged, since that owns the panel through
             // its own overlay. Gif-only: a pack without a `press` gif gets no
             // feedback here (the game events still flash as before).
-            if let Some(press_anim) = self.judgement_gifs.press.clone()
-                && !engaged
+            if !engaged
                 && let Some((pad, p)) = panel
+                && let Some(press_anim) = self.judgement_gifs[pad].press.clone()
             {
                 if press_edge == Some(true) {
                     self.lights.play_press_overlay(
@@ -342,11 +342,14 @@ impl SmxPanelDriver {
         }
     }
 
-    /// Show, swap, or clear the full-pad background animation. Deduplicates, so calling
-    /// every frame with the screen's resolved background is cheap; only an actual change
-    /// is sent to the worker.
-    pub fn set_background(&mut self, background: Option<(Arc<FullPadAnim>, Clock)>) {
-        let unchanged = match (&self.background, &background) {
+    /// Show, swap, or clear the background animation for a specific pad slot. Deduplicates,
+    /// so calling every frame with the screen's resolved background is cheap; only an actual
+    /// change is sent to the worker.
+    pub fn set_background_for_pad(&mut self, pad: usize, background: Option<(Arc<FullPadAnim>, Clock)>) {
+        if pad >= PADS {
+            return;
+        }
+        let unchanged = match (&self.backgrounds[pad], &background) {
             (None, None) => true,
             (Some((a, ca)), Some((b, cb))) => Arc::ptr_eq(a, b) && ca == cb,
             _ => false,
@@ -354,15 +357,17 @@ impl SmxPanelDriver {
         if unchanged {
             return;
         }
-        self.background = background.clone();
-        self.lights.set_background(background);
+        self.backgrounds[pad] = background.clone();
+        self.lights.set_background_for_pad(pad, background);
         self.sync_worker();
     }
 
-    /// Swap the judgement animation set (resolved app-side from the registry). Takes
-    /// effect from the next event; in-flight overlays play out as started.
-    pub fn set_judgement_gifs(&mut self, gifs: JudgementGifs) {
-        self.judgement_gifs = gifs;
+    /// Swap the judgement animation set for a specific pad slot (resolved app-side from
+    /// the registry). Takes effect from the next event; in-flight overlays play out as started.
+    pub fn set_judgement_gifs_for_pad(&mut self, pad: usize, gifs: JudgementGifs) {
+        if pad < PADS {
+            self.judgement_gifs[pad] = gifs;
+        }
     }
 
     /// Force pad slot `pad` to solid black (`on = true`) or restore normal compositing.
@@ -379,7 +384,7 @@ impl SmxPanelDriver {
             return;
         }
         if pressed {
-            if let Some(anim) = self.judgement_gifs.press.clone() {
+            if let Some(anim) = self.judgement_gifs.get(pad).and_then(|g| g.press.clone()) {
                 self.lights
                     .play_press_overlay(pad, panel, anim, OverlayDrive::Sustain { resume: false });
             }
@@ -391,7 +396,7 @@ impl SmxPanelDriver {
     /// Feed the current song beat position. Dropped unless the active background is
     /// beat-locked, so callers can push it every frame without flooding the worker.
     pub fn set_beat(&self, beat: f32) {
-        if matches!(self.background, Some((_, Clock::BeatLocked { .. }))) {
+        if self.backgrounds.iter().any(|b| matches!(b, Some((_, Clock::BeatLocked { .. })))) {
             self.lights.set_beat(beat);
         }
     }
@@ -423,7 +428,7 @@ impl SmxPanelDriver {
     /// `self.background` is already `None` whenever that happens, so the driver and
     /// worker stay in step.
     fn sync_worker(&mut self) {
-        let want = self.gameplay_active || self.background.is_some();
+        let want = self.gameplay_active || self.backgrounds.iter().any(|b| b.is_some());
         if want != self.worker_active {
             self.worker_active = want;
             self.lights.set_active(want);

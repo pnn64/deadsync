@@ -147,11 +147,11 @@ struct PanelState {
     press_overlay: Option<Overlay>,
 }
 
-/// Per-pad, per-panel effect state plus the shared background layer. Builds
+/// Per-pad, per-panel effect state plus per-pad background layers. Builds
 /// the full both-pads RGB frame each tick.
 pub struct PanelFx {
     panels: [[PanelState; PANELS]; PADS],
-    background: Option<Background>,
+    backgrounds: [Option<Background>; PADS],
     /// Latest song beat position, used by a `BeatLocked` background.
     beat: f32,
     /// Beat position at the previous tick, for the tempo estimate.
@@ -178,7 +178,7 @@ impl PanelFx {
     pub fn new() -> Self {
         Self {
             panels: std::array::from_fn(|_| std::array::from_fn(|_| PanelState::default())),
-            background: None,
+            backgrounds: std::array::from_fn(|_| None),
             beat: 0.0,
             prev_beat: 0.0,
             beat_rate: 0.0,
@@ -217,15 +217,17 @@ impl PanelFx {
         }
     }
 
-    /// Set or clear the full-pad background animation (both pads show it).
-    /// Playback restarts from the first frame.
-    pub fn set_background(&mut self, background: Option<(Arc<FullPadAnim>, Clock)>) {
-        self.background = background.map(|(anim, clock)| Background {
-            anim,
-            clock,
-            frame: 0,
-            time_in_frame: 0.0,
-        });
+    /// Set or clear the background animation for a specific pad slot.
+    /// Playback restarts from the first frame. Out-of-range pad index is ignored.
+    pub fn set_background_for_pad(&mut self, pad: usize, background: Option<(Arc<FullPadAnim>, Clock)>) {
+        if pad < PADS {
+            self.backgrounds[pad] = background.map(|(anim, clock)| Background {
+                anim,
+                clock,
+                frame: 0,
+                time_in_frame: 0.0,
+            });
+        }
     }
 
     /// Update the song beat position driving a `BeatLocked` background.
@@ -288,11 +290,11 @@ impl PanelFx {
         self.panels = std::array::from_fn(|_| std::array::from_fn(|_| PanelState::default()));
     }
 
-    /// Full reset: every per-panel effect plus the background. Used when
+    /// Full reset: every per-panel effect plus all backgrounds. Used when
     /// handing the pad back to its firmware lighting.
     pub fn clear_all(&mut self) {
         self.clear_panels();
-        self.background = None;
+        self.backgrounds = std::array::from_fn(|_| None);
     }
 
     /// Advance all playback by `dt_s`, rebuild the reused both-pads RGB frame, and return
@@ -301,7 +303,11 @@ impl PanelFx {
     pub fn tick(&mut self, dt_s: f32) -> &[u8; FRAME_BYTES] {
         let dt = dt_s.max(0.0);
         self.update_beat_rate(dt);
-        let bg_frame = advance_background(&mut self.background, self.beat, self.beat_rate, dt);
+        // Advance all backgrounds first, then composite each pad with its own.
+        let mut bg_frames = [None::<usize>; PADS];
+        for pad in 0..PADS {
+            bg_frames[pad] = advance_background(&mut self.backgrounds[pad], self.beat, self.beat_rate, dt);
+        }
         for pad in 0..PADS {
             for panel in 0..PANELS {
                 let p = &mut self.panels[pad][panel];
@@ -315,9 +321,9 @@ impl PanelFx {
                 let base = pad * BYTES_PER_PAD + panel * (LEDS_PER_PANEL * 3);
                 // When blacked out, suppress the background so overlays (e.g.
                 // press feedback) still composite on top of black.
-                let bg = if self.blackout[pad] { &None } else { &self.background };
+                let bg = if self.blackout[pad] { &None } else { &self.backgrounds[pad] };
                 for led in 0..LEDS_PER_PANEL {
-                    let rgb = composite_led(p, bg, bg_frame, panel, led);
+                    let rgb = composite_led(p, bg, bg_frames[pad], panel, led);
                     let o = base + led * 3;
                     self.frame[o..o + 3].copy_from_slice(&rgb);
                 }
@@ -621,8 +627,8 @@ enum Ev {
         pad: u8,
         panel: u8,
     },
-    /// Set or clear the full-pad background animation.
-    Background(Option<(Arc<FullPadAnim>, Clock)>),
+    /// Set or clear the background animation for a specific pad slot.
+    Background { pad: u8, background: Option<(Arc<FullPadAnim>, Clock)> },
     /// Latest song beat position for a `BeatLocked` background.
     Beat(f32),
     /// Play a GIF on one panel, over the background.
@@ -715,9 +721,9 @@ impl SmxPanelLights {
         });
     }
 
-    /// Set or clear the full-pad background animation (both pads show it).
-    pub fn set_background(&self, background: Option<(Arc<FullPadAnim>, Clock)>) {
-        self.send(Ev::Background(background));
+    /// Set or clear the background animation for a specific pad slot.
+    pub fn set_background_for_pad(&self, pad: usize, background: Option<(Arc<FullPadAnim>, Clock)>) {
+        self.send(Ev::Background { pad: pad as u8, background });
     }
 
     /// Update the song beat position driving a `BeatLocked` background.
@@ -880,7 +886,7 @@ fn handle(fx: &mut PanelFx, active: &mut bool, ev: Ev) -> bool {
         } => fx.flash(pad.into(), panel.into(), color, dur_s),
         Ev::HoldStart { pad, panel, color } => fx.hold_start(pad.into(), panel.into(), color),
         Ev::HoldEnd { pad, panel } => fx.hold_end(pad.into(), panel.into()),
-        Ev::Background(bg) => fx.set_background(bg),
+        Ev::Background { pad, background } => fx.set_background_for_pad(pad.into(), background),
         Ev::Beat(beat) => fx.set_beat(beat),
         Ev::Overlay {
             pad,
@@ -1060,7 +1066,7 @@ mod tests {
         lights.flash(0, 3, [1, 2, 3], 0.05);
         lights.hold_start(0, 5, [4, 5, 6]);
         lights.hold_end(0, 5);
-        lights.set_background(Some((bg_anim(&[1, 2], 0), Clock::Realtime)));
+        lights.set_background_for_pad(0, Some((bg_anim(&[1, 2], 0), Clock::Realtime)));
         lights.set_beat(1.5);
         lights.play_overlay(
             0,
@@ -1117,7 +1123,8 @@ mod tests {
     #[test]
     fn background_plays_loops_and_fills_both_pads() {
         let mut fx = PanelFx::new();
-        fx.set_background(Some((bg_anim(&[10, 20], 0), Clock::Realtime)));
+        fx.set_background_for_pad(0, Some((bg_anim(&[10, 20], 0), Clock::Realtime)));
+        fx.set_background_for_pad(1, Some((bg_anim(&[10, 20], 0), Clock::Realtime)));
         let frame = fx.tick(0.05);
         assert_eq!(led0(frame, 0, 0), 10);
         assert_eq!(led0(frame, 1, 8), 10);
@@ -1134,7 +1141,7 @@ mod tests {
         let mut fx = PanelFx::new();
         // Frames 10,20,30 with the loop point at frame 1: the intro frame 10
         // must not repeat.
-        fx.set_background(Some((bg_anim(&[10, 20, 30], 1), Clock::Realtime)));
+        fx.set_background_for_pad(0, Some((bg_anim(&[10, 20, 30], 1), Clock::Realtime)));
         let mut seen = Vec::new();
         for _ in 0..6 {
             seen.push(led0(fx.tick(0.1), 0, 0));
@@ -1145,9 +1152,9 @@ mod tests {
     #[test]
     fn clearing_the_background_returns_to_black() {
         let mut fx = PanelFx::new();
-        fx.set_background(Some((bg_anim(&[10], 0), Clock::Realtime)));
+        fx.set_background_for_pad(0, Some((bg_anim(&[10], 0), Clock::Realtime)));
         assert_eq!(led0(fx.tick(0.0), 0, 0), 10);
-        fx.set_background(None);
+        fx.set_background_for_pad(0, None);
         assert!(fx.tick(0.0).iter().all(|&b| b == 0));
     }
 
@@ -1155,7 +1162,7 @@ mod tests {
     fn beat_locked_background_maps_beats_to_frames() {
         let mut fx = PanelFx::new();
         // 4 frames over 2 beats: half a beat per frame, wall-clock dt ignored.
-        fx.set_background(Some((
+        fx.set_background_for_pad(0, Some((
             bg_anim(&[1, 2, 3, 4], 0),
             Clock::BeatLocked {
                 beats_per_loop: 2.0,
@@ -1179,7 +1186,7 @@ mod tests {
     fn beat_locked_background_loops_over_its_marker_region() {
         let mut fx = PanelFx::new();
         // Loop region is frames 1..4 (intro frame 0 excluded from the cycle).
-        fx.set_background(Some((
+        fx.set_background_for_pad(0, Some((
             bg_anim(&[1, 2, 3, 4], 1),
             Clock::BeatLocked {
                 beats_per_loop: 3.0,
@@ -1209,7 +1216,7 @@ mod tests {
     #[test]
     fn one_shot_overlay_plays_once_then_reveals_the_background() {
         let mut fx = PanelFx::new();
-        fx.set_background(Some((bg_anim(&[10], 0), Clock::Realtime)));
+        fx.set_background_for_pad(0, Some((bg_anim(&[10], 0), Clock::Realtime)));
         fx.play_overlay(
             0,
             3,
@@ -1228,7 +1235,7 @@ mod tests {
     #[test]
     fn looping_overlay_holds_until_ended() {
         let mut fx = PanelFx::new();
-        fx.set_background(Some((bg_anim(&[10], 0), Clock::Realtime)));
+        fx.set_background_for_pad(1, Some((bg_anim(&[10], 0), Clock::Realtime)));
         fx.play_overlay(1, 7, panel_anim(&[91, 92], 0), OverlayDrive::Sustain { resume: false });
         let mut seen = Vec::new();
         for _ in 0..4 {
@@ -1339,7 +1346,7 @@ mod tests {
     #[test]
     fn black_overlay_leds_are_transparent_and_reveal_lower_layers() {
         let mut fx = PanelFx::new();
-        fx.set_background(Some((bg_anim(&[10], 0), Clock::Realtime)));
+        fx.set_background_for_pad(0, Some((bg_anim(&[10], 0), Clock::Realtime)));
         // One overlay frame: LED 0 black (transparent), LED 1 lit (50).
         let mut f = [0u8; PANEL_RGB_BYTES];
         f[3] = 50;
@@ -1362,7 +1369,7 @@ mod tests {
     #[test]
     fn an_active_overlay_suppresses_press_even_through_its_black_leds() {
         let mut fx = PanelFx::new();
-        fx.set_background(Some((bg_anim(&[10], 0), Clock::Realtime)));
+        fx.set_background_for_pad(0, Some((bg_anim(&[10], 0), Clock::Realtime)));
         // Press feedback fills the whole panel (would show 91 on its own).
         fx.play_press_overlay(0, 3, panel_anim(&[91], 0), OverlayDrive::Sustain {
             resume: false,
@@ -1390,7 +1397,7 @@ mod tests {
     #[test]
     fn press_overlay_sits_below_the_game_event_layers() {
         let mut fx = PanelFx::new();
-        fx.set_background(Some((bg_anim(&[10], 0), Clock::Realtime)));
+        fx.set_background_for_pad(0, Some((bg_anim(&[10], 0), Clock::Realtime)));
         // A press with no note lights the panel over the background.
         fx.play_press_overlay(0, 3, panel_anim(&[91, 92], 0), OverlayDrive::Sustain {
             resume: false,
@@ -1412,7 +1419,7 @@ mod tests {
     #[test]
     fn roll_runs_forward_into_the_outro_and_holds_resetting_on_each_step() {
         let mut fx = PanelFx::new();
-        fx.set_background(Some((bg_anim(&[10], 0), Clock::Realtime)));
+        fx.set_background_for_pad(0, Some((bg_anim(&[10], 0), Clock::Realtime)));
         // Intro frame 1, loop region [1..=2] (values 2,3), outro 4,5.
         let anim = panel_anim_outro(&[1, 2, 3, 4, 5], 1, 2);
         // First step: intro, then it drains forward through the loop into the
@@ -1435,7 +1442,7 @@ mod tests {
     #[test]
     fn overlay_outranks_flash_and_hold_over_background() {
         let mut fx = PanelFx::new();
-        fx.set_background(Some((bg_anim(&[10], 0), Clock::Realtime)));
+        fx.set_background_for_pad(0, Some((bg_anim(&[10], 0), Clock::Realtime)));
         fx.hold_start(0, 5, [30, 30, 30]);
         fx.flash(0, 5, [40, 40, 40], 1.0);
         fx.play_overlay(0, 5, panel_anim(&[91], 0), OverlayDrive::Sustain { resume: false });
@@ -1452,7 +1459,7 @@ mod tests {
     #[test]
     fn clear_panels_keeps_the_background_and_clear_all_drops_it() {
         let mut fx = PanelFx::new();
-        fx.set_background(Some((bg_anim(&[10], 0), Clock::Realtime)));
+        fx.set_background_for_pad(0, Some((bg_anim(&[10], 0), Clock::Realtime)));
         fx.play_overlay(0, 1, panel_anim(&[91], 0), OverlayDrive::Sustain { resume: false });
         fx.flash(0, 2, [40, 40, 40], 1.0);
 

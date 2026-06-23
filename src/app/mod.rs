@@ -4159,7 +4159,7 @@ pub struct App {
     /// no allocation) so a per-song/per-pack background is re-resolved when the
     /// highlighted (song select) or playing (gameplay) song changes. Reset on a
     /// song rescan, so a recycled pointer can't be mistaken for the same song.
-    smx_bg_synced: Option<(bool, Option<&'static str>, config::SmxPackName, config::SmxPackName, Option<usize>, Option<u32>)>,
+    smx_bg_synced: Option<(bool, Option<&'static str>, [config::SmxPackName; 2], [config::SmxPackName; 2], Option<usize>, Option<u32>)>,
     /// Per-slot blackout state last sent to the SMX lights worker; `[P1_slot, P2_slot]`.
     smx_blackout_synced: [bool; 2],
     /// Decoded per-song / per-pack pad background variants, keyed by their
@@ -4829,27 +4829,28 @@ impl App {
         );
         {
             use profile_data::PlayerSide;
-            // Resolve per-player pack overrides: first joined player's preference wins,
-            // falling back to the machine default. Solo play always gets the solo player's
-            // pack; versus/doubles falls back to P1 then P2 then machine config.
-            let resolve_pack = |machine: config::SmxPackName, field: fn(&profile_data::Profile) -> Option<&String>| -> config::SmxPackName {
-                for side in [PlayerSide::P1, PlayerSide::P2] {
-                    if profile::is_session_side_joined(side) {
-                        let p = profile::get_for_side(side);
-                        if let Some(pack) = field(&p) {
-                            return config::SmxPackName::parse(pack.as_str());
-                        }
-                        return machine;
-                    }
+            // Resolve per-player pack overrides independently for each pad slot so that
+            // in versus mode P1's pad uses P1's pack and P2's pad uses P2's pack.
+            let resolve_pack_for_side = |side: PlayerSide, machine: config::SmxPackName, field: fn(&profile_data::Profile) -> Option<&String>| -> config::SmxPackName {
+                let p = profile::get_for_side(side);
+                if let Some(pack) = field(&p) {
+                    config::SmxPackName::parse(pack.as_str())
+                } else {
+                    machine
                 }
-                machine
             };
-            let bg_pack = resolve_pack(config.smx_pad_gifs_pack, |p| p.smx_bg_pack.as_ref());
-            let judge_pack = resolve_pack(config.smx_judge_gifs_pack, |p| p.smx_judge_pack.as_ref());
+            let bg_packs = [
+                resolve_pack_for_side(PlayerSide::P1, config.smx_pad_gifs_pack, |p| p.smx_bg_pack.as_ref()),
+                resolve_pack_for_side(PlayerSide::P2, config.smx_pad_gifs_pack, |p| p.smx_bg_pack.as_ref()),
+            ];
+            let judge_packs = [
+                resolve_pack_for_side(PlayerSide::P1, config.smx_judge_gifs_pack, |p| p.smx_judge_pack.as_ref()),
+                resolve_pack_for_side(PlayerSide::P2, config.smx_judge_gifs_pack, |p| p.smx_judge_pack.as_ref()),
+            ];
             self.sync_smx_pad_gifs(
                 config.smx_input && config.smx_panel_lights,
-                bg_pack,
-                judge_pack,
+                bg_packs,
+                judge_packs,
             );
         }
         self.sync_smx_pad_blackout(config.smx_input && config.smx_panel_lights);
@@ -4937,7 +4938,7 @@ impl App {
     /// follows the (enabled, pack) pair. Cheap per frame: lookups only happen
     /// when the toggle, screen role, pack, or current song folder changes, and
     /// the driver deduplicates the rest.
-    fn sync_smx_pad_gifs(&mut self, enabled: bool, pack: config::SmxPackName, judge_pack: config::SmxPackName) {
+    fn sync_smx_pad_gifs(&mut self, enabled: bool, bg_packs: [config::SmxPackName; 2], judge_packs: [config::SmxPackName; 2]) {
         // The StepManiaX options page lights the pads blue/red to preview the
         // player assignment (`drive_smx_options_lights`), writing the pad
         // directly. Suppress the gif background there so the two don't fight
@@ -4988,13 +4989,13 @@ impl App {
         };
         let eval_grade_key = eval_grade.map(|g| g.to_sprite_state());
 
-        let synced = Some((enabled, role, pack, judge_pack, song_id, eval_grade_key));
+        let synced = Some((enabled, role, bg_packs, judge_packs, song_id, eval_grade_key));
         if self.smx_bg_synced == synced {
             return;
         }
         let pack_changed = self
             .smx_bg_synced
-            .is_none_or(|(e, _, p, jp, _, _)| e != enabled || p != pack || jp != judge_pack);
+            .is_none_or(|(e, _, bp, jp, _, _)| e != enabled || bp != bg_packs || jp != judge_packs);
         self.smx_bg_synced = synced;
 
         let song_dir = song
@@ -5009,67 +5010,74 @@ impl App {
             .map(|s| s.max_bpm as f32)
             .filter(|b| b.is_finite() && *b > 0.0);
 
-        let pack = (!pack.is_empty()).then_some(pack);
-        let pack_str = pack.as_ref().map(|p| p.as_str());
-
         let on_select_music = self.state.screens.current_screen == CurrentScreen::SelectMusic;
-        let anim = role.and_then(|role| {
-            // Resolution order: the song's own background, then its pack's, then
-            // the global pack (selected -> basic), then the global `default`
-            // role. `_25` is the baseline both pad layouts render; 16-LED pads
-            // show its outer ring. Each tier picks the BPM-best variant.
-            let scoped = song_dir
-                .as_deref()
-                .and_then(|dir| self.resolve_scoped_smx_background(dir, role, song_bpm));
-            scoped.or_else(|| {
-                let registry = self.smx_gif_registry();
-                let size = deadsync_smx::gifs::PadSize::Leds25;
-                // On results screens, try grade-specific roles before the plain role.
-                // Fallback chain: results@S+ -> results@S -> results -> default.
-                let grade_anim = if role == "results" {
-                    eval_grade.and_then(|grade| {
-                        let suffix = grade.gif_suffix();
-                        let specific = format!("results@{suffix}");
-                        registry
-                            .background(pack_str, &specific, size, song_bpm)
-                            .or_else(|| {
-                                grade.gif_base().and_then(|base| {
-                                    let base_role = format!("results@{}", base.gif_suffix());
-                                    registry.background(pack_str, &base_role, size, song_bpm)
+
+        // Resolve and push the background for each pad slot independently so P1 and P2
+        // can show different packs in versus mode. Scoped (per-song/per-pack folder) gifs
+        // are pack-independent and may resolve to the same Arc for both slots; the driver
+        // deduplicates by pointer so no redundant work reaches the worker.
+        for pad in 0..deadsync_smx::panels::PADS {
+            let pack_str = (!bg_packs[pad].is_empty()).then_some(bg_packs[pad].as_str());
+            let anim = role.and_then(|role| {
+                // Resolution order: the song's own background, then its pack's, then
+                // the global pack (selected -> basic), then the global `default`
+                // role. `_25` is the baseline both pad layouts render; 16-LED pads
+                // show its outer ring. Each tier picks the BPM-best variant.
+                let scoped = song_dir
+                    .as_deref()
+                    .and_then(|dir| self.resolve_scoped_smx_background(dir, role, song_bpm));
+                scoped.or_else(|| {
+                    let registry = self.smx_gif_registry();
+                    let size = deadsync_smx::gifs::PadSize::Leds25;
+                    // On results screens, try grade-specific roles before the plain role.
+                    // Fallback chain: results@S+ -> results@S -> results -> default.
+                    let grade_anim = if role == "results" {
+                        eval_grade.and_then(|grade| {
+                            let suffix = grade.gif_suffix();
+                            let specific = format!("results@{suffix}");
+                            registry
+                                .background(pack_str, &specific, size, song_bpm)
+                                .or_else(|| {
+                                    grade.gif_base().and_then(|base| {
+                                        let base_role = format!("results@{}", base.gif_suffix());
+                                        registry.background(pack_str, &base_role, size, song_bpm)
+                                    })
                                 })
-                            })
-                    })
-                } else {
-                    None
+                        })
+                    } else {
+                        None
+                    };
+                    grade_anim
+                        .or_else(|| registry.background(pack_str, role, size, song_bpm))
+                        .or_else(|| registry.background(pack_str, "default", size, song_bpm))
+                })
+            });
+            let background = anim.map(|anim| {
+                // A beat-suffixed gif beat-locks on song select, the one screen with
+                // a live beat source (the music preview); elsewhere it plays realtime
+                // rather than freezing on a stale beat.
+                let clock = match anim.beats_per_loop {
+                    Some(beats_per_loop) if on_select_music => {
+                        deadsync_smx::panels::Clock::BeatLocked { beats_per_loop }
+                    }
+                    _ => deadsync_smx::panels::Clock::Realtime,
                 };
-                grade_anim
-                    .or_else(|| registry.background(pack_str, role, size, song_bpm))
-                    .or_else(|| registry.background(pack_str, "default", size, song_bpm))
-            })
-        });
-        let background = anim.map(|anim| {
-            // A beat-suffixed gif beat-locks on song select, the one screen with
-            // a live beat source (the music preview); elsewhere it plays realtime
-            // rather than freezing on a stale beat.
-            let clock = match anim.beats_per_loop {
-                Some(beats_per_loop) if on_select_music => {
-                    deadsync_smx::panels::Clock::BeatLocked { beats_per_loop }
-                }
-                _ => deadsync_smx::panels::Clock::Realtime,
-            };
-            (anim, clock)
-        });
-        self.smx_panels.set_background(background);
+                (anim, clock)
+            });
+            self.smx_panels.set_background_for_pad(pad, background);
+        }
 
         if pack_changed {
-            let gifs = if enabled {
-                let registry = self.smx_gif_registry().clone();
-                let judge_pack_str = (!judge_pack.is_empty()).then_some(judge_pack.as_str());
-                smx_panel_fx::JudgementGifs::resolve(&registry, judge_pack_str)
-            } else {
-                smx_panel_fx::JudgementGifs::default()
-            };
-            self.smx_panels.set_judgement_gifs(gifs);
+            for pad in 0..deadsync_smx::panels::PADS {
+                let gifs = if enabled {
+                    let registry = self.smx_gif_registry().clone();
+                    let judge_pack_str = (!judge_packs[pad].is_empty()).then_some(judge_packs[pad].as_str());
+                    smx_panel_fx::JudgementGifs::resolve(&registry, judge_pack_str)
+                } else {
+                    smx_panel_fx::JudgementGifs::default()
+                };
+                self.smx_panels.set_judgement_gifs_for_pad(pad, gifs);
+            }
         }
     }
 
