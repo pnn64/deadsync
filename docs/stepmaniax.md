@@ -720,7 +720,10 @@ If no pack is selected (or the `basic` pack is selected), steps 3 and 5 use
 `basic` directly and steps 4 and 6 are skipped.
 
 If a pack has no `gifpack.ini` or does not declare a fallback, steps 4 and 6
-are skipped and a missing role simply shows nothing.
+are skipped and a missing role shows **solid black** on the pad. This is not
+the same as the pad's own auto-lights: when Panel Lights is on the game holds
+ownership of the LEDs at all times and the firmware's built-in animations are
+suppressed. Auto-lights only resume when Panel Lights is turned off.
 
 The table below lists **role names** (the internal key used for lookup). The
 corresponding filename is `{role}_{size}.gif` — for grade-tagged roles like
@@ -808,7 +811,8 @@ panel press, giving tactile feedback while navigating menus.
 Judgement packs follow the same fallback logic as backgrounds. A selected pack
 is tried first; if a gif is not found and the pack declares a fallback in its
 `gifpack.ini`, the fallback pack is checked. With no fallback declared, a
-missing gif simply shows nothing for that event.
+missing gif plays nothing for that event (the panel stays black or shows
+whatever the background gif has rendered beneath it).
 
 ---
 
