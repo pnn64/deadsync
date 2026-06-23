@@ -1,4 +1,32 @@
 use super::super::*;
+use std::fs;
+
+/// Return sorted non-default pack names found in `<assets>/<tree>/common/` and
+/// `<assets>/<tree>/dance/`. The list is prefixed with an empty string so index
+/// 0 always means "use the built-in default".
+pub(in crate::screens::options) fn discover_smx_pack_choices(tree: &str) -> Vec<String> {
+    let root = deadlib_platform::dirs::app_dirs().resolve_asset_path("assets");
+    let base = root.join(tree);
+    let mut names: Vec<String> = Vec::new();
+    for group in ["common", "dance"] {
+        let Ok(entries) = fs::read_dir(base.join(group)) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir()
+                && let Some(name) = path.file_name().and_then(|n| n.to_str())
+            {
+                if name != deadsync_smx::gifs::DEFAULT_PACK {
+                    names.push(name.to_owned());
+                }
+            }
+        }
+    }
+    names.sort();
+    names.dedup();
+    names
+}
 
 /// Live help text for the Assign Pads row: which pad is currently P1 (blue) vs
 /// P2 (red) by slot, plus a same-jumper warning when the pads are ambiguous and
@@ -92,6 +120,8 @@ pub(in crate::screens::options) const INPUT_OPTIONS_ITEMS: &[Item] = &[
             HelpEntry::Bullet(lookup_key("OptionsInput", "OptionsNavigation")),
             HelpEntry::Bullet(lookup_key("OptionsInput", "MenuButtons")),
             HelpEntry::Bullet(lookup_key("OptionsInput", "Debounce")),
+            HelpEntry::Bullet(lookup_key("OptionsInput", "SmxBgPack")),
+            HelpEntry::Bullet(lookup_key("OptionsInput", "SmxJudgePack")),
         ],
     },
     Item {
@@ -309,6 +339,20 @@ pub(in crate::screens::options) const SMX_CONFIG_OPTIONS_ROWS: &[SubRow] = &[
         inline: false,
     },
     SubRow {
+        // Placeholder choice overridden dynamically from smx_bg_pack_choices.
+        id: SubRowId::SmxBgPack,
+        label: lookup_key("OptionsInput", "SmxBgPack"),
+        choices: &[localized_choice("Common", "Default")],
+        inline: true,
+    },
+    SubRow {
+        // Placeholder choice overridden dynamically from smx_judge_pack_choices.
+        id: SubRowId::SmxJudgePack,
+        label: lookup_key("OptionsInput", "SmxJudgePack"),
+        choices: &[localized_choice("Common", "Default")],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::SmxAssignPads,
         label: lookup_key("OptionsInput", "SmxAssignPads"),
         choices: &[localized_choice("Common", "Open")],
@@ -377,6 +421,22 @@ pub(in crate::screens::options) const SMX_CONFIG_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsInputHelp",
             "SmxDefaultLightBrightnessHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::InpSmxBgPack,
+        name: lookup_key("OptionsInput", "SmxBgPack"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsInputHelp",
+            "SmxBgPackHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::InpSmxJudgePack,
+        name: lookup_key("OptionsInput", "SmxJudgePack"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsInputHelp",
+            "SmxJudgePackHelp",
         ))],
     },
     Item {

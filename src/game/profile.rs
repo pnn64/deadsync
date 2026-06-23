@@ -195,7 +195,277 @@ fn load_player_options(
     let has_any = profile_conf
         .get_section(section)
         .is_some_and(|s| !s.is_empty());
-    load_player_options_section(has_any, |key| profile_conf.get(section, key), default)
+    if !has_any {
+        return None;
+    }
+
+    let mut options = default.clone();
+    load_visual_player_options(&mut options, |key| profile_conf.get(section, key));
+    load_timing_feedback_options(&mut options, |key| profile_conf.get(section, key));
+    load_error_bar_options(&mut options, |key| profile_conf.get(section, key));
+    if let Some(step_statistics) = profile_conf
+        .get(section, "StepStatistics")
+        .and_then(|s| StepStatisticsMask::from_str(&s).ok())
+    {
+        options.step_statistics = step_statistics;
+    } else if let Some(step_statistics) = profile_conf
+        .get(section, "DataVisualizations")
+        .and_then(|s| StepStatisticsMask::from_str(&s).ok())
+    {
+        options.step_statistics = step_statistics;
+    }
+    options.step_stats_extra = profile_conf
+        .get(section, "StepStatsExtra")
+        .and_then(|s| StepStatsExtra::from_str(&s).ok())
+        .unwrap_or(options.step_stats_extra);
+    options.target_score = profile_conf
+        .get(section, "TargetScore")
+        .and_then(|s| TargetScoreSetting::from_str(&s).ok())
+        .unwrap_or(options.target_score);
+    options.lifemeter_type = profile_conf
+        .get(section, "LifeMeterType")
+        .and_then(|s| LifeMeterType::from_str(&s).ok())
+        .unwrap_or(options.lifemeter_type);
+    options.measure_counter = profile_conf
+        .get(section, "MeasureCounter")
+        .and_then(|s| MeasureCounter::from_str(&s).ok())
+        .unwrap_or(options.measure_counter);
+    options.measure_counter_lookahead = profile_conf
+        .get(section, "MeasureCounterLookahead")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map(|v| v.min(4))
+        .unwrap_or(options.measure_counter_lookahead);
+    options.measure_counter_left = profile_conf
+        .get(section, "MeasureCounterLeft")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.measure_counter_left, |v| v != 0);
+    options.measure_counter_up = profile_conf
+        .get(section, "MeasureCounterUp")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.measure_counter_up, |v| v != 0);
+    options.measure_counter_vert = profile_conf
+        .get(section, "MeasureCounterVert")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.measure_counter_vert, |v| v != 0);
+    options.broken_run = profile_conf
+        .get(section, "BrokenRun")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.broken_run, |v| v != 0);
+    options.run_timer = profile_conf
+        .get(section, "RunTimer")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.run_timer, |v| v != 0);
+    options.measure_lines = profile_conf
+        .get(section, "MeasureLines")
+        .and_then(|s| MeasureLines::from_str(&s).ok())
+        .unwrap_or(options.measure_lines);
+    options.scroll_speed = profile_conf
+        .get(section, "ScrollSpeed")
+        .and_then(|s| ScrollSpeedSetting::from_str(&s).ok())
+        .unwrap_or(options.scroll_speed);
+    options.no_cmod_alternative = profile_conf
+        .get(section, "NoCmodAlternative")
+        .and_then(|s| deadsync_profile::NoCmodAlternative::from_str(&s).ok())
+        .unwrap_or(options.no_cmod_alternative);
+    options.turn_option = profile_conf
+        .get(section, "Turn")
+        .and_then(|s| TurnOption::from_str(&s).ok())
+        .unwrap_or(options.turn_option);
+    options.insert_active_mask = profile_conf
+        .get(section, "InsertMask")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map(InsertMask::from_bits_truncate)
+        .unwrap_or(options.insert_active_mask);
+    options.remove_active_mask = profile_conf
+        .get(section, "RemoveMask")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map(RemoveMask::from_bits_truncate)
+        .unwrap_or(options.remove_active_mask);
+    options.holds_active_mask = profile_conf
+        .get(section, "HoldsMask")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map(HoldsMask::from_bits_truncate)
+        .unwrap_or(options.holds_active_mask);
+    options.accel_effects_active_mask = profile_conf
+        .get(section, "AccelEffectsMask")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map(AccelEffectsMask::from_bits_truncate)
+        .unwrap_or(options.accel_effects_active_mask);
+    options.visual_effects_active_mask = profile_conf
+        .get(section, "VisualEffectsMask")
+        .and_then(|s| s.parse::<u16>().ok())
+        .map(VisualEffectsMask::from_bits_truncate)
+        .unwrap_or(options.visual_effects_active_mask);
+    options.appearance_effects_active_mask = profile_conf
+        .get(section, "AppearanceEffectsMask")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map(AppearanceEffectsMask::from_bits_truncate)
+        .unwrap_or(options.appearance_effects_active_mask);
+    options.attack_mode = profile_conf
+        .get(section, "AttackMode")
+        .or_else(|| profile_conf.get(section, "Attacks"))
+        .and_then(|s| AttackMode::from_str(&s).ok())
+        .unwrap_or(options.attack_mode);
+    options.hide_light_type = profile_conf
+        .get(section, "HideLightType")
+        .and_then(|s| HideLightType::from_str(&s).ok())
+        .unwrap_or(options.hide_light_type);
+    options.rescore_early_hits = profile_conf
+        .get(section, "RescoreEarlyHits")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.rescore_early_hits, |v| v != 0);
+    options.hide_early_dw_judgments = profile_conf
+        .get(section, "HideEarlyDecentWayOffJudgments")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.hide_early_dw_judgments, |v| v != 0);
+    options.hide_early_dw_flash = profile_conf
+        .get(section, "HideEarlyDecentWayOffFlash")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.hide_early_dw_flash, |v| v != 0);
+    options.hide_early_dw_column_flash = profile_conf
+        .get(section, "HideEarlyDecentWayOffColumnFlash")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.hide_early_dw_column_flash, |v| v != 0);
+    options.timing_windows = profile_conf
+        .get(section, "TimingWindows")
+        .and_then(|s| TimingWindowsOption::from_str(&s).ok())
+        .unwrap_or(options.timing_windows);
+    options.hide_targets = profile_conf
+        .get(section, "HideTargets")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.hide_targets, |v| v != 0);
+    options.hide_song_bg = profile_conf
+        .get(section, "HideSongBG")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.hide_song_bg, |v| v != 0);
+    options.hide_combo = profile_conf
+        .get(section, "HideCombo")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.hide_combo, |v| v != 0);
+    options.hide_lifebar = profile_conf
+        .get(section, "HideLifebar")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.hide_lifebar, |v| v != 0);
+    options.hide_score = profile_conf
+        .get(section, "HideScore")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.hide_score, |v| v != 0);
+    options.hide_danger = profile_conf
+        .get(section, "HideDanger")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.hide_danger, |v| v != 0);
+    options.hide_combo_explosions = profile_conf
+        .get(section, "HideComboExplosions")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.hide_combo_explosions, |v| v != 0);
+    options.hide_username = profile_conf
+        .get(section, "HideUsername")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.hide_username, |v| v != 0);
+    options.column_flash_on_miss = profile_conf
+        .get(section, "ColumnFlashOnMiss")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.column_flash_on_miss, |v| v != 0);
+    options.column_flash_mask = profile_conf
+        .get(section, "ColumnFlashMask")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map(ColumnFlashMask::from_bits_truncate)
+        .unwrap_or(options.column_flash_mask);
+    options.column_flash_brightness = profile_conf
+        .get(section, "ColumnFlashBrightness")
+        .and_then(|s| ColumnFlashBrightness::from_str(&s).ok())
+        .unwrap_or(options.column_flash_brightness);
+    options.column_flash_size = profile_conf
+        .get(section, "ColumnFlashSize")
+        .and_then(|s| ColumnFlashSize::from_str(&s).ok())
+        .unwrap_or(options.column_flash_size);
+    options.subtractive_scoring = profile_conf
+        .get(section, "SubtractiveScoring")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.subtractive_scoring, |v| v != 0);
+    options.pacemaker = profile_conf
+        .get(section, "Pacemaker")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.pacemaker, |v| v != 0);
+    options.nps_graph_at_top = profile_conf
+        .get(section, "NPSGraphAtTop")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.nps_graph_at_top, |v| v != 0);
+    options.transparent_density_graph_bg = profile_conf
+        .get(section, "TransparentDensityGraphBackground")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.transparent_density_graph_bg, |v| v != 0);
+    options.smx_fsr_display = profile_conf
+        .get(section, "SmxFsrDisplay")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.smx_fsr_display, |v| v != 0);
+    options.smx_pad_input_display = profile_conf
+        .get(section, "SmxPadInputDisplay")
+        .and_then(|s| s.parse::<u8>().ok())
+        .map_or(options.smx_pad_input_display, |v| v != 0);
+    options.smx_bg_pack = profile_conf
+        .get(section, "SmxBgPack")
+        .map(|s| if s.is_empty() { None } else { Some(s) })
+        .unwrap_or(None);
+    options.smx_judge_pack = profile_conf
+        .get(section, "SmxJudgePack")
+        .map(|s| if s.is_empty() { None } else { Some(s) })
+        .unwrap_or(None);
+    options.mini_indicator = profile_conf
+        .get(section, "MiniIndicator")
+        .and_then(|s| MiniIndicator::from_str(&s).ok())
+        .unwrap_or({
+            if options.subtractive_scoring {
+                MiniIndicator::SubtractiveScoring
+            } else if options.pacemaker {
+                MiniIndicator::Pacemaker
+            } else {
+                options.mini_indicator
+            }
+        });
+    if options.mini_indicator == MiniIndicator::SubtractiveScoring {
+        options.subtractive_scoring = true;
+    }
+    if options.mini_indicator == MiniIndicator::Pacemaker {
+        options.pacemaker = true;
+    }
+    options.mini_indicator_score_type = profile_conf
+        .get(section, "MiniIndicatorScoreType")
+        .and_then(|s| MiniIndicatorScoreType::from_str(&s).ok())
+        .unwrap_or(options.mini_indicator_score_type);
+    options.mini_indicator_subtractive_display = profile_conf
+        .get(section, "MiniIndicatorSubtractiveDisplay")
+        .and_then(|s| MiniIndicatorSubtractiveDisplay::from_str(&s).ok())
+        .unwrap_or(options.mini_indicator_subtractive_display);
+    options.mini_indicator_size = profile_conf
+        .get(section, "MiniIndicatorSize")
+        .and_then(|s| MiniIndicatorSize::from_str(&s).ok())
+        .unwrap_or(options.mini_indicator_size);
+    options.mini_indicator_color = profile_conf
+        .get(section, "MiniIndicatorColor")
+        .and_then(|s| MiniIndicatorColor::from_str(&s).ok())
+        .unwrap_or(options.mini_indicator_color);
+    options.mini_indicator_position = profile_conf
+        .get(section, "MiniIndicatorPosition")
+        .and_then(|s| MiniIndicatorPosition::from_str(&s).ok())
+        .unwrap_or(options.mini_indicator_position);
+    options.scroll_option = profile_conf
+        .get(section, "Scroll")
+        .and_then(|s| ScrollOption::from_str(&s).ok())
+        .unwrap_or_else(|| {
+            let reverse_enabled = profile_conf
+                .get(section, "ReverseScroll")
+                .and_then(|v| v.parse::<u8>().ok())
+                .map_or(options.reverse_scroll, |v| v != 0);
+            if reverse_enabled {
+                ScrollOption::Reverse
+            } else {
+                options.scroll_option
+            }
+        });
+    options.reverse_scroll = options.scroll_option.contains(ScrollOption::Reverse);
+
+    Some(options)
 }
 
 #[inline(always)]

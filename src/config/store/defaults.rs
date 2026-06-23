@@ -124,6 +124,11 @@ fn push_default_options(content: &mut String, default: &Config) {
     );
     push_line(
         content,
+        "SmxJudgeGifsPack",
+        default.smx_judge_gifs_pack.as_str(),
+    );
+    push_line(
+        content,
         "SmxDefaultPadConfig",
         default.smx_default_pad_config.as_str(),
     );

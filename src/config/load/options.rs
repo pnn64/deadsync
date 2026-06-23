@@ -240,6 +240,10 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "SmxPadGifsPack")
         .map(|v| crate::config::SmxPackName::parse(&v))
         .unwrap_or(default.smx_pad_gifs_pack);
+    cfg.smx_judge_gifs_pack = conf
+        .get("Options", "SmxJudgeGifsPack")
+        .map(|v| crate::config::SmxPackName::parse(&v))
+        .unwrap_or(default.smx_judge_gifs_pack);
     cfg.smx_default_pad_config = conf
         .get("Options", "SmxDefaultPadConfig")
         .and_then(|s| crate::config::SmxPadPreset::from_str(&s).ok())

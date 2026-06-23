@@ -14,6 +14,31 @@ pub(super) fn discover_noteskin_names() -> Vec<String> {
     noteskin::discover_itg_skins("dance")
 }
 
+pub(super) fn discover_smx_pack_names(tree: &str) -> Vec<String> {
+    use std::fs;
+    let root = deadlib_platform::dirs::app_dirs().resolve_asset_path("assets");
+    let base = root.join(tree);
+    let mut names: Vec<String> = Vec::new();
+    for group in ["common", "dance"] {
+        let Ok(entries) = fs::read_dir(base.join(group)) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir()
+                && let Some(name) = path.file_name().and_then(|n| n.to_str())
+            {
+                if name != deadsync_smx::gifs::DEFAULT_PACK {
+                    names.push(name.to_owned());
+                }
+            }
+        }
+    }
+    names.sort();
+    names.dedup();
+    names
+}
+
 pub(super) fn build_noteskin_override_choices(noteskin_names: &[String]) -> Vec<String> {
     let mut choices = Vec::with_capacity(noteskin_names.len() + 1);
     choices.push(tr("PlayerOptions", "MatchNoteSkinLabel").to_string());

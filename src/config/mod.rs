@@ -207,6 +207,9 @@ pub struct Config {
     /// User animation pack supplying the pad backgrounds (a directory under
     /// `assets/smx-pad-lights/dance/`). Empty selects the built-in set.
     pub smx_pad_gifs_pack: SmxPackName,
+    /// User animation pack supplying the judgement GIFs (a directory under
+    /// `assets/smx-judge-lights/dance/`). Empty selects the built-in set.
+    pub smx_judge_gifs_pack: SmxPackName,
     /// Set the SMX pad edge underglow LEDs to the player's theme colour.
     pub smx_underglow_theme: bool,
     /// Built-in pad preset flashed as the fallback when DeadSync manages pad
@@ -462,6 +465,7 @@ impl Default for Config {
             smx_manages_pad_config: false,
             smx_panel_lights: false,
             smx_pad_gifs_pack: SmxPackName::default(),
+            smx_judge_gifs_pack: SmxPackName::default(),
             smx_underglow_theme: false,
             smx_default_pad_config: SmxPadPreset::Low,
             smx_default_light_brightness: 100,

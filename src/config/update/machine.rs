@@ -122,6 +122,28 @@ pub fn update_smx_panel_lights(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_smx_pad_gifs_pack(pack: crate::config::SmxPackName) {
+    {
+        let mut cfg = lock_config();
+        if cfg.smx_pad_gifs_pack == pack {
+            return;
+        }
+        cfg.smx_pad_gifs_pack = pack;
+    }
+    save_without_keymaps();
+}
+
+pub fn update_smx_judge_gifs_pack(pack: crate::config::SmxPackName) {
+    {
+        let mut cfg = lock_config();
+        if cfg.smx_judge_gifs_pack == pack {
+            return;
+        }
+        cfg.smx_judge_gifs_pack = pack;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_smx_underglow_theme(enabled: bool) {
     {
         let mut cfg = lock_config();

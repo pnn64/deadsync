@@ -4159,7 +4159,7 @@ pub struct App {
     /// no allocation) so a per-song/per-pack background is re-resolved when the
     /// highlighted (song select) or playing (gameplay) song changes. Reset on a
     /// song rescan, so a recycled pointer can't be mistaken for the same song.
-    smx_bg_synced: Option<(bool, Option<&'static str>, config::SmxPackName, Option<usize>, Option<u32>)>,
+    smx_bg_synced: Option<(bool, Option<&'static str>, config::SmxPackName, config::SmxPackName, Option<usize>, Option<u32>)>,
     /// Per-slot blackout state last sent to the SMX lights worker; `[P1_slot, P2_slot]`.
     smx_blackout_synced: [bool; 2],
     /// Decoded per-song / per-pack pad background variants, keyed by their
@@ -4827,7 +4827,31 @@ impl App {
             config.lights_simplify_bass,
             config.smx_input && config.smx_panel_lights,
         );
-        self.sync_smx_pad_gifs(config.smx_input && config.smx_panel_lights, config.smx_pad_gifs_pack);
+        {
+            use profile_data::PlayerSide;
+            // Resolve per-player pack overrides: first joined player's preference wins,
+            // falling back to the machine default. Solo play always gets the solo player's
+            // pack; versus/doubles falls back to P1 then P2 then machine config.
+            let resolve_pack = |machine: config::SmxPackName, field: fn(&profile_data::Profile) -> Option<&String>| -> config::SmxPackName {
+                for side in [PlayerSide::P1, PlayerSide::P2] {
+                    if profile::is_session_side_joined(side) {
+                        let p = profile::get_for_side(side);
+                        if let Some(pack) = field(&p) {
+                            return config::SmxPackName::parse(pack.as_str());
+                        }
+                        return machine;
+                    }
+                }
+                machine
+            };
+            let bg_pack = resolve_pack(config.smx_pad_gifs_pack, |p| p.smx_bg_pack.as_ref());
+            let judge_pack = resolve_pack(config.smx_judge_gifs_pack, |p| p.smx_judge_pack.as_ref());
+            self.sync_smx_pad_gifs(
+                config.smx_input && config.smx_panel_lights,
+                bg_pack,
+                judge_pack,
+            );
+        }
         self.sync_smx_pad_blackout(config.smx_input && config.smx_panel_lights);
         if config.smx_input && config.smx_panel_lights && self.state.screens.current_screen == CurrentScreen::SelectMusic {
             // One f32 per frame; the driver drops it unless the background is
@@ -4913,7 +4937,7 @@ impl App {
     /// follows the (enabled, pack) pair. Cheap per frame: lookups only happen
     /// when the toggle, screen role, pack, or current song folder changes, and
     /// the driver deduplicates the rest.
-    fn sync_smx_pad_gifs(&mut self, enabled: bool, pack: config::SmxPackName) {
+    fn sync_smx_pad_gifs(&mut self, enabled: bool, pack: config::SmxPackName, judge_pack: config::SmxPackName) {
         // The StepManiaX options page lights the pads blue/red to preview the
         // player assignment (`drive_smx_options_lights`), writing the pad
         // directly. Suppress the gif background there so the two don't fight
@@ -4964,13 +4988,13 @@ impl App {
         };
         let eval_grade_key = eval_grade.map(|g| g.to_sprite_state());
 
-        let synced = Some((enabled, role, pack, song_id, eval_grade_key));
+        let synced = Some((enabled, role, pack, judge_pack, song_id, eval_grade_key));
         if self.smx_bg_synced == synced {
             return;
         }
         let pack_changed = self
             .smx_bg_synced
-            .is_none_or(|(e, _, p, _, _)| e != enabled || p != pack);
+            .is_none_or(|(e, _, p, jp, _, _)| e != enabled || p != pack || jp != judge_pack);
         self.smx_bg_synced = synced;
 
         let song_dir = song
@@ -5040,7 +5064,8 @@ impl App {
         if pack_changed {
             let gifs = if enabled {
                 let registry = self.smx_gif_registry().clone();
-                smx_panel_fx::JudgementGifs::resolve(&registry, pack_str)
+                let judge_pack_str = (!judge_pack.is_empty()).then_some(judge_pack.as_str());
+                smx_panel_fx::JudgementGifs::resolve(&registry, judge_pack_str)
             } else {
                 smx_panel_fx::JudgementGifs::default()
             };

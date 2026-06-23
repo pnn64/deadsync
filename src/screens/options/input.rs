@@ -394,6 +394,30 @@ pub(super) fn apply_submenu_choice_delta(
                 new_index,
             ));
         }
+        if row.id == SubRowId::SmxBgPack {
+            let pack = if new_index == 0 {
+                crate::config::SmxPackName::default()
+            } else {
+                state
+                    .smx_bg_pack_choices
+                    .get(new_index - 1)
+                    .map(|s| crate::config::SmxPackName::parse(s))
+                    .unwrap_or_default()
+            };
+            config::update_smx_pad_gifs_pack(pack);
+        }
+        if row.id == SubRowId::SmxJudgePack {
+            let pack = if new_index == 0 {
+                crate::config::SmxPackName::default()
+            } else {
+                state
+                    .smx_judge_pack_choices
+                    .get(new_index - 1)
+                    .map(|s| crate::config::SmxPackName::parse(s))
+                    .unwrap_or_default()
+            };
+            config::update_smx_judge_gifs_pack(pack);
+        }
         if row.id == SubRowId::SmxSinglePadPlayer {
             // Pin the lone connected pad's serial to the chosen side (index 0 = P1,
             // 1 = P2). The SDK then relocates it to that slot. Row is only shown
