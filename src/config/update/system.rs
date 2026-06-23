@@ -110,6 +110,25 @@ pub fn update_simply_love_color(index: i32) {
         cfg.simply_love_color = index;
     }
     save_without_keymaps();
+    send_smx_underglow_color();
+}
+
+/// Push the current theme colour to the SMX pad edge LED strips. P1 pad gets
+/// `simply_love_color`; P2 pad gets `simply_love_color - 2` (the existing P2
+/// differentiation offset). No-op when SMX input is disabled.
+pub fn send_smx_underglow_color() {
+    let cfg = get();
+    if !cfg.smx_input {
+        return;
+    }
+    let index = cfg.simply_love_color;
+    let p1_rgba = deadlib_present::color::decorative_rgba(index);
+    let p2_rgba = deadlib_present::color::decorative_rgba(index - 2);
+    let to_u8 = |c: f32| (c * 255.0).round() as u8;
+    deadsync_smx::set_platform_lights_solid([
+        Some([to_u8(p1_rgba[0]), to_u8(p1_rgba[1]), to_u8(p1_rgba[2])]),
+        Some([to_u8(p2_rgba[0]), to_u8(p2_rgba[1]), to_u8(p2_rgba[2])]),
+    ]);
 }
 
 pub fn update_global_offset(offset: f32) {

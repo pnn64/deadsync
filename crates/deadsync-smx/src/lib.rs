@@ -9,7 +9,8 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
 use rustmaniax_sdk::{
-    BYTES_PER_PAD_25, ConfigFlags, NUM_PANELS, SMX_USB_PRODUCT_ID, SMX_USB_VENDOR_ID, SmxEvent,
+    BYTES_PER_PAD_25, ConfigFlags, NUM_PANELS, PLATFORM_STRIP_LEDS, SMX_USB_PRODUCT_ID,
+    SMX_USB_VENDOR_ID, SmxEvent,
 };
 pub use rustmaniax_sdk::{SensorTestData, SensorTestMode, SmxConfig, SmxInfo, SmxManager};
 
@@ -748,6 +749,22 @@ pub fn set_player_lights_with_brightness(colors: [Option<[u8; 3]>; 2], brightnes
 /// per-slot brightness. One-shot, so re-send to hold the colour.
 pub fn set_player_lights(colors: [Option<[u8; 3]>; 2]) {
     set_player_lights_with_brightness(colors, light_brightness());
+}
+
+/// Fill each pad's edge LED strip with a solid colour by slot (`colors[0]` = P1
+/// slot, `colors[1]` = P2 slot; `None` leaves that pad's strip unchanged).
+/// One-shot; re-send to hold the colour.
+pub fn set_platform_lights_solid(colors: [Option<[u8; 3]>; 2]) {
+    let Some(s) = SHARED.get() else { return };
+    let mut buf = vec![0u8; PLATFORM_STRIP_LEDS * 3 * 2];
+    for (pad, color) in colors.iter().enumerate() {
+        let Some(rgb) = color else { continue };
+        let base = pad * PLATFORM_STRIP_LEDS * 3;
+        for led in buf[base..base + PLATFORM_STRIP_LEDS * 3].chunks_exact_mut(3) {
+            led.copy_from_slice(rgb);
+        }
+    }
+    s.manager.set_platform_lights(&buf);
 }
 
 /// Re-enable the pads' built-in automatic lighting (call when leaving a screen

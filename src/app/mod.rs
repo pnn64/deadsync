@@ -86,7 +86,7 @@ use deadsync_input as logical_input;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, PadEvent, VirtualAction};
 use deadsync_input_fsr as fsr_input;
-use deadsync_input_native::GpSystemEvent;
+use deadsync_input_native::{GpSystemEvent, PadBackend};
 use deadsync_lights::{
     self as lights, ButtonLight, CabinetLight, HideFlags, Mode as LightMode, Player as LightPlayer,
 };
@@ -10572,6 +10572,9 @@ impl ApplicationHandler<UserEvent> for App {
                             usize::from(*id),
                             backend
                         );
+                        if *backend == PadBackend::Smx {
+                            config::send_smx_underglow_color();
+                        }
                         if !*initial {
                             self.state.shell.gamepad_overlay_state = Some((
                                 format!(
