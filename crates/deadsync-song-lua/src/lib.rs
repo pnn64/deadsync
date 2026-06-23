@@ -6,25 +6,36 @@ use deadlib_present::anim::{EffectClock, EffectMode};
 use deadsync_profile::NoteSkin;
 
 mod cmd;
+mod crypto;
 mod files;
+mod json;
 mod lua_util;
+mod net;
 mod runtime;
 mod sl;
+mod tables;
 mod theme_colors;
+mod timing;
 mod values;
+mod version;
 
 pub use cmd::preprocess_lua_cmd_syntax;
+pub use crypto::create_cryptman_table;
 pub use files::{
-    file_path_string, is_song_lua_audio_path, is_song_lua_image_path, is_song_lua_media_path,
-    is_song_lua_simfile_path, is_song_lua_video_path, song_dir_string, song_group_name,
-    song_music_path, song_named_image_path, song_simfile_path,
+    actor_util_class_registered, actor_util_file_type, file_path_string, fileman_dir_listing,
+    find_compat_files, is_song_lua_audio_path, is_song_lua_image_path, is_song_lua_media_path,
+    is_song_lua_simfile_path, is_song_lua_video_path, path_basename, resolve_compat_path,
+    song_dir_string, song_group_name, song_music_path, song_named_image_path, song_simfile_path,
+    strip_sprite_hints, wildcard_matches,
 };
+pub use json::{json_to_lua_value, lua_to_json_value};
 pub use lua_util::{
     create_bool_array, create_color_constants_table, create_owned_string_array,
     create_string_array, lua_format_text, lua_text_value, make_color_table, method_arg,
     method_arg_offset, read_color_call, read_color_value, read_song_lua_sound_paths,
     read_vertex_colors_value,
 };
+pub use net::{create_network_table, encode_query_params, query_value_text, url_encode_component};
 pub use runtime::{
     compile_song_runtime_delta_values, compile_song_runtime_values, create_song_position_table,
     create_song_runtime_table, note_song_lua_side_effect, read_song_lua_broadcasts,
@@ -33,6 +44,13 @@ pub use runtime::{
     song_lua_runtime_number, song_lua_side_effect_count,
 };
 pub use sl::{create_sl_streams, create_sl_table, init_sl_streams};
+pub use tables::{
+    create_author_table, create_background_filter_values, create_credits_table,
+    create_ex_judgment_counts, create_gameplay_layout, create_index_array, create_ini_file_table,
+    create_network_response_table, create_rage_file_util_table, create_range_table,
+    create_split_table, create_version_parts_table, create_websocket_table, deduplicate_lua_table,
+    lua_table_to_string, map_lua_table, rotate_lua_table, stringify_lua_table,
+};
 pub use theme_colors::{
     DDR_DIFF_COLORS, ITG_DIFF_COLORS, SL_COLORS, SL_DECORATIVE_COLORS, SL_FA_PLUS_COLORS,
     SL_JUDGMENT_COLORS, SONG_LUA_ACTIVE_COLOR_INDEX, blend_color, color_to_hex,
@@ -40,11 +58,13 @@ pub use theme_colors::{
     song_lua_difficulty_color, song_lua_difficulty_index, song_lua_palette, song_lua_player_color,
     song_lua_player_dark_color, song_lua_player_score_color, stage_color, tone_color,
 };
+pub use timing::{timing_window_arg_index, timing_window_seconds, worst_judgment_from_offsets};
 pub use values::{
-    SONG_LUA_EASING_NAME_KEY, lua_values_equal, player_index_from_value, player_number_name,
-    read_boolish, read_easing_name, read_f32, read_i32_value, read_player, read_span_mode,
-    read_string, read_u32_value, truthy,
+    SONG_LUA_EASING_NAME_KEY, lua_binary_to_hex, lua_values_equal, player_index_from_value,
+    player_number_name, read_boolish, read_easing_name, read_f32, read_i32_value, read_player,
+    read_span_mode, read_string, read_u32_value, truthy,
 };
+pub use version::{is_minimum_product_version, is_product_version, version_args, version_parts};
 
 pub const LUA_PLAYERS: usize = 2;
 pub const SONG_LUA_RUNTIME_KEY: &str = "__songlua_compile_song_runtime";

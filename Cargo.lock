@@ -1122,7 +1122,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.4.1521"
+version = "0.4.1529"
 dependencies = [
  "bincode",
  "bitflags 2.13.0",
@@ -1457,6 +1457,7 @@ dependencies = [
  "deadlib-present",
  "deadsync-profile",
  "mlua",
+ "serde_json",
 ]
 
 [[package]]
@@ -1480,7 +1481,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.4.1521"
+version = "0.4.1529"
 dependencies = [
  "log",
  "semver",

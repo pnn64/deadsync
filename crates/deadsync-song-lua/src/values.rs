@@ -146,6 +146,20 @@ pub fn lua_values_equal(left: &Value, right: &Value) -> bool {
     }
 }
 
+pub fn lua_binary_to_hex(value: Value) -> String {
+    let Value::String(text) = value else {
+        return String::new();
+    };
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
+    let bytes = text.as_bytes();
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for byte in bytes.iter().copied() {
+        out.push(HEX[(byte >> 4) as usize] as char);
+        out.push(HEX[(byte & 0x0f) as usize] as char);
+    }
+    out
+}
+
 #[inline(always)]
 pub fn player_index_from_value(value: &Value) -> Option<usize> {
     match value {
