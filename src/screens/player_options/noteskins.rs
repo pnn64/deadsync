@@ -1,8 +1,9 @@
 use super::*;
+use deadsync_noteskin::Style;
 use deadsync_profile as profile_data;
 
 pub(super) fn load_noteskin_cached(skin: &str, cols_per_player: usize) -> Option<Arc<Noteskin>> {
-    let style = noteskin::Style {
+    let style = Style {
         num_cols: cols_per_player,
         num_players: 1,
     };

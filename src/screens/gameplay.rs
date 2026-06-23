@@ -4,7 +4,7 @@ use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::sprite_sheet_dims;
 use crate::assets::{FontRole, current_machine_font_key, visual_styles};
 use crate::game::parsing::noteskin::{
-    self, ModelDrawState, ModelMeshCache, ModelMeshCacheStats, Noteskin, SpriteSlot, Style,
+    self, ModelMeshCache, ModelMeshCacheStats, Noteskin, SpriteSlot,
 };
 use crate::game::parsing::song_lua::{
     CompiledSongLua, SongLuaCapturedActor, SongLuaCompileContext, SongLuaDifficulty,
@@ -61,6 +61,10 @@ use deadsync_gameplay::{
     song_lua_ease_factor, spacing_multiplier_for_percent, update_core,
 };
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_notefield::{FieldPlacement, ProxyCaptureRequests, ViewOverride};
+use deadsync_noteskin::{
+    ModelDrawState, ReceptorGlowBehavior, ReceptorStepBehavior, Style, TweenType,
+};
 use deadsync_online::lobbies as lobby_data;
 use deadsync_profile as profile_data;
 use deadsync_rules::note::Note;
@@ -128,7 +132,7 @@ const DIFFICULTY_METER_Y: f32 = 56.0;
 const DIFFICULTY_METER_SIZE: f32 = 30.0;
 const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0;
 
-pub use crate::screens::components::gameplay::notefield::ViewOverride as NotefieldViewOverride;
+pub use deadsync_notefield::ViewOverride as NotefieldViewOverride;
 
 #[inline(always)]
 fn player_blue_window_ms(state: &GameplayCoreState, player_idx: usize) -> f32 {
@@ -791,18 +795,16 @@ fn noteskin_effects_from_assets(
 }
 
 #[inline(always)]
-fn gameplay_tween(tween: noteskin::TweenType) -> GameplayTween {
+fn gameplay_tween(tween: TweenType) -> GameplayTween {
     match tween {
-        noteskin::TweenType::Linear => GameplayTween::Linear,
-        noteskin::TweenType::Accelerate => GameplayTween::Accelerate,
-        noteskin::TweenType::Decelerate => GameplayTween::Decelerate,
+        TweenType::Linear => GameplayTween::Linear,
+        TweenType::Accelerate => GameplayTween::Accelerate,
+        TweenType::Decelerate => GameplayTween::Decelerate,
     }
 }
 
 #[inline(always)]
-fn gameplay_receptor_glow_behavior(
-    behavior: noteskin::ReceptorGlowBehavior,
-) -> GameplayReceptorGlowBehavior {
+fn gameplay_receptor_glow_behavior(behavior: ReceptorGlowBehavior) -> GameplayReceptorGlowBehavior {
     GameplayReceptorGlowBehavior {
         press_duration: behavior.press_duration,
         press_alpha_start: behavior.press_alpha_start,
@@ -821,9 +823,7 @@ fn gameplay_receptor_glow_behavior(
 }
 
 #[inline(always)]
-fn gameplay_receptor_step_behavior(
-    behavior: noteskin::ReceptorStepBehavior,
-) -> GameplayReceptorStepBehavior {
+fn gameplay_receptor_step_behavior(behavior: ReceptorStepBehavior) -> GameplayReceptorStepBehavior {
     GameplayReceptorStepBehavior {
         duration: behavior.duration,
         zoom_start: behavior.zoom_start,
@@ -9621,7 +9621,7 @@ fn song_lua_player_target_x(
     explicit_x: Option<f32>,
     player_state_x: f32,
     layout_center_x: f32,
-    notefield_view: notefield::ViewOverride,
+    notefield_view: ViewOverride,
 ) -> f32 {
     explicit_x.unwrap_or(if notefield_view.force_center_1player {
         layout_center_x
@@ -10112,12 +10112,12 @@ pub fn push_actors(
     let mut build_player_bundle =
         |player_idx: usize,
          profile: &profile_data::Profile,
-         placement: notefield::FieldPlacement,
+         placement: FieldPlacement,
          requests: SongLuaPlayerProxyRequests| {
             let field_scratch = &mut notefield_actor_scratch[player_idx];
             let hud_scratch = &mut notefield_hud_actor_scratch[player_idx];
             let player_scratch = &mut player_actor_scratch[player_idx];
-            let notefield::BuiltNotefield {
+            let deadsync_notefield::BuiltNotefield {
                 layout_center_x,
                 field_actors,
                 judgment_actors,
@@ -10130,11 +10130,12 @@ pub fn push_actors(
                 placement,
                 play_style,
                 center_1player_notefield,
-                notefield::ProxyCaptureRequests {
+                ProxyCaptureRequests {
                     note_field: requests.note_field,
                     judgment: requests.judgment,
                     combo: requests.combo,
                 },
+                scores::should_warn_cmod_for_itl_chart(state, player_idx),
                 notefield_view,
                 field_scratch,
                 hud_scratch,
@@ -10271,13 +10272,13 @@ pub fn push_actors(
             let (p1_x, p1_player_source, p1_sources) = build_player_bundle(
                 0,
                 &state.profiles()[0],
-                notefield::FieldPlacement::P1,
+                FieldPlacement::P1,
                 proxy_requests.players[0],
             );
             let (p2_x, p2_player_source, p2_sources) = build_player_bundle(
                 1,
                 &state.profiles()[1],
-                notefield::FieldPlacement::P2,
+                FieldPlacement::P2,
                 proxy_requests.players[1],
             );
             (
@@ -10292,9 +10293,9 @@ pub fn push_actors(
         }
         _ => {
             let placement = if is_p2_single {
-                notefield::FieldPlacement::P2
+                FieldPlacement::P2
             } else {
-                notefield::FieldPlacement::P1
+                FieldPlacement::P1
             };
             let (nf_x, nf_player_source, nf_sources) = build_player_bundle(
                 0,
@@ -12243,9 +12244,9 @@ mod tests {
 
     #[test]
     fn forced_center_view_uses_layout_player_x() {
-        let view = notefield::ViewOverride {
+        let view = ViewOverride {
             force_center_1player: true,
-            ..notefield::ViewOverride::default()
+            ..ViewOverride::default()
         };
 
         assert_eq!(song_lua_player_target_x(None, 320.0, 800.0, view), 800.0);
@@ -12253,9 +12254,9 @@ mod tests {
 
     #[test]
     fn forced_center_view_preserves_explicit_player_x() {
-        let view = notefield::ViewOverride {
+        let view = ViewOverride {
             force_center_1player: true,
-            ..notefield::ViewOverride::default()
+            ..ViewOverride::default()
         };
 
         assert_eq!(
@@ -12267,7 +12268,7 @@ mod tests {
     #[test]
     fn default_view_uses_player_state_x() {
         assert_eq!(
-            song_lua_player_target_x(None, 320.0, 800.0, notefield::ViewOverride::default()),
+            song_lua_player_target_x(None, 320.0, 800.0, ViewOverride::default()),
             320.0
         );
     }

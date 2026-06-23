@@ -5,7 +5,10 @@ edition = "2024"
 license = "GPL-3.0"
 
 [dependencies]
+deadlib-present = { path = "../deadlib-present" }
+deadlib-render = { path = "../deadlib-render" }
 deadsync-core = { path = "../deadsync-core" }
+deadsync-noteskin = { path = "../deadsync-noteskin" }
 deadsync-rules = { path = "../deadsync-rules" }
 glam = "0.33.1"
 

@@ -1,19 +1,11 @@
 use crate::act;
 use crate::assets;
-use crate::game::parsing::noteskin::{
-    ModelDrawState, ModelMeshCache, NUM_QUANTIZATIONS, NoteAnimPart, Noteskin, SpriteSlot,
-};
-use crate::game::scores;
-use crate::game::{
-    GameplayCoreState as State, scroll_effects_from_option, tap_explosion_options_from_profile,
-};
+use crate::game::GameplayCoreState as State;
+use crate::game::parsing::noteskin::{ModelMeshCache, Noteskin, SpriteSlot};
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor_from_draw_cached;
 use crate::screens::gameplay::GameplayNoteskinAssets;
-use deadlib_present::actors::{Actor, SizeSpec};
-use deadlib_present::cache::{TextCache, cached_text};
+use deadlib_present::actors::Actor;
 use deadlib_present::color;
-use deadlib_present::compose::TextLayoutCache;
-use deadlib_present::font;
 use deadlib_present::space::*;
 use deadlib_render::{BlendMode, TexturedMeshVertex};
 use deadsync_core::input::{MAX_COLS, MAX_PLAYERS};
@@ -24,75 +16,81 @@ use deadsync_gameplay::{
     AccelEffects, AppearanceEffects, COMBO_HUNDRED_MILESTONE_DURATION,
     COMBO_THOUSAND_MILESTONE_DURATION, ComboMilestoneKind, FantasticWindowOptions,
     GameplayErrorBarTrim, HELD_MISS_TOTAL_DURATION, HOLD_JUDGMENT_TOTAL_DURATION,
-    PerspectiveEffects, PlayerRuntime, RECEPTOR_Y_OFFSET_FROM_CENTER,
-    RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, ScrollEffects, VisualEffects, active_column_cue,
-    blue_fantastic_window_ms, column_flash_duration, gameplay_error_bar_trim_max_window_ix,
-    hold_explosion_active, hold_explosion_enabled_for_options, hold_head_render_flags,
-    let_go_head_beat, perspective_effects_from_profile, scroll_receptor_y,
-    song_lua_column_y_offset, song_lua_note_hidden, spacing_multiplier_for_percent,
+    RECEPTOR_Y_OFFSET_FROM_CENTER, RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, TapExplosionOptions,
+    VisualEffects, active_column_cue, blue_fantastic_window_ms, column_flash_duration,
+    gameplay_error_bar_trim_max_window_ix, hold_explosion_active,
+    hold_explosion_enabled_for_options, hold_head_render_flags, let_go_head_beat,
+    scroll_receptor_y, song_lua_column_y_offset, song_lua_note_hidden,
 };
 use deadsync_notefield::{
-    AccelYParams, COLUMN_CUE_Y_OFFSET, DISPLAY_TURN_BLENDER, DISPLAY_TURN_LEFT,
-    DISPLAY_TURN_LR_MIRROR, DISPLAY_TURN_MIRROR, DISPLAY_TURN_RANDOM, DISPLAY_TURN_RIGHT,
-    DISPLAY_TURN_SHUFFLE, DISPLAY_TURN_UD_MIRROR, GameplayModsAttackMode, GameplayModsTextParams,
-    HudLayoutOffsets, HudLayoutParams, HudLayoutYs, JudgmentTiltParams,
-    LayoutMiniIndicatorPosition, MiniIndicatorColorStyle, MiniIndicatorMode, MiniIndicatorProgress,
-    MiniIndicatorScoreType, MiniIndicatorSize, MiniIndicatorSubtractiveDisplay, NoteAlphaParams,
-    NoteXParams, TapJudgmentRowsParams, TornadoBounds, VisualEffectParams, ZmodComboColorParams,
-    ZmodComboColorStyle, ZmodLayoutParams, ZmodMeasureCounterText, ZmodMiniIndicatorParams,
-    ZmodMiniIndicatorText, appearance_needs_rows, appearance_note_actor_alpha,
+    AccelYParams, BuiltNotefield, COLUMN_CUE_Y_OFFSET, HudLayoutOffsets, HudLayoutParams,
+    HudLayoutYs, JudgmentTiltParams, LayoutMiniIndicatorPosition, NoteAlphaParams, NoteXParams,
+    TapJudgmentRowsParams, TornadoBounds, VisualEffectParams, ZmodLayoutParams,
+    ZmodMeasureCounterText, actor_with_world_z, appearance_needs_rows, appearance_note_actor_alpha,
     appearance_note_glow, apply_accel_y as crate_apply_accel_y,
     apply_accel_y_with_peak as crate_apply_accel_y_with_peak, average_error_bar_mini_scale,
-    beat_factor, beat_scroll_travel, bottom_cap_uv_window, clamp_rounded_i16,
-    clipped_hold_body_bounds, column_cue_alpha, column_cue_height, column_cue_reverse_top_y,
-    column_flash_alpha, column_flash_color, column_flash_height, column_flash_layout,
-    column_flash_reverse_top_y, combo_actor_zoom, compute_invert_distances, compute_tornado_bounds,
-    crossover_cue_height, edit_bar_candidate_step_rows, edit_bar_scroll_speed,
-    edit_beat_bar_info_for_row, edit_beat_scroll_travel,
-    effective_mini_value as crate_effective_mini_value, error_bar_boundaries_s,
-    error_bar_color_for_window, error_bar_flash_alpha, error_bar_text_scalable_zoom,
-    error_bar_tick_alpha, field_effect_height as field_effect_height_for_screen,
-    fill_lane_col_offsets, find_first_displayed_beat, find_last_displayed_beat,
-    for_each_visible_hold_index, for_each_visible_note_index,
-    gameplay_mods_text as crate_gameplay_mods_text, held_miss_zoom, hold_body_bottom_for_tail_cap,
+    beat_factor, beat_scroll_travel, bottom_cap_uv_window, clipped_hold_body_bounds,
+    column_cue_alpha, column_cue_height, column_cue_reverse_top_y, column_flash_alpha,
+    column_flash_color, column_flash_height, column_flash_layout, column_flash_reverse_top_y,
+    combo_actor_zoom, compute_invert_distances, compute_tornado_bounds, crossover_cue_height,
+    edit_bar_candidate_step_rows, edit_bar_scroll_speed, edit_beat_bar_info_for_row,
+    edit_beat_scroll_travel, effective_mini_value as crate_effective_mini_value,
+    error_bar_boundaries_s, error_bar_color_for_window, error_bar_flash_alpha,
+    error_bar_text_scalable_zoom, error_bar_tick_alpha,
+    field_effect_height as field_effect_height_for_screen, fill_lane_col_offsets,
+    find_first_displayed_beat, find_last_displayed_beat, for_each_visible_hold_index,
+    for_each_visible_note_index, held_miss_zoom, hold_body_bottom_for_tail_cap,
     hold_body_segment_budget, hold_draw_span, hold_glow_color,
     hold_indicator_column_x as crate_hold_indicator_column_x, hold_overlaps_visible_window,
-    hold_segment_pose, hold_tail_cap_bounds, hud_layout_ys as crate_hud_layout_ys, hud_y,
-    itg_actor_glow_alpha, judgment_actor_zoom,
+    hold_parts_for_note_type, hold_segment_pose, hold_strip_actor, hold_strip_glow_actor,
+    hold_strip_quad, hold_strip_row_3d, hold_strip_row_from_positions, hold_tail_cap_bounds,
+    hud_layout_ys as crate_hud_layout_ys, hud_y, itg_actor_glow_alpha, judgment_actor_zoom,
     judgment_tilt_rotation_deg as crate_judgment_tilt_rotation_deg, maybe_flip_uv_vert,
-    maybe_mirror_uv_horiz_for_reverse_flipped, mine_hides_after_resolution, mod_percent_key,
+    maybe_mirror_uv_horiz_for_reverse_flipped, mine_hides_after_resolution, mine_part,
     move_col_extra, note_world_z_for_bumpy, note_x_offset as crate_note_x_offset,
-    notefield_view_proj, offset_center, player_metric_y, quantize_centi_i32, quantize_centi_u32,
+    notefield_view_proj, offset_center, player_metric_y,
     receptor_row_center as crate_receptor_row_center, scale_cap_to_arrow, scale_effect_size,
-    scale_sprite_to_arrow, scaled_edit_bar_alpha, smoothstep01, song_time_ns_delta_seconds,
-    song_time_ns_to_seconds, stream_segment_index_exclusive_end,
-    tap_judgment_rows as crate_tap_judgment_rows, timing_window_from_num, tipsy_y_extra,
-    top_cap_rotation_deg, translated_uv_rect, visual_arrow_effect_zoom,
-    visual_confusion_rotation_deg,
+    scale_sprite_to_arrow, scaled_edit_bar_alpha, share_actor_range, smoothstep01,
+    song_time_ns_delta_seconds, song_time_ns_to_seconds, stream_segment_index_exclusive_end,
+    tap_judgment_rows as crate_tap_judgment_rows, tap_part_for_note_type, tap_replacement_head,
+    timing_window_from_num, tipsy_y_extra, top_cap_rotation_deg, translated_uv_rect,
+    visual_arrow_effect_zoom, visual_confusion_rotation_deg,
     visual_effect_params_for_col as crate_visual_effect_params_for_col,
     visual_hold_body_needs_z_buffer, visual_note_rotation_z, visual_pulse_zoom_for_y,
     visual_tiny_zoom, visual_use_legacy_hold_sprites, zmod_broken_run_counter_text,
     zmod_broken_run_end, zmod_broken_run_segment,
-    zmod_combo_quint_active as crate_zmod_combo_quint_active,
-    zmod_measure_counter_text as crate_zmod_measure_counter_text, zmod_mini_indicator_output,
-    zmod_mini_indicator_zoom as crate_zmod_mini_indicator_zoom, zmod_percent_from_points,
-    zmod_resolved_combo_color as crate_zmod_resolved_combo_color,
-    zmod_resolved_mini_indicator_mode, zmod_run_timer_index,
-    zmod_static_combo_color as crate_zmod_static_combo_color, zmod_stream_prog_completion_for_beat,
+    zmod_measure_counter_text as crate_zmod_measure_counter_text, zmod_run_timer_index,
 };
+use deadsync_notefield::{FieldPlacement, ProxyCaptureRequests, ViewOverride};
+use deadsync_noteskin::{ModelDrawState, NUM_QUANTIZATIONS};
 use deadsync_profile as profile_data;
-use deadsync_rules::judgment::{self, HOLD_SCORE_HELD, JudgeGrade, Judgment};
+use deadsync_rules::judgment::Judgment;
 use deadsync_rules::note::{HoldResult, Note};
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::stream::StreamSegment;
-use glam::Mat4 as Matrix4;
 use std::array::from_fn;
 use std::cell::RefCell;
-use std::collections::HashMap;
-use std::hash::{BuildHasherDefault, Hasher};
 use std::sync::Arc;
 use std::time::Instant;
-use twox_hash::XxHash64;
+
+mod measure;
+mod prewarm;
+mod text;
+mod zmod;
+use measure::{append_beat_bar, append_cue_bar, append_edit_measure_number};
+pub use prewarm::prewarm_text_layout;
+pub(crate) use text::gameplay_mods_text;
+use text::{
+    cached_error_bar_text_label, cached_int_i32, cached_int_u32, cached_offset_ms,
+    cached_zmod_measure_counter_text, effective_accel_effects_for_player,
+    effective_mini_percent_for_player, effective_perspective_effects_for_player,
+    effective_scroll_effects_for_player, effective_spacing_multiplier_for_player,
+    effective_visual_effects_for_player, zmod_run_timer_fmt,
+};
+use zmod::{
+    zmod_combo_font_name, zmod_indicator_mode, zmod_mini_indicator_text, zmod_mini_indicator_zoom,
+    zmod_resolved_combo_color, zmod_small_combo_font,
+};
 
 #[inline(always)]
 fn player_blue_window_ms(state: &State, player_idx: usize) -> f32 {
@@ -225,631 +223,6 @@ const Z_ERROR_BAR_TEXT_BACK: i16 = 90;
 // Arrow Cloud/zmod load Average.lua from ScreenGameplay underlay, below the
 // engine Player/NoteField. Keep it behind receptors even with front judgments.
 const Z_ERROR_BAR_AVERAGE: i16 = Z_ERROR_BAR_LINE_BACK;
-
-fn append_edit_measure_number(
-    actors: &mut Vec<Actor>,
-    edit_beat_bars: bool,
-    measure_index: Option<i64>,
-    x: f32,
-    y: f32,
-    field_zoom: f32,
-) {
-    let Some(measure) = measure_index else {
-        return;
-    };
-    if !edit_beat_bars || measure < 0 {
-        return;
-    }
-    actors.push(act!(text:
-        font("miso"):
-        settext(measure.to_string()):
-        align(1.0, 0.5):
-        horizalign(right):
-        xy(x, y):
-        zoom((field_zoom * 0.9).clamp(0.35, 0.75)):
-        shadowlength(2.0):
-        diffuse(1.0, 1.0, 1.0, 1.0):
-        z(Z_MEASURE_LINES + 1)
-    ));
-}
-
-fn append_beat_bar(
-    actors: &mut Vec<Actor>,
-    edit_beat_bars: bool,
-    edit_bar_frame: u32,
-    x_center: f32,
-    y: f32,
-    width: f32,
-    field_zoom: f32,
-    thickness: f32,
-    alpha: f32,
-) {
-    if edit_beat_bars {
-        append_edit_beat_bar(
-            actors,
-            edit_bar_frame,
-            x_center,
-            y,
-            width,
-            field_zoom,
-            thickness,
-            alpha,
-        );
-    } else {
-        actors.push(act!(quad:
-            align(0.5, 0.5): xy(x_center, y):
-            zoomto(width, thickness):
-            diffuse(1.0, 1.0, 1.0, alpha):
-            z(Z_MEASURE_LINES)
-        ));
-    }
-}
-
-/// Measure Cues: a colored line marking a timing event (BPM change / Stop /
-/// Delay / Scroll). Drawn at `Z_MEASURE_LINES`, so when emitted after the white
-/// measure-line pass it sits on top of any coinciding white line. `alpha`
-/// mirrors the white lines' per-subdivision opacity.
-fn append_cue_bar(
-    actors: &mut Vec<Actor>,
-    x_center: f32,
-    y: f32,
-    width: f32,
-    thickness: f32,
-    color: (f32, f32, f32),
-    alpha: f32,
-) {
-    let (r, g, b) = color;
-    actors.push(act!(quad:
-        align(0.5, 0.5): xy(x_center, y):
-        zoomto(width, thickness):
-        diffuse(r, g, b, alpha):
-        z(Z_MEASURE_LINES)
-    ));
-}
-
-fn append_edit_beat_bar(
-    actors: &mut Vec<Actor>,
-    frame: u32,
-    x_center: f32,
-    y: f32,
-    width: f32,
-    field_zoom: f32,
-    thickness: f32,
-    alpha: f32,
-) {
-    match frame {
-        0 | 1 => append_edit_bar_segment(actors, x_center, y, width, thickness, alpha),
-        2 => append_dashed_edit_bar(
-            actors,
-            x_center,
-            y,
-            width,
-            thickness,
-            12.0 * field_zoom,
-            8.0 * field_zoom,
-            alpha,
-        ),
-        _ => append_dashed_edit_bar(
-            actors,
-            x_center,
-            y,
-            width,
-            thickness,
-            4.0 * field_zoom,
-            6.0 * field_zoom,
-            alpha,
-        ),
-    }
-}
-
-fn append_edit_bar_segment(
-    actors: &mut Vec<Actor>,
-    x_center: f32,
-    y: f32,
-    width: f32,
-    thickness: f32,
-    alpha: f32,
-) {
-    actors.push(act!(quad:
-        align(0.5, 0.5):
-        xy(x_center, y):
-        zoomto(width, thickness):
-        diffuse(1.0, 1.0, 1.0, alpha):
-        z(Z_MEASURE_LINES)
-    ));
-}
-
-fn append_dashed_edit_bar(
-    actors: &mut Vec<Actor>,
-    x_center: f32,
-    y: f32,
-    width: f32,
-    thickness: f32,
-    dash: f32,
-    gap: f32,
-    alpha: f32,
-) {
-    let dash = dash.max(1.0);
-    let step = (dash + gap).max(dash + 1.0);
-    let left = x_center - width * 0.5;
-    let right = x_center + width * 0.5;
-    let mut x = left;
-    while x < right {
-        let seg_w = dash.min(right - x);
-        actors.push(act!(quad:
-            align(0.0, 0.5):
-            xy(x, y):
-            zoomto(seg_w, thickness):
-            diffuse(1.0, 1.0, 1.0, alpha):
-            z(Z_MEASURE_LINES)
-        ));
-        x += step;
-    }
-}
-
-type FastTextCache<K> = TextCache<K, BuildHasherDefault<XxHash64>>;
-
-thread_local! {
-    static PERCENT2_CACHE_F64: RefCell<FastTextCache<u32>> = RefCell::new(HashMap::with_capacity_and_hasher(
-        512,
-        BuildHasherDefault::default(),
-    ));
-    static SIGNED_PERCENT2_CACHE_F64: RefCell<FastTextCache<(u32, bool)>> = RefCell::new(
-        HashMap::with_capacity_and_hasher(512, BuildHasherDefault::default()),
-    );
-    static NEG_INT_CACHE_U32: RefCell<FastTextCache<u32>> = RefCell::new(HashMap::with_capacity_and_hasher(
-        256,
-        BuildHasherDefault::default(),
-    ));
-    static PAREN_INT_CACHE_I32: RefCell<FastTextCache<i32>> = RefCell::new(HashMap::with_capacity_and_hasher(
-        512,
-        BuildHasherDefault::default(),
-    ));
-    static INT_CACHE_I32: RefCell<FastTextCache<i32>> = RefCell::new(HashMap::with_capacity_and_hasher(
-        512,
-        BuildHasherDefault::default(),
-    ));
-    static INT_CACHE_U32: RefCell<FastTextCache<u32>> = RefCell::new(HashMap::with_capacity_and_hasher(
-        512,
-        BuildHasherDefault::default(),
-    ));
-    static RATIO_CACHE_I32: RefCell<FastTextCache<(i32, i32)>> = RefCell::new(
-        HashMap::with_capacity_and_hasher(1024, BuildHasherDefault::default()),
-    );
-    static OFFSET_MS_CACHE_F32: RefCell<FastTextCache<i32>> = RefCell::new(HashMap::with_capacity_and_hasher(
-        512,
-        BuildHasherDefault::default(),
-    ));
-    static ERROR_BAR_TEXT_LABEL_CACHE: RefCell<FastTextCache<(bool, i32)>> = RefCell::new(
-        HashMap::with_capacity_and_hasher(256, BuildHasherDefault::default()),
-    );
-    static RUN_TIMER_CACHE: RefCell<FastTextCache<(i32, i32, bool)>> = RefCell::new(
-        HashMap::with_capacity_and_hasher(1024, BuildHasherDefault::default()),
-    );
-    static GAMEPLAY_MODS_CACHE: RefCell<FastTextCache<GameplayModsTextKey>> = RefCell::new(
-        HashMap::with_capacity_and_hasher(256, BuildHasherDefault::default()),
-    );
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-struct GameplayModsTextKey {
-    speed_tag: u8,
-    speed_bits: u32,
-    noteskin_hash: u64,
-    insert_mask: u8,
-    remove_mask: u8,
-    holds_mask: u8,
-    turn_bits: u16,
-    attack_mode: u8,
-    mini_percent: i16,
-    spacing_percent: i16,
-    visual_delay_ms: i16,
-    error_bar_mask: u8,
-    avg_error_bar_intensity_centi: i16,
-    avg_error_bar_interval_ms: u16,
-    accel: [i16; 5],
-    visual: [i16; 9],
-    appearance: [i16; 5],
-    scroll: [i16; 5],
-    perspective_tilt: i16,
-    perspective_skew: i16,
-    dark: i16,
-    blind: i16,
-    cover: i16,
-    disabled_timing_windows: u8,
-}
-
-#[inline(always)]
-fn cached_percent2_f64(value: f64) -> Arc<str> {
-    let key = quantize_centi_u32(value);
-    cached_text(&PERCENT2_CACHE_F64, key, TEXT_CACHE_LIMIT, || {
-        format!("{:.2}%", key as f64 / 100.0)
-    })
-}
-
-#[inline(always)]
-fn cached_signed_percent2_f64(value: f64, neg: bool) -> Arc<str> {
-    let key = quantize_centi_u32(value);
-    cached_text(
-        &SIGNED_PERCENT2_CACHE_F64,
-        (key, neg),
-        TEXT_CACHE_LIMIT,
-        || {
-            if neg {
-                format!("-{:.2}%", key as f64 / 100.0)
-            } else {
-                format!("+{:.2}%", key as f64 / 100.0)
-            }
-        },
-    )
-}
-
-#[inline(always)]
-fn cached_neg_int_u32(value: u32) -> Arc<str> {
-    cached_text(&NEG_INT_CACHE_U32, value, TEXT_CACHE_LIMIT, || {
-        format!("-{value}")
-    })
-}
-
-#[inline(always)]
-fn cached_paren_i32(value: i32) -> Arc<str> {
-    cached_text(&PAREN_INT_CACHE_I32, value, TEXT_CACHE_LIMIT, || {
-        format!("({value})")
-    })
-}
-
-#[inline(always)]
-fn cached_int_i32(value: i32) -> Arc<str> {
-    cached_text(&INT_CACHE_I32, value, TEXT_CACHE_LIMIT, || {
-        value.to_string()
-    })
-}
-
-#[inline(always)]
-fn cached_int_u32(value: u32) -> Arc<str> {
-    cached_text(&INT_CACHE_U32, value, TEXT_CACHE_LIMIT, || {
-        value.to_string()
-    })
-}
-
-#[inline(always)]
-fn cached_ratio_i32(curr: i32, total: i32) -> Arc<str> {
-    cached_text(&RATIO_CACHE_I32, (curr, total), TEXT_CACHE_LIMIT, || {
-        format!("{curr}/{total}")
-    })
-}
-
-#[inline(always)]
-fn cached_offset_ms(value: f32) -> Arc<str> {
-    let key = quantize_centi_i32(f64::from(value));
-    cached_text(&OFFSET_MS_CACHE_F32, key, TEXT_CACHE_LIMIT, || {
-        format!("{:.2}ms", key as f64 / 100.0)
-    })
-}
-
-#[inline(always)]
-fn cached_error_bar_text_label(early: bool, scaled: bool) -> Arc<str> {
-    let rounded = if scaled { -2 } else { -1 };
-    cached_text(
-        &ERROR_BAR_TEXT_LABEL_CACHE,
-        (early, rounded),
-        TEXT_CACHE_LIMIT,
-        || {
-            if scaled {
-                if early { "FAST" } else { "SLOW" }.to_string()
-            } else {
-                if early { "EARLY" } else { "LATE" }.to_string()
-            }
-        },
-    )
-}
-
-fn cached_run_timer(seconds: i32, minute_threshold: i32, trailing_space: bool) -> Arc<str> {
-    let seconds = seconds.max(0);
-    cached_text(
-        &RUN_TIMER_CACHE,
-        (seconds, minute_threshold, trailing_space),
-        TEXT_CACHE_LIMIT,
-        || {
-            let mut s = if seconds < 10 {
-                format!("0.0{seconds}")
-            } else if seconds > minute_threshold {
-                let minutes = seconds / 60;
-                let secs = seconds % 60;
-                format!("{minutes}.{secs:02}")
-            } else {
-                format!("0.{seconds}")
-            };
-            if trailing_space {
-                s.push(' ');
-            }
-            s
-        },
-    )
-}
-
-#[inline(always)]
-fn disabled_timing_window_bits(setting: profile_data::TimingWindowsOption) -> u8 {
-    setting
-        .disabled_windows()
-        .into_iter()
-        .enumerate()
-        .fold(0, |bits, (i, disabled)| {
-            bits | if disabled { 1 << i } else { 0 }
-        })
-}
-
-#[inline(always)]
-const fn turn_option_bits(turn: profile_data::TurnOption) -> u16 {
-    match turn {
-        profile_data::TurnOption::None => 0,
-        profile_data::TurnOption::Mirror => DISPLAY_TURN_MIRROR,
-        profile_data::TurnOption::Left => DISPLAY_TURN_LEFT,
-        profile_data::TurnOption::Right => DISPLAY_TURN_RIGHT,
-        profile_data::TurnOption::LRMirror => DISPLAY_TURN_LR_MIRROR,
-        profile_data::TurnOption::UDMirror => DISPLAY_TURN_UD_MIRROR,
-        profile_data::TurnOption::Shuffle => DISPLAY_TURN_SHUFFLE,
-        profile_data::TurnOption::Blender => DISPLAY_TURN_BLENDER,
-        profile_data::TurnOption::Random => DISPLAY_TURN_RANDOM,
-    }
-}
-
-#[inline(always)]
-fn gameplay_mods_attack_mode(mode: profile_data::AttackMode) -> GameplayModsAttackMode {
-    match mode {
-        profile_data::AttackMode::Off => GameplayModsAttackMode::Off,
-        profile_data::AttackMode::On => GameplayModsAttackMode::On,
-        profile_data::AttackMode::Random => GameplayModsAttackMode::Random,
-    }
-}
-
-#[inline(always)]
-fn profile_error_bar_mask(profile: &profile_data::Profile) -> profile_data::ErrorBarMask {
-    if profile.error_bar_active_mask.is_empty() {
-        profile_data::error_bar_mask_from_style(profile.error_bar, profile.error_bar_text)
-    } else {
-        profile.error_bar_active_mask
-    }
-}
-
-#[inline(always)]
-fn effective_accel_effects_for_player(state: &State, player_idx: usize) -> AccelEffects {
-    if player_idx >= state.num_players() || player_idx >= MAX_PLAYERS {
-        return AccelEffects::default();
-    }
-    state.effective_accel_effects_for_player_with_mask(
-        player_idx,
-        state.profiles()[player_idx]
-            .accel_effects_active_mask
-            .bits(),
-    )
-}
-
-#[inline(always)]
-fn effective_visual_effects_for_player(state: &State, player_idx: usize) -> VisualEffects {
-    if player_idx >= state.num_players() || player_idx >= MAX_PLAYERS {
-        return VisualEffects::default();
-    }
-    state.effective_visual_effects_for_player_with_mask(
-        player_idx,
-        state.profiles()[player_idx]
-            .visual_effects_active_mask
-            .bits(),
-    )
-}
-
-#[inline(always)]
-fn effective_scroll_effects_for_player(state: &State, player_idx: usize) -> ScrollEffects {
-    if player_idx >= state.num_players() || player_idx >= MAX_PLAYERS {
-        return ScrollEffects::default();
-    }
-    state.effective_scroll_effects_for_player_with_base(
-        player_idx,
-        scroll_effects_from_option(state.profiles()[player_idx].scroll_option),
-    )
-}
-
-#[inline(always)]
-fn effective_perspective_effects_for_player(
-    state: &State,
-    player_idx: usize,
-) -> PerspectiveEffects {
-    if player_idx >= state.num_players() || player_idx >= MAX_PLAYERS {
-        return PerspectiveEffects::default();
-    }
-    state.effective_perspective_effects_for_player_with_base(
-        player_idx,
-        perspective_effects_from_profile(&state.profiles()[player_idx]),
-    )
-}
-
-#[inline(always)]
-fn effective_mini_percent_for_player(state: &State, player_idx: usize) -> f32 {
-    if player_idx >= state.num_players() || player_idx >= MAX_PLAYERS {
-        return 0.0;
-    }
-    state.effective_mini_percent_for_player_with_base(
-        player_idx,
-        state.profiles()[player_idx].mini_percent as f32,
-    )
-}
-
-#[inline(always)]
-fn effective_spacing_multiplier_for_player(state: &State, player_idx: usize) -> f32 {
-    if player_idx >= state.num_players() {
-        return 1.0;
-    }
-    spacing_multiplier_for_percent(state.profiles()[player_idx].spacing_percent)
-}
-
-#[inline(always)]
-fn gameplay_mods_text_key(state: &State, player_idx: usize) -> GameplayModsTextKey {
-    let profile = &state.profiles()[player_idx];
-    let chart_attack = state.active_chart_attack_effects_for_player(player_idx);
-    let scroll_speed = state.effective_scroll_speed_for_player(player_idx);
-    let accel = effective_accel_effects_for_player(state, player_idx);
-    let visual = effective_visual_effects_for_player(state, player_idx);
-    let appearance = state.effective_appearance_effects_for_player(player_idx);
-    let visibility = state.effective_visibility_effects_for_player(player_idx);
-    let scroll = effective_scroll_effects_for_player(state, player_idx);
-    let perspective = effective_perspective_effects_for_player(state, player_idx);
-    let display_mini = (effective_mini_percent_for_player(state, player_idx)
-        - if visual.big > f32::EPSILON {
-            100.0 * visual.big
-        } else {
-            0.0
-        })
-    .clamp(-100.0, 150.0);
-    let dark = if profile.hide_targets {
-        1.0
-    } else {
-        visibility.dark
-    };
-    let cover = if profile.hide_song_bg {
-        1.0
-    } else {
-        visibility.cover
-    };
-    let error_bar_mask = profile_error_bar_mask(profile);
-    let average_error_bar_intensity =
-        profile_data::clamp_average_error_bar_intensity(profile.average_error_bar_intensity);
-    let average_error_bar_interval_ms =
-        profile_data::clamp_average_error_bar_interval_ms(profile.average_error_bar_interval_ms);
-    let (speed_tag, speed_bits) = match scroll_speed {
-        ScrollSpeedSetting::CMod(value) => (0, value.to_bits()),
-        ScrollSpeedSetting::XMod(value) => (1, value.to_bits()),
-        ScrollSpeedSetting::MMod(value) => (2, value.to_bits()),
-    };
-    let mut noteskin_hasher = XxHash64::default();
-    noteskin_hasher.write(profile.noteskin.as_str().as_bytes());
-    GameplayModsTextKey {
-        speed_tag,
-        speed_bits,
-        noteskin_hash: noteskin_hasher.finish(),
-        insert_mask: profile.insert_active_mask.bits() | chart_attack.insert_mask,
-        remove_mask: profile.remove_active_mask.bits() | chart_attack.remove_mask,
-        holds_mask: profile.holds_active_mask.bits() | chart_attack.holds_mask,
-        turn_bits: turn_option_bits(profile.turn_option) | chart_attack.turn_bits,
-        attack_mode: profile.attack_mode as u8,
-        mini_percent: clamp_rounded_i16(display_mini),
-        spacing_percent: profile
-            .spacing_percent
-            .clamp(i16::MIN as i32, i16::MAX as i32) as i16,
-        visual_delay_ms: profile
-            .visual_delay_ms
-            .clamp(i16::MIN as i32, i16::MAX as i32) as i16,
-        error_bar_mask: error_bar_mask.bits(),
-        avg_error_bar_intensity_centi: clamp_rounded_i16(average_error_bar_intensity * 100.0),
-        avg_error_bar_interval_ms: average_error_bar_interval_ms as u16,
-        accel: [
-            mod_percent_key(accel.boost),
-            mod_percent_key(accel.brake),
-            mod_percent_key(accel.wave),
-            mod_percent_key(accel.expand),
-            mod_percent_key(accel.boomerang),
-        ],
-        visual: [
-            mod_percent_key(visual.drunk),
-            mod_percent_key(visual.dizzy),
-            mod_percent_key(visual.confusion),
-            mod_percent_key(visual.flip),
-            mod_percent_key(visual.invert),
-            mod_percent_key(visual.tornado),
-            mod_percent_key(visual.tipsy),
-            mod_percent_key(visual.bumpy),
-            mod_percent_key(visual.beat),
-        ],
-        appearance: [
-            mod_percent_key(appearance.hidden),
-            mod_percent_key(appearance.sudden),
-            mod_percent_key(appearance.stealth),
-            mod_percent_key(appearance.blink),
-            mod_percent_key(appearance.random_vanish),
-        ],
-        scroll: [
-            mod_percent_key(scroll.reverse),
-            mod_percent_key(scroll.split),
-            mod_percent_key(scroll.alternate),
-            mod_percent_key(scroll.cross),
-            mod_percent_key(scroll.centered),
-        ],
-        perspective_tilt: mod_percent_key(perspective.tilt),
-        perspective_skew: mod_percent_key(perspective.skew),
-        dark: mod_percent_key(dark),
-        blind: mod_percent_key(visibility.blind),
-        cover: mod_percent_key(cover),
-        disabled_timing_windows: disabled_timing_window_bits(profile.timing_windows),
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum FieldPlacement {
-    P1,
-    P2,
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-pub struct ViewOverride {
-    pub field_zoom: Option<f32>,
-    pub scroll_speed: Option<ScrollSpeedSetting>,
-    pub force_center_1player: bool,
-    pub center_receptors_y: bool,
-    pub receptor_y: Option<f32>,
-    pub edit_beat_bars: bool,
-    pub hide_display_mods: bool,
-    pub hide_combo: bool,
-}
-
-pub struct BuiltNotefield {
-    pub layout_center_x: f32,
-    pub field_actors: Vec<Arc<[Actor]>>,
-    pub judgment_actors: Option<Vec<Arc<[Actor]>>>,
-    pub combo_actors: Option<Vec<Arc<[Actor]>>>,
-}
-
-#[derive(Clone, Copy, Default)]
-pub struct ProxyCaptureRequests {
-    pub note_field: bool,
-    pub judgment: bool,
-    pub combo: bool,
-}
-
-impl BuiltNotefield {
-    fn empty(layout_center_x: f32) -> Self {
-        Self {
-            layout_center_x,
-            field_actors: Vec::new(),
-            judgment_actors: None,
-            combo_actors: None,
-        }
-    }
-}
-
-fn share_hud_range(hud_actors: &mut Vec<Actor>, start: usize) -> Option<Vec<Arc<[Actor]>>> {
-    if start >= hud_actors.len() {
-        return None;
-    }
-    let children = Arc::<[Actor]>::from(hud_actors.drain(start..).collect::<Vec<_>>());
-    hud_actors.push(Actor::SharedFrame {
-        align: [0.0, 0.0],
-        offset: [0.0, 0.0],
-        size: [SizeSpec::Fill, SizeSpec::Fill],
-        children: Arc::clone(&children),
-        background: None,
-        z: 0,
-        tint: [1.0; 4],
-        blend: None,
-    });
-    Some(vec![children])
-}
-#[inline(always)]
-const fn tap_part_for_note_type(note_type: NoteType) -> NoteAnimPart {
-    match note_type {
-        NoteType::Fake => NoteAnimPart::Fake,
-        NoteType::Lift => NoteAnimPart::Lift,
-        _ => NoteAnimPart::Tap,
-    }
-}
 
 #[inline(always)]
 fn note_slot_base_size(slot: &SpriteSlot, scale: f32) -> [f32; 2] {
@@ -1079,125 +452,6 @@ fn hold_indicator_column_x(
 }
 
 #[inline(always)]
-fn hold_strip_row_3d(
-    center: [f32; 3],
-    forward: [f32; 2],
-    half_width: f32,
-    u0: f32,
-    u1: f32,
-    v: f32,
-    color: [f32; 4],
-) -> [TexturedMeshVertex; 2] {
-    let len = forward[0].hypot(forward[1]).max(f32::EPSILON);
-    let nx = -forward[1] / len * half_width;
-    let ny = forward[0] / len * half_width;
-    [
-        TexturedMeshVertex {
-            pos: [center[0] + nx, center[1] + ny, center[2]],
-            uv: [u0, v],
-            tex_matrix_scale: [1.0, 1.0],
-            color,
-        },
-        TexturedMeshVertex {
-            pos: [center[0] - nx, center[1] - ny, center[2]],
-            uv: [u1, v],
-            tex_matrix_scale: [1.0, 1.0],
-            color,
-        },
-    ]
-}
-
-#[inline(always)]
-fn hold_strip_row_from_positions(
-    left: [f32; 3],
-    right: [f32; 3],
-    u0: f32,
-    u1: f32,
-    v: f32,
-    color: [f32; 4],
-) -> [TexturedMeshVertex; 2] {
-    [
-        TexturedMeshVertex {
-            pos: left,
-            uv: [u0, v],
-            tex_matrix_scale: [1.0, 1.0],
-            color,
-        },
-        TexturedMeshVertex {
-            pos: right,
-            uv: [u1, v],
-            tex_matrix_scale: [1.0, 1.0],
-            color,
-        },
-    ]
-}
-
-#[inline(always)]
-fn hold_strip_quad(
-    top: [TexturedMeshVertex; 2],
-    bottom: [TexturedMeshVertex; 2],
-) -> [TexturedMeshVertex; 6] {
-    [top[0], top[1], bottom[1], top[0], bottom[1], bottom[0]]
-}
-
-#[inline(always)]
-fn hold_strip_actor(
-    texture: Arc<str>,
-    vertices: Arc<[TexturedMeshVertex]>,
-    blend: BlendMode,
-    depth_test: bool,
-    z: i16,
-) -> Actor {
-    Actor::TexturedMesh {
-        align: [0.0, 0.0],
-        offset: [0.0, 0.0],
-        world_z: 0.0,
-        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
-        local_transform: Matrix4::IDENTITY,
-        texture,
-        tint: [1.0; 4],
-        glow: [1.0, 1.0, 1.0, 0.0],
-        vertices,
-        geom_cache_key: deadlib_render::INVALID_TMESH_CACHE_KEY,
-        uv_scale: [1.0, 1.0],
-        uv_offset: [0.0, 0.0],
-        uv_tex_shift: [0.0, 0.0],
-        depth_test,
-        visible: true,
-        blend,
-        z,
-    }
-}
-
-#[inline(always)]
-fn hold_strip_glow_actor(
-    texture: Arc<str>,
-    vertices: Arc<[TexturedMeshVertex]>,
-    depth_test: bool,
-    z: i16,
-) -> Actor {
-    Actor::TexturedMesh {
-        align: [0.0, 0.0],
-        offset: [0.0, 0.0],
-        world_z: 0.0,
-        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
-        local_transform: Matrix4::IDENTITY,
-        texture,
-        tint: [1.0, 1.0, 1.0, 0.0],
-        glow: [1.0, 1.0, 1.0, 1.0],
-        vertices,
-        geom_cache_key: deadlib_render::INVALID_TMESH_CACHE_KEY,
-        uv_scale: [1.0, 1.0],
-        uv_offset: [0.0, 0.0],
-        uv_tex_shift: [0.0, 0.0],
-        depth_test,
-        visible: true,
-        blend: BlendMode::Alpha,
-        z,
-    }
-}
-
-#[inline(always)]
 fn visual_effect_params(visual: &VisualEffects, local_col: usize) -> VisualEffectParams {
     crate_visual_effect_params_for_col(
         VisualEffectParams {
@@ -1239,18 +493,6 @@ fn pulse_zoom_for_y(y: f32, visual: &VisualEffects) -> f32 {
 #[inline(always)]
 fn arrow_effect_zoom(visual: &VisualEffects, local_col: usize, y: f32) -> f32 {
     visual_arrow_effect_zoom(y, visual_effect_params(visual, local_col))
-}
-
-#[inline(always)]
-fn actor_with_world_z(mut actor: Actor, world_z: f32) -> Actor {
-    if world_z.abs() <= f32::EPSILON {
-        return actor;
-    }
-    match &mut actor {
-        Actor::Sprite { world_z: z, .. } | Actor::TexturedMesh { world_z: z, .. } => *z = world_z,
-        _ => {}
-    }
-    actor
 }
 
 struct NoteGlowDraw<'a> {
@@ -1372,41 +614,6 @@ fn effective_mini_value(
     mini_percent: f32,
 ) -> f32 {
     crate_effective_mini_value(mini_percent, profile.mini_percent as f32, visual.big)
-}
-
-#[inline(always)]
-pub(crate) fn gameplay_mods_text(state: &State, player_idx: usize) -> Arc<str> {
-    let key = gameplay_mods_text_key(state, player_idx);
-    cached_text(&GAMEPLAY_MODS_CACHE, key, TEXT_CACHE_LIMIT, || {
-        let profile = &state.profiles()[player_idx];
-        crate_gameplay_mods_text(GameplayModsTextParams {
-            speed: state.effective_scroll_speed_for_player(player_idx),
-            noteskin: profile.noteskin.as_str(),
-            insert_mask: key.insert_mask,
-            remove_mask: key.remove_mask,
-            holds_mask: key.holds_mask,
-            turn_bits: key.turn_bits,
-            attack_mode: gameplay_mods_attack_mode(profile.attack_mode),
-            mini_percent: key.mini_percent,
-            spacing_percent: key.spacing_percent,
-            visual_delay_ms: key.visual_delay_ms,
-            average_error_bar_active: key.error_bar_mask
-                & profile_data::ErrorBarMask::AVERAGE.bits()
-                != 0,
-            avg_error_bar_intensity_centi: key.avg_error_bar_intensity_centi,
-            avg_error_bar_interval_ms: key.avg_error_bar_interval_ms,
-            accel: key.accel,
-            visual: key.visual,
-            appearance: key.appearance,
-            scroll: key.scroll,
-            perspective_tilt: key.perspective_tilt,
-            perspective_skew: key.perspective_skew,
-            dark: key.dark,
-            blind: key.blind,
-            cover: key.cover,
-            disabled_timing_windows: key.disabled_timing_windows,
-        })
-    })
 }
 
 #[inline(always)]
@@ -1541,499 +748,19 @@ fn hud_layout_ys(
     )
 }
 
-fn cached_zmod_measure_counter_text(text: ZmodMeasureCounterText) -> Arc<str> {
-    match text {
-        ZmodMeasureCounterText::Break(value) => cached_paren_i32(value),
-        ZmodMeasureCounterText::Ratio { current, total } => cached_ratio_i32(current, total),
-        ZmodMeasureCounterText::Total(value) => cached_int_i32(value),
-    }
-}
-
-#[inline(always)]
-fn zmod_run_timer_fmt(seconds: i32, minute_threshold: i32, trailing_space: bool) -> Arc<str> {
-    cached_run_timer(seconds, minute_threshold, trailing_space)
-}
-
-#[inline(always)]
-fn zmod_small_combo_font(combo_font: profile_data::ComboFont) -> &'static str {
-    match combo_font {
-        profile_data::ComboFont::Wendy | profile_data::ComboFont::WendyCursed => "wendy",
-        profile_data::ComboFont::ArialRounded => "combo_arial_rounded",
-        profile_data::ComboFont::Asap => "combo_asap",
-        profile_data::ComboFont::BebasNeue => "combo_bebas_neue",
-        profile_data::ComboFont::SourceCode => "combo_source_code",
-        profile_data::ComboFont::Work => "combo_work",
-        profile_data::ComboFont::Mega => "combo_mega",
-        profile_data::ComboFont::None => "wendy",
-    }
-}
-
-#[inline(always)]
-fn zmod_combo_font_name(combo_font: profile_data::ComboFont) -> Option<&'static str> {
-    match combo_font {
-        profile_data::ComboFont::Wendy => Some("wendy_combo"),
-        profile_data::ComboFont::ArialRounded => Some("combo_arial_rounded"),
-        profile_data::ComboFont::Asap => Some("combo_asap"),
-        profile_data::ComboFont::BebasNeue => Some("combo_bebas_neue"),
-        profile_data::ComboFont::SourceCode => Some("combo_source_code"),
-        profile_data::ComboFont::Work => Some("combo_work"),
-        profile_data::ComboFont::WendyCursed => Some("combo_wendy_cursed"),
-        profile_data::ComboFont::Mega => Some("combo_mega"),
-        profile_data::ComboFont::None => None,
-    }
-}
-
-pub fn prewarm_text_layout(
-    cache: &mut TextLayoutCache,
-    fonts: &HashMap<&'static str, font::Font>,
-    state: &State,
-) {
-    let prewarm_u32 = |cache: &mut TextLayoutCache, font_name: &'static str, value: u32| {
-        let text = cached_int_u32(value);
-        cache.prewarm_text(fonts, font_name, text.as_ref(), None);
-    };
-    let prewarm_i32 = |cache: &mut TextLayoutCache, font_name: &'static str, value: i32| {
-        let text = cached_int_i32(value);
-        cache.prewarm_text(fonts, font_name, text.as_ref(), None);
-    };
-    let prewarm_ratio =
-        |cache: &mut TextLayoutCache, font_name: &'static str, curr: i32, total: i32| {
-            let text = cached_ratio_i32(curr, total);
-            cache.prewarm_text(fonts, font_name, text.as_ref(), None);
-        };
-    let prewarm_timer = |cache: &mut TextLayoutCache,
-                         font_name: &'static str,
-                         second: i32,
-                         threshold: i32,
-                         trailing: bool| {
-        let text = cached_run_timer(second, threshold, trailing);
-        cache.prewarm_text(fonts, font_name, text.as_ref(), None);
-    };
-    let prewarm_percent = |cache: &mut TextLayoutCache, font_name: &'static str, value: f64| {
-        let text = cached_percent2_f64(value.clamp(0.0, 100.0));
-        cache.prewarm_text(fonts, font_name, text.as_ref(), None);
-    };
-    let prewarm_signed_percent =
-        |cache: &mut TextLayoutCache, font_name: &'static str, value: f64, neg: bool| {
-            let text = cached_signed_percent2_f64(value.clamp(0.0, 100.0), neg);
-            cache.prewarm_text(fonts, font_name, text.as_ref(), None);
-        };
-    let prewarm_neg_u32 = |cache: &mut TextLayoutCache, font_name: &'static str, value: u32| {
-        let text = cached_neg_int_u32(value);
-        cache.prewarm_text(fonts, font_name, text.as_ref(), None);
-    };
-    let prewarm_offset = |cache: &mut TextLayoutCache, value: f32| {
-        let text = cached_offset_ms(value);
-        cache.prewarm_text(fonts, "wendy", text.as_ref(), None);
-    };
-
-    let mut max_combo = 0u32;
-    let mut max_measure_len = 0i32;
-    let music_end_seconds =
-        deadsync_core::song_time::song_time_ns_to_seconds(state.music_end_time_ns())
-            .ceil()
-            .max(0.0) as i32;
-
-    for player in 0..state.num_players() {
-        let profile = &state.profiles()[player];
-        let totals = state.display_totals_for_player(player);
-        max_combo = max_combo.max(
-            totals
-                .total_steps
-                .saturating_add(totals.holds_total)
-                .saturating_add(totals.rolls_total),
-        );
-
-        if let Some(font_name) = zmod_combo_font_name(profile.combo_font) {
-            for value in 0..=max_combo.min(COMBO_PREWARM_CAP) {
-                prewarm_u32(cache, font_name, value);
-            }
-            prewarm_u32(cache, font_name, max_combo);
-        }
-
-        let mods_text = gameplay_mods_text(state, player);
-        cache.prewarm_text(
-            fonts,
-            "miso",
-            mods_text.as_ref(),
-            Some(DISPLAY_MODS_WRAP_WIDTH_PX as i32),
-        );
-
-        let mc_font_name = zmod_small_combo_font(profile.combo_font);
-        let segs = state.measure_counter_segments(player);
-        let multiplier = profile.measure_counter.multiplier();
-        for (seg_ix, seg) in segs.iter().copied().enumerate() {
-            let scaled_len = (((seg.end - seg.start) as f32) * multiplier)
-                .floor()
-                .max(0.0) as i32;
-            max_measure_len = max_measure_len.max(scaled_len);
-            if !seg.is_break {
-                let (broken_end, _) = zmod_broken_run_end(segs, seg_ix);
-                max_measure_len = max_measure_len.max((broken_end - seg.start) as i32);
-            }
-        }
-        let prewarm_measure_len = max_measure_len.min(MEASURE_PREWARM_CAP);
-        for total in 1..=prewarm_measure_len {
-            prewarm_i32(cache, mc_font_name, total);
-            let break_text = cached_paren_i32(total);
-            cache.prewarm_text(fonts, mc_font_name, break_text.as_ref(), None);
-            for curr in 1..=total {
-                prewarm_ratio(cache, mc_font_name, curr, total);
-            }
-        }
-        if max_measure_len > prewarm_measure_len {
-            prewarm_i32(cache, mc_font_name, max_measure_len);
-            let break_text = cached_paren_i32(max_measure_len);
-            cache.prewarm_text(fonts, mc_font_name, break_text.as_ref(), None);
-            prewarm_ratio(cache, mc_font_name, 1, max_measure_len);
-            prewarm_ratio(cache, mc_font_name, max_measure_len, max_measure_len);
-        }
-        for second in 0..=music_end_seconds.min(RUN_TIMER_PREWARM_CAP_S) {
-            prewarm_timer(cache, mc_font_name, second, 60, false);
-            prewarm_timer(cache, mc_font_name, second, 59, true);
-        }
-        prewarm_timer(cache, mc_font_name, music_end_seconds, 60, false);
-        prewarm_timer(cache, mc_font_name, music_end_seconds, 59, true);
-        if profile.measure_counter != profile_data::MeasureCounter::None {
-            let countdown_max = max_measure_len.clamp(16, MEASURE_PREWARM_CAP);
-            for value in 0..=countdown_max {
-                prewarm_i32(cache, mc_font_name, value);
-            }
-            prewarm_i32(cache, mc_font_name, max_measure_len.max(16));
-        }
-        if zmod_indicator_mode(profile) != MiniIndicatorMode::None {
-            for &value in &[0.0, 50.0, 89.0, 95.0, 100.0] {
-                prewarm_percent(cache, mc_font_name, value);
-                prewarm_signed_percent(cache, mc_font_name, value, true);
-                prewarm_signed_percent(cache, mc_font_name, value, false);
-            }
-            prewarm_percent(
-                cache,
-                mc_font_name,
-                state.mini_indicator_target_score_percent(player),
-            );
-            prewarm_percent(
-                cache,
-                mc_font_name,
-                state.mini_indicator_rival_score_percent(player),
-            );
-            prewarm_neg_u32(cache, mc_font_name, 0);
-            prewarm_neg_u32(cache, mc_font_name, max_combo.min(COMBO_PREWARM_CAP));
-            prewarm_neg_u32(cache, mc_font_name, max_combo);
-        }
-        if profile.error_ms_display {
-            prewarm_offset(cache, 0.0);
-        }
-    }
-
-    cache.prewarm_text(fonts, "game", "Early", None);
-    cache.prewarm_text(fonts, "game", "Late", None);
-    cache.prewarm_text(fonts, "wendy", "EARLY", None);
-    cache.prewarm_text(fonts, "wendy", "LATE", None);
-}
-
-#[inline(always)]
-fn zmod_combo_quint_active(
-    state: &State,
-    player_idx: usize,
-    profile: &profile_data::Profile,
-) -> bool {
-    if player_idx >= state.num_players() {
-        return false;
-    }
-    let counts = if profile.combo_mode == profile_data::ComboMode::FullCombo {
-        let blue_window_ms = player_blue_window_ms(state, player_idx);
-        state.display_window_counts(player_idx, None, blue_window_ms)
-    } else {
-        state.players()[player_idx].current_combo_window_counts
-    };
-    crate_zmod_combo_quint_active(profile.show_fa_plus_window, counts)
-}
-
-#[inline(always)]
-fn zmod_combo_color_style(colors: profile_data::ComboColors) -> ZmodComboColorStyle {
-    match colors {
-        profile_data::ComboColors::None => ZmodComboColorStyle::None,
-        profile_data::ComboColors::Rainbow => ZmodComboColorStyle::Rainbow,
-        profile_data::ComboColors::RainbowScroll => ZmodComboColorStyle::RainbowScroll,
-        profile_data::ComboColors::Glow => ZmodComboColorStyle::Glow,
-        profile_data::ComboColors::Solid => ZmodComboColorStyle::Solid,
-    }
-}
-
-fn zmod_combo_color_params(
-    state: &State,
-    p: &PlayerRuntime,
-    profile: &profile_data::Profile,
-    player_idx: usize,
-) -> ZmodComboColorParams {
-    ZmodComboColorParams {
-        style: zmod_combo_color_style(profile.combo_colors),
-        full_combo_mode: profile.combo_mode == profile_data::ComboMode::FullCombo,
-        combo: p.combo,
-        full_combo_grade: p.full_combo_grade,
-        current_combo_grade: p.current_combo_grade,
-        quint_active: zmod_combo_quint_active(state, player_idx, profile),
-        elapsed_s: state.total_elapsed_in_screen(),
-    }
-}
-
-fn zmod_resolved_combo_color(
-    state: &State,
-    p: &PlayerRuntime,
-    profile: &profile_data::Profile,
-    player_idx: usize,
-) -> [f32; 4] {
-    crate_zmod_resolved_combo_color(zmod_combo_color_params(state, p, profile, player_idx))
-}
-
-fn zmod_static_combo_color(
-    state: &State,
-    p: &PlayerRuntime,
-    profile: &profile_data::Profile,
-    player_idx: usize,
-) -> [f32; 4] {
-    crate_zmod_static_combo_color(zmod_combo_color_params(state, p, profile, player_idx))
-}
-
-fn zmod_mini_indicator_progress(
-    state: &State,
-    p: &PlayerRuntime,
-    player_idx: usize,
-    score_type: profile_data::MiniIndicatorScoreType,
-) -> MiniIndicatorProgress {
-    let w1 = p.scoring_counts[judgment::judge_grade_ix(JudgeGrade::Fantastic)];
-    let w2 = p.scoring_counts[judgment::judge_grade_ix(JudgeGrade::Excellent)];
-    let w3 = p.scoring_counts[judgment::judge_grade_ix(JudgeGrade::Great)];
-    let w4 = p.scoring_counts[judgment::judge_grade_ix(JudgeGrade::Decent)];
-    let w5 = p.scoring_counts[judgment::judge_grade_ix(JudgeGrade::WayOff)];
-    let miss = p.scoring_counts[judgment::judge_grade_ix(JudgeGrade::Miss)];
-
-    let let_go = p
-        .holds_let_go_for_score
-        .saturating_add(p.rolls_let_go_for_score);
-    let mines_hit = p.mines_hit_for_score;
-    let tap_rows = w1
-        .saturating_add(w2)
-        .saturating_add(w3)
-        .saturating_add(w4)
-        .saturating_add(w5)
-        .saturating_add(miss);
-    let resolved_holds = p
-        .holds_held_for_score
-        .saturating_add(p.holds_let_go_for_score);
-    let resolved_rolls = p
-        .rolls_held_for_score
-        .saturating_add(p.rolls_let_go_for_score);
-    let current_possible_dp = (tap_rows
-        .saturating_add(resolved_holds)
-        .saturating_add(resolved_rolls) as i32)
-        .saturating_mul(HOLD_SCORE_HELD);
-
-    let possible_dp = state
-        .display_totals_for_player(player_idx)
-        .possible_grade_points
-        .max(1);
-    let actual_dp = p.earned_grade_points;
-
-    // Compute predictive percents for the active score type.
-    let (
-        kept_percent,
-        lost_percent,
-        pace_percent,
-        current_score_percent,
-        current_possible_ratio,
-        white_count,
-        white_10ms_count,
-    ) = match score_type {
-        profile_data::MiniIndicatorScoreType::Itg => {
-            let (kept, lost, pace) = judgment::predictive_itg_score_percents(
-                current_possible_dp,
-                possible_dp,
-                actual_dp,
-            );
-            let current_score = zmod_percent_from_points(actual_dp, possible_dp);
-            let current_possible_ratio =
-                (f64::from(current_possible_dp.max(0)) / f64::from(possible_dp)).clamp(0.0, 1.0);
-            (
-                kept,
-                lost,
-                pace,
-                current_score,
-                current_possible_ratio,
-                0,
-                0,
-            )
-        }
-        profile_data::MiniIndicatorScoreType::Ex | profile_data::MiniIndicatorScoreType::HardEx => {
-            let blue_window_ms = player_blue_window_ms(state, player_idx);
-            let score = state.display_scored_ex_score_data(player_idx, blue_window_ms);
-            let white_count = score.counts.w1;
-            let fantastic_total = score.counts.w0.saturating_add(score.counts.w1);
-            let white_10ms_count = fantastic_total.saturating_sub(score.counts_10ms.w0);
-            let current_possible_ratio = judgment::ex_current_possible_ratio(&score);
-            if score_type == profile_data::MiniIndicatorScoreType::Ex {
-                let (kept, lost, pace) = judgment::predictive_ex_score_percents(&score);
-                (
-                    kept,
-                    lost,
-                    pace,
-                    judgment::ex_score_percent(&score),
-                    current_possible_ratio,
-                    white_count,
-                    white_10ms_count,
-                )
-            } else {
-                let (kept, lost, pace) = judgment::predictive_hard_ex_score_percents(&score);
-                (
-                    kept,
-                    lost,
-                    pace,
-                    judgment::hard_ex_score_percent(&score),
-                    current_possible_ratio,
-                    white_count,
-                    white_10ms_count,
-                )
-            }
-        }
-    };
-
-    let judged_any = tap_rows > 0 || let_go > 0 || mines_hit > 0 || p.is_failing || p.life <= 0.0;
-    MiniIndicatorProgress {
-        kept_percent,
-        lost_percent,
-        pace_percent,
-        current_score_percent,
-        current_possible_ratio,
-        current_possible_dp,
-        actual_dp,
-        white_count,
-        white_10ms_count,
-        w2,
-        w3,
-        w4,
-        w5,
-        miss,
-        let_go,
-        mines_hit,
-        judged_any,
-    }
-}
-
-#[inline(always)]
-fn mini_indicator_score_type(
-    score_type: profile_data::MiniIndicatorScoreType,
-) -> MiniIndicatorScoreType {
-    match score_type {
-        profile_data::MiniIndicatorScoreType::Itg => MiniIndicatorScoreType::Itg,
-        profile_data::MiniIndicatorScoreType::Ex => MiniIndicatorScoreType::Ex,
-        profile_data::MiniIndicatorScoreType::HardEx => MiniIndicatorScoreType::HardEx,
-    }
-}
-
-#[inline(always)]
-fn mini_indicator_mode(mode: profile_data::MiniIndicator) -> MiniIndicatorMode {
-    match mode {
-        profile_data::MiniIndicator::None => MiniIndicatorMode::None,
-        profile_data::MiniIndicator::SubtractiveScoring => MiniIndicatorMode::SubtractiveScoring,
-        profile_data::MiniIndicator::PredictiveScoring => MiniIndicatorMode::PredictiveScoring,
-        profile_data::MiniIndicator::PaceScoring => MiniIndicatorMode::PaceScoring,
-        profile_data::MiniIndicator::RivalScoring => MiniIndicatorMode::RivalScoring,
-        profile_data::MiniIndicator::Pacemaker => MiniIndicatorMode::Pacemaker,
-        profile_data::MiniIndicator::StreamProg => MiniIndicatorMode::StreamProg,
-    }
-}
-
-#[inline(always)]
-fn zmod_indicator_mode(profile: &profile_data::Profile) -> MiniIndicatorMode {
-    zmod_resolved_mini_indicator_mode(
-        mini_indicator_mode(profile.mini_indicator),
-        profile.subtractive_scoring,
-        profile.pacemaker,
-    )
-}
-
-#[inline(always)]
-fn mini_indicator_color_style(style: profile_data::MiniIndicatorColor) -> MiniIndicatorColorStyle {
-    match style {
-        profile_data::MiniIndicatorColor::Default => MiniIndicatorColorStyle::Default,
-        profile_data::MiniIndicatorColor::Detailed => MiniIndicatorColorStyle::Detailed,
-        profile_data::MiniIndicatorColor::Combo => MiniIndicatorColorStyle::Combo,
-    }
-}
-
-#[inline(always)]
-fn mini_indicator_subtractive_display(
-    display: profile_data::MiniIndicatorSubtractiveDisplay,
-) -> MiniIndicatorSubtractiveDisplay {
-    match display {
-        profile_data::MiniIndicatorSubtractiveDisplay::Percent => {
-            MiniIndicatorSubtractiveDisplay::CountThenPercent
-        }
-        profile_data::MiniIndicatorSubtractiveDisplay::Points => {
-            MiniIndicatorSubtractiveDisplay::Points
-        }
-    }
-}
-
-#[inline(always)]
-fn zmod_mini_indicator_zoom(size: profile_data::MiniIndicatorSize) -> f32 {
-    let size = match size {
-        profile_data::MiniIndicatorSize::Default => MiniIndicatorSize::Default,
-        profile_data::MiniIndicatorSize::Large => MiniIndicatorSize::Large,
-    };
-    crate_zmod_mini_indicator_zoom(size)
-}
-
-fn zmod_stream_prog_completion(state: &State, player_idx: usize) -> Option<f64> {
-    let total_stream = state.mini_indicator_total_stream_measures(player_idx) as f64;
-    let segs = state.mini_indicator_stream_segments(player_idx);
-    let beat_floor = state.visible_beat(player_idx).floor();
-    zmod_stream_prog_completion_for_beat(total_stream, segs, beat_floor)
-}
-
-fn cached_zmod_mini_indicator_text(text: ZmodMiniIndicatorText) -> Arc<str> {
-    match text {
-        ZmodMiniIndicatorText::Percent(value) => cached_percent2_f64(value),
-        ZmodMiniIndicatorText::SignedPercent { value, negative } => {
-            cached_signed_percent2_f64(value, negative)
-        }
-        ZmodMiniIndicatorText::NegativeInt(value) => cached_neg_int_u32(value),
-    }
-}
-
-fn zmod_mini_indicator_text(
-    state: &State,
-    p: &PlayerRuntime,
-    profile: &profile_data::Profile,
-    player_idx: usize,
-) -> Option<(Arc<str>, [f32; 4])> {
-    let mode = zmod_indicator_mode(profile);
-    let progress =
-        zmod_mini_indicator_progress(state, p, player_idx, profile.mini_indicator_score_type);
-    let output = zmod_mini_indicator_output(
-        &progress,
-        ZmodMiniIndicatorParams {
-            mode,
-            color_style: mini_indicator_color_style(profile.mini_indicator_color),
-            subtractive_display: mini_indicator_subtractive_display(
-                profile.mini_indicator_subtractive_display,
-            ),
-            score_type: mini_indicator_score_type(profile.mini_indicator_score_type),
-            combo_color: zmod_static_combo_color(state, p, profile, player_idx),
-            is_failing: p.is_failing,
-            life: p.life,
-            rival_score_percent: state.mini_indicator_rival_score_percent(player_idx),
-            target_score_percent: state.mini_indicator_target_score_percent(player_idx),
-            stream_completion: zmod_stream_prog_completion(state, player_idx),
-        },
-    )?;
-    Some((cached_zmod_mini_indicator_text(output.text), output.color))
-}
-
 #[inline(always)]
 fn hold_explosion_enabled(profile: &profile_data::Profile) -> bool {
-    hold_explosion_enabled_for_options(tap_explosion_options_from_profile(profile))
+    let mask = profile.tap_explosion_active_mask;
+    hold_explosion_enabled_for_options(TapExplosionOptions {
+        fantastic: mask.contains(profile_data::TapExplosionMask::FANTASTIC),
+        excellent: mask.contains(profile_data::TapExplosionMask::EXCELLENT),
+        great: mask.contains(profile_data::TapExplosionMask::GREAT),
+        decent: mask.contains(profile_data::TapExplosionMask::DECENT),
+        way_off: mask.contains(profile_data::TapExplosionMask::WAY_OFF),
+        miss: mask.contains(profile_data::TapExplosionMask::MISS),
+        held: mask.contains(profile_data::TapExplosionMask::HELD),
+        holding: mask.contains(profile_data::TapExplosionMask::HOLDING),
+    })
 }
 
 #[inline(always)]
@@ -2054,6 +781,7 @@ pub(crate) fn build_bundles(
     play_style: profile_data::PlayStyle,
     center_1player_notefield: bool,
     capture_requests: ProxyCaptureRequests,
+    warn_cmod_for_itl_chart: bool,
     view: ViewOverride,
     mut actors: &mut Vec<Actor>,
     mut hud_actors: &mut Vec<Actor>,
@@ -3820,46 +2548,27 @@ pub(crate) fn build_bundles(
             };
             let visuals =
                 ns.hold_visuals_for_col(local_col, matches!(note.note_type, NoteType::Roll));
-            let hold_head_part = if matches!(note.note_type, NoteType::Roll) {
-                NoteAnimPart::RollHead
-            } else {
-                NoteAnimPart::HoldHead
-            };
-            let hold_body_part = if matches!(note.note_type, NoteType::Roll) {
-                NoteAnimPart::RollBody
-            } else {
-                NoteAnimPart::HoldBody
-            };
-            let mut hold_topcap_part = if matches!(note.note_type, NoteType::Roll) {
-                NoteAnimPart::RollTopCap
-            } else {
-                NoteAnimPart::HoldTopCap
-            };
-            let mut hold_bottomcap_part = if matches!(note.note_type, NoteType::Roll) {
-                NoteAnimPart::RollBottomCap
-            } else {
-                NoteAnimPart::HoldBottomCap
-            };
+            let mut hold_parts = hold_parts_for_note_type(note.note_type);
             let hold_part_phase = ns.part_uv_phase(
-                hold_head_part,
+                hold_parts.head,
                 state.total_elapsed_in_screen(),
                 current_beat,
                 note.beat,
             );
             let hold_body_phase = ns.part_uv_phase(
-                hold_body_part,
+                hold_parts.body,
                 state.total_elapsed_in_screen(),
                 current_beat,
                 note.beat,
             );
             let mut hold_topcap_phase = ns.part_uv_phase(
-                hold_topcap_part,
+                hold_parts.topcap,
                 state.total_elapsed_in_screen(),
                 current_beat,
                 note.beat,
             );
             let mut hold_bottomcap_phase = ns.part_uv_phase(
-                hold_bottomcap_part,
+                hold_parts.bottomcap,
                 state.total_elapsed_in_screen(),
                 current_beat,
                 note.beat,
@@ -3888,7 +2597,7 @@ pub(crate) fn build_bundles(
             };
             if body_flipped {
                 std::mem::swap(&mut top_cap_slot, &mut bottom_cap_slot);
-                std::mem::swap(&mut hold_topcap_part, &mut hold_bottomcap_part);
+                std::mem::swap(&mut hold_parts.topcap, &mut hold_parts.bottomcap);
                 std::mem::swap(&mut hold_topcap_phase, &mut hold_bottomcap_phase);
             }
             // Prepare clipped body extents. ITG DrawHoldBodyInternal always
@@ -3963,7 +2672,7 @@ pub(crate) fn build_bundles(
                     let body_uv = maybe_flip_uv_vert(
                         translated_uv_rect(
                             body_slot.uv_for_frame_at(body_frame, body_uv_elapsed),
-                            ns.part_uv_translation(hold_body_part, note.beat, false),
+                            ns.part_uv_translation(hold_parts.body, note.beat, false),
                         ),
                         body_flipped,
                     );
@@ -4483,7 +3192,7 @@ pub(crate) fn build_bundles(
                     let cap_uv = maybe_flip_uv_vert(
                         translated_uv_rect(
                             cap_slot.uv_for_frame_at(cap_frame, cap_uv_elapsed),
-                            ns.part_uv_translation(hold_topcap_part, note.beat, false),
+                            ns.part_uv_translation(hold_parts.topcap, note.beat, false),
                         ),
                         body_flipped,
                     );
@@ -4728,7 +3437,7 @@ pub(crate) fn build_bundles(
                     let cap_uv = maybe_flip_uv_vert(
                         translated_uv_rect(
                             cap_slot.uv_for_frame_at(cap_frame, cap_uv_elapsed),
-                            ns.part_uv_translation(hold_bottomcap_part, note.beat, false),
+                            ns.part_uv_translation(hold_parts.bottomcap, note.beat, false),
                         ),
                         body_flipped,
                     );
@@ -5027,7 +3736,7 @@ pub(crate) fn build_bundles(
                     None
                 };
                 let hold_head_translation =
-                    ns.part_uv_translation(hold_head_part, note.beat, false);
+                    ns.part_uv_translation(hold_parts.head, note.beat, false);
                 let head_slot = head_slot.and_then(|slot| {
                     let draw = song_lua_note_model_draw(
                         slot.model_draw_at(elapsed, current_beat),
@@ -5469,7 +4178,7 @@ pub(crate) fn build_bundles(
                         let mine_uv_phase =
                             mine_ns.tap_mine_uv_phase(elapsed, current_beat, mine_note_beat);
                         let mine_translation =
-                            mine_ns.part_uv_translation(NoteAnimPart::Mine, mine_note_beat, false);
+                            mine_ns.part_uv_translation(mine_part(), mine_note_beat, false);
                         let circle_reference = frame_slot
                             .map(|slot| scale_mine_slot_for_note(slot))
                             .or_else(|| fill_slot.map(|slot| scale_mine_slot_for_note(slot)))
@@ -5666,37 +4375,16 @@ pub(crate) fn build_bundles(
                     }
                     let tap_note_part = tap_part_for_note_type(note.note_type);
                     let tap_row_flags = state.tap_row_hold_roll_flags(note_index);
-                    let tap_replacement_roll =
-                        if matches!(note.note_type, NoteType::Tap | NoteType::Lift) {
-                            let same_row_has_hold = tap_row_flags & 0b01 != 0;
-                            let same_row_has_roll = tap_row_flags & 0b10 != 0;
-                            if same_row_has_hold && same_row_has_roll {
-                                if draw_hold_same_row && draw_roll_same_row {
-                                    Some(!tap_same_row_means_hold)
-                                } else if draw_hold_same_row {
-                                    Some(false)
-                                } else if draw_roll_same_row {
-                                    Some(true)
-                                } else {
-                                    None
-                                }
-                            } else if same_row_has_hold && draw_hold_same_row {
-                                Some(false)
-                            } else if same_row_has_roll && draw_roll_same_row {
-                                Some(true)
-                            } else {
-                                None
-                            }
-                        } else {
-                            None
-                        };
-                    if let Some(use_roll_head) = tap_replacement_roll {
-                        let visuals = ns.hold_visuals_for_col(col_idx, use_roll_head);
-                        let part = if use_roll_head {
-                            NoteAnimPart::RollHead
-                        } else {
-                            NoteAnimPart::HoldHead
-                        };
+                    if let Some(replacement_head) = tap_replacement_head(
+                        note.note_type,
+                        tap_row_flags & 0b01 != 0,
+                        tap_row_flags & 0b10 != 0,
+                        draw_hold_same_row,
+                        draw_roll_same_row,
+                        tap_same_row_means_hold,
+                    ) {
+                        let visuals = ns.hold_visuals_for_col(col_idx, replacement_head.is_roll);
+                        let part = replacement_head.part;
                         if let Some(head_slots) = visuals
                             .head_inactive_layers
                             .as_deref()
@@ -5845,11 +4533,7 @@ pub(crate) fn build_bundles(
                             .as_ref()
                             .or(visuals.head_active.as_ref())
                         {
-                            let part = if use_roll_head {
-                                NoteAnimPart::RollHead
-                            } else {
-                                NoteAnimPart::HoldHead
-                            };
+                            let part = replacement_head.part;
                             let head_phase =
                                 ns.part_uv_phase(part, elapsed, current_beat, note.beat);
                             let head_translation = ns.part_uv_translation(part, note.beat, false);
@@ -6187,7 +4871,7 @@ pub(crate) fn build_bundles(
                     z(84)
                 ));
             }
-            if scores::should_warn_cmod_for_itl_chart(state, player_idx) {
+            if warn_cmod_for_itl_chart {
                 let warning_y = mods_line_y + DISPLAY_MODS_LINE_STEP * mods_line_count;
                 hud_actors.push(act!(quad:
                     align(0.5, 0.5):
@@ -6341,7 +5025,7 @@ pub(crate) fn build_bundles(
     }
     let combo_actors = capture_requests
         .combo
-        .then(|| share_hud_range(&mut hud_actors, combo_capture_start))
+        .then(|| share_actor_range(&mut hud_actors, combo_capture_start))
         .flatten();
 
     let show_error_bar_colorful = error_bar_mask.contains(profile_data::ErrorBarMask::COLORFUL);
@@ -7308,7 +5992,7 @@ pub(crate) fn build_bundles(
     }
     let judgment_actors = capture_requests
         .judgment
-        .then(|| share_hud_range(&mut hud_actors, judgment_capture_start))
+        .then(|| share_actor_range(&mut hud_actors, judgment_capture_start))
         .flatten();
 
     let (tilt, skew) = (perspective.tilt, perspective.skew);
@@ -7329,22 +6013,11 @@ pub(crate) fn build_bundles(
         }
     }
 
-    let field_actors = if capture_requests.note_field && !actors.is_empty() {
-        let children = Arc::<[Actor]>::from(actors.drain(..).collect::<Vec<_>>());
-        actors.push(Actor::SharedFrame {
-            align: [0.0, 0.0],
-            offset: [0.0, 0.0],
-            size: [SizeSpec::Fill, SizeSpec::Fill],
-            children: Arc::clone(&children),
-            background: None,
-            z: 0,
-            tint: [1.0; 4],
-            blend: None,
-        });
-        vec![children]
-    } else {
-        Vec::new()
-    };
+    let field_actors = capture_requests
+        .note_field
+        .then(|| share_actor_range(&mut actors, 0))
+        .flatten()
+        .unwrap_or_default();
     BuiltNotefield {
         layout_center_x,
         field_actors,
@@ -7354,1190 +6027,5 @@ pub(crate) fn build_bundles(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{
-        TornadoBounds, Z_ERROR_BAR_AVERAGE, Z_HOLD_BODY, Z_HOLD_GLOW, Z_RECEPTOR, Z_RECEPTOR_GLOW,
-        Z_TAP_NOTE, bottom_cap_uv_window, clipped_hold_body_bounds, combo_actor_zoom,
-        confusion_rotation_deg, error_bar_boundaries_s, error_bar_text_scalable_zoom,
-        error_bar_trim_max_window_ix, hold_body_segment_budget, hold_draw_span,
-        hold_explosion_active, hold_explosion_enabled, hold_explosion_slot_for_col,
-        hold_head_render_flags, hold_indicator_column_x, hold_segment_pose, hold_strip_actor,
-        hold_strip_glow_actor, hold_strip_row_3d, hold_tail_cap_bounds, hud_layout_ys, hud_y,
-        itg_actor_glow_alpha, judgment_actor_zoom, judgment_frame_size, let_go_head_beat,
-        maybe_mirror_uv_horiz_for_reverse_flipped, move_col_extra, note_slot_base_size,
-        note_world_z_for_bumpy, note_x_offset, offset_center, player_metric_y, receptor_row_center,
-        scroll_receptor_y, tap_part_for_note_type, tipsy_y_extra, top_cap_rotation_deg,
-    };
-    use crate::assets;
-    use crate::game::parsing::noteskin::{
-        NUM_QUANTIZATIONS, NoteAnimPart, Quantization, Style, load_itg_skin,
-    };
-    use deadlib_present::actors::Actor;
-    use deadlib_render::BlendMode;
-    use deadsync_core::note::NoteType;
-    use deadsync_core::timing::beat_to_note_row;
-    use deadsync_gameplay::{
-        AccelEffects, ActiveHold, SongLuaNoteHideWindowRuntime, VisualEffects, song_lua_note_hidden,
-    };
-    use deadsync_profile as profile_data;
-    use deadsync_rules::note::{MineResult, Note};
-    use deadsync_rules::scroll::ScrollSpeedSetting;
-    use deadsync_rules::timing::{self, TimeSignatureSegment};
-    use std::sync::Arc;
-
-    fn test_note_at_beat(beat: f32) -> Note {
-        Note {
-            beat,
-            quantization_idx: 0,
-            column: 0,
-            note_type: NoteType::Tap,
-            row_index: beat_to_note_row(beat).max(0) as usize,
-            result: None,
-            early_result: None,
-            hold: None,
-            mine_result: None,
-            is_fake: false,
-            can_be_judged: true,
-        }
-    }
-
-    fn test_note_at_dense_row(beat: f32, row_index: usize) -> Note {
-        let mut note = test_note_at_beat(beat);
-        note.row_index = row_index;
-        note
-    }
-
-    #[test]
-    fn edit_beat_bar_labels_default_measure_indices() {
-        assert_eq!(
-            super::edit_beat_bar_info_for_row(beat_to_note_row(0.0), &[])
-                .and_then(|info| info.measure_index),
-            Some(0)
-        );
-        assert_eq!(
-            super::edit_beat_bar_info_for_row(beat_to_note_row(1.0), &[])
-                .and_then(|info| info.measure_index),
-            None
-        );
-        assert_eq!(
-            super::edit_beat_bar_info_for_row(beat_to_note_row(4.0), &[])
-                .and_then(|info| info.measure_index),
-            Some(1)
-        );
-    }
-
-    #[test]
-    fn edit_beat_bar_labels_follow_time_signature_segments() {
-        let segments = [
-            TimeSignatureSegment {
-                beat: 0.0,
-                numerator: 3,
-                denominator: 4,
-            },
-            TimeSignatureSegment {
-                beat: 6.0,
-                numerator: 4,
-                denominator: 4,
-            },
-        ];
-
-        assert_eq!(
-            super::edit_beat_bar_info_for_row(beat_to_note_row(0.0), &segments)
-                .and_then(|info| info.measure_index),
-            Some(0)
-        );
-        assert_eq!(
-            super::edit_beat_bar_info_for_row(beat_to_note_row(3.0), &segments)
-                .and_then(|info| info.measure_index),
-            Some(1)
-        );
-        assert_eq!(
-            super::edit_beat_bar_info_for_row(beat_to_note_row(6.0), &segments)
-                .and_then(|info| info.measure_index),
-            Some(2)
-        );
-    }
-
-    #[test]
-    fn mine_hides_after_any_final_resolution() {
-        assert!(!super::mine_hides_after_resolution(None));
-        assert!(super::mine_hides_after_resolution(Some(MineResult::Hit)));
-        assert!(super::mine_hides_after_resolution(Some(
-            MineResult::Avoided
-        )));
-    }
-
-    #[test]
-    fn visible_beat_probe_keeps_brake_warped_notes() {
-        let accel = AccelEffects {
-            brake: 1.0,
-            ..Default::default()
-        };
-        let last = super::find_last_displayed_beat(0.0, 120.0, 1.0, false, |beat| {
-            let y = super::apply_accel_y(
-                beat * 64.0,
-                0.0,
-                0.0,
-                super::field_effect_height(0.0),
-                accel,
-            );
-            (y, true)
-        })
-        .expect("finite beat range");
-        assert!(
-            last > 3.5,
-            "last beat {last} should include the warped note"
-        );
-
-        let notes = vec![test_note_at_beat(0.5), test_note_at_beat(3.5)];
-        let note_indices = vec![0usize, 1usize];
-        let mut visited = Vec::new();
-        super::for_each_visible_note_index(
-            &note_indices,
-            &notes,
-            Some((beat_to_note_row(0.0), beat_to_note_row(last))),
-            |note_index| visited.push(note_index),
-        );
-        assert_eq!(visited, vec![0, 1]);
-    }
-
-    #[test]
-    fn zero_scroll_start_stagnates_negative_lead_in_window() {
-        let timing = timing::TimingData::from_segments(
-            0.0,
-            0.0,
-            &timing::TimingSegments {
-                bpms: vec![(0.0, 120.0)],
-                speeds: vec![timing::SpeedSegment {
-                    beat: 0.0,
-                    ratio: 0.1,
-                    delay: 0.0,
-                    unit: timing::SpeedUnit::Beats,
-                }],
-                scrolls: vec![
-                    timing::ScrollSegment {
-                        beat: 0.0,
-                        ratio: 0.0,
-                    },
-                    timing::ScrollSegment {
-                        beat: 4.0,
-                        ratio: 1.0,
-                    },
-                ],
-                ..timing::TimingSegments::default()
-            },
-            &[],
-        );
-        let current_beat = -12.0;
-        let current_time_ns = timing.get_time_for_beat_ns(current_beat);
-        let speed = timing.get_speed_multiplier_ns(current_beat, current_time_ns);
-        let curr_disp_beat = timing.get_displayed_beat(current_beat);
-        let later_disp_beat = timing.get_displayed_beat(-6.0);
-
-        let last = super::find_last_displayed_beat(current_beat, 120.0, speed, false, |beat| {
-            let note_disp_beat = timing.get_displayed_beat(beat);
-            (
-                super::beat_scroll_travel(note_disp_beat, curr_disp_beat, speed),
-                true,
-            )
-        })
-        .expect("finite lead-in visible range");
-        let beat_zero_travel =
-            super::beat_scroll_travel(timing.get_displayed_beat(0.0), curr_disp_beat, speed);
-
-        assert!((speed - 0.1).abs() <= 0.0001);
-        assert!((curr_disp_beat - 0.0).abs() <= 0.0001);
-        assert!((later_disp_beat - 0.0).abs() <= 0.0001);
-        assert!(
-            beat_zero_travel.abs() <= 0.001,
-            "beat zero should be stagnant at the receptor during lead-in, travel={beat_zero_travel}"
-        );
-        assert!(
-            last >= 3.99,
-            "slow lead-in should include the first four beats, last={last}"
-        );
-    }
-
-    #[test]
-    fn brake_applies_before_scroll_multiplier_like_itg() {
-        let accel = AccelEffects {
-            brake: 1.0,
-            ..Default::default()
-        };
-        let effect_height = super::field_effect_height(0.0);
-        let raw_y = ScrollSpeedSetting::ARROW_SPACING;
-        let scroll_speed = 2.0;
-        let itg_order = super::apply_accel_y(raw_y, 0.0, 0.0, effect_height, accel) * scroll_speed;
-        let pre_scaled_order =
-            super::apply_accel_y(raw_y * scroll_speed, 0.0, 0.0, effect_height, accel);
-        let expected_itg_order = raw_y * (raw_y / effect_height) * scroll_speed;
-
-        assert!(itg_order < pre_scaled_order);
-        assert!((itg_order - expected_itg_order).abs() <= 0.001);
-    }
-
-    #[test]
-    fn beat_measure_travel_applies_mini_once_like_notes() {
-        let raw = super::beat_scroll_travel(12.0, 8.0, 1.25);
-        let field_zoom = 0.75;
-        let player_speed = 5.0;
-        let expected = (12.0 - 8.0) * ScrollSpeedSetting::ARROW_SPACING * 1.25;
-
-        assert!((raw - expected).abs() <= 0.001);
-
-        let note_y = raw * field_zoom * player_speed;
-        let old_measure_y = raw * field_zoom * field_zoom * player_speed;
-
-        assert!((note_y - expected * field_zoom * player_speed).abs() <= 0.001);
-        assert!(
-            (note_y - old_measure_y).abs() > 100.0,
-            "double-applying field zoom would drift measure lines away from notes"
-        );
-    }
-
-    #[test]
-    fn edit_beat_travel_uses_step_editor_spacing() {
-        let edit_raw = super::edit_beat_scroll_travel(44.0, 40.0);
-        let displayed_raw = super::beat_scroll_travel(42.0, 40.0, 0.5);
-
-        assert!((edit_raw - 4.0 * ScrollSpeedSetting::ARROW_SPACING).abs() <= 0.001);
-        assert!((displayed_raw - ScrollSpeedSetting::ARROW_SPACING).abs() <= 0.001);
-        assert!(
-            (edit_raw - displayed_raw).abs() > 100.0,
-            "ITG's step editor ignores displayed beat and speed segments"
-        );
-    }
-
-    #[test]
-    fn visible_note_window_uses_itg_rows_not_dense_rows() {
-        let notes = vec![
-            test_note_at_dense_row(0.0, 0),
-            test_note_at_dense_row(4.0, 1),
-        ];
-        let note_indices = vec![0usize, 1usize];
-        let mut visited = Vec::new();
-
-        super::for_each_visible_note_index(
-            &note_indices,
-            &notes,
-            Some((beat_to_note_row(3.5), beat_to_note_row(4.5))),
-            |note_index| visited.push(note_index),
-        );
-
-        assert_eq!(visited, vec![1]);
-    }
-
-    #[test]
-    fn hold_head_render_flags_keep_early_hit_inactive_before_receptor() {
-        let active = ActiveHold {
-            note_index: 42,
-            start_time_ns: 100_000_000_000,
-            end_time_ns: 12_000_000_000,
-            note_type: NoteType::Hold,
-            let_go: false,
-            is_pressed: true,
-            life: 1.0,
-            last_update_time_ns: 100_000_000_000,
-        };
-        let (engaged, use_active) = hold_head_render_flags(Some(&active), 99.99, 100.0);
-        assert!(!engaged);
-        assert!(!use_active);
-    }
-
-    #[test]
-    fn hold_explosion_waits_for_receptor_on_early_hit() {
-        let active = ActiveHold {
-            note_index: 42,
-            start_time_ns: 100_000_000_000,
-            end_time_ns: 12_000_000_000,
-            note_type: NoteType::Hold,
-            let_go: false,
-            is_pressed: true,
-            life: 1.0,
-            last_update_time_ns: 100_000_000_000,
-        };
-
-        assert!(!hold_explosion_active(Some(&active), 99.99, 100.0));
-        assert!(hold_explosion_active(Some(&active), 100.0, 100.0));
-    }
-
-    #[test]
-    fn hold_explosion_requires_live_hold_state() {
-        let exhausted = ActiveHold {
-            note_index: 7,
-            start_time_ns: 100_000_000_000,
-            end_time_ns: 8_000_000_000,
-            note_type: NoteType::Hold,
-            let_go: false,
-            is_pressed: true,
-            life: 0.0,
-            last_update_time_ns: 100_000_000_000,
-        };
-        let let_go = ActiveHold {
-            note_index: 7,
-            start_time_ns: 100_000_000_000,
-            end_time_ns: 8_000_000_000,
-            note_type: NoteType::Hold,
-            let_go: true,
-            is_pressed: true,
-            life: 1.0,
-            last_update_time_ns: 100_000_000_000,
-        };
-
-        assert!(!hold_explosion_active(Some(&exhausted), 100.0, 100.0));
-        assert!(!hold_explosion_active(Some(&let_go), 100.0, 100.0));
-        assert!(!hold_explosion_active(None, 100.0, 100.0));
-    }
-
-    #[test]
-    fn hold_explosion_option_uses_holding_mask() {
-        let enabled = profile_data::Profile::default();
-        assert!(hold_explosion_enabled(&enabled));
-
-        let mut disabled = profile_data::Profile::default();
-        disabled
-            .tap_explosion_active_mask
-            .remove(profile_data::TapExplosionMask::HOLDING);
-
-        assert!(!hold_explosion_enabled(&disabled));
-
-        disabled
-            .tap_explosion_active_mask
-            .insert(profile_data::TapExplosionMask::HOLDING);
-        disabled
-            .tap_explosion_active_mask
-            .remove(profile_data::TapExplosionMask::HELD);
-
-        assert!(hold_explosion_enabled(&disabled));
-    }
-
-    #[test]
-    fn hold_head_render_flags_switch_to_active_at_receptor() {
-        let mut active = ActiveHold {
-            note_index: 42,
-            start_time_ns: 100_000_000_000,
-            end_time_ns: 12_000_000_000,
-            note_type: NoteType::Hold,
-            let_go: false,
-            is_pressed: true,
-            life: 1.0,
-            last_update_time_ns: 100_000_000_000,
-        };
-        let (engaged, use_active) = hold_head_render_flags(Some(&active), 100.0, 100.0);
-        assert!(engaged);
-        assert!(use_active);
-
-        active.is_pressed = false;
-        let (engaged_released, use_active_released) =
-            hold_head_render_flags(Some(&active), 100.0, 100.0);
-        assert!(engaged_released);
-        assert!(!use_active_released);
-    }
-
-    #[test]
-    fn roll_head_render_flags_stay_active_between_taps() {
-        let active = ActiveHold {
-            note_index: 42,
-            start_time_ns: 100_000_000_000,
-            end_time_ns: 12_000_000_000,
-            note_type: NoteType::Roll,
-            let_go: false,
-            is_pressed: false,
-            life: 1.0,
-            last_update_time_ns: 100_000_000_000,
-        };
-        let (engaged, use_active) = hold_head_render_flags(Some(&active), 100.0, 100.0);
-        assert!(engaged);
-        assert!(use_active);
-    }
-
-    #[test]
-    fn hold_head_render_flags_require_engaged_life_state() {
-        let exhausted = ActiveHold {
-            note_index: 7,
-            start_time_ns: 100_000_000_000,
-            end_time_ns: 8_000_000_000,
-            note_type: NoteType::Roll,
-            let_go: false,
-            is_pressed: true,
-            life: 0.0,
-            last_update_time_ns: 100_000_000_000,
-        };
-        let let_go = ActiveHold {
-            note_index: 7,
-            start_time_ns: 100_000_000_000,
-            end_time_ns: 8_000_000_000,
-            note_type: NoteType::Roll,
-            let_go: true,
-            is_pressed: true,
-            life: 1.0,
-            last_update_time_ns: 100_000_000_000,
-        };
-        assert_eq!(
-            hold_head_render_flags(Some(&exhausted), 200.0, 100.0),
-            (false, false)
-        );
-        assert_eq!(
-            hold_head_render_flags(Some(&let_go), 200.0, 100.0),
-            (false, false)
-        );
-    }
-
-    #[test]
-    fn let_go_head_beat_stays_at_receptor_until_visible_clock_catches_up() {
-        let beat = let_go_head_beat(100.0, 108.0, 102.0, 101.25);
-        assert!((beat - 101.25).abs() <= 1e-6);
-    }
-
-    #[test]
-    fn let_go_head_beat_uses_last_held_once_visible_clock_has_caught_up() {
-        let beat = let_go_head_beat(100.0, 108.0, 102.0, 103.0);
-        assert!((beat - 102.0).abs() <= 1e-6);
-    }
-
-    #[test]
-    fn receptor_glow_draws_under_hold_body() {
-        assert!(Z_RECEPTOR < Z_HOLD_BODY);
-        assert!(Z_RECEPTOR_GLOW < Z_HOLD_BODY);
-    }
-
-    #[test]
-    fn hold_glow_draws_over_hold_body_like_itg_second_pass() {
-        assert!(Z_HOLD_BODY < Z_HOLD_GLOW);
-        assert!(Z_HOLD_GLOW < Z_TAP_NOTE);
-    }
-
-    #[test]
-    fn average_error_bar_draws_under_receptors() {
-        assert!(i32::from(Z_ERROR_BAR_AVERAGE) < Z_RECEPTOR);
-        assert!(i32::from(Z_ERROR_BAR_AVERAGE) < Z_TAP_NOTE);
-    }
-
-    #[test]
-    fn text_error_bar_scalable_zoom_matches_sl_fork_curve_at_default_threshold() {
-        fn assert_close(actual: f32, expected: f32) {
-            assert!(
-                (actual - expected).abs() <= 0.0001,
-                "{actual} != {expected}"
-            );
-        }
-
-        let w2_ms = timing::TimingProfile::default_itg_with_fa_plus().windows_s[0] * 1000.0;
-        let smaller_white_ms = timing::FA_PLUS_W010_MS;
-        let w1_ms = timing::FA_PLUS_W0_MS;
-        let inner_mid_ms = (smaller_white_ms + w1_ms) * 0.5;
-        let fantastic_mid_ms = (w1_ms + w2_ms) * 0.5;
-
-        assert_close(
-            error_bar_text_scalable_zoom(inner_mid_ms, 10.0, w2_ms),
-            0.35,
-        );
-        assert_close(
-            error_bar_text_scalable_zoom(fantastic_mid_ms, 10.0, w2_ms),
-            0.4,
-        );
-        assert_close(error_bar_text_scalable_zoom(w2_ms + 1.0, 10.0, w2_ms), 0.45);
-    }
-
-    #[test]
-    fn song_lua_zoom_hide_window_covers_receptor_beat() {
-        let windows = [SongLuaNoteHideWindowRuntime {
-            column: 2,
-            start_beat: 40.0,
-            end_beat: 44.0,
-        }];
-
-        assert!(song_lua_note_hidden(&windows, 2, 40.0));
-        assert!(song_lua_note_hidden(&windows, 2, 44.0));
-        assert!(!song_lua_note_hidden(&windows, 1, 42.0));
-        assert!(!song_lua_note_hidden(&windows, 2, 44.01));
-    }
-
-    #[test]
-    fn reverse_column_cue_bounds_match_simply_love() {
-        let lane_width = 64.0;
-        let cue_height = super::column_cue_height(super::screen_height());
-        let top = super::column_cue_reverse_top_y(
-            lane_width,
-            cue_height,
-            0.0,
-            super::RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE,
-        );
-        let bottom = top + cue_height;
-
-        assert!((cue_height - 400.0).abs() <= 1e-6);
-        assert!((top - 17.0).abs() <= 1e-6);
-        assert!((bottom - 417.0).abs() <= 1e-6);
-    }
-
-    #[test]
-    fn column_flash_default_layout_matches_original_simply_love() {
-        let lane_width = 64.0;
-        let layout = super::column_flash_layout(false);
-        let height = super::column_flash_height(super::screen_height(), layout);
-        let top = super::column_flash_reverse_top_y(
-            layout,
-            lane_width,
-            height,
-            0.0,
-            super::RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE,
-        );
-        let bottom = top + height;
-
-        assert!((layout.y_offset - 80.0).abs() <= 1e-6);
-        assert!((layout.fade - 0.333).abs() <= 1e-6);
-        assert!((height - 400.0).abs() <= 1e-6);
-        assert!((top - 17.0).abs() <= 1e-6);
-        assert!((bottom - 417.0).abs() <= 1e-6);
-    }
-
-    #[test]
-    fn column_flash_compact_layout_matches_chris_reference() {
-        let lane_width = 64.0;
-        let layout = super::column_flash_layout(true);
-        let height = super::column_flash_height(super::screen_height(), layout);
-        let top = super::column_flash_reverse_top_y(
-            layout,
-            lane_width,
-            height,
-            0.0,
-            super::RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE,
-        );
-        let bottom = top + height;
-
-        assert!((layout.y_offset - 70.0).abs() <= 1e-6);
-        assert!((layout.fade - 0.2).abs() <= 1e-6);
-        assert!((height - 140.0).abs() <= 1e-6);
-        assert!((top - 247.0).abs() <= 1e-6);
-        assert!((bottom - 387.0).abs() <= 1e-6);
-    }
-
-    #[test]
-    fn hold_tail_cap_bounds_join_at_body_bottom_for_normal_scroll() {
-        let body_tail_y = 100.0;
-        let cap_height = 24.0;
-        let (top, bottom) = hold_tail_cap_bounds(body_tail_y, cap_height, Some(20.0), Some(96.0))
-            .expect("cap should connect when rendered body reaches tail side");
-        assert!((top - 96.0).abs() <= 1e-6);
-        assert!((bottom - 120.0).abs() <= 1e-6);
-    }
-
-    #[test]
-    fn hold_tail_cap_bounds_falls_back_when_body_is_below_tail_anchor() {
-        let body_tail_y = 100.0;
-        let cap_height = 24.0;
-        assert_eq!(
-            hold_tail_cap_bounds(body_tail_y, cap_height, Some(104.0), Some(160.0)),
-            Some((100.0, 124.0))
-        );
-    }
-
-    #[test]
-    fn hold_tail_cap_bounds_skip_when_body_does_not_reach_tail() {
-        let body_tail_y = 100.0;
-        let cap_height = 24.0;
-        assert_eq!(
-            hold_tail_cap_bounds(body_tail_y, cap_height, Some(20.0), Some(70.0)),
-            Some((100.0, 124.0))
-        );
-        assert_eq!(
-            hold_tail_cap_bounds(body_tail_y, cap_height, Some(140.0), Some(200.0)),
-            Some((100.0, 124.0))
-        );
-        assert_eq!(
-            hold_tail_cap_bounds(body_tail_y, cap_height, None, Some(95.0)),
-            Some((100.0, 124.0))
-        );
-    }
-
-    #[test]
-    fn collapsed_hold_body_uses_tail_cap_fallback_bounds() {
-        let body_top = 120.0;
-        let body_bottom = 121.0;
-        let natural_top = 100.0;
-        let natural_bottom = 110.0;
-        assert_eq!(
-            clipped_hold_body_bounds(body_top, body_bottom, natural_top, natural_bottom),
-            None
-        );
-        assert_eq!(
-            hold_tail_cap_bounds(natural_bottom, 24.0, None, None),
-            Some((110.0, 134.0))
-        );
-    }
-
-    #[test]
-    fn collapsed_hold_draw_span_still_draws_caps() {
-        assert_eq!(hold_draw_span(120.0, 120.0, 480.0), Some((120.0, 120.0)));
-    }
-
-    #[test]
-    fn tiny_hold_body_repeat_uses_mesh_budget() {
-        let (budget, allow_legacy) = hold_body_segment_budget(900.0, 0.25);
-        assert!(budget > 2048);
-        assert!(!allow_legacy);
-    }
-
-    #[test]
-    fn normal_hold_body_repeat_keeps_legacy_budget() {
-        let (budget, allow_legacy) = hold_body_segment_budget(900.0, 64.0);
-        assert_eq!(budget, 2048);
-        assert!(allow_legacy);
-    }
-
-    #[test]
-    fn reverse_flipped_cap_uv_only_mirrors_when_both_flags_are_enabled() {
-        let uv = [0.125, 0.25, 0.75, 0.875];
-        assert_eq!(
-            maybe_mirror_uv_horiz_for_reverse_flipped(uv, true, true),
-            [0.75, 0.25, 0.125, 0.875]
-        );
-        assert_eq!(
-            maybe_mirror_uv_horiz_for_reverse_flipped(uv, true, false),
-            uv
-        );
-        assert_eq!(
-            maybe_mirror_uv_horiz_for_reverse_flipped(uv, false, true),
-            uv
-        );
-    }
-
-    #[test]
-    fn reverse_flipped_top_cap_rotation_matches_itg_parity_path() {
-        assert!((top_cap_rotation_deg(true, true) - 180.0).abs() <= f32::EPSILON);
-        assert!((top_cap_rotation_deg(true, false) - 0.0).abs() <= f32::EPSILON);
-        assert!((top_cap_rotation_deg(false, true) - 0.0).abs() <= f32::EPSILON);
-    }
-
-    #[test]
-    fn lift_notes_use_lift_animation_part() {
-        assert!(matches!(
-            tap_part_for_note_type(NoteType::Lift),
-            NoteAnimPart::Lift
-        ));
-    }
-
-    #[test]
-    fn bottom_cap_uv_window_matches_itg_add_to_tex_coord_progression() {
-        let (v0, v1) = bottom_cap_uv_window(0.0, 1.0, 12.0, 24.0, false)
-            .expect("non-zero cap span and draw height should produce UVs");
-        assert!((v0 - 0.5).abs() <= 1e-6);
-        assert!((v1 - 1.0).abs() <= 1e-6);
-
-        let (full_v0, full_v1) = bottom_cap_uv_window(0.0, 1.0, 24.0, 24.0, false)
-            .expect("full-height cap should preserve full UV range");
-        assert!((full_v0 - 0.0).abs() <= 1e-6);
-        assert!((full_v1 - 1.0).abs() <= 1e-6);
-    }
-
-    #[test]
-    fn bottom_cap_uv_window_honors_top_anchor_when_reverse() {
-        let (v0, v1) = bottom_cap_uv_window(0.2, 0.8, 12.0, 24.0, true)
-            .expect("top-anchored reverse path should produce UVs");
-        assert!((v0 - 0.2).abs() <= 1e-6);
-        assert!((v1 - 0.5).abs() <= 1e-6);
-    }
-
-    #[test]
-    fn bottom_cap_uv_window_rejects_degenerate_inputs() {
-        assert_eq!(bottom_cap_uv_window(0.0, 1.0, 0.0, 24.0, false), None);
-        assert_eq!(bottom_cap_uv_window(0.0, 1.0, 24.0, 0.0, false), None);
-    }
-
-    #[test]
-    fn note_actor_glow_clamps_like_itg_vertex_color() {
-        assert_eq!(itg_actor_glow_alpha(1.3), 1.0);
-        assert_eq!(itg_actor_glow_alpha(0.65), 0.65);
-        assert_eq!(itg_actor_glow_alpha(f32::NAN), 0.0);
-    }
-
-    #[test]
-    fn bumpy_world_z_matches_itg_default_wave() {
-        let z = note_world_z_for_bumpy(8.0 * std::f32::consts::PI, 1.0, 0.0, 0.0);
-        assert!((z - 40.0).abs() <= 1e-4);
-    }
-
-    #[test]
-    fn bumpy_period_changes_wave_length_like_itg() {
-        let z = note_world_z_for_bumpy(-2.0 * std::f32::consts::PI, 1.0, 0.0, -1.25);
-        assert!((z - 40.0).abs() <= 1e-4);
-    }
-
-    #[test]
-    fn hold_strip_row_3d_preserves_row_z() {
-        let row = hold_strip_row_3d(
-            [64.0, 128.0, 12.5],
-            [0.0, 16.0],
-            8.0,
-            0.0,
-            1.0,
-            0.5,
-            [1.0; 4],
-        );
-        assert!((row[0].pos[2] - 12.5).abs() <= 1e-6);
-        assert!((row[1].pos[2] - 12.5).abs() <= 1e-6);
-    }
-
-    #[test]
-    fn hold_strip_actor_carries_depth_test_flag() {
-        let actor = hold_strip_actor(
-            Arc::from("hold.png"),
-            Arc::from([]),
-            BlendMode::Alpha,
-            true,
-            Z_HOLD_BODY as i16,
-        );
-        assert!(matches!(
-            actor,
-            Actor::TexturedMesh {
-                depth_test: true,
-                ..
-            }
-        ));
-    }
-
-    #[test]
-    fn hold_strip_glow_actor_uses_texture_mask_pass() {
-        let actor = hold_strip_glow_actor(
-            Arc::from("hold.png"),
-            Arc::from([]),
-            true,
-            Z_HOLD_GLOW as i16,
-        );
-        assert!(matches!(
-            actor,
-            Actor::TexturedMesh {
-                tint: [1.0, 1.0, 1.0, 0.0],
-                glow: [1.0, 1.0, 1.0, 1.0],
-                depth_test: true,
-                ..
-            }
-        ));
-    }
-
-    #[test]
-    fn move_and_confusion_column_mods_match_itg_scaling() {
-        let mut visual = VisualEffects::default();
-        visual.move_x_cols[1] = 0.5;
-        visual.move_y_cols[1] = -0.25;
-        visual.confusion_offset_cols[1] = std::f32::consts::FRAC_PI_2;
-
-        assert_eq!(move_col_extra(&visual.move_x_cols, 1), 32.0);
-        assert_eq!(move_col_extra(&visual.move_y_cols, 1), -16.0);
-        assert!((confusion_rotation_deg(0.0, visual, 1) + 90.0).abs() <= 1e-6);
-    }
-
-    #[test]
-    fn hold_segment_pose_keeps_vertical_segments_unrotated() {
-        let (center, length, rotation) = hold_segment_pose([32.0, 100.0], [32.0, 180.0]);
-        assert_eq!(center, [32.0, 140.0]);
-        assert!((length - 80.0).abs() <= 1e-6);
-        assert!(rotation.abs() <= 1e-6);
-    }
-
-    #[test]
-    fn hold_segment_pose_uses_diagonal_length_and_rotation() {
-        let (center, length, rotation) = hold_segment_pose([0.0, 0.0], [30.0, 40.0]);
-        assert_eq!(center, [15.0, 20.0]);
-        assert!((length - 50.0).abs() <= 1e-6);
-        assert!((rotation - 36.869_896).abs() <= 1e-5);
-    }
-
-    #[test]
-    fn receptor_center_uses_zero_travel_x_effects() {
-        let col_offsets = [-96.0, -32.0, 32.0, 96.0];
-        let invert = [0.0; 4];
-        let tornado = [TornadoBounds::default(); 4];
-        let center = receptor_row_center(
-            320.0,
-            1,
-            240.0,
-            1.0,
-            0.0,
-            VisualEffects {
-                drunk: 1.0,
-                ..VisualEffects::default()
-            },
-            &col_offsets,
-            &invert,
-            &tornado,
-        );
-        let expected_x = 320.0
-            + note_x_offset(
-                1,
-                0.0,
-                1.0,
-                0.0,
-                VisualEffects {
-                    drunk: 1.0,
-                    ..VisualEffects::default()
-                },
-                &col_offsets,
-                &invert,
-                &tornado,
-            );
-        assert!((center[0] - expected_x).abs() <= 1e-6);
-    }
-
-    #[test]
-    fn receptor_center_uses_tipsy_y_offset() {
-        let col_offsets = [-96.0, -32.0, 32.0, 96.0];
-        let invert = [0.0; 4];
-        let tornado = [TornadoBounds::default(); 4];
-        let visual = VisualEffects {
-            tipsy: 1.0,
-            ..VisualEffects::default()
-        };
-        let center = receptor_row_center(
-            320.0,
-            2,
-            240.0,
-            1.25,
-            0.0,
-            visual,
-            &col_offsets,
-            &invert,
-            &tornado,
-        );
-        assert!((center[1] - (240.0 + tipsy_y_extra(2, 1.25, visual.tipsy))).abs() <= 1e-6);
-    }
-
-    #[test]
-    fn hud_y_only_uses_reverse_branch_for_full_reverse() {
-        let normal_y = 100.0;
-        let reverse_y = 200.0;
-        let centered_y = 300.0;
-        assert!((hud_y(normal_y, reverse_y, centered_y, false, 0.3) - 160.0).abs() <= 1e-6);
-        assert!((hud_y(normal_y, reverse_y, centered_y, true, 0.3) - 230.0).abs() <= 1e-6);
-    }
-
-    #[test]
-    fn centered_scroll_overshoots_like_itg() {
-        assert!((hud_y(100.0, 500.0, 300.0, false, 2.0) - 500.0).abs() <= 1e-6);
-        assert!((scroll_receptor_y(0.0, 2.0, 100.0, 500.0, 300.0) - 500.0).abs() <= 1e-6);
-    }
-
-    #[test]
-    fn hold_indicator_columns_use_receptor_lane_x() {
-        let playfield_center_x = 123.0;
-        let columns = [-96.0, -32.0, 32.0, 96.0];
-        let field_zoom_80_mini = 1.0 - 0.8 * 0.5;
-        let col_offsets = columns.map(|x| x * field_zoom_80_mini);
-        let invert_distances = [0.0; 4];
-        let tornado_bounds = [TornadoBounds::default(); 4];
-        const EPS: f32 = 1e-5;
-
-        assert!(
-            (hold_indicator_column_x(
-                playfield_center_x,
-                0,
-                0.0,
-                0.0,
-                VisualEffects::default(),
-                &col_offsets,
-                &invert_distances,
-                &tornado_bounds,
-            ) - (playfield_center_x - 57.6))
-                .abs()
-                <= EPS
-        );
-        assert!(
-            (hold_indicator_column_x(
-                playfield_center_x,
-                3,
-                0.0,
-                0.0,
-                VisualEffects::default(),
-                &col_offsets,
-                &invert_distances,
-                &tornado_bounds,
-            ) - (playfield_center_x + 57.6))
-                .abs()
-                <= EPS
-        );
-
-        let flipped = VisualEffects {
-            flip: 1.0,
-            ..VisualEffects::default()
-        };
-        assert!(
-            (hold_indicator_column_x(
-                playfield_center_x,
-                0,
-                0.0,
-                0.0,
-                flipped,
-                &col_offsets,
-                &invert_distances,
-                &tornado_bounds,
-            ) - (playfield_center_x + 57.6))
-                .abs()
-                <= EPS
-        );
-    }
-
-    #[test]
-    fn player_metric_y_applies_notefield_offset_after_reverse_mix() {
-        const EPS: f32 = 1e-5;
-        let center_y = 240.0;
-        let offset_y = -22.0;
-
-        let standard = player_metric_y(center_y, offset_y, 0.0, -90.0, 90.0);
-        let reverse = player_metric_y(center_y, offset_y, 1.0, -90.0, 90.0);
-        let split = player_metric_y(center_y, offset_y, 0.5, -90.0, 90.0);
-
-        assert!((standard - 128.0).abs() <= EPS);
-        assert!((reverse - 308.0).abs() <= EPS);
-        assert!((split - 218.0).abs() <= EPS);
-    }
-
-    #[test]
-    fn hud_layout_offsets_apply_independently() {
-        let profile = profile_data::Profile {
-            error_bar_active_mask: profile_data::ErrorBarMask::MONOCHROME,
-            ..profile_data::Profile::default()
-        };
-        let base = hud_layout_ys(&profile, 100.0, 160.0, false, 0.0, 0.0, 0.0);
-        let moved_judgment = hud_layout_ys(&profile, 100.0, 160.0, false, 25.0, 0.0, 0.0);
-        assert_eq!(moved_judgment.judgment_y, 125.0);
-        assert_eq!(moved_judgment.zmod_layout.combo_y, base.zmod_layout.combo_y);
-        assert_eq!(moved_judgment.error_bar_y, base.error_bar_y);
-
-        let moved_combo = hud_layout_ys(&profile, 100.0, 160.0, false, 0.0, -30.0, 0.0);
-        assert_eq!(moved_combo.judgment_y, base.judgment_y);
-        assert_eq!(
-            moved_combo.zmod_layout.combo_y,
-            base.zmod_layout.combo_y - 30.0
-        );
-        assert_eq!(moved_combo.error_bar_y, base.error_bar_y);
-
-        let moved_error_bar = hud_layout_ys(&profile, 100.0, 160.0, false, 0.0, 0.0, 18.0);
-        assert_eq!(moved_error_bar.judgment_y, base.judgment_y);
-        assert_eq!(
-            moved_error_bar.zmod_layout.combo_y,
-            base.zmod_layout.combo_y
-        );
-        assert_eq!(moved_error_bar.error_bar_y, base.error_bar_y + 18.0);
-    }
-
-    #[test]
-    fn judgment_actor_zoom_matches_itgmania_player_mini_formula_without_judgment_back() {
-        // Without the Arrow Cloud JudgmentBack override, the front judgment
-        // inherits the Player ActorFrame's mini scale, identical to combo:
-        // min(pow(0.5, mini + tiny), 1.0).
-        assert!((judgment_actor_zoom(0.0, false, 0.0, 0.0) - 1.0).abs() <= 1e-6);
-        assert!((judgment_actor_zoom(1.0, false, 0.0, 0.0) - 0.5).abs() <= 1e-6);
-        assert!((judgment_actor_zoom(0.5, false, 0.0, 0.0) - 0.5_f32.sqrt()).abs() <= 1e-6);
-        // Negative mini is clamped to 1.0 by the min(_, 1.0) cap so the
-        // judgment never grows past its base size.
-        assert!((judgment_actor_zoom(-1.0, false, 0.0, 0.0) - 1.0).abs() <= 1e-6);
-        // ITGmania draws tap judgments outside PlayerNoteFieldPositioner, so
-        // Hallway/Distant/Incoming/Space do not affect this actor's zoom.
-        assert!((judgment_actor_zoom(0.0, false, -1.0, 0.0) - 1.0).abs() <= 1e-6);
-        assert!((judgment_actor_zoom(0.0, false, 1.0, 0.0) - 1.0).abs() <= 1e-6);
-        assert!((judgment_actor_zoom(0.0, false, -1.0, 1.0) - 1.0).abs() <= 1e-6);
-        // Parity with combo_actor_zoom is the whole point of this branch.
-        for &mini in &[-1.0_f32, 0.0, 0.25, 0.5, 1.0, 1.5] {
-            assert!(
-                (judgment_actor_zoom(mini, false, -1.0, 0.0) - combo_actor_zoom(mini)).abs()
-                    <= 1e-6
-            );
-        }
-    }
-
-    #[test]
-    fn judgment_actor_zoom_matches_arrow_cloud_judgment_back_formula() {
-        assert!((judgment_actor_zoom(0.35, true, 0.0, 0.0) - 0.825).abs() <= 1e-6);
-        assert!((judgment_actor_zoom(1.5, true, 0.0, 0.0) - 0.35).abs() <= 1e-6);
-        assert!((judgment_actor_zoom(-1.0, true, 0.0, 0.0) - 1.0).abs() <= 1e-6);
-        assert!((judgment_actor_zoom(0.0, true, -1.0, 0.0) - 1.0).abs() <= 1e-6);
-    }
-
-    #[test]
-    fn judgment_frame_size_uses_logical_atlas_frame_dims() {
-        let censored = "judgements/Test Censored 1x7 (doubleres).png";
-        let tight_censored = "judgements/Test Censored Tight 1x7 (doubleres).png";
-        let love = "judgements/Test Love 2x7 (doubleres).png";
-        assets::register_texture_dims(censored, 600, 1400);
-        assets::register_texture_dims(tight_censored, 600, 1050);
-        assets::register_texture_dims(love, 880, 1036);
-
-        assert_eq!(judgment_frame_size(censored), [300.0, 100.0]);
-        assert_eq!(judgment_frame_size(tight_censored), [300.0, 75.0]);
-        assert_eq!(judgment_frame_size(love), [220.0, 74.0]);
-
-        let visible_art_h = 68.0 / 2.0;
-        let original_drawn_art_h = visible_art_h * judgment_frame_size(censored)[1] / 100.0;
-        let tight_drawn_art_h = visible_art_h * judgment_frame_size(tight_censored)[1] / 75.0;
-        assert_eq!(original_drawn_art_h, tight_drawn_art_h);
-    }
-
-    #[test]
-    fn combo_actor_zoom_matches_itgmania_player_mini_formula() {
-        // ITGmania Player::Update: min(pow(0.5, mini + tiny), 1.0).
-        assert!((combo_actor_zoom(0.0) - 1.0).abs() <= 1e-6);
-        assert!((combo_actor_zoom(1.0) - 0.5).abs() <= 1e-6);
-        assert!((combo_actor_zoom(0.5) - 0.5_f32.sqrt()).abs() <= 1e-6);
-        // Big (negative mini) is clamped to 1.0 by the min(_, 1.0) cap so
-        // the combo never grows past its base size.
-        assert!((combo_actor_zoom(-1.0) - 1.0).abs() <= 1e-6);
-    }
-
-    #[test]
-    fn error_bar_boundaries_use_10ms_blue_fantastic_window() {
-        let windows = timing::TimingProfile::default_itg_with_fa_plus().windows_s;
-        let (bounds, len) = error_bar_boundaries_s(
-            windows,
-            Some(timing::FA_PLUS_W010_MS / 1000.0),
-            true,
-            error_bar_trim_max_window_ix(profile_data::ErrorBarTrim::Fantastic),
-        );
-
-        assert_eq!(len, 2);
-        assert!((bounds[0] * 1000.0 - timing::FA_PLUS_W010_MS).abs() <= 0.001);
-        assert!((bounds[1] - windows[0]).abs() <= 0.000001);
-    }
-
-    #[test]
-    fn cyber_model_tap_scale_uses_model_height_not_logical_height() {
-        let style = Style {
-            num_cols: 4,
-            num_players: 1,
-        };
-        let ns =
-            load_itg_skin(&style, "cyber").expect("dance/cyber should load from assets/noteskins");
-        let slot = ns
-            .note_layers
-            .first()
-            .and_then(|layers| layers.iter().find(|slot| slot.model.is_some()))
-            .expect("cyber should expose model-backed tap-note layer for 4th notes");
-
-        let logical_h = slot.logical_size()[1].max(1.0);
-        let model_h = slot
-            .model
-            .as_ref()
-            .map(|model| model.size()[1])
-            .expect("cyber tap slot should be model-backed");
-        assert!(
-            model_h > f32::EPSILON,
-            "cyber model-backed tap slot should have positive model height"
-        );
-        assert!(
-            logical_h / model_h > 1.5,
-            "regression guard: cyber logical height must stay larger than model height so this test catches logical-height scaling; logical={logical_h}, model={model_h}"
-        );
-        let scale_h = note_slot_base_size(slot, 1.0)[1];
-        assert!(
-            (scale_h - model_h).abs() <= 1e-4,
-            "model-backed tap notes must scale by model height; got scale_h={scale_h}, model_h={model_h}"
-        );
-    }
-
-    #[test]
-    fn hold_explosion_slot_respects_explosion_noteskin_choice() {
-        let style = Style {
-            num_cols: 4,
-            num_players: 1,
-        };
-        let cel_ns =
-            load_itg_skin(&style, "cel").expect("dance/cel should load from assets/noteskins");
-        let default_ns = load_itg_skin(&style, "default")
-            .expect("dance/default should load from assets/noteskins");
-        let ddr_vivid_ns = load_itg_skin(&style, "ddr-vivid")
-            .expect("dance/ddr-vivid should load from assets/noteskins");
-
-        let base_slot = hold_explosion_slot_for_col(Some(&cel_ns), 0, false)
-            .expect("cel should define a hold explosion");
-        let selected_slot = hold_explosion_slot_for_col(Some(&ddr_vivid_ns), 0, false)
-            .expect("ddr-vivid should define a hold explosion");
-
-        assert_ne!(
-            selected_slot.texture_key(),
-            base_slot.texture_key(),
-            "hold explosions should come from the selected explosion noteskin"
-        );
-        assert!(
-            selected_slot.texture_key().contains("ddr-vivid"),
-            "selected hold explosion should resolve from ddr-vivid, got '{}'",
-            selected_slot.texture_key()
-        );
-        assert!(
-            hold_explosion_slot_for_col(Some(&default_ns), 0, false).is_none(),
-            "a selected noteskin with blank hold explosions must not fall back to the base noteskin"
-        );
-        assert!(
-            hold_explosion_slot_for_col(None, 0, false).is_none(),
-            "the no-explosion choice should also hide hold explosions"
-        );
-    }
-
-    #[test]
-    fn default_tap_circles_stay_inside_arrow_in_gameplay_layout() {
-        let style = Style {
-            num_cols: 4,
-            num_players: 1,
-        };
-        let ns = load_itg_skin(&style, "default")
-            .expect("dance/default should load from assets/noteskins");
-        const EPSILON: f32 = 1e-3;
-
-        for col in 0..style.num_cols {
-            let note_idx = col * NUM_QUANTIZATIONS + Quantization::Q4th as usize;
-            let layers = ns
-                .note_layers
-                .get(note_idx)
-                .expect("default should expose Q4th tap layers for each column");
-
-            let mut arrow_bounds: Option<(f32, f32, f32, f32)> = None;
-            let mut circle_bounds = Vec::new();
-
-            for slot in layers.iter() {
-                let draw = slot.model_draw_at(0.0, 0.0);
-                if !draw.visible {
-                    continue;
-                }
-                let base_size = note_slot_base_size(slot, 1.0);
-                let size = [
-                    base_size[0] * draw.zoom[0].max(0.0),
-                    base_size[1] * draw.zoom[1].max(0.0),
-                ];
-                if size[0] <= f32::EPSILON || size[1] <= f32::EPSILON {
-                    continue;
-                }
-                let local_offset = [draw.pos[0], draw.pos[1]];
-                let center = offset_center([0.0, 0.0], local_offset, slot.base_rot_sin_cos());
-                let half_w = size[0] * 0.5;
-                let half_h = size[1] * 0.5;
-                let bounds = (
-                    center[0] - half_w,
-                    center[0] + half_w,
-                    center[1] - half_h,
-                    center[1] + half_h,
-                );
-                let key = slot.texture_key().to_ascii_lowercase();
-                if key.contains("_arrow") {
-                    arrow_bounds = Some(bounds);
-                } else if key.contains("_circle") {
-                    circle_bounds.push(bounds);
-                }
-            }
-
-            let (ax0, ax1, ay0, ay1) =
-                arrow_bounds.expect("default tap layers should include arrow layer");
-            assert_eq!(
-                circle_bounds.len(),
-                4,
-                "default tap layers should include four circle layers"
-            );
-            for (idx, (cx0, cx1, cy0, cy1)) in circle_bounds.into_iter().enumerate() {
-                assert!(
-                    cx0 >= ax0 - EPSILON
-                        && cx1 <= ax1 + EPSILON
-                        && cy0 >= ay0 - EPSILON
-                        && cy1 <= ay1 + EPSILON,
-                    "column {col} circle {idx} escaped arrow bounds: circle=({cx0},{cx1},{cy0},{cy1}), arrow=({ax0},{ax1},{ay0},{ay1})"
-                );
-            }
-        }
-    }
-}
+#[path = "tests.rs"]
+mod tests;

@@ -11,6 +11,7 @@ use std::time::Instant;
 
 use deadlib_present::actors::{TextAlign, TextAttribute};
 use deadlib_present::anim::{EffectClock, EffectMode};
+use deadsync_noteskin::{NUM_QUANTIZATIONS, Style};
 use deadsync_song_lua::{
     SONG_LUA_BROADCASTS_KEY, SONG_LUA_RUNTIME_BEAT_KEY, SONG_LUA_RUNTIME_KEY,
     SONG_LUA_RUNTIME_SECONDS_KEY, SONG_LUA_SIDE_EFFECT_COUNT_KEY, display_bpms_text,
@@ -3882,13 +3883,13 @@ fn multitap_arrow_visual_spec(
     noteskin: &str,
     context: &SongLuaCompileContext,
 ) -> Option<(SongLuaOverlayKind, SongLuaOverlayState)> {
-    let style = crate::game::parsing::noteskin::Style {
+    let style = Style {
         num_cols: song_lua_style_info(&context.style_name).columns,
         num_players: song_lua_human_player_count(context).max(1),
     };
     let ns = crate::game::parsing::noteskin::load_itg_skin_cached(&style, noteskin).ok()?;
     let down_col = 1.min(style.num_cols.saturating_sub(1));
-    let note_idx = down_col * crate::game::parsing::noteskin::NUM_QUANTIZATIONS;
+    let note_idx = down_col * NUM_QUANTIZATIONS;
     let layers = ns.note_layers.get(note_idx)?;
     if let Some(model_layers) = multitap_arrow_model_layers(layers) {
         return Some((

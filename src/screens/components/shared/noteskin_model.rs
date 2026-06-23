@@ -1,8 +1,7 @@
-use crate::game::parsing::noteskin::{
-    ModelDrawState, ModelMesh, ModelMeshCache, SpriteSlot, build_model_geometry,
-};
+use crate::game::parsing::noteskin::{ModelMeshCache, SpriteSlot, build_model_geometry};
 use deadlib_present::actors::{Actor, SizeSpec};
 use deadlib_render::{BlendMode, TexturedMeshVertex};
+use deadsync_noteskin::{ModelDrawState, ModelMesh};
 use glam::{Mat4 as Matrix4, Vec3 as Vector3, Vec4};
 use std::sync::Arc;
 

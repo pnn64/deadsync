@@ -392,7 +392,7 @@ mod tests {
         max_step_distance_ns, process_input_edges, refresh_active_attack_masks,
         song_time_ns_from_seconds,
     };
-    use crate::game::parsing::noteskin::{self, Noteskin, Style};
+    use crate::game::parsing::noteskin::{self, Noteskin};
     use crate::game::parsing::song_lua::{SongLuaOverlayKind, compile_song_lua};
     use crate::game::profile;
     use crate::screens::gameplay as screen_gameplay;
@@ -403,6 +403,7 @@ mod tests {
     use deadsync_core::note::NoteType;
     use deadsync_core::timing::{ROWS_PER_BEAT, beat_to_note_row};
     use deadsync_input::{InputEvent, VirtualAction};
+    use deadsync_noteskin::{ReceptorGlowBehavior, ReceptorStepBehavior, Style, TweenType};
     use deadsync_profile as profile_data;
     use deadsync_rules::judgment::{self, JudgeGrade, Judgment, TimingWindow};
     use deadsync_rules::note::{HoldData, HoldResult, MineResult, Note};
@@ -891,17 +892,17 @@ mod tests {
     }
 
     #[inline(always)]
-    fn test_gameplay_tween(tween: noteskin::TweenType) -> super::GameplayTween {
+    fn test_gameplay_tween(tween: TweenType) -> super::GameplayTween {
         match tween {
-            noteskin::TweenType::Linear => super::GameplayTween::Linear,
-            noteskin::TweenType::Accelerate => super::GameplayTween::Accelerate,
-            noteskin::TweenType::Decelerate => super::GameplayTween::Decelerate,
+            TweenType::Linear => super::GameplayTween::Linear,
+            TweenType::Accelerate => super::GameplayTween::Accelerate,
+            TweenType::Decelerate => super::GameplayTween::Decelerate,
         }
     }
 
     #[inline(always)]
     fn test_gameplay_receptor_glow_behavior(
-        behavior: noteskin::ReceptorGlowBehavior,
+        behavior: ReceptorGlowBehavior,
     ) -> super::GameplayReceptorGlowBehavior {
         super::GameplayReceptorGlowBehavior {
             press_duration: behavior.press_duration,
@@ -922,7 +923,7 @@ mod tests {
 
     #[inline(always)]
     fn test_gameplay_receptor_step_behavior(
-        behavior: noteskin::ReceptorStepBehavior,
+        behavior: ReceptorStepBehavior,
     ) -> super::GameplayReceptorStepBehavior {
         super::GameplayReceptorStepBehavior {
             duration: behavior.duration,

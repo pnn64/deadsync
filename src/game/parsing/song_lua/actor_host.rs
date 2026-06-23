@@ -3779,9 +3779,7 @@ fn song_lua_model_uv_params(
     (uv_scale, uv_offset, uv_tex_shift)
 }
 
-fn song_lua_model_draw(
-    draw: crate::game::parsing::noteskin::ModelDrawState,
-) -> SongLuaOverlayModelDraw {
+fn song_lua_model_draw(draw: deadsync_noteskin::ModelDrawState) -> SongLuaOverlayModelDraw {
     SongLuaOverlayModelDraw {
         pos: draw.pos,
         rot: draw.rot,

@@ -1,6 +1,6 @@
 use crate::game::parsing::noteskin::{ModelMeshCache, ModelMeshCacheStats};
 use crate::game::profile;
-use crate::screens::components::gameplay::notefield::{self, FieldPlacement};
+use crate::screens::components::gameplay::notefield;
 use crate::screens::gameplay as gameplay_screen;
 use deadlib_present::actors::Actor;
 use deadsync_chart::SongData;
@@ -13,6 +13,7 @@ use deadsync_gameplay::{
     ActiveHold, ActiveTapExplosion, ColumnCue, ColumnCueColumn, ErrorBarText, ErrorBarTick,
     GameplayConfig, GameplayMiniIndicatorData, GameplaySession, GameplayViewport,
 };
+use deadsync_notefield::{FieldPlacement, ProxyCaptureRequests, ViewOverride};
 use deadsync_profile as profile_data;
 use deadsync_rules::judgment::{JudgeGrade, TimingWindow};
 use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -95,8 +96,9 @@ impl NotefieldBenchFixture {
             FieldPlacement::P1,
             profile_data::PlayStyle::Single,
             false,
-            notefield::ProxyCaptureRequests::default(),
-            notefield::ViewOverride::default(),
+            ProxyCaptureRequests::default(),
+            false,
+            ViewOverride::default(),
             &mut actors,
             &mut hud_actors,
         );

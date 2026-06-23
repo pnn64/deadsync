@@ -1,11 +1,16 @@
+use deadlib_present::actors::{Actor, SizeSpec};
+use deadlib_render::{BlendMode, TexturedMeshVertex};
+use deadsync_core::note::NoteType;
 use deadsync_core::song_time::SongTimeNs;
 use deadsync_core::timing::beat_to_note_row;
+use deadsync_noteskin::NoteAnimPart;
 use deadsync_rules::judgment::{JudgeGrade, TimingWindow};
 use deadsync_rules::note::{MineResult, Note, NoteCountStat};
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::stream::StreamSegment;
 use deadsync_rules::timing::{self, TimeSignatureSegment, WindowCounts, default_time_signature};
 use glam::{Mat4 as Matrix4, Vec3 as Vector3};
+use std::sync::Arc;
 
 const HOLD_BODY_LEGACY_SEGMENT_LIMIT: usize = 512;
 const HOLD_BODY_SEGMENT_SAFETY_MAX: usize = 65_536;
@@ -59,6 +64,38 @@ const FA_PLUS_WHITE_RGBA: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 
 const fn rgba8_const(r: u8, g: u8, b: u8) -> [f32; 4] {
     [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, 1.0]
+}
+
+pub struct BuiltNotefield {
+    pub layout_center_x: f32,
+    pub field_actors: Vec<Arc<[Actor]>>,
+    pub judgment_actors: Option<Vec<Arc<[Actor]>>>,
+    pub combo_actors: Option<Vec<Arc<[Actor]>>>,
+}
+
+impl BuiltNotefield {
+    pub fn empty(layout_center_x: f32) -> Self {
+        Self {
+            layout_center_x,
+            field_actors: Vec::new(),
+            judgment_actors: None,
+            combo_actors: None,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct HoldAnimParts {
+    pub head: NoteAnimPart,
+    pub body: NoteAnimPart,
+    pub topcap: NoteAnimPart,
+    pub bottomcap: NoteAnimPart,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TapReplacementHead {
+    pub is_roll: bool,
+    pub part: NoteAnimPart,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -370,6 +407,31 @@ pub struct GameplayModsTextParams<'a> {
     pub blind: i16,
     pub cover: i16,
     pub disabled_timing_windows: u8,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum FieldPlacement {
+    P1,
+    P2,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ViewOverride {
+    pub field_zoom: Option<f32>,
+    pub scroll_speed: Option<ScrollSpeedSetting>,
+    pub force_center_1player: bool,
+    pub center_receptors_y: bool,
+    pub receptor_y: Option<f32>,
+    pub edit_beat_bars: bool,
+    pub hide_display_mods: bool,
+    pub hide_combo: bool,
+}
+
+#[derive(Clone, Copy, Default)]
+pub struct ProxyCaptureRequests {
+    pub note_field: bool,
+    pub judgment: bool,
+    pub combo: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -2963,6 +3025,252 @@ pub fn hold_body_segment_budget(visible_span: f32, segment_height: f32) -> (usiz
 }
 
 #[inline(always)]
+pub fn hold_strip_row_3d(
+    center: [f32; 3],
+    forward: [f32; 2],
+    half_width: f32,
+    u0: f32,
+    u1: f32,
+    v: f32,
+    color: [f32; 4],
+) -> [TexturedMeshVertex; 2] {
+    let len = forward[0].hypot(forward[1]).max(f32::EPSILON);
+    let nx = -forward[1] / len * half_width;
+    let ny = forward[0] / len * half_width;
+    [
+        TexturedMeshVertex {
+            pos: [center[0] + nx, center[1] + ny, center[2]],
+            uv: [u0, v],
+            tex_matrix_scale: [1.0, 1.0],
+            color,
+        },
+        TexturedMeshVertex {
+            pos: [center[0] - nx, center[1] - ny, center[2]],
+            uv: [u1, v],
+            tex_matrix_scale: [1.0, 1.0],
+            color,
+        },
+    ]
+}
+
+#[inline(always)]
+pub fn hold_strip_row_from_positions(
+    left: [f32; 3],
+    right: [f32; 3],
+    u0: f32,
+    u1: f32,
+    v: f32,
+    color: [f32; 4],
+) -> [TexturedMeshVertex; 2] {
+    [
+        TexturedMeshVertex {
+            pos: left,
+            uv: [u0, v],
+            tex_matrix_scale: [1.0, 1.0],
+            color,
+        },
+        TexturedMeshVertex {
+            pos: right,
+            uv: [u1, v],
+            tex_matrix_scale: [1.0, 1.0],
+            color,
+        },
+    ]
+}
+
+#[inline(always)]
+pub fn hold_strip_quad(
+    top: [TexturedMeshVertex; 2],
+    bottom: [TexturedMeshVertex; 2],
+) -> [TexturedMeshVertex; 6] {
+    [top[0], top[1], bottom[1], top[0], bottom[1], bottom[0]]
+}
+
+#[inline(always)]
+pub fn hold_strip_actor(
+    texture: Arc<str>,
+    vertices: Arc<[TexturedMeshVertex]>,
+    blend: BlendMode,
+    depth_test: bool,
+    z: i16,
+) -> Actor {
+    Actor::TexturedMesh {
+        align: [0.0, 0.0],
+        offset: [0.0, 0.0],
+        world_z: 0.0,
+        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+        local_transform: Matrix4::IDENTITY,
+        texture,
+        tint: [1.0; 4],
+        glow: [1.0, 1.0, 1.0, 0.0],
+        vertices,
+        geom_cache_key: deadlib_render::INVALID_TMESH_CACHE_KEY,
+        uv_scale: [1.0, 1.0],
+        uv_offset: [0.0, 0.0],
+        uv_tex_shift: [0.0, 0.0],
+        depth_test,
+        visible: true,
+        blend,
+        z,
+    }
+}
+
+#[inline(always)]
+pub fn hold_strip_glow_actor(
+    texture: Arc<str>,
+    vertices: Arc<[TexturedMeshVertex]>,
+    depth_test: bool,
+    z: i16,
+) -> Actor {
+    Actor::TexturedMesh {
+        align: [0.0, 0.0],
+        offset: [0.0, 0.0],
+        world_z: 0.0,
+        size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+        local_transform: Matrix4::IDENTITY,
+        texture,
+        tint: [1.0, 1.0, 1.0, 0.0],
+        glow: [1.0, 1.0, 1.0, 1.0],
+        vertices,
+        geom_cache_key: deadlib_render::INVALID_TMESH_CACHE_KEY,
+        uv_scale: [1.0, 1.0],
+        uv_offset: [0.0, 0.0],
+        uv_tex_shift: [0.0, 0.0],
+        depth_test,
+        visible: true,
+        blend: BlendMode::Alpha,
+        z,
+    }
+}
+
+#[inline(always)]
+pub fn actor_with_world_z(mut actor: Actor, world_z: f32) -> Actor {
+    if world_z.abs() <= f32::EPSILON {
+        return actor;
+    }
+    match &mut actor {
+        Actor::Sprite { world_z: z, .. } | Actor::TexturedMesh { world_z: z, .. } => *z = world_z,
+        _ => {}
+    }
+    actor
+}
+
+pub fn share_actor_range(actors: &mut Vec<Actor>, start: usize) -> Option<Vec<Arc<[Actor]>>> {
+    if start >= actors.len() {
+        return None;
+    }
+    let children = Arc::<[Actor]>::from(actors.drain(start..).collect::<Vec<_>>());
+    actors.push(Actor::SharedFrame {
+        align: [0.0, 0.0],
+        offset: [0.0, 0.0],
+        size: [SizeSpec::Fill, SizeSpec::Fill],
+        children: Arc::clone(&children),
+        background: None,
+        z: 0,
+        tint: [1.0; 4],
+        blend: None,
+    });
+    Some(vec![children])
+}
+
+#[inline(always)]
+pub const fn tap_part_for_note_type(note_type: NoteType) -> NoteAnimPart {
+    match note_type {
+        NoteType::Fake => NoteAnimPart::Fake,
+        NoteType::Lift => NoteAnimPart::Lift,
+        _ => NoteAnimPart::Tap,
+    }
+}
+
+#[inline(always)]
+pub const fn mine_part() -> NoteAnimPart {
+    NoteAnimPart::Mine
+}
+
+#[inline(always)]
+pub const fn hold_parts_for_note_type(note_type: NoteType) -> HoldAnimParts {
+    match note_type {
+        NoteType::Roll => HoldAnimParts {
+            head: NoteAnimPart::RollHead,
+            body: NoteAnimPart::RollBody,
+            topcap: NoteAnimPart::RollTopCap,
+            bottomcap: NoteAnimPart::RollBottomCap,
+        },
+        _ => HoldAnimParts {
+            head: NoteAnimPart::HoldHead,
+            body: NoteAnimPart::HoldBody,
+            topcap: NoteAnimPart::HoldTopCap,
+            bottomcap: NoteAnimPart::HoldBottomCap,
+        },
+    }
+}
+
+#[inline(always)]
+const fn hold_head_part_for_roll(is_roll: bool) -> NoteAnimPart {
+    if is_roll {
+        NoteAnimPart::RollHead
+    } else {
+        NoteAnimPart::HoldHead
+    }
+}
+
+#[inline(always)]
+pub const fn tap_replacement_head(
+    note_type: NoteType,
+    same_row_has_hold: bool,
+    same_row_has_roll: bool,
+    draw_hold_same_row: bool,
+    draw_roll_same_row: bool,
+    tap_same_row_means_hold: bool,
+) -> Option<TapReplacementHead> {
+    match tap_replacement_roll(
+        note_type,
+        same_row_has_hold,
+        same_row_has_roll,
+        draw_hold_same_row,
+        draw_roll_same_row,
+        tap_same_row_means_hold,
+    ) {
+        Some(is_roll) => Some(TapReplacementHead {
+            is_roll,
+            part: hold_head_part_for_roll(is_roll),
+        }),
+        None => None,
+    }
+}
+
+#[inline(always)]
+const fn tap_replacement_roll(
+    note_type: NoteType,
+    same_row_has_hold: bool,
+    same_row_has_roll: bool,
+    draw_hold_same_row: bool,
+    draw_roll_same_row: bool,
+    tap_same_row_means_hold: bool,
+) -> Option<bool> {
+    if !matches!(note_type, NoteType::Tap | NoteType::Lift) {
+        return None;
+    }
+    if same_row_has_hold && same_row_has_roll {
+        if draw_hold_same_row && draw_roll_same_row {
+            Some(!tap_same_row_means_hold)
+        } else if draw_hold_same_row {
+            Some(false)
+        } else if draw_roll_same_row {
+            Some(true)
+        } else {
+            None
+        }
+    } else if same_row_has_hold && draw_hold_same_row {
+        Some(false)
+    } else if same_row_has_roll && draw_roll_same_row {
+        Some(true)
+    } else {
+        None
+    }
+}
+
+#[inline(always)]
 pub fn bottom_cap_uv_window(
     v_base0: f32,
     v_base1: f32,
@@ -3202,22 +3510,28 @@ pub const fn mine_hides_after_resolution(mine_result: Option<MineResult>) -> boo
 
 #[cfg(test)]
 mod tests {
+    use deadlib_present::actors::{Actor, SizeSpec};
+    use deadlib_render::BlendMode;
+    use deadsync_noteskin::NoteAnimPart;
+    use std::sync::Arc;
+
     use super::{
-        AccelYParams, COLUMN_CUE_Y_OFFSET, DISPLAY_TURN_MIRROR, DISPLAY_TURN_RANDOM,
-        DISPLAY_TURN_UD_MIRROR, GameplayModsAttackMode, GameplayModsTextParams, HudLayoutOffsets,
-        HudLayoutParams, JudgmentTiltParams, LayoutMiniIndicatorPosition, MiniIndicatorColorStyle,
-        MiniIndicatorMode, MiniIndicatorProgress, MiniIndicatorScoreType, MiniIndicatorSize,
+        AccelYParams, BuiltNotefield, COLUMN_CUE_Y_OFFSET, DISPLAY_TURN_MIRROR,
+        DISPLAY_TURN_RANDOM, DISPLAY_TURN_UD_MIRROR, GameplayModsAttackMode,
+        GameplayModsTextParams, HudLayoutOffsets, HudLayoutParams, JudgmentTiltParams,
+        LayoutMiniIndicatorPosition, MiniIndicatorColorStyle, MiniIndicatorMode,
+        MiniIndicatorProgress, MiniIndicatorScoreType, MiniIndicatorSize,
         MiniIndicatorSubtractiveDisplay, NoteAlphaParams, NoteXParams, TapJudgmentRowsParams,
-        TornadoBounds, VisualEffectParams, ZmodComboColorParams, ZmodComboColorStyle,
-        ZmodLayoutParams, ZmodMeasureCounterText, ZmodMiniIndicatorOutput, ZmodMiniIndicatorParams,
-        ZmodMiniIndicatorText, appearance_needs_rows, appearance_note_actor_alpha,
-        appearance_note_alpha, appearance_note_glow, append_average_error_bar_part,
-        append_mini_part, append_perspective_parts, append_turn_parts, apply_accel_y,
-        apply_accel_y_with_peak, average_error_bar_mini_scale, beat_factor, beat_scroll_travel,
-        beat_x_extra, bottom_cap_uv_window, bumpy_angle, clamp_rounded_i16,
-        clipped_hold_body_bounds, column_cue_alpha, column_cue_height, column_cue_reverse_top_y,
-        column_flash_alpha, column_flash_alpha_at, column_flash_color, column_flash_height,
-        column_flash_layout, column_flash_reverse_top_y, combo_actor_zoom,
+        TapReplacementHead, TornadoBounds, VisualEffectParams, ZmodComboColorParams,
+        ZmodComboColorStyle, ZmodLayoutParams, ZmodMeasureCounterText, ZmodMiniIndicatorOutput,
+        ZmodMiniIndicatorParams, ZmodMiniIndicatorText, actor_with_world_z, appearance_needs_rows,
+        appearance_note_actor_alpha, appearance_note_alpha, appearance_note_glow,
+        append_average_error_bar_part, append_mini_part, append_perspective_parts,
+        append_turn_parts, apply_accel_y, apply_accel_y_with_peak, average_error_bar_mini_scale,
+        beat_factor, beat_scroll_travel, beat_x_extra, bottom_cap_uv_window, bumpy_angle,
+        clamp_rounded_i16, clipped_hold_body_bounds, column_cue_alpha, column_cue_height,
+        column_cue_reverse_top_y, column_flash_alpha, column_flash_alpha_at, column_flash_color,
+        column_flash_height, column_flash_layout, column_flash_reverse_top_y, combo_actor_zoom,
         compute_invert_distances, compute_tornado_bounds, crossover_cue_height, default_column_x,
         disabled_timing_windows_name, drunk_x_extra, edit_beat_bar_info_for_row,
         edit_beat_scroll_travel, effective_mini_value, error_bar_boundaries_s,
@@ -3226,19 +3540,21 @@ mod tests {
         find_first_displayed_beat, find_last_displayed_beat, for_each_visible_hold_index,
         for_each_visible_note_index, gameplay_mods_text, held_miss_zoom,
         hold_body_bottom_for_tail_cap, hold_body_segment_budget, hold_draw_span, hold_glow_color,
-        hold_indicator_column_x, hold_overlaps_visible_window, hold_segment_pose,
-        hold_tail_cap_bounds, hud_layout_ys, hud_y, itg_actor_glow_alpha, itg_actor_rotation_z,
-        join_display_mod_parts, judgment_actor_zoom, judgment_tilt_rotation_deg,
-        maybe_mirror_uv_horiz_for_reverse_flipped, mine_hides_after_resolution, mod_divisor,
-        mod_percent_key, move_col_extra, note_itg_row, note_world_z_for_bumpy, note_x_extra,
-        note_x_offset, notefield_view_proj, offset_center, player_metric_y, push_transform_parts,
-        quantize_centi_i32, quantize_centi_u32, quantize_step, receptor_row_center, rgba8,
-        scale_cap_to_arrow, scale_effect_size, scale_sprite_to_arrow, signed_effect_active,
+        hold_head_part_for_roll, hold_indicator_column_x, hold_overlaps_visible_window,
+        hold_parts_for_note_type, hold_segment_pose, hold_strip_actor, hold_strip_glow_actor,
+        hold_strip_row_3d, hold_tail_cap_bounds, hud_layout_ys, hud_y, itg_actor_glow_alpha,
+        itg_actor_rotation_z, join_display_mod_parts, judgment_actor_zoom,
+        judgment_tilt_rotation_deg, maybe_mirror_uv_horiz_for_reverse_flipped,
+        mine_hides_after_resolution, mine_part, mod_divisor, mod_percent_key, move_col_extra,
+        note_itg_row, note_world_z_for_bumpy, note_x_extra, note_x_offset, notefield_view_proj,
+        offset_center, player_metric_y, push_transform_parts, quantize_centi_i32,
+        quantize_centi_u32, quantize_step, receptor_row_center, rgba8, scale_cap_to_arrow,
+        scale_effect_size, scale_sprite_to_arrow, share_actor_range, signed_effect_active,
         sm_scale, smoothstep01, song_time_ns_delta_seconds, song_time_ns_to_seconds,
         stream_segment_index_exclusive_end, stream_segment_index_inclusive_end, tap_judgment_rows,
-        timing_window_from_num, tiny_spacing_scale, tipsy_y_extra, top_cap_rotation_deg,
-        tornado_x_extra, translated_uv_rect, visual_arrow_effect_zoom,
-        visual_confusion_rotation_deg, visual_effect_params_for_col,
+        tap_part_for_note_type, tap_replacement_head, timing_window_from_num, tiny_spacing_scale,
+        tipsy_y_extra, top_cap_rotation_deg, tornado_x_extra, translated_uv_rect,
+        visual_arrow_effect_zoom, visual_confusion_rotation_deg, visual_effect_params_for_col,
         visual_hold_body_needs_z_buffer, visual_note_rotation_z, visual_pulse_inner_zoom,
         visual_pulse_zoom_for_y, visual_tiny_zoom, visual_use_legacy_hold_sprites,
         zmod_broken_run_counter_text, zmod_broken_run_end, zmod_broken_run_segment,
@@ -5529,6 +5845,195 @@ mod tests {
         let (budget, allow_legacy) = hold_body_segment_budget(900.0, 64.0);
         assert_eq!(budget, 2048);
         assert!(allow_legacy);
+    }
+
+    #[test]
+    fn hold_strip_row_3d_preserves_row_z() {
+        let row = hold_strip_row_3d(
+            [64.0, 128.0, 12.5],
+            [0.0, 16.0],
+            8.0,
+            0.0,
+            1.0,
+            0.5,
+            [1.0; 4],
+        );
+        assert!((row[0].pos[2] - 12.5).abs() <= 1e-6);
+        assert!((row[1].pos[2] - 12.5).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn hold_strip_actor_carries_depth_test_flag() {
+        let actor = hold_strip_actor(
+            Arc::from("hold.png"),
+            Arc::from([]),
+            BlendMode::Alpha,
+            true,
+            42,
+        );
+        assert!(matches!(
+            actor,
+            Actor::TexturedMesh {
+                depth_test: true,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn hold_strip_glow_actor_uses_texture_mask_pass() {
+        let actor = hold_strip_glow_actor(Arc::from("hold.png"), Arc::from([]), true, 43);
+        assert!(matches!(
+            actor,
+            Actor::TexturedMesh {
+                tint: [1.0, 1.0, 1.0, 0.0],
+                glow: [1.0, 1.0, 1.0, 1.0],
+                depth_test: true,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn actor_with_world_z_updates_textured_mesh_depth() {
+        let actor = hold_strip_actor(
+            Arc::from("hold.png"),
+            Arc::from([]),
+            BlendMode::Alpha,
+            false,
+            42,
+        );
+        let actor = actor_with_world_z(actor, 12.5);
+        assert!(matches!(
+            actor,
+            Actor::TexturedMesh {
+                world_z,
+                ..
+            } if (world_z - 12.5).abs() <= 1e-6
+        ));
+    }
+
+    #[test]
+    fn share_actor_range_drains_into_shared_frame() {
+        let mut actors = vec![
+            hold_strip_actor(
+                Arc::from("a.png"),
+                Arc::from([]),
+                BlendMode::Alpha,
+                false,
+                1,
+            ),
+            hold_strip_actor(
+                Arc::from("b.png"),
+                Arc::from([]),
+                BlendMode::Alpha,
+                false,
+                2,
+            ),
+        ];
+        let shared = share_actor_range(&mut actors, 1).expect("range should be shared");
+        assert_eq!(actors.len(), 2);
+        assert_eq!(shared.len(), 1);
+        assert_eq!(shared[0].len(), 1);
+        match &actors[1] {
+            Actor::SharedFrame { size, children, .. } => {
+                assert!(matches!(size, [SizeSpec::Fill, SizeSpec::Fill]));
+                assert!(Arc::ptr_eq(children, &shared[0]));
+            }
+            _ => panic!("expected shared frame"),
+        }
+    }
+
+    #[test]
+    fn built_notefield_empty_has_no_actor_outputs() {
+        let built = BuiltNotefield::empty(320.0);
+        assert_eq!(built.layout_center_x, 320.0);
+        assert!(built.field_actors.is_empty());
+        assert!(built.judgment_actors.is_none());
+        assert!(built.combo_actors.is_none());
+    }
+
+    #[test]
+    fn tap_note_types_choose_noteskin_animation_parts() {
+        assert!(matches!(
+            tap_part_for_note_type(NoteType::Tap),
+            NoteAnimPart::Tap
+        ));
+        assert!(matches!(
+            tap_part_for_note_type(NoteType::Fake),
+            NoteAnimPart::Fake
+        ));
+        assert!(matches!(
+            tap_part_for_note_type(NoteType::Lift),
+            NoteAnimPart::Lift
+        ));
+        assert_eq!(mine_part(), NoteAnimPart::Mine);
+    }
+
+    #[test]
+    fn hold_note_types_choose_noteskin_animation_parts() {
+        let hold = hold_parts_for_note_type(NoteType::Hold);
+        assert_eq!(hold.head, NoteAnimPart::HoldHead);
+        assert_eq!(hold.body, NoteAnimPart::HoldBody);
+        assert_eq!(hold.topcap, NoteAnimPart::HoldTopCap);
+        assert_eq!(hold.bottomcap, NoteAnimPart::HoldBottomCap);
+
+        let roll = hold_parts_for_note_type(NoteType::Roll);
+        assert_eq!(roll.head, NoteAnimPart::RollHead);
+        assert_eq!(roll.body, NoteAnimPart::RollBody);
+        assert_eq!(roll.topcap, NoteAnimPart::RollTopCap);
+        assert_eq!(roll.bottomcap, NoteAnimPart::RollBottomCap);
+
+        assert_eq!(hold_head_part_for_roll(false), NoteAnimPart::HoldHead);
+        assert_eq!(hold_head_part_for_roll(true), NoteAnimPart::RollHead);
+    }
+
+    #[test]
+    fn same_row_tap_replacement_selects_enabled_head() {
+        assert_eq!(
+            tap_replacement_head(NoteType::Tap, true, false, true, false, true),
+            Some(TapReplacementHead {
+                is_roll: false,
+                part: NoteAnimPart::HoldHead
+            })
+        );
+        assert_eq!(
+            tap_replacement_head(NoteType::Lift, false, true, false, true, true),
+            Some(TapReplacementHead {
+                is_roll: true,
+                part: NoteAnimPart::RollHead
+            })
+        );
+        assert_eq!(
+            tap_replacement_head(NoteType::Tap, true, true, true, true, true),
+            Some(TapReplacementHead {
+                is_roll: false,
+                part: NoteAnimPart::HoldHead
+            })
+        );
+        assert_eq!(
+            tap_replacement_head(NoteType::Tap, true, true, true, true, false),
+            Some(TapReplacementHead {
+                is_roll: true,
+                part: NoteAnimPart::RollHead
+            })
+        );
+    }
+
+    #[test]
+    fn same_row_tap_replacement_ignores_disabled_or_nontap_notes() {
+        assert_eq!(
+            tap_replacement_head(NoteType::Tap, true, false, false, true, true),
+            None
+        );
+        assert_eq!(
+            tap_replacement_head(NoteType::Hold, true, true, true, true, true),
+            None
+        );
+        assert_eq!(
+            tap_replacement_head(NoteType::Fake, true, true, true, true, true),
+            None
+        );
     }
 
     #[test]
