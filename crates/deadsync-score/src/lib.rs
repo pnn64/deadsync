@@ -16,9 +16,12 @@ pub mod itl;
 pub mod stage_stats;
 pub use import::{ImportedHighScore, grade_from_itg, local_score_from_itg, parse_itg_datetime_ms};
 pub use itl::{
-    ItlFileData, ItlHashEntry, ItlJudgments, ItlPointTotals, ex_hundredths, itl_clear_type,
-    itl_data_from_json, itl_judgments_better, itl_point_totals, itl_points_for_chart,
-    itl_points_for_song, itl_rebuild_song_ranks, itl_score_from_entry, parse_itl_points,
+    ItlFileData, ItlHashEntry, ItlJudgments, ItlPointTotals, ex_hundredths, is_itl_unlocks_pack,
+    itl_chart_no_cmod, itl_clear_type, itl_data_from_json, itl_event_name_from_group,
+    itl_group_name_matches, itl_judgments_better, itl_mark_unlock_folders,
+    itl_overall_ranks_from_song_cache, itl_point_totals, itl_points_for_chart, itl_points_for_song,
+    itl_rebuild_song_ranks, itl_score_from_entry, itl_song_folder_unlocked, itl_song_matches,
+    itl_steps_type_from_chart_type, parse_itl_points,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
@@ -2231,6 +2234,38 @@ pub struct ItlEvalState {
     pub reason_lines: Vec<String>,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct ItlEvalInput<'a> {
+    pub chart_no_cmod: bool,
+    pub used_cmod: bool,
+    pub groovestats_valid: bool,
+    pub groovestats_reason_lines: &'a [String],
+    pub music_rate: f32,
+    pub mines_enabled: bool,
+    pub all_timing_windows_enabled: bool,
+    pub passed: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct ItlChartSaveInput<'a> {
+    pub song_dir: &'a str,
+    pub chart_hash: &'a str,
+    pub chart_name: &'a str,
+    pub chart_type: &'a str,
+    pub event_name: &'a str,
+    pub judgments: ItlJudgments,
+    pub ex_percent: f64,
+    pub used_cmod: bool,
+    pub chart_no_cmod: bool,
+    pub date: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct ItlChartSaveResult {
+    pub needs_write: bool,
+    pub progress: ItlEventProgress,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct GrooveStatsEvalState {
     pub valid: bool,
@@ -2330,6 +2365,177 @@ pub fn groovestats_eval_state_from_parts(input: GrooveStatsEvalInput<'_>) -> Gro
         valid: checks.iter().all(|passed| *passed),
         reason_lines: groovestats_reason_lines(&checks, bad.as_slice()),
         manual_qr_url: None,
+    }
+}
+
+pub fn itl_eval_state_from_parts(input: ItlEvalInput<'_>) -> ItlEvalState {
+    let rate = if input.music_rate.is_finite() && input.music_rate > 0.0 {
+        input.music_rate
+    } else {
+        1.0
+    };
+
+    let mut reason_lines = Vec::with_capacity(5);
+    if !input.groovestats_valid {
+        if input.groovestats_reason_lines.is_empty() {
+            reason_lines.push("Score is not valid for GrooveStats.".to_string());
+        } else {
+            reason_lines.extend(input.groovestats_reason_lines.iter().cloned());
+        }
+    }
+    if (rate - 1.0).abs() > 0.0001 {
+        reason_lines.push("ITL requires 1.00x music rate.".to_string());
+    }
+    if !input.mines_enabled {
+        reason_lines.push("ITL requires mines to be enabled.".to_string());
+    }
+    if !input.all_timing_windows_enabled {
+        reason_lines.push("ITL requires all timing windows to be enabled.".to_string());
+    }
+    if !input.passed {
+        reason_lines.push("ITL only saves passing scores.".to_string());
+    }
+    if input.chart_no_cmod && input.used_cmod {
+        reason_lines.push("This ITL chart does not allow CMod.".to_string());
+    }
+
+    ItlEvalState {
+        active: true,
+        eligible: reason_lines.is_empty(),
+        chart_no_cmod: input.chart_no_cmod,
+        used_cmod: input.used_cmod,
+        reason_lines,
+    }
+}
+
+pub fn save_itl_chart_result(
+    data: &mut ItlFileData,
+    input: ItlChartSaveInput<'_>,
+) -> ItlChartSaveResult {
+    let prev_totals = itl_point_totals(data);
+    let path_changed = data
+        .path_map
+        .get(input.song_dir)
+        .is_none_or(|hash| !hash.eq_ignore_ascii_case(input.chart_hash));
+    if path_changed {
+        data.path_map
+            .insert(input.song_dir.to_string(), input.chart_hash.to_string());
+    }
+
+    let prev = data.hash_map.get(input.chart_hash).cloned();
+    let (passing_points, max_scoring_points) = parse_itl_points(input.chart_name)
+        .or_else(|| {
+            prev.as_ref()
+                .map(|entry| (entry.passing_points, entry.max_scoring_points))
+        })
+        .unwrap_or((0, 0));
+    let max_points = passing_points.saturating_add(max_scoring_points);
+    let current_run_ex = ex_hundredths(input.ex_percent);
+    let new_entry = ItlHashEntry {
+        judgments: input.judgments.clone(),
+        ex: current_run_ex,
+        clear_type: itl_clear_type(&input.judgments),
+        points: itl_points_for_song(passing_points, max_scoring_points, input.ex_percent),
+        used_cmod: input.used_cmod,
+        date: input.date,
+        no_cmod: input.chart_no_cmod,
+        passing_points,
+        max_scoring_points,
+        max_points,
+        rank: None,
+        steps_type: itl_steps_type_from_chart_type(input.chart_type).to_string(),
+        passes: prev
+            .as_ref()
+            .map_or(1, |entry| entry.passes.saturating_add(1)),
+    };
+
+    let mut needs_write = path_changed;
+    let mut best_changed = false;
+    match data.hash_map.get_mut(input.chart_hash) {
+        None => {
+            data.hash_map
+                .insert(input.chart_hash.to_string(), new_entry.clone());
+            needs_write = true;
+        }
+        Some(existing) => {
+            if existing.passes != new_entry.passes {
+                existing.passes = new_entry.passes;
+                needs_write = true;
+            }
+            if !existing
+                .steps_type
+                .eq_ignore_ascii_case(new_entry.steps_type.as_str())
+            {
+                existing.steps_type.clone_from(&new_entry.steps_type);
+                needs_write = true;
+            }
+
+            let ex_improved = new_entry.ex > existing.ex;
+            let ex_tied = new_entry.ex == existing.ex;
+            if ex_improved {
+                existing.ex = new_entry.ex;
+                existing.points = new_entry.points;
+                existing.judgments.clone_from(&new_entry.judgments);
+                needs_write = true;
+                best_changed = true;
+            } else if ex_tied && itl_judgments_better(&new_entry.judgments, &existing.judgments) {
+                existing.judgments.clone_from(&new_entry.judgments);
+                needs_write = true;
+                best_changed = true;
+            }
+            if new_entry.clear_type > existing.clear_type {
+                existing.clear_type = new_entry.clear_type;
+                needs_write = true;
+                best_changed = true;
+            }
+            if best_changed {
+                existing.used_cmod = new_entry.used_cmod;
+                existing.date.clone_from(&new_entry.date);
+                existing.no_cmod = new_entry.no_cmod;
+                existing.passing_points = new_entry.passing_points;
+                existing.max_scoring_points = new_entry.max_scoring_points;
+                existing.max_points = new_entry.max_points;
+            }
+        }
+    }
+
+    itl_rebuild_song_ranks(data);
+    let current_totals = itl_point_totals(data);
+    let current_entry = data
+        .hash_map
+        .get(input.chart_hash)
+        .cloned()
+        .unwrap_or(new_entry);
+    let prev_entry = prev.unwrap_or_default();
+    let mut progress = ItlEventProgress {
+        kind: EventProgressKind::Itl,
+        name: itl_event_name_from_group(Some(input.event_name)),
+        is_doubles: current_entry.steps_type.eq_ignore_ascii_case("double"),
+        score_hundredths: current_run_ex,
+        score_delta_hundredths: delta_i32(current_run_ex, prev_entry.ex),
+        rate_hundredths: None,
+        rate_delta_hundredths: None,
+        current_points: current_entry.points,
+        point_delta: delta_i32(current_entry.points, prev_entry.points),
+        current_ranking_points: current_totals.ranking_points,
+        ranking_delta: delta_i32(current_totals.ranking_points, prev_totals.ranking_points),
+        current_song_points: current_totals.song_points,
+        song_delta: delta_i32(current_totals.song_points, prev_totals.song_points),
+        current_ex_points: current_totals.ex_points,
+        ex_delta: delta_i32(current_totals.ex_points, prev_totals.ex_points),
+        current_total_points: current_totals.total_points,
+        total_delta: delta_i32(current_totals.total_points, prev_totals.total_points),
+        total_passes: current_entry.passes.max(1),
+        clear_type_before: Some(prev_entry.clear_type),
+        clear_type_after: Some(current_entry.clear_type),
+        stat_improvements: Vec::new(),
+        overlay_pages: Vec::new(),
+    };
+    progress.overlay_pages = event_progress_overlay_pages(&progress, None, &[]);
+
+    ItlChartSaveResult {
+        needs_write,
+        progress,
     }
 }
 
@@ -2506,6 +2712,460 @@ pub struct EventProgress {
 pub type ItlEventProgress = EventProgress;
 pub type ItlOverlayPage = EventOverlayPage;
 
+#[derive(Clone, Debug, Default)]
+pub struct SubmitStatImprovement {
+    pub name: String,
+    pub gained: u32,
+    pub current: i32,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct SubmitQuestReward {
+    pub reward_type: String,
+    pub description: String,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct SubmitQuest {
+    pub title: String,
+    pub rewards: Vec<SubmitQuestReward>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct SubmitAchievementReward {
+    pub tier: String,
+    pub requirements: Vec<String>,
+    pub title_unlocked: String,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct SubmitAchievement {
+    pub title: String,
+    pub rewards: Vec<SubmitAchievementReward>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct SubmitProgress {
+    pub stat_improvements: Vec<SubmitStatImprovement>,
+    pub quests_completed: Vec<SubmitQuest>,
+    pub achievements_completed: Vec<SubmitAchievement>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct SubmitEventProgressData {
+    pub name: String,
+    pub is_doubles: bool,
+    pub score_delta: i32,
+    pub rate_delta: i32,
+    pub top_score_points: u32,
+    pub prev_top_score_points: u32,
+    pub total_passes: u32,
+    pub current_ranking_point_total: u32,
+    pub previous_ranking_point_total: u32,
+    pub current_song_point_total: u32,
+    pub previous_song_point_total: u32,
+    pub current_ex_point_total: u32,
+    pub previous_ex_point_total: u32,
+    pub current_point_total: u32,
+    pub previous_point_total: u32,
+    pub leaderboard: Vec<LeaderboardEntry>,
+    pub progress: Option<SubmitProgress>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct SubmitEventProgressInput {
+    pub result: String,
+    pub score_10000: u32,
+    pub rate_hundredths: u32,
+    pub itl_score_hundredths: Option<u32>,
+    pub itl: Option<SubmitEventProgressData>,
+    pub srpg: Option<SubmitEventProgressData>,
+}
+
+pub fn event_name_or_unknown(name: &str) -> &str {
+    if name.trim().is_empty() {
+        "Unknown Event"
+    } else {
+        name.trim()
+    }
+}
+
+#[inline(always)]
+pub const fn clear_type_name(clear_type: u8) -> &'static str {
+    match clear_type {
+        0 => "No Play",
+        1 => "Clear",
+        2 => "FC",
+        3 => "FEC",
+        4 => "FFC",
+        5 => "FBFC",
+        _ => "Clear",
+    }
+}
+
+#[inline(always)]
+pub fn delta_i32(current: u32, previous: u32) -> i32 {
+    (i64::from(current) - i64::from(previous)).clamp(i64::from(i32::MIN), i64::from(i32::MAX))
+        as i32
+}
+
+fn trim_blank_lines(text: String) -> String {
+    text.trim_end_matches(['\n', '\r']).to_string()
+}
+
+fn capitalize_ascii_first(text: &str) -> String {
+    let mut chars = text.chars();
+    let Some(first) = chars.next() else {
+        return String::new();
+    };
+    let mut out = String::new();
+    out.extend(first.to_uppercase());
+    out.extend(chars);
+    out
+}
+
+fn stat_improvement_lines(progress: Option<&SubmitProgress>) -> Vec<String> {
+    let Some(progress) = progress else {
+        return Vec::new();
+    };
+    let mut lines = Vec::new();
+    for improvement in &progress.stat_improvements {
+        if improvement.gained == 0 {
+            continue;
+        }
+        if improvement.name.eq_ignore_ascii_case("clearType") {
+            let after = improvement.current.clamp(0, i32::from(u8::MAX)) as u8;
+            let before = after.saturating_sub(improvement.gained.min(u32::from(u8::MAX)) as u8);
+            lines.push(format!(
+                "Clear Type: {} >>> {}",
+                clear_type_name(before),
+                clear_type_name(after)
+            ));
+            continue;
+        }
+        if improvement.name.eq_ignore_ascii_case("grade") {
+            let curr = improvement.current;
+            let prev = curr - improvement.gained as i32;
+            if curr != 0 && prev != curr {
+                let grade = match curr {
+                    1 => Some("Quad"),
+                    2 => Some("Quint"),
+                    _ => None,
+                };
+                if let Some(grade) = grade {
+                    lines.push(format!("New {grade}!"));
+                }
+            }
+            continue;
+        }
+        let stat_name = capitalize_ascii_first(improvement.name.trim_end_matches("Level"));
+        lines.push(format!(
+            "{stat_name} Lvl: {} (+{})",
+            improvement.current, improvement.gained
+        ));
+    }
+    lines
+}
+
+fn srpg_stat_improvement_lines(progress: &ItlEventProgress) -> Vec<String> {
+    let srpg_stats = ["tp", "lp", "bb", "gold", "jp"];
+    progress
+        .stat_improvements
+        .iter()
+        .filter(|improvement| {
+            improvement.gained > 0
+                && srpg_stats
+                    .iter()
+                    .any(|stat| improvement.name.eq_ignore_ascii_case(stat))
+        })
+        .map(|improvement| {
+            format!(
+                "+{} {}",
+                improvement.gained,
+                improvement.name.to_uppercase()
+            )
+        })
+        .collect()
+}
+
+fn srpg_summary_page_text(progress: &ItlEventProgress) -> String {
+    let rate = progress.rate_hundredths.unwrap_or(100);
+    let rate_delta = progress.rate_delta_hundredths.unwrap_or(0);
+    let mut text = format!(
+        "Skill Improvements\n\n\
+         {:.2}% ({:+.2}%) at\n\
+         {:.2}x ({:+.2}x) rate",
+        progress.score_hundredths as f64 / 100.0,
+        progress.score_delta_hundredths as f64 / 100.0,
+        rate as f64 / 100.0,
+        rate_delta as f64 / 100.0,
+    );
+    let lines = srpg_stat_improvement_lines(progress);
+    if !lines.is_empty() {
+        text.push_str("\n\n");
+        text.push_str(lines.join("\n").as_str());
+    }
+    trim_blank_lines(text)
+}
+
+fn itl_summary_page_text(
+    progress: &ItlEventProgress,
+    submit_progress: Option<&SubmitProgress>,
+) -> String {
+    let mut text = format!(
+        "EX Score: {:.2}% ({:+.2}%)\n\
+         Points: {} ({:+})\n\n\
+         Ranking Points: {} ({:+})\n\
+         Song Points: {} ({:+})\n\
+         EX Points: {} ({:+})\n\
+         Total Points: {} ({:+})\n\n\
+         You've passed the chart {} times",
+        progress.score_hundredths as f64 / 100.0,
+        progress.score_delta_hundredths as f64 / 100.0,
+        progress.current_points,
+        progress.point_delta,
+        progress.current_ranking_points,
+        progress.ranking_delta,
+        progress.current_song_points,
+        progress.song_delta,
+        progress.current_ex_points,
+        progress.ex_delta,
+        progress.current_total_points,
+        progress.total_delta,
+        progress.total_passes,
+    );
+    let lines = stat_improvement_lines(submit_progress);
+    if !lines.is_empty() {
+        text.push_str("\n\n");
+        text.push_str(lines.join("\n").as_str());
+    }
+    trim_blank_lines(text)
+}
+
+fn summary_page_text(
+    progress: &ItlEventProgress,
+    submit_progress: Option<&SubmitProgress>,
+) -> String {
+    match progress.kind {
+        EventProgressKind::Itl => itl_summary_page_text(progress, submit_progress),
+        EventProgressKind::Srpg => srpg_summary_page_text(progress),
+    }
+}
+
+fn append_grouped_reward_text(out: &mut String, reward_type: &str, descriptions: &[String]) {
+    if descriptions.is_empty() {
+        return;
+    }
+    if !out.is_empty() {
+        out.push_str("\n\n");
+    }
+    if !reward_type.eq_ignore_ascii_case("ad-hoc") {
+        out.push_str(reward_type.trim().to_ascii_uppercase().as_str());
+        out.push_str(":\n");
+    }
+    out.push_str(descriptions.join("\n").as_str());
+}
+
+fn quest_page_text(quest: &SubmitQuest) -> String {
+    let mut body = format!("Completed \"{}\"!", quest.title.trim());
+    let mut grouped: Vec<(String, Vec<String>)> = Vec::new();
+    for reward in &quest.rewards {
+        let reward_type = reward.reward_type.trim();
+        let description = reward.description.trim();
+        if description.is_empty() {
+            continue;
+        }
+        if let Some((_, descriptions)) = grouped
+            .iter_mut()
+            .find(|(kind, _)| kind.eq_ignore_ascii_case(reward_type))
+        {
+            descriptions.push(description.to_string());
+        } else {
+            grouped.push((reward_type.to_string(), vec![description.to_string()]));
+        }
+    }
+    for (reward_type, descriptions) in &grouped {
+        append_grouped_reward_text(&mut body, reward_type.as_str(), descriptions.as_slice());
+    }
+    trim_blank_lines(body)
+}
+
+fn achievement_page_text(achievement: &SubmitAchievement) -> String {
+    let mut lines = vec![format!(
+        "Completed the \"{}\" Achievement!",
+        achievement.title.trim()
+    )];
+    for reward in &achievement.rewards {
+        let tier = reward.tier.trim();
+        if !tier.is_empty() && tier != "0" {
+            lines.push(format!("Tier {tier}"));
+        }
+        for requirement in &reward.requirements {
+            let requirement = requirement.trim();
+            if !requirement.is_empty() {
+                lines.push(requirement.to_string());
+            }
+        }
+        let title = reward.title_unlocked.trim();
+        if !title.is_empty() {
+            lines.push(format!("Unlocked the \"{}\" Title!", title));
+        }
+        lines.push(String::new());
+    }
+    trim_blank_lines(lines.join("\n"))
+}
+
+pub fn event_progress_overlay_pages(
+    progress: &ItlEventProgress,
+    submit_progress: Option<&SubmitProgress>,
+    leaderboard: &[LeaderboardEntry],
+) -> Vec<ItlOverlayPage> {
+    let mut pages = vec![ItlOverlayPage::Text(summary_page_text(
+        progress,
+        submit_progress,
+    ))];
+    let Some(submit_progress) = submit_progress else {
+        pages.push(ItlOverlayPage::Leaderboard(leaderboard.to_vec()));
+        return pages;
+    };
+    for quest in &submit_progress.quests_completed {
+        pages.push(ItlOverlayPage::Text(quest_page_text(quest)));
+    }
+    for achievement in &submit_progress.achievements_completed {
+        pages.push(ItlOverlayPage::Text(achievement_page_text(achievement)));
+    }
+    pages.push(ItlOverlayPage::Leaderboard(leaderboard.to_vec()));
+    pages
+}
+
+pub fn event_clear_type_change(progress: Option<&SubmitProgress>) -> (Option<u8>, Option<u8>) {
+    let Some(progress) = progress else {
+        return (None, None);
+    };
+    for improvement in &progress.stat_improvements {
+        if improvement.gained == 0 || !improvement.name.eq_ignore_ascii_case("clearType") {
+            continue;
+        }
+        let after = improvement.current.clamp(0, i32::from(u8::MAX)) as u8;
+        let before = after.saturating_sub(improvement.gained.min(u32::from(u8::MAX)) as u8);
+        return (Some(before), Some(after));
+    }
+    (None, None)
+}
+
+pub fn event_stat_improvements(progress: Option<&SubmitProgress>) -> Vec<EventStatImprovement> {
+    let Some(progress) = progress else {
+        return Vec::new();
+    };
+    progress
+        .stat_improvements
+        .iter()
+        .filter(|improvement| improvement.gained > 0)
+        .map(|improvement| EventStatImprovement {
+            name: improvement.name.clone(),
+            gained: improvement.gained,
+            current: improvement.current,
+        })
+        .collect()
+}
+
+fn itl_progress_from_submit(input: &SubmitEventProgressInput) -> Option<ItlEventProgress> {
+    let itl = input.itl.as_ref()?;
+    let score_hundredths = input.itl_score_hundredths?;
+    let (clear_type_before, clear_type_after) = event_clear_type_change(itl.progress.as_ref());
+    let mut progress = ItlEventProgress {
+        kind: EventProgressKind::Itl,
+        name: event_name_or_unknown(itl.name.as_str()).to_string(),
+        is_doubles: itl.is_doubles,
+        score_hundredths,
+        score_delta_hundredths: itl.score_delta,
+        rate_hundredths: None,
+        rate_delta_hundredths: None,
+        current_points: itl.top_score_points,
+        point_delta: delta_i32(itl.top_score_points, itl.prev_top_score_points),
+        current_ranking_points: itl.current_ranking_point_total,
+        ranking_delta: delta_i32(
+            itl.current_ranking_point_total,
+            itl.previous_ranking_point_total,
+        ),
+        current_song_points: itl.current_song_point_total,
+        song_delta: delta_i32(itl.current_song_point_total, itl.previous_song_point_total),
+        current_ex_points: itl.current_ex_point_total,
+        ex_delta: delta_i32(itl.current_ex_point_total, itl.previous_ex_point_total),
+        current_total_points: itl.current_point_total,
+        total_delta: delta_i32(itl.current_point_total, itl.previous_point_total),
+        total_passes: itl.total_passes,
+        clear_type_before,
+        clear_type_after,
+        stat_improvements: event_stat_improvements(itl.progress.as_ref()),
+        overlay_pages: Vec::new(),
+    };
+    progress.overlay_pages =
+        event_progress_overlay_pages(&progress, itl.progress.as_ref(), itl.leaderboard.as_slice());
+    Some(progress)
+}
+
+fn srpg_progress_from_submit(input: &SubmitEventProgressInput) -> Option<ItlEventProgress> {
+    let srpg = input.srpg.as_ref()?;
+    let score_delta = if input.result.eq_ignore_ascii_case("score-added") {
+        input.score_10000 as i32
+    } else {
+        srpg.score_delta
+    };
+    let rate_delta = if input.result.eq_ignore_ascii_case("score-added") {
+        input.rate_hundredths as i32
+    } else {
+        srpg.rate_delta
+    };
+    let mut progress = ItlEventProgress {
+        kind: EventProgressKind::Srpg,
+        name: event_name_or_unknown(srpg.name.as_str()).to_string(),
+        is_doubles: srpg.is_doubles,
+        score_hundredths: input.score_10000,
+        score_delta_hundredths: score_delta,
+        rate_hundredths: Some(input.rate_hundredths),
+        rate_delta_hundredths: Some(rate_delta),
+        current_points: srpg.top_score_points,
+        point_delta: delta_i32(srpg.top_score_points, srpg.prev_top_score_points),
+        current_ranking_points: srpg.current_ranking_point_total,
+        ranking_delta: delta_i32(
+            srpg.current_ranking_point_total,
+            srpg.previous_ranking_point_total,
+        ),
+        current_song_points: srpg.current_song_point_total,
+        song_delta: delta_i32(
+            srpg.current_song_point_total,
+            srpg.previous_song_point_total,
+        ),
+        current_ex_points: srpg.current_ex_point_total,
+        ex_delta: delta_i32(srpg.current_ex_point_total, srpg.previous_ex_point_total),
+        current_total_points: srpg.current_point_total,
+        total_delta: delta_i32(srpg.current_point_total, srpg.previous_point_total),
+        total_passes: srpg.total_passes,
+        clear_type_before: None,
+        clear_type_after: None,
+        stat_improvements: event_stat_improvements(srpg.progress.as_ref()),
+        overlay_pages: Vec::new(),
+    };
+    progress.overlay_pages = event_progress_overlay_pages(
+        &progress,
+        srpg.progress.as_ref(),
+        srpg.leaderboard.as_slice(),
+    );
+    Some(progress)
+}
+
+pub fn event_progress_from_submit(input: &SubmitEventProgressInput) -> Vec<ItlEventProgress> {
+    let mut progress = Vec::with_capacity(2);
+    if let Some(srpg) = srpg_progress_from_submit(input) {
+        progress.push(srpg);
+    }
+    if let Some(itl) = itl_progress_from_submit(input) {
+        progress.push(itl);
+    }
+    progress
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2521,6 +3181,125 @@ mod tests {
             is_self: false,
             is_fail: false,
         }
+    }
+
+    #[test]
+    fn submit_event_progress_builds_srpg_and_itl_pages() {
+        let input = SubmitEventProgressInput {
+            result: "score-added".to_string(),
+            score_10000: 9876,
+            rate_hundredths: 150,
+            itl_score_hundredths: Some(9912),
+            srpg: Some(SubmitEventProgressData {
+                name: "SRPG".to_string(),
+                is_doubles: false,
+                score_delta: 1,
+                rate_delta: 1,
+                top_score_points: 10,
+                prev_top_score_points: 4,
+                total_passes: 2,
+                current_ranking_point_total: 11,
+                previous_ranking_point_total: 5,
+                current_song_point_total: 12,
+                previous_song_point_total: 6,
+                current_ex_point_total: 13,
+                previous_ex_point_total: 7,
+                current_point_total: 14,
+                previous_point_total: 8,
+                leaderboard: vec![entry(98.76)],
+                progress: Some(SubmitProgress {
+                    stat_improvements: vec![SubmitStatImprovement {
+                        name: "tp".to_string(),
+                        gained: 5,
+                        current: 12,
+                    }],
+                    ..SubmitProgress::default()
+                }),
+            }),
+            itl: Some(SubmitEventProgressData {
+                name: "ITL Online 2026".to_string(),
+                is_doubles: true,
+                score_delta: 34,
+                top_score_points: 100,
+                prev_top_score_points: 90,
+                total_passes: 3,
+                current_ranking_point_total: 200,
+                previous_ranking_point_total: 150,
+                current_song_point_total: 300,
+                previous_song_point_total: 250,
+                current_ex_point_total: 400,
+                previous_ex_point_total: 350,
+                current_point_total: 900,
+                previous_point_total: 750,
+                leaderboard: vec![entry(99.12)],
+                progress: Some(SubmitProgress {
+                    stat_improvements: vec![
+                        SubmitStatImprovement {
+                            name: "clearType".to_string(),
+                            gained: 1,
+                            current: 4,
+                        },
+                        SubmitStatImprovement {
+                            name: "grade".to_string(),
+                            gained: 1,
+                            current: 2,
+                        },
+                    ],
+                    quests_completed: vec![SubmitQuest {
+                        title: "Unlock Song".to_string(),
+                        rewards: vec![SubmitQuestReward {
+                            reward_type: "pack".to_string(),
+                            description: "New pack".to_string(),
+                        }],
+                    }],
+                    achievements_completed: vec![SubmitAchievement {
+                        title: "Milestone".to_string(),
+                        rewards: vec![SubmitAchievementReward {
+                            tier: "2".to_string(),
+                            requirements: vec!["Play one chart".to_string()],
+                            title_unlocked: "Champion".to_string(),
+                        }],
+                    }],
+                }),
+                ..SubmitEventProgressData::default()
+            }),
+        };
+
+        let progress = event_progress_from_submit(&input);
+
+        assert_eq!(progress.len(), 2);
+        assert_eq!(progress[0].kind, EventProgressKind::Srpg);
+        assert_eq!(progress[0].score_delta_hundredths, 9876);
+        assert_eq!(progress[0].rate_delta_hundredths, Some(150));
+        assert!(matches!(
+            &progress[0].overlay_pages[0],
+            EventOverlayPage::Text(text)
+                if text.contains("Skill Improvements") && text.contains("+5 TP")
+        ));
+
+        assert_eq!(progress[1].kind, EventProgressKind::Itl);
+        assert_eq!(progress[1].clear_type_before, Some(3));
+        assert_eq!(progress[1].clear_type_after, Some(4));
+        assert!(matches!(
+            &progress[1].overlay_pages[0],
+            EventOverlayPage::Text(text)
+                if text.contains("Clear Type: FEC >>> FFC") && text.contains("New Quint!")
+        ));
+        assert!(matches!(
+            &progress[1].overlay_pages[1],
+            EventOverlayPage::Text(text)
+                if text.contains("Completed \"Unlock Song\"!") && text.contains("PACK:")
+        ));
+        assert!(matches!(
+            &progress[1].overlay_pages[2],
+            EventOverlayPage::Text(text)
+                if text.contains("Completed the \"Milestone\" Achievement!")
+                    && text.contains("Unlocked the \"Champion\" Title!")
+        ));
+        assert!(matches!(
+            progress[1].overlay_pages.last(),
+            Some(EventOverlayPage::Leaderboard(entries)) if entries.len() == 1
+        ));
     }
 
     #[test]
@@ -3394,6 +4173,176 @@ mod tests {
                 "Autoplay or replay is not allowed.",
             ]
         );
+    }
+
+    #[test]
+    fn itl_eval_state_from_parts_accepts_valid_play() {
+        let state = itl_eval_state_from_parts(ItlEvalInput {
+            chart_no_cmod: false,
+            used_cmod: false,
+            groovestats_valid: true,
+            groovestats_reason_lines: &[],
+            music_rate: 1.0,
+            mines_enabled: true,
+            all_timing_windows_enabled: true,
+            passed: true,
+        });
+
+        assert!(state.active);
+        assert!(state.eligible);
+        assert!(!state.chart_no_cmod);
+        assert!(!state.used_cmod);
+        assert!(state.reason_lines.is_empty());
+    }
+
+    #[test]
+    fn itl_eval_state_from_parts_reports_policy_reasons() {
+        let gs_reasons = vec!["GrooveStats does not support dance-solo charts.".to_string()];
+        let state = itl_eval_state_from_parts(ItlEvalInput {
+            chart_no_cmod: true,
+            used_cmod: true,
+            groovestats_valid: false,
+            groovestats_reason_lines: gs_reasons.as_slice(),
+            music_rate: 1.5,
+            mines_enabled: false,
+            all_timing_windows_enabled: false,
+            passed: false,
+        });
+
+        assert!(state.active);
+        assert!(!state.eligible);
+        assert_eq!(
+            state.reason_lines,
+            vec![
+                "GrooveStats does not support dance-solo charts.",
+                "ITL requires 1.00x music rate.",
+                "ITL requires mines to be enabled.",
+                "ITL requires all timing windows to be enabled.",
+                "ITL only saves passing scores.",
+                "This ITL chart does not allow CMod.",
+            ]
+        );
+    }
+
+    #[test]
+    fn itl_eval_state_from_parts_falls_back_for_missing_gs_reason() {
+        let state = itl_eval_state_from_parts(ItlEvalInput {
+            chart_no_cmod: false,
+            used_cmod: false,
+            groovestats_valid: false,
+            groovestats_reason_lines: &[],
+            music_rate: 1.0,
+            mines_enabled: true,
+            all_timing_windows_enabled: true,
+            passed: true,
+        });
+
+        assert_eq!(
+            state.reason_lines,
+            vec!["Score is not valid for GrooveStats."]
+        );
+    }
+
+    #[test]
+    fn save_itl_chart_result_adds_new_entry_and_progress() {
+        let mut data = ItlFileData::default();
+        let result = save_itl_chart_result(
+            &mut data,
+            ItlChartSaveInput {
+                song_dir: "/Songs/ITL Online 2026/Example",
+                chart_hash: "deadbeef",
+                chart_name: "7500 (P) + 12000 (S)",
+                chart_type: "dance-double",
+                event_name: "ITL Online 2026",
+                judgments: ItlJudgments {
+                    w0: 10,
+                    total_steps: 10,
+                    ..ItlJudgments::default()
+                },
+                ex_percent: 100.0,
+                used_cmod: false,
+                chart_no_cmod: true,
+                date: "2026-06-23".to_string(),
+            },
+        );
+
+        assert!(result.needs_write);
+        assert_eq!(data.path_map["/Songs/ITL Online 2026/Example"], "deadbeef");
+        let entry = &data.hash_map["deadbeef"];
+        assert_eq!(entry.ex, 10_000);
+        assert_eq!(entry.points, 19_500);
+        assert_eq!(entry.passing_points, 7500);
+        assert_eq!(entry.max_scoring_points, 12000);
+        assert_eq!(entry.passes, 1);
+        assert_eq!(entry.steps_type, "double");
+        assert!(entry.no_cmod);
+        assert_eq!(result.progress.name, "ITL Online 2026");
+        assert!(result.progress.is_doubles);
+        assert_eq!(result.progress.current_points, 19_500);
+        assert_eq!(result.progress.score_delta_hundredths, 10_000);
+        assert_eq!(result.progress.clear_type_before, Some(0));
+        assert_eq!(result.progress.clear_type_after, Some(5));
+        assert!(!result.progress.overlay_pages.is_empty());
+    }
+
+    #[test]
+    fn save_itl_chart_result_updates_passes_and_better_tied_judgments() {
+        let mut data = ItlFileData::default();
+        data.path_map.insert(
+            "/Songs/ITL Online 2026/Example".to_string(),
+            "deadbeef".to_string(),
+        );
+        data.hash_map.insert(
+            "deadbeef".to_string(),
+            ItlHashEntry {
+                judgments: ItlJudgments {
+                    w0: 9,
+                    w1: 1,
+                    total_steps: 10,
+                    ..ItlJudgments::default()
+                },
+                ex: 10_000,
+                clear_type: 4,
+                points: 19_500,
+                passing_points: 7500,
+                max_scoring_points: 12000,
+                max_points: 19_500,
+                passes: 1,
+                steps_type: "single".to_string(),
+                ..ItlHashEntry::default()
+            },
+        );
+
+        let result = save_itl_chart_result(
+            &mut data,
+            ItlChartSaveInput {
+                song_dir: "/Songs/ITL Online 2026/Example",
+                chart_hash: "deadbeef",
+                chart_name: "",
+                chart_type: "dance-single",
+                event_name: "",
+                judgments: ItlJudgments {
+                    w0: 10,
+                    total_steps: 10,
+                    ..ItlJudgments::default()
+                },
+                ex_percent: 100.0,
+                used_cmod: true,
+                chart_no_cmod: false,
+                date: "2026-06-24".to_string(),
+            },
+        );
+
+        let entry = &data.hash_map["deadbeef"];
+        assert!(result.needs_write);
+        assert_eq!(entry.passes, 2);
+        assert_eq!(entry.judgments.w0, 10);
+        assert!(entry.used_cmod);
+        assert_eq!(entry.date, "2026-06-24");
+        assert_eq!(result.progress.name, "ITL Online 2026");
+        assert_eq!(result.progress.total_passes, 2);
+        assert_eq!(result.progress.point_delta, 0);
+        assert_eq!(result.progress.score_delta_hundredths, 0);
     }
 
     #[test]

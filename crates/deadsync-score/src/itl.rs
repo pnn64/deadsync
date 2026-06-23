@@ -20,6 +20,13 @@ pub struct ItlFileData {
     pub unlock_folders: HashMap<String, bool>,
 }
 
+impl ItlFileData {
+    #[inline(always)]
+    pub fn is_empty(&self) -> bool {
+        self.path_map.is_empty() && self.hash_map.is_empty() && self.unlock_folders.is_empty()
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ItlHashEntry {
     #[serde(default)]
@@ -106,10 +113,87 @@ where
 /// cache schema. Empty files and malformed text return `None`.
 pub fn itl_data_from_json(json_text: &str) -> Option<ItlFileData> {
     let data: ItlFileData = serde_json::from_str(json_text).ok()?;
-    if data.path_map.is_empty() && data.hash_map.is_empty() && data.unlock_folders.is_empty() {
+    if data.is_empty() {
         return None;
     }
     Some(data)
+}
+
+/// True when `pack_dir` matches the SL-style pattern `ITL Online <year> Unlocks`
+/// (case-insensitive, any 4-digit year).
+pub fn is_itl_unlocks_pack(pack_dir: &str) -> bool {
+    const PREFIX: &[u8] = b"itl online ";
+    const SUFFIX: &[u8] = b" unlocks";
+    let bytes = pack_dir.trim().as_bytes();
+    if bytes.len() != PREFIX.len() + 4 + SUFFIX.len() {
+        return false;
+    }
+    let (prefix, rest) = bytes.split_at(PREFIX.len());
+    let (year, suffix) = rest.split_at(4);
+    prefix.eq_ignore_ascii_case(PREFIX)
+        && suffix.eq_ignore_ascii_case(SUFFIX)
+        && year.iter().all(u8::is_ascii_digit)
+}
+
+#[inline(always)]
+pub fn itl_group_name_matches(group_name: &str) -> bool {
+    let group = group_name.to_ascii_lowercase();
+    group.contains("itl online 2026") || group.contains("itl 2026")
+}
+
+pub fn itl_song_matches(
+    song_dir: Option<&str>,
+    group_name: Option<&str>,
+    data: &ItlFileData,
+) -> bool {
+    if song_dir.is_some_and(|dir| data.path_map.contains_key(dir)) {
+        return true;
+    }
+    group_name.is_some_and(itl_group_name_matches)
+}
+
+pub fn itl_chart_no_cmod(subtitle: &str, prev: Option<&ItlHashEntry>) -> bool {
+    prev.map_or_else(
+        || subtitle.to_ascii_lowercase().contains("no cmod"),
+        |data| data.no_cmod,
+    )
+}
+
+pub fn itl_event_name_from_group(group_name: Option<&str>) -> String {
+    group_name
+        .filter(|name| !name.trim().is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| "ITL Online 2026".to_string())
+}
+
+pub fn itl_steps_type_from_chart_type(chart_type: &str) -> &'static str {
+    if chart_type.to_ascii_lowercase().contains("double") {
+        "double"
+    } else {
+        "single"
+    }
+}
+
+#[inline(always)]
+pub fn itl_song_folder_unlocked(data: &ItlFileData, song_folder: &str) -> bool {
+    data.unlock_folders
+        .get(song_folder)
+        .copied()
+        .unwrap_or(false)
+}
+
+pub fn itl_mark_unlock_folders<'a, I>(data: &mut ItlFileData, folders: I) -> bool
+where
+    I: IntoIterator<Item = &'a str>,
+{
+    let mut changed = false;
+    for folder in folders {
+        let folder = folder.trim();
+        if !folder.is_empty() {
+            changed |= data.unlock_folders.insert(folder.to_string(), true) != Some(true);
+        }
+    }
+    changed
 }
 
 #[inline(always)]
@@ -145,6 +229,68 @@ pub fn itl_points_for_song(passing_points: u32, max_scoring_points: u32, ex_scor
         * (100.0 / (scalar.powf(100.0 / scalar) - 1.0));
     let percent = ((curve / 100.0) * 1_000_000.0).round() / 1_000_000.0;
     passing_points.saturating_add((f64::from(max_scoring_points) * percent).floor() as u32)
+}
+
+fn apply_itl_overall_ranks(
+    out: &mut HashMap<String, u32>,
+    mut by_chart_points: Vec<(String, u32)>,
+) {
+    by_chart_points.sort_unstable_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    let mut prev_points = None;
+    let mut prev_rank = 0u32;
+    for (idx, (chart_hash, points)) in by_chart_points.into_iter().enumerate() {
+        let rank = if prev_points == Some(points) {
+            prev_rank
+        } else {
+            idx.saturating_add(1) as u32
+        };
+        out.insert(chart_hash, rank);
+        prev_points = Some(points);
+        prev_rank = rank;
+    }
+}
+
+pub fn itl_overall_ranks_from_song_cache(
+    song_cache: &[deadsync_chart::SongPack],
+    by_chart_score: &HashMap<String, u32>,
+) -> HashMap<String, u32> {
+    if by_chart_score.is_empty() {
+        return HashMap::new();
+    }
+
+    let mut single_points = Vec::new();
+    let mut double_points = Vec::new();
+    for pack in song_cache {
+        if !itl_group_name_matches(pack.group_name.as_str()) {
+            continue;
+        }
+        for song in &pack.songs {
+            for chart in &song.charts {
+                if !chart.has_note_data {
+                    continue;
+                }
+                let Some(ex_hundredths) = by_chart_score.get(chart.short_hash.as_str()).copied()
+                else {
+                    continue;
+                };
+                let Some(points) = itl_points_for_chart(chart, ex_hundredths) else {
+                    continue;
+                };
+                if itl_steps_type_from_chart_type(chart.chart_type.as_str())
+                    .eq_ignore_ascii_case("double")
+                {
+                    double_points.push((chart.short_hash.clone(), points));
+                } else {
+                    single_points.push((chart.short_hash.clone(), points));
+                }
+            }
+        }
+    }
+
+    let mut ranks = HashMap::with_capacity(single_points.len() + double_points.len());
+    apply_itl_overall_ranks(&mut ranks, single_points);
+    apply_itl_overall_ranks(&mut ranks, double_points);
+    ranks
 }
 
 pub fn itl_judgments_better(cur: &ItlJudgments, prev: &ItlJudgments) -> bool {
@@ -280,6 +426,8 @@ pub fn itl_point_totals(data: &ItlFileData) -> ItlPointTotals {
 mod tests {
     use super::*;
     use serde_json::json;
+    use std::path::PathBuf;
+    use std::sync::Arc;
 
     fn sample_chart(chart_type: &str) -> deadsync_chart::ChartData {
         deadsync_chart::ChartData {
@@ -320,6 +468,66 @@ mod tests {
         }
     }
 
+    fn ranked_chart(hash: &str, chart_type: &str, chart_name: &str) -> deadsync_chart::ChartData {
+        let mut chart = sample_chart(chart_type);
+        chart.short_hash = hash.to_string();
+        chart.chart_name = chart_name.to_string();
+        chart.has_note_data = true;
+        chart
+    }
+
+    fn song_with_charts(charts: Vec<deadsync_chart::ChartData>) -> Arc<deadsync_chart::SongData> {
+        Arc::new(deadsync_chart::SongData {
+            simfile_path: PathBuf::from("/Songs/ITL Online 2026/Example/song.ssc"),
+            title: String::new(),
+            subtitle: String::new(),
+            translit_title: String::new(),
+            translit_subtitle: String::new(),
+            artist: String::new(),
+            genre: String::new(),
+            banner_path: None,
+            background_path: None,
+            background_changes: Vec::new(),
+            background_layer2_changes: Vec::new(),
+            foreground_changes: Vec::new(),
+            background_lua_changes: Vec::new(),
+            foreground_lua_changes: Vec::new(),
+            has_lua: false,
+            cdtitle_path: None,
+            music_path: None,
+            display_bpm: String::new(),
+            offset: 0.0,
+            sample_start: None,
+            sample_length: None,
+            min_bpm: 0.0,
+            max_bpm: 0.0,
+            normalized_bpms: String::new(),
+            music_length_seconds: 0.0,
+            first_second: 0.0,
+            total_length_seconds: 0,
+            precise_last_second_seconds: 0.0,
+            charts,
+        })
+    }
+
+    fn song_pack(
+        group_name: &str,
+        charts: Vec<deadsync_chart::ChartData>,
+    ) -> deadsync_chart::SongPack {
+        deadsync_chart::SongPack {
+            group_name: group_name.to_string(),
+            name: group_name.to_string(),
+            sort_title: String::new(),
+            translit_title: String::new(),
+            series: String::new(),
+            year: 0,
+            sync_pref: deadsync_chart::SyncPref::Default,
+            directory: PathBuf::new(),
+            banner_path: None,
+            songs: vec![song_with_charts(charts)],
+        }
+    }
+
     #[test]
     fn parse_itl_points_reads_chart_name_values() {
         assert_eq!(
@@ -340,6 +548,42 @@ mod tests {
     #[test]
     fn itl_points_curve_keeps_full_ex_exact() {
         assert_eq!(itl_points_for_song(7500, 12000, 100.0), 19_500);
+    }
+
+    #[test]
+    fn itl_overall_ranks_filter_and_split_chart_points() {
+        let song_cache = vec![
+            song_pack(
+                "ITL Online 2026",
+                vec![
+                    ranked_chart("single-a", "dance-single", "10 20"),
+                    ranked_chart("single-b", "dance-single", "10 20"),
+                    ranked_chart("single-c", "dance-single", "10 10"),
+                    ranked_chart("double-a", "dance-double", "10 5"),
+                    ranked_chart("unscored", "dance-single", "100 100"),
+                ],
+            ),
+            song_pack(
+                "Custom Pack",
+                vec![ranked_chart("ignored", "dance-single", "500 500")],
+            ),
+        ];
+        let by_chart_score = HashMap::from([
+            ("single-a".to_string(), 10_000),
+            ("single-b".to_string(), 10_000),
+            ("single-c".to_string(), 10_000),
+            ("double-a".to_string(), 10_000),
+            ("ignored".to_string(), 10_000),
+        ]);
+
+        let ranks = itl_overall_ranks_from_song_cache(&song_cache, &by_chart_score);
+
+        assert_eq!(ranks.get("single-a"), Some(&1));
+        assert_eq!(ranks.get("single-b"), Some(&1));
+        assert_eq!(ranks.get("single-c"), Some(&3));
+        assert_eq!(ranks.get("double-a"), Some(&1));
+        assert!(!ranks.contains_key("unscored"));
+        assert!(!ranks.contains_key("ignored"));
     }
 
     #[test]
@@ -402,6 +646,73 @@ mod tests {
         assert!(itl_data_from_json("{}").is_none());
         assert!(itl_data_from_json("not json").is_none());
         assert!(itl_data_from_json(r#"{"hashMap":{}}"#).is_none());
+    }
+
+    #[test]
+    fn itl_classification_helpers_match_event_rules() {
+        let mut data = ItlFileData::default();
+        data.path_map.insert(
+            "/Songs/Custom Pack/Example".to_string(),
+            "deadbeefcafebabe".to_string(),
+        );
+
+        assert!(itl_group_name_matches("ITL Online 2026"));
+        assert!(itl_group_name_matches("Some ITL 2026 Folder"));
+        assert!(!itl_group_name_matches("Custom Pack"));
+        assert!(itl_song_matches(
+            Some("/Songs/Custom Pack/Example"),
+            None,
+            &data
+        ));
+        assert!(itl_song_matches(None, Some("ITL Online 2026"), &data));
+        assert!(!itl_song_matches(None, Some("Custom Pack"), &data));
+        assert!(itl_chart_no_cmod("(NO CMOD)", None));
+        assert!(!itl_chart_no_cmod(
+            "No marker",
+            Some(&ItlHashEntry {
+                no_cmod: false,
+                ..ItlHashEntry::default()
+            })
+        ));
+        assert_eq!(
+            itl_event_name_from_group(Some("ITL Online 2026")),
+            "ITL Online 2026"
+        );
+        assert_eq!(itl_event_name_from_group(None), "ITL Online 2026");
+        assert_eq!(itl_steps_type_from_chart_type("dance-double"), "double");
+        assert_eq!(itl_steps_type_from_chart_type("dance-single"), "single");
+    }
+
+    #[test]
+    fn itl_unlock_pack_names_match_legacy_pattern() {
+        assert!(is_itl_unlocks_pack("ITL Online 2023 Unlocks"));
+        assert!(is_itl_unlocks_pack("itl online 2024 unlocks"));
+        assert!(is_itl_unlocks_pack("ITL ONLINE 2022 UNLOCKS"));
+        assert!(is_itl_unlocks_pack("  ITL Online 2025 Unlocks  "));
+
+        assert!(!is_itl_unlocks_pack("ITL Online 23 Unlocks"));
+        assert!(!is_itl_unlocks_pack("ITL Online 20XX Unlocks"));
+        assert!(!is_itl_unlocks_pack("ITL Online 2023 Locks"));
+        assert!(!is_itl_unlocks_pack("ITL Offline 2023 Unlocks"));
+        assert!(!is_itl_unlocks_pack("ITL Online 2023  Unlocks"));
+        assert!(!is_itl_unlocks_pack("ITL Online 2023 Unlocks Extra"));
+        assert!(!is_itl_unlocks_pack(""));
+    }
+
+    #[test]
+    fn itl_unlock_folder_helpers_trim_and_report_changes() {
+        let mut data = ItlFileData::default();
+        assert!(data.is_empty());
+
+        assert!(itl_mark_unlock_folders(
+            &mut data,
+            [" /Songs/Unlock/A ", "", " /Songs/Unlock/B "]
+        ));
+        assert!(!data.is_empty());
+        assert!(itl_song_folder_unlocked(&data, "/Songs/Unlock/A"));
+        assert!(itl_song_folder_unlocked(&data, "/Songs/Unlock/B"));
+        assert!(!itl_song_folder_unlocked(&data, "/Songs/Unlock/C"));
+        assert!(!itl_mark_unlock_folders(&mut data, ["/Songs/Unlock/A"]));
     }
 
     #[test]

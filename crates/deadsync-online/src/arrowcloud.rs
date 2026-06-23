@@ -9,9 +9,9 @@ use deadsync_rules::{
 };
 use deadsync_score::{
     ArrowCloudLeaderboard, ArrowCloudPaneKind, ArrowCloudScore, ArrowCloudScores,
-    ArrowCloudSubmitUiStatus, ArrowCloudUserContext, LeaderboardEntry, LeaderboardPane,
-    RejectReason, arrowcloud_empty_hard_ex_leaderboard_pane, arrowcloud_entry_flags,
-    arrowcloud_hard_ex_leaderboard_pane, arrowcloud_leaderboard_entry,
+    ArrowCloudSubmitStats, ArrowCloudSubmitUiStatus, ArrowCloudUserContext, LeaderboardEntry,
+    LeaderboardPane, RejectReason, arrowcloud_empty_hard_ex_leaderboard_pane,
+    arrowcloud_entry_flags, arrowcloud_hard_ex_leaderboard_pane, arrowcloud_leaderboard_entry,
     arrowcloud_pane_kind_from_type, arrowcloud_score_from_retrieve_fields,
     arrowcloud_target_user_ids, arrowcloud_user_id, set_arrowcloud_score_for_leaderboard,
 };
@@ -1083,6 +1083,28 @@ pub struct ArrowCloudPayload {
     pub engine_version: &'static str,
 }
 
+#[derive(Debug, Clone)]
+pub struct ArrowCloudPayloadParts {
+    pub song_name: String,
+    pub artist: String,
+    pub pack: String,
+    pub music_length_seconds: f32,
+    pub hash: String,
+    pub timing_data: Vec<ArrowCloudTimingDatum>,
+    pub difficulty: u32,
+    pub stepartist: String,
+    pub submit_stats: ArrowCloudSubmitStats,
+    pub total_holds: u32,
+    pub total_mines: u32,
+    pub total_rolls: u32,
+    pub nps_info: ArrowCloudNpsInfo,
+    pub lifebar_info: Vec<ArrowCloudLifePoint>,
+    pub modifiers: ArrowCloudModifiers,
+    pub music_rate: f32,
+    pub used_autoplay: bool,
+    pub passed: bool,
+}
+
 impl ArrowCloudPayload {
     pub fn fill_metadata(&mut self) {
         self.body_version = ARROWCLOUD_BODY_VERSION;
@@ -1090,6 +1112,55 @@ impl ArrowCloudPayload {
         self.engine_name = ARROWCLOUD_ENGINE_NAME;
         self.engine_version = deadsync_version::current_static();
     }
+}
+
+#[inline(always)]
+pub fn submit_music_rate(music_rate: f32) -> f64 {
+    if music_rate.is_finite() && music_rate > 0.0 {
+        music_rate as f64
+    } else {
+        1.0
+    }
+}
+
+pub fn payload_from_parts(input: ArrowCloudPayloadParts) -> ArrowCloudPayload {
+    let mut payload = ArrowCloudPayload {
+        song_name: input.song_name,
+        artist: input.artist,
+        pack: input.pack.trim().to_string(),
+        length: format_length(input.music_length_seconds),
+        hash: input.hash,
+        timing_data: input.timing_data,
+        difficulty: input.difficulty,
+        stepartist: input.stepartist,
+        radar: ArrowCloudRadar {
+            holds: [input.submit_stats.holds_held, input.total_holds],
+            mines: [input.submit_stats.mines_avoided, input.total_mines],
+            rolls: [input.submit_stats.rolls_held, input.total_rolls],
+        },
+        judgment_counts: judgment_counts_from_stats(
+            input.submit_stats.judgment_counts,
+            input.submit_stats.window_counts,
+            input.submit_stats.holds_held,
+            input.total_holds,
+            input.submit_stats.mines_hit,
+            input.total_mines,
+            input.submit_stats.rolls_held,
+            input.total_rolls,
+        ),
+        nps_info: input.nps_info,
+        lifebar_info: input.lifebar_info,
+        modifiers: input.modifiers,
+        music_rate: submit_music_rate(input.music_rate),
+        used_autoplay: input.used_autoplay,
+        passed: input.passed,
+        body_version: "",
+        arrow_cloud_body_version: "",
+        engine_name: "",
+        engine_version: "",
+    };
+    payload.fill_metadata();
+    payload
 }
 
 #[derive(Deserialize)]
@@ -1995,6 +2066,70 @@ mod tests {
             value["_engineVersion"],
             serde_json::json!(deadsync_version::current_static())
         );
+    }
+
+    #[test]
+    fn payload_from_parts_builds_submit_shape() {
+        let payload = payload_from_parts(ArrowCloudPayloadParts {
+            song_name: "Test Song".to_string(),
+            artist: "Test Artist".to_string(),
+            pack: " Test Pack ".to_string(),
+            music_length_seconds: 83.5,
+            hash: "deadbeefcafebabe".to_string(),
+            timing_data: vec![(24.0, ArrowCloudTimingOffset::Miss("Miss"))],
+            difficulty: 12,
+            stepartist: "Tester".to_string(),
+            submit_stats: ArrowCloudSubmitStats {
+                judgment_counts: [10, 20, 30, 40, 50, 60],
+                window_counts: WindowCounts {
+                    w0: 4,
+                    ..WindowCounts::default()
+                },
+                holds_held: 1,
+                mines_hit: 2,
+                mines_avoided: 3,
+                rolls_held: 5,
+            },
+            total_holds: 2,
+            total_mines: 4,
+            total_rolls: 6,
+            nps_info: ArrowCloudNpsInfo {
+                peak_nps: 0.0,
+                points: Vec::new(),
+            },
+            lifebar_info: Vec::new(),
+            modifiers: ArrowCloudModifiers {
+                visual_delay: 0,
+                acceleration: Vec::new(),
+                appearance: Vec::new(),
+                effect: Vec::new(),
+                mini: 0,
+                turn: "None".to_string(),
+                disabled_windows: "None".to_string(),
+                speed: ArrowCloudSpeed {
+                    value: 600.0,
+                    speed_type: "C",
+                },
+                perspective: "Overhead".to_string(),
+                noteskin: "cel".to_string(),
+                scroll: None,
+            },
+            music_rate: f32::NAN,
+            used_autoplay: false,
+            passed: true,
+        });
+
+        assert_eq!(payload.pack, "Test Pack");
+        assert_eq!(payload.length, "1:23");
+        assert_eq!(payload.music_rate, 1.0);
+        assert_eq!(payload.radar.holds, [1, 2]);
+        assert_eq!(payload.radar.mines, [3, 4]);
+        assert_eq!(payload.radar.rolls, [5, 6]);
+        assert_eq!(payload.judgment_counts.fantastic_plus, 4);
+        assert_eq!(payload.judgment_counts.fantastic, 6);
+        assert_eq!(payload.judgment_counts.mines_hit, 2);
+        assert_eq!(payload.body_version, ARROWCLOUD_BODY_VERSION);
+        assert_eq!(payload.engine_name, ARROWCLOUD_ENGINE_NAME);
     }
 
     #[test]

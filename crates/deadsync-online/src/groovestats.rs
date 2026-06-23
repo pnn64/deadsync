@@ -11,9 +11,10 @@ use deadsync_rules::{judgment, scroll::ScrollSpeedSetting, timing::WindowCounts}
 use deadsync_score::{
     GrooveStatsSubmitRecordBanner, GrooveStatsSubmitUiStatus, GsExEvidence, ImportedPlayerScore,
     LeaderboardEntry, LeaderboardPane, PlayerLeaderboardData, PlayerScoreImportResult,
-    RejectReason, ScoreImportEndpoint, groovestats_submit_record_banner, leaderboard_nonzero_rank,
-    leaderboard_pane, leaderboard_score_10000, leaderboard_username_matches,
-    score_import_entry_matches_profile,
+    RejectReason, ScoreImportEndpoint, SubmitAchievement, SubmitAchievementReward,
+    SubmitEventProgressData, SubmitProgress, SubmitQuest, SubmitQuestReward, SubmitStatImprovement,
+    groovestats_submit_record_banner, leaderboard_nonzero_rank, leaderboard_pane,
+    leaderboard_score_10000, leaderboard_username_matches, score_import_entry_matches_profile,
 };
 use serde_json::{Map as JsonMap, Value as JsonValue};
 
@@ -1269,6 +1270,76 @@ pub struct GrooveStatsSubmitApiProgress {
     pub quests_completed: Vec<GrooveStatsSubmitApiQuest>,
     #[serde(rename = "achievementsCompleted", default)]
     pub achievements_completed: Vec<GrooveStatsSubmitApiAchievement>,
+}
+
+pub fn submit_progress_from_api(progress: &GrooveStatsSubmitApiProgress) -> SubmitProgress {
+    SubmitProgress {
+        stat_improvements: progress
+            .stat_improvements
+            .iter()
+            .map(|improvement| SubmitStatImprovement {
+                name: improvement.name.clone(),
+                gained: improvement.gained,
+                current: improvement.current,
+            })
+            .collect(),
+        quests_completed: progress
+            .quests_completed
+            .iter()
+            .map(|quest| SubmitQuest {
+                title: quest.title.clone(),
+                rewards: quest
+                    .rewards
+                    .iter()
+                    .map(|reward| SubmitQuestReward {
+                        reward_type: reward.reward_type.clone(),
+                        description: reward.description.clone(),
+                    })
+                    .collect(),
+            })
+            .collect(),
+        achievements_completed: progress
+            .achievements_completed
+            .iter()
+            .map(|achievement| SubmitAchievement {
+                title: achievement.title.clone(),
+                rewards: achievement
+                    .rewards
+                    .iter()
+                    .map(|reward| SubmitAchievementReward {
+                        tier: reward.tier.clone(),
+                        requirements: reward.requirements.clone(),
+                        title_unlocked: reward.title_unlocked.clone(),
+                    })
+                    .collect(),
+            })
+            .collect(),
+    }
+}
+
+pub fn submit_event_progress_from_api(
+    event: &GrooveStatsSubmitApiEvent,
+    leaderboard: Vec<LeaderboardApiEntry>,
+) -> SubmitEventProgressData {
+    SubmitEventProgressData {
+        name: event.name.clone(),
+        is_doubles: event.is_doubles,
+        score_delta: event.score_delta,
+        rate_delta: event.rate_delta,
+        top_score_points: event.top_score_points,
+        prev_top_score_points: event.prev_top_score_points,
+        total_passes: event.total_passes,
+        current_ranking_point_total: event.current_ranking_point_total,
+        previous_ranking_point_total: event.previous_ranking_point_total,
+        current_song_point_total: event.current_song_point_total,
+        previous_song_point_total: event.previous_song_point_total,
+        current_ex_point_total: event.current_ex_point_total,
+        previous_ex_point_total: event.previous_ex_point_total,
+        current_point_total: event.current_point_total,
+        previous_point_total: event.previous_point_total,
+        leaderboard: leaderboard_entries_from_api(leaderboard),
+        progress: event.progress.as_ref().map(submit_progress_from_api),
+    }
 }
 
 #[derive(Deserialize, Debug)]
@@ -2808,6 +2879,25 @@ mod tests {
         );
         assert_eq!(
             progress.achievements_completed[0].rewards[0].title_unlocked,
+            "Title A"
+        );
+
+        let progress_data = submit_event_progress_from_api(itl, itl.itl_leaderboard.clone());
+        assert_eq!(progress_data.name, "ITL");
+        assert!(progress_data.is_doubles);
+        assert_eq!(progress_data.score_delta, -123);
+        assert_eq!(progress_data.top_score_points, 42);
+        assert_eq!(progress_data.leaderboard[0].name, "DREW");
+        let score_progress = progress_data.progress.as_ref().expect("score progress");
+        assert_eq!(score_progress.stat_improvements[0].name, "clearType");
+        assert_eq!(score_progress.stat_improvements[0].gained, 2);
+        assert_eq!(score_progress.quests_completed[0].title, "Unlock One");
+        assert_eq!(
+            score_progress.quests_completed[0].rewards[0].description,
+            "Song A"
+        );
+        assert_eq!(
+            score_progress.achievements_completed[0].rewards[0].title_unlocked,
             "Title A"
         );
 

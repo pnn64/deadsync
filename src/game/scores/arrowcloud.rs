@@ -7,8 +7,8 @@ use crate::game::profile;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{FantasticWindowOptions, blue_fantastic_window_ms};
 use deadsync_online::arrowcloud::{
-    self as arrowcloud_api, ArrowCloudPayload, ArrowCloudRadar, ArrowCloudSubmitRequestError,
-    ArrowCloudTimingDatum,
+    self as arrowcloud_api, ArrowCloudPayload, ArrowCloudPayloadParts,
+    ArrowCloudSubmitRequestError, ArrowCloudTimingDatum,
 };
 use deadsync_online::groovestats::GROOVESTATS_SUBMIT_MAX_ENTRIES;
 use deadsync_profile as profile_data;
@@ -352,55 +352,30 @@ fn arrowcloud_payload_for_player(
         .fail_time
         .map(deadsync_core::song_time::song_time_ns_from_seconds);
     let submit_stats = arrowcloud_submit_stats(gs, player_idx, fail_time_ns);
-    let pack = pack_group.trim().to_string();
     let song = gs.song();
-    let song_name = song.display_full_title(true);
-    let gameplay_music_rate = gs.music_rate();
-    let music_rate = if gameplay_music_rate.is_finite() && gameplay_music_rate > 0.0 {
-        gameplay_music_rate as f64
-    } else {
-        1.0
-    };
     let passed = !gameplay_run_failed(player.is_failing, player.fail_time.is_some());
     let totals = gs.display_totals_for_player(player_idx);
 
-    let mut payload = ArrowCloudPayload {
-        song_name,
+    Some(arrowcloud_api::payload_from_parts(ArrowCloudPayloadParts {
+        song_name: song.display_full_title(true),
         artist: song.artist.clone(),
-        pack,
-        length: arrowcloud_api::format_length(song.music_length_seconds),
+        pack: pack_group.to_string(),
+        music_length_seconds: song.music_length_seconds,
         hash: chart.short_hash.clone(),
         timing_data: arrowcloud_timing_data(gs, player_idx, fail_time_ns),
         difficulty: chart.meter,
         stepartist: chart.step_artist.clone(),
-        radar: ArrowCloudRadar {
-            holds: [submit_stats.holds_held, totals.holds_total],
-            mines: [submit_stats.mines_avoided, totals.mines_total],
-            rolls: [submit_stats.rolls_held, totals.rolls_total],
-        },
-        judgment_counts: arrowcloud_api::judgment_counts_from_stats(
-            submit_stats.judgment_counts,
-            submit_stats.window_counts,
-            submit_stats.holds_held,
-            totals.holds_total,
-            submit_stats.mines_hit,
-            totals.mines_total,
-            submit_stats.rolls_held,
-            totals.rolls_total,
-        ),
+        submit_stats,
+        total_holds: totals.holds_total,
+        total_mines: totals.mines_total,
+        total_rolls: totals.rolls_total,
         nps_info: arrowcloud_nps_info(gs, player_idx),
         lifebar_info: arrowcloud_lifebar_points(gs, player_idx),
         modifiers: arrowcloud_api::modifiers_from_profile(profile),
-        music_rate,
+        music_rate: gs.music_rate(),
         used_autoplay: gs.autoplay_used(),
         passed,
-        body_version: "",
-        arrow_cloud_body_version: "",
-        engine_name: "",
-        engine_version: "",
-    };
-    payload.fill_metadata();
-    Some(payload)
+    }))
 }
 
 #[inline(always)]
