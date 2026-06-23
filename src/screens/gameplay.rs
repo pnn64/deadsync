@@ -568,10 +568,23 @@ pub(crate) fn song_lua_compile_context(
     context
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug)]
 pub struct ActorViewOverride {
     pub notefield: NotefieldViewOverride,
     pub hide_gameplay_hud: bool,
+    /// Alpha multiplier applied to SMX overlay actors (FSR sensor display and pad
+    /// input display). Used to fade them in with the screen transition.
+    pub smx_overlay_alpha: f32,
+}
+
+impl Default for ActorViewOverride {
+    fn default() -> Self {
+        Self {
+            notefield: NotefieldViewOverride::default(),
+            hide_gameplay_hud: false,
+            smx_overlay_alpha: 1.0,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -602,10 +615,13 @@ const TRANSITION_IN_DURATION: f32 = 2.0;
 /// stage-text in-transition (`ScreenGameplay in/default.lua` calls
 /// `Hide` immediately when `SL.Global.GameplayReloadCheck` is true). Use a
 /// short fade-from-black so the new gameplay frame doesn't pop in.
-const TRANSITION_IN_RESTART_DURATION: f32 = 0.2;
+pub const TRANSITION_IN_RESTART_DURATION: f32 = 0.2;
+/// Duration of the black-to-transparent fade that ends the in-transition.
+/// The black holds solid for (TRANSITION_IN_DURATION - this), then lifts over this window.
+pub const TRANSITION_IN_BLACK_FADE_DURATION: f32 = 0.6;
 // Simply Love ScreenGameplay out.lua: sleep(0.5), linear(1.0).
-const TRANSITION_OUT_DELAY: f32 = 0.5;
-const TRANSITION_OUT_FADE_DURATION: f32 = 1.0;
+pub const TRANSITION_OUT_DELAY: f32 = 0.5;
+pub const TRANSITION_OUT_FADE_DURATION: f32 = 1.0;
 const TRANSITION_OUT_DURATION: f32 = TRANSITION_OUT_DELAY + TRANSITION_OUT_FADE_DURATION;
 
 pub struct DensityGraphRenderState {
@@ -10570,7 +10586,18 @@ pub fn push_actors(
                         Some((player_side, field_x - half_w, field_x + half_w));
                 }
             }
+            // Combine shell-transition alpha (FadingIn/FadingOut) with the
+            // in-gameplay exit animation alpha. The exit animation runs under
+            // Idle shell state (NavigateNoFade paths: restart, back-out) so
+            // view.smx_overlay_alpha alone doesn't cover it.
+            let exit_alpha = state
+                .exit_prompt_state()
+                .exit_transition
+                .as_ref()
+                .map_or(1.0, |exit| 1.0 - exit_transition_alpha(exit));
+            let smx_overlay_alpha = view.smx_overlay_alpha.min(exit_alpha);
             if state.profiles()[0].smx_fsr_display || state.profiles()[1].smx_fsr_display {
+                let before = actors.len();
                 smx_profile::time_draw(|| {
                     push_smx_sensor_display(
                         &mut actors,
@@ -10580,10 +10607,16 @@ pub fn push_actors(
                         is_centered_single,
                     )
                 });
+                if smx_overlay_alpha < 1.0 {
+                    for a in &mut actors[before..] {
+                        a.mul_alpha(smx_overlay_alpha);
+                    }
+                }
             }
             if state.profiles()[0].smx_pad_input_display
                 || state.profiles()[1].smx_pad_input_display
             {
+                let before = actors.len();
                 push_smx_pad_input_display(
                     &mut actors,
                     state,
@@ -10591,6 +10624,11 @@ pub fn push_actors(
                     is_doubles,
                     is_centered_single,
                 );
+                if smx_overlay_alpha < 1.0 {
+                    for a in &mut actors[before..] {
+                        a.mul_alpha(smx_overlay_alpha);
+                    }
+                }
             }
         }
 

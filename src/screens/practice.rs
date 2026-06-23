@@ -669,6 +669,7 @@ fn practice_view(state: &State) -> gameplay_screen::ActorViewOverride {
     gameplay_screen::ActorViewOverride {
         notefield,
         hide_gameplay_hud: true,
+        ..Default::default()
     }
 }
 
