@@ -54,7 +54,7 @@ resolver = "3"
 # `version.workspace = true`, so `env!("CARGO_PKG_VERSION")` and
 # `deadsync_version::current()` always agree. Bump THIS line on release.
 [workspace.package]
-version = "0.4.1529"
+version = "0.4.1530"
 
 [[bin]]
 name = "compose_bench"
@@ -251,6 +251,10 @@ objc2-foundation = "0.3.2"
 # Win7-compatible overlapped wait sequence.
 hidapi = { path = "vendor/hidapi-win7" }
 dirs-sys = { path = "vendor/dirs-sys-win7" }
+# rfd's Windows backend imports CoTaskMemFree from combase.dll through
+# windows-sys 0.61. Windows 7 only provides that API from ole32.dll, so the
+# local patch resolves it at runtime.
+rfd = { path = "vendor/rfd-win7" }
 
 [build-dependencies]
 fs_extra = "1.3.0"

@@ -1122,7 +1122,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.4.1529"
+version = "0.4.1530"
 dependencies = [
  "bincode",
  "bitflags 2.13.0",
@@ -1481,7 +1481,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.4.1529"
+version = "0.4.1530"
 dependencies = [
  "log",
  "semver",
@@ -4181,8 +4181,6 @@ checksum = "19b30a45b0cd0bcca8037f3d0dc3421eaf95327a17cad11964fb8179b4fc4832"
 [[package]]
 name = "rfd"
 version = "0.17.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20dafead71c16a34e1ff357ddefc8afc11e7d51d6d2b9fbd07eaa48e3e540220"
 dependencies = [
  "block2 0.6.2",
  "dispatch2",
