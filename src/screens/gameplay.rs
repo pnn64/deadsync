@@ -612,9 +612,12 @@ const TRANSITION_IN_DURATION: f32 = 2.0;
 /// `Hide` immediately when `SL.Global.GameplayReloadCheck` is true). Use a
 /// short fade-from-black so the new gameplay frame doesn't pop in.
 const TRANSITION_IN_RESTART_DURATION: f32 = 0.2;
+/// Duration of the black-to-transparent fade that ends the in-transition.
+/// The black holds solid for (TRANSITION_IN_DURATION - this), then lifts over this window.
+pub const TRANSITION_IN_BLACK_FADE_DURATION: f32 = 0.6;
 // Simply Love ScreenGameplay out.lua: sleep(0.5), linear(1.0).
-const TRANSITION_OUT_DELAY: f32 = 0.5;
-const TRANSITION_OUT_FADE_DURATION: f32 = 1.0;
+pub const TRANSITION_OUT_DELAY: f32 = 0.5;
+pub const TRANSITION_OUT_FADE_DURATION: f32 = 1.0;
 const TRANSITION_OUT_DURATION: f32 = TRANSITION_OUT_DELAY + TRANSITION_OUT_FADE_DURATION;
 
 pub struct DensityGraphRenderState {
