@@ -830,7 +830,7 @@ the keys listed here are read; others are ignored).
 
 **Example:**
 
-```toml
+```ini
 # gifpack.ini -- place in assets/smx-pad-lights/dance/<your-pack>/
 # (and optionally in smx-judge-lights/dance/<your-pack>/)
 
@@ -839,7 +839,7 @@ fallback = "basic"
 
 This tells DeadSync: if a role or judgement GIF is not found in this pack,
 fall through to the `basic` pack before giving up. Without this line the pack
-stands alone -- a missing GIF simply shows nothing.
+stands alone -- a missing GIF shows solid black.
 
 **The `basic` pack never needs a `gifpack.ini`.** It is the terminal fallback
 and has no further pack to fall back to.
@@ -848,6 +848,37 @@ and has no further pack to fall back to.
 `gifpack.ini` in `smx-pad-lights/dance/<pack>/` controls background fallback;
 one in `smx-judge-lights/dance/<pack>/` controls judgement fallback. You can
 declare different fallbacks (or none) for each tree.
+
+**When to use fallback:** The most common use case is wanting to replace just a
+handful of GIFs from an existing pack. Instead of copying the whole pack into
+your own folder, create a new pack directory with only the GIFs you want to
+replace and point its `gifpack.ini` fallback at the source pack. DeadSync will
+use your overrides for the roles you've provided and pull the rest from the
+source pack.
+
+Example: you like `cool-pack` but want a different `gameplay` background.
+
+```
+smx-pad-lights/
+  dance/
+    cool-pack/          <- the pack you like; no gifpack.ini (or fallback = "none")
+      gameplay_25.gif
+      results_25.gif
+      default_25.gif
+      ...
+    my-overrides/
+      gifpack.ini       <- fallback = "cool-pack"
+      gameplay_25.gif   <- your replacement; everything else comes from cool-pack
+```
+
+Select `my-overrides` in the options and DeadSync serves your `gameplay_25.gif`
+for the gameplay role and every other role from `cool-pack`.
+
+**Combining GIFs from more than two packs** is not directly supported: `fallback`
+is a single value pointing to one pack, so the chain is always at most two deep
+(your pack, then one fallback). If you want to mix GIFs from several different
+packs, create your own custom pack directory and copy the files you want into it
+directly.
 
 ---
 
