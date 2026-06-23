@@ -644,13 +644,13 @@ DeadSync looks for GIFs in two directory trees rooted at the app's assets path:
 assets/
   smx-pad-lights/       <- full-pad background GIFs
     common/
-      basic/            <- shipped default pack
+      common/           <- shipped default pack
     dance/
       <your-pack>/      <- user-authored packs
         gifpack.ini    <- optional pack metadata (see §11e)
   smx-judge-lights/     <- per-panel judgement/press GIFs
     common/
-      basic/
+      common/
     dance/
       <your-pack>/
         gifpack.ini
@@ -716,8 +716,8 @@ screen. DeadSync resolves the background through this chain for each screen:
 5. Global registry: selected pack's `default`
 6. If the selected pack declares a fallback: fallback pack's `default`
 
-If no pack is selected (or the `basic` pack is selected), steps 3 and 5 use
-`basic` directly and steps 4 and 6 are skipped.
+If no pack is selected (or the `common` pack is selected), steps 3 and 5 use
+`common` directly and steps 4 and 6 are skipped.
 
 If a pack has no `gifpack.ini` or does not declare a fallback, steps 4 and 6
 are skipped and a missing role shows **solid black** on the pad. This is not
@@ -826,7 +826,7 @@ the keys listed here are read; others are ignored).
 
 | Key | Values | Effect |
 | --- | --- | --- |
-| `fallback` | `"basic"`, any pack name, or `"none"` | When a GIF is not found in this pack, try the named pack before giving up. Omitting the key or setting it to `"none"` means no fallback: a missing GIF shows nothing for that event. |
+| `fallback` | `"common"`, any pack name, or `"none"` | When a GIF is not found in this pack, try the named pack before giving up. Omitting the key or setting it to `"none"` means no fallback: a missing GIF shows nothing for that event. |
 
 **Example:**
 
@@ -834,14 +834,14 @@ the keys listed here are read; others are ignored).
 # gifpack.ini -- place in assets/smx-pad-lights/dance/<your-pack>/
 # (and optionally in smx-judge-lights/dance/<your-pack>/)
 
-fallback = "basic"
+fallback = "common"
 ```
 
 This tells DeadSync: if a role or judgement GIF is not found in this pack,
-fall through to the `basic` pack before giving up. Without this line the pack
+fall through to the `common` pack before giving up. Without this line the pack
 stands alone -- a missing GIF shows solid black.
 
-**The `basic` pack never needs a `gifpack.ini`.** It is the terminal fallback
+**The `common` pack never needs a `gifpack.ini`.** It is the terminal fallback
 and has no further pack to fall back to.
 
 **Fallback applies to both background and judgement packs independently.** A

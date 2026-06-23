@@ -5,7 +5,7 @@
 //! under `assets/smx-pad-lights/` (full-pad backgrounds) and
 //! `assets/smx-judge-lights/` (per-panel judgements) into an immutable
 //! registry at startup or options time. Each root holds pack directories
-//! under `common/` (shipped; `common/basic` is the default set) and `dance/`
+//! under `common/` (shipped; `common/common` is the default set) and `dance/`
 //! (user packs). The lighting worker only ever holds `Arc` handles into the
 //! registry, so no filesystem access or decoding can happen on the gameplay
 //! hot path.
@@ -14,7 +14,7 @@
 //! pack-level metadata. Currently only one key is recognised:
 //!
 //! ```toml
-//! fallback = "basic"   # fall back to this pack when a gif is missing
+//! fallback = "common"   # fall back to this pack when a gif is missing
 //! ```
 //!
 //! When a pack has no `gifpack.ini`, or the file omits `fallback`, missing
@@ -418,8 +418,8 @@ fn parse_beats(tail: &str) -> Option<BeatSpec> {
 
 // Registry
 
-/// The shipped default pack (`common/basic`), the end of every fallback chain.
-pub const DEFAULT_PACK: &str = "basic";
+/// The shipped default pack (`common/common`), the end of every fallback chain.
+pub const DEFAULT_PACK: &str = "common";
 
 /// Identity of one GIF in the registry. Every GIF lives in a named pack
 /// directory under `common/` (shipped) or `dance/` (user); a user pack
@@ -753,7 +753,7 @@ fn load_pack_fallbacks(dir: &Path) -> HashMap<String, String> {
 }
 
 /// Visit every `.gif` in `<dir>/common/<pack>/` and `<dir>/dance/<pack>/`.
-/// `common/` holds shipped packs (`basic` at minimum), `dance/` user packs;
+/// `common/` holds shipped packs (`common` at minimum), `dance/` user packs;
 /// scanning `common` first lets a user pack shadow a shipped one of the same
 /// name.
 fn for_each_gif(dir: &Path, mut visit: impl FnMut(&str, &Path)) {
@@ -1100,7 +1100,7 @@ mod tests {
         assert!(
             reg.background(Some("foo"), "default", PadSize::Leds25, None)
                 .is_none(),
-            "no fallback => None, not basic"
+            "no fallback => None, not common"
         );
     }
 
@@ -1109,18 +1109,18 @@ mod tests {
         let mut reg = GifRegistry::default();
         reg.backgrounds
             .insert(key(DEFAULT_PACK, "default", PadSize::Leds25), dummy_variants());
-        // "foo" pack declares fallback = "basic".
+        // "foo" pack declares fallback = "common".
         reg.pack_fallbacks
             .insert("foo".to_owned(), DEFAULT_PACK.to_owned());
 
-        // "foo" has no "default" gif, so it falls through to basic.
+        // "foo" has no "default" gif, so it falls through to common.
         let got = reg
             .background(Some("foo"), "default", PadSize::Leds25, None)
             .unwrap();
-        let basic = reg.backgrounds[&key(DEFAULT_PACK, "default", PadSize::Leds25)][0]
+        let common = reg.backgrounds[&key(DEFAULT_PACK, "default", PadSize::Leds25)][0]
             .anim
             .clone();
-        assert!(Arc::ptr_eq(&got, &basic));
+        assert!(Arc::ptr_eq(&got, &common));
 
         // "foo" does have a gif: own gif wins over the fallback.
         reg.backgrounds
@@ -1140,7 +1140,7 @@ mod tests {
         reg.backgrounds
             .insert(key(DEFAULT_PACK, "default", PadSize::Leds25), dummy_variants());
         assert!(reg.background(None, "default", PadSize::Leds25, None).is_some());
-        // Selecting basic by name is the same as selecting nothing.
+        // Selecting common by name is the same as selecting nothing.
         assert!(
             reg.background(Some(DEFAULT_PACK), "default", PadSize::Leds25, None)
                 .is_some()
@@ -1215,9 +1215,9 @@ mod tests {
     fn load_scans_common_and_dance_packs() {
         let root =
             std::env::temp_dir().join(format!("deadsync-smx-gifs-test-{}", std::process::id()));
-        let bg_basic = root.join("smx-pad-lights/common/basic");
+        let bg_basic = root.join("smx-pad-lights/common/common");
         let bg_user = root.join("smx-pad-lights/dance/mypack");
-        let j_basic = root.join("smx-judge-lights/common/basic");
+        let j_basic = root.join("smx-judge-lights/common/common");
         fs::create_dir_all(&bg_basic).unwrap();
         fs::create_dir_all(&bg_user).unwrap();
         fs::create_dir_all(&j_basic).unwrap();
@@ -1231,8 +1231,8 @@ mod tests {
         fs::write(bg_basic.join("notes.txt"), b"not a gif").unwrap();
         fs::write(bg_basic.join("broken_25.gif"), b"garbage").unwrap();
         fs::write(j_basic.join("badname.gif"), &panel).unwrap();
-        // gifpack.ini: mypack declares basic as its fallback.
-        fs::write(bg_user.join("gifpack.ini"), b"fallback = \"basic\"\n").unwrap();
+        // gifpack.ini: mypack declares common as its fallback.
+        fs::write(bg_user.join("gifpack.ini"), b"fallback = \"common\"\n").unwrap();
 
         let reg = GifRegistry::load(&root);
         fs::remove_dir_all(&root).unwrap();
@@ -1251,11 +1251,11 @@ mod tests {
         assert_eq!(reg.background_packs(), vec!["mypack".to_owned()]);
         assert!(reg.judgement_packs().is_empty());
 
-        // mypack declares fallback = basic, so a missing role falls through.
+        // mypack declares fallback = common, so a missing role falls through.
         assert!(
             reg.background(Some("mypack"), "default", PadSize::Leds25, None)
                 .is_some(),
-            "mypack fallback to basic should resolve 'default'"
+            "mypack fallback to common should resolve 'default'"
         );
         // A pack with no gifpack.ini does not fall back.
         assert!(
