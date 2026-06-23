@@ -174,12 +174,7 @@ where
             return;
         }
 
-        let max_window_ix = match error_bar_trim {
-            GameplayErrorBarTrim::Off => 4,
-            GameplayErrorBarTrim::Fantastic => 0,
-            GameplayErrorBarTrim::Excellent => 1,
-            GameplayErrorBarTrim::Great => 2,
-        };
+        let max_window_ix = gameplay_error_bar_trim_max_window_ix(error_bar_trim);
         let max_offset_s = self.timing_runtime.timing_profile.windows_s[max_window_ix];
         let clamped_offset_s = if max_offset_s.is_finite() && max_offset_s > 0.0 {
             offset_s.clamp(-max_offset_s, max_offset_s)

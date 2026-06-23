@@ -4102,6 +4102,26 @@ mod tests {
     }
 
     #[test]
+    fn error_bar_trim_max_window_indices_match_profile_labels() {
+        assert_eq!(
+            gameplay_error_bar_trim_max_window_ix(GameplayErrorBarTrim::Off),
+            4
+        );
+        assert_eq!(
+            gameplay_error_bar_trim_max_window_ix(GameplayErrorBarTrim::Fantastic),
+            0
+        );
+        assert_eq!(
+            gameplay_error_bar_trim_max_window_ix(GameplayErrorBarTrim::Excellent),
+            1
+        );
+        assert_eq!(
+            gameplay_error_bar_trim_max_window_ix(GameplayErrorBarTrim::Great),
+            2
+        );
+    }
+
+    #[test]
     fn error_bar_push_tick_overwrites_single_or_rotates_multi() {
         let mut single = [None; 2];
         let mut single_next = 1;
@@ -6335,6 +6355,29 @@ mod tests {
         for easing in ["inBack", "outInBack", "inElastic", "outInElastic"] {
             assert!(song_lua_ease_factor(Some(easing), 0.35, Some(1.0), Some(0.2)).is_finite());
         }
+    }
+
+    #[test]
+    fn song_lua_column_offsets_hold_after_ease_until_cutoff() {
+        let windows = [SongLuaColumnOffsetWindowRuntime {
+            column: 2,
+            start_second: 1.0,
+            end_second: 1.5,
+            sustain_end_second: 3.0,
+            from_y: 33.75,
+            to_y: 0.0,
+            easing: Some("linear".to_string()),
+            opt1: None,
+            opt2: None,
+        }];
+
+        assert!(
+            song_lua_column_offset_window_value(&windows[0], 1.25)
+                .is_some_and(|value| (value - 16.875).abs() <= 0.001)
+        );
+        assert!(song_lua_column_y_offset(&windows, 2, 2.0).abs() <= 0.001);
+        assert_eq!(song_lua_column_y_offset(&windows, 1, 2.0), 0.0);
+        assert_eq!(song_lua_column_y_offset(&windows, 2, 3.01), 0.0);
     }
 
     #[test]
@@ -11908,6 +11951,29 @@ mod tests {
         assert_eq!(cues[0].columns[0].is_mine, true);
         assert_eq!(cues[0].columns[1].column, 2);
         assert_eq!(cues[0].columns[1].is_mine, false);
+    }
+
+    #[test]
+    fn active_column_cue_returns_latest_started_cue() {
+        let cues = [
+            ColumnCue {
+                start_time: 1.0,
+                duration: 0.5,
+                columns: Vec::new(),
+            },
+            ColumnCue {
+                start_time: 3.0,
+                duration: 0.5,
+                columns: Vec::new(),
+            },
+        ];
+
+        assert!(active_column_cue(&[], 2.0).is_none());
+        assert!(active_column_cue(&cues, 0.99).is_none());
+        assert_eq!(active_column_cue(&cues, 1.0).unwrap().start_time, 1.0);
+        assert_eq!(active_column_cue(&cues, 2.0).unwrap().start_time, 1.0);
+        assert_eq!(active_column_cue(&cues, 3.0).unwrap().start_time, 3.0);
+        assert_eq!(active_column_cue(&cues, 9.0).unwrap().start_time, 3.0);
     }
 
     fn xover_anno(beat: f32, note_count: u8, column_mask: u8, is_crossover: bool) -> CrossoverRow {

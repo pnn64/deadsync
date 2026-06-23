@@ -1,11 +1,4 @@
-﻿#[derive(Clone, Copy, Debug)]
-pub struct NoteCountStat {
-    pub beat: f32,
-    pub notes_lower: usize,
-    pub notes_upper: usize,
-}
-
-#[derive(Clone, Debug)]
+﻿#[derive(Clone, Debug)]
 pub struct GameplayNoteCountStatsState {
     stats: [Vec<NoteCountStat>; MAX_PLAYERS],
 }

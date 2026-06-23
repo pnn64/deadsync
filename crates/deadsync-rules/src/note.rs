@@ -140,6 +140,13 @@ pub struct Note {
     pub can_be_judged: bool,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct NoteCountStat {
+    pub beat: f32,
+    pub notes_lower: usize,
+    pub notes_upper: usize,
+}
+
 #[inline(always)]
 fn count_total_steps_for_range(notes: &[Note], note_range: (usize, usize)) -> u32 {
     let (start, end) = note_range;

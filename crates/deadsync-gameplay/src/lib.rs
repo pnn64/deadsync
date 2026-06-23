@@ -15,6 +15,7 @@ use deadsync_input::{
 };
 use deadsync_rules::combo::{self, ComboState, ComboUpdate};
 use deadsync_rules::judgment::{self, JudgeGrade, Judgment, TimingWindow};
+pub use deadsync_rules::note::NoteCountStat;
 use deadsync_rules::note::{
     HoldData, HoldResult, MAX_HOLD_LIFE, MineResult, Note, TIMING_WINDOW_SECONDS_HOLD,
     TIMING_WINDOW_SECONDS_ROLL, advance_hold_last_held, advance_hold_life_ns,

@@ -53,6 +53,16 @@ pub enum GameplayErrorBarTrim {
     Great,
 }
 
+#[inline(always)]
+pub const fn gameplay_error_bar_trim_max_window_ix(trim: GameplayErrorBarTrim) -> usize {
+    match trim {
+        GameplayErrorBarTrim::Off => 4,
+        GameplayErrorBarTrim::Fantastic => 0,
+        GameplayErrorBarTrim::Excellent => 1,
+        GameplayErrorBarTrim::Great => 2,
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct GameplayErrorBarOptions {
     pub mask_bits: u8,

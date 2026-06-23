@@ -241,6 +241,40 @@ pub fn song_lua_ease_factor(
     }
 }
 
+#[inline(always)]
+pub fn song_lua_column_offset_window_value(
+    window: &SongLuaColumnOffsetWindowRuntime,
+    now: f32,
+) -> Option<f32> {
+    const EPS: f32 = 1.0e-4;
+    if now + EPS < window.start_second || now > window.sustain_end_second + EPS {
+        return None;
+    }
+    if now + EPS >= window.end_second {
+        return Some(window.to_y);
+    }
+    let duration = window.end_second - window.start_second;
+    if duration <= EPS {
+        return Some(window.to_y);
+    }
+    let t = ((now - window.start_second) / duration).clamp(0.0, 1.0);
+    let factor = song_lua_ease_factor(window.easing.as_deref(), t, window.opt1, window.opt2);
+    Some(window.from_y + (window.to_y - window.from_y) * factor)
+}
+
+pub fn song_lua_column_y_offset(
+    windows: &[SongLuaColumnOffsetWindowRuntime],
+    local_col: usize,
+    now: f32,
+) -> f32 {
+    windows
+        .iter()
+        .filter(|window| window.column == local_col)
+        .filter_map(|window| song_lua_column_offset_window_value(window, now))
+        .last()
+        .unwrap_or(0.0)
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct GameplayReceptorGlowBehavior {
     pub press_duration: f32,

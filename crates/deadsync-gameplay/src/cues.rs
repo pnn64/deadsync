@@ -44,6 +44,15 @@ pub struct ColumnCue {
     pub columns: Vec<ColumnCueColumn>,
 }
 
+#[inline(always)]
+pub fn active_column_cue(cues: &[ColumnCue], current_time: f32) -> Option<&ColumnCue> {
+    if cues.is_empty() {
+        return None;
+    }
+    let idx = cues.partition_point(|cue| cue.start_time <= current_time);
+    idx.checked_sub(1).and_then(|i| cues.get(i))
+}
+
 // Lead-in/out fade applied to every crossover cue.
 pub const CROSSOVER_CUE_FADE_SECONDS: f32 = 0.075;
 

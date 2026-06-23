@@ -22,25 +22,70 @@ use deadsync_core::song_time::SongTimeNs;
 use deadsync_core::timing::{beat_to_note_row, note_row_to_beat};
 use deadsync_gameplay::{
     AccelEffects, AppearanceEffects, COMBO_HUNDRED_MILESTONE_DURATION,
-    COMBO_THOUSAND_MILESTONE_DURATION, ColumnCue, ComboMilestoneKind, FantasticWindowOptions,
-    HELD_MISS_TOTAL_DURATION, HOLD_JUDGMENT_TOTAL_DURATION, NoteCountStat, PerspectiveEffects,
-    PlayerRuntime, RECEPTOR_Y_OFFSET_FROM_CENTER, RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE,
-    ScrollEffects, SongLuaColumnOffsetWindowRuntime, VisualEffects, blue_fantastic_window_ms,
-    column_flash_duration, hold_explosion_active, hold_explosion_enabled_for_options,
-    hold_head_render_flags, let_go_head_beat, perspective_effects_from_profile, scroll_receptor_y,
-    song_lua_ease_factor, song_lua_note_hidden, spacing_multiplier_for_percent,
+    COMBO_THOUSAND_MILESTONE_DURATION, ComboMilestoneKind, FantasticWindowOptions,
+    GameplayErrorBarTrim, HELD_MISS_TOTAL_DURATION, HOLD_JUDGMENT_TOTAL_DURATION,
+    PerspectiveEffects, PlayerRuntime, RECEPTOR_Y_OFFSET_FROM_CENTER,
+    RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, ScrollEffects, VisualEffects, active_column_cue,
+    blue_fantastic_window_ms, column_flash_duration, gameplay_error_bar_trim_max_window_ix,
+    hold_explosion_active, hold_explosion_enabled_for_options, hold_head_render_flags,
+    let_go_head_beat, perspective_effects_from_profile, scroll_receptor_y,
+    song_lua_column_y_offset, song_lua_note_hidden, spacing_multiplier_for_percent,
 };
 use deadsync_notefield::{
-    bottom_cap_uv_window, clipped_hold_body_bounds, hold_body_segment_budget, hold_draw_span,
-    hold_segment_pose, hold_tail_cap_bounds,
+    AccelYParams, COLUMN_CUE_Y_OFFSET, DISPLAY_TURN_BLENDER, DISPLAY_TURN_LEFT,
+    DISPLAY_TURN_LR_MIRROR, DISPLAY_TURN_MIRROR, DISPLAY_TURN_RANDOM, DISPLAY_TURN_RIGHT,
+    DISPLAY_TURN_SHUFFLE, DISPLAY_TURN_UD_MIRROR, GameplayModsAttackMode, GameplayModsTextParams,
+    HudLayoutOffsets, HudLayoutParams, HudLayoutYs, JudgmentTiltParams,
+    LayoutMiniIndicatorPosition, MiniIndicatorColorStyle, MiniIndicatorMode, MiniIndicatorProgress,
+    MiniIndicatorScoreType, MiniIndicatorSize, MiniIndicatorSubtractiveDisplay, NoteAlphaParams,
+    NoteXParams, TapJudgmentRowsParams, TornadoBounds, VisualEffectParams, ZmodComboColorParams,
+    ZmodComboColorStyle, ZmodLayoutParams, ZmodMeasureCounterText, ZmodMiniIndicatorParams,
+    ZmodMiniIndicatorText, appearance_needs_rows, appearance_note_actor_alpha,
+    appearance_note_glow, apply_accel_y as crate_apply_accel_y,
+    apply_accel_y_with_peak as crate_apply_accel_y_with_peak, average_error_bar_mini_scale,
+    beat_factor, beat_scroll_travel, bottom_cap_uv_window, clamp_rounded_i16,
+    clipped_hold_body_bounds, column_cue_alpha, column_cue_height, column_cue_reverse_top_y,
+    column_flash_alpha, column_flash_color, column_flash_height, column_flash_layout,
+    column_flash_reverse_top_y, combo_actor_zoom, compute_invert_distances, compute_tornado_bounds,
+    crossover_cue_height, edit_bar_candidate_step_rows, edit_bar_scroll_speed,
+    edit_beat_bar_info_for_row, edit_beat_scroll_travel,
+    effective_mini_value as crate_effective_mini_value, error_bar_boundaries_s,
+    error_bar_color_for_window, error_bar_flash_alpha, error_bar_text_scalable_zoom,
+    error_bar_tick_alpha, field_effect_height as field_effect_height_for_screen,
+    fill_lane_col_offsets, find_first_displayed_beat, find_last_displayed_beat,
+    for_each_visible_hold_index, for_each_visible_note_index,
+    gameplay_mods_text as crate_gameplay_mods_text, held_miss_zoom, hold_body_bottom_for_tail_cap,
+    hold_body_segment_budget, hold_draw_span, hold_glow_color,
+    hold_indicator_column_x as crate_hold_indicator_column_x, hold_overlaps_visible_window,
+    hold_segment_pose, hold_tail_cap_bounds, hud_layout_ys as crate_hud_layout_ys, hud_y,
+    itg_actor_glow_alpha, judgment_actor_zoom,
+    judgment_tilt_rotation_deg as crate_judgment_tilt_rotation_deg, maybe_flip_uv_vert,
+    maybe_mirror_uv_horiz_for_reverse_flipped, mine_hides_after_resolution, mod_percent_key,
+    move_col_extra, note_world_z_for_bumpy, note_x_offset as crate_note_x_offset,
+    notefield_view_proj, offset_center, player_metric_y, quantize_centi_i32, quantize_centi_u32,
+    receptor_row_center as crate_receptor_row_center, scale_cap_to_arrow, scale_effect_size,
+    scale_sprite_to_arrow, scaled_edit_bar_alpha, smoothstep01, song_time_ns_delta_seconds,
+    song_time_ns_to_seconds, stream_segment_index_exclusive_end,
+    tap_judgment_rows as crate_tap_judgment_rows, timing_window_from_num, tipsy_y_extra,
+    top_cap_rotation_deg, translated_uv_rect, visual_arrow_effect_zoom,
+    visual_confusion_rotation_deg,
+    visual_effect_params_for_col as crate_visual_effect_params_for_col,
+    visual_hold_body_needs_z_buffer, visual_note_rotation_z, visual_pulse_zoom_for_y,
+    visual_tiny_zoom, visual_use_legacy_hold_sprites, zmod_broken_run_counter_text,
+    zmod_broken_run_end, zmod_broken_run_segment,
+    zmod_combo_quint_active as crate_zmod_combo_quint_active,
+    zmod_measure_counter_text as crate_zmod_measure_counter_text, zmod_mini_indicator_output,
+    zmod_mini_indicator_zoom as crate_zmod_mini_indicator_zoom, zmod_percent_from_points,
+    zmod_resolved_combo_color as crate_zmod_resolved_combo_color,
+    zmod_resolved_mini_indicator_mode, zmod_run_timer_index,
+    zmod_static_combo_color as crate_zmod_static_combo_color, zmod_stream_prog_completion_for_beat,
 };
 use deadsync_profile as profile_data;
-use deadsync_rules::judgment::{self, HOLD_SCORE_HELD, JudgeGrade, Judgment, TimingWindow};
-use deadsync_rules::note::{HoldResult, MineResult, Note};
+use deadsync_rules::judgment::{self, HOLD_SCORE_HELD, JudgeGrade, Judgment};
+use deadsync_rules::note::{HoldResult, Note};
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::stream::StreamSegment;
-use deadsync_rules::timing::{self, TimeSignatureSegment, default_time_signature};
-use glam::{Mat4 as Matrix4, Vec3 as Vector3};
+use glam::Mat4 as Matrix4;
 use std::array::from_fn;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -77,21 +122,9 @@ const HOLD_JUDGMENT_Y_OFFSET_FROM_CENTER: f32 = -90.0; // Mirrors Simply Love me
 const HOLD_JUDGMENT_Y_REVERSE_OFFSET_FROM_CENTER: f32 = 90.0;
 const TAP_JUDGMENT_OFFSET_FROM_CENTER: f32 = 30.0; // From _fallback JudgmentTransformCommand
 const COMBO_OFFSET_FROM_CENTER: f32 = 30.0; // From _fallback ComboTransformCommand (non-centered)
-const COLUMN_CUE_Y_OFFSET: f32 = 80.0;
-// 270px shorter than mine column cues so the flash clears the upcoming step
-// rather than spanning the whole lane.
-const CROSSOVER_CUE_HEIGHT_REDUCTION: f32 = 270.0;
 const COLUMN_CUE_TEXT_NORMAL_Y: f32 = 80.0;
 const COLUMN_CUE_TEXT_REVERSE_Y: f32 = 260.0;
-const COLUMN_CUE_FADE_TIME: f32 = 0.15;
 const COLUMN_CUE_BASE_ALPHA: f32 = 0.12;
-const COLUMN_FLASH_NORMAL_ALPHA: f32 = 0.66;
-const COLUMN_FLASH_DIMMED_ALPHA: f32 = 0.3;
-const COLUMN_FLASH_DEFAULT_Y_OFFSET: f32 = 80.0;
-const COLUMN_FLASH_COMPACT_Y_OFFSET: f32 = 70.0;
-const COLUMN_FLASH_COMPACT_HEIGHT_TRIM: f32 = 270.0;
-const COLUMN_FLASH_DEFAULT_FADE: f32 = 0.333;
-const COLUMN_FLASH_COMPACT_FADE: f32 = 0.2;
 const LOVE_HOLD_JUDGMENT_NATIVE_FRAME_HEIGHT: f32 = 140.0; // Each frame in Love 1x2 (doubleres).png is 140px tall
 const HOLD_JUDGMENT_FINAL_HEIGHT: f32 = 32.0; // Matches Simply Love's final on-screen size
 const HOLD_JUDGMENT_INITIAL_HEIGHT: f32 = HOLD_JUDGMENT_FINAL_HEIGHT * 0.8; // Mirrors 0.4->0.5 zoom ramp in metrics
@@ -113,7 +146,6 @@ const ERROR_BAR_TICK_WIDTH: f32 = 2.0;
 const ERROR_BAR_TICK_DUR_COLORFUL: f32 = 0.5;
 const ERROR_BAR_TICK_DUR_MONOCHROME: f32 = 0.75;
 const ERROR_BAR_AVERAGE_TICK_EXTRA_H: f32 = 75.0;
-const ERROR_BAR_SEG_ALPHA_BASE: f32 = 0.3;
 const ERROR_BAR_MONO_BG_ALPHA: f32 = 0.5;
 const ERROR_BAR_LINE_ALPHA: f32 = 0.3;
 const ERROR_BAR_LINES_FADE_START_S: f32 = 2.5;
@@ -128,7 +160,6 @@ const DISPLAY_MODS_LINE_STEP: f32 = 15.0;
 const DISPLAY_MODS_WARNING_W: f32 = 90.0;
 const DISPLAY_MODS_WARNING_H: f32 = 30.0;
 const DISPLAY_MODS_WARNING_ZOOM: f32 = 1.5;
-const DISPLAY_MODS_OPTION_SPACE: char = '\u{00A0}';
 
 const ERROR_BAR_COLORFUL_TICK_RGBA: [f32; 4] = color::rgba_hex("#b20000");
 const ERROR_BAR_LONG_AVG_TICK_RGBA: [f32; 4] = color::rgba_hex("#0000ff");
@@ -144,30 +175,20 @@ const TEXT_CACHE_LIMIT: usize = 8192;
 const COMBO_PREWARM_CAP: u32 = 2048;
 const MEASURE_PREWARM_CAP: i32 = 64;
 const RUN_TIMER_PREWARM_CAP_S: i32 = 600;
-const MAX_NOTES_AFTER: usize = 64;
 
 // Visual Feedback
 const SHOW_COMBO_AT: u32 = 4; // From Simply Love metrics
 
 #[inline(always)]
 fn judgment_tilt_rotation_deg(profile: &profile_data::Profile, judgment: &Judgment) -> f32 {
-    if !profile.judgment_tilt || judgment.grade == JudgeGrade::Miss {
-        return 0.0;
-    }
-    let offset_ms = judgment.time_error_ms;
-    if !offset_ms.is_finite() || !profile.tilt_multiplier.is_finite() {
-        return 0.0;
-    }
-    let min_ms = profile.tilt_min_threshold_ms as f32;
-    let max_ms = profile
-        .tilt_max_threshold_ms
-        .max(profile.tilt_min_threshold_ms) as f32;
-    let active_ms = offset_ms.abs().min(max_ms) - min_ms;
-    if active_ms <= 0.0 {
-        return 0.0;
-    }
-    let dir = if offset_ms < 0.0 { 1.0 } else { -1.0 };
-    dir * active_ms * 0.3 * profile.tilt_multiplier
+    crate_judgment_tilt_rotation_deg(JudgmentTiltParams {
+        enabled: profile.judgment_tilt,
+        grade: judgment.grade,
+        time_error_ms: judgment.time_error_ms,
+        min_threshold_ms: profile.tilt_min_threshold_ms as f32,
+        max_threshold_ms: profile.tilt_max_threshold_ms as f32,
+        multiplier: profile.tilt_multiplier,
+    })
 }
 
 // Z-order layers for key gameplay visuals (higher draws on top)
@@ -204,41 +225,6 @@ const Z_ERROR_BAR_TEXT_BACK: i16 = 90;
 // Arrow Cloud/zmod load Average.lua from ScreenGameplay underlay, below the
 // engine Player/NoteField. Keep it behind receptors even with front judgments.
 const Z_ERROR_BAR_AVERAGE: i16 = Z_ERROR_BAR_LINE_BACK;
-
-const BLINK_MOD_FREQUENCY: f32 = 0.3333;
-const BOOST_MOD_MIN_CLAMP: f32 = -400.0;
-const BOOST_MOD_MAX_CLAMP: f32 = 400.0;
-const BRAKE_MOD_MIN_CLAMP: f32 = -400.0;
-const BRAKE_MOD_MAX_CLAMP: f32 = 400.0;
-const WAVE_MOD_MAGNITUDE: f32 = 20.0;
-const WAVE_MOD_HEIGHT: f32 = 38.0;
-const EXPAND_MULTIPLIER_FREQUENCY: f32 = 3.0;
-const EXPAND_MULTIPLIER_SCALE_FROM_LOW: f32 = -1.0;
-const EXPAND_MULTIPLIER_SCALE_FROM_HIGH: f32 = 1.0;
-const EXPAND_MULTIPLIER_SCALE_TO_LOW: f32 = 0.75;
-const EXPAND_MULTIPLIER_SCALE_TO_HIGH: f32 = 1.75;
-const EXPAND_SPEED_SCALE_FROM_LOW: f32 = 0.0;
-const EXPAND_SPEED_SCALE_FROM_HIGH: f32 = 1.0;
-const EXPAND_SPEED_SCALE_TO_LOW: f32 = 1.0;
-const TIPSY_TIMER_FREQUENCY: f32 = 1.2;
-const TIPSY_COLUMN_FREQUENCY: f32 = 1.8;
-const TIPSY_ARROW_MAGNITUDE: f32 = 0.4;
-const DRUNK_COLUMN_FREQUENCY: f32 = 0.2;
-const DRUNK_OFFSET_FREQUENCY: f32 = 10.0;
-const DRUNK_ARROW_MAGNITUDE: f32 = 0.5;
-const BUMPY_Z_MAGNITUDE: f32 = 40.0;
-const BUMPY_Z_ANGLE_DIVISOR: f32 = 16.0;
-const TORNADO_X_OFFSET_FREQUENCY: f32 = 6.0;
-const BEAT_OFFSET_HEIGHT: f32 = 15.0;
-const BEAT_PI_HEIGHT: f32 = 2.0;
-const CENTER_LINE_Y: f32 = 160.0;
-const FADE_DIST_Y: f32 = 40.0;
-
-#[derive(Clone, Copy)]
-struct EditBeatBarInfo {
-    frame: u32,
-    measure_index: Option<i64>,
-}
 
 fn append_edit_measure_number(
     actors: &mut Vec<Actor>,
@@ -401,187 +387,9 @@ fn append_dashed_edit_bar(
     }
 }
 
-fn valid_edit_time_signature(sig: TimeSignatureSegment) -> TimeSignatureSegment {
-    if sig.numerator > 0 && sig.denominator > 0 {
-        sig
-    } else {
-        default_time_signature()
-    }
-}
-
-fn edit_time_signature_at(segments: &[TimeSignatureSegment], index: usize) -> TimeSignatureSegment {
-    if segments.is_empty() {
-        default_time_signature()
-    } else {
-        valid_edit_time_signature(segments[index])
-    }
-}
-
-fn edit_time_signature_count(segments: &[TimeSignatureSegment]) -> usize {
-    segments.len().max(1)
-}
-
-fn edit_bar_step_rows(sig: TimeSignatureSegment) -> i32 {
-    (beat_to_note_row(sig.denominator as f32 / 4.0) / 4).max(1)
-}
-
-fn edit_measure_frequency(sig: TimeSignatureSegment) -> i32 {
-    sig.numerator.saturating_mul(4).max(1)
-}
-
-fn edit_measure_bars_in_segment(start_row: i32, end_row: i32, sig: TimeSignatureSegment) -> i64 {
-    if end_row <= start_row {
-        return 0;
-    }
-    let step = i64::from(edit_bar_step_rows(sig));
-    let freq = i64::from(edit_measure_frequency(sig));
-    let bars = (i64::from(end_row) - i64::from(start_row) - 1) / step + 1;
-    (bars - 1) / freq + 1
-}
-
-fn edit_measure_index_before_segment(
-    segments: &[TimeSignatureSegment],
-    segment_index: usize,
-) -> i64 {
-    let mut measure_index = 0;
-    for i in 0..segment_index {
-        let sig = edit_time_signature_at(segments, i);
-        let next_sig = edit_time_signature_at(segments, i + 1);
-        measure_index += edit_measure_bars_in_segment(
-            beat_to_note_row(sig.beat),
-            beat_to_note_row(next_sig.beat),
-            sig,
-        );
-    }
-    measure_index
-}
-
-fn edit_time_signature_index_at_row(segments: &[TimeSignatureSegment], row: i32) -> usize {
-    if segments.is_empty() {
-        return 0;
-    }
-
-    let mut index = 0;
-    for (i, sig) in segments.iter().enumerate() {
-        if beat_to_note_row(sig.beat) <= row {
-            index = i;
-        } else {
-            break;
-        }
-    }
-    index
-}
-
-fn edit_beat_bar_info_for_row(
-    row: i32,
-    segments: &[TimeSignatureSegment],
-) -> Option<EditBeatBarInfo> {
-    if row < 0 {
-        return None;
-    }
-
-    let segment_index = edit_time_signature_index_at_row(segments, row);
-    let sig = edit_time_signature_at(segments, segment_index);
-    let segment_start_row = beat_to_note_row(sig.beat);
-    if row < segment_start_row {
-        return None;
-    }
-
-    let step_rows = edit_bar_step_rows(sig);
-    let local_rows = row - segment_start_row;
-    if local_rows % step_rows != 0 {
-        return None;
-    }
-
-    let bars_drawn = local_rows / step_rows;
-    let measure_frequency = edit_measure_frequency(sig);
-    let is_measure = bars_drawn % measure_frequency == 0;
-    let frame = if is_measure {
-        0
-    } else if bars_drawn % 4 == 0 {
-        1
-    } else if bars_drawn % 2 == 0 {
-        2
-    } else {
-        3
-    };
-    let measure_index = is_measure.then(|| {
-        edit_measure_index_before_segment(segments, segment_index)
-            + i64::from(bars_drawn / measure_frequency)
-    });
-
-    Some(EditBeatBarInfo {
-        frame,
-        measure_index,
-    })
-}
-
-fn edit_bar_gcd(a: i32, b: i32) -> i32 {
-    let mut a = i64::from(a).abs();
-    let mut b = i64::from(b).abs();
-    while b != 0 {
-        let next = a % b;
-        a = b;
-        b = next;
-    }
-    a.clamp(1, i64::from(i32::MAX)) as i32
-}
-
-fn edit_bar_candidate_step_rows(segments: &[TimeSignatureSegment]) -> i32 {
-    let mut step = edit_bar_step_rows(edit_time_signature_at(segments, 0));
-    for i in 0..edit_time_signature_count(segments) {
-        let sig = edit_time_signature_at(segments, i);
-        step = edit_bar_gcd(step, edit_bar_step_rows(sig));
-        step = edit_bar_gcd(step, beat_to_note_row(sig.beat));
-    }
-    step.max(1)
-}
-
-fn edit_bar_scroll_speed(
-    scroll_speed: ScrollSpeedSetting,
-    reference_bpm: f32,
-    music_rate: f32,
-) -> f32 {
-    match scroll_speed {
-        ScrollSpeedSetting::XMod(multiplier) => multiplier,
-        ScrollSpeedSetting::MMod(_) => scroll_speed.beat_multiplier(reference_bpm, music_rate),
-        ScrollSpeedSetting::CMod(_) => 4.0,
-    }
-    .max(0.0)
-}
-
-#[inline(always)]
-fn beat_scroll_travel(
-    note_displayed_beat: f32,
-    current_displayed_beat: f32,
-    displayed_speed_percent: f32,
-) -> f32 {
-    (note_displayed_beat - current_displayed_beat)
-        * ScrollSpeedSetting::ARROW_SPACING
-        * displayed_speed_percent
-}
-
-#[inline(always)]
-fn edit_beat_scroll_travel(note_beat: f32, current_beat: f32) -> f32 {
-    (note_beat - current_beat) * ScrollSpeedSetting::ARROW_SPACING
-}
-
-fn scaled_edit_bar_alpha(scroll_speed: f32, visible_at: f32, full_at: f32) -> f32 {
-    ((scroll_speed - visible_at) / (full_at - visible_at)).clamp(0.0, 1.0)
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-struct TornadoBounds {
-    min_x: f32,
-    max_x: f32,
-}
 type FastTextCache<K> = TextCache<K, BuildHasherDefault<XxHash64>>;
 
 thread_local! {
-    static FMT2_CACHE_F32: RefCell<FastTextCache<i32>> = RefCell::new(HashMap::with_capacity_and_hasher(
-        512,
-        BuildHasherDefault::default(),
-    ));
     static PERCENT2_CACHE_F64: RefCell<FastTextCache<u32>> = RefCell::new(HashMap::with_capacity_and_hasher(
         512,
         BuildHasherDefault::default(),
@@ -649,31 +457,6 @@ struct GameplayModsTextKey {
     blind: i16,
     cover: i16,
     disabled_timing_windows: u8,
-}
-
-#[inline(always)]
-fn quantize_centi_i32(value: f64) -> i32 {
-    (if value.is_finite() { value } else { 0.0 } * 100.0)
-        .round()
-        .clamp(i32::MIN as f64, i32::MAX as f64) as i32
-}
-
-#[inline(always)]
-fn quantize_centi_u32(value: f64) -> u32 {
-    let value = if value.is_finite() {
-        value.max(0.0)
-    } else {
-        0.0
-    };
-    ((value * 100.0).round()).clamp(0.0, u32::MAX as f64) as u32
-}
-
-#[inline(always)]
-fn cached_fmt2_f32(value: f32) -> Arc<str> {
-    let key = quantize_centi_i32(f64::from(value));
-    cached_text(&FMT2_CACHE_F32, key, TEXT_CACHE_LIMIT, || {
-        format!("{:.2}", key as f64 / 100.0)
-    })
 }
 
 #[inline(always)]
@@ -761,34 +544,6 @@ fn cached_error_bar_text_label(early: bool, scaled: bool) -> Arc<str> {
     )
 }
 
-#[inline(always)]
-fn error_bar_text_scalable_zoom(abs_ms: f32, scale_start_ms: f32, w2_ms: f32) -> f32 {
-    let ms = if abs_ms.is_finite() {
-        abs_ms
-    } else {
-        timing::FA_PLUS_W010_MS
-    };
-    let scale_start_ms = if scale_start_ms.is_finite() && scale_start_ms > 0.0 {
-        scale_start_ms
-    } else {
-        timing::FA_PLUS_W010_MS
-    };
-    let w1_ms = scale_start_ms + (timing::FA_PLUS_W0_MS - timing::FA_PLUS_W010_MS).max(0.001);
-    let w2_ms = if w2_ms.is_finite() && w2_ms > w1_ms {
-        w2_ms
-    } else {
-        w1_ms
-    };
-    let mut scale1 = 1.0;
-    let mut scale2 = 1.0;
-    if scale_start_ms < ms && ms <= w1_ms {
-        scale1 = (ms - scale_start_ms) / (w1_ms - scale_start_ms);
-    } else if w1_ms < ms && ms <= w2_ms && w2_ms > w1_ms {
-        scale2 = (ms - w1_ms) / (w2_ms - w1_ms);
-    }
-    0.15 + scale1 * 0.2 + scale2 * 0.1
-}
-
 fn cached_run_timer(seconds: i32, minute_threshold: i32, trailing_space: bool) -> Arc<str> {
     let seconds = seconds.max(0);
     cached_text(
@@ -814,123 +569,6 @@ fn cached_run_timer(seconds: i32, minute_threshold: i32, trailing_space: bool) -
 }
 
 #[inline(always)]
-fn mod_percent_key(level: f32) -> i16 {
-    let value = if level.is_finite() { level } else { 0.0 };
-    (value * 100.0)
-        .round()
-        .clamp(i16::MIN as f32, i16::MAX as f32) as i16
-}
-
-#[inline(always)]
-fn clamp_rounded_i16(value: f32) -> i16 {
-    let value = if value.is_finite() { value } else { 0.0 };
-    value.round().clamp(i16::MIN as f32, i16::MAX as f32) as i16
-}
-
-#[inline(always)]
-fn append_mod_part(parts: &mut Vec<String>, percent: i16, name: &str) {
-    if percent == 0 {
-        return;
-    }
-    if percent == 100 {
-        parts.push(name.to_string());
-    } else {
-        parts.push(format!("{percent}% {name}"));
-    }
-}
-
-#[inline(always)]
-fn append_mini_part(parts: &mut Vec<String>, mini_percent: i16) {
-    if mini_percent != 0 {
-        parts.push(format!("{mini_percent}% Mini"));
-    }
-}
-
-#[inline(always)]
-fn append_spacing_part(parts: &mut Vec<String>, spacing_percent: i16) {
-    if spacing_percent != 0 {
-        parts.push(format!("{spacing_percent}% Spacing"));
-    }
-}
-
-#[inline(always)]
-fn append_average_error_bar_part(parts: &mut Vec<String>, key: &GameplayModsTextKey) {
-    if key.error_bar_mask & profile_data::ErrorBarMask::AVERAGE.bits() == 0 {
-        return;
-    }
-    let zoom = key.avg_error_bar_intensity_centi as f32 / 100.0;
-    let zoom = cached_fmt2_f32(zoom);
-    let zoom = zoom.trim_end_matches('0').trim_end_matches('.');
-    parts.push(format!(
-        "ErrorBar{}x(Avg:{}ms)",
-        zoom, key.avg_error_bar_interval_ms
-    ));
-}
-
-fn push_display_mod_option(out: &mut String, option: &str) {
-    for ch in option.chars() {
-        out.push(if ch == ' ' {
-            DISPLAY_MODS_OPTION_SPACE
-        } else {
-            ch
-        });
-    }
-}
-
-fn join_display_mod_parts(parts: &[String]) -> String {
-    let mut out =
-        String::with_capacity(parts.iter().map(String::len).sum::<usize>() + parts.len() * 2);
-    for (idx, part) in parts.iter().enumerate() {
-        if idx != 0 {
-            out.push_str(", ");
-        }
-        push_display_mod_option(&mut out, part);
-    }
-    out
-}
-
-#[inline(always)]
-fn append_perspective_parts(parts: &mut Vec<String>, tilt: i16, skew: i16) {
-    if tilt == 0 && skew == 0 {
-        parts.push("Overhead".to_string());
-        return;
-    }
-    if skew == 0 {
-        if tilt > 0 {
-            append_mod_part(parts, tilt, "Distant");
-        } else {
-            append_mod_part(parts, -tilt, "Hallway");
-        }
-        return;
-    }
-    if skew == tilt {
-        append_mod_part(parts, skew, "Space");
-        return;
-    }
-    if skew == -tilt {
-        append_mod_part(parts, skew, "Incoming");
-        return;
-    }
-    append_mod_part(parts, skew, "Skew");
-    append_mod_part(parts, tilt, "Tilt");
-}
-
-#[inline(always)]
-fn turn_option_name(turn: profile_data::TurnOption) -> Option<&'static str> {
-    match turn {
-        profile_data::TurnOption::None => None,
-        profile_data::TurnOption::Mirror => Some("Mirror"),
-        profile_data::TurnOption::Left => Some("Left"),
-        profile_data::TurnOption::Right => Some("Right"),
-        profile_data::TurnOption::LRMirror => Some("LR-Mirror"),
-        profile_data::TurnOption::UDMirror => Some("UD-Mirror"),
-        profile_data::TurnOption::Shuffle => Some("Shuffle"),
-        profile_data::TurnOption::Blender => Some("Blender"),
-        profile_data::TurnOption::Random => Some("Random"),
-    }
-}
-
-#[inline(always)]
 fn disabled_timing_window_bits(setting: profile_data::TimingWindowsOption) -> u8 {
     setting
         .disabled_windows()
@@ -941,135 +579,27 @@ fn disabled_timing_window_bits(setting: profile_data::TimingWindowsOption) -> u8
         })
 }
 
-fn disabled_timing_windows_name(bits: u8) -> Option<String> {
-    if bits == 0 {
-        return None;
-    }
-    let mut text = String::from("No ");
-    let mut first = true;
-    for i in 0..5 {
-        if bits & (1 << i) == 0 {
-            continue;
-        }
-        if first {
-            first = false;
-        } else {
-            text.push('/');
-        }
-        text.push('W');
-        text.push(char::from(b'1' + i as u8));
-    }
-    Some(text)
-}
-
 #[inline(always)]
 const fn turn_option_bits(turn: profile_data::TurnOption) -> u16 {
     match turn {
         profile_data::TurnOption::None => 0,
-        profile_data::TurnOption::Mirror => 1 << 0,
-        profile_data::TurnOption::Left => 1 << 1,
-        profile_data::TurnOption::Right => 1 << 2,
-        profile_data::TurnOption::LRMirror => 1 << 3,
-        profile_data::TurnOption::UDMirror => 1 << 4,
-        profile_data::TurnOption::Shuffle => 1 << 5,
-        profile_data::TurnOption::Blender => 1 << 6,
-        profile_data::TurnOption::Random => 1 << 7,
+        profile_data::TurnOption::Mirror => DISPLAY_TURN_MIRROR,
+        profile_data::TurnOption::Left => DISPLAY_TURN_LEFT,
+        profile_data::TurnOption::Right => DISPLAY_TURN_RIGHT,
+        profile_data::TurnOption::LRMirror => DISPLAY_TURN_LR_MIRROR,
+        profile_data::TurnOption::UDMirror => DISPLAY_TURN_UD_MIRROR,
+        profile_data::TurnOption::Shuffle => DISPLAY_TURN_SHUFFLE,
+        profile_data::TurnOption::Blender => DISPLAY_TURN_BLENDER,
+        profile_data::TurnOption::Random => DISPLAY_TURN_RANDOM,
     }
 }
 
 #[inline(always)]
-fn append_turn_parts(parts: &mut Vec<String>, bits: u16) {
-    for turn in [
-        profile_data::TurnOption::Mirror,
-        profile_data::TurnOption::Left,
-        profile_data::TurnOption::Right,
-        profile_data::TurnOption::LRMirror,
-        profile_data::TurnOption::UDMirror,
-        profile_data::TurnOption::Shuffle,
-        profile_data::TurnOption::Blender,
-        profile_data::TurnOption::Random,
-    ] {
-        if (bits & turn_option_bits(turn)) != 0
-            && let Some(name) = turn_option_name(turn)
-        {
-            parts.push(name.to_string());
-        }
-    }
-}
-
-#[inline(always)]
-fn attack_mode_name(mode: profile_data::AttackMode) -> Option<&'static str> {
+fn gameplay_mods_attack_mode(mode: profile_data::AttackMode) -> GameplayModsAttackMode {
     match mode {
-        profile_data::AttackMode::Off => Some("NoAttacks"),
-        profile_data::AttackMode::On => None,
-        profile_data::AttackMode::Random => Some("RandomAttacks"),
-    }
-}
-
-#[inline(always)]
-fn push_transform_parts(parts: &mut Vec<String>, insert_mask: u8, remove_mask: u8, holds_mask: u8) {
-    if (remove_mask & (1 << 2)) != 0 {
-        parts.push("NoHolds".to_string());
-    }
-    if (holds_mask & (1 << 3)) != 0 {
-        parts.push("NoRolls".to_string());
-    }
-    if (remove_mask & (1 << 1)) != 0 {
-        parts.push("NoMines".to_string());
-    }
-    if (remove_mask & (1 << 0)) != 0 {
-        parts.push("Little".to_string());
-    }
-    if (insert_mask & (1 << 0)) != 0 {
-        parts.push("Wide".to_string());
-    }
-    if (insert_mask & (1 << 1)) != 0 {
-        parts.push("Big".to_string());
-    }
-    if (insert_mask & (1 << 2)) != 0 {
-        parts.push("Quick".to_string());
-    }
-    if (insert_mask & (1 << 3)) != 0 {
-        parts.push("BMRize".to_string());
-    }
-    if (insert_mask & (1 << 4)) != 0 {
-        parts.push("Skippy".to_string());
-    }
-    if (insert_mask & (1 << 7)) != 0 {
-        parts.push("Mines".to_string());
-    }
-    if (insert_mask & (1 << 5)) != 0 {
-        parts.push("Echo".to_string());
-    }
-    if (insert_mask & (1 << 6)) != 0 {
-        parts.push("Stomp".to_string());
-    }
-    if (holds_mask & (1 << 0)) != 0 {
-        parts.push("Planted".to_string());
-    }
-    if (holds_mask & (1 << 1)) != 0 {
-        parts.push("Floored".to_string());
-    }
-    if (holds_mask & (1 << 2)) != 0 {
-        parts.push("Twister".to_string());
-    }
-    if (holds_mask & (1 << 4)) != 0 {
-        parts.push("HoldsToRolls".to_string());
-    }
-    if (remove_mask & (1 << 3)) != 0 {
-        parts.push("NoJumps".to_string());
-    }
-    if (remove_mask & (1 << 4)) != 0 {
-        parts.push("NoHands".to_string());
-    }
-    if (remove_mask & (1 << 6)) != 0 {
-        parts.push("NoLifts".to_string());
-    }
-    if (remove_mask & (1 << 7)) != 0 {
-        parts.push("NoFakes".to_string());
-    }
-    if (remove_mask & (1 << 5)) != 0 {
-        parts.push("NoQuads".to_string());
+        profile_data::AttackMode::Off => GameplayModsAttackMode::Off,
+        profile_data::AttackMode::On => GameplayModsAttackMode::On,
+        profile_data::AttackMode::Random => GameplayModsAttackMode::Random,
     }
 }
 
@@ -1313,45 +843,6 @@ fn share_hud_range(hud_actors: &mut Vec<Actor>, start: usize) -> Option<Vec<Arc<
     Some(vec![children])
 }
 #[inline(always)]
-fn translated_uv_rect(mut uv: [f32; 4], translate: [f32; 2]) -> [f32; 4] {
-    uv[0] += translate[0];
-    uv[1] += translate[1];
-    uv[2] += translate[0];
-    uv[3] += translate[1];
-    uv
-}
-
-#[inline(always)]
-fn maybe_flip_uv_vert(mut uv: [f32; 4], flip: bool) -> [f32; 4] {
-    if flip {
-        (uv[1], uv[3]) = (uv[3], uv[1]);
-    }
-    uv
-}
-
-#[inline(always)]
-const fn maybe_mirror_uv_horiz_for_reverse_flipped(
-    uv: [f32; 4],
-    lane_reverse: bool,
-    body_flipped: bool,
-) -> [f32; 4] {
-    if lane_reverse && body_flipped {
-        [uv[2], uv[1], uv[0], uv[3]]
-    } else {
-        uv
-    }
-}
-
-#[inline(always)]
-const fn top_cap_rotation_deg(lane_reverse: bool, body_flipped: bool) -> f32 {
-    if lane_reverse && body_flipped {
-        180.0
-    } else {
-        0.0
-    }
-}
-
-#[inline(always)]
 const fn tap_part_for_note_type(note_type: NoteType) -> NoteAnimPart {
     match note_type {
         NoteType::Fake => NoteAnimPart::Fake,
@@ -1370,12 +861,6 @@ fn note_slot_base_size(slot: &SpriteSlot, scale: f32) -> [f32; 2] {
     }
     let logical = slot.logical_size();
     [logical[0] * scale, logical[1] * scale]
-}
-
-#[inline(always)]
-fn scale_effect_size(logical_size: [f32; 2], field_zoom: f32, effect_zoom: f32) -> [f32; 2] {
-    let zoom = field_zoom * effect_zoom;
-    [logical_size[0] * zoom, logical_size[1] * zoom]
 }
 
 #[inline(always)]
@@ -1406,159 +891,53 @@ fn slot_zoom_y(slot: &SpriteSlot, zoom: f32) -> f32 {
 }
 
 #[inline(always)]
-fn scale_sprite_to_arrow(size: [i32; 2], target_arrow_px: f32) -> [f32; 2] {
-    let width = size[0].max(0) as f32;
-    let height = size[1].max(0) as f32;
-    if height <= 0.0 || target_arrow_px <= 0.0 {
-        [width, height]
-    } else {
-        let scale = target_arrow_px / height;
-        [width * scale, target_arrow_px]
-    }
-}
-
-#[inline(always)]
-fn scale_cap_to_arrow(size: [i32; 2], target_arrow_px: f32) -> [f32; 2] {
-    let width = size[0].max(0) as f32;
-    let height = size[1].max(0) as f32;
-    if width <= 0.0 || target_arrow_px <= 0.0 {
-        [width, height]
-    } else {
-        let scale = target_arrow_px / width;
-        [target_arrow_px, height * scale]
-    }
-}
-
-#[inline(always)]
-fn offset_center(
-    center: [f32; 2],
-    local_offset: [f32; 2],
-    local_offset_rot_sin_cos: [f32; 2],
-) -> [f32; 2] {
-    let [sin_r, cos_r] = local_offset_rot_sin_cos;
-    let offset = [
-        local_offset[0] * cos_r - local_offset[1] * sin_r,
-        local_offset[0] * sin_r + local_offset[1] * cos_r,
-    ];
-    [center[0] + offset[0], center[1] + offset[1]]
-}
-
-#[inline(always)]
-fn sm_scale(v: f32, in0: f32, in1: f32, out0: f32, out1: f32) -> f32 {
-    let denom = in1 - in0;
-    if denom.abs() < 1e-6 {
-        return out1;
-    }
-    ((v - in0) / denom).mul_add(out1 - out0, out0)
-}
-
-#[inline(always)]
-fn quantize_step(v: f32, step: f32) -> f32 {
-    ((v + step * 0.5) / step).trunc() * step
-}
-
-#[inline(always)]
-fn beat_factor(song_beat: f32) -> f32 {
-    let accel_time = 0.2_f32;
-    let total_time = 0.5_f32;
-    let mut beat = song_beat + accel_time;
-    let even_beat = (beat as i32 % 2) != 0;
-    if beat < 0.0 {
-        return 0.0;
-    }
-    beat -= beat.trunc();
-    beat += 1.0;
-    beat -= beat.trunc();
-    if beat >= total_time {
-        return 0.0;
-    }
-    let mut factor = if beat < accel_time {
-        let t = sm_scale(beat, 0.0, accel_time, 0.0, 1.0);
-        t * t
-    } else {
-        let t = sm_scale(beat, accel_time, total_time, 1.0, 0.0);
-        1.0 - (1.0 - t) * (1.0 - t)
-    };
-    if even_beat {
-        factor *= -1.0;
-    }
-    factor * 20.0
-}
-
-#[inline(always)]
 fn field_effect_height(tilt: f32) -> f32 {
-    screen_height() + tilt.abs() * 200.0
+    field_effect_height_for_screen(screen_height(), tilt)
+}
+
+#[inline(always)]
+fn accel_y_params(accel: AccelEffects) -> AccelYParams {
+    AccelYParams {
+        boost: accel.boost,
+        brake: accel.brake,
+        wave: accel.wave,
+        boomerang: accel.boomerang,
+        expand: accel.expand,
+    }
 }
 
 #[inline(always)]
 fn apply_accel_y_with_peak(
     raw_y: f32,
     elapsed: f32,
-    current_beat: f32,
+    _current_beat: f32,
     effect_height: f32,
     accel: AccelEffects,
 ) -> (f32, bool) {
-    if raw_y < 0.0 {
-        return (raw_y, true);
-    }
-    let mut y = raw_y;
-    if accel.boost > f32::EPSILON {
-        let new_y = y * 1.5 / ((y + effect_height / 1.2) / effect_height);
-        let mut adjust = accel.boost * (new_y - y);
-        adjust = adjust.clamp(BOOST_MOD_MIN_CLAMP, BOOST_MOD_MAX_CLAMP);
-        y += adjust;
-    }
-    if accel.brake > f32::EPSILON {
-        let scale = sm_scale(y, 0.0, effect_height, 0.0, 1.0);
-        let new_y = y * scale;
-        let mut adjust = accel.brake * (new_y - y);
-        adjust = adjust.clamp(BRAKE_MOD_MIN_CLAMP, BRAKE_MOD_MAX_CLAMP);
-        y += adjust;
-    }
-    if accel.wave > f32::EPSILON {
-        y += accel.wave * WAVE_MOD_MAGNITUDE * (y / WAVE_MOD_HEIGHT.mul_add(1.0, 0.0)).sin();
-    }
-    let mut before_boomerang_peak = true;
-    if accel.boomerang > f32::EPSILON {
-        let peak_at_y = screen_height() * 0.75;
-        before_boomerang_peak = y < peak_at_y;
-        y = (-y * y / screen_height()) + 1.5 * y;
-    }
-    if accel.expand > f32::EPSILON {
-        let seconds = elapsed.rem_euclid((std::f32::consts::PI * 2.0).max(f32::EPSILON));
-        let multiplier = sm_scale(
-            (seconds * EXPAND_MULTIPLIER_FREQUENCY).cos(),
-            EXPAND_MULTIPLIER_SCALE_FROM_LOW,
-            EXPAND_MULTIPLIER_SCALE_FROM_HIGH,
-            EXPAND_MULTIPLIER_SCALE_TO_LOW,
-            EXPAND_MULTIPLIER_SCALE_TO_HIGH,
-        );
-        y *= sm_scale(
-            accel.expand,
-            EXPAND_SPEED_SCALE_FROM_LOW,
-            EXPAND_SPEED_SCALE_FROM_HIGH,
-            EXPAND_SPEED_SCALE_TO_LOW,
-            multiplier,
-        );
-    }
-    let _ = current_beat;
-    (y, before_boomerang_peak)
+    crate_apply_accel_y_with_peak(
+        raw_y,
+        elapsed,
+        effect_height,
+        screen_height(),
+        accel_y_params(accel),
+    )
 }
 
 #[inline(always)]
 fn apply_accel_y(
     raw_y: f32,
     elapsed: f32,
-    current_beat: f32,
+    _current_beat: f32,
     effect_height: f32,
     accel: AccelEffects,
 ) -> f32 {
-    apply_accel_y_with_peak(raw_y, elapsed, current_beat, effect_height, accel).0
-}
-
-#[inline(always)]
-fn signed_effect_active(value: f32) -> bool {
-    value.is_finite() && value.abs() > f32::EPSILON
+    crate_apply_accel_y(
+        raw_y,
+        elapsed,
+        effect_height,
+        screen_height(),
+        accel_y_params(accel),
+    )
 }
 
 #[inline(always)]
@@ -1567,101 +946,8 @@ fn arrow_effect_game_time_seconds() -> f32 {
 }
 
 #[inline(always)]
-fn tipsy_y_extra(local_col: usize, elapsed: f32, visual: VisualEffects) -> f32 {
-    if !signed_effect_active(visual.tipsy) {
-        return 0.0;
-    }
-    let col = local_col as f32;
-    let angle = elapsed * TIPSY_TIMER_FREQUENCY + col * TIPSY_COLUMN_FREQUENCY;
-    visual.tipsy * angle.cos() * ScrollSpeedSetting::ARROW_SPACING * TIPSY_ARROW_MAGNITUDE
-}
-
-#[inline(always)]
-fn beat_x_extra(y: f32, beat_factor: f32, visual: VisualEffects) -> f32 {
-    if !signed_effect_active(visual.beat) {
-        return 0.0;
-    }
-    let shift =
-        beat_factor * (y / BEAT_OFFSET_HEIGHT + std::f32::consts::PI / BEAT_PI_HEIGHT).sin();
-    visual.beat * shift
-}
-
-#[inline(always)]
-fn drunk_x_extra(local_col: usize, y: f32, elapsed: f32, visual: VisualEffects) -> f32 {
-    if !signed_effect_active(visual.drunk) {
-        return 0.0;
-    }
-    let col = local_col as f32;
-    let angle =
-        elapsed + col * DRUNK_COLUMN_FREQUENCY + y * DRUNK_OFFSET_FREQUENCY / screen_height();
-    visual.drunk * angle.cos() * ScrollSpeedSetting::ARROW_SPACING * DRUNK_ARROW_MAGNITUDE
-}
-
-#[inline(always)]
-fn tornado_x_extra(
-    local_col: usize,
-    y: f32,
-    base_x: f32,
-    bounds: TornadoBounds,
-    visual: VisualEffects,
-) -> f32 {
-    if !signed_effect_active(visual.tornado) {
-        return 0.0;
-    }
-    let position_between = sm_scale(base_x, bounds.min_x, bounds.max_x, -1.0, 1.0).clamp(-1.0, 1.0);
-    let radians = position_between.acos() + y * TORNADO_X_OFFSET_FREQUENCY / screen_height();
-    let adjusted = sm_scale(radians.cos(), -1.0, 1.0, bounds.min_x, bounds.max_x);
-    let _ = local_col;
-    (adjusted - base_x) * visual.tornado
-}
-
-#[inline(always)]
-fn note_alpha(y_no_reverse: f32, elapsed: f32, mini: f32, appearance: AppearanceEffects) -> f32 {
-    if y_no_reverse < 0.0 {
-        return 1.0;
-    }
-    let zoom = (1.0 - mini * 0.5).abs().max(0.01);
-    let center_line = CENTER_LINE_Y / zoom;
-    let hidden_sudden = appearance.hidden * appearance.sudden;
-    let hidden_end = center_line
-        + FADE_DIST_Y * sm_scale(hidden_sudden, 0.0, 1.0, -1.0, -1.25)
-        + center_line * appearance.hidden_offset;
-    let hidden_start = center_line
-        + FADE_DIST_Y * sm_scale(hidden_sudden, 0.0, 1.0, 0.0, -0.25)
-        + center_line * appearance.hidden_offset;
-    let sudden_end = center_line
-        + FADE_DIST_Y * sm_scale(hidden_sudden, 0.0, 1.0, 0.0, 0.25)
-        + center_line * appearance.sudden_offset;
-    let sudden_start = center_line
-        + FADE_DIST_Y * sm_scale(hidden_sudden, 0.0, 1.0, 1.0, 1.25)
-        + center_line * appearance.sudden_offset;
-    let mut visible_adjust = 0.0;
-    if appearance.hidden > f32::EPSILON {
-        visible_adjust += appearance.hidden
-            * sm_scale(y_no_reverse, hidden_start, hidden_end, 0.0, -1.0).clamp(-1.0, 0.0);
-    }
-    if appearance.sudden > f32::EPSILON {
-        visible_adjust += appearance.sudden
-            * sm_scale(y_no_reverse, sudden_start, sudden_end, -1.0, 0.0).clamp(-1.0, 0.0);
-    }
-    if appearance.stealth > f32::EPSILON {
-        visible_adjust -= appearance.stealth;
-    }
-    if appearance.blink > f32::EPSILON {
-        let blink = quantize_step((elapsed * 10.0).sin(), BLINK_MOD_FREQUENCY);
-        visible_adjust += sm_scale(blink, 0.0, 1.0, -1.0, 0.0);
-    }
-    if appearance.random_vanish > f32::EPSILON {
-        let dist = (y_no_reverse - center_line).abs();
-        visible_adjust += sm_scale(dist, 80.0, 160.0, -1.0, 0.0) * appearance.random_vanish;
-    }
-    (1.0 + visible_adjust).clamp(0.0, 1.0)
-}
-
-#[inline(always)]
 fn note_glow(y_no_reverse: f32, elapsed: f32, mini: f32, appearance: AppearanceEffects) -> f32 {
-    let percent_visible = note_alpha(y_no_reverse, elapsed, mini, appearance);
-    sm_scale((percent_visible - 0.5).abs(), 0.0, 0.5, 1.3, 0.0).max(0.0)
+    appearance_note_glow(y_no_reverse, elapsed, mini, note_alpha_params(appearance))
 }
 
 #[inline(always)]
@@ -1671,164 +957,25 @@ fn note_actor_alpha(
     mini: f32,
     appearance: AppearanceEffects,
 ) -> f32 {
-    if note_alpha(y_no_reverse, elapsed, mini, appearance) > 0.5 {
-        1.0
-    } else {
-        0.0
-    }
-}
-
-#[inline(always)]
-fn itg_actor_glow_alpha(alpha: f32) -> f32 {
-    if alpha.is_finite() {
-        alpha.clamp(0.0, 1.0)
-    } else {
-        0.0
-    }
+    appearance_note_actor_alpha(y_no_reverse, elapsed, mini, note_alpha_params(appearance))
 }
 
 #[inline(always)]
 fn hold_alpha_needs_rows(appearance: AppearanceEffects) -> bool {
-    appearance.hidden > f32::EPSILON
-        || appearance.sudden > f32::EPSILON
-        || appearance.random_vanish > f32::EPSILON
+    appearance_needs_rows(note_alpha_params(appearance))
 }
 
 #[inline(always)]
-fn compute_invert_distances(col_offsets: &[f32], out: &mut [f32]) {
-    let num_cols = col_offsets.len();
-    if num_cols == 0 {
-        return;
+fn note_alpha_params(appearance: AppearanceEffects) -> NoteAlphaParams {
+    NoteAlphaParams {
+        hidden: appearance.hidden,
+        hidden_offset: appearance.hidden_offset,
+        sudden: appearance.sudden,
+        sudden_offset: appearance.sudden_offset,
+        stealth: appearance.stealth,
+        blink: appearance.blink,
+        random_vanish: appearance.random_vanish,
     }
-    let num_sides = if num_cols > 4 { 2 } else { 1 };
-    let cols_per_side = (num_cols / num_sides).max(1);
-    for i in 0..num_cols {
-        let side = i / cols_per_side;
-        let on_side = i % cols_per_side;
-        let left_mid = (cols_per_side - 1) / 2;
-        let right_mid = cols_per_side.div_ceil(2);
-        let (first, last) = if on_side <= left_mid {
-            (0, left_mid)
-        } else if on_side >= right_mid {
-            (right_mid, cols_per_side - 1)
-        } else {
-            (on_side / 2, on_side / 2)
-        };
-        let new_on_side = if first == last {
-            0
-        } else {
-            sm_scale(
-                on_side as f32,
-                first as f32,
-                last as f32,
-                last as f32,
-                first as f32,
-            )
-            .round() as usize
-        };
-        let new_col = side * cols_per_side + new_on_side.min(num_cols.saturating_sub(1));
-        out[i] = col_offsets[new_col] - col_offsets[i];
-    }
-}
-
-#[inline(always)]
-fn compute_tornado_bounds(col_offsets: &[f32], out: &mut [TornadoBounds]) {
-    let num_cols = col_offsets.len();
-    let width = if num_cols > 4 { 2 } else { 3 };
-    for (i, bounds) in out.iter_mut().take(num_cols).enumerate() {
-        let start = i.saturating_sub(width);
-        let end = (i + width).min(num_cols.saturating_sub(1));
-        let mut min_x = f32::INFINITY;
-        let mut max_x = f32::NEG_INFINITY;
-        for x in &col_offsets[start..=end] {
-            min_x = min_x.min(*x);
-            max_x = max_x.max(*x);
-        }
-        *bounds = TornadoBounds { min_x, max_x };
-    }
-}
-
-#[inline(always)]
-fn default_column_x(local_col: usize, num_cols: usize) -> f32 {
-    (local_col as f32 - num_cols.saturating_sub(1) as f32 * 0.5) * ScrollSpeedSetting::ARROW_SPACING
-}
-
-#[inline(always)]
-fn fill_lane_col_offsets(
-    out: &mut [f32],
-    column_xs: Option<&[i32]>,
-    num_cols: usize,
-    spacing_mult: f32,
-    field_zoom: f32,
-) {
-    for (i, col_offset) in out.iter_mut().take(num_cols).enumerate() {
-        let col_x = column_xs
-            .and_then(|xs| xs.get(i))
-            .map_or_else(|| default_column_x(i, num_cols), |x| *x as f32);
-        *col_offset = col_x * spacing_mult * field_zoom;
-    }
-}
-
-#[inline(always)]
-fn note_x_extra(
-    local_col: usize,
-    y: f32,
-    elapsed: f32,
-    beat_factor: f32,
-    visual: VisualEffects,
-    col_offsets: &[f32],
-    invert_distances: &[f32],
-    tornado_bounds: &[TornadoBounds],
-) -> f32 {
-    let mut r = 0.0;
-    let base_x = col_offsets[local_col];
-    if signed_effect_active(visual.tornado) {
-        r += tornado_x_extra(local_col, y, base_x, tornado_bounds[local_col], visual);
-    }
-    if signed_effect_active(visual.drunk) {
-        r += drunk_x_extra(local_col, y, elapsed, visual);
-    }
-    if signed_effect_active(visual.flip) {
-        let mirrored = col_offsets[col_offsets.len().saturating_sub(1) - local_col];
-        r += (mirrored - base_x) * visual.flip;
-    }
-    if signed_effect_active(visual.invert) {
-        r += invert_distances[local_col] * visual.invert;
-    }
-    if signed_effect_active(visual.beat) {
-        r += beat_x_extra(y, beat_factor, visual);
-    }
-    r
-}
-
-#[inline(always)]
-fn tiny_spacing_scale(visual: VisualEffects) -> f32 {
-    if visual.tiny.abs() <= f32::EPSILON || !visual.tiny.is_finite() {
-        return 1.0;
-    }
-    0.5_f32.powf(visual.tiny).min(1.0)
-}
-
-#[inline(always)]
-fn move_x_extra(visual: VisualEffects, local_col: usize) -> f32 {
-    visual
-        .move_x_cols
-        .get(local_col)
-        .copied()
-        .filter(|value| value.is_finite())
-        .unwrap_or(0.0)
-        * ScrollSpeedSetting::ARROW_SPACING
-}
-
-#[inline(always)]
-fn move_y_extra(visual: VisualEffects, local_col: usize) -> f32 {
-    visual
-        .move_y_cols
-        .get(local_col)
-        .copied()
-        .filter(|value| value.is_finite())
-        .unwrap_or(0.0)
-        * ScrollSpeedSetting::ARROW_SPACING
 }
 
 #[inline(always)]
@@ -1842,18 +989,25 @@ fn note_x_offset(
     invert_distances: &[f32],
     tornado_bounds: &[TornadoBounds],
 ) -> f32 {
-    let base = col_offsets[local_col]
-        + note_x_extra(
-            local_col,
-            y,
-            elapsed,
-            beat_factor,
-            visual,
-            col_offsets,
-            invert_distances,
-            tornado_bounds,
-        );
-    base * tiny_spacing_scale(visual) + move_x_extra(visual, local_col)
+    crate_note_x_offset(
+        local_col,
+        y,
+        elapsed,
+        beat_factor,
+        col_offsets,
+        invert_distances,
+        tornado_bounds,
+        &visual.move_x_cols,
+        NoteXParams {
+            screen_height: screen_height(),
+            tornado: visual.tornado,
+            drunk: visual.drunk,
+            flip: visual.flip,
+            invert: visual.invert,
+            beat: visual.beat,
+        },
+        visual.tiny,
+    )
 }
 
 #[inline(always)]
@@ -1868,22 +1022,28 @@ fn receptor_row_center(
     invert_distances: &[f32],
     tornado_bounds: &[TornadoBounds],
 ) -> [f32; 2] {
-    [
-        playfield_center_x
-            + note_x_offset(
-                local_col,
-                0.0,
-                elapsed,
-                beat_factor,
-                visual,
-                col_offsets,
-                invert_distances,
-                tornado_bounds,
-            ),
-        receptor_y_lane
-            + tipsy_y_extra(local_col, elapsed, visual)
-            + move_y_extra(visual, local_col),
-    ]
+    crate_receptor_row_center(
+        playfield_center_x,
+        local_col,
+        receptor_y_lane,
+        elapsed,
+        beat_factor,
+        col_offsets,
+        invert_distances,
+        tornado_bounds,
+        &visual.move_x_cols,
+        &visual.move_y_cols,
+        NoteXParams {
+            screen_height: screen_height(),
+            tornado: visual.tornado,
+            drunk: visual.drunk,
+            flip: visual.flip,
+            invert: visual.invert,
+            beat: visual.beat,
+        },
+        visual.tiny,
+        visual.tipsy,
+    )
 }
 
 #[inline(always)]
@@ -1897,33 +1057,24 @@ fn hold_indicator_column_x(
     invert_distances: &[f32],
     tornado_bounds: &[TornadoBounds],
 ) -> f32 {
-    playfield_center_x
-        + note_x_offset(
-            local_col,
-            0.0,
-            elapsed,
-            beat_factor,
-            visual,
-            col_offsets,
-            invert_distances,
-            tornado_bounds,
-        )
-}
-
-#[inline(always)]
-fn player_metric_y(
-    center_y: f32,
-    notefield_offset_y: f32,
-    reverse_percent: f32,
-    normal_offset: f32,
-    reverse_offset: f32,
-) -> f32 {
-    sm_scale(
-        reverse_percent,
-        0.0,
-        1.0,
-        center_y + normal_offset + notefield_offset_y,
-        center_y + reverse_offset + notefield_offset_y,
+    crate_hold_indicator_column_x(
+        playfield_center_x,
+        local_col,
+        elapsed,
+        beat_factor,
+        col_offsets,
+        invert_distances,
+        tornado_bounds,
+        &visual.move_x_cols,
+        NoteXParams {
+            screen_height: screen_height(),
+            tornado: visual.tornado,
+            drunk: visual.drunk,
+            flip: visual.flip,
+            invert: visual.invert,
+            beat: visual.beat,
+        },
+        visual.tiny,
     )
 }
 
@@ -1979,11 +1130,6 @@ fn hold_strip_row_from_positions(
             color,
         },
     ]
-}
-
-#[inline(always)]
-const fn hold_glow_color(alpha: f32) -> [f32; 4] {
-    [1.0, 1.0, 1.0, alpha]
 }
 
 #[inline(always)]
@@ -2052,103 +1198,47 @@ fn hold_strip_glow_actor(
 }
 
 #[inline(always)]
-fn mod_divisor(value: f32) -> f32 {
-    if value.abs() > 0.001 {
-        value
-    } else if value.is_sign_negative() {
-        -0.001
-    } else {
-        0.001
-    }
-}
-
-#[inline(always)]
-fn bumpy_angle(y: f32, offset: f32, period: f32) -> f32 {
-    let offset = if offset.is_finite() { offset } else { 0.0 };
-    let period = if period.is_finite() { period } else { 0.0 };
-    let divisor = mod_divisor(period.mul_add(BUMPY_Z_ANGLE_DIVISOR, BUMPY_Z_ANGLE_DIVISOR));
-    (y + 100.0 * offset) / divisor
-}
-
-#[inline(always)]
-fn note_world_z_for_bumpy(y: f32, bumpy: f32, offset: f32, period: f32) -> f32 {
-    if bumpy.abs() <= f32::EPSILON || !bumpy.is_finite() {
-        return 0.0;
-    }
-    bumpy * BUMPY_Z_MAGNITUDE * bumpy_angle(y, offset, period).sin()
-}
-
-#[inline(always)]
-fn bumpy_for_col(visual: &VisualEffects, local_col: usize) -> f32 {
-    visual.bumpy + visual.bumpy_cols.get(local_col).copied().unwrap_or(0.0)
+fn visual_effect_params(visual: &VisualEffects, local_col: usize) -> VisualEffectParams {
+    crate_visual_effect_params_for_col(
+        VisualEffectParams {
+            tiny: visual.tiny,
+            pulse_inner: visual.pulse_inner,
+            pulse_outer: visual.pulse_outer,
+            pulse_offset: visual.pulse_offset,
+            pulse_period: visual.pulse_period,
+            confusion: visual.confusion,
+            confusion_offset: visual.confusion_offset,
+            dizzy: visual.dizzy,
+            bumpy: visual.bumpy,
+        },
+        local_col,
+        &visual.tiny_cols,
+        &visual.confusion_offset_cols,
+        &visual.bumpy_cols,
+    )
 }
 
 #[inline(always)]
 fn hold_body_needs_z_buffer(visual: &VisualEffects) -> bool {
-    // ITGmania ArrowEffects::NeedZBuffer checks global Bumpy but not BumpyN.
-    signed_effect_active(visual.bumpy)
+    visual_hold_body_needs_z_buffer(VisualEffectParams {
+        bumpy: visual.bumpy,
+        ..VisualEffectParams::default()
+    })
 }
 
 #[inline(always)]
 fn tiny_zoom_for_col(visual: &VisualEffects, local_col: usize) -> f32 {
-    let tiny = visual.tiny + visual.tiny_cols.get(local_col).copied().unwrap_or(0.0);
-    if tiny.abs() <= f32::EPSILON || !tiny.is_finite() {
-        return 1.0;
-    }
-    0.5_f32.powf(tiny)
-}
-
-#[inline(always)]
-fn pulse_active(visual: &VisualEffects) -> bool {
-    visual.pulse_inner.abs() > f32::EPSILON || visual.pulse_outer.abs() > f32::EPSILON
-}
-
-#[inline(always)]
-fn pulse_inner_zoom(visual: &VisualEffects) -> f32 {
-    if !pulse_active(visual) {
-        return 1.0;
-    }
-    let inner = if visual.pulse_inner.is_finite() {
-        visual.pulse_inner.mul_add(0.5, 1.0)
-    } else {
-        1.0
-    };
-    if inner.abs() <= f32::EPSILON {
-        0.01
-    } else {
-        inner
-    }
+    visual_tiny_zoom(visual_effect_params(visual, local_col))
 }
 
 #[inline(always)]
 fn pulse_zoom_for_y(y: f32, visual: &VisualEffects) -> f32 {
-    if !pulse_active(visual) {
-        return 1.0;
-    }
-    let outer = if visual.pulse_outer.is_finite() {
-        visual.pulse_outer
-    } else {
-        0.0
-    };
-    let offset = if visual.pulse_offset.is_finite() {
-        visual.pulse_offset
-    } else {
-        0.0
-    };
-    let period = if visual.pulse_period.is_finite() {
-        visual.pulse_period
-    } else {
-        0.0
-    };
-    let divisor = mod_divisor(0.4 * TARGET_ARROW_PIXEL_SIZE * (1.0 + period));
-    ((y + 100.0 * offset) / divisor)
-        .sin()
-        .mul_add(outer * 0.5, pulse_inner_zoom(visual))
+    visual_pulse_zoom_for_y(y, visual_effect_params(visual, 0))
 }
 
 #[inline(always)]
 fn arrow_effect_zoom(visual: &VisualEffects, local_col: usize, y: f32) -> f32 {
-    tiny_zoom_for_col(visual, local_col) * pulse_zoom_for_y(y, visual)
+    visual_arrow_effect_zoom(y, visual_effect_params(visual, local_col))
 }
 
 #[inline(always)]
@@ -2247,41 +1337,8 @@ fn push_note_glow_actor(
 }
 
 #[inline(always)]
-fn itg_actor_rotation_z(deg: f32) -> f32 {
-    // ITGmania ArrowEffects returns Actor::rotationz degrees in screen space.
-    // DeadSync applies sprite rotations in world space, where Y is inverted.
-    -deg
-}
-
-#[inline(always)]
 fn confusion_rotation_deg(song_beat: f32, visual: VisualEffects, local_col: usize) -> f32 {
-    let mut itg_rotation = 0.0;
-    let col_offset = visual
-        .confusion_offset_cols
-        .get(local_col)
-        .copied()
-        .filter(|value| value.is_finite())
-        .unwrap_or(0.0);
-    if col_offset.abs() > f32::EPSILON {
-        itg_rotation += col_offset * (180.0 / std::f32::consts::PI);
-    }
-    if visual.confusion_offset.abs() > f32::EPSILON {
-        itg_rotation += visual.confusion_offset * (180.0 / std::f32::consts::PI);
-    }
-    if visual.confusion.abs() > f32::EPSILON {
-        let confusion = (song_beat * visual.confusion).rem_euclid(std::f32::consts::TAU);
-        itg_rotation += confusion * (-180.0 / std::f32::consts::PI);
-    }
-    itg_actor_rotation_z(itg_rotation)
-}
-
-#[inline(always)]
-fn dizzy_rotation_deg(note_beat: f32, song_beat: f32, visual: VisualEffects) -> f32 {
-    if visual.dizzy.abs() <= f32::EPSILON {
-        return 0.0;
-    }
-    let dizzy = ((note_beat - song_beat) * visual.dizzy) % std::f32::consts::TAU;
-    dizzy * (180.0 / std::f32::consts::PI)
+    visual_confusion_rotation_deg(song_beat, visual_effect_params(&visual, local_col))
 }
 
 #[inline(always)]
@@ -2292,11 +1349,12 @@ fn calc_note_rotation_z(
     is_hold_head: bool,
     local_col: usize,
 ) -> f32 {
-    let mut r = confusion_rotation_deg(song_beat, visual, local_col);
-    if visual.dizzy.abs() > f32::EPSILON && !is_hold_head {
-        r += itg_actor_rotation_z(dizzy_rotation_deg(note_beat, song_beat, visual));
-    }
-    r
+    visual_note_rotation_z(
+        note_beat,
+        song_beat,
+        is_hold_head,
+        visual_effect_params(&visual, local_col),
+    )
 }
 
 #[inline(always)]
@@ -2308,400 +1366,52 @@ fn song_lua_note_model_draw(mut draw: ModelDrawState, rotation_y_deg: f32) -> Mo
 }
 
 #[inline(always)]
-fn smoothstep01(t: f32) -> f32 {
-    let t = t.clamp(0.0, 1.0);
-    t * t * (3.0 - 2.0 * t)
-}
-
-#[inline(always)]
 fn effective_mini_value(
     profile: &profile_data::Profile,
     visual: VisualEffects,
     mini_percent: f32,
 ) -> f32 {
-    let mut mini = if mini_percent.is_finite() {
-        mini_percent
-    } else {
-        profile.mini_percent as f32
-    };
-    if visual.big > f32::EPSILON {
-        // ITG _fallback/ArrowCloud map Effect Big to mod,-100% mini.
-        mini -= 100.0;
-    }
-    mini.clamp(-100.0, 150.0) / 100.0
-}
-
-#[inline(always)]
-fn judgment_actor_zoom(
-    mini: f32,
-    judgment_back: bool,
-    _perspective_tilt: f32,
-    _perspective_skew: f32,
-) -> f32 {
-    // ITGmania draws the Player judgment outside PlayerNoteFieldPositioner,
-    // so Hallway/Distant/Incoming/Space never alter the judgment's own zoom.
-    // Only the NoteField actor receives the perspective 0.9x tilt scale.
-    if judgment_back {
-        // Arrow Cloud's JudgmentBack actorframe applies its own linear
-        // mini shrink in Lua and is likewise outside the NoteField perspective.
-        ((2.0 - mini) * 0.5).clamp(0.35, 1.0)
-    } else {
-        // ITGmania Player::Update applies the same min(pow(0.5, mini+tiny), 1.0)
-        // factor to the front judgment actor that it applies to combo (see
-        // Player.cpp fJudgmentZoom -> m_pActorWithJudgmentPosition->SetZoom).
-        // Simply Love does not override this, so the front judgment shrinks
-        // with Mini just like the combo does.
-        combo_actor_zoom(mini)
-    }
-}
-
-#[inline(always)]
-fn combo_actor_zoom(mini: f32) -> f32 {
-    // ITGmania Player::Update: min(pow(0.5, mini + tiny), 1.0). The Player
-    // ActorFrame's mini scale is inherited by both the combo display and
-    // the front judgment actor in Simply Love.
-    0.5_f32.powf(mini).min(1.0)
-}
-
-#[inline(always)]
-fn average_error_bar_mini_scale(mini: f32) -> f32 {
-    (1.1 - 0.545 * mini).max(0.0)
-}
-
-#[inline(always)]
-fn held_miss_zoom(elapsed: f32, mini: f32) -> (f32, f32) {
-    let mini_scale = (1.0 - mini * 0.5).max(0.0);
-    if elapsed < 0.1 {
-        let t = (elapsed / 0.1).clamp(0.0, 1.0);
-        let ease_t = 1.0 - (1.0 - t).powi(2);
-        let zoom_x = 0.8 + (0.75 - 0.8) * ease_t;
-        return (zoom_x * mini_scale, 0.75 * mini_scale);
-    }
-    if elapsed < 0.3 {
-        return (0.75 * mini_scale, 0.75 * mini_scale);
-    }
-    let t = ((elapsed - 0.3) / 0.2).clamp(0.0, 1.0);
-    let zoom = 0.75 * mini_scale * (1.0 - t.powi(2));
-    (zoom, zoom)
-}
-
-#[inline(always)]
-fn format_speed_mod_for_display(speed: ScrollSpeedSetting) -> String {
-    let fmt_float = |v: f32| -> String {
-        let s = cached_fmt2_f32(v);
-        s.trim_end_matches('0').trim_end_matches('.').to_owned()
-    };
-
-    match speed {
-        ScrollSpeedSetting::XMod(mult) => {
-            if (mult - 1.0).abs() <= 0.000_1 {
-                "1x".to_string()
-            } else {
-                let mut out = fmt_float(mult);
-                out.push('x');
-                out
-            }
-        }
-        ScrollSpeedSetting::CMod(bpm) => {
-            if (bpm - bpm.round()).abs() <= 0.000_1 {
-                let mut out = String::from("C");
-                out.push_str(&(bpm.round() as i32).to_string());
-                out
-            } else {
-                let mut out = String::from("C");
-                out.push_str(&fmt_float(bpm));
-                out
-            }
-        }
-        ScrollSpeedSetting::MMod(bpm) => {
-            if (bpm - bpm.round()).abs() <= 0.000_1 {
-                let mut out = String::from("m");
-                out.push_str(&(bpm.round() as i32).to_string());
-                out
-            } else {
-                let mut out = String::from("m");
-                out.push_str(&fmt_float(bpm));
-                out
-            }
-        }
-    }
+    crate_effective_mini_value(mini_percent, profile.mini_percent as f32, visual.big)
 }
 
 #[inline(always)]
 pub(crate) fn gameplay_mods_text(state: &State, player_idx: usize) -> Arc<str> {
     let key = gameplay_mods_text_key(state, player_idx);
     cached_text(&GAMEPLAY_MODS_CACHE, key, TEXT_CACHE_LIMIT, || {
-        let mut parts = Vec::with_capacity(32);
-        parts.push(format_speed_mod_for_display(
-            state.effective_scroll_speed_for_player(player_idx),
-        ));
-
-        for (percent, name) in
-            key.accel
-                .into_iter()
-                .zip(["Boost", "Brake", "Wave", "Expand", "Boomerang"])
-        {
-            append_mod_part(&mut parts, percent, name);
-        }
-        for (percent, name) in key.visual.into_iter().zip([
-            "Drunk",
-            "Dizzy",
-            "Confusion",
-            "Flip",
-            "Invert",
-            "Tornado",
-            "Tipsy",
-            "Bumpy",
-            "Beat",
-        ]) {
-            append_mod_part(&mut parts, percent, name);
-        }
-        append_mini_part(&mut parts, key.mini_percent);
-        append_spacing_part(&mut parts, key.spacing_percent);
-        for (percent, name) in
-            key.appearance
-                .into_iter()
-                .zip(["Hidden", "Sudden", "Stealth", "Blink", "RandomVanish"])
-        {
-            append_mod_part(&mut parts, percent, name);
-        }
-        for (percent, name) in
-            key.scroll
-                .into_iter()
-                .zip(["Reverse", "Split", "Alternate", "Cross", "Centered"])
-        {
-            append_mod_part(&mut parts, percent, name);
-        }
-        append_mod_part(&mut parts, key.dark, "Dark");
-        append_mod_part(&mut parts, key.blind, "Blind");
-        append_mod_part(&mut parts, key.cover, "Hide BG");
-
-        if let Some(name) = attack_mode_name(state.profiles()[player_idx].attack_mode) {
-            parts.push(name.to_string());
-        }
-        append_turn_parts(&mut parts, key.turn_bits);
-        push_transform_parts(&mut parts, key.insert_mask, key.remove_mask, key.holds_mask);
-        append_perspective_parts(&mut parts, key.perspective_tilt, key.perspective_skew);
-        parts.push(state.profiles()[player_idx].noteskin.to_string());
-        if key.visual_delay_ms != 0 {
-            parts.push(format!("{}ms VisualDelay", key.visual_delay_ms));
-        }
-        append_average_error_bar_part(&mut parts, &key);
-        if let Some(disabled_windows) = disabled_timing_windows_name(key.disabled_timing_windows) {
-            parts.push(disabled_windows);
-        }
-
-        join_display_mod_parts(&parts)
+        let profile = &state.profiles()[player_idx];
+        crate_gameplay_mods_text(GameplayModsTextParams {
+            speed: state.effective_scroll_speed_for_player(player_idx),
+            noteskin: profile.noteskin.as_str(),
+            insert_mask: key.insert_mask,
+            remove_mask: key.remove_mask,
+            holds_mask: key.holds_mask,
+            turn_bits: key.turn_bits,
+            attack_mode: gameplay_mods_attack_mode(profile.attack_mode),
+            mini_percent: key.mini_percent,
+            spacing_percent: key.spacing_percent,
+            visual_delay_ms: key.visual_delay_ms,
+            average_error_bar_active: key.error_bar_mask
+                & profile_data::ErrorBarMask::AVERAGE.bits()
+                != 0,
+            avg_error_bar_intensity_centi: key.avg_error_bar_intensity_centi,
+            avg_error_bar_interval_ms: key.avg_error_bar_interval_ms,
+            accel: key.accel,
+            visual: key.visual,
+            appearance: key.appearance,
+            scroll: key.scroll,
+            perspective_tilt: key.perspective_tilt,
+            perspective_skew: key.perspective_skew,
+            dark: key.dark,
+            blind: key.blind,
+            cover: key.cover,
+            disabled_timing_windows: key.disabled_timing_windows,
+        })
     })
 }
 
 #[inline(always)]
-fn active_column_cue(cues: &[ColumnCue], current_time: f32) -> Option<&ColumnCue> {
-    if cues.is_empty() {
-        return None;
-    }
-    let idx = cues.partition_point(|cue| cue.start_time <= current_time);
-    idx.checked_sub(1).and_then(|i| cues.get(i))
-}
-
-#[inline(always)]
-fn column_cue_alpha(elapsed_real: f32, duration_real: f32) -> f32 {
-    if !elapsed_real.is_finite() || !duration_real.is_finite() {
-        return 0.0;
-    }
-    if elapsed_real < 0.0 || elapsed_real > duration_real {
-        return 0.0;
-    }
-    if duration_real <= COLUMN_CUE_FADE_TIME * 2.0 {
-        return 0.0;
-    }
-    if elapsed_real < COLUMN_CUE_FADE_TIME {
-        let t = (elapsed_real / COLUMN_CUE_FADE_TIME).clamp(0.0, 1.0);
-        return 1.0 - (1.0 - t) * (1.0 - t);
-    }
-    if elapsed_real > duration_real - COLUMN_CUE_FADE_TIME {
-        let t = ((elapsed_real - (duration_real - COLUMN_CUE_FADE_TIME)) / COLUMN_CUE_FADE_TIME)
-            .clamp(0.0, 1.0);
-        return 1.0 - t * t;
-    }
-    1.0
-}
-
-#[inline(always)]
-fn column_flash_base_alpha(brightness: profile_data::ColumnFlashBrightness) -> f32 {
-    match brightness {
-        profile_data::ColumnFlashBrightness::Normal => COLUMN_FLASH_NORMAL_ALPHA,
-        profile_data::ColumnFlashBrightness::Dimmed => COLUMN_FLASH_DIMMED_ALPHA,
-    }
-}
-
-#[inline(always)]
-fn column_flash_alpha(
-    started_at: f32,
-    current_time: f32,
-    grade: JudgeGrade,
-    brightness: profile_data::ColumnFlashBrightness,
-) -> f32 {
-    let elapsed = current_time - started_at;
-    let duration = column_flash_duration(grade);
-    if !elapsed.is_finite() || elapsed < 0.0 || elapsed >= duration || duration <= 0.0 {
-        return 0.0;
-    }
-    let t = (elapsed / duration).clamp(0.0, 1.0);
-    column_flash_base_alpha(brightness) * (1.0 - t * t)
-}
-
-#[inline(always)]
-fn column_flash_color(grade: JudgeGrade, blue_fantastic: bool, alpha: f32) -> [f32; 4] {
-    let mut rgba = match grade {
-        JudgeGrade::Fantastic => {
-            if blue_fantastic {
-                color::JUDGMENT_RGBA[0]
-            } else {
-                [1.0, 1.0, 1.0, 1.0]
-            }
-        }
-        JudgeGrade::Excellent => [0.88, 0.61, 0.09, 1.0],
-        JudgeGrade::Great => [0.40, 0.79, 0.33, 1.0],
-        JudgeGrade::Decent => [0.70, 0.36, 1.00, 1.0],
-        JudgeGrade::WayOff => [0.78, 0.52, 0.36, 1.0],
-        JudgeGrade::Miss => [1.0, 0.0, 0.0, 1.0],
-    };
-    rgba[3] = alpha;
-    rgba
-}
-
-#[derive(Clone, Copy)]
-struct ColumnFlashLayout {
-    y_offset: f32,
-    height_trim: f32,
-    fade: f32,
-}
-
-#[inline(always)]
-fn column_flash_layout(size: profile_data::ColumnFlashSize) -> ColumnFlashLayout {
-    match size {
-        profile_data::ColumnFlashSize::Default => ColumnFlashLayout {
-            y_offset: COLUMN_FLASH_DEFAULT_Y_OFFSET,
-            height_trim: 0.0,
-            fade: COLUMN_FLASH_DEFAULT_FADE,
-        },
-        profile_data::ColumnFlashSize::Compact => ColumnFlashLayout {
-            y_offset: COLUMN_FLASH_COMPACT_Y_OFFSET,
-            height_trim: COLUMN_FLASH_COMPACT_HEIGHT_TRIM,
-            fade: COLUMN_FLASH_COMPACT_FADE,
-        },
-    }
-}
-
-#[inline(always)]
-fn column_flash_height(layout: ColumnFlashLayout) -> f32 {
-    (screen_height() - layout.y_offset - layout.height_trim).max(0.0)
-}
-
-#[inline(always)]
-fn column_flash_reverse_bottom_y(
-    layout: ColumnFlashLayout,
-    lane_width: f32,
-    notefield_offset_y: f32,
-) -> f32 {
-    layout.y_offset * 3.0
-        + RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE
-        + lane_width * 0.5
-        + notefield_offset_y
-}
-
-#[inline(always)]
-fn column_flash_reverse_top_y(
-    layout: ColumnFlashLayout,
-    lane_width: f32,
-    flash_height: f32,
-    notefield_offset_y: f32,
-) -> f32 {
-    column_flash_reverse_bottom_y(layout, lane_width, notefield_offset_y) - flash_height
-}
-
-#[inline(always)]
-fn column_cue_height() -> f32 {
-    (screen_height() - COLUMN_CUE_Y_OFFSET).max(0.0)
-}
-
-#[inline(always)]
-fn crossover_cue_height() -> f32 {
-    (screen_height() - COLUMN_CUE_Y_OFFSET - CROSSOVER_CUE_HEIGHT_REDUCTION).max(0.0)
-}
-
-#[inline(always)]
-fn column_cue_reverse_bottom_y(lane_width: f32, notefield_offset_y: f32) -> f32 {
-    // Simply Love rotates a top-aligned quad around the actor origin. DeadSync's
-    // sprite fast path rotates around the rect center, so reverse cues are drawn
-    // unrotated from their equivalent top edge instead.
-    COLUMN_CUE_Y_OFFSET * 3.0
-        + RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE
-        + lane_width * 0.5
-        + notefield_offset_y
-}
-
-#[inline(always)]
-fn column_cue_reverse_top_y(lane_width: f32, cue_height: f32, notefield_offset_y: f32) -> f32 {
-    column_cue_reverse_bottom_y(lane_width, notefield_offset_y) - cue_height
-}
-
-#[inline(always)]
-const fn timing_window_from_num(n: usize) -> TimingWindow {
-    match n {
-        0 => TimingWindow::W0,
-        1 => TimingWindow::W1,
-        2 => TimingWindow::W2,
-        3 => TimingWindow::W3,
-        4 => TimingWindow::W4,
-        _ => TimingWindow::W5,
-    }
-}
-
-#[inline(always)]
-fn error_bar_color_for_window(window: TimingWindow, show_fa_plus_window: bool) -> [f32; 4] {
-    match window {
-        TimingWindow::W0 => color::JUDGMENT_RGBA[0],
-        TimingWindow::W1 => {
-            if show_fa_plus_window {
-                color::JUDGMENT_FA_PLUS_WHITE_RGBA
-            } else {
-                color::JUDGMENT_RGBA[0]
-            }
-        }
-        TimingWindow::W2 => color::JUDGMENT_RGBA[1],
-        TimingWindow::W3 => color::JUDGMENT_RGBA[2],
-        TimingWindow::W4 => color::JUDGMENT_RGBA[3],
-        TimingWindow::W5 => color::JUDGMENT_RGBA[4],
-    }
-}
-
-#[inline(always)]
-fn split_15_10ms_active(profile: &profile_data::Profile, judgment: &Judgment) -> bool {
-    profile.show_fa_plus_window
-        && profile.split_15_10ms
-        && !profile.custom_fantastic_window
-        && judgment.grade == JudgeGrade::Fantastic
-        && judgment.time_error_ms.abs() > timing::FA_PLUS_W010_MS
-        && judgment.time_error_ms.abs() <= timing::FA_PLUS_W0_MS
-}
-
-#[inline(always)]
-fn tap_judgment_is_blue_fantastic(profile: &profile_data::Profile, judgment: &Judgment) -> bool {
-    if judgment.grade != JudgeGrade::Fantastic {
-        return false;
-    }
-    if !profile.show_fa_plus_window {
-        return true;
-    }
-    if profile.fa_plus_10ms_blue_window
-        && !profile.split_15_10ms
-        && !profile.custom_fantastic_window
-    {
-        return judgment.time_error_ms.abs() <= timing::FA_PLUS_W010_MS;
-    }
-    judgment.window == Some(TimingWindow::W0)
+fn column_flash_dimmed(brightness: profile_data::ColumnFlashBrightness) -> bool {
+    matches!(brightness, profile_data::ColumnFlashBrightness::Dimmed)
 }
 
 #[inline(always)]
@@ -2749,152 +1459,35 @@ fn tap_judgment_rows(
     judgment: &Judgment,
     frame_rows: usize,
 ) -> (usize, Option<usize>) {
-    if frame_rows < 7 {
-        return match judgment.grade {
-            JudgeGrade::Fantastic => (0, None),
-            JudgeGrade::Excellent => (1, None),
-            JudgeGrade::Great => (2, None),
-            JudgeGrade::Decent => (3, None),
-            JudgeGrade::WayOff => (4, None),
-            JudgeGrade::Miss => (5, None),
-        };
-    }
-
-    match judgment.grade {
-        JudgeGrade::Fantastic => {
-            if split_15_10ms_active(profile, judgment) {
-                // zmod SplitWhites keeps the 15ms blue base, then overlays the
-                // white Fantastic art at half alpha for the 10ms-15ms slice.
-                (0, Some(1))
-            } else if profile.show_fa_plus_window {
-                if tap_judgment_is_blue_fantastic(profile, judgment) {
-                    (0, None)
-                } else {
-                    (1, None)
-                }
-            } else {
-                (0, None)
-            }
-        }
-        JudgeGrade::Excellent => (2, None),
-        JudgeGrade::Great => (3, None),
-        JudgeGrade::Decent => (4, None),
-        JudgeGrade::WayOff => (5, None),
-        JudgeGrade::Miss => (6, None),
-    }
+    crate_tap_judgment_rows(TapJudgmentRowsParams {
+        grade: judgment.grade,
+        window: judgment.window,
+        time_error_ms: judgment.time_error_ms,
+        frame_rows,
+        show_fa_plus_window: profile.show_fa_plus_window,
+        fa_plus_10ms_blue_window: profile.fa_plus_10ms_blue_window,
+        split_15_10ms: profile.split_15_10ms,
+        custom_fantastic_window: profile.custom_fantastic_window,
+    })
 }
 
 #[inline(always)]
-fn error_bar_tick_alpha(age: f32, dur: f32, multi_tick: bool) -> f32 {
-    if !age.is_finite() || age < 0.0 {
-        return 0.0;
+fn gameplay_error_bar_trim(trim: profile_data::ErrorBarTrim) -> GameplayErrorBarTrim {
+    match trim {
+        profile_data::ErrorBarTrim::Off => GameplayErrorBarTrim::Off,
+        profile_data::ErrorBarTrim::Fantastic => GameplayErrorBarTrim::Fantastic,
+        profile_data::ErrorBarTrim::Excellent => GameplayErrorBarTrim::Excellent,
+        profile_data::ErrorBarTrim::Great => GameplayErrorBarTrim::Great,
     }
-    if multi_tick {
-        if age < 0.03 {
-            1.0
-        } else if age < dur {
-            1.0 - (age - 0.03) / (dur - 0.03).max(0.000_001)
-        } else {
-            0.0
-        }
-    } else if age < dur {
-        1.0
-    } else {
-        0.0
-    }
-}
-
-#[inline(always)]
-fn error_bar_flash_alpha(now: f32, started_at: Option<f32>, dur: f32) -> f32 {
-    let Some(t0) = started_at else {
-        return ERROR_BAR_SEG_ALPHA_BASE;
-    };
-    let age = now - t0;
-    if !age.is_finite() || age < 0.0 || age >= dur {
-        return ERROR_BAR_SEG_ALPHA_BASE;
-    }
-    let t = (age / dur).clamp(0.0, 1.0);
-    1.0 - (1.0 - ERROR_BAR_SEG_ALPHA_BASE) * t
 }
 
 #[inline(always)]
 fn error_bar_trim_max_window_ix(trim: profile_data::ErrorBarTrim) -> usize {
-    match trim {
-        profile_data::ErrorBarTrim::Off => 4,       // W5
-        profile_data::ErrorBarTrim::Fantastic => 0, // W1
-        profile_data::ErrorBarTrim::Excellent => 1, // W2
-        profile_data::ErrorBarTrim::Great => 2,     // W3
-    }
+    gameplay_error_bar_trim_max_window_ix(gameplay_error_bar_trim(trim))
 }
 
 #[inline(always)]
-fn error_bar_boundaries_s(
-    windows_s: [f32; 5],
-    w0_s: Option<f32>,
-    show_fa_plus_window: bool,
-    trim: profile_data::ErrorBarTrim,
-) -> ([f32; 6], usize) {
-    let mut out = [0.0_f32; 6];
-    let mut len: usize = 0;
-    let base_end = error_bar_trim_max_window_ix(trim) + 1; // 1..=5
-    for wi in 1..=base_end {
-        if show_fa_plus_window && wi == 1 {
-            if let Some(w0) = w0_s
-                && len < out.len()
-            {
-                out[len] = w0;
-                len += 1;
-            }
-            if len < out.len() {
-                out[len] = windows_s[0];
-                len += 1;
-            }
-        } else if len < out.len() {
-            out[len] = windows_s[wi - 1];
-            len += 1;
-        }
-    }
-    (out, len)
-}
-
-#[derive(Clone, Copy, Debug)]
-struct ZmodLayoutYs {
-    combo_y: f32,
-    measure_counter_y: Option<f32>,
-    subtractive_scoring_y: f32,
-    subtractive_scoring_addx: f32,
-}
-
-#[derive(Clone, Copy, Debug)]
-struct HudLayoutYs {
-    judgment_y: f32,
-    error_bar_y: f32,
-    error_bar_max_h: f32,
-    zmod_layout: ZmodLayoutYs,
-}
-
-#[inline(always)]
-fn hud_y(
-    normal_y: f32,
-    reverse_y: f32,
-    centered_y: f32,
-    reverse: bool,
-    centered_percent: f32,
-) -> f32 {
-    let base_y = if reverse { reverse_y } else { normal_y };
-    sm_scale(centered_percent, 0.0, 1.0, base_y, centered_y)
-}
-
-#[inline(always)]
-fn zmod_layout_ys(
-    profile: &profile_data::Profile,
-    judgment_y: f32,
-    combo_y_base: f32,
-    reverse: bool,
-) -> ZmodLayoutYs {
-    let mut top_y = judgment_y - ERROR_BAR_JUDGMENT_HEIGHT * 0.5;
-    let mut bottom_y = judgment_y + ERROR_BAR_JUDGMENT_HEIGHT * 0.5;
-
+fn zmod_layout_params(profile: &profile_data::Profile) -> ZmodLayoutParams {
     // Zmod SL-Layout.lua: hasErrorBar checks multiple flags.
     let mut error_bar_mask = profile.error_bar_active_mask;
     if error_bar_mask.is_empty() {
@@ -2902,69 +1495,21 @@ fn zmod_layout_ys(
             profile_data::error_bar_mask_from_style(profile.error_bar, profile.error_bar_text);
     }
     let has_error_bar = !error_bar_mask.is_empty();
-    if has_error_bar {
-        if resolved_judgment_texture(profile).is_none() {
-            // Error bar replaces judgment; no top/bottom adjustment.
-        } else if profile.error_bar_up {
-            top_y -= 15.0;
-        } else {
-            bottom_y += 15.0;
-        }
-    }
-
-    let mut measure_counter_y = None;
-    let has_measure_counter = profile.measure_counter != profile_data::MeasureCounter::None;
-    if has_measure_counter {
-        if profile.measure_counter_up {
-            let mut y = top_y - 8.0;
-            top_y -= 20.0;
-            if profile.broken_run {
-                y -= 16.0;
-            }
-            measure_counter_y = Some(y);
-        } else {
-            measure_counter_y = Some(bottom_y + 8.0);
-            bottom_y += 21.0;
-        }
-    }
-
-    // Zmod: HideLookahead is not implemented in deadsync, so we always take the normal branch.
-    let (subtractive_scoring_y, subtractive_scoring_addx) = match profile.mini_indicator_position {
-        profile_data::MiniIndicatorPosition::Default => {
-            if has_measure_counter && profile.measure_counter_up {
-                let y = bottom_y + 8.0;
-                bottom_y += 16.0;
-                (y, 0.0)
-            } else {
-                let y = top_y - 8.0;
-                top_y -= 16.0;
-                (y, 0.0)
-            }
-        }
+    let mini_indicator_position = match profile.mini_indicator_position {
+        profile_data::MiniIndicatorPosition::Default => LayoutMiniIndicatorPosition::Default,
         profile_data::MiniIndicatorPosition::UnderUpArrow => {
-            if has_measure_counter && profile.measure_counter_up {
-                let y = top_y + 16.0;
-                top_y -= 16.0;
-                (y, -60.0)
-            } else {
-                let y = top_y - 8.0;
-                top_y -= 16.0;
-                (y, 0.0)
-            }
+            LayoutMiniIndicatorPosition::UnderUpArrow
         }
     };
-
-    let combo_y = if reverse {
-        combo_y_base.min(top_y - 20.0)
-    } else {
-        combo_y_base.max(bottom_y + 20.0)
-    };
-
-    ZmodLayoutYs {
-        combo_y,
-        measure_counter_y,
-        subtractive_scoring_y,
-        subtractive_scoring_addx,
+    ZmodLayoutParams {
+        judgment_height: ERROR_BAR_JUDGMENT_HEIGHT,
+        has_error_bar,
+        has_judgment_texture: resolved_judgment_texture(profile).is_some(),
+        error_bar_up: profile.error_bar_up,
+        has_measure_counter: profile.measure_counter != profile_data::MeasureCounter::None,
+        measure_counter_up: profile.measure_counter_up,
+        broken_run: profile.broken_run,
+        mini_indicator_position,
     }
 }
 
@@ -2978,162 +1523,30 @@ fn hud_layout_ys(
     combo_extra_y: f32,
     error_bar_extra_y: f32,
 ) -> HudLayoutYs {
-    let mut zmod_layout = zmod_layout_ys(profile, judgment_y_base, combo_y_base, reverse);
-    zmod_layout.combo_y += combo_extra_y;
-    let judgment_y = judgment_y_base + judgment_extra_y;
-    let (error_bar_y, error_bar_max_h) = if resolved_judgment_texture(profile).is_none() {
-        (judgment_y_base + error_bar_extra_y, 30.0_f32)
-    } else if profile.error_bar_up {
-        (
-            judgment_y_base - ERROR_BAR_OFFSET_FROM_JUDGMENT + error_bar_extra_y,
-            10.0_f32,
-        )
-    } else {
-        (
-            judgment_y_base + ERROR_BAR_OFFSET_FROM_JUDGMENT + error_bar_extra_y,
-            10.0_f32,
-        )
-    };
-    HudLayoutYs {
-        judgment_y,
-        error_bar_y,
-        error_bar_max_h,
-        zmod_layout,
-    }
+    crate_hud_layout_ys(
+        judgment_y_base,
+        combo_y_base,
+        reverse,
+        HudLayoutOffsets {
+            judgment_extra_y,
+            combo_extra_y,
+            error_bar_extra_y,
+        },
+        HudLayoutParams {
+            zmod: zmod_layout_params(profile),
+            has_judgment_texture: resolved_judgment_texture(profile).is_some(),
+            error_bar_up: profile.error_bar_up,
+            error_bar_offset: ERROR_BAR_OFFSET_FROM_JUDGMENT,
+        },
+    )
 }
 
-#[inline(always)]
-fn stream_segment_index_exclusive_end(segs: &[StreamSegment], curr_measure: f32) -> usize {
-    if curr_measure.is_nan() {
-        return segs.len();
+fn cached_zmod_measure_counter_text(text: ZmodMeasureCounterText) -> Arc<str> {
+    match text {
+        ZmodMeasureCounterText::Break(value) => cached_paren_i32(value),
+        ZmodMeasureCounterText::Ratio { current, total } => cached_ratio_i32(current, total),
+        ZmodMeasureCounterText::Total(value) => cached_int_i32(value),
     }
-    segs.partition_point(|s| curr_measure >= s.end as f32)
-}
-
-#[inline(always)]
-fn stream_segment_index_inclusive_end(segs: &[StreamSegment], curr_measure: f32) -> usize {
-    if curr_measure.is_nan() {
-        return segs.len();
-    }
-    segs.partition_point(|s| curr_measure > s.end as f32)
-}
-
-fn zmod_measure_counter_text(
-    curr_beat_floor: f32,
-    curr_measure: f32,
-    segs: &[StreamSegment],
-    stream_index_unshifted: usize,
-    is_lookahead: bool,
-    lookahead: u8,
-    multiplier: f32,
-) -> Option<Arc<str>> {
-    if segs.is_empty() {
-        return None;
-    }
-
-    let mut stream_index = stream_index_unshifted as isize;
-    let beat_div4 = curr_beat_floor / 4.0;
-
-    if curr_measure < 0.0 {
-        if !is_lookahead {
-            let first = segs[0];
-            if !first.is_break {
-                let v = ((-beat_div4) + (1.0 * multiplier)).floor() as i32;
-                return Some(cached_paren_i32(v));
-            }
-            let len = (first.end - first.start) as i32;
-            let v_unscaled = (-beat_div4).floor() as i32 + 1 + len;
-            let v = ((v_unscaled as f32) * multiplier).floor() as i32;
-            return Some(cached_paren_i32(v));
-        }
-        if !segs[0].is_break {
-            stream_index -= 1;
-        }
-    }
-
-    let seg = stream_index
-        .try_into()
-        .ok()
-        .and_then(|i: usize| segs.get(i).copied())?;
-
-    let segment_start = seg.start as f32;
-    let segment_end = seg.end as f32;
-    let seg_len = ((segment_end - segment_start) * multiplier).floor() as i32;
-    let curr_count = (((beat_div4 - segment_start) * multiplier).floor() as i32) + 1;
-
-    if seg.is_break {
-        if lookahead == 0 {
-            return None;
-        }
-        if is_lookahead {
-            Some(cached_paren_i32(seg_len))
-        } else {
-            let remaining = seg_len - curr_count + 1;
-            Some(cached_paren_i32(remaining))
-        }
-    } else if !is_lookahead && curr_count != 0 {
-        Some(cached_ratio_i32(curr_count, seg_len))
-    } else {
-        Some(cached_int_i32(seg_len))
-    }
-}
-
-fn zmod_broken_run_end(segs: &[StreamSegment], start_index: usize) -> (usize, bool) {
-    let Some(first) = segs.get(start_index).copied() else {
-        return (0, false);
-    };
-    if first.is_break {
-        return (first.end, false);
-    }
-
-    let last_index = segs.len().saturating_sub(1);
-    let mut end = first.end;
-    let mut broken = false;
-
-    for i in (start_index + 1)..segs.len() {
-        let seg = segs[i];
-        let len = seg.end - seg.start;
-        if seg.is_break {
-            if len < 4 && i != last_index {
-                end += len;
-                broken = true;
-                continue;
-            }
-            break;
-        }
-
-        broken = true;
-        end += len;
-        if !segs[i - 1].is_break {
-            end += 1;
-        }
-    }
-
-    (end, broken)
-}
-
-fn zmod_broken_run_segment(
-    segs: &[StreamSegment],
-    curr_measure: f32,
-) -> Option<(usize, usize, bool)> {
-    for (i, seg) in segs.iter().copied().enumerate() {
-        if seg.is_break {
-            if curr_measure < seg.end as f32 {
-                return Some((i, seg.end, false));
-            }
-            continue;
-        }
-        let (end, broken) = zmod_broken_run_end(segs, i);
-        if curr_measure < end as f32 {
-            return Some((i, end, broken));
-        }
-    }
-    None
-}
-
-fn zmod_run_timer_index(segs: &[StreamSegment], curr_measure: f32) -> Option<usize> {
-    let i = stream_segment_index_inclusive_end(segs, curr_measure);
-    if i < segs.len() { Some(i) } else { None }
 }
 
 #[inline(always)]
@@ -3288,7 +1701,7 @@ pub fn prewarm_text_layout(
             }
             prewarm_i32(cache, mc_font_name, max_measure_len.max(16));
         }
-        if zmod_indicator_mode(profile) != profile_data::MiniIndicator::None {
+        if zmod_indicator_mode(profile) != MiniIndicatorMode::None {
             for &value in &[0.0, 50.0, 89.0, 95.0, 100.0] {
                 prewarm_percent(cache, mc_font_name, value);
                 prewarm_signed_percent(cache, mc_font_name, value, true);
@@ -3325,7 +1738,7 @@ fn zmod_combo_quint_active(
     player_idx: usize,
     profile: &profile_data::Profile,
 ) -> bool {
-    if !profile.show_fa_plus_window || player_idx >= state.num_players() {
+    if player_idx >= state.num_players() {
         return false;
     }
     let counts = if profile.combo_mode == profile_data::ComboMode::FullCombo {
@@ -3334,70 +1747,34 @@ fn zmod_combo_quint_active(
     } else {
         state.players()[player_idx].current_combo_window_counts
     };
-    counts.w0 > 0
-        && counts.w1 == 0
-        && counts.w2 == 0
-        && counts.w3 == 0
-        && counts.w4 == 0
-        && counts.w5 == 0
-        && counts.miss == 0
+    crate_zmod_combo_quint_active(profile.show_fa_plus_window, counts)
 }
 
 #[inline(always)]
-fn zmod_combo_glow_pair(grade: JudgeGrade, quint: bool) -> ([f32; 4], [f32; 4]) {
-    if quint && matches!(grade, JudgeGrade::Fantastic) {
-        return (color::rgba_hex("#F7C0FE"), color::rgba_hex("#E928FF"));
-    }
-    match grade {
-        JudgeGrade::Fantastic => (color::rgba_hex("#C8FFFF"), color::rgba_hex("#6BF0FF")),
-        JudgeGrade::Excellent => (color::rgba_hex("#FDFFC9"), color::rgba_hex("#FDDB85")),
-        JudgeGrade::Great => (color::rgba_hex("#C9FFC9"), color::rgba_hex("#94FEC1")),
-        _ => ([1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0]),
+fn zmod_combo_color_style(colors: profile_data::ComboColors) -> ZmodComboColorStyle {
+    match colors {
+        profile_data::ComboColors::None => ZmodComboColorStyle::None,
+        profile_data::ComboColors::Rainbow => ZmodComboColorStyle::Rainbow,
+        profile_data::ComboColors::RainbowScroll => ZmodComboColorStyle::RainbowScroll,
+        profile_data::ComboColors::Glow => ZmodComboColorStyle::Glow,
+        profile_data::ComboColors::Solid => ZmodComboColorStyle::Solid,
     }
 }
 
-#[inline(always)]
-fn zmod_combo_solid_color(grade: JudgeGrade, quint: bool) -> [f32; 4] {
-    if quint && matches!(grade, JudgeGrade::Fantastic) {
-        return color::rgba_hex("#E928FF");
-    }
-    match grade {
-        JudgeGrade::Fantastic => color::rgba_hex("#21CCE8"),
-        JudgeGrade::Excellent => color::rgba_hex("#E29C18"),
-        JudgeGrade::Great => color::rgba_hex("#66C955"),
-        _ => [1.0, 1.0, 1.0, 1.0],
-    }
-}
-
-#[inline(always)]
-fn zmod_combo_glow_color(color1: [f32; 4], color2: [f32; 4], elapsed: f32) -> [f32; 4] {
-    let effect_period = 0.8_f32;
-    let through = (elapsed / effect_period).fract();
-    let anim_t = ((through * 2.0 * std::f32::consts::PI).sin() + 1.0) * 0.5;
-    [
-        color1[0] + (color2[0] - color1[0]) * anim_t,
-        color1[1] + (color2[1] - color1[1]) * anim_t,
-        color1[2] + (color2[2] - color1[2]) * anim_t,
-        1.0,
-    ]
-}
-
-#[inline(always)]
-fn zmod_combo_rainbow_color(elapsed: f32, scroll: bool, combo: u32) -> [f32; 4] {
-    let speed = if scroll { 0.45 } else { 0.35 };
-    let offset = if scroll { combo as f32 * 0.013 } else { 0.0 };
-    let hue = (elapsed * speed + offset).fract();
-    let h6 = hue * 6.0;
-    let i = h6.floor() as i32;
-    let f = h6 - i as f32;
-    let q = 1.0 - f;
-    match i.rem_euclid(6) {
-        0 => [1.0, f, 0.0, 1.0],
-        1 => [q, 1.0, 0.0, 1.0],
-        2 => [0.0, 1.0, f, 1.0],
-        3 => [0.0, q, 1.0, 1.0],
-        4 => [f, 0.0, 1.0, 1.0],
-        _ => [1.0, 0.0, q, 1.0],
+fn zmod_combo_color_params(
+    state: &State,
+    p: &PlayerRuntime,
+    profile: &profile_data::Profile,
+    player_idx: usize,
+) -> ZmodComboColorParams {
+    ZmodComboColorParams {
+        style: zmod_combo_color_style(profile.combo_colors),
+        full_combo_mode: profile.combo_mode == profile_data::ComboMode::FullCombo,
+        combo: p.combo,
+        full_combo_grade: p.full_combo_grade,
+        current_combo_grade: p.current_combo_grade,
+        quint_active: zmod_combo_quint_active(state, player_idx, profile),
+        elapsed_s: state.total_elapsed_in_screen(),
     }
 }
 
@@ -3407,64 +1784,7 @@ fn zmod_resolved_combo_color(
     profile: &profile_data::Profile,
     player_idx: usize,
 ) -> [f32; 4] {
-    let quint_active = zmod_combo_quint_active(state, player_idx, profile);
-    match profile.combo_colors {
-        profile_data::ComboColors::None => [1.0, 1.0, 1.0, 1.0],
-        profile_data::ComboColors::Rainbow => {
-            if profile.combo_mode == profile_data::ComboMode::FullCombo {
-                if matches!(
-                    p.full_combo_grade,
-                    Some(JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great)
-                ) {
-                    zmod_combo_rainbow_color(state.total_elapsed_in_screen(), false, p.combo)
-                } else {
-                    [1.0, 1.0, 1.0, 1.0]
-                }
-            } else {
-                zmod_combo_rainbow_color(state.total_elapsed_in_screen(), false, p.combo)
-            }
-        }
-        profile_data::ComboColors::RainbowScroll => {
-            if profile.combo_mode == profile_data::ComboMode::FullCombo {
-                if matches!(
-                    p.full_combo_grade,
-                    Some(JudgeGrade::Fantastic | JudgeGrade::Excellent | JudgeGrade::Great)
-                ) {
-                    zmod_combo_rainbow_color(state.total_elapsed_in_screen(), true, p.combo)
-                } else {
-                    [1.0, 1.0, 1.0, 1.0]
-                }
-            } else {
-                zmod_combo_rainbow_color(state.total_elapsed_in_screen(), true, p.combo)
-            }
-        }
-        profile_data::ComboColors::Glow => {
-            let combo_grade = if profile.combo_mode == profile_data::ComboMode::FullCombo {
-                p.full_combo_grade
-            } else {
-                p.current_combo_grade
-            };
-            if let Some(grade) = combo_grade {
-                let (color1, color2) =
-                    zmod_combo_glow_pair(grade, quint_active && grade == JudgeGrade::Fantastic);
-                zmod_combo_glow_color(color1, color2, state.total_elapsed_in_screen())
-            } else {
-                [1.0, 1.0, 1.0, 1.0]
-            }
-        }
-        profile_data::ComboColors::Solid => {
-            let combo_grade = if profile.combo_mode == profile_data::ComboMode::FullCombo {
-                p.full_combo_grade
-            } else {
-                p.current_combo_grade
-            };
-            if let Some(grade) = combo_grade {
-                zmod_combo_solid_color(grade, quint_active && grade == JudgeGrade::Fantastic)
-            } else {
-                [1.0, 1.0, 1.0, 1.0]
-            }
-        }
-    }
+    crate_zmod_resolved_combo_color(zmod_combo_color_params(state, p, profile, player_idx))
 }
 
 fn zmod_static_combo_color(
@@ -3473,46 +1793,7 @@ fn zmod_static_combo_color(
     profile: &profile_data::Profile,
     player_idx: usize,
 ) -> [f32; 4] {
-    let combo_grade = if profile.combo_mode == profile_data::ComboMode::FullCombo {
-        p.full_combo_grade
-    } else {
-        p.current_combo_grade
-    };
-    if let Some(grade) = combo_grade {
-        let quint_active = zmod_combo_quint_active(state, player_idx, profile);
-        zmod_combo_solid_color(grade, quint_active && grade == JudgeGrade::Fantastic)
-    } else {
-        [1.0, 1.0, 1.0, 1.0]
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-struct MiniIndicatorProgress {
-    kept_percent: f64,
-    lost_percent: f64,
-    pace_percent: f64,
-    current_score_percent: f64,
-    current_possible_ratio: f64,
-    current_possible_dp: i32,
-    actual_dp: i32,
-    white_count: u32,
-    white_10ms_count: u32,
-    w2: u32,
-    w3: u32,
-    w4: u32,
-    w5: u32,
-    miss: u32,
-    let_go: u32,
-    mines_hit: u32,
-    judged_any: bool,
-}
-
-#[inline(always)]
-fn zmod_percent_from_points(points: i32, total: i32) -> f64 {
-    if total <= 0 {
-        return 0.0;
-    }
-    ((f64::from(points.max(0)) / f64::from(total)) * 10000.0).floor() / 100.0
+    crate_zmod_static_combo_color(zmod_combo_color_params(state, p, profile, player_idx))
 }
 
 fn zmod_mini_indicator_progress(
@@ -3640,206 +1921,85 @@ fn zmod_mini_indicator_progress(
 }
 
 #[inline(always)]
-fn zmod_subtractive_counter_state(
-    progress: &MiniIndicatorProgress,
+fn mini_indicator_score_type(
     score_type: profile_data::MiniIndicatorScoreType,
-) -> (u32, bool) {
-    let forced_percent = progress.w3 > 0
-        || progress.w4 > 0
-        || progress.w5 > 0
-        || progress.miss > 0
-        || progress.let_go > 0
-        || progress.mines_hit > 0;
+) -> MiniIndicatorScoreType {
     match score_type {
-        profile_data::MiniIndicatorScoreType::Itg => {
-            (progress.w2, forced_percent || progress.w2 > 10)
-        }
-        profile_data::MiniIndicatorScoreType::Ex => (
-            progress.white_count,
-            forced_percent || progress.w2 > 0 || progress.white_count > 10,
-        ),
-        profile_data::MiniIndicatorScoreType::HardEx => (
-            progress.white_10ms_count,
-            forced_percent || progress.w2 > 0 || progress.white_10ms_count > 10,
-        ),
+        profile_data::MiniIndicatorScoreType::Itg => MiniIndicatorScoreType::Itg,
+        profile_data::MiniIndicatorScoreType::Ex => MiniIndicatorScoreType::Ex,
+        profile_data::MiniIndicatorScoreType::HardEx => MiniIndicatorScoreType::HardEx,
     }
 }
 
 #[inline(always)]
-fn zmod_subtractive_points(
-    progress: &MiniIndicatorProgress,
-    score_type: profile_data::MiniIndicatorScoreType,
-) -> u32 {
-    match score_type {
-        profile_data::MiniIndicatorScoreType::Itg => progress
-            .current_possible_dp
-            .saturating_sub(progress.actual_dp)
-            .max(0) as u32,
-        profile_data::MiniIndicatorScoreType::Ex => progress
-            .white_count
-            .saturating_add(progress.w2.saturating_mul(3))
-            .saturating_add(progress.w3.saturating_mul(5))
-            .saturating_add(
-                progress
-                    .w4
-                    .saturating_add(progress.w5)
-                    .saturating_add(progress.miss)
-                    .saturating_mul(7),
-            )
-            .saturating_add(progress.let_go.saturating_mul(2))
-            .saturating_add(progress.mines_hit.saturating_mul(2)),
-        profile_data::MiniIndicatorScoreType::HardEx => progress
-            .white_10ms_count
-            .saturating_add(progress.w2.saturating_mul(5))
-            .saturating_add(
-                progress
-                    .w3
-                    .saturating_add(progress.w4)
-                    .saturating_add(progress.w5)
-                    .saturating_add(progress.miss)
-                    .saturating_mul(7),
-            )
-            .saturating_add(progress.let_go.saturating_mul(2))
-            .saturating_add(progress.mines_hit.saturating_mul(2)),
+fn mini_indicator_mode(mode: profile_data::MiniIndicator) -> MiniIndicatorMode {
+    match mode {
+        profile_data::MiniIndicator::None => MiniIndicatorMode::None,
+        profile_data::MiniIndicator::SubtractiveScoring => MiniIndicatorMode::SubtractiveScoring,
+        profile_data::MiniIndicator::PredictiveScoring => MiniIndicatorMode::PredictiveScoring,
+        profile_data::MiniIndicator::PaceScoring => MiniIndicatorMode::PaceScoring,
+        profile_data::MiniIndicator::RivalScoring => MiniIndicatorMode::RivalScoring,
+        profile_data::MiniIndicator::Pacemaker => MiniIndicatorMode::Pacemaker,
+        profile_data::MiniIndicator::StreamProg => MiniIndicatorMode::StreamProg,
     }
 }
 
 #[inline(always)]
-fn zmod_indicator_mode(profile: &profile_data::Profile) -> profile_data::MiniIndicator {
-    if profile.mini_indicator != profile_data::MiniIndicator::None {
-        return profile.mini_indicator;
-    }
-    if profile.subtractive_scoring {
-        profile_data::MiniIndicator::SubtractiveScoring
-    } else if profile.pacemaker {
-        profile_data::MiniIndicator::Pacemaker
-    } else {
-        profile_data::MiniIndicator::None
-    }
+fn zmod_indicator_mode(profile: &profile_data::Profile) -> MiniIndicatorMode {
+    zmod_resolved_mini_indicator_mode(
+        mini_indicator_mode(profile.mini_indicator),
+        profile.subtractive_scoring,
+        profile.pacemaker,
+    )
 }
 
 #[inline(always)]
-fn zmod_indicator_default_color(score_percent: f64) -> [f32; 4] {
-    if score_percent >= 96.0 {
-        color::JUDGMENT_RGBA[0] // Fantastic
-    } else if score_percent >= 89.0 {
-        color::JUDGMENT_RGBA[1] // Excellent
-    } else if score_percent >= 80.0 {
-        color::JUDGMENT_RGBA[2] // Great
-    } else if score_percent >= 68.0 {
-        color::JUDGMENT_RGBA[3] // Decent
-    } else {
-        color::JUDGMENT_RGBA[5] // Miss
-    }
-}
-
-#[inline(always)]
-fn zmod_indicator_detailed_color(score_percent: f64) -> [f32; 4] {
-    if score_percent >= 99.0 {
-        color::rgba_hex("#FF00FF")
-    } else if score_percent >= 98.0 {
-        color::rgba_hex("#256ECE")
-    } else if score_percent >= 96.0 {
-        color::rgba_hex("#FFFFFF")
-    } else if score_percent >= 94.0 {
-        color::rgba_hex("#FDA307")
-    } else if score_percent >= 90.0 {
-        color::rgba_hex("#79A901")
-    } else if score_percent >= 85.0 {
-        color::rgba_hex("#B932E2")
-    } else {
-        color::rgba_hex("#FF0000")
-    }
-}
-
-#[inline(always)]
-fn zmod_indicator_score_color(
-    score_percent: f64,
-    style: profile_data::MiniIndicatorColor,
-) -> [f32; 4] {
+fn mini_indicator_color_style(style: profile_data::MiniIndicatorColor) -> MiniIndicatorColorStyle {
     match style {
-        profile_data::MiniIndicatorColor::Default => zmod_indicator_default_color(score_percent),
-        profile_data::MiniIndicatorColor::Detailed => zmod_indicator_detailed_color(score_percent),
-        profile_data::MiniIndicatorColor::Combo => zmod_indicator_default_color(score_percent),
+        profile_data::MiniIndicatorColor::Default => MiniIndicatorColorStyle::Default,
+        profile_data::MiniIndicatorColor::Detailed => MiniIndicatorColorStyle::Detailed,
+        profile_data::MiniIndicatorColor::Combo => MiniIndicatorColorStyle::Combo,
     }
 }
 
 #[inline(always)]
-fn zmod_mini_indicator_score_color(
-    score_percent: f64,
-    state: &State,
-    p: &PlayerRuntime,
-    profile: &profile_data::Profile,
-    player_idx: usize,
-) -> [f32; 4] {
-    match profile.mini_indicator_color {
-        profile_data::MiniIndicatorColor::Combo => {
-            zmod_static_combo_color(state, p, profile, player_idx)
+fn mini_indicator_subtractive_display(
+    display: profile_data::MiniIndicatorSubtractiveDisplay,
+) -> MiniIndicatorSubtractiveDisplay {
+    match display {
+        profile_data::MiniIndicatorSubtractiveDisplay::Percent => {
+            MiniIndicatorSubtractiveDisplay::CountThenPercent
         }
-        style => zmod_indicator_score_color(score_percent, style),
+        profile_data::MiniIndicatorSubtractiveDisplay::Points => {
+            MiniIndicatorSubtractiveDisplay::Points
+        }
     }
 }
 
 #[inline(always)]
 fn zmod_mini_indicator_zoom(size: profile_data::MiniIndicatorSize) -> f32 {
-    match size {
-        profile_data::MiniIndicatorSize::Default => 0.35,
-        profile_data::MiniIndicatorSize::Large => 0.5,
-    }
-}
-
-#[inline(always)]
-fn zmod_rival_color(pace: f64, rival_pace: f64) -> [f32; 4] {
-    let r = (1.0 - (pace - rival_pace)).clamp(0.0, 1.0) as f32;
-    let g = (0.5 - (rival_pace - pace)).clamp(0.0, 1.0) as f32;
-    let b = (1.0 - (rival_pace - pace)).clamp(0.0, 1.0) as f32;
-    [r, g, b, 1.0]
-}
-
-#[inline(always)]
-fn zmod_pacemaker_color(pace: f64, rival_pace: f64) -> [f32; 4] {
-    let r = (1.0 - (pace - rival_pace) / 100.0).clamp(0.0, 1.0) as f32;
-    let g = (0.5 - (rival_pace - pace) / 100.0).clamp(0.0, 1.0) as f32;
-    let b = (1.0 - (rival_pace - pace) / 100.0).clamp(0.0, 1.0) as f32;
-    [r, g, b, 1.0]
+    let size = match size {
+        profile_data::MiniIndicatorSize::Default => MiniIndicatorSize::Default,
+        profile_data::MiniIndicatorSize::Large => MiniIndicatorSize::Large,
+    };
+    crate_zmod_mini_indicator_zoom(size)
 }
 
 fn zmod_stream_prog_completion(state: &State, player_idx: usize) -> Option<f64> {
     let total_stream = state.mini_indicator_total_stream_measures(player_idx) as f64;
-    if total_stream <= 0.0 {
-        return None;
-    }
     let segs = state.mini_indicator_stream_segments(player_idx);
-    if segs.is_empty() {
-        return None;
-    }
-
     let beat_floor = state.visible_beat(player_idx).floor();
-    if !beat_floor.is_finite() {
-        return Some(0.0);
-    }
-    let upper_beat = (beat_floor as i32).saturating_add(1).max(0);
-    if upper_beat <= 0 {
-        return Some(0.0);
-    }
-    let mut completed_stream_beats: i64 = 0;
-    for seg in segs {
-        let start_beat = (seg.start as i32).saturating_mul(4);
-        if start_beat >= upper_beat {
-            break;
+    zmod_stream_prog_completion_for_beat(total_stream, segs, beat_floor)
+}
+
+fn cached_zmod_mini_indicator_text(text: ZmodMiniIndicatorText) -> Arc<str> {
+    match text {
+        ZmodMiniIndicatorText::Percent(value) => cached_percent2_f64(value),
+        ZmodMiniIndicatorText::SignedPercent { value, negative } => {
+            cached_signed_percent2_f64(value, negative)
         }
-        if seg.is_break {
-            continue;
-        }
-        let end_beat = (seg.end as i32).saturating_mul(4);
-        let lo = start_beat.max(0);
-        let hi = upper_beat.min(end_beat);
-        if hi > lo {
-            completed_stream_beats += i64::from(hi - lo);
-        }
+        ZmodMiniIndicatorText::NegativeInt(value) => cached_neg_int_u32(value),
     }
-    let completed_stream_measures = (completed_stream_beats as f64) / 4.0;
-    Some((completed_stream_measures / total_stream).clamp(0.0, 1.0))
 }
 
 fn zmod_mini_indicator_text(
@@ -3849,438 +2009,31 @@ fn zmod_mini_indicator_text(
     player_idx: usize,
 ) -> Option<(Arc<str>, [f32; 4])> {
     let mode = zmod_indicator_mode(profile);
-    if mode == profile_data::MiniIndicator::None {
-        return None;
-    }
-
     let progress =
         zmod_mini_indicator_progress(state, p, player_idx, profile.mini_indicator_score_type);
-    if !progress.judged_any {
-        return None;
-    }
-
-    match mode {
-        profile_data::MiniIndicator::SubtractiveScoring => {
-            if profile.mini_indicator_subtractive_display
-                == profile_data::MiniIndicatorSubtractiveDisplay::Points
-            {
-                let points = zmod_subtractive_points(&progress, profile.mini_indicator_score_type);
-                let score = progress.kept_percent.clamp(0.0, 100.0);
-                return Some((
-                    cached_neg_int_u32(points),
-                    zmod_mini_indicator_score_color(score, state, p, profile, player_idx),
-                ));
-            }
-
-            let (count, entered_percent_mode) =
-                zmod_subtractive_counter_state(&progress, profile.mini_indicator_score_type);
-            if !(entered_percent_mode || p.is_failing || p.life <= 0.0) && count > 0 {
-                let rgba =
-                    if profile.mini_indicator_color == profile_data::MiniIndicatorColor::Combo {
-                        zmod_static_combo_color(state, p, profile, player_idx)
-                    } else {
-                        color::rgba_hex("#ff55cc")
-                    };
-                return Some((cached_neg_int_u32(count), rgba));
-            }
-
-            let pcts = &progress;
-            let score = pcts.kept_percent.clamp(0.0, 100.0);
-            Some((
-                cached_signed_percent2_f64(pcts.lost_percent.clamp(0.0, 100.0), true),
-                zmod_mini_indicator_score_color(score, state, p, profile, player_idx),
-            ))
-        }
-        profile_data::MiniIndicator::PredictiveScoring => {
-            let score = progress.kept_percent.clamp(0.0, 100.0);
-            Some((
-                cached_percent2_f64(score),
-                zmod_mini_indicator_score_color(score, state, p, profile, player_idx),
-            ))
-        }
-        profile_data::MiniIndicator::PaceScoring => {
-            let pace = progress.pace_percent.clamp(0.0, 100.0);
-            Some((
-                cached_percent2_f64(pace),
-                zmod_mini_indicator_score_color(pace, state, p, profile, player_idx),
-            ))
-        }
-        profile_data::MiniIndicator::RivalScoring => {
-            let pace = progress.current_score_percent.clamp(0.0, 100.0);
-            let rival_score = state
-                .mini_indicator_rival_score_percent(player_idx)
-                .clamp(0.0, 100.0);
-            let rival_pace =
-                (progress.current_possible_ratio * 10000.0 * rival_score).floor() / 10000.0;
-            let diff = (pace - rival_pace).abs();
-            let text = cached_signed_percent2_f64(diff, pace < rival_pace);
-            let rgba = if profile.mini_indicator_color == profile_data::MiniIndicatorColor::Combo {
-                zmod_static_combo_color(state, p, profile, player_idx)
-            } else {
-                zmod_rival_color(pace, rival_pace)
-            };
-            Some((text, rgba))
-        }
-        profile_data::MiniIndicator::Pacemaker => {
-            let pace = (progress.current_score_percent.clamp(0.0, 100.0) * 100.0).floor();
-            let target_ratio =
-                (state.mini_indicator_target_score_percent(player_idx) / 100.0).clamp(0.0, 1.0);
-            let rival_pace =
-                (progress.current_possible_ratio * 1_000_000.0 * target_ratio).floor() / 100.0;
-
-            let text = if pace < rival_pace {
-                let diff = ((rival_pace - pace).floor() / 100.0).max(0.0);
-                cached_signed_percent2_f64(diff, true)
-            } else {
-                let diff = ((pace - rival_pace).floor() / 100.0).max(0.0);
-                cached_signed_percent2_f64(diff, false)
-            };
-            let rgba = if profile.mini_indicator_color == profile_data::MiniIndicatorColor::Combo {
-                zmod_static_combo_color(state, p, profile, player_idx)
-            } else {
-                zmod_pacemaker_color(pace, rival_pace)
-            };
-            Some((text, rgba))
-        }
-        profile_data::MiniIndicator::StreamProg => {
-            let completion = zmod_stream_prog_completion(state, player_idx)?;
-            let rgba = if completion >= 0.9 {
-                [
-                    0.0,
-                    1.0,
-                    ((completion - 0.9) * 10.0).clamp(0.0, 1.0) as f32,
-                    1.0,
-                ]
-            } else if completion >= 0.5 {
-                [
-                    ((0.9 - completion) * 10.0 / 4.0).clamp(0.0, 1.0) as f32,
-                    1.0,
-                    0.0,
-                    1.0,
-                ]
-            } else {
-                [
-                    1.0,
-                    ((completion - 0.2) * 10.0 / 3.0).clamp(0.0, 1.0) as f32,
-                    0.0,
-                    1.0,
-                ]
-            };
-            Some((
-                cached_percent2_f64((completion * 100.0).clamp(0.0, 100.0)),
-                rgba,
-            ))
-        }
-        profile_data::MiniIndicator::None => None,
-    }
-}
-
-#[inline(always)]
-fn rage_frustum(l: f32, r: f32, b: f32, t: f32, zn: f32, zf: f32) -> Matrix4 {
-    let a = (r + l) / (r - l);
-    let bb = (t + b) / (t - b);
-    let c = -(zf + zn) / (zf - zn);
-    let d = -(2.0 * zf * zn) / (zf - zn);
-    // Match ITGmania's RageDisplay::GetFrustumMatrix (OpenGL-style frustum matrix).
-    //
-    // Note: `glam::Mat4::from_cols_array` takes elements in column-major order.
-    Matrix4::from_cols_array(&[
-        2.0 * zn / (r - l),
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        2.0 * zn / (t - b),
-        0.0,
-        0.0,
-        a,
-        bb,
-        c,
-        -1.0,
-        0.0,
-        0.0,
-        d,
-        0.0,
-    ])
-}
-
-fn notefield_view_proj(
-    screen_w: f32,
-    screen_h: f32,
-    playfield_center_x: f32,
-    center_y: f32,
-    tilt: f32,
-    skew: f32,
-    reverse: bool,
-) -> Option<Matrix4> {
-    if !screen_w.is_finite() || !screen_h.is_finite() || screen_w <= 0.0 || screen_h <= 0.0 {
-        return None;
-    }
-
-    let half_w = 0.5 * screen_w;
-    let half_h = 0.5 * screen_h;
-
-    // ITGmania: Player::PushPlayerMatrix -> LoadMenuPerspective(45, w, h, vanish_x, center_y)
-    let fov_deg = 45.0_f32;
-    let theta = (0.5 * fov_deg).to_radians();
-    let tan_theta = theta.tan();
-    if !tan_theta.is_finite() || tan_theta.abs() < 1e-6 {
-        return None;
-    }
-    let dist = half_w / tan_theta;
-    if !dist.is_finite() || dist <= 0.0 {
-        return None;
-    }
-
-    let vanish_x = sm_scale(skew, 0.1, 1.0, playfield_center_x, half_w);
-    let vanish_y = center_y;
-
-    let near = 1.0_f32;
-    let far = dist + 1000.0_f32;
-
-    // Match RageDisplay::LoadMenuPerspective exactly (ITGmania).
-    let mut vp_x = sm_scale(vanish_x, 0.0, screen_w, screen_w, 0.0);
-    let mut vp_y = sm_scale(vanish_y, 0.0, screen_h, screen_h, 0.0);
-    vp_x -= half_w;
-    vp_y -= half_h;
-    let l = (vp_x - half_w) / dist;
-    let r = (vp_x + half_w) / dist;
-    let b = (vp_y + half_h) / dist;
-    let t = (vp_y - half_h) / dist;
-    let proj = rage_frustum(l, r, b, t, near, far);
-
-    let eye = Vector3::new(-vp_x + half_w, -vp_y + half_h, dist);
-    let at = Vector3::new(-vp_x + half_w, -vp_y + half_h, 0.0);
-    let view = Matrix4::look_at_rh(eye, at, Vector3::Y);
-
-    // ITGmania: PlayerNoteFieldPositioner applies tilt/zoom/y_offset on the NoteField actor.
-    let reverse_mult = if reverse { -1.0 } else { 1.0 };
-    let tilt = tilt.clamp(-1.0, 1.0);
-    let tilt_deg = (-30.0 * tilt) * reverse_mult;
-    let tilt_abs = tilt.abs();
-    let tilt_scale = 1.0 - 0.1 * tilt_abs;
-    let y_offset_screen = if tilt > 0.0 {
-        -45.0 * tilt
-    } else {
-        20.0 * tilt
-    } * reverse_mult;
-    // Screen y-down to world y-up.
-    let y_offset_world = -y_offset_screen;
-
-    let pivot_x = playfield_center_x - half_w;
-    let pivot_y = half_h - center_y;
-    // Convert our world coords (centered, y-up) back into the SM-style screen
-    // coords (top-left, y-down) expected by the menu perspective camera.
-    let world_to_screen = Matrix4::from_cols_array(&[
-        1.0, 0.0, 0.0, 0.0, //
-        0.0, -1.0, 0.0, 0.0, //
-        0.0, 0.0, 1.0, 0.0, //
-        half_w, half_h, 0.0, 1.0,
-    ]);
-    let field = Matrix4::from_translation(Vector3::new(0.0, y_offset_world, 0.0))
-        * Matrix4::from_translation(Vector3::new(pivot_x, pivot_y, 0.0))
-        * Matrix4::from_rotation_x(tilt_deg.to_radians())
-        * Matrix4::from_scale(Vector3::new(tilt_scale, tilt_scale, 1.0))
-        * Matrix4::from_translation(Vector3::new(-pivot_x, -pivot_y, 0.0));
-
-    Some((proj * view) * world_to_screen * field)
+    let output = zmod_mini_indicator_output(
+        &progress,
+        ZmodMiniIndicatorParams {
+            mode,
+            color_style: mini_indicator_color_style(profile.mini_indicator_color),
+            subtractive_display: mini_indicator_subtractive_display(
+                profile.mini_indicator_subtractive_display,
+            ),
+            score_type: mini_indicator_score_type(profile.mini_indicator_score_type),
+            combo_color: zmod_static_combo_color(state, p, profile, player_idx),
+            is_failing: p.is_failing,
+            life: p.life,
+            rival_score_percent: state.mini_indicator_rival_score_percent(player_idx),
+            target_score_percent: state.mini_indicator_target_score_percent(player_idx),
+            stream_completion: zmod_stream_prog_completion(state, player_idx),
+        },
+    )?;
+    Some((cached_zmod_mini_indicator_text(output.text), output.color))
 }
 
 #[inline(always)]
 fn hold_explosion_enabled(profile: &profile_data::Profile) -> bool {
     hold_explosion_enabled_for_options(tap_explosion_options_from_profile(profile))
-}
-
-#[inline(always)]
-fn song_time_ns_to_seconds(time_ns: SongTimeNs) -> f32 {
-    (time_ns as f64 * 1.0e-9) as f32
-}
-
-#[inline(always)]
-fn song_time_ns_delta_seconds(lhs: SongTimeNs, rhs: SongTimeNs) -> f32 {
-    ((lhs as i128 - rhs as i128) as f64 * 1.0e-9) as f32
-}
-
-#[inline(always)]
-fn lane_window_bounds_by_note_row(
-    note_indices: &[usize],
-    notes: &[Note],
-    min_row: i32,
-    max_row: i32,
-) -> (usize, usize) {
-    if max_row < 0 {
-        return (0, 0);
-    }
-    let min_row = min_row.max(0);
-    (
-        note_indices.partition_point(|&note_index| note_itg_row(&notes[note_index]) < min_row),
-        note_indices.partition_point(|&note_index| note_itg_row(&notes[note_index]) <= max_row),
-    )
-}
-
-#[inline(always)]
-fn note_itg_row(note: &Note) -> i32 {
-    // ITG's TrackMap rows are BeatToNoteRow(beat). Dead Sync keeps a separate
-    // dense row_index for gameplay row bookkeeping.
-    beat_to_note_row(note.beat)
-}
-
-#[inline(always)]
-fn lane_hold_window_bounds_by_note_row(
-    hold_indices: &[usize],
-    notes: &[Note],
-    min_row: i32,
-    max_row: i32,
-) -> (usize, usize) {
-    let (mut start, end) = lane_window_bounds_by_note_row(hold_indices, notes, min_row, max_row);
-    let min_row = min_row.max(0);
-    while start > 0 {
-        let prev_note_index = hold_indices[start - 1];
-        let prev_end_row = notes[prev_note_index]
-            .hold
-            .as_ref()
-            .map_or(note_itg_row(&notes[prev_note_index]), |hold| {
-                beat_to_note_row(hold.end_beat)
-            });
-        if prev_end_row < min_row {
-            break;
-        }
-        start -= 1;
-    }
-    (start, end)
-}
-
-#[inline(always)]
-fn find_first_displayed_beat(
-    current_beat: f32,
-    draw_distance_after_targets: f32,
-    note_count_stats: &[NoteCountStat],
-    mut y_offset_for_beat: impl FnMut(f32) -> f32,
-) -> Option<f32> {
-    if !current_beat.is_finite() || !draw_distance_after_targets.is_finite() {
-        return None;
-    }
-    let mut high = current_beat.max(0.0);
-    let has_cache = !note_count_stats.is_empty();
-    let mut low = if has_cache { 0.0 } else { high - 4.0 };
-    let mut first = low;
-    for _ in 0..24 {
-        let mid = (low + high) * 0.5;
-        if y_offset_for_beat(mid) < -draw_distance_after_targets
-            || (has_cache
-                && note_count_range(note_count_stats, mid, current_beat) > MAX_NOTES_AFTER)
-        {
-            first = mid;
-            low = mid;
-        } else {
-            high = mid;
-        }
-    }
-    Some(first)
-}
-
-#[inline(always)]
-fn note_count_range(stats: &[NoteCountStat], low: f32, high: f32) -> usize {
-    let low = note_count_at(stats, low);
-    let high = note_count_at(stats, high);
-    high.notes_upper.saturating_sub(low.notes_lower)
-}
-
-#[inline(always)]
-fn note_count_at(stats: &[NoteCountStat], beat: f32) -> NoteCountStat {
-    let ix = stats
-        .partition_point(|stat| stat.beat <= beat)
-        .saturating_sub(1);
-    stats[ix]
-}
-
-#[inline(always)]
-fn find_last_displayed_beat(
-    current_beat: f32,
-    draw_distance_before_targets: f32,
-    displayed_speed_percent: f32,
-    boomerang: bool,
-    mut y_offset_for_beat: impl FnMut(f32) -> (f32, bool),
-) -> Option<f32> {
-    if !current_beat.is_finite() || !draw_distance_before_targets.is_finite() {
-        return None;
-    }
-    let mut search_distance = 10.0;
-    let mut last = current_beat + search_distance;
-    for _ in 0..20 {
-        let (y_offset, before_peak) = y_offset_for_beat(last);
-        if boomerang && !before_peak {
-            last += search_distance;
-        } else if y_offset > draw_distance_before_targets {
-            last -= search_distance;
-        } else {
-            last += search_distance;
-        }
-        search_distance *= 0.5;
-    }
-    if displayed_speed_percent < 0.75 {
-        last = last.min(current_beat + 16.0);
-    }
-    Some(last)
-}
-
-#[inline(always)]
-fn for_each_visible_note_index(
-    note_indices: &[usize],
-    notes: &[Note],
-    visible_row_range: Option<(i32, i32)>,
-    mut visit: impl FnMut(usize),
-) {
-    if let Some((min_row, max_row)) = visible_row_range {
-        let (start, end) = lane_window_bounds_by_note_row(note_indices, notes, min_row, max_row);
-        for &note_index in &note_indices[start..end] {
-            visit(note_index);
-        }
-        return;
-    }
-    for &note_index in note_indices {
-        visit(note_index);
-    }
-}
-
-#[inline(always)]
-fn for_each_visible_hold_index(
-    hold_indices: &[usize],
-    notes: &[Note],
-    visible_row_range: Option<(i32, i32)>,
-    mut visit: impl FnMut(usize),
-) {
-    if let Some((min_row, max_row)) = visible_row_range {
-        let (start, end) =
-            lane_hold_window_bounds_by_note_row(hold_indices, notes, min_row, max_row);
-        for &note_index in &hold_indices[start..end] {
-            visit(note_index);
-        }
-        return;
-    }
-    for &note_index in hold_indices {
-        visit(note_index);
-    }
-}
-
-#[inline(always)]
-fn hold_overlaps_visible_window(
-    note_index: usize,
-    notes: &[Note],
-    visible_row_range: Option<(i32, i32)>,
-) -> bool {
-    if let Some((min_row, max_row)) = visible_row_range {
-        let hold_end_row = notes[note_index]
-            .hold
-            .as_ref()
-            .map_or(note_itg_row(&notes[note_index]), |hold| {
-                beat_to_note_row(hold.end_beat)
-            });
-        return max_row >= 0
-            && hold_end_row >= min_row.max(0)
-            && note_itg_row(&notes[note_index]) <= max_row;
-    }
-    true
 }
 
 #[inline(always)]
@@ -4290,47 +2043,6 @@ fn song_lua_hides_note(state: &State, player: usize, local_col: usize, beat: f32
         local_col,
         beat,
     )
-}
-
-#[inline(always)]
-fn song_lua_column_offset_window_value(
-    window: &SongLuaColumnOffsetWindowRuntime,
-    now: f32,
-) -> Option<f32> {
-    const EPS: f32 = 1.0e-4;
-    if now + EPS < window.start_second || now > window.sustain_end_second + EPS {
-        return None;
-    }
-    if now + EPS >= window.end_second {
-        return Some(window.to_y);
-    }
-    let duration = window.end_second - window.start_second;
-    if duration <= EPS {
-        return Some(window.to_y);
-    }
-    let t = ((now - window.start_second) / duration).clamp(0.0, 1.0);
-    let factor = song_lua_ease_factor(window.easing.as_deref(), t, window.opt1, window.opt2);
-    Some(window.from_y + (window.to_y - window.from_y) * factor)
-}
-
-fn song_lua_column_y_offset(
-    windows: &[SongLuaColumnOffsetWindowRuntime],
-    local_col: usize,
-    now: f32,
-) -> f32 {
-    windows
-        .iter()
-        .filter(|window| window.column == local_col)
-        .filter_map(|window| song_lua_column_offset_window_value(window, now))
-        .last()
-        .unwrap_or(0.0)
-}
-
-#[inline(always)]
-const fn mine_hides_after_resolution(mine_result: Option<MineResult>) -> bool {
-    // ITG hides mines once they have received any final mine judgment, not
-    // only after a hit explosion.
-    mine_result.is_some()
 }
 
 pub(crate) fn build_bundles(
@@ -4795,7 +2507,8 @@ pub(crate) fn build_bundles(
         };
         let (note_start, note_end) = state.note_range_for_player(player_idx);
         let tipsy_y_for_col = |local_col: usize| -> f32 {
-            tipsy_y_extra(local_col, arrow_effect_time, visual) + move_y_extra(visual, local_col)
+            tipsy_y_extra(local_col, arrow_effect_time, visual.tipsy)
+                + move_col_extra(&visual.move_y_cols, local_col)
         };
         let lane_y_from_travel =
             |local_col: usize, receptor_y_lane: f32, dir: f32, travel_offset: f32| -> f32 {
@@ -4859,7 +2572,7 @@ pub(crate) fn build_bundles(
         let world_z_for_raw_travel = |local_col: usize, travel_offset: f32| -> f32 {
             note_world_z_for_bumpy(
                 adjusted_travel_offset(travel_offset),
-                bumpy_for_col(&visual, local_col),
+                visual_effect_params(&visual, local_col).bumpy,
                 visual.bumpy_offset,
                 visual.bumpy_period,
             )
@@ -4867,7 +2580,7 @@ pub(crate) fn build_bundles(
         let world_z_for_adjusted_travel = |local_col: usize, travel_offset: f32| -> f32 {
             note_world_z_for_bumpy(
                 travel_offset,
-                bumpy_for_col(&visual, local_col),
+                visual_effect_params(&visual, local_col).bumpy,
                 visual.bumpy_offset,
                 visual.bumpy_period,
             )
@@ -5242,7 +2955,7 @@ pub(crate) fn build_bundles(
                 let alpha_mul = column_cue_alpha(elapsed_real, duration_real);
                 if alpha_mul > 0.0 {
                     let lane_width = ScrollSpeedSetting::ARROW_SPACING * field_zoom;
-                    let cue_height = column_cue_height();
+                    let cue_height = column_cue_height(screen_height());
                     let mut countdown_text: Option<(f32, f32, i32)> = None;
 
                     if duration_real >= 5.0 {
@@ -5286,6 +2999,7 @@ pub(crate) fn build_bundles(
                                 lane_width,
                                 cue_height,
                                 notefield_offset_y,
+                                RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE,
                             );
                             actors.push(act!(quad:
                                 align(0.5, 0.0):
@@ -5335,7 +3049,7 @@ pub(crate) fn build_bundles(
                 let alpha_mul = column_cue_alpha(elapsed_real, duration_real);
                 if alpha_mul > 0.0 {
                     let lane_width = ScrollSpeedSetting::ARROW_SPACING * field_zoom;
-                    let cue_height = crossover_cue_height();
+                    let cue_height = crossover_cue_height(screen_height());
                     let mut countdown_text: Option<(f32, f32, i32)> = None;
 
                     if profile.column_countdown && duration_real >= 5.0 {
@@ -5379,6 +3093,7 @@ pub(crate) fn build_bundles(
                                 lane_width,
                                 cue_height,
                                 notefield_offset_y,
+                                RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE,
                             );
                             actors.push(act!(quad:
                                 align(0.5, 0.0):
@@ -5417,8 +3132,10 @@ pub(crate) fn build_bundles(
 
         if profile.column_flash_on_miss {
             let lane_width = ScrollSpeedSetting::ARROW_SPACING * field_zoom;
-            let flash_layout = column_flash_layout(profile.column_flash_size);
-            let flash_height = column_flash_height(flash_layout);
+            let flash_layout = column_flash_layout(
+                profile.column_flash_size == profile_data::ColumnFlashSize::Compact,
+            );
+            let flash_height = column_flash_height(screen_height(), flash_layout);
             for (i, flash_opt) in state
                 .column_flashes_for_columns(col_start, num_cols)
                 .iter()
@@ -5430,8 +3147,8 @@ pub(crate) fn build_bundles(
                 let alpha = column_flash_alpha(
                     flash.started_at_screen_s,
                     elapsed_screen,
-                    flash.grade,
-                    profile.column_flash_brightness,
+                    column_flash_duration(flash.grade),
+                    column_flash_dimmed(profile.column_flash_brightness),
                 );
                 if alpha <= 0.0 {
                     continue;
@@ -5444,6 +3161,7 @@ pub(crate) fn build_bundles(
                         lane_width,
                         flash_height,
                         notefield_offset_y,
+                        RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE,
                     );
                     actors.push(act!(quad:
                         align(0.5, 0.0):
@@ -6190,15 +3908,9 @@ pub(crate) fn build_bundles(
             let hold_note_scale = field_zoom * hold_head_zoom;
             if let Some(cap_slot) = bottom_cap_slot {
                 let cap_size = scale_cap_to_arrow(cap_slot.size(), hold_target_arrow_px);
-                let cap_height = cap_size[1];
-                if cap_height > f32::EPSILON {
-                    // ITGmania joins hold body to cap at the tail edge (with a tiny overlap),
-                    // not at the cap midpoint. Keep the body clipped to that join line.
-                    body_bottom = body_bottom.min(y_tail + 1.0);
-                    if body_bottom >= y_tail - 1.0 {
-                        body_bottom = y_tail + 1.0;
-                    }
-                }
+                // ITGmania joins hold body to cap at the tail edge (with a tiny overlap),
+                // not at the cap midpoint. Keep the body clipped to that join line.
+                body_bottom = hold_body_bottom_for_tail_cap(body_bottom, y_tail, cap_size[1]);
             }
             // Track rendered body extents so the tail cap can attach cleanly when
             // body segments are visible.
@@ -6206,13 +3918,15 @@ pub(crate) fn build_bundles(
             let mut rendered_body_bottom: Option<f32> = None;
             let mut body_head_row: Option<[[f32; 3]; 2]> = None;
             let mut body_tail_row: Option<[[f32; 3]; 2]> = None;
-            let col_bumpy = bumpy_for_col(&visual, local_col);
+            let col_bumpy = visual_effect_params(&visual, local_col).bumpy;
             let hold_depth_test = hold_body_needs_z_buffer(&visual);
-            let use_legacy_hold_sprites = col_bumpy.abs() <= f32::EPSILON
-                && !signed_effect_active(visual.drunk)
-                && !signed_effect_active(visual.tornado)
-                && !signed_effect_active(visual.beat)
-                && visual.pulse_outer.abs() <= f32::EPSILON;
+            let use_legacy_hold_sprites = visual_use_legacy_hold_sprites(
+                col_bumpy,
+                visual.drunk,
+                visual.tornado,
+                visual.beat,
+                visual.pulse_outer,
+            );
             let hold_y_rotation_active = note_rotation_y.abs() > f32::EPSILON;
             // ITG draws hold bodies from y_head to y_tail (top-to-bottom in screen space).
             // If noteskin offsets invert the interval for ultra-short holds, skip body draw
@@ -8740,7 +6454,7 @@ pub(crate) fn build_bundles(
                         state.timing_profile_windows_s(),
                         blue_fantastic_window_s,
                         profile.show_fa_plus_window,
-                        profile.error_bar_trim,
+                        max_window_ix,
                     );
 
                     let bg_alpha = if profile.background_filter.is_off() {
@@ -8864,7 +6578,7 @@ pub(crate) fn build_bundles(
                         state.timing_profile_windows_s(),
                         blue_fantastic_window_s,
                         profile.show_fa_plus_window,
-                        profile.error_bar_trim,
+                        max_window_ix,
                     );
 
                     let bar_visible = p
@@ -8957,7 +6671,7 @@ pub(crate) fn build_bundles(
                         state.timing_profile_windows_s(),
                         blue_fantastic_window_s,
                         profile.show_fa_plus_window,
-                        profile.error_bar_trim,
+                        max_window_ix,
                     );
 
                     let bar_visible = p
@@ -9239,7 +6953,7 @@ pub(crate) fn build_bundles(
                     }
 
                     let is_lookahead = j != 0;
-                    let text = zmod_measure_counter_text(
+                    let text = crate_zmod_measure_counter_text(
                         beat_floor,
                         curr_measure,
                         segs,
@@ -9248,7 +6962,9 @@ pub(crate) fn build_bundles(
                         lookahead,
                         multiplier,
                     );
-                    let Some(text) = text else { continue };
+                    let Some(text_kind) = text else { continue };
+                    let is_ratio = matches!(text_kind, ZmodMeasureCounterText::Ratio { .. });
+                    let text = cached_zmod_measure_counter_text(text_kind);
 
                     let seg_unshifted = segs[seg_index_unshifted];
                     let rgba = if seg_unshifted.is_break {
@@ -9259,7 +6975,7 @@ pub(crate) fn build_bundles(
                         }
                     } else if is_lookahead {
                         [0.45, 0.45, 0.45, 1.0]
-                    } else if text.contains('/') {
+                    } else if is_ratio {
                         [1.0, 1.0, 1.0, 1.0]
                     } else {
                         [0.5, 0.5, 0.5, 1.0]
@@ -9299,26 +7015,14 @@ pub(crate) fn build_bundles(
                 {
                     let seg0 = segs[broken_index];
                     if !seg0.is_break && is_broken {
-                        let curr_count = (curr_measure - (seg0.start as f32)).floor() as i32 + 1;
-                        let len = (broken_end - seg0.start) as i32;
-                        let text = if curr_measure < 0.0 {
-                            // BrokenRunCounter.lua special-cases negative time.
-                            let first = segs[0];
-                            if first.is_break {
-                                let first_len = (first.end - first.start) as i32;
-                                let v = (-curr_measure).floor() as i32 + 1 + first_len;
-                                cached_paren_i32(v)
-                            } else {
-                                let v = (-curr_measure).floor() as i32 + 1;
-                                cached_paren_i32(v)
-                            }
-                        } else if curr_count != 0 {
-                            cached_ratio_i32(curr_count, len)
-                        } else {
-                            cached_int_i32(len)
-                        };
-
-                        if text.contains('/') {
+                        let text_kind = zmod_broken_run_counter_text(
+                            curr_measure,
+                            segs,
+                            broken_index,
+                            broken_end,
+                        );
+                        if let Some(text_kind @ ZmodMeasureCounterText::Ratio { .. }) = text_kind {
+                            let text = cached_zmod_measure_counter_text(text_kind);
                             let mut x = playfield_center_x;
                             let mut y = measure_counter_y + 15.0;
                             if profile.measure_counter_vert {
@@ -9652,56 +7356,34 @@ pub(crate) fn build_bundles(
 #[cfg(test)]
 mod tests {
     use super::{
-        GameplayModsTextKey, MiniIndicatorProgress, TornadoBounds, Z_ERROR_BAR_AVERAGE,
-        Z_HOLD_BODY, Z_HOLD_GLOW, Z_RECEPTOR, Z_RECEPTOR_GLOW, Z_TAP_NOTE,
-        append_average_error_bar_part, append_mini_part, append_perspective_parts,
-        append_turn_parts, arrow_effect_zoom, bottom_cap_uv_window, calc_note_rotation_z,
-        clipped_hold_body_bounds, combo_actor_zoom, confusion_rotation_deg,
-        disabled_timing_window_bits, disabled_timing_windows_name, error_bar_boundaries_s,
-        error_bar_text_scalable_zoom, hold_alpha_needs_rows, hold_body_needs_z_buffer,
-        hold_body_segment_budget, hold_draw_span, hold_explosion_active, hold_explosion_enabled,
-        hold_explosion_slot_for_col, hold_head_render_flags, hold_indicator_column_x,
-        hold_segment_pose, hold_strip_actor, hold_strip_glow_actor, hold_strip_row_3d,
-        hold_tail_cap_bounds, hud_layout_ys, hud_y, itg_actor_glow_alpha, join_display_mod_parts,
-        judgment_actor_zoom, judgment_frame_size, judgment_tilt_rotation_deg, let_go_head_beat,
-        maybe_mirror_uv_horiz_for_reverse_flipped, move_x_extra, move_y_extra, note_actor_alpha,
-        note_alpha, note_glow, note_slot_base_size, note_world_z_for_bumpy, note_x_extra,
-        offset_center, player_metric_y, pulse_inner_zoom, pulse_zoom_for_y, push_transform_parts,
-        receptor_row_center, scale_effect_size, scroll_receptor_y, tap_judgment_rows,
-        tap_part_for_note_type, tiny_zoom_for_col, tipsy_y_extra, top_cap_rotation_deg,
-        turn_option_bits, turn_option_name, zmod_indicator_score_color, zmod_mini_indicator_zoom,
-        zmod_subtractive_counter_state, zmod_subtractive_points,
+        TornadoBounds, Z_ERROR_BAR_AVERAGE, Z_HOLD_BODY, Z_HOLD_GLOW, Z_RECEPTOR, Z_RECEPTOR_GLOW,
+        Z_TAP_NOTE, bottom_cap_uv_window, clipped_hold_body_bounds, combo_actor_zoom,
+        confusion_rotation_deg, error_bar_boundaries_s, error_bar_text_scalable_zoom,
+        error_bar_trim_max_window_ix, hold_body_segment_budget, hold_draw_span,
+        hold_explosion_active, hold_explosion_enabled, hold_explosion_slot_for_col,
+        hold_head_render_flags, hold_indicator_column_x, hold_segment_pose, hold_strip_actor,
+        hold_strip_glow_actor, hold_strip_row_3d, hold_tail_cap_bounds, hud_layout_ys, hud_y,
+        itg_actor_glow_alpha, judgment_actor_zoom, judgment_frame_size, let_go_head_beat,
+        maybe_mirror_uv_horiz_for_reverse_flipped, move_col_extra, note_slot_base_size,
+        note_world_z_for_bumpy, note_x_offset, offset_center, player_metric_y, receptor_row_center,
+        scroll_receptor_y, tap_part_for_note_type, tipsy_y_extra, top_cap_rotation_deg,
     };
     use crate::assets;
     use crate::game::parsing::noteskin::{
         NUM_QUANTIZATIONS, NoteAnimPart, Quantization, Style, load_itg_skin,
     };
     use deadlib_present::actors::Actor;
-    use deadlib_present::color;
     use deadlib_render::BlendMode;
     use deadsync_core::note::NoteType;
     use deadsync_core::timing::beat_to_note_row;
     use deadsync_gameplay::{
-        AccelEffects, ActiveHold, AppearanceEffects, NoteCountStat,
-        SongLuaColumnOffsetWindowRuntime, SongLuaNoteHideWindowRuntime, VisualEffects,
-        song_lua_note_hidden,
+        AccelEffects, ActiveHold, SongLuaNoteHideWindowRuntime, VisualEffects, song_lua_note_hidden,
     };
     use deadsync_profile as profile_data;
-    use deadsync_rules::judgment::{self, JudgeGrade, Judgment, TimingWindow};
     use deadsync_rules::note::{MineResult, Note};
     use deadsync_rules::scroll::ScrollSpeedSetting;
     use deadsync_rules::timing::{self, TimeSignatureSegment};
     use std::sync::Arc;
-
-    fn fantastic_judgment(window: TimingWindow, time_error_ms: f32) -> Judgment {
-        Judgment {
-            time_error_ms,
-            time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(time_error_ms, 1.0),
-            grade: JudgeGrade::Fantastic,
-            window: Some(window),
-            miss_because_held: false,
-        }
-    }
 
     fn test_note_at_beat(beat: f32) -> Note {
         Note {
@@ -9946,22 +7628,6 @@ mod tests {
     }
 
     #[test]
-    fn first_visible_beat_uses_note_count_cutoff() {
-        let stats = (0..80)
-            .map(|i| NoteCountStat {
-                beat: i as f32 * 0.25,
-                notes_lower: i,
-                notes_upper: i + 1,
-            })
-            .collect::<Vec<_>>();
-
-        let first = super::find_first_displayed_beat(20.0, 120.0, &stats, |_| 0.0)
-            .expect("finite beat range");
-
-        assert!((3.9..=4.1).contains(&first), "first beat was {first}");
-    }
-
-    #[test]
     fn hold_head_render_flags_keep_early_hit_inactive_before_receptor() {
         let active = ActiveHold {
             note_index: 42,
@@ -10188,33 +7854,15 @@ mod tests {
     }
 
     #[test]
-    fn song_lua_column_offsets_hold_after_ease_until_cutoff() {
-        let windows = [SongLuaColumnOffsetWindowRuntime {
-            column: 2,
-            start_second: 1.0,
-            end_second: 1.5,
-            sustain_end_second: 3.0,
-            from_y: 33.75,
-            to_y: 0.0,
-            easing: Some("linear".to_string()),
-            opt1: None,
-            opt2: None,
-        }];
-
-        assert!(
-            super::song_lua_column_offset_window_value(&windows[0], 1.25)
-                .is_some_and(|value| (value - 16.875).abs() <= 0.001)
-        );
-        assert!(super::song_lua_column_y_offset(&windows, 2, 2.0).abs() <= 0.001);
-        assert_eq!(super::song_lua_column_y_offset(&windows, 1, 2.0), 0.0);
-        assert_eq!(super::song_lua_column_y_offset(&windows, 2, 3.01), 0.0);
-    }
-
-    #[test]
     fn reverse_column_cue_bounds_match_simply_love() {
         let lane_width = 64.0;
-        let cue_height = super::column_cue_height();
-        let top = super::column_cue_reverse_top_y(lane_width, cue_height, 0.0);
+        let cue_height = super::column_cue_height(super::screen_height());
+        let top = super::column_cue_reverse_top_y(
+            lane_width,
+            cue_height,
+            0.0,
+            super::RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE,
+        );
         let bottom = top + cue_height;
 
         assert!((cue_height - 400.0).abs() <= 1e-6);
@@ -10223,30 +7871,17 @@ mod tests {
     }
 
     #[test]
-    fn column_flash_alpha_matches_brightness_options() {
-        let normal = super::column_flash_alpha(
-            0.0,
-            0.0,
-            JudgeGrade::Miss,
-            profile_data::ColumnFlashBrightness::Normal,
-        );
-        let dimmed = super::column_flash_alpha(
-            0.0,
-            0.0,
-            JudgeGrade::Miss,
-            profile_data::ColumnFlashBrightness::Dimmed,
-        );
-
-        assert!((normal - 0.66).abs() <= 1e-6);
-        assert!((dimmed - 0.3).abs() <= 1e-6);
-    }
-
-    #[test]
     fn column_flash_default_layout_matches_original_simply_love() {
         let lane_width = 64.0;
-        let layout = super::column_flash_layout(profile_data::ColumnFlashSize::Default);
-        let height = super::column_flash_height(layout);
-        let top = super::column_flash_reverse_top_y(layout, lane_width, height, 0.0);
+        let layout = super::column_flash_layout(false);
+        let height = super::column_flash_height(super::screen_height(), layout);
+        let top = super::column_flash_reverse_top_y(
+            layout,
+            lane_width,
+            height,
+            0.0,
+            super::RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE,
+        );
         let bottom = top + height;
 
         assert!((layout.y_offset - 80.0).abs() <= 1e-6);
@@ -10259,9 +7894,15 @@ mod tests {
     #[test]
     fn column_flash_compact_layout_matches_chris_reference() {
         let lane_width = 64.0;
-        let layout = super::column_flash_layout(profile_data::ColumnFlashSize::Compact);
-        let height = super::column_flash_height(layout);
-        let top = super::column_flash_reverse_top_y(layout, lane_width, height, 0.0);
+        let layout = super::column_flash_layout(true);
+        let height = super::column_flash_height(super::screen_height(), layout);
+        let top = super::column_flash_reverse_top_y(
+            layout,
+            lane_width,
+            height,
+            0.0,
+            super::RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE,
+        );
         let bottom = top + height;
 
         assert!((layout.y_offset - 70.0).abs() <= 1e-6);
@@ -10269,22 +7910,6 @@ mod tests {
         assert!((height - 140.0).abs() <= 1e-6);
         assert!((top - 247.0).abs() <= 1e-6);
         assert!((bottom - 387.0).abs() <= 1e-6);
-    }
-
-    #[test]
-    fn column_flash_colors_match_reference_palette() {
-        assert_eq!(
-            super::column_flash_color(JudgeGrade::Miss, false, 0.3),
-            [1.0, 0.0, 0.0, 0.3]
-        );
-        assert_eq!(
-            super::column_flash_color(JudgeGrade::Decent, false, 0.3),
-            [0.70, 0.36, 1.00, 0.3]
-        );
-        assert_eq!(
-            super::column_flash_color(JudgeGrade::Fantastic, false, 0.3),
-            [1.0, 1.0, 1.0, 0.3]
-        );
     }
 
     #[test]
@@ -10420,287 +8045,10 @@ mod tests {
     }
 
     #[test]
-    fn subtractive_counter_uses_whites_for_ex_paths() {
-        let itg = MiniIndicatorProgress {
-            w2: 4,
-            white_count: 7,
-            ..MiniIndicatorProgress::default()
-        };
-        assert_eq!(
-            zmod_subtractive_counter_state(&itg, profile_data::MiniIndicatorScoreType::Itg),
-            (4, false)
-        );
-
-        let ex = MiniIndicatorProgress {
-            w2: 0,
-            white_count: 7,
-            ..MiniIndicatorProgress::default()
-        };
-        assert_eq!(
-            zmod_subtractive_counter_state(&ex, profile_data::MiniIndicatorScoreType::Ex),
-            (7, false)
-        );
-
-        let hard_ex = MiniIndicatorProgress {
-            w2: 1,
-            white_10ms_count: 7,
-            ..MiniIndicatorProgress::default()
-        };
-        assert_eq!(
-            zmod_subtractive_counter_state(&hard_ex, profile_data::MiniIndicatorScoreType::HardEx),
-            (7, true)
-        );
-    }
-
-    #[test]
-    fn subtractive_points_supports_all_score_types() {
-        let itg = MiniIndicatorProgress {
-            current_possible_dp: 20,
-            actual_dp: 16,
-            ..MiniIndicatorProgress::default()
-        };
-        assert_eq!(
-            zmod_subtractive_points(&itg, profile_data::MiniIndicatorScoreType::Itg),
-            4
-        );
-
-        let itg_mine = MiniIndicatorProgress {
-            current_possible_dp: 0,
-            actual_dp: -6,
-            ..MiniIndicatorProgress::default()
-        };
-        assert_eq!(
-            zmod_subtractive_points(&itg_mine, profile_data::MiniIndicatorScoreType::Itg),
-            6
-        );
-
-        let ex = MiniIndicatorProgress {
-            white_count: 3,
-            w2: 1,
-            ..MiniIndicatorProgress::default()
-        };
-        assert_eq!(
-            zmod_subtractive_points(&ex, profile_data::MiniIndicatorScoreType::Ex),
-            6
-        );
-
-        let ex_with_great = MiniIndicatorProgress {
-            white_count: 3,
-            w2: 1,
-            w3: 1,
-            ..MiniIndicatorProgress::default()
-        };
-        assert_eq!(
-            zmod_subtractive_points(&ex_with_great, profile_data::MiniIndicatorScoreType::Ex),
-            11
-        );
-
-        let hard_ex = MiniIndicatorProgress {
-            white_10ms_count: 3,
-            w2: 1,
-            ..MiniIndicatorProgress::default()
-        };
-        assert_eq!(
-            zmod_subtractive_points(&hard_ex, profile_data::MiniIndicatorScoreType::HardEx),
-            8
-        );
-    }
-
-    #[test]
-    fn mini_indicator_zoom_matches_size_setting() {
-        assert!(
-            (zmod_mini_indicator_zoom(profile_data::MiniIndicatorSize::Default) - 0.35).abs()
-                <= f32::EPSILON
-        );
-        assert!(
-            (zmod_mini_indicator_zoom(profile_data::MiniIndicatorSize::Large) - 0.5).abs()
-                <= f32::EPSILON
-        );
-    }
-
-    #[test]
-    fn detailed_mini_indicator_color_uses_expanded_thresholds() {
-        let detailed = profile_data::MiniIndicatorColor::Detailed;
-        assert_eq!(
-            zmod_indicator_score_color(99.0, detailed),
-            color::rgba_hex("#FF00FF")
-        );
-        assert_eq!(
-            zmod_indicator_score_color(98.0, detailed),
-            color::rgba_hex("#256ECE")
-        );
-        assert_eq!(
-            zmod_indicator_score_color(96.0, detailed),
-            color::rgba_hex("#FFFFFF")
-        );
-        assert_eq!(
-            zmod_indicator_score_color(94.0, detailed),
-            color::rgba_hex("#FDA307")
-        );
-        assert_eq!(
-            zmod_indicator_score_color(90.0, detailed),
-            color::rgba_hex("#79A901")
-        );
-        assert_eq!(
-            zmod_indicator_score_color(85.0, detailed),
-            color::rgba_hex("#B932E2")
-        );
-        assert_eq!(
-            zmod_indicator_score_color(84.99, detailed),
-            color::rgba_hex("#FF0000")
-        );
-    }
-
-    #[test]
-    fn blink_alpha_matches_itg_boolean_behavior() {
-        let partial = note_alpha(
-            100.0,
-            0.0,
-            0.0,
-            AppearanceEffects {
-                blink: 0.3,
-                ..AppearanceEffects::default()
-            },
-        );
-        let full = note_alpha(
-            100.0,
-            0.0,
-            0.0,
-            AppearanceEffects {
-                blink: 1.0,
-                ..AppearanceEffects::default()
-            },
-        );
-        assert!((partial - full).abs() <= 1e-6);
-    }
-
-    #[test]
-    fn stealth_glow_matches_itg_visibility_curve() {
-        let glow = note_glow(
-            100.0,
-            0.0,
-            0.0,
-            AppearanceEffects {
-                stealth: 0.25,
-                ..AppearanceEffects::default()
-            },
-        );
-        assert!((glow - 0.65).abs() <= 1e-6);
-    }
-
-    #[test]
-    fn note_actor_alpha_matches_itg_visibility_gate() {
-        let half_visible = note_actor_alpha(
-            100.0,
-            0.0,
-            0.0,
-            AppearanceEffects {
-                stealth: 0.5,
-                ..AppearanceEffects::default()
-            },
-        );
-        let mostly_visible = note_actor_alpha(
-            100.0,
-            0.0,
-            0.0,
-            AppearanceEffects {
-                stealth: 0.25,
-                ..AppearanceEffects::default()
-            },
-        );
-        assert_eq!(half_visible, 0.0);
-        assert_eq!(mostly_visible, 1.0);
-    }
-
-    #[test]
     fn note_actor_glow_clamps_like_itg_vertex_color() {
         assert_eq!(itg_actor_glow_alpha(1.3), 1.0);
         assert_eq!(itg_actor_glow_alpha(0.65), 0.65);
         assert_eq!(itg_actor_glow_alpha(f32::NAN), 0.0);
-    }
-
-    #[test]
-    fn hold_alpha_rows_enable_for_y_varying_appearance_effects() {
-        assert!(!hold_alpha_needs_rows(AppearanceEffects::default()));
-        assert!(hold_alpha_needs_rows(AppearanceEffects {
-            hidden: 1.0,
-            ..AppearanceEffects::default()
-        }));
-        assert!(hold_alpha_needs_rows(AppearanceEffects {
-            sudden: 1.0,
-            ..AppearanceEffects::default()
-        }));
-        assert!(hold_alpha_needs_rows(AppearanceEffects {
-            random_vanish: 1.0,
-            ..AppearanceEffects::default()
-        }));
-        assert!(!hold_alpha_needs_rows(AppearanceEffects {
-            blink: 1.0,
-            stealth: 1.0,
-            ..AppearanceEffects::default()
-        }));
-    }
-
-    #[test]
-    fn sudden_offset_shifts_fade_band_like_itg() {
-        let base = note_alpha(
-            180.0,
-            0.0,
-            0.0,
-            AppearanceEffects {
-                sudden: 1.0,
-                ..AppearanceEffects::default()
-            },
-        );
-        let shifted = note_alpha(
-            180.0,
-            0.0,
-            0.0,
-            AppearanceEffects {
-                sudden: 1.0,
-                sudden_offset: 1.0,
-                ..AppearanceEffects::default()
-            },
-        );
-        assert!(shifted > base);
-    }
-
-    #[test]
-    fn flip_note_x_extra_moves_to_mirrored_column() {
-        let col_offsets = [-96.0, -32.0, 32.0, 96.0];
-        let invert = [0.0; 4];
-        let tornado = [TornadoBounds::default(); 4];
-        let delta = note_x_extra(
-            0,
-            64.0,
-            0.0,
-            0.0,
-            VisualEffects {
-                flip: 1.0,
-                ..VisualEffects::default()
-            },
-            &col_offsets,
-            &invert,
-            &tornado,
-        );
-        assert!((delta - 192.0).abs() <= 1e-6);
-    }
-
-    #[test]
-    fn negative_position_mods_stay_active_like_itg() {
-        let col_offsets = [-96.0, -32.0, 32.0, 96.0];
-        let invert = [0.0; 4];
-        let tornado = [TornadoBounds::default(); 4];
-        let visual = VisualEffects {
-            drunk: -1.0,
-            tipsy: -1.0,
-            flip: -0.5,
-            ..VisualEffects::default()
-        };
-        let delta = note_x_extra(0, 0.0, 0.0, 0.0, visual, &col_offsets, &invert, &tornado);
-
-        assert!((delta + 128.0).abs() <= 1e-6);
-        assert!((tipsy_y_extra(0, 0.0, visual) + 25.6).abs() <= 1e-6);
     }
 
     #[test]
@@ -10713,37 +8061,6 @@ mod tests {
     fn bumpy_period_changes_wave_length_like_itg() {
         let z = note_world_z_for_bumpy(-2.0 * std::f32::consts::PI, 1.0, 0.0, -1.25);
         assert!((z - 40.0).abs() <= 1e-4);
-    }
-
-    #[test]
-    fn hold_z_buffer_ignores_column_bumpy_like_itg() {
-        let mut visual = VisualEffects::default();
-        visual.bumpy_cols[2] = 3.5;
-        assert!(!hold_body_needs_z_buffer(&visual));
-        visual.bumpy = 1.0;
-        assert!(hold_body_needs_z_buffer(&visual));
-    }
-
-    #[test]
-    fn pulse_outer_zoom_matches_itg_formula() {
-        let visual = VisualEffects {
-            pulse_outer: 1.0,
-            ..VisualEffects::default()
-        };
-        assert!((pulse_zoom_for_y(0.0, &visual) - 1.0).abs() <= 1e-6);
-        assert!(
-            (pulse_zoom_for_y(0.4 * 64.0 * std::f32::consts::FRAC_PI_2, &visual) - 1.5).abs()
-                <= 1e-6
-        );
-    }
-
-    #[test]
-    fn pulse_inner_zero_clamps_like_itg() {
-        let visual = VisualEffects {
-            pulse_inner: -2.0,
-            ..VisualEffects::default()
-        };
-        assert!((pulse_inner_zoom(&visual) - 0.01).abs() <= 1e-6);
     }
 
     #[test]
@@ -10799,43 +8116,14 @@ mod tests {
     }
 
     #[test]
-    fn tiny_column_zoom_matches_itg_power_formula() {
-        let mut visual = VisualEffects::default();
-        visual.tiny = -0.5;
-        visual.tiny_cols[1] = 2.5;
-        assert!((tiny_zoom_for_col(&visual, 1) - 0.5_f32.powf(2.0)).abs() <= 1e-6);
-        assert!((tiny_zoom_for_col(&visual, 0) - 0.5_f32.powf(-0.5)).abs() <= 1e-6);
-    }
-
-    #[test]
-    fn receptor_arrow_effect_zoom_matches_note_zoom_at_targets() {
-        let visual = VisualEffects {
-            tiny: 1.0,
-            pulse_outer: 1.0,
-            ..VisualEffects::default()
-        };
-        assert!((arrow_effect_zoom(&visual, 0, 0.0) - 0.5).abs() <= 1e-6);
-    }
-
-    #[test]
-    fn ghost_explosion_size_uses_arrow_effect_zoom() {
-        let mut visual = VisualEffects::default();
-        visual.tiny = -1.0;
-        let base = scale_effect_size([64.0, 64.0], 1.25, 1.0);
-        let scaled = scale_effect_size([64.0, 64.0], 1.25, arrow_effect_zoom(&visual, 0, 0.0));
-        assert!((scaled[0] - base[0] * 2.0).abs() <= 1e-6);
-        assert!((scaled[1] - base[1] * 2.0).abs() <= 1e-6);
-    }
-
-    #[test]
     fn move_and_confusion_column_mods_match_itg_scaling() {
         let mut visual = VisualEffects::default();
         visual.move_x_cols[1] = 0.5;
         visual.move_y_cols[1] = -0.25;
         visual.confusion_offset_cols[1] = std::f32::consts::FRAC_PI_2;
 
-        assert_eq!(move_x_extra(visual, 1), 32.0);
-        assert_eq!(move_y_extra(visual, 1), -16.0);
+        assert_eq!(move_col_extra(&visual.move_x_cols, 1), 32.0);
+        assert_eq!(move_col_extra(&visual.move_y_cols, 1), -16.0);
         assert!((confusion_rotation_deg(0.0, visual, 1) + 90.0).abs() <= 1e-6);
     }
 
@@ -10875,8 +8163,7 @@ mod tests {
             &tornado,
         );
         let expected_x = 320.0
-            + col_offsets[1]
-            + note_x_extra(
+            + note_x_offset(
                 1,
                 0.0,
                 1.0,
@@ -10912,196 +8199,7 @@ mod tests {
             &invert,
             &tornado,
         );
-        assert!((center[1] - (240.0 + tipsy_y_extra(2, 1.25, visual))).abs() <= 1e-6);
-    }
-
-    #[test]
-    fn confusion_rotation_converts_itg_formula_to_actor_space() {
-        let visual = VisualEffects {
-            confusion: 1.5,
-            ..VisualEffects::default()
-        };
-        let rotation = calc_note_rotation_z(visual, 12.0, 3.5, true, 0);
-        let itg_expected = (3.5 * visual.confusion).rem_euclid(std::f32::consts::TAU)
-            * (-180.0 / std::f32::consts::PI);
-        assert!((rotation + itg_expected).abs() <= 1e-6);
-    }
-
-    #[test]
-    fn confusion_offset_converts_static_rotation_to_actor_space() {
-        let visual = VisualEffects {
-            confusion_offset: std::f32::consts::FRAC_PI_2,
-            ..VisualEffects::default()
-        };
-        let rotation = calc_note_rotation_z(visual, 12.0, 3.5, true, 0);
-        assert!((rotation + 90.0).abs() <= 1e-6);
-    }
-
-    #[test]
-    fn dizzy_rotation_converts_itg_formula_to_actor_space() {
-        let visual = VisualEffects {
-            dizzy: 2.0,
-            ..VisualEffects::default()
-        };
-        let rotation = calc_note_rotation_z(visual, 6.75, 3.5, false, 0);
-        let itg_expected =
-            ((6.75 - 3.5) * visual.dizzy) % std::f32::consts::TAU * (180.0 / std::f32::consts::PI);
-        assert!((rotation + itg_expected).abs() <= 1e-6);
-    }
-
-    #[test]
-    fn negative_dizzy_rotates_notes_like_itgmania() {
-        let visual = VisualEffects {
-            dizzy: -0.5,
-            ..VisualEffects::default()
-        };
-        let rotation = calc_note_rotation_z(visual, 70.0, 68.0, false, 0);
-        let itg_expected =
-            ((70.0 - 68.0) * visual.dizzy) % std::f32::consts::TAU * (180.0 / std::f32::consts::PI);
-
-        assert!(rotation.abs() > 1.0);
-        assert!((rotation + itg_expected).abs() <= 1e-6);
-    }
-
-    #[test]
-    fn display_mods_mini_keeps_full_percent() {
-        let mut parts = Vec::new();
-        append_mini_part(&mut parts, 100);
-        assert_eq!(parts, vec!["100% Mini".to_string()]);
-    }
-
-    #[test]
-    fn display_mods_keep_spaces_inside_one_option_atomic() {
-        let text =
-            join_display_mod_parts(&["devcel-2024".to_string(), "-4ms VisualDelay".to_string()]);
-
-        assert_eq!(text, "devcel-2024, -4ms\u{00A0}VisualDelay");
-    }
-
-    fn empty_mods_key() -> GameplayModsTextKey {
-        GameplayModsTextKey {
-            speed_tag: 0,
-            speed_bits: 0,
-            noteskin_hash: 0,
-            insert_mask: 0,
-            remove_mask: 0,
-            holds_mask: 0,
-            turn_bits: 0,
-            attack_mode: 0,
-            mini_percent: 0,
-            spacing_percent: 0,
-            visual_delay_ms: 0,
-            error_bar_mask: 0,
-            avg_error_bar_intensity_centi: 100,
-            avg_error_bar_interval_ms: 100,
-            accel: [0; 5],
-            visual: [0; 9],
-            appearance: [0; 5],
-            scroll: [0; 5],
-            perspective_tilt: 0,
-            perspective_skew: 0,
-            dark: 0,
-            blind: 0,
-            cover: 0,
-            disabled_timing_windows: 0,
-        }
-    }
-
-    #[test]
-    fn display_mods_append_average_error_bar_config() {
-        let mut key = empty_mods_key();
-        key.error_bar_mask = profile_data::ErrorBarMask::AVERAGE.bits();
-        key.avg_error_bar_intensity_centi = 175;
-        key.avg_error_bar_interval_ms = 300;
-
-        let mut parts = Vec::new();
-        append_average_error_bar_part(&mut parts, &key);
-
-        assert_eq!(parts, vec!["ErrorBar1.75x(Avg:300ms)".to_string()]);
-    }
-
-    #[test]
-    fn display_mods_skip_average_error_bar_config_when_inactive() {
-        let mut key = empty_mods_key();
-        key.error_bar_mask = profile_data::ErrorBarMask::COLORFUL.bits();
-
-        let mut parts = Vec::new();
-        append_average_error_bar_part(&mut parts, &key);
-
-        assert!(parts.is_empty());
-    }
-
-    #[test]
-    fn display_mods_use_simply_love_turn_names() {
-        assert_eq!(
-            turn_option_name(profile_data::TurnOption::LRMirror),
-            Some("LR-Mirror")
-        );
-        assert_eq!(
-            turn_option_name(profile_data::TurnOption::UDMirror),
-            Some("UD-Mirror")
-        );
-    }
-
-    #[test]
-    fn display_mods_append_all_active_turns_in_itg_order() {
-        let mut parts = Vec::new();
-        append_turn_parts(
-            &mut parts,
-            turn_option_bits(profile_data::TurnOption::Mirror)
-                | turn_option_bits(profile_data::TurnOption::Random),
-        );
-        assert_eq!(parts, vec!["Mirror".to_string(), "Random".to_string()]);
-    }
-
-    #[test]
-    fn display_mods_transform_order_matches_itg() {
-        let mut parts = Vec::new();
-        push_transform_parts(
-            &mut parts,
-            (1 << 0) | (1 << 1) | (1 << 7),
-            (1 << 0) | (1 << 1),
-            1 << 3,
-        );
-        assert_eq!(
-            parts,
-            vec![
-                "NoRolls".to_string(),
-                "NoMines".to_string(),
-                "Little".to_string(),
-                "Wide".to_string(),
-                "Big".to_string(),
-                "Mines".to_string(),
-            ]
-        );
-    }
-
-    #[test]
-    fn display_mods_use_itg_disabled_timing_window_names() {
-        let bits =
-            disabled_timing_window_bits(profile_data::TimingWindowsOption::DecentsAndWayOffs);
-        assert_eq!(
-            disabled_timing_windows_name(bits),
-            Some("No W4/W5".to_string())
-        );
-
-        let bits =
-            disabled_timing_window_bits(profile_data::TimingWindowsOption::FantasticsAndExcellents);
-        assert_eq!(
-            disabled_timing_windows_name(bits),
-            Some("No W1/W2".to_string())
-        );
-    }
-
-    #[test]
-    fn display_mods_perspective_names_match_itg_rules() {
-        let mut parts = Vec::new();
-        append_perspective_parts(&mut parts, 0, 0);
-        assert_eq!(parts, vec!["Overhead".to_string()]);
-
-        let mut parts = Vec::new();
-        append_perspective_parts(&mut parts, -100, 100);
-        assert_eq!(parts, vec!["Incoming".to_string()]);
+        assert!((center[1] - (240.0 + tipsy_y_extra(2, 1.25, visual.tipsy))).abs() <= 1e-6);
     }
 
     #[test]
@@ -11275,49 +8373,6 @@ mod tests {
     }
 
     #[test]
-    fn judgment_tilt_thresholds_deadzone_and_cap() {
-        let profile = profile_data::Profile {
-            judgment_tilt: true,
-            tilt_min_threshold_ms: 5,
-            tilt_max_threshold_ms: 20,
-            ..profile_data::Profile::default()
-        };
-        assert_eq!(
-            judgment_tilt_rotation_deg(&profile, &fantastic_judgment(TimingWindow::W0, 5.0)),
-            0.0
-        );
-        assert!(
-            (judgment_tilt_rotation_deg(&profile, &fantastic_judgment(TimingWindow::W0, 10.0))
-                + 1.5)
-                .abs()
-                <= 1e-6
-        );
-        assert!(
-            (judgment_tilt_rotation_deg(&profile, &fantastic_judgment(TimingWindow::W0, 40.0))
-                + 4.5)
-                .abs()
-                <= 1e-6
-        );
-    }
-
-    #[test]
-    fn judgment_tilt_keeps_early_late_direction() {
-        let profile = profile_data::Profile {
-            judgment_tilt: true,
-            tilt_min_threshold_ms: 0,
-            tilt_max_threshold_ms: 50,
-            ..profile_data::Profile::default()
-        };
-        assert!(
-            judgment_tilt_rotation_deg(&profile, &fantastic_judgment(TimingWindow::W0, -10.0))
-                > 0.0
-        );
-        assert!(
-            judgment_tilt_rotation_deg(&profile, &fantastic_judgment(TimingWindow::W0, 10.0)) < 0.0
-        );
-    }
-
-    #[test]
     fn combo_actor_zoom_matches_itgmania_player_mini_formula() {
         // ITGmania Player::Update: min(pow(0.5, mini + tiny), 1.0).
         assert!((combo_actor_zoom(0.0) - 1.0).abs() <= 1e-6);
@@ -11329,108 +8384,18 @@ mod tests {
     }
 
     #[test]
-    fn tap_judgment_rows_overlay_white_for_split_15_10_hits() {
-        let profile = profile_data::Profile {
-            show_fa_plus_window: true,
-            split_15_10ms: true,
-            ..profile_data::Profile::default()
-        };
-        let judgment = fantastic_judgment(TimingWindow::W0, 12.0);
-        assert_eq!(tap_judgment_rows(&profile, &judgment, 7), (0, Some(1)));
-    }
-
-    #[test]
-    fn tap_judgment_rows_keep_plain_blue_when_split_is_off() {
-        let profile = profile_data::Profile {
-            show_fa_plus_window: true,
-            ..profile_data::Profile::default()
-        };
-        let judgment = fantastic_judgment(TimingWindow::W0, 12.0);
-        assert_eq!(tap_judgment_rows(&profile, &judgment, 7), (0, None));
-    }
-
-    #[test]
-    fn tap_judgment_rows_use_10ms_blue_window() {
-        let profile = profile_data::Profile {
-            show_fa_plus_window: true,
-            fa_plus_10ms_blue_window: true,
-            ..profile_data::Profile::default()
-        };
-        let blue = fantastic_judgment(TimingWindow::W0, timing::FA_PLUS_W010_MS);
-        let white = fantastic_judgment(TimingWindow::W0, 12.0);
-
-        assert_eq!(tap_judgment_rows(&profile, &blue, 7), (0, None));
-        assert_eq!(tap_judgment_rows(&profile, &white, 7), (1, None));
-    }
-
-    #[test]
     fn error_bar_boundaries_use_10ms_blue_fantastic_window() {
         let windows = timing::TimingProfile::default_itg_with_fa_plus().windows_s;
         let (bounds, len) = error_bar_boundaries_s(
             windows,
             Some(timing::FA_PLUS_W010_MS / 1000.0),
             true,
-            profile_data::ErrorBarTrim::Fantastic,
+            error_bar_trim_max_window_ix(profile_data::ErrorBarTrim::Fantastic),
         );
 
         assert_eq!(len, 2);
         assert!((bounds[0] * 1000.0 - timing::FA_PLUS_W010_MS).abs() <= 0.001);
         assert!((bounds[1] - windows[0]).abs() <= 0.000001);
-    }
-
-    #[test]
-    fn tap_judgment_rows_split_keeps_blue_base_above_10ms() {
-        let profile = profile_data::Profile {
-            show_fa_plus_window: true,
-            fa_plus_10ms_blue_window: true,
-            split_15_10ms: true,
-            ..profile_data::Profile::default()
-        };
-        let judgment = fantastic_judgment(TimingWindow::W0, 12.0);
-
-        assert_eq!(tap_judgment_rows(&profile, &judgment, 7), (0, Some(1)));
-    }
-
-    #[test]
-    fn tap_judgment_rows_ignore_split_without_fa_plus_window() {
-        let profile = profile_data::Profile {
-            split_15_10ms: true,
-            ..profile_data::Profile::default()
-        };
-        let judgment = fantastic_judgment(TimingWindow::W0, 12.0);
-        assert_eq!(tap_judgment_rows(&profile, &judgment, 7), (0, None));
-    }
-
-    #[test]
-    fn tap_judgment_rows_defer_to_custom_window_over_fixed_split() {
-        let profile = profile_data::Profile {
-            show_fa_plus_window: true,
-            split_15_10ms: true,
-            custom_fantastic_window: true,
-            custom_fantastic_window_ms: 12,
-            ..profile_data::Profile::default()
-        };
-        let judgment = fantastic_judgment(TimingWindow::W1, 14.0);
-        assert_eq!(tap_judgment_rows(&profile, &judgment, 7), (1, None));
-    }
-
-    #[test]
-    fn tap_judgment_rows_keep_six_row_assets_unsplit() {
-        let profile = profile_data::Profile {
-            show_fa_plus_window: true,
-            split_15_10ms: true,
-            ..profile_data::Profile::default()
-        };
-        let fantastic = fantastic_judgment(TimingWindow::W0, 12.0);
-        let excellent = Judgment {
-            grade: JudgeGrade::Excellent,
-            time_error_ms: 18.0,
-            time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(18.0, 1.0),
-            window: Some(TimingWindow::W1),
-            miss_because_held: false,
-        };
-        assert_eq!(tap_judgment_rows(&profile, &fantastic, 6), (0, None));
-        assert_eq!(tap_judgment_rows(&profile, &excellent, 6), (1, None));
     }
 
     #[test]

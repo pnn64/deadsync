@@ -1122,7 +1122,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.4.1407"
+version = "0.4.1451"
 dependencies = [
  "bincode",
  "bitflags 2.13.0",
@@ -1356,6 +1356,11 @@ dependencies = [
 [[package]]
 name = "deadsync-notefield"
 version = "0.1.0"
+dependencies = [
+ "deadsync-core",
+ "deadsync-rules",
+ "glam",
+]
 
 [[package]]
 name = "deadsync-noteskin"
@@ -1470,7 +1475,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.4.1407"
+version = "0.4.1451"
 dependencies = [
  "log",
  "semver",

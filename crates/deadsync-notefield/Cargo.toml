@@ -4,6 +4,11 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
+[dependencies]
+deadsync-core = { path = "../deadsync-core" }
+deadsync-rules = { path = "../deadsync-rules" }
+glam = "0.33.1"
+
 [lints.clippy]
 perf = { level = "warn", priority = -1 }
 
