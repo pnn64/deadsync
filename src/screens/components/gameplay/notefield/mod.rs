@@ -464,6 +464,10 @@ fn visual_effect_params(visual: &VisualEffects, local_col: usize) -> VisualEffec
             confusion_offset: visual.confusion_offset,
             dizzy: visual.dizzy,
             bumpy: visual.bumpy,
+            bumpy_offset: visual.bumpy_offset,
+            bumpy_period: visual.bumpy_period,
+            rotate_z: 0.0,
+            beat: visual.beat,
         },
         local_col,
         &visual.tiny_cols,
@@ -5643,7 +5647,7 @@ pub(crate) fn build_bundles(
                         segs,
                         seg_index_unshifted,
                         is_lookahead,
-                        lookahead,
+                        lookahead.into(),
                         multiplier,
                     );
                     let Some(text_kind) = text else { continue };

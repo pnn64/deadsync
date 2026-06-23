@@ -7327,8 +7327,8 @@ impl App {
                             } else {
                                 // Normal entry: black holds solid until the last
                                 // TRANSITION_IN_BLACK_FADE_DURATION seconds, then lifts.
-                                let fade_start = duration
-                                    - gameplay::TRANSITION_IN_BLACK_FADE_DURATION;
+                                let fade_start =
+                                    duration - gameplay::TRANSITION_IN_BLACK_FADE_DURATION;
                                 ((elapsed - fade_start)
                                     / gameplay::TRANSITION_IN_BLACK_FADE_DURATION)
                                     .clamp(0.0, 1.0)

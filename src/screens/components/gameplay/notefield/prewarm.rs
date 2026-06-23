@@ -101,7 +101,7 @@ pub fn prewarm_text_layout(
             max_measure_len = max_measure_len.max(scaled_len);
             if !seg.is_break {
                 let (broken_end, _) = zmod_broken_run_end(segs, seg_ix);
-                max_measure_len = max_measure_len.max((broken_end - seg.start) as i32);
+                max_measure_len = max_measure_len.max(broken_end - seg.start as i32);
             }
         }
         let prewarm_measure_len = max_measure_len.min(MEASURE_PREWARM_CAP);
