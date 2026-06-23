@@ -14,7 +14,7 @@ use deadsync_profile::{PlayStyle, PlayerSide, player_side_index, runtime_player_
 use deadsync_rules::judgment::JudgeGrade;
 use deadsync_rules::note::HoldResult;
 use deadsync_smx::gifs::{FullPadAnim, GifRegistry, PadSize, PanelAnim};
-use deadsync_smx::panels::{Clock, OverlayDrive, PADS, Rgb, SmxPanelLights, smx_panel_for_col};
+use deadsync_smx::panels::{Clock, OverlayDrive, PADS, SmxPanelLights, smx_panel_for_col};
 
 use crate::game::{GameplayCoreState, profile};
 
@@ -44,59 +44,6 @@ fn physical_slot(
 
 /// Sentinel `*_at_screen_s` meaning "nothing seen yet for this column".
 const NO_EVENT: f32 = f32::NEG_INFINITY;
-
-/// Tap flash durations, matching the on-screen column flash timing from gameplay runtime state.
-const FLASH_SECONDS_MISS: f32 = 0.16;
-const FLASH_SECONDS_JUDGMENT: f32 = 0.33;
-/// Fantastic colour for the bright FA+ inner window.
-const PAD_FANTASTIC_WHITE: Rgb = [255, 255, 255];
-/// Sustained colour shown while a freeze or roll is held (steady teal).
-const HOLD_RGB: Rgb = [0, 160, 160];
-/// Flash shown when a freeze or roll is completed.
-const HOLD_OK_RGB: Rgb = [0, 220, 0];
-/// Flash shown when a freeze or roll is dropped.
-const HOLD_DROP_RGB: Rgb = [255, 0, 0];
-/// Flash shown when a mine is hit (magenta, distinct from the warm grade colours).
-const MINE_RGB: Rgb = [255, 0, 180];
-/// Duration of the mine-hit flash.
-const MINE_FLASH_SECONDS: f32 = 0.25;
-
-/// Per-grade panel colour. Tuned for the SMX LED diffuser (saturated, well-separated hues)
-/// rather than reusing the on-screen palette, which washes out on the pad; the SDK scales
-/// output by ~0.67 on send. A `match` (not a table indexed by `judge_grade_ix`) so adding a
-/// `JudgeGrade` is a compile error here instead of a silent out-of-range panic.
-fn pad_grade_color(grade: JudgeGrade) -> Rgb {
-    match grade {
-        JudgeGrade::Fantastic => [0, 90, 255], // blue (white for the FA+ inner window)
-        JudgeGrade::Excellent => [255, 140, 0], // orange
-        JudgeGrade::Great => [0, 220, 0],      // green
-        JudgeGrade::Decent => [170, 0, 255],   // purple
-        JudgeGrade::WayOff => [255, 230, 0],   // yellow
-        JudgeGrade::Miss => [255, 0, 0],       // red
-    }
-}
-
-/// Flash duration for a judgement grade.
-fn flash_duration(grade: JudgeGrade) -> f32 {
-    match grade {
-        JudgeGrade::Miss => FLASH_SECONDS_MISS,
-        _ => FLASH_SECONDS_JUDGMENT,
-    }
-}
-
-/// Colour for a tap judgement flash.
-///
-/// `blue_fantastic` is the flag gameplay records on `ActiveColumnFlash`:
-/// `true` for the blue (outer) Fantastic, `false` for the bright FA+ inner window (white). All
-/// other grades use the pad palette. The pad uses its own saturated palette rather than the
-/// on-screen colours, which wash out on the LED diffuser.
-fn flash_color(grade: JudgeGrade, blue_fantastic: bool) -> Rgb {
-    if grade == JudgeGrade::Fantastic && !blue_fantastic {
-        PAD_FANTASTIC_WHITE
-    } else {
-        pad_grade_color(grade)
-    }
-}
 
 /// Resolved per-panel judgement animations from the GIF registry. Any slot left `None`
 /// falls back to that event's solid colour, so a pack only has to supply the gifs it
@@ -180,13 +127,12 @@ fn sustain_drive(kind: Option<NoteType>, resume: bool) -> OverlayDrive {
     }
 }
 
-/// What `update` started on a column's panel for the current sustain, so the matching
-/// end call is sent when it disengages (an overlay and a colour hold end differently).
+/// Whether `update` started a gif overlay on a column's panel for the current sustain,
+/// so the matching release is sent when it disengages.
 #[derive(Clone, Copy, Default, PartialEq, Debug)]
 enum HoldFx {
     #[default]
     None,
-    Color,
     Overlay,
 }
 
@@ -275,21 +221,10 @@ impl SmxPanelDriver {
             if let Some((grade, blue)) =
                 tap_event(state.last_tap_judgment(col), &mut self.prev_flash[col])
                 && let Some((pad, p)) = panel
+                && let Some(anim) = self.judgement_gifs.for_grade(grade, blue)
             {
-                match self.judgement_gifs.for_grade(grade, blue) {
-                    Some(anim) => {
-                        self.lights.play_overlay(
-                            pad,
-                            p,
-                            anim.clone(),
-                            OverlayDrive::OneShot { pressed },
-                        );
-                    }
-                    None => {
-                        self.lights
-                            .flash(pad, p, flash_color(grade, blue), flash_duration(grade));
-                    }
-                }
+                self.lights
+                    .play_overlay(pad, p, anim.clone(), OverlayDrive::OneShot { pressed });
             }
 
             let engaged = state.active_hold(col).is_some_and(active_hold_is_engaged);
@@ -299,30 +234,15 @@ impl SmxPanelDriver {
             {
                 if now_engaged {
                     let kind = state.active_hold(col).map(|h| h.note_type);
-                    match sustain_anim(&self.judgement_gifs, kind) {
-                        Some(anim) => {
-                            // First engage: play the intro, then loop (freeze) or
-                            // drain forward into the outro (roll).
-                            self.lights.play_overlay(
-                                pad,
-                                p,
-                                anim.clone(),
-                                sustain_drive(kind, false),
-                            );
-                            self.prev_hold_fx[col] = HoldFx::Overlay;
-                        }
-                        None => {
-                            self.lights.hold_start(pad, p, HOLD_RGB);
-                            self.prev_hold_fx[col] = HoldFx::Color;
-                        }
+                    // First engage: play the intro, then loop (freeze) or drain
+                    // into the outro (roll). No gif = no effect on this column.
+                    if let Some(anim) = sustain_anim(&self.judgement_gifs, kind) {
+                        self.lights.play_overlay(pad, p, anim.clone(), sustain_drive(kind, false));
+                        self.prev_hold_fx[col] = HoldFx::Overlay;
                     }
                 } else {
-                    // End whichever effect this column's engage started; the hold
-                    // state may already be gone, so we use the recorded kind.
-                    match self.prev_hold_fx[col] {
-                        HoldFx::Overlay => self.lights.release_overlay(pad, p),
-                        HoldFx::Color => self.lights.hold_end(pad, p),
-                        HoldFx::None => {}
+                    if self.prev_hold_fx[col] == HoldFx::Overlay {
+                        self.lights.release_overlay(pad, p);
                     }
                     self.prev_hold_fx[col] = HoldFx::None;
                 }
@@ -367,38 +287,22 @@ impl SmxPanelDriver {
                 hold_outcome_event(state.hold_judgment(col), &mut self.prev_hold_judged[col])
                 && let Some((pad, p)) = panel
             {
-                let (anim, color) = match result {
-                    HoldResult::Held => (self.judgement_gifs.ok.as_ref(), HOLD_OK_RGB),
-                    _ => (self.judgement_gifs.bad.as_ref(), HOLD_DROP_RGB),
+                let anim = match result {
+                    HoldResult::Held => self.judgement_gifs.ok.as_ref(),
+                    _ => self.judgement_gifs.bad.as_ref(),
                 };
-                match anim {
-                    Some(anim) => {
-                        self.lights.play_overlay(
-                            pad,
-                            p,
-                            anim.clone(),
-                            OverlayDrive::OneShot { pressed },
-                        );
-                    }
-                    None => self.lights.flash(pad, p, color, FLASH_SECONDS_JUDGMENT),
+                if let Some(anim) = anim {
+                    self.lights
+                        .play_overlay(pad, p, anim.clone(), OverlayDrive::OneShot { pressed });
                 }
             }
 
-            let mine_at = state.mine_started_at_screen_s(col);
-            if mine_event(mine_at, &mut self.prev_mine[col])
+            if mine_event(state.mine_started_at_screen_s(col), &mut self.prev_mine[col])
                 && let Some((pad, p)) = panel
+                && let Some(anim) = &self.judgement_gifs.mine
             {
-                match &self.judgement_gifs.mine {
-                    Some(anim) => {
-                        self.lights.play_overlay(
-                            pad,
-                            p,
-                            anim.clone(),
-                            OverlayDrive::OneShot { pressed },
-                        );
-                    }
-                    None => self.lights.flash(pad, p, MINE_RGB, MINE_FLASH_SECONDS),
-                }
+                self.lights
+                    .play_overlay(pad, p, anim.clone(), OverlayDrive::OneShot { pressed });
             }
 
             // Generic press feedback (SMX-style "you touched the panel"): a
@@ -431,6 +335,9 @@ impl SmxPanelDriver {
     pub fn deactivate(&mut self) {
         if self.gameplay_active {
             self.gameplay_active = false;
+            // Flush stale per-panel effects (press overlays held during a transition)
+            // even when the worker stays alive for a background animation.
+            self.lights.clear_panels();
             self.sync_worker();
         }
     }
@@ -658,34 +565,6 @@ mod tests {
             tap_event(Some(tap(JudgeGrade::Fantastic, true, 2.0)), &mut prev),
             Some((JudgeGrade::Fantastic, true))
         );
-    }
-
-    #[test]
-    fn flash_color_uses_pad_palette() {
-        use JudgeGrade::*;
-        // Normal (blue) Fantastic uses the blue pad colour, not white.
-        assert_eq!(flash_color(Fantastic, true), pad_grade_color(Fantastic));
-        // Bright (inner FA+) Fantastic is white.
-        assert_eq!(flash_color(Fantastic, false), PAD_FANTASTIC_WHITE);
-        // Other grades use their pad palette colour.
-        assert_eq!(flash_color(Miss, false), pad_grade_color(Miss));
-        // Every grade colour is distinct so judgements stay readable on the pad.
-        let all = [Fantastic, Excellent, Great, Decent, WayOff, Miss];
-        for i in 0..all.len() {
-            for j in (i + 1)..all.len() {
-                assert_ne!(pad_grade_color(all[i]), pad_grade_color(all[j]));
-            }
-        }
-    }
-
-    #[test]
-    fn flash_duration_miss_is_shorter() {
-        assert_eq!(flash_duration(JudgeGrade::Miss), FLASH_SECONDS_MISS);
-        assert_eq!(
-            flash_duration(JudgeGrade::Fantastic),
-            FLASH_SECONDS_JUDGMENT
-        );
-        assert_eq!(flash_duration(JudgeGrade::WayOff), FLASH_SECONDS_JUDGMENT);
     }
 
     #[test]
