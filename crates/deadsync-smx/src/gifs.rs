@@ -10,6 +10,17 @@
 //! registry, so no filesystem access or decoding can happen on the gameplay
 //! hot path.
 //!
+//! Each pack directory may contain an optional `gifpack.toml` that declares
+//! pack-level metadata. Currently only one key is recognised:
+//!
+//! ```toml
+//! fallback = "basic"   # fall back to this pack when a gif is missing
+//! ```
+//!
+//! When a pack has no `gifpack.toml`, or the file omits `fallback`, missing
+//! gifs resolve to nothing rather than silently pulling from another pack.
+//! `fallback = "none"` is accepted as an explicit opt-out.
+//!
 //! Formats (shared with the SDK and the stepmaniax-gif-maker tool):
 //! - Full-pad: 23x24 (25-LED pads) or 14x15 (16-LED pads). Each panel is a
 //!   block in a 3x3 grid with 1px gaps; the extra bottom row carries the
@@ -422,14 +433,20 @@ struct Key {
 
 /// Immutable preloaded SMX GIF registry: every full-pad background and
 /// per-panel judgement under the asset root, decoded once. Lookups resolve
-/// the pack and size fallback chain and hand out `Arc` clones, so the
-/// lighting worker never touches the filesystem.
+/// the size fallback and optional pack fallback declared in `gifpack.toml`,
+/// then hand out `Arc` clones so the lighting worker never touches the
+/// filesystem.
 #[derive(Default)]
 pub struct GifRegistry {
     /// A role can hold several BPM variants (see `BackgroundVariant`), so the
     /// value is a list resolved per song; most roles have just one.
     backgrounds: HashMap<Key, Vec<BackgroundVariant>>,
     judgements: HashMap<Key, Arc<PanelAnim>>,
+    /// Pack-level fallback declared in `gifpack.toml`: when a gif is missing
+    /// from the selected pack, try this pack before returning `None`. Packs
+    /// with no `gifpack.toml` (or no `fallback` key) have no entry here, and
+    /// missing gifs resolve to nothing.
+    pack_fallbacks: HashMap<String, String>,
 }
 
 impl GifRegistry {
@@ -437,8 +454,16 @@ impl GifRegistry {
     /// full-pad backgrounds from `smx-pad-lights/` and per-panel judgements
     /// from `smx-judge-lights/`. Unreadable or malformed files are logged and
     /// skipped; missing directories just yield an empty category.
+    ///
+    /// `gifpack.toml` files are also read from each pack directory. `dance/`
+    /// packs shadow `common/` packs of the same name for both gifs and metadata.
     pub fn load(root: &Path) -> Self {
         let mut reg = Self::default();
+        for dir in [root.join("smx-pad-lights"), root.join("smx-judge-lights")] {
+            for (pack, fallback) in load_pack_fallbacks(&dir) {
+                reg.pack_fallbacks.entry(pack).or_insert(fallback);
+            }
+        }
         for_each_gif(&root.join("smx-pad-lights"), |pack, path| {
             reg.load_background(pack, path);
         });
@@ -455,9 +480,9 @@ impl GifRegistry {
     }
 
     /// Resolve a full-pad background by role (`default`, `song_select`,
-    /// `gameplay`, ...). Falls back from the selected pack to the shipped
-    /// `basic` pack and from the requested size to the other one, then picks
-    /// the variant best fitting `song_bpm` (see `select_variant`).
+    /// `gameplay`, ...). Tries the selected pack first (both sizes), then the
+    /// pack's declared `gifpack.toml` fallback if any, then nothing. Picks the
+    /// variant best fitting `song_bpm` among those found (see `select_variant`).
     pub fn background(
         &self,
         pack: Option<&str>,
@@ -465,18 +490,19 @@ impl GifRegistry {
         size: PadSize,
         song_bpm: Option<f32>,
     ) -> Option<Arc<FullPadAnim>> {
-        lookup(&self.backgrounds, pack, role, size).and_then(|v| select_variant(v, song_bpm))
+        lookup(&self.backgrounds, &self.pack_fallbacks, pack, role, size)
+            .and_then(|v| select_variant(v, song_bpm))
     }
 
-    /// Resolve a per-panel judgement by name (`bad`, `freeze`, ...), with
-    /// the same pack and size fallback as `background`.
+    /// Resolve a per-panel judgement by name (`bad`, `freeze`, ...), with the
+    /// same pack and size lookup as `background`.
     pub fn judgement(
         &self,
         pack: Option<&str>,
         name: &str,
         size: PadSize,
     ) -> Option<Arc<PanelAnim>> {
-        lookup(&self.judgements, pack, name, size).cloned()
+        lookup(&self.judgements, &self.pack_fallbacks, pack, name, size).cloned()
     }
 
     /// Sorted pack names (other than the default) that supply at least one
@@ -550,23 +576,37 @@ fn key(pack: &str, name: &str, size: PadSize) -> Key {
     }
 }
 
-/// Pack and size fallback: selected pack at the requested then other size,
-/// then the shipped `basic` pack at the requested then other size. `None`
-/// (no pack selected) goes straight to `basic`. Returns a reference to the
-/// stored value so callers clone or select from it as needed.
+/// Look up a gif in a map, respecting the size fallback and the pack's
+/// `gifpack.toml` fallback if declared.
+///
+/// Resolution order:
+/// 1. Selected pack at the requested size, then the other size.
+/// 2. If still not found and the pack has a declared fallback pack (from
+///    `gifpack.toml`), try that pack at both sizes.
+/// 3. Return `None`.
+///
+/// When no pack is selected (or the selected pack is the default), only the
+/// default pack is tried. Returns a reference to the stored value so callers
+/// clone or select from it.
 fn lookup<'a, V>(
     map: &'a HashMap<Key, V>,
+    fallbacks: &HashMap<String, String>,
     pack: Option<&str>,
     name: &str,
     size: PadSize,
 ) -> Option<&'a V> {
     let get = |p: &str, s: PadSize| map.get(&key(p, name, s));
-    if let Some(p) = pack
-        && p != DEFAULT_PACK
-        && let Some(v) = get(p, size).or_else(|| get(p, size.other()))
-    {
-        return Some(v);
+    if let Some(p) = pack.filter(|p| *p != DEFAULT_PACK) {
+        if let Some(v) = get(p, size).or_else(|| get(p, size.other())) {
+            return Some(v);
+        }
+        // Not in the selected pack; use its declared fallback if any.
+        if let Some(fb) = fallbacks.get(p) {
+            return get(fb, size).or_else(|| get(fb, size.other()));
+        }
+        return None;
     }
+    // No pack selected (or selected pack is the default): use the default pack.
     get(DEFAULT_PACK, size).or_else(|| get(DEFAULT_PACK, size.other()))
 }
 
@@ -663,6 +703,53 @@ fn read_named_gif(path: &Path) -> Option<(Vec<u8>, String, PadSize, Option<BeatS
             None
         }
     }
+}
+
+/// Parse the contents of a `gifpack.toml` file and return the declared
+/// fallback pack name. Returns `None` when no `fallback` key is present or
+/// its value is `"none"`. Unrecognised keys and comment lines are ignored.
+fn parse_gifpack_toml(content: &str) -> Option<String> {
+    for line in content.lines() {
+        let line = line.trim();
+        if line.starts_with('#') || line.is_empty() {
+            continue;
+        }
+        let Some((k, v)) = line.split_once('=') else {
+            continue;
+        };
+        if k.trim() != "fallback" {
+            continue;
+        }
+        let v = v.trim().trim_matches('"');
+        return (!v.is_empty() && !v.eq_ignore_ascii_case("none")).then(|| v.to_owned());
+    }
+    None
+}
+
+/// Scan `<dir>/common/*/gifpack.toml` and `<dir>/dance/*/gifpack.toml` and
+/// return the per-pack fallback map. `dance/` packs override `common/` packs
+/// of the same name, matching the gif shadowing rule.
+fn load_pack_fallbacks(dir: &Path) -> HashMap<String, String> {
+    let mut fallbacks = HashMap::new();
+    for group in ["common", "dance"] {
+        let Ok(entries) = fs::read_dir(dir.join(group)) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir()
+                && let Some(pack) = path.file_name().and_then(|n| n.to_str())
+            {
+                let toml_path = path.join("gifpack.toml");
+                if let Ok(content) = fs::read_to_string(&toml_path) {
+                    if let Some(fallback) = parse_gifpack_toml(&content) {
+                        fallbacks.insert(pack.to_owned(), fallback);
+                    }
+                }
+            }
+        }
+    }
+    fallbacks
 }
 
 /// Visit every `.gif` in `<dir>/common/<pack>/` and `<dir>/dance/<pack>/`.
@@ -983,24 +1070,18 @@ mod tests {
     }
 
     #[test]
-    fn resolution_prefers_pack_then_size_then_basic() {
+    fn resolution_prefers_pack_size_then_other_size() {
         let mut reg = GifRegistry::default();
-        let entries = [
-            ("foo", PadSize::Leds25),
-            ("foo", PadSize::Leds16),
-            (DEFAULT_PACK, PadSize::Leds25),
-            (DEFAULT_PACK, PadSize::Leds16),
-        ];
-        for (pack, size) in entries {
+        for (pack, size) in [("foo", PadSize::Leds25), ("foo", PadSize::Leds16)] {
             reg.backgrounds
                 .insert(key(pack, "default", size), dummy_variants());
         }
-
-        // Full registry: the selected pack at the requested size wins.
         let hit = |reg: &GifRegistry, pack, size| reg.background(pack, "default", size, None);
+
+        // Pack has both sizes: the requested size wins.
         assert!(hit(&reg, Some("foo"), PadSize::Leds16).is_some());
 
-        // Drop the pack's _16: falls back to the pack's _25.
+        // Drop _16: pack falls back to its own _25.
         reg.backgrounds
             .remove(&key("foo", "default", PadSize::Leds16));
         let got = hit(&reg, Some("foo"), PadSize::Leds16).unwrap();
@@ -1008,42 +1089,90 @@ mod tests {
             .anim
             .clone();
         assert!(Arc::ptr_eq(&got, &pack_25));
+    }
 
-        // Drop the pack entirely: falls back to basic at the requested size.
+    #[test]
+    fn pack_without_gifpack_toml_does_not_fall_back_to_basic() {
+        let mut reg = GifRegistry::default();
         reg.backgrounds
-            .remove(&key("foo", "default", PadSize::Leds25));
-        let got = hit(&reg, Some("foo"), PadSize::Leds16).unwrap();
-        let basic_16 = reg.backgrounds[&key(DEFAULT_PACK, "default", PadSize::Leds16)][0]
-            .anim
-            .clone();
-        assert!(Arc::ptr_eq(&got, &basic_16));
-
-        // Drop basic _16 too: basic at the other size.
-        reg.backgrounds
-            .remove(&key(DEFAULT_PACK, "default", PadSize::Leds16));
-        assert!(hit(&reg, Some("foo"), PadSize::Leds16).is_some());
-
-        // Unknown role: nothing.
+            .insert(key(DEFAULT_PACK, "default", PadSize::Leds25), dummy_variants());
+        // "foo" pack exists but has no fallback declared.
         assert!(
-            reg.background(Some("foo"), "results", PadSize::Leds25, None)
-                .is_none()
+            reg.background(Some("foo"), "default", PadSize::Leds25, None)
+                .is_none(),
+            "no fallback => None, not basic"
         );
     }
 
     #[test]
-    fn unknown_pack_falls_back_to_basic() {
+    fn pack_with_gifpack_toml_fallback_reaches_declared_pack() {
         let mut reg = GifRegistry::default();
         reg.backgrounds
             .insert(key(DEFAULT_PACK, "default", PadSize::Leds25), dummy_variants());
-        assert!(
-            reg.background(Some("nope"), "default", PadSize::Leds25, None)
-                .is_some()
-        );
+        // "foo" pack declares fallback = "basic".
+        reg.pack_fallbacks
+            .insert("foo".to_owned(), DEFAULT_PACK.to_owned());
+
+        // "foo" has no "default" gif, so it falls through to basic.
+        let got = reg
+            .background(Some("foo"), "default", PadSize::Leds25, None)
+            .unwrap();
+        let basic = reg.backgrounds[&key(DEFAULT_PACK, "default", PadSize::Leds25)][0]
+            .anim
+            .clone();
+        assert!(Arc::ptr_eq(&got, &basic));
+
+        // "foo" does have a gif: own gif wins over the fallback.
+        reg.backgrounds
+            .insert(key("foo", "default", PadSize::Leds25), dummy_variants());
+        let got2 = reg
+            .background(Some("foo"), "default", PadSize::Leds25, None)
+            .unwrap();
+        let foo = reg.backgrounds[&key("foo", "default", PadSize::Leds25)][0]
+            .anim
+            .clone();
+        assert!(Arc::ptr_eq(&got2, &foo));
+    }
+
+    #[test]
+    fn no_pack_and_basic_by_name_both_use_the_default_pack() {
+        let mut reg = GifRegistry::default();
+        reg.backgrounds
+            .insert(key(DEFAULT_PACK, "default", PadSize::Leds25), dummy_variants());
         assert!(reg.background(None, "default", PadSize::Leds25, None).is_some());
         // Selecting basic by name is the same as selecting nothing.
         assert!(
             reg.background(Some(DEFAULT_PACK), "default", PadSize::Leds25, None)
                 .is_some()
+        );
+        // Unknown pack with no fallback: nothing.
+        assert!(
+            reg.background(Some("nope"), "default", PadSize::Leds25, None)
+                .is_none()
+        );
+    }
+
+    // gifpack.toml parsing
+
+    #[test]
+    fn parse_gifpack_toml_extracts_fallback() {
+        assert_eq!(
+            parse_gifpack_toml("fallback = \"basic\""),
+            Some("basic".to_owned())
+        );
+        // Whitespace and comment lines are tolerated.
+        assert_eq!(
+            parse_gifpack_toml("# my pack\nfallback = \"basic\"\n"),
+            Some("basic".to_owned())
+        );
+        // "none" and absent key both yield None.
+        assert_eq!(parse_gifpack_toml("fallback = \"none\""), None);
+        assert_eq!(parse_gifpack_toml(""), None);
+        assert_eq!(parse_gifpack_toml("# just a comment"), None);
+        // Unknown keys are ignored.
+        assert_eq!(
+            parse_gifpack_toml("name = \"cool pack\"\nfallback = \"basic\""),
+            Some("basic".to_owned())
         );
     }
 
@@ -1102,6 +1231,8 @@ mod tests {
         fs::write(bg_basic.join("notes.txt"), b"not a gif").unwrap();
         fs::write(bg_basic.join("broken_25.gif"), b"garbage").unwrap();
         fs::write(j_basic.join("badname.gif"), &panel).unwrap();
+        // gifpack.toml: mypack declares basic as its fallback.
+        fs::write(bg_user.join("gifpack.toml"), b"fallback = \"basic\"\n").unwrap();
 
         let reg = GifRegistry::load(&root);
         fs::remove_dir_all(&root).unwrap();
@@ -1119,6 +1250,18 @@ mod tests {
         assert!(reg.judgement(None, "badname", PadSize::Leds25).is_none());
         assert_eq!(reg.background_packs(), vec!["mypack".to_owned()]);
         assert!(reg.judgement_packs().is_empty());
+
+        // mypack declares fallback = basic, so a missing role falls through.
+        assert!(
+            reg.background(Some("mypack"), "default", PadSize::Leds25, None)
+                .is_some(),
+            "mypack fallback to basic should resolve 'default'"
+        );
+        // A pack with no gifpack.toml does not fall back.
+        assert!(
+            reg.background(Some("nofallback"), "default", PadSize::Leds25, None)
+                .is_none()
+        );
     }
 
     #[test]
