@@ -611,7 +611,7 @@ const TRANSITION_IN_DURATION: f32 = 2.0;
 /// stage-text in-transition (`ScreenGameplay in/default.lua` calls
 /// `Hide` immediately when `SL.Global.GameplayReloadCheck` is true). Use a
 /// short fade-from-black so the new gameplay frame doesn't pop in.
-const TRANSITION_IN_RESTART_DURATION: f32 = 0.2;
+pub const TRANSITION_IN_RESTART_DURATION: f32 = 0.2;
 /// Duration of the black-to-transparent fade that ends the in-transition.
 /// The black holds solid for (TRANSITION_IN_DURATION - this), then lifts over this window.
 pub const TRANSITION_IN_BLACK_FADE_DURATION: f32 = 0.6;
@@ -10581,7 +10581,16 @@ pub fn push_actors(
                         Some((player_side, field_x - half_w, field_x + half_w));
                 }
             }
-            let smx_overlay_alpha = view.smx_overlay_alpha;
+            // Combine shell-transition alpha (FadingIn/FadingOut) with the
+            // in-gameplay exit animation alpha. The exit animation runs under
+            // Idle shell state (NavigateNoFade paths: restart, back-out) so
+            // view.smx_overlay_alpha alone doesn't cover it.
+            let exit_alpha = state
+                .exit_prompt_state()
+                .exit_transition
+                .as_ref()
+                .map_or(1.0, |exit| 1.0 - exit_transition_alpha(exit));
+            let smx_overlay_alpha = view.smx_overlay_alpha.min(exit_alpha);
             if state.profiles()[0].smx_fsr_display || state.profiles()[1].smx_fsr_display {
                 let before = actors.len();
                 smx_profile::time_draw(|| {

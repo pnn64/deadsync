@@ -7317,14 +7317,19 @@ impl App {
                     crate::screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(gs);
                     let smx_overlay_alpha = match self.state.shell.transition {
                         TransitionState::FadingIn { elapsed, duration } => {
-                            // The black overlay holds solid until the last
-                            // TRANSITION_IN_BLACK_FADE_DURATION seconds, then lifts.
-                            // For restart (short duration) the hold is effectively zero.
-                            let fade_start = duration
-                                - gameplay::TRANSITION_IN_BLACK_FADE_DURATION;
-                            ((elapsed - fade_start)
-                                / gameplay::TRANSITION_IN_BLACK_FADE_DURATION)
-                                .clamp(0.0, 1.0)
+                            if duration <= gameplay::TRANSITION_IN_RESTART_DURATION + 0.01 {
+                                // Restart: the in-transition black fades over the whole short
+                                // duration; mirror it so the overlays fade in with the black.
+                                (elapsed / duration).clamp(0.0, 1.0)
+                            } else {
+                                // Normal entry: black holds solid until the last
+                                // TRANSITION_IN_BLACK_FADE_DURATION seconds, then lifts.
+                                let fade_start = duration
+                                    - gameplay::TRANSITION_IN_BLACK_FADE_DURATION;
+                                ((elapsed - fade_start)
+                                    / gameplay::TRANSITION_IN_BLACK_FADE_DURATION)
+                                    .clamp(0.0, 1.0)
+                            }
                         }
                         TransitionState::FadingOut { elapsed, .. } => {
                             // Mirror the out-transition black quad: hold full opacity
