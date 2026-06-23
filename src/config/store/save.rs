@@ -199,7 +199,6 @@ fn push_saved_options(
     push_bool(content, "SmxInput", cfg.smx_input);
     push_bool(content, "SmxManagesPadConfig", cfg.smx_manages_pad_config);
     push_bool(content, "SmxPanelLights", cfg.smx_panel_lights);
-    push_bool(content, "SmxPadGifs", cfg.smx_pad_gifs);
     push_line(content, "SmxPadGifsPack", cfg.smx_pad_gifs_pack.as_str());
     push_line(
         content,

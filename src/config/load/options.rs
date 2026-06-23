@@ -236,10 +236,6 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "SmxPanelLights")
         .and_then(|v| parse_loose_bool_str(&v))
         .unwrap_or(default.smx_panel_lights);
-    cfg.smx_pad_gifs = conf
-        .get("Options", "SmxPadGifs")
-        .and_then(|v| parse_loose_bool_str(&v))
-        .unwrap_or(default.smx_pad_gifs);
     cfg.smx_pad_gifs_pack = conf
         .get("Options", "SmxPadGifsPack")
         .map(|v| crate::config::SmxPackName::parse(&v))

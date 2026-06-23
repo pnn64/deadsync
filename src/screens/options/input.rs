@@ -383,9 +383,6 @@ pub(super) fn apply_submenu_choice_delta(
         if row.id == SubRowId::SmxPanelLights {
             config::update_smx_panel_lights(yes_no_from_choice(new_index));
         }
-        if row.id == SubRowId::SmxPadGifs {
-            config::update_smx_pad_gifs(yes_no_from_choice(new_index));
-        }
         if row.id == SubRowId::SmxUnderglowTheme {
             config::update_smx_underglow_theme(yes_no_from_choice(new_index));
         }

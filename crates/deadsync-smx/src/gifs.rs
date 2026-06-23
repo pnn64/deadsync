@@ -10,14 +10,14 @@
 //! registry, so no filesystem access or decoding can happen on the gameplay
 //! hot path.
 //!
-//! Each pack directory may contain an optional `gifpack.toml` that declares
+//! Each pack directory may contain an optional `gifpack.ini` that declares
 //! pack-level metadata. Currently only one key is recognised:
 //!
 //! ```toml
 //! fallback = "basic"   # fall back to this pack when a gif is missing
 //! ```
 //!
-//! When a pack has no `gifpack.toml`, or the file omits `fallback`, missing
+//! When a pack has no `gifpack.ini`, or the file omits `fallback`, missing
 //! gifs resolve to nothing rather than silently pulling from another pack.
 //! `fallback = "none"` is accepted as an explicit opt-out.
 //!
@@ -433,7 +433,7 @@ struct Key {
 
 /// Immutable preloaded SMX GIF registry: every full-pad background and
 /// per-panel judgement under the asset root, decoded once. Lookups resolve
-/// the size fallback and optional pack fallback declared in `gifpack.toml`,
+/// the size fallback and optional pack fallback declared in `gifpack.ini`,
 /// then hand out `Arc` clones so the lighting worker never touches the
 /// filesystem.
 #[derive(Default)]
@@ -442,9 +442,9 @@ pub struct GifRegistry {
     /// value is a list resolved per song; most roles have just one.
     backgrounds: HashMap<Key, Vec<BackgroundVariant>>,
     judgements: HashMap<Key, Arc<PanelAnim>>,
-    /// Pack-level fallback declared in `gifpack.toml`: when a gif is missing
+    /// Pack-level fallback declared in `gifpack.ini`: when a gif is missing
     /// from the selected pack, try this pack before returning `None`. Packs
-    /// with no `gifpack.toml` (or no `fallback` key) have no entry here, and
+    /// with no `gifpack.ini` (or no `fallback` key) have no entry here, and
     /// missing gifs resolve to nothing.
     pack_fallbacks: HashMap<String, String>,
 }
@@ -455,7 +455,7 @@ impl GifRegistry {
     /// from `smx-judge-lights/`. Unreadable or malformed files are logged and
     /// skipped; missing directories just yield an empty category.
     ///
-    /// `gifpack.toml` files are also read from each pack directory. `dance/`
+    /// `gifpack.ini` files are also read from each pack directory. `dance/`
     /// packs shadow `common/` packs of the same name for both gifs and metadata.
     pub fn load(root: &Path) -> Self {
         let mut reg = Self::default();
@@ -481,7 +481,7 @@ impl GifRegistry {
 
     /// Resolve a full-pad background by role (`default`, `song_select`,
     /// `gameplay`, ...). Tries the selected pack first (both sizes), then the
-    /// pack's declared `gifpack.toml` fallback if any, then nothing. Picks the
+    /// pack's declared `gifpack.ini` fallback if any, then nothing. Picks the
     /// variant best fitting `song_bpm` among those found (see `select_variant`).
     pub fn background(
         &self,
@@ -577,12 +577,12 @@ fn key(pack: &str, name: &str, size: PadSize) -> Key {
 }
 
 /// Look up a gif in a map, respecting the size fallback and the pack's
-/// `gifpack.toml` fallback if declared.
+/// `gifpack.ini` fallback if declared.
 ///
 /// Resolution order:
 /// 1. Selected pack at the requested size, then the other size.
 /// 2. If still not found and the pack has a declared fallback pack (from
-///    `gifpack.toml`), try that pack at both sizes.
+///    `gifpack.ini`), try that pack at both sizes.
 /// 3. Return `None`.
 ///
 /// When no pack is selected (or the selected pack is the default), only the
@@ -705,10 +705,10 @@ fn read_named_gif(path: &Path) -> Option<(Vec<u8>, String, PadSize, Option<BeatS
     }
 }
 
-/// Parse the contents of a `gifpack.toml` file and return the declared
+/// Parse the contents of a `gifpack.ini` file and return the declared
 /// fallback pack name. Returns `None` when no `fallback` key is present or
 /// its value is `"none"`. Unrecognised keys and comment lines are ignored.
-fn parse_gifpack_toml(content: &str) -> Option<String> {
+fn parse_gifpack_ini(content: &str) -> Option<String> {
     for line in content.lines() {
         let line = line.trim();
         if line.starts_with('#') || line.is_empty() {
@@ -726,7 +726,7 @@ fn parse_gifpack_toml(content: &str) -> Option<String> {
     None
 }
 
-/// Scan `<dir>/common/*/gifpack.toml` and `<dir>/dance/*/gifpack.toml` and
+/// Scan `<dir>/common/*/gifpack.ini` and `<dir>/dance/*/gifpack.ini` and
 /// return the per-pack fallback map. `dance/` packs override `common/` packs
 /// of the same name, matching the gif shadowing rule.
 fn load_pack_fallbacks(dir: &Path) -> HashMap<String, String> {
@@ -740,9 +740,9 @@ fn load_pack_fallbacks(dir: &Path) -> HashMap<String, String> {
             if path.is_dir()
                 && let Some(pack) = path.file_name().and_then(|n| n.to_str())
             {
-                let toml_path = path.join("gifpack.toml");
+                let toml_path = path.join("gifpack.ini");
                 if let Ok(content) = fs::read_to_string(&toml_path) {
-                    if let Some(fallback) = parse_gifpack_toml(&content) {
+                    if let Some(fallback) = parse_gifpack_ini(&content) {
                         fallbacks.insert(pack.to_owned(), fallback);
                     }
                 }
@@ -1152,26 +1152,26 @@ mod tests {
         );
     }
 
-    // gifpack.toml parsing
+    // gifpack.ini parsing
 
     #[test]
-    fn parse_gifpack_toml_extracts_fallback() {
+    fn parse_gifpack_ini_extracts_fallback() {
         assert_eq!(
-            parse_gifpack_toml("fallback = \"basic\""),
+            parse_gifpack_ini("fallback = \"basic\""),
             Some("basic".to_owned())
         );
         // Whitespace and comment lines are tolerated.
         assert_eq!(
-            parse_gifpack_toml("# my pack\nfallback = \"basic\"\n"),
+            parse_gifpack_ini("# my pack\nfallback = \"basic\"\n"),
             Some("basic".to_owned())
         );
         // "none" and absent key both yield None.
-        assert_eq!(parse_gifpack_toml("fallback = \"none\""), None);
-        assert_eq!(parse_gifpack_toml(""), None);
-        assert_eq!(parse_gifpack_toml("# just a comment"), None);
+        assert_eq!(parse_gifpack_ini("fallback = \"none\""), None);
+        assert_eq!(parse_gifpack_ini(""), None);
+        assert_eq!(parse_gifpack_ini("# just a comment"), None);
         // Unknown keys are ignored.
         assert_eq!(
-            parse_gifpack_toml("name = \"cool pack\"\nfallback = \"basic\""),
+            parse_gifpack_ini("name = \"cool pack\"\nfallback = \"basic\""),
             Some("basic".to_owned())
         );
     }
@@ -1231,8 +1231,8 @@ mod tests {
         fs::write(bg_basic.join("notes.txt"), b"not a gif").unwrap();
         fs::write(bg_basic.join("broken_25.gif"), b"garbage").unwrap();
         fs::write(j_basic.join("badname.gif"), &panel).unwrap();
-        // gifpack.toml: mypack declares basic as its fallback.
-        fs::write(bg_user.join("gifpack.toml"), b"fallback = \"basic\"\n").unwrap();
+        // gifpack.ini: mypack declares basic as its fallback.
+        fs::write(bg_user.join("gifpack.ini"), b"fallback = \"basic\"\n").unwrap();
 
         let reg = GifRegistry::load(&root);
         fs::remove_dir_all(&root).unwrap();
@@ -1257,7 +1257,7 @@ mod tests {
                 .is_some(),
             "mypack fallback to basic should resolve 'default'"
         );
-        // A pack with no gifpack.toml does not fall back.
+        // A pack with no gifpack.ini does not fall back.
         assert!(
             reg.background(Some("nofallback"), "default", PadSize::Leds25, None)
                 .is_none()

@@ -120,7 +120,6 @@ fn smx_config_items_match_rows() {
     let expected = [
         (SubRowId::SmxInput, ItemId::InpSmxInput),
         (SubRowId::SmxPanelLights, ItemId::InpSmxPanelLights),
-        (SubRowId::SmxPadGifs, ItemId::InpSmxPadGifs),
         (SubRowId::SmxUnderglowTheme, ItemId::InpSmxUnderglowTheme),
         (
             SubRowId::SmxManagesPadConfig,

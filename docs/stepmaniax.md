@@ -33,7 +33,7 @@ report.
   - [11b. File locations](#11b-file-locations)
   - [11c. Role names and fallback chains](#11c-role-names-and-fallback-chains)
   - [11d. Authoring GIFs](#11d-authoring-gifs)
-  - [11e. Pack metadata (gifpack.toml)](#11e-pack-metadata-gifpacktoml)
+  - [11e. Pack metadata (gifpack.ini)](#11e-pack-metadata-gifpackini)
 
 ---
 
@@ -647,13 +647,13 @@ assets/
       basic/            <- shipped default pack
     dance/
       <your-pack>/      <- user-authored packs
-        gifpack.toml    <- optional pack metadata (see §11e)
+        gifpack.ini    <- optional pack metadata (see §11e)
   smx-judge-lights/     <- per-panel judgement/press GIFs
     common/
       basic/
     dance/
       <your-pack>/
-        gifpack.toml
+        gifpack.ini
 ```
 
 **Per-song and per-pack backgrounds:** DeadSync also checks `smx-pad-lights/`
@@ -719,7 +719,7 @@ screen. DeadSync resolves the background through this chain for each screen:
 If no pack is selected (or the `basic` pack is selected), steps 3 and 5 use
 `basic` directly and steps 4 and 6 are skipped.
 
-If a pack has no `gifpack.toml` or does not declare a fallback, steps 4 and 6
+If a pack has no `gifpack.ini` or does not declare a fallback, steps 4 and 6
 are skipped and a missing role simply shows nothing.
 
 The table below lists **role names** (the internal key used for lookup). The
@@ -807,14 +807,14 @@ panel press, giving tactile feedback while navigating menus.
 
 Judgement packs follow the same fallback logic as backgrounds. A selected pack
 is tried first; if a gif is not found and the pack declares a fallback in its
-`gifpack.toml`, the fallback pack is checked. With no fallback declared, a
+`gifpack.ini`, the fallback pack is checked. With no fallback declared, a
 missing gif simply shows nothing for that event.
 
 ---
 
-### 11e. Pack metadata (`gifpack.toml`)
+### 11e. Pack metadata (`gifpack.ini`)
 
-Each user pack can include an optional `gifpack.toml` file in its pack directory.
+Each user pack can include an optional `gifpack.ini` file in its pack directory.
 The file uses a simple `key = "value"` format (no TOML library required; only
 the keys listed here are read; others are ignored).
 
@@ -827,7 +827,7 @@ the keys listed here are read; others are ignored).
 **Example:**
 
 ```toml
-# gifpack.toml -- place in assets/smx-pad-lights/dance/<your-pack>/
+# gifpack.ini -- place in assets/smx-pad-lights/dance/<your-pack>/
 # (and optionally in smx-judge-lights/dance/<your-pack>/)
 
 fallback = "basic"
@@ -837,11 +837,11 @@ This tells DeadSync: if a role or judgement GIF is not found in this pack,
 fall through to the `basic` pack before giving up. Without this line the pack
 stands alone -- a missing GIF simply shows nothing.
 
-**The `basic` pack never needs a `gifpack.toml`.** It is the terminal fallback
+**The `basic` pack never needs a `gifpack.ini`.** It is the terminal fallback
 and has no further pack to fall back to.
 
 **Fallback applies to both background and judgement packs independently.** A
-`gifpack.toml` in `smx-pad-lights/dance/<pack>/` controls background fallback;
+`gifpack.ini` in `smx-pad-lights/dance/<pack>/` controls background fallback;
 one in `smx-judge-lights/dance/<pack>/` controls judgement fallback. You can
 declare different fallbacks (or none) for each tree.
 

@@ -117,7 +117,6 @@ fn push_default_options(content: &mut String, default: &Config) {
         default.smx_manages_pad_config,
     );
     push_bool(content, "SmxPanelLights", default.smx_panel_lights);
-    push_bool(content, "SmxPadGifs", default.smx_pad_gifs);
     push_line(
         content,
         "SmxPadGifsPack",

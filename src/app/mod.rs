@@ -4827,9 +4827,9 @@ impl App {
             config.lights_simplify_bass,
             config.smx_input && config.smx_panel_lights,
         );
-        self.sync_smx_pad_gifs(config.smx_pad_gifs, config.smx_pad_gifs_pack);
+        self.sync_smx_pad_gifs(config.smx_input && config.smx_panel_lights, config.smx_pad_gifs_pack);
         self.sync_smx_pad_blackout(config.smx_input && config.smx_panel_lights);
-        if config.smx_pad_gifs && self.state.screens.current_screen == CurrentScreen::SelectMusic {
+        if config.smx_input && config.smx_panel_lights && self.state.screens.current_screen == CurrentScreen::SelectMusic {
             // One f32 per frame; the driver drops it unless the background is
             // actually beat-locked.
             self.smx_panels
@@ -9161,10 +9161,10 @@ impl App {
     fn handle_pad_event(&mut self, event_loop: &ActiveEventLoop, ev: PadEvent) {
         // Press-feedback gif: on any SMX panel press/release outside gameplay, play
         // the pack's `press` animation on that panel's low-priority layer. Gated on
-        // pad_gifs so no-op when the feature is disabled; gated on non-gameplay so
-        // the judgement/sustain layers (which are higher priority) own gameplay fully.
+        // smx_panel_lights; gated on non-gameplay so the judgement/sustain layers
+        // (which are higher priority) own gameplay fully.
         let cfg = config::get();
-        if cfg.smx_input && cfg.smx_panel_lights && cfg.smx_pad_gifs {
+        if cfg.smx_input && cfg.smx_panel_lights {
             if let PadEvent::RawButton { id, code, pressed, .. } = ev {
                 let pad_slot = id.0 as usize;
                 let is_gameplay = matches!(

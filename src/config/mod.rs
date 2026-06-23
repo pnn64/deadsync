@@ -200,14 +200,12 @@ pub struct Config {
     /// SMX pad (this pad's saved default → a global default → the built-in
     /// `smx_default_pad_config` preset). See `App::apply_smx_managed_preset`.
     pub smx_manages_pad_config: bool,
-    /// Light SMX pad panels with the per-arrow judgement colour during gameplay,
-    /// plus a sustained colour for held freezes and rolls.
+    /// Drive SMX pad panel LEDs with GIF animations (backgrounds, judgement
+    /// effects, press feedback). While on, the game owns the LEDs and the
+    /// pad's own firmware lighting is suppressed.
     pub smx_panel_lights: bool,
-    /// Play full-pad background GIF animations on SMX pads, per screen
-    /// (menus, song select, gameplay), from `assets/smx/pad_animations/`.
-    pub smx_pad_gifs: bool,
     /// User animation pack supplying the pad backgrounds (a directory under
-    /// `assets/smx/pad_animations/user/`). Empty selects the built-in set.
+    /// `assets/smx-pad-lights/dance/`). Empty selects the built-in set.
     pub smx_pad_gifs_pack: SmxPackName,
     /// Set the SMX pad edge underglow LEDs to the player's theme colour.
     pub smx_underglow_theme: bool,
@@ -463,7 +461,6 @@ impl Default for Config {
             smx_input: false,
             smx_manages_pad_config: false,
             smx_panel_lights: false,
-            smx_pad_gifs: false,
             smx_pad_gifs_pack: SmxPackName::default(),
             smx_underglow_theme: false,
             smx_default_pad_config: SmxPadPreset::Low,
