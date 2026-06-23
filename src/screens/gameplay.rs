@@ -1329,7 +1329,11 @@ fn prewarm_notefield_model_cache_slots(
         .into_iter()
         .flatten()
         {
-            skin.for_each_model_slot(|slot| cache.prewarm_slot(slot));
+            skin.for_each_slot(|slot| {
+                if slot.model.is_some() {
+                    cache.prewarm_slot(slot);
+                }
+            });
         }
         cache.reset_stats();
     }

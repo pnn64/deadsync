@@ -7,6 +7,7 @@ license = "GPL-3.0"
 [dependencies]
 deadlib-present = { path = "../deadlib-present" }
 deadsync-profile = { path = "../deadsync-profile" }
+mlua = { version = "0.11.6", features = ["lua54", "vendored"] }
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

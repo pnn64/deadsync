@@ -13,22 +13,33 @@ use deadlib_present::actors::{TextAlign, TextAttribute};
 use deadlib_present::anim::{EffectClock, EffectMode};
 use deadsync_noteskin::{NUM_QUANTIZATIONS, Style};
 use deadsync_song_lua::{
-    SONG_LUA_BROADCASTS_KEY, SONG_LUA_RUNTIME_BEAT_KEY, SONG_LUA_RUNTIME_KEY,
-    SONG_LUA_RUNTIME_SECONDS_KEY, SONG_LUA_SIDE_EFFECT_COUNT_KEY, display_bpms_text,
-    format_song_options_text, player_short_name, song_display_bps, song_elapsed_seconds_for_beat,
-    song_music_rate,
+    SONG_LUA_BROADCASTS_KEY, SONG_LUA_DOUBLE_NOTE_COLUMNS, SONG_LUA_EASING_NAME_KEY,
+    SONG_LUA_NOTE_COLUMNS, SONG_LUA_RUNTIME_BEAT_KEY, SONG_LUA_RUNTIME_KEY,
+    SONG_LUA_RUNTIME_SECONDS_KEY, SONG_LUA_SIDE_EFFECT_COUNT_KEY, SONG_LUA_SOUND_PATHS_KEY,
+    compile_song_runtime_delta_values, compile_song_runtime_values, create_owned_string_array,
+    create_sl_table, create_song_position_table, create_song_runtime_table, create_string_array,
+    display_bpms_text, ease_window_cmp, file_path_string, format_song_options_text,
+    is_song_lua_audio_path, is_song_lua_image_path, is_song_lua_media_path, is_song_lua_video_path,
+    lua_format_text, lua_text_value, lua_values_equal, make_color_table, message_event_cmp,
+    method_arg, mod_window_cmp, note_song_lua_side_effect, player_index_from_value,
+    player_number_name, player_short_name, preprocess_lua_cmd_syntax, read_boolish,
+    read_color_value, read_easing_name, read_f32, read_i32_value, read_player,
+    read_song_lua_broadcasts, read_song_lua_sound_paths, read_span_mode, read_string,
+    read_u32_value, read_vertex_colors_value, record_song_lua_broadcast,
+    set_compile_song_runtime_beat, set_compile_song_runtime_delta_values,
+    set_compile_song_runtime_values, song_dir_string, song_display_bps,
+    song_elapsed_seconds_for_beat, song_group_name, song_lua_runtime_number,
+    song_lua_side_effect_count, song_lua_style_column_name, song_lua_style_column_x,
+    song_lua_style_info, song_music_path, song_music_rate, song_named_image_path,
+    song_simfile_path, truthy,
 };
 
 mod actor_host;
 mod compat;
 mod managers;
 mod overlay;
-mod runtime;
-mod sl;
 mod song_tables;
 mod theme_colors;
-mod types;
-mod util;
 
 use self::actor_host::{
     actor_overlay_initial_state, actor_tree_has_update_functions, broadcast_song_lua_message,
@@ -65,49 +76,24 @@ use self::overlay::{
     parse_overlay_blend_mode, parse_overlay_effect_clock, parse_overlay_effect_mode,
     parse_overlay_text_align, parse_overlay_text_glow_mode,
 };
-use self::runtime::{
-    compile_song_runtime_delta_values, compile_song_runtime_values, create_song_position_table,
-    create_song_runtime_table, note_song_lua_side_effect, read_song_lua_broadcasts,
-    record_song_lua_broadcast, set_compile_song_runtime_beat,
-    set_compile_song_runtime_delta_values, set_compile_song_runtime_values,
-    song_lua_runtime_number, song_lua_side_effect_count,
-};
-use self::sl::create_sl_table;
 use self::song_tables::{
     create_course_table, create_display_bpms_table, create_enabled_players_table,
     create_player_tables, create_song_options_table, create_song_table, create_songman_table,
     create_style_table, create_trail_table, display_bpms_for_args, set_string_method,
 };
-pub use self::types::{
-    CompiledSongLua, SongLuaCapturedActor, SongLuaColumnOffsetWindow, SongLuaCompileContext,
-    SongLuaCompileInfo, SongLuaDifficulty, SongLuaEaseTarget, SongLuaEaseWindow,
-    SongLuaMessageEvent, SongLuaModWindow, SongLuaNoteHideWindow, SongLuaPlayerContext,
-    SongLuaSpanMode, SongLuaSpeedMod, SongLuaTimeUnit,
-};
-use self::util::{
-    SONG_LUA_EASING_NAME_KEY, create_owned_string_array, create_string_array, ease_window_cmp,
-    file_path_string, is_song_lua_audio_path, is_song_lua_image_path, is_song_lua_media_path,
-    is_song_lua_video_path, lua_format_text, lua_text_value, lua_values_equal, make_color_table,
-    message_event_cmp, method_arg, mod_window_cmp, player_index_from_value, player_number_name,
-    preprocess_lua_cmd_syntax, read_boolish, read_color_value, read_easing_name, read_f32,
-    read_i32_value, read_player, read_song_lua_sound_paths, read_span_mode, read_string,
-    read_u32_value, read_vertex_colors_value, song_dir_string, song_group_name, song_music_path,
-    song_named_image_path, song_simfile_path, truthy,
+pub use deadsync_song_lua::{
+    SongLuaCapturedActor, SongLuaColumnOffsetWindow, SongLuaCompileContext, SongLuaCompileInfo,
+    SongLuaDifficulty, SongLuaEaseTarget, SongLuaEaseWindow, SongLuaMessageEvent, SongLuaModWindow,
+    SongLuaNoteHideWindow, SongLuaPlayerContext, SongLuaSpanMode, SongLuaSpeedMod, SongLuaTimeUnit,
 };
 
+pub type CompiledSongLua = deadsync_song_lua::CompiledSongLua<SongLuaOverlayActor>;
 const LUA_PLAYERS: usize = 2;
-const SONG_LUA_NOTE_COLUMNS: usize = 4;
-const SONG_LUA_DOUBLE_NOTE_COLUMNS: usize = 8;
 const SONG_LUA_PRODUCT_FAMILY: &str = "ITGmania";
 const SONG_LUA_PRODUCT_ID: &str = "ITGmania";
 const SONG_LUA_PRODUCT_VERSION: &str = "1.2.0";
 const THEME_RECEPTOR_Y_STD: f32 = -125.0;
 const THEME_RECEPTOR_Y_REV: f32 = 145.0;
-const SONG_LUA_COLUMN_X: [f32; SONG_LUA_NOTE_COLUMNS] = [-96.0, -32.0, 32.0, 96.0];
-const SONG_LUA_DOUBLE_COLUMN_X: [f32; SONG_LUA_DOUBLE_NOTE_COLUMNS] =
-    [-224.0, -160.0, -96.0, -32.0, 32.0, 96.0, 160.0, 224.0];
-const SONG_LUA_COLUMN_NAMES: [&str; SONG_LUA_NOTE_COLUMNS] = ["Left", "Down", "Up", "Right"];
-const SONG_LUA_SOUND_PATHS_KEY: &str = "__songlua_sound_paths";
 const SONG_LUA_PROBE_METHODS_KEY: &str = "__songlua_probe_methods";
 const SONG_LUA_PROBE_ACTORS_KEY: &str = "__songlua_probe_actors";
 const SONG_LUA_PROBE_ACTOR_SET_KEY: &str = "__songlua_probe_actor_set";
@@ -182,67 +168,6 @@ const SONG_LUA_TIMING_WINDOW_NAMES: [&str; 5] = [
     "TimingWindow_W5",
 ];
 
-#[derive(Clone, Copy)]
-struct SongLuaStyleInfo {
-    name: &'static str,
-    steps_type: &'static str,
-    style_type: &'static str,
-    columns: usize,
-    width: f32,
-    x_offsets: &'static [f32],
-}
-
-fn song_lua_style_info(style_name: &str) -> SongLuaStyleInfo {
-    let normalized = style_name
-        .trim()
-        .to_ascii_lowercase()
-        .replace(['_', '-', ' '], "");
-    if matches!(
-        normalized.as_str(),
-        "double" | "dancedouble" | "stepstypedancedouble"
-    ) {
-        SongLuaStyleInfo {
-            name: "double",
-            steps_type: "StepsType_Dance_Double",
-            style_type: "StyleType_OnePlayerTwoSides",
-            columns: SONG_LUA_DOUBLE_NOTE_COLUMNS,
-            width: 512.0,
-            x_offsets: &SONG_LUA_DOUBLE_COLUMN_X,
-        }
-    } else if normalized == "versus" {
-        SongLuaStyleInfo {
-            name: "versus",
-            steps_type: "StepsType_Dance_Single",
-            style_type: "StyleType_TwoPlayersTwoSides",
-            columns: SONG_LUA_NOTE_COLUMNS,
-            width: 256.0,
-            x_offsets: &SONG_LUA_COLUMN_X,
-        }
-    } else {
-        SongLuaStyleInfo {
-            name: "single",
-            steps_type: "StepsType_Dance_Single",
-            style_type: "StyleType_OnePlayerOneSide",
-            columns: SONG_LUA_NOTE_COLUMNS,
-            width: 256.0,
-            x_offsets: &SONG_LUA_COLUMN_X,
-        }
-    }
-}
-
-#[inline(always)]
-fn song_lua_style_column_x(style_name: &str, column_index: usize) -> f32 {
-    song_lua_style_info(style_name)
-        .x_offsets
-        .get(column_index)
-        .copied()
-        .unwrap_or(0.0)
-}
-
-#[inline(always)]
-fn song_lua_style_column_name(column_index: usize) -> &'static str {
-    SONG_LUA_COLUMN_NAMES[column_index % SONG_LUA_COLUMN_NAMES.len()]
-}
 const SONG_LUA_PLAYER_OPTION_CAPABILITIES: &[&str] = &[
     "FromString",
     "IsEasierForSongAndSteps",

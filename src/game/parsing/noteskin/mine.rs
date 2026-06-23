@@ -5,17 +5,13 @@ use super::{
 use crate::assets;
 use deadlib_platform::dirs;
 use deadlib_render::SamplerDesc;
-use image::{Rgba, RgbaImage};
+use deadsync_noteskin::mine::{
+    MINE_GRADIENT_FRAME_SIZE, MINE_GRADIENT_SAMPLES, mine_gradient_texture,
+    mine_gradient_texture_key,
+};
 use log::warn;
-use std::hash::Hasher;
 use std::path::Path;
 use std::sync::{Arc, atomic::AtomicU64};
-use twox_hash::XxHash64;
-
-const MINE_GRADIENT_SAMPLES: usize = 64;
-const MINE_FILL_LAYERS: usize = 32;
-const MINE_GRADIENT_FRAME_SIZE: u32 = 64;
-const MINE_GRADIENT_KEY_PREFIX: &str = "generated/noteskins/mine_fill";
 
 pub(super) fn mine_fill_slots(mines: &[Option<SpriteSlot>]) -> Vec<Option<SpriteSlot>> {
     mines
@@ -140,69 +136,6 @@ fn load_mine_gradient_colors(slot: &SpriteSlot) -> Option<Vec<[f32; 4]>> {
     }
 
     Some(samples)
-}
-
-#[inline(always)]
-fn mine_grad_byte(v: f32) -> u8 {
-    (v.clamp(0.0, 1.0) * 255.0).round() as u8
-}
-
-fn mine_gradient_texture_key(colors: &[[f32; 4]]) -> String {
-    let mut hasher = XxHash64::default();
-    hasher.write_u32(MINE_FILL_LAYERS as u32);
-    hasher.write_u32(MINE_GRADIENT_FRAME_SIZE);
-    hasher.write_u32(colors.len() as u32);
-    for color in colors {
-        for channel in color {
-            hasher.write_u32(channel.to_bits());
-        }
-    }
-    format!("{MINE_GRADIENT_KEY_PREFIX}/{:016x}.png", hasher.finish())
-}
-
-fn mine_gradient_texture(colors: &[[f32; 4]]) -> RgbaImage {
-    let frame_count = colors.len().max(1);
-    let frame_size = MINE_GRADIENT_FRAME_SIZE.max(2);
-    let mut image = RgbaImage::new(frame_size * frame_count as u32, frame_size);
-    let center = (frame_size as f32 - 1.0) * 0.5;
-    let inv_radius = if center > f32::EPSILON {
-        1.0 / center
-    } else {
-        0.0
-    };
-
-    for frame in 0..frame_count {
-        let x_offset = frame as u32 * frame_size;
-        for y in 0..frame_size {
-            let dy = y as f32 - center;
-            for x in 0..frame_size {
-                let dx = x as f32 - center;
-                let radius = (dx.mul_add(dx, dy * dy)).sqrt() * inv_radius;
-                if radius >= 1.0 {
-                    image.put_pixel(x_offset + x, y, Rgba([0, 0, 0, 0]));
-                    continue;
-                }
-                let layer = ((radius * MINE_FILL_LAYERS as f32).ceil() as usize)
-                    .saturating_sub(1)
-                    .min(MINE_FILL_LAYERS - 1);
-                let idx = (frame + colors.len() - (layer % colors.len())) % colors.len();
-                let color = colors[idx];
-                let edge_alpha = ((1.0 - radius) * center).clamp(0.0, 1.0);
-                image.put_pixel(
-                    x_offset + x,
-                    y,
-                    Rgba([
-                        mine_grad_byte(color[0]),
-                        mine_grad_byte(color[1]),
-                        mine_grad_byte(color[2]),
-                        mine_grad_byte(color[3] * edge_alpha),
-                    ]),
-                );
-            }
-        }
-    }
-
-    image
 }
 
 fn build_mine_gradient_slot(colors: &[[f32; 4]]) -> SpriteSlot {

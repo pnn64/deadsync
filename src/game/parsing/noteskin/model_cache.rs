@@ -165,8 +165,8 @@ fn hashed_model_cache_key(key: &ModelMeshCacheKey) -> TMeshCacheKey {
 mod tests {
     use super::*;
     use crate::game::parsing::noteskin::{
-        ModelAutoRotKey, ModelDrawState, ModelMesh, ModelTweenSegment, ModelVertex,
-        SpriteDefinition, SpriteSource,
+        ModelAutoRotKey, ModelDrawState, ModelEffectState, ModelMesh, ModelTweenSegment,
+        ModelVertex, SpriteDefinition, SpriteSource,
     };
 
     fn test_slot() -> SpriteSlot {
@@ -196,7 +196,7 @@ mod tests {
             })),
             model_draw: ModelDrawState::default(),
             model_timeline: Arc::<[ModelTweenSegment]>::from([]),
-            model_effect: deadlib_present::anim::EffectState::default(),
+            model_effect: ModelEffectState::default(),
             model_auto_rot_total_frames: 0.0,
             model_auto_rot_z_keys: Arc::<[ModelAutoRotKey]>::from([]),
         }

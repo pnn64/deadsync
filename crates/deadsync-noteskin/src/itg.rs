@@ -4,6 +4,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
+use crate::{
+    NoteAnimPart, NoteColorType, NoteDisplayMetrics, NotePartAnimation, NotePartTextureTranslate,
+};
+
 const MAX_FALLBACK_DEPTH: usize = 20;
 const MAX_REDIR_DEPTH: usize = 100;
 
@@ -241,6 +245,146 @@ pub fn load_noteskin_data(root: &Path, game: &str, skin: &str) -> Result<Noteski
     ))
 }
 
+pub fn note_display_metrics(metrics: &IniData) -> NoteDisplayMetrics {
+    let mut out = NoteDisplayMetrics::default();
+    let read_bool = |key: &str, default: bool| {
+        metrics
+            .get("NoteDisplay", key)
+            .and_then(parse_ini_int)
+            .map_or(default, |v| v != 0)
+    };
+    let read_float = |key: &str, default: f32| {
+        metrics
+            .get("NoteDisplay", key)
+            .and_then(parse_ini_float)
+            .unwrap_or(default)
+    };
+    let read_int = |key: &str, default: i32| {
+        metrics
+            .get("NoteDisplay", key)
+            .and_then(parse_ini_int)
+            .unwrap_or(default)
+    };
+
+    out.draw_hold_head_for_taps_on_same_row = read_bool(
+        "DrawHoldHeadForTapsOnSameRow",
+        out.draw_hold_head_for_taps_on_same_row,
+    );
+    out.draw_roll_head_for_taps_on_same_row = read_bool(
+        "DrawRollHeadForTapsOnSameRow",
+        out.draw_roll_head_for_taps_on_same_row,
+    );
+    out.tap_hold_roll_on_row_means_hold = read_bool(
+        "TapHoldRollOnRowMeansHold",
+        out.tap_hold_roll_on_row_means_hold,
+    );
+    out.hold_head_is_above_wavy_parts = read_bool(
+        "HoldHeadIsAboveWavyParts",
+        out.hold_head_is_above_wavy_parts,
+    );
+    out.hold_tail_is_above_wavy_parts = read_bool(
+        "HoldTailIsAboveWavyParts",
+        out.hold_tail_is_above_wavy_parts,
+    );
+    out.start_drawing_hold_body_offset_from_head = read_float(
+        "StartDrawingHoldBodyOffsetFromHead",
+        out.start_drawing_hold_body_offset_from_head,
+    );
+    out.stop_drawing_hold_body_offset_from_tail = read_float(
+        "StopDrawingHoldBodyOffsetFromTail",
+        out.stop_drawing_hold_body_offset_from_tail,
+    );
+    out.hold_let_go_gray_percent = read_float("HoldLetGoGrayPercent", out.hold_let_go_gray_percent);
+    out.flip_head_and_tail_when_reverse = read_bool(
+        "FlipHeadAndTailWhenReverse",
+        out.flip_head_and_tail_when_reverse,
+    );
+    out.flip_hold_body_when_reverse =
+        read_bool("FlipHoldBodyWhenReverse", out.flip_hold_body_when_reverse);
+    out.top_hold_anchor_when_reverse =
+        read_bool("TopHoldAnchorWhenReverse", out.top_hold_anchor_when_reverse);
+    out.hold_active_is_add_layer = read_bool("HoldActiveIsAddLayer", out.hold_active_is_add_layer);
+    for part in NoteAnimPart::ALL {
+        let prefix = part.metric_prefix();
+        let length_key = format!("{prefix}AnimationLength");
+        let vivid_key = format!("{prefix}AnimationIsVivid");
+        let add_x_key = format!("{prefix}AdditionTextureCoordOffsetX");
+        let add_y_key = format!("{prefix}AdditionTextureCoordOffsetY");
+        let spacing_x_key = format!("{prefix}NoteColorTextureCoordSpacingX");
+        let spacing_y_key = format!("{prefix}NoteColorTextureCoordSpacingY");
+        let count_key = format!("{prefix}NoteColorCount");
+        let color_type_key = format!("{prefix}NoteColorType");
+        let default_anim = out.part_animation[part as usize];
+        let length = read_float(&length_key, default_anim.length).abs().max(1e-6);
+        let vivid = read_bool(&vivid_key, default_anim.vivid);
+        out.part_animation[part as usize] = NotePartAnimation { length, vivid };
+        let default_translate = out.part_texture_translate[part as usize];
+        let addition_offset = [
+            read_float(&add_x_key, default_translate.addition_offset[0]),
+            read_float(&add_y_key, default_translate.addition_offset[1]),
+        ];
+        let note_color_spacing = [
+            read_float(&spacing_x_key, default_translate.note_color_spacing[0]),
+            read_float(&spacing_y_key, default_translate.note_color_spacing[1]),
+        ];
+        let note_color_count = read_int(&count_key, default_translate.note_color_count);
+        let note_color_type = metrics
+            .get("NoteDisplay", &color_type_key)
+            .and_then(NoteColorType::from_metric)
+            .unwrap_or(default_translate.note_color_type);
+        out.part_texture_translate[part as usize] = NotePartTextureTranslate {
+            addition_offset,
+            note_color_spacing,
+            note_color_count,
+            note_color_type,
+        };
+    }
+    out
+}
+
+pub fn animation_is_beat_based(data: &NoteskinData) -> bool {
+    data.metrics
+        .get("NoteDisplay", "AnimationIsBeatBased")
+        .or_else(|| data.metrics.get("Global", "AnimationIsBeatBased"))
+        .and_then(parse_ini_float)
+        .is_some_and(|v| v > 0.5)
+}
+
+fn parse_ini_value(raw: &str) -> Option<&str> {
+    let trimmed = raw.split_once("//").map_or(raw, |(prefix, _)| prefix);
+    let trimmed = trimmed
+        .split_once(';')
+        .map_or(trimmed, |(prefix, _)| prefix);
+    let value = trimmed.trim().trim_matches('"').trim_matches('\'');
+    if value.is_empty() {
+        return None;
+    }
+    Some(value)
+}
+
+fn parse_ini_int(raw: &str) -> Option<i32> {
+    let value = parse_ini_value(raw)?;
+    let bytes = value.as_bytes();
+    let mut end = 0usize;
+    if bytes.first().is_some_and(|b| *b == b'+' || *b == b'-') {
+        end = 1;
+    }
+    let digit_start = end;
+    while end < bytes.len() && bytes[end].is_ascii_digit() {
+        end += 1;
+    }
+    if end == digit_start {
+        return None;
+    }
+    let parsed = value[..end].parse::<i64>().ok()?;
+    Some(parsed.clamp(i32::MIN as i64, i32::MAX as i64) as i32)
+}
+
+pub fn parse_ini_float(raw: &str) -> Option<f32> {
+    let value = parse_ini_value(raw)?;
+    value.parse::<f32>().ok()
+}
+
 fn resolve_skin_dir(root: &Path, game: &str, skin: &str) -> Option<PathBuf> {
     find_child_dir_case_insensitive(&root.join(game), skin)
         .or_else(|| find_child_dir_case_insensitive(&root.join("common"), skin))
@@ -352,7 +496,12 @@ fn is_redir(path: &Path) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{clear_lookup_caches, find_file_with_prefix, resolve_skin_dir};
+    use super::{
+        IniData, NoteskinData, animation_is_beat_based, clear_lookup_caches, find_file_with_prefix,
+        note_display_metrics, parse_ini_float, resolve_skin_dir,
+    };
+    use crate::{NoteAnimPart, NoteColorType};
+    use std::collections::HashMap;
     use std::fs;
     use std::path::PathBuf;
     use std::sync::Mutex;
@@ -372,6 +521,101 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    fn ini_section(section: &str, values: &[(&str, &str)]) -> IniData {
+        let section_values = values
+            .iter()
+            .map(|(key, value)| (key.to_ascii_lowercase(), value.to_string()))
+            .collect::<HashMap<_, _>>();
+        IniData {
+            sections: HashMap::from([(section.to_ascii_lowercase(), section_values)]),
+        }
+    }
+
+    #[test]
+    fn note_display_metrics_parse_global_flags_and_offsets() {
+        let metrics = ini_section(
+            "NoteDisplay",
+            &[
+                ("DrawHoldHeadForTapsOnSameRow", "0"),
+                ("FlipHoldBodyWhenReverse", "1"),
+                ("HoldLetGoGrayPercent", "0.4"),
+                ("TapNoteAnimationLength", "-2.5"),
+                ("TapNoteAnimationIsVivid", "1"),
+                ("TapNoteAdditionTextureCoordOffsetX", "0.125"),
+                ("TapNoteAdditionTextureCoordOffsetY", "-0.25"),
+                ("TapNoteNoteColorCount", "12"),
+                ("TapNoteNoteColorType", "ProgressAlternate"),
+            ],
+        );
+
+        let parsed = note_display_metrics(&metrics);
+        let tap_anim = parsed.part_animation[NoteAnimPart::Tap as usize];
+        let tap_translate = parsed.part_texture_translate[NoteAnimPart::Tap as usize];
+
+        assert!(!parsed.draw_hold_head_for_taps_on_same_row);
+        assert!(parsed.flip_hold_body_when_reverse);
+        assert!((parsed.hold_let_go_gray_percent - 0.4).abs() <= f32::EPSILON);
+        assert!((tap_anim.length - 2.5).abs() <= f32::EPSILON);
+        assert!(tap_anim.vivid);
+        assert_eq!(tap_translate.addition_offset, [0.125, -0.25]);
+        assert_eq!(tap_translate.note_color_count, 12);
+        assert_eq!(
+            tap_translate.note_color_type,
+            NoteColorType::ProgressAlternate
+        );
+    }
+
+    #[test]
+    fn note_display_metrics_keep_defaults_for_invalid_values() {
+        let metrics = ini_section(
+            "NoteDisplay",
+            &[
+                ("RollHeadAnimationLength", "nope"),
+                ("RollHeadNoteColorCount", "nope"),
+                ("RollHeadNoteColorType", "unknown"),
+            ],
+        );
+
+        let parsed = note_display_metrics(&metrics);
+        let roll_anim = parsed.part_animation[NoteAnimPart::RollHead as usize];
+        let roll_translate = parsed.part_texture_translate[NoteAnimPart::RollHead as usize];
+
+        assert_eq!(roll_anim.length, 1.0);
+        assert_eq!(roll_translate.note_color_count, 8);
+        assert_eq!(roll_translate.note_color_type, NoteColorType::Denominator);
+    }
+
+    #[test]
+    fn parse_ini_float_trims_quotes_and_comments() {
+        assert_eq!(parse_ini_float(" \"1.25\" ; comment"), Some(1.25));
+        assert_eq!(parse_ini_float(" -0.5 // comment"), Some(-0.5));
+        assert_eq!(parse_ini_float(" nope "), None);
+    }
+
+    #[test]
+    fn animation_is_beat_based_reads_notedisplay_then_global() {
+        let global = NoteskinData {
+            name: "global".to_string(),
+            metrics: ini_section("Global", &[("AnimationIsBeatBased", "1")]),
+            search_dirs: Vec::new(),
+        };
+        let override_off = NoteskinData {
+            name: "override".to_string(),
+            metrics: {
+                let mut metrics = ini_section("Global", &[("AnimationIsBeatBased", "1")]);
+                metrics.merge_missing_from(&ini_section(
+                    "NoteDisplay",
+                    &[("AnimationIsBeatBased", "0")],
+                ));
+                metrics
+            },
+            search_dirs: Vec::new(),
+        };
+
+        assert!(animation_is_beat_based(&global));
+        assert!(!animation_is_beat_based(&override_off));
     }
 
     #[test]

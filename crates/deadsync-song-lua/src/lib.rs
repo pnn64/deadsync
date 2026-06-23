@@ -5,6 +5,47 @@ use deadlib_present::actors::TextAlign;
 use deadlib_present::anim::{EffectClock, EffectMode};
 use deadsync_profile::NoteSkin;
 
+mod cmd;
+mod files;
+mod lua_util;
+mod runtime;
+mod sl;
+mod theme_colors;
+mod values;
+
+pub use cmd::preprocess_lua_cmd_syntax;
+pub use files::{
+    file_path_string, is_song_lua_audio_path, is_song_lua_image_path, is_song_lua_media_path,
+    is_song_lua_simfile_path, is_song_lua_video_path, song_dir_string, song_group_name,
+    song_music_path, song_named_image_path, song_simfile_path,
+};
+pub use lua_util::{
+    create_bool_array, create_color_constants_table, create_owned_string_array,
+    create_string_array, lua_format_text, lua_text_value, make_color_table, method_arg,
+    method_arg_offset, read_color_call, read_color_value, read_song_lua_sound_paths,
+    read_vertex_colors_value,
+};
+pub use runtime::{
+    compile_song_runtime_delta_values, compile_song_runtime_values, create_song_position_table,
+    create_song_runtime_table, note_song_lua_side_effect, read_song_lua_broadcasts,
+    record_song_lua_broadcast, set_compile_song_runtime_beat,
+    set_compile_song_runtime_delta_values, set_compile_song_runtime_values,
+    song_lua_runtime_number, song_lua_side_effect_count,
+};
+pub use sl::{create_sl_streams, create_sl_table, init_sl_streams};
+pub use theme_colors::{
+    DDR_DIFF_COLORS, ITG_DIFF_COLORS, SL_COLORS, SL_DECORATIVE_COLORS, SL_FA_PLUS_COLORS,
+    SL_JUDGMENT_COLORS, SONG_LUA_ACTIVE_COLOR_INDEX, blend_color, color_to_hex,
+    custom_difficulty_color, judgment_line_color, light_color, palette_color, parse_color_text,
+    song_lua_difficulty_color, song_lua_difficulty_index, song_lua_palette, song_lua_player_color,
+    song_lua_player_dark_color, song_lua_player_score_color, stage_color, tone_color,
+};
+pub use values::{
+    SONG_LUA_EASING_NAME_KEY, lua_values_equal, player_index_from_value, player_number_name,
+    read_boolish, read_easing_name, read_f32, read_i32_value, read_player, read_span_mode,
+    read_string, read_u32_value, truthy,
+};
+
 pub const LUA_PLAYERS: usize = 2;
 pub const SONG_LUA_RUNTIME_KEY: &str = "__songlua_compile_song_runtime";
 pub const SONG_LUA_RUNTIME_BEAT_KEY: &str = "__songlua_song_beat";
@@ -15,6 +56,76 @@ pub const SONG_LUA_RUNTIME_BPS_KEY: &str = "__songlua_song_bps";
 pub const SONG_LUA_RUNTIME_RATE_KEY: &str = "__songlua_music_rate";
 pub const SONG_LUA_SIDE_EFFECT_COUNT_KEY: &str = "__songlua_side_effect_count";
 pub const SONG_LUA_BROADCASTS_KEY: &str = "__songlua_broadcast_messages";
+pub const SONG_LUA_SOUND_PATHS_KEY: &str = "__songlua_sound_paths";
+pub const SONG_LUA_NOTE_COLUMNS: usize = 4;
+pub const SONG_LUA_DOUBLE_NOTE_COLUMNS: usize = 8;
+
+const SONG_LUA_COLUMN_X: [f32; SONG_LUA_NOTE_COLUMNS] = [-96.0, -32.0, 32.0, 96.0];
+const SONG_LUA_DOUBLE_COLUMN_X: [f32; SONG_LUA_DOUBLE_NOTE_COLUMNS] =
+    [-224.0, -160.0, -96.0, -32.0, 32.0, 96.0, 160.0, 224.0];
+const SONG_LUA_COLUMN_NAMES: [&str; SONG_LUA_NOTE_COLUMNS] = ["Left", "Down", "Up", "Right"];
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SongLuaStyleInfo {
+    pub name: &'static str,
+    pub steps_type: &'static str,
+    pub style_type: &'static str,
+    pub columns: usize,
+    pub width: f32,
+    pub x_offsets: &'static [f32],
+}
+
+pub fn song_lua_style_info(style_name: &str) -> SongLuaStyleInfo {
+    let normalized = style_name
+        .trim()
+        .to_ascii_lowercase()
+        .replace(['_', '-', ' '], "");
+    if matches!(
+        normalized.as_str(),
+        "double" | "dancedouble" | "stepstypedancedouble"
+    ) {
+        SongLuaStyleInfo {
+            name: "double",
+            steps_type: "StepsType_Dance_Double",
+            style_type: "StyleType_OnePlayerTwoSides",
+            columns: SONG_LUA_DOUBLE_NOTE_COLUMNS,
+            width: 512.0,
+            x_offsets: &SONG_LUA_DOUBLE_COLUMN_X,
+        }
+    } else if normalized == "versus" {
+        SongLuaStyleInfo {
+            name: "versus",
+            steps_type: "StepsType_Dance_Single",
+            style_type: "StyleType_TwoPlayersTwoSides",
+            columns: SONG_LUA_NOTE_COLUMNS,
+            width: 256.0,
+            x_offsets: &SONG_LUA_COLUMN_X,
+        }
+    } else {
+        SongLuaStyleInfo {
+            name: "single",
+            steps_type: "StepsType_Dance_Single",
+            style_type: "StyleType_OnePlayerOneSide",
+            columns: SONG_LUA_NOTE_COLUMNS,
+            width: 256.0,
+            x_offsets: &SONG_LUA_COLUMN_X,
+        }
+    }
+}
+
+#[inline(always)]
+pub fn song_lua_style_column_x(style_name: &str, column_index: usize) -> f32 {
+    song_lua_style_info(style_name)
+        .x_offsets
+        .get(column_index)
+        .copied()
+        .unwrap_or(0.0)
+}
+
+#[inline(always)]
+pub fn song_lua_style_column_name(column_index: usize) -> &'static str {
+    SONG_LUA_COLUMN_NAMES[column_index % SONG_LUA_COLUMN_NAMES.len()]
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SongLuaDifficulty {
@@ -229,6 +340,29 @@ pub fn song_music_rate(context: &SongLuaCompileContext) -> f32 {
 #[inline(always)]
 pub fn song_elapsed_seconds_for_beat(beat: f32, song_bps: f32, music_rate: f32) -> f32 {
     beat / (song_bps.max(f32::EPSILON) * music_rate.max(f32::EPSILON))
+}
+
+#[inline(always)]
+pub fn mod_window_cmp(left: &SongLuaModWindow, right: &SongLuaModWindow) -> std::cmp::Ordering {
+    left.start
+        .total_cmp(&right.start)
+        .then_with(|| left.limit.total_cmp(&right.limit))
+        .then_with(|| left.mods.cmp(&right.mods))
+}
+
+#[inline(always)]
+pub fn ease_window_cmp(left: &SongLuaEaseWindow, right: &SongLuaEaseWindow) -> std::cmp::Ordering {
+    left.start
+        .total_cmp(&right.start)
+        .then_with(|| left.limit.total_cmp(&right.limit))
+}
+
+#[inline(always)]
+pub fn message_event_cmp(
+    left: &SongLuaMessageEvent,
+    right: &SongLuaMessageEvent,
+) -> std::cmp::Ordering {
+    left.beat.total_cmp(&right.beat)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

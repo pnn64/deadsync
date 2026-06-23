@@ -3148,19 +3148,22 @@ fn prewarm_gameplay_assets(
         seen_model_textures: &mut HashSet<String>,
         noteskin: &crate::game::parsing::noteskin::Noteskin,
     ) {
-        noteskin.for_each_texture_key(|key| {
+        noteskin.for_each_slot(|slot| {
+            let key = slot.texture_key();
             if seen.insert(key.to_owned()) {
                 assets.ensure_texture_for_key(backend, key);
             }
         });
-        noteskin.for_each_model_slot(|slot| {
-            prewarm_model_texture_key(
-                assets,
-                backend,
-                seen,
-                seen_model_textures,
-                slot.texture_key(),
-            )
+        noteskin.for_each_slot(|slot| {
+            if slot.model.is_some() {
+                prewarm_model_texture_key(
+                    assets,
+                    backend,
+                    seen,
+                    seen_model_textures,
+                    slot.texture_key(),
+                )
+            }
         });
     }
 

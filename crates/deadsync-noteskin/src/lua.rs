@@ -1,4 +1,4 @@
-pub(super) fn itg_parse_lua_quoted(raw: &str) -> Option<String> {
+pub fn itg_parse_lua_quoted(raw: &str) -> Option<String> {
     let trimmed = raw
         .trim()
         .trim_end_matches(',')
@@ -15,12 +15,7 @@ pub(super) fn itg_parse_lua_quoted(raw: &str) -> Option<String> {
     Some(trimmed[1..trimmed.len() - 1].to_string())
 }
 
-pub(super) fn itg_find_matching(
-    content: &str,
-    open_idx: usize,
-    open: char,
-    close: char,
-) -> Option<usize> {
+pub fn itg_find_matching(content: &str, open_idx: usize, open: char, close: char) -> Option<usize> {
     let mut depth = 0usize;
     for (idx, ch) in content.char_indices().skip_while(|(i, _)| *i < open_idx) {
         if ch == open {
@@ -35,7 +30,7 @@ pub(super) fn itg_find_matching(
     None
 }
 
-pub(super) fn itg_skip_ws(content: &str, mut idx: usize) -> usize {
+pub fn itg_skip_ws(content: &str, mut idx: usize) -> usize {
     let bytes = content.as_bytes();
     while idx < bytes.len() && bytes[idx].is_ascii_whitespace() {
         idx += 1;
@@ -43,7 +38,7 @@ pub(super) fn itg_skip_ws(content: &str, mut idx: usize) -> usize {
     idx
 }
 
-pub(super) fn itg_split_call_args(raw: &str) -> Vec<String> {
+pub fn itg_split_call_args(raw: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut start = 0usize;
     let mut depth = 0usize;
@@ -104,7 +99,7 @@ fn strip_wrapped_parens(raw: &str) -> &str {
     value
 }
 
-pub(super) fn itg_parse_lua_float_expr(raw: &str) -> Option<f32> {
+pub fn itg_parse_lua_float_expr(raw: &str) -> Option<f32> {
     let value = strip_wrapped_parens(raw.trim().trim_end_matches(';'));
     if let Some(v) = itg_parse_lua_float_token(value) {
         return Some(v);
@@ -130,7 +125,7 @@ pub(super) fn itg_parse_lua_float_expr(raw: &str) -> Option<f32> {
     None
 }
 
-pub(super) fn itg_find_function_end(content: &str, mut cursor: usize) -> Option<usize> {
+pub fn itg_find_function_end(content: &str, mut cursor: usize) -> Option<usize> {
     let bytes = content.as_bytes();
     let mut depth = 1usize;
     let mut quote = 0u8;
@@ -187,7 +182,7 @@ fn is_lua_ident(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_'
 }
 
-pub(super) fn itg_parse_self_chain_commands(body: &str) -> Option<String> {
+pub fn itg_parse_self_chain_commands(body: &str) -> Option<String> {
     let mut out = Vec::new();
     let mut cursor = 0usize;
     while let Some(rel) = body[cursor..].find("self:") {
@@ -240,7 +235,7 @@ fn itg_parse_lua_method_call(body: &str, name_start: usize) -> Option<(String, S
     ))
 }
 
-pub(super) fn itg_extract_quoted_strings(input: &str) -> Vec<String> {
+pub fn itg_extract_quoted_strings(input: &str) -> Vec<String> {
     let mut out = Vec::new();
     let bytes = input.as_bytes();
     let mut idx = 0usize;

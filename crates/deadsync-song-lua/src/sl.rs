@@ -1,16 +1,14 @@
 use mlua::{Lua, MultiValue, Table, Value};
 
-use deadsync_song_lua::{player_short_name, song_lua_speedmod_parts, song_music_rate_value};
-
-use super::theme_colors::{
-    DDR_DIFF_COLORS, ITG_DIFF_COLORS, SL_COLORS, SL_DECORATIVE_COLORS, SL_FA_PLUS_COLORS,
-    SL_JUDGMENT_COLORS, SONG_LUA_ACTIVE_COLOR_INDEX, create_color_array,
+use crate::{
+    DDR_DIFF_COLORS, ITG_DIFF_COLORS, LUA_PLAYERS, SL_COLORS, SL_DECORATIVE_COLORS,
+    SL_FA_PLUS_COLORS, SL_JUDGMENT_COLORS, SONG_LUA_ACTIVE_COLOR_INDEX, SONG_LUA_NOTE_COLUMNS,
+    SongLuaCompileContext, SongLuaPlayerContext, create_bool_array, create_string_array,
+    make_color_table, parse_color_text, player_short_name, song_lua_speedmod_parts,
+    song_music_rate_value,
 };
-use super::types::{SongLuaCompileContext, SongLuaPlayerContext};
-use super::util::{create_bool_array, create_string_array};
-use super::{LUA_PLAYERS, SONG_LUA_NOTE_COLUMNS};
 
-pub(super) fn create_sl_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {
+pub fn create_sl_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.set("Global", create_sl_global_table(lua, context)?)?;
     table.set("Colors", create_string_array(lua, SL_COLORS)?)?;
@@ -39,13 +37,13 @@ pub(super) fn create_sl_table(lua: &Lua, context: &SongLuaCompileContext) -> mlu
     Ok(table)
 }
 
-pub(super) fn create_sl_streams(lua: &Lua) -> mlua::Result<Table> {
+pub fn create_sl_streams(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     init_sl_streams(lua, &table)?;
     Ok(table)
 }
 
-pub(super) fn init_sl_streams(lua: &Lua, table: &Table) -> mlua::Result<()> {
+pub fn init_sl_streams(lua: &Lua, table: &Table) -> mlua::Result<()> {
     for name in [
         "NotesPerMeasure",
         "EquallySpacedPerMeasure",
@@ -277,6 +275,17 @@ fn create_sl_judgment_colors(lua: &Lua) -> mlua::Result<Table> {
     table.set("Casual", create_color_array(lua, SL_JUDGMENT_COLORS)?)?;
     table.set("ITG", create_color_array(lua, SL_JUDGMENT_COLORS)?)?;
     table.set("FA+", create_color_array(lua, SL_FA_PLUS_COLORS)?)?;
+    Ok(table)
+}
+
+fn create_color_array(lua: &Lua, values: &[&str]) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    for (index, value) in values.iter().enumerate() {
+        table.raw_set(
+            index + 1,
+            make_color_table(lua, parse_color_text(value).unwrap_or([1.0, 1.0, 1.0, 1.0]))?,
+        )?;
+    }
     Ok(table)
 }
 

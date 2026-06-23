@@ -1,34 +1,14 @@
 mod commands;
-mod explosion;
-mod lua;
 mod mine;
-mod model;
 mod model_cache;
-mod script;
 mod texture;
 
+use self::commands::itg_apply_state_properties_from_commands;
 #[cfg(test)]
 use self::commands::itg_apply_state_properties_from_script;
-use self::commands::{
-    itg_apply_state_properties_from_commands, itg_parse_wrapper_commands_from_file,
-};
-use self::explosion::parse_explosion_animation;
-use self::lua::{itg_extract_quoted_strings, itg_parse_lua_quoted};
 use self::mine::mine_fill_slots;
-use self::model::{
-    itg_parse_ini_float, itg_parse_ini_int, itg_parse_milkshape_model,
-    itg_parse_milkshape_model_auto_rot, itg_parse_milkshape_model_layers,
-    itg_resolve_model_texture_path,
-};
 pub use self::model_cache::ModelMeshCacheStats;
 pub(crate) use self::model_cache::{ModelMeshCache, build_model_geometry};
-use self::script::{
-    ItgActorMod, ScriptActorMod, ScriptEffectMod, itg_apply_actor_mods, itg_parse_command_effect,
-    normalized_script_command, parse_script_actor_mod, parse_script_bool, parse_script_control,
-    parse_script_effect_clock, parse_script_effect_mod, parse_script_effectclock_from_commands,
-    parse_script_number, parse_script_sleep, parse_script_tween, parse_script_vertalign,
-    split_script_token, tween_type_from_script_tween,
-};
 use self::texture::{
     itg_apply_frame_override, itg_find_texture_with_prefix, itg_model_slot_from_texture_path,
     itg_slot_from_path, itg_slot_from_path_all_frames, itg_slot_from_path_animated,
@@ -39,20 +19,33 @@ use self::texture::{itg_register_texture_dims_for_path, itg_texture_key};
 use crate::assets;
 use deadlib_platform::dirs;
 use deadlib_present::actors::TextureKeyHandle;
-use deadlib_present::anim as ui_anim;
+use deadsync_noteskin::lua::{itg_extract_quoted_strings, itg_parse_lua_quoted};
+use deadsync_noteskin::model::{
+    itg_parse_milkshape_model, itg_parse_milkshape_model_auto_rot,
+    itg_parse_milkshape_model_layers, itg_resolve_model_texture_path,
+};
+use deadsync_noteskin::parse_explosion_animation;
 pub use deadsync_noteskin::{
-    ExplosionAnimation, ExplosionSegment, ExplosionState, ExplosionVisualState, GlowEffect,
-    ModelAutoRotKey, ModelDrawState, ModelMesh, ModelTweenSegment, ModelVertex,
-    NOTE_ANIM_PART_COUNT, NUM_QUANTIZATIONS, NoteAnimPart, NoteColorType, NoteDisplayMetrics,
-    NotePartAnimation, NotePartTextureTranslate, Quantization, ReceptorGlowBehavior, ReceptorPulse,
+    AnimationRate, ExplosionAnimation, ExplosionSegment, ExplosionState, ExplosionVisualState,
+    GlowEffect, ModelAutoRotKey, ModelDrawState, ModelEffectClock, ModelEffectMode,
+    ModelEffectState, ModelMesh, ModelTweenSegment, ModelVertex, NOTE_ANIM_PART_COUNT,
+    NUM_QUANTIZATIONS, NoteAnimPart, NoteColorType, NoteDisplayMetrics, NotePartAnimation,
+    NotePartTextureTranslate, Quantization, ReceptorGlowBehavior, ReceptorPulse,
     ReceptorReverseBehavior, ReceptorReverseState, ReceptorStepBehavior, ReceptorStepBehaviors,
-    Style, TweenType,
+    SpriteDefinition, Style, TweenType,
 };
 use deadsync_noteskin::{
     actor as noteskin_actor, compiled as noteskin_compiled, compiler as noteskin_compiler,
-    itg as noteskin_itg,
+    duration_frame_index, frame_duration_total, itg as noteskin_itg, model_draw_at, model_glow_at,
+    model_glow_with_draw, neg_rot_sin_cos, script as noteskin_script,
 };
 use log::warn;
+use noteskin_script::{
+    ScriptActorMod, ScriptEffectMod, itg_parse_command_effect, normalized_script_command,
+    parse_script_actor_mod, parse_script_bool, parse_script_effect_mod,
+    parse_script_effectclock_from_commands, parse_script_number, parse_script_vertalign,
+    split_script_token,
+};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -62,21 +55,6 @@ use std::sync::{
 };
 
 const ITG_ARG0_TOKEN: &str = "__ITG_ARG0__";
-
-#[derive(Debug, Clone, Default)]
-pub struct SpriteDefinition {
-    pub src: [i32; 2],
-    pub size: [i32; 2],
-    pub rotation_deg: i32,
-    pub mirror_h: bool,
-    pub mirror_v: bool,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum AnimationRate {
-    FramesPerSecond(f32),
-    FramesPerBeat(f32),
-}
 
 #[derive(Debug)]
 pub enum SpriteSource {
@@ -179,10 +157,6 @@ impl SpriteSource {
     }
 }
 
-pub type ModelEffectClock = ui_anim::EffectClock;
-pub type ModelEffectMode = ui_anim::EffectMode;
-pub type ModelEffectState = ui_anim::EffectState;
-
 #[derive(Debug, Clone)]
 pub struct SpriteSlot {
     pub def: SpriteDefinition,
@@ -199,49 +173,6 @@ pub struct SpriteSlot {
     pub model_effect: ModelEffectState,
     pub model_auto_rot_total_frames: f32,
     pub model_auto_rot_z_keys: Arc<[ModelAutoRotKey]>,
-}
-
-#[inline(always)]
-fn neg_rot_sin_cos(rotation_deg: i32) -> [f32; 2] {
-    match rotation_deg.rem_euclid(360) {
-        0 => [0.0, 1.0],
-        90 => [-1.0, 0.0],
-        180 => [0.0, -1.0],
-        270 => [1.0, 0.0],
-        _ => {
-            let (sin_r, cos_r) = (-(rotation_deg as f32)).to_radians().sin_cos();
-            [sin_r, cos_r]
-        }
-    }
-}
-
-#[inline(always)]
-fn frame_duration_total(durations: &[f32], frames: usize) -> Option<f32> {
-    let total = durations.iter().take(frames).fold(0.0, |sum, duration| {
-        if *duration > f32::EPSILON {
-            sum + *duration
-        } else {
-            sum
-        }
-    });
-    (total > f32::EPSILON && total.is_finite()).then_some(total)
-}
-
-#[inline(always)]
-fn duration_frame_index(durations: &[f32], frames: usize, mut position: f32) -> Option<usize> {
-    let mut last = None;
-    for (idx, duration) in durations.iter().take(frames).enumerate() {
-        let span = (*duration).max(0.0);
-        if span <= f32::EPSILON {
-            continue;
-        }
-        last = Some(idx);
-        if position < span {
-            return Some(idx);
-        }
-        position -= span;
-    }
-    last
 }
 
 impl SpriteSlot {
@@ -261,36 +192,6 @@ impl SpriteSlot {
         self.uv_cycle_seconds
             .filter(|total| *total > f32::EPSILON && total.is_finite())
             .map_or(elapsed, |total| elapsed.rem_euclid(total) / total)
-    }
-
-    #[inline(always)]
-    fn model_effect_mix(effect: ModelEffectState, time: f32, beat: f32) -> Option<f32> {
-        ui_anim::effect_mix(effect, time, beat)
-    }
-
-    #[inline(always)]
-    fn model_auto_rot_z_at(&self, time: f32) -> Option<f32> {
-        if self.model_auto_rot_total_frames <= f32::EPSILON {
-            return None;
-        }
-        let keys = self.model_auto_rot_z_keys.as_ref();
-        let first = *keys.first()?;
-        let frame = (time * 30.0).rem_euclid(self.model_auto_rot_total_frames);
-        if !frame.is_finite() {
-            return Some(first.z_deg);
-        }
-        if frame <= first.frame {
-            return Some(first.z_deg);
-        }
-        let next_idx = keys.partition_point(|key| key.frame < frame);
-        if next_idx >= keys.len() {
-            return Some(keys[keys.len() - 1].z_deg);
-        }
-        let prev = keys[next_idx - 1];
-        let next = keys[next_idx];
-        let span = (next.frame - prev.frame).max(1e-6);
-        let t = ((frame - prev.frame) / span).clamp(0.0, 1.0);
-        Some((next.z_deg - prev.z_deg).mul_add(t, prev.z_deg))
     }
 
     pub fn texture_key(&self) -> &str {
@@ -380,122 +281,15 @@ impl SpriteSlot {
     }
 
     pub fn model_draw_at(&self, time: f32, beat: f32) -> ModelDrawState {
-        #[inline(always)]
-        fn lerp(a: f32, b: f32, t: f32) -> f32 {
-            (b - a).mul_add(t, a)
-        }
-
-        let mut out = self.model_draw;
-        let local = time.max(0.0);
-        let effect = self.model_effect;
-
-        for seg in self.model_timeline.iter() {
-            let start = seg.start.max(0.0);
-            let duration = seg.duration.max(0.0);
-            if local < start {
-                break;
-            }
-            if duration <= f32::EPSILON {
-                out = seg.to;
-                continue;
-            }
-            let elapsed = local - start;
-            if elapsed >= duration {
-                out = seg.to;
-                continue;
-            }
-            let p = seg.tween.ease(elapsed / duration);
-            let mut s = seg.from;
-            for i in 0..3 {
-                s.pos[i] = lerp(seg.from.pos[i], seg.to.pos[i], p);
-                s.rot[i] = lerp(seg.from.rot[i], seg.to.rot[i], p);
-                s.zoom[i] = lerp(seg.from.zoom[i], seg.to.zoom[i], p);
-            }
-            for i in 0..4 {
-                s.tint[i] = lerp(seg.from.tint[i], seg.to.tint[i], p);
-                s.glow[i] = lerp(seg.from.glow[i], seg.to.glow[i], p);
-            }
-            s.vert_align = lerp(seg.from.vert_align, seg.to.vert_align, p);
-            s.blend_add = if p >= 1.0 {
-                seg.to.blend_add
-            } else {
-                seg.from.blend_add
-            };
-            s.visible = if p >= 1.0 {
-                seg.to.visible
-            } else {
-                seg.from.visible
-            };
-            out = s;
-            break;
-        }
-
-        if let Some(rot_z) = self.model_auto_rot_z_at(time) {
-            out.rot[2] = (out.rot[2] + rot_z).rem_euclid(360.0);
-        }
-
-        if matches!(effect.mode, ModelEffectMode::Spin) {
-            let clock = ui_anim::effect_clock_units(effect, time, beat);
-            out.rot[0] = (out.rot[0] + effect.magnitude[0] * clock).rem_euclid(360.0);
-            out.rot[1] = (out.rot[1] + effect.magnitude[1] * clock).rem_euclid(360.0);
-            out.rot[2] = (out.rot[2] + effect.magnitude[2] * clock).rem_euclid(360.0);
-        }
-        if let Some(percent) = Self::model_effect_mix(effect, time, beat) {
-            match effect.mode {
-                ModelEffectMode::DiffuseRamp => {
-                    let mut c = [0.0; 4];
-                    for (i, out) in c.iter_mut().enumerate() {
-                        *out = lerp(effect.color2[i], effect.color1[i], percent).clamp(0.0, 1.0);
-                    }
-                    out.tint[0] *= c[0];
-                    out.tint[1] *= c[1];
-                    out.tint[2] *= c[2];
-                    out.tint[3] *= c[3];
-                }
-                ModelEffectMode::DiffuseShift => {
-                    let between = ui_anim::glowshift_mix(percent);
-                    let mut c = [0.0; 4];
-                    for (i, out) in c.iter_mut().enumerate() {
-                        *out = lerp(effect.color2[i], effect.color1[i], between).clamp(0.0, 1.0);
-                    }
-                    out.tint[0] *= c[0];
-                    out.tint[1] *= c[1];
-                    out.tint[2] *= c[2];
-                    out.tint[3] *= c[3];
-                }
-                ModelEffectMode::Pulse => {
-                    let offset = (percent * std::f32::consts::PI).sin().clamp(0.0, 1.0);
-                    let zoom = lerp(effect.magnitude[0], effect.magnitude[1], offset).max(0.0);
-                    let sx = lerp(effect.color2[0], effect.color1[0], offset).max(0.0);
-                    let sy = lerp(effect.color2[1], effect.color1[1], offset).max(0.0);
-                    let sz = lerp(effect.color2[2], effect.color1[2], offset).max(0.0);
-                    out.zoom[0] *= zoom * sx;
-                    out.zoom[1] *= zoom * sy;
-                    out.zoom[2] *= zoom * sz;
-                }
-                // ITG applies glowshift to the separate glow channel, not diffuse.
-                // The renderer samples this via `model_glow_at()`.
-                ModelEffectMode::GlowShift => {}
-                ModelEffectMode::Bob => {}
-                ModelEffectMode::Bounce => {}
-                ModelEffectMode::Wag => {}
-                ModelEffectMode::Spin => {}
-                ModelEffectMode::None => {}
-            }
-        }
-
-        out.zoom[0] = out.zoom[0].max(0.0);
-        out.zoom[1] = out.zoom[1].max(0.0);
-        out.zoom[2] = out.zoom[2].max(0.0);
-        out.tint[0] = out.tint[0].clamp(0.0, 1.0);
-        out.tint[1] = out.tint[1].clamp(0.0, 1.0);
-        out.tint[2] = out.tint[2].clamp(0.0, 1.0);
-        out.tint[3] = out.tint[3].clamp(0.0, 1.0);
-        out.glow[0] = out.glow[0].clamp(0.0, 1.0);
-        out.glow[1] = out.glow[1].clamp(0.0, 1.0);
-        out.glow[2] = out.glow[2].clamp(0.0, 1.0);
-        out.glow[3] = out.glow[3].clamp(0.0, 1.0);
-        out
+        model_draw_at(
+            self.model_draw,
+            self.model_timeline.as_ref(),
+            self.model_effect,
+            self.model_auto_rot_total_frames,
+            self.model_auto_rot_z_keys.as_ref(),
+            time,
+            beat,
+        )
     }
 
     #[inline(always)]
@@ -506,28 +300,21 @@ impl SpriteSlot {
         beat: f32,
         diffuse_alpha: f32,
     ) -> Option<[f32; 4]> {
-        let mut glow = draw.glow;
-        let effect = self.model_effect;
-        if matches!(effect.mode, ModelEffectMode::GlowShift) {
-            let through = Self::model_effect_mix(effect, time, beat)?;
-            // Match ITG's glow_shift blending: convert effect-phase percentage to the
-            // sinusoidal color mix used by Actor::PreDraw.
-            let mix = ui_anim::glowshift_mix(through);
-            for (i, out) in glow.iter_mut().enumerate() {
-                *out = (effect.color1[i] - effect.color2[i]).mul_add(mix, effect.color2[i]);
-            }
-            glow[3] *= diffuse_alpha;
-        }
-        glow[0] = glow[0].clamp(0.0, 1.0);
-        glow[1] = glow[1].clamp(0.0, 1.0);
-        glow[2] = glow[2].clamp(0.0, 1.0);
-        glow[3] = glow[3].clamp(0.0, 1.0);
-        (glow[3] > f32::EPSILON).then_some(glow)
+        model_glow_with_draw(draw, self.model_effect, time, beat, diffuse_alpha)
     }
 
     #[inline(always)]
     pub fn model_glow_at(&self, time: f32, beat: f32, diffuse_alpha: f32) -> Option<[f32; 4]> {
-        self.model_glow_with_draw(self.model_draw_at(time, beat), time, beat, diffuse_alpha)
+        model_glow_at(
+            self.model_draw,
+            self.model_timeline.as_ref(),
+            self.model_effect,
+            self.model_auto_rot_total_frames,
+            self.model_auto_rot_z_keys.as_ref(),
+            time,
+            beat,
+            diffuse_alpha,
+        )
     }
 
     pub fn uv_for_frame_at(&self, frame_index: usize, elapsed: f32) -> [f32; 4] {
@@ -645,370 +432,10 @@ impl SpriteSlot {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct TapExplosionLayer {
-    pub slot: SpriteSlot,
-    pub animation: ExplosionAnimation,
-}
-
-#[derive(Debug, Clone)]
-pub struct TapExplosion {
-    pub slot: SpriteSlot,
-    pub animation: ExplosionAnimation,
-    pub layers: Arc<[TapExplosionLayer]>,
-}
-
-impl TapExplosion {
-    fn from_single(slot: SpriteSlot, animation: ExplosionAnimation) -> Self {
-        Self::from_layers(vec![TapExplosionLayer { slot, animation }])
-            .expect("single tap explosion layer must build")
-    }
-
-    fn from_layers(layers: Vec<TapExplosionLayer>) -> Option<Self> {
-        let first = layers.first()?.clone();
-        Some(Self {
-            slot: first.slot,
-            animation: first.animation,
-            layers: Arc::from(layers),
-        })
-    }
-
-    pub fn duration(&self) -> f32 {
-        self.layers
-            .iter()
-            .map(|layer| layer.animation.duration())
-            .fold(0.0, f32::max)
-    }
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct HoldVisuals {
-    pub head_inactive: Option<SpriteSlot>,
-    pub head_active: Option<SpriteSlot>,
-    pub head_inactive_layers: Option<Arc<[SpriteSlot]>>,
-    pub head_active_layers: Option<Arc<[SpriteSlot]>>,
-    pub body_inactive: Option<SpriteSlot>,
-    pub body_active: Option<SpriteSlot>,
-    pub topcap_inactive: Option<SpriteSlot>,
-    pub topcap_active: Option<SpriteSlot>,
-    pub bottomcap_inactive: Option<SpriteSlot>,
-    pub bottomcap_active: Option<SpriteSlot>,
-    pub explosion: Option<SpriteSlot>,
-}
-
-#[derive(Debug)]
-pub struct Noteskin {
-    pub notes: Vec<SpriteSlot>,
-    pub note_layers: Vec<Arc<[SpriteSlot]>>,
-    pub lift_note_layers: Vec<Arc<[SpriteSlot]>>,
-    pub receptor_off: Vec<SpriteSlot>,
-    pub receptor_glow: Vec<Option<SpriteSlot>>,
-    pub receptor_off_reverse: Vec<ReceptorReverseBehavior>,
-    pub receptor_glow_reverse: Vec<ReceptorReverseBehavior>,
-    pub receptor_step_behaviors: Vec<ReceptorStepBehaviors>,
-    pub mines: Vec<Option<SpriteSlot>>,
-    pub mine_fill_slots: Vec<Option<SpriteSlot>>,
-    pub mine_frames: Vec<Option<SpriteSlot>>,
-    pub column_xs: Vec<i32>,
-    pub tap_explosions: HashMap<String, TapExplosion>,
-    pub tap_explosions_by_col: Vec<HashMap<String, TapExplosion>>,
-    pub mine_hit_explosion: Option<TapExplosion>,
-    pub receptor_glow_behavior: ReceptorGlowBehavior,
-    pub receptor_pulse: ReceptorPulse,
-    pub hold_let_go_gray_percent: f32,
-    pub hold_columns: Vec<HoldVisuals>,
-    pub roll_columns: Vec<HoldVisuals>,
-    pub hold: HoldVisuals,
-    pub roll: HoldVisuals,
-    pub animation_is_beat_based: bool,
-    pub note_display_metrics: NoteDisplayMetrics,
-}
-
-impl Noteskin {
-    #[inline(always)]
-    pub fn tap_explosion_for_col(&self, col: usize, window: &str) -> Option<&TapExplosion> {
-        self.tap_explosion_for_col_with_bright(col, window, false)
-    }
-
-    #[inline(always)]
-    pub fn tap_explosion_for_col_with_bright(
-        &self,
-        col: usize,
-        window: &str,
-        bright: bool,
-    ) -> Option<&TapExplosion> {
-        if bright
-            && let Some(key) = itg_bright_tap_explosion_key(window)
-            && let Some(explosion) = self.tap_explosion_for_col_key(col, key)
-        {
-            return Some(explosion);
-        }
-        self.tap_explosion_for_col_key(col, window)
-    }
-
-    #[inline(always)]
-    fn tap_explosion_for_col_key(&self, col: usize, key: &str) -> Option<&TapExplosion> {
-        self.tap_explosions_by_col
-            .get(col)
-            .and_then(|by_window| by_window.get(key))
-            .or_else(|| self.tap_explosions.get(key))
-    }
-
-    #[inline(always)]
-    fn for_each_slot(&self, mut visit: impl FnMut(&SpriteSlot)) {
-        for slot in &self.notes {
-            visit(slot);
-        }
-        for layer in &self.note_layers {
-            for slot in layer.iter() {
-                visit(slot);
-            }
-        }
-        for layer in &self.lift_note_layers {
-            for slot in layer.iter() {
-                visit(slot);
-            }
-        }
-        for slot in &self.receptor_off {
-            visit(slot);
-        }
-        for slot in &self.receptor_glow {
-            if let Some(slot) = slot.as_ref() {
-                visit(slot);
-            }
-        }
-        for slot in &self.mines {
-            if let Some(slot) = slot.as_ref() {
-                visit(slot);
-            }
-        }
-        for slot in &self.mine_fill_slots {
-            if let Some(slot) = slot.as_ref() {
-                visit(slot);
-            }
-        }
-        for slot in &self.mine_frames {
-            if let Some(slot) = slot.as_ref() {
-                visit(slot);
-            }
-        }
-        for explosion in self.tap_explosions.values() {
-            for layer in explosion.layers.iter() {
-                visit(&layer.slot);
-            }
-        }
-        for by_col in &self.tap_explosions_by_col {
-            for explosion in by_col.values() {
-                for layer in explosion.layers.iter() {
-                    visit(&layer.slot);
-                }
-            }
-        }
-        if let Some(explosion) = self.mine_hit_explosion.as_ref() {
-            visit(&explosion.slot);
-        }
-        let mut visit_hold = |h: &HoldVisuals| {
-            for slot in [
-                h.head_inactive.as_ref(),
-                h.head_active.as_ref(),
-                h.body_inactive.as_ref(),
-                h.body_active.as_ref(),
-                h.topcap_inactive.as_ref(),
-                h.topcap_active.as_ref(),
-                h.bottomcap_inactive.as_ref(),
-                h.bottomcap_active.as_ref(),
-            ]
-            .into_iter()
-            .flatten()
-            {
-                visit(slot);
-            }
-            for layers in [
-                h.head_inactive_layers.as_deref(),
-                h.head_active_layers.as_deref(),
-            ]
-            .into_iter()
-            .flatten()
-            {
-                for slot in layers {
-                    visit(slot);
-                }
-            }
-            if let Some(slot) = h.explosion.as_ref() {
-                visit(slot);
-            }
-        };
-        visit_hold(&self.hold);
-        visit_hold(&self.roll);
-        for col in &self.hold_columns {
-            visit_hold(col);
-        }
-        for col in &self.roll_columns {
-            visit_hold(col);
-        }
-    }
-
-    #[inline(always)]
-    pub fn for_each_texture_key(&self, mut visit: impl FnMut(&str)) {
-        self.for_each_slot(|slot| visit(slot.texture_key()));
-    }
-
-    #[inline(always)]
-    pub fn for_each_model_slot(&self, mut visit: impl FnMut(&SpriteSlot)) {
-        self.for_each_slot(|slot| {
-            if slot.model.is_some() {
-                visit(slot);
-            }
-        });
-    }
-
-    #[inline(always)]
-    pub fn part_uv_phase(
-        &self,
-        part: NoteAnimPart,
-        song_seconds: f32,
-        song_beat: f32,
-        note_beat: f32,
-    ) -> f32 {
-        let anim = self.note_display_metrics.part_animation[part as usize];
-        Self::part_uv_phase_inner(
-            song_seconds,
-            song_beat,
-            note_beat,
-            anim.length,
-            anim.vivid,
-            self.animation_is_beat_based,
-        )
-    }
-
-    #[inline(always)]
-    fn part_uv_phase_inner(
-        song_seconds: f32,
-        song_beat: f32,
-        note_beat: f32,
-        length: f32,
-        vivid: bool,
-        beat_based: bool,
-    ) -> f32 {
-        let length = length.max(1e-6);
-        let clock = if beat_based { song_beat } else { song_seconds };
-        let mut phase = clock.rem_euclid(length) / length;
-        if vivid {
-            let note_fraction = note_beat.rem_euclid(1.0);
-            let vivid_interval = 1.0 / length;
-            let vivid_offset = (note_fraction / vivid_interval).floor() * vivid_interval;
-            phase = (phase + vivid_offset).rem_euclid(1.0);
-        }
-        phase
-    }
-
-    #[inline(always)]
-    pub fn tap_note_uv_phase(&self, song_seconds: f32, song_beat: f32, note_beat: f32) -> f32 {
-        self.part_uv_phase(NoteAnimPart::Tap, song_seconds, song_beat, note_beat)
-    }
-
-    #[inline(always)]
-    pub fn tap_mine_uv_phase(&self, song_seconds: f32, song_beat: f32, note_beat: f32) -> f32 {
-        self.part_uv_phase(NoteAnimPart::Mine, song_seconds, song_beat, note_beat)
-    }
-
-    #[inline(always)]
-    pub fn part_uv_translation(
-        &self,
-        part: NoteAnimPart,
-        note_beat: f32,
-        is_addition: bool,
-    ) -> [f32; 2] {
-        let metrics = self.note_display_metrics.part_texture_translate[part as usize];
-        Self::part_uv_translation_inner(note_beat, metrics, is_addition)
-    }
-
-    #[inline(always)]
-    fn part_uv_translation_inner(
-        note_beat: f32,
-        metrics: NotePartTextureTranslate,
-        is_addition: bool,
-    ) -> [f32; 2] {
-        let count = metrics.note_color_count.max(1);
-        let countf = count as f32;
-        let color = match metrics.note_color_type {
-            NoteColorType::Denominator => {
-                let note_type = Self::beat_to_note_type_index(note_beat) as f32;
-                note_type.clamp(0.0, (count - 1) as f32)
-            }
-            NoteColorType::Progress => (note_beat * countf).ceil() % countf,
-            NoteColorType::ProgressAlternate => {
-                let mut scaled = note_beat * countf;
-                if scaled - (scaled as i64 as f32) == 0.0 {
-                    scaled += countf - 1.0;
-                }
-                scaled.ceil() % countf
-            }
-        };
-        let add = if is_addition {
-            metrics.addition_offset
-        } else {
-            [0.0, 0.0]
-        };
-        [
-            metrics.note_color_spacing[0].mul_add(color, add[0]),
-            metrics.note_color_spacing[1].mul_add(color, add[1]),
-        ]
-    }
-
-    #[inline(always)]
-    fn beat_to_note_type_index(beat: f32) -> i32 {
-        let row = (beat * 48.0).round() as i32;
-        if row.rem_euclid(48) == 0 {
-            0
-        } else if row.rem_euclid(24) == 0 {
-            1
-        } else if row.rem_euclid(16) == 0 {
-            2
-        } else if row.rem_euclid(12) == 0 {
-            3
-        } else if row.rem_euclid(8) == 0 {
-            4
-        } else if row.rem_euclid(6) == 0 {
-            5
-        } else if row.rem_euclid(4) == 0 {
-            6
-        } else if row.rem_euclid(3) == 0 {
-            7
-        } else {
-            8
-        }
-    }
-
-    #[inline(always)]
-    pub fn hold_visuals_for_col(&self, col: usize, is_roll: bool) -> &HoldVisuals {
-        if is_roll {
-            self.roll_columns
-                .get(col)
-                .or_else(|| self.roll_columns.first())
-                .unwrap_or(&self.roll)
-        } else {
-            self.hold_columns
-                .get(col)
-                .or_else(|| self.hold_columns.first())
-                .unwrap_or(&self.hold)
-        }
-    }
-
-    #[inline(always)]
-    pub fn receptor_step_behavior_for_col(
-        &self,
-        col: usize,
-        window: Option<&str>,
-    ) -> ReceptorStepBehavior {
-        self.receptor_step_behaviors
-            .get(col)
-            .copied()
-            .or_else(|| self.receptor_step_behaviors.first().copied())
-            .unwrap_or_default()
-            .for_window(window)
-    }
-}
+pub type TapExplosionLayer = deadsync_noteskin::TapExplosionLayer<SpriteSlot>;
+pub type TapExplosion = deadsync_noteskin::TapExplosion<SpriteSlot>;
+pub type HoldVisuals = deadsync_noteskin::HoldVisuals<SpriteSlot>;
+pub type Noteskin = deadsync_noteskin::NoteskinRuntime<SpriteSlot>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct ItgSkinCacheKey {
@@ -1467,8 +894,8 @@ fn load_itg_sprite_noteskin_compiled(
     compiled: &noteskin_compiled::CompiledLoader,
     compiled_actors: &noteskin_compiled::CompiledActors,
 ) -> Result<Noteskin, String> {
-    let note_display_metrics = itg_note_display_metrics(&data.metrics);
-    let animation_is_beat_based = itg_animation_is_beat_based(data);
+    let note_display_metrics = noteskin_itg::note_display_metrics(&data.metrics);
+    let animation_is_beat_based = noteskin_itg::animation_is_beat_based(data);
 
     let mut notes = Vec::with_capacity(style.num_cols * NUM_QUANTIZATIONS);
     let mut note_layers = Vec::with_capacity(style.num_cols * NUM_QUANTIZATIONS);
@@ -1488,7 +915,7 @@ fn load_itg_sprite_noteskin_compiled(
         itg_resolve_actor_sprites_compiled(data, compiled, compiled_actors, button, element)
             .into_iter()
             .map(|mut s| {
-                let (draw, timeline, effect) = itg_model_draw_program(&s.commands);
+                let (draw, timeline, effect) = noteskin_script::model_draw_program(&s.commands);
                 s.slot.model_draw = draw;
                 s.slot.model_timeline = timeline;
                 s.slot.model_effect = effect;
@@ -1525,7 +952,7 @@ fn load_itg_sprite_noteskin_compiled(
             itg_resolve_actor_sprites_compiled(data, compiled, compiled_actors, button, "Tap Note")
                 .into_iter()
                 .map(|mut s| {
-                    let (draw, timeline, effect) = itg_model_draw_program(&s.commands);
+                    let (draw, timeline, effect) = noteskin_script::model_draw_program(&s.commands);
                     s.slot.model_draw = draw;
                     s.slot.model_timeline = timeline;
                     s.slot.model_effect = effect;
@@ -1584,7 +1011,7 @@ fn load_itg_sprite_noteskin_compiled(
             itg_resolve_actor_sprites_compiled(data, compiled, compiled_actors, button, "Tap Lift")
                 .into_iter()
                 .map(|mut s| {
-                    let (draw, timeline, effect) = itg_model_draw_program(&s.commands);
+                    let (draw, timeline, effect) = noteskin_script::model_draw_program(&s.commands);
                     s.slot.model_draw = draw;
                     s.slot.model_timeline = timeline;
                     s.slot.model_effect = effect;
@@ -1659,7 +1086,7 @@ fn load_itg_sprite_noteskin_compiled(
             itg_resolve_actor_sprites_compiled(data, compiled, compiled_actors, button, "Tap Mine")
                 .into_iter()
                 .map(|mut s| {
-                    let (draw, timeline, effect) = itg_model_draw_program(&s.commands);
+                    let (draw, timeline, effect) = noteskin_script::model_draw_program(&s.commands);
                     s.slot.model_draw = draw;
                     s.slot.model_timeline = timeline;
                     s.slot.model_effect = effect;
@@ -1838,7 +1265,7 @@ fn load_itg_sprite_noteskin_compiled(
             if let Some(v) = commands.get(active_key) {
                 scripted.insert("nonecommand".to_string(), v.clone());
             }
-            let (draw, timeline, effect) = itg_model_draw_program(&scripted);
+            let (draw, timeline, effect) = noteskin_script::model_draw_program(&scripted);
             with_fx.model_draw = draw;
             with_fx.model_timeline = timeline;
             with_fx.model_effect = effect;
@@ -1910,7 +1337,7 @@ fn load_itg_sprite_noteskin_compiled(
                         itg_slot_from_path_all_frames(
                             &p,
                             Some(0.01),
-                            itg_animation_is_beat_based(data),
+                            noteskin_itg::animation_is_beat_based(data),
                         )
                     })
                     .map(|slot| {
@@ -1968,7 +1395,7 @@ fn load_itg_sprite_noteskin_compiled(
                         itg_slot_from_path_all_frames(
                             &p,
                             Some(0.01),
-                            itg_animation_is_beat_based(data),
+                            noteskin_itg::animation_is_beat_based(data),
                         )
                     })
                     .map(|slot| {
@@ -2504,23 +1931,11 @@ fn itg_tap_explosion_metric_command(
 
 fn itg_tap_explosion_key(window: &str, mode: ItgTapExplosionMode) -> &str {
     if mode == ItgTapExplosionMode::Bright
-        && let Some(key) = itg_bright_tap_explosion_key(window)
+        && let Some(key) = deadsync_noteskin::bright_tap_explosion_key(window)
     {
         key
     } else {
         window
-    }
-}
-
-fn itg_bright_tap_explosion_key(window: &str) -> Option<&'static str> {
-    match window {
-        "W1" => Some("W1Bright"),
-        "W2" => Some("W2Bright"),
-        "W3" => Some("W3Bright"),
-        "W4" => Some("W4Bright"),
-        "W5" => Some("W5Bright"),
-        "Held" => Some("HeldBright"),
-        _ => None,
     }
 }
 
@@ -2609,103 +2024,6 @@ fn itg_direct_tap_explosion_sprites(
             button,
             &element,
         ));
-    }
-    out
-}
-
-fn itg_note_display_metrics(metrics: &noteskin_itg::IniData) -> NoteDisplayMetrics {
-    let mut out = NoteDisplayMetrics::default();
-    let read_bool = |key: &str, default: bool| {
-        metrics
-            .get("NoteDisplay", key)
-            .and_then(itg_parse_ini_int)
-            .map_or(default, |v| v != 0)
-    };
-    let read_float = |key: &str, default: f32| {
-        metrics
-            .get("NoteDisplay", key)
-            .and_then(itg_parse_ini_float)
-            .unwrap_or(default)
-    };
-    let read_int = |key: &str, default: i32| {
-        metrics
-            .get("NoteDisplay", key)
-            .and_then(itg_parse_ini_int)
-            .unwrap_or(default)
-    };
-
-    out.draw_hold_head_for_taps_on_same_row = read_bool(
-        "DrawHoldHeadForTapsOnSameRow",
-        out.draw_hold_head_for_taps_on_same_row,
-    );
-    out.draw_roll_head_for_taps_on_same_row = read_bool(
-        "DrawRollHeadForTapsOnSameRow",
-        out.draw_roll_head_for_taps_on_same_row,
-    );
-    out.tap_hold_roll_on_row_means_hold = read_bool(
-        "TapHoldRollOnRowMeansHold",
-        out.tap_hold_roll_on_row_means_hold,
-    );
-    out.hold_head_is_above_wavy_parts = read_bool(
-        "HoldHeadIsAboveWavyParts",
-        out.hold_head_is_above_wavy_parts,
-    );
-    out.hold_tail_is_above_wavy_parts = read_bool(
-        "HoldTailIsAboveWavyParts",
-        out.hold_tail_is_above_wavy_parts,
-    );
-    out.start_drawing_hold_body_offset_from_head = read_float(
-        "StartDrawingHoldBodyOffsetFromHead",
-        out.start_drawing_hold_body_offset_from_head,
-    );
-    out.stop_drawing_hold_body_offset_from_tail = read_float(
-        "StopDrawingHoldBodyOffsetFromTail",
-        out.stop_drawing_hold_body_offset_from_tail,
-    );
-    out.hold_let_go_gray_percent = read_float("HoldLetGoGrayPercent", out.hold_let_go_gray_percent);
-    out.flip_head_and_tail_when_reverse = read_bool(
-        "FlipHeadAndTailWhenReverse",
-        out.flip_head_and_tail_when_reverse,
-    );
-    out.flip_hold_body_when_reverse =
-        read_bool("FlipHoldBodyWhenReverse", out.flip_hold_body_when_reverse);
-    out.top_hold_anchor_when_reverse =
-        read_bool("TopHoldAnchorWhenReverse", out.top_hold_anchor_when_reverse);
-    out.hold_active_is_add_layer = read_bool("HoldActiveIsAddLayer", out.hold_active_is_add_layer);
-    for part in NoteAnimPart::ALL {
-        let prefix = part.metric_prefix();
-        let length_key = format!("{prefix}AnimationLength");
-        let vivid_key = format!("{prefix}AnimationIsVivid");
-        let add_x_key = format!("{prefix}AdditionTextureCoordOffsetX");
-        let add_y_key = format!("{prefix}AdditionTextureCoordOffsetY");
-        let spacing_x_key = format!("{prefix}NoteColorTextureCoordSpacingX");
-        let spacing_y_key = format!("{prefix}NoteColorTextureCoordSpacingY");
-        let count_key = format!("{prefix}NoteColorCount");
-        let color_type_key = format!("{prefix}NoteColorType");
-        let default_anim = out.part_animation[part as usize];
-        let length = read_float(&length_key, default_anim.length).abs().max(1e-6);
-        let vivid = read_bool(&vivid_key, default_anim.vivid);
-        out.part_animation[part as usize] = NotePartAnimation { length, vivid };
-        let default_translate = out.part_texture_translate[part as usize];
-        let addition_offset = [
-            read_float(&add_x_key, default_translate.addition_offset[0]),
-            read_float(&add_y_key, default_translate.addition_offset[1]),
-        ];
-        let note_color_spacing = [
-            read_float(&spacing_x_key, default_translate.note_color_spacing[0]),
-            read_float(&spacing_y_key, default_translate.note_color_spacing[1]),
-        ];
-        let note_color_count = read_int(&count_key, default_translate.note_color_count);
-        let note_color_type = metrics
-            .get("NoteDisplay", &color_type_key)
-            .and_then(NoteColorType::from_metric)
-            .unwrap_or(default_translate.note_color_type);
-        out.part_texture_translate[part as usize] = NotePartTextureTranslate {
-            addition_offset,
-            note_color_spacing,
-            note_color_count,
-            note_color_type,
-        };
     }
     out
 }
@@ -2867,33 +2185,6 @@ fn itg_receptor_reverse_state(script: &str) -> ReceptorReverseState {
         }
     }
     out
-}
-
-#[derive(Debug, Clone, Copy)]
-struct ItgCommandEffect {
-    start_alpha: Option<f32>,
-    target_alpha: Option<f32>,
-    start_zoom: Option<f32>,
-    target_zoom: Option<f32>,
-    duration: f32,
-    tween: TweenType,
-    blend_add: Option<bool>,
-    interrupts: bool,
-}
-
-impl Default for ItgCommandEffect {
-    fn default() -> Self {
-        Self {
-            start_alpha: None,
-            target_alpha: None,
-            start_zoom: None,
-            target_zoom: None,
-            duration: 0.0,
-            tween: TweenType::Linear,
-            blend_add: None,
-            interrupts: false,
-        }
-    }
 }
 
 fn itg_receptor_glow_behavior_compiled(
@@ -3093,220 +2384,6 @@ fn itg_apply_loader_command(sprites: &mut [ItgLuaResolvedSprite], command: Optio
     }
 }
 
-fn itg_model_draw_program(
-    commands: &HashMap<String, String>,
-) -> (ModelDrawState, Arc<[ModelTweenSegment]>, ModelEffectState) {
-    let mut state = ModelDrawState::default();
-    let mut effect = ModelEffectState::default();
-    let mut timeline: Vec<ModelTweenSegment> = Vec::new();
-    let mut cursor_time = 0.0f32;
-    let mut pending_tween: Option<(f32, TweenType)> = None;
-    let mut grouped_mods: Vec<ItgActorMod> = Vec::new();
-
-    let flush_group = |state: &mut ModelDrawState,
-                       timeline: &mut Vec<ModelTweenSegment>,
-                       cursor_time: &mut f32,
-                       pending_tween: &mut Option<(f32, TweenType)>,
-                       grouped_mods: &mut Vec<ItgActorMod>| {
-        if grouped_mods.is_empty() {
-            return;
-        }
-        if let Some((duration, tween)) = pending_tween.take()
-            && duration > f32::EPSILON
-        {
-            let from = *state;
-            let mut to = from;
-            itg_apply_actor_mods(&mut to, grouped_mods);
-            timeline.push(ModelTweenSegment {
-                start: *cursor_time,
-                duration,
-                tween,
-                from,
-                to,
-            });
-            *state = to;
-            *cursor_time += duration;
-            grouped_mods.clear();
-            return;
-        }
-        itg_apply_actor_mods(state, grouped_mods);
-        grouped_mods.clear();
-    };
-
-    for key in ["initcommand", "nonecommand"] {
-        let Some(script) = commands.get(key) else {
-            continue;
-        };
-        let script = normalized_script_command(script);
-        for raw in script.split(';') {
-            let token = raw.trim();
-            if token.is_empty() {
-                continue;
-            }
-            let Some((cmd, args)) = split_script_token(token) else {
-                continue;
-            };
-            if let Some((tween, duration)) = parse_script_tween(cmd.as_str(), &args) {
-                flush_group(
-                    &mut state,
-                    &mut timeline,
-                    &mut cursor_time,
-                    &mut pending_tween,
-                    &mut grouped_mods,
-                );
-                pending_tween = Some((duration.max(0.0), tween_type_from_script_tween(tween)));
-                continue;
-            }
-            if let Some(duration) = parse_script_sleep(cmd.as_str(), &args) {
-                flush_group(
-                    &mut state,
-                    &mut timeline,
-                    &mut cursor_time,
-                    &mut pending_tween,
-                    &mut grouped_mods,
-                );
-                cursor_time += duration.max(0.0);
-                continue;
-            }
-            if cmd == "effectclock" {
-                flush_group(
-                    &mut state,
-                    &mut timeline,
-                    &mut cursor_time,
-                    &mut pending_tween,
-                    &mut grouped_mods,
-                );
-                let raw_clock = args.first().map(String::as_str).unwrap_or("time");
-                effect.clock = if let Some(clock) = parse_script_effect_clock(raw_clock) {
-                    match clock {
-                        ui_anim::EffectClock::Beat => ModelEffectClock::Beat,
-                        ui_anim::EffectClock::Time => ModelEffectClock::Time,
-                    }
-                } else {
-                    warn!("unsupported effectclock '{raw_clock}' in model DSL path");
-                    ModelEffectClock::Time
-                };
-                continue;
-            }
-            if let Some(effect_mod) = parse_script_effect_mod(cmd.as_str(), &args) {
-                flush_group(
-                    &mut state,
-                    &mut timeline,
-                    &mut cursor_time,
-                    &mut pending_tween,
-                    &mut grouped_mods,
-                );
-                match effect_mod {
-                    ScriptEffectMod::DiffuseRamp => {
-                        effect.mode = ModelEffectMode::DiffuseRamp;
-                        effect.period = 1.0;
-                        effect.timing = [0.5, 0.0, 0.5, 0.0, 0.0];
-                        effect.color1 = [0.0, 0.0, 0.0, 1.0];
-                        effect.color2 = [1.0, 1.0, 1.0, 1.0];
-                    }
-                    ScriptEffectMod::DiffuseShift => {
-                        effect.mode = ModelEffectMode::DiffuseShift;
-                        effect.period = 1.0;
-                        effect.timing = [0.5, 0.0, 0.5, 0.0, 0.0];
-                        effect.color1 = [0.0, 0.0, 0.0, 1.0];
-                        effect.color2 = [1.0, 1.0, 1.0, 1.0];
-                    }
-                    ScriptEffectMod::GlowShift => {
-                        effect.mode = ModelEffectMode::GlowShift;
-                        effect.period = 1.0;
-                        effect.timing = [0.5, 0.0, 0.5, 0.0, 0.0];
-                        effect.color1 = [1.0, 1.0, 1.0, 0.2];
-                        effect.color2 = [1.0, 1.0, 1.0, 0.8];
-                    }
-                    ScriptEffectMod::Pulse => {
-                        effect.mode = ModelEffectMode::Pulse;
-                        effect.period = 2.0;
-                        effect.timing = [1.0, 0.0, 1.0, 0.0, 0.0];
-                        effect.magnitude = [0.5, 1.0, 0.0];
-                    }
-                    ScriptEffectMod::Spin => {
-                        effect.mode = ModelEffectMode::Spin;
-                        effect.magnitude = [0.0, 0.0, 180.0];
-                    }
-                    ScriptEffectMod::StopEffect => {
-                        effect.mode = ModelEffectMode::None;
-                    }
-                    ScriptEffectMod::EffectColor1(c) => {
-                        effect.color1 = c;
-                    }
-                    ScriptEffectMod::EffectColor2(c) => {
-                        effect.color2 = c;
-                    }
-                    ScriptEffectMod::EffectPeriod(v) => {
-                        if v > 0.0 {
-                            effect.period = v;
-                            effect.timing = [v * 0.5, 0.0, v * 0.5, 0.0, 0.0];
-                        }
-                    }
-                    ScriptEffectMod::EffectOffset(v) => {
-                        effect.offset = v;
-                    }
-                    ScriptEffectMod::EffectTiming(v) => {
-                        let timing = [
-                            v[0].max(0.0),
-                            v[1].max(0.0),
-                            v[2].max(0.0),
-                            v[3].max(0.0),
-                            v[4].max(0.0),
-                        ];
-                        let total = timing[0] + timing[1] + timing[2] + timing[3] + timing[4];
-                        if total > 0.0 {
-                            effect.timing = timing;
-                            effect.period = total;
-                        }
-                    }
-                    ScriptEffectMod::EffectMagnitude(v) => {
-                        effect.magnitude = v;
-                    }
-                }
-                continue;
-            }
-            if parse_script_control(cmd.as_str()).is_some() {
-                flush_group(
-                    &mut state,
-                    &mut timeline,
-                    &mut cursor_time,
-                    &mut pending_tween,
-                    &mut grouped_mods,
-                );
-                continue;
-            }
-            if let Some(mod_cmd) = parse_script_actor_mod(cmd.as_str(), &args) {
-                grouped_mods.push(mod_cmd);
-            } else {
-                warn!("unsupported noteskin actor command in model DSL path: '{cmd}'");
-            }
-        }
-    }
-
-    flush_group(
-        &mut state,
-        &mut timeline,
-        &mut cursor_time,
-        &mut pending_tween,
-        &mut grouped_mods,
-    );
-
-    state.zoom[0] = state.zoom[0].max(0.0);
-    state.zoom[1] = state.zoom[1].max(0.0);
-    state.zoom[2] = state.zoom[2].max(0.0);
-    state.tint[0] = state.tint[0].clamp(0.0, 1.0);
-    state.tint[1] = state.tint[1].clamp(0.0, 1.0);
-    state.tint[2] = state.tint[2].clamp(0.0, 1.0);
-    state.tint[3] = state.tint[3].clamp(0.0, 1.0);
-    state.glow[0] = state.glow[0].clamp(0.0, 1.0);
-    state.glow[1] = state.glow[1].clamp(0.0, 1.0);
-    state.glow[2] = state.glow[2].clamp(0.0, 1.0);
-    state.glow[3] = state.glow[3].clamp(0.0, 1.0);
-
-    (state, Arc::from(timeline), effect)
-}
-
 type ItgLuaActorDecl = noteskin_actor::ItgLuaActorDecl;
 
 #[derive(Debug, Clone)]
@@ -3499,7 +2576,7 @@ fn itg_resolve_actor_file_compiled(
         visiting.remove(&path_key);
         return Vec::new();
     };
-    let default_anim_is_beat = itg_animation_is_beat_based(data);
+    let default_anim_is_beat = noteskin_itg::animation_is_beat_based(data);
     for sprite in decl.sprites {
         let texture_path = itg_resolve_texture_expr(data, &sprite.texture_expr, arg0_path);
         let Some(texture_path) = texture_path else {
@@ -3544,7 +2621,7 @@ fn itg_resolve_actor_file_compiled(
         let Some(model_path) = model_path else {
             continue;
         };
-        let (draw, timeline, effect) = itg_model_draw_program(&model.commands);
+        let (draw, timeline, effect) = noteskin_script::model_draw_program(&model.commands);
         let model_auto_rot = itg_parse_milkshape_model_auto_rot(&model_path);
         if let Some(model_layers) = itg_parse_milkshape_model_layers(data, &model_path) {
             let mut pushed = false;
@@ -3655,7 +2732,7 @@ fn itg_resolve_actor_file_compiled(
             .wrapper_expr
             .as_deref()
             .and_then(|expr| itg_resolve_texture_expr(data, expr, arg0_path))
-            .and_then(|path| itg_parse_wrapper_commands_from_file(&path, &data.metrics))
+            .and_then(|path| noteskin_actor::parse_wrapper_commands_from_file(&path, &data.metrics))
             .unwrap_or_default();
         let mut child = itg_resolve_actor_sprites_inner_compiled(
             data,
@@ -3719,14 +2796,6 @@ fn itg_resolve_texture_expr(
         })
 }
 
-fn itg_animation_is_beat_based(data: &noteskin_itg::NoteskinData) -> bool {
-    data.metrics
-        .get("NoteDisplay", "AnimationIsBeatBased")
-        .or_else(|| data.metrics.get("Global", "AnimationIsBeatBased"))
-        .and_then(itg_parse_ini_float)
-        .is_some_and(|v| v > 0.5)
-}
-
 fn itg_sprite_animation_is_beat_based(
     commands: &HashMap<String, String>,
     default_is_beat_based: bool,
@@ -3772,7 +2841,7 @@ fn itg_slot_from_actor_path_first_sprite_compiled(
     }
 
     let decl = itg_compiled_actor_decl(data, compiled_actors, path)?;
-    let default_anim_is_beat = itg_animation_is_beat_based(data);
+    let default_anim_is_beat = noteskin_itg::animation_is_beat_based(data);
     for sprite in decl.sprites {
         let texture_path = itg_resolve_texture_expr(data, &sprite.texture_expr, None)?;
         let anim_is_beat =
@@ -3804,12 +2873,12 @@ mod tests {
         AnimationRate, ModelAutoRotKey, ModelDrawState, ModelEffectClock, ModelEffectMode,
         ModelTweenSegment, NUM_QUANTIZATIONS, NoteAnimPart, NoteColorType, Quantization,
         SpriteDefinition, SpriteSlot, SpriteSource, Style, clear_itg_runtime_caches,
-        compiled_bundle_path, itg_apply_state_properties_from_script, itg_model_draw_program,
-        itg_parse_command_effect, itg_receptor_pulse_from_script,
-        itg_register_texture_dims_for_path, itg_texture_key, load_itg, load_itg_data_cached,
-        load_itg_model_slots_from_path, load_itg_skin, noteskin_compiled,
-        parse_explosion_animation, parse_script_control,
+        compiled_bundle_path, itg_apply_state_properties_from_script, itg_parse_command_effect,
+        itg_receptor_pulse_from_script, itg_register_texture_dims_for_path, itg_texture_key,
+        load_itg, load_itg_data_cached, load_itg_model_slots_from_path, load_itg_skin,
+        noteskin_compiled, parse_explosion_animation,
     };
+    use deadsync_noteskin::script::parse_script_control;
     use std::collections::{HashMap, HashSet};
     use std::ffi::OsStr;
     use std::fs;
@@ -3942,7 +3011,7 @@ mod tests {
             "initcommand".to_string(),
             "SetTextureFiltering,false;vertalign,bottom;glow,0.1,0.2,0.3,0.4".to_string(),
         );
-        let (draw, timeline, effect) = itg_model_draw_program(&commands);
+        let (draw, timeline, effect) = noteskin_script::model_draw_program(&commands);
         assert!(parse_script_control("settexturefiltering").is_some());
         assert!(timeline.is_empty(), "expected no tween timeline");
         assert!(
@@ -6164,17 +5233,19 @@ return skin
                 },
             ],
         );
-        assert_eq!(slot.model_auto_rot_z_at(0.0), Some(20.0));
-        let interp = slot
-            .model_auto_rot_z_at(25.0 / 30.0)
-            .expect("frame 25 should interpolate between keys");
+        let auto_rot = |time| {
+            deadsync_noteskin::model_auto_rot_z_at(80.0, slot.model_auto_rot_z_keys.as_ref(), time)
+        };
+
+        assert_eq!(auto_rot(0.0), Some(20.0));
+        let interp = auto_rot(25.0 / 30.0).expect("frame 25 should interpolate between keys");
         assert!(
             (interp - 50.0).abs() <= 1e-6,
             "frame 25 should interpolate to 50 degrees; got {interp}"
         );
-        assert_eq!(slot.model_auto_rot_z_at(40.0 / 30.0), Some(80.0));
-        assert_eq!(slot.model_auto_rot_z_at(70.0 / 30.0), Some(80.0));
-        assert_eq!(slot.model_auto_rot_z_at(80.0 / 30.0), Some(20.0));
+        assert_eq!(auto_rot(40.0 / 30.0), Some(80.0));
+        assert_eq!(auto_rot(70.0 / 30.0), Some(80.0));
+        assert_eq!(auto_rot(80.0 / 30.0), Some(20.0));
     }
 
     #[test]

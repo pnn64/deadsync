@@ -1,8 +1,11 @@
 use bincode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::fs;
+use std::path::Path;
 
 use crate::itg as noteskin_itg;
+use crate::script::parse_linear_frames_expr;
 
 const ITG_ARG0_TOKEN: &str = "__ITG_ARG0__";
 
@@ -176,6 +179,35 @@ pub fn parse_actor_decl(content: &str, metrics: &noteskin_itg::IniData) -> ItgLu
     }
 
     decl
+}
+
+pub fn parse_wrapper_commands(
+    content: &str,
+    metrics: &noteskin_itg::IniData,
+) -> Option<HashMap<String, String>> {
+    let marker = ".. {";
+    let marker_idx = content.find(marker)?;
+    let open = marker_idx + marker.len() - 1;
+    let close = find_matching(content, open, '{', '}')?;
+    Some(parse_commands_block(
+        &content[open + 1..close],
+        metrics,
+        &CommandContext::default(),
+    ))
+}
+
+pub fn parse_wrapper_commands_from_file(
+    path: &Path,
+    metrics: &noteskin_itg::IniData,
+) -> Option<HashMap<String, String>> {
+    let is_lua = path
+        .extension()
+        .and_then(|s| s.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("lua"));
+    if !is_lua {
+        return None;
+    }
+    parse_wrapper_commands(&fs::read_to_string(path).ok()?, metrics)
 }
 
 fn parse_arg0_aliases(content: &str) -> HashSet<String> {
@@ -642,31 +674,6 @@ fn parse_lua_float_expr(raw: &str) -> Option<f32> {
         }
     }
     None
-}
-
-fn parse_linear_frames_expr(raw: &str) -> Option<(usize, Vec<f32>)> {
-    let value = raw.trim().trim_end_matches(';').trim();
-    let open = value.find('(')?;
-    if !value[..open]
-        .trim()
-        .eq_ignore_ascii_case("Sprite.LinearFrames")
-    {
-        return None;
-    }
-    let close = find_matching(value, open, '(', ')')?;
-    let args = split_call_args(&value[open + 1..close]);
-    if args.len() < 2 {
-        return None;
-    }
-    let frame_count = args[0]
-        .trim()
-        .parse::<usize>()
-        .ok()
-        .or_else(|| parse_lua_float_expr(&args[0]).map(|v| v as usize))?
-        .max(1);
-    let seconds = parse_lua_float_expr(&args[1])?;
-    let delay = (seconds / frame_count as f32).max(0.0);
-    Some((frame_count, vec![delay; frame_count]))
 }
 
 fn parse_model_block(
@@ -1258,4 +1265,55 @@ fn parse_lua_float_token(raw: &str) -> Option<f32> {
     (value.contains(',') && !value.contains('.'))
         .then(|| value.replace(',', "."))
         .and_then(|patched| patched.parse::<f32>().ok())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wrapper_commands_parse_metric_cmd_and_function_forms() {
+        let path = std::env::temp_dir().join(format!(
+            "deadsync-noteskin-wrapper-test-{}.ini",
+            std::process::id()
+        ));
+        std::fs::write(&path, "[ReceptorArrow]\nNoneCommand=diffusealpha,0.5\n")
+            .expect("write test metrics");
+        let metrics = noteskin_itg::IniData::parse_file(&path).expect("parse test metrics");
+        let _ = std::fs::remove_file(&path);
+        let content = r#"
+return Def.ActorFrame .. {
+    InitCommand=cmd(diffusealpha,0);
+    NoneCommand=NOTESKIN:GetMetricA("ReceptorArrow", "NoneCommand");
+    PressCommand=function(self)
+        if true then
+            self:zoom(1.2)
+        end
+        self:diffusealpha(1)
+    end;
+}
+"#;
+
+        let commands = parse_wrapper_commands(content, &metrics).expect("wrapper commands");
+
+        assert_eq!(
+            commands.get("initcommand").map(String::as_str),
+            Some("diffusealpha,0")
+        );
+        assert_eq!(
+            commands.get("nonecommand").map(String::as_str),
+            Some("diffusealpha,0.5")
+        );
+        assert_eq!(
+            commands.get("presscommand").map(String::as_str),
+            Some("zoom,1.2;diffusealpha,1")
+        );
+    }
+
+    #[test]
+    fn wrapper_commands_ignore_non_wrapper_content() {
+        let metrics = noteskin_itg::IniData::default();
+
+        assert!(parse_wrapper_commands("return Def.ActorFrame {}", &metrics).is_none());
+    }
 }

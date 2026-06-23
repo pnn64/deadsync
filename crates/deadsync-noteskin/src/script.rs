@@ -1,20 +1,25 @@
-use super::lua::{
+use crate::lua::{
     itg_find_function_end, itg_find_matching, itg_parse_lua_float_expr,
-    itg_parse_self_chain_commands, itg_skip_ws,
+    itg_parse_self_chain_commands, itg_skip_ws, itg_split_call_args,
 };
-use super::{ItgCommandEffect, ModelDrawState, TweenType};
-use deadlib_present::anim as ui_anim;
+use crate::{
+    ModelDrawState, ModelEffectClock, ModelEffectMode, ModelEffectState, ModelTweenSegment,
+    TweenType,
+};
+use log::warn;
 use std::borrow::Cow;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum ScriptTween {
+pub enum ScriptTween {
     Linear,
     Accelerate,
     Decelerate,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum ScriptControl {
+pub enum ScriptControl {
     StopTweening,
     FinishTweening,
     PlayCommand,
@@ -25,7 +30,7 @@ pub(super) enum ScriptControl {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(super) enum ScriptActorMod {
+pub enum ScriptActorMod {
     X(f32),
     Y(f32),
     Z(f32),
@@ -51,7 +56,7 @@ pub(super) enum ScriptActorMod {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(super) enum ScriptEffectMod {
+pub enum ScriptEffectMod {
     DiffuseRamp,
     DiffuseShift,
     GlowShift,
@@ -112,7 +117,7 @@ fn split_script_call_args(raw: &str) -> Vec<String> {
 }
 
 #[inline(always)]
-pub(super) fn split_script_token(token: &str) -> Option<(String, Vec<String>)> {
+pub fn split_script_token(token: &str) -> Option<(String, Vec<String>)> {
     let token = token.trim();
     let parts = split_script_call_args(token);
     if parts.is_empty() {
@@ -131,14 +136,41 @@ pub(super) fn split_script_token(token: &str) -> Option<(String, Vec<String>)> {
 }
 
 #[inline(always)]
-pub(super) fn parse_script_number(raw: &str) -> Option<f32> {
+pub fn parse_script_number(raw: &str) -> Option<f32> {
     itg_parse_lua_float_expr(raw)
 }
 
 #[inline(always)]
-pub(super) fn parse_script_bool(raw: &str) -> bool {
+pub fn parse_script_bool(raw: &str) -> bool {
     let t = raw.trim().trim_matches('"').trim_matches('\'');
     t.eq_ignore_ascii_case("true") || t == "1"
+}
+
+pub fn parse_linear_frames_expr(raw: &str) -> Option<(usize, Vec<f32>)> {
+    let value = raw.trim().trim_end_matches(';').trim();
+    let open = value.find('(')?;
+    let head = value[..open].trim();
+    if !head.eq_ignore_ascii_case("Sprite.LinearFrames") {
+        return None;
+    }
+    let close = itg_find_matching(value, open, '(', ')')?;
+    let args = itg_split_call_args(&value[open + 1..close]);
+    if args.len() < 2 {
+        return None;
+    }
+    let frame_count = args[0]
+        .trim()
+        .parse::<usize>()
+        .ok()
+        .or_else(|| itg_parse_lua_float_expr(&args[0]).map(|v| v as usize))?
+        .max(1);
+    let seconds = itg_parse_lua_float_expr(&args[1])?;
+    let delay = (seconds / frame_count as f32).max(0.0);
+    Some((frame_count, vec![delay; frame_count]))
+}
+
+pub fn parse_script_state_properties(args: &[String]) -> Option<(usize, Vec<f32>)> {
+    args.first().and_then(|expr| parse_linear_frames_expr(expr))
 }
 
 #[inline(always)]
@@ -254,7 +286,7 @@ fn parse_script_color_args(args: &[String]) -> Option<[f32; 4]> {
 }
 
 #[inline(always)]
-pub(super) fn parse_script_vertalign(raw: &str) -> Option<f32> {
+pub fn parse_script_vertalign(raw: &str) -> Option<f32> {
     let value = raw.trim().trim_matches('"').trim_matches('\'');
     if let Ok(v) = value.parse::<f32>() {
         return Some(v);
@@ -268,7 +300,7 @@ pub(super) fn parse_script_vertalign(raw: &str) -> Option<f32> {
 }
 
 #[inline(always)]
-pub(super) fn parse_script_tween(cmd: &str, args: &[String]) -> Option<(ScriptTween, f32)> {
+pub fn parse_script_tween(cmd: &str, args: &[String]) -> Option<(ScriptTween, f32)> {
     let tween = match cmd {
         "linear" => ScriptTween::Linear,
         "accelerate" => ScriptTween::Accelerate,
@@ -281,7 +313,7 @@ pub(super) fn parse_script_tween(cmd: &str, args: &[String]) -> Option<(ScriptTw
 }
 
 #[inline(always)]
-pub(super) fn parse_script_sleep(cmd: &str, args: &[String]) -> Option<f32> {
+pub fn parse_script_sleep(cmd: &str, args: &[String]) -> Option<f32> {
     if cmd != "sleep" {
         return None;
     }
@@ -289,7 +321,7 @@ pub(super) fn parse_script_sleep(cmd: &str, args: &[String]) -> Option<f32> {
 }
 
 #[inline(always)]
-pub(super) fn parse_script_control(cmd: &str) -> Option<ScriptControl> {
+pub fn parse_script_control(cmd: &str) -> Option<ScriptControl> {
     match cmd {
         "stoptweening" => Some(ScriptControl::StopTweening),
         "finishtweening" => Some(ScriptControl::FinishTweening),
@@ -303,7 +335,7 @@ pub(super) fn parse_script_control(cmd: &str) -> Option<ScriptControl> {
 }
 
 #[inline(always)]
-pub(super) fn parse_script_actor_mod(cmd: &str, args: &[String]) -> Option<ScriptActorMod> {
+pub fn parse_script_actor_mod(cmd: &str, args: &[String]) -> Option<ScriptActorMod> {
     let first = args.first().and_then(|v| parse_script_number(v));
     let bool_first = args.first().map(|v| parse_script_bool(v));
 
@@ -349,24 +381,24 @@ pub(super) fn parse_script_actor_mod(cmd: &str, args: &[String]) -> Option<Scrip
 }
 
 #[inline(always)]
-pub(super) fn parse_script_effect_clock(raw: &str) -> Option<ui_anim::EffectClock> {
+pub fn parse_script_effect_clock(raw: &str) -> Option<ModelEffectClock> {
     let lower = raw
         .trim()
         .trim_matches('"')
         .trim_matches('\'')
         .to_ascii_lowercase();
     match lower.as_str() {
-        "beat" | "beatnooffset" | "bgm" => Some(ui_anim::EffectClock::Beat),
+        "beat" | "beatnooffset" | "bgm" => Some(ModelEffectClock::Beat),
         "timer" | "timerglobal" | "music" | "musicnooffset" | "time" | "seconds" => {
-            Some(ui_anim::EffectClock::Time)
+            Some(ModelEffectClock::Time)
         }
-        _ if lower.contains("beat") => Some(ui_anim::EffectClock::Beat),
+        _ if lower.contains("beat") => Some(ModelEffectClock::Beat),
         _ => None,
     }
 }
 
 #[inline(always)]
-pub(super) fn parse_script_effect_mod(cmd: &str, args: &[String]) -> Option<ScriptEffectMod> {
+pub fn parse_script_effect_mod(cmd: &str, args: &[String]) -> Option<ScriptEffectMod> {
     match cmd {
         "diffuseramp" => Some(ScriptEffectMod::DiffuseRamp),
         "diffuseshift" => Some(ScriptEffectMod::DiffuseShift),
@@ -416,7 +448,7 @@ pub(super) fn parse_script_effect_mod(cmd: &str, args: &[String]) -> Option<Scri
     }
 }
 
-pub(super) fn normalized_script_command(script: &str) -> Cow<'_, str> {
+pub fn normalized_script_command(script: &str) -> Cow<'_, str> {
     let trimmed = script.trim();
     if !trimmed.contains("self:") {
         return Cow::Borrowed(script);
@@ -444,7 +476,7 @@ fn normalized_lua_function_command(script: &str) -> Option<String> {
 }
 
 #[inline(always)]
-pub(super) fn parse_script_effectclock_from_commands(script: &str) -> Option<bool> {
+pub fn parse_script_effectclock_from_commands(script: &str) -> Option<bool> {
     let mut out = None;
     let script = normalized_script_command(script);
     for raw in script.split(';') {
@@ -460,13 +492,40 @@ pub(super) fn parse_script_effectclock_from_commands(script: &str) -> Option<boo
         }
         let clock = args.first().map(String::as_str).unwrap_or("time");
         if let Some(parsed) = parse_script_effect_clock(clock) {
-            out = Some(matches!(parsed, ui_anim::EffectClock::Beat));
+            out = Some(matches!(parsed, ModelEffectClock::Beat));
         }
     }
     out
 }
 
-pub(super) fn itg_parse_command_effect(script: &str) -> ItgCommandEffect {
+#[derive(Debug, Clone, Copy)]
+pub struct ItgCommandEffect {
+    pub start_alpha: Option<f32>,
+    pub target_alpha: Option<f32>,
+    pub start_zoom: Option<f32>,
+    pub target_zoom: Option<f32>,
+    pub duration: f32,
+    pub tween: TweenType,
+    pub blend_add: Option<bool>,
+    pub interrupts: bool,
+}
+
+impl Default for ItgCommandEffect {
+    fn default() -> Self {
+        Self {
+            start_alpha: None,
+            target_alpha: None,
+            start_zoom: None,
+            target_zoom: None,
+            duration: 0.0,
+            tween: TweenType::Linear,
+            blend_add: None,
+            interrupts: false,
+        }
+    }
+}
+
+pub fn itg_parse_command_effect(script: &str) -> ItgCommandEffect {
     let mut out = ItgCommandEffect::default();
     let mut pending_duration = 0.0f32;
     let mut pending_tween = TweenType::Linear;
@@ -528,7 +587,7 @@ pub(super) fn itg_parse_command_effect(script: &str) -> ItgCommandEffect {
 }
 
 #[inline(always)]
-pub(super) fn tween_type_from_script_tween(tween: ScriptTween) -> TweenType {
+pub fn tween_type_from_script_tween(tween: ScriptTween) -> TweenType {
     match tween {
         ScriptTween::Linear => TweenType::Linear,
         ScriptTween::Accelerate => TweenType::Accelerate,
@@ -536,9 +595,9 @@ pub(super) fn tween_type_from_script_tween(tween: ScriptTween) -> TweenType {
     }
 }
 
-pub(super) type ItgActorMod = ScriptActorMod;
+pub type ItgActorMod = ScriptActorMod;
 
-pub(super) fn itg_apply_actor_mods(state: &mut ModelDrawState, mods: &[ItgActorMod]) {
+pub fn itg_apply_actor_mods(state: &mut ModelDrawState, mods: &[ItgActorMod]) {
     for m in mods {
         match *m {
             ItgActorMod::X(v) => state.pos[0] = v,
@@ -564,5 +623,271 @@ pub(super) fn itg_apply_actor_mods(state: &mut ModelDrawState, mods: &[ItgActorM
             ItgActorMod::BlendAdd(v) => state.blend_add = v,
             ItgActorMod::Visible(v) => state.visible = v,
         }
+    }
+}
+
+pub fn model_draw_program(
+    commands: &HashMap<String, String>,
+) -> (ModelDrawState, Arc<[ModelTweenSegment]>, ModelEffectState) {
+    let mut state = ModelDrawState::default();
+    let mut effect = ModelEffectState::default();
+    let mut timeline: Vec<ModelTweenSegment> = Vec::new();
+    let mut cursor_time = 0.0f32;
+    let mut pending_tween: Option<(f32, TweenType)> = None;
+    let mut grouped_mods: Vec<ItgActorMod> = Vec::new();
+
+    let flush_group = |state: &mut ModelDrawState,
+                       timeline: &mut Vec<ModelTweenSegment>,
+                       cursor_time: &mut f32,
+                       pending_tween: &mut Option<(f32, TweenType)>,
+                       grouped_mods: &mut Vec<ItgActorMod>| {
+        if grouped_mods.is_empty() {
+            return;
+        }
+        if let Some((duration, tween)) = pending_tween.take()
+            && duration > f32::EPSILON
+        {
+            let from = *state;
+            let mut to = from;
+            itg_apply_actor_mods(&mut to, grouped_mods);
+            timeline.push(ModelTweenSegment {
+                start: *cursor_time,
+                duration,
+                tween,
+                from,
+                to,
+            });
+            *state = to;
+            *cursor_time += duration;
+            grouped_mods.clear();
+            return;
+        }
+        itg_apply_actor_mods(state, grouped_mods);
+        grouped_mods.clear();
+    };
+
+    for key in ["initcommand", "nonecommand"] {
+        let Some(script) = commands.get(key) else {
+            continue;
+        };
+        let script = normalized_script_command(script);
+        for raw in script.split(';') {
+            let token = raw.trim();
+            if token.is_empty() {
+                continue;
+            }
+            let Some((cmd, args)) = split_script_token(token) else {
+                continue;
+            };
+            if let Some((tween, duration)) = parse_script_tween(cmd.as_str(), &args) {
+                flush_group(
+                    &mut state,
+                    &mut timeline,
+                    &mut cursor_time,
+                    &mut pending_tween,
+                    &mut grouped_mods,
+                );
+                pending_tween = Some((duration.max(0.0), tween_type_from_script_tween(tween)));
+                continue;
+            }
+            if let Some(duration) = parse_script_sleep(cmd.as_str(), &args) {
+                flush_group(
+                    &mut state,
+                    &mut timeline,
+                    &mut cursor_time,
+                    &mut pending_tween,
+                    &mut grouped_mods,
+                );
+                cursor_time += duration.max(0.0);
+                continue;
+            }
+            if cmd == "effectclock" {
+                flush_group(
+                    &mut state,
+                    &mut timeline,
+                    &mut cursor_time,
+                    &mut pending_tween,
+                    &mut grouped_mods,
+                );
+                let raw_clock = args.first().map(String::as_str).unwrap_or("time");
+                effect.clock = if let Some(clock) = parse_script_effect_clock(raw_clock) {
+                    clock
+                } else {
+                    warn!("unsupported effectclock '{raw_clock}' in model DSL path");
+                    ModelEffectClock::Time
+                };
+                continue;
+            }
+            if let Some(effect_mod) = parse_script_effect_mod(cmd.as_str(), &args) {
+                flush_group(
+                    &mut state,
+                    &mut timeline,
+                    &mut cursor_time,
+                    &mut pending_tween,
+                    &mut grouped_mods,
+                );
+                match effect_mod {
+                    ScriptEffectMod::DiffuseRamp => {
+                        effect.mode = ModelEffectMode::DiffuseRamp;
+                        effect.period = 1.0;
+                        effect.timing = [0.5, 0.0, 0.5, 0.0, 0.0];
+                        effect.color1 = [0.0, 0.0, 0.0, 1.0];
+                        effect.color2 = [1.0, 1.0, 1.0, 1.0];
+                    }
+                    ScriptEffectMod::DiffuseShift => {
+                        effect.mode = ModelEffectMode::DiffuseShift;
+                        effect.period = 1.0;
+                        effect.timing = [0.5, 0.0, 0.5, 0.0, 0.0];
+                        effect.color1 = [0.0, 0.0, 0.0, 1.0];
+                        effect.color2 = [1.0, 1.0, 1.0, 1.0];
+                    }
+                    ScriptEffectMod::GlowShift => {
+                        effect.mode = ModelEffectMode::GlowShift;
+                        effect.period = 1.0;
+                        effect.timing = [0.5, 0.0, 0.5, 0.0, 0.0];
+                        effect.color1 = [1.0, 1.0, 1.0, 0.2];
+                        effect.color2 = [1.0, 1.0, 1.0, 0.8];
+                    }
+                    ScriptEffectMod::Pulse => {
+                        effect.mode = ModelEffectMode::Pulse;
+                        effect.period = 2.0;
+                        effect.timing = [1.0, 0.0, 1.0, 0.0, 0.0];
+                        effect.magnitude = [0.5, 1.0, 0.0];
+                    }
+                    ScriptEffectMod::Spin => {
+                        effect.mode = ModelEffectMode::Spin;
+                        effect.magnitude = [0.0, 0.0, 180.0];
+                    }
+                    ScriptEffectMod::StopEffect => {
+                        effect.mode = ModelEffectMode::None;
+                    }
+                    ScriptEffectMod::EffectColor1(c) => {
+                        effect.color1 = c;
+                    }
+                    ScriptEffectMod::EffectColor2(c) => {
+                        effect.color2 = c;
+                    }
+                    ScriptEffectMod::EffectPeriod(v) => {
+                        if v > 0.0 {
+                            effect.period = v;
+                            effect.timing = [v * 0.5, 0.0, v * 0.5, 0.0, 0.0];
+                        }
+                    }
+                    ScriptEffectMod::EffectOffset(v) => {
+                        effect.offset = v;
+                    }
+                    ScriptEffectMod::EffectTiming(v) => {
+                        let timing = [
+                            v[0].max(0.0),
+                            v[1].max(0.0),
+                            v[2].max(0.0),
+                            v[3].max(0.0),
+                            v[4].max(0.0),
+                        ];
+                        let total = timing[0] + timing[1] + timing[2] + timing[3] + timing[4];
+                        if total > 0.0 {
+                            effect.timing = timing;
+                            effect.period = total;
+                        }
+                    }
+                    ScriptEffectMod::EffectMagnitude(v) => {
+                        effect.magnitude = v;
+                    }
+                }
+                continue;
+            }
+            if parse_script_control(cmd.as_str()).is_some() {
+                flush_group(
+                    &mut state,
+                    &mut timeline,
+                    &mut cursor_time,
+                    &mut pending_tween,
+                    &mut grouped_mods,
+                );
+                continue;
+            }
+            if let Some(mod_cmd) = parse_script_actor_mod(cmd.as_str(), &args) {
+                grouped_mods.push(mod_cmd);
+            } else {
+                warn!("unsupported noteskin actor command in model DSL path: '{cmd}'");
+            }
+        }
+    }
+
+    flush_group(
+        &mut state,
+        &mut timeline,
+        &mut cursor_time,
+        &mut pending_tween,
+        &mut grouped_mods,
+    );
+
+    state.zoom[0] = state.zoom[0].max(0.0);
+    state.zoom[1] = state.zoom[1].max(0.0);
+    state.zoom[2] = state.zoom[2].max(0.0);
+    state.tint[0] = state.tint[0].clamp(0.0, 1.0);
+    state.tint[1] = state.tint[1].clamp(0.0, 1.0);
+    state.tint[2] = state.tint[2].clamp(0.0, 1.0);
+    state.tint[3] = state.tint[3].clamp(0.0, 1.0);
+    state.glow[0] = state.glow[0].clamp(0.0, 1.0);
+    state.glow[1] = state.glow[1].clamp(0.0, 1.0);
+    state.glow[2] = state.glow[2].clamp(0.0, 1.0);
+    state.glow[3] = state.glow[3].clamp(0.0, 1.0);
+
+    (state, Arc::from(timeline), effect)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn model_draw_program_builds_tween_and_effect() {
+        let commands = HashMap::from([
+            (
+                "initcommand".to_string(),
+                "zoom,0.5;diffuse,#ff000080;effectclock,beat;glowshift;".to_string(),
+            ),
+            (
+                "nonecommand".to_string(),
+                "linear,0.25;addx,8;rotationz,45;".to_string(),
+            ),
+        ]);
+
+        let (draw, timeline, effect) = model_draw_program(&commands);
+
+        assert_eq!(timeline.len(), 1);
+        assert_eq!(timeline[0].duration, 0.25);
+        assert_eq!(timeline[0].to.pos[0], 8.0);
+        assert_eq!(timeline[0].to.rot[2], 45.0);
+        assert_eq!(draw.zoom, [0.5, 0.5, 0.5]);
+        assert_eq!(draw.tint, [1.0, 0.0, 0.0, 0.5019608]);
+        assert_eq!(effect.clock, ModelEffectClock::Beat);
+        assert_eq!(effect.mode, ModelEffectMode::GlowShift);
+    }
+
+    #[test]
+    fn itg_parse_command_effect_tracks_alpha_zoom_and_interrupts() {
+        let effect = itg_parse_command_effect(
+            "diffusealpha,0.25;linear,0.1;diffusealpha,1;zoom,1.5;stoptweening;blend,BlendMode_Add;",
+        );
+
+        assert_eq!(effect.start_alpha, Some(0.25));
+        assert_eq!(effect.target_alpha, Some(1.0));
+        assert_eq!(effect.duration, 0.1);
+        assert_eq!(effect.start_zoom, Some(1.5));
+        assert_eq!(effect.target_zoom, Some(1.5));
+        assert_eq!(effect.blend_add, Some(true));
+        assert!(effect.interrupts);
+    }
+
+    #[test]
+    fn parse_linear_frames_expr_builds_equal_frame_delays() {
+        let (frames, delays) =
+            parse_linear_frames_expr("Sprite.LinearFrames(64,(64/60))").expect("linear frames");
+
+        assert_eq!(frames, 64);
+        assert_eq!(delays.len(), 64);
+        assert!((delays[0] - (1.0 / 60.0)).abs() < 1e-6);
     }
 }

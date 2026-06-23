@@ -7,17 +7,15 @@ use super::actor_host::{
     current_gamestate_player_value, current_gamestate_value, current_song_value,
     current_steps_value, retarget_loader_env,
 };
-use super::runtime::note_song_lua_side_effect;
-use deadsync_song_lua::player_short_name;
-
-use super::sl::{create_sl_streams, init_sl_streams};
-use super::theme_colors::install_theme_color_helpers;
-use super::util::{
-    create_color_constants_table, create_string_array, file_path_string, lua_text_value,
-    lua_values_equal, make_color_table, method_arg, player_index_from_value,
+use deadsync_song_lua::{
+    create_color_constants_table, create_sl_streams, create_string_array, file_path_string,
+    init_sl_streams, lua_text_value, lua_values_equal, make_color_table, method_arg,
+    note_song_lua_side_effect, player_index_from_value, player_short_name,
     preprocess_lua_cmd_syntax, read_boolish, read_color_call, read_color_value, read_f32,
     read_i32_value, read_string, truthy,
 };
+
+use super::theme_colors::install_theme_color_helpers;
 use super::{
     SONG_LUA_NOTE_COLUMNS, SONG_LUA_PRODUCT_VERSION, SONG_LUA_THEME_NAME,
     SONG_LUA_THEME_PATH_PREFIX, is_compile_global_name, seconds_to_hhmmss, set_string_method,

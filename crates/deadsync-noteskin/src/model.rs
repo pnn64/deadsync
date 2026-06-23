@@ -1,15 +1,15 @@
-use super::lua::itg_extract_quoted_strings;
-use super::{ModelAutoRotKey, ModelMesh, ModelVertex};
-use deadsync_noteskin::itg as noteskin_itg;
+use crate::itg as noteskin_itg;
+use crate::lua::itg_extract_quoted_strings;
+use crate::{ModelAutoRotKey, ModelMesh, ModelVertex};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy)]
-pub(super) struct ItgModelTexturePath {
-    pub(super) uv_velocity: [f32; 2],
-    pub(super) uv_offset: [f32; 2],
-    pub(super) uv_cycle_seconds: Option<f32>,
+pub struct ItgModelTexturePath {
+    pub uv_velocity: [f32; 2],
+    pub uv_offset: [f32; 2],
+    pub uv_cycle_seconds: Option<f32>,
 }
 
 impl Default for ItgModelTexturePath {
@@ -23,9 +23,9 @@ impl Default for ItgModelTexturePath {
 }
 
 #[derive(Debug, Clone)]
-pub(super) struct ItgResolvedModelTexture {
-    pub(super) texture_path: PathBuf,
-    pub(super) tex: ItgModelTexturePath,
+pub struct ItgResolvedModelTexture {
+    pub texture_path: PathBuf,
+    pub tex: ItgModelTexturePath,
 }
 
 impl ItgResolvedModelTexture {
@@ -37,7 +37,7 @@ impl ItgResolvedModelTexture {
     }
 }
 
-pub(super) fn itg_resolve_model_texture_path(
+pub fn itg_resolve_model_texture_path(
     data: &noteskin_itg::NoteskinData,
     model_path: &Path,
 ) -> Option<ItgResolvedModelTexture> {
@@ -191,19 +191,19 @@ fn itg_resolve_animated_texture_ini(path: &Path) -> Option<ItgResolvedModelTextu
     };
     let tex_velocity_x = ini
         .get("AnimatedTexture", "TexVelocityX")
-        .and_then(itg_parse_ini_float)
+        .and_then(noteskin_itg::parse_ini_float)
         .unwrap_or(0.0);
     let tex_velocity_y = ini
         .get("AnimatedTexture", "TexVelocityY")
-        .and_then(itg_parse_ini_float)
+        .and_then(noteskin_itg::parse_ini_float)
         .unwrap_or(0.0);
     let tex_offset_x = ini
         .get("AnimatedTexture", "TexOffsetX")
-        .and_then(itg_parse_ini_float)
+        .and_then(noteskin_itg::parse_ini_float)
         .unwrap_or(0.0);
     let tex_offset_y = ini
         .get("AnimatedTexture", "TexOffsetY")
-        .and_then(itg_parse_ini_float)
+        .and_then(noteskin_itg::parse_ini_float)
         .unwrap_or(0.0);
     let mut cycle_seconds = 0.0f32;
     for idx in first_frame_idx..1000 {
@@ -214,7 +214,7 @@ fn itg_resolve_animated_texture_ini(path: &Path) -> Option<ItgResolvedModelTextu
         }
         let Some(delay) = ini
             .get("AnimatedTexture", &delay_key)
-            .and_then(itg_parse_ini_float)
+            .and_then(noteskin_itg::parse_ini_float)
         else {
             break;
         };
@@ -231,46 +231,11 @@ fn itg_resolve_animated_texture_ini(path: &Path) -> Option<ItgResolvedModelTextu
     })
 }
 
-fn itg_parse_ini_value(raw: &str) -> Option<&str> {
-    let trimmed = raw.split_once("//").map_or(raw, |(prefix, _)| prefix);
-    let trimmed = trimmed
-        .split_once(';')
-        .map_or(trimmed, |(prefix, _)| prefix);
-    let value = trimmed.trim().trim_matches('"').trim_matches('\'');
-    if value.is_empty() {
-        return None;
-    }
-    Some(value)
-}
-
-pub(super) fn itg_parse_ini_int(raw: &str) -> Option<i32> {
-    let value = itg_parse_ini_value(raw)?;
-    let bytes = value.as_bytes();
-    let mut end = 0usize;
-    if bytes.first().is_some_and(|b| *b == b'+' || *b == b'-') {
-        end = 1;
-    }
-    let digit_start = end;
-    while end < bytes.len() && bytes[end].is_ascii_digit() {
-        end += 1;
-    }
-    if end == digit_start {
-        return None;
-    }
-    let parsed = value[..end].parse::<i64>().ok()?;
-    Some(parsed.clamp(i32::MIN as i64, i32::MAX as i64) as i32)
-}
-
-pub(super) fn itg_parse_ini_float(raw: &str) -> Option<f32> {
-    let value = itg_parse_ini_value(raw)?;
-    value.parse::<f32>().ok()
-}
-
 #[derive(Debug, Clone)]
-pub(super) struct ItgResolvedModelLayer {
-    pub(super) mesh: Arc<ModelMesh>,
-    pub(super) texture: ItgResolvedModelTexture,
-    pub(super) flags: ItgModelMaterialFlags,
+pub struct ItgResolvedModelLayer {
+    pub mesh: Arc<ModelMesh>,
+    pub texture: ItgResolvedModelTexture,
+    pub flags: ItgModelMaterialFlags,
 }
 
 #[derive(Debug)]
@@ -281,14 +246,14 @@ struct ItgMilkshapeMeshLayer {
 }
 
 #[derive(Debug, Clone, Copy, Default)]
-pub(super) struct ItgModelMaterialFlags {
-    pub(super) nomove: bool,
+pub struct ItgModelMaterialFlags {
+    pub nomove: bool,
 }
 
 #[derive(Debug, Clone)]
-pub(super) struct ItgModelAutoRot {
-    pub(super) total_frames: f32,
-    pub(super) z_keys: Arc<[ModelAutoRotKey]>,
+pub struct ItgModelAutoRot {
+    pub total_frames: f32,
+    pub z_keys: Arc<[ModelAutoRotKey]>,
 }
 
 fn itg_parse_model_material_flags(name: &str) -> ItgModelMaterialFlags {
@@ -313,7 +278,7 @@ fn itg_parse_milkshape_mesh_material_index(header: &str) -> i32 {
         .unwrap_or(0)
 }
 
-pub(super) fn itg_parse_milkshape_model_auto_rot(path: &Path) -> Option<ItgModelAutoRot> {
+pub fn itg_parse_milkshape_model_auto_rot(path: &Path) -> Option<ItgModelAutoRot> {
     let content = fs::read_to_string(path).ok()?;
     if !content.to_ascii_lowercase().contains("milkshape 3d ascii") {
         return None;
@@ -410,7 +375,7 @@ fn itg_resolve_model_material_texture(
     }
 }
 
-pub(super) fn itg_parse_milkshape_model_layers(
+pub fn itg_parse_milkshape_model_layers(
     data: &noteskin_itg::NoteskinData,
     path: &Path,
 ) -> Option<Vec<ItgResolvedModelLayer>> {
@@ -609,7 +574,7 @@ pub(super) fn itg_parse_milkshape_model_layers(
     }
 }
 
-pub(super) fn itg_parse_milkshape_model(
+pub fn itg_parse_milkshape_model(
     data: &noteskin_itg::NoteskinData,
     path: &Path,
 ) -> Option<Arc<ModelMesh>> {
