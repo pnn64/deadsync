@@ -654,6 +654,10 @@ enum Ev {
     Active(bool),
     /// Force a pad slot to solid black (true) or restore normal compositing (false).
     Blackout { pad: u8, on: bool },
+    /// Clear all per-panel effects (overlays, flashes, holds) without affecting the
+    /// background or the active state. Used when leaving gameplay while the worker
+    /// stays alive for a background animation.
+    ClearPanels,
     Shutdown,
 }
 
@@ -783,6 +787,14 @@ impl SmxPanelLights {
         self.send(Ev::Blackout { pad: pad as u8, on });
     }
 
+    /// Clear all per-panel effects (overlays, flashes, holds) without touching the
+    /// background or the active state. Call when leaving gameplay while the worker
+    /// stays alive for a background, so stale press overlays don't persist into
+    /// the next screen.
+    pub fn clear_panels(&self) {
+        self.send(Ev::ClearPanels);
+    }
+
     fn send(&self, ev: Ev) {
         if let Some(tx) = &self.tx {
             let _ = tx.send(ev);
@@ -885,6 +897,7 @@ fn handle(fx: &mut PanelFx, active: &mut bool, ev: Ev) -> bool {
         } => fx.play_press_overlay(pad.into(), panel.into(), anim, drive),
         Ev::PressRelease { pad, panel } => fx.release_press_overlay(pad.into(), panel.into()),
         Ev::Blackout { pad, on } => fx.set_pad_blackout(pad.into(), on),
+        Ev::ClearPanels => fx.clear_panels(),
         Ev::Active(a) => {
             *active = a;
             if a {
