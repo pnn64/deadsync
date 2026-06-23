@@ -713,6 +713,20 @@ pub const fn final_result_counts_as_rescore_target(judgment: &judgment::Judgment
     )
 }
 
+pub fn rescore_counts_from_judgments<'a, I>(judgments: I) -> GrooveStatsRescoreCounts
+where
+    I: IntoIterator<Item = (&'a judgment::Judgment, &'a judgment::Judgment)>,
+{
+    let mut counts = GrooveStatsRescoreCounts::default();
+    for (final_result, early_result) in judgments {
+        if final_result_counts_as_rescore_target(final_result) {
+            add_rescore_target(&mut counts, final_result);
+        }
+        add_rescore_target(&mut counts, early_result);
+    }
+    counts
+}
+
 pub fn submit_comment(
     counts: &GrooveStatsJudgmentCounts,
     fa_plus_ex_score: Option<f64>,
@@ -978,6 +992,55 @@ pub struct GrooveStatsSubmitPlayerPayload {
     pub used_cmod: bool,
     pub comment: String,
     pub player_options: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct GrooveStatsSubmitPlayerRequest {
+    pub slot: u8,
+    pub chart_hash: String,
+    pub api_key: String,
+    pub payload: GrooveStatsSubmitPlayerPayload,
+}
+
+#[derive(Debug, Clone)]
+pub struct GrooveStatsSubmitRequestParts {
+    pub headers: Vec<(String, String)>,
+    pub query: Vec<(String, String)>,
+    pub body: JsonValue,
+}
+
+pub fn submit_request_parts(
+    players: &[GrooveStatsSubmitPlayerRequest],
+) -> GrooveStatsSubmitRequestParts {
+    let mut body = JsonMap::with_capacity(players.len());
+    let mut headers = Vec::with_capacity(players.len());
+    let mut query = Vec::with_capacity(players.len() + 1);
+    query.push((
+        "maxLeaderboardResults".to_string(),
+        GROOVESTATS_SUBMIT_MAX_ENTRIES.to_string(),
+    ));
+
+    for player in players {
+        headers.push((
+            format!("x-api-key-player-{}", player.slot),
+            player.api_key.clone(),
+        ));
+        query.push((
+            format!("chartHashP{}", player.slot),
+            player.chart_hash.clone(),
+        ));
+        body.insert(
+            format!("player{}", player.slot),
+            serde_json::to_value(&player.payload)
+                .expect("serialize GrooveStats submit player payload"),
+        );
+    }
+
+    GrooveStatsSubmitRequestParts {
+        headers,
+        query,
+        body: JsonValue::Object(body),
+    }
 }
 
 #[derive(Deserialize, Debug)]
@@ -1614,6 +1677,11 @@ mod tests {
         add_rescore_target(&mut counts, &great);
         add_rescore_target(&mut counts, &fa_plus);
 
+        assert_eq!(counts.fantastic_plus, 1);
+        assert_eq!(counts.great, 1);
+        assert_eq!(counts.way_off, 1);
+
+        let counts = rescore_counts_from_judgments([(&great, &way_off), (&way_off, &fa_plus)]);
         assert_eq!(counts.fantastic_plus, 1);
         assert_eq!(counts.great, 1);
         assert_eq!(counts.way_off, 1);
@@ -2287,6 +2355,54 @@ mod tests {
             value["playerOptions"],
             "{\"SpeedModType\":2,\"SpeedMod\":650}"
         );
+    }
+
+    #[test]
+    fn submit_request_parts_use_old_api_shape() {
+        let payload = GrooveStatsSubmitPlayerPayload {
+            rate: 150,
+            score: 9_975,
+            judgment_counts: GrooveStatsJudgmentCounts::default(),
+            rescore_counts: GrooveStatsRescoreCounts::default(),
+            used_cmod: true,
+            comment: "[DS]".to_string(),
+            player_options: "{}".to_string(),
+        };
+        let parts = submit_request_parts(&[
+            GrooveStatsSubmitPlayerRequest {
+                slot: 1,
+                chart_hash: "hash-p1".to_string(),
+                api_key: "key-p1".to_string(),
+                payload: payload.clone(),
+            },
+            GrooveStatsSubmitPlayerRequest {
+                slot: 2,
+                chart_hash: "hash-p2".to_string(),
+                api_key: "key-p2".to_string(),
+                payload,
+            },
+        ]);
+
+        assert_eq!(
+            parts.headers,
+            vec![
+                ("x-api-key-player-1".to_string(), "key-p1".to_string()),
+                ("x-api-key-player-2".to_string(), "key-p2".to_string()),
+            ]
+        );
+        assert_eq!(
+            parts.query,
+            vec![
+                (
+                    "maxLeaderboardResults".to_string(),
+                    GROOVESTATS_SUBMIT_MAX_ENTRIES.to_string(),
+                ),
+                ("chartHashP1".to_string(), "hash-p1".to_string()),
+                ("chartHashP2".to_string(), "hash-p2".to_string()),
+            ]
+        );
+        assert_eq!(parts.body["player1"]["score"], 9_975);
+        assert_eq!(parts.body["player2"]["rate"], 150);
     }
 
     #[test]

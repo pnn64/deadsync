@@ -1,15 +1,25 @@
 use bincode::{Decode, Encode};
 use chrono::{DateTime, Local, TimeZone, Utc};
 use deadsync_core::input::InputSource;
+use deadsync_core::note::NoteType;
 use deadsync_core::song_time::{SongTimeNs, song_time_ns_invalid};
+use deadsync_rules::note::{HoldResult, MineResult, Note};
+use deadsync_rules::scroll::ScrollSpeedSetting;
+use deadsync_rules::{judgment, timing};
 use serde::Serialize;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 pub mod import;
+pub mod itl;
 pub mod stage_stats;
 pub use import::{ImportedHighScore, grade_from_itg, local_score_from_itg, parse_itg_datetime_ms};
+pub use itl::{
+    ItlFileData, ItlHashEntry, ItlJudgments, ItlPointTotals, ex_hundredths, itl_clear_type,
+    itl_data_from_json, itl_judgments_better, itl_point_totals, itl_points_for_chart,
+    itl_points_for_song, itl_rebuild_song_ranks, itl_score_from_entry, parse_itl_points,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub enum Grade {
@@ -868,6 +878,105 @@ pub fn merge_arrowcloud_score_slot(
     }
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ArrowCloudSubmitStats {
+    pub judgment_counts: judgment::JudgeCounts,
+    pub window_counts: timing::WindowCounts,
+    pub holds_held: u32,
+    pub mines_hit: u32,
+    pub mines_avoided: u32,
+    pub rolls_held: u32,
+}
+
+#[inline(always)]
+pub fn arrowcloud_time_in_submit_window(time_ns: i64, fail_time_ns: Option<i64>) -> bool {
+    match fail_time_ns {
+        Some(fail_time) => !song_time_ns_invalid(time_ns) && time_ns <= fail_time,
+        None => true,
+    }
+}
+
+pub fn arrowcloud_submit_stats_from_results(
+    notes: &[Note],
+    note_times: &[i64],
+    hold_end_times: &[Option<i64>],
+    fail_time_ns: Option<i64>,
+) -> ArrowCloudSubmitStats {
+    let mut stats = ArrowCloudSubmitStats::default();
+    let mut idx = 0usize;
+    while idx < notes.len() {
+        let row_index = notes[idx].row_index;
+        let row_start = idx;
+        let row_time = note_times.get(idx).copied().unwrap_or(i64::MIN);
+        while idx < notes.len() && notes[idx].row_index == row_index {
+            idx += 1;
+        }
+        if !arrowcloud_time_in_submit_window(row_time, fail_time_ns) {
+            continue;
+        }
+        let Some(row_judgment) =
+            judgment::aggregate_row_final_judgment(notes[row_start..idx].iter().filter_map(|n| {
+                if n.is_fake || !n.can_be_judged || matches!(n.note_type, NoteType::Mine) {
+                    None
+                } else {
+                    n.result.as_ref()
+                }
+            }))
+        else {
+            continue;
+        };
+        stats.judgment_counts[judgment::judge_grade_ix(row_judgment.grade)] =
+            stats.judgment_counts[judgment::judge_grade_ix(row_judgment.grade)].saturating_add(1);
+        judgment::add_judgment_to_window_counts(
+            &mut stats.window_counts,
+            row_judgment,
+            timing::FA_PLUS_W0_MS,
+        );
+    }
+
+    for (i, note) in notes.iter().enumerate() {
+        if note.is_fake || !note.can_be_judged {
+            continue;
+        }
+        let note_time = note_times.get(i).copied().unwrap_or(i64::MIN);
+        match note.note_type {
+            NoteType::Hold | NoteType::Roll => {
+                let result_time = hold_end_times
+                    .get(i)
+                    .and_then(|time| *time)
+                    .unwrap_or(note_time);
+                if !arrowcloud_time_in_submit_window(result_time, fail_time_ns) {
+                    continue;
+                }
+                if note.hold.as_ref().and_then(|h| h.result) == Some(HoldResult::Held) {
+                    if note.note_type == NoteType::Hold {
+                        stats.holds_held = stats.holds_held.saturating_add(1);
+                    } else {
+                        stats.rolls_held = stats.rolls_held.saturating_add(1);
+                    }
+                }
+            }
+            NoteType::Mine => {
+                if !arrowcloud_time_in_submit_window(note_time, fail_time_ns) {
+                    continue;
+                }
+                match note.mine_result {
+                    Some(MineResult::Hit) => {
+                        stats.mines_hit = stats.mines_hit.saturating_add(1);
+                    }
+                    Some(MineResult::Avoided) => {
+                        stats.mines_avoided = stats.mines_avoided.saturating_add(1);
+                    }
+                    None => {}
+                }
+            }
+            NoteType::Tap | NoteType::Lift | NoteType::Fake => {}
+        }
+    }
+
+    stats
+}
+
 /// Global ArrowCloud leaderboard variants. Numeric values match server IDs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u32)]
@@ -1014,6 +1123,38 @@ pub fn parse_gs_comment_ex_percent(comment: &str) -> Option<f64> {
         }
     }
     None
+}
+
+#[inline(always)]
+pub fn groovestats_score_10000_from_counts(
+    scoring_counts: &deadsync_rules::judgment::JudgeCounts,
+    holds_held_for_score: u32,
+    rolls_held_for_score: u32,
+    mines_hit_for_score: u32,
+    possible_grade_points: i32,
+) -> u32 {
+    let score_percent = deadsync_rules::judgment::calculate_itg_score_percent_from_counts(
+        scoring_counts,
+        holds_held_for_score,
+        rolls_held_for_score,
+        mines_hit_for_score,
+        possible_grade_points,
+    );
+    (score_percent * 10000.0).round().clamp(0.0, 10000.0) as u32
+}
+
+#[inline(always)]
+pub fn groovestats_rate_hundredths(music_rate: f32) -> u32 {
+    if music_rate.is_finite() && music_rate > 0.0 {
+        (music_rate * 100.0).round().clamp(0.0, u32::MAX as f32) as u32
+    } else {
+        100
+    }
+}
+
+#[inline(always)]
+pub const fn groovestats_used_cmod(scroll_speed: ScrollSpeedSetting) -> bool {
+    matches!(scroll_speed, ScrollSpeedSetting::CMod(_))
 }
 
 #[inline(always)]
@@ -2097,6 +2238,21 @@ pub struct GrooveStatsEvalState {
     pub manual_qr_url: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct GrooveStatsEvalInput<'a> {
+    pub chart_type: &'a str,
+    pub music_rate: f32,
+    pub remove_mask: u8,
+    pub insert_mask: u8,
+    pub holds_mask: u8,
+    pub fail_type_ok: bool,
+    pub autoplay_used: bool,
+    pub is_course_mode: bool,
+    pub course_submit_allowed: bool,
+    pub custom_fantastic_window: bool,
+    pub custom_fantastic_window_ms: u8,
+}
+
 // Mirrors zmod's old-api submit path bit layout from gameplay.rs/player options.
 pub const GS_INVALID_REMOVE_MASK: u8 =
     (1u8 << 0) | (1u8 << 2) | (1u8 << 3) | (1u8 << 4) | (1u8 << 5) | (1u8 << 6) | (1u8 << 7);
@@ -2134,6 +2290,47 @@ pub fn groovestats_reason_lines(
         }
     }
     out
+}
+
+pub fn groovestats_eval_state_from_parts(input: GrooveStatsEvalInput<'_>) -> GrooveStatsEvalState {
+    let chart_type = input.chart_type.trim().to_ascii_lowercase();
+    let rate = if input.music_rate.is_finite() && input.music_rate > 0.0 {
+        input.music_rate
+    } else {
+        1.0
+    };
+
+    let mut checks = [true; GROOVESTATS_REASON_COUNT];
+    checks[0] = chart_type.starts_with("dance") || chart_type.starts_with("pump");
+    checks[1] = !chart_type.contains("solo");
+    checks[2] = !input.is_course_mode || input.course_submit_allowed;
+    checks[3] = true;
+    checks[4] = true;
+    checks[5] = true;
+    checks[6] = !input.custom_fantastic_window;
+    checks[7] = (1.0..=3.0).contains(&rate);
+    checks[8] = (input.remove_mask & GS_INVALID_REMOVE_MASK) == 0;
+    checks[9] = (input.insert_mask & GS_INVALID_INSERT_MASK) == 0;
+    checks[10] = input.fail_type_ok;
+    checks[11] = !input.autoplay_used;
+    checks[12] = true;
+    if (input.holds_mask & GS_INVALID_HOLDS_MASK) != 0 {
+        checks[8] = false;
+    }
+
+    let mut bad = Vec::with_capacity(1);
+    if input.custom_fantastic_window {
+        bad.push(format!(
+            "- Custom Fantastic window ({}ms)",
+            input.custom_fantastic_window_ms
+        ));
+    }
+
+    GrooveStatsEvalState {
+        valid: checks.iter().all(|passed| *passed),
+        reason_lines: groovestats_reason_lines(&checks, bad.as_slice()),
+        manual_qr_url: None,
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -3148,6 +3345,58 @@ mod tests {
     }
 
     #[test]
+    fn groovestats_eval_state_from_parts_accepts_valid_play() {
+        let state = groovestats_eval_state_from_parts(GrooveStatsEvalInput {
+            chart_type: "dance-single",
+            music_rate: 1.5,
+            remove_mask: 1u8 << 1,
+            insert_mask: 0,
+            holds_mask: 0,
+            fail_type_ok: true,
+            autoplay_used: false,
+            is_course_mode: false,
+            course_submit_allowed: false,
+            custom_fantastic_window: false,
+            custom_fantastic_window_ms: 10,
+        });
+
+        assert!(state.valid);
+        assert!(state.reason_lines.is_empty());
+        assert!(state.manual_qr_url.is_none());
+    }
+
+    #[test]
+    fn groovestats_eval_state_from_parts_reports_policy_reasons() {
+        let state = groovestats_eval_state_from_parts(GrooveStatsEvalInput {
+            chart_type: "dance-solo",
+            music_rate: 0.75,
+            remove_mask: 0,
+            insert_mask: 0,
+            holds_mask: 0,
+            fail_type_ok: false,
+            autoplay_used: true,
+            is_course_mode: true,
+            course_submit_allowed: false,
+            custom_fantastic_window: true,
+            custom_fantastic_window_ms: 18,
+        });
+
+        assert!(!state.valid);
+        assert_eq!(
+            state.reason_lines,
+            vec![
+                "GrooveStats does not support dance-solo charts.",
+                "GrooveStats QR is unavailable in course mode.",
+                "Metrics or preferences are incorrect.",
+                "- Custom Fantastic window (18ms)",
+                "Music rate must be between 1.0x and 3.0x.",
+                "Fail type must be Immediate or ImmediateContinue.",
+                "Autoplay or replay is not allowed.",
+            ]
+        );
+    }
+
+    #[test]
     fn arrowcloud_submit_status_policy_matches_shared_retry_rules() {
         assert!(!ArrowCloudSubmitUiStatus::Submitting.can_retry());
         assert!(!ArrowCloudSubmitUiStatus::Submitted.can_retry());
@@ -3401,6 +3650,133 @@ mod tests {
         assert_eq!(slot.as_ref().unwrap().score_percent, 0.92);
     }
 
+    fn ac_judgment(grade: judgment::JudgeGrade, offset_ms: f32) -> judgment::Judgment {
+        judgment::Judgment {
+            time_error_ms: offset_ms,
+            time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(offset_ms, 1.0),
+            grade,
+            window: match grade {
+                judgment::JudgeGrade::Fantastic => Some(judgment::TimingWindow::W0),
+                judgment::JudgeGrade::Excellent => Some(judgment::TimingWindow::W2),
+                judgment::JudgeGrade::Great => Some(judgment::TimingWindow::W3),
+                judgment::JudgeGrade::Decent => Some(judgment::TimingWindow::W4),
+                judgment::JudgeGrade::WayOff => Some(judgment::TimingWindow::W5),
+                judgment::JudgeGrade::Miss => None,
+            },
+            miss_because_held: false,
+        }
+    }
+
+    fn ac_note(
+        row_index: usize,
+        note_type: NoteType,
+        result: Option<judgment::Judgment>,
+        hold_result: Option<HoldResult>,
+        mine_result: Option<MineResult>,
+    ) -> Note {
+        Note {
+            beat: row_index as f32,
+            quantization_idx: 0,
+            column: 0,
+            note_type,
+            row_index,
+            result,
+            early_result: None,
+            hold: hold_result.map(|result| deadsync_rules::note::HoldData {
+                end_row_index: row_index,
+                end_beat: row_index as f32,
+                result: Some(result),
+                life: 1.0,
+                let_go_started_at: None,
+                let_go_starting_life: 1.0,
+                last_held_row_index: row_index,
+                last_held_beat: row_index as f32,
+            }),
+            mine_result,
+            is_fake: false,
+            can_be_judged: true,
+        }
+    }
+
+    #[test]
+    fn arrowcloud_submit_stats_caps_failed_runs_at_fail_time() {
+        let ns = deadsync_core::song_time::song_time_ns_from_seconds;
+        let notes = vec![
+            ac_note(
+                0,
+                NoteType::Tap,
+                Some(ac_judgment(judgment::JudgeGrade::Fantastic, 5.0)),
+                None,
+                None,
+            ),
+            ac_note(
+                1,
+                NoteType::Hold,
+                Some(ac_judgment(judgment::JudgeGrade::Fantastic, 8.0)),
+                Some(HoldResult::Held),
+                None,
+            ),
+            ac_note(
+                2,
+                NoteType::Roll,
+                Some(ac_judgment(judgment::JudgeGrade::Fantastic, 10.0)),
+                Some(HoldResult::Held),
+                None,
+            ),
+            ac_note(3, NoteType::Mine, None, None, Some(MineResult::Hit)),
+            ac_note(
+                4,
+                NoteType::Tap,
+                Some(ac_judgment(judgment::JudgeGrade::Miss, 180.0)),
+                None,
+                None,
+            ),
+            ac_note(
+                5,
+                NoteType::Tap,
+                Some(ac_judgment(judgment::JudgeGrade::Great, 55.0)),
+                None,
+                None,
+            ),
+            ac_note(6, NoteType::Mine, None, None, Some(MineResult::Hit)),
+        ];
+        let note_times = vec![
+            ns(1.0),
+            ns(1.2),
+            ns(1.4),
+            ns(1.5),
+            ns(2.0),
+            ns(3.0),
+            ns(3.5),
+        ];
+        let hold_end_times = vec![None, Some(ns(1.8)), Some(ns(2.4)), None, None, None, None];
+
+        let stats = arrowcloud_submit_stats_from_results(
+            &notes,
+            &note_times,
+            &hold_end_times,
+            Some(ns(2.0)),
+        );
+
+        assert_eq!(
+            stats.judgment_counts[judgment::judge_grade_ix(judgment::JudgeGrade::Fantastic)],
+            3
+        );
+        assert_eq!(
+            stats.judgment_counts[judgment::judge_grade_ix(judgment::JudgeGrade::Miss)],
+            1
+        );
+        assert_eq!(
+            stats.judgment_counts[judgment::judge_grade_ix(judgment::JudgeGrade::Great)],
+            0
+        );
+        assert_eq!(stats.window_counts.w0, 3);
+        assert_eq!(stats.window_counts.miss, 1);
+        assert_eq!(stats.holds_held, 1);
+        assert_eq!(stats.rolls_held, 0);
+        assert_eq!(stats.mines_hit, 1);
+    }
+
     #[test]
     fn lua_submit_allowlist_matches_known_hashes() {
         assert!(lua_chart_submit_allowed("d5bd4dd7224f68ff"));
@@ -3430,6 +3806,36 @@ mod tests {
             Some(99.78)
         );
         assert_eq!(parse_gs_comment_ex_percent("[DS], 3 excellents"), None);
+    }
+
+    #[test]
+    fn groovestats_score_10000_from_counts_uses_itg_score_math() {
+        let mut counts = [0u32; deadsync_rules::judgment::JUDGE_GRADE_COUNT];
+        counts[deadsync_rules::judgment::judge_grade_ix(
+            deadsync_rules::judgment::JudgeGrade::Fantastic,
+        )] = 100;
+        assert_eq!(
+            groovestats_score_10000_from_counts(&counts, 2, 1, 0, 515),
+            10_000
+        );
+
+        counts[deadsync_rules::judgment::judge_grade_ix(
+            deadsync_rules::judgment::JudgeGrade::Miss,
+        )] = 1;
+        assert_eq!(
+            groovestats_score_10000_from_counts(&counts, 2, 1, 0, 520),
+            9_673
+        );
+        assert_eq!(groovestats_score_10000_from_counts(&counts, 0, 0, 0, 0), 0);
+    }
+
+    #[test]
+    fn groovestats_rate_and_cmod_helpers_normalize_payload_values() {
+        assert_eq!(groovestats_rate_hundredths(1.5), 150);
+        assert_eq!(groovestats_rate_hundredths(0.0), 100);
+        assert_eq!(groovestats_rate_hundredths(f32::NAN), 100);
+        assert!(groovestats_used_cmod(ScrollSpeedSetting::CMod(650.0)));
+        assert!(!groovestats_used_cmod(ScrollSpeedSetting::MMod(650.0)));
     }
 
     #[test]

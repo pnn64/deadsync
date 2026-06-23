@@ -31,6 +31,11 @@ pub fn current() -> Version {
         .expect("CARGO_PKG_VERSION is not valid semver; check Cargo.toml")
 }
 
+#[inline(always)]
+pub const fn current_static() -> &'static str {
+    env!("CARGO_PKG_VERSION")
+}
+
 /// `format!("v{}", current())`.  Centralised so callers display the same
 /// tag string the updater will compare against.
 #[inline]

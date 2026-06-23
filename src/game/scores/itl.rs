@@ -17,9 +17,6 @@ use deadsync_online::groovestats::{
 };
 use deadsync_profile as profile_data;
 use log::{debug, warn};
-use serde::de::Deserializer;
-use serde::{Deserialize, Serialize};
-use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -28,10 +25,16 @@ use std::sync::{Arc, Mutex};
 
 use bincode::{Decode, Encode};
 use deadsync_rules::{judgment, scroll::ScrollSpeedSetting};
+pub use deadsync_score::itl_points_for_chart;
 use deadsync_score::{
     CachedItlScore, EventProgressKind, EventStatImprovement, ItlEvalState, ItlEventProgress,
-    ItlOverlayPage,
+    ItlFileData, ItlHashEntry, ItlJudgments, ItlOverlayPage, ex_hundredths, itl_clear_type,
+    itl_data_from_json, itl_judgments_better, itl_point_totals, itl_points_for_song,
+    itl_rebuild_song_ranks, itl_score_from_entry, parse_itl_points,
 };
+
+#[cfg(test)]
+use deadsync_score::ItlPointTotals;
 
 const ITL_FILE_NAME: &str = "ITL2026.json";
 const ITL_WHEEL_FETCH_ENTRIES: usize = 5;
@@ -115,92 +118,6 @@ struct OnlineItlOverallRankInput {
     profile_id: Option<String>,
     self_score_generation: u64,
     by_chart_score: HashMap<String, u32>,
-}
-
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
-struct ItlFileData {
-    #[serde(rename = "pathMap", default)]
-    path_map: HashMap<String, String>,
-    #[serde(rename = "hashMap", default)]
-    hash_map: HashMap<String, ItlHashEntry>,
-    #[serde(default)]
-    points: Vec<u32>,
-    #[serde(rename = "pointsSingle", default)]
-    points_single: Vec<u32>,
-    #[serde(rename = "pointsDouble", default)]
-    points_double: Vec<u32>,
-    #[serde(rename = "unlockFolders", default)]
-    unlock_folders: HashMap<String, bool>,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-struct ItlHashEntry {
-    #[serde(default)]
-    judgments: ItlJudgments,
-    #[serde(default, deserialize_with = "deserialize_itl_ex")]
-    ex: u32,
-    #[serde(rename = "clearType", default)]
-    clear_type: u8,
-    #[serde(default)]
-    points: u32,
-    #[serde(rename = "usedCmod", default)]
-    used_cmod: bool,
-    #[serde(default)]
-    date: String,
-    #[serde(rename = "noCmod", default)]
-    no_cmod: bool,
-    #[serde(rename = "passingPoints", default)]
-    passing_points: u32,
-    #[serde(rename = "maxScoringPoints", default)]
-    max_scoring_points: u32,
-    #[serde(rename = "maxPoints", default)]
-    max_points: u32,
-    #[serde(default)]
-    rank: Option<u32>,
-    #[serde(rename = "stepsType", default)]
-    steps_type: String,
-    #[serde(default)]
-    passes: u32,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-struct ItlJudgments {
-    #[serde(rename = "W0", default)]
-    w0: u32,
-    #[serde(rename = "W1", default)]
-    w1: u32,
-    #[serde(rename = "W2", default)]
-    w2: u32,
-    #[serde(rename = "W3", default)]
-    w3: u32,
-    #[serde(rename = "W4", default)]
-    w4: u32,
-    #[serde(rename = "W5", default)]
-    w5: u32,
-    #[serde(rename = "Miss", default)]
-    miss: u32,
-    #[serde(rename = "totalSteps", default)]
-    total_steps: u32,
-    #[serde(rename = "Holds", default)]
-    holds: u32,
-    #[serde(rename = "totalHolds", default)]
-    total_holds: u32,
-    #[serde(rename = "Mines", default)]
-    mines: u32,
-    #[serde(rename = "totalMines", default)]
-    total_mines: u32,
-    #[serde(rename = "Rolls", default)]
-    rolls: u32,
-    #[serde(rename = "totalRolls", default)]
-    total_rolls: u32,
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-struct ItlPointTotals {
-    ranking_points: u32,
-    song_points: u32,
-    ex_points: u32,
-    total_points: u32,
 }
 
 fn online_itl_self_score_index_path_for_profile(profile_id: &str) -> PathBuf {
@@ -1100,28 +1017,6 @@ fn set_cached_itl_file(profile_id: &str, data: ItlFileData) {
         .insert(profile_id.to_string(), data);
 }
 
-fn deserialize_itl_ex<'de, D>(deserializer: D) -> Result<u32, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let raw = Option::<f64>::deserialize(deserializer)?.unwrap_or(0.0);
-    if !raw.is_finite() || raw <= 0.0 {
-        return Ok(0);
-    }
-    let scaled = if raw <= 100.0001 { raw * 100.0 } else { raw };
-    Ok(scaled.round().clamp(0.0, 10_000.0) as u32)
-}
-
-#[inline(always)]
-fn ex_hundredths(ex_percent: f64) -> u32 {
-    let ex = if ex_percent.is_finite() {
-        ex_percent.clamp(0.0, 100.0)
-    } else {
-        0.0
-    };
-    (ex * 100.0).round() as u32
-}
-
 fn read_itl_file(profile_id: &str) -> ItlFileData {
     let path = itl_file_path(profile_id);
     let Ok(text) = fs::read_to_string(&path) else {
@@ -1158,24 +1053,6 @@ fn write_itl_file(profile_id: &str, data: &ItlFileData) {
         warn!("Failed to commit ITL file {path:?}: {error}");
         let _ = fs::remove_file(&tmp);
     }
-}
-
-/// Parses an external `ITL2026.json` (e.g. from an ITGmania/Simply Love profile)
-/// into [`ItlFileData`]. Returns `None` when the text is unparseable or carries
-/// no ITL data. DeadSync's ITL file uses the same schema Simply Love writes
-/// (`pathMap` / `hashMap` / `unlockFolders`), so the data maps directly.
-fn itl_data_from_json(json_text: &str) -> Option<ItlFileData> {
-    let data: ItlFileData = match serde_json::from_str(json_text) {
-        Ok(data) => data,
-        Err(error) => {
-            warn!("Failed to parse imported ITL data: {error}");
-            return None;
-        }
-    };
-    if data.path_map.is_empty() && data.hash_map.is_empty() && data.unlock_folders.is_empty() {
-        return None;
-    }
-    Some(data)
 }
 
 /// Imports an ITGmania/Simply Love `ITL2026.json` (raw text) into a
@@ -1669,15 +1546,6 @@ pub(super) fn event_progress_from_submit(
     progress
 }
 
-#[inline(always)]
-fn itl_score_from_entry(entry: &ItlHashEntry) -> CachedItlScore {
-    CachedItlScore {
-        ex_hundredths: entry.ex,
-        clear_type: entry.clear_type,
-        points: entry.points,
-    }
-}
-
 fn itl_score_for_song(
     song: &deadsync_chart::SongData,
     data: &ItlFileData,
@@ -1761,77 +1629,6 @@ fn itl_steps_type(chart: &deadsync_chart::ChartData) -> &'static str {
 }
 
 #[inline(always)]
-fn rank_for_points(sorted_points: &[u32], points: u32) -> Option<u32> {
-    sorted_points
-        .iter()
-        .position(|value| *value == points)
-        .map(|idx| idx.saturating_add(1) as u32)
-}
-
-fn itl_rebuild_song_ranks(data: &mut ItlFileData) {
-    let mut points: Vec<u32> = data.hash_map.values().map(|entry| entry.points).collect();
-    points.sort_unstable_by(|a, b| b.cmp(a));
-
-    let mut points_single = Vec::with_capacity(points.len());
-    let mut points_double = Vec::with_capacity(points.len());
-    let mut unknown_points = Vec::new();
-    let mut plays_single = 0usize;
-    let mut plays_double = 0usize;
-
-    for entry in data.hash_map.values_mut() {
-        entry.rank = rank_for_points(points.as_slice(), entry.points);
-        if entry.steps_type.eq_ignore_ascii_case("single") {
-            points_single.push(entry.points);
-            plays_single = plays_single.saturating_add(1);
-        } else if entry.steps_type.eq_ignore_ascii_case("double") {
-            points_double.push(entry.points);
-            plays_double = plays_double.saturating_add(1);
-        } else {
-            unknown_points.push(entry.points);
-        }
-    }
-
-    if plays_single > plays_double {
-        points_single.extend(unknown_points);
-    } else {
-        points_double.extend(unknown_points);
-    }
-
-    points_single.sort_unstable_by(|a, b| b.cmp(a));
-    points_double.sort_unstable_by(|a, b| b.cmp(a));
-
-    for entry in data.hash_map.values_mut() {
-        if entry.steps_type.eq_ignore_ascii_case("single") {
-            entry.rank = rank_for_points(points_single.as_slice(), entry.points);
-        } else if entry.steps_type.eq_ignore_ascii_case("double") {
-            entry.rank = rank_for_points(points_double.as_slice(), entry.points);
-        }
-    }
-
-    data.points = points;
-    data.points_single = points_single;
-    data.points_double = points_double;
-}
-
-fn itl_point_totals(data: &ItlFileData) -> ItlPointTotals {
-    let ranking_points = data.points.iter().take(75).copied().sum();
-    let mut song_points = 0u32;
-    let mut ex_points = 0u32;
-    let mut total_points = 0u32;
-    for entry in data.hash_map.values() {
-        song_points = song_points.saturating_add(entry.passing_points);
-        ex_points = ex_points.saturating_add(entry.points.saturating_sub(entry.passing_points));
-        total_points = total_points.saturating_add(entry.points);
-    }
-    ItlPointTotals {
-        ranking_points,
-        song_points,
-        ex_points,
-        total_points,
-    }
-}
-
-#[inline(always)]
 fn delta_i32(current: u32, previous: u32) -> i32 {
     (i64::from(current) - i64::from(previous)).clamp(i64::from(i32::MIN), i64::from(i32::MAX))
         as i32
@@ -1879,80 +1676,6 @@ pub fn should_warn_cmod_for_itl_chart(gs: &GameplayCoreState, player_idx: usize)
         return false;
     };
     group_name_matches(group_name.as_str()) && chart_no_cmod(song, None)
-}
-
-fn parse_itl_points(chart_name: &str) -> Option<(u32, u32)> {
-    let mut nums = chart_name
-        .split(|ch: char| !ch.is_ascii_digit())
-        .filter(|part| !part.is_empty())
-        .filter_map(|part| part.parse::<u32>().ok());
-    Some((nums.next()?, nums.next()?))
-}
-
-pub fn itl_points_for_chart(chart: &deadsync_chart::ChartData, ex_hundredths: u32) -> Option<u32> {
-    let (passing_points, max_scoring_points) = parse_itl_points(chart.chart_name.as_str())?;
-    Some(itl_points_for_song(
-        passing_points,
-        max_scoring_points,
-        f64::from(ex_hundredths) / 100.0,
-    ))
-}
-
-fn itl_points_for_song(passing_points: u32, max_scoring_points: u32, ex_score: f64) -> u32 {
-    let scalar = 40.0_f64;
-    let curve = (scalar.powf(ex_score.max(0.0) / scalar) - 1.0)
-        * (100.0 / (scalar.powf(100.0 / scalar) - 1.0));
-    let percent = ((curve / 100.0) * 1_000_000.0).round() / 1_000_000.0;
-    passing_points.saturating_add((f64::from(max_scoring_points) * percent).floor() as u32)
-}
-
-fn itl_judgments_better(cur: &ItlJudgments, prev: &ItlJudgments) -> bool {
-    for (cur_value, prev_value) in [
-        (cur.w0, prev.w0),
-        (cur.w1, prev.w1),
-        (cur.w2, prev.w2),
-        (cur.w3, prev.w3),
-        (cur.w4, prev.w4),
-        (cur.w5, prev.w5),
-        (cur.miss, prev.miss),
-    ] {
-        match cur_value.cmp(&prev_value) {
-            Ordering::Greater => return true,
-            Ordering::Less => return false,
-            Ordering::Equal => {}
-        }
-    }
-    false
-}
-
-fn itl_clear_type(judgments: &ItlJudgments) -> u8 {
-    if judgments.total_rolls.saturating_sub(judgments.rolls) > 0
-        || judgments.total_holds.saturating_sub(judgments.holds) > 0
-    {
-        return 1;
-    }
-
-    let mut clear_type = 1;
-    let mut taps = judgments
-        .miss
-        .saturating_add(judgments.w5)
-        .saturating_add(judgments.w4);
-    if taps == 0 {
-        clear_type = 2;
-    }
-    taps = taps.saturating_add(judgments.w3);
-    if taps == 0 {
-        clear_type = 3;
-    }
-    taps = taps.saturating_add(judgments.w2);
-    if taps == 0 {
-        clear_type = 4;
-    }
-    taps = taps.saturating_add(judgments.w1);
-    if taps == 0 {
-        clear_type = 5;
-    }
-    clear_type
 }
 
 fn itl_judgments_from_gameplay(gs: &GameplayCoreState, player_idx: usize) -> ItlJudgments {

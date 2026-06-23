@@ -30,6 +30,8 @@ const DEVICE_LOGIN_POLL_INTERVAL_MAX_S: f32 = 10.0;
 const DEVICE_LOGIN_POLL_INTERVAL_DEFAULT_S: f32 = 3.0;
 pub const ARROWCLOUD_BULK_MAX_HASHES: usize = 1000;
 pub const ARROWCLOUD_LIFEBAR_POINTS: usize = 100;
+pub const ARROWCLOUD_BODY_VERSION: &str = "1.4";
+pub const ARROWCLOUD_ENGINE_NAME: &str = "DeadSync";
 const ARROWCLOUD_ACCEL_NAMES: [&str; 5] = ["Boost", "Brake", "Wave", "Expand", "Boomerang"];
 const ARROWCLOUD_EFFECT_NAMES: [&str; 10] = [
     "Drunk",
@@ -1081,6 +1083,15 @@ pub struct ArrowCloudPayload {
     pub engine_version: &'static str,
 }
 
+impl ArrowCloudPayload {
+    pub fn fill_metadata(&mut self) {
+        self.body_version = ARROWCLOUD_BODY_VERSION;
+        self.arrow_cloud_body_version = ARROWCLOUD_BODY_VERSION;
+        self.engine_name = ARROWCLOUD_ENGINE_NAME;
+        self.engine_version = deadsync_version::current_static();
+    }
+}
+
 #[derive(Deserialize)]
 #[serde(untagged)]
 enum U32OrString {
@@ -1910,7 +1921,7 @@ mod tests {
 
     #[test]
     fn submit_payload_serializes_miss_and_counts() {
-        let payload = ArrowCloudPayload {
+        let mut payload = ArrowCloudPayload {
             song_name: "Test Song".to_string(),
             artist: "Test Artist".to_string(),
             pack: "Test Pack".to_string(),
@@ -1964,11 +1975,12 @@ mod tests {
             music_rate: 1.0,
             used_autoplay: false,
             passed: true,
-            body_version: "1.4",
-            arrow_cloud_body_version: "1.4",
-            engine_name: "DeadSync",
-            engine_version: "0.0.0",
+            body_version: "",
+            arrow_cloud_body_version: "",
+            engine_name: "",
+            engine_version: "",
         };
+        payload.fill_metadata();
 
         let value = serde_json::to_value(&payload).expect("serialize");
         assert_eq!(value["timingData"][0][1], serde_json::json!("Miss"));
@@ -1978,6 +1990,11 @@ mod tests {
         assert_eq!(value["modifiers"]["speed"]["type"], serde_json::json!("C"));
         assert_eq!(value["bodyVersion"], serde_json::json!("1.4"));
         assert_eq!(value["_arrowCloudBodyVersion"], serde_json::json!("1.4"));
+        assert_eq!(value["_engineName"], serde_json::json!("DeadSync"));
+        assert_eq!(
+            value["_engineVersion"],
+            serde_json::json!(deadsync_version::current_static())
+        );
     }
 
     #[test]

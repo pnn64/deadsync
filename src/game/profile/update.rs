@@ -4,25 +4,17 @@ use super::{
 };
 use chrono::Local;
 use deadsync_profile::{
-    AccelEffectsMask, AppearanceEffectsMask, AttackMode, BackgroundFilter, ColumnFlashBrightness,
-    ColumnFlashMask, ColumnFlashSize, ComboColors, ComboFont, ComboMode, ErrorBarMask,
-    ErrorBarTrim, HeldMissGraphic, HideLightType, HoldJudgmentGraphic, HoldsMask, InsertMask,
-    JudgmentGraphic, LifeMeterType, LiveTimingStatsMask, MeasureCounter, MeasureLines,
-    MiniIndicator, MiniIndicatorColor, MiniIndicatorPosition, MiniIndicatorScoreType,
-    MiniIndicatorSize, MiniIndicatorSubtractiveDisplay, NoCmodAlternative, NoteSkin, Perspective,
-    Profile, RemoveMask, ScatterplotMaxWindow, ScoreDisplayMode, ScorePosition, ScrollOption,
-    StepStatisticsMask, StepStatsExtra, TapExplosionMask, TargetScoreSetting, TimingWindowsOption,
-    TurnOption, VisualEffectsMask,
+    AccelEffectsMask, AppearanceEffectsMask, AttackMode, ColumnFlashBrightness, ColumnFlashMask,
+    ColumnFlashSize, ComboColors, ComboFont, ComboMode, ErrorBarMask, ErrorBarTrim,
+    HeldMissGraphic, HideLightType, HoldJudgmentGraphic, HoldsMask, InsertMask, JudgmentGraphic,
+    LifeMeterType, LiveTimingStatsMask, MeasureCounter, MeasureLines, MiniIndicator,
+    MiniIndicatorColor, MiniIndicatorPosition, MiniIndicatorScoreType, MiniIndicatorSize,
+    MiniIndicatorSubtractiveDisplay, NoCmodAlternative, NoteSkin, Perspective, Profile, RemoveMask,
+    ScatterplotMaxWindow, ScoreDisplayMode, ScorePosition, ScrollOption, StepStatisticsMask,
+    StepStatsExtra, TapExplosionMask, TargetScoreSetting, TimingWindowsOption, TurnOption,
+    VisualEffectsMask,
 };
 use std::path::Path;
-
-fn set_if_changed<T: PartialEq>(value: &mut T, new_value: T) -> bool {
-    if *value == new_value {
-        return false;
-    }
-    *value = new_value;
-    true
-}
 
 fn update_profile_ini(side: PlayerSide, update: impl FnOnce(&mut Profile) -> bool) {
     {
@@ -100,66 +92,45 @@ pub fn update_player_initials_for_side(side: PlayerSide, initials: &str) {
 
 pub fn update_scroll_speed_for_side(side: PlayerSide, setting: ScrollSpeedSetting) {
     // Guest changes should persist for the active session; save_* no-ops for guests.
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.scroll_speed, setting)
-    });
+    update_profile_ini(side, |profile| profile.set_scroll_speed(setting));
 }
 
 pub fn update_background_filter_for_side(side: PlayerSide, value: i32) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(
-            &mut profile.background_filter,
-            BackgroundFilter::from_i32(value),
-        )
-    });
+    update_profile_ini(side, |profile| profile.set_background_filter_percent(value));
 }
 
 pub fn update_hold_judgment_graphic_for_side(side: PlayerSide, setting: HoldJudgmentGraphic) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.hold_judgment_graphic, setting)
-    });
+    update_profile_ini(side, |profile| profile.set_hold_judgment_graphic(setting));
 }
 
 pub fn update_held_miss_graphic_for_side(side: PlayerSide, setting: HeldMissGraphic) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.held_miss_graphic, setting)
-    });
+    update_profile_ini(side, |profile| profile.set_held_miss_graphic(setting));
 }
 
 pub fn update_judgment_graphic_for_side(side: PlayerSide, setting: JudgmentGraphic) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.judgment_graphic, setting)
-    });
+    update_profile_ini(side, |profile| profile.set_judgment_graphic(setting));
 }
 
 pub fn update_combo_font_for_side(side: PlayerSide, setting: ComboFont) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.combo_font, setting)
-    });
+    update_profile_ini(side, |profile| profile.set_combo_font(setting));
 }
 
 pub fn update_combo_colors_for_side(side: PlayerSide, setting: ComboColors) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.combo_colors, setting)
-    });
+    update_profile_ini(side, |profile| profile.set_combo_colors(setting));
 }
 
 pub fn update_combo_mode_for_side(side: PlayerSide, setting: ComboMode) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.combo_mode, setting)
-    });
+    update_profile_ini(side, |profile| profile.set_combo_mode(setting));
 }
 
 pub fn update_carry_combo_between_songs_for_side(side: PlayerSide, enabled: bool) {
     update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.carry_combo_between_songs, enabled)
+        profile.set_carry_combo_between_songs(enabled)
     });
 }
 
 pub fn update_current_combo_for_side(side: PlayerSide, combo: u32) {
-    update_profile_stats(side, |profile| {
-        set_if_changed(&mut profile.current_combo, combo)
-    });
+    update_profile_stats(side, |profile| profile.set_current_combo(combo));
 }
 
 pub fn update_scroll_option_for_side(side: PlayerSide, setting: ScrollOption) {
@@ -167,63 +138,43 @@ pub fn update_scroll_option_for_side(side: PlayerSide, setting: ScrollOption) {
 }
 
 pub fn update_turn_option_for_side(side: PlayerSide, setting: TurnOption) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.turn_option, setting)
-    });
+    update_profile_ini(side, |profile| profile.set_turn_option(setting));
 }
 
 pub fn update_insert_mask_for_side(side: PlayerSide, mask: InsertMask) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.insert_active_mask, mask)
-    });
+    update_profile_ini(side, |profile| profile.set_insert_mask(mask));
 }
 
 pub fn update_remove_mask_for_side(side: PlayerSide, mask: RemoveMask) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.remove_active_mask, mask)
-    });
+    update_profile_ini(side, |profile| profile.set_remove_mask(mask));
 }
 
 pub fn update_holds_mask_for_side(side: PlayerSide, mask: HoldsMask) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.holds_active_mask, mask)
-    });
+    update_profile_ini(side, |profile| profile.set_holds_mask(mask));
 }
 
 pub fn update_accel_effects_mask_for_side(side: PlayerSide, mask: AccelEffectsMask) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.accel_effects_active_mask, mask)
-    });
+    update_profile_ini(side, |profile| profile.set_accel_effects_mask(mask));
 }
 
 pub fn update_visual_effects_mask_for_side(side: PlayerSide, mask: VisualEffectsMask) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.visual_effects_active_mask, mask)
-    });
+    update_profile_ini(side, |profile| profile.set_visual_effects_mask(mask));
 }
 
 pub fn update_appearance_effects_mask_for_side(side: PlayerSide, mask: AppearanceEffectsMask) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.appearance_effects_active_mask, mask)
-    });
+    update_profile_ini(side, |profile| profile.set_appearance_effects_mask(mask));
 }
 
 pub fn update_attack_mode_for_side(side: PlayerSide, setting: AttackMode) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.attack_mode, setting)
-    });
+    update_profile_ini(side, |profile| profile.set_attack_mode(setting));
 }
 
 pub fn update_hide_light_type_for_side(side: PlayerSide, setting: HideLightType) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.hide_light_type, setting)
-    });
+    update_profile_ini(side, |profile| profile.set_hide_light_type(setting));
 }
 
 pub fn update_rescore_early_hits_for_side(side: PlayerSide, enabled: bool) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.rescore_early_hits, enabled)
-    });
+    update_profile_ini(side, |profile| profile.set_rescore_early_hits(enabled));
 }
 
 pub fn update_early_dw_options_for_side(
@@ -238,9 +189,7 @@ pub fn update_early_dw_options_for_side(
 }
 
 pub fn update_timing_windows_for_side(side: PlayerSide, setting: TimingWindowsOption) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.timing_windows, setting)
-    });
+    update_profile_ini(side, |profile| profile.set_timing_windows(setting));
 }
 
 pub fn update_hide_options_for_side(
@@ -290,39 +239,29 @@ pub fn update_column_flash_mask_for_side(side: PlayerSide, mask: ColumnFlashMask
 }
 
 pub fn update_column_flash_brightness_for_side(side: PlayerSide, setting: ColumnFlashBrightness) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.column_flash_brightness, setting)
-    });
+    update_profile_ini(side, |profile| profile.set_column_flash_brightness(setting));
 }
 
 pub fn update_column_flash_size_for_side(side: PlayerSide, setting: ColumnFlashSize) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.column_flash_size, setting)
-    });
+    update_profile_ini(side, |profile| profile.set_column_flash_size(setting));
 }
 
 pub fn update_transparent_density_graph_bg_for_side(side: PlayerSide, enabled: bool) {
     update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.transparent_density_graph_bg, enabled)
+        profile.set_transparent_density_graph_bg(enabled)
     });
 }
 
 pub fn update_smx_fsr_display_for_side(side: PlayerSide, enabled: bool) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.smx_fsr_display, enabled)
-    });
+    update_profile_ini(side, |profile| profile.set_smx_fsr_display(enabled));
 }
 
 pub fn update_smx_pad_input_display_for_side(side: PlayerSide, enabled: bool) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.smx_pad_input_display, enabled)
-    });
+    update_profile_ini(side, |profile| profile.set_smx_pad_input_display(enabled));
 }
 
 pub fn update_mini_indicator_for_side(side: PlayerSide, setting: MiniIndicator) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.mini_indicator, setting)
-    });
+    update_profile_ini(side, |profile| profile.set_mini_indicator(setting));
 }
 
 pub fn update_mini_indicator_score_type_for_side(
@@ -330,7 +269,7 @@ pub fn update_mini_indicator_score_type_for_side(
     setting: MiniIndicatorScoreType,
 ) {
     update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.mini_indicator_score_type, setting)
+        profile.set_mini_indicator_score_type(setting)
     });
 }
 
@@ -339,56 +278,40 @@ pub fn update_mini_indicator_subtractive_display_for_side(
     setting: MiniIndicatorSubtractiveDisplay,
 ) {
     update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.mini_indicator_subtractive_display, setting)
+        profile.set_mini_indicator_subtractive_display(setting)
     });
 }
 
 pub fn update_mini_indicator_size_for_side(side: PlayerSide, setting: MiniIndicatorSize) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.mini_indicator_size, setting)
-    });
+    update_profile_ini(side, |profile| profile.set_mini_indicator_size(setting));
 }
 
 pub fn update_mini_indicator_color_for_side(side: PlayerSide, setting: MiniIndicatorColor) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.mini_indicator_color, setting)
-    });
+    update_profile_ini(side, |profile| profile.set_mini_indicator_color(setting));
 }
 
 pub fn update_mini_indicator_position_for_side(side: PlayerSide, setting: MiniIndicatorPosition) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.mini_indicator_position, setting)
-    });
+    update_profile_ini(side, |profile| profile.set_mini_indicator_position(setting));
 }
 
 pub fn update_noteskin_for_side(side: PlayerSide, setting: NoteSkin) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.noteskin, setting)
-    });
+    update_profile_ini(side, |profile| profile.set_noteskin(setting));
 }
 
 pub fn update_mine_noteskin_for_side(side: PlayerSide, setting: Option<NoteSkin>) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.mine_noteskin, setting)
-    });
+    update_profile_ini(side, |profile| profile.set_mine_noteskin(setting));
 }
 
 pub fn update_receptor_noteskin_for_side(side: PlayerSide, setting: Option<NoteSkin>) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.receptor_noteskin, setting)
-    });
+    update_profile_ini(side, |profile| profile.set_receptor_noteskin(setting));
 }
 
 pub fn update_tap_explosion_noteskin_for_side(side: PlayerSide, setting: Option<NoteSkin>) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.tap_explosion_noteskin, setting)
-    });
+    update_profile_ini(side, |profile| profile.set_tap_explosion_noteskin(setting));
 }
 
 pub fn update_tap_explosion_mask_for_side(side: PlayerSide, setting: TapExplosionMask) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.tap_explosion_active_mask, setting)
-    });
+    update_profile_ini(side, |profile| profile.set_tap_explosion_mask(setting));
 }
 
 pub fn update_notefield_offset_x_for_side(side: PlayerSide, offset: i32) {
@@ -432,15 +355,11 @@ pub fn update_spacing_percent_for_side(side: PlayerSide, percent: i32) {
 }
 
 pub fn update_perspective_for_side(side: PlayerSide, perspective: Perspective) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.perspective, perspective)
-    });
+    update_profile_ini(side, |profile| profile.set_perspective(perspective));
 }
 
 pub fn update_no_cmod_alternative_for_side(side: PlayerSide, setting: NoCmodAlternative) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.no_cmod_alternative, setting)
-    });
+    update_profile_ini(side, |profile| profile.set_no_cmod_alternative(setting));
 }
 
 pub fn update_visual_delay_ms_for_side(side: PlayerSide, ms: i32) {
@@ -452,57 +371,41 @@ pub fn update_global_offset_shift_ms_for_side(side: PlayerSide, ms: i32) {
 }
 
 pub fn update_show_fa_plus_window_for_side(side: PlayerSide, enabled: bool) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.show_fa_plus_window, enabled)
-    });
+    update_profile_ini(side, |profile| profile.set_show_fa_plus_window(enabled));
 }
 
 pub fn update_show_ex_score_for_side(side: PlayerSide, enabled: bool) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.show_ex_score, enabled)
-    });
+    update_profile_ini(side, |profile| profile.set_show_ex_score(enabled));
 }
 
 pub fn update_show_hard_ex_score_for_side(side: PlayerSide, enabled: bool) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.show_hard_ex_score, enabled)
-    });
+    update_profile_ini(side, |profile| profile.set_show_hard_ex_score(enabled));
 }
 
 pub fn update_show_fa_plus_pane_for_side(side: PlayerSide, enabled: bool) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.show_fa_plus_pane, enabled)
-    });
+    update_profile_ini(side, |profile| profile.set_show_fa_plus_pane(enabled));
 }
 
 pub fn update_fa_plus_10ms_blue_window_for_side(side: PlayerSide, enabled: bool) {
     update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.fa_plus_10ms_blue_window, enabled)
+        profile.set_fa_plus_10ms_blue_window(enabled)
     });
 }
 
 pub fn update_track_early_judgments_for_side(side: PlayerSide, enabled: bool) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.track_early_judgments, enabled)
-    });
+    update_profile_ini(side, |profile| profile.set_track_early_judgments(enabled));
 }
 
 pub fn update_scale_scatterplot_for_side(side: PlayerSide, enabled: bool) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.scale_scatterplot, enabled)
-    });
+    update_profile_ini(side, |profile| profile.set_scale_scatterplot(enabled));
 }
 
 pub fn update_split_15_10ms_for_side(side: PlayerSide, enabled: bool) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.split_15_10ms, enabled)
-    });
+    update_profile_ini(side, |profile| profile.set_split_15_10ms(enabled));
 }
 
 pub fn update_custom_fantastic_window_for_side(side: PlayerSide, enabled: bool) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.custom_fantastic_window, enabled)
-    });
+    update_profile_ini(side, |profile| profile.set_custom_fantastic_window(enabled));
 }
 
 pub fn update_custom_fantastic_window_ms_for_side(side: PlayerSide, ms: u8) {
@@ -516,95 +419,65 @@ pub fn update_pad_light_brightness_for_side(side: PlayerSide, value: i32) {
 }
 
 pub fn update_judgment_tilt_for_side(side: PlayerSide, enabled: bool) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.judgment_tilt, enabled)
-    });
+    update_profile_ini(side, |profile| profile.set_judgment_tilt(enabled));
 }
 
 pub fn update_column_cues_for_side(side: PlayerSide, enabled: bool) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.column_cues, enabled)
-    });
+    update_profile_ini(side, |profile| profile.set_column_cues(enabled));
 }
 
 pub fn update_measure_cues_for_side(side: PlayerSide, enabled: bool) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.measure_cues, enabled)
-    });
+    update_profile_ini(side, |profile| profile.set_measure_cues(enabled));
 }
 
 pub fn update_crossover_cues_for_side(side: PlayerSide, enabled: bool) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.crossover_cues, enabled)
-    });
+    update_profile_ini(side, |profile| profile.set_crossover_cues(enabled));
 }
 
 pub fn update_crossover_cue_brackets_for_side(side: PlayerSide, enabled: bool) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.crossover_cue_brackets, enabled)
-    });
+    update_profile_ini(side, |profile| profile.set_crossover_cue_brackets(enabled));
 }
 
 pub fn update_crossover_cue_duration_ms_for_side(side: PlayerSide, ms: u16) {
-    let ms = deadsync_profile::clamp_crossover_cue_duration_ms(ms);
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.crossover_cue_duration_ms, ms)
-    });
+    update_profile_ini(side, |profile| profile.set_crossover_cue_duration_ms(ms));
 }
 
 pub fn update_crossover_cue_quantization_for_side(side: PlayerSide, quantization: u8) {
-    let quantization = deadsync_profile::clamp_crossover_cue_quantization(quantization);
     update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.crossover_cue_quantization, quantization)
+        profile.set_crossover_cue_quantization(quantization)
     });
 }
 
 pub fn update_column_countdown_for_side(side: PlayerSide, enabled: bool) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.column_countdown, enabled)
-    });
+    update_profile_ini(side, |profile| profile.set_column_countdown(enabled));
 }
 
 pub fn update_judgment_back_for_side(side: PlayerSide, enabled: bool) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.judgment_back, enabled)
-    });
+    update_profile_ini(side, |profile| profile.set_judgment_back(enabled));
 }
 
 pub fn update_error_ms_display_for_side(side: PlayerSide, enabled: bool) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.error_ms_display, enabled)
-    });
+    update_profile_ini(side, |profile| profile.set_error_ms_display(enabled));
 }
 
 pub fn update_live_timing_stats_mask_for_side(side: PlayerSide, mask: LiveTimingStatsMask) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.live_timing_stats_mask, mask)
-    });
+    update_profile_ini(side, |profile| profile.set_live_timing_stats_mask(mask));
 }
 
 pub fn update_live_timing_stats_enabled_for_side(side: PlayerSide, enabled: bool) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.live_timing_stats, enabled)
-    });
+    update_profile_ini(side, |profile| profile.set_live_timing_stats(enabled));
 }
 
 pub fn update_rainbow_max_for_side(side: PlayerSide, enabled: bool) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.rainbow_max, enabled)
-    });
+    update_profile_ini(side, |profile| profile.set_rainbow_max(enabled));
 }
 
 pub fn update_responsive_colors_for_side(side: PlayerSide, enabled: bool) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.responsive_colors, enabled)
-    });
+    update_profile_ini(side, |profile| profile.set_responsive_colors(enabled));
 }
 
 pub fn update_show_life_percent_for_side(side: PlayerSide, enabled: bool) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.show_life_percent, enabled)
-    });
+    update_profile_ini(side, |profile| profile.set_show_life_percent(enabled));
 }
 
 pub fn update_tilt_multiplier_for_side(side: PlayerSide, multiplier: f32) {
@@ -620,21 +493,15 @@ pub fn update_error_bar_mask_for_side(side: PlayerSide, mask: ErrorBarMask) {
 }
 
 pub fn update_error_bar_trim_for_side(side: PlayerSide, setting: ErrorBarTrim) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.error_bar_trim, setting)
-    });
+    update_profile_ini(side, |profile| profile.set_error_bar_trim(setting));
 }
 
 pub fn update_center_tick_for_side(side: PlayerSide, enabled: bool) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.center_tick, enabled)
-    });
+    update_profile_ini(side, |profile| profile.set_center_tick(enabled));
 }
 
 pub fn update_text_error_bar_scalable_for_side(side: PlayerSide, enabled: bool) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.text_error_bar_scalable, enabled)
-    });
+    update_profile_ini(side, |profile| profile.set_text_error_bar_scalable(enabled));
 }
 
 pub fn update_text_error_bar_threshold_ms_for_side(side: PlayerSide, ms: u32) {
@@ -649,7 +516,7 @@ pub fn update_average_error_bar_intensity_for_side(side: PlayerSide, intensity: 
 
 pub fn update_short_average_error_bar_enabled_for_side(side: PlayerSide, enabled: bool) {
     update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.short_average_error_bar_enabled, enabled)
+        profile.set_short_average_error_bar_enabled(enabled)
     });
 }
 
@@ -660,9 +527,7 @@ pub fn update_average_error_bar_interval_ms_for_side(side: PlayerSide, ms: u32) 
 }
 
 pub fn update_long_error_bar_enabled_for_side(side: PlayerSide, enabled: bool) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.long_error_bar_enabled, enabled)
-    });
+    update_profile_ini(side, |profile| profile.set_long_error_bar_enabled(enabled));
 }
 
 pub fn update_long_error_bar_intensity_for_side(side: PlayerSide, intensity: f32) {
@@ -680,51 +545,35 @@ pub fn update_long_error_bar_min_samples_for_side(side: PlayerSide, n: u32) {
 }
 
 pub fn update_step_statistics_for_side(side: PlayerSide, mask: StepStatisticsMask) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.step_statistics, mask)
-    });
+    update_profile_ini(side, |profile| profile.set_step_statistics(mask));
 }
 
 pub fn update_step_stats_extra_for_side(side: PlayerSide, setting: StepStatsExtra) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.step_stats_extra, setting)
-    });
+    update_profile_ini(side, |profile| profile.set_step_stats_extra(setting));
 }
 
 pub fn update_display_scorebox_for_side(side: PlayerSide, enabled: bool) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.display_scorebox, enabled)
-    });
+    update_profile_ini(side, |profile| profile.set_display_scorebox(enabled));
 }
 
 pub fn update_scatterplot_max_window_for_side(side: PlayerSide, setting: ScatterplotMaxWindow) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.scatterplot_max_window, setting)
-    });
+    update_profile_ini(side, |profile| profile.set_scatterplot_max_window(setting));
 }
 
 pub fn update_score_position_for_side(side: PlayerSide, setting: ScorePosition) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.score_position, setting)
-    });
+    update_profile_ini(side, |profile| profile.set_score_position(setting));
 }
 
 pub fn update_score_display_mode_for_side(side: PlayerSide, setting: ScoreDisplayMode) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.score_display_mode, setting)
-    });
+    update_profile_ini(side, |profile| profile.set_score_display_mode(setting));
 }
 
 pub fn update_target_score_for_side(side: PlayerSide, setting: TargetScoreSetting) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.target_score, setting)
-    });
+    update_profile_ini(side, |profile| profile.set_target_score(setting));
 }
 
 pub fn update_lifemeter_type_for_side(side: PlayerSide, setting: LifeMeterType) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.lifemeter_type, setting)
-    });
+    update_profile_ini(side, |profile| profile.set_lifemeter_type(setting));
 }
 
 pub fn update_error_bar_options_for_side(side: PlayerSide, up: bool, multi_tick: bool) {
@@ -734,9 +583,7 @@ pub fn update_error_bar_options_for_side(side: PlayerSide, up: bool, multi_tick:
 }
 
 pub fn update_measure_counter_for_side(side: PlayerSide, setting: MeasureCounter) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.measure_counter, setting)
-    });
+    update_profile_ini(side, |profile| profile.set_measure_counter(setting));
 }
 
 pub fn update_measure_counter_lookahead_for_side(side: PlayerSide, lookahead: u8) {
@@ -759,7 +606,5 @@ pub fn update_measure_counter_options_for_side(
 }
 
 pub fn update_measure_lines_for_side(side: PlayerSide, setting: MeasureLines) {
-    update_profile_ini(side, |profile| {
-        set_if_changed(&mut profile.measure_lines, setting)
-    });
+    update_profile_ini(side, |profile| profile.set_measure_lines(setting));
 }
