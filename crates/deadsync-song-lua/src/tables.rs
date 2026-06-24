@@ -1,6 +1,9 @@
+use std::path::Path;
+
 use mlua::{Function, Lua, MultiValue, Table, Value};
 
-use crate::lua_util::lua_text_value;
+use crate::files::file_path_string;
+use crate::lua_util::{lua_text_value, method_arg};
 use crate::runtime::note_song_lua_side_effect;
 use crate::values::{lua_values_equal, read_f32, read_i32_value, read_string};
 use crate::version::version_parts;
@@ -28,6 +31,165 @@ pub fn create_version_parts_table(lua: &Lua, version: &str) -> mlua::Result<Tabl
         table.raw_set(index + 1, part)?;
     }
     Ok(table)
+}
+
+pub fn create_display_bpms_table(lua: &Lua, bpms: [f32; 2]) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    table.raw_set(1, bpms[0])?;
+    table.raw_set(2, bpms[1])?;
+    Ok(table)
+}
+
+pub fn create_radar_values_table(lua: &Lua) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    table.set(
+        "GetValue",
+        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
+    Ok(table)
+}
+
+pub fn create_song_group_table(lua: &Lua) -> mlua::Result<Table> {
+    let group = lua.create_table()?;
+    group.set(
+        "GetSyncOffset",
+        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
+    )?;
+    Ok(group)
+}
+
+pub fn create_single_value_array(lua: &Lua, value: Table) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    table.raw_set(1, value)?;
+    Ok(table)
+}
+
+pub fn set_string_method(lua: &Lua, table: &Table, name: &str, value: &str) -> mlua::Result<()> {
+    let value = value.to_string();
+    table.set(
+        name,
+        lua.create_function(move |lua, _args: MultiValue| {
+            Ok(Value::String(lua.create_string(&value)?))
+        })?,
+    )
+}
+
+pub fn set_path_methods(
+    lua: &Lua,
+    table: &Table,
+    path_name: &str,
+    has_name: &str,
+    path: Option<&Path>,
+) -> mlua::Result<()> {
+    let path = path.map(file_path_string).unwrap_or_default();
+    set_string_method(lua, table, path_name, &path)?;
+    let has_file = !path.is_empty();
+    table.set(
+        has_name,
+        lua.create_function(move |_, _args: MultiValue| Ok(has_file))?,
+    )?;
+    Ok(())
+}
+
+pub fn create_timing_table(lua: &Lua, bpms: [f32; 2]) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    let actual_bpms = create_display_bpms_table(lua, bpms)?;
+    table.set(
+        "GetActualBPM",
+        lua.create_function(move |_, _args: MultiValue| Ok(actual_bpms.clone()))?,
+    )?;
+    let timing_bpms = create_timing_bpms_table(lua, bpms)?;
+    table.set(
+        "GetBPMs",
+        lua.create_function(move |_, _args: MultiValue| Ok(timing_bpms.clone()))?,
+    )?;
+    let has_bpm_changes = (bpms[0] - bpms[1]).abs() > f32::EPSILON;
+    table.set(
+        "HasBPMChanges",
+        lua.create_function(move |_, _args: MultiValue| Ok(has_bpm_changes))?,
+    )?;
+    let bpm_at_beat = bpms[0].max(0.0);
+    table.set(
+        "GetBPMAtBeat",
+        lua.create_function(move |_, _args: MultiValue| Ok(bpm_at_beat))?,
+    )?;
+    table.set(
+        "GetElapsedTimeFromBeat",
+        lua.create_function(|_, args: MultiValue| {
+            Ok(method_arg(&args, 0)
+                .cloned()
+                .and_then(read_f32)
+                .unwrap_or(0.0))
+        })?,
+    )?;
+    table.set(
+        "GetBeatFromElapsedTime",
+        lua.create_function(|_, args: MultiValue| {
+            Ok(method_arg(&args, 0)
+                .cloned()
+                .and_then(read_f32)
+                .unwrap_or(0.0))
+        })?,
+    )?;
+    Ok(table)
+}
+
+pub fn create_style_table(lua: &Lua, style_name: &str) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    let style = crate::song_lua_style_info(style_name);
+    let style_name_for_get = style.name.to_string();
+    table.set(
+        "GetName",
+        lua.create_function(move |lua, _args: MultiValue| {
+            Ok(Value::String(lua.create_string(&style_name_for_get)?))
+        })?,
+    )?;
+    set_string_method(lua, &table, "GetStepsType", style.steps_type)?;
+    set_string_method(lua, &table, "GetStyleType", style.style_type)?;
+    table.set(
+        "ColumnsPerPlayer",
+        lua.create_function(move |_, _args: MultiValue| Ok(style.columns as i64))?,
+    )?;
+    table.set(
+        "GetWidth",
+        lua.create_function(move |_, _args: MultiValue| Ok(style.width))?,
+    )?;
+    table.set(
+        "GetColumnInfo",
+        lua.create_function(move |lua, args: MultiValue| {
+            let index = method_arg(&args, 1)
+                .cloned()
+                .and_then(read_i32_value)
+                .unwrap_or(1)
+                .clamp(1, style.columns as i32) as usize
+                - 1;
+            let info = lua.create_table()?;
+            info.set("Name", crate::song_lua_style_column_name(index))?;
+            info.set("Track", index as i64)?;
+            info.set("XOffset", crate::song_lua_style_column_x(style.name, index))?;
+            Ok(info)
+        })?,
+    )?;
+    Ok(table)
+}
+
+pub fn display_bpms_for_args(
+    args: &MultiValue,
+    fallback: [f32; 2],
+    default_rate: f32,
+) -> mlua::Result<([f32; 2], f32)> {
+    let rate = args
+        .get(2)
+        .cloned()
+        .and_then(read_f32)
+        .unwrap_or(default_rate)
+        .max(f32::EPSILON);
+    let bpms = args
+        .get(1)
+        .and_then(display_bpms_from_value)
+        .transpose()?
+        .unwrap_or(fallback);
+    Ok(([bpms[0] * rate, bpms[1] * rate], rate))
 }
 
 pub fn create_split_table(lua: &Lua, text: &str, separator: &str) -> mlua::Result<Table> {
@@ -382,6 +544,15 @@ fn create_layout_slot(lua: &Lua, y: f32, max_height: Option<f32>) -> mlua::Resul
     Ok(table)
 }
 
+fn create_timing_bpms_table(lua: &Lua, bpms: [f32; 2]) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    table.raw_set(1, bpms[0].max(0.0))?;
+    if (bpms[0] - bpms[1]).abs() > f32::EPSILON {
+        table.raw_set(2, bpms[1].max(0.0))?;
+    }
+    Ok(table)
+}
+
 fn call_string_method(table: &Table, name: &str) -> mlua::Result<Option<String>> {
     let Some(function) = table.get::<Option<Function>>(name)? else {
         return Ok(None);
@@ -389,6 +560,59 @@ fn call_string_method(table: &Table, name: &str) -> mlua::Result<Option<String>>
     let mut args = MultiValue::new();
     args.push_back(Value::Table(table.clone()));
     Ok(Some(lua_text_value(function.call::<Value>(args)?)?))
+}
+
+fn display_bpms_from_value(value: &Value) -> Option<mlua::Result<[f32; 2]>> {
+    let Value::Table(table) = value else {
+        return None;
+    };
+    Some(display_bpms_from_table(table))
+}
+
+fn display_bpms_from_table(table: &Table) -> mlua::Result<[f32; 2]> {
+    if let Some(bpms) = table
+        .get::<Option<Function>>("GetDisplayBpms")?
+        .map(|function| call_table_function(table, &function))
+        .transpose()?
+        .and_then(read_bpms_table)
+    {
+        if bpms[0] > 0.0 && bpms[1] > 0.0 {
+            return Ok(bpms);
+        }
+    }
+    let Some(timing) = table
+        .get::<Option<Function>>("GetTimingData")?
+        .map(|function| call_table_function(table, &function))
+        .transpose()?
+        .and_then(|value| match value {
+            Value::Table(table) => Some(table),
+            _ => None,
+        })
+    else {
+        return Ok([0.0, 0.0]);
+    };
+    Ok(timing
+        .get::<Option<Function>>("GetActualBPM")?
+        .map(|function| call_table_function(&timing, &function))
+        .transpose()?
+        .and_then(read_bpms_table)
+        .unwrap_or([0.0, 0.0]))
+}
+
+fn call_table_function(table: &Table, function: &Function) -> mlua::Result<Value> {
+    let mut args = MultiValue::new();
+    args.push_back(Value::Table(table.clone()));
+    function.call(args)
+}
+
+fn read_bpms_table(value: Value) -> Option<[f32; 2]> {
+    let Value::Table(table) = value else {
+        return None;
+    };
+    Some([
+        table.raw_get::<Value>(1).ok().and_then(read_f32)?,
+        table.raw_get::<Value>(2).ok().and_then(read_f32)?,
+    ])
 }
 
 fn lua_number_value(value: f32) -> Value {
@@ -401,11 +625,16 @@ fn lua_number_value(value: f32) -> Value {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use mlua::{Lua, MultiValue, Table, Value};
 
     use super::{
-        create_author_table, create_ex_judgment_counts, create_gameplay_layout, create_range_table,
-        create_split_table, lua_table_to_string, rotate_lua_table,
+        create_author_table, create_display_bpms_table, create_ex_judgment_counts,
+        create_gameplay_layout, create_radar_values_table, create_range_table,
+        create_single_value_array, create_song_group_table, create_split_table, create_style_table,
+        create_timing_table, display_bpms_for_args, lua_table_to_string, rotate_lua_table,
+        set_path_methods, set_string_method,
     };
 
     #[test]
@@ -502,5 +731,127 @@ mod tests {
         assert_eq!(counts.get::<i64>("W1").unwrap(), 0);
         assert_eq!(counts.get::<i64>("Miss").unwrap(), 0);
         assert_eq!(counts.get::<i64>("totalRolls").unwrap(), 0);
+    }
+
+    #[test]
+    fn radar_values_default_to_zero() {
+        let lua = Lua::new();
+        let radar = create_radar_values_table(&lua).unwrap();
+        let get_value = radar.get::<mlua::Function>("GetValue").unwrap();
+
+        assert_eq!(get_value.call::<f32>(MultiValue::new()).unwrap(), 0.0);
+    }
+
+    #[test]
+    fn song_group_table_has_zero_sync_offset() {
+        let lua = Lua::new();
+        let group = create_song_group_table(&lua).unwrap();
+        let get_sync_offset = group.get::<mlua::Function>("GetSyncOffset").unwrap();
+
+        assert_eq!(get_sync_offset.call::<f32>(MultiValue::new()).unwrap(), 0.0);
+    }
+
+    #[test]
+    fn single_value_array_wraps_table() {
+        let lua = Lua::new();
+        let value = lua.create_table().unwrap();
+        value.set("name", "song").unwrap();
+
+        let array = create_single_value_array(&lua, value).unwrap();
+        assert_eq!(array.raw_len(), 1);
+        assert_eq!(
+            array
+                .raw_get::<Table>(1)
+                .unwrap()
+                .get::<String>("name")
+                .unwrap(),
+            "song"
+        );
+    }
+
+    #[test]
+    fn string_method_returns_fixed_value() {
+        let lua = Lua::new();
+        let table = lua.create_table().unwrap();
+        set_string_method(&lua, &table, "GetName", "single").unwrap();
+        let get_name = table.get::<mlua::Function>("GetName").unwrap();
+
+        assert_eq!(
+            get_name.call::<String>(MultiValue::new()).unwrap(),
+            "single"
+        );
+    }
+
+    #[test]
+    fn path_methods_report_path_presence() {
+        let lua = Lua::new();
+        let table = lua.create_table().unwrap();
+        set_path_methods(
+            &lua,
+            &table,
+            "GetPath",
+            "HasPath",
+            Some(Path::new("songs\\pack\\song.ogg")),
+        )
+        .unwrap();
+        let get_path = table.get::<mlua::Function>("GetPath").unwrap();
+        let has_path = table.get::<mlua::Function>("HasPath").unwrap();
+
+        assert_eq!(
+            get_path.call::<String>(MultiValue::new()).unwrap(),
+            "songs/pack/song.ogg"
+        );
+        assert!(has_path.call::<bool>(MultiValue::new()).unwrap());
+    }
+
+    #[test]
+    fn timing_table_exposes_bpm_policy() {
+        let lua = Lua::new();
+        let timing = create_timing_table(&lua, [120.0, 180.0]).unwrap();
+        let get_bpms = timing.get::<mlua::Function>("GetBPMs").unwrap();
+        let has_bpm_changes = timing.get::<mlua::Function>("HasBPMChanges").unwrap();
+        let bpms = get_bpms.call::<Table>(MultiValue::new()).unwrap();
+
+        assert_eq!(bpms.raw_get::<f32>(1).unwrap(), 120.0);
+        assert_eq!(bpms.raw_get::<f32>(2).unwrap(), 180.0);
+        assert!(has_bpm_changes.call::<bool>(MultiValue::new()).unwrap());
+    }
+
+    #[test]
+    fn style_table_exposes_column_info() {
+        let lua = Lua::new();
+        let style = create_style_table(&lua, "double").unwrap();
+        let columns = style.get::<mlua::Function>("ColumnsPerPlayer").unwrap();
+        let get_column_info = style.get::<mlua::Function>("GetColumnInfo").unwrap();
+        let mut args = MultiValue::new();
+        args.push_back(Value::Table(style));
+        args.push_back(Value::Integer(1));
+
+        let info = get_column_info.call::<Table>(args).unwrap();
+        assert_eq!(columns.call::<i64>(MultiValue::new()).unwrap(), 8);
+        assert_eq!(info.get::<String>("Name").unwrap(), "Left");
+        assert_eq!(info.get::<i64>("Track").unwrap(), 0);
+    }
+
+    #[test]
+    fn display_bpms_for_args_uses_table_and_rate() {
+        let lua = Lua::new();
+        let bpms = create_display_bpms_table(&lua, [100.0, 200.0]).unwrap();
+        let steps = lua.create_table().unwrap();
+        steps
+            .set(
+                "GetDisplayBpms",
+                lua.create_function(move |_, _: Value| Ok(bpms.clone()))
+                    .unwrap(),
+            )
+            .unwrap();
+        let mut args = MultiValue::new();
+        args.push_back(Value::Nil);
+        args.push_back(Value::Table(steps));
+        args.push_back(Value::Number(1.5));
+
+        let (bpms, rate) = display_bpms_for_args(&args, [60.0, 60.0], 1.0).unwrap();
+        assert_eq!(bpms, [150.0, 300.0]);
+        assert_eq!(rate, 1.5);
     }
 }

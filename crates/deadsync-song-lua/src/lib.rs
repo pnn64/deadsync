@@ -11,6 +11,7 @@ mod files;
 mod json;
 mod lua_util;
 mod net;
+mod player_options;
 mod runtime;
 mod sl;
 mod tables;
@@ -25,8 +26,8 @@ pub use files::{
     actor_util_class_registered, actor_util_file_type, file_path_string, fileman_dir_listing,
     find_compat_files, is_song_lua_audio_path, is_song_lua_image_path, is_song_lua_media_path,
     is_song_lua_simfile_path, is_song_lua_video_path, path_basename, resolve_compat_path,
-    song_dir_string, song_group_name, song_music_path, song_named_image_path, song_simfile_path,
-    strip_sprite_hints, wildcard_matches,
+    song_dir_string, song_group_name, song_lookup_matches, song_music_path, song_named_image_path,
+    song_simfile_path, strip_sprite_hints, theme_path, wildcard_matches,
 };
 pub use json::{json_to_lua_value, lua_to_json_value};
 pub use lua_util::{
@@ -36,6 +37,13 @@ pub use lua_util::{
     read_vertex_colors_value,
 };
 pub use net::{create_network_table, encode_query_params, query_value_text, url_encode_component};
+pub use player_options::{
+    SONG_LUA_PLAYER_OPTION_CAPABILITIES, SONG_LUA_PLAYER_OPTION_MULTICOL_PREFIXES,
+    default_player_option_value, is_player_option_method_name, normalize_player_option_key,
+    normalize_player_option_value, parse_player_option_amount, parse_player_speed_option,
+    player_option_default_string, player_option_uses_bool, song_lua_speedmod_value,
+    split_first_word, strip_player_option_prefix,
+};
 pub use runtime::{
     compile_song_runtime_delta_values, compile_song_runtime_values, create_song_position_table,
     create_song_runtime_table, note_song_lua_side_effect, read_song_lua_broadcasts,
@@ -46,10 +54,13 @@ pub use runtime::{
 pub use sl::{create_sl_streams, create_sl_table, init_sl_streams};
 pub use tables::{
     create_author_table, create_background_filter_values, create_credits_table,
-    create_ex_judgment_counts, create_gameplay_layout, create_index_array, create_ini_file_table,
-    create_network_response_table, create_rage_file_util_table, create_range_table,
-    create_split_table, create_version_parts_table, create_websocket_table, deduplicate_lua_table,
-    lua_table_to_string, map_lua_table, rotate_lua_table, stringify_lua_table,
+    create_display_bpms_table, create_ex_judgment_counts, create_gameplay_layout,
+    create_index_array, create_ini_file_table, create_network_response_table,
+    create_radar_values_table, create_rage_file_util_table, create_range_table,
+    create_single_value_array, create_song_group_table, create_split_table, create_style_table,
+    create_timing_table, create_version_parts_table, create_websocket_table, deduplicate_lua_table,
+    display_bpms_for_args, lua_table_to_string, map_lua_table, rotate_lua_table, set_path_methods,
+    set_string_method, stringify_lua_table,
 };
 pub use theme_colors::{
     DDR_DIFF_COLORS, ITG_DIFF_COLORS, SL_COLORS, SL_DECORATIVE_COLORS, SL_FA_PLUS_COLORS,
@@ -58,7 +69,10 @@ pub use theme_colors::{
     song_lua_difficulty_color, song_lua_difficulty_index, song_lua_palette, song_lua_player_color,
     song_lua_player_dark_color, song_lua_player_score_color, stage_color, tone_color,
 };
-pub use timing::{timing_window_arg_index, timing_window_seconds, worst_judgment_from_offsets};
+pub use timing::{
+    SONG_LUA_TIMING_WINDOW_NAMES, timing_window_arg_index, timing_window_name,
+    timing_window_seconds, worst_judgment_from_offsets,
+};
 pub use values::{
     SONG_LUA_EASING_NAME_KEY, lua_binary_to_hex, lua_values_equal, player_index_from_value,
     player_number_name, read_boolish, read_easing_name, read_f32, read_i32_value, read_player,
@@ -77,6 +91,11 @@ pub const SONG_LUA_RUNTIME_RATE_KEY: &str = "__songlua_music_rate";
 pub const SONG_LUA_SIDE_EFFECT_COUNT_KEY: &str = "__songlua_side_effect_count";
 pub const SONG_LUA_BROADCASTS_KEY: &str = "__songlua_broadcast_messages";
 pub const SONG_LUA_SOUND_PATHS_KEY: &str = "__songlua_sound_paths";
+pub const SONG_LUA_THEME_PATH_PREFIX: &str = "__songlua_theme_path/";
+pub const THEME_RECEPTOR_Y_STD: f32 = -125.0;
+pub const THEME_RECEPTOR_Y_REV: f32 = 145.0;
+pub const SONG_LUA_INITIAL_LIFE: f32 = 0.5;
+pub const SONG_LUA_DANGER_LIFE: f32 = 0.2;
 pub const SONG_LUA_NOTE_COLUMNS: usize = 4;
 pub const SONG_LUA_DOUBLE_NOTE_COLUMNS: usize = 8;
 
@@ -223,6 +242,34 @@ impl SongLuaDifficulty {
     }
 }
 
+pub fn song_lua_difficulty_from_value(value: mlua::Value) -> Option<SongLuaDifficulty> {
+    let normalized = read_string(value)?
+        .trim()
+        .to_ascii_lowercase()
+        .replace(['_', '-', ' '], "");
+    let raw = normalized.strip_prefix("difficulty").unwrap_or(&normalized);
+    match raw {
+        "beginner" => Some(SongLuaDifficulty::Beginner),
+        "easy" => Some(SongLuaDifficulty::Easy),
+        "medium" => Some(SongLuaDifficulty::Medium),
+        "hard" => Some(SongLuaDifficulty::Hard),
+        "challenge" | "expert" => Some(SongLuaDifficulty::Challenge),
+        "edit" => Some(SongLuaDifficulty::Edit),
+        _ => None,
+    }
+}
+
+pub fn song_lua_steps_type_is_dance_single(value: mlua::Value) -> bool {
+    let Some(raw) = read_string(value) else {
+        return false;
+    };
+    let normalized = raw.trim().to_ascii_lowercase().replace(['_', '-', ' '], "");
+    matches!(
+        normalized.as_str(),
+        "stepstypedancesingle" | "dancesingle" | "single"
+    )
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SongLuaSpeedMod {
     X(f32),
@@ -308,6 +355,270 @@ impl Default for SongLuaPlayerContext {
             screen_y: 240.0,
         }
     }
+}
+
+pub fn easiest_steps_difficulty(
+    players: &[SongLuaPlayerContext; LUA_PLAYERS],
+) -> Option<SongLuaDifficulty> {
+    players
+        .iter()
+        .filter(|player| player.enabled)
+        .map(|player| player.difficulty)
+        .min_by_key(|difficulty| difficulty.sort_key())
+}
+
+pub fn song_lua_human_player_count(context: &SongLuaCompileContext) -> usize {
+    context
+        .players
+        .iter()
+        .filter(|player| player.enabled)
+        .count()
+}
+
+pub fn graph_display_body_size(human_player_count: usize) -> [f32; 2] {
+    [
+        if human_player_count == 1 {
+            610.0
+        } else {
+            300.0
+        },
+        64.0,
+    ]
+}
+
+pub fn theme_metric_number(group: &str, name: &str) -> Option<f32> {
+    theme_metric_number_for_human_players(group, name, LUA_PLAYERS)
+}
+
+pub fn theme_metric_number_for_human_players(
+    group: &str,
+    name: &str,
+    human_player_count: usize,
+) -> Option<f32> {
+    theme_metric_number_for_screen(group, name, human_player_count, 480.0)
+}
+
+pub fn theme_metric_number_for_screen(
+    group: &str,
+    name: &str,
+    human_player_count: usize,
+    screen_height: f32,
+) -> Option<f32> {
+    if group.eq_ignore_ascii_case("Player") {
+        if name.eq_ignore_ascii_case("ReceptorArrowsYStandard") {
+            return Some(THEME_RECEPTOR_Y_STD);
+        }
+        if name.eq_ignore_ascii_case("ReceptorArrowsYReverse") {
+            return Some(THEME_RECEPTOR_Y_REV);
+        }
+        if name.eq_ignore_ascii_case("DrawDistanceBeforeTargetsPixels") {
+            return Some(screen_height.max(1.0) * 1.5);
+        }
+        if name.eq_ignore_ascii_case("DrawDistanceAfterTargetsPixels") {
+            return Some(-130.0);
+        }
+    }
+    if group.eq_ignore_ascii_case("Combo") && name.eq_ignore_ascii_case("ShowComboAt") {
+        return Some(4.0);
+    }
+    if group.eq_ignore_ascii_case("GraphDisplay") {
+        if name.eq_ignore_ascii_case("BodyWidth") {
+            return Some(graph_display_body_size(human_player_count)[0]);
+        }
+        if name.eq_ignore_ascii_case("BodyHeight") {
+            return Some(graph_display_body_size(human_player_count)[1]);
+        }
+    }
+    if group.eq_ignore_ascii_case("LifeMeterBar") && name.eq_ignore_ascii_case("InitialValue") {
+        return Some(SONG_LUA_INITIAL_LIFE);
+    }
+    if group.eq_ignore_ascii_case("MusicWheel") && name.eq_ignore_ascii_case("NumWheelItems") {
+        return Some(15.0);
+    }
+    if group.eq_ignore_ascii_case("PlayerStageStats")
+        && name.eq_ignore_ascii_case("NumGradeTiersUsed")
+    {
+        return Some(7.0);
+    }
+    None
+}
+
+pub fn theme_string_names(section: &str) -> Vec<String> {
+    if section.eq_ignore_ascii_case("Difficulty")
+        || section.eq_ignore_ascii_case("CustomDifficulty")
+    {
+        return [
+            SongLuaDifficulty::Beginner,
+            SongLuaDifficulty::Easy,
+            SongLuaDifficulty::Medium,
+            SongLuaDifficulty::Hard,
+            SongLuaDifficulty::Challenge,
+            SongLuaDifficulty::Edit,
+        ]
+        .into_iter()
+        .map(|difficulty| difficulty.sm_name().to_string())
+        .collect();
+    }
+    if matches!(
+        section,
+        "OptionTitles"
+            | "OptionNames"
+            | "ThemePrefs"
+            | "SLPlayerOptions"
+            | "ScreenSelectPlayMode"
+            | "ScreenSelectStyle"
+            | "GameButton"
+            | "TapNoteScore"
+            | "TapNoteScoreFA+"
+            | "HoldNoteScore"
+            | "Stage"
+            | "Months"
+    ) {
+        return [
+            "Yes",
+            "No",
+            "Cancel",
+            "DisplayMode",
+            "MusicRate",
+            "SpeedMod",
+            "NoteSkin",
+            "Difficulty_Hard",
+        ]
+        .into_iter()
+        .map(str::to_string)
+        .collect();
+    }
+    Vec::new()
+}
+
+pub fn theme_string(section: &str, name: &str) -> String {
+    if section.eq_ignore_ascii_case("Difficulty")
+        || section.eq_ignore_ascii_case("CustomDifficulty")
+    {
+        return name.trim_start_matches("Difficulty_").to_string();
+    }
+    if matches!(
+        section,
+        "OptionTitles"
+            | "OptionNames"
+            | "ThemePrefs"
+            | "SLPlayerOptions"
+            | "ScreenSelectPlayMode"
+            | "ScreenSelectStyle"
+            | "GameButton"
+            | "TapNoteScore"
+            | "TapNoteScoreFA+"
+            | "HoldNoteScore"
+            | "Stage"
+            | "Months"
+    ) {
+        return name.replace('_', " ");
+    }
+    match name {
+        "Yes" => "Yes".to_string(),
+        "No" => "No".to_string(),
+        "Cancel" => "Cancel".to_string(),
+        _ => name.to_string(),
+    }
+}
+
+pub fn theme_has_string(section: &str, name: &str) -> bool {
+    section.eq_ignore_ascii_case("Difficulty")
+        || section.eq_ignore_ascii_case("CustomDifficulty")
+        || matches!(
+            section,
+            "OptionTitles"
+                | "OptionNames"
+                | "ThemePrefs"
+                | "SLPlayerOptions"
+                | "ScreenSelectPlayMode"
+                | "ScreenSelectStyle"
+                | "GameButton"
+                | "TapNoteScore"
+                | "TapNoteScoreFA+"
+                | "HoldNoteScore"
+                | "Stage"
+                | "Months"
+        )
+        || matches!(name, "Yes" | "No" | "Cancel")
+}
+
+pub fn song_lua_arch_name() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "Windows"
+    } else if cfg!(target_os = "macos") {
+        "Mac OS X"
+    } else if cfg!(target_os = "linux") {
+        "Linux"
+    } else if cfg!(target_os = "freebsd") {
+        "FreeBSD"
+    } else {
+        "Unknown"
+    }
+}
+
+pub fn custom_multi_modifier_key(option_name: &str, choice: &str) -> String {
+    if option_name.eq_ignore_ascii_case("Hide") {
+        format!("Hide{choice}")
+    } else {
+        choice.to_string()
+    }
+}
+
+pub fn theme_pref_default(lua: &mlua::Lua, name: &str) -> mlua::Result<mlua::Value> {
+    let lower = name.to_ascii_lowercase();
+    if matches!(
+        lower.as_str(),
+        "casualmaxmeter"
+            | "numberofcontinuesallowed"
+            | "screenselectmusicmenutimer"
+            | "screenselectmusiccasualmenutimer"
+            | "screenplayeroptionsmenutimer"
+            | "screenevaluationmenutimer"
+            | "screenevaluationnonstopmenutimer"
+            | "screenevaluationsummarymenutimer"
+            | "screennameentrymenutimer"
+            | "screengroovestatsloginmenutimer"
+            | "simplylovecolor"
+            | "nice"
+    ) {
+        return Ok(mlua::Value::Integer(match lower.as_str() {
+            "casualmaxmeter" => 12,
+            "simplylovecolor" => 1,
+            _ => 0,
+        }));
+    }
+    if matches!(
+        lower.as_str(),
+        "visualstyle"
+            | "lastactiveevent"
+            | "musicwheelstyle"
+            | "themefont"
+            | "defaultgamemode"
+            | "autostyle"
+            | "songselectbg"
+            | "resultsbg"
+            | "scoringsystem"
+            | "stepstats"
+            | "editmodelastseensong"
+            | "editmodelastseendifficulty"
+            | "editmodelastseenstepstype"
+            | "editmodelastseenstyletype"
+    ) {
+        let value = match lower.as_str() {
+            "themefont" => "Common",
+            "defaultgamemode" => "Dance",
+            "songselectbg" | "resultsbg" => "Off",
+            "musicwheelstyle" => "Default",
+            "autostyle" => "Default",
+            _ => "",
+        };
+        return Ok(mlua::Value::String(lua.create_string(value)?));
+    }
+    Ok(mlua::Value::Boolean(matches!(
+        lower.as_str(),
+        "useimagecache"
+    )))
 }
 
 #[derive(Debug, Clone)]
@@ -1982,4 +2293,211 @@ pub struct SongLuaColumnOffsetWindow {
     pub sustain: Option<f32>,
     pub opt1: Option<f32>,
     pub opt2: Option<f32>,
+}
+
+#[cfg(test)]
+mod tests {
+    use mlua::{Lua, Value};
+
+    use super::{
+        SONG_LUA_INITIAL_LIFE, SongLuaCompileContext, SongLuaDifficulty, SongLuaPlayerContext,
+        THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD, custom_multi_modifier_key,
+        easiest_steps_difficulty, graph_display_body_size, song_lua_arch_name,
+        song_lua_difficulty_from_value, song_lua_human_player_count,
+        song_lua_steps_type_is_dance_single, theme_has_string, theme_metric_number,
+        theme_metric_number_for_screen, theme_pref_default, theme_string, theme_string_names,
+    };
+
+    #[test]
+    fn difficulty_from_value_accepts_stepmania_names() {
+        let lua = Lua::new();
+        let value = Value::String(lua.create_string("Difficulty_Challenge").unwrap());
+
+        assert_eq!(
+            song_lua_difficulty_from_value(value),
+            Some(SongLuaDifficulty::Challenge)
+        );
+        assert_eq!(
+            song_lua_difficulty_from_value(Value::String(lua.create_string("expert").unwrap())),
+            Some(SongLuaDifficulty::Challenge)
+        );
+        assert_eq!(
+            song_lua_difficulty_from_value(Value::String(lua.create_string("unknown").unwrap())),
+            None
+        );
+    }
+
+    #[test]
+    fn steps_type_policy_accepts_dance_single_aliases() {
+        let lua = Lua::new();
+
+        assert!(song_lua_steps_type_is_dance_single(Value::String(
+            lua.create_string("StepsType_Dance_Single").unwrap()
+        )));
+        assert!(song_lua_steps_type_is_dance_single(Value::String(
+            lua.create_string("single").unwrap()
+        )));
+        assert!(!song_lua_steps_type_is_dance_single(Value::String(
+            lua.create_string("StepsType_Dance_Double").unwrap()
+        )));
+    }
+
+    #[test]
+    fn easiest_steps_difficulty_ignores_disabled_players() {
+        let mut players = std::array::from_fn(|_| SongLuaPlayerContext::default());
+        players[0].difficulty = SongLuaDifficulty::Beginner;
+        players[0].enabled = false;
+        players[1].difficulty = SongLuaDifficulty::Hard;
+
+        assert_eq!(
+            easiest_steps_difficulty(&players),
+            Some(SongLuaDifficulty::Hard)
+        );
+    }
+
+    #[test]
+    fn human_player_count_counts_enabled_context_players() {
+        let mut context = SongLuaCompileContext::new("songs/pack/song", "Song");
+        context.players[1].enabled = false;
+
+        assert_eq!(song_lua_human_player_count(&context), 1);
+    }
+
+    #[test]
+    fn graph_display_body_size_matches_player_count() {
+        assert_eq!(graph_display_body_size(1), [610.0, 64.0]);
+        assert_eq!(graph_display_body_size(2), [300.0, 64.0]);
+        assert_eq!(graph_display_body_size(0), [300.0, 64.0]);
+    }
+
+    #[test]
+    fn theme_metric_number_exposes_numeric_compat_values() {
+        assert_eq!(
+            theme_metric_number("Player", "ReceptorArrowsYStandard"),
+            Some(THEME_RECEPTOR_Y_STD)
+        );
+        assert_eq!(
+            theme_metric_number("Player", "ReceptorArrowsYReverse"),
+            Some(THEME_RECEPTOR_Y_REV)
+        );
+        assert_eq!(theme_metric_number("Combo", "ShowComboAt"), Some(4.0));
+        assert_eq!(
+            theme_metric_number("LifeMeterBar", "InitialValue"),
+            Some(SONG_LUA_INITIAL_LIFE)
+        );
+        assert_eq!(
+            theme_metric_number("MusicWheel", "NumWheelItems"),
+            Some(15.0)
+        );
+        assert_eq!(
+            theme_metric_number("PlayerStageStats", "NumGradeTiersUsed"),
+            Some(7.0)
+        );
+    }
+
+    #[test]
+    fn theme_metric_number_uses_screen_and_player_count() {
+        assert_eq!(
+            theme_metric_number_for_screen("Player", "DrawDistanceBeforeTargetsPixels", 1, 720.0),
+            Some(1080.0)
+        );
+        assert_eq!(
+            theme_metric_number_for_screen("GraphDisplay", "BodyWidth", 1, 480.0),
+            Some(610.0)
+        );
+        assert_eq!(
+            theme_metric_number_for_screen("GraphDisplay", "BodyWidth", 2, 480.0),
+            Some(300.0)
+        );
+    }
+
+    #[test]
+    fn theme_string_names_include_difficulty_and_common_groups() {
+        assert_eq!(
+            theme_string_names("Difficulty"),
+            vec![
+                "Difficulty_Beginner".to_string(),
+                "Difficulty_Easy".to_string(),
+                "Difficulty_Medium".to_string(),
+                "Difficulty_Hard".to_string(),
+                "Difficulty_Challenge".to_string(),
+                "Difficulty_Edit".to_string(),
+            ]
+        );
+
+        let option_names = theme_string_names("OptionNames");
+        assert!(option_names.contains(&"MusicRate".to_string()));
+        assert!(option_names.contains(&"Difficulty_Hard".to_string()));
+        assert!(theme_string_names("Unknown").is_empty());
+    }
+
+    #[test]
+    fn theme_string_formats_compat_values() {
+        assert_eq!(
+            theme_string("Difficulty", "Difficulty_Challenge"),
+            "Challenge"
+        );
+        assert_eq!(theme_string("OptionNames", "Music_Rate"), "Music Rate");
+        assert_eq!(theme_string("", "Cancel"), "Cancel");
+        assert_eq!(theme_string("", "CustomValue"), "CustomValue");
+    }
+
+    #[test]
+    fn theme_has_string_matches_compat_groups_and_common_values() {
+        assert!(theme_has_string("CustomDifficulty", "Difficulty_Edit"));
+        assert!(theme_has_string("OptionTitles", "MusicRate"));
+        assert!(theme_has_string("", "Yes"));
+        assert!(!theme_has_string("Unknown", "Maybe"));
+    }
+
+    #[test]
+    fn arch_name_reports_stepmania_style_platform_name() {
+        assert!(matches!(
+            song_lua_arch_name(),
+            "Windows" | "Mac OS X" | "Linux" | "FreeBSD" | "Unknown"
+        ));
+    }
+
+    #[test]
+    fn custom_multi_modifier_key_prefixes_hide_choices() {
+        assert_eq!(custom_multi_modifier_key("Hide", "Targets"), "HideTargets");
+        assert_eq!(
+            custom_multi_modifier_key("hide", "ComboExplosions"),
+            "HideComboExplosions"
+        );
+        assert_eq!(
+            custom_multi_modifier_key("GameplayExtras", "ColumnCues"),
+            "ColumnCues"
+        );
+    }
+
+    #[test]
+    fn theme_pref_default_returns_compat_defaults() {
+        let lua = Lua::new();
+
+        assert_eq!(
+            theme_pref_default(&lua, "CasualMaxMeter").unwrap(),
+            Value::Integer(12)
+        );
+        assert_eq!(
+            theme_pref_default(&lua, "SimplyLoveColor").unwrap(),
+            Value::Integer(1)
+        );
+        assert!(matches!(
+            theme_pref_default(&lua, "ThemeFont").unwrap(),
+            Value::String(value) if value.to_str().unwrap() == "Common"
+        ));
+        assert!(matches!(
+            theme_pref_default(&lua, "SongSelectBG").unwrap(),
+            Value::String(value) if value.to_str().unwrap() == "Off"
+        ));
+        assert_eq!(
+            theme_pref_default(&lua, "UseImageCache").unwrap(),
+            Value::Boolean(true)
+        );
+        assert_eq!(
+            theme_pref_default(&lua, "UnknownPreference").unwrap(),
+            Value::Boolean(false)
+        );
+    }
 }

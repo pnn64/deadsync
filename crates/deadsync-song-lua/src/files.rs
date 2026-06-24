@@ -10,6 +10,25 @@ pub fn song_group_name(song_dir: &Path) -> String {
         .to_string()
 }
 
+pub fn song_lookup_matches(query: &str, song_dir: &str, group: &str, title: &str) -> bool {
+    let query = query.trim().replace('\\', "/");
+    !query.is_empty()
+        && (query == song_dir
+            || song_dir.contains(query.as_str())
+            || query.eq_ignore_ascii_case(group)
+            || query.eq_ignore_ascii_case(title))
+}
+
+pub fn theme_path(kind: &str, group: &str, name: &str) -> String {
+    let group = group.trim_matches('/');
+    let name = name.trim_start_matches('/');
+    if group.is_empty() {
+        format!("{}{kind}/{name}", crate::SONG_LUA_THEME_PATH_PREFIX)
+    } else {
+        format!("{}{kind}/{group}/{name}", crate::SONG_LUA_THEME_PATH_PREFIX)
+    }
+}
+
 pub fn song_music_path(song_dir: &Path) -> Option<PathBuf> {
     song_named_file_path(
         song_dir,
@@ -393,5 +412,38 @@ mod tests {
             "Tap Note"
         );
         assert_eq!(strip_sprite_hints("mine.png"), "mine");
+    }
+
+    #[test]
+    fn song_lookup_matches_current_song_aliases() {
+        let song_dir = "songs/pack/My Song/";
+
+        assert!(song_lookup_matches(
+            "songs\\pack\\My Song\\",
+            song_dir,
+            "pack",
+            "My Song"
+        ));
+        assert!(song_lookup_matches("My Song", song_dir, "pack", "My Song"));
+        assert!(song_lookup_matches("PACK", song_dir, "pack", "My Song"));
+        assert!(song_lookup_matches("My Song", song_dir, "pack", "MY SONG"));
+        assert!(!song_lookup_matches("", song_dir, "pack", "My Song"));
+        assert!(!song_lookup_matches("other", song_dir, "pack", "My Song"));
+    }
+
+    #[test]
+    fn theme_path_formats_virtual_theme_assets() {
+        assert_eq!(
+            theme_path("G", "Common", "/fallback banner"),
+            "__songlua_theme_path/G/Common/fallback banner"
+        );
+        assert_eq!(
+            theme_path("B", "", "ScreenGameplay/default"),
+            "__songlua_theme_path/B/ScreenGameplay/default"
+        );
+        assert_eq!(
+            theme_path("G", "/Banner/", "group fallback"),
+            "__songlua_theme_path/G/Banner/group fallback"
+        );
     }
 }

@@ -231,126 +231,6 @@ pub(super) fn create_steps_table(
     Ok(table)
 }
 
-pub(super) fn create_display_bpms_table(lua: &Lua, bpms: [f32; 2]) -> mlua::Result<Table> {
-    let table = lua.create_table()?;
-    table.raw_set(1, bpms[0])?;
-    table.raw_set(2, bpms[1])?;
-    Ok(table)
-}
-
-pub(super) fn display_bpms_for_args(
-    args: &MultiValue,
-    fallback: [f32; 2],
-    default_rate: f32,
-) -> mlua::Result<([f32; 2], f32)> {
-    let rate = args
-        .get(2)
-        .cloned()
-        .and_then(read_f32)
-        .unwrap_or(default_rate)
-        .max(f32::EPSILON);
-    let bpms = args
-        .get(1)
-        .and_then(display_bpms_from_value)
-        .transpose()?
-        .unwrap_or(fallback);
-    Ok(([bpms[0] * rate, bpms[1] * rate], rate))
-}
-
-fn display_bpms_from_value(value: &Value) -> Option<mlua::Result<[f32; 2]>> {
-    let Value::Table(table) = value else {
-        return None;
-    };
-    Some(display_bpms_from_table(table))
-}
-
-fn display_bpms_from_table(table: &Table) -> mlua::Result<[f32; 2]> {
-    if let Some(bpms) = table
-        .get::<Option<Function>>("GetDisplayBpms")?
-        .map(|function| call_table_function(table, &function))
-        .transpose()?
-        .and_then(read_bpms_table)
-    {
-        if bpms[0] > 0.0 && bpms[1] > 0.0 {
-            return Ok(bpms);
-        }
-    }
-    let Some(timing) = table
-        .get::<Option<Function>>("GetTimingData")?
-        .map(|function| call_table_function(table, &function))
-        .transpose()?
-        .and_then(|value| match value {
-            Value::Table(table) => Some(table),
-            _ => None,
-        })
-    else {
-        return Ok([0.0, 0.0]);
-    };
-    Ok(timing
-        .get::<Option<Function>>("GetActualBPM")?
-        .map(|function| call_table_function(&timing, &function))
-        .transpose()?
-        .and_then(read_bpms_table)
-        .unwrap_or([0.0, 0.0]))
-}
-
-fn call_table_function(table: &Table, function: &Function) -> mlua::Result<Value> {
-    let mut args = MultiValue::new();
-    args.push_back(Value::Table(table.clone()));
-    function.call(args)
-}
-
-fn read_bpms_table(value: Value) -> Option<[f32; 2]> {
-    let Value::Table(table) = value else {
-        return None;
-    };
-    Some([
-        table.raw_get::<Value>(1).ok().and_then(read_f32)?,
-        table.raw_get::<Value>(2).ok().and_then(read_f32)?,
-    ])
-}
-
-pub(super) fn create_radar_values_table(lua: &Lua) -> mlua::Result<Table> {
-    let table = lua.create_table()?;
-    table.set(
-        "GetValue",
-        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
-    )?;
-    Ok(table)
-}
-
-pub(super) fn set_string_method(
-    lua: &Lua,
-    table: &Table,
-    name: &str,
-    value: &str,
-) -> mlua::Result<()> {
-    let value = value.to_string();
-    table.set(
-        name,
-        lua.create_function(move |lua, _args: MultiValue| {
-            Ok(Value::String(lua.create_string(&value)?))
-        })?,
-    )
-}
-
-pub(super) fn set_path_methods(
-    lua: &Lua,
-    table: &Table,
-    path_name: &str,
-    has_name: &str,
-    path: Option<&Path>,
-) -> mlua::Result<()> {
-    let path = path.map(file_path_string).unwrap_or_default();
-    set_string_method(lua, table, path_name, &path)?;
-    let has_file = !path.is_empty();
-    table.set(
-        has_name,
-        lua.create_function(move |_, _args: MultiValue| Ok(has_file))?,
-    )?;
-    Ok(())
-}
-
 fn create_player_options_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.set(
@@ -489,17 +369,6 @@ fn create_player_options_table(lua: &Lua, player: SongLuaPlayerContext) -> mlua:
     Ok(table)
 }
 
-fn is_player_option_method_name(name: &str) -> bool {
-    SONG_LUA_PLAYER_OPTION_CAPABILITIES.contains(&name)
-        || SONG_LUA_PLAYER_OPTION_MULTICOL_PREFIXES
-            .iter()
-            .any(|prefix| {
-                name.strip_prefix(prefix)
-                    .and_then(|suffix| suffix.parse::<usize>().ok())
-                    .is_some_and(|column| (1..=16).contains(&column))
-            })
-}
-
 fn disabled_timing_windows(lua: &Lua, owner: &Table) -> mlua::Result<Table> {
     if let Some(table) = owner.raw_get::<Option<Table>>("__songlua_disabled_timing_windows")? {
         return Ok(table);
@@ -507,25 +376,6 @@ fn disabled_timing_windows(lua: &Lua, owner: &Table) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     owner.raw_set("__songlua_disabled_timing_windows", table.clone())?;
     Ok(table)
-}
-
-fn timing_window_name(value: Value) -> Option<&'static str> {
-    let index = match value {
-        Value::Integer(value) => i32::try_from(value).ok(),
-        Value::Number(value) if value.is_finite() => Some(value.round() as i32),
-        Value::String(text) => text
-            .to_str()
-            .ok()?
-            .chars()
-            .rev()
-            .find(|ch| ch.is_ascii_digit())
-            .and_then(|ch| ch.to_digit(10))
-            .map(|value| value as i32),
-        _ => None,
-    }?;
-    (1..=5)
-        .contains(&index)
-        .then_some(SONG_LUA_TIMING_WINDOW_NAMES[index as usize - 1])
 }
 
 fn player_option_number(lua: &Lua, owner: &Table, name: &str) -> mlua::Result<f32> {
@@ -595,157 +445,12 @@ fn apply_player_option_token(lua: &Lua, owner: &Table, raw: &str) -> mlua::Resul
     state.set(key.as_str(), value)
 }
 
-fn strip_player_option_prefix(mut text: &str) -> &str {
-    loop {
-        let trimmed = text.trim_start();
-        let Some(rest) = trimmed.strip_prefix('*') else {
-            return trimmed;
-        };
-        let prefix_len = rest.find(char::is_whitespace).unwrap_or(rest.len());
-        if prefix_len == 0 {
-            return trimmed;
-        }
-        text = &rest[prefix_len..];
-    }
-}
-
-fn split_first_word(text: &str) -> (&str, &str) {
-    let text = text.trim_start();
-    match text.find(char::is_whitespace) {
-        Some(index) => (&text[..index], text[index..].trim_start()),
-        None => (text, ""),
-    }
-}
-
-fn parse_player_option_amount(text: &str) -> Option<f32> {
-    let text = text.trim();
-    let percent = text.ends_with('%');
-    let raw = text.trim_end_matches('%');
-    let value = raw.parse::<f32>().ok()?;
-    Some(if percent { value / 100.0 } else { value })
-}
-
-fn normalize_player_option_key(text: &str) -> String {
-    text.chars()
-        .filter(|ch| ch.is_ascii_alphanumeric())
-        .map(|ch| ch.to_ascii_lowercase())
-        .collect()
-}
-
 fn apply_player_speed_option(owner: &Table, text: &str) -> mlua::Result<bool> {
-    let compact: String = text
-        .chars()
-        .filter(|ch| !ch.is_whitespace())
-        .map(|ch| ch.to_ascii_lowercase())
-        .collect();
-    if let Some(value) = compact
-        .strip_suffix('x')
-        .and_then(|raw| raw.parse::<f32>().ok())
-    {
-        set_player_speedmod(owner, "xmod", Some(value))?;
-        return Ok(true);
-    }
-    for (prefix, key) in [("ca", "camod"), ("c", "cmod"), ("m", "mmod"), ("a", "amod")] {
-        if let Some(value) = compact
-            .strip_prefix(prefix)
-            .and_then(|raw| raw.parse::<f32>().ok())
-            .or_else(|| {
-                compact
-                    .strip_suffix(prefix)
-                    .and_then(|raw| raw.parse::<f32>().ok())
-            })
-        {
-            set_player_speedmod(owner, key, Some(value))?;
-            return Ok(true);
-        }
-    }
-    Ok(false)
-}
-
-#[inline(always)]
-fn normalize_player_option_value(lua: &Lua, name: &str, value: Value) -> mlua::Result<Value> {
-    if player_option_uses_bool(name) {
-        return Ok(Value::Boolean(read_boolish(value).unwrap_or(false)));
-    }
-    if player_option_default_string(name).is_some() {
-        return Ok(match value {
-            Value::String(_) => value,
-            _ => default_player_option_value(lua, name)?,
-        });
-    }
-    Ok(Value::Number(read_f32(value).unwrap_or(0.0) as f64))
-}
-
-#[inline(always)]
-fn default_player_option_value(lua: &Lua, name: &str) -> mlua::Result<Value> {
-    if player_option_uses_bool(name) {
-        return Ok(Value::Boolean(false));
-    }
-    if let Some(value) = player_option_default_string(name) {
-        return Ok(Value::String(lua.create_string(value)?));
-    }
-    Ok(Value::Number(0.0))
-}
-
-#[inline(always)]
-fn player_option_default_string(name: &str) -> Option<&'static str> {
-    Some(match name {
-        "drainsetting" => "DrainType_Normal",
-        "failsetting" => "FailType_Immediate",
-        "hidelightsetting" => "HideLightType_NoHideLights",
-        "lifesetting" => "LifeType_Bar",
-        "mintnstohidenotes" => "TapNoteScore_None",
-        "modtimersetting" => "ModTimerType_Default",
-        _ => return None,
-    })
-}
-
-#[inline(always)]
-fn player_option_uses_bool(name: &str) -> bool {
-    matches!(
-        name,
-        "attackmines"
-            | "backwards"
-            | "big"
-            | "bmrize"
-            | "cosecant"
-            | "dizzyholds"
-            | "echo"
-            | "floored"
-            | "holdrolls"
-            | "hypershuffle"
-            | "left"
-            | "little"
-            | "lrmirror"
-            | "mirror"
-            | "mines"
-            | "muteonerror"
-            | "nohands"
-            | "noholds"
-            | "nojumps"
-            | "nolifts"
-            | "nomines"
-            | "noquads"
-            | "norolls"
-            | "nostretch"
-            | "nofakes"
-            | "overhead"
-            | "planted"
-            | "quick"
-            | "right"
-            | "shuffle"
-            | "skippy"
-            | "softshuffle"
-            | "stealthpastreceptors"
-            | "stealthtype"
-            | "stomp"
-            | "supershuffle"
-            | "turnnone"
-            | "twister"
-            | "udmirror"
-            | "wide"
-            | "zbuffer"
-    )
+    let Some((key, value)) = parse_player_speed_option(text) else {
+        return Ok(false);
+    };
+    set_player_speedmod(owner, key, Some(value))?;
+    Ok(true)
 }
 
 fn install_speedmod_method(
@@ -755,7 +460,7 @@ fn install_speedmod_method(
     speedmod: SongLuaSpeedMod,
     ctor: fn(f32) -> SongLuaSpeedMod,
 ) -> mlua::Result<()> {
-    let initial = speedmod_value(speedmod, ctor);
+    let initial = song_lua_speedmod_value(speedmod, ctor);
     install_speedmod_state_method(lua, table, name, initial)
 }
 
@@ -807,16 +512,6 @@ fn set_player_speedmod(owner: &Table, key: &str, value: Option<f32>) -> mlua::Re
         owner.raw_set(value_key.as_str(), Value::Nil)?;
     }
     Ok(())
-}
-
-fn speedmod_value(speedmod: SongLuaSpeedMod, ctor: fn(f32) -> SongLuaSpeedMod) -> Value {
-    match (speedmod, ctor(0.0)) {
-        (SongLuaSpeedMod::X(value), SongLuaSpeedMod::X(_))
-        | (SongLuaSpeedMod::C(value), SongLuaSpeedMod::C(_))
-        | (SongLuaSpeedMod::M(value), SongLuaSpeedMod::M(_))
-        | (SongLuaSpeedMod::A(value), SongLuaSpeedMod::A(_)) => Value::Number(value as f64),
-        _ => Value::Nil,
-    }
 }
 
 pub(super) fn create_song_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {
@@ -1431,30 +1126,6 @@ pub(super) fn create_songman_table(
     Ok(songman)
 }
 
-fn create_song_group_table(lua: &Lua) -> mlua::Result<Table> {
-    let group = lua.create_table()?;
-    group.set(
-        "GetSyncOffset",
-        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
-    )?;
-    Ok(group)
-}
-
-fn create_single_value_array(lua: &Lua, value: Table) -> mlua::Result<Table> {
-    let table = lua.create_table()?;
-    table.raw_set(1, value)?;
-    Ok(table)
-}
-
-fn song_lookup_matches(query: &str, song_dir: &str, group: &str, title: &str) -> bool {
-    let query = query.trim().replace('\\', "/");
-    !query.is_empty()
-        && (query == song_dir
-            || song_dir.contains(query.as_str())
-            || query.eq_ignore_ascii_case(group)
-            || query.eq_ignore_ascii_case(title))
-}
-
 fn create_steps_by_steps_type_table(
     lua: &Lua,
     display_bpms: [f32; 2],
@@ -1477,96 +1148,5 @@ fn create_steps_by_steps_type_table(
             create_steps_table(lua, difficulty, display_bpms, song_dir)?,
         )?;
     }
-    Ok(table)
-}
-
-fn create_timing_table(lua: &Lua, bpms: [f32; 2]) -> mlua::Result<Table> {
-    let table = lua.create_table()?;
-    let actual_bpms = create_display_bpms_table(lua, bpms)?;
-    table.set(
-        "GetActualBPM",
-        lua.create_function(move |_, _args: MultiValue| Ok(actual_bpms.clone()))?,
-    )?;
-    let timing_bpms = create_timing_bpms_table(lua, bpms)?;
-    table.set(
-        "GetBPMs",
-        lua.create_function(move |_, _args: MultiValue| Ok(timing_bpms.clone()))?,
-    )?;
-    let has_bpm_changes = (bpms[0] - bpms[1]).abs() > f32::EPSILON;
-    table.set(
-        "HasBPMChanges",
-        lua.create_function(move |_, _args: MultiValue| Ok(has_bpm_changes))?,
-    )?;
-    let bpm_at_beat = bpms[0].max(0.0);
-    table.set(
-        "GetBPMAtBeat",
-        lua.create_function(move |_, _args: MultiValue| Ok(bpm_at_beat))?,
-    )?;
-    table.set(
-        "GetElapsedTimeFromBeat",
-        lua.create_function(|_, args: MultiValue| {
-            Ok(method_arg(&args, 0)
-                .cloned()
-                .and_then(read_f32)
-                .unwrap_or(0.0))
-        })?,
-    )?;
-    table.set(
-        "GetBeatFromElapsedTime",
-        lua.create_function(|_, args: MultiValue| {
-            Ok(method_arg(&args, 0)
-                .cloned()
-                .and_then(read_f32)
-                .unwrap_or(0.0))
-        })?,
-    )?;
-    Ok(table)
-}
-
-fn create_timing_bpms_table(lua: &Lua, bpms: [f32; 2]) -> mlua::Result<Table> {
-    let table = lua.create_table()?;
-    table.raw_set(1, bpms[0].max(0.0))?;
-    if (bpms[0] - bpms[1]).abs() > f32::EPSILON {
-        table.raw_set(2, bpms[1].max(0.0))?;
-    }
-    Ok(table)
-}
-
-pub(super) fn create_style_table(lua: &Lua, style_name: &str) -> mlua::Result<Table> {
-    let table = lua.create_table()?;
-    let style = song_lua_style_info(style_name);
-    let style_name_for_get = style.name.to_string();
-    table.set(
-        "GetName",
-        lua.create_function(move |lua, _args: MultiValue| {
-            Ok(Value::String(lua.create_string(&style_name_for_get)?))
-        })?,
-    )?;
-    set_string_method(lua, &table, "GetStepsType", style.steps_type)?;
-    set_string_method(lua, &table, "GetStyleType", style.style_type)?;
-    table.set(
-        "ColumnsPerPlayer",
-        lua.create_function(move |_, _args: MultiValue| Ok(style.columns as i64))?,
-    )?;
-    table.set(
-        "GetWidth",
-        lua.create_function(move |_, _args: MultiValue| Ok(style.width))?,
-    )?;
-    table.set(
-        "GetColumnInfo",
-        lua.create_function(move |lua, args: MultiValue| {
-            let index = method_arg(&args, 1)
-                .cloned()
-                .and_then(read_i32_value)
-                .unwrap_or(1)
-                .clamp(1, style.columns as i32) as usize
-                - 1;
-            let info = lua.create_table()?;
-            info.set("Name", song_lua_style_column_name(index))?;
-            info.set("Track", index as i64)?;
-            info.set("XOffset", song_lua_style_column_x(style.name, index))?;
-            Ok(info)
-        })?,
-    )?;
     Ok(table)
 }

@@ -524,82 +524,6 @@ fn theme_screen_fallback(group: &str) -> Option<&'static str> {
     }
 }
 
-pub(super) fn theme_metric_number(group: &str, name: &str) -> Option<f32> {
-    theme_metric_number_for_human_players(group, name, LUA_PLAYERS)
-}
-
-fn theme_metric_number_for_human_players(
-    group: &str,
-    name: &str,
-    human_player_count: usize,
-) -> Option<f32> {
-    theme_metric_number_for_screen(group, name, human_player_count, 480.0)
-}
-
-fn theme_metric_number_for_screen(
-    group: &str,
-    name: &str,
-    human_player_count: usize,
-    screen_height: f32,
-) -> Option<f32> {
-    if group.eq_ignore_ascii_case("Player") {
-        if name.eq_ignore_ascii_case("ReceptorArrowsYStandard") {
-            return Some(THEME_RECEPTOR_Y_STD);
-        }
-        if name.eq_ignore_ascii_case("ReceptorArrowsYReverse") {
-            return Some(THEME_RECEPTOR_Y_REV);
-        }
-        if name.eq_ignore_ascii_case("DrawDistanceBeforeTargetsPixels") {
-            return Some(screen_height.max(1.0) * 1.5);
-        }
-        if name.eq_ignore_ascii_case("DrawDistanceAfterTargetsPixels") {
-            return Some(-130.0);
-        }
-    }
-    if group.eq_ignore_ascii_case("Combo") && name.eq_ignore_ascii_case("ShowComboAt") {
-        return Some(4.0);
-    }
-    if group.eq_ignore_ascii_case("GraphDisplay") {
-        if name.eq_ignore_ascii_case("BodyWidth") {
-            return Some(graph_display_body_size(human_player_count)[0]);
-        }
-        if name.eq_ignore_ascii_case("BodyHeight") {
-            return Some(graph_display_body_size(human_player_count)[1]);
-        }
-    }
-    if group.eq_ignore_ascii_case("LifeMeterBar") && name.eq_ignore_ascii_case("InitialValue") {
-        return Some(SONG_LUA_INITIAL_LIFE);
-    }
-    if group.eq_ignore_ascii_case("MusicWheel") && name.eq_ignore_ascii_case("NumWheelItems") {
-        return Some(15.0);
-    }
-    if group.eq_ignore_ascii_case("PlayerStageStats")
-        && name.eq_ignore_ascii_case("NumGradeTiersUsed")
-    {
-        return Some(7.0);
-    }
-    None
-}
-
-pub(super) fn graph_display_body_size(human_player_count: usize) -> [f32; 2] {
-    [
-        if human_player_count == 1 {
-            610.0
-        } else {
-            300.0
-        },
-        64.0,
-    ]
-}
-
-pub(super) fn song_lua_human_player_count(context: &SongLuaCompileContext) -> usize {
-    context
-        .players
-        .iter()
-        .filter(|player| player.enabled)
-        .count()
-}
-
 fn theme_metric_bool(value: Value) -> bool {
     match value {
         Value::Boolean(value) => value,
@@ -659,64 +583,6 @@ fn theme_metric_names(group: &str) -> Vec<String> {
     names.sort_unstable();
     names.dedup();
     names
-}
-
-fn theme_string_names(section: &str) -> Vec<String> {
-    if section.eq_ignore_ascii_case("Difficulty")
-        || section.eq_ignore_ascii_case("CustomDifficulty")
-    {
-        return [
-            SongLuaDifficulty::Beginner,
-            SongLuaDifficulty::Easy,
-            SongLuaDifficulty::Medium,
-            SongLuaDifficulty::Hard,
-            SongLuaDifficulty::Challenge,
-            SongLuaDifficulty::Edit,
-        ]
-        .into_iter()
-        .map(|difficulty| difficulty.sm_name().to_string())
-        .collect();
-    }
-    if matches!(
-        section,
-        "OptionTitles"
-            | "OptionNames"
-            | "ThemePrefs"
-            | "SLPlayerOptions"
-            | "ScreenSelectPlayMode"
-            | "ScreenSelectStyle"
-            | "GameButton"
-            | "TapNoteScore"
-            | "TapNoteScoreFA+"
-            | "HoldNoteScore"
-            | "Stage"
-            | "Months"
-    ) {
-        return [
-            "Yes",
-            "No",
-            "Cancel",
-            "DisplayMode",
-            "MusicRate",
-            "SpeedMod",
-            "NoteSkin",
-            "Difficulty_Hard",
-        ]
-        .into_iter()
-        .map(str::to_string)
-        .collect();
-    }
-    Vec::new()
-}
-
-pub(super) fn theme_path(kind: &str, group: &str, name: &str) -> String {
-    let group = group.trim_matches('/');
-    let name = name.trim_start_matches('/');
-    if group.is_empty() {
-        format!("{SONG_LUA_THEME_PATH_PREFIX}{kind}/{name}")
-    } else {
-        format!("{SONG_LUA_THEME_PATH_PREFIX}{kind}/{group}/{name}")
-    }
 }
 
 #[derive(Clone, Copy)]
@@ -1215,14 +1081,6 @@ fn set_custom_option_save(lua: &Lua, row: &Table, option_name: &str) -> mlua::Re
             Ok(())
         })?,
     )
-}
-
-fn custom_multi_modifier_key(option_name: &str, choice: &str) -> String {
-    if option_name.eq_ignore_ascii_case("Hide") {
-        format!("Hide{choice}")
-    } else {
-        choice.to_string()
-    }
 }
 
 fn create_compat_option_row_table(
@@ -3143,20 +3001,6 @@ pub(super) fn create_hooks_table(lua: &Lua) -> mlua::Result<Table> {
     Ok(table)
 }
 
-fn song_lua_arch_name() -> &'static str {
-    if cfg!(target_os = "windows") {
-        "Windows"
-    } else if cfg!(target_os = "macos") {
-        "Mac OS X"
-    } else if cfg!(target_os = "linux") {
-        "Linux"
-    } else if cfg!(target_os = "freebsd") {
-        "FreeBSD"
-    } else {
-        "Unknown"
-    }
-}
-
 pub(super) fn create_noteskin_table(
     lua: &Lua,
     context: &SongLuaCompileContext,
@@ -3527,109 +3371,4 @@ fn tag_song_lua_noteskin_actor(
     actor.set("__songlua_noteskin_name", skin.trim().to_ascii_lowercase())?;
     actor.set("__songlua_noteskin_button", button)?;
     actor.set("__songlua_noteskin_element", element)
-}
-
-pub(super) fn theme_string(section: &str, name: &str) -> String {
-    if section.eq_ignore_ascii_case("Difficulty")
-        || section.eq_ignore_ascii_case("CustomDifficulty")
-    {
-        return name.trim_start_matches("Difficulty_").to_string();
-    }
-    if matches!(
-        section,
-        "OptionTitles"
-            | "OptionNames"
-            | "ThemePrefs"
-            | "SLPlayerOptions"
-            | "ScreenSelectPlayMode"
-            | "ScreenSelectStyle"
-            | "GameButton"
-            | "TapNoteScore"
-            | "TapNoteScoreFA+"
-            | "HoldNoteScore"
-            | "Stage"
-            | "Months"
-    ) {
-        return name.replace('_', " ");
-    }
-    match name {
-        "Yes" => "Yes".to_string(),
-        "No" => "No".to_string(),
-        "Cancel" => "Cancel".to_string(),
-        _ => name.to_string(),
-    }
-}
-
-fn theme_has_string(section: &str, name: &str) -> bool {
-    section.eq_ignore_ascii_case("Difficulty")
-        || section.eq_ignore_ascii_case("CustomDifficulty")
-        || matches!(
-            section,
-            "OptionTitles"
-                | "OptionNames"
-                | "ThemePrefs"
-                | "SLPlayerOptions"
-                | "ScreenSelectPlayMode"
-                | "ScreenSelectStyle"
-                | "GameButton"
-                | "TapNoteScore"
-                | "TapNoteScoreFA+"
-                | "HoldNoteScore"
-                | "Stage"
-                | "Months"
-        )
-        || matches!(name, "Yes" | "No" | "Cancel")
-}
-
-fn theme_pref_default(lua: &Lua, name: &str) -> mlua::Result<Value> {
-    let lower = name.to_ascii_lowercase();
-    if matches!(
-        lower.as_str(),
-        "casualmaxmeter"
-            | "numberofcontinuesallowed"
-            | "screenselectmusicmenutimer"
-            | "screenselectmusiccasualmenutimer"
-            | "screenplayeroptionsmenutimer"
-            | "screenevaluationmenutimer"
-            | "screenevaluationnonstopmenutimer"
-            | "screenevaluationsummarymenutimer"
-            | "screennameentrymenutimer"
-            | "screengroovestatsloginmenutimer"
-            | "simplylovecolor"
-            | "nice"
-    ) {
-        return Ok(Value::Integer(match lower.as_str() {
-            "casualmaxmeter" => 12,
-            "simplylovecolor" => 1,
-            _ => 0,
-        }));
-    }
-    if matches!(
-        lower.as_str(),
-        "visualstyle"
-            | "lastactiveevent"
-            | "musicwheelstyle"
-            | "themefont"
-            | "defaultgamemode"
-            | "autostyle"
-            | "songselectbg"
-            | "resultsbg"
-            | "scoringsystem"
-            | "stepstats"
-            | "editmodelastseensong"
-            | "editmodelastseendifficulty"
-            | "editmodelastseenstepstype"
-            | "editmodelastseenstyletype"
-    ) {
-        let value = match lower.as_str() {
-            "themefont" => "Common",
-            "defaultgamemode" => "Dance",
-            "songselectbg" | "resultsbg" => "Off",
-            "musicwheelstyle" => "Default",
-            "autostyle" => "Default",
-            _ => "",
-        };
-        return Ok(Value::String(lua.create_string(value)?));
-    }
-    Ok(Value::Boolean(matches!(lower.as_str(), "useimagecache")))
 }

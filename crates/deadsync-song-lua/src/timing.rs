@@ -2,12 +2,39 @@ use mlua::Value;
 
 use crate::{read_f32, read_i32_value, read_string, truthy};
 
+pub const SONG_LUA_TIMING_WINDOW_NAMES: [&str; 5] = [
+    "TimingWindow_W1",
+    "TimingWindow_W2",
+    "TimingWindow_W3",
+    "TimingWindow_W4",
+    "TimingWindow_W5",
+];
+
 pub fn timing_window_arg_index(value: Value) -> Option<i32> {
     read_i32_value(value.clone()).or_else(|| {
         let text = read_string(value)?;
         let (_, suffix) = text.rsplit_once('W')?;
         suffix.parse::<i32>().ok()
     })
+}
+
+pub fn timing_window_name(value: Value) -> Option<&'static str> {
+    let index = match value {
+        Value::Integer(value) => i32::try_from(value).ok(),
+        Value::Number(value) if value.is_finite() => Some(value.round() as i32),
+        Value::String(text) => text
+            .to_str()
+            .ok()?
+            .chars()
+            .rev()
+            .find(|ch| ch.is_ascii_digit())
+            .and_then(|ch| ch.to_digit(10))
+            .map(|value| value as i32),
+        _ => None,
+    }?;
+    (1..=5)
+        .contains(&index)
+        .then(|| SONG_LUA_TIMING_WINDOW_NAMES[index as usize - 1])
 }
 
 pub fn timing_window_seconds(index: i32, mode: &str, tenms: bool) -> f32 {
@@ -76,5 +103,19 @@ mod tests {
         assert!((timing_window_seconds(1, "FA+", false) - 0.015).abs() <= 1e-6);
         assert!((timing_window_seconds(1, "FA+", true) - 0.010).abs() <= 1e-6);
         assert!((timing_window_seconds(99, "", false) - 0.1815).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn timing_window_name_accepts_numbers_and_names() {
+        let lua = mlua::Lua::new();
+        assert_eq!(
+            timing_window_name(Value::Integer(1)),
+            Some("TimingWindow_W1")
+        );
+        assert_eq!(
+            timing_window_name(Value::String(lua.create_string("TimingWindow_W5").unwrap())),
+            Some("TimingWindow_W5")
+        );
+        assert_eq!(timing_window_name(Value::Integer(8)), None);
     }
 }
