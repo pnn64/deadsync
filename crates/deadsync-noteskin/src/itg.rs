@@ -2,7 +2,7 @@ use log::warn;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::{
     NoteAnimPart, NoteColorType, NoteDisplayMetrics, NotePartAnimation, NotePartTextureTranslate,
@@ -12,11 +12,22 @@ use crate::{
 
 const MAX_FALLBACK_DEPTH: usize = 20;
 const MAX_REDIR_DEPTH: usize = 100;
+const DEFAULT_SKIN_NAME: &str = "default";
+const DEFAULT_SKIN_CANDIDATES: &[&str] = &[DEFAULT_SKIN_NAME, "cel"];
 
 static CHILD_DIR_CACHE: OnceLock<Mutex<HashMap<(String, String), Option<PathBuf>>>> =
     OnceLock::new();
 static FILE_PREFIX_CACHE: OnceLock<Mutex<HashMap<(String, String), Option<PathBuf>>>> =
     OnceLock::new();
+static NOTESKIN_DATA_CACHE: OnceLock<Mutex<HashMap<NoteskinDataCacheKey, Arc<NoteskinData>>>> =
+    OnceLock::new();
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct NoteskinDataCacheKey {
+    root: String,
+    game: String,
+    skin: String,
+}
 
 pub fn clear_lookup_caches() {
     if let Some(cache) = CHILD_DIR_CACHE.get() {
@@ -26,6 +37,15 @@ pub fn clear_lookup_caches() {
             .clear();
     }
     if let Some(cache) = FILE_PREFIX_CACHE.get() {
+        cache
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
+    }
+}
+
+pub fn clear_data_cache() {
+    if let Some(cache) = NOTESKIN_DATA_CACHE.get() {
         cache
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -47,6 +67,39 @@ pub fn down_col(num_cols: usize) -> usize {
     (0..num_cols)
         .find(|&col| button_for_col(col).eq_ignore_ascii_case("Down"))
         .unwrap_or(0)
+}
+
+pub fn normalized_game_name(game: &str) -> String {
+    game.trim().to_ascii_lowercase()
+}
+
+pub fn normalized_skin_name(skin: &str) -> String {
+    let skin = skin.trim();
+    if skin.is_empty() {
+        DEFAULT_SKIN_NAME.to_string()
+    } else {
+        skin.to_ascii_lowercase()
+    }
+}
+
+pub fn skin_name_is_default(skin: &str) -> bool {
+    normalized_skin_name(skin) == DEFAULT_SKIN_NAME
+}
+
+pub const fn default_skin_name() -> &'static str {
+    DEFAULT_SKIN_NAME
+}
+
+pub const fn default_skin_candidates() -> &'static [&'static str] {
+    DEFAULT_SKIN_CANDIDATES
+}
+
+fn noteskin_data_cache_key(root: &Path, game: &str, skin: &str) -> NoteskinDataCacheKey {
+    NoteskinDataCacheKey {
+        root: root.to_string_lossy().to_ascii_lowercase(),
+        game: normalized_game_name(game),
+        skin: normalized_skin_name(skin),
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -280,11 +333,69 @@ pub fn resolve_texture_expr(
         })
 }
 
+pub fn discover_skins(roots: &[PathBuf], game: &str) -> Vec<String> {
+    let game = normalized_game_name(game);
+    let mut seen = HashSet::new();
+    let mut found = Vec::new();
+    for root in roots {
+        let game_dir = root.join(&game);
+        let Ok(entries) = fs::read_dir(&game_dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let Ok(meta) = entry.metadata() else {
+                continue;
+            };
+            if !meta.is_dir() {
+                continue;
+            }
+            let name = entry.file_name().to_string_lossy().to_ascii_lowercase();
+            if name.is_empty() || name == "common" || name.starts_with('.') {
+                continue;
+            }
+            let dir = entry.path();
+            if noteskin_dir_has_itg_files(&dir) && seen.insert(name.clone()) {
+                found.push(name);
+            }
+        }
+    }
+    order_discovered_skins(found)
+}
+
+fn noteskin_dir_has_itg_files(dir: &Path) -> bool {
+    dir.join("NoteSkin.lua").is_file()
+        || dir.join("metrics.ini").is_file()
+        || fs::read_dir(dir)
+            .ok()
+            .and_then(|mut entries| entries.next())
+            .is_some()
+}
+
+fn order_discovered_skins(mut found: Vec<String>) -> Vec<String> {
+    found.sort();
+    let mut ordered = Vec::with_capacity(found.len().max(2));
+    for preferred in default_skin_candidates() {
+        if let Some(pos) = found.iter().position(|skin| skin == preferred) {
+            ordered.push(found.remove(pos));
+        }
+    }
+    ordered.extend(found);
+    if ordered.is_empty() {
+        default_skin_candidates()
+            .iter()
+            .map(|skin| skin.to_string())
+            .collect()
+    } else {
+        ordered
+    }
+}
+
 pub fn load_noteskin_data(root: &Path, game: &str, skin: &str) -> Result<NoteskinData, String> {
     let mut metrics = IniData::default();
     let mut search_dirs = Vec::new();
 
-    let mut current = skin.trim().to_ascii_lowercase();
+    let requested = normalized_skin_name(skin);
+    let mut current = requested.clone();
     if current.is_empty() {
         return Err("noteskin name was empty".to_string());
     }
@@ -331,21 +442,21 @@ pub fn load_noteskin_data(root: &Path, game: &str, skin: &str) -> Result<Noteski
 
         let Some(next_skin) = next else {
             return Ok(NoteskinData {
-                name: skin.to_ascii_lowercase(),
+                name: requested,
                 metrics,
                 search_dirs,
             });
         };
         if next_skin == current {
             return Ok(NoteskinData {
-                name: skin.to_ascii_lowercase(),
+                name: requested,
                 metrics,
                 search_dirs,
             });
         }
         if seen.contains(&next_skin) {
             return Ok(NoteskinData {
-                name: skin.to_ascii_lowercase(),
+                name: requested,
                 metrics,
                 search_dirs,
             });
@@ -356,6 +467,30 @@ pub fn load_noteskin_data(root: &Path, game: &str, skin: &str) -> Result<Noteski
     Err(format!(
         "noteskin fallback depth exceeded while loading '{skin}'"
     ))
+}
+
+pub fn load_noteskin_data_cached(
+    root: &Path,
+    game: &str,
+    skin: &str,
+) -> Result<Arc<NoteskinData>, String> {
+    let key = noteskin_data_cache_key(root, game, skin);
+    let cache = NOTESKIN_DATA_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Some(cached) = cache
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get(&key)
+        .cloned()
+    {
+        return Ok(cached);
+    }
+
+    let loaded = Arc::new(load_noteskin_data(root, game, skin)?);
+    let mut guard = cache
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let entry = guard.entry(key).or_insert_with(|| loaded.clone());
+    Ok(entry.clone())
 }
 
 pub fn note_display_metrics(metrics: &IniData) -> NoteDisplayMetrics {
@@ -610,9 +745,11 @@ fn is_redir(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        IniData, NoteskinData, animation_is_beat_based, button_for_col, clear_lookup_caches,
-        down_col, find_file_with_prefix, find_texture_with_prefix, note_display_metrics,
-        parse_ini_float, resolve_skin_dir, resolve_texture_expr, texture_key_for_path,
+        IniData, NoteskinData, animation_is_beat_based, button_for_col, clear_data_cache,
+        clear_lookup_caches, default_skin_candidates, default_skin_name, down_col,
+        find_file_with_prefix, find_texture_with_prefix, load_noteskin_data_cached,
+        normalized_game_name, normalized_skin_name, note_display_metrics, parse_ini_float,
+        resolve_skin_dir, resolve_texture_expr, skin_name_is_default, texture_key_for_path,
     };
     use crate::{NoteAnimPart, NoteColorType};
     use std::collections::HashMap;
@@ -648,6 +785,102 @@ mod tests {
         assert_eq!(down_col(1), 0);
         assert_eq!(down_col(4), 1);
         assert_eq!(down_col(8), 1);
+    }
+
+    #[test]
+    fn normalized_names_trim_case_and_default_empty_skins() {
+        assert_eq!(normalized_game_name(" Dance "), "dance");
+        assert_eq!(normalized_skin_name(" Cel "), "cel");
+        assert_eq!(normalized_skin_name(" \t "), "default");
+        assert_eq!(default_skin_name(), "default");
+        assert_eq!(default_skin_candidates(), ["default", "cel"]);
+        assert!(skin_name_is_default(""));
+        assert!(skin_name_is_default(" DEFAULT "));
+        assert!(!skin_name_is_default("cel"));
+    }
+
+    #[test]
+    fn load_noteskin_data_uses_normalized_requested_name() {
+        let _guard = LOOKUP_CACHE_TEST_LOCK.lock().unwrap();
+        clear_lookup_caches();
+        clear_data_cache();
+        let root = temp_root("normalized-name");
+        let skin_dir = root.join("dance/cel");
+        let default_dir = root.join("dance/default");
+        let common_dir = root.join("common/common");
+        fs::create_dir_all(&skin_dir).unwrap();
+        fs::create_dir_all(&default_dir).unwrap();
+        fs::create_dir_all(&common_dir).unwrap();
+
+        let data = super::load_noteskin_data(&root, "dance", " CeL ").expect("noteskin data");
+
+        assert_eq!(data.name, "cel");
+        clear_data_cache();
+    }
+
+    #[test]
+    fn clear_data_cache_reloads_noteskin_data() {
+        let _guard = LOOKUP_CACHE_TEST_LOCK.lock().unwrap();
+        clear_lookup_caches();
+        clear_data_cache();
+        let root = temp_root("data-cache");
+        let skin_dir = root.join("dance/hot");
+        fs::create_dir_all(&skin_dir).unwrap();
+        let metrics = skin_dir.join("metrics.ini");
+        fs::write(
+            &metrics,
+            "[Global]\nFallbackNoteSkin=hot\n[Down]\nFoo=old\n",
+        )
+        .unwrap();
+
+        let loaded = load_noteskin_data_cached(&root, "dance", "hot").unwrap();
+        assert_eq!(loaded.get_metric("Down", "Foo"), Some("old"));
+
+        fs::write(
+            &metrics,
+            "[Global]\nFallbackNoteSkin=hot\n[Down]\nFoo=new\n",
+        )
+        .unwrap();
+        let stale = load_noteskin_data_cached(&root, "dance", "hot").unwrap();
+        assert_eq!(stale.get_metric("Down", "Foo"), Some("old"));
+
+        clear_data_cache();
+        let refreshed = load_noteskin_data_cached(&root, "dance", "hot").unwrap();
+        assert_eq!(refreshed.get_metric("Down", "Foo"), Some("new"));
+
+        let _ = fs::remove_dir_all(root);
+        clear_lookup_caches();
+        clear_data_cache();
+    }
+
+    #[test]
+    fn discover_skins_orders_preferred_and_filters_internal_dirs() {
+        let root = temp_root("discover");
+        fs::create_dir_all(root.join("dance/default")).unwrap();
+        fs::create_dir_all(root.join("dance/cel")).unwrap();
+        fs::create_dir_all(root.join("dance/Zeta")).unwrap();
+        fs::create_dir_all(root.join("dance/alpha")).unwrap();
+        fs::create_dir_all(root.join("dance/common")).unwrap();
+        fs::create_dir_all(root.join("dance/.hidden")).unwrap();
+        fs::create_dir_all(root.join("dance/empty")).unwrap();
+        fs::write(root.join("dance/default/metrics.ini"), b"").unwrap();
+        fs::write(root.join("dance/cel/NoteSkin.lua"), b"").unwrap();
+        fs::write(root.join("dance/Zeta/NoteSkin.lua"), b"").unwrap();
+        fs::write(root.join("dance/alpha/sprite.png"), b"").unwrap();
+        fs::write(root.join("dance/common/metrics.ini"), b"").unwrap();
+        fs::write(root.join("dance/.hidden/metrics.ini"), b"").unwrap();
+
+        assert_eq!(
+            super::discover_skins(&[root], " Dance "),
+            ["default", "cel", "alpha", "zeta"]
+        );
+    }
+
+    #[test]
+    fn discover_skins_returns_default_list_when_none_found() {
+        let root = temp_root("discover-empty");
+
+        assert_eq!(super::discover_skins(&[root], "dance"), ["default", "cel"]);
     }
 
     #[test]

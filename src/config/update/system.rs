@@ -125,9 +125,8 @@ pub fn send_smx_underglow_color() {
     }
     let index = cfg.simply_love_color;
     let to_u8 = |c: f32| (c * 255.0).round() as u8;
-    let rgba_to_rgb = |rgba: [f32; 4]| -> [u8; 3] {
-        [to_u8(rgba[0]), to_u8(rgba[1]), to_u8(rgba[2])]
-    };
+    let rgba_to_rgb =
+        |rgba: [f32; 4]| -> [u8; 3] { [to_u8(rgba[0]), to_u8(rgba[1]), to_u8(rgba[2])] };
     let p1_rgb = rgba_to_rgb(deadlib_present::color::decorative_rgba(index));
     let lone_pad = deadsync_smx::get_info(0).connected ^ deadsync_smx::get_info(1).connected;
     let p2_rgb = if lone_pad {

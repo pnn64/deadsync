@@ -109,7 +109,8 @@ pub(in crate::screens::options) const SYSTEM_OPTIONS_ITEMS: &[Item] = &[
 ];
 
 pub(in crate::screens::options) fn discover_system_noteskin_choices() -> Vec<String> {
-    let mut names = noteskin_parser::discover_itg_skins("dance");
+    let roots = deadlib_platform::dirs::app_dirs().noteskin_roots();
+    let mut names = deadsync_noteskin::itg::discover_skins(&roots, "dance");
     if names.is_empty() {
         names.push(NoteSkin::DEFAULT_NAME.to_string());
     }

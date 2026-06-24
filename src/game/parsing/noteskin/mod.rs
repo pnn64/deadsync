@@ -1,23 +1,20 @@
-mod commands;
-mod mine;
-mod model_cache;
 mod texture;
 
-use self::commands::itg_apply_state_properties_from_commands;
+pub(crate) use self::texture::build_model_geometry;
+pub(crate) use self::texture::load_itg_model_slots_from_path;
 #[cfg(test)]
-use self::commands::itg_apply_state_properties_from_script;
-use self::mine::mine_fill_slots;
-pub use self::model_cache::ModelMeshCacheStats;
-pub(crate) use self::model_cache::{ModelMeshCache, build_model_geometry};
+pub(crate) use self::texture::test_model_slot;
+pub use self::texture::{SpriteSlot, SpriteSource};
 use self::texture::{
-    itg_apply_frame_override, itg_model_slot_from_texture_path, itg_slot_from_path,
+    itg_apply_frame_override, itg_apply_state_properties_from_commands, itg_slot_from_path,
     itg_slot_from_path_all_frames, itg_slot_from_path_animated, itg_slot_from_path_with_frame,
+    mine_fill_slots,
 };
 #[cfg(test)]
-use self::texture::{itg_register_texture_dims_for_path, itg_texture_key};
-use crate::assets;
+use self::texture::{
+    itg_apply_state_properties_from_script, itg_register_texture_dims_for_path, itg_texture_key,
+};
 use deadlib_platform::dirs;
-use deadlib_present::actors::TextureKeyHandle;
 use deadsync_noteskin::model::{
     itg_parse_milkshape_model, itg_parse_milkshape_model_auto_rot,
     itg_parse_milkshape_model_layers, itg_resolve_model_texture_path,
@@ -33,282 +30,16 @@ pub use deadsync_noteskin::{
 };
 use deadsync_noteskin::{
     actor as noteskin_actor, compiled as noteskin_compiled, compiler as noteskin_compiler,
-    explosion as noteskin_explosion, itg as noteskin_itg, model_draw_at, model_glow_at,
-    model_glow_with_draw, neg_rot_sin_cos, receptor as noteskin_receptor,
-    script as noteskin_script, sprite_animated_uv, sprite_atlas_uv, sprite_frame_index,
-    sprite_frame_index_from_phase, sprite_scrolled_uv,
+    itg as noteskin_itg, script as noteskin_script,
 };
 use log::warn;
 use noteskin_script::{parse_script_bool, parse_script_number};
 use std::collections::{HashMap, HashSet};
-use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{
-    Arc, Mutex, OnceLock,
-    atomic::{AtomicU64, Ordering},
-};
-
-#[derive(Debug)]
-pub enum SpriteSource {
-    Atlas {
-        texture_key: Arc<str>,
-        tex_dims: (u32, u32),
-        cached_handle: AtomicU64,
-        cached_generation: AtomicU64,
-    },
-    Animated {
-        texture_key: Arc<str>,
-        tex_dims: (u32, u32),
-        frame_size: [i32; 2],
-        grid: (usize, usize),
-        frame_count: usize,
-        frame_indices: Option<Arc<[usize]>>,
-        rate: AnimationRate,
-        frame_durations: Option<Arc<[f32]>>,
-        cached_handle: AtomicU64,
-        cached_generation: AtomicU64,
-    },
-}
-
-impl SpriteSource {
-    pub fn texture_key(&self) -> &str {
-        match self {
-            Self::Atlas { texture_key, .. } => texture_key,
-            Self::Animated { texture_key, .. } => texture_key,
-        }
-    }
-
-    #[inline(always)]
-    pub fn texture_key_shared(&self) -> Arc<str> {
-        match self {
-            Self::Atlas { texture_key, .. } => texture_key.clone(),
-            Self::Animated { texture_key, .. } => texture_key.clone(),
-        }
-    }
-
-    #[inline(always)]
-    pub fn texture_key_handle(&self) -> TextureKeyHandle {
-        let (texture_key, cached_handle, cached_generation) = match self {
-            Self::Atlas {
-                texture_key,
-                cached_handle,
-                cached_generation,
-                ..
-            }
-            | Self::Animated {
-                texture_key,
-                cached_handle,
-                cached_generation,
-                ..
-            } => (texture_key, cached_handle, cached_generation),
-        };
-        let generation = assets::texture_registry_generation();
-        let handle = cached_handle.load(Ordering::Relaxed);
-        if handle != deadlib_render::INVALID_TEXTURE_HANDLE
-            && cached_generation.load(Ordering::Relaxed) == generation
-        {
-            return TextureKeyHandle {
-                key: texture_key.clone(),
-                handle,
-                generation,
-            };
-        }
-
-        let handle = assets::texture_handle(texture_key.as_ref());
-        cached_handle.store(handle, Ordering::Relaxed);
-        cached_generation.store(generation, Ordering::Relaxed);
-        TextureKeyHandle {
-            key: texture_key.clone(),
-            handle,
-            generation,
-        }
-    }
-
-    pub fn frame_count(&self) -> usize {
-        match self {
-            Self::Atlas { .. } => 1,
-            Self::Animated { frame_count, .. } => (*frame_count).max(1),
-        }
-    }
-
-    pub const fn frame_size(&self) -> Option<[i32; 2]> {
-        match self {
-            Self::Atlas { .. } => None,
-            Self::Animated { frame_size, .. } => Some(*frame_size),
-        }
-    }
-
-    pub const fn is_beat_based(&self) -> bool {
-        matches!(
-            self,
-            Self::Animated {
-                rate: AnimationRate::FramesPerBeat(_),
-                ..
-            }
-        )
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct SpriteSlot {
-    pub def: SpriteDefinition,
-    base_rot_sin_cos: [f32; 2],
-    pub source_size: [i32; 2],
-    pub source: Arc<SpriteSource>,
-    pub uv_velocity: [f32; 2],
-    pub uv_offset: [f32; 2],
-    pub uv_cycle_seconds: Option<f32>,
-    pub note_color_translate: bool,
-    pub model: Option<Arc<ModelMesh>>,
-    pub model_draw: ModelDrawState,
-    pub model_timeline: Arc<[ModelTweenSegment]>,
-    pub model_effect: ModelEffectState,
-    pub model_auto_rot_total_frames: f32,
-    pub model_auto_rot_z_keys: Arc<[ModelAutoRotKey]>,
-}
-
-impl SpriteSlot {
-    #[inline(always)]
-    pub fn set_rotation_deg(&mut self, rotation_deg: i32) {
-        self.def.rotation_deg = rotation_deg;
-        self.base_rot_sin_cos = neg_rot_sin_cos(rotation_deg);
-    }
-
-    #[inline(always)]
-    pub const fn base_rot_sin_cos(&self) -> [f32; 2] {
-        self.base_rot_sin_cos
-    }
-
-    pub fn texture_key(&self) -> &str {
-        self.source.texture_key()
-    }
-
-    #[inline(always)]
-    pub fn texture_key_shared(&self) -> Arc<str> {
-        self.source.texture_key_shared()
-    }
-
-    #[inline(always)]
-    pub fn texture_key_handle(&self) -> TextureKeyHandle {
-        self.source.texture_key_handle()
-    }
-
-    pub const fn size(&self) -> [i32; 2] {
-        self.def.size
-    }
-
-    #[inline(always)]
-    pub fn logical_size(&self) -> [f32; 2] {
-        [
-            self.source_size[0].max(0) as f32,
-            self.source_size[1].max(0) as f32,
-        ]
-    }
-
-    pub fn frame_index(&self, time: f32, beat: f32) -> usize {
-        match self.source.as_ref() {
-            SpriteSource::Atlas { .. } => 0,
-            SpriteSource::Animated {
-                rate,
-                frame_count,
-                frame_durations,
-                ..
-            } => sprite_frame_index(*frame_count, *rate, frame_durations.as_deref(), time, beat),
-        }
-    }
-
-    pub fn frame_index_from_phase(&self, phase: f32) -> usize {
-        match self.source.as_ref() {
-            SpriteSource::Atlas { .. } => 0,
-            SpriteSource::Animated {
-                frame_count,
-                frame_durations,
-                ..
-            } => sprite_frame_index_from_phase(*frame_count, frame_durations.as_deref(), phase),
-        }
-    }
-
-    pub fn model_draw_at(&self, time: f32, beat: f32) -> ModelDrawState {
-        model_draw_at(
-            self.model_draw,
-            self.model_timeline.as_ref(),
-            self.model_effect,
-            self.model_auto_rot_total_frames,
-            self.model_auto_rot_z_keys.as_ref(),
-            time,
-            beat,
-        )
-    }
-
-    #[inline(always)]
-    pub fn model_glow_with_draw(
-        &self,
-        draw: ModelDrawState,
-        time: f32,
-        beat: f32,
-        diffuse_alpha: f32,
-    ) -> Option<[f32; 4]> {
-        model_glow_with_draw(draw, self.model_effect, time, beat, diffuse_alpha)
-    }
-
-    #[inline(always)]
-    pub fn model_glow_at(&self, time: f32, beat: f32, diffuse_alpha: f32) -> Option<[f32; 4]> {
-        model_glow_at(
-            self.model_draw,
-            self.model_timeline.as_ref(),
-            self.model_effect,
-            self.model_auto_rot_total_frames,
-            self.model_auto_rot_z_keys.as_ref(),
-            time,
-            beat,
-            diffuse_alpha,
-        )
-    }
-
-    pub fn uv_for_frame_at(&self, frame_index: usize, elapsed: f32) -> [f32; 4] {
-        let uv = match self.source.as_ref() {
-            SpriteSource::Atlas { tex_dims, .. } => {
-                sprite_atlas_uv([tex_dims.0, tex_dims.1], &self.def, self.model.is_none())
-            }
-            SpriteSource::Animated {
-                tex_dims,
-                frame_size,
-                grid,
-                frame_count,
-                frame_indices,
-                ..
-            } => sprite_animated_uv(
-                [tex_dims.0, tex_dims.1],
-                &self.def,
-                *frame_size,
-                [grid.0, grid.1],
-                *frame_count,
-                frame_indices.as_deref(),
-                frame_index,
-                self.model.is_none(),
-            ),
-        };
-
-        // ITG model textures can scroll via AnimatedTexture TexVelocity/TexOffset.
-        // ITGmania applies TexVelocity over the animation cycle percentage, not
-        // raw seconds (see AnimatedTexture::GetTextureTranslate), so keep model
-        // UVs on that clock while preserving the full [0..1] span.
-        sprite_scrolled_uv(
-            uv,
-            self.uv_velocity,
-            self.uv_offset,
-            elapsed,
-            self.model
-                .is_some()
-                .then_some(self.uv_cycle_seconds)
-                .flatten(),
-        )
-    }
-}
+use std::sync::{Arc, Mutex, OnceLock};
 
 pub type TapExplosion = deadsync_noteskin::TapExplosion<SpriteSlot>;
 pub type HoldVisuals = deadsync_noteskin::HoldVisuals<SpriteSlot>;
-type HoldVisualParts = deadsync_noteskin::HoldVisualParts<SpriteSlot>;
 pub type Noteskin = deadsync_noteskin::NoteskinRuntime<SpriteSlot>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -318,68 +49,15 @@ struct ItgSkinCacheKey {
     skin: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct ItgDataCacheKey {
-    root: String,
-    game: String,
-    skin: String,
-}
-
 static ITG_SKIN_CACHE: OnceLock<Mutex<HashMap<ItgSkinCacheKey, Arc<Noteskin>>>> = OnceLock::new();
-static ITG_DATA_CACHE: OnceLock<Mutex<HashMap<ItgDataCacheKey, Arc<noteskin_itg::NoteskinData>>>> =
-    OnceLock::new();
 
 #[inline(always)]
 fn itg_skin_cache_key(style: &Style, skin: &str) -> ItgSkinCacheKey {
-    let trimmed = skin.trim();
-    let normalized = if trimmed.is_empty() {
-        "default"
-    } else {
-        trimmed
-    };
     ItgSkinCacheKey {
         num_cols: style.num_cols,
         num_players: style.num_players,
-        skin: normalized.to_ascii_lowercase(),
+        skin: noteskin_itg::normalized_skin_name(skin),
     }
-}
-
-#[inline(always)]
-fn itg_data_cache_key(root: &Path, game: &str, skin: &str) -> ItgDataCacheKey {
-    let trimmed = skin.trim();
-    let normalized_skin = if trimmed.is_empty() {
-        "default"
-    } else {
-        trimmed
-    };
-    ItgDataCacheKey {
-        root: root.to_string_lossy().to_ascii_lowercase(),
-        game: game.trim().to_ascii_lowercase(),
-        skin: normalized_skin.to_ascii_lowercase(),
-    }
-}
-
-fn load_itg_data_cached(
-    root: &Path,
-    game: &str,
-    skin: &str,
-) -> Result<Arc<noteskin_itg::NoteskinData>, String> {
-    let key = itg_data_cache_key(root, game, skin);
-    let cache = ITG_DATA_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
-    if let Some(cached) = cache
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .get(&key)
-        .cloned()
-    {
-        return Ok(cached);
-    }
-    let loaded = Arc::new(noteskin_itg::load_noteskin_data(root, game, skin)?);
-    let mut guard = cache
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    let entry = guard.entry(key).or_insert_with(|| loaded.clone());
-    Ok(entry.clone())
 }
 
 pub fn clear_itg_runtime_caches() {
@@ -389,24 +67,14 @@ pub fn clear_itg_runtime_caches() {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clear();
     }
-    if let Some(cache) = ITG_DATA_CACHE.get() {
-        cache
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clear();
-    }
+    noteskin_itg::clear_data_cache();
     noteskin_itg::clear_lookup_caches();
 }
 
 fn song_lua_itg_data(skin: &str) -> Option<Arc<noteskin_itg::NoteskinData>> {
-    let requested = skin.trim();
-    let skin = if requested.is_empty() {
-        "default"
-    } else {
-        requested
-    };
+    let skin = noteskin_itg::normalized_skin_name(skin);
     for root in &dirs::app_dirs().noteskin_roots() {
-        if let Ok(data) = load_itg_data_cached(root, "dance", skin) {
+        if let Ok(data) = noteskin_itg::load_noteskin_data_cached(root, "dance", &skin) {
             return Some(data);
         }
     }
@@ -445,23 +113,6 @@ fn noteskin_cache_dir() -> PathBuf {
     dirs::app_dirs().noteskin_cache_dir()
 }
 
-fn ensure_itg_compiled(
-    game: &str,
-    data: &noteskin_itg::NoteskinData,
-) -> Result<noteskin_compiler::CompileOutcome, String> {
-    let cache_dir = noteskin_cache_dir();
-    noteskin_compiler::ensure_compiled(&cache_dir, game, data)
-}
-
-#[allow(dead_code)]
-fn load_itg_compiled(
-    game: &str,
-    data: &noteskin_itg::NoteskinData,
-) -> Option<noteskin_compiled::CompiledNoteskinBundle> {
-    let cache_dir = noteskin_cache_dir();
-    noteskin_compiler::load_compiled(&cache_dir, game, data)
-}
-
 #[cfg(test)]
 fn compiled_bundle_path(game: &str, skin: &str, source_hash: &str) -> PathBuf {
     let cache_dir = noteskin_cache_dir();
@@ -488,89 +139,10 @@ pub fn load_itg_skin_cached(style: &Style, skin: &str) -> Result<Arc<Noteskin>, 
     Ok(entry.clone())
 }
 
-pub(crate) fn load_itg_model_slots_from_path(path: &Path) -> Result<Arc<[SpriteSlot]>, String> {
-    let model_path = if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        dirs::app_dirs().resolve_asset_path(&path.to_string_lossy())
-    };
-    if !model_path.is_file() {
-        return Err(format!("model '{}' was not found", model_path.display()));
-    }
-
-    let Some(search_dir) = model_path.parent() else {
-        return Err(format!(
-            "model '{}' has no parent directory",
-            model_path.display()
-        ));
-    };
-    let data = noteskin_itg::NoteskinData {
-        name: "shared-model".to_string(),
-        metrics: noteskin_itg::IniData::default(),
-        search_dirs: vec![search_dir.to_path_buf()],
-    };
-    let model_auto_rot = itg_parse_milkshape_model_auto_rot(&model_path);
-    let mut slots = Vec::new();
-
-    if let Some(model_layers) = itg_parse_milkshape_model_layers(&data, &model_path) {
-        for layer in model_layers {
-            let Some(mut slot) = itg_model_slot_from_texture_path(&layer.texture.texture_path)
-            else {
-                continue;
-            };
-            slot.model = Some(layer.mesh);
-            if let Some(auto_rot) = model_auto_rot.as_ref() {
-                slot.model_auto_rot_total_frames = auto_rot.total_frames;
-                slot.model_auto_rot_z_keys = Arc::clone(&auto_rot.z_keys);
-            }
-            slot.note_color_translate = !layer.flags.nomove;
-            slot.uv_velocity = if layer.flags.nomove {
-                [0.0, 0.0]
-            } else {
-                layer.texture.tex.uv_velocity
-            };
-            slot.uv_offset = layer.texture.tex.uv_offset;
-            slot.uv_cycle_seconds = layer.texture.tex.uv_cycle_seconds;
-            slots.push(slot);
-        }
-    }
-
-    if slots.is_empty() {
-        let Some(model_texture) = itg_resolve_model_texture_path(&data, &model_path) else {
-            return Err(format!(
-                "model '{}' did not resolve a texture",
-                model_path.display()
-            ));
-        };
-        let Some(mut slot) = itg_model_slot_from_texture_path(&model_texture.texture_path) else {
-            return Err(format!(
-                "model texture '{}' did not load",
-                model_texture.texture_path.display()
-            ));
-        };
-        slot.model = itg_parse_milkshape_model(&data, &model_path);
-        if slot.model.is_none() {
-            return Err(format!(
-                "model '{}' did not produce any geometry",
-                model_path.display()
-            ));
-        }
-        if let Some(auto_rot) = model_auto_rot.as_ref() {
-            slot.model_auto_rot_total_frames = auto_rot.total_frames;
-            slot.model_auto_rot_z_keys = Arc::clone(&auto_rot.z_keys);
-        }
-        slot.uv_velocity = model_texture.tex.uv_velocity;
-        slot.uv_offset = model_texture.tex.uv_offset;
-        slot.uv_cycle_seconds = model_texture.tex.uv_cycle_seconds;
-        slots.push(slot);
-    }
-
-    Ok(Arc::from(slots))
-}
-
 pub fn prewarm_itg_preview_cache() {
     let _ = compile_all_itg_caches_with_progress(|_, _, _, _| {});
-    let skins = discover_itg_skins("dance");
+    let roots = dirs::app_dirs().noteskin_roots();
+    let skins = noteskin_itg::discover_skins(&roots, "dance");
     let styles = [
         Style {
             num_cols: 4,
@@ -594,13 +166,7 @@ pub fn prewarm_itg_preview_cache() {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct CompileAllItgSummary {
-    pub total: usize,
-    pub built: usize,
-    pub reused: usize,
-    pub failed: usize,
-}
+pub type CompileAllItgSummary = noteskin_compiler::CompileAllItgSummary;
 
 pub fn compile_all_itg_caches_with_progress<F>(mut on_progress: F) -> CompileAllItgSummary
 where
@@ -608,127 +174,40 @@ where
 {
     clear_itg_runtime_caches();
     let roots = dirs::app_dirs().noteskin_roots();
-    let game = "dance";
-    let skins = discover_itg_skins(game);
-    let total = skins.len();
-    let mut summary = CompileAllItgSummary {
-        total,
-        ..CompileAllItgSummary::default()
-    };
-    for (idx, skin) in skins.iter().enumerate() {
-        let label = format!("{game}/{skin}");
-        let mut last_load_err = None;
-        let mut loaded = None;
-        for root in &roots {
-            match noteskin_itg::load_noteskin_data(root, game, skin) {
-                Ok(data) => {
-                    loaded = Some(data);
-                    break;
-                }
-                Err(err) => {
-                    last_load_err = Some(err);
-                }
-            }
-        }
-        let result = loaded
-            .ok_or_else(|| {
-                last_load_err
-                    .unwrap_or_else(|| format!("noteskin '{game}/{skin}' not found in any root"))
-            })
-            .and_then(|data| ensure_itg_compiled(game, &data).map(|outcome| (data, outcome)));
-        match result {
-            Ok((_data, noteskin_compiler::CompileOutcome::Built)) => {
-                summary.built += 1;
-                on_progress(idx + 1, total, &label, "compiled");
-            }
-            Ok((_data, noteskin_compiler::CompileOutcome::Reused)) => {
-                summary.reused += 1;
-                on_progress(idx + 1, total, &label, "");
-            }
-            Err(err) => {
-                summary.failed += 1;
-                warn!("noteskin cache compile failed for '{}': {}", label, err);
-                on_progress(idx + 1, total, &label, "failed");
-            }
-        }
-    }
-    summary
+    let cache_dir = noteskin_cache_dir();
+    noteskin_compiler::compile_all_itg_caches_with_progress(
+        &cache_dir,
+        &roots,
+        "dance",
+        &mut on_progress,
+    )
 }
 
 pub fn load_itg_default(style: &Style) -> Result<Noteskin, String> {
     let roots = dirs::app_dirs().noteskin_roots();
-    for root in &roots {
-        if let Ok(ns) = load_itg(root, "dance", "default", style) {
-            return Ok(ns);
-        }
-    }
-    // Final attempt: try cel fallback on any root
-    for root in &roots {
-        if let Ok(ns) = load_itg(root, "dance", "cel", style) {
-            warn!("ITG default noteskin load failed; using dance/cel fallback");
-            return Ok(ns);
+    for skin in noteskin_itg::default_skin_candidates() {
+        for root in &roots {
+            if let Ok(ns) = load_itg(root, "dance", skin, style) {
+                if *skin != noteskin_itg::default_skin_name() {
+                    warn!("ITG default noteskin load failed; using dance/{skin} fallback");
+                }
+                return Ok(ns);
+            }
         }
     }
     Err("failed to load ITG default noteskin from any root".to_string())
 }
 
-pub fn discover_itg_skins(game: &str) -> Vec<String> {
-    let roots = dirs::app_dirs().noteskin_roots();
-    let mut seen = HashSet::new();
-    let mut found = Vec::new();
-    for root in &roots {
-        let game_dir = root.join(game);
-        let Ok(entries) = fs::read_dir(&game_dir) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            let Ok(meta) = entry.metadata() else {
-                continue;
-            };
-            if !meta.is_dir() {
-                continue;
-            }
-            let name = entry.file_name().to_string_lossy().to_ascii_lowercase();
-            if name.is_empty() || name == "common" || name.starts_with('.') {
-                continue;
-            }
-            let dir = entry.path();
-            let has_itg_files = dir.join("NoteSkin.lua").is_file()
-                || dir.join("metrics.ini").is_file()
-                || fs::read_dir(&dir)
-                    .ok()
-                    .and_then(|mut it| it.next())
-                    .is_some();
-            if has_itg_files && seen.insert(name.clone()) {
-                found.push(name);
-            }
-        }
-    }
-    found.sort();
-    let mut ordered = Vec::with_capacity(found.len().max(2));
-    for preferred in ["default", "cel"] {
-        if let Some(pos) = found.iter().position(|s| s == preferred) {
-            ordered.push(found.remove(pos));
-        }
-    }
-    ordered.extend(found);
-    if ordered.is_empty() {
-        vec!["default".to_string(), "cel".to_string()]
-    } else {
-        ordered
-    }
-}
-
 pub fn load_itg_skin(style: &Style, skin: &str) -> Result<Noteskin, String> {
-    let requested = skin.trim();
-    if requested.is_empty() || requested.eq_ignore_ascii_case("default") {
+    let requested = noteskin_itg::normalized_skin_name(skin);
+    if noteskin_itg::skin_name_is_default(&requested) {
         return load_itg_default(style);
     }
 
     let roots = dirs::app_dirs().noteskin_roots();
     let mut last_err = String::new();
     for root in &roots {
-        match load_itg(root, "dance", requested, style) {
+        match load_itg(root, "dance", &requested, style) {
             Ok(ns) => return Ok(ns),
             Err(e) => last_err = e,
         }
@@ -737,23 +216,9 @@ pub fn load_itg_skin(style: &Style, skin: &str) -> Result<Noteskin, String> {
 }
 
 pub fn load_itg(root: &Path, game: &str, skin: &str, style: &Style) -> Result<Noteskin, String> {
-    let data = load_itg_data_cached(root, game, skin)?;
-    let bundle = if let Some(bundle) = load_itg_compiled(game, &data) {
-        bundle
-    } else {
-        ensure_itg_compiled(game, &data).map_err(|err| {
-            format!(
-                "failed to compile noteskin cache for '{}/{}': {}",
-                game, data.name, err
-            )
-        })?;
-        load_itg_compiled(game, &data).ok_or_else(|| {
-            format!(
-                "compiled noteskin cache missing for '{}/{}' after successful compilation",
-                game, data.name
-            )
-        })?
-    };
+    let data = noteskin_itg::load_noteskin_data_cached(root, game, skin)?;
+    let cache_dir = noteskin_cache_dir();
+    let bundle = noteskin_compiler::load_or_compile(&cache_dir, game, &data)?;
     load_itg_sprite_noteskin_compiled(&data, style, &bundle.loader, &bundle.actors).map_err(|err| {
         format!(
             "failed to load compiled noteskin '{}/{}': {}",
@@ -786,59 +251,43 @@ fn load_itg_sprite_noteskin_compiled(
     let mut roll_columns = Vec::with_capacity(style.num_cols);
     let mut receptor_pulse_command: Option<String> = None;
     let resolve_slots = |button: &str, element: &str| {
-        itg_resolve_actor_sprites_compiled(data, compiled, compiled_actors, button, element)
-            .into_iter()
-            .map(|mut s| {
-                let (draw, timeline, effect) = noteskin_script::model_draw_program(&s.commands);
-                s.slot.model_draw = draw;
-                s.slot.model_timeline = timeline;
-                s.slot.model_effect = effect;
-                s.slot
-            })
-            .collect::<Vec<_>>()
+        itg_resolved_slots_with_model_draw(itg_resolve_actor_sprites_compiled(
+            data,
+            compiled,
+            compiled_actors,
+            button,
+            element,
+        ))
     };
     let resolve_head_slots = |button: &str, element: &str| {
         let slots = resolve_slots(button, element);
-        match slots.len() {
-            0 => (None, None),
-            1 => (slots.into_iter().next(), None),
-            _ => (slots.first().cloned(), Some(Arc::from(slots))),
-        }
+        deadsync_noteskin::itg_hold_head_layers(slots)
     };
     let resolve_single_slot = |button: &str, element: &str| {
         let request = compiled.load_request(button, element);
-        itg_resolve_actor_sprites_compiled(data, compiled, compiled_actors, button, element)
-            .into_iter()
-            .next()
-            .map(|s| s.slot)
-            .or_else(|| {
-                if request.blank {
-                    return None;
-                }
+        deadsync_noteskin::itg_first_resolved_slot_or_fallback(
+            itg_resolve_actor_sprites_compiled(data, compiled, compiled_actors, button, element),
+            request.blank,
+            || {
                 data.resolve_path(&request.load_button, &request.load_element)
                     .and_then(|p| itg_slot_from_path(&p))
-            })
+            },
+        )
     };
 
     for col in 0..style.num_cols {
         let button = noteskin_itg::button_for_col(col);
-        let mut note_sprites =
-            itg_resolve_actor_sprites_compiled(data, compiled, compiled_actors, button, "Tap Note")
-                .into_iter()
-                .map(|mut s| {
-                    let (draw, timeline, effect) = noteskin_script::model_draw_program(&s.commands);
-                    s.slot.model_draw = draw;
-                    s.slot.model_timeline = timeline;
-                    s.slot.model_effect = effect;
-                    s.slot
-                })
-                .collect::<Vec<_>>();
-        if note_sprites.is_empty()
-            && let Some(fallback) = noteskin_itg::find_texture_with_prefix(data, "_arrow")
+        let note_sprites = itg_resolved_slots_with_model_draw(itg_resolve_actor_sprites_compiled(
+            data,
+            compiled,
+            compiled_actors,
+            button,
+            "Tap Note",
+        ));
+        let note_sprites = deadsync_noteskin::itg_tap_note_layers(note_sprites, || {
+            noteskin_itg::find_texture_with_prefix(data, "_arrow")
                 .and_then(|p| itg_slot_from_path(&p))
-        {
-            note_sprites.push(fallback);
-        }
+        });
         let note_column =
             deadsync_noteskin::itg_tap_note_column(note_sprites, NUM_QUANTIZATIONS, |slot| {
                 (slot.model.is_some(), slot.uv_velocity)
@@ -848,17 +297,13 @@ fn load_itg_sprite_noteskin_compiled(
         notes.extend(note_column.notes);
         note_layers.extend(note_column.note_layers);
 
-        let lift_sprites =
-            itg_resolve_actor_sprites_compiled(data, compiled, compiled_actors, button, "Tap Lift")
-                .into_iter()
-                .map(|mut s| {
-                    let (draw, timeline, effect) = noteskin_script::model_draw_program(&s.commands);
-                    s.slot.model_draw = draw;
-                    s.slot.model_timeline = timeline;
-                    s.slot.model_effect = effect;
-                    s.slot
-                })
-                .collect::<Vec<_>>();
+        let lift_sprites = itg_resolved_slots_with_model_draw(itg_resolve_actor_sprites_compiled(
+            data,
+            compiled,
+            compiled_actors,
+            button,
+            "Tap Lift",
+        ));
         let lift_layers_for_col =
             deadsync_noteskin::itg_lift_layers_for_col(lift_sprites, &note_sprites);
         for _ in 0..NUM_QUANTIZATIONS {
@@ -867,22 +312,9 @@ fn load_itg_sprite_noteskin_compiled(
 
         let receptor_sprites =
             itg_resolve_actor_sprites_compiled(data, compiled, compiled_actors, button, "Receptor");
-        let receptor_layer_commands = receptor_sprites
-            .iter()
-            .map(|sprite| &sprite.commands)
-            .collect::<Vec<_>>();
-        if receptor_pulse_command.is_none() {
-            receptor_pulse_command =
-                noteskin_receptor::itg_receptor_pulse_command(&receptor_layer_commands)
-                    .map(str::to_string);
-        }
-        let receptor_commands = receptor_layer_commands.first().copied();
-        let receptor_slots = receptor_sprites
-            .iter()
-            .map(|sprite| sprite.slot.clone())
-            .collect::<Vec<_>>();
-        let receptor_visuals = noteskin_receptor::itg_receptor_visuals(
-            &receptor_slots,
+        let receptor_column = deadsync_noteskin::itg_receptor_column(
+            &receptor_sprites,
+            &data.metrics,
             || {
                 noteskin_itg::find_texture_with_prefix(data, "_receptor")
                     .and_then(|p| itg_slot_from_path(&p))
@@ -895,44 +327,32 @@ fn load_itg_sprite_noteskin_compiled(
                 noteskin_itg::find_texture_with_prefix(data, "_glow")
                     .and_then(|p| itg_slot_from_path(&p))
             },
-        );
-        let mut receptor_slot = receptor_visuals
-            .off
-            .ok_or_else(|| format!("failed to resolve Receptor for button '{button}'"))?;
-        if let Some(init_command) =
-            receptor_commands.and_then(|commands| commands.get("initcommand"))
-        {
-            noteskin_script::itg_apply_parent_command(
-                &mut receptor_slot.def,
-                &mut receptor_slot.model_draw,
-                init_command,
-            );
+            |slot, command| {
+                noteskin_script::itg_apply_parent_command(
+                    &mut slot.def,
+                    &mut slot.model_draw,
+                    command,
+                );
+            },
+            |slot| slot.model_draw.zoom[0],
+        )
+        .ok_or_else(|| format!("failed to resolve Receptor for button '{button}'"))?;
+        if receptor_pulse_command.is_none() {
+            receptor_pulse_command = receptor_column.pulse_command.clone();
         }
-        let step_behaviors = noteskin_receptor::receptor_step_behaviors(
-            &data.metrics,
-            receptor_commands,
-            receptor_slot.model_draw.zoom[0],
-        );
-        let (receptor_reverse, glow_reverse) =
-            noteskin_receptor::itg_receptor_reverse_behaviors(&receptor_layer_commands);
-        let glow_slot = receptor_visuals.glow;
-        receptor_off.push(receptor_slot);
-        receptor_glow.push(glow_slot);
-        receptor_off_reverse.push(receptor_reverse);
-        receptor_glow_reverse.push(glow_reverse);
-        receptor_step_behaviors.push(step_behaviors);
+        receptor_off.push(receptor_column.off);
+        receptor_glow.push(receptor_column.glow);
+        receptor_off_reverse.push(receptor_column.off_reverse);
+        receptor_glow_reverse.push(receptor_column.glow_reverse);
+        receptor_step_behaviors.push(receptor_column.step_behaviors);
 
-        let mine_sprites =
-            itg_resolve_actor_sprites_compiled(data, compiled, compiled_actors, button, "Tap Mine")
-                .into_iter()
-                .map(|mut s| {
-                    let (draw, timeline, effect) = noteskin_script::model_draw_program(&s.commands);
-                    s.slot.model_draw = draw;
-                    s.slot.model_timeline = timeline;
-                    s.slot.model_effect = effect;
-                    s.slot
-                })
-                .collect::<Vec<_>>();
+        let mine_sprites = itg_resolved_slots_with_model_draw(itg_resolve_actor_sprites_compiled(
+            data,
+            compiled,
+            compiled_actors,
+            button,
+            "Tap Mine",
+        ));
         let mine_fallback = noteskin_itg::find_texture_with_prefix(data, "_mine")
             .and_then(|p| itg_slot_from_path(&p));
         let (mine_fill, mine_frame) =
@@ -940,80 +360,22 @@ fn load_itg_sprite_noteskin_compiled(
         mines.push(mine_fill);
         mine_frames.push(mine_frame);
 
-        let (hold_head_inactive, hold_head_inactive_layers) = if compiled
-            .load_request(button, "Hold Head Inactive")
-            .maps_head_to_tap()
-        {
-            (None, None)
-        } else {
-            resolve_head_slots(button, "Hold Head Inactive")
-        };
-        let (hold_head_active, hold_head_active_layers) = if compiled
-            .load_request(button, "Hold Head Active")
-            .maps_head_to_tap()
-        {
-            (None, None)
-        } else {
-            resolve_head_slots(button, "Hold Head Active")
-        };
-        let hold_body_inactive = resolve_single_slot(button, "Hold Body Inactive");
-        let hold_body_active = resolve_single_slot(button, "Hold Body Active");
-        let hold_topcap_inactive = resolve_single_slot(button, "Hold TopCap Inactive");
-        let hold_topcap_active = resolve_single_slot(button, "Hold TopCap Active");
-        let hold_bottomcap_inactive = resolve_single_slot(button, "Hold BottomCap Inactive");
-        let hold_bottomcap_active = resolve_single_slot(button, "Hold BottomCap Active");
-
-        let hold_visual = deadsync_noteskin::itg_hold_visuals_from_parts(HoldVisualParts {
-            head_inactive: hold_head_inactive,
-            head_active: hold_head_active,
-            head_inactive_layers: hold_head_inactive_layers,
-            head_active_layers: hold_head_active_layers,
-            body_inactive: hold_body_inactive,
-            body_active: hold_body_active,
-            topcap_inactive: hold_topcap_inactive,
-            topcap_active: hold_topcap_active,
-            bottomcap_inactive: hold_bottomcap_inactive,
-            bottomcap_active: hold_bottomcap_active,
-        });
-
-        let (roll_head_inactive, roll_head_inactive_layers) = if compiled
-            .load_request(button, "Roll Head Inactive")
-            .maps_head_to_tap()
-        {
-            (None, None)
-        } else {
-            resolve_head_slots(button, "Roll Head Inactive")
-        };
-        let (roll_head_active, roll_head_active_layers) = if compiled
-            .load_request(button, "Roll Head Active")
-            .maps_head_to_tap()
-        {
-            (None, None)
-        } else {
-            resolve_head_slots(button, "Roll Head Active")
-        };
-        let roll_body_inactive = resolve_single_slot(button, "Roll Body Inactive");
-        let roll_body_active = resolve_single_slot(button, "Roll Body Active");
-        let roll_topcap_inactive = resolve_single_slot(button, "Roll TopCap Inactive");
-        let roll_topcap_active = resolve_single_slot(button, "Roll TopCap Active");
-        let roll_bottomcap_inactive = resolve_single_slot(button, "Roll BottomCap Inactive");
-        let roll_bottomcap_active = resolve_single_slot(button, "Roll BottomCap Active");
-
-        let roll_visual = deadsync_noteskin::itg_roll_visuals_from_parts(
-            HoldVisualParts {
-                head_inactive: roll_head_inactive,
-                head_active: roll_head_active,
-                head_inactive_layers: roll_head_inactive_layers,
-                head_active_layers: roll_head_active_layers,
-                body_inactive: roll_body_inactive,
-                body_active: roll_body_active,
-                topcap_inactive: roll_topcap_inactive,
-                topcap_active: roll_topcap_active,
-                bottomcap_inactive: roll_bottomcap_inactive,
-                bottomcap_active: roll_bottomcap_active,
-            },
-            &hold_visual,
+        let hold_parts = deadsync_noteskin::itg_hold_visual_parts(
+            deadsync_noteskin::ItgHoldKind::Hold,
+            |element| compiled.load_request(button, element).maps_head_to_tap(),
+            |element| resolve_head_slots(button, element),
+            |element| resolve_single_slot(button, element),
         );
+        let hold_visual = deadsync_noteskin::itg_hold_visuals_from_parts(hold_parts);
+
+        let roll_parts = deadsync_noteskin::itg_hold_visual_parts(
+            deadsync_noteskin::ItgHoldKind::Roll,
+            |element| compiled.load_request(button, element).maps_head_to_tap(),
+            |element| resolve_head_slots(button, element),
+            |element| resolve_single_slot(button, element),
+        );
+
+        let roll_visual = deadsync_noteskin::itg_roll_visuals_from_parts(roll_parts, &hold_visual);
 
         hold_columns.push(hold_visual);
         roll_columns.push(roll_visual);
@@ -1024,28 +386,6 @@ fn load_itg_sprite_noteskin_compiled(
 
     let explosion_sprites =
         itg_resolve_actor_sprites_compiled(data, compiled, compiled_actors, "Down", "Explosion");
-    let slot_with_active_cmd =
-        |slot: &SpriteSlot, commands: &HashMap<String, String>, active_key: &str| {
-            let mut with_fx = slot.clone();
-            let scripted = noteskin_script::itg_active_model_commands(commands, active_key);
-            let (draw, timeline, effect) = noteskin_script::model_draw_program(&scripted);
-            with_fx.model_draw = draw;
-            with_fx.model_timeline = timeline;
-            with_fx.model_effect = effect;
-            with_fx
-        };
-
-    let find_explosion_wrapper = |active_key: &str, element_hint: &str| {
-        noteskin_explosion::itg_explosion_wrapper(
-            &explosion_sprites,
-            active_key,
-            element_hint,
-            |sprite, key| sprite.commands.contains_key(key),
-            |sprite, hint| noteskin_actor::element_contains_hint(&sprite.element, hint),
-        )
-    };
-    let hold_wrapper = find_explosion_wrapper("holdingoncommand", "hold explosion");
-    let roll_wrapper = find_explosion_wrapper("rolloncommand", "roll explosion");
 
     let hold_explosion_request = compiled.load_request("Down", "Hold Explosion");
     let roll_explosion_request = compiled.load_request("Down", "Roll Explosion");
@@ -1058,58 +398,19 @@ fn load_itg_sprite_noteskin_compiled(
         "Down",
         "Hold Explosion",
     );
-    let hold_source = noteskin_explosion::itg_explosion_source(
+    hold.explosion = itg_resolve_hold_explosion_slot_compiled(
+        data,
+        compiled_actors,
+        &explosion_sprites,
         &hold_explosion_sprites,
+        "Down",
         "holdingoncommand",
-        |sprite, key| sprite.commands.contains_key(key),
+        "hold explosion",
+        hold_explosion_blank,
+        Some("Hold Explosion"),
+        Some("_down hold explosion"),
+        None,
     );
-    let hold_wrapper_source =
-        hold_wrapper.filter(|sprite| sprite.commands.contains_key("holdingoncommand"));
-    hold.explosion = if hold_explosion_blank {
-        None
-    } else {
-        hold_wrapper_source
-            .map(|sprite| slot_with_active_cmd(&sprite.slot, &sprite.commands, "holdingoncommand"))
-            .or_else(|| {
-                hold_source.map(|sprite| {
-                    let cmd = hold_wrapper.map_or(&sprite.commands, |wrapped| &wrapped.commands);
-                    slot_with_active_cmd(&sprite.slot, cmd, "holdingoncommand")
-                })
-            })
-            .or_else(|| {
-                hold_wrapper.map(|s| slot_with_active_cmd(&s.slot, &s.commands, "holdingoncommand"))
-            })
-            .or_else(|| {
-                data.resolve_path("Down", "Hold Explosion")
-                    .and_then(|p| itg_slot_from_path(&p))
-            })
-            .or_else(|| {
-                data.resolve_path("Down", "Hold Explosion")
-                    .and_then(|p| {
-                        itg_slot_from_actor_path_first_sprite_compiled(data, compiled_actors, &p)
-                    })
-                    .map(|slot| {
-                        hold_wrapper.map_or(slot.clone(), |wrapped| {
-                            slot_with_active_cmd(&slot, &wrapped.commands, "holdingoncommand")
-                        })
-                    })
-            })
-            .or_else(|| {
-                noteskin_itg::find_texture_with_prefix(data, "_down hold explosion")
-                    .and_then(|p| {
-                        itg_slot_from_path_all_frames(
-                            &p,
-                            Some(0.01),
-                            noteskin_itg::animation_is_beat_based(data),
-                        )
-                    })
-                    .map(|slot| {
-                        hold_wrapper.map_or(slot.clone(), |wrapped| {
-                            slot_with_active_cmd(&slot, &wrapped.commands, "holdingoncommand")
-                        })
-                    })
-            })
-    };
     let roll_explosion_sprites = itg_resolve_actor_sprites_compiled(
         data,
         compiled,
@@ -1117,84 +418,32 @@ fn load_itg_sprite_noteskin_compiled(
         "Down",
         "Roll Explosion",
     );
-    let roll_source = noteskin_explosion::itg_explosion_source(
+    let roll_explosion = itg_resolve_hold_explosion_slot_compiled(
+        data,
+        compiled_actors,
+        &explosion_sprites,
         &roll_explosion_sprites,
+        "Down",
         "rolloncommand",
-        |sprite, key| sprite.commands.contains_key(key),
+        "roll explosion",
+        roll_explosion_blank,
+        Some("Roll Explosion"),
+        Some("_down hold explosion"),
+        None,
     );
-    let roll_wrapper_source =
-        roll_wrapper.filter(|sprite| sprite.commands.contains_key("rolloncommand"));
-    let roll_explosion = if roll_explosion_blank {
-        None
-    } else {
-        roll_wrapper_source
-            .map(|sprite| slot_with_active_cmd(&sprite.slot, &sprite.commands, "rolloncommand"))
-            .or_else(|| {
-                roll_source.map(|sprite| {
-                    let cmd = roll_wrapper.map_or(&sprite.commands, |wrapped| &wrapped.commands);
-                    slot_with_active_cmd(&sprite.slot, cmd, "rolloncommand")
-                })
-            })
-            .or_else(|| {
-                roll_wrapper.map(|s| slot_with_active_cmd(&s.slot, &s.commands, "rolloncommand"))
-            })
-            .or_else(|| {
-                data.resolve_path("Down", "Roll Explosion")
-                    .and_then(|p| itg_slot_from_path(&p))
-            })
-            .or_else(|| {
-                data.resolve_path("Down", "Roll Explosion")
-                    .and_then(|p| {
-                        itg_slot_from_actor_path_first_sprite_compiled(data, compiled_actors, &p)
-                    })
-                    .map(|slot| {
-                        roll_wrapper.map_or(slot.clone(), |wrapped| {
-                            slot_with_active_cmd(&slot, &wrapped.commands, "rolloncommand")
-                        })
-                    })
-            })
-            .or_else(|| {
-                noteskin_itg::find_texture_with_prefix(data, "_down hold explosion")
-                    .and_then(|p| {
-                        itg_slot_from_path_all_frames(
-                            &p,
-                            Some(0.01),
-                            noteskin_itg::animation_is_beat_based(data),
-                        )
-                    })
-                    .map(|slot| {
-                        roll_wrapper.map_or(slot.clone(), |wrapped| {
-                            slot_with_active_cmd(&slot, &wrapped.commands, "rolloncommand")
-                        })
-                    })
-            })
-    };
-    roll.explosion = if roll_explosion_blank {
-        None
-    } else {
-        roll_explosion.or(hold.explosion.clone())
-    };
-    if let (Some(roll_slot), Some(hold_slot)) = (roll.explosion.clone(), hold.explosion.clone()) {
-        if deadsync_noteskin::itg_roll_explosion_should_use_hold(
-            roll_slot.texture_key(),
-            hold_slot.texture_key(),
-        ) {
-            let actor_commands = roll_wrapper
-                .filter(|sprite| sprite.commands.contains_key("rolloncommand"))
-                .map(|sprite| &sprite.commands);
-            let roll_commands =
-                deadsync_noteskin::itg_roll_explosion_commands(actor_commands, |key| {
-                    data.metrics
-                        .get("HoldGhostArrow", key)
-                        .map(ToString::to_string)
-                });
-            if let Some(commands) = roll_commands {
-                roll.explosion = Some(slot_with_active_cmd(&hold_slot, &commands, "rolloncommand"));
-            } else {
-                roll.explosion = Some(hold_slot);
-            }
-        }
-    }
+    roll.explosion = deadsync_noteskin::itg_roll_explosion_from_resolved_layers(
+        &explosion_sprites,
+        roll_explosion_blank,
+        roll_explosion,
+        hold.explosion.clone(),
+        |slot| slot.texture_key().to_string(),
+        |key| {
+            data.metrics
+                .get("HoldGhostArrow", key)
+                .map(ToString::to_string)
+        },
+        |slot, commands, key| itg_slot_with_active_cmd(slot, commands, key),
+    );
     let resolve_hold_explosion_for_button =
         |button: &str,
          active_key: &str,
@@ -1212,49 +461,31 @@ fn load_itg_sprite_noteskin_compiled(
                     "Explosion",
                 )
             };
-            let wrapper = column_explosion_sprites
-                .iter()
-                .find(|sprite| sprite.commands.contains_key(active_key))
-                .or_else(|| {
-                    column_explosion_sprites.iter().find(|sprite| {
-                        noteskin_actor::element_contains_hint(&sprite.element, element_hint)
-                    })
-                });
-            if let Some(sprite) = wrapper.filter(|sprite| sprite.commands.contains_key(active_key))
-            {
-                return Some(slot_with_active_cmd(
-                    &sprite.slot,
-                    &sprite.commands,
-                    active_key,
-                ));
-            }
-
             let request = compiled.load_request(button, request_element);
-            if request.blank {
-                return None;
-            }
-            let source_sprites = itg_resolve_actor_sprites_compiled(
+            let source_sprites = if request.blank {
+                Vec::new()
+            } else {
+                itg_resolve_actor_sprites_compiled(
+                    data,
+                    compiled,
+                    compiled_actors,
+                    button,
+                    request_element,
+                )
+            };
+            itg_resolve_hold_explosion_slot_compiled(
                 data,
-                compiled,
                 compiled_actors,
+                &column_explosion_sprites,
+                &source_sprites,
                 button,
-                request_element,
-            );
-            let source = source_sprites
-                .iter()
-                .find(|sprite| sprite.commands.contains_key(active_key))
-                .or_else(|| source_sprites.first());
-            source
-                .map(|sprite| {
-                    let cmd = wrapper.map_or(&sprite.commands, |wrapped| &wrapped.commands);
-                    slot_with_active_cmd(&sprite.slot, cmd, active_key)
-                })
-                .or_else(|| {
-                    wrapper.map(|sprite| {
-                        slot_with_active_cmd(&sprite.slot, &sprite.commands, active_key)
-                    })
-                })
-                .or_else(|| fallback.cloned())
+                active_key,
+                element_hint,
+                request.blank,
+                None,
+                None,
+                fallback,
+            )
         };
     for (col, visuals) in hold_columns.iter_mut().enumerate() {
         let button = noteskin_itg::button_for_col(col);
@@ -1284,52 +515,50 @@ fn load_itg_sprite_noteskin_compiled(
         } else {
             itg_resolve_actor_sprites_compiled(data, compiled, compiled_actors, button, "Explosion")
         };
-        tap_explosions_by_col.push(itg_tap_explosion_map_compiled(
-            data,
-            compiled,
-            compiled_actors,
-            button,
-            &column_explosion_sprites,
-        ));
+        tap_explosions_by_col.push(
+            deadsync_noteskin::itg_tap_explosion_map_from_resolved_layers(
+                &column_explosion_sprites,
+                |base_element| {
+                    let base_request = compiled.load_request(button, base_element);
+                    deadsync_noteskin::itg_direct_tap_explosion_resolved_layers(
+                        base_element,
+                        base_request.blank,
+                        |element| compiled.load_request(button, element).blank,
+                        |element| {
+                            itg_resolve_actor_sprites_compiled(
+                                data,
+                                compiled,
+                                compiled_actors,
+                                button,
+                                element,
+                            )
+                        },
+                    )
+                },
+                |mode, metric_key| {
+                    data.metrics
+                        .get(mode.metric_section(), metric_key)
+                        .map(str::to_string)
+                },
+            ),
+        );
     }
-    let mine_source = explosion_sprites
-        .iter()
-        .find(|sprite| noteskin_explosion::itg_has_hit_mine_command(&sprite.commands))
-        .or_else(|| {
-            explosion_sprites.iter().find(|sprite| {
-                noteskin_explosion::itg_is_hit_mine_explosion_element(&sprite.element)
-            })
-        });
-    let mine_slot = mine_source
-        .map(|sprite| sprite.slot.clone())
-        .or_else(|| {
+    let mine_hit_explosion = deadsync_noteskin::itg_hit_mine_explosion_from_layers(
+        &explosion_sprites,
+        || {
             data.resolve_path("Down", "HitMine Explosion")
                 .and_then(|p| itg_slot_from_path(&p))
-        })
-        .or_else(|| {
+        },
+        || {
             data.resolve_path("Down", "HitMine Explosion")
                 .and_then(|p| {
                     itg_slot_from_actor_path_first_sprite_compiled(data, compiled_actors, &p)
                 })
-        });
-    let mine_hit_explosion = mine_source
-        .and_then(|source| {
-            deadsync_noteskin::itg_mine_explosion_from_commands(
-                source.slot.clone(),
-                &source.commands,
-            )
-        })
-        .or_else(|| {
-            mine_slot.map(|slot| {
-                deadsync_noteskin::itg_hit_mine_explosion_from_slot(
-                    slot,
-                    mine_source.map(|sprite| &sprite.commands),
-                    data.metrics
-                        .get("GhostArrowBright", "HitMineCommand")
-                        .map(str::to_string),
-                )
-            })
-        });
+        },
+        data.metrics
+            .get("GhostArrowBright", "HitMineCommand")
+            .map(str::to_string),
+    );
     let tap_explosions =
         deadsync_noteskin::default_tap_explosions(&tap_explosions_by_col, down_col);
 
@@ -1337,12 +566,16 @@ fn load_itg_sprite_noteskin_compiled(
         .hold_let_go_gray_percent
         .clamp(0.0, 1.0);
 
+    let receptor =
+        itg_resolve_actor_sprites_compiled(data, compiled, compiled_actors, "Down", "Receptor");
     let receptor_glow_behavior =
-        itg_receptor_glow_behavior_compiled(data, compiled, compiled_actors);
-    let receptor_pulse = receptor_pulse_command
-        .as_deref()
-        .map(noteskin_receptor::receptor_pulse_from_script)
-        .unwrap_or_default();
+        deadsync_noteskin::itg_receptor_glow_behavior_from_layers(&receptor, |metric_key| {
+            data.metrics
+                .get("ReceptorOverlay", metric_key)
+                .map(str::to_string)
+        });
+    let receptor_pulse =
+        deadsync_noteskin::itg_receptor_pulse_from_command(receptor_pulse_command.as_deref());
     let mine_fill_slots = mine_fill_slots(&mines);
     let column_xs = deadsync_noteskin::itg_column_xs(style.num_cols);
     Ok(Noteskin {
@@ -1373,125 +606,92 @@ fn load_itg_sprite_noteskin_compiled(
     })
 }
 
-fn itg_tap_explosion_map_compiled(
-    data: &noteskin_itg::NoteskinData,
-    compiled: &noteskin_compiled::CompiledLoader,
-    compiled_actors: &noteskin_compiled::CompiledActors,
-    button: &str,
-    explosion_sprites: &[ItgLuaResolvedSprite],
-) -> HashMap<String, TapExplosion> {
-    let actor_tap_sprites = explosion_sprites
-        .iter()
-        .filter(|sprite| noteskin_explosion::itg_has_tap_explosion_command(&sprite.commands))
-        .collect::<Vec<_>>();
-
-    let (direct_dim_sprites, direct_bright_sprites) = if actor_tap_sprites.is_empty() {
-        let dim_request = compiled.load_request(button, "Tap Explosion Dim");
-        let bright_request = compiled.load_request(button, "Tap Explosion Bright");
-        (
-            itg_direct_tap_explosion_sprites(
-                data,
-                compiled,
-                compiled_actors,
-                button,
-                "Tap Explosion Dim",
-                dim_request.blank,
-            ),
-            itg_direct_tap_explosion_sprites(
-                data,
-                compiled,
-                compiled_actors,
-                button,
-                "Tap Explosion Bright",
-                bright_request.blank,
-            ),
-        )
-    } else {
-        (Vec::new(), Vec::new())
-    };
-
-    deadsync_noteskin::itg_tap_explosion_map_from_sources(
-        actor_tap_sprites
-            .iter()
-            .copied()
-            .chain(direct_dim_sprites.iter())
-            .chain(direct_bright_sprites.iter())
-            .map(|sprite| {
-                noteskin_explosion::ItgTapExplosionSource::new(
-                    sprite.element.clone(),
-                    sprite.slot.clone(),
-                    sprite.commands.clone(),
-                )
-            }),
-        |mode, metric_key| {
-            data.metrics
-                .get(mode.metric_section(), metric_key)
-                .map(str::to_string)
-        },
-    )
-}
-
-fn itg_direct_tap_explosion_sprites(
-    data: &noteskin_itg::NoteskinData,
-    compiled: &noteskin_compiled::CompiledLoader,
-    compiled_actors: &noteskin_compiled::CompiledActors,
-    button: &str,
-    base_element: &str,
-    base_blank: bool,
-) -> Vec<ItgLuaResolvedSprite> {
-    let mut out = Vec::new();
-    for element in
-        noteskin_explosion::itg_direct_tap_explosion_elements(base_element, base_blank, |element| {
-            compiled.load_request(button, element).blank
-        })
-    {
-        out.extend(itg_resolve_actor_sprites_compiled(
-            data,
-            compiled,
-            compiled_actors,
-            button,
-            &element,
-        ));
-    }
-    out
-}
-
-fn itg_receptor_glow_behavior_compiled(
-    data: &noteskin_itg::NoteskinData,
-    compiled: &noteskin_compiled::CompiledLoader,
-    compiled_actors: &noteskin_compiled::CompiledActors,
-) -> ReceptorGlowBehavior {
-    let receptor =
-        itg_resolve_actor_sprites_compiled(data, compiled, compiled_actors, "Down", "Receptor");
-    let overlay = receptor.get(1);
-    noteskin_receptor::receptor_glow_behavior(
-        overlay.map(|sprite| &sprite.commands),
-        |metric_key| {
-            data.metrics
-                .get("ReceptorOverlay", metric_key)
-                .map(str::to_string)
-        },
-    )
-}
-
 fn itg_apply_loader_command(sprites: &mut [ItgLuaResolvedSprite], command: Option<&str>) {
-    let Some(command) = command.filter(|cmd| !cmd.trim().is_empty()) else {
-        return;
-    };
-    for sprite in sprites {
-        noteskin_script::itg_apply_parent_command(
-            &mut sprite.slot.def,
-            &mut sprite.slot.model_draw,
-            command,
-        );
-    }
+    deadsync_noteskin::itg_apply_loader_command(sprites, command, |slot, command| {
+        noteskin_script::itg_apply_parent_command(&mut slot.def, &mut slot.model_draw, command);
+    });
 }
 
-#[derive(Debug, Clone)]
-struct ItgLuaResolvedSprite {
-    element: String,
-    slot: SpriteSlot,
-    commands: HashMap<String, String>,
+type ItgLuaResolvedSprite = deadsync_noteskin::ItgResolvedSprite<SpriteSlot>;
+
+fn itg_resolved_slots_with_model_draw(sprites: Vec<ItgLuaResolvedSprite>) -> Vec<SpriteSlot> {
+    deadsync_noteskin::itg_resolved_slots_with_model_draw(
+        sprites,
+        |slot, draw, timeline, effect| {
+            slot.model_draw = draw;
+            slot.model_timeline = timeline;
+            slot.model_effect = effect;
+        },
+    )
+}
+
+fn itg_slot_with_active_cmd(
+    slot: &SpriteSlot,
+    commands: &HashMap<String, String>,
+    active_key: &str,
+) -> SpriteSlot {
+    deadsync_noteskin::itg_slot_with_active_model_draw(
+        slot,
+        commands,
+        active_key,
+        |slot, draw, timeline, effect| {
+            slot.model_draw = draw;
+            slot.model_timeline = timeline;
+            slot.model_effect = effect;
+        },
+    )
+}
+
+fn itg_resolve_hold_explosion_slot_compiled(
+    data: &noteskin_itg::NoteskinData,
+    compiled_actors: &noteskin_compiled::CompiledActors,
+    wrapper_sprites: &[ItgLuaResolvedSprite],
+    source_sprites: &[ItgLuaResolvedSprite],
+    button: &str,
+    active_key: &str,
+    element_hint: &str,
+    blank: bool,
+    asset_element: Option<&str>,
+    texture_prefix: Option<&str>,
+    fallback: Option<&SpriteSlot>,
+) -> Option<SpriteSlot> {
+    deadsync_noteskin::itg_hold_explosion_from_resolved_layers(
+        wrapper_sprites,
+        source_sprites,
+        active_key,
+        element_hint,
+        blank,
+        fallback.cloned(),
+        || {
+            asset_element
+                .and_then(|element| data.resolve_path(button, element))
+                .and_then(|path| itg_slot_from_path(&path))
+        },
+        || {
+            if let Some(slot) = asset_element
+                .and_then(|element| data.resolve_path(button, element))
+                .and_then(|path| {
+                    itg_slot_from_actor_path_first_sprite_compiled(data, compiled_actors, &path)
+                })
+            {
+                return vec![slot];
+            }
+            if let Some(slot) = texture_prefix
+                .and_then(|prefix| noteskin_itg::find_texture_with_prefix(data, prefix))
+                .and_then(|path| {
+                    itg_slot_from_path_all_frames(
+                        &path,
+                        Some(0.01),
+                        noteskin_itg::animation_is_beat_based(data),
+                    )
+                })
+            {
+                return vec![slot];
+            }
+            Vec::new()
+        },
+        |slot, commands, key| itg_slot_with_active_cmd(&slot, commands, key),
+    )
 }
 
 fn itg_resolve_actor_sprites_compiled(
@@ -1522,44 +722,29 @@ fn itg_resolve_actor_sprites_inner_compiled(
     depth: usize,
     visiting: &mut HashSet<String>,
 ) -> Vec<ItgLuaResolvedSprite> {
-    if depth > noteskin_compiled::ACTOR_RECURSION_MAX_DEPTH {
-        warn!("noteskin lua actor recursion depth exceeded at '{button} {element}'");
-        return Vec::new();
-    }
-
-    let visit_key = noteskin_compiled::actor_visit_key(button, element);
-    if !visiting.insert(visit_key.clone()) {
-        warn!("noteskin lua actor recursion loop detected at '{button} {element}'");
-        return Vec::new();
-    }
-
-    let request = compiled.load_request(button, element);
-    if request.blank {
-        visiting.remove(&visit_key);
-        return Vec::new();
-    }
-    let path = data.resolve_path(&request.load_button, &request.load_element);
-    let Some(path) = path else {
-        visiting.remove(&visit_key);
-        return Vec::new();
-    };
-
-    let mut out = itg_resolve_actor_file_compiled(
+    deadsync_noteskin::itg_resolve_actor_sprites_inner_compiled(
         data,
         compiled,
-        compiled_actors,
         button,
         element,
-        &path,
-        request.rotation_z,
         depth,
         visiting,
-        None,
-    );
-    itg_apply_loader_command(&mut out, request.init_command.as_deref());
-
-    visiting.remove(&visit_key);
-    out
+        |path, rotation_z, depth, visiting, arg0_path| {
+            itg_resolve_actor_file_compiled(
+                data,
+                compiled,
+                compiled_actors,
+                button,
+                element,
+                path,
+                rotation_z,
+                depth,
+                visiting,
+                arg0_path,
+            )
+        },
+        itg_apply_loader_command,
+    )
 }
 
 fn itg_resolve_actor_file_compiled(
@@ -1806,35 +991,23 @@ fn itg_slot_from_actor_path_first_sprite_compiled(
     compiled_actors: &noteskin_compiled::CompiledActors,
     path: &Path,
 ) -> Option<SpriteSlot> {
-    if !noteskin_actor::is_lua_path(path) {
-        return itg_slot_from_path(path);
-    }
-
-    let decl = compiled_actors.decl_for_path(&data.search_dirs, path)?;
-    let default_anim_is_beat = noteskin_itg::animation_is_beat_based(data);
-    for sprite in decl.sprites {
-        let texture_path = noteskin_itg::resolve_texture_expr(data, &sprite.texture_expr, None)?;
-        let anim_is_beat =
-            noteskin_script::sprite_animation_is_beat_based(&sprite.commands, default_anim_is_beat);
-        let slot = if sprite.frame_count > 1 {
+    deadsync_noteskin::itg_first_actor_sprite_slot(
+        data,
+        compiled_actors,
+        path,
+        |path| itg_slot_from_path(path),
+        |path, frame| itg_slot_from_path_with_frame(path, frame),
+        |path, frame0, frame_count, frame_indices, frame_delays, anim_is_beat| {
             itg_slot_from_path_animated(
-                &texture_path,
-                sprite.frame0,
-                sprite.frame_count,
-                sprite.frame_indices.as_deref(),
-                sprite.frame_delays.as_deref(),
+                path,
+                frame0,
+                frame_count,
+                frame_indices,
+                frame_delays,
                 anim_is_beat,
             )
-            .or_else(|| itg_slot_from_path_with_frame(&texture_path, sprite.frame0))
-        } else {
-            itg_slot_from_path_with_frame(&texture_path, sprite.frame0)
-        }
-        .or_else(|| itg_slot_from_path(&texture_path));
-        if let Some(slot) = slot {
-            return Some(slot);
-        }
-    }
-    None
+        },
+    )
 }
 
 #[cfg(test)]
@@ -1844,8 +1017,8 @@ mod tests {
         ModelTweenSegment, NUM_QUANTIZATIONS, NoteAnimPart, NoteColorType, Quantization,
         SpriteDefinition, SpriteSlot, SpriteSource, Style, clear_itg_runtime_caches,
         compiled_bundle_path, itg_apply_state_properties_from_script,
-        itg_register_texture_dims_for_path, itg_texture_key, load_itg, load_itg_data_cached,
-        load_itg_model_slots_from_path, load_itg_skin, noteskin_compiled,
+        itg_register_texture_dims_for_path, itg_texture_key, load_itg,
+        load_itg_model_slots_from_path, load_itg_skin, noteskin_compiled, noteskin_itg,
     };
     use deadsync_noteskin::parse_explosion_animation;
     use deadsync_noteskin::receptor::receptor_pulse_from_script;
@@ -1955,7 +1128,7 @@ mod tests {
         )
         .unwrap();
 
-        let loaded = load_itg_data_cached(&root, "dance", "hot").unwrap();
+        let loaded = noteskin_itg::load_noteskin_data_cached(&root, "dance", "hot").unwrap();
         assert_eq!(loaded.get_metric("Down", "Foo"), Some("old"));
 
         fs::write(
@@ -1963,7 +1136,7 @@ mod tests {
             "[Global]\nFallbackNoteSkin=hot\n[Down]\nFoo=new\n",
         )
         .unwrap();
-        let stale = load_itg_data_cached(&root, "dance", "hot").unwrap();
+        let stale = noteskin_itg::load_noteskin_data_cached(&root, "dance", "hot").unwrap();
         assert_eq!(
             stale.get_metric("Down", "Foo"),
             Some("old"),
@@ -1971,7 +1144,7 @@ mod tests {
         );
 
         clear_itg_runtime_caches();
-        let refreshed = load_itg_data_cached(&root, "dance", "hot").unwrap();
+        let refreshed = noteskin_itg::load_noteskin_data_cached(&root, "dance", "hot").unwrap();
         assert_eq!(refreshed.get_metric("Down", "Foo"), Some("new"));
         let _ = fs::remove_dir_all(&root);
         clear_itg_runtime_caches();
@@ -2566,7 +1739,7 @@ return t
         write_noteskin_png(&skin_dir.join("Down Tap Note.png"));
         write_noteskin_png(&skin_dir.join("_down go receptor.png"));
 
-        let data = load_itg_data_cached(&root, "dance", "steady")
+        let data = noteskin_itg::load_noteskin_data_cached(&root, "dance", "steady")
             .expect("steady test noteskin data should load");
         assert!(
             data.metrics

@@ -11,7 +11,8 @@ pub(super) fn load_noteskin_cached(skin: &str, cols_per_player: usize) -> Option
 }
 
 pub(super) fn discover_noteskin_names() -> Vec<String> {
-    noteskin::discover_itg_skins("dance")
+    let roots = deadlib_platform::dirs::app_dirs().noteskin_roots();
+    deadsync_noteskin::itg::discover_skins(&roots, "dance")
 }
 
 pub(super) fn build_noteskin_override_choices(noteskin_names: &[String]) -> Vec<String> {

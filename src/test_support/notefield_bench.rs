@@ -1,6 +1,6 @@
-use crate::game::parsing::noteskin::{ModelMeshCache, ModelMeshCacheStats};
 use crate::game::profile;
 use crate::screens::components::gameplay::notefield;
+use crate::screens::components::shared::noteskin_model::{ModelMeshCache, ModelMeshCacheStats};
 use crate::screens::gameplay as gameplay_screen;
 use deadlib_present::actors::Actor;
 use deadsync_chart::SongData;

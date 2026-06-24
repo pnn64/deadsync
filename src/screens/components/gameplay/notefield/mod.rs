@@ -1,8 +1,10 @@
 use crate::act;
 use crate::assets;
 use crate::game::GameplayCoreState as State;
-use crate::game::parsing::noteskin::{ModelMeshCache, SpriteSlot};
-use crate::screens::components::shared::noteskin_model::noteskin_model_actor_from_draw_cached;
+use crate::game::parsing::noteskin::SpriteSlot;
+use crate::screens::components::shared::noteskin_model::{
+    ModelMeshCache, noteskin_model_actor_from_draw_cached,
+};
 use crate::screens::gameplay::GameplayNoteskinAssets;
 use deadlib_present::actors::Actor;
 use deadlib_present::color;

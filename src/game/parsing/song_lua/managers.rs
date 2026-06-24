@@ -12,6 +12,7 @@ use super::actor_host::{
 };
 use super::song_tables::create_steps_table;
 use super::*;
+use deadlib_platform::dirs;
 use deadsync_profile::NoteSkin;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -3172,7 +3173,8 @@ pub(super) fn create_noteskin_table(
     noteskin.set(
         "GetNoteSkinNames",
         lua.create_function(|lua, _args: MultiValue| {
-            let names = crate::game::parsing::noteskin::discover_itg_skins("dance");
+            let roots = dirs::app_dirs().noteskin_roots();
+            let names = deadsync_noteskin::itg::discover_skins(&roots, "dance");
             let table = lua.create_table()?;
             for (idx, name) in names.into_iter().enumerate() {
                 table.raw_set(idx + 1, name)?;

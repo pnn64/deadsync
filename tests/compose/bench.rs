@@ -1156,7 +1156,9 @@ fn benchmark_notefield_actor_builder(
         model_cache_total.hits, model_cache_total.misses, model_cache_total.saturated_misses
     )];
     for (player, stats) in model_cache_stats.iter().copied().enumerate() {
-        if stats == deadsync::game::parsing::noteskin::ModelMeshCacheStats::default() {
+        if stats
+            == deadsync::screens::components::shared::noteskin_model::ModelMeshCacheStats::default()
+        {
             continue;
         }
         notes.push(format!(

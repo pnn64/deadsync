@@ -794,6 +794,82 @@ pub fn itg_explosion_source<'a, T>(
         .or_else(|| layers.first())
 }
 
+pub fn itg_hold_explosion_slot<L, T: Clone>(
+    wrapper_layers: &[L],
+    source_layers: &[L],
+    active_key: &str,
+    element_hint: &str,
+    blank: bool,
+    fallback_slot: Option<T>,
+    mut has_command: impl FnMut(&L, &str) -> bool,
+    mut element_matches_hint: impl FnMut(&L, &str) -> bool,
+    mut layer_slot: impl FnMut(&L) -> T,
+    mut apply_commands: impl FnMut(T, &L, &str) -> T,
+    mut direct_slot: impl FnMut() -> Option<T>,
+    mut wrapped_slots: impl FnMut() -> Vec<T>,
+) -> Option<T> {
+    let wrapper = wrapper_layers
+        .iter()
+        .find(|layer| has_command(layer, active_key))
+        .or_else(|| {
+            wrapper_layers
+                .iter()
+                .find(|layer| element_matches_hint(layer, element_hint))
+        });
+
+    if let Some(layer) = wrapper.filter(|layer| has_command(layer, active_key)) {
+        return Some(apply_commands(layer_slot(layer), layer, active_key));
+    }
+    if blank {
+        return None;
+    }
+
+    let source = source_layers
+        .iter()
+        .find(|layer| has_command(layer, active_key))
+        .or_else(|| source_layers.first());
+    if let Some(layer) = source {
+        let commands_layer = wrapper.unwrap_or(layer);
+        return Some(apply_commands(
+            layer_slot(layer),
+            commands_layer,
+            active_key,
+        ));
+    }
+    if let Some(layer) = wrapper {
+        return Some(apply_commands(layer_slot(layer), layer, active_key));
+    }
+    if let Some(slot) = direct_slot() {
+        return Some(slot);
+    }
+    for slot in wrapped_slots() {
+        return Some(match wrapper {
+            Some(layer) => apply_commands(slot, layer, active_key),
+            None => slot,
+        });
+    }
+    fallback_slot
+}
+
+pub fn itg_hit_mine_explosion_slot<'a, L, T>(
+    layers: &'a [L],
+    mut has_hit_mine_command: impl FnMut(&L) -> bool,
+    mut is_hit_mine_element: impl FnMut(&L) -> bool,
+    mut layer_slot: impl FnMut(&L) -> T,
+    mut direct_slot: impl FnMut() -> Option<T>,
+    actor_slot: impl FnMut() -> Option<T>,
+) -> (Option<&'a L>, Option<T>) {
+    let source = layers
+        .iter()
+        .find(|layer| has_hit_mine_command(layer))
+        .or_else(|| layers.iter().find(|layer| is_hit_mine_element(layer)));
+    let slot = source
+        .map(&mut layer_slot)
+        .or_else(&mut direct_slot)
+        .or_else(actor_slot);
+    (source, slot)
+}
+
 pub fn itg_tap_explosion_mode(element: &str) -> Option<ItgTapExplosionMode> {
     let element = element.to_ascii_lowercase();
     if element.starts_with("tap explosion bright") {
@@ -871,6 +947,19 @@ pub fn itg_direct_tap_explosion_elements(
         if !is_blank(&element) {
             out.push(element);
         }
+    }
+    out
+}
+
+pub fn itg_direct_tap_explosion_layers<T>(
+    base_element: &str,
+    base_blank: bool,
+    is_blank: impl FnMut(&str) -> bool,
+    mut resolve_element: impl FnMut(&str) -> Vec<T>,
+) -> Vec<T> {
+    let mut out = Vec::new();
+    for element in itg_direct_tap_explosion_elements(base_element, base_blank, is_blank) {
+        out.extend(resolve_element(&element));
     }
     out
 }
@@ -1130,6 +1219,178 @@ mod tests {
     }
 
     #[test]
+    fn hold_explosion_slot_prefers_wrapper_and_source_before_fallbacks() {
+        #[derive(Debug, Clone)]
+        struct Layer {
+            id: &'static str,
+            element: &'static str,
+            active: bool,
+        }
+
+        let wrapper_layers = [Layer {
+            id: "wrapper",
+            element: "Hold Explosion Wrapper",
+            active: true,
+        }];
+        let source_layers = [Layer {
+            id: "source",
+            element: "Hold Explosion",
+            active: true,
+        }];
+        let slot = itg_hold_explosion_slot(
+            &wrapper_layers,
+            &source_layers,
+            "holdingoncommand",
+            "hold explosion",
+            false,
+            Some("fallback".to_string()),
+            |layer, _| layer.active,
+            |layer, hint| layer.element.to_ascii_lowercase().contains(hint),
+            |layer| layer.id.to_string(),
+            |slot, layer, key| format!("{slot}+{}:{key}", layer.id),
+            || Some("direct".to_string()),
+            || vec!["wrapped".to_string()],
+        );
+
+        assert_eq!(slot, Some("wrapper+wrapper:holdingoncommand".to_string()));
+    }
+
+    #[test]
+    fn hold_explosion_slot_uses_source_with_wrapper_commands() {
+        #[derive(Debug, Clone)]
+        struct Layer {
+            id: &'static str,
+            element: &'static str,
+            active: bool,
+        }
+
+        let wrapper_layers = [Layer {
+            id: "wrapper",
+            element: "Hold Explosion Wrapper",
+            active: false,
+        }];
+        let source_layers = [Layer {
+            id: "source",
+            element: "Hold Explosion",
+            active: true,
+        }];
+        let slot = itg_hold_explosion_slot(
+            &wrapper_layers,
+            &source_layers,
+            "holdingoncommand",
+            "hold explosion",
+            false,
+            None,
+            |layer, _| layer.active,
+            |layer, hint| layer.element.to_ascii_lowercase().contains(hint),
+            |layer| layer.id.to_string(),
+            |slot, layer, key| format!("{slot}+{}:{key}", layer.id),
+            || None,
+            Vec::new,
+        );
+
+        assert_eq!(slot, Some("source+wrapper:holdingoncommand".to_string()));
+    }
+
+    #[test]
+    fn hold_explosion_slot_respects_blank_and_late_fallbacks() {
+        #[derive(Debug, Clone)]
+        struct Layer;
+
+        let blank = itg_hold_explosion_slot(
+            &[] as &[Layer],
+            &[],
+            "holdingoncommand",
+            "hold explosion",
+            true,
+            Some("fallback".to_string()),
+            |_, _| false,
+            |_, _| false,
+            |_| "layer".to_string(),
+            |slot, _, _| slot,
+            || Some("direct".to_string()),
+            || vec!["wrapped".to_string()],
+        );
+        let late = itg_hold_explosion_slot(
+            &[] as &[Layer],
+            &[],
+            "holdingoncommand",
+            "hold explosion",
+            false,
+            Some("fallback".to_string()),
+            |_, _| false,
+            |_, _| false,
+            |_| "layer".to_string(),
+            |slot, _, _| slot,
+            || None,
+            || vec!["wrapped".to_string()],
+        );
+
+        assert_eq!(blank, None);
+        assert_eq!(late, Some("wrapped".to_string()));
+    }
+
+    #[test]
+    fn hit_mine_explosion_slot_prefers_command_source() {
+        #[derive(Debug)]
+        struct Layer {
+            id: &'static str,
+            has_command: bool,
+            is_hit_mine: bool,
+        }
+        let layers = [
+            Layer {
+                id: "element",
+                has_command: false,
+                is_hit_mine: true,
+            },
+            Layer {
+                id: "command",
+                has_command: true,
+                is_hit_mine: false,
+            },
+        ];
+
+        let (source, slot) = itg_hit_mine_explosion_slot(
+            &layers,
+            |layer| layer.has_command,
+            |layer| layer.is_hit_mine,
+            |layer| layer.id.to_string(),
+            || Some("direct".to_string()),
+            || Some("actor".to_string()),
+        );
+
+        assert_eq!(source.map(|layer| layer.id), Some("command"));
+        assert_eq!(slot, Some("command".to_string()));
+    }
+
+    #[test]
+    fn hit_mine_explosion_slot_uses_direct_then_actor_fallback() {
+        #[derive(Debug)]
+        struct Layer;
+
+        let (_, direct) = itg_hit_mine_explosion_slot(
+            &[] as &[Layer],
+            |_| false,
+            |_| false,
+            |_| "layer".to_string(),
+            || Some("direct".to_string()),
+            || Some("actor".to_string()),
+        );
+        let (_, actor) = itg_hit_mine_explosion_slot(
+            &[] as &[Layer],
+            |_| false,
+            |_| false,
+            |_| "layer".to_string(),
+            || None,
+            || Some("actor".to_string()),
+        );
+
+        assert_eq!(direct, Some("direct".to_string()));
+        assert_eq!(actor, Some("actor".to_string()));
+    }
+
+    #[test]
     fn direct_tap_explosion_elements_skip_blank_variants() {
         let elements = itg_direct_tap_explosion_elements("Tap Explosion Dim", true, |element| {
             element == "Tap Explosion Dim W1" || element == "Tap Explosion Dim W4"
@@ -1141,6 +1402,27 @@ mod tests {
                 "Tap Explosion Dim W2",
                 "Tap Explosion Dim W3",
                 "Tap Explosion Dim W5"
+            ]
+        );
+    }
+
+    #[test]
+    fn direct_tap_explosion_layers_resolve_selected_elements() {
+        let layers = itg_direct_tap_explosion_layers(
+            "Tap Explosion Bright",
+            false,
+            |element| element == "Tap Explosion Bright W2",
+            |element| vec![element.to_string()],
+        );
+
+        assert_eq!(
+            layers,
+            vec![
+                "Tap Explosion Bright",
+                "Tap Explosion Bright W1",
+                "Tap Explosion Bright W3",
+                "Tap Explosion Bright W4",
+                "Tap Explosion Bright W5",
             ]
         );
     }

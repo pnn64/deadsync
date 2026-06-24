@@ -4,7 +4,7 @@ use crate::{
     compiled::{CompiledActorFile, CompiledLoaderEntry, CompiledNoteskinBundle},
     itg as noteskin_itg,
 };
-use log::info;
+use log::{info, warn};
 use mlua::{Function, Lua, MultiValue, Table, Value};
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -59,6 +59,14 @@ pub enum CompileOutcome {
     Built,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct CompileAllItgSummary {
+    pub total: usize,
+    pub built: usize,
+    pub reused: usize,
+    pub failed: usize,
+}
+
 pub fn ensure_compiled(
     cache_dir: &Path,
     game: &str,
@@ -81,7 +89,6 @@ pub fn ensure_compiled(
     Ok(CompileOutcome::Built)
 }
 
-#[allow(dead_code)]
 pub fn load_compiled(
     cache_dir: &Path,
     game: &str,
@@ -89,6 +96,84 @@ pub fn load_compiled(
 ) -> Option<CompiledNoteskinBundle> {
     let path = cached_bundle_path(cache_dir, game, &data.name)?;
     noteskin_compiled::load_compiled_bundle(&path)
+}
+
+pub fn load_or_compile(
+    cache_dir: &Path,
+    game: &str,
+    data: &noteskin_itg::NoteskinData,
+) -> Result<CompiledNoteskinBundle, String> {
+    if let Some(bundle) = load_compiled(cache_dir, game, data) {
+        return Ok(bundle);
+    }
+    ensure_compiled(cache_dir, game, data).map_err(|err| {
+        format!(
+            "failed to compile noteskin cache for '{game}/{}': {err}",
+            data.name
+        )
+    })?;
+    load_compiled(cache_dir, game, data).ok_or_else(|| {
+        format!(
+            "compiled noteskin cache missing for '{game}/{}' after successful compilation",
+            data.name
+        )
+    })
+}
+
+pub fn compile_all_itg_caches_with_progress<F>(
+    cache_dir: &Path,
+    roots: &[PathBuf],
+    game: &str,
+    mut on_progress: F,
+) -> CompileAllItgSummary
+where
+    F: FnMut(usize, usize, &str, &str),
+{
+    let skins = noteskin_itg::discover_skins(roots, game);
+    let total = skins.len();
+    let mut summary = CompileAllItgSummary {
+        total,
+        ..CompileAllItgSummary::default()
+    };
+
+    for (idx, skin) in skins.iter().enumerate() {
+        let label = format!("{game}/{skin}");
+        let result = load_data_from_roots(roots, game, skin).and_then(|data| {
+            ensure_compiled(cache_dir, game, &data).map(|outcome| (data, outcome))
+        });
+        match result {
+            Ok((_data, CompileOutcome::Built)) => {
+                summary.built += 1;
+                on_progress(idx + 1, total, &label, "compiled");
+            }
+            Ok((_data, CompileOutcome::Reused)) => {
+                summary.reused += 1;
+                on_progress(idx + 1, total, &label, "");
+            }
+            Err(err) => {
+                summary.failed += 1;
+                warn!("noteskin cache compile failed for '{}': {}", label, err);
+                on_progress(idx + 1, total, &label, "failed");
+            }
+        }
+    }
+
+    summary
+}
+
+fn load_data_from_roots(
+    roots: &[PathBuf],
+    game: &str,
+    skin: &str,
+) -> Result<noteskin_itg::NoteskinData, String> {
+    let mut last_load_err = None;
+    for root in roots {
+        match noteskin_itg::load_noteskin_data(root, game, skin) {
+            Ok(data) => return Ok(data),
+            Err(err) => last_load_err = Some(err),
+        }
+    }
+    Err(last_load_err.unwrap_or_else(|| format!("noteskin '{game}/{skin}' not found in any root")))
 }
 
 fn cached_bundle_path(cache_dir: &Path, game: &str, skin: &str) -> Option<PathBuf> {

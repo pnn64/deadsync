@@ -3,9 +3,7 @@ use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::sprite_sheet_dims;
 use crate::assets::{FontRole, current_machine_font_key, visual_styles};
-use crate::game::parsing::noteskin::{
-    self, ModelMeshCache, ModelMeshCacheStats, Noteskin, SpriteSlot,
-};
+use crate::game::parsing::noteskin::{self, Noteskin, SpriteSlot};
 use crate::game::parsing::song_lua::{
     CompiledSongLua, SongLuaCapturedActor, SongLuaCompileContext, SongLuaDifficulty,
     SongLuaOverlayActor, SongLuaOverlayBlendMode, SongLuaOverlayCommandBlock, SongLuaOverlayKind,
@@ -22,6 +20,7 @@ use crate::screens::components::shared::banner as shared_banner;
 use crate::screens::components::shared::gs_scorebox;
 use crate::screens::components::shared::lobby_hud;
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor_from_draw;
+use crate::screens::components::shared::noteskin_model::{ModelMeshCache, ModelMeshCacheStats};
 use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenBarParams};
 use crate::screens::{Screen, ScreenAction};
 use deadlib_present::actors::{Actor, SizeSpec, SpriteSource, TextAttribute, TextContent};
