@@ -118,7 +118,7 @@ pub fn update_simply_love_color(index: i32) {
 /// differentiation offset). No-op when SMX input is disabled.
 pub fn send_smx_underglow_color() {
     let cfg = get();
-    if !cfg.smx_input {
+    if !cfg.smx_input || !cfg.smx_underglow_theme {
         return;
     }
     let index = cfg.simply_love_color;
