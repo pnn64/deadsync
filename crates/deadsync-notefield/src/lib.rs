@@ -1966,6 +1966,19 @@ mod tests {
     }
 
     #[test]
+    fn notefield_view_proj_maps_centered_world_coords_to_clip_space() {
+        let matrix = notefield_view_proj(640.0, 480.0, 320.0, 240.0, 0.0, 0.0, false)
+            .expect("valid notefield projection");
+        let center = matrix.project_point3(glam::Vec3::ZERO);
+        let top_right = matrix.project_point3(glam::Vec3::new(320.0, 240.0, 0.0));
+
+        assert!(center.x.abs() <= 1e-5);
+        assert!(center.y.abs() <= 1e-5);
+        assert!((top_right.x - 1.0).abs() <= 1e-5);
+        assert!((top_right.y - 1.0).abs() <= 1e-5);
+    }
+
+    #[test]
     fn notefield_view_proj_changes_with_tilt_skew_and_reverse() {
         let flat = notefield_view_proj(640.0, 480.0, 320.0, 240.0, 0.0, 0.0, false)
             .expect("flat projection");

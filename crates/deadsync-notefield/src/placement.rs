@@ -1,6 +1,8 @@
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use glam::{Mat4 as Matrix4, Vec3 as Vector3};
 
+use crate::transforms::sm_scale;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LayoutMiniIndicatorPosition {
     Default,
@@ -109,34 +111,77 @@ fn rage_frustum(l: f32, r: f32, b: f32, t: f32, zn: f32, zf: f32) -> Matrix4 {
 pub fn notefield_view_proj(
     screen_w: f32,
     screen_h: f32,
-    center_x: f32,
+    playfield_center_x: f32,
     center_y: f32,
     tilt: f32,
     skew: f32,
     reverse: bool,
 ) -> Option<Matrix4> {
-    if ![screen_w, screen_h, center_x, center_y, tilt, skew]
-        .iter()
-        .all(|v| v.is_finite())
-        || screen_w <= 0.0
-        || screen_h <= 0.0
-    {
+    if !screen_w.is_finite() || !screen_h.is_finite() || screen_w <= 0.0 || screen_h <= 0.0 {
         return None;
     }
-    let proj = rage_frustum(
-        -screen_w * 0.5,
-        screen_w * 0.5,
-        -screen_h * 0.5,
-        screen_h * 0.5,
-        1.0,
-        10_000.0,
-    );
-    let rev = if reverse { std::f32::consts::PI } else { 0.0 };
-    let view = Matrix4::from_translation(Vector3::new(-center_x, -center_y, -1000.0))
-        * Matrix4::from_rotation_x(tilt)
-        * Matrix4::from_rotation_y(skew)
-        * Matrix4::from_rotation_z(rev);
-    Some(proj * view)
+
+    let half_w = 0.5 * screen_w;
+    let half_h = 0.5 * screen_h;
+
+    let fov_deg = 45.0_f32;
+    let theta = (0.5 * fov_deg).to_radians();
+    let tan_theta = theta.tan();
+    if !tan_theta.is_finite() || tan_theta.abs() < 1e-6 {
+        return None;
+    }
+    let dist = half_w / tan_theta;
+    if !dist.is_finite() || dist <= 0.0 {
+        return None;
+    }
+
+    let vanish_x = sm_scale(skew, 0.1, 1.0, playfield_center_x, half_w);
+    let vanish_y = center_y;
+
+    let near = 1.0_f32;
+    let far = dist + 1000.0_f32;
+
+    let mut vp_x = sm_scale(vanish_x, 0.0, screen_w, screen_w, 0.0);
+    let mut vp_y = sm_scale(vanish_y, 0.0, screen_h, screen_h, 0.0);
+    vp_x -= half_w;
+    vp_y -= half_h;
+    let l = (vp_x - half_w) / dist;
+    let r = (vp_x + half_w) / dist;
+    let b = (vp_y + half_h) / dist;
+    let t = (vp_y - half_h) / dist;
+    let proj = rage_frustum(l, r, b, t, near, far);
+
+    let eye = Vector3::new(-vp_x + half_w, -vp_y + half_h, dist);
+    let at = Vector3::new(-vp_x + half_w, -vp_y + half_h, 0.0);
+    let view = Matrix4::look_at_rh(eye, at, Vector3::Y);
+
+    let reverse_mult = if reverse { -1.0 } else { 1.0 };
+    let tilt = tilt.clamp(-1.0, 1.0);
+    let tilt_deg = (-30.0 * tilt) * reverse_mult;
+    let tilt_abs = tilt.abs();
+    let tilt_scale = 1.0 - 0.1 * tilt_abs;
+    let y_offset_screen = if tilt > 0.0 {
+        -45.0 * tilt
+    } else {
+        20.0 * tilt
+    } * reverse_mult;
+    let y_offset_world = -y_offset_screen;
+
+    let pivot_x = playfield_center_x - half_w;
+    let pivot_y = half_h - center_y;
+    let world_to_screen = Matrix4::from_cols_array(&[
+        1.0, 0.0, 0.0, 0.0, //
+        0.0, -1.0, 0.0, 0.0, //
+        0.0, 0.0, 1.0, 0.0, //
+        half_w, half_h, 0.0, 1.0,
+    ]);
+    let field = Matrix4::from_translation(Vector3::new(0.0, y_offset_world, 0.0))
+        * Matrix4::from_translation(Vector3::new(pivot_x, pivot_y, 0.0))
+        * Matrix4::from_rotation_x(tilt_deg.to_radians())
+        * Matrix4::from_scale(Vector3::new(tilt_scale, tilt_scale, 1.0))
+        * Matrix4::from_translation(Vector3::new(-pivot_x, -pivot_y, 0.0));
+
+    Some((proj * view) * world_to_screen * field)
 }
 
 pub fn combo_actor_zoom(mini: f32) -> f32 {

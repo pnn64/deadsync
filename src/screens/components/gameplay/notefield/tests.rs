@@ -9,6 +9,8 @@ use super::{
 };
 use crate::assets;
 use crate::game::parsing::noteskin::load_itg_skin;
+use crate::test_support::notefield_bench;
+use deadlib_present::actors::Actor;
 use deadsync_core::note::NoteType;
 use deadsync_core::timing::beat_to_note_row;
 use deadsync_gameplay::{
@@ -332,6 +334,54 @@ fn average_error_bar_draws_under_receptors() {
 }
 
 #[test]
+fn default_gameplay_field_emits_receptors_and_notes() {
+    std::thread::Builder::new()
+        .stack_size(16 * 1024 * 1024)
+        .spawn(|| {
+            let fixture = notefield_bench::fixture();
+            let actors = fixture.build(false);
+
+            assert!(
+                count_visible_z(&actors, Z_RECEPTOR as i16) >= 4,
+                "default gameplay field should emit receptor actors"
+            );
+            assert!(
+                count_visible_z(&actors, Z_TAP_NOTE as i16) > 0,
+                "default gameplay field should emit tap note actors"
+            );
+        })
+        .expect("spawn diagnostic notefield test")
+        .join()
+        .expect("diagnostic notefield test should not panic");
+}
+
+fn count_visible_z(actors: &[Actor], wanted_z: i16) -> usize {
+    let mut count = 0;
+    let mut stack: Vec<&Actor> = actors.iter().collect();
+    while let Some(actor) = stack.pop() {
+        count += match actor {
+            Actor::Sprite { visible, z, .. }
+            | Actor::Mesh { visible, z, .. }
+            | Actor::TexturedMesh { visible, z, .. } => usize::from(*visible && *z == wanted_z),
+            Actor::Frame { children, .. } | Actor::Camera { children, .. } => {
+                stack.extend(children.iter());
+                0
+            }
+            Actor::SharedFrame { children, .. } => {
+                stack.extend(children.iter());
+                0
+            }
+            Actor::Shadow { child, .. } => {
+                stack.push(child);
+                0
+            }
+            Actor::Text { .. } | Actor::CameraPush { .. } | Actor::CameraPop => 0,
+        };
+    }
+    count
+}
+
+#[test]
 fn text_error_bar_scalable_zoom_matches_sl_fork_curve_at_default_threshold() {
     fn assert_close(actual: f32, expected: f32) {
         assert!(
@@ -358,7 +408,7 @@ fn text_error_bar_scalable_zoom_matches_sl_fork_curve_at_default_threshold() {
 }
 
 #[test]
-fn song_lua_zoom_hide_window_covers_receptor_beat() {
+fn song_lua_zoom_hide_window_covers_note_beat() {
     let windows = [SongLuaNoteHideWindowRuntime {
         column: 2,
         start_beat: 40.0,

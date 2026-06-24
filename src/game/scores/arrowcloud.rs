@@ -783,8 +783,8 @@ pub fn tick_arrowcloud_auto_retries() -> bool {
 mod tests {
     use super::*;
     use deadsync_online::arrowcloud::{
-        ArrowCloudJudgmentCounts, ArrowCloudModifiers, ArrowCloudNpsInfo, ArrowCloudSpeed,
-        ArrowCloudTimingOffset,
+        ArrowCloudJudgmentCounts, ArrowCloudModifiers, ArrowCloudNpsInfo, ArrowCloudRadar,
+        ArrowCloudSpeed, ArrowCloudTimingOffset,
     };
     use deadsync_rules::timing::ScatterPoint;
     use serde_json::{Value, json};

@@ -2878,7 +2878,7 @@ mod tests {
         load_itg, load_itg_data_cached, load_itg_model_slots_from_path, load_itg_skin,
         noteskin_compiled, parse_explosion_animation,
     };
-    use deadsync_noteskin::script::parse_script_control;
+    use deadsync_noteskin::script::{model_draw_program, parse_script_control};
     use std::collections::{HashMap, HashSet};
     use std::ffi::OsStr;
     use std::fs;
@@ -3011,7 +3011,7 @@ mod tests {
             "initcommand".to_string(),
             "SetTextureFiltering,false;vertalign,bottom;glow,0.1,0.2,0.3,0.4".to_string(),
         );
-        let (draw, timeline, effect) = noteskin_script::model_draw_program(&commands);
+        let (draw, timeline, effect) = model_draw_program(&commands);
         assert!(parse_script_control("settexturefiltering").is_some());
         assert!(timeline.is_empty(), "expected no tween timeline");
         assert!(

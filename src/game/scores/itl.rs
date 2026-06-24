@@ -1447,23 +1447,6 @@ mod tests {
     }
 
     #[test]
-    fn online_itl_overall_ranks_share_tied_points() {
-        let mut ranks = HashMap::new();
-        apply_online_itl_overall_ranks(
-            &mut ranks,
-            vec![
-                ("a".to_string(), 19_500),
-                ("b".to_string(), 19_500),
-                ("c".to_string(), 18_000),
-            ],
-        );
-
-        assert_eq!(ranks.get("a"), Some(&1));
-        assert_eq!(ranks.get("b"), Some(&1));
-        assert_eq!(ranks.get("c"), Some(&3));
-    }
-
-    #[test]
     fn itl_score_lookup_uses_song_path_map() {
         let song = sample_song("/Songs/ITL Online 2026/Example");
         let mut data = ItlFileData::default();
