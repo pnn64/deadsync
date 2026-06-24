@@ -108,6 +108,10 @@ pub struct NoteDisplayMetrics {
     pub part_texture_translate: [NotePartTextureTranslate; NOTE_ANIM_PART_COUNT],
 }
 
+pub fn clamped_hold_let_go_gray_percent(metrics: &NoteDisplayMetrics) -> f32 {
+    metrics.hold_let_go_gray_percent.clamp(0.0, 1.0)
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct NotePartAnimation {
     pub length: f32,
@@ -197,5 +201,20 @@ mod tests {
             itg_column_xs(8),
             vec![-224, -160, -96, -32, 32, 96, 160, 224]
         );
+    }
+
+    #[test]
+    fn clamped_hold_let_go_gray_percent_stays_in_unit_range() {
+        let mut metrics = NoteDisplayMetrics {
+            hold_let_go_gray_percent: -0.5,
+            ..NoteDisplayMetrics::default()
+        };
+        assert_eq!(clamped_hold_let_go_gray_percent(&metrics), 0.0);
+
+        metrics.hold_let_go_gray_percent = 0.33;
+        assert_eq!(clamped_hold_let_go_gray_percent(&metrics), 0.33);
+
+        metrics.hold_let_go_gray_percent = 1.5;
+        assert_eq!(clamped_hold_let_go_gray_percent(&metrics), 1.0);
     }
 }

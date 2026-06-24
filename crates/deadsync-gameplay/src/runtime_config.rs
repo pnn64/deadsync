@@ -80,7 +80,6 @@ pub const fn gameplay_raw_key_plan(
         return GameplayRawKeyPlan::None;
     }
     match input {
-        GameplayRawKeyInput::Restart if ctrl_held && shift_held => GameplayRawKeyPlan::Reload,
         GameplayRawKeyInput::Restart if ctrl_held => GameplayRawKeyPlan::Restart,
         GameplayRawKeyInput::Autosync => {
             GameplayRawKeyPlan::SetAutosyncMode(next_autosync_mode(autosync_mode, course_active))
@@ -101,7 +100,6 @@ pub const fn gameplay_raw_key_plan(
 pub const fn gameplay_raw_key_action_for_plan(plan: GameplayRawKeyPlan) -> RawKeyAction {
     match plan {
         GameplayRawKeyPlan::Restart => RawKeyAction::Restart,
-        GameplayRawKeyPlan::Reload => RawKeyAction::Reload,
         _ => RawKeyAction::None,
     }
 }

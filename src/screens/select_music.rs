@@ -1448,28 +1448,6 @@ fn selected_song_arc(state: &State) -> Option<Arc<SongData>> {
     }
 }
 
-fn reload_selected_song(state: &mut State) -> bool {
-    let Some(song) = selected_song_arc(state) else {
-        return false;
-    };
-    let simfile_path = song.simfile_path.clone();
-    match song_loading::reload_song_in_cache(&simfile_path) {
-        Ok(_) => {
-            refresh_from_song_cache(state);
-            audio::play_sfx("assets/sounds/change.ogg");
-            debug!("Force-reloaded song from disk: {}", simfile_path.display());
-            true
-        }
-        Err(e) => {
-            warn!(
-                "Force reload failed for '{}': {e}",
-                simfile_path.display()
-            );
-            false
-        }
-    }
-}
-
 fn song_entry_index(entries: &[MusicWheelEntry], target_song: &Arc<SongData>) -> Option<usize> {
     entries
         .iter()
@@ -9382,26 +9360,6 @@ pub fn handle_raw_key_event(
     key: Option<&RawKeyboardEvent>,
     text: Option<&str>,
 ) -> ScreenAction {
-    handle_raw_key_event_impl(state, key, text, false, false)
-}
-
-pub fn handle_raw_key_event_with_modifiers(
-    state: &mut State,
-    key: Option<&RawKeyboardEvent>,
-    text: Option<&str>,
-    ctrl_held: bool,
-    shift_held: bool,
-) -> ScreenAction {
-    handle_raw_key_event_impl(state, key, text, ctrl_held, shift_held)
-}
-
-fn handle_raw_key_event_impl(
-    state: &mut State,
-    key: Option<&RawKeyboardEvent>,
-    text: Option<&str>,
-    ctrl_held: bool,
-    shift_held: bool,
-) -> ScreenAction {
     if state.reload_ui.is_some() {
         return ScreenAction::None;
     }
@@ -9607,18 +9565,6 @@ fn handle_raw_key_event_impl(
             state.song_search_ignore_next_text = true;
         }
         return action;
-    }
-    if let Some(key) = key
-        && ctrl_held
-        && shift_held
-        && key.code == KeyCode::KeyR
-        && key.pressed
-        && !key.repeat
-        && config::get().keyboard_features
-        && !key_bound_to_player_input(key)
-        && reload_selected_song(state)
-    {
-        return ScreenAction::ConsumeInput;
     }
     if let Some(key) = key
         && key.code == KeyCode::F7

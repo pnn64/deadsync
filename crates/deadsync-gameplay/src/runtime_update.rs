@@ -2774,7 +2774,7 @@ where
     ) -> RawKeyAction {
         let action = gameplay_raw_key_action_for_plan(plan);
         match plan {
-            GameplayRawKeyPlan::Restart | GameplayRawKeyPlan::Reload => return action,
+            GameplayRawKeyPlan::Restart => return action,
             GameplayRawKeyPlan::SetAutosyncMode(mode) => self.set_autosync_mode(mode),
             GameplayRawKeyPlan::SetTimingTickMode(mode) => {
                 self.apply_timing_tick_mode_command(mode, now_music_time)

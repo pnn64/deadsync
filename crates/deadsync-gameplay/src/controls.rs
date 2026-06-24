@@ -81,8 +81,6 @@ pub const fn offset_adjust_target(
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum GameplayRawKeyPlan {
     Restart,
-    /// Re-read the simfile from disk (refresh the chart cache) and restart.
-    Reload,
     SetAutosyncMode(AutosyncMode),
     SetTimingTickMode(GameplayTimingTickMode),
     SetAutoplayEnabled(bool),
@@ -100,8 +98,6 @@ pub enum RawKeyAction {
     #[default]
     None,
     Restart,
-    /// Refresh the chart cache from disk, then restart.
-    Reload,
 }
 
 #[inline(always)]

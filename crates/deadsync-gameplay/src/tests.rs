@@ -8614,20 +8614,6 @@ mod tests {
         );
         assert_eq!(
             gameplay_raw_key_plan(
-                GameplayRawKeyInput::Restart,
-                true,
-                true,
-                true,
-                true,
-                AutosyncMode::Off,
-                false,
-                GameplayTimingTickMode::Off,
-                false,
-            ),
-            GameplayRawKeyPlan::Reload
-        );
-        assert_eq!(
-            gameplay_raw_key_plan(
                 GameplayRawKeyInput::Autosync,
                 true,
                 true,
@@ -8675,10 +8661,6 @@ mod tests {
         assert_eq!(
             gameplay_raw_key_action_for_plan(GameplayRawKeyPlan::Restart),
             RawKeyAction::Restart
-        );
-        assert_eq!(
-            gameplay_raw_key_action_for_plan(GameplayRawKeyPlan::Reload),
-            RawKeyAction::Reload
         );
         assert_eq!(
             gameplay_raw_key_action_for_plan(GameplayRawKeyPlan::SetAutoplayEnabled(true)),

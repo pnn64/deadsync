@@ -32,7 +32,7 @@ pub use explosion::{
 pub use parts::{
     ITG_DANCE_COL_SPACING, NOTE_ANIM_PART_COUNT, NUM_QUANTIZATIONS, NoteAnimPart, NoteColorType,
     NoteDisplayMetrics, NotePartAnimation, NotePartTextureTranslate, Quantization, Style,
-    itg_column_xs,
+    clamped_hold_let_go_gray_percent, itg_column_xs,
 };
 pub use receptor::{
     ItgReceptorVisuals, ReceptorGlowBehavior, ReceptorPulse, ReceptorReverseBehavior,
