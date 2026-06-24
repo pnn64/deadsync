@@ -7,7 +7,7 @@ use std::path::Path;
 use crate::itg as noteskin_itg;
 use crate::script::parse_linear_frames_expr;
 
-const ITG_ARG0_TOKEN: &str = "__ITG_ARG0__";
+pub const ITG_ARG0_TOKEN: &str = "__ITG_ARG0__";
 
 #[derive(Debug, Default)]
 struct CommandContext {
@@ -200,14 +200,22 @@ pub fn parse_wrapper_commands_from_file(
     path: &Path,
     metrics: &noteskin_itg::IniData,
 ) -> Option<HashMap<String, String>> {
-    let is_lua = path
-        .extension()
-        .and_then(|s| s.to_str())
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("lua"));
-    if !is_lua {
+    if !is_lua_path(path) {
         return None;
     }
     parse_wrapper_commands(&fs::read_to_string(path).ok()?, metrics)
+}
+
+pub fn is_lua_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|s| s.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("lua"))
+}
+
+pub fn element_contains_hint(element: &str, hint: &str) -> bool {
+    element
+        .to_ascii_lowercase()
+        .contains(&hint.to_ascii_lowercase())
 }
 
 fn parse_arg0_aliases(content: &str) -> HashSet<String> {
@@ -1315,5 +1323,21 @@ return Def.ActorFrame .. {
         let metrics = noteskin_itg::IniData::default();
 
         assert!(parse_wrapper_commands("return Def.ActorFrame {}", &metrics).is_none());
+    }
+
+    #[test]
+    fn lua_path_detection_is_case_insensitive() {
+        assert!(is_lua_path(Path::new("Down Receptor.LUA")));
+        assert!(!is_lua_path(Path::new("Down Receptor.png")));
+        assert!(!is_lua_path(Path::new("Down Receptor")));
+    }
+
+    #[test]
+    fn element_hint_matching_is_case_insensitive() {
+        assert!(element_contains_hint(
+            "Down Hold Explosion",
+            "hold explosion"
+        ));
+        assert!(!element_contains_hint("Down Tap Note", "hold explosion"));
     }
 }

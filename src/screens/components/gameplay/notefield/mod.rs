@@ -1,7 +1,7 @@
 use crate::act;
 use crate::assets;
 use crate::game::GameplayCoreState as State;
-use crate::game::parsing::noteskin::{ModelMeshCache, Noteskin, SpriteSlot};
+use crate::game::parsing::noteskin::{ModelMeshCache, SpriteSlot};
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor_from_draw_cached;
 use crate::screens::gameplay::GameplayNoteskinAssets;
 use deadlib_present::actors::Actor;
@@ -27,20 +27,20 @@ use deadsync_notefield::{
     HudLayoutYs, JudgmentTiltParams, LayoutMiniIndicatorPosition, NoteAlphaParams, NoteXParams,
     TapJudgmentRowsParams, TornadoBounds, VisualEffectParams, ZmodLayoutParams,
     ZmodMeasureCounterText, actor_with_world_z, appearance_needs_rows, appearance_note_actor_alpha,
-    appearance_note_glow, apply_accel_y as crate_apply_accel_y,
-    apply_accel_y_with_peak as crate_apply_accel_y_with_peak, average_error_bar_mini_scale,
-    beat_factor, beat_scroll_travel, bottom_cap_uv_window, clipped_hold_body_bounds,
-    column_cue_alpha, column_cue_height, column_cue_reverse_top_y, column_flash_alpha,
-    column_flash_color, column_flash_height, column_flash_layout, column_flash_reverse_top_y,
-    combo_actor_zoom, compute_invert_distances, compute_tornado_bounds, crossover_cue_height,
-    edit_bar_candidate_step_rows, edit_bar_scroll_speed, edit_beat_bar_info_for_row,
-    edit_beat_scroll_travel, effective_mini_value as crate_effective_mini_value,
-    error_bar_boundaries_s, error_bar_color_for_window, error_bar_flash_alpha,
-    error_bar_text_scalable_zoom, error_bar_tick_alpha,
-    field_effect_height as field_effect_height_for_screen, fill_lane_col_offsets,
-    find_first_displayed_beat, find_last_displayed_beat, for_each_visible_hold_index,
-    for_each_visible_note_index, held_miss_zoom, hold_body_bottom_for_tail_cap,
-    hold_body_segment_budget, hold_draw_span, hold_glow_color,
+    appearance_note_glow, append_beat_bar, append_cue_bar, append_edit_measure_number,
+    apply_accel_y as crate_apply_accel_y, apply_accel_y_with_peak as crate_apply_accel_y_with_peak,
+    average_error_bar_mini_scale, beat_factor, beat_scroll_travel, bottom_cap_uv_window,
+    clipped_hold_body_bounds, column_cue_alpha, column_cue_height, column_cue_reverse_top_y,
+    column_flash_alpha, column_flash_color, column_flash_height, column_flash_layout,
+    column_flash_reverse_top_y, combo_actor_zoom, compute_invert_distances, compute_tornado_bounds,
+    crossover_cue_height, edit_bar_candidate_step_rows, edit_bar_scroll_speed,
+    edit_beat_bar_info_for_row, edit_beat_scroll_travel,
+    effective_mini_value as crate_effective_mini_value, error_bar_boundaries_s,
+    error_bar_color_for_window, error_bar_flash_alpha, error_bar_text_scalable_zoom,
+    error_bar_tick_alpha, field_effect_height as field_effect_height_for_screen,
+    fill_lane_col_offsets, find_first_displayed_beat, find_last_displayed_beat,
+    for_each_visible_hold_index, for_each_visible_note_index, held_miss_zoom,
+    hold_body_bottom_for_tail_cap, hold_body_segment_budget, hold_draw_span, hold_glow_color,
     hold_indicator_column_x as crate_hold_indicator_column_x, hold_overlaps_visible_window,
     hold_parts_for_note_type, hold_segment_pose, hold_strip_actor, hold_strip_glow_actor,
     hold_strip_quad, hold_strip_row_3d, hold_strip_row_from_positions, hold_tail_cap_bounds,
@@ -73,11 +73,9 @@ use std::cell::RefCell;
 use std::sync::Arc;
 use std::time::Instant;
 
-mod measure;
 mod prewarm;
 mod text;
 mod zmod;
-use measure::{append_beat_bar, append_cue_bar, append_edit_measure_number};
 pub use prewarm::prewarm_text_layout;
 pub(crate) use text::gameplay_mods_text;
 use text::{
@@ -206,7 +204,7 @@ const Z_TAP_NOTE: i32 = 140;
 const Z_COLUMN_CUE: i32 = 90;
 const Z_COLUMN_FLASH: i32 = 91;
 const MINE_CORE_SIZE_RATIO: f32 = 0.45;
-const Z_MEASURE_LINES: i32 = 80;
+const Z_MEASURE_LINES: i16 = 80;
 const Z_JUDGMENT_FRONT: i16 = 200;
 const Z_JUDGMENT_BACK: i16 = 95;
 const Z_ERROR_BAR_BG_FRONT: i16 = 180;
@@ -234,23 +232,6 @@ fn note_slot_base_size(slot: &SpriteSlot, scale: f32) -> [f32; 2] {
     }
     let logical = slot.logical_size();
     [logical[0] * scale, logical[1] * scale]
-}
-
-#[inline(always)]
-fn hold_explosion_slot_for_col(
-    explosion_ns: Option<&Noteskin>,
-    col: usize,
-    is_roll: bool,
-) -> Option<&SpriteSlot> {
-    let ns = explosion_ns?;
-    let visuals = ns.hold_visuals_for_col(col, is_roll);
-    visuals.explosion.as_ref().or_else(|| {
-        if is_roll {
-            ns.roll.explosion.as_ref()
-        } else {
-            ns.hold.explosion.as_ref()
-        }
-    })
 }
 
 #[inline(always)]
@@ -1484,6 +1465,7 @@ pub(crate) fn build_bundles(
                             field_zoom,
                             line_thickness,
                             alpha,
+                            Z_MEASURE_LINES,
                         );
                         append_edit_measure_number(
                             &mut actors,
@@ -1492,6 +1474,7 @@ pub(crate) fn build_bundles(
                             x_center - w * 0.5,
                             y,
                             field_zoom,
+                            Z_MEASURE_LINES,
                         );
                     }
                     u -= 1;
@@ -1546,6 +1529,7 @@ pub(crate) fn build_bundles(
                             field_zoom,
                             line_thickness,
                             alpha,
+                            Z_MEASURE_LINES,
                         );
                         append_edit_measure_number(
                             &mut actors,
@@ -1554,6 +1538,7 @@ pub(crate) fn build_bundles(
                             x_center - w * 0.5,
                             y,
                             field_zoom,
+                            Z_MEASURE_LINES,
                         );
                     }
                     u += 1;
@@ -1645,6 +1630,7 @@ pub(crate) fn build_bundles(
                                 line_thickness,
                                 color,
                                 alpha,
+                                Z_MEASURE_LINES,
                             );
                         }
                     };
@@ -2014,11 +2000,9 @@ pub(crate) fn build_bundles(
                     if !hold_explosion_active(Some(active), current_beat, note.beat) {
                         return None;
                     }
-                    hold_explosion_slot_for_col(
-                        tap_explosion_ns,
-                        i,
-                        matches!(note.note_type, NoteType::Roll),
-                    )
+                    tap_explosion_ns.and_then(|ns| {
+                        ns.hold_explosion_for_col(i, matches!(note.note_type, NoteType::Roll))
+                    })
                 })
             };
             if let Some(hold_slot) = hold_slot {

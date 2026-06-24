@@ -6,6 +6,8 @@ use std::sync::{Mutex, OnceLock};
 
 use crate::{
     NoteAnimPart, NoteColorType, NoteDisplayMetrics, NotePartAnimation, NotePartTextureTranslate,
+    actor::ITG_ARG0_TOKEN,
+    lua::{itg_extract_quoted_strings, itg_parse_lua_quoted},
 };
 
 const MAX_FALLBACK_DEPTH: usize = 20;
@@ -29,6 +31,22 @@ pub fn clear_lookup_caches() {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clear();
     }
+}
+
+#[inline(always)]
+pub fn button_for_col(col: usize) -> &'static str {
+    match col % 4 {
+        0 => "Left",
+        1 => "Down",
+        2 => "Up",
+        _ => "Right",
+    }
+}
+
+pub fn down_col(num_cols: usize) -> usize {
+    (0..num_cols)
+        .find(|&col| button_for_col(col).eq_ignore_ascii_case("Down"))
+        .unwrap_or(0)
 }
 
 #[derive(Debug, Clone, Default)]
@@ -165,6 +183,101 @@ impl NoteskinData {
         }
         None
     }
+}
+
+pub fn find_texture_with_prefix(data: &NoteskinData, prefix: &str) -> Option<PathBuf> {
+    let want = prefix.to_ascii_lowercase();
+    for dir in &data.search_dirs {
+        let Ok(entries) = fs::read_dir(dir) else {
+            continue;
+        };
+        let mut matches = entries
+            .flatten()
+            .map(|entry| entry.path())
+            .filter(|path| path.is_file())
+            .filter(|path| {
+                path.file_name()
+                    .and_then(|s| s.to_str())
+                    .is_some_and(|name| {
+                        let name = name.to_ascii_lowercase();
+                        name.starts_with(&want) && name.ends_with(".png")
+                    })
+            })
+            .collect::<Vec<_>>();
+        if matches.is_empty() {
+            continue;
+        }
+        matches.sort_by(|a, b| {
+            let a_name = a
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_ascii_lowercase();
+            let b_name = b
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_ascii_lowercase();
+            a_name.cmp(&b_name)
+        });
+        return matches.into_iter().next();
+    }
+    None
+}
+
+pub fn texture_key_for_path(
+    asset_relative_path: Option<&Path>,
+    path: &Path,
+    path_is_file: bool,
+) -> Option<String> {
+    let key_path = if let Some(rel) = asset_relative_path {
+        rel
+    } else if path_is_file {
+        path
+    } else {
+        return None;
+    };
+    let mut key = key_path.to_string_lossy().replace('\\', "/");
+    if !path.is_absolute() {
+        while key.starts_with('/') {
+            key.remove(0);
+        }
+    }
+    Some(key)
+}
+
+pub fn resolve_texture_expr(
+    data: &NoteskinData,
+    expr: &str,
+    arg0_path: Option<&Path>,
+) -> Option<PathBuf> {
+    let value = expr.trim();
+    if value == ITG_ARG0_TOKEN {
+        return arg0_path.map(Path::to_path_buf);
+    }
+    if value.starts_with("NOTESKIN:GetPath(") {
+        let args = itg_extract_quoted_strings(value);
+        if args.len() >= 2 {
+            return data
+                .resolve_path(&args[0], &args[1])
+                .or_else(|| data.resolve_path("", &args[1]));
+        }
+        if args.len() == 1 {
+            return data
+                .resolve_path(&args[0], "")
+                .or_else(|| data.resolve_path("", &args[0]));
+        }
+    }
+    let name = itg_parse_lua_quoted(value).unwrap_or_else(|| value.to_string());
+    data.resolve_path(&name, "")
+        .or_else(|| data.resolve_path("", &name))
+        .or_else(|| {
+            if value == "..." {
+                arg0_path.map(Path::to_path_buf)
+            } else {
+                None
+            }
+        })
 }
 
 pub fn load_noteskin_data(root: &Path, game: &str, skin: &str) -> Result<NoteskinData, String> {
@@ -497,13 +610,14 @@ fn is_redir(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        IniData, NoteskinData, animation_is_beat_based, clear_lookup_caches, find_file_with_prefix,
-        note_display_metrics, parse_ini_float, resolve_skin_dir,
+        IniData, NoteskinData, animation_is_beat_based, button_for_col, clear_lookup_caches,
+        down_col, find_file_with_prefix, find_texture_with_prefix, note_display_metrics,
+        parse_ini_float, resolve_skin_dir, resolve_texture_expr, texture_key_for_path,
     };
     use crate::{NoteAnimPart, NoteColorType};
     use std::collections::HashMap;
     use std::fs;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use std::sync::Mutex;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -521,6 +635,52 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn button_for_col_cycles_dance_panels() {
+        assert_eq!(button_for_col(0), "Left");
+        assert_eq!(button_for_col(1), "Down");
+        assert_eq!(button_for_col(2), "Up");
+        assert_eq!(button_for_col(3), "Right");
+        assert_eq!(button_for_col(4), "Left");
+        assert_eq!(down_col(0), 0);
+        assert_eq!(down_col(1), 0);
+        assert_eq!(down_col(4), 1);
+        assert_eq!(down_col(8), 1);
+    }
+
+    #[test]
+    fn resolve_texture_expr_handles_getpath_quotes_and_arg0() {
+        let _guard = LOOKUP_CACHE_TEST_LOCK.lock().unwrap();
+        clear_lookup_caches();
+        let root = temp_root("texture-expr");
+        let skin_dir = root.join("dance/default");
+        fs::create_dir_all(&skin_dir).unwrap();
+        fs::write(skin_dir.join("Down Tap Note.png"), b"").unwrap();
+        fs::write(skin_dir.join("Fallback Explosion.png"), b"").unwrap();
+        let data = NoteskinData {
+            name: "default".to_string(),
+            metrics: IniData::default(),
+            search_dirs: vec![skin_dir.clone()],
+        };
+        let arg0 = skin_dir.join("Arg0.png");
+
+        assert_eq!(
+            resolve_texture_expr(&data, "NOTESKIN:GetPath('Down', 'Tap Note')", Some(&arg0),)
+                .and_then(|path| path.file_name().map(|name| name.to_owned())),
+            Some("Down Tap Note.png".into())
+        );
+        assert_eq!(
+            resolve_texture_expr(&data, "'Fallback Explosion'", Some(&arg0))
+                .and_then(|path| path.file_name().map(|name| name.to_owned())),
+            Some("Fallback Explosion.png".into())
+        );
+        assert_eq!(
+            resolve_texture_expr(&data, crate::actor::ITG_ARG0_TOKEN, Some(&arg0)),
+            Some(arg0.clone())
+        );
+        clear_lookup_caches();
     }
 
     fn ini_section(section: &str, values: &[(&str, &str)]) -> IniData {
@@ -665,5 +825,61 @@ mod tests {
         assert_eq!(find_file_with_prefix(&dir, "Tap Note"), Some(path));
         let _ = fs::remove_dir_all(&root);
         clear_lookup_caches();
+    }
+
+    #[test]
+    fn find_texture_with_prefix_uses_png_matches_in_search_order() {
+        let root = temp_root("texture-prefix");
+        let first = root.join("dance/default");
+        let second = root.join("common/default");
+        fs::create_dir_all(&first).unwrap();
+        fs::create_dir_all(&second).unwrap();
+        fs::write(first.join("_arrow.ini"), []).unwrap();
+        fs::write(first.join("_arrow z.png"), []).unwrap();
+        fs::write(first.join("_arrow a.PNG"), []).unwrap();
+        fs::write(second.join("_arrow first.png"), []).unwrap();
+        let data = NoteskinData {
+            name: "test".to_string(),
+            metrics: IniData::default(),
+            search_dirs: vec![first.clone(), second],
+        };
+
+        assert_eq!(
+            find_texture_with_prefix(&data, "_ARROW"),
+            Some(first.join("_arrow a.PNG"))
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn texture_key_for_path_prefers_asset_relative_path() {
+        let path = Path::new("assets/noteskins/dance/default/Down Tap Note.png");
+        let rel = Path::new("noteskins/dance/default/Down Tap Note.png");
+
+        assert_eq!(
+            texture_key_for_path(Some(rel), path, true),
+            Some("noteskins/dance/default/Down Tap Note.png".to_string())
+        );
+    }
+
+    #[test]
+    fn texture_key_for_path_preserves_external_file_paths() {
+        let path = std::env::current_dir()
+            .unwrap()
+            .join("external pack")
+            .join("Tap Note.png");
+
+        assert_eq!(
+            texture_key_for_path(None, &path, true),
+            Some(path.to_string_lossy().replace('\\', "/"))
+        );
+    }
+
+    #[test]
+    fn texture_key_for_path_rejects_missing_external_paths() {
+        assert_eq!(
+            texture_key_for_path(None, Path::new("missing.png"), false),
+            None
+        );
     }
 }

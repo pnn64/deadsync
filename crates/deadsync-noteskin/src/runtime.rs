@@ -1,3 +1,10 @@
+use crate::explosion::{
+    ITG_TAP_EXPLOSION_WINDOWS, ItgTapExplosionMode, ItgTapExplosionSource,
+    itg_hit_mine_command_with_init, itg_mine_explosion_commands,
+    itg_partition_tap_explosion_sources, itg_tap_explosion_command_for_window,
+    itg_tap_explosion_command_with_init, itg_tap_explosion_key,
+    itg_tap_explosion_sources_for_window, parse_explosion_animation,
+};
 use crate::{
     ExplosionAnimation, NoteAnimPart, NoteColorType, NoteDisplayMetrics, NotePartTextureTranslate,
     ReceptorGlowBehavior, ReceptorPulse, ReceptorReverseBehavior, ReceptorStepBehavior,
@@ -57,6 +64,45 @@ pub struct HoldVisuals<T> {
     pub explosion: Option<T>,
 }
 
+#[derive(Debug, Clone)]
+pub struct HoldVisualParts<T> {
+    pub head_inactive: Option<T>,
+    pub head_active: Option<T>,
+    pub head_inactive_layers: Option<Arc<[T]>>,
+    pub head_active_layers: Option<Arc<[T]>>,
+    pub body_inactive: Option<T>,
+    pub body_active: Option<T>,
+    pub topcap_inactive: Option<T>,
+    pub topcap_active: Option<T>,
+    pub bottomcap_inactive: Option<T>,
+    pub bottomcap_active: Option<T>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ItgTapNoteColumn<T> {
+    pub notes: Vec<T>,
+    pub note_layers: Vec<Arc<[T]>>,
+    pub layers: Vec<T>,
+    pub base: T,
+}
+
+impl<T> Default for HoldVisualParts<T> {
+    fn default() -> Self {
+        Self {
+            head_inactive: None,
+            head_active: None,
+            head_inactive_layers: None,
+            head_active_layers: None,
+            body_inactive: None,
+            body_active: None,
+            topcap_inactive: None,
+            topcap_active: None,
+            bottomcap_inactive: None,
+            bottomcap_active: None,
+        }
+    }
+}
+
 impl<T> Default for HoldVisuals<T> {
     fn default() -> Self {
         Self {
@@ -72,6 +118,330 @@ impl<T> Default for HoldVisuals<T> {
             bottomcap_active: None,
             explosion: None,
         }
+    }
+}
+
+pub fn itg_hold_visuals_from_parts<T: Clone>(parts: HoldVisualParts<T>) -> HoldVisuals<T> {
+    let head_active_layers = if parts.head_active.is_some() {
+        parts.head_active_layers.clone()
+    } else {
+        parts
+            .head_active_layers
+            .clone()
+            .or_else(|| parts.head_inactive_layers.clone())
+    };
+    HoldVisuals {
+        head_inactive: parts.head_inactive.clone(),
+        head_active: parts.head_active.or(parts.head_inactive),
+        head_inactive_layers: parts.head_inactive_layers,
+        head_active_layers,
+        body_inactive: parts.body_inactive.clone(),
+        body_active: parts.body_active.or(parts.body_inactive),
+        topcap_inactive: parts.topcap_inactive.clone(),
+        topcap_active: parts.topcap_active.or(parts.topcap_inactive),
+        bottomcap_inactive: parts.bottomcap_inactive.clone(),
+        bottomcap_active: parts.bottomcap_active.or(parts.bottomcap_inactive),
+        explosion: None,
+    }
+}
+
+pub fn itg_roll_visuals_from_parts<T: Clone>(
+    parts: HoldVisualParts<T>,
+    hold: &HoldVisuals<T>,
+) -> HoldVisuals<T> {
+    let head_inactive_has_slot = parts.head_inactive.is_some();
+    let head_active_has_slot = parts.head_active.is_some();
+    let head_inactive_layers = if head_inactive_has_slot {
+        parts.head_inactive_layers.clone()
+    } else {
+        parts
+            .head_inactive_layers
+            .clone()
+            .or_else(|| hold.head_inactive_layers.clone())
+    };
+    let head_active_layers = if head_active_has_slot {
+        parts.head_active_layers.clone()
+    } else if head_inactive_has_slot {
+        parts.head_inactive_layers.clone()
+    } else {
+        parts
+            .head_active_layers
+            .clone()
+            .or(parts.head_inactive_layers.clone())
+            .or_else(|| hold.head_active_layers.clone())
+            .or_else(|| hold.head_inactive_layers.clone())
+    };
+    HoldVisuals {
+        head_inactive: parts.head_inactive.clone().or(hold.head_inactive.clone()),
+        head_active: parts
+            .head_active
+            .or(parts.head_inactive)
+            .or(hold.head_active.clone())
+            .or(hold.head_inactive.clone()),
+        head_inactive_layers,
+        head_active_layers,
+        body_inactive: parts.body_inactive.clone().or(hold.body_inactive.clone()),
+        body_active: parts
+            .body_active
+            .or(parts.body_inactive)
+            .or(hold.body_active.clone())
+            .or(hold.body_inactive.clone()),
+        topcap_inactive: parts
+            .topcap_inactive
+            .clone()
+            .or(hold.topcap_inactive.clone()),
+        topcap_active: parts
+            .topcap_active
+            .or(parts.topcap_inactive)
+            .or(hold.topcap_active.clone())
+            .or(hold.topcap_inactive.clone()),
+        bottomcap_inactive: parts
+            .bottomcap_inactive
+            .clone()
+            .or(hold.bottomcap_inactive.clone()),
+        bottomcap_active: parts
+            .bottomcap_active
+            .or(parts.bottomcap_inactive)
+            .or(hold.bottomcap_active.clone())
+            .or(hold.bottomcap_inactive.clone()),
+        explosion: None,
+    }
+}
+
+pub fn default_hold_visuals<T: Clone>(
+    hold_columns: &[HoldVisuals<T>],
+    roll_columns: &[HoldVisuals<T>],
+    down_col: usize,
+) -> (HoldVisuals<T>, HoldVisuals<T>) {
+    let hold = hold_columns
+        .get(down_col)
+        .cloned()
+        .or_else(|| hold_columns.first().cloned())
+        .unwrap_or_default();
+    let roll = roll_columns
+        .get(down_col)
+        .cloned()
+        .or_else(|| roll_columns.first().cloned())
+        .unwrap_or_else(|| HoldVisuals {
+            head_inactive: hold.head_inactive.clone(),
+            head_active: hold.head_active.clone(),
+            head_inactive_layers: hold.head_inactive_layers.clone(),
+            head_active_layers: hold.head_active_layers.clone(),
+            body_inactive: hold.body_inactive.clone(),
+            body_active: hold.body_active.clone(),
+            topcap_inactive: hold.topcap_inactive.clone(),
+            topcap_active: hold.topcap_active.clone(),
+            bottomcap_inactive: hold.bottomcap_inactive.clone(),
+            bottomcap_active: hold.bottomcap_active.clone(),
+            explosion: None,
+        });
+    (hold, roll)
+}
+
+pub fn default_tap_explosions<T: Clone>(
+    tap_explosions_by_col: &[HashMap<String, TapExplosion<T>>],
+    down_col: usize,
+) -> HashMap<String, TapExplosion<T>> {
+    tap_explosions_by_col
+        .get(down_col)
+        .filter(|by_window| !by_window.is_empty())
+        .cloned()
+        .or_else(|| {
+            tap_explosions_by_col
+                .iter()
+                .find(|by_window| !by_window.is_empty())
+                .cloned()
+        })
+        .unwrap_or_default()
+}
+
+pub fn itg_is_common_fallback_hold_explosion_key(texture_key: &str) -> bool {
+    texture_key
+        .to_ascii_lowercase()
+        .contains("noteskins/common/common/fallback hold explosion")
+}
+
+pub fn itg_is_common_noteskin_key(texture_key: &str) -> bool {
+    texture_key
+        .to_ascii_lowercase()
+        .contains("noteskins/common/common/")
+}
+
+pub fn itg_roll_explosion_should_use_hold(roll_key: &str, hold_key: &str) -> bool {
+    itg_is_common_fallback_hold_explosion_key(roll_key) && !itg_is_common_noteskin_key(hold_key)
+}
+
+pub fn itg_roll_explosion_commands(
+    actor_commands: Option<&HashMap<String, String>>,
+    mut metric: impl FnMut(&str) -> Option<String>,
+) -> Option<HashMap<String, String>> {
+    actor_commands.cloned().or_else(|| {
+        let mut metric_commands = HashMap::new();
+        if let Some(v) = metric("RollOnCommand") {
+            metric_commands.insert("rolloncommand".to_string(), v);
+        }
+        if let Some(v) = metric("RollOffCommand") {
+            metric_commands.insert("rolloffcommand".to_string(), v);
+        }
+        (!metric_commands.is_empty()).then_some(metric_commands)
+    })
+}
+
+pub fn itg_mine_explosion_from_commands<T: Clone>(
+    slot: T,
+    commands: &HashMap<String, String>,
+) -> Option<TapExplosion<T>> {
+    let layers = itg_mine_explosion_commands(commands)
+        .into_iter()
+        .map(|command_with_init| TapExplosionLayer {
+            slot: slot.clone(),
+            animation: parse_explosion_animation(&command_with_init),
+        })
+        .collect();
+    TapExplosion::from_layers(layers)
+}
+
+pub fn itg_hit_mine_explosion_from_slot<T: Clone>(
+    slot: T,
+    commands: Option<&HashMap<String, String>>,
+    metric_command: Option<String>,
+) -> TapExplosion<T> {
+    let command = itg_hit_mine_command_with_init(commands, metric_command);
+    TapExplosion::from_single(
+        slot,
+        command
+            .as_deref()
+            .map(parse_explosion_animation)
+            .unwrap_or_default(),
+    )
+}
+
+pub fn itg_tap_explosion_map_from_sources<T: Clone>(
+    sources: impl IntoIterator<Item = ItgTapExplosionSource<T>>,
+    mut metric_command: impl FnMut(ItgTapExplosionMode, &str) -> Option<String>,
+) -> HashMap<String, TapExplosion<T>> {
+    let (dim_sprites, bright_sprites) = itg_partition_tap_explosion_sources(sources);
+    if dim_sprites.is_empty() && bright_sprites.is_empty() {
+        return HashMap::new();
+    }
+
+    let mut tap_explosions = HashMap::new();
+    for window in ITG_TAP_EXPLOSION_WINDOWS {
+        let key = format!("{}command", window.to_ascii_lowercase());
+        for mode in [ItgTapExplosionMode::Dim, ItgTapExplosionMode::Bright] {
+            if mode == ItgTapExplosionMode::Bright && bright_sprites.is_empty() {
+                continue;
+            }
+            let sources = itg_tap_explosion_sources_for_window(
+                &dim_sprites,
+                &bright_sprites,
+                window,
+                &key,
+                mode,
+            );
+            if sources.is_empty() {
+                continue;
+            }
+            let layers = sources
+                .into_iter()
+                .filter_map(|source| {
+                    let command = itg_tap_explosion_command_for_window(
+                        source,
+                        window,
+                        &key,
+                        &mut metric_command,
+                    )?;
+                    let command_with_init =
+                        itg_tap_explosion_command_with_init(source, mode, &command)?;
+                    Some(TapExplosionLayer {
+                        slot: source.payload.clone(),
+                        animation: parse_explosion_animation(&command_with_init),
+                    })
+                })
+                .collect();
+            if let Some(explosion) = TapExplosion::from_layers(layers) {
+                tap_explosions.insert(itg_tap_explosion_key(window, mode).to_string(), explosion);
+            }
+        }
+    }
+    tap_explosions
+}
+
+pub fn itg_mine_visuals_from_layers<T: Clone>(
+    layers: &[T],
+    fallback: Option<T>,
+) -> (Option<T>, Option<T>) {
+    let fill = layers
+        .first()
+        .cloned()
+        .or_else(|| layers.get(1).cloned())
+        .or(fallback);
+    let frame = if layers.len() > 1 {
+        layers.get(1).cloned()
+    } else {
+        None
+    };
+    (fill, frame)
+}
+
+pub fn itg_tap_note_layer_priority(has_model: bool, uv_velocity: [f32; 2]) -> u8 {
+    if !has_model {
+        return 2;
+    }
+    if uv_velocity[0].abs() > f32::EPSILON || uv_velocity[1].abs() > f32::EPSILON {
+        0
+    } else {
+        1
+    }
+}
+
+pub fn itg_tap_note_base_layer<T: Clone>(
+    layers: &[T],
+    mut layer_info: impl FnMut(&T) -> (bool, [f32; 2]),
+) -> Option<T> {
+    layers
+        .iter()
+        .find(|layer| {
+            let (has_model, uv_velocity) = layer_info(layer);
+            has_model
+                && (uv_velocity[0].abs() > f32::EPSILON || uv_velocity[1].abs() > f32::EPSILON)
+        })
+        .cloned()
+        .or_else(|| layers.iter().find(|layer| layer_info(layer).0).cloned())
+        .or_else(|| layers.first().cloned())
+}
+
+pub fn itg_tap_note_column<T: Clone>(
+    mut layers: Vec<T>,
+    quantizations: usize,
+    mut layer_info: impl FnMut(&T) -> (bool, [f32; 2]),
+) -> Option<ItgTapNoteColumn<T>> {
+    if layers.len() > 1 {
+        layers.sort_by_key(|layer| {
+            let (has_model, uv_velocity) = layer_info(layer);
+            itg_tap_note_layer_priority(has_model, uv_velocity)
+        });
+    }
+    let base = itg_tap_note_base_layer(&layers, &mut layer_info)?;
+    let mut notes = Vec::with_capacity(quantizations);
+    let mut note_layers = Vec::with_capacity(quantizations);
+    for _ in 0..quantizations {
+        notes.push(layers.first().cloned().unwrap_or_else(|| base.clone()));
+        note_layers.push(Arc::from(layers.clone()));
+    }
+    Some(ItgTapNoteColumn {
+        notes,
+        note_layers,
+        layers,
+        base,
+    })
+}
+
+pub fn itg_lift_layers_for_col<T: Clone>(lift_layers: Vec<T>, note_layers: &[T]) -> Arc<[T]> {
+    if lift_layers.is_empty() {
+        Arc::from(note_layers.to_vec())
+    } else {
+        Arc::from(lift_layers)
     }
 }
 
@@ -283,6 +653,20 @@ impl<T> NoteskinRuntime<T> {
     }
 
     #[inline(always)]
+    pub fn hold_explosion_for_col(&self, col: usize, is_roll: bool) -> Option<&T> {
+        self.hold_visuals_for_col(col, is_roll)
+            .explosion
+            .as_ref()
+            .or_else(|| {
+                if is_roll {
+                    self.roll.explosion.as_ref()
+                } else {
+                    self.hold.explosion.as_ref()
+                }
+            })
+    }
+
+    #[inline(always)]
     pub fn receptor_step_behavior_for_col(
         &self,
         col: usize,
@@ -391,8 +775,16 @@ fn beat_to_note_type_index(beat: f32) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::{
-        HoldVisuals, NoteskinRuntime, TapExplosion, TapExplosionLayer, bright_tap_explosion_key,
+        HoldVisualParts, HoldVisuals, NoteskinRuntime, TapExplosion, TapExplosionLayer,
+        bright_tap_explosion_key, default_hold_visuals, default_tap_explosions,
+        itg_hit_mine_explosion_from_slot, itg_hold_visuals_from_parts,
+        itg_is_common_fallback_hold_explosion_key, itg_is_common_noteskin_key,
+        itg_lift_layers_for_col, itg_mine_explosion_from_commands, itg_mine_visuals_from_layers,
+        itg_roll_explosion_commands, itg_roll_explosion_should_use_hold,
+        itg_roll_visuals_from_parts, itg_tap_explosion_map_from_sources, itg_tap_note_base_layer,
+        itg_tap_note_column, itg_tap_note_layer_priority,
     };
+    use crate::explosion::ItgTapExplosionSource;
     use crate::{
         ExplosionAnimation, ExplosionSegment, ExplosionState, NoteAnimPart, NoteDisplayMetrics,
         NotePartAnimation, NotePartTextureTranslate, ReceptorStepBehavior, ReceptorStepBehaviors,
@@ -501,6 +893,383 @@ mod tests {
             runtime.hold_visuals_for_col(4, true).body_inactive,
             Some(Slot(2))
         );
+    }
+
+    #[test]
+    fn noteskin_runtime_selects_column_or_default_hold_explosion() {
+        let runtime = NoteskinRuntime {
+            hold: HoldVisuals {
+                explosion: Some(Slot(1)),
+                ..HoldVisuals::default()
+            },
+            roll: HoldVisuals {
+                explosion: Some(Slot(2)),
+                ..HoldVisuals::default()
+            },
+            hold_columns: vec![HoldVisuals {
+                explosion: Some(Slot(3)),
+                ..HoldVisuals::default()
+            }],
+            ..empty_runtime()
+        };
+
+        assert_eq!(runtime.hold_explosion_for_col(0, false), Some(&Slot(3)));
+        assert_eq!(runtime.hold_explosion_for_col(4, false), Some(&Slot(3)));
+        assert_eq!(runtime.hold_explosion_for_col(0, true), Some(&Slot(2)));
+    }
+
+    #[test]
+    fn default_hold_visuals_prefer_down_then_first_and_hold_for_roll() {
+        let hold_columns = vec![
+            HoldVisuals {
+                body_inactive: Some(Slot(1)),
+                ..HoldVisuals::default()
+            },
+            HoldVisuals {
+                body_inactive: Some(Slot(2)),
+                ..HoldVisuals::default()
+            },
+        ];
+        let (hold, roll) = default_hold_visuals(&hold_columns, &[], 1);
+
+        assert_eq!(hold.body_inactive, Some(Slot(2)));
+        assert_eq!(roll.body_inactive, Some(Slot(2)));
+    }
+
+    #[test]
+    fn hold_visuals_from_parts_fall_back_active_to_inactive() {
+        let inactive_layers: Arc<[Slot]> = Arc::from([Slot(10)]);
+        let hold = itg_hold_visuals_from_parts(HoldVisualParts {
+            head_inactive: Some(Slot(1)),
+            head_inactive_layers: Some(Arc::clone(&inactive_layers)),
+            body_inactive: Some(Slot(2)),
+            topcap_inactive: Some(Slot(3)),
+            bottomcap_inactive: Some(Slot(4)),
+            ..HoldVisualParts::default()
+        });
+
+        assert_eq!(hold.head_active, Some(Slot(1)));
+        assert_eq!(hold.body_active, Some(Slot(2)));
+        assert_eq!(hold.topcap_active, Some(Slot(3)));
+        assert_eq!(hold.bottomcap_active, Some(Slot(4)));
+        assert_eq!(hold.head_active_layers, Some(inactive_layers));
+    }
+
+    #[test]
+    fn roll_visuals_from_parts_fall_back_to_hold_visuals() {
+        let hold = HoldVisuals {
+            head_inactive: Some(Slot(1)),
+            head_active: Some(Slot(2)),
+            head_inactive_layers: Some(Arc::from([Slot(11)])),
+            head_active_layers: Some(Arc::from([Slot(12)])),
+            body_inactive: Some(Slot(3)),
+            body_active: Some(Slot(4)),
+            topcap_inactive: Some(Slot(5)),
+            topcap_active: Some(Slot(6)),
+            bottomcap_inactive: Some(Slot(7)),
+            bottomcap_active: Some(Slot(8)),
+            explosion: None,
+        };
+
+        let roll = itg_roll_visuals_from_parts(
+            HoldVisualParts {
+                body_inactive: Some(Slot(30)),
+                ..HoldVisualParts::default()
+            },
+            &hold,
+        );
+
+        assert_eq!(roll.head_inactive, Some(Slot(1)));
+        assert_eq!(roll.head_active, Some(Slot(2)));
+        assert_eq!(roll.body_inactive, Some(Slot(30)));
+        assert_eq!(roll.body_active, Some(Slot(30)));
+        assert_eq!(roll.topcap_active, Some(Slot(6)));
+        assert_eq!(roll.bottomcap_active, Some(Slot(8)));
+    }
+
+    #[test]
+    fn default_tap_explosions_prefer_down_then_first_nonempty() {
+        let first = TapExplosion::from_single(Slot(1), ExplosionAnimation::default());
+        let down = TapExplosion::from_single(Slot(2), ExplosionAnimation::default());
+
+        let selected = default_tap_explosions(
+            &[
+                HashMap::from([("W1".to_string(), first.clone())]),
+                HashMap::from([("W1".to_string(), down.clone())]),
+            ],
+            1,
+        );
+        assert_eq!(
+            selected.get("W1").map(|explosion| explosion.slot.clone()),
+            Some(Slot(2))
+        );
+
+        let selected = default_tap_explosions(
+            &[HashMap::from([("W1".to_string(), first)]), HashMap::new()],
+            1,
+        );
+        assert_eq!(
+            selected.get("W1").map(|explosion| explosion.slot.clone()),
+            Some(Slot(1))
+        );
+    }
+
+    #[test]
+    fn common_noteskin_key_classification_is_case_insensitive() {
+        assert!(itg_is_common_fallback_hold_explosion_key(
+            "NoteSkins/common/common/Fallback Hold Explosion.png"
+        ));
+        assert!(itg_is_common_noteskin_key(
+            "noteskins/common/common/Fallback Receptor.png"
+        ));
+        assert!(!itg_is_common_noteskin_key(
+            "noteskins/dance/default/Down Hold Explosion.png"
+        ));
+    }
+
+    #[test]
+    fn roll_explosion_prefers_skin_hold_over_common_hold_fallback() {
+        assert!(itg_roll_explosion_should_use_hold(
+            "NoteSkins/common/common/Fallback Hold Explosion.png",
+            "NoteSkins/dance/default/Down Hold Explosion.png",
+        ));
+        assert!(!itg_roll_explosion_should_use_hold(
+            "NoteSkins/dance/default/Down Roll Explosion.png",
+            "NoteSkins/dance/default/Down Hold Explosion.png",
+        ));
+        assert!(!itg_roll_explosion_should_use_hold(
+            "NoteSkins/common/common/Fallback Hold Explosion.png",
+            "NoteSkins/common/common/Fallback Hold Explosion.png",
+        ));
+    }
+
+    #[test]
+    fn roll_explosion_commands_prefer_actor_then_metrics() {
+        let actor_commands =
+            HashMap::from([("rolloncommand".to_string(), "diffusealpha,1".to_string())]);
+        let commands = itg_roll_explosion_commands(Some(&actor_commands), |_| {
+            Some("diffusealpha,0".to_string())
+        })
+        .expect("actor commands should be selected");
+        assert_eq!(commands, actor_commands);
+
+        let commands = itg_roll_explosion_commands(None, |key| match key {
+            "RollOnCommand" => Some("diffusealpha,1".to_string()),
+            "RollOffCommand" => Some("diffusealpha,0".to_string()),
+            _ => None,
+        })
+        .expect("metric commands should be selected");
+        assert_eq!(
+            commands.get("rolloncommand").map(String::as_str),
+            Some("diffusealpha,1")
+        );
+        assert_eq!(
+            commands.get("rolloffcommand").map(String::as_str),
+            Some("diffusealpha,0")
+        );
+
+        assert!(itg_roll_explosion_commands(None, |_| None).is_none());
+    }
+
+    #[test]
+    fn itg_mine_explosion_builds_layers_from_actor_commands() {
+        let explosion = itg_mine_explosion_from_commands(
+            Slot(7),
+            &HashMap::from([
+                (
+                    "ecommand".to_string(),
+                    "diffusealpha,1;linear,0.2;diffusealpha,0".to_string(),
+                ),
+                ("initcommand".to_string(), "zoom,0.5".to_string()),
+            ]),
+        )
+        .expect("actor mine command should build explosion");
+
+        assert_eq!(explosion.slot, Slot(7));
+        assert_eq!(explosion.layers.len(), 1);
+        assert_eq!(explosion.animation.initial.zoom, 0.5);
+        assert!((explosion.duration() - 0.2).abs() <= f32::EPSILON);
+    }
+
+    #[test]
+    fn mine_visuals_use_first_layer_fill_and_second_layer_frame() {
+        let (fill, frame) = itg_mine_visuals_from_layers(&[Slot(1), Slot(2)], Some(Slot(9)));
+
+        assert_eq!(fill, Some(Slot(1)));
+        assert_eq!(frame, Some(Slot(2)));
+    }
+
+    #[test]
+    fn mine_visuals_use_fallback_when_layers_are_empty() {
+        let (fill, frame) = itg_mine_visuals_from_layers(&[], Some(Slot(9)));
+
+        assert_eq!(fill, Some(Slot(9)));
+        assert_eq!(frame, None);
+    }
+
+    #[test]
+    fn tap_note_layer_priority_prefers_moving_model_layers() {
+        assert_eq!(itg_tap_note_layer_priority(true, [0.0, 1.0]), 0);
+        assert_eq!(itg_tap_note_layer_priority(true, [0.0, 0.0]), 1);
+        assert_eq!(itg_tap_note_layer_priority(false, [1.0, 0.0]), 2);
+    }
+
+    #[test]
+    fn tap_note_base_layer_prefers_moving_model_then_model_then_first() {
+        #[derive(Clone, Debug, PartialEq, Eq)]
+        struct Layer {
+            id: u8,
+            has_model: bool,
+            uv: [i32; 2],
+        }
+
+        let layers = [
+            Layer {
+                id: 1,
+                has_model: false,
+                uv: [9, 0],
+            },
+            Layer {
+                id: 2,
+                has_model: true,
+                uv: [0, 0],
+            },
+            Layer {
+                id: 3,
+                has_model: true,
+                uv: [0, 1],
+            },
+        ];
+        let info = |layer: &Layer| (layer.has_model, [layer.uv[0] as f32, layer.uv[1] as f32]);
+
+        let moving_model = itg_tap_note_base_layer(&layers, info);
+        let static_model = itg_tap_note_base_layer(&layers[..2], info);
+        let first_sprite = itg_tap_note_base_layer(&layers[..1], info);
+
+        assert_eq!(moving_model.map(|layer| layer.id), Some(3));
+        assert_eq!(static_model.map(|layer| layer.id), Some(2));
+        assert_eq!(first_sprite.map(|layer| layer.id), Some(1));
+    }
+
+    #[test]
+    fn tap_note_column_sorts_layers_and_expands_quantizations() {
+        #[derive(Clone, Debug, PartialEq)]
+        struct Layer {
+            id: u8,
+            has_model: bool,
+            uv_velocity: [f32; 2],
+        }
+
+        let column = itg_tap_note_column(
+            vec![
+                Layer {
+                    id: 2,
+                    has_model: true,
+                    uv_velocity: [0.0, 0.0],
+                },
+                Layer {
+                    id: 3,
+                    has_model: false,
+                    uv_velocity: [0.0, 0.0],
+                },
+                Layer {
+                    id: 1,
+                    has_model: true,
+                    uv_velocity: [0.5, 0.0],
+                },
+            ],
+            2,
+            |layer| (layer.has_model, layer.uv_velocity),
+        )
+        .expect("tap note column");
+
+        assert_eq!(column.base.id, 1);
+        assert_eq!(
+            column
+                .layers
+                .iter()
+                .map(|layer| layer.id)
+                .collect::<Vec<_>>(),
+            vec![1, 2, 3]
+        );
+        assert_eq!(column.notes, vec![column.layers[0].clone(); 2]);
+        assert_eq!(&*column.note_layers[0], column.layers.as_slice());
+        assert_eq!(&*column.note_layers[1], column.layers.as_slice());
+    }
+
+    #[test]
+    fn lift_layers_fall_back_to_note_layers() {
+        let note_layers = [Slot(1), Slot(2)];
+        let fallback = itg_lift_layers_for_col(Vec::new(), &note_layers);
+        let explicit = itg_lift_layers_for_col(vec![Slot(3)], &note_layers);
+
+        assert_eq!(&*fallback, &note_layers);
+        assert_eq!(&*explicit, &[Slot(3)]);
+    }
+
+    #[test]
+    fn itg_hit_mine_explosion_uses_source_or_metric_command() {
+        let source = HashMap::from([
+            ("initcommand".to_string(), "zoom,0.5".to_string()),
+            (
+                "hitminecommand".to_string(),
+                "linear,0.2;diffusealpha,0".to_string(),
+            ),
+        ]);
+        let explosion = itg_hit_mine_explosion_from_slot(
+            Slot(3),
+            Some(&source),
+            Some("linear,0.9;diffusealpha,0".to_string()),
+        );
+
+        assert_eq!(explosion.slot, Slot(3));
+        assert_eq!(explosion.animation.initial.zoom, 0.5);
+        assert!((explosion.duration() - 0.2).abs() <= f32::EPSILON);
+
+        let metric = itg_hit_mine_explosion_from_slot(
+            Slot(4),
+            None,
+            Some("linear,0.4;diffusealpha,0".to_string()),
+        );
+        assert_eq!(metric.slot, Slot(4));
+        assert!((metric.duration() - 0.4).abs() <= f32::EPSILON);
+    }
+
+    #[test]
+    fn itg_tap_explosion_map_builds_dim_and_bright_windows() {
+        let map = itg_tap_explosion_map_from_sources(
+            [
+                ItgTapExplosionSource::new(
+                    "Tap Explosion Dim".to_string(),
+                    Slot(1),
+                    HashMap::from([(
+                        "w1command".to_string(),
+                        "zoom,0.5;linear,0.2;diffusealpha,0".to_string(),
+                    )]),
+                ),
+                ItgTapExplosionSource::new(
+                    "Tap Explosion Bright".to_string(),
+                    Slot(2),
+                    HashMap::from([(
+                        "w1command".to_string(),
+                        "zoom,0.75;linear,0.3;diffusealpha,0".to_string(),
+                    )]),
+                ),
+            ],
+            |_, _| None,
+        );
+
+        assert_eq!(
+            map.get("W1").map(|explosion| explosion.slot.clone()),
+            Some(Slot(1))
+        );
+        assert_eq!(
+            map.get("W1Bright").map(|explosion| explosion.slot.clone()),
+            Some(Slot(2))
+        );
+        assert_eq!(map["W1"].layers.len(), 2);
+        assert!((map["W1"].duration() - 0.3).abs() <= f32::EPSILON);
+        assert!((map["W1Bright"].duration() - 0.3).abs() <= f32::EPSILON);
     }
 
     #[test]

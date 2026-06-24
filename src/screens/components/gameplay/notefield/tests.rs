@@ -2,10 +2,10 @@ use super::{
     TornadoBounds, Z_ERROR_BAR_AVERAGE, Z_HOLD_BODY, Z_HOLD_GLOW, Z_RECEPTOR, Z_RECEPTOR_GLOW,
     Z_TAP_NOTE, confusion_rotation_deg, error_bar_boundaries_s, error_bar_text_scalable_zoom,
     error_bar_trim_max_window_ix, hold_explosion_active, hold_explosion_enabled,
-    hold_explosion_slot_for_col, hold_head_render_flags, hold_indicator_column_x, hud_y,
-    itg_actor_glow_alpha, judgment_frame_size, let_go_head_beat, move_col_extra,
-    note_slot_base_size, note_world_z_for_bumpy, note_x_offset, offset_center, receptor_row_center,
-    scroll_receptor_y, tipsy_y_extra,
+    hold_head_render_flags, hold_indicator_column_x, hud_y, itg_actor_glow_alpha,
+    judgment_frame_size, let_go_head_beat, move_col_extra, note_slot_base_size,
+    note_world_z_for_bumpy, note_x_offset, offset_center, receptor_row_center, scroll_receptor_y,
+    tipsy_y_extra,
 };
 use crate::assets;
 use crate::game::parsing::noteskin::load_itg_skin;
@@ -656,9 +656,11 @@ fn hold_explosion_slot_respects_explosion_noteskin_choice() {
     let ddr_vivid_ns = load_itg_skin(&style, "ddr-vivid")
         .expect("dance/ddr-vivid should load from assets/noteskins");
 
-    let base_slot = hold_explosion_slot_for_col(Some(&cel_ns), 0, false)
+    let base_slot = cel_ns
+        .hold_explosion_for_col(0, false)
         .expect("cel should define a hold explosion");
-    let selected_slot = hold_explosion_slot_for_col(Some(&ddr_vivid_ns), 0, false)
+    let selected_slot = ddr_vivid_ns
+        .hold_explosion_for_col(0, false)
         .expect("ddr-vivid should define a hold explosion");
 
     assert_ne!(
@@ -672,12 +674,8 @@ fn hold_explosion_slot_respects_explosion_noteskin_choice() {
         selected_slot.texture_key()
     );
     assert!(
-        hold_explosion_slot_for_col(Some(&default_ns), 0, false).is_none(),
+        default_ns.hold_explosion_for_col(0, false).is_none(),
         "a selected noteskin with blank hold explosions must not fall back to the base noteskin"
-    );
-    assert!(
-        hold_explosion_slot_for_col(None, 0, false).is_none(),
-        "the no-explosion choice should also hide hold explosions"
     );
 }
 

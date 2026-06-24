@@ -10,21 +10,18 @@ use self::mine::mine_fill_slots;
 pub use self::model_cache::ModelMeshCacheStats;
 pub(crate) use self::model_cache::{ModelMeshCache, build_model_geometry};
 use self::texture::{
-    itg_apply_frame_override, itg_find_texture_with_prefix, itg_model_slot_from_texture_path,
-    itg_slot_from_path, itg_slot_from_path_all_frames, itg_slot_from_path_animated,
-    itg_slot_from_path_with_frame,
+    itg_apply_frame_override, itg_model_slot_from_texture_path, itg_slot_from_path,
+    itg_slot_from_path_all_frames, itg_slot_from_path_animated, itg_slot_from_path_with_frame,
 };
 #[cfg(test)]
 use self::texture::{itg_register_texture_dims_for_path, itg_texture_key};
 use crate::assets;
 use deadlib_platform::dirs;
 use deadlib_present::actors::TextureKeyHandle;
-use deadsync_noteskin::lua::{itg_extract_quoted_strings, itg_parse_lua_quoted};
 use deadsync_noteskin::model::{
     itg_parse_milkshape_model, itg_parse_milkshape_model_auto_rot,
     itg_parse_milkshape_model_layers, itg_resolve_model_texture_path,
 };
-use deadsync_noteskin::parse_explosion_animation;
 pub use deadsync_noteskin::{
     AnimationRate, ExplosionAnimation, ExplosionSegment, ExplosionState, ExplosionVisualState,
     GlowEffect, ModelAutoRotKey, ModelDrawState, ModelEffectClock, ModelEffectMode,
@@ -36,16 +33,13 @@ pub use deadsync_noteskin::{
 };
 use deadsync_noteskin::{
     actor as noteskin_actor, compiled as noteskin_compiled, compiler as noteskin_compiler,
-    duration_frame_index, frame_duration_total, itg as noteskin_itg, model_draw_at, model_glow_at,
-    model_glow_with_draw, neg_rot_sin_cos, script as noteskin_script,
+    explosion as noteskin_explosion, itg as noteskin_itg, model_draw_at, model_glow_at,
+    model_glow_with_draw, neg_rot_sin_cos, receptor as noteskin_receptor,
+    script as noteskin_script, sprite_animated_uv, sprite_atlas_uv, sprite_frame_index,
+    sprite_frame_index_from_phase, sprite_scrolled_uv,
 };
 use log::warn;
-use noteskin_script::{
-    ScriptActorMod, ScriptEffectMod, itg_parse_command_effect, normalized_script_command,
-    parse_script_actor_mod, parse_script_bool, parse_script_effect_mod,
-    parse_script_effectclock_from_commands, parse_script_number, parse_script_vertalign,
-    split_script_token,
-};
+use noteskin_script::{parse_script_bool, parse_script_number};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -53,8 +47,6 @@ use std::sync::{
     Arc, Mutex, OnceLock,
     atomic::{AtomicU64, Ordering},
 };
-
-const ITG_ARG0_TOKEN: &str = "__ITG_ARG0__";
 
 #[derive(Debug)]
 pub enum SpriteSource {
@@ -187,13 +179,6 @@ impl SpriteSlot {
         self.base_rot_sin_cos
     }
 
-    #[inline(always)]
-    fn uv_scroll_clock(&self, elapsed: f32) -> f32 {
-        self.uv_cycle_seconds
-            .filter(|total| *total > f32::EPSILON && total.is_finite())
-            .map_or(elapsed, |total| elapsed.rem_euclid(total) / total)
-    }
-
     pub fn texture_key(&self) -> &str {
         self.source.texture_key()
     }
@@ -221,62 +206,25 @@ impl SpriteSlot {
     }
 
     pub fn frame_index(&self, time: f32, beat: f32) -> usize {
-        let frames = self.source.frame_count();
-        if frames <= 1 {
-            return 0;
-        }
         match self.source.as_ref() {
             SpriteSource::Atlas { .. } => 0,
             SpriteSource::Animated {
                 rate,
+                frame_count,
                 frame_durations,
                 ..
-            } => {
-                if let Some(durations) = frame_durations.as_ref() {
-                    let clock = match rate {
-                        AnimationRate::FramesPerSecond(_) => time,
-                        AnimationRate::FramesPerBeat(_) => beat,
-                    };
-                    if let Some(total) = frame_duration_total(durations, frames)
-                        && let Some(idx) =
-                            duration_frame_index(durations, frames, clock.rem_euclid(total))
-                    {
-                        return idx;
-                    }
-                }
-                let frame = match rate {
-                    AnimationRate::FramesPerSecond(fps) if *fps > 0.0 => {
-                        (time * fps).floor() as isize
-                    }
-                    AnimationRate::FramesPerBeat(frames_per_beat) if *frames_per_beat > 0.0 => {
-                        (beat * frames_per_beat).floor() as isize
-                    }
-                    _ => return 0,
-                };
-                ((frame % frames as isize) + frames as isize) as usize % frames
-            }
+            } => sprite_frame_index(*frame_count, *rate, frame_durations.as_deref(), time, beat),
         }
     }
 
     pub fn frame_index_from_phase(&self, phase: f32) -> usize {
-        let frames = self.source.frame_count();
-        if frames <= 1 {
-            return 0;
-        }
-        let p = phase.rem_euclid(1.0);
         match self.source.as_ref() {
             SpriteSource::Atlas { .. } => 0,
             SpriteSource::Animated {
-                frame_durations, ..
-            } => {
-                if let Some(durations) = frame_durations.as_ref()
-                    && let Some(total) = frame_duration_total(durations, frames)
-                    && let Some(idx) = duration_frame_index(durations, frames, p * total)
-                {
-                    return idx;
-                }
-                ((p * frames as f32).floor() as usize).min(frames - 1)
-            }
+                frame_count,
+                frame_durations,
+                ..
+            } => sprite_frame_index_from_phase(*frame_count, frame_durations.as_deref(), phase),
         }
     }
 
@@ -318,30 +266,9 @@ impl SpriteSlot {
     }
 
     pub fn uv_for_frame_at(&self, frame_index: usize, elapsed: f32) -> [f32; 4] {
-        let mut uv = match self.source.as_ref() {
+        let uv = match self.source.as_ref() {
             SpriteSource::Atlas { tex_dims, .. } => {
-                let tw = tex_dims.0.max(1) as f32;
-                let th = tex_dims.1.max(1) as f32;
-                let src = self.def.src;
-                let size = self.def.size;
-
-                let mut u0 = src[0] as f32;
-                let mut v0 = src[1] as f32;
-                let mut u1 = (src[0] + size[0]) as f32;
-                let mut v1 = (src[1] + size[1]) as f32;
-
-                if self.model.is_none() {
-                    if size[0] > 0 {
-                        u0 += 0.5;
-                        u1 -= 0.5;
-                    }
-                    if size[1] > 0 {
-                        v0 += 0.5;
-                        v1 -= 0.5;
-                    }
-                }
-
-                [u0 / tw, v0 / th, u1 / tw, v1 / th]
+                sprite_atlas_uv([tex_dims.0, tex_dims.1], &self.def, self.model.is_none())
             }
             SpriteSource::Animated {
                 tex_dims,
@@ -350,91 +277,38 @@ impl SpriteSlot {
                 frame_count,
                 frame_indices,
                 ..
-            } => {
-                let frames = (*frame_count).max(1);
-                let idx = if frames > 0 { frame_index % frames } else { 0 };
-                let cols = grid.0.max(1);
-                let available = cols.saturating_mul(grid.1.max(1)).max(1);
-                let source_idx = frame_indices
-                    .as_ref()
-                    .and_then(|indices| indices.get(idx).copied())
-                    .map_or(idx, |idx| idx % available);
-                let row = source_idx / cols;
-                let col = source_idx % cols;
-                let (src_x, src_y) = if frame_indices.is_some() {
-                    (col as i32 * frame_size[0], row as i32 * frame_size[1])
-                } else {
-                    (
-                        self.def.src[0] + (col as i32 * frame_size[0]),
-                        self.def.src[1] + (row as i32 * frame_size[1]),
-                    )
-                };
-                let tw = tex_dims.0.max(1) as f32;
-                let th = tex_dims.1.max(1) as f32;
-
-                let mut u0 = src_x as f32;
-                let mut v0 = src_y as f32;
-                let mut u1 = (src_x + frame_size[0]) as f32;
-                let mut v1 = (src_y + frame_size[1]) as f32;
-
-                if self.model.is_none() {
-                    if frame_size[0] > 0 {
-                        u0 += 0.5;
-                        u1 -= 0.5;
-                    }
-                    if frame_size[1] > 0 {
-                        v0 += 0.5;
-                        v1 -= 0.5;
-                    }
-                }
-
-                [u0 / tw, v0 / th, u1 / tw, v1 / th]
-            }
+            } => sprite_animated_uv(
+                [tex_dims.0, tex_dims.1],
+                &self.def,
+                *frame_size,
+                [grid.0, grid.1],
+                *frame_count,
+                frame_indices.as_deref(),
+                frame_index,
+                self.model.is_none(),
+            ),
         };
 
         // ITG model textures can scroll via AnimatedTexture TexVelocity/TexOffset.
         // ITGmania applies TexVelocity over the animation cycle percentage, not
         // raw seconds (see AnimatedTexture::GetTextureTranslate), so keep model
         // UVs on that clock while preserving the full [0..1] span.
-        if self.uv_velocity != [0.0, 0.0] || self.uv_offset != [0.0, 0.0] {
-            let w = (uv[2] - uv[0]).abs();
-            let h = (uv[3] - uv[1]).abs();
-            if self.model.is_some() {
-                let clock = self.uv_scroll_clock(elapsed);
-                let shift_u = self.uv_offset[0] + self.uv_velocity[0] * clock;
-                let shift_v = self.uv_offset[1] + self.uv_velocity[1] * clock;
-                uv[0] += shift_u;
-                uv[2] += shift_u;
-                uv[1] += shift_v;
-                uv[3] += shift_v;
-            } else {
-                let shift_u = self.uv_offset[0] + self.uv_velocity[0] * elapsed;
-                let shift_v = self.uv_offset[1] + self.uv_velocity[1] * elapsed;
-                let u_span = (1.0 - w).max(0.0);
-                let v_span = (1.0 - h).max(0.0);
-                let u_shift = if u_span > f32::EPSILON {
-                    shift_u.rem_euclid(u_span)
-                } else {
-                    0.0
-                };
-                let v_shift = if v_span > f32::EPSILON {
-                    shift_v.rem_euclid(v_span)
-                } else {
-                    0.0
-                };
-                uv[0] += u_shift;
-                uv[2] += u_shift;
-                uv[1] += v_shift;
-                uv[3] += v_shift;
-            }
-        }
-        uv
+        sprite_scrolled_uv(
+            uv,
+            self.uv_velocity,
+            self.uv_offset,
+            elapsed,
+            self.model
+                .is_some()
+                .then_some(self.uv_cycle_seconds)
+                .flatten(),
+        )
     }
 }
 
-pub type TapExplosionLayer = deadsync_noteskin::TapExplosionLayer<SpriteSlot>;
 pub type TapExplosion = deadsync_noteskin::TapExplosion<SpriteSlot>;
 pub type HoldVisuals = deadsync_noteskin::HoldVisuals<SpriteSlot>;
+type HoldVisualParts = deadsync_noteskin::HoldVisualParts<SpriteSlot>;
 pub type Noteskin = deadsync_noteskin::NoteskinRuntime<SpriteSlot>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -932,7 +806,7 @@ fn load_itg_sprite_noteskin_compiled(
         }
     };
     let resolve_single_slot = |button: &str, element: &str| {
-        let request = itg_load_request(compiled, button, element);
+        let request = compiled.load_request(button, element);
         itg_resolve_actor_sprites_compiled(data, compiled, compiled_actors, button, element)
             .into_iter()
             .next()
@@ -947,7 +821,7 @@ fn load_itg_sprite_noteskin_compiled(
     };
 
     for col in 0..style.num_cols {
-        let button = itg_button_for_col(col);
+        let button = noteskin_itg::button_for_col(col);
         let mut note_sprites =
             itg_resolve_actor_sprites_compiled(data, compiled, compiled_actors, button, "Tap Note")
                 .into_iter()
@@ -959,53 +833,20 @@ fn load_itg_sprite_noteskin_compiled(
                     s.slot
                 })
                 .collect::<Vec<_>>();
-        if note_sprites.len() > 1 {
-            note_sprites.sort_by_key(|slot| {
-                if slot.model.is_some() {
-                    if slot.uv_velocity[0].abs() > f32::EPSILON
-                        || slot.uv_velocity[1].abs() > f32::EPSILON
-                    {
-                        0u8
-                    } else {
-                        1u8
-                    }
-                } else {
-                    2u8
-                }
-            });
-        }
         if note_sprites.is_empty()
-            && let Some(fallback) =
-                itg_find_texture_with_prefix(data, "_arrow").and_then(|p| itg_slot_from_path(&p))
+            && let Some(fallback) = noteskin_itg::find_texture_with_prefix(data, "_arrow")
+                .and_then(|p| itg_slot_from_path(&p))
         {
             note_sprites.push(fallback);
         }
-        let model_color_texture = note_sprites
-            .iter()
-            .find(|slot| {
-                slot.model.is_some()
-                    && (slot.uv_velocity[0].abs() > f32::EPSILON
-                        || slot.uv_velocity[1].abs() > f32::EPSILON)
+        let note_column =
+            deadsync_noteskin::itg_tap_note_column(note_sprites, NUM_QUANTIZATIONS, |slot| {
+                (slot.model.is_some(), slot.uv_velocity)
             })
-            .map(|slot| slot.texture_key().to_string())
-            .or_else(|| {
-                note_sprites
-                    .iter()
-                    .find(|slot| slot.model.is_some())
-                    .map(|slot| slot.texture_key().to_string())
-            });
-        let note_base = model_color_texture
-            .as_ref()
-            .and_then(|key| note_sprites.iter().find(|slot| slot.texture_key() == key))
-            .cloned()
-            .or_else(|| note_sprites.first().cloned())
             .ok_or_else(|| format!("failed to resolve Tap Note for button '{button}'"))?;
-        for _ in 0..NUM_QUANTIZATIONS {
-            let layers = note_sprites.clone();
-            let primary = layers.first().cloned().unwrap_or_else(|| note_base.clone());
-            notes.push(primary);
-            note_layers.push(Arc::from(layers));
-        }
+        let note_sprites = note_column.layers;
+        notes.extend(note_column.notes);
+        note_layers.extend(note_column.note_layers);
 
         let lift_sprites =
             itg_resolve_actor_sprites_compiled(data, compiled, compiled_actors, button, "Tap Lift")
@@ -1018,71 +859,70 @@ fn load_itg_sprite_noteskin_compiled(
                     s.slot
                 })
                 .collect::<Vec<_>>();
-        let lift_layers_for_col: Arc<[SpriteSlot]> = if lift_sprites.is_empty() {
-            Arc::from(note_sprites.clone())
-        } else {
-            Arc::from(lift_sprites)
-        };
+        let lift_layers_for_col =
+            deadsync_noteskin::itg_lift_layers_for_col(lift_sprites, &note_sprites);
         for _ in 0..NUM_QUANTIZATIONS {
             lift_note_layers.push(Arc::clone(&lift_layers_for_col));
         }
 
         let receptor_sprites =
             itg_resolve_actor_sprites_compiled(data, compiled, compiled_actors, button, "Receptor");
+        let receptor_layer_commands = receptor_sprites
+            .iter()
+            .map(|sprite| &sprite.commands)
+            .collect::<Vec<_>>();
         if receptor_pulse_command.is_none() {
-            receptor_pulse_command = receptor_sprites
-                .first()
-                .and_then(|s| s.commands.get("initcommand"))
-                .cloned();
+            receptor_pulse_command =
+                noteskin_receptor::itg_receptor_pulse_command(&receptor_layer_commands)
+                    .map(str::to_string);
         }
-        let receptor_commands = receptor_sprites.first().map(|s| &s.commands);
-        let mut receptor_slot = receptor_sprites
-            .first()
-            .map(|s| s.slot.clone())
-            .or_else(|| {
-                itg_find_texture_with_prefix(data, "_receptor").and_then(|p| itg_slot_from_path(&p))
-            })
+        let receptor_commands = receptor_layer_commands.first().copied();
+        let receptor_slots = receptor_sprites
+            .iter()
+            .map(|sprite| sprite.slot.clone())
+            .collect::<Vec<_>>();
+        let receptor_visuals = noteskin_receptor::itg_receptor_visuals(
+            &receptor_slots,
+            || {
+                noteskin_itg::find_texture_with_prefix(data, "_receptor")
+                    .and_then(|p| itg_slot_from_path(&p))
+            },
+            || {
+                noteskin_itg::find_texture_with_prefix(data, "_rflash")
+                    .and_then(|p| itg_slot_from_path(&p))
+            },
+            || {
+                noteskin_itg::find_texture_with_prefix(data, "_glow")
+                    .and_then(|p| itg_slot_from_path(&p))
+            },
+        );
+        let mut receptor_slot = receptor_visuals
+            .off
             .ok_or_else(|| format!("failed to resolve Receptor for button '{button}'"))?;
         if let Some(init_command) =
             receptor_commands.and_then(|commands| commands.get("initcommand"))
         {
-            itg_apply_parent_command(&mut receptor_slot, init_command);
+            noteskin_script::itg_apply_parent_command(
+                &mut receptor_slot.def,
+                &mut receptor_slot.model_draw,
+                init_command,
+            );
         }
-        let step_behaviors =
-            itg_receptor_step_behaviors(data, receptor_commands, receptor_slot.model_draw.zoom[0]);
-        let receptor_reverse = receptor_sprites
-            .first()
-            .map(|s| itg_receptor_reverse_behavior(&s.commands))
-            .unwrap_or_default();
-        let glow_slot = receptor_sprites
-            .get(1)
-            .map(|s| s.slot.clone())
-            .or_else(|| {
-                if receptor_sprites.is_empty() {
-                    itg_find_texture_with_prefix(data, "_rflash")
-                        .and_then(|p| itg_slot_from_path(&p))
-                } else {
-                    None
-                }
-            })
-            .or_else(|| {
-                if receptor_sprites.is_empty() {
-                    itg_find_texture_with_prefix(data, "_glow").and_then(|p| itg_slot_from_path(&p))
-                } else {
-                    None
-                }
-            });
-        let glow_reverse = receptor_sprites
-            .get(1)
-            .map(|s| itg_receptor_reverse_behavior(&s.commands))
-            .unwrap_or_default();
+        let step_behaviors = noteskin_receptor::receptor_step_behaviors(
+            &data.metrics,
+            receptor_commands,
+            receptor_slot.model_draw.zoom[0],
+        );
+        let (receptor_reverse, glow_reverse) =
+            noteskin_receptor::itg_receptor_reverse_behaviors(&receptor_layer_commands);
+        let glow_slot = receptor_visuals.glow;
         receptor_off.push(receptor_slot);
         receptor_glow.push(glow_slot);
         receptor_off_reverse.push(receptor_reverse);
         receptor_glow_reverse.push(glow_reverse);
         receptor_step_behaviors.push(step_behaviors);
 
-        let mut mine_sprites =
+        let mine_sprites =
             itg_resolve_actor_sprites_compiled(data, compiled, compiled_actors, button, "Tap Mine")
                 .into_iter()
                 .map(|mut s| {
@@ -1093,31 +933,25 @@ fn load_itg_sprite_noteskin_compiled(
                     s.slot
                 })
                 .collect::<Vec<_>>();
-        let mine_fallback =
-            itg_find_texture_with_prefix(data, "_mine").and_then(|p| itg_slot_from_path(&p));
-        let mine_fill = mine_sprites
-            .first()
-            .cloned()
-            .or_else(|| mine_sprites.get(1).cloned())
-            .or_else(|| mine_fallback.clone());
-        let mine_frame = if mine_sprites.len() > 1 {
-            mine_sprites.get(1).cloned().or_else(|| mine_sprites.pop())
-        } else {
-            None
-        };
+        let mine_fallback = noteskin_itg::find_texture_with_prefix(data, "_mine")
+            .and_then(|p| itg_slot_from_path(&p));
+        let (mine_fill, mine_frame) =
+            deadsync_noteskin::itg_mine_visuals_from_layers(&mine_sprites, mine_fallback);
         mines.push(mine_fill);
         mine_frames.push(mine_frame);
 
-        let (hold_head_inactive, hold_head_inactive_layers) = if itg_request_maps_head_to_tap(
-            &itg_load_request(compiled, button, "Hold Head Inactive"),
-        ) {
+        let (hold_head_inactive, hold_head_inactive_layers) = if compiled
+            .load_request(button, "Hold Head Inactive")
+            .maps_head_to_tap()
+        {
             (None, None)
         } else {
             resolve_head_slots(button, "Hold Head Inactive")
         };
-        let (hold_head_active, hold_head_active_layers) = if itg_request_maps_head_to_tap(
-            &itg_load_request(compiled, button, "Hold Head Active"),
-        ) {
+        let (hold_head_active, hold_head_active_layers) = if compiled
+            .load_request(button, "Hold Head Active")
+            .maps_head_to_tap()
+        {
             (None, None)
         } else {
             resolve_head_slots(button, "Hold Head Active")
@@ -1129,37 +963,31 @@ fn load_itg_sprite_noteskin_compiled(
         let hold_bottomcap_inactive = resolve_single_slot(button, "Hold BottomCap Inactive");
         let hold_bottomcap_active = resolve_single_slot(button, "Hold BottomCap Active");
 
-        let hold_head_active_layers = if hold_head_active.is_some() {
-            hold_head_active_layers.clone()
-        } else {
-            hold_head_active_layers
-                .clone()
-                .or_else(|| hold_head_inactive_layers.clone())
-        };
-        let hold_visual = HoldVisuals {
-            head_inactive: hold_head_inactive.clone(),
-            head_active: hold_head_active.or(hold_head_inactive.clone()),
-            head_inactive_layers: hold_head_inactive_layers.clone(),
+        let hold_visual = deadsync_noteskin::itg_hold_visuals_from_parts(HoldVisualParts {
+            head_inactive: hold_head_inactive,
+            head_active: hold_head_active,
+            head_inactive_layers: hold_head_inactive_layers,
             head_active_layers: hold_head_active_layers,
-            body_inactive: hold_body_inactive.clone(),
-            body_active: hold_body_active.or(hold_body_inactive.clone()),
-            topcap_inactive: hold_topcap_inactive.clone(),
-            topcap_active: hold_topcap_active.or(hold_topcap_inactive.clone()),
-            bottomcap_inactive: hold_bottomcap_inactive.clone(),
-            bottomcap_active: hold_bottomcap_active.or(hold_bottomcap_inactive.clone()),
-            explosion: None,
-        };
+            body_inactive: hold_body_inactive,
+            body_active: hold_body_active,
+            topcap_inactive: hold_topcap_inactive,
+            topcap_active: hold_topcap_active,
+            bottomcap_inactive: hold_bottomcap_inactive,
+            bottomcap_active: hold_bottomcap_active,
+        });
 
-        let (roll_head_inactive, roll_head_inactive_layers) = if itg_request_maps_head_to_tap(
-            &itg_load_request(compiled, button, "Roll Head Inactive"),
-        ) {
+        let (roll_head_inactive, roll_head_inactive_layers) = if compiled
+            .load_request(button, "Roll Head Inactive")
+            .maps_head_to_tap()
+        {
             (None, None)
         } else {
             resolve_head_slots(button, "Roll Head Inactive")
         };
-        let (roll_head_active, roll_head_active_layers) = if itg_request_maps_head_to_tap(
-            &itg_load_request(compiled, button, "Roll Head Active"),
-        ) {
+        let (roll_head_active, roll_head_active_layers) = if compiled
+            .load_request(button, "Roll Head Active")
+            .maps_head_to_tap()
+        {
             (None, None)
         } else {
             resolve_head_slots(button, "Roll Head Active")
@@ -1171,100 +999,35 @@ fn load_itg_sprite_noteskin_compiled(
         let roll_bottomcap_inactive = resolve_single_slot(button, "Roll BottomCap Inactive");
         let roll_bottomcap_active = resolve_single_slot(button, "Roll BottomCap Active");
 
-        let roll_head_inactive_has_slot = roll_head_inactive.is_some();
-        let roll_head_active_has_slot = roll_head_active.is_some();
-        let roll_head_inactive_layers_resolved = if roll_head_inactive_has_slot {
-            roll_head_inactive_layers.clone()
-        } else {
-            roll_head_inactive_layers
-                .clone()
-                .or_else(|| hold_visual.head_inactive_layers.clone())
-        };
-        let roll_head_active_layers_resolved = if roll_head_active_has_slot {
-            roll_head_active_layers.clone()
-        } else if roll_head_inactive_has_slot {
-            roll_head_inactive_layers.clone()
-        } else {
-            roll_head_active_layers
-                .or(roll_head_inactive_layers)
-                .or_else(|| hold_visual.head_active_layers.clone())
-                .or_else(|| hold_visual.head_inactive_layers.clone())
-        };
-        let roll_visual = HoldVisuals {
-            head_inactive: roll_head_inactive
-                .clone()
-                .or(hold_visual.head_inactive.clone()),
-            head_active: roll_head_active
-                .or(roll_head_inactive)
-                .or(hold_visual.head_active.clone())
-                .or(hold_visual.head_inactive.clone()),
-            head_inactive_layers: roll_head_inactive_layers_resolved,
-            head_active_layers: roll_head_active_layers_resolved,
-            body_inactive: roll_body_inactive
-                .clone()
-                .or(hold_visual.body_inactive.clone()),
-            body_active: roll_body_active
-                .or(roll_body_inactive)
-                .or(hold_visual.body_active.clone())
-                .or(hold_visual.body_inactive.clone()),
-            topcap_inactive: roll_topcap_inactive
-                .clone()
-                .or(hold_visual.topcap_inactive.clone()),
-            topcap_active: roll_topcap_active
-                .or(roll_topcap_inactive)
-                .or(hold_visual.topcap_active.clone())
-                .or(hold_visual.topcap_inactive.clone()),
-            bottomcap_inactive: roll_bottomcap_inactive
-                .clone()
-                .or(hold_visual.bottomcap_inactive.clone()),
-            bottomcap_active: roll_bottomcap_active
-                .or(roll_bottomcap_inactive)
-                .or(hold_visual.bottomcap_active.clone())
-                .or(hold_visual.bottomcap_inactive.clone()),
-            explosion: None,
-        };
+        let roll_visual = deadsync_noteskin::itg_roll_visuals_from_parts(
+            HoldVisualParts {
+                head_inactive: roll_head_inactive,
+                head_active: roll_head_active,
+                head_inactive_layers: roll_head_inactive_layers,
+                head_active_layers: roll_head_active_layers,
+                body_inactive: roll_body_inactive,
+                body_active: roll_body_active,
+                topcap_inactive: roll_topcap_inactive,
+                topcap_active: roll_topcap_active,
+                bottomcap_inactive: roll_bottomcap_inactive,
+                bottomcap_active: roll_bottomcap_active,
+            },
+            &hold_visual,
+        );
 
         hold_columns.push(hold_visual);
         roll_columns.push(roll_visual);
     }
-    let down_col = (0..style.num_cols)
-        .find(|&col| itg_button_for_col(col).eq_ignore_ascii_case("Down"))
-        .unwrap_or(0);
-    let mut hold = hold_columns
-        .get(down_col)
-        .cloned()
-        .or_else(|| hold_columns.first().cloned())
-        .unwrap_or_default();
-    let mut roll = roll_columns
-        .get(down_col)
-        .cloned()
-        .or_else(|| roll_columns.first().cloned())
-        .unwrap_or_else(|| HoldVisuals {
-            head_inactive: hold.head_inactive.clone(),
-            head_active: hold.head_active.clone(),
-            head_inactive_layers: hold.head_inactive_layers.clone(),
-            head_active_layers: hold.head_active_layers.clone(),
-            body_inactive: hold.body_inactive.clone(),
-            body_active: hold.body_active.clone(),
-            topcap_inactive: hold.topcap_inactive.clone(),
-            topcap_active: hold.topcap_active.clone(),
-            bottomcap_inactive: hold.bottomcap_inactive.clone(),
-            bottomcap_active: hold.bottomcap_active.clone(),
-            explosion: None,
-        });
+    let down_col = noteskin_itg::down_col(style.num_cols);
+    let (mut hold, mut roll) =
+        deadsync_noteskin::default_hold_visuals(&hold_columns, &roll_columns, down_col);
 
     let explosion_sprites =
         itg_resolve_actor_sprites_compiled(data, compiled, compiled_actors, "Down", "Explosion");
     let slot_with_active_cmd =
         |slot: &SpriteSlot, commands: &HashMap<String, String>, active_key: &str| {
             let mut with_fx = slot.clone();
-            let mut scripted = HashMap::new();
-            if let Some(v) = commands.get("initcommand") {
-                scripted.insert("initcommand".to_string(), v.clone());
-            }
-            if let Some(v) = commands.get(active_key) {
-                scripted.insert("nonecommand".to_string(), v.clone());
-            }
+            let scripted = noteskin_script::itg_active_model_commands(commands, active_key);
             let (draw, timeline, effect) = noteskin_script::model_draw_program(&scripted);
             with_fx.model_draw = draw;
             with_fx.model_timeline = timeline;
@@ -1273,20 +1036,19 @@ fn load_itg_sprite_noteskin_compiled(
         };
 
     let find_explosion_wrapper = |active_key: &str, element_hint: &str| {
-        explosion_sprites
-            .iter()
-            .find(|sprite| sprite.commands.contains_key(active_key))
-            .or_else(|| {
-                explosion_sprites
-                    .iter()
-                    .find(|sprite| sprite.element.to_ascii_lowercase().contains(element_hint))
-            })
+        noteskin_explosion::itg_explosion_wrapper(
+            &explosion_sprites,
+            active_key,
+            element_hint,
+            |sprite, key| sprite.commands.contains_key(key),
+            |sprite, hint| noteskin_actor::element_contains_hint(&sprite.element, hint),
+        )
     };
     let hold_wrapper = find_explosion_wrapper("holdingoncommand", "hold explosion");
     let roll_wrapper = find_explosion_wrapper("rolloncommand", "roll explosion");
 
-    let hold_explosion_request = itg_load_request(compiled, "Down", "Hold Explosion");
-    let roll_explosion_request = itg_load_request(compiled, "Down", "Roll Explosion");
+    let hold_explosion_request = compiled.load_request("Down", "Hold Explosion");
+    let roll_explosion_request = compiled.load_request("Down", "Roll Explosion");
     let hold_explosion_blank = hold_explosion_request.blank;
     let roll_explosion_blank = roll_explosion_request.blank;
     let hold_explosion_sprites = itg_resolve_actor_sprites_compiled(
@@ -1296,10 +1058,11 @@ fn load_itg_sprite_noteskin_compiled(
         "Down",
         "Hold Explosion",
     );
-    let hold_source = hold_explosion_sprites
-        .iter()
-        .find(|sprite| sprite.commands.contains_key("holdingoncommand"))
-        .or_else(|| hold_explosion_sprites.first());
+    let hold_source = noteskin_explosion::itg_explosion_source(
+        &hold_explosion_sprites,
+        "holdingoncommand",
+        |sprite, key| sprite.commands.contains_key(key),
+    );
     let hold_wrapper_source =
         hold_wrapper.filter(|sprite| sprite.commands.contains_key("holdingoncommand"));
     hold.explosion = if hold_explosion_blank {
@@ -1332,7 +1095,7 @@ fn load_itg_sprite_noteskin_compiled(
                     })
             })
             .or_else(|| {
-                itg_find_texture_with_prefix(data, "_down hold explosion")
+                noteskin_itg::find_texture_with_prefix(data, "_down hold explosion")
                     .and_then(|p| {
                         itg_slot_from_path_all_frames(
                             &p,
@@ -1354,10 +1117,11 @@ fn load_itg_sprite_noteskin_compiled(
         "Down",
         "Roll Explosion",
     );
-    let roll_source = roll_explosion_sprites
-        .iter()
-        .find(|sprite| sprite.commands.contains_key("rolloncommand"))
-        .or_else(|| roll_explosion_sprites.first());
+    let roll_source = noteskin_explosion::itg_explosion_source(
+        &roll_explosion_sprites,
+        "rolloncommand",
+        |sprite, key| sprite.commands.contains_key(key),
+    );
     let roll_wrapper_source =
         roll_wrapper.filter(|sprite| sprite.commands.contains_key("rolloncommand"));
     let roll_explosion = if roll_explosion_blank {
@@ -1390,7 +1154,7 @@ fn load_itg_sprite_noteskin_compiled(
                     })
             })
             .or_else(|| {
-                itg_find_texture_with_prefix(data, "_down hold explosion")
+                noteskin_itg::find_texture_with_prefix(data, "_down hold explosion")
                     .and_then(|p| {
                         itg_slot_from_path_all_frames(
                             &p,
@@ -1411,28 +1175,18 @@ fn load_itg_sprite_noteskin_compiled(
         roll_explosion.or(hold.explosion.clone())
     };
     if let (Some(roll_slot), Some(hold_slot)) = (roll.explosion.clone(), hold.explosion.clone()) {
-        let roll_key = roll_slot.texture_key().to_ascii_lowercase();
-        let hold_key = hold_slot.texture_key().to_ascii_lowercase();
-        let roll_is_common_fallback_hold =
-            roll_key.contains("noteskins/common/common/fallback hold explosion");
-        let hold_is_skin_specific = !hold_key.contains("noteskins/common/common/");
-        if roll_is_common_fallback_hold && hold_is_skin_specific {
-            let roll_commands = roll_wrapper
+        if deadsync_noteskin::itg_roll_explosion_should_use_hold(
+            roll_slot.texture_key(),
+            hold_slot.texture_key(),
+        ) {
+            let actor_commands = roll_wrapper
                 .filter(|sprite| sprite.commands.contains_key("rolloncommand"))
-                .map(|sprite| sprite.commands.clone())
-                .or_else(|| {
-                    let mut metrics_commands = HashMap::new();
-                    if let Some(v) = data.metrics.get("HoldGhostArrow", "RollOnCommand") {
-                        metrics_commands.insert("rolloncommand".to_string(), v.to_string());
-                    }
-                    if let Some(v) = data.metrics.get("HoldGhostArrow", "RollOffCommand") {
-                        metrics_commands.insert("rolloffcommand".to_string(), v.to_string());
-                    }
-                    if metrics_commands.is_empty() {
-                        None
-                    } else {
-                        Some(metrics_commands)
-                    }
+                .map(|sprite| &sprite.commands);
+            let roll_commands =
+                deadsync_noteskin::itg_roll_explosion_commands(actor_commands, |key| {
+                    data.metrics
+                        .get("HoldGhostArrow", key)
+                        .map(ToString::to_string)
                 });
             if let Some(commands) = roll_commands {
                 roll.explosion = Some(slot_with_active_cmd(&hold_slot, &commands, "rolloncommand"));
@@ -1462,9 +1216,9 @@ fn load_itg_sprite_noteskin_compiled(
                 .iter()
                 .find(|sprite| sprite.commands.contains_key(active_key))
                 .or_else(|| {
-                    column_explosion_sprites
-                        .iter()
-                        .find(|sprite| sprite.element.to_ascii_lowercase().contains(element_hint))
+                    column_explosion_sprites.iter().find(|sprite| {
+                        noteskin_actor::element_contains_hint(&sprite.element, element_hint)
+                    })
                 });
             if let Some(sprite) = wrapper.filter(|sprite| sprite.commands.contains_key(active_key))
             {
@@ -1475,7 +1229,7 @@ fn load_itg_sprite_noteskin_compiled(
                 ));
             }
 
-            let request = itg_load_request(compiled, button, request_element);
+            let request = compiled.load_request(button, request_element);
             if request.blank {
                 return None;
             }
@@ -1503,7 +1257,7 @@ fn load_itg_sprite_noteskin_compiled(
                 .or_else(|| fallback.cloned())
         };
     for (col, visuals) in hold_columns.iter_mut().enumerate() {
-        let button = itg_button_for_col(col);
+        let button = noteskin_itg::button_for_col(col);
         visuals.explosion = resolve_hold_explosion_for_button(
             button,
             "holdingoncommand",
@@ -1513,7 +1267,7 @@ fn load_itg_sprite_noteskin_compiled(
         );
     }
     for (col, visuals) in roll_columns.iter_mut().enumerate() {
-        let button = itg_button_for_col(col);
+        let button = noteskin_itg::button_for_col(col);
         visuals.explosion = resolve_hold_explosion_for_button(
             button,
             "rolloncommand",
@@ -1524,7 +1278,7 @@ fn load_itg_sprite_noteskin_compiled(
     }
     let mut tap_explosions_by_col = Vec::with_capacity(style.num_cols);
     for col in 0..style.num_cols {
-        let button = itg_button_for_col(col);
+        let button = noteskin_itg::button_for_col(col);
         let column_explosion_sprites = if button.eq_ignore_ascii_case("Down") {
             explosion_sprites.clone()
         } else {
@@ -1540,13 +1294,10 @@ fn load_itg_sprite_noteskin_compiled(
     }
     let mine_source = explosion_sprites
         .iter()
-        .find(|sprite| sprite.commands.contains_key("hitminecommand"))
+        .find(|sprite| noteskin_explosion::itg_has_hit_mine_command(&sprite.commands))
         .or_else(|| {
             explosion_sprites.iter().find(|sprite| {
-                sprite
-                    .element
-                    .to_ascii_lowercase()
-                    .contains("hitmine explosion")
+                noteskin_explosion::itg_is_hit_mine_explosion_element(&sprite.element)
             })
         });
     let mine_slot = mine_source
@@ -1562,40 +1313,25 @@ fn load_itg_sprite_noteskin_compiled(
                 })
         });
     let mine_hit_explosion = mine_source
-        .and_then(itg_mine_explosion_from_actor_source)
+        .and_then(|source| {
+            deadsync_noteskin::itg_mine_explosion_from_commands(
+                source.slot.clone(),
+                &source.commands,
+            )
+        })
         .or_else(|| {
             mine_slot.map(|slot| {
-                let mine_command = mine_source
-                    .and_then(|sprite| sprite.commands.get("hitminecommand"))
-                    .cloned()
-                    .or_else(|| {
-                        data.metrics
-                            .get("GhostArrowBright", "HitMineCommand")
-                            .map(str::to_string)
-                    });
-                TapExplosion::from_single(
+                deadsync_noteskin::itg_hit_mine_explosion_from_slot(
                     slot,
-                    mine_command
-                        .as_deref()
-                        .and_then(|cmd| itg_command_with_init(mine_source, cmd))
-                        .as_deref()
-                        .map(parse_explosion_animation)
-                        .unwrap_or_default(),
+                    mine_source.map(|sprite| &sprite.commands),
+                    data.metrics
+                        .get("GhostArrowBright", "HitMineCommand")
+                        .map(str::to_string),
                 )
             })
         });
-
-    let tap_explosions = tap_explosions_by_col
-        .get(down_col)
-        .filter(|by_window| !by_window.is_empty())
-        .cloned()
-        .or_else(|| {
-            tap_explosions_by_col
-                .iter()
-                .find(|by_window| !by_window.is_empty())
-                .cloned()
-        })
-        .unwrap_or_default();
+    let tap_explosions =
+        deadsync_noteskin::default_tap_explosions(&tap_explosions_by_col, down_col);
 
     let hold_let_go_gray_percent = note_display_metrics
         .hold_let_go_gray_percent
@@ -1605,21 +1341,10 @@ fn load_itg_sprite_noteskin_compiled(
         itg_receptor_glow_behavior_compiled(data, compiled, compiled_actors);
     let receptor_pulse = receptor_pulse_command
         .as_deref()
-        .map(itg_receptor_pulse_from_script)
+        .map(noteskin_receptor::receptor_pulse_from_script)
         .unwrap_or_default();
     let mine_fill_slots = mine_fill_slots(&mines);
-    let column_xs = if style.num_cols == 0 {
-        Vec::new()
-    } else {
-        const ITG_DANCE_COL_SPACING: i32 = 64;
-        const ITG_DANCE_COL_HALF_SPACING: i32 = ITG_DANCE_COL_SPACING / 2;
-        (0..style.num_cols)
-            .map(|i| {
-                (i as i32 * ITG_DANCE_COL_SPACING)
-                    - ((style.num_cols - 1) as i32 * ITG_DANCE_COL_HALF_SPACING)
-            })
-            .collect()
-    };
+    let column_xs = deadsync_noteskin::itg_column_xs(style.num_cols);
     Ok(Noteskin {
         notes,
         note_layers,
@@ -1648,40 +1373,6 @@ fn load_itg_sprite_noteskin_compiled(
     })
 }
 
-fn itg_mine_explosion_from_actor_source(source: &ItgLuaResolvedSprite) -> Option<TapExplosion> {
-    let mut layers = Vec::new();
-    for key in ["ecommand", "e2command"] {
-        let Some(command) = source.commands.get(key) else {
-            continue;
-        };
-        let Some(command_with_init) = itg_command_with_init(Some(source), command) else {
-            continue;
-        };
-        layers.push(TapExplosionLayer {
-            slot: source.slot.clone(),
-            animation: parse_explosion_animation(&command_with_init),
-        });
-    }
-    TapExplosion::from_layers(layers)
-}
-
-fn itg_command_with_init(source: Option<&ItgLuaResolvedSprite>, command: &str) -> Option<String> {
-    let command = command.trim();
-    if command.is_empty() {
-        return None;
-    }
-    let mut sequence = Vec::with_capacity(2);
-    if let Some(init) = source
-        .and_then(|sprite| sprite.commands.get("initcommand"))
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty())
-    {
-        sequence.push(init.to_string());
-    }
-    sequence.push(command.to_string());
-    Some(sequence.join(";"))
-}
-
 fn itg_tap_explosion_map_compiled(
     data: &noteskin_itg::NoteskinData,
     compiled: &noteskin_compiled::CompiledLoader,
@@ -1691,14 +1382,12 @@ fn itg_tap_explosion_map_compiled(
 ) -> HashMap<String, TapExplosion> {
     let actor_tap_sprites = explosion_sprites
         .iter()
-        .filter(|sprite| itg_sprite_has_tap_explosion_command(sprite))
+        .filter(|sprite| noteskin_explosion::itg_has_tap_explosion_command(&sprite.commands))
         .collect::<Vec<_>>();
 
-    let mut dim_sprites = Vec::<ItgTapExplosionSource>::new();
-    let mut bright_sprites = Vec::<ItgTapExplosionSource>::new();
     let (direct_dim_sprites, direct_bright_sprites) = if actor_tap_sprites.is_empty() {
-        let dim_request = itg_load_request(compiled, button, "Tap Explosion Dim");
-        let bright_request = itg_load_request(compiled, button, "Tap Explosion Bright");
+        let dim_request = compiled.load_request(button, "Tap Explosion Dim");
+        let bright_request = compiled.load_request(button, "Tap Explosion Bright");
         (
             itg_direct_tap_explosion_sprites(
                 data,
@@ -1721,277 +1410,25 @@ fn itg_tap_explosion_map_compiled(
         (Vec::new(), Vec::new())
     };
 
-    for sprite in actor_tap_sprites
-        .iter()
-        .copied()
-        .chain(direct_dim_sprites.iter())
-        .chain(direct_bright_sprites.iter())
-    {
-        let source = ItgTapExplosionSource::from_sprite(sprite);
-        match source.mode {
-            ItgTapExplosionMode::Dim => dim_sprites.push(source),
-            ItgTapExplosionMode::Bright => bright_sprites.push(source),
-        }
-    }
-
-    if dim_sprites.is_empty() && bright_sprites.is_empty() {
-        return HashMap::new();
-    }
-
-    let mut tap_explosions = HashMap::new();
-    for window in ["W1", "W2", "W3", "W4", "W5", "Miss", "Held"] {
-        let key = format!("{}command", window.to_ascii_lowercase());
-        for mode in [ItgTapExplosionMode::Dim, ItgTapExplosionMode::Bright] {
-            if mode == ItgTapExplosionMode::Bright && bright_sprites.is_empty() {
-                continue;
-            }
-            let sources = itg_tap_explosion_sources_for_window(
-                &dim_sprites,
-                &bright_sprites,
-                window,
-                &key,
-                mode,
-            );
-            if sources.is_empty() {
-                continue;
-            }
-            let metric_key = format!("{window}Command");
-            let mut layers = Vec::with_capacity(sources.len());
-            for source in sources {
-                let command =
-                    source.commands.get(&key).cloned().or_else(|| {
-                        itg_tap_explosion_metric_command(data, source.mode, &metric_key)
-                    });
-                if window == "Held" && command.as_deref().map_or(true, |c| c.trim().is_empty()) {
-                    continue;
-                }
-                let Some(command) = command.filter(|cmd| !cmd.trim().is_empty()) else {
-                    continue;
-                };
-                let Some(command_with_init) =
-                    itg_tap_explosion_command_with_init(source, mode, &command)
-                else {
-                    continue;
-                };
-                layers.push(TapExplosionLayer {
-                    slot: source.slot.clone(),
-                    animation: parse_explosion_animation(&command_with_init),
-                });
-            }
-            if let Some(explosion) = TapExplosion::from_layers(layers) {
-                tap_explosions.insert(itg_tap_explosion_key(window, mode).to_string(), explosion);
-            }
-        }
-    }
-    tap_explosions
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum ItgTapExplosionMode {
-    Dim,
-    Bright,
-}
-
-#[derive(Clone)]
-struct ItgTapExplosionSource {
-    element: String,
-    slot: SpriteSlot,
-    commands: HashMap<String, String>,
-    mode: ItgTapExplosionMode,
-}
-
-impl ItgTapExplosionSource {
-    fn from_sprite(sprite: &ItgLuaResolvedSprite) -> Self {
-        Self {
-            element: sprite.element.clone(),
-            slot: sprite.slot.clone(),
-            commands: sprite.commands.clone(),
-            mode: itg_tap_explosion_mode(&sprite.element)
-                .or_else(|| itg_tap_explosion_mode_from_commands(&sprite.commands))
-                .unwrap_or(ItgTapExplosionMode::Dim),
-        }
-    }
-
-    fn matches_window(&self, window: &str) -> bool {
-        itg_tap_explosion_element_window(&self.element)
-            .is_some_and(|value| value.eq_ignore_ascii_case(window))
-    }
-
-    fn applies_to_window(&self, window: &str, command_key: &str) -> bool {
-        self.commands.contains_key(command_key)
-            || self.matches_window(window)
-            || self.is_generic_tap_explosion()
-    }
-
-    fn is_generic_tap_explosion(&self) -> bool {
-        let element = self.element.trim().to_ascii_lowercase();
-        (element == "tap explosion dim" || element == "tap explosion bright")
-            && itg_tap_explosion_element_window(&self.element).is_none()
-    }
-}
-
-fn itg_tap_explosion_sources_for_window<'a>(
-    dim_sprites: &'a [ItgTapExplosionSource],
-    bright_sprites: &'a [ItgTapExplosionSource],
-    window: &str,
-    command_key: &str,
-    mode: ItgTapExplosionMode,
-) -> Vec<&'a ItgTapExplosionSource> {
-    let mut out = Vec::new();
-    let (preferred, fallback) = match mode {
-        ItgTapExplosionMode::Dim => (dim_sprites, bright_sprites),
-        ItgTapExplosionMode::Bright => (bright_sprites, dim_sprites),
-    };
-    out.extend(
-        preferred
+    deadsync_noteskin::itg_tap_explosion_map_from_sources(
+        actor_tap_sprites
             .iter()
-            .filter(|sprite| sprite.applies_to_window(window, command_key)),
-    );
-    let has_preferred = !out.is_empty();
-    if mode == ItgTapExplosionMode::Bright && !has_preferred {
-        return out;
-    }
-    if !has_preferred {
-        out.extend(
-            fallback
-                .iter()
-                .filter(|sprite| sprite.applies_to_window(window, command_key)),
-        );
-    }
-    if out.is_empty() {
-        if let Some(first) = preferred.first() {
-            out.push(first);
-        } else if let Some(first) = fallback.first() {
-            out.push(first);
-        }
-    } else if has_preferred {
-        out.extend(
-            fallback
-                .iter()
-                .filter(|sprite| sprite.applies_to_window(window, command_key)),
-        );
-    }
-    out
-}
-
-fn itg_tap_explosion_command_with_init(
-    source: &ItgTapExplosionSource,
-    mode: ItgTapExplosionMode,
-    command: &str,
-) -> Option<String> {
-    let mut sequence = Vec::with_capacity(4);
-    let mut push_command = |raw: Option<&String>| {
-        if let Some(value) = raw {
-            let trimmed = value.trim();
-            if !trimmed.is_empty() {
-                sequence.push(trimmed.to_string());
-            }
-        }
-    };
-    push_command(source.commands.get("initcommand"));
-    push_command(source.commands.get("judgmentcommand"));
-    push_command(
-        source
-            .commands
-            .get(itg_tap_explosion_mode_command_key(mode)),
-    );
-    sequence.push(command.trim().to_string());
-    (!sequence.is_empty()).then(|| sequence.join(";"))
-}
-
-fn itg_tap_explosion_mode(element: &str) -> Option<ItgTapExplosionMode> {
-    let element = element.to_ascii_lowercase();
-    if element.starts_with("tap explosion bright") {
-        Some(ItgTapExplosionMode::Bright)
-    } else if element.starts_with("tap explosion dim") {
-        Some(ItgTapExplosionMode::Dim)
-    } else {
-        None
-    }
-}
-
-fn itg_tap_explosion_mode_command_key(mode: ItgTapExplosionMode) -> &'static str {
-    match mode {
-        ItgTapExplosionMode::Dim => "dimcommand",
-        ItgTapExplosionMode::Bright => "brightcommand",
-    }
-}
-
-fn itg_tap_explosion_metric_command(
-    data: &noteskin_itg::NoteskinData,
-    mode: ItgTapExplosionMode,
-    metric_key: &str,
-) -> Option<String> {
-    let section = match mode {
-        ItgTapExplosionMode::Dim => "GhostArrowDim",
-        ItgTapExplosionMode::Bright => "GhostArrowBright",
-    };
-    data.metrics.get(section, metric_key).map(str::to_string)
-}
-
-fn itg_tap_explosion_key(window: &str, mode: ItgTapExplosionMode) -> &str {
-    if mode == ItgTapExplosionMode::Bright
-        && let Some(key) = deadsync_noteskin::bright_tap_explosion_key(window)
-    {
-        key
-    } else {
-        window
-    }
-}
-
-fn itg_tap_explosion_mode_from_commands(
-    commands: &HashMap<String, String>,
-) -> Option<ItgTapExplosionMode> {
-    let bright_visible = commands
-        .get("brightcommand")
-        .and_then(|cmd| itg_script_visible_command(cmd));
-    let dim_visible = commands
-        .get("dimcommand")
-        .and_then(|cmd| itg_script_visible_command(cmd));
-    match (bright_visible, dim_visible) {
-        (Some(true), Some(false)) => Some(ItgTapExplosionMode::Bright),
-        (Some(false), Some(true)) => Some(ItgTapExplosionMode::Dim),
-        (None, Some(true)) => Some(ItgTapExplosionMode::Dim),
-        (Some(true), None) => Some(ItgTapExplosionMode::Bright),
-        _ => None,
-    }
-}
-
-fn itg_script_visible_command(script: &str) -> Option<bool> {
-    let script = normalized_script_command(script);
-    script.split(';').find_map(|token| {
-        let (command, args) = split_script_token(token)?;
-        (command == "visible")
-            .then(|| args.first().map(|arg| parse_script_bool(arg)))
-            .flatten()
-    })
-}
-
-fn itg_sprite_has_tap_explosion_command(sprite: &ItgLuaResolvedSprite) -> bool {
-    [
-        "w1command",
-        "w2command",
-        "w3command",
-        "w4command",
-        "w5command",
-        "heldcommand",
-    ]
-    .iter()
-    .any(|key| sprite.commands.contains_key(*key))
-}
-
-fn itg_tap_explosion_element_window(element: &str) -> Option<&str> {
-    let element = element.trim();
-    element
-        .strip_prefix("Tap Explosion Dim ")
-        .or_else(|| element.strip_prefix("Tap Explosion Bright "))
-        .map(str::trim)
-        .filter(|value| {
-            matches!(
-                value.to_ascii_lowercase().as_str(),
-                "w1" | "w2" | "w3" | "w4" | "w5"
-            )
-        })
+            .copied()
+            .chain(direct_dim_sprites.iter())
+            .chain(direct_bright_sprites.iter())
+            .map(|sprite| {
+                noteskin_explosion::ItgTapExplosionSource::new(
+                    sprite.element.clone(),
+                    sprite.slot.clone(),
+                    sprite.commands.clone(),
+                )
+            }),
+        |mode, metric_key| {
+            data.metrics
+                .get(mode.metric_section(), metric_key)
+                .map(str::to_string)
+        },
+    )
 }
 
 fn itg_direct_tap_explosion_sprites(
@@ -2003,20 +1440,11 @@ fn itg_direct_tap_explosion_sprites(
     base_blank: bool,
 ) -> Vec<ItgLuaResolvedSprite> {
     let mut out = Vec::new();
-    if !base_blank {
-        out.extend(itg_resolve_actor_sprites_compiled(
-            data,
-            compiled,
-            compiled_actors,
-            button,
-            base_element,
-        ));
-    }
-    for window in ["W1", "W2", "W3", "W4", "W5"] {
-        let element = format!("{base_element} {window}");
-        if itg_load_request(compiled, button, &element).blank {
-            continue;
-        }
+    for element in
+        noteskin_explosion::itg_direct_tap_explosion_elements(base_element, base_blank, |element| {
+            compiled.load_request(button, element).blank
+        })
+    {
         out.extend(itg_resolve_actor_sprites_compiled(
             data,
             compiled,
@@ -2028,351 +1456,22 @@ fn itg_direct_tap_explosion_sprites(
     out
 }
 
-fn itg_receptor_pulse_from_script(command: &str) -> ReceptorPulse {
-    let mut pulse = ReceptorPulse::default();
-    let command = normalized_script_command(command);
-    for raw_token in command.split(';') {
-        let token = raw_token.trim();
-        if token.is_empty() {
-            continue;
-        }
-        let Some((cmd, args)) = split_script_token(token) else {
-            continue;
-        };
-        if let Some(effect_mod) = parse_script_effect_mod(cmd.as_str(), &args) {
-            match effect_mod {
-                ScriptEffectMod::EffectColor1(color) => pulse.effect_color1 = color,
-                ScriptEffectMod::EffectColor2(color) => pulse.effect_color2 = color,
-                ScriptEffectMod::EffectPeriod(v) => {
-                    let period = v.max(f32::EPSILON);
-                    pulse.effect_period = period;
-                    pulse.ramp_to_half = period * 0.5;
-                    pulse.hold_at_half = 0.0;
-                    pulse.ramp_to_full = period * 0.5;
-                    pulse.hold_at_full = 0.0;
-                    pulse.hold_at_zero = 0.0;
-                }
-                ScriptEffectMod::EffectOffset(v) => {
-                    pulse.effect_offset = v;
-                }
-                ScriptEffectMod::EffectTiming(v) => {
-                    pulse.ramp_to_half = v[0].max(0.0);
-                    pulse.hold_at_half = v[1].max(0.0);
-                    pulse.ramp_to_full = v[2].max(0.0);
-                    pulse.hold_at_full = v[3].max(0.0);
-                    pulse.hold_at_zero = v[4].max(0.0);
-                    pulse.effect_period = pulse.total_period().max(f32::EPSILON);
-                }
-                _ => {}
-            }
-        }
-    }
-
-    pulse
-}
-
-fn itg_receptor_arrow_command(
-    data: &noteskin_itg::NoteskinData,
-    commands: Option<&HashMap<String, String>>,
-    actor_key: &str,
-    metric_key: &str,
-) -> Option<String> {
-    commands
-        .and_then(|commands| commands.get(actor_key).cloned())
-        .or_else(|| {
-            data.metrics
-                .get("ReceptorArrow", metric_key)
-                .map(str::to_string)
-        })
-}
-
-fn itg_receptor_step_behavior_for_command(
-    command: Option<String>,
-    base_zoom: f32,
-) -> ReceptorStepBehavior {
-    let Some(command) = command else {
-        return ReceptorStepBehavior::identity();
-    };
-    let none = itg_parse_command_effect(&command);
-    let Some(zoom_start) = none.start_zoom.or(none.target_zoom) else {
-        return ReceptorStepBehavior {
-            interrupts: none.interrupts,
-            ..ReceptorStepBehavior::identity()
-        };
-    };
-    let zoom_end = none.target_zoom.or(none.start_zoom).unwrap_or(zoom_start);
-    if (zoom_end - zoom_start).abs() <= f32::EPSILON {
-        return ReceptorStepBehavior {
-            interrupts: none.interrupts,
-            ..ReceptorStepBehavior::identity()
-        };
-    }
-    let base_zoom = if base_zoom.abs() > f32::EPSILON {
-        base_zoom
-    } else {
-        1.0
-    };
-
-    ReceptorStepBehavior {
-        duration: none.duration.max(0.0),
-        zoom_start: (zoom_start / base_zoom).max(0.0),
-        zoom_end: (zoom_end / base_zoom).max(0.0),
-        tween: if none.duration > f32::EPSILON {
-            none.tween
-        } else {
-            TweenType::Linear
-        },
-        interrupts: none.interrupts,
-    }
-}
-
-fn itg_receptor_step_behaviors(
-    data: &noteskin_itg::NoteskinData,
-    commands: Option<&HashMap<String, String>>,
-    base_zoom: f32,
-) -> ReceptorStepBehaviors {
-    let behavior = |actor_key, metric_key| {
-        itg_receptor_step_behavior_for_command(
-            itg_receptor_arrow_command(data, commands, actor_key, metric_key),
-            base_zoom,
-        )
-    };
-    ReceptorStepBehaviors::new(
-        behavior("nonecommand", "NoneCommand"),
-        behavior("misscommand", "MissCommand"),
-        [
-            behavior("w1command", "W1Command"),
-            behavior("w2command", "W2Command"),
-            behavior("w3command", "W3Command"),
-            behavior("w4command", "W4Command"),
-            behavior("w5command", "W5Command"),
-        ],
-    )
-}
-
-fn itg_receptor_reverse_behavior(commands: &HashMap<String, String>) -> ReceptorReverseBehavior {
-    ReceptorReverseBehavior {
-        reverse_off: commands
-            .get("reverseoffcommand")
-            .map(|script| itg_receptor_reverse_state(script))
-            .unwrap_or_default(),
-        reverse_on: commands
-            .get("reverseoncommand")
-            .map(|script| itg_receptor_reverse_state(script))
-            .unwrap_or_default(),
-    }
-}
-
-fn itg_receptor_reverse_state(script: &str) -> ReceptorReverseState {
-    let mut out = ReceptorReverseState::default();
-    let script = normalized_script_command(script);
-    for raw_token in script.split(';') {
-        let token = raw_token.trim();
-        if token.is_empty() {
-            continue;
-        }
-        let Some((cmd, args)) = split_script_token(token) else {
-            continue;
-        };
-        match cmd.as_str() {
-            "baserotationz" => {
-                out.base_rotation_z = args.first().and_then(|v| parse_script_number(v));
-            }
-            "vertalign" | "valign" => {
-                out.vert_align = args.first().and_then(|v| parse_script_vertalign(v));
-            }
-            _ => {}
-        }
-    }
-    out
-}
-
 fn itg_receptor_glow_behavior_compiled(
     data: &noteskin_itg::NoteskinData,
     compiled: &noteskin_compiled::CompiledLoader,
     compiled_actors: &noteskin_compiled::CompiledActors,
 ) -> ReceptorGlowBehavior {
-    let mut out = ReceptorGlowBehavior::default();
     let receptor =
         itg_resolve_actor_sprites_compiled(data, compiled, compiled_actors, "Down", "Receptor");
     let overlay = receptor.get(1);
-    let init_cmd = overlay
-        .and_then(|s| s.commands.get("initcommand"))
-        .cloned()
-        .or_else(|| {
+    noteskin_receptor::receptor_glow_behavior(
+        overlay.map(|sprite| &sprite.commands),
+        |metric_key| {
             data.metrics
-                .get("ReceptorOverlay", "InitCommand")
+                .get("ReceptorOverlay", metric_key)
                 .map(str::to_string)
-        })
-        .unwrap_or_default();
-    let press_cmd = overlay
-        .and_then(|s| s.commands.get("presscommand"))
-        .cloned()
-        .or_else(|| {
-            data.metrics
-                .get("ReceptorOverlay", "PressCommand")
-                .map(str::to_string)
-        })
-        .unwrap_or_default();
-    let lift_cmd = overlay
-        .and_then(|s| s.commands.get("liftcommand"))
-        .cloned()
-        .or_else(|| {
-            data.metrics
-                .get("ReceptorOverlay", "LiftCommand")
-                .map(str::to_string)
-        })
-        .unwrap_or_default();
-    let none_cmd = overlay
-        .and_then(|s| s.commands.get("nonecommand"))
-        .cloned()
-        .or_else(|| {
-            data.metrics
-                .get("ReceptorOverlay", "NoneCommand")
-                .map(str::to_string)
-        })
-        .unwrap_or_default();
-
-    let init = itg_parse_command_effect(&init_cmd);
-    let press = itg_parse_command_effect(&press_cmd);
-    let lift = itg_parse_command_effect(&lift_cmd);
-    let none = itg_parse_command_effect(&none_cmd);
-
-    out.press_duration = press.duration.max(0.0);
-    out.press_alpha_start = press
-        .start_alpha
-        .or(press.target_alpha)
-        .or(init.target_alpha)
-        .unwrap_or(out.press_alpha_start);
-    out.press_alpha_end = press
-        .target_alpha
-        .or(press.start_alpha)
-        .or(init.target_alpha)
-        .unwrap_or(out.press_alpha_end);
-    out.press_zoom_start = press
-        .start_zoom
-        .or(press.target_zoom)
-        .or(init.target_zoom)
-        .unwrap_or(out.press_zoom_start);
-    out.press_zoom_end = press
-        .target_zoom
-        .or(press.start_zoom)
-        .or(init.target_zoom)
-        .unwrap_or(out.press_zoom_end);
-    out.press_tween = if press.duration > f32::EPSILON {
-        press.tween
-    } else {
-        out.press_tween
-    };
-
-    out.duration = if lift.duration > f32::EPSILON {
-        lift.duration
-    } else if none.duration > f32::EPSILON {
-        none.duration
-    } else if press.duration > f32::EPSILON {
-        press.duration
-    } else {
-        out.duration
-    };
-    out.alpha_start = out.press_alpha_end;
-    out.alpha_end = lift
-        .target_alpha
-        .or(none.target_alpha)
-        .or(init.target_alpha)
-        .unwrap_or(0.0);
-    out.zoom_start = out.press_zoom_end;
-    out.zoom_end = lift
-        .target_zoom
-        .or(none.target_zoom)
-        .or(init.target_zoom)
-        .unwrap_or(out.zoom_end);
-    out.tween = if lift.duration > f32::EPSILON {
-        lift.tween
-    } else if none.duration > f32::EPSILON {
-        none.tween
-    } else if press.duration > f32::EPSILON {
-        press.tween
-    } else {
-        out.tween
-    };
-    out.blend_add = press
-        .blend_add
-        .or(lift.blend_add)
-        .or(init.blend_add)
-        .unwrap_or(out.blend_add);
-    out.press_alpha_start = out.press_alpha_start.clamp(0.0, 1.0);
-    out.press_alpha_end = out.press_alpha_end.clamp(0.0, 1.0);
-    out.press_zoom_start = out.press_zoom_start.max(0.0);
-    out.press_zoom_end = out.press_zoom_end.max(0.0);
-    out.press_duration = out.press_duration.max(0.0);
-    out.alpha_start = out.alpha_start.clamp(0.0, 1.0);
-    out.alpha_end = out.alpha_end.clamp(0.0, 1.0);
-    out.zoom_start = out.zoom_start.max(0.0);
-    out.zoom_end = out.zoom_end.max(0.0);
-    out.duration = out.duration.max(0.0);
-    out
-}
-
-fn itg_apply_parent_zoom(slot: &mut SpriteSlot, axis: usize, zoom: f32) {
-    if zoom < 0.0 {
-        match axis {
-            0 => slot.def.mirror_h = !slot.def.mirror_h,
-            1 => slot.def.mirror_v = !slot.def.mirror_v,
-            _ => {}
-        }
-    }
-    slot.model_draw.zoom[axis] *= zoom.abs();
-}
-
-fn itg_apply_parent_actor_mod(slot: &mut SpriteSlot, actor_mod: ScriptActorMod) {
-    match actor_mod {
-        ScriptActorMod::X(v) | ScriptActorMod::AddX(v) => slot.model_draw.pos[0] += v,
-        ScriptActorMod::Y(v) | ScriptActorMod::AddY(v) => slot.model_draw.pos[1] += v,
-        ScriptActorMod::Z(v) | ScriptActorMod::AddZ(v) => slot.model_draw.pos[2] += v,
-        ScriptActorMod::RotationX(v) | ScriptActorMod::AddRotationX(v) => {
-            slot.model_draw.rot[0] += v
-        }
-        ScriptActorMod::RotationY(v) | ScriptActorMod::AddRotationY(v) => {
-            slot.model_draw.rot[1] += v
-        }
-        ScriptActorMod::RotationZ(v) | ScriptActorMod::AddRotationZ(v) => {
-            slot.model_draw.rot[2] += v
-        }
-        ScriptActorMod::Zoom(v) => {
-            itg_apply_parent_zoom(slot, 0, v);
-            itg_apply_parent_zoom(slot, 1, v);
-            itg_apply_parent_zoom(slot, 2, v);
-        }
-        ScriptActorMod::ZoomX(v) => itg_apply_parent_zoom(slot, 0, v),
-        ScriptActorMod::ZoomY(v) => itg_apply_parent_zoom(slot, 1, v),
-        ScriptActorMod::ZoomZ(v) => itg_apply_parent_zoom(slot, 2, v),
-        ScriptActorMod::Diffuse(color) => {
-            for (dst, src) in slot.model_draw.tint.iter_mut().zip(color) {
-                *dst *= src;
-            }
-        }
-        ScriptActorMod::DiffuseAlpha(alpha) => slot.model_draw.tint[3] *= alpha,
-        ScriptActorMod::Glow(color) => slot.model_draw.glow = color,
-        ScriptActorMod::VertAlign(v) => slot.model_draw.vert_align = v,
-        ScriptActorMod::BlendAdd(v) => slot.model_draw.blend_add = v,
-        ScriptActorMod::Visible(v) => slot.model_draw.visible &= v,
-    }
-}
-
-fn itg_apply_parent_command(slot: &mut SpriteSlot, script: &str) {
-    let script = normalized_script_command(script);
-    for raw_token in script.split(';') {
-        let token = raw_token.trim();
-        if token.is_empty() {
-            continue;
-        }
-        let Some((command, args)) = split_script_token(token) else {
-            continue;
-        };
-        if let Some(actor_mod) = parse_script_actor_mod(&command, &args) {
-            itg_apply_parent_actor_mod(slot, actor_mod);
-        }
-    }
+        },
+    )
 }
 
 fn itg_apply_loader_command(sprites: &mut [ItgLuaResolvedSprite], command: Option<&str>) {
@@ -2380,73 +1479,19 @@ fn itg_apply_loader_command(sprites: &mut [ItgLuaResolvedSprite], command: Optio
         return;
     };
     for sprite in sprites {
-        itg_apply_parent_command(&mut sprite.slot, command);
+        noteskin_script::itg_apply_parent_command(
+            &mut sprite.slot.def,
+            &mut sprite.slot.model_draw,
+            command,
+        );
     }
 }
-
-type ItgLuaActorDecl = noteskin_actor::ItgLuaActorDecl;
 
 #[derive(Debug, Clone)]
 struct ItgLuaResolvedSprite {
     element: String,
     slot: SpriteSlot,
     commands: HashMap<String, String>,
-}
-
-#[derive(Debug, Clone)]
-struct ItgLoadRequest {
-    blank: bool,
-    load_button: String,
-    load_element: String,
-    rotation_z: Option<i32>,
-    init_command: Option<String>,
-}
-
-#[inline(always)]
-fn itg_button_for_col(col: usize) -> &'static str {
-    match col % 4 {
-        0 => "Left",
-        1 => "Down",
-        2 => "Up",
-        _ => "Right",
-    }
-}
-
-fn itg_load_request(
-    compiled: &noteskin_compiled::CompiledLoader,
-    button: &str,
-    element: &str,
-) -> ItgLoadRequest {
-    if let Some(entry) = compiled.find(button, element) {
-        return ItgLoadRequest {
-            blank: entry.blank,
-            load_button: entry.load_button.clone(),
-            load_element: entry.load_element.clone(),
-            rotation_z: entry.rotation_z,
-            init_command: entry.init_command.clone(),
-        };
-    }
-    warn!("compiled noteskin loader is missing '{button} {element}'");
-    ItgLoadRequest {
-        blank: false,
-        load_button: button.to_string(),
-        load_element: element.to_string(),
-        rotation_z: None,
-        init_command: None,
-    }
-}
-
-fn itg_request_maps_head_to_tap(request: &ItgLoadRequest) -> bool {
-    !request.blank && request.load_element.eq_ignore_ascii_case("Tap Note")
-}
-
-fn itg_compiled_actor_decl(
-    data: &noteskin_itg::NoteskinData,
-    compiled_actors: &noteskin_compiled::CompiledActors,
-    path: &Path,
-) -> Option<ItgLuaActorDecl> {
-    let key = noteskin_compiled::actor_manifest_key(&data.search_dirs, path)?;
-    compiled_actors.find(&key).cloned().map(|file| file.decl)
 }
 
 fn itg_resolve_actor_sprites_compiled(
@@ -2477,22 +1522,18 @@ fn itg_resolve_actor_sprites_inner_compiled(
     depth: usize,
     visiting: &mut HashSet<String>,
 ) -> Vec<ItgLuaResolvedSprite> {
-    if depth > 24 {
+    if depth > noteskin_compiled::ACTOR_RECURSION_MAX_DEPTH {
         warn!("noteskin lua actor recursion depth exceeded at '{button} {element}'");
         return Vec::new();
     }
 
-    let visit_key = format!(
-        "{}|{}",
-        button.to_ascii_lowercase(),
-        element.to_ascii_lowercase()
-    );
+    let visit_key = noteskin_compiled::actor_visit_key(button, element);
     if !visiting.insert(visit_key.clone()) {
         warn!("noteskin lua actor recursion loop detected at '{button} {element}'");
         return Vec::new();
     }
 
-    let request = itg_load_request(compiled, button, element);
+    let request = compiled.load_request(button, element);
     if request.blank {
         visiting.remove(&visit_key);
         return Vec::new();
@@ -2533,7 +1574,7 @@ fn itg_resolve_actor_file_compiled(
     visiting: &mut HashSet<String>,
     arg0_path: Option<&Path>,
 ) -> Vec<ItgLuaResolvedSprite> {
-    if depth > 48 {
+    if depth > noteskin_compiled::ACTOR_FILE_RECURSION_MAX_DEPTH {
         warn!(
             "noteskin lua file recursion depth exceeded at '{}' for '{button} {element}'",
             path.display()
@@ -2542,11 +1583,7 @@ fn itg_resolve_actor_file_compiled(
     }
 
     let mut out = Vec::new();
-    let is_lua = path
-        .extension()
-        .and_then(|s| s.to_str())
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("lua"));
-    if !is_lua {
+    if !noteskin_actor::is_lua_path(path) {
         if let Some(mut slot) =
             itg_slot_from_path_with_frame(path, 0).or_else(|| itg_slot_from_path(path))
         {
@@ -2562,7 +1599,7 @@ fn itg_resolve_actor_file_compiled(
         return out;
     }
 
-    let path_key = format!("file:{}", path.display().to_string().to_ascii_lowercase());
+    let path_key = noteskin_compiled::actor_file_visit_key(path);
     if !visiting.insert(path_key.clone()) {
         warn!(
             "noteskin lua file recursion loop detected at '{}' for '{button} {element}'",
@@ -2571,19 +1608,20 @@ fn itg_resolve_actor_file_compiled(
         return Vec::new();
     }
 
-    let Some(decl) = itg_compiled_actor_decl(data, compiled_actors, path) else {
+    let Some(decl) = compiled_actors.decl_for_path(&data.search_dirs, path) else {
         warn!("compiled noteskin actors are missing '{}'", path.display());
         visiting.remove(&path_key);
         return Vec::new();
     };
     let default_anim_is_beat = noteskin_itg::animation_is_beat_based(data);
     for sprite in decl.sprites {
-        let texture_path = itg_resolve_texture_expr(data, &sprite.texture_expr, arg0_path);
+        let texture_path =
+            noteskin_itg::resolve_texture_expr(data, &sprite.texture_expr, arg0_path);
         let Some(texture_path) = texture_path else {
             continue;
         };
         let anim_is_beat =
-            itg_sprite_animation_is_beat_based(&sprite.commands, default_anim_is_beat);
+            noteskin_script::sprite_animation_is_beat_based(&sprite.commands, default_anim_is_beat);
         let mut slot = if sprite.frame_count > 1 {
             itg_slot_from_path_animated(
                 &texture_path,
@@ -2617,7 +1655,7 @@ fn itg_resolve_actor_file_compiled(
             .as_deref()
             .or(model.meshes_expr.as_deref())
             .or(model.texture_expr.as_deref())
-            .and_then(|expr| itg_resolve_texture_expr(data, expr, arg0_path));
+            .and_then(|expr| noteskin_itg::resolve_texture_expr(data, expr, arg0_path));
         let Some(model_path) = model_path else {
             continue;
         };
@@ -2696,13 +1734,14 @@ fn itg_resolve_actor_file_compiled(
         });
     }
     for path_ref in decl.path_refs {
-        let Some(path) = itg_resolve_texture_expr(data, &path_ref.path_expr, arg0_path) else {
+        let Some(path) = noteskin_itg::resolve_texture_expr(data, &path_ref.path_expr, arg0_path)
+        else {
             continue;
         };
         let path_ref_arg = path_ref
             .arg_expr
             .as_deref()
-            .and_then(|expr| itg_resolve_texture_expr(data, expr, arg0_path));
+            .and_then(|expr| noteskin_itg::resolve_texture_expr(data, expr, arg0_path));
         let mut child = itg_resolve_actor_file_compiled(
             data,
             compiled,
@@ -2731,7 +1770,7 @@ fn itg_resolve_actor_file_compiled(
         let wrapper_commands = reference
             .wrapper_expr
             .as_deref()
-            .and_then(|expr| itg_resolve_texture_expr(data, expr, arg0_path))
+            .and_then(|expr| noteskin_itg::resolve_texture_expr(data, expr, arg0_path))
             .and_then(|path| noteskin_actor::parse_wrapper_commands_from_file(&path, &data.metrics))
             .unwrap_or_default();
         let mut child = itg_resolve_actor_sprites_inner_compiled(
@@ -2762,90 +1801,21 @@ fn itg_resolve_actor_file_compiled(
     out
 }
 
-fn itg_resolve_texture_expr(
-    data: &noteskin_itg::NoteskinData,
-    expr: &str,
-    arg0_path: Option<&Path>,
-) -> Option<PathBuf> {
-    let value = expr.trim();
-    if value == ITG_ARG0_TOKEN {
-        return arg0_path.map(Path::to_path_buf);
-    }
-    if value.starts_with("NOTESKIN:GetPath(") {
-        let args = itg_extract_quoted_strings(value);
-        if args.len() >= 2 {
-            return data
-                .resolve_path(&args[0], &args[1])
-                .or_else(|| data.resolve_path("", &args[1]));
-        }
-        if args.len() == 1 {
-            return data
-                .resolve_path(&args[0], "")
-                .or_else(|| data.resolve_path("", &args[0]));
-        }
-    }
-    let name = itg_parse_lua_quoted(value).unwrap_or_else(|| value.to_string());
-    data.resolve_path(&name, "")
-        .or_else(|| data.resolve_path("", &name))
-        .or_else(|| {
-            if value == "..." {
-                arg0_path.map(Path::to_path_buf)
-            } else {
-                None
-            }
-        })
-}
-
-fn itg_sprite_animation_is_beat_based(
-    commands: &HashMap<String, String>,
-    default_is_beat_based: bool,
-) -> bool {
-    let mut clock = None;
-    let preferred = ["initcommand", "nonecommand", "oncommand", "offcommand"];
-    for key in preferred {
-        if let Some(script) = commands.get(key)
-            && let Some(is_beat) = itg_parse_effectclock_from_commands(script)
-        {
-            clock = Some(is_beat);
-        }
-    }
-    let mut extras = commands
-        .iter()
-        .filter(|(key, _)| !preferred.contains(&key.as_str()))
-        .map(|(key, script)| (key.as_str(), script.as_str()))
-        .collect::<Vec<_>>();
-    extras.sort_unstable_by(|a, b| a.0.cmp(b.0));
-    for (_, script) in extras {
-        if let Some(is_beat) = itg_parse_effectclock_from_commands(script) {
-            clock = Some(is_beat);
-        }
-    }
-    clock.unwrap_or(default_is_beat_based)
-}
-
-fn itg_parse_effectclock_from_commands(script: &str) -> Option<bool> {
-    parse_script_effectclock_from_commands(script)
-}
-
 fn itg_slot_from_actor_path_first_sprite_compiled(
     data: &noteskin_itg::NoteskinData,
     compiled_actors: &noteskin_compiled::CompiledActors,
     path: &Path,
 ) -> Option<SpriteSlot> {
-    let is_lua = path
-        .extension()
-        .and_then(|s| s.to_str())
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("lua"));
-    if !is_lua {
+    if !noteskin_actor::is_lua_path(path) {
         return itg_slot_from_path(path);
     }
 
-    let decl = itg_compiled_actor_decl(data, compiled_actors, path)?;
+    let decl = compiled_actors.decl_for_path(&data.search_dirs, path)?;
     let default_anim_is_beat = noteskin_itg::animation_is_beat_based(data);
     for sprite in decl.sprites {
-        let texture_path = itg_resolve_texture_expr(data, &sprite.texture_expr, None)?;
+        let texture_path = noteskin_itg::resolve_texture_expr(data, &sprite.texture_expr, None)?;
         let anim_is_beat =
-            itg_sprite_animation_is_beat_based(&sprite.commands, default_anim_is_beat);
+            noteskin_script::sprite_animation_is_beat_based(&sprite.commands, default_anim_is_beat);
         let slot = if sprite.frame_count > 1 {
             itg_slot_from_path_animated(
                 &texture_path,
@@ -2873,12 +1843,15 @@ mod tests {
         AnimationRate, ModelAutoRotKey, ModelDrawState, ModelEffectClock, ModelEffectMode,
         ModelTweenSegment, NUM_QUANTIZATIONS, NoteAnimPart, NoteColorType, Quantization,
         SpriteDefinition, SpriteSlot, SpriteSource, Style, clear_itg_runtime_caches,
-        compiled_bundle_path, itg_apply_state_properties_from_script, itg_parse_command_effect,
-        itg_receptor_pulse_from_script, itg_register_texture_dims_for_path, itg_texture_key,
-        load_itg, load_itg_data_cached, load_itg_model_slots_from_path, load_itg_skin,
-        noteskin_compiled, parse_explosion_animation,
+        compiled_bundle_path, itg_apply_state_properties_from_script,
+        itg_register_texture_dims_for_path, itg_texture_key, load_itg, load_itg_data_cached,
+        load_itg_model_slots_from_path, load_itg_skin, noteskin_compiled,
     };
-    use deadsync_noteskin::script::{model_draw_program, parse_script_control};
+    use deadsync_noteskin::parse_explosion_animation;
+    use deadsync_noteskin::receptor::receptor_pulse_from_script;
+    use deadsync_noteskin::script::{
+        itg_parse_command_effect, model_draw_program, parse_script_control,
+    };
     use std::collections::{HashMap, HashSet};
     use std::ffi::OsStr;
     use std::fs;
@@ -3631,7 +2604,7 @@ return t
 
     #[test]
     fn receptor_pulse_effecttiming_recalculates_period() {
-        let pulse = itg_receptor_pulse_from_script(
+        let pulse = receptor_pulse_from_script(
             "effectclock,'beat';diffuseramp;effectcolor1,0.1,0.1,0.1,1;\
              effectcolor2,1,1,1,1;effectperiod,0.5;\
              effecttiming,0.25,0.50,0,0.25;effectoffset,-0.25",

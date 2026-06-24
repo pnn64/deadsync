@@ -3,6 +3,7 @@ mod display_mods;
 mod error_bar;
 mod feedback;
 mod holds;
+mod measure_actors;
 mod measure_lines;
 mod mini_indicator;
 mod notes;
@@ -16,6 +17,7 @@ pub use display_mods::*;
 pub use error_bar::*;
 pub use feedback::*;
 pub use holds::*;
+pub use measure_actors::*;
 pub use measure_lines::*;
 pub use mini_indicator::*;
 pub use notes::*;
@@ -35,7 +37,7 @@ use holds::hold_head_part_for_roll;
 use mini_indicator::rgba8;
 #[cfg(test)]
 mod tests {
-    use deadlib_present::actors::{Actor, SizeSpec};
+    use deadlib_present::actors::{Actor, SizeSpec, SpriteSource, TextAlign};
     use deadlib_render::BlendMode;
     use deadsync_noteskin::NoteAnimPart;
     use std::sync::Arc;
@@ -51,12 +53,13 @@ mod tests {
         ZmodComboColorStyle, ZmodLayoutParams, ZmodMeasureCounterText, ZmodMiniIndicatorOutput,
         ZmodMiniIndicatorParams, ZmodMiniIndicatorText, actor_with_world_z, appearance_needs_rows,
         appearance_note_actor_alpha, appearance_note_alpha, appearance_note_glow,
-        append_average_error_bar_part, append_mini_part, append_perspective_parts,
-        append_turn_parts, apply_accel_y, apply_accel_y_with_peak, average_error_bar_mini_scale,
-        beat_factor, beat_scroll_travel, beat_x_extra, bottom_cap_uv_window, bumpy_angle,
-        clamp_rounded_i16, clipped_hold_body_bounds, column_cue_alpha, column_cue_height,
-        column_cue_reverse_top_y, column_flash_alpha, column_flash_alpha_at, column_flash_color,
-        column_flash_height, column_flash_layout, column_flash_reverse_top_y, combo_actor_zoom,
+        append_average_error_bar_part, append_beat_bar, append_cue_bar, append_edit_measure_number,
+        append_mini_part, append_perspective_parts, append_turn_parts, apply_accel_y,
+        apply_accel_y_with_peak, average_error_bar_mini_scale, beat_factor, beat_scroll_travel,
+        beat_x_extra, bottom_cap_uv_window, bumpy_angle, clamp_rounded_i16,
+        clipped_hold_body_bounds, column_cue_alpha, column_cue_height, column_cue_reverse_top_y,
+        column_flash_alpha, column_flash_alpha_at, column_flash_color, column_flash_height,
+        column_flash_layout, column_flash_reverse_top_y, combo_actor_zoom,
         compute_invert_distances, compute_tornado_bounds, crossover_cue_height, default_column_x,
         disabled_timing_windows_name, drunk_x_extra, edit_beat_bar_info_for_row,
         edit_beat_scroll_travel, effective_mini_value, error_bar_boundaries_s,
@@ -187,6 +190,114 @@ mod tests {
                 .and_then(|info| info.measure_index),
             Some(2)
         );
+    }
+
+    #[test]
+    fn beat_bar_actor_builds_solid_measure_quad() {
+        let mut actors = Vec::new();
+        append_beat_bar(&mut actors, false, 0, 120.0, 80.0, 256.0, 1.0, 2.0, 0.4, 80);
+
+        assert_eq!(actors.len(), 1);
+        match &actors[0] {
+            Actor::Sprite {
+                align,
+                offset,
+                source,
+                tint,
+                z,
+                ..
+            } => {
+                assert_eq!(*align, [0.5, 0.5]);
+                assert_eq!(*offset, [120.0, 80.0]);
+                assert!(matches!(source, SpriteSource::Solid));
+                assert_eq!(*tint, [1.0, 1.0, 1.0, 0.4]);
+                assert_eq!(*z, 80);
+            }
+            actor => panic!("expected measure quad, got {actor:?}"),
+        }
+    }
+
+    #[test]
+    fn edit_beat_bar_actor_splits_dashed_frames() {
+        let mut actors = Vec::new();
+        append_beat_bar(&mut actors, true, 2, 50.0, 20.0, 50.0, 1.0, 2.0, 0.75, 80);
+
+        assert_eq!(actors.len(), 3);
+        let expected_x = [25.0, 45.0, 65.0];
+        for (actor, x) in actors.iter().zip(expected_x) {
+            match actor {
+                Actor::Sprite {
+                    align,
+                    offset,
+                    tint,
+                    z,
+                    ..
+                } => {
+                    assert_eq!(*align, [0.0, 0.5]);
+                    assert_eq!(*offset, [x, 20.0]);
+                    assert_eq!(*tint, [1.0, 1.0, 1.0, 0.75]);
+                    assert_eq!(*z, 80);
+                }
+                actor => panic!("expected dashed segment, got {actor:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn edit_measure_number_actor_respects_edit_mode_and_measure_index() {
+        let mut actors = Vec::new();
+        append_edit_measure_number(&mut actors, false, Some(4), 12.0, 34.0, 1.0, 80);
+        append_edit_measure_number(&mut actors, true, Some(-1), 12.0, 34.0, 1.0, 80);
+        append_edit_measure_number(&mut actors, true, None, 12.0, 34.0, 1.0, 80);
+        append_edit_measure_number(&mut actors, true, Some(4), 12.0, 34.0, 0.5, 80);
+
+        assert_eq!(actors.len(), 1);
+        match &actors[0] {
+            Actor::Text {
+                align,
+                offset,
+                font,
+                content,
+                align_text,
+                z,
+                scale,
+                shadow_len,
+                ..
+            } => {
+                assert_eq!(*align, [1.0, 0.5]);
+                assert_eq!(*offset, [12.0, 34.0]);
+                assert_eq!(*font, "miso");
+                assert_eq!(content.as_str(), "4");
+                assert_eq!(*align_text, TextAlign::Right);
+                assert_eq!(*z, 81);
+                assert_eq!(*scale, [0.45, 0.45]);
+                assert_eq!(*shadow_len, [2.0, -2.0]);
+            }
+            actor => panic!("expected measure number text, got {actor:?}"),
+        }
+    }
+
+    #[test]
+    fn cue_bar_actor_keeps_color_and_measure_layer() {
+        let mut actors = Vec::new();
+        append_cue_bar(&mut actors, 10.0, 20.0, 30.0, 4.0, (0.2, 0.4, 0.6), 0.8, 80);
+
+        assert_eq!(actors.len(), 1);
+        match &actors[0] {
+            Actor::Sprite {
+                align,
+                offset,
+                tint,
+                z,
+                ..
+            } => {
+                assert_eq!(*align, [0.5, 0.5]);
+                assert_eq!(*offset, [10.0, 20.0]);
+                assert_eq!(*tint, [0.2, 0.4, 0.6, 0.8]);
+                assert_eq!(*z, 80);
+            }
+            actor => panic!("expected cue bar quad, got {actor:?}"),
+        }
     }
 
     #[test]

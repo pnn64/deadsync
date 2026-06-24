@@ -4,7 +4,7 @@ use crate::lua::{
 };
 use crate::{
     ModelDrawState, ModelEffectClock, ModelEffectMode, ModelEffectState, ModelTweenSegment,
-    TweenType,
+    SpriteDefinition, TweenType,
 };
 use log::warn;
 use std::borrow::Cow;
@@ -171,6 +171,60 @@ pub fn parse_linear_frames_expr(raw: &str) -> Option<(usize, Vec<f32>)> {
 
 pub fn parse_script_state_properties(args: &[String]) -> Option<(usize, Vec<f32>)> {
     args.first().and_then(|expr| parse_linear_frames_expr(expr))
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SpriteStatePropertiesPlan {
+    pub frame_count: usize,
+    pub frame_delays: Vec<f32>,
+}
+
+pub fn sprite_state_properties_plans(script: &str) -> Vec<SpriteStatePropertiesPlan> {
+    let script = normalized_script_command(script);
+    let mut plans = Vec::new();
+    for raw_token in script.split(';') {
+        let token = raw_token.trim();
+        if token.is_empty() {
+            continue;
+        }
+        let Some((command, args)) = split_script_token(token) else {
+            continue;
+        };
+        if command != "setstateproperties" {
+            continue;
+        }
+        if let Some((frame_count, frame_delays)) = parse_script_state_properties(&args) {
+            plans.push(SpriteStatePropertiesPlan {
+                frame_count,
+                frame_delays,
+            });
+        }
+    }
+    plans
+}
+
+pub fn sprite_state_properties_command_plans(
+    commands: &HashMap<String, String>,
+    default_is_beat_based: bool,
+) -> (bool, Vec<SpriteStatePropertiesPlan>) {
+    if commands.is_empty() {
+        return (default_is_beat_based, Vec::new());
+    }
+    let mut sorted = commands.iter().collect::<Vec<_>>();
+    sorted.sort_unstable_by(|a, b| a.0.cmp(b.0));
+
+    let mut beat_based = default_is_beat_based;
+    for (_, script) in sorted.iter().copied() {
+        if let Some(script_clock) = parse_script_effectclock_from_commands(script) {
+            beat_based = script_clock;
+        }
+    }
+
+    let plans = sorted
+        .into_iter()
+        .flat_map(|(_, script)| sprite_state_properties_plans(script))
+        .collect();
+    (beat_based, plans)
 }
 
 #[inline(always)]
@@ -498,6 +552,33 @@ pub fn parse_script_effectclock_from_commands(script: &str) -> Option<bool> {
     out
 }
 
+pub fn sprite_animation_is_beat_based(
+    commands: &HashMap<String, String>,
+    default_is_beat_based: bool,
+) -> bool {
+    let mut clock = None;
+    let preferred = ["initcommand", "nonecommand", "oncommand", "offcommand"];
+    for key in preferred {
+        if let Some(script) = commands.get(key)
+            && let Some(is_beat) = parse_script_effectclock_from_commands(script)
+        {
+            clock = Some(is_beat);
+        }
+    }
+    let mut extras = commands
+        .iter()
+        .filter(|(key, _)| !preferred.contains(&key.as_str()))
+        .map(|(key, script)| (key.as_str(), script.as_str()))
+        .collect::<Vec<_>>();
+    extras.sort_unstable_by(|a, b| a.0.cmp(b.0));
+    for (_, script) in extras {
+        if let Some(is_beat) = parse_script_effectclock_from_commands(script) {
+            clock = Some(is_beat);
+        }
+    }
+    clock.unwrap_or(default_is_beat_based)
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct ItgCommandEffect {
     pub start_alpha: Option<f32>,
@@ -597,6 +678,75 @@ pub fn tween_type_from_script_tween(tween: ScriptTween) -> TweenType {
 
 pub type ItgActorMod = ScriptActorMod;
 
+pub fn itg_apply_parent_zoom(
+    def: &mut SpriteDefinition,
+    draw: &mut ModelDrawState,
+    axis: usize,
+    zoom: f32,
+) {
+    if zoom < 0.0 {
+        match axis {
+            0 => def.mirror_h = !def.mirror_h,
+            1 => def.mirror_v = !def.mirror_v,
+            _ => {}
+        }
+    }
+    draw.zoom[axis] *= zoom.abs();
+}
+
+pub fn itg_apply_parent_actor_mod(
+    def: &mut SpriteDefinition,
+    draw: &mut ModelDrawState,
+    actor_mod: ScriptActorMod,
+) {
+    match actor_mod {
+        ScriptActorMod::X(v) | ScriptActorMod::AddX(v) => draw.pos[0] += v,
+        ScriptActorMod::Y(v) | ScriptActorMod::AddY(v) => draw.pos[1] += v,
+        ScriptActorMod::Z(v) | ScriptActorMod::AddZ(v) => draw.pos[2] += v,
+        ScriptActorMod::RotationX(v) | ScriptActorMod::AddRotationX(v) => draw.rot[0] += v,
+        ScriptActorMod::RotationY(v) | ScriptActorMod::AddRotationY(v) => draw.rot[1] += v,
+        ScriptActorMod::RotationZ(v) | ScriptActorMod::AddRotationZ(v) => draw.rot[2] += v,
+        ScriptActorMod::Zoom(v) => {
+            itg_apply_parent_zoom(def, draw, 0, v);
+            itg_apply_parent_zoom(def, draw, 1, v);
+            itg_apply_parent_zoom(def, draw, 2, v);
+        }
+        ScriptActorMod::ZoomX(v) => itg_apply_parent_zoom(def, draw, 0, v),
+        ScriptActorMod::ZoomY(v) => itg_apply_parent_zoom(def, draw, 1, v),
+        ScriptActorMod::ZoomZ(v) => itg_apply_parent_zoom(def, draw, 2, v),
+        ScriptActorMod::Diffuse(color) => {
+            for (dst, src) in draw.tint.iter_mut().zip(color) {
+                *dst *= src;
+            }
+        }
+        ScriptActorMod::DiffuseAlpha(alpha) => draw.tint[3] *= alpha,
+        ScriptActorMod::Glow(color) => draw.glow = color,
+        ScriptActorMod::VertAlign(v) => draw.vert_align = v,
+        ScriptActorMod::BlendAdd(v) => draw.blend_add = v,
+        ScriptActorMod::Visible(v) => draw.visible &= v,
+    }
+}
+
+pub fn itg_apply_parent_command(
+    def: &mut SpriteDefinition,
+    draw: &mut ModelDrawState,
+    script: &str,
+) {
+    let script = normalized_script_command(script);
+    for raw_token in script.split(';') {
+        let token = raw_token.trim();
+        if token.is_empty() {
+            continue;
+        }
+        let Some((command, args)) = split_script_token(token) else {
+            continue;
+        };
+        if let Some(actor_mod) = parse_script_actor_mod(&command, &args) {
+            itg_apply_parent_actor_mod(def, draw, actor_mod);
+        }
+    }
+}
+
 pub fn itg_apply_actor_mods(state: &mut ModelDrawState, mods: &[ItgActorMod]) {
     for m in mods {
         match *m {
@@ -624,6 +774,20 @@ pub fn itg_apply_actor_mods(state: &mut ModelDrawState, mods: &[ItgActorMod]) {
             ItgActorMod::Visible(v) => state.visible = v,
         }
     }
+}
+
+pub fn itg_active_model_commands(
+    commands: &HashMap<String, String>,
+    active_key: &str,
+) -> HashMap<String, String> {
+    let mut out = HashMap::new();
+    if let Some(value) = commands.get("initcommand") {
+        out.insert("initcommand".to_string(), value.clone());
+    }
+    if let Some(value) = commands.get(active_key) {
+        out.insert("nonecommand".to_string(), value.clone());
+    }
+    out
 }
 
 pub fn model_draw_program(
@@ -842,6 +1006,64 @@ mod tests {
     use super::*;
 
     #[test]
+    fn parent_actor_mod_negative_zoom_flips_sprite_definition() {
+        let mut def = SpriteDefinition::default();
+        let mut draw = ModelDrawState::default();
+
+        itg_apply_parent_actor_mod(&mut def, &mut draw, ScriptActorMod::ZoomX(-2.0));
+        itg_apply_parent_actor_mod(&mut def, &mut draw, ScriptActorMod::ZoomY(-0.5));
+
+        assert!(def.mirror_h);
+        assert!(def.mirror_v);
+        assert_eq!(draw.zoom, [2.0, 0.5, 1.0]);
+    }
+
+    #[test]
+    fn parent_actor_mod_accumulates_and_multiplies_values() {
+        let mut def = SpriteDefinition::default();
+        let mut draw = ModelDrawState {
+            tint: [0.5, 0.75, 1.0, 0.8],
+            ..ModelDrawState::default()
+        };
+
+        itg_apply_parent_actor_mod(&mut def, &mut draw, ScriptActorMod::X(4.0));
+        itg_apply_parent_actor_mod(&mut def, &mut draw, ScriptActorMod::AddX(2.0));
+        itg_apply_parent_actor_mod(
+            &mut def,
+            &mut draw,
+            ScriptActorMod::Diffuse([0.5, 0.5, 0.25, 0.5]),
+        );
+        itg_apply_parent_actor_mod(&mut def, &mut draw, ScriptActorMod::DiffuseAlpha(0.5));
+        itg_apply_parent_actor_mod(&mut def, &mut draw, ScriptActorMod::Visible(false));
+        itg_apply_parent_actor_mod(&mut def, &mut draw, ScriptActorMod::Visible(true));
+
+        assert_eq!(draw.pos[0], 6.0);
+        assert_eq!(draw.tint, [0.25, 0.375, 0.25, 0.2]);
+        assert!(!draw.visible);
+    }
+
+    #[test]
+    fn parent_command_parses_and_applies_actor_mods() {
+        let mut def = SpriteDefinition::default();
+        let mut draw = ModelDrawState {
+            tint: [1.0, 0.5, 0.25, 1.0],
+            ..ModelDrawState::default()
+        };
+
+        itg_apply_parent_command(
+            &mut def,
+            &mut draw,
+            "zoomx,-2;addy,8;diffusealpha,0.25;visible,false;finishtweening",
+        );
+
+        assert!(def.mirror_h);
+        assert_eq!(draw.zoom[0], 2.0);
+        assert_eq!(draw.pos[1], 8.0);
+        assert_eq!(draw.tint[3], 0.25);
+        assert!(!draw.visible);
+    }
+
+    #[test]
     fn model_draw_program_builds_tween_and_effect() {
         let commands = HashMap::from([
             (
@@ -867,6 +1089,33 @@ mod tests {
     }
 
     #[test]
+    fn active_model_commands_keep_init_and_remap_active_command() {
+        let commands = HashMap::from([
+            ("initcommand".to_string(), "zoom,0.5".to_string()),
+            (
+                "holdingoncommand".to_string(),
+                "linear,0.2;diffusealpha,1".to_string(),
+            ),
+            (
+                "rolloncommand".to_string(),
+                "linear,0.2;diffusealpha,0".to_string(),
+            ),
+        ]);
+
+        let active = itg_active_model_commands(&commands, "holdingoncommand");
+
+        assert_eq!(
+            active.get("initcommand").map(String::as_str),
+            Some("zoom,0.5")
+        );
+        assert_eq!(
+            active.get("nonecommand").map(String::as_str),
+            Some("linear,0.2;diffusealpha,1")
+        );
+        assert!(!active.contains_key("rolloncommand"));
+    }
+
+    #[test]
     fn itg_parse_command_effect_tracks_alpha_zoom_and_interrupts() {
         let effect = itg_parse_command_effect(
             "diffusealpha,0.25;linear,0.1;diffusealpha,1;zoom,1.5;stoptweening;blend,BlendMode_Add;",
@@ -879,6 +1128,55 @@ mod tests {
         assert_eq!(effect.target_zoom, Some(1.5));
         assert_eq!(effect.blend_add, Some(true));
         assert!(effect.interrupts);
+    }
+
+    #[test]
+    fn sprite_animation_clock_uses_preferred_then_sorted_extra_commands() {
+        let commands = HashMap::from([
+            ("zcommand".to_string(), "effectclock,time".to_string()),
+            ("initcommand".to_string(), "effectclock,beat".to_string()),
+            ("acommand".to_string(), "effectclock,beat".to_string()),
+        ]);
+
+        assert!(!sprite_animation_is_beat_based(&commands, true));
+        assert!(sprite_animation_is_beat_based(&HashMap::new(), true));
+    }
+
+    #[test]
+    fn sprite_state_properties_plans_parse_direct_and_lua_commands() {
+        let lua_plans = sprite_state_properties_plans(
+            "function(self) self:SetStateProperties(Sprite.LinearFrames(4, 0.2)) end",
+        );
+        let direct_plans =
+            sprite_state_properties_plans("SetStateProperties, Sprite.LinearFrames(2, 0.5);");
+
+        assert_eq!(lua_plans.len(), 1);
+        assert_eq!(lua_plans[0].frame_count, 4);
+        assert_eq!(lua_plans[0].frame_delays, vec![0.05; 4]);
+        assert_eq!(direct_plans.len(), 1);
+        assert_eq!(direct_plans[0].frame_count, 2);
+        assert_eq!(direct_plans[0].frame_delays, vec![0.25; 2]);
+    }
+
+    #[test]
+    fn sprite_state_properties_command_plans_sort_and_select_clock() {
+        let commands = HashMap::from([
+            (
+                "zcommand".to_string(),
+                "effectclock,time;SetStateProperties,Sprite.LinearFrames(3,0.3)".to_string(),
+            ),
+            (
+                "acommand".to_string(),
+                "effectclock,beat;SetStateProperties,Sprite.LinearFrames(2,0.2)".to_string(),
+            ),
+        ]);
+
+        let (beat_based, plans) = sprite_state_properties_command_plans(&commands, true);
+
+        assert!(!beat_based);
+        assert_eq!(plans.len(), 2);
+        assert_eq!(plans[0].frame_count, 2);
+        assert_eq!(plans[1].frame_count, 3);
     }
 
     #[test]

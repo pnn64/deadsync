@@ -1,9 +1,20 @@
 pub const NUM_QUANTIZATIONS: usize = 9;
+pub const ITG_DANCE_COL_SPACING: i32 = 64;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Style {
     pub num_cols: usize,
     pub num_players: usize,
+}
+
+pub fn itg_column_xs(num_cols: usize) -> Vec<i32> {
+    if num_cols == 0 {
+        return Vec::new();
+    }
+    let half_spacing = ITG_DANCE_COL_SPACING / 2;
+    (0..num_cols)
+        .map(|i| (i as i32 * ITG_DANCE_COL_SPACING) - ((num_cols - 1) as i32 * half_spacing))
+        .collect()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -171,5 +182,20 @@ impl Default for NoteDisplayMetrics {
             part_animation: [NotePartAnimation::default(); NOTE_ANIM_PART_COUNT],
             part_texture_translate: [NotePartTextureTranslate::default(); NOTE_ANIM_PART_COUNT],
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn itg_column_xs_center_columns_on_64px_spacing() {
+        assert_eq!(itg_column_xs(0), Vec::<i32>::new());
+        assert_eq!(itg_column_xs(4), vec![-96, -32, 32, 96]);
+        assert_eq!(
+            itg_column_xs(8),
+            vec![-224, -160, -96, -32, 32, 96, 160, 224]
+        );
     }
 }
