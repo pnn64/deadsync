@@ -6433,6 +6433,42 @@ impl App {
         true
     }
 
+    fn try_gameplay_reload(&mut self, event_loop: &ActiveEventLoop, label: &str) -> bool {
+        let simfile_path = if let Some(gs) = self.state.screens.gameplay_state.as_ref() {
+            Some(gs.song().simfile_path.clone())
+        } else if self.state.screens.current_screen == CurrentScreen::Evaluation {
+            restart_payload_from_eval(&self.state.screens.evaluation_state.score_info)
+                .map(|(song, ..)| song.simfile_path.clone())
+        } else {
+            None
+        };
+        let Some(simfile_path) = simfile_path else {
+            log::warn!("Ignored {label} reload: no restartable stage state.");
+            return false;
+        };
+
+        let updated_song = match song_loading::reload_song_in_cache(simfile_path.as_path()) {
+            Ok(song) => song,
+            Err(e) => {
+                log::warn!(
+                    "Ignored {label} reload for '{}': {e}",
+                    simfile_path.display()
+                );
+                return false;
+            }
+        };
+        select_music::refresh_from_song_cache(&mut self.state.screens.select_music_state);
+
+        if !self.try_gameplay_restart(event_loop, label) {
+            return false;
+        }
+
+        if let Some(po_state) = self.state.screens.player_options_state.as_mut() {
+            let _ = replace_song_arc_if_same_simfile(&mut po_state.song, &updated_song);
+        }
+        true
+    }
+
     /// SL-zmod parity (`BGAnimations/ScreenEvaluation common/Shared/RestartHandler.lua`):
     /// Ctrl+P on the Evaluation screen re-enters the just-played chart in
     /// Practice mode. Mirrors `try_gameplay_restart`, but routes to
@@ -6450,6 +6486,93 @@ impl App {
             self.handle_action(ScreenAction::Navigate(CurrentScreen::Practice), event_loop)
         {
             log::error!("Failed to enter Practice with {label}: {e}");
+            return false;
+        }
+        true
+    }
+
+    fn try_practice_reload(&mut self, event_loop: &ActiveEventLoop, label: &str) -> bool {
+        if self.state.screens.current_screen != CurrentScreen::Practice {
+            return false;
+        }
+        let Some((
+            simfile_path,
+            old_song,
+            music_rate,
+            scroll_speed,
+            active_color_index,
+            old_hashes,
+            old_difficulties,
+        )) = self.state.screens.practice_state.as_ref().map(|ps| {
+            let gs = &ps.gameplay;
+            (
+                gs.song().simfile_path.clone(),
+                gs.song_arc(),
+                gs.music_rate(),
+                [
+                    gs.scroll_speed_for_player(0),
+                    gs.scroll_speed_for_player(1),
+                ],
+                gs.active_color_index(),
+                [
+                    gs.charts()[0].short_hash.clone(),
+                    gs.charts()[1].short_hash.clone(),
+                ],
+                [
+                    gs.charts()[0].difficulty.clone(),
+                    gs.charts()[1].difficulty.clone(),
+                ],
+            )
+        }) else {
+            log::warn!("Ignored {label} reload: no practice stage state.");
+            return false;
+        };
+
+        let updated_song = match song_loading::reload_song_in_cache(simfile_path.as_path()) {
+            Ok(song) => song,
+            Err(e) => {
+                log::warn!(
+                    "Ignored {label} reload for '{}': {e}",
+                    simfile_path.display()
+                );
+                return false;
+            }
+        };
+        select_music::refresh_from_song_cache(&mut self.state.screens.select_music_state);
+
+        // Editing notes changes a chart's hash, so the old hash will not exist
+        // in the reloaded song. Resolve each slot by its stable difficulty steps
+        // index (derived from the pre-reload chart) and take the reloaded chart's
+        // new hash so the restart selects the same difficulty.
+        let target_chart_type = profile::get_session_play_style().chart_type();
+        let new_hashes: [String; MAX_PLAYERS] = std::array::from_fn(|slot| {
+            let steps_index = old_song
+                .steps_index_for_chart_hash(target_chart_type, &old_hashes[slot])
+                .or_else(|| {
+                    deadsync_chart::song::standard_difficulty_index(&old_difficulties[slot])
+                })
+                .unwrap_or(0);
+            updated_song
+                .chart_for_steps_index(target_chart_type, steps_index)
+                .map(|chart| chart.short_hash.clone())
+                .unwrap_or_default()
+        });
+
+        if !self.prepare_restart_player_options(
+            updated_song,
+            [new_hashes[0].as_str(), new_hashes[1].as_str()],
+            music_rate,
+            scroll_speed,
+            active_color_index,
+            CurrentScreen::Practice,
+        ) {
+            log::warn!("Ignored {label} reload: could not rebuild practice options.");
+            return false;
+        }
+        if let Err(e) =
+            self.handle_action(ScreenAction::Navigate(CurrentScreen::Practice), event_loop)
+        {
+            log::error!("Failed to reload Practice with {label}: {e}");
             return false;
         }
         true
@@ -8617,10 +8740,12 @@ impl App {
             }
         } else if self.state.screens.current_screen == CurrentScreen::SelectMusic {
             // Route screen-specific raw key handling (e.g., F7 fetch) to the screen
-            let action = crate::screens::select_music::handle_raw_key_event(
+            let action = crate::screens::select_music::handle_raw_key_event_with_modifiers(
                 &mut self.state.screens.select_music_state,
                 Some(&raw_key),
                 None,
+                self.state.shell.ctrl_held,
+                self.state.shell.shift_held,
             );
             if !matches!(action, ScreenAction::None) {
                 if let Err(e) = self.handle_action(action, event_loop) {
@@ -8629,6 +8754,16 @@ impl App {
                 return true;
             }
         } else if self.state.screens.current_screen == CurrentScreen::Practice {
+            if raw_key.pressed
+                && !raw_key.repeat
+                && raw_key.code == KeyCode::KeyR
+                && self.state.shell.ctrl_held
+                && self.state.shell.shift_held
+                && config::get().keyboard_features
+            {
+                self.try_practice_reload(event_loop, "Ctrl+Shift+R");
+                return true;
+            }
             if let Some(ps) = self.state.screens.practice_state.as_mut() {
                 let (consumed, action) =
                     crate::screens::practice::handle_raw_key_event(ps, &raw_key);
@@ -8655,7 +8790,11 @@ impl App {
                 && config::get().keyboard_features
                 && self.state.session.course_run.is_none()
             {
-                self.try_gameplay_restart(event_loop, "Ctrl+R");
+                if self.state.shell.shift_held {
+                    self.try_gameplay_reload(event_loop, "Ctrl+Shift+R");
+                } else {
+                    self.try_gameplay_restart(event_loop, "Ctrl+R");
+                }
                 return true;
             }
             if raw_key.pressed
@@ -9422,8 +9561,12 @@ impl App {
         if target == CurrentScreen::Practice {
             deadsync_audio_stream::stop_music();
             if let Some(mut po_state) = self.state.screens.player_options_state.take() {
-                let edit_snapshot = (prev == CurrentScreen::PlayerOptions
+                // Preserve the editor cursor/selection across a returning
+                // PlayerOptions->Practice trip and across an in-place Practice
+                // chart reload (Ctrl+Shift+R re-enters Practice from Practice).
+                let edit_snapshot = ((prev == CurrentScreen::PlayerOptions
                     && po_state.return_screen == CurrentScreen::Practice)
+                    || prev == CurrentScreen::Practice)
                     .then(|| {
                         self.state
                             .screens
