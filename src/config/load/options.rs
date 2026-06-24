@@ -224,6 +224,10 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "GamepadBackend")
         .and_then(|s| WindowsPadBackend::from_str(&s).ok())
         .unwrap_or(default.windows_gamepad_backend);
+    cfg.allow_shutdown_host = conf
+        .get("Options", "AllowShutdown")
+        .and_then(|v| parse_loose_bool_str(&v))
+        .unwrap_or(default.allow_shutdown_host);
     cfg.smx_input = conf
         .get("Options", "SmxInput")
         .and_then(|v| v.parse::<u8>().ok())
