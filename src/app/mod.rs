@@ -8653,10 +8653,12 @@ impl App {
             }
         } else if self.state.screens.current_screen == CurrentScreen::SelectMusic {
             // Route screen-specific raw key handling (e.g., F7 fetch) to the screen
-            let action = crate::screens::select_music::handle_raw_key_event(
+            let action = crate::screens::select_music::handle_raw_key_event_with_modifiers(
                 &mut self.state.screens.select_music_state,
                 Some(&raw_key),
                 None,
+                self.state.shell.ctrl_held,
+                self.state.shell.shift_held,
             );
             if !matches!(action, ScreenAction::None) {
                 if let Err(e) = self.handle_action(action, event_loop) {
