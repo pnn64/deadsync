@@ -63,6 +63,20 @@ pub(super) fn row_choices(
             .map(Cow::Owned)
             .collect();
     }
+    if let Some(row) = rows.get(row_idx) && matches!(kind, SubmenuKind::SmxConfig) {
+        if row.id == SubRowId::SmxBgPack {
+            let default_label = tr("Common", "Default").to_string();
+            let mut choices = vec![Cow::Owned(default_label)];
+            choices.extend(state.smx_bg_pack_choices.iter().cloned().map(Cow::Owned));
+            return choices;
+        }
+        if row.id == SubRowId::SmxJudgePack {
+            let default_label = tr("Common", "Default").to_string();
+            let mut choices = vec![Cow::Owned(default_label)];
+            choices.extend(state.smx_judge_pack_choices.iter().cloned().map(Cow::Owned));
+            return choices;
+        }
+    }
     if let Some(row) = rows.get(row_idx)
         && matches!(kind, SubmenuKind::Graphics)
     {

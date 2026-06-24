@@ -101,6 +101,8 @@ pub enum RowId {
     CustomBlueFantasticWindowMs,
     SmxFsrDisplay,
     SmxPadInputDisplay,
+    SmxBgPack,
+    SmxJudgePack,
     // Uncommon pane
     Insert,
     Remove,

@@ -33,6 +33,8 @@ pub(super) struct RowVisibility {
     pub(super) show_pad_light_brightness: bool,
     pub(super) show_smx_fsr_display: bool,
     pub(super) show_smx_pad_input_display: bool,
+    pub(super) show_smx_bg_pack: bool,
+    pub(super) show_smx_judge_pack: bool,
 }
 
 #[inline(always)]
@@ -151,6 +153,12 @@ pub(super) fn row_visible_with_flags(id: RowId, visibility: RowVisibility) -> bo
     }
     if id == RowId::SmxPadInputDisplay {
         return visibility.show_smx_pad_input_display;
+    }
+    if id == RowId::SmxBgPack {
+        return visibility.show_smx_bg_pack;
+    }
+    if id == RowId::SmxJudgePack {
+        return visibility.show_smx_judge_pack;
     }
     true
 }
@@ -740,6 +748,14 @@ pub(super) fn row_visibility(
         },
         show_smx_fsr_display: crate::config::get().smx_input,
         show_smx_pad_input_display: crate::config::get().smx_input,
+        show_smx_bg_pack: {
+            let cfg = crate::config::get();
+            cfg.smx_input && cfg.smx_panel_lights
+        },
+        show_smx_judge_pack: {
+            let cfg = crate::config::get();
+            cfg.smx_input && cfg.smx_panel_lights
+        },
     }
 }
 

@@ -2262,6 +2262,8 @@ pub(super) mod tests {
                 state.music_rate,
                 pane,
                 &noteskin_names,
+                &[],
+                &[],
                 Screen::SelectMusic,
                 state.fixed_stepchart.as_ref(),
             );
@@ -2283,6 +2285,8 @@ pub(super) mod tests {
             state.music_rate,
             super::OptionsPane::Advanced,
             &noteskin_names,
+            &[],
+            &[],
             return_screen,
             state.fixed_stepchart.as_ref(),
         );
@@ -2783,6 +2787,8 @@ pub(super) mod tests {
             state.music_rate,
             super::OptionsPane::Main,
             &noteskin_names,
+            &[],
+            &[],
             Screen::SelectMusic,
             state.fixed_stepchart.as_ref(),
         );
@@ -2837,6 +2843,8 @@ pub(super) mod tests {
             state.music_rate,
             super::OptionsPane::Display,
             &noteskin_names,
+            &[],
+            &[],
             Screen::SelectMusic,
             state.fixed_stepchart.as_ref(),
         );
@@ -2892,6 +2900,8 @@ pub(super) mod tests {
             state.music_rate,
             super::OptionsPane::Main,
             &noteskin_names,
+            &[],
+            &[],
             Screen::SelectMusic,
             state.fixed_stepchart.as_ref(),
         );
@@ -2903,6 +2913,8 @@ pub(super) mod tests {
             state.music_rate,
             super::OptionsPane::Display,
             &noteskin_names,
+            &[],
+            &[],
             Screen::SelectMusic,
             state.fixed_stepchart.as_ref(),
         );
@@ -2975,6 +2987,8 @@ pub(super) mod tests {
             state.music_rate,
             super::OptionsPane::Advanced,
             &noteskin_names,
+            &[],
+            &[],
             Screen::SelectMusic,
             state.fixed_stepchart.as_ref(),
         );

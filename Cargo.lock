@@ -1446,6 +1446,7 @@ dependencies = [
  "deadlib-platform",
  "deadsync-input",
  "deadsync-input-native",
+ "image",
  "log",
  "rustmaniax-sdk",
 ]
