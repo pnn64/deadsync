@@ -10600,6 +10600,9 @@ impl ApplicationHandler<UserEvent> for App {
                             usize::from(*id),
                             backend
                         );
+                        if *backend == PadBackend::Smx {
+                            config::send_smx_underglow_color();
+                        }
                         if !*initial {
                             self.state.shell.gamepad_overlay_state = Some((
                                 format!(
