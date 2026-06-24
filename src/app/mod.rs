@@ -6433,6 +6433,42 @@ impl App {
         true
     }
 
+    fn try_gameplay_reload(&mut self, event_loop: &ActiveEventLoop, label: &str) -> bool {
+        let simfile_path = if let Some(gs) = self.state.screens.gameplay_state.as_ref() {
+            Some(gs.song().simfile_path.clone())
+        } else if self.state.screens.current_screen == CurrentScreen::Evaluation {
+            restart_payload_from_eval(&self.state.screens.evaluation_state.score_info)
+                .map(|(song, ..)| song.simfile_path.clone())
+        } else {
+            None
+        };
+        let Some(simfile_path) = simfile_path else {
+            log::warn!("Ignored {label} reload: no restartable stage state.");
+            return false;
+        };
+
+        let updated_song = match song_loading::reload_song_in_cache(simfile_path.as_path()) {
+            Ok(song) => song,
+            Err(e) => {
+                log::warn!(
+                    "Ignored {label} reload for '{}': {e}",
+                    simfile_path.display()
+                );
+                return false;
+            }
+        };
+        select_music::refresh_from_song_cache(&mut self.state.screens.select_music_state);
+
+        if !self.try_gameplay_restart(event_loop, label) {
+            return false;
+        }
+
+        if let Some(po_state) = self.state.screens.player_options_state.as_mut() {
+            let _ = replace_song_arc_if_same_simfile(&mut po_state.song, &updated_song);
+        }
+        true
+    }
+
     /// SL-zmod parity (`BGAnimations/ScreenEvaluation common/Shared/RestartHandler.lua`):
     /// Ctrl+P on the Evaluation screen re-enters the just-played chart in
     /// Practice mode. Mirrors `try_gameplay_restart`, but routes to
@@ -8655,7 +8691,11 @@ impl App {
                 && config::get().keyboard_features
                 && self.state.session.course_run.is_none()
             {
-                self.try_gameplay_restart(event_loop, "Ctrl+R");
+                if self.state.shell.shift_held {
+                    self.try_gameplay_reload(event_loop, "Ctrl+Shift+R");
+                } else {
+                    self.try_gameplay_restart(event_loop, "Ctrl+R");
+                }
                 return true;
             }
             if raw_key.pressed
