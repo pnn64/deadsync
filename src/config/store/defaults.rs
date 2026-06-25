@@ -11,7 +11,6 @@ pub(super) fn build_content() -> String {
 
 fn push_default_options(content: &mut String, default: &Config) {
     push_section(content, "[Options]");
-    push_line(content, "AllowShutdown=","");
     push_line(content, "AudioOutputDevice", "Auto");
     push_line(content, "AudioOutputMode", "Auto");
     push_line(content, "AudioSampleRateHz", "Auto");
