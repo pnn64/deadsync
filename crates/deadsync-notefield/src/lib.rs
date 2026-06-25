@@ -714,7 +714,23 @@ mod tests {
 
         let mut parts = Vec::new();
         append_perspective_parts(&mut parts, -100, 100);
-        assert_eq!(parts, vec!["Incoming".to_string()]);
+        assert_eq!(parts, vec!["100% Incoming".to_string()]);
+
+        let mut parts = Vec::new();
+        append_perspective_parts(&mut parts, 100, 0);
+        assert_eq!(parts, vec!["100% Distant".to_string()]);
+
+        let mut parts = Vec::new();
+        append_perspective_parts(&mut parts, -100, 0);
+        assert_eq!(parts, vec!["100% Hallway".to_string()]);
+
+        let mut parts = Vec::new();
+        append_perspective_parts(&mut parts, 75, 75);
+        assert_eq!(parts, vec!["75% Space".to_string()]);
+
+        let mut parts = Vec::new();
+        append_perspective_parts(&mut parts, 50, 25);
+        assert_eq!(parts, vec!["25% Skew".to_string(), "50% Tilt".to_string()]);
     }
 
     #[test]
@@ -734,6 +750,37 @@ mod tests {
         assert_eq!(
             gameplay_mods_text(params),
             "C725, 100%\u{00A0}Mini, NoAttacks, Mirror, NoMines, Little, Overhead, devcel-2024, -4ms\u{00A0}VisualDelay, ErrorBar1.75x(Avg:300ms), No\u{00A0}W4/W5"
+        );
+    }
+
+    #[test]
+    fn gameplay_mods_text_includes_effect_sections_in_legacy_order() {
+        let mut params = empty_mods_params();
+        params.noteskin = "";
+        params.accel = [1, 2, 3, 4, 5];
+        params.visual = [6, 7, 8, 9, 10, 11, 12, 13, 14];
+        params.mini_percent = 15;
+        params.spacing_percent = 16;
+        params.appearance = [17, 18, 19, 20, 21];
+        params.scroll = [22, 23, 24, 25, 26];
+        params.dark = 27;
+        params.blind = 28;
+        params.cover = 29;
+
+        assert_eq!(
+            gameplay_mods_text(params),
+            concat!(
+                "1x, 1%\u{00A0}Boost, 2%\u{00A0}Brake, 3%\u{00A0}Wave, ",
+                "4%\u{00A0}Expand, 5%\u{00A0}Boomerang, 6%\u{00A0}Drunk, ",
+                "7%\u{00A0}Dizzy, 8%\u{00A0}Confusion, 9%\u{00A0}Flip, ",
+                "10%\u{00A0}Invert, 11%\u{00A0}Tornado, 12%\u{00A0}Tipsy, ",
+                "13%\u{00A0}Bumpy, 14%\u{00A0}Beat, 15%\u{00A0}Mini, ",
+                "16%\u{00A0}Spacing, 17%\u{00A0}Hidden, 18%\u{00A0}Sudden, ",
+                "19%\u{00A0}Stealth, 20%\u{00A0}Blink, 21%\u{00A0}RandomVanish, ",
+                "22%\u{00A0}Reverse, 23%\u{00A0}Split, 24%\u{00A0}Alternate, ",
+                "25%\u{00A0}Cross, 26%\u{00A0}Centered, 27%\u{00A0}Dark, ",
+                "28%\u{00A0}Blind, 29%\u{00A0}Hide\u{00A0}BG, Overhead"
+            )
         );
     }
 

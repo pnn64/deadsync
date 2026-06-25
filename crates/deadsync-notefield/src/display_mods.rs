@@ -108,11 +108,26 @@ pub(crate) fn join_display_mod_parts(parts: &[String]) -> String {
 pub(crate) fn append_perspective_parts(parts: &mut Vec<String>, tilt: i16, skew: i16) {
     if tilt == 0 && skew == 0 {
         parts.push("Overhead".to_string());
-    } else if tilt < 0 || skew > 0 {
-        parts.push("Incoming".to_string());
-    } else if tilt > 0 || skew < 0 {
-        parts.push("Space".to_string());
+        return;
     }
+    if skew == 0 {
+        if tilt > 0 {
+            append_mod_part(parts, tilt, "Distant");
+        } else {
+            append_mod_part(parts, -tilt, "Hallway");
+        }
+        return;
+    }
+    if skew == tilt {
+        append_mod_part(parts, skew, "Space");
+        return;
+    }
+    if skew == -tilt {
+        append_mod_part(parts, skew, "Incoming");
+        return;
+    }
+    append_mod_part(parts, skew, "Skew");
+    append_mod_part(parts, tilt, "Tilt");
 }
 
 pub(crate) fn append_turn_parts(parts: &mut Vec<String>, bits: u16) {
@@ -228,8 +243,48 @@ pub(crate) fn disabled_timing_windows_name(bits: u8) -> Option<String> {
 pub fn gameplay_mods_text(params: GameplayModsTextParams<'_>) -> String {
     let mut parts = Vec::new();
     parts.push(format_speed(params.speed));
+    for (percent, name) in
+        params
+            .accel
+            .into_iter()
+            .zip(["Boost", "Brake", "Wave", "Expand", "Boomerang"])
+    {
+        append_mod_part(&mut parts, percent, name);
+    }
+    for (percent, name) in params.visual.into_iter().zip([
+        "Drunk",
+        "Dizzy",
+        "Confusion",
+        "Flip",
+        "Invert",
+        "Tornado",
+        "Tipsy",
+        "Bumpy",
+        "Beat",
+    ]) {
+        append_mod_part(&mut parts, percent, name);
+    }
     append_mini_part(&mut parts, params.mini_percent);
     append_spacing_part(&mut parts, params.spacing_percent);
+    for (percent, name) in
+        params
+            .appearance
+            .into_iter()
+            .zip(["Hidden", "Sudden", "Stealth", "Blink", "RandomVanish"])
+    {
+        append_mod_part(&mut parts, percent, name);
+    }
+    for (percent, name) in
+        params
+            .scroll
+            .into_iter()
+            .zip(["Reverse", "Split", "Alternate", "Cross", "Centered"])
+    {
+        append_mod_part(&mut parts, percent, name);
+    }
+    append_mod_part(&mut parts, params.dark, "Dark");
+    append_mod_part(&mut parts, params.blind, "Blind");
+    append_mod_part(&mut parts, params.cover, "Hide BG");
     if let Some(name) = attack_mode_name(params.attack_mode) {
         parts.push(name.to_string());
     }
