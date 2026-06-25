@@ -2,6 +2,8 @@ use crate::style::*;
 use crate::*;
 use deadsync_rules::judgment::{JudgeGrade, TimingWindow};
 
+const COLUMN_CUE_FADE_TIME: f32 = 0.15;
+
 #[derive(Clone, Copy, Debug)]
 pub struct JudgmentTiltParams {
     pub enabled: bool,
@@ -181,22 +183,25 @@ pub fn column_cue_reverse_top_y(
 }
 
 pub fn column_cue_alpha(elapsed_real: f32, duration_real: f32) -> f32 {
-    if !elapsed_real.is_finite()
-        || !duration_real.is_finite()
-        || duration_real <= 0.3
-        || elapsed_real < 0.0
-        || elapsed_real > duration_real
-    {
+    if !elapsed_real.is_finite() || !duration_real.is_finite() {
         return 0.0;
     }
-    let fade = 0.1;
-    if elapsed_real < fade {
-        elapsed_real / fade
-    } else if elapsed_real > duration_real - fade {
-        (duration_real - elapsed_real) / fade
-    } else {
-        1.0
+    if elapsed_real < 0.0 || elapsed_real > duration_real {
+        return 0.0;
     }
+    if duration_real <= COLUMN_CUE_FADE_TIME * 2.0 {
+        return 0.0;
+    }
+    if elapsed_real < COLUMN_CUE_FADE_TIME {
+        let t = (elapsed_real / COLUMN_CUE_FADE_TIME).clamp(0.0, 1.0);
+        return 1.0 - (1.0 - t) * (1.0 - t);
+    }
+    if elapsed_real > duration_real - COLUMN_CUE_FADE_TIME {
+        let t = ((elapsed_real - (duration_real - COLUMN_CUE_FADE_TIME)) / COLUMN_CUE_FADE_TIME)
+            .clamp(0.0, 1.0);
+        return 1.0 - t * t;
+    }
+    1.0
 }
 
 pub fn judgment_tilt_rotation_deg(params: JudgmentTiltParams) -> f32 {

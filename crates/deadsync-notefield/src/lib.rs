@@ -1546,10 +1546,12 @@ mod tests {
     #[test]
     fn column_cue_alpha_fades_in_and_out() {
         assert!((column_cue_alpha(0.0, 1.0) - 0.0).abs() <= 1e-6);
+        assert!((column_cue_alpha(0.0375, 1.0) - 0.4375).abs() <= 1e-6);
         assert!((column_cue_alpha(0.075, 1.0) - 0.75).abs() <= 1e-6);
         assert!((column_cue_alpha(0.15, 1.0) - 1.0).abs() <= 1e-6);
         assert!((column_cue_alpha(0.5, 1.0) - 1.0).abs() <= 1e-6);
         assert!((column_cue_alpha(0.925, 1.0) - 0.75).abs() <= 1e-6);
+        assert!((column_cue_alpha(0.95, 1.0) - 0.5555556).abs() <= 1e-6);
         assert!((column_cue_alpha(1.0, 1.0) - 0.0).abs() <= 1e-6);
     }
 
@@ -1667,6 +1669,30 @@ mod tests {
         assert_eq!(zmod_broken_run_segment(&segs, 9.0), Some((0, 14, true)));
         assert_eq!(zmod_broken_run_segment(&segs, 15.0), Some((3, 20, false)));
         assert_eq!(zmod_broken_run_segment(&segs, 21.0), None);
+
+        let three_measure_break = [
+            StreamSegment {
+                start: 0,
+                end: 8,
+                is_break: false,
+            },
+            StreamSegment {
+                start: 8,
+                end: 11,
+                is_break: true,
+            },
+            StreamSegment {
+                start: 11,
+                end: 15,
+                is_break: false,
+            },
+        ];
+
+        assert_eq!(zmod_broken_run_end(&three_measure_break, 0), (15, true));
+        assert_eq!(
+            zmod_broken_run_segment(&three_measure_break, 9.0),
+            Some((0, 15, true))
+        );
     }
 
     #[test]

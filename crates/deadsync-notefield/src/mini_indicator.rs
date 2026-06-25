@@ -156,26 +156,37 @@ pub fn stream_segment_index_inclusive_end(segs: &[StreamSegment], curr_measure: 
 }
 
 pub fn zmod_broken_run_end(segs: &[StreamSegment], start_index: usize) -> (i32, bool) {
-    let Some(first) = segs.get(start_index) else {
+    let Some(first) = segs.get(start_index).copied() else {
         return (0, false);
     };
+    if first.is_break {
+        return (first.end as i32, false);
+    }
+
+    let last_index = segs.len().saturating_sub(1);
     let mut end = first.end;
-    let mut merged = false;
-    let mut i = start_index + 1;
-    while i < segs.len() {
+    let mut broken = false;
+
+    for i in (start_index + 1)..segs.len() {
         let seg = segs[i];
-        if seg.is_break && seg.end - seg.start <= 2 && i + 1 < segs.len() && !segs[i + 1].is_break {
-            merged = true;
-            end = segs[i + 1].end;
-            i += 2;
-        } else if !seg.is_break && !first.is_break {
-            end = seg.end;
-            i += 1;
-        } else {
+        let len = seg.end - seg.start;
+        if seg.is_break {
+            if len < 4 && i != last_index {
+                end += len;
+                broken = true;
+                continue;
+            }
             break;
         }
+
+        broken = true;
+        end += len;
+        if !segs[i - 1].is_break {
+            end += 1;
+        }
     }
-    (end as i32, merged)
+
+    (end as i32, broken)
 }
 
 pub fn zmod_broken_run_segment(
@@ -185,7 +196,7 @@ pub fn zmod_broken_run_segment(
     let ix = stream_segment_index_exclusive_end(segs, curr_measure);
     let seg = *segs.get(ix)?;
     if seg.is_break {
-        if seg.end - seg.start <= 2 && ix > 0 && !segs[ix - 1].is_break {
+        if seg.end - seg.start < 4 && ix > 0 && ix + 1 < segs.len() && !segs[ix - 1].is_break {
             let (end, merged) = zmod_broken_run_end(segs, ix - 1);
             return Some((ix - 1, end, merged));
         }
