@@ -1,6 +1,4 @@
-use mlua::{Function, Lua, MultiValue, Table, Value, ffi};
-use std::ffi::c_int;
-use std::fs;
+use mlua::{Function, Lua, MultiValue, Table, Value};
 use std::path::Path;
 
 use super::actor_host::{
@@ -8,117 +6,27 @@ use super::actor_host::{
     current_steps_value, retarget_loader_env,
 };
 use deadsync_song_lua::{
-    actor_util_class_registered, actor_util_file_type, create_author_table,
-    create_background_filter_values, create_color_constants_table, create_credits_table,
-    create_cryptman_table, create_ex_judgment_counts, create_index_array, create_ini_file_table,
-    create_network_table, create_rage_file_util_table, create_range_table, create_sl_streams,
-    create_split_table, create_string_array, create_version_parts_table, deduplicate_lua_table,
-    file_path_string, fileman_dir_listing, find_compat_files, init_sl_streams, json_to_lua_value,
-    lua_binary_to_hex, lua_table_to_string, lua_to_json_value, make_color_table, map_lua_table,
-    method_arg, note_song_lua_side_effect, path_basename, player_index_from_value,
-    player_short_name, preprocess_lua_cmd_syntax, read_boolish, read_color_call, read_color_value,
-    read_f32, read_string, resolve_compat_path, rotate_lua_table, stringify_lua_table,
-    strip_sprite_hints, timing_window_arg_index, timing_window_seconds, truthy,
-    worst_judgment_from_offsets,
+    create_actor_util_table, create_author_table, create_background_filter_values,
+    create_color_constants_table, create_credits_table, create_cryptman_table, create_debug_table,
+    create_ex_judgment_counts, create_fileman_table, create_find_files_function,
+    create_index_array, create_ini_file_table, create_lua_compat_table, create_network_table,
+    create_rage_file_util_table, create_range_table, create_sl_streams, create_split_table,
+    create_string_array, create_version_parts_table, deduplicate_lua_table, init_sl_streams,
+    json_to_lua_value, lua_binary_to_hex, lua_table_to_string, lua_to_json_value, make_color_table,
+    map_lua_table, note_song_lua_side_effect, path_basename, player_index_from_value,
+    player_short_name, preprocess_lua_cmd_syntax, read_color_call, read_color_value, read_f32,
+    read_string, rotate_lua_table, stringify_lua_table, strip_sprite_hints,
+    timing_window_arg_index, timing_window_seconds, truthy, worst_judgment_from_offsets,
 };
 use deadsync_song_lua::{
-    is_minimum_product_version as crate_is_minimum_product_version,
+    install_theme_color_helpers, is_minimum_product_version as crate_is_minimum_product_version,
     is_product_version as crate_is_product_version,
 };
 
-use super::theme_colors::install_theme_color_helpers;
 use super::{
     SONG_LUA_NOTE_COLUMNS, SONG_LUA_PRODUCT_VERSION, SONG_LUA_THEME_NAME,
     SONG_LUA_THEME_PATH_PREFIX, is_compile_global_name, seconds_to_hhmmss, set_string_method,
 };
-
-pub(super) fn create_fileman_table(lua: &Lua, song_dir: &Path) -> mlua::Result<Table> {
-    let fileman = lua.create_table()?;
-    let song_dir = song_dir.to_path_buf();
-    let listing_song_dir = song_dir.clone();
-    fileman.set(
-        "GetDirListing",
-        lua.create_function(move |lua, args: MultiValue| {
-            fileman_dir_listing_table(lua, &listing_song_dir, &args).map(Value::Table)
-        })?,
-    )?;
-    let file_song_dir = song_dir.clone();
-    fileman.set(
-        "DoesFileExist",
-        lua.create_function(move |_, args: MultiValue| {
-            let Some(raw_path) = method_arg(&args, 0).cloned().and_then(read_string) else {
-                return Ok(false);
-            };
-            Ok(resolve_compat_path(&file_song_dir, raw_path.as_str()).exists())
-        })?,
-    )?;
-    let size_song_dir = song_dir.clone();
-    fileman.set(
-        "GetFileSizeBytes",
-        lua.create_function(move |_, args: MultiValue| {
-            let Some(raw_path) = method_arg(&args, 0).cloned().and_then(read_string) else {
-                return Ok(0_i64);
-            };
-            let size = resolve_compat_path(&size_song_dir, raw_path.as_str())
-                .metadata()
-                .ok()
-                .filter(|metadata| metadata.is_file())
-                .map(|metadata| metadata.len().min(i64::MAX as u64) as i64)
-                .unwrap_or(0);
-            Ok(size)
-        })?,
-    )?;
-    fileman.set(
-        "GetHashForFile",
-        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
-    )?;
-    fileman.set(
-        "Copy",
-        lua.create_function(|lua, _args: MultiValue| {
-            note_song_lua_side_effect(lua)?;
-            Ok(false)
-        })?,
-    )?;
-    for (name, value) in [("CreateDir", true), ("Remove", true), ("Unzip", false)] {
-        fileman.set(
-            name,
-            lua.create_function(move |lua, _args: MultiValue| {
-                note_song_lua_side_effect(lua)?;
-                Ok(value)
-            })?,
-        )?;
-    }
-    fileman.set(
-        "FlushDirCache",
-        lua.create_function(|lua, _args: MultiValue| {
-            note_song_lua_side_effect(lua)?;
-            Ok(())
-        })?,
-    )?;
-    Ok(fileman)
-}
-
-fn fileman_dir_listing_table(lua: &Lua, song_dir: &Path, args: &MultiValue) -> mlua::Result<Table> {
-    let table = lua.create_table()?;
-    let Some(raw_path) = method_arg(args, 0).cloned().and_then(read_string) else {
-        return Ok(table);
-    };
-    let only_dirs = method_arg(args, 1)
-        .cloned()
-        .and_then(read_boolish)
-        .unwrap_or(false);
-    let return_path_too = method_arg(args, 2)
-        .cloned()
-        .and_then(read_boolish)
-        .unwrap_or(false);
-
-    let entries = fileman_dir_listing(song_dir, raw_path.as_str(), only_dirs, return_path_too)
-        .map_err(mlua::Error::external)?;
-    for (idx, entry) in entries.into_iter().enumerate() {
-        table.raw_set(idx + 1, entry)?;
-    }
-    Ok(table)
-}
 
 pub(super) fn install_stdlib_compat(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
     let globals = lua.globals();
@@ -228,13 +136,7 @@ pub(super) fn install_stdlib_compat(lua: &Lua, song_dir: &Path) -> mlua::Result<
         })?,
     )?;
     globals.set("ActorUtil", create_actor_util_table(lua, song_dir)?)?;
-    let find_files_song_dir = song_dir.to_path_buf();
-    globals.set(
-        "findFiles",
-        lua.create_function(move |lua, args: MultiValue| {
-            find_compat_files_table(lua, &find_files_song_dir, &args)
-        })?,
-    )?;
+    globals.set("findFiles", create_find_files_function(lua, song_dir)?)?;
     globals.set(
         "cleanGSub",
         lua.create_function(|lua, args: MultiValue| {
@@ -647,86 +549,6 @@ pub(super) fn install_stdlib_compat(lua: &Lua, song_dir: &Path) -> mlua::Result<
     Ok(())
 }
 
-fn find_compat_files_table(lua: &Lua, song_dir: &Path, args: &MultiValue) -> mlua::Result<Table> {
-    let dir = args
-        .front()
-        .cloned()
-        .and_then(read_string)
-        .unwrap_or_default();
-    let extension = args
-        .get(1)
-        .cloned()
-        .and_then(read_string)
-        .unwrap_or_else(|| "ogg".to_string())
-        .to_string();
-    let files = find_compat_files(song_dir, &dir, &extension).map_err(mlua::Error::external)?;
-    let table = lua.create_table()?;
-    for (index, file) in files.into_iter().enumerate() {
-        table.raw_set(index + 1, file)?;
-    }
-    Ok(table)
-}
-
-fn create_actor_util_table(lua: &Lua, song_dir: &Path) -> mlua::Result<Table> {
-    let table = lua.create_table()?;
-    let resolve_song_dir = song_dir.to_path_buf();
-    table.set(
-        "ResolvePath",
-        lua.create_function(move |lua, args: MultiValue| {
-            let Some(path) = args.front().cloned().and_then(read_string) else {
-                return Ok(Value::Nil);
-            };
-            let resolved = resolve_compat_path(&resolve_song_dir, &path);
-            let out = if resolved.exists() {
-                file_path_string(resolved.as_path())
-            } else {
-                path
-            };
-            Ok(Value::String(lua.create_string(&out)?))
-        })?,
-    )?;
-    table.set(
-        "GetFileType",
-        lua.create_function(|lua, args: MultiValue| {
-            let file_type = args
-                .front()
-                .cloned()
-                .and_then(read_string)
-                .map(|path| actor_util_file_type(&path))
-                .unwrap_or("FileType_Unknown");
-            Ok(Value::String(lua.create_string(file_type)?))
-        })?,
-    )?;
-    table.set(
-        "IsRegisteredClass",
-        lua.create_function(|_, args: MultiValue| {
-            let registered = args
-                .front()
-                .cloned()
-                .and_then(read_string)
-                .is_some_and(|name| actor_util_class_registered(&name));
-            Ok(registered)
-        })?,
-    )?;
-    for method in ["LoadAllCommands", "LoadAllCommandsFromName"] {
-        table.set(
-            method,
-            lua.create_function(|lua, _args: MultiValue| {
-                note_song_lua_side_effect(lua)?;
-                Ok(())
-            })?,
-        )?;
-    }
-    table.set(
-        "LoadAllCommandsAndSetXY",
-        lua.create_function(|lua, _args: MultiValue| {
-            note_song_lua_side_effect(lua)?;
-            Ok(())
-        })?,
-    )?;
-    Ok(table)
-}
-
 fn create_game_command_table(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.set(
@@ -855,113 +677,6 @@ fn parse_chart_info(lua: &Lua, args: &MultiValue) -> mlua::Result<Table> {
     init_sl_streams(lua, &streams)?;
     note_song_lua_side_effect(lua)?;
     Ok(streams)
-}
-
-fn create_debug_table(lua: &Lua) -> mlua::Result<Table> {
-    let debug = lua.create_table()?;
-    debug.set(
-        "getinfo",
-        lua.create_function(|lua, args: MultiValue| {
-            let globals = lua.globals();
-            let source = globals
-                .get::<Option<String>>("__songlua_current_script_path")?
-                .map(|path| format!("@{path}"))
-                .unwrap_or_else(|| "=[songlua]".to_string());
-            let info = lua.create_table()?;
-            info.set("source", source)?;
-            info.set("short_src", info.get::<String>("source")?)?;
-            info.set("what", "Lua")?;
-            info.set("currentline", 0)?;
-            info.set("linedefined", 0)?;
-            info.set("lastlinedefined", 0)?;
-            if args.front().is_some() {
-                info.set("namewhat", "")?;
-            }
-            Ok(info)
-        })?,
-    )?;
-    debug.set(
-        "getupvalue",
-        lua.create_function(|lua, args: MultiValue| {
-            let Some(function) = args.front().cloned().and_then(|value| match value {
-                Value::Function(function) => Some(function),
-                _ => None,
-            }) else {
-                return Ok((Value::Nil, Value::Nil));
-            };
-            let Some(index) = args.get(1).cloned().and_then(|value| match value {
-                Value::Integer(value) => Some(value),
-                Value::Number(value) => Some(value as i64),
-                _ => None,
-            }) else {
-                return Ok((Value::Nil, Value::Nil));
-            };
-            // SAFETY: exec_raw owns the temporary stack frame for this call. We only
-            // read the pushed function/index arguments, call Lua's debug API to fetch
-            // a single upvalue, then replace the frame contents with plain Lua return
-            // values before exec_raw converts them back into mlua Values.
-            unsafe {
-                lua.exec_raw((function, index), |state| {
-                    let upvalue_index = ffi::lua_tointeger(state, 2) as c_int;
-                    let name = ffi::lua_getupvalue(state, 1, upvalue_index);
-                    ffi::lua_remove(state, 2);
-                    ffi::lua_remove(state, 1);
-                    if name.is_null() {
-                        ffi::lua_pushnil(state);
-                        ffi::lua_pushnil(state);
-                        return;
-                    }
-                    ffi::lua_pushstring(state, name);
-                    ffi::lua_insert(state, -2);
-                })
-            }
-        })?,
-    )?;
-    debug.set(
-        "traceback",
-        lua.create_function(|_, args: MultiValue| {
-            let message = args
-                .front()
-                .cloned()
-                .and_then(read_string)
-                .unwrap_or_default();
-            Ok(message)
-        })?,
-    )?;
-    Ok(debug)
-}
-
-fn create_lua_compat_table(lua: &Lua, song_dir: &Path) -> mlua::Result<Table> {
-    let table = lua.create_table()?;
-    let read_song_dir = song_dir.to_path_buf();
-    table.set(
-        "ReadFile",
-        lua.create_function(move |lua, args: MultiValue| {
-            let Some(raw_path) = method_arg(&args, 0).cloned().and_then(read_string) else {
-                return Ok(Value::Nil);
-            };
-            let path = resolve_compat_path(&read_song_dir, &raw_path);
-            match fs::read_to_string(path) {
-                Ok(text) => Ok(Value::String(lua.create_string(&text)?)),
-                Err(_) => Ok(Value::Nil),
-            }
-        })?,
-    )?;
-    table.set(
-        "WriteFile",
-        lua.create_function(|lua, _args: MultiValue| {
-            note_song_lua_side_effect(lua)?;
-            Ok(true)
-        })?,
-    )?;
-    table.set(
-        "ReportScriptError",
-        lua.create_function(|lua, _args: MultiValue| {
-            note_song_lua_side_effect(lua)?;
-            Ok(())
-        })?,
-    )?;
-    Ok(table)
 }
 
 pub(super) fn create_chunk_env_proxy(lua: &Lua, target: Table) -> mlua::Result<Table> {

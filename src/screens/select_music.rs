@@ -1461,10 +1461,7 @@ fn reload_selected_song(state: &mut State) -> bool {
             true
         }
         Err(e) => {
-            warn!(
-                "Force reload failed for '{}': {e}",
-                simfile_path.display()
-            );
+            warn!("Force reload failed for '{}': {e}", simfile_path.display());
             false
         }
     }

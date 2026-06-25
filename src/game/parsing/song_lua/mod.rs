@@ -18,41 +18,33 @@ use deadsync_song_lua::{
     SONG_LUA_PLAYER_OPTION_CAPABILITIES, SONG_LUA_PLAYER_OPTION_MULTICOL_PREFIXES,
     SONG_LUA_RUNTIME_BEAT_KEY, SONG_LUA_RUNTIME_KEY, SONG_LUA_RUNTIME_SECONDS_KEY,
     SONG_LUA_SIDE_EFFECT_COUNT_KEY, SONG_LUA_SOUND_PATHS_KEY, SONG_LUA_THEME_PATH_PREFIX,
-    SONG_LUA_TIMING_WINDOW_NAMES, THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD,
-    compile_song_runtime_delta_values, compile_song_runtime_values, create_display_bpms_table,
-    create_gameplay_layout, create_owned_string_array, create_radar_values_table,
-    create_single_value_array, create_sl_table, create_song_group_table,
-    create_song_position_table, create_song_runtime_table, create_string_array, create_style_table,
-    create_timing_table, custom_multi_modifier_key, default_player_option_value,
-    display_bpms_for_args, display_bpms_text, ease_window_cmp, easiest_steps_difficulty,
-    file_path_string, format_song_options_text, graph_display_body_size,
-    is_player_option_method_name, is_song_lua_audio_path, is_song_lua_image_path,
-    is_song_lua_media_path, is_song_lua_video_path, lua_format_text, lua_text_value,
-    lua_values_equal, make_color_table, message_event_cmp, method_arg, mod_window_cmp,
-    normalize_player_option_key, normalize_player_option_value, note_song_lua_side_effect,
-    parse_player_option_amount, parse_player_speed_option, player_index_from_value,
-    player_number_name, player_option_uses_bool, player_short_name, preprocess_lua_cmd_syntax,
-    read_boolish, read_color_value, read_easing_name, read_f32, read_i32_value, read_player,
-    read_song_lua_broadcasts, read_song_lua_sound_paths, read_span_mode, read_string,
-    read_u32_value, read_vertex_colors_value, record_song_lua_broadcast,
-    set_compile_song_runtime_beat, set_compile_song_runtime_delta_values,
-    set_compile_song_runtime_values, set_path_methods, set_string_method, song_dir_string,
-    song_display_bps, song_elapsed_seconds_for_beat, song_group_name, song_lookup_matches,
-    song_lua_arch_name, song_lua_difficulty_from_value, song_lua_human_player_count,
-    song_lua_runtime_number, song_lua_side_effect_count, song_lua_speedmod_value,
-    song_lua_steps_type_is_dance_single, song_lua_style_column_x, song_lua_style_info,
-    song_music_path, song_music_rate, song_named_image_path, song_simfile_path, split_first_word,
-    strip_player_option_prefix, theme_has_string, theme_metric_number,
-    theme_metric_number_for_screen, theme_path, theme_pref_default, theme_string,
-    theme_string_names, timing_window_name, truthy,
+    THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD, compile_song_runtime_delta_values,
+    compile_song_runtime_values, create_course_table, create_display_bpms_table,
+    create_enabled_players_table, create_gameplay_layout, create_owned_string_array,
+    create_player_tables, create_sl_table, create_song_options_table, create_song_position_table,
+    create_song_runtime_table, create_song_table, create_songman_table, create_string_array,
+    create_style_table, create_trail_table, custom_multi_modifier_key, display_bpms_for_args,
+    display_bpms_text, ease_window_cmp, easiest_steps_difficulty, file_path_string,
+    format_song_options_text, graph_display_body_size, is_song_lua_audio_path,
+    is_song_lua_image_path, is_song_lua_media_path, is_song_lua_video_path, lua_format_text,
+    lua_text_value, lua_values_equal, make_color_table, message_event_cmp, method_arg,
+    mod_window_cmp, note_song_lua_side_effect, player_index_from_value, player_number_name,
+    player_short_name, preprocess_lua_cmd_syntax, read_boolish, read_color_value, read_easing_name,
+    read_f32, read_i32_value, read_player, read_song_lua_broadcasts, read_song_lua_sound_paths,
+    read_span_mode, read_string, read_u32_value, read_vertex_colors_value,
+    record_song_lua_broadcast, set_compile_song_runtime_beat,
+    set_compile_song_runtime_delta_values, set_compile_song_runtime_values, set_string_method,
+    song_dir_string, song_display_bps, song_elapsed_seconds_for_beat, song_lua_arch_name,
+    song_lua_human_player_count, song_lua_runtime_number, song_lua_side_effect_count,
+    song_lua_style_column_x, song_lua_style_info, song_music_rate, theme_has_string,
+    theme_metric_number, theme_metric_number_for_screen, theme_path, theme_pref_default,
+    theme_string, theme_string_names, truthy,
 };
 
 mod actor_host;
 mod compat;
 mod managers;
 mod overlay;
-mod song_tables;
-mod theme_colors;
 
 use self::actor_host::{
     actor_overlay_initial_state, actor_tree_has_update_functions, broadcast_song_lua_message,
@@ -72,7 +64,7 @@ use self::managers::{
     create_noteskin_table, create_operator_menu_option_rows_table, create_profileman_table,
     create_sl_custom_prefs_table, create_sound_table, create_statsman_table,
     create_theme_prefs_rows_table, create_theme_prefs_table, create_theme_table,
-    create_unlockman_table, custom_option_default_text,
+    create_unlockman_table, custom_option_default_text, song_lua_noteskin_resolver,
 };
 pub use self::overlay::{
     SongLuaOverlayActor, SongLuaOverlayBlendMode, SongLuaOverlayCommandBlock, SongLuaOverlayEase,
@@ -85,14 +77,11 @@ use self::overlay::{
     parse_overlay_blend_mode, parse_overlay_effect_clock, parse_overlay_effect_mode,
     parse_overlay_text_align, parse_overlay_text_glow_mode,
 };
-use self::song_tables::{
-    create_course_table, create_enabled_players_table, create_player_tables,
-    create_song_options_table, create_song_table, create_songman_table, create_trail_table,
-};
 pub use deadsync_song_lua::{
     SongLuaCapturedActor, SongLuaColumnOffsetWindow, SongLuaCompileContext, SongLuaCompileInfo,
     SongLuaDifficulty, SongLuaEaseTarget, SongLuaEaseWindow, SongLuaMessageEvent, SongLuaModWindow,
-    SongLuaNoteHideWindow, SongLuaPlayerContext, SongLuaSpanMode, SongLuaSpeedMod, SongLuaTimeUnit,
+    SongLuaNoteHideWindow, SongLuaNoteskinResolver, SongLuaPlayerContext, SongLuaSpanMode,
+    SongLuaSpeedMod, SongLuaTimeUnit,
 };
 
 pub type CompiledSongLua = deadsync_song_lua::CompiledSongLua<SongLuaOverlayActor>;
@@ -3382,6 +3371,7 @@ fn compile_multitap_update_overlays(
         return Ok(None);
     }
     let overlay_indices = named_overlay_indices(overlays);
+    let noteskin_resolver = song_lua_noteskin_resolver();
     let mut out = Vec::new();
     for player in 0..LUA_PLAYERS {
         if !context.players[player].enabled {
@@ -3427,6 +3417,7 @@ fn compile_multitap_update_overlays(
                 deco_index,
                 context,
                 player,
+                noteskin_resolver,
                 &noteskin,
                 desc,
             );
@@ -3709,6 +3700,7 @@ fn push_multitap_actor_eases(
     deco_index: usize,
     context: &SongLuaCompileContext,
     player: usize,
+    noteskin_resolver: SongLuaNoteskinResolver,
     noteskin: &str,
     desc: &MultitapDesc,
 ) {
@@ -3738,19 +3730,26 @@ fn push_multitap_actor_eases(
             &mut arrow_samples,
             beat,
             overlays[arrow_index].actor.initial_state,
+            noteskin_resolver,
             noteskin,
             desc.lane,
             phase,
         );
         deco_samples.push((
             beat,
-            multitap_deco_state(overlays[deco_index].actor.initial_state, noteskin, phase),
+            multitap_deco_state(
+                overlays[deco_index].actor.initial_state,
+                noteskin_resolver,
+                noteskin,
+                phase,
+            ),
         ));
         for (child_index, samples) in &mut deco_child_samples {
             samples.push((
                 beat,
                 multitap_deco_child_state(
                     overlays[*child_index].actor.initial_state,
+                    noteskin_resolver,
                     noteskin,
                     phase,
                 ),
@@ -3838,12 +3837,16 @@ fn push_multitap_arrow_sample(
     samples: &mut Vec<(f32, SongLuaOverlayState)>,
     beat: f32,
     baseline: SongLuaOverlayState,
+    noteskin_resolver: SongLuaNoteskinResolver,
     noteskin: &str,
     lane: usize,
     phase: MultitapPhase,
 ) {
     if phase.visible {
-        samples.push((beat, multitap_arrow_state(baseline, noteskin, lane, phase)));
+        samples.push((
+            beat,
+            multitap_arrow_state(baseline, noteskin_resolver, noteskin, lane, phase),
+        ));
     }
 }
 
@@ -4069,6 +4072,7 @@ fn song_lua_speedmod_multiplier(context: &SongLuaCompileContext, player: usize) 
 
 fn multitap_arrow_state(
     baseline: SongLuaOverlayState,
+    noteskin_resolver: SongLuaNoteskinResolver,
     noteskin: &str,
     lane: usize,
     phase: MultitapPhase,
@@ -4083,19 +4087,25 @@ fn multitap_arrow_state(
     state.visible = true;
     state.rot_z_deg = MULTITAP_LANE_ROTATION[lane - 1];
     state.diffuse = [0.4, 0.4, 0.4, 1.0];
-    state.texcoord_offset = Some(multitap_qtzn_texcoord_offset(noteskin, phase.qtc));
+    state.texcoord_offset = Some(multitap_qtzn_texcoord_offset(
+        noteskin_resolver,
+        noteskin,
+        phase.qtc,
+    ));
     state
 }
 
 fn multitap_deco_state(
     baseline: SongLuaOverlayState,
+    noteskin_resolver: SongLuaNoteskinResolver,
     noteskin: &str,
     phase: MultitapPhase,
 ) -> SongLuaOverlayState {
     if !phase.visible {
         return baseline;
     }
-    let (effect_color1, effect_color2) = multitap_deco_color_pair(noteskin, phase.qtc);
+    let (effect_color1, effect_color2) =
+        multitap_deco_color_pair(noteskin_resolver, noteskin, phase.qtc);
     let mut state = baseline;
     state.visible = true;
     state.zoom = 1.0;
@@ -4111,13 +4121,15 @@ fn multitap_deco_state(
 
 fn multitap_deco_child_state(
     baseline: SongLuaOverlayState,
+    noteskin_resolver: SongLuaNoteskinResolver,
     noteskin: &str,
     phase: MultitapPhase,
 ) -> SongLuaOverlayState {
     if !phase.visible {
         return baseline;
     }
-    let (effect_color1, effect_color2) = multitap_deco_color_pair(noteskin, phase.qtc);
+    let (effect_color1, effect_color2) =
+        multitap_deco_color_pair(noteskin_resolver, noteskin, phase.qtc);
     let mut state = baseline;
     state.effect_mode = EffectMode::DiffuseRamp;
     state.effect_clock = EffectClock::Beat;
@@ -4231,30 +4243,29 @@ fn multitap_qtzn_tex(qtzn: u8) -> usize {
     }
 }
 
-fn multitap_qtzn_texcoord_offset(noteskin: &str, qtzn: u8) -> [f32; 2] {
+fn multitap_qtzn_texcoord_offset(
+    noteskin_resolver: SongLuaNoteskinResolver,
+    noteskin: &str,
+    qtzn: u8,
+) -> [f32; 2] {
     let tex = multitap_qtzn_tex(qtzn) as f32;
-    let x = crate::game::parsing::noteskin::song_lua_noteskin_metric_f(
-        noteskin,
-        "",
-        "TapNoteNoteColorTextureCoordSpacingX",
-    )
-    .unwrap_or(0.0);
-    let y = crate::game::parsing::noteskin::song_lua_noteskin_metric_f(
-        noteskin,
-        "",
-        "TapNoteNoteColorTextureCoordSpacingY",
-    )
-    .unwrap_or(0.0);
+    let x = noteskin_resolver
+        .metric_f(noteskin, "", "TapNoteNoteColorTextureCoordSpacingX")
+        .unwrap_or(0.0);
+    let y = noteskin_resolver
+        .metric_f(noteskin, "", "TapNoteNoteColorTextureCoordSpacingY")
+        .unwrap_or(0.0);
     [x * tex, y * tex]
 }
 
-fn multitap_deco_color_pair(noteskin: &str, qtzn: u8) -> MultitapColorPair {
-    if crate::game::parsing::noteskin::song_lua_noteskin_metric_b(
-        noteskin,
-        "",
-        "TapNoteAnimationIsVivid",
-    )
-    .unwrap_or(false)
+fn multitap_deco_color_pair(
+    noteskin_resolver: SongLuaNoteskinResolver,
+    noteskin: &str,
+    qtzn: u8,
+) -> MultitapColorPair {
+    if noteskin_resolver
+        .metric_b(noteskin, "", "TapNoteAnimationIsVivid")
+        .unwrap_or(false)
     {
         return MULTITAP_QTZN_VIVID[0];
     }

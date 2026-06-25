@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use deadlib_present::actors::TextAlign;
 use deadlib_present::anim::{EffectClock, EffectMode};
-use deadsync_profile::NoteSkin;
 
 mod cmd;
 mod crypto;
@@ -14,6 +13,7 @@ mod net;
 mod player_options;
 mod runtime;
 mod sl;
+mod song_tables;
 mod tables;
 mod theme_colors;
 mod timing;
@@ -23,15 +23,16 @@ mod version;
 pub use cmd::preprocess_lua_cmd_syntax;
 pub use crypto::create_cryptman_table;
 pub use files::{
-    actor_util_class_registered, actor_util_file_type, file_path_string, fileman_dir_listing,
-    find_compat_files, is_song_lua_audio_path, is_song_lua_image_path, is_song_lua_media_path,
-    is_song_lua_simfile_path, is_song_lua_video_path, path_basename, resolve_compat_path,
-    song_dir_string, song_group_name, song_lookup_matches, song_music_path, song_named_image_path,
-    song_simfile_path, strip_sprite_hints, theme_path, wildcard_matches,
+    actor_util_class_registered, actor_util_file_type, create_actor_util_table,
+    create_fileman_table, create_find_files_function, create_lua_compat_table, file_path_string,
+    fileman_dir_listing, find_compat_files, is_song_lua_audio_path, is_song_lua_image_path,
+    is_song_lua_media_path, is_song_lua_simfile_path, is_song_lua_video_path, path_basename,
+    resolve_compat_path, song_dir_string, song_group_name, song_lookup_matches, song_music_path,
+    song_named_image_path, song_simfile_path, strip_sprite_hints, theme_path, wildcard_matches,
 };
 pub use json::{json_to_lua_value, lua_to_json_value};
 pub use lua_util::{
-    create_bool_array, create_color_constants_table, create_owned_string_array,
+    create_bool_array, create_color_constants_table, create_debug_table, create_owned_string_array,
     create_string_array, lua_format_text, lua_text_value, make_color_table, method_arg,
     method_arg_offset, read_color_call, read_color_value, read_song_lua_sound_paths,
     read_vertex_colors_value,
@@ -52,6 +53,11 @@ pub use runtime::{
     song_lua_runtime_number, song_lua_side_effect_count,
 };
 pub use sl::{create_sl_streams, create_sl_table, init_sl_streams};
+pub use song_tables::{
+    PlayerLuaTables, create_course_table, create_enabled_players_table, create_player_tables,
+    create_song_options_table, create_song_table, create_songman_table, create_steps_table,
+    create_trail_table,
+};
 pub use tables::{
     create_author_table, create_background_filter_values, create_credits_table,
     create_display_bpms_table, create_ex_judgment_counts, create_gameplay_layout,
@@ -65,9 +71,10 @@ pub use tables::{
 pub use theme_colors::{
     DDR_DIFF_COLORS, ITG_DIFF_COLORS, SL_COLORS, SL_DECORATIVE_COLORS, SL_FA_PLUS_COLORS,
     SL_JUDGMENT_COLORS, SONG_LUA_ACTIVE_COLOR_INDEX, blend_color, color_to_hex,
-    custom_difficulty_color, judgment_line_color, light_color, palette_color, parse_color_text,
-    song_lua_difficulty_color, song_lua_difficulty_index, song_lua_palette, song_lua_player_color,
-    song_lua_player_dark_color, song_lua_player_score_color, stage_color, tone_color,
+    custom_difficulty_color, install_theme_color_helpers, judgment_line_color, light_color,
+    palette_color, parse_color_text, song_lua_difficulty_color, song_lua_difficulty_index,
+    song_lua_palette, song_lua_player_color, song_lua_player_dark_color,
+    song_lua_player_score_color, stage_color, tone_color,
 };
 pub use timing::{
     SONG_LUA_TIMING_WINDOW_NAMES, timing_window_arg_index, timing_window_name,
@@ -81,6 +88,7 @@ pub use values::{
 pub use version::{is_minimum_product_version, is_product_version, version_args, version_parts};
 
 pub const LUA_PLAYERS: usize = 2;
+pub const SONG_LUA_DEFAULT_NOTESKIN_NAME: &str = "cel";
 pub const SONG_LUA_RUNTIME_KEY: &str = "__songlua_compile_song_runtime";
 pub const SONG_LUA_RUNTIME_BEAT_KEY: &str = "__songlua_song_beat";
 pub const SONG_LUA_RUNTIME_SECONDS_KEY: &str = "__songlua_music_seconds";
@@ -350,7 +358,7 @@ impl Default for SongLuaPlayerContext {
             difficulty: SongLuaDifficulty::default_enabled(),
             speedmod: SongLuaSpeedMod::default(),
             display_bpms: [60.0, 60.0],
-            noteskin_name: NoteSkin::default().to_string(),
+            noteskin_name: SONG_LUA_DEFAULT_NOTESKIN_NAME.to_string(),
             screen_x: 320.0,
             screen_y: 240.0,
         }
@@ -621,6 +629,117 @@ pub fn theme_pref_default(lua: &mlua::Lua, name: &str) -> mlua::Result<mlua::Val
     )))
 }
 
+pub type SongLuaNoteskinPathResolver = fn(&str, &str, &str) -> Option<PathBuf>;
+pub type SongLuaNoteskinMetricResolver = fn(&str, &str, &str) -> Option<String>;
+pub type SongLuaNoteskinMetricFResolver = fn(&str, &str, &str) -> Option<f32>;
+pub type SongLuaNoteskinMetricBResolver = fn(&str, &str, &str) -> Option<bool>;
+pub type SongLuaNoteskinExistsResolver = fn(&str) -> bool;
+pub type SongLuaNoteskinNamesResolver = fn() -> Vec<String>;
+
+#[derive(Clone, Copy)]
+pub struct SongLuaNoteskinResolver {
+    pub resolve_path: SongLuaNoteskinPathResolver,
+    pub metric: SongLuaNoteskinMetricResolver,
+    pub metric_f: SongLuaNoteskinMetricFResolver,
+    pub metric_b: SongLuaNoteskinMetricBResolver,
+    pub exists: SongLuaNoteskinExistsResolver,
+    pub names: SongLuaNoteskinNamesResolver,
+}
+
+fn missing_noteskin_path(_: &str, _: &str, _: &str) -> Option<PathBuf> {
+    None
+}
+
+fn missing_noteskin_metric(_: &str, _: &str, _: &str) -> Option<String> {
+    None
+}
+
+fn missing_noteskin_metric_f(_: &str, _: &str, _: &str) -> Option<f32> {
+    None
+}
+
+fn missing_noteskin_metric_b(_: &str, _: &str, _: &str) -> Option<bool> {
+    None
+}
+
+fn missing_noteskin_exists(_: &str) -> bool {
+    false
+}
+
+fn missing_noteskin_names() -> Vec<String> {
+    Vec::new()
+}
+
+impl Default for SongLuaNoteskinResolver {
+    fn default() -> Self {
+        Self {
+            resolve_path: missing_noteskin_path,
+            metric: missing_noteskin_metric,
+            metric_f: missing_noteskin_metric_f,
+            metric_b: missing_noteskin_metric_b,
+            exists: missing_noteskin_exists,
+            names: missing_noteskin_names,
+        }
+    }
+}
+
+impl SongLuaNoteskinResolver {
+    #[inline(always)]
+    pub fn resolve_path(self, skin: &str, button: &str, element: &str) -> Option<PathBuf> {
+        (self.resolve_path)(skin, button, element)
+    }
+
+    #[inline(always)]
+    pub fn path_string(self, skin: &str, button: &str, element: &str) -> String {
+        self.resolve_path(skin, button, element)
+            .map(|path| file_path_string(path.as_path()))
+            .unwrap_or_default()
+    }
+
+    #[inline(always)]
+    pub fn metric(self, skin: &str, element: &str, value: &str) -> Option<String> {
+        (self.metric)(skin, element, value)
+    }
+
+    #[inline(always)]
+    pub fn metric_f(self, skin: &str, element: &str, value: &str) -> Option<f32> {
+        (self.metric_f)(skin, element, value)
+    }
+
+    pub fn metric_i(self, skin: &str, element: &str, value: &str) -> i64 {
+        let Some(metric) = self.metric(skin, element, value) else {
+            return 0;
+        };
+        let metric = metric.trim();
+        metric
+            .parse::<i64>()
+            .ok()
+            .or_else(|| {
+                metric
+                    .parse::<f64>()
+                    .ok()
+                    .filter(|value| value.is_finite())
+                    .map(|value| value.round().clamp(i64::MIN as f64, i64::MAX as f64) as i64)
+            })
+            .unwrap_or(0)
+    }
+
+    #[inline(always)]
+    pub fn metric_b(self, skin: &str, element: &str, value: &str) -> Option<bool> {
+        (self.metric_b)(skin, element, value)
+    }
+
+    #[inline(always)]
+    pub fn exists(self, skin: &str) -> bool {
+        (self.exists)(skin)
+    }
+
+    #[inline(always)]
+    pub fn names(self) -> Vec<String> {
+        (self.names)()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct SongLuaCompileContext {
     pub song_dir: PathBuf,
@@ -656,6 +775,21 @@ impl SongLuaCompileContext {
             amod_available: true,
         }
     }
+}
+
+pub fn song_lua_default_noteskin_name(context: &SongLuaCompileContext) -> String {
+    context
+        .players
+        .iter()
+        .find(|player| player.enabled)
+        .map(|player| player.noteskin_name.clone())
+        .or_else(|| {
+            context
+                .players
+                .first()
+                .map(|player| player.noteskin_name.clone())
+        })
+        .unwrap_or_else(|| SONG_LUA_DEFAULT_NOTESKIN_NAME.to_string())
 }
 
 #[inline(always)]
@@ -867,6 +1001,56 @@ pub struct SongLuaOverlayModelLayer<Vertex> {
     pub uv_velocity: [f32; 2],
     pub uv_cycle_seconds: Option<f32>,
     pub draw: SongLuaOverlayModelDraw,
+}
+
+#[derive(Debug, Clone)]
+pub enum SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute> {
+    Actor,
+    ActorFrame,
+    ActorFrameTexture,
+    ActorProxy {
+        target: SongLuaProxyTarget,
+    },
+    AftSprite {
+        capture_name: String,
+    },
+    Sprite {
+        texture_path: PathBuf,
+        texture_key: Arc<str>,
+    },
+    Sound {
+        sound_path: PathBuf,
+    },
+    BitmapText {
+        font_name: &'static str,
+        font_path: PathBuf,
+        text: Arc<str>,
+        stroke_color: Option<[f32; 4]>,
+        attributes: Arc<[TextAttribute]>,
+    },
+    ActorMultiVertex {
+        vertices: Arc<[SongLuaOverlayMeshVertex]>,
+        texture_path: Option<PathBuf>,
+        texture_key: Option<Arc<str>>,
+    },
+    Model {
+        layers: Arc<[SongLuaOverlayModelLayer<ModelVertex>]>,
+    },
+    NoteskinActor {
+        slots: Arc<[NoteskinSlot]>,
+    },
+    SongMeterDisplay {
+        stream_width: f32,
+        stream_state: SongLuaOverlayState,
+        music_length_seconds: f32,
+    },
+    GraphDisplay {
+        size: [f32; 2],
+        body_values: Arc<[f32]>,
+        body_state: SongLuaOverlayState,
+        line_state: SongLuaOverlayState,
+    },
+    Quad,
 }
 
 pub fn parse_overlay_blend_mode(raw: &str) -> Option<SongLuaOverlayBlendMode> {

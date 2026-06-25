@@ -6509,10 +6509,7 @@ impl App {
                 gs.song().simfile_path.clone(),
                 gs.song_arc(),
                 gs.music_rate(),
-                [
-                    gs.scroll_speed_for_player(0),
-                    gs.scroll_speed_for_player(1),
-                ],
+                [gs.scroll_speed_for_player(0), gs.scroll_speed_for_player(1)],
                 gs.active_color_index(),
                 [
                     gs.charts()[0].short_hash.clone(),
@@ -6523,7 +6520,8 @@ impl App {
                     gs.charts()[1].difficulty.clone(),
                 ],
             )
-        }) else {
+        })
+        else {
             log::warn!("Ignored {label} reload: no practice stage state.");
             return false;
         };

@@ -1,4 +1,5 @@
-use mlua::{Function, Lua, MultiValue, Table, Value};
+use mlua::{Function, Lua, MultiValue, Table, Value, ffi};
+use std::ffi::c_int;
 use std::path::PathBuf;
 
 use crate::{SONG_LUA_SOUND_PATHS_KEY, parse_color_text, read_f32, read_string};
@@ -66,6 +67,80 @@ pub fn create_bool_array(lua: &Lua, values: &[bool]) -> mlua::Result<Table> {
         table.raw_set(index + 1, *value)?;
     }
     Ok(table)
+}
+
+pub fn create_debug_table(lua: &Lua) -> mlua::Result<Table> {
+    let debug = lua.create_table()?;
+    debug.set(
+        "getinfo",
+        lua.create_function(|lua, args: MultiValue| {
+            let globals = lua.globals();
+            let source = globals
+                .get::<Option<String>>("__songlua_current_script_path")?
+                .map(|path| format!("@{path}"))
+                .unwrap_or_else(|| "=[songlua]".to_string());
+            let info = lua.create_table()?;
+            info.set("source", source)?;
+            info.set("short_src", info.get::<String>("source")?)?;
+            info.set("what", "Lua")?;
+            info.set("currentline", 0)?;
+            info.set("linedefined", 0)?;
+            info.set("lastlinedefined", 0)?;
+            if args.front().is_some() {
+                info.set("namewhat", "")?;
+            }
+            Ok(info)
+        })?,
+    )?;
+    debug.set(
+        "getupvalue",
+        lua.create_function(|lua, args: MultiValue| {
+            let Some(function) = args.front().cloned().and_then(|value| match value {
+                Value::Function(function) => Some(function),
+                _ => None,
+            }) else {
+                return Ok((Value::Nil, Value::Nil));
+            };
+            let Some(index) = args.get(1).cloned().and_then(|value| match value {
+                Value::Integer(value) => Some(value),
+                Value::Number(value) => Some(value as i64),
+                _ => None,
+            }) else {
+                return Ok((Value::Nil, Value::Nil));
+            };
+            // SAFETY: exec_raw owns the temporary stack frame for this call. We only
+            // read the pushed function/index arguments, call Lua's debug API to fetch
+            // a single upvalue, then replace the frame contents with plain Lua return
+            // values before exec_raw converts them back into mlua Values.
+            unsafe {
+                lua.exec_raw((function, index), |state| {
+                    let upvalue_index = ffi::lua_tointeger(state, 2) as c_int;
+                    let name = ffi::lua_getupvalue(state, 1, upvalue_index);
+                    ffi::lua_remove(state, 2);
+                    ffi::lua_remove(state, 1);
+                    if name.is_null() {
+                        ffi::lua_pushnil(state);
+                        ffi::lua_pushnil(state);
+                        return;
+                    }
+                    ffi::lua_pushstring(state, name);
+                    ffi::lua_insert(state, -2);
+                })
+            }
+        })?,
+    )?;
+    debug.set(
+        "traceback",
+        lua.create_function(|_, args: MultiValue| {
+            let message = args
+                .front()
+                .cloned()
+                .and_then(read_string)
+                .unwrap_or_default();
+            Ok(message)
+        })?,
+    )?;
+    Ok(debug)
 }
 
 #[inline(always)]

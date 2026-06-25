@@ -1,5 +1,10 @@
+use mlua::{Function, Lua, MultiValue, Table, Value};
 use std::path::{Path, PathBuf};
 use std::{fs, io};
+
+use crate::lua_util::method_arg;
+use crate::runtime::note_song_lua_side_effect;
+use crate::values::{read_boolish, read_string};
 
 pub fn song_group_name(song_dir: &Path) -> String {
     song_dir
@@ -78,6 +83,127 @@ pub fn fileman_dir_listing(
     Ok(entries)
 }
 
+pub fn create_fileman_table(lua: &Lua, song_dir: &Path) -> mlua::Result<Table> {
+    let fileman = lua.create_table()?;
+    let song_dir = song_dir.to_path_buf();
+    let listing_song_dir = song_dir.clone();
+    fileman.set(
+        "GetDirListing",
+        lua.create_function(move |lua, args: MultiValue| {
+            fileman_dir_listing_table(lua, &listing_song_dir, &args).map(Value::Table)
+        })?,
+    )?;
+    let file_song_dir = song_dir.clone();
+    fileman.set(
+        "DoesFileExist",
+        lua.create_function(move |_, args: MultiValue| {
+            let Some(raw_path) = method_arg(&args, 0).cloned().and_then(read_string) else {
+                return Ok(false);
+            };
+            Ok(resolve_compat_path(&file_song_dir, raw_path.as_str()).exists())
+        })?,
+    )?;
+    let size_song_dir = song_dir.clone();
+    fileman.set(
+        "GetFileSizeBytes",
+        lua.create_function(move |_, args: MultiValue| {
+            let Some(raw_path) = method_arg(&args, 0).cloned().and_then(read_string) else {
+                return Ok(0_i64);
+            };
+            let size = resolve_compat_path(&size_song_dir, raw_path.as_str())
+                .metadata()
+                .ok()
+                .filter(|metadata| metadata.is_file())
+                .map(|metadata| metadata.len().min(i64::MAX as u64) as i64)
+                .unwrap_or(0);
+            Ok(size)
+        })?,
+    )?;
+    fileman.set(
+        "GetHashForFile",
+        lua.create_function(|_, _args: MultiValue| Ok(0_i64))?,
+    )?;
+    fileman.set(
+        "Copy",
+        lua.create_function(|lua, _args: MultiValue| {
+            note_song_lua_side_effect(lua)?;
+            Ok(false)
+        })?,
+    )?;
+    for (name, value) in [("CreateDir", true), ("Remove", true), ("Unzip", false)] {
+        fileman.set(
+            name,
+            lua.create_function(move |lua, _args: MultiValue| {
+                note_song_lua_side_effect(lua)?;
+                Ok(value)
+            })?,
+        )?;
+    }
+    fileman.set(
+        "FlushDirCache",
+        lua.create_function(|lua, _args: MultiValue| {
+            note_song_lua_side_effect(lua)?;
+            Ok(())
+        })?,
+    )?;
+    Ok(fileman)
+}
+
+fn fileman_dir_listing_table(lua: &Lua, song_dir: &Path, args: &MultiValue) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    let Some(raw_path) = method_arg(args, 0).cloned().and_then(read_string) else {
+        return Ok(table);
+    };
+    let only_dirs = method_arg(args, 1)
+        .cloned()
+        .and_then(read_boolish)
+        .unwrap_or(false);
+    let return_path_too = method_arg(args, 2)
+        .cloned()
+        .and_then(read_boolish)
+        .unwrap_or(false);
+
+    let entries = fileman_dir_listing(song_dir, raw_path.as_str(), only_dirs, return_path_too)
+        .map_err(mlua::Error::external)?;
+    for (idx, entry) in entries.into_iter().enumerate() {
+        table.raw_set(idx + 1, entry)?;
+    }
+    Ok(table)
+}
+
+pub fn create_lua_compat_table(lua: &Lua, song_dir: &Path) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    let read_song_dir = song_dir.to_path_buf();
+    table.set(
+        "ReadFile",
+        lua.create_function(move |lua, args: MultiValue| {
+            let Some(raw_path) = method_arg(&args, 0).cloned().and_then(read_string) else {
+                return Ok(Value::Nil);
+            };
+            let path = resolve_compat_path(&read_song_dir, &raw_path);
+            match fs::read_to_string(path) {
+                Ok(text) => Ok(Value::String(lua.create_string(&text)?)),
+                Err(_) => Ok(Value::Nil),
+            }
+        })?,
+    )?;
+    table.set(
+        "WriteFile",
+        lua.create_function(|lua, _args: MultiValue| {
+            note_song_lua_side_effect(lua)?;
+            Ok(true)
+        })?,
+    )?;
+    table.set(
+        "ReportScriptError",
+        lua.create_function(|lua, _args: MultiValue| {
+            note_song_lua_side_effect(lua)?;
+            Ok(())
+        })?,
+    )?;
+    Ok(table)
+}
+
 pub fn find_compat_files(song_dir: &Path, dir: &str, extension: &str) -> io::Result<Vec<String>> {
     let extension = extension.trim_start_matches('.').to_ascii_lowercase();
     let path = resolve_compat_path(song_dir, dir);
@@ -97,6 +223,91 @@ pub fn find_compat_files(song_dir: &Path, dir: &str, extension: &str) -> io::Res
     };
     files.sort_unstable();
     Ok(files)
+}
+
+pub fn create_find_files_function(lua: &Lua, song_dir: &Path) -> mlua::Result<Function> {
+    let song_dir = song_dir.to_path_buf();
+    lua.create_function(move |lua, args: MultiValue| find_compat_files_table(lua, &song_dir, &args))
+}
+
+fn find_compat_files_table(lua: &Lua, song_dir: &Path, args: &MultiValue) -> mlua::Result<Table> {
+    let dir = args
+        .front()
+        .cloned()
+        .and_then(read_string)
+        .unwrap_or_default();
+    let extension = args
+        .get(1)
+        .cloned()
+        .and_then(read_string)
+        .unwrap_or_else(|| "ogg".to_string())
+        .to_string();
+    let files = find_compat_files(song_dir, &dir, &extension).map_err(mlua::Error::external)?;
+    let table = lua.create_table()?;
+    for (index, file) in files.into_iter().enumerate() {
+        table.raw_set(index + 1, file)?;
+    }
+    Ok(table)
+}
+
+pub fn create_actor_util_table(lua: &Lua, song_dir: &Path) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    let resolve_song_dir = song_dir.to_path_buf();
+    table.set(
+        "ResolvePath",
+        lua.create_function(move |lua, args: MultiValue| {
+            let Some(path) = args.front().cloned().and_then(read_string) else {
+                return Ok(Value::Nil);
+            };
+            let resolved = resolve_compat_path(&resolve_song_dir, &path);
+            let out = if resolved.exists() {
+                file_path_string(resolved.as_path())
+            } else {
+                path
+            };
+            Ok(Value::String(lua.create_string(&out)?))
+        })?,
+    )?;
+    table.set(
+        "GetFileType",
+        lua.create_function(|lua, args: MultiValue| {
+            let file_type = args
+                .front()
+                .cloned()
+                .and_then(read_string)
+                .map(|path| actor_util_file_type(&path))
+                .unwrap_or("FileType_Unknown");
+            Ok(Value::String(lua.create_string(file_type)?))
+        })?,
+    )?;
+    table.set(
+        "IsRegisteredClass",
+        lua.create_function(|_, args: MultiValue| {
+            let registered = args
+                .front()
+                .cloned()
+                .and_then(read_string)
+                .is_some_and(|name| actor_util_class_registered(&name));
+            Ok(registered)
+        })?,
+    )?;
+    for method in ["LoadAllCommands", "LoadAllCommandsFromName"] {
+        table.set(
+            method,
+            lua.create_function(|lua, _args: MultiValue| {
+                note_song_lua_side_effect(lua)?;
+                Ok(())
+            })?,
+        )?;
+    }
+    table.set(
+        "LoadAllCommandsAndSetXY",
+        lua.create_function(|lua, _args: MultiValue| {
+            note_song_lua_side_effect(lua)?;
+            Ok(())
+        })?,
+    )?;
+    Ok(table)
 }
 
 fn fileman_read_dir(

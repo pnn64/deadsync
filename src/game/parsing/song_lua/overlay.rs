@@ -1,8 +1,6 @@
 use crate::game::parsing::noteskin::SpriteSlot;
 use deadlib_present::actors::TextAttribute;
 use deadlib_render::TexturedMeshVertex;
-use std::path::PathBuf;
-use std::sync::Arc;
 
 pub use deadsync_song_lua::{
     SongLuaOverlayActor as GenericSongLuaOverlayActor, SongLuaOverlayBlendMode,
@@ -15,57 +13,9 @@ pub use deadsync_song_lua::{
     parse_overlay_text_glow_mode,
 };
 
-#[derive(Debug, Clone)]
-pub enum SongLuaOverlayKind {
-    Actor,
-    ActorFrame,
-    ActorFrameTexture,
-    ActorProxy {
-        target: SongLuaProxyTarget,
-    },
-    AftSprite {
-        capture_name: String,
-    },
-    Sprite {
-        texture_path: PathBuf,
-        texture_key: Arc<str>,
-    },
-    Sound {
-        sound_path: PathBuf,
-    },
-    BitmapText {
-        font_name: &'static str,
-        font_path: PathBuf,
-        text: Arc<str>,
-        stroke_color: Option<[f32; 4]>,
-        attributes: Arc<[TextAttribute]>,
-    },
-    ActorMultiVertex {
-        vertices: Arc<[SongLuaOverlayMeshVertex]>,
-        texture_path: Option<PathBuf>,
-        texture_key: Option<Arc<str>>,
-    },
-    Model {
-        layers: Arc<[SongLuaOverlayModelLayer]>,
-    },
-    NoteskinActor {
-        slots: Arc<[SpriteSlot]>,
-    },
-    SongMeterDisplay {
-        stream_width: f32,
-        stream_state: SongLuaOverlayState,
-        music_length_seconds: f32,
-    },
-    GraphDisplay {
-        size: [f32; 2],
-        body_values: Arc<[f32]>,
-        body_state: SongLuaOverlayState,
-        line_state: SongLuaOverlayState,
-    },
-    Quad,
-}
-
 pub type SongLuaOverlayModelLayer = GenericSongLuaOverlayModelLayer<TexturedMeshVertex>;
+pub type SongLuaOverlayKind =
+    deadsync_song_lua::SongLuaOverlayKind<SpriteSlot, TexturedMeshVertex, TextAttribute>;
 
 pub type SongLuaOverlayActor = GenericSongLuaOverlayActor<SongLuaOverlayKind>;
 

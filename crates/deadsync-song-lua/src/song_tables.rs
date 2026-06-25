@@ -1,6 +1,10 @@
-use super::*;
+use std::path::Path;
 
-pub(super) fn create_song_options_table(lua: &Lua, music_rate: f32) -> mlua::Result<Table> {
+use mlua::{Function, Lua, MultiValue, Table, Value};
+
+use crate::*;
+
+pub fn create_song_options_table(lua: &Lua, music_rate: f32) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.set("__songlua_music_rate", music_rate.max(0.0))?;
     table.set(
@@ -24,12 +28,12 @@ pub(super) fn create_song_options_table(lua: &Lua, music_rate: f32) -> mlua::Res
     Ok(table)
 }
 
-pub(super) struct PlayerLuaTables {
-    pub(super) player_states: [Table; LUA_PLAYERS],
-    pub(super) steps: [Table; LUA_PLAYERS],
+pub struct PlayerLuaTables {
+    pub player_states: [Table; LUA_PLAYERS],
+    pub steps: [Table; LUA_PLAYERS],
 }
 
-pub(super) fn create_player_tables(
+pub fn create_player_tables(
     lua: &Lua,
     context: &SongLuaCompileContext,
     song_runtime: &Table,
@@ -58,7 +62,7 @@ pub(super) fn create_player_tables(
     })
 }
 
-pub(super) fn create_enabled_players_table(
+pub fn create_enabled_players_table(
     lua: &Lua,
     players: [SongLuaPlayerContext; LUA_PLAYERS],
 ) -> mlua::Result<Table> {
@@ -178,7 +182,7 @@ fn create_player_options_array(lua: &Lua, owner: &Table) -> mlua::Result<Table> 
     Ok(table)
 }
 
-pub(super) fn create_steps_table(
+pub fn create_steps_table(
     lua: &Lua,
     difficulty: SongLuaDifficulty,
     display_bpms: [f32; 2],
@@ -514,7 +518,7 @@ fn set_player_speedmod(owner: &Table, key: &str, value: Option<f32>) -> mlua::Re
     Ok(())
 }
 
-pub(super) fn create_song_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {
+pub fn create_song_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     let song_dir = song_dir_string(context.song_dir.as_path());
     let steps_by_type = create_steps_by_steps_type_table(
@@ -686,7 +690,7 @@ pub(super) fn create_song_table(lua: &Lua, context: &SongLuaCompileContext) -> m
     Ok(table)
 }
 
-pub(super) fn create_course_table(
+pub fn create_course_table(
     lua: &Lua,
     context: &SongLuaCompileContext,
     song: Table,
@@ -755,7 +759,7 @@ pub(super) fn create_course_table(
     Ok(table)
 }
 
-pub(super) fn create_trail_table(
+pub fn create_trail_table(
     lua: &Lua,
     song: Table,
     steps: Table,
@@ -823,7 +827,7 @@ fn create_trail_entry_table(lua: &Lua, song: Table, steps: Table) -> mlua::Resul
     Ok(table)
 }
 
-pub(super) fn create_songman_table(
+pub fn create_songman_table(
     lua: &Lua,
     current_song: Table,
     current_steps: Table,

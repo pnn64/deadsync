@@ -10,10 +10,11 @@ use super::actor_host::{
     SONG_LUA_SCREEN_USB_PROFILE_OPTIONS_LINE_NAMES, SONG_LUA_SCREEN_VISUAL_OPTIONS_LINE_NAMES,
     create_dummy_actor, resolve_script_path,
 };
-use super::song_tables::create_steps_table;
 use super::*;
 use deadlib_platform::dirs;
-use deadsync_profile::NoteSkin;
+use deadsync_song_lua::{
+    SongLuaNoteskinResolver, create_steps_table, song_lua_default_noteskin_name,
+};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -3002,11 +3003,28 @@ pub(super) fn create_hooks_table(lua: &Lua) -> mlua::Result<Table> {
     Ok(table)
 }
 
+pub(super) fn song_lua_noteskin_resolver() -> SongLuaNoteskinResolver {
+    SongLuaNoteskinResolver {
+        resolve_path: crate::game::parsing::noteskin::song_lua_noteskin_resolve_path,
+        metric: crate::game::parsing::noteskin::song_lua_noteskin_metric,
+        metric_f: crate::game::parsing::noteskin::song_lua_noteskin_metric_f,
+        metric_b: crate::game::parsing::noteskin::song_lua_noteskin_metric_b,
+        exists: crate::game::parsing::noteskin::song_lua_noteskin_exists,
+        names: song_lua_noteskin_names,
+    }
+}
+
+fn song_lua_noteskin_names() -> Vec<String> {
+    let roots = dirs::app_dirs().noteskin_roots();
+    deadsync_noteskin::itg::discover_skins(&roots, "dance")
+}
+
 pub(super) fn create_noteskin_table(
     lua: &Lua,
     context: &SongLuaCompileContext,
 ) -> mlua::Result<Table> {
     let noteskin = lua.create_table()?;
+    let resolver = song_lua_noteskin_resolver();
     let default_noteskin = song_lua_default_noteskin_name(context);
 
     let default_metric_skin = default_noteskin.clone();
@@ -3014,11 +3032,7 @@ pub(super) fn create_noteskin_table(
         "GetMetric",
         lua.create_function(
             move |lua, (_self, element, value): (Table, String, String)| {
-                let Some(metric) = crate::game::parsing::noteskin::song_lua_noteskin_metric(
-                    &default_metric_skin,
-                    &element,
-                    &value,
-                ) else {
+                let Some(metric) = resolver.metric(&default_metric_skin, &element, &value) else {
                     return Ok(Value::Nil);
                 };
                 Ok(Value::String(lua.create_string(&metric)?))
@@ -3029,9 +3043,7 @@ pub(super) fn create_noteskin_table(
         "GetMetricForNoteSkin",
         lua.create_function(
             move |lua, (_self, element, value, skin): (Table, String, String, String)| {
-                let Some(metric) = crate::game::parsing::noteskin::song_lua_noteskin_metric(
-                    &skin, &element, &value,
-                ) else {
+                let Some(metric) = resolver.metric(&skin, &element, &value) else {
                     return Ok(Value::Nil);
                 };
                 Ok(Value::String(lua.create_string(&metric)?))
@@ -3043,22 +3055,18 @@ pub(super) fn create_noteskin_table(
     noteskin.set(
         "GetMetricF",
         lua.create_function(move |_, (_self, element, value): (Table, String, String)| {
-            Ok(crate::game::parsing::noteskin::song_lua_noteskin_metric_f(
-                &default_metric_f_skin,
-                &element,
-                &value,
-            )
-            .unwrap_or(0.0_f32))
+            Ok(resolver
+                .metric_f(&default_metric_f_skin, &element, &value)
+                .unwrap_or(0.0_f32))
         })?,
     )?;
     noteskin.set(
         "GetMetricFForNoteSkin",
         lua.create_function(
             move |_, (_self, element, value, skin): (Table, String, String, String)| {
-                Ok(crate::game::parsing::noteskin::song_lua_noteskin_metric_f(
-                    &skin, &element, &value,
-                )
-                .unwrap_or(0.0_f32))
+                Ok(resolver
+                    .metric_f(&skin, &element, &value)
+                    .unwrap_or(0.0_f32))
             },
         )?,
     )?;
@@ -3067,18 +3075,14 @@ pub(super) fn create_noteskin_table(
     noteskin.set(
         "GetMetricI",
         lua.create_function(move |_, (_self, element, value): (Table, String, String)| {
-            Ok(song_lua_noteskin_metric_i(
-                &default_metric_i_skin,
-                &element,
-                &value,
-            ))
+            Ok(resolver.metric_i(&default_metric_i_skin, &element, &value))
         })?,
     )?;
     noteskin.set(
         "GetMetricIForNoteSkin",
         lua.create_function(
             move |_, (_self, element, value, skin): (Table, String, String, String)| {
-                Ok(song_lua_noteskin_metric_i(&skin, &element, &value))
+                Ok(resolver.metric_i(&skin, &element, &value))
             },
         )?,
     )?;
@@ -3087,22 +3091,16 @@ pub(super) fn create_noteskin_table(
     noteskin.set(
         "GetMetricB",
         lua.create_function(move |_, (_self, element, value): (Table, String, String)| {
-            Ok(crate::game::parsing::noteskin::song_lua_noteskin_metric_b(
-                &default_metric_b_skin,
-                &element,
-                &value,
-            )
-            .unwrap_or(false))
+            Ok(resolver
+                .metric_b(&default_metric_b_skin, &element, &value)
+                .unwrap_or(false))
         })?,
     )?;
     noteskin.set(
         "GetMetricBForNoteSkin",
         lua.create_function(
             move |_, (_self, element, value, skin): (Table, String, String, String)| {
-                Ok(crate::game::parsing::noteskin::song_lua_noteskin_metric_b(
-                    &skin, &element, &value,
-                )
-                .unwrap_or(false))
+                Ok(resolver.metric_b(&skin, &element, &value).unwrap_or(false))
             },
         )?,
     )?;
@@ -3129,7 +3127,7 @@ pub(super) fn create_noteskin_table(
         "GetPath",
         lua.create_function(
             move |lua, (_self, button, element): (Table, String, String)| {
-                let path = song_lua_noteskin_path(&default_path_skin, &button, &element);
+                let path = resolver.path_string(&default_path_skin, &button, &element);
                 Ok(Value::String(lua.create_string(&path)?))
             },
         )?,
@@ -3138,7 +3136,7 @@ pub(super) fn create_noteskin_table(
         "GetPathForNoteSkin",
         lua.create_function(
             move |lua, (_self, button, element, skin): (Table, String, String, String)| {
-                let path = song_lua_noteskin_path(&skin, &button, &element);
+                let path = resolver.path_string(&skin, &button, &element);
                 Ok(Value::String(lua.create_string(&path)?))
             },
         )?,
@@ -3149,7 +3147,7 @@ pub(super) fn create_noteskin_table(
         "LoadActor",
         lua.create_function(
             move |lua, (_self, button, element): (Table, String, String)| {
-                song_lua_noteskin_actor(lua, &default_load_skin, &button, &element)
+                song_lua_noteskin_actor(lua, resolver, &default_load_skin, &button, &element)
             },
         )?,
     )?;
@@ -3157,24 +3155,19 @@ pub(super) fn create_noteskin_table(
         "LoadActorForNoteSkin",
         lua.create_function(
             move |lua, (_self, button, element, skin): (Table, String, String, String)| {
-                song_lua_noteskin_actor(lua, &skin, &button, &element)
+                song_lua_noteskin_actor(lua, resolver, &skin, &button, &element)
             },
         )?,
     )?;
 
     noteskin.set(
         "DoesNoteSkinExist",
-        lua.create_function(|_, (_self, skin): (Table, String)| {
-            Ok(crate::game::parsing::noteskin::song_lua_noteskin_exists(
-                &skin,
-            ))
-        })?,
+        lua.create_function(move |_, (_self, skin): (Table, String)| Ok(resolver.exists(&skin)))?,
     )?;
     noteskin.set(
         "GetNoteSkinNames",
-        lua.create_function(|lua, _args: MultiValue| {
-            let roots = dirs::app_dirs().noteskin_roots();
-            let names = deadsync_noteskin::itg::discover_skins(&roots, "dance");
+        lua.create_function(move |lua, _args: MultiValue| {
+            let names = resolver.names();
             let table = lua.create_table()?;
             for (idx, name) in names.into_iter().enumerate() {
                 table.raw_set(idx + 1, name)?;
@@ -3197,62 +3190,21 @@ pub(super) fn create_noteskin_table(
     Ok(noteskin)
 }
 
-fn song_lua_default_noteskin_name(context: &SongLuaCompileContext) -> String {
-    context
-        .players
-        .iter()
-        .find(|player| player.enabled)
-        .map(|player| player.noteskin_name.clone())
-        .or_else(|| {
-            context
-                .players
-                .first()
-                .map(|player| player.noteskin_name.clone())
-        })
-        .unwrap_or_else(|| NoteSkin::default().to_string())
-}
-
-fn song_lua_noteskin_path(skin: &str, button: &str, element: &str) -> String {
-    crate::game::parsing::noteskin::song_lua_noteskin_resolve_path(skin, button, element)
-        .map(|path| file_path_string(path.as_path()))
-        .unwrap_or_default()
-}
-
-fn song_lua_noteskin_metric_i(skin: &str, element: &str, value: &str) -> i64 {
-    let Some(metric) =
-        crate::game::parsing::noteskin::song_lua_noteskin_metric(skin, element, value)
-    else {
-        return 0;
-    };
-    let metric = metric.trim();
-    metric
-        .parse::<i64>()
-        .ok()
-        .or_else(|| {
-            metric
-                .parse::<f64>()
-                .ok()
-                .filter(|value| value.is_finite())
-                .map(|value| value.round().clamp(i64::MIN as f64, i64::MAX as f64) as i64)
-        })
-        .unwrap_or(0)
-}
-
 fn song_lua_noteskin_metric_a(lua: &Lua) -> mlua::Result<Function> {
     lua.create_function(|_, actor: Table| Ok(Value::Table(actor)))
 }
 
 fn song_lua_noteskin_actor(
     lua: &Lua,
+    resolver: SongLuaNoteskinResolver,
     skin: &str,
     button: &str,
     element: &str,
 ) -> mlua::Result<Table> {
-    let resolved =
-        crate::game::parsing::noteskin::song_lua_noteskin_resolve_path(skin, button, element);
+    let resolved = resolver.resolve_path(skin, button, element);
     let model_path = resolved
         .as_ref()
-        .and_then(|path| song_lua_noteskin_model_template_path(skin, path));
+        .and_then(|path| song_lua_noteskin_model_template_path(resolver, skin, path));
     let sprite_path = resolved
         .as_ref()
         .filter(|_| model_path.is_none())
@@ -3280,7 +3232,11 @@ fn song_lua_noteskin_actor(
     Ok(actor)
 }
 
-fn song_lua_noteskin_model_template_path(skin: &str, template_path: &Path) -> Option<PathBuf> {
+fn song_lua_noteskin_model_template_path(
+    resolver: SongLuaNoteskinResolver,
+    skin: &str,
+    template_path: &Path,
+) -> Option<PathBuf> {
     if !template_path
         .extension()
         .and_then(|ext| ext.to_str())
@@ -3293,9 +3249,7 @@ fn song_lua_noteskin_model_template_path(skin: &str, template_path: &Path) -> Op
         return None;
     }
     if let Some((button, element)) = first_noteskin_get_path_args(&script) {
-        return crate::game::parsing::noteskin::song_lua_noteskin_resolve_path(
-            skin, &button, &element,
-        );
+        return resolver.resolve_path(skin, &button, &element);
     }
     let raw = first_lua_field_string(&script, "Meshes")
         .or_else(|| first_lua_field_string(&script, "Materials"))
