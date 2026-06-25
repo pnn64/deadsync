@@ -1638,6 +1638,22 @@ mod tests {
         assert_eq!(stream_segment_index_exclusive_end(&segs, 4.0), 1);
         assert_eq!(stream_segment_index_inclusive_end(&segs, 4.0), 0);
         assert_eq!(
+            stream_segment_index_exclusive_end(&segs, f32::NEG_INFINITY),
+            0
+        );
+        assert_eq!(
+            stream_segment_index_inclusive_end(&segs, f32::NEG_INFINITY),
+            0
+        );
+        assert_eq!(
+            stream_segment_index_exclusive_end(&segs, f32::INFINITY),
+            segs.len()
+        );
+        assert_eq!(
+            stream_segment_index_inclusive_end(&segs, f32::INFINITY),
+            segs.len()
+        );
+        assert_eq!(
             stream_segment_index_exclusive_end(&segs, f32::NAN),
             segs.len()
         );
@@ -1645,6 +1661,10 @@ mod tests {
             stream_segment_index_inclusive_end(&segs, f32::NAN),
             segs.len()
         );
+        assert_eq!(zmod_run_timer_index(&segs, 3.0), Some(0));
+        assert_eq!(zmod_run_timer_index(&segs, 4.0), Some(0));
+        assert_eq!(zmod_run_timer_index(&segs, 4.5), Some(1));
+        assert_eq!(zmod_run_timer_index(&segs, 8.0), Some(1));
         assert_eq!(zmod_run_timer_index(&segs, 9.0), None);
     }
 
@@ -1701,6 +1721,10 @@ mod tests {
             zmod_broken_run_segment(&three_measure_break, 9.0),
             Some((0, 15, true))
         );
+        assert_eq!(
+            zmod_broken_run_segment(&three_measure_break, 12.0),
+            Some((0, 15, true))
+        );
     }
 
     #[test]
@@ -1731,8 +1755,19 @@ mod tests {
             })
         );
         assert_eq!(
+            zmod_measure_counter_text(12.0, 3.0, &segs, 0, false, 0, 1.0),
+            Some(ZmodMeasureCounterText::Ratio {
+                current: 4,
+                total: 8
+            })
+        );
+        assert_eq!(
             zmod_measure_counter_text(12.0, 3.0, &segs, 1, true, 2, 1.0),
             Some(ZmodMeasureCounterText::Break(4))
+        );
+        assert_eq!(
+            zmod_measure_counter_text(12.0, 3.0, &segs, 1, true, 2, 1.5),
+            Some(ZmodMeasureCounterText::Break(6))
         );
         assert_eq!(
             zmod_measure_counter_text(36.0, 9.0, &segs, 1, false, 2, 1.0),
@@ -1741,6 +1776,20 @@ mod tests {
         assert_eq!(
             zmod_measure_counter_text(12.0, 3.0, &segs, 2, true, 2, 1.0),
             Some(ZmodMeasureCounterText::Total(8))
+        );
+        assert_eq!(
+            zmod_measure_counter_text(52.0, 13.0, &segs, 2, false, 2, 1.0),
+            Some(ZmodMeasureCounterText::Ratio {
+                current: 2,
+                total: 8
+            })
+        );
+        assert_eq!(
+            zmod_measure_counter_text(12.0, 3.0, &segs, 0, false, 2, 2.0),
+            Some(ZmodMeasureCounterText::Ratio {
+                current: 7,
+                total: 16
+            })
         );
         assert_eq!(
             zmod_measure_counter_text(36.0, 9.0, &segs, 1, false, 0, 1.0),
@@ -1809,7 +1858,28 @@ mod tests {
             zmod_broken_run_counter_text(-1.0, &segs, 0, 14),
             Some(ZmodMeasureCounterText::Break(2))
         );
+        assert_eq!(
+            zmod_broken_run_counter_text(-1.2, &segs, 0, 14),
+            Some(ZmodMeasureCounterText::Break(2))
+        );
         assert_eq!(zmod_broken_run_counter_text(9.0, &segs, 1, 10), None);
+
+        let future_stream = [
+            StreamSegment {
+                start: 0,
+                end: 8,
+                is_break: true,
+            },
+            StreamSegment {
+                start: 8,
+                end: 12,
+                is_break: false,
+            },
+        ];
+        assert_eq!(
+            zmod_broken_run_counter_text(7.5, &future_stream, 1, 12),
+            Some(ZmodMeasureCounterText::Total(4))
+        );
     }
 
     #[test]

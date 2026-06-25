@@ -138,21 +138,17 @@ pub const fn zmod_resolved_mini_indicator_mode(
 }
 
 pub fn stream_segment_index_exclusive_end(segs: &[StreamSegment], curr_measure: f32) -> usize {
-    if !curr_measure.is_finite() {
+    if curr_measure.is_nan() {
         return segs.len();
     }
-    segs.iter()
-        .position(|s| curr_measure < s.end as f32)
-        .unwrap_or(segs.len())
+    segs.partition_point(|s| curr_measure >= s.end as f32)
 }
 
 pub fn stream_segment_index_inclusive_end(segs: &[StreamSegment], curr_measure: f32) -> usize {
-    if !curr_measure.is_finite() {
+    if curr_measure.is_nan() {
         return segs.len();
     }
-    segs.iter()
-        .position(|s| curr_measure <= s.end as f32)
-        .unwrap_or(segs.len())
+    segs.partition_point(|s| curr_measure > s.end as f32)
 }
 
 pub fn zmod_broken_run_end(segs: &[StreamSegment], start_index: usize) -> (i32, bool) {
@@ -193,61 +189,90 @@ pub fn zmod_broken_run_segment(
     segs: &[StreamSegment],
     curr_measure: f32,
 ) -> Option<(usize, i32, bool)> {
-    let ix = stream_segment_index_exclusive_end(segs, curr_measure);
-    let seg = *segs.get(ix)?;
-    if seg.is_break {
-        if seg.end - seg.start < 4 && ix > 0 && ix + 1 < segs.len() && !segs[ix - 1].is_break {
-            let (end, merged) = zmod_broken_run_end(segs, ix - 1);
-            return Some((ix - 1, end, merged));
+    for (i, seg) in segs.iter().copied().enumerate() {
+        if seg.is_break {
+            if curr_measure < seg.end as f32 {
+                return Some((i, seg.end as i32, false));
+            }
+            continue;
         }
-        Some((ix, seg.end as i32, false))
-    } else {
-        let (end, merged) = zmod_broken_run_end(segs, ix);
-        Some((ix, end, merged))
+        let (end, broken) = zmod_broken_run_end(segs, i);
+        if curr_measure < end as f32 {
+            return Some((i, end, broken));
+        }
     }
+    None
 }
 
 pub fn zmod_run_timer_index(segs: &[StreamSegment], curr_measure: f32) -> Option<usize> {
-    let ix = stream_segment_index_exclusive_end(segs, curr_measure);
-    segs.get(ix).filter(|s| !s.is_break).map(|_| ix)
+    let index = stream_segment_index_inclusive_end(segs, curr_measure);
+    if index < segs.len() {
+        Some(index)
+    } else {
+        None
+    }
 }
 
 pub fn zmod_measure_counter_text(
-    song_beat: f32,
+    curr_beat_floor: f32,
     curr_measure: f32,
     segs: &[StreamSegment],
     index: usize,
-    break_text: bool,
+    is_lookahead: bool,
     lookahead: usize,
-    music_rate: f32,
+    multiplier: f32,
 ) -> Option<ZmodMeasureCounterText> {
-    if lookahead == 0 {
+    if segs.is_empty() {
         return None;
     }
-    let seg = *segs.get(index)?;
-    if song_beat < 0.0 {
-        let target = if seg.is_break { seg.end } else { seg.start };
-        return Some(ZmodMeasureCounterText::Break(
-            (((target as f32 - curr_measure).ceil() + 1.0) / music_rate.max(0.001)).max(0.0) as i32,
-        ));
+
+    let mut stream_index = index as isize;
+    let beat_div4 = curr_beat_floor / 4.0;
+
+    if curr_measure < 0.0 {
+        if !is_lookahead {
+            let first = segs[0];
+            if !first.is_break {
+                let value = ((-beat_div4) + (1.0 * multiplier)).floor() as i32;
+                return Some(ZmodMeasureCounterText::Break(value));
+            }
+            let len = (first.end - first.start) as i32;
+            let value_unscaled = (-beat_div4).floor() as i32 + 1 + len;
+            let value = ((value_unscaled as f32) * multiplier).floor() as i32;
+            return Some(ZmodMeasureCounterText::Break(value));
+        }
+        if !segs[0].is_break {
+            stream_index -= 1;
+        }
     }
+
+    let seg = stream_index
+        .try_into()
+        .ok()
+        .and_then(|i: usize| segs.get(i).copied())?;
+
+    let segment_start = seg.start as f32;
+    let segment_end = seg.end as f32;
+    let seg_len = ((segment_end - segment_start) * multiplier).floor() as i32;
+    let curr_count = (((beat_div4 - segment_start) * multiplier).floor() as i32) + 1;
+
     if seg.is_break {
-        let measures = if break_text {
-            (seg.end - seg.start) as f32
+        if lookahead == 0 {
+            return None;
+        }
+        if is_lookahead {
+            Some(ZmodMeasureCounterText::Break(seg_len))
         } else {
-            (seg.end as f32 - curr_measure).ceil()
-        };
-        return Some(ZmodMeasureCounterText::Break(
-            (measures / music_rate.max(0.001)).max(0.0) as i32,
-        ));
+            Some(ZmodMeasureCounterText::Break(seg_len - curr_count + 1))
+        }
+    } else if !is_lookahead && curr_count != 0 {
+        Some(ZmodMeasureCounterText::Ratio {
+            current: curr_count,
+            total: seg_len,
+        })
+    } else {
+        Some(ZmodMeasureCounterText::Total(seg_len))
     }
-    if lookahead > 1 && index + 1 < segs.len() && segs[index + 1].is_break {
-        return Some(ZmodMeasureCounterText::Ratio {
-            current: (curr_measure - seg.start as f32 + 1.0).max(0.0) as i32,
-            total: (seg.end - seg.start) as i32,
-        });
-    }
-    Some(ZmodMeasureCounterText::Total((seg.end - seg.start) as i32))
 }
 
 pub fn zmod_broken_run_counter_text(
@@ -260,15 +285,27 @@ pub fn zmod_broken_run_counter_text(
     if seg.is_break {
         return None;
     }
-    if curr_measure < seg.start as f32 {
-        return Some(ZmodMeasureCounterText::Break(
-            (seg.start as f32 - curr_measure).ceil() as i32 + 1,
-        ));
+    if curr_measure < 0.0 {
+        let first = segs[0];
+        if first.is_break {
+            let first_len = (first.end - first.start) as i32;
+            let value = (-curr_measure).floor() as i32 + 1 + first_len;
+            return Some(ZmodMeasureCounterText::Break(value));
+        }
+        let value = (-curr_measure).floor() as i32 + 1;
+        return Some(ZmodMeasureCounterText::Break(value));
     }
-    Some(ZmodMeasureCounterText::Ratio {
-        current: (curr_measure - seg.start as f32 + 1.0).max(0.0) as i32,
-        total: end - seg.start as i32,
-    })
+
+    let curr_count = (curr_measure - seg.start as f32).floor() as i32 + 1;
+    let len = end - seg.start as i32;
+    if curr_count != 0 {
+        Some(ZmodMeasureCounterText::Ratio {
+            current: curr_count,
+            total: len,
+        })
+    } else {
+        Some(ZmodMeasureCounterText::Total(len))
+    }
 }
 
 pub fn zmod_percent_from_points(points: i32, total: i32) -> f64 {
