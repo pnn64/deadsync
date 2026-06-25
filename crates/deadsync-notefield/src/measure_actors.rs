@@ -194,7 +194,7 @@ fn append_measure_quad(
     let mut quad = SpriteBuilder::solid();
     quad.align(align[0], align[1]);
     quad.xy(xy[0], xy[1]);
-    quad.zoomto(size[0], size[1]);
+    quad.size(size[0], size[1]);
     quad.diffuse(diffuse);
     quad.z(z);
     actors.push(quad.build(0));

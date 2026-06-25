@@ -1,5 +1,4 @@
 use deadlib_present::actors::{Actor, SizeSpec};
-use deadlib_render::BlendMode;
 use std::sync::Arc;
 
 pub struct BuiltNotefield {
@@ -41,7 +40,7 @@ pub fn share_actor_range(actors: &mut Vec<Actor>, start: usize) -> Option<Vec<Ar
         background: None,
         z: 0,
         tint: [1.0, 1.0, 1.0, 1.0],
-        blend: Some(BlendMode::Alpha),
+        blend: None,
     });
     Some(vec![shared])
 }

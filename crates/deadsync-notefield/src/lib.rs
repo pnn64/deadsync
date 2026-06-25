@@ -261,6 +261,8 @@ mod tests {
             Actor::Sprite {
                 align,
                 offset,
+                size,
+                scale,
                 source,
                 tint,
                 z,
@@ -268,6 +270,12 @@ mod tests {
             } => {
                 assert_eq!(*align, [0.5, 0.5]);
                 assert_eq!(*offset, [120.0, 80.0]);
+                assert!(matches!(
+                    size,
+                    [SizeSpec::Px(w), SizeSpec::Px(h)]
+                        if (*w - 256.0).abs() <= 1e-6 && (*h - 2.0).abs() <= 1e-6
+                ));
+                assert_eq!(*scale, [1.0, 1.0]);
                 assert!(matches!(source, SpriteSource::Solid));
                 assert_eq!(*tint, [1.0, 1.0, 1.0, 0.4]);
                 assert_eq!(*z, 80);
@@ -288,12 +296,20 @@ mod tests {
                 Actor::Sprite {
                     align,
                     offset,
+                    size,
+                    scale,
                     tint,
                     z,
                     ..
                 } => {
                     assert_eq!(*align, [0.0, 0.5]);
                     assert_eq!(*offset, [x, 20.0]);
+                    assert!(matches!(
+                        size,
+                        [SizeSpec::Px(w), SizeSpec::Px(h)]
+                            if *w > 0.0 && (*h - 2.0).abs() <= 1e-6
+                    ));
+                    assert_eq!(*scale, [1.0, 1.0]);
                     assert_eq!(*tint, [1.0, 1.0, 1.0, 0.75]);
                     assert_eq!(*z, 80);
                 }
@@ -346,12 +362,20 @@ mod tests {
             Actor::Sprite {
                 align,
                 offset,
+                size,
+                scale,
                 tint,
                 z,
                 ..
             } => {
                 assert_eq!(*align, [0.5, 0.5]);
                 assert_eq!(*offset, [10.0, 20.0]);
+                assert!(matches!(
+                    size,
+                    [SizeSpec::Px(w), SizeSpec::Px(h)]
+                        if (*w - 30.0).abs() <= 1e-6 && (*h - 4.0).abs() <= 1e-6
+                ));
+                assert_eq!(*scale, [1.0, 1.0]);
                 assert_eq!(*tint, [0.2, 0.4, 0.6, 0.8]);
                 assert_eq!(*z, 80);
             }
@@ -3275,9 +3299,15 @@ mod tests {
         assert_eq!(shared.len(), 1);
         assert_eq!(shared[0].len(), 1);
         match &actors[1] {
-            Actor::SharedFrame { size, children, .. } => {
+            Actor::SharedFrame {
+                size,
+                children,
+                blend,
+                ..
+            } => {
                 assert!(matches!(size, [SizeSpec::Fill, SizeSpec::Fill]));
                 assert!(Arc::ptr_eq(children, &shared[0]));
+                assert_eq!(*blend, None);
             }
             _ => panic!("expected shared frame"),
         }
