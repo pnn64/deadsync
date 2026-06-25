@@ -48,7 +48,7 @@ pub const fn column_flash_layout(compact: bool) -> ColumnFlashLayout {
 }
 
 pub fn column_flash_height(screen_height: f32, layout: ColumnFlashLayout) -> f32 {
-    (screen_height - layout.y_offset).max(0.0) - layout.height_trim
+    (screen_height - layout.y_offset - layout.height_trim).max(0.0)
 }
 
 pub fn column_flash_reverse_bottom_y(
@@ -203,13 +203,21 @@ pub fn judgment_tilt_rotation_deg(params: JudgmentTiltParams) -> f32 {
     if !params.enabled || params.grade == JudgeGrade::Miss {
         return 0.0;
     }
-    let abs = params.time_error_ms.abs();
-    if abs <= params.min_threshold_ms {
+    if !params.time_error_ms.is_finite() || !params.multiplier.is_finite() {
         return 0.0;
     }
-    let denom = (params.max_threshold_ms - params.min_threshold_ms).max(1.0);
-    let t = ((abs - params.min_threshold_ms) / denom).clamp(0.0, 1.0);
-    -params.time_error_ms.signum() * 4.5 * t * params.multiplier
+    let min_ms = params.min_threshold_ms;
+    let max_ms = params.max_threshold_ms.max(params.min_threshold_ms);
+    let active_ms = params.time_error_ms.abs().min(max_ms) - min_ms;
+    if active_ms <= 0.0 {
+        return 0.0;
+    }
+    let dir = if params.time_error_ms < 0.0 {
+        1.0
+    } else {
+        -1.0
+    };
+    dir * active_ms * 0.3 * params.multiplier
 }
 
 pub fn judgment_actor_zoom(mini: f32, judgment_back: bool, _tilt: f32, _skew: f32) -> f32 {
@@ -270,14 +278,17 @@ pub fn tap_judgment_rows(params: TapJudgmentRowsParams) -> (usize, Option<usize>
 }
 
 pub fn held_miss_zoom(elapsed: f32, mini: f32) -> (f32, f32) {
-    if elapsed >= 0.5 {
-        return (0.0, 0.0);
+    let mini_scale = (1.0 - mini * 0.5).max(0.0);
+    if elapsed < 0.1 {
+        let t = (elapsed / 0.1).clamp(0.0, 1.0);
+        let ease_t = 1.0 - (1.0 - t).powi(2);
+        let zoom_x = 0.8 + (0.75 - 0.8) * ease_t;
+        return (zoom_x * mini_scale, 0.75 * mini_scale);
     }
-    let mini_scale = 1.0 - mini.clamp(0.0, 1.0) * 0.5;
-    let zoom = if elapsed <= 0.2 {
-        0.8 - 0.25 * elapsed
-    } else {
-        0.75 * (1.0 - (elapsed - 0.2) / 0.3)
-    };
-    (zoom * mini_scale, 0.75 * mini_scale)
+    if elapsed < 0.3 {
+        return (0.75 * mini_scale, 0.75 * mini_scale);
+    }
+    let t = ((elapsed - 0.3) / 0.2).clamp(0.0, 1.0);
+    let zoom = 0.75 * mini_scale * (1.0 - t.powi(2));
+    (zoom, zoom)
 }

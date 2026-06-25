@@ -2,17 +2,21 @@ use crate::style::*;
 use deadsync_rules::judgment::TimingWindow;
 
 pub fn error_bar_tick_alpha(age: f32, dur: f32, multi_tick: bool) -> f32 {
-    if age < 0.0 || dur <= 0.0 || age >= dur {
+    if !age.is_finite() || age < 0.0 {
         return 0.0;
     }
-    if !multi_tick {
-        return 1.0;
-    }
-    let fade_start = 0.03;
-    if age <= fade_start {
+    if multi_tick {
+        if age < 0.03 {
+            1.0
+        } else if age < dur {
+            1.0 - (age - 0.03) / (dur - 0.03).max(0.000_001)
+        } else {
+            0.0
+        }
+    } else if age < dur {
         1.0
     } else {
-        1.0 - (age - fade_start) / (dur - fade_start)
+        0.0
     }
 }
 
@@ -20,11 +24,8 @@ pub fn error_bar_flash_alpha(now: f32, started_at: Option<f32>, dur: f32) -> f32
     let Some(started) = started_at else {
         return ERROR_BAR_SEG_ALPHA_BASE;
     };
-    if !now.is_finite() || now < started || dur <= 0.0 {
-        return ERROR_BAR_SEG_ALPHA_BASE;
-    }
     let age = now - started;
-    if age >= dur {
+    if !age.is_finite() || age < 0.0 || age >= dur {
         return ERROR_BAR_SEG_ALPHA_BASE;
     }
     1.0 + (ERROR_BAR_SEG_ALPHA_BASE - 1.0) * (age / dur)

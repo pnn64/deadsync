@@ -11,16 +11,11 @@ pub fn lane_window_bounds_by_note_row(
     range: Option<(i32, i32)>,
 ) -> Option<(usize, usize)> {
     let (low, high) = range?;
-    let start = indices
-        .iter()
-        .position(|&i| note_itg_row(&notes[i]) >= low)
-        .unwrap_or(indices.len());
-    let end = indices
-        .iter()
-        .rposition(|&i| note_itg_row(&notes[i]) <= high)
-        .map(|i| i + 1)
-        .unwrap_or(start);
-    Some((start, end.max(start)))
+    let low = low.max(0);
+    Some((
+        indices.partition_point(|&note_index| note_itg_row(&notes[note_index]) < low),
+        indices.partition_point(|&note_index| note_itg_row(&notes[note_index]) <= high),
+    ))
 }
 
 pub fn lane_hold_window_bounds_by_note_row(
@@ -28,15 +23,23 @@ pub fn lane_hold_window_bounds_by_note_row(
     indices: &[usize],
     range: Option<(i32, i32)>,
 ) -> Option<(usize, usize)> {
-    let mut first = None;
-    let mut last = None;
-    for (pos, &ix) in indices.iter().enumerate() {
-        if hold_overlaps_visible_window(ix, notes, range) {
-            first.get_or_insert(pos);
-            last = Some(pos + 1);
+    let (low, _) = range?;
+    let (mut start, end) = lane_window_bounds_by_note_row(notes, indices, range)?;
+    let low = low.max(0);
+    while start > 0 {
+        let prev_note_index = indices[start - 1];
+        let prev_end_row = notes[prev_note_index]
+            .hold
+            .as_ref()
+            .map_or(note_itg_row(&notes[prev_note_index]), |hold| {
+                beat_to_note_row(hold.end_beat)
+            });
+        if prev_end_row < low {
+            break;
         }
+        start -= 1;
     }
-    Some((first.unwrap_or(0), last.unwrap_or(0)))
+    Some((start, end))
 }
 
 pub fn for_each_visible_note_index<F: FnMut(usize)>(
@@ -51,11 +54,12 @@ pub fn for_each_visible_note_index<F: FnMut(usize)>(
         }
         return;
     };
-    for &i in indices {
-        let row = note_itg_row(&notes[i]);
-        if row >= low && row <= high {
-            f(i);
-        }
+    let Some((start, end)) = lane_window_bounds_by_note_row(notes, indices, Some((low, high)))
+    else {
+        return;
+    };
+    for &i in &indices[start..end] {
+        f(i);
     }
 }
 
@@ -65,10 +69,18 @@ pub fn for_each_visible_hold_index<F: FnMut(usize)>(
     range: Option<(i32, i32)>,
     mut f: F,
 ) {
-    for &i in indices {
-        if hold_overlaps_visible_window(i, notes, range) {
+    let Some((low, high)) = range else {
+        for &i in indices {
             f(i);
         }
+        return;
+    };
+    let Some((start, end)) = lane_hold_window_bounds_by_note_row(notes, indices, Some((low, high)))
+    else {
+        return;
+    };
+    for &i in &indices[start..end] {
+        f(i);
     }
 }
 
@@ -89,73 +101,80 @@ pub fn hold_overlaps_visible_window(
         .as_ref()
         .map(|h| beat_to_note_row(h.end_beat))
         .unwrap_or(start);
-    start <= high && end >= low
+    high >= 0 && end >= low.max(0) && start <= high
 }
 
 fn note_count_at(stats: &[NoteCountStat], beat: f32) -> NoteCountStat {
-    stats
-        .iter()
-        .rev()
-        .find(|s| s.beat <= beat)
-        .copied()
-        .unwrap_or(NoteCountStat {
-            beat: 0.0,
-            notes_lower: 0,
-            notes_upper: 0,
-        })
+    let ix = stats
+        .partition_point(|stat| stat.beat <= beat)
+        .saturating_sub(1);
+    stats.get(ix).copied().unwrap_or(NoteCountStat {
+        beat: 0.0,
+        notes_lower: 0,
+        notes_upper: 0,
+    })
 }
 
-pub fn find_first_displayed_beat<F: Fn(f32) -> f32>(
+fn note_count_range(stats: &[NoteCountStat], low: f32, high: f32) -> usize {
+    let low = note_count_at(stats, low);
+    let high = note_count_at(stats, high);
+    high.notes_upper.saturating_sub(low.notes_lower)
+}
+
+pub fn find_first_displayed_beat<F: FnMut(f32) -> f32>(
     current_beat: f32,
     draw_distance: f32,
     stats: &[NoteCountStat],
-    y_for_beat: F,
+    mut y_for_beat: F,
 ) -> Option<f32> {
     if !current_beat.is_finite() || !draw_distance.is_finite() {
         return None;
     }
-    if !stats.is_empty() {
-        let total = note_count_at(stats, current_beat).notes_upper;
-        let cutoff = total.saturating_sub(MAX_NOTES_AFTER);
-        if let Some(stat) = stats.iter().find(|s| s.notes_lower >= cutoff) {
-            return Some(stat.beat);
+    let mut high = current_beat.max(0.0);
+    let has_cache = !stats.is_empty();
+    let mut low = if has_cache { 0.0 } else { high - 4.0 };
+    let mut first = low;
+    for _ in 0..24 {
+        let mid = (low + high) * 0.5;
+        if y_for_beat(mid) < -draw_distance
+            || (has_cache && note_count_range(stats, mid, current_beat) > MAX_NOTES_AFTER)
+        {
+            first = mid;
+            low = mid;
+        } else {
+            high = mid;
         }
     }
-    let estimate = current_beat - draw_distance / 30.0;
-    let mut beat = estimate;
-    while beat <= current_beat {
-        if y_for_beat(beat).abs() <= draw_distance {
-            return Some(beat);
-        }
-        beat += 0.001;
-    }
-    Some(estimate)
+    Some(first)
 }
 
-pub fn find_last_displayed_beat<F: Fn(f32) -> (f32, bool)>(
+pub fn find_last_displayed_beat<F: FnMut(f32) -> (f32, bool)>(
     current_beat: f32,
     draw_distance: f32,
-    scroll_speed: f32,
+    displayed_speed_percent: f32,
     boomerang: bool,
-    y_for_beat: F,
+    mut y_for_beat: F,
 ) -> Option<f32> {
     if !current_beat.is_finite() || !draw_distance.is_finite() {
         return None;
     }
-    let max_lookahead = if scroll_speed < 1.0 { 16.0 } else { 64.0 };
-    if boomerang {
-        return Some(current_beat + max_lookahead);
-    }
-    let mut beat = current_beat;
-    let step = 0.001_f32.max(1.0 / 192.0);
-    while beat < current_beat + max_lookahead {
-        let (y, before_peak) = y_for_beat(beat);
-        if y.abs() >= draw_distance && (!boomerang || !before_peak) {
-            return Some(beat);
+    let mut search_distance = 10.0;
+    let mut last = current_beat + search_distance;
+    for _ in 0..20 {
+        let (y_offset, before_peak) = y_for_beat(last);
+        if boomerang && !before_peak {
+            last += search_distance;
+        } else if y_offset > draw_distance {
+            last -= search_distance;
+        } else {
+            last += search_distance;
         }
-        beat += step;
+        search_distance *= 0.5;
     }
-    Some(current_beat + max_lookahead)
+    if displayed_speed_percent < 0.75 {
+        last = last.min(current_beat + 16.0);
+    }
+    Some(last)
 }
 
 pub const fn mine_hides_after_resolution(mine_result: Option<MineResult>) -> bool {

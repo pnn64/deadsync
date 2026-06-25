@@ -70,20 +70,20 @@ mod tests {
         gameplay_mods_text, held_miss_zoom, hold_body_bottom_for_tail_cap,
         hold_body_segment_budget, hold_draw_span, hold_glow_color, hold_head_part_for_roll,
         hold_indicator_column_x, hold_overlaps_visible_window, hold_parts_for_note_type,
-        hold_segment_pose, hold_strip_actor, hold_strip_glow_actor, hold_strip_row_3d,
-        hold_tail_cap_bounds, hud_layout_ys, hud_y, itg_actor_glow_alpha, itg_actor_rotation_z,
-        join_display_mod_parts, judgment_actor_zoom, judgment_tilt_rotation_deg,
-        maybe_mirror_uv_horiz_for_reverse_flipped, mine_hides_after_resolution, mine_part,
-        mod_divisor, mod_percent_key, move_col_extra, note_itg_row, note_world_z_for_bumpy,
-        note_x_extra, note_x_offset, notefield_view_proj, offset_center, player_metric_y,
-        push_transform_parts, quantize_centi_i32, quantize_centi_u32, quantize_step,
-        receptor_row_center, rgba8, scale_cap_to_arrow, scale_effect_size, scale_sprite_to_arrow,
-        share_actor_range, signed_effect_active, sm_scale, smoothstep01,
-        song_time_ns_delta_seconds, song_time_ns_to_seconds, stream_segment_index_exclusive_end,
-        stream_segment_index_inclusive_end, tap_judgment_rows, tap_part_for_note_type,
-        tap_replacement_head, timing_window_from_num, tiny_spacing_scale, tipsy_y_extra,
-        top_cap_rotation_deg, tornado_x_extra, translated_uv_rect, visual_arrow_effect_zoom,
-        visual_confusion_rotation_deg, visual_effect_params_for_col,
+        hold_segment_pose, hold_strip_actor, hold_strip_glow_actor, hold_strip_quad,
+        hold_strip_row_3d, hold_tail_cap_bounds, hud_layout_ys, hud_y, itg_actor_glow_alpha,
+        itg_actor_rotation_z, join_display_mod_parts, judgment_actor_zoom,
+        judgment_tilt_rotation_deg, maybe_mirror_uv_horiz_for_reverse_flipped,
+        mine_hides_after_resolution, mine_part, mod_divisor, mod_percent_key, move_col_extra,
+        note_itg_row, note_world_z_for_bumpy, note_x_extra, note_x_offset, notefield_view_proj,
+        offset_center, player_metric_y, push_transform_parts, quantize_centi_i32,
+        quantize_centi_u32, quantize_step, receptor_row_center, rgba8, scale_cap_to_arrow,
+        scale_effect_size, scale_sprite_to_arrow, share_actor_range, signed_effect_active,
+        sm_scale, smoothstep01, song_time_ns_delta_seconds, song_time_ns_to_seconds,
+        stream_segment_index_exclusive_end, stream_segment_index_inclusive_end, tap_judgment_rows,
+        tap_part_for_note_type, tap_replacement_head, timing_window_from_num, tiny_spacing_scale,
+        tipsy_y_extra, top_cap_rotation_deg, tornado_x_extra, translated_uv_rect,
+        visual_arrow_effect_zoom, visual_confusion_rotation_deg, visual_effect_params_for_col,
         visual_hold_body_needs_z_buffer, visual_note_rotation_z, visual_pulse_inner_zoom,
         visual_pulse_zoom_for_y, visual_tiny_zoom, visual_use_legacy_hold_sprites,
         zmod_broken_run_counter_text, zmod_broken_run_end, zmod_broken_run_segment,
@@ -1113,6 +1113,7 @@ mod tests {
         assert!((height - 140.0).abs() <= 1e-6);
         assert!((top - 247.0).abs() <= 1e-6);
         assert!((bottom - 387.0).abs() <= 1e-6);
+        assert_eq!(column_flash_height(100.0, layout), 0.0);
     }
 
     #[test]
@@ -1473,6 +1474,8 @@ mod tests {
         assert_eq!(error_bar_tick_alpha(0.02, 0.5, true), 1.0);
         assert!((error_bar_tick_alpha(0.265, 0.5, true) - 0.5).abs() <= 1e-6);
         assert_eq!(error_bar_tick_alpha(0.5, 0.5, true), 0.0);
+        assert_eq!(error_bar_tick_alpha(f32::NAN, 0.5, false), 0.0);
+        assert_eq!(error_bar_tick_alpha(0.02, 0.0, true), 1.0);
     }
 
     #[test]
@@ -1481,6 +1484,7 @@ mod tests {
         assert!((error_bar_flash_alpha(1.0, Some(1.2), 0.5) - 0.3).abs() <= 1e-6);
         assert!((error_bar_flash_alpha(1.6, Some(1.0), 0.5) - 0.3).abs() <= 1e-6);
         assert!((error_bar_flash_alpha(f32::NAN, Some(1.0), 0.5) - 0.3).abs() <= 1e-6);
+        assert!((error_bar_flash_alpha(1.0, Some(f32::NAN), 0.5) - 0.3).abs() <= 1e-6);
     }
 
     #[test]
@@ -2431,6 +2435,24 @@ mod tests {
                 .abs()
                 <= 1e-6
         );
+        assert!(
+            (judgment_tilt_rotation_deg(JudgmentTiltParams {
+                time_error_ms: 40.0,
+                max_threshold_ms: 30.0,
+                ..params
+            }) + 7.5)
+                .abs()
+                <= 1e-6
+        );
+        assert_eq!(
+            judgment_tilt_rotation_deg(JudgmentTiltParams {
+                time_error_ms: 40.0,
+                min_threshold_ms: 30.0,
+                max_threshold_ms: 5.0,
+                ..params
+            }),
+            0.0
+        );
     }
 
     #[test]
@@ -2620,11 +2642,14 @@ mod tests {
     #[test]
     fn held_miss_zoom_pops_then_fades() {
         assert_eq!(held_miss_zoom(0.0, 0.0), (0.8, 0.75));
+        assert!((held_miss_zoom(0.05, 0.0).0 - 0.7625).abs() <= 1e-6);
         assert_eq!(held_miss_zoom(0.2, 0.0), (0.75, 0.75));
+        assert_eq!(held_miss_zoom(0.4, 0.0), (0.5625, 0.5625));
         let faded = held_miss_zoom(0.5, 0.0);
         assert!(faded.0.abs() <= 1e-6);
         assert!(faded.1.abs() <= 1e-6);
         assert_eq!(held_miss_zoom(0.2, 1.0), (0.375, 0.375));
+        assert_eq!(held_miss_zoom(0.2, -1.0), (1.125, 1.125));
     }
 
     #[test]
@@ -2720,6 +2745,19 @@ mod tests {
         );
         assert!((row[0].pos[2] - 12.5).abs() <= 1e-6);
         assert!((row[1].pos[2] - 12.5).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn hold_strip_quad_matches_legacy_triangle_order() {
+        let top = hold_strip_row_3d([0.0, 0.0, 0.0], [0.0, 16.0], 1.0, 0.0, 1.0, 0.0, [1.0; 4]);
+        let bottom = hold_strip_row_3d([0.0, 10.0, 0.0], [0.0, 16.0], 1.0, 0.0, 1.0, 1.0, [1.0; 4]);
+        let quad = hold_strip_quad(top, bottom);
+        assert_eq!(quad[0].pos, top[0].pos);
+        assert_eq!(quad[1].pos, top[1].pos);
+        assert_eq!(quad[2].pos, bottom[1].pos);
+        assert_eq!(quad[3].pos, top[0].pos);
+        assert_eq!(quad[4].pos, bottom[1].pos);
+        assert_eq!(quad[5].pos, bottom[0].pos);
     }
 
     #[test]
@@ -2976,6 +3014,25 @@ mod tests {
     }
 
     #[test]
+    fn visible_note_window_clamps_negative_track_rows() {
+        let notes = vec![
+            test_note_at_dense_row(-1.0, 0),
+            test_note_at_dense_row(0.0, 1),
+        ];
+        let note_indices = vec![0usize, 1usize];
+        let mut visited = Vec::new();
+
+        for_each_visible_note_index(
+            &note_indices,
+            &notes,
+            Some((beat_to_note_row(-2.0), beat_to_note_row(0.0))),
+            |note_index| visited.push(note_index),
+        );
+
+        assert_eq!(visited, vec![1]);
+    }
+
+    #[test]
     fn visible_hold_window_includes_holds_started_before_range() {
         let notes = vec![test_hold_at_beat(0.0, 8.0), test_hold_at_beat(12.0, 16.0)];
         let hold_indices = vec![0usize, 1usize];
@@ -2989,6 +3046,21 @@ mod tests {
         assert!(hold_overlaps_visible_window(0, &notes, visible_range));
         assert!(!hold_overlaps_visible_window(1, &notes, visible_range));
         assert_eq!(visited, vec![0]);
+    }
+
+    #[test]
+    fn visible_hold_window_rejects_fully_negative_ranges() {
+        let notes = vec![test_hold_at_beat(-4.0, -1.0)];
+        let hold_indices = vec![0usize];
+        let visible_range = Some((beat_to_note_row(-4.0), beat_to_note_row(-1.0)));
+        let mut visited = Vec::new();
+
+        for_each_visible_hold_index(&hold_indices, &notes, visible_range, |note_index| {
+            visited.push(note_index);
+        });
+
+        assert!(!hold_overlaps_visible_window(0, &notes, visible_range));
+        assert!(visited.is_empty());
     }
 
     #[test]

@@ -208,7 +208,7 @@ pub fn hold_strip_quad(
     top: [TexturedMeshVertex; 2],
     bottom: [TexturedMeshVertex; 2],
 ) -> [TexturedMeshVertex; 6] {
-    [top[0], bottom[0], bottom[1], top[0], bottom[1], top[1]]
+    [top[0], top[1], bottom[1], top[0], bottom[1], bottom[0]]
 }
 
 pub fn hold_strip_actor(
