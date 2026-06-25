@@ -65,7 +65,7 @@ pub fn quantize_step(v: f32, step: f32) -> f32 {
     if !v.is_finite() || !step.is_finite() || step == 0.0 {
         0.0
     } else {
-        (v / step).round() * step
+        ((v + step * 0.5) / step).trunc() * step
     }
 }
 
@@ -409,34 +409,53 @@ pub fn note_x_offset(
     base * tiny_spacing_scale(tiny_zoom) + move_col_extra(move_x, local_col)
 }
 
-pub fn appearance_note_alpha(y: f32, elapsed: f32, _mini: f32, params: NoteAlphaParams) -> f32 {
-    let mut alpha = 1.0 - params.stealth.clamp(0.0, 1.0);
-    if params.hidden > 0.0 {
-        alpha *= 1.0
-            - smoothstep01((y - params.hidden_offset) / FADE_DIST_Y)
-                * params.hidden.clamp(0.0, 1.0);
+pub fn appearance_note_alpha(y: f32, elapsed: f32, mini: f32, params: NoteAlphaParams) -> f32 {
+    if y < 0.0 {
+        return 1.0;
     }
-    if params.sudden > 0.0 {
-        alpha *=
-            smoothstep01((y - CENTER_LINE_Y + params.sudden_offset * FADE_DIST_Y) / FADE_DIST_Y)
-                * params.sudden.clamp(0.0, 1.0)
-                + (1.0 - params.sudden.clamp(0.0, 1.0));
+
+    let zoom = (1.0 - mini * 0.5).abs().max(0.01);
+    let center_line = CENTER_LINE_Y / zoom;
+    let hidden_sudden = params.hidden * params.sudden;
+    let hidden_end = center_line
+        + FADE_DIST_Y * sm_scale(hidden_sudden, 0.0, 1.0, -1.0, -1.25)
+        + center_line * params.hidden_offset;
+    let hidden_start = center_line
+        + FADE_DIST_Y * sm_scale(hidden_sudden, 0.0, 1.0, 0.0, -0.25)
+        + center_line * params.hidden_offset;
+    let sudden_end = center_line
+        + FADE_DIST_Y * sm_scale(hidden_sudden, 0.0, 1.0, 0.0, 0.25)
+        + center_line * params.sudden_offset;
+    let sudden_start = center_line
+        + FADE_DIST_Y * sm_scale(hidden_sudden, 0.0, 1.0, 1.0, 1.25)
+        + center_line * params.sudden_offset;
+
+    let mut visible_adjust = 0.0;
+    if params.hidden > f32::EPSILON {
+        visible_adjust +=
+            params.hidden * sm_scale(y, hidden_start, hidden_end, 0.0, -1.0).clamp(-1.0, 0.0);
     }
-    if params.blink != 0.0 && ((y * BLINK_MOD_FREQUENCY).sin() < 0.0) {
-        alpha *= 1.0 - params.blink.clamp(0.0, 1.0);
+    if params.sudden > f32::EPSILON {
+        visible_adjust +=
+            params.sudden * sm_scale(y, sudden_start, sudden_end, -1.0, 0.0).clamp(-1.0, 0.0);
     }
-    if params.random_vanish != 0.0 && (elapsed + y).sin().abs() < params.random_vanish {
-        alpha = 0.0;
+    if params.stealth > f32::EPSILON {
+        visible_adjust -= params.stealth;
     }
-    alpha.clamp(0.0, 1.0)
+    if params.blink > f32::EPSILON {
+        let blink = quantize_step((elapsed * 10.0).sin(), BLINK_MOD_FREQUENCY);
+        visible_adjust += sm_scale(blink, 0.0, 1.0, -1.0, 0.0);
+    }
+    if params.random_vanish > f32::EPSILON {
+        let dist = (y - center_line).abs();
+        visible_adjust += sm_scale(dist, 80.0, 160.0, -1.0, 0.0) * params.random_vanish;
+    }
+    (1.0 + visible_adjust).clamp(0.0, 1.0)
 }
 
 pub fn appearance_note_glow(y: f32, elapsed: f32, mini: f32, params: NoteAlphaParams) -> f32 {
-    if params.stealth > 0.0 {
-        (params.stealth * 2.6).clamp(0.0, 1.0)
-    } else {
-        (1.0 - appearance_note_alpha(y, elapsed, mini, params)) * (1.0 - mini.clamp(0.0, 1.0) * 0.4)
-    }
+    let percent_visible = appearance_note_alpha(y, elapsed, mini, params);
+    sm_scale((percent_visible - 0.5).abs(), 0.0, 0.5, 1.3, 0.0).max(0.0)
 }
 
 pub fn appearance_note_actor_alpha(
@@ -445,15 +464,17 @@ pub fn appearance_note_actor_alpha(
     mini: f32,
     params: NoteAlphaParams,
 ) -> f32 {
-    if appearance_note_alpha(y, elapsed, mini, params) <= 0.5 {
-        0.0
-    } else {
+    if appearance_note_alpha(y, elapsed, mini, params) > 0.5 {
         1.0
+    } else {
+        0.0
     }
 }
 
 pub fn appearance_needs_rows(appearance: NoteAlphaParams) -> bool {
-    appearance.hidden != 0.0 || appearance.sudden != 0.0 || appearance.random_vanish != 0.0
+    appearance.hidden > f32::EPSILON
+        || appearance.sudden > f32::EPSILON
+        || appearance.random_vanish > f32::EPSILON
 }
 
 pub fn tiny_spacing_scale(tiny: f32) -> f32 {

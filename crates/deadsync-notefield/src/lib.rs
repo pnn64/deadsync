@@ -507,6 +507,7 @@ mod tests {
     fn quantize_step_rounds_to_nearest_step() {
         assert!((quantize_step(0.24, 0.5) - 0.0).abs() <= 1e-6);
         assert!((quantize_step(0.26, 0.5) - 0.5).abs() <= 1e-6);
+        assert!((quantize_step(-0.50, 0.3333) + 0.3333).abs() <= 1e-4);
     }
 
     #[test]
@@ -1222,6 +1223,60 @@ mod tests {
             },
         );
         assert!((partial - full).abs() <= 1e-6);
+        assert_eq!(full, 0.0);
+
+        let visible_phase = appearance_note_alpha(
+            100.0,
+            0.1,
+            0.0,
+            NoteAlphaParams {
+                blink: 1.0,
+                ..NoteAlphaParams::default()
+            },
+        );
+        assert!((visible_phase - 0.9999).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn appearance_hidden_and_sudden_alpha_match_itg_fade_bands() {
+        let hidden = NoteAlphaParams {
+            hidden: 1.0,
+            ..NoteAlphaParams::default()
+        };
+        assert_eq!(appearance_note_alpha(-1.0, 0.0, 0.0, hidden), 1.0);
+        assert_eq!(appearance_note_alpha(120.0, 0.0, 0.0, hidden), 0.0);
+        assert!((appearance_note_alpha(140.0, 0.0, 0.0, hidden) - 0.5).abs() <= 1e-6);
+        assert_eq!(appearance_note_alpha(160.0, 0.0, 0.0, hidden), 1.0);
+
+        let sudden = NoteAlphaParams {
+            sudden: 1.0,
+            ..NoteAlphaParams::default()
+        };
+        assert_eq!(appearance_note_alpha(160.0, 0.0, 0.0, sudden), 1.0);
+        assert!((appearance_note_alpha(180.0, 0.0, 0.0, sudden) - 0.5).abs() <= 1e-6);
+        assert_eq!(appearance_note_alpha(200.0, 0.0, 0.0, sudden), 0.0);
+    }
+
+    #[test]
+    fn appearance_hidden_sudden_combo_widens_fade_bands() {
+        let combo = NoteAlphaParams {
+            hidden: 1.0,
+            sudden: 1.0,
+            ..NoteAlphaParams::default()
+        };
+        assert_eq!(appearance_note_alpha(110.0, 0.0, 0.0, combo), 0.0);
+        assert_eq!(appearance_note_alpha(160.0, 0.0, 0.0, combo), 1.0);
+        assert_eq!(appearance_note_alpha(210.0, 0.0, 0.0, combo), 0.0);
+    }
+
+    #[test]
+    fn appearance_random_vanish_fades_near_center_line() {
+        let random_vanish = NoteAlphaParams {
+            random_vanish: 1.0,
+            ..NoteAlphaParams::default()
+        };
+        assert_eq!(appearance_note_alpha(160.0, 0.0, 0.0, random_vanish), 0.0);
+        assert_eq!(appearance_note_alpha(320.0, 0.0, 0.0, random_vanish), 1.0);
     }
 
     #[test]
