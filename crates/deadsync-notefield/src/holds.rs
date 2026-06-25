@@ -140,8 +140,13 @@ pub fn hold_draw_span(y_head: f32, y_tail: f32, screen_height: f32) -> Option<(f
     {
         return None;
     }
-    let top = y_head.min(y_tail).max(-screen_height);
-    let bottom = y_head.max(y_tail).min(screen_height * 2.0);
+    let mut top = y_head.min(y_tail);
+    let mut bottom = y_head.max(y_tail);
+    if bottom < -200.0 || top > screen_height + 200.0 {
+        return None;
+    }
+    top = top.max(-400.0);
+    bottom = bottom.min(screen_height + 400.0);
     (bottom >= top).then_some((top, bottom))
 }
 
