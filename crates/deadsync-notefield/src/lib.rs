@@ -754,6 +754,14 @@ mod tests {
     }
 
     #[test]
+    fn gameplay_mods_text_formats_mmod_like_legacy_display() {
+        let mut params = empty_mods_params();
+        params.speed = ScrollSpeedSetting::MMod(600.0);
+
+        assert_eq!(gameplay_mods_text(params), "m600, Overhead, devcel-2024");
+    }
+
+    #[test]
     fn gameplay_mods_text_includes_effect_sections_in_legacy_order() {
         let mut params = empty_mods_params();
         params.noteskin = "";
@@ -2604,6 +2612,10 @@ mod tests {
         );
         assert_eq!(moved_judgment.judgment_y, 125.0);
         assert_eq!(moved_judgment.zmod_layout.combo_y, base.zmod_layout.combo_y);
+        assert_eq!(
+            moved_judgment.zmod_layout.subtractive_scoring_y,
+            base.zmod_layout.subtractive_scoring_y
+        );
         assert_eq!(moved_judgment.error_bar_y, base.error_bar_y);
 
         let moved_combo = hud_layout_ys(
@@ -2658,6 +2670,59 @@ mod tests {
         let layout = zmod_layout_ys(100.0, 160.0, false, params);
         assert_eq!(layout.subtractive_scoring_y, 76.0);
         assert_eq!(layout.subtractive_scoring_addx, -60.0);
+    }
+
+    #[test]
+    fn zmod_layout_preserves_legacy_row_reservation_branches() {
+        let mut params = default_zmod_layout_params();
+        params.mini_indicator_position = LayoutMiniIndicatorPosition::UnderUpArrow;
+        let layout = zmod_layout_ys(100.0, 160.0, false, params);
+        assert_eq!(layout.measure_counter_y, None);
+        assert_eq!(layout.subtractive_scoring_y, 72.0);
+        assert_eq!(layout.subtractive_scoring_addx, 0.0);
+        assert_eq!(layout.combo_y, 160.0);
+
+        params = default_zmod_layout_params();
+        params.has_measure_counter = true;
+        params.measure_counter_up = false;
+        let layout = zmod_layout_ys(100.0, 160.0, false, params);
+        assert_eq!(layout.measure_counter_y, Some(143.0));
+        assert_eq!(layout.subtractive_scoring_y, 72.0);
+        assert_eq!(layout.combo_y, 176.0);
+
+        params = default_zmod_layout_params();
+        params.has_measure_counter = true;
+        params.measure_counter_up = true;
+        params.has_judgment_texture = false;
+        params.error_bar_up = true;
+        let layout = zmod_layout_ys(100.0, 160.0, false, params);
+        assert_eq!(layout.measure_counter_y, Some(72.0));
+        assert_eq!(layout.subtractive_scoring_y, 128.0);
+    }
+
+    #[test]
+    fn hud_layout_error_bar_matches_legacy_judgment_branches() {
+        let mut params = HudLayoutParams {
+            zmod: default_zmod_layout_params(),
+            has_judgment_texture: true,
+            error_bar_up: false,
+            error_bar_offset: 25.0,
+        };
+
+        let reverse = hud_layout_ys(100.0, 160.0, true, HudLayoutOffsets::default(), params);
+        assert_eq!(reverse.error_bar_y, 125.0);
+        assert_eq!(reverse.error_bar_max_h, 10.0);
+
+        params.error_bar_up = true;
+        let up = hud_layout_ys(100.0, 160.0, false, HudLayoutOffsets::default(), params);
+        assert_eq!(up.error_bar_y, 75.0);
+        assert_eq!(up.error_bar_max_h, 10.0);
+
+        params.has_judgment_texture = false;
+        params.zmod.has_judgment_texture = false;
+        let no_judgment = hud_layout_ys(100.0, 160.0, false, HudLayoutOffsets::default(), params);
+        assert_eq!(no_judgment.error_bar_y, 100.0);
+        assert_eq!(no_judgment.error_bar_max_h, 30.0);
     }
 
     #[test]

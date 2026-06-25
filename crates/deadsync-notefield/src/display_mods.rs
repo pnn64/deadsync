@@ -59,7 +59,7 @@ fn format_speed(speed: ScrollSpeedSetting) -> String {
     match speed {
         ScrollSpeedSetting::XMod(v) => format!("{}x", trim_float2(v)),
         ScrollSpeedSetting::CMod(v) => format!("C{}", trim_float2(v)),
-        ScrollSpeedSetting::MMod(v) => format!("M{}", trim_float2(v)),
+        ScrollSpeedSetting::MMod(v) => format!("m{}", trim_float2(v)),
     }
 }
 

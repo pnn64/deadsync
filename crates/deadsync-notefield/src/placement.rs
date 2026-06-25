@@ -228,18 +228,67 @@ pub fn zmod_layout_ys(
     reverse: bool,
     params: ZmodLayoutParams,
 ) -> ZmodLayoutYs {
-    let dir = if reverse { 1.0 } else { -1.0 };
-    let measure_counter_y = params.has_measure_counter.then(|| judgment_y + dir * 44.0);
+    let mut top_y = judgment_y - params.judgment_height * 0.5;
+    let mut bottom_y = judgment_y + params.judgment_height * 0.5;
+
+    if params.has_error_bar && params.has_judgment_texture {
+        if params.error_bar_up {
+            top_y -= 15.0;
+        } else {
+            bottom_y += 15.0;
+        }
+    }
+
+    let mut measure_counter_y = None;
+    if params.has_measure_counter {
+        if params.measure_counter_up {
+            let mut y = top_y - 8.0;
+            top_y -= 20.0;
+            if params.broken_run {
+                y -= 16.0;
+            }
+            measure_counter_y = Some(y);
+        } else {
+            measure_counter_y = Some(bottom_y + 8.0);
+            bottom_y += 21.0;
+        }
+    }
+
     let (subtractive_scoring_y, subtractive_scoring_addx) = match params.mini_indicator_position {
-        LayoutMiniIndicatorPosition::Default => (combo_y - 17.0, 0.0),
-        LayoutMiniIndicatorPosition::UnderUpArrow => (judgment_y - 24.0, -60.0),
+        LayoutMiniIndicatorPosition::Default => {
+            if params.has_measure_counter && params.measure_counter_up {
+                let y = bottom_y + 8.0;
+                bottom_y += 16.0;
+                (y, 0.0)
+            } else {
+                let y = top_y - 8.0;
+                top_y -= 16.0;
+                (y, 0.0)
+            }
+        }
+        LayoutMiniIndicatorPosition::UnderUpArrow => {
+            if params.has_measure_counter && params.measure_counter_up {
+                let y = top_y + 16.0;
+                top_y -= 16.0;
+                (y, -60.0)
+            } else {
+                let y = top_y - 8.0;
+                top_y -= 16.0;
+                (y, 0.0)
+            }
+        }
     };
-    let combo_offset = if params.broken_run { 11.0 } else { 0.0 };
+    let combo_y = if reverse {
+        combo_y.min(top_y - 20.0)
+    } else {
+        combo_y.max(bottom_y + 20.0)
+    };
+
     ZmodLayoutYs {
         measure_counter_y,
         subtractive_scoring_y,
         subtractive_scoring_addx,
-        combo_y: combo_y + combo_offset,
+        combo_y,
     }
 }
 
@@ -251,18 +300,26 @@ pub fn hud_layout_ys(
     params: HudLayoutParams,
 ) -> HudLayoutYs {
     let placed_judgment_y = judgment_y + offsets.judgment_extra_y;
-    let combo_y = combo_y + offsets.combo_extra_y;
-    let error_dir = if params.error_bar_up || reverse {
-        -1.0
+    let mut zmod_layout = zmod_layout_ys(judgment_y, combo_y, reverse, params.zmod);
+    zmod_layout.combo_y += offsets.combo_extra_y;
+    let (error_bar_y, error_bar_max_h) = if !params.has_judgment_texture {
+        (judgment_y + offsets.error_bar_extra_y, 30.0)
+    } else if params.error_bar_up {
+        (
+            judgment_y - params.error_bar_offset + offsets.error_bar_extra_y,
+            10.0,
+        )
     } else {
-        1.0
+        (
+            judgment_y + params.error_bar_offset + offsets.error_bar_extra_y,
+            10.0,
+        )
     };
-    let error_bar_y = judgment_y + error_dir * params.error_bar_offset + offsets.error_bar_extra_y;
     HudLayoutYs {
         judgment_y: placed_judgment_y,
         error_bar_y,
-        error_bar_max_h: params.zmod.judgment_height,
-        zmod_layout: zmod_layout_ys(placed_judgment_y, combo_y, reverse, params.zmod),
+        error_bar_max_h,
+        zmod_layout,
     }
 }
 
