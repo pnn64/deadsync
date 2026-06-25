@@ -495,11 +495,23 @@ mod tests {
                 max_x: 160.0
             }
         );
+
+        let cols = [-96.0, -32.0, 32.0, 96.0];
+        let mut out = [TornadoBounds::default(); 4];
+        compute_tornado_bounds(&cols, &mut out);
+        assert_eq!(
+            out[0],
+            TornadoBounds {
+                min_x: -96.0,
+                max_x: 96.0
+            }
+        );
     }
 
     #[test]
     fn sm_scale_interpolates_and_handles_degenerate_inputs() {
         assert!((sm_scale(0.25, 0.0, 1.0, 100.0, 200.0) - 125.0).abs() <= 1e-6);
+        assert!((sm_scale(2.0, 0.0, 1.0, 0.0, 10.0) - 20.0).abs() <= 1e-6);
         assert_eq!(sm_scale(0.25, 1.0, 1.0, 100.0, 200.0), 200.0);
     }
 
@@ -679,13 +691,15 @@ mod tests {
     fn beat_factor_pulses_early_in_each_beat() {
         assert_eq!(beat_factor(-0.25), 0.0);
         assert_eq!(beat_factor(0.3), 0.0);
-        assert!(beat_factor(0.0) > 0.0);
-        assert!(beat_factor(1.0) < 0.0);
+        assert!((beat_factor(0.0) - 20.0).abs() <= 1e-6);
+        assert!((beat_factor(1.0) + 20.0).abs() <= 1e-6);
     }
 
     #[test]
     fn mod_divisor_preserves_sign_near_zero() {
         assert_eq!(mod_divisor(2.0), 2.0);
+        assert_eq!(mod_divisor(0.0005), 0.001);
+        assert_eq!(mod_divisor(-0.0005), -0.001);
         assert_eq!(mod_divisor(0.0), 0.001);
         assert_eq!(mod_divisor(-0.0), -0.001);
     }
@@ -693,6 +707,17 @@ mod tests {
     #[test]
     fn bumpy_angle_sanitizes_non_finite_options() {
         assert!((bumpy_angle(16.0, f32::NAN, f32::NAN) - 1.0).abs() <= 1e-6);
+        assert!((bumpy_angle(16.0, 1.0, 1.0) - 3.625).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn accel_y_boost_matches_itg_formula() {
+        let accel = AccelYParams {
+            boost: 1.0,
+            ..AccelYParams::default()
+        };
+        let y = apply_accel_y(120.0, 0.0, 480.0, 480.0, accel);
+        assert!((y - 166.15385).abs() <= 0.001);
     }
 
     #[test]
@@ -720,6 +745,7 @@ mod tests {
             ..AccelYParams::default()
         };
         assert!(apply_accel_y_with_peak(100.0, 0.0, 480.0, 480.0, accel).1);
+        assert!(apply_accel_y_with_peak(300.0, 0.0, 480.0, 480.0, accel).1);
         assert!(!apply_accel_y_with_peak(400.0, 0.0, 480.0, 480.0, accel).1);
     }
 
@@ -730,6 +756,9 @@ mod tests {
 
         let z = note_world_z_for_bumpy(-2.0 * std::f32::consts::PI, 1.0, 0.0, -1.25);
         assert!((z - 40.0).abs() <= 0.0001);
+
+        let z = note_world_z_for_bumpy(-8.0 * std::f32::consts::PI, 1.0, 0.0, 0.0);
+        assert!((z + 40.0).abs() <= 0.0001);
 
         assert_eq!(note_world_z_for_bumpy(8.0, 0.0, 0.0, 0.0), 0.0);
         assert_eq!(note_world_z_for_bumpy(8.0, f32::NAN, 0.0, 0.0), 0.0);
@@ -804,6 +833,11 @@ mod tests {
             (visual_pulse_zoom_for_y(0.4 * 64.0 * std::f32::consts::FRAC_PI_2, params) - 1.5).abs()
                 <= 1e-6
         );
+        assert!(
+            (visual_pulse_zoom_for_y(-0.4 * 64.0 * std::f32::consts::FRAC_PI_2, params) - 0.5)
+                .abs()
+                <= 1e-6
+        );
     }
 
     #[test]
@@ -813,6 +847,12 @@ mod tests {
             ..VisualEffectParams::default()
         };
         assert!((visual_pulse_inner_zoom(params) - 0.01).abs() <= 1e-6);
+
+        let params = VisualEffectParams {
+            pulse_inner: 1.0,
+            ..VisualEffectParams::default()
+        };
+        assert!((visual_pulse_inner_zoom(params) - 1.5).abs() <= 1e-6);
     }
 
     #[test]
@@ -832,6 +872,13 @@ mod tests {
             }) - 0.5_f32.powf(-0.5))
             .abs()
                 <= 1e-6
+        );
+        assert_eq!(
+            visual_tiny_zoom(VisualEffectParams {
+                tiny: f32::NAN,
+                ..VisualEffectParams::default()
+            }),
+            1.0
         );
     }
 
@@ -1124,6 +1171,7 @@ mod tests {
     #[test]
     fn tipsy_y_extra_matches_itg_column_wave() {
         assert_eq!(tipsy_y_extra(0, 0.0, 0.0), 0.0);
+        assert_eq!(tipsy_y_extra(0, 0.0, f32::NAN), 0.0);
         assert!((tipsy_y_extra(0, 0.0, -1.0) + 25.6).abs() <= 1e-6);
     }
 
@@ -1131,11 +1179,14 @@ mod tests {
     fn beat_x_extra_uses_beat_factor_wave() {
         assert_eq!(beat_x_extra(0.0, 20.0, 0.0), 0.0);
         assert!((beat_x_extra(0.0, 20.0, 1.0) - 20.0).abs() <= 1e-6);
+        let expected = 20.0 * (1.0_f32 + std::f32::consts::FRAC_PI_2).sin();
+        assert!((beat_x_extra(15.0, 20.0, 1.0) - expected).abs() <= 1e-6);
     }
 
     #[test]
     fn drunk_x_extra_uses_column_and_y_phase() {
         assert_eq!(drunk_x_extra(0, 0.0, 0.0, 480.0, 0.0), 0.0);
+        assert_eq!(drunk_x_extra(0, 0.0, 0.0, 480.0, f32::NAN), 0.0);
         assert!((drunk_x_extra(0, 0.0, 0.0, 480.0, -1.0) + 32.0).abs() <= 1e-6);
     }
 
@@ -1147,7 +1198,11 @@ mod tests {
         };
         assert_eq!(tornado_x_extra(0.0, 0.0, bounds, 480.0, 0.0), 0.0);
         assert!((tornado_x_extra(0.0, 0.0, bounds, 480.0, 1.0) - 0.0).abs() <= 1e-4);
-        assert!(tornado_x_extra(80.0, -96.0, bounds, 480.0, 1.0) > 0.0);
+        let expected = {
+            let radians = std::f32::consts::PI + 80.0 * 6.0 / 480.0;
+            sm_scale(radians.cos(), -1.0, 1.0, -96.0, 96.0) + 96.0
+        };
+        assert!((tornado_x_extra(80.0, -96.0, bounds, 480.0, 1.0) - expected).abs() <= 1e-4);
     }
 
     #[test]
@@ -1755,6 +1810,7 @@ mod tests {
         assert_eq!(effective_mini_value(80.0, 25.0, 0.0), 0.8);
         assert_eq!(effective_mini_value(f32::NAN, 25.0, 0.0), 0.25);
         assert_eq!(effective_mini_value(80.0, 25.0, 1.0), -0.2);
+        assert_eq!(effective_mini_value(80.0, 25.0, 0.25), -0.2);
         assert_eq!(effective_mini_value(-200.0, 25.0, 0.0), -1.0);
         assert_eq!(effective_mini_value(200.0, 25.0, 0.0), 1.5);
     }
@@ -2557,6 +2613,7 @@ mod tests {
     fn average_error_bar_mini_scale_shrinks_with_mini() {
         assert!((average_error_bar_mini_scale(0.0) - 1.1).abs() <= 1e-6);
         assert!((average_error_bar_mini_scale(1.0) - 0.555).abs() <= 1e-6);
+        assert!((average_error_bar_mini_scale(-0.5) - 1.3725).abs() <= 1e-6);
         assert_eq!(average_error_bar_mini_scale(4.0), 0.0);
     }
 

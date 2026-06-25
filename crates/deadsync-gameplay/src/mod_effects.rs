@@ -368,6 +368,11 @@ pub struct VisualEffects {
 
 impl VisualEffects {
     #[inline(always)]
+    fn signed_active(value: f32) -> bool {
+        value.is_finite() && value.abs() > f32::EPSILON
+    }
+
+    #[inline(always)]
     pub fn from_mask_bits(mask: u16) -> Self {
         Self {
             drunk: f32::from((mask & VISUAL_MASK_BIT_DRUNK) != 0),
@@ -399,34 +404,34 @@ impl VisualEffects {
     #[inline(always)]
     pub fn to_mask_bits(self) -> u16 {
         let mut mask = 0;
-        if self.drunk > f32::EPSILON {
+        if Self::signed_active(self.drunk) {
             mask |= VISUAL_MASK_BIT_DRUNK;
         }
-        if self.dizzy > f32::EPSILON {
+        if Self::signed_active(self.dizzy) {
             mask |= VISUAL_MASK_BIT_DIZZY;
         }
-        if self.confusion > f32::EPSILON {
+        if Self::signed_active(self.confusion) {
             mask |= VISUAL_MASK_BIT_CONFUSION;
         }
         if self.big > f32::EPSILON {
             mask |= VISUAL_MASK_BIT_BIG;
         }
-        if self.flip > f32::EPSILON {
+        if Self::signed_active(self.flip) {
             mask |= VISUAL_MASK_BIT_FLIP;
         }
-        if self.invert > f32::EPSILON {
+        if Self::signed_active(self.invert) {
             mask |= VISUAL_MASK_BIT_INVERT;
         }
-        if self.tornado > f32::EPSILON {
+        if Self::signed_active(self.tornado) {
             mask |= VISUAL_MASK_BIT_TORNADO;
         }
-        if self.tipsy > f32::EPSILON {
+        if Self::signed_active(self.tipsy) {
             mask |= VISUAL_MASK_BIT_TIPSY;
         }
-        if self.bumpy > f32::EPSILON || self.bumpy_cols.iter().any(|v| *v > f32::EPSILON) {
+        if Self::signed_active(self.bumpy) || self.bumpy_cols.iter().any(|v| Self::signed_active(*v)) {
             mask |= VISUAL_MASK_BIT_BUMPY;
         }
-        if self.beat > f32::EPSILON {
+        if Self::signed_active(self.beat) {
             mask |= VISUAL_MASK_BIT_BEAT;
         }
         mask

@@ -1,5 +1,4 @@
 use crate::style::*;
-use crate::*;
 use deadsync_rules::judgment::TimingWindow;
 
 pub fn error_bar_tick_alpha(age: f32, dur: f32, multi_tick: bool) -> f32 {
@@ -82,11 +81,30 @@ pub const fn error_bar_color_for_window(window: TimingWindow, white_w0: bool) ->
 }
 
 pub fn error_bar_text_scalable_zoom(abs_ms: f32, scale_start_ms: f32, w2_ms: f32) -> f32 {
-    if abs_ms <= scale_start_ms {
-        1.0
-    } else if abs_ms <= 15.0 {
-        0.35
+    let ms = if abs_ms.is_finite() {
+        abs_ms
     } else {
-        sm_scale(abs_ms, 15.0, w2_ms, 0.35, 0.45)
+        deadsync_rules::timing::FA_PLUS_W010_MS
+    };
+    let scale_start_ms = if scale_start_ms.is_finite() && scale_start_ms > 0.0 {
+        scale_start_ms
+    } else {
+        deadsync_rules::timing::FA_PLUS_W010_MS
+    };
+    let w1_ms = scale_start_ms
+        + (deadsync_rules::timing::FA_PLUS_W0_MS - deadsync_rules::timing::FA_PLUS_W010_MS)
+            .max(0.001);
+    let w2_ms = if w2_ms.is_finite() && w2_ms > w1_ms {
+        w2_ms
+    } else {
+        w1_ms
+    };
+    let mut scale1 = 1.0;
+    let mut scale2 = 1.0;
+    if scale_start_ms < ms && ms <= w1_ms {
+        scale1 = (ms - scale_start_ms) / (w1_ms - scale_start_ms);
+    } else if w1_ms < ms && ms <= w2_ms && w2_ms > w1_ms {
+        scale2 = (ms - w1_ms) / (w2_ms - w1_ms);
     }
+    0.15 + scale1 * 0.2 + scale2 * 0.1
 }

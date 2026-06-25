@@ -1590,6 +1590,31 @@ mod tests {
         column_bumpy.bumpy_cols[2] = 0.5;
         assert_near(column_bumpy.bumpy, 0.0);
         assert_ne!(column_bumpy.to_mask_bits() & VISUAL_MASK_BIT_BUMPY, 0);
+
+        let signed_effects = VisualEffects {
+            drunk: -1.0,
+            dizzy: -1.0,
+            confusion: -1.0,
+            big: -1.0,
+            flip: -1.0,
+            invert: -1.0,
+            tornado: -1.0,
+            tipsy: -1.0,
+            bumpy: -1.0,
+            beat: -1.0,
+            ..VisualEffects::default()
+        };
+        let signed_mask = signed_effects.to_mask_bits();
+        assert_ne!(signed_mask & VISUAL_MASK_BIT_DRUNK, 0);
+        assert_ne!(signed_mask & VISUAL_MASK_BIT_DIZZY, 0);
+        assert_ne!(signed_mask & VISUAL_MASK_BIT_CONFUSION, 0);
+        assert_eq!(signed_mask & VISUAL_MASK_BIT_BIG, 0);
+        assert_ne!(signed_mask & VISUAL_MASK_BIT_FLIP, 0);
+        assert_ne!(signed_mask & VISUAL_MASK_BIT_INVERT, 0);
+        assert_ne!(signed_mask & VISUAL_MASK_BIT_TORNADO, 0);
+        assert_ne!(signed_mask & VISUAL_MASK_BIT_TIPSY, 0);
+        assert_ne!(signed_mask & VISUAL_MASK_BIT_BUMPY, 0);
+        assert_ne!(signed_mask & VISUAL_MASK_BIT_BEAT, 0);
     }
 
     #[test]

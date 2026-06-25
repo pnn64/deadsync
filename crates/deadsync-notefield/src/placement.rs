@@ -193,17 +193,19 @@ pub fn combo_actor_zoom(mini: f32) -> f32 {
 }
 
 pub fn effective_mini_value(mini_percent: f32, fallback_mini_percent: f32, big_effect: f32) -> f32 {
-    let mini_percent = if mini_percent.is_finite() {
+    let mut mini_percent = if mini_percent.is_finite() {
         mini_percent
     } else {
         fallback_mini_percent
     };
-    let value = (mini_percent / 100.0 - big_effect).clamp(-1.0, 1.5);
-    (value * 1000.0).round() / 1000.0
+    if big_effect > f32::EPSILON {
+        mini_percent -= 100.0;
+    }
+    mini_percent.clamp(-100.0, 150.0) / 100.0
 }
 
 pub fn average_error_bar_mini_scale(mini: f32) -> f32 {
-    (1.1 - 0.545 * mini.max(0.0)).max(0.0)
+    (1.1 - 0.545 * mini).max(0.0)
 }
 
 pub fn hud_y(

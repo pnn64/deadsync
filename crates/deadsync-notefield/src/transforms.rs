@@ -54,11 +54,11 @@ pub struct NoteXParams {
 }
 
 pub fn sm_scale(v: f32, in0: f32, in1: f32, out0: f32, out1: f32) -> f32 {
-    if !v.is_finite() || !in0.is_finite() || !in1.is_finite() || (in1 - in0).abs() <= f32::EPSILON {
+    let denom = in1 - in0;
+    if denom.abs() < 1e-6 {
         return out1;
     }
-    let t = ((v - in0) / (in1 - in0)).clamp(0.0, 1.0);
-    out0 + (out1 - out0) * t
+    ((v - in0) / denom).mul_add(out1 - out0, out0)
 }
 
 pub fn quantize_step(v: f32, step: f32) -> f32 {
@@ -100,82 +100,121 @@ pub fn beat_factor(song_beat: f32) -> f32 {
     if !song_beat.is_finite() {
         return 0.0;
     }
-    let beat = song_beat.floor();
-    let frac = song_beat - beat;
-    if frac > 0.25 {
+    let accel_time = 0.2_f32;
+    let total_time = 0.5_f32;
+    let mut beat = song_beat + accel_time;
+    let even_beat = (beat as i32 % 2) != 0;
+    if beat < 0.0 {
         return 0.0;
     }
-    (1.0 - frac * 4.0) * if beat as i32 % 2 == 0 { 1.0 } else { -1.0 }
+    beat -= beat.trunc();
+    beat += 1.0;
+    beat -= beat.trunc();
+    if beat >= total_time {
+        return 0.0;
+    }
+    let mut factor = if beat < accel_time {
+        let t = sm_scale(beat, 0.0, accel_time, 0.0, 1.0);
+        t * t
+    } else {
+        let t = sm_scale(beat, accel_time, total_time, 1.0, 0.0);
+        1.0 - (1.0 - t) * (1.0 - t)
+    };
+    if even_beat {
+        factor *= -1.0;
+    }
+    factor * 20.0
 }
 
 pub fn mod_divisor(value: f32) -> f32 {
-    if value == 0.0 {
-        if value.is_sign_negative() {
-            -0.001
-        } else {
-            0.001
-        }
-    } else {
+    if value.abs() > 0.001 {
         value
+    } else if value.is_sign_negative() {
+        -0.001
+    } else {
+        0.001
     }
 }
 
+fn signed_effect_active(value: f32) -> bool {
+    value.is_finite() && value.abs() > f32::EPSILON
+}
+
 pub fn bumpy_angle(y: f32, offset: f32, period: f32) -> f32 {
-    (y / BUMPY_Z_ANGLE_DIVISOR)
-        + offset.is_finite().then_some(offset).unwrap_or(0.0)
-        + period.is_finite().then_some(period).unwrap_or(0.0)
+    let offset = if offset.is_finite() { offset } else { 0.0 };
+    let period = if period.is_finite() { period } else { 0.0 };
+    let divisor = mod_divisor(period.mul_add(BUMPY_Z_ANGLE_DIVISOR, BUMPY_Z_ANGLE_DIVISOR));
+    (y + 100.0 * offset) / divisor
 }
 
 pub fn apply_accel_y_with_peak(
     raw_y: f32,
-    song_beat: f32,
+    elapsed: f32,
     effect_height: f32,
     screen_height: f32,
     accel: AccelYParams,
 ) -> (f32, bool) {
+    if raw_y < 0.0 {
+        return (raw_y, true);
+    }
     let mut y = raw_y;
-    if accel.boost.is_finite() && accel.boost != 0.0 {
-        y += accel.boost.clamp(BOOST_MOD_MIN_CLAMP, BOOST_MOD_MAX_CLAMP)
-            * (raw_y / effect_height.max(1.0)).powi(2);
+    if accel.boost > f32::EPSILON {
+        let new_y = y * 1.5 / ((y + effect_height / 1.2) / effect_height);
+        let mut adjust = accel.boost * (new_y - y);
+        adjust = adjust.clamp(BOOST_MOD_MIN_CLAMP, BOOST_MOD_MAX_CLAMP);
+        y += adjust;
     }
-    if accel.brake.is_finite() && accel.brake != 0.0 {
-        y *= raw_y / effect_height.max(1.0);
+    if accel.brake > f32::EPSILON {
+        let scale = sm_scale(y, 0.0, effect_height, 0.0, 1.0);
+        let new_y = y * scale;
+        let mut adjust = accel.brake * (new_y - y);
+        adjust = adjust.clamp(BRAKE_MOD_MIN_CLAMP, BRAKE_MOD_MAX_CLAMP);
+        y += adjust;
     }
-    if accel.wave.is_finite() && accel.wave != 0.0 {
-        y += (raw_y / WAVE_MOD_HEIGHT).sin() * WAVE_MOD_MAGNITUDE * accel.wave;
+    if accel.wave > f32::EPSILON {
+        y += accel.wave * WAVE_MOD_MAGNITUDE * (y / WAVE_MOD_HEIGHT.mul_add(1.0, 0.0)).sin();
     }
-    if accel.expand.is_finite() && accel.expand != 0.0 {
-        let phase = ((song_beat * EXPAND_MULTIPLIER_FREQUENCY).sin() + 1.0) * 0.5;
-        let zoom = EXPAND_MULTIPLIER_SCALE_TO_LOW
-            + (EXPAND_MULTIPLIER_SCALE_TO_HIGH - EXPAND_MULTIPLIER_SCALE_TO_LOW) * phase;
-        y *= 1.0 + (zoom - 1.0) * accel.expand;
+    let mut before_boomerang_peak = true;
+    if accel.boomerang > f32::EPSILON {
+        let peak_at_y = screen_height * 0.75;
+        before_boomerang_peak = y < peak_at_y;
+        y = (-y * y / screen_height) + 1.5 * y;
     }
-    let mut peak_before = false;
-    if accel.boomerang.is_finite() && accel.boomerang != 0.0 {
-        let peak = screen_height * 0.5;
-        peak_before = raw_y < peak;
-        y = raw_y + (peak - raw_y).abs() * accel.boomerang;
+    if accel.expand > f32::EPSILON {
+        let seconds = elapsed.rem_euclid((std::f32::consts::PI * 2.0).max(f32::EPSILON));
+        let multiplier = sm_scale(
+            (seconds * EXPAND_MULTIPLIER_FREQUENCY).cos(),
+            EXPAND_MULTIPLIER_SCALE_FROM_LOW,
+            EXPAND_MULTIPLIER_SCALE_FROM_HIGH,
+            EXPAND_MULTIPLIER_SCALE_TO_LOW,
+            EXPAND_MULTIPLIER_SCALE_TO_HIGH,
+        );
+        y *= sm_scale(
+            accel.expand,
+            EXPAND_SPEED_SCALE_FROM_LOW,
+            EXPAND_SPEED_SCALE_FROM_HIGH,
+            EXPAND_SPEED_SCALE_TO_LOW,
+            multiplier,
+        );
     }
-    (y, peak_before)
+    (y, before_boomerang_peak)
 }
 
 pub fn apply_accel_y(
     raw_y: f32,
-    song_beat: f32,
+    elapsed: f32,
     effect_height: f32,
     screen_height: f32,
     accel: AccelYParams,
 ) -> f32 {
-    apply_accel_y_with_peak(raw_y, song_beat, effect_height, screen_height, accel).0
+    apply_accel_y_with_peak(raw_y, elapsed, effect_height, screen_height, accel).0
 }
 
 pub fn note_world_z_for_bumpy(y: f32, bumpy: f32, offset: f32, period: f32) -> f32 {
-    if !bumpy.is_finite() || bumpy == 0.0 {
+    if bumpy.abs() <= f32::EPSILON || !bumpy.is_finite() {
         return 0.0;
     }
-    let magnitude = bumpy_angle(y, offset, period).sin().abs();
-    let magnitude = if magnitude > 0.995 { 1.0 } else { magnitude };
-    magnitude * BUMPY_Z_MAGNITUDE * bumpy.signum()
+    bumpy * BUMPY_Z_MAGNITUDE * bumpy_angle(y, offset, period).sin()
 }
 
 pub fn itg_actor_rotation_z(deg: f32) -> f32 {
@@ -183,7 +222,7 @@ pub fn itg_actor_rotation_z(deg: f32) -> f32 {
 }
 
 pub fn visual_hold_body_needs_z_buffer(params: VisualEffectParams) -> bool {
-    params.bumpy.is_finite() && params.bumpy != 0.0
+    signed_effect_active(params.bumpy)
 }
 
 pub fn visual_use_legacy_hold_sprites(
@@ -199,24 +238,60 @@ pub fn visual_use_legacy_hold_sprites(
 }
 
 pub fn visual_tiny_zoom(params: VisualEffectParams) -> f32 {
-    0.5_f32.powf(params.tiny)
+    if !params.tiny.is_finite() || params.tiny.abs() <= f32::EPSILON {
+        1.0
+    } else {
+        0.5_f32.powf(params.tiny)
+    }
 }
 
 pub fn visual_pulse_active(params: VisualEffectParams) -> bool {
-    params.pulse_outer != 0.0 || params.pulse_inner != 0.0
+    signed_effect_active(params.pulse_inner) || signed_effect_active(params.pulse_outer)
 }
 
 pub fn visual_pulse_inner_zoom(params: VisualEffectParams) -> f32 {
-    (1.0 + params.pulse_inner).max(0.01)
+    if !visual_pulse_active(params) {
+        return 1.0;
+    }
+    let inner = if params.pulse_inner.is_finite() {
+        params.pulse_inner.mul_add(0.5, 1.0)
+    } else {
+        1.0
+    };
+    if inner.abs() <= f32::EPSILON {
+        0.01
+    } else {
+        inner
+    }
 }
 
 pub fn visual_pulse_zoom_for_y(y: f32, params: VisualEffectParams) -> f32 {
-    let phase = (y / (0.4 * ARROW_EFFECT_PIXEL_SIZE)).sin().max(0.0);
-    1.0 + 0.5 * params.pulse_outer * phase
+    if !visual_pulse_active(params) {
+        return 1.0;
+    }
+    let outer = if params.pulse_outer.is_finite() {
+        params.pulse_outer
+    } else {
+        0.0
+    };
+    let offset = if params.pulse_offset.is_finite() {
+        params.pulse_offset
+    } else {
+        0.0
+    };
+    let period = if params.pulse_period.is_finite() {
+        params.pulse_period
+    } else {
+        0.0
+    };
+    let divisor = mod_divisor(0.4 * ARROW_EFFECT_PIXEL_SIZE * (1.0 + period));
+    ((y + 100.0 * offset) / divisor)
+        .sin()
+        .mul_add(outer * 0.5, visual_pulse_inner_zoom(params))
 }
 
 pub fn visual_arrow_effect_zoom(y: f32, params: VisualEffectParams) -> f32 {
-    visual_tiny_zoom(params) * visual_pulse_zoom_for_y(y, params) * visual_pulse_inner_zoom(params)
+    visual_tiny_zoom(params) * visual_pulse_zoom_for_y(y, params)
 }
 
 pub fn visual_confusion_rotation_deg(song_beat: f32, params: VisualEffectParams) -> f32 {
@@ -268,70 +343,88 @@ pub fn smoothstep01(t: f32) -> f32 {
 }
 
 pub fn compute_invert_distances(col_offsets: &[f32], out: &mut [f32]) {
-    if col_offsets.is_empty() {
+    let num_cols = col_offsets.len();
+    if num_cols == 0 {
         return;
     }
-    for i in 0..out.len().min(col_offsets.len()) {
-        out[i] = if i % 2 == 0 {
-            col_offsets.get(i + 1).copied().unwrap_or(col_offsets[i]) - col_offsets[i]
+    let num_sides = if num_cols > 4 { 2 } else { 1 };
+    let cols_per_side = (num_cols / num_sides).max(1);
+    for i in 0..out.len().min(num_cols) {
+        let side = i / cols_per_side;
+        let on_side = i % cols_per_side;
+        let left_mid = (cols_per_side - 1) / 2;
+        let right_mid = cols_per_side.div_ceil(2);
+        let (first, last) = if on_side <= left_mid {
+            (0, left_mid)
+        } else if on_side >= right_mid {
+            (right_mid, cols_per_side - 1)
         } else {
-            col_offsets
-                .get(i.wrapping_sub(1))
-                .copied()
-                .unwrap_or(col_offsets[i])
-                - col_offsets[i]
+            (on_side / 2, on_side / 2)
         };
+        let new_on_side = if first == last {
+            0
+        } else {
+            sm_scale(
+                on_side as f32,
+                first as f32,
+                last as f32,
+                last as f32,
+                first as f32,
+            )
+            .round() as usize
+        };
+        let new_col = side * cols_per_side + new_on_side.min(num_cols.saturating_sub(1));
+        out[i] = col_offsets[new_col] - col_offsets[i];
     }
 }
 
 pub fn compute_tornado_bounds(col_offsets: &[f32], out: &mut [TornadoBounds]) {
-    for i in 0..out.len().min(col_offsets.len()) {
-        let left = col_offsets
-            .get(i.saturating_sub(2))
-            .copied()
-            .unwrap_or(col_offsets[0]);
-        let right = col_offsets
-            .get(i + 2)
-            .copied()
-            .unwrap_or_else(|| col_offsets[col_offsets.len() - 1]);
-        out[i] = TornadoBounds {
-            min_x: left.min(right),
-            max_x: left.max(right),
-        };
+    let num_cols = col_offsets.len();
+    let width = if num_cols > 4 { 2 } else { 3 };
+    for (i, bounds) in out.iter_mut().take(num_cols).enumerate() {
+        let start = i.saturating_sub(width);
+        let end = (i + width).min(num_cols.saturating_sub(1));
+        let mut min_x = f32::INFINITY;
+        let mut max_x = f32::NEG_INFINITY;
+        for x in &col_offsets[start..=end] {
+            min_x = min_x.min(*x);
+            max_x = max_x.max(*x);
+        }
+        *bounds = TornadoBounds { min_x, max_x };
     }
 }
 
 pub fn tipsy_y_extra(local_col: usize, elapsed: f32, tipsy: f32) -> f32 {
-    if tipsy == 0.0 {
-        0.0
-    } else {
-        ((elapsed * TIPSY_TIMER_FREQUENCY) + local_col as f32 * TIPSY_COLUMN_FREQUENCY).cos()
-            * ARROW_EFFECT_PIXEL_SIZE
-            * TIPSY_ARROW_MAGNITUDE
-            * tipsy
+    if !signed_effect_active(tipsy) {
+        return 0.0;
     }
+    let col = local_col as f32;
+    let angle = elapsed * TIPSY_TIMER_FREQUENCY + col * TIPSY_COLUMN_FREQUENCY;
+    tipsy * angle.cos() * ARROW_EFFECT_PIXEL_SIZE * TIPSY_ARROW_MAGNITUDE
 }
 
 pub fn beat_x_extra(y: f32, beat_factor: f32, beat: f32) -> f32 {
-    if beat == 0.0 {
-        0.0
-    } else {
-        (y / BEAT_PI_HEIGHT + std::f32::consts::FRAC_PI_2).sin() * beat_factor * beat
+    if !signed_effect_active(beat) {
+        return 0.0;
     }
+    let shift =
+        beat_factor * (y / BEAT_OFFSET_HEIGHT + std::f32::consts::PI / BEAT_PI_HEIGHT).sin();
+    beat * shift
 }
 
-pub fn drunk_x_extra(local_col: usize, y: f32, offset: f32, screen_height: f32, drunk: f32) -> f32 {
-    if drunk == 0.0 {
-        0.0
-    } else {
-        ((local_col as f32 * DRUNK_COLUMN_FREQUENCY)
-            + y / screen_height.max(1.0) * DRUNK_OFFSET_FREQUENCY
-            + offset)
-            .cos()
-            * ARROW_EFFECT_PIXEL_SIZE
-            * DRUNK_ARROW_MAGNITUDE
-            * drunk
+pub fn drunk_x_extra(
+    local_col: usize,
+    y: f32,
+    elapsed: f32,
+    screen_height: f32,
+    drunk: f32,
+) -> f32 {
+    if !signed_effect_active(drunk) {
+        return 0.0;
     }
+    let col = local_col as f32;
+    let angle = elapsed + col * DRUNK_COLUMN_FREQUENCY + y * DRUNK_OFFSET_FREQUENCY / screen_height;
+    drunk * angle.cos() * ARROW_EFFECT_PIXEL_SIZE * DRUNK_ARROW_MAGNITUDE
 }
 
 pub fn tornado_x_extra(
@@ -341,17 +434,13 @@ pub fn tornado_x_extra(
     screen_height: f32,
     tornado: f32,
 ) -> f32 {
-    if tornado == 0.0 {
+    if !signed_effect_active(tornado) {
         return 0.0;
     }
-    let width = (bounds.max_x - bounds.min_x).abs();
-    let phase = (y / screen_height.max(1.0) * TORNADO_X_OFFSET_FREQUENCY).sin();
-    let target = if phase >= 0.0 {
-        bounds.max_x
-    } else {
-        bounds.min_x
-    };
-    (target - base_x) * phase.abs() * tornado + width * 0.0
+    let position_between = sm_scale(base_x, bounds.min_x, bounds.max_x, -1.0, 1.0).clamp(-1.0, 1.0);
+    let radians = position_between.acos() + y * TORNADO_X_OFFSET_FREQUENCY / screen_height;
+    let adjusted = sm_scale(radians.cos(), -1.0, 1.0, bounds.min_x, bounds.max_x);
+    (adjusted - base_x) * tornado
 }
 
 pub fn note_x_extra(
@@ -365,22 +454,38 @@ pub fn note_x_extra(
     params: NoteXParams,
 ) -> f32 {
     let base_x = col_offsets.get(local_col).copied().unwrap_or(0.0);
-    let flip = col_offsets.last().copied().unwrap_or(base_x)
-        + col_offsets.first().copied().unwrap_or(base_x)
-        - 2.0 * base_x;
-    let invert_x = invert.get(local_col).copied().unwrap_or(0.0);
-    let tornado_bounds = tornado.get(local_col).copied().unwrap_or_default();
-    flip * params.flip
-        + invert_x * params.invert
-        + tornado_x_extra(
+    let mut out = 0.0;
+    if signed_effect_active(params.tornado) {
+        out += tornado_x_extra(
             y,
             base_x,
-            tornado_bounds,
+            tornado.get(local_col).copied().unwrap_or_default(),
             params.screen_height,
             params.tornado,
-        )
-        + drunk_x_extra(local_col, y, elapsed, params.screen_height, params.drunk)
-        + beat_x_extra(y, beat_factor_value, params.beat)
+        );
+    }
+    if signed_effect_active(params.drunk) {
+        out += drunk_x_extra(local_col, y, elapsed, params.screen_height, params.drunk);
+    }
+    if signed_effect_active(params.flip) {
+        let mirrored = col_offsets
+            .get(
+                col_offsets
+                    .len()
+                    .saturating_sub(1)
+                    .saturating_sub(local_col),
+            )
+            .copied()
+            .unwrap_or(base_x);
+        out += (mirrored - base_x) * params.flip;
+    }
+    if signed_effect_active(params.invert) {
+        out += invert.get(local_col).copied().unwrap_or(0.0) * params.invert;
+    }
+    if signed_effect_active(params.beat) {
+        out += beat_x_extra(y, beat_factor_value, params.beat);
+    }
+    out
 }
 
 pub fn note_x_offset(
@@ -478,10 +583,10 @@ pub fn appearance_needs_rows(appearance: NoteAlphaParams) -> bool {
 }
 
 pub fn tiny_spacing_scale(tiny: f32) -> f32 {
-    if !tiny.is_finite() || tiny <= 0.0 {
+    if !tiny.is_finite() || tiny.abs() <= f32::EPSILON {
         1.0
     } else {
-        0.5_f32.powf(tiny).clamp(0.01, 1.0)
+        0.5_f32.powf(tiny).min(1.0)
     }
 }
 
