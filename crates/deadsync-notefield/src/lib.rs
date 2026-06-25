@@ -61,28 +61,29 @@ mod tests {
         column_flash_alpha, column_flash_alpha_at, column_flash_color, column_flash_height,
         column_flash_layout, column_flash_reverse_top_y, combo_actor_zoom,
         compute_invert_distances, compute_tornado_bounds, crossover_cue_height, default_column_x,
-        disabled_timing_windows_name, drunk_x_extra, edit_beat_bar_info_for_row,
-        edit_beat_scroll_travel, effective_mini_value, error_bar_boundaries_s,
-        error_bar_color_for_window, error_bar_flash_alpha, error_bar_text_scalable_zoom,
-        error_bar_tick_alpha, field_effect_height, fill_lane_col_offsets,
-        find_first_displayed_beat, find_last_displayed_beat, for_each_visible_hold_index,
-        for_each_visible_note_index, gameplay_mods_text, held_miss_zoom,
-        hold_body_bottom_for_tail_cap, hold_body_segment_budget, hold_draw_span, hold_glow_color,
-        hold_head_part_for_roll, hold_indicator_column_x, hold_overlaps_visible_window,
-        hold_parts_for_note_type, hold_segment_pose, hold_strip_actor, hold_strip_glow_actor,
-        hold_strip_row_3d, hold_tail_cap_bounds, hud_layout_ys, hud_y, itg_actor_glow_alpha,
-        itg_actor_rotation_z, join_display_mod_parts, judgment_actor_zoom,
-        judgment_tilt_rotation_deg, maybe_mirror_uv_horiz_for_reverse_flipped,
-        mine_hides_after_resolution, mine_part, mod_divisor, mod_percent_key, move_col_extra,
-        note_itg_row, note_world_z_for_bumpy, note_x_extra, note_x_offset, notefield_view_proj,
-        offset_center, player_metric_y, push_transform_parts, quantize_centi_i32,
-        quantize_centi_u32, quantize_step, receptor_row_center, rgba8, scale_cap_to_arrow,
-        scale_effect_size, scale_sprite_to_arrow, share_actor_range, signed_effect_active,
-        sm_scale, smoothstep01, song_time_ns_delta_seconds, song_time_ns_to_seconds,
-        stream_segment_index_exclusive_end, stream_segment_index_inclusive_end, tap_judgment_rows,
-        tap_part_for_note_type, tap_replacement_head, timing_window_from_num, tiny_spacing_scale,
-        tipsy_y_extra, top_cap_rotation_deg, tornado_x_extra, translated_uv_rect,
-        visual_arrow_effect_zoom, visual_confusion_rotation_deg, visual_effect_params_for_col,
+        disabled_timing_windows_name, drunk_x_extra, edit_bar_candidate_step_rows,
+        edit_bar_scroll_speed, edit_beat_bar_info_for_row, edit_beat_scroll_travel,
+        effective_mini_value, error_bar_boundaries_s, error_bar_color_for_window,
+        error_bar_flash_alpha, error_bar_text_scalable_zoom, error_bar_tick_alpha,
+        field_effect_height, fill_lane_col_offsets, find_first_displayed_beat,
+        find_last_displayed_beat, for_each_visible_hold_index, for_each_visible_note_index,
+        gameplay_mods_text, held_miss_zoom, hold_body_bottom_for_tail_cap,
+        hold_body_segment_budget, hold_draw_span, hold_glow_color, hold_head_part_for_roll,
+        hold_indicator_column_x, hold_overlaps_visible_window, hold_parts_for_note_type,
+        hold_segment_pose, hold_strip_actor, hold_strip_glow_actor, hold_strip_row_3d,
+        hold_tail_cap_bounds, hud_layout_ys, hud_y, itg_actor_glow_alpha, itg_actor_rotation_z,
+        join_display_mod_parts, judgment_actor_zoom, judgment_tilt_rotation_deg,
+        maybe_mirror_uv_horiz_for_reverse_flipped, mine_hides_after_resolution, mine_part,
+        mod_divisor, mod_percent_key, move_col_extra, note_itg_row, note_world_z_for_bumpy,
+        note_x_extra, note_x_offset, notefield_view_proj, offset_center, player_metric_y,
+        push_transform_parts, quantize_centi_i32, quantize_centi_u32, quantize_step,
+        receptor_row_center, rgba8, scale_cap_to_arrow, scale_effect_size, scale_sprite_to_arrow,
+        share_actor_range, signed_effect_active, sm_scale, smoothstep01,
+        song_time_ns_delta_seconds, song_time_ns_to_seconds, stream_segment_index_exclusive_end,
+        stream_segment_index_inclusive_end, tap_judgment_rows, tap_part_for_note_type,
+        tap_replacement_head, timing_window_from_num, tiny_spacing_scale, tipsy_y_extra,
+        top_cap_rotation_deg, tornado_x_extra, translated_uv_rect, visual_arrow_effect_zoom,
+        visual_confusion_rotation_deg, visual_effect_params_for_col,
         visual_hold_body_needs_z_buffer, visual_note_rotation_z, visual_pulse_inner_zoom,
         visual_pulse_zoom_for_y, visual_tiny_zoom, visual_use_legacy_hold_sprites,
         zmod_broken_run_counter_text, zmod_broken_run_end, zmod_broken_run_segment,
@@ -161,6 +162,26 @@ mod tests {
     }
 
     #[test]
+    fn edit_beat_bar_frames_use_sixteenth_spacing() {
+        assert_eq!(
+            edit_beat_bar_info_for_row(beat_to_note_row(0.25), &[]).map(|info| info.frame),
+            Some(3)
+        );
+        assert_eq!(
+            edit_beat_bar_info_for_row(beat_to_note_row(0.5), &[]).map(|info| info.frame),
+            Some(2)
+        );
+        assert_eq!(
+            edit_beat_bar_info_for_row(beat_to_note_row(1.0), &[]).map(|info| info.frame),
+            Some(1)
+        );
+        assert_eq!(
+            edit_beat_bar_info_for_row(beat_to_note_row(4.0), &[]).map(|info| info.frame),
+            Some(0)
+        );
+    }
+
+    #[test]
     fn edit_beat_bar_labels_follow_time_signature_segments() {
         let segments = [
             TimeSignatureSegment {
@@ -189,6 +210,44 @@ mod tests {
             edit_beat_bar_info_for_row(beat_to_note_row(6.0), &segments)
                 .and_then(|info| info.measure_index),
             Some(2)
+        );
+    }
+
+    #[test]
+    fn edit_bar_candidate_step_rows_match_segment_grid() {
+        assert_eq!(edit_bar_candidate_step_rows(&[]), beat_to_note_row(0.25));
+
+        let segments = [
+            TimeSignatureSegment {
+                beat: 0.0,
+                numerator: 3,
+                denominator: 4,
+            },
+            TimeSignatureSegment {
+                beat: 6.25,
+                numerator: 4,
+                denominator: 4,
+            },
+        ];
+        assert_eq!(
+            edit_bar_candidate_step_rows(&segments),
+            beat_to_note_row(0.25)
+        );
+    }
+
+    #[test]
+    fn edit_bar_scroll_speed_matches_legacy_modes() {
+        assert_eq!(
+            edit_bar_scroll_speed(ScrollSpeedSetting::XMod(2.5), 200.0, 1.0),
+            2.5
+        );
+        assert_eq!(
+            edit_bar_scroll_speed(ScrollSpeedSetting::CMod(600.0), 200.0, 1.0),
+            4.0
+        );
+        assert!(
+            (edit_bar_scroll_speed(ScrollSpeedSetting::MMod(400.0), 200.0, 1.0) - 2.0).abs()
+                <= 1e-6
         );
     }
 
