@@ -224,6 +224,18 @@ pub fn judgment_actor_zoom(mini: f32, judgment_back: bool, _tilt: f32, _skew: f3
 }
 
 pub fn tap_judgment_rows(params: TapJudgmentRowsParams) -> (usize, Option<usize>) {
+    if params.frame_rows < 7 {
+        let base = match params.grade {
+            JudgeGrade::Fantastic => 0,
+            JudgeGrade::Excellent => 1,
+            JudgeGrade::Great => 2,
+            JudgeGrade::Decent => 3,
+            JudgeGrade::WayOff => 4,
+            JudgeGrade::Miss => 5,
+        };
+        return (base, None);
+    }
+
     let base = match params.grade {
         JudgeGrade::Fantastic => {
             if params.custom_fantastic_window {
@@ -242,11 +254,11 @@ pub fn tap_judgment_rows(params: TapJudgmentRowsParams) -> (usize, Option<usize>
                 0
             }
         }
-        JudgeGrade::Excellent => 1,
-        JudgeGrade::Great => 2,
-        JudgeGrade::Decent => 3,
-        JudgeGrade::WayOff => 4,
-        JudgeGrade::Miss => 5,
+        JudgeGrade::Excellent => 2,
+        JudgeGrade::Great => 3,
+        JudgeGrade::Decent => 4,
+        JudgeGrade::WayOff => 5,
+        JudgeGrade::Miss => 6,
     };
     let overlay = params.show_fa_plus_window
         && params.split_15_10ms

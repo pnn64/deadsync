@@ -2375,11 +2375,51 @@ mod tests {
     }
 
     #[test]
+    fn tap_judgment_rows_shift_non_fantastic_rows_for_seven_row_assets() {
+        assert_eq!(
+            tap_judgment_rows(TapJudgmentRowsParams {
+                grade: JudgeGrade::Excellent,
+                window: Some(TimingWindow::W2),
+                time_error_ms: 18.0,
+                ..tap_rows_params(0.0)
+            }),
+            (2, None)
+        );
+        assert_eq!(
+            tap_judgment_rows(TapJudgmentRowsParams {
+                grade: JudgeGrade::Great,
+                window: Some(TimingWindow::W3),
+                time_error_ms: 60.0,
+                ..tap_rows_params(0.0)
+            }),
+            (3, None)
+        );
+        assert_eq!(
+            tap_judgment_rows(TapJudgmentRowsParams {
+                grade: JudgeGrade::Miss,
+                window: None,
+                time_error_ms: 180.0,
+                ..tap_rows_params(0.0)
+            }),
+            (6, None)
+        );
+    }
+
+    #[test]
     fn tap_judgment_rows_keep_six_row_assets_unsplit() {
         assert_eq!(
             tap_judgment_rows(TapJudgmentRowsParams {
                 show_fa_plus_window: true,
                 split_15_10ms: true,
+                frame_rows: 6,
+                ..tap_rows_params(12.0)
+            }),
+            (0, None)
+        );
+        assert_eq!(
+            tap_judgment_rows(TapJudgmentRowsParams {
+                show_fa_plus_window: true,
+                fa_plus_10ms_blue_window: true,
                 frame_rows: 6,
                 ..tap_rows_params(12.0)
             }),
