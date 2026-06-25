@@ -271,23 +271,60 @@ pub fn zmod_subtractive_counter_state(
     progress: &MiniIndicatorProgress,
     score_type: MiniIndicatorScoreType,
 ) -> (u32, bool) {
+    let forced_percent = progress.w3 > 0
+        || progress.w4 > 0
+        || progress.w5 > 0
+        || progress.miss > 0
+        || progress.let_go > 0
+        || progress.mines_hit > 0;
     match score_type {
-        MiniIndicatorScoreType::Itg => (progress.w2, false),
-        MiniIndicatorScoreType::Ex => (progress.white_count, false),
-        MiniIndicatorScoreType::HardEx => (progress.white_10ms_count, true),
+        MiniIndicatorScoreType::Itg => (progress.w2, forced_percent || progress.w2 > 10),
+        MiniIndicatorScoreType::Ex => (
+            progress.white_count,
+            forced_percent || progress.w2 > 0 || progress.white_count > 10,
+        ),
+        MiniIndicatorScoreType::HardEx => (
+            progress.white_10ms_count,
+            forced_percent || progress.w2 > 0 || progress.white_10ms_count > 10,
+        ),
     }
 }
 
 pub fn zmod_subtractive_points(
     progress: &MiniIndicatorProgress,
     score_type: MiniIndicatorScoreType,
-) -> i32 {
+) -> u32 {
     match score_type {
-        MiniIndicatorScoreType::Itg => (progress.current_possible_dp - progress.actual_dp).abs(),
-        MiniIndicatorScoreType::Ex => progress.white_count as i32 * 2 + progress.w3 as i32 * 5,
-        MiniIndicatorScoreType::HardEx => {
-            progress.white_10ms_count as i32 * 2 + progress.w2 as i32 * 2
-        }
+        MiniIndicatorScoreType::Itg => progress
+            .current_possible_dp
+            .saturating_sub(progress.actual_dp)
+            .max(0) as u32,
+        MiniIndicatorScoreType::Ex => progress
+            .white_count
+            .saturating_add(progress.w2.saturating_mul(3))
+            .saturating_add(progress.w3.saturating_mul(5))
+            .saturating_add(
+                progress
+                    .w4
+                    .saturating_add(progress.w5)
+                    .saturating_add(progress.miss)
+                    .saturating_mul(7),
+            )
+            .saturating_add(progress.let_go.saturating_mul(2))
+            .saturating_add(progress.mines_hit.saturating_mul(2)),
+        MiniIndicatorScoreType::HardEx => progress
+            .white_10ms_count
+            .saturating_add(progress.w2.saturating_mul(5))
+            .saturating_add(
+                progress
+                    .w3
+                    .saturating_add(progress.w4)
+                    .saturating_add(progress.w5)
+                    .saturating_add(progress.miss)
+                    .saturating_mul(7),
+            )
+            .saturating_add(progress.let_go.saturating_mul(2))
+            .saturating_add(progress.mines_hit.saturating_mul(2)),
     }
 }
 
@@ -299,23 +336,64 @@ pub const fn zmod_mini_indicator_zoom(size: MiniIndicatorSize) -> f32 {
 }
 
 pub fn zmod_rival_color(pace: f64, rival_pace: f64) -> [f32; 4] {
-    if pace >= rival_pace {
-        [0.0, 1.0, 1.0, 1.0]
-    } else {
-        [1.0, 0.0, 0.0, 1.0]
-    }
+    let r = (1.0 - (pace - rival_pace)).clamp(0.0, 1.0) as f32;
+    let g = (0.5 - (rival_pace - pace)).clamp(0.0, 1.0) as f32;
+    let b = (1.0 - (rival_pace - pace)).clamp(0.0, 1.0) as f32;
+    [r, g, b, 1.0]
 }
 
 pub fn zmod_pacemaker_color(pace: f64, rival_pace: f64) -> [f32; 4] {
-    if pace >= rival_pace {
-        [0.99, 0.51, 1.0, 1.0]
-    } else {
-        [1.0, 0.0, 0.0, 1.0]
-    }
+    let r = (1.0 - (pace - rival_pace) / 100.0).clamp(0.0, 1.0) as f32;
+    let g = (0.5 - (rival_pace - pace) / 100.0).clamp(0.0, 1.0) as f32;
+    let b = (1.0 - (rival_pace - pace) / 100.0).clamp(0.0, 1.0) as f32;
+    [r, g, b, 1.0]
 }
 
 pub(crate) fn rgba8(r: u8, g: u8, b: u8) -> [f32; 4] {
     [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, 1.0]
+}
+
+fn zmod_indicator_score_color(score_percent: f64, style: MiniIndicatorColorStyle) -> [f32; 4] {
+    match style {
+        MiniIndicatorColorStyle::Default => zmod_indicator_default_color(score_percent),
+        MiniIndicatorColorStyle::Detailed => zmod_indicator_detailed_color(score_percent),
+        MiniIndicatorColorStyle::Combo => zmod_indicator_default_color(score_percent),
+    }
+}
+
+fn zmod_mini_indicator_score_color(
+    score_percent: f64,
+    params: ZmodMiniIndicatorParams,
+) -> [f32; 4] {
+    match params.color_style {
+        MiniIndicatorColorStyle::Combo => params.combo_color,
+        style => zmod_indicator_score_color(score_percent, style),
+    }
+}
+
+pub fn zmod_stream_prog_color(completion: f64) -> [f32; 4] {
+    if completion >= 0.9 {
+        [
+            0.0,
+            1.0,
+            ((completion - 0.9) * 10.0).clamp(0.0, 1.0) as f32,
+            1.0,
+        ]
+    } else if completion >= 0.5 {
+        [
+            ((0.9 - completion) * 10.0 / 4.0).clamp(0.0, 1.0) as f32,
+            1.0,
+            0.0,
+            1.0,
+        ]
+    } else {
+        [
+            1.0,
+            ((completion - 0.2) * 10.0 / 3.0).clamp(0.0, 1.0) as f32,
+            0.0,
+            1.0,
+        ]
+    }
 }
 
 pub fn zmod_mini_indicator_output(
@@ -327,63 +405,89 @@ pub fn zmod_mini_indicator_output(
     }
     match params.mode {
         MiniIndicatorMode::SubtractiveScoring => {
-            let (count, _) = zmod_subtractive_counter_state(progress, params.score_type);
-            if params.subtractive_display == MiniIndicatorSubtractiveDisplay::Points
-                || count == 0
-                || progress.w3 > 0
-                || progress.w4 > 0
-                || progress.w5 > 0
-                || progress.miss > 0
-            {
-                Some(ZmodMiniIndicatorOutput {
-                    text: ZmodMiniIndicatorText::SignedPercent {
-                        value: progress.lost_percent,
-                        negative: true,
-                    },
-                    color: zmod_indicator_default_color(progress.kept_percent),
-                })
-            } else {
+            if params.subtractive_display == MiniIndicatorSubtractiveDisplay::Points {
+                let points = zmod_subtractive_points(progress, params.score_type);
+                let score = progress.kept_percent.clamp(0.0, 100.0);
+                return Some(ZmodMiniIndicatorOutput {
+                    text: ZmodMiniIndicatorText::NegativeInt(points),
+                    color: zmod_mini_indicator_score_color(score, params),
+                });
+            }
+
+            let (count, entered_percent_mode) =
+                zmod_subtractive_counter_state(progress, params.score_type);
+            if !(entered_percent_mode || params.is_failing || params.life <= 0.0) && count > 0 {
                 Some(ZmodMiniIndicatorOutput {
                     text: ZmodMiniIndicatorText::NegativeInt(count),
-                    color: rgba8(0xff, 0x55, 0xcc),
+                    color: if params.color_style == MiniIndicatorColorStyle::Combo {
+                        params.combo_color
+                    } else {
+                        rgba8(0xff, 0x55, 0xcc)
+                    },
+                })
+            } else {
+                let score = progress.kept_percent.clamp(0.0, 100.0);
+                Some(ZmodMiniIndicatorOutput {
+                    text: ZmodMiniIndicatorText::SignedPercent {
+                        value: progress.lost_percent.clamp(0.0, 100.0),
+                        negative: true,
+                    },
+                    color: zmod_mini_indicator_score_color(score, params),
                 })
             }
         }
-        MiniIndicatorMode::PredictiveScoring => Some(ZmodMiniIndicatorOutput {
-            text: ZmodMiniIndicatorText::Percent(progress.kept_percent),
-            color: zmod_indicator_default_color(progress.kept_percent),
-        }),
-        MiniIndicatorMode::PaceScoring => Some(ZmodMiniIndicatorOutput {
-            text: ZmodMiniIndicatorText::SignedPercent {
-                value: progress.pace_percent.abs(),
-                negative: progress.pace_percent < 0.0,
-            },
-            color: zmod_indicator_default_color(progress.current_score_percent),
-        }),
+        MiniIndicatorMode::PredictiveScoring => {
+            let score = progress.kept_percent.clamp(0.0, 100.0);
+            Some(ZmodMiniIndicatorOutput {
+                text: ZmodMiniIndicatorText::Percent(score),
+                color: zmod_mini_indicator_score_color(score, params),
+            })
+        }
+        MiniIndicatorMode::PaceScoring => {
+            let pace = progress.pace_percent.clamp(0.0, 100.0);
+            Some(ZmodMiniIndicatorOutput {
+                text: ZmodMiniIndicatorText::Percent(pace),
+                color: zmod_mini_indicator_score_color(pace, params),
+            })
+        }
         MiniIndicatorMode::RivalScoring => {
-            let target = params.rival_score_percent * progress.current_possible_ratio;
+            let pace = progress.current_score_percent.clamp(0.0, 100.0);
+            let rival_score = params.rival_score_percent.clamp(0.0, 100.0);
+            let target =
+                (progress.current_possible_ratio * 10000.0 * rival_score).floor() / 10000.0;
             Some(ZmodMiniIndicatorOutput {
                 text: ZmodMiniIndicatorText::SignedPercent {
-                    value: (progress.current_score_percent - target).abs(),
-                    negative: progress.current_score_percent < target,
+                    value: (pace - target).abs(),
+                    negative: pace < target,
                 },
-                color: zmod_rival_color(progress.current_score_percent, target),
+                color: if params.color_style == MiniIndicatorColorStyle::Combo {
+                    params.combo_color
+                } else {
+                    zmod_rival_color(pace, target)
+                },
             })
         }
         MiniIndicatorMode::Pacemaker => {
-            let target = params.target_score_percent * progress.current_possible_ratio;
+            let pace = (progress.current_score_percent.clamp(0.0, 100.0) * 100.0).floor();
+            let target_ratio = (params.target_score_percent / 100.0).clamp(0.0, 1.0);
+            let target =
+                (progress.current_possible_ratio * 1_000_000.0 * target_ratio).floor() / 100.0;
             Some(ZmodMiniIndicatorOutput {
                 text: ZmodMiniIndicatorText::SignedPercent {
-                    value: (progress.current_score_percent - target).abs(),
-                    negative: progress.current_score_percent < target,
+                    value: ((pace - target).abs().floor() / 100.0).max(0.0),
+                    negative: pace < target,
                 },
-                color: zmod_pacemaker_color(progress.current_score_percent * 100.0, target * 100.0),
+                color: if params.color_style == MiniIndicatorColorStyle::Combo {
+                    params.combo_color
+                } else {
+                    zmod_pacemaker_color(pace, target)
+                },
             })
         }
         MiniIndicatorMode::StreamProg => {
             params.stream_completion.map(|c| ZmodMiniIndicatorOutput {
-                text: ZmodMiniIndicatorText::Percent(c * 100.0),
-                color: [0.0, 1.0, 0.5, 1.0],
+                text: ZmodMiniIndicatorText::Percent((c * 100.0).clamp(0.0, 100.0)),
+                color: zmod_stream_prog_color(c),
             })
         }
         MiniIndicatorMode::None => None,
@@ -391,24 +495,25 @@ pub fn zmod_mini_indicator_output(
 }
 
 pub fn zmod_combo_glow_color(color1: [f32; 4], color2: [f32; 4], elapsed: f32) -> [f32; 4] {
-    let t = ((elapsed * std::f32::consts::TAU * 1.25).sin() + 1.0) * 0.5;
+    let effect_period = 0.8_f32;
+    let through = (elapsed / effect_period).fract();
+    let t = ((through * std::f32::consts::TAU).sin() + 1.0) * 0.5;
     [
         color1[0] + (color2[0] - color1[0]) * t,
         color1[1] + (color2[1] - color1[1]) * t,
         color1[2] + (color2[2] - color1[2]) * t,
-        color1[3] + (color2[3] - color1[3]) * t,
+        1.0,
     ]
 }
 
 pub fn zmod_combo_glow_pair(grade: JudgeGrade, quint: bool) -> ([f32; 4], [f32; 4]) {
-    if quint {
+    if quint && grade == JudgeGrade::Fantastic {
         return (rgba8(247, 192, 254), rgba8(233, 40, 255));
     }
     match grade {
         JudgeGrade::Fantastic => (rgba8(200, 255, 255), rgba8(107, 240, 255)),
-        JudgeGrade::Excellent => (rgba8(255, 220, 100), rgba8(226, 156, 24)),
-        JudgeGrade::Great => (rgba8(170, 255, 120), rgba8(102, 201, 85)),
-        JudgeGrade::Decent => (rgba8(210, 150, 255), rgba8(180, 92, 255)),
+        JudgeGrade::Excellent => (rgba8(253, 255, 201), rgba8(253, 219, 133)),
+        JudgeGrade::Great => (rgba8(201, 255, 201), rgba8(148, 254, 193)),
         _ => ([1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0]),
     }
 }
@@ -421,9 +526,7 @@ pub fn zmod_combo_solid_color(grade: JudgeGrade, quint: bool) -> [f32; 4] {
         JudgeGrade::Fantastic => rgba8(33, 204, 232),
         JudgeGrade::Excellent => rgba8(226, 156, 24),
         JudgeGrade::Great => rgba8(102, 201, 85),
-        JudgeGrade::Decent => rgba8(180, 92, 255),
-        JudgeGrade::WayOff => rgba8(201, 133, 94),
-        JudgeGrade::Miss => [1.0, 1.0, 1.0, 1.0],
+        _ => [1.0, 1.0, 1.0, 1.0],
     }
 }
 
@@ -460,9 +563,21 @@ pub fn zmod_indicator_detailed_color(score_percent: f64) -> [f32; 4] {
 }
 
 pub fn zmod_combo_rainbow_color(elapsed: f32, scroll: bool, combo: u32) -> [f32; 4] {
-    let g =
-        (elapsed.fract() * 5.571 + if scroll { combo as f32 * 0.078 } else { 0.0 }).clamp(0.0, 1.0);
-    [1.0, g, 0.0, 1.0]
+    let speed = if scroll { 0.45 } else { 0.35 };
+    let offset = if scroll { combo as f32 * 0.013 } else { 0.0 };
+    let hue = (elapsed * speed + offset).fract();
+    let h6 = hue * 6.0;
+    let i = h6.floor() as i32;
+    let f = h6 - i as f32;
+    let q = 1.0 - f;
+    match i.rem_euclid(6) {
+        0 => [1.0, f, 0.0, 1.0],
+        1 => [q, 1.0, 0.0, 1.0],
+        2 => [0.0, 1.0, f, 1.0],
+        3 => [0.0, q, 1.0, 1.0],
+        4 => [f, 0.0, 1.0, 1.0],
+        _ => [1.0, 0.0, q, 1.0],
+    }
 }
 
 fn zmod_combo_grade(params: ZmodComboColorParams) -> Option<JudgeGrade> {

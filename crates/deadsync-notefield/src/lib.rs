@@ -92,7 +92,7 @@ mod tests {
         zmod_indicator_detailed_color, zmod_layout_ys, zmod_measure_counter_text,
         zmod_mini_indicator_output, zmod_mini_indicator_zoom, zmod_pacemaker_color,
         zmod_percent_from_points, zmod_resolved_combo_color, zmod_resolved_mini_indicator_mode,
-        zmod_rival_color, zmod_run_timer_index, zmod_static_combo_color,
+        zmod_rival_color, zmod_run_timer_index, zmod_static_combo_color, zmod_stream_prog_color,
         zmod_stream_prog_completion_for_beat, zmod_subtractive_counter_state,
         zmod_subtractive_points,
     };
@@ -1728,6 +1728,11 @@ mod tests {
             zmod_subtractive_counter_state(&itg, MiniIndicatorScoreType::Itg),
             (4, false)
         );
+        let itg_many = MiniIndicatorProgress { w2: 11, ..itg };
+        assert_eq!(
+            zmod_subtractive_counter_state(&itg_many, MiniIndicatorScoreType::Itg),
+            (11, true)
+        );
 
         let ex = MiniIndicatorProgress {
             w2: 0,
@@ -1738,6 +1743,11 @@ mod tests {
             zmod_subtractive_counter_state(&ex, MiniIndicatorScoreType::Ex),
             (7, false)
         );
+        let ex_w2 = MiniIndicatorProgress { w2: 1, ..ex };
+        assert_eq!(
+            zmod_subtractive_counter_state(&ex_w2, MiniIndicatorScoreType::Ex),
+            (7, true)
+        );
 
         let hard_ex = MiniIndicatorProgress {
             w2: 1,
@@ -1747,6 +1757,11 @@ mod tests {
         assert_eq!(
             zmod_subtractive_counter_state(&hard_ex, MiniIndicatorScoreType::HardEx),
             (7, true)
+        );
+        let let_go = MiniIndicatorProgress { let_go: 1, ..itg };
+        assert_eq!(
+            zmod_subtractive_counter_state(&let_go, MiniIndicatorScoreType::Itg),
+            (4, true)
         );
     }
 
@@ -1771,6 +1786,15 @@ mod tests {
             zmod_subtractive_points(&itg_mine, MiniIndicatorScoreType::Itg),
             6
         );
+        let itg_over_scored = MiniIndicatorProgress {
+            current_possible_dp: 16,
+            actual_dp: 20,
+            ..MiniIndicatorProgress::default()
+        };
+        assert_eq!(
+            zmod_subtractive_points(&itg_over_scored, MiniIndicatorScoreType::Itg),
+            0
+        );
 
         let ex = MiniIndicatorProgress {
             white_count: 3,
@@ -1789,6 +1813,21 @@ mod tests {
             zmod_subtractive_points(&ex_with_great, MiniIndicatorScoreType::Ex),
             11
         );
+        let ex_penalties = MiniIndicatorProgress {
+            white_count: 3,
+            w2: 1,
+            w3: 1,
+            w4: 1,
+            w5: 1,
+            miss: 1,
+            let_go: 1,
+            mines_hit: 1,
+            ..MiniIndicatorProgress::default()
+        };
+        assert_eq!(
+            zmod_subtractive_points(&ex_penalties, MiniIndicatorScoreType::Ex),
+            36
+        );
 
         let hard_ex = MiniIndicatorProgress {
             white_10ms_count: 3,
@@ -1798,6 +1837,21 @@ mod tests {
         assert_eq!(
             zmod_subtractive_points(&hard_ex, MiniIndicatorScoreType::HardEx),
             8
+        );
+        let hard_ex_penalties = MiniIndicatorProgress {
+            white_10ms_count: 3,
+            w2: 1,
+            w3: 1,
+            w4: 1,
+            w5: 1,
+            miss: 1,
+            let_go: 1,
+            mines_hit: 1,
+            ..MiniIndicatorProgress::default()
+        };
+        assert_eq!(
+            zmod_subtractive_points(&hard_ex_penalties, MiniIndicatorScoreType::HardEx),
+            40
         );
     }
 
@@ -1823,12 +1877,22 @@ mod tests {
     fn zmod_pace_colors_match_expected_channels() {
         assert_eq!(zmod_rival_color(99.0, 98.0), [0.0, 1.0, 1.0, 1.0]);
         assert_eq!(zmod_rival_color(98.0, 99.0), [1.0, 0.0, 0.0, 1.0]);
+        assert_eq!(zmod_rival_color(98.25, 98.0), [0.75, 0.75, 1.0, 1.0]);
+        assert_eq!(zmod_rival_color(98.0, 98.25), [1.0, 0.25, 0.75, 1.0]);
 
         let ahead = zmod_pacemaker_color(101.0, 100.0);
         assert!((ahead[0] - 0.99).abs() <= 1e-6);
         assert!((ahead[1] - 0.51).abs() <= 1e-6);
         assert_eq!(ahead[2], 1.0);
         assert_eq!(ahead[3], 1.0);
+        assert_eq!(
+            zmod_pacemaker_color(10025.0, 10000.0),
+            [0.75, 0.75, 1.0, 1.0]
+        );
+        assert_eq!(
+            zmod_pacemaker_color(10000.0, 10025.0),
+            [1.0, 0.25, 0.75, 1.0]
+        );
     }
 
     #[test]
@@ -1877,12 +1941,25 @@ mod tests {
         let (fa1, fa2) = zmod_combo_glow_pair(JudgeGrade::Fantastic, false);
         assert_rgba_close(fa1, [200.0 / 255.0, 1.0, 1.0, 1.0]);
         assert_rgba_close(fa2, [107.0 / 255.0, 240.0 / 255.0, 1.0, 1.0]);
+        let (excellent1, excellent2) = zmod_combo_glow_pair(JudgeGrade::Excellent, false);
+        assert_rgba_close(excellent1, [253.0 / 255.0, 1.0, 201.0 / 255.0, 1.0]);
+        assert_rgba_close(
+            excellent2,
+            [253.0 / 255.0, 219.0 / 255.0, 133.0 / 255.0, 1.0],
+        );
+        let (decent1, decent2) = zmod_combo_glow_pair(JudgeGrade::Decent, false);
+        assert_eq!(decent1, [1.0, 1.0, 1.0, 1.0]);
+        assert_eq!(decent2, [1.0, 1.0, 1.0, 1.0]);
         assert_rgba_close(
             zmod_combo_solid_color(JudgeGrade::Excellent, false),
             [226.0 / 255.0, 156.0 / 255.0, 24.0 / 255.0, 1.0],
         );
         assert_eq!(
             zmod_combo_solid_color(JudgeGrade::Miss, false),
+            [1.0, 1.0, 1.0, 1.0]
+        );
+        assert_eq!(
+            zmod_combo_solid_color(JudgeGrade::Decent, false),
             [1.0, 1.0, 1.0, 1.0]
         );
     }
@@ -2054,6 +2131,12 @@ mod tests {
         assert!((scrolled[1] - 0.78).abs() <= 1e-6);
         assert_eq!(scrolled[2], 0.0);
         assert_eq!(scrolled[3], 1.0);
+
+        let cyanish = zmod_combo_rainbow_color(1.0, false, 0);
+        assert_eq!(cyanish[0], 0.0);
+        assert_eq!(cyanish[1], 1.0);
+        assert!((cyanish[2] - 0.1).abs() <= 1e-6);
+        assert_eq!(cyanish[3], 1.0);
     }
 
     #[test]
@@ -2085,6 +2168,18 @@ mod tests {
             })
         );
 
+        let combo_params = ZmodMiniIndicatorParams {
+            color_style: MiniIndicatorColorStyle::Combo,
+            ..params
+        };
+        assert_eq!(
+            zmod_mini_indicator_output(&count, combo_params),
+            Some(ZmodMiniIndicatorOutput {
+                text: ZmodMiniIndicatorText::NegativeInt(4),
+                color: [0.2, 0.3, 0.4, 1.0],
+            })
+        );
+
         let forced_percent = MiniIndicatorProgress { w3: 1, ..count };
         assert_eq!(
             zmod_mini_indicator_output(&forced_percent, params),
@@ -2094,6 +2189,41 @@ mod tests {
                     negative: true,
                 },
                 color: zmod_indicator_default_color(99.0),
+            })
+        );
+
+        let failing_params = ZmodMiniIndicatorParams {
+            is_failing: true,
+            ..params
+        };
+        assert_eq!(
+            zmod_mini_indicator_output(&count, failing_params),
+            Some(ZmodMiniIndicatorOutput {
+                text: ZmodMiniIndicatorText::SignedPercent {
+                    value: 1.0,
+                    negative: true,
+                },
+                color: zmod_indicator_default_color(99.0),
+            })
+        );
+
+        let points_params = ZmodMiniIndicatorParams {
+            subtractive_display: MiniIndicatorSubtractiveDisplay::Points,
+            color_style: MiniIndicatorColorStyle::Detailed,
+            ..params
+        };
+        let points = MiniIndicatorProgress {
+            judged_any: true,
+            kept_percent: 94.0,
+            current_possible_dp: 20,
+            actual_dp: 16,
+            ..MiniIndicatorProgress::default()
+        };
+        assert_eq!(
+            zmod_mini_indicator_output(&points, points_params),
+            Some(ZmodMiniIndicatorOutput {
+                text: ZmodMiniIndicatorText::NegativeInt(4),
+                color: zmod_indicator_detailed_color(94.0),
             })
         );
     }
@@ -2129,6 +2259,22 @@ mod tests {
             })
         );
 
+        params.mode = MiniIndicatorMode::PaceScoring;
+        assert_eq!(
+            zmod_mini_indicator_output(
+                &MiniIndicatorProgress {
+                    judged_any: true,
+                    pace_percent: 97.25,
+                    ..MiniIndicatorProgress::default()
+                },
+                params,
+            ),
+            Some(ZmodMiniIndicatorOutput {
+                text: ZmodMiniIndicatorText::Percent(97.25),
+                color: zmod_indicator_default_color(97.25),
+            })
+        );
+
         params.mode = MiniIndicatorMode::Pacemaker;
         assert_eq!(
             zmod_mini_indicator_output(&progress, params),
@@ -2147,6 +2293,22 @@ mod tests {
             Some(ZmodMiniIndicatorOutput {
                 text: ZmodMiniIndicatorText::Percent(95.0),
                 color: [0.0, 1.0, 0.5, 1.0],
+            })
+        );
+        params.stream_completion = Some(0.3);
+        assert_eq!(
+            zmod_mini_indicator_output(&progress, params),
+            Some(ZmodMiniIndicatorOutput {
+                text: ZmodMiniIndicatorText::Percent(30.0),
+                color: zmod_stream_prog_color(0.3),
+            })
+        );
+        params.stream_completion = Some(1.2);
+        assert_eq!(
+            zmod_mini_indicator_output(&progress, params),
+            Some(ZmodMiniIndicatorOutput {
+                text: ZmodMiniIndicatorText::Percent(100.0),
+                color: zmod_stream_prog_color(1.2),
             })
         );
     }
