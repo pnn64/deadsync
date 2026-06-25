@@ -473,6 +473,20 @@ mod tests {
     }
 
     #[test]
+    fn fill_lane_col_offsets_falls_back_for_missing_noteskin_columns() {
+        let mut out = [999.0; 4];
+        fill_lane_col_offsets(&mut out, Some(&[-100, -20]), 4, 1.0, 1.0);
+        assert_eq!(out, [-100.0, -20.0, 32.0, 96.0]);
+    }
+
+    #[test]
+    fn fill_lane_col_offsets_only_updates_active_columns() {
+        let mut out = [999.0; 5];
+        fill_lane_col_offsets::<i32>(&mut out, None, 4, 1.0, 1.0);
+        assert_eq!(out, [-96.0, -32.0, 32.0, 96.0, 999.0]);
+    }
+
+    #[test]
     fn compute_invert_distances_mirrors_sides() {
         let cols = [-96.0, -32.0, 32.0, 96.0];
         let mut out = [0.0; 4];

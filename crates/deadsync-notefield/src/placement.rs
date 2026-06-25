@@ -293,13 +293,10 @@ pub fn fill_lane_col_offsets<T: Copy + LaneColumnX>(
     spacing: f32,
     zoom: f32,
 ) {
-    if let Some(cols) = noteskin_cols {
-        for (dst, src) in out.iter_mut().zip(cols.iter().copied()) {
-            *dst = src.to_f32() * spacing * zoom;
-        }
-        return;
-    }
-    for (i, dst) in out.iter_mut().enumerate() {
-        *dst = default_column_x(i, num_cols) * spacing * zoom;
+    for (i, dst) in out.iter_mut().take(num_cols).enumerate() {
+        let col_x = noteskin_cols
+            .and_then(|cols| cols.get(i).copied())
+            .map_or_else(|| default_column_x(i, num_cols), LaneColumnX::to_f32);
+        *dst = col_x * spacing * zoom;
     }
 }
