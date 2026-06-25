@@ -102,18 +102,18 @@ pub fn hold_tail_cap_bounds(
     body_top: Option<f32>,
     body_bottom: Option<f32>,
 ) -> Option<(f32, f32)> {
-    if cap_height <= 0.0 {
-        return None;
+    let default_bounds = (body_tail_y, body_tail_y + cap_height);
+    let rendered_bottom = match (body_top, body_bottom) {
+        (Some(top), Some(bottom)) if bottom > top + 0.5 => bottom,
+        _ => return Some(default_bounds),
+    };
+
+    let dist = body_tail_y - rendered_bottom;
+    if dist < -2.0 || dist > cap_height + 2.0 {
+        return Some(default_bounds);
     }
-    if let (Some(top), Some(bottom)) = (body_top, body_bottom) {
-        if top <= body_tail_y && bottom >= body_tail_y - cap_height * 0.2 {
-            return Some((
-                body_tail_y - cap_height * 0.166_666_67,
-                body_tail_y + cap_height * 0.833_333_3,
-            ));
-        }
-    }
-    Some((body_tail_y, body_tail_y + cap_height))
+
+    Some((rendered_bottom, rendered_bottom + cap_height))
 }
 
 pub fn clipped_hold_body_bounds(

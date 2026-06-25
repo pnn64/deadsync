@@ -3106,6 +3106,15 @@ mod tests {
     }
 
     #[test]
+    fn hold_tail_cap_bounds_tracks_visible_body_inside_cap_range() {
+        let body_tail_y = 100.0;
+        let cap_height = 24.0;
+        let (top, bottom) = hold_tail_cap_bounds(body_tail_y, cap_height, Some(20.0), Some(90.0))
+            .expect("cap should stay attached to the visible body edge");
+        assert_eq!((top, bottom), (90.0, 114.0));
+    }
+
+    #[test]
     fn hold_tail_cap_bounds_falls_back_when_body_is_below_tail_anchor() {
         let body_tail_y = 100.0;
         let cap_height = 24.0;
