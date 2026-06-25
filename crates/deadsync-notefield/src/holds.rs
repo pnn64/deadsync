@@ -65,21 +65,23 @@ pub fn scale_effect_size(logical_size: [f32; 2], field_zoom: f32, effect_zoom: f
 }
 
 pub fn scale_sprite_to_arrow(size: [i32; 2], target_arrow_px: f32) -> [f32; 2] {
-    if size[1] <= 0 {
-        return [size[0] as f32, size[1] as f32];
+    let width = size[0].max(0) as f32;
+    let height = size[1].max(0) as f32;
+    if height <= 0.0 || target_arrow_px <= 0.0 {
+        return [width, height];
     }
-    let h = size[1] as f32;
-    let scale = target_arrow_px / h;
-    [size[0] as f32 * scale, size[1] as f32 * scale]
+    let scale = target_arrow_px / height;
+    [width * scale, target_arrow_px]
 }
 
 pub fn scale_cap_to_arrow(size: [i32; 2], target_arrow_px: f32) -> [f32; 2] {
-    if size[0] <= 0 {
-        return [size[0] as f32, size[1] as f32];
+    let width = size[0].max(0) as f32;
+    let height = size[1].max(0) as f32;
+    if width <= 0.0 || target_arrow_px <= 0.0 {
+        return [width, height];
     }
-    let w = size[0] as f32;
-    let scale = target_arrow_px / w;
-    [size[0] as f32 * scale, size[1] as f32 * scale]
+    let scale = target_arrow_px / width;
+    [target_arrow_px, height * scale]
 }
 
 pub fn offset_center(
@@ -122,7 +124,7 @@ pub fn clipped_hold_body_bounds(
 ) -> Option<(f32, f32)> {
     let top = body_top.max(natural_top);
     let bottom = body_bottom.min(natural_bottom);
-    (bottom >= top).then_some((top, bottom))
+    (bottom > top).then_some((top, bottom))
 }
 
 pub fn hold_body_bottom_for_tail_cap(body_bottom: f32, y_tail: f32, cap_height: f32) -> f32 {
@@ -151,14 +153,15 @@ pub fn hold_draw_span(y_head: f32, y_tail: f32, screen_height: f32) -> Option<(f
 }
 
 pub fn hold_body_segment_budget(visible_span: f32, segment_height: f32) -> (usize, bool) {
-    if segment_height >= 1.0 {
-        (HOLD_BODY_LEGACY_SEGMENT_LIMIT * 4, true)
+    let estimated = if visible_span <= f32::EPSILON || segment_height <= f32::EPSILON {
+        1
     } else {
-        (((visible_span / segment_height.max(0.001)).ceil() as usize) + 2)
-            .min(HOLD_BODY_SEGMENT_SAFETY_MAX)
-            .max(1)
-            .pipe(|v| (v, false))
-    }
+        (visible_span / segment_height).ceil() as usize
+    };
+    let max_segments = estimated
+        .saturating_add(2)
+        .clamp(2048, HOLD_BODY_SEGMENT_SAFETY_MAX);
+    (max_segments, estimated <= HOLD_BODY_LEGACY_SEGMENT_LIMIT)
 }
 
 pub fn hold_strip_row_3d(
@@ -371,10 +374,3 @@ pub fn song_time_ns_to_seconds(time_ns: SongTimeNs) -> f32 {
 pub fn song_time_ns_delta_seconds(lhs: SongTimeNs, rhs: SongTimeNs) -> f32 {
     (lhs - rhs) as f32 / 1_000_000_000.0
 }
-
-trait Pipe: Sized {
-    fn pipe<R>(self, f: impl FnOnce(Self) -> R) -> R {
-        f(self)
-    }
-}
-impl<T> Pipe for T {}

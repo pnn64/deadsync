@@ -427,12 +427,16 @@ mod tests {
     fn sprite_scale_uses_height_as_arrow_target() {
         assert_eq!(scale_sprite_to_arrow([32, 64], 128.0), [64.0, 128.0]);
         assert_eq!(scale_sprite_to_arrow([32, 0], 128.0), [32.0, 0.0]);
+        assert_eq!(scale_sprite_to_arrow([-32, 64], 128.0), [0.0, 128.0]);
+        assert_eq!(scale_sprite_to_arrow([32, 64], 0.0), [32.0, 64.0]);
     }
 
     #[test]
     fn cap_scale_uses_width_as_arrow_target() {
         assert_eq!(scale_cap_to_arrow([32, 16], 64.0), [64.0, 32.0]);
         assert_eq!(scale_cap_to_arrow([0, 16], 64.0), [0.0, 16.0]);
+        assert_eq!(scale_cap_to_arrow([32, -16], 64.0), [64.0, 0.0]);
+        assert_eq!(scale_cap_to_arrow([32, 16], 0.0), [32.0, 16.0]);
     }
 
     #[test]
@@ -2868,6 +2872,11 @@ mod tests {
     }
 
     #[test]
+    fn clipped_hold_body_bounds_rejects_zero_height_span() {
+        assert_eq!(clipped_hold_body_bounds(100.0, 100.0, 100.0, 100.0), None);
+    }
+
+    #[test]
     fn hold_body_bottom_for_tail_cap_joins_tail_edge_with_overlap() {
         assert_eq!(hold_body_bottom_for_tail_cap(140.0, 100.0, 0.0), 140.0);
         assert_eq!(hold_body_bottom_for_tail_cap(140.0, 100.0, 24.0), 101.0);
@@ -2901,6 +2910,13 @@ mod tests {
         let (budget, allow_legacy) = hold_body_segment_budget(900.0, 64.0);
         assert_eq!(budget, 2048);
         assert!(allow_legacy);
+    }
+
+    #[test]
+    fn long_small_hold_body_repeat_uses_mesh_budget() {
+        let (budget, allow_legacy) = hold_body_segment_budget(2000.0, 2.0);
+        assert_eq!(budget, 2048);
+        assert!(!allow_legacy);
     }
 
     #[test]
