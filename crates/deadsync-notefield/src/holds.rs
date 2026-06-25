@@ -368,9 +368,9 @@ pub fn hold_segment_pose(top: [f32; 2], bottom: [f32; 2]) -> ([f32; 2], f32, f32
 }
 
 pub fn song_time_ns_to_seconds(time_ns: SongTimeNs) -> f32 {
-    time_ns as f32 / 1_000_000_000.0
+    (time_ns as f64 * 1.0e-9) as f32
 }
 
 pub fn song_time_ns_delta_seconds(lhs: SongTimeNs, rhs: SongTimeNs) -> f32 {
-    (lhs - rhs) as f32 / 1_000_000_000.0
+    ((lhs as i128 - rhs as i128) as f64 * 1.0e-9) as f32
 }

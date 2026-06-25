@@ -11,6 +11,9 @@ pub fn lane_window_bounds_by_note_row(
     range: Option<(i32, i32)>,
 ) -> Option<(usize, usize)> {
     let (low, high) = range?;
+    if high < 0 {
+        return Some((0, 0));
+    }
     let low = low.max(0);
     Some((
         indices.partition_point(|&note_index| note_itg_row(&notes[note_index]) < low),

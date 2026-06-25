@@ -3171,6 +3171,10 @@ mod tests {
             song_time_ns_delta_seconds(1_250_000_000, 2_000_000_000),
             -0.75
         );
+
+        let wide_delta = song_time_ns_delta_seconds(i64::MAX, i64::MIN);
+        assert!(wide_delta.is_finite());
+        assert!(wide_delta > 1.0e10);
     }
 
     #[test]
@@ -3217,6 +3221,22 @@ mod tests {
         );
 
         assert_eq!(visited, vec![1]);
+    }
+
+    #[test]
+    fn visible_note_window_rejects_fully_negative_ranges() {
+        let notes = vec![test_note_at_dense_row(-1.0, 0)];
+        let note_indices = vec![0usize];
+        let mut visited = Vec::new();
+
+        for_each_visible_note_index(
+            &note_indices,
+            &notes,
+            Some((beat_to_note_row(-4.0), beat_to_note_row(-2.0))),
+            |note_index| visited.push(note_index),
+        );
+
+        assert!(visited.is_empty());
     }
 
     #[test]
