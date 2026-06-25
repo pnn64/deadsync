@@ -663,6 +663,38 @@ mod tests {
     }
 
     #[test]
+    fn display_mods_transform_masks_use_legacy_bit_assignments() {
+        let mut parts = Vec::new();
+        push_transform_parts(&mut parts, 0xFF, 0xFF, 0x1F);
+        assert_eq!(
+            parts,
+            vec![
+                "NoHolds".to_string(),
+                "NoRolls".to_string(),
+                "NoMines".to_string(),
+                "Little".to_string(),
+                "Wide".to_string(),
+                "Big".to_string(),
+                "Quick".to_string(),
+                "BMRize".to_string(),
+                "Skippy".to_string(),
+                "Mines".to_string(),
+                "Echo".to_string(),
+                "Stomp".to_string(),
+                "Planted".to_string(),
+                "Floored".to_string(),
+                "Twister".to_string(),
+                "HoldsToRolls".to_string(),
+                "NoJumps".to_string(),
+                "NoHands".to_string(),
+                "NoLifts".to_string(),
+                "NoFakes".to_string(),
+                "NoQuads".to_string(),
+            ]
+        );
+    }
+
+    #[test]
     fn display_mods_use_itg_disabled_timing_window_names() {
         assert_eq!(
             disabled_timing_windows_name((1 << 3) | (1 << 4)),

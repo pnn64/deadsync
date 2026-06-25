@@ -147,25 +147,68 @@ pub(crate) fn push_transform_parts(
     remove_mask: u8,
     holds_mask: u8,
 ) {
-    if insert_mask & (1 << 0) != 0 {
+    if remove_mask & (1 << 2) != 0 {
+        parts.push("NoHolds".to_string());
+    }
+    if holds_mask & (1 << 3) != 0 {
         parts.push("NoRolls".to_string());
     }
-    if remove_mask & (1 << 0) != 0 {
+    if remove_mask & (1 << 1) != 0 {
         parts.push("NoMines".to_string());
     }
-    if remove_mask & (1 << 1) != 0 {
+    if remove_mask & (1 << 0) != 0 {
         parts.push("Little".to_string());
     }
-    if insert_mask & (1 << 1) != 0 {
+    if insert_mask & (1 << 0) != 0 {
         parts.push("Wide".to_string());
     }
-    if insert_mask & (1 << 7) != 0 {
+    if insert_mask & (1 << 1) != 0 {
         parts.push("Big".to_string());
     }
-    for (bit, name) in [(0, "Planted"), (1, "Floored"), (2, "Twister"), (3, "Mines")] {
-        if holds_mask & (1 << bit) != 0 {
-            parts.push(name.to_string());
-        }
+    if insert_mask & (1 << 2) != 0 {
+        parts.push("Quick".to_string());
+    }
+    if insert_mask & (1 << 3) != 0 {
+        parts.push("BMRize".to_string());
+    }
+    if insert_mask & (1 << 4) != 0 {
+        parts.push("Skippy".to_string());
+    }
+    if insert_mask & (1 << 7) != 0 {
+        parts.push("Mines".to_string());
+    }
+    if insert_mask & (1 << 5) != 0 {
+        parts.push("Echo".to_string());
+    }
+    if insert_mask & (1 << 6) != 0 {
+        parts.push("Stomp".to_string());
+    }
+    if holds_mask & (1 << 0) != 0 {
+        parts.push("Planted".to_string());
+    }
+    if holds_mask & (1 << 1) != 0 {
+        parts.push("Floored".to_string());
+    }
+    if holds_mask & (1 << 2) != 0 {
+        parts.push("Twister".to_string());
+    }
+    if holds_mask & (1 << 4) != 0 {
+        parts.push("HoldsToRolls".to_string());
+    }
+    if remove_mask & (1 << 3) != 0 {
+        parts.push("NoJumps".to_string());
+    }
+    if remove_mask & (1 << 4) != 0 {
+        parts.push("NoHands".to_string());
+    }
+    if remove_mask & (1 << 6) != 0 {
+        parts.push("NoLifts".to_string());
+    }
+    if remove_mask & (1 << 7) != 0 {
+        parts.push("NoFakes".to_string());
+    }
+    if remove_mask & (1 << 5) != 0 {
+        parts.push("NoQuads".to_string());
     }
 }
 
