@@ -249,22 +249,27 @@ pub fn tap_judgment_rows(params: TapJudgmentRowsParams) -> (usize, Option<usize>
         return (base, None);
     }
 
+    let abs_error_ms = params.time_error_ms.abs();
+    let uses_10ms_blue_mode =
+        params.fa_plus_10ms_blue_window && !params.split_15_10ms && !params.custom_fantastic_window;
+    let split_15_10ms_active = params.show_fa_plus_window
+        && params.split_15_10ms
+        && !params.custom_fantastic_window
+        && abs_error_ms > deadsync_rules::timing::FA_PLUS_W010_MS
+        && abs_error_ms <= deadsync_rules::timing::FA_PLUS_W0_MS;
+
     let base = match params.grade {
         JudgeGrade::Fantastic => {
-            if params.custom_fantastic_window {
-                params
-                    .window
-                    .map(|w| w as usize)
-                    .unwrap_or(0)
-                    .min(params.frame_rows.saturating_sub(1))
-            } else if params.show_fa_plus_window
-                && params.fa_plus_10ms_blue_window
-                && !params.split_15_10ms
-                && params.time_error_ms.abs() > deadsync_rules::timing::FA_PLUS_W010_MS
-            {
-                1
-            } else {
+            let blue_fantastic = !params.show_fa_plus_window
+                || if uses_10ms_blue_mode {
+                    abs_error_ms <= deadsync_rules::timing::FA_PLUS_W010_MS
+                } else {
+                    params.window == Some(TimingWindow::W0)
+                };
+            if split_15_10ms_active || blue_fantastic {
                 0
+            } else {
+                1
             }
         }
         JudgeGrade::Excellent => 2,
@@ -273,12 +278,10 @@ pub fn tap_judgment_rows(params: TapJudgmentRowsParams) -> (usize, Option<usize>
         JudgeGrade::WayOff => 5,
         JudgeGrade::Miss => 6,
     };
-    let overlay = params.show_fa_plus_window
-        && params.split_15_10ms
-        && !params.custom_fantastic_window
+    let overlay = split_15_10ms_active
+        && params.grade == JudgeGrade::Fantastic
         && params.frame_rows >= 7
-        && params.window == Some(TimingWindow::W0)
-        && params.time_error_ms.abs() > deadsync_rules::timing::FA_PLUS_W010_MS;
+        && params.window == Some(TimingWindow::W0);
     (base, overlay.then_some(1))
 }
 

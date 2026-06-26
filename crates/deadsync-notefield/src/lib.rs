@@ -2955,6 +2955,19 @@ mod tests {
     }
 
     #[test]
+    fn tap_judgment_rows_show_fa_plus_uses_white_w1_without_10ms_split() {
+        assert_eq!(
+            tap_judgment_rows(TapJudgmentRowsParams {
+                window: Some(TimingWindow::W1),
+                time_error_ms: 16.0,
+                show_fa_plus_window: true,
+                ..tap_rows_params(0.0)
+            }),
+            (1, None)
+        );
+    }
+
+    #[test]
     fn tap_judgment_rows_use_10ms_blue_window() {
         let blue = TapJudgmentRowsParams {
             show_fa_plus_window: true,
