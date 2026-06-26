@@ -255,6 +255,7 @@ pub fn tap_judgment_rows(params: TapJudgmentRowsParams) -> (usize, Option<usize>
     let split_15_10ms_active = params.show_fa_plus_window
         && params.split_15_10ms
         && !params.custom_fantastic_window
+        && params.grade == JudgeGrade::Fantastic
         && abs_error_ms > deadsync_rules::timing::FA_PLUS_W010_MS
         && abs_error_ms <= deadsync_rules::timing::FA_PLUS_W0_MS;
 
@@ -278,10 +279,7 @@ pub fn tap_judgment_rows(params: TapJudgmentRowsParams) -> (usize, Option<usize>
         JudgeGrade::WayOff => 5,
         JudgeGrade::Miss => 6,
     };
-    let overlay = split_15_10ms_active
-        && params.grade == JudgeGrade::Fantastic
-        && params.frame_rows >= 7
-        && params.window == Some(TimingWindow::W0);
+    let overlay = split_15_10ms_active && params.frame_rows >= 7;
     (base, overlay.then_some(1))
 }
 

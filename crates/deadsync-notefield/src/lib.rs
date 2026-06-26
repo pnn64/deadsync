@@ -2944,6 +2944,19 @@ mod tests {
     }
 
     #[test]
+    fn tap_judgment_rows_overlay_white_for_split_hits_without_window() {
+        assert_eq!(
+            tap_judgment_rows(TapJudgmentRowsParams {
+                window: None,
+                show_fa_plus_window: true,
+                split_15_10ms: true,
+                ..tap_rows_params(12.0)
+            }),
+            (0, Some(1))
+        );
+    }
+
+    #[test]
     fn tap_judgment_rows_keep_plain_blue_when_split_is_off() {
         assert_eq!(
             tap_judgment_rows(TapJudgmentRowsParams {
