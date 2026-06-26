@@ -13,19 +13,21 @@ use deadlib_present::actors::{TextAlign, TextAttribute};
 use deadlib_present::anim::EffectClock;
 use deadsync_noteskin::{NUM_QUANTIZATIONS, Style};
 use deadsync_song_lua::{
-    MULTITAP_HIDE_EPSILON_BEATS, MULTITAP_PREVISIBLE_BEATS, MULTITAP_SAMPLE_STEP, MultitapDesc,
-    RuntimeModEaseEntry, SONG_LUA_BROADCASTS_KEY, SONG_LUA_DANGER_LIFE,
-    SONG_LUA_DOUBLE_NOTE_COLUMNS, SONG_LUA_EASING_NAME_KEY, SONG_LUA_INITIAL_LIFE,
-    SONG_LUA_NOTE_COLUMNS, SONG_LUA_PLAYER_OPTION_CAPABILITIES,
-    SONG_LUA_PLAYER_OPTION_MULTICOL_PREFIXES, SONG_LUA_RUNTIME_BEAT_KEY, SONG_LUA_RUNTIME_KEY,
+    LUA_PLAYERS, MULTITAP_HIDE_EPSILON_BEATS, MULTITAP_PREVISIBLE_BEATS, MULTITAP_SAMPLE_STEP,
+    MultitapDesc, RuntimeModEaseEntry, SONG_LUA_BROADCASTS_KEY, SONG_LUA_DANGER_LIFE,
+    SONG_LUA_DOUBLE_NOTE_COLUMNS, SONG_LUA_EASING_NAME_KEY, SONG_LUA_EASING_NAMES,
+    SONG_LUA_INITIAL_LIFE, SONG_LUA_NOTE_COLUMNS, SONG_LUA_PLAYER_OPTION_CAPABILITIES,
+    SONG_LUA_PLAYER_OPTION_MULTICOL_PREFIXES, SONG_LUA_PRODUCT_FAMILY, SONG_LUA_PRODUCT_ID,
+    SONG_LUA_PRODUCT_VERSION, SONG_LUA_RUNTIME_BEAT_KEY, SONG_LUA_RUNTIME_KEY,
     SONG_LUA_RUNTIME_SECONDS_KEY, SONG_LUA_SIDE_EFFECT_COUNT_KEY, SONG_LUA_SOUND_PATHS_KEY,
-    SONG_LUA_THEME_PATH_PREFIX, SongLuaPerframePlayerState, THEME_RECEPTOR_Y_REV,
-    THEME_RECEPTOR_Y_STD, calc_multitap_phase, compile_song_runtime_delta_values,
-    compile_song_runtime_values, create_branch_table, create_course_table, create_difficulty_table,
-    create_display_bpms_table, create_enabled_players_table, create_game_table,
-    create_gameplay_layout, create_other_player_table, create_owned_string_array,
-    create_player_number_table, create_player_tables, create_screen_system_layer_helpers_table,
-    create_screen_table, create_sl_table, create_song_options_table, create_song_position_table,
+    SONG_LUA_THEME_NAME, SONG_LUA_THEME_PATH_PREFIX, SongLuaPerframePlayerState,
+    THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD, calc_multitap_phase,
+    compile_song_runtime_delta_values, compile_song_runtime_values, create_branch_table,
+    create_course_table, create_difficulty_table, create_display_bpms_table,
+    create_enabled_players_table, create_game_table, create_gameplay_layout,
+    create_other_player_table, create_owned_string_array, create_player_number_table,
+    create_player_tables, create_screen_system_layer_helpers_table, create_screen_table,
+    create_sl_table, create_song_options_table, create_song_position_table,
     create_song_runtime_table, create_song_table, create_songman_table, create_string_array,
     create_string_enum_table, create_style_table, create_trail_table, custom_multi_modifier_key,
     display_bpms_for_args, display_bpms_text, ease_window_cmp, easiest_steps_difficulty,
@@ -38,19 +40,19 @@ use deadsync_song_lua::{
     overlay_delta_pair_from_states, perframe_delta_seconds, perframe_segment_step,
     player_index_from_value, player_number_name, player_short_name, preprocess_lua_cmd_syntax,
     push_multitap_arrow_sample, push_overlay_sample_eases, push_perframe_player_target,
-    read_boolish, read_color_value, read_easing_name, read_f32, read_i32_value, read_player,
-    read_runtime_mod_eases, read_song_lua_broadcasts, read_song_lua_sound_paths, read_span_mode,
-    read_string, read_u32_value, read_vertex_colors_value, record_song_lua_broadcast,
-    relative_player_target, runtime_mod_end_value, runtime_mod_entry_players, runtime_mod_key,
-    runtime_mod_start_value, runtime_player_option_ease_target, scale_value, seconds_to_hhmmss,
-    seconds_to_mmss, seconds_to_mmss_ms_ms, seconds_to_mss, seconds_to_mss_ms_ms,
-    set_compile_song_runtime_beat, set_compile_song_runtime_delta_values,
-    set_compile_song_runtime_values, set_string_method, song_dir_string, song_display_bps,
-    song_lua_arch_name, song_lua_human_player_count, song_lua_runtime_number,
-    song_lua_side_effect_count, song_lua_style_column_x, song_lua_style_info, song_music_rate,
-    theme_has_string, theme_metric_number, theme_metric_number_for_screen, theme_path,
-    theme_pref_default, theme_string, theme_string_names, truthy, update_function_end_beat,
-    update_function_sample_step,
+    read_boolish, read_color_value, read_easing_name, read_f32, read_i32_value, read_mod_windows,
+    read_player, read_runtime_mod_eases, read_song_lua_broadcasts, read_song_lua_sound_paths,
+    read_span_mode, read_string, read_u32_value, read_vertex_colors_value,
+    record_song_lua_broadcast, relative_player_target, runtime_mod_end_value,
+    runtime_mod_entry_players, runtime_mod_key, runtime_mod_start_value,
+    runtime_player_option_ease_target, scale_value, seconds_to_hhmmss, seconds_to_mmss,
+    seconds_to_mmss_ms_ms, seconds_to_mss, seconds_to_mss_ms_ms, set_compile_song_runtime_beat,
+    set_compile_song_runtime_delta_values, set_compile_song_runtime_values, set_string_method,
+    song_dir_string, song_display_bps, song_lua_arch_name, song_lua_human_player_count,
+    song_lua_runtime_number, song_lua_side_effect_count, song_lua_style_column_x,
+    song_lua_style_info, song_music_rate, theme_has_string, theme_metric_number,
+    theme_metric_number_for_screen, theme_path, theme_pref_default, theme_string,
+    theme_string_names, truthy, update_function_end_beat, update_function_sample_step,
 };
 
 mod actor_host;
@@ -97,10 +99,6 @@ pub use deadsync_song_lua::{
 };
 
 pub type CompiledSongLua = deadsync_song_lua::CompiledSongLua<SongLuaOverlayActor>;
-const LUA_PLAYERS: usize = 2;
-const SONG_LUA_PRODUCT_FAMILY: &str = "ITGmania";
-const SONG_LUA_PRODUCT_ID: &str = "ITGmania";
-const SONG_LUA_PRODUCT_VERSION: &str = "1.2.0";
 const SONG_LUA_PROBE_METHODS_KEY: &str = "__songlua_probe_methods";
 const SONG_LUA_PROBE_ACTORS_KEY: &str = "__songlua_probe_actors";
 const SONG_LUA_PROBE_ACTOR_SET_KEY: &str = "__songlua_probe_actor_set";
@@ -108,53 +106,8 @@ const SONG_LUA_CAPTURE_ACTORS_KEY: &str = "__songlua_capture_scope_actors";
 const SONG_LUA_CAPTURE_ACTOR_SET_KEY: &str = "__songlua_capture_scope_actor_set";
 const SONG_LUA_CAPTURE_SNAPSHOTS_KEY: &str = "__songlua_capture_scope_snapshots";
 const SONG_LUA_STARTUP_MESSAGE: &str = "__songlua_startup";
-const SONG_LUA_THEME_NAME: &str = "Simply Love";
 const GRAPH_DISPLAY_VALUE_RESOLUTION: usize = 100;
 const SONG_LUA_SPRITE_STATE_CLEAR: u32 = u32::MAX;
-const EASING_NAMES: &[&str] = &[
-    "instant",
-    "linear",
-    "inQuad",
-    "outQuad",
-    "inOutQuad",
-    "outInQuad",
-    "inCubic",
-    "outCubic",
-    "inOutCubic",
-    "outInCubic",
-    "inQuart",
-    "outQuart",
-    "inOutQuart",
-    "outInQuart",
-    "inQuint",
-    "outQuint",
-    "inOutQuint",
-    "outInQuint",
-    "inSine",
-    "outSine",
-    "inOutSine",
-    "outInSine",
-    "inExpo",
-    "outExpo",
-    "inOutExpo",
-    "outInExpo",
-    "inCirc",
-    "outCirc",
-    "inOutCirc",
-    "outInCirc",
-    "inElastic",
-    "outElastic",
-    "inOutElastic",
-    "outInElastic",
-    "inBack",
-    "outBack",
-    "inOutBack",
-    "outInBack",
-    "inBounce",
-    "outBounce",
-    "inOutBounce",
-    "outInBounce",
-];
 struct SongLuaPerframeEntry {
     start: f32,
     end: f32,
@@ -588,7 +541,7 @@ fn install_host(
 fn install_ease_table(lua: &Lua, host: &mut HostState) -> mlua::Result<()> {
     let globals = lua.globals();
     let ease = lua.create_table()?;
-    for &name in EASING_NAMES {
+    for &name in SONG_LUA_EASING_NAMES {
         let function = lua.create_function(
             |_, (_t, b, c, d, _p1, _p2): (f32, f32, f32, f32, Value, Value)| {
                 if d.abs() <= f32::EPSILON {
@@ -618,7 +571,7 @@ fn register_loaded_easing_names(lua: &Lua, host: &mut HostState) -> mlua::Result
 }
 
 fn register_easing_table(table: &Table, host: &mut HostState) -> mlua::Result<()> {
-    for &name in EASING_NAMES {
+    for &name in SONG_LUA_EASING_NAMES {
         match table.get::<Value>(name)? {
             Value::Function(function) => {
                 host.easing_names
@@ -2044,45 +1997,6 @@ fn entry_file_path(path: &Path) -> Option<PathBuf> {
         }
     }
     None
-}
-
-fn read_mod_windows(
-    table: Option<Table>,
-    unit: SongLuaTimeUnit,
-) -> Result<Vec<SongLuaModWindow>, String> {
-    let Some(table) = table else {
-        return Ok(Vec::new());
-    };
-    let mut out = Vec::new();
-    for value in table.sequence_values::<Value>() {
-        let Value::Table(entry) = value.map_err(|err| err.to_string())? else {
-            continue;
-        };
-        let Some(start) = read_f32(entry.raw_get::<Value>(1).map_err(|err| err.to_string())?)
-        else {
-            continue;
-        };
-        let Some(limit) = read_f32(entry.raw_get::<Value>(2).map_err(|err| err.to_string())?)
-        else {
-            continue;
-        };
-        let Some(mods) = read_string(entry.raw_get::<Value>(3).map_err(|err| err.to_string())?)
-        else {
-            continue;
-        };
-        let span_mode = read_span_mode(entry.raw_get::<Value>(4).map_err(|err| err.to_string())?)
-            .unwrap_or(SongLuaSpanMode::Len);
-        let player = read_player(entry.raw_get::<Value>(5).map_err(|err| err.to_string())?);
-        out.push(SongLuaModWindow {
-            unit,
-            start,
-            limit,
-            span_mode,
-            mods,
-            player,
-        });
-    }
-    Ok(out)
 }
 
 #[derive(Clone)]

@@ -9,6 +9,7 @@ mod crypto;
 mod files;
 mod json;
 mod lua_util;
+mod mod_windows;
 mod multitap;
 mod net;
 mod perframe;
@@ -40,6 +41,7 @@ pub use lua_util::{
     method_arg_offset, read_color_call, read_color_value, read_song_lua_sound_paths,
     read_vertex_colors_value,
 };
+pub use mod_windows::read_mod_windows;
 pub use multitap::{
     MULTITAP_HIDE_EPSILON_BEATS, MULTITAP_PREVISIBLE_BEATS, MULTITAP_SAMPLE_STEP, MultitapDesc,
     MultitapPhase, calc_multitap_phase, multitap_deco_child_state, multitap_deco_state,
@@ -113,6 +115,9 @@ pub use version::{is_minimum_product_version, is_product_version, version_args, 
 
 pub const LUA_PLAYERS: usize = 2;
 pub const SONG_LUA_DEFAULT_NOTESKIN_NAME: &str = "cel";
+pub const SONG_LUA_PRODUCT_FAMILY: &str = "ITGmania";
+pub const SONG_LUA_PRODUCT_ID: &str = "ITGmania";
+pub const SONG_LUA_PRODUCT_VERSION: &str = "1.2.0";
 pub const SONG_LUA_RUNTIME_KEY: &str = "__songlua_compile_song_runtime";
 pub const SONG_LUA_RUNTIME_BEAT_KEY: &str = "__songlua_song_beat";
 pub const SONG_LUA_RUNTIME_SECONDS_KEY: &str = "__songlua_music_seconds";
@@ -124,12 +129,57 @@ pub const SONG_LUA_SIDE_EFFECT_COUNT_KEY: &str = "__songlua_side_effect_count";
 pub const SONG_LUA_BROADCASTS_KEY: &str = "__songlua_broadcast_messages";
 pub const SONG_LUA_SOUND_PATHS_KEY: &str = "__songlua_sound_paths";
 pub const SONG_LUA_THEME_PATH_PREFIX: &str = "__songlua_theme_path/";
+pub const SONG_LUA_THEME_NAME: &str = "Simply Love";
 pub const THEME_RECEPTOR_Y_STD: f32 = -125.0;
 pub const THEME_RECEPTOR_Y_REV: f32 = 145.0;
 pub const SONG_LUA_INITIAL_LIFE: f32 = 0.5;
 pub const SONG_LUA_DANGER_LIFE: f32 = 0.2;
 pub const SONG_LUA_NOTE_COLUMNS: usize = 4;
 pub const SONG_LUA_DOUBLE_NOTE_COLUMNS: usize = 8;
+pub const SONG_LUA_EASING_NAMES: &[&str] = &[
+    "instant",
+    "linear",
+    "inQuad",
+    "outQuad",
+    "inOutQuad",
+    "outInQuad",
+    "inCubic",
+    "outCubic",
+    "inOutCubic",
+    "outInCubic",
+    "inQuart",
+    "outQuart",
+    "inOutQuart",
+    "outInQuart",
+    "inQuint",
+    "outQuint",
+    "inOutQuint",
+    "outInQuint",
+    "inSine",
+    "outSine",
+    "inOutSine",
+    "outInSine",
+    "inExpo",
+    "outExpo",
+    "inOutExpo",
+    "outInExpo",
+    "inCirc",
+    "outCirc",
+    "inOutCirc",
+    "outInCirc",
+    "inElastic",
+    "outElastic",
+    "inOutElastic",
+    "outInElastic",
+    "inBack",
+    "outBack",
+    "inOutBack",
+    "outInBack",
+    "inBounce",
+    "outBounce",
+    "inOutBounce",
+    "outInBounce",
+];
 
 const SONG_LUA_COLUMN_X: [f32; SONG_LUA_NOTE_COLUMNS] = [-96.0, -32.0, 32.0, 96.0];
 const SONG_LUA_DOUBLE_COLUMN_X: [f32; SONG_LUA_DOUBLE_NOTE_COLUMNS] =
