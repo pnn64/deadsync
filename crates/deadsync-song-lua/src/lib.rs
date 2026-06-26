@@ -9,6 +9,7 @@ mod crypto;
 mod files;
 mod json;
 mod lua_util;
+mod multitap;
 mod net;
 mod player_options;
 mod runtime;
@@ -36,6 +37,12 @@ pub use lua_util::{
     create_string_array, lua_format_text, lua_text_value, make_color_table, method_arg,
     method_arg_offset, read_color_call, read_color_value, read_song_lua_sound_paths,
     read_vertex_colors_value,
+};
+pub use multitap::{
+    MULTITAP_HIDE_EPSILON_BEATS, MULTITAP_PREVISIBLE_BEATS, MULTITAP_SAMPLE_STEP, MultitapDesc,
+    MultitapPhase, calc_multitap_phase, multitap_deco_child_state, multitap_deco_state,
+    multitap_explosion_state, multitap_frame_state, overlay_delta_pair_from_states,
+    push_multitap_arrow_sample, push_overlay_sample_eases,
 };
 pub use net::{create_network_table, encode_query_params, query_value_text, url_encode_component};
 pub use player_options::{

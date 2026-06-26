@@ -8,9 +8,8 @@ pub use deadsync_song_lua::{
     SongLuaOverlayMessageCommand, SongLuaOverlayModelDraw,
     SongLuaOverlayModelLayer as GenericSongLuaOverlayModelLayer, SongLuaOverlayState,
     SongLuaOverlayStateDelta, SongLuaProxyTarget, SongLuaTextGlowMode, overlay_delta_from_blocks,
-    overlay_delta_intersection, overlay_state_after_blocks, parse_overlay_blend_mode,
-    parse_overlay_effect_clock, parse_overlay_effect_mode, parse_overlay_text_align,
-    parse_overlay_text_glow_mode,
+    overlay_state_after_blocks, parse_overlay_blend_mode, parse_overlay_effect_clock,
+    parse_overlay_effect_mode, parse_overlay_text_align, parse_overlay_text_glow_mode,
 };
 
 pub type SongLuaOverlayModelLayer = GenericSongLuaOverlayModelLayer<TexturedMeshVertex>;
