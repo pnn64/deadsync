@@ -4786,8 +4786,9 @@ return Def.ActorFrame{
         &SongLuaCompileContext::new(&song_dir, "LoadActor Video Media"),
     )
     .unwrap();
-    assert_eq!(compiled.messages.len(), 1);
-    assert_eq!(compiled.messages[0].message, "true:true");
+    assert!(compiled.messages.iter().any(|event| {
+        event.message != SONG_LUA_STARTUP_MESSAGE && event.message == "true:true"
+    }));
 }
 
 #[test]
@@ -4857,8 +4858,9 @@ return Def.ActorFrame{
         &SongLuaCompileContext::new(&song_dir, "LoadActor Audio Media"),
     )
     .unwrap();
-    assert_eq!(compiled.messages.len(), 1);
-    assert_eq!(compiled.messages[0].message, "true:true");
+    assert!(compiled.messages.iter().any(|event| {
+        event.message != SONG_LUA_STARTUP_MESSAGE && event.message == "true:true"
+    }));
     assert_eq!(compiled.overlays.len(), 1);
     let SongLuaOverlayKind::Sound { sound_path } = &compiled.overlays[0].kind else {
         panic!("expected sound overlay");
