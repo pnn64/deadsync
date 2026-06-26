@@ -3246,6 +3246,10 @@ mod tests {
         assert!(matches!(
             actor,
             Actor::TexturedMesh {
+                align: [0.0, 0.0],
+                size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+                glow: [1.0, 1.0, 1.0, 0.0],
+                geom_cache_key: deadlib_render::INVALID_TMESH_CACHE_KEY,
                 depth_test: true,
                 ..
             }
@@ -3258,8 +3262,11 @@ mod tests {
         assert!(matches!(
             actor,
             Actor::TexturedMesh {
+                align: [0.0, 0.0],
+                size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
                 tint: [1.0, 1.0, 1.0, 0.0],
                 glow: [1.0, 1.0, 1.0, 1.0],
+                geom_cache_key: deadlib_render::INVALID_TMESH_CACHE_KEY,
                 depth_test: true,
                 ..
             }
