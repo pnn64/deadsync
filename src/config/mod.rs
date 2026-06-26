@@ -148,6 +148,9 @@ pub struct Config {
     /// Hide the OS mouse cursor while it is inside the DeadSync window.
     pub hide_mouse_cursor: bool,
     pub gfx_debug: bool,
+    /// Enable a "Shutdown" entry on the main menu that powers off the host
+    /// machine. Off by default; intended for cabinet use.
+    pub allow_shutdown_host: bool,
     /// Windows-only: choose which gamepad backend to use.
     pub windows_gamepad_backend: WindowsPadBackend,
     /// Enable StepManiaX pad input via the RustManiaX SDK (all platforms).
@@ -409,6 +412,7 @@ impl Default for Config {
             high_dpi: false,
             hide_mouse_cursor: true,
             gfx_debug: false,
+            allow_shutdown_host: false,
             windows_gamepad_backend: WindowsPadBackend::RawInput,
             smx_input: false,
             smx_manages_pad_config: false,

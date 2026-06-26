@@ -110,6 +110,7 @@ fn push_default_options(content: &mut String, default: &Config) {
     push_line(content, "FullscreenType", default.fullscreen_type.as_str());
     push_line(content, "Game", default.game_flag.as_str());
     push_line(content, "GamepadBackend", default.windows_gamepad_backend);
+    push_bool(content, "AllowShutdown", default.allow_shutdown_host);
     push_bool(content, "SmxInput", default.smx_input);
     push_bool(
         content,

@@ -67,6 +67,10 @@ pub enum ScreenAction {
     /// full-screen transition-out animation and we only want the target's in-transition.
     NavigateNoFade(Screen),
     Exit,
+    /// Power off the host machine after the menu out-transition. Only
+    /// dispatched when the operator has enabled `AllowShutdown` in
+    /// `deadsync.ini` and the user picks the Shutdown menu entry.
+    Shutdown,
     SelectProfiles {
         p1: ActiveProfile,
         p2: ActiveProfile,

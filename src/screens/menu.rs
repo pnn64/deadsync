@@ -33,6 +33,22 @@ const NORMAL_COLOR_HEX: &str = "#888888";
 
 pub const OPTION_COUNT: usize = 3;
 
+#[inline]
+fn option_count() -> usize {
+    if crate::config::get().allow_shutdown_host {
+        OPTION_COUNT + 1
+    } else {
+        OPTION_COUNT
+    }
+}
+
+#[inline]
+fn shutdown_index() -> Option<usize> {
+    crate::config::get()
+        .allow_shutdown_host
+        .then_some(OPTION_COUNT)
+}
+
 // --- CONSTANTS UPDATED FOR NEW ANIMATION-DRIVEN LAYOUT ---
 //const MENU_BELOW_LOGO: f32 = 25.0;
 //const MENU_ROW_SPACING: f32 = 23.0;
@@ -438,11 +454,13 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_multiplier: f32
     selected[3] *= alpha_multiplier;
     normal[3] *= alpha_multiplier;
 
-    let menu_labels = [
-        tr("Menu", "Gameplay"),
-        tr("Menu", "Options"),
-        tr("Menu", "Exit"),
-    ];
+    let mut menu_labels: Vec<Arc<str>> = Vec::with_capacity(4);
+    menu_labels.push(tr("Menu", "Gameplay"));
+    menu_labels.push(tr("Menu", "Options"));
+    menu_labels.push(tr("Menu", "Exit"));
+    if crate::config::get().allow_shutdown_host {
+        menu_labels.push(tr("Menu", "Shutdown"));
+    }
 
     // --- UPDATED PARAMS FOR THE NEW MENU LIST BUILDER ---
     let params = menu_list::MenuParams {
@@ -566,7 +584,7 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
 
 #[inline(always)]
 fn move_selection(state: &mut State, delta: isize) {
-    let n = OPTION_COUNT as isize;
+    let n = option_count() as isize;
     let cur = state.selected_index as isize;
     state.selected_index = (cur + delta).rem_euclid(n) as usize;
     deadsync_audio_stream::play_sfx("assets/sounds/change.ogg");
@@ -576,6 +594,9 @@ fn move_selection(state: &mut State, delta: isize) {
 fn start_selected(state: &mut State, started_by_p2: bool) -> ScreenAction {
     deadsync_audio_stream::play_sfx("assets/sounds/start.ogg");
     state.started_by_p2 = started_by_p2;
+    if Some(state.selected_index) == shutdown_index() {
+        return ScreenAction::Shutdown;
+    }
     match state.selected_index {
         0 => ScreenAction::Navigate(Screen::SelectProfile),
         1 => ScreenAction::Navigate(Screen::Options),

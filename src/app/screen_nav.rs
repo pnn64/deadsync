@@ -434,6 +434,7 @@ impl App {
         }
 
         self.state.shell.pending_exit = false;
+        self.state.shell.pending_shutdown = false;
         if self.is_actor_only_fade(from, target) {
             self.start_actor_fade(from, target);
         } else {
@@ -527,7 +528,35 @@ impl App {
         }
     }
 
+    pub(super) fn handle_shutdown_action(&mut self) -> Vec<Command> {
+        if self.state.screens.current_screen == CurrentScreen::Menu
+            && matches!(self.state.shell.transition, TransitionState::Idle)
+        {
+            info!("Host-shutdown requested from Menu; playing out-transition first.");
+            let (_, out_duration) =
+                self.get_out_transition_for_screen(self.state.screens.current_screen);
+            self.state.shell.transition = TransitionState::FadingOut {
+                elapsed: 0.0,
+                duration: out_duration,
+                target: self.state.screens.current_screen,
+            };
+            self.state.shell.pending_shutdown = true;
+            Vec::new()
+        } else {
+            info!("Host-shutdown action received. Powering off.");
+            vec![Command::Shutdown]
+        }
+    }
+
     pub(super) fn on_fade_complete(&mut self, target: CurrentScreen, event_loop: &ActiveEventLoop) {
+        if self.state.shell.pending_shutdown {
+            info!("Fade-out complete; powering off host and exiting.");
+            if let Err(e) = deadlib_platform::power::shutdown_host() {
+                log::warn!("host shutdown failed; exiting application only: {e}");
+            }
+            event_loop.exit();
+            return;
+        }
         if self.state.shell.pending_exit {
             info!("Fade-out complete; exiting application.");
             event_loop.exit();

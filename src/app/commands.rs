@@ -14,6 +14,7 @@ use winit::event_loop::ActiveEventLoop;
 /// Imperative effects to be executed by the shell.
 pub(super) enum Command {
     ExitNow,
+    Shutdown,
     SetBanner(Option<PathBuf>),
     SetCdTitle(Option<PathBuf>),
     SetPackBanner(Option<PathBuf>),
@@ -75,6 +76,7 @@ impl App {
     const fn command_label(command: &Command) -> &'static str {
         match command {
             Command::ExitNow => "ExitNow",
+            Command::Shutdown => "Shutdown",
             Command::SetBanner(_) => "SetBanner",
             Command::SetCdTitle(_) => "SetCdTitle",
             Command::SetPackBanner(_) => "SetPackBanner",
@@ -101,6 +103,12 @@ impl App {
         let started = Instant::now();
         match command {
             Command::ExitNow => {
+                event_loop.exit();
+            }
+            Command::Shutdown => {
+                if let Err(e) = deadlib_platform::power::shutdown_host() {
+                    warn!("host shutdown failed; exiting application only: {e}");
+                }
                 event_loop.exit();
             }
             Command::SetBanner(path_opt) => self.apply_banner(path_opt),
