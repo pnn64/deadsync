@@ -8590,9 +8590,9 @@ fn handle_select_music_menu_input(state: &mut State, ev: &InputEvent) -> ScreenA
             audio::play_sfx("assets/sounds/start.ogg");
             ScreenAction::None
         }
-        select_music_menu::InputOutcome::ActivateAction(action) => {
+        select_music_menu::InputOutcome::ActivateAction(action, side) => {
             audio::play_sfx("assets/sounds/start.ogg");
-            dispatch_menu_action(state, action)
+            dispatch_menu_action(state, action, side)
         }
         select_music_menu::InputOutcome::Close => {
             audio::play_sfx("assets/sounds/start.ogg");
@@ -8602,7 +8602,11 @@ fn handle_select_music_menu_input(state: &mut State, ev: &InputEvent) -> ScreenA
     }
 }
 
-fn dispatch_menu_action(state: &mut State, action: select_music_menu::Action) -> ScreenAction {
+fn dispatch_menu_action(
+    state: &mut State,
+    action: select_music_menu::Action,
+    side: profile_data::PlayerSide,
+) -> ScreenAction {
     match action {
         select_music_menu::Action::BackToMain => {
             hide_select_music_menu(state);
@@ -8699,7 +8703,6 @@ fn dispatch_menu_action(state: &mut State, action: select_music_menu::Action) ->
         }
         select_music_menu::Action::ToggleFavorite => {
             // Toggle favorite for the highlighted song chart or real pack header.
-            let side = profile::get_session_player_side();
             match state.entries.get(state.selected_index).cloned() {
                 Some(MusicWheelEntry::Song(song)) => {
                     let target_chart_type = profile::get_session_play_style().chart_type();
@@ -9591,7 +9594,8 @@ fn handle_raw_key_event_impl(
         let ignore_open_text = matches!(action, select_music_menu::Action::SongSearch);
         // Consume the key even when the dispatched action itself reports
         // ScreenAction::None, so a successful raw shortcut stays single-action.
-        let action = match dispatch_menu_action(state, action) {
+        let side = profile::get_session_player_side();
+        let action = match dispatch_menu_action(state, action, side) {
             ScreenAction::None => ScreenAction::ConsumeInput,
             other => other,
         };
