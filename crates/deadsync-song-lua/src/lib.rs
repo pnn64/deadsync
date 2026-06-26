@@ -14,6 +14,7 @@ mod net;
 mod perframe;
 mod player_options;
 mod runtime;
+mod runtime_mod;
 mod sl;
 mod song_tables;
 mod tables;
@@ -64,6 +65,12 @@ pub use runtime::{
     record_song_lua_broadcast, set_compile_song_runtime_beat,
     set_compile_song_runtime_delta_values, set_compile_song_runtime_values,
     song_lua_runtime_number, song_lua_side_effect_count,
+};
+pub use runtime_mod::{
+    RuntimeModEaseEntry, extend_runtime_mod_sustains, read_runtime_mod_ease_entry,
+    read_runtime_mod_eases, runtime_mod_ease_target, runtime_mod_end_value,
+    runtime_mod_entry_players, runtime_mod_key, runtime_mod_start_value,
+    runtime_player_option_ease_target,
 };
 pub use sl::{create_sl_streams, create_sl_table, init_sl_streams};
 pub use song_tables::{

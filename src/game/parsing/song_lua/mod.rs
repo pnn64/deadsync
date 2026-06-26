@@ -14,18 +14,19 @@ use deadlib_present::anim::EffectClock;
 use deadsync_noteskin::{NUM_QUANTIZATIONS, Style};
 use deadsync_song_lua::{
     MULTITAP_HIDE_EPSILON_BEATS, MULTITAP_PREVISIBLE_BEATS, MULTITAP_SAMPLE_STEP, MultitapDesc,
-    SONG_LUA_BROADCASTS_KEY, SONG_LUA_DANGER_LIFE, SONG_LUA_DOUBLE_NOTE_COLUMNS,
-    SONG_LUA_EASING_NAME_KEY, SONG_LUA_INITIAL_LIFE, SONG_LUA_NOTE_COLUMNS,
-    SONG_LUA_PLAYER_OPTION_CAPABILITIES, SONG_LUA_PLAYER_OPTION_MULTICOL_PREFIXES,
-    SONG_LUA_RUNTIME_BEAT_KEY, SONG_LUA_RUNTIME_KEY, SONG_LUA_RUNTIME_SECONDS_KEY,
-    SONG_LUA_SIDE_EFFECT_COUNT_KEY, SONG_LUA_SOUND_PATHS_KEY, SONG_LUA_THEME_PATH_PREFIX,
-    SongLuaPerframePlayerState, THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD, calc_multitap_phase,
-    compile_song_runtime_delta_values, compile_song_runtime_values, create_course_table,
-    create_display_bpms_table, create_enabled_players_table, create_gameplay_layout,
-    create_owned_string_array, create_player_tables, create_sl_table, create_song_options_table,
-    create_song_position_table, create_song_runtime_table, create_song_table, create_songman_table,
-    create_string_array, create_style_table, create_trail_table, custom_multi_modifier_key,
-    display_bpms_for_args, display_bpms_text, ease_window_cmp, easiest_steps_difficulty,
+    RuntimeModEaseEntry, SONG_LUA_BROADCASTS_KEY, SONG_LUA_DANGER_LIFE,
+    SONG_LUA_DOUBLE_NOTE_COLUMNS, SONG_LUA_EASING_NAME_KEY, SONG_LUA_INITIAL_LIFE,
+    SONG_LUA_NOTE_COLUMNS, SONG_LUA_PLAYER_OPTION_CAPABILITIES,
+    SONG_LUA_PLAYER_OPTION_MULTICOL_PREFIXES, SONG_LUA_RUNTIME_BEAT_KEY, SONG_LUA_RUNTIME_KEY,
+    SONG_LUA_RUNTIME_SECONDS_KEY, SONG_LUA_SIDE_EFFECT_COUNT_KEY, SONG_LUA_SOUND_PATHS_KEY,
+    SONG_LUA_THEME_PATH_PREFIX, SongLuaPerframePlayerState, THEME_RECEPTOR_Y_REV,
+    THEME_RECEPTOR_Y_STD, calc_multitap_phase, compile_song_runtime_delta_values,
+    compile_song_runtime_values, create_course_table, create_display_bpms_table,
+    create_enabled_players_table, create_gameplay_layout, create_owned_string_array,
+    create_player_tables, create_sl_table, create_song_options_table, create_song_position_table,
+    create_song_runtime_table, create_song_table, create_songman_table, create_string_array,
+    create_style_table, create_trail_table, custom_multi_modifier_key, display_bpms_for_args,
+    display_bpms_text, ease_window_cmp, easiest_steps_difficulty, extend_runtime_mod_sustains,
     file_path_string, format_song_options_text, graph_display_body_size, is_song_lua_audio_path,
     is_song_lua_image_path, is_song_lua_media_path, is_song_lua_video_path, lua_format_text,
     lua_text_value, lua_values_equal, make_color_table, message_event_cmp, method_arg,
@@ -35,15 +36,16 @@ use deadsync_song_lua::{
     player_index_from_value, player_number_name, player_short_name, preprocess_lua_cmd_syntax,
     push_multitap_arrow_sample, push_overlay_sample_eases, push_perframe_player_target,
     read_boolish, read_color_value, read_easing_name, read_f32, read_i32_value, read_player,
-    read_song_lua_broadcasts, read_song_lua_sound_paths, read_span_mode, read_string,
-    read_u32_value, read_vertex_colors_value, record_song_lua_broadcast, relative_player_target,
-    set_compile_song_runtime_beat, set_compile_song_runtime_delta_values,
-    set_compile_song_runtime_values, set_string_method, song_dir_string, song_display_bps,
-    song_lua_arch_name, song_lua_human_player_count, song_lua_runtime_number,
-    song_lua_side_effect_count, song_lua_style_column_x, song_lua_style_info, song_music_rate,
-    theme_has_string, theme_metric_number, theme_metric_number_for_screen, theme_path,
-    theme_pref_default, theme_string, theme_string_names, truthy, update_function_end_beat,
-    update_function_sample_step,
+    read_runtime_mod_eases, read_song_lua_broadcasts, read_song_lua_sound_paths, read_span_mode,
+    read_string, read_u32_value, read_vertex_colors_value, record_song_lua_broadcast,
+    relative_player_target, runtime_mod_end_value, runtime_mod_entry_players, runtime_mod_key,
+    runtime_mod_start_value, runtime_player_option_ease_target, set_compile_song_runtime_beat,
+    set_compile_song_runtime_delta_values, set_compile_song_runtime_values, set_string_method,
+    song_dir_string, song_display_bps, song_lua_arch_name, song_lua_human_player_count,
+    song_lua_runtime_number, song_lua_side_effect_count, song_lua_style_column_x,
+    song_lua_style_info, song_music_rate, theme_has_string, theme_metric_number,
+    theme_metric_number_for_screen, theme_path, theme_pref_default, theme_string,
+    theme_string_names, truthy, update_function_end_beat, update_function_sample_step,
 };
 
 mod actor_host;
@@ -392,8 +394,12 @@ pub fn compile_song_lua(
         global_mods.clone(),
         SongLuaTimeUnit::Beat,
     )?);
-    let (runtime_eases, runtime_overlay_eases) =
-        read_runtime_mod_eases(global_mods, &host.easing_names, &mut overlays, context)?;
+    let (runtime_eases, runtime_overlay_eases) = read_runtime_mod_eases(
+        global_mods,
+        &host.easing_names,
+        runtime_static_overlay_index(&overlays),
+        context,
+    )?;
     out.eases.extend(runtime_eases);
     out.overlay_eases.extend(runtime_overlay_eases);
     out.time_mods.extend(read_mod_windows(
@@ -2257,286 +2263,6 @@ fn read_mod_windows(
 }
 
 #[derive(Clone)]
-struct RuntimeModEaseEntry {
-    unit: SongLuaTimeUnit,
-    start: f32,
-    limit: f32,
-    easing: String,
-    to: f32,
-    target: String,
-    start_val: Option<f32>,
-    opt1: Option<f32>,
-    opt2: Option<f32>,
-    player: Option<u8>,
-    add: bool,
-}
-
-fn read_runtime_mod_eases(
-    table: Option<Table>,
-    easing_names: &HashMap<*const c_void, String>,
-    overlays: &mut [OverlayCompileActor],
-    context: &SongLuaCompileContext,
-) -> Result<(Vec<SongLuaEaseWindow>, Vec<SongLuaOverlayEase>), String> {
-    let Some(table) = table else {
-        return Ok((Vec::new(), Vec::new()));
-    };
-    let mut entries = Vec::new();
-    for value in table.sequence_values::<Value>() {
-        let Value::Table(entry) = value.map_err(|err| err.to_string())? else {
-            continue;
-        };
-        let Some(entry) = read_runtime_mod_ease_entry(entry, easing_names)? else {
-            continue;
-        };
-        if !entries
-            .iter()
-            .any(|other| runtime_mod_entries_equal(other, &entry))
-        {
-            entries.push(entry);
-        }
-    }
-    if entries.is_empty() {
-        return Ok((Vec::new(), Vec::new()));
-    }
-
-    let mut current: [HashMap<String, f32>; LUA_PLAYERS] = std::array::from_fn(|_| HashMap::new());
-    let mut eases = Vec::new();
-    let mut overlay_eases = Vec::new();
-    let static_overlay = runtime_static_overlay_index(overlays);
-    let static_player = context
-        .players
-        .iter()
-        .position(|player| player.enabled)
-        .unwrap_or(0);
-
-    for entry in entries {
-        let key = runtime_mod_key(&entry.target);
-        let players = runtime_mod_entry_players(entry.player);
-        if key == "static" {
-            let mut static_window = None;
-            for player in players {
-                let from = runtime_mod_start_value(&mut current[player], &key, &entry);
-                let to = runtime_mod_end_value(from, &entry);
-                current[player].insert(key.clone(), to);
-                if player == static_player {
-                    static_window = Some((from, to));
-                }
-            }
-            if let (Some(overlay_index), Some((from, to))) = (static_overlay, static_window) {
-                overlay_eases.push(runtime_static_overlay_ease(overlay_index, &entry, from, to));
-            }
-            continue;
-        }
-
-        let Some(target) = runtime_mod_ease_target(&key, &entry.target) else {
-            continue;
-        };
-        for player in players {
-            let from = runtime_mod_start_value(&mut current[player], &key, &entry);
-            let to = runtime_mod_end_value(from, &entry);
-            current[player].insert(key.clone(), to);
-            eases.push(SongLuaEaseWindow {
-                unit: entry.unit,
-                start: entry.start,
-                limit: entry.limit,
-                span_mode: SongLuaSpanMode::Len,
-                from,
-                to,
-                target: target.clone(),
-                easing: Some(entry.easing.clone()),
-                player: Some((player + 1) as u8),
-                sustain: None,
-                opt1: entry.opt1,
-                opt2: entry.opt2,
-            });
-        }
-    }
-    extend_runtime_mod_sustains(&mut eases);
-    Ok((eases, overlay_eases))
-}
-
-fn read_runtime_mod_ease_entry(
-    entry: Table,
-    easing_names: &HashMap<*const c_void, String>,
-) -> Result<Option<RuntimeModEaseEntry>, String> {
-    let Some(start) = read_f32(entry.raw_get::<Value>(1).map_err(|err| err.to_string())?) else {
-        return Ok(None);
-    };
-    let Some(mut limit) = read_f32(entry.raw_get::<Value>(2).map_err(|err| err.to_string())?)
-    else {
-        return Ok(None);
-    };
-    let Some(easing) = read_easing_name(
-        entry.raw_get::<Value>(3).map_err(|err| err.to_string())?,
-        easing_names,
-    ) else {
-        return Ok(None);
-    };
-    let Some(to) = read_f32(entry.raw_get::<Value>(4).map_err(|err| err.to_string())?) else {
-        return Ok(None);
-    };
-    let Some(target) = read_string(entry.raw_get::<Value>(5).map_err(|err| err.to_string())?)
-    else {
-        return Ok(None);
-    };
-    if read_string(
-        entry
-            .raw_get::<Value>("timing")
-            .map_err(|err| err.to_string())?,
-    )
-    .is_some_and(|value| value.eq_ignore_ascii_case("end"))
-    {
-        limit -= start;
-    }
-    if !start.is_finite() || !limit.is_finite() || limit < 0.0 || !to.is_finite() {
-        return Ok(None);
-    }
-    let player = read_player(
-        entry
-            .raw_get::<Value>("plr")
-            .map_err(|err| err.to_string())?,
-    );
-    let player = match player {
-        Some(player) => Some(player),
-        None => read_player(
-            entry
-                .raw_get::<Value>("pn")
-                .map_err(|err| err.to_string())?,
-        ),
-    };
-    Ok(Some(RuntimeModEaseEntry {
-        unit: SongLuaTimeUnit::Beat,
-        start,
-        limit,
-        easing,
-        to,
-        target,
-        start_val: read_f32(
-            entry
-                .raw_get::<Value>("startVal")
-                .map_err(|err| err.to_string())?,
-        ),
-        opt1: read_f32(
-            entry
-                .raw_get::<Value>("opt1")
-                .map_err(|err| err.to_string())?,
-        ),
-        opt2: read_f32(
-            entry
-                .raw_get::<Value>("opt2")
-                .map_err(|err| err.to_string())?,
-        ),
-        player,
-        add: truthy(
-            &entry
-                .raw_get::<Value>("add")
-                .map_err(|err| err.to_string())?,
-        ),
-    }))
-}
-
-fn runtime_mod_entries_equal(left: &RuntimeModEaseEntry, right: &RuntimeModEaseEntry) -> bool {
-    left.unit == right.unit
-        && left.start.to_bits() == right.start.to_bits()
-        && left.limit.to_bits() == right.limit.to_bits()
-        && left.to.to_bits() == right.to.to_bits()
-        && left.target == right.target
-        && left.easing == right.easing
-        && left.start_val.map(f32::to_bits) == right.start_val.map(f32::to_bits)
-        && left.opt1.map(f32::to_bits) == right.opt1.map(f32::to_bits)
-        && left.opt2.map(f32::to_bits) == right.opt2.map(f32::to_bits)
-        && left.player == right.player
-        && left.add == right.add
-}
-
-fn runtime_mod_entry_players(player: Option<u8>) -> Vec<usize> {
-    match player {
-        Some(player) if (1..=LUA_PLAYERS as u8).contains(&player) => vec![(player - 1) as usize],
-        _ => (0..LUA_PLAYERS).collect(),
-    }
-}
-
-fn runtime_mod_key(target: &str) -> String {
-    target.to_ascii_lowercase()
-}
-
-fn runtime_mod_initial_value(key: &str) -> f32 {
-    if matches!(key, "zoom" | "zoomx" | "zoomy" | "zoomz") {
-        1.0
-    } else {
-        0.0
-    }
-}
-
-fn runtime_mod_start_value(
-    current: &mut HashMap<String, f32>,
-    key: &str,
-    entry: &RuntimeModEaseEntry,
-) -> f32 {
-    entry.start_val.unwrap_or_else(|| {
-        *current
-            .entry(key.to_string())
-            .or_insert_with(|| runtime_mod_initial_value(key))
-    })
-}
-
-fn runtime_mod_end_value(from: f32, entry: &RuntimeModEaseEntry) -> f32 {
-    if entry.add { from + entry.to } else { entry.to }
-}
-
-fn runtime_mod_ease_target(key: &str, original: &str) -> Option<SongLuaEaseTarget> {
-    Some(match key {
-        "z" => SongLuaEaseTarget::PlayerZ,
-        "rotationx" => SongLuaEaseTarget::PlayerRotationX,
-        "rotationy" => SongLuaEaseTarget::PlayerRotationY,
-        "rotationz" => SongLuaEaseTarget::PlayerRotationZ,
-        "zoom" => SongLuaEaseTarget::PlayerZoom,
-        "zoomx" => SongLuaEaseTarget::PlayerZoomX,
-        "zoomy" => SongLuaEaseTarget::PlayerZoomY,
-        "zoomz" => SongLuaEaseTarget::PlayerZoomZ,
-        "x" | "y" => return None,
-        _ => SongLuaEaseTarget::Mod(original.to_string()),
-    })
-}
-
-fn runtime_mod_column_key(key: &str, prefix: &str) -> bool {
-    key.strip_prefix(prefix)
-        .and_then(|suffix| suffix.parse::<usize>().ok())
-        .is_some_and(|column| (1..=16).contains(&column))
-}
-
-fn runtime_player_option_ease_target(key: &str, original: &str) -> Option<SongLuaEaseTarget> {
-    if runtime_mod_column_key(key, "bumpy")
-        || runtime_mod_column_key(key, "tiny")
-        || runtime_mod_column_key(key, "movex")
-        || runtime_mod_column_key(key, "movey")
-        || runtime_mod_column_key(key, "confusionoffset")
-    {
-        return Some(SongLuaEaseTarget::Mod(original.to_string()));
-    }
-    Some(match key {
-        "z" => SongLuaEaseTarget::PlayerZ,
-        "rotationx" => SongLuaEaseTarget::PlayerRotationX,
-        "rotationy" => SongLuaEaseTarget::PlayerRotationY,
-        "rotationz" => SongLuaEaseTarget::PlayerRotationZ,
-        "zoom" => SongLuaEaseTarget::PlayerZoom,
-        "zoomx" => SongLuaEaseTarget::PlayerZoomX,
-        "zoomy" => SongLuaEaseTarget::PlayerZoomY,
-        "zoomz" => SongLuaEaseTarget::PlayerZoomZ,
-        "boost" | "brake" | "wave" | "expand" | "boomerang" | "drunk" | "dizzy" | "confusion"
-        | "confusionoffset" | "flip" | "invert" | "tornado" | "tipsy" | "bumpy" | "bumpyoffset"
-        | "bumpyperiod" | "pulseinner" | "pulseouter" | "pulseperiod" | "pulseoffset" | "beat"
-        | "hidden" | "sudden" | "stealth" | "blink" | "rvanish" | "randomvanish"
-        | "reversevanish" | "dark" | "blind" | "cover" | "reverse" | "split" | "alternate"
-        | "cross" | "centered" | "incoming" | "space" | "hallway" | "distant" | "overhead"
-        | "xmod" | "cmod" | "mmod" | "tiny" | "mini" | "confusionyoffset" | "skewx" | "skewy" => {
-            SongLuaEaseTarget::Mod(original.to_string())
-        }
-        _ => return None,
-    })
-}
-
-#[derive(Clone)]
 struct RuntimeOverlayFunctionEntry {
     entry: RuntimeModEaseEntry,
     function: Function,
@@ -2859,63 +2585,6 @@ fn runtime_static_overlay_index(overlays: &[OverlayCompileActor]) -> Option<usiz
                 .eq_ignore_ascii_case("_static 4x1.png")
         })
     })
-}
-
-fn runtime_static_overlay_ease(
-    overlay_index: usize,
-    entry: &RuntimeModEaseEntry,
-    from: f32,
-    to: f32,
-) -> SongLuaOverlayEase {
-    SongLuaOverlayEase {
-        overlay_index,
-        unit: SongLuaTimeUnit::Beat,
-        start: entry.start,
-        limit: entry.limit,
-        span_mode: SongLuaSpanMode::Len,
-        from: SongLuaOverlayStateDelta {
-            diffuse: Some([1.0, 1.0, 1.0, from]),
-            ..SongLuaOverlayStateDelta::default()
-        },
-        to: SongLuaOverlayStateDelta {
-            diffuse: Some([1.0, 1.0, 1.0, to]),
-            ..SongLuaOverlayStateDelta::default()
-        },
-        easing: Some(entry.easing.clone()),
-        sustain: None,
-        opt1: entry.opt1,
-        opt2: entry.opt2,
-    }
-}
-
-fn extend_runtime_mod_sustains(windows: &mut [SongLuaEaseWindow]) {
-    const DEFAULT_SUSTAIN_BEATS: f32 = 1_000_000.0;
-    const SAME_TICK_EPSILON: f32 = 0.001;
-
-    for index in 0..windows.len() {
-        let end = windows[index].start + windows[index].limit;
-        let next_start = windows
-            .iter()
-            .enumerate()
-            .filter_map(|(other_index, other)| {
-                if other_index == index
-                    || other.player != windows[index].player
-                    || other.target != windows[index].target
-                    || other.start <= windows[index].start + SAME_TICK_EPSILON
-                {
-                    None
-                } else {
-                    Some(other.start)
-                }
-            })
-            .fold(None::<f32>, |acc, start| {
-                Some(acc.map_or(start, |current| current.min(start)))
-            })
-            .unwrap_or(DEFAULT_SUSTAIN_BEATS);
-        if next_start > end + SAME_TICK_EPSILON {
-            windows[index].sustain = Some(next_start - end);
-        }
-    }
 }
 
 fn read_eases(
