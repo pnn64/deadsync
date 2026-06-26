@@ -5,8 +5,9 @@ use mlua::{Function, Lua, MultiValue, Table, Value};
 use crate::files::file_path_string;
 use crate::lua_util::{lua_text_value, method_arg};
 use crate::runtime::note_song_lua_side_effect;
-use crate::values::{lua_values_equal, read_f32, read_i32_value, read_string};
+use crate::values::{lua_values_equal, player_number_name, read_f32, read_i32_value, read_string};
 use crate::version::version_parts;
+use crate::{LUA_PLAYERS, SongLuaDifficulty};
 
 pub fn lua_table_to_string(args: &MultiValue) -> String {
     let name = args
@@ -72,6 +73,188 @@ pub fn set_string_method(lua: &Lua, table: &Table, name: &str, value: &str) -> m
             Ok(Value::String(lua.create_string(&value)?))
         })?,
     )
+}
+
+pub fn create_difficulty_table(lua: &Lua) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    let reverse = lua.create_table()?;
+    for (idx, difficulty) in [
+        SongLuaDifficulty::Beginner,
+        SongLuaDifficulty::Easy,
+        SongLuaDifficulty::Medium,
+        SongLuaDifficulty::Hard,
+        SongLuaDifficulty::Challenge,
+        SongLuaDifficulty::Edit,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        table.raw_set(idx + 1, difficulty.sm_name())?;
+        reverse.raw_set(difficulty.sm_name(), idx)?;
+    }
+    table.set(
+        "Reverse",
+        lua.create_function(move |_, _args: MultiValue| Ok(reverse.clone()))?,
+    )?;
+    Ok(table)
+}
+
+pub fn create_string_enum_table(lua: &Lua, names: &[&str]) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    let reverse = lua.create_table()?;
+    for (idx, name) in names.iter().enumerate() {
+        table.raw_set(idx + 1, *name)?;
+        reverse.raw_set(*name, idx)?;
+    }
+    table.set(
+        "Reverse",
+        lua.create_function(move |_, _args: MultiValue| Ok(reverse.clone()))?,
+    )?;
+    Ok(table)
+}
+
+pub fn create_player_number_table(lua: &Lua) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    let reverse = lua.create_table()?;
+    for player in 0..LUA_PLAYERS {
+        let name = player_number_name(player);
+        table.raw_set(player + 1, name)?;
+        table.raw_set(name, name)?;
+        reverse.raw_set(name, player)?;
+    }
+    table.set(
+        "Reverse",
+        lua.create_function(move |_, _args: MultiValue| Ok(reverse.clone()))?,
+    )?;
+    Ok(table)
+}
+
+pub fn create_other_player_table(lua: &Lua) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    table.raw_set(player_number_name(0), player_number_name(1))?;
+    table.raw_set(player_number_name(1), player_number_name(0))?;
+    Ok(table)
+}
+
+pub fn create_screen_system_layer_helpers_table(lua: &Lua) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    set_string_method(lua, &table, "GetCreditsMessage", "Free Play")?;
+    Ok(table)
+}
+
+pub fn create_branch_table(lua: &Lua) -> mlua::Result<Table> {
+    let branch = lua.create_table()?;
+    for (name, screen) in [
+        ("AfterScreenRankingDouble", "ScreenRainbow"),
+        ("TitleMenu", "ScreenTitleMenu"),
+        ("AfterInit", "ScreenTitleMenu"),
+        ("AllowScreenSelectProfile", "ScreenSelectProfile"),
+        ("AfterSelectProfile", "ScreenSelectColor"),
+        ("AllowScreenSelectColor", "ScreenSelectColor"),
+        ("AfterScreenSelectColor", "ScreenSelectStyle"),
+        ("AllowScreenSelectPlayMode", "ScreenSelectPlayMode"),
+        ("AllowScreenSelectPlayMode2", "ScreenProfileLoad"),
+        ("AfterSelectPlayMode", "ScreenSelectMusic"),
+        ("AfterEvaluationStage", "ScreenProfileSave"),
+        ("AfterGameplay", "ScreenEvaluationStage"),
+        ("AfterHeartEntry", "ScreenEvaluationStage"),
+        ("AfterSelectMusic", "ScreenGameplay"),
+        ("SSMCancel", "ScreenTitleMenu"),
+        ("AllowScreenNameEntry", "ScreenNameEntryTraditional"),
+        ("AllowScreenEvalSummary", "ScreenEvaluationSummary"),
+        ("AfterProfileSave", "ScreenSelectMusic"),
+        ("AfterProfileSaveSummary", "ScreenGameOver"),
+        ("GameplayScreen", "ScreenGameplay"),
+    ] {
+        branch.set(
+            name,
+            lua.create_function(move |lua, _args: MultiValue| {
+                Ok(Value::String(lua.create_string(screen)?))
+            })?,
+        )?;
+    }
+    Ok(branch)
+}
+
+pub fn scale_value(value: f32, from_low: f32, from_high: f32, to_low: f32, to_high: f32) -> f32 {
+    let span = from_high - from_low;
+    if span.abs() <= f32::EPSILON {
+        to_low
+    } else {
+        (value - from_low) / span * (to_high - to_low) + to_low
+    }
+}
+
+fn seconds_to_time_parts(seconds: f64) -> (i64, i64, i64) {
+    let minutes = (seconds / 60.0).trunc() as i64;
+    let secs = (seconds % 60.0).trunc() as i64;
+    let centis = ((seconds - (minutes * 60 + secs) as f64) * 100.0).trunc() as i64;
+    let centis = centis.clamp(0, 99);
+    (minutes, secs, centis)
+}
+
+pub fn seconds_to_hhmmss(seconds: f64) -> String {
+    let (minutes, seconds, _) = seconds_to_time_parts(seconds);
+    format!("{:02}:{:02}:{seconds:02}", minutes / 60, minutes % 60)
+}
+
+pub fn seconds_to_mss(seconds: f64) -> String {
+    let (minutes, seconds, _) = seconds_to_time_parts(seconds);
+    format!("{minutes:01}:{seconds:02}")
+}
+
+pub fn seconds_to_mmss(seconds: f64) -> String {
+    let (minutes, seconds, _) = seconds_to_time_parts(seconds);
+    format!("{minutes:02}:{seconds:02}")
+}
+
+pub fn seconds_to_mss_ms_ms(seconds: f64) -> String {
+    let (minutes, seconds, centis) = seconds_to_time_parts(seconds);
+    format!("{minutes:01}:{seconds:02}.{centis:02}")
+}
+
+pub fn seconds_to_mmss_ms_ms(seconds: f64) -> String {
+    let (minutes, seconds, centis) = seconds_to_time_parts(seconds);
+    format!("{minutes:02}:{seconds:02}.{centis:02}")
+}
+
+pub fn format_number_and_suffix(value: i64) -> String {
+    let suffix = if (value % 100) / 10 == 1 {
+        "th"
+    } else {
+        match value % 10 {
+            1 => "st",
+            2 => "nd",
+            3 => "rd",
+            _ => "th",
+        }
+    };
+    format!("{value}{suffix}")
+}
+
+pub fn create_game_table(lua: &Lua) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    set_string_method(lua, &table, "GetName", "dance")?;
+    Ok(table)
+}
+
+pub fn create_screen_table(
+    lua: &Lua,
+    width: f32,
+    height: f32,
+    center_x: f32,
+    center_y: f32,
+) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    table.set("w", width)?;
+    table.set("h", height)?;
+    table.set("cx", center_x)?;
+    table.set("cy", center_y)?;
+    table.set("l", 0.0_f32)?;
+    table.set("t", 0.0_f32)?;
+    table.set("r", width)?;
+    table.set("b", height)?;
+    Ok(table)
 }
 
 pub fn set_path_methods(

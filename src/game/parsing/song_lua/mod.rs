@@ -21,13 +21,16 @@ use deadsync_song_lua::{
     SONG_LUA_RUNTIME_SECONDS_KEY, SONG_LUA_SIDE_EFFECT_COUNT_KEY, SONG_LUA_SOUND_PATHS_KEY,
     SONG_LUA_THEME_PATH_PREFIX, SongLuaPerframePlayerState, THEME_RECEPTOR_Y_REV,
     THEME_RECEPTOR_Y_STD, calc_multitap_phase, compile_song_runtime_delta_values,
-    compile_song_runtime_values, create_course_table, create_display_bpms_table,
-    create_enabled_players_table, create_gameplay_layout, create_owned_string_array,
-    create_player_tables, create_sl_table, create_song_options_table, create_song_position_table,
+    compile_song_runtime_values, create_branch_table, create_course_table, create_difficulty_table,
+    create_display_bpms_table, create_enabled_players_table, create_game_table,
+    create_gameplay_layout, create_other_player_table, create_owned_string_array,
+    create_player_number_table, create_player_tables, create_screen_system_layer_helpers_table,
+    create_screen_table, create_sl_table, create_song_options_table, create_song_position_table,
     create_song_runtime_table, create_song_table, create_songman_table, create_string_array,
-    create_style_table, create_trail_table, custom_multi_modifier_key, display_bpms_for_args,
-    display_bpms_text, ease_window_cmp, easiest_steps_difficulty, extend_runtime_mod_sustains,
-    file_path_string, format_song_options_text, graph_display_body_size, is_song_lua_audio_path,
+    create_string_enum_table, create_style_table, create_trail_table, custom_multi_modifier_key,
+    display_bpms_for_args, display_bpms_text, ease_window_cmp, easiest_steps_difficulty,
+    extend_runtime_mod_sustains, file_path_string, format_number_and_suffix,
+    format_song_options_text, graph_display_body_size, is_song_lua_audio_path,
     is_song_lua_image_path, is_song_lua_media_path, is_song_lua_video_path, lua_format_text,
     lua_text_value, lua_values_equal, make_color_table, message_event_cmp, method_arg,
     mod_window_cmp, multitap_deco_child_state, multitap_deco_state, multitap_explosion_state,
@@ -39,13 +42,15 @@ use deadsync_song_lua::{
     read_runtime_mod_eases, read_song_lua_broadcasts, read_song_lua_sound_paths, read_span_mode,
     read_string, read_u32_value, read_vertex_colors_value, record_song_lua_broadcast,
     relative_player_target, runtime_mod_end_value, runtime_mod_entry_players, runtime_mod_key,
-    runtime_mod_start_value, runtime_player_option_ease_target, set_compile_song_runtime_beat,
-    set_compile_song_runtime_delta_values, set_compile_song_runtime_values, set_string_method,
-    song_dir_string, song_display_bps, song_lua_arch_name, song_lua_human_player_count,
-    song_lua_runtime_number, song_lua_side_effect_count, song_lua_style_column_x,
-    song_lua_style_info, song_music_rate, theme_has_string, theme_metric_number,
-    theme_metric_number_for_screen, theme_path, theme_pref_default, theme_string,
-    theme_string_names, truthy, update_function_end_beat, update_function_sample_step,
+    runtime_mod_start_value, runtime_player_option_ease_target, scale_value, seconds_to_hhmmss,
+    seconds_to_mmss, seconds_to_mmss_ms_ms, seconds_to_mss, seconds_to_mss_ms_ms,
+    set_compile_song_runtime_beat, set_compile_song_runtime_delta_values,
+    set_compile_song_runtime_values, set_string_method, song_dir_string, song_display_bps,
+    song_lua_arch_name, song_lua_human_player_count, song_lua_runtime_number,
+    song_lua_side_effect_count, song_lua_style_column_x, song_lua_style_info, song_music_rate,
+    theme_has_string, theme_metric_number, theme_metric_number_for_screen, theme_path,
+    theme_pref_default, theme_string, theme_string_names, truthy, update_function_end_beat,
+    update_function_sample_step,
 };
 
 mod actor_host;
@@ -1965,67 +1970,6 @@ fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<(
     Ok(())
 }
 
-fn create_difficulty_table(lua: &Lua) -> mlua::Result<Table> {
-    let table = lua.create_table()?;
-    let reverse = lua.create_table()?;
-    for (idx, difficulty) in [
-        SongLuaDifficulty::Beginner,
-        SongLuaDifficulty::Easy,
-        SongLuaDifficulty::Medium,
-        SongLuaDifficulty::Hard,
-        SongLuaDifficulty::Challenge,
-        SongLuaDifficulty::Edit,
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        table.raw_set(idx + 1, difficulty.sm_name())?;
-        reverse.raw_set(difficulty.sm_name(), idx)?;
-    }
-    table.set(
-        "Reverse",
-        lua.create_function(move |_, _args: MultiValue| Ok(reverse.clone()))?,
-    )?;
-    Ok(table)
-}
-
-fn create_string_enum_table(lua: &Lua, names: &[&str]) -> mlua::Result<Table> {
-    let table = lua.create_table()?;
-    let reverse = lua.create_table()?;
-    for (idx, name) in names.iter().enumerate() {
-        table.raw_set(idx + 1, *name)?;
-        reverse.raw_set(*name, idx)?;
-    }
-    table.set(
-        "Reverse",
-        lua.create_function(move |_, _args: MultiValue| Ok(reverse.clone()))?,
-    )?;
-    Ok(table)
-}
-
-fn create_player_number_table(lua: &Lua) -> mlua::Result<Table> {
-    let table = lua.create_table()?;
-    let reverse = lua.create_table()?;
-    for player in 0..LUA_PLAYERS {
-        let name = player_number_name(player);
-        table.raw_set(player + 1, name)?;
-        table.raw_set(name, name)?;
-        reverse.raw_set(name, player)?;
-    }
-    table.set(
-        "Reverse",
-        lua.create_function(move |_, _args: MultiValue| Ok(reverse.clone()))?,
-    )?;
-    Ok(table)
-}
-
-fn create_other_player_table(lua: &Lua) -> mlua::Result<Table> {
-    let table = lua.create_table()?;
-    table.raw_set(player_number_name(0), player_number_name(1))?;
-    table.raw_set(player_number_name(1), player_number_name(0))?;
-    Ok(table)
-}
-
 fn create_song_util_table(lua: &Lua) -> mlua::Result<Table> {
     let table = lua.create_table()?;
     table.set(
@@ -2087,127 +2031,6 @@ fn call_song_steps_method(
         args.push_back(argument);
     }
     method.call::<Value>(args)
-}
-
-fn create_screen_system_layer_helpers_table(lua: &Lua) -> mlua::Result<Table> {
-    let table = lua.create_table()?;
-    set_string_method(lua, &table, "GetCreditsMessage", "Free Play")?;
-    Ok(table)
-}
-
-fn create_branch_table(lua: &Lua) -> mlua::Result<Table> {
-    let branch = lua.create_table()?;
-    for (name, screen) in [
-        ("AfterScreenRankingDouble", "ScreenRainbow"),
-        ("TitleMenu", "ScreenTitleMenu"),
-        ("AfterInit", "ScreenTitleMenu"),
-        ("AllowScreenSelectProfile", "ScreenSelectProfile"),
-        ("AfterSelectProfile", "ScreenSelectColor"),
-        ("AllowScreenSelectColor", "ScreenSelectColor"),
-        ("AfterScreenSelectColor", "ScreenSelectStyle"),
-        ("AllowScreenSelectPlayMode", "ScreenSelectPlayMode"),
-        ("AllowScreenSelectPlayMode2", "ScreenProfileLoad"),
-        ("AfterSelectPlayMode", "ScreenSelectMusic"),
-        ("AfterEvaluationStage", "ScreenProfileSave"),
-        ("AfterGameplay", "ScreenEvaluationStage"),
-        ("AfterHeartEntry", "ScreenEvaluationStage"),
-        ("AfterSelectMusic", "ScreenGameplay"),
-        ("SSMCancel", "ScreenTitleMenu"),
-        ("AllowScreenNameEntry", "ScreenNameEntryTraditional"),
-        ("AllowScreenEvalSummary", "ScreenEvaluationSummary"),
-        ("AfterProfileSave", "ScreenSelectMusic"),
-        ("AfterProfileSaveSummary", "ScreenGameOver"),
-        ("GameplayScreen", "ScreenGameplay"),
-    ] {
-        branch.set(
-            name,
-            lua.create_function(move |lua, _args: MultiValue| {
-                Ok(Value::String(lua.create_string(screen)?))
-            })?,
-        )?;
-    }
-    Ok(branch)
-}
-
-fn scale_value(value: f32, from_low: f32, from_high: f32, to_low: f32, to_high: f32) -> f32 {
-    let span = from_high - from_low;
-    if span.abs() <= f32::EPSILON {
-        to_low
-    } else {
-        (value - from_low) / span * (to_high - to_low) + to_low
-    }
-}
-
-fn seconds_to_time_parts(seconds: f64) -> (i64, i64, i64) {
-    let minutes = (seconds / 60.0).trunc() as i64;
-    let secs = (seconds % 60.0).trunc() as i64;
-    let centis = ((seconds - (minutes * 60 + secs) as f64) * 100.0).trunc() as i64;
-    let centis = centis.clamp(0, 99);
-    (minutes, secs, centis)
-}
-
-fn seconds_to_hhmmss(seconds: f64) -> String {
-    let (minutes, seconds, _) = seconds_to_time_parts(seconds);
-    format!("{:02}:{:02}:{seconds:02}", minutes / 60, minutes % 60)
-}
-
-fn seconds_to_mss(seconds: f64) -> String {
-    let (minutes, seconds, _) = seconds_to_time_parts(seconds);
-    format!("{minutes:01}:{seconds:02}")
-}
-
-fn seconds_to_mmss(seconds: f64) -> String {
-    let (minutes, seconds, _) = seconds_to_time_parts(seconds);
-    format!("{minutes:02}:{seconds:02}")
-}
-
-fn seconds_to_mss_ms_ms(seconds: f64) -> String {
-    let (minutes, seconds, centis) = seconds_to_time_parts(seconds);
-    format!("{minutes:01}:{seconds:02}.{centis:02}")
-}
-
-fn seconds_to_mmss_ms_ms(seconds: f64) -> String {
-    let (minutes, seconds, centis) = seconds_to_time_parts(seconds);
-    format!("{minutes:02}:{seconds:02}.{centis:02}")
-}
-
-fn format_number_and_suffix(value: i64) -> String {
-    let suffix = if (value % 100) / 10 == 1 {
-        "th"
-    } else {
-        match value % 10 {
-            1 => "st",
-            2 => "nd",
-            3 => "rd",
-            _ => "th",
-        }
-    };
-    format!("{value}{suffix}")
-}
-
-fn create_game_table(lua: &Lua) -> mlua::Result<Table> {
-    let table = lua.create_table()?;
-    set_string_method(lua, &table, "GetName", "dance")?;
-    Ok(table)
-}
-
-fn create_screen_table(
-    lua: &Lua,
-    width: f32,
-    height: f32,
-    center_x: f32,
-    center_y: f32,
-) -> mlua::Result<Table> {
-    let table = lua.create_table()?;
-    table.set("w", width)?;
-    table.set("h", height)?;
-    table.set("cx", center_x)?;
-    table.set("cy", center_y)?;
-    table.set("l", 0.0_f32)?;
-    table.set("t", 0.0_f32)?;
-    table.set("r", width)?;
-    table.set("b", height)?;
-    Ok(table)
 }
 
 fn entry_file_path(path: &Path) -> Option<PathBuf> {
