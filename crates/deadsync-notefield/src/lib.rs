@@ -622,6 +622,18 @@ mod tests {
     }
 
     #[test]
+    fn display_mods_omit_full_percent_for_named_mods() {
+        let mut params = empty_mods_params();
+        params.scroll[0] = 100;
+        params.visual[0] = 50;
+
+        assert_eq!(
+            gameplay_mods_text(params),
+            "1x, 50%\u{00A0}Drunk, Reverse, Overhead, devcel-2024"
+        );
+    }
+
+    #[test]
     fn display_mods_keep_spaces_inside_one_option_atomic() {
         let text =
             join_display_mod_parts(&["devcel-2024".to_string(), "-4ms VisualDelay".to_string()]);
@@ -738,15 +750,15 @@ mod tests {
 
         let mut parts = Vec::new();
         append_perspective_parts(&mut parts, -100, 100);
-        assert_eq!(parts, vec!["100% Incoming".to_string()]);
+        assert_eq!(parts, vec!["Incoming".to_string()]);
 
         let mut parts = Vec::new();
         append_perspective_parts(&mut parts, 100, 0);
-        assert_eq!(parts, vec!["100% Distant".to_string()]);
+        assert_eq!(parts, vec!["Distant".to_string()]);
 
         let mut parts = Vec::new();
         append_perspective_parts(&mut parts, -100, 0);
-        assert_eq!(parts, vec!["100% Hallway".to_string()]);
+        assert_eq!(parts, vec!["Hallway".to_string()]);
 
         let mut parts = Vec::new();
         append_perspective_parts(&mut parts, 75, 75);

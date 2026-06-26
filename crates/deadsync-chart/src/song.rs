@@ -311,12 +311,6 @@ impl SongData {
             .contains("no cmod")
     }
 
-    pub fn is_xmod(&self) -> bool {
-        self.display_full_title(false)
-            .to_ascii_lowercase()
-            .contains("xmod")
-    }
-
     pub fn has_standard_difficulty(&self, chart_type: &str, difficulty_index: usize) -> bool {
         let Some(target) = STANDARD_DIFFICULTY_NAMES.get(difficulty_index) else {
             return false;
@@ -724,19 +718,6 @@ mod tests {
         song.subtitle = "Mix".to_string();
         song.title = "Hard Song [No CMod]".to_string();
         assert!(song.is_no_cmod());
-    }
-
-    #[test]
-    fn is_xmod_matches_title_or_subtitle_case_insensitively() {
-        let mut song = song_data();
-        assert!(!song.is_xmod());
-
-        song.subtitle = "(XMOD)".to_string();
-        assert!(song.is_xmod());
-
-        song.subtitle = "Mix".to_string();
-        song.title = "Hard Song (xmod only)".to_string();
-        assert!(song.is_xmod());
     }
 
     #[test]

@@ -64,17 +64,26 @@ fn format_speed(speed: ScrollSpeedSetting) -> String {
 }
 
 fn append_mod_part(parts: &mut Vec<String>, percent: i16, name: &str) {
-    if percent != 0 {
+    if percent == 0 {
+        return;
+    }
+    if percent == 100 {
+        parts.push(name.to_string());
+    } else {
         parts.push(format!("{percent}% {name}"));
     }
 }
 
 pub(crate) fn append_mini_part(parts: &mut Vec<String>, mini_percent: i16) {
-    append_mod_part(parts, mini_percent, "Mini");
+    if mini_percent != 0 {
+        parts.push(format!("{mini_percent}% Mini"));
+    }
 }
 
 fn append_spacing_part(parts: &mut Vec<String>, spacing_percent: i16) {
-    append_mod_part(parts, spacing_percent, "Spacing");
+    if spacing_percent != 0 {
+        parts.push(format!("{spacing_percent}% Spacing"));
+    }
 }
 
 pub(crate) fn append_average_error_bar_part(
