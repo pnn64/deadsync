@@ -19,7 +19,7 @@ use deadsync_song_lua::{
     SONG_LUA_PLAYER_OPTION_CAPABILITIES, SONG_LUA_PLAYER_OPTION_MULTICOL_PREFIXES,
     SONG_LUA_RUNTIME_BEAT_KEY, SONG_LUA_RUNTIME_KEY, SONG_LUA_RUNTIME_SECONDS_KEY,
     SONG_LUA_SIDE_EFFECT_COUNT_KEY, SONG_LUA_SOUND_PATHS_KEY, SONG_LUA_THEME_PATH_PREFIX,
-    THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD, calc_multitap_phase,
+    SongLuaPerframePlayerState, THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD, calc_multitap_phase,
     compile_song_runtime_delta_values, compile_song_runtime_values, create_course_table,
     create_display_bpms_table, create_enabled_players_table, create_gameplay_layout,
     create_owned_string_array, create_player_tables, create_sl_table, create_song_options_table,
@@ -31,18 +31,19 @@ use deadsync_song_lua::{
     lua_text_value, lua_values_equal, make_color_table, message_event_cmp, method_arg,
     mod_window_cmp, multitap_deco_child_state, multitap_deco_state, multitap_explosion_state,
     multitap_frame_state, note_song_lua_side_effect, overlay_delta_intersection,
-    overlay_delta_pair_from_states, player_index_from_value, player_number_name, player_short_name,
-    preprocess_lua_cmd_syntax, push_multitap_arrow_sample, push_overlay_sample_eases, read_boolish,
-    read_color_value, read_easing_name, read_f32, read_i32_value, read_player,
+    overlay_delta_pair_from_states, perframe_delta_seconds, perframe_segment_step,
+    player_index_from_value, player_number_name, player_short_name, preprocess_lua_cmd_syntax,
+    push_multitap_arrow_sample, push_overlay_sample_eases, push_perframe_player_target,
+    read_boolish, read_color_value, read_easing_name, read_f32, read_i32_value, read_player,
     read_song_lua_broadcasts, read_song_lua_sound_paths, read_span_mode, read_string,
-    read_u32_value, read_vertex_colors_value, record_song_lua_broadcast,
+    read_u32_value, read_vertex_colors_value, record_song_lua_broadcast, relative_player_target,
     set_compile_song_runtime_beat, set_compile_song_runtime_delta_values,
     set_compile_song_runtime_values, set_string_method, song_dir_string, song_display_bps,
-    song_elapsed_seconds_for_beat, song_lua_arch_name, song_lua_human_player_count,
-    song_lua_runtime_number, song_lua_side_effect_count, song_lua_style_column_x,
-    song_lua_style_info, song_music_rate, theme_has_string, theme_metric_number,
-    theme_metric_number_for_screen, theme_path, theme_pref_default, theme_string,
-    theme_string_names, truthy,
+    song_lua_arch_name, song_lua_human_player_count, song_lua_runtime_number,
+    song_lua_side_effect_count, song_lua_style_column_x, song_lua_style_info, song_music_rate,
+    theme_has_string, theme_metric_number, theme_metric_number_for_screen, theme_path,
+    theme_pref_default, theme_string, theme_string_names, truthy, update_function_end_beat,
+    update_function_sample_step,
 };
 
 mod actor_host;
@@ -103,7 +104,6 @@ const SONG_LUA_STARTUP_MESSAGE: &str = "__songlua_startup";
 const SONG_LUA_THEME_NAME: &str = "Simply Love";
 const GRAPH_DISPLAY_VALUE_RESOLUTION: usize = 100;
 const SONG_LUA_SPRITE_STATE_CLEAR: u32 = u32::MAX;
-const SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES: usize = 4096;
 const EASING_NAMES: &[&str] = &[
     "instant",
     "linear",
@@ -148,21 +148,6 @@ const EASING_NAMES: &[&str] = &[
     "inOutBounce",
     "outInBounce",
 ];
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
-struct SongLuaPerframePlayerState {
-    x: Option<f32>,
-    y: Option<f32>,
-    z: Option<f32>,
-    rotation_x: Option<f32>,
-    rotation_z: Option<f32>,
-    rotation_y: Option<f32>,
-    zoom_x: Option<f32>,
-    zoom_y: Option<f32>,
-    zoom_z: Option<f32>,
-    skew_x: Option<f32>,
-    skew_y: Option<f32>,
-}
-
 struct SongLuaPerframeEntry {
     start: f32,
     end: f32,
@@ -3169,20 +3154,6 @@ fn read_perframe_entries(table: Option<Table>) -> Result<Vec<SongLuaPerframeEntr
     Ok(out)
 }
 
-#[inline(always)]
-fn perframe_segment_step(len: f32) -> f32 {
-    (len / 96.0).clamp(1.0 / 192.0, 0.125)
-}
-
-#[inline(always)]
-fn perframe_delta_seconds(context: &SongLuaCompileContext, delta_beats: f32) -> f32 {
-    song_elapsed_seconds_for_beat(
-        delta_beats,
-        song_display_bps(context),
-        song_music_rate(context),
-    )
-}
-
 fn tracked_player_tables(tracked_actors: &[TrackedCompileActor]) -> [Option<Table>; LUA_PLAYERS] {
     let mut out = std::array::from_fn(|_| None);
     for tracked in tracked_actors {
@@ -3235,11 +3206,6 @@ fn actor_perframe_player_state(actor: &Table) -> Result<SongLuaPerframePlayerSta
             .get::<Option<f32>>("__songlua_state_skew_y")
             .map_err(|err| err.to_string())?,
     })
-}
-
-#[inline(always)]
-fn relative_player_target(value: Option<f32>, baseline: Option<f32>) -> Option<f32> {
-    value.map(|value| value - baseline.unwrap_or(0.0))
 }
 
 fn current_perframe_player_states(
@@ -3302,20 +3268,6 @@ fn call_perframe_entry(
         song_lua_side_effect_count(lua).map_err(|err| err.to_string())? > side_effect_before;
     result?;
     Ok(saw_side_effect)
-}
-
-fn update_function_end_beat(context: &SongLuaCompileContext) -> f32 {
-    let seconds = context.music_length_seconds.max(0.0);
-    let beats = seconds * song_display_bps(context) * song_music_rate(context);
-    beats.max(0.0)
-}
-
-fn update_function_sample_step(len: f32) -> f32 {
-    if len <= 0.0 {
-        return 0.0;
-    }
-    let capped = len / SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES as f32;
-    perframe_segment_step(len).max(capped)
 }
 
 fn call_update_functions_at(
@@ -3974,45 +3926,6 @@ fn compile_update_function_overlays(
         }
     }
     Ok(out)
-}
-
-fn push_perframe_player_target(
-    out: &mut Vec<SongLuaEaseWindow>,
-    start: f32,
-    end: f32,
-    from: Option<f32>,
-    to: Option<f32>,
-    baseline: Option<f32>,
-    neutral: f32,
-    target: SongLuaEaseTarget,
-    player: usize,
-) {
-    if end <= start {
-        return;
-    }
-    let baseline = baseline.unwrap_or(neutral);
-    let from = from.unwrap_or(baseline);
-    let to = to.unwrap_or(baseline);
-    if !from.is_finite() || !to.is_finite() {
-        return;
-    }
-    if (from - baseline).abs() <= f32::EPSILON && (to - baseline).abs() <= f32::EPSILON {
-        return;
-    }
-    out.push(SongLuaEaseWindow {
-        unit: SongLuaTimeUnit::Beat,
-        start,
-        limit: end - start,
-        span_mode: SongLuaSpanMode::Len,
-        from,
-        to,
-        target,
-        easing: Some("linear".to_string()),
-        player: Some((player + 1) as u8),
-        sustain: None,
-        opt1: None,
-        opt2: None,
-    });
 }
 
 fn compile_perframes(

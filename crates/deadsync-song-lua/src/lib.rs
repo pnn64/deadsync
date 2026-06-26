@@ -11,6 +11,7 @@ mod json;
 mod lua_util;
 mod multitap;
 mod net;
+mod perframe;
 mod player_options;
 mod runtime;
 mod sl;
@@ -45,6 +46,11 @@ pub use multitap::{
     push_multitap_arrow_sample, push_overlay_sample_eases,
 };
 pub use net::{create_network_table, encode_query_params, query_value_text, url_encode_component};
+pub use perframe::{
+    SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES, SongLuaPerframePlayerState, perframe_delta_seconds,
+    perframe_segment_step, push_perframe_player_target, relative_player_target,
+    update_function_end_beat, update_function_sample_step,
+};
 pub use player_options::{
     SONG_LUA_PLAYER_OPTION_CAPABILITIES, SONG_LUA_PLAYER_OPTION_MULTICOL_PREFIXES,
     default_player_option_value, is_player_option_method_name, normalize_player_option_key,
