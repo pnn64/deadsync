@@ -378,7 +378,7 @@ pub(crate) fn noteskin_model_actor_from_draw_cached(
     ))
 }
 
-pub(crate) fn noteskin_model_actor_from_draw_depth_sorted_affine(
+pub(crate) fn noteskin_model_actor_from_draw_depth_sorted_affine_cached_geometry(
     slot: &SpriteSlot,
     draw: ModelDrawState,
     xy: [f32; 2],
@@ -388,9 +388,11 @@ pub(crate) fn noteskin_model_actor_from_draw_depth_sorted_affine(
     color: [f32; 4],
     blend: BlendMode,
     z: i16,
+    vertices: Arc<[TexturedMeshVertex]>,
+    geom_cache_key: TMeshCacheKey,
 ) -> Option<Actor> {
     let model = slot.model.as_ref()?;
-    if !draw.visible || model.vertices.is_empty() {
+    if !draw.visible || model.vertices.is_empty() || vertices.is_empty() {
         return None;
     }
 
@@ -403,8 +405,8 @@ pub(crate) fn noteskin_model_actor_from_draw_depth_sorted_affine(
         slot,
         xy,
         tint,
-        build_model_geometry(slot),
-        deadlib_render::INVALID_TMESH_CACHE_KEY,
+        vertices,
+        geom_cache_key,
         local_transform,
         uv_scale,
         uv_offset,

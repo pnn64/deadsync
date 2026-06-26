@@ -755,7 +755,9 @@ fn push_actors_with_elapsed_overrides(
         alpha_mul: 1.0,
     };
     if let Some(bg_elapsed_s) = bg_elapsed_override {
-        state.bg.push_at_elapsed(actors, bg_params, bg_elapsed_s);
+        state
+            .bg
+            .push_at_elapsed(actors, bg_params, f64::from(bg_elapsed_s));
     } else {
         state.bg.push(actors, bg_params);
     }

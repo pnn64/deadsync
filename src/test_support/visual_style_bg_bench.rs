@@ -3,7 +3,7 @@ use deadlib_present::actors::Actor;
 
 pub const SCENARIO_NAME: &str = "visual-style-bg";
 
-const ELAPSED_S: f32 = 12.345;
+const ELAPSED_S: f64 = 12.345;
 
 pub struct VisualStyleBgBenchFixture {
     state: visual_style_bg::State,
