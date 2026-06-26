@@ -1016,15 +1016,15 @@ impl Serialize for ArrowCloudLeaderboard {
 
 // Lua charts stay blocked from online submit unless their effects have been
 // verified closely enough to match ITGmania for scoring purposes.
-const LUA_SCORE_SUBMIT_ALLOWLIST: [&str; 8] = [
-    "d5bd4dd7224f68ff", // Spooky (SM)
-    "c9e45c5e534f058d", // media offline (SM)
-    "596b42ed8317d9b8", // Godspeed (SX)
-    "3926ec3e5f1aaede", // CO5M1C R4ILR0AD (SH)
-    "a147dd828cd08fc7", // Riddle (DX)
-    "f95bc209c6f2cbfe", // Levels (SM)
-    "b50d0c3916e75b84", // Levels (SH)
-    "f41a24722a37758f", // Levels (SX)
+const LUA_SCORE_SUBMIT_ALLOWLIST: &[&str] = &[
+    // "d5bd4dd7224f68ff", // Spooky (SM)
+    // "c9e45c5e534f058d", // media offline (SM)
+    // "596b42ed8317d9b8", // Godspeed (SX)
+    // "3926ec3e5f1aaede", // CO5M1C R4ILR0AD (SH)
+    // "a147dd828cd08fc7", // Riddle (DX)
+    // "f95bc209c6f2cbfe", // Levels (SM)
+    // "b50d0c3916e75b84", // Levels (SH)
+    // "f41a24722a37758f", // Levels (SX)
 ];
 
 #[inline(always)]
@@ -4727,13 +4727,13 @@ mod tests {
     }
 
     #[test]
-    fn lua_submit_allowlist_matches_known_hashes() {
-        assert!(lua_chart_submit_allowed("d5bd4dd7224f68ff"));
-        assert!(lua_chart_submit_allowed(" D5BD4DD7224F68FF "));
+    fn lua_submit_allowlist_is_disabled() {
+        assert!(!lua_chart_submit_allowed("d5bd4dd7224f68ff"));
+        assert!(!lua_chart_submit_allowed(" D5BD4DD7224F68FF "));
         assert!(!lua_chart_submit_allowed("deadbeefcafebabe"));
         assert!(lua_submit_allowed(false, "deadbeefcafebabe"));
         assert!(!lua_submit_allowed(true, "deadbeefcafebabe"));
-        assert!(lua_submit_allowed(true, "d5bd4dd7224f68ff"));
+        assert!(!lua_submit_allowed(true, "d5bd4dd7224f68ff"));
     }
 
     #[test]

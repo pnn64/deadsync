@@ -1256,11 +1256,11 @@ mod tests {
 
     #[test]
     fn groovestats_validity_rejects_lua_simfiles() {
-        let mut allowed = sample_chart("dance-single");
-        allowed.short_hash = "d5bd4dd7224f68ff".to_string();
+        let mut formerly_allowed = sample_chart("dance-single");
+        formerly_allowed.short_hash = "d5bd4dd7224f68ff".to_string();
         assert_eq!(
-            groovestats_submit_invalid_reason(&allowed, true, &Profile::default(), 1.0),
-            None
+            groovestats_submit_invalid_reason(&formerly_allowed, true, &Profile::default(), 1.0),
+            Some("simfile relies on lua".to_string())
         );
         assert_eq!(
             groovestats_submit_invalid_reason(
