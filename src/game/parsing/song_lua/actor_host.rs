@@ -1,7 +1,8 @@
 use super::*;
 use deadsync_song_lua::{
     SONG_LUA_TOP_SCREEN_OPTION_ROWS, option_row_default_text, player_child_proxy_name,
-    push_unique_compile_detail, top_screen_danger_index, top_screen_life_meter_bar_index,
+    push_unique_compile_detail, table_bool_field, table_f32_field, table_i32_field,
+    table_string_field, top_screen_danger_index, top_screen_life_meter_bar_index,
     top_screen_life_meter_index, top_screen_life_meter_name, top_screen_option_row_name,
     top_screen_player_index, top_screen_player_name, top_screen_score_index, top_screen_score_name,
     top_screen_score_percent_name, top_screen_song_meter_display_index,
@@ -6231,42 +6232,6 @@ fn install_tap_note_result_methods(
     )?;
     set_string_method(lua, result, "GetTapNoteScore", &score)?;
     Ok(())
-}
-
-fn table_string_field(table: &Table, names: &[&str]) -> mlua::Result<Option<String>> {
-    for name in names {
-        if let Some(value) = read_string(table.get::<Value>(*name)?) {
-            return Ok(Some(value));
-        }
-    }
-    Ok(None)
-}
-
-fn table_f32_field(table: &Table, names: &[&str]) -> mlua::Result<Option<f32>> {
-    for name in names {
-        if let Some(value) = read_f32(table.get::<Value>(*name)?) {
-            return Ok(Some(value));
-        }
-    }
-    Ok(None)
-}
-
-fn table_i32_field(table: &Table, names: &[&str]) -> mlua::Result<Option<i32>> {
-    for name in names {
-        if let Some(value) = read_i32_value(table.get::<Value>(*name)?) {
-            return Ok(Some(value));
-        }
-    }
-    Ok(None)
-}
-
-fn table_bool_field(table: &Table, names: &[&str]) -> mlua::Result<Option<bool>> {
-    for name in names {
-        if let Some(value) = read_boolish(table.get::<Value>(*name)?) {
-            return Ok(Some(value));
-        }
-    }
-    Ok(None)
 }
 
 pub(super) fn broadcast_song_lua_message(

@@ -64,7 +64,8 @@ pub use lua_util::{
     create_bool_array, create_color_constants_table, create_debug_table, create_owned_string_array,
     create_string_array, lua_format_text, lua_text_value, make_color_table, method_arg,
     method_arg_offset, read_color_call, read_color_value, read_song_lua_sound_paths,
-    read_vertex_colors_value,
+    read_vertex_colors_value, table_bool_field, table_f32_field, table_i32_field,
+    table_string_field,
 };
 pub use mod_windows::read_mod_windows;
 pub use multitap::{

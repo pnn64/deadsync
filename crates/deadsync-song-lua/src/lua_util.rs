@@ -2,7 +2,9 @@ use mlua::{Function, Lua, MultiValue, Table, Value, ffi};
 use std::ffi::c_int;
 use std::path::PathBuf;
 
-use crate::{SONG_LUA_SOUND_PATHS_KEY, parse_color_text, read_f32, read_string};
+use crate::{
+    SONG_LUA_SOUND_PATHS_KEY, parse_color_text, read_boolish, read_f32, read_i32_value, read_string,
+};
 
 pub fn read_song_lua_sound_paths(lua: &Lua) -> Result<Vec<PathBuf>, String> {
     let globals = lua.globals();
@@ -27,6 +29,42 @@ pub fn lua_text_value(value: Value) -> mlua::Result<String> {
         Value::Boolean(value) => Ok(value.to_string()),
         _ => Ok(String::new()),
     }
+}
+
+pub fn table_string_field(table: &Table, names: &[&str]) -> mlua::Result<Option<String>> {
+    for name in names {
+        if let Some(value) = read_string(table.get::<Value>(*name)?) {
+            return Ok(Some(value));
+        }
+    }
+    Ok(None)
+}
+
+pub fn table_f32_field(table: &Table, names: &[&str]) -> mlua::Result<Option<f32>> {
+    for name in names {
+        if let Some(value) = read_f32(table.get::<Value>(*name)?) {
+            return Ok(Some(value));
+        }
+    }
+    Ok(None)
+}
+
+pub fn table_i32_field(table: &Table, names: &[&str]) -> mlua::Result<Option<i32>> {
+    for name in names {
+        if let Some(value) = read_i32_value(table.get::<Value>(*name)?) {
+            return Ok(Some(value));
+        }
+    }
+    Ok(None)
+}
+
+pub fn table_bool_field(table: &Table, names: &[&str]) -> mlua::Result<Option<bool>> {
+    for name in names {
+        if let Some(value) = read_boolish(table.get::<Value>(*name)?) {
+            return Ok(Some(value));
+        }
+    }
+    Ok(None)
 }
 
 pub fn lua_format_text(lua: &Lua, args: &MultiValue) -> mlua::Result<String> {
