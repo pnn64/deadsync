@@ -1,9 +1,11 @@
 use deadlib_present::anim::{EffectClock, EffectMode};
+use mlua::{Lua, Table, Value};
 
 use crate::{
-    SONG_LUA_DOUBLE_NOTE_COLUMNS, SongLuaCompileContext, SongLuaNoteskinResolver,
-    SongLuaOverlayEase, SongLuaOverlayState, SongLuaOverlayStateDelta, SongLuaSpanMode,
-    SongLuaSpeedMod, SongLuaTimeUnit, THEME_RECEPTOR_Y_STD, overlay_delta_intersection,
+    SONG_LUA_DOUBLE_NOTE_COLUMNS, SongLuaCompileContext, SongLuaMessageEvent,
+    SongLuaNoteskinResolver, SongLuaOverlayActor, SongLuaOverlayCommandBlock, SongLuaOverlayEase,
+    SongLuaOverlayState, SongLuaOverlayStateDelta, SongLuaSpanMode, SongLuaSpeedMod,
+    SongLuaTimeUnit, THEME_RECEPTOR_Y_STD, overlay_delta_intersection, read_f32,
     song_lua_style_column_x,
 };
 
@@ -31,6 +33,70 @@ pub struct MultitapPhase {
     pub lin: f32,
     pub qtc: u8,
     pub visible: bool,
+}
+
+pub fn read_multitap_descs(
+    lua: &Lua,
+    context: &SongLuaCompileContext,
+) -> Result<Option<Vec<MultitapDesc>>, String> {
+    let globals = lua.globals();
+    let Some(multitaps) = globals
+        .get::<Option<Table>>("multitaps")
+        .map_err(|err| err.to_string())?
+    else {
+        return Ok(None);
+    };
+    let difficulty = context.players[0]
+        .difficulty
+        .sm_name()
+        .trim_start_matches("Difficulty_");
+    let table = multitaps
+        .get::<Option<Table>>(difficulty)
+        .map_err(|err| err.to_string())?
+        .or_else(|| multitaps.get::<Option<Table>>("Challenge").ok().flatten());
+    let Some(table) = table else {
+        return Ok(None);
+    };
+    let mut out = Vec::new();
+    for value in table.sequence_values::<Value>() {
+        let Value::Table(entry) = value.map_err(|err| err.to_string())? else {
+            continue;
+        };
+        let Some(lane) = entry
+            .get::<Option<i64>>("lane")
+            .map_err(|err| err.to_string())?
+            .and_then(|value| usize::try_from(value).ok())
+            .filter(|value| (1..=SONG_LUA_DOUBLE_NOTE_COLUMNS).contains(value))
+        else {
+            continue;
+        };
+        let Some(taps_table) = entry
+            .get::<Option<Table>>("taps")
+            .map_err(|err| err.to_string())?
+        else {
+            continue;
+        };
+        let mut taps = Vec::new();
+        for tap in taps_table.sequence_values::<Value>() {
+            if let Some(tap) = read_f32(tap.map_err(|err| err.to_string())?)
+                && tap.is_finite()
+            {
+                taps.push(tap);
+            }
+        }
+        if taps.is_empty() {
+            continue;
+        }
+        taps.sort_by(|left, right| left.total_cmp(right));
+        let peak = entry
+            .get::<Value>("peak")
+            .map_err(|err| err.to_string())
+            .ok()
+            .and_then(read_f32)
+            .filter(|value| value.is_finite());
+        out.push(MultitapDesc { lane, taps, peak });
+    }
+    Ok(Some(out))
 }
 
 pub fn push_multitap_arrow_sample(
@@ -75,6 +141,171 @@ pub fn push_overlay_sample_eases(
             (false, false) => {}
         }
     }
+}
+
+pub fn apply_multitap_field_state(
+    state: &mut SongLuaOverlayState,
+    context: &SongLuaCompileContext,
+    player: usize,
+) {
+    state.visible = true;
+    state.x = context.players[player].screen_x;
+    state.y = context.players[player].screen_y;
+    state.z = 0.0;
+    state.zoom_x = 1.0;
+    state.zoom_y = 1.0;
+    state.zoom_z = 1.0;
+}
+
+pub fn push_multitap_explosion_eases(
+    out: &mut Vec<SongLuaOverlayEase>,
+    overlay_index: usize,
+    baseline: SongLuaOverlayState,
+    context: &SongLuaCompileContext,
+    descs: &[MultitapDesc],
+    lane: usize,
+) {
+    let mut ranges = descs
+        .iter()
+        .filter(|desc| desc.lane == lane)
+        .map(|desc| {
+            (
+                desc.taps[0] - MULTITAP_PREVISIBLE_BEATS,
+                desc.taps[desc.taps.len() - 1] + MULTITAP_HIDE_EPSILON_BEATS,
+            )
+        })
+        .collect::<Vec<_>>();
+    if ranges.is_empty() {
+        return;
+    }
+    ranges.sort_by(|left, right| left.0.total_cmp(&right.0));
+    let mut samples = Vec::new();
+    for (start, end) in ranges {
+        let mut beat = start;
+        loop {
+            let visible = descs
+                .iter()
+                .any(|desc| desc.lane == lane && calc_multitap_phase(desc, beat).visible);
+            samples.push((
+                beat,
+                multitap_explosion_state(baseline, context, lane, visible),
+            ));
+            if beat >= end - f32::EPSILON {
+                break;
+            }
+            beat = (beat + MULTITAP_SAMPLE_STEP).min(end);
+        }
+    }
+    samples.sort_by(|left, right| left.0.total_cmp(&right.0));
+    samples.dedup_by(|left, right| (left.0 - right.0).abs() <= f32::EPSILON);
+    push_overlay_sample_eases(out, overlay_index, baseline, &samples);
+}
+
+pub fn push_multitap_actor_eases(
+    out: &mut Vec<SongLuaOverlayEase>,
+    frame_index: usize,
+    frame_baseline: SongLuaOverlayState,
+    arrow_index: usize,
+    arrow_baseline: SongLuaOverlayState,
+    deco_index: usize,
+    deco_baseline: SongLuaOverlayState,
+    deco_children: &[(usize, SongLuaOverlayState)],
+    context: &SongLuaCompileContext,
+    player: usize,
+    noteskin_resolver: SongLuaNoteskinResolver,
+    noteskin: &str,
+    desc: &MultitapDesc,
+) {
+    let start = desc.taps[0] - MULTITAP_PREVISIBLE_BEATS;
+    let end = desc.taps[desc.taps.len() - 1] + MULTITAP_HIDE_EPSILON_BEATS;
+    let mut frame_samples = Vec::new();
+    let mut arrow_samples = Vec::new();
+    let mut deco_samples = Vec::new();
+    let mut deco_child_samples = deco_children
+        .iter()
+        .map(|(index, _)| (*index, Vec::new()))
+        .collect::<Vec<_>>();
+    let mut beat = start;
+    loop {
+        let phase = calc_multitap_phase(desc, beat);
+        frame_samples.push((
+            beat,
+            multitap_frame_state(frame_baseline, context, player, desc.lane, phase),
+        ));
+        push_multitap_arrow_sample(
+            &mut arrow_samples,
+            beat,
+            arrow_baseline,
+            noteskin_resolver,
+            noteskin,
+            desc.lane,
+            phase,
+        );
+        deco_samples.push((
+            beat,
+            multitap_deco_state(deco_baseline, noteskin_resolver, noteskin, phase),
+        ));
+        for ((_, baseline), (_, samples)) in deco_children.iter().zip(&mut deco_child_samples) {
+            samples.push((
+                beat,
+                multitap_deco_child_state(*baseline, noteskin_resolver, noteskin, phase),
+            ));
+        }
+        if beat >= end - f32::EPSILON {
+            break;
+        }
+        beat = (beat + MULTITAP_SAMPLE_STEP).min(end);
+    }
+    push_overlay_sample_eases(out, frame_index, frame_baseline, &frame_samples);
+    push_overlay_sample_eases(out, arrow_index, arrow_baseline, &arrow_samples);
+    push_overlay_sample_eases(out, deco_index, deco_baseline, &deco_samples);
+    for ((_, baseline), (child_index, samples)) in deco_children.iter().zip(deco_child_samples) {
+        push_overlay_sample_eases(out, child_index, *baseline, &samples);
+    }
+}
+
+pub fn multitap_explosion_message_name(lane: usize, pn: usize) -> String {
+    format!("__songlua_multitap_explosion_p{pn}_{lane}")
+}
+
+pub fn multitap_explosion_message_events(
+    descs: &[MultitapDesc],
+    lane: usize,
+    pn: usize,
+) -> Vec<SongLuaMessageEvent> {
+    let message = multitap_explosion_message_name(lane, pn);
+    let mut beats = descs
+        .iter()
+        .filter(|desc| desc.lane == lane)
+        .flat_map(|desc| desc.taps.iter().copied())
+        .filter(|beat| beat.is_finite())
+        .collect::<Vec<_>>();
+    beats.sort_by(f32::total_cmp);
+    beats.dedup_by(|left, right| (*left - *right).abs() <= f32::EPSILON);
+    beats
+        .into_iter()
+        .map(|beat| SongLuaMessageEvent {
+            beat,
+            message: message.clone(),
+            persists: false,
+        })
+        .collect()
+}
+
+pub fn multitap_explosion_command_blocks<Kind>(
+    actor: &SongLuaOverlayActor<Kind>,
+) -> Vec<SongLuaOverlayCommandBlock> {
+    let mut out = Vec::new();
+    for message in ["Judgment", "Dim", "W1"] {
+        if let Some(command) = actor
+            .message_commands
+            .iter()
+            .find(|command| command.message.eq_ignore_ascii_case(message))
+        {
+            out.extend(command.blocks.clone());
+        }
+    }
+    out
 }
 
 fn push_overlay_sample_linear_ease(

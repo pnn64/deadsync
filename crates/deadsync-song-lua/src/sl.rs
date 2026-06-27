@@ -4,8 +4,8 @@ use crate::{
     DDR_DIFF_COLORS, ITG_DIFF_COLORS, LUA_PLAYERS, SL_COLORS, SL_DECORATIVE_COLORS,
     SL_FA_PLUS_COLORS, SL_JUDGMENT_COLORS, SONG_LUA_ACTIVE_COLOR_INDEX, SONG_LUA_NOTE_COLUMNS,
     SongLuaCompileContext, SongLuaPlayerContext, create_bool_array, create_string_array,
-    make_color_table, parse_color_text, player_short_name, song_lua_speedmod_parts,
-    song_music_rate_value,
+    make_color_table, note_song_lua_side_effect, parse_color_text, player_index_from_value,
+    player_short_name, song_lua_speedmod_parts, song_music_rate_value,
 };
 
 pub fn create_sl_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {
@@ -72,6 +72,42 @@ pub fn init_sl_streams(lua: &Lua, table: &Table) -> mlua::Result<()> {
         }
     }
     Ok(())
+}
+
+pub fn parse_chart_info(lua: &Lua, args: &MultiValue) -> mlua::Result<Table> {
+    let player = args
+        .get(1)
+        .and_then(player_index_from_value)
+        .map(player_short_name)
+        .unwrap_or("P1");
+    let globals = lua.globals();
+    let sl = match globals.get::<Option<Table>>("SL")? {
+        Some(table) => table,
+        None => {
+            let table = lua.create_table()?;
+            globals.set("SL", table.clone())?;
+            table
+        }
+    };
+    let player_table = match sl.get::<Option<Table>>(player)? {
+        Some(table) => table,
+        None => {
+            let table = lua.create_table()?;
+            sl.set(player, table.clone())?;
+            table
+        }
+    };
+    let streams = match player_table.get::<Option<Table>>("Streams")? {
+        Some(table) => table,
+        None => {
+            let table = create_sl_streams(lua)?;
+            player_table.set("Streams", table.clone())?;
+            table
+        }
+    };
+    init_sl_streams(lua, &streams)?;
+    note_song_lua_side_effect(lua)?;
+    Ok(streams)
 }
 
 fn create_sl_global_table(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<Table> {

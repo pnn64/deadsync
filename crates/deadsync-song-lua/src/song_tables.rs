@@ -827,6 +827,69 @@ fn create_trail_entry_table(lua: &Lua, song: Table, steps: Table) -> mlua::Resul
     Ok(table)
 }
 
+pub fn create_song_util_table(lua: &Lua) -> mlua::Result<Table> {
+    let table = lua.create_table()?;
+    table.set(
+        "GetPlayableSteps",
+        lua.create_function(|lua, args: MultiValue| {
+            let Some(song) = song_util_song_arg(&args)? else {
+                return Ok(Value::Table(lua.create_table()?));
+            };
+            call_song_steps_method(lua, &song, "GetAllSteps", Value::Nil)
+        })?,
+    )?;
+    table.set(
+        "GetPlayableStepsByStepsType",
+        lua.create_function(|lua, args: MultiValue| {
+            let Some(song) = song_util_song_arg(&args)? else {
+                return Ok(Value::Table(lua.create_table()?));
+            };
+            let steps_type = match args
+                .iter()
+                .skip_while(|value| {
+                    !matches!(value, Value::Table(table) if table.to_pointer() == song.to_pointer())
+                })
+                .nth(1)
+                .cloned()
+            {
+                Some(value) => value,
+                None => Value::String(lua.create_string("StepsType_Dance_Single")?),
+            };
+            call_song_steps_method(lua, &song, "GetStepsByStepsType", steps_type)
+        })?,
+    )?;
+    Ok(table)
+}
+
+fn song_util_song_arg(args: &MultiValue) -> mlua::Result<Option<Table>> {
+    for value in args {
+        let Value::Table(table) = value else {
+            continue;
+        };
+        if matches!(table.get::<Value>("GetAllSteps")?, Value::Function(_)) {
+            return Ok(Some(table.clone()));
+        }
+    }
+    Ok(None)
+}
+
+fn call_song_steps_method(
+    lua: &Lua,
+    song: &Table,
+    method_name: &str,
+    argument: Value,
+) -> mlua::Result<Value> {
+    let Value::Function(method) = song.get::<Value>(method_name)? else {
+        return Ok(Value::Table(lua.create_table()?));
+    };
+    let mut args = MultiValue::new();
+    args.push_back(Value::Table(song.clone()));
+    if !matches!(argument, Value::Nil) {
+        args.push_back(argument);
+    }
+    method.call::<Value>(args)
+}
+
 pub fn create_songman_table(
     lua: &Lua,
     current_song: Table,

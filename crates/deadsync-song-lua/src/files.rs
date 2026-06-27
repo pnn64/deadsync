@@ -60,6 +60,49 @@ pub fn resolve_compat_path(song_dir: &Path, raw_path: &str) -> PathBuf {
     }
 }
 
+pub fn resolve_script_path(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Result<PathBuf> {
+    let raw = Path::new(path);
+    if raw.is_absolute() && raw.exists() {
+        return Ok(raw.to_path_buf());
+    }
+    let globals = lua.globals();
+    if let Some(current_dir) = globals
+        .get::<Option<String>>("__songlua_script_dir")?
+        .filter(|dir| !dir.trim().is_empty())
+    {
+        let candidate = Path::new(&current_dir).join(path);
+        if candidate.exists() {
+            return Ok(candidate);
+        }
+    }
+    let candidate = song_dir.join(path);
+    if candidate.exists() {
+        return Ok(candidate);
+    }
+    // GetSongDir can be process-relative for AdditionalSongFolders entries.
+    if raw.exists() {
+        return Ok(raw.to_path_buf());
+    }
+    Err(mlua::Error::external(format!(
+        "script '{}' not found relative to '{}'",
+        path,
+        song_dir.display()
+    )))
+}
+
+pub fn entry_file_path(path: &Path) -> Option<PathBuf> {
+    if path.is_file() {
+        return Some(path.to_path_buf());
+    }
+    if path.is_dir() {
+        let default_lua = path.join("default.lua");
+        if default_lua.is_file() {
+            return Some(default_lua);
+        }
+    }
+    None
+}
+
 pub fn fileman_dir_listing(
     song_dir: &Path,
     raw_path: &str,

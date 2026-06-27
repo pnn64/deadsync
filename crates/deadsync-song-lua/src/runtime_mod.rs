@@ -1,11 +1,11 @@
-use mlua::{Table, Value};
+use mlua::{Function, Table, Value};
 use std::collections::HashMap;
 use std::ffi::c_void;
 
 use crate::{
-    LUA_PLAYERS, SongLuaCompileContext, SongLuaEaseTarget, SongLuaEaseWindow, SongLuaOverlayEase,
-    SongLuaOverlayStateDelta, SongLuaSpanMode, SongLuaTimeUnit, read_easing_name, read_f32,
-    read_player, read_string, truthy,
+    LUA_PLAYERS, SongLuaCompileContext, SongLuaCompileInfo, SongLuaEaseTarget, SongLuaEaseWindow,
+    SongLuaOverlayEase, SongLuaOverlayStateDelta, SongLuaSpanMode, SongLuaTimeUnit,
+    push_unique_compile_detail, read_easing_name, read_f32, read_player, read_string, truthy,
 };
 
 #[derive(Clone)]
@@ -21,6 +21,31 @@ pub struct RuntimeModEaseEntry {
     pub opt2: Option<f32>,
     pub player: Option<u8>,
     pub add: bool,
+}
+
+#[derive(Clone)]
+pub struct XeroRuntimeOverlayFunctionEntry {
+    pub entry: RuntimeModEaseEntry,
+    pub function: Function,
+}
+
+pub enum XeroRuntimeModEaseEntry {
+    Player(RuntimeModEaseEntry),
+    Overlay(XeroRuntimeOverlayFunctionEntry),
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct RuntimeOverlayCaptureKey {
+    pub function: usize,
+    pub unit: SongLuaTimeUnit,
+    pub start: u32,
+    pub limit: u32,
+    pub easing: String,
+    pub target: String,
+    pub from: u32,
+    pub to: u32,
+    pub opt1: Option<u32>,
+    pub opt2: Option<u32>,
 }
 
 pub fn read_runtime_mod_eases(
@@ -104,6 +129,218 @@ pub fn read_runtime_mod_eases(
     }
     extend_runtime_mod_sustains(&mut eases);
     Ok((eases, overlay_eases))
+}
+
+pub fn read_xero_runtime_mod_entries(
+    ease_tables: Vec<Table>,
+    node_tables: Vec<Table>,
+    easing_names: &HashMap<*const c_void, String>,
+) -> Result<Vec<XeroRuntimeModEaseEntry>, String> {
+    let node_functions = read_xero_node_functions(node_tables)?;
+    let mut entries = Vec::new();
+    for table in ease_tables {
+        for value in table.sequence_values::<Value>() {
+            let Value::Table(entry) = value.map_err(|err| err.to_string())? else {
+                continue;
+            };
+            let Some(start) = read_f32(entry.raw_get::<Value>(1).map_err(|err| err.to_string())?)
+            else {
+                continue;
+            };
+            let Some(limit) = read_f32(entry.raw_get::<Value>(2).map_err(|err| err.to_string())?)
+            else {
+                continue;
+            };
+            let Some(easing) = read_easing_name(
+                entry.raw_get::<Value>(3).map_err(|err| err.to_string())?,
+                easing_names,
+            ) else {
+                continue;
+            };
+            if !start.is_finite() || !limit.is_finite() || limit < 0.0 {
+                continue;
+            }
+            let unit = if truthy(
+                &entry
+                    .raw_get::<Value>("time")
+                    .map_err(|err| err.to_string())?,
+            ) {
+                SongLuaTimeUnit::Second
+            } else {
+                SongLuaTimeUnit::Beat
+            };
+            let player = read_player(
+                entry
+                    .raw_get::<Value>("plr")
+                    .map_err(|err| err.to_string())?,
+            );
+            let add = truthy(
+                &entry
+                    .raw_get::<Value>("relative")
+                    .map_err(|err| err.to_string())?,
+            );
+            let mut index = 4;
+            loop {
+                let to_value = entry
+                    .raw_get::<Value>(index)
+                    .map_err(|err| err.to_string())?;
+                let target_value = entry
+                    .raw_get::<Value>(index + 1)
+                    .map_err(|err| err.to_string())?;
+                if matches!(to_value, Value::Nil) && matches!(target_value, Value::Nil) {
+                    break;
+                }
+                let Some(to) = read_f32(to_value) else {
+                    index += 2;
+                    continue;
+                };
+                let Some(target) = read_string(target_value) else {
+                    index += 2;
+                    continue;
+                };
+                let key = runtime_mod_key(&target);
+                let base = RuntimeModEaseEntry {
+                    unit,
+                    start,
+                    limit,
+                    easing: easing.clone(),
+                    to,
+                    target,
+                    start_val: None,
+                    opt1: None,
+                    opt2: None,
+                    player,
+                    add,
+                };
+                if runtime_player_option_ease_target(&key, &base.target).is_some() {
+                    entries.push(XeroRuntimeModEaseEntry::Player(base));
+                } else if let Some(function) = node_functions.get(&key) {
+                    entries.push(XeroRuntimeModEaseEntry::Overlay(
+                        XeroRuntimeOverlayFunctionEntry {
+                            entry: base,
+                            function: function.clone(),
+                        },
+                    ));
+                }
+                index += 2;
+            }
+        }
+    }
+    Ok(entries)
+}
+
+pub fn read_xero_runtime_mod_eases_with_overlay_capture<F>(
+    ease_tables: Vec<Table>,
+    node_tables: Vec<Table>,
+    easing_names: &HashMap<*const c_void, String>,
+    mut compile_overlay: F,
+) -> Result<
+    (
+        Vec<SongLuaEaseWindow>,
+        Vec<SongLuaOverlayEase>,
+        SongLuaCompileInfo,
+    ),
+    String,
+>
+where
+    F: FnMut(
+        &RuntimeModEaseEntry,
+        &Function,
+        f32,
+        f32,
+        &mut SongLuaCompileInfo,
+    ) -> Result<Vec<SongLuaOverlayEase>, String>,
+{
+    let entries = read_xero_runtime_mod_entries(ease_tables, node_tables, easing_names)?;
+    if entries.is_empty() {
+        return Ok((Vec::new(), Vec::new(), SongLuaCompileInfo::default()));
+    }
+
+    let mut current: [HashMap<String, f32>; LUA_PLAYERS] = std::array::from_fn(|_| HashMap::new());
+    let mut out = Vec::new();
+    let mut overlay_eases = Vec::new();
+    let mut overlay_capture_keys = Vec::new();
+    let mut info = SongLuaCompileInfo::default();
+    for entry in entries {
+        match entry {
+            XeroRuntimeModEaseEntry::Player(entry) => {
+                let key = runtime_mod_key(&entry.target);
+                let Some(target) = runtime_player_option_ease_target(&key, &entry.target) else {
+                    continue;
+                };
+                for player in runtime_mod_entry_players(entry.player) {
+                    let from = runtime_mod_start_value(&mut current[player], &key, &entry);
+                    let to = runtime_mod_end_value(from, &entry);
+                    current[player].insert(key.clone(), to);
+                    out.push(SongLuaEaseWindow {
+                        unit: entry.unit,
+                        start: entry.start,
+                        limit: entry.limit,
+                        span_mode: SongLuaSpanMode::Len,
+                        from,
+                        to,
+                        target: target.clone(),
+                        easing: Some(entry.easing.clone()),
+                        player: Some((player + 1) as u8),
+                        sustain: None,
+                        opt1: entry.opt1,
+                        opt2: entry.opt2,
+                    });
+                }
+            }
+            XeroRuntimeModEaseEntry::Overlay(entry) => {
+                let key = runtime_mod_key(&entry.entry.target);
+                for player in runtime_mod_entry_players(entry.entry.player) {
+                    let from = runtime_mod_start_value(&mut current[player], &key, &entry.entry);
+                    let to = runtime_mod_end_value(from, &entry.entry);
+                    current[player].insert(key.clone(), to);
+                    let capture_key =
+                        runtime_overlay_capture_key(&entry.entry, &entry.function, from, to);
+                    if overlay_capture_keys.contains(&capture_key) {
+                        continue;
+                    }
+                    overlay_capture_keys.push(capture_key);
+                    overlay_eases.extend(compile_overlay(
+                        &entry.entry,
+                        &entry.function,
+                        from,
+                        to,
+                        &mut info,
+                    )?);
+                }
+            }
+        }
+    }
+    extend_runtime_mod_sustains(&mut out);
+    Ok((out, overlay_eases, info))
+}
+
+fn read_xero_node_functions(tables: Vec<Table>) -> Result<HashMap<String, Function>, String> {
+    let mut out = HashMap::new();
+    for table in tables {
+        for value in table.sequence_values::<Value>() {
+            let Value::Table(node) = value.map_err(|err| err.to_string())? else {
+                continue;
+            };
+            let Value::Table(inputs) = node.raw_get::<Value>(1).map_err(|err| err.to_string())?
+            else {
+                continue;
+            };
+            let Value::Function(function) =
+                node.raw_get::<Value>(3).map_err(|err| err.to_string())?
+            else {
+                continue;
+            };
+            for input in inputs.sequence_values::<Value>() {
+                let Some(name) = read_string(input.map_err(|err| err.to_string())?) else {
+                    continue;
+                };
+                out.entry(runtime_mod_key(&name))
+                    .or_insert_with(|| function.clone());
+            }
+        }
+    }
+    Ok(out)
 }
 
 pub fn read_runtime_mod_ease_entry(
@@ -235,6 +472,26 @@ pub fn runtime_mod_end_value(from: f32, entry: &RuntimeModEaseEntry) -> f32 {
     if entry.add { from + entry.to } else { entry.to }
 }
 
+pub fn runtime_overlay_capture_key(
+    entry: &RuntimeModEaseEntry,
+    function: &Function,
+    from: f32,
+    to: f32,
+) -> RuntimeOverlayCaptureKey {
+    RuntimeOverlayCaptureKey {
+        function: function.to_pointer() as usize,
+        unit: entry.unit,
+        start: entry.start.to_bits(),
+        limit: entry.limit.to_bits(),
+        easing: entry.easing.clone(),
+        target: runtime_mod_key(&entry.target),
+        from: from.to_bits(),
+        to: to.to_bits(),
+        opt1: entry.opt1.map(f32::to_bits),
+        opt2: entry.opt2.map(f32::to_bits),
+    }
+}
+
 pub fn runtime_mod_ease_target(key: &str, original: &str) -> Option<SongLuaEaseTarget> {
     Some(match key {
         "z" => SongLuaEaseTarget::PlayerZ,
@@ -342,4 +599,21 @@ pub fn extend_runtime_mod_sustains(windows: &mut [SongLuaEaseWindow]) {
             windows[index].sustain = Some(next_start - end);
         }
     }
+}
+
+pub fn record_unsupported_xero_overlay_function_ease(
+    info: &mut SongLuaCompileInfo,
+    entry: &RuntimeModEaseEntry,
+    from: f32,
+    to: f32,
+    probe_methods: &[String],
+) -> String {
+    info.unsupported_function_eases += 1;
+    let detail = format!(
+        "xero node '{}' unit={:?} start={:.3} limit={:.3} from={:.3} to={:.3} \
+         easing={:?} probe_methods={:?}",
+        entry.target, entry.unit, entry.start, entry.limit, from, to, entry.easing, probe_methods,
+    );
+    push_unique_compile_detail(&mut info.unsupported_function_ease_captures, detail.clone());
+    detail
 }

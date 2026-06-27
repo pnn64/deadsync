@@ -1,6 +1,6 @@
 use mlua::{MultiValue, Value};
 
-use crate::read_f32;
+use crate::{SONG_LUA_PRODUCT_VERSION, read_f32};
 
 pub fn version_parts(version: &str) -> [i64; 3] {
     let mut parts = [0_i64; 3];
@@ -41,6 +41,10 @@ pub fn is_product_version(product_version: &str, args: &MultiValue) -> bool {
         .all(|(index, value)| product.get(index).is_some_and(|part| *part == value))
 }
 
+pub fn song_lua_is_product_version(args: &MultiValue) -> bool {
+    is_product_version(SONG_LUA_PRODUCT_VERSION, args)
+}
+
 pub fn is_minimum_product_version(product_version: &str, args: &MultiValue) -> bool {
     let expected = version_args(args);
     if expected.is_empty() {
@@ -54,6 +58,10 @@ pub fn is_minimum_product_version(product_version: &str, args: &MultiValue) -> b
         }
     }
     true
+}
+
+pub fn song_lua_is_minimum_product_version(args: &MultiValue) -> bool {
+    is_minimum_product_version(SONG_LUA_PRODUCT_VERSION, args)
 }
 
 #[cfg(test)]

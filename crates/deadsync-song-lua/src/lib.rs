@@ -1,17 +1,24 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use deadlib_present::actors::TextAlign;
 use deadlib_present::anim::{EffectClock, EffectMode};
 
+mod actions;
 mod cmd;
+mod compat;
 mod crypto;
+mod eases;
 mod files;
+mod host;
 mod json;
 mod lua_util;
 mod mod_windows;
 mod multitap;
 mod net;
+mod noteskin;
+mod option_rows;
 mod perframe;
 mod player_options;
 mod runtime;
@@ -21,18 +28,36 @@ mod song_tables;
 mod tables;
 mod theme_colors;
 mod timing;
+mod top_screen;
 mod values;
 mod version;
 
+pub use actions::{SongLuaFunctionActionInput, read_actions_with_function_capture};
 pub use cmd::preprocess_lua_cmd_syntax;
+pub use compat::{SongLuaCompatCallbacks, install_stdlib_compat};
 pub use crypto::create_cryptman_table;
+pub use eases::{
+    SongLuaFunctionEaseDecision, SongLuaFunctionEaseInput, SongLuaFunctionEaseResult,
+    SongLuaReadEasesResult, SongLuaReadEasesStats, read_eases_with_function_capture,
+};
 pub use files::{
     actor_util_class_registered, actor_util_file_type, create_actor_util_table,
-    create_fileman_table, create_find_files_function, create_lua_compat_table, file_path_string,
-    fileman_dir_listing, find_compat_files, is_song_lua_audio_path, is_song_lua_image_path,
-    is_song_lua_media_path, is_song_lua_simfile_path, is_song_lua_video_path, path_basename,
-    resolve_compat_path, song_dir_string, song_group_name, song_lookup_matches, song_music_path,
-    song_named_image_path, song_simfile_path, strip_sprite_hints, theme_path, wildcard_matches,
+    create_fileman_table, create_find_files_function, create_lua_compat_table, entry_file_path,
+    file_path_string, fileman_dir_listing, find_compat_files, is_song_lua_audio_path,
+    is_song_lua_image_path, is_song_lua_media_path, is_song_lua_simfile_path,
+    is_song_lua_video_path, path_basename, resolve_compat_path, resolve_script_path,
+    song_dir_string, song_group_name, song_lookup_matches, song_music_path, song_named_image_path,
+    song_simfile_path, strip_sprite_hints, theme_path, wildcard_matches,
+};
+pub use host::{
+    SONG_LUA_STARTUP_MESSAGE, SongLuaCompileGlobals, SongLuaDateGlobals, SongLuaGameStateGlobals,
+    SongLuaHostState, clone_lua_value, create_arrow_effects_table, create_chunk_env_proxy,
+    initial_chunk_environment, install_basic_globals, install_cmd_helpers, install_core_globals,
+    install_date_globals, install_ease_table, install_game_state_globals, install_late_globals,
+    install_manager_globals, install_message_manager_globals, install_screen_manager_globals,
+    install_screen_string_globals, install_screen_utility_globals, install_sound_globals,
+    is_compile_global_name, register_loaded_easing_names, restore_compile_globals,
+    snapshot_compile_globals,
 };
 pub use json::{json_to_lua_value, lua_to_json_value};
 pub use lua_util::{
@@ -44,15 +69,30 @@ pub use lua_util::{
 pub use mod_windows::read_mod_windows;
 pub use multitap::{
     MULTITAP_HIDE_EPSILON_BEATS, MULTITAP_PREVISIBLE_BEATS, MULTITAP_SAMPLE_STEP, MultitapDesc,
-    MultitapPhase, calc_multitap_phase, multitap_deco_child_state, multitap_deco_state,
-    multitap_explosion_state, multitap_frame_state, overlay_delta_pair_from_states,
-    push_multitap_arrow_sample, push_overlay_sample_eases,
+    MultitapPhase, apply_multitap_field_state, calc_multitap_phase, multitap_deco_child_state,
+    multitap_deco_state, multitap_explosion_command_blocks, multitap_explosion_message_events,
+    multitap_explosion_message_name, multitap_explosion_state, multitap_frame_state,
+    overlay_delta_pair_from_states, push_multitap_actor_eases, push_multitap_arrow_sample,
+    push_multitap_explosion_eases, push_overlay_sample_eases, read_multitap_descs,
 };
 pub use net::{create_network_table, encode_query_params, query_value_text, url_encode_component};
+pub use noteskin::{SongLuaActorFactory, create_noteskin_table};
+pub use option_rows::{
+    SongLuaNamedOptionRowSpec, SongLuaOperatorOptionRowSpec, SongLuaOptionRowSpec,
+    SongLuaOptionValues, THEME_PREF_ROW_NAMES, conf_option_row_spec, create_conf_option_row,
+    create_custom_option_row, create_operator_menu_option_rows_table, create_sl_custom_prefs_table,
+    create_theme_prefs_rows_table, create_theme_prefs_table, custom_option_default_text,
+    custom_option_row_spec, operator_menu_option_row_spec, option_value_text, theme_pref_row_spec,
+};
 pub use perframe::{
-    SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES, SongLuaPerframePlayerState, perframe_delta_seconds,
-    perframe_segment_step, push_perframe_player_target, relative_player_target,
-    update_function_end_beat, update_function_sample_step,
+    SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES, SongLuaPerframeEntry, SongLuaPerframePlayerState,
+    SongLuaPerframeSample, active_perframe_entries, actor_perframe_player_state,
+    call_perframe_entry, current_perframe_player_states, perframe_boundaries,
+    perframe_delta_seconds, perframe_samples, perframe_segment_step, push_perframe_overlay_targets,
+    push_perframe_player_target, push_perframe_player_targets, push_perframe_static_targets,
+    push_sampled_perframe_targets, read_perframe_entries, relative_player_target,
+    tracked_player_tables, unsupported_perframe_info, update_function_end_beat,
+    update_function_overlay_eases, update_function_sample_step, update_function_samples,
 };
 pub use player_options::{
     SONG_LUA_PLAYER_OPTION_CAPABILITIES, SONG_LUA_PLAYER_OPTION_MULTICOL_PREFIXES,
@@ -69,30 +109,35 @@ pub use runtime::{
     song_lua_runtime_number, song_lua_side_effect_count,
 };
 pub use runtime_mod::{
-    RuntimeModEaseEntry, extend_runtime_mod_sustains, read_runtime_mod_ease_entry,
-    read_runtime_mod_eases, runtime_mod_ease_target, runtime_mod_end_value,
-    runtime_mod_entry_players, runtime_mod_key, runtime_mod_start_value,
-    runtime_player_option_ease_target,
+    RuntimeModEaseEntry, RuntimeOverlayCaptureKey, XeroRuntimeModEaseEntry,
+    XeroRuntimeOverlayFunctionEntry, extend_runtime_mod_sustains, read_runtime_mod_ease_entry,
+    read_runtime_mod_eases, read_xero_runtime_mod_eases_with_overlay_capture,
+    read_xero_runtime_mod_entries, record_unsupported_xero_overlay_function_ease,
+    runtime_mod_ease_target, runtime_mod_end_value, runtime_mod_entry_players, runtime_mod_key,
+    runtime_mod_start_value, runtime_overlay_capture_key, runtime_player_option_ease_target,
 };
-pub use sl::{create_sl_streams, create_sl_table, init_sl_streams};
+pub use sl::{create_sl_streams, create_sl_table, init_sl_streams, parse_chart_info};
 pub use song_tables::{
     PlayerLuaTables, create_course_table, create_enabled_players_table, create_player_tables,
-    create_song_options_table, create_song_table, create_songman_table, create_steps_table,
-    create_trail_table,
+    create_song_options_table, create_song_table, create_song_util_table, create_songman_table,
+    create_steps_table, create_trail_table,
 };
 pub use tables::{
-    create_author_table, create_background_filter_values, create_branch_table, create_credits_table,
-    create_difficulty_table, create_display_bpms_table, create_ex_judgment_counts,
-    create_game_table, create_gameplay_layout, create_index_array, create_ini_file_table,
-    create_network_response_table, create_other_player_table, create_player_number_table,
-    create_radar_values_table, create_rage_file_util_table, create_range_table,
-    create_screen_system_layer_helpers_table, create_screen_table, create_single_value_array,
-    create_song_group_table, create_split_table, create_string_enum_table, create_style_table,
-    create_timing_table, create_version_parts_table, create_websocket_table, deduplicate_lua_table,
-    display_bpms_for_args, format_number_and_suffix, lua_table_to_string, map_lua_table,
-    rotate_lua_table, scale_value, seconds_to_hhmmss, seconds_to_mmss, seconds_to_mmss_ms_ms,
-    seconds_to_mss, seconds_to_mss_ms_ms, set_path_methods, set_string_method,
-    stringify_lua_table,
+    create_author_table, create_background_filter_values, create_branch_table,
+    create_charman_table, create_credits_table, create_difficulty_table, create_display_bpms_table,
+    create_display_table, create_ex_judgment_counts, create_game_table, create_gameman_table,
+    create_gameplay_layout, create_hooks_table, create_index_array, create_ini_file_table,
+    create_life_record_table, create_memcardman_table, create_network_response_table,
+    create_other_player_table, create_player_number_table, create_prefsmgr_table,
+    create_profileman_table, create_radar_values_table, create_rage_file_util_table,
+    create_range_table, create_screen_system_layer_helpers_table, create_screen_table,
+    create_single_value_array, create_song_group_table, create_split_table, create_statsman_table,
+    create_string_enum_table, create_style_table, create_theme_table, create_timing_table,
+    create_unlockman_table, create_version_parts_table, create_websocket_table,
+    deduplicate_lua_table, display_bpms_for_args, format_number_and_suffix, lua_table_to_string,
+    map_lua_table, prefsmgr_default_value, rotate_lua_table, scale_value, seconds_to_hhmmss,
+    seconds_to_mmss, seconds_to_mmss_ms_ms, seconds_to_mss, seconds_to_mss_ms_ms, set_path_methods,
+    set_string_method, stringify_lua_table,
 };
 pub use theme_colors::{
     DDR_DIFF_COLORS, ITG_DIFF_COLORS, SL_COLORS, SL_DECORATIVE_COLORS, SL_FA_PLUS_COLORS,
@@ -106,12 +151,24 @@ pub use timing::{
     SONG_LUA_TIMING_WINDOW_NAMES, timing_window_arg_index, timing_window_name,
     timing_window_seconds, worst_judgment_from_offsets,
 };
+pub use top_screen::{
+    SONG_LUA_TOP_SCREEN_OPTION_ROWS, option_row_default_text, player_child_proxy_name,
+    top_screen_danger_index, top_screen_life_meter_bar_index, top_screen_life_meter_index,
+    top_screen_life_meter_name, top_screen_option_row_name, top_screen_option_row_name_at,
+    top_screen_player_index, top_screen_player_name, top_screen_score_index, top_screen_score_name,
+    top_screen_score_percent_name, top_screen_song_meter_display_index,
+    top_screen_step_stats_pane_index, top_screen_steps_display_index, underlay_score_index,
+    underlay_score_name,
+};
 pub use values::{
     SONG_LUA_EASING_NAME_KEY, lua_binary_to_hex, lua_values_equal, player_index_from_value,
     player_number_name, read_boolish, read_easing_name, read_f32, read_i32_value, read_player,
     read_span_mode, read_string, read_u32_value, truthy,
 };
-pub use version::{is_minimum_product_version, is_product_version, version_args, version_parts};
+pub use version::{
+    is_minimum_product_version, is_product_version, song_lua_is_minimum_product_version,
+    song_lua_is_product_version, version_args, version_parts,
+};
 
 pub const LUA_PLAYERS: usize = 2;
 pub const SONG_LUA_DEFAULT_NOTESKIN_NAME: &str = "cel";
@@ -128,6 +185,12 @@ pub const SONG_LUA_RUNTIME_RATE_KEY: &str = "__songlua_music_rate";
 pub const SONG_LUA_SIDE_EFFECT_COUNT_KEY: &str = "__songlua_side_effect_count";
 pub const SONG_LUA_BROADCASTS_KEY: &str = "__songlua_broadcast_messages";
 pub const SONG_LUA_SOUND_PATHS_KEY: &str = "__songlua_sound_paths";
+pub const SONG_LUA_PROBE_METHODS_KEY: &str = "__songlua_probe_methods";
+pub const SONG_LUA_PROBE_ACTORS_KEY: &str = "__songlua_probe_actors";
+pub const SONG_LUA_PROBE_ACTOR_SET_KEY: &str = "__songlua_probe_actor_set";
+pub const SONG_LUA_CAPTURE_ACTORS_KEY: &str = "__songlua_capture_scope_actors";
+pub const SONG_LUA_CAPTURE_ACTOR_SET_KEY: &str = "__songlua_capture_scope_actor_set";
+pub const SONG_LUA_CAPTURE_SNAPSHOTS_KEY: &str = "__songlua_capture_scope_snapshots";
 pub const SONG_LUA_THEME_PATH_PREFIX: &str = "__songlua_theme_path/";
 pub const SONG_LUA_THEME_NAME: &str = "Simply Love";
 pub const THEME_RECEPTOR_Y_STD: f32 = -125.0;
@@ -136,6 +199,8 @@ pub const SONG_LUA_INITIAL_LIFE: f32 = 0.5;
 pub const SONG_LUA_DANGER_LIFE: f32 = 0.2;
 pub const SONG_LUA_NOTE_COLUMNS: usize = 4;
 pub const SONG_LUA_DOUBLE_NOTE_COLUMNS: usize = 8;
+pub const GRAPH_DISPLAY_VALUE_RESOLUTION: usize = 100;
+pub const SONG_LUA_SPRITE_STATE_CLEAR: u32 = u32::MAX;
 pub const SONG_LUA_EASING_NAMES: &[&str] = &[
     "instant",
     "linear",
@@ -425,6 +490,13 @@ pub struct SongLuaPlayerContext {
     pub screen_y: f32,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct SongLuaActorMultiVertexPoint {
+    pub pos: [f32; 2],
+    pub color: [f32; 4],
+    pub uv: [f32; 2],
+}
+
 impl Default for SongLuaPlayerContext {
     fn default() -> Self {
         Self {
@@ -523,6 +595,229 @@ pub fn theme_metric_number_for_screen(
         return Some(7.0);
     }
     None
+}
+
+const SONG_LUA_SCREEN_PLAYER_OPTIONS_LINE_NAMES: &str = "SpeedModType,SpeedMod,Mini,Perspective,NoteSkinSL,NoteSkinVariant,Judgment,ComboFont,HoldJudgment,BackgroundFilter,NoteFieldOffsetX,NoteFieldOffsetY,VisualDelay,MusicRate,Stepchart,ScreenAfterPlayerOptions";
+const SONG_LUA_SCREEN_PLAYER_OPTIONS2_LINE_NAMES: &str = "Turn,Scroll,Hide,LifeMeterType,DataVisualizations,TargetScore,ActionOnMissedTarget,GameplayExtras,GameplayExtrasB,GameplayExtrasC,TiltMultiplier,ErrorBar,ErrorBarTrim,ErrorBarOptions,MeasureCounter,MeasureCounterOptions,MeasureLines,TimingWindowOptions,FaPlus,ScreenAfterPlayerOptions2";
+const SONG_LUA_SCREEN_PLAYER_OPTIONS3_LINE_NAMES: &str =
+    "Insert,Remove,Holds,11,12,13,Attacks,Characters,HideLightType,ScreenAfterPlayerOptions3";
+const SONG_LUA_SCREEN_ATTACK_MENU_LINE_NAMES: &str =
+    "SpeedModType,SpeedMod,Mini,Perspective,NoteSkin,MusicRate,Assist,ShowBGChangesPlay";
+const SONG_LUA_SCREEN_OPTIONS_SERVICE_LINE_NAMES: &str = "SystemOptions,MapControllers,TestInput,InputOptions,GraphicsSoundOptions,VisualOptions,ArcadeOptions,Bookkeeping,AdvancedOptions,MenuTimerOptions,USBProfileOptions,OptionsManageProfiles,ThemeOptions,TournamentModeOptions,GrooveStatsOptions,StepManiaCredits,Reload";
+const SONG_LUA_SCREEN_SYSTEM_OPTIONS_LINE_NAMES: &str =
+    "Game,Theme,Language,Announcer,DefaultNoteSkin,EditorNoteSkin";
+const SONG_LUA_SCREEN_INPUT_OPTIONS_LINE_NAMES: &str =
+    "AutoMap,OnlyDedicatedMenu,OptionsNav,Debounce,ThreeKey,AxisFix";
+const SONG_LUA_SCREEN_GRAPHICS_SOUND_OPTIONS_LINE_NAMES: &str = "VideoRenderer,DisplayMode,DisplayAspectRatio,DisplayResolution,RefreshRate,FullscreenType,DisplayColorDepth,HighResolutionTextures,MaxTextureResolution";
+const SONG_LUA_SCREEN_VISUAL_OPTIONS_LINE_NAMES: &str =
+    "AppearanceOptions,Set BG Fit Mode,Overscan Correction,CRT Test Patterns";
+const SONG_LUA_SCREEN_APPEARANCE_OPTIONS_LINE_NAMES: &str = "Center1Player,ShowBanners,BGBrightness,RandomBackgroundMode,NumBackgrounds,ShowLyrics,ShowNativeLanguage,ShowDancingCharacters";
+const SONG_LUA_SCREEN_ARCADE_OPTIONS_LINE_NAMES: &str = "Event,Coin,CoinsPerCredit,MaxNumCredits,ResetCoinsAtStartup,Premium,SongsPerPlay,Long Time,Marathon Time";
+const SONG_LUA_SCREEN_ADVANCED_OPTIONS_LINE_NAMES: &str =
+    "DefaultFailType,TimingWindowScale,LifeDifficulty,HiddenSongs,EasterEggs,AllowExtraStage";
+const SONG_LUA_SCREEN_THEME_OPTIONS_LINE_NAMES: &str =
+    "VisualStyle,MusicWheelSpeed,MusicWheelStyle,AutoStyle,DefaultGameMode,CasualMaxMeter";
+const SONG_LUA_SCREEN_MENU_TIMER_OPTIONS_LINE_NAMES: &str =
+    "MenuTimer,ScreenSelectMusicMenuTimer,ScreenPlayerOptionsMenuTimer,ScreenEvaluationMenuTimer";
+const SONG_LUA_SCREEN_USB_PROFILE_OPTIONS_LINE_NAMES: &str = "MemoryCards,CustomSongs,MaxCount,CustomSongsLoadTimeout,CustomSongsMaxSeconds,CustomSongsMaxMegabytes";
+const SONG_LUA_SCREEN_TOURNAMENT_MODE_OPTIONS_LINE_NAMES: &str =
+    "EnableTournamentMode,ScoringSystem,StepStats,EnforceNoCmod";
+const SONG_LUA_SCREEN_GROOVE_STATS_OPTIONS_LINE_NAMES: &str =
+    "EnableGrooveStats,AutoDownloadUnlocks,SeparateUnlocksByPlayer,QRLogin,EnableOnlineLobbies";
+
+pub fn theme_metric_value_for_human_players(
+    lua: &mlua::Lua,
+    group: &str,
+    name: &str,
+    human_player_count: usize,
+    screen_height: f32,
+) -> mlua::Result<mlua::Value> {
+    if let Some(value) =
+        theme_metric_number_for_screen(group, name, human_player_count, screen_height)
+    {
+        return Ok(mlua::Value::Number(value as f64));
+    }
+    if let Some(value) = theme_metric_string(group, name) {
+        return Ok(mlua::Value::String(lua.create_string(&value)?));
+    }
+    if group.eq_ignore_ascii_case("Common") && name.eq_ignore_ascii_case("DefaultNoteSkinName") {
+        return Ok(mlua::Value::String(lua.create_string("default")?));
+    }
+    if name.eq_ignore_ascii_case("Class") {
+        return Ok(mlua::Value::String(lua.create_string(group)?));
+    }
+    if group.eq_ignore_ascii_case("Common") && name.eq_ignore_ascii_case("AutoSetStyle")
+        || group.eq_ignore_ascii_case("ScreenHeartEntry")
+            && name.eq_ignore_ascii_case("HeartEntryEnabled")
+    {
+        return Ok(mlua::Value::Boolean(false));
+    }
+    Ok(mlua::Value::Nil)
+}
+
+fn theme_metric_string(group: &str, name: &str) -> Option<String> {
+    if name.eq_ignore_ascii_case("LineNames") {
+        return theme_line_names(group).map(str::to_string);
+    }
+    if name.eq_ignore_ascii_case("Fallback") {
+        return theme_screen_fallback(group).map(str::to_string);
+    }
+    if let Some(row) = name.strip_prefix("Line") {
+        if let Some(metric) = theme_explicit_line_metric(group, row) {
+            return Some(metric.to_string());
+        }
+        if group.eq_ignore_ascii_case("ScreenOptionsService") {
+            return Some(format!("gamecommand;screen,Screen{row};name,{row}"));
+        }
+        if theme_screen_fallback(group).is_some() && !row.trim().is_empty() {
+            return Some(format!("conf,{row}"));
+        }
+    }
+    None
+}
+
+fn theme_explicit_line_metric(group: &str, row: &str) -> Option<&'static str> {
+    if group.eq_ignore_ascii_case("ScreenGraphicsSoundOptions") {
+        return match row {
+            "VideoRenderer" => Some("lua,OperatorMenuOptionRows.VideoRenderer()"),
+            "DisplayAspectRatio" => Some("lua,ConfAspectRatio()"),
+            "DisplayResolution" => Some("lua,ConfDisplayResolution()"),
+            "DisplayMode" => Some("lua,ConfDisplayMode()"),
+            "FullscreenType" => Some("lua,ConfFullscreenType()"),
+            "GlobalOffsetSeconds" => Some("lua,OperatorMenuOptionRows.GlobalOffsetSeconds()"),
+            "VisualDelaySeconds" => Some("lua,OperatorMenuOptionRows.VisualDelaySeconds()"),
+            _ => None,
+        };
+    }
+    if group.eq_ignore_ascii_case("ScreenSystemOptions") {
+        return match row {
+            "Theme" => Some("lua,OperatorMenuOptionRows.Theme()"),
+            "EditorNoteSkin" => Some("lua,OperatorMenuOptionRows.EditorNoteskin()"),
+            _ => None,
+        };
+    }
+    None
+}
+
+fn theme_line_names(group: &str) -> Option<&'static str> {
+    if group.eq_ignore_ascii_case("ScreenPlayerOptions") {
+        Some(SONG_LUA_SCREEN_PLAYER_OPTIONS_LINE_NAMES)
+    } else if group.eq_ignore_ascii_case("ScreenPlayerOptions2") {
+        Some(SONG_LUA_SCREEN_PLAYER_OPTIONS2_LINE_NAMES)
+    } else if group.eq_ignore_ascii_case("ScreenPlayerOptions3") {
+        Some(SONG_LUA_SCREEN_PLAYER_OPTIONS3_LINE_NAMES)
+    } else if group.eq_ignore_ascii_case("ScreenAttackMenu") {
+        Some(SONG_LUA_SCREEN_ATTACK_MENU_LINE_NAMES)
+    } else if group.eq_ignore_ascii_case("ScreenOptionsService") {
+        Some(SONG_LUA_SCREEN_OPTIONS_SERVICE_LINE_NAMES)
+    } else if group.eq_ignore_ascii_case("ScreenSystemOptions") {
+        Some(SONG_LUA_SCREEN_SYSTEM_OPTIONS_LINE_NAMES)
+    } else if group.eq_ignore_ascii_case("ScreenInputOptions") {
+        Some(SONG_LUA_SCREEN_INPUT_OPTIONS_LINE_NAMES)
+    } else if group.eq_ignore_ascii_case("ScreenGraphicsSoundOptions") {
+        Some(SONG_LUA_SCREEN_GRAPHICS_SOUND_OPTIONS_LINE_NAMES)
+    } else if group.eq_ignore_ascii_case("ScreenVisualOptions") {
+        Some(SONG_LUA_SCREEN_VISUAL_OPTIONS_LINE_NAMES)
+    } else if group.eq_ignore_ascii_case("ScreenAppearanceOptions") {
+        Some(SONG_LUA_SCREEN_APPEARANCE_OPTIONS_LINE_NAMES)
+    } else if group.eq_ignore_ascii_case("ScreenArcadeOptions") {
+        Some(SONG_LUA_SCREEN_ARCADE_OPTIONS_LINE_NAMES)
+    } else if group.eq_ignore_ascii_case("ScreenAdvancedOptions") {
+        Some(SONG_LUA_SCREEN_ADVANCED_OPTIONS_LINE_NAMES)
+    } else if group.eq_ignore_ascii_case("ScreenThemeOptions") {
+        Some(SONG_LUA_SCREEN_THEME_OPTIONS_LINE_NAMES)
+    } else if group.eq_ignore_ascii_case("ScreenMenuTimerOptions") {
+        Some(SONG_LUA_SCREEN_MENU_TIMER_OPTIONS_LINE_NAMES)
+    } else if group.eq_ignore_ascii_case("ScreenUSBProfileOptions") {
+        Some(SONG_LUA_SCREEN_USB_PROFILE_OPTIONS_LINE_NAMES)
+    } else if group.eq_ignore_ascii_case("ScreenTournamentModeOptions") {
+        Some(SONG_LUA_SCREEN_TOURNAMENT_MODE_OPTIONS_LINE_NAMES)
+    } else if group.eq_ignore_ascii_case("ScreenGrooveStatsOptions") {
+        Some(SONG_LUA_SCREEN_GROOVE_STATS_OPTIONS_LINE_NAMES)
+    } else {
+        None
+    }
+}
+
+fn theme_screen_fallback(group: &str) -> Option<&'static str> {
+    let lower = group.to_ascii_lowercase();
+    match lower.as_str() {
+        "screenoptionsservice" => Some("ScreenOptionsSimple"),
+        "screenvisualoptions" => Some("ScreenOptionsServiceSub"),
+        "screensystemoptions"
+        | "screeninputoptions"
+        | "screengraphicssoundoptions"
+        | "screenappearanceoptions"
+        | "screenarcadeoptions"
+        | "screenadvancedoptions"
+        | "screenthemeoptions"
+        | "screenmenutimeroptions"
+        | "screenusbprofileoptions"
+        | "screentournamentmodeoptions"
+        | "screengroovestatsoptions" => Some("ScreenOptionsServiceChild"),
+        _ => None,
+    }
+}
+
+pub fn theme_metric_bool(value: mlua::Value) -> bool {
+    match value {
+        mlua::Value::Boolean(value) => value,
+        mlua::Value::Integer(value) => value != 0,
+        mlua::Value::Number(value) => value != 0.0,
+        mlua::Value::String(value) => !value.to_str().is_ok_and(|text| text.is_empty()),
+        _ => false,
+    }
+}
+
+pub fn theme_metric_names(group: &str) -> Vec<String> {
+    let mut names = Vec::new();
+    if theme_line_names(group).is_some() {
+        names.push("LineNames".to_string());
+    }
+    if theme_screen_fallback(group).is_some() {
+        names.push("Fallback".to_string());
+    }
+    if let Some(lines) = theme_line_names(group) {
+        names.extend(
+            lines
+                .split(',')
+                .filter(|line| !line.trim().is_empty())
+                .map(|line| format!("Line{}", line.trim())),
+        );
+    }
+    if group.eq_ignore_ascii_case("Player") {
+        names.extend(
+            [
+                "ReceptorArrowsYStandard",
+                "ReceptorArrowsYReverse",
+                "DrawDistanceBeforeTargetsPixels",
+                "DrawDistanceAfterTargetsPixels",
+            ]
+            .into_iter()
+            .map(str::to_string),
+        );
+    } else if group.eq_ignore_ascii_case("Common") {
+        names.extend(
+            ["DefaultNoteSkinName", "AutoSetStyle"]
+                .into_iter()
+                .map(str::to_string),
+        );
+    } else if group.eq_ignore_ascii_case("Combo") {
+        names.push("ShowComboAt".to_string());
+    } else if group.eq_ignore_ascii_case("GraphDisplay") {
+        names.extend(["BodyWidth", "BodyHeight"].into_iter().map(str::to_string));
+    } else if group.eq_ignore_ascii_case("LifeMeterBar") {
+        names.push("InitialValue".to_string());
+    } else if group.eq_ignore_ascii_case("MusicWheel") {
+        names.push("NumWheelItems".to_string());
+    } else if group.eq_ignore_ascii_case("PlayerStageStats") {
+        names.push("NumGradeTiersUsed".to_string());
+    } else if group.eq_ignore_ascii_case("ScreenHeartEntry") {
+        names.push("HeartEntryEnabled".to_string());
+    }
+    names.sort_unstable();
+    names.dedup();
+    names
 }
 
 pub fn theme_string_names(section: &str) -> Vec<String> {
@@ -976,6 +1271,65 @@ pub struct SongLuaCompileInfo {
     pub unsupported_function_ease_captures: Vec<String>,
     pub unsupported_function_action_captures: Vec<String>,
     pub skipped_message_command_captures: Vec<String>,
+}
+
+pub fn push_unique_compile_detail(out: &mut Vec<String>, detail: String) {
+    if !out.contains(&detail) {
+        out.push(detail);
+    }
+}
+
+pub fn record_unsupported_function_ease_capture(
+    info: &mut SongLuaCompileInfo,
+    unit: SongLuaTimeUnit,
+    start: f32,
+    limit: f32,
+    span_mode: SongLuaSpanMode,
+    from: f32,
+    to: f32,
+    easing: &Option<String>,
+    probe_methods: &[String],
+) -> String {
+    info.unsupported_function_eases += 1;
+    let detail = format!(
+        "function ease unit={unit:?} start={start:.3} limit={limit:.3} \
+         span={span_mode:?} from={from:.3} to={to:.3} easing={easing:?} \
+         probe_methods={probe_methods:?}"
+    );
+    push_unique_compile_detail(&mut info.unsupported_function_ease_captures, detail.clone());
+    detail
+}
+
+pub fn record_unsupported_function_action_capture(
+    info: &mut SongLuaCompileInfo,
+    beat: f32,
+    persists: bool,
+) -> String {
+    info.unsupported_function_actions += 1;
+    let detail = format!("function action beat={beat:.3} persists={persists}");
+    push_unique_compile_detail(
+        &mut info.unsupported_function_action_captures,
+        detail.clone(),
+    );
+    detail
+}
+
+pub fn merge_compile_info(out: &mut SongLuaCompileInfo, info: SongLuaCompileInfo) {
+    out.unsupported_perframes += info.unsupported_perframes;
+    out.unsupported_function_eases += info.unsupported_function_eases;
+    out.unsupported_function_actions += info.unsupported_function_actions;
+    for detail in info.unsupported_perframe_captures {
+        push_unique_compile_detail(&mut out.unsupported_perframe_captures, detail);
+    }
+    for detail in info.unsupported_function_ease_captures {
+        push_unique_compile_detail(&mut out.unsupported_function_ease_captures, detail);
+    }
+    for detail in info.unsupported_function_action_captures {
+        push_unique_compile_detail(&mut out.unsupported_function_action_captures, detail);
+    }
+    for detail in info.skipped_message_command_captures {
+        push_unique_compile_detail(&mut out.skipped_message_command_captures, detail);
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -2508,6 +2862,38 @@ pub struct SongLuaOverlayActor<Kind> {
     pub message_commands: Vec<SongLuaOverlayMessageCommand>,
 }
 
+pub fn named_overlay_indices_by_name<'a>(
+    len: usize,
+    mut name_at: impl FnMut(usize) -> Option<&'a str>,
+) -> HashMap<String, usize> {
+    let mut out = HashMap::new();
+    for index in 0..len {
+        if let Some(name) = name_at(index) {
+            out.insert(name.to_string(), index);
+        }
+    }
+    out
+}
+
+pub fn overlay_descendants_by_parent(
+    len: usize,
+    root_index: usize,
+    mut parent_at: impl FnMut(usize) -> Option<usize>,
+) -> Vec<usize> {
+    let mut out = Vec::new();
+    for index in 0..len {
+        let mut parent = parent_at(index);
+        while let Some(parent_index) = parent {
+            if parent_index == root_index {
+                out.push(index);
+                break;
+            }
+            parent = parent_at(parent_index);
+        }
+    }
+    out
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct SongLuaOverlayEase {
     pub overlay_index: usize,
@@ -2527,6 +2913,18 @@ pub struct SongLuaOverlayEase {
 pub struct SongLuaCapturedActor {
     pub initial_state: SongLuaOverlayState,
     pub message_commands: Vec<SongLuaOverlayMessageCommand>,
+}
+
+#[derive(Clone, Copy)]
+pub enum SongLuaTrackedActorTarget {
+    Player(usize),
+    SongForeground,
+}
+
+pub struct SongLuaTrackedActor {
+    pub table: mlua::Table,
+    pub actor: SongLuaCapturedActor,
+    pub target: SongLuaTrackedActorTarget,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
