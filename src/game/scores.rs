@@ -1,9 +1,9 @@
+use super::GameplayCoreState;
 use crate::config::SimpleIni;
 use crate::game::online::groovestats as online_groovestats;
 use crate::game::profile;
 use crate::game::song::get_song_cache;
 use crate::game::stage_stats;
-use super::GameplayCoreState;
 use deadlib_platform::dirs;
 use deadsync_profile::Profile;
 use log::{debug, warn};
@@ -16,7 +16,7 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use deadsync_gameplay::{
-    PlayerRuntime, gameplay_attack_mode, chart_effects_from_profile, ScoreValidityOptions,
+    PlayerRuntime, ScoreValidityOptions, chart_effects_from_profile, gameplay_attack_mode,
     score_invalid_reason_lines_for_options,
 };
 use deadsync_online::arrowcloud::{self as arrowcloud_api, ARROWCLOUD_BULK_MAX_HASHES};
@@ -75,7 +75,7 @@ use deadsync_score::{
 };
 use groovestats::{GrooveStatsSubmitPlayerJob, groovestats_judgment_counts};
 pub use groovestats::{
-    get_groovestats_submit_itl_progress_for_side, get_groovestats_submit_record_banner_for_side,
+    get_groovestats_submit_event_progress_for_side, get_groovestats_submit_record_banner_for_side,
     get_groovestats_submit_ui_status_for_side, groovestats_eval_state_from_gameplay,
     groovestats_next_retry_is_auto, groovestats_next_retry_remaining_secs,
     retry_groovestats_submit, submit_groovestats_payloads_from_gameplay,

@@ -527,6 +527,7 @@ fn push_saved_theme(content: &mut String, cfg: &Config) {
     push_section(content, "[Theme]");
     push_bool(content, "KeyboardFeatures", cfg.keyboard_features);
     push_line(content, "VisualStyle", cfg.visual_style.as_str());
+    push_line(content, "SrpgVariant", cfg.srpg_variant.as_str());
     push_bool(content, "VideoBackgrounds", cfg.show_video_backgrounds);
     push_line(
         content,

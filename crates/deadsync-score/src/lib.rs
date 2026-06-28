@@ -2259,18 +2259,35 @@ pub fn groovestats_submit_record_banner(
     })
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum EventProgressKind {
+    #[default]
+    Itl,
+    Srpg,
+}
+
 #[derive(Clone, Debug)]
-pub enum ItlOverlayPage {
+pub struct EventStatImprovement {
+    pub name: String,
+    pub gained: u32,
+    pub current: i32,
+}
+
+#[derive(Clone, Debug)]
+pub enum EventOverlayPage {
     Text(String),
     Leaderboard(Vec<LeaderboardEntry>),
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct ItlEventProgress {
+pub struct EventProgress {
+    pub kind: EventProgressKind,
     pub name: String,
     pub is_doubles: bool,
     pub score_hundredths: u32,
     pub score_delta_hundredths: i32,
+    pub rate_hundredths: Option<u32>,
+    pub rate_delta_hundredths: Option<i32>,
     pub current_points: u32,
     pub point_delta: i32,
     pub current_ranking_points: u32,
@@ -2284,8 +2301,12 @@ pub struct ItlEventProgress {
     pub total_passes: u32,
     pub clear_type_before: Option<u8>,
     pub clear_type_after: Option<u8>,
-    pub overlay_pages: Vec<ItlOverlayPage>,
+    pub stat_improvements: Vec<EventStatImprovement>,
+    pub overlay_pages: Vec<EventOverlayPage>,
 }
+
+pub type ItlEventProgress = EventProgress;
+pub type ItlOverlayPage = EventOverlayPage;
 
 #[cfg(test)]
 mod tests {

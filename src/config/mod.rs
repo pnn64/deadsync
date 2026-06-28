@@ -40,7 +40,7 @@ pub use self::theme::{
     MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, RandomBackgroundMode,
     SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicPatternInfoMode,
     SelectMusicScoreboxPlacement, SelectMusicSongSelectBgMode, SelectMusicStepArtistBoxMode,
-    SelectMusicWheelStyle, SyncGraphMode, ThemeFlag, VersionOverlaySide, VisualStyle,
+    SelectMusicWheelStyle, SrpgVariant, SyncGraphMode, ThemeFlag, VersionOverlaySide, VisualStyle,
     auto_screenshot_bit, auto_screenshot_mask_from_str, auto_screenshot_mask_to_str,
 };
 pub use self::update::*;
@@ -209,6 +209,8 @@ pub struct Config {
     pub version_overlay_side: VersionOverlaySide,
     /// Simply Love visual style used by shared menu art.
     pub visual_style: VisualStyle,
+    /// Variant used when the SRPG visual-style family is selected.
+    pub srpg_variant: SrpgVariant,
     /// Enable or disable animated gameplay background videos.
     pub show_video_backgrounds: bool,
     /// ITGmania RandomBackgroundMode. DeadSync currently implements RandomMovies.
@@ -435,6 +437,7 @@ impl Default for Config {
             show_version_overlay: true,
             version_overlay_side: VersionOverlaySide::Right,
             visual_style: VisualStyle::Hearts,
+            srpg_variant: SrpgVariant::Srpg9,
             show_video_backgrounds: true,
             random_background_mode: RandomBackgroundMode::Off,
             machine_show_select_profile: true,

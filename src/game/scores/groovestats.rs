@@ -1,8 +1,8 @@
 use super::{
-    GameplayCoreState,
-    cache_gs_score_for_profile, chart_stats_for_imported_score, gameplay_run_failed,
-    gameplay_run_passed, gameplay_side_for_player, get_or_fetch_player_leaderboards_for_side,
-    invalidate_player_leaderboards_for_side, itl, lua_chart_submit_allowed, submit_record_banner,
+    GameplayCoreState, cache_gs_score_for_profile, chart_stats_for_imported_score,
+    gameplay_run_failed, gameplay_run_passed, gameplay_side_for_player,
+    get_or_fetch_player_leaderboards_for_side, invalidate_player_leaderboards_for_side, itl,
+    lua_chart_submit_allowed, submit_record_banner,
 };
 use crate::game::online::groovestats as online_groovestats;
 use crate::game::profile;
@@ -16,9 +16,9 @@ use deadsync_profile as profile_data;
 use deadsync_profile::Profile;
 use deadsync_rules::{judgment, scroll::ScrollSpeedSetting};
 use deadsync_score::{
-    GROOVESTATS_REASON_COUNT, GS_INVALID_HOLDS_MASK, GS_INVALID_INSERT_MASK,
+    EventProgress, GROOVESTATS_REASON_COUNT, GS_INVALID_HOLDS_MASK, GS_INVALID_INSERT_MASK,
     GS_INVALID_REMOVE_MASK, GrooveStatsEvalState, GrooveStatsSubmitRecordBanner,
-    GrooveStatsSubmitUiStatus, ItlEventProgress, RejectReason, SUBMIT_RETRY_MAX_ATTEMPTS,
+    GrooveStatsSubmitUiStatus, RejectReason, SUBMIT_RETRY_MAX_ATTEMPTS,
     cached_score_from_imported_player_score, duration_to_ceil_secs, groovestats_reason_lines,
     submit_retry_delay_secs,
 };
@@ -54,7 +54,7 @@ static GROOVESTATS_SUBMIT_UI_TOKEN: AtomicU64 = AtomicU64::new(1);
 struct GrooveStatsSubmitEventUiEntry {
     chart_hash: String,
     token: u64,
-    itl_progress: Option<ItlEventProgress>,
+    event_progress: Vec<EventProgress>,
     record_banner: Option<GrooveStatsSubmitRecordBanner>,
 }
 
@@ -115,6 +115,7 @@ pub(super) struct GrooveStatsSubmitPlayerJob {
     pub(super) itl_score_hundredths: Option<u32>,
     pub(super) show_ex_score: bool,
     pub(super) score_10000: u32,
+    pub(super) rate_hundredths: u32,
     pub(super) comment: String,
 }
 
@@ -231,14 +232,14 @@ fn groovestats_arm_submit_event_ui(side: profile_data::PlayerSide, chart_hash: &
         .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
     {
         entry.token = token;
-        entry.itl_progress = None;
+        entry.event_progress.clear();
         entry.record_banner = None;
         return;
     }
     entries.push(GrooveStatsSubmitEventUiEntry {
         chart_hash: hash.to_string(),
         token,
-        itl_progress: None,
+        event_progress: Vec::new(),
         record_banner: None,
     });
 }
@@ -248,7 +249,7 @@ fn groovestats_update_submit_event_ui_if_token(
     side: profile_data::PlayerSide,
     chart_hash: &str,
     token: u64,
-    itl_progress: Option<ItlEventProgress>,
+    event_progress: Vec<EventProgress>,
     record_banner: Option<GrooveStatsSubmitRecordBanner>,
 ) {
     let hash = chart_hash.trim();
@@ -265,7 +266,7 @@ fn groovestats_update_submit_event_ui_if_token(
     if entry.token != token {
         return;
     }
-    entry.itl_progress = itl_progress;
+    entry.event_progress = event_progress;
     entry.record_banner = record_banner;
 }
 
@@ -308,18 +309,19 @@ pub fn get_groovestats_submit_ui_status_for_side(
         .map(|entry| entry.status)
 }
 
-pub fn get_groovestats_submit_itl_progress_for_side(
+pub fn get_groovestats_submit_event_progress_for_side(
     chart_hash: &str,
     side: profile_data::PlayerSide,
-) -> Option<ItlEventProgress> {
+) -> Vec<EventProgress> {
     let hash = chart_hash.trim();
     if hash.is_empty() {
-        return None;
+        return Vec::new();
     }
     GROOVESTATS_SUBMIT_EVENT_UI.lock().unwrap()[profile_data::player_side_index(side)]
         .iter()
         .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
-        .and_then(|entry| entry.itl_progress.clone())
+        .map(|entry| entry.event_progress.clone())
+        .unwrap_or_default()
 }
 
 pub fn get_groovestats_submit_record_banner_for_side(
@@ -519,7 +521,10 @@ fn groovestats_warn_submit_skip(side: profile_data::PlayerSide, chart_hash: &str
     );
 }
 
-fn groovestats_rescore_counts(gs: &GameplayCoreState, player_idx: usize) -> GrooveStatsRescoreCounts {
+fn groovestats_rescore_counts(
+    gs: &GameplayCoreState,
+    player_idx: usize,
+) -> GrooveStatsRescoreCounts {
     let (start, end) = gs.note_range_for_player(player_idx);
     let mut counts = GrooveStatsRescoreCounts::default();
     for note in &gs.notes()[start..end] {
@@ -702,7 +707,7 @@ fn spawn_groovestats_submit(job: GrooveStatsSubmitRequest) {
                     player.side,
                     player.chart_hash.as_str(),
                     player.token,
-                    itl::progress_from_submit(player, player_response),
+                    itl::event_progress_from_submit(player, player_response),
                     submit_record_banner(player, player_response),
                 );
                 itl::handle_submit_player_unlocks(player, player_response);
@@ -799,6 +804,7 @@ fn groovestats_retry_request(
         itl_score_hundredths: entry.itl_score_hundredths,
         show_ex_score: entry.show_ex_score,
         score_10000: entry.payload.score,
+        rate_hundredths: entry.payload.rate,
         comment: entry.payload.comment.clone(),
     };
     let mut body = JsonMap::with_capacity(1);
@@ -962,6 +968,7 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &GameplayCoreState) {
             itl_score_hundredths,
             show_ex_score: profile.show_ex_score,
             score_10000: payload.score,
+            rate_hundredths: payload.rate,
             comment: payload.comment.clone(),
         });
         headers.push((
@@ -1435,14 +1442,14 @@ mod tests {
             side,
             first,
             11,
-            None,
+            Vec::new(),
             Some(GrooveStatsSubmitRecordBanner::PersonalBest),
         );
         groovestats_update_submit_event_ui_if_token(
             side,
             second,
             12,
-            None,
+            Vec::new(),
             Some(GrooveStatsSubmitRecordBanner::WorldRecord),
         );
 

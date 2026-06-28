@@ -20,7 +20,9 @@ use deadsync_score as score_data;
 
 use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
-use crate::assets::{FontRole, current_machine_font_key, current_machine_font_key_for_text};
+use crate::assets::{
+    FontRole, current_machine_font_key, current_machine_font_key_for_text, visual_styles,
+};
 use crate::game::online;
 use crate::game::parsing::noteskin::Noteskin;
 use crate::game::scores;
@@ -82,6 +84,10 @@ const EVAL_STAGE_IN_TEXT_FADE_OUT_SECONDS: f32 = 0.4;
 const EVAL_STAGE_IN_TOTAL_SECONDS: f32 = EVAL_STAGE_IN_TEXT_FADE_IN_SECONDS
     + EVAL_STAGE_IN_TEXT_HOLD_SECONDS
     + EVAL_STAGE_IN_TEXT_FADE_OUT_SECONDS;
+const SRPG10_EVAL_FAILED_SECONDS: f32 = 3.0;
+const SRPG10_EVAL_PASSED_SECONDS: f32 = 1.0;
+const SRPG10_EVAL_Z: i16 = 1250;
+const SRPG10_EVAL_ZOOM: f32 = 480.0 / 1080.0;
 const GRAPH_BARELY_SAMPLE_COUNT: usize = 100;
 const GRAPH_BARELY_LIFE_MAX: f32 = 0.1;
 const GRAPH_BARELY_ANIM_DELAY_SECONDS: f32 = 2.0;
@@ -2133,7 +2139,7 @@ pub struct State {
     pub gameplay_elapsed: f32,
     pub stage_duration_seconds: f32,
     pub score_info: [Option<ScoreInfo>; MAX_PLAYERS],
-    pub itl_progress: [Option<score_data::ItlEventProgress>; MAX_PLAYERS],
+    pub event_progress: [Vec<score_data::EventProgress>; MAX_PLAYERS],
     pub density_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
     pub timing_hist_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
     pub timing_hist_mesh_ex: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS],
@@ -2151,15 +2157,15 @@ pub struct State {
     pub auto_advance_seconds: Option<f32>,
     pub allow_online_panes: bool,
     pub auto_screenshot_taken: bool,
-    pub itl_overlay_visible: bool,
-    itl_overlay_shown: bool,
+    pub event_overlay_visible: bool,
+    event_overlay_shown: bool,
     submit_record_sfx_played: bool,
     nice_sfx_played: bool,
     submit_groovestats_fallback: [Option<score_data::GrooveStatsSubmitUiStatus>; MAX_PLAYERS],
     submit_arrowcloud_fallback: [Option<score_data::ArrowCloudSubmitUiStatus>; MAX_PLAYERS],
     lobby_disconnect_hold_p1: Option<Instant>,
     lobby_disconnect_hold_p2: Option<Instant>,
-    itl_overlay_page: [usize; MAX_PLAYERS],
+    event_overlay_page: [usize; MAX_PLAYERS],
     active_pane: [EvalPane; MAX_PLAYERS],
     active_graph: [EvalGraphPane; MAX_PLAYERS],
     menu_lr_chord: screen_input::MenuLrChordTracker,
@@ -2187,7 +2193,7 @@ impl Clone for State {
             gameplay_elapsed: self.gameplay_elapsed,
             stage_duration_seconds: self.stage_duration_seconds,
             score_info: self.score_info.clone(),
-            itl_progress: self.itl_progress.clone(),
+            event_progress: self.event_progress.clone(),
             density_graph_mesh: self.density_graph_mesh.clone(),
             timing_hist_mesh: self.timing_hist_mesh.clone(),
             timing_hist_mesh_ex: self.timing_hist_mesh_ex.clone(),
@@ -2205,15 +2211,15 @@ impl Clone for State {
             auto_advance_seconds: self.auto_advance_seconds,
             allow_online_panes: self.allow_online_panes,
             auto_screenshot_taken: self.auto_screenshot_taken,
-            itl_overlay_visible: self.itl_overlay_visible,
-            itl_overlay_shown: self.itl_overlay_shown,
+            event_overlay_visible: self.event_overlay_visible,
+            event_overlay_shown: self.event_overlay_shown,
             submit_record_sfx_played: self.submit_record_sfx_played,
             nice_sfx_played: self.nice_sfx_played,
             submit_groovestats_fallback: self.submit_groovestats_fallback,
             submit_arrowcloud_fallback: self.submit_arrowcloud_fallback,
             lobby_disconnect_hold_p1: self.lobby_disconnect_hold_p1,
             lobby_disconnect_hold_p2: self.lobby_disconnect_hold_p2,
-            itl_overlay_page: self.itl_overlay_page,
+            event_overlay_page: self.event_overlay_page,
             active_pane: self.active_pane,
             active_graph: self.active_graph,
             menu_lr_chord: self.menu_lr_chord,
@@ -2788,7 +2794,7 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         gameplay_elapsed: 0.0,
         stage_duration_seconds,
         score_info,
-        itl_progress: std::array::from_fn(|_| None),
+        event_progress: std::array::from_fn(|_| Vec::new()),
         density_graph_mesh,
         timing_hist_mesh,
         timing_hist_mesh_ex,
@@ -2806,15 +2812,15 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         auto_advance_seconds: None,
         allow_online_panes: true,
         auto_screenshot_taken: false,
-        itl_overlay_visible: false,
-        itl_overlay_shown: false,
+        event_overlay_visible: false,
+        event_overlay_shown: false,
         submit_record_sfx_played: false,
         nice_sfx_played: false,
         submit_groovestats_fallback: std::array::from_fn(|_| None),
         submit_arrowcloud_fallback: std::array::from_fn(|_| None),
         lobby_disconnect_hold_p1: None,
         lobby_disconnect_hold_p2: None,
-        itl_overlay_page: [0; MAX_PLAYERS],
+        event_overlay_page: [0; MAX_PLAYERS],
         active_pane,
         active_graph,
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
@@ -2943,7 +2949,7 @@ pub fn init_from_score_info(
         gameplay_elapsed: 0.0,
         stage_duration_seconds,
         score_info,
-        itl_progress: std::array::from_fn(|_| None),
+        event_progress: std::array::from_fn(|_| Vec::new()),
         density_graph_mesh,
         timing_hist_mesh,
         timing_hist_mesh_ex,
@@ -2961,15 +2967,15 @@ pub fn init_from_score_info(
         auto_advance_seconds: None,
         allow_online_panes: true,
         auto_screenshot_taken: false,
-        itl_overlay_visible: false,
-        itl_overlay_shown: false,
+        event_overlay_visible: false,
+        event_overlay_shown: false,
         submit_record_sfx_played: false,
         nice_sfx_played: false,
         submit_groovestats_fallback: std::array::from_fn(|_| None),
         submit_arrowcloud_fallback: std::array::from_fn(|_| None),
         lobby_disconnect_hold_p1: None,
         lobby_disconnect_hold_p2: None,
-        itl_overlay_page: [0; MAX_PLAYERS],
+        event_overlay_page: [0; MAX_PLAYERS],
         active_pane,
         active_graph,
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
@@ -2984,30 +2990,53 @@ pub fn init_from_score_info(
 
 // Keyboard input is handled centrally via the virtual dispatcher in app
 
-fn sync_submit_itl_progress(state: &mut State) {
+fn event_overlay_page_count(progress: &[score_data::EventProgress]) -> usize {
+    progress
+        .iter()
+        .map(|event| event.overlay_pages.len().max(1))
+        .sum::<usize>()
+        .max(1)
+}
+
+fn event_progress_page(
+    progress: &[score_data::EventProgress],
+    mut page_idx: usize,
+) -> Option<(&score_data::EventProgress, usize)> {
+    for event in progress {
+        let page_count = event.overlay_pages.len().max(1);
+        if page_idx < page_count {
+            return Some((event, page_idx));
+        }
+        page_idx -= page_count;
+    }
+    progress.first().map(|event| (event, 0))
+}
+
+fn sync_submit_event_progress(state: &mut State) {
     let mut found_new = false;
     for player_idx in 0..MAX_PLAYERS {
         let Some(si) = state.score_info[player_idx].as_ref() else {
             continue;
         };
-        let Some(progress) = scores::get_groovestats_submit_itl_progress_for_side(
+        let progress = scores::get_groovestats_submit_event_progress_for_side(
             si.chart.short_hash.as_str(),
             si.side,
-        ) else {
+        );
+        if progress.is_empty() {
             continue;
-        };
-        found_new |= state.itl_progress[player_idx].is_none();
-        let page_count = progress.overlay_pages.len().max(1);
-        if state.itl_progress[player_idx].is_none() {
-            state.itl_overlay_page[player_idx] = 0;
-        } else if state.itl_overlay_page[player_idx] >= page_count {
-            state.itl_overlay_page[player_idx] = page_count - 1;
         }
-        state.itl_progress[player_idx] = Some(progress);
+        found_new |= state.event_progress[player_idx].is_empty();
+        let page_count = event_overlay_page_count(progress.as_slice());
+        if state.event_progress[player_idx].is_empty() {
+            state.event_overlay_page[player_idx] = 0;
+        } else if state.event_overlay_page[player_idx] >= page_count {
+            state.event_overlay_page[player_idx] = page_count - 1;
+        }
+        state.event_progress[player_idx] = progress;
     }
-    if found_new && !state.itl_overlay_shown {
-        state.itl_overlay_visible = true;
-        state.itl_overlay_shown = true;
+    if found_new && !state.event_overlay_shown {
+        state.event_overlay_visible = true;
+        state.event_overlay_shown = true;
     }
 }
 
@@ -3221,7 +3250,7 @@ pub fn update(state: &mut State, dt: f32) {
     } else {
         clear_lobby_disconnect_holds(state);
     }
-    sync_submit_itl_progress(state);
+    sync_submit_event_progress(state);
     sync_missing_submit_status_fallbacks(state);
     sync_submit_record_sfx(state);
     sync_nice_sfx(state);
@@ -3479,17 +3508,127 @@ const fn stage_in_stinger_texture_key(failed: bool, disqualified: bool) -> Optio
     }
 }
 
-fn build_stage_in_stinger(state: &State) -> Vec<Actor> {
-    if state.screen_elapsed > EVAL_STAGE_IN_TOTAL_SECONDS {
-        return vec![];
-    }
-
+fn stage_in_result(state: &State) -> (bool, bool) {
     let failed = all_joined_players_failed(state);
     let disqualified = state
         .score_info
         .iter()
         .flatten()
         .any(|score| score.disqualified);
+    (failed, disqualified)
+}
+
+#[inline(always)]
+fn stage_in_stinger_seconds(failed: bool) -> f32 {
+    if visual_styles::srpg10_active() {
+        if failed {
+            SRPG10_EVAL_FAILED_SECONDS
+        } else {
+            SRPG10_EVAL_PASSED_SECONDS
+        }
+    } else {
+        EVAL_STAGE_IN_TOTAL_SECONDS
+    }
+}
+
+fn build_srpg10_failed_stinger() -> Vec<Actor> {
+    vec![
+        act!(sprite(visual_styles::SRPG10_EVAL_PAINT):
+            align(0.5, 0.5):
+            xy(screen_center_x(), screen_center_y()):
+            zoomto(screen_width() + 350.0, screen_height() + 200.0):
+            z(SRPG10_EVAL_Z):
+            decelerate(0.75): zoomto(screen_width() + 250.0, screen_height()):
+            sleep(SRPG10_EVAL_FAILED_SECONDS - 1.25):
+            linear(0.5): alpha(0.0):
+            linear(0.0): visible(false)
+        ),
+        act!(quad:
+            align(0.5, 0.5):
+            xy(screen_center_x(), screen_center_y()):
+            zoomto(screen_width(), screen_height()):
+            diffuse(0.0, 0.0, 0.0, 0.8):
+            z(SRPG10_EVAL_Z + 1):
+            sleep(1.5):
+            linear(0.375): alpha(1.0):
+            sleep(0.625):
+            linear(0.5): alpha(0.0):
+            linear(0.0): visible(false)
+        ),
+        act!(sprite(visual_styles::SRPG10_EVAL_RED_LINES):
+            align(0.5, 0.5):
+            xy(screen_center_x(), screen_center_y()):
+            zoom(SRPG10_EVAL_ZOOM):
+            z(SRPG10_EVAL_Z + 2):
+            alpha(0.0):
+            accelerate(0.1): alpha(1.0):
+            sleep(SRPG10_EVAL_FAILED_SECONDS - 0.6):
+            linear(0.5): alpha(0.0):
+            linear(0.0): visible(false)
+        ),
+        act!(sprite(visual_styles::SRPG10_EVAL_EXPEDITION_FAILED):
+            align(0.5, 0.5):
+            xy(screen_center_x(), screen_center_y()):
+            zoom(SRPG10_EVAL_ZOOM):
+            z(SRPG10_EVAL_Z + 3):
+            alpha(0.0):
+            linear(0.375): alpha(1.0):
+            sleep(SRPG10_EVAL_FAILED_SECONDS - 0.875):
+            linear(0.5): alpha(0.0):
+            linear(0.0): visible(false)
+        ),
+    ]
+}
+
+fn build_srpg10_passed_stinger() -> Vec<Actor> {
+    vec![
+        act!(sprite(visual_styles::SRPG10_EVAL_PASS_BG):
+            align(0.5, 0.5):
+            xy(screen_center_x(), screen_center_y()):
+            zoom(SRPG10_EVAL_ZOOM):
+            z(SRPG10_EVAL_Z):
+            sleep(0.5):
+            linear(0.5): alpha(0.0):
+            linear(0.0): visible(false)
+        ),
+        act!(sprite(visual_styles::SRPG10_EVAL_GOLD_LEAF_BG):
+            align(0.5, 0.5):
+            xy(screen_center_x(), screen_center_y()):
+            zoom(SRPG10_EVAL_ZOOM):
+            z(SRPG10_EVAL_Z + 1):
+            decelerate(0.1): zoom(0.5):
+            sleep(0.4):
+            linear(0.5): alpha(0.0):
+            linear(0.0): visible(false)
+        ),
+        act!(sprite(visual_styles::SRPG10_EVAL_VICTORY):
+            align(0.5, 0.5):
+            xy(screen_center_x(), screen_center_y()):
+            zoom(0.5):
+            z(SRPG10_EVAL_Z + 2):
+            decelerate(0.1): zoom(0.3):
+            sleep(0.4):
+            linear(0.5): alpha(0.0):
+            linear(0.0): visible(false)
+        ),
+    ]
+}
+
+fn build_stage_in_stinger(state: &State) -> Vec<Actor> {
+    let (failed, disqualified) = stage_in_result(state);
+    let failed = failed || disqualified;
+    if state.screen_elapsed > stage_in_stinger_seconds(failed) {
+        return vec![];
+    }
+
+    if visual_styles::srpg10_active() {
+        return if failed {
+            build_srpg10_failed_stinger()
+        } else {
+            build_srpg10_passed_stinger()
+        };
+    }
+
     let texture_key = stage_in_stinger_texture_key(failed, disqualified);
     let mut actors = vec![act!(quad:
         align(0.0, 0.0): xy(0.0, 0.0):
@@ -3524,8 +3663,8 @@ fn build_stage_in_stinger(state: &State) -> Vec<Actor> {
 ///   WaitingForGrooveStats
 ///        v   (GS submit reaches a terminal status; the network layer
 ///             times out / errors on its own, so no extra cap here)
-///   WaitingForItlOverlayDismissal
-///        v   (user dismisses the overlay; skipped entirely if no ITL
+///   WaitingForEventOverlayDismissal
+///        v   (user dismisses the overlay; skipped entirely if no event
 ///             overlay opened)
 ///   Ready
 /// ```
@@ -3533,7 +3672,7 @@ fn build_stage_in_stinger(state: &State) -> Vec<Actor> {
 enum AutoScreenshotPhase {
     IntroPlaying,
     WaitingForGrooveStats,
-    WaitingForItlOverlayDismissal,
+    WaitingForEventOverlayDismissal,
     Ready,
 }
 
@@ -3544,7 +3683,8 @@ pub(crate) fn auto_screenshot_ready(state: &State) -> bool {
 fn auto_screenshot_phase(state: &State) -> AutoScreenshotPhase {
     let elapsed = state.screen_elapsed;
 
-    if elapsed < auto_screenshot_intro_done_seconds() {
+    let (failed, disqualified) = stage_in_result(state);
+    if elapsed < auto_screenshot_intro_done_seconds(failed || disqualified) {
         return AutoScreenshotPhase::IntroPlaying;
     }
 
@@ -3552,20 +3692,20 @@ fn auto_screenshot_phase(state: &State) -> AutoScreenshotPhase {
         return AutoScreenshotPhase::WaitingForGrooveStats;
     }
 
-    if state.itl_overlay_visible {
-        return AutoScreenshotPhase::WaitingForItlOverlayDismissal;
+    if state.event_overlay_visible {
+        return AutoScreenshotPhase::WaitingForEventOverlayDismissal;
     }
 
     AutoScreenshotPhase::Ready
 }
 
 #[inline(always)]
-fn auto_screenshot_intro_done_seconds() -> f32 {
-    EVAL_STAGE_IN_TOTAL_SECONDS.max(eval_panes::pane_stats::rolling_numbers_approach_seconds())
+fn auto_screenshot_intro_done_seconds(failed: bool) -> f32 {
+    stage_in_stinger_seconds(failed).max(eval_panes::pane_stats::rolling_numbers_approach_seconds())
 }
 
 /// True if any player expected a GrooveStats submit and the response
-/// (terminal status or ITL progress) hasn't arrived yet.
+/// (terminal status or event progress) hasn't arrived yet.
 fn waiting_for_groovestats_submit(state: &State) -> bool {
     for player_idx in 0..MAX_PLAYERS {
         let Some(si) = state.score_info[player_idx].as_ref() else {
@@ -3574,7 +3714,7 @@ fn waiting_for_groovestats_submit(state: &State) -> bool {
         if !si.expected_groovestats_submit {
             continue;
         }
-        if state.itl_progress[player_idx].is_some() {
+        if !state.event_progress[player_idx].is_empty() {
             continue;
         }
         let status = scores::get_groovestats_submit_ui_status_for_side(
@@ -3585,11 +3725,11 @@ fn waiting_for_groovestats_submit(state: &State) -> bool {
         match status {
             None | Some(score_data::GrooveStatsSubmitUiStatus::Submitting) => return true,
             Some(score_data::GrooveStatsSubmitUiStatus::Submitted) => {
-                if scores::get_groovestats_submit_itl_progress_for_side(
+                if !scores::get_groovestats_submit_event_progress_for_side(
                     si.chart.short_hash.as_str(),
                     si.side,
                 )
-                .is_some()
+                .is_empty()
                 {
                     return true;
                 }
@@ -3800,9 +3940,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     if state.auto_advance_seconds.is_some() {
         return ScreenAction::None;
     }
-    if state.itl_overlay_visible {
+    if state.event_overlay_visible {
         let play_style = profile::get_session_play_style();
-        let mut shift_itl_page = |controller: profile_data::PlayerSide, dir: i32| {
+        let mut shift_event_page = |controller: profile_data::PlayerSide, dir: i32| {
             let player_idx = profile_data::runtime_player_index(play_style, controller);
             let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
                 return false;
@@ -3810,24 +3950,24 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             if si.side != controller {
                 return false;
             }
-            let Some(progress) = state.itl_progress.get(player_idx).and_then(|p| p.as_ref()) else {
+            let Some(progress) = state.event_progress.get(player_idx) else {
                 return false;
             };
-            let page_count = progress.overlay_pages.len();
+            let page_count = event_overlay_page_count(progress.as_slice());
             if page_count <= 1 {
                 return false;
             }
-            let old_page = state.itl_overlay_page[player_idx];
-            state.itl_overlay_page[player_idx] = (state.itl_overlay_page[player_idx] as i32 + dir)
-                .rem_euclid(page_count as i32)
-                as usize;
-            state.itl_overlay_page[player_idx] != old_page
+            let old_page = state.event_overlay_page[player_idx];
+            state.event_overlay_page[player_idx] =
+                (state.event_overlay_page[player_idx] as i32 + dir).rem_euclid(page_count as i32)
+                    as usize;
+            state.event_overlay_page[player_idx] != old_page
         };
         if let Some(side) = chord_side {
             let undo = state.menu_lr_undo[profile_data::player_side_index(side)];
             state.menu_lr_undo[profile_data::player_side_index(side)] = 0;
             if undo != 0 {
-                let _ = shift_itl_page(side, i32::from(undo));
+                let _ = shift_event_page(side, i32::from(undo));
             }
             return ScreenAction::RequestScreenshot(Some(side));
         }
@@ -3836,12 +3976,12 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             | VirtualAction::p1_start
             | VirtualAction::p2_back
             | VirtualAction::p2_start => {
-                state.itl_overlay_visible = false;
+                state.event_overlay_visible = false;
                 ScreenAction::None
             }
             VirtualAction::p1_left | VirtualAction::p1_menu_left => {
                 state.menu_lr_undo[profile_data::player_side_index(profile_data::PlayerSide::P1)] =
-                    if shift_itl_page(profile_data::PlayerSide::P1, -1) {
+                    if shift_event_page(profile_data::PlayerSide::P1, -1) {
                         1
                     } else {
                         0
@@ -3850,7 +3990,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             }
             VirtualAction::p1_right | VirtualAction::p1_menu_right => {
                 state.menu_lr_undo[profile_data::player_side_index(profile_data::PlayerSide::P1)] =
-                    if shift_itl_page(profile_data::PlayerSide::P1, 1) {
+                    if shift_event_page(profile_data::PlayerSide::P1, 1) {
                         -1
                     } else {
                         0
@@ -3859,7 +3999,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             }
             VirtualAction::p2_left | VirtualAction::p2_menu_left => {
                 state.menu_lr_undo[profile_data::player_side_index(profile_data::PlayerSide::P2)] =
-                    if shift_itl_page(profile_data::PlayerSide::P2, -1) {
+                    if shift_event_page(profile_data::PlayerSide::P2, -1) {
                         1
                     } else {
                         0
@@ -3868,7 +4008,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             }
             VirtualAction::p2_right | VirtualAction::p2_menu_right => {
                 state.menu_lr_undo[profile_data::player_side_index(profile_data::PlayerSide::P2)] =
-                    if shift_itl_page(profile_data::PlayerSide::P2, 1) {
+                    if shift_event_page(profile_data::PlayerSide::P2, 1) {
                         -1
                     } else {
                         0
@@ -4687,7 +4827,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
         }
     }
 
-    if !state.itl_overlay_visible {
+    if !state.event_overlay_visible {
         let progress_single = [(0, player_side)];
         let progress_vs = [
             (0, profile_data::PlayerSide::P1),
@@ -4700,10 +4840,11 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
                 &progress_single
             };
         for &(player_idx, side) in progress_players {
-            let Some(progress) = state.itl_progress[player_idx].as_ref() else {
+            let progress = state.event_progress[player_idx].as_slice();
+            if progress.is_empty() {
                 continue;
-            };
-            actors.extend(eval_panes::build_itl_progress_box(
+            }
+            actors.extend(eval_panes::build_event_progress_boxes(
                 asset_manager,
                 side,
                 play_style != profile_data::PlayStyle::Versus,
@@ -5687,7 +5828,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
     // ScreenEvaluationStage in stinger (standard Simply Love visual style).
     actors.extend(build_stage_in_stinger(state));
 
-    if state.itl_overlay_visible {
+    if state.event_overlay_visible {
         let progress_single = [(0, player_side)];
         let progress_vs = [
             (0, profile_data::PlayerSide::P1),
@@ -5701,10 +5842,13 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
             };
         let mut panels = Vec::with_capacity(progress_players.len());
         for &(player_idx, side) in progress_players {
-            let Some(progress) = state.itl_progress[player_idx].as_ref() else {
+            let Some((progress, page_idx)) = event_progress_page(
+                state.event_progress[player_idx].as_slice(),
+                state.event_overlay_page[player_idx],
+            ) else {
                 continue;
             };
-            panels.push((side, progress, state.itl_overlay_page[player_idx]));
+            panels.push((side, progress, page_idx));
         }
         let overlay_song = state
             .score_info
@@ -5712,7 +5856,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
             .flatten()
             .next()
             .map(|si| si.song.as_ref());
-        actors.extend(eval_panes::build_itl_event_overlay(
+        actors.extend(eval_panes::build_event_overlay(
             asset_manager,
             play_style != profile_data::PlayStyle::Versus,
             overlay_song,

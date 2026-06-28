@@ -89,6 +89,7 @@ pub enum SubRowId {
     WriteCurrentScreen,
     MenuMusic,
     VisualStyle,
+    ThemeVariant,
     Replays,
     PerPlayerGlobalOffsets,
     PackIniOffsets,

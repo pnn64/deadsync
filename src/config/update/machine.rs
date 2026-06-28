@@ -243,6 +243,17 @@ pub fn update_visual_style(style: VisualStyle) {
     save_without_keymaps();
 }
 
+pub fn update_srpg_variant(variant: SrpgVariant) {
+    {
+        let mut cfg = lock_config();
+        if cfg.srpg_variant == variant {
+            return;
+        }
+        cfg.srpg_variant = variant;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_machine_show_select_profile(enabled: bool) {
     {
         let mut cfg = lock_config();

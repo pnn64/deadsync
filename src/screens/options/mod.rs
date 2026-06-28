@@ -7,7 +7,7 @@ use crate::config::{
     MachineFont, MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode,
     RandomBackgroundMode, SelectMusicItlRankMode, SelectMusicItlWheelMode,
     SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SelectMusicSongSelectBgMode,
-    SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SimpleIni, SyncGraphMode,
+    SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SimpleIni, SrpgVariant, SyncGraphMode,
     VersionOverlaySide, VisualStyle,
 };
 use crate::game::parsing::{noteskin as noteskin_parser, simfile as song_loading};

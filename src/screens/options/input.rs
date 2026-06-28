@@ -448,6 +448,9 @@ pub(super) fn apply_submenu_choice_delta(
             SubRowId::VisualStyle => {
                 config::update_visual_style(VisualStyle::from_choice(new_index))
             }
+            SubRowId::ThemeVariant => {
+                config::update_srpg_variant(SrpgVariant::from_choice(new_index))
+            }
             SubRowId::Replays => config::update_machine_enable_replays(enabled),
             SubRowId::PerPlayerGlobalOffsets => {
                 config::update_machine_allow_per_player_global_offsets(enabled)

@@ -1,6 +1,5 @@
 use super::{
-    GameplayCoreState,
-    GrooveStatsSubmitPlayerJob, gameplay_run_passed, gameplay_side_for_player,
+    GameplayCoreState, GrooveStatsSubmitPlayerJob, gameplay_run_passed, gameplay_side_for_player,
     get_cached_player_leaderboard_itl_self_rank_for_side,
     get_or_fetch_player_leaderboards_for_side, groovestats_eval_state_from_gameplay,
     groovestats_judgment_counts,
@@ -29,7 +28,10 @@ use std::sync::{Arc, Mutex};
 
 use bincode::{Decode, Encode};
 use deadsync_rules::{judgment, scroll::ScrollSpeedSetting};
-use deadsync_score::{CachedItlScore, ItlEvalState, ItlEventProgress, ItlOverlayPage};
+use deadsync_score::{
+    CachedItlScore, EventProgressKind, EventStatImprovement, ItlEvalState, ItlEventProgress,
+    ItlOverlayPage,
+};
 
 const ITL_FILE_NAME: &str = "ITL2026.json";
 const ITL_WHEEL_FETCH_ENTRIES: usize = 5;
@@ -1005,10 +1007,13 @@ pub fn save_itl_data_from_gameplay(
             .unwrap_or(new_entry.clone());
         let prev_entry = prev.unwrap_or_default();
         let mut event_progress = ItlEventProgress {
+            kind: EventProgressKind::Itl,
             name: itl_event_name(song),
             is_doubles: current_entry.steps_type.eq_ignore_ascii_case("double"),
             score_hundredths: current_run_ex,
             score_delta_hundredths: delta_i32(current_run_ex, prev_entry.ex),
+            rate_hundredths: None,
+            rate_delta_hundredths: None,
             current_points: current_entry.points,
             point_delta: delta_i32(current_entry.points, prev_entry.points),
             current_ranking_points: current_totals.ranking_points,
@@ -1022,6 +1027,7 @@ pub fn save_itl_data_from_gameplay(
             total_passes: current_entry.passes.max(1),
             clear_type_before: Some(prev_entry.clear_type),
             clear_type_after: Some(current_entry.clear_type),
+            stat_improvements: Vec::new(),
             overlay_pages: Vec::new(),
         };
         event_progress.overlay_pages = overlay_pages(&event_progress, None, &[]);
@@ -1284,7 +1290,48 @@ fn stat_improvement_lines(progress: Option<&GrooveStatsSubmitApiProgress>) -> Ve
     lines
 }
 
-fn summary_page_text(
+fn srpg_stat_improvement_lines(progress: &ItlEventProgress) -> Vec<String> {
+    let srpg_stats = ["tp", "lp", "bb", "gold", "jp"];
+    progress
+        .stat_improvements
+        .iter()
+        .filter(|improvement| {
+            improvement.gained > 0
+                && srpg_stats
+                    .iter()
+                    .any(|stat| improvement.name.eq_ignore_ascii_case(stat))
+        })
+        .map(|improvement| {
+            format!(
+                "+{} {}",
+                improvement.gained,
+                improvement.name.to_uppercase()
+            )
+        })
+        .collect()
+}
+
+fn srpg_summary_page_text(progress: &ItlEventProgress) -> String {
+    let rate = progress.rate_hundredths.unwrap_or(100);
+    let rate_delta = progress.rate_delta_hundredths.unwrap_or(0);
+    let mut text = format!(
+        "Skill Improvements\n\n\
+         {:.2}% ({:+.2}%) at\n\
+         {:.2}x ({:+.2}x) rate",
+        progress.score_hundredths as f64 / 100.0,
+        progress.score_delta_hundredths as f64 / 100.0,
+        rate as f64 / 100.0,
+        rate_delta as f64 / 100.0,
+    );
+    let lines = srpg_stat_improvement_lines(progress);
+    if !lines.is_empty() {
+        text.push_str("\n\n");
+        text.push_str(lines.join("\n").as_str());
+    }
+    trim_blank_lines(text)
+}
+
+fn itl_summary_page_text(
     progress: &ItlEventProgress,
     submit_progress: Option<&GrooveStatsSubmitApiProgress>,
 ) -> String {
@@ -1316,6 +1363,16 @@ fn summary_page_text(
         text.push_str(lines.join("\n").as_str());
     }
     trim_blank_lines(text)
+}
+
+fn summary_page_text(
+    progress: &ItlEventProgress,
+    submit_progress: Option<&GrooveStatsSubmitApiProgress>,
+) -> String {
+    match progress.kind {
+        EventProgressKind::Itl => itl_summary_page_text(progress, submit_progress),
+        EventProgressKind::Srpg => srpg_summary_page_text(progress),
+    }
 }
 
 fn append_grouped_reward_text(out: &mut String, reward_type: &str, descriptions: &[String]) {
@@ -1462,8 +1519,8 @@ pub(super) fn handle_submit_player_unlocks(
             }
         }
     }
-    if let Some(rpg) = response.rpg.as_ref() {
-        handle_submit_event_unlocks(player, rpg);
+    if let Some(srpg) = response.srpg.as_ref() {
+        handle_submit_event_unlocks(player, srpg);
     }
     if accept_itl_response && let Some(itl) = response.itl.as_ref() {
         handle_submit_event_unlocks(player, itl);
@@ -1485,7 +1542,25 @@ fn clear_type_change(progress: Option<&GrooveStatsSubmitApiProgress>) -> (Option
     (None, None)
 }
 
-pub(super) fn progress_from_submit(
+fn event_stat_improvements(
+    progress: Option<&GrooveStatsSubmitApiProgress>,
+) -> Vec<EventStatImprovement> {
+    let Some(progress) = progress else {
+        return Vec::new();
+    };
+    progress
+        .stat_improvements
+        .iter()
+        .filter(|improvement| improvement.gained > 0)
+        .map(|improvement| EventStatImprovement {
+            name: improvement.name.clone(),
+            gained: improvement.gained,
+            current: improvement.current,
+        })
+        .collect()
+}
+
+fn itl_progress_from_submit(
     player: &GrooveStatsSubmitPlayerJob,
     response: &GrooveStatsSubmitApiPlayer,
 ) -> Option<ItlEventProgress> {
@@ -1493,10 +1568,13 @@ pub(super) fn progress_from_submit(
     let score_hundredths = player.itl_score_hundredths?;
     let (clear_type_before, clear_type_after) = clear_type_change(itl.progress.as_ref());
     let mut progress = ItlEventProgress {
+        kind: EventProgressKind::Itl,
         name: event_name_or_unknown(itl.name.as_str()).to_string(),
         is_doubles: itl.is_doubles,
         score_hundredths,
         score_delta_hundredths: itl.score_delta,
+        rate_hundredths: None,
+        rate_delta_hundredths: None,
         current_points: itl.top_score_points,
         point_delta: delta_i32(itl.top_score_points, itl.prev_top_score_points),
         current_ranking_points: itl.current_ranking_point_total,
@@ -1513,6 +1591,7 @@ pub(super) fn progress_from_submit(
         total_passes: itl.total_passes,
         clear_type_before,
         clear_type_after,
+        stat_improvements: event_stat_improvements(itl.progress.as_ref()),
         overlay_pages: Vec::new(),
     };
     progress.overlay_pages = overlay_pages(
@@ -1521,6 +1600,73 @@ pub(super) fn progress_from_submit(
         itl.itl_leaderboard.as_slice(),
     );
     Some(progress)
+}
+
+fn srpg_progress_from_submit(
+    player: &GrooveStatsSubmitPlayerJob,
+    response: &GrooveStatsSubmitApiPlayer,
+) -> Option<ItlEventProgress> {
+    let srpg = response.srpg.as_ref()?;
+    let score_delta = if response.result.eq_ignore_ascii_case("score-added") {
+        player.score_10000 as i32
+    } else {
+        srpg.score_delta
+    };
+    let rate_delta = if response.result.eq_ignore_ascii_case("score-added") {
+        player.rate_hundredths as i32
+    } else {
+        srpg.rate_delta
+    };
+    let mut progress = ItlEventProgress {
+        kind: EventProgressKind::Srpg,
+        name: event_name_or_unknown(srpg.name.as_str()).to_string(),
+        is_doubles: srpg.is_doubles,
+        score_hundredths: player.score_10000,
+        score_delta_hundredths: score_delta,
+        rate_hundredths: Some(player.rate_hundredths),
+        rate_delta_hundredths: Some(rate_delta),
+        current_points: srpg.top_score_points,
+        point_delta: delta_i32(srpg.top_score_points, srpg.prev_top_score_points),
+        current_ranking_points: srpg.current_ranking_point_total,
+        ranking_delta: delta_i32(
+            srpg.current_ranking_point_total,
+            srpg.previous_ranking_point_total,
+        ),
+        current_song_points: srpg.current_song_point_total,
+        song_delta: delta_i32(
+            srpg.current_song_point_total,
+            srpg.previous_song_point_total,
+        ),
+        current_ex_points: srpg.current_ex_point_total,
+        ex_delta: delta_i32(srpg.current_ex_point_total, srpg.previous_ex_point_total),
+        current_total_points: srpg.current_point_total,
+        total_delta: delta_i32(srpg.current_point_total, srpg.previous_point_total),
+        total_passes: srpg.total_passes,
+        clear_type_before: None,
+        clear_type_after: None,
+        stat_improvements: event_stat_improvements(srpg.progress.as_ref()),
+        overlay_pages: Vec::new(),
+    };
+    progress.overlay_pages = overlay_pages(
+        &progress,
+        srpg.progress.as_ref(),
+        srpg.srpg_leaderboard.as_slice(),
+    );
+    Some(progress)
+}
+
+pub(super) fn event_progress_from_submit(
+    player: &GrooveStatsSubmitPlayerJob,
+    response: &GrooveStatsSubmitApiPlayer,
+) -> Vec<ItlEventProgress> {
+    let mut progress = Vec::with_capacity(2);
+    if let Some(srpg) = srpg_progress_from_submit(player, response) {
+        progress.push(srpg);
+    }
+    if let Some(itl) = itl_progress_from_submit(player, response) {
+        progress.push(itl);
+    }
+    progress
 }
 
 #[inline(always)]

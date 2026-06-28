@@ -1,7 +1,7 @@
 use super::technique_bg;
 use crate::act;
 use crate::assets::visual_styles;
-use crate::config::{self, VisualStyle};
+use crate::config::{self, SrpgVariant, VisualStyle};
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
@@ -14,7 +14,7 @@ use std::sync::{
 // menu backgrounds stay phase-locked across screens while still honoring
 // fast/slow/paused menu animation controls.
 static GLOBAL_ELAPSED_BITS: AtomicU32 = AtomicU32::new(0.0_f32.to_bits());
-static SRPG9_BACKGROUND_KEY: OnceLock<Mutex<Option<Arc<str>>>> = OnceLock::new();
+static SRPG_BACKGROUND_KEY: OnceLock<Mutex<Option<Arc<str>>>> = OnceLock::new();
 
 const COLOR_ADD: [i32; 10] = [-1, 0, 0, -1, -1, -1, 0, 0, 0, 0];
 const DIFFUSE_ALPHA: [f32; 10] = [0.05, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.05, 0.1, 0.1];
@@ -120,7 +120,7 @@ impl State {
             return;
         }
         if matches!(style, VisualStyle::Srpg9) {
-            push_srpg9(out, &params);
+            push_srpg(out, &params);
             return;
         }
         self.tiled.push_at_elapsed(out, &params, elapsed_s);
@@ -145,11 +145,11 @@ fn push_shared_bg(out: &mut Vec<Actor>, x: f32, y: f32, rgba: [f32; 4], uv: [f32
     );
 }
 
-fn push_srpg9(out: &mut Vec<Actor>, params: &Params) {
+fn push_srpg(out: &mut Vec<Actor>, params: &Params) {
     out.reserve(3);
     let w = screen_width();
     let h = screen_height();
-    let background_key = srpg9_background_key();
+    let background_key = srpg_background_key();
     out.push(act!(quad:
         align(0.0, 0.0):
         xy(0.0, 0.0):
@@ -158,7 +158,7 @@ fn push_srpg9(out: &mut Vec<Actor>, params: &Params) {
         z(-100)
     ));
 
-    let mut tint = color::decorative_rgba(params.active_color_index);
+    let mut tint = srpg_background_tint(params.active_color_index);
     tint[0] = (tint[0] * 3.0).min(1.0);
     tint[1] = (tint[1] * 3.0).min(1.0);
     tint[2] = (tint[2] * 3.0).min(1.0);
@@ -179,17 +179,27 @@ fn push_srpg9(out: &mut Vec<Actor>, params: &Params) {
     ));
 }
 
-pub fn set_srpg9_background_key(key: Option<String>) {
-    if let Ok(mut slot) = SRPG9_BACKGROUND_KEY.get_or_init(|| Mutex::new(None)).lock() {
+pub fn set_srpg_background_key(key: Option<String>) {
+    if let Ok(mut slot) = SRPG_BACKGROUND_KEY.get_or_init(|| Mutex::new(None)).lock() {
         *slot = key.map(Arc::<str>::from);
     }
 }
 
-fn srpg9_background_key() -> Arc<str> {
+fn srpg_background_key() -> Arc<str> {
     let fallback = || Arc::<str>::from(visual_styles::shared_background_texture_key());
-    match SRPG9_BACKGROUND_KEY.get_or_init(|| Mutex::new(None)).lock() {
+    match SRPG_BACKGROUND_KEY.get_or_init(|| Mutex::new(None)).lock() {
         Ok(slot) => slot.clone().unwrap_or_else(fallback),
         Err(_) => fallback(),
+    }
+}
+
+fn srpg_background_tint(active_color_index: i32) -> [f32; 4] {
+    let Ok(cfg) = std::panic::catch_unwind(config::get) else {
+        return color::decorative_rgba(active_color_index);
+    };
+    match cfg.srpg_variant {
+        SrpgVariant::Srpg10 if cfg.visual_style.is_srpg() => color::srpg10_rgba(active_color_index),
+        _ => color::decorative_rgba(active_color_index),
     }
 }
 
