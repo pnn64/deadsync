@@ -12019,6 +12019,44 @@ mod tests {
         assert_eq!(active_column_cue(&cues, 9.0).unwrap().start_time, 3.0);
     }
 
+    #[test]
+    fn active_column_cues_returns_overlapping_window() {
+        // Two consecutive cues overlapping by the fade time, as the builder emits
+        // them: cue2.start == cue1.end - fade.
+        let fade = CROSSOVER_CUE_FADE_SECONDS;
+        let cues = [
+            ColumnCue {
+                start_time: 1.0,
+                duration: 0.5,
+                columns: Vec::new(),
+            },
+            ColumnCue {
+                start_time: 1.5 - fade,
+                duration: 0.5,
+                columns: Vec::new(),
+            },
+        ];
+
+        // Before anything starts: empty.
+        assert!(active_column_cues(&cues, 0.99).is_empty());
+        // Only the first cue is active well inside its window.
+        let only_first = active_column_cues(&cues, 1.2);
+        assert_eq!(only_first.len(), 1);
+        assert_eq!(only_first[0].start_time, 1.0);
+        // Inside the overlap region both cues render simultaneously.
+        let overlap = active_column_cues(&cues, 1.5 - fade + 0.01);
+        assert_eq!(overlap.len(), 2);
+        assert_eq!(overlap[0].start_time, 1.0);
+        assert_eq!(overlap[1].start_time, 1.5 - fade);
+        // After the first cue ends, only the second remains.
+        let only_second = active_column_cues(&cues, 1.6);
+        assert_eq!(only_second.len(), 1);
+        assert_eq!(only_second[0].start_time, 1.5 - fade);
+        // After both end: empty.
+        assert!(active_column_cues(&cues, 9.0).is_empty());
+        assert!(active_column_cues(&[], 2.0).is_empty());
+    }
+
     fn xover_anno(beat: f32, note_count: u8, column_mask: u8, is_crossover: bool) -> CrossoverRow {
         debug_assert_eq!(
             u32::from(note_count),

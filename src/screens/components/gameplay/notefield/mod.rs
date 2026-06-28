@@ -19,8 +19,8 @@ use deadsync_gameplay::{
     COMBO_THOUSAND_MILESTONE_DURATION, ComboMilestoneKind, FantasticWindowOptions,
     GameplayErrorBarTrim, HELD_MISS_TOTAL_DURATION, HOLD_JUDGMENT_TOTAL_DURATION,
     RECEPTOR_Y_OFFSET_FROM_CENTER, RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, TapExplosionOptions,
-    VisualEffects, active_column_cue, blue_fantastic_window_ms, column_flash_duration,
-    gameplay_error_bar_trim_max_window_ix, hold_explosion_active,
+    VisualEffects, active_column_cue, active_column_cues, blue_fantastic_window_ms,
+    column_flash_duration, gameplay_error_bar_trim_max_window_ix, hold_explosion_active,
     hold_explosion_enabled_for_options, hold_head_render_flags, let_go_head_beat,
     scroll_receptor_y, song_lua_column_y_offset, song_lua_note_hidden,
 };
@@ -1763,13 +1763,18 @@ pub(crate) fn build_bundles(
             } else {
                 1.0
             };
-            if let Some(cue) = active_column_cue(state.crossover_cues(player_idx), current_time) {
-                let duration_real = cue.duration / rate;
-                let elapsed_real = (current_time - cue.start_time) / rate;
-                let alpha_mul = column_cue_alpha(elapsed_real, duration_real);
-                if alpha_mul > 0.0 {
-                    let lane_width = ScrollSpeedSetting::ARROW_SPACING * field_zoom;
-                    let cue_height = crossover_cue_height(screen_height());
+            let active_cues = active_column_cues(state.crossover_cues(player_idx), current_time);
+            if !active_cues.is_empty() {
+                let lane_width = ScrollSpeedSetting::ARROW_SPACING * field_zoom;
+                let cue_height = crossover_cue_height(screen_height());
+
+                for cue in active_cues {
+                    let duration_real = cue.duration / rate;
+                    let elapsed_real = (current_time - cue.start_time) / rate;
+                    let alpha_mul = column_cue_alpha(elapsed_real, duration_real);
+                    if alpha_mul <= 0.0 {
+                        continue;
+                    }
                     let mut countdown_text: Option<(f32, f32, i32)> = None;
 
                     if profile.column_countdown && duration_real >= 5.0 {

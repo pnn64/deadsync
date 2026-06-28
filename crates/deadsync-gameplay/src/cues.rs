@@ -53,6 +53,23 @@ pub fn active_column_cue(cues: &[ColumnCue], current_time: f32) -> Option<&Colum
     idx.checked_sub(1).and_then(|i| cues.get(i))
 }
 
+// Returns every cue whose [start_time, start_time + duration] window contains
+// `current_time`, as a contiguous slice in chronological order.
+#[inline]
+pub fn active_column_cues(cues: &[ColumnCue], current_time: f32) -> &[ColumnCue] {
+    let end = cues.partition_point(|cue| cue.start_time <= current_time);
+    let mut begin = end;
+    while begin > 0 {
+        let cue = &cues[begin - 1];
+        if current_time < cue.start_time + cue.duration {
+            begin -= 1;
+        } else {
+            break;
+        }
+    }
+    &cues[begin..end]
+}
+
 // Lead-in/out fade applied to every crossover cue.
 pub const CROSSOVER_CUE_FADE_SECONDS: f32 = 0.075;
 
