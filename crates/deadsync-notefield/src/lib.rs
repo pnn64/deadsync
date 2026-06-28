@@ -1590,12 +1590,12 @@ mod tests {
     #[test]
     fn column_cue_alpha_fades_in_and_out() {
         assert!((column_cue_alpha(0.0, 1.0) - 0.0).abs() <= 1e-6);
-        assert!((column_cue_alpha(0.0375, 1.0) - 0.4375).abs() <= 1e-6);
-        assert!((column_cue_alpha(0.075, 1.0) - 0.75).abs() <= 1e-6);
+        assert!((column_cue_alpha(0.0375, 1.0) - 0.75).abs() <= 1e-6);
+        assert!((column_cue_alpha(0.075, 1.0) - 1.0).abs() <= 1e-6);
         assert!((column_cue_alpha(0.15, 1.0) - 1.0).abs() <= 1e-6);
         assert!((column_cue_alpha(0.5, 1.0) - 1.0).abs() <= 1e-6);
-        assert!((column_cue_alpha(0.925, 1.0) - 0.75).abs() <= 1e-6);
-        assert!((column_cue_alpha(0.95, 1.0) - 0.5555556).abs() <= 1e-6);
+        assert!((column_cue_alpha(0.925, 1.0) - 1.0).abs() <= 1e-6);
+        assert!((column_cue_alpha(0.95, 1.0) - 0.8888889).abs() <= 1e-6);
         assert!((column_cue_alpha(1.0, 1.0) - 0.0).abs() <= 1e-6);
     }
 
@@ -1603,7 +1603,7 @@ mod tests {
     fn column_cue_alpha_rejects_invalid_ranges() {
         assert_eq!(column_cue_alpha(-0.1, 1.0), 0.0);
         assert_eq!(column_cue_alpha(1.1, 1.0), 0.0);
-        assert_eq!(column_cue_alpha(0.1, 0.3), 0.0);
+        assert_eq!(column_cue_alpha(0.05, 0.1), 0.0);
         assert_eq!(column_cue_alpha(f32::NAN, 1.0), 0.0);
         assert_eq!(column_cue_alpha(0.1, f32::INFINITY), 0.0);
     }

@@ -2,7 +2,7 @@ use crate::style::*;
 use crate::*;
 use deadsync_rules::judgment::{JudgeGrade, TimingWindow};
 
-const COLUMN_CUE_FADE_TIME: f32 = 0.15;
+const COLUMN_CUE_FADE_TIME: f32 = 0.075;
 
 #[derive(Clone, Copy, Debug)]
 pub struct JudgmentTiltParams {
