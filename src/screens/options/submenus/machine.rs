@@ -8,12 +8,6 @@ pub(in crate::screens::options) const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
-        id: SubRowId::ThemeVariant,
-        label: lookup_key("OptionsMachine", "ThemeVariant"),
-        choices: SRPG_VARIANT_CHOICES,
-        inline: true,
-    },
-    SubRow {
         id: SubRowId::Font,
         label: lookup_key("OptionsMachine", "MachineFont"),
         choices: &[
@@ -247,14 +241,6 @@ pub(in crate::screens::options) const MACHINE_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsMachineHelp",
             "VisualStyleHelp",
-        ))],
-    },
-    Item {
-        id: ItemId::MchThemeVariant,
-        name: lookup_key("OptionsMachine", "ThemeVariant"),
-        help: &[HelpEntry::Paragraph(lookup_key(
-            "OptionsMachineHelp",
-            "ThemeVariantHelp",
         ))],
     },
     Item {
@@ -524,11 +510,6 @@ impl ChoiceEnum for VisualStyle {
     const DEFAULT: Self = Self::Hearts;
 }
 
-impl ChoiceEnum for SrpgVariant {
-    const ALL: &'static [Self] = &[Self::Srpg9, Self::Srpg10];
-    const DEFAULT: Self = Self::Srpg9;
-}
-
 pub(in crate::screens::options) const VISUAL_STYLE_CHOICES: &[Choice] = &[
     literal_choice("❤"),
     literal_choice("↖"),
@@ -542,9 +523,6 @@ pub(in crate::screens::options) const VISUAL_STYLE_CHOICES: &[Choice] = &[
     literal_choice("🌀"),
     literal_choice("💪"),
 ];
-
-pub(in crate::screens::options) const SRPG_VARIANT_CHOICES: &[Choice] =
-    &[literal_choice("SRPG9"), literal_choice("SRPG10")];
 
 pub(in crate::screens::options) const COLOR_CHOICES: &[Choice] = &[
     literal_choice("0"),

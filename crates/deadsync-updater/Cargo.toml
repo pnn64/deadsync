@@ -8,7 +8,7 @@ license = "GPL-3.0"
 deadlib-platform = { path = "../deadlib-platform" }
 deadsync-version = { path = "../deadsync-version" }
 flate2 = "1.1.9"
-log = "0.4.33"
+log = "0.4.32"
 rand = "0.10.1"
 semver = "1.0.28"
 serde = { version = "1.0.228", features = ["derive"] }

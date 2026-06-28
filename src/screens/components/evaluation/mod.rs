@@ -14,8 +14,8 @@ mod utils;
 
 pub(crate) use utils::{eval_style_alpha, pane_origin_x as test_input_pane_origin_x};
 
-pub use event_progress::build_event_overlay;
-pub use event_progress::build_event_progress_boxes;
+pub use event_progress::build_itl_event_overlay;
+pub use event_progress::build_itl_progress_box;
 pub use pane_column::build_column_judgments_pane;
 pub use pane_gs_records::build_arrowcloud_records_pane;
 pub use pane_gs_records::build_gs_ex_records_pane;

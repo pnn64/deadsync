@@ -1,4 +1,4 @@
-use crate::config::{self, SrpgVariant, VisualStyle};
+use crate::config::{self, VisualStyle};
 
 pub struct Assets {
     pub select_color: &'static str,
@@ -220,44 +220,9 @@ pub const ASSETS: [Assets; VisualStyle::ALL.len()] = [
     },
 ];
 
-pub const SRPG10_ASSETS: Assets = Assets {
-    select_color: "visual_styles/srpg10/select_color.png",
-    shared_background: "visual_styles/srpg10/shared_background.png",
-    effects: effect_assets!("srpg10", "", "", "", ""),
-    shared_background_video: Some("assets/graphics/visual_styles/srpg10/background_video.mp4"),
-    menu_music: "assets/music/SRPG10 (loop).ogg",
-    select_color_size: [244, 219],
-    shared_background_size: [2581, 1452],
-};
-
-pub const SRPG10_TITLE_LOGO: &str = "srpg10_logo_main.png";
-pub const SRPG10_EVAL_FAILED_SFX: &str = "assets/sounds/srpg10_eval_failed.ogg";
-pub const SRPG10_EVAL_PASSED_SFX: &str = "assets/sounds/srpg10_eval_passed.ogg";
-pub const SRPG10_GAMEOVER_MUSIC: &str = "assets/music/SRPG10-GameOver.ogg";
-pub const SRPG10_EVAL_PAINT: &str = "visual_styles/srpg10/eval/paint.png";
-pub const SRPG10_EVAL_RED_LINES: &str = "visual_styles/srpg10/eval/red_lines.png";
-pub const SRPG10_EVAL_EXPEDITION_FAILED: &str = "visual_styles/srpg10/eval/expedition_failed.png";
-pub const SRPG10_EVAL_PASS_BG: &str = "visual_styles/srpg10/eval/pass_bg.png";
-pub const SRPG10_EVAL_GOLD_LEAF_BG: &str = "visual_styles/srpg10/eval/gold_leaf_background.png";
-pub const SRPG10_EVAL_VICTORY: &str = "visual_styles/srpg10/eval/victory.png";
-
-pub const SRPG10_EVAL_TEXTURES: [&str; 6] = [
-    SRPG10_EVAL_PAINT,
-    SRPG10_EVAL_RED_LINES,
-    SRPG10_EVAL_EXPEDITION_FAILED,
-    SRPG10_EVAL_PASS_BG,
-    SRPG10_EVAL_GOLD_LEAF_BG,
-    SRPG10_EVAL_VICTORY,
-];
-
 #[inline(always)]
 pub fn current_style() -> VisualStyle {
     std::panic::catch_unwind(|| config::get().visual_style).unwrap_or(VisualStyle::Hearts)
-}
-
-#[inline(always)]
-pub fn current_srpg_variant() -> SrpgVariant {
-    std::panic::catch_unwind(|| config::get().srpg_variant).unwrap_or(SrpgVariant::Srpg9)
 }
 
 #[inline(always)]
@@ -266,81 +231,57 @@ pub fn for_style(style: VisualStyle) -> &'static Assets {
 }
 
 #[inline(always)]
-pub fn for_style_and_variant(style: VisualStyle, variant: SrpgVariant) -> &'static Assets {
-    if style.is_srpg() && variant == SrpgVariant::Srpg10 {
-        &SRPG10_ASSETS
-    } else {
-        for_style(style)
-    }
-}
-
-#[inline(always)]
-pub fn current_assets() -> &'static Assets {
-    for_style_and_variant(current_style(), current_srpg_variant())
-}
-
-#[inline(always)]
-pub fn srpg10_active() -> bool {
-    current_style().is_srpg() && current_srpg_variant() == SrpgVariant::Srpg10
-}
-
-pub fn all_assets() -> impl Iterator<Item = &'static Assets> {
-    ASSETS.iter().chain(std::iter::once(&SRPG10_ASSETS))
-}
-
-#[inline(always)]
-pub fn title_logo_texture_key() -> Option<&'static str> {
-    srpg10_active().then_some(SRPG10_TITLE_LOGO)
-}
-
-#[inline(always)]
 pub fn select_color_texture_key() -> &'static str {
-    current_assets().select_color
+    for_style(current_style()).select_color
 }
 
 #[inline(always)]
 pub fn shared_background_texture_key() -> &'static str {
-    current_assets().shared_background
+    for_style(current_style()).shared_background
 }
 
 #[inline(always)]
 pub fn titlemenu_flycenter_texture_key() -> &'static str {
-    current_assets().effects.titlemenu_flycenter
+    for_style(current_style()).effects.titlemenu_flycenter
 }
 
 #[inline(always)]
 pub fn titlemenu_flytop_texture_key() -> &'static str {
-    current_assets().effects.titlemenu_flytop
+    for_style(current_style()).effects.titlemenu_flytop
 }
 
 #[inline(always)]
 pub fn titlemenu_flybottom_texture_key() -> &'static str {
-    current_assets().effects.titlemenu_flybottom
+    for_style(current_style()).effects.titlemenu_flybottom
 }
 
 #[inline(always)]
 pub fn gameplayin_splode_texture_key() -> &'static str {
-    current_assets().effects.gameplayin_splode
+    for_style(current_style()).effects.gameplayin_splode
 }
 
 #[inline(always)]
 pub fn gameplayin_minisplode_texture_key() -> &'static str {
-    current_assets().effects.gameplayin_minisplode
+    for_style(current_style()).effects.gameplayin_minisplode
 }
 
 #[inline(always)]
 pub fn combo_100milestone_splode_texture_key() -> &'static str {
-    current_assets().effects.combo_100milestone_splode
+    for_style(current_style()).effects.combo_100milestone_splode
 }
 
 #[inline(always)]
 pub fn combo_100milestone_minisplode_texture_key() -> &'static str {
-    current_assets().effects.combo_100milestone_minisplode
+    for_style(current_style())
+        .effects
+        .combo_100milestone_minisplode
 }
 
 #[inline(always)]
 pub fn combo_1000milestone_swoosh_texture_key() -> &'static str {
-    current_assets().effects.combo_1000milestone_swoosh
+    for_style(current_style())
+        .effects
+        .combo_1000milestone_swoosh
 }
 
 #[inline(always)]
@@ -354,27 +295,12 @@ pub fn effect_zoom_scale(texture_key: &str) -> f32 {
 
 #[inline(always)]
 pub fn shared_background_video_asset_path() -> Option<&'static str> {
-    current_assets().shared_background_video
+    for_style(current_style()).shared_background_video
 }
 
 #[inline(always)]
 pub fn menu_music_asset_path() -> &'static str {
-    current_assets().menu_music
-}
-
-#[inline(always)]
-pub fn srpg10_gameover_music_path() -> std::path::PathBuf {
-    deadlib_platform::dirs::app_dirs().resolve_asset_path(SRPG10_GAMEOVER_MUSIC)
-}
-
-#[inline(always)]
-pub fn srpg10_faction_name(color_index: i32) -> &'static str {
-    match color_index.rem_euclid(12) {
-        0..=2 => "Unaffiliated",
-        3..=5 => "Democratic People's Republic of Timing",
-        6..=8 => "Footspeed Empire",
-        _ => "Stamina Nation",
-    }
+    for_style(current_style()).menu_music
 }
 
 /// Returns the absolute path to the menu music file that should play for the
@@ -386,12 +312,7 @@ pub fn srpg10_faction_name(color_index: i32) -> &'static str {
 /// the bundle.
 pub fn menu_music_resolved_path() -> std::path::PathBuf {
     let style = current_style();
-    let folder = if style.is_srpg() {
-        current_srpg_variant().as_str()
-    } else {
-        style.as_str()
-    };
-    let folder_rel = format!("assets/music/menu/{}", folder.to_ascii_lowercase());
+    let folder_rel = format!("assets/music/menu/{}", style.as_str().to_ascii_lowercase());
     if let Some(p) = crate::assets::audio_folder::random_music_path(&folder_rel) {
         return p;
     }
@@ -406,10 +327,9 @@ pub fn menu_music_resolved_path() -> std::path::PathBuf {
 /// plays.
 pub fn bundled_music_paths() -> Vec<std::path::PathBuf> {
     use std::collections::BTreeSet;
-    let mut rels: BTreeSet<&'static str> = all_assets().map(|assets| assets.menu_music).collect();
+    let mut rels: BTreeSet<&'static str> = ASSETS.iter().map(|assets| assets.menu_music).collect();
     rels.insert("assets/music/select_course (loop).ogg");
     rels.insert("assets/music/credits.ogg");
-    rels.insert(SRPG10_GAMEOVER_MUSIC);
 
     let dirs = deadlib_platform::dirs::app_dirs();
     rels.into_iter()
@@ -419,18 +339,18 @@ pub fn bundled_music_paths() -> Vec<std::path::PathBuf> {
 
 #[inline(always)]
 pub fn select_color_aspect(style: VisualStyle) -> f32 {
-    let size = for_style_and_variant(style, current_srpg_variant()).select_color_size;
+    let size = for_style(style).select_color_size;
     size[0] as f32 / size[1] as f32
 }
 
 #[inline(always)]
 pub fn select_color_zoom_scale(style: VisualStyle) -> f32 {
-    566.0 / for_style_and_variant(style, current_srpg_variant()).select_color_size[1] as f32
+    566.0 / for_style(style).select_color_size[1] as f32
 }
 
 #[inline(always)]
 pub fn is_shared_background_texture(key: &str) -> bool {
-    all_assets().any(|asset| asset.shared_background == key)
+    ASSETS.iter().any(|asset| asset.shared_background == key)
 }
 
 const fn style_index(style: VisualStyle) -> usize {

@@ -1058,8 +1058,6 @@ pub(super) fn row_shows_all_choices_inline(id: RowId) -> bool {
         || id == RowId::Appearance
         || id == RowId::Attacks
         || id == RowId::HideLightType
-        || id == RowId::SmxFsrDisplay
-        || id == RowId::SmxPadInputDisplay
 }
 
 #[inline(always)]

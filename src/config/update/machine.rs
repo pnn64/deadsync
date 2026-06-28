@@ -123,20 +123,6 @@ pub fn update_smx_panel_lights(enabled: bool) {
     save_without_keymaps();
 }
 
-pub fn update_smx_underglow_theme(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.smx_underglow_theme == enabled {
-            return;
-        }
-        cfg.smx_underglow_theme = enabled;
-    }
-    save_without_keymaps();
-    if enabled {
-        send_smx_underglow_color();
-    }
-}
-
 /// Persist the built-in default pad preset (Low/Medium/High). Used as the
 /// fallback config flashed to a managed pad when no saved config resolves.
 pub fn update_smx_default_pad_config(preset: crate::config::SmxPadPreset) {
@@ -253,17 +239,6 @@ pub fn update_visual_style(style: VisualStyle) {
             return;
         }
         cfg.visual_style = style;
-    }
-    save_without_keymaps();
-}
-
-pub fn update_srpg_variant(variant: SrpgVariant) {
-    {
-        let mut cfg = lock_config();
-        if cfg.srpg_variant == variant {
-            return;
-        }
-        cfg.srpg_variant = variant;
     }
     save_without_keymaps();
 }

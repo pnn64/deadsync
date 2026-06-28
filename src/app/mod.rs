@@ -21,10 +21,7 @@ use crate::act;
 use crate::assets::{AssetManager, PRESENT_TEXTURE_CONTEXT, TextureUploadBudget, visual_styles};
 use crate::config::{self, DisplayMode};
 use crate::game::parsing::simfile as song_loading;
-use crate::game::{
-    GameplayCoreState, gameplay_play_style_from_profile, gameplay_player_side_from_profile,
-    gameplay_tick_mode_from_profile, profile, scores, stage_stats,
-};
+use crate::game::{GameplayCoreState, profile, scores, stage_stats};
 use crate::screens::{
     DensityGraphSlot, DensityGraphSource, Screen as CurrentScreen, ScreenAction,
     SongOffsetSyncChange, credits, evaluation, evaluation_summary, gameover, gameplay, init,
@@ -80,13 +77,14 @@ use deadsync_core::{input::MAX_PLAYERS, song_time::SongTimeNs, timing::ROWS_PER_
 use deadsync_gameplay::{
     CourseDisplayTiming, CourseDisplayTotals, GameplayConfig, GameplayFailType, GameplaySession,
     GameplayViewport, LeadInTiming, ReplayInputEdge, ReplayOffsetSnapshot,
-    course_display_totals_for_chart,
+    course_display_totals_for_chart, gameplay_player_side_from_profile,
+    gameplay_play_style_from_profile, gameplay_tick_mode_from_profile,
 };
 use deadsync_input as logical_input;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, PadEvent, VirtualAction};
 use deadsync_input_fsr as fsr_input;
-use deadsync_input_native::{GpSystemEvent, PadBackend};
+use deadsync_input_native::GpSystemEvent;
 use deadsync_lights::{
     self as lights, ButtonLight, CabinetLight, HideFlags, Mode as LightMode, Player as LightPlayer,
 };
@@ -330,7 +328,11 @@ fn gameplay_note_lights(note: &Note) -> bool {
         )
 }
 
-fn blink_pad_lights(lights: &mut lights::Manager, state: &GameplayCoreState, column: usize) {
+fn blink_pad_lights(
+    lights: &mut lights::Manager,
+    state: &GameplayCoreState,
+    column: usize,
+) {
     if let Some((player, button)) = pad_light_for_col(state, column) {
         lights.blink_button(player, button);
     }
@@ -537,9 +539,6 @@ fn itl_event_intro_name(pack_group: &str) -> Option<String> {
 fn event_intro_name_for_pack(pack_group: &str) -> Option<String> {
     let name = pack_group.trim();
     let lower = name.to_ascii_lowercase();
-    if lower.contains("stamina rpg 10") || lower.contains("srpg10") {
-        return Some("Stamina RPG 10".to_string());
-    }
     if lower.contains("stamina rpg 9") || lower.contains("srpg9") {
         return Some("Stamina RPG 9".to_string());
     }
@@ -3148,22 +3147,19 @@ fn prewarm_gameplay_assets(
         seen_model_textures: &mut HashSet<String>,
         noteskin: &crate::game::parsing::noteskin::Noteskin,
     ) {
-        noteskin.for_each_slot(|slot| {
-            let key = slot.texture_key();
+        noteskin.for_each_texture_key(|key| {
             if seen.insert(key.to_owned()) {
                 assets.ensure_texture_for_key(backend, key);
             }
         });
-        noteskin.for_each_slot(|slot| {
-            if slot.model.is_some() {
-                prewarm_model_texture_key(
-                    assets,
-                    backend,
-                    seen,
-                    seen_model_textures,
-                    slot.texture_key(),
-                )
-            }
+        noteskin.for_each_model_slot(|slot| {
+            prewarm_model_texture_key(
+                assets,
+                backend,
+                seen,
+                seen_model_textures,
+                slot.texture_key(),
+            )
         });
     }
 
@@ -6433,42 +6429,6 @@ impl App {
         true
     }
 
-    fn try_gameplay_reload(&mut self, event_loop: &ActiveEventLoop, label: &str) -> bool {
-        let simfile_path = if let Some(gs) = self.state.screens.gameplay_state.as_ref() {
-            Some(gs.song().simfile_path.clone())
-        } else if self.state.screens.current_screen == CurrentScreen::Evaluation {
-            restart_payload_from_eval(&self.state.screens.evaluation_state.score_info)
-                .map(|(song, ..)| song.simfile_path.clone())
-        } else {
-            None
-        };
-        let Some(simfile_path) = simfile_path else {
-            log::warn!("Ignored {label} reload: no restartable stage state.");
-            return false;
-        };
-
-        let updated_song = match song_loading::reload_song_in_cache(simfile_path.as_path()) {
-            Ok(song) => song,
-            Err(e) => {
-                log::warn!(
-                    "Ignored {label} reload for '{}': {e}",
-                    simfile_path.display()
-                );
-                return false;
-            }
-        };
-        select_music::refresh_from_song_cache(&mut self.state.screens.select_music_state);
-
-        if !self.try_gameplay_restart(event_loop, label) {
-            return false;
-        }
-
-        if let Some(po_state) = self.state.screens.player_options_state.as_mut() {
-            let _ = replace_song_arc_if_same_simfile(&mut po_state.song, &updated_song);
-        }
-        true
-    }
-
     /// SL-zmod parity (`BGAnimations/ScreenEvaluation common/Shared/RestartHandler.lua`):
     /// Ctrl+P on the Evaluation screen re-enters the just-played chart in
     /// Practice mode. Mirrors `try_gameplay_restart`, but routes to
@@ -6486,91 +6446,6 @@ impl App {
             self.handle_action(ScreenAction::Navigate(CurrentScreen::Practice), event_loop)
         {
             log::error!("Failed to enter Practice with {label}: {e}");
-            return false;
-        }
-        true
-    }
-
-    fn try_practice_reload(&mut self, event_loop: &ActiveEventLoop, label: &str) -> bool {
-        if self.state.screens.current_screen != CurrentScreen::Practice {
-            return false;
-        }
-        let Some((
-            simfile_path,
-            old_song,
-            music_rate,
-            scroll_speed,
-            active_color_index,
-            old_hashes,
-            old_difficulties,
-        )) = self.state.screens.practice_state.as_ref().map(|ps| {
-            let gs = &ps.gameplay;
-            (
-                gs.song().simfile_path.clone(),
-                gs.song_arc(),
-                gs.music_rate(),
-                [gs.scroll_speed_for_player(0), gs.scroll_speed_for_player(1)],
-                gs.active_color_index(),
-                [
-                    gs.charts()[0].short_hash.clone(),
-                    gs.charts()[1].short_hash.clone(),
-                ],
-                [
-                    gs.charts()[0].difficulty.clone(),
-                    gs.charts()[1].difficulty.clone(),
-                ],
-            )
-        })
-        else {
-            log::warn!("Ignored {label} reload: no practice stage state.");
-            return false;
-        };
-
-        let updated_song = match song_loading::reload_song_in_cache(simfile_path.as_path()) {
-            Ok(song) => song,
-            Err(e) => {
-                log::warn!(
-                    "Ignored {label} reload for '{}': {e}",
-                    simfile_path.display()
-                );
-                return false;
-            }
-        };
-        select_music::refresh_from_song_cache(&mut self.state.screens.select_music_state);
-
-        // Editing notes changes a chart's hash, so the old hash will not exist
-        // in the reloaded song. Resolve each slot by its stable difficulty steps
-        // index (derived from the pre-reload chart) and take the reloaded chart's
-        // new hash so the restart selects the same difficulty.
-        let target_chart_type = profile::get_session_play_style().chart_type();
-        let new_hashes: [String; MAX_PLAYERS] = std::array::from_fn(|slot| {
-            let steps_index = old_song
-                .steps_index_for_chart_hash(target_chart_type, &old_hashes[slot])
-                .or_else(|| {
-                    deadsync_chart::song::standard_difficulty_index(&old_difficulties[slot])
-                })
-                .unwrap_or(0);
-            updated_song
-                .chart_for_steps_index(target_chart_type, steps_index)
-                .map(|chart| chart.short_hash.clone())
-                .unwrap_or_default()
-        });
-
-        if !self.prepare_restart_player_options(
-            updated_song,
-            [new_hashes[0].as_str(), new_hashes[1].as_str()],
-            music_rate,
-            scroll_speed,
-            active_color_index,
-            CurrentScreen::Practice,
-        ) {
-            log::warn!("Ignored {label} reload: could not rebuild practice options.");
-            return false;
-        }
-        if let Err(e) =
-            self.handle_action(ScreenAction::Navigate(CurrentScreen::Practice), event_loop)
-        {
-            log::error!("Failed to reload Practice with {label}: {e}");
             return false;
         }
         true
@@ -6651,21 +6526,12 @@ impl App {
         // is immediately replaced by a course summary, this is the cue tied to
         // the player's actual exit from gameplay.
         let failed = crate::screens::evaluation::all_joined_players_failed(&eval_snapshot);
-        if visual_styles::srpg10_active() {
-            let sfx = if failed {
-                visual_styles::SRPG10_EVAL_FAILED_SFX
-            } else {
-                visual_styles::SRPG10_EVAL_PASSED_SFX
-            };
-            deadsync_audio_stream::play_screen_sfx(sfx);
+        let folder = if failed {
+            "assets/sounds/evaluation_fail"
         } else {
-            let folder = if failed {
-                "assets/sounds/evaluation_fail"
-            } else {
-                "assets/sounds/evaluation_pass"
-            };
-            crate::assets::audio_folder::play_random_screen_sfx(folder);
-        }
+            "assets/sounds/evaluation_pass"
+        };
+        crate::assets::audio_folder::play_random_screen_sfx(folder);
 
         if self
             .state
@@ -6893,23 +6759,10 @@ impl App {
 
         profile::set_session_joined(true, true);
         profile::set_session_play_style(profile_data::PlayStyle::Versus);
-        let show_select_profile = config::get().machine_show_select_profile;
-        let join_profile = if show_select_profile {
-            profile_data::ActiveProfile::Guest
-        } else {
-            profile::get_default_profile_for_side(join_side)
-        };
-        let joined_profile = profile::set_active_profile_for_side(join_side, join_profile);
+        let guest_profile =
+            profile::set_active_profile_for_side(join_side, profile_data::ActiveProfile::Guest);
         self.state.session.combo_carry[profile_data::player_side_index(join_side)] =
-            joined_profile.current_combo;
-        if let Some(backend) = self.backend.as_mut() {
-            self.dynamic_media.set_profile_avatar_for_side(
-                &mut self.asset_manager,
-                backend,
-                join_side,
-                joined_profile.avatar_path.clone(),
-            );
-        }
+            guest_profile.current_combo;
 
         if screen == CurrentScreen::SelectStyle {
             self.state.screens.select_style_state.selected_index = 1;
@@ -6919,7 +6772,7 @@ impl App {
             // Per Simply-Love-SM5#741: when the Select Profile screen is on,
             // prompt the late-joining player with the profile-select widget
             // instead of silently leaving them as Guest.
-            if show_select_profile {
+            if config::get().machine_show_select_profile {
                 crate::screens::select_music::open_late_join_profile_overlay(
                     &mut self.state.screens.select_music_state,
                     join_side,
@@ -7303,26 +7156,26 @@ impl App {
             self.state.screens.current_screen,
             CurrentScreen::Gameplay | CurrentScreen::Practice
         ) {
-            crate::screens::components::shared::visual_style_bg::set_srpg_background_key(None);
+            crate::screens::components::shared::visual_style_bg::set_srpg9_background_key(None);
             return;
         }
 
         let cfg = config::get();
-        let path = (cfg.visual_style.is_srpg() && cfg.show_video_backgrounds)
+        let path = (cfg.visual_style == config::VisualStyle::Srpg9 && cfg.show_video_backgrounds)
             .then(visual_styles::shared_background_video_asset_path)
             .flatten()
             .map(|path| dirs::app_dirs().resolve_asset_path(path));
 
         let Some(backend) = self.backend.as_mut() else {
-            crate::screens::components::shared::visual_style_bg::set_srpg_background_key(None);
+            crate::screens::components::shared::visual_style_bg::set_srpg9_background_key(None);
             return;
         };
 
         let key =
             self.dynamic_media
                 .set_background(&mut self.asset_manager, backend, path, ui_time_sec);
-        let srpg_key = if key == "__black" { None } else { Some(key) };
-        crate::screens::components::shared::visual_style_bg::set_srpg_background_key(srpg_key);
+        let srpg9_key = if key == "__black" { None } else { Some(key) };
+        crate::screens::components::shared::visual_style_bg::set_srpg9_background_key(srpg9_key);
     }
 
     fn append_gameplay_offset_prompt_actors(&self, actors: &mut Vec<Actor>) {
@@ -7439,39 +7292,11 @@ impl App {
             CurrentScreen::Gameplay => {
                 if let Some(gs) = &mut self.state.screens.gameplay_state {
                     crate::screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(gs);
-                    let smx_overlay_alpha = match self.state.shell.transition {
-                        TransitionState::FadingIn { elapsed, duration } => {
-                            if duration <= gameplay::TRANSITION_IN_RESTART_DURATION + 0.01 {
-                                // Restart: the in-transition black fades over the whole short
-                                // duration; mirror it so the overlays fade in with the black.
-                                (elapsed / duration).clamp(0.0, 1.0)
-                            } else {
-                                // Normal entry: black holds solid until the last
-                                // TRANSITION_IN_BLACK_FADE_DURATION seconds, then lifts.
-                                let fade_start =
-                                    duration - gameplay::TRANSITION_IN_BLACK_FADE_DURATION;
-                                ((elapsed - fade_start)
-                                    / gameplay::TRANSITION_IN_BLACK_FADE_DURATION)
-                                    .clamp(0.0, 1.0)
-                            }
-                        }
-                        TransitionState::FadingOut { elapsed, .. } => {
-                            // Mirror the out-transition black quad: hold full opacity
-                            // during TRANSITION_OUT_DELAY then fade down as the black fades up.
-                            1.0 - ((elapsed - gameplay::TRANSITION_OUT_DELAY)
-                                / gameplay::TRANSITION_OUT_FADE_DURATION)
-                                .clamp(0.0, 1.0)
-                        }
-                        _ => 1.0,
-                    };
                     gameplay::push_actors(
                         &mut actors,
                         gs,
                         &self.asset_manager,
-                        gameplay::ActorViewOverride {
-                            smx_overlay_alpha,
-                            ..Default::default()
-                        },
+                        gameplay::ActorViewOverride::default(),
                     );
                 }
             }
@@ -8738,12 +8563,10 @@ impl App {
             }
         } else if self.state.screens.current_screen == CurrentScreen::SelectMusic {
             // Route screen-specific raw key handling (e.g., F7 fetch) to the screen
-            let action = crate::screens::select_music::handle_raw_key_event_with_modifiers(
+            let action = crate::screens::select_music::handle_raw_key_event(
                 &mut self.state.screens.select_music_state,
                 Some(&raw_key),
                 None,
-                self.state.shell.ctrl_held,
-                self.state.shell.shift_held,
             );
             if !matches!(action, ScreenAction::None) {
                 if let Err(e) = self.handle_action(action, event_loop) {
@@ -8752,16 +8575,6 @@ impl App {
                 return true;
             }
         } else if self.state.screens.current_screen == CurrentScreen::Practice {
-            if raw_key.pressed
-                && !raw_key.repeat
-                && raw_key.code == KeyCode::KeyR
-                && self.state.shell.ctrl_held
-                && self.state.shell.shift_held
-                && config::get().keyboard_features
-            {
-                self.try_practice_reload(event_loop, "Ctrl+Shift+R");
-                return true;
-            }
             if let Some(ps) = self.state.screens.practice_state.as_mut() {
                 let (consumed, action) =
                     crate::screens::practice::handle_raw_key_event(ps, &raw_key);
@@ -8788,11 +8601,7 @@ impl App {
                 && config::get().keyboard_features
                 && self.state.session.course_run.is_none()
             {
-                if self.state.shell.shift_held {
-                    self.try_gameplay_reload(event_loop, "Ctrl+Shift+R");
-                } else {
-                    self.try_gameplay_restart(event_loop, "Ctrl+R");
-                }
+                self.try_gameplay_restart(event_loop, "Ctrl+R");
                 return true;
             }
             if raw_key.pressed
@@ -9067,10 +8876,6 @@ impl App {
         let prev_course_music = prev == CurrentScreen::SelectCourse;
         let target_credits_music = target == CurrentScreen::Credits;
         let prev_credits_music = prev == CurrentScreen::Credits;
-        let target_srpg10_gameover_music =
-            target == CurrentScreen::GameOver && visual_styles::srpg10_active();
-        let prev_srpg10_gameover_music =
-            prev == CurrentScreen::GameOver && visual_styles::srpg10_active();
         let keep_preview = (prev == CurrentScreen::SelectMusic
             && target == CurrentScreen::PlayerOptions)
             || (prev == CurrentScreen::PlayerOptions && target == CurrentScreen::SelectMusic);
@@ -9104,14 +8909,6 @@ impl App {
                     volume: 1.0,
                 });
             }
-        } else if target_srpg10_gameover_music {
-            if !prev_srpg10_gameover_music {
-                commands.push(Command::PlayMusic {
-                    path: visual_styles::srpg10_gameover_music_path(),
-                    looped: false,
-                    volume: 1.0,
-                });
-            }
         } else if (prev_menu_music || prev_course_music || prev_credits_music)
             && target != CurrentScreen::Gameplay
         {
@@ -9123,11 +8920,7 @@ impl App {
         if matches!(prev, CurrentScreen::Gameplay | CurrentScreen::Practice)
             && !matches!(target, CurrentScreen::Gameplay | CurrentScreen::Practice)
         {
-            if !target_menu_music
-                && !target_course_music
-                && !target_credits_music
-                && !target_srpg10_gameover_music
-            {
+            if !target_menu_music && !target_course_music && !target_credits_music {
                 commands.push(Command::StopMusic);
             }
             if let Some(backend) = self.backend.as_mut() {
@@ -9237,35 +9030,6 @@ impl App {
         self.state.session.course_individual_stage_indices.clear();
         self.pad_config_sync.reset_signatures();
         debug!("Session timer started.");
-    }
-
-    fn sync_profile_load_state(
-        &mut self,
-        profiles: &[profile_data::Profile; profile_data::PLAYER_SLOTS],
-    ) {
-        self.state.session.combo_carry = [profiles[0].current_combo, profiles[1].current_combo];
-        let play_style = profile::get_session_play_style();
-        let active_side = profile::get_session_player_side();
-        let active_ix = profile_data::player_side_index(active_side);
-        self.state.session.preferred_difficulty_index = profiles[active_ix]
-            .last_played(play_style)
-            .difficulty_index
-            .min(STANDARD_DIFFICULTY_COUNT.saturating_sub(1));
-
-        if let Some(backend) = self.backend.as_mut() {
-            self.dynamic_media.set_profile_avatar_for_side(
-                &mut self.asset_manager,
-                backend,
-                profile_data::PlayerSide::P1,
-                profiles[0].avatar_path.clone(),
-            );
-            self.dynamic_media.set_profile_avatar_for_side(
-                &mut self.asset_manager,
-                backend,
-                profile_data::PlayerSide::P2,
-                profiles[1].avatar_path.clone(),
-            );
-        }
     }
 
     fn handle_screen_state_on_fade(&mut self, prev: CurrentScreen, target: CurrentScreen) {
@@ -9390,8 +9154,6 @@ impl App {
             };
             self.state.screens.profile_load_state = profile_load::init();
             self.state.screens.profile_load_state.active_color_index = current_color_index;
-            let profiles = profile::load_default_profiles_for_joined_sides();
-            self.sync_profile_load_state(&profiles);
             profile_load::on_enter(&mut self.state.screens.profile_load_state);
         } else if target == CurrentScreen::PlayerOptions {
             if prev == CurrentScreen::SelectCourse {
@@ -9559,12 +9321,8 @@ impl App {
         if target == CurrentScreen::Practice {
             deadsync_audio_stream::stop_music();
             if let Some(mut po_state) = self.state.screens.player_options_state.take() {
-                // Preserve the editor cursor/selection across a returning
-                // PlayerOptions->Practice trip and across an in-place Practice
-                // chart reload (Ctrl+Shift+R re-enters Practice from Practice).
-                let edit_snapshot = ((prev == CurrentScreen::PlayerOptions
+                let edit_snapshot = (prev == CurrentScreen::PlayerOptions
                     && po_state.return_screen == CurrentScreen::Practice)
-                    || prev == CurrentScreen::Practice)
                     .then(|| {
                         self.state
                             .screens
@@ -9849,8 +9607,10 @@ impl App {
                     })
                     .collect::<Vec<_>>()
             });
-            let replay_offsets = replay_pending.as_ref().map(|payload| ReplayOffsetSnapshot {
-                beat0_time_ns: payload.replay_beat0_time_ns,
+            let replay_offsets = replay_pending.as_ref().map(|payload| {
+                ReplayOffsetSnapshot {
+                    beat0_time_ns: payload.replay_beat0_time_ns,
+                }
             });
             let replay_status_text = replay_pending.as_ref().map(|payload| {
                 Arc::<str>::from(format!(
@@ -10713,9 +10473,6 @@ impl ApplicationHandler<UserEvent> for App {
                             usize::from(*id),
                             backend
                         );
-                        if *backend == PadBackend::Smx {
-                            config::send_smx_underglow_color();
-                        }
                         if !*initial {
                             self.state.shell.gamepad_overlay_state = Some((
                                 format!(
@@ -10741,9 +10498,6 @@ impl ApplicationHandler<UserEvent> for App {
                             usize::from(*id),
                             backend
                         );
-                        if *backend == PadBackend::Smx {
-                            config::send_smx_underglow_color();
-                        }
                         if !*initial {
                             self.state.shell.gamepad_overlay_state = Some((
                                 format!(

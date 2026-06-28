@@ -6,7 +6,6 @@
 //! settings owned by the input backend.
 
 use std::fmt::Write as _;
-use std::path::Path;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PadConfigProfile {
@@ -214,68 +213,6 @@ pub fn parse(content: &str) -> Vec<PadConfigProfile> {
 
     out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
     out
-}
-
-pub fn load_path(path: &Path) -> std::io::Result<Vec<PadConfigProfile>> {
-    let content = std::fs::read_to_string(path)?;
-    Ok(parse(&content))
-}
-
-pub fn save_path(path: &Path, profiles: &[PadConfigProfile]) -> std::io::Result<()> {
-    std::fs::write(path, serialize(profiles))
-}
-
-#[allow(clippy::too_many_arguments)]
-pub fn upsert_path(
-    path: &Path,
-    name: &str,
-    backend: &str,
-    pad_type: Option<String>,
-    serial: Option<String>,
-    make_default: bool,
-    settings: Vec<(String, String)>,
-) -> std::io::Result<bool> {
-    let mut list = load_path(path).unwrap_or_default();
-    let changed = upsert_config(
-        &mut list,
-        name,
-        backend,
-        pad_type,
-        serial,
-        make_default,
-        settings,
-    );
-    if changed {
-        save_path(path, &list)?;
-    }
-    Ok(changed)
-}
-
-pub fn set_default_path(path: &Path, serial: &str, name: &str) -> std::io::Result<bool> {
-    let mut list = load_path(path).unwrap_or_default();
-    let changed = set_default_config(&mut list, serial, name);
-    if changed {
-        save_path(path, &list)?;
-    }
-    Ok(changed)
-}
-
-pub fn rename_path(path: &Path, old: &str, new: &str) -> std::io::Result<bool> {
-    let mut list = load_path(path).unwrap_or_default();
-    let changed = rename_config(&mut list, old, new);
-    if changed {
-        save_path(path, &list)?;
-    }
-    Ok(changed)
-}
-
-pub fn delete_path(path: &Path, name: &str) -> std::io::Result<bool> {
-    let mut list = load_path(path).unwrap_or_default();
-    let changed = delete_config(&mut list, name);
-    if changed {
-        save_path(path, &list)?;
-    }
-    Ok(changed)
 }
 
 #[allow(clippy::too_many_arguments)]

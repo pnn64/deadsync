@@ -1,6 +1,6 @@
 use crate::act;
 use crate::assets::{FontRole, current_machine_font_key_for_text};
-use crate::config::{self, MachineBarColor, SrpgVariant};
+use crate::config::{self, MachineBarColor};
 use deadlib_present::actors::{self, Actor, Background, SizeSpec};
 use deadlib_present::cache::{SharedStrCache, cached_shared_str};
 use deadlib_present::color;
@@ -88,20 +88,13 @@ fn bar_background(transparent: bool, context: ScreenBarContext) -> Option<Backgr
     match cfg.machine_bar_color.resolve(cfg.visual_style) {
         MachineBarColor::Default if transparent => None,
         MachineBarColor::Default => Some(Background::Color(color::rgba_hex("#a6a6a6"))),
-        MachineBarColor::Colored => Some(Background::Color(srpg_bar_rgba(&cfg))),
+        MachineBarColor::Colored => {
+            Some(Background::Color(color::srpg9_rgba(cfg.simply_love_color)))
+        }
         MachineBarColor::Transparent if matches!(context, ScreenBarContext::SelectMusic) => {
             Some(Background::Color([0.0, 0.0, 0.0, 0.5]))
         }
         MachineBarColor::Transparent => None,
-    }
-}
-
-fn srpg_bar_rgba(cfg: &config::Config) -> [f32; 4] {
-    match cfg.srpg_variant {
-        SrpgVariant::Srpg10 if cfg.visual_style.is_srpg() => {
-            color::srpg10_rgba(cfg.simply_love_color)
-        }
-        _ => color::srpg9_rgba(cfg.simply_love_color),
     }
 }
 

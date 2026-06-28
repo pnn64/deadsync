@@ -1,8 +1,6 @@
 use deadsync::test_support::notefield_bench;
 use deadsync_core::input::InputSource;
-use deadsync_gameplay::{
-    GameplayAction, GameplayAudioSnapshot, GameplayExit, handle_core_input, update_core,
-};
+use deadsync_gameplay::{GameplayAction, GameplayAudioSnapshot, GameplayExit, handle_core_input, update_core};
 use deadsync_input as input;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputBinding, InputEvent, Keymap, PadDir, PadEvent, PadId, VirtualAction};
@@ -342,9 +340,12 @@ fn step_gameplay(
     checksum: u64,
     measured: bool,
 ) -> u64 {
-    let action = update_core(state, delta_time, GameplayAudioSnapshot::default(), || {
-        deadlib_platform::host_time::instant_nanos(Instant::now())
-    });
+    let action = update_core(
+        state,
+        delta_time,
+        GameplayAudioSnapshot::default(),
+        || deadlib_platform::host_time::instant_nanos(Instant::now()),
+    );
     let mut checksum = mix_checksum(checksum, checksum_state(state, action));
     if measured {
         checksum = mix_checksum(

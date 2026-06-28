@@ -68,7 +68,6 @@ pub enum ItemId {
     InpSmxConfig,
     InpSmxManagesPadConfig,
     InpSmxPanelLights,
-    InpSmxUnderglowTheme,
     InpSmxDefaultPadConfig,
     InpSmxSinglePadPlayer,
     InpSmxDefaultLightBrightness,
@@ -103,7 +102,6 @@ pub enum ItemId {
     MchWriteCurrentScreen,
     MchMenuMusic,
     MchVisualStyle,
-    MchThemeVariant,
     MchReplays,
     MchPerPlayerGlobalOffsets,
     MchPackIniOffsets,
@@ -371,7 +369,6 @@ pub const ITEMS: &[Item] = &[
         help: &[
             HelpEntry::Paragraph(lookup_key("OptionsHelp", "MachineOptionsHelp")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "VisualStyle")),
-            HelpEntry::Bullet(lookup_key("OptionsMachine", "ThemeVariant")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "BarColor")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "SelectProfile")),
             HelpEntry::Bullet(lookup_key("OptionsMachine", "SelectColor")),

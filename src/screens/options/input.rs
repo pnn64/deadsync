@@ -383,9 +383,6 @@ pub(super) fn apply_submenu_choice_delta(
         if row.id == SubRowId::SmxPanelLights {
             config::update_smx_panel_lights(yes_no_from_choice(new_index));
         }
-        if row.id == SubRowId::SmxUnderglowTheme {
-            config::update_smx_underglow_theme(yes_no_from_choice(new_index));
-        }
         if row.id == SubRowId::SmxManagesPadConfig {
             config::update_smx_manages_pad_config(yes_no_from_choice(new_index));
         }
@@ -450,9 +447,6 @@ pub(super) fn apply_submenu_choice_delta(
             SubRowId::MenuMusic => config::update_menu_music(enabled),
             SubRowId::VisualStyle => {
                 config::update_visual_style(VisualStyle::from_choice(new_index))
-            }
-            SubRowId::ThemeVariant => {
-                config::update_srpg_variant(SrpgVariant::from_choice(new_index))
             }
             SubRowId::Replays => config::update_machine_enable_replays(enabled),
             SubRowId::PerPlayerGlobalOffsets => {

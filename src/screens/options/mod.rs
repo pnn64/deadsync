@@ -7,10 +7,10 @@ use crate::config::{
     MachineFont, MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode,
     RandomBackgroundMode, SelectMusicItlRankMode, SelectMusicItlWheelMode,
     SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SelectMusicSongSelectBgMode,
-    SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SimpleIni, SrpgVariant, SyncGraphMode,
+    SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SimpleIni, SyncGraphMode,
     VersionOverlaySide, VisualStyle,
 };
-use crate::game::parsing::simfile as song_loading;
+use crate::game::parsing::{noteskin as noteskin_parser, simfile as song_loading};
 use crate::game::{course, profile, scores};
 use crate::screens::input as screen_input;
 use crate::screens::pack_sync as shared_pack_sync;

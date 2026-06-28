@@ -7,7 +7,7 @@ license = "GPL-3.0"
 [dependencies]
 deadsync-input = { path = "../deadsync-input" }
 deadsync-smx = { path = "../deadsync-smx" }
-log = "0.4.33"
+log = "0.4.32"
 
 [target.'cfg(windows)'.dependencies]
 hidapi = { version = "2.6.6", default-features = false, features = ["windows-native"] }

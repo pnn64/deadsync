@@ -40,7 +40,7 @@ pub use self::theme::{
     MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, RandomBackgroundMode,
     SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicPatternInfoMode,
     SelectMusicScoreboxPlacement, SelectMusicSongSelectBgMode, SelectMusicStepArtistBoxMode,
-    SelectMusicWheelStyle, SrpgVariant, SyncGraphMode, ThemeFlag, VersionOverlaySide, VisualStyle,
+    SelectMusicWheelStyle, SyncGraphMode, ThemeFlag, VersionOverlaySide, VisualStyle,
     auto_screenshot_bit, auto_screenshot_mask_from_str, auto_screenshot_mask_to_str,
 };
 pub use self::update::*;
@@ -159,8 +159,6 @@ pub struct Config {
     /// Light SMX pad panels with the per-arrow judgement colour during gameplay,
     /// plus a sustained colour for held freezes and rolls.
     pub smx_panel_lights: bool,
-    /// Set the SMX pad edge underglow LEDs to the player's theme colour.
-    pub smx_underglow_theme: bool,
     /// Built-in pad preset flashed as the fallback when DeadSync manages pad
     /// config and no saved config resolves for the pad.
     pub smx_default_pad_config: SmxPadPreset,
@@ -211,8 +209,6 @@ pub struct Config {
     pub version_overlay_side: VersionOverlaySide,
     /// Simply Love visual style used by shared menu art.
     pub visual_style: VisualStyle,
-    /// Variant used when the SRPG visual-style family is selected.
-    pub srpg_variant: SrpgVariant,
     /// Enable or disable animated gameplay background videos.
     pub show_video_backgrounds: bool,
     /// ITGmania RandomBackgroundMode. DeadSync currently implements RandomMovies.
@@ -413,7 +409,6 @@ impl Default for Config {
             smx_input: false,
             smx_manages_pad_config: false,
             smx_panel_lights: false,
-            smx_underglow_theme: false,
             smx_default_pad_config: SmxPadPreset::Low,
             smx_default_light_brightness: 100,
             software_renderer_threads: 1,
@@ -440,7 +435,6 @@ impl Default for Config {
             show_version_overlay: true,
             version_overlay_side: VersionOverlaySide::Right,
             visual_style: VisualStyle::Hearts,
-            srpg_variant: SrpgVariant::Srpg9,
             show_video_backgrounds: true,
             random_background_mode: RandomBackgroundMode::Off,
             machine_show_select_profile: true,

@@ -454,7 +454,9 @@ fn tool_is_available(name: &str) -> bool {
         .stdout(Stdio::null())
         .stderr(Stdio::null());
     suppress_console(&mut cmd);
-    cmd.status().map(|status| status.success()).unwrap_or(false)
+    cmd.status()
+        .map(|status| status.success())
+        .unwrap_or(false)
 }
 
 fn tool_command(name: &str) -> Command {

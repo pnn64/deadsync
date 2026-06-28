@@ -236,8 +236,8 @@ pub fn load_sync_analysis_chart(
     chart_ix: usize,
 ) -> Result<GameplayChartData, String> {
     let config = config::get();
-    let allow_cache_read =
-        (config.fastload || config.cachesongs) && !song_group_is_never_cached(&song.simfile_path);
+    let allow_cache_read = (config.fastload || config.cachesongs)
+        && !song_group_is_never_cached(&song.simfile_path);
     let verify_cache_freshness = !config.fastload;
     if allow_cache_read
         && let Some(mut charts) =

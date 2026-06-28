@@ -184,15 +184,6 @@ fn set_u8_if_changed(value: &mut u8, new_value: u8) -> bool {
     true
 }
 
-#[inline]
-fn set_value_if_changed<T: PartialEq>(value: &mut T, new_value: T) -> bool {
-    if *value == new_value {
-        return false;
-    }
-    *value = new_value;
-    true
-}
-
 #[inline(always)]
 pub fn tap_explosion_mask_for_window(window: &str) -> Option<TapExplosionMask> {
     match window {
@@ -3990,204 +3981,6 @@ where
         .unwrap_or(options.long_error_bar_min_samples);
 }
 
-pub fn load_player_options_section<F>(
-    has_any: bool,
-    mut get: F,
-    default: &PlayerOptionsData,
-) -> Option<PlayerOptionsData>
-where
-    F: FnMut(&str) -> Option<String>,
-{
-    if !has_any {
-        return None;
-    }
-
-    let mut options = default.clone();
-    load_visual_player_options(&mut options, &mut get);
-    load_timing_feedback_options(&mut options, &mut get);
-    load_error_bar_options(&mut options, &mut get);
-    if let Some(step_statistics) =
-        get("StepStatistics").and_then(|s| StepStatisticsMask::from_str(&s).ok())
-    {
-        options.step_statistics = step_statistics;
-    } else if let Some(step_statistics) =
-        get("DataVisualizations").and_then(|s| StepStatisticsMask::from_str(&s).ok())
-    {
-        options.step_statistics = step_statistics;
-    }
-    options.step_stats_extra = get("StepStatsExtra")
-        .and_then(|s| StepStatsExtra::from_str(&s).ok())
-        .unwrap_or(options.step_stats_extra);
-    options.target_score = get("TargetScore")
-        .and_then(|s| TargetScoreSetting::from_str(&s).ok())
-        .unwrap_or(options.target_score);
-    options.lifemeter_type = get("LifeMeterType")
-        .and_then(|s| LifeMeterType::from_str(&s).ok())
-        .unwrap_or(options.lifemeter_type);
-    options.measure_counter = get("MeasureCounter")
-        .and_then(|s| MeasureCounter::from_str(&s).ok())
-        .unwrap_or(options.measure_counter);
-    options.measure_counter_lookahead = get("MeasureCounterLookahead")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map(|v| v.min(4))
-        .unwrap_or(options.measure_counter_lookahead);
-    options.measure_counter_left =
-        load_u8_bool(&mut get, "MeasureCounterLeft", options.measure_counter_left);
-    options.measure_counter_up =
-        load_u8_bool(&mut get, "MeasureCounterUp", options.measure_counter_up);
-    options.measure_counter_vert =
-        load_u8_bool(&mut get, "MeasureCounterVert", options.measure_counter_vert);
-    options.broken_run = load_u8_bool(&mut get, "BrokenRun", options.broken_run);
-    options.run_timer = load_u8_bool(&mut get, "RunTimer", options.run_timer);
-    options.measure_lines = get("MeasureLines")
-        .and_then(|s| MeasureLines::from_str(&s).ok())
-        .unwrap_or(options.measure_lines);
-    options.scroll_speed = get("ScrollSpeed")
-        .and_then(|s| ScrollSpeedSetting::from_str(&s).ok())
-        .unwrap_or(options.scroll_speed);
-    options.no_cmod_alternative = get("NoCmodAlternative")
-        .and_then(|s| NoCmodAlternative::from_str(&s).ok())
-        .unwrap_or(options.no_cmod_alternative);
-    options.turn_option = get("Turn")
-        .and_then(|s| TurnOption::from_str(&s).ok())
-        .unwrap_or(options.turn_option);
-    options.insert_active_mask = get("InsertMask")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map(InsertMask::from_bits_truncate)
-        .unwrap_or(options.insert_active_mask);
-    options.remove_active_mask = get("RemoveMask")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map(RemoveMask::from_bits_truncate)
-        .unwrap_or(options.remove_active_mask);
-    options.holds_active_mask = get("HoldsMask")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map(HoldsMask::from_bits_truncate)
-        .unwrap_or(options.holds_active_mask);
-    options.accel_effects_active_mask = get("AccelEffectsMask")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map(AccelEffectsMask::from_bits_truncate)
-        .unwrap_or(options.accel_effects_active_mask);
-    options.visual_effects_active_mask = get("VisualEffectsMask")
-        .and_then(|s| s.parse::<u16>().ok())
-        .map(VisualEffectsMask::from_bits_truncate)
-        .unwrap_or(options.visual_effects_active_mask);
-    options.appearance_effects_active_mask = get("AppearanceEffectsMask")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map(AppearanceEffectsMask::from_bits_truncate)
-        .unwrap_or(options.appearance_effects_active_mask);
-    options.attack_mode = get("AttackMode")
-        .or_else(|| get("Attacks"))
-        .and_then(|s| AttackMode::from_str(&s).ok())
-        .unwrap_or(options.attack_mode);
-    options.hide_light_type = get("HideLightType")
-        .and_then(|s| HideLightType::from_str(&s).ok())
-        .unwrap_or(options.hide_light_type);
-    options.rescore_early_hits =
-        load_u8_bool(&mut get, "RescoreEarlyHits", options.rescore_early_hits);
-    options.hide_early_dw_judgments = load_u8_bool(
-        &mut get,
-        "HideEarlyDecentWayOffJudgments",
-        options.hide_early_dw_judgments,
-    );
-    options.hide_early_dw_flash = load_u8_bool(
-        &mut get,
-        "HideEarlyDecentWayOffFlash",
-        options.hide_early_dw_flash,
-    );
-    options.hide_early_dw_column_flash = load_u8_bool(
-        &mut get,
-        "HideEarlyDecentWayOffColumnFlash",
-        options.hide_early_dw_column_flash,
-    );
-    options.timing_windows = get("TimingWindows")
-        .and_then(|s| TimingWindowsOption::from_str(&s).ok())
-        .unwrap_or(options.timing_windows);
-    options.hide_targets = load_u8_bool(&mut get, "HideTargets", options.hide_targets);
-    options.hide_song_bg = load_u8_bool(&mut get, "HideSongBG", options.hide_song_bg);
-    options.hide_combo = load_u8_bool(&mut get, "HideCombo", options.hide_combo);
-    options.hide_lifebar = load_u8_bool(&mut get, "HideLifebar", options.hide_lifebar);
-    options.hide_score = load_u8_bool(&mut get, "HideScore", options.hide_score);
-    options.hide_danger = load_u8_bool(&mut get, "HideDanger", options.hide_danger);
-    options.hide_combo_explosions = load_u8_bool(
-        &mut get,
-        "HideComboExplosions",
-        options.hide_combo_explosions,
-    );
-    options.hide_username = load_u8_bool(&mut get, "HideUsername", options.hide_username);
-    options.column_flash_on_miss =
-        load_u8_bool(&mut get, "ColumnFlashOnMiss", options.column_flash_on_miss);
-    options.column_flash_mask = get("ColumnFlashMask")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map(ColumnFlashMask::from_bits_truncate)
-        .unwrap_or(options.column_flash_mask);
-    options.column_flash_brightness = get("ColumnFlashBrightness")
-        .and_then(|s| ColumnFlashBrightness::from_str(&s).ok())
-        .unwrap_or(options.column_flash_brightness);
-    options.column_flash_size = get("ColumnFlashSize")
-        .and_then(|s| ColumnFlashSize::from_str(&s).ok())
-        .unwrap_or(options.column_flash_size);
-    options.subtractive_scoring =
-        load_u8_bool(&mut get, "SubtractiveScoring", options.subtractive_scoring);
-    options.pacemaker = load_u8_bool(&mut get, "Pacemaker", options.pacemaker);
-    options.nps_graph_at_top = load_u8_bool(&mut get, "NPSGraphAtTop", options.nps_graph_at_top);
-    options.transparent_density_graph_bg = load_u8_bool(
-        &mut get,
-        "TransparentDensityGraphBackground",
-        options.transparent_density_graph_bg,
-    );
-    options.smx_fsr_display = load_u8_bool(&mut get, "SmxFsrDisplay", options.smx_fsr_display);
-    options.smx_pad_input_display = load_u8_bool(
-        &mut get,
-        "SmxPadInputDisplay",
-        options.smx_pad_input_display,
-    );
-    options.mini_indicator = get("MiniIndicator")
-        .and_then(|s| MiniIndicator::from_str(&s).ok())
-        .unwrap_or({
-            if options.subtractive_scoring {
-                MiniIndicator::SubtractiveScoring
-            } else if options.pacemaker {
-                MiniIndicator::Pacemaker
-            } else {
-                options.mini_indicator
-            }
-        });
-    if options.mini_indicator == MiniIndicator::SubtractiveScoring {
-        options.subtractive_scoring = true;
-    }
-    if options.mini_indicator == MiniIndicator::Pacemaker {
-        options.pacemaker = true;
-    }
-    options.mini_indicator_score_type = get("MiniIndicatorScoreType")
-        .and_then(|s| MiniIndicatorScoreType::from_str(&s).ok())
-        .unwrap_or(options.mini_indicator_score_type);
-    options.mini_indicator_subtractive_display = get("MiniIndicatorSubtractiveDisplay")
-        .and_then(|s| MiniIndicatorSubtractiveDisplay::from_str(&s).ok())
-        .unwrap_or(options.mini_indicator_subtractive_display);
-    options.mini_indicator_size = get("MiniIndicatorSize")
-        .and_then(|s| MiniIndicatorSize::from_str(&s).ok())
-        .unwrap_or(options.mini_indicator_size);
-    options.mini_indicator_color = get("MiniIndicatorColor")
-        .and_then(|s| MiniIndicatorColor::from_str(&s).ok())
-        .unwrap_or(options.mini_indicator_color);
-    options.mini_indicator_position = get("MiniIndicatorPosition")
-        .and_then(|s| MiniIndicatorPosition::from_str(&s).ok())
-        .unwrap_or(options.mini_indicator_position);
-    options.scroll_option = get("Scroll")
-        .and_then(|s| ScrollOption::from_str(&s).ok())
-        .unwrap_or_else(|| {
-            let reverse_enabled = load_u8_bool(&mut get, "ReverseScroll", options.reverse_scroll);
-            if reverse_enabled {
-                ScrollOption::Reverse
-            } else {
-                options.scroll_option
-            }
-        });
-    options.reverse_scroll = options.scroll_option.contains(ScrollOption::Reverse);
-
-    Some(options)
-}
-
 pub fn append_player_options_section(
     content: &mut String,
     section: &str,
@@ -4617,94 +4410,6 @@ pub fn append_player_options_section(
         options.global_offset_shift_ms
     ));
     content.push('\n');
-}
-
-pub fn append_userprofile_section(content: &mut String, guid: &str, profile: &Profile) {
-    content.push_str("[userprofile]\n");
-    push_profile_guid_line(content, guid);
-    content.push_str(&format!("DisplayName={}\n", profile.display_name));
-    content.push_str(&format!("PlayerInitials={}\n", profile.player_initials));
-    content.push('\n');
-}
-
-pub fn append_editable_section(content: &mut String, profile: &Profile) {
-    content.push_str("[Editable]\n");
-    content.push_str(&format!("WeightPounds={}\n", profile.weight_pounds));
-    content.push_str(&format!("BirthYear={}\n", profile.birth_year));
-    content.push_str(&format!(
-        "IgnoreStepCountCalories={}\n",
-        i32::from(profile.ignore_step_count_calories)
-    ));
-    content.push('\n');
-}
-
-pub fn append_stats_section(content: &mut String, profile: &Profile) {
-    content.push_str("[Stats]\n");
-    content.push_str(&format!(
-        "CaloriesBurnedDate={}\n",
-        profile.calories_burned_day
-    ));
-    content.push_str(&format!(
-        "CaloriesBurnedToday={}\n",
-        profile.calories_burned_today
-    ));
-    content.push('\n');
-}
-
-pub fn append_profile_ini_content(content: &mut String, guid: &str, profile: &Profile) {
-    append_player_options_section(
-        content,
-        player_options_section(PlayStyle::Single),
-        &profile.player_options_singles,
-    );
-    append_player_options_section(
-        content,
-        player_options_section(PlayStyle::Double),
-        &profile.player_options_doubles,
-    );
-    append_userprofile_section(content, guid, profile);
-    append_editable_section(content, profile);
-    append_last_played_section(content, "LastPlayedSingles", &profile.last_played_singles);
-    append_last_played_section(content, "LastPlayedDoubles", &profile.last_played_doubles);
-    append_last_played_course_section(
-        content,
-        "LastPlayedCourseSingles",
-        &profile.last_played_course_singles,
-    );
-    append_last_played_course_section(
-        content,
-        "LastPlayedCourseDoubles",
-        &profile.last_played_course_doubles,
-    );
-    append_stats_section(content, profile);
-}
-
-pub fn render_profile_ini_content(guid: &str, profile: &Profile) -> String {
-    let mut content = String::new();
-    append_profile_ini_content(&mut content, guid, profile);
-    content
-}
-
-pub fn render_groovestats_ini_content(
-    api_key: &str,
-    is_pad_player: bool,
-    username: &str,
-) -> String {
-    let mut content = String::new();
-    content.push_str("[GrooveStats]\n");
-    content.push_str(&format!("ApiKey={api_key}\n"));
-    content.push_str(&format!("IsPadPlayer={}\n", i32::from(is_pad_player)));
-    content.push_str(&format!("Username={username}\n"));
-    content.push('\n');
-    content
-}
-
-pub fn render_arrowcloud_ini_content(api_key: &str) -> String {
-    let mut content = String::new();
-    content.push_str("[ArrowCloud]\n");
-    content.push_str(&format!("ApiKey={api_key}\n"));
-    content.push('\n');
-    content
 }
 
 #[derive(Debug, Clone)]
@@ -5161,49 +4866,6 @@ impl Profile {
         true
     }
 
-    pub fn set_scroll_speed(&mut self, setting: ScrollSpeedSetting) -> bool {
-        set_value_if_changed(&mut self.scroll_speed, setting)
-    }
-
-    pub fn set_background_filter_percent(&mut self, percent: i32) -> bool {
-        set_value_if_changed(
-            &mut self.background_filter,
-            BackgroundFilter::from_i32(percent),
-        )
-    }
-
-    pub fn set_hold_judgment_graphic(&mut self, setting: HoldJudgmentGraphic) -> bool {
-        set_value_if_changed(&mut self.hold_judgment_graphic, setting)
-    }
-
-    pub fn set_held_miss_graphic(&mut self, setting: HeldMissGraphic) -> bool {
-        set_value_if_changed(&mut self.held_miss_graphic, setting)
-    }
-
-    pub fn set_judgment_graphic(&mut self, setting: JudgmentGraphic) -> bool {
-        set_value_if_changed(&mut self.judgment_graphic, setting)
-    }
-
-    pub fn set_combo_font(&mut self, setting: ComboFont) -> bool {
-        set_value_if_changed(&mut self.combo_font, setting)
-    }
-
-    pub fn set_combo_colors(&mut self, setting: ComboColors) -> bool {
-        set_value_if_changed(&mut self.combo_colors, setting)
-    }
-
-    pub fn set_combo_mode(&mut self, setting: ComboMode) -> bool {
-        set_value_if_changed(&mut self.combo_mode, setting)
-    }
-
-    pub fn set_carry_combo_between_songs(&mut self, enabled: bool) -> bool {
-        set_value_if_changed(&mut self.carry_combo_between_songs, enabled)
-    }
-
-    pub fn set_current_combo(&mut self, combo: u32) -> bool {
-        set_u32_if_changed(&mut self.current_combo, combo)
-    }
-
     pub fn set_scroll_option(&mut self, setting: ScrollOption) -> bool {
         let reverse_enabled = setting.contains(ScrollOption::Reverse);
         if self.scroll_option == setting && self.reverse_scroll == reverse_enabled {
@@ -5212,46 +4874,6 @@ impl Profile {
         self.scroll_option = setting;
         self.reverse_scroll = reverse_enabled;
         true
-    }
-
-    pub fn set_turn_option(&mut self, setting: TurnOption) -> bool {
-        set_value_if_changed(&mut self.turn_option, setting)
-    }
-
-    pub fn set_insert_mask(&mut self, mask: InsertMask) -> bool {
-        set_value_if_changed(&mut self.insert_active_mask, mask)
-    }
-
-    pub fn set_remove_mask(&mut self, mask: RemoveMask) -> bool {
-        set_value_if_changed(&mut self.remove_active_mask, mask)
-    }
-
-    pub fn set_holds_mask(&mut self, mask: HoldsMask) -> bool {
-        set_value_if_changed(&mut self.holds_active_mask, mask)
-    }
-
-    pub fn set_accel_effects_mask(&mut self, mask: AccelEffectsMask) -> bool {
-        set_value_if_changed(&mut self.accel_effects_active_mask, mask)
-    }
-
-    pub fn set_visual_effects_mask(&mut self, mask: VisualEffectsMask) -> bool {
-        set_value_if_changed(&mut self.visual_effects_active_mask, mask)
-    }
-
-    pub fn set_appearance_effects_mask(&mut self, mask: AppearanceEffectsMask) -> bool {
-        set_value_if_changed(&mut self.appearance_effects_active_mask, mask)
-    }
-
-    pub fn set_attack_mode(&mut self, setting: AttackMode) -> bool {
-        set_value_if_changed(&mut self.attack_mode, setting)
-    }
-
-    pub fn set_hide_light_type(&mut self, setting: HideLightType) -> bool {
-        set_value_if_changed(&mut self.hide_light_type, setting)
-    }
-
-    pub fn set_rescore_early_hits(&mut self, enabled: bool) -> bool {
-        set_value_if_changed(&mut self.rescore_early_hits, enabled)
     }
 
     pub fn set_gameplay_extras(
@@ -5293,73 +4915,6 @@ impl Profile {
         true
     }
 
-    pub fn set_column_flash_brightness(&mut self, setting: ColumnFlashBrightness) -> bool {
-        set_value_if_changed(&mut self.column_flash_brightness, setting)
-    }
-
-    pub fn set_column_flash_size(&mut self, setting: ColumnFlashSize) -> bool {
-        set_value_if_changed(&mut self.column_flash_size, setting)
-    }
-
-    pub fn set_transparent_density_graph_bg(&mut self, enabled: bool) -> bool {
-        set_value_if_changed(&mut self.transparent_density_graph_bg, enabled)
-    }
-
-    pub fn set_smx_fsr_display(&mut self, enabled: bool) -> bool {
-        set_value_if_changed(&mut self.smx_fsr_display, enabled)
-    }
-
-    pub fn set_smx_pad_input_display(&mut self, enabled: bool) -> bool {
-        set_value_if_changed(&mut self.smx_pad_input_display, enabled)
-    }
-
-    pub fn set_mini_indicator(&mut self, setting: MiniIndicator) -> bool {
-        set_value_if_changed(&mut self.mini_indicator, setting)
-    }
-
-    pub fn set_mini_indicator_score_type(&mut self, setting: MiniIndicatorScoreType) -> bool {
-        set_value_if_changed(&mut self.mini_indicator_score_type, setting)
-    }
-
-    pub fn set_mini_indicator_subtractive_display(
-        &mut self,
-        setting: MiniIndicatorSubtractiveDisplay,
-    ) -> bool {
-        set_value_if_changed(&mut self.mini_indicator_subtractive_display, setting)
-    }
-
-    pub fn set_mini_indicator_size(&mut self, setting: MiniIndicatorSize) -> bool {
-        set_value_if_changed(&mut self.mini_indicator_size, setting)
-    }
-
-    pub fn set_mini_indicator_color(&mut self, setting: MiniIndicatorColor) -> bool {
-        set_value_if_changed(&mut self.mini_indicator_color, setting)
-    }
-
-    pub fn set_mini_indicator_position(&mut self, setting: MiniIndicatorPosition) -> bool {
-        set_value_if_changed(&mut self.mini_indicator_position, setting)
-    }
-
-    pub fn set_noteskin(&mut self, setting: NoteSkin) -> bool {
-        set_value_if_changed(&mut self.noteskin, setting)
-    }
-
-    pub fn set_mine_noteskin(&mut self, setting: Option<NoteSkin>) -> bool {
-        set_value_if_changed(&mut self.mine_noteskin, setting)
-    }
-
-    pub fn set_receptor_noteskin(&mut self, setting: Option<NoteSkin>) -> bool {
-        set_value_if_changed(&mut self.receptor_noteskin, setting)
-    }
-
-    pub fn set_tap_explosion_noteskin(&mut self, setting: Option<NoteSkin>) -> bool {
-        set_value_if_changed(&mut self.tap_explosion_noteskin, setting)
-    }
-
-    pub fn set_tap_explosion_mask(&mut self, setting: TapExplosionMask) -> bool {
-        set_value_if_changed(&mut self.tap_explosion_active_mask, setting)
-    }
-
     pub fn set_early_dw_options(
         &mut self,
         hide_judgments: bool,
@@ -5376,120 +4931,6 @@ impl Profile {
         self.hide_early_dw_flash = hide_flash;
         self.hide_early_dw_column_flash = hide_column_flash;
         true
-    }
-
-    pub fn set_timing_windows(&mut self, setting: TimingWindowsOption) -> bool {
-        set_value_if_changed(&mut self.timing_windows, setting)
-    }
-
-    pub fn set_perspective(&mut self, setting: Perspective) -> bool {
-        set_value_if_changed(&mut self.perspective, setting)
-    }
-
-    pub fn set_no_cmod_alternative(&mut self, setting: NoCmodAlternative) -> bool {
-        set_value_if_changed(&mut self.no_cmod_alternative, setting)
-    }
-
-    pub fn set_show_fa_plus_window(&mut self, enabled: bool) -> bool {
-        set_value_if_changed(&mut self.show_fa_plus_window, enabled)
-    }
-
-    pub fn set_show_ex_score(&mut self, enabled: bool) -> bool {
-        set_value_if_changed(&mut self.show_ex_score, enabled)
-    }
-
-    pub fn set_show_hard_ex_score(&mut self, enabled: bool) -> bool {
-        set_value_if_changed(&mut self.show_hard_ex_score, enabled)
-    }
-
-    pub fn set_show_fa_plus_pane(&mut self, enabled: bool) -> bool {
-        set_value_if_changed(&mut self.show_fa_plus_pane, enabled)
-    }
-
-    pub fn set_fa_plus_10ms_blue_window(&mut self, enabled: bool) -> bool {
-        set_value_if_changed(&mut self.fa_plus_10ms_blue_window, enabled)
-    }
-
-    pub fn set_track_early_judgments(&mut self, enabled: bool) -> bool {
-        set_value_if_changed(&mut self.track_early_judgments, enabled)
-    }
-
-    pub fn set_scale_scatterplot(&mut self, enabled: bool) -> bool {
-        set_value_if_changed(&mut self.scale_scatterplot, enabled)
-    }
-
-    pub fn set_split_15_10ms(&mut self, enabled: bool) -> bool {
-        set_value_if_changed(&mut self.split_15_10ms, enabled)
-    }
-
-    pub fn set_custom_fantastic_window(&mut self, enabled: bool) -> bool {
-        set_value_if_changed(&mut self.custom_fantastic_window, enabled)
-    }
-
-    pub fn set_judgment_tilt(&mut self, enabled: bool) -> bool {
-        set_value_if_changed(&mut self.judgment_tilt, enabled)
-    }
-
-    pub fn set_column_cues(&mut self, enabled: bool) -> bool {
-        set_value_if_changed(&mut self.column_cues, enabled)
-    }
-
-    pub fn set_measure_cues(&mut self, enabled: bool) -> bool {
-        set_value_if_changed(&mut self.measure_cues, enabled)
-    }
-
-    pub fn set_crossover_cues(&mut self, enabled: bool) -> bool {
-        set_value_if_changed(&mut self.crossover_cues, enabled)
-    }
-
-    pub fn set_crossover_cue_brackets(&mut self, enabled: bool) -> bool {
-        set_value_if_changed(&mut self.crossover_cue_brackets, enabled)
-    }
-
-    pub fn set_crossover_cue_duration_ms(&mut self, ms: u16) -> bool {
-        set_value_if_changed(
-            &mut self.crossover_cue_duration_ms,
-            clamp_crossover_cue_duration_ms(ms),
-        )
-    }
-
-    pub fn set_crossover_cue_quantization(&mut self, quantization: u8) -> bool {
-        set_value_if_changed(
-            &mut self.crossover_cue_quantization,
-            clamp_crossover_cue_quantization(quantization),
-        )
-    }
-
-    pub fn set_column_countdown(&mut self, enabled: bool) -> bool {
-        set_value_if_changed(&mut self.column_countdown, enabled)
-    }
-
-    pub fn set_judgment_back(&mut self, enabled: bool) -> bool {
-        set_value_if_changed(&mut self.judgment_back, enabled)
-    }
-
-    pub fn set_error_ms_display(&mut self, enabled: bool) -> bool {
-        set_value_if_changed(&mut self.error_ms_display, enabled)
-    }
-
-    pub fn set_live_timing_stats_mask(&mut self, mask: LiveTimingStatsMask) -> bool {
-        set_value_if_changed(&mut self.live_timing_stats_mask, mask)
-    }
-
-    pub fn set_live_timing_stats(&mut self, enabled: bool) -> bool {
-        set_value_if_changed(&mut self.live_timing_stats, enabled)
-    }
-
-    pub fn set_rainbow_max(&mut self, enabled: bool) -> bool {
-        set_value_if_changed(&mut self.rainbow_max, enabled)
-    }
-
-    pub fn set_responsive_colors(&mut self, enabled: bool) -> bool {
-        set_value_if_changed(&mut self.responsive_colors, enabled)
-    }
-
-    pub fn set_show_life_percent(&mut self, enabled: bool) -> bool {
-        set_value_if_changed(&mut self.show_life_percent, enabled)
     }
 
     pub fn set_hide_options(
@@ -5544,18 +4985,6 @@ impl Profile {
         self.error_bar = error_bar_style_from_mask(mask);
         self.error_bar_text = error_bar_text_from_mask(mask);
         true
-    }
-
-    pub fn set_error_bar_trim(&mut self, setting: ErrorBarTrim) -> bool {
-        set_value_if_changed(&mut self.error_bar_trim, setting)
-    }
-
-    pub fn set_center_tick(&mut self, enabled: bool) -> bool {
-        set_value_if_changed(&mut self.center_tick, enabled)
-    }
-
-    pub fn set_text_error_bar_scalable(&mut self, enabled: bool) -> bool {
-        set_value_if_changed(&mut self.text_error_bar_scalable, enabled)
     }
 
     pub fn set_note_field_offset_x(&mut self, offset: i32) -> bool {
@@ -5677,10 +5106,6 @@ impl Profile {
         )
     }
 
-    pub fn set_short_average_error_bar_enabled(&mut self, enabled: bool) -> bool {
-        set_value_if_changed(&mut self.short_average_error_bar_enabled, enabled)
-    }
-
     pub fn set_text_error_bar_threshold_ms(&mut self, ms: u32) -> bool {
         set_u32_if_changed(
             &mut self.text_error_bar_threshold_ms,
@@ -5693,10 +5118,6 @@ impl Profile {
             &mut self.long_error_bar_intensity,
             clamp_long_error_bar_intensity(intensity),
         )
-    }
-
-    pub fn set_long_error_bar_enabled(&mut self, enabled: bool) -> bool {
-        set_value_if_changed(&mut self.long_error_bar_enabled, enabled)
     }
 
     pub fn set_long_error_bar_threshold_ms(&mut self, ms: u32) -> bool {
@@ -5720,42 +5141,6 @@ impl Profile {
         self.error_bar_up = up;
         self.error_bar_multi_tick = multi_tick;
         true
-    }
-
-    pub fn set_step_statistics(&mut self, mask: StepStatisticsMask) -> bool {
-        set_value_if_changed(&mut self.step_statistics, mask)
-    }
-
-    pub fn set_step_stats_extra(&mut self, setting: StepStatsExtra) -> bool {
-        set_value_if_changed(&mut self.step_stats_extra, setting)
-    }
-
-    pub fn set_display_scorebox(&mut self, enabled: bool) -> bool {
-        set_value_if_changed(&mut self.display_scorebox, enabled)
-    }
-
-    pub fn set_scatterplot_max_window(&mut self, setting: ScatterplotMaxWindow) -> bool {
-        set_value_if_changed(&mut self.scatterplot_max_window, setting)
-    }
-
-    pub fn set_score_position(&mut self, setting: ScorePosition) -> bool {
-        set_value_if_changed(&mut self.score_position, setting)
-    }
-
-    pub fn set_score_display_mode(&mut self, setting: ScoreDisplayMode) -> bool {
-        set_value_if_changed(&mut self.score_display_mode, setting)
-    }
-
-    pub fn set_target_score(&mut self, setting: TargetScoreSetting) -> bool {
-        set_value_if_changed(&mut self.target_score, setting)
-    }
-
-    pub fn set_lifemeter_type(&mut self, setting: LifeMeterType) -> bool {
-        set_value_if_changed(&mut self.lifemeter_type, setting)
-    }
-
-    pub fn set_measure_counter(&mut self, setting: MeasureCounter) -> bool {
-        set_value_if_changed(&mut self.measure_counter, setting)
     }
 
     pub fn set_measure_counter_lookahead(&mut self, lookahead: u8) -> bool {
@@ -5784,10 +5169,6 @@ impl Profile {
         self.broken_run = broken_run;
         self.run_timer = run_timer;
         true
-    }
-
-    pub fn set_measure_lines(&mut self, setting: MeasureLines) -> bool {
-        set_value_if_changed(&mut self.measure_lines, setting)
     }
 
     #[inline(always)]
@@ -7508,197 +6889,6 @@ mod tests {
         assert!(content.contains("ColumnFlashSize=Compact\n"));
         assert!(content.contains("MiniPercent=42\n"));
         assert!(content.contains("GlobalOffsetShiftMs=-9\n"));
-    }
-
-    #[test]
-    fn player_options_section_loads_persisted_options() {
-        let values = [
-            ("StepStatistics", "Judgements, Pack Info"),
-            ("StepStatsExtra", "CatJAM"),
-            ("TargetScore", "A"),
-            ("LifeMeterType", "Vertical"),
-            ("MeasureCounter", "16th"),
-            ("MeasureCounterLookahead", "9"),
-            ("MeasureCounterLeft", "1"),
-            ("MeasureCounterUp", "1"),
-            ("MeasureCounterVert", "1"),
-            ("BrokenRun", "1"),
-            ("RunTimer", "1"),
-            ("MeasureLines", "Eighth"),
-            ("NoCmodAlternative", "XMod"),
-            ("Turn", "Mirror"),
-            ("InsertMask", "3"),
-            ("RemoveMask", "2"),
-            ("HoldsMask", "1"),
-            ("AccelEffectsMask", "1"),
-            ("VisualEffectsMask", "3"),
-            ("AppearanceEffectsMask", "1"),
-            ("AttackMode", "Off"),
-            ("HideLightType", "HideAllLights"),
-            ("RescoreEarlyHits", "0"),
-            ("HideEarlyDecentWayOffJudgments", "1"),
-            ("HideEarlyDecentWayOffFlash", "1"),
-            ("HideEarlyDecentWayOffColumnFlash", "1"),
-            ("TimingWindows", "WayOffs"),
-            ("HideTargets", "1"),
-            ("HideSongBG", "1"),
-            ("HideCombo", "1"),
-            ("HideLifebar", "1"),
-            ("HideScore", "1"),
-            ("HideDanger", "1"),
-            ("HideComboExplosions", "1"),
-            ("HideUsername", "1"),
-            ("ColumnFlashOnMiss", "1"),
-            ("ColumnFlashMask", "64"),
-            ("ColumnFlashBrightness", "Dimmed"),
-            ("ColumnFlashSize", "Compact"),
-            ("SubtractiveScoring", "1"),
-            ("Pacemaker", "1"),
-            ("NPSGraphAtTop", "1"),
-            ("TransparentDensityGraphBackground", "1"),
-            ("SmxFsrDisplay", "1"),
-            ("SmxPadInputDisplay", "1"),
-            ("MiniIndicator", "Pacemaker"),
-            ("MiniIndicatorScoreType", "Ex"),
-            ("MiniIndicatorSubtractiveDisplay", "Points"),
-            ("MiniIndicatorSize", "Large"),
-            ("MiniIndicatorColor", "Detailed"),
-            ("MiniIndicatorPosition", "UnderUpArrow"),
-            ("Scroll", "Reverse+Centered"),
-        ];
-        let options = load_player_options_section(
-            true,
-            |key| {
-                values
-                    .iter()
-                    .find_map(|(k, v)| (*k == key).then(|| (*v).to_string()))
-            },
-            &PlayerOptionsData::default(),
-        )
-        .unwrap();
-
-        assert!(
-            options
-                .step_statistics
-                .contains(StepStatisticsMask::JUDGMENT_COUNTER)
-        );
-        assert!(
-            options
-                .step_statistics
-                .contains(StepStatisticsMask::PACK_BANNER)
-        );
-        assert_eq!(options.step_stats_extra, StepStatsExtra::CatJAM);
-        assert_eq!(options.target_score, TargetScoreSetting::A);
-        assert_eq!(options.lifemeter_type, LifeMeterType::Vertical);
-        assert_eq!(options.measure_counter, MeasureCounter::Sixteenth);
-        assert_eq!(options.measure_counter_lookahead, 4);
-        assert!(options.measure_counter_left);
-        assert!(options.measure_counter_up);
-        assert!(options.measure_counter_vert);
-        assert!(options.broken_run);
-        assert!(options.run_timer);
-        assert_eq!(options.measure_lines, MeasureLines::Eighth);
-        assert_eq!(options.no_cmod_alternative, NoCmodAlternative::XMod);
-        assert_eq!(options.turn_option, TurnOption::Mirror);
-        assert_eq!(options.insert_active_mask.bits(), 3);
-        assert_eq!(options.remove_active_mask.bits(), 2);
-        assert_eq!(options.holds_active_mask.bits(), 1);
-        assert_eq!(options.accel_effects_active_mask.bits(), 1);
-        assert_eq!(options.visual_effects_active_mask.bits(), 3);
-        assert_eq!(options.appearance_effects_active_mask.bits(), 1);
-        assert_eq!(options.attack_mode, AttackMode::Off);
-        assert_eq!(options.hide_light_type, HideLightType::HideAllLights);
-        assert!(!options.rescore_early_hits);
-        assert!(options.hide_early_dw_judgments);
-        assert!(options.hide_early_dw_flash);
-        assert!(options.hide_early_dw_column_flash);
-        assert_eq!(options.timing_windows, TimingWindowsOption::WayOffs);
-        assert!(options.hide_targets);
-        assert!(options.hide_song_bg);
-        assert!(options.hide_combo);
-        assert!(options.hide_lifebar);
-        assert!(options.hide_score);
-        assert!(options.hide_danger);
-        assert!(options.hide_combo_explosions);
-        assert!(options.hide_username);
-        assert!(options.column_flash_on_miss);
-        assert_eq!(options.column_flash_mask, ColumnFlashMask::MISS);
-        assert_eq!(
-            options.column_flash_brightness,
-            ColumnFlashBrightness::Dimmed
-        );
-        assert_eq!(options.column_flash_size, ColumnFlashSize::Compact);
-        assert!(options.subtractive_scoring);
-        assert!(options.pacemaker);
-        assert!(options.nps_graph_at_top);
-        assert!(options.transparent_density_graph_bg);
-        assert!(options.smx_fsr_display);
-        assert!(options.smx_pad_input_display);
-        assert_eq!(options.mini_indicator, MiniIndicator::Pacemaker);
-        assert_eq!(
-            options.mini_indicator_score_type,
-            MiniIndicatorScoreType::Ex
-        );
-        assert_eq!(
-            options.mini_indicator_subtractive_display,
-            MiniIndicatorSubtractiveDisplay::Points
-        );
-        assert_eq!(options.mini_indicator_size, MiniIndicatorSize::Large);
-        assert_eq!(options.mini_indicator_color, MiniIndicatorColor::Detailed);
-        assert_eq!(
-            options.mini_indicator_position,
-            MiniIndicatorPosition::UnderUpArrow
-        );
-        assert!(options.scroll_option.contains(ScrollOption::Reverse));
-        assert!(options.scroll_option.contains(ScrollOption::Centered));
-        assert!(options.reverse_scroll);
-        assert_eq!(
-            load_player_options_section(false, |_| None, &PlayerOptionsData::default()),
-            None
-        );
-    }
-
-    #[test]
-    fn profile_ini_renderers_write_profile_and_service_sections() {
-        let mut profile = Profile {
-            display_name: "Test Player".to_string(),
-            player_initials: "TEST".to_string(),
-            weight_pounds: 165,
-            birth_year: 2000,
-            calories_burned_day: "2026-06-23".to_string(),
-            calories_burned_today: 12.5,
-            ignore_step_count_calories: true,
-            ..Profile::default()
-        };
-        profile.player_options_singles.no_cmod_alternative = NoCmodAlternative::XMod;
-        profile.player_options_doubles.no_cmod_alternative = NoCmodAlternative::MMod;
-
-        let profile_ini = render_profile_ini_content("profile-guid", &profile);
-
-        assert!(profile_ini.starts_with("[PlayerOptionsSingles]\n"));
-        assert!(profile_ini.contains("[PlayerOptionsDoubles]\n"));
-        assert!(profile_ini.contains("[userprofile]\nGuid=profile-guid\n"));
-        assert!(profile_ini.contains("DisplayName=Test Player\n"));
-        assert!(profile_ini.contains("PlayerInitials=TEST\n"));
-        assert!(profile_ini.contains("[Editable]\nWeightPounds=165\nBirthYear=2000\n"));
-        assert!(profile_ini.contains("IgnoreStepCountCalories=1\n"));
-        assert!(profile_ini.contains("[LastPlayedSingles]\n"));
-        assert!(profile_ini.contains("[LastPlayedDoubles]\n"));
-        assert!(profile_ini.contains("[LastPlayedCourseSingles]\n"));
-        assert!(profile_ini.contains("[LastPlayedCourseDoubles]\n"));
-        assert!(
-            profile_ini
-                .contains("[Stats]\nCaloriesBurnedDate=2026-06-23\nCaloriesBurnedToday=12.5\n")
-        );
-
-        assert_eq!(
-            render_groovestats_ini_content("gs-key", true, "player"),
-            "[GrooveStats]\nApiKey=gs-key\nIsPadPlayer=1\nUsername=player\n\n"
-        );
-        assert_eq!(
-            render_arrowcloud_ini_content("ac-key"),
-            "[ArrowCloud]\nApiKey=ac-key\n\n"
-        );
     }
 
     #[test]

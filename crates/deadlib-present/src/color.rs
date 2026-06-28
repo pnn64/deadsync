@@ -189,21 +189,6 @@ pub const SRPG9_RGBA: [[f32; 4]; 12] = [
     rgba_hex("#954f00"), // Orange
 ];
 
-pub const SRPG10_RGBA: [[f32; 4]; 12] = [
-    rgba_hex("#666000"), // Unaffiliated Yellow
-    rgba_hex("#3d6526"), // Green
-    rgba_hex("#36855b"), // Green-Blue
-    rgba_hex("#36a392"), // DPRT Teal
-    rgba_hex("#51c0c8"), // Cyan
-    rgba_hex("#009bcf"), // Light Blue
-    rgba_hex("#006ecb"), // FE Blue
-    rgba_hex("#5131a4"), // Violet
-    rgba_hex("#9c0082"), // Purple
-    rgba_hex("#bf0052"), // SN Pink
-    rgba_hex("#c32020"), // Red
-    rgba_hex("#954f00"), // Orange
-];
-
 /// Simply Love-ish UI accent palette
 pub const SIMPLY_LOVE_RGBA: [[f32; 4]; 12] = [
     rgba_hex("#FF5D47"),
@@ -290,11 +275,6 @@ pub fn srpg9_rgba(idx: i32) -> [f32; 4] {
 }
 
 #[inline(always)]
-pub fn srpg10_rgba(idx: i32) -> [f32; 4] {
-    SRPG10_RGBA[wrap(SRPG10_RGBA.len(), idx)]
-}
-
-#[inline(always)]
 pub fn simply_love_rgba(idx: i32) -> [f32; 4] {
     SIMPLY_LOVE_RGBA[wrap(SIMPLY_LOVE_RGBA.len(), idx)]
 }
@@ -322,14 +302,5 @@ mod tests {
         assert_eq!(srpg9_rgba(8), rgba_hex("#3d6526"));
         assert_eq!(srpg9_rgba(9), rgba_hex("#666000"));
         assert_eq!(srpg9_rgba(11), rgba_hex("#954f00"));
-    }
-
-    #[test]
-    fn srpg10_order_matches_theme_reference() {
-        assert_eq!(srpg10_rgba(0), rgba_hex("#666000"));
-        assert_eq!(srpg10_rgba(3), rgba_hex("#36a392"));
-        assert_eq!(srpg10_rgba(6), rgba_hex("#006ecb"));
-        assert_eq!(srpg10_rgba(9), rgba_hex("#bf0052"));
-        assert_eq!(srpg10_rgba(11), rgba_hex("#954f00"));
     }
 }

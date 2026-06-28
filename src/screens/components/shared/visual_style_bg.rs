@@ -1,20 +1,20 @@
 use super::technique_bg;
 use crate::act;
 use crate::assets::visual_styles;
-use crate::config::{self, SrpgVariant, VisualStyle};
+use crate::config::{self, VisualStyle};
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use std::sync::{
     Arc, Mutex, OnceLock,
-    atomic::{AtomicU64, Ordering},
+    atomic::{AtomicU32, Ordering},
 };
 
 // Shared UI elapsed clock advanced by `app` using post-Tab-acceleration dt so
 // menu backgrounds stay phase-locked across screens while still honoring
 // fast/slow/paused menu animation controls.
-static GLOBAL_ELAPSED_BITS: AtomicU64 = AtomicU64::new(0.0_f64.to_bits());
-static SRPG_BACKGROUND_KEY: OnceLock<Mutex<Option<Arc<str>>>> = OnceLock::new();
+static GLOBAL_ELAPSED_BITS: AtomicU32 = AtomicU32::new(0.0_f32.to_bits());
+static SRPG9_BACKGROUND_KEY: OnceLock<Mutex<Option<Arc<str>>>> = OnceLock::new();
 
 const COLOR_ADD: [i32; 10] = [-1, 0, 0, -1, -1, -1, 0, 0, 0, 0];
 const DIFFUSE_ALPHA: [f32; 10] = [0.05, 0.2, 0.1, 0.1, 0.1, 0.1, 0.1, 0.05, 0.1, 0.1];
@@ -68,7 +68,7 @@ impl TiledStyleState {
         Self
     }
 
-    fn push_at_elapsed(&self, out: &mut Vec<Actor>, params: &Params, elapsed_s: f64) {
+    fn push_at_elapsed(&self, out: &mut Vec<Actor>, params: &Params, elapsed_s: f32) {
         out.reserve(11);
         let w = screen_width();
         let h = screen_height();
@@ -106,7 +106,7 @@ impl State {
         self.push_at_elapsed(out, params, global_elapsed_s());
     }
 
-    pub fn push_at_elapsed(&self, out: &mut Vec<Actor>, params: Params, elapsed_s: f64) {
+    pub fn push_at_elapsed(&self, out: &mut Vec<Actor>, params: Params, elapsed_s: f32) {
         let style = visual_style();
         if matches!(style, VisualStyle::Technique)
             && self.technique.push_at_elapsed(
@@ -120,13 +120,13 @@ impl State {
             return;
         }
         if matches!(style, VisualStyle::Srpg9) {
-            push_srpg(out, &params);
+            push_srpg9(out, &params);
             return;
         }
         self.tiled.push_at_elapsed(out, &params, elapsed_s);
     }
 
-    pub fn build_at_elapsed(&self, params: Params, elapsed_s: f64) -> Vec<Actor> {
+    pub fn build_at_elapsed(&self, params: Params, elapsed_s: f32) -> Vec<Actor> {
         let mut actors = Vec::new();
         self.push_at_elapsed(&mut actors, params, elapsed_s);
         actors
@@ -145,11 +145,11 @@ fn push_shared_bg(out: &mut Vec<Actor>, x: f32, y: f32, rgba: [f32; 4], uv: [f32
     );
 }
 
-fn push_srpg(out: &mut Vec<Actor>, params: &Params) {
+fn push_srpg9(out: &mut Vec<Actor>, params: &Params) {
     out.reserve(3);
     let w = screen_width();
     let h = screen_height();
-    let background_key = srpg_background_key();
+    let background_key = srpg9_background_key();
     out.push(act!(quad:
         align(0.0, 0.0):
         xy(0.0, 0.0):
@@ -158,7 +158,7 @@ fn push_srpg(out: &mut Vec<Actor>, params: &Params) {
         z(-100)
     ));
 
-    let mut tint = srpg_background_tint(params.active_color_index);
+    let mut tint = color::decorative_rgba(params.active_color_index);
     tint[0] = (tint[0] * 3.0).min(1.0);
     tint[1] = (tint[1] * 3.0).min(1.0);
     tint[2] = (tint[2] * 3.0).min(1.0);
@@ -179,34 +179,24 @@ fn push_srpg(out: &mut Vec<Actor>, params: &Params) {
     ));
 }
 
-pub fn set_srpg_background_key(key: Option<String>) {
-    if let Ok(mut slot) = SRPG_BACKGROUND_KEY.get_or_init(|| Mutex::new(None)).lock() {
+pub fn set_srpg9_background_key(key: Option<String>) {
+    if let Ok(mut slot) = SRPG9_BACKGROUND_KEY.get_or_init(|| Mutex::new(None)).lock() {
         *slot = key.map(Arc::<str>::from);
     }
 }
 
-fn srpg_background_key() -> Arc<str> {
+fn srpg9_background_key() -> Arc<str> {
     let fallback = || Arc::<str>::from(visual_styles::shared_background_texture_key());
-    match SRPG_BACKGROUND_KEY.get_or_init(|| Mutex::new(None)).lock() {
+    match SRPG9_BACKGROUND_KEY.get_or_init(|| Mutex::new(None)).lock() {
         Ok(slot) => slot.clone().unwrap_or_else(fallback),
         Err(_) => fallback(),
     }
 }
 
-fn srpg_background_tint(active_color_index: i32) -> [f32; 4] {
-    let Ok(cfg) = std::panic::catch_unwind(config::get) else {
-        return color::decorative_rgba(active_color_index);
-    };
-    match cfg.srpg_variant {
-        SrpgVariant::Srpg10 if cfg.visual_style.is_srpg() => color::srpg10_rgba(active_color_index),
-        _ => color::decorative_rgba(active_color_index),
-    }
-}
-
 #[inline(always)]
-fn scrolled_uv_rect(velocity: [f32; 2], elapsed_s: f64) -> [f32; 4] {
-    let u0 = (f64::from(velocity[0]) * elapsed_s).rem_euclid(1.0) as f32;
-    let v0 = (f64::from(velocity[1]) * elapsed_s).rem_euclid(1.0) as f32;
+fn scrolled_uv_rect(velocity: [f32; 2], elapsed_s: f32) -> [f32; 4] {
+    let u0 = (velocity[0] * elapsed_s).rem_euclid(1.0);
+    let v0 = (velocity[1] * elapsed_s).rem_euclid(1.0);
     [u0, v0, u0 + SHARED_BG_UV_SPAN, v0 + SHARED_BG_UV_SPAN]
 }
 
@@ -219,9 +209,8 @@ pub fn tick_global(dt: f32) {
     if !dt.is_finite() || dt <= 0.0 {
         return;
     }
-    let dt = f64::from(dt);
     let _ = GLOBAL_ELAPSED_BITS.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |bits| {
-        let elapsed = f64::from_bits(bits);
+        let elapsed = f32::from_bits(bits);
         let next = elapsed + dt;
         Some(if next.is_finite() {
             next.max(0.0).to_bits()
@@ -232,12 +221,12 @@ pub fn tick_global(dt: f32) {
 }
 
 #[inline]
-fn global_elapsed_s() -> f64 {
-    f64::from_bits(GLOBAL_ELAPSED_BITS.load(Ordering::Relaxed))
+fn global_elapsed_s() -> f32 {
+    f32::from_bits(GLOBAL_ELAPSED_BITS.load(Ordering::Relaxed))
 }
 
 #[cfg(test)]
-fn set_global_elapsed_for_test(elapsed_s: f64) {
+fn set_global_elapsed_for_test(elapsed_s: f32) {
     GLOBAL_ELAPSED_BITS.store(elapsed_s.max(0.0).to_bits(), Ordering::Relaxed);
 }
 
@@ -245,7 +234,7 @@ fn set_global_elapsed_for_test(elapsed_s: f64) {
 mod tests {
     use super::*;
 
-    const EPS: f64 = 1e-3;
+    const EPS: f32 = 1e-3;
 
     fn params() -> Params {
         Params {
@@ -286,13 +275,13 @@ mod tests {
         let shared = first_bg_sprite(&shared_actors);
         let explicit = first_bg_sprite(&explicit_actors);
         assert!(
-            f64::from((shared.0[0] - explicit.0[0]).abs()) < EPS
-                && f64::from((shared.0[1] - explicit.0[1]).abs()) < EPS
+            (shared.0[0] - explicit.0[0]).abs() < EPS
+                && (shared.0[1] - explicit.0[1]).abs() < EPS
                 && shared
                     .1
                     .iter()
                     .zip(explicit.1)
-                    .all(|(a, b)| f64::from((*a - b).abs()) < EPS),
+                    .all(|(a, b)| (*a - b).abs() < EPS),
             "shared={shared:?} explicit={explicit:?}"
         );
     }
@@ -315,17 +304,6 @@ mod tests {
         tick_global(-0.25);
         assert!(
             (global_elapsed_s() - 1.5).abs() < EPS,
-            "got {}",
-            global_elapsed_s()
-        );
-    }
-
-    #[test]
-    fn tick_global_keeps_subframe_precision_after_long_uptime() {
-        set_global_elapsed_for_test(1_000_000.0);
-        tick_global(1.0 / 240.0);
-        assert!(
-            global_elapsed_s() > 1_000_000.0,
             "got {}",
             global_elapsed_s()
         );

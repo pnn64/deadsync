@@ -18,24 +18,11 @@ fn load_theme_presentation(conf: &SimpleIni, default: Config, cfg: &mut Config) 
         .get("Theme", "KeyboardFeatures")
         .and_then(|v| parse_bool_str(&v))
         .unwrap_or(default.keyboard_features);
-    let visual_style_raw = conf
+    cfg.visual_style = conf
         .get("Theme", "VisualStyle")
-        .or_else(|| conf.get("Theme", "MenuBackgroundStyle"));
-    cfg.visual_style = visual_style_raw
-        .as_deref()
-        .and_then(|v| VisualStyle::from_str(v).ok())
+        .or_else(|| conf.get("Theme", "MenuBackgroundStyle"))
+        .and_then(|v| VisualStyle::from_str(&v).ok())
         .unwrap_or(default.visual_style);
-    cfg.srpg_variant = conf
-        .get("Theme", "SrpgVariant")
-        .or_else(|| conf.get("Theme", "ThemeVariant"))
-        .as_deref()
-        .and_then(|v| SrpgVariant::from_str(v).ok())
-        .or_else(|| {
-            visual_style_raw
-                .as_deref()
-                .and_then(SrpgVariant::from_visual_style_str)
-        })
-        .unwrap_or(default.srpg_variant);
     cfg.show_video_backgrounds = conf
         .get("Theme", "VideoBackgrounds")
         .and_then(|v| parse_bool_str(&v))

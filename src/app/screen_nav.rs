@@ -215,10 +215,6 @@ impl App {
                 prev,
                 CurrentScreen::SelectColor | CurrentScreen::SelectStyle
             );
-        let target_srpg10_gameover_music =
-            target_screen == CurrentScreen::GameOver && visual_styles::srpg10_active();
-        let prev_srpg10_gameover_music =
-            prev == CurrentScreen::GameOver && visual_styles::srpg10_active();
         let keep_preview = (prev == CurrentScreen::SelectMusic
             && target_screen == CurrentScreen::PlayerOptions)
             || (prev == CurrentScreen::PlayerOptions
@@ -230,15 +226,6 @@ impl App {
                     visual_styles::menu_music_resolved_path(),
                     deadsync_audio_stream::Cut::default(),
                     true,
-                    1.0,
-                );
-            }
-        } else if target_srpg10_gameover_music {
-            if !prev_srpg10_gameover_music {
-                deadsync_audio_stream::play_music(
-                    visual_styles::srpg10_gameover_music_path(),
-                    deadsync_audio_stream::Cut::default(),
-                    false,
                     1.0,
                 );
             }

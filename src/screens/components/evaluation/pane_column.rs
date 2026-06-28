@@ -1,5 +1,6 @@
 use crate::act;
 use crate::assets::{self, AssetManager};
+use crate::game::parsing::noteskin::{NUM_QUANTIZATIONS, Quantization};
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor;
 use crate::screens::evaluation::{ColumnJudgments, ScoreInfo};
 use deadlib_platform::dirs;
@@ -8,7 +9,6 @@ use deadlib_present::color;
 use deadlib_present::font;
 use deadlib_present::space::screen_center_y;
 use deadlib_render::{BlendMode, SamplerDesc};
-use deadsync_noteskin::{NUM_QUANTIZATIONS, Quantization};
 use deadsync_profile as profile_data;
 use image::{Rgba, RgbaImage};
 use std::hash::Hasher;

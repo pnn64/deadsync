@@ -1,9 +1,11 @@
 use crate::assets::AssetManager;
-use crate::screens::components::gameplay::{gameplay_stats, notefield};
+use crate::screens::components::gameplay::{
+    gameplay_stats,
+    notefield::{self, FieldPlacement},
+};
 use crate::screens::gameplay as gameplay_screen;
 use crate::test_support::{compose_scenarios, notefield_bench};
 use deadlib_present::actors::Actor;
-use deadsync_notefield::{FieldPlacement, ProxyCaptureRequests, ViewOverride};
 use deadsync_profile as profile_data;
 use deadsync_rules::timing::WindowCounts;
 use deadsync_score::{
@@ -141,9 +143,8 @@ pub fn fixture() -> GameplayStatsBenchFixture {
         FieldPlacement::P1,
         profile_data::PlayStyle::Single,
         false,
-        ProxyCaptureRequests::default(),
-        false,
-        ViewOverride::default(),
+        notefield::ProxyCaptureRequests::default(),
+        notefield::ViewOverride::default(),
         &mut notefield_actors,
         &mut notefield_hud_actors,
     )

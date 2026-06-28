@@ -1,6 +1,5 @@
 use crate::act;
 use crate::assets;
-use crate::config::{self, SrpgVariant};
 use crate::game::{profile, scores};
 use deadlib_present::actors::Actor;
 use deadlib_present::cache::{TextCache, cached_text};
@@ -19,7 +18,7 @@ const SCOREBOX_W: f32 = 162.0;
 const SCOREBOX_H: f32 = 80.0;
 const SCOREBOX_BORDER: f32 = 5.0;
 const SCOREBOX_GS_BLUE: [f32; 4] = color::rgba_hex("#007b85");
-const SCOREBOX_SRPG_YELLOW: [f32; 4] = [1.0, 0.972, 0.792, 1.0];
+const SCOREBOX_RPG_YELLOW: [f32; 4] = [1.0, 0.972, 0.792, 1.0];
 const SCOREBOX_ITL_PINK: [f32; 4] = [1.0, 0.2, 0.406, 1.0];
 const SCOREBOX_SELF: [f32; 4] = color::rgba_hex("#A1FF94");
 const SCOREBOX_RIVAL: [f32; 4] = color::rgba_hex("#C29CFF");
@@ -29,7 +28,7 @@ const SCOREBOX_EX_TEXT_ALPHA: f32 = 0.3;
 const SCOREBOX_HARD_EX_TEXT_ALPHA: f32 = 0.32;
 const SCOREBOX_ARROWCLOUD_LOGO_ALPHA: f32 = 0.5;
 const SCOREBOX_ARROWCLOUD_LOGO_ZOOM: f32 = 0.06;
-const SCOREBOX_SRPG_LOGO_ALPHA: f32 = 0.5;
+const SCOREBOX_RPG_LOGO_ALPHA: f32 = 0.5;
 const SCOREBOX_ITL_LOGO_ALPHA: f32 = 0.2;
 const SCOREBOX_LOGO_MAX_W_FRAC: f32 = 0.94;
 const SCOREBOX_LOGO_MAX_H_FRAC: f32 = 0.94;
@@ -102,7 +101,7 @@ enum PaneKind {
     Gs,
     Ex,
     HardEx,
-    Srpg,
+    Rpg,
     Itl,
     Other,
 }
@@ -159,7 +158,7 @@ const fn select_music_filter_allows_kind(kind: PaneKind, filter: SelectMusicPane
         PaneKind::Gs => filter.itg,
         PaneKind::Ex => filter.ex,
         PaneKind::HardEx => filter.hard_ex,
-        PaneKind::Srpg | PaneKind::Itl | PaneKind::Other => filter.tournaments,
+        PaneKind::Rpg | PaneKind::Itl | PaneKind::Other => filter.tournaments,
     }
 }
 
@@ -195,8 +194,8 @@ fn pane_kind(pane: &score_data::LeaderboardPane) -> PaneKind {
         };
     }
     let lower = pane.name.to_ascii_lowercase();
-    if lower.contains("srpg") || lower.contains("rpg") {
-        PaneKind::Srpg
+    if lower.contains("rpg") {
+        PaneKind::Rpg
     } else if lower.contains("itl") {
         PaneKind::Itl
     } else if pane.is_ex {
@@ -212,7 +211,7 @@ fn pane_mode_text(kind: PaneKind, pane: &score_data::LeaderboardPane) -> &str {
         PaneKind::Gs => "ITG",
         PaneKind::Ex => "EX",
         PaneKind::HardEx => "H.EX",
-        PaneKind::Srpg => "SRPG",
+        PaneKind::Rpg => "RPG",
         PaneKind::Itl => "ITL",
         PaneKind::Other => pane.name.as_str(),
     }
@@ -234,7 +233,7 @@ fn pane_color(kind: PaneKind) -> [f32; 4] {
                     * SCOREBOX_HARD_EX_BORDER_TINT,
             1.0,
         ],
-        PaneKind::Srpg => SCOREBOX_SRPG_YELLOW,
+        PaneKind::Rpg => SCOREBOX_RPG_YELLOW,
         PaneKind::Itl => SCOREBOX_ITL_PINK,
     }
 }
@@ -351,7 +350,7 @@ fn local_self_score_10000(
         }
         PaneKind::Itl => scores::get_cached_itl_score_for_side(chart_hash, side)
             .map(|score| (f64::from(score.ex_hundredths), false)),
-        PaneKind::Srpg | PaneKind::Other => None,
+        PaneKind::Rpg | PaneKind::Other => None,
     }
 }
 
@@ -862,8 +861,8 @@ fn is_hard_ex_text(pane: &GameplayScoreboxPane) -> bool {
 }
 
 #[inline(always)]
-fn is_srpg_logo(kind: PaneKind) -> bool {
-    matches!(kind, PaneKind::Srpg)
+fn is_rpg_logo(kind: PaneKind) -> bool {
+    matches!(kind, PaneKind::Rpg)
 }
 
 #[inline(always)]
@@ -1186,7 +1185,7 @@ fn push_hard_ex_header_overlay(
     );
 }
 
-fn push_srpg_logo_overlay(
+fn push_rpg_logo_overlay(
     actors: &mut Vec<Actor>,
     cycle: ScoreboxCycleState,
     cur: PaneKind,
@@ -1198,14 +1197,14 @@ fn push_srpg_logo_overlay(
 ) {
     let alpha = logo_alpha(
         cycle,
-        is_srpg_logo(cur),
-        is_srpg_logo(next),
-        SCOREBOX_SRPG_LOGO_ALPHA,
+        is_rpg_logo(cur),
+        is_rpg_logo(next),
+        SCOREBOX_RPG_LOGO_ALPHA,
         false,
     );
     push_centered_logo(
         actors,
-        srpg_logo_texture(),
+        "srpg9_logo_alt.png",
         center_x,
         center_y,
         zoom,
@@ -1213,14 +1212,6 @@ fn push_srpg_logo_overlay(
         z_base,
         alpha,
     );
-}
-
-fn srpg_logo_texture() -> &'static str {
-    let cfg = config::get();
-    match cfg.srpg_variant {
-        SrpgVariant::Srpg10 if cfg.visual_style.is_srpg() => "srpg10_logo_alt.png",
-        _ => "srpg9_logo_alt.png",
-    }
 }
 
 fn push_itl_logo_overlay(
@@ -1259,7 +1250,7 @@ fn push_header_overlays(
     push_arrowcloud_logo_overlay(actors, cycle, cur, next, center_x, center_y, zoom, z_base);
     push_ex_header_overlay(actors, cycle, cur, next, center_x, center_y, zoom, z_base);
     push_hard_ex_header_overlay(actors, cycle, cur, next, center_x, center_y, zoom, z_base);
-    push_srpg_logo_overlay(
+    push_rpg_logo_overlay(
         actors, cycle, cur.kind, next.kind, center_x, center_y, zoom, z_base,
     );
     push_itl_logo_overlay(

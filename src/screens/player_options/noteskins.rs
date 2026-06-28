@@ -1,9 +1,8 @@
 use super::*;
-use deadsync_noteskin::Style;
 use deadsync_profile as profile_data;
 
 pub(super) fn load_noteskin_cached(skin: &str, cols_per_player: usize) -> Option<Arc<Noteskin>> {
-    let style = Style {
+    let style = noteskin::Style {
         num_cols: cols_per_player,
         num_players: 1,
     };
@@ -11,8 +10,7 @@ pub(super) fn load_noteskin_cached(skin: &str, cols_per_player: usize) -> Option
 }
 
 pub(super) fn discover_noteskin_names() -> Vec<String> {
-    let roots = deadlib_platform::dirs::app_dirs().noteskin_roots();
-    deadsync_noteskin::itg::discover_skins(&roots, "dance")
+    noteskin::discover_itg_skins("dance")
 }
 
 pub(super) fn build_noteskin_override_choices(noteskin_names: &[String]) -> Vec<String> {

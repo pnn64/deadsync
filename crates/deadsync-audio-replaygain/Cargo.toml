@@ -6,7 +6,7 @@ license = "GPL-3.0"
 
 [dependencies]
 deadsync-audio-analysis = { path = "../deadsync-audio-analysis" }
-log = "0.4.33"
+log = "0.4.32"
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

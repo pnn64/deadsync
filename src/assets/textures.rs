@@ -1136,14 +1136,6 @@ impl AssetManager {
                 "srpg9_logo_alt.png".to_string(),
             ),
             (
-                "srpg10_logo_alt.png".to_string(),
-                "srpg10_logo_alt.png".to_string(),
-            ),
-            (
-                visual_styles::SRPG10_TITLE_LOGO.to_string(),
-                visual_styles::SRPG10_TITLE_LOGO.to_string(),
-            ),
-            (
                 "combo_explosion.png".to_string(),
                 "combo_explosion.png".to_string(),
             ),
@@ -1217,7 +1209,7 @@ impl AssetManager {
             ),
         ];
 
-        for asset in visual_styles::all_assets() {
+        for asset in &visual_styles::ASSETS {
             textures_to_load.push((
                 asset.select_color.to_string(),
                 asset.select_color.to_string(),
@@ -1238,10 +1230,6 @@ impl AssetManager {
             ] {
                 textures_to_load.push((effect.to_string(), effect.to_string()));
             }
-        }
-
-        for p in visual_styles::SRPG10_EVAL_TEXTURES {
-            textures_to_load.push((p.to_string(), p.to_string()));
         }
 
         for p in [

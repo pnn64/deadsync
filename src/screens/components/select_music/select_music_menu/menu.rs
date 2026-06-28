@@ -5,7 +5,6 @@ use crate::assets::{FontRole, current_machine_font_key};
 use deadlib_present::actors::Actor;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_input::{InputEvent, VirtualAction};
-use deadsync_profile::PlayerSide;
 
 use super::{Action, Item, scroll_anim_dir, set_text_clip_rect};
 
@@ -277,7 +276,7 @@ pub enum InputOutcome {
     None,
     Moved,
     ToggleCategory(Category),
-    ActivateAction(Action, PlayerSide),
+    ActivateAction(Action),
     Close,
 }
 
@@ -315,8 +314,7 @@ pub fn handle_input(state: &mut VisibleState, ev: &InputEvent) -> InputOutcome {
                 InputOutcome::None
             }
         }
-        VirtualAction::p1_start => activate(state, PlayerSide::P1),
-        VirtualAction::p2_start => activate(state, PlayerSide::P2),
+        VirtualAction::p1_start | VirtualAction::p2_start => activate(state),
         VirtualAction::p1_back
         | VirtualAction::p2_back
         | VirtualAction::p1_select
@@ -341,7 +339,7 @@ pub fn move_selection(state: &mut VisibleState, len: usize, delta: isize) -> boo
     true
 }
 
-fn activate(state: &mut VisibleState, side: PlayerSide) -> InputOutcome {
+fn activate(state: &mut VisibleState) -> InputOutcome {
     let entries = &state.cached_entries;
     if entries.is_empty() {
         return InputOutcome::Close;
@@ -353,7 +351,7 @@ fn activate(state: &mut VisibleState, side: PlayerSide) -> InputOutcome {
             InputOutcome::ToggleCategory(*category)
         }
         Entry::CategoryItem(item) | Entry::StandaloneItem(item) => {
-            InputOutcome::ActivateAction(item.action.clone(), side)
+            InputOutcome::ActivateAction(item.action.clone())
         }
     }
 }
@@ -632,47 +630,4 @@ fn lerp_color(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
         lerp_scalar(a[2], b[2], t),
         lerp_scalar(a[3], b[3], t),
     ]
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use deadlib_present::actors::TextContent;
-    use deadsync_core::input::InputSource;
-    use std::time::Instant;
-
-    fn input_event(action: VirtualAction) -> InputEvent {
-        let now = Instant::now();
-        InputEvent {
-            action,
-            input_slot: 0,
-            pressed: true,
-            source: InputSource::Gamepad,
-            timestamp: now,
-            timestamp_host_nanos: 0,
-            stored_at: now,
-            emitted_at: now,
-        }
-    }
-
-    fn menu_item(action: Action) -> Item {
-        Item {
-            top_label: TextContent::Static(""),
-            bottom_label: TextContent::Static(""),
-            action,
-        }
-    }
-
-    #[test]
-    fn start_activation_preserves_player_side() {
-        let mut state = open();
-        state.cached_entries = vec![Entry::StandaloneItem(menu_item(Action::ToggleFavorite))];
-
-        let outcome = handle_input(&mut state, &input_event(VirtualAction::p2_start));
-
-        assert!(matches!(
-            outcome,
-            InputOutcome::ActivateAction(Action::ToggleFavorite, PlayerSide::P2)
-        ));
-    }
 }

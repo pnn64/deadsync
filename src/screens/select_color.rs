@@ -336,7 +336,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_multiplier: f32
         let a = o.abs();
 
         // palette color for this slot (stick to integer to avoid “color lerp” look)
-        let tint = select_color_tint(base_i + offset_i);
+        let tint = color::decorative_rgba(base_i + offset_i);
 
         // X centered via distance samples (sign from side)
         let x_off = super::select_color::sample_linear(&x_samples, a);
@@ -398,7 +398,6 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_multiplier: f32
         actor.mul_alpha(alpha_multiplier);
     }
     actors.extend(wheel_actors);
-    push_srpg10_faction_label(actors, state.active_color_index, alpha_multiplier);
 }
 
 pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
@@ -412,36 +411,6 @@ pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
 #[inline(always)]
 fn lerp(a: f32, b: f32, t: f32) -> f32 {
     (b - a).mul_add(t, a)
-}
-
-#[inline(always)]
-fn select_color_tint(color_index: i32) -> [f32; 4] {
-    if visual_styles::srpg10_active() {
-        color::srpg10_rgba(color_index)
-    } else {
-        color::decorative_rgba(color_index)
-    }
-}
-
-fn push_srpg10_faction_label(actors: &mut Vec<Actor>, color_index: i32, alpha_multiplier: f32) {
-    if !visual_styles::srpg10_active() {
-        return;
-    }
-    let alpha = 0.94 * alpha_multiplier;
-    let max_width = (screen_width() - 96.0).max(220.0);
-    let y = (screen_center_y() + 160.0).min(screen_height() - 72.0);
-    actors.push(act!(text:
-        font("miso"):
-        settext(visual_styles::srpg10_faction_name(color_index)):
-        align(0.5, 0.5):
-        xy(screen_center_x(), y):
-        zoom(0.9):
-        maxwidth(max_width):
-        horizalign(center):
-        shadowlength(1.0):
-        diffuse(1.0, 1.0, 1.0, alpha):
-        z(140)
-    ));
 }
 
 #[inline(always)]

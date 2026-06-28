@@ -1,16 +1,13 @@
 use super::{
-    GRAPH_DISPLAY_VALUE_RESOLUTION, SONG_LUA_INITIAL_LIFE, SONG_LUA_STARTUP_MESSAGE,
-    SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget, SongLuaNoteskinResolver,
+    EffectClock, EffectMode, GRAPH_DISPLAY_VALUE_RESOLUTION, MultitapPhase, SONG_LUA_INITIAL_LIFE,
+    SONG_LUA_STARTUP_MESSAGE, SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget,
     SongLuaOverlayBlendMode, SongLuaOverlayKind, SongLuaOverlayState, SongLuaPlayerContext,
     SongLuaProxyTarget, SongLuaSpanMode, SongLuaSpeedMod, SongLuaTextGlowMode, SongLuaTimeUnit,
-    THEME_RECEPTOR_Y_STD, compile_song_lua, file_path_string,
+    THEME_RECEPTOR_Y_STD, compile_song_lua, file_path_string, multitap_deco_state,
+    push_multitap_arrow_sample, push_overlay_sample_eases,
 };
 use chrono::{Datelike, Local};
 use deadlib_present::actors::TextAlign;
-use deadlib_present::anim::{EffectClock, EffectMode};
-use deadsync_song_lua::{
-    MultitapPhase, multitap_deco_state, push_multitap_arrow_sample, push_overlay_sample_eases,
-};
 use std::fs;
 use std::path::PathBuf;
 
@@ -886,7 +883,6 @@ fn multitap_sample_eases_step_visibility_edges() {
 fn multitap_deco_state_rotates_yinyang_during_bounce() {
     let state = multitap_deco_state(
         SongLuaOverlayState::default(),
-        SongLuaNoteskinResolver::default(),
         "ddr-note",
         MultitapPhase {
             pos: 0.0,
@@ -914,7 +910,6 @@ fn multitap_arrow_sampler_does_not_emit_inactive_baseline() {
         &mut samples,
         10.0,
         baseline,
-        SongLuaNoteskinResolver::default(),
         "ddr-note",
         1,
         MultitapPhase {
@@ -929,7 +924,6 @@ fn multitap_arrow_sampler_does_not_emit_inactive_baseline() {
         &mut samples,
         10.001,
         baseline,
-        SongLuaNoteskinResolver::default(),
         "ddr-note",
         1,
         MultitapPhase {
@@ -4789,9 +4783,8 @@ return Def.ActorFrame{
         &SongLuaCompileContext::new(&song_dir, "LoadActor Video Media"),
     )
     .unwrap();
-    assert!(compiled.messages.iter().any(|event| {
-        event.message != SONG_LUA_STARTUP_MESSAGE && event.message == "true:true"
-    }));
+    assert_eq!(compiled.messages.len(), 1);
+    assert_eq!(compiled.messages[0].message, "true:true");
 }
 
 #[test]
@@ -4861,9 +4854,8 @@ return Def.ActorFrame{
         &SongLuaCompileContext::new(&song_dir, "LoadActor Audio Media"),
     )
     .unwrap();
-    assert!(compiled.messages.iter().any(|event| {
-        event.message != SONG_LUA_STARTUP_MESSAGE && event.message == "true:true"
-    }));
+    assert_eq!(compiled.messages.len(), 1);
+    assert_eq!(compiled.messages[0].message, "true:true");
     assert_eq!(compiled.overlays.len(), 1);
     let SongLuaOverlayKind::Sound { sound_path } = &compiled.overlays[0].kind else {
         panic!("expected sound overlay");

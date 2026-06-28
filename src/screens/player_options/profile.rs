@@ -175,7 +175,7 @@ pub(super) fn effective_scroll_speed_with_alt(
 /// returned, so both the arrow-scroll path (which reads the returned array) and
 /// the score-validity path (which reads `player_profiles`) observe the same
 /// effective speed. The persisted profile is never touched, so returning to
-/// song select restores the player's real mod automatically.
+/// song select restores CMod automatically.
 pub fn apply_no_cmod_alternative(state: &mut State) -> [ScrollSpeedSetting; PLAYER_SLOTS] {
     let is_no_cmod = state.song.is_no_cmod();
     let reference_bpm = reference_bpm_for_song(

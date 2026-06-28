@@ -1448,25 +1448,6 @@ fn selected_song_arc(state: &State) -> Option<Arc<SongData>> {
     }
 }
 
-fn reload_selected_song(state: &mut State) -> bool {
-    let Some(song) = selected_song_arc(state) else {
-        return false;
-    };
-    let simfile_path = song.simfile_path.clone();
-    match song_loading::reload_song_in_cache(&simfile_path) {
-        Ok(_) => {
-            refresh_from_song_cache(state);
-            audio::play_sfx("assets/sounds/change.ogg");
-            debug!("Force-reloaded song from disk: {}", simfile_path.display());
-            true
-        }
-        Err(e) => {
-            warn!("Force reload failed for '{}': {e}", simfile_path.display());
-            false
-        }
-    }
-}
-
 fn song_entry_index(entries: &[MusicWheelEntry], target_song: &Arc<SongData>) -> Option<usize> {
     entries
         .iter()
@@ -8590,9 +8571,9 @@ fn handle_select_music_menu_input(state: &mut State, ev: &InputEvent) -> ScreenA
             audio::play_sfx("assets/sounds/start.ogg");
             ScreenAction::None
         }
-        select_music_menu::InputOutcome::ActivateAction(action, side) => {
+        select_music_menu::InputOutcome::ActivateAction(action) => {
             audio::play_sfx("assets/sounds/start.ogg");
-            dispatch_menu_action(state, action, side)
+            dispatch_menu_action(state, action)
         }
         select_music_menu::InputOutcome::Close => {
             audio::play_sfx("assets/sounds/start.ogg");
@@ -8602,11 +8583,7 @@ fn handle_select_music_menu_input(state: &mut State, ev: &InputEvent) -> ScreenA
     }
 }
 
-fn dispatch_menu_action(
-    state: &mut State,
-    action: select_music_menu::Action,
-    side: profile_data::PlayerSide,
-) -> ScreenAction {
+fn dispatch_menu_action(state: &mut State, action: select_music_menu::Action) -> ScreenAction {
     match action {
         select_music_menu::Action::BackToMain => {
             hide_select_music_menu(state);
@@ -8703,6 +8680,7 @@ fn dispatch_menu_action(
         }
         select_music_menu::Action::ToggleFavorite => {
             // Toggle favorite for the highlighted song chart or real pack header.
+            let side = profile::get_session_player_side();
             match state.entries.get(state.selected_index).cloned() {
                 Some(MusicWheelEntry::Song(song)) => {
                     let target_chart_type = profile::get_session_play_style().chart_type();
@@ -9382,26 +9360,6 @@ pub fn handle_raw_key_event(
     key: Option<&RawKeyboardEvent>,
     text: Option<&str>,
 ) -> ScreenAction {
-    handle_raw_key_event_impl(state, key, text, false, false)
-}
-
-pub fn handle_raw_key_event_with_modifiers(
-    state: &mut State,
-    key: Option<&RawKeyboardEvent>,
-    text: Option<&str>,
-    ctrl_held: bool,
-    shift_held: bool,
-) -> ScreenAction {
-    handle_raw_key_event_impl(state, key, text, ctrl_held, shift_held)
-}
-
-fn handle_raw_key_event_impl(
-    state: &mut State,
-    key: Option<&RawKeyboardEvent>,
-    text: Option<&str>,
-    ctrl_held: bool,
-    shift_held: bool,
-) -> ScreenAction {
     if state.reload_ui.is_some() {
         return ScreenAction::None;
     }
@@ -9594,8 +9552,7 @@ fn handle_raw_key_event_impl(
         let ignore_open_text = matches!(action, select_music_menu::Action::SongSearch);
         // Consume the key even when the dispatched action itself reports
         // ScreenAction::None, so a successful raw shortcut stays single-action.
-        let side = profile::get_session_player_side();
-        let action = match dispatch_menu_action(state, action, side) {
+        let action = match dispatch_menu_action(state, action) {
             ScreenAction::None => ScreenAction::ConsumeInput,
             other => other,
         };
@@ -9608,18 +9565,6 @@ fn handle_raw_key_event_impl(
             state.song_search_ignore_next_text = true;
         }
         return action;
-    }
-    if let Some(key) = key
-        && ctrl_held
-        && shift_held
-        && key.code == KeyCode::KeyR
-        && key.pressed
-        && !key.repeat
-        && config::get().keyboard_features
-        && !key_bound_to_player_input(key)
-        && reload_selected_song(state)
-    {
-        return ScreenAction::ConsumeInput;
     }
     if let Some(key) = key
         && key.code == KeyCode::F7

@@ -506,12 +506,6 @@ pub fn init() -> State {
     set_choice_by_id(
         &mut state.sub[SubmenuKind::SmxConfig].choice_indices,
         SMX_CONFIG_OPTIONS_ROWS,
-        SubRowId::SmxUnderglowTheme,
-        yes_no_choice_index(cfg.smx_underglow_theme),
-    );
-    set_choice_by_id(
-        &mut state.sub[SubmenuKind::SmxConfig].choice_indices,
-        SMX_CONFIG_OPTIONS_ROWS,
         SubRowId::SmxManagesPadConfig,
         yes_no_choice_index(cfg.smx_manages_pad_config),
     );
@@ -664,12 +658,6 @@ pub fn init() -> State {
         MACHINE_OPTIONS_ROWS,
         SubRowId::VisualStyle,
         cfg.visual_style.choice_index(),
-    );
-    set_choice_by_id(
-        &mut state.sub[SubmenuKind::Machine].choice_indices,
-        MACHINE_OPTIONS_ROWS,
-        SubRowId::ThemeVariant,
-        cfg.srpg_variant.choice_index(),
     );
     set_choice_by_id(
         &mut state.sub[SubmenuKind::Machine].choice_indices,
