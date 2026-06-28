@@ -19,7 +19,7 @@ use deadsync_gameplay::{
     COMBO_THOUSAND_MILESTONE_DURATION, ComboMilestoneKind, FantasticWindowOptions,
     GameplayErrorBarTrim, HELD_MISS_TOTAL_DURATION, HOLD_JUDGMENT_TOTAL_DURATION,
     RECEPTOR_Y_OFFSET_FROM_CENTER, RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, TapExplosionOptions,
-    VisualEffects, active_column_cue, active_column_cues, blue_fantastic_window_ms,
+    VisualEffects, active_column_cue, active_column_cue_range, blue_fantastic_window_ms,
     column_flash_duration, gameplay_error_bar_trim_max_window_ix, hold_explosion_active,
     hold_explosion_enabled_for_options, hold_head_render_flags, let_go_head_beat,
     scroll_receptor_y, song_lua_column_y_offset, song_lua_note_hidden,
@@ -32,9 +32,10 @@ use deadsync_notefield::{
     appearance_note_glow, append_beat_bar, append_cue_bar, append_edit_measure_number,
     apply_accel_y as crate_apply_accel_y, apply_accel_y_with_peak as crate_apply_accel_y_with_peak,
     average_error_bar_mini_scale, beat_factor, beat_scroll_travel, bottom_cap_uv_window,
-    clipped_hold_body_bounds, column_cue_alpha, column_cue_height, column_cue_reverse_top_y,
-    column_flash_alpha, column_flash_color, column_flash_height, column_flash_layout,
-    column_flash_reverse_top_y, combo_actor_zoom, compute_invert_distances, compute_tornado_bounds,
+    clipped_hold_body_bounds, column_cue_alpha, column_cue_alpha_anchored, column_cue_height,
+    column_cue_reverse_top_y, column_flash_alpha, column_flash_color, column_flash_height,
+    column_flash_layout, column_flash_reverse_top_y, combo_actor_zoom, compute_invert_distances,
+    compute_tornado_bounds,
     crossover_cue_height, edit_bar_candidate_step_rows, edit_bar_scroll_speed,
     edit_beat_bar_info_for_row, edit_beat_scroll_travel,
     effective_mini_value as crate_effective_mini_value, error_bar_boundaries_s,
@@ -1763,15 +1764,22 @@ pub(crate) fn build_bundles(
             } else {
                 1.0
             };
-            let active_cues = active_column_cues(state.crossover_cues(player_idx), current_time);
-            if !active_cues.is_empty() {
+            let crossover_cues = state.crossover_cues(player_idx);
+            let active_range = active_column_cue_range(crossover_cues, current_time);
+            if !active_range.is_empty() {
                 let lane_width = ScrollSpeedSetting::ARROW_SPACING * field_zoom;
                 let cue_height = crossover_cue_height(screen_height());
 
-                for cue in active_cues {
+                for cue_idx in active_range {
+                    let cue = &crossover_cues[cue_idx];
+                    let entry_time = state
+                        .crossover_cue_entry_time(player_idx, cue_idx)
+                        .unwrap_or(cue.start_time);
                     let duration_real = cue.duration / rate;
                     let elapsed_real = (current_time - cue.start_time) / rate;
-                    let alpha_mul = column_cue_alpha(elapsed_real, duration_real);
+                    let since_entry_real = (current_time - entry_time) / rate;
+                    let alpha_mul =
+                        column_cue_alpha_anchored(since_entry_real, elapsed_real, duration_real);
                     if alpha_mul <= 0.0 {
                         continue;
                     }

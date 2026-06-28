@@ -53,10 +53,12 @@ pub fn active_column_cue(cues: &[ColumnCue], current_time: f32) -> Option<&Colum
     idx.checked_sub(1).and_then(|i| cues.get(i))
 }
 
-// Returns every cue whose [start_time, start_time + duration] window contains
-// `current_time`, as a contiguous slice in chronological order.
+// Returns the half-open index range of cues whose [start_time, start_time +
+// duration] window contains `current_time`, in chronological order. Consecutive
+// crossover cues are built to overlap by the fade time, so up to two cues can be
+// active at once.
 #[inline]
-pub fn active_column_cues(cues: &[ColumnCue], current_time: f32) -> &[ColumnCue] {
+pub fn active_column_cue_range(cues: &[ColumnCue], current_time: f32) -> core::ops::Range<usize> {
     let end = cues.partition_point(|cue| cue.start_time <= current_time);
     let mut begin = end;
     while begin > 0 {
@@ -67,11 +69,29 @@ pub fn active_column_cues(cues: &[ColumnCue], current_time: f32) -> &[ColumnCue]
             break;
         }
     }
-    &cues[begin..end]
+    begin..end
+}
+
+// Returns every cue whose [start_time, start_time + duration] window contains
+// `current_time`, as a contiguous slice in chronological order. Rendering all of
+// them lets the outgoing cue's fade-out crossfade with the incoming cue's
+// fade-in, matching the 8ms theme where each cue animates on its own independent
+// column actor.
+#[inline]
+pub fn active_column_cues(cues: &[ColumnCue], current_time: f32) -> &[ColumnCue] {
+    &cues[active_column_cue_range(cues, current_time)]
 }
 
 // Lead-in/out fade applied to every crossover cue.
 pub const CROSSOVER_CUE_FADE_SECONDS: f32 = 0.075;
+
+// When the playhead first crosses a cue's start, the cue is only shown if it was
+// reached within this window. During normal play a cue is always caught a frame
+// or two after its start (well under the fade time). After a practice-mode seek
+// that lands past this window, the cue is suppressed instead of popping in at
+// partial/full alpha. Using the fade time guarantees a caught cue is still
+// inside its fade-in, so it always fades in from a low alpha.
+pub const CROSSOVER_CUE_SEEK_GUARD_SECONDS: f32 = CROSSOVER_CUE_FADE_SECONDS;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct CrossoverRow {

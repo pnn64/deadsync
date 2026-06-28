@@ -183,7 +183,25 @@ pub fn column_cue_reverse_top_y(
 }
 
 pub fn column_cue_alpha(elapsed_real: f32, duration_real: f32) -> f32 {
-    if !elapsed_real.is_finite() || !duration_real.is_finite() {
+    // The natural envelope is the anchored envelope with the fade-in anchored to
+    // the cue's own start (i.e. since_entry == elapsed).
+    column_cue_alpha_anchored(elapsed_real, elapsed_real, duration_real)
+}
+
+// Alpha envelope for a column cue whose fade-in is anchored to an arbitrary
+// entry point. `since_entry_real` is the time since the cue first became visible
+// (its natural start during normal play, or the seek-landing time when the
+// playhead jumped into the middle of it); it drives the fade-in. `elapsed_real`
+// is the time since the cue's real start; it drives the fade-out and bounds the
+// cue's lifetime. When since_entry_real == elapsed_real this is identical to the
+// natural fade. Anchoring the fade-in lets a seeked-into cue ramp up from 0
+// instead of popping in at full alpha.
+pub fn column_cue_alpha_anchored(
+    since_entry_real: f32,
+    elapsed_real: f32,
+    duration_real: f32,
+) -> f32 {
+    if !since_entry_real.is_finite() || !elapsed_real.is_finite() || !duration_real.is_finite() {
         return 0.0;
     }
     if elapsed_real < 0.0 || elapsed_real > duration_real {
@@ -192,16 +210,20 @@ pub fn column_cue_alpha(elapsed_real: f32, duration_real: f32) -> f32 {
     if duration_real <= COLUMN_CUE_FADE_TIME * 2.0 {
         return 0.0;
     }
-    if elapsed_real < COLUMN_CUE_FADE_TIME {
-        let t = (elapsed_real / COLUMN_CUE_FADE_TIME).clamp(0.0, 1.0);
-        return 1.0 - (1.0 - t) * (1.0 - t);
-    }
-    if elapsed_real > duration_real - COLUMN_CUE_FADE_TIME {
+    let fade_in = if since_entry_real < COLUMN_CUE_FADE_TIME {
+        let t = (since_entry_real / COLUMN_CUE_FADE_TIME).clamp(0.0, 1.0);
+        1.0 - (1.0 - t) * (1.0 - t)
+    } else {
+        1.0
+    };
+    let fade_out = if elapsed_real > duration_real - COLUMN_CUE_FADE_TIME {
         let t = ((elapsed_real - (duration_real - COLUMN_CUE_FADE_TIME)) / COLUMN_CUE_FADE_TIME)
             .clamp(0.0, 1.0);
-        return 1.0 - t * t;
-    }
-    1.0
+        1.0 - t * t
+    } else {
+        1.0
+    };
+    fade_in.min(fade_out)
 }
 
 pub fn judgment_tilt_rotation_deg(params: JudgmentTiltParams) -> f32 {

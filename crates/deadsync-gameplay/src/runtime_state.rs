@@ -303,6 +303,15 @@ pub struct GameplayCueRuntimeState {
     measure_counter_segments: [Vec<StreamSegment>; MAX_PLAYERS],
     column_cues: [Vec<ColumnCue>; MAX_PLAYERS],
     crossover_cues: [Vec<ColumnCue>; MAX_PLAYERS],
+    // Per crossover cue: None = not yet reached (or rewound before its start),
+    // Some(t) = the fade-in anchor time. During normal play this is the cue's own
+    // start; when the playhead seeks into the middle of a cue it is the landing
+    // time, so the cue fades in from there instead of popping in at full alpha.
+    crossover_cue_entry: [Vec<Option<f32>>; MAX_PLAYERS],
+    // Number of leading crossover cues whose start has been crossed (and thus
+    // anchored) at the last evaluated time. Lets the gate anchor/rewind only the
+    // cues that changed since the previous frame.
+    crossover_cue_cursor: [usize; MAX_PLAYERS],
 }
 
 impl Default for GameplayCueRuntimeState {
@@ -311,6 +320,8 @@ impl Default for GameplayCueRuntimeState {
             measure_counter_segments: std::array::from_fn(|_| Vec::new()),
             column_cues: std::array::from_fn(|_| Vec::new()),
             crossover_cues: std::array::from_fn(|_| Vec::new()),
+            crossover_cue_entry: std::array::from_fn(|_| Vec::new()),
+            crossover_cue_cursor: [0; MAX_PLAYERS],
         }
     }
 }
@@ -325,6 +336,8 @@ impl GameplayCueRuntimeState {
             measure_counter_segments,
             column_cues,
             crossover_cues,
+            crossover_cue_entry: std::array::from_fn(|_| Vec::new()),
+            crossover_cue_cursor: [0; MAX_PLAYERS],
         }
     }
 
@@ -345,6 +358,58 @@ impl GameplayCueRuntimeState {
         self.crossover_cues.get(player).map_or(&[], Vec::as_slice)
     }
 
+    // Advances the per-player crossover cue fade-in anchors to `current_time`
+    // (visible music seconds). The first frame the playhead crosses a cue's
+    // start, anchor it to the cue's start if it was reached within
+    // CROSSOVER_CUE_SEEK_GUARD_SECONDS (normal play -> natural fade-in) or to
+    // `current_time` if the start was jumped over (seek -> fade in from the
+    // landing point). Anchors are cleared for cues the playhead has rewound
+    // before, so a replayed section fades in naturally. Call once per player per
+    // frame.
+    pub fn update_crossover_cue_anchors(&mut self, player: usize, current_time: f32) {
+        let Some(cues) = self.crossover_cues.get(player) else {
+            return;
+        };
+        let Some(entry) = self.crossover_cue_entry.get_mut(player) else {
+            return;
+        };
+        if entry.len() != cues.len() {
+            entry.clear();
+            entry.resize(cues.len(), None);
+            self.crossover_cue_cursor[player] = 0;
+        }
+        if cues.is_empty() {
+            return;
+        }
+        let cursor = self.crossover_cue_cursor[player];
+        let target = cues.partition_point(|cue| cue.start_time <= current_time);
+        if target > cursor {
+            for i in cursor..target {
+                let start = cues[i].start_time;
+                entry[i] = Some(if current_time - start < CROSSOVER_CUE_SEEK_GUARD_SECONDS {
+                    start
+                } else {
+                    current_time
+                });
+            }
+        } else if target < cursor {
+            for slot in &mut entry[target..cursor] {
+                *slot = None;
+            }
+        }
+        self.crossover_cue_cursor[player] = target;
+    }
+
+    // The fade-in anchor time for the crossover cue at `index`, or None when the
+    // cue has not been reached yet or is outside a tracked gate (callers fall
+    // back to the cue's own start, i.e. the natural fade-in).
+    #[inline(always)]
+    pub fn crossover_cue_entry_time(&self, player: usize, index: usize) -> Option<f32> {
+        self.crossover_cue_entry
+            .get(player)
+            .and_then(|entry| entry.get(index).copied().flatten())
+    }
+
     #[inline(always)]
     pub fn set_column_cues_for_benchmark(&mut self, player: usize, cues: Vec<ColumnCue>) {
         if let Some(slot) = self.column_cues.get_mut(player) {
@@ -363,6 +428,10 @@ impl GameplayCueRuntimeState {
         for cues in &mut self.crossover_cues {
             cues.clear();
         }
+        for entry in &mut self.crossover_cue_entry {
+            entry.clear();
+        }
+        self.crossover_cue_cursor = [0; MAX_PLAYERS];
     }
 }
 

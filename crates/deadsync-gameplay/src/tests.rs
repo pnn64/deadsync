@@ -13227,6 +13227,55 @@ mod tests {
     }
 
     #[test]
+    fn crossover_cue_anchor_tracks_entry_time() {
+        let new_state = || {
+            let measure_counter_segments: [Vec<StreamSegment>; MAX_PLAYERS] =
+                std::array::from_fn(|_| Vec::new());
+            let column_cues: [Vec<ColumnCue>; MAX_PLAYERS] = std::array::from_fn(|_| Vec::new());
+            let mut crossover_cues: [Vec<ColumnCue>; MAX_PLAYERS] =
+                std::array::from_fn(|_| Vec::new());
+            // Two well-separated cues so seeking lands clearly inside one.
+            crossover_cues[0].push(ColumnCue {
+                start_time: 1.0,
+                duration: 1.0,
+                columns: Vec::new(),
+            });
+            crossover_cues[0].push(ColumnCue {
+                start_time: 5.0,
+                duration: 1.0,
+                columns: Vec::new(),
+            });
+            GameplayCueRuntimeState::new(measure_counter_segments, column_cues, crossover_cues)
+        };
+
+        // Normal forward play: each cue is caught near its start, so it anchors
+        // to its own start (natural fade-in).
+        let mut state = new_state();
+        state.update_crossover_cue_anchors(0, 0.5);
+        state.update_crossover_cue_anchors(0, 1.0 + 0.01);
+        assert_eq!(state.crossover_cue_entry_time(0, 0), Some(1.0));
+
+        // Seek straight into the middle of cue 1: it anchors to the landing time,
+        // so the renderer fades it in from there instead of popping it in.
+        state.update_crossover_cue_anchors(0, 5.5);
+        assert_eq!(state.crossover_cue_entry_time(0, 1), Some(5.5));
+        // Cue 0 keeps its earlier natural anchor.
+        assert_eq!(state.crossover_cue_entry_time(0, 0), Some(1.0));
+
+        // Rewind before cue 1's start, then catch it from the start: it re-anchors
+        // to its own start.
+        state.update_crossover_cue_anchors(0, 4.0);
+        assert_eq!(state.crossover_cue_entry_time(0, 1), None);
+        state.update_crossover_cue_anchors(0, 5.0 + 0.01);
+        assert_eq!(state.crossover_cue_entry_time(0, 1), Some(5.0));
+
+        // Out-of-range / untracked players have no anchor (callers fall back to
+        // the cue's own start).
+        assert_eq!(state.crossover_cue_entry_time(0, 99), None);
+        assert_eq!(state.crossover_cue_entry_time(1, 0), None);
+    }
+
+    #[test]
     fn hold_feedback_state_returns_slices_and_clears() {
         let mut state = GameplayHoldFeedbackState::default();
         state.hold_judgments[1] = Some(HoldJudgmentRenderInfo {
