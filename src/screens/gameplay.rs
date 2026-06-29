@@ -2179,15 +2179,21 @@ fn cached_bpm_text(bpm: f64, show_decimal: bool) -> Arc<str> {
             format!("{rounded:.0}")
         });
     }
-    let rounded_tenth = (bpm * 10.0).round() / 10.0;
-    let rounded_tenth = rounded_tenth.max(0.0);
-    let key = (rounded_tenth.to_bits(), true);
+    let rounded = ((bpm * 1000.0).round() / 1000.0).max(0.0);
+    let key = (rounded.to_bits(), true);
     cached_text(&BPM_TEXT_CACHE, key, TEXT_CACHE_LIMIT, || {
-        let nearest_int = rounded_tenth.round();
-        if (rounded_tenth - nearest_int).abs() <= 0.001 {
+        let nearest_int = rounded.round();
+        if (rounded - nearest_int).abs() <= 0.0005 {
             format!("{nearest_int:.0}")
         } else {
-            format!("{rounded_tenth:.1}")
+            let mut s = format!("{rounded:.3}");
+            while s.ends_with('0') {
+                s.pop();
+            }
+            if s.ends_with('.') {
+                s.pop();
+            }
+            s
         }
     })
 }
