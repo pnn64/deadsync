@@ -18,7 +18,7 @@ use std::{
 
 struct DynamicVideoState {
     player: video::Player,
-    started_at: Instant,
+    started_at: Option<Instant>,
     path: PathBuf,
 }
 
@@ -956,8 +956,11 @@ impl DynamicMedia {
             if assets.has_pending_texture_upload(key) {
                 continue;
             }
-            let play_time = video.started_at.elapsed().as_secs_f32();
+            let play_time = video
+                .started_at
+                .map_or(0.0, |start| start.elapsed().as_secs_f32());
             if let Some(frame) = video.player.take_due_frame(play_time) {
+                video.started_at.get_or_insert_with(Instant::now);
                 assets.queue_texture_upload(key.clone(), frame);
             }
         }
@@ -1113,7 +1116,7 @@ impl DynamicMedia {
                         prepared.key,
                         DynamicVideoState {
                             player: prepared.player,
-                            started_at: Instant::now(),
+                            started_at: None,
                             path: prepared.path,
                         },
                     ) {
@@ -1151,7 +1154,7 @@ impl DynamicMedia {
                         prepared.key,
                         DynamicVideoState {
                             player: prepared.player,
-                            started_at: Instant::now(),
+                            started_at: None,
                             path: prepared.path,
                         },
                     ) {
