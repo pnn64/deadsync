@@ -10,7 +10,9 @@ use deadlib_present::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
 use deadsync_audio_stream as audio;
-use deadsync_gameplay::{GameplayAction, handle_core_input, spacing_multiplier_for_percent, update_core};
+use deadsync_gameplay::{
+    GameplayAction, handle_core_input, spacing_multiplier_for_percent, update_core,
+};
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
@@ -436,9 +438,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     gameplay_screen::drain_core_commands(&mut state.gameplay);
     let current_time = state.gameplay.current_music_time_seconds();
     let stop_time = state.gameplay.music_time_for_beat(stop_beat);
-    if current_time >= stop_time + LOOP_AFTER_SECONDS
-        || !matches!(action, GameplayAction::None)
-    {
+    if current_time >= stop_time + LOOP_AFTER_SECONDS || !matches!(action, GameplayAction::None) {
         start_playback(state, start_beat, stop_beat);
     }
     ScreenAction::None
@@ -669,6 +669,7 @@ fn practice_view(state: &State) -> gameplay_screen::ActorViewOverride {
     gameplay_screen::ActorViewOverride {
         notefield,
         hide_gameplay_hud: true,
+        ..Default::default()
     }
 }
 
@@ -960,7 +961,9 @@ fn start_playback(state: &mut State, start_beat: f32, stop_beat: f32) {
     clear_page_hold_inputs(state);
     let start_time = state.gameplay.music_time_for_beat(start_beat);
     let playback_time = snapped_playback_music_time(state, start_time - LEAD_IN_SECONDS);
-    state.gameplay.start_practice_music_at(playback_time, start_time);
+    state
+        .gameplay
+        .start_practice_music_at(playback_time, start_time);
     crate::screens::gameplay::drain_core_commands(&mut state.gameplay);
     state.mode = Mode::Playing {
         start_beat,

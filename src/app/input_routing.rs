@@ -180,11 +180,16 @@ impl App {
             allow_commands,
         );
         crate::screens::gameplay::drain_audio_commands(gs);
-        if matches!(action, RawKeyAction::Restart)
-            && config::get().keyboard_features
-            && self.state.session.course_run.is_none()
-        {
-            self.try_gameplay_restart(event_loop, "Ctrl+R");
+        let keyboard_features = config::get().keyboard_features;
+        let non_course = self.state.session.course_run.is_none();
+        match action {
+            RawKeyAction::Restart if keyboard_features && non_course => {
+                self.try_gameplay_restart(event_loop, "Ctrl+R");
+            }
+            RawKeyAction::Reload if keyboard_features && non_course => {
+                self.try_gameplay_reload(event_loop, "Ctrl+Shift+R");
+            }
+            _ => {}
         }
     }
 

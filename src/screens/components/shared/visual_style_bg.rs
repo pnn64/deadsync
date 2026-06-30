@@ -7,13 +7,13 @@ use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use std::sync::{
     Arc, Mutex, OnceLock,
-    atomic::{AtomicU32, Ordering},
+    atomic::{AtomicU64, Ordering},
 };
 
 // Shared UI elapsed clock advanced by `app` using post-Tab-acceleration dt so
 // menu backgrounds stay phase-locked across screens while still honoring
 // fast/slow/paused menu animation controls.
-static GLOBAL_ELAPSED_BITS: AtomicU32 = AtomicU32::new(0.0_f32.to_bits());
+static GLOBAL_ELAPSED_BITS: AtomicU64 = AtomicU64::new(0.0_f64.to_bits());
 static SRPG_BACKGROUND_KEY: OnceLock<Mutex<Option<Arc<str>>>> = OnceLock::new();
 
 const COLOR_ADD: [i32; 10] = [-1, 0, 0, -1, -1, -1, 0, 0, 0, 0];
@@ -68,7 +68,7 @@ impl TiledStyleState {
         Self
     }
 
-    fn push_at_elapsed(&self, out: &mut Vec<Actor>, params: &Params, elapsed_s: f32) {
+    fn push_at_elapsed(&self, out: &mut Vec<Actor>, params: &Params, elapsed_s: f64) {
         out.reserve(11);
         let w = screen_width();
         let h = screen_height();
@@ -106,7 +106,7 @@ impl State {
         self.push_at_elapsed(out, params, global_elapsed_s());
     }
 
-    pub fn push_at_elapsed(&self, out: &mut Vec<Actor>, params: Params, elapsed_s: f32) {
+    pub fn push_at_elapsed(&self, out: &mut Vec<Actor>, params: Params, elapsed_s: f64) {
         let style = visual_style();
         if matches!(style, VisualStyle::Technique)
             && self.technique.push_at_elapsed(
@@ -126,7 +126,7 @@ impl State {
         self.tiled.push_at_elapsed(out, &params, elapsed_s);
     }
 
-    pub fn build_at_elapsed(&self, params: Params, elapsed_s: f32) -> Vec<Actor> {
+    pub fn build_at_elapsed(&self, params: Params, elapsed_s: f64) -> Vec<Actor> {
         let mut actors = Vec::new();
         self.push_at_elapsed(&mut actors, params, elapsed_s);
         actors
@@ -204,9 +204,9 @@ fn srpg_background_tint(active_color_index: i32) -> [f32; 4] {
 }
 
 #[inline(always)]
-fn scrolled_uv_rect(velocity: [f32; 2], elapsed_s: f32) -> [f32; 4] {
-    let u0 = (velocity[0] * elapsed_s).rem_euclid(1.0);
-    let v0 = (velocity[1] * elapsed_s).rem_euclid(1.0);
+fn scrolled_uv_rect(velocity: [f32; 2], elapsed_s: f64) -> [f32; 4] {
+    let u0 = (f64::from(velocity[0]) * elapsed_s).rem_euclid(1.0) as f32;
+    let v0 = (f64::from(velocity[1]) * elapsed_s).rem_euclid(1.0) as f32;
     [u0, v0, u0 + SHARED_BG_UV_SPAN, v0 + SHARED_BG_UV_SPAN]
 }
 
@@ -219,8 +219,9 @@ pub fn tick_global(dt: f32) {
     if !dt.is_finite() || dt <= 0.0 {
         return;
     }
+    let dt = f64::from(dt);
     let _ = GLOBAL_ELAPSED_BITS.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |bits| {
-        let elapsed = f32::from_bits(bits);
+        let elapsed = f64::from_bits(bits);
         let next = elapsed + dt;
         Some(if next.is_finite() {
             next.max(0.0).to_bits()
@@ -231,12 +232,12 @@ pub fn tick_global(dt: f32) {
 }
 
 #[inline]
-fn global_elapsed_s() -> f32 {
-    f32::from_bits(GLOBAL_ELAPSED_BITS.load(Ordering::Relaxed))
+fn global_elapsed_s() -> f64 {
+    f64::from_bits(GLOBAL_ELAPSED_BITS.load(Ordering::Relaxed))
 }
 
 #[cfg(test)]
-fn set_global_elapsed_for_test(elapsed_s: f32) {
+fn set_global_elapsed_for_test(elapsed_s: f64) {
     GLOBAL_ELAPSED_BITS.store(elapsed_s.max(0.0).to_bits(), Ordering::Relaxed);
 }
 
@@ -244,7 +245,7 @@ fn set_global_elapsed_for_test(elapsed_s: f32) {
 mod tests {
     use super::*;
 
-    const EPS: f32 = 1e-3;
+    const EPS: f64 = 1e-3;
 
     fn params() -> Params {
         Params {
@@ -285,13 +286,13 @@ mod tests {
         let shared = first_bg_sprite(&shared_actors);
         let explicit = first_bg_sprite(&explicit_actors);
         assert!(
-            (shared.0[0] - explicit.0[0]).abs() < EPS
-                && (shared.0[1] - explicit.0[1]).abs() < EPS
+            f64::from((shared.0[0] - explicit.0[0]).abs()) < EPS
+                && f64::from((shared.0[1] - explicit.0[1]).abs()) < EPS
                 && shared
                     .1
                     .iter()
                     .zip(explicit.1)
-                    .all(|(a, b)| (*a - b).abs() < EPS),
+                    .all(|(a, b)| f64::from((*a - b).abs()) < EPS),
             "shared={shared:?} explicit={explicit:?}"
         );
     }
@@ -314,6 +315,17 @@ mod tests {
         tick_global(-0.25);
         assert!(
             (global_elapsed_s() - 1.5).abs() < EPS,
+            "got {}",
+            global_elapsed_s()
+        );
+    }
+
+    #[test]
+    fn tick_global_keeps_subframe_precision_after_long_uptime() {
+        set_global_elapsed_for_test(1_000_000.0);
+        tick_global(1.0 / 240.0);
+        assert!(
+            global_elapsed_s() > 1_000_000.0,
             "got {}",
             global_elapsed_s()
         );

@@ -70,13 +70,14 @@ fn build_body_lines(
 ) -> Vec<String> {
     let mut lines = Vec::new();
 
+    lines.push(format!("Lobby Code: {}", joined.code));
+    lines.push(String::new());
+
     if let Some(status_text) = status_text {
         for line in status_text.lines() {
             lines.push(truncate_text(line, 44));
         }
-        if !lines.is_empty() {
-            lines.push(String::new());
-        }
+        lines.push(String::new());
     }
 
     let ordered_players = ordered_players(joined);

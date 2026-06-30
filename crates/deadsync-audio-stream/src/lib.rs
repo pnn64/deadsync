@@ -820,7 +820,7 @@ fn music_decoder_thread_loop(
                     if let Some(fade) = fade_spec {
                         apply_fade_envelope(&mut out_tmp, out_ch, frames_emitted_total, fade);
                     }
-                    next_music_output_sec = push_music_block_with_map(
+                    let _ = push_music_block_with_map(
                         &ring,
                         &queued_music_map,
                         &out_tmp,

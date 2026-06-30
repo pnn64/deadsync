@@ -1,7 +1,7 @@
 use crate::act;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::{self, AssetManager, visual_styles};
-use crate::game::parsing::noteskin::{self, NUM_QUANTIZATIONS, Noteskin, Quantization};
+use crate::game::parsing::noteskin::{self, Noteskin};
 use crate::game::profile;
 use crate::game::scores;
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor;
@@ -18,6 +18,7 @@ use deadlib_present::space::{screen_center_x, screen_center_y};
 use deadlib_render::BlendMode;
 use deadsync_audio_stream as audio;
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_noteskin::{NUM_QUANTIZATIONS, Quantization, Style};
 use deadsync_profile as profile_data;
 use deadsync_rules::scroll::{GUEST_SCROLL_SPEED, ScrollSpeedSetting};
 use std::collections::HashMap;
@@ -134,12 +135,12 @@ pub struct State {
 
 struct NoteskinCache {
     cache: HashMap<String, Arc<Noteskin>>,
-    style: noteskin::Style,
+    style: Style,
 }
 
 impl NoteskinCache {
     fn new(_choices: &[Choice]) -> Self {
-        let style = noteskin::Style {
+        let style = Style {
             num_cols: 4,
             num_players: 1,
         };

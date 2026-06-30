@@ -1,4 +1,4 @@
-use super::GameplayCoreState;
+use super::{GameplayCoreState, chart_effects_from_profile, gameplay_attack_mode};
 use crate::config::SimpleIni;
 use crate::game::online::groovestats as online_groovestats;
 use crate::game::profile;
@@ -16,8 +16,7 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use deadsync_gameplay::{
-    PlayerRuntime, ScoreValidityOptions, chart_effects_from_profile, gameplay_attack_mode,
-    score_invalid_reason_lines_for_options,
+    PlayerRuntime, ScoreValidityOptions, score_invalid_reason_lines_for_options,
 };
 use deadsync_online::arrowcloud::{self as arrowcloud_api, ARROWCLOUD_BULK_MAX_HASHES};
 use deadsync_online::boxed_request_error;

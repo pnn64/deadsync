@@ -1,0 +1,17 @@
+[package]
+name = "deadsync-import"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0"
+
+[dependencies]
+deadsync-chart = { path = "../deadsync-chart" }
+deadsync-profile = { path = "../deadsync-profile" }
+deadsync-rules = { path = "../deadsync-rules" }
+deadsync-score = { path = "../deadsync-score" }
+flate2 = "1.1.9"
+
+[lints.clippy]
+perf = { level = "warn", priority = -1 }
+
+inline_always = "allow"

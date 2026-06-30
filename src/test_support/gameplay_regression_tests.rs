@@ -4,26 +4,25 @@ pub(crate) use deadsync_core::song_time::{
     INVALID_SONG_TIME_NS, SongTimeNs, normalized_song_rate, song_time_ns_from_seconds,
     song_time_ns_invalid, song_time_ns_to_seconds,
 };
+#[cfg(test)]
+use deadsync_gameplay::effective_visual_effects_for_player;
 pub(crate) use deadsync_gameplay::song_lua_ease_factor;
 pub use deadsync_gameplay::{
     ASSIST_TICK_LOOKAHEAD_MARGIN_SECONDS, AUTOSYNC_OFFSET_SAMPLE_COUNT,
     AUTOSYNC_STDDEV_MAX_SECONDS, AccelEffects, AccelOverrides, ActiveColumnFlash,
-    ActiveComboMilestone, ActiveHold, ActiveHoldAdvance, ActiveInputSlot,
-    ActiveMineExplosion, ActiveTapExplosion, AppearanceEffects, AppearanceOverrides,
-    AutoplayNoteEvent, AutoplayRowEventsUpdate,
-    AutosyncMode, COLUMN_FLASH_JUDGMENT_DURATION, COLUMN_FLASH_MISS_DURATION,
-    COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO, COMBO_HUNDRED_MILESTONE_DURATION,
-    COMBO_THOUSAND_MILESTONE_DURATION, CROSSOVER_CUE_FADE_SECONDS, ChartAttackEffects,
-    ColumnCue, ColumnCueColumn, ColumnFlashOptions, ColumnScrollFlags,
-    ColumnTapJudgment, ComboMilestoneKind, CourseDisplayCarry, CourseDisplayTiming,
-    CourseDisplayTotals, CrossoverRow, DRAW_DISTANCE_AFTER_TARGETS,
-    DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER, DisplayClockDiagEvent,
-    DisplayClockHealth, DisplayWindowCountsSources, EMPTY_ACTIVE_INPUT_SLOT,
-    EarlyRescoreHitDecision, ExitTransition, ExitTransitionKind,
-    FantasticFeedbackOptions, FantasticWindowOptions, FinalNoteResultUpdate,
-    FinalizedRowOutcome, GAMEPLAY_INPUT_LATENCY_WARN_US,
-    GameplayAction, GameplayAssistClapState, GameplayAttackMode,
-    GameplayAttackRuntimeState, GameplayAudioClockState, GameplayAudioCommand,
+    ActiveComboMilestone, ActiveHold, ActiveHoldAdvance, ActiveInputSlot, ActiveMineExplosion,
+    ActiveTapExplosion, AppearanceEffects, AppearanceOverrides, AutoplayNoteEvent,
+    AutoplayRowEventsUpdate, AutosyncMode, COLUMN_FLASH_JUDGMENT_DURATION,
+    COLUMN_FLASH_MISS_DURATION, COMBO_BREAK_ON_IMMEDIATE_HOLD_LET_GO,
+    COMBO_HUNDRED_MILESTONE_DURATION, COMBO_THOUSAND_MILESTONE_DURATION,
+    CROSSOVER_CUE_FADE_SECONDS, ChartAttackEffects, ColumnCue, ColumnCueColumn, ColumnFlashOptions,
+    ColumnScrollFlags, ColumnTapJudgment, ComboMilestoneKind, CourseDisplayCarry,
+    CourseDisplayTiming, CourseDisplayTotals, CrossoverRow, DRAW_DISTANCE_AFTER_TARGETS,
+    DRAW_DISTANCE_BEFORE_TARGETS_MULTIPLIER, DisplayClockDiagEvent, DisplayClockHealth,
+    DisplayWindowCountsSources, EMPTY_ACTIVE_INPUT_SLOT, EarlyRescoreHitDecision, ExitTransition,
+    ExitTransitionKind, FantasticFeedbackOptions, FantasticWindowOptions, FinalNoteResultUpdate,
+    FinalizedRowOutcome, GAMEPLAY_INPUT_LATENCY_WARN_US, GameplayAction, GameplayAssistClapState,
+    GameplayAttackMode, GameplayAttackRuntimeState, GameplayAudioClockState, GameplayAudioCommand,
     GameplayAudioSnapshot, GameplayAutoplayRuntimeState, GameplayAutosyncRuntimeState,
     GameplayBeatPhaseState, GameplayBoundaryRuntimeState, GameplayCapacityTraceEvent,
     GameplayCapacityTraceKind, GameplayCapacityTraceSnapshot, GameplayChartRuntimeState,
@@ -34,8 +33,6 @@ pub use deadsync_gameplay::{
     GameplayExitInputState, GameplayExitPromptState, GameplayHoldFeedbackState,
     GameplayHoldRuntimeState, GameplayInputLatencySample, GameplayInputLatencyTrace,
     GameplayInputPlayStyle, GameplayInputPlayerSide, GameplayInputState, GameplayLaneIndexState,
-    gameplay_player_side_from_profile, gameplay_play_style_from_profile, gameplay_runtime_profiles,
-    gameplay_tick_mode_from_profile,
     GameplayLifeDeltaUpdate, GameplayMenuInput, GameplayMenuInputPlan, GameplayMineScanState,
     GameplayMiniIndicatorData, GameplayMiniIndicatorMode, GameplayMiniIndicatorOptions,
     GameplayMiniIndicatorRuntimeState, GameplayMusicCut, GameplayMusicRateState,
@@ -63,9 +60,8 @@ pub use deadsync_gameplay::{
     MINE_EXPLOSION_DURATION, MINI_PERCENT_MAX, MINI_PERCENT_MIN, MineHitPlayerState,
     MineHitPlayerUpdate, MineHitSideEffectPlan, MineJudgmentRenderInfo, MiniAttackMode,
     NoteCountStat, NoteHitEval, OFFSET_ADJUST_REPEAT_DELAY, OFFSET_ADJUST_REPEAT_INTERVAL,
-    OFFSET_ADJUST_STEP_SECONDS,
-    PerspectiveEffects, PerspectiveOverrides, PlayerJudgmentTiming, PlayerRowScanState,
-    PlayerRuntime, PracticePlayerCursors, ProvisionalEarlyHitPlan,
+    OFFSET_ADJUST_STEP_SECONDS, PerspectiveEffects, PerspectiveOverrides, PlayerJudgmentTiming,
+    PlayerRowScanState, PlayerRuntime, PracticePlayerCursors, ProvisionalEarlyHitPlan,
     ProvisionalEarlyNoteResultUpdate, RECEPTOR_GLOW_DURATION, RECEPTOR_STEP_WINDOWS,
     RECEPTOR_Y_OFFSET_FROM_CENTER, RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, REMOVE_MASK_BIT_LITTLE,
     REMOVE_MASK_BIT_NO_FAKES, REMOVE_MASK_BIT_NO_HANDS, REMOVE_MASK_BIT_NO_HOLDS,
@@ -76,122 +72,106 @@ pub use deadsync_gameplay::{
     SPACING_PERCENT_MIN, ScrollEffects, ScrollOverrides, ScrollReverseOptions, SongClockSnapshot,
     SongLuaColumnOffsetWindowRuntime, SongLuaNoteHideWindowRuntime, SongLuaOverlayMessageRuntime,
     TAP_EXPLOSION_WINDOWS, TOGGLE_FLASH_DURATION, TOGGLE_FLASH_FADE_START, TapExplosionOptions,
-    TurnRng, VisibilityEffects, VisibilityOverrides,
-    VisualEffects, VisualOverrides, active_hold_counts_as_pressed, active_hold_is_engaged,
-    active_input_slot_lane_is_down, add_elapsed_us, add_player_step_calories,
-    advance_active_hold_to_time,
-    apply_combo_update, apply_echo_insert, apply_final_note_result,
-    apply_gameplay_life_delta, apply_hyper_shuffle, apply_insert_intelligent_taps,
-    apply_mines_insert,
-    apply_life_change, apply_next_time_based_tap_miss_for_player,
-    apply_row_finalization_player_state, apply_stomp_insert,
-    apply_super_shuffle_taps, apply_turn_options,
-    apply_turn_permutation, apply_uncommon_chart_transforms, apply_uncommon_masks_with_masks,
-    apply_wide_insert, approach_attack_mini_percent_to_target, approach_attack_value, approach_f32,
-    attack_mini_target_percent, autoplay_cursor_for_enable,
-    autoplay_due_active_hold_resolution, autoplay_judgment_offset_music_ns,
-    autoplay_random_offset_music_ns_for_window, autosync_mean_ns, autosync_mode_status_line,
-    autosync_row_hits_enabled, autosync_stddev_seconds, blue_fantastic_window_ms,
-    build_assist_clap_rows, build_column_cues_for_player,
-    build_note_count_stats,
-    build_player_judgment_timing, build_replay_input_edges, build_row_entry,
-    build_row_grids, carried_holds_down_at_row, cell_has_any_note, cell_has_nonfake_note,
-    clear_offset_adjust_hold_state, collect_autosync_row_hit_offsets,
-    column_cue_is_mine, column_flash_duration,
-    column_scroll_dirs_for_flags,
-    combo_milestone_duration, completed_mine_can_be_avoided, completed_row_final_judgment,
-    completed_row_flash_note_indices_and_judgment, completed_row_hides_note,
-    compute_end_times_ns, convert_tap_row_to_mines, convert_taps_to_holds,
-    count_held_tracks_at_row, count_nonempty_tracks_at_row, count_tap_or_hold_tracks_at_row,
-    count_tap_tracks_at_row,
-    counts_for_early_rescore, course_display_carry_for_player, course_display_carry_for_stage,
+    TurnRng, VisibilityEffects, VisibilityOverrides, VisualEffects, VisualOverrides,
+    active_hold_counts_as_pressed, active_hold_is_engaged, active_input_slot_lane_is_down,
+    add_elapsed_us, add_player_step_calories, advance_active_hold_to_time, apply_combo_update,
+    apply_echo_insert, apply_final_note_result, apply_gameplay_life_delta, apply_hyper_shuffle,
+    apply_insert_intelligent_taps, apply_life_change, apply_mines_insert,
+    apply_next_time_based_tap_miss_for_player, apply_row_finalization_player_state,
+    apply_stomp_insert, apply_super_shuffle_taps, apply_turn_options, apply_turn_permutation,
+    apply_uncommon_chart_transforms, apply_uncommon_masks_with_masks, apply_wide_insert,
+    approach_attack_mini_percent_to_target, approach_attack_value, approach_f32,
+    attack_mini_target_percent, autoplay_cursor_for_enable, autoplay_due_active_hold_resolution,
+    autoplay_judgment_offset_music_ns, autoplay_random_offset_music_ns_for_window,
+    autosync_mean_ns, autosync_mode_status_line, autosync_row_hits_enabled,
+    autosync_stddev_seconds, blue_fantastic_window_ms, build_assist_clap_rows,
+    build_column_cues_for_player, build_note_count_stats, build_player_judgment_timing,
+    build_replay_input_edges, build_row_entry, build_row_grids, carried_holds_down_at_row,
+    cell_has_any_note, cell_has_nonfake_note, clear_offset_adjust_hold_state,
+    collect_autosync_row_hit_offsets, column_cue_is_mine, column_flash_duration,
+    column_scroll_dirs_for_flags, combo_milestone_duration, completed_mine_can_be_avoided,
+    completed_row_final_judgment, completed_row_flash_note_indices_and_judgment,
+    completed_row_hides_note, compute_end_times_ns, convert_tap_row_to_mines,
+    convert_taps_to_holds, count_held_tracks_at_row, count_nonempty_tracks_at_row,
+    count_tap_or_hold_tracks_at_row, count_tap_tracks_at_row, counts_for_early_rescore,
+    course_display_carry_for_player, course_display_carry_for_stage,
     course_display_carry_for_stages, course_display_totals_for_chart, crossed_mine_held_start_time,
     crossover_arrow_col, display_window_counts_current, display_window_counts_mode,
-    draw_distance_after_targets,
-    draw_distance_before_targets, effective_mini_percent,
-    enforce_max_simultaneous_notes,
-    exit_transition_alpha, fantastic_window_seconds, final_note_hit_judgment, final_note_hit_plan,
-    final_note_result_effects, finalized_row_awards_hand, finalized_row_judgment_for_entry,
+    draw_distance_after_targets, draw_distance_before_targets, effective_mini_percent,
+    enforce_max_simultaneous_notes, exit_transition_alpha, fantastic_window_seconds,
+    final_note_hit_judgment, final_note_hit_plan, final_note_result_effects,
+    finalized_row_awards_hand, finalized_row_judgment_for_entry,
     finalized_row_outcome_for_cached_row, finalized_row_outcome_for_entry,
     first_nonempty_track_at_row, first_row_entry_index_at_or_after_time, first_tap_track_at_row,
-    first_time_index_at_or_after, gameplay_input_latency_sample,
-    gameplay_is_single_p2_side, gameplay_player_side_for_index,
-    gameplay_player_side_index, gameplay_runtime_player_is_p2, gameplay_runtime_player_side,
-    gameplay_update_hot_phase,
+    first_time_index_at_or_after, gameplay_input_latency_sample, gameplay_is_single_p2_side,
+    gameplay_player_side_for_index, gameplay_player_side_index, gameplay_runtime_player_is_p2,
+    gameplay_runtime_player_side, gameplay_runtime_profiles, gameplay_update_hot_phase,
     hold_explosion_active, hold_explosion_enabled_for_options, hold_head_render_flags,
-    hold_result_stats_update,
-    init_player_runtime, init_player_runtime_for_song, input_lane_bit, input_queue_cap,
-    is_hold_body_at_row, judged_row_lookahead_time_ns,
-    judgment_render_info, lane_edge_judges_lift, lane_edge_judges_tap,
-    lane_press_started, lane_release_finished, late_note_resolution_window_ns, let_go_head_beat,
-    local_column_for_field, local_player_col,
-    mark_row_entry_note_finalized,
-    mark_row_entry_provisional_early_result, max_step_distance_ns,
+    hold_result_stats_update, init_player_runtime, init_player_runtime_for_song, input_lane_bit,
+    input_queue_cap, is_hold_body_at_row, judged_row_lookahead_time_ns, judgment_render_info,
+    lane_edge_judges_lift, lane_edge_judges_tap, lane_press_started, lane_release_finished,
+    late_note_resolution_window_ns, let_go_head_beat, local_column_for_field, local_player_col,
+    mark_row_entry_note_finalized, mark_row_entry_provisional_early_result, max_step_distance_ns,
     measure_counter_segments_for_densities, mine_can_be_avoided, mine_can_be_hit,
-    mine_hit_offset_in_window,
-    mine_judgment_render_info, mine_window_bounds_ns,
-    music_time_from_stream_position, next_autosync_mode,
+    mine_hit_offset_in_window, mine_judgment_render_info, mine_window_bounds_ns,
+    music_time_from_stream_position, music_time_ns_from_song_clock, next_autosync_mode,
     next_ready_row_in_lookahead, next_timing_tick_mode, note_has_displayable_hold,
-    note_hit_judgment, note_tracks_held_miss, notes_row_sorted,
-    offset_adjust_delta_for_key, offset_adjust_repeat_ready, offset_adjust_slot_for_key,
-    offset_adjust_target, player_chart_changes_for_options, player_column_range,
-    player_combo_state, player_course_display_stage, player_index_for_column,
-    player_note_range_for_ranges, player_row_scan_state, player_rows, player_runtime_is_dead,
-    practice_player_cursors, process_input_edges, quantization_index_from_beat,
-    recent_step_calories,
-    profile_side_from_gameplay, profile_tick_mode_from_gameplay, recent_step_tracks,
-    receptor_glow_visual, record_unmapped_input_clock_warning,
-    reference_bpm_from_display_tag, refresh_roll_life_for_step,
-    register_provisional_early_note_result, remap_live_input_lane,
+    note_hit_judgment, note_tracks_held_miss, notes_row_sorted, offset_adjust_delta_for_key,
+    offset_adjust_repeat_ready, offset_adjust_slot_for_key, offset_adjust_target,
+    player_chart_changes_for_options, player_column_range, player_combo_state,
+    player_course_display_stage, player_index_for_column, player_note_range_for_ranges,
+    player_row_scan_state, player_rows, player_runtime_is_dead, practice_player_cursors,
+    process_input_edges, quantization_index_from_beat, recent_step_calories, recent_step_tracks,
+    receptor_glow_visual, record_unmapped_input_clock_warning, reference_bpm_from_display_tag,
+    refresh_roll_life_for_step, register_provisional_early_note_result, remap_live_input_lane,
     remove_cell_notes, replay_edge_cap, row_entry_for_cached_row, row_entry_index_for_cached_row,
     row_final_grade_hides_note, row_finalization_plan, row_finalization_player_state,
-    saturating_elapsed_us_between,
-    scroll_receptor_y, scroll_reverse_percent_for_column, scroll_reverse_scale_for_column,
-    set_added_mine_note, set_added_tap_note, set_row_finalization_player_state,
-    song_audio_end_time_ns,
-    music_time_ns_from_song_clock, song_lua_field_note_hidden, song_lua_note_hidden,
-    song_lua_player_transforms_default, sort_player_notes, spacing_multiplier_for_percent,
-    stage_music_cut, start_offset_adjust_hold_state, stomp_mirror_track,
-    suppress_final_bad_rescore_visual, tick_offset_adjust_hold_state,
-    timing_row_floor, toggle_flash_alpha,
-    track_range_has_any_note, trigger_combo_milestone,
-    turn_seed_for_song, update_active_input_slot,
-    update_itg_grade_totals, visible_notefield_time_ns, write_player_combo_state,
-    zmod_stream_totals_for_densities,
+    saturating_elapsed_us_between, scroll_receptor_y, scroll_reverse_percent_for_column,
+    scroll_reverse_scale_for_column, set_added_mine_note, set_added_tap_note,
+    set_row_finalization_player_state, song_audio_end_time_ns, song_lua_field_note_hidden,
+    song_lua_note_hidden, song_lua_player_transforms_default, sort_player_notes,
+    spacing_multiplier_for_percent, stage_music_cut, start_offset_adjust_hold_state,
+    stomp_mirror_track, suppress_final_bad_rescore_visual, tick_offset_adjust_hold_state,
+    timing_row_floor, toggle_flash_alpha, track_range_has_any_note, trigger_combo_milestone,
+    turn_seed_for_song, update_active_input_slot, update_itg_grade_totals,
+    visible_notefield_time_ns, write_player_combo_state, zmod_stream_totals_for_densities,
 };
+#[cfg(test)]
+use deadsync_gameplay::{SongLuaEaseMaskTarget, song_lua_ease_window_value};
 #[cfg(test)]
 use deadsync_gameplay::{
     build_attack_mask_windows_for_player, effective_mini_percent_for_player,
     effective_scroll_effects_for_player, refresh_active_attack_masks,
     score_invalid_reason_lines_for_chart,
 };
-#[cfg(test)]
-use deadsync_gameplay::effective_visual_effects_for_player;
-#[cfg(test)]
-use deadsync_gameplay::{
-    SongLuaEaseMaskTarget,
-    song_lua_ease_window_value,
-};
-use deadsync_input::InputEdge;
+pub use deadsync_input::InputEdge;
 use deadsync_profile as profile_data;
-#[cfg(test)]
-use deadsync_gameplay::{
-    build_song_lua_column_offset_windows_for_player, build_song_lua_constant_windows_for_player,
-};
 use deadsync_rules::judgment::{self, JudgeGrade, Judgment, TimingWindow};
 #[cfg(test)]
 use deadsync_rules::note::{MAX_HOLD_LIFE, TIMING_WINDOW_SECONDS_HOLD, TIMING_WINDOW_SECONDS_ROLL};
+pub use deadsync_rules::scroll::ScrollSpeedSetting;
+
+pub use crate::game::{
+    GameplayProfile, gameplay_play_style_from_profile, gameplay_player_side_from_profile,
+    gameplay_tick_mode_from_profile, profile_side_from_gameplay, profile_tick_mode_from_gameplay,
+};
 
 pub type State = GameplayRuntimeState<
-    profile_data::Profile,
-    InputEdge,
+    GameplayProfile,
     deadsync_song_lua::SongLuaOverlayActor<crate::game::parsing::song_lua::SongLuaOverlayKind>,
     deadsync_song_lua::SongLuaCapturedActor,
-    deadsync_song_lua::SongLuaOverlayStateDelta,
+    deadsync_gameplay::SongLuaRuntimeOverlayStateDelta<deadsync_song_lua::SongLuaOverlayStateDelta>,
 >;
+
+#[inline(always)]
+pub fn set_music_rate(state: &mut State, rate: f32) -> bool {
+    state.set_music_rate(rate)
+}
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     fn assert_valid_hot_state_for_tests(state: &State, delta_time: f32, music_time_sec: f32) {
         debug_assert!(
             delta_time.is_finite() && delta_time >= 0.0,
@@ -407,14 +387,13 @@ mod tests {
         GameplayTimingTickMode, HELD_MISS_TOTAL_DURATION, HeldMissRenderInfo,
         HoldJudgmentRenderInfo, HoldToExitKey, MAX_COLS, MAX_PLAYERS, OFFSET_ADJUST_STEP_SECONDS,
         RowEntry, ScrollSpeedSetting, SongLuaNoteHideWindowRuntime, TIMING_WINDOW_SECONDS_HOLD,
-        build_attack_mask_windows_for_player, build_row_entry,
-        crossed_mine_held_start_time, effective_mini_percent_for_player,
+        build_row_entry, crossed_mine_held_start_time, effective_mini_percent_for_player,
         effective_scroll_effects_for_player, effective_visual_effects_for_player,
-        max_step_distance_ns, process_input_edges,
-        refresh_active_attack_masks, score_invalid_reason_lines_for_chart, song_time_ns_from_seconds,
+        max_step_distance_ns, process_input_edges, refresh_active_attack_masks,
+        song_time_ns_from_seconds,
     };
-    use crate::game::parsing::noteskin::{self, Noteskin, Style};
-    use crate::game::parsing::song_lua::{compile_song_lua, SongLuaOverlayKind};
+    use crate::game::parsing::noteskin::{self, Noteskin};
+    use crate::game::parsing::song_lua::{SongLuaOverlayKind, compile_song_lua};
     use crate::game::profile;
     use crate::screens::gameplay as screen_gameplay;
     use deadsync_chart::SongData;
@@ -422,17 +401,19 @@ mod tests {
     use deadsync_chart::{ArrowStats, ChartData, GameplayChartData, StaminaCounts, TechCounts};
     use deadsync_core::input::{InputSource, Lane};
     use deadsync_core::note::NoteType;
-    use deadsync_core::timing::{beat_to_note_row, ROWS_PER_BEAT};
-    use deadsync_input::{InputEdge, InputEvent, VirtualAction};
+    use deadsync_core::timing::{ROWS_PER_BEAT, beat_to_note_row};
+    use deadsync_input::{InputEvent, VirtualAction};
+    use deadsync_noteskin::{ReceptorGlowBehavior, ReceptorStepBehavior, Style, TweenType};
     use deadsync_profile as profile_data;
-    use deadsync_song_lua::{
-        SongLuaColumnOffsetWindow, SongLuaEaseTarget, SongLuaEaseWindow, SongLuaMessageEvent,
-        SongLuaModWindow, SongLuaOverlayCommandBlock, SongLuaOverlayEase,
-        SongLuaOverlayMessageCommand, SongLuaOverlayState, SongLuaSpanMode, SongLuaTimeUnit,
-    };
     use deadsync_rules::judgment::{self, JudgeGrade, Judgment, TimingWindow};
     use deadsync_rules::note::{HoldData, HoldResult, MineResult, Note};
     use deadsync_rules::timing::{DelaySegment, TimingData, TimingSegments};
+    use deadsync_song_lua::{
+        SongLuaColumnOffsetWindow, SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget,
+        SongLuaEaseWindow, SongLuaMessageEvent, SongLuaModWindow, SongLuaOverlayCommandBlock,
+        SongLuaOverlayEase, SongLuaOverlayMessageCommand, SongLuaOverlayState,
+        SongLuaPlayerContext, SongLuaSpanMode, SongLuaSpeedMod, SongLuaTimeUnit,
+    };
     use std::sync::{Arc, LazyLock, Mutex};
     use std::time::Instant;
     use std::{fs, path::PathBuf};
@@ -442,6 +423,89 @@ mod tests {
     type CompiledSongLua = deadsync_song_lua::CompiledSongLua<SongLuaOverlayActor>;
 
     static SESSION_TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+    fn score_invalid_reason_lines_for_chart(
+        chart: &deadsync_chart::ChartData,
+        profile: &profile_data::Profile,
+        scroll_speed: ScrollSpeedSetting,
+        music_rate: f32,
+    ) -> Vec<&'static str> {
+        deadsync_gameplay::score_invalid_reason_lines_for_chart(
+            chart,
+            &GameplayProfile(profile.clone()),
+            scroll_speed,
+            music_rate,
+        )
+    }
+
+    fn build_attack_mask_windows_for_player(
+        chart_attacks: Option<&str>,
+        attack_mode: profile_data::AttackMode,
+        player: usize,
+        base_seed: u64,
+        song_length_seconds: f32,
+    ) -> Vec<deadsync_gameplay::AttackMaskWindow> {
+        deadsync_gameplay::build_attack_mask_windows_for_player(
+            chart_attacks,
+            crate::game::gameplay_attack_mode(attack_mode),
+            player,
+            base_seed,
+            song_length_seconds,
+        )
+    }
+
+    fn build_song_lua_constant_windows_for_player(
+        compiled: &CompiledSongLua,
+        timing_player: &TimingData,
+        player: usize,
+        global_offset_seconds: f32,
+    ) -> Vec<deadsync_gameplay::AttackMaskWindow> {
+        let time_mods = screen_gameplay::song_lua_runtime_mod_windows(&compiled.time_mods);
+        let beat_mods = screen_gameplay::song_lua_runtime_mod_windows(&compiled.beat_mods);
+        deadsync_gameplay::build_song_lua_constant_windows_for_player(
+            &time_mods,
+            &beat_mods,
+            timing_player,
+            player,
+            global_offset_seconds,
+        )
+    }
+
+    fn build_song_lua_column_offset_windows_for_player(
+        compiled: &CompiledSongLua,
+        timing_player: &TimingData,
+        player: usize,
+        global_offset_seconds: f32,
+    ) -> Vec<deadsync_gameplay::SongLuaColumnOffsetWindowRuntime> {
+        let column_offsets =
+            screen_gameplay::song_lua_runtime_column_offset_windows(&compiled.column_offsets);
+        deadsync_gameplay::build_song_lua_column_offset_windows_for_player(
+            &column_offsets,
+            timing_player,
+            player,
+            global_offset_seconds,
+        )
+    }
+
+    fn test_song_lua_double_context(root: &std::path::Path, title: &str) -> SongLuaCompileContext {
+        let mut context = SongLuaCompileContext::new(root, title);
+        context.style_name = "double".to_string();
+        context.players = [
+            SongLuaPlayerContext {
+                enabled: true,
+                difficulty: SongLuaDifficulty::Challenge,
+                speedmod: SongLuaSpeedMod::X(2.0),
+                ..SongLuaPlayerContext::default()
+            },
+            SongLuaPlayerContext {
+                enabled: false,
+                difficulty: SongLuaDifficulty::Challenge,
+                speedmod: SongLuaSpeedMod::X(2.0),
+                ..SongLuaPlayerContext::default()
+            },
+        ];
+        context
+    }
 
     #[inline(always)]
     fn gameplay_menu_input(action: VirtualAction) -> Option<super::GameplayMenuInput> {
@@ -518,9 +582,7 @@ mod tests {
         pack_sync_pref: deadsync_chart::SyncPref,
         mini_indicator_data: super::GameplayMiniIndicatorData,
         noteskin_data: super::GameplayNoteskinData,
-        song_lua_data: deadsync_gameplay::GameplaySongLuaData<
-            CompiledSongLua,
-        >,
+        song_lua_data: screen_gameplay::GameplaySongLuaData,
         active_color_index: i32,
         music_rate: f32,
         scroll_speed: [ScrollSpeedSetting; MAX_PLAYERS],
@@ -533,10 +595,7 @@ mod tests {
         course_display_timing: Option<super::CourseDisplayTiming>,
         combo_carry: [u32; MAX_PLAYERS],
     ) -> super::State {
-        deadsync_gameplay::init_gameplay_runtime::<
-            InputEdge,
-            SongLuaOverlayKind,
-        >(
+        deadsync_gameplay::init_gameplay_runtime(
             song,
             charts,
             gameplay_charts,
@@ -547,10 +606,11 @@ mod tests {
             mini_indicator_data,
             noteskin_data,
             song_lua_data,
+            deadsync_gameplay::empty_crossover_annotations,
             active_color_index,
             music_rate,
             scroll_speed,
-            player_profiles,
+            player_profiles.map(GameplayProfile::from),
             replay_edges,
             replay_offsets,
             lead_in_timing,
@@ -579,12 +639,12 @@ mod tests {
             KeyCode::F6 => super::GameplayRawKeyInput::Autosync,
             KeyCode::F7 => super::GameplayRawKeyInput::TimingTick,
             KeyCode::F8 => super::GameplayRawKeyInput::Autoplay,
-            KeyCode::F11 => super::GameplayRawKeyInput::OffsetAdjust(
-                super::GameplayOffsetAdjustKey::Decrease,
-            ),
-            KeyCode::F12 => super::GameplayRawKeyInput::OffsetAdjust(
-                super::GameplayOffsetAdjustKey::Increase,
-            ),
+            KeyCode::F11 => {
+                super::GameplayRawKeyInput::OffsetAdjust(super::GameplayOffsetAdjustKey::Decrease)
+            }
+            KeyCode::F12 => {
+                super::GameplayRawKeyInput::OffsetAdjust(super::GameplayOffsetAdjustKey::Increase)
+            }
             _ => super::GameplayRawKeyInput::Other,
         }
     }
@@ -832,17 +892,17 @@ mod tests {
     }
 
     #[inline(always)]
-    fn test_gameplay_tween(tween: noteskin::TweenType) -> super::GameplayTween {
+    fn test_gameplay_tween(tween: TweenType) -> super::GameplayTween {
         match tween {
-            noteskin::TweenType::Linear => super::GameplayTween::Linear,
-            noteskin::TweenType::Accelerate => super::GameplayTween::Accelerate,
-            noteskin::TweenType::Decelerate => super::GameplayTween::Decelerate,
+            TweenType::Linear => super::GameplayTween::Linear,
+            TweenType::Accelerate => super::GameplayTween::Accelerate,
+            TweenType::Decelerate => super::GameplayTween::Decelerate,
         }
     }
 
     #[inline(always)]
     fn test_gameplay_receptor_glow_behavior(
-        behavior: noteskin::ReceptorGlowBehavior,
+        behavior: ReceptorGlowBehavior,
     ) -> super::GameplayReceptorGlowBehavior {
         super::GameplayReceptorGlowBehavior {
             press_duration: behavior.press_duration,
@@ -863,7 +923,7 @@ mod tests {
 
     #[inline(always)]
     fn test_gameplay_receptor_step_behavior(
-        behavior: noteskin::ReceptorStepBehavior,
+        behavior: ReceptorStepBehavior,
     ) -> super::GameplayReceptorStepBehavior {
         super::GameplayReceptorStepBehavior {
             duration: behavior.duration,
@@ -1024,7 +1084,7 @@ mod tests {
             deadsync_chart::SyncPref::Default,
             super::GameplayMiniIndicatorData::default(),
             noteskin_data,
-            deadsync_gameplay::GameplaySongLuaData::<CompiledSongLua>::default(),
+            screen_gameplay::GameplaySongLuaData::default(),
             5,
             1.0,
             [
@@ -1190,13 +1250,16 @@ return Def.ActorFrame{}
                             &player_profiles,
                             &session,
                         );
-                        let runtime_profiles = gameplay_runtime_profiles(&player_profiles, &session);
+                        let runtime_profiles = screen_gameplay::gameplay_runtime_profile_data(
+                            &player_profiles,
+                            &session,
+                        );
                         let noteskin_assets = screen_gameplay::gameplay_noteskin_assets(
                             session.play_style.cols_per_player(),
                             session.play_style.player_count(),
                             &runtime_profiles,
                         );
-                        let context = deadsync_gameplay::build_song_lua_compile_context(
+                        let context = screen_gameplay::song_lua_compile_context(
                             song.as_ref(),
                             &charts,
                             session.play_style.player_count(),
@@ -1213,17 +1276,14 @@ return Def.ActorFrame{}
                             .iter()
                             .find(|change| change.start_beat <= 0.0 && change.path.is_file())
                             .map(|change| {
-                                compile_song_lua(
-                                    &change.path,
-                                    &context,
-                                )
-                                .expect("generated song lua should compile")
+                                compile_song_lua(&change.path, &context)
+                                    .expect("generated song lua should compile")
                             })
-                            .map(|compiled| deadsync_gameplay::GameplayCompiledSongLua {
+                            .map(|compiled| screen_gameplay::GameplayCompiledSongLua {
                                 compiled,
                                 compile_ms: 0.0,
                             });
-                        let song_lua_data = deadsync_gameplay::GameplaySongLuaData::<CompiledSongLua> {
+                        let song_lua_data = screen_gameplay::GameplaySongLuaData {
                             primary,
                             ..Default::default()
                         };
@@ -1899,7 +1959,13 @@ return Def.ActorFrame{}
             last_update_time_ns: song_time_ns_from_seconds(0.95),
         });
 
-        state.start_active_hold(0, 1, next_start_ns, next_end_ns, song_time_ns_from_seconds(0.95));
+        state.start_active_hold(
+            0,
+            1,
+            next_start_ns,
+            next_end_ns,
+            song_time_ns_from_seconds(0.95),
+        );
 
         assert_eq!(
             state.chart_runtime.notes[0]
@@ -2072,7 +2138,9 @@ return Def.ActorFrame{}
                 state.clock.song_position.current_music_time_ns = song_time_ns_from_seconds(1.096);
                 state.boundary.total_elapsed_in_screen = 12.0;
 
-                state.set_final_note_result(0, Judgment {
+                state.set_final_note_result(
+                    0,
+                    Judgment {
                         time_error_ms: -12.0,
                         time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(
                             -12.0, 1.0,
@@ -2082,7 +2150,9 @@ return Def.ActorFrame{}
                         miss_because_held: false,
                     },
                 );
-                state.set_final_note_result(1, Judgment {
+                state.set_final_note_result(
+                    1,
+                    Judgment {
                         time_error_ms: 96.0,
                         time_error_music_ns: judgment::judgment_time_error_music_ns_from_ms(
                             96.0, 1.0,
@@ -2560,7 +2630,9 @@ return Def.ActorFrame{}
         )];
         state.chart_runtime.row_indices.note_row_entry_indices = vec![0];
 
-        state.set_final_note_result(0, Judgment {
+        state.set_final_note_result(
+            0,
+            Judgment {
                 time_error_ms: 180.0,
                 time_error_music_ns: song_time_ns_from_seconds(0.18),
                 grade: JudgeGrade::Miss,
@@ -2914,26 +2986,14 @@ return Def.ActorFrame{}
 
         let mut hide_notefield = build_state();
         hide_notefield.render_provisional_early_rescore_feedback(
-            0,
-            column,
-            &judgment,
-            1.0,
-            true,
-            true,
-            false,
+            0, column, &judgment, 1.0, true, true, false,
         );
         assert!(hide_notefield.display.visual_feedback.tap_explosions[column].is_none());
         assert!(hide_notefield.display.visual_feedback.column_flashes[column].is_some());
 
         let mut hide_column = build_state();
         hide_column.render_provisional_early_rescore_feedback(
-            0,
-            column,
-            &judgment,
-            1.0,
-            true,
-            false,
-            true,
+            0, column, &judgment, 1.0, true, false, true,
         );
         assert!(hide_column.display.visual_feedback.tap_explosions[column].is_some());
         assert!(hide_column.display.visual_feedback.column_flashes[column].is_none());
@@ -3118,7 +3178,9 @@ return Def.ActorFrame{}
         state.chart_runtime.row_indices.note_row_entry_indices = vec![0];
         state.progress.stage.autoplay_enabled = true;
 
-        state.set_final_note_result(0, Judgment {
+        state.set_final_note_result(
+            0,
+            Judgment {
                 time_error_ms: 0.0,
                 time_error_music_ns: 0,
                 grade: JudgeGrade::Fantastic,
@@ -3309,7 +3371,13 @@ return Def.ActorFrame{}
             ..Default::default()
         };
         let (windows, unsupported) =
-            deadsync_gameplay::build_compiled_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0, &[]);
+            screen_gameplay::build_compiled_song_lua_ease_windows_for_player(
+                &compiled,
+                &timing,
+                0,
+                0.0,
+                &[],
+            );
         assert_eq!(unsupported, 0);
         state.mods.attacks.song_lua_ease_windows[0] = windows;
         state.clock.visible_timing.current_music_time[0] = 2.5;
@@ -3334,22 +3402,20 @@ return Def.ActorFrame{}
                 name: None,
                 parent_index: None,
                 initial_state: SongLuaOverlayState::default(),
-                message_commands: vec![
-                    SongLuaOverlayMessageCommand {
-                        message: "ResetBlack".to_string(),
-                        blocks: vec![SongLuaOverlayCommandBlock {
-                            start: 0.0,
-                            duration: 0.0,
-                            easing: None,
-                            opt1: None,
-                            opt2: None,
-                            delta: deadsync_song_lua::SongLuaOverlayStateDelta {
-                                diffuse: Some([1.0, 1.0, 1.0, 0.0]),
-                                ..Default::default()
-                            },
-                        }],
-                    },
-                ],
+                message_commands: vec![SongLuaOverlayMessageCommand {
+                    message: "ResetBlack".to_string(),
+                    blocks: vec![SongLuaOverlayCommandBlock {
+                        start: 0.0,
+                        duration: 0.0,
+                        easing: None,
+                        opt1: None,
+                        opt2: None,
+                        delta: deadsync_song_lua::SongLuaOverlayStateDelta {
+                            diffuse: Some([1.0, 1.0, 1.0, 0.0]),
+                            ..Default::default()
+                        },
+                    }],
+                }],
             }],
             overlay_eases: vec![SongLuaOverlayEase {
                 overlay_index: 0,
@@ -3378,7 +3444,7 @@ return Def.ActorFrame{}
             ..Default::default()
         };
 
-        let windows = deadsync_gameplay::build_song_lua_overlay_ease_windows(&compiled, &timing, 0.0);
+        let windows = screen_gameplay::build_song_lua_overlay_ease_windows(&compiled, &timing, 0.0);
 
         assert_eq!(windows.len(), 1);
         assert_eq!(windows[0].cutoff_second, Some(4.0));
@@ -3399,22 +3465,20 @@ return Def.ActorFrame{}
                 name: None,
                 parent_index: None,
                 initial_state: SongLuaOverlayState::default(),
-                message_commands: vec![
-                    SongLuaOverlayMessageCommand {
-                        message: "SetupZoom".to_string(),
-                        blocks: vec![SongLuaOverlayCommandBlock {
-                            start: 0.0,
-                            duration: 0.0,
-                            easing: None,
-                            opt1: None,
-                            opt2: None,
-                            delta: deadsync_song_lua::SongLuaOverlayStateDelta {
-                                zoom: Some(1.5),
-                                ..Default::default()
-                            },
-                        }],
-                    },
-                ],
+                message_commands: vec![SongLuaOverlayMessageCommand {
+                    message: "SetupZoom".to_string(),
+                    blocks: vec![SongLuaOverlayCommandBlock {
+                        start: 0.0,
+                        duration: 0.0,
+                        easing: None,
+                        opt1: None,
+                        opt2: None,
+                        delta: deadsync_song_lua::SongLuaOverlayStateDelta {
+                            zoom: Some(1.5),
+                            ..Default::default()
+                        },
+                    }],
+                }],
             }],
             overlay_eases: vec![SongLuaOverlayEase {
                 overlay_index: 0,
@@ -3443,7 +3507,7 @@ return Def.ActorFrame{}
             ..Default::default()
         };
 
-        let windows = deadsync_gameplay::build_song_lua_overlay_ease_windows(&compiled, &timing, 0.0);
+        let windows = screen_gameplay::build_song_lua_overlay_ease_windows(&compiled, &timing, 0.0);
 
         assert_eq!(windows.len(), 1);
         assert_eq!(windows[0].cutoff_second, None);
@@ -3464,22 +3528,20 @@ return Def.ActorFrame{}
                 name: None,
                 parent_index: None,
                 initial_state: SongLuaOverlayState::default(),
-                message_commands: vec![
-                    SongLuaOverlayMessageCommand {
-                        message: "ResetBlack".to_string(),
-                        blocks: vec![SongLuaOverlayCommandBlock {
-                            start: 0.0,
-                            duration: 0.0,
-                            easing: None,
-                            opt1: None,
-                            opt2: None,
-                            delta: deadsync_song_lua::SongLuaOverlayStateDelta {
-                                diffuse: Some([0.0, 0.0, 0.0, 0.0]),
-                                ..Default::default()
-                            },
-                        }],
-                    },
-                ],
+                message_commands: vec![SongLuaOverlayMessageCommand {
+                    message: "ResetBlack".to_string(),
+                    blocks: vec![SongLuaOverlayCommandBlock {
+                        start: 0.0,
+                        duration: 0.0,
+                        easing: None,
+                        opt1: None,
+                        opt2: None,
+                        delta: deadsync_song_lua::SongLuaOverlayStateDelta {
+                            diffuse: Some([0.0, 0.0, 0.0, 0.0]),
+                            ..Default::default()
+                        },
+                    }],
+                }],
             }],
             overlay_eases: vec![SongLuaOverlayEase {
                 overlay_index: 0,
@@ -3508,7 +3570,7 @@ return Def.ActorFrame{}
             ..Default::default()
         };
 
-        let windows = deadsync_gameplay::build_song_lua_overlay_ease_windows(&compiled, &timing, 0.0);
+        let windows = screen_gameplay::build_song_lua_overlay_ease_windows(&compiled, &timing, 0.0);
 
         assert_eq!(windows.len(), 1);
         assert_eq!(windows[0].end_second, 2.0);
@@ -3559,9 +3621,7 @@ return Def.ActorFrame{}
                     start: 1.0,
                     limit: 0.25,
                     span_mode: SongLuaSpanMode::Len,
-                    target: SongLuaEaseTarget::Mod(
-                        "dark".to_string(),
-                    ),
+                    target: SongLuaEaseTarget::Mod("dark".to_string()),
                     from: 0.0,
                     to: 100.0,
                     easing: Some("linear".to_string()),
@@ -3575,9 +3635,7 @@ return Def.ActorFrame{}
                     start: 4.0,
                     limit: 2.0,
                     span_mode: SongLuaSpanMode::Len,
-                    target: SongLuaEaseTarget::Mod(
-                        "dark".to_string(),
-                    ),
+                    target: SongLuaEaseTarget::Mod("dark".to_string()),
                     from: 100.0,
                     to: 0.0,
                     easing: Some("linear".to_string()),
@@ -3590,7 +3648,13 @@ return Def.ActorFrame{}
         };
 
         let (windows, unsupported) =
-            deadsync_gameplay::build_compiled_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0, &[]);
+            screen_gameplay::build_compiled_song_lua_ease_windows_for_player(
+                &compiled,
+                &timing,
+                0,
+                0.0,
+                &[],
+            );
 
         assert_eq!(unsupported, 0);
         assert_eq!(windows.len(), 4);
@@ -3650,10 +3714,11 @@ return Def.ActorFrame{}
             ..Default::default()
         };
 
-        let constants =
-            build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
+        let constants = build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
         let (windows, unsupported) =
-            deadsync_gameplay::build_compiled_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0, &constants);
+            screen_gameplay::build_compiled_song_lua_ease_windows_for_player(
+                &compiled, &timing, 0, 0.0, &constants,
+            );
 
         assert_eq!(unsupported, 0);
         assert_eq!(windows.len(), 1);
@@ -3690,9 +3755,7 @@ return Def.ActorFrame{}
                     start: 4.0,
                     limit: 2.0,
                     span_mode: SongLuaSpanMode::Len,
-                    target: SongLuaEaseTarget::Mod(
-                        "Stealth".to_string(),
-                    ),
+                    target: SongLuaEaseTarget::Mod("Stealth".to_string()),
                     from: 0.0,
                     to: 45.0,
                     easing: Some("linear".to_string()),
@@ -3706,9 +3769,7 @@ return Def.ActorFrame{}
                     start: 4.0,
                     limit: 2.0,
                     span_mode: SongLuaSpanMode::Len,
-                    target: SongLuaEaseTarget::Mod(
-                        "PulseOuter".to_string(),
-                    ),
+                    target: SongLuaEaseTarget::Mod("PulseOuter".to_string()),
                     from: 0.0,
                     to: 80.0,
                     easing: Some("linear".to_string()),
@@ -3722,9 +3783,7 @@ return Def.ActorFrame{}
                     start: 4.0,
                     limit: 2.0,
                     span_mode: SongLuaSpanMode::Len,
-                    target: SongLuaEaseTarget::Mod(
-                        "PulsePeriod".to_string(),
-                    ),
+                    target: SongLuaEaseTarget::Mod("PulsePeriod".to_string()),
                     from: 0.0,
                     to: -80.0,
                     easing: Some("linear".to_string()),
@@ -3736,10 +3795,11 @@ return Def.ActorFrame{}
             ..Default::default()
         };
 
-        let constants =
-            build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
+        let constants = build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
         let (windows, unsupported) =
-            deadsync_gameplay::build_compiled_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0, &constants);
+            screen_gameplay::build_compiled_song_lua_ease_windows_for_player(
+                &compiled, &timing, 0, 0.0, &constants,
+            );
 
         assert_eq!(unsupported, 0);
         let stealth = windows
@@ -3946,7 +4006,13 @@ return Def.ActorFrame{}
             ..Default::default()
         };
         let (windows, unsupported) =
-            deadsync_gameplay::build_compiled_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0, &[]);
+            screen_gameplay::build_compiled_song_lua_ease_windows_for_player(
+                &compiled,
+                &timing,
+                0,
+                0.0,
+                &[],
+            );
         assert_eq!(unsupported, 0);
         state.mods.attacks.song_lua_ease_windows[0] = windows;
 
@@ -4043,7 +4109,7 @@ return Def.ActorFrame{}
             return;
         };
         let entry = root.join("lua/default.lua");
-        let context = deadsync_gameplay::test_song_lua_double_context(&root, "Riddle");
+        let context = test_song_lua_double_context(&root, "Riddle");
         let compiled = compile_song_lua(&entry, &context).unwrap();
         assert!(compiled.beat_mods.iter().any(|window| {
             (window.start - 70.5).abs() <= 0.001 && window.mods.contains("80% confusionoffset")
@@ -4083,7 +4149,7 @@ return Def.ActorFrame{}
             return;
         };
         let entry = root.join("template/main.lua");
-        let context = deadsync_gameplay::test_song_lua_double_context(&root, "KENPO SAITO");
+        let context = test_song_lua_double_context(&root, "KENPO SAITO");
         let compiled = compile_song_lua(&entry, &context).unwrap();
         assert!(compiled.eases.iter().any(|window| {
             matches!(
@@ -4126,10 +4192,8 @@ return Def.ActorFrame{}
                 && (window.to.abs() - 3.0).abs() <= 0.001
         }));
         assert!(compiled.eases.iter().any(|window| {
-            matches!(
-                window.target,
-                SongLuaEaseTarget::PlayerRotationX
-            ) && (window.start - 189.0).abs() <= 0.001
+            matches!(window.target, SongLuaEaseTarget::PlayerRotationX)
+                && (window.start - 189.0).abs() <= 0.001
                 && (window.to - 20.0).abs() <= 0.001
         }));
 
@@ -4139,10 +4203,11 @@ return Def.ActorFrame{}
         };
         let timing =
             TimingData::from_segments(0.0, 0.0, &timing_segments, &test_row_to_beat(200 * 48));
-        let constants =
-            build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
+        let constants = build_song_lua_constant_windows_for_player(&compiled, &timing, 0, 0.0);
         let (windows, unsupported) =
-            deadsync_gameplay::build_compiled_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0, &constants);
+            screen_gameplay::build_compiled_song_lua_ease_windows_for_player(
+                &compiled, &timing, 0, 0.0, &constants,
+            );
         assert_eq!(unsupported, 0);
         assert!(windows.iter().any(|window| {
             matches!(window.target, super::SongLuaEaseMaskTarget::PlayerSkewX)
@@ -4226,8 +4291,7 @@ return Def.ActorFrame{}
             ..Default::default()
         };
 
-        let windows =
-            build_song_lua_column_offset_windows_for_player(&compiled, &timing, 0, 0.0);
+        let windows = build_song_lua_column_offset_windows_for_player(&compiled, &timing, 0, 0.0);
 
         assert_eq!(windows.len(), 2);
         assert_eq!(windows[0].sustain_end_second, 2.0);
@@ -4347,7 +4411,13 @@ return Def.ActorFrame{}
         };
 
         let (windows, unsupported) =
-            deadsync_gameplay::build_compiled_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0, &[]);
+            screen_gameplay::build_compiled_song_lua_ease_windows_for_player(
+                &compiled,
+                &timing,
+                0,
+                0.0,
+                &[],
+            );
 
         assert_eq!(unsupported, 0);
         assert_eq!(windows.len(), 7);
@@ -4425,9 +4495,7 @@ return Def.ActorFrame{}
                     start: 0.0,
                     limit: 1.0,
                     span_mode: SongLuaSpanMode::Len,
-                    target: SongLuaEaseTarget::Mod(
-                        "skewx".to_string(),
-                    ),
+                    target: SongLuaEaseTarget::Mod("skewx".to_string()),
                     from: 0.0,
                     to: 3.0,
                     easing: Some("linear".to_string()),
@@ -4441,9 +4509,7 @@ return Def.ActorFrame{}
                     start: 1.0,
                     limit: 1.0,
                     span_mode: SongLuaSpanMode::Len,
-                    target: SongLuaEaseTarget::Mod(
-                        "skewy".to_string(),
-                    ),
+                    target: SongLuaEaseTarget::Mod("skewy".to_string()),
                     from: 0.0,
                     to: -4.0,
                     easing: Some("linear".to_string()),
@@ -4456,7 +4522,13 @@ return Def.ActorFrame{}
         };
 
         let (windows, unsupported) =
-            deadsync_gameplay::build_compiled_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0, &[]);
+            screen_gameplay::build_compiled_song_lua_ease_windows_for_player(
+                &compiled,
+                &timing,
+                0,
+                0.0,
+                &[],
+            );
 
         assert_eq!(unsupported, 0);
         assert_eq!(windows.len(), 2);
@@ -4487,9 +4559,7 @@ return Def.ActorFrame{}
                 start: 0.0,
                 limit: 4.0,
                 span_mode: SongLuaSpanMode::Len,
-                target: SongLuaEaseTarget::Mod(
-                    "confusionoffset".to_string(),
-                ),
+                target: SongLuaEaseTarget::Mod("confusionoffset".to_string()),
                 from: -85.0,
                 to: 0.0,
                 easing: Some("outQuad".to_string()),
@@ -4501,7 +4571,13 @@ return Def.ActorFrame{}
         };
 
         let (windows, unsupported) =
-            deadsync_gameplay::build_compiled_song_lua_ease_windows_for_player(&compiled, &timing, 0, 0.0, &[]);
+            screen_gameplay::build_compiled_song_lua_ease_windows_for_player(
+                &compiled,
+                &timing,
+                0,
+                0.0,
+                &[],
+            );
 
         assert_eq!(unsupported, 0);
         assert_eq!(windows.len(), 1);
@@ -4642,7 +4718,9 @@ return Def.ActorFrame{}
             state.chart_runtime.row_indices.note_row_entry_indices[last_note] as usize;
         let miss_ix = judgment::judge_grade_ix(JudgeGrade::Miss);
 
-        state.set_final_note_result(first_note, Judgment {
+        state.set_final_note_result(
+            first_note,
+            Judgment {
                 time_error_ms: 0.0,
                 time_error_music_ns: 0,
                 grade: JudgeGrade::Fantastic,
@@ -4966,7 +5044,3 @@ return Def.ActorFrame{}
         assert!((state.music_rate() - 1.0).abs() < 1e-6);
     }
 }
-
-
-
-

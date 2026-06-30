@@ -16,7 +16,6 @@ use log::{debug, info, warn};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
@@ -24,25 +23,18 @@ use std::time::Instant;
 mod update;
 
 use deadsync_profile::{
-    AccelEffectsMask, ActiveProfile, AppearanceEffectsMask, AttackMode, ColumnFlashBrightness,
-    ColumnFlashMask, ColumnFlashSize, GameplayHudPlayerSnapshot, GameplayHudSnapshot,
-    HideLightType, HoldsMask, InsertMask, LastPlayed, LastPlayedCourse, LifeMeterType,
-    LocalProfileSummary, MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorColor,
-    MiniIndicatorPosition, MiniIndicatorScoreType, MiniIndicatorSize,
-    MiniIndicatorSubtractiveDisplay, NoteSkin, PLAYER_SLOTS, PlayMode, PlayStyle,
-    PlayerOptionsData, PlayerSide, Profile, ProfileStats, ProfileStatsDecodeError, RemoveMask,
-    ScrollOption, StepStatisticsMask, StepStatsExtra, TargetScoreSetting, TimingTickMode,
-    TimingWindowsOption, TurnOption, VisualEffectsMask, active_profile_is_guest,
-    active_profile_local_id, add_known_pack_names, append_last_played_course_section,
-    append_last_played_section, append_player_options_section, clamp_weight_pounds,
+    ActiveProfile, GameplayHudPlayerSnapshot, GameplayHudSnapshot, LastPlayed, LastPlayedCourse,
+    LocalProfileSummary, NoteSkin, PLAYER_SLOTS, PlayMode, PlayStyle, PlayerOptionsData,
+    PlayerSide, Profile, ProfileStats, ProfileStatsDecodeError, TimingTickMode,
+    active_profile_is_guest, active_profile_local_id, add_known_pack_names, clamp_weight_pounds,
     cmp_profile_ids_case_insensitive, decode_profile_stats as decode_profile_stats_bytes,
     encode_profile_stats, find_profile_avatar_path, folder_name_for_display, generate_profile_guid,
     initials_from_name, is_local_profile_id, is_valid_profile_guid, joined_player_mask,
-    load_error_bar_options, load_last_played_course_section, load_last_played_section,
-    load_timing_feedback_options, load_visual_player_options, parse_favorited_packs_content,
-    parse_favorites_content, parse_groovestats_is_pad_player, player_options_section,
-    player_side_index as side_ix, player_side_is_joined, push_profile_guid_line,
-    read_userprofile_identity, render_favorited_packs_content, render_favorites_content,
+    load_last_played_course_section, load_last_played_section, load_player_options_section,
+    parse_favorited_packs_content, parse_favorites_content, parse_groovestats_is_pad_player,
+    player_options_section, player_side_index as side_ix, player_side_is_joined,
+    read_userprofile_identity, render_arrowcloud_ini_content, render_favorited_packs_content,
+    render_favorites_content, render_groovestats_ini_content, render_profile_ini_content,
     rewrite_profile_display_name_content, sanitize_player_initials, unknown_pack_names,
     upsert_profile_guid_content,
 };
@@ -203,269 +195,7 @@ fn load_player_options(
     let has_any = profile_conf
         .get_section(section)
         .is_some_and(|s| !s.is_empty());
-    if !has_any {
-        return None;
-    }
-
-    let mut options = default.clone();
-    load_visual_player_options(&mut options, |key| profile_conf.get(section, key));
-    load_timing_feedback_options(&mut options, |key| profile_conf.get(section, key));
-    load_error_bar_options(&mut options, |key| profile_conf.get(section, key));
-    if let Some(step_statistics) = profile_conf
-        .get(section, "StepStatistics")
-        .and_then(|s| StepStatisticsMask::from_str(&s).ok())
-    {
-        options.step_statistics = step_statistics;
-    } else if let Some(step_statistics) = profile_conf
-        .get(section, "DataVisualizations")
-        .and_then(|s| StepStatisticsMask::from_str(&s).ok())
-    {
-        options.step_statistics = step_statistics;
-    }
-    options.step_stats_extra = profile_conf
-        .get(section, "StepStatsExtra")
-        .and_then(|s| StepStatsExtra::from_str(&s).ok())
-        .unwrap_or(options.step_stats_extra);
-    options.target_score = profile_conf
-        .get(section, "TargetScore")
-        .and_then(|s| TargetScoreSetting::from_str(&s).ok())
-        .unwrap_or(options.target_score);
-    options.lifemeter_type = profile_conf
-        .get(section, "LifeMeterType")
-        .and_then(|s| LifeMeterType::from_str(&s).ok())
-        .unwrap_or(options.lifemeter_type);
-    options.measure_counter = profile_conf
-        .get(section, "MeasureCounter")
-        .and_then(|s| MeasureCounter::from_str(&s).ok())
-        .unwrap_or(options.measure_counter);
-    options.measure_counter_lookahead = profile_conf
-        .get(section, "MeasureCounterLookahead")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map(|v| v.min(4))
-        .unwrap_or(options.measure_counter_lookahead);
-    options.measure_counter_left = profile_conf
-        .get(section, "MeasureCounterLeft")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map_or(options.measure_counter_left, |v| v != 0);
-    options.measure_counter_up = profile_conf
-        .get(section, "MeasureCounterUp")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map_or(options.measure_counter_up, |v| v != 0);
-    options.measure_counter_vert = profile_conf
-        .get(section, "MeasureCounterVert")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map_or(options.measure_counter_vert, |v| v != 0);
-    options.broken_run = profile_conf
-        .get(section, "BrokenRun")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map_or(options.broken_run, |v| v != 0);
-    options.run_timer = profile_conf
-        .get(section, "RunTimer")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map_or(options.run_timer, |v| v != 0);
-    options.measure_lines = profile_conf
-        .get(section, "MeasureLines")
-        .and_then(|s| MeasureLines::from_str(&s).ok())
-        .unwrap_or(options.measure_lines);
-    options.scroll_speed = profile_conf
-        .get(section, "ScrollSpeed")
-        .and_then(|s| ScrollSpeedSetting::from_str(&s).ok())
-        .unwrap_or(options.scroll_speed);
-    options.no_cmod_alternative = profile_conf
-        .get(section, "NoCmodAlternative")
-        .and_then(|s| deadsync_profile::NoCmodAlternative::from_str(&s).ok())
-        .unwrap_or(options.no_cmod_alternative);
-    options.turn_option = profile_conf
-        .get(section, "Turn")
-        .and_then(|s| TurnOption::from_str(&s).ok())
-        .unwrap_or(options.turn_option);
-    options.insert_active_mask = profile_conf
-        .get(section, "InsertMask")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map(InsertMask::from_bits_truncate)
-        .unwrap_or(options.insert_active_mask);
-    options.remove_active_mask = profile_conf
-        .get(section, "RemoveMask")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map(RemoveMask::from_bits_truncate)
-        .unwrap_or(options.remove_active_mask);
-    options.holds_active_mask = profile_conf
-        .get(section, "HoldsMask")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map(HoldsMask::from_bits_truncate)
-        .unwrap_or(options.holds_active_mask);
-    options.accel_effects_active_mask = profile_conf
-        .get(section, "AccelEffectsMask")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map(AccelEffectsMask::from_bits_truncate)
-        .unwrap_or(options.accel_effects_active_mask);
-    options.visual_effects_active_mask = profile_conf
-        .get(section, "VisualEffectsMask")
-        .and_then(|s| s.parse::<u16>().ok())
-        .map(VisualEffectsMask::from_bits_truncate)
-        .unwrap_or(options.visual_effects_active_mask);
-    options.appearance_effects_active_mask = profile_conf
-        .get(section, "AppearanceEffectsMask")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map(AppearanceEffectsMask::from_bits_truncate)
-        .unwrap_or(options.appearance_effects_active_mask);
-    options.attack_mode = profile_conf
-        .get(section, "AttackMode")
-        .or_else(|| profile_conf.get(section, "Attacks"))
-        .and_then(|s| AttackMode::from_str(&s).ok())
-        .unwrap_or(options.attack_mode);
-    options.hide_light_type = profile_conf
-        .get(section, "HideLightType")
-        .and_then(|s| HideLightType::from_str(&s).ok())
-        .unwrap_or(options.hide_light_type);
-    options.rescore_early_hits = profile_conf
-        .get(section, "RescoreEarlyHits")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map_or(options.rescore_early_hits, |v| v != 0);
-    options.hide_early_dw_judgments = profile_conf
-        .get(section, "HideEarlyDecentWayOffJudgments")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map_or(options.hide_early_dw_judgments, |v| v != 0);
-    options.hide_early_dw_flash = profile_conf
-        .get(section, "HideEarlyDecentWayOffFlash")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map_or(options.hide_early_dw_flash, |v| v != 0);
-    options.hide_early_dw_column_flash = profile_conf
-        .get(section, "HideEarlyDecentWayOffColumnFlash")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map_or(options.hide_early_dw_column_flash, |v| v != 0);
-    options.timing_windows = profile_conf
-        .get(section, "TimingWindows")
-        .and_then(|s| TimingWindowsOption::from_str(&s).ok())
-        .unwrap_or(options.timing_windows);
-    options.hide_targets = profile_conf
-        .get(section, "HideTargets")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map_or(options.hide_targets, |v| v != 0);
-    options.hide_song_bg = profile_conf
-        .get(section, "HideSongBG")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map_or(options.hide_song_bg, |v| v != 0);
-    options.hide_combo = profile_conf
-        .get(section, "HideCombo")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map_or(options.hide_combo, |v| v != 0);
-    options.hide_lifebar = profile_conf
-        .get(section, "HideLifebar")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map_or(options.hide_lifebar, |v| v != 0);
-    options.hide_score = profile_conf
-        .get(section, "HideScore")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map_or(options.hide_score, |v| v != 0);
-    options.hide_danger = profile_conf
-        .get(section, "HideDanger")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map_or(options.hide_danger, |v| v != 0);
-    options.hide_combo_explosions = profile_conf
-        .get(section, "HideComboExplosions")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map_or(options.hide_combo_explosions, |v| v != 0);
-    options.hide_username = profile_conf
-        .get(section, "HideUsername")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map_or(options.hide_username, |v| v != 0);
-    options.column_flash_on_miss = profile_conf
-        .get(section, "ColumnFlashOnMiss")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map_or(options.column_flash_on_miss, |v| v != 0);
-    options.column_flash_mask = profile_conf
-        .get(section, "ColumnFlashMask")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map(ColumnFlashMask::from_bits_truncate)
-        .unwrap_or(options.column_flash_mask);
-    options.column_flash_brightness = profile_conf
-        .get(section, "ColumnFlashBrightness")
-        .and_then(|s| ColumnFlashBrightness::from_str(&s).ok())
-        .unwrap_or(options.column_flash_brightness);
-    options.column_flash_size = profile_conf
-        .get(section, "ColumnFlashSize")
-        .and_then(|s| ColumnFlashSize::from_str(&s).ok())
-        .unwrap_or(options.column_flash_size);
-    options.subtractive_scoring = profile_conf
-        .get(section, "SubtractiveScoring")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map_or(options.subtractive_scoring, |v| v != 0);
-    options.pacemaker = profile_conf
-        .get(section, "Pacemaker")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map_or(options.pacemaker, |v| v != 0);
-    options.nps_graph_at_top = profile_conf
-        .get(section, "NPSGraphAtTop")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map_or(options.nps_graph_at_top, |v| v != 0);
-    options.transparent_density_graph_bg = profile_conf
-        .get(section, "TransparentDensityGraphBackground")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map_or(options.transparent_density_graph_bg, |v| v != 0);
-    options.smx_fsr_display = profile_conf
-        .get(section, "SmxFsrDisplay")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map_or(options.smx_fsr_display, |v| v != 0);
-    options.smx_pad_input_display = profile_conf
-        .get(section, "SmxPadInputDisplay")
-        .and_then(|s| s.parse::<u8>().ok())
-        .map_or(options.smx_pad_input_display, |v| v != 0);
-    options.mini_indicator = profile_conf
-        .get(section, "MiniIndicator")
-        .and_then(|s| MiniIndicator::from_str(&s).ok())
-        .unwrap_or({
-            if options.subtractive_scoring {
-                MiniIndicator::SubtractiveScoring
-            } else if options.pacemaker {
-                MiniIndicator::Pacemaker
-            } else {
-                options.mini_indicator
-            }
-        });
-    if options.mini_indicator == MiniIndicator::SubtractiveScoring {
-        options.subtractive_scoring = true;
-    }
-    if options.mini_indicator == MiniIndicator::Pacemaker {
-        options.pacemaker = true;
-    }
-    options.mini_indicator_score_type = profile_conf
-        .get(section, "MiniIndicatorScoreType")
-        .and_then(|s| MiniIndicatorScoreType::from_str(&s).ok())
-        .unwrap_or(options.mini_indicator_score_type);
-    options.mini_indicator_subtractive_display = profile_conf
-        .get(section, "MiniIndicatorSubtractiveDisplay")
-        .and_then(|s| MiniIndicatorSubtractiveDisplay::from_str(&s).ok())
-        .unwrap_or(options.mini_indicator_subtractive_display);
-    options.mini_indicator_size = profile_conf
-        .get(section, "MiniIndicatorSize")
-        .and_then(|s| MiniIndicatorSize::from_str(&s).ok())
-        .unwrap_or(options.mini_indicator_size);
-    options.mini_indicator_color = profile_conf
-        .get(section, "MiniIndicatorColor")
-        .and_then(|s| MiniIndicatorColor::from_str(&s).ok())
-        .unwrap_or(options.mini_indicator_color);
-    options.mini_indicator_position = profile_conf
-        .get(section, "MiniIndicatorPosition")
-        .and_then(|s| MiniIndicatorPosition::from_str(&s).ok())
-        .unwrap_or(options.mini_indicator_position);
-    options.scroll_option = profile_conf
-        .get(section, "Scroll")
-        .and_then(|s| ScrollOption::from_str(&s).ok())
-        .unwrap_or_else(|| {
-            let reverse_enabled = profile_conf
-                .get(section, "ReverseScroll")
-                .and_then(|v| v.parse::<u8>().ok())
-                .map_or(options.reverse_scroll, |v| v != 0);
-            if reverse_enabled {
-                ScrollOption::Reverse
-            } else {
-                options.scroll_option
-            }
-        });
-    options.reverse_scroll = options.scroll_option.contains(ScrollOption::Reverse);
-
-    Some(options)
+    load_player_options_section(has_any, |key| profile_conf.get(section, key), default)
 }
 
 #[inline(always)]
@@ -698,74 +428,25 @@ fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
         default_profile.noteskin = machine_default_noteskin_value();
         default_profile.pad_light_brightness = machine_default_light_brightness();
         default_profile.store_current_player_options_for_all_styles();
-        let mut content = String::new();
-        append_player_options_section(
-            &mut content,
-            player_options_section(PlayStyle::Single),
-            &default_profile.player_options_singles,
-        );
-        append_player_options_section(
-            &mut content,
-            player_options_section(PlayStyle::Double),
-            &default_profile.player_options_doubles,
-        );
+        default_profile.calories_burned_day = Local::now().date_naive().to_string();
 
-        content.push_str("[userprofile]\n");
-        push_profile_guid_line(&mut content, id);
-        content.push_str(&format!("DisplayName = {}\n", default_profile.display_name));
-        content.push_str(&format!(
-            "PlayerInitials = {}\n",
-            default_profile.player_initials
-        ));
-        content.push('\n');
-
-        content.push_str("[Editable]\n");
-        content.push_str(&format!(
-            "WeightPounds = {}\n",
-            default_profile.weight_pounds
-        ));
-        content.push_str(&format!("BirthYear = {}\n", default_profile.birth_year));
-        content.push_str(&format!(
-            "IgnoreStepCountCalories = {}\n",
-            i32::from(default_profile.ignore_step_count_calories)
-        ));
-        content.push('\n');
-
-        // Stats (for ScreenGameOver parity)
-        let today = Local::now().date_naive().to_string();
-        content.push_str("[Stats]\n");
-        content.push_str(&format!("CaloriesBurnedDate = {today}\n"));
-        content.push_str(&format!(
-            "CaloriesBurnedToday = {}\n",
-            default_profile.calories_burned_today
-        ));
-        content.push('\n');
-
-        fs::write(profile_ini, content)?;
+        fs::write(
+            profile_ini,
+            render_profile_ini_content(id, &default_profile),
+        )?;
     }
 
     // Create groovestats.ini
     if !groovestats_ini.exists() {
-        let mut content = String::new();
-
-        content.push_str("[GrooveStats]\n");
-        content.push_str("ApiKey = \n");
-        content.push_str("IsPadPlayer = 0\n");
-        content.push_str("Username = \n");
-        content.push('\n');
-
-        fs::write(groovestats_ini, content)?;
+        fs::write(
+            groovestats_ini,
+            render_groovestats_ini_content("", false, ""),
+        )?;
     }
 
     // Create arrowcloud.ini
     if !arrowcloud_ini.exists() {
-        let mut content = String::new();
-
-        content.push_str("[ArrowCloud]\n");
-        content.push_str("ApiKey = \n");
-        content.push('\n');
-
-        fs::write(arrowcloud_ini, content)?;
+        fs::write(arrowcloud_ini, render_arrowcloud_ini_content(""))?;
     }
 
     // A new folder may have appeared; let the resolver pick it up.
@@ -792,68 +473,8 @@ fn save_profile_ini_for_side(side: PlayerSide) {
         profile.store_current_player_options(play_style);
         profile.clone()
     };
-    let mut content = String::new();
-
-    append_player_options_section(
-        &mut content,
-        player_options_section(PlayStyle::Single),
-        &profile.player_options_singles,
-    );
-    append_player_options_section(
-        &mut content,
-        player_options_section(PlayStyle::Double),
-        &profile.player_options_doubles,
-    );
-
-    content.push_str("[userprofile]\n");
-    push_profile_guid_line(&mut content, &profile_id);
-    content.push_str(&format!("DisplayName={}\n", profile.display_name));
-    content.push_str(&format!("PlayerInitials={}\n", profile.player_initials));
-    content.push('\n');
-
-    content.push_str("[Editable]\n");
-    content.push_str(&format!("WeightPounds={}\n", profile.weight_pounds));
-    content.push_str(&format!("BirthYear={}\n", profile.birth_year));
-    content.push_str(&format!(
-        "IgnoreStepCountCalories={}\n",
-        i32::from(profile.ignore_step_count_calories)
-    ));
-    content.push('\n');
-
-    append_last_played_section(
-        &mut content,
-        "LastPlayedSingles",
-        &profile.last_played_singles,
-    );
-    append_last_played_section(
-        &mut content,
-        "LastPlayedDoubles",
-        &profile.last_played_doubles,
-    );
-    append_last_played_course_section(
-        &mut content,
-        "LastPlayedCourseSingles",
-        &profile.last_played_course_singles,
-    );
-    append_last_played_course_section(
-        &mut content,
-        "LastPlayedCourseDoubles",
-        &profile.last_played_course_doubles,
-    );
-
-    content.push_str("[Stats]\n");
-    content.push_str(&format!(
-        "CaloriesBurnedDate={}\n",
-        profile.calories_burned_day
-    ));
-    content.push_str(&format!(
-        "CaloriesBurnedToday={}\n",
-        profile.calories_burned_today
-    ));
-    content.push('\n');
-
     let path = profile_ini_path(&profile_id);
-    if let Err(e) = fs::write(&path, content) {
+    if let Err(e) = fs::write(&path, render_profile_ini_content(&profile_id, &profile)) {
         warn!("Failed to save {}: {}", path.display(), e);
     }
 }
@@ -971,23 +592,16 @@ fn save_groovestats_ini_for_side(side: PlayerSide) {
     };
 
     let profile = lock_profiles()[side_ix(side)].clone();
-    let mut content = String::new();
-
-    content.push_str("[GrooveStats]\n");
-    content.push_str(&format!("ApiKey={}\n", profile.groovestats_api_key));
-    content.push_str(&format!(
-        "IsPadPlayer={}\n",
-        if profile.groovestats_is_pad_player {
-            "1"
-        } else {
-            "0"
-        }
-    ));
-    content.push_str(&format!("Username={}\n", profile.groovestats_username));
-    content.push('\n');
 
     let path = groovestats_ini_path(&profile_id);
-    if let Err(e) = fs::write(&path, content) {
+    if let Err(e) = fs::write(
+        &path,
+        render_groovestats_ini_content(
+            &profile.groovestats_api_key,
+            profile.groovestats_is_pad_player,
+            &profile.groovestats_username,
+        ),
+    ) {
         warn!("Failed to save {}: {}", path.display(), e);
     }
 }
@@ -1005,14 +619,12 @@ fn save_arrowcloud_ini_for_side(side: PlayerSide) {
     };
 
     let profile = lock_profiles()[side_ix(side)].clone();
-    let mut content = String::new();
-
-    content.push_str("[ArrowCloud]\n");
-    content.push_str(&format!("ApiKey={}\n", profile.arrowcloud_api_key));
-    content.push('\n');
 
     let path = arrowcloud_ini_path(&profile_id);
-    if let Err(e) = fs::write(&path, content) {
+    if let Err(e) = fs::write(
+        &path,
+        render_arrowcloud_ini_content(&profile.arrowcloud_api_key),
+    ) {
         warn!("Failed to save {}: {}", path.display(), e);
     }
 }
@@ -1057,12 +669,8 @@ pub fn set_arrowcloud_api_key_for_id(profile_id: &str, api_key: &str) {
 
     // Persist directly to that profile's ArrowCloud.ini, even if the
     // profile isn't loaded on any side right now.
-    let mut content = String::new();
-    content.push_str("[ArrowCloud]\n");
-    content.push_str(&format!("ApiKey={api_key}\n"));
-    content.push('\n');
     let path = arrowcloud_ini_path(profile_id);
-    if let Err(e) = fs::write(&path, content) {
+    if let Err(e) = fs::write(&path, render_arrowcloud_ini_content(api_key)) {
         warn!("Failed to save {}: {}", path.display(), e);
     }
 }
@@ -1134,14 +742,11 @@ pub fn set_groovestats_credentials_for_id(profile_id: &str, api_key: &str, usern
 
     // Persist directly to that profile's GrooveStats.ini, even if the
     // profile isn't loaded on any side right now.
-    let mut content = String::new();
-    content.push_str("[GrooveStats]\n");
-    content.push_str(&format!("ApiKey={api_key}\n"));
-    content.push_str("IsPadPlayer=1\n");
-    content.push_str(&format!("Username={username}\n"));
-    content.push('\n');
     let path = groovestats_ini_path(profile_id);
-    if let Err(e) = fs::write(&path, content) {
+    if let Err(e) = fs::write(
+        &path,
+        render_groovestats_ini_content(api_key, true, username),
+    ) {
         warn!("Failed to save {}: {}", path.display(), e);
     }
 }
@@ -1973,6 +1578,21 @@ pub fn set_active_profiles(p1: ActiveProfile, p2: ActiveProfile) -> [Profile; PL
     [get_for_side(PlayerSide::P1), get_for_side(PlayerSide::P2)]
 }
 
+pub fn load_default_profiles_for_joined_sides() -> [Profile; PLAYER_SLOTS] {
+    let (p1, p2) = config::default_profiles();
+    let defaults = [p1, p2];
+    let joined_mask = lock_session().joined_mask;
+    for side in [PlayerSide::P1, PlayerSide::P2] {
+        if !player_side_is_joined(joined_mask, side) {
+            continue;
+        }
+        let active = default_profile_from_id(defaults[side_ix(side)].clone());
+        lock_session().active_profiles[side_ix(side)] = active;
+        load_for_side(side);
+    }
+    [get_for_side(PlayerSide::P1), get_for_side(PlayerSide::P2)]
+}
+
 pub fn scan_local_profiles() -> Vec<LocalProfileSummary> {
     let Ok(read_dir) = fs::read_dir(profiles_root()) else {
         return Vec::new();
@@ -2029,49 +1649,26 @@ pub fn create_local_profile(display_name: &str) -> Result<String, std::io::Error
     default_profile.pad_light_brightness = machine_default_light_brightness();
     default_profile.store_current_player_options_for_all_styles();
     let initials = initials_from_name(name);
-    let mut content = String::new();
-    append_player_options_section(
-        &mut content,
-        player_options_section(PlayStyle::Single),
-        &default_profile.player_options_singles,
-    );
-    append_player_options_section(
-        &mut content,
-        player_options_section(PlayStyle::Double),
-        &default_profile.player_options_doubles,
-    );
-    content.push_str("[userprofile]\n");
-    push_profile_guid_line(&mut content, &id);
-    content.push_str(&format!("DisplayName={name}\n"));
-    content.push_str(&format!("PlayerInitials={initials}\n"));
-    content.push('\n');
-
-    content.push_str("[Editable]\n");
-    content.push_str("WeightPounds=0\n");
-    content.push_str("BirthYear=0\n");
-    content.push_str("IgnoreStepCountCalories=0\n");
-    content.push('\n');
-
     let today = Local::now().date_naive().to_string();
-    content.push_str("[Stats]\n");
-    content.push_str(&format!("CaloriesBurnedDate={today}\n"));
-    content.push_str("CaloriesBurnedToday=0\n");
-    content.push('\n');
-    fs::write(dir.join("profile.ini"), content)?;
-
-    let mut gs = String::new();
-    gs.push_str("[GrooveStats]\n");
-    gs.push_str("ApiKey=\n");
-    gs.push_str("IsPadPlayer=0\n");
-    gs.push_str("Username=\n");
-    gs.push('\n');
-    fs::write(dir.join("groovestats.ini"), gs)?;
-
-    let mut ac = String::new();
-    ac.push_str("[ArrowCloud]\n");
-    ac.push_str("ApiKey=\n");
-    ac.push('\n');
-    fs::write(dir.join("arrowcloud.ini"), ac)?;
+    default_profile.display_name = name.to_string();
+    default_profile.player_initials = initials;
+    default_profile.weight_pounds = 0;
+    default_profile.birth_year = 0;
+    default_profile.ignore_step_count_calories = false;
+    default_profile.calories_burned_day = today;
+    default_profile.calories_burned_today = 0.0;
+    fs::write(
+        dir.join("profile.ini"),
+        render_profile_ini_content(&id, &default_profile),
+    )?;
+    fs::write(
+        dir.join("groovestats.ini"),
+        render_groovestats_ini_content("", false, ""),
+    )?;
+    fs::write(
+        dir.join("arrowcloud.ini"),
+        render_arrowcloud_ini_content(""),
+    )?;
 
     // Make the new GUID -> folder mapping visible to later path lookups.
     invalidate_profile_dir_cache();
@@ -2160,55 +1757,35 @@ pub fn create_local_profile_from_import(
     };
     let weight = clamp_weight_pounds(data.weight_pounds.min(i32::MAX as u32) as i32);
 
-    let mut content = String::new();
-    append_player_options_section(
-        &mut content,
-        player_options_section(PlayStyle::Single),
-        data.options_singles,
-    );
-    append_player_options_section(
-        &mut content,
-        player_options_section(PlayStyle::Double),
-        data.options_doubles,
-    );
-    content.push_str("[userprofile]\n");
-    content.push_str(&format!("Guid={id}\n"));
-    content.push_str(&format!("DisplayName={name}\n"));
-    content.push_str(&format!("PlayerInitials={initials}\n"));
-    content.push('\n');
-
-    content.push_str("[Editable]\n");
-    content.push_str(&format!("WeightPounds={weight}\n"));
-    content.push_str(&format!("BirthYear={}\n", data.birth_year));
-    content.push_str(&format!(
-        "IgnoreStepCountCalories={}\n",
-        i32::from(data.ignore_step_count_calories)
-    ));
-    content.push('\n');
-
     let today = Local::now().date_naive().to_string();
-    content.push_str("[Stats]\n");
-    content.push_str(&format!("CaloriesBurnedDate={today}\n"));
-    content.push_str("CaloriesBurnedToday=0\n");
-    content.push('\n');
-    fs::write(dir.join("profile.ini"), content)?;
-
-    let mut gs = String::new();
-    gs.push_str("[GrooveStats]\n");
-    gs.push_str(&format!("ApiKey={}\n", data.groovestats_api_key));
-    gs.push_str(&format!(
-        "IsPadPlayer={}\n",
-        i32::from(data.groovestats_is_pad_player)
-    ));
-    gs.push_str(&format!("Username={}\n", data.groovestats_username));
-    gs.push('\n');
-    fs::write(dir.join("groovestats.ini"), gs)?;
-
-    let mut ac = String::new();
-    ac.push_str("[ArrowCloud]\n");
-    ac.push_str(&format!("ApiKey={}\n", data.arrowcloud_api_key));
-    ac.push('\n');
-    fs::write(dir.join("arrowcloud.ini"), ac)?;
+    let profile = Profile {
+        display_name: name.to_string(),
+        player_initials: initials,
+        weight_pounds: weight,
+        birth_year: data.birth_year.min(i32::MAX as u32) as i32,
+        ignore_step_count_calories: data.ignore_step_count_calories,
+        calories_burned_day: today,
+        calories_burned_today: 0.0,
+        player_options_singles: data.options_singles.clone(),
+        player_options_doubles: data.options_doubles.clone(),
+        ..Profile::default()
+    };
+    fs::write(
+        dir.join("profile.ini"),
+        render_profile_ini_content(&id, &profile),
+    )?;
+    fs::write(
+        dir.join("groovestats.ini"),
+        render_groovestats_ini_content(
+            data.groovestats_api_key,
+            data.groovestats_is_pad_player,
+            data.groovestats_username,
+        ),
+    )?;
+    fs::write(
+        dir.join("arrowcloud.ini"),
+        render_arrowcloud_ini_content(data.arrowcloud_api_key),
+    )?;
 
     if let Some(src) = data.avatar_src {
         if let Err(e) = fs::copy(src, dir.join("profile.png")) {
@@ -2423,15 +2000,16 @@ pub fn take_fast_profile_switch_from_select_music() -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        LastPlayed, LastPlayedCourse, MiniIndicatorColor, MiniIndicatorPosition, MiniIndicatorSize,
-        MiniIndicatorSubtractiveDisplay, NoteSkin, PlayStyle, PlayerOptionsData, Profile,
-        SimpleIni, TimingWindowsOption, append_player_options_section, heal_default_profile_id,
-        load_player_options, parse_groovestats_is_pad_player, player_options_section,
+        SimpleIni, heal_default_profile_id, load_player_options, parse_groovestats_is_pad_player,
     };
     use deadsync_profile::{
-        DEFAULT_BIRTH_YEAR, DEFAULT_WEIGHT_POUNDS, ErrorBarMask, ErrorBarStyle,
-        LiveTimingStatsMask, NoCmodAlternative, TapExplosionMask, error_bar_mask_from_style,
-        error_bar_style_from_mask, error_bar_text_from_mask, normalize_tap_explosion_mask,
+        AccelEffectsMask, AppearanceEffectsMask, DEFAULT_BIRTH_YEAR, DEFAULT_WEIGHT_POUNDS,
+        ErrorBarMask, ErrorBarStyle, HoldsMask, InsertMask, LastPlayed, LastPlayedCourse,
+        LiveTimingStatsMask, MiniIndicatorColor, MiniIndicatorPosition, MiniIndicatorSize,
+        MiniIndicatorSubtractiveDisplay, NoCmodAlternative, NoteSkin, PlayStyle, PlayerOptionsData,
+        Profile, RemoveMask, TapExplosionMask, TimingWindowsOption, VisualEffectsMask,
+        append_player_options_section, error_bar_mask_from_style, error_bar_style_from_mask,
+        error_bar_text_from_mask, normalize_tap_explosion_mask, player_options_section,
     };
     use std::collections::HashMap;
     use std::str::FromStr;
@@ -2769,11 +2347,6 @@ mod tests {
 
     #[test]
     fn persisted_row_mask_bit_layouts_are_stable() {
-        use super::{
-            AccelEffectsMask, AppearanceEffectsMask, HoldsMask, InsertMask, RemoveMask,
-            VisualEffectsMask,
-        };
-
         // InsertMask: persisted bits 0..=6 (Mines is runtime-only and
         // intentionally not represented here).
         assert_eq!(InsertMask::WIDE.bits(), 1 << 0);
@@ -2854,8 +2427,6 @@ mod tests {
 
     #[test]
     fn from_bits_truncate_drops_unrepresented_bits() {
-        use super::{InsertMask, VisualEffectsMask};
-
         // InsertMask only persists 7 bits; bit 7 (Mines) belongs to runtime.
         assert_eq!(InsertMask::from_bits_truncate(0xFF), InsertMask::all());
         assert_eq!(InsertMask::from_bits_truncate(0xFF).bits(), 0b0111_1111);

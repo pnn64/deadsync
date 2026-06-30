@@ -110,6 +110,31 @@ pub fn update_simply_love_color(index: i32) {
         cfg.simply_love_color = index;
     }
     save_without_keymaps();
+    send_smx_underglow_color();
+}
+
+/// Push the current theme colour to the SMX pad edge LED strips. P1 pad gets
+/// `simply_love_color`; P2 pad gets `simply_love_color - 2` (the existing P2
+/// differentiation offset). A lone pad (only one slot connected) always gets
+/// the main theme colour regardless of which side it sits on. No-op when SMX
+/// input is disabled.
+pub fn send_smx_underglow_color() {
+    let cfg = get();
+    if !cfg.smx_input || !cfg.smx_underglow_theme {
+        return;
+    }
+    let index = cfg.simply_love_color;
+    let to_u8 = |c: f32| (c * 255.0).round() as u8;
+    let rgba_to_rgb =
+        |rgba: [f32; 4]| -> [u8; 3] { [to_u8(rgba[0]), to_u8(rgba[1]), to_u8(rgba[2])] };
+    let p1_rgb = rgba_to_rgb(deadlib_present::color::decorative_rgba(index));
+    let lone_pad = deadsync_smx::get_info(0).connected ^ deadsync_smx::get_info(1).connected;
+    let p2_rgb = if lone_pad {
+        p1_rgb
+    } else {
+        rgba_to_rgb(deadlib_present::color::decorative_rgba(index - 2))
+    };
+    deadsync_smx::set_platform_lights_solid([Some(p1_rgb), Some(p2_rgb)]);
 }
 
 pub fn update_global_offset(offset: f32) {

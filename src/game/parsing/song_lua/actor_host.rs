@@ -1,4 +1,14 @@
 use super::*;
+use deadsync_song_lua::{
+    SONG_LUA_TOP_SCREEN_OPTION_ROWS, option_row_default_text, player_child_proxy_name,
+    push_unique_compile_detail, table_bool_field, table_f32_field, table_i32_field,
+    table_string_field, top_screen_danger_index, top_screen_life_meter_bar_index,
+    top_screen_life_meter_index, top_screen_life_meter_name, top_screen_option_row_name,
+    top_screen_player_index, top_screen_player_name, top_screen_score_index, top_screen_score_name,
+    top_screen_score_percent_name, top_screen_song_meter_display_index,
+    top_screen_step_stats_pane_index, top_screen_steps_display_index, underlay_score_index,
+    underlay_score_name,
+};
 
 pub(super) struct TopScreenLuaTables {
     pub(super) top_screen: Table,
@@ -11,7 +21,7 @@ type ActorAssetPrefixKey = (String, String);
 type ActorAssetPrefixCache = Mutex<HashMap<ActorAssetPrefixKey, Option<PathBuf>>>;
 static ACTOR_ASSET_PREFIX_CACHE: OnceLock<ActorAssetPrefixCache> = OnceLock::new();
 
-fn current_song_lua_style_name(lua: &Lua) -> String {
+pub(super) fn current_song_lua_style_name(lua: &Lua) -> String {
     let Ok(Value::Table(style)) = current_gamestate_value(lua, "GetCurrentStyle") else {
         return "single".to_string();
     };
@@ -23,133 +33,6 @@ fn current_song_lua_style_name(lua: &Lua) -> String {
         .ok()
         .and_then(read_string)
         .unwrap_or_else(|| "single".to_string())
-}
-
-fn arrow_effects_player_options(args: &MultiValue) -> mlua::Result<Option<Table>> {
-    let Some(Value::Table(player_state)) = args.front() else {
-        return Ok(None);
-    };
-    let Some(method) = player_state.get::<Option<Function>>("GetPlayerOptions")? else {
-        return Ok(None);
-    };
-    method.call::<Table>(player_state.clone()).map(Some)
-}
-
-fn arrow_effects_speedmod_value(options: &Table, name: &str) -> mlua::Result<Option<f32>> {
-    let Some(method) = options.get::<Option<Function>>(name)? else {
-        return Ok(None);
-    };
-    Ok(read_f32(method.call::<Value>(options.clone())?)
-        .filter(|value| value.is_finite() && *value > 0.0))
-}
-
-fn arrow_effects_speed_multiplier(args: &MultiValue) -> mlua::Result<f32> {
-    let Some(options) = arrow_effects_player_options(args)? else {
-        return Ok(1.0);
-    };
-    if let Some(value) = arrow_effects_speedmod_value(&options, "XMod")? {
-        return Ok(value);
-    }
-    let reference_bpm = options
-        .get::<Option<f32>>("__songlua_reference_bpm")?
-        .filter(|value| value.is_finite() && *value > 0.0)
-        .unwrap_or(1.0);
-    for name in ["CMod", "MMod", "AMod"] {
-        if let Some(value) = arrow_effects_speedmod_value(&options, name)? {
-            return Ok(value / reference_bpm);
-        }
-    }
-    Ok(1.0)
-}
-
-fn arrow_effects_reverse_percent(args: &MultiValue) -> mlua::Result<f32> {
-    let Some(options) = arrow_effects_player_options(args)? else {
-        return Ok(0.0);
-    };
-    let Some(method) = options.get::<Option<Function>>("GetReversePercentForColumn")? else {
-        return Ok(0.0);
-    };
-    let column = args
-        .get(1)
-        .cloned()
-        .and_then(read_f32)
-        .map(|value| value - 1.0)
-        .unwrap_or(0.0);
-    Ok(read_f32(method.call::<Value>((options, column))?)
-        .unwrap_or(0.0)
-        .clamp(0.0, 1.0))
-}
-
-pub(super) fn create_arrow_effects_table(lua: &Lua) -> mlua::Result<Table> {
-    let table = lua.create_table()?;
-    table.set(
-        "GetYOffset",
-        lua.create_function(|_, args: MultiValue| {
-            let speed = arrow_effects_speed_multiplier(&args)?;
-            Ok(args
-                .get(2)
-                .cloned()
-                .and_then(read_f32)
-                .map(|beat| 64.0 * beat * speed)
-                .unwrap_or(0.0_f32))
-        })?,
-    )?;
-    table.set(
-        "GetYPos",
-        lua.create_function(|_, args: MultiValue| {
-            let y_offset = args.get(2).cloned().and_then(read_f32).unwrap_or(0.0_f32);
-            let reverse = arrow_effects_reverse_percent(&args)?;
-            let receptor_y = (THEME_RECEPTOR_Y_REV - THEME_RECEPTOR_Y_STD)
-                .mul_add(reverse, THEME_RECEPTOR_Y_STD);
-            Ok(receptor_y + y_offset * (1.0 - 2.0 * reverse))
-        })?,
-    )?;
-    table.set(
-        "GetXPos",
-        lua.create_function(|lua, args: MultiValue| {
-            let column_index = args
-                .get(1)
-                .cloned()
-                .and_then(read_f32)
-                .map(|value| value as isize - 1)
-                .filter(|value| *value >= 0)
-                .map(|value| value as usize)
-                .unwrap_or(0);
-            Ok(song_lua_style_column_x(
-                &current_song_lua_style_name(lua),
-                column_index,
-            ))
-        })?,
-    )?;
-    table.set(
-        "GetZPos",
-        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
-    )?;
-    table.set(
-        "GetRotationX",
-        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
-    )?;
-    table.set(
-        "GetRotationY",
-        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
-    )?;
-    table.set(
-        "GetRotationZ",
-        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
-    )?;
-    table.set(
-        "GetZoom",
-        lua.create_function(|_, _args: MultiValue| Ok(1.0_f32))?,
-    )?;
-    table.set(
-        "GetAlpha",
-        lua.create_function(|_, _args: MultiValue| Ok(1.0_f32))?,
-    )?;
-    table.set(
-        "GetGlow",
-        lua.create_function(|_, _args: MultiValue| Ok(0.0_f32))?,
-    )?;
-    Ok(table)
 }
 
 fn actor_children(lua: &Lua, actor: &Table) -> mlua::Result<Table> {
@@ -383,16 +266,6 @@ fn can_create_named_child_actor(parent: &Table, name: &str) -> mlua::Result<bool
             || name.eq_ignore_ascii_case("Header"));
     }
     Ok(false)
-}
-
-fn player_child_proxy_name(name: &str) -> Option<&'static str> {
-    if name.eq_ignore_ascii_case("Judgment") {
-        Some("Judgment")
-    } else if name.eq_ignore_ascii_case("Combo") {
-        Some("Combo")
-    } else {
-        None
-    }
 }
 
 fn create_named_actor(lua: &Lua, actor_type: &'static str, name: &str) -> mlua::Result<Table> {
@@ -1277,119 +1150,6 @@ fn create_music_wheel_table(lua: &Lua, current_sort_order: Table) -> mlua::Resul
     Ok(wheel)
 }
 
-pub(super) const SONG_LUA_SCREEN_PLAYER_OPTIONS_LINE_NAMES: &str = "SpeedModType,SpeedMod,Mini,Perspective,NoteSkinSL,NoteSkinVariant,Judgment,ComboFont,HoldJudgment,BackgroundFilter,NoteFieldOffsetX,NoteFieldOffsetY,VisualDelay,MusicRate,Stepchart,ScreenAfterPlayerOptions";
-pub(super) const SONG_LUA_SCREEN_PLAYER_OPTIONS2_LINE_NAMES: &str = "Turn,Scroll,Hide,LifeMeterType,DataVisualizations,TargetScore,ActionOnMissedTarget,GameplayExtras,GameplayExtrasB,GameplayExtrasC,TiltMultiplier,ErrorBar,ErrorBarTrim,ErrorBarOptions,MeasureCounter,MeasureCounterOptions,MeasureLines,TimingWindowOptions,FaPlus,ScreenAfterPlayerOptions2";
-pub(super) const SONG_LUA_SCREEN_PLAYER_OPTIONS3_LINE_NAMES: &str =
-    "Insert,Remove,Holds,11,12,13,Attacks,Characters,HideLightType,ScreenAfterPlayerOptions3";
-pub(super) const SONG_LUA_SCREEN_ATTACK_MENU_LINE_NAMES: &str =
-    "SpeedModType,SpeedMod,Mini,Perspective,NoteSkin,MusicRate,Assist,ShowBGChangesPlay";
-pub(super) const SONG_LUA_SCREEN_OPTIONS_SERVICE_LINE_NAMES: &str = "SystemOptions,MapControllers,TestInput,InputOptions,GraphicsSoundOptions,VisualOptions,ArcadeOptions,Bookkeeping,AdvancedOptions,MenuTimerOptions,USBProfileOptions,OptionsManageProfiles,ThemeOptions,TournamentModeOptions,GrooveStatsOptions,StepManiaCredits,Reload";
-pub(super) const SONG_LUA_SCREEN_SYSTEM_OPTIONS_LINE_NAMES: &str =
-    "Game,Theme,Language,Announcer,DefaultNoteSkin,EditorNoteSkin";
-pub(super) const SONG_LUA_SCREEN_INPUT_OPTIONS_LINE_NAMES: &str =
-    "AutoMap,OnlyDedicatedMenu,OptionsNav,Debounce,ThreeKey,AxisFix";
-pub(super) const SONG_LUA_SCREEN_GRAPHICS_SOUND_OPTIONS_LINE_NAMES: &str = "VideoRenderer,DisplayMode,DisplayAspectRatio,DisplayResolution,RefreshRate,FullscreenType,DisplayColorDepth,HighResolutionTextures,MaxTextureResolution";
-pub(super) const SONG_LUA_SCREEN_VISUAL_OPTIONS_LINE_NAMES: &str =
-    "AppearanceOptions,Set BG Fit Mode,Overscan Correction,CRT Test Patterns";
-pub(super) const SONG_LUA_SCREEN_APPEARANCE_OPTIONS_LINE_NAMES: &str = "Center1Player,ShowBanners,BGBrightness,RandomBackgroundMode,NumBackgrounds,ShowLyrics,ShowNativeLanguage,ShowDancingCharacters";
-pub(super) const SONG_LUA_SCREEN_ARCADE_OPTIONS_LINE_NAMES: &str = "Event,Coin,CoinsPerCredit,MaxNumCredits,ResetCoinsAtStartup,Premium,SongsPerPlay,Long Time,Marathon Time";
-pub(super) const SONG_LUA_SCREEN_ADVANCED_OPTIONS_LINE_NAMES: &str =
-    "DefaultFailType,TimingWindowScale,LifeDifficulty,HiddenSongs,EasterEggs,AllowExtraStage";
-pub(super) const SONG_LUA_SCREEN_THEME_OPTIONS_LINE_NAMES: &str =
-    "VisualStyle,MusicWheelSpeed,MusicWheelStyle,AutoStyle,DefaultGameMode,CasualMaxMeter";
-pub(super) const SONG_LUA_SCREEN_MENU_TIMER_OPTIONS_LINE_NAMES: &str =
-    "MenuTimer,ScreenSelectMusicMenuTimer,ScreenPlayerOptionsMenuTimer,ScreenEvaluationMenuTimer";
-pub(super) const SONG_LUA_SCREEN_USB_PROFILE_OPTIONS_LINE_NAMES: &str = "MemoryCards,CustomSongs,MaxCount,CustomSongsLoadTimeout,CustomSongsMaxSeconds,CustomSongsMaxMegabytes";
-pub(super) const SONG_LUA_SCREEN_TOURNAMENT_MODE_OPTIONS_LINE_NAMES: &str =
-    "EnableTournamentMode,ScoringSystem,StepStats,EnforceNoCmod";
-pub(super) const SONG_LUA_SCREEN_GROOVE_STATS_OPTIONS_LINE_NAMES: &str =
-    "EnableGrooveStats,AutoDownloadUnlocks,SeparateUnlocksByPlayer,QRLogin,EnableOnlineLobbies";
-const SONG_LUA_TOP_SCREEN_OPTION_ROWS: &[&str] = &[
-    "SpeedModType",
-    "SpeedMod",
-    "Mini",
-    "Perspective",
-    "NoteSkin",
-    "NoteSkinVariant",
-    "JudgmentGraphic",
-    "ComboFont",
-    "HoldJudgment",
-    "HeldGraphic",
-    "BackgroundFilter",
-    "NoteFieldOffsetX",
-    "NoteFieldOffsetY",
-    "VisualDelay",
-    "MusicRate",
-    "Stepchart",
-    "ScreenAfterPlayerOptions",
-    "Turn",
-    "Scroll",
-    "Hide",
-    "LifeMeterType",
-    "DataVisualizations",
-    "TargetScore",
-    "ActionOnMissedTarget",
-    "GameplayExtras",
-    "GameplayExtrasB",
-    "GameplayExtrasC",
-    "TiltMultiplier",
-    "ErrorBar",
-    "ErrorBarTrim",
-    "ErrorBarOptions",
-    "MeasureCounter",
-    "MeasureCounterOptions",
-    "MeasureLines",
-    "TimingWindowOptions",
-    "TimingWindows",
-    "FaPlus",
-    "ScoreBoxOptions",
-    "StepStatsExtra",
-    "FunOptions",
-    "LifeBarOptions",
-    "ComboColors",
-    "ComboMode",
-    "TimerMode",
-    "JudgmentAnimation",
-    "RailBalance",
-    "ExtraAesthetics",
-    "ScreenAfterPlayerOptions2",
-    "Insert",
-    "Remove",
-    "Holds",
-    "Attacks",
-    "Characters",
-    "HideLightType",
-    "ScreenAfterPlayerOptions3",
-    "Assist",
-    "ShowBGChangesPlay",
-    "ScreenAfterPlayerOptions4",
-];
-
-fn top_screen_option_row_name(value: Option<Value>) -> String {
-    match value {
-        Some(Value::String(name)) => name
-            .to_str()
-            .map(|name| name.to_string())
-            .unwrap_or_default(),
-        Some(value) => read_i32_value(value)
-            .and_then(|index| top_screen_option_row_name_at(index).map(str::to_string))
-            .unwrap_or_else(|| SONG_LUA_TOP_SCREEN_OPTION_ROWS[0].to_string()),
-        None => SONG_LUA_TOP_SCREEN_OPTION_ROWS[0].to_string(),
-    }
-}
-
-fn top_screen_option_row_name_at(index: i32) -> Option<&'static str> {
-    let index = usize::try_from(index).ok()?;
-    SONG_LUA_TOP_SCREEN_OPTION_ROWS
-        .get(index)
-        .or_else(|| {
-            index
-                .checked_sub(1)
-                .and_then(|index| SONG_LUA_TOP_SCREEN_OPTION_ROWS.get(index))
-        })
-        .copied()
-}
-
 fn create_option_row_table(lua: &Lua, name: &str) -> mlua::Result<Table> {
     let row = create_dummy_actor(lua, "OptionRow")?;
     row.set("Name", name)?;
@@ -1428,19 +1188,6 @@ fn create_option_row_text_actor(lua: &Lua, name: &str, text: &str) -> mlua::Resu
     Ok(actor)
 }
 
-fn option_row_default_text(name: &str) -> String {
-    let lower = name.to_ascii_lowercase();
-    match lower.as_str() {
-        "speedmodtype" => "X".to_string(),
-        "speedmod" => "1".to_string(),
-        "mini" => "0%".to_string(),
-        "perspective" => "Overhead".to_string(),
-        "noteskin" | "noteskinvariant" => "default".to_string(),
-        "musicrate" => "1".to_string(),
-        _ => custom_option_default_text(name).unwrap_or_default(),
-    }
-}
-
 fn create_top_screen_player_actor(
     lua: &Lua,
     player: SongLuaPlayerContext,
@@ -1457,70 +1204,6 @@ fn create_top_screen_player_actor(
     Ok(actor)
 }
 
-fn top_screen_player_name(player_index: usize) -> &'static str {
-    match player_index {
-        0 => "PlayerP1",
-        1 => "PlayerP2",
-        _ => "",
-    }
-}
-
-fn top_screen_player_index(name: &str) -> Option<usize> {
-    match name {
-        "PlayerP1" => Some(0),
-        "PlayerP2" => Some(1),
-        _ => None,
-    }
-}
-
-fn top_screen_life_meter_index(name: &str) -> Option<usize> {
-    match name {
-        "LifeP1" => Some(0),
-        "LifeP2" => Some(1),
-        _ => None,
-    }
-}
-
-fn top_screen_life_meter_name(player_index: usize) -> &'static str {
-    match player_index {
-        0 => "LifeP1",
-        1 => "LifeP2",
-        _ => "",
-    }
-}
-
-fn top_screen_score_index(name: &str) -> Option<usize> {
-    match name {
-        "ScoreP1" => Some(0),
-        "ScoreP2" => Some(1),
-        _ => None,
-    }
-}
-
-fn top_screen_score_name(player_index: usize) -> &'static str {
-    match player_index {
-        0 => "ScoreP1",
-        1 => "ScoreP2",
-        _ => "",
-    }
-}
-
-fn top_screen_score_percent_name(player_index: usize) -> &'static str {
-    match player_index {
-        0 => "PercentP1",
-        1 => "PercentP2",
-        _ => "",
-    }
-}
-
-fn top_screen_steps_display_index(name: &str) -> Option<usize> {
-    match name {
-        "StepsDisplayP1" => Some(0),
-        "StepsDisplayP2" => Some(1),
-        _ => None,
-    }
-}
-
 fn top_screen_steps_text(parent: &Table, player_index: usize) -> mlua::Result<String> {
     parent
         .get::<Option<String>>(match player_index {
@@ -1529,54 +1212,6 @@ fn top_screen_steps_text(parent: &Table, player_index: usize) -> mlua::Result<St
             _ => "",
         })?
         .map_or_else(|| Ok(SongLuaDifficulty::Medium.sm_name().to_string()), Ok)
-}
-
-fn top_screen_song_meter_display_index(name: &str) -> Option<usize> {
-    match name {
-        "SongMeterDisplayP1" => Some(0),
-        "SongMeterDisplayP2" => Some(1),
-        _ => None,
-    }
-}
-
-fn top_screen_life_meter_bar_index(name: &str) -> Option<usize> {
-    match name {
-        "LifeMeterBarP1" => Some(0),
-        "LifeMeterBarP2" => Some(1),
-        _ => None,
-    }
-}
-
-fn underlay_score_index(name: &str) -> Option<usize> {
-    match name {
-        "P1Score" => Some(0),
-        "P2Score" => Some(1),
-        _ => None,
-    }
-}
-
-fn underlay_score_name(player_index: usize) -> &'static str {
-    match player_index {
-        0 => "P1Score",
-        1 => "P2Score",
-        _ => "",
-    }
-}
-
-fn top_screen_step_stats_pane_index(name: &str) -> Option<usize> {
-    match name {
-        "StepStatsPaneP1" => Some(0),
-        "StepStatsPaneP2" => Some(1),
-        _ => None,
-    }
-}
-
-fn top_screen_danger_index(name: &str) -> Option<usize> {
-    match name {
-        "DangerP1" => Some(0),
-        "DangerP2" => Some(1),
-        _ => None,
-    }
 }
 
 pub(super) fn install_def(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<()> {
@@ -3779,9 +3414,7 @@ fn song_lua_model_uv_params(
     (uv_scale, uv_offset, uv_tex_shift)
 }
 
-fn song_lua_model_draw(
-    draw: crate::game::parsing::noteskin::ModelDrawState,
-) -> SongLuaOverlayModelDraw {
+fn song_lua_model_draw(draw: deadsync_noteskin::ModelDrawState) -> SongLuaOverlayModelDraw {
     SongLuaOverlayModelDraw {
         pos: draw.pos,
         rot: draw.rot,
@@ -6213,36 +5846,6 @@ fn actor_update_text_pre_zoom_flags(
     Ok(())
 }
 
-pub(super) fn resolve_script_path(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Result<PathBuf> {
-    let raw = Path::new(path);
-    if raw.is_absolute() && raw.exists() {
-        return Ok(raw.to_path_buf());
-    }
-    let globals = lua.globals();
-    if let Some(current_dir) = globals
-        .get::<Option<String>>("__songlua_script_dir")?
-        .filter(|dir| !dir.trim().is_empty())
-    {
-        let candidate = Path::new(&current_dir).join(path);
-        if candidate.exists() {
-            return Ok(candidate);
-        }
-    }
-    let candidate = song_dir.join(path);
-    if candidate.exists() {
-        return Ok(candidate);
-    }
-    // GetSongDir can be process-relative for AdditionalSongFolders entries.
-    if raw.exists() {
-        return Ok(raw.to_path_buf());
-    }
-    Err(mlua::Error::external(format!(
-        "script '{}' not found relative to '{}'",
-        path,
-        song_dir.display()
-    )))
-}
-
 fn call_with_script_dir<T>(
     lua: &Lua,
     script_dir: &Path,
@@ -6629,42 +6232,6 @@ fn install_tap_note_result_methods(
     )?;
     set_string_method(lua, result, "GetTapNoteScore", &score)?;
     Ok(())
-}
-
-fn table_string_field(table: &Table, names: &[&str]) -> mlua::Result<Option<String>> {
-    for name in names {
-        if let Some(value) = read_string(table.get::<Value>(*name)?) {
-            return Ok(Some(value));
-        }
-    }
-    Ok(None)
-}
-
-fn table_f32_field(table: &Table, names: &[&str]) -> mlua::Result<Option<f32>> {
-    for name in names {
-        if let Some(value) = read_f32(table.get::<Value>(*name)?) {
-            return Ok(Some(value));
-        }
-    }
-    Ok(None)
-}
-
-fn table_i32_field(table: &Table, names: &[&str]) -> mlua::Result<Option<i32>> {
-    for name in names {
-        if let Some(value) = read_i32_value(table.get::<Value>(*name)?) {
-            return Ok(Some(value));
-        }
-    }
-    Ok(None)
-}
-
-fn table_bool_field(table: &Table, names: &[&str]) -> mlua::Result<Option<bool>> {
-    for name in names {
-        if let Some(value) = read_boolish(table.get::<Value>(*name)?) {
-            return Ok(Some(value));
-        }
-    }
-    Ok(None)
 }
 
 pub(super) fn broadcast_song_lua_message(

@@ -159,6 +159,8 @@ pub struct Config {
     /// Light SMX pad panels with the per-arrow judgement colour during gameplay,
     /// plus a sustained colour for held freezes and rolls.
     pub smx_panel_lights: bool,
+    /// Set the SMX pad edge underglow LEDs to the player's theme colour.
+    pub smx_underglow_theme: bool,
     /// Built-in pad preset flashed as the fallback when DeadSync manages pad
     /// config and no saved config resolves for the pad.
     pub smx_default_pad_config: SmxPadPreset,
@@ -411,6 +413,7 @@ impl Default for Config {
             smx_input: false,
             smx_manages_pad_config: false,
             smx_panel_lights: false,
+            smx_underglow_theme: false,
             smx_default_pad_config: SmxPadPreset::Low,
             smx_default_light_brightness: 100,
             software_renderer_threads: 1,

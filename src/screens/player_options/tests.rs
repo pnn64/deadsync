@@ -216,6 +216,20 @@ pub(super) mod tests {
             ),
             ScrollSpeedSetting::XMod(2.0)
         );
+        let mmod = SpeedMod {
+            mod_type: SpeedModType::M,
+            value: 600.0,
+        };
+        assert_eq!(
+            effective_scroll_speed_with_alt(
+                &mmod,
+                NoCmodAlternative::XMod,
+                true,
+                reference_bpm,
+                rate
+            ),
+            ScrollSpeedSetting::MMod(600.0)
+        );
     }
 
     #[test]

@@ -3,6 +3,7 @@ use crate::assets::AssetManager;
 use crate::assets::i18n::{LookupKey, lookup_key, tr};
 use crate::assets::{FontRole, current_machine_font_key};
 use crate::game::profile;
+use crate::game::score_display_mode_from_profile;
 use crate::screens::components::gameplay::step_stats_gifs;
 use crate::screens::components::shared::gs_scorebox;
 use crate::screens::gameplay::{self as gameplay_screen, State};
@@ -15,9 +16,7 @@ use deadlib_present::font;
 use deadlib_present::space::*;
 use deadlib_render::BlendMode;
 use deadsync_core::input::MAX_PLAYERS;
-use deadsync_gameplay::{
-    FantasticWindowOptions, blue_fantastic_window_ms, score_display_mode_from_profile,
-};
+use deadsync_gameplay::{FantasticWindowOptions, blue_fantastic_window_ms};
 use deadsync_profile as profile_data;
 use deadsync_rules::judgment::{self, JudgeGrade};
 use deadsync_rules::timing::LiveTimingSnapshot;

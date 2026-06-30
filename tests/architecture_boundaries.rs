@@ -7,9 +7,7 @@ const GAME_UPWARD_DEP_BASELINE: &[(&str, &str, usize)] = &[
     ("src/game/online/arrowcloud.rs", "config", 1),
     ("src/game/online/downloads.rs", "config", 2),
     ("src/game/online/groovestats.rs", "config", 2),
-    ("src/game/parsing/noteskin/compile.rs", "config", 1),
-    ("src/game/parsing/noteskin/mod.rs", "assets", 1),
-    ("src/game/parsing/noteskin/mod.rs", "config", 1),
+    ("src/game/parsing/noteskin/service.rs", "assets", 1),
     ("src/game/parsing/simfile.rs", "config", 3),
     ("src/game/parsing/simfile/cache.rs", "config", 1),
     ("src/game/parsing/simfile/scan.rs", "config", 3),
@@ -892,6 +890,23 @@ const NET_RESPONSE_BODY_SCAN_DIRS: &[&str] = &[
 
 const GAME_TRANSPORT_CRATES: &[&str] = &["deadsync_net", "tungstenite", "ureq::"];
 
+const NOTESKIN_CRATE_FORBIDDEN_TOKENS: &[&str] = &[
+    "deadlib_platform",
+    "deadlib_present",
+    "deadlib_render",
+    "crate::assets",
+    "crate::config",
+    "crate::game",
+    "crate::screens",
+    "TextureKeyHandle",
+    "INVALID_TEXTURE_HANDLE",
+];
+
+const NOTEFIELD_CRATE_FORBIDDEN_TOKENS: &[&str] = &[
+    "crate::game::parsing::noteskin",
+    "deadsync::game::parsing::noteskin",
+];
+
 #[test]
 fn game_upward_dependencies_do_not_grow() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -952,6 +967,58 @@ fn game_layer_does_not_import_transport_crates() {
 }
 
 #[test]
+fn noteskin_crate_stays_renderer_and_app_independent() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut files = rust_files(&root.join("crates/deadsync-noteskin/src"));
+    files.push(root.join("crates/deadsync-noteskin/Cargo.toml"));
+    let mut failures = Vec::new();
+
+    for file in files {
+        let text = fs::read_to_string(&file).expect("noteskin crate file should be readable");
+        let rel = rel_path(&root, &file);
+        for token in NOTESKIN_CRATE_FORBIDDEN_TOKENS {
+            let count = text.match_indices(token).count();
+            if count != 0 {
+                failures.push(format!(
+                    "{rel} references forbidden token {token} {count} times"
+                ));
+            }
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "deadsync-noteskin must stay renderer/app independent:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
+fn notefield_crate_does_not_import_root_noteskin_bridge() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut failures = Vec::new();
+
+    for file in rust_files(&root.join("crates/deadsync-notefield/src")) {
+        let text = fs::read_to_string(&file).expect("notefield crate file should be readable");
+        let rel = rel_path(&root, &file);
+        for token in NOTEFIELD_CRATE_FORBIDDEN_TOKENS {
+            let count = text.match_indices(token).count();
+            if count != 0 {
+                failures.push(format!(
+                    "{rel} references forbidden token {token} {count} times"
+                ));
+            }
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "deadsync-notefield should depend on crate DTOs, not the root noteskin bridge:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
 fn deterministic_gameplay_crate_stays_runtime_independent() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let crate_dir = root.join("crates/deadsync-gameplay");
@@ -970,10 +1037,13 @@ fn deterministic_gameplay_crate_stays_runtime_independent() {
             "deadsync-online",
             "deadlib-present",
             "deadsync-profile",
+            "deadsync-simfile",
+            "deadsync-song-lua",
             "deadlib-render",
             "deadlib-renderer",
             "deadsync-score",
             "deadlib-video",
+            "rssp",
         ] {
             let count = manifest.match_indices(token).count();
             if count != 0 {
@@ -1001,10 +1071,13 @@ fn deterministic_gameplay_crate_stays_runtime_independent() {
                 "deadsync_online",
                 "deadlib_present",
                 "deadsync_profile",
+                "deadsync_simfile",
+                "deadsync_song_lua",
                 "deadlib_render",
                 "deadlib_renderer",
                 "deadsync_score",
                 "deadlib_video",
+                "rssp::",
                 "std::fs",
                 "std::io",
             ] {

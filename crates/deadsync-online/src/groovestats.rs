@@ -11,9 +11,10 @@ use deadsync_rules::{judgment, scroll::ScrollSpeedSetting, timing::WindowCounts}
 use deadsync_score::{
     GrooveStatsSubmitRecordBanner, GrooveStatsSubmitUiStatus, GsExEvidence, ImportedPlayerScore,
     LeaderboardEntry, LeaderboardPane, PlayerLeaderboardData, PlayerScoreImportResult,
-    RejectReason, ScoreImportEndpoint, groovestats_submit_record_banner, leaderboard_nonzero_rank,
-    leaderboard_pane, leaderboard_score_10000, leaderboard_username_matches,
-    score_import_entry_matches_profile,
+    RejectReason, ScoreImportEndpoint, SubmitAchievement, SubmitAchievementReward,
+    SubmitEventProgressData, SubmitProgress, SubmitQuest, SubmitQuestReward, SubmitStatImprovement,
+    groovestats_submit_record_banner, leaderboard_nonzero_rank, leaderboard_pane,
+    leaderboard_score_10000, leaderboard_username_matches, score_import_entry_matches_profile,
 };
 use serde_json::{Map as JsonMap, Value as JsonValue};
 
@@ -713,6 +714,20 @@ pub const fn final_result_counts_as_rescore_target(judgment: &judgment::Judgment
     )
 }
 
+pub fn rescore_counts_from_judgments<'a, I>(judgments: I) -> GrooveStatsRescoreCounts
+where
+    I: IntoIterator<Item = (&'a judgment::Judgment, &'a judgment::Judgment)>,
+{
+    let mut counts = GrooveStatsRescoreCounts::default();
+    for (final_result, early_result) in judgments {
+        if final_result_counts_as_rescore_target(final_result) {
+            add_rescore_target(&mut counts, final_result);
+        }
+        add_rescore_target(&mut counts, early_result);
+    }
+    counts
+}
+
 pub fn submit_comment(
     counts: &GrooveStatsJudgmentCounts,
     fa_plus_ex_score: Option<f64>,
@@ -980,6 +995,55 @@ pub struct GrooveStatsSubmitPlayerPayload {
     pub player_options: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct GrooveStatsSubmitPlayerRequest {
+    pub slot: u8,
+    pub chart_hash: String,
+    pub api_key: String,
+    pub payload: GrooveStatsSubmitPlayerPayload,
+}
+
+#[derive(Debug, Clone)]
+pub struct GrooveStatsSubmitRequestParts {
+    pub headers: Vec<(String, String)>,
+    pub query: Vec<(String, String)>,
+    pub body: JsonValue,
+}
+
+pub fn submit_request_parts(
+    players: &[GrooveStatsSubmitPlayerRequest],
+) -> GrooveStatsSubmitRequestParts {
+    let mut body = JsonMap::with_capacity(players.len());
+    let mut headers = Vec::with_capacity(players.len());
+    let mut query = Vec::with_capacity(players.len() + 1);
+    query.push((
+        "maxLeaderboardResults".to_string(),
+        GROOVESTATS_SUBMIT_MAX_ENTRIES.to_string(),
+    ));
+
+    for player in players {
+        headers.push((
+            format!("x-api-key-player-{}", player.slot),
+            player.api_key.clone(),
+        ));
+        query.push((
+            format!("chartHashP{}", player.slot),
+            player.chart_hash.clone(),
+        ));
+        body.insert(
+            format!("player{}", player.slot),
+            serde_json::to_value(&player.payload)
+                .expect("serialize GrooveStats submit player payload"),
+        );
+    }
+
+    GrooveStatsSubmitRequestParts {
+        headers,
+        query,
+        body: JsonValue::Object(body),
+    }
+}
+
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct GrooveStatsSubmitApiResponse {
@@ -1206,6 +1270,76 @@ pub struct GrooveStatsSubmitApiProgress {
     pub quests_completed: Vec<GrooveStatsSubmitApiQuest>,
     #[serde(rename = "achievementsCompleted", default)]
     pub achievements_completed: Vec<GrooveStatsSubmitApiAchievement>,
+}
+
+pub fn submit_progress_from_api(progress: &GrooveStatsSubmitApiProgress) -> SubmitProgress {
+    SubmitProgress {
+        stat_improvements: progress
+            .stat_improvements
+            .iter()
+            .map(|improvement| SubmitStatImprovement {
+                name: improvement.name.clone(),
+                gained: improvement.gained,
+                current: improvement.current,
+            })
+            .collect(),
+        quests_completed: progress
+            .quests_completed
+            .iter()
+            .map(|quest| SubmitQuest {
+                title: quest.title.clone(),
+                rewards: quest
+                    .rewards
+                    .iter()
+                    .map(|reward| SubmitQuestReward {
+                        reward_type: reward.reward_type.clone(),
+                        description: reward.description.clone(),
+                    })
+                    .collect(),
+            })
+            .collect(),
+        achievements_completed: progress
+            .achievements_completed
+            .iter()
+            .map(|achievement| SubmitAchievement {
+                title: achievement.title.clone(),
+                rewards: achievement
+                    .rewards
+                    .iter()
+                    .map(|reward| SubmitAchievementReward {
+                        tier: reward.tier.clone(),
+                        requirements: reward.requirements.clone(),
+                        title_unlocked: reward.title_unlocked.clone(),
+                    })
+                    .collect(),
+            })
+            .collect(),
+    }
+}
+
+pub fn submit_event_progress_from_api(
+    event: &GrooveStatsSubmitApiEvent,
+    leaderboard: Vec<LeaderboardApiEntry>,
+) -> SubmitEventProgressData {
+    SubmitEventProgressData {
+        name: event.name.clone(),
+        is_doubles: event.is_doubles,
+        score_delta: event.score_delta,
+        rate_delta: event.rate_delta,
+        top_score_points: event.top_score_points,
+        prev_top_score_points: event.prev_top_score_points,
+        total_passes: event.total_passes,
+        current_ranking_point_total: event.current_ranking_point_total,
+        previous_ranking_point_total: event.previous_ranking_point_total,
+        current_song_point_total: event.current_song_point_total,
+        previous_song_point_total: event.previous_song_point_total,
+        current_ex_point_total: event.current_ex_point_total,
+        previous_ex_point_total: event.previous_ex_point_total,
+        current_point_total: event.current_point_total,
+        previous_point_total: event.previous_point_total,
+        leaderboard: leaderboard_entries_from_api(leaderboard),
+        progress: event.progress.as_ref().map(submit_progress_from_api),
+    }
 }
 
 #[derive(Deserialize, Debug)]
@@ -1614,6 +1748,11 @@ mod tests {
         add_rescore_target(&mut counts, &great);
         add_rescore_target(&mut counts, &fa_plus);
 
+        assert_eq!(counts.fantastic_plus, 1);
+        assert_eq!(counts.great, 1);
+        assert_eq!(counts.way_off, 1);
+
+        let counts = rescore_counts_from_judgments([(&great, &way_off), (&way_off, &fa_plus)]);
         assert_eq!(counts.fantastic_plus, 1);
         assert_eq!(counts.great, 1);
         assert_eq!(counts.way_off, 1);
@@ -2290,6 +2429,54 @@ mod tests {
     }
 
     #[test]
+    fn submit_request_parts_use_old_api_shape() {
+        let payload = GrooveStatsSubmitPlayerPayload {
+            rate: 150,
+            score: 9_975,
+            judgment_counts: GrooveStatsJudgmentCounts::default(),
+            rescore_counts: GrooveStatsRescoreCounts::default(),
+            used_cmod: true,
+            comment: "[DS]".to_string(),
+            player_options: "{}".to_string(),
+        };
+        let parts = submit_request_parts(&[
+            GrooveStatsSubmitPlayerRequest {
+                slot: 1,
+                chart_hash: "hash-p1".to_string(),
+                api_key: "key-p1".to_string(),
+                payload: payload.clone(),
+            },
+            GrooveStatsSubmitPlayerRequest {
+                slot: 2,
+                chart_hash: "hash-p2".to_string(),
+                api_key: "key-p2".to_string(),
+                payload,
+            },
+        ]);
+
+        assert_eq!(
+            parts.headers,
+            vec![
+                ("x-api-key-player-1".to_string(), "key-p1".to_string()),
+                ("x-api-key-player-2".to_string(), "key-p2".to_string()),
+            ]
+        );
+        assert_eq!(
+            parts.query,
+            vec![
+                (
+                    "maxLeaderboardResults".to_string(),
+                    GROOVESTATS_SUBMIT_MAX_ENTRIES.to_string(),
+                ),
+                ("chartHashP1".to_string(), "hash-p1".to_string()),
+                ("chartHashP2".to_string(), "hash-p2".to_string()),
+            ]
+        );
+        assert_eq!(parts.body["player1"]["score"], 9_975);
+        assert_eq!(parts.body["player2"]["rate"], 150);
+    }
+
+    #[test]
     fn submit_payload_omits_disabled_bad_windows() {
         let counts = GrooveStatsJudgmentCounts {
             fantastic_plus: 8,
@@ -2692,6 +2879,25 @@ mod tests {
         );
         assert_eq!(
             progress.achievements_completed[0].rewards[0].title_unlocked,
+            "Title A"
+        );
+
+        let progress_data = submit_event_progress_from_api(itl, itl.itl_leaderboard.clone());
+        assert_eq!(progress_data.name, "ITL");
+        assert!(progress_data.is_doubles);
+        assert_eq!(progress_data.score_delta, -123);
+        assert_eq!(progress_data.top_score_points, 42);
+        assert_eq!(progress_data.leaderboard[0].name, "DREW");
+        let score_progress = progress_data.progress.as_ref().expect("score progress");
+        assert_eq!(score_progress.stat_improvements[0].name, "clearType");
+        assert_eq!(score_progress.stat_improvements[0].gained, 2);
+        assert_eq!(score_progress.quests_completed[0].title, "Unlock One");
+        assert_eq!(
+            score_progress.quests_completed[0].rewards[0].description,
+            "Song A"
+        );
+        assert_eq!(
+            score_progress.achievements_completed[0].rewards[0].title_unlocked,
             "Title A"
         );
 
