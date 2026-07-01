@@ -236,6 +236,10 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "SmxPanelLights")
         .and_then(|v| parse_loose_bool_str(&v))
         .unwrap_or(default.smx_panel_lights);
+    cfg.smx_underglow_theme = conf
+        .get("Options", "SmxUnderglowTheme")
+        .and_then(|v| parse_loose_bool_str(&v))
+        .unwrap_or(default.smx_underglow_theme);
     cfg.smx_default_pad_config = conf
         .get("Options", "SmxDefaultPadConfig")
         .and_then(|s| crate::config::SmxPadPreset::from_str(&s).ok())
