@@ -18,11 +18,12 @@ use deadsync_score::{
 use serde_json::{Map as JsonMap, Value as JsonValue};
 
 const GROOVESTATS_API_BASE_URL: &str = "https://api.groovestats.com";
+const GROOVESTATS_API_SERVICE_URL: &str = "https://apiservice.groovestats.com/api/";
 const BOOGIESTATS_API_BASE_URL: &str = "https://boogiestats.andr.host";
 const GROOVESTATS_QR_BASE_URL: &str = "https://www.groovestats.com";
 const GROOVESTATS_QR_LOGIN_WS_URL: &str = "ws://qrlogin.groovestats.com:3000";
 const GROOVESTATS_QR_LOGIN_URL: &str = "https://www.groovestats.com/qrlogin.php";
-const GROOVESTATS_NEW_SESSION_PATH: &str = "new-session.php?chartHashVersion=3";
+const LEGACY_NEW_SESSION_PATH: &str = "new-session.php?chartHashVersion=3";
 pub const GROOVESTATS_QR_LOGIN_WS_READ_TIMEOUT_MS: u64 = 100;
 pub const GROOVESTATS_CHART_HASH_VERSION: u8 = 3;
 pub const GROOVESTATS_COMMENT_PREFIX: &str = "[DS]";
@@ -164,28 +165,45 @@ pub fn qr_login_uuid_message(uuid: &str) -> String {
 }
 
 #[inline(always)]
+fn groovestats_action_url(action: &str) -> String {
+    format!("{GROOVESTATS_API_SERVICE_URL}?action={action}")
+}
+
+#[inline(always)]
 pub fn player_leaderboards_url(service: Service) -> String {
-    format!(
-        "{}/player-leaderboards.php",
-        api_base_url(service).trim_end_matches('/')
-    )
+    match service {
+        Service::GrooveStats => groovestats_action_url("playerLeaderboards"),
+        Service::BoogieStats => format!(
+            "{}/player-leaderboards.php",
+            api_base_url(service).trim_end_matches('/')
+        ),
+    }
 }
 
 #[inline(always)]
 pub fn score_submit_url(service: Service) -> String {
-    format!(
-        "{}/score-submit.php",
-        api_base_url(service).trim_end_matches('/')
-    )
+    match service {
+        Service::GrooveStats => groovestats_action_url("scoreSubmit"),
+        Service::BoogieStats => format!(
+            "{}/score-submit.php",
+            api_base_url(service).trim_end_matches('/')
+        ),
+    }
 }
 
 #[inline(always)]
 pub fn new_session_url(service: Service) -> String {
-    format!(
-        "{}/{}",
-        api_base_url(service).trim_end_matches('/'),
-        GROOVESTATS_NEW_SESSION_PATH
-    )
+    match service {
+        Service::GrooveStats => format!(
+            "{}&chartHashVersion={GROOVESTATS_CHART_HASH_VERSION}",
+            groovestats_action_url("newSession")
+        ),
+        Service::BoogieStats => format!(
+            "{}/{}",
+            api_base_url(service).trim_end_matches('/'),
+            LEGACY_NEW_SESSION_PATH
+        ),
+    }
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -1725,7 +1743,7 @@ mod tests {
     fn player_leaderboards_url_uses_selected_backend() {
         assert_eq!(
             player_leaderboards_url(Service::GrooveStats),
-            "https://api.groovestats.com/player-leaderboards.php"
+            "https://apiservice.groovestats.com/api/?action=playerLeaderboards"
         );
         assert_eq!(
             player_leaderboards_url(Service::BoogieStats),
@@ -1737,7 +1755,7 @@ mod tests {
     fn score_submit_url_uses_selected_backend() {
         assert_eq!(
             score_submit_url(Service::GrooveStats),
-            "https://api.groovestats.com/score-submit.php"
+            "https://apiservice.groovestats.com/api/?action=scoreSubmit"
         );
         assert_eq!(
             score_submit_url(Service::BoogieStats),
@@ -1749,7 +1767,7 @@ mod tests {
     fn new_session_url_uses_chart_hash_version() {
         assert_eq!(
             new_session_url(Service::GrooveStats),
-            "https://api.groovestats.com/new-session.php?chartHashVersion=3"
+            "https://apiservice.groovestats.com/api/?action=newSession&chartHashVersion=3"
         );
     }
 
@@ -2239,7 +2257,7 @@ mod tests {
     }
 
     #[test]
-    fn submit_payload_serializes_old_api_shape() {
+    fn submit_payload_serializes_score_submit_shape() {
         let payload = GrooveStatsSubmitPlayerPayload {
             rate: 150,
             score: 9_975,
