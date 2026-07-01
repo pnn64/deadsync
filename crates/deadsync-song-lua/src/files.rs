@@ -6,6 +6,8 @@ use crate::lua_util::method_arg;
 use crate::runtime::note_song_lua_side_effect;
 use crate::values::{read_boolish, read_string};
 
+const SONG_LUA_LOADER_ENVS_KEY: &str = "__songlua_loader_envs";
+
 pub fn song_group_name(song_dir: &Path) -> String {
     song_dir
         .parent()
@@ -88,6 +90,162 @@ pub fn resolve_script_path(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Resu
         path,
         song_dir.display()
     )))
+}
+
+pub fn resolve_load_actor_path(lua: &Lua, song_dir: &Path, path: &str) -> mlua::Result<PathBuf> {
+    if let Ok(resolved) = resolve_script_path(lua, song_dir, path) {
+        if resolved.is_dir() {
+            return resolve_load_actor_directory(&resolved, song_dir, path);
+        }
+        if resolved.is_file() {
+            return Ok(resolved);
+        }
+    }
+    resolve_load_actor_with_extensions(lua, song_dir, path)
+}
+
+fn resolve_load_actor_directory(dir: &Path, song_dir: &Path, path: &str) -> mlua::Result<PathBuf> {
+    for candidate in [dir.join("default.lua"), dir.join("default.xml")] {
+        if candidate.is_file() {
+            return Ok(candidate);
+        }
+    }
+    Err(mlua::Error::external(format!(
+        "script '{}' not found relative to '{}'",
+        path,
+        song_dir.display()
+    )))
+}
+
+fn resolve_load_actor_with_extensions(
+    lua: &Lua,
+    song_dir: &Path,
+    path: &str,
+) -> mlua::Result<PathBuf> {
+    let raw = Path::new(path.trim());
+    if raw.extension().is_some() {
+        return Err(mlua::Error::external(format!(
+            "script '{}' not found relative to '{}'",
+            path,
+            song_dir.display()
+        )));
+    }
+
+    const LOAD_ACTOR_EXTENSIONS: &[&str] = &[
+        "lua", "xml", "png", "jpg", "jpeg", "gif", "bmp", "webp", "apng", "mp4", "avi", "m4v",
+        "mov", "webm", "mkv", "mpg", "mpeg", "ogg", "mp3", "wav", "flac", "opus", "m4a", "aac",
+    ];
+
+    for base_dir in load_actor_search_dirs(lua, song_dir)? {
+        let base = base_dir.join(path);
+        if base.is_dir()
+            && let Ok(resolved) = resolve_load_actor_directory(&base, song_dir, path)
+        {
+            return Ok(resolved);
+        }
+        for ext in LOAD_ACTOR_EXTENSIONS {
+            let candidate = base.with_extension(ext);
+            if candidate.is_file() {
+                return Ok(candidate);
+            }
+        }
+    }
+
+    Err(mlua::Error::external(format!(
+        "script '{}' not found relative to '{}'",
+        path,
+        song_dir.display()
+    )))
+}
+
+fn load_actor_search_dirs(lua: &Lua, song_dir: &Path) -> mlua::Result<Vec<PathBuf>> {
+    let globals = lua.globals();
+    let mut out = Vec::with_capacity(2);
+    if let Some(current_dir) = globals
+        .get::<Option<String>>("__songlua_script_dir")?
+        .filter(|dir| !dir.trim().is_empty())
+    {
+        let current_dir = PathBuf::from(current_dir);
+        if !out.iter().any(|dir| dir == &current_dir) {
+            out.push(current_dir);
+        }
+    }
+    if !out.iter().any(|dir| dir == song_dir) {
+        out.push(song_dir.to_path_buf());
+    }
+    Ok(out)
+}
+
+pub fn register_loader_env(lua: &Lua, function: &Function, env: &Table) -> mlua::Result<()> {
+    let globals = lua.globals();
+    let envs = match globals.get::<Option<Table>>(SONG_LUA_LOADER_ENVS_KEY)? {
+        Some(envs) => envs,
+        None => {
+            let envs = lua.create_table()?;
+            globals.set(SONG_LUA_LOADER_ENVS_KEY, envs.clone())?;
+            envs
+        }
+    };
+    envs.set(loader_env_key(function), env.clone())
+}
+
+pub fn retarget_loader_env(lua: &Lua, function: &Function, env: &Table) -> mlua::Result<()> {
+    let Some(envs) = lua
+        .globals()
+        .get::<Option<Table>>(SONG_LUA_LOADER_ENVS_KEY)?
+    else {
+        return Ok(());
+    };
+    let Some(loader_env) = envs.get::<Option<Table>>(loader_env_key(function))? else {
+        return Ok(());
+    };
+    loader_env.set("__songlua_env_target", env.clone())
+}
+
+fn loader_env_key(function: &Function) -> String {
+    format!("{:p}", function.to_pointer())
+}
+
+pub fn call_with_script_dir<T>(
+    lua: &Lua,
+    script_dir: &Path,
+    f: impl FnOnce() -> mlua::Result<T>,
+) -> mlua::Result<T> {
+    let globals = lua.globals();
+    let previous = globals.get::<Value>("__songlua_script_dir")?;
+    globals.set(
+        "__songlua_script_dir",
+        script_dir.to_string_lossy().as_ref(),
+    )?;
+    let result = f();
+    globals.set("__songlua_script_dir", previous)?;
+    result
+}
+
+pub fn call_with_script_path<T>(
+    lua: &Lua,
+    script_path: &str,
+    f: impl FnOnce() -> mlua::Result<T>,
+) -> mlua::Result<T> {
+    let globals = lua.globals();
+    let previous = globals.get::<Value>("__songlua_current_script_path")?;
+    globals.set("__songlua_current_script_path", script_path)?;
+    let result = f();
+    globals.set("__songlua_current_script_path", previous)?;
+    result
+}
+
+pub fn call_with_chunk_env<T>(
+    lua: &Lua,
+    chunk_env: &Table,
+    f: impl FnOnce() -> mlua::Result<T>,
+) -> mlua::Result<T> {
+    let globals = lua.globals();
+    let previous = globals.get::<Value>("__songlua_current_chunk_env")?;
+    globals.set("__songlua_current_chunk_env", chunk_env.clone())?;
+    let result = f();
+    globals.set("__songlua_current_chunk_env", previous)?;
+    result
 }
 
 pub fn entry_file_path(path: &Path) -> Option<PathBuf> {

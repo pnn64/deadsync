@@ -41,13 +41,14 @@ pub use eases::{
     SongLuaReadEasesResult, SongLuaReadEasesStats, read_eases_with_function_capture,
 };
 pub use files::{
-    actor_util_class_registered, actor_util_file_type, create_actor_util_table,
-    create_fileman_table, create_find_files_function, create_lua_compat_table, entry_file_path,
-    file_path_string, fileman_dir_listing, find_compat_files, is_song_lua_audio_path,
-    is_song_lua_image_path, is_song_lua_media_path, is_song_lua_simfile_path,
-    is_song_lua_video_path, path_basename, resolve_compat_path, resolve_script_path,
-    song_dir_string, song_group_name, song_lookup_matches, song_music_path, song_named_image_path,
-    song_simfile_path, strip_sprite_hints, theme_path, wildcard_matches,
+    actor_util_class_registered, actor_util_file_type, call_with_chunk_env, call_with_script_dir,
+    call_with_script_path, create_actor_util_table, create_fileman_table,
+    create_find_files_function, create_lua_compat_table, entry_file_path, file_path_string,
+    fileman_dir_listing, find_compat_files, is_song_lua_audio_path, is_song_lua_image_path,
+    is_song_lua_media_path, is_song_lua_simfile_path, is_song_lua_video_path, path_basename,
+    register_loader_env, resolve_compat_path, resolve_load_actor_path, resolve_script_path,
+    retarget_loader_env, song_dir_string, song_group_name, song_lookup_matches, song_music_path,
+    song_named_image_path, song_simfile_path, strip_sprite_hints, theme_path, wildcard_matches,
 };
 pub use host::{
     SONG_LUA_STARTUP_MESSAGE, SongLuaCompileGlobals, SongLuaDateGlobals, SongLuaGameStateGlobals,
@@ -61,11 +62,61 @@ pub use host::{
 };
 pub use json::{json_to_lua_value, lua_to_json_value};
 pub use lua_util::{
+    SongLuaActionCaptureScope, actor_active_commands, actor_aft_capture_name, actor_child_at,
+    actor_children, actor_command_queue, actor_current_capture_block, actor_debug_label,
+    actor_decode_movie, actor_diffuse, actor_direct_children, actor_effect_magnitude, actor_glow,
+    actor_halign, actor_is_bitmap_text, actor_is_child_group, actor_named_children,
+    actor_runs_startup_commands, actor_shadow_len, actor_table_has_update_functions,
+    actor_texture_is_video, actor_texture_path, actor_tree_has_update_functions,
+    actor_tween_time_left, actor_type_is, actor_update_text_pre_zoom_flags, actor_valign,
+    actor_vertex_colors, actor_wrappers, actor_zoom_axis, banner_sort_order_path,
+    begin_action_capture_scope, call_actor_function, call_table_method,
+    capture_actor_command_preserving_state, capture_actor_text_attribute,
+    capture_actor_vertex_diffuse, capture_block_set_bool, capture_block_set_color,
+    capture_block_set_f32, capture_block_set_i32, capture_block_set_size,
+    capture_block_set_stretch, capture_block_set_string, capture_block_set_u32,
+    capture_block_set_vec2, capture_block_set_vec3, capture_block_set_vec4, capture_block_set_vec5,
+    capture_block_set_vertex_colors, capture_block_set_zoom_axes, capture_scope_actor_pointers,
+    capture_scope_actor_tables, capture_scope_snapshots, capture_texture_rect,
+    classify_function_ease_probe, collect_aft_capture_names,
+    collect_tracked_capture_blocks_for_indices, copy_dummy_actor_tags, create_actor_child_group,
     create_bool_array, create_color_constants_table, create_debug_table, create_owned_string_array,
-    create_string_array, lua_format_text, lua_text_value, make_color_table, method_arg,
-    method_arg_offset, read_color_call, read_color_value, read_song_lua_sound_paths,
-    read_vertex_colors_value, table_bool_field, table_f32_field, table_i32_field,
-    table_string_field,
+    create_string_array, current_gamestate_player_value, current_gamestate_value,
+    current_song_lua_style_name, current_song_value, current_steps_value,
+    default_message_command_params, drain_actor_command_queue, finish_actor_tweening,
+    flush_actor_capture, hurry_actor_tweening, inherit_actor_dirs, install_actor_metatable,
+    install_course_contents_list_children, lua_format_text, lua_text_value,
+    make_actor_add_f32_method, make_actor_capture_f32_method, make_actor_chain_method,
+    make_actor_finish_tweening_method, make_actor_set_size_method, make_actor_stop_tweening_method,
+    make_actor_tween_method, make_actor_wrap_width_method, make_color_table,
+    make_vertex_color_table, method_arg, method_arg_offset, normalize_broadcast_params,
+    note_zoom_point_hides, populate_course_contents_display, position_scroller_items,
+    prepare_capture_scope_actor, probe_actor_pointers, probe_call_names,
+    probe_function_ease_target, probe_target_kind, push_note_hide_window, push_sequence_child_once,
+    push_unique_actor_child, read_actor_capture_blocks, read_actor_color_field,
+    read_actor_multi_vertex_mesh, read_actor_multi_vertex_texture_path,
+    read_actor_semantic_state_table, read_bitmap_font, read_bitmap_text_attributes,
+    read_child_index, read_color_args, read_color_call, read_color_value, read_graph_display_size,
+    read_graph_display_values, read_model_path, read_proxy_target_kind, read_song_lua_sound_paths,
+    read_vertex_colors_value, record_probe_method_call, register_song_lua_actor,
+    remove_actor_child, remove_all_actor_children, reset_actor_capture, reset_actor_capture_tables,
+    reset_tracked_capture_tables, resolve_actor_asset_path, restore_action_capture_scope,
+    restore_actor_mutable_state, restore_actors_semantic_state, run_actor_init_commands,
+    run_actor_init_commands_for_table, run_actor_named_command, run_actor_named_command_with_drain,
+    run_actor_named_command_with_drain_and_params, run_actor_startup_commands,
+    run_actor_startup_commands_for_table, run_actor_update_functions,
+    run_actor_update_functions_for_table, run_actor_update_functions_with_delta,
+    run_added_actor_child_commands, run_command_on_leaves,
+    run_named_command_on_children_recursively, run_named_command_on_leaves,
+    set_actor_decode_movie_for_texture, set_actor_effect_defaults, set_actor_effect_mode,
+    set_actor_sound_file_from_value, set_actor_sprite_state, set_actor_texture_from_path,
+    set_actor_texture_from_path_methods, set_actor_texture_from_path_methods_or_fallback,
+    set_actor_texture_from_value, set_proxy_target_fields, snapshot_actor_mutable_state,
+    snapshot_actor_semantic_state_table, snapshot_actors_semantic_state, song_lua_actor_registry,
+    song_lua_screen_center, song_lua_screen_size, table_bool_field, table_f32_field,
+    table_i32_field, table_string_field, table_vec2, table_vec3, table_vec4, table_vec5,
+    table_vertex_colors, text_attribute_matches, text_attribute_value,
+    tracked_indices_for_actor_pointers,
 };
 pub use mod_windows::read_mod_windows;
 pub use multitap::{
@@ -1558,6 +1609,150 @@ pub fn parse_overlay_text_glow_mode(raw: &str) -> Option<SongLuaTextGlowMode> {
         "stroke" | "textglowmode_stroke" => Some(SongLuaTextGlowMode::Stroke),
         "both" | "textglowmode_both" => Some(SongLuaTextGlowMode::Both),
         _ => None,
+    }
+}
+
+pub fn input_status_actor_text(actor_type: &str) -> Option<&'static str> {
+    if actor_type.eq_ignore_ascii_case("DeviceList") {
+        Some("No input devices")
+    } else if actor_type.eq_ignore_ascii_case("InputList") {
+        Some("No unmapped inputs")
+    } else {
+        None
+    }
+}
+
+#[inline(always)]
+pub fn effect_clock_label(clock: EffectClock) -> &'static str {
+    match clock {
+        EffectClock::Time => "time",
+        EffectClock::Beat => "beat",
+    }
+}
+
+#[inline(always)]
+pub fn text_glow_mode_label(mode: SongLuaTextGlowMode) -> &'static str {
+    match mode {
+        SongLuaTextGlowMode::Inner => "inner",
+        SongLuaTextGlowMode::Stroke => "stroke",
+        SongLuaTextGlowMode::Both => "both",
+    }
+}
+
+#[inline(always)]
+pub fn song_lua_valid_sprite_state_index(index: Option<u32>) -> Option<u32> {
+    index.filter(|&value| value != SONG_LUA_SPRITE_STATE_CLEAR)
+}
+
+#[inline(always)]
+pub fn sprite_sheet_rect(index: u32, cols: u32, rows: u32) -> [f32; 4] {
+    let cols = cols.max(1);
+    let rows = rows.max(1);
+    let col = index % cols;
+    let row = (index / cols).min(rows.saturating_sub(1));
+    let width = 1.0 / cols as f32;
+    let height = 1.0 / rows as f32;
+    let left = col as f32 * width;
+    let top = row as f32 * height;
+    [left, top, left + width, top + height]
+}
+
+pub fn song_lua_halign_value(value: &mlua::Value) -> Option<f32> {
+    read_f32(value.clone()).or_else(|| {
+        read_string(value.clone()).and_then(|raw| {
+            match song_lua_align_token(raw.as_str()).as_str() {
+                "left" => Some(0.0),
+                "center" | "middle" => Some(0.5),
+                "right" => Some(1.0),
+                _ => None,
+            }
+        })
+    })
+}
+
+pub fn song_lua_valign_value(value: &mlua::Value) -> Option<f32> {
+    read_f32(value.clone()).or_else(|| {
+        read_string(value.clone()).and_then(|raw| {
+            match song_lua_align_token(raw.as_str()).as_str() {
+                "top" => Some(0.0),
+                "center" | "middle" => Some(0.5),
+                "bottom" => Some(1.0),
+                _ => None,
+            }
+        })
+    })
+}
+
+pub fn song_lua_align_token(raw: &str) -> String {
+    raw.trim()
+        .trim_matches('"')
+        .trim_matches('\'')
+        .to_ascii_lowercase()
+        .trim_start_matches("horizalign_")
+        .trim_start_matches("vertalign_")
+        .to_string()
+}
+
+pub fn song_lua_text_align_value(value: &mlua::Value) -> Option<TextAlign> {
+    read_string(value.clone()).and_then(|raw| parse_overlay_text_align(raw.as_str()))
+}
+
+pub fn overlay_text_align_label(value: TextAlign) -> &'static str {
+    match value {
+        TextAlign::Left => "left",
+        TextAlign::Center => "center",
+        TextAlign::Right => "right",
+    }
+}
+
+pub fn crop_texture_rect(source: [f32; 2], target: [f32; 2]) -> Option<[f32; 4]> {
+    if !source.iter().all(|value| value.is_finite() && *value > 0.0) {
+        return None;
+    }
+    let scale = (target[0] / source[0]).max(target[1] / source[1]);
+    if !scale.is_finite() || scale <= f32::EPSILON {
+        return None;
+    }
+    let zoomed = [source[0] * scale, source[1] * scale];
+    if zoomed[0] > target[0] + 0.01 {
+        let cut = ((zoomed[0] - target[0]) / zoomed[0]).max(0.0) * 0.5;
+        return Some([cut, 0.0, 1.0 - cut, 1.0]);
+    }
+    let cut = ((zoomed[1] - target[1]) / zoomed[1]).max(0.0) * 0.5;
+    Some([0.0, cut, 1.0, 1.0 - cut])
+}
+
+#[inline(always)]
+pub fn song_lua_span_end(start: f32, limit: f32, span_mode: SongLuaSpanMode) -> f32 {
+    match span_mode {
+        SongLuaSpanMode::Len => start + limit.max(0.0),
+        SongLuaSpanMode::End => limit,
+    }
+}
+
+pub fn rolling_numbers_format(metric: &str) -> &'static str {
+    if metric.eq_ignore_ascii_case("RollingNumbersEvaluationB") {
+        "%03.0f"
+    } else if metric.eq_ignore_ascii_case("RollingNumbersEvaluationA")
+        || metric.eq_ignore_ascii_case("RollingNumbersEvaluationNoDecentsWayOffs")
+        || metric.eq_ignore_ascii_case("RollingNumbersEvaluation")
+    {
+        "%04.0f"
+    } else {
+        "%.0f"
+    }
+}
+
+pub fn format_rolling_number(format: &str, number: f32) -> String {
+    let rounded = number.round().clamp(i64::MIN as f32, i64::MAX as f32) as i64;
+    if format.contains("%04") {
+        format!("{rounded:04}")
+    } else if format.contains("%03") {
+        format!("{rounded:03}")
+    } else if format.contains("%.2") {
+        format!("{number:.2}")
+    } else {
+        rounded.to_string()
     }
 }
 

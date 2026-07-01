@@ -6,26 +6,24 @@ use std::collections::{HashMap, HashSet};
 use std::ffi::c_void;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::Arc;
 use std::time::Instant;
 
-use deadlib_present::actors::{TextAlign, TextAttribute};
+use deadlib_present::actors::TextAttribute;
 use deadlib_present::anim::EffectClock;
 use deadsync_noteskin::{NUM_QUANTIZATIONS, Style};
 use deadsync_song_lua::{
     GRAPH_DISPLAY_VALUE_RESOLUTION, LUA_PLAYERS, MultitapDesc, RuntimeModEaseEntry,
-    SONG_LUA_BROADCASTS_KEY, SONG_LUA_CAPTURE_ACTOR_SET_KEY, SONG_LUA_CAPTURE_ACTORS_KEY,
-    SONG_LUA_CAPTURE_SNAPSHOTS_KEY, SONG_LUA_DANGER_LIFE, SONG_LUA_INITIAL_LIFE,
-    SONG_LUA_NOTE_COLUMNS, SONG_LUA_PROBE_ACTOR_SET_KEY, SONG_LUA_PROBE_ACTORS_KEY,
-    SONG_LUA_PROBE_METHODS_KEY, SONG_LUA_SPRITE_STATE_CLEAR, SONG_LUA_STARTUP_MESSAGE,
-    SONG_LUA_THEME_PATH_PREFIX, SongLuaActorMultiVertexPoint, SongLuaDateGlobals,
-    SongLuaFunctionActionInput, SongLuaFunctionEaseDecision, SongLuaFunctionEaseInput,
-    SongLuaFunctionEaseResult, SongLuaHostState, SongLuaReadEasesStats,
+    SONG_LUA_BROADCASTS_KEY, SONG_LUA_DANGER_LIFE, SONG_LUA_INITIAL_LIFE, SONG_LUA_NOTE_COLUMNS,
+    SONG_LUA_SPRITE_STATE_CLEAR, SONG_LUA_STARTUP_MESSAGE, SONG_LUA_THEME_PATH_PREFIX,
+    SongLuaDateGlobals, SongLuaFunctionActionInput, SongLuaFunctionEaseDecision,
+    SongLuaFunctionEaseInput, SongLuaFunctionEaseResult, SongLuaHostState, SongLuaReadEasesStats,
     SongLuaTrackedActor as TrackedCompileActor,
     SongLuaTrackedActorTarget as TrackedCompileActorTarget, THEME_RECEPTOR_Y_REV,
-    THEME_RECEPTOR_Y_STD, active_perframe_entries, apply_multitap_field_state, call_perframe_entry,
-    clone_lua_value, compile_song_runtime_delta_values, compile_song_runtime_values,
-    create_chunk_env_proxy, create_life_record_table, current_perframe_player_states,
+    THEME_RECEPTOR_Y_STD, active_perframe_entries, actor_tree_has_update_functions,
+    apply_multitap_field_state, call_perframe_entry, clone_lua_value,
+    compile_song_runtime_delta_values, compile_song_runtime_values, create_chunk_env_proxy,
+    create_life_record_table, current_perframe_player_states, current_song_lua_style_name,
     display_bpms_text, ease_window_cmp, entry_file_path, file_path_string, graph_display_body_size,
     initial_chunk_environment, install_cmd_helpers, install_core_globals, install_ease_table,
     install_late_globals, install_message_manager_globals, install_screen_manager_globals,
@@ -35,15 +33,17 @@ use deadsync_song_lua::{
     multitap_explosion_message_events, multitap_explosion_message_name,
     named_overlay_indices_by_name, note_song_lua_side_effect, overlay_delta_intersection,
     overlay_descendants_by_parent, perframe_boundaries, perframe_delta_seconds, perframe_samples,
-    player_index_from_value, player_number_name, preprocess_lua_cmd_syntax,
+    player_index_from_value, preprocess_lua_cmd_syntax, probe_function_ease_target,
     push_multitap_actor_eases, push_multitap_explosion_eases, push_perframe_static_targets,
     push_sampled_perframe_targets, read_actions_with_function_capture, read_boolish,
-    read_color_value, read_eases_with_function_capture, read_f32, read_i32_value, read_mod_windows,
+    read_eases_with_function_capture, read_f32, read_i32_value, read_mod_windows,
     read_multitap_descs, read_perframe_entries, read_runtime_mod_eases, read_song_lua_broadcasts,
-    read_song_lua_sound_paths, read_string, read_u32_value, read_vertex_colors_value,
+    read_song_lua_sound_paths, read_string, read_u32_value,
     read_xero_runtime_mod_eases_with_overlay_capture, record_unsupported_function_action_capture,
     record_unsupported_function_ease_capture, record_unsupported_xero_overlay_function_ease,
-    register_loaded_easing_names, resolve_script_path, restore_compile_globals,
+    register_loaded_easing_names, reset_tracked_capture_tables, resolve_script_path,
+    restore_compile_globals, run_actor_init_commands, run_actor_startup_commands,
+    run_actor_update_functions, run_actor_update_functions_with_delta,
     set_compile_song_runtime_beat, set_compile_song_runtime_delta_values,
     set_compile_song_runtime_values, set_string_method, snapshot_compile_globals,
     song_lua_human_player_count, song_lua_side_effect_count, song_lua_style_column_x,
@@ -58,15 +58,12 @@ mod managers;
 mod overlay;
 
 use self::actor_host::{
-    actor_overlay_initial_state, actor_tree_has_update_functions, broadcast_song_lua_message,
-    compile_function_action, compile_note_column_pos_function_ease, compile_overlay_function_ease,
-    create_dummy_actor, create_top_screen_table, current_song_lua_style_name, execute_script_file,
-    install_def, install_file_loaders, probe_function_ease_target,
+    actor_overlay_initial_state, broadcast_song_lua_message, compile_function_action,
+    compile_note_column_pos_function_ease, compile_overlay_function_ease, create_dummy_actor,
+    create_top_screen_table, execute_script_file, install_def, install_file_loaders,
     read_global_function_nested_tables, read_note_column_zoom_hides, read_overlay_actors,
     read_tracked_compile_actors, read_update_function_actions, read_update_function_nested_tables,
-    read_update_function_tables, reset_overlay_capture_tables, reset_tracked_capture_tables,
-    run_actor_draw_functions, run_actor_init_commands, run_actor_startup_commands,
-    run_actor_update_functions, run_actor_update_functions_with_delta,
+    read_update_function_tables, reset_overlay_capture_tables, run_actor_draw_functions,
 };
 use self::compat::install_stdlib_compat;
 use self::managers::{create_noteskin_table, song_lua_noteskin_resolver};
