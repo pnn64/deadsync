@@ -3037,52 +3037,13 @@ fn prewarm_gameplay_assets(
     fn song_lua_overlay_sampler(
         overlay: &crate::game::parsing::song_lua::SongLuaOverlayActor,
     ) -> SamplerDesc {
-        let uses_repeat_state = |state: &crate::game::parsing::song_lua::SongLuaOverlayState| {
-            state.texture_wrapping
-                || state
-                    .texcoord_offset
-                    .is_some_and(|[u, v]| u.abs() > f32::EPSILON || v.abs() > f32::EPSILON)
-                || state
-                    .custom_texture_rect
-                    .is_some_and(|[u0, v0, u1, v1]| u0 < 0.0 || v0 < 0.0 || u1 > 1.0 || v1 > 1.0)
-                || state.texcoord_velocity.is_some()
-        };
-        let uses_repeat_delta =
-            |delta: &crate::game::parsing::song_lua::SongLuaOverlayStateDelta| {
-                delta.texture_wrapping == Some(true)
-                    || delta
-                        .texcoord_offset
-                        .is_some_and(|[u, v]| u.abs() > f32::EPSILON || v.abs() > f32::EPSILON)
-                    || delta.custom_texture_rect.is_some_and(|[u0, v0, u1, v1]| {
-                        u0 < 0.0 || v0 < 0.0 || u1 > 1.0 || v1 > 1.0
-                    })
-                    || delta.texcoord_velocity.is_some()
-            };
-        let uses_nearest_state =
-            |state: &crate::game::parsing::song_lua::SongLuaOverlayState| !state.texture_filtering;
-        let uses_nearest_delta =
-            |delta: &crate::game::parsing::song_lua::SongLuaOverlayStateDelta| {
-                delta.texture_filtering == Some(false)
-            };
-        let uses_repeat = uses_repeat_state(&overlay.initial_state)
-            || overlay
-                .message_commands
-                .iter()
-                .flat_map(|command| command.blocks.iter())
-                .any(|block| uses_repeat_delta(&block.delta));
-        let uses_nearest = uses_nearest_state(&overlay.initial_state)
-            || overlay
-                .message_commands
-                .iter()
-                .flat_map(|command| command.blocks.iter())
-                .any(|block| uses_nearest_delta(&block.delta));
         SamplerDesc {
-            filter: if uses_nearest {
+            filter: if deadsync_song_lua::overlay_actor_uses_nearest_sampler(overlay) {
                 SamplerFilter::Nearest
             } else {
                 SamplerFilter::Linear
             },
-            wrap: if uses_repeat {
+            wrap: if deadsync_song_lua::overlay_actor_uses_repeat_sampler(overlay) {
                 SamplerWrap::Repeat
             } else {
                 SamplerWrap::Clamp

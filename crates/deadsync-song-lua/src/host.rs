@@ -11,24 +11,27 @@ use crate::{
     SONG_LUA_PRODUCT_FAMILY, SONG_LUA_PRODUCT_ID, SONG_LUA_PRODUCT_VERSION,
     SONG_LUA_RUNTIME_BEAT_KEY, SONG_LUA_RUNTIME_KEY, SONG_LUA_RUNTIME_SECONDS_KEY,
     SONG_LUA_SIDE_EFFECT_COUNT_KEY, SONG_LUA_SOUND_PATHS_KEY, SongLuaCompileContext,
-    THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD, create_branch_table, create_charman_table,
-    create_conf_option_row, create_course_table, create_custom_option_row, create_difficulty_table,
+    SongLuaNoteskinResolver, THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD,
+    broadcast_song_lua_message, create_branch_table, create_charman_table, create_conf_option_row,
+    create_course_table, create_custom_option_row, create_difficulty_table,
     create_display_bpms_table, create_display_table, create_enabled_players_table,
     create_game_table, create_gameman_table, create_gameplay_layout, create_hooks_table,
-    create_memcardman_table, create_operator_menu_option_rows_table, create_other_player_table,
-    create_player_number_table, create_player_tables, create_prefsmgr_table,
-    create_profileman_table, create_screen_system_layer_helpers_table, create_screen_table,
-    create_sl_custom_prefs_table, create_sl_table, create_song_options_table,
+    create_memcardman_table, create_noteskin_table, create_operator_menu_option_rows_table,
+    create_other_player_table, create_player_number_table, create_player_tables,
+    create_prefsmgr_table, create_profileman_table, create_screen_system_layer_helpers_table,
+    create_screen_table, create_sl_custom_prefs_table, create_sl_table, create_song_options_table,
     create_song_position_table, create_song_runtime_table, create_song_table,
     create_song_util_table, create_songman_table, create_statsman_table, create_string_enum_table,
     create_style_table, create_theme_prefs_rows_table, create_theme_prefs_table,
-    create_theme_table, create_trail_table, create_unlockman_table, display_bpms_for_args,
-    display_bpms_text, easiest_steps_difficulty, format_number_and_suffix,
-    format_song_options_text, is_song_lua_audio_path, lua_values_equal, method_arg,
-    note_song_lua_side_effect, player_index_from_value, player_number_name, read_f32, read_string,
-    record_song_lua_broadcast, resolve_script_path, scale_value, seconds_to_hhmmss,
-    seconds_to_mmss, seconds_to_mmss_ms_ms, seconds_to_mss, seconds_to_mss_ms_ms, song_dir_string,
-    song_display_bps, song_lua_runtime_number, song_lua_style_column_x, song_music_rate,
+    create_theme_table, create_top_screen_table, create_trail_table, create_unlockman_table,
+    current_song_lua_style_name, display_bpms_for_args, display_bpms_text,
+    easiest_steps_difficulty, format_number_and_suffix, format_song_options_text,
+    install_def_globals, install_default_stdlib_compat, install_file_loader_globals,
+    is_song_lua_audio_path, lua_values_equal, method_arg, note_song_lua_side_effect,
+    player_index_from_value, player_number_name, read_f32, read_string, record_song_lua_broadcast,
+    resolve_script_path, scale_value, seconds_to_hhmmss, seconds_to_mmss, seconds_to_mmss_ms_ms,
+    seconds_to_mss, seconds_to_mss_ms_ms, song_dir_string, song_display_bps,
+    song_lua_human_player_count, song_lua_runtime_number, song_lua_style_column_x, song_music_rate,
     theme_string, truthy,
 };
 
@@ -46,6 +49,71 @@ pub struct SongLuaCompileGlobals {
     mods_ease: Value,
     mod_perframes: Value,
     mod_actions: Value,
+}
+
+pub fn install_compile_host(
+    lua: &Lua,
+    context: &SongLuaCompileContext,
+    host: &mut SongLuaHostState,
+    noteskin_resolver: SongLuaNoteskinResolver,
+    create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
+    create_named_child_actor: fn(&Lua, &Table, &str) -> mlua::Result<Table>,
+    install_actor_methods: fn(&Lua, &Table) -> mlua::Result<()>,
+) -> mlua::Result<()> {
+    install_default_stdlib_compat(lua, context.song_dir.as_path())?;
+    install_ease_table(lua, host)?;
+    install_compile_globals(
+        lua,
+        context,
+        noteskin_resolver,
+        create_dummy_actor,
+        create_named_child_actor,
+    )?;
+    install_cmd_helpers(lua)?;
+    install_def_globals(
+        lua,
+        song_lua_human_player_count(context),
+        create_dummy_actor,
+        install_actor_methods,
+    )?;
+    install_file_loader_globals(lua, context.song_dir.clone(), create_dummy_actor)?;
+    Ok(())
+}
+
+fn install_compile_globals(
+    lua: &Lua,
+    context: &SongLuaCompileContext,
+    noteskin_resolver: SongLuaNoteskinResolver,
+    create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
+    create_named_child_actor: fn(&Lua, &Table, &str) -> mlua::Result<Table>,
+) -> mlua::Result<()> {
+    let game_state_globals = install_core_globals(
+        lua,
+        context,
+        song_lua_local_date_globals(),
+        create_noteskin_table(lua, context, noteskin_resolver, create_dummy_actor)?,
+        current_song_lua_style_name,
+    )?;
+    let current_sort_order = game_state_globals.current_sort_order;
+    let current_song = game_state_globals.current_song;
+
+    let top_screen = create_top_screen_table(
+        lua,
+        context,
+        current_sort_order,
+        current_song,
+        create_dummy_actor,
+        create_named_child_actor,
+    )?;
+    install_screen_manager_globals(
+        lua,
+        top_screen.top_screen.clone(),
+        top_screen.players.clone(),
+    )?;
+    install_sound_globals(lua, context.song_dir.as_path())?;
+    install_message_manager_globals(lua, broadcast_song_lua_message)?;
+    install_late_globals(lua, context)?;
+    Ok(())
 }
 
 pub fn clone_lua_value(lua: &Lua, value: Value) -> mlua::Result<Value> {

@@ -1,3 +1,5 @@
+use log::info;
+use std::path::Path;
 use std::time::Instant;
 
 pub struct SongLuaCompileTimer {
@@ -46,4 +48,17 @@ pub fn song_lua_compile_stage_summary(stage_times: &[(&'static str, f64)]) -> St
         stages.push_str(format!("{ms:.3}").as_str());
     }
     stages
+}
+
+pub fn log_song_lua_compile_timing(entry_path: &Path, compile_timer: &SongLuaCompileTimer) {
+    if !compile_timer.should_log() {
+        return;
+    }
+    let elapsed_ms = compile_timer.elapsed_ms();
+    let stages = compile_timer.stage_summary();
+    info!(
+        "Song lua compile timing: entry='{}' elapsed_ms={elapsed_ms:.3} {}",
+        entry_path.display(),
+        stages
+    );
 }

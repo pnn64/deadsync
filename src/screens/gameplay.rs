@@ -4550,7 +4550,7 @@ fn song_lua_overlay_state_lerp(
 
 #[inline(always)]
 fn song_lua_valid_sprite_state_index(state: SongLuaOverlayState) -> Option<u32> {
-    state.sprite_state_index.filter(|&value| value != u32::MAX)
+    deadsync_song_lua::song_lua_valid_sprite_state_index(state.sprite_state_index)
 }
 
 #[inline(always)]
@@ -4563,30 +4563,16 @@ fn song_lua_sprite_sheet_index(
     let (cols, rows) = sprite_sheet_dims(texture_key);
     let total = cols.saturating_mul(rows).max(1);
     if state.sprite_animate && state.sprite_state_delay > 0.0 && total > 1 {
-        let steps =
-            (total_elapsed * state.sprite_playback_rate / state.sprite_state_delay).floor() as i64;
-        let frame = i64::from(start) + steps;
-        let total = i64::from(total);
-        return Some(if state.sprite_loop {
-            frame.rem_euclid(total) as u32
-        } else {
-            frame.clamp(0, total - 1) as u32
-        });
+        return Some(deadsync_song_lua::sprite_animation_state_from(
+            start,
+            total_elapsed,
+            state.sprite_playback_rate,
+            state.sprite_state_delay,
+            total,
+            state.sprite_loop,
+        ));
     }
     (state.sprite_animate || song_lua_valid_sprite_state_index(state).is_some()).then_some(start)
-}
-
-#[inline(always)]
-fn song_lua_sprite_sheet_rect(index: u32, cols: u32, rows: u32) -> [f32; 4] {
-    let cols = cols.max(1);
-    let rows = rows.max(1);
-    let col = index % cols;
-    let row = (index / cols).min(rows.saturating_sub(1));
-    let width = 1.0 / cols as f32;
-    let height = 1.0 / rows as f32;
-    let left = col as f32 * width;
-    let top = row as f32 * height;
-    [left, top, left + width, top + height]
 }
 
 fn song_lua_overlay_sprite_size(state: SongLuaOverlayState, texture_key: &str) -> Option<[f32; 2]> {
@@ -4594,12 +4580,12 @@ fn song_lua_overlay_sprite_size(state: SongLuaOverlayState, texture_key: &str) -
         return Some(size);
     }
     let tex = crate::assets::texture_dims(texture_key)?;
-    let (mut width, mut height) = (tex.w as f32, tex.h as f32);
-    if state.sprite_animate || song_lua_valid_sprite_state_index(state).is_some() {
-        let (cols, rows) = sprite_sheet_dims(texture_key);
-        width /= cols.max(1) as f32;
-        height /= rows.max(1) as f32;
-    }
+    let (width, height) = deadsync_song_lua::sprite_image_frame_size(
+        Some((tex.w as f32, tex.h as f32)),
+        state.sprite_animate,
+        state.sprite_state_index,
+        Some(sprite_sheet_dims(texture_key)),
+    )?;
     Some([width, height])
 }
 
@@ -4608,59 +4594,25 @@ fn song_lua_overlay_uv_rect(
     texture_key: Option<&str>,
     total_elapsed: f32,
 ) -> Option<[f32; 4]> {
-    let mut rect = state.custom_texture_rect.or_else(|| {
-        let texture_key = texture_key?;
-        let state_index = song_lua_sprite_sheet_index(state, texture_key, total_elapsed)?;
-        let (cols, rows) = sprite_sheet_dims(texture_key);
-        Some(song_lua_sprite_sheet_rect(state_index, cols, rows))
-    });
-    if rect.is_none() && state.texcoord_offset.is_some() {
-        rect = Some([0.0, 0.0, 1.0, 1.0]);
-    }
-    if let (Some([u0, v0, u1, v1]), Some([dx, dy])) = (rect, state.texcoord_offset) {
-        rect = Some([u0 + dx, v0 + dy, u1 + dx, v1 + dy]);
-    }
-    rect
+    let state_index = texture_key
+        .and_then(|texture_key| song_lua_sprite_sheet_index(state, texture_key, total_elapsed));
+    let sheet_dims = texture_key.map(sprite_sheet_dims);
+    deadsync_song_lua::sprite_texture_rect_with_offset(
+        state.custom_texture_rect,
+        state_index,
+        sheet_dims,
+        state.texcoord_offset,
+    )
 }
 
 #[inline(always)]
 fn song_lua_overlay_axis_scale(state: SongLuaOverlayState) -> [f32; 2] {
-    let basezoom_x = if (state.basezoom_x - 1.0).abs() <= f32::EPSILON {
-        state.basezoom
-    } else {
-        state.basezoom_x
-    };
-    let basezoom_y = if (state.basezoom_y - 1.0).abs() <= f32::EPSILON {
-        state.basezoom
-    } else {
-        state.basezoom_y
-    };
-    let zoom_x = if (state.zoom_x - 1.0).abs() <= f32::EPSILON {
-        state.zoom
-    } else {
-        state.zoom_x
-    };
-    let zoom_y = if (state.zoom_y - 1.0).abs() <= f32::EPSILON {
-        state.zoom
-    } else {
-        state.zoom_y
-    };
-    [basezoom_x * zoom_x, basezoom_y * zoom_y]
+    deadsync_song_lua::overlay_state_axis_scale(state)
 }
 
 #[inline(always)]
 fn song_lua_overlay_z_scale(state: SongLuaOverlayState) -> f32 {
-    let basezoom_z = if (state.basezoom_z - 1.0).abs() <= f32::EPSILON {
-        state.basezoom
-    } else {
-        state.basezoom_z
-    };
-    let zoom_z = if (state.zoom_z - 1.0).abs() <= f32::EPSILON {
-        state.zoom
-    } else {
-        state.zoom_z
-    };
-    basezoom_z * zoom_z
+    deadsync_song_lua::overlay_state_z_scale(state)
 }
 
 #[inline(always)]

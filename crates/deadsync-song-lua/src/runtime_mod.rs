@@ -1,11 +1,14 @@
-use mlua::{Function, Table, Value};
+use log::debug;
+use mlua::{Function, Lua, Table, Value};
 use std::collections::HashMap;
 use std::ffi::c_void;
 
 use crate::{
     LUA_PLAYERS, SongLuaCompileContext, SongLuaCompileInfo, SongLuaEaseTarget, SongLuaEaseWindow,
-    SongLuaOverlayEase, SongLuaOverlayStateDelta, SongLuaSpanMode, SongLuaTimeUnit,
-    push_unique_compile_detail, read_easing_name, read_f32, read_player, read_string, truthy,
+    SongLuaOverlayCompileActor, SongLuaOverlayEase, SongLuaOverlayStateDelta, SongLuaSpanMode,
+    SongLuaTimeUnit, actor_pointers_touch_actor, capture_overlay_compile_actor_function_eases,
+    probe_function_ease_target, push_unique_compile_detail, read_easing_name, read_f32,
+    read_player, read_string, truthy,
 };
 
 #[derive(Clone)]
@@ -313,6 +316,103 @@ where
     }
     extend_runtime_mod_sustains(&mut out);
     Ok((out, overlay_eases, info))
+}
+
+pub fn read_xero_runtime_mod_eases_for_overlay_actors<Kind>(
+    lua: &Lua,
+    ease_tables: Vec<Table>,
+    node_tables: Vec<Table>,
+    easing_names: &HashMap<*const c_void, String>,
+    overlays: &[SongLuaOverlayCompileActor<Kind>],
+) -> Result<
+    (
+        Vec<SongLuaEaseWindow>,
+        Vec<SongLuaOverlayEase>,
+        SongLuaCompileInfo,
+    ),
+    String,
+> {
+    read_xero_runtime_mod_eases_with_overlay_capture(
+        ease_tables,
+        node_tables,
+        easing_names,
+        |entry, function, from, to, info| {
+            compile_xero_overlay_function_ease(lua, overlays, entry, function, from, to, info)
+        },
+    )
+}
+
+fn compile_xero_overlay_function_ease<Kind>(
+    lua: &Lua,
+    overlays: &[SongLuaOverlayCompileActor<Kind>],
+    entry: &RuntimeModEaseEntry,
+    function: &Function,
+    from: f32,
+    to: f32,
+    info: &mut SongLuaCompileInfo,
+) -> Result<Vec<SongLuaOverlayEase>, String> {
+    let (probed_target, probe_methods, probe_actor_ptrs) =
+        probe_function_ease_target(lua, function).map_err(|err| err.to_string())?;
+    if !xero_node_touches_overlay(overlays, &probe_actor_ptrs)
+        || !matches!(probed_target, None | Some(SongLuaEaseTarget::Function))
+    {
+        return Ok(Vec::new());
+    }
+    match capture_overlay_compile_actor_function_eases(
+        lua,
+        overlays,
+        function,
+        entry.unit,
+        entry.start,
+        entry.limit,
+        SongLuaSpanMode::Len,
+        from,
+        to,
+        Some(entry.easing.clone()),
+        None,
+        entry.opt1,
+        entry.opt2,
+        &probe_actor_ptrs,
+    ) {
+        Ok(compiled) if !compiled.is_empty() => Ok(compiled),
+        Ok(_) => {
+            let detail = record_unsupported_xero_overlay_function_ease(
+                info,
+                entry,
+                from,
+                to,
+                &probe_methods,
+            );
+            debug!("Unsupported xero overlay function ease capture: {detail}");
+            Ok(Vec::new())
+        }
+        Err(err) => {
+            let detail = record_unsupported_xero_overlay_function_ease(
+                info,
+                entry,
+                from,
+                to,
+                &probe_methods,
+            );
+            debug!("Unsupported xero overlay function ease capture: {detail}");
+            debug!(
+                "Unsupported xero overlay function ease capture for '{}': {err}",
+                entry.target
+            );
+            Ok(Vec::new())
+        }
+    }
+}
+
+fn xero_node_touches_overlay<Kind>(
+    overlays: &[SongLuaOverlayCompileActor<Kind>],
+    probe_actor_ptrs: &[usize],
+) -> bool {
+    actor_pointers_touch_actor(
+        overlays.len(),
+        |index| overlays[index].table.to_pointer() as usize,
+        probe_actor_ptrs,
+    )
 }
 
 fn read_xero_node_functions(tables: Vec<Table>) -> Result<HashMap<String, Function>, String> {

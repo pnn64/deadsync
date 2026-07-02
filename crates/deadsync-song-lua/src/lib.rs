@@ -8,6 +8,7 @@ use deadlib_present::anim::{EffectClock, EffectMode};
 mod actions;
 mod cmd;
 mod compat;
+mod compile;
 mod compile_timing;
 mod crypto;
 mod eases;
@@ -40,11 +41,15 @@ pub use actions::{
 };
 pub use cmd::preprocess_lua_cmd_syntax;
 pub use compat::{SongLuaCompatCallbacks, install_default_stdlib_compat, install_stdlib_compat};
-pub use compile_timing::{SongLuaCompileTimer, song_lua_compile_stage_summary};
+pub use compile::compile_song_lua_with_actors;
+pub use compile_timing::{
+    SongLuaCompileTimer, log_song_lua_compile_timing, song_lua_compile_stage_summary,
+};
 pub use crypto::create_cryptman_table;
 pub use eases::{
     SongLuaFunctionEaseDecision, SongLuaFunctionEaseInput, SongLuaFunctionEaseResult,
-    SongLuaReadEasesResult, SongLuaReadEasesStats, read_eases_with_function_capture,
+    SongLuaReadEasesResult, SongLuaReadEasesStats, read_eases_for_overlay_actors,
+    read_eases_with_function_capture,
 };
 pub use files::{
     actor_util_class_registered, actor_util_file_type, call_with_chunk_env, call_with_script_dir,
@@ -59,22 +64,22 @@ pub use files::{
 pub use host::{
     SONG_LUA_STARTUP_MESSAGE, SongLuaCompileGlobals, SongLuaDateGlobals, SongLuaGameStateGlobals,
     SongLuaHostState, clone_lua_value, create_arrow_effects_table, create_chunk_env_proxy,
-    initial_chunk_environment, install_basic_globals, install_cmd_helpers, install_core_globals,
-    install_date_globals, install_ease_table, install_game_state_globals, install_late_globals,
-    install_manager_globals, install_message_manager_globals, install_screen_manager_globals,
-    install_screen_string_globals, install_screen_utility_globals, install_sound_globals,
-    is_compile_global_name, register_loaded_easing_names, restore_compile_globals,
-    snapshot_compile_globals, song_lua_local_date_globals,
+    initial_chunk_environment, install_basic_globals, install_cmd_helpers, install_compile_host,
+    install_core_globals, install_date_globals, install_ease_table, install_game_state_globals,
+    install_late_globals, install_manager_globals, install_message_manager_globals,
+    install_screen_manager_globals, install_screen_string_globals, install_screen_utility_globals,
+    install_sound_globals, is_compile_global_name, register_loaded_easing_names,
+    restore_compile_globals, snapshot_compile_globals, song_lua_local_date_globals,
 };
 pub use json::{json_to_lua_value, lua_to_json_value};
 pub use lua_util::{
     SongLuaActionCaptureScope, SongLuaCapturedMessageCommands, SongLuaFunctionActionCapture,
-    SongLuaNoteColumnHandlerSnapshot, SongLuaNoteFieldColumnSnapshot, TopScreenLuaTables,
-    actor_active_commands, actor_aft_capture_name, actor_base_size, actor_base_size_with_image,
-    actor_child_at, actor_children, actor_command_queue, actor_crop_source_size,
-    actor_current_capture_block, actor_debug_label, actor_decode_movie, actor_diffuse,
-    actor_direct_children, actor_effect_magnitude, actor_glow, actor_halign,
-    actor_image_frame_size, actor_image_texture_size, actor_indices_for_pointers,
+    SongLuaNoteColumnHandlerSnapshot, SongLuaNoteFieldColumnSnapshot, SongLuaNoteskinTapActorModel,
+    SongLuaOverlayCompileActor, TopScreenLuaTables, actor_active_commands, actor_aft_capture_name,
+    actor_base_size, actor_base_size_with_image, actor_child_at, actor_children,
+    actor_command_queue, actor_crop_source_size, actor_current_capture_block, actor_debug_label,
+    actor_decode_movie, actor_diffuse, actor_direct_children, actor_effect_magnitude, actor_glow,
+    actor_halign, actor_image_frame_size, actor_image_texture_size, actor_indices_for_pointers,
     actor_is_bitmap_text, actor_is_child_group, actor_named_children, actor_overlay_initial_state,
     actor_pointers_touch_actor, actor_runs_startup_commands, actor_shadow_len,
     actor_sprite_frame_count, actor_sprite_sheet_dims, actor_table_has_update_functions,
@@ -90,14 +95,16 @@ pub use lua_util::{
     capture_block_set_u32, capture_block_set_vec2, capture_block_set_vec3, capture_block_set_vec4,
     capture_block_set_vec5, capture_block_set_vertex_colors, capture_block_set_zoom_axes,
     capture_function_action_blocks, capture_graph_display_values,
-    capture_indexed_actor_function_blocks, capture_overlay_function_eases,
+    capture_indexed_actor_function_blocks, capture_overlay_compile_actor_function_action_blocks,
+    capture_overlay_compile_actor_function_eases, capture_overlay_function_eases,
     capture_scope_actor_pointers, capture_scope_actor_tables, capture_scope_snapshots,
     capture_texture_rect, classify_function_ease_probe, collect_aft_capture_names,
     collect_indexed_actor_capture_blocks, collect_tracked_capture_blocks_for_indices,
-    compile_note_column_pos_function_ease, copy_dummy_actor_tags, create_actor_child_group,
-    create_actorframe_class_table, create_bool_array, create_color_constants_table,
-    create_debug_table, create_dummy_actor, create_life_meter_table, create_loader_function,
-    create_media_actor, create_music_wheel_table, create_named_actor, create_named_text_actor,
+    compile_note_column_pos_function_ease, compile_overlay_compile_actor_function_action,
+    copy_dummy_actor_tags, create_actor_child_group, create_actorframe_class_table,
+    create_bool_array, create_color_constants_table, create_debug_table, create_dummy_actor,
+    create_life_meter_table, create_loader_function, create_media_actor, create_music_wheel_table,
+    create_named_actor, create_named_child_actor, create_named_text_actor,
     create_note_column_actor, create_note_column_spline_handler, create_note_field_actor,
     create_option_row_table, create_owned_string_array, create_score_display_percent_actor,
     create_score_percent_text_actor, create_screen_timer_actor, create_sprite_class_table,
@@ -132,27 +139,32 @@ pub use lua_util::{
     make_color_table, make_vertex_color_table, method_arg, method_arg_offset,
     nested_function_named_upvalue_tables, normalize_broadcast_params, note_column_pos_offset_y,
     note_field_column_actors, note_field_tables, note_zoom_point_hides, offset_actor_texture_rect,
+    overlay_compile_actor_tables_for_indices, overlay_model_layers_from_slots,
     populate_course_contents_display, position_scroller_items, prepare_capture_scope_actor,
     probe_actor_pointers, probe_call_names, probe_function_ease_target, probe_target_kind,
     push_note_hide_window, push_sequence_child_once, push_unique_actor_child,
-    read_actor_capture_blocks, read_actor_color_field, read_actor_multi_vertex_mesh,
-    read_actor_multi_vertex_texture_path, read_actor_semantic_state_table, read_bitmap_font,
-    read_bitmap_text_attributes, read_child_index, read_color_args, read_color_call,
-    read_color_value, read_global_function_nested_tables, read_graph_display_body_state,
+    read_actor_capture_blocks, read_actor_color_field, read_actor_model_layers,
+    read_actor_multi_vertex_mesh, read_actor_multi_vertex_texture_path,
+    read_actor_semantic_state_table, read_bitmap_font, read_bitmap_text_attributes,
+    read_child_index, read_color_args, read_color_call, read_color_value,
+    read_global_function_nested_tables, read_graph_display_body_state,
     read_graph_display_line_state, read_graph_display_size, read_graph_display_values,
     read_model_path, read_note_column_pos_samples, read_note_column_pos_samples_for_fields,
-    read_note_column_zoom_hides, read_note_column_zoom_hides_for_actor, read_proxy_target_kind,
+    read_note_column_zoom_hides, read_note_column_zoom_hides_for_actor,
+    read_noteskin_tap_actor_model, read_noteskin_tap_actor_slots,
+    read_overlay_compile_actor_actions, read_overlay_compile_actors, read_proxy_target_kind,
     read_song_lua_sound_paths, read_song_meter_display_state, read_tracked_compile_actors,
-    read_update_function_nested_tables, read_update_function_tables, read_vertex_colors_value,
-    record_probe_method_call, register_song_lua_actor, remove_actor_child,
-    remove_all_actor_children, reset_actor_capture, reset_actor_capture_tables,
-    reset_indexed_actor_capture_tables, reset_tracked_capture_tables, resolve_actor_asset_path,
-    restore_action_capture_scope, restore_actor_mutable_state, restore_actors_semantic_state,
-    restore_note_column_handlers, restore_note_field_columns, rolling_numbers_text,
-    run_actor_draw_functions, run_actor_draw_functions_for_table, run_actor_init_commands,
-    run_actor_init_commands_for_table, run_actor_named_command, run_actor_named_command_with_drain,
-    run_actor_named_command_with_drain_and_params, run_actor_startup_commands,
-    run_actor_startup_commands_for_table, run_actor_update_functions,
+    read_update_function_nested_tables, read_update_function_overlay_compile_actor_actions,
+    read_update_function_tables, read_vertex_colors_value, record_probe_method_call,
+    register_song_lua_actor, remove_actor_child, remove_all_actor_children, reset_actor_capture,
+    reset_actor_capture_tables, reset_indexed_actor_capture_tables,
+    reset_overlay_compile_actor_capture_tables, reset_tracked_capture_tables,
+    resolve_actor_asset_path, restore_action_capture_scope, restore_actor_mutable_state,
+    restore_actors_semantic_state, restore_note_column_handlers, restore_note_field_columns,
+    rolling_numbers_text, run_actor_draw_functions, run_actor_draw_functions_for_table,
+    run_actor_init_commands, run_actor_init_commands_for_table, run_actor_named_command,
+    run_actor_named_command_with_drain, run_actor_named_command_with_drain_and_params,
+    run_actor_startup_commands, run_actor_startup_commands_for_table, run_actor_update_functions,
     run_actor_update_functions_for_table, run_actor_update_functions_with_delta,
     run_added_actor_child_commands, run_command_on_leaves,
     run_named_command_on_children_recursively, run_named_command_on_leaves,
@@ -172,8 +184,9 @@ pub use lua_util::{
 pub use mod_windows::read_mod_windows;
 pub use multitap::{
     MULTITAP_HIDE_EPSILON_BEATS, MULTITAP_PREVISIBLE_BEATS, MULTITAP_SAMPLE_STEP, MultitapDesc,
-    MultitapPhase, apply_multitap_field_state, calc_multitap_phase, multitap_deco_child_state,
-    multitap_deco_state, multitap_explosion_command_blocks, multitap_explosion_message_events,
+    MultitapPhase, apply_multitap_field_state, calc_multitap_phase,
+    compile_multitap_update_overlays_for_actors, multitap_deco_child_state, multitap_deco_state,
+    multitap_explosion_command_blocks, multitap_explosion_message_events,
     multitap_explosion_message_name, multitap_explosion_state, multitap_frame_state,
     overlay_delta_pair_from_states, push_multitap_actor_eases, push_multitap_arrow_sample,
     push_multitap_explosion_eases, push_overlay_sample_eases, read_multitap_descs,
@@ -190,12 +203,14 @@ pub use option_rows::{
 pub use perframe::{
     SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES, SongLuaPerframeEntry, SongLuaPerframePlayerState,
     SongLuaPerframeSample, active_perframe_entries, actor_perframe_player_state,
-    call_perframe_entry, current_perframe_player_states, perframe_boundaries,
-    perframe_delta_seconds, perframe_samples, perframe_segment_step, push_perframe_overlay_targets,
-    push_perframe_player_target, push_perframe_player_targets, push_perframe_static_targets,
-    push_sampled_perframe_targets, read_perframe_entries, relative_player_target,
-    tracked_player_tables, unsupported_perframe_info, update_function_end_beat,
-    update_function_overlay_eases, update_function_sample_step, update_function_samples,
+    call_perframe_entry, call_update_functions_at, compile_perframes,
+    compile_update_function_overlays, current_overlay_compile_actor_states,
+    current_perframe_player_states, perframe_boundaries, perframe_delta_seconds, perframe_samples,
+    perframe_segment_step, push_perframe_overlay_targets, push_perframe_player_target,
+    push_perframe_player_targets, push_perframe_static_targets, push_sampled_perframe_targets,
+    read_perframe_entries, relative_player_target, tracked_player_tables,
+    unsupported_perframe_info, update_function_end_beat, update_function_overlay_eases,
+    update_function_sample_step, update_function_samples,
 };
 pub use player_options::{
     SONG_LUA_PLAYER_OPTION_CAPABILITIES, SONG_LUA_PLAYER_OPTION_MULTICOL_PREFIXES,
@@ -214,10 +229,11 @@ pub use runtime::{
 pub use runtime_mod::{
     RuntimeModEaseEntry, RuntimeOverlayCaptureKey, XeroRuntimeModEaseEntry,
     XeroRuntimeOverlayFunctionEntry, extend_runtime_mod_sustains, read_runtime_mod_ease_entry,
-    read_runtime_mod_eases, read_xero_runtime_mod_eases_with_overlay_capture,
-    read_xero_runtime_mod_entries, record_unsupported_xero_overlay_function_ease,
-    runtime_mod_ease_target, runtime_mod_end_value, runtime_mod_entry_players, runtime_mod_key,
-    runtime_mod_start_value, runtime_overlay_capture_key, runtime_player_option_ease_target,
+    read_runtime_mod_eases, read_xero_runtime_mod_eases_for_overlay_actors,
+    read_xero_runtime_mod_eases_with_overlay_capture, read_xero_runtime_mod_entries,
+    record_unsupported_xero_overlay_function_ease, runtime_mod_ease_target, runtime_mod_end_value,
+    runtime_mod_entry_players, runtime_mod_key, runtime_mod_start_value,
+    runtime_overlay_capture_key, runtime_player_option_ease_target,
 };
 pub use sl::{create_sl_streams, create_sl_table, init_sl_streams, parse_chart_info};
 pub use song_tables::{
@@ -1526,6 +1542,19 @@ pub fn runtime_static_overlay_index_by_path<'a>(
     })
 }
 
+pub fn runtime_static_overlay_index_for_actors<NoteskinSlot, ModelVertex, TextAttribute>(
+    overlays: &[SongLuaOverlayCompileActor<
+        SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute>,
+    >],
+) -> Option<usize> {
+    runtime_static_overlay_index_by_path(overlays.len(), |index| {
+        let SongLuaOverlayKind::Sprite { texture_path, .. } = &overlays[index].actor.kind else {
+            return None;
+        };
+        Some(texture_path.as_path())
+    })
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SongLuaOverlayBlendMode {
     Alpha,
@@ -1567,6 +1596,28 @@ pub struct SongLuaOverlayModelDraw {
     pub vert_align: f32,
     pub blend_add: bool,
     pub visible: bool,
+}
+
+impl SongLuaOverlayModelDraw {
+    pub const fn new(
+        pos: [f32; 3],
+        rot: [f32; 3],
+        zoom: [f32; 3],
+        tint: [f32; 4],
+        vert_align: f32,
+        blend_add: bool,
+        visible: bool,
+    ) -> Self {
+        Self {
+            pos,
+            rot,
+            zoom,
+            tint,
+            vert_align,
+            blend_add,
+            visible,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -1772,6 +1823,26 @@ pub fn sprite_texture_rect(
     [0.0, 0.0, 1.0, 1.0]
 }
 
+pub fn sprite_texture_rect_with_offset(
+    custom_rect: Option<[f32; 4]>,
+    state_index: Option<u32>,
+    sheet_dims: Option<(u32, u32)>,
+    texcoord_offset: Option<[f32; 2]>,
+) -> Option<[f32; 4]> {
+    let mut rect = custom_rect.or_else(|| {
+        let state_index = song_lua_valid_sprite_state_index(state_index)?;
+        let (cols, rows) = sheet_dims?;
+        Some(sprite_sheet_rect(state_index, cols, rows))
+    });
+    if rect.is_none() && texcoord_offset.is_some() {
+        rect = Some([0.0, 0.0, 1.0, 1.0]);
+    }
+    if let (Some(base), Some(offset)) = (rect, texcoord_offset) {
+        return Some(offset_texture_rect(base, offset));
+    }
+    rect
+}
+
 pub fn sprite_frame_count(sheet_dims: Option<(u32, u32)>) -> u32 {
     let Some((cols, rows)) = sheet_dims else {
         return 1;
@@ -1928,6 +1999,28 @@ pub fn sprite_animation_state_at(seconds: f32, delay: f32, frame_count: u32) -> 
         0
     } else {
         ((seconds.max(0.0) / delay).floor() as u32) % frame_count
+    }
+}
+
+pub fn sprite_animation_state_from(
+    start: u32,
+    seconds: f32,
+    playback_rate: f32,
+    delay: f32,
+    frame_count: u32,
+    loops: bool,
+) -> u32 {
+    let frame_count = frame_count.max(1);
+    if delay <= f32::EPSILON || frame_count <= 1 {
+        return start.min(frame_count - 1);
+    }
+    let steps = (seconds * playback_rate / delay).floor() as i64;
+    let frame = i64::from(start) + steps;
+    let frame_count = i64::from(frame_count);
+    if loops {
+        frame.rem_euclid(frame_count) as u32
+    } else {
+        frame.clamp(0, frame_count - 1) as u32
     }
 }
 
@@ -2132,6 +2225,59 @@ impl Default for SongLuaOverlayState {
     }
 }
 
+pub fn overlay_state_uses_repeat_sampler(state: &SongLuaOverlayState) -> bool {
+    state.texture_wrapping
+        || state
+            .texcoord_offset
+            .is_some_and(|[u, v]| u.abs() > f32::EPSILON || v.abs() > f32::EPSILON)
+        || state
+            .custom_texture_rect
+            .is_some_and(|[u0, v0, u1, v1]| u0 < 0.0 || v0 < 0.0 || u1 > 1.0 || v1 > 1.0)
+        || state.texcoord_velocity.is_some()
+}
+
+pub fn overlay_state_uses_nearest_sampler(state: &SongLuaOverlayState) -> bool {
+    !state.texture_filtering
+}
+
+pub fn overlay_state_axis_scale(state: SongLuaOverlayState) -> [f32; 2] {
+    let basezoom_x = if (state.basezoom_x - 1.0).abs() <= f32::EPSILON {
+        state.basezoom
+    } else {
+        state.basezoom_x
+    };
+    let basezoom_y = if (state.basezoom_y - 1.0).abs() <= f32::EPSILON {
+        state.basezoom
+    } else {
+        state.basezoom_y
+    };
+    let zoom_x = if (state.zoom_x - 1.0).abs() <= f32::EPSILON {
+        state.zoom
+    } else {
+        state.zoom_x
+    };
+    let zoom_y = if (state.zoom_y - 1.0).abs() <= f32::EPSILON {
+        state.zoom
+    } else {
+        state.zoom_y
+    };
+    [basezoom_x * zoom_x, basezoom_y * zoom_y]
+}
+
+pub fn overlay_state_z_scale(state: SongLuaOverlayState) -> f32 {
+    let basezoom_z = if (state.basezoom_z - 1.0).abs() <= f32::EPSILON {
+        state.basezoom
+    } else {
+        state.basezoom_z
+    };
+    let zoom_z = if (state.zoom_z - 1.0).abs() <= f32::EPSILON {
+        state.zoom
+    } else {
+        state.zoom_z
+    };
+    basezoom_z * zoom_z
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct SongLuaOverlayStateDelta {
     pub x: Option<f32>,
@@ -2212,6 +2358,21 @@ pub struct SongLuaOverlayStateDelta {
     pub size: Option<[f32; 2]>,
     pub stretch_rect: Option<[f32; 4]>,
     pub sound_play: Option<bool>,
+}
+
+pub fn overlay_delta_uses_repeat_sampler(delta: &SongLuaOverlayStateDelta) -> bool {
+    delta.texture_wrapping == Some(true)
+        || delta
+            .texcoord_offset
+            .is_some_and(|[u, v]| u.abs() > f32::EPSILON || v.abs() > f32::EPSILON)
+        || delta
+            .custom_texture_rect
+            .is_some_and(|[u0, v0, u1, v1]| u0 < 0.0 || v0 < 0.0 || u1 > 1.0 || v1 > 1.0)
+        || delta.texcoord_velocity.is_some()
+}
+
+pub fn overlay_delta_uses_nearest_sampler(delta: &SongLuaOverlayStateDelta) -> bool {
+    delta.texture_filtering == Some(false)
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -3333,6 +3494,24 @@ pub struct SongLuaOverlayActor<Kind> {
     pub message_commands: Vec<SongLuaOverlayMessageCommand>,
 }
 
+pub fn overlay_actor_uses_repeat_sampler<Kind>(actor: &SongLuaOverlayActor<Kind>) -> bool {
+    overlay_state_uses_repeat_sampler(&actor.initial_state)
+        || actor
+            .message_commands
+            .iter()
+            .flat_map(|command| command.blocks.iter())
+            .any(|block| overlay_delta_uses_repeat_sampler(&block.delta))
+}
+
+pub fn overlay_actor_uses_nearest_sampler<Kind>(actor: &SongLuaOverlayActor<Kind>) -> bool {
+    overlay_state_uses_nearest_sampler(&actor.initial_state)
+        || actor
+            .message_commands
+            .iter()
+            .flat_map(|command| command.blocks.iter())
+            .any(|block| overlay_delta_uses_nearest_sampler(&block.delta))
+}
+
 pub fn named_overlay_indices_by_name<'a>(
     len: usize,
     mut name_at: impl FnMut(usize) -> Option<&'a str>,
@@ -3363,6 +3542,33 @@ pub fn overlay_descendants_by_parent(
         }
     }
     out
+}
+
+pub fn overlay_actor_tree_has_visual<NoteskinSlot, ModelVertex, TextAttribute>(
+    overlays: &[SongLuaOverlayCompileActor<
+        SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute>,
+    >],
+    root_index: usize,
+) -> bool {
+    overlay_actor_has_visual(&overlays[root_index].actor)
+        || overlay_descendants_by_parent(overlays.len(), root_index, |index| {
+            overlays
+                .get(index)
+                .and_then(|overlay| overlay.actor.parent_index)
+        })
+        .into_iter()
+        .any(|index| overlay_actor_has_visual(&overlays[index].actor))
+}
+
+fn overlay_actor_has_visual<NoteskinSlot, ModelVertex, TextAttribute>(
+    actor: &SongLuaOverlayActor<SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute>>,
+) -> bool {
+    matches!(
+        actor.kind,
+        SongLuaOverlayKind::Sprite { .. }
+            | SongLuaOverlayKind::Model { .. }
+            | SongLuaOverlayKind::NoteskinActor { .. }
+    )
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -3608,21 +3814,22 @@ mod tests {
         SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget, SongLuaEaseWindow,
         SongLuaMessageEvent, SongLuaModWindow, SongLuaNoteHideWindow, SongLuaOverlayBlendMode,
         SongLuaOverlayCommandBlock, SongLuaOverlayEase, SongLuaOverlayEaseBuildParams,
-        SongLuaOverlayMessageCommand, SongLuaOverlayStateDelta, SongLuaPlayerContext,
-        SongLuaSpanMode, SongLuaTimeUnit, THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD,
-        TOP_SCREEN_THEME_CHILD_NAMES, UNDERLAY_THEME_CHILD_NAMES, actor_indices_for_pointers,
-        actor_overlay_initial_state, actor_pointers_touch_actor, capture_actor_message_commands,
-        capture_block_set_bool, capture_block_set_f32, capture_function_action_blocks,
-        capture_indexed_actor_function_blocks, capture_overlay_function_eases,
-        collect_indexed_actor_capture_blocks, column_offset_windows_from_samples,
-        compile_song_runtime_values, create_debug_table, create_song_runtime_table,
-        custom_multi_modifier_key, easiest_steps_difficulty, function_ease_actor_indices,
-        function_named_upvalue_tables, graph_display_body_size,
+        SongLuaOverlayMessageCommand, SongLuaOverlayState, SongLuaOverlayStateDelta,
+        SongLuaPlayerContext, SongLuaSpanMode, SongLuaTimeUnit, THEME_RECEPTOR_Y_REV,
+        THEME_RECEPTOR_Y_STD, TOP_SCREEN_THEME_CHILD_NAMES, UNDERLAY_THEME_CHILD_NAMES,
+        actor_indices_for_pointers, actor_overlay_initial_state, actor_pointers_touch_actor,
+        capture_actor_message_commands, capture_block_set_bool, capture_block_set_f32,
+        capture_function_action_blocks, capture_indexed_actor_function_blocks,
+        capture_overlay_function_eases, collect_indexed_actor_capture_blocks,
+        column_offset_windows_from_samples, compile_song_runtime_values, create_debug_table,
+        create_song_runtime_table, custom_multi_modifier_key, easiest_steps_difficulty,
+        function_ease_actor_indices, function_named_upvalue_tables, graph_display_body_size,
         message_command_lists_have_listener, nested_function_named_upvalue_tables,
         note_column_pos_offset_y_from_points, note_column_zoom_hide_beats_per_t,
         note_hide_window_from_indices, note_hide_windows_from_flags, note_song_lua_side_effect,
-        offset_texture_rect, overlay_eases_from_captures, parse_overlay_blend_mode,
-        parse_overlay_effect_clock, parse_overlay_effect_mode, push_startup_message_if_listened,
+        offset_texture_rect, overlay_eases_from_captures, overlay_state_axis_scale,
+        overlay_state_z_scale, parse_overlay_blend_mode, parse_overlay_effect_clock,
+        parse_overlay_effect_mode, push_startup_message_if_listened,
         read_global_function_nested_tables, read_graph_display_body_state,
         read_graph_display_line_state, read_song_meter_display_state,
         read_update_function_nested_tables, read_update_function_tables, record_song_lua_broadcast,
@@ -3630,8 +3837,9 @@ mod tests {
         runtime_static_overlay_index_by_path, scale_to_rect_plan, set_compile_song_runtime_values,
         song_lua_arch_name, song_lua_difficulty_from_value, song_lua_human_player_count,
         song_lua_steps_type_is_dance_single, sort_compiled_song_lua, sort_note_hide_windows,
-        sprite_animation_state_at, sprite_frame_count, sprite_image_frame_size,
-        sprite_texture_rect, texture_pixel_offset_rect, theme_has_string, theme_metric_number,
+        sprite_animation_state_at, sprite_animation_state_from, sprite_frame_count,
+        sprite_image_frame_size, sprite_texture_rect, sprite_texture_rect_with_offset,
+        texture_pixel_offset_rect, theme_has_string, theme_metric_number,
         theme_metric_number_for_screen, theme_pref_default, theme_string, theme_string_names,
     };
     use std::collections::HashSet;
@@ -4369,6 +4577,23 @@ mod tests {
     }
 
     #[test]
+    fn overlay_state_scale_uses_axis_fallbacks() {
+        let state = SongLuaOverlayState {
+            basezoom: 2.0,
+            basezoom_x: 1.0,
+            basezoom_y: 3.0,
+            basezoom_z: 1.0,
+            zoom: 4.0,
+            zoom_x: 5.0,
+            zoom_y: 1.0,
+            zoom_z: 6.0,
+            ..SongLuaOverlayState::default()
+        };
+        assert_eq!(overlay_state_axis_scale(state), [10.0, 12.0]);
+        assert_eq!(overlay_state_z_scale(state), 12.0);
+    }
+
+    #[test]
     fn texture_rect_offsets_preserve_actor_host_math() {
         assert_eq!(
             offset_texture_rect([0.25, 0.5, 0.75, 1.0], [0.1, -0.2]),
@@ -4401,6 +4626,31 @@ mod tests {
         assert_eq!(
             sprite_texture_rect(None, Some(1), None),
             [0.0, 0.0, 1.0, 1.0]
+        );
+    }
+
+    #[test]
+    fn sprite_texture_rect_with_offset_preserves_optional_policy() {
+        assert_eq!(
+            sprite_texture_rect_with_offset(None, None, Some((4, 2)), None),
+            None
+        );
+        assert_eq!(
+            sprite_texture_rect_with_offset(None, None, Some((4, 2)), Some([0.25, -0.5])),
+            Some([0.25, -0.5, 1.25, 0.5])
+        );
+        assert_eq!(
+            sprite_texture_rect_with_offset(None, Some(5), Some((4, 2)), Some([0.25, -0.5])),
+            Some([0.5, 0.0, 0.75, 0.5])
+        );
+        assert_eq!(
+            sprite_texture_rect_with_offset(
+                Some([0.1, 0.2, 0.3, 0.4]),
+                Some(5),
+                Some((4, 2)),
+                Some([0.25, -0.5]),
+            ),
+            Some([0.1 + 0.25, 0.2 - 0.5, 0.3 + 0.25, 0.4 - 0.5])
         );
     }
 
@@ -4452,6 +4702,14 @@ mod tests {
         assert_eq!(sprite_animation_state_at(5.0, 0.0, 4), 0);
         assert_eq!(sprite_animation_state_at(5.0, -1.0, 4), 0);
         assert_eq!(sprite_animation_state_at(5.0, 0.1, 0), 0);
+    }
+
+    #[test]
+    fn sprite_animation_state_from_offsets_and_clamps() {
+        assert_eq!(sprite_animation_state_from(2, 0.29, 1.0, 0.1, 4, true), 0);
+        assert_eq!(sprite_animation_state_from(2, 0.29, 1.0, 0.1, 4, false), 3);
+        assert_eq!(sprite_animation_state_from(2, -0.29, 1.0, 0.1, 4, false), 0);
+        assert_eq!(sprite_animation_state_from(7, 0.29, 1.0, 0.0, 4, true), 3);
     }
 
     #[test]

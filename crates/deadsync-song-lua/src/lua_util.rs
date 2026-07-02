@@ -16,38 +16,43 @@ use crate::{
     SONG_LUA_SPRITE_STATE_CLEAR, SONG_LUA_STARTUP_MESSAGE, SONG_LUA_THEME_PATH_PREFIX,
     SONG_LUA_TOP_SCREEN_OPTION_ROWS, SongLuaActorMultiVertexPoint, SongLuaCapturedActor,
     SongLuaColumnOffsetBuildParams, SongLuaColumnOffsetSample, SongLuaColumnOffsetWindow,
-    SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget, SongLuaNoteHideWindow,
-    SongLuaOverlayBlendMode, SongLuaOverlayCommandBlock, SongLuaOverlayEase,
-    SongLuaOverlayEaseBuildParams, SongLuaOverlayMeshVertex, SongLuaOverlayMessageCommand,
-    SongLuaOverlayState, SongLuaOverlayStateDelta, SongLuaPlayerContext, SongLuaProxyTarget,
-    SongLuaSpanMode, SongLuaTimeUnit, SongLuaTrackedActor, SongLuaTrackedActorTarget,
-    THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD, TOP_SCREEN_THEME_CHILD_NAMES,
-    UNDERLAY_THEME_CHILD_NAMES, call_with_chunk_env, call_with_script_dir, call_with_script_path,
-    clone_lua_value, column_offset_windows_from_samples, compile_song_runtime_delta_values,
+    SongLuaCompileContext, SongLuaCompileInfo, SongLuaDifficulty, SongLuaEaseTarget,
+    SongLuaMessageEvent, SongLuaNoteHideWindow, SongLuaOverlayBlendMode,
+    SongLuaOverlayCommandBlock, SongLuaOverlayEase, SongLuaOverlayEaseBuildParams,
+    SongLuaOverlayKind, SongLuaOverlayMeshVertex, SongLuaOverlayMessageCommand,
+    SongLuaOverlayModelLayer, SongLuaOverlayState, SongLuaOverlayStateDelta, SongLuaPlayerContext,
+    SongLuaProxyTarget, SongLuaSpanMode, SongLuaTimeUnit, SongLuaTrackedActor,
+    SongLuaTrackedActorTarget, THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD,
+    TOP_SCREEN_THEME_CHILD_NAMES, UNDERLAY_THEME_CHILD_NAMES, call_with_chunk_env,
+    call_with_script_dir, call_with_script_path, clone_lua_value,
+    column_offset_windows_from_samples, compile_song_runtime_delta_values,
     compile_song_runtime_values, create_chunk_env_proxy, create_life_record_table,
     crop_texture_rect, display_bpms_text, effect_clock_label, file_path_string,
-    format_rolling_number, graph_display_body_size, initial_chunk_environment,
-    input_status_actor_text, is_song_lua_audio_path, is_song_lua_image_path,
-    is_song_lua_media_path, is_song_lua_video_path, note_song_lua_side_effect,
+    format_rolling_number, function_action_plan, graph_display_body_size,
+    initial_chunk_environment, input_status_actor_text, is_song_lua_audio_path,
+    is_song_lua_image_path, is_song_lua_media_path, is_song_lua_video_path,
+    message_command_lists_have_listener, note_song_lua_side_effect,
     offset_texture_rect as song_lua_offset_texture_rect, option_row_default_text,
-    overlay_eases_from_captures, overlay_text_align_label, parse_color_text,
-    parse_overlay_blend_mode, parse_overlay_effect_clock, parse_overlay_effect_mode,
-    parse_overlay_text_align, parse_overlay_text_glow_mode, parse_sprite_sheet_dims,
-    player_child_proxy_name, player_index_from_value, player_number_name,
-    preprocess_lua_cmd_syntax, push_unique_compile_detail, read_boolish, read_f32, read_i32_value,
-    read_song_lua_broadcasts, read_string, read_u32_value, register_loader_env,
-    resolve_load_actor_path, resolve_script_path, rolling_numbers_format, scale_to_rect_plan,
-    set_compile_song_runtime_beat, set_compile_song_runtime_values, set_string_method,
-    song_lua_halign_value, song_lua_human_player_count, song_lua_side_effect_count,
-    song_lua_span_end, song_lua_style_column_x, song_lua_style_info, song_lua_text_align_value,
+    overlay_eases_from_captures, overlay_state_after_blocks, overlay_text_align_label,
+    parse_color_text, parse_overlay_blend_mode, parse_overlay_effect_clock,
+    parse_overlay_effect_mode, parse_overlay_text_align, parse_overlay_text_glow_mode,
+    parse_sprite_sheet_dims, player_child_proxy_name, player_index_from_value, player_number_name,
+    preprocess_lua_cmd_syntax, push_unique_compile_detail, read_actions_with_function_capture,
+    read_boolish, read_f32, read_i32_value, read_song_lua_broadcasts, read_string, read_u32_value,
+    record_unsupported_function_action_capture, register_loader_env, resolve_load_actor_path,
+    resolve_script_path, rolling_numbers_format, scale_to_rect_plan, set_compile_song_runtime_beat,
+    set_compile_song_runtime_values, set_string_method, song_lua_halign_value,
+    song_lua_human_player_count, song_lua_side_effect_count, song_lua_span_end,
+    song_lua_style_column_x, song_lua_style_info, song_lua_text_align_value,
     song_lua_valid_sprite_state_index, song_lua_valign_value, song_music_rate,
     sprite_animation_state_at, sprite_frame_count, sprite_image_frame_size, sprite_texture_rect,
     text_glow_mode_label, texture_pixel_offset_rect, theme_metric_number, theme_path,
     top_screen_danger_index, top_screen_life_meter_bar_index, top_screen_life_meter_index,
     top_screen_life_meter_name, top_screen_option_row_name, top_screen_player_index,
-    top_screen_player_name, top_screen_score_name, top_screen_score_percent_name,
-    top_screen_song_meter_display_index, top_screen_step_stats_pane_index,
-    top_screen_steps_display_index, truthy, underlay_score_index, underlay_score_name,
+    top_screen_player_name, top_screen_score_index, top_screen_score_name,
+    top_screen_score_percent_name, top_screen_song_meter_display_index,
+    top_screen_step_stats_pane_index, top_screen_steps_display_index, truthy, underlay_score_index,
+    underlay_score_name,
 };
 
 type ActorAssetPrefixKey = (String, String);
@@ -58,6 +63,34 @@ const SONG_LUA_CHILD_GROUP_KEY: &str = "__songlua_child_group";
 pub struct TopScreenLuaTables {
     pub top_screen: Table,
     pub players: [Table; LUA_PLAYERS],
+}
+
+pub struct SongLuaOverlayCompileActor<Kind> {
+    pub table: Table,
+    pub actor: crate::SongLuaOverlayActor<Kind>,
+}
+
+pub fn overlay_compile_actor_tables_for_indices<Kind>(
+    overlays: &[SongLuaOverlayCompileActor<Kind>],
+    indices: &[usize],
+) -> Vec<(usize, Table)> {
+    indices
+        .iter()
+        .filter_map(|&index| {
+            overlays
+                .get(index)
+                .map(|overlay| (index, overlay.table.clone()))
+        })
+        .collect()
+}
+
+pub fn reset_overlay_compile_actor_capture_tables<Kind>(
+    lua: &Lua,
+    overlays: &[SongLuaOverlayCompileActor<Kind>],
+) -> Result<(), String> {
+    let indices: Vec<_> = (0..overlays.len()).collect();
+    let tables = overlay_compile_actor_tables_for_indices(overlays, &indices);
+    reset_indexed_actor_capture_tables(lua, &tables)
 }
 
 pub fn read_song_lua_sound_paths(lua: &Lua) -> Result<Vec<PathBuf>, String> {
@@ -6712,6 +6745,80 @@ pub fn create_named_text_actor(
     Ok(actor)
 }
 
+pub fn create_named_child_actor(
+    lua: &Lua,
+    parent: &Table,
+    name: &str,
+    create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
+    create_named_child_actor: fn(&Lua, &Table, &str) -> mlua::Result<Table>,
+) -> mlua::Result<Table> {
+    let parent_type = parent.get::<Option<String>>("__songlua_actor_type")?;
+    let player_index = parent.get::<Option<i64>>("__songlua_player_index")?;
+    let child = if parent_type
+        .as_deref()
+        .is_some_and(|kind| kind.eq_ignore_ascii_case("PlayerActor"))
+        && let Some(player_index) = player_index
+    {
+        if name.eq_ignore_ascii_case("NoteField") {
+            let style_name = parent
+                .get::<Option<String>>("__songlua_style_name")?
+                .unwrap_or_else(|| current_song_lua_style_name(lua));
+            create_note_field_actor(lua, player_index as usize, &style_name, create_dummy_actor)?
+        } else if player_child_proxy_name(name).is_some() {
+            create_named_actor(lua, "Actor", name, create_dummy_actor)?
+        } else {
+            create_dummy_actor(lua, "ChildActor")?
+        }
+    } else if parent_type
+        .as_deref()
+        .is_some_and(|kind| kind.eq_ignore_ascii_case("TopScreen"))
+        && name.eq_ignore_ascii_case("Timer")
+    {
+        create_screen_timer_actor(lua, create_dummy_actor)?
+    } else if parent_type
+        .as_deref()
+        .is_some_and(|kind| kind.eq_ignore_ascii_case("TopScreen"))
+        && let Some(player_index) = top_screen_score_index(name)
+    {
+        create_top_screen_score_actor(lua, player_index, create_dummy_actor)?
+    } else if parent_type
+        .as_deref()
+        .is_some_and(|kind| kind.eq_ignore_ascii_case("TopScreen"))
+        && let Some(child) = create_top_screen_theme_actor(
+            lua,
+            parent,
+            name,
+            create_dummy_actor,
+            create_named_child_actor,
+        )?
+    {
+        child
+    } else if parent
+        .get::<Option<String>>("__songlua_top_screen_child_name")?
+        .as_deref()
+        .is_some_and(|child_name| child_name.eq_ignore_ascii_case("Underlay"))
+        && let Some(child) = create_underlay_theme_actor(lua, parent, name, create_dummy_actor)?
+    {
+        child
+    } else {
+        create_dummy_actor(lua, "ChildActor")?
+    };
+    copy_dummy_actor_tags(parent, &child)?;
+    child.set("__songlua_parent", parent.clone())?;
+    if parent_type
+        .as_deref()
+        .is_some_and(|kind| kind.eq_ignore_ascii_case("PlayerActor"))
+    {
+        child.set("__songlua_player_child_name", name)?;
+    } else if parent_type
+        .as_deref()
+        .is_some_and(|kind| kind.eq_ignore_ascii_case("TopScreen"))
+    {
+        child.set("__songlua_top_screen_child_name", name)?;
+    }
+    Ok(child)
+}
+
 pub fn create_top_screen_song_meter_display_actor(
     lua: &Lua,
     name: &str,
@@ -8499,6 +8606,42 @@ pub fn capture_overlay_function_eases(
     ))
 }
 
+pub fn capture_overlay_compile_actor_function_eases<Kind>(
+    lua: &Lua,
+    overlays: &[SongLuaOverlayCompileActor<Kind>],
+    function: &Function,
+    unit: SongLuaTimeUnit,
+    start: f32,
+    limit: f32,
+    span_mode: SongLuaSpanMode,
+    from: f32,
+    to: f32,
+    easing: Option<String>,
+    sustain: Option<f32>,
+    opt1: Option<f32>,
+    opt2: Option<f32>,
+    probe_actor_ptrs: &[usize],
+) -> Result<Vec<SongLuaOverlayEase>, String> {
+    let indices: Vec<_> = (0..overlays.len()).collect();
+    let overlay_tables = overlay_compile_actor_tables_for_indices(overlays, &indices);
+    capture_overlay_function_eases(
+        lua,
+        &overlay_tables,
+        function,
+        unit,
+        start,
+        limit,
+        span_mode,
+        from,
+        to,
+        easing,
+        sustain,
+        opt1,
+        opt2,
+        probe_actor_ptrs,
+    )
+}
+
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct SongLuaFunctionActionCapture {
     pub overlay_blocks: Vec<(usize, Vec<SongLuaOverlayCommandBlock>)>,
@@ -8562,6 +8705,131 @@ pub fn capture_function_action_blocks(
         broadcasts,
         saw_side_effect,
     })
+}
+
+pub fn capture_overlay_compile_actor_function_action_blocks<Kind>(
+    lua: &Lua,
+    overlays: &[SongLuaOverlayCompileActor<Kind>],
+    tracked_actors: &[SongLuaTrackedActor],
+    function: &Function,
+    beat: f32,
+) -> Result<SongLuaFunctionActionCapture, String> {
+    let indices: Vec<_> = (0..overlays.len()).collect();
+    let overlay_tables = overlay_compile_actor_tables_for_indices(overlays, &indices);
+    capture_function_action_blocks(lua, &overlay_tables, tracked_actors, function, beat)
+}
+
+pub fn compile_overlay_compile_actor_function_action<Kind>(
+    lua: &Lua,
+    overlays: &mut [SongLuaOverlayCompileActor<Kind>],
+    tracked_actors: &mut [SongLuaTrackedActor],
+    function: &Function,
+    beat: f32,
+    persists: bool,
+    counter: &mut usize,
+    messages: &mut Vec<SongLuaMessageEvent>,
+) -> Result<bool, String> {
+    let capture = capture_overlay_compile_actor_function_action_blocks(
+        lua,
+        overlays,
+        tracked_actors,
+        function,
+        beat,
+    )?;
+    let plan = function_action_plan(
+        beat,
+        persists,
+        *counter,
+        capture.overlay_blocks,
+        capture.tracked_blocks,
+        capture.broadcasts,
+        capture.saw_side_effect,
+        |message| overlay_compile_actors_have_message_listener(overlays, tracked_actors, message),
+    );
+    *counter = plan.next_counter;
+    for (overlay_index, command) in plan.overlay_commands {
+        overlays[overlay_index].actor.message_commands.push(command);
+    }
+    for (tracked_index, command) in plan.tracked_commands {
+        tracked_actors[tracked_index]
+            .actor
+            .message_commands
+            .push(command);
+    }
+    messages.extend(plan.messages);
+    Ok(plan.handled)
+}
+
+pub fn read_overlay_compile_actor_actions<Kind>(
+    lua: &Lua,
+    table: Option<Table>,
+    overlays: &mut [SongLuaOverlayCompileActor<Kind>],
+    tracked_actors: &mut [SongLuaTrackedActor],
+    messages: &mut Vec<SongLuaMessageEvent>,
+    counter: &mut usize,
+    info: &mut SongLuaCompileInfo,
+) -> Result<(), String> {
+    read_actions_with_function_capture(table, messages, |input, messages| {
+        if !matches!(
+            compile_overlay_compile_actor_function_action(
+                lua,
+                overlays,
+                tracked_actors,
+                &input.function,
+                input.beat,
+                input.persists,
+                counter,
+                messages,
+            ),
+            Ok(true)
+        ) {
+            let detail =
+                record_unsupported_function_action_capture(info, input.beat, input.persists);
+            log::debug!("Unsupported song lua function action capture: {detail}");
+        }
+        Ok(())
+    })
+}
+
+pub fn read_update_function_overlay_compile_actor_actions<Kind>(
+    lua: &Lua,
+    root: &Value,
+    overlays: &mut [SongLuaOverlayCompileActor<Kind>],
+    tracked_actors: &mut [SongLuaTrackedActor],
+    messages: &mut Vec<SongLuaMessageEvent>,
+    counter: &mut usize,
+    info: &mut SongLuaCompileInfo,
+) -> Result<(), String> {
+    for table in read_update_function_tables(lua, root, &["mod_actions", "actions"])? {
+        read_overlay_compile_actor_actions(
+            lua,
+            Some(table),
+            overlays,
+            tracked_actors,
+            messages,
+            counter,
+            info,
+        )?;
+    }
+    Ok(())
+}
+
+fn overlay_compile_actors_have_message_listener<Kind>(
+    overlays: &[SongLuaOverlayCompileActor<Kind>],
+    tracked_actors: &[SongLuaTrackedActor],
+    message: &str,
+) -> bool {
+    message_command_lists_have_listener(
+        overlays
+            .iter()
+            .map(|overlay| overlay.actor.message_commands.as_slice())
+            .chain(
+                tracked_actors
+                    .iter()
+                    .map(|actor| actor.actor.message_commands.as_slice()),
+            ),
+        message,
+    )
 }
 
 pub fn reset_tracked_capture_tables(
@@ -9820,6 +10088,94 @@ pub fn read_model_path(actor: &Table) -> Result<Option<PathBuf>, String> {
     Ok(None)
 }
 
+pub fn read_actor_model_layers<Slot, Vertex, ReadSlots, ReadLayer>(
+    actor: &Table,
+    read_slots: ReadSlots,
+    read_layer: ReadLayer,
+) -> Result<Option<Arc<[SongLuaOverlayModelLayer<Vertex>]>>, String>
+where
+    ReadSlots: Fn(&Path) -> Result<Arc<[Slot]>, String>,
+    ReadLayer: Fn(&Slot) -> Option<SongLuaOverlayModelLayer<Vertex>>,
+{
+    let Some(model_path) = read_model_path(actor)? else {
+        return Ok(None);
+    };
+    let slots = read_slots(&model_path)?;
+    Ok(overlay_model_layers_from_slots(slots.as_ref(), read_layer))
+}
+
+pub fn overlay_model_layers_from_slots<Slot, Vertex, ReadLayer>(
+    slots: &[Slot],
+    read_layer: ReadLayer,
+) -> Option<Arc<[SongLuaOverlayModelLayer<Vertex>]>>
+where
+    ReadLayer: Fn(&Slot) -> Option<SongLuaOverlayModelLayer<Vertex>>,
+{
+    let mut layers = Vec::with_capacity(slots.len());
+    for slot in slots.iter() {
+        let Some(layer) = read_layer(slot) else {
+            continue;
+        };
+        layers.push(layer);
+    }
+    if layers.is_empty() {
+        None
+    } else {
+        Some(Arc::from(layers.into_boxed_slice()))
+    }
+}
+
+pub struct SongLuaNoteskinTapActorModel {
+    pub skin: String,
+    pub element: String,
+    pub model_path: PathBuf,
+}
+
+pub fn read_noteskin_tap_actor_model(
+    actor: &Table,
+) -> Result<Option<SongLuaNoteskinTapActorModel>, String> {
+    let Some(skin) = actor
+        .get::<Option<String>>("__songlua_noteskin_name")
+        .map_err(|err| err.to_string())?
+        .filter(|value| !value.trim().is_empty())
+    else {
+        return Ok(None);
+    };
+    let Some(element) = actor
+        .get::<Option<String>>("__songlua_noteskin_element")
+        .map_err(|err| err.to_string())?
+        .filter(|value| value.eq_ignore_ascii_case("Tap Note"))
+    else {
+        return Ok(None);
+    };
+    let Some(model_path) = read_model_path(actor)? else {
+        return Ok(None);
+    };
+    Ok(Some(SongLuaNoteskinTapActorModel {
+        skin,
+        element,
+        model_path,
+    }))
+}
+
+pub fn read_noteskin_tap_actor_slots<Slot, ReadSlots>(
+    actor: &Table,
+    read_slots: ReadSlots,
+) -> Result<Option<Arc<[Slot]>>, String>
+where
+    ReadSlots: Fn(&Path) -> Result<Arc<[Slot]>, String>,
+{
+    let Some(model) = read_noteskin_tap_actor_model(actor)? else {
+        return Ok(None);
+    };
+    read_slots(&model.model_path).map(Some).map_err(|err| {
+        format!(
+            "failed to load noteskin actor '{} {}': {err}",
+            model.skin, model.element
+        )
+    })
+}
+
 pub fn collect_aft_capture_names(actor: &Table, out: &mut HashSet<String>) -> Result<(), String> {
     if actor
         .get::<Option<String>>("__songlua_actor_type")
@@ -9849,6 +10205,296 @@ pub fn actor_aft_capture_name(actor: &Table) -> mlua::Result<Option<String>> {
     Ok(actor
         .get::<Option<String>>("Name")?
         .filter(|name| !name.trim().is_empty()))
+}
+
+pub fn read_overlay_compile_actors<NoteskinSlot, ModelVertex, ReadModel, ReadNoteskin, OnSkipped>(
+    lua: &Lua,
+    root: &Value,
+    context: &SongLuaCompileContext,
+    read_model_layers: ReadModel,
+    read_noteskin_tap_actor_slots: ReadNoteskin,
+    mut on_skipped_message_capture: OnSkipped,
+) -> Result<
+    Vec<SongLuaOverlayCompileActor<SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute>>>,
+    String,
+>
+where
+    ReadModel: Fn(&Table) -> Result<Option<Arc<[SongLuaOverlayModelLayer<ModelVertex>]>>, String>,
+    ReadNoteskin: Fn(&Table, &SongLuaCompileContext) -> Result<Option<Arc<[NoteskinSlot]>>, String>,
+    OnSkipped: FnMut(String),
+{
+    let Value::Table(root) = root else {
+        return Ok(Vec::new());
+    };
+    let mut aft_capture_names = HashSet::new();
+    collect_aft_capture_names(root, &mut aft_capture_names)?;
+    let mut out = Vec::new();
+    read_overlay_compile_actors_from_table(
+        lua,
+        root,
+        None,
+        &aft_capture_names,
+        &mut out,
+        context,
+        &read_model_layers,
+        &read_noteskin_tap_actor_slots,
+        &mut on_skipped_message_capture,
+    )?;
+    Ok(out)
+}
+
+fn read_overlay_compile_actors_from_table<
+    NoteskinSlot,
+    ModelVertex,
+    ReadModel,
+    ReadNoteskin,
+    OnSkipped,
+>(
+    lua: &Lua,
+    actor: &Table,
+    parent_index: Option<usize>,
+    aft_capture_names: &HashSet<String>,
+    out: &mut Vec<
+        SongLuaOverlayCompileActor<SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute>>,
+    >,
+    context: &SongLuaCompileContext,
+    read_model_layers: &ReadModel,
+    read_noteskin_tap_actor_slots: &ReadNoteskin,
+    on_skipped_message_capture: &mut OnSkipped,
+) -> Result<(), String>
+where
+    ReadModel: Fn(&Table) -> Result<Option<Arc<[SongLuaOverlayModelLayer<ModelVertex>]>>, String>,
+    ReadNoteskin: Fn(&Table, &SongLuaCompileContext) -> Result<Option<Arc<[NoteskinSlot]>>, String>,
+    OnSkipped: FnMut(String),
+{
+    let next_parent_index = if let Some(overlay) = read_overlay_compile_actor(
+        lua,
+        actor,
+        parent_index,
+        aft_capture_names,
+        context,
+        read_model_layers,
+        read_noteskin_tap_actor_slots,
+        on_skipped_message_capture,
+    )? {
+        let index = out.len();
+        out.push(overlay);
+        Some(index)
+    } else {
+        parent_index
+    };
+    for child in actor.sequence_values::<Value>() {
+        let Value::Table(child) = child.map_err(|err| err.to_string())? else {
+            continue;
+        };
+        read_overlay_compile_actors_from_table(
+            lua,
+            &child,
+            next_parent_index,
+            aft_capture_names,
+            out,
+            context,
+            read_model_layers,
+            read_noteskin_tap_actor_slots,
+            on_skipped_message_capture,
+        )?;
+    }
+    Ok(())
+}
+
+fn read_overlay_compile_actor<NoteskinSlot, ModelVertex, ReadModel, ReadNoteskin, OnSkipped>(
+    lua: &Lua,
+    actor: &Table,
+    parent_index: Option<usize>,
+    aft_capture_names: &HashSet<String>,
+    context: &SongLuaCompileContext,
+    read_model_layers: &ReadModel,
+    read_noteskin_tap_actor_slots: &ReadNoteskin,
+    on_skipped_message_capture: &mut OnSkipped,
+) -> Result<
+    Option<
+        SongLuaOverlayCompileActor<SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute>>,
+    >,
+    String,
+>
+where
+    ReadModel: Fn(&Table) -> Result<Option<Arc<[SongLuaOverlayModelLayer<ModelVertex>]>>, String>,
+    ReadNoteskin: Fn(&Table, &SongLuaCompileContext) -> Result<Option<Arc<[NoteskinSlot]>>, String>,
+    OnSkipped: FnMut(String),
+{
+    let Some(actor_type) = actor
+        .get::<Option<String>>("__songlua_actor_type")
+        .map_err(|err| err.to_string())?
+    else {
+        return Ok(None);
+    };
+    let initial_state = overlay_state_after_blocks(actor_overlay_initial_state(actor)?, &[], 0.0);
+    let captured_commands = capture_actor_message_commands(lua, actor)?;
+    for skipped in captured_commands.skipped {
+        log::debug!("Skipping song lua overlay message capture for {}", skipped);
+        on_skipped_message_capture(skipped);
+    }
+    let message_commands = captured_commands.commands;
+    let name = actor
+        .get::<Option<String>>("Name")
+        .map_err(|err| err.to_string())?;
+
+    let kind = if actor_type.eq_ignore_ascii_case("Actor") {
+        if name.is_none()
+            && initial_state == SongLuaOverlayState::default()
+            && message_commands.is_empty()
+        {
+            return Ok(None);
+        }
+        SongLuaOverlayKind::Actor
+    } else if actor_type.eq_ignore_ascii_case("ActorFrame") {
+        let has_draw_function = actor
+            .get::<Option<Function>>("__songlua_draw_function")
+            .map_err(|err| err.to_string())?
+            .is_some();
+        if parent_index.is_none()
+            && name.is_none()
+            && initial_state == SongLuaOverlayState::default()
+            && message_commands.is_empty()
+            && !has_draw_function
+        {
+            return Ok(None);
+        }
+        SongLuaOverlayKind::ActorFrame
+    } else if actor_type.eq_ignore_ascii_case("ActorFrameTexture") {
+        SongLuaOverlayKind::ActorFrameTexture
+    } else if actor_type.eq_ignore_ascii_case("ActorProxy") {
+        let Some(target) = read_proxy_target_kind(actor)? else {
+            return Ok(None);
+        };
+        SongLuaOverlayKind::ActorProxy { target }
+    } else if actor_type.eq_ignore_ascii_case("Sprite") {
+        if let Some(capture_name) = actor
+            .get::<Option<String>>("__songlua_aft_capture_name")
+            .map_err(|err| err.to_string())?
+            .filter(|name| !name.trim().is_empty())
+        {
+            SongLuaOverlayKind::AftSprite { capture_name }
+        } else {
+            let Some(texture) = actor
+                .get::<Option<String>>("Texture")
+                .map_err(|err| err.to_string())?
+            else {
+                return Ok(None);
+            };
+            if aft_capture_names.contains(&texture) {
+                SongLuaOverlayKind::AftSprite {
+                    capture_name: texture,
+                }
+            } else {
+                let Some(texture_path) = resolve_actor_asset_path(actor, &texture).ok() else {
+                    return Ok(None);
+                };
+                let texture_key = Arc::<str>::from(texture_path.to_string_lossy().into_owned());
+                SongLuaOverlayKind::Sprite {
+                    texture_path,
+                    texture_key,
+                }
+            }
+        }
+    } else if actor_type.eq_ignore_ascii_case("Sound") {
+        let Some(file) = actor
+            .get::<Option<String>>("File")
+            .map_err(|err| err.to_string())?
+        else {
+            return Ok(None);
+        };
+        let Ok(sound_path) = resolve_actor_asset_path(actor, &file) else {
+            return Ok(None);
+        };
+        SongLuaOverlayKind::Sound { sound_path }
+    } else if actor_type.eq_ignore_ascii_case("BitmapText")
+        || actor_type.eq_ignore_ascii_case("RollingNumbers")
+    {
+        let Some((font_name, font_path)) = read_bitmap_font(actor)? else {
+            return Ok(None);
+        };
+        SongLuaOverlayKind::BitmapText {
+            font_name,
+            font_path,
+            text: Arc::<str>::from(
+                actor
+                    .get::<Option<String>>("Text")
+                    .map_err(|err| err.to_string())?
+                    .unwrap_or_default(),
+            ),
+            stroke_color: read_actor_color_field(actor, "__songlua_stroke_color")?
+                .or_else(|| read_actor_color_field(actor, "StrokeColor").ok().flatten()),
+            attributes: read_bitmap_text_attributes(actor)?,
+        }
+    } else if actor_type.eq_ignore_ascii_case("DeviceList")
+        || actor_type.eq_ignore_ascii_case("InputList")
+    {
+        let Some((font_name, font_path)) = read_bitmap_font(actor)? else {
+            return Ok(None);
+        };
+        SongLuaOverlayKind::BitmapText {
+            font_name,
+            font_path,
+            text: Arc::<str>::from(input_status_actor_text(&actor_type).unwrap_or_default()),
+            stroke_color: None,
+            attributes: Arc::<[TextAttribute]>::from([]),
+        }
+    } else if actor_type.eq_ignore_ascii_case("ActorMultiVertex") {
+        let Some(vertices) = read_actor_multi_vertex_mesh(actor)? else {
+            return Ok(None);
+        };
+        let texture_path = read_actor_multi_vertex_texture_path(actor, aft_capture_names)?;
+        let texture_key = texture_path
+            .as_ref()
+            .map(|path| Arc::<str>::from(path.to_string_lossy().into_owned()));
+        SongLuaOverlayKind::ActorMultiVertex {
+            vertices,
+            texture_path,
+            texture_key,
+        }
+    } else if actor_type.eq_ignore_ascii_case("Model") {
+        if let Some(slots) = read_noteskin_tap_actor_slots(actor, context)? {
+            SongLuaOverlayKind::NoteskinActor { slots }
+        } else {
+            let Some(layers) = read_model_layers(actor)? else {
+                return Ok(None);
+            };
+            SongLuaOverlayKind::Model { layers }
+        }
+    } else if actor_type.eq_ignore_ascii_case("SongMeterDisplay") {
+        let Some((stream_width, stream_state)) = read_song_meter_display_state(lua, actor)? else {
+            return Ok(None);
+        };
+        SongLuaOverlayKind::SongMeterDisplay {
+            stream_width,
+            stream_state,
+            music_length_seconds: context.music_length_seconds.max(0.0),
+        }
+    } else if actor_type.eq_ignore_ascii_case("CourseContentsList") {
+        SongLuaOverlayKind::ActorFrame
+    } else if actor_type.eq_ignore_ascii_case("GraphDisplay") {
+        SongLuaOverlayKind::GraphDisplay {
+            size: read_graph_display_size(initial_state, context),
+            body_values: read_graph_display_values(actor)?,
+            body_state: read_graph_display_body_state(lua, actor)?,
+            line_state: read_graph_display_line_state(lua, actor)?,
+        }
+    } else if actor_type.eq_ignore_ascii_case("Quad") {
+        SongLuaOverlayKind::Quad
+    } else {
+        return Ok(None);
+    };
+    Ok(Some(SongLuaOverlayCompileActor {
+        table: actor.clone(),
+        actor: crate::SongLuaOverlayActor {
+            kind,
+            name,
+            parent_index,
+            initial_state,
+            message_commands,
+        },
+    }))
 }
 
 fn read_actor_multi_vertex_range(

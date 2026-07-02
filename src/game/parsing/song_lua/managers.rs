@@ -1,12 +1,5 @@
-use mlua::{Lua, Table};
-
 use deadlib_platform::dirs;
-use deadsync_song_lua::{
-    SongLuaCompileContext, SongLuaNoteskinResolver,
-    create_noteskin_table as create_crate_noteskin_table,
-};
-
-use super::actor_host::create_dummy_actor;
+use deadsync_song_lua::SongLuaNoteskinResolver;
 
 pub(super) fn song_lua_noteskin_resolver() -> SongLuaNoteskinResolver {
     SongLuaNoteskinResolver {
@@ -22,16 +15,4 @@ pub(super) fn song_lua_noteskin_resolver() -> SongLuaNoteskinResolver {
 fn song_lua_noteskin_names() -> Vec<String> {
     let roots = dirs::app_dirs().noteskin_roots();
     deadsync_noteskin::itg::discover_skins(&roots, "dance")
-}
-
-pub(super) fn create_noteskin_table(
-    lua: &Lua,
-    context: &SongLuaCompileContext,
-) -> mlua::Result<Table> {
-    create_crate_noteskin_table(
-        lua,
-        context,
-        song_lua_noteskin_resolver(),
-        create_dummy_actor,
-    )
 }

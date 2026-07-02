@@ -2,12 +2,14 @@ use mlua::{Function, Lua, Table, Value};
 
 use crate::{
     LUA_PLAYERS, SongLuaCompileContext, SongLuaCompileInfo, SongLuaEaseTarget, SongLuaEaseWindow,
-    SongLuaOverlayEase, SongLuaOverlayState, SongLuaSpanMode, SongLuaTimeUnit, SongLuaTrackedActor,
-    SongLuaTrackedActorTarget, compile_song_runtime_delta_values, compile_song_runtime_values,
-    overlay_delta_pair_from_states, push_unique_compile_detail, read_f32,
-    set_compile_song_runtime_beat, set_compile_song_runtime_delta_values,
-    set_compile_song_runtime_values, song_display_bps, song_elapsed_seconds_for_beat,
-    song_lua_side_effect_count, song_music_rate,
+    SongLuaOverlayCompileActor, SongLuaOverlayEase, SongLuaOverlayState, SongLuaSpanMode,
+    SongLuaTimeUnit, SongLuaTrackedActor, SongLuaTrackedActorTarget, actor_overlay_initial_state,
+    actor_tree_has_update_functions, compile_song_runtime_delta_values,
+    compile_song_runtime_values, overlay_delta_pair_from_states, push_unique_compile_detail,
+    read_f32, reset_overlay_compile_actor_capture_tables, reset_tracked_capture_tables,
+    run_actor_update_functions_with_delta, set_compile_song_runtime_beat,
+    set_compile_song_runtime_delta_values, set_compile_song_runtime_values, song_display_bps,
+    song_elapsed_seconds_for_beat, song_lua_side_effect_count, song_music_rate,
 };
 
 pub const SONG_LUA_UPDATE_FUNCTION_MAX_SAMPLES: usize = 4096;
@@ -603,4 +605,177 @@ pub fn push_sampled_perframe_targets(
             false,
         );
     }
+}
+
+pub fn current_overlay_compile_actor_states<Kind>(
+    overlays: &[SongLuaOverlayCompileActor<Kind>],
+) -> Result<Vec<SongLuaOverlayState>, String> {
+    let mut out = Vec::with_capacity(overlays.len());
+    for overlay in overlays {
+        out.push(actor_overlay_initial_state(&overlay.table)?);
+    }
+    Ok(out)
+}
+
+pub fn call_update_functions_at(
+    lua: &Lua,
+    root: &Value,
+    beat: f32,
+    delta_beats: f32,
+    delta_seconds: f32,
+) -> Result<(), String> {
+    let previous = compile_song_runtime_values(lua).map_err(|err| err.to_string())?;
+    let previous_delta = compile_song_runtime_delta_values(lua).map_err(|err| err.to_string())?;
+    set_compile_song_runtime_beat(lua, beat).map_err(|err| err.to_string())?;
+    set_compile_song_runtime_delta_values(lua, delta_beats, delta_seconds)
+        .map_err(|err| err.to_string())?;
+    let result = run_actor_update_functions_with_delta(lua, root, delta_seconds as f64)
+        .map_err(|err| err.to_string());
+    set_compile_song_runtime_values(lua, previous.0, previous.1).map_err(|err| err.to_string())?;
+    set_compile_song_runtime_delta_values(lua, previous_delta.0, previous_delta.1)
+        .map_err(|err| err.to_string())?;
+    result
+}
+
+pub fn compile_update_function_overlays<Kind>(
+    lua: &Lua,
+    root: &Value,
+    context: &SongLuaCompileContext,
+    overlays: &mut [SongLuaOverlayCompileActor<Kind>],
+    tracked_actors: &[SongLuaTrackedActor],
+) -> Result<Vec<SongLuaOverlayEase>, String> {
+    if overlays.is_empty()
+        || !actor_tree_has_update_functions(lua, root).map_err(|err| err.to_string())?
+    {
+        return Ok(Vec::new());
+    }
+    let start = 0.0;
+    let end = update_function_end_beat(context);
+    if end <= start {
+        return Ok(Vec::new());
+    }
+
+    reset_overlay_compile_actor_capture_tables(lua, overlays)?;
+    reset_tracked_capture_tables(lua, tracked_actors)?;
+    call_update_functions_at(lua, root, start, 0.0, 0.0)?;
+    let baseline_overlays = current_overlay_compile_actor_states(overlays)?;
+    let mut sample_beats = vec![start];
+    let mut overlay_samples = vec![baseline_overlays.clone()];
+
+    for sample in update_function_samples(start, end) {
+        let delta_seconds = perframe_delta_seconds(context, sample.delta_beats);
+        reset_overlay_compile_actor_capture_tables(lua, overlays)?;
+        reset_tracked_capture_tables(lua, tracked_actors)?;
+        call_update_functions_at(
+            lua,
+            root,
+            sample.eval_beat,
+            sample.delta_beats,
+            delta_seconds,
+        )?;
+        sample_beats.push(sample.beat);
+        overlay_samples.push(current_overlay_compile_actor_states(overlays)?);
+    }
+
+    Ok(update_function_overlay_eases(
+        end,
+        &baseline_overlays,
+        &sample_beats,
+        &overlay_samples,
+    ))
+}
+
+pub fn compile_perframes<Kind>(
+    lua: &Lua,
+    prefix_table: Option<Table>,
+    global_table: Option<Table>,
+    context: &SongLuaCompileContext,
+    overlays: &mut [SongLuaOverlayCompileActor<Kind>],
+    tracked_actors: &[SongLuaTrackedActor],
+) -> Result<
+    (
+        Vec<SongLuaEaseWindow>,
+        Vec<SongLuaOverlayEase>,
+        SongLuaCompileInfo,
+    ),
+    String,
+> {
+    let mut entries = read_perframe_entries(prefix_table)?;
+    entries.extend(read_perframe_entries(global_table)?);
+    if entries.is_empty() {
+        return Ok((Vec::new(), Vec::new(), SongLuaCompileInfo::default()));
+    }
+
+    let boundaries = perframe_boundaries(&entries);
+    if boundaries.len() < 2 {
+        return Ok((Vec::new(), Vec::new(), SongLuaCompileInfo::default()));
+    }
+
+    let player_tables = tracked_player_tables(tracked_actors);
+    let baseline_players = current_perframe_player_states(&player_tables)?;
+    let baseline_overlays = current_overlay_compile_actor_states(overlays)?;
+    let mut out_eases = Vec::new();
+    let mut out_overlay_eases = Vec::new();
+    let mut saw_recognized_side_effect = false;
+
+    for window in boundaries.windows(2) {
+        let [start, end] = [window[0], window[1]];
+        if end <= start {
+            continue;
+        }
+        let active = active_perframe_entries(&entries, start, end);
+        if active.is_empty() {
+            let current_players = current_perframe_player_states(&player_tables)?;
+            let current_overlays = current_overlay_compile_actor_states(overlays)?;
+            push_perframe_static_targets(
+                &mut out_eases,
+                &mut out_overlay_eases,
+                start,
+                end,
+                &current_players,
+                &current_overlays,
+                &baseline_players,
+                &baseline_overlays,
+            );
+            continue;
+        }
+
+        let mut sample_beats = Vec::new();
+        let mut player_samples = Vec::new();
+        let mut overlay_samples = Vec::new();
+        for sample in perframe_samples(start, end) {
+            let delta_seconds = perframe_delta_seconds(context, sample.delta_beats);
+            reset_overlay_compile_actor_capture_tables(lua, overlays)?;
+            reset_tracked_capture_tables(lua, tracked_actors)?;
+            for entry in &active {
+                saw_recognized_side_effect |= call_perframe_entry(
+                    lua,
+                    entry,
+                    sample.eval_beat,
+                    sample.delta_beats,
+                    delta_seconds,
+                )?;
+            }
+            sample_beats.push(sample.beat);
+            player_samples.push(current_perframe_player_states(&player_tables)?);
+            overlay_samples.push(current_overlay_compile_actor_states(overlays)?);
+        }
+
+        push_sampled_perframe_targets(
+            &mut out_eases,
+            &mut out_overlay_eases,
+            end,
+            &sample_beats,
+            &player_samples,
+            &overlay_samples,
+            &baseline_players,
+            &baseline_overlays,
+        );
+    }
+
+    let mut info = SongLuaCompileInfo::default();
+    if out_eases.is_empty() && out_overlay_eases.is_empty() && !saw_recognized_side_effect {
+        info = unsupported_perframe_info(&entries);
+    }
+    Ok((out_eases, out_overlay_eases, info))
 }

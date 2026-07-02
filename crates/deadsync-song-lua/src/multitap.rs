@@ -2,11 +2,12 @@ use deadlib_present::anim::{EffectClock, EffectMode};
 use mlua::{Lua, Table, Value};
 
 use crate::{
-    SONG_LUA_DOUBLE_NOTE_COLUMNS, SongLuaCompileContext, SongLuaMessageEvent,
-    SongLuaNoteskinResolver, SongLuaOverlayActor, SongLuaOverlayCommandBlock, SongLuaOverlayEase,
+    LUA_PLAYERS, SONG_LUA_DOUBLE_NOTE_COLUMNS, SONG_LUA_NOTE_COLUMNS, SongLuaCompileContext,
+    SongLuaMessageEvent, SongLuaNoteskinResolver, SongLuaOverlayActor, SongLuaOverlayCommandBlock,
+    SongLuaOverlayCompileActor, SongLuaOverlayEase, SongLuaOverlayMessageCommand,
     SongLuaOverlayState, SongLuaOverlayStateDelta, SongLuaSpanMode, SongLuaSpeedMod,
-    SongLuaTimeUnit, THEME_RECEPTOR_Y_STD, overlay_delta_intersection, read_f32,
-    song_lua_style_column_x,
+    SongLuaTimeUnit, THEME_RECEPTOR_Y_STD, named_overlay_indices_by_name,
+    overlay_delta_intersection, overlay_descendants_by_parent, read_f32, song_lua_style_column_x,
 };
 
 pub const MULTITAP_PREVISIBLE_BEATS: f32 = 8.0;
@@ -262,6 +263,173 @@ pub fn push_multitap_actor_eases(
     for ((_, baseline), (child_index, samples)) in deco_children.iter().zip(deco_child_samples) {
         push_overlay_sample_eases(out, child_index, *baseline, &samples);
     }
+}
+
+pub fn compile_multitap_update_overlays_for_actors<Kind, EnsureArrowVisual>(
+    lua: &Lua,
+    context: &SongLuaCompileContext,
+    overlays: &mut Vec<SongLuaOverlayCompileActor<Kind>>,
+    messages: &mut Vec<SongLuaMessageEvent>,
+    noteskin_resolver: SongLuaNoteskinResolver,
+    mut ensure_arrow_visual: EnsureArrowVisual,
+) -> Result<Option<Vec<SongLuaOverlayEase>>, String>
+where
+    EnsureArrowVisual:
+        FnMut(&mut Vec<SongLuaOverlayCompileActor<Kind>>, usize, &str) -> Result<(), String>,
+{
+    let Some(multitaps) = read_multitap_descs(lua, context)? else {
+        return Ok(None);
+    };
+    if multitaps.is_empty() {
+        return Ok(None);
+    }
+    let overlay_indices = named_overlay_indices_by_name(overlays.len(), |index| {
+        overlays[index].actor.name.as_deref()
+    });
+    let mut out = Vec::new();
+    for player in 0..LUA_PLAYERS {
+        if !context.players[player].enabled {
+            continue;
+        }
+        let pn = player + 1;
+        let Some(&field_index) = overlay_indices.get(format!("MultitapFrameP{pn}").as_str()) else {
+            return Ok(None);
+        };
+        apply_multitap_field_state(
+            &mut overlays[field_index].actor.initial_state,
+            context,
+            player,
+        );
+        for (mti, desc) in multitaps.iter().enumerate() {
+            let index = mti + 1;
+            let Some(&frame_index) = overlay_indices.get(format!("MultitapP{pn}_{index}").as_str())
+            else {
+                return Ok(None);
+            };
+            let Some(&arrow_index) =
+                overlay_indices.get(format!("MultitapArrowP{pn}_{index}").as_str())
+            else {
+                return Ok(None);
+            };
+            let Some(&deco_index) =
+                overlay_indices.get(format!("MultitapDeco{pn}_{index}").as_str())
+            else {
+                return Ok(None);
+            };
+            overlays[arrow_index]
+                .actor
+                .initial_state
+                .texcoord_offset
+                .get_or_insert([0.0, 0.0]);
+            let noteskin = multitap_arrow_noteskin(overlays, arrow_index, context, player)?;
+            ensure_arrow_visual(overlays, arrow_index, &noteskin)?;
+            let deco_children =
+                overlay_descendants_by_parent(overlays.len(), deco_index, |index| {
+                    overlays
+                        .get(index)
+                        .and_then(|overlay| overlay.actor.parent_index)
+                })
+                .into_iter()
+                .map(|index| (index, overlays[index].actor.initial_state))
+                .collect::<Vec<_>>();
+            push_multitap_actor_eases(
+                &mut out,
+                frame_index,
+                overlays[frame_index].actor.initial_state,
+                arrow_index,
+                overlays[arrow_index].actor.initial_state,
+                deco_index,
+                overlays[deco_index].actor.initial_state,
+                &deco_children,
+                context,
+                player,
+                noteskin_resolver,
+                &noteskin,
+                desc,
+            );
+        }
+        for lane in 1..=SONG_LUA_NOTE_COLUMNS {
+            let Some(&explosion_index) =
+                overlay_indices.get(format!("MultitapExplosionP{pn}_{lane}").as_str())
+            else {
+                continue;
+            };
+            push_multitap_explosion_eases(
+                &mut out,
+                explosion_index,
+                overlays[explosion_index].actor.initial_state,
+                context,
+                &multitaps,
+                lane,
+            );
+            install_multitap_explosion_messages(
+                overlays,
+                messages,
+                explosion_index,
+                &multitaps,
+                lane,
+                pn,
+            );
+        }
+    }
+    Ok(Some(out))
+}
+
+fn multitap_arrow_noteskin<Kind>(
+    overlays: &[SongLuaOverlayCompileActor<Kind>],
+    arrow_index: usize,
+    context: &SongLuaCompileContext,
+    player: usize,
+) -> Result<String, String> {
+    overlays[arrow_index]
+        .table
+        .get::<Option<String>>("__songlua_noteskin_name")
+        .map_err(|err| err.to_string())
+        .map(|noteskin| {
+            noteskin
+                .filter(|value| !value.trim().is_empty())
+                .unwrap_or_else(|| context.players[player].noteskin_name.clone())
+        })
+}
+
+fn install_multitap_explosion_messages<Kind>(
+    overlays: &mut [SongLuaOverlayCompileActor<Kind>],
+    messages: &mut Vec<SongLuaMessageEvent>,
+    explosion_index: usize,
+    descs: &[MultitapDesc],
+    lane: usize,
+    pn: usize,
+) {
+    let message = multitap_explosion_message_name(lane, pn);
+    let mut installed = false;
+    let mut targets = vec![explosion_index];
+    targets.extend(overlay_descendants_by_parent(
+        overlays.len(),
+        explosion_index,
+        |index| {
+            overlays
+                .get(index)
+                .and_then(|overlay| overlay.actor.parent_index)
+        },
+    ));
+    for overlay_index in targets {
+        let blocks = multitap_explosion_command_blocks(&overlays[overlay_index].actor);
+        if blocks.is_empty() {
+            continue;
+        }
+        overlays[overlay_index]
+            .actor
+            .message_commands
+            .push(SongLuaOverlayMessageCommand {
+                message: message.clone(),
+                blocks,
+            });
+        installed = true;
+    }
+    if !installed {
+        return;
+    }
+    messages.extend(multitap_explosion_message_events(descs, lane, pn));
 }
 
 pub fn multitap_explosion_message_name(lane: usize, pn: usize) -> String {

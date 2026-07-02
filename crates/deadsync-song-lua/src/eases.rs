@@ -1,11 +1,15 @@
-use mlua::{Function, Table, Value};
+use log::{debug, info};
+use mlua::{Function, Lua, Table, Value};
 use std::collections::HashMap;
 use std::ffi::c_void;
+use std::time::Instant;
 
 use crate::{
     SongLuaColumnOffsetWindow, SongLuaCompileInfo, SongLuaEaseTarget, SongLuaEaseWindow,
-    SongLuaOverlayEase, SongLuaSpanMode, SongLuaTimeUnit, read_easing_name, read_f32, read_player,
-    read_span_mode,
+    SongLuaOverlayCompileActor, SongLuaOverlayEase, SongLuaSpanMode, SongLuaTimeUnit,
+    capture_overlay_compile_actor_function_eases, compile_note_column_pos_function_ease,
+    probe_function_ease_target, read_easing_name, read_f32, read_player, read_span_mode,
+    record_unsupported_function_ease_capture,
 };
 
 pub struct SongLuaReadEasesResult {
@@ -188,6 +192,161 @@ where
         overlay_eases,
         column_offsets,
         info,
+        stats,
+    })
+}
+
+pub fn read_eases_for_overlay_actors<Kind>(
+    lua: &Lua,
+    table: Option<Table>,
+    unit: SongLuaTimeUnit,
+    easing_names: &HashMap<*const c_void, String>,
+    overlays: &mut [SongLuaOverlayCompileActor<Kind>],
+) -> Result<
+    (
+        Vec<SongLuaEaseWindow>,
+        Vec<SongLuaOverlayEase>,
+        Vec<SongLuaColumnOffsetWindow>,
+        SongLuaCompileInfo,
+    ),
+    String,
+> {
+    let Some(table) = table else {
+        return Ok((
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            SongLuaCompileInfo::default(),
+        ));
+    };
+    let trace_started = Instant::now();
+    let result =
+        read_eases_with_function_capture(Some(table), unit, easing_names, |input, info| {
+            capture_function_ease(lua, overlays, input, info)
+        })?;
+    let elapsed_ms = trace_started.elapsed().as_secs_f64() * 1000.0;
+    if elapsed_ms >= 1000.0 {
+        let stats = result.stats;
+        info!(
+            "Song lua read_eases timing: unit={unit:?} entries={} function_targets={} overlay_capture_attempts={} overlay_capture_outputs={} player_eases={} overlay_eases={} unsupported_function_eases={} probe_ms={probe_ms:.3} overlay_capture_ms={overlay_capture_ms:.3} elapsed_ms={elapsed_ms:.3}",
+            stats.entry_count,
+            stats.function_targets,
+            stats.overlay_capture_attempts,
+            stats.overlay_capture_outputs,
+            result.eases.len(),
+            result.overlay_eases.len(),
+            result.info.unsupported_function_eases,
+            probe_ms = stats.probe_ms,
+            overlay_capture_ms = stats.overlay_capture_ms,
+        );
+    }
+    Ok((
+        result.eases,
+        result.overlay_eases,
+        result.column_offsets,
+        result.info,
+    ))
+}
+
+fn capture_function_ease<Kind>(
+    lua: &Lua,
+    overlays: &[SongLuaOverlayCompileActor<Kind>],
+    input: SongLuaFunctionEaseInput,
+    info: &mut SongLuaCompileInfo,
+) -> Result<SongLuaFunctionEaseResult, String> {
+    let mut stats = SongLuaReadEasesStats::default();
+    match compile_note_column_pos_function_ease(
+        lua,
+        &input.function,
+        input.unit,
+        input.start,
+        input.limit,
+        input.span_mode,
+        input.from,
+        input.to,
+        input.easing.clone(),
+        input.sustain,
+        input.opt1,
+        input.opt2,
+    ) {
+        Ok(compiled) if !compiled.is_empty() => {
+            return Ok(SongLuaFunctionEaseResult {
+                decision: SongLuaFunctionEaseDecision::ColumnOffsets(compiled),
+                stats,
+            });
+        }
+        Ok(_) => {}
+        Err(err) => {
+            debug!("Skipping song lua note-column position function ease capture: {err}");
+        }
+    }
+    let probe_started = Instant::now();
+    let (probed_target, probe_methods, probe_actor_ptrs) =
+        probe_function_ease_target(lua, &input.function).map_err(|err| err.to_string())?;
+    stats.probe_ms += probe_started.elapsed().as_secs_f64() * 1000.0;
+    let target = probed_target.unwrap_or(SongLuaEaseTarget::Function);
+    if matches!(target, SongLuaEaseTarget::Function) {
+        stats.overlay_capture_attempts += 1;
+        let capture_started = Instant::now();
+        let captured = capture_overlay_compile_actor_function_eases(
+            lua,
+            overlays,
+            &input.function,
+            input.unit,
+            input.start,
+            input.limit,
+            input.span_mode,
+            input.from,
+            input.to,
+            input.easing.clone(),
+            input.sustain,
+            input.opt1,
+            input.opt2,
+            &probe_actor_ptrs,
+        );
+        let capture_ms = capture_started.elapsed().as_secs_f64() * 1000.0;
+        stats.overlay_capture_ms += capture_ms;
+        if capture_ms >= 1000.0 {
+            info!(
+                "Slow song lua function ease capture: unit={:?} start={:.3} limit={:.3} span={:?} from={:.3} to={:.3} easing={:?} probe_actors={} overlays={} capture_ms={capture_ms:.3}",
+                input.unit,
+                input.start,
+                input.limit,
+                input.span_mode,
+                input.from,
+                input.to,
+                input.easing,
+                probe_actor_ptrs.len(),
+                overlays.len(),
+            );
+        }
+        return match captured {
+            Ok(compiled) if !compiled.is_empty() => Ok(SongLuaFunctionEaseResult {
+                decision: SongLuaFunctionEaseDecision::OverlayEases(compiled),
+                stats,
+            }),
+            _ => {
+                let detail = record_unsupported_function_ease_capture(
+                    info,
+                    input.unit,
+                    input.start,
+                    input.limit,
+                    input.span_mode,
+                    input.from,
+                    input.to,
+                    &input.easing,
+                    &probe_methods,
+                );
+                debug!("Unsupported song lua function ease capture: {detail}");
+                Ok(SongLuaFunctionEaseResult {
+                    decision: SongLuaFunctionEaseDecision::Skip,
+                    stats,
+                })
+            }
+        };
+    }
+    Ok(SongLuaFunctionEaseResult {
+        decision: SongLuaFunctionEaseDecision::Target(target),
         stats,
     })
 }
