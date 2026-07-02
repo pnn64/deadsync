@@ -8,14 +8,15 @@ use crate::{
     create_cryptman_table, create_debug_table, create_ex_judgment_counts, create_fileman_table,
     create_find_files_function, create_index_array, create_ini_file_table, create_lua_compat_table,
     create_network_table, create_rage_file_util_table, create_range_table, create_split_table,
-    create_string_array, create_version_parts_table, deduplicate_lua_table,
+    create_string_array, create_version_parts_table, current_gamestate_player_value,
+    current_gamestate_value, current_song_value, current_steps_value, deduplicate_lua_table,
     install_theme_color_helpers, json_to_lua_value, lua_binary_to_hex, lua_table_to_string,
     lua_to_json_value, make_color_table, map_lua_table, note_song_lua_side_effect,
     parse_chart_info, path_basename, preprocess_lua_cmd_syntax, read_color_call, read_color_value,
-    read_f32, read_string, rotate_lua_table, seconds_to_hhmmss, set_string_method,
-    song_lua_is_minimum_product_version, song_lua_is_product_version, stringify_lua_table,
-    strip_sprite_hints, timing_window_arg_index, timing_window_seconds, truthy,
-    worst_judgment_from_offsets,
+    read_f32, read_string, retarget_loader_env, rotate_lua_table, seconds_to_hhmmss,
+    set_string_method, song_lua_is_minimum_product_version, song_lua_is_product_version,
+    stringify_lua_table, strip_sprite_hints, timing_window_arg_index, timing_window_seconds,
+    truthy, worst_judgment_from_offsets,
 };
 
 #[derive(Clone, Copy)]
@@ -550,6 +551,20 @@ pub fn install_stdlib_compat(
         lua.create_function(|_, value: Value| Ok(worst_judgment_from_offsets(value)))?,
     )?;
     Ok(())
+}
+
+pub fn install_default_stdlib_compat(lua: &Lua, song_dir: &Path) -> mlua::Result<()> {
+    install_stdlib_compat(
+        lua,
+        song_dir,
+        SongLuaCompatCallbacks {
+            current_gamestate_player_value,
+            current_gamestate_value,
+            current_song_value,
+            current_steps_value,
+            retarget_loader_env,
+        },
+    )
 }
 
 fn create_game_command_table(lua: &Lua, callbacks: SongLuaCompatCallbacks) -> mlua::Result<Table> {

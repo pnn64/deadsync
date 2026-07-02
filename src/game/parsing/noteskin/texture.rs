@@ -288,6 +288,15 @@ impl SpriteSlot {
                 .flatten(),
         )
     }
+
+    #[inline(always)]
+    pub fn model_uv_params(&self, uv_rect: [f32; 4]) -> ([f32; 2], [f32; 2], [f32; 2]) {
+        let atlas_tex_dims = match self.source.as_ref() {
+            SpriteSource::Atlas { tex_dims, .. } => Some(*tex_dims),
+            SpriteSource::Animated { .. } => None,
+        };
+        deadsync_noteskin::model_texture_uv_params(uv_rect, self.def.src, atlas_tex_dims)
+    }
 }
 
 #[inline(always)]
@@ -296,33 +305,7 @@ pub(crate) fn build_model_geometry(slot: &SpriteSlot) -> Arc<[TexturedMeshVertex
         .model
         .as_ref()
         .expect("model geometry requested for non-model noteskin slot");
-    let mut vertices = Vec::with_capacity(model.vertices.len());
-    for v in model.vertices.iter() {
-        let mut pos = v.pos;
-        if slot.def.mirror_h {
-            pos[0] = -pos[0];
-        }
-        if slot.def.mirror_v {
-            pos[1] = -pos[1];
-        }
-        let u = if slot.def.mirror_h {
-            1.0 - v.uv[0]
-        } else {
-            v.uv[0]
-        };
-        let v_tex = if slot.def.mirror_v {
-            1.0 - v.uv[1]
-        } else {
-            v.uv[1]
-        };
-        vertices.push(TexturedMeshVertex {
-            pos,
-            uv: [u, v_tex],
-            tex_matrix_scale: v.tex_matrix_scale,
-            color: [1.0; 4],
-        });
-    }
-    Arc::from(vertices)
+    deadsync_noteskin::build_textured_model_geometry(model, slot.def.mirror_h, slot.def.mirror_v)
 }
 
 #[cfg(test)]

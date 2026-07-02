@@ -1122,7 +1122,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.4.1750"
+version = "0.4.1775"
 dependencies = [
  "bincode",
  "bitflags 2.13.0",
@@ -1370,6 +1370,7 @@ name = "deadsync-noteskin"
 version = "0.1.0"
 dependencies = [
  "bincode",
+ "deadlib-render",
  "image",
  "log",
  "mlua",
@@ -1454,6 +1455,7 @@ dependencies = [
 name = "deadsync-song-lua"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "deadlib-present",
  "mlua",
  "serde_json",
@@ -1480,7 +1482,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.4.1750"
+version = "0.4.1775"
 dependencies = [
  "log",
  "semver",

@@ -63,6 +63,38 @@ pub const SONG_LUA_TOP_SCREEN_OPTION_ROWS: &[&str] = &[
     "ScreenAfterPlayerOptions4",
 ];
 
+pub const TOP_SCREEN_THEME_CHILD_NAMES: &[&str] = &[
+    "Underlay",
+    "Overlay",
+    "BPMDisplay",
+    "LifeFrame",
+    "ScoreFrame",
+    "Lyrics",
+    "SongBackground",
+    "SongForeground",
+    "StageDisplay",
+    "SongTitle",
+    "ScoreP1",
+    "ScoreP2",
+    "SongMeterDisplayP1",
+    "SongMeterDisplayP2",
+    "StepsDisplayP1",
+    "StepsDisplayP2",
+    "LifeMeterBarP1",
+    "LifeMeterBarP2",
+];
+
+pub const UNDERLAY_THEME_CHILD_NAMES: &[&str] = &[
+    "Header",
+    "StepStatsPaneP1",
+    "StepStatsPaneP2",
+    "DangerP1",
+    "DangerP2",
+    "P1Score",
+    "P2Score",
+    "SongMeter",
+];
+
 pub fn top_screen_option_row_name(value: Option<Value>) -> String {
     match value {
         Some(Value::String(name)) => name

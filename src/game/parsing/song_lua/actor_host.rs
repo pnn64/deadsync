@@ -1,52 +1,58 @@
 use super::*;
 use deadsync_song_lua::{
-    SONG_LUA_TOP_SCREEN_OPTION_ROWS, actor_active_commands, actor_aft_capture_name, actor_child_at,
-    actor_children, actor_command_queue, actor_current_capture_block, actor_debug_label,
-    actor_decode_movie, actor_diffuse, actor_direct_children, actor_effect_magnitude, actor_glow,
-    actor_halign, actor_named_children, actor_shadow_len, actor_texture_path,
-    actor_tween_time_left, actor_type_is, actor_update_text_pre_zoom_flags, actor_valign,
-    actor_wrappers, actor_zoom_axis, banner_sort_order_path, begin_action_capture_scope,
-    call_actor_function, call_with_chunk_env, call_with_script_dir, call_with_script_path,
-    capture_actor_command_preserving_state, capture_actor_text_attribute,
+    SONG_LUA_TOP_SCREEN_OPTION_ROWS, SongLuaColumnOffsetBuildParams, SongLuaColumnOffsetSample,
+    TOP_SCREEN_THEME_CHILD_NAMES, UNDERLAY_THEME_CHILD_NAMES, actor_active_commands,
+    actor_aft_capture_name, actor_child_at, actor_children, actor_command_queue,
+    actor_current_capture_block, actor_debug_label, actor_decode_movie, actor_diffuse,
+    actor_direct_children, actor_effect_magnitude, actor_glow, actor_halign, actor_named_children,
+    actor_overlay_initial_state, actor_shadow_len, actor_texture_path, actor_tween_time_left,
+    actor_type_is, actor_update_text_pre_zoom_flags, actor_valign, actor_wrappers, actor_zoom_axis,
+    banner_sort_order_path, call_actor_function, call_with_chunk_env, call_with_script_dir,
+    call_with_script_path, capture_actor_message_commands, capture_actor_text_attribute,
     capture_actor_vertex_diffuse, capture_block_set_bool, capture_block_set_color,
     capture_block_set_f32, capture_block_set_i32, capture_block_set_size,
     capture_block_set_stretch, capture_block_set_string, capture_block_set_u32,
     capture_block_set_vec2, capture_block_set_vec3, capture_block_set_vec4, capture_block_set_vec5,
-    capture_block_set_zoom_axes, capture_scope_actor_pointers, capture_scope_actor_tables,
-    capture_scope_snapshots, capture_texture_rect, collect_aft_capture_names,
-    collect_tracked_capture_blocks_for_indices, copy_dummy_actor_tags, create_actor_child_group,
-    crop_texture_rect, current_song_lua_style_name, drain_actor_command_queue, effect_clock_label,
-    flush_actor_capture, format_rolling_number, hurry_actor_tweening, inherit_actor_dirs,
+    capture_block_set_zoom_axes,
+    capture_function_action_blocks as capture_lua_function_action_blocks,
+    capture_overlay_function_eases as capture_lua_overlay_function_eases, capture_texture_rect,
+    collect_aft_capture_names, column_offset_windows_from_samples, copy_dummy_actor_tags,
+    create_actor_child_group, crop_texture_rect, current_song_lua_style_name,
+    drain_actor_command_queue, effect_clock_label, flush_actor_capture, format_rolling_number,
+    function_action_plan, function_named_upvalue_tables, hurry_actor_tweening, inherit_actor_dirs,
     input_status_actor_text, install_actor_metatable, install_course_contents_list_children,
     make_actor_add_f32_method, make_actor_capture_f32_method, make_actor_chain_method,
     make_actor_finish_tweening_method, make_actor_set_size_method, make_actor_stop_tweening_method,
-    make_actor_tween_method, make_actor_wrap_width_method, normalize_broadcast_params,
-    note_zoom_point_hides, option_row_default_text, overlay_text_align_label,
-    player_child_proxy_name, populate_course_contents_display, position_scroller_items,
-    prepare_capture_scope_actor, push_note_hide_window, push_sequence_child_once,
-    push_unique_compile_detail, read_actor_capture_blocks, read_actor_color_field,
+    make_actor_tween_method, make_actor_wrap_width_method, message_command_lists_have_listener,
+    normalize_broadcast_params, note_column_pos_offset_y_from_points,
+    note_column_zoom_hide_beats_per_t, note_hide_windows_from_flags, note_zoom_point_hides,
+    offset_texture_rect as song_lua_offset_texture_rect, option_row_default_text,
+    overlay_text_align_label, parse_sprite_sheet_dims, player_child_proxy_name,
+    populate_course_contents_display, position_scroller_items, prepare_capture_scope_actor,
+    push_sequence_child_once, push_unique_compile_detail, read_actor_color_field,
     read_actor_multi_vertex_mesh, read_actor_multi_vertex_texture_path, read_bitmap_font,
-    read_bitmap_text_attributes, read_child_index, read_color_args, read_graph_display_size,
-    read_graph_display_values, read_model_path, read_proxy_target_kind, record_probe_method_call,
-    register_loader_env, register_song_lua_actor, remove_actor_child, remove_all_actor_children,
-    reset_actor_capture, reset_actor_capture_tables, resolve_actor_asset_path,
-    resolve_load_actor_path, restore_action_capture_scope, restore_actors_semantic_state,
-    rolling_numbers_format, run_actor_named_command_with_drain_and_params,
-    run_added_actor_child_commands, run_command_on_leaves,
-    run_named_command_on_children_recursively, run_named_command_on_leaves,
-    set_actor_decode_movie_for_texture, set_actor_effect_defaults, set_actor_effect_mode,
-    set_actor_sound_file_from_value, set_actor_sprite_state, set_actor_texture_from_path,
-    set_actor_texture_from_path_methods, set_actor_texture_from_path_methods_or_fallback,
-    set_actor_texture_from_value, set_proxy_target_fields, snapshot_actors_semantic_state,
-    song_lua_actor_registry, song_lua_halign_value, song_lua_screen_center, song_lua_screen_size,
-    song_lua_span_end, song_lua_text_align_value, song_lua_valid_sprite_state_index,
-    song_lua_valign_value, sprite_sheet_rect, table_vec2, table_vec3, table_vec4, table_vec5,
-    table_vertex_colors, text_glow_mode_label, top_screen_danger_index,
-    top_screen_life_meter_bar_index, top_screen_life_meter_index, top_screen_life_meter_name,
-    top_screen_option_row_name, top_screen_player_index, top_screen_player_name,
-    top_screen_score_index, top_screen_score_name, top_screen_score_percent_name,
-    top_screen_song_meter_display_index, top_screen_step_stats_pane_index,
-    top_screen_steps_display_index, tracked_indices_for_actor_pointers, underlay_score_index,
+    read_bitmap_text_attributes, read_child_index, read_color_args, read_graph_display_body_state,
+    read_graph_display_line_state, read_graph_display_size, read_graph_display_values,
+    read_model_path, read_proxy_target_kind, read_song_meter_display_state,
+    record_probe_method_call, register_loader_env, register_song_lua_actor, remove_actor_child,
+    remove_all_actor_children, reset_actor_capture, reset_indexed_actor_capture_tables,
+    resolve_actor_asset_path, resolve_load_actor_path, rolling_numbers_format,
+    run_actor_named_command_with_drain_and_params, run_added_actor_child_commands,
+    run_command_on_leaves, run_named_command_on_children_recursively, run_named_command_on_leaves,
+    scale_to_rect_plan, set_actor_decode_movie_for_texture, set_actor_effect_defaults,
+    set_actor_effect_mode, set_actor_sound_file_from_value, set_actor_sprite_state,
+    set_actor_texture_from_path, set_actor_texture_from_path_methods,
+    set_actor_texture_from_path_methods_or_fallback, set_actor_texture_from_value,
+    set_proxy_target_fields, song_lua_actor_registry, song_lua_halign_value,
+    song_lua_screen_center, song_lua_screen_size, song_lua_span_end, song_lua_text_align_value,
+    song_lua_valid_sprite_state_index, song_lua_valign_value, sort_note_hide_windows,
+    sprite_animation_state_at, sprite_frame_count, sprite_image_frame_size, sprite_texture_rect,
+    table_vec2, table_vec4, text_glow_mode_label, texture_pixel_offset_rect,
+    top_screen_danger_index, top_screen_life_meter_bar_index, top_screen_life_meter_index,
+    top_screen_life_meter_name, top_screen_option_row_name, top_screen_player_index,
+    top_screen_player_name, top_screen_score_index, top_screen_score_name,
+    top_screen_score_percent_name, top_screen_song_meter_display_index,
+    top_screen_step_stats_pane_index, top_screen_steps_display_index, underlay_score_index,
     underlay_score_name,
 };
 
@@ -273,38 +279,6 @@ fn create_top_screen_song_meter_display_actor(lua: &Lua, name: &str) -> mlua::Re
     actor_children(lua, &actor)?.set("Stream", stream)?;
     Ok(actor)
 }
-
-const TOP_SCREEN_THEME_CHILD_NAMES: &[&str] = &[
-    "Underlay",
-    "Overlay",
-    "BPMDisplay",
-    "LifeFrame",
-    "ScoreFrame",
-    "Lyrics",
-    "SongBackground",
-    "SongForeground",
-    "StageDisplay",
-    "SongTitle",
-    "ScoreP1",
-    "ScoreP2",
-    "SongMeterDisplayP1",
-    "SongMeterDisplayP2",
-    "StepsDisplayP1",
-    "StepsDisplayP2",
-    "LifeMeterBarP1",
-    "LifeMeterBarP2",
-];
-
-const UNDERLAY_THEME_CHILD_NAMES: &[&str] = &[
-    "Header",
-    "StepStatsPaneP1",
-    "StepStatsPaneP2",
-    "DangerP1",
-    "DangerP2",
-    "P1Score",
-    "P2Score",
-    "SongMeter",
-];
 
 fn install_top_screen_theme_children(lua: &Lua, top_screen: &Table) -> mlua::Result<()> {
     install_named_theme_children(lua, top_screen, TOP_SCREEN_THEME_CHILD_NAMES)
@@ -1536,114 +1510,6 @@ pub(super) fn read_update_function_actions(
     )
 }
 
-pub(super) fn read_update_function_tables(
-    lua: &Lua,
-    root: &Value,
-    names: &[&str],
-) -> Result<Vec<Table>, String> {
-    let Value::Table(root) = root else {
-        return Ok(Vec::new());
-    };
-    let globals = lua.globals();
-    let Some(debug) = globals
-        .get::<Option<Table>>("debug")
-        .map_err(|err| err.to_string())?
-    else {
-        return Ok(Vec::new());
-    };
-    let Some(getupvalue) = debug
-        .get::<Option<Function>>("getupvalue")
-        .map_err(|err| err.to_string())?
-    else {
-        return Ok(Vec::new());
-    };
-    let mut out = Vec::new();
-    let mut seen_tables = HashSet::new();
-    read_update_function_tables_for_table(root, &getupvalue, names, &mut seen_tables, &mut out)?;
-    Ok(out)
-}
-
-pub(super) fn read_update_function_nested_tables(
-    lua: &Lua,
-    root: &Value,
-    names: &[&str],
-) -> Result<Vec<Table>, String> {
-    let Value::Table(root) = root else {
-        return Ok(Vec::new());
-    };
-    let globals = lua.globals();
-    let Some(debug) = globals
-        .get::<Option<Table>>("debug")
-        .map_err(|err| err.to_string())?
-    else {
-        return Ok(Vec::new());
-    };
-    let Some(getupvalue) = debug
-        .get::<Option<Function>>("getupvalue")
-        .map_err(|err| err.to_string())?
-    else {
-        return Ok(Vec::new());
-    };
-    let mut out = Vec::new();
-    let mut seen_tables = HashSet::new();
-    let mut seen_functions = HashSet::new();
-    read_update_function_nested_tables_for_table(
-        root,
-        &getupvalue,
-        names,
-        &mut seen_tables,
-        &mut seen_functions,
-        &mut out,
-    )?;
-    Ok(out)
-}
-
-pub(super) fn read_global_function_nested_tables(
-    lua: &Lua,
-    table_name: &str,
-    function_names: &[&str],
-    names: &[&str],
-) -> Result<Vec<Table>, String> {
-    let globals = lua.globals();
-    let Some(source) = globals
-        .get::<Option<Table>>(table_name)
-        .map_err(|err| err.to_string())?
-    else {
-        return Ok(Vec::new());
-    };
-    let Some(debug) = globals
-        .get::<Option<Table>>("debug")
-        .map_err(|err| err.to_string())?
-    else {
-        return Ok(Vec::new());
-    };
-    let Some(getupvalue) = debug
-        .get::<Option<Function>>("getupvalue")
-        .map_err(|err| err.to_string())?
-    else {
-        return Ok(Vec::new());
-    };
-    let mut out = Vec::new();
-    let mut seen_tables = HashSet::new();
-    let mut seen_functions = HashSet::new();
-    for function_name in function_names {
-        let Some(function) = source
-            .get::<Option<Function>>(*function_name)
-            .map_err(|err| err.to_string())?
-        else {
-            continue;
-        };
-        out.extend(nested_function_named_tables(
-            &getupvalue,
-            &function,
-            names,
-            &mut seen_tables,
-            &mut seen_functions,
-        )?);
-    }
-    Ok(out)
-}
-
 pub(super) fn read_note_column_zoom_hides(lua: &Lua) -> Result<Vec<SongLuaNoteHideWindow>, String> {
     let globals = lua.globals();
     let mut out = Vec::new();
@@ -1684,13 +1550,7 @@ pub(super) fn read_note_column_zoom_hides(lua: &Lua) -> Result<Vec<SongLuaNoteHi
             read_note_column_zoom_hides_for(player, local_col, &column, &mut out)?;
         }
     }
-    out.sort_by(|left, right| {
-        left.player
-            .cmp(&right.player)
-            .then_with(|| left.column.cmp(&right.column))
-            .then_with(|| left.start_beat.total_cmp(&right.start_beat))
-            .then_with(|| left.end_beat.total_cmp(&right.end_beat))
-    });
+    sort_note_hide_windows(&mut out);
     Ok(out)
 }
 
@@ -1710,23 +1570,19 @@ fn read_note_column_zoom_hides_for(
         .get::<Option<String>>("__songlua_spline_mode")
         .map_err(|err| err.to_string())?
         .unwrap_or_default();
-    if !mode.eq_ignore_ascii_case("NoteColumnSplineMode_Offset") {
-        return Ok(());
-    }
-    if handler
+    let subtract_song_beat = handler
         .get::<Option<bool>>("__songlua_subtract_song_beat")
         .map_err(|err| err.to_string())?
-        .unwrap_or(false)
-    {
-        return Ok(());
-    }
+        .unwrap_or(false);
     let beats_per_t = handler
         .get::<Option<f32>>("__songlua_beats_per_t")
         .map_err(|err| err.to_string())?
         .unwrap_or(1.0);
-    if !beats_per_t.is_finite() || beats_per_t <= 0.0 {
+    let Some(beats_per_t) =
+        note_column_zoom_hide_beats_per_t(&mode, subtract_song_beat, beats_per_t)
+    else {
         return Ok(());
-    }
+    };
     let Some(spline) = handler
         .get::<Option<Table>>("__songlua_spline")
         .map_err(|err| err.to_string())?
@@ -1741,24 +1597,21 @@ fn read_note_column_zoom_hides_for(
     let points = spline
         .get::<Table>("__songlua_spline_points")
         .map_err(|err| err.to_string())?;
-    let mut run_start = None::<usize>;
+    let mut hidden = Vec::with_capacity(size);
     for index in 1..=size {
-        let hidden = points
-            .raw_get::<Option<Table>>(index)
-            .map_err(|err| err.to_string())?
-            .is_some_and(|point| note_zoom_point_hides(&point));
-        match (run_start, hidden) {
-            (None, true) => run_start = Some(index),
-            (Some(start), false) => {
-                push_note_hide_window(out, player, column, beats_per_t, start, index - 1);
-                run_start = None;
-            }
-            _ => {}
-        }
+        hidden.push(
+            points
+                .raw_get::<Option<Table>>(index)
+                .map_err(|err| err.to_string())?
+                .is_some_and(|point| note_zoom_point_hides(&point)),
+        );
     }
-    if let Some(start) = run_start {
-        push_note_hide_window(out, player, column, beats_per_t, start, size);
-    }
+    out.extend(note_hide_windows_from_flags(
+        player,
+        column,
+        beats_per_t,
+        &hidden,
+    ));
     Ok(())
 }
 
@@ -1778,13 +1631,6 @@ struct NoteFieldColumnSnapshot {
     note_field: Option<Table>,
     columns: Option<Table>,
     handlers: Vec<NoteColumnHandlerSnapshot>,
-}
-
-#[derive(Clone, Copy)]
-struct NoteColumnPosSample {
-    player: usize,
-    column: usize,
-    y: f32,
 }
 
 pub(super) fn compile_note_column_pos_function_ease(
@@ -1808,39 +1654,20 @@ pub(super) fn compile_note_column_pos_function_ease(
     if from_samples.is_empty() && to_samples.is_empty() {
         return Ok(Vec::new());
     }
-
-    let mut keys = Vec::<(usize, usize)>::new();
-    for sample in from_samples.iter().chain(to_samples.iter()) {
-        let key = (sample.player, sample.column);
-        if !keys.contains(&key) {
-            keys.push(key);
-        }
-    }
-    keys.sort_unstable();
-
-    let mut out = Vec::new();
-    for (player, column) in keys {
-        let from_y = note_column_sample_y(&from_samples, player, column);
-        let to_y = note_column_sample_y(&to_samples, player, column);
-        if from_y.abs() <= f32::EPSILON && to_y.abs() <= f32::EPSILON {
-            continue;
-        }
-        out.push(SongLuaColumnOffsetWindow {
+    Ok(column_offset_windows_from_samples(
+        &from_samples,
+        &to_samples,
+        SongLuaColumnOffsetBuildParams {
             unit,
             start,
             limit,
             span_mode,
-            player,
-            column,
-            from_y,
-            to_y,
-            easing: easing.clone(),
+            easing,
             sustain,
             opt1,
             opt2,
-        });
-    }
-    Ok(out)
+        },
+    ))
 }
 
 fn capture_note_column_pos_samples(
@@ -1848,7 +1675,7 @@ fn capture_note_column_pos_samples(
     function: &Function,
     value: f32,
     song_beat: f32,
-) -> Result<Vec<NoteColumnPosSample>, String> {
+) -> Result<Vec<SongLuaColumnOffsetSample>, String> {
     let previous = compile_song_runtime_values(lua).map_err(|err| err.to_string())?;
     set_compile_song_runtime_beat(lua, song_beat).map_err(|err| err.to_string())?;
     let snapshot = snapshot_note_field_columns(lua).map_err(|err| err.to_string())?;
@@ -1858,13 +1685,6 @@ fn capture_note_column_pos_samples(
     set_compile_song_runtime_values(lua, previous.0, previous.1).map_err(|err| err.to_string())?;
     result.map_err(|err| err.to_string())?;
     samples
-}
-
-fn note_column_sample_y(samples: &[NoteColumnPosSample], player: usize, column: usize) -> f32 {
-    samples
-        .iter()
-        .find(|sample| sample.player == player && sample.column == column)
-        .map_or(0.0, |sample| sample.y)
 }
 
 fn snapshot_note_field_columns(lua: &Lua) -> mlua::Result<Vec<NoteFieldColumnSnapshot>> {
@@ -2000,7 +1820,7 @@ fn note_field_tables(lua: &Lua) -> mlua::Result<Vec<Table>> {
     Ok(out)
 }
 
-fn read_note_column_pos_samples(lua: &Lua) -> Result<Vec<NoteColumnPosSample>, String> {
+fn read_note_column_pos_samples(lua: &Lua) -> Result<Vec<SongLuaColumnOffsetSample>, String> {
     let mut out = Vec::new();
     for note_field in note_field_tables(lua).map_err(|err| err.to_string())? {
         let Some(columns) = note_field
@@ -2028,7 +1848,7 @@ fn read_note_column_pos_samples(lua: &Lua) -> Result<Vec<NoteColumnPosSample>, S
             let Some(y) = note_column_pos_offset_y(&column)? else {
                 continue;
             };
-            out.push(NoteColumnPosSample {
+            out.push(SongLuaColumnOffsetSample {
                 player,
                 column: local_col,
                 y,
@@ -2039,7 +1859,6 @@ fn read_note_column_pos_samples(lua: &Lua) -> Result<Vec<NoteColumnPosSample>, S
 }
 
 fn note_column_pos_offset_y(column: &Table) -> Result<Option<f32>, String> {
-    const EPS: f32 = 0.001;
     let Some(handler) = column
         .get::<Option<Table>>("__songlua_pos_handler")
         .map_err(|err| err.to_string())?
@@ -2051,7 +1870,7 @@ fn note_column_pos_offset_y(column: &Table) -> Result<Option<f32>, String> {
         .map_err(|err| err.to_string())?
         .unwrap_or_default();
     if mode.eq_ignore_ascii_case("NoteColumnSplineMode_Disabled") {
-        return Ok(Some(0.0));
+        return Ok(note_column_pos_offset_y_from_points(&mode, &[]));
     }
     if !mode.eq_ignore_ascii_case("NoteColumnSplineMode_Offset") {
         return Ok(None);
@@ -2068,12 +1887,12 @@ fn note_column_pos_offset_y(column: &Table) -> Result<Option<f32>, String> {
         .and_then(|value| usize::try_from(value).ok())
         .unwrap_or(0);
     if size == 0 {
-        return Ok(Some(0.0));
+        return Ok(note_column_pos_offset_y_from_points(&mode, &[]));
     }
     let points = spline
         .get::<Table>("__songlua_spline_points")
         .map_err(|err| err.to_string())?;
-    let mut y = None::<f32>;
+    let mut points_out = Vec::with_capacity(size);
     for index in 1..=size {
         let Some(point) = points
             .raw_get::<Option<Table>>(index)
@@ -2086,18 +1905,9 @@ fn note_column_pos_offset_y(column: &Table) -> Result<Option<f32>, String> {
         let (Some(x), Some(point_y)) = (x, point_y) else {
             return Ok(None);
         };
-        if !x.is_finite() || !point_y.is_finite() || x.abs() > EPS {
-            return Ok(None);
-        }
-        if let Some(y) = y {
-            if (point_y - y).abs() > EPS {
-                return Ok(None);
-            }
-        } else {
-            y = Some(point_y);
-        }
+        points_out.push([x, point_y]);
     }
-    Ok(y)
+    Ok(note_column_pos_offset_y_from_points(&mode, &points_out))
 }
 
 fn run_actor_draw_functions_for_table(lua: &Lua, actor: &Table) -> mlua::Result<()> {
@@ -2144,7 +1954,7 @@ fn read_update_function_actions_for_table(
         .get::<Option<Function>>("__songlua_update_function")
         .map_err(|err| err.to_string())?
     {
-        for table in update_function_named_tables(
+        for table in function_named_upvalue_tables(
             getupvalue,
             &update,
             &["mod_actions", "actions"],
@@ -2178,134 +1988,6 @@ fn read_update_function_actions_for_table(
         )?;
     }
     Ok(())
-}
-
-fn read_update_function_tables_for_table(
-    actor: &Table,
-    getupvalue: &Function,
-    names: &[&str],
-    seen_tables: &mut HashSet<usize>,
-    out: &mut Vec<Table>,
-) -> Result<(), String> {
-    if let Some(update) = actor
-        .get::<Option<Function>>("__songlua_update_function")
-        .map_err(|err| err.to_string())?
-    {
-        out.extend(update_function_named_tables(
-            getupvalue,
-            &update,
-            names,
-            seen_tables,
-        )?);
-    }
-    for child in actor.sequence_values::<Value>() {
-        let Value::Table(child) = child.map_err(|err| err.to_string())? else {
-            continue;
-        };
-        read_update_function_tables_for_table(&child, getupvalue, names, seen_tables, out)?;
-    }
-    Ok(())
-}
-
-fn read_update_function_nested_tables_for_table(
-    actor: &Table,
-    getupvalue: &Function,
-    names: &[&str],
-    seen_tables: &mut HashSet<usize>,
-    seen_functions: &mut HashSet<usize>,
-    out: &mut Vec<Table>,
-) -> Result<(), String> {
-    if let Some(update) = actor
-        .get::<Option<Function>>("__songlua_update_function")
-        .map_err(|err| err.to_string())?
-    {
-        out.extend(nested_function_named_tables(
-            getupvalue,
-            &update,
-            names,
-            seen_tables,
-            seen_functions,
-        )?);
-    }
-    for child in actor.sequence_values::<Value>() {
-        let Value::Table(child) = child.map_err(|err| err.to_string())? else {
-            continue;
-        };
-        read_update_function_nested_tables_for_table(
-            &child,
-            getupvalue,
-            names,
-            seen_tables,
-            seen_functions,
-            out,
-        )?;
-    }
-    Ok(())
-}
-
-fn update_function_named_tables(
-    getupvalue: &Function,
-    function: &Function,
-    names: &[&str],
-    seen_tables: &mut HashSet<usize>,
-) -> Result<Vec<Table>, String> {
-    let mut out = Vec::new();
-    for index in 1..=function.info().num_upvalues {
-        let (name, value): (Value, Value) = getupvalue
-            .call((function.clone(), i64::from(index)))
-            .map_err(|err| err.to_string())?;
-        let Value::String(name) = name else {
-            continue;
-        };
-        let name = name.to_str().map_err(|err| err.to_string())?;
-        if !names.iter().any(|candidate| name.as_ref() == *candidate) {
-            continue;
-        }
-        let Value::Table(table) = value else {
-            continue;
-        };
-        if seen_tables.insert(table.to_pointer() as usize) {
-            out.push(table);
-        }
-    }
-    Ok(out)
-}
-
-fn nested_function_named_tables(
-    getupvalue: &Function,
-    function: &Function,
-    names: &[&str],
-    seen_tables: &mut HashSet<usize>,
-    seen_functions: &mut HashSet<usize>,
-) -> Result<Vec<Table>, String> {
-    if !seen_functions.insert(function.to_pointer() as usize) {
-        return Ok(Vec::new());
-    }
-    let mut out = Vec::new();
-    for index in 1..=function.info().num_upvalues {
-        let (name, value): (Value, Value) = getupvalue
-            .call((function.clone(), i64::from(index)))
-            .map_err(|err| err.to_string())?;
-        if let Value::String(name) = &name {
-            let name = name.to_str().map_err(|err| err.to_string())?;
-            if names.iter().any(|candidate| name.as_ref() == *candidate)
-                && let Value::Table(table) = &value
-                && seen_tables.insert(table.to_pointer() as usize)
-            {
-                out.push(table.clone());
-            }
-        }
-        if let Value::Function(child) = value {
-            out.extend(nested_function_named_tables(
-                getupvalue,
-                &child,
-                names,
-                seen_tables,
-                seen_functions,
-            )?);
-        }
-    }
-    Ok(out)
 }
 
 pub(super) fn read_overlay_actors(
@@ -2374,43 +2056,12 @@ fn read_overlay_actor(
         return Ok(None);
     };
     let initial_state = overlay_state_after_blocks(actor_overlay_initial_state(actor)?, &[], 0.0);
-    let mut message_commands = Vec::new();
-    for pair in actor.clone().pairs::<Value, Value>() {
-        let (key, value) = pair.map_err(|err| err.to_string())?;
-        let Some(name) = read_string(key) else {
-            continue;
-        };
-        if !name.ends_with("MessageCommand") || !matches!(value, Value::Function(_)) {
-            continue;
-        }
-        let message = name.trim_end_matches("MessageCommand").to_string();
-        let blocks = match capture_actor_command_preserving_state(lua, actor, name.as_str()) {
-            Ok(blocks) => blocks,
-            Err(err) => {
-                let skipped = format!("{}.{}: {err}", actor_debug_label(actor), name);
-                push_unique_compile_detail(
-                    &mut info.skipped_message_command_captures,
-                    skipped.clone(),
-                );
-                debug!("Skipping song lua overlay message capture for {}", skipped);
-                continue;
-            }
-        };
-        if !blocks.is_empty() {
-            message_commands.push(SongLuaOverlayMessageCommand { message, blocks });
-        }
+    let captured_commands = capture_actor_message_commands(lua, actor)?;
+    for skipped in captured_commands.skipped {
+        push_unique_compile_detail(&mut info.skipped_message_command_captures, skipped.clone());
+        debug!("Skipping song lua overlay message capture for {}", skipped);
     }
-    flush_actor_capture(actor).map_err(|err| err.to_string())?;
-    let startup_sound_blocks: Vec<_> = read_actor_capture_blocks(actor)?
-        .into_iter()
-        .filter(|block| block.delta.sound_play == Some(true))
-        .collect();
-    if !startup_sound_blocks.is_empty() {
-        message_commands.push(SongLuaOverlayMessageCommand {
-            message: SONG_LUA_STARTUP_MESSAGE.to_string(),
-            blocks: startup_sound_blocks,
-        });
-    }
+    let message_commands = captured_commands.commands;
     let name = actor
         .get::<Option<String>>("Name")
         .map_err(|err| err.to_string())?;
@@ -2587,7 +2238,7 @@ fn read_model_layers(actor: &Table) -> Result<Option<Arc<[SongLuaOverlayModelLay
             continue;
         }
         let uv_rect = slot.uv_for_frame_at(0, 0.0);
-        let (uv_scale, uv_offset, uv_tex_shift) = song_lua_model_uv_params(slot, uv_rect);
+        let (uv_scale, uv_offset, uv_tex_shift) = slot.model_uv_params(uv_rect);
         layers.push(SongLuaOverlayModelLayer {
             texture_key: slot.texture_key_shared(),
             vertices: crate::game::parsing::noteskin::build_model_geometry(slot),
@@ -2633,25 +2284,6 @@ fn read_noteskin_tap_actor_slots(
         .map_err(|err| format!("failed to load noteskin actor '{skin} {element}': {err}"))
 }
 
-fn song_lua_model_uv_params(
-    slot: &crate::game::parsing::noteskin::SpriteSlot,
-    uv_rect: [f32; 4],
-) -> ([f32; 2], [f32; 2], [f32; 2]) {
-    let uv_scale = [uv_rect[2] - uv_rect[0], uv_rect[3] - uv_rect[1]];
-    let uv_offset = [uv_rect[0], uv_rect[1]];
-    let uv_tex_shift = match slot.source.as_ref() {
-        crate::game::parsing::noteskin::SpriteSource::Atlas { tex_dims, .. } => {
-            let tw = tex_dims.0.max(1) as f32;
-            let th = tex_dims.1.max(1) as f32;
-            let base_u0 = slot.def.src[0] as f32 / tw;
-            let base_v0 = slot.def.src[1] as f32 / th;
-            [uv_offset[0] - base_u0, uv_offset[1] - base_v0]
-        }
-        crate::game::parsing::noteskin::SpriteSource::Animated { .. } => [0.0, 0.0],
-    };
-    (uv_scale, uv_offset, uv_tex_shift)
-}
-
 fn song_lua_model_draw(draw: deadsync_noteskin::ModelDrawState) -> SongLuaOverlayModelDraw {
     SongLuaOverlayModelDraw {
         pos: draw.pos,
@@ -2664,566 +2296,9 @@ fn song_lua_model_draw(draw: deadsync_noteskin::ModelDrawState) -> SongLuaOverla
     }
 }
 
-fn read_graph_display_line_state(lua: &Lua, actor: &Table) -> Result<SongLuaOverlayState, String> {
-    let Some(line) = actor_named_children(lua, actor)
-        .map_err(|err| err.to_string())?
-        .get::<Option<Table>>("Line")
-        .map_err(|err| err.to_string())?
-    else {
-        return Ok(SongLuaOverlayState::default());
-    };
-    actor_overlay_initial_state(&line)
-}
-
-fn read_graph_display_body_state(lua: &Lua, actor: &Table) -> Result<SongLuaOverlayState, String> {
-    let Some(body_group) = actor_named_children(lua, actor)
-        .map_err(|err| err.to_string())?
-        .get::<Option<Table>>("")
-        .map_err(|err| err.to_string())?
-    else {
-        return Ok(SongLuaOverlayState::default());
-    };
-    let Some(body) = body_group
-        .raw_get::<Option<Table>>(2)
-        .map_err(|err| err.to_string())?
-        .or_else(|| body_group.raw_get::<Option<Table>>(1).ok().flatten())
-    else {
-        return Ok(SongLuaOverlayState::default());
-    };
-    actor_overlay_initial_state(&body)
-}
-
-fn read_song_meter_display_state(
-    lua: &Lua,
-    actor: &Table,
-) -> Result<Option<(f32, SongLuaOverlayState)>, String> {
-    let stream_width = actor
-        .get::<Option<f32>>("__songlua_stream_width")
-        .map_err(|err| err.to_string())?
-        .or_else(|| {
-            actor
-                .get::<Option<Value>>("StreamWidth")
-                .ok()
-                .flatten()
-                .and_then(read_f32)
-        })
-        .unwrap_or(0.0)
-        .max(0.0);
-    if stream_width <= f32::EPSILON {
-        return Ok(None);
-    }
-    let Some(stream) = actor_named_children(lua, actor)
-        .map_err(|err| err.to_string())?
-        .get::<Option<Table>>("Stream")
-        .map_err(|err| err.to_string())?
-    else {
-        return Ok(None);
-    };
-    let stream_state = actor_overlay_initial_state(&stream)?;
-    Ok(Some((stream_width, stream_state)))
-}
-
-pub(super) fn actor_overlay_initial_state(actor: &Table) -> Result<SongLuaOverlayState, String> {
-    let mut state = SongLuaOverlayState::default();
-    if let Some(visible) = actor
-        .get::<Option<bool>>("__songlua_visible")
-        .map_err(|err| err.to_string())?
-    {
-        state.visible = visible;
-    }
-    if let Some(diffuse) = actor
-        .get::<Option<Table>>("__songlua_state_diffuse")
-        .map_err(|err| err.to_string())?
-        .and_then(|value| table_vec4(&value))
-    {
-        state.diffuse = diffuse;
-    }
-    if let Some(colors) = actor
-        .get::<Option<Table>>("__songlua_state_vertex_colors")
-        .map_err(|err| err.to_string())?
-        .and_then(|value| table_vertex_colors(&value))
-    {
-        state.vertex_colors = Some(colors);
-    }
-    if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_x")
-        .map_err(|err| err.to_string())?
-    {
-        state.x = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_y")
-        .map_err(|err| err.to_string())?
-    {
-        state.y = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_z")
-        .map_err(|err| err.to_string())?
-    {
-        state.z = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_z_bias")
-        .map_err(|err| err.to_string())?
-    {
-        state.z_bias = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<i32>>("__songlua_state_draw_order")
-        .map_err(|err| err.to_string())?
-    {
-        state.draw_order = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<bool>>("__songlua_state_draw_by_z_position")
-        .map_err(|err| err.to_string())?
-    {
-        state.draw_by_z_position = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_halign")
-        .map_err(|err| err.to_string())?
-    {
-        state.halign = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_valign")
-        .map_err(|err| err.to_string())?
-    {
-        state.valign = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<String>>("__songlua_state_text_align")
-        .map_err(|err| err.to_string())?
-        .as_deref()
-        .and_then(parse_overlay_text_align)
-    {
-        state.text_align = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<bool>>("__songlua_state_uppercase")
-        .map_err(|err| err.to_string())?
-    {
-        state.uppercase = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<Table>>("__songlua_state_shadow_len")
-        .map_err(|err| err.to_string())?
-        .and_then(|value| table_vec2(&value))
-    {
-        state.shadow_len = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<Table>>("__songlua_state_shadow_color")
-        .map_err(|err| err.to_string())?
-        .and_then(|value| table_vec4(&value))
-    {
-        state.shadow_color = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<Table>>("__songlua_state_glow")
-        .map_err(|err| err.to_string())?
-        .and_then(|value| table_vec4(&value))
-    {
-        state.glow = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_fov")
-        .map_err(|err| err.to_string())?
-    {
-        state.fov = Some(value);
-    }
-    if let Some(value) = actor
-        .get::<Option<Table>>("__songlua_state_vanishpoint")
-        .map_err(|err| err.to_string())?
-        .and_then(|value| table_vec2(&value))
-    {
-        state.vanishpoint = Some(value);
-    }
-    if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_cropleft")
-        .map_err(|err| err.to_string())?
-    {
-        state.cropleft = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_cropright")
-        .map_err(|err| err.to_string())?
-    {
-        state.cropright = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_croptop")
-        .map_err(|err| err.to_string())?
-    {
-        state.croptop = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_cropbottom")
-        .map_err(|err| err.to_string())?
-    {
-        state.cropbottom = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_fadeleft")
-        .map_err(|err| err.to_string())?
-    {
-        state.fadeleft = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_faderight")
-        .map_err(|err| err.to_string())?
-    {
-        state.faderight = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_fadetop")
-        .map_err(|err| err.to_string())?
-    {
-        state.fadetop = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_fadebottom")
-        .map_err(|err| err.to_string())?
-    {
-        state.fadebottom = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<bool>>("__songlua_state_mask_source")
-        .map_err(|err| err.to_string())?
-    {
-        state.mask_source = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<bool>>("__songlua_state_mask_dest")
-        .map_err(|err| err.to_string())?
-    {
-        state.mask_dest = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<bool>>("__songlua_state_depth_test")
-        .map_err(|err| err.to_string())?
-    {
-        state.depth_test = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_zoom")
-        .map_err(|err| err.to_string())?
-    {
-        state.zoom = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_zoom_x")
-        .map_err(|err| err.to_string())?
-    {
-        state.zoom_x = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_zoom_y")
-        .map_err(|err| err.to_string())?
-    {
-        state.zoom_y = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_zoom_z")
-        .map_err(|err| err.to_string())?
-    {
-        state.zoom_z = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_basezoom")
-        .map_err(|err| err.to_string())?
-    {
-        state.basezoom = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_basezoom_x")
-        .map_err(|err| err.to_string())?
-    {
-        state.basezoom_x = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_basezoom_y")
-        .map_err(|err| err.to_string())?
-    {
-        state.basezoom_y = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_basezoom_z")
-        .map_err(|err| err.to_string())?
-    {
-        state.basezoom_z = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_rot_x_deg")
-        .map_err(|err| err.to_string())?
-    {
-        state.rot_x_deg = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_rot_y_deg")
-        .map_err(|err| err.to_string())?
-    {
-        state.rot_y_deg = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_rot_z_deg")
-        .map_err(|err| err.to_string())?
-    {
-        state.rot_z_deg = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_skew_x")
-        .map_err(|err| err.to_string())?
-    {
-        state.skew_x = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_skew_y")
-        .map_err(|err| err.to_string())?
-    {
-        state.skew_y = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<bool>>("__songlua_state_vibrate")
-        .map_err(|err| err.to_string())?
-    {
-        state.vibrate = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<Table>>("__songlua_state_effect_magnitude")
-        .map_err(|err| err.to_string())?
-        .and_then(|value| table_vec3(&value))
-    {
-        state.effect_magnitude = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<String>>("__songlua_state_effect_clock")
-        .map_err(|err| err.to_string())?
-        .as_deref()
-        .and_then(parse_overlay_effect_clock)
-    {
-        state.effect_clock = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<Table>>("__songlua_state_effect_color1")
-        .map_err(|err| err.to_string())?
-        .and_then(|value| table_vec4(&value))
-    {
-        state.effect_color1 = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<Table>>("__songlua_state_effect_color2")
-        .map_err(|err| err.to_string())?
-        .and_then(|value| table_vec4(&value))
-    {
-        state.effect_color2 = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_effect_period")
-        .map_err(|err| err.to_string())?
-    {
-        state.effect_period = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_effect_offset")
-        .map_err(|err| err.to_string())?
-    {
-        state.effect_offset = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<Table>>("__songlua_state_effect_timing")
-        .map_err(|err| err.to_string())?
-        .and_then(|value| table_vec5(&value))
-    {
-        state.effect_timing = Some(value);
-    }
-    if let Some(value) = actor
-        .get::<Option<bool>>("__songlua_state_rainbow")
-        .map_err(|err| err.to_string())?
-    {
-        state.rainbow = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<bool>>("__songlua_state_rainbow_scroll")
-        .map_err(|err| err.to_string())?
-    {
-        state.rainbow_scroll = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<bool>>("__songlua_state_text_jitter")
-        .map_err(|err| err.to_string())?
-    {
-        state.text_jitter = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_text_distortion")
-        .map_err(|err| err.to_string())?
-    {
-        state.text_distortion = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<String>>("__songlua_state_text_glow_mode")
-        .map_err(|err| err.to_string())?
-        .as_deref()
-        .and_then(parse_overlay_text_glow_mode)
-    {
-        state.text_glow_mode = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<bool>>("__songlua_state_mult_attrs_with_diffuse")
-        .map_err(|err| err.to_string())?
-    {
-        state.mult_attrs_with_diffuse = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<bool>>("__songlua_state_sprite_animate")
-        .map_err(|err| err.to_string())?
-    {
-        state.sprite_animate = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<bool>>("__songlua_state_sprite_loop")
-        .map_err(|err| err.to_string())?
-    {
-        state.sprite_loop = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_sprite_playback_rate")
-        .map_err(|err| err.to_string())?
-    {
-        state.sprite_playback_rate = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_sprite_state_delay")
-        .map_err(|err| err.to_string())?
-    {
-        state.sprite_state_delay = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<i32>>("__songlua_state_vert_spacing")
-        .map_err(|err| err.to_string())?
-    {
-        state.vert_spacing = Some(value);
-    }
-    if let Some(value) = actor
-        .get::<Option<i32>>("__songlua_state_wrap_width_pixels")
-        .map_err(|err| err.to_string())?
-    {
-        state.wrap_width_pixels = Some(value);
-    }
-    if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_max_width")
-        .map_err(|err| err.to_string())?
-    {
-        state.max_width = Some(value);
-    }
-    if let Some(value) = actor
-        .get::<Option<f32>>("__songlua_state_max_height")
-        .map_err(|err| err.to_string())?
-    {
-        state.max_height = Some(value);
-    }
-    if let Some(value) = actor
-        .get::<Option<bool>>("__songlua_state_max_w_pre_zoom")
-        .map_err(|err| err.to_string())?
-    {
-        state.max_w_pre_zoom = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<bool>>("__songlua_state_max_h_pre_zoom")
-        .map_err(|err| err.to_string())?
-    {
-        state.max_h_pre_zoom = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<bool>>("__songlua_state_max_dimension_uses_zoom")
-        .map_err(|err| err.to_string())?
-    {
-        state.max_dimension_uses_zoom = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<u32>>("__songlua_state_sprite_state_index")
-        .map_err(|err| err.to_string())?
-    {
-        state.sprite_state_index = Some(value);
-    }
-    if let Some(value) = actor
-        .get::<Option<bool>>("__songlua_state_decode_movie")
-        .map_err(|err| err.to_string())?
-    {
-        state.decode_movie = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<bool>>("__songlua_state_texture_filtering")
-        .map_err(|err| err.to_string())?
-    {
-        state.texture_filtering = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<bool>>("__songlua_state_texture_wrapping")
-        .map_err(|err| err.to_string())?
-    {
-        state.texture_wrapping = value;
-    }
-    if let Some(value) = actor
-        .get::<Option<Table>>("__songlua_state_texcoord_offset")
-        .map_err(|err| err.to_string())?
-        .and_then(|value| table_vec2(&value))
-    {
-        state.texcoord_offset = Some(value);
-    }
-    if let Some(value) = actor
-        .get::<Option<Table>>("__songlua_state_custom_texture_rect")
-        .map_err(|err| err.to_string())?
-        .and_then(|value| table_vec4(&value))
-    {
-        state.custom_texture_rect = Some(value);
-    }
-    if let Some(value) = actor
-        .get::<Option<Table>>("__songlua_state_texcoord_velocity")
-        .map_err(|err| err.to_string())?
-        .and_then(|value| table_vec2(&value))
-    {
-        state.texcoord_velocity = Some(value);
-    }
-    if let Some(value) = actor
-        .get::<Option<Table>>("__songlua_state_size")
-        .map_err(|err| err.to_string())?
-        .and_then(|value| table_vec2(&value))
-    {
-        state.size = Some(value);
-    }
-    if let Some(value) = actor
-        .get::<Option<Table>>("__songlua_state_stretch_rect")
-        .map_err(|err| err.to_string())?
-        .and_then(|value| table_vec4(&value))
-    {
-        state.stretch_rect = Some(value);
-    }
-    if let Some(raw) = actor
-        .get::<Option<String>>("__songlua_state_blend")
-        .map_err(|err| err.to_string())?
-        .as_deref()
-        .and_then(parse_overlay_blend_mode)
-    {
-        state.blend = raw;
-    }
-    if let Some(raw) = actor
-        .get::<Option<String>>("__songlua_state_effect_mode")
-        .map_err(|err| err.to_string())?
-        .as_deref()
-        .and_then(parse_overlay_effect_mode)
-    {
-        state.effect_mode = raw;
-    }
-    Ok(state)
-}
-
 fn actor_sprite_sheet_dims(actor: &Table) -> mlua::Result<Option<(u32, u32)>> {
     if let Some(path) = actor_texture_path(actor)? {
-        return Ok(Some(crate::assets::parse_sprite_sheet_dims(
+        return Ok(Some(parse_sprite_sheet_dims(
             path.to_string_lossy().as_ref(),
         )));
     }
@@ -3234,57 +2309,41 @@ fn actor_sprite_sheet_dims(actor: &Table) -> mlua::Result<Option<(u32, u32)>> {
     if texture.is_empty() {
         return Ok(None);
     }
-    Ok(Some(crate::assets::parse_sprite_sheet_dims(texture)))
+    Ok(Some(parse_sprite_sheet_dims(texture)))
 }
 
 fn actor_texture_rect(actor: &Table) -> mlua::Result<[f32; 4]> {
-    if let Some(rect) = actor
+    let custom_rect = actor
         .get::<Option<Table>>("__songlua_state_custom_texture_rect")?
-        .and_then(|value| table_vec4(&value))
-    {
-        return Ok(rect);
-    }
-    if let Some(state_index) = song_lua_valid_sprite_state_index(
-        actor.get::<Option<u32>>("__songlua_state_sprite_state_index")?,
-    ) && let Some((cols, rows)) = actor_sprite_sheet_dims(actor)?
-    {
-        return Ok(sprite_sheet_rect(state_index, cols, rows));
-    }
-    Ok([0.0, 0.0, 1.0, 1.0])
+        .and_then(|value| table_vec4(&value));
+    let state_index = actor.get::<Option<u32>>("__songlua_state_sprite_state_index")?;
+    Ok(sprite_texture_rect(
+        custom_rect,
+        state_index,
+        actor_sprite_sheet_dims(actor)?,
+    ))
 }
 
 fn offset_texture_rect(lua: &Lua, actor: &Table, dx: f32, dy: f32) -> mlua::Result<()> {
-    let [u0, v0, u1, v1] = actor_texture_rect(actor)?;
-    capture_texture_rect(lua, actor, [u0 + dx, v0 + dy, u1 + dx, v1 + dy])
+    let rect = song_lua_offset_texture_rect(actor_texture_rect(actor)?, [dx, dy]);
+    capture_texture_rect(lua, actor, rect)
 }
 
 fn scale_actor_to_rect(lua: &Lua, actor: &Table, rect: [f32; 4], cover: bool) -> mlua::Result<()> {
-    let width = rect[2] - rect[0];
-    let height = rect[3] - rect[1];
     let (base_width, base_height) = actor_base_size(actor)?;
-    if base_width.abs() <= f32::EPSILON || base_height.abs() <= f32::EPSILON {
+    let align = [actor_halign(actor)?, actor_valign(actor)?];
+    let Some(plan) = scale_to_rect_plan(rect, [base_width, base_height], align, cover) else {
         return Ok(());
-    }
-    let zoom_x = (width / base_width).abs();
-    let zoom_y = (height / base_height).abs();
-    let zoom = if cover {
-        zoom_x.max(zoom_y)
-    } else {
-        zoom_x.min(zoom_y)
     };
-    if !zoom.is_finite() {
-        return Ok(());
-    }
-
-    capture_block_set_f32(lua, actor, "x", rect[0] + width * actor_halign(actor)?)?;
-    capture_block_set_f32(lua, actor, "y", rect[1] + height * actor_valign(actor)?)?;
-    capture_block_set_f32(lua, actor, "zoom", zoom)?;
-    capture_block_set_zoom_axes(lua, actor, zoom, "zoom_x", "zoom_y", "zoom_z")?;
+    capture_block_set_f32(lua, actor, "x", plan.pos[0])?;
+    capture_block_set_f32(lua, actor, "y", plan.pos[1])?;
+    capture_block_set_f32(lua, actor, "zoom", plan.zoom)?;
+    capture_block_set_zoom_axes(lua, actor, plan.zoom, "zoom_x", "zoom_y", "zoom_z")?;
     actor_update_text_pre_zoom_flags(lua, actor, true, true)?;
-    if width < 0.0 {
+    if plan.flip_x {
         capture_block_set_f32(lua, actor, "rot_y_deg", 180.0)?;
     }
-    if height < 0.0 {
+    if plan.flip_y {
         capture_block_set_f32(lua, actor, "rot_x_deg", 180.0)?;
     }
     Ok(())
@@ -3293,22 +2352,14 @@ fn scale_actor_to_rect(lua: &Lua, actor: &Table, rect: [f32; 4], cover: bool) ->
 fn set_actor_seconds_into_animation(lua: &Lua, actor: &Table, seconds: f32) -> mlua::Result<()> {
     let delay = actor
         .get::<Option<f32>>("__songlua_state_sprite_state_delay")?
-        .unwrap_or(0.1)
-        .max(0.0);
-    let frame_count = actor_sprite_frame_count(actor)?.max(1);
-    let state = if delay <= f32::EPSILON {
-        0
-    } else {
-        ((seconds.max(0.0) / delay).floor() as u32) % frame_count
-    };
+        .unwrap_or(0.1);
+    let frame_count = actor_sprite_frame_count(actor)?;
+    let state = sprite_animation_state_at(seconds, delay, frame_count);
     set_actor_sprite_state(lua, actor, state)
 }
 
 fn actor_sprite_frame_count(actor: &Table) -> mlua::Result<u32> {
-    let Some((cols, rows)) = actor_sprite_sheet_dims(actor)? else {
-        return Ok(1);
-    };
-    Ok(cols.max(1).saturating_mul(rows.max(1)).max(1))
+    Ok(sprite_frame_count(actor_sprite_sheet_dims(actor)?))
 }
 
 pub(super) fn create_dummy_actor(lua: &Lua, actor_type: &'static str) -> mlua::Result<Table> {
@@ -5275,9 +4326,6 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                 let Some((width, height)) = actor_image_texture_size(&actor)? else {
                     return Ok(actor.clone());
                 };
-                if width <= f32::EPSILON || height <= f32::EPSILON {
-                    return Ok(actor.clone());
-                }
                 let dx = method_arg(&args, 0)
                     .cloned()
                     .and_then(read_f32)
@@ -5286,7 +4334,14 @@ fn install_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
                     .cloned()
                     .and_then(read_f32)
                     .unwrap_or(0.0);
-                offset_texture_rect(lua, &actor, dx / width, dy / height)?;
+                let Some(rect) = texture_pixel_offset_rect(
+                    actor_texture_rect(&actor)?,
+                    [width, height],
+                    [dx, dy],
+                ) else {
+                    return Ok(actor.clone());
+                };
+                capture_texture_rect(lua, &actor, rect)?;
                 Ok(actor.clone())
             }
         })?,
@@ -6966,25 +6021,17 @@ fn actor_image_texture_size(actor: &Table) -> mlua::Result<Option<(f32, f32)>> {
 }
 
 fn actor_image_frame_size(actor: &Table) -> mlua::Result<Option<(f32, f32)>> {
-    if let Some((mut width, mut height)) = actor_image_texture_size(actor)? {
-        if actor
+    let sheet_dims = actor_texture_path(actor)?
+        .as_ref()
+        .map(|path| parse_sprite_sheet_dims(path.to_string_lossy().as_ref()));
+    Ok(sprite_image_frame_size(
+        actor_image_texture_size(actor)?,
+        actor
             .get::<Option<bool>>("__songlua_state_sprite_animate")?
-            .unwrap_or(false)
-            || song_lua_valid_sprite_state_index(
-                actor.get::<Option<u32>>("__songlua_state_sprite_state_index")?,
-            )
-            .is_some()
-        {
-            if let Some(path) = actor_texture_path(actor)? {
-                let (cols, rows) =
-                    crate::assets::parse_sprite_sheet_dims(path.to_string_lossy().as_ref());
-                width /= cols.max(1) as f32;
-                height /= rows.max(1) as f32;
-            }
-        }
-        return Ok(Some((width, height)));
-    }
-    Ok(None)
+            .unwrap_or(false),
+        actor.get::<Option<u32>>("__songlua_state_sprite_state_index")?,
+        sheet_dims,
+    ))
 }
 
 fn actor_crop_source_size(lua: &Lua, actor: &Table) -> mlua::Result<Option<(f32, f32)>> {
@@ -7231,84 +6278,22 @@ pub(super) fn reset_overlay_capture_tables(
     overlays: &[OverlayCompileActor],
 ) -> Result<(), String> {
     let indices: Vec<_> = (0..overlays.len()).collect();
-    reset_overlay_capture_tables_for_indices(lua, overlays, &indices)
+    let tables = overlay_capture_tables_for_indices(overlays, &indices);
+    reset_indexed_actor_capture_tables(lua, &tables)
 }
 
-fn reset_overlay_capture_tables_for_indices(
-    lua: &Lua,
+fn overlay_capture_tables_for_indices(
     overlays: &[OverlayCompileActor],
     indices: &[usize],
-) -> Result<(), String> {
-    for &index in indices {
-        let Some(overlay) = overlays.get(index) else {
-            continue;
-        };
-        reset_actor_capture(lua, &overlay.table).map_err(|err| err.to_string())?;
-    }
-    Ok(())
-}
-
-fn collect_overlay_capture_blocks_for_indices(
-    overlays: &[OverlayCompileActor],
-    indices: &[usize],
-) -> Result<Vec<(usize, Vec<SongLuaOverlayCommandBlock>)>, String> {
-    let mut out = Vec::new();
-    for &idx in indices {
-        let Some(overlay) = overlays.get(idx) else {
-            continue;
-        };
-        flush_actor_capture(&overlay.table).map_err(|err| err.to_string())?;
-        let blocks = read_actor_capture_blocks(&overlay.table)?;
-        if !blocks.is_empty() {
-            out.push((idx, blocks));
-        }
-    }
-    Ok(out)
-}
-
-fn overlay_indices_for_actor_pointers(
-    overlays: &[OverlayCompileActor],
-    actor_ptrs: &HashSet<usize>,
-) -> Vec<usize> {
-    overlays
+) -> Vec<(usize, Table)> {
+    indices
         .iter()
-        .enumerate()
-        .filter(|(_, overlay)| actor_ptrs.contains(&(overlay.table.to_pointer() as usize)))
-        .map(|(index, _)| index)
+        .filter_map(|&index| {
+            overlays
+                .get(index)
+                .map(|overlay| (index, overlay.table.clone()))
+        })
         .collect()
-}
-
-fn capture_overlay_function_blocks(
-    lua: &Lua,
-    overlays: &[OverlayCompileActor],
-    overlay_indices: &[usize],
-    function: &Function,
-    arg: Option<f32>,
-    song_beat: Option<f32>,
-) -> Result<Vec<(usize, Vec<SongLuaOverlayCommandBlock>)>, String> {
-    let previous = compile_song_runtime_values(lua).map_err(|err| err.to_string())?;
-    if let Some(song_beat) = song_beat {
-        set_compile_song_runtime_beat(lua, song_beat).map_err(|err| err.to_string())?;
-    }
-    let snapshot_tables: Vec<_> = overlay_indices
-        .iter()
-        .filter_map(|&index| overlays.get(index))
-        .map(|overlay| overlay.table.clone())
-        .collect();
-    let state_snapshot =
-        snapshot_actors_semantic_state(lua, &snapshot_tables).map_err(|err| err.to_string())?;
-    reset_overlay_capture_tables_for_indices(lua, overlays, overlay_indices)?;
-    let result = match arg {
-        Some(value) => function.call::<Value>(value),
-        None => function.call::<Value>(()),
-    };
-    let blocks = collect_overlay_capture_blocks_for_indices(overlays, overlay_indices);
-    reset_overlay_capture_tables_for_indices(lua, overlays, overlay_indices)?;
-    restore_actors_semantic_state(state_snapshot).map_err(|err| err.to_string())?;
-    set_compile_song_runtime_values(lua, previous.0, previous.1).map_err(|err| err.to_string())?;
-    let blocks = blocks?;
-    result.map_err(|err| err.to_string())?;
-    Ok(blocks)
 }
 
 fn capture_function_action_blocks(
@@ -7326,45 +6311,16 @@ fn capture_function_action_blocks(
     ),
     String,
 > {
-    let previous = compile_song_runtime_values(lua).map_err(|err| err.to_string())?;
-    let side_effect_before = song_lua_side_effect_count(lua).map_err(|err| err.to_string())?;
-    let globals = lua.globals();
-    let previous_broadcasts = globals
-        .get::<Value>(SONG_LUA_BROADCASTS_KEY)
-        .map_err(|err| err.to_string())?;
-    let broadcast_table = lua.create_table().map_err(|err| err.to_string())?;
-    globals
-        .set(SONG_LUA_BROADCASTS_KEY, broadcast_table.clone())
-        .map_err(|err| err.to_string())?;
-    set_compile_song_runtime_beat(lua, beat).map_err(|err| err.to_string())?;
-    let capture_scope = begin_action_capture_scope(lua).map_err(|err| err.to_string())?;
-    let result = function.call::<Value>(());
-    let touched_actors =
-        capture_scope_actor_tables(&capture_scope.actors).map_err(|err| err.to_string())?;
-    let actor_ptrs =
-        capture_scope_actor_pointers(&capture_scope.actors).map_err(|err| err.to_string())?;
-    let state_snapshot =
-        capture_scope_snapshots(&capture_scope.snapshots).map_err(|err| err.to_string())?;
-    restore_action_capture_scope(lua, capture_scope).map_err(|err| err.to_string())?;
-    let overlay_indices = overlay_indices_for_actor_pointers(overlays, &actor_ptrs);
-    let tracked_indices = tracked_indices_for_actor_pointers(tracked_actors, &actor_ptrs);
-    let overlay_blocks = collect_overlay_capture_blocks_for_indices(overlays, &overlay_indices);
-    let tracked_blocks =
-        collect_tracked_capture_blocks_for_indices(tracked_actors, &tracked_indices);
-    let broadcasts = read_song_lua_broadcasts(&broadcast_table).map_err(|err| err.to_string());
-    reset_actor_capture_tables(lua, &touched_actors)?;
-    restore_actors_semantic_state(state_snapshot).map_err(|err| err.to_string())?;
-    globals
-        .set(SONG_LUA_BROADCASTS_KEY, previous_broadcasts)
-        .map_err(|err| err.to_string())?;
-    set_compile_song_runtime_values(lua, previous.0, previous.1).map_err(|err| err.to_string())?;
-    let overlay_blocks = overlay_blocks?;
-    let tracked_blocks = tracked_blocks?;
-    let broadcasts = broadcasts?;
-    let saw_side_effect =
-        song_lua_side_effect_count(lua).map_err(|err| err.to_string())? > side_effect_before;
-    result.map_err(|err| err.to_string())?;
-    Ok((overlay_blocks, tracked_blocks, broadcasts, saw_side_effect))
+    let indices: Vec<_> = (0..overlays.len()).collect();
+    let overlay_tables = overlay_capture_tables_for_indices(overlays, &indices);
+    let capture =
+        capture_lua_function_action_blocks(lua, &overlay_tables, tracked_actors, function, beat)?;
+    Ok((
+        capture.overlay_blocks,
+        capture.tracked_blocks,
+        capture.broadcasts,
+        capture.saw_side_effect,
+    ))
 }
 
 pub(super) fn compile_function_action(
@@ -7379,52 +6335,28 @@ pub(super) fn compile_function_action(
 ) -> Result<bool, String> {
     let (overlay_captures, tracked_captures, broadcasts, saw_side_effect) =
         capture_function_action_blocks(lua, overlays, tracked_actors, function, beat)?;
-    if !broadcasts.is_empty() && broadcasts.iter().all(|(_, has_params)| !*has_params) {
-        let mut emitted = false;
-        for (message, _) in broadcasts {
-            if !song_lua_message_has_listener(overlays, tracked_actors, &message) {
-                continue;
-            }
-            messages.push(SongLuaMessageEvent {
-                beat,
-                message,
-                persists,
-            });
-            emitted = true;
-        }
-        if emitted {
-            return Ok(true);
-        }
+    let plan = function_action_plan(
+        beat,
+        persists,
+        *counter,
+        overlay_captures,
+        tracked_captures,
+        broadcasts,
+        saw_side_effect,
+        |message| song_lua_message_has_listener(overlays, tracked_actors, message),
+    );
+    *counter = plan.next_counter;
+    for (overlay_index, command) in plan.overlay_commands {
+        overlays[overlay_index].actor.message_commands.push(command);
     }
-    if overlay_captures.is_empty() && tracked_captures.is_empty() {
-        return Ok(saw_side_effect);
-    }
-    let message = format!("__songlua_overlay_fn_action_{}", *counter);
-    *counter += 1;
-    for (overlay_index, blocks) in overlay_captures {
-        overlays[overlay_index]
-            .actor
-            .message_commands
-            .push(SongLuaOverlayMessageCommand {
-                message: message.clone(),
-                blocks,
-            });
-    }
-    for (tracked_index, blocks) in tracked_captures {
+    for (tracked_index, command) in plan.tracked_commands {
         tracked_actors[tracked_index]
             .actor
             .message_commands
-            .push(SongLuaOverlayMessageCommand {
-                message: message.clone(),
-                blocks,
-            });
+            .push(command);
     }
-    messages.push(SongLuaMessageEvent {
-        beat,
-        message,
-        persists,
-    });
-    Ok(true)
+    messages.extend(plan.messages);
+    Ok(plan.handled)
 }
 
 fn song_lua_message_has_listener(
@@ -7432,19 +6364,17 @@ fn song_lua_message_has_listener(
     tracked_actors: &[TrackedCompileActor],
     message: &str,
 ) -> bool {
-    overlays.iter().any(|overlay| {
-        overlay
-            .actor
-            .message_commands
+    message_command_lists_have_listener(
+        overlays
             .iter()
-            .any(|command| command.message == message)
-    }) || tracked_actors.iter().any(|actor| {
-        actor
-            .actor
-            .message_commands
-            .iter()
-            .any(|command| command.message == message)
-    })
+            .map(|overlay| overlay.actor.message_commands.as_slice())
+            .chain(
+                tracked_actors
+                    .iter()
+                    .map(|actor| actor.actor.message_commands.as_slice()),
+            ),
+        message,
+    )
 }
 
 pub(super) fn compile_overlay_function_ease(
@@ -7463,87 +6393,24 @@ pub(super) fn compile_overlay_function_ease(
     opt2: Option<f32>,
     probe_actor_ptrs: &[usize],
 ) -> Result<Vec<SongLuaOverlayEase>, String> {
-    let start_beat = start;
-    let end_beat = song_lua_span_end(start, limit, span_mode).max(start_beat);
-    let overlay_indices = overlay_function_ease_indices(overlays, probe_actor_ptrs);
-    let from_blocks = capture_overlay_function_blocks(
+    let indices: Vec<_> = (0..overlays.len()).collect();
+    let overlay_tables = overlay_capture_tables_for_indices(overlays, &indices);
+    capture_lua_overlay_function_eases(
         lua,
-        overlays,
-        &overlay_indices,
+        &overlay_tables,
         function,
-        Some(from),
-        Some(start_beat),
-    )?;
-    let to_blocks = capture_overlay_function_blocks(
-        lua,
-        overlays,
-        &overlay_indices,
-        function,
-        Some(to),
-        Some(end_beat),
-    )?;
-    if from_blocks.is_empty() && to_blocks.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    let mut from_deltas = HashMap::new();
-    for (overlay_index, blocks) in from_blocks {
-        if let Some(delta) = overlay_delta_from_blocks(&blocks) {
-            from_deltas.insert(overlay_index, delta);
-        }
-    }
-    let mut to_deltas = HashMap::new();
-    for (overlay_index, blocks) in to_blocks {
-        if let Some(delta) = overlay_delta_from_blocks(&blocks) {
-            to_deltas.insert(overlay_index, delta);
-        }
-    }
-
-    let mut out = Vec::new();
-    for overlay_index in 0..overlays.len() {
-        let Some((from_delta, to_delta)) = from_deltas
-            .get(&overlay_index)
-            .zip(to_deltas.get(&overlay_index))
-            .and_then(|(from_delta, to_delta)| overlay_delta_intersection(from_delta, to_delta))
-        else {
-            continue;
-        };
-        out.push(SongLuaOverlayEase {
-            overlay_index,
-            unit,
-            start,
-            limit,
-            span_mode,
-            from: from_delta,
-            to: to_delta,
-            easing: easing.clone(),
-            sustain,
-            opt1,
-            opt2,
-        });
-    }
-    Ok(out)
-}
-
-fn overlay_function_ease_indices(
-    overlays: &[OverlayCompileActor],
-    probe_actor_ptrs: &[usize],
-) -> Vec<usize> {
-    if probe_actor_ptrs.is_empty() {
-        return (0..overlays.len()).collect();
-    }
-    let probe_actor_ptrs: HashSet<_> = probe_actor_ptrs.iter().copied().collect();
-    let out: Vec<_> = overlays
-        .iter()
-        .enumerate()
-        .filter(|(_, overlay)| probe_actor_ptrs.contains(&(overlay.table.to_pointer() as usize)))
-        .map(|(index, _)| index)
-        .collect();
-    if out.is_empty() {
-        (0..overlays.len()).collect()
-    } else {
-        out
-    }
+        unit,
+        start,
+        limit,
+        span_mode,
+        from,
+        to,
+        easing,
+        sustain,
+        opt1,
+        opt2,
+        probe_actor_ptrs,
+    )
 }
 
 fn set_rolling_numbers_metric(actor: &Table, metric: &str) -> mlua::Result<()> {

@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::ffi::c_void;
 use std::path::Path;
 
+use chrono::{Datelike, Local, Timelike};
 use mlua::{Function, Lua, MultiValue, Table, Value};
 
 use crate::{
@@ -529,6 +530,18 @@ pub struct SongLuaDateGlobals {
     pub hour: i32,
     pub minute: i32,
     pub second: i32,
+}
+
+pub fn song_lua_local_date_globals() -> SongLuaDateGlobals {
+    let now = Local::now();
+    SongLuaDateGlobals {
+        year: now.year(),
+        month_of_year: now.month0() as i32,
+        day_of_month: now.day() as i32,
+        hour: now.hour() as i32,
+        minute: now.minute() as i32,
+        second: now.second() as i32,
+    }
 }
 
 pub fn install_date_globals(lua: &Lua, date: SongLuaDateGlobals) -> mlua::Result<()> {

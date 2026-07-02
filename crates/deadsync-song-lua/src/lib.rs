@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use deadlib_present::actors::TextAlign;
@@ -8,6 +8,7 @@ use deadlib_present::anim::{EffectClock, EffectMode};
 mod actions;
 mod cmd;
 mod compat;
+mod compile_timing;
 mod crypto;
 mod eases;
 mod files;
@@ -25,6 +26,7 @@ mod runtime;
 mod runtime_mod;
 mod sl;
 mod song_tables;
+mod sprite_sheet;
 mod tables;
 mod theme_colors;
 mod timing;
@@ -32,9 +34,13 @@ mod top_screen;
 mod values;
 mod version;
 
-pub use actions::{SongLuaFunctionActionInput, read_actions_with_function_capture};
+pub use actions::{
+    SongLuaFunctionActionInput, SongLuaFunctionActionPlan, function_action_plan,
+    read_actions_with_function_capture,
+};
 pub use cmd::preprocess_lua_cmd_syntax;
-pub use compat::{SongLuaCompatCallbacks, install_stdlib_compat};
+pub use compat::{SongLuaCompatCallbacks, install_default_stdlib_compat, install_stdlib_compat};
+pub use compile_timing::{SongLuaCompileTimer, song_lua_compile_stage_summary};
 pub use crypto::create_cryptman_table;
 pub use eases::{
     SongLuaFunctionEaseDecision, SongLuaFunctionEaseInput, SongLuaFunctionEaseResult,
@@ -58,53 +64,60 @@ pub use host::{
     install_manager_globals, install_message_manager_globals, install_screen_manager_globals,
     install_screen_string_globals, install_screen_utility_globals, install_sound_globals,
     is_compile_global_name, register_loaded_easing_names, restore_compile_globals,
-    snapshot_compile_globals,
+    snapshot_compile_globals, song_lua_local_date_globals,
 };
 pub use json::{json_to_lua_value, lua_to_json_value};
 pub use lua_util::{
-    SongLuaActionCaptureScope, actor_active_commands, actor_aft_capture_name, actor_child_at,
-    actor_children, actor_command_queue, actor_current_capture_block, actor_debug_label,
-    actor_decode_movie, actor_diffuse, actor_direct_children, actor_effect_magnitude, actor_glow,
-    actor_halign, actor_is_bitmap_text, actor_is_child_group, actor_named_children,
-    actor_runs_startup_commands, actor_shadow_len, actor_table_has_update_functions,
-    actor_texture_is_video, actor_texture_path, actor_tree_has_update_functions,
-    actor_tween_time_left, actor_type_is, actor_update_text_pre_zoom_flags, actor_valign,
-    actor_vertex_colors, actor_wrappers, actor_zoom_axis, banner_sort_order_path,
-    begin_action_capture_scope, call_actor_function, call_table_method,
-    capture_actor_command_preserving_state, capture_actor_text_attribute,
-    capture_actor_vertex_diffuse, capture_block_set_bool, capture_block_set_color,
-    capture_block_set_f32, capture_block_set_i32, capture_block_set_size,
+    SongLuaActionCaptureScope, SongLuaCapturedMessageCommands, SongLuaFunctionActionCapture,
+    actor_active_commands, actor_aft_capture_name, actor_child_at, actor_children,
+    actor_command_queue, actor_current_capture_block, actor_debug_label, actor_decode_movie,
+    actor_diffuse, actor_direct_children, actor_effect_magnitude, actor_glow, actor_halign,
+    actor_indices_for_pointers, actor_is_bitmap_text, actor_is_child_group, actor_named_children,
+    actor_overlay_initial_state, actor_pointers_touch_actor, actor_runs_startup_commands,
+    actor_shadow_len, actor_table_has_update_functions, actor_texture_is_video, actor_texture_path,
+    actor_tree_has_update_functions, actor_tween_time_left, actor_type_is,
+    actor_update_text_pre_zoom_flags, actor_valign, actor_vertex_colors, actor_wrappers,
+    actor_zoom_axis, banner_sort_order_path, begin_action_capture_scope, call_actor_function,
+    call_table_method, capture_actor_command_preserving_state, capture_actor_message_commands,
+    capture_actor_text_attribute, capture_actor_vertex_diffuse, capture_block_set_bool,
+    capture_block_set_color, capture_block_set_f32, capture_block_set_i32, capture_block_set_size,
     capture_block_set_stretch, capture_block_set_string, capture_block_set_u32,
     capture_block_set_vec2, capture_block_set_vec3, capture_block_set_vec4, capture_block_set_vec5,
-    capture_block_set_vertex_colors, capture_block_set_zoom_axes, capture_scope_actor_pointers,
-    capture_scope_actor_tables, capture_scope_snapshots, capture_texture_rect,
-    classify_function_ease_probe, collect_aft_capture_names,
-    collect_tracked_capture_blocks_for_indices, copy_dummy_actor_tags, create_actor_child_group,
-    create_bool_array, create_color_constants_table, create_debug_table, create_owned_string_array,
+    capture_block_set_vertex_colors, capture_block_set_zoom_axes, capture_function_action_blocks,
+    capture_indexed_actor_function_blocks, capture_overlay_function_eases,
+    capture_scope_actor_pointers, capture_scope_actor_tables, capture_scope_snapshots,
+    capture_texture_rect, classify_function_ease_probe, collect_aft_capture_names,
+    collect_indexed_actor_capture_blocks, collect_tracked_capture_blocks_for_indices,
+    copy_dummy_actor_tags, create_actor_child_group, create_bool_array,
+    create_color_constants_table, create_debug_table, create_owned_string_array,
     create_string_array, current_gamestate_player_value, current_gamestate_value,
     current_song_lua_style_name, current_song_value, current_steps_value,
     default_message_command_params, drain_actor_command_queue, finish_actor_tweening,
-    flush_actor_capture, hurry_actor_tweening, inherit_actor_dirs, install_actor_metatable,
+    flush_actor_capture, function_ease_actor_indices, function_named_upvalue_tables,
+    hurry_actor_tweening, inherit_actor_dirs, install_actor_metatable,
     install_course_contents_list_children, lua_format_text, lua_text_value,
     make_actor_add_f32_method, make_actor_capture_f32_method, make_actor_chain_method,
     make_actor_finish_tweening_method, make_actor_set_size_method, make_actor_stop_tweening_method,
     make_actor_tween_method, make_actor_wrap_width_method, make_color_table,
-    make_vertex_color_table, method_arg, method_arg_offset, normalize_broadcast_params,
-    note_zoom_point_hides, populate_course_contents_display, position_scroller_items,
-    prepare_capture_scope_actor, probe_actor_pointers, probe_call_names,
+    make_vertex_color_table, method_arg, method_arg_offset, nested_function_named_upvalue_tables,
+    normalize_broadcast_params, note_zoom_point_hides, populate_course_contents_display,
+    position_scroller_items, prepare_capture_scope_actor, probe_actor_pointers, probe_call_names,
     probe_function_ease_target, probe_target_kind, push_note_hide_window, push_sequence_child_once,
     push_unique_actor_child, read_actor_capture_blocks, read_actor_color_field,
     read_actor_multi_vertex_mesh, read_actor_multi_vertex_texture_path,
     read_actor_semantic_state_table, read_bitmap_font, read_bitmap_text_attributes,
-    read_child_index, read_color_args, read_color_call, read_color_value, read_graph_display_size,
-    read_graph_display_values, read_model_path, read_proxy_target_kind, read_song_lua_sound_paths,
+    read_child_index, read_color_args, read_color_call, read_color_value,
+    read_global_function_nested_tables, read_graph_display_body_state,
+    read_graph_display_line_state, read_graph_display_size, read_graph_display_values,
+    read_model_path, read_proxy_target_kind, read_song_lua_sound_paths,
+    read_song_meter_display_state, read_update_function_nested_tables, read_update_function_tables,
     read_vertex_colors_value, record_probe_method_call, register_song_lua_actor,
     remove_actor_child, remove_all_actor_children, reset_actor_capture, reset_actor_capture_tables,
-    reset_tracked_capture_tables, resolve_actor_asset_path, restore_action_capture_scope,
-    restore_actor_mutable_state, restore_actors_semantic_state, run_actor_init_commands,
-    run_actor_init_commands_for_table, run_actor_named_command, run_actor_named_command_with_drain,
-    run_actor_named_command_with_drain_and_params, run_actor_startup_commands,
-    run_actor_startup_commands_for_table, run_actor_update_functions,
+    reset_indexed_actor_capture_tables, reset_tracked_capture_tables, resolve_actor_asset_path,
+    restore_action_capture_scope, restore_actor_mutable_state, restore_actors_semantic_state,
+    run_actor_init_commands, run_actor_init_commands_for_table, run_actor_named_command,
+    run_actor_named_command_with_drain, run_actor_named_command_with_drain_and_params,
+    run_actor_startup_commands, run_actor_startup_commands_for_table, run_actor_update_functions,
     run_actor_update_functions_for_table, run_actor_update_functions_with_delta,
     run_added_actor_child_commands, run_command_on_leaves,
     run_named_command_on_children_recursively, run_named_command_on_leaves,
@@ -174,6 +187,7 @@ pub use song_tables::{
     create_song_options_table, create_song_table, create_song_util_table, create_songman_table,
     create_steps_table, create_trail_table,
 };
+pub use sprite_sheet::parse_sprite_sheet_dims;
 pub use tables::{
     create_author_table, create_background_filter_values, create_branch_table,
     create_charman_table, create_credits_table, create_difficulty_table, create_display_bpms_table,
@@ -204,10 +218,11 @@ pub use timing::{
     timing_window_seconds, worst_judgment_from_offsets,
 };
 pub use top_screen::{
-    SONG_LUA_TOP_SCREEN_OPTION_ROWS, option_row_default_text, player_child_proxy_name,
-    top_screen_danger_index, top_screen_life_meter_bar_index, top_screen_life_meter_index,
-    top_screen_life_meter_name, top_screen_option_row_name, top_screen_option_row_name_at,
-    top_screen_player_index, top_screen_player_name, top_screen_score_index, top_screen_score_name,
+    SONG_LUA_TOP_SCREEN_OPTION_ROWS, TOP_SCREEN_THEME_CHILD_NAMES, UNDERLAY_THEME_CHILD_NAMES,
+    option_row_default_text, player_child_proxy_name, top_screen_danger_index,
+    top_screen_life_meter_bar_index, top_screen_life_meter_index, top_screen_life_meter_name,
+    top_screen_option_row_name, top_screen_option_row_name_at, top_screen_player_index,
+    top_screen_player_name, top_screen_score_index, top_screen_score_name,
     top_screen_score_percent_name, top_screen_song_meter_display_index,
     top_screen_step_stats_pane_index, top_screen_steps_display_index, underlay_score_index,
     underlay_score_name,
@@ -1251,6 +1266,17 @@ pub fn message_event_cmp(
     left.beat.total_cmp(&right.beat)
 }
 
+#[inline(always)]
+pub fn overlay_ease_cmp(
+    left: &SongLuaOverlayEase,
+    right: &SongLuaOverlayEase,
+) -> std::cmp::Ordering {
+    left.start
+        .total_cmp(&right.start)
+        .then_with(|| left.limit.total_cmp(&right.limit))
+        .then_with(|| left.overlay_index.cmp(&right.overlay_index))
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SongLuaTimeUnit {
     Beat,
@@ -1425,6 +1451,41 @@ impl<OverlayActor> Default for CompiledSongLua<OverlayActor> {
             info: SongLuaCompileInfo::default(),
         }
     }
+}
+
+pub fn push_startup_message_if_listened<'a>(
+    messages: &mut Vec<SongLuaMessageEvent>,
+    command_lists: impl IntoIterator<Item = &'a [SongLuaOverlayMessageCommand]>,
+) {
+    if message_command_lists_have_listener(command_lists, SONG_LUA_STARTUP_MESSAGE) {
+        messages.push(SongLuaMessageEvent {
+            beat: 0.0,
+            message: SONG_LUA_STARTUP_MESSAGE.to_string(),
+            persists: false,
+        });
+    }
+}
+
+pub fn sort_compiled_song_lua<OverlayActor>(compiled: &mut CompiledSongLua<OverlayActor>) {
+    compiled.beat_mods.sort_by(mod_window_cmp);
+    compiled.time_mods.sort_by(mod_window_cmp);
+    compiled.eases.sort_by(ease_window_cmp);
+    compiled.overlay_eases.sort_by(overlay_ease_cmp);
+    compiled.messages.sort_by(message_event_cmp);
+}
+
+pub fn runtime_static_overlay_index_by_path<'a>(
+    len: usize,
+    mut path_at: impl FnMut(usize) -> Option<&'a Path>,
+) -> Option<usize> {
+    (0..len).position(|index| {
+        path_at(index).is_some_and(|path| {
+            path.file_name().is_some_and(|name| {
+                name.to_string_lossy()
+                    .eq_ignore_ascii_case("_static 4x1.png")
+            })
+        })
+    })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1657,6 +1718,45 @@ pub fn sprite_sheet_rect(index: u32, cols: u32, rows: u32) -> [f32; 4] {
     [left, top, left + width, top + height]
 }
 
+pub fn sprite_texture_rect(
+    custom_rect: Option<[f32; 4]>,
+    state_index: Option<u32>,
+    sheet_dims: Option<(u32, u32)>,
+) -> [f32; 4] {
+    if let Some(rect) = custom_rect {
+        return rect;
+    }
+    if let Some(state_index) = song_lua_valid_sprite_state_index(state_index)
+        && let Some((cols, rows)) = sheet_dims
+    {
+        return sprite_sheet_rect(state_index, cols, rows);
+    }
+    [0.0, 0.0, 1.0, 1.0]
+}
+
+pub fn sprite_frame_count(sheet_dims: Option<(u32, u32)>) -> u32 {
+    let Some((cols, rows)) = sheet_dims else {
+        return 1;
+    };
+    cols.max(1).saturating_mul(rows.max(1)).max(1)
+}
+
+pub fn sprite_image_frame_size(
+    texture_size: Option<(f32, f32)>,
+    animate: bool,
+    state_index: Option<u32>,
+    sheet_dims: Option<(u32, u32)>,
+) -> Option<(f32, f32)> {
+    let (mut width, mut height) = texture_size?;
+    if animate || song_lua_valid_sprite_state_index(state_index).is_some() {
+        if let Some((cols, rows)) = sheet_dims {
+            width /= cols.max(1) as f32;
+            height /= rows.max(1) as f32;
+        }
+    }
+    Some((width, height))
+}
+
 pub fn song_lua_halign_value(value: &mlua::Value) -> Option<f32> {
     read_f32(value.clone()).or_else(|| {
         read_string(value.clone()).and_then(|raw| {
@@ -1720,6 +1820,77 @@ pub fn crop_texture_rect(source: [f32; 2], target: [f32; 2]) -> Option<[f32; 4]>
     }
     let cut = ((zoomed[1] - target[1]) / zoomed[1]).max(0.0) * 0.5;
     Some([0.0, cut, 1.0, 1.0 - cut])
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SongLuaScaleToRectPlan {
+    pub pos: [f32; 2],
+    pub zoom: f32,
+    pub flip_x: bool,
+    pub flip_y: bool,
+}
+
+pub fn scale_to_rect_plan(
+    rect: [f32; 4],
+    base_size: [f32; 2],
+    align: [f32; 2],
+    cover: bool,
+) -> Option<SongLuaScaleToRectPlan> {
+    let width = rect[2] - rect[0];
+    let height = rect[3] - rect[1];
+    if base_size[0].abs() <= f32::EPSILON || base_size[1].abs() <= f32::EPSILON {
+        return None;
+    }
+    let zoom_x = (width / base_size[0]).abs();
+    let zoom_y = (height / base_size[1]).abs();
+    let zoom = if cover {
+        zoom_x.max(zoom_y)
+    } else {
+        zoom_x.min(zoom_y)
+    };
+    if !zoom.is_finite() {
+        return None;
+    }
+    Some(SongLuaScaleToRectPlan {
+        pos: [rect[0] + width * align[0], rect[1] + height * align[1]],
+        zoom,
+        flip_x: width < 0.0,
+        flip_y: height < 0.0,
+    })
+}
+
+#[inline(always)]
+pub fn offset_texture_rect(rect: [f32; 4], offset: [f32; 2]) -> [f32; 4] {
+    [
+        rect[0] + offset[0],
+        rect[1] + offset[1],
+        rect[2] + offset[0],
+        rect[3] + offset[1],
+    ]
+}
+
+pub fn texture_pixel_offset_rect(
+    rect: [f32; 4],
+    texture_size: [f32; 2],
+    offset: [f32; 2],
+) -> Option<[f32; 4]> {
+    if texture_size[0] <= f32::EPSILON || texture_size[1] <= f32::EPSILON {
+        return None;
+    }
+    Some(offset_texture_rect(
+        rect,
+        [offset[0] / texture_size[0], offset[1] / texture_size[1]],
+    ))
+}
+
+pub fn sprite_animation_state_at(seconds: f32, delay: f32, frame_count: u32) -> u32 {
+    let delay = delay.max(0.0);
+    let frame_count = frame_count.max(1);
+    if delay <= f32::EPSILON {
+        0
+    } else {
+        ((seconds.max(0.0) / delay).floor() as u32) % frame_count
+    }
 }
 
 #[inline(always)]
@@ -3043,10 +3214,76 @@ pub fn overlay_delta_intersection(
     (!overlay_delta_is_empty(&out_from)).then_some((out_from, out_to))
 }
 
+#[derive(Debug, Clone)]
+pub struct SongLuaOverlayEaseBuildParams {
+    pub unit: SongLuaTimeUnit,
+    pub start: f32,
+    pub limit: f32,
+    pub span_mode: SongLuaSpanMode,
+    pub easing: Option<String>,
+    pub sustain: Option<f32>,
+    pub opt1: Option<f32>,
+    pub opt2: Option<f32>,
+}
+
+pub fn overlay_eases_from_captures(
+    overlay_count: usize,
+    from_blocks: &[(usize, Vec<SongLuaOverlayCommandBlock>)],
+    to_blocks: &[(usize, Vec<SongLuaOverlayCommandBlock>)],
+    params: SongLuaOverlayEaseBuildParams,
+) -> Vec<SongLuaOverlayEase> {
+    let mut from_deltas = HashMap::new();
+    for (overlay_index, blocks) in from_blocks {
+        if let Some(delta) = overlay_delta_from_blocks(blocks) {
+            from_deltas.insert(*overlay_index, delta);
+        }
+    }
+    let mut to_deltas = HashMap::new();
+    for (overlay_index, blocks) in to_blocks {
+        if let Some(delta) = overlay_delta_from_blocks(blocks) {
+            to_deltas.insert(*overlay_index, delta);
+        }
+    }
+
+    let mut out = Vec::new();
+    for overlay_index in 0..overlay_count {
+        let Some((from_delta, to_delta)) = from_deltas
+            .get(&overlay_index)
+            .zip(to_deltas.get(&overlay_index))
+            .and_then(|(from_delta, to_delta)| overlay_delta_intersection(from_delta, to_delta))
+        else {
+            continue;
+        };
+        out.push(SongLuaOverlayEase {
+            overlay_index,
+            unit: params.unit,
+            start: params.start,
+            limit: params.limit,
+            span_mode: params.span_mode,
+            from: from_delta,
+            to: to_delta,
+            easing: params.easing.clone(),
+            sustain: params.sustain,
+            opt1: params.opt1,
+            opt2: params.opt2,
+        });
+    }
+    out
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct SongLuaOverlayMessageCommand {
     pub message: String,
     pub blocks: Vec<SongLuaOverlayCommandBlock>,
+}
+
+pub fn message_command_lists_have_listener<'a>(
+    command_lists: impl IntoIterator<Item = &'a [SongLuaOverlayMessageCommand]>,
+    message: &str,
+) -> bool {
+    command_lists
+        .into_iter()
+        .any(|commands| commands.iter().any(|command| command.message == message))
 }
 
 #[derive(Debug, Clone)]
@@ -3131,6 +3368,85 @@ pub struct SongLuaNoteHideWindow {
     pub end_beat: f32,
 }
 
+pub fn note_hide_window_from_indices(
+    player: usize,
+    column: usize,
+    beats_per_t: f32,
+    start_index: usize,
+    end_index: usize,
+) -> Option<SongLuaNoteHideWindow> {
+    if start_index == 0 || end_index < start_index {
+        return None;
+    }
+    let start_beat = (start_index - 1) as f32 * beats_per_t;
+    let end_beat = (end_index - 1) as f32 * beats_per_t;
+    if !start_beat.is_finite() || !end_beat.is_finite() || end_beat < start_beat {
+        return None;
+    }
+    Some(SongLuaNoteHideWindow {
+        player,
+        column,
+        start_beat,
+        end_beat,
+    })
+}
+
+pub fn note_hide_windows_from_flags(
+    player: usize,
+    column: usize,
+    beats_per_t: f32,
+    hidden: &[bool],
+) -> Vec<SongLuaNoteHideWindow> {
+    if !beats_per_t.is_finite() || beats_per_t <= 0.0 {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    let mut run_start = None::<usize>;
+    for (offset, hidden) in hidden.iter().copied().enumerate() {
+        let index = offset + 1;
+        match (run_start, hidden) {
+            (None, true) => run_start = Some(index),
+            (Some(start), false) => {
+                if let Some(window) =
+                    note_hide_window_from_indices(player, column, beats_per_t, start, index - 1)
+                {
+                    out.push(window);
+                }
+                run_start = None;
+            }
+            _ => {}
+        }
+    }
+    if let Some(start) = run_start
+        && let Some(window) =
+            note_hide_window_from_indices(player, column, beats_per_t, start, hidden.len())
+    {
+        out.push(window);
+    }
+    out
+}
+
+pub fn note_column_zoom_hide_beats_per_t(
+    mode: &str,
+    subtract_song_beat: bool,
+    beats_per_t: f32,
+) -> Option<f32> {
+    if !mode.eq_ignore_ascii_case("NoteColumnSplineMode_Offset") || subtract_song_beat {
+        return None;
+    }
+    (beats_per_t.is_finite() && beats_per_t > 0.0).then_some(beats_per_t)
+}
+
+pub fn sort_note_hide_windows(windows: &mut [SongLuaNoteHideWindow]) {
+    windows.sort_by(|left, right| {
+        left.player
+            .cmp(&right.player)
+            .then_with(|| left.column.cmp(&right.column))
+            .then_with(|| left.start_beat.total_cmp(&right.start_beat))
+            .then_with(|| left.end_beat.total_cmp(&right.end_beat))
+    });
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct SongLuaColumnOffsetWindow {
     pub unit: SongLuaTimeUnit,
@@ -3147,18 +3463,185 @@ pub struct SongLuaColumnOffsetWindow {
     pub opt2: Option<f32>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SongLuaColumnOffsetSample {
+    pub player: usize,
+    pub column: usize,
+    pub y: f32,
+}
+
+pub fn note_column_pos_offset_y_from_points(mode: &str, points: &[[f32; 2]]) -> Option<f32> {
+    const EPS: f32 = 0.001;
+    if mode.eq_ignore_ascii_case("NoteColumnSplineMode_Disabled") {
+        return Some(0.0);
+    }
+    if !mode.eq_ignore_ascii_case("NoteColumnSplineMode_Offset") {
+        return None;
+    }
+    if points.is_empty() {
+        return Some(0.0);
+    }
+    let mut y = None::<f32>;
+    for [x, point_y] in points.iter().copied() {
+        if !x.is_finite() || !point_y.is_finite() || x.abs() > EPS {
+            return None;
+        }
+        if let Some(y) = y {
+            if (point_y - y).abs() > EPS {
+                return None;
+            }
+        } else {
+            y = Some(point_y);
+        }
+    }
+    y
+}
+
+#[derive(Debug, Clone)]
+pub struct SongLuaColumnOffsetBuildParams {
+    pub unit: SongLuaTimeUnit,
+    pub start: f32,
+    pub limit: f32,
+    pub span_mode: SongLuaSpanMode,
+    pub easing: Option<String>,
+    pub sustain: Option<f32>,
+    pub opt1: Option<f32>,
+    pub opt2: Option<f32>,
+}
+
+pub fn column_offset_windows_from_samples(
+    from_samples: &[SongLuaColumnOffsetSample],
+    to_samples: &[SongLuaColumnOffsetSample],
+    params: SongLuaColumnOffsetBuildParams,
+) -> Vec<SongLuaColumnOffsetWindow> {
+    let mut keys = Vec::<(usize, usize)>::new();
+    for sample in from_samples.iter().chain(to_samples.iter()) {
+        let key = (sample.player, sample.column);
+        if !keys.contains(&key) {
+            keys.push(key);
+        }
+    }
+    keys.sort_unstable();
+
+    let mut out = Vec::new();
+    for (player, column) in keys {
+        let from_y = column_offset_sample_y(from_samples, player, column);
+        let to_y = column_offset_sample_y(to_samples, player, column);
+        if from_y.abs() <= f32::EPSILON && to_y.abs() <= f32::EPSILON {
+            continue;
+        }
+        out.push(SongLuaColumnOffsetWindow {
+            unit: params.unit,
+            start: params.start,
+            limit: params.limit,
+            span_mode: params.span_mode,
+            player,
+            column,
+            from_y,
+            to_y,
+            easing: params.easing.clone(),
+            sustain: params.sustain,
+            opt1: params.opt1,
+            opt2: params.opt2,
+        });
+    }
+    out
+}
+
+fn column_offset_sample_y(
+    samples: &[SongLuaColumnOffsetSample],
+    player: usize,
+    column: usize,
+) -> f32 {
+    samples
+        .iter()
+        .find(|sample| sample.player == player && sample.column == column)
+        .map_or(0.0, |sample| sample.y)
+}
+
 #[cfg(test)]
 mod tests {
-    use mlua::{Lua, Value};
+    use deadlib_present::anim::{EffectClock, EffectMode};
+    use mlua::{Function, Lua, Table, Value};
 
     use super::{
-        SONG_LUA_INITIAL_LIFE, SongLuaCompileContext, SongLuaDifficulty, SongLuaPlayerContext,
-        THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD, custom_multi_modifier_key,
-        easiest_steps_difficulty, graph_display_body_size, song_lua_arch_name,
-        song_lua_difficulty_from_value, song_lua_human_player_count,
-        song_lua_steps_type_is_dance_single, theme_has_string, theme_metric_number,
+        CompiledSongLua, SONG_LUA_INITIAL_LIFE, SONG_LUA_RUNTIME_KEY, SONG_LUA_SPRITE_STATE_CLEAR,
+        SONG_LUA_STARTUP_MESSAGE, SongLuaColumnOffsetBuildParams, SongLuaColumnOffsetSample,
+        SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget, SongLuaEaseWindow,
+        SongLuaMessageEvent, SongLuaModWindow, SongLuaNoteHideWindow, SongLuaOverlayBlendMode,
+        SongLuaOverlayCommandBlock, SongLuaOverlayEase, SongLuaOverlayEaseBuildParams,
+        SongLuaOverlayMessageCommand, SongLuaOverlayStateDelta, SongLuaPlayerContext,
+        SongLuaSpanMode, SongLuaTimeUnit, THEME_RECEPTOR_Y_REV, THEME_RECEPTOR_Y_STD,
+        TOP_SCREEN_THEME_CHILD_NAMES, UNDERLAY_THEME_CHILD_NAMES, actor_indices_for_pointers,
+        actor_overlay_initial_state, actor_pointers_touch_actor, capture_actor_message_commands,
+        capture_block_set_bool, capture_block_set_f32, capture_function_action_blocks,
+        capture_indexed_actor_function_blocks, capture_overlay_function_eases,
+        collect_indexed_actor_capture_blocks, column_offset_windows_from_samples,
+        compile_song_runtime_values, create_debug_table, create_song_runtime_table,
+        custom_multi_modifier_key, easiest_steps_difficulty, function_ease_actor_indices,
+        function_named_upvalue_tables, graph_display_body_size,
+        message_command_lists_have_listener, nested_function_named_upvalue_tables,
+        note_column_pos_offset_y_from_points, note_column_zoom_hide_beats_per_t,
+        note_hide_window_from_indices, note_hide_windows_from_flags, note_song_lua_side_effect,
+        offset_texture_rect, overlay_eases_from_captures, parse_overlay_blend_mode,
+        parse_overlay_effect_clock, parse_overlay_effect_mode, push_startup_message_if_listened,
+        read_global_function_nested_tables, read_graph_display_body_state,
+        read_graph_display_line_state, read_song_meter_display_state,
+        read_update_function_nested_tables, read_update_function_tables, record_song_lua_broadcast,
+        reset_actor_capture, reset_indexed_actor_capture_tables,
+        runtime_static_overlay_index_by_path, scale_to_rect_plan, set_compile_song_runtime_values,
+        song_lua_arch_name, song_lua_difficulty_from_value, song_lua_human_player_count,
+        song_lua_steps_type_is_dance_single, sort_compiled_song_lua, sort_note_hide_windows,
+        sprite_animation_state_at, sprite_frame_count, sprite_image_frame_size,
+        sprite_texture_rect, texture_pixel_offset_rect, theme_has_string, theme_metric_number,
         theme_metric_number_for_screen, theme_pref_default, theme_string, theme_string_names,
     };
+    use std::collections::HashSet;
+    use std::path::PathBuf;
+
+    fn mod_window(start: f32, limit: f32, mods: &str) -> SongLuaModWindow {
+        SongLuaModWindow {
+            unit: SongLuaTimeUnit::Beat,
+            start,
+            limit,
+            span_mode: SongLuaSpanMode::Len,
+            mods: mods.to_string(),
+            player: None,
+        }
+    }
+
+    fn ease_window(start: f32, limit: f32) -> SongLuaEaseWindow {
+        SongLuaEaseWindow {
+            unit: SongLuaTimeUnit::Beat,
+            start,
+            limit,
+            span_mode: SongLuaSpanMode::Len,
+            from: 0.0,
+            to: 1.0,
+            target: SongLuaEaseTarget::PlayerX,
+            easing: None,
+            player: None,
+            sustain: None,
+            opt1: None,
+            opt2: None,
+        }
+    }
+
+    fn overlay_ease(overlay_index: usize, start: f32, limit: f32) -> SongLuaOverlayEase {
+        SongLuaOverlayEase {
+            overlay_index,
+            unit: SongLuaTimeUnit::Beat,
+            start,
+            limit,
+            span_mode: SongLuaSpanMode::Len,
+            from: SongLuaOverlayStateDelta::default(),
+            to: SongLuaOverlayStateDelta::default(),
+            easing: None,
+            sustain: None,
+            opt1: None,
+            opt2: None,
+        }
+    }
 
     #[test]
     fn difficulty_from_value_accepts_stepmania_names() {
@@ -3195,6 +3678,607 @@ mod tests {
     }
 
     #[test]
+    fn actor_indices_for_pointers_matches_known_actor_tables() {
+        let actor_ptrs = HashSet::from([20_usize, 40]);
+
+        assert_eq!(
+            actor_indices_for_pointers(5, |index| (index + 1) * 10, &actor_ptrs),
+            vec![1, 3]
+        );
+    }
+
+    #[test]
+    fn actor_pointers_touch_actor_requires_probe_hit() {
+        assert!(actor_pointers_touch_actor(
+            4,
+            |index| (index + 1) * 10,
+            &[20, 99]
+        ));
+        assert!(!actor_pointers_touch_actor(
+            4,
+            |index| (index + 1) * 10,
+            &[99]
+        ));
+        assert!(!actor_pointers_touch_actor(
+            4,
+            |index| (index + 1) * 10,
+            &[]
+        ));
+    }
+
+    #[test]
+    fn function_ease_actor_indices_falls_back_to_all_when_unprobed() {
+        assert_eq!(
+            function_ease_actor_indices(3, |index| (index + 1) * 10, &[]),
+            vec![0, 1, 2]
+        );
+        assert_eq!(
+            function_ease_actor_indices(3, |index| (index + 1) * 10, &[999]),
+            vec![0, 1, 2]
+        );
+        assert_eq!(
+            function_ease_actor_indices(3, |index| (index + 1) * 10, &[30]),
+            vec![2]
+        );
+    }
+
+    #[test]
+    fn function_named_upvalue_tables_dedups_matching_tables() {
+        let lua = Lua::new();
+        let debug = create_debug_table(&lua).unwrap();
+        let getupvalue = debug.get::<Function>("getupvalue").unwrap();
+        let function = lua
+            .load(
+                r#"
+                local target = { name = "target" }
+                local duplicate = target
+                local ignored = { name = "ignored" }
+                return function()
+                    return target, duplicate, ignored
+                end
+                "#,
+            )
+            .eval::<Function>()
+            .unwrap();
+        let mut seen = HashSet::new();
+
+        let out = function_named_upvalue_tables(
+            &getupvalue,
+            &function,
+            &["target", "duplicate"],
+            &mut seen,
+        )
+        .unwrap();
+
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].get::<String>("name").unwrap(), "target");
+    }
+
+    #[test]
+    fn nested_function_named_upvalue_tables_recurses_once_per_function() {
+        let lua = Lua::new();
+        let debug = create_debug_table(&lua).unwrap();
+        let getupvalue = debug.get::<Function>("getupvalue").unwrap();
+        let function = lua
+            .load(
+                r#"
+                local target = { name = "target" }
+                local function inner()
+                    return target
+                end
+                return function()
+                    return inner
+                end
+                "#,
+            )
+            .eval::<Function>()
+            .unwrap();
+        let mut seen_tables = HashSet::new();
+        let mut seen_functions = HashSet::new();
+
+        let out = nested_function_named_upvalue_tables(
+            &getupvalue,
+            &function,
+            &["target"],
+            &mut seen_tables,
+            &mut seen_functions,
+        )
+        .unwrap();
+
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].get::<String>("name").unwrap(), "target");
+        let second = nested_function_named_upvalue_tables(
+            &getupvalue,
+            &function,
+            &["target"],
+            &mut seen_tables,
+            &mut seen_functions,
+        )
+        .unwrap();
+        assert!(second.is_empty());
+    }
+
+    #[test]
+    fn actor_overlay_initial_state_reads_actor_state_fields() {
+        let lua = Lua::new();
+        let actor = lua.create_table().unwrap();
+        let diffuse = lua.create_table().unwrap();
+        for (index, value) in [0.1_f32, 0.2, 0.3, 0.4].into_iter().enumerate() {
+            diffuse.raw_set(index + 1, value).unwrap();
+        }
+        let size = lua.create_table().unwrap();
+        size.raw_set(1, 64.0_f32).unwrap();
+        size.raw_set(2, 32.0_f32).unwrap();
+        actor.set("__songlua_visible", false).unwrap();
+        actor.set("__songlua_state_x", 12.0_f32).unwrap();
+        actor.set("__songlua_state_y", -8.0_f32).unwrap();
+        actor.set("__songlua_state_diffuse", diffuse).unwrap();
+        actor.set("__songlua_state_size", size).unwrap();
+        actor.set("__songlua_state_blend", "BlendMode_Add").unwrap();
+        actor.set("__songlua_state_effect_clock", "beat").unwrap();
+        actor
+            .set("__songlua_state_effect_mode", "glowshift")
+            .unwrap();
+
+        let state = actor_overlay_initial_state(&actor).unwrap();
+
+        assert!(!state.visible);
+        assert_eq!(state.x, 12.0);
+        assert_eq!(state.y, -8.0);
+        assert_eq!(state.diffuse, [0.1, 0.2, 0.3, 0.4]);
+        assert_eq!(state.size, Some([64.0, 32.0]));
+        assert_eq!(
+            state.blend,
+            parse_overlay_blend_mode("BlendMode_Add").unwrap()
+        );
+        assert_eq!(
+            state.effect_clock,
+            parse_overlay_effect_clock("beat").unwrap()
+        );
+        assert_eq!(
+            state.effect_mode,
+            parse_overlay_effect_mode("glowshift").unwrap()
+        );
+    }
+
+    #[test]
+    fn display_child_state_readers_use_named_child_state() {
+        let lua = Lua::new();
+        let graph = lua.create_table().unwrap();
+        let graph_children = lua.create_table().unwrap();
+        let line = lua.create_table().unwrap();
+        line.set("__songlua_state_x", 5.0_f32).unwrap();
+        graph_children.set("Line", line).unwrap();
+        let body_group = lua.create_table().unwrap();
+        let first_body = lua.create_table().unwrap();
+        first_body.set("__songlua_state_y", 1.0_f32).unwrap();
+        let second_body = lua.create_table().unwrap();
+        second_body.set("__songlua_state_y", 2.0_f32).unwrap();
+        body_group.raw_set(1, first_body).unwrap();
+        body_group.raw_set(2, second_body).unwrap();
+        graph_children.set("", body_group).unwrap();
+        graph.set("__songlua_children", graph_children).unwrap();
+
+        let line_state = read_graph_display_line_state(&lua, &graph).unwrap();
+        let body_state = read_graph_display_body_state(&lua, &graph).unwrap();
+
+        assert_eq!(line_state.x, 5.0);
+        assert_eq!(body_state.y, 2.0);
+
+        let song_meter = lua.create_table().unwrap();
+        song_meter.set("__songlua_stream_width", 128.0_f32).unwrap();
+        let song_meter_children = lua.create_table().unwrap();
+        let stream = lua.create_table().unwrap();
+        stream.set("__songlua_state_zoom", 1.5_f32).unwrap();
+        song_meter_children.set("Stream", stream).unwrap();
+        song_meter
+            .set("__songlua_children", song_meter_children)
+            .unwrap();
+
+        let Some((stream_width, stream_state)) =
+            read_song_meter_display_state(&lua, &song_meter).unwrap()
+        else {
+            panic!("expected song meter stream state");
+        };
+
+        assert_eq!(stream_width, 128.0);
+        assert_eq!(stream_state.zoom, 1.5);
+    }
+
+    #[test]
+    fn update_function_table_scans_find_direct_nested_and_global_upvalues() {
+        let lua = Lua::new();
+        lua.globals()
+            .set("debug", create_debug_table(&lua).unwrap())
+            .unwrap();
+        let root = lua
+            .load(
+                r#"
+                local mods = { name = "mods" }
+                local nodes = { name = "nodes" }
+                local function inner()
+                    return nodes
+                end
+                return {
+                    __songlua_update_function = function()
+                        return mods
+                    end,
+                    {
+                        __songlua_update_function = function()
+                            return inner
+                        end
+                    }
+                }
+                "#,
+            )
+            .eval::<Table>()
+            .unwrap();
+
+        let direct =
+            read_update_function_tables(&lua, &Value::Table(root.clone()), &["mods"]).unwrap();
+        let nested =
+            read_update_function_nested_tables(&lua, &Value::Table(root), &["nodes"]).unwrap();
+
+        assert_eq!(direct.len(), 1);
+        assert_eq!(direct[0].get::<String>("name").unwrap(), "mods");
+        assert_eq!(nested.len(), 1);
+        assert_eq!(nested[0].get::<String>("name").unwrap(), "nodes");
+
+        let source = lua
+            .load(
+                r#"
+                local nodes = { name = "global" }
+                local function inner()
+                    return nodes
+                end
+                return {
+                    Run = function()
+                        return inner
+                    end
+                }
+                "#,
+            )
+            .eval::<Table>()
+            .unwrap();
+        lua.globals().set("global_updates", source).unwrap();
+
+        let global =
+            read_global_function_nested_tables(&lua, "global_updates", &["Run"], &["nodes"])
+                .unwrap();
+
+        assert_eq!(global.len(), 1);
+        assert_eq!(global[0].get::<String>("name").unwrap(), "global");
+    }
+
+    #[test]
+    fn top_screen_theme_child_names_include_compat_children() {
+        assert!(TOP_SCREEN_THEME_CHILD_NAMES.contains(&"BPMDisplay"));
+        assert!(TOP_SCREEN_THEME_CHILD_NAMES.contains(&"StepsDisplayP2"));
+        assert!(UNDERLAY_THEME_CHILD_NAMES.contains(&"StepStatsPaneP1"));
+        assert!(UNDERLAY_THEME_CHILD_NAMES.contains(&"SongMeter"));
+    }
+
+    #[test]
+    fn indexed_actor_capture_blocks_preserve_source_indices() {
+        let lua = Lua::new();
+        let first = lua.create_table().unwrap();
+        let second = lua.create_table().unwrap();
+        reset_actor_capture(&lua, &first).unwrap();
+        reset_actor_capture(&lua, &second).unwrap();
+        capture_block_set_f32(&lua, &second, "x", 12.0).unwrap();
+        let actors = vec![(3, first), (7, second)];
+
+        let blocks = collect_indexed_actor_capture_blocks(&actors).unwrap();
+
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(blocks[0].0, 7);
+        assert_eq!(blocks[0].1[0].delta.x, Some(12.0));
+        reset_indexed_actor_capture_tables(&lua, &actors).unwrap();
+        assert!(
+            collect_indexed_actor_capture_blocks(&actors)
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn capture_indexed_actor_function_blocks_restores_state_and_runtime() {
+        let lua = Lua::new();
+        let actor = lua.create_table().unwrap();
+        actor.set("__songlua_visible", true).unwrap();
+        reset_actor_capture(&lua, &actor).unwrap();
+        let runtime = create_song_runtime_table(&lua, &SongLuaCompileContext::new("", "")).unwrap();
+        lua.globals().set(SONG_LUA_RUNTIME_KEY, runtime).unwrap();
+        set_compile_song_runtime_values(&lua, 2.0, 3.0).unwrap();
+
+        let captured_actor = actor.clone();
+        let function = lua
+            .create_function(move |lua, value: f32| {
+                let (beat, seconds) = compile_song_runtime_values(lua)?;
+                capture_block_set_f32(lua, &captured_actor, "x", value)?;
+                capture_block_set_f32(lua, &captured_actor, "y", beat + seconds)?;
+                captured_actor.set("__songlua_visible", false)?;
+                Ok(())
+            })
+            .unwrap();
+        let actors = vec![(5, actor.clone())];
+
+        let blocks =
+            capture_indexed_actor_function_blocks(&lua, &actors, &function, Some(12.0), Some(9.0))
+                .unwrap();
+
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(blocks[0].0, 5);
+        assert_eq!(blocks[0].1[0].delta.x, Some(12.0));
+        assert_eq!(blocks[0].1[0].delta.y, Some(18.0));
+        assert_eq!(actor.get::<bool>("__songlua_visible").unwrap(), true);
+        assert_eq!(compile_song_runtime_values(&lua).unwrap(), (2.0, 3.0));
+    }
+
+    #[test]
+    fn capture_overlay_function_eases_builds_probed_overlay_ease() {
+        let lua = Lua::new();
+        let first = lua.create_table().unwrap();
+        let second = lua.create_table().unwrap();
+        second.set("__songlua_visible", true).unwrap();
+        let runtime = create_song_runtime_table(&lua, &SongLuaCompileContext::new("", "")).unwrap();
+        lua.globals().set(SONG_LUA_RUNTIME_KEY, runtime).unwrap();
+        set_compile_song_runtime_values(&lua, 2.0, 3.0).unwrap();
+        let probed_ptr = second.to_pointer() as usize;
+
+        let captured_actor = second.clone();
+        let function = lua
+            .create_function(move |lua, value: f32| {
+                capture_block_set_f32(lua, &captured_actor, "x", value)?;
+                captured_actor.set("__songlua_visible", false)?;
+                Ok(())
+            })
+            .unwrap();
+        let overlays = vec![(0, first), (1, second.clone())];
+
+        let eases = capture_overlay_function_eases(
+            &lua,
+            &overlays,
+            &function,
+            SongLuaTimeUnit::Beat,
+            4.0,
+            2.0,
+            SongLuaSpanMode::Len,
+            2.0,
+            6.0,
+            None,
+            None,
+            None,
+            None,
+            &[probed_ptr],
+        )
+        .unwrap();
+
+        assert_eq!(eases.len(), 1);
+        assert_eq!(eases[0].overlay_index, 1);
+        assert_eq!(eases[0].from.x, Some(2.0));
+        assert_eq!(eases[0].to.x, Some(6.0));
+        assert_eq!(second.get::<bool>("__songlua_visible").unwrap(), true);
+        assert_eq!(compile_song_runtime_values(&lua).unwrap(), (2.0, 3.0));
+    }
+
+    #[test]
+    fn capture_function_action_blocks_collects_captures_and_broadcasts() {
+        let lua = Lua::new();
+        let actor = lua.create_table().unwrap();
+        actor.set("__songlua_visible", true).unwrap();
+        let runtime = create_song_runtime_table(&lua, &SongLuaCompileContext::new("", "")).unwrap();
+        lua.globals().set(SONG_LUA_RUNTIME_KEY, runtime).unwrap();
+        set_compile_song_runtime_values(&lua, 2.0, 3.0).unwrap();
+
+        let captured_actor = actor.clone();
+        let function = lua
+            .create_function(move |lua, ()| {
+                capture_block_set_f32(lua, &captured_actor, "x", 5.0)?;
+                captured_actor.set("__songlua_visible", false)?;
+                record_song_lua_broadcast(lua, "Hit", false)?;
+                note_song_lua_side_effect(lua)?;
+                Ok(())
+            })
+            .unwrap();
+        let overlays = vec![(4, actor.clone())];
+
+        let capture = capture_function_action_blocks(&lua, &overlays, &[], &function, 8.0).unwrap();
+
+        assert_eq!(capture.overlay_blocks.len(), 1);
+        assert_eq!(capture.overlay_blocks[0].0, 4);
+        assert_eq!(capture.overlay_blocks[0].1[0].delta.x, Some(5.0));
+        assert!(capture.tracked_blocks.is_empty());
+        assert_eq!(capture.broadcasts, vec![("Hit".to_string(), false)]);
+        assert!(capture.saw_side_effect);
+        assert_eq!(actor.get::<bool>("__songlua_visible").unwrap(), true);
+        assert_eq!(compile_song_runtime_values(&lua).unwrap(), (2.0, 3.0));
+    }
+
+    #[test]
+    fn capture_actor_message_commands_reads_blocks_and_skips_failures() {
+        let lua = Lua::new();
+        let actor = lua.create_table().unwrap();
+        actor.set("Name", "Sample").unwrap();
+        reset_actor_capture(&lua, &actor).unwrap();
+        actor
+            .set(
+                "HitMessageCommand",
+                lua.create_function(|lua, actor: Table| {
+                    capture_block_set_f32(lua, &actor, "x", 9.0)?;
+                    Ok(())
+                })
+                .unwrap(),
+            )
+            .unwrap();
+        actor
+            .set(
+                "FailMessageCommand",
+                lua.create_function(|_, _: Table| -> mlua::Result<()> {
+                    Err(mlua::Error::RuntimeError("boom".to_string()))
+                })
+                .unwrap(),
+            )
+            .unwrap();
+
+        let captured = capture_actor_message_commands(&lua, &actor).unwrap();
+
+        assert_eq!(captured.commands.len(), 1);
+        assert_eq!(captured.commands[0].message, "Hit");
+        assert_eq!(captured.commands[0].blocks[0].delta.x, Some(9.0));
+        assert_eq!(captured.skipped.len(), 1);
+        assert!(captured.skipped[0].contains("FailMessageCommand"));
+        assert!(captured.skipped[0].contains("boom"));
+    }
+
+    #[test]
+    fn capture_actor_message_commands_extracts_startup_sound_blocks() {
+        let lua = Lua::new();
+        let actor = lua.create_table().unwrap();
+        reset_actor_capture(&lua, &actor).unwrap();
+        capture_block_set_bool(&lua, &actor, "sound_play", true).unwrap();
+
+        let captured = capture_actor_message_commands(&lua, &actor).unwrap();
+
+        assert_eq!(captured.commands.len(), 1);
+        assert_eq!(captured.commands[0].message, SONG_LUA_STARTUP_MESSAGE);
+        assert_eq!(captured.commands[0].blocks[0].delta.sound_play, Some(true));
+        assert!(captured.skipped.is_empty());
+    }
+
+    #[test]
+    fn runtime_static_overlay_index_by_path_matches_static_texture_name() {
+        let paths = [
+            PathBuf::from("sprites/normal.png"),
+            PathBuf::from("sprites/_STATIC 4x1.PNG"),
+            PathBuf::from("sprites/other.png"),
+        ];
+
+        assert_eq!(
+            runtime_static_overlay_index_by_path(paths.len(), |index| Some(paths[index].as_path())),
+            Some(1)
+        );
+        assert_eq!(
+            runtime_static_overlay_index_by_path(paths.len(), |index| (index == 0)
+                .then_some(paths[index].as_path())),
+            None
+        );
+    }
+
+    #[test]
+    fn message_command_lists_have_listener_matches_command_name() {
+        let first = vec![SongLuaOverlayMessageCommand {
+            message: "Alpha".to_string(),
+            blocks: Vec::new(),
+        }];
+        let second = vec![SongLuaOverlayMessageCommand {
+            message: "Beta".to_string(),
+            blocks: Vec::new(),
+        }];
+
+        assert!(message_command_lists_have_listener(
+            [first.as_slice(), second.as_slice()],
+            "Beta"
+        ));
+        assert!(!message_command_lists_have_listener(
+            [first.as_slice(), second.as_slice()],
+            "Gamma"
+        ));
+    }
+
+    #[test]
+    fn push_startup_message_if_listened_adds_zero_beat_event() {
+        let commands = vec![SongLuaOverlayMessageCommand {
+            message: SONG_LUA_STARTUP_MESSAGE.to_string(),
+            blocks: Vec::new(),
+        }];
+        let mut messages = Vec::new();
+
+        push_startup_message_if_listened(&mut messages, [commands.as_slice()]);
+
+        assert_eq!(
+            messages,
+            vec![SongLuaMessageEvent {
+                beat: 0.0,
+                message: SONG_LUA_STARTUP_MESSAGE.to_string(),
+                persists: false,
+            }]
+        );
+    }
+
+    #[test]
+    fn sort_compiled_song_lua_orders_timeline_dtos() {
+        let mut compiled = CompiledSongLua::<()>::default();
+        compiled.beat_mods = vec![
+            mod_window(4.0, 1.0, "b"),
+            mod_window(1.0, 2.0, "a"),
+            mod_window(1.0, 1.0, "c"),
+        ];
+        compiled.time_mods = vec![mod_window(2.0, 1.0, "x"), mod_window(1.0, 1.0, "y")];
+        compiled.eases = vec![ease_window(3.0, 1.0), ease_window(2.0, 2.0)];
+        compiled.overlay_eases = vec![
+            overlay_ease(2, 1.0, 1.0),
+            overlay_ease(1, 1.0, 1.0),
+            overlay_ease(0, 1.0, 0.5),
+        ];
+        compiled.messages = vec![
+            SongLuaMessageEvent {
+                beat: 2.0,
+                message: "B".to_string(),
+                persists: false,
+            },
+            SongLuaMessageEvent {
+                beat: 1.0,
+                message: "A".to_string(),
+                persists: false,
+            },
+        ];
+
+        sort_compiled_song_lua(&mut compiled);
+
+        assert_eq!(
+            compiled
+                .beat_mods
+                .iter()
+                .map(|window| window.mods.as_str())
+                .collect::<Vec<_>>(),
+            vec!["c", "a", "b"]
+        );
+        assert_eq!(
+            compiled
+                .time_mods
+                .iter()
+                .map(|window| window.mods.as_str())
+                .collect::<Vec<_>>(),
+            vec!["y", "x"]
+        );
+        assert_eq!(
+            compiled
+                .eases
+                .iter()
+                .map(|window| window.start)
+                .collect::<Vec<_>>(),
+            vec![2.0, 3.0]
+        );
+        assert_eq!(
+            compiled
+                .overlay_eases
+                .iter()
+                .map(|window| window.overlay_index)
+                .collect::<Vec<_>>(),
+            vec![0, 1, 2]
+        );
+        assert_eq!(
+            compiled
+                .messages
+                .iter()
+                .map(|event| event.beat)
+                .collect::<Vec<_>>(),
+            vec![1.0, 2.0]
+        );
+    }
+
+    #[test]
     fn easiest_steps_difficulty_ignores_disabled_players() {
         let mut players = std::array::from_fn(|_| SongLuaPlayerContext::default());
         players[0].difficulty = SongLuaDifficulty::Beginner;
@@ -3220,6 +4304,422 @@ mod tests {
         assert_eq!(graph_display_body_size(1), [610.0, 64.0]);
         assert_eq!(graph_display_body_size(2), [300.0, 64.0]);
         assert_eq!(graph_display_body_size(0), [300.0, 64.0]);
+    }
+
+    #[test]
+    fn scale_to_rect_plan_matches_actor_scale_policy() {
+        let fit = scale_to_rect_plan([10.0, 20.0, 210.0, 120.0], [50.0, 100.0], [0.5, 0.0], false)
+            .unwrap();
+        assert_eq!(fit.pos, [110.0, 20.0]);
+        assert_eq!(fit.zoom, 1.0);
+        assert!(!fit.flip_x);
+        assert!(!fit.flip_y);
+
+        let cover = scale_to_rect_plan([10.0, 20.0, 210.0, 120.0], [50.0, 100.0], [0.0, 0.5], true)
+            .unwrap();
+        assert_eq!(cover.pos, [10.0, 70.0]);
+        assert_eq!(cover.zoom, 4.0);
+
+        let flipped =
+            scale_to_rect_plan([210.0, 120.0, 10.0, 20.0], [50.0, 100.0], [0.5, 0.5], false)
+                .unwrap();
+        assert_eq!(flipped.pos, [110.0, 70.0]);
+        assert!(flipped.flip_x);
+        assert!(flipped.flip_y);
+
+        assert!(scale_to_rect_plan([0.0, 0.0, 1.0, 1.0], [0.0, 1.0], [0.0, 0.0], false).is_none());
+    }
+
+    #[test]
+    fn texture_rect_offsets_preserve_actor_host_math() {
+        assert_eq!(
+            offset_texture_rect([0.25, 0.5, 0.75, 1.0], [0.1, -0.2]),
+            [0.35, 0.3, 0.85, 0.8]
+        );
+        assert_eq!(
+            texture_pixel_offset_rect([0.0, 0.0, 0.5, 0.5], [200.0, 100.0], [10.0, 5.0]),
+            Some([0.05, 0.05, 0.55, 0.55])
+        );
+        assert_eq!(
+            texture_pixel_offset_rect([0.0, 0.0, 1.0, 1.0], [0.0, 100.0], [10.0, 5.0]),
+            None
+        );
+    }
+
+    #[test]
+    fn sprite_texture_rect_prefers_custom_then_state_sheet() {
+        assert_eq!(
+            sprite_texture_rect(Some([0.1, 0.2, 0.3, 0.4]), Some(2), Some((4, 2))),
+            [0.1, 0.2, 0.3, 0.4]
+        );
+        assert_eq!(
+            sprite_texture_rect(None, Some(5), Some((4, 2))),
+            [0.25, 0.5, 0.5, 1.0]
+        );
+        assert_eq!(
+            sprite_texture_rect(None, Some(SONG_LUA_SPRITE_STATE_CLEAR), Some((4, 2))),
+            [0.0, 0.0, 1.0, 1.0]
+        );
+        assert_eq!(
+            sprite_texture_rect(None, Some(1), None),
+            [0.0, 0.0, 1.0, 1.0]
+        );
+    }
+
+    #[test]
+    fn sprite_frame_count_saturates_empty_dims() {
+        assert_eq!(sprite_frame_count(None), 1);
+        assert_eq!(sprite_frame_count(Some((0, 0))), 1);
+        assert_eq!(sprite_frame_count(Some((4, 3))), 12);
+    }
+
+    #[test]
+    fn sprite_image_frame_size_divides_animated_or_stateful_sheets() {
+        assert_eq!(
+            sprite_image_frame_size(Some((256.0, 128.0)), false, None, Some((4, 2))),
+            Some((256.0, 128.0))
+        );
+        assert_eq!(
+            sprite_image_frame_size(Some((256.0, 128.0)), true, None, Some((4, 2))),
+            Some((64.0, 64.0))
+        );
+        assert_eq!(
+            sprite_image_frame_size(Some((256.0, 128.0)), false, Some(3), Some((4, 2))),
+            Some((64.0, 64.0))
+        );
+        assert_eq!(
+            sprite_image_frame_size(
+                Some((256.0, 128.0)),
+                false,
+                Some(SONG_LUA_SPRITE_STATE_CLEAR),
+                Some((4, 2)),
+            ),
+            Some((256.0, 128.0))
+        );
+        assert_eq!(
+            sprite_image_frame_size(Some((256.0, 128.0)), true, None, Some((0, 0))),
+            Some((256.0, 128.0))
+        );
+        assert_eq!(
+            sprite_image_frame_size(None, true, Some(3), Some((4, 2))),
+            None
+        );
+    }
+
+    #[test]
+    fn sprite_animation_state_at_matches_stepmania_timing() {
+        assert_eq!(sprite_animation_state_at(-1.0, 0.1, 4), 0);
+        assert_eq!(sprite_animation_state_at(0.39, 0.1, 4), 3);
+        assert_eq!(sprite_animation_state_at(0.4, 0.1, 4), 0);
+        assert_eq!(sprite_animation_state_at(5.0, 0.0, 4), 0);
+        assert_eq!(sprite_animation_state_at(5.0, -1.0, 4), 0);
+        assert_eq!(sprite_animation_state_at(5.0, 0.1, 0), 0);
+    }
+
+    #[test]
+    fn note_column_zoom_hide_policy_filters_unsupported_handlers() {
+        assert_eq!(
+            note_column_zoom_hide_beats_per_t("NoteColumnSplineMode_Offset", false, 0.5),
+            Some(0.5)
+        );
+        assert_eq!(
+            note_column_zoom_hide_beats_per_t("NoteColumnSplineMode_Disabled", false, 0.5),
+            None
+        );
+        assert_eq!(
+            note_column_zoom_hide_beats_per_t("NoteColumnSplineMode_Offset", true, 0.5),
+            None
+        );
+        assert_eq!(
+            note_column_zoom_hide_beats_per_t("NoteColumnSplineMode_Offset", false, 0.0),
+            None
+        );
+        assert_eq!(
+            note_column_zoom_hide_beats_per_t("NoteColumnSplineMode_Offset", false, f32::NAN),
+            None
+        );
+    }
+
+    #[test]
+    fn sort_note_hide_windows_matches_actor_host_order() {
+        let mut windows = vec![
+            SongLuaNoteHideWindow {
+                player: 1,
+                column: 0,
+                start_beat: 1.0,
+                end_beat: 1.5,
+            },
+            SongLuaNoteHideWindow {
+                player: 0,
+                column: 1,
+                start_beat: 2.0,
+                end_beat: 2.5,
+            },
+            SongLuaNoteHideWindow {
+                player: 0,
+                column: 1,
+                start_beat: 1.0,
+                end_beat: 2.0,
+            },
+            SongLuaNoteHideWindow {
+                player: 0,
+                column: 0,
+                start_beat: 4.0,
+                end_beat: 4.5,
+            },
+        ];
+        sort_note_hide_windows(&mut windows);
+        assert_eq!(
+            windows
+                .iter()
+                .map(|window| window.player)
+                .collect::<Vec<_>>(),
+            vec![0, 0, 0, 1]
+        );
+        assert_eq!(
+            windows
+                .iter()
+                .map(|window| (window.column, window.start_beat))
+                .collect::<Vec<_>>(),
+            vec![(0, 4.0), (1, 1.0), (1, 2.0), (0, 1.0)]
+        );
+    }
+
+    #[test]
+    fn note_column_pos_offset_y_from_points_matches_actor_host_policy() {
+        assert_eq!(
+            note_column_pos_offset_y_from_points("NoteColumnSplineMode_Disabled", &[]),
+            Some(0.0)
+        );
+        assert_eq!(
+            note_column_pos_offset_y_from_points("NoteColumnSplineMode_Rotation", &[[0.0, 2.0]]),
+            None
+        );
+        assert_eq!(
+            note_column_pos_offset_y_from_points("NoteColumnSplineMode_Offset", &[]),
+            Some(0.0)
+        );
+        assert_eq!(
+            note_column_pos_offset_y_from_points(
+                "NoteColumnSplineMode_Offset",
+                &[[0.0, 2.0], [0.0005, 2.0005]],
+            ),
+            Some(2.0)
+        );
+        assert_eq!(
+            note_column_pos_offset_y_from_points(
+                "NoteColumnSplineMode_Offset",
+                &[[0.0, 2.0], [0.0, 2.01]],
+            ),
+            None
+        );
+        assert_eq!(
+            note_column_pos_offset_y_from_points("NoteColumnSplineMode_Offset", &[[0.01, 2.0]]),
+            None
+        );
+    }
+
+    #[test]
+    fn column_offset_windows_from_samples_match_capture_policy() {
+        let params = SongLuaColumnOffsetBuildParams {
+            unit: SongLuaTimeUnit::Beat,
+            start: 4.0,
+            limit: 8.0,
+            span_mode: SongLuaSpanMode::End,
+            easing: Some("linear".to_string()),
+            sustain: Some(1.0),
+            opt1: Some(2.0),
+            opt2: Some(3.0),
+        };
+        let from = [
+            SongLuaColumnOffsetSample {
+                player: 1,
+                column: 2,
+                y: 12.0,
+            },
+            SongLuaColumnOffsetSample {
+                player: 0,
+                column: 1,
+                y: 0.0,
+            },
+            SongLuaColumnOffsetSample {
+                player: 0,
+                column: 0,
+                y: 4.0,
+            },
+        ];
+        let to = [
+            SongLuaColumnOffsetSample {
+                player: 0,
+                column: 1,
+                y: 0.0,
+            },
+            SongLuaColumnOffsetSample {
+                player: 0,
+                column: 0,
+                y: 8.0,
+            },
+            SongLuaColumnOffsetSample {
+                player: 1,
+                column: 0,
+                y: -2.0,
+            },
+        ];
+
+        let out = column_offset_windows_from_samples(&from, &to, params);
+
+        assert_eq!(out.len(), 3);
+        assert_eq!(
+            (out[0].player, out[0].column, out[0].from_y, out[0].to_y),
+            (0, 0, 4.0, 8.0)
+        );
+        assert_eq!(
+            (out[1].player, out[1].column, out[1].from_y, out[1].to_y),
+            (1, 0, 0.0, -2.0)
+        );
+        assert_eq!(
+            (out[2].player, out[2].column, out[2].from_y, out[2].to_y),
+            (1, 2, 12.0, 0.0)
+        );
+        assert_eq!(out[0].easing.as_deref(), Some("linear"));
+        assert_eq!(out[0].sustain, Some(1.0));
+        assert_eq!(out[0].opt1, Some(2.0));
+        assert_eq!(out[0].opt2, Some(3.0));
+    }
+
+    #[test]
+    fn note_hide_windows_from_flags_preserve_spline_run_policy() {
+        let out =
+            note_hide_windows_from_flags(1, 2, 0.5, &[false, true, true, false, true, true, true]);
+
+        assert_eq!(out.len(), 2);
+        assert_eq!((out[0].player, out[0].column), (1, 2));
+        assert_eq!((out[0].start_beat, out[0].end_beat), (0.5, 1.0));
+        assert_eq!((out[1].start_beat, out[1].end_beat), (2.0, 3.0));
+    }
+
+    #[test]
+    fn note_hide_window_index_policy_filters_invalid_ranges() {
+        assert_eq!(note_hide_window_from_indices(0, 0, 1.0, 0, 1), None);
+        assert_eq!(note_hide_window_from_indices(0, 0, 1.0, 3, 2), None);
+        assert_eq!(
+            note_hide_window_from_indices(0, 1, 0.25, 1, 1),
+            Some(super::SongLuaNoteHideWindow {
+                player: 0,
+                column: 1,
+                start_beat: 0.0,
+                end_beat: 0.0,
+            })
+        );
+        assert!(note_hide_windows_from_flags(0, 0, 0.0, &[true]).is_empty());
+        assert!(note_hide_windows_from_flags(0, 0, f32::NAN, &[true]).is_empty());
+    }
+
+    #[test]
+    fn overlay_eases_from_captures_intersects_common_delta_fields() {
+        let params = SongLuaOverlayEaseBuildParams {
+            unit: SongLuaTimeUnit::Beat,
+            start: 2.0,
+            limit: 4.0,
+            span_mode: SongLuaSpanMode::Len,
+            easing: Some("linear".to_string()),
+            sustain: Some(0.5),
+            opt1: Some(1.0),
+            opt2: Some(2.0),
+        };
+        let block = |delta: SongLuaOverlayStateDelta| SongLuaOverlayCommandBlock {
+            start: 0.0,
+            duration: 0.0,
+            easing: None,
+            opt1: None,
+            opt2: None,
+            delta,
+        };
+        let from = vec![
+            (
+                2,
+                vec![block(SongLuaOverlayStateDelta {
+                    x: Some(10.0),
+                    y: Some(20.0),
+                    ..SongLuaOverlayStateDelta::default()
+                })],
+            ),
+            (
+                0,
+                vec![block(SongLuaOverlayStateDelta {
+                    x: Some(1.0),
+                    ..SongLuaOverlayStateDelta::default()
+                })],
+            ),
+        ];
+        let to = vec![
+            (
+                2,
+                vec![block(SongLuaOverlayStateDelta {
+                    x: Some(30.0),
+                    ..SongLuaOverlayStateDelta::default()
+                })],
+            ),
+            (
+                1,
+                vec![block(SongLuaOverlayStateDelta {
+                    x: Some(99.0),
+                    ..SongLuaOverlayStateDelta::default()
+                })],
+            ),
+        ];
+
+        let out = overlay_eases_from_captures(3, &from, &to, params);
+
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].overlay_index, 2);
+        assert_eq!(out[0].from.x, Some(10.0));
+        assert_eq!(out[0].from.y, None);
+        assert_eq!(out[0].to.x, Some(30.0));
+        assert_eq!(out[0].easing.as_deref(), Some("linear"));
+        assert_eq!(out[0].sustain, Some(0.5));
+        assert_eq!(out[0].opt1, Some(1.0));
+        assert_eq!(out[0].opt2, Some(2.0));
+    }
+
+    #[test]
+    fn parse_overlay_blend_mode_accepts_stepmania_add_name() {
+        assert_eq!(
+            parse_overlay_blend_mode("BlendMode_Add"),
+            Some(SongLuaOverlayBlendMode::Add)
+        );
+        assert_eq!(
+            parse_overlay_blend_mode("BlendMode_Multiply"),
+            Some(SongLuaOverlayBlendMode::Multiply)
+        );
+        assert_eq!(
+            parse_overlay_blend_mode("BlendMode_Subtract"),
+            Some(SongLuaOverlayBlendMode::Subtract)
+        );
+    }
+
+    #[test]
+    fn parse_overlay_effect_mode_accepts_song_lua_effect_names() {
+        assert_eq!(
+            parse_overlay_effect_mode("DiffuseRamp"),
+            Some(EffectMode::DiffuseRamp)
+        );
+        assert_eq!(
+            parse_overlay_effect_mode("glowshift"),
+            Some(EffectMode::GlowShift)
+        );
+        assert_eq!(
+            parse_overlay_effect_mode("bounce"),
+            Some(EffectMode::Bounce)
+        );
+        assert_eq!(parse_overlay_effect_mode("wag"), Some(EffectMode::Wag));
+    }
+
+    #[test]
+    fn parse_overlay_effect_clock_accepts_music_and_bgm_aliases() {
+        assert_eq!(parse_overlay_effect_clock("beat"), Some(EffectClock::Beat));
+        assert_eq!(parse_overlay_effect_clock("bgm"), Some(EffectClock::Beat));
+        assert_eq!(parse_overlay_effect_clock("music"), Some(EffectClock::Time));
     }
 
     #[test]

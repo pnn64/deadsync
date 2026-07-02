@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use deadlib_render::TexturedMeshVertex;
+
 #[derive(Debug, Clone, Copy)]
 pub enum TweenType {
     Linear,
@@ -39,6 +41,53 @@ impl ModelMesh {
             (self.bounds[4] - self.bounds[1]).max(0.0),
         ]
     }
+}
+
+#[inline(always)]
+pub fn build_textured_model_geometry(
+    model: &ModelMesh,
+    mirror_h: bool,
+    mirror_v: bool,
+) -> Arc<[TexturedMeshVertex]> {
+    let mut vertices = Vec::with_capacity(model.vertices.len());
+    for v in model.vertices.iter() {
+        let mut pos = v.pos;
+        if mirror_h {
+            pos[0] = -pos[0];
+        }
+        if mirror_v {
+            pos[1] = -pos[1];
+        }
+        let u = if mirror_h { 1.0 - v.uv[0] } else { v.uv[0] };
+        let v_tex = if mirror_v { 1.0 - v.uv[1] } else { v.uv[1] };
+        vertices.push(TexturedMeshVertex {
+            pos,
+            uv: [u, v_tex],
+            tex_matrix_scale: v.tex_matrix_scale,
+            color: [1.0; 4],
+        });
+    }
+    Arc::from(vertices)
+}
+
+#[inline(always)]
+pub fn model_texture_uv_params(
+    uv_rect: [f32; 4],
+    src: [i32; 2],
+    atlas_tex_dims: Option<(u32, u32)>,
+) -> ([f32; 2], [f32; 2], [f32; 2]) {
+    let uv_scale = [uv_rect[2] - uv_rect[0], uv_rect[3] - uv_rect[1]];
+    let uv_offset = [uv_rect[0], uv_rect[1]];
+    let uv_tex_shift = if let Some((tw, th)) = atlas_tex_dims {
+        let tw = tw.max(1) as f32;
+        let th = th.max(1) as f32;
+        let base_u0 = src[0] as f32 / tw;
+        let base_v0 = src[1] as f32 / th;
+        [uv_offset[0] - base_u0, uv_offset[1] - base_v0]
+    } else {
+        [0.0, 0.0]
+    };
+    (uv_scale, uv_offset, uv_tex_shift)
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -399,7 +448,7 @@ mod tests {
     use super::{
         ModelAutoRotKey, ModelDrawState, ModelEffectClock, ModelEffectMode, ModelEffectState,
         ModelTweenSegment, TweenType, glowshift_mix, model_auto_rot_z_at, model_draw_at,
-        model_effect_clock_units, model_effect_mix, model_glow_with_draw,
+        model_effect_clock_units, model_effect_mix, model_glow_with_draw, model_texture_uv_params,
     };
 
     #[test]
@@ -457,6 +506,24 @@ mod tests {
         assert!((model_auto_rot_z_at(80.0, &keys, 25.0 / 30.0).unwrap() - 50.0).abs() <= 1e-6);
         assert_eq!(model_auto_rot_z_at(80.0, &keys, 40.0 / 30.0), Some(80.0));
         assert_eq!(model_auto_rot_z_at(80.0, &keys, 80.0 / 30.0), Some(20.0));
+    }
+
+    #[test]
+    fn model_texture_uv_params_preserve_atlas_shift_only() {
+        let uv_rect = [0.25, 0.5, 0.75, 1.0];
+
+        assert_eq!(
+            model_texture_uv_params(uv_rect, [64, 32], Some((256, 64))),
+            ([0.5, 0.5], [0.25, 0.5], [0.0, 0.0])
+        );
+        assert_eq!(
+            model_texture_uv_params(uv_rect, [64, 32], None),
+            ([0.5, 0.5], [0.25, 0.5], [0.0, 0.0])
+        );
+        assert_eq!(
+            model_texture_uv_params([0.5, 0.25, 0.75, 0.75], [64, 32], Some((256, 64))),
+            ([0.25, 0.5], [0.5, 0.25], [0.25, -0.25])
+        );
     }
 
     #[test]

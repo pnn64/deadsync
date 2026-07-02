@@ -1,4 +1,3 @@
-use chrono::{Datelike, Local, Timelike};
 use image::image_dimensions;
 use log::{debug, info};
 use mlua::{Function, Lua, MultiValue, Table, Value};
@@ -11,80 +10,81 @@ use std::time::Instant;
 
 use deadlib_present::actors::TextAttribute;
 use deadlib_present::anim::EffectClock;
+use deadlib_render::TexturedMeshVertex;
 use deadsync_noteskin::{NUM_QUANTIZATIONS, Style};
+#[cfg(test)]
+use deadsync_song_lua::SONG_LUA_STARTUP_MESSAGE;
 use deadsync_song_lua::{
     GRAPH_DISPLAY_VALUE_RESOLUTION, LUA_PLAYERS, MultitapDesc, RuntimeModEaseEntry,
-    SONG_LUA_BROADCASTS_KEY, SONG_LUA_DANGER_LIFE, SONG_LUA_INITIAL_LIFE, SONG_LUA_NOTE_COLUMNS,
-    SONG_LUA_SPRITE_STATE_CLEAR, SONG_LUA_STARTUP_MESSAGE, SONG_LUA_THEME_PATH_PREFIX,
-    SongLuaDateGlobals, SongLuaFunctionActionInput, SongLuaFunctionEaseDecision,
-    SongLuaFunctionEaseInput, SongLuaFunctionEaseResult, SongLuaHostState, SongLuaReadEasesStats,
+    SONG_LUA_DANGER_LIFE, SONG_LUA_INITIAL_LIFE, SONG_LUA_NOTE_COLUMNS,
+    SONG_LUA_SPRITE_STATE_CLEAR, SONG_LUA_THEME_PATH_PREFIX, SongLuaCompileTimer,
+    SongLuaFunctionActionInput, SongLuaFunctionEaseDecision, SongLuaFunctionEaseInput,
+    SongLuaFunctionEaseResult, SongLuaHostState, SongLuaReadEasesStats,
     SongLuaTrackedActor as TrackedCompileActor,
     SongLuaTrackedActorTarget as TrackedCompileActorTarget, THEME_RECEPTOR_Y_REV,
-    THEME_RECEPTOR_Y_STD, active_perframe_entries, actor_tree_has_update_functions,
-    apply_multitap_field_state, call_perframe_entry, clone_lua_value,
-    compile_song_runtime_delta_values, compile_song_runtime_values, create_chunk_env_proxy,
-    create_life_record_table, current_perframe_player_states, current_song_lua_style_name,
-    display_bpms_text, ease_window_cmp, entry_file_path, file_path_string, graph_display_body_size,
-    initial_chunk_environment, install_cmd_helpers, install_core_globals, install_ease_table,
+    THEME_RECEPTOR_Y_STD, active_perframe_entries, actor_overlay_initial_state,
+    actor_pointers_touch_actor, actor_tree_has_update_functions, apply_multitap_field_state,
+    call_perframe_entry, clone_lua_value, compile_song_runtime_delta_values,
+    compile_song_runtime_values, create_chunk_env_proxy, create_life_record_table,
+    current_perframe_player_states, current_song_lua_style_name, display_bpms_text,
+    entry_file_path, file_path_string, graph_display_body_size, initial_chunk_environment,
+    install_cmd_helpers, install_core_globals, install_default_stdlib_compat, install_ease_table,
     install_late_globals, install_message_manager_globals, install_screen_manager_globals,
     install_sound_globals, is_song_lua_audio_path, is_song_lua_image_path, is_song_lua_media_path,
     is_song_lua_video_path, lua_format_text, lua_text_value, make_color_table, merge_compile_info,
-    message_event_cmp, method_arg, mod_window_cmp, multitap_explosion_command_blocks,
-    multitap_explosion_message_events, multitap_explosion_message_name,
-    named_overlay_indices_by_name, note_song_lua_side_effect, overlay_delta_intersection,
+    method_arg, multitap_explosion_command_blocks, multitap_explosion_message_events,
+    multitap_explosion_message_name, named_overlay_indices_by_name, note_song_lua_side_effect,
     overlay_descendants_by_parent, perframe_boundaries, perframe_delta_seconds, perframe_samples,
     player_index_from_value, preprocess_lua_cmd_syntax, probe_function_ease_target,
     push_multitap_actor_eases, push_multitap_explosion_eases, push_perframe_static_targets,
-    push_sampled_perframe_targets, read_actions_with_function_capture, read_boolish,
-    read_eases_with_function_capture, read_f32, read_i32_value, read_mod_windows,
-    read_multitap_descs, read_perframe_entries, read_runtime_mod_eases, read_song_lua_broadcasts,
-    read_song_lua_sound_paths, read_string, read_u32_value,
+    push_sampled_perframe_targets, push_startup_message_if_listened,
+    read_actions_with_function_capture, read_boolish, read_eases_with_function_capture, read_f32,
+    read_global_function_nested_tables, read_i32_value, read_mod_windows, read_multitap_descs,
+    read_perframe_entries, read_runtime_mod_eases, read_song_lua_sound_paths, read_string,
+    read_u32_value, read_update_function_nested_tables, read_update_function_tables,
     read_xero_runtime_mod_eases_with_overlay_capture, record_unsupported_function_action_capture,
     record_unsupported_function_ease_capture, record_unsupported_xero_overlay_function_ease,
     register_loaded_easing_names, reset_tracked_capture_tables, resolve_script_path,
     restore_compile_globals, run_actor_init_commands, run_actor_startup_commands,
     run_actor_update_functions, run_actor_update_functions_with_delta,
-    set_compile_song_runtime_beat, set_compile_song_runtime_delta_values,
-    set_compile_song_runtime_values, set_string_method, snapshot_compile_globals,
-    song_lua_human_player_count, song_lua_side_effect_count, song_lua_style_column_x,
-    song_lua_style_info, song_music_rate, theme_metric_number, theme_path, tracked_player_tables,
-    truthy, unsupported_perframe_info, update_function_end_beat, update_function_overlay_eases,
-    update_function_samples,
+    runtime_static_overlay_index_by_path, set_compile_song_runtime_beat,
+    set_compile_song_runtime_delta_values, set_compile_song_runtime_values, set_string_method,
+    snapshot_compile_globals, song_lua_human_player_count, song_lua_local_date_globals,
+    song_lua_style_column_x, song_lua_style_info, song_music_rate, sort_compiled_song_lua,
+    theme_metric_number, theme_path, tracked_player_tables, truthy, unsupported_perframe_info,
+    update_function_end_beat, update_function_overlay_eases, update_function_samples,
 };
 
 mod actor_host;
-mod compat;
 mod managers;
-mod overlay;
 
 use self::actor_host::{
-    actor_overlay_initial_state, broadcast_song_lua_message, compile_function_action,
-    compile_note_column_pos_function_ease, compile_overlay_function_ease, create_dummy_actor,
-    create_top_screen_table, execute_script_file, install_def, install_file_loaders,
-    read_global_function_nested_tables, read_note_column_zoom_hides, read_overlay_actors,
-    read_tracked_compile_actors, read_update_function_actions, read_update_function_nested_tables,
-    read_update_function_tables, reset_overlay_capture_tables, run_actor_draw_functions,
+    broadcast_song_lua_message, compile_function_action, compile_note_column_pos_function_ease,
+    compile_overlay_function_ease, create_dummy_actor, create_top_screen_table,
+    execute_script_file, install_def, install_file_loaders, read_note_column_zoom_hides,
+    read_overlay_actors, read_tracked_compile_actors, read_update_function_actions,
+    reset_overlay_capture_tables, run_actor_draw_functions,
 };
-use self::compat::install_stdlib_compat;
 use self::managers::{create_noteskin_table, song_lua_noteskin_resolver};
-pub use self::overlay::{
-    SongLuaOverlayActor, SongLuaOverlayBlendMode, SongLuaOverlayCommandBlock, SongLuaOverlayEase,
-    SongLuaOverlayKind, SongLuaOverlayMeshVertex, SongLuaOverlayMessageCommand,
-    SongLuaOverlayModelDraw, SongLuaOverlayModelLayer, SongLuaOverlayState,
-    SongLuaOverlayStateDelta, SongLuaProxyTarget, SongLuaTextGlowMode,
-};
-use self::overlay::{
-    overlay_delta_from_blocks, overlay_state_after_blocks, parse_overlay_blend_mode,
-    parse_overlay_effect_clock, parse_overlay_effect_mode, parse_overlay_text_align,
-    parse_overlay_text_glow_mode,
-};
 pub use deadsync_song_lua::{
     SongLuaCapturedActor, SongLuaColumnOffsetWindow, SongLuaCompileContext, SongLuaCompileInfo,
     SongLuaDifficulty, SongLuaEaseTarget, SongLuaEaseWindow, SongLuaMessageEvent, SongLuaModWindow,
-    SongLuaNoteHideWindow, SongLuaNoteskinResolver, SongLuaPlayerContext, SongLuaSpanMode,
-    SongLuaSpeedMod, SongLuaTimeUnit,
+    SongLuaNoteHideWindow, SongLuaNoteskinResolver, SongLuaOverlayBlendMode,
+    SongLuaOverlayCommandBlock, SongLuaOverlayEase, SongLuaOverlayMeshVertex,
+    SongLuaOverlayMessageCommand, SongLuaOverlayModelDraw, SongLuaOverlayState,
+    SongLuaOverlayStateDelta, SongLuaPlayerContext, SongLuaProxyTarget, SongLuaSpanMode,
+    SongLuaSpeedMod, SongLuaTextGlowMode, SongLuaTimeUnit, overlay_state_after_blocks,
+    parse_overlay_blend_mode, parse_overlay_effect_clock, parse_overlay_effect_mode,
+    parse_overlay_text_align, parse_overlay_text_glow_mode,
 };
 
+pub type SongLuaOverlayModelLayer = deadsync_song_lua::SongLuaOverlayModelLayer<TexturedMeshVertex>;
+pub type SongLuaOverlayKind = deadsync_song_lua::SongLuaOverlayKind<
+    crate::game::parsing::noteskin::SpriteSlot,
+    TexturedMeshVertex,
+    TextAttribute,
+>;
+pub type SongLuaOverlayActor = deadsync_song_lua::SongLuaOverlayActor<SongLuaOverlayKind>;
 pub type CompiledSongLua = deadsync_song_lua::CompiledSongLua<SongLuaOverlayActor>;
 struct OverlayCompileActor {
     table: Table,
@@ -95,44 +95,42 @@ pub fn compile_song_lua(
     entry_path: &Path,
     context: &SongLuaCompileContext,
 ) -> Result<CompiledSongLua, String> {
-    let compile_started = Instant::now();
-    let mut stage_started = compile_started;
-    let mut stage_times = Vec::new();
+    let mut compile_timer = SongLuaCompileTimer::start();
     let entry_path = entry_file_path(entry_path)
         .ok_or_else(|| format!("song lua entry '{}' does not exist", entry_path.display()))?;
     let trace_entry_path = entry_path.clone();
     let lua = Lua::new();
     let mut host = SongLuaHostState::default();
     install_host(&lua, context, &mut host).map_err(|err| err.to_string())?;
-    push_song_lua_stage_time(&mut stage_times, "host", &mut stage_started);
+    compile_timer.push_stage("host");
     let root = execute_script_file(&lua, &entry_path, context.song_dir.as_path())
         .map_err(|err| format!("failed to execute '{}': {err}", entry_path.display()))?;
-    push_song_lua_stage_time(&mut stage_times, "execute", &mut stage_started);
+    compile_timer.push_stage("execute");
     run_actor_init_commands(&lua, &root).map_err(|err| {
         format!(
             "failed to run actor init commands for '{}': {err}",
             entry_path.display()
         )
     })?;
-    push_song_lua_stage_time(&mut stage_times, "init_commands", &mut stage_started);
+    compile_timer.push_stage("init_commands");
     run_actor_startup_commands(&lua, &root).map_err(|err| {
         format!(
             "failed to run actor startup commands for '{}': {err}",
             entry_path.display()
         )
     })?;
-    push_song_lua_stage_time(&mut stage_times, "startup_commands", &mut stage_started);
+    compile_timer.push_stage("startup_commands");
     run_actor_update_functions(&lua, &root).map_err(|err| {
         format!(
             "failed to run actor update functions for '{}': {err}",
             entry_path.display()
         )
     })?;
-    push_song_lua_stage_time(&mut stage_times, "update_functions", &mut stage_started);
+    compile_timer.push_stage("update_functions");
     run_actor_draw_functions(&lua, &root);
-    push_song_lua_stage_time(&mut stage_times, "draw_functions", &mut stage_started);
+    compile_timer.push_stage("draw_functions");
     register_loaded_easing_names(&lua, &mut host).map_err(|err| err.to_string())?;
-    push_song_lua_stage_time(&mut stage_times, "easing_names", &mut stage_started);
+    compile_timer.push_stage("easing_names");
 
     let globals = lua.globals();
     let mut out = CompiledSongLua {
@@ -148,7 +146,7 @@ pub fn compile_song_lua(
     let overlays = read_overlay_actors(&lua, &root, context, &mut out.info);
     restore_compile_globals(&globals, compile_globals).map_err(|err| err.to_string())?;
     let mut overlays = overlays?;
-    push_song_lua_stage_time(&mut stage_times, "read_overlays", &mut stage_started);
+    compile_timer.push_stage("read_overlays");
     let mut tracked_actors = read_tracked_compile_actors(&lua)?;
     let mut overlay_trigger_counter = 0usize;
     let hidden_players = std::array::from_fn(|player| {
@@ -176,7 +174,7 @@ pub fn compile_song_lua(
     let global_perframes = globals
         .get::<Option<Table>>("mod_perframes")
         .map_err(|err| err.to_string())?;
-    push_song_lua_stage_time(&mut stage_times, "read_globals", &mut stage_started);
+    compile_timer.push_stage("read_globals");
 
     if let Some(prefix_globals) = globals
         .get::<Option<Table>>("prefix_globals")
@@ -188,7 +186,7 @@ pub fn compile_song_lua(
                 .map_err(|err| err.to_string())?,
             SongLuaTimeUnit::Beat,
         )?);
-        push_song_lua_stage_time(&mut stage_times, "prefix_mods", &mut stage_started);
+        compile_timer.push_stage("prefix_mods");
         let (eases, overlay_eases, column_offsets, info) = read_eases(
             &lua,
             prefix_globals
@@ -202,7 +200,7 @@ pub fn compile_song_lua(
         out.overlay_eases.extend(overlay_eases);
         out.column_offsets.extend(column_offsets);
         merge_compile_info(&mut out.info, info);
-        push_song_lua_stage_time(&mut stage_times, "prefix_eases", &mut stage_started);
+        compile_timer.push_stage("prefix_eases");
         read_actions(
             &lua,
             prefix_globals
@@ -214,7 +212,7 @@ pub fn compile_song_lua(
             &mut overlay_trigger_counter,
             &mut out.info,
         )?;
-        push_song_lua_stage_time(&mut stage_times, "prefix_actions", &mut stage_started);
+        compile_timer.push_stage("prefix_actions");
     }
 
     let global_mods = globals
@@ -242,7 +240,7 @@ pub fn compile_song_lua(
         out.time_mods
             .extend(read_mod_windows(Some(table), SongLuaTimeUnit::Second)?);
     }
-    push_song_lua_stage_time(&mut stage_times, "global_mods", &mut stage_started);
+    compile_timer.push_stage("global_mods");
     let (global_eases, global_overlay_eases, global_column_offsets, global_info) = read_eases(
         &lua,
         globals
@@ -256,7 +254,7 @@ pub fn compile_song_lua(
     out.overlay_eases.extend(global_overlay_eases);
     out.column_offsets.extend(global_column_offsets);
     merge_compile_info(&mut out.info, global_info);
-    push_song_lua_stage_time(&mut stage_times, "global_eases", &mut stage_started);
+    compile_timer.push_stage("global_eases");
     let mut xero_node_tables = read_update_function_nested_tables(&lua, &root, &["nodes"])?;
     xero_node_tables.extend(read_global_function_nested_tables(
         &lua,
@@ -274,7 +272,7 @@ pub fn compile_song_lua(
     out.eases.extend(xero_eases);
     out.overlay_eases.extend(xero_overlay_eases);
     merge_compile_info(&mut out.info, xero_info);
-    push_song_lua_stage_time(&mut stage_times, "xero_eases", &mut stage_started);
+    compile_timer.push_stage("xero_eases");
     read_actions(
         &lua,
         globals
@@ -286,7 +284,7 @@ pub fn compile_song_lua(
         &mut overlay_trigger_counter,
         &mut out.info,
     )?;
-    push_song_lua_stage_time(&mut stage_times, "global_actions", &mut stage_started);
+    compile_timer.push_stage("global_actions");
     read_update_function_actions(
         &lua,
         &root,
@@ -296,7 +294,7 @@ pub fn compile_song_lua(
         &mut overlay_trigger_counter,
         &mut out.info,
     )?;
-    push_song_lua_stage_time(&mut stage_times, "update_actions", &mut stage_started);
+    compile_timer.push_stage("update_actions");
     let (perframe_eases, perframe_overlay_eases, perframe_info) = compile_perframes(
         &lua,
         prefix_perframes,
@@ -308,9 +306,9 @@ pub fn compile_song_lua(
     out.eases.extend(perframe_eases);
     out.overlay_eases.extend(perframe_overlay_eases);
     merge_compile_info(&mut out.info, perframe_info);
-    push_song_lua_stage_time(&mut stage_times, "perframes", &mut stage_started);
+    compile_timer.push_stage("perframes");
     out.note_hides = read_note_column_zoom_hides(&lua)?;
-    push_song_lua_stage_time(&mut stage_times, "note_hides", &mut stage_started);
+    compile_timer.push_stage("note_hides");
     let update_overlay_eases =
         match compile_multitap_update_overlays(&lua, context, &mut overlays, &mut out.messages)? {
             Some(eases) => eases,
@@ -323,20 +321,13 @@ pub fn compile_song_lua(
             )?,
         };
     out.overlay_eases.extend(update_overlay_eases);
-    push_song_lua_stage_time(&mut stage_times, "update_overlays", &mut stage_started);
-    if overlays.iter().any(|overlay| {
-        overlay
-            .actor
-            .message_commands
+    compile_timer.push_stage("update_overlays");
+    push_startup_message_if_listened(
+        &mut out.messages,
+        overlays
             .iter()
-            .any(|command| command.message == SONG_LUA_STARTUP_MESSAGE)
-    }) {
-        out.messages.push(SongLuaMessageEvent {
-            beat: 0.0,
-            message: SONG_LUA_STARTUP_MESSAGE.to_string(),
-            persists: false,
-        });
-    }
+            .map(|overlay| overlay.actor.message_commands.as_slice()),
+    );
     out.overlays = overlays.into_iter().map(|overlay| overlay.actor).collect();
     for tracked in tracked_actors {
         match tracked.target {
@@ -346,49 +337,19 @@ pub fn compile_song_lua(
     }
     out.hidden_players = hidden_players;
 
-    out.beat_mods.sort_by(mod_window_cmp);
-    out.time_mods.sort_by(mod_window_cmp);
-    out.eases.sort_by(ease_window_cmp);
-    out.overlay_eases.sort_by(|left, right| {
-        left.start
-            .total_cmp(&right.start)
-            .then_with(|| left.limit.total_cmp(&right.limit))
-            .then_with(|| left.overlay_index.cmp(&right.overlay_index))
-    });
-    out.messages.sort_by(message_event_cmp);
+    sort_compiled_song_lua(&mut out);
     out.sound_paths = read_song_lua_sound_paths(&lua)?;
-    push_song_lua_stage_time(&mut stage_times, "finalize", &mut stage_started);
-    log_song_lua_compile_timing(&trace_entry_path, compile_started, &stage_times);
+    compile_timer.push_stage("finalize");
+    log_song_lua_compile_timing(&trace_entry_path, &compile_timer);
     Ok(out)
 }
 
-fn push_song_lua_stage_time(
-    stage_times: &mut Vec<(&'static str, f64)>,
-    stage: &'static str,
-    stage_started: &mut Instant,
-) {
-    stage_times.push((stage, stage_started.elapsed().as_secs_f64() * 1000.0));
-    *stage_started = Instant::now();
-}
-
-fn log_song_lua_compile_timing(
-    entry_path: &Path,
-    compile_started: Instant,
-    stage_times: &[(&'static str, f64)],
-) {
-    let elapsed_ms = compile_started.elapsed().as_secs_f64() * 1000.0;
-    if elapsed_ms < 1000.0 {
+fn log_song_lua_compile_timing(entry_path: &Path, compile_timer: &SongLuaCompileTimer) {
+    if !compile_timer.should_log() {
         return;
     }
-    let mut stages = String::new();
-    for (stage, ms) in stage_times {
-        if !stages.is_empty() {
-            stages.push(' ');
-        }
-        stages.push_str(stage);
-        stages.push_str("_ms=");
-        stages.push_str(format!("{ms:.3}").as_str());
-    }
+    let elapsed_ms = compile_timer.elapsed_ms();
+    let stages = compile_timer.stage_summary();
     info!(
         "Song lua compile timing: entry='{}' elapsed_ms={elapsed_ms:.3} {}",
         entry_path.display(),
@@ -401,7 +362,7 @@ fn install_host(
     context: &SongLuaCompileContext,
     host: &mut SongLuaHostState,
 ) -> mlua::Result<()> {
-    install_stdlib_compat(lua, context.song_dir.as_path())?;
+    install_default_stdlib_compat(lua, context.song_dir.as_path())?;
     install_ease_table(lua, host)?;
     install_globals(lua, context)?;
     install_cmd_helpers(lua)?;
@@ -411,24 +372,10 @@ fn install_host(
 }
 
 fn install_globals(lua: &Lua, context: &SongLuaCompileContext) -> mlua::Result<()> {
-    let now = Local::now();
-    let year = now.year();
-    let month_of_year = now.month0() as i32;
-    let day_of_month = now.day() as i32;
-    let hour = now.hour() as i32;
-    let minute = now.minute() as i32;
-    let second = now.second() as i32;
     let game_state_globals = install_core_globals(
         lua,
         context,
-        SongLuaDateGlobals {
-            year,
-            month_of_year,
-            day_of_month,
-            hour,
-            minute,
-            second,
-        },
+        song_lua_local_date_globals(),
         create_noteskin_table(lua, context)?,
         current_song_lua_style_name,
     )?;
@@ -534,22 +481,19 @@ fn compile_xero_overlay_function_ease(
 }
 
 fn xero_node_touches_overlay(overlays: &[OverlayCompileActor], probe_actor_ptrs: &[usize]) -> bool {
-    !probe_actor_ptrs.is_empty()
-        && overlays.iter().any(|overlay| {
-            let ptr = overlay.table.to_pointer() as usize;
-            probe_actor_ptrs.contains(&ptr)
-        })
+    actor_pointers_touch_actor(
+        overlays.len(),
+        |index| overlays[index].table.to_pointer() as usize,
+        probe_actor_ptrs,
+    )
 }
 
 fn runtime_static_overlay_index(overlays: &[OverlayCompileActor]) -> Option<usize> {
-    overlays.iter().position(|overlay| {
-        let SongLuaOverlayKind::Sprite { texture_path, .. } = &overlay.actor.kind else {
-            return false;
+    runtime_static_overlay_index_by_path(overlays.len(), |index| {
+        let SongLuaOverlayKind::Sprite { texture_path, .. } = &overlays[index].actor.kind else {
+            return None;
         };
-        texture_path.file_name().is_some_and(|name| {
-            name.to_string_lossy()
-                .eq_ignore_ascii_case("_static 4x1.png")
-        })
+        Some(texture_path.as_path())
     })
 }
 
@@ -957,7 +901,7 @@ fn multitap_arrow_model_layers(
             continue;
         }
         let uv_rect = slot.uv_for_frame_at(slot.frame_index_from_phase(0.0), 0.0);
-        let (uv_scale, uv_offset, uv_tex_shift) = multitap_arrow_model_uv_params(slot, uv_rect);
+        let (uv_scale, uv_offset, uv_tex_shift) = slot.model_uv_params(uv_rect);
         let draw = slot.model_draw_at(0.0, 0.0);
         out.push(SongLuaOverlayModelLayer {
             texture_key: slot.texture_key_shared(),
@@ -980,25 +924,6 @@ fn multitap_arrow_model_layers(
         });
     }
     (!out.is_empty()).then(|| Arc::from(out.into_boxed_slice()))
-}
-
-fn multitap_arrow_model_uv_params(
-    slot: &crate::game::parsing::noteskin::SpriteSlot,
-    uv_rect: [f32; 4],
-) -> ([f32; 2], [f32; 2], [f32; 2]) {
-    let uv_scale = [uv_rect[2] - uv_rect[0], uv_rect[3] - uv_rect[1]];
-    let uv_offset = [uv_rect[0], uv_rect[1]];
-    let uv_tex_shift = match slot.source.as_ref() {
-        crate::game::parsing::noteskin::SpriteSource::Atlas { tex_dims, .. } => {
-            let tw = tex_dims.0.max(1) as f32;
-            let th = tex_dims.1.max(1) as f32;
-            let base_u0 = slot.def.src[0] as f32 / tw;
-            let base_v0 = slot.def.src[1] as f32 / th;
-            [uv_offset[0] - base_u0, uv_offset[1] - base_v0]
-        }
-        crate::game::parsing::noteskin::SpriteSource::Animated { .. } => [0.0, 0.0],
-    };
-    (uv_scale, uv_offset, uv_tex_shift)
 }
 
 fn install_multitap_explosion_messages(
