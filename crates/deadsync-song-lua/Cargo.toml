@@ -7,6 +7,8 @@ license = "GPL-3.0"
 [dependencies]
 deadlib-present = { path = "../deadlib-present" }
 chrono = "0.4.45"
+image = "0.25.10"
+log = "0.4.33"
 mlua = { version = "0.11.6", features = ["lua54", "vendored"] }
 serde_json = "1.0.150"
 
