@@ -2078,19 +2078,30 @@ fn build_length_grouped_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<Musi
     entries
 }
 
-fn song_meter_for_sort(song: &SongData, chart_type: &str) -> Option<u32> {
-    let mut best_non_edit: Option<u32> = None;
-    let mut best_any: Option<u32> = None;
+/// Returns all unique meter values for a song, considering the given chart type.
+/// Non-edit charts are preferred; edit charts are only included if the song has
+/// no non-edit charts at all. A song with charts at levels 1, 4, 7 returns [1, 4, 7]
+/// so that it can appear in every corresponding meter bucket.
+fn song_meters_for_sort(song: &SongData, chart_type: &str) -> Vec<u32> {
+    let mut non_edit_meters: HashSet<u32> = HashSet::new();
+    let mut any_meters: HashSet<u32> = HashSet::new();
     for chart in &song.charts {
         if !chart.chart_type.eq_ignore_ascii_case(chart_type) || !chart.has_note_data {
             continue;
         }
-        best_any = Some(best_any.map_or(chart.meter, |m| m.max(chart.meter)));
+        any_meters.insert(chart.meter);
         if !chart.difficulty.eq_ignore_ascii_case("edit") {
-            best_non_edit = Some(best_non_edit.map_or(chart.meter, |m| m.max(chart.meter)));
+            non_edit_meters.insert(chart.meter);
         }
     }
-    best_non_edit.or(best_any)
+    let meters = if !non_edit_meters.is_empty() {
+        non_edit_meters
+    } else {
+        any_meters
+    };
+    let mut result: Vec<u32> = meters.into_iter().collect();
+    result.sort_unstable();
+    result
 }
 
 #[inline(always)]
@@ -2105,7 +2116,7 @@ fn build_meter_grouped_entries(
     grouped_entries: &[MusicWheelEntry],
     chart_type: &str,
 ) -> Vec<MusicWheelEntry> {
-    let mut songs: Vec<Arc<SongData>> = grouped_entries
+    let songs: Vec<Arc<SongData>> = grouped_entries
         .iter()
         .filter_map(|e| match e {
             MusicWheelEntry::Song(song) => Some(song.clone()),
@@ -2113,40 +2124,60 @@ fn build_meter_grouped_entries(
         })
         .collect();
 
-    songs.sort_by_cached_key(|song| {
-        (
-            song_meter_for_sort(song.as_ref(), chart_type).unwrap_or(u32::MAX),
-            song_title_sort_key(song.as_ref()),
-        )
-    });
+    // Build a map from meter bucket -> songs in that bucket, preserving
+    // alphabetical order within each bucket. Songs with multiple charts at
+    // different levels appear in every applicable bucket.
+    let mut bucket_map: std::collections::BTreeMap<String, Vec<Arc<SongData>>> =
+        std::collections::BTreeMap::new();
 
-    let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(songs.len().saturating_add(32));
-    let mut current_group: Option<String> = None;
-    let mut current_header_index: Option<usize> = None;
-    let mut current_count = 0usize;
-    let mut header_idx = 0usize;
+    let no_meter_name = meter_bucket_name(None);
 
     for song in songs {
-        let group_name = meter_bucket_name(song_meter_for_sort(song.as_ref(), chart_type));
-        if current_group.as_deref() != Some(group_name.as_str()) {
-            write_header_song_count(&mut entries, current_header_index, current_count);
-            entries.push(MusicWheelEntry::PackHeader {
-                name: group_name.clone(),
-                original_index: header_idx,
-                banner_path: None,
-                song_count: 0,
-                pack_key: None,
-            });
-            current_header_index = Some(entries.len() - 1);
-            current_group = Some(group_name.clone());
-            current_count = 0;
-            header_idx += 1;
+        let meters = song_meters_for_sort(song.as_ref(), chart_type);
+        if meters.is_empty() {
+            bucket_map
+                .entry(no_meter_name.clone())
+                .or_default()
+                .push(song);
+        } else {
+            for meter in meters {
+                bucket_map
+                    .entry(meter_bucket_name(Some(meter)))
+                    .or_default()
+                    .push(song.clone());
+            }
         }
-        current_count += 1;
-        entries.push(MusicWheelEntry::Song(song));
     }
 
-    write_header_song_count(&mut entries, current_header_index, current_count);
+    // Sort songs within each bucket alphabetically.
+    for bucket_songs in bucket_map.values_mut() {
+        bucket_songs.sort_by_cached_key(|song| song_title_sort_key(song.as_ref()));
+    }
+
+    let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(
+        bucket_map
+            .values()
+            .map(|v| v.len() + 1)
+            .sum::<usize>()
+            .saturating_add(4),
+    );
+    let mut header_idx = 0usize;
+
+    for (group_name, bucket_songs) in &bucket_map {
+        let song_count = bucket_songs.len();
+        entries.push(MusicWheelEntry::PackHeader {
+            name: group_name.clone(),
+            original_index: header_idx,
+            banner_path: None,
+            song_count,
+            pack_key: None,
+        });
+        header_idx += 1;
+        for song in bucket_songs {
+            entries.push(MusicWheelEntry::Song(song.clone()));
+        }
+    }
+
     entries
 }
 
