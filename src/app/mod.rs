@@ -1681,6 +1681,7 @@ pub struct ShellState {
     pending_window_position: Option<PhysicalPosition<i32>>,
     gamepad_overlay_state: Option<(String, Instant)>,
     pending_exit: bool,
+    pending_shutdown: bool,
     shift_held: bool,
     ctrl_held: bool,
     alt_held: bool,
@@ -1906,6 +1907,7 @@ impl ShellState {
             pending_window_position: None,
             gamepad_overlay_state: None,
             pending_exit: false,
+            pending_shutdown: false,
             shift_held: false,
             ctrl_held: false,
             alt_held: false,
@@ -5510,6 +5512,7 @@ impl App {
                 return Ok(());
             }
             ScreenAction::Exit => self.handle_exit_action(),
+            ScreenAction::Shutdown => self.handle_shutdown_action(),
             ScreenAction::SelectProfiles { p1, p2 } => {
                 let fast_profile_switch = profile::take_fast_profile_switch_from_select_music();
                 let profile_data = profile::set_active_profiles(p1, p2);
