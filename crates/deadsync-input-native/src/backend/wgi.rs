@@ -62,7 +62,7 @@ const BTN_MAP: [(GamepadButtons, u32); 10] = [
     (GamepadButtons::Y, CODE_BTN_Y),
 ];
 
-#[derive(Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
 enum ReadingClockKind {
     #[default]
     Unknown,
@@ -259,13 +259,16 @@ impl ReadingClock {
         }
         let reading_ns = self.kind.to_nanos(raw, host)?;
         let offset_sample = offset_between(poll_host_nanos, reading_ns)?;
-        self.offset_ns = if self.offset_ns == 0 {
-            offset_sample
-        } else {
-            (((self.offset_ns as i128) * 7 + offset_sample as i128) / 8)
-                .try_into()
-                .ok()?
-        };
+        let advanced = raw != self.last_raw;
+        if advanced || self.offset_ns == 0 {
+            self.offset_ns = if self.offset_ns == 0 {
+                offset_sample
+            } else {
+                (((self.offset_ns as i128) * 7 + offset_sample as i128) / 8)
+                    .try_into()
+                    .ok()?
+            };
+        }
         let mapped = apply_offset(reading_ns, self.offset_ns);
         if mapped > poll_host_nanos.saturating_add(WGI_TIMESTAMP_FUTURE_TOLERANCE_NS) {
             return None;
@@ -287,8 +290,10 @@ impl ReadingClock {
         let host_nanos = self
             .host_nanos(raw, poll_host_nanos, host)
             .unwrap_or(poll_host_nanos);
-        self.last_raw = raw;
-        self.last_poll_host_nanos = poll_host_nanos;
+        if raw != self.last_raw {
+            self.last_raw = raw;
+            self.last_poll_host_nanos = poll_host_nanos;
+        }
         if host_nanos == 0 {
             return (polled_at, 0);
         }
@@ -896,5 +901,93 @@ pub fn run(
         // of immediate polls after a slow iteration or hotplug burst.
         let now = Instant::now();
         next_poll = now.checked_add(POLL_INTERVAL).unwrap_or(now);
+    }
+}
+
+#[cfg(test)]
+mod reading_clock_tests {
+    use super::*;
+
+    fn test_host() -> BackendHost {
+        fn pad_idx(_: PadOrderBackend, _: [u8; 16]) -> u32 { 0 }
+        fn smx_owns(_: Option<u16>, _: Option<u16>) -> bool { false }
+        fn now() -> u64 { 0 }
+        fn inst(_: Instant) -> u64 { 0 }
+        fn qpc(t: u64) -> Option<u64> { Some(t.saturating_mul(100)) } // 10 MHz QPC
+        fn boost() -> super::super::InputThreadPolicy { super::super::InputThreadPolicy::none() }
+        BackendHost::new(pad_idx, smx_owns, now, inst, qpc, boost)
+    }
+
+    /// Verifies that `ReadingClock` correctly identifies a device whose hardware
+    /// timestamps are reported in microseconds, even when the backend polls far
+    /// faster than the device emits new reports.
+    ///
+    /// The device only advances its timestamp when it produces a new report, but
+    /// the backend polls every 1 ms and re-reads the same (frozen) timestamp in
+    /// between. This test feeds a microsecond-timestamp stream with those repeated
+    /// stale polls interleaved and asserts that the clock locks onto Microseconds
+    /// and maps every press to within a sub-millisecond window of poll time, with
+    /// no early or late tail.
+    #[test]
+    fn locks_microseconds_through_stale_polls() {
+        let host = test_host();
+        let mut clock = ReadingClock::default();
+
+        const OFFSET_NS: u64 = 1_200_000; // device epoch ~1.2 ms behind host QPC
+        const POLL_NS: u64 = 1_000_000; // 1 ms poll loop
+        let host_ns = |d_us: u64| d_us * 1000 + OFFSET_NS;
+
+        // 40 taps (press + release 25 ms later) spaced 125 ms apart -> ~100 ms
+        // idle gaps between reports.
+        let mut edges: Vec<(u64, bool)> = Vec::new();
+        let base_us = 50_000_000u64;
+        for k in 0..40u64 {
+            let press_us = base_us + k * 125_000;
+            edges.push((press_us, true));
+            edges.push((press_us + 25_000, false));
+        }
+
+        let mut last_raw_us = 0u64;
+        let mut prev_host = 0u64;
+        let mut press_off_ms: Vec<f64> = Vec::new();
+        let mut kinds_after_warmup: Vec<ReadingClockKind> = Vec::new();
+
+        for (idx, (d_us, pressed)) in edges.iter().copied().enumerate() {
+            let edge_host = host_ns(d_us);
+            // Stale no-edge polls at 1 ms cadence carrying the frozen reading.
+            if last_raw_us != 0 {
+                let mut p = prev_host + POLL_NS;
+                while p < edge_host {
+                    let _ = clock.sample_time(last_raw_us, Instant::now(), p, host);
+                    p += POLL_NS;
+                }
+            }
+            // The genuine new report.
+            let (_inst, mapped) = clock.sample_time(d_us, Instant::now(), edge_host, host);
+            if idx >= 4 {
+                kinds_after_warmup.push(clock.kind);
+                if pressed {
+                    press_off_ms.push((edge_host as i64 - mapped as i64) as f64 / 1_000_000.0);
+                }
+            }
+            last_raw_us = d_us;
+            prev_host = edge_host;
+        }
+
+        // The unit must converge to (and stay) Microseconds.
+        assert!(
+            kinds_after_warmup.iter().all(|k| *k == ReadingClockKind::Microseconds),
+            "clock did not lock Microseconds: {:?}",
+            kinds_after_warmup
+        );
+
+        // Every press must map within a sub-millisecond window of poll time:
+        // no early tail (the bug produced tens of ms early) and no late tail.
+        let max_early = press_off_ms.iter().cloned().fold(f64::MIN, f64::max);
+        let max_late = press_off_ms.iter().cloned().fold(f64::MIN, |a, b| a.max(-b));
+        assert!(
+            max_early < 3.0 && max_late < 3.0,
+            "press offset out of band: max_early={max_early:.3}ms max_late={max_late:.3}ms all={press_off_ms:?}"
+        );
     }
 }
