@@ -909,12 +909,24 @@ mod reading_clock_tests {
     use super::*;
 
     fn test_host() -> BackendHost {
-        fn pad_idx(_: PadOrderBackend, _: [u8; 16]) -> u32 { 0 }
-        fn smx_owns(_: Option<u16>, _: Option<u16>) -> bool { false }
-        fn now() -> u64 { 0 }
-        fn inst(_: Instant) -> u64 { 0 }
-        fn qpc(t: u64) -> Option<u64> { Some(t.saturating_mul(100)) } // 10 MHz QPC
-        fn boost() -> super::super::InputThreadPolicy { super::super::InputThreadPolicy::none() }
+        fn pad_idx(_: PadOrderBackend, _: [u8; 16]) -> u32 {
+            0
+        }
+        fn smx_owns(_: Option<u16>, _: Option<u16>) -> bool {
+            false
+        }
+        fn now() -> u64 {
+            0
+        }
+        fn inst(_: Instant) -> u64 {
+            0
+        }
+        fn qpc(t: u64) -> Option<u64> {
+            Some(t.saturating_mul(100))
+        } // 10 MHz QPC
+        fn boost() -> super::super::InputThreadPolicy {
+            super::super::InputThreadPolicy::none()
+        }
         BackendHost::new(pad_idx, smx_owns, now, inst, qpc, boost)
     }
 
@@ -976,7 +988,9 @@ mod reading_clock_tests {
 
         // The unit must converge to (and stay) Microseconds.
         assert!(
-            kinds_after_warmup.iter().all(|k| *k == ReadingClockKind::Microseconds),
+            kinds_after_warmup
+                .iter()
+                .all(|k| *k == ReadingClockKind::Microseconds),
             "clock did not lock Microseconds: {:?}",
             kinds_after_warmup
         );
@@ -984,7 +998,10 @@ mod reading_clock_tests {
         // Every press must map within a sub-millisecond window of poll time:
         // no early tail (the bug produced tens of ms early) and no late tail.
         let max_early = press_off_ms.iter().cloned().fold(f64::MIN, f64::max);
-        let max_late = press_off_ms.iter().cloned().fold(f64::MIN, |a, b| a.max(-b));
+        let max_late = press_off_ms
+            .iter()
+            .cloned()
+            .fold(f64::MIN, |a, b| a.max(-b));
         assert!(
             max_early < 3.0 && max_late < 3.0,
             "press offset out of band: max_early={max_early:.3}ms max_late={max_late:.3}ms all={press_off_ms:?}"

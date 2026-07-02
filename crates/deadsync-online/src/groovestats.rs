@@ -1284,6 +1284,8 @@ pub struct GrooveStatsSubmitApiEvent {
 pub struct GrooveStatsSubmitApiProgress {
     #[serde(rename = "statImprovements", default)]
     pub stat_improvements: Vec<GrooveStatsSubmitApiStatImprovement>,
+    #[serde(rename = "skillImprovements", default)]
+    pub skill_improvements: Vec<String>,
     #[serde(rename = "questsCompleted", default)]
     pub quests_completed: Vec<GrooveStatsSubmitApiQuest>,
     #[serde(rename = "achievementsCompleted", default)]
@@ -1301,6 +1303,7 @@ pub fn submit_progress_from_api(progress: &GrooveStatsSubmitApiProgress) -> Subm
                 current: improvement.current,
             })
             .collect(),
+        skill_improvements: progress.skill_improvements.clone(),
         quests_completed: progress
             .quests_completed
             .iter()
@@ -2820,6 +2823,9 @@ mod tests {
                         "statImprovements": [
                             { "name": "clearType", "gained": "2", "current": "4" }
                         ],
+                        "skillImprovements": [
+                            "Gained 150 EXP and reached Level 12"
+                        ],
                         "questsCompleted": [
                             {
                                 "title": "Unlock One",
@@ -2883,6 +2889,10 @@ mod tests {
         assert_eq!(progress.stat_improvements[0].name, "clearType");
         assert_eq!(progress.stat_improvements[0].gained, 2);
         assert_eq!(progress.stat_improvements[0].current, 4);
+        assert_eq!(
+            progress.skill_improvements[0],
+            "Gained 150 EXP and reached Level 12"
+        );
         assert_eq!(progress.quests_completed[0].title, "Unlock One");
         assert_eq!(progress.quests_completed[0].rewards[0].reward_type, "song");
         assert_eq!(
@@ -2909,6 +2919,10 @@ mod tests {
         let score_progress = progress_data.progress.as_ref().expect("score progress");
         assert_eq!(score_progress.stat_improvements[0].name, "clearType");
         assert_eq!(score_progress.stat_improvements[0].gained, 2);
+        assert_eq!(
+            score_progress.skill_improvements[0],
+            "Gained 150 EXP and reached Level 12"
+        );
         assert_eq!(score_progress.quests_completed[0].title, "Unlock One");
         assert_eq!(
             score_progress.quests_completed[0].rewards[0].description,

@@ -45,10 +45,10 @@ fn event_color(kind: score_data::EventProgressKind) -> [f32; 4] {
 }
 
 #[inline(always)]
-fn event_badge(kind: score_data::EventProgressKind) -> &'static str {
+fn event_badge(kind: score_data::EventProgressKind) -> Option<&'static str> {
     match kind {
-        score_data::EventProgressKind::Itl => "EX",
-        score_data::EventProgressKind::Srpg => "SRPG",
+        score_data::EventProgressKind::Itl => Some("EX"),
+        score_data::EventProgressKind::Srpg => None,
     }
 }
 
@@ -168,6 +168,22 @@ fn srpg_stat_lines(progress: &score_data::EventProgress) -> (Vec<String>, Vec<St
 }
 
 #[inline(always)]
+fn srpg_overlay_stat_lines(progress: &score_data::EventProgress) -> Vec<String> {
+    progress
+        .stat_improvements
+        .iter()
+        .filter(|improvement| improvement.gained > 0)
+        .map(|improvement| {
+            format!(
+                "+{} {}",
+                improvement.gained,
+                improvement.name.to_uppercase()
+            )
+        })
+        .collect()
+}
+
+#[inline(always)]
 fn build_srpg_box_body(progress: &score_data::EventProgress) -> String {
     let mut body = format!(
         "Score: {} {}\n\
@@ -257,17 +273,14 @@ fn build_srpg_overlay_body(progress: &score_data::EventProgress) -> String {
         format_rate_hundredths(progress.rate_hundredths.unwrap_or(100)),
         format_signed_rate_hundredths(progress.rate_delta_hundredths.unwrap_or(0)),
     );
-    let (qualifier, stats) = srpg_stat_lines(progress);
-    if !qualifier.is_empty() || !stats.is_empty() {
+    let stats = srpg_overlay_stat_lines(progress);
+    if !stats.is_empty() {
         text.push_str("\n\n");
+        text.push_str(stats.join("\n").as_str());
     }
-    if !qualifier.is_empty() {
-        text.push_str(qualifier.join(" ").as_str());
-        text.push('\n');
-    }
-    for line in stats {
-        text.push_str(line.as_str());
-        text.push('\n');
+    if !progress.skill_improvements.is_empty() {
+        text.push_str("\n\n");
+        text.push_str(progress.skill_improvements.join("\n").as_str());
     }
     text.trim_end().to_string()
 }
@@ -946,15 +959,17 @@ fn build_overlay_panel(
         header_y,
         4,
     ));
-    children.push(act!(text:
-        font(current_machine_font_key_for_text(FontRole::Header, badge)):
-        settext(badge):
-        align(0.5, 0.5):
-        xy(pane_width * 0.5 - 18.0, header_y):
-        zoom(0.5):
-        diffuse(WHITE[0], WHITE[1], WHITE[2], WHITE[3]):
-        z(4)
-    ));
+    if let Some(badge) = badge {
+        children.push(act!(text:
+            font(current_machine_font_key_for_text(FontRole::Header, badge)):
+            settext(badge):
+            align(0.5, 0.5):
+            xy(pane_width * 0.5 - 18.0, header_y):
+            zoom(0.5):
+            diffuse(WHITE[0], WHITE[1], WHITE[2], WHITE[3]):
+            z(4)
+        ));
+    }
     match active_overlay_page(progress, page_idx) {
         Some(score_data::EventOverlayPage::Leaderboard(entries)) => {
             children.extend(build_overlay_leaderboard(

@@ -43,6 +43,7 @@ pub struct EventProgress {
     pub clear_type_before: Option<u8>,
     pub clear_type_after: Option<u8>,
     pub stat_improvements: Vec<EventStatImprovement>,
+    pub skill_improvements: Vec<String>,
     pub overlay_pages: Vec<EventOverlayPage>,
 }
 
@@ -84,6 +85,7 @@ pub struct SubmitAchievement {
 #[derive(Clone, Debug, Default)]
 pub struct SubmitProgress {
     pub stat_improvements: Vec<SubmitStatImprovement>,
+    pub skill_improvements: Vec<String>,
     pub quests_completed: Vec<SubmitQuest>,
     pub achievements_completed: Vec<SubmitAchievement>,
 }
@@ -205,16 +207,10 @@ fn stat_improvement_lines(progress: Option<&SubmitProgress>) -> Vec<String> {
 }
 
 fn srpg_stat_improvement_lines(progress: &ItlEventProgress) -> Vec<String> {
-    let srpg_stats = ["tp", "lp", "bb", "gold", "jp"];
     progress
         .stat_improvements
         .iter()
-        .filter(|improvement| {
-            improvement.gained > 0
-                && srpg_stats
-                    .iter()
-                    .any(|stat| improvement.name.eq_ignore_ascii_case(stat))
-        })
+        .filter(|improvement| improvement.gained > 0)
         .map(|improvement| {
             format!(
                 "+{} {}",
@@ -241,6 +237,10 @@ fn srpg_summary_page_text(progress: &ItlEventProgress) -> String {
     if !lines.is_empty() {
         text.push_str("\n\n");
         text.push_str(lines.join("\n").as_str());
+    }
+    if !progress.skill_improvements.is_empty() {
+        text.push_str("\n\n");
+        text.push_str(progress.skill_improvements.join("\n").as_str());
     }
     trim_blank_lines(text)
 }
@@ -435,6 +435,7 @@ fn itl_progress_from_submit(input: &SubmitEventProgressInput) -> Option<ItlEvent
         clear_type_before,
         clear_type_after,
         stat_improvements: event_stat_improvements(itl.progress.as_ref()),
+        skill_improvements: Vec::new(),
         overlay_pages: Vec::new(),
     };
     progress.overlay_pages =
@@ -482,6 +483,11 @@ fn srpg_progress_from_submit(input: &SubmitEventProgressInput) -> Option<ItlEven
         clear_type_before: None,
         clear_type_after: None,
         stat_improvements: event_stat_improvements(srpg.progress.as_ref()),
+        skill_improvements: srpg
+            .progress
+            .as_ref()
+            .map(|progress| progress.skill_improvements.clone())
+            .unwrap_or_default(),
         overlay_pages: Vec::new(),
     };
     progress.overlay_pages = event_progress_overlay_pages(

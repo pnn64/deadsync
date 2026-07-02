@@ -2032,6 +2032,7 @@ pub fn save_itl_chart_result(
         clear_type_before: Some(prev_entry.clear_type),
         clear_type_after: Some(current_entry.clear_type),
         stat_improvements: Vec::new(),
+        skill_improvements: Vec::new(),
         overlay_pages: Vec::new(),
     };
     progress.overlay_pages = event_progress_overlay_pages(&progress, None, &[]);
@@ -2209,11 +2210,19 @@ mod tests {
                 previous_point_total: 8,
                 leaderboard: vec![entry(98.76)],
                 progress: Some(SubmitProgress {
-                    stat_improvements: vec![SubmitStatImprovement {
-                        name: "tp".to_string(),
-                        gained: 5,
-                        current: 12,
-                    }],
+                    stat_improvements: vec![
+                        SubmitStatImprovement {
+                            name: "tp".to_string(),
+                            gained: 5,
+                            current: 12,
+                        },
+                        SubmitStatImprovement {
+                            name: "exp".to_string(),
+                            gained: 150,
+                            current: 900,
+                        },
+                    ],
+                    skill_improvements: vec!["Gained 150 EXP and reached Level 12".to_string()],
                     ..SubmitProgress::default()
                 }),
             }),
@@ -2261,6 +2270,7 @@ mod tests {
                             title_unlocked: "Champion".to_string(),
                         }],
                     }],
+                    skill_improvements: Vec::new(),
                 }),
                 ..SubmitEventProgressData::default()
             }),
@@ -2275,7 +2285,10 @@ mod tests {
         assert!(matches!(
             &progress[0].overlay_pages[0],
             EventOverlayPage::Text(text)
-                if text.contains("Skill Improvements") && text.contains("+5 TP")
+                if text.contains("Skill Improvements")
+                    && text.contains("+5 TP")
+                    && text.contains("+150 EXP")
+                    && text.contains("Gained 150 EXP and reached Level 12")
         ));
 
         assert_eq!(progress[1].kind, EventProgressKind::Itl);
