@@ -8,9 +8,7 @@ use crate::screens::components::shared::loading_bar;
 use crate::screens::input as screen_input;
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
-use deadlib_present::space::{
-    screen_center_x, screen_center_y, screen_height, screen_width, widescale,
-};
+use deadlib_present::space::{screen_center_x, screen_center_y, widescale};
 use deadsync_audio_stream as audio;
 use deadsync_chart::ChartData;
 use deadsync_chart::SongData;
@@ -22,7 +20,8 @@ use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
 
 const OVERLAY_Z: i16 = 1496;
-const VIEW_ROWS: usize = 8;
+const VIEW_ROWS_RUNNING: usize = 7;
+const VIEW_ROWS_REVIEW: usize = 5;
 const ROW_STEP: f32 = 43.0;
 const PROGRESS_STEP_BEATS: usize = 4;
 const MAX_MSGS_PER_FRAME: usize = 64;
@@ -171,16 +170,19 @@ pub(crate) fn build_overlay(state: &OverlayState, active_color_index: i32) -> Op
     };
 
     let summary = summary(overlay);
-    let pane_w = widescale(760.0, 860.0);
-    let pane_h = 488.0;
+    let pane_w = widescale(580.0, 760.0);
+    let pane_h = 470.0;
     let pane_cx = screen_center_x();
-    let pane_cy = screen_center_y() - 4.0;
+    let pane_cy = screen_center_y();
     let pane_left = pane_cx - pane_w * 0.5;
     let pane_top = pane_cy - pane_h * 0.5;
     let pane_right = pane_cx + pane_w * 0.5;
     let accent = color::simply_love_rgba(active_color_index);
     let fill = color::decorative_rgba(active_color_index);
-    let start = overlay.scroll_index.min(scroll_limit(overlay.rows.len()));
+    let view_rows = view_rows(overlay);
+    let start = overlay
+        .scroll_index
+        .min(scroll_limit(overlay.rows.len(), view_rows));
     let title = if overlay.phase == OverlayPhase::Running {
         tr("PackSync", "SyncingPackTitle")
     } else if can_save(overlay) {
@@ -198,13 +200,13 @@ pub(crate) fn build_overlay(state: &OverlayState, active_color_index: i32) -> Op
         summary.no_change,
         summary.failed
     );
-    let scroll_text = (summary.total > VIEW_ROWS).then(|| {
+    let scroll_text = (summary.total > view_rows).then(|| {
         tr_fmt(
             "PackSync",
             "RowsPaginationFormat",
             &[
                 ("start", &(start + 1).to_string()),
-                ("end", &(start + VIEW_ROWS).min(summary.total).to_string()),
+                ("end", &(start + view_rows).min(summary.total).to_string()),
                 ("total", &summary.total.to_string()),
             ],
         )
@@ -215,7 +217,7 @@ pub(crate) fn build_overlay(state: &OverlayState, active_color_index: i32) -> Op
         pane_w - 56.0
     };
     let song_x = pane_left + 28.0;
-    let bar_x = pane_left + 360.0;
+    let bar_x = pane_left + widescale(250.0, 360.0);
     let result_x = pane_right - 28.0;
     let row_top = pane_top + 138.0;
 
@@ -223,7 +225,7 @@ pub(crate) fn build_overlay(state: &OverlayState, active_color_index: i32) -> Op
     actors.push(act!(quad:
         align(0.0, 0.0):
         xy(0.0, 0.0):
-        zoomto(screen_width(), screen_height()):
+        zoomto(pane_w + 2.0, pane_h + 2.0):
         diffuse(0.0, 0.0, 0.0, 0.88):
         z(OVERLAY_Z)
     ));
@@ -319,7 +321,7 @@ pub(crate) fn build_overlay(state: &OverlayState, active_color_index: i32) -> Op
         horizalign(right)
     ));
 
-    for (slot, row) in overlay.rows.iter().skip(start).take(VIEW_ROWS).enumerate() {
+    for (slot, row) in overlay.rows.iter().skip(start).take(view_rows).enumerate() {
         let row_index = start + slot;
         let row_y = row_top + ROW_STEP * slot as f32;
         let disposition = row_disposition(row, overlay.min_confidence);
@@ -346,7 +348,7 @@ pub(crate) fn build_overlay(state: &OverlayState, active_color_index: i32) -> Op
             align(0.0, 0.5):
             xy(song_x, row_y - 6.0):
             zoom(0.84):
-            maxwidth(310.0):
+            maxwidth(widescale(200.0, 310.0)):
             diffuse(1.0, 1.0, 1.0, 1.0):
             z(OVERLAY_Z + 4):
             horizalign(left)
@@ -357,7 +359,7 @@ pub(crate) fn build_overlay(state: &OverlayState, active_color_index: i32) -> Op
             align(0.0, 0.5):
             xy(song_x, row_y + 12.0):
             zoom(0.7):
-            maxwidth(310.0):
+            maxwidth(widescale(200.0, 310.0)):
             diffuse(0.72, 0.72, 0.72, 1.0):
             z(OVERLAY_Z + 4):
             horizalign(left)
@@ -365,7 +367,7 @@ pub(crate) fn build_overlay(state: &OverlayState, active_color_index: i32) -> Op
         actors.push(loading_bar::build(loading_bar::LoadingBarParams {
             align: [0.0, 0.5],
             offset: [bar_x, row_y + 2.0],
-            width: 220.0,
+            width: widescale(160.0, 220.0),
             height: 18.0,
             progress: progress(row),
             label: bar_label(row, overlay.min_confidence).into(),
@@ -382,7 +384,7 @@ pub(crate) fn build_overlay(state: &OverlayState, active_color_index: i32) -> Op
             align(1.0, 0.5):
             xy(result_x, row_y + 2.0):
             zoom(0.72):
-            maxwidth(180.0):
+            maxwidth(widescale(140.0, 180.0)):
             diffuse(result_rgba[0], result_rgba[1], result_rgba[2], result_rgba[3]):
             z(OVERLAY_Z + 4):
             horizalign(right)
@@ -652,12 +654,12 @@ pub(crate) fn handle_input(
     let mut apply_changes: Option<Vec<SongOffsetSyncChange>> = None;
     let mut play_change = false;
     let mut play_start = false;
-    let page_delta = VIEW_ROWS.saturating_sub(1).max(1) as isize;
 
     {
         let OverlayState::Visible(overlay) = state else {
             return crate::screens::ScreenAction::None;
         };
+        let page_delta = view_rows(overlay).saturating_sub(1).max(1) as isize;
         if screen_input::dedicated_three_key_nav_enabled()
             && let Some((_, nav)) = three_key_action
         {
@@ -983,8 +985,15 @@ fn save_prompt(overlay: &OverlayStateData) -> String {
 }
 
 #[inline(always)]
-fn scroll_limit(total: usize) -> usize {
-    total.saturating_sub(VIEW_ROWS)
+fn scroll_limit(total: usize, view_rows: usize) -> usize {
+    total.saturating_sub(view_rows)
+}
+
+fn view_rows(overlay: &OverlayStateData) -> usize {
+    match overlay.phase {
+        OverlayPhase::Running => VIEW_ROWS_RUNNING,
+        OverlayPhase::Review => VIEW_ROWS_REVIEW,
+    }
 }
 
 #[inline(always)]
@@ -1064,18 +1073,19 @@ fn result_text(row: &RowState, min_confidence: f64) -> String {
 }
 
 fn follow_row(overlay: &mut OverlayStateData, row_index: usize) {
+    let view_rows = view_rows(overlay);
     if row_index < overlay.scroll_index {
         overlay.scroll_index = row_index;
         return;
     }
-    let end = overlay.scroll_index + VIEW_ROWS;
+    let end = overlay.scroll_index + view_rows;
     if row_index >= end {
-        overlay.scroll_index = row_index + 1 - VIEW_ROWS;
+        overlay.scroll_index = row_index + 1 - view_rows;
     }
 }
 
 fn shift(overlay: &mut OverlayStateData, delta: isize) -> bool {
-    let limit = scroll_limit(overlay.rows.len());
+    let limit = scroll_limit(overlay.rows.len(), view_rows(overlay));
     let next = (overlay.scroll_index as isize + delta).clamp(0, limit as isize) as usize;
     if next == overlay.scroll_index {
         return false;
@@ -1164,7 +1174,9 @@ fn poll_overlay(overlay: &mut OverlayStateData) {
         handled += 1;
     }
 
-    overlay.scroll_index = overlay.scroll_index.min(scroll_limit(overlay.rows.len()));
+    overlay.scroll_index = overlay
+        .scroll_index
+        .min(scroll_limit(overlay.rows.len(), view_rows(overlay)));
     if overlay.auto_follow
         && let Some(index) = overlay.current_row
     {
