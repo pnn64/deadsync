@@ -1,14 +1,13 @@
-use super::keybinds::{
-    binding_to_token, parse_binding_token, parse_keycode, parse_pad_code, parse_pad_device_binding,
-    parse_pad_dir, parse_pad_dir_binding,
-};
 use super::null_or_die_cfg::{
     clamp_null_or_die_confidence_percent, clamp_null_or_die_magic_offset_ms,
     clamp_null_or_die_positive_ms,
 };
 use super::*;
-use deadsync_input::InputBinding;
 use deadsync_input::{GamepadCodeBinding, PadDir};
+use deadsync_input::{
+    InputBinding, binding_to_token, parse_binding_token, parse_keycode, parse_pad_code,
+    parse_pad_device_binding, parse_pad_dir, parse_pad_dir_binding,
+};
 use winit::keyboard::KeyCode;
 
 fn assert_tenths_eq(actual: f64, expected_tenths: i32) {
