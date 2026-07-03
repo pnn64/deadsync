@@ -12,6 +12,8 @@ const AMONG_US_FRAMES: [u16; 6] = [1, 2, 3, 4, 5, 0];
 const AMONG_US_DELAYS: [f32; 6] = [0.125, 0.1875, 0.1875, 0.1875, 0.1875, 0.125];
 const DONCHAN_FRAMES: [u16; 16] = [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 2, 3];
 const DONCHAN_DELAYS: [f32; 16] = [0.5; 16];
+const BOCCHI_FRAMES: u32 = 18;
+const BOCCHI_DELAY: f32 = 1.0 / 9.0;
 const RIN_CAT_FRAMES: [u16; 6] = [2, 3, 4, 5, 0, 1];
 const RIN_CAT_DELAYS: [f32; 6] = [
     0.333_333_333_333_333_3,
@@ -183,7 +185,7 @@ fn gif_layout(extra: StepStatsExtra) -> Option<GifLayout> {
 fn frame_for_extra(extra: StepStatsExtra, beat: f32) -> u32 {
     match extra {
         StepStatsExtra::AmongUs => mixed_frame(beat, &AMONG_US_FRAMES, &AMONG_US_DELAYS),
-        StepStatsExtra::Bocchi => uniform_rotated_frame(beat, 18, 0, 0.125),
+        StepStatsExtra::Bocchi => uniform_rotated_frame(beat, BOCCHI_FRAMES, 0, BOCCHI_DELAY),
         StepStatsExtra::BrodyQuest => uniform_rotated_frame(beat, 84, 0, 0.095_238_095_238_095_2),
         StepStatsExtra::CatJAM => uniform_rotated_frame(beat, 151, 9, 0.086_092_715_231_788_1),
         StepStatsExtra::CrabPls => uniform_rotated_frame(beat, 59, 5, 0.067_796_610_169_491_5),
@@ -259,12 +261,18 @@ mod tests {
     }
 
     #[test]
-    fn bocchi_uses_uniform_eighteen_frame_loop() {
+    fn bocchi_loops_eighteen_frames_over_two_bgm_beats() {
         assert_eq!(frame_for_extra(StepStatsExtra::Bocchi, 0.0), 0);
-        assert_eq!(frame_for_extra(StepStatsExtra::Bocchi, 0.124), 0);
-        assert_eq!(frame_for_extra(StepStatsExtra::Bocchi, 0.125), 1);
-        assert_eq!(frame_for_extra(StepStatsExtra::Bocchi, 17.0 * 0.125), 17);
-        assert_eq!(frame_for_extra(StepStatsExtra::Bocchi, 18.0 * 0.125), 0);
+        assert_eq!(
+            frame_for_extra(StepStatsExtra::Bocchi, BOCCHI_DELAY * 0.99),
+            0
+        );
+        assert_eq!(frame_for_extra(StepStatsExtra::Bocchi, BOCCHI_DELAY), 1);
+        assert_eq!(
+            frame_for_extra(StepStatsExtra::Bocchi, 17.0 * BOCCHI_DELAY),
+            17
+        );
+        assert_eq!(frame_for_extra(StepStatsExtra::Bocchi, 2.0), 0);
     }
 
     #[test]
