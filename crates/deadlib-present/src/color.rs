@@ -58,6 +58,73 @@ pub const fn rgba_hex(s: &str) -> [f32; 4] {
     ]
 }
 
+/// ARGB color used by runtime/configurable presentation values.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Color {
+    pub a: f32,
+    pub r: f32,
+    pub g: f32,
+    pub b: f32,
+}
+
+impl Color {
+    /// Opaque black.
+    pub const BLACK: Self = Self {
+        a: 1.0,
+        r: 0.0,
+        g: 0.0,
+        b: 0.0,
+    };
+
+    /// Build an opaque color (alpha = 1.0) from RGB channels.
+    pub const fn rgb(r: f32, g: f32, b: f32) -> Self {
+        Self { a: 1.0, r, g, b }
+    }
+
+    /// Channels as an `[r, g, b, a]` array for render tint/diffuse values.
+    pub const fn to_rgba(self) -> [f32; 4] {
+        [self.r, self.g, self.b, self.a]
+    }
+
+    /// Parse a config hex color string: trimmed, optional leading `#`,
+    /// 6-digit `RRGGBB` or 8-digit `AARRGGBB`.
+    pub fn from_hex(raw: &str) -> Option<Self> {
+        let hex = raw.trim().trim_start_matches('#');
+        if !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return None;
+        }
+        let byte = |idx: usize| u8::from_str_radix(&hex[idx..idx + 2], 16).ok();
+        let chan = |idx: usize| Some(byte(idx)? as f32 / 255.0);
+        match hex.len() {
+            6 => Some(Self {
+                a: 1.0,
+                r: chan(0)?,
+                g: chan(2)?,
+                b: chan(4)?,
+            }),
+            8 => Some(Self {
+                a: chan(0)?,
+                r: chan(2)?,
+                g: chan(4)?,
+                b: chan(6)?,
+            }),
+            _ => None,
+        }
+    }
+
+    /// Format as `#RRGGBB` when opaque, otherwise `#AARRGGBB`.
+    pub fn to_hex(self) -> String {
+        let channel = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+        let (r, g, b) = (channel(self.r), channel(self.g), channel(self.b));
+        let a = channel(self.a);
+        if a == 255 {
+            format!("#{r:02X}{g:02X}{b:02X}")
+        } else {
+            format!("#{a:02X}{r:02X}{g:02X}{b:02X}")
+        }
+    }
+}
+
 #[macro_export]
 macro_rules! rgba {
     ($hex:literal $(,)?) => {
@@ -314,6 +381,38 @@ pub fn menu_selected_rgba(active_idx: i32) -> [f32; 4] {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn config_color_hex_parses_rgb_and_argb() {
+        assert_eq!(Color::from_hex("#000000"), Some(Color::BLACK));
+        assert_eq!(Color::from_hex("FFFFFF"), Some(Color::rgb(1.0, 1.0, 1.0)));
+        let gray = Color::from_hex("#0C0C0C").unwrap();
+        assert_eq!(
+            gray.to_rgba(),
+            [12.0 / 255.0, 12.0 / 255.0, 12.0 / 255.0, 1.0]
+        );
+
+        let c = Color::from_hex("#8001FE7F").unwrap();
+        assert_eq!(c.a, 128.0 / 255.0);
+        assert_eq!(c.r, 1.0 / 255.0);
+        assert_eq!(c.g, 254.0 / 255.0);
+        assert_eq!(c.b, 127.0 / 255.0);
+    }
+
+    #[test]
+    fn config_color_hex_rejects_malformed_input() {
+        assert_eq!(Color::from_hex(""), None);
+        assert_eq!(Color::from_hex("#FFF"), None);
+        assert_eq!(Color::from_hex("#GGGGGG"), None);
+        assert_eq!(Color::from_hex("#1234567"), None);
+        assert_eq!(Color::from_hex("#123456789"), None);
+    }
+
+    #[test]
+    fn config_color_hex_formats_uppercase() {
+        assert_eq!(Color::from_hex("#0C0C0C").unwrap().to_hex(), "#0C0C0C");
+        assert_eq!(Color::from_hex("#8001FE7F").unwrap().to_hex(), "#8001FE7F");
+    }
 
     #[test]
     fn srpg9_order_tracks_decorative_wheel() {

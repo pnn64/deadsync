@@ -27,7 +27,6 @@ mod runtime;
 mod runtime_mod;
 mod sl;
 mod song_tables;
-mod sprite_sheet;
 mod tables;
 mod theme_colors;
 mod timing;
@@ -46,6 +45,7 @@ pub use compile_timing::{
     SongLuaCompileTimer, log_song_lua_compile_timing, song_lua_compile_stage_summary,
 };
 pub use crypto::create_cryptman_table;
+pub use deadlib_assets::parse_sprite_sheet_dims;
 pub use eases::{
     SongLuaFunctionEaseDecision, SongLuaFunctionEaseInput, SongLuaFunctionEaseResult,
     SongLuaReadEasesResult, SongLuaReadEasesStats, read_eases_for_overlay_actors,
@@ -241,7 +241,6 @@ pub use song_tables::{
     create_song_options_table, create_song_table, create_song_util_table, create_songman_table,
     create_steps_table, create_trail_table,
 };
-pub use sprite_sheet::parse_sprite_sheet_dims;
 pub use tables::{
     create_author_table, create_background_filter_values, create_branch_table,
     create_charman_table, create_credits_table, create_difficulty_table, create_display_bpms_table,

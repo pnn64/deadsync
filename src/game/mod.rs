@@ -7,7 +7,6 @@ pub mod profile;
 pub mod random_movies;
 pub mod scores;
 pub mod song;
-pub mod stage_stats;
 
 use std::ops::{Deref, DerefMut};
 

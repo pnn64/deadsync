@@ -5,6 +5,7 @@ edition = "2024"
 license = "GPL-3.0"
 
 [dependencies]
+deadlib-assets = { path = "../deadlib-assets" }
 deadlib-present = { path = "../deadlib-present" }
 chrono = "0.4.45"
 image = "0.25.10"

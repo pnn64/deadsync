@@ -43,6 +43,25 @@ pub fn clamp_input_debounce_seconds(seconds: f32) -> f32 {
     seconds.clamp(INPUT_DEBOUNCE_MIN_SECONDS, INPUT_DEBOUNCE_MAX_SECONDS)
 }
 
+pub fn parse_input_debounce_seconds(raw: &str) -> Option<f32> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return None;
+    }
+    let lower = raw.to_ascii_lowercase();
+    if let Some(ms) = lower.strip_suffix("ms") {
+        return ms
+            .trim()
+            .parse::<f32>()
+            .ok()
+            .map(|n| clamp_input_debounce_seconds(n / 1000.0));
+    }
+    raw.parse::<f32>().ok().map(|n| {
+        let seconds = if n > 1.0 { n / 1000.0 } else { n };
+        clamp_input_debounce_seconds(seconds)
+    })
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct PadId(pub u32);
 
@@ -645,7 +664,8 @@ mod tests {
         ALL_VIRTUAL_ACTIONS, GamepadCodeBinding, Lane, PadCode, PadDir, PadEvent, PadId,
         VirtualAction, action_from_ini_key_lower, action_to_ini_key, clamp_input_debounce_seconds,
         emit_normalized_actions, gamepad_code_binding_to_token, lane_from_action, lane_from_column,
-        pad_dir_from_action, parse_gamepad_code_binding, parse_pad_dir, secondary_menu_mask,
+        pad_dir_from_action, parse_gamepad_code_binding, parse_input_debounce_seconds,
+        parse_pad_dir, secondary_menu_mask,
     };
     use std::time::Instant;
 
@@ -692,6 +712,17 @@ mod tests {
         assert_eq!(clamp_input_debounce_seconds(-1.0), 0.0);
         assert_eq!(clamp_input_debounce_seconds(0.1), 0.1);
         assert_eq!(clamp_input_debounce_seconds(1.0), 0.2);
+    }
+
+    #[test]
+    fn input_debounce_parses_config_units() {
+        assert_eq!(parse_input_debounce_seconds("20ms"), Some(0.02));
+        assert_eq!(parse_input_debounce_seconds(" 200MS "), Some(0.2));
+        assert_eq!(parse_input_debounce_seconds("0.05"), Some(0.05));
+        assert_eq!(parse_input_debounce_seconds("50"), Some(0.05));
+        assert_eq!(parse_input_debounce_seconds("500ms"), Some(0.2));
+        assert_eq!(parse_input_debounce_seconds(""), None);
+        assert_eq!(parse_input_debounce_seconds("fast"), None);
     }
 
     #[test]

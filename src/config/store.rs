@@ -38,14 +38,6 @@ const DEFAULT_KEYMAP_LINES: [(&str, &str); 28] = [
     ("System_SlowDown", "KeyCode::Backquote"),
 ];
 
-pub(super) fn normalize_machine_default_noteskin(raw: &str) -> String {
-    let trimmed = raw.trim();
-    if trimmed.is_empty() {
-        return DEFAULT_MACHINE_NOTESKIN.to_string();
-    }
-    trimmed.to_ascii_lowercase()
-}
-
 pub(super) fn create_default_config_file() -> Result<(), std::io::Error> {
     let path = dirs::app_dirs().config_path();
     info!(

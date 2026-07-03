@@ -1,4 +1,6 @@
 use super::*;
+use deadsync_config::cache::never_cache_list_value;
+use deadsync_config::folders::additional_song_folder_paths;
 use deadsync_input::Keymap;
 
 pub(super) fn build_content(
@@ -77,7 +79,11 @@ fn push_saved_options(
     push_line(content, "GameplayBgColor", cfg.gameplay_bg_color.to_hex());
     push_bool(content, "BannerCache", cfg.banner_cache);
     push_bool(content, "CacheSongs", cfg.cachesongs);
-    push_line(content, "NeverCacheList", never_cache_list.join(","));
+    push_line(
+        content,
+        "NeverCacheList",
+        never_cache_list_value(never_cache_list),
+    );
     push_bool(content, "CDTitleCache", cfg.cdtitle_cache);
     push_bool(content, "Center1Player", cfg.center_1player_notefield);
     push_line(
@@ -467,47 +473,6 @@ fn push_saved_options(
     push_bool(content, "Windowed", cfg.windowed);
     push_bool(content, "WriteCurrentScreen", cfg.write_current_screen);
     content.push('\n');
-}
-
-fn additional_song_folder_paths(folders: &[AdditionalSongFolder], writable: bool) -> String {
-    let mut out = String::new();
-    for folder in folders.iter().filter(|folder| folder.writable == writable) {
-        if !out.is_empty() {
-            out.push(',');
-        }
-        out.push_str(folder.path.as_str());
-    }
-    out
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn folder(path: &str, writable: bool) -> AdditionalSongFolder {
-        AdditionalSongFolder {
-            path: path.to_string(),
-            writable,
-        }
-    }
-
-    #[test]
-    fn additional_song_folder_paths_split_writable_and_read_only() {
-        let folders = [
-            folder("G:\\readonly", false),
-            folder("D:\\writable-a", true),
-            folder("E:\\writable-b", true),
-        ];
-
-        assert_eq!(
-            additional_song_folder_paths(&folders, false),
-            "G:\\readonly"
-        );
-        assert_eq!(
-            additional_song_folder_paths(&folders, true),
-            "D:\\writable-a,E:\\writable-b"
-        );
-    }
 }
 
 fn push_saved_keymaps(content: &mut String, keymap: &Keymap) {

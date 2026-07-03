@@ -1,6 +1,7 @@
 use super::media_cache;
-use crate::assets::{AssetManager, dynamic, open_image_fallback, register_texture_dims};
+use crate::assets::{AssetManager, open_image_fallback, register_texture_dims};
 use crate::game::profile;
+use deadlib_assets::dynamic;
 use deadlib_render::{SamplerDesc, TextureHandle};
 use deadlib_renderer::{Backend, Texture as RendererTexture};
 use deadlib_video as video;

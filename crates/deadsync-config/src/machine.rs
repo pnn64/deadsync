@@ -1,0 +1,94 @@
+pub const DEFAULT_MACHINE_NOTESKIN: &str = "cel";
+pub const DEFAULT_FRAME_STATS_OVERLAY_ANCHOR: &str = "auto";
+pub const DEFAULT_FRAME_STATS_OVERLAY_STYLE: &str = "detailed";
+
+pub fn normalize_machine_default_noteskin(raw: &str) -> String {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return DEFAULT_MACHINE_NOTESKIN.to_string();
+    }
+    trimmed.to_ascii_lowercase()
+}
+
+pub fn canonical_frame_stats_overlay_anchor(value: &str) -> &'static str {
+    const KEYS: &[&str] = &[
+        "top-left",
+        "top-right",
+        "bottom-left",
+        "bottom-right",
+        "top-center",
+        "bottom-center",
+    ];
+    let value = value.trim().to_ascii_lowercase();
+    KEYS.iter()
+        .copied()
+        .find(|&key| key == value)
+        .unwrap_or(DEFAULT_FRAME_STATS_OVERLAY_ANCHOR)
+}
+
+pub fn canonical_frame_stats_overlay_style(value: &str) -> &'static str {
+    if value.trim().eq_ignore_ascii_case("minimal") {
+        "minimal"
+    } else {
+        DEFAULT_FRAME_STATS_OVERLAY_STYLE
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalizes_machine_default_noteskin() {
+        assert_eq!(normalize_machine_default_noteskin(" Cyber "), "cyber");
+        assert_eq!(
+            normalize_machine_default_noteskin(""),
+            DEFAULT_MACHINE_NOTESKIN
+        );
+        assert_eq!(
+            normalize_machine_default_noteskin("   "),
+            DEFAULT_MACHINE_NOTESKIN
+        );
+    }
+
+    #[test]
+    fn canonical_overlay_anchor_accepts_known_keys() {
+        assert_eq!(
+            canonical_frame_stats_overlay_anchor(" Top-Left "),
+            "top-left"
+        );
+        assert_eq!(
+            canonical_frame_stats_overlay_anchor("bottom-center"),
+            "bottom-center"
+        );
+    }
+
+    #[test]
+    fn canonical_overlay_anchor_defaults_unknown_values() {
+        assert_eq!(
+            canonical_frame_stats_overlay_anchor("auto"),
+            DEFAULT_FRAME_STATS_OVERLAY_ANCHOR
+        );
+        assert_eq!(
+            canonical_frame_stats_overlay_anchor("middle"),
+            DEFAULT_FRAME_STATS_OVERLAY_ANCHOR
+        );
+        assert_eq!(
+            canonical_frame_stats_overlay_anchor(""),
+            DEFAULT_FRAME_STATS_OVERLAY_ANCHOR
+        );
+    }
+
+    #[test]
+    fn canonical_overlay_style_accepts_minimal_only() {
+        assert_eq!(canonical_frame_stats_overlay_style(" Minimal "), "minimal");
+        assert_eq!(
+            canonical_frame_stats_overlay_style("detailed"),
+            DEFAULT_FRAME_STATS_OVERLAY_STYLE
+        );
+        assert_eq!(
+            canonical_frame_stats_overlay_style("compact"),
+            DEFAULT_FRAME_STATS_OVERLAY_STYLE
+        );
+    }
+}

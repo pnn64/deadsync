@@ -3,9 +3,6 @@ use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::visual_styles;
 use crate::assets::{FontRole, current_machine_font_key};
-use crate::game::import::detect::{
-    ItgProfileCandidate, detect_itg_local_profiles, detect_itg_profiles_from_game_dir,
-};
 use crate::game::import::run::{ImportSummary, import_itg_profile_dir};
 use crate::game::profile;
 use crate::screens::components::shared::loading_bar;
@@ -20,6 +17,9 @@ use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_height, screen_width};
 use deadsync_audio_stream as audio;
+use deadsync_import::detect::{
+    ItgProfileCandidate, detect_itg_local_profiles, detect_itg_profiles_from_game_dir,
+};
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;

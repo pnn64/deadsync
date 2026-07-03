@@ -1,6 +1,3 @@
-mod audio;
-mod color;
-mod ini;
 mod keybinds;
 mod load;
 #[path = "null_or_die.rs"]
@@ -10,12 +7,8 @@ mod runtime;
 mod store;
 #[cfg(test)]
 mod tests;
-mod theme;
 mod update;
 
-pub use self::audio::{AudioMixLevels, AudioOutputMode, LinuxAudioBackend};
-pub use self::color::Color;
-pub use self::ini::SimpleIni;
 pub use self::keybinds::{
     clear_keymap_binding, update_keymap_binding_unique_gamepad,
     update_keymap_binding_unique_keyboard,
@@ -32,7 +25,17 @@ pub use self::runtime::{
     group_is_never_cached, machine_default_noteskin, never_cache_list, smx_pad_assignment,
     song_path_is_writable,
 };
-pub use self::theme::{
+pub use self::update::*;
+pub use deadlib_platform::display::FullscreenType;
+pub use deadlib_present::color::Color;
+pub use deadsync_audio::{AudioMixLevels, AudioOutputMode, LinuxAudioBackend};
+pub use deadsync_config::ini::SimpleIni;
+pub use deadsync_config::null_or_die::{
+    clamp_null_or_die_confidence_percent, clamp_null_or_die_magic_offset_ms,
+    clamp_null_or_die_positive_ms, null_or_die_kernel_target_str, null_or_die_kernel_type_str,
+    parse_null_or_die_kernel_target, parse_null_or_die_kernel_type,
+};
+pub use deadsync_config::theme::{
     AUTO_SS_CLEARS, AUTO_SS_FAILS, AUTO_SS_FLAG_NAMES, AUTO_SS_NUM_FLAGS, AUTO_SS_PBS,
     AUTO_SS_QUADS, AUTO_SS_QUINTS, ArrowCloudQrLoginWhen, BreakdownStyle, DefaultFailType,
     DefaultSyncOffset, GameFlag, GrooveStatsQrLoginWhen, LanguageFlag, LogLevel,
@@ -43,25 +46,22 @@ pub use self::theme::{
     SelectMusicWheelStyle, SrpgVariant, SyncGraphMode, ThemeFlag, VersionOverlaySide, VisualStyle,
     auto_screenshot_bit, auto_screenshot_mask_from_str, auto_screenshot_mask_to_str,
 };
-pub use self::update::*;
-pub use deadlib_platform::display::FullscreenType;
 
 use self::keybinds::{
     ALL_VIRTUAL_ACTIONS, action_to_ini_key, binding_to_token, load_keymap_from_ini_local,
-};
-use self::null_or_die_cfg::{
-    clamp_null_or_die_confidence_percent, clamp_null_or_die_magic_offset_ms,
-    clamp_null_or_die_positive_ms, null_or_die_kernel_target_str, null_or_die_kernel_type_str,
-    parse_null_or_die_kernel_target, parse_null_or_die_kernel_type,
 };
 use self::runtime::{
     ADDITIONAL_SONG_FOLDERS, DEFAULT_PROFILE_P1, DEFAULT_PROFILE_P2, MACHINE_DEFAULT_NOTESKIN,
     NEVER_CACHE_LIST, SMX_P1_SERIAL, SMX_P2_SERIAL, lock_config, queue_save_write,
     sync_audio_mix_levels_from_config,
 };
-use self::store::{normalize_machine_default_noteskin, save_without_keymaps};
+use self::store::save_without_keymaps;
 use deadlib_platform::logging;
 use deadlib_render::{BackendType, PresentModePolicy};
+use deadsync_config::machine::normalize_machine_default_noteskin;
+pub use deadsync_config::machine::{
+    DEFAULT_FRAME_STATS_OVERLAY_ANCHOR, DEFAULT_FRAME_STATS_OVERLAY_STYLE, DEFAULT_MACHINE_NOTESKIN,
+};
 pub use deadsync_input_native::PadOrderBackend;
 use deadsync_input_native::WindowsPadBackend;
 use deadsync_lights::{DriverKind as LightsDriverKind, GameplayPadLightMode, SerialPortName};
@@ -71,13 +71,7 @@ use null_or_die::{BiasCfg, BiasKernel, KernelTarget};
 use std::str::FromStr;
 use winit::keyboard::KeyCode;
 
-const DEFAULT_MACHINE_NOTESKIN: &str = "cel";
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AdditionalSongFolder {
-    pub path: String,
-    pub writable: bool,
-}
+pub use deadsync_config::folders::AdditionalSongFolder;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DisplayMode {
@@ -393,8 +387,8 @@ impl Default for Config {
             write_current_screen: false,
             tab_acceleration: true,
             show_stats_mode: 0,
-            frame_stats_overlay_anchor: "auto",
-            frame_stats_overlay_style: "detailed",
+            frame_stats_overlay_anchor: DEFAULT_FRAME_STATS_OVERLAY_ANCHOR,
+            frame_stats_overlay_style: DEFAULT_FRAME_STATS_OVERLAY_STYLE,
             translated_titles: false,
             mine_hit_sound: true,
             bg_brightness: 0.7,

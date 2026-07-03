@@ -1,0 +1,17 @@
+[package]
+name = "deadlib-assets"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0"
+
+[dependencies]
+deadlib-render = { path = "../deadlib-render" }
+deadlib-video = { path = "../deadlib-video" }
+image = "0.25.10"
+log = "0.4.33"
+twox-hash = "2.1.2"
+
+[lints.clippy]
+perf = { level = "warn", priority = -1 }
+
+inline_always = "allow"

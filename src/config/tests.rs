@@ -1,7 +1,3 @@
-use super::null_or_die_cfg::{
-    clamp_null_or_die_confidence_percent, clamp_null_or_die_magic_offset_ms,
-    clamp_null_or_die_positive_ms,
-};
 use super::*;
 use deadsync_input::{GamepadCodeBinding, PadDir};
 use deadsync_input::{
@@ -9,32 +5,6 @@ use deadsync_input::{
     parse_pad_device_binding, parse_pad_dir, parse_pad_dir_binding,
 };
 use winit::keyboard::KeyCode;
-
-fn assert_tenths_eq(actual: f64, expected_tenths: i32) {
-    assert_eq!((actual * 10.0).round() as i32, expected_tenths);
-}
-
-#[test]
-fn clamp_null_or_die_confidence_caps_at_100() {
-    assert_eq!(clamp_null_or_die_confidence_percent(0), 0);
-    assert_eq!(clamp_null_or_die_confidence_percent(80), 80);
-    assert_eq!(clamp_null_or_die_confidence_percent(120), 100);
-}
-
-#[test]
-fn clamp_null_or_die_positive_ms_uses_tenths() {
-    assert_tenths_eq(clamp_null_or_die_positive_ms(0.0), 1);
-    assert_tenths_eq(clamp_null_or_die_positive_ms(10.04), 100);
-    assert_tenths_eq(clamp_null_or_die_positive_ms(10.05), 101);
-    assert_tenths_eq(clamp_null_or_die_positive_ms(1000.0), 1000);
-}
-
-#[test]
-fn clamp_null_or_die_magic_offset_uses_tenths() {
-    assert_tenths_eq(clamp_null_or_die_magic_offset_ms(-200.0), -1000);
-    assert_tenths_eq(clamp_null_or_die_magic_offset_ms(0.04), 0);
-    assert_tenths_eq(clamp_null_or_die_magic_offset_ms(0.05), 1);
-}
 
 #[test]
 fn config_default_enables_custom_sounds() {

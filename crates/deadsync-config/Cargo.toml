@@ -1,0 +1,15 @@
+[package]
+name = "deadsync-config"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0"
+
+[dependencies]
+deadsync-chart = { path = "../deadsync-chart" }
+log = "0.4.33"
+null-or-die = { git = "https://github.com/pnn64/null-or-die", branch = "main" }
+
+[lints.clippy]
+perf = { level = "warn", priority = -1 }
+
+inline_always = "allow"

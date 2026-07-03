@@ -1,32 +1,11 @@
 use super::*;
+use deadsync_config::machine::{
+    canonical_frame_stats_overlay_anchor, canonical_frame_stats_overlay_style,
+};
+use deadsync_config::numbers::parse_auto_threads_u8;
 use deadsync_lights::{
     SerialPortName, parse_driver_or_default, parse_gameplay_pad_lights_or_default,
 };
-
-/// Normalize a persisted frame-stats overlay anchor to a canonical static key, mapping
-/// "auto"/empty/unknown to "auto" (the engine then follows the play-context default).
-fn canonical_overlay_anchor(value: &str) -> &'static str {
-    const KEYS: &[&str] = &[
-        "top-left",
-        "top-right",
-        "bottom-left",
-        "bottom-right",
-        "top-center",
-        "bottom-center",
-    ];
-    let value = value.trim().to_ascii_lowercase();
-    KEYS.iter().copied().find(|&k| k == value).unwrap_or("auto")
-}
-
-/// Normalize a persisted frame-stats overlay style to a canonical static key; anything other
-/// than "minimal" falls back to "detailed".
-fn canonical_overlay_style(value: &str) -> &'static str {
-    if value.trim().eq_ignore_ascii_case("minimal") {
-        "minimal"
-    } else {
-        "detailed"
-    }
-}
 
 pub(super) fn load(conf: &SimpleIni, default: Config, cfg: &mut Config) {
     load_system_opts(conf, default, cfg);
@@ -132,11 +111,11 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .unwrap_or(default.show_stats_mode);
     cfg.frame_stats_overlay_anchor = conf
         .get("Options", "FrameStatsOverlayAnchor")
-        .map(|v| canonical_overlay_anchor(&v))
+        .map(|v| canonical_frame_stats_overlay_anchor(&v))
         .unwrap_or(default.frame_stats_overlay_anchor);
     cfg.frame_stats_overlay_style = conf
         .get("Options", "FrameStatsOverlayStyle")
-        .map(|v| canonical_overlay_style(&v))
+        .map(|v| canonical_frame_stats_overlay_style(&v))
         .unwrap_or(default.frame_stats_overlay_style);
     cfg.translated_titles = conf
         .get("Options", "TranslatedTitles")
@@ -290,14 +269,7 @@ fn load_null_or_die_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .unwrap_or(default.null_or_die_confidence_percent);
     cfg.null_or_die_pack_sync_threads = conf
         .get("Options", "PackSyncThreads")
-        .map(|v| v.trim().to_string())
-        .and_then(|v| {
-            if v.eq_ignore_ascii_case("auto") || v.is_empty() {
-                Some(0u8)
-            } else {
-                v.parse::<u8>().ok()
-            }
-        })
+        .and_then(|v| parse_auto_threads_u8(&v))
         .unwrap_or(default.null_or_die_pack_sync_threads);
     cfg.null_or_die_fingerprint_ms = conf
         .get("Options", "NullOrDieFingerprintMs")
@@ -564,14 +536,7 @@ fn load_runtime_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .map_or(default.cachesongs, |v| v != 0);
     cfg.song_parsing_threads = conf
         .get("Options", "SongParsingThreads")
-        .map(|v| v.trim().to_string())
-        .and_then(|v| {
-            if v.eq_ignore_ascii_case("auto") || v.is_empty() {
-                Some(0u8)
-            } else {
-                v.parse::<u8>().ok()
-            }
-        })
+        .and_then(|v| parse_auto_threads_u8(&v))
         .unwrap_or(default.song_parsing_threads);
     cfg.smooth_histogram = conf
         .get("Options", "SmoothHistogram")
@@ -583,24 +548,7 @@ fn load_runtime_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .map_or(default.shade_scatterplot_judgments, |v| v != 0);
     cfg.input_debounce_seconds = conf
         .get("Options", "InputDebounceTime")
-        .map(|v| v.trim().to_string())
-        .and_then(|v| {
-            if v.is_empty() {
-                return None;
-            }
-            let lower = v.to_ascii_lowercase();
-            if let Some(ms) = lower.strip_suffix("ms") {
-                return ms
-                    .trim()
-                    .parse::<f32>()
-                    .ok()
-                    .map(|n| deadsync_input::clamp_input_debounce_seconds(n / 1000.0));
-            }
-            v.parse::<f32>().ok().map(|n| {
-                let secs = if n > 1.0 { n / 1000.0 } else { n };
-                deadsync_input::clamp_input_debounce_seconds(secs)
-            })
-        })
+        .and_then(|v| deadsync_input::parse_input_debounce_seconds(&v))
         .unwrap_or(default.input_debounce_seconds);
     cfg.arcade_options_navigation = conf
         .get("Options", "ArcadeOptionsNavigation")
@@ -644,14 +592,7 @@ fn load_runtime_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .unwrap_or(default.theme_flag);
     cfg.software_renderer_threads = conf
         .get("Options", "SoftwareRendererThreads")
-        .map(|v| v.trim().to_string())
-        .and_then(|v| {
-            if v.eq_ignore_ascii_case("auto") || v.is_empty() {
-                Some(0u8)
-            } else {
-                v.parse::<u8>().ok()
-            }
-        })
+        .and_then(|v| parse_auto_threads_u8(&v))
         .unwrap_or(default.software_renderer_threads);
 }
 

@@ -1,5 +1,4 @@
 pub mod audio_folder;
-pub(crate) mod dynamic;
 pub mod i18n;
 #[doc(hidden)]
 pub mod present_dsl;
@@ -13,16 +12,9 @@ use deadlib_render::{SamplerDesc, TextureHandle, TextureHandleMap};
 use deadlib_renderer::{Backend, Texture as RendererTexture};
 use image::RgbaImage;
 use log::{debug, warn};
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::{error::Error as StdError, fmt, path::Path, sync::Arc};
 
-#[cfg(test)]
-pub(crate) use self::dynamic::{
-    BannerCacheOptions, dedupe_dynamic_keys, dynamic_image_cache_path_for,
-    load_or_build_cached_dynamic_image, save_cached_banner_image, save_raw_cached_banner_image,
-};
-#[cfg(test)]
-pub(crate) use self::textures::parse_texture_resolution_hint;
 pub use self::textures::{
     TexMeta, TextureChoice, TextureHints, canonical_texture_key, held_miss_texture_choices,
     hold_judgment_texture_choices, judgment_texture_choices, open_image_fallback,
@@ -35,6 +27,8 @@ use self::textures::{
     apply_texture_hints, clear_texture_handles, fix_hidden_alpha, generated_texture,
     register_texture_handle, remove_texture_handle, take_pending_generated_texture_keys,
 };
+pub use deadlib_assets::upload::TextureUploadBudget;
+use deadlib_assets::upload::TextureUploadQueue;
 
 pub fn media_path_key(path: &Path) -> Arc<str> {
     match path.to_string_lossy() {
@@ -140,80 +134,6 @@ impl present_texture::TextureContext for PresentTextureContext {
 }
 
 pub const PRESENT_TEXTURE_CONTEXT: PresentTextureContext = PresentTextureContext;
-
-#[derive(Clone, Copy)]
-pub(crate) struct TextureUploadBudget {
-    pub max_uploads: usize,
-    pub max_bytes: usize,
-}
-
-struct PendingTextureUpload {
-    image: Arc<RgbaImage>,
-    sampler: SamplerDesc,
-    bytes: usize,
-}
-
-#[derive(Default)]
-struct TextureUploadQueue {
-    order: VecDeque<String>,
-    entries: HashMap<String, PendingTextureUpload>,
-    queued_bytes: usize,
-}
-
-impl TextureUploadQueue {
-    fn contains(&self, key: &str) -> bool {
-        self.entries.contains_key(key)
-    }
-
-    fn push(&mut self, key: String, image: Arc<RgbaImage>, sampler: SamplerDesc) {
-        let bytes = image.as_raw().len();
-        if let Some(old) = self.entries.insert(
-            key.clone(),
-            PendingTextureUpload {
-                image,
-                sampler,
-                bytes,
-            },
-        ) {
-            self.queued_bytes = self.queued_bytes.saturating_sub(old.bytes);
-        } else {
-            self.order.push_back(key);
-        }
-        self.queued_bytes = self.queued_bytes.saturating_add(bytes);
-    }
-
-    fn remove(&mut self, key: &str) {
-        if let Some(old) = self.entries.remove(key) {
-            self.queued_bytes = self.queued_bytes.saturating_sub(old.bytes);
-        }
-    }
-
-    fn pop_next(
-        &mut self,
-        budget: TextureUploadBudget,
-        drained_uploads: usize,
-        drained_bytes: usize,
-    ) -> Option<(String, PendingTextureUpload)> {
-        while let Some(key) = self.order.pop_front() {
-            let Some(upload) = self.entries.remove(&key) else {
-                continue;
-            };
-            let next_bytes = drained_bytes.saturating_add(upload.bytes);
-            let fits_budget =
-                drained_uploads < budget.max_uploads && next_bytes <= budget.max_bytes;
-            let allow_first =
-                drained_uploads == 0 && budget.max_uploads > 0 && budget.max_bytes > 0;
-            if fits_budget || allow_first {
-                self.queued_bytes = self.queued_bytes.saturating_sub(upload.bytes);
-                return Some((key, upload));
-            }
-            self.entries.insert(key.clone(), upload);
-            self.order.push_front(key);
-            return None;
-        }
-        None
-    }
-}
 
 pub struct AssetManager {
     textures: TextureHandleMap<RendererTexture>,
@@ -776,11 +696,6 @@ impl Default for AssetManager {
 mod tests {
     use super::*;
     use crate::config::MachineFont;
-    use std::{
-        fs,
-        path::{Path, PathBuf},
-        sync::atomic::{AtomicUsize, Ordering},
-    };
 
     #[test]
     fn machine_font_key_normal_is_always_miso() {
@@ -916,255 +831,8 @@ mod tests {
         );
     }
 
-    static NEXT_TMP_ID: AtomicUsize = AtomicUsize::new(1);
-
-    struct TempDir {
-        path: PathBuf,
-    }
-
-    impl TempDir {
-        fn new(name: &str) -> Self {
-            let id = NEXT_TMP_ID.fetch_add(1, Ordering::Relaxed);
-            let path = std::env::temp_dir().join(format!(
-                "deadsync-assets-{name}-{}-{id}",
-                std::process::id()
-            ));
-            let _ = fs::remove_dir_all(&path);
-            fs::create_dir_all(&path).unwrap();
-            Self { path }
-        }
-
-        fn path(&self) -> &Path {
-            &self.path
-        }
-    }
-
-    impl Drop for TempDir {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.path);
-        }
-    }
-
-    fn test_rgba(color: [u8; 4]) -> RgbaImage {
-        RgbaImage::from_raw(1, 1, color.to_vec()).expect("test pixel should match image size")
-    }
-
-    fn write_test_png(path: &Path, color: [u8; 4]) {
-        test_rgba(color).save(path).unwrap();
-    }
-
     fn blank_rgba(width: u32, height: u32) -> RgbaImage {
         RgbaImage::from_pixel(width, height, image::Rgba([0, 0, 0, 0]))
-    }
-
-    #[test]
-    fn parses_texture_resolution_hint_from_parenthetical_res_tag() {
-        assert_eq!(
-            parse_texture_resolution_hint("_miso light 15x15 (res 360x360).png"),
-            Some((360, 360))
-        );
-    }
-
-    #[test]
-    fn parses_texture_resolution_hint_case_insensitively() {
-        assert_eq!(
-            parse_texture_resolution_hint("banner (ReS 512x160).png"),
-            Some((512, 160))
-        );
-    }
-
-    #[test]
-    fn ignores_invalid_res_tags_until_a_valid_one() {
-        assert_eq!(
-            parse_texture_resolution_hint("sheet (res nope) (res 384 x170).png"),
-            Some((384, 170))
-        );
-    }
-
-    #[test]
-    fn ignores_zero_sized_res_tags() {
-        assert_eq!(parse_texture_resolution_hint("sheet (res 0x170).png"), None);
-    }
-
-    #[test]
-    fn ignores_non_parenthetical_sheet_dims() {
-        assert_eq!(
-            parse_texture_resolution_hint("_miso light 16x7 doubleres.png"),
-            None
-        );
-    }
-
-    #[test]
-    fn parses_itg_style_sprite_sheet_dims() {
-        assert_eq!(parse_sprite_sheet_dims("grades/grades 1x19.png"), (1, 19));
-        assert_eq!(
-            parse_sprite_sheet_dims("_miso light 16x7 doubleres.png"),
-            (16, 7)
-        );
-    }
-
-    #[test]
-    fn preserves_local_underscore_sprite_sheet_dims() {
-        assert_eq!(
-            parse_sprite_sheet_dims("submit/LoadingSpinner_10x3.png"),
-            (10, 3)
-        );
-        assert_eq!(
-            parse_sprite_sheet_dims("practice/note_field_bars_1x4_wrap.png"),
-            (1, 4)
-        );
-    }
-
-    #[test]
-    fn ignores_resolution_labels_in_banner_names() {
-        assert_eq!(
-            parse_sprite_sheet_dims("1024x480-song-banner-background.png"),
-            (1, 1)
-        );
-        assert_eq!(
-            parse_sprite_sheet_dims("song-banner-1024x480-dimensions.png"),
-            (1, 1)
-        );
-    }
-
-    #[test]
-    fn dedupe_dynamic_keys_preserves_first_owner_order() {
-        assert_eq!(
-            dedupe_dynamic_keys(vec![
-                "banner.mp4".to_string(),
-                "shared.mp4".to_string(),
-                "banner.mp4".to_string(),
-                "shared.mp4".to_string(),
-                "bg.mp4".to_string(),
-            ]),
-            vec![
-                "banner.mp4".to_string(),
-                "shared.mp4".to_string(),
-                "bg.mp4".to_string(),
-            ]
-        );
-    }
-
-    #[test]
-    fn cache_hit_skips_stale_variant_prune() {
-        let dir = TempDir::new("cache-hit-no-prune");
-        let src = dir.path().join("banner.png");
-        let cache_dir = dir.path().join("cache");
-        let opts = BannerCacheOptions { enabled: true };
-        let expected = test_rgba([1, 2, 3, 4]);
-
-        write_test_png(&src, [1, 2, 3, 4]);
-        let (cache_path, path_hex) = dynamic_image_cache_path_for(&src, opts, &cache_dir).unwrap();
-        let stale_path = cache_path
-            .parent()
-            .unwrap()
-            .join(format!("{path_hex}-ffffffffffffffff.rgba"));
-        assert!(save_raw_cached_banner_image(&cache_path, &expected));
-        assert!(save_raw_cached_banner_image(
-            &stale_path,
-            &test_rgba([9, 8, 7, 6])
-        ));
-
-        let rgba = load_or_build_cached_dynamic_image(&src, opts, &cache_dir)
-            .expect("cache hit should load cached image");
-
-        assert_eq!(rgba, expected);
-        assert!(stale_path.is_file());
-    }
-
-    #[test]
-    fn cache_write_prunes_stale_variants() {
-        let dir = TempDir::new("cache-write-prune");
-        let src = dir.path().join("banner.png");
-        let cache_dir = dir.path().join("cache");
-        let opts = BannerCacheOptions { enabled: true };
-        let current = test_rgba([4, 3, 2, 1]);
-
-        write_test_png(&src, [4, 3, 2, 1]);
-        let (cache_path, path_hex) = dynamic_image_cache_path_for(&src, opts, &cache_dir).unwrap();
-        let stale_path = cache_path
-            .parent()
-            .unwrap()
-            .join(format!("{path_hex}-eeeeeeeeeeeeeeee.rgba"));
-        assert!(save_raw_cached_banner_image(
-            &stale_path,
-            &test_rgba([7, 7, 7, 7])
-        ));
-
-        save_cached_banner_image(&cache_path, &path_hex, &current);
-
-        assert!(cache_path.is_file());
-        assert!(!stale_path.exists());
-    }
-
-    #[test]
-    fn texture_upload_queue_replaces_existing_key_without_dup_order() {
-        let mut queue = TextureUploadQueue::default();
-        queue.push(
-            "shared".to_string(),
-            Arc::new(blank_rgba(1, 1)),
-            SamplerDesc::default(),
-        );
-        queue.push(
-            "shared".to_string(),
-            Arc::new(blank_rgba(2, 2)),
-            SamplerDesc::default(),
-        );
-        queue.push(
-            "other".to_string(),
-            Arc::new(blank_rgba(1, 1)),
-            SamplerDesc::default(),
-        );
-
-        assert_eq!(queue.entries.len(), 2);
-        assert!(queue.contains("shared"));
-        assert!(queue.contains("other"));
-        assert!(!queue.contains("missing"));
-        assert_eq!(queue.queued_bytes, (2 * 2 * 4 + 1 * 1 * 4) as usize);
-
-        let budget = TextureUploadBudget {
-            max_uploads: 4,
-            max_bytes: 64,
-        };
-        let (first_key, first) = queue.pop_next(budget, 0, 0).unwrap();
-        assert_eq!(first_key, "shared");
-        assert_eq!(first.bytes, (2 * 2 * 4) as usize);
-
-        let (second_key, second) = queue.pop_next(budget, 1, first.bytes).unwrap();
-        assert_eq!(second_key, "other");
-        assert_eq!(second.bytes, 4);
-        assert!(!queue.contains("shared"));
-        assert!(!queue.contains("other"));
-        assert!(
-            queue
-                .pop_next(budget, 2, first.bytes + second.bytes)
-                .is_none()
-        );
-    }
-
-    #[test]
-    fn texture_upload_queue_allows_one_oversize_upload_then_stops_at_budget() {
-        let mut queue = TextureUploadQueue::default();
-        queue.push(
-            "big".to_string(),
-            Arc::new(blank_rgba(3, 1)),
-            SamplerDesc::default(),
-        );
-        queue.push(
-            "small".to_string(),
-            Arc::new(blank_rgba(1, 1)),
-            SamplerDesc::default(),
-        );
-
-        let budget = TextureUploadBudget {
-            max_uploads: 1,
-            max_bytes: 8,
-        };
-        let (first_key, first) = queue.pop_next(budget, 0, 0).unwrap();
-        assert_eq!(first_key, "big");
-        assert_eq!(first.bytes, 12);
-        assert!(queue.pop_next(budget, 1, first.bytes).is_none());
-        assert!(queue.entries.contains_key("small"));
     }
 
     #[test]
@@ -1174,21 +842,11 @@ mod tests {
 
         assert!(assets.has_texture_key("queued"));
         assert!(assets.has_pending_texture_upload("queued"));
-        assert!(
-            assets
-                .pending_texture_uploads
-                .entries
-                .contains_key("queued")
-        );
+        assert!(assets.pending_texture_uploads.contains("queued"));
 
         assert!(assets.remove_texture("queued").is_none());
         assert!(!assets.has_texture_key("queued"));
-        assert!(
-            !assets
-                .pending_texture_uploads
-                .entries
-                .contains_key("queued")
-        );
+        assert!(!assets.pending_texture_uploads.contains("queued"));
         assert!(!assets.has_pending_texture_upload("queued"));
     }
 }

@@ -17,9 +17,9 @@ use crate::game::profile::{
 use crate::game::scores::{import_itl_json, import_local_scores};
 use crate::game::song::get_song_cache;
 
-use super::itg::{self, ItgReadError, ItgSource};
-use super::options::translate_player_options;
-use super::resolver::{ChartResolver, Resolution};
+use deadsync_import::itg::{self, ItgReadError, ItgSource};
+use deadsync_import::options::translate_player_options;
+use deadsync_import::resolver::{ChartResolver, Resolution};
 
 /// Result of importing one ITGmania profile.
 #[derive(Debug, Default, Clone)]

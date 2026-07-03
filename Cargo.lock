@@ -994,6 +994,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 
 [[package]]
+name = "deadlib-assets"
+version = "0.1.0"
+dependencies = [
+ "deadlib-render",
+ "deadlib-video",
+ "image",
+ "log",
+ "twox-hash",
+]
+
+[[package]]
 name = "deadlib-platform"
 version = "0.1.0"
 dependencies = [
@@ -1129,6 +1140,7 @@ dependencies = [
  "bytemuck",
  "chrono",
  "coreaudio-rs",
+ "deadlib-assets",
  "deadlib-platform",
  "deadlib-present",
  "deadlib-render",
@@ -1141,6 +1153,7 @@ dependencies = [
  "deadsync-audio-replaygain",
  "deadsync-audio-stream",
  "deadsync-chart",
+ "deadsync-config",
  "deadsync-core",
  "deadsync-gameplay",
  "deadsync-import",
@@ -1274,6 +1287,15 @@ version = "0.1.0"
 dependencies = [
  "deadsync-core",
  "deadsync-rules",
+]
+
+[[package]]
+name = "deadsync-config"
+version = "0.1.0"
+dependencies = [
+ "deadsync-chart",
+ "log",
+ "null-or-die",
 ]
 
 [[package]]
@@ -1456,6 +1478,7 @@ name = "deadsync-song-lua"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "deadlib-assets",
  "deadlib-present",
  "image",
  "log",

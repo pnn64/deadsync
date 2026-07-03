@@ -1,6 +1,7 @@
 use deadsync_profile as profile_data;
 use deadsync_profile::pad_config as pad_profile_data;
 use deadsync_score as score_data;
+use deadsync_score::stage_stats;
 mod commands;
 mod dynamic_media;
 mod graphics;
@@ -23,7 +24,7 @@ use crate::config::{self, DisplayMode};
 use crate::game::parsing::simfile as song_loading;
 use crate::game::{
     GameplayCoreState, gameplay_play_style_from_profile, gameplay_player_side_from_profile,
-    gameplay_tick_mode_from_profile, profile, scores, stage_stats,
+    gameplay_tick_mode_from_profile, profile, scores,
 };
 use crate::screens::{
     DensityGraphSlot, DensityGraphSource, Screen as CurrentScreen, ScreenAction,
@@ -2981,7 +2982,7 @@ fn gameplay_song_lua_video_paths(state: &gameplay::State) -> Vec<PathBuf> {
 fn gameplay_overlay_video_paths(state: &gameplay::State) -> Vec<PathBuf> {
     let mut paths = gameplay_song_lua_video_paths(state);
     if let Some(path) = state.song().active_foreground_path(state.current_beat())
-        && crate::assets::dynamic::is_dynamic_video_path(path)
+        && deadlib_assets::dynamic::is_dynamic_video_path(path)
         && !paths.iter().any(|existing| existing == path)
     {
         paths.push(path.clone());

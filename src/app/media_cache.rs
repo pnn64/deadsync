@@ -1,4 +1,5 @@
-use crate::assets::{AssetManager, dynamic, open_image_fallback};
+use crate::assets::{AssetManager, open_image_fallback};
+use deadlib_assets::dynamic;
 use deadlib_platform::dirs;
 use deadlib_renderer::Backend;
 use deadlib_video as video;

@@ -5,5 +5,3 @@
 //! scores.
 
 pub mod run;
-
-pub use deadsync_import::{detect, itg, options, resolver, xml};
