@@ -1401,6 +1401,7 @@ fn step_stats_extra_label_key(setting: StepStatsExtra) -> &'static str {
         StepStatsExtra::None => "StepStatsExtraNone",
         StepStatsExtra::ErrorStats => "StepStatsExtraErrorStats",
         StepStatsExtra::AmongUs => "StepStatsExtraAmongUs",
+        StepStatsExtra::Bocchi => "StepStatsExtraBocchi",
         StepStatsExtra::BrodyQuest => "StepStatsExtraBrodyQuest",
         StepStatsExtra::CatJAM => "StepStatsExtraCatJAM",
         StepStatsExtra::CrabPls => "StepStatsExtraCrabPls",

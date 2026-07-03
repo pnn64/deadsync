@@ -195,10 +195,11 @@ pub(super) const SCORE_POSITION_VARIANTS: [ScorePosition; 2] =
 pub(super) const SCORE_DISPLAY_MODE_VARIANTS: [ScoreDisplayMode; 2] =
     [ScoreDisplayMode::Normal, ScoreDisplayMode::Predictive];
 
-pub(super) const STEP_STATS_EXTRA_VARIANTS: [deadsync_profile::StepStatsExtra; 13] = [
+pub(super) const STEP_STATS_EXTRA_VARIANTS: [deadsync_profile::StepStatsExtra; 14] = [
     deadsync_profile::StepStatsExtra::None,
     deadsync_profile::StepStatsExtra::ErrorStats,
     deadsync_profile::StepStatsExtra::AmongUs,
+    deadsync_profile::StepStatsExtra::Bocchi,
     deadsync_profile::StepStatsExtra::BrodyQuest,
     deadsync_profile::StepStatsExtra::CatJAM,
     deadsync_profile::StepStatsExtra::CrabPls,

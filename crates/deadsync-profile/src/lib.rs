@@ -2065,6 +2065,7 @@ pub enum StepStatsExtra {
     None,
     ErrorStats,
     AmongUs,
+    Bocchi,
     BrodyQuest,
     CatJAM,
     CrabPls,
@@ -2078,8 +2079,9 @@ pub enum StepStatsExtra {
 }
 
 impl StepStatsExtra {
-    pub const RANDOMIZER_CHOICES: [Self; 10] = [
+    pub const RANDOMIZER_CHOICES: [Self; 11] = [
         Self::AmongUs,
+        Self::Bocchi,
         Self::BrodyQuest,
         Self::CatJAM,
         Self::CrabPls,
@@ -2105,6 +2107,7 @@ impl FromStr for StepStatsExtra {
             "" | "none" => Ok(Self::None),
             "errorstats" | "error" => Ok(Self::ErrorStats),
             "amongus" => Ok(Self::AmongUs),
+            "bocchi" => Ok(Self::Bocchi),
             "brodyquest" => Ok(Self::BrodyQuest),
             "catjam" => Ok(Self::CatJAM),
             "crabpls" => Ok(Self::CrabPls),
@@ -2126,6 +2129,7 @@ impl core::fmt::Display for StepStatsExtra {
             Self::None => write!(f, "None"),
             Self::ErrorStats => write!(f, "ErrorStats"),
             Self::AmongUs => write!(f, "AmongUs"),
+            Self::Bocchi => write!(f, "Bocchi"),
             Self::BrodyQuest => write!(f, "BrodyQuest"),
             Self::CatJAM => write!(f, "CatJAM"),
             Self::CrabPls => write!(f, "CrabPls"),
@@ -8494,6 +8498,7 @@ mod tests {
             StepStatsExtra::None,
             StepStatsExtra::ErrorStats,
             StepStatsExtra::AmongUs,
+            StepStatsExtra::Bocchi,
             StepStatsExtra::BrodyQuest,
             StepStatsExtra::CatJAM,
             StepStatsExtra::CrabPls,

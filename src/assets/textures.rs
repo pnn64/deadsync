@@ -791,6 +791,7 @@ impl AssetManager {
 
         for p in [
             "step_stats_gifs/AmongUs 3x2.png",
+            "step_stats_gifs/Bocchi 6x3.png",
             "step_stats_gifs/brodyquest 7x12.gif",
             "step_stats_gifs/catjam 11x14.png",
             "step_stats_gifs/CrabPls 8x8.png",

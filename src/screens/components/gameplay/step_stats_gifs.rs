@@ -124,6 +124,11 @@ fn gif_layout(extra: StepStatsExtra) -> Option<GifLayout> {
             zoom: 0.5,
             crop: true,
         },
+        StepStatsExtra::Bocchi => GifLayout {
+            texture: "step_stats_gifs/Bocchi 6x3.png",
+            zoom: 2.0,
+            crop: true,
+        },
         StepStatsExtra::BrodyQuest => GifLayout {
             texture: "step_stats_gifs/brodyquest 7x12.gif",
             zoom: 1.0,
@@ -178,6 +183,7 @@ fn gif_layout(extra: StepStatsExtra) -> Option<GifLayout> {
 fn frame_for_extra(extra: StepStatsExtra, beat: f32) -> u32 {
     match extra {
         StepStatsExtra::AmongUs => mixed_frame(beat, &AMONG_US_FRAMES, &AMONG_US_DELAYS),
+        StepStatsExtra::Bocchi => uniform_rotated_frame(beat, 18, 0, 0.125),
         StepStatsExtra::BrodyQuest => uniform_rotated_frame(beat, 84, 0, 0.095_238_095_238_095_2),
         StepStatsExtra::CatJAM => uniform_rotated_frame(beat, 151, 9, 0.086_092_715_231_788_1),
         StepStatsExtra::CrabPls => uniform_rotated_frame(beat, 59, 5, 0.067_796_610_169_491_5),
@@ -253,8 +259,17 @@ mod tests {
     }
 
     #[test]
+    fn bocchi_uses_uniform_eighteen_frame_loop() {
+        assert_eq!(frame_for_extra(StepStatsExtra::Bocchi, 0.0), 0);
+        assert_eq!(frame_for_extra(StepStatsExtra::Bocchi, 0.124), 0);
+        assert_eq!(frame_for_extra(StepStatsExtra::Bocchi, 0.125), 1);
+        assert_eq!(frame_for_extra(StepStatsExtra::Bocchi, 17.0 * 0.125), 17);
+        assert_eq!(frame_for_extra(StepStatsExtra::Bocchi, 18.0 * 0.125), 0);
+    }
+
+    #[test]
     fn randomizer_choices_are_renderable_gifs_only() {
-        assert_eq!(StepStatsExtra::RANDOMIZER_CHOICES.len(), 10);
+        assert_eq!(StepStatsExtra::RANDOMIZER_CHOICES.len(), 11);
         for choice in StepStatsExtra::RANDOMIZER_CHOICES {
             assert!(choice.renderable());
         }
