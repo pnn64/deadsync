@@ -5,39 +5,33 @@ use std::sync::Arc;
 
 use crate::{
     CompiledSongLua, SongLuaCompileContext, SongLuaCompileTimer, SongLuaHostState,
-    SongLuaNoteskinResolver, SongLuaOverlayActor, SongLuaOverlayCompileActor, SongLuaOverlayKind,
-    SongLuaOverlayModelLayer, SongLuaTimeUnit,
-    SongLuaTrackedActorTarget as TrackedCompileActorTarget,
+    SongLuaNoteskinResolver, SongLuaOverlayActor, SongLuaOverlayKind, SongLuaOverlayModelLayer,
+    SongLuaOverlayState, SongLuaTimeUnit, SongLuaTrackedActorTarget as TrackedCompileActorTarget,
+    add_actor_child_from_path as add_host_actor_child_from_path,
     compile_multitap_update_overlays_for_actors, compile_perframes,
-    compile_update_function_overlays, entry_file_path, execute_script_file, install_compile_host,
-    log_song_lua_compile_timing, merge_compile_info, push_startup_message_if_listened,
-    push_unique_compile_detail, read_eases_for_overlay_actors, read_global_function_nested_tables,
-    read_mod_windows, read_note_column_zoom_hides, read_overlay_compile_actor_actions,
-    read_overlay_compile_actors, read_runtime_mod_eases, read_song_lua_sound_paths,
-    read_tracked_compile_actors, read_update_function_nested_tables,
-    read_update_function_overlay_compile_actor_actions, read_update_function_tables,
-    read_xero_runtime_mod_eases_for_overlay_actors, register_loaded_easing_names,
-    restore_compile_globals, run_actor_draw_functions, run_actor_init_commands,
-    run_actor_startup_commands, run_actor_update_functions,
+    compile_update_function_overlays, create_dummy_actor as create_host_dummy_actor,
+    create_named_child_actor as create_host_named_child_actor, ensure_overlay_arrow_visual,
+    entry_file_path, execute_script_file, install_actor_methods as install_host_actor_methods,
+    install_compile_host, log_song_lua_compile_timing, merge_compile_info,
+    note_field_column_actors as host_note_field_column_actors, push_startup_message_if_listened,
+    push_unique_compile_detail, read_actor_model_layers, read_eases_for_overlay_actors,
+    read_global_function_nested_tables, read_mod_windows, read_note_column_zoom_hides,
+    read_noteskin_tap_actor_slots, read_overlay_compile_actor_actions, read_overlay_compile_actors,
+    read_runtime_mod_eases, read_song_lua_sound_paths, read_tracked_compile_actors,
+    read_update_function_nested_tables, read_update_function_overlay_compile_actor_actions,
+    read_update_function_tables, read_xero_runtime_mod_eases_for_overlay_actors,
+    register_loaded_easing_names, restore_compile_globals, run_actor_draw_functions,
+    run_actor_init_commands, run_actor_startup_commands, run_actor_update_functions,
     runtime_static_overlay_index_for_actors, snapshot_compile_globals, sort_compiled_song_lua,
 };
 
-pub fn compile_song_lua_with_actors<NoteskinSlot, ModelVertex, EnsureArrowVisual>(
+pub fn compile_song_lua_with_default_host<NoteskinSlot, ModelVertex, MultitapArrowVisualSpec>(
     entry_path: &Path,
     context: &SongLuaCompileContext,
     noteskin_resolver: SongLuaNoteskinResolver,
-    create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
-    create_named_child_actor: fn(&Lua, &Table, &str) -> mlua::Result<Table>,
-    install_actor_methods: fn(&Lua, &Table) -> mlua::Result<()>,
-    read_model_layers: fn(
-        &Table,
-    )
-        -> Result<Option<Arc<[SongLuaOverlayModelLayer<ModelVertex>]>>, String>,
-    read_noteskin_tap_actor_slots: fn(
-        &Table,
-        &SongLuaCompileContext,
-    ) -> Result<Option<Arc<[NoteskinSlot]>>, String>,
-    mut ensure_multitap_arrow_visual: EnsureArrowVisual,
+    read_model_slots: fn(&Path) -> Result<Arc<[NoteskinSlot]>, String>,
+    model_layer_from_slot: fn(&NoteskinSlot) -> Option<SongLuaOverlayModelLayer<ModelVertex>>,
+    multitap_arrow_visual_spec: MultitapArrowVisualSpec,
 ) -> Result<
     CompiledSongLua<
         SongLuaOverlayActor<SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute>>,
@@ -45,17 +39,84 @@ pub fn compile_song_lua_with_actors<NoteskinSlot, ModelVertex, EnsureArrowVisual
     String,
 >
 where
-    EnsureArrowVisual: FnMut(
-        &Lua,
-        &mut Vec<
-            SongLuaOverlayCompileActor<
-                SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute>,
-            >,
-        >,
-        usize,
+    MultitapArrowVisualSpec: FnMut(
         &SongLuaCompileContext,
         &str,
-    ) -> Result<(), String>,
+    ) -> Option<(
+        SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute>,
+        SongLuaOverlayState,
+    )>,
+{
+    compile_song_lua_with_actors(
+        entry_path,
+        context,
+        noteskin_resolver,
+        create_default_dummy_actor,
+        create_default_named_child_actor,
+        install_default_actor_methods,
+        read_model_slots,
+        model_layer_from_slot,
+        multitap_arrow_visual_spec,
+    )
+}
+
+fn create_default_named_child_actor(lua: &Lua, parent: &Table, name: &str) -> mlua::Result<Table> {
+    create_host_named_child_actor(
+        lua,
+        parent,
+        name,
+        create_default_dummy_actor,
+        create_default_named_child_actor,
+    )
+}
+
+fn default_note_field_column_actors(lua: &Lua, note_field: &Table) -> mlua::Result<Table> {
+    host_note_field_column_actors(lua, note_field, create_default_dummy_actor)
+}
+
+fn create_default_dummy_actor(lua: &Lua, actor_type: &'static str) -> mlua::Result<Table> {
+    create_host_dummy_actor(lua, actor_type, install_default_actor_methods)
+}
+
+fn install_default_actor_methods(lua: &Lua, actor: &Table) -> mlua::Result<()> {
+    install_host_actor_methods(
+        lua,
+        actor,
+        add_default_actor_child_from_path,
+        default_note_field_column_actors,
+        create_default_named_child_actor,
+        create_default_dummy_actor,
+    )
+}
+
+fn add_default_actor_child_from_path(lua: &Lua, actor: &Table, path: &str) -> mlua::Result<()> {
+    add_host_actor_child_from_path(lua, actor, path, create_default_dummy_actor)
+}
+
+pub fn compile_song_lua_with_actors<NoteskinSlot, ModelVertex, MultitapArrowVisualSpec>(
+    entry_path: &Path,
+    context: &SongLuaCompileContext,
+    noteskin_resolver: SongLuaNoteskinResolver,
+    create_dummy_actor: fn(&Lua, &'static str) -> mlua::Result<Table>,
+    create_named_child_actor: fn(&Lua, &Table, &str) -> mlua::Result<Table>,
+    install_actor_methods: fn(&Lua, &Table) -> mlua::Result<()>,
+    read_model_slots: fn(&Path) -> Result<Arc<[NoteskinSlot]>, String>,
+    model_layer_from_slot: fn(&NoteskinSlot) -> Option<SongLuaOverlayModelLayer<ModelVertex>>,
+    mut multitap_arrow_visual_spec: MultitapArrowVisualSpec,
+) -> Result<
+    CompiledSongLua<
+        SongLuaOverlayActor<SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute>>,
+    >,
+    String,
+>
+where
+    MultitapArrowVisualSpec: FnMut(
+        &SongLuaCompileContext,
+        &str,
+    ) -> Option<(
+        SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute>,
+        SongLuaOverlayState,
+    )>,
 {
     let mut compile_timer = SongLuaCompileTimer::start();
     let entry_path = entry_file_path(entry_path)
@@ -116,8 +177,8 @@ where
         &lua,
         &root,
         context,
-        read_model_layers,
-        read_noteskin_tap_actor_slots,
+        |actor| read_actor_model_layers(actor, read_model_slots, model_layer_from_slot),
+        |actor, _context| read_noteskin_tap_actor_slots(actor, read_model_slots),
         |skipped| {
             push_unique_compile_detail(&mut out.info.skipped_message_command_captures, skipped)
         },
@@ -296,7 +357,14 @@ where
         &mut out.messages,
         noteskin_resolver,
         |overlays, arrow_index, noteskin| {
-            ensure_multitap_arrow_visual(&lua, overlays, arrow_index, context, noteskin)
+            ensure_overlay_arrow_visual(
+                &lua,
+                overlays,
+                arrow_index,
+                noteskin,
+                create_dummy_actor,
+                |noteskin| multitap_arrow_visual_spec(context, noteskin),
+            )
         },
     )? {
         Some(eases) => eases,

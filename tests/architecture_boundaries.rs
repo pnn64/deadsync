@@ -11,7 +11,6 @@ const GAME_UPWARD_DEP_BASELINE: &[(&str, &str, usize)] = &[
     ("src/game/parsing/simfile.rs", "config", 3),
     ("src/game/parsing/simfile/cache.rs", "config", 1),
     ("src/game/parsing/simfile/scan.rs", "config", 3),
-    ("src/game/parsing/song_lua/actor_host.rs", "assets", 3),
     ("src/game/profile.rs", "config", 1),
     ("src/game/random_movies.rs", "config", 1),
     ("src/game/scores.rs", "config", 4),

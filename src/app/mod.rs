@@ -2964,51 +2964,16 @@ const fn course_eval_is_final(next_stage_index: usize, stage_count: usize, faile
     failed || next_stage_index >= stage_count
 }
 
-fn push_song_lua_video_paths<'a>(
-    overlays: &'a [crate::game::parsing::song_lua::SongLuaOverlayActor],
-    seen: &mut HashSet<&'a str>,
-    paths: &mut Vec<PathBuf>,
-) {
-    for overlay in overlays {
-        let crate::game::parsing::song_lua::SongLuaOverlayKind::Sprite {
-            texture_path,
-            texture_key,
-        } = &overlay.kind
-        else {
-            continue;
-        };
-        if !crate::assets::dynamic::is_dynamic_video_path(texture_path) {
-            continue;
-        }
-        if !overlay.initial_state.decode_movie {
-            continue;
-        }
-        if seen.insert(texture_key.as_ref()) {
-            paths.push(texture_path.clone());
-        }
-    }
-}
-
-#[cfg(test)]
-fn song_lua_video_paths(
-    overlays: &[crate::game::parsing::song_lua::SongLuaOverlayActor],
-) -> Vec<PathBuf> {
-    let mut paths = Vec::new();
-    let mut seen = HashSet::new();
-    push_song_lua_video_paths(overlays, &mut seen, &mut paths);
-    paths
-}
-
 fn gameplay_song_lua_video_paths(state: &gameplay::State) -> Vec<PathBuf> {
     let mut paths = Vec::new();
     let mut seen = HashSet::new();
     let song_lua_visuals = state.song_lua_visuals();
-    push_song_lua_video_paths(&song_lua_visuals.overlays, &mut seen, &mut paths);
+    deadsync_song_lua::push_song_lua_video_paths(&song_lua_visuals.overlays, &mut seen, &mut paths);
     for layer in &song_lua_visuals.background_visual_layers {
-        push_song_lua_video_paths(&layer.overlays, &mut seen, &mut paths);
+        deadsync_song_lua::push_song_lua_video_paths(&layer.overlays, &mut seen, &mut paths);
     }
     for layer in &song_lua_visuals.foreground_visual_layers {
-        push_song_lua_video_paths(&layer.overlays, &mut seen, &mut paths);
+        deadsync_song_lua::push_song_lua_video_paths(&layer.overlays, &mut seen, &mut paths);
     }
     paths
 }
@@ -11071,9 +11036,6 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::game::parsing::song_lua::{
-        SongLuaOverlayActor, SongLuaOverlayKind, SongLuaOverlayState,
-    };
     use deadsync_chart::GameplayChartData;
     use deadsync_chart::notes::ParsedNote;
     use deadsync_chart::{ArrowStats, ChartData, SongData, StaminaCounts, TechCounts};
@@ -11401,78 +11363,6 @@ mod tests {
             sync_change_line("Global Offset", -0.0424, -0.0426).as_deref(),
             Some("Global Offset from -0.042 to -0.043 (notes later)")
         );
-    }
-
-    #[test]
-    fn song_lua_video_paths_filter_and_dedupe_video_sprites() {
-        let movie = PathBuf::from("badapple.AVI");
-        let overlays = vec![
-            SongLuaOverlayActor {
-                kind: SongLuaOverlayKind::Sprite {
-                    texture_path: movie.clone(),
-                    texture_key: Arc::from(movie.to_string_lossy().into_owned()),
-                },
-                name: None,
-                parent_index: None,
-                initial_state: SongLuaOverlayState {
-                    decode_movie: true,
-                    ..Default::default()
-                },
-                message_commands: Vec::new(),
-            },
-            SongLuaOverlayActor {
-                kind: SongLuaOverlayKind::Sprite {
-                    texture_path: movie.clone(),
-                    texture_key: Arc::from(movie.to_string_lossy().into_owned()),
-                },
-                name: None,
-                parent_index: None,
-                initial_state: SongLuaOverlayState {
-                    decode_movie: true,
-                    ..Default::default()
-                },
-                message_commands: Vec::new(),
-            },
-            SongLuaOverlayActor {
-                kind: SongLuaOverlayKind::Sprite {
-                    texture_path: PathBuf::from("panel.png"),
-                    texture_key: Arc::from("panel.png"),
-                },
-                name: None,
-                parent_index: None,
-                initial_state: Default::default(),
-                message_commands: Vec::new(),
-            },
-            SongLuaOverlayActor {
-                kind: SongLuaOverlayKind::Quad,
-                name: None,
-                parent_index: None,
-                initial_state: Default::default(),
-                message_commands: Vec::new(),
-            },
-        ];
-
-        assert_eq!(song_lua_video_paths(&overlays), vec![movie]);
-    }
-
-    #[test]
-    fn song_lua_video_paths_skip_disabled_video_decode() {
-        let movie = PathBuf::from("badapple.AVI");
-        let overlays = vec![SongLuaOverlayActor {
-            kind: SongLuaOverlayKind::Sprite {
-                texture_path: movie.clone(),
-                texture_key: Arc::from(movie.to_string_lossy().into_owned()),
-            },
-            name: None,
-            parent_index: None,
-            initial_state: SongLuaOverlayState {
-                decode_movie: false,
-                ..Default::default()
-            },
-            message_commands: Vec::new(),
-        }];
-
-        assert!(song_lua_video_paths(&overlays).is_empty());
     }
 
     #[test]

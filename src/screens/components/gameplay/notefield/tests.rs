@@ -13,9 +13,7 @@ use crate::test_support::notefield_bench;
 use deadlib_present::actors::Actor;
 use deadsync_core::note::NoteType;
 use deadsync_core::timing::beat_to_note_row;
-use deadsync_gameplay::{
-    AccelEffects, ActiveHold, SongLuaNoteHideWindowRuntime, VisualEffects, song_lua_note_hidden,
-};
+use deadsync_gameplay::{AccelEffects, ActiveHold, VisualEffects};
 use deadsync_noteskin::{NUM_QUANTIZATIONS, Quantization, Style};
 use deadsync_profile as profile_data;
 use deadsync_rules::note::Note;
@@ -405,20 +403,6 @@ fn text_error_bar_scalable_zoom_matches_sl_fork_curve_at_default_threshold() {
         0.4,
     );
     assert_close(error_bar_text_scalable_zoom(w2_ms + 1.0, 10.0, w2_ms), 0.45);
-}
-
-#[test]
-fn song_lua_zoom_hide_window_covers_note_beat() {
-    let windows = [SongLuaNoteHideWindowRuntime {
-        column: 2,
-        start_beat: 40.0,
-        end_beat: 44.0,
-    }];
-
-    assert!(song_lua_note_hidden(&windows, 2, 40.0));
-    assert!(song_lua_note_hidden(&windows, 2, 44.0));
-    assert!(!song_lua_note_hidden(&windows, 1, 42.0));
-    assert!(!song_lua_note_hidden(&windows, 2, 44.01));
 }
 
 #[test]

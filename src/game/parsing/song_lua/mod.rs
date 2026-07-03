@@ -1,25 +1,14 @@
-use mlua::{Lua, Table};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
+use deadlib_platform::dirs;
 use deadlib_present::actors::TextAttribute;
 use deadlib_render::TexturedMeshVertex;
 use deadsync_noteskin::{NUM_QUANTIZATIONS, Style};
-#[cfg(test)]
-use deadsync_song_lua::SONG_LUA_STARTUP_MESSAGE;
 use deadsync_song_lua::{
-    compile_song_lua_with_actors, overlay_actor_tree_has_visual, overlay_model_layers_from_slots,
+    compile_song_lua_with_default_host, overlay_model_layers_from_slots,
     song_lua_human_player_count, song_lua_style_info,
 };
 
-mod actor_host;
-mod managers;
-
-use self::actor_host::{
-    create_dummy_actor, create_named_child_actor, install_actor_methods, read_model_layers,
-    read_noteskin_tap_actor_slots,
-};
-use self::managers::song_lua_noteskin_resolver;
 pub use deadsync_song_lua::{
     SONG_LUA_INITIAL_LIFE, SongLuaCapturedActor, SongLuaColumnOffsetWindow, SongLuaCompileContext,
     SongLuaCompileInfo, SongLuaDifficulty, SongLuaEaseTarget, SongLuaEaseWindow,
@@ -41,49 +30,76 @@ pub type SongLuaOverlayKind = deadsync_song_lua::SongLuaOverlayKind<
 >;
 pub type SongLuaOverlayActor = deadsync_song_lua::SongLuaOverlayActor<SongLuaOverlayKind>;
 pub type CompiledSongLua = deadsync_song_lua::CompiledSongLua<SongLuaOverlayActor>;
-type OverlayCompileActor = deadsync_song_lua::SongLuaOverlayCompileActor<SongLuaOverlayKind>;
 
 pub fn compile_song_lua(
     entry_path: &Path,
     context: &SongLuaCompileContext,
 ) -> Result<CompiledSongLua, String> {
-    compile_song_lua_with_actors(
+    compile_song_lua_with_default_host(
         entry_path,
         context,
         song_lua_noteskin_resolver(),
-        create_dummy_actor,
-        create_named_child_actor,
-        install_actor_methods,
-        read_model_layers,
-        read_noteskin_tap_actor_slots,
-        ensure_multitap_arrow_visual,
+        crate::game::parsing::noteskin::load_itg_model_slots_from_path,
+        model_layer_from_slot,
+        |context, noteskin| multitap_arrow_visual_spec(noteskin, context),
     )
 }
 
-fn ensure_multitap_arrow_visual(
-    lua: &Lua,
-    overlays: &mut Vec<OverlayCompileActor>,
-    arrow_index: usize,
-    context: &SongLuaCompileContext,
-    noteskin: &str,
-) -> Result<(), String> {
-    if overlay_actor_tree_has_visual(overlays, arrow_index) {
-        return Ok(());
+fn song_lua_noteskin_resolver() -> SongLuaNoteskinResolver {
+    SongLuaNoteskinResolver {
+        resolve_path: crate::game::parsing::noteskin::song_lua_noteskin_resolve_path,
+        metric: crate::game::parsing::noteskin::song_lua_noteskin_metric,
+        metric_f: crate::game::parsing::noteskin::song_lua_noteskin_metric_f,
+        metric_b: crate::game::parsing::noteskin::song_lua_noteskin_metric_b,
+        exists: crate::game::parsing::noteskin::song_lua_noteskin_exists,
+        names: song_lua_noteskin_names,
     }
-    let Some((kind, initial_state)) = multitap_arrow_visual_spec(noteskin, context) else {
-        return Ok(());
-    };
-    overlays.push(OverlayCompileActor {
-        table: create_dummy_actor(lua, "Model").map_err(|err| err.to_string())?,
-        actor: SongLuaOverlayActor {
-            kind,
-            name: None,
-            parent_index: Some(arrow_index),
-            initial_state,
-            message_commands: Vec::new(),
-        },
-    });
-    Ok(())
+}
+
+fn song_lua_noteskin_names() -> Vec<String> {
+    let roots = dirs::app_dirs().noteskin_roots();
+    deadsync_noteskin::itg::discover_skins(&roots, "dance")
+}
+
+fn model_layer_from_slot(
+    slot: &crate::game::parsing::noteskin::SpriteSlot,
+) -> Option<SongLuaOverlayModelLayer> {
+    model_layer_from_slot_frame(slot, 0)
+}
+
+fn model_layer_from_slot_frame(
+    slot: &crate::game::parsing::noteskin::SpriteSlot,
+    frame_index: usize,
+) -> Option<SongLuaOverlayModelLayer> {
+    let model = slot.model.as_ref()?;
+    if model.vertices.is_empty() {
+        return None;
+    }
+    let uv_rect = slot.uv_for_frame_at(frame_index, 0.0);
+    let (uv_scale, uv_offset, uv_tex_shift) = slot.model_uv_params(uv_rect);
+    Some(SongLuaOverlayModelLayer::new(
+        slot.texture_key_shared(),
+        crate::game::parsing::noteskin::build_model_geometry(slot),
+        model.size(),
+        uv_scale,
+        uv_offset,
+        uv_tex_shift,
+        slot.uv_velocity,
+        slot.uv_cycle_seconds,
+        song_lua_model_draw(slot.model_draw_at(0.0, 0.0)),
+    ))
+}
+
+fn song_lua_model_draw(draw: deadsync_noteskin::ModelDrawState) -> SongLuaOverlayModelDraw {
+    SongLuaOverlayModelDraw::new(
+        draw.pos,
+        draw.rot,
+        draw.zoom,
+        draw.tint,
+        draw.vert_align,
+        draw.blend_add,
+        draw.visible,
+    )
 }
 
 fn multitap_arrow_visual_spec(
@@ -98,7 +114,9 @@ fn multitap_arrow_visual_spec(
     let down_col = 1.min(style.num_cols.saturating_sub(1));
     let note_idx = down_col * NUM_QUANTIZATIONS;
     let layers = ns.note_layers.get(note_idx)?;
-    if let Some(model_layers) = multitap_arrow_model_layers(layers) {
+    if let Some(model_layers) =
+        overlay_model_layers_from_slots(layers, multitap_arrow_model_layer_from_slot)
+    {
         return Some((
             SongLuaOverlayKind::Model {
                 layers: model_layers,
@@ -129,42 +147,8 @@ fn multitap_arrow_visual_spec(
     ))
 }
 
-fn multitap_arrow_model_layers(
-    slots: &[crate::game::parsing::noteskin::SpriteSlot],
-) -> Option<Arc<[SongLuaOverlayModelLayer]>> {
-    overlay_model_layers_from_slots(slots, multitap_arrow_model_layer_from_slot)
-}
-
 fn multitap_arrow_model_layer_from_slot(
     slot: &crate::game::parsing::noteskin::SpriteSlot,
 ) -> Option<SongLuaOverlayModelLayer> {
-    let model = slot.model.as_ref()?;
-    if model.vertices.is_empty() {
-        return None;
-    }
-    let uv_rect = slot.uv_for_frame_at(slot.frame_index_from_phase(0.0), 0.0);
-    let (uv_scale, uv_offset, uv_tex_shift) = slot.model_uv_params(uv_rect);
-    let draw = slot.model_draw_at(0.0, 0.0);
-    Some(SongLuaOverlayModelLayer {
-        texture_key: slot.texture_key_shared(),
-        vertices: crate::game::parsing::noteskin::build_model_geometry(slot),
-        model_size: model.size(),
-        uv_scale,
-        uv_offset,
-        uv_tex_shift,
-        uv_velocity: slot.uv_velocity,
-        uv_cycle_seconds: slot.uv_cycle_seconds,
-        draw: SongLuaOverlayModelDraw::new(
-            draw.pos,
-            draw.rot,
-            draw.zoom,
-            draw.tint,
-            draw.vert_align,
-            draw.blend_add,
-            draw.visible,
-        ),
-    })
+    model_layer_from_slot_frame(slot, slot.frame_index_from_phase(0.0))
 }
-
-#[cfg(test)]
-mod tests;
