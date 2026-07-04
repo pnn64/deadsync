@@ -4,7 +4,7 @@ use chrono::{Datelike, Local};
 use deadsync_rules::judgment::JudgeGrade;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_score::ScoreImportEndpoint;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -732,6 +732,165 @@ pub fn find_profile_avatar_path(dir: &Path) -> Option<PathBuf> {
         }
     }
     avatar
+}
+
+pub const PROFILE_INI_FILE: &str = "profile.ini";
+pub const GROOVESTATS_INI_FILE: &str = "groovestats.ini";
+pub const ARROWCLOUD_INI_FILE: &str = "arrowcloud.ini";
+pub const PROFILE_STATS_FILE: &str = "stats.bin";
+pub const PROFILE_STATS_TMP_FILE: &str = "stats.bin.tmp";
+pub const FAVORITES_FILE: &str = "favorites.txt";
+pub const FAVORITED_PACKS_FILE: &str = "favorited_packs.txt";
+
+#[inline(always)]
+pub fn profile_ini_path(dir: &Path) -> PathBuf {
+    dir.join(PROFILE_INI_FILE)
+}
+
+#[inline(always)]
+pub fn groovestats_ini_path(dir: &Path) -> PathBuf {
+    dir.join(GROOVESTATS_INI_FILE)
+}
+
+#[inline(always)]
+pub fn arrowcloud_ini_path(dir: &Path) -> PathBuf {
+    dir.join(ARROWCLOUD_INI_FILE)
+}
+
+#[inline(always)]
+pub fn profile_stats_path(dir: &Path) -> PathBuf {
+    dir.join(PROFILE_STATS_FILE)
+}
+
+#[inline(always)]
+pub fn profile_stats_tmp_path(dir: &Path) -> PathBuf {
+    dir.join(PROFILE_STATS_TMP_FILE)
+}
+
+#[inline(always)]
+pub fn favorites_path(dir: &Path) -> PathBuf {
+    dir.join(FAVORITES_FILE)
+}
+
+#[inline(always)]
+pub fn favorited_packs_path(dir: &Path) -> PathBuf {
+    dir.join(FAVORITED_PACKS_FILE)
+}
+
+/// Read the embedded `Guid` and `DisplayName` from a folder's `profile.ini`.
+pub fn read_profile_identity_dir(dir: &Path) -> (Option<String>, Option<String>) {
+    match fs::read_to_string(profile_ini_path(dir)) {
+        Ok(content) => read_userprofile_identity(&content),
+        Err(_) => (None, None),
+    }
+}
+
+#[inline(always)]
+pub fn read_profile_guid_dir(dir: &Path) -> Option<String> {
+    read_profile_identity_dir(dir).0
+}
+
+/// Write `contents` to `path` atomically via a temp sibling and rename.
+pub fn write_profile_file_atomic(path: &Path, contents: &str) -> std::io::Result<()> {
+    let mut tmp = path.as_os_str().to_owned();
+    tmp.push(".tmp");
+    let tmp = PathBuf::from(tmp);
+    fs::write(&tmp, contents)?;
+    fs::rename(&tmp, path)
+}
+
+pub fn rewrite_profile_display_name_file(
+    path: &Path,
+    display_name: &str,
+) -> Result<(), std::io::Error> {
+    let src = fs::read_to_string(path)?;
+    fs::write(
+        path,
+        rewrite_profile_display_name_content(&src, display_name),
+    )
+}
+
+pub fn profile_folder_names(root: &Path) -> Vec<String> {
+    let Ok(read_dir) = fs::read_dir(root) else {
+        return Vec::new();
+    };
+    read_dir
+        .flatten()
+        .filter(|e| e.file_type().map(|ft| ft.is_dir()).unwrap_or(false))
+        .filter_map(|e| e.file_name().to_str().map(str::to_string))
+        .collect()
+}
+
+/// Build a GUID -> folder map from profile folders under `root`.
+///
+/// Duplicate GUIDs resolve deterministically to the lexicographically smallest
+/// folder name, matching root cache behavior.
+pub fn build_profile_dir_map(
+    root: &Path,
+    mut duplicate: impl FnMut(&str, &Path, &Path, &Path),
+) -> HashMap<String, PathBuf> {
+    use std::collections::hash_map::Entry;
+
+    let mut map: HashMap<String, PathBuf> = HashMap::new();
+    let Ok(read_dir) = fs::read_dir(root) else {
+        return map;
+    };
+    for entry in read_dir.flatten() {
+        if !entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
+            continue;
+        }
+        let path = entry.path();
+        let Some(guid) = read_profile_guid_dir(&path) else {
+            continue;
+        };
+        match map.entry(guid) {
+            Entry::Vacant(slot) => {
+                slot.insert(path);
+            }
+            Entry::Occupied(mut slot) => {
+                let keep_existing = slot.get().file_name() <= path.file_name();
+                let kept = if keep_existing { slot.get() } else { &path };
+                duplicate(slot.key(), slot.get(), &path, kept);
+                if !keep_existing {
+                    slot.insert(path);
+                }
+            }
+        }
+    }
+    map
+}
+
+/// Pure read-only local profile enumeration. Legacy folders without an
+/// embedded GUID are skipped; startup migration is responsible for backfill.
+pub fn scan_local_profile_summaries(root: &Path) -> Vec<LocalProfileSummary> {
+    let Ok(read_dir) = fs::read_dir(root) else {
+        return Vec::new();
+    };
+
+    let mut out = Vec::new();
+    for entry in read_dir.flatten() {
+        let Ok(ft) = entry.file_type() else {
+            continue;
+        };
+        if !ft.is_dir() {
+            continue;
+        }
+        let dir = entry.path();
+        let (Some(id), display) = read_profile_identity_dir(&dir) else {
+            continue;
+        };
+        out.push(LocalProfileSummary {
+            display_name: display.unwrap_or_else(|| id.clone()),
+            id,
+            avatar_path: find_profile_avatar_path(&dir),
+        });
+    }
+
+    out.sort_by(|a, b| {
+        cmp_profile_ids_case_insensitive(&a.display_name, &b.display_name)
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    out
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

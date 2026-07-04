@@ -4,6 +4,7 @@ use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 use std::io::ErrorKind;
 use std::net::TcpStream;
+use std::time::{Duration, Instant};
 use tungstenite::stream::MaybeTlsStream;
 use tungstenite::{Message, WebSocket};
 
@@ -535,6 +536,104 @@ impl Default for Snapshot {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct ReconnectTarget {
+    pub code: String,
+    pub password: String,
+}
+
+#[derive(Debug, Default)]
+pub struct ReconnectState {
+    pub target: Option<ReconnectTarget>,
+    pub pending_create_password: Option<String>,
+    pub retry_attempts: u32,
+    pub next_retry_at: Option<Instant>,
+}
+
+impl ReconnectState {
+    pub fn clear(&mut self) {
+        self.target = None;
+        self.pending_create_password = None;
+        self.retry_attempts = 0;
+        self.next_retry_at = None;
+    }
+
+    pub fn set_pending_create(&mut self, password: String) {
+        self.target = None;
+        self.pending_create_password = Some(password);
+        self.retry_attempts = 0;
+        self.next_retry_at = None;
+    }
+
+    pub fn set_join_target(&mut self, code: String, password: String) {
+        self.target = Some(ReconnectTarget { code, password });
+        self.pending_create_password = None;
+        self.retry_attempts = 0;
+        self.next_retry_at = None;
+    }
+
+    pub fn set_joined_lobby(&mut self, code: String) {
+        let password = self
+            .pending_create_password
+            .take()
+            .or_else(|| self.target.as_ref().map(|target| target.password.clone()))
+            .unwrap_or_default();
+        self.target = Some(ReconnectTarget { code, password });
+        self.retry_attempts = 0;
+        self.next_retry_at = None;
+    }
+
+    #[inline(always)]
+    pub fn has_target(&self) -> bool {
+        self.target.is_some()
+    }
+
+    pub fn ready_target(&mut self, now: Instant) -> Option<ReconnectTarget> {
+        let target = self.target.clone()?;
+        if self.next_retry_at.is_some_and(|retry_at| now < retry_at) {
+            return None;
+        }
+        self.next_retry_at = None;
+        Some(target)
+    }
+
+    pub fn schedule(&mut self, now: Instant) {
+        if self.target.is_none() {
+            self.retry_attempts = 0;
+            self.next_retry_at = None;
+            return;
+        }
+        self.retry_attempts = self.retry_attempts.saturating_add(1);
+        self.next_retry_at = Some(now + reconnect_delay(self.retry_attempts));
+    }
+
+    pub fn status_text(&self, connection: &ConnectionState, now: Instant) -> Option<String> {
+        self.target.as_ref()?;
+        match connection {
+            ConnectionState::Connected => None,
+            ConnectionState::Connecting => Some("Reconnecting to lobby...".to_string()),
+            ConnectionState::Disconnected | ConnectionState::Error(_) => {
+                if let Some(retry_at) = self.next_retry_at {
+                    let remaining = retry_at.saturating_duration_since(now);
+                    let seconds = remaining.as_secs().max(1);
+                    Some(format!("Connection lost. Retrying in {seconds}s..."))
+                } else {
+                    Some("Connection lost. Retrying...".to_string())
+                }
+            }
+        }
+    }
+}
+
+pub fn reconnect_delay(attempt: u32) -> Duration {
+    Duration::from_secs(match attempt {
+        0 | 1 => 1,
+        2 => 2,
+        3 => 3,
+        _ => 5,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -546,6 +645,82 @@ mod tests {
         assert!(snapshot.available_lobbies.is_empty());
         assert!(snapshot.joined_lobby.is_none());
         assert!(snapshot.last_status.is_none());
+    }
+
+    #[test]
+    fn reconnect_delay_caps_after_third_retry() {
+        assert_eq!(reconnect_delay(0), Duration::from_secs(1));
+        assert_eq!(reconnect_delay(1), Duration::from_secs(1));
+        assert_eq!(reconnect_delay(2), Duration::from_secs(2));
+        assert_eq!(reconnect_delay(3), Duration::from_secs(3));
+        assert_eq!(reconnect_delay(4), Duration::from_secs(5));
+        assert_eq!(reconnect_delay(99), Duration::from_secs(5));
+    }
+
+    #[test]
+    fn reconnect_state_carries_created_lobby_password() {
+        let mut reconnect = ReconnectState::default();
+        reconnect.set_pending_create("ABCD".to_string());
+        reconnect.set_joined_lobby("ROOM".to_string());
+
+        assert_eq!(
+            reconnect.target.as_ref().map(|target| target.code.as_str()),
+            Some("ROOM")
+        );
+        assert_eq!(
+            reconnect
+                .target
+                .as_ref()
+                .map(|target| target.password.as_str()),
+            Some("ABCD")
+        );
+        assert!(reconnect.pending_create_password.is_none());
+        assert_eq!(reconnect.retry_attempts, 0);
+        assert!(reconnect.next_retry_at.is_none());
+    }
+
+    #[test]
+    fn reconnect_state_waits_until_scheduled_retry() {
+        let now = Instant::now();
+        let mut reconnect = ReconnectState::default();
+        reconnect.set_join_target("ROOM".to_string(), "PASS".to_string());
+        reconnect.schedule(now);
+
+        assert!(reconnect.ready_target(now).is_none());
+
+        let target = reconnect
+            .ready_target(now + Duration::from_secs(2))
+            .expect("retry target");
+        assert_eq!(target.code, "ROOM");
+        assert_eq!(target.password, "PASS");
+        assert!(reconnect.next_retry_at.is_none());
+    }
+
+    #[test]
+    fn reconnect_status_text_reports_connection_phase() {
+        let now = Instant::now();
+        let mut reconnect = ReconnectState::default();
+        assert!(
+            reconnect
+                .status_text(&ConnectionState::Disconnected, now)
+                .is_none()
+        );
+
+        reconnect.set_join_target("ROOM".to_string(), "PASS".to_string());
+        assert_eq!(
+            reconnect.status_text(&ConnectionState::Connecting, now),
+            Some("Reconnecting to lobby...".to_string())
+        );
+        assert_eq!(
+            reconnect.status_text(&ConnectionState::Disconnected, now),
+            Some("Connection lost. Retrying...".to_string())
+        );
+
+        reconnect.next_retry_at = Some(now + Duration::from_secs(3));
+        assert_eq!(
+            reconnect.status_text(&ConnectionState::Error("closed".to_string()), now),
+            Some("Connection lost. Retrying in 3s...".to_string())
+        );
     }
 
     #[test]

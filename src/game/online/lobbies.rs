@@ -1,10 +1,10 @@
 use crate::game::profile;
 use deadsync_online::lobbies::{
     ConnectionState, LobbyInboundEffect, LobbyMachinePlayer, LobbySocket, LobbySocketError,
-    LobbySongInfo, MachinePlayerStats, Snapshot, close_lobby_socket, connect_lobby_socket,
-    create_lobby_text, flush_lobby_socket, is_transient_lobby_socket_error, join_lobby_text,
-    joined_lobby_from_state, leave_lobby_text, lobby_left_clears_joined, lobby_machine_player,
-    lobby_machine_state_value, normalize_lobby_password, parse_inbound_text,
+    LobbySongInfo, MachinePlayerStats, ReconnectState, Snapshot, close_lobby_socket,
+    connect_lobby_socket, create_lobby_text, flush_lobby_socket, is_transient_lobby_socket_error,
+    join_lobby_text, joined_lobby_from_state, leave_lobby_text, lobby_left_clears_joined,
+    lobby_machine_player, lobby_machine_state_value, normalize_lobby_password, parse_inbound_text,
     public_lobbies_from_search, read_lobby_text, response_status_clears_joined,
     response_status_from_data, search_lobby_text, select_song_text, send_lobby_ping,
     send_lobby_text, update_machine_text,
@@ -53,20 +53,6 @@ static RECONNECT_STATE: LazyLock<Mutex<ReconnectState>> =
 #[cfg(test)]
 static TEST_MUTEX: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
-#[derive(Debug, Clone)]
-struct ReconnectTarget {
-    code: String,
-    password: String,
-}
-
-#[derive(Debug, Default)]
-struct ReconnectState {
-    target: Option<ReconnectTarget>,
-    pending_create_password: Option<String>,
-    retry_attempts: u32,
-    next_retry_at: Option<Instant>,
-}
-
 pub fn snapshot() -> Snapshot {
     SNAPSHOT.lock().unwrap().clone()
 }
@@ -93,10 +79,7 @@ pub fn create_lobby_with_password(password: &str) {
     let password = normalize_lobby_password(password);
     {
         let mut reconnect = RECONNECT_STATE.lock().unwrap();
-        reconnect.target = None;
-        reconnect.pending_create_password = Some(password.clone());
-        reconnect.retry_attempts = 0;
-        reconnect.next_retry_at = None;
+        reconnect.set_pending_create(password.clone());
     }
     let _ = send_command(Command::Create { password });
 }
@@ -109,13 +92,7 @@ pub fn join_lobby_with_password(code: &str, password: &str) {
     let password = normalize_lobby_password(password);
     {
         let mut reconnect = RECONNECT_STATE.lock().unwrap();
-        reconnect.target = Some(ReconnectTarget {
-            code: code.to_string(),
-            password: password.clone(),
-        });
-        reconnect.pending_create_password = None;
-        reconnect.retry_attempts = 0;
-        reconnect.next_retry_at = None;
+        reconnect.set_join_target(code.to_string(), password.clone());
     }
     let _ = send_command(Command::Join {
         code: code.to_string(),
@@ -217,16 +194,9 @@ pub fn poll_reconnect() {
             return;
         }
         let mut reconnect = RECONNECT_STATE.lock().unwrap();
-        let Some(target) = reconnect.target.clone() else {
+        let Some(target) = reconnect.ready_target(Instant::now()) else {
             return;
         };
-        if reconnect
-            .next_retry_at
-            .is_some_and(|retry_at| Instant::now() < retry_at)
-        {
-            return;
-        }
-        reconnect.next_retry_at = None;
         target
     };
 
@@ -239,20 +209,7 @@ pub fn poll_reconnect() {
 pub fn reconnect_status_text() -> Option<String> {
     let snapshot = SNAPSHOT.lock().unwrap().clone();
     let reconnect = RECONNECT_STATE.lock().unwrap();
-    reconnect.target.as_ref()?;
-    match snapshot.connection {
-        ConnectionState::Connected => None,
-        ConnectionState::Connecting => Some("Reconnecting to lobby...".to_string()),
-        ConnectionState::Disconnected | ConnectionState::Error(_) => {
-            if let Some(retry_at) = reconnect.next_retry_at {
-                let remaining = retry_at.saturating_duration_since(Instant::now());
-                let seconds = remaining.as_secs().max(1);
-                Some(format!("Connection lost. Retrying in {seconds}s..."))
-            } else {
-                Some("Connection lost. Retrying...".to_string())
-            }
-        }
-    }
+    reconnect.status_text(&snapshot.connection, Instant::now())
 }
 
 fn ensure_worker() {
@@ -289,34 +246,16 @@ fn send_command(command: Command) -> bool {
 
 fn clear_reconnect_target() {
     let mut reconnect = RECONNECT_STATE.lock().unwrap();
-    reconnect.target = None;
-    reconnect.pending_create_password = None;
-    reconnect.retry_attempts = 0;
-    reconnect.next_retry_at = None;
-}
-
-fn reconnect_delay(attempt: u32) -> Duration {
-    Duration::from_secs(match attempt {
-        0 | 1 => 1,
-        2 => 2,
-        3 => 3,
-        _ => 5,
-    })
+    reconnect.clear();
 }
 
 fn schedule_reconnect() {
     let mut reconnect = RECONNECT_STATE.lock().unwrap();
-    if reconnect.target.is_none() {
-        reconnect.retry_attempts = 0;
-        reconnect.next_retry_at = None;
-        return;
-    }
-    reconnect.retry_attempts = reconnect.retry_attempts.saturating_add(1);
-    reconnect.next_retry_at = Some(Instant::now() + reconnect_delay(reconnect.retry_attempts));
+    reconnect.schedule(Instant::now());
 }
 
 fn should_preserve_joined_lobby() -> bool {
-    RECONNECT_STATE.lock().unwrap().target.is_some()
+    RECONNECT_STATE.lock().unwrap().has_target()
 }
 
 fn handle_connection_loss(connection: ConnectionState) {
@@ -534,20 +473,7 @@ fn handle_text_message(text: &str) -> Result<(), String> {
         LobbyInboundEffect::LobbyState(data) => {
             {
                 let mut reconnect = RECONNECT_STATE.lock().unwrap();
-                let code = data.code.clone();
-                let password = reconnect
-                    .pending_create_password
-                    .take()
-                    .or_else(|| {
-                        reconnect
-                            .target
-                            .as_ref()
-                            .map(|target| target.password.clone())
-                    })
-                    .unwrap_or_default();
-                reconnect.target = Some(ReconnectTarget { code, password });
-                reconnect.retry_attempts = 0;
-                reconnect.next_retry_at = None;
+                reconnect.set_joined_lobby(data.code.clone());
             }
             let mut snapshot = SNAPSHOT.lock().unwrap();
             snapshot.joined_lobby = Some(joined_lobby_from_state(data));
@@ -596,10 +522,9 @@ fn log_malformed_payload(event: Option<&str>, error: &str, raw_text: &str) {
 mod tests {
     use super::{
         COMMAND_TX, Command, ConnectionState, LAST_MACHINE_STATE_SIG, RECONNECT_STATE,
-        ReconnectState, ReconnectTarget, SNAPSHOT, Snapshot, TEST_MUTEX, handle_text_message,
-        leave_lobby,
+        ReconnectState, SNAPSHOT, Snapshot, TEST_MUTEX, handle_text_message, leave_lobby,
     };
-    use deadsync_online::lobbies::{JoinedLobby, LobbyPlayer};
+    use deadsync_online::lobbies::{JoinedLobby, LobbyPlayer, ReconnectTarget};
 
     fn reset_test_state() {
         *SNAPSHOT.lock().unwrap() = Snapshot::default();

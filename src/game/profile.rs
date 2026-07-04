@@ -27,16 +27,15 @@ use deadsync_profile::{
     LocalProfileSummary, NoteSkin, PLAYER_SLOTS, PlayMode, PlayStyle, PlayerOptionsData,
     PlayerSide, Profile, ProfileStats, ProfileStatsDecodeError, TimingTickMode,
     active_profile_is_guest, active_profile_local_id, add_known_pack_names, clamp_weight_pounds,
-    cmp_profile_ids_case_insensitive, decode_profile_stats as decode_profile_stats_bytes,
-    encode_profile_stats, find_profile_avatar_path, folder_name_for_display, generate_profile_guid,
-    initials_from_name, is_local_profile_id, is_valid_profile_guid, joined_player_mask,
+    decode_profile_stats as decode_profile_stats_bytes, encode_profile_stats,
+    find_profile_avatar_path, folder_name_for_display, generate_profile_guid, initials_from_name,
+    is_local_profile_id, is_valid_profile_guid, joined_player_mask,
     load_last_played_course_section, load_last_played_section, load_player_options_section,
     parse_favorited_packs_content, parse_favorites_content, parse_groovestats_is_pad_player,
     player_options_section, player_side_index as side_ix, player_side_is_joined,
     read_userprofile_identity, render_arrowcloud_ini_content, render_favorited_packs_content,
     render_favorites_content, render_groovestats_ini_content, render_profile_ini_content,
-    rewrite_profile_display_name_content, sanitize_player_initials, unknown_pack_names,
-    upsert_profile_guid_content,
+    sanitize_player_initials, unknown_pack_names, upsert_profile_guid_content,
 };
 pub use update::*;
 
@@ -56,67 +55,16 @@ fn profile_dir_by_folder(folder: &str) -> PathBuf {
 /// `invalidate_profile_dir_cache()` so the next lookup re-scans.
 static PROFILE_DIR_CACHE: Mutex<Option<HashMap<String, PathBuf>>> = Mutex::new(None);
 
-/// Read the embedded `Guid` and `DisplayName` from a folder's `profile.ini` in a
-/// single targeted pass (no full INI parse).
-fn read_profile_identity(dir: &Path) -> (Option<String>, Option<String>) {
-    match fs::read_to_string(dir.join("profile.ini")) {
-        Ok(content) => read_userprofile_identity(&content),
-        Err(_) => (None, None),
-    }
-}
-
-fn read_profile_guid(dir: &Path) -> Option<String> {
-    read_profile_identity(dir).0
-}
-
-/// Write `contents` to `path` atomically (temp sibling + rename) so a crash or
-/// power loss mid-write can't truncate the live file. Matters most during the
-/// one-time startup backfill, which rewrites every legacy profile at once.
-fn write_atomic(path: &Path, contents: &str) -> std::io::Result<()> {
-    let mut tmp = path.as_os_str().to_owned();
-    tmp.push(".tmp");
-    let tmp = PathBuf::from(tmp);
-    fs::write(&tmp, contents)?;
-    fs::rename(&tmp, path)
-}
-
 fn build_profile_dir_map() -> HashMap<String, PathBuf> {
-    use std::collections::hash_map::Entry;
-    let mut map: HashMap<String, PathBuf> = HashMap::new();
-    let Ok(read_dir) = fs::read_dir(profiles_root()) else {
-        return map;
-    };
-    for entry in read_dir.flatten() {
-        if !entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
-            continue;
-        }
-        let path = entry.path();
-        let Some(guid) = read_profile_guid(&path) else {
-            continue;
-        };
-        match map.entry(guid) {
-            Entry::Vacant(slot) => {
-                slot.insert(path);
-            }
-            Entry::Occupied(mut slot) => {
-                // Two folders embed the same GUID (e.g. a copied profile). Bind
-                // deterministically to the lexicographically smallest folder name
-                // so resolution is stable across runs instead of read_dir order.
-                let keep_existing = slot.get().file_name() <= path.file_name();
-                warn!(
-                    "Duplicate profile GUID {} in '{}' and '{}'; using '{}'.",
-                    slot.key(),
-                    slot.get().display(),
-                    path.display(),
-                    if keep_existing { slot.get() } else { &path }.display()
-                );
-                if !keep_existing {
-                    slot.insert(path);
-                }
-            }
-        }
-    }
-    map
+    deadsync_profile::build_profile_dir_map(&profiles_root(), |guid, left, right, kept| {
+        warn!(
+            "Duplicate profile GUID {} in '{}' and '{}'; using '{}'.",
+            guid,
+            left.display(),
+            right.display(),
+            kept.display()
+        );
+    })
 }
 
 /// Drop the cached map so the next lookup rescans disk.
@@ -156,34 +104,27 @@ pub fn local_profile_dir_for_id(id: &str) -> PathBuf {
 }
 
 fn existing_profile_folder_names() -> Vec<String> {
-    let Ok(read_dir) = fs::read_dir(profiles_root()) else {
-        return Vec::new();
-    };
-    read_dir
-        .flatten()
-        .filter(|e| e.file_type().map(|ft| ft.is_dir()).unwrap_or(false))
-        .filter_map(|e| e.file_name().to_str().map(str::to_string))
-        .collect()
+    deadsync_profile::profile_folder_names(&profiles_root())
 }
 
 #[inline(always)]
 fn profile_ini_path(id: &str) -> PathBuf {
-    local_profile_dir(id).join("profile.ini")
+    deadsync_profile::profile_ini_path(&local_profile_dir(id))
 }
 
 #[inline(always)]
 fn groovestats_ini_path(id: &str) -> PathBuf {
-    local_profile_dir(id).join("groovestats.ini")
+    deadsync_profile::groovestats_ini_path(&local_profile_dir(id))
 }
 
 #[inline(always)]
 fn arrowcloud_ini_path(id: &str) -> PathBuf {
-    local_profile_dir(id).join("arrowcloud.ini")
+    deadsync_profile::arrowcloud_ini_path(&local_profile_dir(id))
 }
 
 #[inline(always)]
 fn profile_stats_path(id: &str) -> PathBuf {
-    local_profile_dir(id).join("stats.bin")
+    deadsync_profile::profile_stats_path(&local_profile_dir(id))
 }
 
 #[inline(always)]
@@ -220,7 +161,7 @@ fn load_last_played_course(profile_conf: &SimpleIni, section: &str) -> Option<La
 
 #[inline(always)]
 fn profile_stats_tmp_path(id: &str) -> PathBuf {
-    local_profile_dir(id).join("stats.bin.tmp")
+    deadsync_profile::profile_stats_tmp_path(&local_profile_dir(id))
 }
 
 // Global statics for the loaded player profiles.
@@ -1055,7 +996,8 @@ fn migrate_local_profiles() {
                 None => {
                     let g = generate_profile_guid();
                     let updated = upsert_profile_guid_content(&content, &g);
-                    if let Err(e) = write_atomic(&ini_path, &updated) {
+                    if let Err(e) = deadsync_profile::write_profile_file_atomic(&ini_path, &updated)
+                    {
                         warn!("Failed to backfill GUID for '{}': {e}", path.display());
                         continue;
                     }
@@ -1412,7 +1354,7 @@ pub fn mark_packs_known<'a>(profile_ids: &[String], pack_names: impl IntoIterato
 // --- Favorites ---
 
 fn favorites_path(profile_id: &str) -> PathBuf {
-    local_profile_dir(profile_id).join("favorites.txt")
+    deadsync_profile::favorites_path(&local_profile_dir(profile_id))
 }
 
 fn load_favorites(profile_id: &str) -> HashSet<String> {
@@ -1486,7 +1428,7 @@ pub fn seed_session_favorite(side: PlayerSide, chart_hash: &str) {
 }
 
 fn favorited_packs_path(profile_id: &str) -> PathBuf {
-    local_profile_dir(profile_id).join("favorited_packs.txt")
+    deadsync_profile::favorited_packs_path(&local_profile_dir(profile_id))
 }
 
 fn load_favorited_packs(profile_id: &str) -> HashSet<String> {
@@ -1594,40 +1536,7 @@ pub fn load_default_profiles_for_joined_sides() -> [Profile; PLAYER_SLOTS] {
 }
 
 pub fn scan_local_profiles() -> Vec<LocalProfileSummary> {
-    let Ok(read_dir) = fs::read_dir(profiles_root()) else {
-        return Vec::new();
-    };
-
-    let mut out = Vec::new();
-    for entry in read_dir.flatten() {
-        let Ok(ft) = entry.file_type() else {
-            continue;
-        };
-        if !ft.is_dir() {
-            continue;
-        }
-        let dir = entry.path();
-
-        // Pure read: identity comes from the embedded GUID. Legacy profiles
-        // without one are skipped here and backfilled by startup migration; a
-        // read-only enumeration must never write to disk.
-        let (Some(id), display) = read_profile_identity(&dir) else {
-            continue;
-        };
-
-        out.push(LocalProfileSummary {
-            display_name: display.unwrap_or_else(|| id.clone()),
-            id,
-            avatar_path: find_profile_avatar_path(&dir),
-        });
-    }
-
-    // Folder name is no longer the identity, so order by display name.
-    out.sort_by(|a, b| {
-        cmp_profile_ids_case_insensitive(&a.display_name, &b.display_name)
-            .then_with(|| a.id.cmp(&b.id))
-    });
-    out
+    deadsync_profile::scan_local_profile_summaries(&profiles_root())
 }
 
 pub fn create_local_profile(display_name: &str) -> Result<String, std::io::Error> {
@@ -1800,14 +1709,6 @@ pub fn create_local_profile_from_import(
     Ok(id)
 }
 
-fn rewrite_profile_display_name(path: &Path, display_name: &str) -> Result<(), std::io::Error> {
-    let src = fs::read_to_string(path)?;
-    fs::write(
-        path,
-        rewrite_profile_display_name_content(&src, display_name),
-    )
-}
-
 pub fn rename_local_profile(id: &str, display_name: &str) -> Result<(), std::io::Error> {
     if !is_local_profile_id(id) {
         return Err(std::io::Error::new(
@@ -1831,7 +1732,7 @@ pub fn rename_local_profile(id: &str, display_name: &str) -> Result<(), std::io:
             "Profile does not exist",
         ));
     }
-    rewrite_profile_display_name(&ini_path, name)?;
+    deadsync_profile::rewrite_profile_display_name_file(&ini_path, name)?;
 
     // Keep the folder readable; safe because identity is the GUID, not the name.
     let current_dir = local_profile_dir(id);

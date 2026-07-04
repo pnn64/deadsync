@@ -1133,7 +1133,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.4.1931"
+version = "0.4.1940"
 dependencies = [
  "bincode",
  "bitflags 2.13.0",
@@ -1413,6 +1413,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tungstenite",
+ "zip",
 ]
 
 [[package]]
@@ -1492,6 +1493,7 @@ version = "0.1.0"
 dependencies = [
  "deadsync-config",
  "deadsync-profile",
+ "log",
  "rand 0.10.1",
 ]
 
@@ -1516,7 +1518,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.4.1931"
+version = "0.4.1940"
 dependencies = [
  "log",
  "semver",

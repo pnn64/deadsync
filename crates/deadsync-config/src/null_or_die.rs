@@ -1,4 +1,73 @@
+use crate::bools::parse_u8_bool_or_default;
+use crate::ini::SimpleIni;
+use crate::numbers::parse_auto_threads_u8;
+use crate::theme::SyncGraphMode;
 use null_or_die::{BiasKernel, KernelTarget};
+use std::str::FromStr;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct NullOrDieOptions {
+    pub sync_graph: SyncGraphMode,
+    pub confidence_percent: u8,
+    pub pack_sync_threads: u8,
+    pub fingerprint_ms: f64,
+    pub window_ms: f64,
+    pub step_ms: f64,
+    pub magic_offset_ms: f64,
+    pub kernel_target: KernelTarget,
+    pub kernel_type: BiasKernel,
+    pub full_spectrogram: bool,
+}
+
+pub fn load_null_or_die_options(conf: &SimpleIni, default: NullOrDieOptions) -> NullOrDieOptions {
+    NullOrDieOptions {
+        sync_graph: conf
+            .get("Options", "NullOrDieSyncGraph")
+            .and_then(|value| SyncGraphMode::from_str(&value).ok())
+            .unwrap_or(default.sync_graph),
+        confidence_percent: conf
+            .get("Options", "NullOrDieConfidencePercent")
+            .and_then(|value| value.parse::<u8>().ok())
+            .map(clamp_null_or_die_confidence_percent)
+            .unwrap_or(default.confidence_percent),
+        pack_sync_threads: conf
+            .get("Options", "PackSyncThreads")
+            .and_then(|value| parse_auto_threads_u8(&value))
+            .unwrap_or(default.pack_sync_threads),
+        fingerprint_ms: conf
+            .get("Options", "NullOrDieFingerprintMs")
+            .and_then(|value| value.parse::<f64>().ok())
+            .map(clamp_null_or_die_positive_ms)
+            .unwrap_or(default.fingerprint_ms),
+        window_ms: conf
+            .get("Options", "NullOrDieWindowMs")
+            .and_then(|value| value.parse::<f64>().ok())
+            .map(clamp_null_or_die_positive_ms)
+            .unwrap_or(default.window_ms),
+        step_ms: conf
+            .get("Options", "NullOrDieStepMs")
+            .and_then(|value| value.parse::<f64>().ok())
+            .map(clamp_null_or_die_positive_ms)
+            .unwrap_or(default.step_ms),
+        magic_offset_ms: conf
+            .get("Options", "NullOrDieMagicOffsetMs")
+            .and_then(|value| value.parse::<f64>().ok())
+            .map(clamp_null_or_die_magic_offset_ms)
+            .unwrap_or(default.magic_offset_ms),
+        kernel_target: conf
+            .get("Options", "NullOrDieKernelTarget")
+            .and_then(|value| parse_null_or_die_kernel_target(&value))
+            .unwrap_or(default.kernel_target),
+        kernel_type: conf
+            .get("Options", "NullOrDieKernelType")
+            .and_then(|value| parse_null_or_die_kernel_type(&value))
+            .unwrap_or(default.kernel_type),
+        full_spectrogram: parse_u8_bool_or_default(
+            conf.get("Options", "NullOrDieFullSpectrogram").as_deref(),
+            default.full_spectrogram,
+        ),
+    }
+}
 
 pub fn clamp_null_or_die_confidence_percent(value: u8) -> u8 {
     value.min(100)
@@ -117,6 +186,21 @@ pub const fn null_or_die_kernel_type_from_choice(idx: usize) -> BiasKernel {
 mod tests {
     use super::*;
 
+    fn default_options() -> NullOrDieOptions {
+        NullOrDieOptions {
+            sync_graph: SyncGraphMode::Frequency,
+            confidence_percent: 80,
+            pack_sync_threads: 0,
+            fingerprint_ms: 12.0,
+            window_ms: 8.0,
+            step_ms: 1.0,
+            magic_offset_ms: 0.0,
+            kernel_target: KernelTarget::Digest,
+            kernel_type: BiasKernel::Rising,
+            full_spectrogram: false,
+        }
+    }
+
     fn assert_tenths_eq(value: f64, tenths: i32) {
         assert_eq!((value * 10.0).round() as i32, tenths);
     }
@@ -172,5 +256,61 @@ mod tests {
         assert_eq!(null_or_die_kernel_type_from_choice(0), BiasKernel::Rising);
         assert_eq!(null_or_die_kernel_type_from_choice(1), BiasKernel::Loudest);
         assert_eq!(null_or_die_kernel_type_from_choice(99), BiasKernel::Rising);
+    }
+
+    #[test]
+    fn loads_null_or_die_options_from_ini() {
+        let mut conf = SimpleIni::new();
+        conf.load_str(
+            r#"
+            [Options]
+            NullOrDieSyncGraph=PostKernel
+            NullOrDieConfidencePercent=200
+            PackSyncThreads=4
+            NullOrDieFingerprintMs=10.05
+            NullOrDieWindowMs=0
+            NullOrDieStepMs=250
+            NullOrDieMagicOffsetMs=-250
+            NullOrDieKernelTarget=Accumulator
+            NullOrDieKernelType=Loudest
+            NullOrDieFullSpectrogram=1
+            "#,
+        );
+
+        let loaded = load_null_or_die_options(&conf, default_options());
+
+        assert_eq!(loaded.sync_graph, SyncGraphMode::PostKernelFingerprint);
+        assert_eq!(loaded.confidence_percent, 100);
+        assert_eq!(loaded.pack_sync_threads, 4);
+        assert_tenths_eq(loaded.fingerprint_ms, 101);
+        assert_tenths_eq(loaded.window_ms, 1);
+        assert_tenths_eq(loaded.step_ms, 1000);
+        assert_tenths_eq(loaded.magic_offset_ms, -1000);
+        assert_eq!(loaded.kernel_target, KernelTarget::Accumulator);
+        assert_eq!(loaded.kernel_type, BiasKernel::Loudest);
+        assert!(loaded.full_spectrogram);
+    }
+
+    #[test]
+    fn load_null_or_die_options_keeps_defaults_for_bad_values() {
+        let default = default_options();
+        let mut conf = SimpleIni::new();
+        conf.load_str(
+            r#"
+            [Options]
+            NullOrDieSyncGraph=bad
+            NullOrDieConfidencePercent=bad
+            PackSyncThreads=bad
+            NullOrDieFingerprintMs=bad
+            NullOrDieWindowMs=bad
+            NullOrDieStepMs=bad
+            NullOrDieMagicOffsetMs=bad
+            NullOrDieKernelTarget=bad
+            NullOrDieKernelType=bad
+            NullOrDieFullSpectrogram=bad
+            "#,
+        );
+
+        assert_eq!(load_null_or_die_options(&conf, default), default);
     }
 }

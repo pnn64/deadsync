@@ -2,16 +2,15 @@ use super::groovestats;
 use crate::config;
 use deadlib_platform::dirs;
 use deadsync_online::downloads::{
-    DownloadSnapshot, DownloadZipError, UnlockCache, UnlockCacheFile, cache_has_destination,
-    download_zip_to_path, itl_unlock_pack_ini_content, sanitize_pack_name,
+    DownloadSnapshot, DownloadZipError, UnlockCache, cache_has_destination, choose_unlock_root,
+    download_filename, download_zip_to_path, file_len, read_unlock_cache_file, sanitize_pack_name,
+    unzip_to_destination, write_pack_ini_if_needed, write_unlock_cache_file,
 };
 use deadsync_online::groovestats::ConnectionStatus;
 use log::{debug, warn};
-use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{LazyLock, Mutex};
-use zip::ZipArchive;
 
 #[derive(Clone, Debug)]
 struct DownloadEntry {
@@ -173,72 +172,6 @@ fn unlock_destination_roots() -> Vec<PathBuf> {
     roots
 }
 
-fn choose_unlock_root(destination: &str, roots: &[PathBuf]) -> Option<usize> {
-    let mut best: Option<(usize, usize)> = None;
-    for (idx, root) in roots.iter().enumerate() {
-        let Some(score) = unlock_root_score(root, destination) else {
-            continue;
-        };
-        if best.is_none_or(|(best_idx, best_score)| {
-            score < best_score || score == best_score && idx > best_idx
-        }) {
-            best = Some((idx, score));
-        }
-    }
-    best.map(|(idx, _)| idx)
-}
-
-fn unlock_root_score(root: &Path, destination: &str) -> Option<usize> {
-    if root.exists() && !root.is_dir() {
-        return None;
-    }
-    let pack = root.join(destination);
-    if pack.exists() && !pack.is_dir() {
-        return None;
-    }
-    Some(usize::from(!pack.is_dir()))
-}
-
-fn unzip_to_destination(
-    zip_path: &Path,
-    destination: &Path,
-) -> Result<(), Box<dyn std::error::Error>> {
-    fs::create_dir_all(destination)?;
-    let file = File::open(zip_path)?;
-    let mut archive = ZipArchive::new(file)?;
-    for idx in 0..archive.len() {
-        let mut entry = archive.by_index(idx)?;
-        let Some(relative_path) = entry.enclosed_name().map(|path| path.to_path_buf()) else {
-            continue;
-        };
-        let out_path = destination.join(relative_path);
-        if entry.name().ends_with('/') {
-            fs::create_dir_all(&out_path)?;
-            continue;
-        }
-        if let Some(parent) = out_path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        let mut out_file = File::create(&out_path)?;
-        std::io::copy(&mut entry, &mut out_file)?;
-    }
-    Ok(())
-}
-
-fn write_pack_ini_if_needed(
-    destination_pack: &Path,
-    pack_name: &str,
-) -> Result<(), std::io::Error> {
-    let Some(content) = itl_unlock_pack_ini_content(pack_name) else {
-        return Ok(());
-    };
-    let pack_ini = destination_pack.join("Pack.ini");
-    if pack_ini.exists() {
-        return Ok(());
-    }
-    fs::write(pack_ini, content)
-}
-
 fn mark_cache_success(url: &str, destination: &str) {
     let cache_snapshot = {
         let mut state = DOWNLOAD_STATE.lock().unwrap();
@@ -294,73 +227,36 @@ fn ensure_cache_loaded(state: &mut DownloadState) {
 
 fn load_unlock_cache() -> UnlockCache {
     let path = dirs::app_dirs().unlock_cache_path();
-    let Ok(text) = fs::read_to_string(&path) else {
-        return UnlockCache::new();
-    };
-    serde_json::from_str::<UnlockCacheFile>(&text)
-        .map(|file| file.0)
-        .unwrap_or_else(|error| {
-            warn!("Failed to parse unlock cache {path:?}: {error}");
+    match read_unlock_cache_file(&path) {
+        Ok(cache) => cache,
+        Err(error) => {
+            if path.exists() {
+                warn!("Failed to parse unlock cache {path:?}: {error}");
+            }
             UnlockCache::new()
-        })
+        }
+    }
 }
 
 fn write_unlock_cache(cache: &UnlockCache) {
     let path = dirs::app_dirs().unlock_cache_path();
-    if let Some(parent) = path.parent()
-        && let Err(error) = fs::create_dir_all(parent)
-    {
-        warn!("Failed to create unlock cache dir {parent:?}: {error}");
-        return;
+    if let Err(error) = write_unlock_cache_file(&path, cache) {
+        warn!("Failed to write unlock cache file {path:?}: {error}");
     }
-    let Ok(text) = serde_json::to_string(&UnlockCacheFile(cache.clone())) else {
-        warn!("Failed to encode unlock cache.");
-        return;
-    };
-    let tmp = path.with_extension("tmp");
-    if let Err(error) = fs::write(&tmp, text) {
-        warn!("Failed to write unlock cache temp file {tmp:?}: {error}");
-        return;
-    }
-    if let Err(error) = fs::rename(&tmp, &path) {
-        warn!("Failed to commit unlock cache file {path:?}: {error}");
-        let _ = fs::remove_file(&tmp);
-    }
-}
-
-fn download_filename(id: u64) -> String {
-    format!("{id:016x}.zip")
-}
-
-fn file_len(path: &Path) -> u64 {
-    fs::metadata(path).map(|meta| meta.len()).unwrap_or(0)
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        DOWNLOAD_STATE, DownloadEntry, DownloadState, NEXT_DOWNLOAD_ID, choose_unlock_root,
+        DOWNLOAD_STATE, DownloadEntry, DownloadState, NEXT_DOWNLOAD_ID,
         take_ready_song_reload_request,
     };
-    use std::fs;
     use std::path::PathBuf;
     use std::sync::atomic::Ordering;
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn reset_download_state() {
         *DOWNLOAD_STATE.lock().unwrap() = DownloadState::default();
         NEXT_DOWNLOAD_ID.store(1, Ordering::Relaxed);
-    }
-
-    fn temp_root(label: &str) -> PathBuf {
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system time before unix epoch")
-            .as_nanos();
-        std::env::temp_dir().join(format!(
-            "deadsync-downloads-{label}-{}-{unique}",
-            std::process::id()
-        ))
     }
 
     #[test]
@@ -392,71 +288,5 @@ mod tests {
             vec![PathBuf::from("Songs/ITL Unlocks")]
         );
         assert!(take_ready_song_reload_request().is_empty());
-    }
-
-    #[test]
-    fn unlock_root_prefers_last_writable_root_for_new_pack() {
-        let roots = vec![
-            PathBuf::from("Songs"),
-            PathBuf::from("ExtraSongsA"),
-            PathBuf::from("ExtraSongsB"),
-        ];
-
-        assert_eq!(
-            choose_unlock_root("Stamina RPG 10 Unlocks", &roots),
-            Some(2)
-        );
-    }
-
-    #[test]
-    fn unlock_root_keeps_existing_pack_location() {
-        let root = temp_root("existing-pack");
-        let primary = root.join("songs");
-        let extra = root.join("extra");
-        fs::create_dir_all(primary.join("ITL Online 2026 Unlocks"))
-            .expect("create primary unlock pack");
-        fs::create_dir_all(&extra).expect("create extra song root");
-
-        let roots = vec![primary, extra];
-
-        assert_eq!(
-            choose_unlock_root("ITL Online 2026 Unlocks", &roots),
-            Some(0)
-        );
-        fs::remove_dir_all(root).expect("remove test root");
-    }
-
-    #[test]
-    fn unlock_root_uses_existing_additional_pack() {
-        let root = temp_root("existing-extra-pack");
-        let primary = root.join("songs");
-        let extra = root.join("extra");
-        fs::create_dir_all(&primary).expect("create primary song root");
-        fs::create_dir_all(extra.join("Stamina RPG 10 Unlocks")).expect("create extra unlock pack");
-
-        let roots = vec![primary, extra];
-
-        assert_eq!(
-            choose_unlock_root("Stamina RPG 10 Unlocks", &roots),
-            Some(1)
-        );
-        fs::remove_dir_all(root).expect("remove test root");
-    }
-
-    #[test]
-    fn unlock_root_skips_file_candidates() {
-        let root = temp_root("file-candidate");
-        let primary = root.join("songs");
-        let extra = root.join("extra");
-        fs::create_dir_all(&primary).expect("create primary song root");
-        fs::write(extra, "not a directory").expect("create extra file");
-
-        let roots = vec![primary, root.join("extra")];
-
-        assert_eq!(
-            choose_unlock_root("ITL Online 2026 Unlocks", &roots),
-            Some(0)
-        );
-        fs::remove_dir_all(root).expect("remove test root");
     }
 }

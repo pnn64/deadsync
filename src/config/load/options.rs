@@ -1,15 +1,10 @@
 use super::*;
-use deadsync_config::audio::{
-    clamp_audio_volume_percent, clamp_music_wheel_switch_speed, parse_auto_audio_output_device,
-    parse_auto_audio_sample_rate_hz,
-};
-use deadsync_config::machine::{
-    canonical_frame_stats_overlay_anchor, canonical_frame_stats_overlay_style,
-    clamp_smx_light_brightness_percent,
-};
-use deadsync_config::numbers::parse_auto_threads_u8;
+use deadsync_config::audio::{AudioOptions, load_audio_options};
+use deadsync_config::machine::clamp_smx_light_brightness_percent;
+use deadsync_config::null_or_die::{NullOrDieOptions, load_null_or_die_options};
 use deadsync_config::options::{
-    parse_select_music_itl_rank_mode, parse_select_music_song_select_bg_mode, parse_show_stats_mode,
+    RuntimeOptions, SelectMusicOptions, SystemOptions, load_runtime_options,
+    load_select_music_options, load_system_options,
 };
 use deadsync_lights::{
     SerialPortName, parse_driver_or_default, parse_gameplay_pad_lights_or_default,
@@ -50,137 +45,105 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "FullscreenType")
         .and_then(|v| FullscreenType::from_str(&v).ok())
         .unwrap_or(default.fullscreen_type);
-    cfg.game_flag = conf
-        .get("Options", "Game")
-        .and_then(|v| GameFlag::from_str(&v).ok())
-        .unwrap_or(default.game_flag);
     cfg.display_monitor = conf
         .get("Options", "DisplayMonitor")
         .and_then(|v| v.parse::<usize>().ok())
         .unwrap_or(default.display_monitor);
-    cfg.auto_download_unlocks = parse_u8_bool_or_default(
-        conf.get("Options", "AutoDownloadUnlocks").as_deref(),
-        default.auto_download_unlocks,
+
+    let loaded = load_system_options(
+        conf,
+        SystemOptions {
+            game_flag: default.game_flag,
+            auto_download_unlocks: default.auto_download_unlocks,
+            auto_populate_gs_scores: default.auto_populate_gs_scores,
+            updater_install_enabled: default.updater_install_enabled,
+            enable_groovestats: default.enable_groovestats,
+            enable_arrowcloud: default.enable_arrowcloud,
+            enable_boogiestats: default.enable_boogiestats,
+            submit_arrowcloud_fails: default.submit_arrowcloud_fails,
+            arrowcloud_qr_login_when: default.arrowcloud_qr_login_when,
+            groovestats_qr_login_when: default.groovestats_qr_login_when,
+            separate_unlocks_by_player: default.separate_unlocks_by_player,
+            mine_hit_sound: default.mine_hit_sound,
+            show_stats_mode: default.show_stats_mode,
+            frame_stats_overlay_anchor: default.frame_stats_overlay_anchor,
+            frame_stats_overlay_style: default.frame_stats_overlay_style,
+            translated_titles: default.translated_titles,
+            bg_brightness: default.bg_brightness,
+            center_1player_notefield: default.center_1player_notefield,
+            center_image_translate_x: default.center_image_translate_x,
+            center_image_translate_y: default.center_image_translate_y,
+            center_image_add_width: default.center_image_add_width,
+            center_image_add_height: default.center_image_add_height,
+            autosubmit_course_scores_individually: default.autosubmit_course_scores_individually,
+            show_course_individual_scores: default.show_course_individual_scores,
+            show_most_played_courses: default.show_most_played_courses,
+            show_random_courses: default.show_random_courses,
+            default_fail_type: default.default_fail_type,
+            banner_cache: default.banner_cache,
+            cdtitle_cache: default.cdtitle_cache,
+            high_dpi: default.high_dpi,
+            hide_mouse_cursor: default.hide_mouse_cursor,
+            allow_shutdown_host: default.allow_shutdown_host,
+            smx_input: default.smx_input,
+            smx_manages_pad_config: default.smx_manages_pad_config,
+            smx_panel_lights: default.smx_panel_lights,
+            smx_underglow_theme: default.smx_underglow_theme,
+            gfx_debug: default.gfx_debug,
+            global_offset_seconds: default.global_offset_seconds,
+            language_flag: default.language_flag,
+            log_level: default.log_level,
+            log_to_file: default.log_to_file,
+            show_console: default.show_console,
+        },
     );
-    cfg.auto_populate_gs_scores = parse_u8_bool_or_default(
-        conf.get("Options", "AutoPopulateGrooveStatsScores")
-            .as_deref(),
-        default.auto_populate_gs_scores,
-    );
-    cfg.updater_install_enabled = parse_u8_bool_or_default(
-        conf.get("Options", "UpdaterInstallEnabled").as_deref(),
-        default.updater_install_enabled,
-    );
-    cfg.enable_groovestats = parse_u8_bool_or_default(
-        conf.get("Options", "EnableGrooveStats").as_deref(),
-        default.enable_groovestats,
-    );
-    cfg.enable_arrowcloud = parse_u8_bool_or_default(
-        conf.get("Options", "EnableArrowCloud").as_deref(),
-        default.enable_arrowcloud,
-    );
-    cfg.enable_boogiestats = parse_u8_bool_or_default(
-        conf.get("Options", "EnableBoogieStats").as_deref(),
-        default.enable_boogiestats,
-    );
-    cfg.submit_arrowcloud_fails = parse_u8_bool_or_default(
-        conf.get("Options", "SubmitArrowCloudFails").as_deref(),
-        default.submit_arrowcloud_fails,
-    );
-    cfg.arrowcloud_qr_login_when = conf
-        .get("Options", "ArrowCloudQrLoginWhen")
-        .and_then(|v| ArrowCloudQrLoginWhen::from_str(&v).ok())
-        .unwrap_or(default.arrowcloud_qr_login_when);
-    cfg.groovestats_qr_login_when = conf
-        .get("Options", "GrooveStatsQrLoginWhen")
-        .and_then(|v| GrooveStatsQrLoginWhen::from_str(&v).ok())
-        .unwrap_or(default.groovestats_qr_login_when);
-    cfg.separate_unlocks_by_player = parse_u8_bool_or_default(
-        conf.get("Options", "SeparateUnlocksByPlayer").as_deref(),
-        default.separate_unlocks_by_player,
-    );
-    cfg.mine_hit_sound = parse_u8_bool_or_default(
-        conf.get("Options", "MineHitSound").as_deref(),
-        default.mine_hit_sound,
-    );
-    let show_stats_mode = conf.get("Options", "ShowStatsMode");
-    let show_stats_legacy = conf.get("Options", "ShowStats");
-    cfg.show_stats_mode = parse_show_stats_mode(
-        show_stats_mode.as_deref(),
-        show_stats_legacy.as_deref(),
-        default.show_stats_mode,
-    );
-    cfg.frame_stats_overlay_anchor = conf
-        .get("Options", "FrameStatsOverlayAnchor")
-        .map(|v| canonical_frame_stats_overlay_anchor(&v))
-        .unwrap_or(default.frame_stats_overlay_anchor);
-    cfg.frame_stats_overlay_style = conf
-        .get("Options", "FrameStatsOverlayStyle")
-        .map(|v| canonical_frame_stats_overlay_style(&v))
-        .unwrap_or(default.frame_stats_overlay_style);
-    cfg.translated_titles = conf
-        .get("Options", "TranslatedTitles")
-        .or_else(|| conf.get("Options", "translatedtitles"))
-        .and_then(|v| parse_loose_bool_str(&v))
-        .unwrap_or(default.translated_titles);
-    cfg.bg_brightness = conf
-        .get("Options", "BGBrightness")
-        .and_then(|v| v.parse::<f32>().ok())
-        .map_or(default.bg_brightness, clamp_bg_brightness);
+    cfg.game_flag = loaded.game_flag;
+    cfg.auto_download_unlocks = loaded.auto_download_unlocks;
+    cfg.auto_populate_gs_scores = loaded.auto_populate_gs_scores;
+    cfg.updater_install_enabled = loaded.updater_install_enabled;
+    cfg.enable_groovestats = loaded.enable_groovestats;
+    cfg.enable_arrowcloud = loaded.enable_arrowcloud;
+    cfg.enable_boogiestats = loaded.enable_boogiestats;
+    cfg.submit_arrowcloud_fails = loaded.submit_arrowcloud_fails;
+    cfg.arrowcloud_qr_login_when = loaded.arrowcloud_qr_login_when;
+    cfg.groovestats_qr_login_when = loaded.groovestats_qr_login_when;
+    cfg.separate_unlocks_by_player = loaded.separate_unlocks_by_player;
+    cfg.mine_hit_sound = loaded.mine_hit_sound;
+    cfg.show_stats_mode = loaded.show_stats_mode;
+    cfg.frame_stats_overlay_anchor = loaded.frame_stats_overlay_anchor;
+    cfg.frame_stats_overlay_style = loaded.frame_stats_overlay_style;
+    cfg.translated_titles = loaded.translated_titles;
+    cfg.bg_brightness = loaded.bg_brightness;
+    cfg.center_1player_notefield = loaded.center_1player_notefield;
+    cfg.center_image_translate_x = loaded.center_image_translate_x;
+    cfg.center_image_translate_y = loaded.center_image_translate_y;
+    cfg.center_image_add_width = loaded.center_image_add_width;
+    cfg.center_image_add_height = loaded.center_image_add_height;
+    cfg.autosubmit_course_scores_individually = loaded.autosubmit_course_scores_individually;
+    cfg.show_course_individual_scores = loaded.show_course_individual_scores;
+    cfg.show_most_played_courses = loaded.show_most_played_courses;
+    cfg.show_random_courses = loaded.show_random_courses;
+    cfg.default_fail_type = loaded.default_fail_type;
+    cfg.banner_cache = loaded.banner_cache;
+    cfg.cdtitle_cache = loaded.cdtitle_cache;
+    cfg.high_dpi = loaded.high_dpi;
+    cfg.hide_mouse_cursor = loaded.hide_mouse_cursor;
+    cfg.allow_shutdown_host = loaded.allow_shutdown_host;
+    cfg.smx_input = loaded.smx_input;
+    cfg.smx_manages_pad_config = loaded.smx_manages_pad_config;
+    cfg.smx_panel_lights = loaded.smx_panel_lights;
+    cfg.smx_underglow_theme = loaded.smx_underglow_theme;
+    cfg.gfx_debug = loaded.gfx_debug;
+    cfg.global_offset_seconds = loaded.global_offset_seconds;
+    cfg.language_flag = loaded.language_flag;
+    cfg.log_level = loaded.log_level;
+    cfg.log_to_file = loaded.log_to_file;
+    cfg.show_console = loaded.show_console;
+
     cfg.gameplay_bg_color = conf
         .get("Options", "GameplayBgColor")
         .and_then(|v| Color::from_hex(&v))
         .unwrap_or(default.gameplay_bg_color);
-    cfg.center_1player_notefield = conf
-        .get("Options", "Center1Player")
-        .or_else(|| conf.get("Options", "CenteredP1Notefield"))
-        .and_then(|v| parse_loose_bool_str(&v))
-        .unwrap_or(default.center_1player_notefield);
-    cfg.center_image_translate_x = conf
-        .get("Options", "CenterImageTranslateX")
-        .and_then(|v| v.trim().parse::<i32>().ok())
-        .unwrap_or(default.center_image_translate_x);
-    cfg.center_image_translate_y = conf
-        .get("Options", "CenterImageTranslateY")
-        .and_then(|v| v.trim().parse::<i32>().ok())
-        .unwrap_or(default.center_image_translate_y);
-    cfg.center_image_add_width = conf
-        .get("Options", "CenterImageAddWidth")
-        .and_then(|v| v.trim().parse::<i32>().ok())
-        .unwrap_or(default.center_image_add_width);
-    cfg.center_image_add_height = conf
-        .get("Options", "CenterImageAddHeight")
-        .and_then(|v| v.trim().parse::<i32>().ok())
-        .unwrap_or(default.center_image_add_height);
-    cfg.autosubmit_course_scores_individually = parse_u8_bool_or_default(
-        conf.get("Options", "CourseAutosubmitScoresIndividually")
-            .as_deref(),
-        default.autosubmit_course_scores_individually,
-    );
-    cfg.show_course_individual_scores = parse_u8_bool_or_default(
-        conf.get("Options", "CourseShowIndividualScores").as_deref(),
-        default.show_course_individual_scores,
-    );
-    cfg.show_most_played_courses = parse_u8_bool_or_default(
-        conf.get("Options", "CourseShowMostPlayed").as_deref(),
-        default.show_most_played_courses,
-    );
-    cfg.show_random_courses = parse_u8_bool_or_default(
-        conf.get("Options", "CourseShowRandom").as_deref(),
-        default.show_random_courses,
-    );
-    cfg.default_fail_type = conf
-        .get("Options", "DefaultFailType")
-        .and_then(|v| DefaultFailType::from_str(&v).ok())
-        .unwrap_or(default.default_fail_type);
-    cfg.banner_cache = parse_u8_bool_or_default(
-        conf.get("Options", "BannerCache").as_deref(),
-        default.banner_cache,
-    );
-    cfg.cdtitle_cache = parse_u8_bool_or_default(
-        conf.get("Options", "CDTitleCache").as_deref(),
-        default.cdtitle_cache,
-    );
     cfg.display_width = conf
         .get("Options", "DisplayWidth")
         .and_then(|v| v.parse().ok())
@@ -193,38 +156,10 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "VideoRenderer")
         .and_then(|s| BackendType::from_str(&s).ok())
         .unwrap_or(default.video_renderer);
-    cfg.high_dpi = conf
-        .get("Options", "HighDPI")
-        .and_then(|v| parse_loose_bool_str(&v))
-        .unwrap_or(default.high_dpi);
-    cfg.hide_mouse_cursor = conf
-        .get("Options", "HideMouseCursor")
-        .and_then(|v| parse_loose_bool_str(&v))
-        .unwrap_or(default.hide_mouse_cursor);
     cfg.windows_gamepad_backend = conf
         .get("Options", "GamepadBackend")
         .and_then(|s| WindowsPadBackend::from_str(&s).ok())
         .unwrap_or(default.windows_gamepad_backend);
-    cfg.allow_shutdown_host = conf
-        .get("Options", "AllowShutdown")
-        .and_then(|v| parse_loose_bool_str(&v))
-        .unwrap_or(default.allow_shutdown_host);
-    cfg.smx_input = parse_u8_bool_or_default(
-        conf.get("Options", "SmxInput").as_deref(),
-        default.smx_input,
-    );
-    cfg.smx_manages_pad_config = parse_u8_bool_or_default(
-        conf.get("Options", "SmxManagesPadConfig").as_deref(),
-        default.smx_manages_pad_config,
-    );
-    cfg.smx_panel_lights = conf
-        .get("Options", "SmxPanelLights")
-        .and_then(|v| parse_loose_bool_str(&v))
-        .unwrap_or(default.smx_panel_lights);
-    cfg.smx_underglow_theme = conf
-        .get("Options", "SmxUnderglowTheme")
-        .and_then(|v| parse_loose_bool_str(&v))
-        .unwrap_or(default.smx_underglow_theme);
     cfg.smx_default_pad_config = conf
         .get("Options", "SmxDefaultPadConfig")
         .and_then(|s| crate::config::SmxPadPreset::from_str(&s).ok())
@@ -236,78 +171,34 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
             default.smx_default_light_brightness,
             clamp_smx_light_brightness_percent,
         );
-    cfg.gfx_debug = parse_u8_bool_or_default(
-        conf.get("Options", "GfxDebug").as_deref(),
-        default.gfx_debug,
-    );
-    cfg.global_offset_seconds = conf
-        .get("Options", "GlobalOffsetSeconds")
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(default.global_offset_seconds);
-    cfg.language_flag = conf
-        .get("Options", "Language")
-        .and_then(|v| LanguageFlag::from_str(&v).ok())
-        .unwrap_or(default.language_flag);
-    cfg.log_level = conf
-        .get("Options", "LogLevel")
-        .and_then(|v| LogLevel::from_str(&v).ok())
-        .unwrap_or(default.log_level);
-    cfg.log_to_file = conf
-        .get("Options", "LogToFile")
-        .and_then(|v| parse_bool_str(&v))
-        .unwrap_or(default.log_to_file);
-    cfg.show_console = conf
-        .get("Options", "ShowConsole")
-        .and_then(|v| parse_bool_str(&v))
-        .unwrap_or(default.show_console);
 }
 
 fn load_null_or_die_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
-    cfg.null_or_die_sync_graph = conf
-        .get("Options", "NullOrDieSyncGraph")
-        .and_then(|v| SyncGraphMode::from_str(&v).ok())
-        .unwrap_or(default.null_or_die_sync_graph);
-    cfg.null_or_die_confidence_percent = conf
-        .get("Options", "NullOrDieConfidencePercent")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map(clamp_null_or_die_confidence_percent)
-        .unwrap_or(default.null_or_die_confidence_percent);
-    cfg.null_or_die_pack_sync_threads = conf
-        .get("Options", "PackSyncThreads")
-        .and_then(|v| parse_auto_threads_u8(&v))
-        .unwrap_or(default.null_or_die_pack_sync_threads);
-    cfg.null_or_die_fingerprint_ms = conf
-        .get("Options", "NullOrDieFingerprintMs")
-        .and_then(|v| v.parse::<f64>().ok())
-        .map(clamp_null_or_die_positive_ms)
-        .unwrap_or(default.null_or_die_fingerprint_ms);
-    cfg.null_or_die_window_ms = conf
-        .get("Options", "NullOrDieWindowMs")
-        .and_then(|v| v.parse::<f64>().ok())
-        .map(clamp_null_or_die_positive_ms)
-        .unwrap_or(default.null_or_die_window_ms);
-    cfg.null_or_die_step_ms = conf
-        .get("Options", "NullOrDieStepMs")
-        .and_then(|v| v.parse::<f64>().ok())
-        .map(clamp_null_or_die_positive_ms)
-        .unwrap_or(default.null_or_die_step_ms);
-    cfg.null_or_die_magic_offset_ms = conf
-        .get("Options", "NullOrDieMagicOffsetMs")
-        .and_then(|v| v.parse::<f64>().ok())
-        .map(clamp_null_or_die_magic_offset_ms)
-        .unwrap_or(default.null_or_die_magic_offset_ms);
-    cfg.null_or_die_kernel_target = conf
-        .get("Options", "NullOrDieKernelTarget")
-        .and_then(|v| parse_null_or_die_kernel_target(&v))
-        .unwrap_or(default.null_or_die_kernel_target);
-    cfg.null_or_die_kernel_type = conf
-        .get("Options", "NullOrDieKernelType")
-        .and_then(|v| parse_null_or_die_kernel_type(&v))
-        .unwrap_or(default.null_or_die_kernel_type);
-    cfg.null_or_die_full_spectrogram = parse_u8_bool_or_default(
-        conf.get("Options", "NullOrDieFullSpectrogram").as_deref(),
-        default.null_or_die_full_spectrogram,
+    let loaded = load_null_or_die_options(
+        conf,
+        NullOrDieOptions {
+            sync_graph: default.null_or_die_sync_graph,
+            confidence_percent: default.null_or_die_confidence_percent,
+            pack_sync_threads: default.null_or_die_pack_sync_threads,
+            fingerprint_ms: default.null_or_die_fingerprint_ms,
+            window_ms: default.null_or_die_window_ms,
+            step_ms: default.null_or_die_step_ms,
+            magic_offset_ms: default.null_or_die_magic_offset_ms,
+            kernel_target: default.null_or_die_kernel_target,
+            kernel_type: default.null_or_die_kernel_type,
+            full_spectrogram: default.null_or_die_full_spectrogram,
+        },
     );
+    cfg.null_or_die_sync_graph = loaded.sync_graph;
+    cfg.null_or_die_confidence_percent = loaded.confidence_percent;
+    cfg.null_or_die_pack_sync_threads = loaded.pack_sync_threads;
+    cfg.null_or_die_fingerprint_ms = loaded.fingerprint_ms;
+    cfg.null_or_die_window_ms = loaded.window_ms;
+    cfg.null_or_die_step_ms = loaded.step_ms;
+    cfg.null_or_die_magic_offset_ms = loaded.magic_offset_ms;
+    cfg.null_or_die_kernel_target = loaded.kernel_target;
+    cfg.null_or_die_kernel_type = loaded.kernel_type;
+    cfg.null_or_die_full_spectrogram = loaded.full_spectrogram;
 }
 
 fn load_audio_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
@@ -315,250 +206,152 @@ fn load_audio_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "LinuxAudioBackend")
         .and_then(|v| LinuxAudioBackend::from_str(&v).ok())
         .unwrap_or(default.linux_audio_backend);
-    cfg.visual_delay_seconds = conf
-        .get("Options", "VisualDelaySeconds")
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(default.visual_delay_seconds);
-    cfg.master_volume = conf
-        .get("Options", "MasterVolume")
-        .and_then(|v| v.parse().ok())
-        .map_or(default.master_volume, clamp_audio_volume_percent);
-    cfg.menu_music = parse_u8_bool_or_default(
-        conf.get("Options", "MenuMusic").as_deref(),
-        default.menu_music,
-    );
-    cfg.custom_sounds_enabled = parse_u8_bool_or_default(
-        conf.get("Options", "CustomSoundsEnabled").as_deref(),
-        default.custom_sounds_enabled,
-    );
-    cfg.music_volume = conf
-        .get("Options", "MusicVolume")
-        .and_then(|v| v.parse().ok())
-        .map_or(default.music_volume, clamp_audio_volume_percent);
-    cfg.music_wheel_switch_speed = conf
-        .get("Options", "MusicWheelSwitchSpeed")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(
-            default.music_wheel_switch_speed,
-            clamp_music_wheel_switch_speed,
-        );
-    cfg.sfx_volume = conf
-        .get("Options", "SFXVolume")
-        .and_then(|v| v.parse().ok())
-        .map_or(default.sfx_volume, clamp_audio_volume_percent);
-    cfg.assist_tick_volume = conf
-        .get("Options", "AssistTickVolume")
-        .and_then(|v| v.parse().ok())
-        .map_or(default.assist_tick_volume, clamp_audio_volume_percent);
-    cfg.audio_output_device_index = conf
-        .get("Options", "AudioOutputDevice")
-        .and_then(|v| parse_auto_audio_output_device(&v))
-        .unwrap_or(default.audio_output_device_index);
     cfg.audio_output_mode = conf
         .get("Options", "AudioOutputMode")
         .and_then(|s| AudioOutputMode::from_str(&s).ok())
         .unwrap_or(default.audio_output_mode);
-    cfg.audio_sample_rate_hz = conf
-        .get("Options", "AudioSampleRateHz")
-        .and_then(|v| parse_auto_audio_sample_rate_hz(&v))
-        .unwrap_or(default.audio_sample_rate_hz);
-    cfg.rate_mod_preserves_pitch = parse_u8_bool_or_default(
-        conf.get("Options", "RateModPreservesPitch").as_deref(),
-        default.rate_mod_preserves_pitch,
+    let loaded = load_audio_options(
+        conf,
+        AudioOptions {
+            visual_delay_seconds: default.visual_delay_seconds,
+            master_volume: default.master_volume,
+            menu_music: default.menu_music,
+            custom_sounds_enabled: default.custom_sounds_enabled,
+            music_volume: default.music_volume,
+            music_wheel_switch_speed: default.music_wheel_switch_speed,
+            sfx_volume: default.sfx_volume,
+            assist_tick_volume: default.assist_tick_volume,
+            output_device_index: default.audio_output_device_index,
+            sample_rate_hz: default.audio_sample_rate_hz,
+            rate_mod_preserves_pitch: default.rate_mod_preserves_pitch,
+            enable_replaygain: default.enable_replaygain,
+            write_current_screen: default.write_current_screen,
+            tab_acceleration: default.tab_acceleration,
+        },
     );
-    cfg.enable_replaygain = parse_u8_bool_or_default(
-        conf.get("Options", "ReplayGain").as_deref(),
-        default.enable_replaygain,
-    );
-    cfg.write_current_screen = conf
-        .get("Options", "WriteCurrentScreen")
-        .and_then(|v| parse_bool_str(&v))
-        .unwrap_or(default.write_current_screen);
-    cfg.tab_acceleration = conf
-        .get("Options", "TabAcceleration")
-        .and_then(|v| parse_bool_str(&v))
-        .unwrap_or(default.tab_acceleration);
+    cfg.visual_delay_seconds = loaded.visual_delay_seconds;
+    cfg.master_volume = loaded.master_volume;
+    cfg.menu_music = loaded.menu_music;
+    cfg.custom_sounds_enabled = loaded.custom_sounds_enabled;
+    cfg.music_volume = loaded.music_volume;
+    cfg.music_wheel_switch_speed = loaded.music_wheel_switch_speed;
+    cfg.sfx_volume = loaded.sfx_volume;
+    cfg.assist_tick_volume = loaded.assist_tick_volume;
+    cfg.audio_output_device_index = loaded.output_device_index;
+    cfg.audio_sample_rate_hz = loaded.sample_rate_hz;
+    cfg.rate_mod_preserves_pitch = loaded.rate_mod_preserves_pitch;
+    cfg.enable_replaygain = loaded.enable_replaygain;
+    cfg.write_current_screen = loaded.write_current_screen;
+    cfg.tab_acceleration = loaded.tab_acceleration;
 }
 
 fn load_select_music_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
-    cfg.select_music_breakdown_style = conf
-        .get("Options", "SelectMusicBreakdown")
-        .and_then(|v| BreakdownStyle::from_str(&v).ok())
-        .unwrap_or(default.select_music_breakdown_style);
-    cfg.show_select_music_banners = parse_u8_bool_or_default(
-        conf.get("Options", "SelectMusicShowBanners").as_deref(),
-        default.show_select_music_banners,
+    let loaded = load_select_music_options(
+        conf,
+        SelectMusicOptions {
+            breakdown_style: default.select_music_breakdown_style,
+            show_banners: default.show_select_music_banners,
+            show_version_overlay: default.show_version_overlay,
+            version_overlay_side: default.version_overlay_side,
+            show_video_banners: default.show_select_music_video_banners,
+            show_breakdown: default.show_select_music_breakdown,
+            show_stage_display: default.show_select_music_stage_display,
+            show_cdtitles: default.show_select_music_cdtitles,
+            show_wheel_grades: default.show_music_wheel_grades,
+            show_wheel_lamps: default.show_music_wheel_lamps,
+            itl_rank_mode: default.select_music_itl_rank_mode,
+            itl_wheel_mode: default.select_music_itl_wheel_mode,
+            wheel_style: default.select_music_wheel_style,
+            song_select_bg_mode: default.select_music_song_select_bg_mode,
+            new_pack_mode: default.select_music_new_pack_mode,
+            show_folder_stats: default.show_select_music_folder_stats,
+            show_previews: default.show_select_music_previews,
+            show_preview_marker: default.show_select_music_preview_marker,
+            preview_loop: default.select_music_preview_loop,
+            pattern_info_mode: default.select_music_pattern_info_mode,
+            step_artist_box_mode: default.select_music_step_artist_box_mode,
+            show_scorebox: default.show_select_music_scorebox,
+            scorebox_placement: default.select_music_scorebox_placement,
+            scorebox_cycle_itg: default.select_music_scorebox_cycle_itg,
+            scorebox_cycle_ex: default.select_music_scorebox_cycle_ex,
+            scorebox_cycle_hard_ex: default.select_music_scorebox_cycle_hard_ex,
+            scorebox_cycle_tournaments: default.select_music_scorebox_cycle_tournaments,
+            chart_info_peak_nps: default.select_music_chart_info_peak_nps,
+            chart_info_effective_bpm: default.select_music_chart_info_effective_bpm,
+            chart_info_matrix_rating: default.select_music_chart_info_matrix_rating,
+            auto_screenshot_eval: default.auto_screenshot_eval,
+        },
     );
-    cfg.show_version_overlay = parse_u8_bool_or_default(
-        conf.get("Options", "ShowVersionOverlay").as_deref(),
-        default.show_version_overlay,
-    );
-    cfg.version_overlay_side = conf
-        .get("Options", "VersionOverlaySide")
-        .and_then(|v| VersionOverlaySide::from_str(&v).ok())
-        .unwrap_or(default.version_overlay_side);
-    cfg.show_select_music_video_banners = conf
-        .get("Options", "SelectMusicShowVideoBanners")
-        .and_then(|v| parse_bool_str(&v))
-        .unwrap_or(default.show_select_music_video_banners);
-    cfg.show_select_music_breakdown = parse_u8_bool_or_default(
-        conf.get("Options", "SelectMusicShowBreakdown").as_deref(),
-        default.show_select_music_breakdown,
-    );
-    cfg.show_select_music_stage_display = parse_u8_bool_or_default(
-        conf.get("Options", "SelectMusicShowStageDisplay")
-            .as_deref(),
-        default.show_select_music_stage_display,
-    );
-    cfg.show_select_music_cdtitles = parse_u8_bool_or_default(
-        conf.get("Options", "SelectMusicShowCDTitles").as_deref(),
-        default.show_select_music_cdtitles,
-    );
-    cfg.show_music_wheel_grades = parse_u8_bool_or_default(
-        conf.get("Options", "SelectMusicWheelGrades").as_deref(),
-        default.show_music_wheel_grades,
-    );
-    cfg.show_music_wheel_lamps = parse_u8_bool_or_default(
-        conf.get("Options", "SelectMusicWheelLamps").as_deref(),
-        default.show_music_wheel_lamps,
-    );
-    let itl_rank_mode = conf.get("Options", "SelectMusicWheelITLRank");
-    let legacy_itl_chart_rank = conf.get("Options", "SelectMusicShowITLChartRank");
-    cfg.select_music_itl_rank_mode = parse_select_music_itl_rank_mode(
-        itl_rank_mode.as_deref(),
-        legacy_itl_chart_rank.as_deref(),
-        default.select_music_itl_rank_mode,
-    );
-    cfg.select_music_itl_wheel_mode = conf
-        .get("Options", "SelectMusicWheelITL")
-        .and_then(|v| SelectMusicItlWheelMode::from_str(&v).ok())
-        .unwrap_or(default.select_music_itl_wheel_mode);
-    cfg.select_music_wheel_style = conf
-        .get("Options", "SelectMusicWheelStyle")
-        .and_then(|v| SelectMusicWheelStyle::from_str(&v).ok())
-        .unwrap_or(default.select_music_wheel_style);
-    let song_select_bg = conf.get("Options", "SongSelectBG");
-    let legacy_song_select_bg = conf.get("Options", "SelectMusicSongSelectBG");
-    cfg.select_music_song_select_bg_mode = parse_select_music_song_select_bg_mode(
-        song_select_bg.as_deref(),
-        legacy_song_select_bg.as_deref(),
-        default.select_music_song_select_bg_mode,
-    );
-    cfg.select_music_new_pack_mode = conf
-        .get("Options", "SelectMusicNewPackMode")
-        .and_then(|v| NewPackMode::from_str(&v).ok())
-        .unwrap_or(default.select_music_new_pack_mode);
-    cfg.show_select_music_folder_stats = parse_u8_bool_or_default(
-        conf.get("Options", "SelectMusicFolderStats").as_deref(),
-        default.show_select_music_folder_stats,
-    );
-    cfg.show_select_music_previews = parse_u8_bool_or_default(
-        conf.get("Options", "SelectMusicPreviews").as_deref(),
-        default.show_select_music_previews,
-    );
-    cfg.show_select_music_preview_marker = parse_u8_bool_or_default(
-        conf.get("Options", "SelectMusicPreviewMarker").as_deref(),
-        default.show_select_music_preview_marker,
-    );
-    cfg.select_music_preview_loop = parse_u8_bool_or_default(
-        conf.get("Options", "SelectMusicPreviewLoop").as_deref(),
-        default.select_music_preview_loop,
-    );
-    cfg.select_music_pattern_info_mode = conf
-        .get("Options", "SelectMusicPatternInfo")
-        .and_then(|v| SelectMusicPatternInfoMode::from_str(&v).ok())
-        .unwrap_or(default.select_music_pattern_info_mode);
-    cfg.select_music_step_artist_box_mode = conf
-        .get("Options", "SelectMusicStepArtistBox")
-        .and_then(|v| SelectMusicStepArtistBoxMode::from_str(&v).ok())
-        .unwrap_or(default.select_music_step_artist_box_mode);
-    cfg.show_select_music_scorebox = parse_u8_bool_or_default(
-        conf.get("Options", "SelectMusicScorebox").as_deref(),
-        default.show_select_music_scorebox,
-    );
-    cfg.select_music_scorebox_placement = conf
-        .get("Options", "SelectMusicScoreboxPlacement")
-        .and_then(|v| SelectMusicScoreboxPlacement::from_str(&v).ok())
-        .unwrap_or(default.select_music_scorebox_placement);
-    cfg.select_music_scorebox_cycle_itg = parse_u8_bool_or_default(
-        conf.get("Options", "SelectMusicScoreboxCycleItg")
-            .as_deref(),
-        default.select_music_scorebox_cycle_itg,
-    );
-    cfg.select_music_scorebox_cycle_ex = parse_u8_bool_or_default(
-        conf.get("Options", "SelectMusicScoreboxCycleEx").as_deref(),
-        default.select_music_scorebox_cycle_ex,
-    );
-    cfg.select_music_scorebox_cycle_hard_ex = parse_u8_bool_or_default(
-        conf.get("Options", "SelectMusicScoreboxCycleHardEx")
-            .as_deref(),
-        default.select_music_scorebox_cycle_hard_ex,
-    );
-    cfg.select_music_scorebox_cycle_tournaments = parse_u8_bool_or_default(
-        conf.get("Options", "SelectMusicScoreboxCycleTournaments")
-            .as_deref(),
-        default.select_music_scorebox_cycle_tournaments,
-    );
-    cfg.select_music_chart_info_peak_nps = parse_u8_bool_or_default(
-        conf.get("Options", "SelectMusicChartInfoPeakNps")
-            .as_deref(),
-        default.select_music_chart_info_peak_nps,
-    );
-    cfg.select_music_chart_info_effective_bpm = parse_u8_bool_or_default(
-        conf.get("Options", "SelectMusicChartInfoEffectiveBpm")
-            .as_deref(),
-        default.select_music_chart_info_effective_bpm,
-    );
-    cfg.select_music_chart_info_matrix_rating = parse_u8_bool_or_default(
-        conf.get("Options", "SelectMusicChartInfoMatrixRating")
-            .as_deref(),
-        default.select_music_chart_info_matrix_rating,
-    );
-    cfg.auto_screenshot_eval = conf
-        .get("Options", "AutoScreenshotEval")
-        .map(|v| auto_screenshot_mask_from_str(&v))
-        .unwrap_or(default.auto_screenshot_eval);
+    cfg.select_music_breakdown_style = loaded.breakdown_style;
+    cfg.show_select_music_banners = loaded.show_banners;
+    cfg.show_version_overlay = loaded.show_version_overlay;
+    cfg.version_overlay_side = loaded.version_overlay_side;
+    cfg.show_select_music_video_banners = loaded.show_video_banners;
+    cfg.show_select_music_breakdown = loaded.show_breakdown;
+    cfg.show_select_music_stage_display = loaded.show_stage_display;
+    cfg.show_select_music_cdtitles = loaded.show_cdtitles;
+    cfg.show_music_wheel_grades = loaded.show_wheel_grades;
+    cfg.show_music_wheel_lamps = loaded.show_wheel_lamps;
+    cfg.select_music_itl_rank_mode = loaded.itl_rank_mode;
+    cfg.select_music_itl_wheel_mode = loaded.itl_wheel_mode;
+    cfg.select_music_wheel_style = loaded.wheel_style;
+    cfg.select_music_song_select_bg_mode = loaded.song_select_bg_mode;
+    cfg.select_music_new_pack_mode = loaded.new_pack_mode;
+    cfg.show_select_music_folder_stats = loaded.show_folder_stats;
+    cfg.show_select_music_previews = loaded.show_previews;
+    cfg.show_select_music_preview_marker = loaded.show_preview_marker;
+    cfg.select_music_preview_loop = loaded.preview_loop;
+    cfg.select_music_pattern_info_mode = loaded.pattern_info_mode;
+    cfg.select_music_step_artist_box_mode = loaded.step_artist_box_mode;
+    cfg.show_select_music_scorebox = loaded.show_scorebox;
+    cfg.select_music_scorebox_placement = loaded.scorebox_placement;
+    cfg.select_music_scorebox_cycle_itg = loaded.scorebox_cycle_itg;
+    cfg.select_music_scorebox_cycle_ex = loaded.scorebox_cycle_ex;
+    cfg.select_music_scorebox_cycle_hard_ex = loaded.scorebox_cycle_hard_ex;
+    cfg.select_music_scorebox_cycle_tournaments = loaded.scorebox_cycle_tournaments;
+    cfg.select_music_chart_info_peak_nps = loaded.chart_info_peak_nps;
+    cfg.select_music_chart_info_effective_bpm = loaded.chart_info_effective_bpm;
+    cfg.select_music_chart_info_matrix_rating = loaded.chart_info_matrix_rating;
+    cfg.auto_screenshot_eval = loaded.auto_screenshot_eval;
 }
 
 fn load_runtime_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
-    cfg.fastload =
-        parse_u8_bool_or_default(conf.get("Options", "FastLoad").as_deref(), default.fastload);
-    cfg.cachesongs = parse_u8_bool_or_default(
-        conf.get("Options", "CacheSongs").as_deref(),
-        default.cachesongs,
+    let loaded = load_runtime_options(
+        conf,
+        RuntimeOptions {
+            fastload: default.fastload,
+            cachesongs: default.cachesongs,
+            song_parsing_threads: default.song_parsing_threads,
+            smooth_histogram: default.smooth_histogram,
+            shade_scatterplot_judgments: default.shade_scatterplot_judgments,
+            arcade_options_navigation: default.arcade_options_navigation,
+            delayed_back: default.delayed_back,
+            three_key_navigation: default.three_key_navigation,
+            use_fsrs: default.use_fsrs,
+            lights_simplify_bass: default.lights_simplify_bass,
+            only_dedicated_menu_buttons: default.only_dedicated_menu_buttons,
+            theme_flag: default.theme_flag,
+            software_renderer_threads: default.software_renderer_threads,
+        },
     );
-    cfg.song_parsing_threads = conf
-        .get("Options", "SongParsingThreads")
-        .and_then(|v| parse_auto_threads_u8(&v))
-        .unwrap_or(default.song_parsing_threads);
-    cfg.smooth_histogram = parse_u8_bool_or_default(
-        conf.get("Options", "SmoothHistogram").as_deref(),
-        default.smooth_histogram,
-    );
-    cfg.shade_scatterplot_judgments = parse_u8_bool_or_default(
-        conf.get("Options", "ShadeScatterplotJudgments").as_deref(),
-        default.shade_scatterplot_judgments,
-    );
+    cfg.fastload = loaded.fastload;
+    cfg.cachesongs = loaded.cachesongs;
+    cfg.song_parsing_threads = loaded.song_parsing_threads;
+    cfg.smooth_histogram = loaded.smooth_histogram;
+    cfg.shade_scatterplot_judgments = loaded.shade_scatterplot_judgments;
+    cfg.arcade_options_navigation = loaded.arcade_options_navigation;
+    cfg.delayed_back = loaded.delayed_back;
+    cfg.three_key_navigation = loaded.three_key_navigation;
+    cfg.use_fsrs = loaded.use_fsrs;
+    cfg.lights_simplify_bass = loaded.lights_simplify_bass;
+    cfg.only_dedicated_menu_buttons = loaded.only_dedicated_menu_buttons;
+    cfg.theme_flag = loaded.theme_flag;
+    cfg.software_renderer_threads = loaded.software_renderer_threads;
+
     cfg.input_debounce_seconds = conf
         .get("Options", "InputDebounceTime")
         .and_then(|v| deadsync_input::parse_input_debounce_seconds(&v))
         .unwrap_or(default.input_debounce_seconds);
-    cfg.arcade_options_navigation = conf
-        .get("Options", "ArcadeOptionsNavigation")
-        .and_then(|v| parse_loose_bool_str(&v))
-        .unwrap_or(default.arcade_options_navigation);
-    cfg.delayed_back = conf
-        .get("Options", "DelayedBack")
-        .and_then(|v| parse_loose_bool_str(&v))
-        .unwrap_or(default.delayed_back);
-    cfg.three_key_navigation = conf
-        .get("Options", "ThreeKeyNavigation")
-        .and_then(|v| parse_loose_bool_str(&v))
-        .unwrap_or(default.three_key_navigation);
-    cfg.use_fsrs = conf
-        .get("Options", "UseFSRs")
-        .and_then(|v| parse_loose_bool_str(&v))
-        .unwrap_or(default.use_fsrs);
     cfg.lights_driver = conf
         .get("Options", "LightsDriver")
         .map(|v| parse_driver_or_default(&v, default.lights_driver))
@@ -567,24 +360,8 @@ fn load_runtime_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "GameplayPadLights")
         .map(|v| parse_gameplay_pad_lights_or_default(&v, default.lights_gameplay_pad_lights))
         .unwrap_or(default.lights_gameplay_pad_lights);
-    cfg.lights_simplify_bass = conf
-        .get("Options", "LightsSimplifyBass")
-        .and_then(|v| parse_loose_bool_str(&v))
-        .unwrap_or(default.lights_simplify_bass);
     cfg.lights_com_port = conf
         .get("Options", "LightsComPort")
         .map(|v| SerialPortName::parse(&v, default.lights_com_port))
         .unwrap_or(default.lights_com_port);
-    cfg.only_dedicated_menu_buttons = parse_u8_bool_or_default(
-        conf.get("Options", "OnlyDedicatedMenuButtons").as_deref(),
-        default.only_dedicated_menu_buttons,
-    );
-    cfg.theme_flag = conf
-        .get("Options", "Theme")
-        .and_then(|v| ThemeFlag::from_str(&v).ok())
-        .unwrap_or(default.theme_flag);
-    cfg.software_renderer_threads = conf
-        .get("Options", "SoftwareRendererThreads")
-        .and_then(|v| parse_auto_threads_u8(&v))
-        .unwrap_or(default.software_renderer_threads);
 }
