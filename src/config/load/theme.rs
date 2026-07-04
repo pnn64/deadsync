@@ -1,6 +1,7 @@
 use super::*;
 use deadsync_config::theme::{
-    parse_machine_default_sync_offset, parse_machine_font, parse_srpg_variant, parse_visual_style,
+    MachineFlowOptions, ThemePresentationOptions, load_machine_flow_options,
+    load_theme_presentation_options,
 };
 
 pub(super) fn load(conf: &SimpleIni, default: Config, cfg: &mut Config) {
@@ -9,76 +10,75 @@ pub(super) fn load(conf: &SimpleIni, default: Config, cfg: &mut Config) {
 }
 
 fn load_theme_presentation(conf: &SimpleIni, default: Config, cfg: &mut Config) {
-    cfg.simply_love_color = conf
-        .get("Theme", "SimplyLoveColor")
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(default.simply_love_color);
-    cfg.show_select_music_gameplay_timer = conf
-        .get("Theme", "ShowSelectMusicGameplayTimer")
-        .and_then(|v| parse_loose_bool_str(&v))
-        .unwrap_or(default.show_select_music_gameplay_timer);
-    cfg.keyboard_features = conf
-        .get("Theme", "KeyboardFeatures")
-        .and_then(|v| parse_bool_str(&v))
-        .unwrap_or(default.keyboard_features);
-    let visual_style = conf.get("Theme", "VisualStyle");
-    let legacy_visual_style = conf.get("Theme", "MenuBackgroundStyle");
-    cfg.visual_style = parse_visual_style(
-        visual_style.as_deref(),
-        legacy_visual_style.as_deref(),
-        default.visual_style,
+    let loaded = load_theme_presentation_options(
+        conf,
+        ThemePresentationOptions {
+            simply_love_color: default.simply_love_color,
+            show_select_music_gameplay_timer: default.show_select_music_gameplay_timer,
+            keyboard_features: default.keyboard_features,
+            visual_style: default.visual_style,
+            srpg_variant: default.srpg_variant,
+            show_video_backgrounds: default.show_video_backgrounds,
+            random_background_mode: default.random_background_mode,
+            zmod_rating_box_text: default.zmod_rating_box_text,
+            show_bpm_decimal: default.show_bpm_decimal,
+        },
     );
-    let srpg_variant = conf.get("Theme", "SrpgVariant");
-    let legacy_srpg_variant = conf.get("Theme", "ThemeVariant");
-    cfg.srpg_variant = parse_srpg_variant(
-        srpg_variant.as_deref(),
-        legacy_srpg_variant.as_deref(),
-        visual_style.or(legacy_visual_style).as_deref(),
-        default.srpg_variant,
-    );
-    cfg.show_video_backgrounds = conf
-        .get("Theme", "VideoBackgrounds")
-        .and_then(|v| parse_bool_str(&v))
-        .unwrap_or(default.show_video_backgrounds);
-    cfg.random_background_mode = conf
-        .get("Theme", "RandomBackgroundMode")
-        .and_then(|v| RandomBackgroundMode::from_str(&v).ok())
-        .unwrap_or(default.random_background_mode);
-    cfg.zmod_rating_box_text = conf
-        .get("Theme", "ZmodRatingBoxText")
-        .and_then(|v| parse_loose_bool_str(&v))
-        .unwrap_or(default.zmod_rating_box_text);
-    cfg.show_bpm_decimal = conf
-        .get("Theme", "ShowBpmDecimal")
-        .and_then(|v| parse_loose_bool_str(&v))
-        .unwrap_or(default.show_bpm_decimal);
+    cfg.simply_love_color = loaded.simply_love_color;
+    cfg.show_select_music_gameplay_timer = loaded.show_select_music_gameplay_timer;
+    cfg.keyboard_features = loaded.keyboard_features;
+    cfg.visual_style = loaded.visual_style;
+    cfg.srpg_variant = loaded.srpg_variant;
+    cfg.show_video_backgrounds = loaded.show_video_backgrounds;
+    cfg.random_background_mode = loaded.random_background_mode;
+    cfg.zmod_rating_box_text = loaded.zmod_rating_box_text;
+    cfg.show_bpm_decimal = loaded.show_bpm_decimal;
 }
 
 fn load_machine_flow(conf: &SimpleIni, default: Config, cfg: &mut Config) {
-    cfg.machine_show_eval_summary = conf
-        .get("Theme", "MachineShowEvalSummary")
-        .and_then(|v| parse_bool_str(&v))
-        .unwrap_or(default.machine_show_eval_summary);
-    cfg.machine_nice_sound = conf
-        .get("Theme", "MachineNiceSound")
-        .and_then(|v| parse_loose_bool_str(&v))
-        .unwrap_or(default.machine_nice_sound);
-    cfg.machine_show_name_entry = conf
-        .get("Theme", "MachineShowNameEntry")
-        .and_then(|v| parse_loose_bool_str(&v))
-        .unwrap_or(default.machine_show_name_entry);
-    cfg.machine_show_gameover = conf
-        .get("Theme", "MachineShowGameOver")
-        .and_then(|v| parse_loose_bool_str(&v))
-        .unwrap_or(default.machine_show_gameover);
-    cfg.machine_show_select_profile = conf
-        .get("Theme", "MachineShowSelectProfile")
-        .and_then(|v| parse_loose_bool_str(&v))
-        .unwrap_or(default.machine_show_select_profile);
-    cfg.allow_switch_profile_in_menu = conf
-        .get("Theme", "AllowSwitchProfileInMenu")
-        .and_then(|v| parse_loose_bool_str(&v))
-        .unwrap_or(default.allow_switch_profile_in_menu);
+    let loaded = load_machine_flow_options(
+        conf,
+        MachineFlowOptions {
+            machine_show_eval_summary: default.machine_show_eval_summary,
+            machine_nice_sound: default.machine_nice_sound,
+            machine_show_name_entry: default.machine_show_name_entry,
+            machine_show_gameover: default.machine_show_gameover,
+            machine_show_select_profile: default.machine_show_select_profile,
+            allow_switch_profile_in_menu: default.allow_switch_profile_in_menu,
+            machine_show_select_color: default.machine_show_select_color,
+            machine_show_select_style: default.machine_show_select_style,
+            machine_show_select_play_mode: default.machine_show_select_play_mode,
+            machine_enable_replays: default.machine_enable_replays,
+            machine_allow_per_player_global_offsets: default
+                .machine_allow_per_player_global_offsets,
+            machine_pack_ini_offsets: default.machine_pack_ini_offsets,
+            machine_default_sync_offset: default.machine_default_sync_offset,
+            machine_preferred_style: default.machine_preferred_style,
+            machine_preferred_play_mode: default.machine_preferred_play_mode,
+            machine_font: default.machine_font,
+            machine_bar_color: default.machine_bar_color,
+            machine_evaluation_style: default.machine_evaluation_style,
+        },
+    );
+    cfg.machine_show_eval_summary = loaded.machine_show_eval_summary;
+    cfg.machine_nice_sound = loaded.machine_nice_sound;
+    cfg.machine_show_name_entry = loaded.machine_show_name_entry;
+    cfg.machine_show_gameover = loaded.machine_show_gameover;
+    cfg.machine_show_select_profile = loaded.machine_show_select_profile;
+    cfg.allow_switch_profile_in_menu = loaded.allow_switch_profile_in_menu;
+    cfg.machine_show_select_color = loaded.machine_show_select_color;
+    cfg.machine_show_select_style = loaded.machine_show_select_style;
+    cfg.machine_show_select_play_mode = loaded.machine_show_select_play_mode;
+    cfg.machine_enable_replays = loaded.machine_enable_replays;
+    cfg.machine_allow_per_player_global_offsets = loaded.machine_allow_per_player_global_offsets;
+    cfg.machine_pack_ini_offsets = loaded.machine_pack_ini_offsets;
+    cfg.machine_default_sync_offset = loaded.machine_default_sync_offset;
+    cfg.machine_preferred_style = loaded.machine_preferred_style;
+    cfg.machine_preferred_play_mode = loaded.machine_preferred_play_mode;
+    cfg.machine_font = loaded.machine_font;
+    cfg.machine_bar_color = loaded.machine_bar_color;
+    cfg.machine_evaluation_style = loaded.machine_evaluation_style;
+
     cfg.music_select_shortcut_practice = conf
         .get("Theme", "SelectMusicShortcutPractice")
         .and_then(|v| parse_keycode_to_key(&v))
@@ -95,58 +95,4 @@ fn load_machine_flow(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Theme", "SelectMusicShortcutTestInput")
         .and_then(|v| parse_keycode_to_key(&v))
         .unwrap_or(default.music_select_shortcut_test_input);
-    cfg.machine_show_select_color = conf
-        .get("Theme", "MachineShowSelectColor")
-        .and_then(|v| parse_loose_bool_str(&v))
-        .unwrap_or(default.machine_show_select_color);
-    cfg.machine_show_select_style = conf
-        .get("Theme", "MachineShowSelectStyle")
-        .and_then(|v| parse_loose_bool_str(&v))
-        .unwrap_or(default.machine_show_select_style);
-    cfg.machine_show_select_play_mode = conf
-        .get("Theme", "MachineShowSelectPlayMode")
-        .and_then(|v| parse_loose_bool_str(&v))
-        .unwrap_or(default.machine_show_select_play_mode);
-    cfg.machine_enable_replays = conf
-        .get("Theme", "MachineEnableReplays")
-        .and_then(|v| parse_loose_bool_str(&v))
-        .unwrap_or(default.machine_enable_replays);
-    cfg.machine_allow_per_player_global_offsets = conf
-        .get("Theme", "MachineAllowPerPlayerGlobalOffsets")
-        .and_then(|v| parse_loose_bool_str(&v))
-        .unwrap_or(default.machine_allow_per_player_global_offsets);
-    cfg.machine_pack_ini_offsets = conf
-        .get("Theme", "MachinePackIniOffsets")
-        .and_then(|v| parse_loose_bool_str(&v))
-        .unwrap_or(default.machine_pack_ini_offsets);
-    let machine_default_sync_offset = conf.get("Theme", "MachineDefaultSyncOffset");
-    let legacy_default_sync_offset = conf.get("Theme", "DefaultSyncOffset");
-    cfg.machine_default_sync_offset = parse_machine_default_sync_offset(
-        machine_default_sync_offset.as_deref(),
-        legacy_default_sync_offset.as_deref(),
-        default.machine_default_sync_offset,
-    );
-    cfg.machine_preferred_style = conf
-        .get("Theme", "MachinePreferredStyle")
-        .and_then(|v| MachinePreferredPlayStyle::from_str(&v).ok())
-        .unwrap_or(default.machine_preferred_style);
-    cfg.machine_preferred_play_mode = conf
-        .get("Theme", "MachinePreferredPlayMode")
-        .and_then(|v| MachinePreferredPlayMode::from_str(&v).ok())
-        .unwrap_or(default.machine_preferred_play_mode);
-    let machine_font = conf.get("Theme", "MachineFont");
-    let legacy_machine_font = conf.get("Theme", "ThemeFont");
-    cfg.machine_font = parse_machine_font(
-        machine_font.as_deref(),
-        legacy_machine_font.as_deref(),
-        default.machine_font,
-    );
-    cfg.machine_bar_color = conf
-        .get("Theme", "MachineBarColor")
-        .and_then(|v| MachineBarColor::from_str(&v).ok())
-        .unwrap_or(default.machine_bar_color);
-    cfg.machine_evaluation_style = conf
-        .get("Theme", "MachineEvaluationStyle")
-        .and_then(|v| MachineEvaluationStyle::from_str(&v).ok())
-        .unwrap_or(default.machine_evaluation_style);
 }

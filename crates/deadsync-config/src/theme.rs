@@ -1,3 +1,6 @@
+use crate::bools::{parse_bool_str, parse_loose_bool_str};
+use crate::ini::SimpleIni;
+use crate::writer::{push_bool, push_line};
 use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1231,6 +1234,319 @@ pub fn parse_machine_font(
         .unwrap_or(default)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ThemePresentationOptions {
+    pub simply_love_color: i32,
+    pub show_select_music_gameplay_timer: bool,
+    pub keyboard_features: bool,
+    pub visual_style: VisualStyle,
+    pub srpg_variant: SrpgVariant,
+    pub show_video_backgrounds: bool,
+    pub random_background_mode: RandomBackgroundMode,
+    pub zmod_rating_box_text: bool,
+    pub show_bpm_decimal: bool,
+}
+
+pub fn load_theme_presentation_options(
+    conf: &SimpleIni,
+    default: ThemePresentationOptions,
+) -> ThemePresentationOptions {
+    let visual_style = conf.get("Theme", "VisualStyle");
+    let legacy_visual_style = conf.get("Theme", "MenuBackgroundStyle");
+    let srpg_variant = conf.get("Theme", "SrpgVariant");
+    let legacy_srpg_variant = conf.get("Theme", "ThemeVariant");
+
+    ThemePresentationOptions {
+        simply_love_color: conf
+            .get("Theme", "SimplyLoveColor")
+            .and_then(|value| value.parse::<i32>().ok())
+            .unwrap_or(default.simply_love_color),
+        show_select_music_gameplay_timer: conf
+            .get("Theme", "ShowSelectMusicGameplayTimer")
+            .and_then(|value| parse_loose_bool_str(&value))
+            .unwrap_or(default.show_select_music_gameplay_timer),
+        keyboard_features: conf
+            .get("Theme", "KeyboardFeatures")
+            .and_then(|value| parse_bool_str(&value))
+            .unwrap_or(default.keyboard_features),
+        visual_style: parse_visual_style(
+            visual_style.as_deref(),
+            legacy_visual_style.as_deref(),
+            default.visual_style,
+        ),
+        srpg_variant: parse_srpg_variant(
+            srpg_variant.as_deref(),
+            legacy_srpg_variant.as_deref(),
+            visual_style.or(legacy_visual_style).as_deref(),
+            default.srpg_variant,
+        ),
+        show_video_backgrounds: conf
+            .get("Theme", "VideoBackgrounds")
+            .and_then(|value| parse_bool_str(&value))
+            .unwrap_or(default.show_video_backgrounds),
+        random_background_mode: conf
+            .get("Theme", "RandomBackgroundMode")
+            .and_then(|value| RandomBackgroundMode::from_str(&value).ok())
+            .unwrap_or(default.random_background_mode),
+        zmod_rating_box_text: conf
+            .get("Theme", "ZmodRatingBoxText")
+            .and_then(|value| parse_loose_bool_str(&value))
+            .unwrap_or(default.zmod_rating_box_text),
+        show_bpm_decimal: conf
+            .get("Theme", "ShowBpmDecimal")
+            .and_then(|value| parse_loose_bool_str(&value))
+            .unwrap_or(default.show_bpm_decimal),
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MachineFlowOptions {
+    pub machine_show_eval_summary: bool,
+    pub machine_nice_sound: bool,
+    pub machine_show_name_entry: bool,
+    pub machine_show_gameover: bool,
+    pub machine_show_select_profile: bool,
+    pub allow_switch_profile_in_menu: bool,
+    pub machine_show_select_color: bool,
+    pub machine_show_select_style: bool,
+    pub machine_show_select_play_mode: bool,
+    pub machine_enable_replays: bool,
+    pub machine_allow_per_player_global_offsets: bool,
+    pub machine_pack_ini_offsets: bool,
+    pub machine_default_sync_offset: DefaultSyncOffset,
+    pub machine_preferred_style: MachinePreferredPlayStyle,
+    pub machine_preferred_play_mode: MachinePreferredPlayMode,
+    pub machine_font: MachineFont,
+    pub machine_bar_color: MachineBarColor,
+    pub machine_evaluation_style: MachineEvaluationStyle,
+}
+
+pub fn load_machine_flow_options(
+    conf: &SimpleIni,
+    default: MachineFlowOptions,
+) -> MachineFlowOptions {
+    let machine_default_sync_offset = conf.get("Theme", "MachineDefaultSyncOffset");
+    let legacy_default_sync_offset = conf.get("Theme", "DefaultSyncOffset");
+    let machine_font = conf.get("Theme", "MachineFont");
+    let legacy_machine_font = conf.get("Theme", "ThemeFont");
+
+    MachineFlowOptions {
+        machine_show_eval_summary: conf
+            .get("Theme", "MachineShowEvalSummary")
+            .and_then(|value| parse_bool_str(&value))
+            .unwrap_or(default.machine_show_eval_summary),
+        machine_nice_sound: conf
+            .get("Theme", "MachineNiceSound")
+            .and_then(|value| parse_loose_bool_str(&value))
+            .unwrap_or(default.machine_nice_sound),
+        machine_show_name_entry: conf
+            .get("Theme", "MachineShowNameEntry")
+            .and_then(|value| parse_loose_bool_str(&value))
+            .unwrap_or(default.machine_show_name_entry),
+        machine_show_gameover: conf
+            .get("Theme", "MachineShowGameOver")
+            .and_then(|value| parse_loose_bool_str(&value))
+            .unwrap_or(default.machine_show_gameover),
+        machine_show_select_profile: conf
+            .get("Theme", "MachineShowSelectProfile")
+            .and_then(|value| parse_loose_bool_str(&value))
+            .unwrap_or(default.machine_show_select_profile),
+        allow_switch_profile_in_menu: conf
+            .get("Theme", "AllowSwitchProfileInMenu")
+            .and_then(|value| parse_loose_bool_str(&value))
+            .unwrap_or(default.allow_switch_profile_in_menu),
+        machine_show_select_color: conf
+            .get("Theme", "MachineShowSelectColor")
+            .and_then(|value| parse_loose_bool_str(&value))
+            .unwrap_or(default.machine_show_select_color),
+        machine_show_select_style: conf
+            .get("Theme", "MachineShowSelectStyle")
+            .and_then(|value| parse_loose_bool_str(&value))
+            .unwrap_or(default.machine_show_select_style),
+        machine_show_select_play_mode: conf
+            .get("Theme", "MachineShowSelectPlayMode")
+            .and_then(|value| parse_loose_bool_str(&value))
+            .unwrap_or(default.machine_show_select_play_mode),
+        machine_enable_replays: conf
+            .get("Theme", "MachineEnableReplays")
+            .and_then(|value| parse_loose_bool_str(&value))
+            .unwrap_or(default.machine_enable_replays),
+        machine_allow_per_player_global_offsets: conf
+            .get("Theme", "MachineAllowPerPlayerGlobalOffsets")
+            .and_then(|value| parse_loose_bool_str(&value))
+            .unwrap_or(default.machine_allow_per_player_global_offsets),
+        machine_pack_ini_offsets: conf
+            .get("Theme", "MachinePackIniOffsets")
+            .and_then(|value| parse_loose_bool_str(&value))
+            .unwrap_or(default.machine_pack_ini_offsets),
+        machine_default_sync_offset: parse_machine_default_sync_offset(
+            machine_default_sync_offset.as_deref(),
+            legacy_default_sync_offset.as_deref(),
+            default.machine_default_sync_offset,
+        ),
+        machine_preferred_style: conf
+            .get("Theme", "MachinePreferredStyle")
+            .and_then(|value| MachinePreferredPlayStyle::from_str(&value).ok())
+            .unwrap_or(default.machine_preferred_style),
+        machine_preferred_play_mode: conf
+            .get("Theme", "MachinePreferredPlayMode")
+            .and_then(|value| MachinePreferredPlayMode::from_str(&value).ok())
+            .unwrap_or(default.machine_preferred_play_mode),
+        machine_font: parse_machine_font(
+            machine_font.as_deref(),
+            legacy_machine_font.as_deref(),
+            default.machine_font,
+        ),
+        machine_bar_color: conf
+            .get("Theme", "MachineBarColor")
+            .and_then(|value| MachineBarColor::from_str(&value).ok())
+            .unwrap_or(default.machine_bar_color),
+        machine_evaluation_style: conf
+            .get("Theme", "MachineEvaluationStyle")
+            .and_then(|value| MachineEvaluationStyle::from_str(&value).ok())
+            .unwrap_or(default.machine_evaluation_style),
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ThemeShortcutTokens<'a> {
+    pub practice: &'a str,
+    pub song_search: &'a str,
+    pub load_songs: &'a str,
+    pub test_input: &'a str,
+}
+
+pub fn push_theme_option_lines(
+    content: &mut String,
+    presentation: ThemePresentationOptions,
+    machine: MachineFlowOptions,
+    shortcuts: ThemeShortcutTokens<'_>,
+) {
+    push_bool(content, "KeyboardFeatures", presentation.keyboard_features);
+    push_line(content, "VisualStyle", presentation.visual_style.as_str());
+    push_line(content, "SrpgVariant", presentation.srpg_variant.as_str());
+    push_bool(
+        content,
+        "VideoBackgrounds",
+        presentation.show_video_backgrounds,
+    );
+    push_line(
+        content,
+        "RandomBackgroundMode",
+        presentation.random_background_mode.as_str(),
+    );
+    push_bool(
+        content,
+        "MachineShowEvalSummary",
+        machine.machine_show_eval_summary,
+    );
+    push_bool(content, "MachineNiceSound", machine.machine_nice_sound);
+    push_bool(
+        content,
+        "MachineShowGameOver",
+        machine.machine_show_gameover,
+    );
+    push_bool(
+        content,
+        "MachineShowNameEntry",
+        machine.machine_show_name_entry,
+    );
+    push_bool(
+        content,
+        "MachineShowSelectColor",
+        machine.machine_show_select_color,
+    );
+    push_bool(
+        content,
+        "MachineShowSelectPlayMode",
+        machine.machine_show_select_play_mode,
+    );
+    push_bool(
+        content,
+        "MachineShowSelectProfile",
+        machine.machine_show_select_profile,
+    );
+    push_bool(
+        content,
+        "AllowSwitchProfileInMenu",
+        machine.allow_switch_profile_in_menu,
+    );
+    push_line(content, "SelectMusicShortcutPractice", shortcuts.practice);
+    push_line(
+        content,
+        "SelectMusicShortcutSongSearch",
+        shortcuts.song_search,
+    );
+    push_line(
+        content,
+        "SelectMusicShortcutLoadSongs",
+        shortcuts.load_songs,
+    );
+    push_line(
+        content,
+        "SelectMusicShortcutTestInput",
+        shortcuts.test_input,
+    );
+    push_bool(
+        content,
+        "MachineShowSelectStyle",
+        machine.machine_show_select_style,
+    );
+    push_bool(
+        content,
+        "MachineEnableReplays",
+        machine.machine_enable_replays,
+    );
+    push_bool(
+        content,
+        "MachineAllowPerPlayerGlobalOffsets",
+        machine.machine_allow_per_player_global_offsets,
+    );
+    push_bool(
+        content,
+        "MachinePackIniOffsets",
+        machine.machine_pack_ini_offsets,
+    );
+    push_line(
+        content,
+        "MachineDefaultSyncOffset",
+        machine.machine_default_sync_offset.as_str(),
+    );
+    push_line(
+        content,
+        "MachinePreferredStyle",
+        machine.machine_preferred_style.as_str(),
+    );
+    push_line(
+        content,
+        "MachinePreferredPlayMode",
+        machine.machine_preferred_play_mode.as_str(),
+    );
+    push_line(content, "MachineFont", machine.machine_font.as_str());
+    push_line(
+        content,
+        "MachineBarColor",
+        machine.machine_bar_color.as_str(),
+    );
+    push_line(
+        content,
+        "MachineEvaluationStyle",
+        machine.machine_evaluation_style.as_str(),
+    );
+    push_bool(
+        content,
+        "ShowSelectMusicGameplayTimer",
+        presentation.show_select_music_gameplay_timer,
+    );
+    push_line(content, "SimplyLoveColor", presentation.simply_love_color);
+    push_bool(
+        content,
+        "ZmodRatingBoxText",
+        presentation.zmod_rating_box_text,
+    );
+    push_bool(content, "ShowBpmDecimal", presentation.show_bpm_decimal);
+}
+
 impl FromStr for LogLevel {
     type Err = ();
 
@@ -1249,6 +1565,95 @@ impl FromStr for LogLevel {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn default_theme_presentation_options() -> ThemePresentationOptions {
+        ThemePresentationOptions {
+            simply_love_color: 2,
+            show_select_music_gameplay_timer: true,
+            keyboard_features: true,
+            visual_style: VisualStyle::Hearts,
+            srpg_variant: SrpgVariant::Srpg9,
+            show_video_backgrounds: true,
+            random_background_mode: RandomBackgroundMode::Off,
+            zmod_rating_box_text: false,
+            show_bpm_decimal: false,
+        }
+    }
+
+    fn default_machine_flow_options() -> MachineFlowOptions {
+        MachineFlowOptions {
+            machine_show_eval_summary: true,
+            machine_nice_sound: true,
+            machine_show_name_entry: true,
+            machine_show_gameover: true,
+            machine_show_select_profile: true,
+            allow_switch_profile_in_menu: false,
+            machine_show_select_color: true,
+            machine_show_select_style: true,
+            machine_show_select_play_mode: true,
+            machine_enable_replays: true,
+            machine_allow_per_player_global_offsets: false,
+            machine_pack_ini_offsets: false,
+            machine_default_sync_offset: DefaultSyncOffset::Null,
+            machine_preferred_style: MachinePreferredPlayStyle::Single,
+            machine_preferred_play_mode: MachinePreferredPlayMode::Regular,
+            machine_font: MachineFont::Wendy,
+            machine_bar_color: MachineBarColor::Default,
+            machine_evaluation_style: MachineEvaluationStyle::Default,
+        }
+    }
+
+    #[test]
+    fn writes_theme_option_lines() {
+        let mut content = String::new();
+
+        push_theme_option_lines(
+            &mut content,
+            default_theme_presentation_options(),
+            default_machine_flow_options(),
+            ThemeShortcutTokens {
+                practice: "KeyP",
+                song_search: "KeyS",
+                load_songs: "KeyL",
+                test_input: "KeyT",
+            },
+        );
+
+        assert_eq!(
+            content,
+            "KeyboardFeatures=1\n\
+VisualStyle=Hearts\n\
+SrpgVariant=SRPG9\n\
+VideoBackgrounds=1\n\
+RandomBackgroundMode=Off\n\
+MachineShowEvalSummary=1\n\
+MachineNiceSound=1\n\
+MachineShowGameOver=1\n\
+MachineShowNameEntry=1\n\
+MachineShowSelectColor=1\n\
+MachineShowSelectPlayMode=1\n\
+MachineShowSelectProfile=1\n\
+AllowSwitchProfileInMenu=0\n\
+SelectMusicShortcutPractice=KeyP\n\
+SelectMusicShortcutSongSearch=KeyS\n\
+SelectMusicShortcutLoadSongs=KeyL\n\
+SelectMusicShortcutTestInput=KeyT\n\
+MachineShowSelectStyle=1\n\
+MachineEnableReplays=1\n\
+MachineAllowPerPlayerGlobalOffsets=0\n\
+MachinePackIniOffsets=0\n\
+MachineDefaultSyncOffset=NULL\n\
+MachinePreferredStyle=Single\n\
+MachinePreferredPlayMode=Regular\n\
+MachineFont=Wendy\n\
+MachineBarColor=Default\n\
+MachineEvaluationStyle=Default\n\
+ShowSelectMusicGameplayTimer=1\n\
+SimplyLoveColor=2\n\
+ZmodRatingBoxText=0\n\
+ShowBpmDecimal=0\n"
+        );
+    }
 
     #[test]
     fn auto_screenshot_mask_roundtrips() {
@@ -1344,6 +1749,81 @@ mod tests {
             parse_visual_style(Some("bad"), Some("Cats"), VisualStyle::Arrows),
             VisualStyle::Arrows
         );
+    }
+
+    #[test]
+    fn loads_theme_presentation_options_from_ini() {
+        let mut conf = SimpleIni::new();
+        conf.load_str(
+            r#"
+            [Theme]
+            SimplyLoveColor=7
+            ShowSelectMusicGameplayTimer=0
+            KeyboardFeatures=false
+            VisualStyle=Technique
+            SrpgVariant=SRPG10
+            VideoBackgrounds=false
+            RandomBackgroundMode=RandomMovies
+            ZmodRatingBoxText=1
+            ShowBpmDecimal=1
+            "#,
+        );
+
+        let loaded = load_theme_presentation_options(&conf, default_theme_presentation_options());
+
+        assert_eq!(loaded.simply_love_color, 7);
+        assert!(!loaded.show_select_music_gameplay_timer);
+        assert!(!loaded.keyboard_features);
+        assert_eq!(loaded.visual_style, VisualStyle::Technique);
+        assert_eq!(loaded.srpg_variant, SrpgVariant::Srpg10);
+        assert!(!loaded.show_video_backgrounds);
+        assert_eq!(
+            loaded.random_background_mode,
+            RandomBackgroundMode::RandomMovies
+        );
+        assert!(loaded.zmod_rating_box_text);
+        assert!(loaded.show_bpm_decimal);
+    }
+
+    #[test]
+    fn theme_presentation_options_use_legacy_keys_and_defaults() {
+        let default = default_theme_presentation_options();
+        let mut conf = SimpleIni::new();
+        conf.load_str(
+            r#"
+            [Theme]
+            SimplyLoveColor=bad
+            ShowSelectMusicGameplayTimer=bad
+            KeyboardFeatures=bad
+            MenuBackgroundStyle=Cats
+            ThemeVariant=SRPG10
+            VideoBackgrounds=bad
+            RandomBackgroundMode=bad
+            ZmodRatingBoxText=bad
+            ShowBpmDecimal=bad
+            "#,
+        );
+
+        let loaded = load_theme_presentation_options(&conf, default);
+
+        assert_eq!(loaded.simply_love_color, default.simply_love_color);
+        assert_eq!(
+            loaded.show_select_music_gameplay_timer,
+            default.show_select_music_gameplay_timer
+        );
+        assert_eq!(loaded.keyboard_features, default.keyboard_features);
+        assert_eq!(loaded.visual_style, VisualStyle::Cats);
+        assert_eq!(loaded.srpg_variant, SrpgVariant::Srpg10);
+        assert_eq!(
+            loaded.show_video_backgrounds,
+            default.show_video_backgrounds
+        );
+        assert_eq!(
+            loaded.random_background_mode,
+            default.random_background_mode
+        );
+        assert_eq!(loaded.zmod_rating_box_text, default.zmod_rating_box_text);
+        assert_eq!(loaded.show_bpm_decimal, default.show_bpm_decimal);
     }
 
     #[test]
@@ -1576,6 +2056,153 @@ mod tests {
         assert_eq!(
             parse_machine_default_sync_offset(Some("bad"), Some("ITG"), DefaultSyncOffset::Null,),
             DefaultSyncOffset::Null
+        );
+    }
+
+    #[test]
+    fn loads_machine_flow_options_from_ini() {
+        let mut conf = SimpleIni::new();
+        conf.load_str(
+            r#"
+            [Theme]
+            MachineShowEvalSummary=false
+            MachineNiceSound=0
+            MachineShowNameEntry=0
+            MachineShowGameOver=0
+            MachineShowSelectProfile=0
+            AllowSwitchProfileInMenu=1
+            MachineShowSelectColor=0
+            MachineShowSelectStyle=0
+            MachineShowSelectPlayMode=0
+            MachineEnableReplays=0
+            MachineAllowPerPlayerGlobalOffsets=1
+            MachinePackIniOffsets=1
+            MachineDefaultSyncOffset=ITG
+            MachinePreferredStyle=Double
+            MachinePreferredPlayMode=Marathon
+            MachineFont=Mega
+            MachineBarColor=Transparent
+            MachineEvaluationStyle=Transparent
+            "#,
+        );
+
+        let loaded = load_machine_flow_options(&conf, default_machine_flow_options());
+
+        assert!(!loaded.machine_show_eval_summary);
+        assert!(!loaded.machine_nice_sound);
+        assert!(!loaded.machine_show_name_entry);
+        assert!(!loaded.machine_show_gameover);
+        assert!(!loaded.machine_show_select_profile);
+        assert!(loaded.allow_switch_profile_in_menu);
+        assert!(!loaded.machine_show_select_color);
+        assert!(!loaded.machine_show_select_style);
+        assert!(!loaded.machine_show_select_play_mode);
+        assert!(!loaded.machine_enable_replays);
+        assert!(loaded.machine_allow_per_player_global_offsets);
+        assert!(loaded.machine_pack_ini_offsets);
+        assert_eq!(loaded.machine_default_sync_offset, DefaultSyncOffset::Itg);
+        assert_eq!(
+            loaded.machine_preferred_style,
+            MachinePreferredPlayStyle::Double
+        );
+        assert_eq!(
+            loaded.machine_preferred_play_mode,
+            MachinePreferredPlayMode::Marathon
+        );
+        assert_eq!(loaded.machine_font, MachineFont::Mega);
+        assert_eq!(loaded.machine_bar_color, MachineBarColor::Transparent);
+        assert_eq!(
+            loaded.machine_evaluation_style,
+            MachineEvaluationStyle::Transparent
+        );
+    }
+
+    #[test]
+    fn machine_flow_options_use_legacy_keys_and_defaults() {
+        let default = default_machine_flow_options();
+        let mut conf = SimpleIni::new();
+        conf.load_str(
+            r#"
+            [Theme]
+            MachineShowEvalSummary=bad
+            MachineNiceSound=bad
+            MachineShowNameEntry=bad
+            MachineShowGameOver=bad
+            MachineShowSelectProfile=bad
+            AllowSwitchProfileInMenu=bad
+            MachineShowSelectColor=bad
+            MachineShowSelectStyle=bad
+            MachineShowSelectPlayMode=bad
+            MachineEnableReplays=bad
+            MachineAllowPerPlayerGlobalOffsets=bad
+            MachinePackIniOffsets=bad
+            DefaultSyncOffset=ITG
+            MachinePreferredStyle=bad
+            MachinePreferredPlayMode=bad
+            ThemeFont=Mega
+            MachineBarColor=bad
+            MachineEvaluationStyle=bad
+            "#,
+        );
+
+        let loaded = load_machine_flow_options(&conf, default);
+
+        assert_eq!(
+            loaded.machine_show_eval_summary,
+            default.machine_show_eval_summary
+        );
+        assert_eq!(loaded.machine_nice_sound, default.machine_nice_sound);
+        assert_eq!(
+            loaded.machine_show_name_entry,
+            default.machine_show_name_entry
+        );
+        assert_eq!(loaded.machine_show_gameover, default.machine_show_gameover);
+        assert_eq!(
+            loaded.machine_show_select_profile,
+            default.machine_show_select_profile
+        );
+        assert_eq!(
+            loaded.allow_switch_profile_in_menu,
+            default.allow_switch_profile_in_menu
+        );
+        assert_eq!(
+            loaded.machine_show_select_color,
+            default.machine_show_select_color
+        );
+        assert_eq!(
+            loaded.machine_show_select_style,
+            default.machine_show_select_style
+        );
+        assert_eq!(
+            loaded.machine_show_select_play_mode,
+            default.machine_show_select_play_mode
+        );
+        assert_eq!(
+            loaded.machine_enable_replays,
+            default.machine_enable_replays
+        );
+        assert_eq!(
+            loaded.machine_allow_per_player_global_offsets,
+            default.machine_allow_per_player_global_offsets
+        );
+        assert_eq!(
+            loaded.machine_pack_ini_offsets,
+            default.machine_pack_ini_offsets
+        );
+        assert_eq!(loaded.machine_default_sync_offset, DefaultSyncOffset::Itg);
+        assert_eq!(
+            loaded.machine_preferred_style,
+            default.machine_preferred_style
+        );
+        assert_eq!(
+            loaded.machine_preferred_play_mode,
+            default.machine_preferred_play_mode
+        );
+        assert_eq!(loaded.machine_font, MachineFont::Mega);
+        assert_eq!(loaded.machine_bar_color, default.machine_bar_color);
+        assert_eq!(
+            loaded.machine_evaluation_style,
+            default.machine_evaluation_style
         );
     }
 

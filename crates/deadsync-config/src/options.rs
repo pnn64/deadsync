@@ -11,7 +11,9 @@ use crate::theme::{
     SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SelectMusicSongSelectBgMode,
     SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SrpgVariant, SyncGraphMode, ThemeFlag,
     VersionOverlaySide, VisualStyle, auto_screenshot_bit, auto_screenshot_mask_from_str,
+    auto_screenshot_mask_to_str,
 };
+use crate::writer::{push_bool, push_line};
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -286,6 +288,84 @@ pub fn load_system_options(conf: &SimpleIni, default: SystemOptions) -> SystemOp
     }
 }
 
+pub fn push_system_download_option_lines(content: &mut String, options: SystemOptions) {
+    push_bool(
+        content,
+        "AutoDownloadUnlocks",
+        options.auto_download_unlocks,
+    );
+    push_bool(
+        content,
+        "AutoPopulateGrooveStatsScores",
+        options.auto_populate_gs_scores,
+    );
+    push_bool(
+        content,
+        "UpdaterInstallEnabled",
+        options.updater_install_enabled,
+    );
+}
+
+pub fn push_system_course_option_lines(content: &mut String, options: SystemOptions) {
+    push_bool(
+        content,
+        "CourseAutosubmitScoresIndividually",
+        options.autosubmit_course_scores_individually,
+    );
+    push_bool(
+        content,
+        "CourseShowIndividualScores",
+        options.show_course_individual_scores,
+    );
+    push_bool(
+        content,
+        "CourseShowMostPlayed",
+        options.show_most_played_courses,
+    );
+    push_bool(content, "CourseShowRandom", options.show_random_courses);
+    push_line(
+        content,
+        "DefaultFailType",
+        options.default_fail_type.as_str(),
+    );
+}
+
+pub fn push_system_online_option_lines(content: &mut String, options: SystemOptions) {
+    push_bool(content, "EnableArrowCloud", options.enable_arrowcloud);
+    push_bool(content, "EnableBoogieStats", options.enable_boogiestats);
+    push_bool(content, "EnableGrooveStats", options.enable_groovestats);
+    push_bool(
+        content,
+        "SubmitArrowCloudFails",
+        options.submit_arrowcloud_fails,
+    );
+    push_line(
+        content,
+        "ArrowCloudQrLoginWhen",
+        options.arrowcloud_qr_login_when.as_str(),
+    );
+    push_line(
+        content,
+        "GrooveStatsQrLoginWhen",
+        options.groovestats_qr_login_when.as_str(),
+    );
+}
+
+pub fn push_system_diagnostics_option_lines(content: &mut String, options: SystemOptions) {
+    push_bool(content, "GfxDebug", options.gfx_debug);
+    push_bool(content, "HighDPI", options.high_dpi);
+    push_bool(content, "HideMouseCursor", options.hide_mouse_cursor);
+    push_line(
+        content,
+        "GlobalOffsetSeconds",
+        options.global_offset_seconds,
+    );
+    push_line(content, "Language", options.language_flag.as_str());
+    push_line(content, "LogLevel", options.log_level.as_str());
+    push_bool(content, "LogToFile", options.log_to_file);
+    push_bool(content, "ShowConsole", options.show_console);
+}
+
 pub fn parse_select_music_itl_rank_mode(
     raw_mode: Option<&str>,
     raw_legacy_chart_rank: Option<&str>,
@@ -500,6 +580,132 @@ pub fn load_select_music_options(
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SelectMusicSaveOptions {
+    pub select_music: SelectMusicOptions,
+    pub separate_unlocks_by_player: bool,
+}
+
+pub fn push_select_music_option_lines(content: &mut String, options: SelectMusicSaveOptions) {
+    let select = options.select_music;
+    push_line(
+        content,
+        "SelectMusicBreakdown",
+        select.breakdown_style.as_str(),
+    );
+    push_bool(content, "SelectMusicShowBanners", select.show_banners);
+    push_bool(content, "ShowVersionOverlay", select.show_version_overlay);
+    push_line(
+        content,
+        "VersionOverlaySide",
+        select.version_overlay_side.as_str(),
+    );
+    push_bool(
+        content,
+        "SelectMusicShowVideoBanners",
+        select.show_video_banners,
+    );
+    push_bool(content, "SelectMusicShowBreakdown", select.show_breakdown);
+    push_bool(
+        content,
+        "SelectMusicShowStageDisplay",
+        select.show_stage_display,
+    );
+    push_bool(content, "SelectMusicShowCDTitles", select.show_cdtitles);
+    push_bool(content, "SelectMusicWheelGrades", select.show_wheel_grades);
+    push_bool(content, "SelectMusicWheelLamps", select.show_wheel_lamps);
+    push_line(
+        content,
+        "SelectMusicWheelITLRank",
+        select.itl_rank_mode.as_str(),
+    );
+    push_line(
+        content,
+        "SelectMusicWheelITL",
+        select.itl_wheel_mode.as_str(),
+    );
+    push_line(
+        content,
+        "SelectMusicWheelStyle",
+        select.wheel_style.as_str(),
+    );
+    push_line(content, "SongSelectBG", select.song_select_bg_mode.as_str());
+    push_line(
+        content,
+        "SelectMusicNewPackMode",
+        select.new_pack_mode.as_str(),
+    );
+    push_bool(content, "SelectMusicFolderStats", select.show_folder_stats);
+    push_bool(content, "SelectMusicPreviews", select.show_previews);
+    push_bool(
+        content,
+        "SelectMusicPreviewMarker",
+        select.show_preview_marker,
+    );
+    push_bool(content, "SelectMusicPreviewLoop", select.preview_loop);
+    push_line(
+        content,
+        "SelectMusicPatternInfo",
+        select.pattern_info_mode.as_str(),
+    );
+    push_line(
+        content,
+        "SelectMusicStepArtistBox",
+        select.step_artist_box_mode.as_str(),
+    );
+    push_bool(content, "SelectMusicScorebox", select.show_scorebox);
+    push_line(
+        content,
+        "SelectMusicScoreboxPlacement",
+        select.scorebox_placement.as_str(),
+    );
+    push_bool(
+        content,
+        "SelectMusicScoreboxCycleItg",
+        select.scorebox_cycle_itg,
+    );
+    push_bool(
+        content,
+        "SelectMusicScoreboxCycleEx",
+        select.scorebox_cycle_ex,
+    );
+    push_bool(
+        content,
+        "SelectMusicScoreboxCycleHardEx",
+        select.scorebox_cycle_hard_ex,
+    );
+    push_bool(
+        content,
+        "SelectMusicScoreboxCycleTournaments",
+        select.scorebox_cycle_tournaments,
+    );
+    push_bool(
+        content,
+        "SelectMusicChartInfoPeakNps",
+        select.chart_info_peak_nps,
+    );
+    push_bool(
+        content,
+        "SelectMusicChartInfoEffectiveBpm",
+        select.chart_info_effective_bpm,
+    );
+    push_bool(
+        content,
+        "SelectMusicChartInfoMatrixRating",
+        select.chart_info_matrix_rating,
+    );
+    push_bool(
+        content,
+        "SeparateUnlocksByPlayer",
+        options.separate_unlocks_by_player,
+    );
+    push_line(
+        content,
+        "AutoScreenshotEval",
+        auto_screenshot_mask_to_str(select.auto_screenshot_eval),
+    );
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RuntimeOptions {
     pub fastload: bool,
     pub cachesongs: bool,
@@ -571,6 +777,77 @@ pub fn load_runtime_options(conf: &SimpleIni, default: RuntimeOptions) -> Runtim
             .and_then(|value| parse_auto_threads_u8(&value))
             .unwrap_or(default.software_renderer_threads),
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StatsOverlayOptions<'a> {
+    pub show_stats_mode: u8,
+    pub frame_stats_overlay_anchor: Option<&'a str>,
+    pub frame_stats_overlay_style: Option<&'a str>,
+    pub smooth_histogram: bool,
+    pub shade_scatterplot_judgments: bool,
+}
+
+pub fn push_stats_overlay_option_lines(content: &mut String, options: StatsOverlayOptions<'_>) {
+    push_bool(content, "ShowStats", options.show_stats_mode != 0);
+    push_line(
+        content,
+        "ShowStatsMode",
+        clamp_show_stats_mode(options.show_stats_mode),
+    );
+    if let Some(anchor) = options.frame_stats_overlay_anchor {
+        push_line(content, "FrameStatsOverlayAnchor", anchor);
+    }
+    if let Some(style) = options.frame_stats_overlay_style {
+        push_line(content, "FrameStatsOverlayStyle", style);
+    }
+    push_bool(content, "SmoothHistogram", options.smooth_histogram);
+    push_bool(
+        content,
+        "ShadeScatterplotJudgments",
+        options.shade_scatterplot_judgments,
+    );
+}
+
+pub fn push_runtime_cache_option_lines(content: &mut String, options: RuntimeOptions) {
+    push_bool(content, "CacheSongs", options.cachesongs);
+}
+
+pub fn push_runtime_fastload_option_lines(content: &mut String, options: RuntimeOptions) {
+    push_bool(content, "FastLoad", options.fastload);
+}
+
+pub fn push_runtime_navigation_option_lines(content: &mut String, options: RuntimeOptions) {
+    push_bool(
+        content,
+        "ArcadeOptionsNavigation",
+        options.arcade_options_navigation,
+    );
+    push_bool(content, "DelayedBack", options.delayed_back);
+    push_bool(content, "ThreeKeyNavigation", options.three_key_navigation);
+    push_bool(content, "UseFSRs", options.use_fsrs);
+}
+
+pub fn push_runtime_lights_option_lines(content: &mut String, options: RuntimeOptions) {
+    push_bool(content, "LightsSimplifyBass", options.lights_simplify_bass);
+}
+
+pub fn push_runtime_menu_option_lines(content: &mut String, options: RuntimeOptions) {
+    push_bool(
+        content,
+        "OnlyDedicatedMenuButtons",
+        options.only_dedicated_menu_buttons,
+    );
+}
+
+pub fn push_runtime_worker_theme_option_lines(content: &mut String, options: RuntimeOptions) {
+    push_line(content, "SongParsingThreads", options.song_parsing_threads);
+    push_line(
+        content,
+        "SoftwareRendererThreads",
+        options.software_renderer_threads,
+    );
+    push_line(content, "Theme", options.theme_flag.as_str());
 }
 
 pub fn music_wheel_scroll_speed_choice_index(speed: u8) -> usize {
@@ -1471,6 +1748,67 @@ mod tests {
     }
 
     #[test]
+    fn writes_system_option_line_groups() {
+        let mut content = String::new();
+        let mut options = default_system_options();
+        options.auto_download_unlocks = true;
+        options.auto_populate_gs_scores = true;
+        options.updater_install_enabled = false;
+        options.autosubmit_course_scores_individually = false;
+        options.show_course_individual_scores = true;
+        options.show_most_played_courses = false;
+        options.show_random_courses = true;
+        options.default_fail_type = DefaultFailType::Immediate;
+        options.enable_arrowcloud = true;
+        options.enable_boogiestats = false;
+        options.enable_groovestats = true;
+        options.submit_arrowcloud_fails = true;
+        options.arrowcloud_qr_login_when = ArrowCloudQrLoginWhen::Always;
+        options.groovestats_qr_login_when = GrooveStatsQrLoginWhen::Disabled;
+        options.gfx_debug = true;
+        options.high_dpi = true;
+        options.hide_mouse_cursor = false;
+        options.global_offset_seconds = -0.012;
+        options.language_flag = LanguageFlag::German;
+        options.log_level = LogLevel::Trace;
+        options.log_to_file = false;
+        options.show_console = true;
+
+        push_system_download_option_lines(&mut content, options);
+        push_system_course_option_lines(&mut content, options);
+        push_system_online_option_lines(&mut content, options);
+        push_system_diagnostics_option_lines(&mut content, options);
+
+        assert_eq!(
+            content,
+            concat!(
+                "AutoDownloadUnlocks=1\n",
+                "AutoPopulateGrooveStatsScores=1\n",
+                "UpdaterInstallEnabled=0\n",
+                "CourseAutosubmitScoresIndividually=0\n",
+                "CourseShowIndividualScores=1\n",
+                "CourseShowMostPlayed=0\n",
+                "CourseShowRandom=1\n",
+                "DefaultFailType=Immediate\n",
+                "EnableArrowCloud=1\n",
+                "EnableBoogieStats=0\n",
+                "EnableGrooveStats=1\n",
+                "SubmitArrowCloudFails=1\n",
+                "ArrowCloudQrLoginWhen=Always\n",
+                "GrooveStatsQrLoginWhen=Disabled\n",
+                "GfxDebug=1\n",
+                "HighDPI=1\n",
+                "HideMouseCursor=0\n",
+                "GlobalOffsetSeconds=-0.012\n",
+                "Language=German\n",
+                "LogLevel=Trace\n",
+                "LogToFile=0\n",
+                "ShowConsole=1\n",
+            ),
+        );
+    }
+
+    #[test]
     fn loads_runtime_options_from_ini() {
         let mut conf = SimpleIni::new();
         conf.load_str(
@@ -1677,6 +2015,59 @@ mod tests {
     }
 
     #[test]
+    fn writes_select_music_option_lines() {
+        let mut content = String::new();
+        let mut select_music = default_select_music_options();
+        select_music.auto_screenshot_eval = AUTO_SS_PBS | AUTO_SS_QUADS;
+
+        push_select_music_option_lines(
+            &mut content,
+            SelectMusicSaveOptions {
+                select_music,
+                separate_unlocks_by_player: true,
+            },
+        );
+
+        assert_eq!(
+            content,
+            concat!(
+                "SelectMusicBreakdown=SL\n",
+                "SelectMusicShowBanners=1\n",
+                "ShowVersionOverlay=0\n",
+                "VersionOverlaySide=Right\n",
+                "SelectMusicShowVideoBanners=0\n",
+                "SelectMusicShowBreakdown=1\n",
+                "SelectMusicShowStageDisplay=0\n",
+                "SelectMusicShowCDTitles=1\n",
+                "SelectMusicWheelGrades=1\n",
+                "SelectMusicWheelLamps=0\n",
+                "SelectMusicWheelITLRank=None\n",
+                "SelectMusicWheelITL=Off\n",
+                "SelectMusicWheelStyle=ITG\n",
+                "SongSelectBG=Off\n",
+                "SelectMusicNewPackMode=Disabled\n",
+                "SelectMusicFolderStats=0\n",
+                "SelectMusicPreviews=1\n",
+                "SelectMusicPreviewMarker=1\n",
+                "SelectMusicPreviewLoop=0\n",
+                "SelectMusicPatternInfo=Auto\n",
+                "SelectMusicStepArtistBox=Default\n",
+                "SelectMusicScorebox=0\n",
+                "SelectMusicScoreboxPlacement=Auto\n",
+                "SelectMusicScoreboxCycleItg=1\n",
+                "SelectMusicScoreboxCycleEx=0\n",
+                "SelectMusicScoreboxCycleHardEx=0\n",
+                "SelectMusicScoreboxCycleTournaments=0\n",
+                "SelectMusicChartInfoPeakNps=1\n",
+                "SelectMusicChartInfoEffectiveBpm=1\n",
+                "SelectMusicChartInfoMatrixRating=0\n",
+                "SeparateUnlocksByPlayer=1\n",
+                "AutoScreenshotEval=PBs|Quads\n",
+            ),
+        );
+    }
+
+    #[test]
     fn load_select_music_options_uses_legacy_keys_and_defaults() {
         let default = default_select_music_options();
         let mut conf = SimpleIni::new();
@@ -1699,6 +2090,104 @@ mod tests {
         );
         assert_eq!(loaded.breakdown_style, default.breakdown_style);
         assert_eq!(loaded.show_video_banners, default.show_video_banners);
+    }
+
+    #[test]
+    fn writes_stats_overlay_lines_with_frame_options() {
+        let mut content = String::new();
+
+        push_stats_overlay_option_lines(
+            &mut content,
+            StatsOverlayOptions {
+                show_stats_mode: 7,
+                frame_stats_overlay_anchor: Some("top-right"),
+                frame_stats_overlay_style: Some("compact"),
+                smooth_histogram: true,
+                shade_scatterplot_judgments: false,
+            },
+        );
+
+        assert_eq!(
+            content,
+            concat!(
+                "ShowStats=1\n",
+                "ShowStatsMode=3\n",
+                "FrameStatsOverlayAnchor=top-right\n",
+                "FrameStatsOverlayStyle=compact\n",
+                "SmoothHistogram=1\n",
+                "ShadeScatterplotJudgments=0\n",
+            ),
+        );
+    }
+
+    #[test]
+    fn writes_stats_overlay_lines_without_frame_options() {
+        let mut content = String::new();
+
+        push_stats_overlay_option_lines(
+            &mut content,
+            StatsOverlayOptions {
+                show_stats_mode: 0,
+                frame_stats_overlay_anchor: None,
+                frame_stats_overlay_style: None,
+                smooth_histogram: false,
+                shade_scatterplot_judgments: true,
+            },
+        );
+
+        assert_eq!(
+            content,
+            concat!(
+                "ShowStats=0\n",
+                "ShowStatsMode=0\n",
+                "SmoothHistogram=0\n",
+                "ShadeScatterplotJudgments=1\n",
+            ),
+        );
+    }
+
+    #[test]
+    fn writes_runtime_option_line_groups() {
+        let mut content = String::new();
+        let options = RuntimeOptions {
+            fastload: true,
+            cachesongs: false,
+            song_parsing_threads: 6,
+            smooth_histogram: true,
+            shade_scatterplot_judgments: false,
+            arcade_options_navigation: true,
+            delayed_back: false,
+            three_key_navigation: true,
+            use_fsrs: false,
+            lights_simplify_bass: true,
+            only_dedicated_menu_buttons: false,
+            theme_flag: ThemeFlag::SimplyLove,
+            software_renderer_threads: 3,
+        };
+
+        push_runtime_cache_option_lines(&mut content, options);
+        push_runtime_fastload_option_lines(&mut content, options);
+        push_runtime_navigation_option_lines(&mut content, options);
+        push_runtime_lights_option_lines(&mut content, options);
+        push_runtime_menu_option_lines(&mut content, options);
+        push_runtime_worker_theme_option_lines(&mut content, options);
+
+        assert_eq!(
+            content,
+            concat!(
+                "CacheSongs=0\n",
+                "FastLoad=1\n",
+                "ArcadeOptionsNavigation=1\n",
+                "DelayedBack=0\n",
+                "ThreeKeyNavigation=1\n",
+                "UseFSRs=0\n",
+                "LightsSimplifyBass=1\n",
+                "OnlyDedicatedMenuButtons=0\n",
+                "SongParsingThreads=6\n",
+                "SoftwareRendererThreads=3\n",
+                "Theme=Simply Love\n",
+            ),
+        );
     }
 
     #[test]

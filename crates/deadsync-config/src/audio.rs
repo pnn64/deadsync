@@ -1,5 +1,6 @@
 use crate::bools::{parse_bool_str, parse_u8_bool_or_default};
 use crate::ini::SimpleIni;
+use crate::writer::{push_bool, push_line};
 
 pub const AUDIO_VOLUME_MAX: u8 = 100;
 pub const MUSIC_WHEEL_SWITCH_SPEED_MIN: u8 = 1;
@@ -20,6 +21,13 @@ pub struct AudioOptions {
     pub enable_replaygain: bool,
     pub write_current_screen: bool,
     pub tab_acceleration: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AudioDeviceOptions<'a> {
+    pub output_device_index: Option<u16>,
+    pub output_mode: &'a str,
+    pub sample_rate_hz: Option<u32>,
 }
 
 pub fn load_audio_options(conf: &SimpleIni, default: AudioOptions) -> AudioOptions {
@@ -84,6 +92,46 @@ pub fn load_audio_options(conf: &SimpleIni, default: AudioOptions) -> AudioOptio
             .and_then(|value| parse_bool_str(&value))
             .unwrap_or(default.tab_acceleration),
     }
+}
+
+pub fn push_audio_device_option_lines(content: &mut String, options: AudioDeviceOptions<'_>) {
+    push_line(
+        content,
+        "AudioOutputDevice",
+        optional_audio_output_device_value(options.output_device_index),
+    );
+    push_line(content, "AudioOutputMode", options.output_mode);
+    push_line(
+        content,
+        "AudioSampleRateHz",
+        optional_audio_sample_rate_hz_value(options.sample_rate_hz),
+    );
+}
+
+pub fn push_audio_playback_prefix_lines(content: &mut String, options: AudioOptions) {
+    push_line(content, "VisualDelaySeconds", options.visual_delay_seconds);
+    push_line(content, "MasterVolume", options.master_volume);
+    push_bool(content, "MenuMusic", options.menu_music);
+    push_bool(
+        content,
+        "CustomSoundsEnabled",
+        options.custom_sounds_enabled,
+    );
+}
+
+pub fn push_audio_music_option_lines(content: &mut String, options: AudioOptions) {
+    push_line(content, "MusicVolume", options.music_volume);
+    push_line(
+        content,
+        "MusicWheelSwitchSpeed",
+        clamp_music_wheel_switch_speed(options.music_wheel_switch_speed),
+    );
+    push_bool(
+        content,
+        "RateModPreservesPitch",
+        options.rate_mod_preserves_pitch,
+    );
+    push_bool(content, "ReplayGain", options.enable_replaygain);
 }
 
 pub const fn clamp_audio_volume_percent(value: u8) -> u8 {
@@ -197,6 +245,53 @@ mod tests {
         assert_eq!(optional_audio_output_device_value(Some(3)), "3");
         assert_eq!(optional_audio_sample_rate_hz_value(None), "Auto");
         assert_eq!(optional_audio_sample_rate_hz_value(Some(48_000)), "48000");
+    }
+
+    #[test]
+    fn writes_audio_device_option_lines() {
+        let mut content = String::new();
+
+        push_audio_device_option_lines(
+            &mut content,
+            AudioDeviceOptions {
+                output_device_index: Some(2),
+                output_mode: "Exclusive",
+                sample_rate_hz: Some(48_000),
+            },
+        );
+
+        assert_eq!(
+            content,
+            concat!(
+                "AudioOutputDevice=2\n",
+                "AudioOutputMode=Exclusive\n",
+                "AudioSampleRateHz=48000\n",
+            ),
+        );
+    }
+
+    #[test]
+    fn writes_audio_playback_option_lines() {
+        let mut content = String::new();
+        let mut options = default_options();
+        options.music_wheel_switch_speed = 0;
+
+        push_audio_playback_prefix_lines(&mut content, options);
+        push_audio_music_option_lines(&mut content, options);
+
+        assert_eq!(
+            content,
+            concat!(
+                "VisualDelaySeconds=0\n",
+                "MasterVolume=80\n",
+                "MenuMusic=1\n",
+                "CustomSoundsEnabled=1\n",
+                "MusicVolume=80\n",
+                "MusicWheelSwitchSpeed=1\n",
+                "RateModPreservesPitch=1\n",
+                "ReplayGain=0\n",
+            ),
+        );
     }
 
     #[test]

@@ -2,6 +2,7 @@ use crate::bools::parse_u8_bool_or_default;
 use crate::ini::SimpleIni;
 use crate::numbers::parse_auto_threads_u8;
 use crate::theme::SyncGraphMode;
+use crate::writer::{push_bool, push_line};
 use null_or_die::{BiasKernel, KernelTarget};
 use std::str::FromStr;
 
@@ -182,6 +183,57 @@ pub const fn null_or_die_kernel_type_from_choice(idx: usize) -> BiasKernel {
     }
 }
 
+pub fn push_null_or_die_option_lines(content: &mut String, options: NullOrDieOptions) {
+    push_line(content, "NullOrDieSyncGraph", options.sync_graph.as_str());
+    push_line(
+        content,
+        "NullOrDieConfidencePercent",
+        clamp_null_or_die_confidence_percent(options.confidence_percent),
+    );
+    push_line(content, "PackSyncThreads", options.pack_sync_threads);
+    push_line(
+        content,
+        "NullOrDieFingerprintMs",
+        format!(
+            "{:.1}",
+            clamp_null_or_die_positive_ms(options.fingerprint_ms)
+        ),
+    );
+    push_line(
+        content,
+        "NullOrDieWindowMs",
+        format!("{:.1}", clamp_null_or_die_positive_ms(options.window_ms)),
+    );
+    push_line(
+        content,
+        "NullOrDieStepMs",
+        format!("{:.1}", clamp_null_or_die_positive_ms(options.step_ms)),
+    );
+    push_line(
+        content,
+        "NullOrDieMagicOffsetMs",
+        format!(
+            "{:.1}",
+            clamp_null_or_die_magic_offset_ms(options.magic_offset_ms)
+        ),
+    );
+    push_line(
+        content,
+        "NullOrDieKernelTarget",
+        null_or_die_kernel_target_str(options.kernel_target),
+    );
+    push_line(
+        content,
+        "NullOrDieKernelType",
+        null_or_die_kernel_type_str(options.kernel_type),
+    );
+    push_bool(
+        content,
+        "NullOrDieFullSpectrogram",
+        options.full_spectrogram,
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -312,5 +364,40 @@ mod tests {
         );
 
         assert_eq!(load_null_or_die_options(&conf, default), default);
+    }
+
+    #[test]
+    fn writes_null_or_die_option_lines() {
+        let mut content = String::new();
+
+        push_null_or_die_option_lines(
+            &mut content,
+            NullOrDieOptions {
+                sync_graph: SyncGraphMode::PostKernelFingerprint,
+                confidence_percent: 250,
+                pack_sync_threads: 4,
+                fingerprint_ms: 10.05,
+                window_ms: 0.0,
+                step_ms: 250.0,
+                magic_offset_ms: -250.0,
+                kernel_target: KernelTarget::Accumulator,
+                kernel_type: BiasKernel::Loudest,
+                full_spectrogram: true,
+            },
+        );
+
+        assert_eq!(
+            content,
+            "NullOrDieSyncGraph=PostKernelFingerprint\n\
+NullOrDieConfidencePercent=100\n\
+PackSyncThreads=4\n\
+NullOrDieFingerprintMs=10.1\n\
+NullOrDieWindowMs=0.1\n\
+NullOrDieStepMs=100.0\n\
+NullOrDieMagicOffsetMs=-100.0\n\
+NullOrDieKernelTarget=Accumulator\n\
+NullOrDieKernelType=Loudest\n\
+NullOrDieFullSpectrogram=1\n"
+        );
     }
 }
