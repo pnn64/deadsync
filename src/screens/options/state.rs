@@ -859,6 +859,12 @@ pub fn init() -> State {
     set_choice_by_id(
         &mut state.sub[SubmenuKind::Gameplay].choice_indices,
         GAMEPLAY_OPTIONS_ROWS,
+        SubRowId::BpmPosition,
+        usize::from(cfg.gameplay_bpm_position == config::GameplayBpmPosition::NearField),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::Gameplay].choice_indices,
+        GAMEPLAY_OPTIONS_ROWS,
         SubRowId::DelayedBack,
         usize::from(cfg.delayed_back),
     );

@@ -119,6 +119,7 @@ pub enum ItemId {
     GpCenteredP1,
     GpZmodRatingBox,
     GpBpmDecimal,
+    GpBpmPosition,
     GpDelayedBack,
     GpAutoScreenshot,
 
@@ -399,6 +400,7 @@ pub const ITEMS: &[Item] = &[
             HelpEntry::Bullet(lookup_key("OptionsGameplay", "CenteredP1Notefield")),
             HelpEntry::Bullet(lookup_key("OptionsGameplay", "ZmodRatingBox")),
             HelpEntry::Bullet(lookup_key("OptionsGameplay", "BpmDecimal")),
+            HelpEntry::Bullet(lookup_key("OptionsGameplay", "BpmPosition")),
         ],
     },
     Item {

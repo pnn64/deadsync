@@ -530,6 +530,13 @@ pub(super) fn apply_submenu_choice_delta(
             config::update_zmod_rating_box_text(new_index == 1);
         } else if row.id == SubRowId::BpmDecimal {
             config::update_show_bpm_decimal(new_index == 1);
+        } else if row.id == SubRowId::BpmPosition {
+            let position = if new_index == 1 {
+                config::GameplayBpmPosition::NearField
+            } else {
+                config::GameplayBpmPosition::TopCenter
+            };
+            config::update_gameplay_bpm_position(position);
         } else if row.id == SubRowId::DelayedBack {
             // Choice 0 = Instant (delayed_back = false), 1 = Hold (delayed_back = true).
             config::update_delayed_back(new_index == 1);

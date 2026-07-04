@@ -51,6 +51,15 @@ pub(in crate::screens::options) const GAMEPLAY_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::BpmPosition,
+        label: lookup_key("OptionsGameplay", "BpmPosition"),
+        choices: &[
+            localized_choice("OptionsGameplay", "BpmPositionTopCenter"),
+            localized_choice("OptionsGameplay", "BpmPositionNearField"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::DelayedBack,
         label: lookup_key("OptionsGameplay", "DelayedBack"),
         choices: &[
@@ -104,6 +113,14 @@ pub(in crate::screens::options) const GAMEPLAY_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsGameplayHelp",
             "BpmDecimalHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::GpBpmPosition,
+        name: lookup_key("OptionsGameplay", "BpmPosition"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGameplayHelp",
+            "BpmPositionHelp",
         ))],
     },
     Item {

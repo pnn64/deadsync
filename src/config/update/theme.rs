@@ -451,6 +451,17 @@ pub fn update_show_bpm_decimal(enabled: bool) {
     save_without_keymaps();
 }
 
+pub fn update_gameplay_bpm_position(position: GameplayBpmPosition) {
+    {
+        let mut cfg = lock_config();
+        if cfg.gameplay_bpm_position == position {
+            return;
+        }
+        cfg.gameplay_bpm_position = position;
+    }
+    save_without_keymaps();
+}
+
 pub fn update_default_fail_type(fail_type: DefaultFailType) {
     {
         let mut cfg = lock_config();

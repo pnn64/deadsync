@@ -77,8 +77,8 @@ pub use deadsync_config::options::{
 pub use deadsync_config::theme::{
     AUTO_SS_CLEARS, AUTO_SS_FAILS, AUTO_SS_FLAG_NAMES, AUTO_SS_NUM_FLAGS, AUTO_SS_PBS,
     AUTO_SS_QUADS, AUTO_SS_QUINTS, ArrowCloudQrLoginWhen, BreakdownStyle, DefaultFailType,
-    DefaultSyncOffset, GameFlag, GrooveStatsQrLoginWhen, LanguageFlag, LogLevel,
-    MACHINE_FONT_VARIANTS, MachineBarColor, MachineEvaluationStyle, MachineFont,
+    DefaultSyncOffset, GameFlag, GameplayBpmPosition, GrooveStatsQrLoginWhen, LanguageFlag,
+    LogLevel, MACHINE_FONT_VARIANTS, MachineBarColor, MachineEvaluationStyle, MachineFont,
     MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode, RandomBackgroundMode,
     SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicPatternInfoMode,
     SelectMusicScoreboxPlacement, SelectMusicSongSelectBgMode, SelectMusicStepArtistBoxMode,
@@ -303,6 +303,8 @@ pub struct Config {
     pub zmod_rating_box_text: bool,
     /// Show one decimal place for live gameplay BPM when BPM is non-integer.
     pub show_bpm_decimal: bool,
+    /// Where to place the live gameplay BPM display.
+    pub gameplay_bpm_position: GameplayBpmPosition,
     /// Require holding Back to leave gameplay instead of exiting on first press.
     pub delayed_back: bool,
     /// Machine default fail behavior (ITGmania DefaultFailType).
@@ -503,6 +505,7 @@ impl Default for Config {
             machine_show_gameover: true,
             zmod_rating_box_text: false,
             show_bpm_decimal: false,
+            gameplay_bpm_position: GameplayBpmPosition::TopCenter,
             default_fail_type: DefaultFailType::ImmediateContinue,
             null_or_die_sync_graph: SyncGraphMode::PostKernelFingerprint,
             null_or_die_confidence_percent: 80,

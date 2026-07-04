@@ -10777,8 +10777,20 @@ pub fn push_actors(
             let bpm_final_zoom = 1.0 * frame_zoom;
             let rate_final_zoom = 0.5 * frame_zoom;
             let mut bpm_x = screen_center_x();
+            if cfg.gameplay_bpm_position == crate::config::GameplayBpmPosition::NearField
+                && state.num_players() == 1
+                && play_style == profile_data::PlayStyle::Single
+            {
+                let side = if player_side == profile_data::PlayerSide::P1 {
+                    1.0
+                } else {
+                    -1.0
+                };
+                bpm_x = playfield_center_x + side * (notefield_width(0) * 0.5 + 20.0);
+            }
             let note_field_is_centered = (playfield_center_x - screen_center_x()).abs() < 1.0;
-            if state.num_players() == 1
+            if cfg.gameplay_bpm_position != crate::config::GameplayBpmPosition::NearField
+                && state.num_players() == 1
                 && note_field_is_centered
                 && state.profiles()[0].nps_graph_at_top
             {

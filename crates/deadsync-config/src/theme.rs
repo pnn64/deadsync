@@ -582,6 +582,39 @@ impl FromStr for SelectMusicScoreboxPlacement {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GameplayBpmPosition {
+    TopCenter,
+    NearField,
+}
+
+impl GameplayBpmPosition {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::TopCenter => "TopCenter",
+            Self::NearField => "NearField",
+        }
+    }
+}
+
+impl FromStr for GameplayBpmPosition {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
+            }
+        }
+        match key.as_str() {
+            "topcenter" | "center" | "centered" | "normal" => Ok(Self::TopCenter),
+            "nearfield" | "nearnotefield" | "notefield" | "field" => Ok(Self::NearField),
+            _ => Err(()),
+        }
+    }
+}
+
 pub const AUTO_SS_NUM_FLAGS: usize = 5;
 pub const AUTO_SS_FLAG_NAMES: [&str; AUTO_SS_NUM_FLAGS] =
     ["PBs", "Fails", "Clears", "Quads", "Quints"];
@@ -1245,6 +1278,7 @@ pub struct ThemePresentationOptions {
     pub random_background_mode: RandomBackgroundMode,
     pub zmod_rating_box_text: bool,
     pub show_bpm_decimal: bool,
+    pub gameplay_bpm_position: GameplayBpmPosition,
 }
 
 pub fn load_theme_presentation_options(
@@ -1296,6 +1330,11 @@ pub fn load_theme_presentation_options(
             .get("Theme", "ShowBpmDecimal")
             .and_then(|value| parse_loose_bool_str(&value))
             .unwrap_or(default.show_bpm_decimal),
+        gameplay_bpm_position: conf
+            .get("Theme", "GameplayBpmPosition")
+            .or_else(|| conf.get("Theme", "BpmPosition"))
+            .and_then(|value| GameplayBpmPosition::from_str(&value).ok())
+            .unwrap_or(default.gameplay_bpm_position),
     }
 }
 
@@ -1545,6 +1584,11 @@ pub fn push_theme_option_lines(
         presentation.zmod_rating_box_text,
     );
     push_bool(content, "ShowBpmDecimal", presentation.show_bpm_decimal);
+    push_line(
+        content,
+        "GameplayBpmPosition",
+        presentation.gameplay_bpm_position.as_str(),
+    );
 }
 
 impl FromStr for LogLevel {
@@ -1577,6 +1621,7 @@ mod tests {
             random_background_mode: RandomBackgroundMode::Off,
             zmod_rating_box_text: false,
             show_bpm_decimal: false,
+            gameplay_bpm_position: GameplayBpmPosition::TopCenter,
         }
     }
 
@@ -1648,10 +1693,11 @@ MachinePreferredPlayMode=Regular\n\
 MachineFont=Wendy\n\
 MachineBarColor=Default\n\
 MachineEvaluationStyle=Default\n\
-ShowSelectMusicGameplayTimer=1\n\
-SimplyLoveColor=2\n\
-ZmodRatingBoxText=0\n\
-ShowBpmDecimal=0\n"
+	ShowSelectMusicGameplayTimer=1\n\
+	SimplyLoveColor=2\n\
+	ZmodRatingBoxText=0\n\
+	ShowBpmDecimal=0\n\
+	GameplayBpmPosition=TopCenter\n"
         );
     }
 
@@ -1766,6 +1812,7 @@ ShowBpmDecimal=0\n"
             RandomBackgroundMode=RandomMovies
             ZmodRatingBoxText=1
             ShowBpmDecimal=1
+            GameplayBpmPosition=NearField
             "#,
         );
 
@@ -1783,6 +1830,7 @@ ShowBpmDecimal=0\n"
         );
         assert!(loaded.zmod_rating_box_text);
         assert!(loaded.show_bpm_decimal);
+        assert_eq!(loaded.gameplay_bpm_position, GameplayBpmPosition::NearField);
     }
 
     #[test]
@@ -1801,6 +1849,7 @@ ShowBpmDecimal=0\n"
             RandomBackgroundMode=bad
             ZmodRatingBoxText=bad
             ShowBpmDecimal=bad
+            GameplayBpmPosition=bad
             "#,
         );
 
@@ -1824,6 +1873,24 @@ ShowBpmDecimal=0\n"
         );
         assert_eq!(loaded.zmod_rating_box_text, default.zmod_rating_box_text);
         assert_eq!(loaded.show_bpm_decimal, default.show_bpm_decimal);
+        assert_eq!(loaded.gameplay_bpm_position, default.gameplay_bpm_position);
+    }
+
+    #[test]
+    fn gameplay_bpm_position_round_trips_aliases() {
+        assert_eq!(
+            GameplayBpmPosition::from_str("TopCenter"),
+            Ok(GameplayBpmPosition::TopCenter)
+        );
+        assert_eq!(
+            GameplayBpmPosition::from_str("Normal"),
+            Ok(GameplayBpmPosition::TopCenter)
+        );
+        assert_eq!(
+            GameplayBpmPosition::from_str("Near Notefield"),
+            Ok(GameplayBpmPosition::NearField)
+        );
+        assert!(GameplayBpmPosition::from_str("bottom").is_err());
     }
 
     #[test]

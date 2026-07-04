@@ -22,6 +22,7 @@ fn load_theme_presentation(conf: &SimpleIni, default: Config, cfg: &mut Config) 
             random_background_mode: default.random_background_mode,
             zmod_rating_box_text: default.zmod_rating_box_text,
             show_bpm_decimal: default.show_bpm_decimal,
+            gameplay_bpm_position: default.gameplay_bpm_position,
         },
     );
     cfg.simply_love_color = loaded.simply_love_color;
@@ -33,6 +34,7 @@ fn load_theme_presentation(conf: &SimpleIni, default: Config, cfg: &mut Config) 
     cfg.random_background_mode = loaded.random_background_mode;
     cfg.zmod_rating_box_text = loaded.zmod_rating_box_text;
     cfg.show_bpm_decimal = loaded.show_bpm_decimal;
+    cfg.gameplay_bpm_position = loaded.gameplay_bpm_position;
 }
 
 fn load_machine_flow(conf: &SimpleIni, default: Config, cfg: &mut Config) {

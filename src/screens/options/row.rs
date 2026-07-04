@@ -105,6 +105,7 @@ pub enum SubRowId {
     CenteredP1Notefield,
     ZmodRatingBox,
     BpmDecimal,
+    BpmPosition,
     DelayedBack,
     AutoScreenshot,
     // Select Music Options
