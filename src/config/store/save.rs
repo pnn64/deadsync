@@ -1,6 +1,11 @@
 use super::*;
+use deadsync_config::audio::{
+    clamp_music_wheel_switch_speed, optional_audio_output_device_value,
+    optional_audio_sample_rate_hz_value,
+};
 use deadsync_config::cache::never_cache_list_value;
 use deadsync_config::folders::additional_song_folder_paths;
+use deadsync_config::machine::clamp_smx_light_brightness_percent;
 use deadsync_input::Keymap;
 
 pub(super) fn build_content(
@@ -42,12 +47,8 @@ fn push_saved_options(
     default_profile_p1: &str,
     default_profile_p2: &str,
 ) {
-    let audio_output_device = cfg
-        .audio_output_device_index
-        .map_or_else(|| "Auto".to_string(), |idx| idx.to_string());
-    let audio_rate_str = cfg
-        .audio_sample_rate_hz
-        .map_or_else(|| "Auto".to_string(), |hz| hz.to_string());
+    let audio_output_device = optional_audio_output_device_value(cfg.audio_output_device_index);
+    let audio_rate_str = optional_audio_sample_rate_hz_value(cfg.audio_sample_rate_hz);
 
     push_section(content, "[Options]");
     push_line(content, "AudioOutputDevice", audio_output_device);
@@ -75,7 +76,11 @@ fn push_saved_options(
         "UpdaterInstallEnabled",
         cfg.updater_install_enabled,
     );
-    push_line(content, "BGBrightness", cfg.bg_brightness.clamp(0.0, 1.0));
+    push_line(
+        content,
+        "BGBrightness",
+        clamp_bg_brightness(cfg.bg_brightness),
+    );
     push_line(content, "GameplayBgColor", cfg.gameplay_bg_color.to_hex());
     push_bool(content, "BannerCache", cfg.banner_cache);
     push_bool(content, "CacheSongs", cfg.cachesongs);
@@ -215,7 +220,7 @@ fn push_saved_options(
     push_line(
         content,
         "SmxDefaultLightBrightness",
-        cfg.smx_default_light_brightness,
+        clamp_smx_light_brightness_percent(cfg.smx_default_light_brightness),
     );
     push_line(content, "SmxP1Serial", smx_p1_serial);
     push_line(content, "SmxP2Serial", smx_p2_serial);
@@ -252,7 +257,7 @@ fn push_saved_options(
     push_line(
         content,
         "MusicWheelSwitchSpeed",
-        cfg.music_wheel_switch_speed.max(1),
+        clamp_music_wheel_switch_speed(cfg.music_wheel_switch_speed),
     );
     push_bool(
         content,
@@ -413,7 +418,11 @@ fn push_saved_options(
         auto_screenshot_mask_to_str(cfg.auto_screenshot_eval),
     );
     push_bool(content, "ShowStats", cfg.show_stats_mode != 0);
-    push_line(content, "ShowStatsMode", cfg.show_stats_mode.min(3));
+    push_line(
+        content,
+        "ShowStatsMode",
+        clamp_show_stats_mode(cfg.show_stats_mode),
+    );
     push_line(
         content,
         "FrameStatsOverlayAnchor",

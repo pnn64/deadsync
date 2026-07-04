@@ -1,3 +1,4 @@
+pub mod scorebox;
 pub mod step_stats;
 pub mod step_stats_gifs;
 

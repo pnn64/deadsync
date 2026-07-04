@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use deadlib_render::TexturedMeshVertex;
-
 #[derive(Debug, Clone, Copy)]
 pub enum TweenType {
     Linear,
@@ -41,33 +39,6 @@ impl ModelMesh {
             (self.bounds[4] - self.bounds[1]).max(0.0),
         ]
     }
-}
-
-#[inline(always)]
-pub fn build_textured_model_geometry(
-    model: &ModelMesh,
-    mirror_h: bool,
-    mirror_v: bool,
-) -> Arc<[TexturedMeshVertex]> {
-    let mut vertices = Vec::with_capacity(model.vertices.len());
-    for v in model.vertices.iter() {
-        let mut pos = v.pos;
-        if mirror_h {
-            pos[0] = -pos[0];
-        }
-        if mirror_v {
-            pos[1] = -pos[1];
-        }
-        let u = if mirror_h { 1.0 - v.uv[0] } else { v.uv[0] };
-        let v_tex = if mirror_v { 1.0 - v.uv[1] } else { v.uv[1] };
-        vertices.push(TexturedMeshVertex {
-            pos,
-            uv: [u, v_tex],
-            tex_matrix_scale: v.tex_matrix_scale,
-            color: [1.0; 4],
-        });
-    }
-    Arc::from(vertices)
 }
 
 #[inline(always)]

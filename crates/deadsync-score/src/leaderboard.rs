@@ -107,6 +107,43 @@ pub fn format_leaderboard_date_or_placeholder(date: &str) -> String {
 }
 
 #[inline(always)]
+pub fn scorebox_machine_tag(machine_tag: Option<&str>, name: &str) -> String {
+    let src = machine_tag.unwrap_or(name).trim();
+    if src.is_empty() {
+        return "----".to_string();
+    }
+    let mut out = String::with_capacity(4);
+    for ch in src.chars().take(4) {
+        out.push(ch.to_ascii_uppercase());
+    }
+    out
+}
+
+#[inline(always)]
+pub fn scorebox_score_percent(score_10000: f64) -> f64 {
+    if score_10000.is_finite() {
+        (score_10000 / 100.0).clamp(0.0, 100.0)
+    } else {
+        0.0
+    }
+}
+
+#[inline(always)]
+pub fn format_scorebox_score_percent(score_10000: f64) -> String {
+    format!("{:.2}%", scorebox_score_percent(score_10000))
+}
+
+#[inline(always)]
+pub fn format_scorebox_score_value(score_10000: f64) -> String {
+    format!("{:.2}", scorebox_score_percent(score_10000))
+}
+
+#[inline(always)]
+pub fn format_scorebox_rank(rank: u32) -> String {
+    format!("{rank}.")
+}
+
+#[inline(always)]
 fn same_leaderboard_entry(a: &LeaderboardEntry, b: &LeaderboardEntry) -> bool {
     a.rank == b.rank && a.name.eq_ignore_ascii_case(b.name.as_str())
 }
@@ -427,6 +464,19 @@ pub const fn select_music_scorebox_filter_allows_kind(
     }
 }
 
+pub fn select_music_scorebox_filtered_panes(
+    panes: &[LeaderboardPane],
+    filter: SelectMusicScoreboxFilter,
+) -> Vec<&LeaderboardPane> {
+    let mut out = Vec::with_capacity(panes.len());
+    for pane in panes {
+        if select_music_scorebox_filter_allows_kind(scorebox_pane_kind(pane), filter) {
+            out.push(pane);
+        }
+    }
+    out
+}
+
 #[inline(always)]
 pub fn scorebox_pane_kind(pane: &LeaderboardPane) -> ScoreboxPaneKind {
     if pane.is_arrowcloud() {
@@ -472,6 +522,34 @@ pub fn scorebox_pane_mode_text(kind: ScoreboxPaneKind, pane: &LeaderboardPane) -
 #[inline(always)]
 pub const fn default_scorebox_mode_text(show_ex_score: bool) -> &'static str {
     if show_ex_score { "EX" } else { "ITG" }
+}
+
+pub fn preferred_primary_scorebox_pane<'a>(
+    panes: &'a [&'a LeaderboardPane],
+    show_ex: bool,
+) -> Option<&'a LeaderboardPane> {
+    let want = if show_ex {
+        ScoreboxPaneKind::Ex
+    } else {
+        ScoreboxPaneKind::Gs
+    };
+    panes
+        .iter()
+        .copied()
+        .find(|pane| scorebox_pane_kind(pane) == want)
+        .or_else(|| {
+            panes
+                .iter()
+                .copied()
+                .find(|pane| scorebox_pane_kind(pane) == ScoreboxPaneKind::Gs)
+        })
+        .or_else(|| {
+            panes
+                .iter()
+                .copied()
+                .find(|pane| scorebox_pane_kind(pane) == ScoreboxPaneKind::Ex)
+        })
+        .or_else(|| panes.first().copied())
 }
 
 pub fn leaderboard_pane(
@@ -735,6 +813,19 @@ mod tests {
     }
 
     #[test]
+    fn scorebox_text_helpers_match_ui_policy() {
+        assert_eq!(scorebox_machine_tag(Some(" abcd5 "), "fallback"), "ABCD");
+        assert_eq!(scorebox_machine_tag(Some(" "), "efgh5"), "----");
+        assert_eq!(scorebox_machine_tag(None, " ijkl5 "), "IJKL");
+
+        assert_eq!(format_scorebox_score_percent(9876.0), "98.76%");
+        assert_eq!(format_scorebox_score_value(9876.0), "98.76");
+        assert_eq!(format_scorebox_score_percent(12000.0), "100.00%");
+        assert_eq!(format_scorebox_score_value(f64::NAN), "0.00");
+        assert_eq!(format_scorebox_rank(42), "42.");
+    }
+
+    #[test]
     fn prioritized_leaderboard_entries_keep_self_and_rivals_visible() {
         let mut entries = (1..=12)
             .map(|rank| entry(rank, &format!("top-{rank}"), false, false))
@@ -838,5 +929,53 @@ mod tests {
             ScoreboxPaneKind::Itl,
             filter
         ));
+    }
+
+    #[test]
+    fn select_music_scorebox_filter_returns_allowed_panes() {
+        let panes = [
+            pane("GrooveStats", false, None),
+            pane("GrooveStats", true, None),
+            pane("ITL 2025", false, None),
+        ];
+        let filter = SelectMusicScoreboxFilter {
+            itg: false,
+            ex: true,
+            hard_ex: false,
+            tournaments: true,
+        };
+
+        let filtered = select_music_scorebox_filtered_panes(&panes, filter);
+        let names = filtered
+            .iter()
+            .map(|pane| pane.name.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(names, vec!["GrooveStats", "ITL 2025"]);
+        assert_eq!(scorebox_pane_kind(filtered[0]), ScoreboxPaneKind::Ex);
+        assert_eq!(scorebox_pane_kind(filtered[1]), ScoreboxPaneKind::Itl);
+    }
+
+    #[test]
+    fn preferred_primary_scorebox_pane_uses_profile_mode_then_fallbacks() {
+        let gs = pane("GrooveStats", false, None);
+        let ex = pane("GrooveStats", true, None);
+        let itl = pane("ITL 2025", false, None);
+        let only_tournament = [&itl];
+        let mixed = [&itl, &gs, &ex];
+
+        assert_eq!(
+            preferred_primary_scorebox_pane(&mixed, true).map(scorebox_pane_kind),
+            Some(ScoreboxPaneKind::Ex)
+        );
+        assert_eq!(
+            preferred_primary_scorebox_pane(&mixed, false).map(scorebox_pane_kind),
+            Some(ScoreboxPaneKind::Gs)
+        );
+        assert_eq!(
+            preferred_primary_scorebox_pane(&only_tournament, true).map(scorebox_pane_kind),
+            Some(ScoreboxPaneKind::Itl)
+        );
+        assert!(preferred_primary_scorebox_pane(&[], true).is_none());
     }
 }

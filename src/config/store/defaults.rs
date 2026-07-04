@@ -1,4 +1,6 @@
 use super::*;
+use deadsync_config::audio::clamp_music_wheel_switch_speed;
+use deadsync_config::machine::clamp_smx_light_brightness_percent;
 
 pub(super) fn build_content() -> String {
     let default = Config::default();
@@ -126,7 +128,7 @@ fn push_default_options(content: &mut String, default: &Config) {
     push_line(
         content,
         "SmxDefaultLightBrightness",
-        default.smx_default_light_brightness,
+        clamp_smx_light_brightness_percent(default.smx_default_light_brightness),
     );
     // No pad→player assignment by default (slots follow the hardware jumper).
     push_line(content, "SmxP1Serial", "");
@@ -173,7 +175,7 @@ fn push_default_options(content: &mut String, default: &Config) {
     push_line(
         content,
         "MusicWheelSwitchSpeed",
-        default.music_wheel_switch_speed.max(1),
+        clamp_music_wheel_switch_speed(default.music_wheel_switch_speed),
     );
     push_bool(
         content,
@@ -338,7 +340,11 @@ fn push_default_options(content: &mut String, default: &Config) {
         auto_screenshot_mask_to_str(default.auto_screenshot_eval),
     );
     push_bool(content, "ShowStats", default.show_stats_mode != 0);
-    push_line(content, "ShowStatsMode", default.show_stats_mode.min(3));
+    push_line(
+        content,
+        "ShowStatsMode",
+        clamp_show_stats_mode(default.show_stats_mode),
+    );
     push_bool(content, "SmoothHistogram", default.smooth_histogram);
     push_bool(
         content,

@@ -1,4 +1,7 @@
 use super::*;
+use deadsync_config::theme::{
+    parse_machine_default_sync_offset, parse_machine_font, parse_srpg_variant, parse_visual_style,
+};
 
 pub(super) fn load(conf: &SimpleIni, default: Config, cfg: &mut Config) {
     load_theme_presentation(conf, default, cfg);
@@ -18,24 +21,21 @@ fn load_theme_presentation(conf: &SimpleIni, default: Config, cfg: &mut Config) 
         .get("Theme", "KeyboardFeatures")
         .and_then(|v| parse_bool_str(&v))
         .unwrap_or(default.keyboard_features);
-    let visual_style_raw = conf
-        .get("Theme", "VisualStyle")
-        .or_else(|| conf.get("Theme", "MenuBackgroundStyle"));
-    cfg.visual_style = visual_style_raw
-        .as_deref()
-        .and_then(|v| VisualStyle::from_str(v).ok())
-        .unwrap_or(default.visual_style);
-    cfg.srpg_variant = conf
-        .get("Theme", "SrpgVariant")
-        .or_else(|| conf.get("Theme", "ThemeVariant"))
-        .as_deref()
-        .and_then(|v| SrpgVariant::from_str(v).ok())
-        .or_else(|| {
-            visual_style_raw
-                .as_deref()
-                .and_then(SrpgVariant::from_visual_style_str)
-        })
-        .unwrap_or(default.srpg_variant);
+    let visual_style = conf.get("Theme", "VisualStyle");
+    let legacy_visual_style = conf.get("Theme", "MenuBackgroundStyle");
+    cfg.visual_style = parse_visual_style(
+        visual_style.as_deref(),
+        legacy_visual_style.as_deref(),
+        default.visual_style,
+    );
+    let srpg_variant = conf.get("Theme", "SrpgVariant");
+    let legacy_srpg_variant = conf.get("Theme", "ThemeVariant");
+    cfg.srpg_variant = parse_srpg_variant(
+        srpg_variant.as_deref(),
+        legacy_srpg_variant.as_deref(),
+        visual_style.or(legacy_visual_style).as_deref(),
+        default.srpg_variant,
+    );
     cfg.show_video_backgrounds = conf
         .get("Theme", "VideoBackgrounds")
         .and_then(|v| parse_bool_str(&v))
@@ -119,11 +119,13 @@ fn load_machine_flow(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Theme", "MachinePackIniOffsets")
         .and_then(|v| parse_loose_bool_str(&v))
         .unwrap_or(default.machine_pack_ini_offsets);
-    cfg.machine_default_sync_offset = conf
-        .get("Theme", "MachineDefaultSyncOffset")
-        .or_else(|| conf.get("Theme", "DefaultSyncOffset"))
-        .and_then(|v| DefaultSyncOffset::from_str(&v).ok())
-        .unwrap_or(default.machine_default_sync_offset);
+    let machine_default_sync_offset = conf.get("Theme", "MachineDefaultSyncOffset");
+    let legacy_default_sync_offset = conf.get("Theme", "DefaultSyncOffset");
+    cfg.machine_default_sync_offset = parse_machine_default_sync_offset(
+        machine_default_sync_offset.as_deref(),
+        legacy_default_sync_offset.as_deref(),
+        default.machine_default_sync_offset,
+    );
     cfg.machine_preferred_style = conf
         .get("Theme", "MachinePreferredStyle")
         .and_then(|v| MachinePreferredPlayStyle::from_str(&v).ok())
@@ -132,11 +134,13 @@ fn load_machine_flow(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Theme", "MachinePreferredPlayMode")
         .and_then(|v| MachinePreferredPlayMode::from_str(&v).ok())
         .unwrap_or(default.machine_preferred_play_mode);
-    cfg.machine_font = conf
-        .get("Theme", "MachineFont")
-        .or_else(|| conf.get("Theme", "ThemeFont"))
-        .and_then(|v| MachineFont::from_str(&v).ok())
-        .unwrap_or(default.machine_font);
+    let machine_font = conf.get("Theme", "MachineFont");
+    let legacy_machine_font = conf.get("Theme", "ThemeFont");
+    cfg.machine_font = parse_machine_font(
+        machine_font.as_deref(),
+        legacy_machine_font.as_deref(),
+        default.machine_font,
+    );
     cfg.machine_bar_color = conf
         .get("Theme", "MachineBarColor")
         .and_then(|v| MachineBarColor::from_str(&v).ok())

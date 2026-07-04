@@ -1,9 +1,10 @@
 use super::store::{create_default_config_file, current_save_content};
 use super::*;
 use deadlib_platform::dirs;
-use deadsync_config::bools::{parse_bool_str, parse_loose_bool_str};
+use deadsync_config::bools::{parse_bool_str, parse_loose_bool_str, parse_u8_bool_or_default};
 use deadsync_config::cache::load_never_cache_list;
 use deadsync_config::folders::load_additional_song_folders;
+use deadsync_config::runtime_state::load_runtime_state_ids;
 
 #[path = "load/backfill.rs"]
 mod backfill;
@@ -121,17 +122,11 @@ fn load_runtime_state(conf: &SimpleIni) {
     *MACHINE_DEFAULT_NOTESKIN.lock().unwrap() = noteskin;
     *ADDITIONAL_SONG_FOLDERS.lock().unwrap() = load_additional_song_folders(conf);
     *NEVER_CACHE_LIST.lock().unwrap() = load_never_cache_list(conf);
-    // SMX pad assignment serials: missing/blank means "no assignment" (jumper).
-    let serial = |key| {
-        conf.get("Options", key)
-            .map(|v| v.trim().to_owned())
-            .filter(|v| !v.is_empty())
-    };
-    let profile_id = |key, fallback_key| serial(key).or_else(|| serial(fallback_key));
-    *SMX_P1_SERIAL.lock().unwrap() = serial("SmxP1Serial");
-    *SMX_P2_SERIAL.lock().unwrap() = serial("SmxP2Serial");
-    *DEFAULT_PROFILE_P1.lock().unwrap() = profile_id("DefaultLocalProfileIDP1", "LastProfileP1");
-    *DEFAULT_PROFILE_P2.lock().unwrap() = profile_id("DefaultLocalProfileIDP2", "LastProfileP2");
+    let ids = load_runtime_state_ids(conf);
+    *SMX_P1_SERIAL.lock().unwrap() = ids.smx_p1_serial;
+    *SMX_P2_SERIAL.lock().unwrap() = ids.smx_p2_serial;
+    *DEFAULT_PROFILE_P1.lock().unwrap() = ids.default_profile_p1;
+    *DEFAULT_PROFILE_P2.lock().unwrap() = ids.default_profile_p2;
     pad_order::load_order_from_ini(conf);
 }
 

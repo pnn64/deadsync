@@ -1,6 +1,15 @@
 pub const DEFAULT_MACHINE_NOTESKIN: &str = "cel";
 pub const DEFAULT_FRAME_STATS_OVERLAY_ANCHOR: &str = "auto";
 pub const DEFAULT_FRAME_STATS_OVERLAY_STYLE: &str = "detailed";
+pub const SMX_LIGHT_BRIGHTNESS_MAX: u8 = 100;
+
+pub const fn clamp_smx_light_brightness_percent(value: u8) -> u8 {
+    if value > SMX_LIGHT_BRIGHTNESS_MAX {
+        SMX_LIGHT_BRIGHTNESS_MAX
+    } else {
+        value
+    }
+}
 
 pub fn normalize_machine_default_noteskin(raw: &str) -> String {
     let trimmed = raw.trim();
@@ -49,6 +58,14 @@ mod tests {
             normalize_machine_default_noteskin("   "),
             DEFAULT_MACHINE_NOTESKIN
         );
+    }
+
+    #[test]
+    fn clamps_smx_light_brightness_percent() {
+        assert_eq!(clamp_smx_light_brightness_percent(0), 0);
+        assert_eq!(clamp_smx_light_brightness_percent(80), 80);
+        assert_eq!(clamp_smx_light_brightness_percent(101), 100);
+        assert_eq!(clamp_smx_light_brightness_percent(u8::MAX), 100);
     }
 
     #[test]

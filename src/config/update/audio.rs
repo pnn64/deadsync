@@ -1,7 +1,8 @@
 use super::*;
+use deadsync_config::audio::{clamp_audio_volume_percent, clamp_music_wheel_switch_speed};
 
 pub fn update_master_volume(volume: u8) {
-    let vol = volume.clamp(0, 100);
+    let vol = clamp_audio_volume_percent(volume);
     {
         let mut cfg = lock_config();
         if cfg.master_volume == vol {
@@ -14,7 +15,7 @@ pub fn update_master_volume(volume: u8) {
 }
 
 pub fn update_music_volume(volume: u8) {
-    let vol = volume.clamp(0, 100);
+    let vol = clamp_audio_volume_percent(volume);
     {
         let mut cfg = lock_config();
         if cfg.music_volume == vol {
@@ -49,7 +50,7 @@ pub fn update_software_renderer_threads(threads: u8) {
 }
 
 pub fn update_sfx_volume(volume: u8) {
-    let vol = volume.clamp(0, 100);
+    let vol = clamp_audio_volume_percent(volume);
     {
         let mut cfg = lock_config();
         if cfg.sfx_volume == vol {
@@ -62,7 +63,7 @@ pub fn update_sfx_volume(volume: u8) {
 }
 
 pub fn update_assist_tick_volume(volume: u8) {
-    let vol = volume.clamp(0, 100);
+    let vol = clamp_audio_volume_percent(volume);
     {
         let mut cfg = lock_config();
         if cfg.assist_tick_volume == vol {
@@ -131,7 +132,7 @@ pub fn update_mine_hit_sound(enabled: bool) {
 }
 
 pub fn update_music_wheel_switch_speed(speed: u8) {
-    let speed = speed.max(1);
+    let speed = clamp_music_wheel_switch_speed(speed);
     {
         let mut cfg = lock_config();
         if cfg.music_wheel_switch_speed == speed {

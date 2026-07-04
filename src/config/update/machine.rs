@@ -1,4 +1,5 @@
 use super::*;
+use deadsync_config::machine::clamp_smx_light_brightness_percent;
 
 #[inline(always)]
 fn dedicated_menu_buttons_supported(three_key_navigation: bool) -> bool {
@@ -155,7 +156,7 @@ pub fn update_smx_default_pad_config(preset: crate::config::SmxPadPreset) {
 /// is nothing to push to the SDK here (the per-slot live value is resolved from
 /// the active profiles by `App::sync_smx_light_brightness`).
 pub fn update_smx_default_light_brightness(percent: u8) {
-    let percent = percent.min(100);
+    let percent = clamp_smx_light_brightness_percent(percent);
     {
         let mut cfg = lock_config();
         if cfg.smx_default_light_brightness == percent {

@@ -14,6 +14,14 @@ pub fn parse_loose_bool_str(raw: &str) -> Option<bool> {
     parse_bool_str(raw).or_else(|| raw.parse::<u8>().ok().map(|n| n != 0))
 }
 
+pub fn parse_u8_bool_str(raw: &str) -> Option<bool> {
+    raw.trim().parse::<u8>().ok().map(|n| n != 0)
+}
+
+pub fn parse_u8_bool_or_default(raw: Option<&str>, default: bool) -> bool {
+    raw.and_then(parse_u8_bool_str).unwrap_or(default)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -41,5 +49,16 @@ mod tests {
         assert_eq!(parse_loose_bool_str("255"), Some(true));
         assert_eq!(parse_loose_bool_str("256"), None);
         assert_eq!(parse_loose_bool_str(""), None);
+    }
+
+    #[test]
+    fn parses_u8_bool_values() {
+        assert_eq!(parse_u8_bool_str("0"), Some(false));
+        assert_eq!(parse_u8_bool_str("1"), Some(true));
+        assert_eq!(parse_u8_bool_str("255"), Some(true));
+        assert_eq!(parse_u8_bool_str("256"), None);
+        assert_eq!(parse_u8_bool_str("true"), None);
+        assert!(parse_u8_bool_or_default(Some("bad"), true));
+        assert!(!parse_u8_bool_or_default(None, false));
     }
 }

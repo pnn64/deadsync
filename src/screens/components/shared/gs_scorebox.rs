@@ -7,17 +7,17 @@ use deadlib_present::cache::{TextCache, cached_text};
 use deadlib_present::color;
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
+use deadsync_theme::scorebox as scorebox_theme;
+use deadsync_theme::scorebox::{
+    SCOREBOX_BORDER, SCOREBOX_H, SCOREBOX_W, ScoreboxCycleState, color_with_alpha, lerp_color,
+    logo_alpha, scorebox_cycle_state,
+};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
 pub(crate) const SCOREBOX_NUM_ENTRIES: usize = 5;
 const SCOREBOX_FETCH_NUM_ENTRIES: usize = 13;
-const SCOREBOX_LOOP_SECONDS: f32 = 5.0;
-const SCOREBOX_TRANSITION_SECONDS: f32 = 1.0;
-const SCOREBOX_W: f32 = 162.0;
-const SCOREBOX_H: f32 = 80.0;
-const SCOREBOX_BORDER: f32 = 5.0;
 const SCOREBOX_GS_BLUE: [f32; 4] = color::rgba_hex("#007b85");
 const SCOREBOX_SRPG_YELLOW: [f32; 4] = [1.0, 0.972, 0.792, 1.0];
 const SCOREBOX_ITL_PINK: [f32; 4] = [1.0, 0.2, 0.406, 1.0];
@@ -31,8 +31,6 @@ const SCOREBOX_ARROWCLOUD_LOGO_ALPHA: f32 = 0.5;
 const SCOREBOX_ARROWCLOUD_LOGO_ZOOM: f32 = 0.06;
 const SCOREBOX_SRPG_LOGO_ALPHA: f32 = 0.5;
 const SCOREBOX_ITL_LOGO_ALPHA: f32 = 0.2;
-const SCOREBOX_LOGO_MAX_W_FRAC: f32 = 0.94;
-const SCOREBOX_LOGO_MAX_H_FRAC: f32 = 0.94;
 const SCOREBOX_HARD_EX_BORDER_TINT: f32 = 0.35;
 const TEXT_CACHE_LIMIT: usize = 8192;
 
@@ -57,21 +55,6 @@ pub(crate) fn unknown_score_percent_text() -> Arc<str> {
     UNKNOWN.get_or_init(|| Arc::<str>::from("??.??%")).clone()
 }
 
-#[inline(always)]
-fn cached_percent_text(percent: f64) -> Arc<str> {
-    let percent = if percent.is_finite() {
-        percent.clamp(0.0, 100.0)
-    } else {
-        0.0
-    };
-    cached_text(
-        &SCORE_PERCENT_TEXT_CACHE,
-        percent.to_bits(),
-        TEXT_CACHE_LIMIT,
-        || format!("{percent:.2}%"),
-    )
-}
-
 #[derive(Clone, Debug)]
 struct GameplayScoreboxRow {
     rank: Arc<str>,
@@ -89,15 +72,6 @@ struct GameplayScoreboxPane {
     mode_text: Arc<str>,
     border_color: [f32; 4],
     rows: [GameplayScoreboxRow; SCOREBOX_NUM_ENTRIES],
-}
-
-#[derive(Clone, Copy, Debug)]
-struct ScoreboxCycleState {
-    cur_idx: usize,
-    next_idx: usize,
-    border_mix: f32,
-    cur_alpha: f32,
-    next_alpha: f32,
 }
 
 #[derive(Clone, Debug)]
@@ -133,22 +107,6 @@ fn select_music_pane_filter() -> SelectMusicPaneFilter {
     }
 }
 
-fn select_music_filtered_panes(
-    panes: &[score_data::LeaderboardPane],
-    filter: SelectMusicPaneFilter,
-) -> Vec<&score_data::LeaderboardPane> {
-    let mut out = Vec::with_capacity(panes.len());
-    for pane in panes {
-        if score_data::select_music_scorebox_filter_allows_kind(
-            score_data::scorebox_pane_kind(pane),
-            filter,
-        ) {
-            out.push(pane);
-        }
-    }
-    out
-}
-
 #[inline(always)]
 fn pane_color(kind: PaneKind) -> [f32; 4] {
     match kind {
@@ -171,42 +129,31 @@ fn pane_color(kind: PaneKind) -> [f32; 4] {
 }
 
 #[inline(always)]
-fn machine_tag(machine_tag: Option<&str>, name: &str) -> String {
-    let src = machine_tag.unwrap_or(name).trim();
-    if src.is_empty() {
-        return "----".to_string();
-    }
-    let mut out = String::with_capacity(4);
-    for ch in src.chars().take(4) {
-        out.push(ch.to_ascii_uppercase());
-    }
-    out
-}
-
-#[inline(always)]
 fn score_text_with_percent(score_10000: f64) -> Arc<str> {
-    cached_percent_text(score_10000 / 100.0)
+    let percent = score_data::scorebox_score_percent(score_10000);
+    cached_text(
+        &SCORE_PERCENT_TEXT_CACHE,
+        percent.to_bits(),
+        TEXT_CACHE_LIMIT,
+        || score_data::format_scorebox_score_percent(score_10000),
+    )
 }
 
 #[inline(always)]
 fn score_text_without_percent(score_10000: f64) -> Arc<str> {
-    let score = if score_10000.is_finite() {
-        (score_10000 / 100.0).clamp(0.0, 100.0)
-    } else {
-        0.0
-    };
+    let score = score_data::scorebox_score_percent(score_10000);
     cached_text(
         &SCORE_VALUE_TEXT_CACHE,
         score.to_bits(),
         TEXT_CACHE_LIMIT,
-        || format!("{score:.2}"),
+        || score_data::format_scorebox_score_value(score_10000),
     )
 }
 
 #[inline(always)]
 fn rank_text(rank: u32) -> Arc<str> {
     cached_text(&RANK_TEXT_CACHE, rank, TEXT_CACHE_LIMIT, || {
-        format!("{rank}.")
+        score_data::format_scorebox_rank(rank)
     })
 }
 
@@ -237,7 +184,7 @@ fn local_self_scorebox_name(side: profile_data::PlayerSide) -> String {
     .find(|value| !value.is_empty())
     .unwrap_or("----");
     let tag = local_self_machine_tag(side);
-    machine_tag(tag.as_deref(), fallback)
+    score_data::scorebox_machine_tag(tag.as_deref(), fallback)
 }
 
 fn leaderboard_entry_matches_local_self(
@@ -328,30 +275,6 @@ pub(crate) fn entries_with_local_self_state(
     entries
 }
 
-fn preferred_primary_pane<'a>(
-    panes: &'a [&'a score_data::LeaderboardPane],
-    show_ex: bool,
-) -> Option<&'a score_data::LeaderboardPane> {
-    let want = if show_ex { PaneKind::Ex } else { PaneKind::Gs };
-    panes
-        .iter()
-        .copied()
-        .find(|pane| score_data::scorebox_pane_kind(pane) == want)
-        .or_else(|| {
-            panes
-                .iter()
-                .copied()
-                .find(|pane| score_data::scorebox_pane_kind(pane) == PaneKind::Gs)
-        })
-        .or_else(|| {
-            panes
-                .iter()
-                .copied()
-                .find(|pane| score_data::scorebox_pane_kind(pane) == PaneKind::Ex)
-        })
-        .or_else(|| panes.first().copied())
-}
-
 #[inline(always)]
 fn default_mode_text_for_side(side: profile_data::PlayerSide) -> &'static str {
     score_data::default_scorebox_mode_text(profile::get_for_side(side).show_ex_score)
@@ -409,8 +332,11 @@ pub fn select_music_scorebox_view(
     let Some(data) = snapshot.data else {
         return view;
     };
-    let filtered_panes = select_music_filtered_panes(data.panes.as_slice(), filter);
-    let Some(pane) = preferred_primary_pane(filtered_panes.as_slice(), show_ex) else {
+    let filtered_panes =
+        score_data::select_music_scorebox_filtered_panes(data.panes.as_slice(), filter);
+    let Some(pane) =
+        score_data::preferred_primary_scorebox_pane(filtered_panes.as_slice(), show_ex)
+    else {
         view.loading_text = Some("No Scores".to_string());
         return view;
     };
@@ -428,11 +354,15 @@ pub fn select_music_scorebox_view(
         .find(|entry| entry.rank == 1)
         .or_else(|| entries.first())
     {
-        view.machine_name = machine_tag(world.machine_tag.as_deref(), &world.name);
+        view.machine_name =
+            score_data::scorebox_machine_tag(world.machine_tag.as_deref(), &world.name);
         view.machine_score = score_text_with_percent(world.score);
     }
     if let Some(player_entry) = entries.iter().find(|entry| entry.is_self) {
-        view.player_name = machine_tag(player_entry.machine_tag.as_deref(), &player_entry.name);
+        view.player_name = score_data::scorebox_machine_tag(
+            player_entry.machine_tag.as_deref(),
+            &player_entry.name,
+        );
         view.player_score = score_text_with_percent(player_entry.score);
     } else if let Some((local_score_10000, _)) = local_self_score_10000(side, hash, kind) {
         view.player_name = local_self_scorebox_name(side);
@@ -445,7 +375,7 @@ pub fn select_music_scorebox_view(
         .enumerate()
     {
         view.rivals[idx] = (
-            machine_tag(rival.machine_tag.as_deref(), &rival.name),
+            score_data::scorebox_machine_tag(rival.machine_tag.as_deref(), &rival.name),
             score_text_with_percent(rival.score),
         );
     }
@@ -620,7 +550,7 @@ fn gameplay_panes_from_snapshot(
         return Vec::new();
     }
 
-    let filtered = select_music_filtered_panes(data.panes.as_slice(), filter);
+    let filtered = score_data::select_music_scorebox_filtered_panes(data.panes.as_slice(), filter);
     if filtered.is_empty() {
         return vec![gameplay_status_pane(
             profile_snapshot.show_ex_score,
@@ -658,7 +588,7 @@ fn select_music_panes_from_snapshot(
         return Vec::new();
     }
 
-    let filtered = select_music_filtered_panes(data.panes.as_slice(), filter);
+    let filtered = score_data::select_music_scorebox_filtered_panes(data.panes.as_slice(), filter);
     if filtered.is_empty() {
         return vec![gameplay_status_pane_for_side(side, "No Scores")];
     }
@@ -668,33 +598,6 @@ fn select_music_panes_from_snapshot(
         panes.push(gameplay_pane_from_leaderboard(pane, entries.as_slice()));
     }
     panes
-}
-
-#[inline(always)]
-fn clamp01(v: f32) -> f32 {
-    v.clamp(0.0, 1.0)
-}
-
-#[inline(always)]
-fn lerp(a: f32, b: f32, t: f32) -> f32 {
-    let t = clamp01(t);
-    a + (b - a) * t
-}
-
-#[inline(always)]
-fn lerp_color(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
-    [
-        lerp(a[0], b[0], t),
-        lerp(a[1], b[1], t),
-        lerp(a[2], b[2], t),
-        lerp(a[3], b[3], t),
-    ]
-}
-
-#[inline(always)]
-fn color_with_alpha(mut rgba: [f32; 4], alpha: f32) -> [f32; 4] {
-    rgba[3] *= clamp01(alpha);
-    rgba
 }
 
 #[inline(always)]
@@ -730,88 +633,6 @@ fn is_itl_logo(kind: PaneKind) -> bool {
 fn is_fallback_text(pane: &GameplayScoreboxPane) -> bool {
     matches!(pane.kind, PaneKind::Other)
         || (pane.is_arrowcloud && matches!(pane.kind, PaneKind::Gs))
-}
-
-fn logo_alpha(
-    cycle: ScoreboxCycleState,
-    cur_on: bool,
-    next_on: bool,
-    target: f32,
-    enter_in_second_half: bool,
-) -> f32 {
-    if cycle.cur_idx == cycle.next_idx {
-        return if cur_on { target } else { 0.0 };
-    }
-
-    let t = cycle.border_mix;
-    let start = if cur_on { target } else { 0.0 };
-    if enter_in_second_half {
-        if next_on {
-            if t < 0.5 {
-                start
-            } else {
-                lerp(start, target, (t - 0.5) * 2.0)
-            }
-        } else if t < 0.5 {
-            lerp(start, 0.0, t * 2.0)
-        } else {
-            0.0
-        }
-    } else if next_on {
-        if t < 0.5 {
-            lerp(start, target, t * 2.0)
-        } else {
-            target
-        }
-    } else if t < 0.5 {
-        start
-    } else {
-        lerp(start, 0.0, (t - 0.5) * 2.0)
-    }
-}
-
-fn scorebox_cycle_state(num_panes: usize, elapsed_seconds: f32) -> ScoreboxCycleState {
-    if num_panes <= 1 {
-        return ScoreboxCycleState {
-            cur_idx: 0,
-            next_idx: 0,
-            border_mix: 0.0,
-            cur_alpha: 1.0,
-            next_alpha: 0.0,
-        };
-    }
-
-    let cycle_len = SCOREBOX_LOOP_SECONDS + SCOREBOX_TRANSITION_SECONDS;
-    let elapsed = elapsed_seconds.max(0.0);
-    let cycle_num = (elapsed / cycle_len).floor() as usize;
-    let cycle_pos = elapsed - (cycle_num as f32) * cycle_len;
-    let cur_idx = cycle_num % num_panes;
-
-    if cycle_pos < SCOREBOX_LOOP_SECONDS {
-        return ScoreboxCycleState {
-            cur_idx,
-            next_idx: cur_idx,
-            border_mix: 0.0,
-            cur_alpha: 1.0,
-            next_alpha: 0.0,
-        };
-    }
-
-    let next_idx = (cur_idx + 1) % num_panes;
-    let t = clamp01((cycle_pos - SCOREBOX_LOOP_SECONDS) / SCOREBOX_TRANSITION_SECONDS);
-    let (cur_alpha, next_alpha) = if t < 0.5 {
-        (1.0 - t * 2.0, 0.0)
-    } else {
-        (0.0, (t - 0.5) * 2.0)
-    };
-
-    ScoreboxCycleState {
-        cur_idx,
-        next_idx,
-        border_mix: t,
-        cur_alpha,
-        next_alpha,
-    }
 }
 
 fn push_mode_text(
@@ -853,20 +674,12 @@ fn push_centered_logo(
         return;
     }
     let dims = assets::texture_dims(texture).unwrap_or(assets::TexMeta { w: 1, h: 1 });
-    let mut width = dims.w.max(1) as f32 * sprite_zoom * zoom;
-    let mut height = dims.h.max(1) as f32 * sprite_zoom * zoom;
-    let max_width = SCOREBOX_W * SCOREBOX_LOGO_MAX_W_FRAC * zoom;
-    let max_height = SCOREBOX_H * SCOREBOX_LOGO_MAX_H_FRAC * zoom;
-    if width > 0.0 && height > 0.0 {
-        let fit = (max_width / width).min(max_height / height).min(1.0);
-        width *= fit;
-        height *= fit;
-    }
+    let fit = scorebox_theme::fit_scorebox_logo(dims.w, dims.h, sprite_zoom, zoom);
     let c = color_with_alpha([1.0; 4], alpha);
     actors.push(act!(sprite(texture):
         align(0.5, 0.5):
         xy(center_x, center_y):
-        setsize(width, height):
+        setsize(fit.width, fit.height):
         diffuse(c[0], c[1], c[2], c[3]):
         z(z_base + 2)
     ));

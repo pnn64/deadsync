@@ -305,7 +305,33 @@ pub(crate) fn build_model_geometry(slot: &SpriteSlot) -> Arc<[TexturedMeshVertex
         .model
         .as_ref()
         .expect("model geometry requested for non-model noteskin slot");
-    deadsync_noteskin::build_textured_model_geometry(model, slot.def.mirror_h, slot.def.mirror_v)
+    let mut vertices = Vec::with_capacity(model.vertices.len());
+    for v in model.vertices.iter() {
+        let mut pos = v.pos;
+        if slot.def.mirror_h {
+            pos[0] = -pos[0];
+        }
+        if slot.def.mirror_v {
+            pos[1] = -pos[1];
+        }
+        let u = if slot.def.mirror_h {
+            1.0 - v.uv[0]
+        } else {
+            v.uv[0]
+        };
+        let v_tex = if slot.def.mirror_v {
+            1.0 - v.uv[1]
+        } else {
+            v.uv[1]
+        };
+        vertices.push(TexturedMeshVertex {
+            pos,
+            uv: [u, v_tex],
+            color: [1.0; 4],
+            tex_matrix_scale: v.tex_matrix_scale,
+        });
+    }
+    Arc::from(vertices)
 }
 
 #[cfg(test)]

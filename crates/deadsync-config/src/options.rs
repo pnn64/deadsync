@@ -8,11 +8,13 @@ use crate::theme::{
     SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SrpgVariant, SyncGraphMode,
     VersionOverlaySide, VisualStyle, auto_screenshot_bit,
 };
+use std::str::FromStr;
 use std::time::Duration;
 
 pub const SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES: usize = 4;
 pub const SELECT_MUSIC_CHART_INFO_NUM_CHOICES: usize = 3;
 pub const MUSIC_WHEEL_SCROLL_SPEED_VALUES: [u8; 7] = [5, 10, 15, 25, 30, 45, 100];
+pub const SHOW_STATS_MODE_MAX: u8 = 3;
 pub const MAX_FPS_MIN: u16 = 5;
 pub const MAX_FPS_MAX: u16 = 1000;
 pub const MAX_FPS_STEP: u16 = 1;
@@ -22,11 +24,67 @@ pub const MAX_FPS_HOLD_FASTER_AFTER: Duration = Duration::from_millis(1200);
 pub const MAX_FPS_HOLD_FASTEST_AFTER: Duration = Duration::from_millis(1800);
 
 pub fn bg_brightness_choice_index(brightness: f32) -> usize {
-    ((brightness.clamp(0.0, 1.0) * 10.0).round() as i32).clamp(0, 10) as usize
+    ((clamp_bg_brightness(brightness) * 10.0).round() as i32).clamp(0, 10) as usize
 }
 
 pub fn bg_brightness_from_choice(idx: usize) -> f32 {
     idx.min(10) as f32 / 10.0
+}
+
+pub fn clamp_bg_brightness(brightness: f32) -> f32 {
+    brightness.clamp(0.0, 1.0)
+}
+
+pub const fn clamp_show_stats_mode(mode: u8) -> u8 {
+    if mode > SHOW_STATS_MODE_MAX {
+        SHOW_STATS_MODE_MAX
+    } else {
+        mode
+    }
+}
+
+pub fn parse_show_stats_mode(raw_mode: Option<&str>, raw_legacy: Option<&str>, default: u8) -> u8 {
+    raw_mode
+        .and_then(|v| v.parse::<u8>().ok())
+        .map(clamp_show_stats_mode)
+        .or_else(|| {
+            raw_legacy
+                .and_then(|v| v.parse::<u8>().ok())
+                .map(|v| if v != 0 { 1 } else { 0 })
+        })
+        .unwrap_or(default)
+}
+
+pub fn parse_select_music_itl_rank_mode(
+    raw_mode: Option<&str>,
+    raw_legacy_chart_rank: Option<&str>,
+    default: SelectMusicItlRankMode,
+) -> SelectMusicItlRankMode {
+    raw_mode
+        .and_then(|v| SelectMusicItlRankMode::from_str(v).ok())
+        .or_else(|| {
+            raw_legacy_chart_rank
+                .and_then(|v| v.parse::<u8>().ok())
+                .map(|v| {
+                    if v != 0 {
+                        SelectMusicItlRankMode::Chart
+                    } else {
+                        SelectMusicItlRankMode::None
+                    }
+                })
+        })
+        .unwrap_or(default)
+}
+
+pub fn parse_select_music_song_select_bg_mode(
+    raw_mode: Option<&str>,
+    raw_legacy_mode: Option<&str>,
+    default: SelectMusicSongSelectBgMode,
+) -> SelectMusicSongSelectBgMode {
+    raw_mode
+        .or(raw_legacy_mode)
+        .and_then(|v| SelectMusicSongSelectBgMode::from_str(v).ok())
+        .unwrap_or(default)
 }
 
 pub fn music_wheel_scroll_speed_choice_index(speed: u8) -> usize {
@@ -657,6 +715,87 @@ mod tests {
         assert_eq!(bg_brightness_choice_index(1.5), 10);
         assert_eq!(bg_brightness_from_choice(7), 0.7);
         assert_eq!(bg_brightness_from_choice(99), 1.0);
+    }
+
+    #[test]
+    fn bg_brightness_clamps_to_unit_range() {
+        assert_eq!(clamp_bg_brightness(-1.0), 0.0);
+        assert_eq!(clamp_bg_brightness(0.4), 0.4);
+        assert_eq!(clamp_bg_brightness(2.0), 1.0);
+    }
+
+    #[test]
+    fn show_stats_mode_parses_current_key_first() {
+        assert_eq!(parse_show_stats_mode(Some("2"), Some("0"), 0), 2);
+        assert_eq!(parse_show_stats_mode(Some("8"), Some("0"), 0), 3);
+        assert_eq!(parse_show_stats_mode(Some("bad"), Some("1"), 0), 1);
+    }
+
+    #[test]
+    fn show_stats_mode_supports_legacy_bool_key() {
+        assert_eq!(parse_show_stats_mode(None, Some("0"), 2), 0);
+        assert_eq!(parse_show_stats_mode(None, Some("1"), 0), 1);
+        assert_eq!(parse_show_stats_mode(None, Some("2"), 0), 1);
+        assert_eq!(parse_show_stats_mode(None, Some("bad"), 2), 2);
+    }
+
+    #[test]
+    fn show_stats_mode_clamps_for_save_and_update() {
+        assert_eq!(clamp_show_stats_mode(0), 0);
+        assert_eq!(clamp_show_stats_mode(3), 3);
+        assert_eq!(clamp_show_stats_mode(4), 3);
+    }
+
+    #[test]
+    fn select_music_itl_rank_parses_current_and_legacy_keys() {
+        assert_eq!(
+            parse_select_music_itl_rank_mode(
+                Some("Overall"),
+                Some("1"),
+                SelectMusicItlRankMode::None
+            ),
+            SelectMusicItlRankMode::Overall
+        );
+        assert_eq!(
+            parse_select_music_itl_rank_mode(Some("bad"), Some("1"), SelectMusicItlRankMode::None),
+            SelectMusicItlRankMode::Chart
+        );
+        assert_eq!(
+            parse_select_music_itl_rank_mode(None, Some("0"), SelectMusicItlRankMode::Overall),
+            SelectMusicItlRankMode::None
+        );
+        assert_eq!(
+            parse_select_music_itl_rank_mode(None, Some("bad"), SelectMusicItlRankMode::Overall),
+            SelectMusicItlRankMode::Overall
+        );
+    }
+
+    #[test]
+    fn song_select_bg_parses_primary_before_legacy_key() {
+        assert_eq!(
+            parse_select_music_song_select_bg_mode(
+                Some("BG"),
+                Some("Banner"),
+                SelectMusicSongSelectBgMode::Off,
+            ),
+            SelectMusicSongSelectBgMode::Bg
+        );
+        assert_eq!(
+            parse_select_music_song_select_bg_mode(
+                None,
+                Some("Banner"),
+                SelectMusicSongSelectBgMode::Off,
+            ),
+            SelectMusicSongSelectBgMode::Banner
+        );
+        assert_eq!(
+            parse_select_music_song_select_bg_mode(
+                Some("bad"),
+                Some("Banner"),
+                SelectMusicSongSelectBgMode::Bg,
+            ),
+            SelectMusicSongSelectBgMode::Bg
+        );
     }
 
     #[test]

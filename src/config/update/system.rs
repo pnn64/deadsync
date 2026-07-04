@@ -194,7 +194,7 @@ pub fn update_present_mode_policy(mode: PresentModePolicy) {
 }
 
 pub fn update_show_stats_mode(mode: u8) {
-    let mode = mode.min(3);
+    let mode = clamp_show_stats_mode(mode);
     {
         let mut cfg = lock_config();
         if cfg.show_stats_mode == mode {
@@ -264,7 +264,7 @@ pub fn update_windows_gamepad_backend(backend: WindowsPadBackend) {
 }
 
 pub fn update_bg_brightness(brightness: f32) {
-    let clamped = brightness.clamp(0.0, 1.0);
+    let clamped = clamp_bg_brightness(brightness);
     {
         let mut cfg = lock_config();
         if (cfg.bg_brightness - clamped).abs() < f32::EPSILON {

@@ -1129,6 +1129,52 @@ impl LogLevel {
     }
 }
 
+pub fn parse_visual_style(
+    raw_style: Option<&str>,
+    raw_legacy_style: Option<&str>,
+    default: VisualStyle,
+) -> VisualStyle {
+    raw_style
+        .or(raw_legacy_style)
+        .and_then(|v| VisualStyle::from_str(v).ok())
+        .unwrap_or(default)
+}
+
+pub fn parse_srpg_variant(
+    raw_variant: Option<&str>,
+    raw_legacy_variant: Option<&str>,
+    raw_visual_style: Option<&str>,
+    default: SrpgVariant,
+) -> SrpgVariant {
+    raw_variant
+        .or(raw_legacy_variant)
+        .and_then(|v| SrpgVariant::from_str(v).ok())
+        .or_else(|| raw_visual_style.and_then(SrpgVariant::from_visual_style_str))
+        .unwrap_or(default)
+}
+
+pub fn parse_machine_default_sync_offset(
+    raw_offset: Option<&str>,
+    raw_legacy_offset: Option<&str>,
+    default: DefaultSyncOffset,
+) -> DefaultSyncOffset {
+    raw_offset
+        .or(raw_legacy_offset)
+        .and_then(|v| DefaultSyncOffset::from_str(v).ok())
+        .unwrap_or(default)
+}
+
+pub fn parse_machine_font(
+    raw_font: Option<&str>,
+    raw_legacy_font: Option<&str>,
+    default: MachineFont,
+) -> MachineFont {
+    raw_font
+        .or(raw_legacy_font)
+        .and_then(|v| MachineFont::from_str(v).ok())
+        .unwrap_or(default)
+}
+
 impl FromStr for LogLevel {
     type Err = ();
 
@@ -1190,8 +1236,40 @@ mod tests {
     }
 
     #[test]
+    fn machine_font_parse_uses_primary_before_legacy_key() {
+        assert_eq!(
+            parse_machine_font(Some("Mega"), Some("Wendy"), MachineFont::Wendy),
+            MachineFont::Mega
+        );
+        assert_eq!(
+            parse_machine_font(None, Some("Mega"), MachineFont::Wendy),
+            MachineFont::Mega
+        );
+        assert_eq!(
+            parse_machine_font(Some("bad"), Some("Mega"), MachineFont::Wendy),
+            MachineFont::Wendy
+        );
+    }
+
+    #[test]
     fn visual_style_srpg10_alias_uses_srpg_family_icon() {
         assert_eq!(VisualStyle::from_str("SRPG10"), Ok(VisualStyle::Srpg9));
+    }
+
+    #[test]
+    fn visual_style_parse_uses_primary_before_legacy_key() {
+        assert_eq!(
+            parse_visual_style(Some("Technique"), Some("Hearts"), VisualStyle::Arrows),
+            VisualStyle::Technique
+        );
+        assert_eq!(
+            parse_visual_style(None, Some("Cats"), VisualStyle::Arrows),
+            VisualStyle::Cats
+        );
+        assert_eq!(
+            parse_visual_style(Some("bad"), Some("Cats"), VisualStyle::Arrows),
+            VisualStyle::Arrows
+        );
     }
 
     #[test]
@@ -1205,6 +1283,41 @@ mod tests {
     fn srpg_variant_accepts_import_aliases() {
         assert_eq!(SrpgVariant::from_str("SRPG"), Ok(SrpgVariant::Srpg9));
         assert_eq!(SrpgVariant::from_str("SRPG10"), Ok(SrpgVariant::Srpg10));
+    }
+
+    #[test]
+    fn srpg_variant_parse_uses_variant_then_visual_style_fallback() {
+        assert_eq!(
+            parse_srpg_variant(
+                Some("SRPG10"),
+                Some("SRPG9"),
+                Some("SRPG9"),
+                SrpgVariant::Srpg9,
+            ),
+            SrpgVariant::Srpg10
+        );
+        assert_eq!(
+            parse_srpg_variant(None, Some("SRPG10"), Some("SRPG9"), SrpgVariant::Srpg9),
+            SrpgVariant::Srpg10
+        );
+        assert_eq!(
+            parse_srpg_variant(
+                Some("bad"),
+                Some("SRPG10"),
+                Some("SRPG10"),
+                SrpgVariant::Srpg9,
+            ),
+            SrpgVariant::Srpg10
+        );
+        assert_eq!(
+            parse_srpg_variant(
+                Some("bad"),
+                Some("SRPG10"),
+                Some("Hearts"),
+                SrpgVariant::Srpg9,
+            ),
+            SrpgVariant::Srpg9
+        );
     }
 
     #[test]
@@ -1373,6 +1486,22 @@ mod tests {
         assert_eq!(
             DefaultSyncOffset::from_sync_pref(deadsync_chart::SyncPref::Itg),
             DefaultSyncOffset::Itg
+        );
+    }
+
+    #[test]
+    fn machine_default_sync_offset_parse_uses_primary_before_legacy_key() {
+        assert_eq!(
+            parse_machine_default_sync_offset(Some("ITG"), Some("NULL"), DefaultSyncOffset::Null,),
+            DefaultSyncOffset::Itg
+        );
+        assert_eq!(
+            parse_machine_default_sync_offset(None, Some("ITG"), DefaultSyncOffset::Null),
+            DefaultSyncOffset::Itg
+        );
+        assert_eq!(
+            parse_machine_default_sync_offset(Some("bad"), Some("ITG"), DefaultSyncOffset::Null,),
+            DefaultSyncOffset::Null
         );
     }
 

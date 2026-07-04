@@ -1,8 +1,16 @@
 use super::*;
+use deadsync_config::audio::{
+    clamp_audio_volume_percent, clamp_music_wheel_switch_speed, parse_auto_audio_output_device,
+    parse_auto_audio_sample_rate_hz,
+};
 use deadsync_config::machine::{
     canonical_frame_stats_overlay_anchor, canonical_frame_stats_overlay_style,
+    clamp_smx_light_brightness_percent,
 };
 use deadsync_config::numbers::parse_auto_threads_u8;
+use deadsync_config::options::{
+    parse_select_music_itl_rank_mode, parse_select_music_song_select_bg_mode, parse_show_stats_mode,
+};
 use deadsync_lights::{
     SerialPortName, parse_driver_or_default, parse_gameplay_pad_lights_or_default,
 };
@@ -16,10 +24,7 @@ pub(super) fn load(conf: &SimpleIni, default: Config, cfg: &mut Config) {
 }
 
 fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
-    cfg.vsync = conf
-        .get("Options", "Vsync")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.vsync, |v| v != 0);
+    cfg.vsync = parse_u8_bool_or_default(conf.get("Options", "Vsync").as_deref(), default.vsync);
     cfg.max_fps = conf
         .get("Options", "MaxFps")
         .and_then(|v| v.parse::<u16>().ok())
@@ -39,10 +44,8 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
             })
         })
         .unwrap_or(default.present_mode_policy);
-    cfg.windowed = conf
-        .get("Options", "Windowed")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.windowed, |v| v != 0);
+    cfg.windowed =
+        parse_u8_bool_or_default(conf.get("Options", "Windowed").as_deref(), default.windowed);
     cfg.fullscreen_type = conf
         .get("Options", "FullscreenType")
         .and_then(|v| FullscreenType::from_str(&v).ok())
@@ -55,34 +58,35 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "DisplayMonitor")
         .and_then(|v| v.parse::<usize>().ok())
         .unwrap_or(default.display_monitor);
-    cfg.auto_download_unlocks = conf
-        .get("Options", "AutoDownloadUnlocks")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.auto_download_unlocks, |v| v != 0);
-    cfg.auto_populate_gs_scores = conf
-        .get("Options", "AutoPopulateGrooveStatsScores")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.auto_populate_gs_scores, |v| v != 0);
-    cfg.updater_install_enabled = conf
-        .get("Options", "UpdaterInstallEnabled")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.updater_install_enabled, |v| v != 0);
-    cfg.enable_groovestats = conf
-        .get("Options", "EnableGrooveStats")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.enable_groovestats, |v| v != 0);
-    cfg.enable_arrowcloud = conf
-        .get("Options", "EnableArrowCloud")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.enable_arrowcloud, |v| v != 0);
-    cfg.enable_boogiestats = conf
-        .get("Options", "EnableBoogieStats")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.enable_boogiestats, |v| v != 0);
-    cfg.submit_arrowcloud_fails = conf
-        .get("Options", "SubmitArrowCloudFails")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.submit_arrowcloud_fails, |v| v != 0);
+    cfg.auto_download_unlocks = parse_u8_bool_or_default(
+        conf.get("Options", "AutoDownloadUnlocks").as_deref(),
+        default.auto_download_unlocks,
+    );
+    cfg.auto_populate_gs_scores = parse_u8_bool_or_default(
+        conf.get("Options", "AutoPopulateGrooveStatsScores")
+            .as_deref(),
+        default.auto_populate_gs_scores,
+    );
+    cfg.updater_install_enabled = parse_u8_bool_or_default(
+        conf.get("Options", "UpdaterInstallEnabled").as_deref(),
+        default.updater_install_enabled,
+    );
+    cfg.enable_groovestats = parse_u8_bool_or_default(
+        conf.get("Options", "EnableGrooveStats").as_deref(),
+        default.enable_groovestats,
+    );
+    cfg.enable_arrowcloud = parse_u8_bool_or_default(
+        conf.get("Options", "EnableArrowCloud").as_deref(),
+        default.enable_arrowcloud,
+    );
+    cfg.enable_boogiestats = parse_u8_bool_or_default(
+        conf.get("Options", "EnableBoogieStats").as_deref(),
+        default.enable_boogiestats,
+    );
+    cfg.submit_arrowcloud_fails = parse_u8_bool_or_default(
+        conf.get("Options", "SubmitArrowCloudFails").as_deref(),
+        default.submit_arrowcloud_fails,
+    );
     cfg.arrowcloud_qr_login_when = conf
         .get("Options", "ArrowCloudQrLoginWhen")
         .and_then(|v| ArrowCloudQrLoginWhen::from_str(&v).ok())
@@ -91,24 +95,21 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "GrooveStatsQrLoginWhen")
         .and_then(|v| GrooveStatsQrLoginWhen::from_str(&v).ok())
         .unwrap_or(default.groovestats_qr_login_when);
-    cfg.separate_unlocks_by_player = conf
-        .get("Options", "SeparateUnlocksByPlayer")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.separate_unlocks_by_player, |v| v != 0);
-    cfg.mine_hit_sound = conf
-        .get("Options", "MineHitSound")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.mine_hit_sound, |v| v != 0);
-    cfg.show_stats_mode = conf
-        .get("Options", "ShowStatsMode")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map(|v| v.min(3))
-        .or_else(|| {
-            conf.get("Options", "ShowStats")
-                .and_then(|v| v.parse::<u8>().ok())
-                .map(|v| if v != 0 { 1 } else { 0 })
-        })
-        .unwrap_or(default.show_stats_mode);
+    cfg.separate_unlocks_by_player = parse_u8_bool_or_default(
+        conf.get("Options", "SeparateUnlocksByPlayer").as_deref(),
+        default.separate_unlocks_by_player,
+    );
+    cfg.mine_hit_sound = parse_u8_bool_or_default(
+        conf.get("Options", "MineHitSound").as_deref(),
+        default.mine_hit_sound,
+    );
+    let show_stats_mode = conf.get("Options", "ShowStatsMode");
+    let show_stats_legacy = conf.get("Options", "ShowStats");
+    cfg.show_stats_mode = parse_show_stats_mode(
+        show_stats_mode.as_deref(),
+        show_stats_legacy.as_deref(),
+        default.show_stats_mode,
+    );
     cfg.frame_stats_overlay_anchor = conf
         .get("Options", "FrameStatsOverlayAnchor")
         .map(|v| canonical_frame_stats_overlay_anchor(&v))
@@ -125,7 +126,7 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
     cfg.bg_brightness = conf
         .get("Options", "BGBrightness")
         .and_then(|v| v.parse::<f32>().ok())
-        .map_or(default.bg_brightness, |v| v.clamp(0.0, 1.0));
+        .map_or(default.bg_brightness, clamp_bg_brightness);
     cfg.gameplay_bg_color = conf
         .get("Options", "GameplayBgColor")
         .and_then(|v| Color::from_hex(&v))
@@ -151,34 +152,35 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "CenterImageAddHeight")
         .and_then(|v| v.trim().parse::<i32>().ok())
         .unwrap_or(default.center_image_add_height);
-    cfg.autosubmit_course_scores_individually = conf
-        .get("Options", "CourseAutosubmitScoresIndividually")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.autosubmit_course_scores_individually, |v| v != 0);
-    cfg.show_course_individual_scores = conf
-        .get("Options", "CourseShowIndividualScores")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.show_course_individual_scores, |v| v != 0);
-    cfg.show_most_played_courses = conf
-        .get("Options", "CourseShowMostPlayed")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.show_most_played_courses, |v| v != 0);
-    cfg.show_random_courses = conf
-        .get("Options", "CourseShowRandom")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.show_random_courses, |v| v != 0);
+    cfg.autosubmit_course_scores_individually = parse_u8_bool_or_default(
+        conf.get("Options", "CourseAutosubmitScoresIndividually")
+            .as_deref(),
+        default.autosubmit_course_scores_individually,
+    );
+    cfg.show_course_individual_scores = parse_u8_bool_or_default(
+        conf.get("Options", "CourseShowIndividualScores").as_deref(),
+        default.show_course_individual_scores,
+    );
+    cfg.show_most_played_courses = parse_u8_bool_or_default(
+        conf.get("Options", "CourseShowMostPlayed").as_deref(),
+        default.show_most_played_courses,
+    );
+    cfg.show_random_courses = parse_u8_bool_or_default(
+        conf.get("Options", "CourseShowRandom").as_deref(),
+        default.show_random_courses,
+    );
     cfg.default_fail_type = conf
         .get("Options", "DefaultFailType")
         .and_then(|v| DefaultFailType::from_str(&v).ok())
         .unwrap_or(default.default_fail_type);
-    cfg.banner_cache = conf
-        .get("Options", "BannerCache")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.banner_cache, |v| v != 0);
-    cfg.cdtitle_cache = conf
-        .get("Options", "CDTitleCache")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.cdtitle_cache, |v| v != 0);
+    cfg.banner_cache = parse_u8_bool_or_default(
+        conf.get("Options", "BannerCache").as_deref(),
+        default.banner_cache,
+    );
+    cfg.cdtitle_cache = parse_u8_bool_or_default(
+        conf.get("Options", "CDTitleCache").as_deref(),
+        default.cdtitle_cache,
+    );
     cfg.display_width = conf
         .get("Options", "DisplayWidth")
         .and_then(|v| v.parse().ok())
@@ -207,14 +209,14 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "AllowShutdown")
         .and_then(|v| parse_loose_bool_str(&v))
         .unwrap_or(default.allow_shutdown_host);
-    cfg.smx_input = conf
-        .get("Options", "SmxInput")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.smx_input, |v| v != 0);
-    cfg.smx_manages_pad_config = conf
-        .get("Options", "SmxManagesPadConfig")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.smx_manages_pad_config, |v| v != 0);
+    cfg.smx_input = parse_u8_bool_or_default(
+        conf.get("Options", "SmxInput").as_deref(),
+        default.smx_input,
+    );
+    cfg.smx_manages_pad_config = parse_u8_bool_or_default(
+        conf.get("Options", "SmxManagesPadConfig").as_deref(),
+        default.smx_manages_pad_config,
+    );
     cfg.smx_panel_lights = conf
         .get("Options", "SmxPanelLights")
         .and_then(|v| parse_loose_bool_str(&v))
@@ -230,11 +232,14 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
     cfg.smx_default_light_brightness = conf
         .get("Options", "SmxDefaultLightBrightness")
         .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.smx_default_light_brightness, |v| v.min(100));
-    cfg.gfx_debug = conf
-        .get("Options", "GfxDebug")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.gfx_debug, |v| v != 0);
+        .map_or(
+            default.smx_default_light_brightness,
+            clamp_smx_light_brightness_percent,
+        );
+    cfg.gfx_debug = parse_u8_bool_or_default(
+        conf.get("Options", "GfxDebug").as_deref(),
+        default.gfx_debug,
+    );
     cfg.global_offset_seconds = conf
         .get("Options", "GlobalOffsetSeconds")
         .and_then(|v| v.parse().ok())
@@ -299,10 +304,10 @@ fn load_null_or_die_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "NullOrDieKernelType")
         .and_then(|v| parse_null_or_die_kernel_type(&v))
         .unwrap_or(default.null_or_die_kernel_type);
-    cfg.null_or_die_full_spectrogram = conf
-        .get("Options", "NullOrDieFullSpectrogram")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.null_or_die_full_spectrogram, |v| v != 0);
+    cfg.null_or_die_full_spectrogram = parse_u8_bool_or_default(
+        conf.get("Options", "NullOrDieFullSpectrogram").as_deref(),
+        default.null_or_die_full_spectrogram,
+    );
 }
 
 fn load_audio_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
@@ -317,65 +322,54 @@ fn load_audio_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
     cfg.master_volume = conf
         .get("Options", "MasterVolume")
         .and_then(|v| v.parse().ok())
-        .map_or(default.master_volume, |v: u8| v.clamp(0, 100));
-    cfg.menu_music = conf
-        .get("Options", "MenuMusic")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.menu_music, |v| v != 0);
-    cfg.custom_sounds_enabled = conf
-        .get("Options", "CustomSoundsEnabled")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.custom_sounds_enabled, |v| v != 0);
+        .map_or(default.master_volume, clamp_audio_volume_percent);
+    cfg.menu_music = parse_u8_bool_or_default(
+        conf.get("Options", "MenuMusic").as_deref(),
+        default.menu_music,
+    );
+    cfg.custom_sounds_enabled = parse_u8_bool_or_default(
+        conf.get("Options", "CustomSoundsEnabled").as_deref(),
+        default.custom_sounds_enabled,
+    );
     cfg.music_volume = conf
         .get("Options", "MusicVolume")
         .and_then(|v| v.parse().ok())
-        .map_or(default.music_volume, |v: u8| v.clamp(0, 100));
+        .map_or(default.music_volume, clamp_audio_volume_percent);
     cfg.music_wheel_switch_speed = conf
         .get("Options", "MusicWheelSwitchSpeed")
         .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.music_wheel_switch_speed, |v| v.max(1));
+        .map_or(
+            default.music_wheel_switch_speed,
+            clamp_music_wheel_switch_speed,
+        );
     cfg.sfx_volume = conf
         .get("Options", "SFXVolume")
         .and_then(|v| v.parse().ok())
-        .map_or(default.sfx_volume, |v: u8| v.clamp(0, 100));
+        .map_or(default.sfx_volume, clamp_audio_volume_percent);
     cfg.assist_tick_volume = conf
         .get("Options", "AssistTickVolume")
         .and_then(|v| v.parse().ok())
-        .map_or(default.assist_tick_volume, |v: u8| v.clamp(0, 100));
+        .map_or(default.assist_tick_volume, clamp_audio_volume_percent);
     cfg.audio_output_device_index = conf
         .get("Options", "AudioOutputDevice")
-        .map(|v| v.trim().to_string())
-        .and_then(|v| {
-            if v.is_empty() || v.eq_ignore_ascii_case("auto") {
-                None
-            } else {
-                v.parse::<u16>().ok()
-            }
-        })
-        .or(default.audio_output_device_index);
+        .and_then(|v| parse_auto_audio_output_device(&v))
+        .unwrap_or(default.audio_output_device_index);
     cfg.audio_output_mode = conf
         .get("Options", "AudioOutputMode")
         .and_then(|s| AudioOutputMode::from_str(&s).ok())
         .unwrap_or(default.audio_output_mode);
     cfg.audio_sample_rate_hz = conf
         .get("Options", "AudioSampleRateHz")
-        .map(|v| v.trim().to_string())
-        .and_then(|v| {
-            if v.eq_ignore_ascii_case("auto") || v.is_empty() {
-                None
-            } else {
-                v.parse::<u32>().ok()
-            }
-        })
-        .or(default.audio_sample_rate_hz);
-    cfg.rate_mod_preserves_pitch = conf
-        .get("Options", "RateModPreservesPitch")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.rate_mod_preserves_pitch, |v| v != 0);
-    cfg.enable_replaygain = conf
-        .get("Options", "ReplayGain")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.enable_replaygain, |v| v != 0);
+        .and_then(|v| parse_auto_audio_sample_rate_hz(&v))
+        .unwrap_or(default.audio_sample_rate_hz);
+    cfg.rate_mod_preserves_pitch = parse_u8_bool_or_default(
+        conf.get("Options", "RateModPreservesPitch").as_deref(),
+        default.rate_mod_preserves_pitch,
+    );
+    cfg.enable_replaygain = parse_u8_bool_or_default(
+        conf.get("Options", "ReplayGain").as_deref(),
+        default.enable_replaygain,
+    );
     cfg.write_current_screen = conf
         .get("Options", "WriteCurrentScreen")
         .and_then(|v| parse_bool_str(&v))
@@ -391,14 +385,14 @@ fn load_select_music_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "SelectMusicBreakdown")
         .and_then(|v| BreakdownStyle::from_str(&v).ok())
         .unwrap_or(default.select_music_breakdown_style);
-    cfg.show_select_music_banners = conf
-        .get("Options", "SelectMusicShowBanners")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.show_select_music_banners, |v| v != 0);
-    cfg.show_version_overlay = conf
-        .get("Options", "ShowVersionOverlay")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.show_version_overlay, |v| v != 0);
+    cfg.show_select_music_banners = parse_u8_bool_or_default(
+        conf.get("Options", "SelectMusicShowBanners").as_deref(),
+        default.show_select_music_banners,
+    );
+    cfg.show_version_overlay = parse_u8_bool_or_default(
+        conf.get("Options", "ShowVersionOverlay").as_deref(),
+        default.show_version_overlay,
+    );
     cfg.version_overlay_side = conf
         .get("Options", "VersionOverlaySide")
         .and_then(|v| VersionOverlaySide::from_str(&v).ok())
@@ -407,41 +401,34 @@ fn load_select_music_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "SelectMusicShowVideoBanners")
         .and_then(|v| parse_bool_str(&v))
         .unwrap_or(default.show_select_music_video_banners);
-    cfg.show_select_music_breakdown = conf
-        .get("Options", "SelectMusicShowBreakdown")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.show_select_music_breakdown, |v| v != 0);
-    cfg.show_select_music_stage_display = conf
-        .get("Options", "SelectMusicShowStageDisplay")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.show_select_music_stage_display, |v| v != 0);
-    cfg.show_select_music_cdtitles = conf
-        .get("Options", "SelectMusicShowCDTitles")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.show_select_music_cdtitles, |v| v != 0);
-    cfg.show_music_wheel_grades = conf
-        .get("Options", "SelectMusicWheelGrades")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.show_music_wheel_grades, |v| v != 0);
-    cfg.show_music_wheel_lamps = conf
-        .get("Options", "SelectMusicWheelLamps")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.show_music_wheel_lamps, |v| v != 0);
-    cfg.select_music_itl_rank_mode = conf
-        .get("Options", "SelectMusicWheelITLRank")
-        .and_then(|v| SelectMusicItlRankMode::from_str(&v).ok())
-        .or_else(|| {
-            conf.get("Options", "SelectMusicShowITLChartRank")
-                .and_then(|v| v.parse::<u8>().ok())
-                .map(|v| {
-                    if v != 0 {
-                        SelectMusicItlRankMode::Chart
-                    } else {
-                        SelectMusicItlRankMode::None
-                    }
-                })
-        })
-        .unwrap_or(default.select_music_itl_rank_mode);
+    cfg.show_select_music_breakdown = parse_u8_bool_or_default(
+        conf.get("Options", "SelectMusicShowBreakdown").as_deref(),
+        default.show_select_music_breakdown,
+    );
+    cfg.show_select_music_stage_display = parse_u8_bool_or_default(
+        conf.get("Options", "SelectMusicShowStageDisplay")
+            .as_deref(),
+        default.show_select_music_stage_display,
+    );
+    cfg.show_select_music_cdtitles = parse_u8_bool_or_default(
+        conf.get("Options", "SelectMusicShowCDTitles").as_deref(),
+        default.show_select_music_cdtitles,
+    );
+    cfg.show_music_wheel_grades = parse_u8_bool_or_default(
+        conf.get("Options", "SelectMusicWheelGrades").as_deref(),
+        default.show_music_wheel_grades,
+    );
+    cfg.show_music_wheel_lamps = parse_u8_bool_or_default(
+        conf.get("Options", "SelectMusicWheelLamps").as_deref(),
+        default.show_music_wheel_lamps,
+    );
+    let itl_rank_mode = conf.get("Options", "SelectMusicWheelITLRank");
+    let legacy_itl_chart_rank = conf.get("Options", "SelectMusicShowITLChartRank");
+    cfg.select_music_itl_rank_mode = parse_select_music_itl_rank_mode(
+        itl_rank_mode.as_deref(),
+        legacy_itl_chart_rank.as_deref(),
+        default.select_music_itl_rank_mode,
+    );
     cfg.select_music_itl_wheel_mode = conf
         .get("Options", "SelectMusicWheelITL")
         .and_then(|v| SelectMusicItlWheelMode::from_str(&v).ok())
@@ -450,31 +437,33 @@ fn load_select_music_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "SelectMusicWheelStyle")
         .and_then(|v| SelectMusicWheelStyle::from_str(&v).ok())
         .unwrap_or(default.select_music_wheel_style);
-    cfg.select_music_song_select_bg_mode = conf
-        .get("Options", "SongSelectBG")
-        .or_else(|| conf.get("Options", "SelectMusicSongSelectBG"))
-        .and_then(|v| SelectMusicSongSelectBgMode::from_str(&v).ok())
-        .unwrap_or(default.select_music_song_select_bg_mode);
+    let song_select_bg = conf.get("Options", "SongSelectBG");
+    let legacy_song_select_bg = conf.get("Options", "SelectMusicSongSelectBG");
+    cfg.select_music_song_select_bg_mode = parse_select_music_song_select_bg_mode(
+        song_select_bg.as_deref(),
+        legacy_song_select_bg.as_deref(),
+        default.select_music_song_select_bg_mode,
+    );
     cfg.select_music_new_pack_mode = conf
         .get("Options", "SelectMusicNewPackMode")
         .and_then(|v| NewPackMode::from_str(&v).ok())
         .unwrap_or(default.select_music_new_pack_mode);
-    cfg.show_select_music_folder_stats = conf
-        .get("Options", "SelectMusicFolderStats")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.show_select_music_folder_stats, |v| v != 0);
-    cfg.show_select_music_previews = conf
-        .get("Options", "SelectMusicPreviews")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.show_select_music_previews, |v| v != 0);
-    cfg.show_select_music_preview_marker = conf
-        .get("Options", "SelectMusicPreviewMarker")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.show_select_music_preview_marker, |v| v != 0);
-    cfg.select_music_preview_loop = conf
-        .get("Options", "SelectMusicPreviewLoop")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.select_music_preview_loop, |v| v != 0);
+    cfg.show_select_music_folder_stats = parse_u8_bool_or_default(
+        conf.get("Options", "SelectMusicFolderStats").as_deref(),
+        default.show_select_music_folder_stats,
+    );
+    cfg.show_select_music_previews = parse_u8_bool_or_default(
+        conf.get("Options", "SelectMusicPreviews").as_deref(),
+        default.show_select_music_previews,
+    );
+    cfg.show_select_music_preview_marker = parse_u8_bool_or_default(
+        conf.get("Options", "SelectMusicPreviewMarker").as_deref(),
+        default.show_select_music_preview_marker,
+    );
+    cfg.select_music_preview_loop = parse_u8_bool_or_default(
+        conf.get("Options", "SelectMusicPreviewLoop").as_deref(),
+        default.select_music_preview_loop,
+    );
     cfg.select_music_pattern_info_mode = conf
         .get("Options", "SelectMusicPatternInfo")
         .and_then(|v| SelectMusicPatternInfoMode::from_str(&v).ok())
@@ -483,42 +472,48 @@ fn load_select_music_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "SelectMusicStepArtistBox")
         .and_then(|v| SelectMusicStepArtistBoxMode::from_str(&v).ok())
         .unwrap_or(default.select_music_step_artist_box_mode);
-    cfg.show_select_music_scorebox = conf
-        .get("Options", "SelectMusicScorebox")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.show_select_music_scorebox, |v| v != 0);
+    cfg.show_select_music_scorebox = parse_u8_bool_or_default(
+        conf.get("Options", "SelectMusicScorebox").as_deref(),
+        default.show_select_music_scorebox,
+    );
     cfg.select_music_scorebox_placement = conf
         .get("Options", "SelectMusicScoreboxPlacement")
         .and_then(|v| SelectMusicScoreboxPlacement::from_str(&v).ok())
         .unwrap_or(default.select_music_scorebox_placement);
-    cfg.select_music_scorebox_cycle_itg = conf
-        .get("Options", "SelectMusicScoreboxCycleItg")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.select_music_scorebox_cycle_itg, |v| v != 0);
-    cfg.select_music_scorebox_cycle_ex = conf
-        .get("Options", "SelectMusicScoreboxCycleEx")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.select_music_scorebox_cycle_ex, |v| v != 0);
-    cfg.select_music_scorebox_cycle_hard_ex = conf
-        .get("Options", "SelectMusicScoreboxCycleHardEx")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.select_music_scorebox_cycle_hard_ex, |v| v != 0);
-    cfg.select_music_scorebox_cycle_tournaments = conf
-        .get("Options", "SelectMusicScoreboxCycleTournaments")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.select_music_scorebox_cycle_tournaments, |v| v != 0);
-    cfg.select_music_chart_info_peak_nps = conf
-        .get("Options", "SelectMusicChartInfoPeakNps")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.select_music_chart_info_peak_nps, |v| v != 0);
-    cfg.select_music_chart_info_effective_bpm = conf
-        .get("Options", "SelectMusicChartInfoEffectiveBpm")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.select_music_chart_info_effective_bpm, |v| v != 0);
-    cfg.select_music_chart_info_matrix_rating = conf
-        .get("Options", "SelectMusicChartInfoMatrixRating")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.select_music_chart_info_matrix_rating, |v| v != 0);
+    cfg.select_music_scorebox_cycle_itg = parse_u8_bool_or_default(
+        conf.get("Options", "SelectMusicScoreboxCycleItg")
+            .as_deref(),
+        default.select_music_scorebox_cycle_itg,
+    );
+    cfg.select_music_scorebox_cycle_ex = parse_u8_bool_or_default(
+        conf.get("Options", "SelectMusicScoreboxCycleEx").as_deref(),
+        default.select_music_scorebox_cycle_ex,
+    );
+    cfg.select_music_scorebox_cycle_hard_ex = parse_u8_bool_or_default(
+        conf.get("Options", "SelectMusicScoreboxCycleHardEx")
+            .as_deref(),
+        default.select_music_scorebox_cycle_hard_ex,
+    );
+    cfg.select_music_scorebox_cycle_tournaments = parse_u8_bool_or_default(
+        conf.get("Options", "SelectMusicScoreboxCycleTournaments")
+            .as_deref(),
+        default.select_music_scorebox_cycle_tournaments,
+    );
+    cfg.select_music_chart_info_peak_nps = parse_u8_bool_or_default(
+        conf.get("Options", "SelectMusicChartInfoPeakNps")
+            .as_deref(),
+        default.select_music_chart_info_peak_nps,
+    );
+    cfg.select_music_chart_info_effective_bpm = parse_u8_bool_or_default(
+        conf.get("Options", "SelectMusicChartInfoEffectiveBpm")
+            .as_deref(),
+        default.select_music_chart_info_effective_bpm,
+    );
+    cfg.select_music_chart_info_matrix_rating = parse_u8_bool_or_default(
+        conf.get("Options", "SelectMusicChartInfoMatrixRating")
+            .as_deref(),
+        default.select_music_chart_info_matrix_rating,
+    );
     cfg.auto_screenshot_eval = conf
         .get("Options", "AutoScreenshotEval")
         .map(|v| auto_screenshot_mask_from_str(&v))
@@ -526,26 +521,24 @@ fn load_select_music_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
 }
 
 fn load_runtime_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
-    cfg.fastload = conf
-        .get("Options", "FastLoad")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.fastload, |v| v != 0);
-    cfg.cachesongs = conf
-        .get("Options", "CacheSongs")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.cachesongs, |v| v != 0);
+    cfg.fastload =
+        parse_u8_bool_or_default(conf.get("Options", "FastLoad").as_deref(), default.fastload);
+    cfg.cachesongs = parse_u8_bool_or_default(
+        conf.get("Options", "CacheSongs").as_deref(),
+        default.cachesongs,
+    );
     cfg.song_parsing_threads = conf
         .get("Options", "SongParsingThreads")
         .and_then(|v| parse_auto_threads_u8(&v))
         .unwrap_or(default.song_parsing_threads);
-    cfg.smooth_histogram = conf
-        .get("Options", "SmoothHistogram")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.smooth_histogram, |v| v != 0);
-    cfg.shade_scatterplot_judgments = conf
-        .get("Options", "ShadeScatterplotJudgments")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.shade_scatterplot_judgments, |v| v != 0);
+    cfg.smooth_histogram = parse_u8_bool_or_default(
+        conf.get("Options", "SmoothHistogram").as_deref(),
+        default.smooth_histogram,
+    );
+    cfg.shade_scatterplot_judgments = parse_u8_bool_or_default(
+        conf.get("Options", "ShadeScatterplotJudgments").as_deref(),
+        default.shade_scatterplot_judgments,
+    );
     cfg.input_debounce_seconds = conf
         .get("Options", "InputDebounceTime")
         .and_then(|v| deadsync_input::parse_input_debounce_seconds(&v))
@@ -582,10 +575,10 @@ fn load_runtime_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
         .get("Options", "LightsComPort")
         .map(|v| SerialPortName::parse(&v, default.lights_com_port))
         .unwrap_or(default.lights_com_port);
-    cfg.only_dedicated_menu_buttons = conf
-        .get("Options", "OnlyDedicatedMenuButtons")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(default.only_dedicated_menu_buttons, |v| v != 0);
+    cfg.only_dedicated_menu_buttons = parse_u8_bool_or_default(
+        conf.get("Options", "OnlyDedicatedMenuButtons").as_deref(),
+        default.only_dedicated_menu_buttons,
+    );
     cfg.theme_flag = conf
         .get("Options", "Theme")
         .and_then(|v| ThemeFlag::from_str(&v).ok())
