@@ -143,7 +143,7 @@ fn download_one(id: u64, url: &str, zip_path: &Path) -> Result<(), String> {
 }
 
 fn extract_zip(id: u64, zip_path: &Path, destination: &str, url: &str) -> Result<(), String> {
-    let destination_pack = dirs::app_dirs().songs_dir().join(destination);
+    let destination_pack = unlock_destination_pack(destination);
     unzip_to_destination(zip_path, &destination_pack)
         .map_err(|_| "Failed to Unzip!".to_string())?;
     write_pack_ini_if_needed(&destination_pack, destination).map_err(|error| error.to_string())?;
@@ -152,6 +152,51 @@ fn extract_zip(id: u64, zip_path: &Path, destination: &str, url: &str) -> Result
     let total = file_len(zip_path);
     set_download_progress(id, total, total);
     Ok(())
+}
+
+fn unlock_destination_pack(destination: &str) -> PathBuf {
+    let roots = unlock_destination_roots();
+    let root_idx = choose_unlock_root(destination, &roots).unwrap_or(0);
+    roots[root_idx].join(destination)
+}
+
+fn unlock_destination_roots() -> Vec<PathBuf> {
+    let folders = config::additional_song_folder_roots();
+    let mut roots = Vec::with_capacity(1 + folders.len());
+    roots.push(dirs::app_dirs().songs_dir());
+    roots.extend(
+        folders
+            .into_iter()
+            .filter(|folder| folder.writable)
+            .map(|folder| PathBuf::from(folder.path)),
+    );
+    roots
+}
+
+fn choose_unlock_root(destination: &str, roots: &[PathBuf]) -> Option<usize> {
+    let mut best: Option<(usize, usize)> = None;
+    for (idx, root) in roots.iter().enumerate() {
+        let Some(score) = unlock_root_score(root, destination) else {
+            continue;
+        };
+        if best.is_none_or(|(best_idx, best_score)| {
+            score < best_score || score == best_score && idx > best_idx
+        }) {
+            best = Some((idx, score));
+        }
+    }
+    best.map(|(idx, _)| idx)
+}
+
+fn unlock_root_score(root: &Path, destination: &str) -> Option<usize> {
+    if root.exists() && !root.is_dir() {
+        return None;
+    }
+    let pack = root.join(destination);
+    if pack.exists() && !pack.is_dir() {
+        return None;
+    }
+    Some(usize::from(!pack.is_dir()))
 }
 
 fn unzip_to_destination(
@@ -294,15 +339,28 @@ fn file_len(path: &Path) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::{
-        DOWNLOAD_STATE, DownloadEntry, DownloadState, NEXT_DOWNLOAD_ID,
+        DOWNLOAD_STATE, DownloadEntry, DownloadState, NEXT_DOWNLOAD_ID, choose_unlock_root,
         take_ready_song_reload_request,
     };
+    use std::fs;
     use std::path::PathBuf;
     use std::sync::atomic::Ordering;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn reset_download_state() {
         *DOWNLOAD_STATE.lock().unwrap() = DownloadState::default();
         NEXT_DOWNLOAD_ID.store(1, Ordering::Relaxed);
+    }
+
+    fn temp_root(label: &str) -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time before unix epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "deadsync-downloads-{label}-{}-{unique}",
+            std::process::id()
+        ))
     }
 
     #[test]
@@ -334,5 +392,71 @@ mod tests {
             vec![PathBuf::from("Songs/ITL Unlocks")]
         );
         assert!(take_ready_song_reload_request().is_empty());
+    }
+
+    #[test]
+    fn unlock_root_prefers_last_writable_root_for_new_pack() {
+        let roots = vec![
+            PathBuf::from("Songs"),
+            PathBuf::from("ExtraSongsA"),
+            PathBuf::from("ExtraSongsB"),
+        ];
+
+        assert_eq!(
+            choose_unlock_root("Stamina RPG 10 Unlocks", &roots),
+            Some(2)
+        );
+    }
+
+    #[test]
+    fn unlock_root_keeps_existing_pack_location() {
+        let root = temp_root("existing-pack");
+        let primary = root.join("songs");
+        let extra = root.join("extra");
+        fs::create_dir_all(primary.join("ITL Online 2026 Unlocks"))
+            .expect("create primary unlock pack");
+        fs::create_dir_all(&extra).expect("create extra song root");
+
+        let roots = vec![primary, extra];
+
+        assert_eq!(
+            choose_unlock_root("ITL Online 2026 Unlocks", &roots),
+            Some(0)
+        );
+        fs::remove_dir_all(root).expect("remove test root");
+    }
+
+    #[test]
+    fn unlock_root_uses_existing_additional_pack() {
+        let root = temp_root("existing-extra-pack");
+        let primary = root.join("songs");
+        let extra = root.join("extra");
+        fs::create_dir_all(&primary).expect("create primary song root");
+        fs::create_dir_all(extra.join("Stamina RPG 10 Unlocks")).expect("create extra unlock pack");
+
+        let roots = vec![primary, extra];
+
+        assert_eq!(
+            choose_unlock_root("Stamina RPG 10 Unlocks", &roots),
+            Some(1)
+        );
+        fs::remove_dir_all(root).expect("remove test root");
+    }
+
+    #[test]
+    fn unlock_root_skips_file_candidates() {
+        let root = temp_root("file-candidate");
+        let primary = root.join("songs");
+        let extra = root.join("extra");
+        fs::create_dir_all(&primary).expect("create primary song root");
+        fs::write(extra, "not a directory").expect("create extra file");
+
+        let roots = vec![primary, root.join("extra")];
+
+        assert_eq!(
+            choose_unlock_root("ITL Online 2026 Unlocks", &roots),
+            Some(0)
+        );
+        fs::remove_dir_all(root).expect("remove test root");
     }
 }
