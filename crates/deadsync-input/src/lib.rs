@@ -10,11 +10,13 @@ pub mod fsr;
 pub mod keymap;
 
 pub use bindings::{
-    binding_to_token, cleared_keymap, default_binding_for_action, default_key_for_action,
-    default_keymap, editable_key_binding_slot_indices, keycode_to_token, parse_binding_token,
-    parse_keycode, parse_keycode_to_key, parse_pad_code, parse_pad_device_binding,
-    parse_pad_dir_binding, protected_default_key_for_action, restore_available_default_bindings,
+    DEFAULT_KEYMAP_INI_LINES, binding_to_token, cleared_keymap, default_binding_for_action,
+    default_key_for_action, default_keymap, editable_key_binding_slot_indices, keycode_to_token,
+    keymap_ini_lines, load_keymap_from_ini_entries, parse_binding_token, parse_keycode,
+    parse_keycode_to_key, parse_pad_code, parse_pad_device_binding, parse_pad_dir_binding,
+    protected_default_key_for_action, restore_available_default_bindings,
     updated_keymap_unique_gamepad, updated_keymap_unique_keyboard,
+    write_default_keymap_ini_section, write_keymap_ini_section,
 };
 pub use keymap::{
     InputBinding, Keymap, any_player_has_dedicated_menu_buttons_for_mode,

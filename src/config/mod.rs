@@ -86,9 +86,7 @@ pub use deadsync_config::theme::{
     auto_screenshot_bit, auto_screenshot_mask_from_str, auto_screenshot_mask_to_str,
 };
 
-use self::keybinds::{
-    ALL_VIRTUAL_ACTIONS, action_to_ini_key, binding_to_token, load_keymap_from_ini_local,
-};
+use self::keybinds::load_keymap_from_ini_local;
 use self::runtime::{
     ADDITIONAL_SONG_FOLDERS, DEFAULT_PROFILE_P1, DEFAULT_PROFILE_P2, MACHINE_DEFAULT_NOTESKIN,
     NEVER_CACHE_LIST, SMX_P1_SERIAL, SMX_P2_SERIAL, lock_config, queue_save_write,

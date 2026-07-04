@@ -6,7 +6,7 @@ pub(super) fn build_content() -> String {
     let default = Config::default();
     let mut content = String::with_capacity(4096);
     push_default_options(&mut content, &default);
-    push_default_keymaps(&mut content);
+    deadsync_input::write_default_keymap_ini_section(&mut content);
     push_default_theme(&mut content, &default);
     content
 }
@@ -137,12 +137,9 @@ fn push_default_options(content: &mut String, default: &Config) {
     push_line(content, "DefaultLocalProfileIDP1", "");
     push_line(content, "DefaultLocalProfileIDP2", "");
     // Persisted pad ordering is empty until pads are seen; seeded at runtime.
-    push_line(content, "PadOrderRawInput", "");
-    push_line(content, "PadOrderWGI", "");
-    push_line(content, "PadOrderIoHid", "");
-    push_line(content, "PadOrderHidraw", "");
-    push_line(content, "PadOrderLinuxEvdev", "");
-    push_line(content, "PadOrderFreeBsdEvdev", "");
+    for (key, value) in deadsync_input_native::DEFAULT_PAD_ORDER_INI_LINES {
+        push_line(content, key, value);
+    }
     push_bool(content, "GfxDebug", default.gfx_debug);
     push_bool(content, "HighDPI", default.high_dpi);
     push_bool(content, "HideMouseCursor", default.hide_mouse_cursor);
@@ -392,14 +389,6 @@ fn push_default_options(content: &mut String, default: &Config) {
     push_bool(content, "Vsync", default.vsync);
     push_bool(content, "Windowed", default.windowed);
     push_bool(content, "WriteCurrentScreen", default.write_current_screen);
-    content.push('\n');
-}
-
-fn push_default_keymaps(content: &mut String) {
-    push_section(content, "[Keymaps]");
-    for (key, value) in DEFAULT_KEYMAP_LINES {
-        push_line(content, key, value);
-    }
     content.push('\n');
 }
 

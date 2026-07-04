@@ -25,72 +25,75 @@ pub fn current_assets() -> &'static Assets {
 
 #[inline(always)]
 pub fn srpg10_active() -> bool {
-    current_style().is_srpg() && current_srpg_variant() == SrpgVariant::Srpg10
+    deadsync_theme::srpg10_active(current_style(), current_srpg_variant())
 }
 
 #[inline(always)]
 pub fn title_logo_texture_key() -> Option<&'static str> {
-    srpg10_active().then_some(SRPG10_TITLE_LOGO)
+    deadsync_theme::title_logo_texture_key(current_style(), current_srpg_variant())
 }
 
 #[inline(always)]
 pub fn select_color_texture_key() -> &'static str {
-    current_assets().select_color
+    deadsync_theme::select_color_texture_key(current_style(), current_srpg_variant())
 }
 
 #[inline(always)]
 pub fn shared_background_texture_key() -> &'static str {
-    current_assets().shared_background
+    deadsync_theme::shared_background_texture_key(current_style(), current_srpg_variant())
 }
 
 #[inline(always)]
 pub fn titlemenu_flycenter_texture_key() -> &'static str {
-    current_assets().effects.titlemenu_flycenter
+    deadsync_theme::titlemenu_flycenter_texture_key(current_style(), current_srpg_variant())
 }
 
 #[inline(always)]
 pub fn titlemenu_flytop_texture_key() -> &'static str {
-    current_assets().effects.titlemenu_flytop
+    deadsync_theme::titlemenu_flytop_texture_key(current_style(), current_srpg_variant())
 }
 
 #[inline(always)]
 pub fn titlemenu_flybottom_texture_key() -> &'static str {
-    current_assets().effects.titlemenu_flybottom
+    deadsync_theme::titlemenu_flybottom_texture_key(current_style(), current_srpg_variant())
 }
 
 #[inline(always)]
 pub fn gameplayin_splode_texture_key() -> &'static str {
-    current_assets().effects.gameplayin_splode
+    deadsync_theme::gameplayin_splode_texture_key(current_style(), current_srpg_variant())
 }
 
 #[inline(always)]
 pub fn gameplayin_minisplode_texture_key() -> &'static str {
-    current_assets().effects.gameplayin_minisplode
+    deadsync_theme::gameplayin_minisplode_texture_key(current_style(), current_srpg_variant())
 }
 
 #[inline(always)]
 pub fn combo_100milestone_splode_texture_key() -> &'static str {
-    current_assets().effects.combo_100milestone_splode
+    deadsync_theme::combo_100milestone_splode_texture_key(current_style(), current_srpg_variant())
 }
 
 #[inline(always)]
 pub fn combo_100milestone_minisplode_texture_key() -> &'static str {
-    current_assets().effects.combo_100milestone_minisplode
+    deadsync_theme::combo_100milestone_minisplode_texture_key(
+        current_style(),
+        current_srpg_variant(),
+    )
 }
 
 #[inline(always)]
 pub fn combo_1000milestone_swoosh_texture_key() -> &'static str {
-    current_assets().effects.combo_1000milestone_swoosh
+    deadsync_theme::combo_1000milestone_swoosh_texture_key(current_style(), current_srpg_variant())
 }
 
 #[inline(always)]
 pub fn shared_background_video_asset_path() -> Option<&'static str> {
-    current_assets().shared_background_video
+    deadsync_theme::shared_background_video_asset_path(current_style(), current_srpg_variant())
 }
 
 #[inline(always)]
 pub fn menu_music_asset_path() -> &'static str {
-    current_assets().menu_music
+    deadsync_theme::menu_music_asset_path(current_style(), current_srpg_variant())
 }
 
 #[inline(always)]
@@ -107,11 +110,7 @@ pub fn srpg10_gameover_music_path() -> std::path::PathBuf {
 /// the bundle.
 pub fn menu_music_resolved_path() -> std::path::PathBuf {
     let style = current_style();
-    let folder = if style.is_srpg() {
-        current_srpg_variant().as_str()
-    } else {
-        style.as_str()
-    };
+    let folder = deadsync_theme::menu_music_folder_name(style, current_srpg_variant());
     let folder_rel = format!("assets/music/menu/{}", folder.to_ascii_lowercase());
     if let Some(p) = crate::assets::audio_folder::random_music_path(&folder_rel) {
         return p;

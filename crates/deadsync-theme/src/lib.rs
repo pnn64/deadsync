@@ -2,7 +2,7 @@ pub mod scorebox;
 pub mod step_stats;
 pub mod step_stats_gifs;
 
-use deadsync_config::theme::{SrpgVariant, VisualStyle};
+use deadsync_config::theme::{MachineFont, SrpgVariant, VisualStyle};
 
 pub struct Assets {
     pub select_color: &'static str,
@@ -23,6 +23,93 @@ pub struct EffectAssets {
     pub combo_100milestone_splode: &'static str,
     pub combo_100milestone_minisplode: &'static str,
     pub combo_1000milestone_swoosh: &'static str,
+}
+
+/// Logical font role in the theme, mirroring Simply Love's per-role .redir
+/// table.
+///
+/// Do not use this for gameplay-side text such as notefield combo, judgment
+/// label, or hold judgment text. Those follow each player's per-profile font.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FontRole {
+    /// Body text. Always Miso, regardless of the chosen MachineFont.
+    Normal,
+    /// Emphasized UI labels.
+    Bold,
+    /// Large screen titles.
+    Header,
+    /// Bottom-of-screen action prompts.
+    Footer,
+    /// Numeric stats text.
+    Numbers,
+    /// Evaluation panel numerics.
+    ScreenEval,
+    /// Big white headline numerals.
+    Headline,
+}
+
+/// Resolve a logical [`FontRole`] under the given [`MachineFont`] to a
+/// registered font key.
+///
+/// Mirrors the Simply Love `<ThemeFont> <Role>.redir` table:
+///
+/// | Role         | Wendy (default)             | Mega                     |
+/// | ------------ | --------------------------- | ------------------------ |
+/// | `Normal`     | `miso`                      | `miso`                   |
+/// | `Bold`       | `wendy`                     | `mega_alpha`             |
+/// | `Header`     | `wendy`                     | `mega_alpha`             |
+/// | `Footer`     | `wendy`                     | `mega_alpha`             |
+/// | `Numbers`    | `wendy_monospace_numbers`   | `mega_monospace_numbers` |
+/// | `ScreenEval` | `wendy_screenevaluation`    | `mega_screenevaluation`  |
+/// | `Headline`   | `wendy_white`               | `mega_alpha`             |
+pub fn machine_font_key(machine_font: MachineFont, role: FontRole) -> &'static str {
+    use MachineFont::{Mega, Wendy};
+    match (machine_font, role) {
+        (_, FontRole::Normal) => "miso",
+        (Wendy, FontRole::Bold | FontRole::Header | FontRole::Footer) => "wendy",
+        (Mega, FontRole::Bold | FontRole::Header | FontRole::Footer) => "mega_alpha",
+        (Wendy, FontRole::Numbers) => "wendy_monospace_numbers",
+        (Mega, FontRole::Numbers) => "mega_monospace_numbers",
+        (Wendy, FontRole::ScreenEval) => "wendy_screenevaluation",
+        (Mega, FontRole::ScreenEval) => "mega_screenevaluation",
+        (Wendy, FontRole::Headline) => "wendy_white",
+        (Mega, FontRole::Headline) => "mega_alpha",
+    }
+}
+
+fn mega_alpha_supports_char(c: char) -> bool {
+    matches!(c,
+        'A'..='Z' | 'a'..='z' | '0'..='9' |
+        ' ' | '?' | '!' | '.' | ',' | ';' | ':' | '\'' | '"' |
+        '+' | '=' | '-' | '_' | '<' | '>' | '[' | ']' |
+        '@' | '#' | '$' | '%' | '^' | '&' | '(' | ')' | '{' | '}' |
+        '/' | '\\'
+    )
+}
+
+#[inline]
+fn mega_alpha_supports(text: &str) -> bool {
+    text.chars().all(mega_alpha_supports_char)
+}
+
+/// Resolve a font role with the Mega whole-string fallback policy.
+///
+/// For alphabetic roles under [`MachineFont::Mega`], text containing any glyph
+/// Mega cannot render falls back to Wendy for the whole actor. This avoids
+/// mixed Mega/Miso strings from per-glyph fallback.
+pub fn machine_font_key_for_text(
+    machine_font: MachineFont,
+    role: FontRole,
+    text: &str,
+) -> &'static str {
+    match (machine_font, role) {
+        (MachineFont::Mega, FontRole::Bold | FontRole::Header | FontRole::Footer)
+            if !mega_alpha_supports(text) =>
+        {
+            "wendy"
+        }
+        _ => machine_font_key(machine_font, role),
+    }
 }
 
 macro_rules! effect_assets {
@@ -268,6 +355,113 @@ pub fn for_style_and_variant(style: VisualStyle, variant: SrpgVariant) -> &'stat
     }
 }
 
+#[inline(always)]
+pub const fn srpg10_active(style: VisualStyle, variant: SrpgVariant) -> bool {
+    style.is_srpg() && matches!(variant, SrpgVariant::Srpg10)
+}
+
+#[inline(always)]
+pub fn title_logo_texture_key(style: VisualStyle, variant: SrpgVariant) -> Option<&'static str> {
+    srpg10_active(style, variant).then_some(SRPG10_TITLE_LOGO)
+}
+
+#[inline(always)]
+pub fn select_color_texture_key(style: VisualStyle, variant: SrpgVariant) -> &'static str {
+    for_style_and_variant(style, variant).select_color
+}
+
+#[inline(always)]
+pub fn shared_background_texture_key(style: VisualStyle, variant: SrpgVariant) -> &'static str {
+    for_style_and_variant(style, variant).shared_background
+}
+
+#[inline(always)]
+pub fn titlemenu_flycenter_texture_key(style: VisualStyle, variant: SrpgVariant) -> &'static str {
+    for_style_and_variant(style, variant)
+        .effects
+        .titlemenu_flycenter
+}
+
+#[inline(always)]
+pub fn titlemenu_flytop_texture_key(style: VisualStyle, variant: SrpgVariant) -> &'static str {
+    for_style_and_variant(style, variant)
+        .effects
+        .titlemenu_flytop
+}
+
+#[inline(always)]
+pub fn titlemenu_flybottom_texture_key(style: VisualStyle, variant: SrpgVariant) -> &'static str {
+    for_style_and_variant(style, variant)
+        .effects
+        .titlemenu_flybottom
+}
+
+#[inline(always)]
+pub fn gameplayin_splode_texture_key(style: VisualStyle, variant: SrpgVariant) -> &'static str {
+    for_style_and_variant(style, variant)
+        .effects
+        .gameplayin_splode
+}
+
+#[inline(always)]
+pub fn gameplayin_minisplode_texture_key(style: VisualStyle, variant: SrpgVariant) -> &'static str {
+    for_style_and_variant(style, variant)
+        .effects
+        .gameplayin_minisplode
+}
+
+#[inline(always)]
+pub fn combo_100milestone_splode_texture_key(
+    style: VisualStyle,
+    variant: SrpgVariant,
+) -> &'static str {
+    for_style_and_variant(style, variant)
+        .effects
+        .combo_100milestone_splode
+}
+
+#[inline(always)]
+pub fn combo_100milestone_minisplode_texture_key(
+    style: VisualStyle,
+    variant: SrpgVariant,
+) -> &'static str {
+    for_style_and_variant(style, variant)
+        .effects
+        .combo_100milestone_minisplode
+}
+
+#[inline(always)]
+pub fn combo_1000milestone_swoosh_texture_key(
+    style: VisualStyle,
+    variant: SrpgVariant,
+) -> &'static str {
+    for_style_and_variant(style, variant)
+        .effects
+        .combo_1000milestone_swoosh
+}
+
+#[inline(always)]
+pub fn shared_background_video_asset_path(
+    style: VisualStyle,
+    variant: SrpgVariant,
+) -> Option<&'static str> {
+    for_style_and_variant(style, variant).shared_background_video
+}
+
+#[inline(always)]
+pub fn menu_music_asset_path(style: VisualStyle, variant: SrpgVariant) -> &'static str {
+    for_style_and_variant(style, variant).menu_music
+}
+
+#[inline(always)]
+pub const fn menu_music_folder_name(style: VisualStyle, variant: SrpgVariant) -> &'static str {
+    if style.is_srpg() {
+        variant.as_str()
+    } else {
+        style.as_str()
+    }
+}
+
 pub fn all_assets() -> impl Iterator<Item = &'static Assets> {
     ASSETS.iter().chain(std::iter::once(&SRPG10_ASSETS))
 }
@@ -338,6 +532,148 @@ mod tests {
     use super::*;
 
     #[test]
+    fn machine_font_key_normal_is_always_miso() {
+        assert_eq!(
+            machine_font_key(MachineFont::Wendy, FontRole::Normal),
+            "miso"
+        );
+        assert_eq!(
+            machine_font_key(MachineFont::Mega, FontRole::Normal),
+            "miso"
+        );
+    }
+
+    #[test]
+    fn machine_font_key_wendy_routes_to_wendy_family() {
+        assert_eq!(
+            machine_font_key(MachineFont::Wendy, FontRole::Bold),
+            "wendy"
+        );
+        assert_eq!(
+            machine_font_key(MachineFont::Wendy, FontRole::Header),
+            "wendy"
+        );
+        assert_eq!(
+            machine_font_key(MachineFont::Wendy, FontRole::Footer),
+            "wendy"
+        );
+        assert_eq!(
+            machine_font_key(MachineFont::Wendy, FontRole::Numbers),
+            "wendy_monospace_numbers"
+        );
+        assert_eq!(
+            machine_font_key(MachineFont::Wendy, FontRole::ScreenEval),
+            "wendy_screenevaluation"
+        );
+        assert_eq!(
+            machine_font_key(MachineFont::Wendy, FontRole::Headline),
+            "wendy_white"
+        );
+    }
+
+    #[test]
+    fn machine_font_key_mega_routes_to_mega_family() {
+        assert_eq!(
+            machine_font_key(MachineFont::Mega, FontRole::Bold),
+            "mega_alpha"
+        );
+        assert_eq!(
+            machine_font_key(MachineFont::Mega, FontRole::Header),
+            "mega_alpha"
+        );
+        assert_eq!(
+            machine_font_key(MachineFont::Mega, FontRole::Footer),
+            "mega_alpha"
+        );
+        assert_eq!(
+            machine_font_key(MachineFont::Mega, FontRole::Numbers),
+            "mega_monospace_numbers"
+        );
+        assert_eq!(
+            machine_font_key(MachineFont::Mega, FontRole::ScreenEval),
+            "mega_screenevaluation"
+        );
+        assert_eq!(
+            machine_font_key(MachineFont::Mega, FontRole::Headline),
+            "mega_alpha"
+        );
+    }
+
+    #[test]
+    fn machine_font_key_for_text_passes_through_when_wendy() {
+        for role in [
+            FontRole::Normal,
+            FontRole::Bold,
+            FontRole::Header,
+            FontRole::Footer,
+            FontRole::Numbers,
+            FontRole::ScreenEval,
+        ] {
+            assert_eq!(
+                machine_font_key_for_text(MachineFont::Wendy, role, "anything"),
+                machine_font_key(MachineFont::Wendy, role),
+                "role={role:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn machine_font_key_for_text_uses_mega_alpha_for_ascii() {
+        assert_eq!(
+            machine_font_key_for_text(MachineFont::Mega, FontRole::Header, "Select Music"),
+            "mega_alpha"
+        );
+        assert_eq!(
+            machine_font_key_for_text(MachineFont::Mega, FontRole::Footer, "Press Start"),
+            "mega_alpha"
+        );
+    }
+
+    #[test]
+    fn machine_font_key_for_text_falls_back_wholesale_for_unsupported_chars() {
+        assert_eq!(
+            machine_font_key_for_text(
+                MachineFont::Mega,
+                FontRole::Header,
+                "\u{30ea}\u{30ba}\u{30e0}"
+            ),
+            "wendy"
+        );
+        assert_eq!(
+            machine_font_key_for_text(
+                MachineFont::Mega,
+                FontRole::Footer,
+                "\u{25d0} \u{2714} \u{2298}"
+            ),
+            "wendy"
+        );
+        assert_eq!(
+            machine_font_key_for_text(MachineFont::Mega, FontRole::Bold, "Hello\u{2014}World"),
+            "wendy"
+        );
+    }
+
+    #[test]
+    fn machine_font_key_for_text_keeps_numeric_roles_on_mega_unconditionally() {
+        assert_eq!(
+            machine_font_key_for_text(
+                MachineFont::Mega,
+                FontRole::Numbers,
+                "\u{30ea}\u{30ba}\u{30e0}"
+            ),
+            "mega_monospace_numbers"
+        );
+        assert_eq!(
+            machine_font_key_for_text(
+                MachineFont::Mega,
+                FontRole::ScreenEval,
+                "\u{30ea}\u{30ba}\u{30e0}"
+            ),
+            "mega_screenevaluation"
+        );
+    }
+
+    #[test]
     fn visual_styles_have_matching_asset_rows() {
         for style in VisualStyle::ALL {
             let assets = for_style(style);
@@ -356,6 +692,58 @@ mod tests {
         assert_eq!(
             for_style_and_variant(VisualStyle::Hearts, SrpgVariant::Srpg10).menu_music,
             for_style(VisualStyle::Hearts).menu_music
+        );
+    }
+
+    #[test]
+    fn srpg10_selectors_only_enable_for_srpg_style_and_variant() {
+        assert!(srpg10_active(VisualStyle::Srpg9, SrpgVariant::Srpg10));
+        assert!(!srpg10_active(VisualStyle::Srpg9, SrpgVariant::Srpg9));
+        assert!(!srpg10_active(VisualStyle::Hearts, SrpgVariant::Srpg10));
+
+        assert_eq!(
+            title_logo_texture_key(VisualStyle::Srpg9, SrpgVariant::Srpg10),
+            Some(SRPG10_TITLE_LOGO)
+        );
+        assert_eq!(
+            title_logo_texture_key(VisualStyle::Hearts, SrpgVariant::Srpg10),
+            None
+        );
+    }
+
+    #[test]
+    fn asset_key_selectors_follow_variant_assets() {
+        assert_eq!(
+            select_color_texture_key(VisualStyle::Srpg9, SrpgVariant::Srpg10),
+            SRPG10_ASSETS.select_color
+        );
+        assert_eq!(
+            shared_background_texture_key(VisualStyle::Srpg9, SrpgVariant::Srpg10),
+            SRPG10_ASSETS.shared_background
+        );
+        assert_eq!(
+            shared_background_video_asset_path(VisualStyle::Srpg9, SrpgVariant::Srpg10),
+            SRPG10_ASSETS.shared_background_video
+        );
+        assert_eq!(
+            menu_music_asset_path(VisualStyle::Hearts, SrpgVariant::Srpg10),
+            for_style(VisualStyle::Hearts).menu_music
+        );
+    }
+
+    #[test]
+    fn menu_music_folder_name_uses_srpg_variant_folder() {
+        assert_eq!(
+            menu_music_folder_name(VisualStyle::Srpg9, SrpgVariant::Srpg10),
+            "SRPG10"
+        );
+        assert_eq!(
+            menu_music_folder_name(VisualStyle::Srpg9, SrpgVariant::Srpg9),
+            "SRPG9"
+        );
+        assert_eq!(
+            menu_music_folder_name(VisualStyle::Hearts, SrpgVariant::Srpg10),
+            "Hearts"
         );
     }
 

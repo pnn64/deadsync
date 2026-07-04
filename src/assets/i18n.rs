@@ -1,4 +1,6 @@
 use crate::config;
+use deadsync_config::ini::unescape_ini_value;
+use deadsync_config::theme::resolve_language_locale;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -58,29 +60,6 @@ fn languages_dir_path() -> std::path::PathBuf {
         .exe_dir
         .join("assets")
         .join("languages")
-}
-
-/// Unescape INI string escape sequences (`\n`, `\t`, `\\`).
-fn unescape_ini_value(raw: &str) -> String {
-    let mut out = String::with_capacity(raw.len());
-    let mut chars = raw.chars();
-    while let Some(c) = chars.next() {
-        if c == '\\' {
-            match chars.next() {
-                Some('n') => out.push('\n'),
-                Some('t') => out.push('\t'),
-                Some('\\') => out.push('\\'),
-                Some(other) => {
-                    out.push('\\');
-                    out.push(other);
-                }
-                None => out.push('\\'),
-            }
-        } else {
-            out.push(c);
-        }
-    }
-    out
 }
 
 fn load_ini_to_map(path: &Path) -> HashMap<Box<str>, HashMap<Box<str>, Arc<str>>> {
@@ -229,27 +208,17 @@ pub fn revision() -> u64 {
 }
 
 pub fn resolve_locale(flag: config::LanguageFlag) -> String {
-    match flag {
-        config::LanguageFlag::Auto => detect_os_locale(),
-        flag => flag.locale_code().to_string(),
-    }
+    resolve_language_locale(flag, raw_os_locale().as_deref(), locale_file_exists)
 }
 
 /// Detect the best locale from the OS settings, falling back to `"en"` if
 /// no matching language file is found.
 pub fn detect_os_locale() -> String {
-    let raw = raw_os_locale().unwrap_or_else(|| "en".to_string());
-    let code = normalize_locale(&raw);
-
-    if locale_file_exists(&code) {
-        return code;
-    }
-    if let Some(base) = code.split('-').next() {
-        if base != code && locale_file_exists(base) {
-            return base.to_string();
-        }
-    }
-    "en".to_string()
+    resolve_language_locale(
+        config::LanguageFlag::Auto,
+        raw_os_locale().as_deref(),
+        locale_file_exists,
+    )
 }
 
 fn raw_os_locale() -> Option<String> {
@@ -263,38 +232,6 @@ fn raw_os_locale() -> Option<String> {
         }
     }
     None
-}
-
-/// Normalize an OS locale string to our file-naming convention.
-///
-/// - `"ja-JP"` -> `"ja-jp"`
-/// - `"fr-FR.UTF-8"` -> `"fr-fr"`
-/// - `"pt_BR"` -> `"pt-br"`
-/// - `"zh-TW"` / `"zh-HK"` -> `"zh-Hant"`
-/// - `"zh-CN"` / `"zh-SG"` -> `"zh-Hans"`
-fn normalize_locale(raw: &str) -> String {
-    let lower = raw
-        .trim()
-        .split('.')
-        .next()
-        .unwrap_or(raw)
-        .split('@')
-        .next()
-        .unwrap_or(raw)
-        .replace('_', "-")
-        .to_ascii_lowercase();
-
-    if lower.starts_with("zh") {
-        if lower.contains("hant") || lower.contains("tw") || lower.contains("hk") {
-            return "zh-Hant".to_string();
-        }
-        if lower.contains("hans") || lower.contains("cn") || lower.contains("sg") {
-            return "zh-Hans".to_string();
-        }
-        return "zh-Hans".to_string();
-    }
-
-    lower
 }
 
 fn locale_file_exists(code: &str) -> bool {
@@ -365,28 +302,4 @@ pub(crate) fn init_for_tests() {
         }
         LANG_REVISION.fetch_add(1, Ordering::AcqRel);
     });
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn normalize_locale_keeps_exact_region() {
-        assert_eq!(normalize_locale("en-US"), "en-us");
-        assert_eq!(normalize_locale("ja-JP"), "ja-jp");
-        assert_eq!(normalize_locale("fr_FR.UTF-8"), "fr-fr");
-        assert_eq!(normalize_locale("pt_BR"), "pt-br");
-    }
-
-    #[test]
-    fn normalize_locale_handles_chinese_variants() {
-        assert_eq!(normalize_locale("zh-TW"), "zh-Hant");
-        assert_eq!(normalize_locale("zh-HK"), "zh-Hant");
-        assert_eq!(normalize_locale("zh-Hant-TW"), "zh-Hant");
-        assert_eq!(normalize_locale("zh-CN"), "zh-Hans");
-        assert_eq!(normalize_locale("zh-SG"), "zh-Hans");
-        assert_eq!(normalize_locale("zh-Hans-CN"), "zh-Hans");
-        assert_eq!(normalize_locale("zh"), "zh-Hans");
-    }
 }

@@ -31,7 +31,7 @@ pub(super) fn build_content(
         default_profile_p1,
         default_profile_p2,
     );
-    push_saved_keymaps(&mut content, keymap);
+    deadsync_input::write_keymap_ini_section(&mut content, keymap);
     push_saved_theme(&mut content, cfg);
     content
 }
@@ -226,12 +226,8 @@ fn push_saved_options(
     push_line(content, "SmxP2Serial", smx_p2_serial);
     push_line(content, "DefaultLocalProfileIDP1", default_profile_p1);
     push_line(content, "DefaultLocalProfileIDP2", default_profile_p2);
-    for backend in crate::config::pad_order::all_backends() {
-        push_line(
-            content,
-            crate::config::pad_order::ini_key(backend),
-            crate::config::pad_order::serialized(backend),
-        );
+    for (key, value) in deadsync_input_native::pad_order_ini_lines() {
+        push_line(content, key, value);
     }
     push_bool(content, "GfxDebug", cfg.gfx_debug);
     push_bool(content, "HighDPI", cfg.high_dpi);
@@ -481,21 +477,6 @@ fn push_saved_options(
     push_bool(content, "Vsync", cfg.vsync);
     push_bool(content, "Windowed", cfg.windowed);
     push_bool(content, "WriteCurrentScreen", cfg.write_current_screen);
-    content.push('\n');
-}
-
-fn push_saved_keymaps(content: &mut String, keymap: &Keymap) {
-    push_section(content, "[Keymaps]");
-    for act in ALL_VIRTUAL_ACTIONS {
-        let key_name = action_to_ini_key(act);
-        let mut tokens: Vec<String> = Vec::new();
-        let mut i = 0;
-        while let Some(binding) = keymap.binding_at(act, i) {
-            tokens.push(binding_to_token(binding));
-            i += 1;
-        }
-        push_line(content, key_name, tokens.join(","));
-    }
     content.push('\n');
 }
 

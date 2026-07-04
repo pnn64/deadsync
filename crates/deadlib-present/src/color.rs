@@ -409,6 +409,15 @@ mod tests {
     }
 
     #[test]
+    fn config_color_hex_is_case_insensitive_and_trims() {
+        assert_eq!(Color::from_hex("  #0c0c0c  "), Color::from_hex("#0C0C0C"));
+        assert_eq!(
+            Color::from_hex("  80ffffff  "),
+            Color::from_hex("#80FFFFFF")
+        );
+    }
+
+    #[test]
     fn config_color_hex_formats_uppercase() {
         assert_eq!(Color::from_hex("#0C0C0C").unwrap().to_hex(), "#0C0C0C");
         assert_eq!(Color::from_hex("#8001FE7F").unwrap().to_hex(), "#8001FE7F");

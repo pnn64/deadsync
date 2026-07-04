@@ -7,37 +7,6 @@ mod defaults;
 #[path = "store/save.rs"]
 mod save;
 
-const DEFAULT_KEYMAP_LINES: [(&str, &str); 28] = [
-    ("P1_Back", "KeyCode::Escape"),
-    ("P1_Down", "KeyCode::ArrowDown,KeyCode::KeyS"),
-    ("P1_Left", "KeyCode::ArrowLeft,KeyCode::KeyA"),
-    ("P1_MenuDown", ""),
-    ("P1_MenuLeft", ""),
-    ("P1_MenuRight", ""),
-    ("P1_MenuUp", ""),
-    ("P1_Operator", "KeyCode::ScrollLock"),
-    ("P1_Restart", ""),
-    ("P1_Right", "KeyCode::ArrowRight,KeyCode::KeyD"),
-    ("P1_Select", "KeyCode::Slash"),
-    ("P1_Start", "KeyCode::Enter"),
-    ("P1_Up", "KeyCode::ArrowUp,KeyCode::KeyW"),
-    ("P2_Back", "KeyCode::Numpad0"),
-    ("P2_Down", "KeyCode::Numpad2"),
-    ("P2_Left", "KeyCode::Numpad4"),
-    ("P2_MenuDown", ""),
-    ("P2_MenuLeft", ""),
-    ("P2_MenuRight", ""),
-    ("P2_MenuUp", ""),
-    ("P2_Operator", ""),
-    ("P2_Restart", ""),
-    ("P2_Right", "KeyCode::Numpad6"),
-    ("P2_Select", "KeyCode::NumpadDecimal"),
-    ("P2_Start", "KeyCode::NumpadEnter"),
-    ("P2_Up", "KeyCode::Numpad8"),
-    ("System_FastForward", "KeyCode::Tab"),
-    ("System_SlowDown", "KeyCode::Backquote"),
-];
-
 pub(super) fn create_default_config_file() -> Result<(), std::io::Error> {
     let path = dirs::app_dirs().config_path();
     info!(

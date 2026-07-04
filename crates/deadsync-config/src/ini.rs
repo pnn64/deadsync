@@ -64,3 +64,44 @@ impl SimpleIni {
         &self.sections
     }
 }
+
+/// Unescape INI string escape sequences used by localized string values.
+pub fn unescape_ini_value(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len());
+    let mut chars = raw.chars();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            match chars.next() {
+                Some('n') => out.push('\n'),
+                Some('t') => out.push('\t'),
+                Some('\\') => out.push('\\'),
+                Some(other) => {
+                    out.push('\\');
+                    out.push(other);
+                }
+                None => out.push('\\'),
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unescape_ini_value_handles_supported_escapes() {
+        assert_eq!(unescape_ini_value(r"line\nnext"), "line\nnext");
+        assert_eq!(unescape_ini_value(r"col\tvalue"), "col\tvalue");
+        assert_eq!(unescape_ini_value(r"path\\file"), r"path\file");
+    }
+
+    #[test]
+    fn unescape_ini_value_preserves_unknown_and_trailing_slashes() {
+        assert_eq!(unescape_ini_value(r"\q"), r"\q");
+        assert_eq!(unescape_ini_value(r"tail\"), r"tail\");
+    }
+}

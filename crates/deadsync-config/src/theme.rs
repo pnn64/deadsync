@@ -1070,6 +1070,62 @@ impl LanguageFlag {
     }
 }
 
+/// Normalize an OS locale string to the language file naming convention.
+///
+/// Examples:
+///
+/// - `"ja-JP"` -> `"ja-jp"`
+/// - `"fr-FR.UTF-8"` -> `"fr-fr"`
+/// - `"pt_BR"` -> `"pt-br"`
+/// - `"zh-TW"` / `"zh-HK"` -> `"zh-Hant"`
+/// - `"zh-CN"` / `"zh-SG"` -> `"zh-Hans"`
+pub fn normalize_locale(raw: &str) -> String {
+    let lower = raw
+        .trim()
+        .split('.')
+        .next()
+        .unwrap_or(raw)
+        .split('@')
+        .next()
+        .unwrap_or(raw)
+        .replace('_', "-")
+        .to_ascii_lowercase();
+
+    if lower.starts_with("zh") {
+        if lower.contains("hant") || lower.contains("tw") || lower.contains("hk") {
+            return "zh-Hant".to_string();
+        }
+        if lower.contains("hans") || lower.contains("cn") || lower.contains("sg") {
+            return "zh-Hans".to_string();
+        }
+        return "zh-Hans".to_string();
+    }
+
+    lower
+}
+
+pub fn resolve_language_locale(
+    flag: LanguageFlag,
+    raw_os_locale: Option<&str>,
+    locale_exists: impl Fn(&str) -> bool,
+) -> String {
+    if flag != LanguageFlag::Auto {
+        return flag.locale_code().to_string();
+    }
+
+    let code = normalize_locale(raw_os_locale.unwrap_or("en"));
+    if locale_exists(&code) {
+        return code;
+    }
+    if let Some(base) = code.split('-').next()
+        && base != code
+        && locale_exists(base)
+    {
+        return base.to_string();
+    }
+    "en".to_string()
+}
+
 impl FromStr for LanguageFlag {
     type Err = ();
 
@@ -1193,6 +1249,24 @@ impl FromStr for LogLevel {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn auto_screenshot_mask_roundtrips() {
+        let mask = AUTO_SS_PBS | AUTO_SS_CLEARS | AUTO_SS_QUINTS;
+        let encoded = auto_screenshot_mask_to_str(mask);
+        assert_eq!(encoded, "PBs|Clears|Quints");
+        assert_eq!(auto_screenshot_mask_from_str(&encoded), mask);
+    }
+
+    #[test]
+    fn auto_screenshot_mask_handles_off_and_unknown_tokens() {
+        assert_eq!(auto_screenshot_mask_from_str(""), 0);
+        assert_eq!(auto_screenshot_mask_from_str("Off"), 0);
+        assert_eq!(
+            auto_screenshot_mask_from_str("PBs|unknown|Fails"),
+            AUTO_SS_PBS | AUTO_SS_FAILS
+        );
+    }
 
     #[test]
     fn machine_font_default_is_wendy() {
@@ -1554,5 +1628,44 @@ mod tests {
         assert!(!SelectMusicStepArtistBoxMode::Default.is_expanded(ThemeFlag::SimplyLove));
         assert!(!SelectMusicStepArtistBoxMode::Legacy.is_expanded(ThemeFlag::SimplyLove));
         assert!(SelectMusicStepArtistBoxMode::Expanded.is_expanded(ThemeFlag::SimplyLove));
+    }
+
+    #[test]
+    fn normalize_locale_keeps_exact_region() {
+        assert_eq!(normalize_locale("en-US"), "en-us");
+        assert_eq!(normalize_locale("ja-JP"), "ja-jp");
+        assert_eq!(normalize_locale("fr_FR.UTF-8"), "fr-fr");
+        assert_eq!(normalize_locale("pt_BR"), "pt-br");
+    }
+
+    #[test]
+    fn normalize_locale_handles_chinese_variants() {
+        assert_eq!(normalize_locale("zh-TW"), "zh-Hant");
+        assert_eq!(normalize_locale("zh-HK"), "zh-Hant");
+        assert_eq!(normalize_locale("zh-Hant-TW"), "zh-Hant");
+        assert_eq!(normalize_locale("zh-CN"), "zh-Hans");
+        assert_eq!(normalize_locale("zh-SG"), "zh-Hans");
+        assert_eq!(normalize_locale("zh-Hans-CN"), "zh-Hans");
+        assert_eq!(normalize_locale("zh"), "zh-Hans");
+    }
+
+    #[test]
+    fn resolve_language_locale_uses_explicit_flag_before_os() {
+        assert_eq!(
+            resolve_language_locale(LanguageFlag::Japanese, Some("fr-FR"), |_| true),
+            "ja"
+        );
+    }
+
+    #[test]
+    fn resolve_language_locale_falls_back_through_region_and_english() {
+        assert_eq!(
+            resolve_language_locale(LanguageFlag::Auto, Some("fr-CA"), |code| code == "fr"),
+            "fr"
+        );
+        assert_eq!(
+            resolve_language_locale(LanguageFlag::Auto, Some("zz-ZZ"), |_| false),
+            "en"
+        );
     }
 }

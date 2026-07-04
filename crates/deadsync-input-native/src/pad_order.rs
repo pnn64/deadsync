@@ -58,6 +58,62 @@ pub fn load_pad_order_serialized(backend: PadOrderBackend, raw: &str) {
     }
 }
 
+pub const DEFAULT_PAD_ORDER_INI_LINES: [(&str, &str); 6] = [
+    ("PadOrderRawInput", ""),
+    ("PadOrderWGI", ""),
+    ("PadOrderIoHid", ""),
+    ("PadOrderHidraw", ""),
+    ("PadOrderLinuxEvdev", ""),
+    ("PadOrderFreeBsdEvdev", ""),
+];
+
+/// Replace the full in-memory order from `[Options]` INI entries.
+pub fn load_pad_order_from_ini_entries<'a, I>(entries: Option<I>)
+where
+    I: IntoIterator<Item = (&'a str, &'a str)>,
+{
+    reset_pad_order();
+    let Some(entries) = entries else {
+        return;
+    };
+    for (key, value) in entries {
+        if let Some(backend) = pad_order_backend_from_ini_key(key) {
+            load_pad_order_serialized(backend, value);
+        }
+    }
+}
+
+pub fn pad_order_ini_lines() -> Vec<(&'static str, String)> {
+    let mut lines = Vec::with_capacity(PAD_ORDER_BACKENDS.len());
+    for backend in PAD_ORDER_BACKENDS {
+        lines.push((pad_order_ini_key(backend), serialized_pad_order(backend)));
+    }
+    lines
+}
+
+pub const fn pad_order_ini_key(backend: PadOrderBackend) -> &'static str {
+    match backend {
+        PadOrderBackend::RawInput => "PadOrderRawInput",
+        PadOrderBackend::Wgi => "PadOrderWGI",
+        PadOrderBackend::IoHid => "PadOrderIoHid",
+        PadOrderBackend::Hidraw => "PadOrderHidraw",
+        PadOrderBackend::LinuxEvdev => "PadOrderLinuxEvdev",
+        PadOrderBackend::FreeBsdEvdev => "PadOrderFreeBsdEvdev",
+    }
+}
+
+pub fn pad_order_backend_from_ini_key(key: &str) -> Option<PadOrderBackend> {
+    match key {
+        "PadOrderRawInput" => Some(PadOrderBackend::RawInput),
+        "PadOrderWGI" => Some(PadOrderBackend::Wgi),
+        "PadOrderIoHid" => Some(PadOrderBackend::IoHid),
+        "PadOrderHidraw" => Some(PadOrderBackend::Hidraw),
+        "PadOrderLinuxEvdev" => Some(PadOrderBackend::LinuxEvdev),
+        "PadOrderFreeBsdEvdev" => Some(PadOrderBackend::FreeBsdEvdev),
+        _ => None,
+    }
+}
+
 /// Clear every backend's in-memory order.
 pub fn reset_pad_order() {
     PAD_DEVICE_ORDER.lock().unwrap().clear();
@@ -169,5 +225,47 @@ mod tests {
                 changed: false
             }
         );
+    }
+
+    #[test]
+    fn pad_order_ini_keys_round_trip_backends() {
+        assert_eq!(DEFAULT_PAD_ORDER_INI_LINES.len(), PAD_ORDER_BACKENDS.len());
+        for backend in PAD_ORDER_BACKENDS {
+            let key = pad_order_ini_key(backend);
+            assert_eq!(pad_order_backend_from_ini_key(key), Some(backend));
+            assert!(DEFAULT_PAD_ORDER_INI_LINES.contains(&(key, "")));
+        }
+        assert_eq!(pad_order_backend_from_ini_key("PadOrderrawinput"), None);
+        assert_eq!(pad_order_backend_from_ini_key("PadOrderSmx"), None);
+    }
+
+    #[test]
+    fn load_pad_order_from_ini_entries_replaces_all_backend_orders() {
+        reset_pad_order();
+        let raw = "00112233445566778899aabbccddeeff";
+        load_pad_order_from_ini_entries(Some([
+            ("PadOrderRawInput", raw),
+            ("PadOrderWGI", "bad"),
+            ("Unknown", raw),
+        ]));
+
+        assert_eq!(serialized_pad_order(PadOrderBackend::RawInput), raw);
+        assert_eq!(serialized_pad_order(PadOrderBackend::Wgi), "");
+        assert_eq!(serialized_pad_order(PadOrderBackend::IoHid), "");
+
+        load_pad_order_from_ini_entries::<[(&str, &str); 0]>(None);
+        assert_eq!(serialized_pad_order(PadOrderBackend::RawInput), "");
+    }
+
+    #[test]
+    fn pad_order_ini_lines_use_backend_order() {
+        reset_pad_order();
+        let uuid = [3u8; 16];
+        assert!(pad_index_for_uuid(PadOrderBackend::Hidraw, uuid).changed);
+
+        let lines = pad_order_ini_lines();
+        assert_eq!(lines.len(), PAD_ORDER_BACKENDS.len());
+        assert_eq!(lines[0], ("PadOrderRawInput", String::new()));
+        assert_eq!(lines[3], ("PadOrderHidraw", uuid_to_hex(&uuid)));
     }
 }
