@@ -112,6 +112,7 @@ const CREDITS: &[CreditLine] = &[
     name("DolphinChips"),
     name("madewithlinux"),
     name("din"),
+    name("Tom Jackson (ddrcoder)"),
     name("SamuelDev"),
     name("Sereni"),
     name("Romain Roffé (rofferom)"),
