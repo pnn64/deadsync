@@ -216,7 +216,7 @@ pub(super) fn submenu_visible_row_indices(
                 MACHINE_OPTIONS_ROWS,
                 SubRowId::VisualStyle,
             )
-            .is_some_and(|idx| VisualStyle::from_choice(idx).is_srpg());
+            .is_some_and(|idx| visual_style_from_choice(idx).is_srpg());
             let show_default_sync_offset = get_choice_by_id(
                 &state.sub[SubmenuKind::Machine].choice_indices,
                 MACHINE_OPTIONS_ROWS,
@@ -297,31 +297,6 @@ pub(super) fn submenu_visible_row_to_actual(
     let rows = submenu_rows(kind);
     let visible_rows = submenu_visible_row_indices(state, kind, rows);
     visible_rows.get(visible_row_idx).copied()
-}
-
-#[cfg(target_os = "windows")]
-pub(super) const fn windows_backend_choice_index(backend: WindowsPadBackend) -> usize {
-    match backend {
-        WindowsPadBackend::Auto | WindowsPadBackend::RawInput => 0,
-        #[cfg(target_vendor = "win7")]
-        WindowsPadBackend::Wgi => 0,
-        #[cfg(not(target_vendor = "win7"))]
-        WindowsPadBackend::Wgi => 1,
-    }
-}
-
-#[cfg(target_os = "windows")]
-pub(super) const fn windows_backend_from_choice(idx: usize) -> WindowsPadBackend {
-    #[cfg(target_vendor = "win7")]
-    {
-        let _ = idx;
-        WindowsPadBackend::RawInput
-    }
-    #[cfg(not(target_vendor = "win7"))]
-    match idx {
-        0 => WindowsPadBackend::RawInput,
-        _ => WindowsPadBackend::Wgi,
-    }
 }
 
 pub(super) fn submenu_choice_indices(state: &State, kind: SubmenuKind) -> &[usize] {

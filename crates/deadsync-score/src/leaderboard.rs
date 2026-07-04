@@ -63,6 +63,110 @@ fn local_score_date_string(played_at_ms: i64) -> String {
     dt.format("%Y-%m-%d %H:%M:%S").to_string()
 }
 
+const LEADERBOARD_MONTH_ABBR: [&str; 12] = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+fn format_leaderboard_date_with_empty(date: &str, empty_text: &str) -> String {
+    let trimmed = date.trim();
+    if trimmed.is_empty() {
+        return empty_text.to_string();
+    }
+
+    let ymd = trimmed.split_once(' ').map_or(trimmed, |(value, _)| value);
+    let ymd = ymd.split_once('T').map_or(ymd, |(value, _)| value);
+    let mut parts = ymd.split('-');
+    let (Some(year), Some(month), Some(day)) = (parts.next(), parts.next(), parts.next()) else {
+        return trimmed.to_string();
+    };
+
+    let Some(month_idx) = month
+        .parse::<usize>()
+        .ok()
+        .and_then(|m| m.checked_sub(1))
+        .filter(|m| *m < LEADERBOARD_MONTH_ABBR.len())
+    else {
+        return trimmed.to_string();
+    };
+    let Some(day_num) = day.parse::<u32>().ok().filter(|d| *d > 0) else {
+        return trimmed.to_string();
+    };
+
+    format!(
+        "{} {}, {}",
+        LEADERBOARD_MONTH_ABBR[month_idx], day_num, year
+    )
+}
+
+pub fn format_leaderboard_date(date: &str) -> String {
+    format_leaderboard_date_with_empty(date, "")
+}
+
+pub fn format_leaderboard_date_or_placeholder(date: &str) -> String {
+    format_leaderboard_date_with_empty(date, "----------")
+}
+
+#[inline(always)]
+fn same_leaderboard_entry(a: &LeaderboardEntry, b: &LeaderboardEntry) -> bool {
+    a.rank == b.rank && a.name.eq_ignore_ascii_case(b.name.as_str())
+}
+
+#[inline(always)]
+fn selected_contains(selected: &[&LeaderboardEntry], entry: &LeaderboardEntry) -> bool {
+    selected
+        .iter()
+        .any(|chosen| same_leaderboard_entry(chosen, entry))
+}
+
+fn next_prioritized_entry<'a>(
+    entries: &'a [LeaderboardEntry],
+    selected: &[&'a LeaderboardEntry],
+    include: impl Fn(&LeaderboardEntry) -> bool,
+) -> Option<&'a LeaderboardEntry> {
+    entries
+        .iter()
+        .filter(|entry| include(entry) && !selected_contains(selected, entry))
+        .min_by_key(|entry| entry.rank)
+}
+
+pub fn prioritized_leaderboard_entries(
+    entries: &[LeaderboardEntry],
+    max_rows: usize,
+) -> Vec<LeaderboardEntry> {
+    if max_rows == 0 {
+        return Vec::new();
+    }
+    if entries.len() <= max_rows {
+        return entries.to_vec();
+    }
+
+    let mut selected = Vec::with_capacity(max_rows);
+    if let Some(top) = next_prioritized_entry(entries, selected.as_slice(), |_| true) {
+        selected.push(top);
+    }
+    if let Some(self_entry) =
+        next_prioritized_entry(entries, selected.as_slice(), |entry| entry.is_self)
+    {
+        selected.push(self_entry);
+    }
+    while selected.len() < max_rows {
+        let Some(rival) =
+            next_prioritized_entry(entries, selected.as_slice(), |entry| entry.is_rival)
+        else {
+            break;
+        };
+        selected.push(rival);
+    }
+    while selected.len() < max_rows {
+        let Some(entry) = next_prioritized_entry(entries, selected.as_slice(), |_| true) else {
+            break;
+        };
+        selected.push(entry);
+    }
+    selected.sort_unstable_by_key(|entry| entry.rank);
+    selected.into_iter().cloned().collect()
+}
+
 pub fn machine_leaderboard_entries(
     mut plays: Vec<MachineLeaderboardPlay>,
     max_entries: usize,
@@ -285,6 +389,91 @@ impl LeaderboardPane {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ScoreboxPaneKind {
+    Gs,
+    Ex,
+    HardEx,
+    Srpg,
+    Itl,
+    Other,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SelectMusicScoreboxFilter {
+    pub itg: bool,
+    pub ex: bool,
+    pub hard_ex: bool,
+    pub tournaments: bool,
+}
+
+#[inline(always)]
+pub const fn select_music_scorebox_filter_has_any(filter: SelectMusicScoreboxFilter) -> bool {
+    filter.itg || filter.ex || filter.hard_ex || filter.tournaments
+}
+
+#[inline(always)]
+pub const fn select_music_scorebox_filter_allows_kind(
+    kind: ScoreboxPaneKind,
+    filter: SelectMusicScoreboxFilter,
+) -> bool {
+    match kind {
+        ScoreboxPaneKind::Gs => filter.itg,
+        ScoreboxPaneKind::Ex => filter.ex,
+        ScoreboxPaneKind::HardEx => filter.hard_ex,
+        ScoreboxPaneKind::Srpg | ScoreboxPaneKind::Itl | ScoreboxPaneKind::Other => {
+            filter.tournaments
+        }
+    }
+}
+
+#[inline(always)]
+pub fn scorebox_pane_kind(pane: &LeaderboardPane) -> ScoreboxPaneKind {
+    if pane.is_arrowcloud() {
+        return if pane.is_hard_ex() {
+            ScoreboxPaneKind::HardEx
+        } else if pane.is_ex {
+            ScoreboxPaneKind::Ex
+        } else {
+            ScoreboxPaneKind::Gs
+        };
+    }
+    if pane.is_groovestats() {
+        return if pane.is_ex {
+            ScoreboxPaneKind::Ex
+        } else {
+            ScoreboxPaneKind::Gs
+        };
+    }
+    let lower = pane.name.to_ascii_lowercase();
+    if lower.contains("srpg") || lower.contains("rpg") {
+        ScoreboxPaneKind::Srpg
+    } else if lower.contains("itl") {
+        ScoreboxPaneKind::Itl
+    } else if pane.is_ex {
+        ScoreboxPaneKind::Ex
+    } else {
+        ScoreboxPaneKind::Other
+    }
+}
+
+#[inline(always)]
+pub fn scorebox_pane_mode_text(kind: ScoreboxPaneKind, pane: &LeaderboardPane) -> &str {
+    match kind {
+        ScoreboxPaneKind::Gs => "ITG",
+        ScoreboxPaneKind::Ex => "EX",
+        ScoreboxPaneKind::HardEx => "H.EX",
+        ScoreboxPaneKind::Srpg => "SRPG",
+        ScoreboxPaneKind::Itl => "ITL",
+        ScoreboxPaneKind::Other => pane.name.as_str(),
+    }
+}
+
+#[inline(always)]
+pub const fn default_scorebox_mode_text(show_ex_score: bool) -> &'static str {
+    if show_ex_score { "EX" } else { "ITG" }
+}
+
 pub fn leaderboard_pane(
     name: &str,
     entries: Vec<LeaderboardEntry>,
@@ -504,4 +693,150 @@ pub fn player_leaderboard_cache_key(
         include_arrowcloud: profile_snapshot.include_arrowcloud,
         show_ex_score: profile_snapshot.show_ex_score,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entry(rank: u32, name: &str, is_self: bool, is_rival: bool) -> LeaderboardEntry {
+        LeaderboardEntry {
+            rank,
+            name: name.to_string(),
+            machine_tag: None,
+            score: 9800.0 - f64::from(rank),
+            date: String::new(),
+            is_rival,
+            is_self,
+            is_fail: false,
+        }
+    }
+
+    #[test]
+    fn leaderboard_date_formats_date_time_prefixes() {
+        assert_eq!(format_leaderboard_date("2023-04-15"), "Apr 15, 2023");
+        assert_eq!(
+            format_leaderboard_date("2023-04-15 21:07:33"),
+            "Apr 15, 2023"
+        );
+        assert_eq!(
+            format_leaderboard_date("2023-04-15T21:07:33Z"),
+            "Apr 15, 2023"
+        );
+    }
+
+    #[test]
+    fn leaderboard_date_handles_empty_and_invalid_values() {
+        assert_eq!(format_leaderboard_date(" "), "");
+        assert_eq!(format_leaderboard_date_or_placeholder(" "), "----------");
+        assert_eq!(format_leaderboard_date("2023-13-01"), "2023-13-01");
+        assert_eq!(format_leaderboard_date("2023-04-00"), "2023-04-00");
+        assert_eq!(format_leaderboard_date("not-a-date"), "not-a-date");
+    }
+
+    #[test]
+    fn prioritized_leaderboard_entries_keep_self_and_rivals_visible() {
+        let mut entries = (1..=12)
+            .map(|rank| entry(rank, &format!("top-{rank}"), false, false))
+            .collect::<Vec<_>>();
+        entries.push(entry(20, "self", true, false));
+        entries.push(entry(30, "rival-a", false, true));
+        entries.push(entry(40, "rival-b", false, true));
+
+        let selected = prioritized_leaderboard_entries(entries.as_slice(), 10);
+        let ranks = selected.iter().map(|entry| entry.rank).collect::<Vec<_>>();
+
+        assert_eq!(ranks, vec![1, 2, 3, 4, 5, 6, 7, 20, 30, 40]);
+    }
+
+    #[test]
+    fn prioritized_leaderboard_entries_handles_small_caps() {
+        let entries = [
+            entry(1, "top", false, false),
+            entry(20, "self", true, false),
+            entry(30, "rival", false, true),
+        ];
+
+        assert!(prioritized_leaderboard_entries(&entries, 0).is_empty());
+        let selected = prioritized_leaderboard_entries(&entries, 2);
+        let ranks = selected.iter().map(|entry| entry.rank).collect::<Vec<_>>();
+        assert_eq!(ranks, vec![1, 20]);
+    }
+
+    fn pane(
+        name: &str,
+        is_ex: bool,
+        arrowcloud_kind: Option<ArrowCloudPaneKind>,
+    ) -> LeaderboardPane {
+        LeaderboardPane {
+            name: name.to_string(),
+            entries: vec![entry(1, "score", false, false)],
+            is_ex,
+            disabled: false,
+            personalized: true,
+            arrowcloud_kind,
+        }
+    }
+
+    #[test]
+    fn scorebox_pane_kind_classifies_known_leaderboards() {
+        let cases = [
+            (
+                pane("GrooveStats", false, None),
+                ScoreboxPaneKind::Gs,
+                "ITG",
+            ),
+            (pane("GrooveStats", true, None), ScoreboxPaneKind::Ex, "EX"),
+            (
+                pane("ArrowCloud", false, Some(ArrowCloudPaneKind::HardEx)),
+                ScoreboxPaneKind::HardEx,
+                "H.EX",
+            ),
+            (
+                pane("ArrowCloud", true, Some(ArrowCloudPaneKind::Ex)),
+                ScoreboxPaneKind::Ex,
+                "EX",
+            ),
+            (
+                pane("SRPG Event", false, None),
+                ScoreboxPaneKind::Srpg,
+                "SRPG",
+            ),
+            (pane("ITL 2025", false, None), ScoreboxPaneKind::Itl, "ITL"),
+            (
+                pane("Custom Board", false, None),
+                ScoreboxPaneKind::Other,
+                "Custom Board",
+            ),
+        ];
+
+        for (pane, kind, mode_text) in cases {
+            assert_eq!(scorebox_pane_kind(&pane), kind);
+            assert_eq!(scorebox_pane_mode_text(kind, &pane), mode_text);
+        }
+    }
+
+    #[test]
+    fn select_music_scorebox_filter_allows_expected_kinds() {
+        let filter = SelectMusicScoreboxFilter {
+            itg: false,
+            ex: true,
+            hard_ex: false,
+            tournaments: true,
+        };
+
+        assert!(select_music_scorebox_filter_has_any(filter));
+        assert!(!select_music_scorebox_filter_allows_kind(
+            ScoreboxPaneKind::Gs,
+            filter
+        ));
+        assert!(select_music_scorebox_filter_allows_kind(
+            ScoreboxPaneKind::Ex,
+            filter
+        ));
+        assert!(select_music_scorebox_filter_allows_kind(
+            ScoreboxPaneKind::Itl,
+            filter
+        ));
+    }
 }

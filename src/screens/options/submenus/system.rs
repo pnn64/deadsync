@@ -1,4 +1,9 @@
 use super::super::*;
+
+pub(in crate::screens::options) use crate::config::{
+    language_choice_index, language_flag_from_choice, translated_titles_choice_index,
+    translated_titles_from_choice,
+};
 use deadsync_profile::NoteSkin;
 
 pub(in crate::screens::options) const SYSTEM_OPTIONS_ROWS: &[SubRow] = &[
@@ -115,50 +120,4 @@ pub(in crate::screens::options) fn discover_system_noteskin_choices() -> Vec<Str
         names.push(NoteSkin::DEFAULT_NAME.to_string());
     }
     names
-}
-
-pub(in crate::screens::options) const fn translated_titles_choice_index(
-    translated_titles: bool,
-) -> usize {
-    if translated_titles { 0 } else { 1 }
-}
-
-pub(in crate::screens::options) const fn translated_titles_from_choice(idx: usize) -> bool {
-    idx == 0
-}
-
-pub(in crate::screens::options) const fn language_choice_index(
-    flag: config::LanguageFlag,
-) -> usize {
-    match flag {
-        config::LanguageFlag::Auto | config::LanguageFlag::English => 0,
-        config::LanguageFlag::German => 1,
-        config::LanguageFlag::Spanish => 2,
-        config::LanguageFlag::French => 3,
-        config::LanguageFlag::Italian => 4,
-        config::LanguageFlag::Japanese => 5,
-        config::LanguageFlag::Polish => 6,
-        config::LanguageFlag::PortugueseBrazil => 7,
-        config::LanguageFlag::Russian => 8,
-        config::LanguageFlag::Swedish => 9,
-        config::LanguageFlag::Pseudo => 10,
-    }
-}
-
-pub(in crate::screens::options) const fn language_flag_from_choice(
-    idx: usize,
-) -> config::LanguageFlag {
-    match idx {
-        1 => config::LanguageFlag::German,
-        2 => config::LanguageFlag::Spanish,
-        3 => config::LanguageFlag::French,
-        4 => config::LanguageFlag::Italian,
-        5 => config::LanguageFlag::Japanese,
-        6 => config::LanguageFlag::Polish,
-        7 => config::LanguageFlag::PortugueseBrazil,
-        8 => config::LanguageFlag::Russian,
-        9 => config::LanguageFlag::Swedish,
-        10 => config::LanguageFlag::Pseudo,
-        _ => config::LanguageFlag::English,
-    }
 }

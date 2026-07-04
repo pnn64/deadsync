@@ -1,5 +1,9 @@
 use super::super::*;
 
+pub(in crate::screens::options) use crate::config::{
+    sync_confidence_choice_index, sync_confidence_from_choice,
+};
+
 pub(in crate::screens::options) const GAMEPLAY_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         id: SubRowId::BgBrightness,
@@ -127,27 +131,3 @@ pub(in crate::screens::options) const GAMEPLAY_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
 ];
-
-impl ChoiceEnum for BreakdownStyle {
-    const ALL: &'static [Self] = &[Self::Sl, Self::Sn];
-    const DEFAULT: Self = Self::Sl;
-}
-
-impl ChoiceEnum for SyncGraphMode {
-    const ALL: &'static [Self] = &[
-        Self::Frequency,
-        Self::BeatIndex,
-        Self::PostKernelFingerprint,
-    ];
-    const DEFAULT: Self = Self::PostKernelFingerprint;
-}
-
-pub(in crate::screens::options) const fn sync_confidence_choice_index(percent: u8) -> usize {
-    let capped = if percent > 100 { 100 } else { percent };
-    ((capped as usize) + 2) / 5
-}
-
-pub(in crate::screens::options) const fn sync_confidence_from_choice(idx: usize) -> u8 {
-    let capped = if idx > 20 { 20 } else { idx };
-    capped as u8 * 5
-}

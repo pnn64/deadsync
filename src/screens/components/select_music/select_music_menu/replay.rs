@@ -7,8 +7,6 @@ use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, sc
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_score as score_data;
 
-use super::leaderboard::format_groovestats_date;
-
 pub const REPLAY_FOCUS_TWEEN_SECONDS: f32 = 0.1;
 pub const REPLAY_INPUT_LOCK_SECONDS: f32 = 0.15;
 const REPLAY_MAX_ENTRIES: usize = 1024;
@@ -287,7 +285,7 @@ pub fn build_replay_overlay(
                 format!("{}.", entry.rank),
                 entry.name.clone(),
                 format!("{:.2}%", entry.score / 100.0),
-                format_groovestats_date(&entry.date),
+                score_data::format_leaderboard_date(&entry.date),
                 entry.is_fail,
                 false,
             )

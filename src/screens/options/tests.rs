@@ -1,7 +1,9 @@
 use super::*;
 use crate::assets::AssetManager;
+use crate::config::{MAX_FPS_MAX, MAX_FPS_MIN};
 use deadsync_core::input::InputSource;
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_lights::DriverKind as LightsDriverKind;
 use deadsync_profile as profile_data;
 use std::time::{Duration, Instant};
 
@@ -55,11 +57,11 @@ fn select_visible_row(state: &mut State, kind: SubmenuKind, row_id: SubRowId) ->
 
 #[test]
 fn inferred_aspect_choice_maps_1024x768_to_4_3() {
-    let idx = inferred_aspect_choice(1024, 768);
-    assert_eq!(
-        DISPLAY_ASPECT_RATIO_CHOICES[idx].as_str_static(),
-        Some("4:3")
-    );
+    let idx = display::display_aspect_choice_index(1024, 768);
+    assert!(matches!(
+        DISPLAY_ASPECT_RATIO_CHOICES[idx],
+        Choice::Literal("4:3")
+    ));
 }
 
 #[test]
@@ -174,10 +176,10 @@ fn lights_driver_choices_roundtrip() {
     for driver in cases {
         let idx = lights_driver_choice_index(driver);
         assert_eq!(lights_driver_from_choice(idx), driver);
-        assert_eq!(
-            LIGHTS_OPTIONS_ROWS[0].choices[idx].as_str_static(),
-            Some(driver.as_str())
-        );
+        assert!(matches!(
+            LIGHTS_OPTIONS_ROWS[0].choices[idx],
+            Choice::Literal(label) if label == driver.as_str()
+        ));
     }
 }
 

@@ -6,4 +6,5 @@ pub mod ini;
 pub mod machine;
 pub mod null_or_die;
 pub mod numbers;
+pub mod options;
 pub mod theme;

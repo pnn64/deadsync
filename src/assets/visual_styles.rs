@@ -1,254 +1,12 @@
 use crate::config::{self, SrpgVariant, VisualStyle};
 
-pub struct Assets {
-    pub select_color: &'static str,
-    pub shared_background: &'static str,
-    pub effects: EffectAssets,
-    pub shared_background_video: Option<&'static str>,
-    pub menu_music: &'static str,
-    pub select_color_size: [u32; 2],
-    pub shared_background_size: [u32; 2],
-}
-
-pub struct EffectAssets {
-    pub titlemenu_flycenter: &'static str,
-    pub titlemenu_flytop: &'static str,
-    pub titlemenu_flybottom: &'static str,
-    pub gameplayin_splode: &'static str,
-    pub gameplayin_minisplode: &'static str,
-    pub combo_100milestone_splode: &'static str,
-    pub combo_100milestone_minisplode: &'static str,
-    pub combo_1000milestone_swoosh: &'static str,
-}
-
-macro_rules! effect_assets {
-    (
-        $folder:literal,
-        $title_suffix:literal,
-        $gameplay_suffix:literal,
-        $combo100_splode_suffix:literal,
-        $combo100_minisplode_suffix:literal
-    ) => {
-        EffectAssets {
-            titlemenu_flycenter: concat!(
-                "visual_styles/",
-                $folder,
-                "/titlemenu_flycenter",
-                $title_suffix,
-                ".png"
-            ),
-            titlemenu_flytop: concat!(
-                "visual_styles/",
-                $folder,
-                "/titlemenu_flytop",
-                $title_suffix,
-                ".png"
-            ),
-            titlemenu_flybottom: concat!(
-                "visual_styles/",
-                $folder,
-                "/titlemenu_flybottom",
-                $title_suffix,
-                ".png"
-            ),
-            gameplayin_splode: concat!(
-                "visual_styles/",
-                $folder,
-                "/gameplayin_splode",
-                $gameplay_suffix,
-                ".png"
-            ),
-            gameplayin_minisplode: concat!(
-                "visual_styles/",
-                $folder,
-                "/gameplayin_minisplode",
-                $gameplay_suffix,
-                ".png"
-            ),
-            combo_100milestone_splode: concat!(
-                "visual_styles/",
-                $folder,
-                "/combo_100milestone_splode",
-                $combo100_splode_suffix,
-                ".png"
-            ),
-            combo_100milestone_minisplode: concat!(
-                "visual_styles/",
-                $folder,
-                "/combo_100milestone_minisplode",
-                $combo100_minisplode_suffix,
-                ".png"
-            ),
-            combo_1000milestone_swoosh: concat!(
-                "visual_styles/",
-                $folder,
-                "/combo_1000milestone_swoosh.png"
-            ),
-        }
-    };
-}
-
-pub const ASSETS: [Assets; VisualStyle::ALL.len()] = [
-    Assets {
-        select_color: "visual_styles/hearts/select_color.png",
-        shared_background: "visual_styles/hearts/shared_background.png",
-        effects: effect_assets!("hearts", "", "", "", ""),
-        shared_background_video: None,
-        menu_music: "assets/music/in_two (loop).ogg",
-        select_color_size: [668, 566],
-        shared_background_size: [2048, 2048],
-    },
-    Assets {
-        select_color: "visual_styles/arrows/select_color.png",
-        shared_background: "visual_styles/arrows/shared_background.png",
-        effects: effect_assets!(
-            "arrows",
-            " (doubleres)",
-            " (doubleres)",
-            " (doubleres)",
-            " (doubleres)"
-        ),
-        shared_background_video: None,
-        menu_music: "assets/music/halcyon farms (loop).ogg",
-        select_color_size: [668, 566],
-        shared_background_size: [2048, 2048],
-    },
-    Assets {
-        select_color: "visual_styles/bears/select_color.png",
-        shared_background: "visual_styles/bears/shared_background.png",
-        effects: effect_assets!("bears", "", "", " (doubleres)", " (doubleres)"),
-        shared_background_video: None,
-        menu_music: "assets/music/vrtuous faults (loop).ogg",
-        select_color_size: [668, 566],
-        shared_background_size: [2048, 2048],
-    },
-    Assets {
-        select_color: "visual_styles/ducks/select_color.png",
-        shared_background: "visual_styles/ducks/shared_background.png",
-        effects: effect_assets!("ducks", "", " (doubleres)", " (doubleres)", " (doubleres)"),
-        shared_background_video: None,
-        menu_music: "assets/music/Xuxa fami VRC6 (loop).ogg",
-        select_color_size: [668, 566],
-        shared_background_size: [2048, 2048],
-    },
-    Assets {
-        select_color: "visual_styles/cats/select_color.png",
-        shared_background: "visual_styles/cats/shared_background.png",
-        effects: effect_assets!("cats", "", "", "", " (doubleres)"),
-        shared_background_video: None,
-        menu_music: "assets/music/Beanmania IIDX (loop).ogg",
-        select_color_size: [668, 566],
-        shared_background_size: [2048, 2048],
-    },
-    Assets {
-        select_color: "visual_styles/spooky/select_color.png",
-        shared_background: "visual_styles/spooky/shared_background.png",
-        effects: effect_assets!(
-            "spooky",
-            " (doubleres)",
-            " (doubleres)",
-            " (doubleres)",
-            " (doubleres)"
-        ),
-        shared_background_video: None,
-        menu_music: "assets/music/Spooky Scary Chiptunes (loop).ogg",
-        select_color_size: [668, 566],
-        shared_background_size: [2048, 2048],
-    },
-    Assets {
-        select_color: "visual_styles/gay/select_color.png",
-        shared_background: "visual_styles/gay/shared_background.png",
-        effects: effect_assets!("gay", "", "", "", ""),
-        shared_background_video: None,
-        menu_music: "assets/music/Mystical Wheelbarrow Journey (loop).ogg",
-        select_color_size: [668, 566],
-        shared_background_size: [2048, 2048],
-    },
-    Assets {
-        select_color: "visual_styles/stars/select_color.png",
-        shared_background: "visual_styles/stars/shared_background.png",
-        effects: effect_assets!(
-            "stars",
-            " (doubleres)",
-            " (doubleres)",
-            " (doubleres)",
-            " (doubleres)"
-        ),
-        shared_background_video: None,
-        menu_music: "assets/music/Shooting Star - faux VRC6 remix (loop).ogg",
-        select_color_size: [668, 566],
-        shared_background_size: [2048, 2048],
-    },
-    Assets {
-        select_color: "visual_styles/thonk/select_color.png",
-        shared_background: "visual_styles/thonk/shared_background.png",
-        effects: effect_assets!(
-            "thonk",
-            " (doubleres)",
-            " (doubleres)",
-            " (doubleres)",
-            " (doubleres)"
-        ),
-        shared_background_video: None,
-        menu_music: "assets/music/Da Box of Kardboard Too (feat Naoki vs ZigZag) - TaroNuke Remix (loop).ogg",
-        select_color_size: [668, 566],
-        shared_background_size: [2048, 2048],
-    },
-    Assets {
-        select_color: "visual_styles/technique/select_color.png",
-        shared_background: "visual_styles/technique/shared_background.png",
-        effects: effect_assets!(
-            "technique",
-            " (doubleres)",
-            " (doubleres)",
-            " (doubleres)",
-            " (doubleres)"
-        ),
-        shared_background_video: None,
-        menu_music: "assets/music/Quaq (loop).ogg",
-        select_color_size: [668, 566],
-        shared_background_size: [2048, 2048],
-    },
-    Assets {
-        select_color: "visual_styles/srpg9/select_color.png",
-        shared_background: "visual_styles/srpg9/shared_background.png",
-        effects: effect_assets!("srpg9", "", "", "", ""),
-        shared_background_video: Some("assets/graphics/visual_styles/srpg9/background_video.mp4"),
-        menu_music: "assets/music/SRPG9 (loop).ogg",
-        select_color_size: [244, 244],
-        shared_background_size: [1920, 1080],
-    },
-];
-
-pub const SRPG10_ASSETS: Assets = Assets {
-    select_color: "visual_styles/srpg10/select_color.png",
-    shared_background: "visual_styles/srpg10/shared_background.png",
-    effects: effect_assets!("srpg10", "", "", "", ""),
-    shared_background_video: Some("assets/graphics/visual_styles/srpg10/background_video.mp4"),
-    menu_music: "assets/music/SRPG10 (loop).ogg",
-    select_color_size: [244, 219],
-    shared_background_size: [2581, 1452],
+pub use deadsync_theme::{
+    ASSETS, Assets, EffectAssets, SRPG10_EVAL_EXPEDITION_FAILED, SRPG10_EVAL_FAILED_SFX,
+    SRPG10_EVAL_GOLD_LEAF_BG, SRPG10_EVAL_PAINT, SRPG10_EVAL_PASS_BG, SRPG10_EVAL_PASSED_SFX,
+    SRPG10_EVAL_RED_LINES, SRPG10_EVAL_TEXTURES, SRPG10_EVAL_VICTORY, SRPG10_GAMEOVER_MUSIC,
+    SRPG10_TITLE_LOGO, all_assets, effect_zoom_scale, for_style, for_style_and_variant,
+    is_shared_background_texture, srpg10_faction_name,
 };
-
-pub const SRPG10_TITLE_LOGO: &str = "srpg10_logo_main.png";
-pub const SRPG10_EVAL_FAILED_SFX: &str = "assets/sounds/srpg10_eval_failed.ogg";
-pub const SRPG10_EVAL_PASSED_SFX: &str = "assets/sounds/srpg10_eval_passed.ogg";
-pub const SRPG10_GAMEOVER_MUSIC: &str = "assets/music/SRPG10-GameOver.ogg";
-pub const SRPG10_EVAL_PAINT: &str = "visual_styles/srpg10/eval/paint.png";
-pub const SRPG10_EVAL_RED_LINES: &str = "visual_styles/srpg10/eval/red_lines.png";
-pub const SRPG10_EVAL_EXPEDITION_FAILED: &str = "visual_styles/srpg10/eval/expedition_failed.png";
-pub const SRPG10_EVAL_PASS_BG: &str = "visual_styles/srpg10/eval/pass_bg.png";
-pub const SRPG10_EVAL_GOLD_LEAF_BG: &str = "visual_styles/srpg10/eval/gold_leaf_background.png";
-pub const SRPG10_EVAL_VICTORY: &str = "visual_styles/srpg10/eval/victory.png";
-
-pub const SRPG10_EVAL_TEXTURES: [&str; 6] = [
-    SRPG10_EVAL_PAINT,
-    SRPG10_EVAL_RED_LINES,
-    SRPG10_EVAL_EXPEDITION_FAILED,
-    SRPG10_EVAL_PASS_BG,
-    SRPG10_EVAL_GOLD_LEAF_BG,
-    SRPG10_EVAL_VICTORY,
-];
 
 #[inline(always)]
 pub fn current_style() -> VisualStyle {
@@ -261,20 +19,6 @@ pub fn current_srpg_variant() -> SrpgVariant {
 }
 
 #[inline(always)]
-pub fn for_style(style: VisualStyle) -> &'static Assets {
-    &ASSETS[style_index(style)]
-}
-
-#[inline(always)]
-pub fn for_style_and_variant(style: VisualStyle, variant: SrpgVariant) -> &'static Assets {
-    if style.is_srpg() && variant == SrpgVariant::Srpg10 {
-        &SRPG10_ASSETS
-    } else {
-        for_style(style)
-    }
-}
-
-#[inline(always)]
 pub fn current_assets() -> &'static Assets {
     for_style_and_variant(current_style(), current_srpg_variant())
 }
@@ -282,10 +26,6 @@ pub fn current_assets() -> &'static Assets {
 #[inline(always)]
 pub fn srpg10_active() -> bool {
     current_style().is_srpg() && current_srpg_variant() == SrpgVariant::Srpg10
-}
-
-pub fn all_assets() -> impl Iterator<Item = &'static Assets> {
-    ASSETS.iter().chain(std::iter::once(&SRPG10_ASSETS))
 }
 
 #[inline(always)]
@@ -344,15 +84,6 @@ pub fn combo_1000milestone_swoosh_texture_key() -> &'static str {
 }
 
 #[inline(always)]
-pub fn effect_zoom_scale(texture_key: &str) -> f32 {
-    if texture_key.contains("doubleres") {
-        0.5
-    } else {
-        1.0
-    }
-}
-
-#[inline(always)]
 pub fn shared_background_video_asset_path() -> Option<&'static str> {
     current_assets().shared_background_video
 }
@@ -365,16 +96,6 @@ pub fn menu_music_asset_path() -> &'static str {
 #[inline(always)]
 pub fn srpg10_gameover_music_path() -> std::path::PathBuf {
     deadlib_platform::dirs::app_dirs().resolve_asset_path(SRPG10_GAMEOVER_MUSIC)
-}
-
-#[inline(always)]
-pub fn srpg10_faction_name(color_index: i32) -> &'static str {
-    match color_index.rem_euclid(12) {
-        0..=2 => "Unaffiliated",
-        3..=5 => "Democratic People's Republic of Timing",
-        6..=8 => "Footspeed Empire",
-        _ => "Stamina Nation",
-    }
 }
 
 /// Returns the absolute path to the menu music file that should play for the
@@ -406,11 +127,7 @@ pub fn menu_music_resolved_path() -> std::path::PathBuf {
 /// plays.
 pub fn bundled_music_paths() -> Vec<std::path::PathBuf> {
     use std::collections::BTreeSet;
-    let mut rels: BTreeSet<&'static str> = all_assets().map(|assets| assets.menu_music).collect();
-    rels.insert("assets/music/select_course (loop).ogg");
-    rels.insert("assets/music/credits.ogg");
-    rels.insert(SRPG10_GAMEOVER_MUSIC);
-
+    let rels: BTreeSet<&'static str> = deadsync_theme::bundled_music_asset_paths().collect();
     let dirs = deadlib_platform::dirs::app_dirs();
     rels.into_iter()
         .map(|rel| dirs.resolve_asset_path(rel))
@@ -419,32 +136,10 @@ pub fn bundled_music_paths() -> Vec<std::path::PathBuf> {
 
 #[inline(always)]
 pub fn select_color_aspect(style: VisualStyle) -> f32 {
-    let size = for_style_and_variant(style, current_srpg_variant()).select_color_size;
-    size[0] as f32 / size[1] as f32
+    deadsync_theme::select_color_aspect(style, current_srpg_variant())
 }
 
 #[inline(always)]
 pub fn select_color_zoom_scale(style: VisualStyle) -> f32 {
-    566.0 / for_style_and_variant(style, current_srpg_variant()).select_color_size[1] as f32
-}
-
-#[inline(always)]
-pub fn is_shared_background_texture(key: &str) -> bool {
-    all_assets().any(|asset| asset.shared_background == key)
-}
-
-const fn style_index(style: VisualStyle) -> usize {
-    match style {
-        VisualStyle::Hearts => 0,
-        VisualStyle::Arrows => 1,
-        VisualStyle::Bears => 2,
-        VisualStyle::Ducks => 3,
-        VisualStyle::Cats => 4,
-        VisualStyle::Spooky => 5,
-        VisualStyle::Gay => 6,
-        VisualStyle::Stars => 7,
-        VisualStyle::Thonk => 8,
-        VisualStyle::Technique => 9,
-        VisualStyle::Srpg9 => 10,
-    }
+    deadsync_theme::select_color_zoom_scale(style, current_srpg_variant())
 }

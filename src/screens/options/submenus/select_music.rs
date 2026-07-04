@@ -1,5 +1,14 @@
 use super::super::*;
 
+pub(in crate::screens::options) use crate::config::{
+    SELECT_MUSIC_CHART_INFO_NUM_CHOICES, SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES,
+    auto_screenshot_bit_from_choice, auto_screenshot_cursor_index, bg_brightness_choice_index,
+    bg_brightness_from_choice, music_wheel_scroll_speed_choice_index,
+    music_wheel_scroll_speed_from_choice, scorebox_cycle_bit_from_choice,
+    scorebox_cycle_cursor_index, scorebox_cycle_mask, select_music_chart_info_bit_from_choice,
+    select_music_chart_info_cursor_index, select_music_chart_info_mask,
+};
+
 pub(in crate::screens::options) const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         id: SubRowId::ShowBanners,
@@ -481,96 +490,6 @@ pub(in crate::screens::options) const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
     },
 ];
 
-pub(in crate::screens::options) const SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES: usize = 4;
-pub(in crate::screens::options) const SELECT_MUSIC_CHART_INFO_NUM_CHOICES: usize = 3;
-
-pub(in crate::screens::options) const MUSIC_WHEEL_SCROLL_SPEED_VALUES: [u8; 7] =
-    [5, 10, 15, 25, 30, 45, 100];
-
-pub(in crate::screens::options) fn bg_brightness_choice_index(brightness: f32) -> usize {
-    ((brightness.clamp(0.0, 1.0) * 10.0).round() as i32).clamp(0, 10) as usize
-}
-
-pub(in crate::screens::options) fn bg_brightness_from_choice(idx: usize) -> f32 {
-    idx.min(10) as f32 / 10.0
-}
-
-pub(in crate::screens::options) fn music_wheel_scroll_speed_choice_index(speed: u8) -> usize {
-    let mut best_idx = 0usize;
-    let mut best_diff = u8::MAX;
-    for (idx, value) in MUSIC_WHEEL_SCROLL_SPEED_VALUES.iter().enumerate() {
-        let diff = speed.abs_diff(*value);
-        if diff < best_diff {
-            best_diff = diff;
-            best_idx = idx;
-        }
-    }
-    best_idx
-}
-
-pub(in crate::screens::options) fn music_wheel_scroll_speed_from_choice(idx: usize) -> u8 {
-    MUSIC_WHEEL_SCROLL_SPEED_VALUES
-        .get(idx)
-        .copied()
-        .unwrap_or(15)
-}
-
-#[inline(always)]
-pub(in crate::screens::options) const fn scorebox_cycle_mask(
-    itg: bool,
-    ex: bool,
-    hard_ex: bool,
-    tournaments: bool,
-) -> u8 {
-    (itg as u8) | ((ex as u8) << 1) | ((hard_ex as u8) << 2) | ((tournaments as u8) << 3)
-}
-
-#[inline(always)]
-pub(in crate::screens::options) const fn auto_screenshot_cursor_index(mask: u8) -> usize {
-    if (mask & config::AUTO_SS_PBS) != 0 {
-        0
-    } else if (mask & config::AUTO_SS_FAILS) != 0 {
-        1
-    } else if (mask & config::AUTO_SS_CLEARS) != 0 {
-        2
-    } else if (mask & config::AUTO_SS_QUADS) != 0 {
-        3
-    } else if (mask & config::AUTO_SS_QUINTS) != 0 {
-        4
-    } else {
-        0
-    }
-}
-
-#[inline(always)]
-pub(in crate::screens::options) const fn scorebox_cycle_cursor_index(
-    itg: bool,
-    ex: bool,
-    hard_ex: bool,
-    tournaments: bool,
-) -> usize {
-    if itg {
-        0
-    } else if ex {
-        1
-    } else if hard_ex {
-        2
-    } else if tournaments {
-        3
-    } else {
-        0
-    }
-}
-
-#[inline(always)]
-pub(in crate::screens::options) const fn scorebox_cycle_bit_from_choice(idx: usize) -> u8 {
-    if idx < SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES {
-        1u8 << (idx as u8)
-    } else {
-        0
-    }
-}
-
 #[inline(always)]
 pub(in crate::screens::options) const fn scorebox_cycle_mask_from_config(
     cfg: &config::Config,
@@ -631,11 +550,6 @@ pub(in crate::screens::options) fn select_music_scorebox_cycle_enabled_mask() ->
 }
 
 #[inline(always)]
-pub(in crate::screens::options) const fn auto_screenshot_bit_from_choice(idx: usize) -> u8 {
-    config::auto_screenshot_bit(idx)
-}
-
-#[inline(always)]
 pub(in crate::screens::options) fn auto_screenshot_enabled_mask() -> u8 {
     config::get().auto_screenshot_eval
 }
@@ -670,51 +584,6 @@ pub(in crate::screens::options) fn toggle_auto_screenshot_option(
         clamped,
     );
     audio::play_sfx("assets/sounds/change_value.ogg");
-}
-
-impl ChoiceEnum for SelectMusicPatternInfoMode {
-    const ALL: &'static [Self] = &[Self::Auto, Self::Tech, Self::Stamina];
-    const DEFAULT: Self = Self::Auto;
-}
-
-impl ChoiceEnum for SelectMusicStepArtistBoxMode {
-    const ALL: &'static [Self] = &[Self::Default, Self::Legacy, Self::Expanded];
-    const DEFAULT: Self = Self::Default;
-}
-
-#[inline(always)]
-pub(in crate::screens::options) const fn select_music_chart_info_mask(
-    peak_nps: bool,
-    effective_bpm: bool,
-    matrix_rating: bool,
-) -> u8 {
-    (peak_nps as u8) | ((effective_bpm as u8) << 1) | ((matrix_rating as u8) << 2)
-}
-
-#[inline(always)]
-pub(in crate::screens::options) const fn select_music_chart_info_cursor_index(
-    peak_nps: bool,
-    effective_bpm: bool,
-    matrix_rating: bool,
-) -> usize {
-    if peak_nps {
-        0
-    } else if effective_bpm {
-        1
-    } else if matrix_rating {
-        2
-    } else {
-        0
-    }
-}
-
-#[inline(always)]
-pub(in crate::screens::options) const fn select_music_chart_info_bit_from_choice(idx: usize) -> u8 {
-    if idx < SELECT_MUSIC_CHART_INFO_NUM_CHOICES {
-        1u8 << (idx as u8)
-    } else {
-        0
-    }
 }
 
 #[inline(always)]
@@ -775,35 +644,5 @@ pub(in crate::screens::options) fn toggle_select_music_chart_info_option(
 #[inline(always)]
 pub(in crate::screens::options) fn select_music_chart_info_enabled_mask() -> u8 {
     let mask = select_music_chart_info_mask_from_config(&config::get());
-    if mask == 0 { 1 } else { mask }
-}
-
-impl ChoiceEnum for SelectMusicItlWheelMode {
-    const ALL: &'static [Self] = &[Self::Off, Self::Score, Self::PointsAndScore];
-    const DEFAULT: Self = Self::Off;
-}
-
-impl ChoiceEnum for SelectMusicItlRankMode {
-    const ALL: &'static [Self] = &[Self::None, Self::Chart, Self::Overall];
-    const DEFAULT: Self = Self::None;
-}
-
-impl ChoiceEnum for SelectMusicWheelStyle {
-    const ALL: &'static [Self] = &[Self::Itg, Self::Iidx];
-    const DEFAULT: Self = Self::Itg;
-}
-
-impl ChoiceEnum for SelectMusicSongSelectBgMode {
-    const ALL: &'static [Self] = &[Self::Off, Self::Banner, Self::Bg];
-    const DEFAULT: Self = Self::Off;
-}
-
-impl ChoiceEnum for NewPackMode {
-    const ALL: &'static [Self] = &[Self::Disabled, Self::OpenPack, Self::HasScore];
-    const DEFAULT: Self = Self::Disabled;
-}
-
-impl ChoiceEnum for SelectMusicScoreboxPlacement {
-    const ALL: &'static [Self] = &[Self::Auto, Self::StepPane];
-    const DEFAULT: Self = Self::Auto;
+    config::select_music_chart_info_enabled_mask(mask)
 }

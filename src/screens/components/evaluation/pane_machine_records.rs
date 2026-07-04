@@ -5,7 +5,7 @@ use deadlib_present::color;
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 
-use super::utils::{format_machine_record_date, pane_origin_x};
+use super::utils::pane_origin_x;
 
 const MACHINE_RECORD_ROWS: usize = 10;
 const MACHINE_RECORD_SPLIT_MACHINE_ROWS: usize = 8;
@@ -75,7 +75,7 @@ fn push_machine_record_row(
         (
             name,
             format_machine_record_score(entry.score),
-            format_machine_record_date(&entry.date),
+            score_data::format_leaderboard_date_or_placeholder(&entry.date),
         )
     } else {
         (

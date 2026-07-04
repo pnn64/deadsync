@@ -7,7 +7,7 @@
 //! so they can be unit-tested without constructing a whole gameplay `State`.
 
 use deadsync_gameplay::{ColumnTapJudgment, HoldJudgmentRenderInfo, active_hold_is_engaged};
-use deadsync_profile::{PlayStyle, PlayerSide, player_side_index, runtime_player_side};
+use deadsync_profile::physical_player_slot_for_chart_pad;
 use deadsync_rules::judgment::JudgeGrade;
 use deadsync_rules::note::HoldResult;
 use deadsync_smx::panels::{PADS, Rgb, SmxPanelLights, smx_panel_for_col};
@@ -15,28 +15,6 @@ use deadsync_smx::panels::{PADS, Rgb, SmxPanelLights, smx_panel_for_col};
 use crate::game::{GameplayCoreState, profile};
 
 const MAX_COLS: usize = deadsync_core::input::MAX_COLS;
-
-/// Translate the chart-layout pad index from `smx_panel_for_col` (0 = first side,
-/// 1 = second side) to the physical SMX slot the player's pad occupies.
-///
-/// A single player is always packed at chart pad 0 (`runtime_player_index`), but
-/// may have joined as P2 - and a lone pad assigned to P2 sits at SDK slot 1 - so we
-/// route by the runtime side, the same basis input uses (keymaps bind `P2_*` to
-/// slot 1). Without this, a single P2 player's judgements would light frame pad 0
-/// (slot 0, no pad) while the pad they stand on stays dark. Doubles drives both
-/// pads (left = slot 0, right = slot 1), so it stays identity.
-fn physical_slot(
-    play_style: PlayStyle,
-    session_side: PlayerSide,
-    doubles: bool,
-    chart_pad: usize,
-) -> usize {
-    if doubles {
-        chart_pad
-    } else {
-        player_side_index(runtime_player_side(play_style, session_side, chart_pad))
-    }
-}
 
 /// Sentinel `*_at_screen_s` meaning "nothing seen yet for this column".
 const NO_EVENT: f32 = f32::NEG_INFINITY;
@@ -201,8 +179,9 @@ impl SmxPanelDriver {
         let play_style = profile::get_session_play_style();
         let session_side = profile::get_session_player_side();
         let doubles = state.cols_per_player() >= 8 && state.num_players() == 1;
-        self.slot_for_pad =
-            std::array::from_fn(|pad| physical_slot(play_style, session_side, doubles, pad));
+        self.slot_for_pad = std::array::from_fn(|pad| {
+            physical_player_slot_for_chart_pad(play_style, session_side, doubles, pad)
+        });
         self.prev_flash = [NO_EVENT; MAX_COLS];
         self.prev_engaged = [false; MAX_COLS];
         self.prev_hold_judged = [NO_EVENT; MAX_COLS];
@@ -294,22 +273,6 @@ mod tests {
             result,
             started_at_screen_s: at,
         }
-    }
-
-    #[test]
-    fn physical_slot_routes_single_p2_to_slot_1() {
-        use PlayStyle::*;
-        use PlayerSide::*;
-        // Single player on either side packs at chart pad 0, but the slot follows the
-        // side they joined: P1 -> slot 0, P2 -> slot 1 (the lone pad relocated to slot 1).
-        assert_eq!(physical_slot(Single, P1, false, 0), 0);
-        assert_eq!(physical_slot(Single, P2, false, 0), 1);
-        // Versus: chart pad already equals the slot (P1 left pad, P2 right pad), unchanged.
-        assert_eq!(physical_slot(Versus, P1, false, 0), 0);
-        assert_eq!(physical_slot(Versus, P1, false, 1), 1);
-        // Doubles owns both pads regardless of side, so left/right stay slot 0/1.
-        assert_eq!(physical_slot(Double, P2, true, 0), 0);
-        assert_eq!(physical_slot(Double, P2, true, 1), 1);
     }
 
     #[test]

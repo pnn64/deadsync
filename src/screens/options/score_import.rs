@@ -333,24 +333,13 @@ pub(super) struct ScoreImportConfirmState {
 }
 
 #[inline(always)]
-pub(super) const fn score_import_endpoint_from_choice_index(
-    idx: usize,
-) -> score_data::ScoreImportEndpoint {
-    match idx {
-        1 => score_data::ScoreImportEndpoint::BoogieStats,
-        2 => score_data::ScoreImportEndpoint::ArrowCloud,
-        _ => score_data::ScoreImportEndpoint::GrooveStats,
-    }
-}
-
-#[inline(always)]
 pub(super) fn score_import_selected_endpoint(state: &State) -> score_data::ScoreImportEndpoint {
     let idx = state.sub[SubmenuKind::ScoreImport]
         .choice_indices
         .get(SCORE_IMPORT_ROW_ENDPOINT_INDEX)
         .copied()
         .unwrap_or(0);
-    score_import_endpoint_from_choice_index(idx)
+    score_data::score_import_endpoint_from_choice_index(idx)
 }
 
 fn installed_pack_entries() -> Vec<(String, String)> {

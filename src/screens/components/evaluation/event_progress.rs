@@ -10,8 +10,6 @@ use deadsync_chart::SongData;
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 
-use super::utils::format_machine_record_date;
-
 const ITL_PINK: [f32; 4] = [1.0, 0.2, 0.406, 1.0];
 const SRPG_YELLOW: [f32; 4] = [1.0, 0.972, 0.792, 1.0];
 const POSITIVE_GREEN: [f32; 4] = [0.0, 1.0, 0.0, 1.0];
@@ -740,7 +738,7 @@ fn build_overlay_leaderboard(
                 format!("{}.", entry.rank),
                 leaderboard_name(entry),
                 format!("{:.2}%", entry.score / 100.0),
-                format_machine_record_date(&entry.date),
+                score_data::format_leaderboard_date_or_placeholder(&entry.date),
                 row_color,
                 score_color,
                 bg,

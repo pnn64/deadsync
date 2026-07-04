@@ -20,6 +20,11 @@ use deadsync_gameplay::{FantasticWindowOptions, blue_fantastic_window_ms};
 use deadsync_profile as profile_data;
 use deadsync_rules::judgment::{self, JudgeGrade};
 use deadsync_rules::timing::LiveTimingSnapshot;
+use deadsync_theme::step_stats as step_stats_theme;
+use deadsync_theme::step_stats::{
+    STEP_STATS_BANNER_H, STEP_STATS_BANNER_W, StepStatsGraphRect, StepStatsPaneLayout,
+    StepStatsPaneParams,
+};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
@@ -27,9 +32,6 @@ use std::sync::{Arc, LazyLock};
 const TEXT_CACHE_LIMIT: usize = 8192;
 const COUNT_PREWARM_CAP: u32 = 2048;
 const TIME_PREWARM_CAP_S: u32 = 600;
-const STEP_STATS_BANNER_W: f32 = 418.0;
-const STEP_STATS_BANNER_H: f32 = 164.0;
-const STEP_STATS_SONG_BANNER_ZOOM: f32 = 0.4;
 const PEAK_NPS_GRAPH_PAD: f32 = 4.0;
 const PEAK_NPS_ALPHA: f32 = 0.75;
 const DISABLED_WINDOW_RGBA: [f32; 4] = color::JUDGMENT_FA_PLUS_WHITE_EVAL_DIM_RGBA;
@@ -947,112 +949,30 @@ pub fn push_step_stats(
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-struct StepStatsPaneLayout {
-    sidepane_center_x: f32,
-    sidepane_center_y: f32,
-    sidepane_width: f32,
-    note_field_is_centered: bool,
-    is_ultrawide: bool,
-    banner_data_zoom: f32,
-}
-
-#[derive(Clone, Copy, Debug)]
-struct StepStatsGraphRect {
-    x: f32,
-    y: f32,
-    w: f32,
-}
-
 fn step_stats_pane_layout(
     state: &State,
     playfield_center_x: f32,
     player_side: profile_data::PlayerSide,
 ) -> StepStatsPaneLayout {
-    let sw = screen_width();
-    let sh = screen_height().max(1.0);
-    let wide = is_wide();
-    let is_ultrawide = sw / sh > (21.0 / 9.0);
-    let note_field_is_centered = (playfield_center_x - screen_center_x()).abs() < 1.0;
-
-    let mut sidepane_width = sw * 0.5;
-    let mut sidepane_center_x = match player_side {
-        profile_data::PlayerSide::P1 => sw * 0.75,
-        profile_data::PlayerSide::P2 => sw * 0.25,
-    };
-
-    // zmod StepStatistics/default.lua:
-    // when 1P notefield is centered on widescreen, clamp sidepane to the
-    // region between notefield edge and screen edge.
-    if !is_ultrawide && note_field_is_centered && wide {
-        let nf_width = notefield_width(state).unwrap_or(256.0).max(1.0);
-        sidepane_width = ((sw - nf_width) * 0.5).max(1.0);
-        sidepane_center_x = match player_side {
-            profile_data::PlayerSide::P1 => {
-                screen_center_x() + nf_width + (sidepane_width - nf_width) * 0.5
-            }
-            profile_data::PlayerSide::P2 => {
-                screen_center_x() - nf_width - (sidepane_width - nf_width) * 0.5
-            }
-        };
-    }
-
-    // zmod ultrawide versus override.
-    if is_ultrawide && state.num_players() > 1 {
-        sidepane_width = sw * 0.2;
-        sidepane_center_x = match player_side {
-            profile_data::PlayerSide::P1 => sidepane_width * 0.5,
-            profile_data::PlayerSide::P2 => sw - (sidepane_width * 0.5),
-        };
-    }
-
-    let banner_data_zoom = if note_field_is_centered && wide && !is_ultrawide {
-        let ar = sw / sh;
-        let t = ((ar - (16.0 / 10.0)) / ((16.0 / 9.0) - (16.0 / 10.0))).clamp(0.0, 1.0);
-        0.825 + (0.925 - 0.825) * t
-    } else {
-        1.0
-    };
-
-    StepStatsPaneLayout {
-        sidepane_center_x,
-        sidepane_center_y: screen_center_y() + 80.0,
-        sidepane_width,
-        note_field_is_centered,
-        is_ultrawide,
-        banner_data_zoom,
-    }
+    step_stats_theme::pane_layout(StepStatsPaneParams {
+        screen_w: screen_width(),
+        screen_h: screen_height(),
+        screen_center_x: screen_center_x(),
+        screen_center_y: screen_center_y(),
+        playfield_center_x,
+        player_side,
+        num_players: state.num_players(),
+        notefield_width: notefield_width(state),
+        wide: is_wide(),
+    })
 }
 
 fn song_info_text_zoom(layout: StepStatsPaneLayout) -> f32 {
-    let mut zoom = 0.75;
-    if layout.note_field_is_centered {
-        let ar = screen_width() / screen_height().max(1.0);
-        zoom = if ar > 1.7 { 0.9 } else { 0.95 };
-    }
-    zoom * layout.banner_data_zoom
-}
-
-fn step_stats_density_graph_w(state: &State, sidepane_width: f32, double: bool) -> f32 {
-    let graph_w = state.gameplay.density_graph_view().graph_w;
-    if graph_w > 0.0 {
-        return graph_w;
-    }
-    let width = if double {
-        sidepane_width * 0.95
-    } else {
-        sidepane_width.round()
-    };
-    width.max(1.0)
+    step_stats_theme::song_info_text_zoom(layout, screen_width() / screen_height().max(1.0))
 }
 
 fn step_stats_density_graph_rect(state: &State, layout: StepStatsPaneLayout) -> StepStatsGraphRect {
-    let graph_w = step_stats_density_graph_w(state, layout.sidepane_width, false);
-    StepStatsGraphRect {
-        x: layout.sidepane_center_x - graph_w * 0.5,
-        y: layout.sidepane_center_y + 55.0,
-        w: graph_w,
-    }
+    step_stats_theme::density_graph_rect(state.gameplay.density_graph_view().graph_w, layout)
 }
 
 fn push_peak_nps_on_graph(
@@ -1448,21 +1368,17 @@ pub fn push_double_step_stats(
         return;
     };
 
-    // Simply Love: StepStatistics/default.lua
-    // - StepStatsPane centered: x=_screen.cx, y=_screen.cy+80
-    // - BannerAndData is scaled when the notefield is centered (aspect 16:10..16:9)
-    let header_h = 80.0;
-    let pane_cx = screen_center_x();
-    let pane_cy = screen_center_y() + header_h;
-
-    let note_field_is_centered = (playfield_center_x - screen_center_x()).abs() < 1.0;
-    let banner_data_zoom = if note_field_is_centered {
-        let ar = screen_width() / screen_height();
-        let t = ((ar - (16.0 / 10.0)) / ((16.0 / 9.0) - (16.0 / 10.0))).clamp(0.0, 1.0);
-        0.825 + (0.925 - 0.825) * t
-    } else {
-        1.0
-    };
+    let layout = step_stats_theme::double_pane_layout(
+        screen_center_x(),
+        screen_center_y(),
+        screen_width(),
+        screen_height(),
+        playfield_center_x,
+    );
+    let pane_cx = layout.pane_center_x;
+    let pane_cy = layout.pane_center_y;
+    let note_field_is_centered = layout.note_field_is_centered;
+    let banner_data_zoom = layout.banner_data_zoom;
 
     actors.reserve(256);
 
@@ -1486,15 +1402,14 @@ pub fn push_double_step_stats(
     ));
 
     // Banner.lua (double): xy(GetNotefieldWidth() - 140, -200)
-    let song_banner_x = pane_cx + ((notefield_width - 140.0) * banner_data_zoom);
+    let song_banner = step_stats_theme::double_song_banner_placement(layout, notefield_width);
     if mask.contains(profile_data::StepStatisticsMask::SONG_BANNER)
         && let Some(banner_key) = &state.song_banner_key
     {
-        let banner_y = pane_cy + (-200.0 * banner_data_zoom);
         actors.push(act!(sprite(banner_key):
-            align(0.5, 0.5): xy(song_banner_x, banner_y):
+            align(0.5, 0.5): xy(song_banner.x, song_banner.y):
             setsize(STEP_STATS_BANNER_W, STEP_STATS_BANNER_H):
-            zoom(STEP_STATS_SONG_BANNER_ZOOM * banner_data_zoom):
+            zoom(song_banner.zoom):
             z(-50)
         ));
     }
@@ -1503,15 +1418,11 @@ pub fn push_double_step_stats(
     if mask.pack_info_enabled()
         && let Some(pack_key) = state.pack_banner_key.as_ref()
     {
-        let final_size = if note_field_is_centered { 0.2 } else { 0.25 };
-        let song_w = STEP_STATS_BANNER_W * STEP_STATS_SONG_BANNER_ZOOM * banner_data_zoom;
-        let pack_w = STEP_STATS_BANNER_W * final_size * banner_data_zoom;
-        let x = song_banner_x - song_w * 0.5 + pack_w * 0.5;
-        let y = pane_cy + (20.0 * banner_data_zoom);
+        let pack_banner = step_stats_theme::double_pack_banner_placement(layout, notefield_width);
         actors.push(act!(sprite(pack_key):
-            align(0.5, 0.5): xy(x, y):
+            align(0.5, 0.5): xy(pack_banner.x, pack_banner.y):
             setsize(STEP_STATS_BANNER_W, STEP_STATS_BANNER_H):
-            zoom(final_size * banner_data_zoom):
+            zoom(pack_banner.zoom):
             z(-49)
         ));
     }
@@ -1741,38 +1652,30 @@ pub fn push_double_step_stats(
 
     // HoldsMinesRolls.lua (double): x(-GetNotefieldWidth() + 212), y(-10), zoom(0.8)
     if mask.contains(profile_data::StepStatisticsMask::STEP_COUNTS) && !display_scorebox {
-        let frame_cx = pane_cx + ((-notefield_width + 212.0) * banner_data_zoom);
-        // Our holds/mines/rolls builder positions the frame origin at the *middle* row (Mines),
-        // matching the non-double path where SL uses y=-140 and row2 is at y=28.
-        // For double, SL uses y=-10 and zoom=0.8, so the middle row sits at:
-        // -10 + (0.8 * 28) == 12.4
-        let frame_cy = pane_cy + ((-10.0 + 0.8 * 28.0) * banner_data_zoom);
-        let frame_zoom = 0.8 * banner_data_zoom;
+        let frame = step_stats_theme::double_holds_mines_rolls_frame(layout, notefield_width);
 
         push_holds_mines_rolls_pane_at(
             actors,
             state,
             asset_manager,
-            frame_cx,
-            frame_cy,
-            frame_zoom,
+            frame.center_x,
+            frame.center_y,
+            frame.zoom,
         );
     }
 
     // Scorebox.lua (double): x(GetNotefieldWidth() - 140), y(-115)
     if mask.contains(profile_data::StepStatisticsMask::STEP_COUNTS) && display_scorebox {
-        let frame_cx = pane_cx + ((notefield_width - 140.0) * banner_data_zoom);
-        let frame_cy = pane_cy + (-115.0 * banner_data_zoom);
-        let frame_zoom = banner_data_zoom;
+        let frame = step_stats_theme::double_scorebox_frame(layout, notefield_width);
         let side = profile::get_session_player_side();
         let snapshot = gameplay_screen::scorebox_snapshot_for_side(state, side);
         let profile_snapshot = gameplay_screen::scorebox_profile_for_side(state, side);
         actors.extend(gs_scorebox::gameplay_scorebox_actors_from_snapshot(
             snapshot,
             profile_snapshot,
-            frame_cx,
-            frame_cy,
-            frame_zoom,
+            frame.center_x,
+            frame.center_y,
+            frame.zoom,
             state.current_music_time_display(),
         ));
     }
@@ -1860,12 +1763,14 @@ pub fn push_double_step_stats(
 
     // DensityGraph.lua (double): graph ActorFrame xy(260, 40), with width
     // calculated as 95% of the side pane in gameplay init.
-    let double_sidepane_width = ((screen_width() - notefield_width) * 0.5).max(1.0);
-    let double_graph = StepStatsGraphRect {
-        x: pane_cx + 260.0,
-        y: pane_cy + 40.0,
-        w: step_stats_density_graph_w(state, double_sidepane_width, true),
-    };
+    let double_sidepane_width =
+        step_stats_theme::double_sidepane_width(screen_width(), notefield_width);
+    let double_graph = step_stats_theme::double_density_graph_rect(
+        layout,
+        screen_width(),
+        notefield_width,
+        state.gameplay.density_graph_view().graph_w,
+    );
     if mask.contains(profile_data::StepStatisticsMask::DENSITY_GRAPH) {
         push_density_graph_at(actors, state, 0, double_graph.x, double_graph.y);
     }
@@ -1913,37 +1818,14 @@ fn build_banner(
     player_side: profile_data::PlayerSide,
 ) {
     if let Some(banner_key) = &state.song_banner_key {
-        let local_banner_x = song_banner_local_x(layout, wide, player_side, state.num_players());
-        let local_banner_y = -200.0;
-        let banner_x = layout.sidepane_center_x + (local_banner_x * layout.banner_data_zoom);
-        let banner_y = layout.sidepane_center_y + (local_banner_y * layout.banner_data_zoom);
-        let final_zoom = STEP_STATS_SONG_BANNER_ZOOM * layout.banner_data_zoom;
+        let placement =
+            step_stats_theme::song_banner_placement(layout, wide, player_side, state.num_players());
         actors.push(act!(sprite(banner_key):
-            align(0.5, 0.5): xy(banner_x, banner_y):
-            setsize(STEP_STATS_BANNER_W, STEP_STATS_BANNER_H): zoom(final_zoom):
+            align(0.5, 0.5): xy(placement.x, placement.y):
+            setsize(STEP_STATS_BANNER_W, STEP_STATS_BANNER_H): zoom(placement.zoom):
             z(-50)
         ));
     }
-}
-
-fn song_banner_local_x(
-    layout: StepStatsPaneLayout,
-    wide: bool,
-    player_side: profile_data::PlayerSide,
-    num_players: usize,
-) -> f32 {
-    let mut x = if layout.note_field_is_centered && wide {
-        72.0
-    } else {
-        70.0
-    };
-    if player_side == profile_data::PlayerSide::P2 {
-        x *= -1.0;
-    }
-    if layout.is_ultrawide && num_players > 1 {
-        x *= -1.0;
-    }
-    x
 }
 
 fn build_pack_banner(
@@ -1960,30 +1842,15 @@ fn build_pack_banner(
         return;
     };
 
-    let final_size = if layout.note_field_is_centered {
-        0.2
-    } else {
-        0.25
-    };
     // Arrow Cloud Banner2.lua parity for non-double Step Statistics. The
     // doubles-specific renderer handles its separate left-edge alignment.
-    let final_offset = if layout.note_field_is_centered {
-        -115.0
-    } else {
-        -160.0
-    };
-    let side_sign = match player_side {
-        profile_data::PlayerSide::P1 => 1.0,
-        profile_data::PlayerSide::P2 => -1.0,
-    };
-    let x = layout.sidepane_center_x + final_offset * side_sign * layout.banner_data_zoom;
-    let y = layout.sidepane_center_y + (20.0 * layout.banner_data_zoom);
+    let placement = step_stats_theme::pack_banner_placement(layout, player_side);
 
     actors.push(act!(sprite(pack_key):
         align(0.5, 0.5):
-        xy(x, y):
+        xy(placement.x, placement.y):
         setsize(STEP_STATS_BANNER_W, STEP_STATS_BANNER_H):
-        zoom(final_size * layout.banner_data_zoom):
+        zoom(placement.zoom):
         z(-49)
     ));
 }
@@ -2238,15 +2105,7 @@ fn build_holds_mines_rolls_pane(
         return;
     }
     let player_idx = step_stats_player_idx(state, player_side);
-    let banner_data_zoom = layout.banner_data_zoom;
-    let local_x = match player_side {
-        profile_data::PlayerSide::P1 => 155.0,
-        profile_data::PlayerSide::P2 => -85.0,
-    };
-    let local_y = -112.0;
-    let frame_cx = layout.sidepane_center_x + (local_x * banner_data_zoom);
-    let frame_cy = layout.sidepane_center_y + (local_y * banner_data_zoom);
-    let frame_zoom = banner_data_zoom;
+    let frame = step_stats_theme::holds_mines_rolls_frame(layout, player_side);
 
     let categories = step_stats_hmr_categories(state, player_idx);
 
@@ -2261,12 +2120,12 @@ fn build_holds_mines_rolls_pane(
         (largest_count as f32).log10().floor() as usize + 1
     };
     let digits_to_fmt = digits_needed.clamp(3, 4);
-    let row_height = 28.0 * frame_zoom;
+    let row_height = 28.0 * frame.zoom;
     actors.reserve(categories.len() * (digits_to_fmt * 2 + 2));
 
     asset_manager.with_fonts(|all_fonts| asset_manager.with_font(current_machine_font_key(FontRole::ScreenEval), |metrics_font| {
-        let value_zoom = 0.4 * frame_zoom;
-        let label_zoom = 0.833 * frame_zoom;
+        let value_zoom = 0.4 * frame.zoom;
+        let label_zoom = 0.833 * frame.zoom;
         let gray = color::rgba_hex("#5A6166");
         let white = [1.0, 1.0, 1.0, 1.0];
 
@@ -2281,10 +2140,10 @@ fn build_holds_mines_rolls_pane(
         let fixed_char_width_scaled_for_label = LOGICAL_CHAR_WIDTH_FOR_LABEL * value_zoom;
 
         for (i, (label_index, achieved, total)) in categories.iter().enumerate() {
-            let item_y = frame_cy + (i as f32 - 1.0) * row_height;
+            let item_y = frame.center_y + (i as f32 - 1.0) * row_height;
             let right_anchor_x = match player_side {
-                profile_data::PlayerSide::P1 => frame_cx,
-                profile_data::PlayerSide::P2 => frame_cx + 100.0 * frame_zoom,
+                profile_data::PlayerSide::P1 => frame.center_x,
+                profile_data::PlayerSide::P2 => frame.center_x + 100.0 * frame.zoom,
             };
             let mut cursor_x = right_anchor_x;
 
@@ -2335,7 +2194,7 @@ fn build_holds_mines_rolls_pane(
 
             // --- Position Label using HARDCODED width assumption ---
             let total_value_width_for_label = (achieved_str.len() + 1 + possible_str.len()) as f32 * fixed_char_width_scaled_for_label;
-            let label_x = right_anchor_x - total_value_width_for_label - (10.0 * frame_zoom);
+            let label_x = right_anchor_x - total_value_width_for_label - (10.0 * frame.zoom);
 
             actors.push(act!(text:
                 font("miso"): settext(holds_mines_rolls_label_text(*label_index)): align(1.0, 0.5): xy(label_x, item_y):
@@ -2356,26 +2215,14 @@ fn build_scorebox_pane(
         return;
     }
 
-    let x_sign = match player_side {
-        profile_data::PlayerSide::P1 => 1.0,
-        profile_data::PlayerSide::P2 => -1.0,
-    };
-    let mut local_x = 70.0 * x_sign;
-    if layout.note_field_is_centered && wide {
-        local_x += 2.0 * x_sign;
-    }
-    if layout.is_ultrawide && state.num_players() > 1 {
-        local_x = -local_x;
-    }
-    let frame_cx = layout.sidepane_center_x + (local_x * layout.banner_data_zoom);
-    let frame_cy = layout.sidepane_center_y + (-115.0 * layout.banner_data_zoom);
+    let frame = step_stats_theme::scorebox_frame(layout, wide, player_side, state.num_players());
 
     actors.extend(gs_scorebox::gameplay_scorebox_actors_from_snapshot(
         gameplay_screen::scorebox_snapshot_for_side(state, player_side),
         gameplay_screen::scorebox_profile_for_side(state, player_side),
-        frame_cx,
-        frame_cy,
-        layout.banner_data_zoom,
+        frame.center_x,
+        frame.center_y,
+        frame.zoom,
         state.current_music_time_display(),
     ));
 }

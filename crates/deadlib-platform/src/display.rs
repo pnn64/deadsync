@@ -20,6 +20,102 @@ impl FullscreenType {
     }
 }
 
+pub const fn fullscreen_type_choice_index(fullscreen_type: FullscreenType) -> usize {
+    match fullscreen_type {
+        FullscreenType::Exclusive => 0,
+        FullscreenType::Borderless => 1,
+    }
+}
+
+pub const fn fullscreen_type_from_choice(idx: usize) -> FullscreenType {
+    match idx {
+        1 => FullscreenType::Borderless,
+        _ => FullscreenType::Exclusive,
+    }
+}
+
+pub const DISPLAY_ASPECT_RATIO_LABELS: [&str; 4] = ["16:9", "16:10", "4:3", "1:1"];
+
+pub const DEFAULT_RESOLUTION_CHOICES: &[(u32, u32)] = &[
+    (1920, 1080),
+    (1600, 900),
+    (1280, 720),
+    (1024, 768),
+    (800, 600),
+];
+
+pub fn display_aspect_choice_index(width: u32, height: u32) -> usize {
+    if height == 0 {
+        return 0;
+    }
+
+    if let Some(idx) = DISPLAY_ASPECT_RATIO_LABELS
+        .iter()
+        .position(|label| aspect_matches(width, height, label))
+    {
+        return idx;
+    }
+
+    let ratio = width as f32 / height as f32;
+    let mut best_idx = 0;
+    let mut best_delta = f32::INFINITY;
+    for (idx, label) in DISPLAY_ASPECT_RATIO_LABELS.iter().enumerate() {
+        let target = match *label {
+            "16:9" => 16.0 / 9.0,
+            "16:10" => 16.0 / 10.0,
+            "4:3" => 4.0 / 3.0,
+            "1:1" => 1.0,
+            _ => continue,
+        };
+        let delta = (ratio - target).abs();
+        if delta < best_delta {
+            best_delta = delta;
+            best_idx = idx;
+        }
+    }
+    best_idx
+}
+
+pub fn display_aspect_label_from_choice(idx: usize) -> &'static str {
+    DISPLAY_ASPECT_RATIO_LABELS
+        .get(idx)
+        .copied()
+        .unwrap_or("16:9")
+}
+
+pub fn push_unique_resolution(target: &mut Vec<(u32, u32)>, width: u32, height: u32) {
+    if !target.iter().any(|&(w, h)| w == width && h == height) {
+        target.push((width, height));
+    }
+}
+
+pub fn preset_resolutions_for_aspect(label: &str) -> Vec<(u32, u32)> {
+    match label.to_ascii_lowercase().as_str() {
+        "16:9" => vec![(1280, 720), (1600, 900), (1920, 1080)],
+        "16:10" => vec![(1280, 800), (1440, 900), (1680, 1050), (1920, 1200)],
+        "4:3" => vec![
+            (640, 480),
+            (800, 600),
+            (1024, 768),
+            (1280, 960),
+            (1600, 1200),
+        ],
+        "1:1" => vec![(342, 342), (456, 456), (608, 608), (810, 810), (1080, 1080)],
+        _ => DEFAULT_RESOLUTION_CHOICES.to_vec(),
+    }
+}
+
+pub fn aspect_matches(width: u32, height: u32, label: &str) -> bool {
+    let ratio = width as f32 / height as f32;
+    match label {
+        "16:9" => (ratio - 1.7777).abs() < 0.05,
+        "16:10" => (ratio - 1.6).abs() < 0.05,
+        "4:3" => (ratio - 1.3333).abs() < 0.05,
+        "1:1" => (ratio - 1.0).abs() < 0.05,
+        _ => true,
+    }
+}
+
 impl FromStr for FullscreenType {
     type Err = ();
 
@@ -29,6 +125,57 @@ impl FromStr for FullscreenType {
             "borderless" => Ok(Self::Borderless),
             _ => Err(()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fullscreen_type_choices_match_options_order() {
+        assert_eq!(fullscreen_type_choice_index(FullscreenType::Exclusive), 0);
+        assert_eq!(fullscreen_type_choice_index(FullscreenType::Borderless), 1);
+        assert_eq!(fullscreen_type_from_choice(0), FullscreenType::Exclusive);
+        assert_eq!(fullscreen_type_from_choice(1), FullscreenType::Borderless);
+        assert_eq!(fullscreen_type_from_choice(99), FullscreenType::Exclusive);
+    }
+
+    #[test]
+    fn display_aspect_choice_matches_common_resolutions() {
+        assert_eq!(display_aspect_choice_index(1920, 1080), 0);
+        assert_eq!(display_aspect_choice_index(1680, 1050), 1);
+        assert_eq!(display_aspect_choice_index(1024, 768), 2);
+        assert_eq!(display_aspect_choice_index(810, 810), 3);
+        assert_eq!(display_aspect_choice_index(1920, 0), 0);
+    }
+
+    #[test]
+    fn display_aspect_labels_fallback_to_wide() {
+        assert_eq!(display_aspect_label_from_choice(0), "16:9");
+        assert_eq!(display_aspect_label_from_choice(2), "4:3");
+        assert_eq!(display_aspect_label_from_choice(99), "16:9");
+    }
+
+    #[test]
+    fn preset_resolutions_match_aspect_policy() {
+        assert_eq!(
+            preset_resolutions_for_aspect("16:9"),
+            vec![(1280, 720), (1600, 900), (1920, 1080)]
+        );
+        assert!(preset_resolutions_for_aspect("4:3").contains(&(1024, 768)));
+        assert_eq!(
+            preset_resolutions_for_aspect("unknown"),
+            DEFAULT_RESOLUTION_CHOICES
+        );
+    }
+
+    #[test]
+    fn push_unique_resolution_deduplicates() {
+        let mut resolutions = vec![(800, 600)];
+        push_unique_resolution(&mut resolutions, 800, 600);
+        push_unique_resolution(&mut resolutions, 1024, 768);
+        assert_eq!(resolutions, vec![(800, 600), (1024, 768)]);
     }
 }
 

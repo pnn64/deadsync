@@ -112,8 +112,3 @@ pub(in crate::screens::options) const ADVANCED_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
 ];
-
-impl ChoiceEnum for DefaultFailType {
-    const ALL: &'static [Self] = &[Self::Immediate, Self::ImmediateContinue];
-    const DEFAULT: Self = Self::ImmediateContinue;
-}

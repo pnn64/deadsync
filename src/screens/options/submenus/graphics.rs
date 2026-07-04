@@ -1,5 +1,10 @@
 use super::super::*;
 
+pub(in crate::screens::options) use crate::config::{
+    build_max_fps_choices, clamped_max_fps, max_fps_choice_index, max_fps_from_choice,
+    max_fps_hold_delta,
+};
+
 pub(in crate::screens::options) const GRAPHICS_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         id: SubRowId::VideoRenderer,
@@ -299,56 +304,6 @@ pub(in crate::screens::options) const GRAPHICS_OPTIONS_ITEMS: &[Item] = &[
     not(target_vendor = "win7"),
     not(target_pointer_width = "32")
 ))]
-pub(in crate::screens::options) const VIDEO_RENDERER_OPTIONS: &[(BackendType, &str)] = &[
-    (BackendType::OpenGL, "OpenGL"),
-    (BackendType::Vulkan, "Vulkan"),
-    (BackendType::DirectX, "DirectX"),
-    (BackendType::OpenGLWgpu, "OpenGL (wgpu)"),
-    (BackendType::VulkanWgpu, "Vulkan (wgpu)"),
-    (BackendType::Software, "Software"),
-];
-#[cfg(all(
-    target_os = "windows",
-    any(target_vendor = "win7", target_pointer_width = "32")
-))]
-pub(in crate::screens::options) const VIDEO_RENDERER_OPTIONS: &[(BackendType, &str)] = &[
-    (BackendType::OpenGL, "OpenGL"),
-    (BackendType::DirectX, "DirectX"),
-    (BackendType::OpenGLWgpu, "OpenGL (wgpu)"),
-    (BackendType::Software, "Software"),
-];
-#[cfg(all(target_os = "macos", not(target_pointer_width = "32")))]
-pub(in crate::screens::options) const VIDEO_RENDERER_OPTIONS: &[(BackendType, &str)] = &[
-    (BackendType::OpenGL, "OpenGL"),
-    (BackendType::Vulkan, "Vulkan"),
-    (BackendType::Metal, "Metal (wgpu)"),
-    (BackendType::OpenGLWgpu, "OpenGL (wgpu)"),
-    (BackendType::VulkanWgpu, "Vulkan (wgpu)"),
-    (BackendType::Software, "Software"),
-];
-#[cfg(all(
-    not(any(target_os = "windows", target_os = "macos")),
-    not(target_pointer_width = "32")
-))]
-pub(in crate::screens::options) const VIDEO_RENDERER_OPTIONS: &[(BackendType, &str)] = &[
-    (BackendType::OpenGL, "OpenGL"),
-    (BackendType::Vulkan, "Vulkan"),
-    (BackendType::OpenGLWgpu, "OpenGL (wgpu)"),
-    (BackendType::VulkanWgpu, "Vulkan (wgpu)"),
-    (BackendType::Software, "Software"),
-];
-#[cfg(all(not(target_os = "windows"), target_pointer_width = "32"))]
-pub(in crate::screens::options) const VIDEO_RENDERER_OPTIONS: &[(BackendType, &str)] = &[
-    (BackendType::OpenGL, "OpenGL"),
-    (BackendType::OpenGLWgpu, "OpenGL (wgpu)"),
-    (BackendType::Software, "Software"),
-];
-
-#[cfg(all(
-    target_os = "windows",
-    not(target_vendor = "win7"),
-    not(target_pointer_width = "32")
-))]
 pub(in crate::screens::options) const VIDEO_RENDERER_LABELS: &[Choice] = &[
     localized_choice("OptionsGraphics", "RendererOpenGL"),
     localized_choice("OptionsGraphics", "RendererVulkan"),
@@ -401,19 +356,6 @@ pub(in crate::screens::options) const DISPLAY_ASPECT_RATIO_CHOICES: &[Choice] = 
     literal_choice("1:1"),
 ];
 
-pub(in crate::screens::options) const MAX_FPS_MIN: u16 = 5;
-pub(in crate::screens::options) const MAX_FPS_MAX: u16 = 1000;
-pub(in crate::screens::options) const MAX_FPS_STEP: u16 = 1;
-pub(in crate::screens::options) const MAX_FPS_DEFAULT: u16 = 60;
-
-pub(in crate::screens::options) const DEFAULT_RESOLUTION_CHOICES: &[(u32, u32)] = &[
-    (1920, 1080),
-    (1600, 900),
-    (1280, 720),
-    (1024, 768),
-    (800, 600),
-];
-
 pub(in crate::screens::options) fn build_display_mode_choices(
     monitor_specs: &[MonitorSpec],
 ) -> Vec<String> {
@@ -431,19 +373,6 @@ pub(in crate::screens::options) fn build_display_mode_choices(
     out
 }
 
-pub(in crate::screens::options) fn backend_to_renderer_choice_index(backend: BackendType) -> usize {
-    VIDEO_RENDERER_OPTIONS
-        .iter()
-        .position(|(b, _)| *b == backend)
-        .unwrap_or(0)
-}
-
-pub(in crate::screens::options) fn renderer_choice_index_to_backend(idx: usize) -> BackendType {
-    VIDEO_RENDERER_OPTIONS
-        .get(idx)
-        .map_or_else(|| VIDEO_RENDERER_OPTIONS[0].0, |(backend, _)| *backend)
-}
-
 pub(in crate::screens::options) fn selected_video_renderer(state: &State) -> BackendType {
     let choice_idx = get_choice_by_id(
         &state.sub[SubmenuKind::Graphics].choice_indices,
@@ -452,19 +381,6 @@ pub(in crate::screens::options) fn selected_video_renderer(state: &State) -> Bac
     )
     .unwrap_or(0);
     renderer_choice_index_to_backend(choice_idx)
-}
-
-pub(in crate::screens::options) fn build_software_thread_choices() -> Vec<u8> {
-    let max_threads = std::thread::available_parallelism()
-        .map(std::num::NonZero::get)
-        .unwrap_or(8)
-        .clamp(2, 32);
-    let mut out = Vec::with_capacity(max_threads + 1);
-    out.push(0); // Auto
-    for n in 1..=max_threads {
-        out.push(n as u8);
-    }
-    out
 }
 
 pub(in crate::screens::options) fn software_thread_choice_labels(values: &[u8]) -> Vec<String> {
@@ -478,38 +394,6 @@ pub(in crate::screens::options) fn software_thread_choice_labels(values: &[u8]) 
             }
         })
         .collect()
-}
-
-pub(in crate::screens::options) fn software_thread_choice_index(
-    values: &[u8],
-    thread_count: u8,
-) -> usize {
-    values
-        .iter()
-        .position(|&v| v == thread_count)
-        .unwrap_or_else(|| {
-            values
-                .iter()
-                .enumerate()
-                .min_by_key(|(_, v)| v.abs_diff(thread_count))
-                .map_or(0, |(idx, _)| idx)
-        })
-}
-
-pub(in crate::screens::options) fn software_thread_from_choice(values: &[u8], idx: usize) -> u8 {
-    values.get(idx).copied().unwrap_or(0)
-}
-
-pub(in crate::screens::options) fn build_max_fps_choices() -> Vec<u16> {
-    let mut out = Vec::with_capacity(
-        1 + usize::from(MAX_FPS_MAX.saturating_sub(MAX_FPS_MIN)) / usize::from(MAX_FPS_STEP),
-    );
-    let mut fps = MAX_FPS_MIN;
-    while fps <= MAX_FPS_MAX {
-        out.push(fps);
-        fps = fps.saturating_add(MAX_FPS_STEP);
-    }
-    out
 }
 
 pub(in crate::screens::options) fn selected_max_fps_label(state: &State) -> String {
@@ -569,50 +453,6 @@ pub(in crate::screens::options) fn on_max_fps_value_row(state: &State) -> bool {
     )
 }
 
-pub(in crate::screens::options) fn max_fps_hold_delta(delta: isize, held_for: Duration) -> isize {
-    let multiplier = if held_for >= MAX_FPS_HOLD_FASTEST_AFTER {
-        50
-    } else if held_for >= MAX_FPS_HOLD_FASTER_AFTER {
-        25
-    } else if held_for >= MAX_FPS_HOLD_FAST_AFTER {
-        10
-    } else {
-        5
-    };
-    delta * multiplier
-}
-
-#[inline(always)]
-pub(in crate::screens::options) const fn clamped_max_fps(max_fps: u16) -> u16 {
-    if max_fps < MAX_FPS_MIN {
-        MAX_FPS_MIN
-    } else if max_fps > MAX_FPS_MAX {
-        MAX_FPS_MAX
-    } else {
-        max_fps
-    }
-}
-
-pub(in crate::screens::options) fn max_fps_choice_index(values: &[u16], max_fps: u16) -> usize {
-    let target = clamped_max_fps(max_fps);
-    values.iter().position(|&v| v == target).unwrap_or_else(|| {
-        values
-            .iter()
-            .enumerate()
-            .min_by_key(|(_, v)| v.abs_diff(target))
-            .map_or(0, |(idx, _)| idx)
-    })
-}
-
-pub(in crate::screens::options) fn max_fps_from_choice(values: &[u16], idx: usize) -> u16 {
-    values.get(idx).copied().unwrap_or(MAX_FPS_DEFAULT)
-}
-
-impl ChoiceEnum for PresentModePolicy {
-    const ALL: &'static [Self] = &[Self::Mailbox, Self::Immediate];
-    const DEFAULT: Self = Self::Mailbox;
-}
-
 pub(in crate::screens::options) fn selected_present_mode_policy(
     state: &State,
 ) -> PresentModePolicy {
@@ -623,7 +463,7 @@ pub(in crate::screens::options) fn selected_present_mode_policy(
     )
     .map_or(
         state.present_mode_policy_at_load,
-        PresentModePolicy::from_choice,
+        present_mode_policy_from_choice,
     )
 }
 
@@ -719,18 +559,13 @@ pub(in crate::screens::options) fn graphics_show_high_dpi(state: &State) -> bool
     cfg!(target_os = "macos") && selected_video_renderer(state) == BackendType::OpenGL
 }
 
-impl ChoiceEnum for FullscreenType {
-    const ALL: &'static [Self] = &[Self::Exclusive, Self::Borderless];
-    const DEFAULT: Self = Self::Exclusive;
-}
-
 pub(in crate::screens::options) fn selected_fullscreen_type(state: &State) -> FullscreenType {
     get_choice_by_id(
         &state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
         SubRowId::FullscreenType,
     )
-    .map_or(FullscreenType::Exclusive, FullscreenType::from_choice)
+    .map_or(FullscreenType::Exclusive, fullscreen_type_from_choice)
 }
 
 pub(in crate::screens::options) fn selected_display_mode(state: &State) -> DisplayMode {
@@ -916,46 +751,7 @@ pub(in crate::screens::options) fn selected_aspect_label(state: &State) -> &'sta
         SubRowId::DisplayAspectRatio,
     )
     .unwrap_or(0);
-    DISPLAY_ASPECT_RATIO_CHOICES
-        .get(idx)
-        .or(Some(&DISPLAY_ASPECT_RATIO_CHOICES[0]))
-        .and_then(|c| c.as_str_static())
-        .unwrap_or("16:9")
-}
-
-pub(in crate::screens::options) fn inferred_aspect_choice(width: u32, height: u32) -> usize {
-    if height == 0 {
-        return 0;
-    }
-
-    if let Some(idx) = DISPLAY_ASPECT_RATIO_CHOICES.iter().position(|c| {
-        c.as_str_static()
-            .map_or(false, |label| aspect_matches(width, height, label))
-    }) {
-        return idx;
-    }
-
-    let ratio = width as f32 / height as f32;
-    let mut best_idx = 0;
-    let mut best_delta = f32::INFINITY;
-    for (idx, choice) in DISPLAY_ASPECT_RATIO_CHOICES.iter().enumerate() {
-        let Some(label) = choice.as_str_static() else {
-            continue;
-        };
-        let target = match label {
-            "16:9" => 16.0 / 9.0,
-            "16:10" => 16.0 / 10.0,
-            "4:3" => 4.0 / 3.0,
-            "1:1" => 1.0,
-            _ => continue,
-        };
-        let delta = (ratio - target).abs();
-        if delta < best_delta {
-            best_delta = delta;
-            best_idx = idx;
-        }
-    }
-    best_idx
+    display::display_aspect_label_from_choice(idx)
 }
 
 pub(in crate::screens::options) fn sync_display_aspect_ratio(
@@ -963,7 +759,7 @@ pub(in crate::screens::options) fn sync_display_aspect_ratio(
     width: u32,
     height: u32,
 ) {
-    let idx = inferred_aspect_choice(width, height);
+    let idx = display::display_aspect_choice_index(width, height);
     if let Some(slot) = get_choice_by_id_mut(
         &mut state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
@@ -977,43 +773,6 @@ pub(in crate::screens::options) fn sync_display_aspect_ratio(
         SubRowId::DisplayAspectRatio,
     ) {
         *slot = idx;
-    }
-}
-
-pub(in crate::screens::options) fn push_unique_resolution(
-    target: &mut Vec<(u32, u32)>,
-    width: u32,
-    height: u32,
-) {
-    if !target.iter().any(|&(w, h)| w == width && h == height) {
-        target.push((width, height));
-    }
-}
-
-pub(in crate::screens::options) fn preset_resolutions_for_aspect(label: &str) -> Vec<(u32, u32)> {
-    match label.to_ascii_lowercase().as_str() {
-        "16:9" => vec![(1280, 720), (1600, 900), (1920, 1080)],
-        "16:10" => vec![(1280, 800), (1440, 900), (1680, 1050), (1920, 1200)],
-        "4:3" => vec![
-            (640, 480),
-            (800, 600),
-            (1024, 768),
-            (1280, 960),
-            (1600, 1200),
-        ],
-        "1:1" => vec![(342, 342), (456, 456), (608, 608), (810, 810), (1080, 1080)],
-        _ => DEFAULT_RESOLUTION_CHOICES.to_vec(),
-    }
-}
-
-pub(in crate::screens::options) fn aspect_matches(width: u32, height: u32, label: &str) -> bool {
-    let ratio = width as f32 / height as f32;
-    match label {
-        "16:9" => (ratio - 1.7777).abs() < 0.05,
-        "16:10" => (ratio - 1.6).abs() < 0.05,
-        "4:3" => (ratio - 1.3333).abs() < 0.05,
-        "1:1" => (ratio - 1.0).abs() < 0.05,
-        _ => true,
     }
 }
 
@@ -1116,17 +875,17 @@ pub(in crate::screens::options) fn rebuild_resolution_choices(
     let mut list: Vec<(u32, u32)> =
         display::supported_resolutions(state.monitor_specs.get(mon_idx))
             .into_iter()
-            .filter(|(w, h)| aspect_matches(*w, *h, aspect_label))
+            .filter(|(w, h)| display::aspect_matches(*w, *h, aspect_label))
             .collect();
 
     // 2. If list is empty (e.g. no monitor data or Aspect filter too strict), use presets.
     if list.is_empty() {
-        list = preset_resolutions_for_aspect(aspect_label);
+        list = display::preset_resolutions_for_aspect(aspect_label);
     }
 
     // 3. Keep the current resolution only if it matches the selected aspect.
-    if aspect_matches(width, height, aspect_label) {
-        push_unique_resolution(&mut list, width, height);
+    if display::aspect_matches(width, height, aspect_label) {
+        display::push_unique_resolution(&mut list, width, height);
     }
 
     // Sort descending by width then height (typical UI preference).

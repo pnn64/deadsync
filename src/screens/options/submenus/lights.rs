@@ -1,5 +1,10 @@
 use super::super::*;
 
+pub(in crate::screens::options) use deadsync_lights::{
+    lights_driver_choice_index, lights_driver_from_choice, lights_gameplay_pad_choice_index,
+    lights_gameplay_pad_from_choice,
+};
+
 pub(in crate::screens::options) const LIGHTS_OPTIONS_ROWS: &[SubRow] = &[
     SubRow {
         id: SubRowId::LightsDriver,
@@ -85,57 +90,3 @@ pub(in crate::screens::options) const LIGHTS_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
 ];
-
-pub(in crate::screens::options) const fn lights_driver_choice_index(
-    driver: LightsDriverKind,
-) -> usize {
-    match driver {
-        LightsDriverKind::Off => 0,
-        LightsDriverKind::Snek => 1,
-        LightsDriverKind::Litboard => 2,
-        LightsDriverKind::Win32Serial => 3,
-        LightsDriverKind::Fusion => 4,
-        LightsDriverKind::Gpb => 5,
-        LightsDriverKind::PacDrive => 6,
-        LightsDriverKind::PiuioLeds => 7,
-        LightsDriverKind::Itgio => 8,
-        LightsDriverKind::HidBlueDot => 9,
-        LightsDriverKind::Stac2 => 10,
-        LightsDriverKind::MinimaidHid => 11,
-    }
-}
-
-pub(in crate::screens::options) const fn lights_driver_from_choice(idx: usize) -> LightsDriverKind {
-    match idx {
-        1 => LightsDriverKind::Snek,
-        2 => LightsDriverKind::Litboard,
-        3 => LightsDriverKind::Win32Serial,
-        4 => LightsDriverKind::Fusion,
-        5 => LightsDriverKind::Gpb,
-        6 => LightsDriverKind::PacDrive,
-        7 => LightsDriverKind::PiuioLeds,
-        8 => LightsDriverKind::Itgio,
-        9 => LightsDriverKind::HidBlueDot,
-        10 => LightsDriverKind::Stac2,
-        11 => LightsDriverKind::MinimaidHid,
-        _ => LightsDriverKind::Off,
-    }
-}
-
-pub(in crate::screens::options) const fn lights_gameplay_pad_choice_index(
-    mode: LightsGameplayPadMode,
-) -> usize {
-    match mode {
-        LightsGameplayPadMode::Input => 0,
-        LightsGameplayPadMode::Chart => 1,
-    }
-}
-
-pub(in crate::screens::options) const fn lights_gameplay_pad_from_choice(
-    idx: usize,
-) -> LightsGameplayPadMode {
-    match idx {
-        1 => LightsGameplayPadMode::Chart,
-        _ => LightsGameplayPadMode::Input,
-    }
-}

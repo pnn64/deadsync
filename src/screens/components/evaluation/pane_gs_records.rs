@@ -5,7 +5,7 @@ use deadlib_present::color;
 use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 
-use super::utils::{format_machine_record_date, pane_origin_x};
+use super::utils::pane_origin_x;
 
 const GS_RECORD_ROWS: usize = 10;
 const GS_LOADING_TEXT: &str = "Loading ...";
@@ -85,78 +85,13 @@ fn gs_player_name(entry: &score_data::LeaderboardEntry) -> String {
     GS_ROW_PLACEHOLDER_NAME.to_string()
 }
 
-#[inline(always)]
-fn same_leaderboard_entry(
-    a: &score_data::LeaderboardEntry,
-    b: &score_data::LeaderboardEntry,
-) -> bool {
-    a.rank == b.rank && a.name.eq_ignore_ascii_case(b.name.as_str())
-}
-
-#[inline(always)]
-fn selected_contains(
-    selected: &[&score_data::LeaderboardEntry],
-    entry: &score_data::LeaderboardEntry,
-) -> bool {
-    selected
-        .iter()
-        .any(|chosen| same_leaderboard_entry(chosen, entry))
-}
-
-fn next_record_entry<'a>(
-    entries: &'a [score_data::LeaderboardEntry],
-    selected: &[&'a score_data::LeaderboardEntry],
-    include: impl Fn(&score_data::LeaderboardEntry) -> bool,
-) -> Option<&'a score_data::LeaderboardEntry> {
-    entries
-        .iter()
-        .filter(|entry| include(entry) && !selected_contains(selected, entry))
-        .min_by_key(|entry| entry.rank)
-}
-
-fn prioritized_record_entries(
-    entries: &[score_data::LeaderboardEntry],
-    max_rows: usize,
-) -> Vec<score_data::LeaderboardEntry> {
-    if max_rows == 0 {
-        return Vec::new();
-    }
-    if entries.len() <= max_rows {
-        return entries.to_vec();
-    }
-
-    let mut selected = Vec::with_capacity(max_rows);
-    if let Some(top) = next_record_entry(entries, selected.as_slice(), |_| true) {
-        selected.push(top);
-    }
-    if let Some(self_entry) = next_record_entry(entries, selected.as_slice(), |entry| entry.is_self)
-    {
-        selected.push(self_entry);
-    }
-    while selected.len() < max_rows {
-        let Some(rival) = next_record_entry(entries, selected.as_slice(), |entry| entry.is_rival)
-        else {
-            break;
-        };
-        selected.push(rival);
-    }
-    while selected.len() < max_rows {
-        let Some(entry) = next_record_entry(entries, selected.as_slice(), |_| true) else {
-            break;
-        };
-        selected.push(entry);
-    }
-    selected.sort_unstable_by_key(|entry| entry.rank);
-    selected.into_iter().cloned().collect()
-}
-
 fn pane_display_entries(
     score_side: profile_data::PlayerSide,
     chart_hash: Option<&str>,
     pane: &score_data::LeaderboardPane,
 ) -> Vec<score_data::LeaderboardEntry> {
     let entries = entries_with_local_self_state(score_side, chart_hash, pane);
-    prioritized_record_entries(entries.as_slice(), GS_RECORD_ROWS)
+    score_data::prioritized_leaderboard_entries(entries.as_slice(), GS_RECORD_ROWS)
 }
 
 fn build_records_pane(
@@ -252,7 +187,7 @@ fn build_records_pane(
                             format!("{}.", entry.rank),
                             gs_player_name(&entry),
                             format!("{:.2}%", entry.score / 100.0),
-                            format_machine_record_date(&entry.date),
+                            score_data::format_leaderboard_date_or_placeholder(&entry.date),
                             base_col,
                             score_col,
                         ));
@@ -436,21 +371,6 @@ mod tests {
             personalized: true,
             arrowcloud_kind,
         }
-    }
-
-    #[test]
-    fn prioritized_entries_keep_self_and_rivals_visible() {
-        let mut entries = (1..=12)
-            .map(|rank| entry(rank, &format!("top-{rank}"), false, false))
-            .collect::<Vec<_>>();
-        entries.push(entry(20, "self", true, false));
-        entries.push(entry(30, "rival-a", false, true));
-        entries.push(entry(40, "rival-b", false, true));
-
-        let selected = prioritized_record_entries(entries.as_slice(), GS_RECORD_ROWS);
-        let ranks = selected.iter().map(|entry| entry.rank).collect::<Vec<_>>();
-
-        assert_eq!(ranks, vec![1, 2, 3, 4, 5, 6, 7, 20, 30, 40]);
     }
 
     #[test]

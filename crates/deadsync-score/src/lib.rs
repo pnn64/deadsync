@@ -1601,6 +1601,30 @@ impl ScoreImportEndpoint {
     }
 }
 
+pub const SCORE_IMPORT_ENDPOINT_CHOICES: [ScoreImportEndpoint; 3] = [
+    ScoreImportEndpoint::GrooveStats,
+    ScoreImportEndpoint::BoogieStats,
+    ScoreImportEndpoint::ArrowCloud,
+];
+
+#[inline(always)]
+pub const fn score_import_endpoint_choice_index(endpoint: ScoreImportEndpoint) -> usize {
+    match endpoint {
+        ScoreImportEndpoint::GrooveStats => 0,
+        ScoreImportEndpoint::BoogieStats => 1,
+        ScoreImportEndpoint::ArrowCloud => 2,
+    }
+}
+
+#[inline(always)]
+pub const fn score_import_endpoint_from_choice_index(idx: usize) -> ScoreImportEndpoint {
+    match idx {
+        1 => ScoreImportEndpoint::BoogieStats,
+        2 => ScoreImportEndpoint::ArrowCloud,
+        _ => ScoreImportEndpoint::GrooveStats,
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ImportedPlayerScore {
     pub score_10000: f64,
@@ -4101,6 +4125,46 @@ mod tests {
         assert!(ScoreImportEndpoint::GrooveStats.requires_username());
         assert!(ScoreImportEndpoint::BoogieStats.requires_username());
         assert!(!ScoreImportEndpoint::ArrowCloud.requires_username());
+    }
+
+    #[test]
+    fn score_import_endpoint_choices_match_options_order() {
+        assert_eq!(
+            SCORE_IMPORT_ENDPOINT_CHOICES,
+            [
+                ScoreImportEndpoint::GrooveStats,
+                ScoreImportEndpoint::BoogieStats,
+                ScoreImportEndpoint::ArrowCloud,
+            ]
+        );
+        assert_eq!(
+            score_import_endpoint_choice_index(ScoreImportEndpoint::GrooveStats),
+            0
+        );
+        assert_eq!(
+            score_import_endpoint_choice_index(ScoreImportEndpoint::BoogieStats),
+            1
+        );
+        assert_eq!(
+            score_import_endpoint_choice_index(ScoreImportEndpoint::ArrowCloud),
+            2
+        );
+        assert_eq!(
+            score_import_endpoint_from_choice_index(0),
+            ScoreImportEndpoint::GrooveStats
+        );
+        assert_eq!(
+            score_import_endpoint_from_choice_index(1),
+            ScoreImportEndpoint::BoogieStats
+        );
+        assert_eq!(
+            score_import_endpoint_from_choice_index(2),
+            ScoreImportEndpoint::ArrowCloud
+        );
+        assert_eq!(
+            score_import_endpoint_from_choice_index(99),
+            ScoreImportEndpoint::GrooveStats
+        );
     }
 
     #[test]

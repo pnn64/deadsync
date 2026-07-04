@@ -1,0 +1,15 @@
+[package]
+name = "deadsync-theme"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0"
+
+[dependencies]
+deadsync-config = { path = "../deadsync-config" }
+deadsync-profile = { path = "../deadsync-profile" }
+rand = "0.10.1"
+
+[lints.clippy]
+perf = { level = "warn", priority = -1 }
+
+inline_always = "allow"

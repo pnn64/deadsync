@@ -219,13 +219,6 @@ impl Choice {
             Choice::Literal(s) => Arc::from(*s),
         }
     }
-
-    pub fn as_str_static(&self) -> Option<&'static str> {
-        match self {
-            Choice::Literal(s) => Some(s),
-            Choice::Localized(_) => None,
-        }
-    }
 }
 
 /// Shorthand for `Choice::Localized(lookup_key(section, key))` in const arrays.
@@ -278,23 +271,4 @@ pub(super) const fn yes_no_choice_index(enabled: bool) -> usize {
 
 pub(super) const fn yes_no_from_choice(idx: usize) -> bool {
     idx == 1
-}
-
-/// Trait for enums that map 1:1 to choice indices in option rows.
-/// Provides bidirectional conversion between enum values and choice indices.
-pub(super) trait ChoiceEnum: Copy + PartialEq + 'static {
-    /// All variants in choice-index order.
-    const ALL: &'static [Self];
-    /// Fallback for out-of-range indices.
-    const DEFAULT: Self;
-
-    /// Returns the choice index for this value.
-    fn choice_index(self) -> usize {
-        Self::ALL.iter().position(|v| *v == self).unwrap_or(0)
-    }
-
-    /// Returns the enum value for a choice index, or `DEFAULT` if out of range.
-    fn from_choice(idx: usize) -> Self {
-        Self::ALL.get(idx).copied().unwrap_or(Self::DEFAULT)
-    }
 }

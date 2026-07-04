@@ -408,6 +408,99 @@ impl core::str::FromStr for BackendType {
     }
 }
 
+#[cfg(all(
+    target_os = "windows",
+    not(target_vendor = "win7"),
+    not(target_pointer_width = "32")
+))]
+pub const BACKEND_TYPE_CHOICES: &[(BackendType, &str)] = &[
+    (BackendType::OpenGL, "OpenGL"),
+    (BackendType::Vulkan, "Vulkan"),
+    (BackendType::DirectX, "DirectX"),
+    (BackendType::OpenGLWgpu, "OpenGL (wgpu)"),
+    (BackendType::VulkanWgpu, "Vulkan (wgpu)"),
+    (BackendType::Software, "Software"),
+];
+#[cfg(all(
+    target_os = "windows",
+    any(target_vendor = "win7", target_pointer_width = "32")
+))]
+pub const BACKEND_TYPE_CHOICES: &[(BackendType, &str)] = &[
+    (BackendType::OpenGL, "OpenGL"),
+    (BackendType::DirectX, "DirectX"),
+    (BackendType::OpenGLWgpu, "OpenGL (wgpu)"),
+    (BackendType::Software, "Software"),
+];
+#[cfg(all(target_os = "macos", not(target_pointer_width = "32")))]
+pub const BACKEND_TYPE_CHOICES: &[(BackendType, &str)] = &[
+    (BackendType::OpenGL, "OpenGL"),
+    (BackendType::Vulkan, "Vulkan"),
+    (BackendType::Metal, "Metal (wgpu)"),
+    (BackendType::OpenGLWgpu, "OpenGL (wgpu)"),
+    (BackendType::VulkanWgpu, "Vulkan (wgpu)"),
+    (BackendType::Software, "Software"),
+];
+#[cfg(all(
+    not(any(target_os = "windows", target_os = "macos")),
+    not(target_pointer_width = "32")
+))]
+pub const BACKEND_TYPE_CHOICES: &[(BackendType, &str)] = &[
+    (BackendType::OpenGL, "OpenGL"),
+    (BackendType::Vulkan, "Vulkan"),
+    (BackendType::OpenGLWgpu, "OpenGL (wgpu)"),
+    (BackendType::VulkanWgpu, "Vulkan (wgpu)"),
+    (BackendType::Software, "Software"),
+];
+#[cfg(all(not(target_os = "windows"), target_pointer_width = "32"))]
+pub const BACKEND_TYPE_CHOICES: &[(BackendType, &str)] = &[
+    (BackendType::OpenGL, "OpenGL"),
+    (BackendType::OpenGLWgpu, "OpenGL (wgpu)"),
+    (BackendType::Software, "Software"),
+];
+
+pub fn backend_type_choice_index(backend: BackendType) -> usize {
+    BACKEND_TYPE_CHOICES
+        .iter()
+        .position(|(candidate, _)| *candidate == backend)
+        .unwrap_or(0)
+}
+
+pub fn backend_type_from_choice(idx: usize) -> BackendType {
+    BACKEND_TYPE_CHOICES
+        .get(idx)
+        .map_or_else(|| BACKEND_TYPE_CHOICES[0].0, |(backend, _)| *backend)
+}
+
+pub fn build_software_thread_choices() -> Vec<u8> {
+    let max_threads = std::thread::available_parallelism()
+        .map(std::num::NonZero::get)
+        .unwrap_or(8)
+        .clamp(2, 32);
+    let mut out = Vec::with_capacity(max_threads + 1);
+    out.push(0);
+    for n in 1..=max_threads {
+        out.push(n as u8);
+    }
+    out
+}
+
+pub fn software_thread_choice_index(values: &[u8], thread_count: u8) -> usize {
+    values
+        .iter()
+        .position(|&value| value == thread_count)
+        .unwrap_or_else(|| {
+            values
+                .iter()
+                .enumerate()
+                .min_by_key(|(_, value)| value.abs_diff(thread_count))
+                .map_or(0, |(idx, _)| idx)
+        })
+}
+
+pub fn software_thread_from_choice(values: &[u8], idx: usize) -> u8 {
+    values.get(idx).copied().unwrap_or(0)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PresentModePolicy {
     Mailbox,
@@ -513,6 +606,20 @@ impl PresentModePolicy {
     }
 }
 
+pub const fn present_mode_policy_choice_index(policy: PresentModePolicy) -> usize {
+    match policy {
+        PresentModePolicy::Mailbox => 0,
+        PresentModePolicy::Immediate => 1,
+    }
+}
+
+pub const fn present_mode_policy_from_choice(idx: usize) -> PresentModePolicy {
+    match idx {
+        1 => PresentModePolicy::Immediate,
+        _ => PresentModePolicy::Mailbox,
+    }
+}
+
 impl core::fmt::Display for PresentModePolicy {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.write_str(self.as_str())
@@ -528,5 +635,85 @@ impl core::str::FromStr for PresentModePolicy {
             "immediate" | "unhinged" => Ok(Self::Immediate),
             other => Err(format!("'{other}' is not a valid present mode policy")),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn present_mode_policy_choices_match_options_order() {
+        assert_eq!(
+            present_mode_policy_choice_index(PresentModePolicy::Mailbox),
+            0
+        );
+        assert_eq!(
+            present_mode_policy_choice_index(PresentModePolicy::Immediate),
+            1
+        );
+        assert_eq!(
+            present_mode_policy_from_choice(0),
+            PresentModePolicy::Mailbox
+        );
+        assert_eq!(
+            present_mode_policy_from_choice(1),
+            PresentModePolicy::Immediate
+        );
+        assert_eq!(
+            present_mode_policy_from_choice(99),
+            PresentModePolicy::Mailbox
+        );
+    }
+
+    #[test]
+    fn backend_type_choices_match_options_order() {
+        assert_eq!(BACKEND_TYPE_CHOICES[0], (BackendType::OpenGL, "OpenGL"));
+        assert_eq!(backend_type_choice_index(BackendType::OpenGL), 0);
+        assert_eq!(backend_type_from_choice(0), BackendType::OpenGL);
+        assert_eq!(backend_type_from_choice(usize::MAX), BackendType::OpenGL);
+        assert_eq!(
+            backend_type_choice_index(BackendType::Software),
+            BACKEND_TYPE_CHOICES.len() - 1
+        );
+
+        #[cfg(target_os = "windows")]
+        assert!(
+            BACKEND_TYPE_CHOICES
+                .iter()
+                .any(|(backend, _)| *backend == BackendType::DirectX)
+        );
+        #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+        assert!(
+            BACKEND_TYPE_CHOICES
+                .iter()
+                .any(|(backend, _)| *backend == BackendType::VulkanWgpu)
+        );
+        #[cfg(target_os = "macos")]
+        assert!(
+            BACKEND_TYPE_CHOICES
+                .iter()
+                .any(|(backend, _)| *backend == BackendType::Metal)
+        );
+    }
+
+    #[test]
+    fn software_thread_choices_include_auto_and_available_range() {
+        let choices = build_software_thread_choices();
+        assert_eq!(choices.first().copied(), Some(0));
+        assert!(choices.len() >= 3);
+        assert!(choices.windows(2).all(|pair| pair[0] < pair[1]));
+        assert!(choices.len() <= 33);
+    }
+
+    #[test]
+    fn software_thread_choice_helpers_round_to_nearest() {
+        let choices = [0, 1, 2, 4, 8];
+        assert_eq!(software_thread_choice_index(&choices, 4), 3);
+        assert_eq!(software_thread_choice_index(&choices, 3), 2);
+        assert_eq!(software_thread_choice_index(&choices, 7), 4);
+        assert_eq!(software_thread_choice_index(&[], 7), 0);
+        assert_eq!(software_thread_from_choice(&choices, 4), 8);
+        assert_eq!(software_thread_from_choice(&choices, 99), 0);
     }
 }

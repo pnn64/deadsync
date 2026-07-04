@@ -1,5 +1,4 @@
 use super::super::*;
-use ::null_or_die::{BiasKernel, KernelTarget};
 
 pub(in crate::screens::options) const NULL_OR_DIE_MENU_ROWS: &[SubRow] = &[
     SubRow {
@@ -231,13 +230,3 @@ pub(in crate::screens::options) const NULL_OR_DIE_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
 ];
-
-impl ChoiceEnum for KernelTarget {
-    const ALL: &'static [Self] = &[Self::Digest, Self::Accumulator];
-    const DEFAULT: Self = Self::Digest;
-}
-
-impl ChoiceEnum for BiasKernel {
-    const ALL: &'static [Self] = &[Self::Rising, Self::Loudest];
-    const DEFAULT: Self = Self::Rising;
-}

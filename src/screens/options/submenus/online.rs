@@ -238,13 +238,3 @@ pub(in crate::screens::options) const ONLINE_SCORING_OPTIONS_ITEMS: &[Item] = &[
         ))],
     },
 ];
-
-impl ChoiceEnum for ArrowCloudQrLoginWhen {
-    const ALL: &'static [Self] = &[Self::Always, Self::Sometimes, Self::Disabled];
-    const DEFAULT: Self = Self::Sometimes;
-}
-
-impl ChoiceEnum for GrooveStatsQrLoginWhen {
-    const ALL: &'static [Self] = &[Self::Always, Self::Sometimes, Self::Disabled];
-    const DEFAULT: Self = Self::Sometimes;
-}

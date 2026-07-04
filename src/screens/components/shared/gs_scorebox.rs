@@ -36,6 +36,9 @@ const SCOREBOX_LOGO_MAX_H_FRAC: f32 = 0.94;
 const SCOREBOX_HARD_EX_BORDER_TINT: f32 = 0.35;
 const TEXT_CACHE_LIMIT: usize = 8192;
 
+type PaneKind = score_data::ScoreboxPaneKind;
+type SelectMusicPaneFilter = score_data::SelectMusicScoreboxFilter;
+
 thread_local! {
     static SCORE_PERCENT_TEXT_CACHE: RefCell<TextCache<u64>> = RefCell::new(HashMap::with_capacity(2048));
     static SCORE_VALUE_TEXT_CACHE: RefCell<TextCache<u64>> = RefCell::new(HashMap::with_capacity(2048));
@@ -97,24 +100,6 @@ struct ScoreboxCycleState {
     next_alpha: f32,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum PaneKind {
-    Gs,
-    Ex,
-    HardEx,
-    Srpg,
-    Itl,
-    Other,
-}
-
-#[derive(Clone, Copy)]
-struct SelectMusicPaneFilter {
-    itg: bool,
-    ex: bool,
-    hard_ex: bool,
-    tournaments: bool,
-}
-
 #[derive(Clone, Debug)]
 pub struct SelectMusicScoreboxView {
     pub mode_text: String,
@@ -140,26 +125,11 @@ fn error_text(error: &str) -> &'static str {
 #[inline(always)]
 fn select_music_pane_filter() -> SelectMusicPaneFilter {
     let cfg = crate::config::get();
-    SelectMusicPaneFilter {
+    score_data::SelectMusicScoreboxFilter {
         itg: cfg.select_music_scorebox_cycle_itg,
         ex: cfg.select_music_scorebox_cycle_ex,
         hard_ex: cfg.select_music_scorebox_cycle_hard_ex,
         tournaments: cfg.select_music_scorebox_cycle_tournaments,
-    }
-}
-
-#[inline(always)]
-const fn select_music_filter_has_any(filter: SelectMusicPaneFilter) -> bool {
-    filter.itg || filter.ex || filter.hard_ex || filter.tournaments
-}
-
-#[inline(always)]
-const fn select_music_filter_allows_kind(kind: PaneKind, filter: SelectMusicPaneFilter) -> bool {
-    match kind {
-        PaneKind::Gs => filter.itg,
-        PaneKind::Ex => filter.ex,
-        PaneKind::HardEx => filter.hard_ex,
-        PaneKind::Srpg | PaneKind::Itl | PaneKind::Other => filter.tournaments,
     }
 }
 
@@ -169,53 +139,14 @@ fn select_music_filtered_panes(
 ) -> Vec<&score_data::LeaderboardPane> {
     let mut out = Vec::with_capacity(panes.len());
     for pane in panes {
-        if select_music_filter_allows_kind(pane_kind(pane), filter) {
+        if score_data::select_music_scorebox_filter_allows_kind(
+            score_data::scorebox_pane_kind(pane),
+            filter,
+        ) {
             out.push(pane);
         }
     }
     out
-}
-
-#[inline(always)]
-fn pane_kind(pane: &score_data::LeaderboardPane) -> PaneKind {
-    if pane.is_arrowcloud() {
-        return if pane.is_hard_ex() {
-            PaneKind::HardEx
-        } else if pane.is_ex {
-            PaneKind::Ex
-        } else {
-            PaneKind::Gs
-        };
-    }
-    if pane.is_groovestats() {
-        return if pane.is_ex {
-            PaneKind::Ex
-        } else {
-            PaneKind::Gs
-        };
-    }
-    let lower = pane.name.to_ascii_lowercase();
-    if lower.contains("srpg") || lower.contains("rpg") {
-        PaneKind::Srpg
-    } else if lower.contains("itl") {
-        PaneKind::Itl
-    } else if pane.is_ex {
-        PaneKind::Ex
-    } else {
-        PaneKind::Other
-    }
-}
-
-#[inline(always)]
-fn pane_mode_text(kind: PaneKind, pane: &score_data::LeaderboardPane) -> &str {
-    match kind {
-        PaneKind::Gs => "ITG",
-        PaneKind::Ex => "EX",
-        PaneKind::HardEx => "H.EX",
-        PaneKind::Srpg => "SRPG",
-        PaneKind::Itl => "ITL",
-        PaneKind::Other => pane.name.as_str(),
-    }
 }
 
 #[inline(always)]
@@ -360,7 +291,7 @@ pub(crate) fn entries_with_local_self_state(
     chart_hash: Option<&str>,
     pane: &score_data::LeaderboardPane,
 ) -> Vec<score_data::LeaderboardEntry> {
-    let kind = pane_kind(pane);
+    let kind = score_data::scorebox_pane_kind(pane);
     let mut entries = pane.entries.clone();
     let local_self = chart_hash.and_then(|hash| local_self_score_10000(side, hash, kind));
 
@@ -405,30 +336,25 @@ fn preferred_primary_pane<'a>(
     panes
         .iter()
         .copied()
-        .find(|pane| pane_kind(pane) == want)
+        .find(|pane| score_data::scorebox_pane_kind(pane) == want)
         .or_else(|| {
             panes
                 .iter()
                 .copied()
-                .find(|pane| pane_kind(pane) == PaneKind::Gs)
+                .find(|pane| score_data::scorebox_pane_kind(pane) == PaneKind::Gs)
         })
         .or_else(|| {
             panes
                 .iter()
                 .copied()
-                .find(|pane| pane_kind(pane) == PaneKind::Ex)
+                .find(|pane| score_data::scorebox_pane_kind(pane) == PaneKind::Ex)
         })
         .or_else(|| panes.first().copied())
 }
 
 #[inline(always)]
-fn default_mode_text(show_ex_score: bool) -> &'static str {
-    if show_ex_score { "EX" } else { "ITG" }
-}
-
-#[inline(always)]
 fn default_mode_text_for_side(side: profile_data::PlayerSide) -> &'static str {
-    default_mode_text(profile::get_for_side(side).show_ex_score)
+    score_data::default_scorebox_mode_text(profile::get_for_side(side).show_ex_score)
 }
 
 pub fn select_music_scorebox_view(
@@ -452,7 +378,7 @@ pub fn select_music_scorebox_view(
         return view;
     }
     let filter = select_music_pane_filter();
-    if !select_music_filter_has_any(filter) {
+    if !score_data::select_music_scorebox_filter_has_any(filter) {
         return view;
     }
     view.machine_name = "----".to_string();
@@ -489,9 +415,9 @@ pub fn select_music_scorebox_view(
         return view;
     };
 
-    let kind = pane_kind(pane);
+    let kind = score_data::scorebox_pane_kind(pane);
     let entries = entries_with_local_self_state(side, Some(hash), pane);
-    view.mode_text = pane_mode_text(kind, pane).to_string();
+    view.mode_text = score_data::scorebox_pane_mode_text(kind, pane).to_string();
     if entries.is_empty() {
         view.loading_text = Some("No Scores".to_string());
         return view;
@@ -575,7 +501,7 @@ fn gameplay_status_pane(show_ex_score: bool, text: &str) -> GameplayScoreboxPane
     GameplayScoreboxPane {
         kind,
         is_arrowcloud: false,
-        mode_text: owned_text(default_mode_text(show_ex_score)),
+        mode_text: owned_text(score_data::default_scorebox_mode_text(show_ex_score)),
         border_color: SCOREBOX_GS_BLUE,
         rows,
     }
@@ -631,47 +557,6 @@ fn gameplay_row_from_entry(
     }
 }
 
-#[inline(always)]
-fn same_leaderboard_entry(
-    a: &score_data::LeaderboardEntry,
-    b: &score_data::LeaderboardEntry,
-) -> bool {
-    a.rank == b.rank && a.name.eq_ignore_ascii_case(b.name.as_str())
-}
-
-fn selected_contains(
-    selected: &[Option<&score_data::LeaderboardEntry>; SCOREBOX_NUM_ENTRIES],
-    entry: &score_data::LeaderboardEntry,
-) -> bool {
-    selected
-        .iter()
-        .flatten()
-        .any(|chosen| same_leaderboard_entry(chosen, entry))
-}
-
-fn push_selected_entry<'a>(
-    selected: &mut [Option<&'a score_data::LeaderboardEntry>; SCOREBOX_NUM_ENTRIES],
-    len: &mut usize,
-    entry: &'a score_data::LeaderboardEntry,
-) {
-    if *len >= SCOREBOX_NUM_ENTRIES || selected_contains(selected, entry) {
-        return;
-    }
-    selected[*len] = Some(entry);
-    *len += 1;
-}
-
-fn next_best_entry<'a>(
-    entries: &'a [score_data::LeaderboardEntry],
-    selected: &[Option<&'a score_data::LeaderboardEntry>; SCOREBOX_NUM_ENTRIES],
-    include: impl Fn(&score_data::LeaderboardEntry) -> bool,
-) -> Option<&'a score_data::LeaderboardEntry> {
-    entries
-        .iter()
-        .filter(|entry| include(entry) && !selected_contains(selected, entry))
-        .min_by_key(|entry| entry.rank)
-}
-
 fn scorebox_rows_for_kind(
     entries: &[score_data::LeaderboardEntry],
     kind: PaneKind,
@@ -682,38 +567,8 @@ fn scorebox_rows_for_kind(
         return rows;
     }
 
-    let mut selected: [Option<&score_data::LeaderboardEntry>; SCOREBOX_NUM_ENTRIES] =
-        [None; SCOREBOX_NUM_ENTRIES];
-    let mut len = 0usize;
-
-    if let Some(top) = next_best_entry(entries, &selected, |_| true) {
-        push_selected_entry(&mut selected, &mut len, top);
-    }
-    if let Some(self_entry) = next_best_entry(entries, &selected, |entry| entry.is_self) {
-        push_selected_entry(&mut selected, &mut len, self_entry);
-    }
-    while len < SCOREBOX_NUM_ENTRIES {
-        let Some(rival) = next_best_entry(entries, &selected, |entry| entry.is_rival) else {
-            break;
-        };
-        push_selected_entry(&mut selected, &mut len, rival);
-    }
-    while len < SCOREBOX_NUM_ENTRIES {
-        let Some(entry) = next_best_entry(entries, &selected, |_| true) else {
-            break;
-        };
-        push_selected_entry(&mut selected, &mut len, entry);
-    }
-
-    for i in 1..len {
-        let mut j = i;
-        while j > 0 && selected[j - 1].unwrap().rank > selected[j].unwrap().rank {
-            selected.swap(j - 1, j);
-            j -= 1;
-        }
-    }
-
-    for (slot, entry) in rows.iter_mut().zip(selected.into_iter().flatten()) {
+    let selected = score_data::prioritized_leaderboard_entries(entries, SCOREBOX_NUM_ENTRIES);
+    for (slot, entry) in rows.iter_mut().zip(selected.iter()) {
         *slot = gameplay_row_from_entry(entry, kind);
     }
     rows
@@ -723,11 +578,11 @@ fn gameplay_pane_from_leaderboard(
     pane: &score_data::LeaderboardPane,
     entries: &[score_data::LeaderboardEntry],
 ) -> GameplayScoreboxPane {
-    let kind = pane_kind(pane);
+    let kind = score_data::scorebox_pane_kind(pane);
     GameplayScoreboxPane {
         kind,
         is_arrowcloud: pane.is_arrowcloud(),
-        mode_text: owned_text(pane_mode_text(kind, pane)),
+        mode_text: owned_text(score_data::scorebox_pane_mode_text(kind, pane)),
         border_color: pane_color(kind),
         rows: scorebox_rows_for_kind(entries, kind),
     }
@@ -761,7 +616,7 @@ fn gameplay_panes_from_snapshot(
     }
 
     let filter = select_music_pane_filter();
-    if !select_music_filter_has_any(filter) {
+    if !score_data::select_music_scorebox_filter_has_any(filter) {
         return Vec::new();
     }
 
@@ -799,7 +654,7 @@ fn select_music_panes_from_snapshot(
         return vec![gameplay_status_pane_for_side(side, "No Scores")];
     };
     let filter = select_music_pane_filter();
-    if !select_music_filter_has_any(filter) {
+    if !score_data::select_music_scorebox_filter_has_any(filter) {
         return Vec::new();
     }
 

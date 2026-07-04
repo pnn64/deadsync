@@ -1133,7 +1133,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.4.1891"
+version = "0.4.1914"
 dependencies = [
  "bincode",
  "bitflags 2.13.0",
@@ -1171,6 +1171,7 @@ dependencies = [
  "deadsync-simfile",
  "deadsync-smx",
  "deadsync-song-lua",
+ "deadsync-theme",
  "deadsync-updater",
  "deadsync-version",
  "dhat",
@@ -1487,6 +1488,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "deadsync-theme"
+version = "0.1.0"
+dependencies = [
+ "deadsync-config",
+ "deadsync-profile",
+ "rand 0.10.1",
+]
+
+[[package]]
 name = "deadsync-updater"
 version = "0.1.0"
 dependencies = [
@@ -1507,7 +1517,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.4.1891"
+version = "0.4.1914"
 dependencies = [
  "log",
  "semver",

@@ -185,74 +185,13 @@ fn refresh_leaderboard_side_from_cache(
     apply_leaderboard_side_snapshot(side, snapshot);
 }
 
-#[inline(always)]
-fn same_leaderboard_entry(
-    a: &score_data::LeaderboardEntry,
-    b: &score_data::LeaderboardEntry,
-) -> bool {
-    a.rank == b.rank && a.name.eq_ignore_ascii_case(b.name.as_str())
-}
-
-#[inline(always)]
-fn overlay_selected_contains(
-    selected: &[&score_data::LeaderboardEntry],
-    entry: &score_data::LeaderboardEntry,
-) -> bool {
-    selected
-        .iter()
-        .any(|chosen| same_leaderboard_entry(chosen, entry))
-}
-
-fn next_overlay_entry<'a, F>(
-    entries: &'a [score_data::LeaderboardEntry],
-    selected: &[&'a score_data::LeaderboardEntry],
-    include: F,
-) -> Option<&'a score_data::LeaderboardEntry>
-where
-    F: Fn(&score_data::LeaderboardEntry) -> bool,
-{
-    entries
-        .iter()
-        .filter(|entry| include(entry) && !overlay_selected_contains(selected, entry))
-        .min_by_key(|entry| entry.rank)
-}
-
 fn overlay_display_entries(
     side: profile_data::PlayerSide,
     chart_hash: Option<&str>,
     pane: &score_data::LeaderboardPane,
 ) -> Vec<score_data::LeaderboardEntry> {
     let entries = entries_with_local_self_state(side, chart_hash, pane);
-    if entries.len() <= GS_LEADERBOARD_NUM_ENTRIES {
-        return entries;
-    }
-
-    let mut selected = Vec::with_capacity(GS_LEADERBOARD_NUM_ENTRIES);
-    if let Some(top) = next_overlay_entry(entries.as_slice(), selected.as_slice(), |_| true) {
-        selected.push(top);
-    }
-    if let Some(self_entry) = next_overlay_entry(entries.as_slice(), selected.as_slice(), |entry| {
-        entry.is_self
-    }) {
-        selected.push(self_entry);
-    }
-    while selected.len() < GS_LEADERBOARD_NUM_ENTRIES {
-        let Some(rival) = next_overlay_entry(entries.as_slice(), selected.as_slice(), |entry| {
-            entry.is_rival
-        }) else {
-            break;
-        };
-        selected.push(rival);
-    }
-    while selected.len() < GS_LEADERBOARD_NUM_ENTRIES {
-        let Some(entry) = next_overlay_entry(entries.as_slice(), selected.as_slice(), |_| true)
-        else {
-            break;
-        };
-        selected.push(entry);
-    }
-    selected.sort_unstable_by_key(|entry| entry.rank);
-    selected.into_iter().cloned().collect()
+    score_data::prioritized_leaderboard_entries(entries.as_slice(), GS_LEADERBOARD_NUM_ENTRIES)
 }
 
 pub fn show_leaderboard_overlay(
@@ -381,39 +320,6 @@ pub fn handle_leaderboard_input(
     }
 
     LeaderboardInputOutcome::None
-}
-
-pub(crate) fn format_groovestats_date(date: &str) -> String {
-    let trimmed = date.trim();
-    if trimmed.is_empty() {
-        return String::new();
-    }
-    let ymd = trimmed.split_once(' ').map_or(trimmed, |(value, _)| value);
-    let ymd = ymd.split_once('T').map_or(ymd, |(value, _)| value);
-    let mut parts = ymd.split('-');
-    let (Some(year), Some(month), Some(day)) = (parts.next(), parts.next(), parts.next()) else {
-        return trimmed.to_string();
-    };
-    let month_txt = match month {
-        "01" => "Jan",
-        "02" => "Feb",
-        "03" => "Mar",
-        "04" => "Apr",
-        "05" => "May",
-        "06" => "Jun",
-        "07" => "Jul",
-        "08" => "Aug",
-        "09" => "Sep",
-        "10" => "Oct",
-        "11" => "Nov",
-        "12" => "Dec",
-        _ => return trimmed.to_string(),
-    };
-    let day_num = day.parse::<u32>().unwrap_or(0);
-    if day_num == 0 {
-        return trimmed.to_string();
-    }
-    format!("{month_txt} {day_num}, {year}")
 }
 
 #[inline(always)]
@@ -615,7 +521,7 @@ pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<
                     rank = format!("{}.", entry.rank);
                     name.clone_from(&entry.name);
                     score = format!("{:.2}%", entry.score / 100.0);
-                    date = format_groovestats_date(&entry.date);
+                    date = score_data::format_leaderboard_date(&entry.date);
 
                     if entry.is_rival || entry.is_self {
                         has_highlight = true;

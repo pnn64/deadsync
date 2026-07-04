@@ -45,6 +45,7 @@ members = [
     "crates/deadsync-simfile",
     "crates/deadsync-song-lua",
     "crates/deadsync-smx",
+    "crates/deadsync-theme",
     "crates/deadsync-updater",
     "crates/deadsync-version",
     "crates/deadlib-video",
@@ -56,7 +57,7 @@ resolver = "3"
 # `version.workspace = true`, so `env!("CARGO_PKG_VERSION")` and
 # `deadsync_version::current()` always agree. Bump THIS line on release.
 [workspace.package]
-version = "0.4.1891"
+version = "0.4.1914"
 
 [[bin]]
 name = "compose_bench"
@@ -123,6 +124,7 @@ deadsync-score = { path = "crates/deadsync-score" }
 deadsync-simfile = { path = "crates/deadsync-simfile" }
 deadsync-song-lua = { path = "crates/deadsync-song-lua" }
 deadsync-smx = { path = "crates/deadsync-smx" }
+deadsync-theme = { path = "crates/deadsync-theme" }
 deadsync-updater = { path = "crates/deadsync-updater" }
 deadsync-version = { path = "crates/deadsync-version" }
 deadlib-video = { path = "crates/deadlib-video" }

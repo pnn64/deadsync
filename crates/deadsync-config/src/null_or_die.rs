@@ -60,6 +60,22 @@ pub fn parse_null_or_die_kernel_target(raw: &str) -> Option<KernelTarget> {
 }
 
 #[inline(always)]
+pub const fn null_or_die_kernel_target_choice_index(target: KernelTarget) -> usize {
+    match target {
+        KernelTarget::Digest => 0,
+        KernelTarget::Accumulator => 1,
+    }
+}
+
+#[inline(always)]
+pub const fn null_or_die_kernel_target_from_choice(idx: usize) -> KernelTarget {
+    match idx {
+        1 => KernelTarget::Accumulator,
+        _ => KernelTarget::Digest,
+    }
+}
+
+#[inline(always)]
 pub const fn null_or_die_kernel_type_str(kind: BiasKernel) -> &'static str {
     match kind {
         BiasKernel::Rising => "Rising",
@@ -81,12 +97,25 @@ pub fn parse_null_or_die_kernel_type(raw: &str) -> Option<BiasKernel> {
     }
 }
 
+#[inline(always)]
+pub const fn null_or_die_kernel_type_choice_index(kind: BiasKernel) -> usize {
+    match kind {
+        BiasKernel::Rising => 0,
+        BiasKernel::Loudest => 1,
+    }
+}
+
+#[inline(always)]
+pub const fn null_or_die_kernel_type_from_choice(idx: usize) -> BiasKernel {
+    match idx {
+        1 => BiasKernel::Loudest,
+        _ => BiasKernel::Rising,
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{
-        clamp_null_or_die_confidence_percent, clamp_null_or_die_magic_offset_ms,
-        clamp_null_or_die_positive_ms,
-    };
+    use super::*;
 
     fn assert_tenths_eq(value: f64, tenths: i32) {
         assert_eq!((value * 10.0).round() as i32, tenths);
@@ -113,5 +142,35 @@ mod tests {
         assert_tenths_eq(clamp_null_or_die_magic_offset_ms(0.04), 0);
         assert_tenths_eq(clamp_null_or_die_magic_offset_ms(0.05), 1);
         assert_tenths_eq(clamp_null_or_die_magic_offset_ms(200.0), 1000);
+    }
+
+    #[test]
+    fn kernel_choices_match_options_order() {
+        assert_eq!(
+            null_or_die_kernel_target_choice_index(KernelTarget::Digest),
+            0
+        );
+        assert_eq!(
+            null_or_die_kernel_target_choice_index(KernelTarget::Accumulator),
+            1
+        );
+        assert_eq!(
+            null_or_die_kernel_target_from_choice(0),
+            KernelTarget::Digest
+        );
+        assert_eq!(
+            null_or_die_kernel_target_from_choice(1),
+            KernelTarget::Accumulator
+        );
+        assert_eq!(
+            null_or_die_kernel_target_from_choice(99),
+            KernelTarget::Digest
+        );
+
+        assert_eq!(null_or_die_kernel_type_choice_index(BiasKernel::Rising), 0);
+        assert_eq!(null_or_die_kernel_type_choice_index(BiasKernel::Loudest), 1);
+        assert_eq!(null_or_die_kernel_type_from_choice(0), BiasKernel::Rising);
+        assert_eq!(null_or_die_kernel_type_from_choice(1), BiasKernel::Loudest);
+        assert_eq!(null_or_die_kernel_type_from_choice(99), BiasKernel::Rising);
     }
 }

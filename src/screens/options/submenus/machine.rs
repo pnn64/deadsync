@@ -467,68 +467,6 @@ pub(in crate::screens::options) const MACHINE_OPTIONS_ITEMS: &[Item] = &[
     },
 ];
 
-impl ChoiceEnum for MachinePreferredPlayStyle {
-    const ALL: &'static [Self] = &[Self::Single, Self::Versus, Self::Double];
-    const DEFAULT: Self = Self::Single;
-}
-
-impl ChoiceEnum for MachinePreferredPlayMode {
-    const ALL: &'static [Self] = &[Self::Regular, Self::Marathon];
-    const DEFAULT: Self = Self::Regular;
-}
-
-impl ChoiceEnum for MachineFont {
-    const ALL: &'static [Self] = &[Self::Wendy, Self::Mega];
-    const DEFAULT: Self = Self::Wendy;
-}
-
-impl ChoiceEnum for MachineBarColor {
-    const ALL: &'static [Self] = &[Self::Default, Self::Colored, Self::Transparent];
-    const DEFAULT: Self = Self::Default;
-}
-
-impl ChoiceEnum for MachineEvaluationStyle {
-    const ALL: &'static [Self] = &[Self::Default, Self::Opaque, Self::Transparent];
-    const DEFAULT: Self = Self::Default;
-}
-
-impl ChoiceEnum for RandomBackgroundMode {
-    const ALL: &'static [Self] = &[Self::Off, Self::RandomMovies];
-    const DEFAULT: Self = Self::Off;
-}
-
-impl ChoiceEnum for DefaultSyncOffset {
-    const ALL: &'static [Self] = &[Self::Null, Self::Itg];
-    const DEFAULT: Self = Self::Null;
-}
-
-impl ChoiceEnum for VersionOverlaySide {
-    const ALL: &'static [Self] = &[Self::Left, Self::Right];
-    const DEFAULT: Self = Self::Right;
-}
-
-impl ChoiceEnum for VisualStyle {
-    const ALL: &'static [Self] = &[
-        Self::Hearts,
-        Self::Arrows,
-        Self::Bears,
-        Self::Ducks,
-        Self::Cats,
-        Self::Spooky,
-        Self::Gay,
-        Self::Stars,
-        Self::Thonk,
-        Self::Technique,
-        Self::Srpg9,
-    ];
-    const DEFAULT: Self = Self::Hearts;
-}
-
-impl ChoiceEnum for SrpgVariant {
-    const ALL: &'static [Self] = &[Self::Srpg9, Self::Srpg10];
-    const DEFAULT: Self = Self::Srpg9;
-}
-
 pub(in crate::screens::options) const VISUAL_STYLE_CHOICES: &[Choice] = &[
     literal_choice("❤"),
     literal_choice("↖"),
@@ -560,14 +498,3 @@ pub(in crate::screens::options) const COLOR_CHOICES: &[Choice] = &[
     literal_choice("10"),
     literal_choice("11"),
 ];
-
-impl ChoiceEnum for LogLevel {
-    const ALL: &'static [Self] = &[
-        Self::Error,
-        Self::Warn,
-        Self::Info,
-        Self::Debug,
-        Self::Trace,
-    ];
-    const DEFAULT: Self = Self::Trace;
-}

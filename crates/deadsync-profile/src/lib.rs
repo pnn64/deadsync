@@ -909,6 +909,20 @@ pub const fn runtime_player_side(
     }
 }
 
+#[inline(always)]
+pub const fn physical_player_slot_for_chart_pad(
+    play_style: PlayStyle,
+    session_side: PlayerSide,
+    doubles: bool,
+    chart_pad: usize,
+) -> usize {
+    if doubles {
+        chart_pad
+    } else {
+        player_side_index(runtime_player_side(play_style, session_side, chart_pad))
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TimingTickMode {
     #[default]
@@ -6903,6 +6917,19 @@ mod tests {
             runtime_player_side(PlayStyle::Versus, PlayerSide::P1, 1),
             PlayerSide::P2
         );
+    }
+
+    #[test]
+    fn physical_player_slots_follow_session_side_for_single_player() {
+        use PlayStyle::*;
+        use PlayerSide::*;
+
+        assert_eq!(physical_player_slot_for_chart_pad(Single, P1, false, 0), 0);
+        assert_eq!(physical_player_slot_for_chart_pad(Single, P2, false, 0), 1);
+        assert_eq!(physical_player_slot_for_chart_pad(Versus, P1, false, 0), 0);
+        assert_eq!(physical_player_slot_for_chart_pad(Versus, P1, false, 1), 1);
+        assert_eq!(physical_player_slot_for_chart_pad(Double, P2, true, 0), 0);
+        assert_eq!(physical_player_slot_for_chart_pad(Double, P2, true, 1), 1);
     }
 
     #[test]
