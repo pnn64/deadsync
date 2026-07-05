@@ -356,6 +356,7 @@ pub fn parse_explosion_animation(script: &str) -> ExplosionAnimation {
                 ScriptControl::StopTweening => {
                     pending = None;
                 }
+                ScriptControl::SetAllStateDelays => {}
                 _ => finish_pending(&mut pending, &mut animation, &mut current_state, true),
             }
             continue;
@@ -1099,6 +1100,14 @@ mod tests {
             itg_mine_explosion_commands(&commands),
             vec!["zoom,2;diffusealpha,1", "zoom,2;diffusealpha,0"]
         );
+    }
+
+    #[test]
+    fn explosion_animation_ignores_all_state_delay_control() {
+        let anim = parse_explosion_animation("linear,0.1;SetAllStateDelays,0.05;diffusealpha,0");
+
+        assert_eq!(anim.segments.len(), 1);
+        assert!((anim.state_at(0.1).diffuse[3] - 0.0).abs() <= f32::EPSILON);
     }
 
     #[test]

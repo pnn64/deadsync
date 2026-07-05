@@ -14,9 +14,11 @@ use deadsync_noteskin::model::{
     itg_parse_milkshape_model, itg_parse_milkshape_model_auto_rot,
     itg_parse_milkshape_model_layers, itg_resolve_model_texture_path,
 };
-use deadsync_noteskin::script::sprite_state_properties_command_plans;
 #[cfg(test)]
-use deadsync_noteskin::script::sprite_state_properties_plans;
+use deadsync_noteskin::script::sprite_animation_command_plans;
+use deadsync_noteskin::script::{
+    SpriteAnimationCommandPlan, sprite_animation_command_plans_from_commands,
+};
 use deadsync_noteskin::{
     AnimationRate, ModelAutoRotKey, ModelDrawState, ModelEffectState, ModelMesh, ModelTweenSegment,
     SpriteAnimationPlan, SpriteDefinition, model_draw_at, model_glow_at, model_glow_with_draw,
@@ -708,14 +710,65 @@ fn itg_apply_slot_state_properties(
     slot.source_size = [source_frame.0 as i32, source_frame.1 as i32];
 }
 
+fn itg_apply_slot_all_state_delays(slot: &mut SpriteSlot, delay: f32, beat_based: bool) {
+    if slot.model.is_some() {
+        return;
+    }
+    let delay = delay.max(1e-6);
+    let SpriteSource::Animated {
+        texture_key,
+        tex_dims,
+        frame_size,
+        grid,
+        frame_count,
+        frame_indices,
+        ..
+    } = slot.source.as_ref()
+    else {
+        return;
+    };
+    let frame_count = (*frame_count).max(1);
+    slot.source = Arc::new(SpriteSource::Animated {
+        texture_key: texture_key.clone(),
+        tex_dims: *tex_dims,
+        frame_size: *frame_size,
+        grid: *grid,
+        frame_count,
+        frame_indices: frame_indices.clone(),
+        rate: if beat_based {
+            AnimationRate::FramesPerBeat(1.0 / delay)
+        } else {
+            AnimationRate::FramesPerSecond(1.0 / delay)
+        },
+        frame_durations: Some(Arc::<[f32]>::from(vec![delay; frame_count])),
+        cached_handle: AtomicU64::new(deadlib_render::INVALID_TEXTURE_HANDLE),
+        cached_generation: AtomicU64::new(u64::MAX),
+    });
+}
+
+fn itg_apply_sprite_animation_plan(
+    slot: &mut SpriteSlot,
+    plan: SpriteAnimationCommandPlan,
+    beat_based: bool,
+) {
+    match plan {
+        SpriteAnimationCommandPlan::StateProperties(plan) => {
+            itg_apply_slot_state_properties(slot, plan.frame_count, &plan.frame_delays, beat_based);
+        }
+        SpriteAnimationCommandPlan::AllStateDelays(delay) => {
+            itg_apply_slot_all_state_delays(slot, delay, beat_based);
+        }
+    }
+}
+
 pub(super) fn itg_apply_state_properties_from_commands(
     slot: &mut SpriteSlot,
     commands: &std::collections::HashMap<String, String>,
 ) {
     let (beat_based, plans) =
-        sprite_state_properties_command_plans(commands, slot_is_beat_based(slot));
+        sprite_animation_command_plans_from_commands(commands, slot_is_beat_based(slot));
     for plan in plans {
-        itg_apply_slot_state_properties(slot, plan.frame_count, &plan.frame_delays, beat_based);
+        itg_apply_sprite_animation_plan(slot, plan, beat_based);
     }
 }
 
@@ -725,8 +778,8 @@ pub(super) fn itg_apply_state_properties_from_script(
     script: &str,
     beat_based: bool,
 ) {
-    for plan in sprite_state_properties_plans(script) {
-        itg_apply_slot_state_properties(slot, plan.frame_count, &plan.frame_delays, beat_based);
+    for plan in sprite_animation_command_plans(script) {
+        itg_apply_sprite_animation_plan(slot, plan, beat_based);
     }
 }
 

@@ -2960,6 +2960,59 @@ return skin
     }
 
     #[test]
+    fn setallstatedelays_overrides_existing_sprite_animation() {
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns = load_itg_skin(&style, "default")
+            .expect("dance/default should load from assets/noteskins");
+        let mut slot = ns
+            .mine_hit_explosion
+            .as_ref()
+            .expect("default should define mine hit explosion")
+            .slot
+            .clone();
+        let key = "tests/fake/Fallback HitMine Explosion 8x8 (res 1536x1536).png".to_string();
+        slot.source = Arc::new(SpriteSource::Atlas {
+            texture_key: Arc::<str>::from(key.as_str()),
+            tex_dims: (2048, 2048),
+            cached_handle: AtomicU64::new(deadlib_render::INVALID_TEXTURE_HANDLE),
+            cached_generation: AtomicU64::new(u64::MAX),
+        });
+        slot.model = None;
+
+        itg_apply_state_properties_from_script(
+            &mut slot,
+            "setstateproperties,Sprite.LinearFrames(4,0.4);SetAllStateDelays,0.05",
+            false,
+        );
+
+        let SpriteSource::Animated {
+            frame_count,
+            frame_durations,
+            rate,
+            ..
+        } = slot.source.as_ref()
+        else {
+            panic!("setallstatedelays should keep the source animated");
+        };
+        assert_eq!(*frame_count, 4);
+        let delays = frame_durations
+            .as_ref()
+            .expect("setallstatedelays should preserve explicit frame durations");
+        assert_eq!(delays.as_ref(), [0.05, 0.05, 0.05, 0.05]);
+        match rate {
+            AnimationRate::FramesPerSecond(fps) => {
+                assert!((*fps - 20.0).abs() < 1e-3, "expected 20fps, got {fps}");
+            }
+            AnimationRate::FramesPerBeat(v) => panic!("expected time-based animation, got {v} fpb"),
+        }
+        assert_eq!(slot.frame_index(0.0, 0.0), 0);
+        assert_eq!(slot.frame_index(0.051, 0.0), 1);
+    }
+
+    #[test]
     fn explosion_animation_honors_visible_commands() {
         let anim = parse_explosion_animation("visible,false;sleep,0.1;visible,true");
         let at_start = anim.state_at(0.0);

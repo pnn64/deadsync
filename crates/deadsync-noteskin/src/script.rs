@@ -26,6 +26,7 @@ pub enum ScriptControl {
     Animate,
     SetState,
     SetStateProperties,
+    SetAllStateDelays,
     SetTextureFiltering,
 }
 
@@ -179,7 +180,13 @@ pub struct SpriteStatePropertiesPlan {
     pub frame_delays: Vec<f32>,
 }
 
-pub fn sprite_state_properties_plans(script: &str) -> Vec<SpriteStatePropertiesPlan> {
+#[derive(Debug, Clone, PartialEq)]
+pub enum SpriteAnimationCommandPlan {
+    StateProperties(SpriteStatePropertiesPlan),
+    AllStateDelays(f32),
+}
+
+pub fn sprite_animation_command_plans(script: &str) -> Vec<SpriteAnimationCommandPlan> {
     let script = normalized_script_command(script);
     let mut plans = Vec::new();
     for raw_token in script.split(';') {
@@ -190,23 +197,42 @@ pub fn sprite_state_properties_plans(script: &str) -> Vec<SpriteStatePropertiesP
         let Some((command, args)) = split_script_token(token) else {
             continue;
         };
-        if command != "setstateproperties" {
-            continue;
-        }
-        if let Some((frame_count, frame_delays)) = parse_script_state_properties(&args) {
-            plans.push(SpriteStatePropertiesPlan {
-                frame_count,
-                frame_delays,
-            });
+        match command.as_str() {
+            "setstateproperties" => {
+                if let Some((frame_count, frame_delays)) = parse_script_state_properties(&args) {
+                    plans.push(SpriteAnimationCommandPlan::StateProperties(
+                        SpriteStatePropertiesPlan {
+                            frame_count,
+                            frame_delays,
+                        },
+                    ));
+                }
+            }
+            "setallstatedelays" => {
+                if let Some(delay) = args.first().and_then(|arg| parse_script_number(arg)) {
+                    plans.push(SpriteAnimationCommandPlan::AllStateDelays(delay.max(0.0)));
+                }
+            }
+            _ => {}
         }
     }
     plans
 }
 
-pub fn sprite_state_properties_command_plans(
+pub fn sprite_state_properties_plans(script: &str) -> Vec<SpriteStatePropertiesPlan> {
+    sprite_animation_command_plans(script)
+        .into_iter()
+        .filter_map(|plan| match plan {
+            SpriteAnimationCommandPlan::StateProperties(plan) => Some(plan),
+            SpriteAnimationCommandPlan::AllStateDelays(_) => None,
+        })
+        .collect()
+}
+
+pub fn sprite_animation_command_plans_from_commands(
     commands: &HashMap<String, String>,
     default_is_beat_based: bool,
-) -> (bool, Vec<SpriteStatePropertiesPlan>) {
+) -> (bool, Vec<SpriteAnimationCommandPlan>) {
     if commands.is_empty() {
         return (default_is_beat_based, Vec::new());
     }
@@ -222,7 +248,23 @@ pub fn sprite_state_properties_command_plans(
 
     let plans = sorted
         .into_iter()
-        .flat_map(|(_, script)| sprite_state_properties_plans(script))
+        .flat_map(|(_, script)| sprite_animation_command_plans(script))
+        .collect();
+    (beat_based, plans)
+}
+
+pub fn sprite_state_properties_command_plans(
+    commands: &HashMap<String, String>,
+    default_is_beat_based: bool,
+) -> (bool, Vec<SpriteStatePropertiesPlan>) {
+    let (beat_based, plans) =
+        sprite_animation_command_plans_from_commands(commands, default_is_beat_based);
+    let plans = plans
+        .into_iter()
+        .filter_map(|plan| match plan {
+            SpriteAnimationCommandPlan::StateProperties(plan) => Some(plan),
+            SpriteAnimationCommandPlan::AllStateDelays(_) => None,
+        })
         .collect();
     (beat_based, plans)
 }
@@ -383,6 +425,7 @@ pub fn parse_script_control(cmd: &str) -> Option<ScriptControl> {
         "animate" => Some(ScriptControl::Animate),
         "setstate" => Some(ScriptControl::SetState),
         "setstateproperties" => Some(ScriptControl::SetStateProperties),
+        "setallstatedelays" => Some(ScriptControl::SetAllStateDelays),
         "settexturefiltering" => Some(ScriptControl::SetTextureFiltering),
         _ => None,
     }
@@ -960,14 +1003,16 @@ pub fn model_draw_program(
                 }
                 continue;
             }
-            if parse_script_control(cmd.as_str()).is_some() {
-                flush_group(
-                    &mut state,
-                    &mut timeline,
-                    &mut cursor_time,
-                    &mut pending_tween,
-                    &mut grouped_mods,
-                );
+            if let Some(control) = parse_script_control(cmd.as_str()) {
+                if control != ScriptControl::SetAllStateDelays {
+                    flush_group(
+                        &mut state,
+                        &mut timeline,
+                        &mut cursor_time,
+                        &mut pending_tween,
+                        &mut grouped_mods,
+                    );
+                }
                 continue;
             }
             if let Some(mod_cmd) = parse_script_actor_mod(cmd.as_str(), &args) {
@@ -1089,6 +1134,20 @@ mod tests {
     }
 
     #[test]
+    fn model_draw_program_ignores_all_state_delay_control() {
+        let commands = HashMap::from([(
+            "nonecommand".to_string(),
+            "linear,0.2;SetAllStateDelays,0.05;addx,8".to_string(),
+        )]);
+
+        let (_, timeline, _) = model_draw_program(&commands);
+
+        assert_eq!(timeline.len(), 1);
+        assert_eq!(timeline[0].duration, 0.2);
+        assert_eq!(timeline[0].to.pos[0], 8.0);
+    }
+
+    #[test]
     fn active_model_commands_keep_init_and_remap_active_command() {
         let commands = HashMap::from([
             ("initcommand".to_string(), "zoom,0.5".to_string()),
@@ -1156,6 +1215,22 @@ mod tests {
         assert_eq!(direct_plans.len(), 1);
         assert_eq!(direct_plans[0].frame_count, 2);
         assert_eq!(direct_plans[0].frame_delays, vec![0.25; 2]);
+    }
+
+    #[test]
+    fn sprite_animation_command_plans_parse_all_state_delays() {
+        let plans = sprite_animation_command_plans(
+            "function(self) self:SetAllStateDelays(0.05):setstate(3) end",
+        );
+
+        assert_eq!(
+            plans,
+            vec![SpriteAnimationCommandPlan::AllStateDelays(0.05)]
+        );
+        assert_eq!(
+            parse_script_control("setallstatedelays"),
+            Some(ScriptControl::SetAllStateDelays)
+        );
     }
 
     #[test]
