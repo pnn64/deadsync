@@ -69,6 +69,7 @@ const WHEEL_BADGE_ZOOM: f32 = 0.1875;
 const ITL_RANK_TEXT_CACHE_LIMIT: usize = 1024;
 const ITL_EX_TEXT_CACHE_LIMIT: usize = 1024;
 const ITL_POINTS_TEXT_CACHE_LIMIT: usize = 1024;
+const SRPG_RATE_TEXT_CACHE_LIMIT: usize = 512;
 const PACK_COUNT_TEXT_CACHE_LIMIT: usize = 1024;
 const STR_REF_CACHE_LIMIT: usize = 4096;
 // Simply Love and Arrow Cloud both use zoom(0.2) for the single-line ITL wheel value.
@@ -89,6 +90,24 @@ fn song_select_bg_path(song: &SongData, mode: SelectMusicSongSelectBgMode) -> Op
             song.background_path.as_ref().or(song.banner_path.as_ref())
         }
     }
+}
+
+fn song_pack_group(song: &SongData) -> Option<&str> {
+    song.simfile_path
+        .parent()
+        .and_then(|p| p.parent())
+        .and_then(|p| p.file_name())
+        .and_then(|s| s.to_str())
+}
+
+fn is_srpg_event_group(group: &str) -> bool {
+    let lower = group.trim().to_ascii_lowercase();
+    lower.chars().any(|c| c.is_ascii_digit())
+        && (lower.contains("stamina rpg") || lower.contains("srpg"))
+}
+
+fn is_srpg_event_song(song: &SongData) -> bool {
+    song_pack_group(song).is_some_and(is_srpg_event_group)
 }
 
 fn push_unique_path(paths: &mut Vec<PathBuf>, path: &Path) {
@@ -170,6 +189,8 @@ thread_local! {
         RefCell::new(HashMap::with_capacity(256));
     static ITL_POINTS_TEXT_CACHE: RefCell<HashMap<u32, Arc<str>>> =
         RefCell::new(HashMap::with_capacity(256));
+    static SRPG_RATE_TEXT_CACHE: RefCell<HashMap<u32, Arc<str>>> =
+        RefCell::new(HashMap::with_capacity(128));
     static PACK_COUNT_TEXT_CACHE: RefCell<HashMap<usize, Arc<str>>> =
         RefCell::new(HashMap::with_capacity(256));
     static STR_REF_CACHE: RefCell<SharedStrCache> =
@@ -252,6 +273,25 @@ fn cached_itl_points_text(points: u32) -> Arc<str> {
         let text: Arc<str> = Arc::<str>::from(points.to_string());
         if cache.len() < ITL_POINTS_TEXT_CACHE_LIMIT {
             cache.insert(points, text.clone());
+        }
+        text
+    })
+}
+
+#[inline(always)]
+fn cached_srpg_rate_text(rate_hundredths: u32) -> Arc<str> {
+    SRPG_RATE_TEXT_CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if let Some(text) = cache.get(&rate_hundredths) {
+            return text.clone();
+        }
+        let text: Arc<str> = Arc::<str>::from(format!(
+            "{}.{:02}",
+            rate_hundredths / 100,
+            rate_hundredths % 100
+        ));
+        if cache.len() < SRPG_RATE_TEXT_CACHE_LIMIT {
+            cache.insert(rate_hundredths, text.clone());
         }
         text
     })
@@ -373,6 +413,16 @@ fn itl_rank_color(rank: u32, is_double_style: bool) -> [f32; 4] {
         color::JUDGMENT_RGBA[4]
     } else {
         color::JUDGMENT_RGBA[5]
+    }
+}
+
+#[inline(always)]
+fn srpg_rate_color(rate_hundredths: u32, side: profile_data::PlayerSide) -> [f32; 4] {
+    let shade = (1.0 - ((rate_hundredths as f32 - 100.0) / 50.0)).clamp(0.0, 1.0);
+    if side == profile_data::PlayerSide::P2 {
+        [shade, shade, 1.0, 1.0]
+    } else {
+        [1.0, shade, shade, 1.0]
     }
 }
 
@@ -524,6 +574,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
     let grade_x_p1 = widescale(10.0, 17.0);
     let grade_x_p2 = widescale(26.0, 47.0);
     let itl_rank_zoom = widescale(0.2, 0.3);
+    let srpg_rate_zoom = widescale(0.15, 0.2);
     let itl_ex_x = screen_width() / widescale(2.15, 2.14) - 40.0;
     let itl_ex_color = color::JUDGMENT_RGBA[0];
     let itl_points_color = [1.0, 1.0, 1.0, 1.0];
@@ -1121,6 +1172,46 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                         }
                     }
 
+                    if is_srpg_event_song(info) && joined_sides == 1 {
+                        for (side, rate_x) in [
+                            (profile_data::PlayerSide::P1, grade_x_p2),
+                            (profile_data::PlayerSide::P2, grade_x_p1),
+                        ] {
+                            let side_joined = match side {
+                                profile_data::PlayerSide::P1 => p1_joined,
+                                profile_data::PlayerSide::P2 => p2_joined,
+                            };
+                            if !side_joined {
+                                continue;
+                            }
+                            let Some(side_chart) = wheel_chart_for_side(side) else {
+                                continue;
+                            };
+                            let Some(profile_id) = local_profile_id(side) else {
+                                continue;
+                            };
+                            let Some(rate_hundredths) =
+                                scores::get_cached_local_pass_rate_with_profile(
+                                    side_chart.short_hash.as_str(),
+                                    profile_id.as_ref(),
+                                )
+                            else {
+                                continue;
+                            };
+                            let rate_color = srpg_rate_color(rate_hundredths, side);
+                            actors.push(act!(text:
+                                font(numbers_font):
+                                settext(cached_srpg_rate_text(rate_hundredths)):
+                                align(0.5, 0.5):
+                                horizalign(center):
+                                xy(highlight_left_world + rate_x, y_center_item):
+                                zoom(srpg_rate_zoom):
+                                diffuse(rate_color[0], rate_color[1], rate_color[2], rate_color[3]):
+                                z(53)
+                            ));
+                        }
+                    }
+
                     for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
                         if matches!(itl_wheel_mode, SelectMusicItlWheelMode::Off) {
                             continue;
@@ -1410,8 +1501,9 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
 #[cfg(test)]
 mod tests {
     use super::{
-        choose_itl_wheel_score, itl_rank_color, itl_wheel_mode_for_sides,
-        should_fetch_online_itl_score, song_select_bg_path, visible_song_select_bg_paths,
+        choose_itl_wheel_score, is_srpg_event_group, itl_rank_color, itl_wheel_mode_for_sides,
+        should_fetch_online_itl_score, song_select_bg_path, srpg_rate_color,
+        visible_song_select_bg_paths,
     };
     use crate::config::{SelectMusicItlWheelMode, SelectMusicSongSelectBgMode};
     use crate::screens::select_music::MusicWheelEntry;
@@ -1548,6 +1640,33 @@ mod tests {
     fn online_itl_fetch_requires_settled_selection() {
         assert!(!should_fetch_online_itl_score(true, false));
         assert!(should_fetch_online_itl_score(true, true));
+    }
+
+    #[test]
+    fn srpg_event_group_detection_accepts_current_event_names() {
+        assert!(is_srpg_event_group("Stamina RPG 10"));
+        assert!(is_srpg_event_group("Stamina RPG 10 Unlocks"));
+        assert!(is_srpg_event_group("SRPG10"));
+        assert!(is_srpg_event_group("SRPG9"));
+        assert!(!is_srpg_event_group("ITL Online 2026"));
+        assert!(!is_srpg_event_group("Stamina RPG Songs"));
+        assert!(!is_srpg_event_group("RPG Songs"));
+    }
+
+    #[test]
+    fn srpg_rate_color_matches_zmod_ramp() {
+        assert_eq!(
+            srpg_rate_color(100, profile_data::PlayerSide::P1),
+            [1.0, 1.0, 1.0, 1.0]
+        );
+        assert_eq!(
+            srpg_rate_color(150, profile_data::PlayerSide::P1),
+            [1.0, 0.0, 0.0, 1.0]
+        );
+        assert_eq!(
+            srpg_rate_color(150, profile_data::PlayerSide::P2),
+            [0.0, 0.0, 1.0, 1.0]
+        );
     }
 
     #[test]

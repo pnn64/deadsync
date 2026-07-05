@@ -102,6 +102,7 @@ pub struct LocalScoreIndex {
     pub best_itg: HashMap<String, CachedScore>,
     pub best_ex: HashMap<String, LocalScoreBestScalar>,
     pub best_hard_ex: HashMap<String, LocalScoreBestScalar>,
+    pub best_pass_rate: HashMap<String, u32>,
 }
 
 /// Maximum number of attempts before the backoff schedule saturates. For
@@ -1205,7 +1206,7 @@ pub fn fix_local_ex_grade(grade: Grade, ex_score_percent: f64) -> Grade {
 }
 
 pub const LOCAL_SCORE_VERSION: u16 = 1;
-pub const LOCAL_SCORE_INDEX_VERSION: u16 = 2;
+pub const LOCAL_SCORE_INDEX_VERSION: u16 = 3;
 
 #[derive(Debug, Clone, Encode, Decode)]
 struct LocalScoreIndexFile {
@@ -1475,6 +1476,17 @@ pub fn update_local_score_index(
         }
         None => {
             index.best_itg.insert(chart_hash.to_string(), cached);
+        }
+    }
+
+    if grade != Grade::Failed {
+        let rate = groovestats_rate_hundredths(header.music_rate);
+        if rate >= 100 {
+            index
+                .best_pass_rate
+                .entry(chart_hash.to_string())
+                .and_modify(|best| *best = (*best).max(rate))
+                .or_insert(rate);
         }
     }
 
@@ -2764,14 +2776,28 @@ mod tests {
         newer.grade_code = grade_to_code(Grade::Tier02);
         newer.ex_score_percent = 93.0;
         newer.hard_ex_score_percent = 96.0;
+        newer.music_rate = 1.25;
+
+        let mut failed_faster = newer;
+        failed_faster.music_rate = 2.0;
+        failed_faster.grade_code = grade_to_code(Grade::Failed);
+        failed_faster.fail_time = Some(10.0);
+
+        let mut passed_faster = newer;
+        passed_faster.score_percent = 0.7500;
+        passed_faster.grade_code = grade_to_code(Grade::Tier12);
+        passed_faster.music_rate = 1.5;
 
         let mut index = LocalScoreIndex::default();
         update_local_score_index(&mut index, "deadbeef", &older);
         update_local_score_index(&mut index, "deadbeef", &newer);
+        update_local_score_index(&mut index, "deadbeef", &failed_faster);
+        update_local_score_index(&mut index, "deadbeef", &passed_faster);
 
         assert_eq!(index.best_itg["deadbeef"].score_percent, 0.9900);
         assert_eq!(index.best_ex["deadbeef"].percent, 94.0);
         assert_eq!(index.best_hard_ex["deadbeef"].percent, 96.0);
+        assert_eq!(index.best_pass_rate["deadbeef"], 150);
     }
 
     #[test]
@@ -2781,6 +2807,7 @@ mod tests {
             "deadbeef".to_string(),
             cached_score(Grade::Tier04, 0.975, Some(3), Some(2)),
         );
+        index.best_pass_rate.insert("deadbeef".to_string(), 125);
 
         let bytes = encode_local_score_index(&index).expect("local index should encode");
         let decoded = decode_local_score_index(&bytes).expect("local index should decode");

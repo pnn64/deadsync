@@ -860,6 +860,19 @@ pub fn get_cached_local_score_for_side(
         .and_then(|idx| idx.best_itg.get(chart_hash).copied())
 }
 
+pub fn get_cached_local_pass_rate_with_profile(chart_hash: &str, profile_id: &str) -> Option<u32> {
+    if profile_id.trim().is_empty() {
+        return None;
+    }
+    ensure_local_score_cache_loaded(profile_id);
+    LOCAL_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .loaded_profiles
+        .get(profile_id)
+        .and_then(|idx| idx.best_pass_rate.get(chart_hash).copied())
+}
+
 pub fn get_cached_score_for_side(
     chart_hash: &str,
     side: profile_data::PlayerSide,
