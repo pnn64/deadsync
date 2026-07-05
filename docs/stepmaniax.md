@@ -32,8 +32,8 @@ report.
   - [11a. GIF format](#11a-gif-format)
   - [11b. File locations](#11b-file-locations)
   - [11c. Role names and fallback chains](#11c-role-names-and-fallback-chains)
-  - [11d. Authoring GIFs](#11d-authoring-gifs)
   - [11e. Pack metadata (gifpack.ini)](#11e-pack-metadata-gifpackini)
+  - [11d. Authoring GIFs](#11d-authoring-gifs)
 
 ---
 
@@ -667,6 +667,21 @@ assets/
         gifpack.ini
 ```
 
+Both trees also ship a `dance/none` pack: an empty pack whose `gifpack.ini`
+declares `Fallback = "none"`, so every role resolves to nothing. Select it to
+turn that group off entirely (backgrounds dark, or judgement effects dark)
+without touching the master Panel Lights toggle, and independently per group
+and per player.
+
+**Selecting a pack:** the machine defaults live on the StepManiaX options
+page (**Pad Lights Pack** for backgrounds, **Judgement Pack** for judgement
+gifs; the rows appear once Panel Lights is on). Each player can override both
+per profile in **Player Options**; a profile with no override follows the
+machine default. A pack dropped into `dance/` while the game is running shows
+up in the selectors right away (the list is re-scanned each time), but its
+GIFs are only decoded at first use after launch, so restart the game to
+actually see a brand-new pack's animations.
+
 **Per-song and per-pack backgrounds:** DeadSync also checks `smx-pad-lights/`
 inside the song's folder and its parent pack folder before consulting the global
 registry. This lets you ship a custom background alongside a simfile.
@@ -1002,6 +1017,14 @@ uses for difficulty (`Challenge` = your current theme color; `Hard`,
 step at a time; `Edit` is a fixed grey). So a Hard-difficulty result tints
 differently depending on what theme color you've picked, but always in a way
 consistent with how difficulty is colored everywhere else in the game.
+
+Before the multiply, the target color is adapted for the pad LEDs: the theme
+palette is sRGB (authored for screens), while the LEDs are linear in the byte
+value, so raw palette bytes would render the pastel difficulty colors as
+washed-out near-white. DeadSync gamma-expands each channel relative to the
+brightest one, keeping peak brightness and hue while dropping the floor
+channels to the light level the color actually encodes. Author your grayscale
+art normally; the tint colors come out vivid on the pad automatically.
 
 **This only works correctly on grayscale source art.** If your gif has actual
 color in it, the same per-channel multiply still runs, but the result

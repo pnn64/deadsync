@@ -19,11 +19,17 @@ DIRECTORY LAYOUT
       common/
         common/           <- shipped default pack (DeadSync always ships this)
       dance/
+        none/             <- shipped "off switch" pack (gifpack.ini only)
         <your-pack>/      <- your own pack goes here
           gifpack.ini      <- optional metadata (see below)
           miss_25.gif
           great_25.gif
           ...
+
+The shipped dance/none pack is empty apart from a gifpack.ini declaring
+Fallback = "none", so every name resolves to nothing. Select it in Options
+to turn judgement gifs off entirely without touching the Panel Lights
+toggle (background gifs keep working if their own pack is set normally).
 
 Only add new packs under dance/. Don't edit common/common/ directly --
 future updates to DeadSync may overwrite it. A dance/ pack that reuses a
