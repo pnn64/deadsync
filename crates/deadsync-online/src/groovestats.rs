@@ -466,6 +466,7 @@ pub fn fetched_player_leaderboards_from_api(
 ) -> FetchedPlayerLeaderboards {
     let mut panes = Vec::with_capacity(5);
     let mut imported_score = None;
+    let mut srpg_self_score = None;
     let mut itl_self_score = None;
     let mut itl_self_rank = None;
     let mut itl_self_found = false;
@@ -494,6 +495,7 @@ pub fn fetched_player_leaderboards_from_api(
         if let Some(srpg) = srpg
             && !srpg.srpg_leaderboard.is_empty()
         {
+            srpg_self_score = leaderboard_self_score_10000(&srpg.srpg_leaderboard, username);
             let name =
                 if srpg.name.trim().is_empty() || srpg.name.trim().eq_ignore_ascii_case("rpg") {
                     "SRPG"
@@ -520,6 +522,7 @@ pub fn fetched_player_leaderboards_from_api(
     FetchedPlayerLeaderboards {
         data: PlayerLeaderboardData {
             panes,
+            srpg_self_score,
             itl_self_score,
             itl_self_rank,
         },
@@ -2240,7 +2243,7 @@ mod tests {
                     ex_leaderboard: vec![leaderboard_entry(2, "PerfectTaste", 9912.0, true)],
                     srpg: Some(LeaderboardEventData {
                         name: " ".to_string(),
-                        srpg_leaderboard: vec![leaderboard_entry(4, "RPG", 9000.0, false)],
+                        srpg_leaderboard: vec![leaderboard_entry(4, "PerfectTaste", 9000.0, true)],
                         itl_leaderboard: Vec::new(),
                     }),
                     itl: Some(LeaderboardEventData {
@@ -2258,6 +2261,7 @@ mod tests {
         assert_eq!(imported.score_10000, 9876.0);
         assert_eq!(imported.ex_evidence.leaderboard_score_10000, Some(9912.0));
         assert!(fetched.itl_self_found);
+        assert_eq!(fetched.data.srpg_self_score, Some(9000));
         assert_eq!(fetched.data.itl_self_score, Some(8765));
         assert_eq!(fetched.data.itl_self_rank, Some(42));
         assert_eq!(fetched.data.panes.len(), 4);

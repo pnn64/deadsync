@@ -1678,6 +1678,7 @@ static PLAYER_LEADERBOARD_CACHE: std::sync::LazyLock<Mutex<PlayerLeaderboardCach
     std::sync::LazyLock::new(|| Mutex::new(PlayerLeaderboardCacheState::default()));
 
 const PLAYER_LEADERBOARD_ERROR_RETRY_INTERVAL: Duration = Duration::from_secs(10);
+const EVENT_WHEEL_FETCH_ENTRIES: usize = 5;
 
 #[inline(always)]
 fn should_keep_newer_player_leaderboard_entry(
@@ -2114,6 +2115,19 @@ fn get_cached_player_leaderboard_itl_self_rank_with(
     data.itl_self_rank
 }
 
+fn get_cached_player_leaderboard_srpg_self_score_with(
+    chart_hash: &str,
+    profile_snapshot: &GameplayScoreboxProfileSnapshot,
+) -> Option<u32> {
+    let kref = PlayerLeaderboardCacheKeyRef::for_lookup(chart_hash, profile_snapshot)?;
+    let cache = PLAYER_LEADERBOARD_CACHE.lock().unwrap();
+    let entry = cache.by_key.get(&kref)?;
+    let PlayerLeaderboardCacheValue::Ready(data) = &entry.value else {
+        return None;
+    };
+    data.srpg_self_score
+}
+
 pub struct ItlWheelSideContext {
     profile_id: Option<std::sync::Arc<str>>,
     api_key: String,
@@ -2149,6 +2163,24 @@ impl ItlWheelSideContext {
             self.profile_id.as_deref(),
             &self.api_key,
         )
+    }
+
+    /// Cached SRPG event score for the active GrooveStats event leaderboard.
+    pub fn cached_srpg_self_score(&self, chart_hash: &str) -> Option<u32> {
+        get_cached_player_leaderboard_srpg_self_score_with(chart_hash, &self.leaderboard_snapshot)
+    }
+
+    pub fn get_or_fetch_srpg_self_score(&self, chart_hash: &str) -> Option<u32> {
+        if let Some(score) = self.cached_srpg_self_score(chart_hash) {
+            return Some(score);
+        }
+        let _ = get_or_fetch_player_leaderboards_for_profile_inner(
+            chart_hash,
+            &self.leaderboard_snapshot,
+            EVENT_WHEEL_FETCH_ENTRIES,
+            false,
+        )?;
+        self.cached_srpg_self_score(chart_hash)
     }
 
     /// Cached ITL tournament rank for a chart hash: prefers the player
@@ -3222,6 +3254,7 @@ mod tests {
         let ready = PlayerLeaderboardCacheEntry {
             value: PlayerLeaderboardCacheValue::Ready(PlayerLeaderboardData {
                 panes: Vec::new(),
+                srpg_self_score: None,
                 itl_self_score: None,
                 itl_self_rank: None,
             }),
@@ -3249,6 +3282,7 @@ mod tests {
         let cooled_down_ready = PlayerLeaderboardCacheEntry {
             value: PlayerLeaderboardCacheValue::Ready(PlayerLeaderboardData {
                 panes: Vec::new(),
+                srpg_self_score: None,
                 itl_self_score: None,
                 itl_self_rank: None,
             }),
@@ -3310,10 +3344,52 @@ mod tests {
     }
 
     #[test]
+    fn player_leaderboard_cache_exposes_srpg_self_score() {
+        let snapshot = scorebox_snapshot(
+            true,
+            false,
+            true,
+            true,
+            false,
+            false,
+            "gs-key",
+            "",
+            "PerfectTaste",
+            Some("profile-1".to_string()),
+        );
+        let key = player_leaderboard_cache_key("deadbeef", &snapshot).expect("cache key");
+        {
+            let mut cache = PLAYER_LEADERBOARD_CACHE.lock().unwrap();
+            cache.by_key.insert(
+                key.clone(),
+                PlayerLeaderboardCacheEntry {
+                    value: PlayerLeaderboardCacheValue::Ready(PlayerLeaderboardData {
+                        panes: Vec::new(),
+                        srpg_self_score: Some(9_910),
+                        itl_self_score: None,
+                        itl_self_rank: None,
+                    }),
+                    max_entries: 5,
+                    refreshed_at: Instant::now(),
+                    retry_after: None,
+                },
+            );
+        }
+
+        assert_eq!(
+            get_cached_player_leaderboard_srpg_self_score_with("deadbeef", &snapshot),
+            Some(9_910)
+        );
+
+        PLAYER_LEADERBOARD_CACHE.lock().unwrap().by_key.remove(&key);
+    }
+
+    #[test]
     fn newer_player_leaderboard_entry_blocks_older_fetch_result() {
         let newer_entry = PlayerLeaderboardCacheEntry {
             value: PlayerLeaderboardCacheValue::Ready(PlayerLeaderboardData {
                 panes: Vec::new(),
+                srpg_self_score: None,
                 itl_self_score: None,
                 itl_self_rank: None,
             }),
@@ -3330,6 +3406,7 @@ mod tests {
         let older_entry = PlayerLeaderboardCacheEntry {
             value: PlayerLeaderboardCacheValue::Ready(PlayerLeaderboardData {
                 panes: Vec::new(),
+                srpg_self_score: None,
                 itl_self_score: None,
                 itl_self_rank: None,
             }),

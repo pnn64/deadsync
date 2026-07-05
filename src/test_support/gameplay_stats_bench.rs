@@ -111,6 +111,7 @@ pub fn fixture() -> GameplayStatsBenchFixture {
                         ],
                     },
                 ],
+                srpg_self_score: None,
                 itl_self_score: None,
                 itl_self_rank: None,
             }),

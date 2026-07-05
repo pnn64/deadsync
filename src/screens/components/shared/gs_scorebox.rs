@@ -1292,6 +1292,7 @@ mod tests {
                         arrowcloud_kind: Some(score_data::ArrowCloudPaneKind::HardEx),
                     },
                 ],
+                srpg_self_score: None,
                 itl_self_score: None,
                 itl_self_rank: None,
             }),

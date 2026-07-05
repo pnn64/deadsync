@@ -592,6 +592,7 @@ pub fn arrowcloud_empty_hard_ex_leaderboard_pane() -> LeaderboardPane {
 #[derive(Debug, Clone)]
 pub struct PlayerLeaderboardData {
     pub panes: Vec<LeaderboardPane>,
+    pub srpg_self_score: Option<u32>,
     pub itl_self_score: Option<u32>,
     pub itl_self_rank: Option<u32>,
 }

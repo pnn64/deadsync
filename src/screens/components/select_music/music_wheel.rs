@@ -44,7 +44,7 @@ const NUM_WHEEL_SLOTS: usize = NUM_WHEEL_ITEMS_TO_DRAW + 2; // 17 -> 19 internal
 const CENTER_WHEEL_SLOT_INDEX: usize = NUM_WHEEL_SLOTS / 2;
 // Upper bound on actors emitted per wheel slot with every feature enabled and
 // both player sides joined (box + art + title + BG art, plus per-side grades,
-// lamps, ITL rank, ITL wheel score and favorite heart). A single joined side
+// lamps, event rank/rate/score and favorite heart). A single joined side
 // measures ~6 actors/slot, so 16 leaves headroom for two sides and avoids any
 // mid-build Vec reallocation regardless of config.
 const MAX_ACTORS_PER_WHEEL_SLOT: usize = 16;
@@ -577,6 +577,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
     let srpg_rate_zoom = widescale(0.15, 0.2);
     let itl_ex_x = screen_width() / widescale(2.15, 2.14) - 40.0;
     let itl_ex_color = color::JUDGMENT_RGBA[0];
+    let srpg_score_color = [1.0, 1.0, 1.0, 1.0];
     let itl_points_color = [1.0, 1.0, 1.0, 1.0];
     let joined_sides = usize::from(p1_joined) + usize::from(p2_joined);
     let itl_wheel_mode = itl_wheel_mode_for_sides(p.itl_wheel_mode, joined_sides);
@@ -1172,7 +1173,8 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                         }
                     }
 
-                    if is_srpg_event_song(info) && joined_sides == 1 {
+                    let is_srpg_event = is_srpg_event_song(info);
+                    if is_srpg_event && joined_sides == 1 {
                         for (side, rate_x) in [
                             (profile_data::PlayerSide::P1, grade_x_p2),
                             (profile_data::PlayerSide::P2, grade_x_p1),
@@ -1214,6 +1216,34 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
 
                     for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
                         if matches!(itl_wheel_mode, SelectMusicItlWheelMode::Off) {
+                            continue;
+                        }
+                        if is_srpg_event {
+                            let Some(side_chart) = wheel_chart_for_side(side) else {
+                                continue;
+                            };
+                            let Some(itl_ctx) = itl_ctx_for_side(side) else {
+                                continue;
+                            };
+                            let chart_hash = side_chart.short_hash.as_str();
+                            let score_hundredths = if should_fetch_online_itl {
+                                itl_ctx.get_or_fetch_srpg_self_score(chart_hash)
+                            } else {
+                                itl_ctx.cached_srpg_self_score(chart_hash)
+                            };
+                            let Some(score_hundredths) = score_hundredths else {
+                                continue;
+                            };
+                            actors.push(act!(text:
+                                font(numbers_font):
+                                settext(cached_itl_ex_text(score_hundredths)):
+                                align(1.0, 0.5):
+                                horizalign(right):
+                                xy(highlight_left_world + itl_ex_x, y_center_item + itl_score_y(side, joined_sides)):
+                                zoom(ITL_SCORE_ZOOM):
+                                diffuse(srpg_score_color[0], srpg_score_color[1], srpg_score_color[2], srpg_score_color[3]):
+                                z(53)
+                            ));
                             continue;
                         }
                         let Some(itl_ctx) = itl_ctx_for_side(side) else {

@@ -4425,6 +4425,7 @@ mod tests {
     fn cached_leaderboard_snapshots_set_state_exclusively() {
         let data = PlayerLeaderboardData {
             panes: Vec::new(),
+            srpg_self_score: Some(9_432),
             itl_self_score: Some(9_876),
             itl_self_rank: Some(2),
         };
