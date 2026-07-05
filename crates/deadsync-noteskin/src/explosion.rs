@@ -809,6 +809,15 @@ pub fn itg_hold_explosion_slot<L, T: Clone>(
     mut direct_slot: impl FnMut() -> Option<T>,
     mut wrapped_slots: impl FnMut() -> Vec<T>,
 ) -> Option<T> {
+    let wrapper_has_active = wrapper_layers
+        .iter()
+        .any(|layer| has_command(layer, active_key));
+    let wrapper_has_hint = wrapper_layers
+        .iter()
+        .any(|layer| element_matches_hint(layer, element_hint));
+    let wrapper_has_flash_child = wrapper_layers
+        .iter()
+        .any(|layer| has_command(layer, "flashcommand"));
     let wrapper = wrapper_layers
         .iter()
         .find(|layer| has_command(layer, active_key))
@@ -820,6 +829,9 @@ pub fn itg_hold_explosion_slot<L, T: Clone>(
 
     if let Some(layer) = wrapper.filter(|layer| has_command(layer, active_key)) {
         return Some(apply_commands(layer_slot(layer), layer, active_key));
+    }
+    if wrapper_has_flash_child && !wrapper_has_active && !wrapper_has_hint {
+        return None;
     }
     if blank {
         return None;
@@ -1299,6 +1311,50 @@ mod tests {
         );
 
         assert_eq!(slot, Some("source+wrapper:holdingoncommand".to_string()));
+    }
+
+    #[test]
+    fn hold_explosion_slot_skips_child_flash_emitters_without_active_command() {
+        #[derive(Debug, Clone)]
+        struct Layer {
+            id: &'static str,
+            element: &'static str,
+            active: bool,
+            flash: bool,
+        }
+
+        let wrapper_layers = [Layer {
+            id: "holdflash",
+            element: "Flash Dim",
+            active: false,
+            flash: true,
+        }];
+        let source_layers = [Layer {
+            id: "source",
+            element: "Hold Explosion",
+            active: true,
+            flash: false,
+        }];
+        let slot = itg_hold_explosion_slot(
+            &wrapper_layers,
+            &source_layers,
+            "holdingoncommand",
+            "hold explosion",
+            false,
+            Some("fallback".to_string()),
+            |layer, key| match key {
+                "holdingoncommand" => layer.active,
+                "flashcommand" => layer.flash,
+                _ => false,
+            },
+            |layer, hint| layer.element.to_ascii_lowercase().contains(hint),
+            |layer| layer.id.to_string(),
+            |slot, layer, key| format!("{slot}+{}:{key}", layer.id),
+            || Some("direct".to_string()),
+            || vec!["wrapped".to_string()],
+        );
+
+        assert_eq!(slot, None);
     }
 
     #[test]

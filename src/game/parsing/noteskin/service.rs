@@ -1967,6 +1967,77 @@ return skin
     }
 
     #[test]
+    fn child_flash_hold_emitter_does_not_fall_back_to_static_explosion() {
+        clear_itg_runtime_caches();
+        let root = temp_noteskin_root("hold-child-flash-emitter");
+        let skin_dir = root.join("dance/flashhold");
+        fs::create_dir_all(&skin_dir).unwrap();
+        fs::write(
+            skin_dir.join("metrics.ini"),
+            "[Global]\nFallbackNoteSkin=flashhold\n",
+        )
+        .unwrap();
+        fs::write(
+            skin_dir.join("NoteSkin.lua"),
+            r#"local skin = {}
+skin.ButtonRedir = { Up = "Down", Down = "Down", Left = "Down", Right = "Down" }
+
+function skin.Load()
+    local button = skin.ButtonRedir[Var "Button"] or Var "Button"
+    local element = Var "Element"
+    local path = element == "Explosion" and NOTESKIN:GetPath("", "Fallback Explosion") or NOTESKIN:GetPath(button, element)
+    return LoadActor(path)
+end
+
+return skin
+"#,
+        )
+        .unwrap();
+        fs::write(
+            skin_dir.join("Fallback Explosion.lua"),
+r#"local holdflash = NOTESKIN:LoadActor(Var "Button", "Flash Dim") .. {
+    InitCommand=function(self) self:blend(Blend.Add):diffuse(0,0,0,0) end;
+    FlashCommand=function(self) self:diffuse(1,1,1,1):linear(0.05):diffuse(1,1,1,0) end;
+}
+
+return Def.ActorFrame {
+    Def.ActorFrame {
+        HoldingOnCommand=function(self) self.emitting=true; self:finishtweening():playcommand("Emit") end;
+        HoldingOffCommand=function(self) self.emitting=false end;
+        RollOnCommand=function(self) self.emitting=true; self:finishtweening():playcommand("Emit") end;
+        RollOffCommand=function(self) self.emitting=false end;
+        EmitCommand=function(self) self:queuecommand("Emit") end;
+        holdflash;
+    };
+}"#,
+        )
+        .unwrap();
+        write_noteskin_png(&skin_dir.join("Down Tap Note.png"));
+        write_noteskin_png(&skin_dir.join("Down Receptor.png"));
+        write_noteskin_png(&skin_dir.join("Down Flash Dim.png"));
+        write_noteskin_png(&skin_dir.join("Down Hold Explosion.png"));
+
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let ns = load_itg(&root, "dance", "flashhold", &style).expect("test noteskin should load");
+        for col in 0..4 {
+            assert!(
+                ns.hold_visuals_for_col(col, false).explosion.is_none(),
+                "hold column {col} should not use a static fallback for child FlashCommand emitters"
+            );
+            assert!(
+                ns.hold_visuals_for_col(col, true).explosion.is_none(),
+                "roll column {col} should not use a static fallback for child FlashCommand emitters"
+            );
+        }
+
+        let _ = fs::remove_dir_all(&root);
+        clear_itg_runtime_caches();
+    }
+
+    #[test]
     fn receptor_reverse_commands_are_kept_per_layer() {
         clear_itg_runtime_caches();
         let root = temp_noteskin_root("receptor-reverse-command");
