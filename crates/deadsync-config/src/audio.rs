@@ -30,6 +30,34 @@ pub struct AudioDeviceOptions<'a> {
     pub sample_rate_hz: Option<u32>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AudioRuntimeOptions<L, M> {
+    pub linux_audio_backend: L,
+    pub output_mode: M,
+}
+
+pub fn load_audio_runtime_options<L, M>(
+    conf: &SimpleIni,
+    default: AudioRuntimeOptions<L, M>,
+    parse_linux_backend: impl Fn(&str) -> Option<L>,
+    parse_output_mode: impl Fn(&str) -> Option<M>,
+) -> AudioRuntimeOptions<L, M>
+where
+    L: Copy,
+    M: Copy,
+{
+    AudioRuntimeOptions {
+        linux_audio_backend: conf
+            .get("Options", "LinuxAudioBackend")
+            .and_then(|value| parse_linux_backend(&value))
+            .unwrap_or(default.linux_audio_backend),
+        output_mode: conf
+            .get("Options", "AudioOutputMode")
+            .and_then(|value| parse_output_mode(&value))
+            .unwrap_or(default.output_mode),
+    }
+}
+
 pub fn load_audio_options(conf: &SimpleIni, default: AudioOptions) -> AudioOptions {
     AudioOptions {
         visual_delay_seconds: conf
@@ -134,6 +162,16 @@ pub fn push_audio_music_option_lines(content: &mut String, options: AudioOptions
     push_bool(content, "ReplayGain", options.enable_replaygain);
 }
 
+pub fn push_audio_tail_option_lines(content: &mut String, options: AudioOptions) {
+    push_line(content, "AssistTickVolume", options.assist_tick_volume);
+    push_line(content, "SFXVolume", options.sfx_volume);
+    push_bool(content, "TabAcceleration", options.tab_acceleration);
+}
+
+pub fn push_audio_write_current_screen_option_lines(content: &mut String, options: AudioOptions) {
+    push_bool(content, "WriteCurrentScreen", options.write_current_screen);
+}
+
 pub const fn clamp_audio_volume_percent(value: u8) -> u8 {
     if value > AUDIO_VOLUME_MAX {
         AUDIO_VOLUME_MAX
@@ -182,6 +220,12 @@ fn optional_auto_number_value<T: std::fmt::Display>(value: Option<T>) -> String 
 mod tests {
     use super::*;
 
+    fn ini(content: &str) -> SimpleIni {
+        let mut conf = SimpleIni::new();
+        conf.load_str(content);
+        conf
+    }
+
     fn default_options() -> AudioOptions {
         AudioOptions {
             visual_delay_seconds: 0.0,
@@ -199,6 +243,40 @@ mod tests {
             write_current_screen: false,
             tab_acceleration: true,
         }
+    }
+
+    fn parse_letter_token(raw: &str) -> Option<char> {
+        match raw.trim() {
+            "a" => Some('a'),
+            "b" => Some('b'),
+            "c" => Some('c'),
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn loads_audio_runtime_options_with_token_parsers() {
+        let loaded = load_audio_runtime_options(
+            &ini(r#"
+                [Options]
+                LinuxAudioBackend=b
+                AudioOutputMode=c
+                "#),
+            AudioRuntimeOptions {
+                linux_audio_backend: 'a',
+                output_mode: 'a',
+            },
+            parse_letter_token,
+            parse_letter_token,
+        );
+
+        assert_eq!(
+            loaded,
+            AudioRuntimeOptions {
+                linux_audio_backend: 'b',
+                output_mode: 'c',
+            },
+        );
     }
 
     #[test]
@@ -290,6 +368,29 @@ mod tests {
                 "MusicWheelSwitchSpeed=1\n",
                 "RateModPreservesPitch=1\n",
                 "ReplayGain=0\n",
+            ),
+        );
+    }
+
+    #[test]
+    fn writes_audio_tail_option_lines() {
+        let mut content = String::new();
+        let mut options = default_options();
+        options.assist_tick_volume = 31;
+        options.sfx_volume = 42;
+        options.tab_acceleration = false;
+        options.write_current_screen = true;
+
+        push_audio_tail_option_lines(&mut content, options);
+        push_audio_write_current_screen_option_lines(&mut content, options);
+
+        assert_eq!(
+            content,
+            concat!(
+                "AssistTickVolume=31\n",
+                "SFXVolume=42\n",
+                "TabAcceleration=0\n",
+                "WriteCurrentScreen=1\n",
             ),
         );
     }

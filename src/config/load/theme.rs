@@ -1,7 +1,7 @@
 use super::*;
 use deadsync_config::theme::{
-    MachineFlowOptions, ThemePresentationOptions, load_machine_flow_options,
-    load_theme_presentation_options,
+    MachineFlowOptions, ThemePresentationOptions, ThemeShortcutOptions, load_machine_flow_options,
+    load_theme_presentation_options, load_theme_shortcut_options,
 };
 
 pub(super) fn load(conf: &SimpleIni, default: Config, cfg: &mut Config) {
@@ -81,20 +81,18 @@ fn load_machine_flow(conf: &SimpleIni, default: Config, cfg: &mut Config) {
     cfg.machine_bar_color = loaded.machine_bar_color;
     cfg.machine_evaluation_style = loaded.machine_evaluation_style;
 
-    cfg.music_select_shortcut_practice = conf
-        .get("Theme", "SelectMusicShortcutPractice")
-        .and_then(|v| parse_keycode_to_key(&v))
-        .unwrap_or(default.music_select_shortcut_practice);
-    cfg.music_select_shortcut_song_search = conf
-        .get("Theme", "SelectMusicShortcutSongSearch")
-        .and_then(|v| parse_keycode_to_key(&v))
-        .unwrap_or(default.music_select_shortcut_song_search);
-    cfg.music_select_shortcut_load_songs = conf
-        .get("Theme", "SelectMusicShortcutLoadSongs")
-        .and_then(|v| parse_keycode_to_key(&v))
-        .unwrap_or(default.music_select_shortcut_load_songs);
-    cfg.music_select_shortcut_test_input = conf
-        .get("Theme", "SelectMusicShortcutTestInput")
-        .and_then(|v| parse_keycode_to_key(&v))
-        .unwrap_or(default.music_select_shortcut_test_input);
+    let shortcuts = load_theme_shortcut_options(
+        conf,
+        ThemeShortcutOptions {
+            practice: default.music_select_shortcut_practice,
+            song_search: default.music_select_shortcut_song_search,
+            load_songs: default.music_select_shortcut_load_songs,
+            test_input: default.music_select_shortcut_test_input,
+        },
+        parse_keycode_to_key,
+    );
+    cfg.music_select_shortcut_practice = shortcuts.practice;
+    cfg.music_select_shortcut_song_search = shortcuts.song_search;
+    cfg.music_select_shortcut_load_songs = shortcuts.load_songs;
+    cfg.music_select_shortcut_test_input = shortcuts.test_input;
 }

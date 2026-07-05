@@ -1448,6 +1448,42 @@ pub fn load_machine_flow_options(
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ThemeShortcutOptions<K> {
+    pub practice: K,
+    pub song_search: K,
+    pub load_songs: K,
+    pub test_input: K,
+}
+
+pub fn load_theme_shortcut_options<K>(
+    conf: &SimpleIni,
+    default: ThemeShortcutOptions<K>,
+    parse_key: impl Fn(&str) -> Option<K>,
+) -> ThemeShortcutOptions<K>
+where
+    K: Copy,
+{
+    ThemeShortcutOptions {
+        practice: conf
+            .get("Theme", "SelectMusicShortcutPractice")
+            .and_then(|value| parse_key(&value))
+            .unwrap_or(default.practice),
+        song_search: conf
+            .get("Theme", "SelectMusicShortcutSongSearch")
+            .and_then(|value| parse_key(&value))
+            .unwrap_or(default.song_search),
+        load_songs: conf
+            .get("Theme", "SelectMusicShortcutLoadSongs")
+            .and_then(|value| parse_key(&value))
+            .unwrap_or(default.load_songs),
+        test_input: conf
+            .get("Theme", "SelectMusicShortcutTestInput")
+            .and_then(|value| parse_key(&value))
+            .unwrap_or(default.test_input),
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ThemeShortcutTokens<'a> {
     pub practice: &'a str,
     pub song_search: &'a str,
@@ -1697,7 +1733,42 @@ MachineEvaluationStyle=Default\n\
 	SimplyLoveColor=2\n\
 	ZmodRatingBoxText=0\n\
 	ShowBpmDecimal=0\n\
-	GameplayBpmPosition=TopCenter\n"
+		GameplayBpmPosition=TopCenter\n"
+        );
+    }
+
+    #[test]
+    fn loads_theme_shortcut_options_with_token_parser() {
+        let mut conf = SimpleIni::new();
+        conf.load_str(
+            r#"
+            [Theme]
+            SelectMusicShortcutPractice=p
+            SelectMusicShortcutSongSearch=s
+            SelectMusicShortcutLoadSongs=l
+            SelectMusicShortcutTestInput=t
+            "#,
+        );
+
+        let loaded = load_theme_shortcut_options(
+            &conf,
+            ThemeShortcutOptions {
+                practice: 'a',
+                song_search: 'a',
+                load_songs: 'a',
+                test_input: 'a',
+            },
+            |raw| raw.chars().next().filter(|ch| ch.is_ascii_lowercase()),
+        );
+
+        assert_eq!(
+            loaded,
+            ThemeShortcutOptions {
+                practice: 'p',
+                song_search: 's',
+                load_songs: 'l',
+                test_input: 't',
+            },
         );
     }
 

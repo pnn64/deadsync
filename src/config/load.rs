@@ -1,7 +1,7 @@
 use super::store::{create_default_config_file, current_save_content};
 use super::*;
 use deadlib_platform::dirs;
-use deadsync_config::bools::{parse_bool_str, parse_u8_bool_or_default};
+use deadsync_config::bools::parse_bool_str;
 use deadsync_config::cache::load_never_cache_list;
 use deadsync_config::folders::load_additional_song_folders;
 use deadsync_config::runtime_state::load_runtime_state_ids;

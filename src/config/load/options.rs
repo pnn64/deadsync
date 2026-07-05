@@ -1,10 +1,13 @@
 use super::*;
-use deadsync_config::audio::{AudioOptions, load_audio_options};
-use deadsync_config::machine::clamp_smx_light_brightness_percent;
+use deadsync_config::audio::{
+    AudioOptions, AudioRuntimeOptions, load_audio_options, load_audio_runtime_options,
+};
 use deadsync_config::null_or_die::{NullOrDieOptions, load_null_or_die_options};
 use deadsync_config::options::{
-    RuntimeOptions, SelectMusicOptions, SystemOptions, load_runtime_options,
-    load_select_music_options, load_system_options,
+    DisplayLoadOptions, RuntimeIoLoadOptions, RuntimeOptions, SelectMusicOptions,
+    SystemInputHardwareLoadOptions, SystemOptions, load_display_options, load_gameplay_bg_color,
+    load_runtime_io_options, load_runtime_options, load_select_music_options,
+    load_system_input_hardware_options, load_system_options,
 };
 use deadsync_lights::{
     SerialPortName, parse_driver_or_default, parse_gameplay_pad_lights_or_default,
@@ -19,36 +22,34 @@ pub(super) fn load(conf: &SimpleIni, default: Config, cfg: &mut Config) {
 }
 
 fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
-    cfg.vsync = parse_u8_bool_or_default(conf.get("Options", "Vsync").as_deref(), default.vsync);
-    cfg.max_fps = conf
-        .get("Options", "MaxFps")
-        .and_then(|v| v.parse::<u16>().ok())
-        .unwrap_or(default.max_fps);
-    cfg.present_mode_policy = conf
-        .get("Options", "PresentModePolicy")
-        .and_then(|s| PresentModePolicy::from_str(&s).ok())
-        .or_else(|| {
-            conf.get("Options", "UncappedMode").and_then(|s| {
-                match s.trim().to_ascii_lowercase().as_str() {
-                    "balanced" => Some(PresentModePolicy::Mailbox),
-                    "unhinged" | "maxfps" | "max_fps" | "max-fps" => {
-                        Some(PresentModePolicy::Immediate)
-                    }
-                    _ => None,
-                }
-            })
-        })
-        .unwrap_or(default.present_mode_policy);
-    cfg.windowed =
-        parse_u8_bool_or_default(conf.get("Options", "Windowed").as_deref(), default.windowed);
-    cfg.fullscreen_type = conf
-        .get("Options", "FullscreenType")
-        .and_then(|v| FullscreenType::from_str(&v).ok())
-        .unwrap_or(default.fullscreen_type);
-    cfg.display_monitor = conf
-        .get("Options", "DisplayMonitor")
-        .and_then(|v| v.parse::<usize>().ok())
-        .unwrap_or(default.display_monitor);
+    let display = load_display_options(
+        conf,
+        DisplayLoadOptions {
+            vsync: default.vsync,
+            max_fps: default.max_fps,
+            present_mode_policy: default.present_mode_policy,
+            windowed: default.windowed,
+            fullscreen_type: default.fullscreen_type,
+            monitor: default.display_monitor,
+            width: default.display_width,
+            height: default.display_height,
+            video_renderer: default.video_renderer,
+        },
+        |value| FullscreenType::from_str(value).ok(),
+        |value| PresentModePolicy::from_str(value).ok(),
+        PresentModePolicy::Mailbox,
+        PresentModePolicy::Immediate,
+        |value| BackendType::from_str(value).ok(),
+    );
+    cfg.vsync = display.vsync;
+    cfg.max_fps = display.max_fps;
+    cfg.present_mode_policy = display.present_mode_policy;
+    cfg.windowed = display.windowed;
+    cfg.fullscreen_type = display.fullscreen_type;
+    cfg.display_monitor = display.monitor;
+    cfg.display_width = display.width;
+    cfg.display_height = display.height;
+    cfg.video_renderer = display.video_renderer;
 
     let loaded = load_system_options(
         conf,
@@ -140,37 +141,21 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
     cfg.log_to_file = loaded.log_to_file;
     cfg.show_console = loaded.show_console;
 
-    cfg.gameplay_bg_color = conf
-        .get("Options", "GameplayBgColor")
-        .and_then(|v| Color::from_hex(&v))
-        .unwrap_or(default.gameplay_bg_color);
-    cfg.display_width = conf
-        .get("Options", "DisplayWidth")
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(default.display_width);
-    cfg.display_height = conf
-        .get("Options", "DisplayHeight")
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(default.display_height);
-    cfg.video_renderer = conf
-        .get("Options", "VideoRenderer")
-        .and_then(|s| BackendType::from_str(&s).ok())
-        .unwrap_or(default.video_renderer);
-    cfg.windows_gamepad_backend = conf
-        .get("Options", "GamepadBackend")
-        .and_then(|s| WindowsPadBackend::from_str(&s).ok())
-        .unwrap_or(default.windows_gamepad_backend);
-    cfg.smx_default_pad_config = conf
-        .get("Options", "SmxDefaultPadConfig")
-        .and_then(|s| crate::config::SmxPadPreset::from_str(&s).ok())
-        .unwrap_or(default.smx_default_pad_config);
-    cfg.smx_default_light_brightness = conf
-        .get("Options", "SmxDefaultLightBrightness")
-        .and_then(|v| v.parse::<u8>().ok())
-        .map_or(
-            default.smx_default_light_brightness,
-            clamp_smx_light_brightness_percent,
-        );
+    cfg.gameplay_bg_color =
+        load_gameplay_bg_color(conf, default.gameplay_bg_color, Color::from_hex);
+    let hardware = load_system_input_hardware_options(
+        conf,
+        SystemInputHardwareLoadOptions {
+            gamepad_backend: default.windows_gamepad_backend,
+            smx_default_pad_config: default.smx_default_pad_config,
+            smx_default_light_brightness: default.smx_default_light_brightness,
+        },
+        |value| WindowsPadBackend::from_str(value).ok(),
+        |value| crate::config::SmxPadPreset::from_str(value).ok(),
+    );
+    cfg.windows_gamepad_backend = hardware.gamepad_backend;
+    cfg.smx_default_pad_config = hardware.smx_default_pad_config;
+    cfg.smx_default_light_brightness = hardware.smx_default_light_brightness;
 }
 
 fn load_null_or_die_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
@@ -202,14 +187,17 @@ fn load_null_or_die_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
 }
 
 fn load_audio_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
-    cfg.linux_audio_backend = conf
-        .get("Options", "LinuxAudioBackend")
-        .and_then(|v| LinuxAudioBackend::from_str(&v).ok())
-        .unwrap_or(default.linux_audio_backend);
-    cfg.audio_output_mode = conf
-        .get("Options", "AudioOutputMode")
-        .and_then(|s| AudioOutputMode::from_str(&s).ok())
-        .unwrap_or(default.audio_output_mode);
+    let runtime = load_audio_runtime_options(
+        conf,
+        AudioRuntimeOptions {
+            linux_audio_backend: default.linux_audio_backend,
+            output_mode: default.audio_output_mode,
+        },
+        |value| LinuxAudioBackend::from_str(value).ok(),
+        |value| AudioOutputMode::from_str(value).ok(),
+    );
+    cfg.linux_audio_backend = runtime.linux_audio_backend;
+    cfg.audio_output_mode = runtime.output_mode;
     let loaded = load_audio_options(
         conf,
         AudioOptions {
@@ -348,20 +336,21 @@ fn load_runtime_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
     cfg.theme_flag = loaded.theme_flag;
     cfg.software_renderer_threads = loaded.software_renderer_threads;
 
-    cfg.input_debounce_seconds = conf
-        .get("Options", "InputDebounceTime")
-        .and_then(|v| deadsync_input::parse_input_debounce_seconds(&v))
-        .unwrap_or(default.input_debounce_seconds);
-    cfg.lights_driver = conf
-        .get("Options", "LightsDriver")
-        .map(|v| parse_driver_or_default(&v, default.lights_driver))
-        .unwrap_or(default.lights_driver);
-    cfg.lights_gameplay_pad_lights = conf
-        .get("Options", "GameplayPadLights")
-        .map(|v| parse_gameplay_pad_lights_or_default(&v, default.lights_gameplay_pad_lights))
-        .unwrap_or(default.lights_gameplay_pad_lights);
-    cfg.lights_com_port = conf
-        .get("Options", "LightsComPort")
-        .map(|v| SerialPortName::parse(&v, default.lights_com_port))
-        .unwrap_or(default.lights_com_port);
+    let io = load_runtime_io_options(
+        conf,
+        RuntimeIoLoadOptions {
+            input_debounce_seconds: default.input_debounce_seconds,
+            lights_driver: default.lights_driver,
+            gameplay_pad_lights: default.lights_gameplay_pad_lights,
+            lights_com_port: default.lights_com_port,
+        },
+        deadsync_input::parse_input_debounce_seconds,
+        parse_driver_or_default,
+        parse_gameplay_pad_lights_or_default,
+        SerialPortName::parse,
+    );
+    cfg.input_debounce_seconds = io.input_debounce_seconds;
+    cfg.lights_driver = io.lights_driver;
+    cfg.lights_gameplay_pad_lights = io.gameplay_pad_lights;
+    cfg.lights_com_port = io.lights_com_port;
 }

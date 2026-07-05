@@ -1,4 +1,5 @@
 use crate::ini::SimpleIni;
+use crate::writer::push_line;
 
 pub fn load_never_cache_list(conf: &SimpleIni) -> Vec<String> {
     conf.get("Options", "NeverCacheList")
@@ -12,6 +13,10 @@ pub fn load_never_cache_list(conf: &SimpleIni) -> Vec<String> {
 
 pub fn never_cache_list_value(list: &[String]) -> String {
     list.join(",")
+}
+
+pub fn push_never_cache_list_option_line(content: &mut String, list: &[String]) {
+    push_line(content, "NeverCacheList", never_cache_list_value(list));
 }
 
 #[cfg(test)]
@@ -46,5 +51,17 @@ mod tests {
             never_cache_list_value(&["Pack A".to_string(), "Pack B".to_string()]),
             "Pack A,Pack B"
         );
+    }
+
+    #[test]
+    fn writes_never_cache_list_option_line() {
+        let mut content = String::new();
+
+        push_never_cache_list_option_line(
+            &mut content,
+            &["Pack A".to_string(), "Pack B".to_string()],
+        );
+
+        assert_eq!(content, "NeverCacheList=Pack A,Pack B\n");
     }
 }

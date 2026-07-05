@@ -1,3 +1,5 @@
+use crate::writer::push_line;
+
 pub const DEFAULT_MACHINE_NOTESKIN: &str = "cel";
 pub const DEFAULT_FRAME_STATS_OVERLAY_ANCHOR: &str = "auto";
 pub const DEFAULT_FRAME_STATS_OVERLAY_STYLE: &str = "detailed";
@@ -17,6 +19,10 @@ pub fn normalize_machine_default_noteskin(raw: &str) -> String {
         return DEFAULT_MACHINE_NOTESKIN.to_string();
     }
     trimmed.to_ascii_lowercase()
+}
+
+pub fn push_default_noteskin_option_line(content: &mut String, noteskin: &str) {
+    push_line(content, "DefaultNoteSkin", noteskin);
 }
 
 pub fn canonical_frame_stats_overlay_anchor(value: &str) -> &'static str {
@@ -58,6 +64,15 @@ mod tests {
             normalize_machine_default_noteskin("   "),
             DEFAULT_MACHINE_NOTESKIN
         );
+    }
+
+    #[test]
+    fn writes_default_noteskin_option_line() {
+        let mut content = String::new();
+
+        push_default_noteskin_option_line(&mut content, "cyber");
+
+        assert_eq!(content, "DefaultNoteSkin=cyber\n");
     }
 
     #[test]

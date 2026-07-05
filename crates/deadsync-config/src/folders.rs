@@ -1,4 +1,5 @@
 use crate::ini::SimpleIni;
+use crate::writer::push_line;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AdditionalSongFolder {
@@ -49,6 +50,23 @@ pub fn additional_song_folder_paths(folders: &[AdditionalSongFolder], writable: 
         out.push_str(folder.path.as_str());
     }
     out
+}
+
+pub fn push_additional_song_folder_option_lines(
+    content: &mut String,
+    folders: &[AdditionalSongFolder],
+) {
+    push_line(content, "AdditionalSongFolders", "");
+    push_line(
+        content,
+        "AdditionalSongFoldersWritable",
+        additional_song_folder_paths(folders, true),
+    );
+    push_line(
+        content,
+        "AdditionalSongFoldersReadOnly",
+        additional_song_folder_paths(folders, false),
+    );
 }
 
 #[cfg(test)]
@@ -134,6 +152,27 @@ AdditionalSongFoldersReadOnly= , G:\\ro , \n");
         assert_eq!(
             additional_song_folder_paths(&folders, true),
             "D:\\writable-a,E:\\writable-b"
+        );
+    }
+
+    #[test]
+    fn writes_additional_song_folder_option_lines() {
+        let folders = [
+            folder("G:\\readonly", false),
+            folder("D:\\writable-a", true),
+            folder("E:\\writable-b", true),
+        ];
+        let mut content = String::new();
+
+        push_additional_song_folder_option_lines(&mut content, &folders);
+
+        assert_eq!(
+            content,
+            concat!(
+                "AdditionalSongFolders=\n",
+                "AdditionalSongFoldersWritable=D:\\writable-a,E:\\writable-b\n",
+                "AdditionalSongFoldersReadOnly=G:\\readonly\n",
+            ),
         );
     }
 }

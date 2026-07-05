@@ -1,6 +1,9 @@
 use crate::bools::{parse_bool_str, parse_loose_bool_str, parse_u8_bool_or_default};
 use crate::ini::SimpleIni;
-use crate::machine::{canonical_frame_stats_overlay_anchor, canonical_frame_stats_overlay_style};
+use crate::machine::{
+    canonical_frame_stats_overlay_anchor, canonical_frame_stats_overlay_style,
+    clamp_smx_light_brightness_percent,
+};
 use crate::numbers::parse_auto_threads_u8;
 use crate::theme::{
     AUTO_SS_CLEARS, AUTO_SS_FAILS, AUTO_SS_PBS, AUTO_SS_QUADS, AUTO_SS_QUINTS,
@@ -105,6 +108,211 @@ pub struct SystemOptions {
     pub log_level: LogLevel,
     pub log_to_file: bool,
     pub show_console: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SystemInputHardwareOptions<'a> {
+    pub system: SystemOptions,
+    pub gamepad_backend: &'a str,
+    pub smx_default_pad_config: &'a str,
+    pub smx_default_light_brightness: u8,
+    pub smx_underglow_theme: Option<bool>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DisplayOptions<'a> {
+    pub width: u32,
+    pub height: u32,
+    pub monitor: usize,
+    pub fullscreen_type: &'a str,
+    pub max_fps: u16,
+    pub present_mode_policy: &'a str,
+    pub video_renderer: &'a str,
+    pub vsync: bool,
+    pub windowed: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RuntimeIoOptions<'a> {
+    pub linux_audio_backend: &'a str,
+    pub input_debounce_seconds: f32,
+    pub lights_driver: &'a str,
+    pub gameplay_pad_lights: &'a str,
+    pub lights_com_port: &'a str,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DisplayLoadOptions<F, P, V> {
+    pub vsync: bool,
+    pub max_fps: u16,
+    pub present_mode_policy: P,
+    pub windowed: bool,
+    pub fullscreen_type: F,
+    pub monitor: usize,
+    pub width: u32,
+    pub height: u32,
+    pub video_renderer: V,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SystemInputHardwareLoadOptions<W, S> {
+    pub gamepad_backend: W,
+    pub smx_default_pad_config: S,
+    pub smx_default_light_brightness: u8,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RuntimeIoLoadOptions<D, G, P> {
+    pub input_debounce_seconds: f32,
+    pub lights_driver: D,
+    pub gameplay_pad_lights: G,
+    pub lights_com_port: P,
+}
+
+pub fn load_display_options<F, P, V>(
+    conf: &SimpleIni,
+    default: DisplayLoadOptions<F, P, V>,
+    parse_fullscreen_type: impl Fn(&str) -> Option<F>,
+    parse_present_mode_policy: impl Fn(&str) -> Option<P>,
+    legacy_balanced_policy: P,
+    legacy_unhinged_policy: P,
+    parse_video_renderer: impl Fn(&str) -> Option<V>,
+) -> DisplayLoadOptions<F, P, V>
+where
+    F: Copy,
+    P: Copy,
+    V: Copy,
+{
+    DisplayLoadOptions {
+        vsync: parse_u8_bool_or_default(conf.get("Options", "Vsync").as_deref(), default.vsync),
+        max_fps: conf
+            .get("Options", "MaxFps")
+            .and_then(|value| value.parse::<u16>().ok())
+            .unwrap_or(default.max_fps),
+        present_mode_policy: conf
+            .get("Options", "PresentModePolicy")
+            .and_then(|value| parse_present_mode_policy(&value))
+            .or_else(|| {
+                conf.get("Options", "UncappedMode").and_then(|value| {
+                    parse_legacy_present_mode(
+                        &value,
+                        legacy_balanced_policy,
+                        legacy_unhinged_policy,
+                    )
+                })
+            })
+            .unwrap_or(default.present_mode_policy),
+        windowed: parse_u8_bool_or_default(
+            conf.get("Options", "Windowed").as_deref(),
+            default.windowed,
+        ),
+        fullscreen_type: conf
+            .get("Options", "FullscreenType")
+            .and_then(|value| parse_fullscreen_type(&value))
+            .unwrap_or(default.fullscreen_type),
+        monitor: conf
+            .get("Options", "DisplayMonitor")
+            .and_then(|value| value.parse::<usize>().ok())
+            .unwrap_or(default.monitor),
+        width: conf
+            .get("Options", "DisplayWidth")
+            .and_then(|value| value.parse::<u32>().ok())
+            .unwrap_or(default.width),
+        height: conf
+            .get("Options", "DisplayHeight")
+            .and_then(|value| value.parse::<u32>().ok())
+            .unwrap_or(default.height),
+        video_renderer: conf
+            .get("Options", "VideoRenderer")
+            .and_then(|value| parse_video_renderer(&value))
+            .unwrap_or(default.video_renderer),
+    }
+}
+
+fn parse_legacy_present_mode<P>(raw: &str, balanced_policy: P, unhinged_policy: P) -> Option<P>
+where
+    P: Copy,
+{
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "balanced" => Some(balanced_policy),
+        "unhinged" | "maxfps" | "max_fps" | "max-fps" => Some(unhinged_policy),
+        _ => None,
+    }
+}
+
+pub fn load_system_input_hardware_options<W, S>(
+    conf: &SimpleIni,
+    default: SystemInputHardwareLoadOptions<W, S>,
+    parse_gamepad_backend: impl Fn(&str) -> Option<W>,
+    parse_smx_pad_config: impl Fn(&str) -> Option<S>,
+) -> SystemInputHardwareLoadOptions<W, S>
+where
+    W: Copy,
+    S: Copy,
+{
+    SystemInputHardwareLoadOptions {
+        gamepad_backend: conf
+            .get("Options", "GamepadBackend")
+            .and_then(|value| parse_gamepad_backend(&value))
+            .unwrap_or(default.gamepad_backend),
+        smx_default_pad_config: conf
+            .get("Options", "SmxDefaultPadConfig")
+            .and_then(|value| parse_smx_pad_config(&value))
+            .unwrap_or(default.smx_default_pad_config),
+        smx_default_light_brightness: conf
+            .get("Options", "SmxDefaultLightBrightness")
+            .and_then(|value| value.parse::<u8>().ok())
+            .map_or(
+                default.smx_default_light_brightness,
+                clamp_smx_light_brightness_percent,
+            ),
+    }
+}
+
+pub fn load_runtime_io_options<D, G, P>(
+    conf: &SimpleIni,
+    default: RuntimeIoLoadOptions<D, G, P>,
+    parse_input_debounce_seconds: impl Fn(&str) -> Option<f32>,
+    parse_lights_driver: impl Fn(&str, D) -> D,
+    parse_gameplay_pad_lights: impl Fn(&str, G) -> G,
+    parse_lights_com_port: impl Fn(&str, P) -> P,
+) -> RuntimeIoLoadOptions<D, G, P>
+where
+    D: Copy,
+    G: Copy,
+    P: Copy,
+{
+    RuntimeIoLoadOptions {
+        input_debounce_seconds: conf
+            .get("Options", "InputDebounceTime")
+            .and_then(|value| parse_input_debounce_seconds(&value))
+            .unwrap_or(default.input_debounce_seconds),
+        lights_driver: conf
+            .get("Options", "LightsDriver")
+            .map(|value| parse_lights_driver(&value, default.lights_driver))
+            .unwrap_or(default.lights_driver),
+        gameplay_pad_lights: conf
+            .get("Options", "GameplayPadLights")
+            .map(|value| parse_gameplay_pad_lights(&value, default.gameplay_pad_lights))
+            .unwrap_or(default.gameplay_pad_lights),
+        lights_com_port: conf
+            .get("Options", "LightsComPort")
+            .map(|value| parse_lights_com_port(&value, default.lights_com_port))
+            .unwrap_or(default.lights_com_port),
+    }
+}
+
+pub fn load_gameplay_bg_color<C>(
+    conf: &SimpleIni,
+    default: C,
+    parse_color: impl Fn(&str) -> Option<C>,
+) -> C
+where
+    C: Copy,
+{
+    conf.get("Options", "GameplayBgColor")
+        .and_then(|value| parse_color(&value))
+        .unwrap_or(default)
 }
 
 pub fn load_system_options(conf: &SimpleIni, default: SystemOptions) -> SystemOptions {
@@ -306,6 +514,47 @@ pub fn push_system_download_option_lines(content: &mut String, options: SystemOp
     );
 }
 
+pub fn push_system_bg_brightness_option_lines(content: &mut String, options: SystemOptions) {
+    push_line(
+        content,
+        "BGBrightness",
+        clamp_bg_brightness(options.bg_brightness),
+    );
+}
+
+pub fn push_gameplay_bg_color_option_line(content: &mut String, color_hex: &str) {
+    push_line(content, "GameplayBgColor", color_hex);
+}
+
+pub fn push_system_banner_cache_option_lines(content: &mut String, options: SystemOptions) {
+    push_bool(content, "BannerCache", options.banner_cache);
+}
+
+pub fn push_system_cdtitle_center_option_lines(content: &mut String, options: SystemOptions) {
+    push_bool(content, "CDTitleCache", options.cdtitle_cache);
+    push_bool(content, "Center1Player", options.center_1player_notefield);
+    push_line(
+        content,
+        "CenterImageTranslateX",
+        options.center_image_translate_x,
+    );
+    push_line(
+        content,
+        "CenterImageTranslateY",
+        options.center_image_translate_y,
+    );
+    push_line(
+        content,
+        "CenterImageAddWidth",
+        options.center_image_add_width,
+    );
+    push_line(
+        content,
+        "CenterImageAddHeight",
+        options.center_image_add_height,
+    );
+}
+
 pub fn push_system_course_option_lines(content: &mut String, options: SystemOptions) {
     push_bool(
         content,
@@ -351,6 +600,89 @@ pub fn push_system_online_option_lines(content: &mut String, options: SystemOpti
     );
 }
 
+pub fn push_system_input_hardware_option_lines(
+    content: &mut String,
+    options: SystemInputHardwareOptions<'_>,
+) {
+    push_line(content, "Game", options.system.game_flag.as_str());
+    push_line(content, "GamepadBackend", options.gamepad_backend);
+    push_bool(content, "AllowShutdown", options.system.allow_shutdown_host);
+    push_bool(content, "SmxInput", options.system.smx_input);
+    push_bool(
+        content,
+        "SmxManagesPadConfig",
+        options.system.smx_manages_pad_config,
+    );
+    push_bool(content, "SmxPanelLights", options.system.smx_panel_lights);
+    if let Some(enabled) = options.smx_underglow_theme {
+        push_bool(content, "SmxUnderglowTheme", enabled);
+    }
+    push_line(
+        content,
+        "SmxDefaultPadConfig",
+        options.smx_default_pad_config,
+    );
+    push_line(
+        content,
+        "SmxDefaultLightBrightness",
+        clamp_smx_light_brightness_percent(options.smx_default_light_brightness),
+    );
+}
+
+pub fn push_display_size_option_lines(content: &mut String, options: DisplayOptions<'_>) {
+    push_line(content, "DisplayHeight", options.height);
+    push_line(content, "DisplayWidth", options.width);
+}
+
+pub fn push_display_monitor_option_lines(content: &mut String, options: DisplayOptions<'_>) {
+    push_line(content, "DisplayMonitor", options.monitor);
+}
+
+pub fn push_display_fullscreen_option_lines(content: &mut String, options: DisplayOptions<'_>) {
+    push_line(content, "FullscreenType", options.fullscreen_type);
+}
+
+pub fn push_display_frame_timing_option_lines(content: &mut String, options: DisplayOptions<'_>) {
+    push_line(content, "MaxFps", options.max_fps);
+    push_line(content, "PresentModePolicy", options.present_mode_policy);
+}
+
+pub fn push_display_video_tail_option_lines(content: &mut String, options: DisplayOptions<'_>) {
+    push_line(content, "VideoRenderer", options.video_renderer);
+    push_bool(content, "Vsync", options.vsync);
+    push_bool(content, "Windowed", options.windowed);
+}
+
+pub fn push_runtime_audio_backend_option_lines(
+    content: &mut String,
+    options: RuntimeIoOptions<'_>,
+) {
+    push_line(content, "LinuxAudioBackend", options.linux_audio_backend);
+}
+
+pub fn push_runtime_input_debounce_option_lines(
+    content: &mut String,
+    options: RuntimeIoOptions<'_>,
+) {
+    push_line(
+        content,
+        "InputDebounceTime",
+        format!("{:.3}", options.input_debounce_seconds),
+    );
+}
+
+pub fn push_runtime_lights_driver_option_lines(
+    content: &mut String,
+    options: RuntimeIoOptions<'_>,
+) {
+    push_line(content, "LightsDriver", options.lights_driver);
+    push_line(content, "GameplayPadLights", options.gameplay_pad_lights);
+}
+
+pub fn push_runtime_lights_port_option_lines(content: &mut String, options: RuntimeIoOptions<'_>) {
+    push_line(content, "LightsComPort", options.lights_com_port);
+}
+
 pub fn push_system_diagnostics_option_lines(content: &mut String, options: SystemOptions) {
     push_bool(content, "GfxDebug", options.gfx_debug);
     push_bool(content, "HighDPI", options.high_dpi);
@@ -364,6 +696,14 @@ pub fn push_system_diagnostics_option_lines(content: &mut String, options: Syste
     push_line(content, "LogLevel", options.log_level.as_str());
     push_bool(content, "LogToFile", options.log_to_file);
     push_bool(content, "ShowConsole", options.show_console);
+}
+
+pub fn push_system_mine_hit_sound_option_lines(content: &mut String, options: SystemOptions) {
+    push_bool(content, "MineHitSound", options.mine_hit_sound);
+}
+
+pub fn push_system_translation_option_lines(content: &mut String, options: SystemOptions) {
+    push_bool(content, "TranslatedTitles", options.translated_titles);
 }
 
 pub fn parse_select_music_itl_rank_mode(
@@ -1469,6 +1809,12 @@ pub const fn groovestats_qr_login_when_from_choice(idx: usize) -> GrooveStatsQrL
 mod tests {
     use super::*;
 
+    fn ini(content: &str) -> SimpleIni {
+        let mut conf = SimpleIni::new();
+        conf.load_str(content);
+        conf
+    }
+
     fn default_select_music_options() -> SelectMusicOptions {
         SelectMusicOptions {
             breakdown_style: BreakdownStyle::Sl,
@@ -1568,6 +1914,164 @@ mod tests {
             theme_flag: ThemeFlag::SimplyLove,
             software_renderer_threads: 1,
         }
+    }
+
+    fn parse_letter_token(raw: &str) -> Option<char> {
+        match raw.trim() {
+            "a" => Some('a'),
+            "b" => Some('b'),
+            "c" => Some('c'),
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn loads_display_options_with_token_parsers() {
+        let loaded = load_display_options(
+            &ini(r#"
+                [Options]
+                Vsync=1
+                MaxFps=144
+                PresentModePolicy=b
+                Windowed=0
+                FullscreenType=c
+                DisplayMonitor=2
+                DisplayWidth=1920
+                DisplayHeight=1080
+                VideoRenderer=a
+                "#),
+            DisplayLoadOptions {
+                vsync: false,
+                max_fps: 60,
+                present_mode_policy: 'a',
+                windowed: true,
+                fullscreen_type: 'a',
+                monitor: 0,
+                width: 1600,
+                height: 900,
+                video_renderer: 'b',
+            },
+            parse_letter_token,
+            parse_letter_token,
+            'a',
+            'c',
+            parse_letter_token,
+        );
+
+        assert_eq!(
+            loaded,
+            DisplayLoadOptions {
+                vsync: true,
+                max_fps: 144,
+                present_mode_policy: 'b',
+                windowed: false,
+                fullscreen_type: 'c',
+                monitor: 2,
+                width: 1920,
+                height: 1080,
+                video_renderer: 'a',
+            },
+        );
+    }
+
+    #[test]
+    fn display_options_support_legacy_uncapped_mode() {
+        let loaded = load_display_options(
+            &ini("[Options]\nUncappedMode=max-fps\n"),
+            DisplayLoadOptions {
+                vsync: false,
+                max_fps: 60,
+                present_mode_policy: 'a',
+                windowed: true,
+                fullscreen_type: 'a',
+                monitor: 0,
+                width: 1600,
+                height: 900,
+                video_renderer: 'b',
+            },
+            parse_letter_token,
+            parse_letter_token,
+            'b',
+            'c',
+            parse_letter_token,
+        );
+
+        assert_eq!(loaded.present_mode_policy, 'c');
+    }
+
+    #[test]
+    fn loads_system_input_hardware_options_with_token_parsers() {
+        let loaded = load_system_input_hardware_options(
+            &ini(r#"
+                [Options]
+                GamepadBackend=b
+                SmxDefaultPadConfig=c
+                SmxDefaultLightBrightness=250
+                "#),
+            SystemInputHardwareLoadOptions {
+                gamepad_backend: 'a',
+                smx_default_pad_config: 'a',
+                smx_default_light_brightness: 80,
+            },
+            parse_letter_token,
+            parse_letter_token,
+        );
+
+        assert_eq!(
+            loaded,
+            SystemInputHardwareLoadOptions {
+                gamepad_backend: 'b',
+                smx_default_pad_config: 'c',
+                smx_default_light_brightness: 100,
+            },
+        );
+    }
+
+    #[test]
+    fn loads_runtime_io_options_with_token_parsers() {
+        let loaded = load_runtime_io_options(
+            &ini(r#"
+                [Options]
+                InputDebounceTime=0.050
+                LightsDriver=b
+                GameplayPadLights=c
+                LightsComPort=a
+                "#),
+            RuntimeIoLoadOptions {
+                input_debounce_seconds: 0.02,
+                lights_driver: 'a',
+                gameplay_pad_lights: 'a',
+                lights_com_port: 'b',
+            },
+            |raw| raw.parse::<f32>().ok(),
+            |raw, default| parse_letter_token(raw).unwrap_or(default),
+            |raw, default| parse_letter_token(raw).unwrap_or(default),
+            |raw, default| parse_letter_token(raw).unwrap_or(default),
+        );
+
+        assert_eq!(
+            loaded,
+            RuntimeIoLoadOptions {
+                input_debounce_seconds: 0.05,
+                lights_driver: 'b',
+                gameplay_pad_lights: 'c',
+                lights_com_port: 'a',
+            },
+        );
+    }
+
+    #[test]
+    fn loads_gameplay_bg_color_with_token_parser() {
+        let loaded = load_gameplay_bg_color(
+            &ini(r#"
+                [Options]
+                GameplayBgColor=b
+                "#),
+            'a',
+            parse_letter_token,
+        );
+
+        assert_eq!(loaded, 'b');
     }
 
     #[test]
@@ -1806,6 +2310,163 @@ mod tests {
                 "ShowConsole=1\n",
             ),
         );
+    }
+
+    #[test]
+    fn writes_system_input_hardware_lines() {
+        let mut content = String::new();
+        let mut options = default_system_options();
+        options.allow_shutdown_host = true;
+        options.smx_input = true;
+        options.smx_manages_pad_config = true;
+        options.smx_panel_lights = false;
+        let hardware_options = SystemInputHardwareOptions {
+            system: options,
+            gamepad_backend: "RawInput",
+            smx_default_pad_config: "High",
+            smx_default_light_brightness: 120,
+            smx_underglow_theme: Some(true),
+        };
+
+        push_system_input_hardware_option_lines(&mut content, hardware_options);
+
+        assert_eq!(
+            content,
+            concat!(
+                "Game=dance\n",
+                "GamepadBackend=RawInput\n",
+                "AllowShutdown=1\n",
+                "SmxInput=1\n",
+                "SmxManagesPadConfig=1\n",
+                "SmxPanelLights=0\n",
+                "SmxUnderglowTheme=1\n",
+                "SmxDefaultPadConfig=High\n",
+                "SmxDefaultLightBrightness=100\n",
+            ),
+        );
+
+        content.clear();
+        push_system_input_hardware_option_lines(
+            &mut content,
+            SystemInputHardwareOptions {
+                smx_underglow_theme: None,
+                ..hardware_options
+            },
+        );
+
+        assert!(!content.contains("SmxUnderglowTheme"));
+    }
+
+    #[test]
+    fn writes_display_option_line_groups() {
+        let mut content = String::new();
+        let options = DisplayOptions {
+            width: 1600,
+            height: 900,
+            monitor: 2,
+            fullscreen_type: "Borderless",
+            max_fps: 144,
+            present_mode_policy: "immediate",
+            video_renderer: "OpenGL",
+            vsync: true,
+            windowed: false,
+        };
+
+        push_display_size_option_lines(&mut content, options);
+        push_display_monitor_option_lines(&mut content, options);
+        push_display_fullscreen_option_lines(&mut content, options);
+        push_display_frame_timing_option_lines(&mut content, options);
+        push_display_video_tail_option_lines(&mut content, options);
+
+        assert_eq!(
+            content,
+            concat!(
+                "DisplayHeight=900\n",
+                "DisplayWidth=1600\n",
+                "DisplayMonitor=2\n",
+                "FullscreenType=Borderless\n",
+                "MaxFps=144\n",
+                "PresentModePolicy=immediate\n",
+                "VideoRenderer=OpenGL\n",
+                "Vsync=1\n",
+                "Windowed=0\n",
+            ),
+        );
+    }
+
+    #[test]
+    fn writes_runtime_io_option_line_groups() {
+        let mut content = String::new();
+        let options = RuntimeIoOptions {
+            linux_audio_backend: "PipeWire",
+            input_debounce_seconds: 0.0174,
+            lights_driver: "StepManiaX",
+            gameplay_pad_lights: "Judgment",
+            lights_com_port: "COM4",
+        };
+
+        push_runtime_audio_backend_option_lines(&mut content, options);
+        push_runtime_input_debounce_option_lines(&mut content, options);
+        push_runtime_lights_driver_option_lines(&mut content, options);
+        push_runtime_lights_port_option_lines(&mut content, options);
+
+        assert_eq!(
+            content,
+            concat!(
+                "LinuxAudioBackend=PipeWire\n",
+                "InputDebounceTime=0.017\n",
+                "LightsDriver=StepManiaX\n",
+                "GameplayPadLights=Judgment\n",
+                "LightsComPort=COM4\n",
+            ),
+        );
+    }
+
+    #[test]
+    fn writes_system_split_option_line_groups() {
+        let mut content = String::new();
+        let mut options = default_system_options();
+        options.bg_brightness = 1.25;
+        options.banner_cache = false;
+        options.cdtitle_cache = false;
+        options.center_1player_notefield = true;
+        options.center_image_translate_x = -8;
+        options.center_image_translate_y = 6;
+        options.center_image_add_width = 14;
+        options.center_image_add_height = -2;
+        options.mine_hit_sound = false;
+        options.translated_titles = true;
+
+        push_system_bg_brightness_option_lines(&mut content, options);
+        push_system_banner_cache_option_lines(&mut content, options);
+        push_system_cdtitle_center_option_lines(&mut content, options);
+        push_system_mine_hit_sound_option_lines(&mut content, options);
+        push_system_translation_option_lines(&mut content, options);
+
+        assert_eq!(
+            content,
+            concat!(
+                "BGBrightness=1\n",
+                "BannerCache=0\n",
+                "CDTitleCache=0\n",
+                "Center1Player=1\n",
+                "CenterImageTranslateX=-8\n",
+                "CenterImageTranslateY=6\n",
+                "CenterImageAddWidth=14\n",
+                "CenterImageAddHeight=-2\n",
+                "MineHitSound=0\n",
+                "TranslatedTitles=1\n",
+            ),
+        );
+    }
+
+    #[test]
+    fn writes_gameplay_bg_color_option_line() {
+        let mut content = String::new();
+
+        push_gameplay_bg_color_option_line(&mut content, "#102030");
+
+        assert_eq!(content, "GameplayBgColor=#102030\n");
     }
 
     #[test]
