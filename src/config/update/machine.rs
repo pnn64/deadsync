@@ -17,37 +17,17 @@ const fn dedicated_menu_navigation_label(three_key_navigation: bool) -> &'static
 
 pub fn update_input_debounce_seconds(seconds: f32) {
     let seconds = deadsync_input::clamp_input_debounce_seconds(seconds);
-    {
-        let mut cfg = lock_config();
-        if (cfg.input_debounce_seconds - seconds).abs() <= f32::EPSILON {
-            return;
-        }
-        cfg.input_debounce_seconds = seconds;
+    if update_config_f32(seconds, |cfg| &mut cfg.input_debounce_seconds) {
+        deadsync_input::set_input_debounce_seconds(seconds);
     }
-    deadsync_input::set_input_debounce_seconds(seconds);
-    save_without_keymaps();
 }
 
 pub fn update_arcade_options_navigation(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.arcade_options_navigation == enabled {
-            return;
-        }
-        cfg.arcade_options_navigation = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| &mut cfg.arcade_options_navigation);
 }
 
 pub fn update_delayed_back(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.delayed_back == enabled {
-            return;
-        }
-        cfg.delayed_back = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| &mut cfg.delayed_back);
 }
 
 pub fn update_three_key_navigation(enabled: bool) {
@@ -71,42 +51,21 @@ pub fn update_three_key_navigation(enabled: bool) {
 }
 
 pub fn update_use_fsrs(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.use_fsrs == enabled {
-            return;
-        }
-        cfg.use_fsrs = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| &mut cfg.use_fsrs);
 }
 
 /// Persist the StepManiaX-pad input toggle. The SMX manager and listeners are
 /// wired at startup, so this takes effect on the next launch (mirroring the
 /// gamepad-backend option).
 pub fn update_smx_input(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.smx_input == enabled {
-            return;
-        }
-        cfg.smx_input = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| &mut cfg.smx_input);
 }
 
 /// Persist the "DeadSync manages pad config" toggle. When on, the app loop
 /// (`apply_smx_managed_preset`) resolves and writes each connected SMX pad's
 /// config every non-gameplay frame; this just records the preference.
 pub fn update_smx_manages_pad_config(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.smx_manages_pad_config == enabled {
-            return;
-        }
-        cfg.smx_manages_pad_config = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| &mut cfg.smx_manages_pad_config);
 }
 
 /// Persist whether SMX pad panels light up during gameplay. Saving the flag is all this
@@ -114,26 +73,11 @@ pub fn update_smx_manages_pad_config(enabled: bool) {
 /// and activates or releases the panel worker accordingly, so there is no separate driver or
 /// runtime state to update here.
 pub fn update_smx_panel_lights(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.smx_panel_lights == enabled {
-            return;
-        }
-        cfg.smx_panel_lights = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| &mut cfg.smx_panel_lights);
 }
 
 pub fn update_smx_underglow_theme(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.smx_underglow_theme == enabled {
-            return;
-        }
-        cfg.smx_underglow_theme = enabled;
-    }
-    save_without_keymaps();
-    if enabled {
+    if update_config_value(enabled, |cfg| &mut cfg.smx_underglow_theme) && enabled {
         send_smx_underglow_color();
     }
 }
@@ -142,29 +86,16 @@ pub fn update_smx_underglow_theme(enabled: bool) {
 /// path, re-sending the current colour so the change shows immediately (the
 /// options-page preview also re-sends its test colour on its own).
 pub fn update_smx_underglow_grb(grb: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.smx_underglow_grb == grb {
-            return;
-        }
-        cfg.smx_underglow_grb = grb;
+    if update_config_value(grb, |cfg| &mut cfg.smx_underglow_grb) {
+        deadsync_smx::set_platform_lights_grb(grb);
+        send_smx_underglow_color();
     }
-    save_without_keymaps();
-    deadsync_smx::set_platform_lights_grb(grb);
-    send_smx_underglow_color();
 }
 
 /// Persist the built-in default pad preset (Low/Medium/High). Used as the
 /// fallback config flashed to a managed pad when no saved config resolves.
 pub fn update_smx_default_pad_config(preset: crate::config::SmxPadPreset) {
-    {
-        let mut cfg = lock_config();
-        if cfg.smx_default_pad_config == preset {
-            return;
-        }
-        cfg.smx_default_pad_config = preset;
-    }
-    save_without_keymaps();
+    update_config_value(preset, |cfg| &mut cfg.smx_default_pad_config);
 }
 
 /// Persist the machine-default pad-light brightness (0..=100). This seeds new
@@ -173,14 +104,7 @@ pub fn update_smx_default_pad_config(preset: crate::config::SmxPadPreset) {
 /// the active profiles by `App::sync_smx_light_brightness`).
 pub fn update_smx_default_light_brightness(percent: u8) {
     let percent = clamp_smx_light_brightness_percent(percent);
-    {
-        let mut cfg = lock_config();
-        if cfg.smx_default_light_brightness == percent {
-            return;
-        }
-        cfg.smx_default_light_brightness = percent;
-    }
-    save_without_keymaps();
+    update_config_value(percent, |cfg| &mut cfg.smx_default_light_brightness);
 }
 
 /// Persist the SMX pad → player serial assignment and push it live to the SDK,
@@ -253,366 +177,137 @@ pub fn update_only_dedicated_menu_buttons(enabled: bool) {
 }
 
 pub fn update_keyboard_features(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.keyboard_features == enabled {
-            return;
-        }
-        cfg.keyboard_features = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| &mut cfg.keyboard_features);
 }
 
 pub fn update_visual_style(style: VisualStyle) {
-    {
-        let mut cfg = lock_config();
-        if cfg.visual_style == style {
-            return;
-        }
-        cfg.visual_style = style;
-    }
-    save_without_keymaps();
+    update_config_value(style, |cfg| &mut cfg.visual_style);
 }
 
 pub fn update_srpg_variant(variant: SrpgVariant) {
-    {
-        let mut cfg = lock_config();
-        if cfg.srpg_variant == variant {
-            return;
-        }
-        cfg.srpg_variant = variant;
-    }
-    save_without_keymaps();
+    update_config_value(variant, |cfg| &mut cfg.srpg_variant);
 }
 
 pub fn update_machine_show_select_profile(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.machine_show_select_profile == enabled {
-            return;
-        }
-        cfg.machine_show_select_profile = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| &mut cfg.machine_show_select_profile);
 }
 
 pub fn update_allow_switch_profile_in_menu(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.allow_switch_profile_in_menu == enabled {
-            return;
-        }
-        cfg.allow_switch_profile_in_menu = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| &mut cfg.allow_switch_profile_in_menu);
 }
 
 pub fn update_show_video_backgrounds(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.show_video_backgrounds == enabled {
-            return;
-        }
-        cfg.show_video_backgrounds = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| &mut cfg.show_video_backgrounds);
 }
 
 pub fn update_random_background_mode(mode: RandomBackgroundMode) {
-    {
-        let mut cfg = lock_config();
-        if cfg.random_background_mode == mode {
-            return;
-        }
-        cfg.random_background_mode = mode;
-    }
-    save_without_keymaps();
+    update_config_value(mode, |cfg| &mut cfg.random_background_mode);
 }
 
 pub fn update_write_current_screen(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.write_current_screen == enabled {
-            return;
-        }
-        cfg.write_current_screen = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| &mut cfg.write_current_screen);
 }
 
 pub fn update_machine_show_select_color(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.machine_show_select_color == enabled {
-            return;
-        }
-        cfg.machine_show_select_color = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| &mut cfg.machine_show_select_color);
 }
 
 pub fn update_machine_show_select_style(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.machine_show_select_style == enabled {
-            return;
-        }
-        cfg.machine_show_select_style = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| &mut cfg.machine_show_select_style);
 }
 
 pub fn update_machine_show_select_play_mode(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.machine_show_select_play_mode == enabled {
-            return;
-        }
-        cfg.machine_show_select_play_mode = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| &mut cfg.machine_show_select_play_mode);
 }
 
 pub fn update_machine_preferred_style(style: MachinePreferredPlayStyle) {
-    {
-        let mut cfg = lock_config();
-        if cfg.machine_preferred_style == style {
-            return;
-        }
-        cfg.machine_preferred_style = style;
-    }
-    save_without_keymaps();
+    update_config_value(style, |cfg| &mut cfg.machine_preferred_style);
 }
 
 pub fn update_machine_preferred_play_mode(mode: MachinePreferredPlayMode) {
-    {
-        let mut cfg = lock_config();
-        if cfg.machine_preferred_play_mode == mode {
-            return;
-        }
-        cfg.machine_preferred_play_mode = mode;
-    }
-    save_without_keymaps();
+    update_config_value(mode, |cfg| &mut cfg.machine_preferred_play_mode);
 }
 
 pub fn update_machine_show_eval_summary(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.machine_show_eval_summary == enabled {
-            return;
-        }
-        cfg.machine_show_eval_summary = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| &mut cfg.machine_show_eval_summary);
 }
 
 pub fn update_machine_nice_sound(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.machine_nice_sound == enabled {
-            return;
-        }
-        cfg.machine_nice_sound = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| &mut cfg.machine_nice_sound);
 }
 
 pub fn update_machine_show_name_entry(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.machine_show_name_entry == enabled {
-            return;
-        }
-        cfg.machine_show_name_entry = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| &mut cfg.machine_show_name_entry);
 }
 
 pub fn update_machine_show_gameover(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.machine_show_gameover == enabled {
-            return;
-        }
-        cfg.machine_show_gameover = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| &mut cfg.machine_show_gameover);
 }
 
 pub fn update_machine_enable_replays(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.machine_enable_replays == enabled {
-            return;
-        }
-        cfg.machine_enable_replays = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| &mut cfg.machine_enable_replays);
 }
 
 pub fn update_machine_allow_per_player_global_offsets(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.machine_allow_per_player_global_offsets == enabled {
-            return;
-        }
-        cfg.machine_allow_per_player_global_offsets = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| {
+        &mut cfg.machine_allow_per_player_global_offsets
+    });
 }
 
 pub fn update_machine_pack_ini_offsets(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.machine_pack_ini_offsets == enabled {
-            return;
-        }
-        cfg.machine_pack_ini_offsets = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| &mut cfg.machine_pack_ini_offsets);
 }
 
 pub fn update_machine_default_sync_offset(offset: DefaultSyncOffset) {
-    {
-        let mut cfg = lock_config();
-        if cfg.machine_default_sync_offset == offset {
-            return;
-        }
-        cfg.machine_default_sync_offset = offset;
-    }
-    save_without_keymaps();
+    update_config_value(offset, |cfg| &mut cfg.machine_default_sync_offset);
 }
 
 pub fn update_enable_groovestats(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.enable_groovestats == enabled {
-            return;
-        }
-        cfg.enable_groovestats = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| &mut cfg.enable_groovestats);
 }
 
 pub fn update_enable_boogiestats(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.enable_boogiestats == enabled {
-            return;
-        }
-        cfg.enable_boogiestats = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| &mut cfg.enable_boogiestats);
 }
 
 pub fn update_enable_arrowcloud(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.enable_arrowcloud == enabled {
-            return;
-        }
-        cfg.enable_arrowcloud = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| &mut cfg.enable_arrowcloud);
 }
 
 pub fn update_submit_arrowcloud_fails(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.submit_arrowcloud_fails == enabled {
-            return;
-        }
-        cfg.submit_arrowcloud_fails = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| &mut cfg.submit_arrowcloud_fails);
 }
 
 pub fn update_arrowcloud_qr_login_when(when: ArrowCloudQrLoginWhen) {
-    {
-        let mut cfg = lock_config();
-        if cfg.arrowcloud_qr_login_when == when {
-            return;
-        }
-        cfg.arrowcloud_qr_login_when = when;
-    }
-    save_without_keymaps();
+    update_config_value(when, |cfg| &mut cfg.arrowcloud_qr_login_when);
 }
 
 pub fn update_groovestats_qr_login_when(when: GrooveStatsQrLoginWhen) {
-    {
-        let mut cfg = lock_config();
-        if cfg.groovestats_qr_login_when == when {
-            return;
-        }
-        cfg.groovestats_qr_login_when = when;
-    }
-    save_without_keymaps();
+    update_config_value(when, |cfg| &mut cfg.groovestats_qr_login_when);
 }
 
 pub fn update_auto_download_unlocks(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.auto_download_unlocks == enabled {
-            return;
-        }
-        cfg.auto_download_unlocks = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| &mut cfg.auto_download_unlocks);
 }
 
 pub fn update_auto_populate_gs_scores(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.auto_populate_gs_scores == enabled {
-            return;
-        }
-        cfg.auto_populate_gs_scores = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| &mut cfg.auto_populate_gs_scores);
 }
 
 pub fn update_separate_unlocks_by_player(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.separate_unlocks_by_player == enabled {
-            return;
-        }
-        cfg.separate_unlocks_by_player = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| &mut cfg.separate_unlocks_by_player);
 }
 
 pub fn update_game_flag(flag: GameFlag) {
-    {
-        let mut cfg = lock_config();
-        if cfg.game_flag == flag {
-            return;
-        }
-        cfg.game_flag = flag;
-    }
-    save_without_keymaps();
+    update_config_value(flag, |cfg| &mut cfg.game_flag);
 }
 
 pub fn update_theme_flag(flag: ThemeFlag) {
-    {
-        let mut cfg = lock_config();
-        if cfg.theme_flag == flag {
-            return;
-        }
-        cfg.theme_flag = flag;
-    }
-    save_without_keymaps();
+    update_config_value(flag, |cfg| &mut cfg.theme_flag);
 }
 
 pub fn update_language_flag(flag: LanguageFlag) {
-    {
-        let mut cfg = lock_config();
-        if cfg.language_flag == flag {
-            return;
-        }
-        cfg.language_flag = flag;
-    }
-    save_without_keymaps();
+    update_config_value(flag, |cfg| &mut cfg.language_flag);
 }
 
 pub fn update_machine_default_noteskin(noteskin: &str) {
