@@ -69,6 +69,7 @@ pub enum ItemId {
     InpSmxManagesPadConfig,
     InpSmxPanelLights,
     InpSmxUnderglowTheme,
+    InpSmxUnderglowGrb,
     InpSmxDefaultPadConfig,
     InpSmxSinglePadPlayer,
     InpSmxDefaultLightBrightness,

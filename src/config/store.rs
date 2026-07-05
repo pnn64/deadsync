@@ -301,6 +301,7 @@ fn system_options(cfg: &Config) -> SystemOptions {
         smx_manages_pad_config: cfg.smx_manages_pad_config,
         smx_panel_lights: cfg.smx_panel_lights,
         smx_underglow_theme: cfg.smx_underglow_theme,
+        smx_underglow_grb: cfg.smx_underglow_grb,
         gfx_debug: cfg.gfx_debug,
         global_offset_seconds: cfg.global_offset_seconds,
         language_flag: cfg.language_flag,
@@ -347,6 +348,7 @@ fn push_config_system_input_hardware_lines(
             smx_default_pad_config: cfg.smx_default_pad_config.as_str(),
             smx_default_light_brightness: cfg.smx_default_light_brightness,
             smx_underglow_theme: include_underglow_theme.then_some(cfg.smx_underglow_theme),
+            smx_underglow_grb: include_underglow_theme.then_some(cfg.smx_underglow_grb),
         },
     );
 }

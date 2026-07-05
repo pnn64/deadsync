@@ -138,6 +138,22 @@ pub fn update_smx_underglow_theme(enabled: bool) {
     }
 }
 
+/// Persist the underglow GRB wire-order switch and push it to the strip send
+/// path, re-sending the current colour so the change shows immediately (the
+/// options-page preview also re-sends its test colour on its own).
+pub fn update_smx_underglow_grb(grb: bool) {
+    {
+        let mut cfg = lock_config();
+        if cfg.smx_underglow_grb == grb {
+            return;
+        }
+        cfg.smx_underglow_grb = grb;
+    }
+    save_without_keymaps();
+    deadsync_smx::set_platform_lights_grb(grb);
+    send_smx_underglow_color();
+}
+
 /// Persist the built-in default pad preset (Low/Medium/High). Used as the
 /// fallback config flashed to a managed pad when no saved config resolves.
 pub fn update_smx_default_pad_config(preset: crate::config::SmxPadPreset) {

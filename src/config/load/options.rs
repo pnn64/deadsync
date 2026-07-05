@@ -90,6 +90,7 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
             smx_manages_pad_config: default.smx_manages_pad_config,
             smx_panel_lights: default.smx_panel_lights,
             smx_underglow_theme: default.smx_underglow_theme,
+            smx_underglow_grb: default.smx_underglow_grb,
             gfx_debug: default.gfx_debug,
             global_offset_seconds: default.global_offset_seconds,
             language_flag: default.language_flag,
@@ -134,6 +135,7 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
     cfg.smx_manages_pad_config = loaded.smx_manages_pad_config;
     cfg.smx_panel_lights = loaded.smx_panel_lights;
     cfg.smx_underglow_theme = loaded.smx_underglow_theme;
+    cfg.smx_underglow_grb = loaded.smx_underglow_grb;
     cfg.gfx_debug = loaded.gfx_debug;
     cfg.global_offset_seconds = loaded.global_offset_seconds;
     cfg.language_flag = loaded.language_flag;
