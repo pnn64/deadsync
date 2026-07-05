@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
 use twox_hash::XxHash64;
 
-const COMPILER_VERSION: u32 = 8;
+const COMPILER_VERSION: u32 = 9;
 static COMPILED_HASH_CACHE: LazyLock<Mutex<HashMap<String, String>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 const DANCE_BUTTONS: [&str; 6] = ["UpLeft", "UpRight", "Left", "Down", "Up", "Right"];
@@ -290,7 +290,7 @@ fn compile_data(
 ) -> Result<CompiledNoteskinBundle, String> {
     let scripts = noteskin_paths(data);
     let lua = Lua::new();
-    install_host(&lua).map_err(|err| err.to_string())?;
+    install_host(&lua, data).map_err(|err| err.to_string())?;
     let noteskin = load_noteskin_table(&lua, &scripts)?;
     Ok(CompiledNoteskinBundle {
         version: noteskin_compiled::CACHE_SCHEMA_VERSION,
@@ -354,7 +354,7 @@ fn compile_actor_files(
     Ok(out)
 }
 
-fn install_host(lua: &Lua) -> mlua::Result<()> {
+fn install_host(lua: &Lua, data: &noteskin_itg::NoteskinData) -> mlua::Result<()> {
     let globals = lua.globals();
     let actor_mt = lua.create_table()?;
     let actor_methods = lua.create_table()?;
@@ -418,28 +418,10 @@ fn install_host(lua: &Lua) -> mlua::Result<()> {
     let load_actor = {
         let make_actor = make_actor.clone();
         lua.create_function(move |_, value: Value| -> mlua::Result<Table> {
-            match value {
-                Value::String(text) => {
-                    let text = text.to_str()?.to_string();
-                    make_actor.call((
-                        text.eq_ignore_ascii_case("_blank"),
-                        None::<String>,
-                        Some(text),
-                    ))
-                }
-                Value::Table(path) => {
-                    let button = path.get::<Option<String>>("load_button")?;
-                    let element = path.get::<Option<String>>("load_element")?;
-                    let blank = element
-                        .as_deref()
-                        .is_some_and(|value| value.eq_ignore_ascii_case("_blank"));
-                    make_actor.call((blank, button, element))
-                }
-                _ => make_actor.call((false, None::<String>, None::<String>)),
-            }
+            make_actor_for_path(&make_actor, value)
         })?
     };
-    globals.set("LoadActor", load_actor)?;
+    globals.set("LoadActor", load_actor.clone())?;
     let var_fn = lua.create_function(|lua, name: String| {
         let globals = lua.globals();
         match name.as_str() {
@@ -479,8 +461,101 @@ fn install_host(lua: &Lua) -> mlua::Result<()> {
         })?
     };
     def.set("Actor", actor_fn)?;
+    let sprite_fn = {
+        let make_actor = make_actor.clone();
+        lua.create_function(move |_, value: Value| -> mlua::Result<Table> {
+            let Value::Table(props) = value else {
+                return make_actor.call((false, None::<String>, None::<String>));
+            };
+            let actor = match props.get::<Value>("Texture")? {
+                Value::Nil => make_actor.call((false, None::<String>, None::<String>))?,
+                texture => make_actor_for_path(&make_actor, texture)?,
+            };
+            copy_actor_fields(&props, &actor)?;
+            Ok(actor)
+        })?
+    };
+    def.set("Sprite", sprite_fn)?;
     globals.set("Def", def)?;
+    let data = data.clone();
+    let loadfile = {
+        let make_actor = make_actor.clone();
+        lua.create_function(move |lua, value: Value| -> mlua::Result<Value> {
+            let Some((button, element)) = loadfile_target(&data, value)? else {
+                return Ok(Value::Nil);
+            };
+            let make_actor = make_actor.clone();
+            let func = lua.create_function(move |_, _args: MultiValue| -> mlua::Result<Table> {
+                make_actor.call((false, button.clone(), element.clone()))
+            })?;
+            Ok(Value::Function(func))
+        })?
+    };
+    globals.set("loadfile", loadfile)?;
     Ok(())
+}
+
+fn make_actor_for_path(make_actor: &Function, value: Value) -> mlua::Result<Table> {
+    match value {
+        Value::String(text) => {
+            let text = text.to_str()?.to_string();
+            make_actor.call((
+                text.eq_ignore_ascii_case("_blank"),
+                None::<String>,
+                Some(text),
+            ))
+        }
+        Value::Table(path) => {
+            let button = path.get::<Option<String>>("load_button")?;
+            let element = path.get::<Option<String>>("load_element")?;
+            let blank = element
+                .as_deref()
+                .is_some_and(|value| value.eq_ignore_ascii_case("_blank"));
+            make_actor.call((blank, button, element))
+        }
+        _ => make_actor.call((false, None::<String>, None::<String>)),
+    }
+}
+
+fn copy_actor_fields(src: &Table, dst: &Table) -> mlua::Result<()> {
+    for key in ["InitCommand", "BaseRotationZ"] {
+        let value = src.get::<Value>(key)?;
+        if !matches!(value, Value::Nil) {
+            dst.set(key, value)?;
+        }
+    }
+    Ok(())
+}
+
+fn loadfile_target(
+    data: &noteskin_itg::NoteskinData,
+    value: Value,
+) -> mlua::Result<Option<(Option<String>, Option<String>)>> {
+    match value {
+        Value::Table(path) => {
+            let button = path.get::<Option<String>>("load_button")?;
+            let element = path.get::<Option<String>>("load_element")?;
+            let Some(element_value) = element.as_deref() else {
+                return Ok(None);
+            };
+            let button_value = button.as_deref().unwrap_or("");
+            let Some(path) = data.resolve_path(button_value, element_value) else {
+                return Ok(None);
+            };
+            Ok(path_is_lua(&path).then_some((button, element)))
+        }
+        Value::String(path) => {
+            let path = PathBuf::from(path.to_str()?.as_ref());
+            Ok(path_is_lua(&path).then_some((None, None)))
+        }
+        _ => Ok(None),
+    }
+}
+
+fn path_is_lua(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("lua"))
 }
 
 fn append_actor_command(
@@ -772,8 +847,26 @@ fn read_entry(button: &str, element: &str, actor: &Table) -> Result<CompiledLoad
 #[cfg(test)]
 mod tests {
     use super::{compiled_bundle_path, noteskin_actor, noteskin_compiled, noteskin_itg};
-    use std::ffi::OsStr;
-    use std::path::Path;
+    use std::{
+        ffi::OsStr,
+        fs,
+        path::{Path, PathBuf},
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    fn temp_noteskin_dir(name: &str) -> PathBuf {
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!(
+            "deadsync-noteskin-compiler-{name}-{}-{suffix}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
 
     #[test]
     fn compiled_bundle_path_omits_version_dir() {
@@ -788,6 +881,73 @@ mod tests {
             path.components()
                 .all(|component| component.as_os_str() != OsStr::new(&version_dir))
         );
+    }
+
+    #[test]
+    fn loader_loadfile_accepts_noteskin_path_tables() {
+        let root = temp_noteskin_dir("loadfile-path-table");
+        let skin_dir = root.join("dance/sch");
+        fs::create_dir_all(&skin_dir).unwrap();
+        fs::write(
+            skin_dir.join("NoteSkin.lua"),
+            r#"local skin = {}
+skin.ButtonRedir = { Left = "Down", Down = "Down", Up = "Down", Right = "Down" }
+skin.PartsToRotate = { Receptor = true, ["Hold Body Active"] = true }
+skin.Rotate = { Left = 90, Down = 0, Up = 180, Right = -90 }
+
+function skin.Load()
+    local button = Var "Button"
+    local element = Var "Element"
+    local load_button = skin.ButtonRedir[button] or button
+    local actor_file = loadfile(NOTESKIN:GetPath(load_button, element))
+    local actor
+    if type(actor_file) == "function" then
+        actor = actor_file(nil)
+    else
+        actor = Def.Sprite { Texture = NOTESKIN:GetPath(load_button, element) }
+    end
+    if skin.PartsToRotate[element] then
+        actor.BaseRotationZ = skin.Rotate[button]
+    end
+    return actor
+end
+
+return skin
+"#,
+        )
+        .unwrap();
+        fs::write(
+            skin_dir.join("Down Receptor.lua"),
+            r#"return Def.Sprite { Texture=NOTESKIN:GetPath("Down", "Receptor") }"#,
+        )
+        .unwrap();
+        fs::write(skin_dir.join("Down Hold Body Active.png"), []).unwrap();
+        fs::write(
+            skin_dir.join("Fallback Explosion.lua"),
+            r#"return Def.Actor {}"#,
+        )
+        .unwrap();
+
+        let data = noteskin_itg::NoteskinData {
+            name: "sch".to_string(),
+            metrics: noteskin_itg::IniData::default(),
+            search_dirs: vec![skin_dir],
+        };
+        let bundle = super::compile_data("dance", &data, "testhash").expect("compile data");
+        let receptor = bundle.loader.load_request("Left", "Receptor");
+        let hold_body = bundle.loader.load_request("Left", "Hold Body Active");
+        let explosion = bundle.loader.load_request("Left", "Explosion");
+
+        assert_eq!(receptor.load_button, "Down");
+        assert_eq!(receptor.load_element, "Receptor");
+        assert_eq!(receptor.rotation_z, Some(90));
+        assert_eq!(hold_body.load_button, "Down");
+        assert_eq!(hold_body.load_element, "Hold Body Active");
+        assert_eq!(hold_body.rotation_z, Some(90));
+        assert_eq!(explosion.load_button, "Down");
+        assert_eq!(explosion.load_element, "Explosion");
+
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
