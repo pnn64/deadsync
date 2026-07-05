@@ -94,3 +94,33 @@ fn push_saved_theme(content: &mut String, cfg: &Config) {
     push_config_theme_lines(content, cfg);
     content.push('\n');
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Full app-side round trip for the underglow options: the saved ini
+    /// content must contain the keys, and parsing that same content back
+    /// through the crate loader must return the saved values. Guards the app
+    /// glue an option needs beyond the crate (struct field, save call, load
+    /// copy), which a missed line silently breaks for one session-persisting
+    /// setting (see the SmxUnderglowTheme persistence bug shipped in the
+    /// original underglow PR).
+    #[test]
+    fn saved_content_round_trips_smx_underglow_options() {
+        let mut cfg = Config::default();
+        cfg.smx_underglow_theme = true;
+        cfg.smx_underglow_grb = true;
+        let content = build_content(&cfg, &Keymap::default(), "", &[], &[], "", "", "", "");
+        assert!(content.contains("SmxUnderglowTheme=1"));
+        assert!(content.contains("SmxUnderglowGrb=1"));
+
+        let mut conf = SimpleIni::new();
+        conf.load_str(&content);
+        let defaults = super::super::system_options(&Config::default());
+        assert!(!defaults.smx_underglow_theme && !defaults.smx_underglow_grb);
+        let loaded = deadsync_config::options::load_system_options(&conf, defaults);
+        assert!(loaded.smx_underglow_theme);
+        assert!(loaded.smx_underglow_grb);
+    }
+}

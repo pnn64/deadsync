@@ -123,6 +123,7 @@ fn smx_config_items_match_rows() {
         (SubRowId::SmxInput, ItemId::InpSmxInput),
         (SubRowId::SmxPanelLights, ItemId::InpSmxPanelLights),
         (SubRowId::SmxUnderglowTheme, ItemId::InpSmxUnderglowTheme),
+        (SubRowId::SmxUnderglowGrb, ItemId::InpSmxUnderglowGrb),
         (
             SubRowId::SmxManagesPadConfig,
             ItemId::InpSmxManagesPadConfig,

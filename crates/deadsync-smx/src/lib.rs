@@ -751,17 +751,32 @@ pub fn set_player_lights(colors: [Option<[u8; 3]>; 2]) {
     set_player_lights_with_brightness(colors, light_brightness());
 }
 
+/// Whether the platform strips consume GRB (WS2812 channel order) instead of
+/// RGB. Some strip hardware reads the platform-light payload in GRB, swapping
+/// red and green (purple lights cyan, green lights magenta, while yellow, the
+/// R=G colour, is unaffected). Pushed from the user-facing underglow option.
+static PLATFORM_LIGHTS_GRB: AtomicBool = AtomicBool::new(false);
+
+/// Set whether platform strip colours are sent in GRB wire order. Cheap and
+/// lock-free; read on every strip send.
+pub fn set_platform_lights_grb(grb: bool) {
+    PLATFORM_LIGHTS_GRB.store(grb, Ordering::Relaxed);
+}
+
 /// Fill each pad's edge LED strip with a solid colour by slot (`colors[0]` = P1
 /// slot, `colors[1]` = P2 slot; `None` leaves that pad's strip unchanged).
-/// One-shot; re-send to hold the colour.
+/// One-shot; re-send to hold the colour. Takes RGB; the wire bytes follow the
+/// configured channel order (see `set_platform_lights_grb`).
 pub fn set_platform_lights_solid(colors: [Option<[u8; 3]>; 2]) {
     let Some(s) = SHARED.get() else { return };
+    let grb = PLATFORM_LIGHTS_GRB.load(Ordering::Relaxed);
     let mut buf = vec![0u8; PLATFORM_STRIP_LEDS * 3 * 2];
     for (pad, color) in colors.iter().enumerate() {
-        let Some(rgb) = color else { continue };
+        let Some([r, g, b]) = color else { continue };
+        let wire = if grb { [*g, *r, *b] } else { [*r, *g, *b] };
         let base = pad * PLATFORM_STRIP_LEDS * 3;
         for led in buf[base..base + PLATFORM_STRIP_LEDS * 3].chunks_exact_mut(3) {
-            led.copy_from_slice(rgb);
+            led.copy_from_slice(&wire);
         }
     }
     s.manager.set_platform_lights(&buf);

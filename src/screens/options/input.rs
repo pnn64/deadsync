@@ -386,6 +386,9 @@ pub(super) fn apply_submenu_choice_delta(
         if row.id == SubRowId::SmxUnderglowTheme {
             config::update_smx_underglow_theme(yes_no_from_choice(new_index));
         }
+        if row.id == SubRowId::SmxUnderglowGrb {
+            config::update_smx_underglow_grb(new_index == 1);
+        }
         if row.id == SubRowId::SmxManagesPadConfig {
             config::update_smx_manages_pad_config(yes_no_from_choice(new_index));
         }

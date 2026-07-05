@@ -102,6 +102,9 @@ pub struct SystemOptions {
     pub smx_manages_pad_config: bool,
     pub smx_panel_lights: bool,
     pub smx_underglow_theme: bool,
+    /// Send platform strip (underglow) colours in GRB wire order instead of
+    /// RGB, for strip hardware that consumes WS2812 channel order.
+    pub smx_underglow_grb: bool,
     pub gfx_debug: bool,
     pub global_offset_seconds: f32,
     pub language_flag: LanguageFlag,
@@ -117,6 +120,9 @@ pub struct SystemInputHardwareOptions<'a> {
     pub smx_default_pad_config: &'a str,
     pub smx_default_light_brightness: u8,
     pub smx_underglow_theme: Option<bool>,
+    /// Written alongside `smx_underglow_theme` (both omitted from the
+    /// defaults template together).
+    pub smx_underglow_grb: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -469,6 +475,10 @@ pub fn load_system_options(conf: &SimpleIni, default: SystemOptions) -> SystemOp
             .get("Options", "SmxUnderglowTheme")
             .and_then(|value| parse_loose_bool_str(&value))
             .unwrap_or(default.smx_underglow_theme),
+        smx_underglow_grb: conf
+            .get("Options", "SmxUnderglowGrb")
+            .and_then(|value| parse_loose_bool_str(&value))
+            .unwrap_or(default.smx_underglow_grb),
         gfx_debug: parse_u8_bool_or_default(
             conf.get("Options", "GfxDebug").as_deref(),
             default.gfx_debug,
@@ -616,6 +626,9 @@ pub fn push_system_input_hardware_option_lines(
     push_bool(content, "SmxPanelLights", options.system.smx_panel_lights);
     if let Some(enabled) = options.smx_underglow_theme {
         push_bool(content, "SmxUnderglowTheme", enabled);
+    }
+    if let Some(grb) = options.smx_underglow_grb {
+        push_bool(content, "SmxUnderglowGrb", grb);
     }
     push_line(
         content,
@@ -1889,6 +1902,7 @@ mod tests {
             smx_manages_pad_config: false,
             smx_panel_lights: false,
             smx_underglow_theme: false,
+            smx_underglow_grb: false,
             gfx_debug: false,
             global_offset_seconds: -0.008,
             language_flag: LanguageFlag::Auto,
@@ -2156,6 +2170,7 @@ mod tests {
             SmxManagesPadConfig=1
             SmxPanelLights=1
             SmxUnderglowTheme=1
+            SmxUnderglowGrb=1
             GfxDebug=1
             GlobalOffsetSeconds=0.125
             Language=Japanese
@@ -2209,6 +2224,7 @@ mod tests {
         assert!(loaded.smx_manages_pad_config);
         assert!(loaded.smx_panel_lights);
         assert!(loaded.smx_underglow_theme);
+        assert!(loaded.smx_underglow_grb);
         assert!(loaded.gfx_debug);
         assert_eq!(loaded.global_offset_seconds, 0.125);
         assert_eq!(loaded.language_flag, LanguageFlag::Japanese);
@@ -2326,6 +2342,7 @@ mod tests {
             smx_default_pad_config: "High",
             smx_default_light_brightness: 120,
             smx_underglow_theme: Some(true),
+            smx_underglow_grb: Some(false),
         };
 
         push_system_input_hardware_option_lines(&mut content, hardware_options);
@@ -2340,6 +2357,7 @@ mod tests {
                 "SmxManagesPadConfig=1\n",
                 "SmxPanelLights=0\n",
                 "SmxUnderglowTheme=1\n",
+                "SmxUnderglowGrb=0\n",
                 "SmxDefaultPadConfig=High\n",
                 "SmxDefaultLightBrightness=100\n",
             ),
@@ -2350,11 +2368,13 @@ mod tests {
             &mut content,
             SystemInputHardwareOptions {
                 smx_underglow_theme: None,
+                smx_underglow_grb: None,
                 ..hardware_options
             },
         );
 
         assert!(!content.contains("SmxUnderglowTheme"));
+        assert!(!content.contains("SmxUnderglowGrb"));
     }
 
     #[test]

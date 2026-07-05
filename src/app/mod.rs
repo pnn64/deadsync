@@ -1793,6 +1793,10 @@ pub struct ScreensState {
     smx_options_last_brightness: u8,
     /// Time since the last options-page light send, for the periodic hold.
     smx_options_light_timer: f32,
+    /// Last underglow test state (underglow on, GRB order) previewed on the
+    /// options page, so toggling either row re-sends the strip test colour
+    /// immediately.
+    smx_options_last_strip: Option<(bool, bool)>,
     /// Latched while the Player Options page is driving a pad's lights for the
     /// Pad Light Brightness preview, so auto-lighting is restored on leaving.
     smx_po_lights_active: bool,
@@ -3789,6 +3793,7 @@ impl ScreensState {
             smx_autoprompt_latched: false,
             smx_options_lights_active: false,
             smx_options_last_lights: [None, None],
+            smx_options_last_strip: None,
             smx_options_last_brightness: 100,
             smx_options_light_timer: 0.0,
             smx_po_lights_active: false,
@@ -4473,9 +4478,12 @@ impl App {
 
     /// While the StepManiaX options page is open, light the pads blue (P1) / red
     /// (P2), white when ambiguous, so the user can see the assignment, and so a
-    /// live Swap is reflected on the pads immediately. Restores auto-lighting on
-    /// leaving the page, unless the assignment screen is taking the lights over.
-    /// (Driven from the app loop so the lifecycle is in one place.)
+    /// live Swap is reflected on the pads immediately. Also holds the underglow
+    /// strips on a test colour (red with Theme Underglow on, blue with it off)
+    /// so the GRB wire-order switch can be judged by eye. Restores auto-lighting
+    /// and the theme underglow on leaving the page, unless the assignment screen
+    /// is taking the lights over. (Driven from the app loop so the lifecycle is
+    /// in one place.)
     fn drive_smx_options_lights(&mut self, dt: f32) {
         // Re-send at most this often to hold the colour (a one-shot set_lights
         // lapses back to auto-lighting), plus immediately on any colour change so
@@ -4490,14 +4498,25 @@ impl App {
             // this page: scale both indicator pads by it so changes show live.
             // (config is updated on each adjust, so this tracks the edit.)
             let brightness = config::get().smx_default_light_brightness;
+            // Underglow test colours: red while Theme Underglow is on (red shows
+            // green when the strip wants GRB, making a wrong order obvious), blue
+            // (the firmware default look) while off. Both track the GRB switch
+            // live, so flipping it recolours the strips at once.
+            let cfg = config::get();
+            let strip = (cfg.smx_underglow_theme, cfg.smx_underglow_grb);
             self.state.screens.smx_options_light_timer += dt;
             if colors != self.state.screens.smx_options_last_lights
                 || brightness != self.state.screens.smx_options_last_brightness
+                || Some(strip) != self.state.screens.smx_options_last_strip
                 || self.state.screens.smx_options_light_timer >= RESEND_INTERVAL
             {
                 deadsync_smx::set_player_lights_with_brightness(colors, [brightness, brightness]);
+                deadsync_smx::set_platform_lights_grb(strip.1);
+                let test_rgb = if strip.0 { [255, 0, 0] } else { [0, 0, 255] };
+                deadsync_smx::set_platform_lights_solid([Some(test_rgb), Some(test_rgb)]);
                 self.state.screens.smx_options_last_lights = colors;
                 self.state.screens.smx_options_last_brightness = brightness;
+                self.state.screens.smx_options_last_strip = Some(strip);
                 self.state.screens.smx_options_light_timer = 0.0;
             }
             self.state.screens.smx_options_lights_active = true;
@@ -4506,11 +4525,15 @@ impl App {
             self.state.screens.smx_options_light_timer = 0.0;
             self.state.screens.smx_options_last_lights = [None, None];
             self.state.screens.smx_options_last_brightness = 100;
+            self.state.screens.smx_options_last_strip = None;
             // The assignment screen drives the pad lights itself, so don't restore
             // auto-lighting when handing off to it (avoids a one-frame flicker).
             if self.state.screens.current_screen != CurrentScreen::SmxAssignPads {
                 deadsync_smx::reenable_auto_lights();
             }
+            // Put the strips back on the theme colour (no-op when underglow is
+            // off; auto-lighting above restores the firmware default there).
+            config::send_smx_underglow_color();
         }
     }
 

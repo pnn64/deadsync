@@ -271,6 +271,15 @@ pub(in crate::screens::options) const SMX_CONFIG_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        // Shown only while Theme Underglow is on (see options visibility). The
+        // options page holds the strips on a red test colour, so a wrong order
+        // is immediately visible (red shows green on GRB strips).
+        id: SubRowId::SmxUnderglowGrb,
+        label: lookup_key("OptionsInput", "SmxUnderglowGrb"),
+        choices: &[literal_choice("RGB"), literal_choice("GRB")],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::SmxManagesPadConfig,
         label: lookup_key("OptionsInput", "SmxManagesPadConfig"),
         choices: &[
@@ -345,6 +354,14 @@ pub(in crate::screens::options) const SMX_CONFIG_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsInputHelp",
             "SmxUnderglowThemeHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::InpSmxUnderglowGrb,
+        name: lookup_key("OptionsInput", "SmxUnderglowGrb"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsInputHelp",
+            "SmxUnderglowGrbHelp",
         ))],
     },
     Item {

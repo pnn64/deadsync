@@ -195,6 +195,10 @@ pub struct Config {
     pub smx_panel_lights: bool,
     /// Set the SMX pad edge underglow LEDs to the player's theme colour.
     pub smx_underglow_theme: bool,
+    /// Send underglow strip colours in GRB wire order instead of RGB, for
+    /// strip hardware that consumes WS2812 channel order (symptom when wrong:
+    /// red shows as green, purple as cyan; yellow and blue look correct).
+    pub smx_underglow_grb: bool,
     /// Built-in pad preset flashed as the fallback when DeadSync manages pad
     /// config and no saved config resolves for the pad.
     pub smx_default_pad_config: SmxPadPreset,
@@ -451,6 +455,7 @@ impl Default for Config {
             smx_manages_pad_config: false,
             smx_panel_lights: false,
             smx_underglow_theme: false,
+            smx_underglow_grb: false,
             smx_default_pad_config: SmxPadPreset::Low,
             smx_default_light_brightness: 100,
             software_renderer_threads: 1,

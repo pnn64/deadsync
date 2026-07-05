@@ -274,6 +274,7 @@ pub(super) fn submenu_visible_row_indices(
             rows.iter()
                 .enumerate()
                 .filter_map(|(idx, row)| match row.id {
+                    SubRowId::SmxUnderglowGrb if !config::get().smx_underglow_theme => None,
                     SubRowId::SmxSinglePadPlayer if pad_count != 1 => None,
                     SubRowId::SmxAssignPads | SubRowId::SmxSwapPads if pad_count != 2 => None,
                     _ => Some(idx),

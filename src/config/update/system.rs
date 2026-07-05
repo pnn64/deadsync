@@ -124,6 +124,9 @@ pub fn send_smx_underglow_color() {
         return;
     }
     let index = cfg.simply_love_color;
+    // Keep the wire order in sync before any send: this path also runs from
+    // pad-connect events, which can fire before the user ever opens options.
+    deadsync_smx::set_platform_lights_grb(cfg.smx_underglow_grb);
     let to_u8 = |c: f32| (c * 255.0).round() as u8;
     let rgba_to_rgb =
         |rgba: [f32; 4]| -> [u8; 3] { [to_u8(rgba[0]), to_u8(rgba[1]), to_u8(rgba[2])] };
