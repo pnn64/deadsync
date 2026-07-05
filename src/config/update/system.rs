@@ -47,70 +47,29 @@ pub fn update_display_resolution(width: u32, height: u32) {
 }
 
 pub fn update_display_monitor(monitor: usize) {
-    {
-        let mut cfg = lock_config();
-        if cfg.display_monitor == monitor {
-            return;
-        }
-        cfg.display_monitor = monitor;
-    }
-    save_without_keymaps();
+    update_config_value(monitor, |cfg| &mut cfg.display_monitor);
 }
 
 pub fn update_video_renderer(renderer: BackendType) {
-    {
-        let mut cfg = lock_config();
-        if cfg.video_renderer == renderer {
-            return;
-        }
-        cfg.video_renderer = renderer;
-    }
-    save_without_keymaps();
+    update_config_value(renderer, |cfg| &mut cfg.video_renderer);
 }
 
 pub fn update_gfx_debug(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.gfx_debug == enabled {
-            return;
-        }
-        cfg.gfx_debug = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| &mut cfg.gfx_debug);
 }
 
 pub fn update_high_dpi(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.high_dpi == enabled {
-            return;
-        }
-        cfg.high_dpi = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| &mut cfg.high_dpi);
 }
 
 pub fn update_hide_mouse_cursor(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.hide_mouse_cursor == enabled {
-            return;
-        }
-        cfg.hide_mouse_cursor = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| &mut cfg.hide_mouse_cursor);
 }
 
 pub fn update_simply_love_color(index: i32) {
-    {
-        let mut cfg = lock_config();
-        if cfg.simply_love_color == index {
-            return;
-        }
-        cfg.simply_love_color = index;
+    if update_config_value(index, |cfg| &mut cfg.simply_love_color) {
+        send_smx_underglow_color();
     }
-    save_without_keymaps();
-    send_smx_underglow_color();
 }
 
 /// Push the current theme colour to the SMX pad edge LED strips. P1 pad gets
@@ -141,152 +100,61 @@ pub fn send_smx_underglow_color() {
 }
 
 pub fn update_global_offset(offset: f32) {
-    {
-        let mut cfg = lock_config();
-        if (cfg.global_offset_seconds - offset).abs() < f32::EPSILON {
-            return;
-        }
-        cfg.global_offset_seconds = offset;
-    }
-    save_without_keymaps();
+    update_config_f32(offset, |cfg| &mut cfg.global_offset_seconds);
 }
 
 pub fn update_visual_delay_seconds(delay: f32) {
     let clamped = delay.clamp(-1.0, 1.0);
-    {
-        let mut cfg = lock_config();
-        if (cfg.visual_delay_seconds - clamped).abs() < f32::EPSILON {
-            return;
-        }
-        cfg.visual_delay_seconds = clamped;
-    }
-    save_without_keymaps();
+    update_config_f32(clamped, |cfg| &mut cfg.visual_delay_seconds);
 }
 
 pub fn update_vsync(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.vsync == enabled {
-            return;
-        }
-        cfg.vsync = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| &mut cfg.vsync);
 }
 
 pub fn update_max_fps(max_fps: u16) {
-    {
-        let mut cfg = lock_config();
-        if cfg.max_fps == max_fps {
-            return;
-        }
-        cfg.max_fps = max_fps;
-    }
-    save_without_keymaps();
+    update_config_value(max_fps, |cfg| &mut cfg.max_fps);
 }
 
 pub fn update_present_mode_policy(mode: PresentModePolicy) {
-    {
-        let mut cfg = lock_config();
-        if cfg.present_mode_policy == mode {
-            return;
-        }
-        cfg.present_mode_policy = mode;
-    }
-    save_without_keymaps();
+    update_config_value(mode, |cfg| &mut cfg.present_mode_policy);
 }
 
 pub fn update_show_stats_mode(mode: u8) {
     let mode = clamp_show_stats_mode(mode);
-    {
-        let mut cfg = lock_config();
-        if cfg.show_stats_mode == mode {
-            return;
-        }
-        cfg.show_stats_mode = mode;
-    }
-    save_without_keymaps();
+    update_config_value(mode, |cfg| &mut cfg.show_stats_mode);
 }
 
 pub fn update_frame_stats_overlay_anchor(key: &'static str) {
-    {
-        let mut cfg = lock_config();
-        if cfg.frame_stats_overlay_anchor == key {
-            return;
-        }
-        cfg.frame_stats_overlay_anchor = key;
-    }
-    save_without_keymaps();
+    update_config_value(key, |cfg| &mut cfg.frame_stats_overlay_anchor);
 }
 
 pub fn update_frame_stats_overlay_style(key: &'static str) {
-    {
-        let mut cfg = lock_config();
-        if cfg.frame_stats_overlay_style == key {
-            return;
-        }
-        cfg.frame_stats_overlay_style = key;
-    }
-    save_without_keymaps();
+    update_config_value(key, |cfg| &mut cfg.frame_stats_overlay_style);
 }
 
 pub fn update_log_level(level: LogLevel) {
     log::set_max_level(level.as_level_filter());
-    {
-        let mut cfg = lock_config();
-        if cfg.log_level == level {
-            return;
-        }
-        cfg.log_level = level;
-    }
-    save_without_keymaps();
+    update_config_value(level, |cfg| &mut cfg.log_level);
 }
 
 pub fn update_log_to_file(enabled: bool) {
     logging::set_file_logging_enabled(enabled);
-    {
-        let mut cfg = lock_config();
-        if cfg.log_to_file == enabled {
-            return;
-        }
-        cfg.log_to_file = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| &mut cfg.log_to_file);
 }
 
 #[cfg(target_os = "windows")]
 pub fn update_windows_gamepad_backend(backend: WindowsPadBackend) {
-    {
-        let mut cfg = lock_config();
-        if cfg.windows_gamepad_backend == backend {
-            return;
-        }
-        cfg.windows_gamepad_backend = backend;
-    }
-    save_without_keymaps();
+    update_config_value(backend, |cfg| &mut cfg.windows_gamepad_backend);
 }
 
 pub fn update_bg_brightness(brightness: f32) {
     let clamped = clamp_bg_brightness(brightness);
-    {
-        let mut cfg = lock_config();
-        if (cfg.bg_brightness - clamped).abs() < f32::EPSILON {
-            return;
-        }
-        cfg.bg_brightness = clamped;
-    }
-    save_without_keymaps();
+    update_config_f32(clamped, |cfg| &mut cfg.bg_brightness);
 }
 
 pub fn update_center_1player_notefield(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.center_1player_notefield == enabled {
-            return;
-        }
-        cfg.center_1player_notefield = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| &mut cfg.center_1player_notefield);
 }
 
 /// Commit overscan (CenterImage) adjustment to config + disk and sync the live
@@ -320,56 +188,21 @@ pub fn update_overscan(translate_x: i32, translate_y: i32, add_width: i32, add_h
 }
 
 pub fn update_banner_cache(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.banner_cache == enabled {
-            return;
-        }
-        cfg.banner_cache = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| &mut cfg.banner_cache);
 }
 
 pub fn update_cdtitle_cache(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.cdtitle_cache == enabled {
-            return;
-        }
-        cfg.cdtitle_cache = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| &mut cfg.cdtitle_cache);
 }
 
 pub fn update_song_parsing_threads(threads: u8) {
-    {
-        let mut cfg = lock_config();
-        if cfg.song_parsing_threads == threads {
-            return;
-        }
-        cfg.song_parsing_threads = threads;
-    }
-    save_without_keymaps();
+    update_config_value(threads, |cfg| &mut cfg.song_parsing_threads);
 }
 
 pub fn update_cache_songs(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.cachesongs == enabled {
-            return;
-        }
-        cfg.cachesongs = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| &mut cfg.cachesongs);
 }
 
 pub fn update_fastload(enabled: bool) {
-    {
-        let mut cfg = lock_config();
-        if cfg.fastload == enabled {
-            return;
-        }
-        cfg.fastload = enabled;
-    }
-    save_without_keymaps();
+    update_config_value(enabled, |cfg| &mut cfg.fastload);
 }
