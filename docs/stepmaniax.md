@@ -28,6 +28,12 @@ report.
 - [8. Architecture (for contributors)](#8-architecture-for-contributors)
 - [9. Diagnostics & bug reports](#9-diagnostics--bug-reports)
 - [10. Troubleshooting cheatsheet](#10-troubleshooting-cheatsheet)
+- [11. Pad light GIF animations](#11-pad-light-gif-animations)
+  - [11a. GIF format](#11a-gif-format)
+  - [11b. File locations](#11b-file-locations)
+  - [11c. Role names and fallback chains](#11c-role-names-and-fallback-chains)
+  - [11d. Authoring GIFs](#11d-authoring-gifs)
+  - [11e. Pack metadata (gifpack.ini)](#11e-pack-metadata-gifpackini)
 
 ---
 
@@ -564,3 +570,506 @@ for dev in /sys/class/hidraw/hidraw*; do
   fi
 done
 ```
+
+---
+
+## 11. Pad light GIF animations
+
+DeadSync drives the SMX pad LEDs directly and supports a library of animated
+GIFs for backgrounds, judgement feedback, and press feedback. All GIF loading
+and decoding happens at startup (or when options change); nothing touches the
+filesystem during gameplay.
+
+### 11a. GIF format
+
+Every GIF is a standard animated GIF with one special convention: a **marker
+row** at the bottom of each frame. Each pixel in that row at x=0 or x=1 with
+alpha=255 and R>=128 (white-ish) flags a timing or playback event.
+
+**Full-pad backgrounds** (used for `default`, `gameplay`, `results`, etc.):
+
+| Canvas size | Pad layout |
+| --- | --- |
+| 23x24 | 25-LED pads (SMX Gen 5+, the common format) |
+| 14x15 | 16-LED pads (older gen) |
+
+The 23x24 canvas is a 3x3 grid of 7x7 panel slots with 1px gaps between them,
+plus a 24th row for the marker row. The 14x15 canvas uses 4x4 slots with 1px
+gaps. Each panel block maps directly to its physical LED layout. The 25-LED
+inner-ring LEDs sit at odd-x, odd-y positions inside each slot.
+
+**Per-panel judgement/press GIFs** (tap grades, freezes, rolls, press):
+
+| Canvas size | Pad layout |
+| --- | --- |
+| 7x8 | 25-LED (7x7 panel + 1-row marker row) |
+| 4x5 | 16-LED (4x4 panel + 1-row marker row) |
+
+A bare 7x7 or 4x4 (no marker row) is also accepted and simply loops the whole
+sequence with no outro.
+
+**Marker row flags:**
+
+| Column | Meaning |
+| --- | --- |
+| x=0 | Loop point: playback returns here after the last frame |
+| x=1 | Loop end (per-panel GIFs only): frames after this form an **outro** played on panel release |
+
+For a sustain animation (freeze, roll) the section from `loop_frame` to
+`loop_end` loops while the note is held; frames after `loop_end` play as an
+outro when the panel is released. For a one-shot animation (tap judgement,
+press) the sequence plays once and stops; the outro is played if it exists.
+
+**BPM variants** (full-pad backgrounds only): You can author multiple GIFs for
+the same role, each tagged with a beat count and reference BPM. DeadSync picks
+the variant with the smallest reference BPM at or above the song's tempo: the
+densest gif that still plays at or under the pad's 30Hz LED cap. Note this is
+not "nearest BPM": a 130-BPM song with 129- and 225-BPM variants uses the 225
+one (129 would need to play faster than its reference to keep up). A song
+faster than every variant uses the highest-reference one, which then plays
+half-time. An untagged file is used as a single variant when only one BPM is
+needed.
+
+Example: `gameplay_25@4b120.gif` and `gameplay_25@4b240.gif` give DeadSync
+120-BPM and 240-BPM variants for the `gameplay` role; a 100-BPM song plays the
+120 variant, a 200-BPM song the 240 variant.
+
+**Playback timing:** only song select drives beat-locked playback. There a
+BPM-tagged background ignores its own frame delays entirely: DeadSync maps the
+music preview's live beat straight to a frame (one pass through the loop region
+spans the tagged beat count), so the animation follows the music exactly,
+tempo changes included. On every other screen, gameplay included, a background
+plays in real time at the durations encoded in its GIF frame delay fields; the
+BPM tag still selects which variant plays, so a variant authored at the song's
+tempo stays close to the beat even without the lock. The pad's hardware LED
+update rate is capped at 30Hz, so author GIFs at 30fps or slower for smooth
+playback.
+
+---
+
+### 11b. File locations
+
+DeadSync looks for GIFs in two directory trees rooted at the app's assets path:
+
+```
+assets/
+  smx-pad-lights/       <- full-pad background GIFs
+    common/
+      common/           <- shipped default pack
+    dance/
+      <your-pack>/      <- user-authored packs
+        gifpack.ini    <- optional pack metadata (see §11e)
+  smx-judge-lights/     <- per-panel judgement/press GIFs
+    common/
+      common/
+    dance/
+      <your-pack>/
+        gifpack.ini
+```
+
+**Per-song and per-pack backgrounds:** DeadSync also checks `smx-pad-lights/`
+inside the song's folder and its parent pack folder before consulting the global
+registry. This lets you ship a custom background alongside a simfile.
+
+```
+Songs/
+  MyPack/
+    smx-pad-lights/           <- applies to every song in MyPack
+      default_25.gif
+    MySong/
+      smx-pad-lights/         <- applies only to MySong, overrides MyPack level
+        gameplay_25.gif
+```
+
+The scoped lookup uses the same role names and BPM-variant filename conventions
+as the global registry.
+
+**Filename convention:**
+
+```
+{role}_{size}[@{beats}b{bpm}].gif           <- background with optional BPM tag
+{role}_{size}[@{difficulty}][@{grade}].gif  <- results background, difficulty and/or grade
+```
+
+- `{role}` is one of the role names listed in [§11c](#11c-role-names-and-fallback-chains).
+- `{size}` is `25` (25-LED pads) or `16` (16-LED pads). DeadSync tries the
+  requested size first, then the other size as a fallback.
+- The optional `@` suffix(es) always come **after** the size.
+  - `@{beats}b{bpm}`: BPM variant tag (backgrounds only). `{beats}` is the loop
+    length in beats; `{bpm}` is the reference tempo (both numeric).
+  - `@{difficulty}`: results-only, the chart's difficulty, lowercase: one of
+    `beginner`, `easy`, `medium`, `hard`, `challenge`, `edit`. This is the
+    chart's actual file-level difficulty, not a display name — a `Challenge`
+    chart tagged for on-screen display as "Novice" or "Expert" elsewhere still
+    tags its gif `challenge`.
+  - `@{grade}`: grade suffix for results backgrounds (e.g. `@S+`, `@B-`,
+    `@*****`). The grade tag starts with a letter or `*` (not a digit), so
+    DeadSync can always distinguish it from a BPM tag.
+  - A results file can combine both: `@{difficulty}@{grade}` (difficulty
+    first, then grade).
+
+Examples:
+- `default_25.gif`
+- `gameplay_25@4b120.gif`
+- `results_25.gif`
+- `results_25@S+.gif`
+- `results_25@B-.gif`
+- `results_25@*****.gif`
+- `results_25@hard.gif`
+- `results_25@hard@S+.gif`
+- `results_25@edit@*****.gif`
+- `fantastic_blue_25.gif`
+- `press_25.gif`
+
+---
+
+### 11c. Role names and fallback chains
+
+#### Full-pad backgrounds (`smx-pad-lights/`)
+
+These set the background for an entire pad (all 9 panels) based on the current
+screen. DeadSync resolves the background through this chain for each screen:
+
+1. Per-song `smx-pad-lights/<role>` (song folder)
+2. Per-pack `smx-pad-lights/<role>` (pack folder)
+3. Global registry: selected pack's `<role>`
+4. If the selected pack declares a `Fallback` (see §11e): that pack's `<role>`
+5. Global registry: `common`'s `<role>` (automatic; see §11e for how to opt out)
+6. Global registry: selected pack's `default`
+7. If the selected pack declares a `Fallback`: that pack's `default`
+8. Global registry: `common`'s `default`
+
+If no pack is selected (or the `common` pack is selected), steps 3-5 and 6-8
+collapse to `common` directly.
+
+Every pack automatically falls back to `common` for any role it doesn't
+supply (steps 5 and 8) — a pack only has to author what it wants to
+customize. A pack can opt individual roles, or itself entirely, out of this
+via `gifpack.ini` (see §11e); an opted-out missing role shows **solid black**
+on the pad. This is not the same as the pad's own auto-lights: when Panel
+Lights is on the game holds ownership of the LEDs at all times and the
+firmware's built-in animations are suppressed. Auto-lights only resume when
+Panel Lights is turned off.
+
+The table below lists **role names** (the internal key used for lookup). The
+corresponding filename is `{role}_{size}.gif` — for grade-tagged roles like
+`results@S+` the `@` suffix goes after the `_size` in the filename:
+`results_25@S+.gif`.
+
+| Role | When active |
+| --- | --- |
+| `default` | All screens not covered by a more specific role; also the ultimate fallback |
+| `gameplay` | During a song (Gameplay screen) |
+| `song_select` | Song/course selection screen |
+| `results` | Evaluation/results screen (grade unknown or no grade-specific gif found) |
+| `results@*****` | Results screen, Quint (5-star) grade |
+| `results@****` | Results screen, Quad (4-star) grade |
+| `results@***` | Results screen, Triple (3-star) grade |
+| `results@**` | Results screen, Double (2-star) grade |
+| `results@*` | Results screen, Single (1-star) grade |
+| `results@S+` | Results screen, S+ grade |
+| `results@S` | Results screen, S grade |
+| `results@S-` | Results screen, S- grade |
+| `results@A+` | Results screen, A+ grade |
+| `results@A` | Results screen, A grade |
+| `results@A-` | Results screen, A- grade |
+| `results@B+` | Results screen, B+ grade |
+| `results@B` | Results screen, B grade |
+| `results@B-` | Results screen, B- grade |
+| `results@C+` | Results screen, C+ grade |
+| `results@C` | Results screen, C grade |
+| `results@C-` | Results screen, C- grade |
+| `results@D` | Results screen, D grade |
+| `results@F` | Results screen, F grade |
+
+**Grade fallback chain for `results@<grade>` roles:**
+
+Grade-specific results backgrounds fall back gracefully so you only have to
+author what you want to customize:
+
+```
+results@S+  -->  results@S  -->  results  -->  default
+results@S-  -->  results@S  -->  results  -->  default
+results@A+  -->  results@A  -->  results  -->  default
+results@A-  -->  results@A  -->  results  -->  default
+results@B+  -->  results@B  -->  results  -->  default
+results@B-  -->  results@B  -->  results  -->  default
+results@C+  -->  results@C  -->  results  -->  default
+results@C-  -->  results@C  -->  results  -->  default
+results@*****  -->  results  -->  default   (no base-letter fallback)
+results@****   -->  results  -->  default
+results@***    -->  results  -->  default
+results@**     -->  results  -->  default
+results@*      -->  results  -->  default
+results@S      -->  results  -->  default
+results@D      -->  results  -->  default
+results@F      -->  results  -->  default
+```
+
+So authoring `results_25@A.gif` covers A+, A, and A- automatically unless you
+also provide the `+`/`-` variants.
+
+**Difficulty tagging:** any `results@<grade>` role above can also be
+qualified with the difficulty of the chart that earned the grade:
+`results@<difficulty>@<grade>`, e.g. `results_25@hard@S+.gif`. Difficulty is
+one of `beginner`, `easy`, `medium`, `hard`, `challenge`, `edit` (the file's
+actual difficulty, not a display name — see the filename convention above).
+
+Difficulty slots into the existing grade chain as an extra tier tried
+*before* the difficulty-agnostic role at each grade level, so packs that
+don't care about difficulty keep working exactly as before:
+
+```
+results@hard@S+  -->  results@S+  -->  results@hard@S  -->  results@S
+  -->  results@hard  -->  results  -->  default
+```
+
+That is: DeadSync first tries the exact difficulty+grade combo, then the
+existing grade-only file (unchanged from before difficulty tagging existed),
+then the same two steps for the grade's base letter (e.g. `S` for `S+`/`S-`),
+then a difficulty-only file with no grade, then the plain `results` role, then
+`default`. You only need to author the specific combinations you want to
+differentiate -- e.g. add just `results_25@hard@F.gif` to give Hard-chart
+fails a distinct look, and every other difficulty/grade combination keeps
+using whatever it already resolved to.
+
+**Where BPM tagging actually matters:** `@{beats}b{bpm}` variants are only
+useful on `gameplay` and `song_select` — the only two roles that resolve
+while DeadSync has an actual song BPM to match against (the playing song
+during Gameplay/Practice, or the highlighted song on Song/Course Select).
+Every other role (`default`, `options`, `results`, and every `results@...`
+grade/difficulty variant) always resolves with no song BPM available, since
+there's no "current song" concept on those screens. Authoring several
+`@{beats}b{bpm}` variants of one of those roles isn't an error, but
+`select_variant` deterministically always picks the lowest-reference-BPM
+variant in that case — the rest just go unused.
+
+**BPM variants don't pool across packs by default.** Each `(pack, role,
+size)` combination has its own separate variant list — only the BPM-tagged
+files *that pack itself* authored for that role/size are considered. If your
+pack supplies *any* `song_select` gif at all, `common`'s `song_select`
+variants are never looked at, even if one of them would actually fit the
+song's tempo better. See `MergeCommonBPMVariants`/`MergeFallbackBPMVariants`
+(§11e) to opt a role into pooling instead.
+
+#### Per-panel judgement/press GIFs (`smx-judge-lights/`)
+
+These animate individual panels on top of (or instead of) the background.
+Unlike backgrounds, judgement GIFs support neither the `@{beats}b{bpm}` BPM
+tag nor the `@{difficulty}`/`@{grade}` tags — there's exactly one GIF per
+name per size per pack. A judgement plays once (or loops) per event
+regardless of song tempo or grade, so there's no variant to pick among.
+`MatchColorToDifficulty` (§11e) is likewise background-only; declaring it in
+a `smx-judge-lights/` `gifpack.ini` has no effect.
+
+| Name | When played |
+| --- | --- |
+| `fantastic_blue` | Fantastic judgment (FA+ blue window) |
+| `fantastic_white` | Fantastic judgment (standard white window) |
+| `excellent` | Excellent judgment |
+| `great` | Great judgment |
+| `decent` | Decent judgment |
+| `way_off` | Way Off judgment |
+| `miss` | Miss judgment |
+| `mine` | Mine explosion |
+| `ok` | Freeze/roll/lift held successfully (on release) |
+| `bad` | Freeze/roll/lift dropped |
+| `freeze` | Looping sustain while a freeze note is held |
+| `roll` | Looping sustain while a roll note is held |
+| `press` | Generic press feedback: any panel press with no note (outside gameplay) |
+
+`press` also plays during gameplay on any panel that has no note — the
+judgement and sustain layers draw on top of it, so it is always overridden by
+real hits. Outside gameplay and practice the `press` gif fires on every raw SMX
+panel press, giving tactile feedback while navigating menus.
+
+Judgement packs follow the same fallback logic as backgrounds, including the
+automatic fallback to `common` (see §11e): a selected pack is tried first,
+then its declared `Fallback` pack if any, then `common`. Unlike a missing
+background (which can reasonably show nothing), leaving a judgement
+completely unhandled would mean that event gives no pad feedback at all, so
+this automatic step matters more here — a pack only has to author the
+judgements it wants to customize and everything else still shows *something*.
+A pack can still opt specific names (or itself entirely) out via `gifpack.ini`
+if it genuinely wants an event to show no gif.
+
+---
+
+### 11e. Pack metadata (`gifpack.ini`)
+
+Every pack automatically falls back to `common` for any role or judgement it
+doesn't supply -- you only have to author what you want to customize. Each
+user pack can additionally include an optional `gifpack.ini` file in its pack
+directory to adjust that behaviour. The file uses a simple `key = "value"`
+format (no TOML library required; only the keys listed here are read; others
+are ignored).
+
+**Supported keys:**
+
+| Key | Values | Effect |
+| --- | --- | --- |
+| `Fallback` | any pack name, or `"none"` | Try the named pack (both LED sizes) before falling back to `common`. `"none"` opts the *whole pack* out of the automatic `common` fallback -- every role/judgement this pack doesn't supply shows nothing rather than pulling from `common`. Omitting the key is the default: no extra pack to try, but the automatic `common` fallback still applies. |
+| `CanBeEmpty` | comma-separated list of role or judgement names | These specific names never fall back to anything (not `Fallback`, not `common`) when this pack doesn't supply them -- they show nothing for that name specifically, while every other name still falls back normally. |
+| `MatchColorToDifficulty` | comma-separated list of base role names (background packs only, e.g. `"results"`) | Whatever gif actually resolves for that role gets recolored to match the played chart's difficulty color. See "Difficulty color matching" below. |
+| `MergeCommonBPMVariants` | comma-separated list of base role names (background packs only, e.g. `"song_select"`) | Pool this pack's own BPM-tagged variants for that role with `common`'s, instead of using only this pack's own variants. See "Merging BPM variants across packs" below. |
+| `MergeFallbackBPMVariants` | comma-separated list of base role names (background packs only) | Same as `MergeCommonBPMVariants`, but pools with the declared `Fallback` pack's variants instead. No-op if this pack has no `Fallback` declared. |
+
+**Example:**
+
+```ini
+# gifpack.ini -- place in assets/smx-pad-lights/dance/<your-pack>/
+# (and optionally in smx-judge-lights/dance/<your-pack>/)
+
+Fallback = "cool-pack"
+CanBeEmpty = "miss, ok, bad"
+```
+
+This tells DeadSync: if a role or judgement GIF is not found in this pack, try
+`cool-pack` first, then `common` -- except for `miss`, `ok`, and `bad`, which
+show nothing if this pack doesn't provide them (they never pull from
+`cool-pack` or `common`).
+
+**The `common` pack never needs a `gifpack.ini`.** It is the terminal fallback
+and has no further pack to fall back to.
+
+**`Fallback` and `CanBeEmpty` apply to background and judgement packs
+independently.** A `gifpack.ini` in `smx-pad-lights/dance/<pack>/` controls
+background behaviour; one in `smx-judge-lights/dance/<pack>/` controls
+judgement behaviour. A pack of the same name can declare different (or no)
+metadata in each tree.
+
+**When to use `Fallback`:** The most common use case is wanting to replace
+just a handful of GIFs from an existing pack. Instead of copying the whole
+pack into your own folder, create a new pack directory with only the GIFs you
+want to replace and point its `gifpack.ini` fallback at the source pack.
+DeadSync will use your overrides for the roles you've provided and pull the
+rest from the source pack (then `common` for anything neither pack has).
+
+Example: you like `cool-pack` but want a different `gameplay` background.
+
+```
+smx-pad-lights/
+  dance/
+    cool-pack/          <- the pack you like; no gifpack.ini needed
+      gameplay_25.gif
+      results_25.gif
+      default_25.gif
+      ...
+    my-overrides/
+      gifpack.ini       <- Fallback = "cool-pack"
+      gameplay_25.gif   <- your replacement; everything else comes from cool-pack
+```
+
+Select `my-overrides` in the options and DeadSync serves your `gameplay_25.gif`
+for the gameplay role and every other role from `cool-pack` (or `common` if
+`cool-pack` doesn't have it either).
+
+**When to use `CanBeEmpty`:** Use this when you deliberately want certain
+events to show no gif at all rather than borrowing `common`'s (or a
+`Fallback` pack's) version -- for example a minimalist judgement pack that
+only lights up misses and mines, and wants everything else to stay dark
+instead of showing `common`'s style for the rest.
+
+**Combining GIFs from more than two packs** is not directly supported beyond
+the automatic `common` step: `Fallback` is a single value pointing to one
+pack, so the declared chain is always at most two deep (your pack, then one
+`Fallback` pack) before the automatic `common` fallback. If you want to mix
+GIFs from several different non-`common` packs, create your own custom pack
+directory and copy the files you want into it directly.
+
+**Difficulty color matching (`MatchColorToDifficulty`):** background packs
+only. Rather than hand-authoring a separately-colored gif per difficulty (see
+`results@<difficulty>@<grade>` in §11c), you can author **one grayscale gif**
+(every pixel R=G=B, varying only in brightness) and have DeadSync recolor it
+automatically to match whichever difficulty the player is looking at results
+for. List the base role name(s) this applies to:
+
+```ini
+# gifpack.ini -- place in assets/smx-pad-lights/dance/<your-pack>/
+MatchColorToDifficulty = "results"
+```
+
+Whatever gif actually wins the normal `results` resolution chain (plain
+`results`, a grade-specific file, a difficulty-specific file, whatever you've
+authored) gets recolored before it's sent to the pad: each pixel's R, G, and B
+values are multiplied by the target difficulty color's R, G, and B (each
+scaled to `0.0..=1.0`). White pixels become the target color exactly, black
+stays black, and grays become dimmed versions of the target color.
+
+The target color is the same theme-relative color the rest of the UI already
+uses for difficulty (`Challenge` = your current theme color; `Hard`,
+`Medium`, `Easy`, `Beginner` step backward around the same color wheel one
+step at a time; `Edit` is a fixed grey). So a Hard-difficulty result tints
+differently depending on what theme color you've picked, but always in a way
+consistent with how difficulty is colored everywhere else in the game.
+
+**This only works correctly on grayscale source art.** If your gif has actual
+color in it, the same per-channel multiply still runs, but the result
+generally will not look like a clean recolor -- a red pixel tinted toward
+blue doesn't become a *different shade of blue*, it becomes mostly black
+(red's green and blue channels multiplied by blue's target color both land
+near zero). There's no way for DeadSync to tell which color in your gif is
+the "primary" one to shift, so this feature assumes lightness-only source art
+and leaves genuine hue/saturation-aware shifting as a possible-but-more-
+complex future extension.
+
+Recoloring is computed once per (pack, role, difficulty) combination and
+cached -- not per frame -- and only recomputed when the player's theme color
+changes, so it costs nothing during normal gameplay.
+
+**Merging BPM variants across packs (`MergeCommonBPMVariants` /
+`MergeFallbackBPMVariants`):** background packs only. By default, BPM
+variants don't pool across packs (see the note in §11c) — if your pack
+supplies any `song_select` (or `gameplay`) gif at all, `common`'s variants for
+that role are ignored entirely, even ones that would fit a song's tempo
+better. These two keys opt a role into pooling instead:
+
+```ini
+# gifpack.ini
+Fallback = "cool-pack"
+MergeCommonBPMVariants = "song_select"
+MergeFallbackBPMVariants = "song_select"
+```
+
+- `MergeCommonBPMVariants` pools this pack's variants for the listed role(s)
+  with `common`'s.
+- `MergeFallbackBPMVariants` pools with the declared `Fallback` pack's
+  variants instead (a no-op if no `Fallback` is declared).
+- Both, as above: all three sources (your pack, the `Fallback` pack, and
+  `common`) are pooled into one set, and DeadSync picks whichever variant
+  best fits the song's actual BPM from the combined set.
+- Neither (the default): only your pack's own variants are considered, as
+  described in §11c.
+
+Each key is independent and only affects the role names it lists — a role not
+listed in either key keeps the default (own-pack-only) behavior even if the
+pack sets one of these keys for a *different* role.
+
+**Exact BPM-tag collisions still respect the normal precedence.** If two
+sources happen to author the same reference BPM for a role (say your pack
+and `common` both have a `@2b129` variant), pooling doesn't create a
+duplicate or pick arbitrarily — your pack's own variant always wins, then the
+`Fallback` pack's, then `common`'s, exactly the same precedence order as the
+regular (non-merged) resolution chain.
+
+---
+
+### 11d. Authoring GIFs
+
+The **stepmaniax-gif-maker** is a desktop tool for authoring and previewing SMX
+pad GIFs. It renders frames in real time to a connected SMX pad over USB, so
+you see exactly what will appear on the hardware while you edit.
+
+Features include:
+
+- Full-pad and single-panel authoring modes
+- Loop and outro region markers
+- HSV adjustment (hue shift, saturation and value gain + bias) per frame or
+  across all frames, with live preview
+- BPM-variant export
+- Hold playback simulation for reviewing sustain/outro animations
+
+The tool is part of the
+[`stepmaniax-gif-maker`](https://github.com/fchorney/stepmaniax-gif-maker)
+project (separate repo). Build and run it with a connected SMX pad to author
+or tweak animations before dropping them into your DeadSync assets folder.

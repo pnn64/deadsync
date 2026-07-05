@@ -183,6 +183,8 @@ pub struct State {
     pub(super) sub_inline_x: f32,
     pub(super) sub: SubmenuStates,
     pub(super) system_noteskin_choices: Vec<String>,
+    pub(super) smx_bg_pack_choices: Vec<String>,
+    pub(super) smx_judge_pack_choices: Vec<String>,
     pub(super) score_import_profiles: Vec<ScoreImportProfileConfig>,
     pub(super) score_import_profile_choices: Vec<String>,
     pub(super) score_import_profile_ids: Vec<Option<String>>,
@@ -248,6 +250,8 @@ pub struct State {
 pub fn init() -> State {
     let cfg = config::get();
     let system_noteskin_choices = discover_system_noteskin_choices();
+    let smx_bg_pack_choices = discover_smx_pack_choices("smx-pad-lights");
+    let smx_judge_pack_choices = discover_smx_pack_choices("smx-judge-lights");
     let software_thread_choices = build_software_thread_choices();
     let software_thread_labels = software_thread_choice_labels(&software_thread_choices);
     let max_fps_choices = build_max_fps_choices();
@@ -298,6 +302,8 @@ pub fn init() -> State {
             }
         }),
         system_noteskin_choices,
+        smx_bg_pack_choices,
+        smx_judge_pack_choices,
         score_import_profiles: Vec::new(),
         score_import_profile_choices: vec![
             tr("OptionsScoreImport", "NoEligibleProfiles").to_string(),
@@ -526,6 +532,39 @@ pub fn init() -> State {
         SMX_CONFIG_OPTIONS_ROWS,
         SubRowId::SmxDefaultPadConfig,
         cfg.smx_default_pad_config.index(),
+    );
+    // Bg/judge pack selections: index 0 = default, 1..N = user packs.
+    let bg_pack_idx = if cfg.smx_pad_gifs_pack.is_empty() {
+        0
+    } else {
+        state
+            .smx_bg_pack_choices
+            .iter()
+            .position(|n| n == cfg.smx_pad_gifs_pack.as_str())
+            .map(|i| i + 1)
+            .unwrap_or(0)
+    };
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::SmxConfig].choice_indices,
+        SMX_CONFIG_OPTIONS_ROWS,
+        SubRowId::SmxBgPack,
+        bg_pack_idx,
+    );
+    let judge_pack_idx = if cfg.smx_judge_gifs_pack.is_empty() {
+        0
+    } else {
+        state
+            .smx_judge_pack_choices
+            .iter()
+            .position(|n| n == cfg.smx_judge_gifs_pack.as_str())
+            .map(|i| i + 1)
+            .unwrap_or(0)
+    };
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::SmxConfig].choice_indices,
+        SMX_CONFIG_OPTIONS_ROWS,
+        SubRowId::SmxJudgePack,
+        judge_pack_idx,
     );
     // Single-pad P1/P2 picker: reflect the slot the SDK currently has the lone pad
     // in (slot 1 = P2, index 1; slot 0 = P1, index 0). The slot already accounts for

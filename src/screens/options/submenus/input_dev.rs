@@ -1,5 +1,13 @@
 use super::super::*;
 
+/// Sorted non-default pack names found under `<assets>/<tree>/`. The picker
+/// rows prepend their own "Default" entry, so index 0 in the row always means
+/// "use the built-in default".
+pub(in crate::screens::options) fn discover_smx_pack_choices(tree: &str) -> Vec<String> {
+    let root = deadlib_platform::dirs::app_dirs().resolve_asset_path("assets");
+    deadsync_smx::gifs::discover_packs(&root.join(tree))
+}
+
 /// Live help text for the Assign Pads row: which pad is currently P1 (blue) vs
 /// P2 (red) by slot, plus a same-jumper warning when the pads are ambiguous and
 /// not yet assigned.
@@ -92,6 +100,8 @@ pub(in crate::screens::options) const INPUT_OPTIONS_ITEMS: &[Item] = &[
             HelpEntry::Bullet(lookup_key("OptionsInput", "OptionsNavigation")),
             HelpEntry::Bullet(lookup_key("OptionsInput", "MenuButtons")),
             HelpEntry::Bullet(lookup_key("OptionsInput", "Debounce")),
+            HelpEntry::Bullet(lookup_key("OptionsInput", "SmxBgPack")),
+            HelpEntry::Bullet(lookup_key("OptionsInput", "SmxJudgePack")),
         ],
     },
     Item {
@@ -318,6 +328,20 @@ pub(in crate::screens::options) const SMX_CONFIG_OPTIONS_ROWS: &[SubRow] = &[
         inline: false,
     },
     SubRow {
+        // Placeholder choice overridden dynamically from smx_bg_pack_choices.
+        id: SubRowId::SmxBgPack,
+        label: lookup_key("OptionsInput", "SmxBgPack"),
+        choices: &[localized_choice("Common", "Default")],
+        inline: true,
+    },
+    SubRow {
+        // Placeholder choice overridden dynamically from smx_judge_pack_choices.
+        id: SubRowId::SmxJudgePack,
+        label: lookup_key("OptionsInput", "SmxJudgePack"),
+        choices: &[localized_choice("Common", "Default")],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::SmxAssignPads,
         label: lookup_key("OptionsInput", "SmxAssignPads"),
         choices: &[localized_choice("Common", "Open")],
@@ -394,6 +418,22 @@ pub(in crate::screens::options) const SMX_CONFIG_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsInputHelp",
             "SmxDefaultLightBrightnessHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::InpSmxBgPack,
+        name: lookup_key("OptionsInput", "SmxBgPack"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsInputHelp",
+            "SmxBgPackHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::InpSmxJudgePack,
+        name: lookup_key("OptionsInput", "SmxJudgePack"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsInputHelp",
+            "SmxJudgePackHelp",
         ))],
     },
     Item {

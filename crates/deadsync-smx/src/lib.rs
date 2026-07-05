@@ -17,10 +17,13 @@ pub use rustmaniax_sdk::{SensorTestData, SensorTestMode, SmxConfig, SmxInfo, Smx
 use deadsync_input::{PadCode, PadEvent, PadId};
 use deadsync_input_native::{GpSystemEvent, PadBackend, uuid_from_bytes};
 
+pub mod gifs;
 pub mod panels;
 
 /// Number of panels per SMX pad (from the SDK's hardware-shape constants).
 pub const PANEL_COUNT: usize = NUM_PANELS;
+/// Center panel index (the non-playable middle panel in the 3x3 grid).
+pub const CENTER_PANEL: usize = 4;
 
 // ─── Pad-light brightness ────────────────────────────────────────────────────
 //

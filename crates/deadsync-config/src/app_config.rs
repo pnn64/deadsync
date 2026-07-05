@@ -1,7 +1,7 @@
 use crate::audio::AudioOptions;
 use crate::defaults::*;
 use crate::null_or_die::NullOrDieOptions;
-use crate::options::{RuntimeOptions, SelectMusicOptions, SystemOptions};
+use crate::options::{RuntimeOptions, SelectMusicOptions, SmxPackName, SystemOptions};
 use crate::theme::{
     ArrowCloudQrLoginWhen, BreakdownStyle, DefaultFailType, DefaultSyncOffset, GameFlag,
     GameplayBpmPosition, GrooveStatsQrLoginWhen, LanguageFlag, LogLevel, MachineBarColor,
@@ -101,9 +101,16 @@ pub struct Config {
     /// SMX pad (this pad's saved default -> a global default -> the built-in
     /// `smx_default_pad_config` preset). See `App::apply_smx_managed_preset`.
     pub smx_manages_pad_config: bool,
-    /// Light SMX pad panels with the per-arrow judgement colour during gameplay,
-    /// plus a sustained colour for held freezes and rolls.
+    /// Drive SMX pad panel LEDs with GIF animations (backgrounds, judgement
+    /// effects, press feedback). While on, the game owns the LEDs and the
+    /// pad's own firmware lighting is suppressed.
     pub smx_panel_lights: bool,
+    /// User animation pack supplying the pad backgrounds (a directory under
+    /// `assets/smx-pad-lights/dance/`). Empty selects the built-in set.
+    pub smx_pad_gifs_pack: SmxPackName,
+    /// User animation pack supplying the judgement GIFs (a directory under
+    /// `assets/smx-judge-lights/dance/`). Empty selects the built-in set.
+    pub smx_judge_gifs_pack: SmxPackName,
     /// Set the SMX pad edge underglow LEDs to the player's theme colour.
     pub smx_underglow_theme: bool,
     /// Send underglow strip colours in GRB wire order instead of RGB, for
@@ -373,6 +380,8 @@ impl Default for Config {
             smx_input: system.smx_input,
             smx_manages_pad_config: system.smx_manages_pad_config,
             smx_panel_lights: system.smx_panel_lights,
+            smx_pad_gifs_pack: system.smx_pad_gifs_pack,
+            smx_judge_gifs_pack: system.smx_judge_gifs_pack,
             smx_underglow_theme: system.smx_underglow_theme,
             smx_underglow_grb: system.smx_underglow_grb,
             smx_default_pad_config: SmxPadPreset::Low,

@@ -28,7 +28,7 @@ pub use crate::options::{
     MAX_FPS_DEFAULT, MAX_FPS_HOLD_FAST_AFTER, MAX_FPS_HOLD_FASTER_AFTER,
     MAX_FPS_HOLD_FASTEST_AFTER, MAX_FPS_MAX, MAX_FPS_MIN, MAX_FPS_STEP,
     MUSIC_WHEEL_SCROLL_SPEED_VALUES, SELECT_MUSIC_CHART_INFO_NUM_CHOICES,
-    SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES, arrowcloud_qr_login_when_choice_index,
+    SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES, SmxPackName, arrowcloud_qr_login_when_choice_index,
     arrowcloud_qr_login_when_from_choice, auto_screenshot_bit_from_choice,
     auto_screenshot_cursor_index, bg_brightness_choice_index, bg_brightness_from_choice,
     breakdown_style_choice_index, breakdown_style_from_choice, build_max_fps_choices,

@@ -79,6 +79,8 @@ pub(super) fn build_rows(
     session_music_rate: f32,
     pane: OptionsPane,
     noteskin_names: &[String],
+    smx_bg_pack_names: &[String],
+    smx_judge_pack_names: &[String],
     return_screen: Screen,
     fixed_stepchart: Option<&FixedStepchart>,
 ) -> RowMap {
@@ -93,7 +95,9 @@ pub(super) fn build_rows(
             return_screen,
             fixed_stepchart,
         ),
-        OptionsPane::Display => build_display_rows(noteskin_names, return_screen),
+        OptionsPane::Display => {
+            build_display_rows(noteskin_names, smx_bg_pack_names, smx_judge_pack_names, return_screen)
+        }
         OptionsPane::Advanced => build_advanced_rows(return_screen),
         OptionsPane::Uncommon => build_uncommon_rows(return_screen),
     }
@@ -378,6 +382,18 @@ pub(super) fn apply_profile_defaults(
             .position(|&v| v == profile.hide_light_type)
             .unwrap_or(0)
             .min(row.choices.len().saturating_sub(1));
+    }
+    if let Some(row) = row_map.get_mut(RowId::SmxBgPack) {
+        row.selected_choice_index[player_idx] = match &profile.smx_bg_pack {
+            None => 0,
+            Some(pack) => row.choices.iter().position(|c| c == pack).unwrap_or(0),
+        };
+    }
+    if let Some(row) = row_map.get_mut(RowId::SmxJudgePack) {
+        row.selected_choice_index[player_idx] = match &profile.smx_judge_pack {
+            None => 0,
+            Some(pack) => row.choices.iter().position(|c| c == pack).unwrap_or(0),
+        };
     }
 }
 

@@ -3685,6 +3685,8 @@ pub struct PlayerOptionsData {
     pub transparent_density_graph_bg: bool,
     pub smx_fsr_display: bool,
     pub smx_pad_input_display: bool,
+    pub smx_bg_pack: Option<String>,
+    pub smx_judge_pack: Option<String>,
     pub mini_indicator: MiniIndicator,
     pub mini_indicator_score_type: MiniIndicatorScoreType,
     pub mini_indicator_subtractive_display: MiniIndicatorSubtractiveDisplay,
@@ -3818,6 +3820,8 @@ fn default_player_options() -> PlayerOptionsData {
         transparent_density_graph_bg: false,
         smx_fsr_display: false,
         smx_pad_input_display: false,
+        smx_bg_pack: None,
+        smx_judge_pack: None,
         mini_indicator: MiniIndicator::None,
         mini_indicator_score_type: MiniIndicatorScoreType::Itg,
         mini_indicator_subtractive_display: MiniIndicatorSubtractiveDisplay::Percent,
@@ -4318,6 +4322,12 @@ where
         "SmxPadInputDisplay",
         options.smx_pad_input_display,
     );
+    if let Some(pack) = get("SmxBgPack") {
+        options.smx_bg_pack = (!pack.is_empty()).then_some(pack);
+    }
+    if let Some(pack) = get("SmxJudgePack") {
+        options.smx_judge_pack = (!pack.is_empty()).then_some(pack);
+    }
     options.mini_indicator = get("MiniIndicator")
         .and_then(|s| MiniIndicator::from_str(&s).ok())
         .unwrap_or({
@@ -4472,6 +4482,14 @@ pub fn append_player_options_section(
     content.push_str(&format!(
         "SmxPadInputDisplay={}\n",
         i32::from(options.smx_pad_input_display)
+    ));
+    content.push_str(&format!(
+        "SmxBgPack={}\n",
+        options.smx_bg_pack.as_deref().unwrap_or("")
+    ));
+    content.push_str(&format!(
+        "SmxJudgePack={}\n",
+        options.smx_judge_pack.as_deref().unwrap_or("")
     ));
     content.push_str(&format!("MiniIndicator={}\n", options.mini_indicator));
     content.push_str(&format!(
@@ -5049,6 +5067,8 @@ pub struct Profile {
     pub transparent_density_graph_bg: bool,
     pub smx_fsr_display: bool,
     pub smx_pad_input_display: bool,
+    pub smx_bg_pack: Option<String>,
+    pub smx_judge_pack: Option<String>,
     pub mini_indicator: MiniIndicator,
     pub mini_indicator_score_type: MiniIndicatorScoreType,
     pub mini_indicator_subtractive_display: MiniIndicatorSubtractiveDisplay,
@@ -5225,6 +5245,8 @@ impl Default for Profile {
             transparent_density_graph_bg: player_options.transparent_density_graph_bg,
             smx_fsr_display: player_options.smx_fsr_display,
             smx_pad_input_display: player_options.smx_pad_input_display,
+            smx_bg_pack: player_options.smx_bg_pack.clone(),
+            smx_judge_pack: player_options.smx_judge_pack.clone(),
             mini_indicator: player_options.mini_indicator,
             mini_indicator_score_type: player_options.mini_indicator_score_type,
             mini_indicator_subtractive_display: player_options.mini_indicator_subtractive_display,
@@ -5488,6 +5510,14 @@ impl Profile {
 
     pub fn set_smx_pad_input_display(&mut self, enabled: bool) -> bool {
         set_value_if_changed(&mut self.smx_pad_input_display, enabled)
+    }
+
+    pub fn set_smx_bg_pack(&mut self, pack: Option<String>) -> bool {
+        set_value_if_changed(&mut self.smx_bg_pack, pack)
+    }
+
+    pub fn set_smx_judge_pack(&mut self, pack: Option<String>) -> bool {
+        set_value_if_changed(&mut self.smx_judge_pack, pack)
     }
 
     pub fn set_mini_indicator(&mut self, setting: MiniIndicator) -> bool {
@@ -6120,6 +6150,8 @@ impl Profile {
             transparent_density_graph_bg: self.transparent_density_graph_bg,
             smx_fsr_display: self.smx_fsr_display,
             smx_pad_input_display: self.smx_pad_input_display,
+            smx_bg_pack: self.smx_bg_pack.clone(),
+            smx_judge_pack: self.smx_judge_pack.clone(),
             mini_indicator: self.mini_indicator,
             mini_indicator_score_type: self.mini_indicator_score_type,
             mini_indicator_subtractive_display: self.mini_indicator_subtractive_display,
@@ -6255,6 +6287,8 @@ impl Profile {
         self.transparent_density_graph_bg = options.transparent_density_graph_bg;
         self.smx_fsr_display = options.smx_fsr_display;
         self.smx_pad_input_display = options.smx_pad_input_display;
+        self.smx_bg_pack = options.smx_bg_pack.clone();
+        self.smx_judge_pack = options.smx_judge_pack.clone();
         self.mini_indicator = options.mini_indicator;
         self.mini_indicator_score_type = options.mini_indicator_score_type;
         self.mini_indicator_subtractive_display = options.mini_indicator_subtractive_display;

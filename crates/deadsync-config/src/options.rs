@@ -94,6 +94,50 @@ pub fn parse_show_stats_mode(raw_mode: Option<&str>, raw_legacy: Option<&str>, d
         .unwrap_or(default)
 }
 
+/// Byte capacity of an SMX animation pack name.
+const SMX_PACK_NAME_CAP: usize = 64;
+
+/// Fixed-capacity pack-directory name, so `SystemOptions` (and the app
+/// `Config`) stays `Copy`. Empty means the built-in (`common/`) animation set.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SmxPackName {
+    bytes: [u8; SMX_PACK_NAME_CAP],
+    len: u8,
+}
+
+impl Default for SmxPackName {
+    fn default() -> Self {
+        Self {
+            bytes: [0; SMX_PACK_NAME_CAP],
+            len: 0,
+        }
+    }
+}
+
+impl SmxPackName {
+    /// Parse a pack name from the ini. Names longer than the capacity fall
+    /// back to empty (the built-in set).
+    pub fn parse(raw: &str) -> Self {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() || trimmed.len() > SMX_PACK_NAME_CAP {
+            return Self::default();
+        }
+        let mut out = Self::default();
+        out.bytes[..trimmed.len()].copy_from_slice(trimmed.as_bytes());
+        out.len = trimmed.len() as u8;
+        out
+    }
+
+    pub fn as_str(&self) -> &str {
+        // Always valid: the bytes are a prefix copied from a &str.
+        std::str::from_utf8(&self.bytes[..self.len as usize]).unwrap_or("")
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SystemOptions {
     pub game_flag: GameFlag,
@@ -135,6 +179,12 @@ pub struct SystemOptions {
     /// Send platform strip (underglow) colours in GRB wire order instead of
     /// RGB, for strip hardware that consumes WS2812 channel order.
     pub smx_underglow_grb: bool,
+    /// User animation pack supplying the pad backgrounds (a directory under
+    /// `assets/smx-pad-lights/dance/`). Empty selects the built-in set.
+    pub smx_pad_gifs_pack: SmxPackName,
+    /// User animation pack supplying the judgement GIFs (a directory under
+    /// `assets/smx-judge-lights/dance/`). Empty selects the built-in set.
+    pub smx_judge_gifs_pack: SmxPackName,
     pub gfx_debug: bool,
     pub global_offset_seconds: f32,
     pub language_flag: LanguageFlag,
@@ -183,6 +233,8 @@ impl Default for SystemOptions {
             smx_panel_lights: DEFAULT_SMX_PANEL_LIGHTS,
             smx_underglow_theme: DEFAULT_SMX_UNDERGLOW_THEME,
             smx_underglow_grb: DEFAULT_SMX_UNDERGLOW_GRB,
+            smx_pad_gifs_pack: SmxPackName::default(),
+            smx_judge_gifs_pack: SmxPackName::default(),
             gfx_debug: DEFAULT_GFX_DEBUG,
             global_offset_seconds: DEFAULT_GLOBAL_OFFSET_SECONDS,
             language_flag: LanguageFlag::Auto,
@@ -565,6 +617,14 @@ pub fn load_system_options(conf: &SimpleIni, default: SystemOptions) -> SystemOp
             .get("Options", "SmxUnderglowGrb")
             .and_then(|value| parse_loose_bool_str(&value))
             .unwrap_or(default.smx_underglow_grb),
+        smx_pad_gifs_pack: conf
+            .get("Options", "SmxPadGifsPack")
+            .map(|value| SmxPackName::parse(&value))
+            .unwrap_or(default.smx_pad_gifs_pack),
+        smx_judge_gifs_pack: conf
+            .get("Options", "SmxJudgeGifsPack")
+            .map(|value| SmxPackName::parse(&value))
+            .unwrap_or(default.smx_judge_gifs_pack),
         gfx_debug: parse_u8_bool_or_default(
             conf.get("Options", "GfxDebug").as_deref(),
             default.gfx_debug,
@@ -716,6 +776,16 @@ pub fn push_system_input_hardware_option_lines(
     if let Some(grb) = options.smx_underglow_grb {
         push_bool(content, "SmxUnderglowGrb", grb);
     }
+    push_line(
+        content,
+        "SmxPadGifsPack",
+        options.system.smx_pad_gifs_pack.as_str(),
+    );
+    push_line(
+        content,
+        "SmxJudgeGifsPack",
+        options.system.smx_judge_gifs_pack.as_str(),
+    );
     push_line(
         content,
         "SmxDefaultPadConfig",
@@ -2047,6 +2117,8 @@ mod tests {
             smx_panel_lights: false,
             smx_underglow_theme: false,
             smx_underglow_grb: false,
+            smx_pad_gifs_pack: SmxPackName::default(),
+            smx_judge_gifs_pack: SmxPackName::default(),
             gfx_debug: false,
             global_offset_seconds: -0.008,
             language_flag: LanguageFlag::Auto,
@@ -2324,6 +2396,8 @@ mod tests {
             SmxPanelLights=1
             SmxUnderglowTheme=1
             SmxUnderglowGrb=1
+            SmxPadGifsPack=senpi-basic
+            SmxJudgeGifsPack=none
             GfxDebug=1
             GlobalOffsetSeconds=0.125
             Language=Japanese
@@ -2378,12 +2452,24 @@ mod tests {
         assert!(loaded.smx_panel_lights);
         assert!(loaded.smx_underglow_theme);
         assert!(loaded.smx_underglow_grb);
+        assert_eq!(loaded.smx_pad_gifs_pack.as_str(), "senpi-basic");
+        assert_eq!(loaded.smx_judge_gifs_pack.as_str(), "none");
         assert!(loaded.gfx_debug);
         assert_eq!(loaded.global_offset_seconds, 0.125);
         assert_eq!(loaded.language_flag, LanguageFlag::Japanese);
         assert_eq!(loaded.log_level, LogLevel::Trace);
         assert!(!loaded.log_to_file);
         assert!(loaded.show_console);
+    }
+
+    #[test]
+    fn smx_pack_name_parse_trims_and_caps() {
+        assert_eq!(SmxPackName::parse("  senpi-basic  ").as_str(), "senpi-basic");
+        assert!(SmxPackName::parse("").is_empty());
+        assert!(SmxPackName::parse("   ").is_empty());
+        // Over-capacity names fall back to empty (the built-in set).
+        assert!(SmxPackName::parse(&"x".repeat(65)).is_empty());
+        assert_eq!(SmxPackName::parse(&"x".repeat(64)).as_str(), "x".repeat(64));
     }
 
     #[test]
@@ -2511,6 +2597,8 @@ mod tests {
                 "SmxPanelLights=0\n",
                 "SmxUnderglowTheme=1\n",
                 "SmxUnderglowGrb=0\n",
+                "SmxPadGifsPack=\n",
+                "SmxJudgeGifsPack=\n",
                 "SmxDefaultPadConfig=High\n",
                 "SmxDefaultLightBrightness=100\n",
             ),

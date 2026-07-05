@@ -271,12 +271,14 @@ pub(super) fn submenu_visible_row_indices(
             // neither.
             let pad_count = usize::from(deadsync_smx::get_info(0).connected)
                 + usize::from(deadsync_smx::get_info(1).connected);
+            let panel_lights = config::get().smx_panel_lights;
             rows.iter()
                 .enumerate()
                 .filter_map(|(idx, row)| match row.id {
                     SubRowId::SmxUnderglowGrb if !config::get().smx_underglow_theme => None,
                     SubRowId::SmxSinglePadPlayer if pad_count != 1 => None,
                     SubRowId::SmxAssignPads | SubRowId::SmxSwapPads if pad_count != 2 => None,
+                    SubRowId::SmxBgPack | SubRowId::SmxJudgePack if !panel_lights => None,
                     _ => Some(idx),
                 })
                 .collect()

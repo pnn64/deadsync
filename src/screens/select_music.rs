@@ -594,6 +594,14 @@ fn sl_selection_anim_beat(entry_opt: Option<&MusicWheelEntry>, state: &State) ->
     }
 }
 
+/// The beat position driving selection-synced animations on this screen (what
+/// the bouncing selection arrow follows): the playing preview's musical beat,
+/// or steady fallbacks when nothing is previewing. Used by the app to beat-lock
+/// SMX pad background animations on song select.
+pub fn selection_anim_beat(state: &State) -> f32 {
+    sl_selection_anim_beat(state.entries.get(state.selected_index), state)
+}
+
 #[inline(always)]
 fn sl_arrow_bounce01(entry_opt: Option<&MusicWheelEntry>, state: &State) -> f32 {
     let beat = sl_selection_anim_beat(entry_opt, state);
@@ -1465,6 +1473,12 @@ fn reload_selected_song(state: &mut State) -> bool {
             false
         }
     }
+}
+
+/// The song currently highlighted on the music wheel, if the cursor is on a
+/// song (not a pack header). Used to resolve its per-song SMX pad background.
+pub fn highlighted_song(state: &State) -> Option<Arc<SongData>> {
+    selected_song_arc(state)
 }
 
 fn song_entry_index(entries: &[MusicWheelEntry], target_song: &Arc<SongData>) -> Option<usize> {

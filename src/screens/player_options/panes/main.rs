@@ -834,7 +834,91 @@ fn push_notefield_offset_rows(b: &mut RowBuilder) {
     ));
 }
 
-pub(super) fn push_display_modifier_rows(b: &mut RowBuilder, noteskin_names: &[String]) {
+pub(super) fn build_smx_pack_choices(pack_names: &[String]) -> Vec<String> {
+    let mut choices = Vec::with_capacity(pack_names.len() + 1);
+    choices.push(tr("Common", "Default").to_string());
+    choices.extend(pack_names.iter().cloned());
+    choices
+}
+
+const SMX_BG_PACK: CustomBinding = CustomBinding {
+    apply: |state, player_idx, row_id, delta, wrap| {
+        let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap) else {
+            return Outcome::NONE;
+        };
+        let pack = if new_index == 0 {
+            String::new()
+        } else {
+            state
+                .pane()
+                .row_map
+                .get(row_id)
+                .and_then(|r| r.choices.get(new_index))
+                .cloned()
+                .unwrap_or_default()
+        };
+        let (should_persist, side) = choice::persist_ctx(player_idx);
+        state.player_profiles[player_idx].smx_bg_pack =
+            if pack.is_empty() { None } else { Some(pack.clone()) };
+        if should_persist {
+            gp::update_smx_bg_pack_for_side(side, &pack);
+        }
+        Outcome::persisted()
+    },
+};
+
+const SMX_JUDGE_PACK: CustomBinding = CustomBinding {
+    apply: |state, player_idx, row_id, delta, wrap| {
+        let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap) else {
+            return Outcome::NONE;
+        };
+        let pack = if new_index == 0 {
+            String::new()
+        } else {
+            state
+                .pane()
+                .row_map
+                .get(row_id)
+                .and_then(|r| r.choices.get(new_index))
+                .cloned()
+                .unwrap_or_default()
+        };
+        let (should_persist, side) = choice::persist_ctx(player_idx);
+        state.player_profiles[player_idx].smx_judge_pack =
+            if pack.is_empty() { None } else { Some(pack.clone()) };
+        if should_persist {
+            gp::update_smx_judge_pack_for_side(side, &pack);
+        }
+        Outcome::persisted()
+    },
+};
+
+fn push_smx_bg_pack_row(b: &mut RowBuilder, pack_names: &[String]) {
+    b.push(Row::custom(
+        RowId::SmxBgPack,
+        lookup_key("PlayerOptions", "SmxBgPack"),
+        lookup_key("PlayerOptionsHelp", "SmxBgPackHelp"),
+        SMX_BG_PACK,
+        build_smx_pack_choices(pack_names),
+    ));
+}
+
+fn push_smx_judge_pack_row(b: &mut RowBuilder, pack_names: &[String]) {
+    b.push(Row::custom(
+        RowId::SmxJudgePack,
+        lookup_key("PlayerOptions", "SmxJudgePack"),
+        lookup_key("PlayerOptionsHelp", "SmxJudgePackHelp"),
+        SMX_JUDGE_PACK,
+        build_smx_pack_choices(pack_names),
+    ));
+}
+
+pub(super) fn push_display_modifier_rows(
+    b: &mut RowBuilder,
+    noteskin_names: &[String],
+    smx_bg_pack_names: &[String],
+    smx_judge_pack_names: &[String],
+) {
     push_mini_row(b);
     push_spacing_row(b);
     push_perspective_row(b);
@@ -851,6 +935,8 @@ pub(super) fn push_display_modifier_rows(b: &mut RowBuilder, noteskin_names: &[S
     push_held_graphic_row(b);
     push_background_filter_row(b);
     push_pad_light_brightness_row(b);
+    push_smx_bg_pack_row(b, smx_bg_pack_names);
+    push_smx_judge_pack_row(b, smx_judge_pack_names);
     push_notefield_offset_rows(b);
 }
 
