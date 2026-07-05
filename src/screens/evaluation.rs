@@ -4574,10 +4574,10 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
             }
 
             // "Nice" easter egg graphic (Simply Love PerPlayer/Upper/nice.lua):
-            // when a `69` shows up anywhere notable in the score, draw nice.png
-            // just below the letter grade, matching SL's placement (x = grade x,
-            // y = cy - 94, zoom 0.4).
-            if score_info_is_nice(si) {
+            // when enabled and a `69` shows up anywhere notable in the score,
+            // draw nice.png just below the letter grade, matching SL's placement
+            // (x = grade x, y = cy - 94, zoom 0.4).
+            if cfg.machine_nice_sound && score_info_is_nice(si) {
                 actors.push(act!(sprite("nice.png"):
                     align(0.5, 0.5):
                     xy(upper_origin_x + 70.0 * dir, cy - 94.0):

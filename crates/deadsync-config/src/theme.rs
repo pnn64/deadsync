@@ -1664,7 +1664,7 @@ mod tests {
     fn default_machine_flow_options() -> MachineFlowOptions {
         MachineFlowOptions {
             machine_show_eval_summary: true,
-            machine_nice_sound: true,
+            machine_nice_sound: false,
             machine_show_name_entry: true,
             machine_show_gameover: true,
             machine_show_select_profile: true,
@@ -1708,7 +1708,7 @@ SrpgVariant=SRPG9\n\
 VideoBackgrounds=1\n\
 RandomBackgroundMode=Off\n\
 MachineShowEvalSummary=1\n\
-MachineNiceSound=1\n\
+MachineNiceSound=0\n\
 MachineShowGameOver=1\n\
 MachineShowNameEntry=1\n\
 MachineShowSelectColor=1\n\
