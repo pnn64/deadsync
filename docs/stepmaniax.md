@@ -718,7 +718,7 @@ as the global registry.
     chart tagged for on-screen display as "Novice" or "Expert" elsewhere still
     tags its gif `challenge`.
   - `@{grade}`: grade suffix for results backgrounds (e.g. `@S+`, `@B-`,
-    `@*****`). The grade tag starts with a letter or `*` (not a digit), so
+    `@star5`). The grade tag starts with a letter (not a digit), so
     DeadSync can always distinguish it from a BPM tag.
   - A results file can combine both: `@{difficulty}@{grade}` (difficulty
     first, then grade).
@@ -729,10 +729,10 @@ Examples:
 - `results_25.gif`
 - `results_25@S+.gif`
 - `results_25@B-.gif`
-- `results_25@*****.gif`
+- `results_25@star5.gif`
 - `results_25@hard.gif`
 - `results_25@hard@S+.gif`
-- `results_25@edit@*****.gif`
+- `results_25@edit@star5.gif`
 - `fantastic_blue_25.gif`
 - `press_25.gif`
 
@@ -777,11 +777,11 @@ corresponding filename is `{role}_{size}.gif` — for grade-tagged roles like
 | `gameplay` | During a song (Gameplay screen) |
 | `song_select` | Song/course selection screen |
 | `results` | Evaluation/results screen (grade unknown or no grade-specific gif found) |
-| `results@*****` | Results screen, Quint (5-star) grade |
-| `results@****` | Results screen, Quad (4-star) grade |
-| `results@***` | Results screen, Triple (3-star) grade |
-| `results@**` | Results screen, Double (2-star) grade |
-| `results@*` | Results screen, Single (1-star) grade |
+| `results@star5` | Results screen, Quint (5-star) grade |
+| `results@star4` | Results screen, Quad (4-star) grade |
+| `results@star3` | Results screen, Triple (3-star) grade |
+| `results@star2` | Results screen, Double (2-star) grade |
+| `results@star1` | Results screen, Single (1-star) grade |
 | `results@S+` | Results screen, S+ grade |
 | `results@S` | Results screen, S grade |
 | `results@S-` | Results screen, S- grade |
@@ -811,11 +811,11 @@ results@B+  -->  results@B  -->  results  -->  default
 results@B-  -->  results@B  -->  results  -->  default
 results@C+  -->  results@C  -->  results  -->  default
 results@C-  -->  results@C  -->  results  -->  default
-results@*****  -->  results  -->  default   (no base-letter fallback)
-results@****   -->  results  -->  default
-results@***    -->  results  -->  default
-results@**     -->  results  -->  default
-results@*      -->  results  -->  default
+results@star5  -->  results  -->  default   (no base-letter fallback)
+results@star4  -->  results  -->  default
+results@star3  -->  results  -->  default
+results@star2  -->  results  -->  default
+results@star1  -->  results  -->  default
 results@S      -->  results  -->  default
 results@D      -->  results  -->  default
 results@F      -->  results  -->  default

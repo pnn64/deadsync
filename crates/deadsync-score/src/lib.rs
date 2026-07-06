@@ -79,11 +79,11 @@ impl Grade {
     /// Short display string used in SMX pad GIF filenames (`results_25@<suffix>.gif`).
     pub const fn gif_suffix(&self) -> &'static str {
         match self {
-            Self::Quint => "*****",
-            Self::Tier01 => "****",
-            Self::Tier02 => "***",
-            Self::Tier03 => "**",
-            Self::Tier04 => "*",
+            Self::Quint => "star5",
+            Self::Tier01 => "star4",
+            Self::Tier02 => "star3",
+            Self::Tier03 => "star2",
+            Self::Tier04 => "star1",
             Self::Tier05 => "S+",
             Self::Tier06 => "S",
             Self::Tier07 => "S-",

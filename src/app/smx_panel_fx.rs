@@ -690,7 +690,7 @@ mod tests {
             ["results@edit@S", "results@S", "results@edit"]
         );
         // Star grades never fall back to a letter grade.
-        assert_eq!(results_role_candidates(Grade::Quint, None), ["results@*****"]);
+        assert_eq!(results_role_candidates(Grade::Quint, None), ["results@star5"]);
         assert_eq!(
             results_role_candidates(Grade::Failed, Some("challenge")),
             ["results@challenge@F", "results@F", "results@challenge"]
