@@ -64,7 +64,7 @@ FILENAME CONVENTION
              chart's real file-level difficulty, not a display name -- e.g. a
              Challenge chart shown on-screen as "Novice" or "Expert" (a
              per-song display convention) still tags its gif "challenge".
-  @{grade}   -- grade suffix for results backgrounds (e.g. @S+, @B-, @*****).
+  @{grade}   -- grade suffix for results backgrounds (e.g. @S+, @B-, @star5).
   A results file can combine both, difficulty first: @{difficulty}@{grade}.
 
 Examples:
@@ -72,10 +72,10 @@ Examples:
   gameplay_25@4b120.gif
   results_25.gif
   results_25@S+.gif
-  results_25@*****.gif
+  results_25@star5.gif
   results_25@hard.gif
   results_25@hard@S+.gif
-  results_25@edit@*****.gif
+  results_25@edit@star5.gif
 
 
 ROLE NAMES (what you can author)
@@ -86,11 +86,11 @@ ROLE NAMES (what you can author)
   gameplay         During a song (Gameplay screen).
   song_select      Song/course selection screen.
   results          Evaluation/results screen (no grade-specific GIF found).
-  results@*****    Results screen, Quint (5-star) grade.
-  results@****     Results screen, Quad (4-star) grade.
-  results@***      Results screen, Triple (3-star) grade.
-  results@**       Results screen, Double (2-star) grade.
-  results@*        Results screen, Single (1-star) grade.
+  results@star5    Results screen, Quint (5-star) grade.
+  results@star4    Results screen, Quad (4-star) grade.
+  results@star3    Results screen, Triple (3-star) grade.
+  results@star2    Results screen, Double (2-star) grade.
+  results@star1    Results screen, Single (1-star) grade.
   results@S+ / S / S-
   results@A+ / A / A-
   results@B+ / B / B-
@@ -103,7 +103,7 @@ want to customize, e.g.:
 
   results@S+  -->  results@S  -->  results  -->  default
   results@A-  -->  results@A  -->  results  -->  default
-  results@*****  -->  results  -->  default   (no base-letter fallback)
+  results@star5  -->  results  -->  default   (no base-letter fallback)
 
 You don't need to author every role. Anything you don't supply falls
 through to the chain described below.

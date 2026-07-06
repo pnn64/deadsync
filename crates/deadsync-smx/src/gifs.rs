@@ -423,8 +423,8 @@ fn parse_stem(stem: &str) -> Option<(String, PadSize, Option<BeatSpec>)> {
     //
     //   - tag starts with a digit, '-', or '.': BPM spec (<N>b[<bpm>]); parse
     //     or reject if malformed.
-    //   - tag starts with anything else (letter, '*', …): role modifier (e.g. a
-    //     grade suffix: @S+, @B+, @*****); appended to the role name.
+    //   - tag starts with anything else (letter, …): role modifier (e.g. a
+    //     grade suffix: @S+, @B+, @star5); appended to the role name.
     //
     // This order is necessary because grade letters include 'B', which is also
     // the beat/bpm separator, so splitting on '@' first and checking for 'b'/'B'
@@ -1209,8 +1209,8 @@ mod tests {
             Some((s("results@B+"), PadSize::Leds25, None))
         );
         assert_eq!(
-            parse_stem("results_25@*****"),
-            Some((s("results@*****"), PadSize::Leds25, None))
+            parse_stem("results_25@star5"),
+            Some((s("results@star5"), PadSize::Leds25, None))
         );
         // Stacked difficulty+grade tags: everything after the first '@' becomes
         // part of the name verbatim, so a second '@' just carries straight through.
@@ -1219,8 +1219,8 @@ mod tests {
             Some((s("results@hard@S+"), PadSize::Leds25, None))
         );
         assert_eq!(
-            parse_stem("results_25@edit@*****"),
-            Some((s("results@edit@*****"), PadSize::Leds25, None))
+            parse_stem("results_25@edit@star5"),
+            Some((s("results@edit@star5"), PadSize::Leds25, None))
         );
         // Difficulty tag alone (no grade).
         assert_eq!(
