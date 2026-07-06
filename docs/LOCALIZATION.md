@@ -113,7 +113,9 @@ Language files are resolved from the executable's `assets/languages/` directory.
 
 ```sh
 # Check coverage and see which keys are missing
-cargo run --bin lang_coverage
+mkdir -p target/tools
+rustc --edition=2024 scripts/lang_coverage.rs -o target/tools/lang_coverage
+./target/tools/lang_coverage
 
 # Run the CI validation tests
 cargo test --test i18n_coverage

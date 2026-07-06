@@ -12,8 +12,6 @@ permissions:
 jobs:
   update-status:
     runs-on: ubuntu-latest
-    env:
-      CARGO_TERM_COLOR: always
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -21,22 +19,11 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libudev-dev pkg-config libasound2-dev
-
-      - name: Cache cargo
-        uses: actions/cache@v6
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-lang-coverage-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-lang-coverage-
-
       - name: Generate TRANSLATION_STATUS.md
-        run: cargo run --bin lang_coverage -- --markdown
+        run: |
+          mkdir -p target/tools
+          rustc --edition=2024 scripts/lang_coverage.rs -o target/tools/lang_coverage
+          ./target/tools/lang_coverage --markdown
 
       - name: Commit if changed
         run: |
