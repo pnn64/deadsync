@@ -1,9 +1,11 @@
+pub mod decode;
 pub mod discover;
 pub mod dynamic;
 pub mod registry;
 pub mod texture_store;
 pub mod upload;
 
+pub use decode::{TextureDecodeJob, TextureDecodeResult, decode_texture_jobs_parallel};
 pub use discover::{
     DiscoveredTexture, NONE_TEXTURE_CHOICE_KEY, TextureChoiceLike,
     canonical_texture_key_with_asset_roots, discover_graphic_textures_in_roots,

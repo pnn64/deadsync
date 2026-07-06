@@ -17,17 +17,16 @@ use log::{debug, warn};
 use std::{
     path::{Path, PathBuf},
     sync::{
-        Arc, Mutex, OnceLock,
+        Arc, OnceLock,
         atomic::{AtomicU64, Ordering},
-        mpsc,
     },
 };
 
 use super::{AssetError, PRESENT_TEXTURE_CONTEXT};
 use deadlib_assets::{
-    DiscoveredTexture, NONE_TEXTURE_CHOICE_KEY, TextureChoiceLike,
-    canonical_texture_key_with_asset_roots, discover_graphic_textures_in_roots,
-    noteskin_png_texture_entries,
+    DiscoveredTexture, NONE_TEXTURE_CHOICE_KEY, TextureChoiceLike, TextureDecodeJob,
+    TextureDecodeResult, canonical_texture_key_with_asset_roots, decode_texture_jobs_parallel,
+    discover_graphic_textures_in_roots, noteskin_png_texture_entries,
 };
 
 pub struct TextureChoice {
@@ -226,6 +225,18 @@ fn append_graphic_textures(
     }
 }
 
+fn initial_texture_path(relative_path: &str) -> PathBuf {
+    let rel = Path::new(relative_path);
+    let path = if rel.is_absolute() {
+        rel.to_path_buf()
+    } else if relative_path.starts_with("noteskins/") {
+        Path::new("assets").join(relative_path)
+    } else {
+        Path::new("assets/graphics").join(relative_path)
+    };
+    dirs::app_dirs().resolve_asset_path(&path.to_string_lossy())
+}
+
 impl AssetManager {
     pub fn load_initial_textures(&mut self, backend: &mut Backend) -> Result<(), AssetError> {
         debug!("Loading initial textures...");
@@ -259,67 +270,18 @@ impl AssetManager {
         append_graphic_textures(&mut textures_to_load, "hold_judgements", false, true);
         append_graphic_textures(&mut textures_to_load, "held_miss", false, false);
 
-        #[inline(always)]
-        fn decode_rgba(
-            key: String,
-            relative_path: String,
-        ) -> Result<(String, RgbaImage), (String, String)> {
-            let rel = Path::new(&relative_path);
-            let path = if rel.is_absolute() {
-                rel.to_path_buf()
-            } else if relative_path.starts_with("noteskins/") {
-                Path::new("assets").join(&relative_path)
-            } else {
-                Path::new("assets/graphics").join(&relative_path)
-            };
-            let path = dirs::app_dirs().resolve_asset_path(&path.to_string_lossy());
-            match open_image_fallback(&path) {
-                Ok(img) => {
-                    let mut rgba = img.to_rgba8();
-                    fix_hidden_alpha(&mut rgba);
-                    Ok((key, rgba))
-                }
-                Err(e) => Err((key, e.to_string())),
-            }
-        }
-
-        let job_count = textures_to_load.len();
-        let worker_count = std::thread::available_parallelism()
-            .map(std::num::NonZero::get)
-            .unwrap_or(1)
-            .min(job_count.max(1));
-
-        let (job_tx, job_rx) = mpsc::channel::<(String, String)>();
-        let job_rx = Arc::new(Mutex::new(job_rx));
-        let (res_tx, res_rx) = mpsc::channel::<Result<(String, RgbaImage), (String, String)>>();
-
-        let mut workers = Vec::with_capacity(worker_count);
-        for _ in 0..worker_count {
-            let job_rx = Arc::clone(&job_rx);
-            let res_tx = res_tx.clone();
-            workers.push(std::thread::spawn(move || {
-                loop {
-                    let job = {
-                        let Ok(rx) = job_rx.lock() else { return };
-                        rx.recv()
-                    };
-                    let Ok((key, relative_path)) = job else {
-                        return;
-                    };
-                    let _ = res_tx.send(decode_rgba(key, relative_path));
-                }
-            }));
-        }
-        drop(res_tx);
-        for (key, relative_path) in textures_to_load {
-            let _ = job_tx.send((key, relative_path));
-        }
-        drop(job_tx);
+        let texture_jobs: Vec<TextureDecodeJob> = textures_to_load
+            .into_iter()
+            .map(|(key, relative_path)| TextureDecodeJob {
+                key,
+                path: initial_texture_path(&relative_path),
+            })
+            .collect();
 
         let fallback_image = Arc::new(fallback_rgba());
-        for r in res_rx {
-            match r {
-                Ok((key, rgba)) => {
+        for result in decode_texture_jobs_parallel(texture_jobs) {
+            match result {
+                TextureDecodeResult::Decoded { key, image } => {
                     let sampler = if needs_repeat_sampler(&key) {
                         SamplerDesc {
                             wrap: SamplerWrap::Repeat,
@@ -330,13 +292,13 @@ impl AssetManager {
                     } else {
                         SamplerDesc::default()
                     };
-                    let texture = backend.create_texture(&rgba, sampler)?;
-                    register_texture_dims(&key, rgba.width(), rgba.height());
+                    let texture = backend.create_texture(&image, sampler)?;
+                    register_texture_dims(&key, image.width(), image.height());
                     debug!("Loaded texture: {key}");
-                    self.insert_texture(key, texture, rgba.width(), rgba.height());
+                    self.insert_texture(key, texture, image.width(), image.height());
                 }
-                Err((key, msg)) => {
-                    warn!("Failed to load texture for key '{key}': {msg}. Using fallback.");
+                TextureDecodeResult::Failed { key, message } => {
+                    warn!("Failed to load texture for key '{key}': {message}. Using fallback.");
                     let sampler = if needs_repeat_sampler(&key) {
                         SamplerDesc {
                             wrap: SamplerWrap::Repeat,
@@ -357,10 +319,6 @@ impl AssetManager {
                     );
                 }
             }
-        }
-
-        for w in workers {
-            w.join().expect("texture decode worker panicked");
         }
 
         Ok(())
