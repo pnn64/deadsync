@@ -1157,6 +1157,7 @@ pub struct State {
     currently_playing_preview_start_sec: Option<f32>,
     currently_playing_preview_length_sec: Option<f32>,
     preview_music_muted: bool,
+    music_wheel_moved: bool,
     prev_selected_index: usize,
     time_since_selection_change: f32,
     lobby_last_joined_code: Option<String>,
@@ -3547,6 +3548,7 @@ pub fn init() -> State {
         currently_playing_preview_start_sec: None,
         currently_playing_preview_length_sec: None,
         preview_music_muted: false,
+        music_wheel_moved: false,
         session_elapsed: 0.0,
         gameplay_elapsed: 0.0,
         prev_selected_index: 0,
@@ -3740,6 +3742,7 @@ pub fn init_placeholder() -> State {
         currently_playing_preview_start_sec: None,
         currently_playing_preview_length_sec: None,
         preview_music_muted: false,
+        music_wheel_moved: false,
         session_elapsed: 0.0,
         gameplay_elapsed: 0.0,
         prev_selected_index: 0,
@@ -3789,6 +3792,7 @@ fn music_wheel_change(state: &mut State, dist: isize) {
     if dist == 0 {
         return;
     }
+    state.music_wheel_moved = true;
     let num_entries = state.entries.len();
     if num_entries == 0 {
         state.selected_index = 0;
@@ -3886,7 +3890,10 @@ fn maybe_prewarm_replaygain_for_pack(state: &mut State) {
 }
 
 #[inline(always)]
-fn sync_preview_song(state: &mut State, selected_song: Option<&Arc<SongData>>, loop_preview: bool) {
+fn sync_preview_song(state: &mut State, selected_song: Option<&Arc<SongData>>, loop_preview: bool, preview_starts_immediately: bool) {
+    if !state.music_wheel_moved && !preview_starts_immediately {
+        return;
+    }
     let music_path = selected_song.and_then(|s| s.music_path.clone());
     if state.currently_playing_preview_path == music_path {
         return;
@@ -4767,6 +4774,7 @@ fn begin_reload_ui(state: &mut State) -> Option<mpsc::Sender<ReloadMsg>> {
     state.last_steps_nav_time_p1 = None;
     state.last_steps_nav_dir_p2 = None;
     state.last_steps_nav_time_p2 = None;
+    state.music_wheel_moved = false;
 
     let (tx, rx) = mpsc::channel::<ReloadMsg>();
     state.reload_ui = Some(ReloadUiState::new(rx));
@@ -9297,7 +9305,7 @@ pub fn handle_confirm(state: &mut State) -> ScreenAction {
             // ITGmania parity: force sample preview to start on selection finalize.
             let cfg = config::get();
             if cfg.show_select_music_previews && !state.preview_music_muted {
-                sync_preview_song(state, Some(&song), cfg.select_music_preview_loop);
+                sync_preview_song(state, Some(&song), cfg.select_music_preview_loop, cfg.select_music_preview_starts_immediately);
             }
             state.out_prompt = OutPromptState::PressStartForOptions { elapsed: 0.0 };
             ScreenAction::None
@@ -10301,7 +10309,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         && !state.preview_music_muted
         && allow_gs_fetch_for_selection(state)
     {
-        sync_preview_song(state, selected_song.as_ref(), cfg.select_music_preview_loop);
+        sync_preview_song(state, selected_song.as_ref(), cfg.select_music_preview_loop, cfg.select_music_preview_starts_immediately);
     } else if state.currently_playing_preview_path.is_some() {
         clear_preview(state);
     }
@@ -10461,6 +10469,7 @@ pub fn reset_preview_after_gameplay(state: &mut State) {
     state.currently_playing_preview_path = None;
     state.currently_playing_preview_start_sec = None;
     state.currently_playing_preview_length_sec = None;
+    state.music_wheel_moved = false;
     // Treat evaluation -> SelectMusic like a fresh chart visit so the existing
     // scorebox snapshot stays visible while the current chart is refreshed.
     state.last_refreshed_leaderboard_hash = None;

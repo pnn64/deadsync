@@ -348,6 +348,7 @@ fn apply_select_music_opts(loaded: SelectMusicOptions, cfg: &mut Config) {
     cfg.show_select_music_previews = loaded.show_previews;
     cfg.show_select_music_preview_marker = loaded.show_preview_marker;
     cfg.select_music_preview_loop = loaded.preview_loop;
+    cfg.select_music_preview_starts_immediately = loaded.preview_starts_immediately;
     cfg.select_music_pattern_info_mode = loaded.pattern_info_mode;
     cfg.select_music_step_artist_box_mode = loaded.step_artist_box_mode;
     cfg.show_select_music_scorebox = loaded.show_scorebox;

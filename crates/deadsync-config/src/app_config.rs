@@ -155,6 +155,7 @@ pub struct Config {
     pub show_select_music_previews: bool,
     pub show_select_music_preview_marker: bool,
     pub select_music_preview_loop: bool,
+    pub select_music_preview_starts_immediately: bool,
     /// zmod parity: enable keyboard-only shortcuts like Ctrl+R restart in gameplay/evaluation.
     pub keyboard_features: bool,
     /// Show a small build-version watermark in the bottom-right corner of
@@ -406,6 +407,7 @@ impl Default for Config {
             show_select_music_previews: select_music.show_previews,
             show_select_music_preview_marker: select_music.show_preview_marker,
             select_music_preview_loop: select_music.preview_loop,
+            select_music_preview_starts_immediately: select_music.preview_starts_immediately,
             keyboard_features: theme.keyboard_features,
             show_version_overlay: select_music.show_version_overlay,
             version_overlay_side: select_music.version_overlay_side,

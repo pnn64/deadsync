@@ -215,6 +215,15 @@ pub(in crate::screens::options) const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::PreviewStartsImmediately,
+        label: lookup_key("OptionsSelectMusic", "PreviewStartsImmediately"),
+        choices: &[
+            localized_choice("Common", "No"),
+            localized_choice("Common", "Yes"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::ShowGameplayTimer,
         label: lookup_key("OptionsSelectMusic", "ShowGameplayTimer"),
         choices: &[
@@ -438,6 +447,14 @@ pub(in crate::screens::options) const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsSelectMusicHelp",
             "LoopMusicHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::SmPreviewStartsImmediately,
+        name: lookup_key("OptionsSelectMusic", "PreviewStartsImmediately"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSelectMusicHelp",
+            "PreviewStartsImmediatelyHelp",
         ))],
     },
     Item {

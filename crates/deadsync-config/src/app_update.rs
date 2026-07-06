@@ -542,6 +542,10 @@ pub fn set_select_music_preview_loop(cfg: &mut Config, enabled: bool) -> bool {
     set_if_changed(&mut cfg.select_music_preview_loop, enabled)
 }
 
+pub fn set_select_music_preview_starts_immediately(cfg: &mut Config, enabled: bool) -> bool {
+    set_if_changed(&mut cfg.select_music_preview_starts_immediately, enabled)
+}
+
 pub fn set_show_select_music_gameplay_timer(cfg: &mut Config, enabled: bool) -> bool {
     set_if_changed(&mut cfg.show_select_music_gameplay_timer, enabled)
 }

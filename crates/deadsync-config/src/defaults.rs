@@ -44,6 +44,7 @@ pub const DEFAULT_SHOW_SELECT_MUSIC_FOLDER_STATS: bool = false;
 pub const DEFAULT_SHOW_SELECT_MUSIC_PREVIEWS: bool = true;
 pub const DEFAULT_SHOW_SELECT_MUSIC_PREVIEW_MARKER: bool = false;
 pub const DEFAULT_SELECT_MUSIC_PREVIEW_LOOP: bool = true;
+pub const DEFAULT_SELECT_MUSIC_PREVIEW_STARTS_IMMEDIATELY: bool = true;
 pub const DEFAULT_KEYBOARD_FEATURES: bool = true;
 pub const DEFAULT_SHOW_VERSION_OVERLAY: bool = true;
 pub const DEFAULT_SHOW_VIDEO_BACKGROUNDS: bool = true;
