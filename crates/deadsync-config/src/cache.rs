@@ -15,6 +15,14 @@ pub fn never_cache_list_value(list: &[String]) -> String {
     list.join(",")
 }
 
+pub fn group_is_never_cached(list: &[String], group: &str) -> bool {
+    let group = group.trim();
+    if group.is_empty() {
+        return false;
+    }
+    list.iter().any(|entry| entry.eq_ignore_ascii_case(group))
+}
+
 pub fn push_never_cache_list_option_line(content: &mut String, list: &[String]) {
     push_line(content, "NeverCacheList", never_cache_list_value(list));
 }
@@ -51,6 +59,15 @@ mod tests {
             never_cache_list_value(&["Pack A".to_string(), "Pack B".to_string()]),
             "Pack A,Pack B"
         );
+    }
+
+    #[test]
+    fn group_never_cache_match_trims_and_ignores_case() {
+        let list = ["WIP Pack".to_string(), "Other".to_string()];
+
+        assert!(group_is_never_cached(&list, " wip pack "));
+        assert!(!group_is_never_cached(&list, "Missing"));
+        assert!(!group_is_never_cached(&list, " "));
     }
 
     #[test]

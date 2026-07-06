@@ -1,18 +1,10 @@
 use super::*;
 use deadsync_config::machine::clamp_smx_light_brightness_percent;
+use deadsync_config::update::{dedicated_menu_navigation_label, resolve_dedicated_menu_navigation};
 
 #[inline(always)]
 fn dedicated_menu_buttons_supported(three_key_navigation: bool) -> bool {
     deadsync_input::any_player_has_dedicated_menu_buttons_for_mode(three_key_navigation)
-}
-
-#[inline(always)]
-const fn dedicated_menu_navigation_label(three_key_navigation: bool) -> &'static str {
-    if three_key_navigation {
-        "Three Key Menu"
-    } else {
-        "Five Key Menu"
-    }
 }
 
 pub fn update_input_debounce_seconds(seconds: f32) {
@@ -37,12 +29,16 @@ pub fn update_three_key_navigation(enabled: bool) {
             return;
         }
         cfg.three_key_navigation = enabled;
-        if cfg.only_dedicated_menu_buttons && !dedicated_menu_buttons_supported(enabled) {
+        let dedicated = resolve_dedicated_menu_navigation(
+            cfg.only_dedicated_menu_buttons,
+            dedicated_menu_buttons_supported(enabled),
+        );
+        if dedicated.disabled_by_missing_bindings {
             warn!(
                 "three_key_navigation changed to {} but no player has the required dedicated menu buttons mapped — disabling dedicated-only menu navigation.",
                 dedicated_menu_navigation_label(enabled)
             );
-            cfg.only_dedicated_menu_buttons = false;
+            cfg.only_dedicated_menu_buttons = dedicated.enabled;
         }
         cfg.only_dedicated_menu_buttons
     };
@@ -114,11 +110,9 @@ pub fn update_smx_pad_assignment(p1_serial: Option<String>, p2_serial: Option<St
     {
         let mut p1 = SMX_P1_SERIAL.lock().unwrap();
         let mut p2 = SMX_P2_SERIAL.lock().unwrap();
-        if *p1 == p1_serial && *p2 == p2_serial {
+        if !set_pair_if_changed(&mut *p1, p1_serial.clone(), &mut *p2, p2_serial.clone()) {
             return;
         }
-        *p1 = p1_serial.clone();
-        *p2 = p2_serial.clone();
     }
     deadsync_smx::set_player_assignment(p1_serial, p2_serial);
     save_without_keymaps();
@@ -130,11 +124,9 @@ pub fn update_default_profiles(p1: Option<String>, p2: Option<String>) {
     {
         let mut a = DEFAULT_PROFILE_P1.lock().unwrap();
         let mut b = DEFAULT_PROFILE_P2.lock().unwrap();
-        if *a == p1 && *b == p2 {
+        if !set_pair_if_changed(&mut *a, p1, &mut *b, p2) {
             return;
         }
-        *a = p1;
-        *b = p2;
     }
     save_without_keymaps();
 }
@@ -157,15 +149,17 @@ pub fn swap_smx_pad_assignment() -> bool {
 pub fn update_only_dedicated_menu_buttons(enabled: bool) {
     let enabled = {
         let mut cfg = lock_config();
-        let enabled = if enabled && !dedicated_menu_buttons_supported(cfg.three_key_navigation) {
+        let dedicated = resolve_dedicated_menu_navigation(
+            enabled,
+            dedicated_menu_buttons_supported(cfg.three_key_navigation),
+        );
+        if dedicated.disabled_by_missing_bindings {
             warn!(
                 "only_dedicated_menu_buttons requires dedicated menu buttons for {} mode, but no player has the required bindings mapped — leaving gameplay button fallback enabled.",
                 dedicated_menu_navigation_label(cfg.three_key_navigation)
             );
-            false
-        } else {
-            enabled
-        };
+        }
+        let enabled = dedicated.enabled;
         if cfg.only_dedicated_menu_buttons == enabled {
             return;
         }

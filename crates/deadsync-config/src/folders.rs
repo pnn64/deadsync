@@ -1,5 +1,6 @@
 use crate::ini::SimpleIni;
 use crate::writer::push_line;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AdditionalSongFolder {
@@ -67,6 +68,49 @@ pub fn push_additional_song_folder_option_lines(
         "AdditionalSongFoldersReadOnly",
         additional_song_folder_paths(folders, false),
     );
+}
+
+pub fn song_path_is_writable_for_roots(path: &Path, roots: &[AdditionalSongFolder]) -> bool {
+    let path = canonical_or_raw(path);
+    let mut best: Option<(usize, bool)> = None;
+    for root in roots {
+        let root_path = canonical_or_raw(Path::new(root.path.as_str()));
+        let Some(len) = root_prefix_len(path.as_path(), root_path.as_path()) else {
+            continue;
+        };
+        if best.is_none_or(|(best_len, _)| len >= best_len) {
+            best = Some((len, root.writable));
+        }
+    }
+    best.map_or(true, |(_, writable)| writable)
+}
+
+fn canonical_or_raw(path: &Path) -> PathBuf {
+    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+}
+
+fn root_prefix_len(path: &Path, root: &Path) -> Option<usize> {
+    let mut path_components = path.components();
+    let mut len = 0usize;
+    for root_component in root.components() {
+        let path_component = path_components.next()?;
+        if !path_components_equal(path_component.as_os_str(), root_component.as_os_str()) {
+            return None;
+        }
+        len += 1;
+    }
+    Some(len)
+}
+
+#[cfg(windows)]
+fn path_components_equal(a: &std::ffi::OsStr, b: &std::ffi::OsStr) -> bool {
+    a.to_string_lossy()
+        .eq_ignore_ascii_case(&b.to_string_lossy())
+}
+
+#[cfg(not(windows))]
+fn path_components_equal(a: &std::ffi::OsStr, b: &std::ffi::OsStr) -> bool {
+    a == b
 }
 
 #[cfg(test)]
@@ -174,5 +218,40 @@ AdditionalSongFoldersReadOnly= , G:\\ro , \n");
                 "AdditionalSongFoldersReadOnly=G:\\readonly\n",
             ),
         );
+    }
+
+    #[test]
+    fn song_path_writable_defaults_to_true_outside_additional_roots() {
+        assert!(song_path_is_writable_for_roots(
+            Path::new("Songs/Pack/song.ssc"),
+            &[folder("ExtraSongs", false)]
+        ));
+    }
+
+    #[test]
+    fn song_path_writable_rejects_read_only_additional_root() {
+        assert!(!song_path_is_writable_for_roots(
+            Path::new("ExtraSongs/Pack/song.ssc"),
+            &[folder("ExtraSongs", false)]
+        ));
+    }
+
+    #[test]
+    fn song_path_writable_prefers_longest_matching_root() {
+        assert!(song_path_is_writable_for_roots(
+            Path::new("ExtraSongs/WritablePack/song.ssc"),
+            &[
+                folder("ExtraSongs", false),
+                folder("ExtraSongs/WritablePack", true),
+            ]
+        ));
+    }
+
+    #[test]
+    fn root_prefix_does_not_match_partial_directory_names() {
+        assert!(song_path_is_writable_for_roots(
+            Path::new("ExtraSongs2/Pack/song.ssc"),
+            &[folder("ExtraSongs", false)]
+        ));
     }
 }

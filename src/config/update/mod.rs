@@ -1,5 +1,8 @@
 use super::*;
-use deadsync_config::update::{set_f32_if_changed, set_f64_if_changed, set_if_changed};
+use deadsync_config::update::{
+    set_f32_if_changed, set_f64_if_changed, set_if_changed, set_pair_if_changed,
+    set_quad_if_changed,
+};
 
 mod audio;
 mod lights;

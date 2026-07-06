@@ -2,62 +2,58 @@ use super::*;
 
 pub(super) fn build_content() -> String {
     let default = Config::default();
-    let mut content = String::with_capacity(4096);
-    push_default_options(&mut content, &default);
-    deadsync_input::write_default_keymap_ini_section(&mut content);
-    push_default_theme(&mut content, &default);
-    content
-}
+    let gameplay_bg_color = default.gameplay_bg_color.to_hex();
+    let video_renderer = default.video_renderer.to_string();
+    let practice = keycode_to_token(default.music_select_shortcut_practice);
+    let song_search = keycode_to_token(default.music_select_shortcut_song_search);
+    let load_songs = keycode_to_token(default.music_select_shortcut_load_songs);
+    let test_input = keycode_to_token(default.music_select_shortcut_test_input);
 
-fn push_default_options(content: &mut String, default: &Config) {
-    push_section(content, "[Options]");
-    push_config_audio_device_lines(content, default, "Auto");
-    push_config_additional_song_folder_lines(content, &[]);
-    push_config_system_download_lines(content, default);
-    push_config_system_bg_brightness_lines(content, default);
-    push_config_gameplay_bg_color_line(content, default);
-    push_config_system_banner_cache_lines(content, default);
-    push_config_runtime_cache_lines(content, default);
-    push_config_never_cache_list_line(content, &[]);
-    push_config_system_cdtitle_center_lines(content, default);
-    push_config_system_course_lines(content, default);
-    push_config_default_noteskin_line(content, DEFAULT_MACHINE_NOTESKIN);
-    push_config_display_size_lines(content, default);
-    push_config_display_monitor_lines(content, default);
-    push_config_system_online_lines(content, default);
-    push_config_runtime_fastload_lines(content, default);
-    push_config_display_fullscreen_lines(content, default);
-    push_config_system_input_hardware_lines(content, default, false);
-    // No pad→player assignment by default (slots follow the hardware jumper).
-    // No default local profiles until the operator or profile select assigns them.
-    push_config_runtime_state_id_lines(content, "", "", "", "");
-    // Persisted pad ordering is empty until pads are seen; seeded at runtime.
-    push_config_pad_order_lines(content, deadsync_input_native::DEFAULT_PAD_ORDER_INI_LINES);
-    push_config_system_diagnostics_lines(content, default);
-    push_config_runtime_audio_backend_lines(content, default);
-    push_config_display_frame_timing_lines(content, default);
-    push_config_audio_playback_prefix_lines(content, default);
-    push_config_system_mine_hit_sound_lines(content, default);
-    push_config_audio_music_lines(content, default);
-    push_config_select_music_lines(content, default);
-    push_config_stats_overlay_lines(content, default, false);
-    push_config_runtime_input_debounce_lines(content, default);
-    push_config_runtime_navigation_lines(content, default);
-    push_config_runtime_lights_driver_lines(content, default);
-    push_config_runtime_lights_lines(content, default);
-    push_config_runtime_lights_port_lines(content, default);
-    push_config_runtime_menu_lines(content, default);
-    push_config_runtime_worker_theme_lines(content, default);
-    push_config_audio_tail_lines(content, default);
-    push_config_system_translation_lines(content, default);
-    push_config_display_video_tail_lines(content, default);
-    push_config_audio_write_current_screen_lines(content, default);
-    content.push('\n');
-}
-
-fn push_default_theme(content: &mut String, default: &Config) {
-    push_section(content, "[Theme]");
-    push_config_theme_lines(content, default);
-    push_config_null_or_die_lines(content, default);
-    content.push('\n');
+    build_default_config_file(
+        DefaultConfigFile {
+            options: DefaultOptionSection {
+                audio: audio_options(&default),
+                audio_device: audio_device_options(&default, "Auto"),
+                additional_song_folders: &[],
+                never_cache_list: &[],
+                system: system_options(&default),
+                input_hardware: system_input_hardware_options(&default, false),
+                display: display_options(
+                    &default,
+                    default.present_mode_policy.as_str(),
+                    video_renderer.as_str(),
+                ),
+                runtime_io: runtime_io_options(
+                    &default,
+                    default.linux_audio_backend.as_str(),
+                    default.lights_driver.as_str(),
+                    default.lights_gameplay_pad_lights.as_str(),
+                    default.lights_com_port.as_str(),
+                ),
+                runtime: runtime_options(&default),
+                stats_overlay: stats_overlay_options(&default, None, None),
+                select_music: select_music_save_options(&default),
+                gameplay_bg_color: gameplay_bg_color.as_str(),
+                default_noteskin: DEFAULT_MACHINE_NOTESKIN,
+                // No pad->player assignment by default (slots follow the hardware jumper).
+                // No default local profiles until the operator or profile select assigns them.
+                runtime_state_ids: runtime_state_ids("", "", "", ""),
+                // Persisted pad ordering is empty until pads are seen; seeded at runtime.
+                pad_order_lines: deadsync_input_native::DEFAULT_PAD_ORDER_INI_LINES,
+            },
+            keymap: (),
+            theme: ThemeSection {
+                presentation: theme_presentation_options(&default),
+                machine: machine_flow_options(&default),
+                shortcuts: theme_shortcut_tokens(
+                    practice.as_str(),
+                    song_search.as_str(),
+                    load_songs.as_str(),
+                    test_input.as_str(),
+                ),
+                null_or_die: Some(null_or_die_options(&default)),
+            },
+        },
+        |content, ()| deadsync_input::write_default_keymap_ini_section(content),
+    )
 }

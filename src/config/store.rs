@@ -1,39 +1,17 @@
 use super::*;
 use deadlib_platform::dirs;
-use deadsync_config::audio::{
-    AudioDeviceOptions, AudioOptions, push_audio_device_option_lines,
-    push_audio_music_option_lines, push_audio_playback_prefix_lines, push_audio_tail_option_lines,
-    push_audio_write_current_screen_option_lines,
-};
-use deadsync_config::cache::push_never_cache_list_option_line;
-use deadsync_config::folders::push_additional_song_folder_option_lines;
-use deadsync_config::machine::push_default_noteskin_option_line;
-use deadsync_config::null_or_die::{NullOrDieOptions, push_null_or_die_option_lines};
+use deadsync_config::audio::{AudioDeviceOptions, AudioOptions};
+use deadsync_config::null_or_die::NullOrDieOptions;
 use deadsync_config::options::{
     DisplayOptions, RuntimeIoOptions, RuntimeOptions, SelectMusicOptions, SelectMusicSaveOptions,
     StatsOverlayOptions, SystemInputHardwareOptions, SystemOptions,
-    push_display_frame_timing_option_lines, push_display_fullscreen_option_lines,
-    push_display_monitor_option_lines, push_display_size_option_lines,
-    push_display_video_tail_option_lines, push_gameplay_bg_color_option_line,
-    push_runtime_audio_backend_option_lines, push_runtime_cache_option_lines,
-    push_runtime_fastload_option_lines, push_runtime_input_debounce_option_lines,
-    push_runtime_lights_driver_option_lines, push_runtime_lights_option_lines,
-    push_runtime_lights_port_option_lines, push_runtime_menu_option_lines,
-    push_runtime_navigation_option_lines, push_runtime_worker_theme_option_lines,
-    push_select_music_option_lines, push_stats_overlay_option_lines,
-    push_system_banner_cache_option_lines, push_system_bg_brightness_option_lines,
-    push_system_cdtitle_center_option_lines, push_system_course_option_lines,
-    push_system_diagnostics_option_lines, push_system_download_option_lines,
-    push_system_input_hardware_option_lines, push_system_mine_hit_sound_option_lines,
-    push_system_online_option_lines, push_system_translation_option_lines,
 };
-use deadsync_config::runtime_state::{
-    RuntimeStateIdTokens, push_pad_order_option_lines, push_runtime_state_id_option_lines,
+use deadsync_config::runtime_state::RuntimeStateIdTokens;
+use deadsync_config::save::{
+    DefaultConfigFile, DefaultOptionSection, SavedConfigFile, SavedOptionSection, ThemeSection,
+    build_default_config_file, build_saved_config_file,
 };
-use deadsync_config::theme::{
-    MachineFlowOptions, ThemePresentationOptions, ThemeShortcutTokens, push_theme_option_lines,
-};
-pub(super) use deadsync_config::writer::push_section;
+use deadsync_config::theme::{MachineFlowOptions, ThemePresentationOptions, ThemeShortcutTokens};
 
 #[path = "store/defaults.rs"]
 mod defaults;
@@ -84,50 +62,18 @@ pub(super) fn save_without_keymaps() {
     queue_save_write(current_save_content());
 }
 
-fn push_config_additional_song_folder_lines(
-    content: &mut String,
-    folders: &[AdditionalSongFolder],
-) {
-    push_additional_song_folder_option_lines(content, folders);
-}
-
-fn push_config_never_cache_list_line(content: &mut String, never_cache_list: &[String]) {
-    push_never_cache_list_option_line(content, never_cache_list);
-}
-
-fn push_config_gameplay_bg_color_line(content: &mut String, cfg: &Config) {
-    let color = cfg.gameplay_bg_color.to_hex();
-    push_gameplay_bg_color_option_line(content, &color);
-}
-
-fn push_config_default_noteskin_line(content: &mut String, noteskin: &str) {
-    push_default_noteskin_option_line(content, noteskin);
-}
-
-fn push_config_runtime_state_id_lines(
-    content: &mut String,
-    smx_p1_serial: &str,
-    smx_p2_serial: &str,
-    default_profile_p1: &str,
-    default_profile_p2: &str,
-) {
-    push_runtime_state_id_option_lines(
-        content,
-        RuntimeStateIdTokens {
-            smx_p1_serial,
-            smx_p2_serial,
-            default_profile_p1,
-            default_profile_p2,
-        },
-    );
-}
-
-fn push_config_pad_order_lines<I, V>(content: &mut String, lines: I)
-where
-    I: IntoIterator<Item = (&'static str, V)>,
-    V: std::fmt::Display,
-{
-    push_pad_order_option_lines(content, lines);
+fn runtime_state_ids<'a>(
+    smx_p1_serial: &'a str,
+    smx_p2_serial: &'a str,
+    default_profile_p1: &'a str,
+    default_profile_p2: &'a str,
+) -> RuntimeStateIdTokens<'a> {
+    RuntimeStateIdTokens {
+        smx_p1_serial,
+        smx_p2_serial,
+        default_profile_p1,
+        default_profile_p2,
+    }
 }
 
 fn audio_options(cfg: &Config) -> AudioOptions {
@@ -149,31 +95,12 @@ fn audio_options(cfg: &Config) -> AudioOptions {
     }
 }
 
-fn push_config_audio_device_lines(content: &mut String, cfg: &Config, output_mode: &str) {
-    push_audio_device_option_lines(
-        content,
-        AudioDeviceOptions {
-            output_device_index: cfg.audio_output_device_index,
-            output_mode,
-            sample_rate_hz: cfg.audio_sample_rate_hz,
-        },
-    );
-}
-
-fn push_config_audio_playback_prefix_lines(content: &mut String, cfg: &Config) {
-    push_audio_playback_prefix_lines(content, audio_options(cfg));
-}
-
-fn push_config_audio_music_lines(content: &mut String, cfg: &Config) {
-    push_audio_music_option_lines(content, audio_options(cfg));
-}
-
-fn push_config_audio_tail_lines(content: &mut String, cfg: &Config) {
-    push_audio_tail_option_lines(content, audio_options(cfg));
-}
-
-fn push_config_audio_write_current_screen_lines(content: &mut String, cfg: &Config) {
-    push_audio_write_current_screen_option_lines(content, audio_options(cfg));
+fn audio_device_options<'a>(cfg: &Config, output_mode: &'a str) -> AudioDeviceOptions<'a> {
+    AudioDeviceOptions {
+        output_device_index: cfg.audio_output_device_index,
+        output_mode,
+        sample_rate_hz: cfg.audio_sample_rate_hz,
+    }
 }
 
 fn display_options<'a>(
@@ -194,28 +121,6 @@ fn display_options<'a>(
     }
 }
 
-fn push_config_display_size_lines(content: &mut String, cfg: &Config) {
-    push_display_size_option_lines(content, display_options(cfg, "", ""));
-}
-
-fn push_config_display_monitor_lines(content: &mut String, cfg: &Config) {
-    push_display_monitor_option_lines(content, display_options(cfg, "", ""));
-}
-
-fn push_config_display_fullscreen_lines(content: &mut String, cfg: &Config) {
-    push_display_fullscreen_option_lines(content, display_options(cfg, "", ""));
-}
-
-fn push_config_display_frame_timing_lines(content: &mut String, cfg: &Config) {
-    let present_mode_policy = cfg.present_mode_policy.as_str();
-    push_display_frame_timing_option_lines(content, display_options(cfg, present_mode_policy, ""));
-}
-
-fn push_config_display_video_tail_lines(content: &mut String, cfg: &Config) {
-    let video_renderer = cfg.video_renderer.to_string();
-    push_display_video_tail_option_lines(content, display_options(cfg, "", &video_renderer));
-}
-
 fn runtime_io_options<'a>(
     cfg: &'a Config,
     linux_audio_backend: &'a str,
@@ -230,37 +135,6 @@ fn runtime_io_options<'a>(
         gameplay_pad_lights,
         lights_com_port,
     }
-}
-
-fn push_config_runtime_audio_backend_lines(content: &mut String, cfg: &Config) {
-    push_runtime_audio_backend_option_lines(
-        content,
-        runtime_io_options(cfg, cfg.linux_audio_backend.as_str(), "", "", ""),
-    );
-}
-
-fn push_config_runtime_input_debounce_lines(content: &mut String, cfg: &Config) {
-    push_runtime_input_debounce_option_lines(content, runtime_io_options(cfg, "", "", "", ""));
-}
-
-fn push_config_runtime_lights_driver_lines(content: &mut String, cfg: &Config) {
-    push_runtime_lights_driver_option_lines(
-        content,
-        runtime_io_options(
-            cfg,
-            "",
-            cfg.lights_driver.as_str(),
-            cfg.lights_gameplay_pad_lights.as_str(),
-            "",
-        ),
-    );
-}
-
-fn push_config_runtime_lights_port_lines(content: &mut String, cfg: &Config) {
-    push_runtime_lights_port_option_lines(
-        content,
-        runtime_io_options(cfg, "", "", "", cfg.lights_com_port.as_str()),
-    );
 }
 
 fn system_options(cfg: &Config) -> SystemOptions {
@@ -311,58 +185,18 @@ fn system_options(cfg: &Config) -> SystemOptions {
     }
 }
 
-fn push_config_system_download_lines(content: &mut String, cfg: &Config) {
-    push_system_download_option_lines(content, system_options(cfg));
-}
-
-fn push_config_system_bg_brightness_lines(content: &mut String, cfg: &Config) {
-    push_system_bg_brightness_option_lines(content, system_options(cfg));
-}
-
-fn push_config_system_banner_cache_lines(content: &mut String, cfg: &Config) {
-    push_system_banner_cache_option_lines(content, system_options(cfg));
-}
-
-fn push_config_system_cdtitle_center_lines(content: &mut String, cfg: &Config) {
-    push_system_cdtitle_center_option_lines(content, system_options(cfg));
-}
-
-fn push_config_system_course_lines(content: &mut String, cfg: &Config) {
-    push_system_course_option_lines(content, system_options(cfg));
-}
-
-fn push_config_system_online_lines(content: &mut String, cfg: &Config) {
-    push_system_online_option_lines(content, system_options(cfg));
-}
-
-fn push_config_system_input_hardware_lines(
-    content: &mut String,
+fn system_input_hardware_options(
     cfg: &Config,
     include_underglow_theme: bool,
-) {
-    push_system_input_hardware_option_lines(
-        content,
-        SystemInputHardwareOptions {
-            system: system_options(cfg),
-            gamepad_backend: cfg.windows_gamepad_backend.as_str(),
-            smx_default_pad_config: cfg.smx_default_pad_config.as_str(),
-            smx_default_light_brightness: cfg.smx_default_light_brightness,
-            smx_underglow_theme: include_underglow_theme.then_some(cfg.smx_underglow_theme),
-            smx_underglow_grb: include_underglow_theme.then_some(cfg.smx_underglow_grb),
-        },
-    );
-}
-
-fn push_config_system_diagnostics_lines(content: &mut String, cfg: &Config) {
-    push_system_diagnostics_option_lines(content, system_options(cfg));
-}
-
-fn push_config_system_mine_hit_sound_lines(content: &mut String, cfg: &Config) {
-    push_system_mine_hit_sound_option_lines(content, system_options(cfg));
-}
-
-fn push_config_system_translation_lines(content: &mut String, cfg: &Config) {
-    push_system_translation_option_lines(content, system_options(cfg));
+) -> SystemInputHardwareOptions<'_> {
+    SystemInputHardwareOptions {
+        system: system_options(cfg),
+        gamepad_backend: cfg.windows_gamepad_backend.as_str(),
+        smx_default_pad_config: cfg.smx_default_pad_config.as_str(),
+        smx_default_light_brightness: cfg.smx_default_light_brightness,
+        smx_underglow_theme: include_underglow_theme.then_some(cfg.smx_underglow_theme),
+        smx_underglow_grb: include_underglow_theme.then_some(cfg.smx_underglow_grb),
+    }
 }
 
 fn runtime_options(cfg: &Config) -> RuntimeOptions {
@@ -383,30 +217,6 @@ fn runtime_options(cfg: &Config) -> RuntimeOptions {
     }
 }
 
-fn push_config_runtime_cache_lines(content: &mut String, cfg: &Config) {
-    push_runtime_cache_option_lines(content, runtime_options(cfg));
-}
-
-fn push_config_runtime_fastload_lines(content: &mut String, cfg: &Config) {
-    push_runtime_fastload_option_lines(content, runtime_options(cfg));
-}
-
-fn push_config_runtime_navigation_lines(content: &mut String, cfg: &Config) {
-    push_runtime_navigation_option_lines(content, runtime_options(cfg));
-}
-
-fn push_config_runtime_lights_lines(content: &mut String, cfg: &Config) {
-    push_runtime_lights_option_lines(content, runtime_options(cfg));
-}
-
-fn push_config_runtime_menu_lines(content: &mut String, cfg: &Config) {
-    push_runtime_menu_option_lines(content, runtime_options(cfg));
-}
-
-fn push_config_runtime_worker_theme_lines(content: &mut String, cfg: &Config) {
-    push_runtime_worker_theme_option_lines(content, runtime_options(cfg));
-}
-
 fn stats_overlay_options<'a>(
     cfg: &Config,
     frame_stats_overlay_anchor: Option<&'a str>,
@@ -419,25 +229,6 @@ fn stats_overlay_options<'a>(
         smooth_histogram: cfg.smooth_histogram,
         shade_scatterplot_judgments: cfg.shade_scatterplot_judgments,
     }
-}
-
-fn push_config_stats_overlay_lines(
-    content: &mut String,
-    cfg: &Config,
-    include_frame_options: bool,
-) {
-    push_stats_overlay_option_lines(
-        content,
-        if include_frame_options {
-            stats_overlay_options(
-                cfg,
-                Some(cfg.frame_stats_overlay_anchor),
-                Some(cfg.frame_stats_overlay_style),
-            )
-        } else {
-            stats_overlay_options(cfg, None, None)
-        },
-    );
 }
 
 fn theme_presentation_options(cfg: &Config) -> ThemePresentationOptions {
@@ -493,10 +284,6 @@ fn null_or_die_options(cfg: &Config) -> NullOrDieOptions {
     }
 }
 
-fn push_config_null_or_die_lines(content: &mut String, cfg: &Config) {
-    push_null_or_die_option_lines(content, null_or_die_options(cfg));
-}
-
 fn select_music_options(cfg: &Config) -> SelectMusicOptions {
     SelectMusicOptions {
         breakdown_style: cfg.select_music_breakdown_style,
@@ -533,30 +320,23 @@ fn select_music_options(cfg: &Config) -> SelectMusicOptions {
     }
 }
 
-fn push_config_select_music_lines(content: &mut String, cfg: &Config) {
-    push_select_music_option_lines(
-        content,
-        SelectMusicSaveOptions {
-            select_music: select_music_options(cfg),
-            separate_unlocks_by_player: cfg.separate_unlocks_by_player,
-        },
-    );
+fn select_music_save_options(cfg: &Config) -> SelectMusicSaveOptions {
+    SelectMusicSaveOptions {
+        select_music: select_music_options(cfg),
+        separate_unlocks_by_player: cfg.separate_unlocks_by_player,
+    }
 }
 
-fn push_config_theme_lines(content: &mut String, cfg: &Config) {
-    let practice = keycode_to_token(cfg.music_select_shortcut_practice);
-    let song_search = keycode_to_token(cfg.music_select_shortcut_song_search);
-    let load_songs = keycode_to_token(cfg.music_select_shortcut_load_songs);
-    let test_input = keycode_to_token(cfg.music_select_shortcut_test_input);
-    push_theme_option_lines(
-        content,
-        theme_presentation_options(cfg),
-        machine_flow_options(cfg),
-        ThemeShortcutTokens {
-            practice: &practice,
-            song_search: &song_search,
-            load_songs: &load_songs,
-            test_input: &test_input,
-        },
-    );
+fn theme_shortcut_tokens<'a>(
+    practice: &'a str,
+    song_search: &'a str,
+    load_songs: &'a str,
+    test_input: &'a str,
+) -> ThemeShortcutTokens<'a> {
+    ThemeShortcutTokens {
+        practice,
+        song_search,
+        load_songs,
+        test_input,
+    }
 }

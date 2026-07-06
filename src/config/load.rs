@@ -1,17 +1,14 @@
 use super::store::{create_default_config_file, current_save_content};
 use super::*;
 use deadlib_platform::dirs;
-use deadsync_config::bools::parse_bool_str;
-use deadsync_config::cache::load_never_cache_list;
-use deadsync_config::folders::load_additional_song_folders;
-use deadsync_config::runtime_state::load_runtime_state_ids;
+use deadsync_config::options::load_bool_option;
+use deadsync_config::runtime_state::{RuntimeStateOptions, load_runtime_state_options};
+use deadsync_config::update::{dedicated_menu_navigation_label, resolve_dedicated_menu_navigation};
 
 #[path = "load/backfill.rs"]
 mod backfill;
 #[path = "load/options.rs"]
 mod options;
-#[path = "load/theme.rs"]
-mod theme_load;
 
 pub fn bootstrap_log_to_file() -> bool {
     let mut conf = SimpleIni::new();
@@ -19,9 +16,7 @@ pub fn bootstrap_log_to_file() -> bool {
     if conf.load(dirs::app_dirs().config_path()).is_err() {
         return default;
     }
-    conf.get("Options", "LogToFile")
-        .and_then(|v| parse_bool_str(&v))
-        .unwrap_or(default)
+    load_bool_option(&conf, "Options", "LogToFile", default)
 }
 
 pub fn bootstrap_show_console() -> bool {
@@ -30,9 +25,7 @@ pub fn bootstrap_show_console() -> bool {
     if conf.load(dirs::app_dirs().config_path()).is_err() {
         return default;
     }
-    conf.get("Options", "ShowConsole")
-        .and_then(|v| parse_bool_str(&v))
-        .unwrap_or(default)
+    load_bool_option(&conf, "Options", "ShowConsole", default)
 }
 
 pub fn load() {
@@ -68,7 +61,6 @@ fn load_from_ini(conf: &SimpleIni) {
     let default = Config::default();
     let mut cfg = default;
     options::load(conf, default, &mut cfg);
-    theme_load::load(conf, default, &mut cfg);
 
     publish_config(cfg);
     publish_keymap(conf);
@@ -102,51 +94,40 @@ fn publish_keymap(conf: &SimpleIni) {
 }
 
 fn load_defaults_after_error() {
-    *MACHINE_DEFAULT_NOTESKIN.lock().unwrap() = DEFAULT_MACHINE_NOTESKIN.to_string();
-    ADDITIONAL_SONG_FOLDERS.lock().unwrap().clear();
-    NEVER_CACHE_LIST.lock().unwrap().clear();
-    *SMX_P1_SERIAL.lock().unwrap() = None;
-    *SMX_P2_SERIAL.lock().unwrap() = None;
-    *DEFAULT_PROFILE_P1.lock().unwrap() = None;
-    *DEFAULT_PROFILE_P2.lock().unwrap() = None;
+    publish_runtime_state(RuntimeStateOptions::default());
     deadsync_audio_stream::set_replaygain_enabled(Config::default().enable_replaygain);
     deadsync_audio_stream::set_preserve_pitch_enabled(Config::default().rate_mod_preserves_pitch);
     pad_order::reset();
 }
 
 fn load_runtime_state(conf: &SimpleIni) {
-    let noteskin = conf
-        .get("Options", "DefaultNoteSkin")
-        .map(|v| normalize_machine_default_noteskin(&v))
-        .unwrap_or_else(|| DEFAULT_MACHINE_NOTESKIN.to_string());
-    *MACHINE_DEFAULT_NOTESKIN.lock().unwrap() = noteskin;
-    *ADDITIONAL_SONG_FOLDERS.lock().unwrap() = load_additional_song_folders(conf);
-    *NEVER_CACHE_LIST.lock().unwrap() = load_never_cache_list(conf);
-    let ids = load_runtime_state_ids(conf);
+    publish_runtime_state(load_runtime_state_options(conf));
+    pad_order::load_order_from_ini(conf);
+}
+
+fn publish_runtime_state(state: RuntimeStateOptions) {
+    *MACHINE_DEFAULT_NOTESKIN.lock().unwrap() = state.machine_default_noteskin;
+    *ADDITIONAL_SONG_FOLDERS.lock().unwrap() = state.additional_song_folders;
+    *NEVER_CACHE_LIST.lock().unwrap() = state.never_cache_list;
+    let ids = state.ids;
     *SMX_P1_SERIAL.lock().unwrap() = ids.smx_p1_serial;
     *SMX_P2_SERIAL.lock().unwrap() = ids.smx_p2_serial;
     *DEFAULT_PROFILE_P1.lock().unwrap() = ids.default_profile_p1;
     *DEFAULT_PROFILE_P2.lock().unwrap() = ids.default_profile_p2;
-    pad_order::load_order_from_ini(conf);
 }
 
 fn apply_input_runtime_state() {
-    let mut dedicated = get().only_dedicated_menu_buttons;
-    let three_key_navigation = get().three_key_navigation;
-    if dedicated
-        && !deadsync_input::any_player_has_dedicated_menu_buttons_for_mode(three_key_navigation)
-    {
+    let cfg = get();
+    let supported =
+        deadsync_input::any_player_has_dedicated_menu_buttons_for_mode(cfg.three_key_navigation);
+    let dedicated = resolve_dedicated_menu_navigation(cfg.only_dedicated_menu_buttons, supported);
+    if dedicated.disabled_by_missing_bindings {
         warn!(
             "only_dedicated_menu_buttons is enabled but no player has the required dedicated menu buttons mapped for {} mode — disabling.",
-            if three_key_navigation {
-                "Three Key Menu"
-            } else {
-                "Five Key Menu"
-            }
+            dedicated_menu_navigation_label(cfg.three_key_navigation)
         );
-        dedicated = false;
         lock_config().only_dedicated_menu_buttons = false;
     }
-    deadsync_input::set_only_dedicated_menu_buttons(dedicated);
-    deadsync_input::set_input_debounce_seconds(get().input_debounce_seconds);
+    deadsync_input::set_only_dedicated_menu_buttons(dedicated.enabled);
+    deadsync_input::set_input_debounce_seconds(cfg.input_debounce_seconds);
 }

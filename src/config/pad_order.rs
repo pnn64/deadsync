@@ -1,6 +1,7 @@
 //! Stable per-pad `PadId` assignment config adapter.
 
 use super::*;
+use deadsync_config::runtime_state::load_pad_order_entries;
 use deadsync_input_native::PadOrderBackend;
 
 /// Stable `PadId` index for `uuid` on the given backend.
@@ -14,8 +15,9 @@ pub fn pad_index_for_uuid(backend: PadOrderBackend, uuid: [u8; 16]) -> u32 {
 
 /// Replace the in-memory order from the loaded config file.
 pub(super) fn load_order_from_ini(conf: &SimpleIni) {
-    let entries = conf.get_section("Options").map(|section| {
-        section
+    let entries = load_pad_order_entries(conf);
+    let entries = entries.as_ref().map(|entries| {
+        entries
             .iter()
             .map(|(key, value)| (key.as_str(), value.as_str()))
     });

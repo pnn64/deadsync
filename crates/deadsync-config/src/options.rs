@@ -1,6 +1,36 @@
 use crate::bools::{parse_bool_str, parse_loose_bool_str, parse_u8_bool_or_default};
+use crate::defaults::{
+    DEFAULT_ALLOW_SHUTDOWN_HOST, DEFAULT_ARCADE_OPTIONS_NAVIGATION, DEFAULT_AUTO_DOWNLOAD_UNLOCKS,
+    DEFAULT_AUTO_POPULATE_GS_SCORES, DEFAULT_AUTO_SCREENSHOT_EVAL,
+    DEFAULT_AUTOSUBMIT_COURSE_SCORES_INDIVIDUALLY, DEFAULT_BANNER_CACHE, DEFAULT_BG_BRIGHTNESS,
+    DEFAULT_CACHE_SONGS, DEFAULT_CDTITLE_CACHE, DEFAULT_CENTER_1PLAYER_NOTEFIELD,
+    DEFAULT_CENTER_IMAGE_ADD_HEIGHT, DEFAULT_CENTER_IMAGE_ADD_WIDTH,
+    DEFAULT_CENTER_IMAGE_TRANSLATE_X, DEFAULT_CENTER_IMAGE_TRANSLATE_Y, DEFAULT_DELAYED_BACK,
+    DEFAULT_ENABLE_ARROWCLOUD, DEFAULT_ENABLE_BOOGIESTATS, DEFAULT_ENABLE_GROOVESTATS,
+    DEFAULT_FASTLOAD, DEFAULT_GFX_DEBUG, DEFAULT_GLOBAL_OFFSET_SECONDS, DEFAULT_HIDE_MOUSE_CURSOR,
+    DEFAULT_HIGH_DPI, DEFAULT_LIGHTS_SIMPLIFY_BASS, DEFAULT_LOG_TO_FILE, DEFAULT_MINE_HIT_SOUND,
+    DEFAULT_ONLY_DEDICATED_MENU_BUTTONS, DEFAULT_SELECT_MUSIC_CHART_INFO_EFFECTIVE_BPM,
+    DEFAULT_SELECT_MUSIC_CHART_INFO_MATRIX_RATING, DEFAULT_SELECT_MUSIC_CHART_INFO_PEAK_NPS,
+    DEFAULT_SELECT_MUSIC_PREVIEW_LOOP, DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_EX,
+    DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_HARD_EX, DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_ITG,
+    DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_TOURNAMENTS, DEFAULT_SEPARATE_UNLOCKS_BY_PLAYER,
+    DEFAULT_SHADE_SCATTERPLOT_JUDGMENTS, DEFAULT_SHOW_CONSOLE,
+    DEFAULT_SHOW_COURSE_INDIVIDUAL_SCORES, DEFAULT_SHOW_MOST_PLAYED_COURSES,
+    DEFAULT_SHOW_MUSIC_WHEEL_GRADES, DEFAULT_SHOW_MUSIC_WHEEL_LAMPS, DEFAULT_SHOW_RANDOM_COURSES,
+    DEFAULT_SHOW_SELECT_MUSIC_BANNERS, DEFAULT_SHOW_SELECT_MUSIC_BREAKDOWN,
+    DEFAULT_SHOW_SELECT_MUSIC_CDTITLES, DEFAULT_SHOW_SELECT_MUSIC_FOLDER_STATS,
+    DEFAULT_SHOW_SELECT_MUSIC_PREVIEW_MARKER, DEFAULT_SHOW_SELECT_MUSIC_PREVIEWS,
+    DEFAULT_SHOW_SELECT_MUSIC_SCOREBOX, DEFAULT_SHOW_SELECT_MUSIC_STAGE_DISPLAY,
+    DEFAULT_SHOW_SELECT_MUSIC_VIDEO_BANNERS, DEFAULT_SHOW_STATS_MODE, DEFAULT_SHOW_VERSION_OVERLAY,
+    DEFAULT_SMOOTH_HISTOGRAM, DEFAULT_SMX_INPUT, DEFAULT_SMX_MANAGES_PAD_CONFIG,
+    DEFAULT_SMX_PANEL_LIGHTS, DEFAULT_SMX_UNDERGLOW_GRB, DEFAULT_SMX_UNDERGLOW_THEME,
+    DEFAULT_SOFTWARE_RENDERER_THREADS, DEFAULT_SONG_PARSING_THREADS,
+    DEFAULT_SUBMIT_ARROWCLOUD_FAILS, DEFAULT_THREE_KEY_NAVIGATION, DEFAULT_TRANSLATED_TITLES,
+    DEFAULT_UPDATER_INSTALL_ENABLED, DEFAULT_USE_FSRS,
+};
 use crate::ini::SimpleIni;
 use crate::machine::{
+    DEFAULT_FRAME_STATS_OVERLAY_ANCHOR, DEFAULT_FRAME_STATS_OVERLAY_STYLE,
     canonical_frame_stats_overlay_anchor, canonical_frame_stats_overlay_style,
     clamp_smx_light_brightness_percent,
 };
@@ -111,6 +141,56 @@ pub struct SystemOptions {
     pub log_level: LogLevel,
     pub log_to_file: bool,
     pub show_console: bool,
+}
+
+impl Default for SystemOptions {
+    fn default() -> Self {
+        Self {
+            game_flag: GameFlag::Dance,
+            auto_download_unlocks: DEFAULT_AUTO_DOWNLOAD_UNLOCKS,
+            auto_populate_gs_scores: DEFAULT_AUTO_POPULATE_GS_SCORES,
+            updater_install_enabled: DEFAULT_UPDATER_INSTALL_ENABLED,
+            enable_groovestats: DEFAULT_ENABLE_GROOVESTATS,
+            enable_arrowcloud: DEFAULT_ENABLE_ARROWCLOUD,
+            enable_boogiestats: DEFAULT_ENABLE_BOOGIESTATS,
+            submit_arrowcloud_fails: DEFAULT_SUBMIT_ARROWCLOUD_FAILS,
+            arrowcloud_qr_login_when: ArrowCloudQrLoginWhen::Sometimes,
+            groovestats_qr_login_when: GrooveStatsQrLoginWhen::Sometimes,
+            separate_unlocks_by_player: DEFAULT_SEPARATE_UNLOCKS_BY_PLAYER,
+            mine_hit_sound: DEFAULT_MINE_HIT_SOUND,
+            show_stats_mode: DEFAULT_SHOW_STATS_MODE,
+            frame_stats_overlay_anchor: DEFAULT_FRAME_STATS_OVERLAY_ANCHOR,
+            frame_stats_overlay_style: DEFAULT_FRAME_STATS_OVERLAY_STYLE,
+            translated_titles: DEFAULT_TRANSLATED_TITLES,
+            bg_brightness: DEFAULT_BG_BRIGHTNESS,
+            center_1player_notefield: DEFAULT_CENTER_1PLAYER_NOTEFIELD,
+            center_image_translate_x: DEFAULT_CENTER_IMAGE_TRANSLATE_X,
+            center_image_translate_y: DEFAULT_CENTER_IMAGE_TRANSLATE_Y,
+            center_image_add_width: DEFAULT_CENTER_IMAGE_ADD_WIDTH,
+            center_image_add_height: DEFAULT_CENTER_IMAGE_ADD_HEIGHT,
+            autosubmit_course_scores_individually: DEFAULT_AUTOSUBMIT_COURSE_SCORES_INDIVIDUALLY,
+            show_course_individual_scores: DEFAULT_SHOW_COURSE_INDIVIDUAL_SCORES,
+            show_most_played_courses: DEFAULT_SHOW_MOST_PLAYED_COURSES,
+            show_random_courses: DEFAULT_SHOW_RANDOM_COURSES,
+            default_fail_type: DefaultFailType::ImmediateContinue,
+            banner_cache: DEFAULT_BANNER_CACHE,
+            cdtitle_cache: DEFAULT_CDTITLE_CACHE,
+            high_dpi: DEFAULT_HIGH_DPI,
+            hide_mouse_cursor: DEFAULT_HIDE_MOUSE_CURSOR,
+            allow_shutdown_host: DEFAULT_ALLOW_SHUTDOWN_HOST,
+            smx_input: DEFAULT_SMX_INPUT,
+            smx_manages_pad_config: DEFAULT_SMX_MANAGES_PAD_CONFIG,
+            smx_panel_lights: DEFAULT_SMX_PANEL_LIGHTS,
+            smx_underglow_theme: DEFAULT_SMX_UNDERGLOW_THEME,
+            smx_underglow_grb: DEFAULT_SMX_UNDERGLOW_GRB,
+            gfx_debug: DEFAULT_GFX_DEBUG,
+            global_offset_seconds: DEFAULT_GLOBAL_OFFSET_SECONDS,
+            language_flag: LanguageFlag::Auto,
+            log_level: LogLevel::Warn,
+            log_to_file: DEFAULT_LOG_TO_FILE,
+            show_console: DEFAULT_SHOW_CONSOLE,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -318,6 +398,12 @@ where
 {
     conf.get("Options", "GameplayBgColor")
         .and_then(|value| parse_color(&value))
+        .unwrap_or(default)
+}
+
+pub fn load_bool_option(conf: &SimpleIni, section: &str, key: &str, default: bool) -> bool {
+    conf.get(section, key)
+        .and_then(|value| parse_bool_str(&value))
         .unwrap_or(default)
 }
 
@@ -786,6 +872,44 @@ pub struct SelectMusicOptions {
     pub auto_screenshot_eval: u8,
 }
 
+impl Default for SelectMusicOptions {
+    fn default() -> Self {
+        Self {
+            breakdown_style: BreakdownStyle::Sl,
+            show_banners: DEFAULT_SHOW_SELECT_MUSIC_BANNERS,
+            show_version_overlay: DEFAULT_SHOW_VERSION_OVERLAY,
+            version_overlay_side: VersionOverlaySide::Right,
+            show_video_banners: DEFAULT_SHOW_SELECT_MUSIC_VIDEO_BANNERS,
+            show_breakdown: DEFAULT_SHOW_SELECT_MUSIC_BREAKDOWN,
+            show_stage_display: DEFAULT_SHOW_SELECT_MUSIC_STAGE_DISPLAY,
+            show_cdtitles: DEFAULT_SHOW_SELECT_MUSIC_CDTITLES,
+            show_wheel_grades: DEFAULT_SHOW_MUSIC_WHEEL_GRADES,
+            show_wheel_lamps: DEFAULT_SHOW_MUSIC_WHEEL_LAMPS,
+            itl_rank_mode: SelectMusicItlRankMode::None,
+            itl_wheel_mode: SelectMusicItlWheelMode::Score,
+            wheel_style: SelectMusicWheelStyle::Itg,
+            song_select_bg_mode: SelectMusicSongSelectBgMode::Off,
+            new_pack_mode: NewPackMode::Disabled,
+            show_folder_stats: DEFAULT_SHOW_SELECT_MUSIC_FOLDER_STATS,
+            show_previews: DEFAULT_SHOW_SELECT_MUSIC_PREVIEWS,
+            show_preview_marker: DEFAULT_SHOW_SELECT_MUSIC_PREVIEW_MARKER,
+            preview_loop: DEFAULT_SELECT_MUSIC_PREVIEW_LOOP,
+            pattern_info_mode: SelectMusicPatternInfoMode::Tech,
+            step_artist_box_mode: SelectMusicStepArtistBoxMode::Default,
+            show_scorebox: DEFAULT_SHOW_SELECT_MUSIC_SCOREBOX,
+            scorebox_placement: SelectMusicScoreboxPlacement::Auto,
+            scorebox_cycle_itg: DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_ITG,
+            scorebox_cycle_ex: DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_EX,
+            scorebox_cycle_hard_ex: DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_HARD_EX,
+            scorebox_cycle_tournaments: DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_TOURNAMENTS,
+            chart_info_peak_nps: DEFAULT_SELECT_MUSIC_CHART_INFO_PEAK_NPS,
+            chart_info_effective_bpm: DEFAULT_SELECT_MUSIC_CHART_INFO_EFFECTIVE_BPM,
+            chart_info_matrix_rating: DEFAULT_SELECT_MUSIC_CHART_INFO_MATRIX_RATING,
+            auto_screenshot_eval: DEFAULT_AUTO_SCREENSHOT_EVAL,
+        }
+    }
+}
+
 pub fn load_select_music_options(
     conf: &SimpleIni,
     default: SelectMusicOptions,
@@ -1073,6 +1197,26 @@ pub struct RuntimeOptions {
     pub only_dedicated_menu_buttons: bool,
     pub theme_flag: ThemeFlag,
     pub software_renderer_threads: u8,
+}
+
+impl Default for RuntimeOptions {
+    fn default() -> Self {
+        Self {
+            fastload: DEFAULT_FASTLOAD,
+            cachesongs: DEFAULT_CACHE_SONGS,
+            song_parsing_threads: DEFAULT_SONG_PARSING_THREADS,
+            smooth_histogram: DEFAULT_SMOOTH_HISTOGRAM,
+            shade_scatterplot_judgments: DEFAULT_SHADE_SCATTERPLOT_JUDGMENTS,
+            arcade_options_navigation: DEFAULT_ARCADE_OPTIONS_NAVIGATION,
+            delayed_back: DEFAULT_DELAYED_BACK,
+            three_key_navigation: DEFAULT_THREE_KEY_NAVIGATION,
+            use_fsrs: DEFAULT_USE_FSRS,
+            lights_simplify_bass: DEFAULT_LIGHTS_SIMPLIFY_BASS,
+            only_dedicated_menu_buttons: DEFAULT_ONLY_DEDICATED_MENU_BUTTONS,
+            theme_flag: ThemeFlag::SimplyLove,
+            software_renderer_threads: DEFAULT_SOFTWARE_RENDERER_THREADS,
+        }
+    }
 }
 
 pub fn load_runtime_options(conf: &SimpleIni, default: RuntimeOptions) -> RuntimeOptions {
@@ -2086,6 +2230,15 @@ mod tests {
         );
 
         assert_eq!(loaded, 'b');
+    }
+
+    #[test]
+    fn loads_bool_option_from_section_key() {
+        let conf = ini("[Options]\nLogToFile=false\nShowConsole=bad\n");
+
+        assert!(!load_bool_option(&conf, "Options", "LogToFile", true));
+        assert!(load_bool_option(&conf, "Options", "ShowConsole", true));
+        assert!(!load_bool_option(&conf, "Options", "Missing", false));
     }
 
     #[test]

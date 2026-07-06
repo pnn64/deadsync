@@ -1,46 +1,88 @@
 use super::*;
-use deadsync_config::audio::{
-    AudioOptions, AudioRuntimeOptions, load_audio_options, load_audio_runtime_options,
-};
-use deadsync_config::null_or_die::{NullOrDieOptions, load_null_or_die_options};
+use deadsync_config::audio::{AudioOptions, AudioRuntimeOptions};
+use deadsync_config::load::{ConfigLoadDefaults, ConfigLoadParsers, load_config_sections};
+use deadsync_config::null_or_die::NullOrDieOptions;
 use deadsync_config::options::{
     DisplayLoadOptions, RuntimeIoLoadOptions, RuntimeOptions, SelectMusicOptions,
-    SystemInputHardwareLoadOptions, SystemOptions, load_display_options, load_gameplay_bg_color,
-    load_runtime_io_options, load_runtime_options, load_select_music_options,
-    load_system_input_hardware_options, load_system_options,
+    SystemInputHardwareLoadOptions, SystemOptions,
 };
+use deadsync_config::theme::{MachineFlowOptions, ThemePresentationOptions, ThemeShortcutOptions};
 use deadsync_lights::{
     SerialPortName, parse_driver_or_default, parse_gameplay_pad_lights_or_default,
 };
 
 pub(super) fn load(conf: &SimpleIni, default: Config, cfg: &mut Config) {
-    load_system_opts(conf, default, cfg);
-    load_null_or_die_opts(conf, default, cfg);
-    load_audio_opts(conf, default, cfg);
-    load_select_music_opts(conf, default, cfg);
-    load_runtime_opts(conf, default, cfg);
+    let loaded = load_config_sections(
+        conf,
+        ConfigLoadDefaults {
+            display: DisplayLoadOptions {
+                vsync: default.vsync,
+                max_fps: default.max_fps,
+                present_mode_policy: default.present_mode_policy,
+                windowed: default.windowed,
+                fullscreen_type: default.fullscreen_type,
+                monitor: default.display_monitor,
+                width: default.display_width,
+                height: default.display_height,
+                video_renderer: default.video_renderer,
+            },
+            input_hardware: SystemInputHardwareLoadOptions {
+                gamepad_backend: default.windows_gamepad_backend,
+                smx_default_pad_config: default.smx_default_pad_config,
+                smx_default_light_brightness: default.smx_default_light_brightness,
+            },
+            audio_runtime: AudioRuntimeOptions {
+                linux_audio_backend: default.linux_audio_backend,
+                output_mode: default.audio_output_mode,
+            },
+            runtime_io: RuntimeIoLoadOptions {
+                input_debounce_seconds: default.input_debounce_seconds,
+                lights_driver: default.lights_driver,
+                gameplay_pad_lights: default.lights_gameplay_pad_lights,
+                lights_com_port: default.lights_com_port,
+            },
+            gameplay_bg_color: default.gameplay_bg_color,
+            shortcuts: ThemeShortcutOptions {
+                practice: default.music_select_shortcut_practice,
+                song_search: default.music_select_shortcut_song_search,
+                load_songs: default.music_select_shortcut_load_songs,
+                test_input: default.music_select_shortcut_test_input,
+            },
+        },
+        ConfigLoadParsers {
+            parse_fullscreen_type: |value| FullscreenType::from_str(value).ok(),
+            parse_present_mode_policy: |value| PresentModePolicy::from_str(value).ok(),
+            legacy_balanced_policy: PresentModePolicy::Mailbox,
+            legacy_unhinged_policy: PresentModePolicy::Immediate,
+            parse_video_renderer: |value| BackendType::from_str(value).ok(),
+            parse_gamepad_backend: |value| WindowsPadBackend::from_str(value).ok(),
+            parse_smx_pad_config: |value| crate::config::SmxPadPreset::from_str(value).ok(),
+            parse_linux_backend: |value| LinuxAudioBackend::from_str(value).ok(),
+            parse_audio_output_mode: |value| AudioOutputMode::from_str(value).ok(),
+            parse_input_debounce_seconds: deadsync_input::parse_input_debounce_seconds,
+            parse_lights_driver: parse_driver_or_default,
+            parse_gameplay_pad_lights: parse_gameplay_pad_lights_or_default,
+            parse_lights_com_port: SerialPortName::parse,
+            parse_color: Color::from_hex,
+            parse_key: parse_keycode_to_key,
+        },
+    );
+    apply_display_opts(loaded.display, cfg);
+    apply_system_opts(loaded.system, cfg);
+    apply_system_hardware_opts(loaded.input_hardware, cfg);
+    cfg.gameplay_bg_color = loaded.gameplay_bg_color;
+    apply_null_or_die_opts(loaded.null_or_die, cfg);
+    apply_audio_opts(loaded.audio_runtime, loaded.audio, cfg);
+    apply_select_music_opts(loaded.select_music, cfg);
+    apply_runtime_opts(loaded.runtime, loaded.runtime_io, cfg);
+    apply_theme_presentation(loaded.theme_presentation, cfg);
+    apply_machine_flow(loaded.machine_flow, loaded.shortcuts, cfg);
 }
 
-fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
-    let display = load_display_options(
-        conf,
-        DisplayLoadOptions {
-            vsync: default.vsync,
-            max_fps: default.max_fps,
-            present_mode_policy: default.present_mode_policy,
-            windowed: default.windowed,
-            fullscreen_type: default.fullscreen_type,
-            monitor: default.display_monitor,
-            width: default.display_width,
-            height: default.display_height,
-            video_renderer: default.video_renderer,
-        },
-        |value| FullscreenType::from_str(value).ok(),
-        |value| PresentModePolicy::from_str(value).ok(),
-        PresentModePolicy::Mailbox,
-        PresentModePolicy::Immediate,
-        |value| BackendType::from_str(value).ok(),
-    );
+fn apply_display_opts(
+    display: DisplayLoadOptions<FullscreenType, PresentModePolicy, BackendType>,
+    cfg: &mut Config,
+) {
     cfg.vsync = display.vsync;
     cfg.max_fps = display.max_fps;
     cfg.present_mode_policy = display.present_mode_policy;
@@ -50,55 +92,9 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
     cfg.display_width = display.width;
     cfg.display_height = display.height;
     cfg.video_renderer = display.video_renderer;
+}
 
-    let loaded = load_system_options(
-        conf,
-        SystemOptions {
-            game_flag: default.game_flag,
-            auto_download_unlocks: default.auto_download_unlocks,
-            auto_populate_gs_scores: default.auto_populate_gs_scores,
-            updater_install_enabled: default.updater_install_enabled,
-            enable_groovestats: default.enable_groovestats,
-            enable_arrowcloud: default.enable_arrowcloud,
-            enable_boogiestats: default.enable_boogiestats,
-            submit_arrowcloud_fails: default.submit_arrowcloud_fails,
-            arrowcloud_qr_login_when: default.arrowcloud_qr_login_when,
-            groovestats_qr_login_when: default.groovestats_qr_login_when,
-            separate_unlocks_by_player: default.separate_unlocks_by_player,
-            mine_hit_sound: default.mine_hit_sound,
-            show_stats_mode: default.show_stats_mode,
-            frame_stats_overlay_anchor: default.frame_stats_overlay_anchor,
-            frame_stats_overlay_style: default.frame_stats_overlay_style,
-            translated_titles: default.translated_titles,
-            bg_brightness: default.bg_brightness,
-            center_1player_notefield: default.center_1player_notefield,
-            center_image_translate_x: default.center_image_translate_x,
-            center_image_translate_y: default.center_image_translate_y,
-            center_image_add_width: default.center_image_add_width,
-            center_image_add_height: default.center_image_add_height,
-            autosubmit_course_scores_individually: default.autosubmit_course_scores_individually,
-            show_course_individual_scores: default.show_course_individual_scores,
-            show_most_played_courses: default.show_most_played_courses,
-            show_random_courses: default.show_random_courses,
-            default_fail_type: default.default_fail_type,
-            banner_cache: default.banner_cache,
-            cdtitle_cache: default.cdtitle_cache,
-            high_dpi: default.high_dpi,
-            hide_mouse_cursor: default.hide_mouse_cursor,
-            allow_shutdown_host: default.allow_shutdown_host,
-            smx_input: default.smx_input,
-            smx_manages_pad_config: default.smx_manages_pad_config,
-            smx_panel_lights: default.smx_panel_lights,
-            smx_underglow_theme: default.smx_underglow_theme,
-            smx_underglow_grb: default.smx_underglow_grb,
-            gfx_debug: default.gfx_debug,
-            global_offset_seconds: default.global_offset_seconds,
-            language_flag: default.language_flag,
-            log_level: default.log_level,
-            log_to_file: default.log_to_file,
-            show_console: default.show_console,
-        },
-    );
+fn apply_system_opts(loaded: SystemOptions, cfg: &mut Config) {
     cfg.game_flag = loaded.game_flag;
     cfg.auto_download_unlocks = loaded.auto_download_unlocks;
     cfg.auto_populate_gs_scores = loaded.auto_populate_gs_scores;
@@ -142,40 +138,18 @@ fn load_system_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
     cfg.log_level = loaded.log_level;
     cfg.log_to_file = loaded.log_to_file;
     cfg.show_console = loaded.show_console;
+}
 
-    cfg.gameplay_bg_color =
-        load_gameplay_bg_color(conf, default.gameplay_bg_color, Color::from_hex);
-    let hardware = load_system_input_hardware_options(
-        conf,
-        SystemInputHardwareLoadOptions {
-            gamepad_backend: default.windows_gamepad_backend,
-            smx_default_pad_config: default.smx_default_pad_config,
-            smx_default_light_brightness: default.smx_default_light_brightness,
-        },
-        |value| WindowsPadBackend::from_str(value).ok(),
-        |value| crate::config::SmxPadPreset::from_str(value).ok(),
-    );
+fn apply_system_hardware_opts(
+    hardware: SystemInputHardwareLoadOptions<WindowsPadBackend, crate::config::SmxPadPreset>,
+    cfg: &mut Config,
+) {
     cfg.windows_gamepad_backend = hardware.gamepad_backend;
     cfg.smx_default_pad_config = hardware.smx_default_pad_config;
     cfg.smx_default_light_brightness = hardware.smx_default_light_brightness;
 }
 
-fn load_null_or_die_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
-    let loaded = load_null_or_die_options(
-        conf,
-        NullOrDieOptions {
-            sync_graph: default.null_or_die_sync_graph,
-            confidence_percent: default.null_or_die_confidence_percent,
-            pack_sync_threads: default.null_or_die_pack_sync_threads,
-            fingerprint_ms: default.null_or_die_fingerprint_ms,
-            window_ms: default.null_or_die_window_ms,
-            step_ms: default.null_or_die_step_ms,
-            magic_offset_ms: default.null_or_die_magic_offset_ms,
-            kernel_target: default.null_or_die_kernel_target,
-            kernel_type: default.null_or_die_kernel_type,
-            full_spectrogram: default.null_or_die_full_spectrogram,
-        },
-    );
+fn apply_null_or_die_opts(loaded: NullOrDieOptions, cfg: &mut Config) {
     cfg.null_or_die_sync_graph = loaded.sync_graph;
     cfg.null_or_die_confidence_percent = loaded.confidence_percent;
     cfg.null_or_die_pack_sync_threads = loaded.pack_sync_threads;
@@ -188,37 +162,13 @@ fn load_null_or_die_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
     cfg.null_or_die_full_spectrogram = loaded.full_spectrogram;
 }
 
-fn load_audio_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
-    let runtime = load_audio_runtime_options(
-        conf,
-        AudioRuntimeOptions {
-            linux_audio_backend: default.linux_audio_backend,
-            output_mode: default.audio_output_mode,
-        },
-        |value| LinuxAudioBackend::from_str(value).ok(),
-        |value| AudioOutputMode::from_str(value).ok(),
-    );
+fn apply_audio_opts(
+    runtime: AudioRuntimeOptions<LinuxAudioBackend, AudioOutputMode>,
+    loaded: AudioOptions,
+    cfg: &mut Config,
+) {
     cfg.linux_audio_backend = runtime.linux_audio_backend;
     cfg.audio_output_mode = runtime.output_mode;
-    let loaded = load_audio_options(
-        conf,
-        AudioOptions {
-            visual_delay_seconds: default.visual_delay_seconds,
-            master_volume: default.master_volume,
-            menu_music: default.menu_music,
-            custom_sounds_enabled: default.custom_sounds_enabled,
-            music_volume: default.music_volume,
-            music_wheel_switch_speed: default.music_wheel_switch_speed,
-            sfx_volume: default.sfx_volume,
-            assist_tick_volume: default.assist_tick_volume,
-            output_device_index: default.audio_output_device_index,
-            sample_rate_hz: default.audio_sample_rate_hz,
-            rate_mod_preserves_pitch: default.rate_mod_preserves_pitch,
-            enable_replaygain: default.enable_replaygain,
-            write_current_screen: default.write_current_screen,
-            tab_acceleration: default.tab_acceleration,
-        },
-    );
     cfg.visual_delay_seconds = loaded.visual_delay_seconds;
     cfg.master_volume = loaded.master_volume;
     cfg.menu_music = loaded.menu_music;
@@ -235,43 +185,7 @@ fn load_audio_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
     cfg.tab_acceleration = loaded.tab_acceleration;
 }
 
-fn load_select_music_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
-    let loaded = load_select_music_options(
-        conf,
-        SelectMusicOptions {
-            breakdown_style: default.select_music_breakdown_style,
-            show_banners: default.show_select_music_banners,
-            show_version_overlay: default.show_version_overlay,
-            version_overlay_side: default.version_overlay_side,
-            show_video_banners: default.show_select_music_video_banners,
-            show_breakdown: default.show_select_music_breakdown,
-            show_stage_display: default.show_select_music_stage_display,
-            show_cdtitles: default.show_select_music_cdtitles,
-            show_wheel_grades: default.show_music_wheel_grades,
-            show_wheel_lamps: default.show_music_wheel_lamps,
-            itl_rank_mode: default.select_music_itl_rank_mode,
-            itl_wheel_mode: default.select_music_itl_wheel_mode,
-            wheel_style: default.select_music_wheel_style,
-            song_select_bg_mode: default.select_music_song_select_bg_mode,
-            new_pack_mode: default.select_music_new_pack_mode,
-            show_folder_stats: default.show_select_music_folder_stats,
-            show_previews: default.show_select_music_previews,
-            show_preview_marker: default.show_select_music_preview_marker,
-            preview_loop: default.select_music_preview_loop,
-            pattern_info_mode: default.select_music_pattern_info_mode,
-            step_artist_box_mode: default.select_music_step_artist_box_mode,
-            show_scorebox: default.show_select_music_scorebox,
-            scorebox_placement: default.select_music_scorebox_placement,
-            scorebox_cycle_itg: default.select_music_scorebox_cycle_itg,
-            scorebox_cycle_ex: default.select_music_scorebox_cycle_ex,
-            scorebox_cycle_hard_ex: default.select_music_scorebox_cycle_hard_ex,
-            scorebox_cycle_tournaments: default.select_music_scorebox_cycle_tournaments,
-            chart_info_peak_nps: default.select_music_chart_info_peak_nps,
-            chart_info_effective_bpm: default.select_music_chart_info_effective_bpm,
-            chart_info_matrix_rating: default.select_music_chart_info_matrix_rating,
-            auto_screenshot_eval: default.auto_screenshot_eval,
-        },
-    );
+fn apply_select_music_opts(loaded: SelectMusicOptions, cfg: &mut Config) {
     cfg.select_music_breakdown_style = loaded.breakdown_style;
     cfg.show_select_music_banners = loaded.show_banners;
     cfg.show_version_overlay = loaded.show_version_overlay;
@@ -305,25 +219,15 @@ fn load_select_music_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
     cfg.auto_screenshot_eval = loaded.auto_screenshot_eval;
 }
 
-fn load_runtime_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
-    let loaded = load_runtime_options(
-        conf,
-        RuntimeOptions {
-            fastload: default.fastload,
-            cachesongs: default.cachesongs,
-            song_parsing_threads: default.song_parsing_threads,
-            smooth_histogram: default.smooth_histogram,
-            shade_scatterplot_judgments: default.shade_scatterplot_judgments,
-            arcade_options_navigation: default.arcade_options_navigation,
-            delayed_back: default.delayed_back,
-            three_key_navigation: default.three_key_navigation,
-            use_fsrs: default.use_fsrs,
-            lights_simplify_bass: default.lights_simplify_bass,
-            only_dedicated_menu_buttons: default.only_dedicated_menu_buttons,
-            theme_flag: default.theme_flag,
-            software_renderer_threads: default.software_renderer_threads,
-        },
-    );
+fn apply_runtime_opts(
+    loaded: RuntimeOptions,
+    io: RuntimeIoLoadOptions<
+        deadsync_lights::DriverKind,
+        deadsync_lights::GameplayPadLightMode,
+        SerialPortName,
+    >,
+    cfg: &mut Config,
+) {
     cfg.fastload = loaded.fastload;
     cfg.cachesongs = loaded.cachesongs;
     cfg.song_parsing_threads = loaded.song_parsing_threads;
@@ -338,21 +242,50 @@ fn load_runtime_opts(conf: &SimpleIni, default: Config, cfg: &mut Config) {
     cfg.theme_flag = loaded.theme_flag;
     cfg.software_renderer_threads = loaded.software_renderer_threads;
 
-    let io = load_runtime_io_options(
-        conf,
-        RuntimeIoLoadOptions {
-            input_debounce_seconds: default.input_debounce_seconds,
-            lights_driver: default.lights_driver,
-            gameplay_pad_lights: default.lights_gameplay_pad_lights,
-            lights_com_port: default.lights_com_port,
-        },
-        deadsync_input::parse_input_debounce_seconds,
-        parse_driver_or_default,
-        parse_gameplay_pad_lights_or_default,
-        SerialPortName::parse,
-    );
     cfg.input_debounce_seconds = io.input_debounce_seconds;
     cfg.lights_driver = io.lights_driver;
     cfg.lights_gameplay_pad_lights = io.gameplay_pad_lights;
     cfg.lights_com_port = io.lights_com_port;
+}
+
+fn apply_theme_presentation(loaded: ThemePresentationOptions, cfg: &mut Config) {
+    cfg.simply_love_color = loaded.simply_love_color;
+    cfg.show_select_music_gameplay_timer = loaded.show_select_music_gameplay_timer;
+    cfg.keyboard_features = loaded.keyboard_features;
+    cfg.visual_style = loaded.visual_style;
+    cfg.srpg_variant = loaded.srpg_variant;
+    cfg.show_video_backgrounds = loaded.show_video_backgrounds;
+    cfg.random_background_mode = loaded.random_background_mode;
+    cfg.zmod_rating_box_text = loaded.zmod_rating_box_text;
+    cfg.show_bpm_decimal = loaded.show_bpm_decimal;
+    cfg.gameplay_bpm_position = loaded.gameplay_bpm_position;
+}
+
+fn apply_machine_flow(
+    loaded: MachineFlowOptions,
+    shortcuts: ThemeShortcutOptions<KeyCode>,
+    cfg: &mut Config,
+) {
+    cfg.machine_show_eval_summary = loaded.machine_show_eval_summary;
+    cfg.machine_nice_sound = loaded.machine_nice_sound;
+    cfg.machine_show_name_entry = loaded.machine_show_name_entry;
+    cfg.machine_show_gameover = loaded.machine_show_gameover;
+    cfg.machine_show_select_profile = loaded.machine_show_select_profile;
+    cfg.allow_switch_profile_in_menu = loaded.allow_switch_profile_in_menu;
+    cfg.machine_show_select_color = loaded.machine_show_select_color;
+    cfg.machine_show_select_style = loaded.machine_show_select_style;
+    cfg.machine_show_select_play_mode = loaded.machine_show_select_play_mode;
+    cfg.machine_enable_replays = loaded.machine_enable_replays;
+    cfg.machine_allow_per_player_global_offsets = loaded.machine_allow_per_player_global_offsets;
+    cfg.machine_pack_ini_offsets = loaded.machine_pack_ini_offsets;
+    cfg.machine_default_sync_offset = loaded.machine_default_sync_offset;
+    cfg.machine_preferred_style = loaded.machine_preferred_style;
+    cfg.machine_preferred_play_mode = loaded.machine_preferred_play_mode;
+    cfg.machine_font = loaded.machine_font;
+    cfg.machine_bar_color = loaded.machine_bar_color;
+    cfg.machine_evaluation_style = loaded.machine_evaluation_style;
+    cfg.music_select_shortcut_practice = shortcuts.practice;
+    cfg.music_select_shortcut_song_search = shortcuts.song_search;
+    cfg.music_select_shortcut_load_songs = shortcuts.load_songs;
+    cfg.music_select_shortcut_test_input = shortcuts.test_input;
 }

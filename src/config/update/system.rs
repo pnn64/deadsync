@@ -29,18 +29,15 @@ pub fn update_display_mode(mode: DisplayMode) {
 }
 
 pub fn update_display_resolution(width: u32, height: u32) {
-    let mut dirty = false;
-    {
+    let dirty = {
         let mut cfg = lock_config();
-        if cfg.display_width != width {
-            cfg.display_width = width;
-            dirty = true;
-        }
-        if cfg.display_height != height {
-            cfg.display_height = height;
-            dirty = true;
-        }
-    }
+        let Config {
+            display_width,
+            display_height,
+            ..
+        } = &mut *cfg;
+        set_pair_if_changed(display_width, width, display_height, height)
+    };
     if dirty {
         save_without_keymaps();
     }
@@ -161,26 +158,26 @@ pub fn update_center_1player_notefield(enabled: bool) {
 /// render mirror. The overscan screen also calls `space::set_overscan` directly
 /// for live preview; this persists the committed values.
 pub fn update_overscan(translate_x: i32, translate_y: i32, add_width: i32, add_height: i32) {
-    let mut dirty = false;
-    {
+    let dirty = {
         let mut cfg = lock_config();
-        if cfg.center_image_translate_x != translate_x {
-            cfg.center_image_translate_x = translate_x;
-            dirty = true;
-        }
-        if cfg.center_image_translate_y != translate_y {
-            cfg.center_image_translate_y = translate_y;
-            dirty = true;
-        }
-        if cfg.center_image_add_width != add_width {
-            cfg.center_image_add_width = add_width;
-            dirty = true;
-        }
-        if cfg.center_image_add_height != add_height {
-            cfg.center_image_add_height = add_height;
-            dirty = true;
-        }
-    }
+        let Config {
+            center_image_translate_x,
+            center_image_translate_y,
+            center_image_add_width,
+            center_image_add_height,
+            ..
+        } = &mut *cfg;
+        set_quad_if_changed(
+            center_image_translate_x,
+            translate_x,
+            center_image_translate_y,
+            translate_y,
+            center_image_add_width,
+            add_width,
+            center_image_add_height,
+            add_height,
+        )
+    };
     deadlib_present::space::set_overscan(translate_x, translate_y, add_width, add_height);
     if dirty {
         save_without_keymaps();

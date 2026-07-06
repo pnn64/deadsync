@@ -1,4 +1,15 @@
 use crate::bools::{parse_bool_str, parse_loose_bool_str};
+use crate::defaults::{
+    DEFAULT_ALLOW_SWITCH_PROFILE_IN_MENU, DEFAULT_KEYBOARD_FEATURES,
+    DEFAULT_MACHINE_ALLOW_PER_PLAYER_GLOBAL_OFFSETS, DEFAULT_MACHINE_ENABLE_REPLAYS,
+    DEFAULT_MACHINE_NICE_SOUND, DEFAULT_MACHINE_PACK_INI_OFFSETS,
+    DEFAULT_MACHINE_SHOW_EVAL_SUMMARY, DEFAULT_MACHINE_SHOW_GAMEOVER,
+    DEFAULT_MACHINE_SHOW_NAME_ENTRY, DEFAULT_MACHINE_SHOW_SELECT_COLOR,
+    DEFAULT_MACHINE_SHOW_SELECT_PLAY_MODE, DEFAULT_MACHINE_SHOW_SELECT_PROFILE,
+    DEFAULT_MACHINE_SHOW_SELECT_STYLE, DEFAULT_SHOW_BPM_DECIMAL,
+    DEFAULT_SHOW_SELECT_MUSIC_GAMEPLAY_TIMER, DEFAULT_SHOW_VIDEO_BACKGROUNDS,
+    DEFAULT_SIMPLY_LOVE_COLOR, DEFAULT_ZMOD_RATING_BOX_TEXT,
+};
 use crate::ini::SimpleIni;
 use crate::writer::{push_bool, push_line};
 use std::str::FromStr;
@@ -1281,6 +1292,23 @@ pub struct ThemePresentationOptions {
     pub gameplay_bpm_position: GameplayBpmPosition,
 }
 
+impl Default for ThemePresentationOptions {
+    fn default() -> Self {
+        Self {
+            simply_love_color: DEFAULT_SIMPLY_LOVE_COLOR,
+            show_select_music_gameplay_timer: DEFAULT_SHOW_SELECT_MUSIC_GAMEPLAY_TIMER,
+            keyboard_features: DEFAULT_KEYBOARD_FEATURES,
+            visual_style: VisualStyle::Hearts,
+            srpg_variant: SrpgVariant::Srpg9,
+            show_video_backgrounds: DEFAULT_SHOW_VIDEO_BACKGROUNDS,
+            random_background_mode: RandomBackgroundMode::Off,
+            zmod_rating_box_text: DEFAULT_ZMOD_RATING_BOX_TEXT,
+            show_bpm_decimal: DEFAULT_SHOW_BPM_DECIMAL,
+            gameplay_bpm_position: GameplayBpmPosition::TopCenter,
+        }
+    }
+}
+
 pub fn load_theme_presentation_options(
     conf: &SimpleIni,
     default: ThemePresentationOptions,
@@ -1358,6 +1386,32 @@ pub struct MachineFlowOptions {
     pub machine_font: MachineFont,
     pub machine_bar_color: MachineBarColor,
     pub machine_evaluation_style: MachineEvaluationStyle,
+}
+
+impl Default for MachineFlowOptions {
+    fn default() -> Self {
+        Self {
+            machine_show_eval_summary: DEFAULT_MACHINE_SHOW_EVAL_SUMMARY,
+            machine_nice_sound: DEFAULT_MACHINE_NICE_SOUND,
+            machine_show_name_entry: DEFAULT_MACHINE_SHOW_NAME_ENTRY,
+            machine_show_gameover: DEFAULT_MACHINE_SHOW_GAMEOVER,
+            machine_show_select_profile: DEFAULT_MACHINE_SHOW_SELECT_PROFILE,
+            allow_switch_profile_in_menu: DEFAULT_ALLOW_SWITCH_PROFILE_IN_MENU,
+            machine_show_select_color: DEFAULT_MACHINE_SHOW_SELECT_COLOR,
+            machine_show_select_style: DEFAULT_MACHINE_SHOW_SELECT_STYLE,
+            machine_show_select_play_mode: DEFAULT_MACHINE_SHOW_SELECT_PLAY_MODE,
+            machine_enable_replays: DEFAULT_MACHINE_ENABLE_REPLAYS,
+            machine_allow_per_player_global_offsets:
+                DEFAULT_MACHINE_ALLOW_PER_PLAYER_GLOBAL_OFFSETS,
+            machine_pack_ini_offsets: DEFAULT_MACHINE_PACK_INI_OFFSETS,
+            machine_default_sync_offset: DefaultSyncOffset::Null,
+            machine_preferred_style: MachinePreferredPlayStyle::Single,
+            machine_preferred_play_mode: MachinePreferredPlayMode::Regular,
+            machine_font: MachineFont::Wendy,
+            machine_bar_color: MachineBarColor::Default,
+            machine_evaluation_style: MachineEvaluationStyle::Default,
+        }
+    }
 }
 
 pub fn load_machine_flow_options(

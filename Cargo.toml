@@ -34,6 +34,7 @@ members = [
     "crates/deadlib-platform",
     "crates/deadlib-present",
     "crates/deadsync-profile",
+    "crates/deadsync-profile-gameplay",
     "crates/deadlib-render",
     "crates/deadlib-render-backend-gl",
     "crates/deadlib-render-backend-software",
@@ -57,7 +58,7 @@ resolver = "3"
 # `version.workspace = true`, so `env!("CARGO_PKG_VERSION")` and
 # `deadsync_version::current()` always agree. Bump THIS line on release.
 [workspace.package]
-version = "0.4.1967"
+version = "0.4.1981"
 
 [[bin]]
 name = "compose_bench"
@@ -117,6 +118,7 @@ deadlib-assets = { path = "crates/deadlib-assets" }
 deadlib-platform = { path = "crates/deadlib-platform" }
 deadlib-present = { path = "crates/deadlib-present" }
 deadsync-profile = { path = "crates/deadsync-profile" }
+deadsync-profile-gameplay = { path = "crates/deadsync-profile-gameplay" }
 deadlib-render = { path = "crates/deadlib-render" }
 deadlib-renderer = { path = "crates/deadlib-renderer" }
 deadsync-rules = { path = "crates/deadsync-rules" }

@@ -1,9 +1,15 @@
 use crate::bools::parse_u8_bool_or_default;
+use crate::defaults::{
+    DEFAULT_NULL_OR_DIE_CONFIDENCE_PERCENT, DEFAULT_NULL_OR_DIE_FINGERPRINT_MS,
+    DEFAULT_NULL_OR_DIE_FULL_SPECTROGRAM, DEFAULT_NULL_OR_DIE_MAGIC_OFFSET_MS,
+    DEFAULT_NULL_OR_DIE_PACK_SYNC_THREADS, DEFAULT_NULL_OR_DIE_STEP_MS,
+    DEFAULT_NULL_OR_DIE_WINDOW_MS,
+};
 use crate::ini::SimpleIni;
 use crate::numbers::parse_auto_threads_u8;
 use crate::theme::SyncGraphMode;
 use crate::writer::{push_bool, push_line};
-use null_or_die::{BiasKernel, KernelTarget};
+use null_or_die::{BiasCfg, BiasKernel, KernelTarget};
 use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -18,6 +24,23 @@ pub struct NullOrDieOptions {
     pub kernel_target: KernelTarget,
     pub kernel_type: BiasKernel,
     pub full_spectrogram: bool,
+}
+
+impl Default for NullOrDieOptions {
+    fn default() -> Self {
+        Self {
+            sync_graph: SyncGraphMode::PostKernelFingerprint,
+            confidence_percent: DEFAULT_NULL_OR_DIE_CONFIDENCE_PERCENT,
+            pack_sync_threads: DEFAULT_NULL_OR_DIE_PACK_SYNC_THREADS,
+            fingerprint_ms: DEFAULT_NULL_OR_DIE_FINGERPRINT_MS,
+            window_ms: DEFAULT_NULL_OR_DIE_WINDOW_MS,
+            step_ms: DEFAULT_NULL_OR_DIE_STEP_MS,
+            magic_offset_ms: DEFAULT_NULL_OR_DIE_MAGIC_OFFSET_MS,
+            kernel_target: KernelTarget::Digest,
+            kernel_type: BiasKernel::Rising,
+            full_spectrogram: DEFAULT_NULL_OR_DIE_FULL_SPECTROGRAM,
+        }
+    }
 }
 
 pub fn load_null_or_die_options(conf: &SimpleIni, default: NullOrDieOptions) -> NullOrDieOptions {
@@ -234,6 +257,18 @@ pub fn push_null_or_die_option_lines(content: &mut String, options: NullOrDieOpt
     );
 }
 
+pub fn null_or_die_bias_cfg(options: NullOrDieOptions) -> BiasCfg {
+    BiasCfg {
+        fingerprint_ms: clamp_null_or_die_positive_ms(options.fingerprint_ms),
+        window_ms: clamp_null_or_die_positive_ms(options.window_ms),
+        step_ms: clamp_null_or_die_positive_ms(options.step_ms),
+        magic_offset_ms: clamp_null_or_die_magic_offset_ms(options.magic_offset_ms),
+        kernel_target: options.kernel_target,
+        kernel_type: options.kernel_type,
+        _full_spectrogram: options.full_spectrogram,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -399,5 +434,29 @@ NullOrDieKernelTarget=Accumulator\n\
 NullOrDieKernelType=Loudest\n\
 NullOrDieFullSpectrogram=1\n"
         );
+    }
+
+    #[test]
+    fn bias_cfg_clamps_runtime_values() {
+        let cfg = null_or_die_bias_cfg(NullOrDieOptions {
+            sync_graph: SyncGraphMode::Frequency,
+            confidence_percent: 80,
+            pack_sync_threads: 0,
+            fingerprint_ms: 0.0,
+            window_ms: 250.0,
+            step_ms: 10.05,
+            magic_offset_ms: -250.0,
+            kernel_target: KernelTarget::Accumulator,
+            kernel_type: BiasKernel::Loudest,
+            full_spectrogram: true,
+        });
+
+        assert_tenths_eq(cfg.fingerprint_ms, 1);
+        assert_tenths_eq(cfg.window_ms, 1000);
+        assert_tenths_eq(cfg.step_ms, 101);
+        assert_tenths_eq(cfg.magic_offset_ms, -1000);
+        assert_eq!(cfg.kernel_target, KernelTarget::Accumulator);
+        assert_eq!(cfg.kernel_type, BiasKernel::Loudest);
+        assert!(cfg._full_spectrogram);
     }
 }

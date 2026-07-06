@@ -1,4 +1,10 @@
 use crate::bools::{parse_bool_str, parse_u8_bool_or_default};
+use crate::defaults::{
+    DEFAULT_ASSIST_TICK_VOLUME, DEFAULT_CUSTOM_SOUNDS_ENABLED, DEFAULT_ENABLE_REPLAYGAIN,
+    DEFAULT_MASTER_VOLUME, DEFAULT_MENU_MUSIC, DEFAULT_MUSIC_VOLUME,
+    DEFAULT_MUSIC_WHEEL_SWITCH_SPEED, DEFAULT_RATE_MOD_PRESERVES_PITCH, DEFAULT_SFX_VOLUME,
+    DEFAULT_TAB_ACCELERATION, DEFAULT_VISUAL_DELAY_SECONDS, DEFAULT_WRITE_CURRENT_SCREEN,
+};
 use crate::ini::SimpleIni;
 use crate::writer::{push_bool, push_line};
 
@@ -21,6 +27,27 @@ pub struct AudioOptions {
     pub enable_replaygain: bool,
     pub write_current_screen: bool,
     pub tab_acceleration: bool,
+}
+
+impl Default for AudioOptions {
+    fn default() -> Self {
+        Self {
+            visual_delay_seconds: DEFAULT_VISUAL_DELAY_SECONDS,
+            master_volume: DEFAULT_MASTER_VOLUME,
+            menu_music: DEFAULT_MENU_MUSIC,
+            custom_sounds_enabled: DEFAULT_CUSTOM_SOUNDS_ENABLED,
+            music_volume: DEFAULT_MUSIC_VOLUME,
+            music_wheel_switch_speed: DEFAULT_MUSIC_WHEEL_SWITCH_SPEED,
+            sfx_volume: DEFAULT_SFX_VOLUME,
+            assist_tick_volume: DEFAULT_ASSIST_TICK_VOLUME,
+            output_device_index: None,
+            sample_rate_hz: None,
+            rate_mod_preserves_pitch: DEFAULT_RATE_MOD_PRESERVES_PITCH,
+            enable_replaygain: DEFAULT_ENABLE_REPLAYGAIN,
+            write_current_screen: DEFAULT_WRITE_CURRENT_SCREEN,
+            tab_acceleration: DEFAULT_TAB_ACCELERATION,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
