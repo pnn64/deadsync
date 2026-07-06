@@ -26,6 +26,265 @@ pub struct EffectAssets {
     pub combo_1000milestone_swoosh: &'static str,
 }
 
+pub struct FontAssetSpec {
+    pub name: &'static str,
+    pub ini_path: &'static str,
+    pub fallback_font_name: Option<&'static str>,
+}
+
+#[derive(Clone, Copy)]
+pub struct TextureAssetSpec {
+    pub key: &'static str,
+    pub path: &'static str,
+}
+
+pub const FONT_ASSETS: [FontAssetSpec; 20] = [
+    FontAssetSpec {
+        name: "wendy",
+        ini_path: "assets/fonts/wendy/_wendy small.ini",
+        fallback_font_name: None,
+    },
+    FontAssetSpec {
+        name: "miso",
+        ini_path: "assets/fonts/miso/_miso light.ini",
+        fallback_font_name: Some("game"),
+    },
+    FontAssetSpec {
+        name: "cjk",
+        ini_path: "assets/fonts/cjk/_jfonts 16px.ini",
+        fallback_font_name: Some("emoji"),
+    },
+    FontAssetSpec {
+        name: "emoji",
+        ini_path: "assets/fonts/emoji/_emoji 16px.ini",
+        fallback_font_name: None,
+    },
+    FontAssetSpec {
+        name: "game",
+        ini_path: "assets/fonts/game/_game chars 16px.ini",
+        fallback_font_name: Some("cjk"),
+    },
+    FontAssetSpec {
+        name: "wendy_monospace_numbers",
+        ini_path: "assets/fonts/wendy/_wendy monospace numbers.ini",
+        fallback_font_name: None,
+    },
+    FontAssetSpec {
+        name: "wendy_screenevaluation",
+        ini_path: "assets/fonts/wendy/_ScreenEvaluation numbers.ini",
+        fallback_font_name: None,
+    },
+    FontAssetSpec {
+        name: "wendy_combo",
+        ini_path: "assets/fonts/_combo/wendy/Wendy.ini",
+        fallback_font_name: None,
+    },
+    FontAssetSpec {
+        name: "combo_arial_rounded",
+        ini_path: "assets/fonts/_combo/Arial Rounded/Arial Rounded.ini",
+        fallback_font_name: None,
+    },
+    FontAssetSpec {
+        name: "combo_asap",
+        ini_path: "assets/fonts/_combo/Asap/Asap.ini",
+        fallback_font_name: None,
+    },
+    FontAssetSpec {
+        name: "combo_bebas_neue",
+        ini_path: "assets/fonts/_combo/Bebas Neue/Bebas Neue.ini",
+        fallback_font_name: None,
+    },
+    FontAssetSpec {
+        name: "combo_source_code",
+        ini_path: "assets/fonts/_combo/Source Code/Source Code.ini",
+        fallback_font_name: None,
+    },
+    FontAssetSpec {
+        name: "combo_work",
+        ini_path: "assets/fonts/_combo/Work/Work.ini",
+        fallback_font_name: None,
+    },
+    FontAssetSpec {
+        name: "combo_wendy_cursed",
+        ini_path: "assets/fonts/_combo/Wendy (Cursed)/Wendy (Cursed).ini",
+        fallback_font_name: None,
+    },
+    FontAssetSpec {
+        name: "combo_mega",
+        ini_path: "assets/fonts/_combo/Mega/Mega.ini",
+        fallback_font_name: None,
+    },
+    FontAssetSpec {
+        name: "wendy_white",
+        ini_path: "assets/fonts/wendy/_wendy white.ini",
+        fallback_font_name: None,
+    },
+    FontAssetSpec {
+        name: "mega_alpha",
+        ini_path: "assets/fonts/Mega/_mega font.ini",
+        fallback_font_name: Some("miso"),
+    },
+    FontAssetSpec {
+        name: "mega_monospace_numbers",
+        ini_path: "assets/fonts/Mega/_mega monospace numbers.ini",
+        fallback_font_name: None,
+    },
+    FontAssetSpec {
+        name: "mega_screenevaluation",
+        ini_path: "assets/fonts/Mega/_ScreenEvaluation numbers.ini",
+        fallback_font_name: None,
+    },
+    FontAssetSpec {
+        name: "mega_game",
+        ini_path: "assets/fonts/Mega/_game chars 36px 4x1.ini",
+        fallback_font_name: None,
+    },
+];
+
+pub const BASE_TEXTURE_ASSETS: &[TextureAssetSpec] = &[
+    texture_asset("logo.png"),
+    texture_asset("init_arrow.png"),
+    texture_asset("dance.png"),
+    texture_asset("select_mode/arrow-body.png"),
+    texture_asset("select_mode/arrow-border.png"),
+    texture_asset("select_mode/arrow-stripes.png"),
+    texture_asset("select_mode/center-body.png"),
+    texture_asset("select_mode/center-border.png"),
+    texture_asset("select_mode/center-feet.png"),
+    texture_asset("test_input/dance.png"),
+    texture_asset("test_input/buttons.png"),
+    texture_asset("test_input/highlight.png"),
+    texture_asset("test_input/highlightgreen.png"),
+    texture_asset("test_input/highlightred.png"),
+    texture_asset("test_input/highlightarrow.png"),
+    texture_asset("test_lights/bass light (blue).png"),
+    texture_asset("test_lights/blue.png"),
+    texture_asset("test_lights/cabinet ITG2.png"),
+    texture_asset("test_lights/dance.png"),
+    texture_asset("test_lights/highlight.png"),
+    texture_asset("test_lights/pink.png"),
+    texture_asset("test_lights/red.png"),
+    texture_asset("test_lights/white.png"),
+    texture_asset("meter_arrow.png"),
+    texture_asset("name_entry_cursor.png"),
+    texture_asset("has_lua.png"),
+    texture_asset("has_edit.png"),
+    texture_asset("rounded-square.png"),
+    texture_asset("circle.png"),
+    texture_asset("swoosh.png"),
+    TextureAssetSpec {
+        key: "graphics/menu_bg_technique/arrow_tex.png",
+        path: "menu_bg_technique/arrow_tex.png",
+    },
+    TextureAssetSpec {
+        key: "graphics/menu_bg_technique/square.png",
+        path: "menu_bg_technique/square.png",
+    },
+    TextureAssetSpec {
+        key: "graphics/menu_bg_technique/white_tex.png",
+        path: "menu_bg_technique/white_tex.png",
+    },
+    texture_asset("fave-icon.png"),
+    texture_asset("lock.png"),
+    texture_asset("folder-solid.png"),
+    texture_asset("GrooveStats.png"),
+    texture_asset("nice.png"),
+    texture_asset("BoogieStatsEX.png"),
+    texture_asset("arrowcloud.png"),
+    texture_asset("ITL.png"),
+    texture_asset("crown.png"),
+    texture_asset("srpg9_logo_alt.png"),
+    texture_asset("srpg10_logo_alt.png"),
+    texture_asset(SRPG10_TITLE_LOGO),
+    texture_asset("combo_explosion.png"),
+    TextureAssetSpec {
+        key: "banner1.png",
+        path: "_fallback/banner1.png",
+    },
+    TextureAssetSpec {
+        key: "banner2.png",
+        path: "_fallback/banner2.png",
+    },
+    TextureAssetSpec {
+        key: "banner3.png",
+        path: "_fallback/banner3.png",
+    },
+    TextureAssetSpec {
+        key: "banner4.png",
+        path: "_fallback/banner4.png",
+    },
+    TextureAssetSpec {
+        key: "banner5.png",
+        path: "_fallback/banner5.png",
+    },
+    TextureAssetSpec {
+        key: "banner6.png",
+        path: "_fallback/banner6.png",
+    },
+    TextureAssetSpec {
+        key: "banner7.png",
+        path: "_fallback/banner7.png",
+    },
+    TextureAssetSpec {
+        key: "banner8.png",
+        path: "_fallback/banner8.png",
+    },
+    TextureAssetSpec {
+        key: "banner9.png",
+        path: "_fallback/banner9.png",
+    },
+    TextureAssetSpec {
+        key: "banner10.png",
+        path: "_fallback/banner10.png",
+    },
+    TextureAssetSpec {
+        key: "banner11.png",
+        path: "_fallback/banner11.png",
+    },
+    TextureAssetSpec {
+        key: "banner12.png",
+        path: "_fallback/banner12.png",
+    },
+    texture_asset("grades/grades 1x19.png"),
+    texture_asset("evaluation/failed.png"),
+    texture_asset("evaluation/cleared.png"),
+    texture_asset("feet-diagram.png"),
+    texture_asset("practice/snap_display_icon_9x1 (doubleres).png"),
+];
+
+pub const GRADE_TEXTURE_ASSETS: &[TextureAssetSpec] = &[
+    texture_asset("grades/star.png"),
+    texture_asset("grades/s-plus.png"),
+    texture_asset("grades/s.png"),
+    texture_asset("grades/s-minus.png"),
+    texture_asset("grades/a-plus.png"),
+    texture_asset("grades/a.png"),
+    texture_asset("grades/a-minus.png"),
+    texture_asset("grades/b-plus.png"),
+    texture_asset("grades/b.png"),
+    texture_asset("grades/b-minus.png"),
+    texture_asset("grades/c-plus.png"),
+    texture_asset("grades/c.png"),
+    texture_asset("grades/c-minus.png"),
+    texture_asset("grades/d.png"),
+    texture_asset("grades/f.png"),
+    texture_asset("grades/q.png"),
+    texture_asset("grades/affluent.png"),
+    texture_asset("grades/goldstar (stretch).png"),
+];
+
+pub const SUBMIT_TEXTURE_ASSETS: &[TextureAssetSpec] = &[
+    texture_asset("submit/LoadingSpinner_10x3.png"),
+    texture_asset("submit/Hourglass_10x3.png"),
+    texture_asset("submit/Check_1x1.png"),
+    texture_asset("submit/Refresh_1x1.png"),
+    texture_asset("submit/Rejected_1x1.png"),
+];
+
+pub const fn texture_asset(path: &'static str) -> TextureAssetSpec {
+    TextureAssetSpec { key: path, path }
+}
+
 /// Logical font role in the theme, mirroring Simply Love's per-role .redir
 /// table.
 ///
@@ -467,6 +726,39 @@ pub fn all_assets() -> impl Iterator<Item = &'static Assets> {
     ASSETS.iter().chain(std::iter::once(&SRPG10_ASSETS))
 }
 
+pub fn initial_font_assets() -> impl Iterator<Item = &'static FontAssetSpec> {
+    FONT_ASSETS.iter()
+}
+
+pub fn initial_texture_assets() -> impl Iterator<Item = TextureAssetSpec> {
+    BASE_TEXTURE_ASSETS
+        .iter()
+        .copied()
+        .chain(all_assets().flat_map(|asset| {
+            [
+                texture_asset(asset.select_color),
+                texture_asset(asset.shared_background),
+                texture_asset(asset.effects.titlemenu_flycenter),
+                texture_asset(asset.effects.titlemenu_flytop),
+                texture_asset(asset.effects.titlemenu_flybottom),
+                texture_asset(asset.effects.gameplayin_splode),
+                texture_asset(asset.effects.gameplayin_minisplode),
+                texture_asset(asset.effects.combo_100milestone_splode),
+                texture_asset(asset.effects.combo_100milestone_minisplode),
+                texture_asset(asset.effects.combo_1000milestone_swoosh),
+            ]
+            .into_iter()
+        }))
+        .chain(SRPG10_EVAL_TEXTURES.into_iter().map(texture_asset))
+        .chain(GRADE_TEXTURE_ASSETS.iter().copied())
+        .chain(SUBMIT_TEXTURE_ASSETS.iter().copied())
+        .chain(
+            step_stats_gifs::STEP_STATS_GIF_TEXTURES
+                .into_iter()
+                .map(texture_asset),
+        )
+}
+
 #[inline(always)]
 pub fn effect_zoom_scale(texture_key: &str) -> f32 {
     if texture_key.contains("doubleres") {
@@ -753,5 +1045,35 @@ mod tests {
         let paths: Vec<_> = bundled_music_asset_paths().collect();
         assert!(paths.contains(&SRPG10_GAMEOVER_MUSIC));
         assert!(paths.contains(&"assets/music/in_two (loop).ogg"));
+    }
+
+    #[test]
+    fn initial_font_assets_include_runtime_fallback_chain() {
+        let fallback = |name: &str| {
+            initial_font_assets()
+                .find(|spec| spec.name == name)
+                .and_then(|spec| spec.fallback_font_name)
+        };
+        assert_eq!(fallback("miso"), Some("game"));
+        assert_eq!(fallback("game"), Some("cjk"));
+        assert_eq!(fallback("cjk"), Some("emoji"));
+        assert_eq!(fallback("mega_alpha"), Some("miso"));
+    }
+
+    #[test]
+    fn initial_texture_assets_include_base_and_theme_catalogs() {
+        let assets: Vec<_> = initial_texture_assets().collect();
+        assert!(assets.iter().any(|asset| asset.key == "logo.png"));
+        assert!(assets.iter().any(|asset| asset.key == SRPG10_TITLE_LOGO));
+        assert!(
+            assets
+                .iter()
+                .any(|asset| asset.key == SRPG10_ASSETS.shared_background)
+        );
+        assert!(
+            assets
+                .iter()
+                .any(|asset| asset.key == step_stats_gifs::STEP_STATS_GIF_TEXTURES[0])
+        );
     }
 }

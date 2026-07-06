@@ -40,7 +40,6 @@ pub enum AssetError {
     FontParse(FontParseError),
     Image(image::ImageError),
     Backend(String),
-    UnknownFont(&'static str),
 }
 
 impl fmt::Display for AssetError {
@@ -49,7 +48,6 @@ impl fmt::Display for AssetError {
             Self::FontParse(err) => write!(f, "{err}"),
             Self::Image(err) => write!(f, "{err}"),
             Self::Backend(err) => write!(f, "GPU texture operation failed: {err}"),
-            Self::UnknownFont(name) => write!(f, "Unknown font name: {name}"),
         }
     }
 }
@@ -59,7 +57,7 @@ impl StdError for AssetError {
         match self {
             Self::FontParse(err) => Some(err),
             Self::Image(err) => Some(err),
-            Self::Backend(_) | Self::UnknownFont(_) => None,
+            Self::Backend(_) => None,
         }
     }
 }
@@ -399,85 +397,23 @@ impl AssetManager {
     }
 
     pub(crate) fn load_initial_fonts(&mut self, backend: &mut Backend) -> Result<(), AssetError> {
-        for &name in &[
-            "wendy",
-            "miso",
-            "cjk",
-            "emoji",
-            "game",
-            "wendy_monospace_numbers",
-            "wendy_screenevaluation",
-            "wendy_combo",
-            "combo_arial_rounded",
-            "combo_asap",
-            "combo_bebas_neue",
-            "combo_source_code",
-            "combo_work",
-            "combo_wendy_cursed",
-            "combo_mega",
-            "wendy_white",
-            "mega_alpha",
-            "mega_monospace_numbers",
-            "mega_screenevaluation",
-            "mega_game",
-        ] {
-            let ini_path_str = match name {
-                "wendy" => "assets/fonts/wendy/_wendy small.ini",
-                "miso" => "assets/fonts/miso/_miso light.ini",
-                "cjk" => "assets/fonts/cjk/_jfonts 16px.ini",
-                "emoji" => "assets/fonts/emoji/_emoji 16px.ini",
-                "game" => "assets/fonts/game/_game chars 16px.ini",
-                "wendy_monospace_numbers" => "assets/fonts/wendy/_wendy monospace numbers.ini",
-                "wendy_screenevaluation" => "assets/fonts/wendy/_ScreenEvaluation numbers.ini",
-                "wendy_combo" => "assets/fonts/_combo/wendy/Wendy.ini",
-                "combo_arial_rounded" => "assets/fonts/_combo/Arial Rounded/Arial Rounded.ini",
-                "combo_asap" => "assets/fonts/_combo/Asap/Asap.ini",
-                "combo_bebas_neue" => "assets/fonts/_combo/Bebas Neue/Bebas Neue.ini",
-                "combo_source_code" => "assets/fonts/_combo/Source Code/Source Code.ini",
-                "combo_work" => "assets/fonts/_combo/Work/Work.ini",
-                "combo_wendy_cursed" => "assets/fonts/_combo/Wendy (Cursed)/Wendy (Cursed).ini",
-                "combo_mega" => "assets/fonts/_combo/Mega/Mega.ini",
-                "wendy_white" => "assets/fonts/wendy/_wendy white.ini",
-                "mega_alpha" => "assets/fonts/Mega/_mega font.ini",
-                "mega_monospace_numbers" => "assets/fonts/Mega/_mega monospace numbers.ini",
-                "mega_screenevaluation" => "assets/fonts/Mega/_ScreenEvaluation numbers.ini",
-                "mega_game" => "assets/fonts/Mega/_game chars 36px 4x1.ini",
-                _ => return Err(AssetError::UnknownFont(name)),
-            };
-
-            let resolved = dirs::app_dirs().resolve_asset_path(ini_path_str);
+        for spec in deadsync_theme::initial_font_assets() {
+            let resolved = dirs::app_dirs().resolve_asset_path(spec.ini_path);
             let resolved_str = resolved.to_string_lossy();
             let FontLoadData {
                 mut font,
                 required_textures,
             } = font::parse_with_texture_context(&resolved_str, &FONT_TEXTURE_CONTEXT)?;
 
-            if name == "miso" {
-                font.fallback_font_name = Some("game");
-                debug!("Font 'miso' configured to use 'game' as fallback.");
+            if let Some(fallback) = spec.fallback_font_name {
+                font.fallback_font_name = Some(fallback);
+                debug!(
+                    "Font '{}' configured to use '{}' as fallback.",
+                    spec.name, fallback
+                );
             }
-
-            if name == "game" {
-                font.fallback_font_name = Some("cjk");
-                debug!("Font 'game' configured to use 'cjk' as fallback.");
-            }
-
-            if name == "cjk" {
-                font.fallback_font_name = Some("emoji");
-                debug!("Font 'cjk' configured to use 'emoji' as fallback.");
-            }
-
-            // Mega is uppercase-Latin + digits + a small punctuation set. Fall
-            // back through Miso so screens that ever pass lowercase or non-ASCII
-            // through a Mega-bound role still render readable glyphs instead of
-            // missing ones. Mega's own ini imports `Mega/_game chars 36px` for
-            // name-entry glyphs, so we don't need to override that.
-            if name == "mega_alpha" {
-                font.fallback_font_name = Some("miso");
-                debug!("Font 'mega_alpha' configured to use 'miso' as fallback.");
-            }
-            self.register_parsed_font(backend, name, font, &required_textures)?;
-            debug!("Loaded font '{name}' from '{ini_path_str}'");
+            self.register_parsed_font(backend, spec.name, font, &required_textures)?;
+            debug!("Loaded font '{}' from '{}'", spec.name, spec.ini_path);
         }
         Ok(())
     }
