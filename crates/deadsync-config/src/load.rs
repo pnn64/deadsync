@@ -271,6 +271,8 @@ fn apply_system_opts(loaded: SystemOptions, cfg: &mut Config) {
     cfg.smx_input = loaded.smx_input;
     cfg.smx_manages_pad_config = loaded.smx_manages_pad_config;
     cfg.smx_panel_lights = loaded.smx_panel_lights;
+    cfg.smx_pad_gifs_pack = loaded.smx_pad_gifs_pack;
+    cfg.smx_judge_gifs_pack = loaded.smx_judge_gifs_pack;
     cfg.smx_underglow_theme = loaded.smx_underglow_theme;
     cfg.smx_underglow_grb = loaded.smx_underglow_grb;
     cfg.gfx_debug = loaded.gfx_debug;

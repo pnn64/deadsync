@@ -774,6 +774,43 @@ const fn button_light_for_col(local_col: usize) -> Option<ButtonLight> {
     }
 }
 
+/// Which named SMX background animation a screen shows (the role half of the
+/// `<role>_<size>.gif` asset name), or `None` where the pad lights are owned by
+/// something else. Precedence per the pad-gifs design: the pad-assignment screen
+/// drives whole-pad player colours itself and the lights test owns all lighting,
+/// then gameplay and song select get their own roles, then the operator default.
+const fn smx_background_role(screen: CurrentScreen) -> Option<&'static str> {
+    match screen {
+        CurrentScreen::SmxAssignPads | CurrentScreen::TestLights | CurrentScreen::Init => None,
+        CurrentScreen::Gameplay | CurrentScreen::Practice => Some("gameplay"),
+        CurrentScreen::SelectMusic | CurrentScreen::SelectCourse => Some("song_select"),
+        CurrentScreen::Evaluation | CurrentScreen::EvaluationSummary | CurrentScreen::Initials => {
+            Some("results")
+        }
+        CurrentScreen::Options => Some("options"),
+        _ => Some("default"),
+    }
+}
+
+/// Dedup key for the per-frame SMX background/judgement sync: registry and
+/// filesystem lookups in `sync_smx_pad_gifs` only run when one of these
+/// fields changed since the last frame.
+#[derive(Clone, Copy, PartialEq)]
+struct SmxBgKey {
+    enabled: bool,
+    role: Option<&'static str>,
+    bg_packs: [config::SmxPackName; 2],
+    judge_packs: [config::SmxPackName; 2],
+    /// Current song identity: its `Arc` pointer, cheap to compute per frame
+    /// with no allocation. Cleared alongside the scoped cache on a rescan.
+    song_id: Option<usize>,
+    /// On results screens, the shown grade (as its sprite-state index) and the
+    /// difficulty of the chart that earned it, so a new result re-resolves a
+    /// grade/difficulty-specific gif even when role and song are unchanged.
+    eval_grade: Option<u32>,
+    eval_difficulty: Option<&'static str>,
+}
+
 const fn light_mode_for_screen(screen: CurrentScreen) -> LightMode {
     match screen {
         CurrentScreen::Init => LightMode::Attract,
@@ -4066,6 +4103,37 @@ pub struct App {
     /// Last per-slot pad-light brightness pushed to the SMX crate (`[P1, P2]`),
     /// cached so the resolve-and-push only fires when the value actually changes.
     smx_light_brightness: [u8; 2],
+    /// Preloaded SMX pad GIF animations, decoded once on first use (the pad-gifs
+    /// option toggling on). `None` until then; never loaded on the gameplay path.
+    smx_gifs: Option<std::sync::Arc<deadsync_smx::gifs::GifRegistry>>,
+    /// Background state last pushed to `smx_panels` (see `SmxBgKey`), so the
+    /// per-frame sync only does lookups when the toggle, screen role, pack, or
+    /// current song change. Reset on a song rescan, so a recycled `Arc`
+    /// pointer can't be mistaken for the same song.
+    smx_bg_synced: Option<SmxBgKey>,
+    /// Per-slot blackout state last sent to the SMX lights worker; `[P1_slot, P2_slot]`.
+    smx_blackout_synced: [bool; 2],
+    /// Decoded per-song / per-pack pad background variants, keyed by their
+    /// `smx-pad-lights/` folder and role. An empty vec is the negative entry
+    /// (folder scanned, no matching gif) so a folder is touched only once; the
+    /// per-song BPM variant is selected from the list per resolution. Cleared
+    /// when the song cache is rescanned. Only grows with folders visited.
+    smx_scoped_bg_cache: std::collections::HashMap<
+        (PathBuf, &'static str),
+        Vec<deadsync_smx::gifs::BackgroundVariant>,
+    >,
+    /// Song-cache generation the scoped cache was built against; a change means
+    /// a rescan, so the scoped cache is dropped (files may have changed).
+    smx_scoped_bg_generation: u64,
+    /// Cache of `MatchColorToDifficulty`-tinted backgrounds, keyed by (pack,
+    /// role, difficulty). Holds the theme color index the tint was computed
+    /// against alongside the `Arc`, so a stale entry (the player changed their
+    /// theme color) is detected and recomputed on next use rather than pruned
+    /// eagerly; at most one entry lives per (pack, role, difficulty) at a time.
+    smx_difficulty_tint_cache: std::collections::HashMap<
+        (String, &'static str, &'static str),
+        (i32, std::sync::Arc<deadsync_smx::gifs::FullPadAnim>),
+    >,
     asset_manager: AssetManager,
     dynamic_media: DynamicMedia,
     ui_text_layout_cache: compose::TextLayoutCache,
@@ -4737,6 +4805,26 @@ impl App {
             config.lights_simplify_bass,
             config.smx_input && config.smx_panel_lights,
         );
+        let smx_gifs_enabled = config.smx_input && config.smx_panel_lights;
+        // Per-player pack overrides, resolved per pad slot so that in versus
+        // mode P1's pad uses P1's pack and P2's pad uses P2's pack. One profile
+        // lock, no clones; skipped entirely while the feature is off.
+        let (bg_packs, judge_packs) = if smx_gifs_enabled {
+            profile::smx_gif_packs(config.smx_pad_gifs_pack, config.smx_judge_gifs_pack)
+        } else {
+            let none = [config::SmxPackName::default(); 2];
+            (none, none)
+        };
+        self.sync_smx_pad_gifs(smx_gifs_enabled, bg_packs, judge_packs);
+        self.sync_smx_pad_blackout(smx_gifs_enabled);
+        if smx_gifs_enabled && self.state.screens.current_screen == CurrentScreen::SelectMusic {
+            // One f32 per frame; the driver drops it unless the background is
+            // actually beat-locked.
+            self.smx_panels
+                .set_beat(crate::screens::select_music::selection_anim_beat(
+                    &self.state.screens.select_music_state,
+                ));
+        }
         self.lights.tick(delta_time, elapsed_seconds);
     }
 
@@ -4805,6 +4893,310 @@ impl App {
         }
         self.gameplay_lights.clear();
         self.smx_panels.deactivate();
+    }
+
+    /// Keep the SMX pad GIF state in step with the options and the current screen:
+    /// the full-pad background follows the screen role (and the current song's
+    /// per-song/per-pack override, if any), and the judgement animation set
+    /// follows the (enabled, pack) pair. Cheap per frame: lookups only happen
+    /// when the toggle, screen role, pack, or current song folder changes, and
+    /// the driver deduplicates the rest.
+    fn sync_smx_pad_gifs(&mut self, enabled: bool, bg_packs: [config::SmxPackName; 2], judge_packs: [config::SmxPackName; 2]) {
+        // The StepManiaX options page lights the pads blue/red to preview the
+        // player assignment (`drive_smx_options_lights`), writing the pad
+        // directly. Suppress the gif background there so the two don't fight
+        // over `set_lights`; the assignment preview wins.
+        let assignment_preview = self.state.screens.current_screen == CurrentScreen::Options
+            && config::get().smx_input
+            && options::is_smx_config_view(&self.state.screens.options_state);
+        let role = if enabled && !assignment_preview {
+            smx_background_role(self.state.screens.current_screen)
+        } else {
+            None
+        };
+
+        // A song rescan may have changed per-song/per-pack files; drop the
+        // scoped cache and force a re-resolve (a recycled `Arc` pointer must not
+        // read as the same song).
+        let generation = crate::game::song::song_cache_generation();
+        if generation != self.smx_scoped_bg_generation {
+            self.smx_scoped_bg_generation = generation;
+            self.smx_scoped_bg_cache.clear();
+            self.smx_bg_synced = None;
+        }
+
+        // The song whose per-song/per-pack background applies here: the playing
+        // song in gameplay, the highlighted song on song select. Identified by
+        // `Arc` pointer so the per-frame dedup never allocates.
+        let song = role.and_then(|_| self.current_smx_song());
+        let song_id = song.as_ref().map(|s| std::sync::Arc::as_ptr(s) as usize);
+
+        // On results screens, include the grade (and the difficulty of the chart
+        // that earned it) in the key so a new result re-resolves to a
+        // grade/difficulty-specific gif even when the role and song haven't changed.
+        let eval_grade_and_difficulty = if matches!(
+            self.state.screens.current_screen,
+            CurrentScreen::Evaluation
+                | CurrentScreen::EvaluationSummary
+                | CurrentScreen::Initials
+        ) {
+            self.state
+                .screens
+                .evaluation_state
+                .score_info
+                .iter()
+                .flatten()
+                .map(|si| (si.grade, deadlib_present::color::difficulty_gif_tag(&si.chart.difficulty)))
+                .min_by_key(|(g, _)| g.to_sprite_state())
+        } else {
+            None
+        };
+        let eval_grade = eval_grade_and_difficulty.map(|(g, _)| g);
+        let eval_difficulty = eval_grade_and_difficulty.map(|(_, d)| d);
+
+        let synced = Some(SmxBgKey {
+            enabled,
+            role,
+            bg_packs,
+            judge_packs,
+            song_id,
+            eval_grade: eval_grade.map(|g| g.to_sprite_state()),
+            eval_difficulty,
+        });
+        if self.smx_bg_synced == synced {
+            return;
+        }
+        let pack_changed = self.smx_bg_synced.is_none_or(|prev| {
+            prev.enabled != enabled || prev.bg_packs != bg_packs || prev.judge_packs != judge_packs
+        });
+        self.smx_bg_synced = synced;
+
+        let song_dir = song
+            .as_ref()
+            .and_then(|s| s.simfile_path.parent())
+            .map(Path::to_path_buf);
+        // The song's tempo selects among BPM variants of a role (denser gif at
+        // low tempo, sparser at high). `max_bpm` is the conservative pick: the
+        // chosen variant stays under the pad's 30fps even at the song's fastest.
+        let song_bpm = song
+            .as_ref()
+            .map(|s| s.max_bpm as f32)
+            .filter(|b| b.is_finite() && *b > 0.0);
+
+        let on_select_music = self.state.screens.current_screen == CurrentScreen::SelectMusic;
+
+        // Resolve and push the background for each pad slot independently so P1 and P2
+        // can show different packs in versus mode. Scoped (per-song/per-pack folder) gifs
+        // are pack-independent and may resolve to the same Arc for both slots; the driver
+        // deduplicates by pointer so no redundant work reaches the worker.
+        for pad in 0..deadsync_smx::panels::PADS {
+            let pack_str = (!bg_packs[pad].is_empty()).then_some(bg_packs[pad].as_str());
+            let anim = role.and_then(|role| {
+                // Resolution order: the song's own background, then its pack's, then
+                // the global pack (selected -> basic), then the global `default`
+                // role. `_25` is the baseline both pad layouts render; 16-LED pads
+                // show its outer ring. Each tier picks the BPM-best variant.
+                let scoped = song_dir
+                    .as_deref()
+                    .and_then(|dir| self.resolve_scoped_smx_background(dir, role, song_bpm));
+                scoped.or_else(|| {
+                    let registry = self.smx_gif_registry();
+                    let size = deadsync_smx::gifs::PadSize::Leds25;
+                    let try_role = |role_str: &str| registry.background(pack_str, role_str, size, song_bpm);
+                    // On results screens, try grade- and difficulty-specific roles
+                    // before the plain role; `results_role_candidates` documents and
+                    // tests the exact order.
+                    let grade_anim = if role == "results" {
+                        eval_grade.and_then(|grade| {
+                            smx_panel_fx::results_role_candidates(grade, eval_difficulty)
+                                .iter()
+                                .find_map(|r| try_role(r))
+                        })
+                    } else {
+                        None
+                    };
+                    let resolved = grade_anim
+                        .or_else(|| registry.background(pack_str, role, size, song_bpm))
+                        .or_else(|| registry.background(pack_str, "default", size, song_bpm));
+                    // Only pack-resolved gifs get tinted; a per-song/pack scoped gif
+                    // (the `scoped` branch above, handled outside this closure) is
+                    // fully authored by the song and left as-is.
+                    resolved.map(|anim| self.maybe_tint_smx_background(pack_str, role, eval_difficulty, anim))
+                })
+            });
+            let background = anim.map(|anim| {
+                // A beat-suffixed gif beat-locks on song select, the one screen with
+                // a live beat source (the music preview); elsewhere it plays realtime
+                // rather than freezing on a stale beat.
+                let clock = match anim.beats_per_loop {
+                    Some(beats_per_loop) if on_select_music => {
+                        deadsync_smx::panels::Clock::BeatLocked { beats_per_loop }
+                    }
+                    _ => deadsync_smx::panels::Clock::Realtime,
+                };
+                (anim, clock)
+            });
+            self.smx_panels.set_background_for_pad(pad, background);
+        }
+
+        if pack_changed {
+            for pad in 0..deadsync_smx::panels::PADS {
+                let gifs = if enabled {
+                    let registry = self.smx_gif_registry().clone();
+                    let judge_pack_str = (!judge_packs[pad].is_empty()).then_some(judge_packs[pad].as_str());
+                    smx_panel_fx::JudgementGifs::resolve(&registry, judge_pack_str)
+                } else {
+                    smx_panel_fx::JudgementGifs::default()
+                };
+                self.smx_panels.set_judgement_gifs_for_pad(pad, gifs);
+            }
+        }
+    }
+
+    /// Black out the unused pad slot when a single player is in game mode.
+    /// In Versus / Doubles both pads are in use; in Single play the non-session slot
+    /// gets solid black so only the pad the player stands on is lit.
+    fn sync_smx_pad_blackout(&mut self, enabled: bool) {
+        let in_game = enabled
+            && !matches!(
+                self.state.screens.current_screen,
+                CurrentScreen::Menu
+                    | CurrentScreen::Init
+                    | CurrentScreen::SmxAssignPads
+                    | CurrentScreen::TestLights
+                    | CurrentScreen::ManageLocalProfiles
+                    | CurrentScreen::Credits
+                    | CurrentScreen::OverscanAdjustment
+                    | CurrentScreen::Mappings
+                    | CurrentScreen::Options
+                    | CurrentScreen::PlayerOptions
+                    | CurrentScreen::ConfigurePads
+                    | CurrentScreen::Input
+            );
+        let blackout: [bool; 2] = if in_game {
+            let play_style = profile::get_session_play_style();
+            let session_side = profile::get_session_player_side();
+            if matches!(play_style, profile_data::PlayStyle::Single) {
+                let used = profile_data::player_side_index(session_side);
+                std::array::from_fn(|slot| slot != used)
+            } else {
+                [false; 2]
+            }
+        } else {
+            [false; 2]
+        };
+        if blackout != self.smx_blackout_synced {
+            self.smx_blackout_synced = blackout;
+            for (pad, &on) in blackout.iter().enumerate() {
+                self.smx_panels.set_pad_blackout(pad, on);
+            }
+        }
+    }
+
+    /// The song whose per-song/per-pack SMX background applies on the current
+    /// screen: the playing song in gameplay/practice, the highlighted song on
+    /// song select. `None` elsewhere or with no song. A cheap `Arc` clone.
+    fn current_smx_song(&self) -> Option<std::sync::Arc<deadsync_chart::SongData>> {
+        let screens = &self.state.screens;
+        match screens.current_screen {
+            CurrentScreen::Gameplay => screens.gameplay_state.as_ref().map(|gs| gs.song_arc()),
+            CurrentScreen::Practice => screens
+                .practice_state
+                .as_ref()
+                .map(|ps| ps.gameplay.song_arc()),
+            CurrentScreen::SelectMusic => {
+                select_music::highlighted_song(&screens.select_music_state)
+            }
+            _ => None,
+        }
+    }
+
+    /// Resolve a per-song then per-pack background for `role` from the song
+    /// folder's and pack folder's `smx-pad-lights/` subfolders, decoding once
+    /// and caching the variant list (an empty list is the negative "no gif
+    /// here" entry) so a folder is touched at most once per song-cache
+    /// generation. Picks the BPM-best variant for `song_bpm`.
+    fn resolve_scoped_smx_background(
+        &mut self,
+        song_dir: &Path,
+        role: &'static str,
+        song_bpm: Option<f32>,
+    ) -> Option<std::sync::Arc<deadsync_smx::gifs::FullPadAnim>> {
+        let song_scope = song_dir.join("smx-pad-lights");
+        let pack_scope = song_dir.parent().map(|p| p.join("smx-pad-lights"));
+        for dir in std::iter::once(song_scope).chain(pack_scope) {
+            let variants = self
+                .smx_scoped_bg_cache
+                .entry((dir.clone(), role))
+                .or_insert_with(|| {
+                    deadsync_smx::gifs::load_scoped_background(
+                        &dir,
+                        role,
+                        deadsync_smx::gifs::PadSize::Leds25,
+                    )
+                });
+            if let Some(anim) = deadsync_smx::gifs::select_variant(variants, song_bpm) {
+                return Some(anim);
+            }
+        }
+        None
+    }
+
+    /// Decode the SMX GIF assets on first use. A cold path: runs when the pad-gifs
+    /// option first resolves a background, never per frame.
+    fn smx_gif_registry(&mut self) -> &std::sync::Arc<deadsync_smx::gifs::GifRegistry> {
+        self.smx_gifs.get_or_insert_with(|| {
+            let root = dirs::app_dirs().resolve_asset_path("assets");
+            std::sync::Arc::new(deadsync_smx::gifs::GifRegistry::load(&root))
+        })
+    }
+
+    /// Recolor a resolved background to the played chart's difficulty color if
+    /// `pack` declares `role` under `MatchColorToDifficulty` in its
+    /// `gifpack.ini`; otherwise returns `anim` unchanged. Reuses the same
+    /// theme-relative color the rest of the UI uses for difficulty (see
+    /// `deadlib_present::color::difficulty_rgba`), so `Challenge` always tints
+    /// to the player's current theme color and easier difficulties step back
+    /// around the same hue wheel. Cheap: a cache keyed by (pack, role,
+    /// difficulty) holds one tinted `Arc` per combination, recomputed only
+    /// when the player's theme color changes (never per frame).
+    fn maybe_tint_smx_background(
+        &mut self,
+        pack_str: Option<&str>,
+        role: &'static str,
+        difficulty: Option<&'static str>,
+        anim: std::sync::Arc<deadsync_smx::gifs::FullPadAnim>,
+    ) -> std::sync::Arc<deadsync_smx::gifs::FullPadAnim> {
+        let Some(difficulty) = difficulty else {
+            return anim;
+        };
+        if !self.smx_gif_registry().background_wants_difficulty_tint(pack_str, role) {
+            return anim;
+        }
+        let theme_index = config::get().simply_love_color;
+        let cache_key = (
+            pack_str.unwrap_or(deadsync_smx::gifs::DEFAULT_PACK).to_owned(),
+            role,
+            difficulty,
+        );
+        if let Some((cached_theme, cached_anim)) = self.smx_difficulty_tint_cache.get(&cache_key)
+            && *cached_theme == theme_index
+        {
+            return cached_anim.clone();
+        }
+        let target_rgba = deadlib_present::color::difficulty_rgba(difficulty, theme_index)
+            .map(|c| (c * 255.0).round() as u8);
+        // The palette is sRGB for screen use; the pad LEDs are linear, so the
+        // pastel difficulty colors read as off-white without this correction.
+        let target_rgb = deadsync_smx::gifs::saturate_for_leds([
+            target_rgba[0],
+            target_rgba[1],
+            target_rgba[2],
+        ]);
+        let tinted = std::sync::Arc::new(deadsync_smx::gifs::tint_full_pad(&anim, target_rgb));
+        self.smx_difficulty_tint_cache
+            .insert(cache_key, (theme_index, tinted.clone()));
+        tinted
     }
 
     #[inline(always)]
@@ -5428,6 +5820,12 @@ impl App {
             gameplay_lights: GameplayLightTracker::default(),
             smx_panels: smx_panel_fx::SmxPanelDriver::default(),
             smx_light_brightness: [100, 100],
+            smx_gifs: None,
+            smx_bg_synced: None,
+            smx_blackout_synced: [false; 2],
+            smx_scoped_bg_cache: std::collections::HashMap::new(),
+            smx_scoped_bg_generation: 0,
+            smx_difficulty_tint_cache: std::collections::HashMap::new(),
             asset_manager: AssetManager::new(),
             dynamic_media: DynamicMedia::new(),
             // Screen transitions clear the UI cache, so misses stop inserting
@@ -8953,6 +9351,30 @@ impl App {
 
     #[inline(always)]
     fn handle_pad_event(&mut self, event_loop: &ActiveEventLoop, ev: PadEvent) {
+        // Press-feedback gif: on any SMX panel press/release outside gameplay, play
+        // the pack's `press` animation on that panel's low-priority layer. Gated on
+        // smx_panel_lights; gated on non-gameplay so the judgement/sustain layers
+        // (which are higher priority) own gameplay fully.
+        let cfg = config::get();
+        if cfg.smx_input && cfg.smx_panel_lights {
+            if let PadEvent::RawButton { id, code, pressed, .. } = ev {
+                let pad_slot = id.0 as usize;
+                let is_gameplay = matches!(
+                    self.state.screens.current_screen,
+                    CurrentScreen::Gameplay | CurrentScreen::Practice
+                );
+                // During gameplay, only fire press feedback on the blacked-out (unused) pad.
+                // Outside gameplay, fire on all pads.
+                let is_blacked_out =
+                    self.smx_blackout_synced.get(pad_slot).copied().unwrap_or(false);
+                if (!is_gameplay || is_blacked_out)
+                    && code.0 as usize != deadsync_smx::CENTER_PANEL
+                {
+                    self.smx_panels.on_raw_panel(pad_slot, code.0 as usize, pressed);
+                }
+            }
+        }
+
         if !input_routing::screen_accepts_queued_input(
             self.state.screens.current_screen,
             &self.state.shell.transition,

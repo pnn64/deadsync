@@ -75,6 +75,43 @@ impl Grade {
             Self::Failed => 18,
         }
     }
+
+    /// Short display string used in SMX pad GIF filenames (`results_25@<suffix>.gif`).
+    pub const fn gif_suffix(&self) -> &'static str {
+        match self {
+            Self::Quint => "*****",
+            Self::Tier01 => "****",
+            Self::Tier02 => "***",
+            Self::Tier03 => "**",
+            Self::Tier04 => "*",
+            Self::Tier05 => "S+",
+            Self::Tier06 => "S",
+            Self::Tier07 => "S-",
+            Self::Tier08 => "A+",
+            Self::Tier09 => "A",
+            Self::Tier10 => "A-",
+            Self::Tier11 => "B+",
+            Self::Tier12 => "B",
+            Self::Tier13 => "B-",
+            Self::Tier14 => "C+",
+            Self::Tier15 => "C",
+            Self::Tier16 => "C-",
+            Self::Tier17 => "D",
+            Self::Failed => "F",
+        }
+    }
+
+    /// The "base" grade to fall back to for `+`/`-` variants when no exact gif exists.
+    /// `S+` and `S-` fall back to `S`, `A+`/`A-` to `A`, etc. Base grades return `None`.
+    pub const fn gif_base(&self) -> Option<Grade> {
+        match self {
+            Self::Tier05 | Self::Tier07 => Some(Self::Tier06),
+            Self::Tier08 | Self::Tier10 => Some(Self::Tier09),
+            Self::Tier11 | Self::Tier13 => Some(Self::Tier12),
+            Self::Tier14 | Self::Tier16 => Some(Self::Tier15),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Encode, Decode)]

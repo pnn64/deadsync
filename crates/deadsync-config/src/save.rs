@@ -474,6 +474,8 @@ fn system_options(cfg: &Config) -> SystemOptions {
         smx_panel_lights: cfg.smx_panel_lights,
         smx_underglow_theme: cfg.smx_underglow_theme,
         smx_underglow_grb: cfg.smx_underglow_grb,
+        smx_pad_gifs_pack: cfg.smx_pad_gifs_pack,
+        smx_judge_gifs_pack: cfg.smx_judge_gifs_pack,
         gfx_debug: cfg.gfx_debug,
         global_offset_seconds: cfg.global_offset_seconds,
         language_flag: cfg.language_flag,
@@ -649,10 +651,14 @@ mod tests {
         let mut cfg = Config::default();
         cfg.smx_underglow_theme = true;
         cfg.smx_underglow_grb = true;
+        cfg.smx_pad_gifs_pack = crate::options::SmxPackName::parse("senpi-basic");
+        cfg.smx_judge_gifs_pack = crate::options::SmxPackName::parse("none");
         let content =
             build_saved_app_config_file(&cfg, &Keymap::default(), "", &[], &[], "", "", "", "");
         assert!(content.contains("SmxUnderglowTheme=1"));
         assert!(content.contains("SmxUnderglowGrb=1"));
+        assert!(content.contains("SmxPadGifsPack=senpi-basic"));
+        assert!(content.contains("SmxJudgeGifsPack=none"));
 
         let mut conf = SimpleIni::new();
         conf.load_str(&content);
@@ -661,5 +667,7 @@ mod tests {
         let loaded = crate::options::load_system_options(&conf, defaults);
         assert!(loaded.smx_underglow_theme);
         assert!(loaded.smx_underglow_grb);
+        assert_eq!(loaded.smx_pad_gifs_pack.as_str(), "senpi-basic");
+        assert_eq!(loaded.smx_judge_gifs_pack.as_str(), "none");
     }
 }

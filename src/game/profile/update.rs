@@ -260,6 +260,16 @@ pub fn update_smx_pad_input_display_for_side(side: PlayerSide, enabled: bool) {
     update_profile_ini(side, |profile| profile.set_smx_pad_input_display(enabled));
 }
 
+pub fn update_smx_bg_pack_for_side(side: PlayerSide, pack: &str) {
+    let value = (!pack.is_empty()).then(|| pack.to_owned());
+    update_profile_ini(side, |profile| profile.set_smx_bg_pack(value));
+}
+
+pub fn update_smx_judge_pack_for_side(side: PlayerSide, pack: &str) {
+    let value = (!pack.is_empty()).then(|| pack.to_owned());
+    update_profile_ini(side, |profile| profile.set_smx_judge_pack(value));
+}
+
 pub fn update_mini_indicator_for_side(side: PlayerSide, setting: MiniIndicator) {
     update_profile_ini(side, |profile| profile.set_mini_indicator(setting));
 }

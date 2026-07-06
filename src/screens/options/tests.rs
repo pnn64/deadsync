@@ -137,6 +137,8 @@ fn smx_config_items_match_rows() {
             SubRowId::SmxDefaultLightBrightness,
             ItemId::InpSmxDefaultLightBrightness,
         ),
+        (SubRowId::SmxBgPack, ItemId::InpSmxBgPack),
+        (SubRowId::SmxJudgePack, ItemId::InpSmxJudgePack),
         (SubRowId::SmxAssignPads, ItemId::InpSmxAssignPads),
         (SubRowId::SmxSwapPads, ItemId::InpSmxSwapPads),
     ];

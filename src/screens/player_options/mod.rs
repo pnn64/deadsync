@@ -110,6 +110,8 @@ pub fn init(
     });
 
     let noteskin_names = discover_noteskin_names();
+    let smx_bg_pack_names = discover_smx_pack_names("smx-pad-lights");
+    let smx_judge_pack_names = discover_smx_pack_names("smx-judge-lights");
     let mut main_row_map = build_rows(
         &song,
         &speed_mod_p1,
@@ -118,6 +120,8 @@ pub fn init(
         session_music_rate,
         OptionsPane::Main,
         &noteskin_names,
+        &smx_bg_pack_names,
+        &smx_judge_pack_names,
         return_screen,
         fixed_stepchart.as_ref(),
     );
@@ -129,6 +133,8 @@ pub fn init(
         session_music_rate,
         OptionsPane::Display,
         &noteskin_names,
+        &smx_bg_pack_names,
+        &smx_judge_pack_names,
         return_screen,
         fixed_stepchart.as_ref(),
     );
@@ -140,6 +146,8 @@ pub fn init(
         session_music_rate,
         OptionsPane::Advanced,
         &noteskin_names,
+        &smx_bg_pack_names,
+        &smx_judge_pack_names,
         return_screen,
         fixed_stepchart.as_ref(),
     );
@@ -151,6 +159,8 @@ pub fn init(
         session_music_rate,
         OptionsPane::Uncommon,
         &noteskin_names,
+        &smx_bg_pack_names,
+        &smx_judge_pack_names,
         return_screen,
         fixed_stepchart.as_ref(),
     );

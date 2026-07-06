@@ -1109,6 +1109,26 @@ pub fn get_for_side(side: PlayerSide) -> Profile {
     lock_profiles()[side_ix(side)].clone()
 }
 
+/// Per-player SMX gif pack overrides for both sides (`[P1, P2]` bg packs, then
+/// judge packs), each falling back to its machine default when the profile has
+/// no override. One lock, no `Profile` clone: called every frame by
+/// `App::sync_lights`, so it must stay off the allocation path (`SmxPackName`
+/// is a fixed-capacity copy type).
+pub fn smx_gif_packs(
+    machine_bg: crate::config::SmxPackName,
+    machine_judge: crate::config::SmxPackName,
+) -> ([crate::config::SmxPackName; 2], [crate::config::SmxPackName; 2]) {
+    let profiles = lock_profiles();
+    let resolve = |pack: &Option<String>, machine: crate::config::SmxPackName| match pack {
+        Some(p) => crate::config::SmxPackName::parse(p),
+        None => machine,
+    };
+    (
+        std::array::from_fn(|i| resolve(&profiles[i].smx_bg_pack, machine_bg)),
+        std::array::from_fn(|i| resolve(&profiles[i].smx_judge_pack, machine_judge)),
+    )
+}
+
 pub fn footer_fields_for_side(side: PlayerSide) -> (Option<String>, String) {
     let profiles = lock_profiles();
     let p = &profiles[side_ix(side)];

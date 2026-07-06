@@ -73,6 +73,8 @@ pub enum ItemId {
     InpSmxDefaultPadConfig,
     InpSmxSinglePadPlayer,
     InpSmxDefaultLightBrightness,
+    InpSmxBgPack,
+    InpSmxJudgePack,
     InpSmxAssignPads,
     InpSmxSwapPads,
     InpMenuNavigation,

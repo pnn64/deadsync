@@ -266,6 +266,14 @@ impl RuntimeConfigStore {
         self.update_config(|cfg| config_update::set_smx_panel_lights(cfg, enabled))
     }
 
+    pub fn update_smx_pad_gifs_pack(&self, pack: crate::options::SmxPackName) -> bool {
+        self.update_config(|cfg| config_update::set_smx_pad_gifs_pack(cfg, pack))
+    }
+
+    pub fn update_smx_judge_gifs_pack(&self, pack: crate::options::SmxPackName) -> bool {
+        self.update_config(|cfg| config_update::set_smx_judge_gifs_pack(cfg, pack))
+    }
+
     pub fn update_smx_underglow_theme(&self, enabled: bool) -> bool {
         self.update_config(|cfg| config_update::set_smx_underglow_theme(cfg, enabled))
     }
@@ -507,11 +515,13 @@ pub fn smx_underglow_colors_from_config(
 
 fn decorative_rgb(index: i32) -> [u8; 3] {
     let rgba = deadlib_present::color::decorative_rgba(index);
-    [
+    // The palette is sRGB for screen use; the LED strips are linear, so the
+    // colours wash toward white without the gamma expansion.
+    deadsync_smx::gifs::saturate_for_leds([
         color_component_to_u8(rgba[0]),
         color_component_to_u8(rgba[1]),
         color_component_to_u8(rgba[2]),
-    ]
+    ])
 }
 
 fn color_component_to_u8(c: f32) -> u8 {

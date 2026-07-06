@@ -195,6 +195,27 @@ pub fn difficulty_display_name(difficulty_name: &str, zmod_rating_box_text: bool
     }
 }
 
+/// Canonical lowercase difficulty tag for SMX pad GIF filenames/roles
+/// (`results_25@<tag>@<grade>.gif`): one of `beginner`, `easy`, `medium`,
+/// `hard`, `challenge`, `edit`. Matches `difficulty_name` case-insensitively
+/// against the raw sm-file difficulty string, independent of any
+/// song-specific display remapping (e.g. a `(NOVICE)`-tagged Challenge chart
+/// still tags its gif as `challenge`, not `beginner`) so a pack author can
+/// target the file's actual difficulty rather than a per-song display quirk.
+/// Unrecognized values fall back to `"medium"`, matching `difficulty_display_name`.
+#[inline(always)]
+pub fn difficulty_gif_tag(difficulty_name: &str) -> &'static str {
+    if difficulty_name.eq_ignore_ascii_case("edit") {
+        return "edit";
+    }
+    const TAGS: [&str; 5] = ["beginner", "easy", "medium", "hard", "challenge"];
+    let difficulty_index = FILE_DIFFICULTY_NAMES
+        .iter()
+        .position(|&name| name.eq_ignore_ascii_case(difficulty_name))
+        .unwrap_or(2);
+    TAGS[difficulty_index]
+}
+
 #[inline(always)]
 pub fn difficulty_display_name_for_song(
     difficulty_name: &str,
@@ -439,5 +460,23 @@ mod tests {
         assert_eq!(srpg10_rgba(6), rgba_hex("#006ecb"));
         assert_eq!(srpg10_rgba(9), rgba_hex("#bf0052"));
         assert_eq!(srpg10_rgba(11), rgba_hex("#954f00"));
+    }
+
+    #[test]
+    fn difficulty_gif_tag_maps_each_file_difficulty_and_edit() {
+        assert_eq!(difficulty_gif_tag("Beginner"), "beginner");
+        assert_eq!(difficulty_gif_tag("Easy"), "easy");
+        assert_eq!(difficulty_gif_tag("Medium"), "medium");
+        assert_eq!(difficulty_gif_tag("Hard"), "hard");
+        assert_eq!(difficulty_gif_tag("Challenge"), "challenge");
+        assert_eq!(difficulty_gif_tag("Edit"), "edit");
+        // Case-insensitive.
+        assert_eq!(difficulty_gif_tag("hard"), "hard");
+        assert_eq!(difficulty_gif_tag("EDIT"), "edit");
+        // A Challenge chart tagged for display as "Novice"/"Expert" elsewhere
+        // still tags its gif by its real file difficulty, not the display name.
+        assert_eq!(difficulty_gif_tag("Challenge"), "challenge");
+        // Unrecognized values fall back to "medium".
+        assert_eq!(difficulty_gif_tag("Bogus"), "medium");
     }
 }

@@ -138,6 +138,14 @@ pub fn set_smx_panel_lights(cfg: &mut Config, enabled: bool) -> bool {
     set_if_changed(&mut cfg.smx_panel_lights, enabled)
 }
 
+pub fn set_smx_pad_gifs_pack(cfg: &mut Config, pack: crate::options::SmxPackName) -> bool {
+    set_if_changed(&mut cfg.smx_pad_gifs_pack, pack)
+}
+
+pub fn set_smx_judge_gifs_pack(cfg: &mut Config, pack: crate::options::SmxPackName) -> bool {
+    set_if_changed(&mut cfg.smx_judge_gifs_pack, pack)
+}
+
 pub fn set_smx_underglow_theme(cfg: &mut Config, enabled: bool) -> bool {
     set_if_changed(&mut cfg.smx_underglow_theme, enabled)
 }

@@ -15,6 +15,12 @@ pub(super) fn discover_noteskin_names() -> Vec<String> {
     deadsync_noteskin::itg::discover_skins(&roots, "dance")
 }
 
+/// Sorted non-default SMX gif pack names found under `<assets>/<tree>/`.
+pub(super) fn discover_smx_pack_names(tree: &str) -> Vec<String> {
+    let root = deadlib_platform::dirs::app_dirs().resolve_asset_path("assets");
+    deadsync_smx::gifs::discover_packs(&root.join(tree))
+}
+
 pub(super) fn build_noteskin_override_choices(noteskin_names: &[String]) -> Vec<String> {
     let mut choices = Vec::with_capacity(noteskin_names.len() + 1);
     choices.push(tr("PlayerOptions", "MatchNoteSkinLabel").to_string());
