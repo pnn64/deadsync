@@ -97,7 +97,7 @@ pub fn play_indexed_sfx(rel_dir: &str, index: u32, fallback_name: &str) {
 pub fn random_music_path(rel_path: &str) -> Option<PathBuf> {
     let resolved = dirs::app_dirs().resolve_asset_path(rel_path);
     if resolved.is_dir() {
-        let picked = pick_random_in(&resolved);
+        let picked = audio_folder::pick_music_path(&resolved);
         if picked.is_none() {
             warn!(
                 "Menu music folder {} is empty; falling back to no music",
@@ -105,9 +105,7 @@ pub fn random_music_path(rel_path: &str) -> Option<PathBuf> {
             );
         }
         picked
-    } else if resolved.is_file() {
-        Some(resolved)
     } else {
-        None
+        audio_folder::pick_music_path(&resolved)
     }
 }

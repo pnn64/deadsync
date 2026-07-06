@@ -101,6 +101,16 @@ pub fn pick_indexed_ogg(dir: &Path, index: u32, fallback_name: &str) -> Option<P
     None
 }
 
+pub fn pick_music_path(path: &Path) -> Option<PathBuf> {
+    if path.is_dir() {
+        pick_random_ogg(path)
+    } else if path.is_file() {
+        Some(path.to_path_buf())
+    } else {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -285,5 +295,29 @@ mod tests {
         let second = cached_ogg_listing(dir.path());
 
         assert_eq!(first, second);
+    }
+
+    #[test]
+    fn pick_music_path_uses_random_ogg_from_directory() {
+        let dir = TmpDir::new("music-dir");
+        let kept = write(dir.path(), "track.ogg");
+        invalidate_ogg_listing_cache(dir.path());
+
+        assert_eq!(pick_music_path(dir.path()), Some(kept));
+    }
+
+    #[test]
+    fn pick_music_path_accepts_direct_file() {
+        let dir = TmpDir::new("music-file");
+        let file = write(dir.path(), "loop.ogg");
+
+        assert_eq!(pick_music_path(&file), Some(file));
+    }
+
+    #[test]
+    fn pick_music_path_returns_none_for_missing_path() {
+        let dir = TmpDir::new("music-missing");
+
+        assert_eq!(pick_music_path(&dir.path().join("missing.ogg")), None);
     }
 }
