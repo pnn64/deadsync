@@ -1,6 +1,7 @@
 pub mod discover;
 pub mod dynamic;
 pub mod registry;
+pub mod texture_store;
 pub mod upload;
 
 pub use discover::{
@@ -12,6 +13,7 @@ pub use registry::{
     remove_texture_handle, sprite_sheet_dims, take_pending_generated_texture_keys, texture_dims,
     texture_handle, texture_registry_generation,
 };
+pub use texture_store::TextureStore;
 
 use deadlib_render::{SamplerDesc, SamplerFilter, SamplerWrap};
 use image::{ImageFormat, ImageReader, RgbaImage};

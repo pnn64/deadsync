@@ -1,14 +1,11 @@
 use crate::assets::AssetManager;
+pub(crate) use deadlib_assets::generated_texture;
 pub use deadlib_assets::{
     TexMeta, TextureHints, apply_texture_hints, direct_texture_key_path, fix_hidden_alpha,
     open_image_fallback, parse_sprite_sheet_dims, parse_texture_hints, register_generated_texture,
     register_texture_dims, sprite_sheet_dims, strip_sprite_hints, texture_dims, texture_handle,
     texture_registry_generation, texture_source_dims_from_real,
     texture_source_frame_dims_from_real,
-};
-pub(crate) use deadlib_assets::{
-    clear_texture_handles, generated_texture, register_texture_handle, remove_texture_handle,
-    take_pending_generated_texture_keys,
 };
 use deadlib_platform::dirs;
 use deadlib_present::actors::TextureKeyHandle;

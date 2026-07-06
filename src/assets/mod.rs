@@ -23,12 +23,9 @@ pub use self::textures::{
     strip_sprite_hints, texture_dims, texture_handle, texture_registry_generation,
     texture_source_dims_from_real, texture_source_frame_dims_from_real,
 };
-use self::textures::{
-    apply_texture_hints, clear_texture_handles, fix_hidden_alpha, generated_texture,
-    register_texture_handle, remove_texture_handle, take_pending_generated_texture_keys,
-};
+use self::textures::{apply_texture_hints, fix_hidden_alpha};
+use deadlib_assets::TextureStore;
 pub use deadlib_assets::upload::TextureUploadBudget;
-use deadlib_assets::upload::TextureUploadQueue;
 pub use deadsync_theme::{FontRole, machine_font_key, machine_font_key_for_text};
 
 pub fn media_path_key(path: &Path) -> Arc<str> {
@@ -137,23 +134,15 @@ impl present_texture::TextureContext for PresentTextureContext {
 pub const PRESENT_TEXTURE_CONTEXT: PresentTextureContext = PresentTextureContext;
 
 pub struct AssetManager {
-    textures: TextureHandleMap<RendererTexture>,
-    uploaded_texture_dims: TextureHandleMap<TexMeta>,
-    texture_handles: HashMap<String, TextureHandle>,
-    next_texture_handle: TextureHandle,
+    texture_store: TextureStore<RendererTexture>,
     fonts: HashMap<&'static str, Font>,
-    pending_texture_uploads: TextureUploadQueue,
 }
 
 impl AssetManager {
     pub fn new() -> Self {
         Self {
-            textures: TextureHandleMap::default(),
-            uploaded_texture_dims: TextureHandleMap::default(),
-            texture_handles: HashMap::new(),
-            next_texture_handle: 1,
+            texture_store: TextureStore::new(),
             fonts: HashMap::new(),
-            pending_texture_uploads: TextureUploadQueue::default(),
         }
     }
 
@@ -170,31 +159,26 @@ impl AssetManager {
 
     #[inline(always)]
     pub fn textures(&self) -> &TextureHandleMap<RendererTexture> {
-        &self.textures
+        self.texture_store.textures()
     }
 
     #[inline(always)]
     pub fn has_texture_key(&self, key: &str) -> bool {
-        self.texture_handles.contains_key(key)
+        self.texture_store.has_texture_key(key)
     }
 
     #[inline(always)]
     pub fn has_uploaded_texture_key(&self, key: &str) -> bool {
-        self.texture_handles
-            .get(key)
-            .is_some_and(|handle| self.textures.contains_key(handle))
+        self.texture_store.has_uploaded_texture_key(key)
     }
 
     #[inline(always)]
     pub(crate) fn has_pending_texture_upload(&self, key: &str) -> bool {
-        self.pending_texture_uploads.contains(key)
+        self.texture_store.has_pending_texture_upload(key)
     }
 
     pub fn take_textures(&mut self) -> TextureHandleMap<RendererTexture> {
-        self.texture_handles.clear();
-        clear_texture_handles();
-        self.uploaded_texture_dims.clear();
-        std::mem::take(&mut self.textures)
+        self.texture_store.take_textures()
     }
 
     pub fn with_fonts<F, R>(&self, f: F) -> R
@@ -264,23 +248,8 @@ impl AssetManager {
         Ok(())
     }
 
-    #[inline(always)]
-    fn alloc_texture_handle(&mut self) -> TextureHandle {
-        let handle = self.next_texture_handle;
-        self.next_texture_handle = self.next_texture_handle.wrapping_add(1).max(1);
-        handle
-    }
-
     pub(crate) fn reserve_texture_handle(&mut self, key: String) -> TextureHandle {
-        match self.texture_handles.get(&key).copied() {
-            Some(handle) => handle,
-            None => {
-                let handle = self.alloc_texture_handle();
-                self.texture_handles.insert(key.clone(), handle);
-                register_texture_handle(&key, handle);
-                handle
-            }
-        }
+        self.texture_store.reserve_texture_handle(key)
     }
 
     pub(crate) fn insert_texture(
@@ -290,25 +259,12 @@ impl AssetManager {
         width: u32,
         height: u32,
     ) -> Option<RendererTexture> {
-        let handle = self.reserve_texture_handle(key);
-        self.uploaded_texture_dims.insert(
-            handle,
-            TexMeta {
-                w: width,
-                h: height,
-            },
-        );
-        self.textures.insert(handle, texture)
+        self.texture_store
+            .insert_texture(key, texture, width, height)
     }
 
     pub(crate) fn remove_texture(&mut self, key: &str) -> Option<(TextureHandle, RendererTexture)> {
-        self.pending_texture_uploads.remove(key);
-        let handle = self.texture_handles.remove(key)?;
-        remove_texture_handle(key);
-        self.uploaded_texture_dims.remove(&handle);
-        self.textures
-            .remove(&handle)
-            .map(|texture| (handle, texture))
+        self.texture_store.remove_texture(key)
     }
 
     pub(crate) fn retire_texture(
@@ -330,16 +286,10 @@ impl AssetManager {
         width: u32,
         height: u32,
     ) -> TextureHandle {
-        self.pending_texture_uploads.remove(&key);
-        let handle = self.reserve_texture_handle(key);
-        self.uploaded_texture_dims.insert(
-            handle,
-            TexMeta {
-                w: width,
-                h: height,
-            },
-        );
-        if let Some(old) = self.textures.insert(handle, texture) {
+        let (handle, old) = self
+            .texture_store
+            .set_texture_for_key(key, texture, width, height);
+        if let Some(old) = old {
             self.retire_texture(backend, handle, old);
         }
         handle
@@ -351,13 +301,9 @@ impl AssetManager {
         key: &str,
         rgba: &RgbaImage,
     ) -> Result<(), AssetError> {
-        self.pending_texture_uploads.remove(key);
-        let handle = self.texture_handles.get(key).copied();
-        if let Some(handle) = handle
-            && let Some(meta) = self.uploaded_texture_dims.get(&handle).copied()
-            && meta.w == rgba.width()
-            && meta.h == rgba.height()
-            && let Some(texture) = self.textures.get_mut(&handle)
+        if let Some(texture) =
+            self.texture_store
+                .uploaded_texture_mut(key, rgba.width(), rgba.height())
         {
             backend.update_texture(texture, rgba)?;
             return Ok(());
@@ -382,7 +328,6 @@ impl AssetManager {
         rgba: &RgbaImage,
         sampler: SamplerDesc,
     ) -> Result<(), AssetError> {
-        self.pending_texture_uploads.remove(key);
         let texture = backend.create_texture(rgba, sampler)?;
         self.set_texture_for_key(
             backend,
@@ -395,37 +340,12 @@ impl AssetManager {
         Ok(())
     }
 
-    fn queue_texture_upload_shared(
-        &mut self,
-        key: String,
-        image: Arc<RgbaImage>,
-        sampler: SamplerDesc,
-    ) {
-        self.reserve_texture_handle(key.clone());
-        register_texture_dims(&key, image.width(), image.height());
-        self.pending_texture_uploads.push(key, image, sampler);
-    }
-
     pub(crate) fn queue_texture_upload(&mut self, key: String, image: RgbaImage) {
-        self.queue_texture_upload_with_sampler(key, image, SamplerDesc::default());
-    }
-
-    pub(crate) fn queue_texture_upload_with_sampler(
-        &mut self,
-        key: String,
-        image: RgbaImage,
-        sampler: SamplerDesc,
-    ) {
-        self.queue_texture_upload_shared(key, Arc::new(image), sampler);
+        self.texture_store.queue_texture_upload(key, image);
     }
 
     pub(crate) fn queue_pending_generated_textures(&mut self) {
-        for key in take_pending_generated_texture_keys() {
-            let Some(generated) = generated_texture(&key) else {
-                continue;
-            };
-            self.queue_texture_upload_shared(key, generated.image, generated.sampler);
-        }
+        self.texture_store.queue_pending_generated_textures();
     }
 
     pub(crate) fn drain_texture_uploads(
@@ -436,20 +356,18 @@ impl AssetManager {
         let mut drained_uploads = 0usize;
         let mut drained_bytes = 0usize;
         while let Some((key, upload)) =
-            self.pending_texture_uploads
-                .pop_next(budget, drained_uploads, drained_bytes)
+            self.texture_store
+                .pop_next_upload(budget, drained_uploads, drained_bytes)
         {
             drained_uploads = drained_uploads.saturating_add(1);
             drained_bytes = drained_bytes.saturating_add(upload.bytes);
 
-            let handle = self.texture_handles.get(&key).copied();
             let mut updated = false;
-            if let Some(handle) = handle
-                && let Some(meta) = self.uploaded_texture_dims.get(&handle).copied()
-                && meta.w == upload.image.width()
-                && meta.h == upload.image.height()
-                && let Some(texture) = self.textures.get_mut(&handle)
-            {
+            if let Some(texture) = self.texture_store.uploaded_texture_mut(
+                &key,
+                upload.image.width(),
+                upload.image.height(),
+            ) {
                 match backend.update_texture(texture, upload.image.as_ref()) {
                     Ok(()) => {
                         updated = true;
@@ -606,11 +524,9 @@ mod tests {
 
         assert!(assets.has_texture_key("queued"));
         assert!(assets.has_pending_texture_upload("queued"));
-        assert!(assets.pending_texture_uploads.contains("queued"));
 
         assert!(assets.remove_texture("queued").is_none());
         assert!(!assets.has_texture_key("queued"));
-        assert!(!assets.pending_texture_uploads.contains("queued"));
         assert!(!assets.has_pending_texture_upload("queued"));
     }
 }
