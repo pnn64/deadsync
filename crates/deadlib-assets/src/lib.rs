@@ -5,7 +5,9 @@ pub mod texture_store;
 pub mod upload;
 
 pub use discover::{
-    DiscoveredTexture, NONE_TEXTURE_CHOICE_KEY, discover_graphic_textures_in_roots,
+    DiscoveredTexture, NONE_TEXTURE_CHOICE_KEY, TextureChoiceLike,
+    canonical_texture_key_with_asset_roots, discover_graphic_textures_in_roots,
+    noteskin_png_texture_entries, resolve_texture_choice_entry, resolve_texture_choice_key,
 };
 pub use registry::{
     GeneratedTexture, TexMeta, clear_texture_handles, generated_texture,

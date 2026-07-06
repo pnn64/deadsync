@@ -15,8 +15,6 @@ use deadlib_renderer::Backend;
 use image::RgbaImage;
 use log::{debug, warn};
 use std::{
-    collections::HashSet,
-    fs,
     path::{Path, PathBuf},
     sync::{
         Arc, Mutex, OnceLock,
@@ -25,9 +23,11 @@ use std::{
     },
 };
 
-use super::{AssetError, PRESENT_TEXTURE_CONTEXT, visual_styles};
+use super::{AssetError, PRESENT_TEXTURE_CONTEXT};
 use deadlib_assets::{
-    DiscoveredTexture, NONE_TEXTURE_CHOICE_KEY, discover_graphic_textures_in_roots,
+    DiscoveredTexture, NONE_TEXTURE_CHOICE_KEY, TextureChoiceLike,
+    canonical_texture_key_with_asset_roots, discover_graphic_textures_in_roots,
+    noteskin_png_texture_entries,
 };
 
 pub struct TextureChoice {
@@ -86,16 +86,19 @@ impl PartialEq for TextureChoice {
 
 impl Eq for TextureChoice {}
 
+impl TextureChoiceLike for TextureChoice {
+    fn key(&self) -> &str {
+        self.key.as_ref()
+    }
+}
+
 static JUDGMENT_TEXTURE_CHOICES: OnceLock<Vec<TextureChoice>> = OnceLock::new();
 static HOLD_JUDGMENT_TEXTURE_CHOICES: OnceLock<Vec<TextureChoice>> = OnceLock::new();
 static HELD_MISS_TEXTURE_CHOICES: OnceLock<Vec<TextureChoice>> = OnceLock::new();
 
 #[inline(always)]
 fn needs_repeat_sampler(key: &str) -> bool {
-    matches!(
-        key,
-        "swoosh.png" | "graphics/menu_bg_technique/square.png" | "grades/goldstar (stretch).png"
-    ) || visual_styles::is_shared_background_texture(key)
+    deadsync_theme::texture_needs_repeat_sampler(key)
 }
 
 fn absolute_or_self(path: &Path) -> PathBuf {
@@ -187,71 +190,29 @@ pub fn resolve_texture_choice<'a>(
     requested: Option<&str>,
     choices: &'a [TextureChoice],
 ) -> Option<&'a str> {
-    resolve_texture_choice_entry(requested, choices).map(|choice| choice.key.as_ref())
+    deadlib_assets::resolve_texture_choice_key(requested, choices)
 }
 
 pub fn resolve_texture_choice_entry<'a>(
     requested: Option<&str>,
     choices: &'a [TextureChoice],
 ) -> Option<&'a TextureChoice> {
-    // When the caller explicitly opts out of a texture (e.g. user selected "None"),
-    // honor that and render nothing. Only fall back to the first available choice
-    // when a texture was requested but could not be located in the discovered set
-    // (e.g. the user-customized file was removed).
-    let key = requested?;
-    choices
-        .iter()
-        .find(|choice| choice.key.as_ref().eq_ignore_ascii_case(key))
-        .or_else(|| {
-            choices.iter().find(|choice| {
-                !choice
-                    .key
-                    .as_ref()
-                    .eq_ignore_ascii_case(NONE_TEXTURE_CHOICE_KEY)
-            })
-        })
+    deadlib_assets::resolve_texture_choice_entry(requested, choices)
 }
 
 pub fn canonical_texture_key<P: AsRef<Path>>(p: P) -> String {
-    let p = p.as_ref();
-    // Try stripping data-dir or exe-dir asset prefix for absolute paths.
-    if let Some(rel) = dirs::app_dirs().strip_asset_prefix(p) {
-        return rel.to_string_lossy().replace('\\', "/");
-    }
-    let rel = p.strip_prefix(Path::new("assets")).unwrap_or(p);
-    rel.to_string_lossy().replace('\\', "/")
+    let dirs = dirs::app_dirs();
+    canonical_texture_key_with_asset_roots(
+        p.as_ref(),
+        [dirs.data_dir.join("assets"), dirs.exe_dir.join("assets")],
+    )
 }
 
 pub(crate) fn append_noteskins_pngs_recursive(list: &mut Vec<(String, String)>, folder: &str) {
     let roots = dirs::app_dirs().noteskin_roots();
-    let mut seen_keys = HashSet::new();
-    for root in &roots {
-        let base = root.parent().expect("noteskin root has parent");
-        let mut dirs = vec![base.join(folder)];
-        while let Some(dir) = dirs.pop() {
-            let Ok(entries) = fs::read_dir(&dir) else {
-                continue;
-            };
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() {
-                    dirs.push(path);
-                    continue;
-                }
-                if !path
-                    .extension()
-                    .is_some_and(|ext| ext.eq_ignore_ascii_case("png"))
-                {
-                    continue;
-                }
-                let key = canonical_texture_key(&path);
-                if key.starts_with("noteskins/") && seen_keys.insert(key.clone()) {
-                    let file_path = path.to_string_lossy().replace('\\', "/");
-                    list.push((key, file_path));
-                }
-            }
-        }
-    }
+    list.extend(noteskin_png_texture_entries(&roots, folder, |path| {
+        canonical_texture_key(path)
+    }));
 }
 
 fn append_graphic_textures(

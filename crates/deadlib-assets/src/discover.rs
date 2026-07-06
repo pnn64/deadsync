@@ -14,6 +14,10 @@ pub struct DiscoveredTexture {
     pub source_path: String,
 }
 
+pub trait TextureChoiceLike {
+    fn key(&self) -> &str;
+}
+
 fn absolute_or_self(path: &Path) -> PathBuf {
     if path.is_absolute() {
         return path.to_path_buf();
@@ -84,4 +88,131 @@ pub fn discover_graphic_textures_in_roots(
         }
     });
     discovered
+}
+
+pub fn canonical_texture_key_with_asset_roots(
+    path: &Path,
+    asset_roots: impl IntoIterator<Item = PathBuf>,
+) -> String {
+    for root in asset_roots {
+        if let Ok(rel) = path.strip_prefix(root) {
+            return rel.to_string_lossy().replace('\\', "/");
+        }
+    }
+    let rel = path.strip_prefix(Path::new("assets")).unwrap_or(path);
+    rel.to_string_lossy().replace('\\', "/")
+}
+
+pub fn noteskin_png_texture_entries(
+    roots: &[PathBuf],
+    folder: &str,
+    canonical_key: impl Fn(&Path) -> String,
+) -> Vec<(String, String)> {
+    let mut list = Vec::new();
+    let mut seen_keys = HashSet::new();
+    for root in roots {
+        let base = root.parent().expect("noteskin root has parent");
+        let mut dirs = vec![base.join(folder)];
+        while let Some(dir) = dirs.pop() {
+            let Ok(entries) = fs::read_dir(&dir) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    dirs.push(path);
+                    continue;
+                }
+                if !path
+                    .extension()
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("png"))
+                {
+                    continue;
+                }
+                let key = canonical_key(&path);
+                if key.starts_with("noteskins/") && seen_keys.insert(key.clone()) {
+                    let file_path = path.to_string_lossy().replace('\\', "/");
+                    list.push((key, file_path));
+                }
+            }
+        }
+    }
+    list
+}
+
+pub fn resolve_texture_choice_key<'a, T: TextureChoiceLike>(
+    requested: Option<&str>,
+    choices: &'a [T],
+) -> Option<&'a str> {
+    resolve_texture_choice_entry(requested, choices).map(TextureChoiceLike::key)
+}
+
+pub fn resolve_texture_choice_entry<'a, T: TextureChoiceLike>(
+    requested: Option<&str>,
+    choices: &'a [T],
+) -> Option<&'a T> {
+    // When the caller explicitly opts out of a texture (e.g. user selected "None"),
+    // honor that and render nothing. Only fall back to the first available choice
+    // when a texture was requested but could not be located in the discovered set
+    // (e.g. the user-customized file was removed).
+    let key = requested?;
+    choices
+        .iter()
+        .find(|choice| choice.key().eq_ignore_ascii_case(key))
+        .or_else(|| {
+            choices
+                .iter()
+                .find(|choice| !choice.key().eq_ignore_ascii_case(NONE_TEXTURE_CHOICE_KEY))
+        })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Debug, PartialEq, Eq)]
+    struct Choice(&'static str);
+
+    impl TextureChoiceLike for Choice {
+        fn key(&self) -> &str {
+            self.0
+        }
+    }
+
+    #[test]
+    fn resolves_requested_texture_choice_case_insensitively() {
+        let choices = [Choice("Love"), Choice("Metal")];
+
+        assert_eq!(
+            resolve_texture_choice_entry(Some("metal"), &choices),
+            Some(&choices[1])
+        );
+    }
+
+    #[test]
+    fn falls_back_to_first_non_none_texture_choice() {
+        let choices = [Choice(NONE_TEXTURE_CHOICE_KEY), Choice("Love")];
+
+        assert_eq!(
+            resolve_texture_choice_key(Some("missing"), &choices),
+            Some("Love")
+        );
+    }
+
+    #[test]
+    fn explicit_none_request_keeps_none_choice() {
+        let choices = [Choice(NONE_TEXTURE_CHOICE_KEY), Choice("Love")];
+
+        assert_eq!(
+            resolve_texture_choice_key(Some(NONE_TEXTURE_CHOICE_KEY), &choices),
+            Some(NONE_TEXTURE_CHOICE_KEY)
+        );
+    }
+
+    #[test]
+    fn missing_request_resolves_to_no_choice() {
+        let choices = [Choice("Love")];
+
+        assert_eq!(resolve_texture_choice_key(None, &choices), None);
+    }
 }

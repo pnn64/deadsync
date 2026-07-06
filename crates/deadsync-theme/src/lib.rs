@@ -794,6 +794,14 @@ pub fn is_shared_background_texture(key: &str) -> bool {
     all_assets().any(|asset| asset.shared_background == key)
 }
 
+#[inline(always)]
+pub fn texture_needs_repeat_sampler(key: &str) -> bool {
+    matches!(
+        key,
+        "swoosh.png" | "graphics/menu_bg_technique/square.png" | "grades/goldstar (stretch).png"
+    ) || is_shared_background_texture(key)
+}
+
 pub fn bundled_music_asset_paths() -> impl Iterator<Item = &'static str> {
     [
         "assets/music/select_course (loop).ogg",
@@ -1075,5 +1083,14 @@ mod tests {
                 .iter()
                 .any(|asset| asset.key == step_stats_gifs::STEP_STATS_GIF_TEXTURES[0])
         );
+    }
+
+    #[test]
+    fn repeat_sampler_policy_includes_stretched_and_shared_textures() {
+        assert!(texture_needs_repeat_sampler(
+            "grades/goldstar (stretch).png"
+        ));
+        assert!(texture_needs_repeat_sampler(ASSETS[0].shared_background));
+        assert!(!texture_needs_repeat_sampler("logo.png"));
     }
 }
