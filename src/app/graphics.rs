@@ -38,7 +38,14 @@ fn logical_px_for_physical(px: u32, scale: f64) -> u32 {
 }
 
 fn window_render_size(window: &Window, backend_type: BackendType) -> PhysicalSize<u32> {
-    let size = window.inner_size();
+    render_size_for_physical(window, backend_type, window.inner_size())
+}
+
+fn render_size_for_physical(
+    window: &Window,
+    backend_type: BackendType,
+    size: PhysicalSize<u32>,
+) -> PhysicalSize<u32> {
     if !macos_opengl_low_dpi(backend_type) {
         return size;
     }
@@ -73,19 +80,23 @@ fn with_requested_window_size(
     attrs.with_inner_size(PhysicalSize::new(width, height))
 }
 
-fn request_window_size(window: &Window, backend_type: BackendType, width: u32, height: u32) {
+fn request_window_size(
+    window: &Window,
+    backend_type: BackendType,
+    width: u32,
+    height: u32,
+) -> Option<PhysicalSize<u32>> {
     #[cfg(not(target_os = "macos"))]
     let _ = backend_type;
     #[cfg(target_os = "macos")]
     {
         if macos_opengl_low_dpi(backend_type) {
             let size = LogicalSize::new(f64::from(width), f64::from(height));
-            let _ = window.request_inner_size(size);
-            return;
+            return window.request_inner_size(size);
         }
     }
     let size = PhysicalSize::new(width, height);
-    let _ = window.request_inner_size(size);
+    window.request_inner_size(size)
 }
 
 fn load_window_icon() -> Option<Icon> {
@@ -183,6 +194,15 @@ impl App {
 
         match self.state.shell.display_mode {
             DisplayMode::Fullscreen(fullscreen_type) => {
+                // Winit defaults new Linux windows to 800x600. In bare X11
+                // sessions fullscreen can be applied after the hidden window
+                // is shown, so seed the configured size before backend init.
+                window_attributes = with_requested_window_size(
+                    window_attributes,
+                    self.backend_type,
+                    window_width,
+                    window_height,
+                );
                 let fullscreen = display::fullscreen_mode(
                     fullscreen_type,
                     window_width,
@@ -366,10 +386,9 @@ impl App {
     }
 
     pub(super) fn sync_window_size(&mut self, size: PhysicalSize<u32>) {
-        let size = self
-            .window
-            .as_ref()
-            .map_or(size, |window| window_render_size(window, self.backend_type));
+        let size = self.window.as_ref().map_or(size, |window| {
+            render_size_for_physical(window, self.backend_type, size)
+        });
         if size.width > 0 && size.height > 0 {
             self.state.shell.metrics = space::metrics_for_window(size.width, size.height);
             space::set_current_metrics(self.state.shell.metrics);
@@ -405,7 +424,7 @@ impl App {
             match mode {
                 DisplayMode::Windowed => {
                     window.set_fullscreen(None);
-                    request_window_size(
+                    let immediate_size = request_window_size(
                         window,
                         self.backend_type,
                         self.state.shell.display_width,
@@ -420,6 +439,9 @@ impl App {
                     ) {
                         window.set_outer_position(pos);
                     }
+                    if let Some(size) = immediate_size {
+                        self.sync_window_size(size);
+                    }
                 }
                 DisplayMode::Fullscreen(fullscreen_type) => {
                     let fullscreen = display::fullscreen_mode(
@@ -429,12 +451,32 @@ impl App {
                         monitor_handle,
                         event_loop,
                     );
+                    let immediate_size = request_window_size(
+                        window,
+                        self.backend_type,
+                        self.state.shell.display_width,
+                        self.state.shell.display_height,
+                    );
                     window.set_fullscreen(fullscreen);
+                    if let Some(size) = immediate_size {
+                        self.sync_window_size(size);
+                    }
+                    // Fullscreen transitions are asynchronous on common Linux
+                    // paths. Do not resize from window.inner_size() here; the
+                    // final surface size is handled by WindowEvent::Resized.
+                    self.state.shell.display_mode = mode;
+                    config::update_display_mode(mode);
+                    config::update_display_monitor(self.state.shell.display_monitor);
+                    options::sync_display_mode(
+                        &mut self.state.screens.options_state,
+                        mode,
+                        fullscreen_type,
+                        self.state.shell.display_monitor,
+                        monitor_count,
+                    );
+                    return Ok(());
                 }
             }
-
-            let sz = window_render_size(window, self.backend_type);
-            self.sync_window_size(sz);
         }
 
         self.state.shell.display_mode = mode;
@@ -473,7 +515,11 @@ impl App {
         if let Some(window) = &self.window {
             match self.state.shell.display_mode {
                 DisplayMode::Windowed => {
-                    request_window_size(window, self.backend_type, width, height);
+                    if let Some(size) =
+                        request_window_size(window, self.backend_type, width, height)
+                    {
+                        self.sync_window_size(size);
+                    }
                 }
                 DisplayMode::Fullscreen(fullscreen_type) => {
                     let fullscreen = display::fullscreen_mode(
@@ -483,12 +529,17 @@ impl App {
                         monitor_handle,
                         event_loop,
                     );
+                    let immediate_size =
+                        request_window_size(window, self.backend_type, width, height);
                     window.set_fullscreen(fullscreen);
+                    if let Some(size) = immediate_size {
+                        self.sync_window_size(size);
+                    }
+                    // Wait for WindowEvent::Resized before trusting the final
+                    // fullscreen drawable size on X11/Wayland.
+                    return Ok(());
                 }
             }
-
-            let sz = window_render_size(window, self.backend_type);
-            self.sync_window_size(sz);
         }
 
         Ok(())
