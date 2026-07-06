@@ -9,9 +9,23 @@ pub use rssp::course::{
     resolve_course_banner_path,
 };
 
+pub type LoadedCourse = (PathBuf, CourseFile);
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CourseRefError {
     pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CourseLoadFailure {
+    pub path: PathBuf,
+    pub message: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct CourseLoadReport {
+    pub courses: Vec<LoadedCourse>,
+    pub failures: Vec<CourseLoadFailure>,
 }
 
 impl fmt::Display for CourseRefError {
@@ -66,6 +80,63 @@ pub fn course_progress_names<'a>(path: &'a Path, root: &'a Path) -> (&'a str, &'
         .filter(|name| !name.is_empty())
         .unwrap_or_default();
     (group, course)
+}
+
+pub fn load_course_paths_with_progress<F>(
+    course_paths: Vec<PathBuf>,
+    progress_root: &Path,
+    song_roots: &[PathBuf],
+    total_song_count: usize,
+    mut progress: Option<&mut F>,
+) -> CourseLoadReport
+where
+    F: FnMut(usize, usize, &str, &str),
+{
+    let total_courses = course_paths.len();
+    let mut courses = Vec::with_capacity(total_courses);
+    let mut failures = Vec::new();
+    let mut group_dirs = HashMap::new();
+    let mut courses_done = 0usize;
+    report_load_progress(&mut progress, 0, total_courses, "", "");
+
+    for course_path in course_paths {
+        let (group_display, course_display) = course_progress_names(&course_path, progress_root);
+        let group_display = group_display.to_owned();
+        let course_display = course_display.to_owned();
+        let mut report_done = || {
+            courses_done = courses_done.saturating_add(1);
+            report_load_progress(
+                &mut progress,
+                courses_done,
+                total_courses,
+                &group_display,
+                &course_display,
+            );
+        };
+
+        let course = match parse_course_file(&course_path) {
+            Ok(course) => course,
+            Err(message) => {
+                failures.push(CourseLoadFailure {
+                    path: course_path,
+                    message,
+                });
+                report_done();
+                continue;
+            }
+        };
+
+        match validate_course_refs(&course, song_roots, &mut group_dirs, total_song_count) {
+            Ok(()) => courses.push((course_path, course)),
+            Err(error) => failures.push(CourseLoadFailure {
+                path: course_path,
+                message: error.message,
+            }),
+        }
+        report_done();
+    }
+
+    CourseLoadReport { courses, failures }
 }
 
 pub fn autogen_nonstop_group_courses(
@@ -305,6 +376,21 @@ fn is_dir_ci(dir: &Path, name: &str) -> Option<PathBuf> {
     ci_match
 }
 
+#[inline(always)]
+fn report_load_progress<F>(
+    progress: &mut Option<&mut F>,
+    done: usize,
+    total: usize,
+    group: &str,
+    item: &str,
+) where
+    F: FnMut(usize, usize, &str, &str),
+{
+    if let Some(cb) = progress.as_mut() {
+        cb(done, total, group, item);
+    }
+}
+
 fn validate_song_dir(
     course: &CourseFile,
     entry_num: usize,
@@ -541,6 +627,75 @@ mod tests {
         assert_eq!(
             course_progress_names(Path::new("course.crs"), Path::new("")),
             ("courses", "course.crs")
+        );
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn load_course_paths_reports_progress_and_successes() {
+        let root = test_dir("load-course-success");
+        let course = root.join("Group").join("course.crs");
+        fs::create_dir_all(course.parent().unwrap()).unwrap();
+        fs::write(&course, b"#COURSE:Base;").unwrap();
+        let mut progress = Vec::new();
+
+        let report = load_course_paths_with_progress(
+            vec![course.clone()],
+            &root,
+            &[],
+            0,
+            Some(&mut |done, total, group, item| {
+                progress.push((done, total, group.to_string(), item.to_string()));
+            }),
+        );
+
+        assert_eq!(report.failures, Vec::new());
+        assert_eq!(report.courses.len(), 1);
+        assert_eq!(report.courses[0].0, course);
+        assert_eq!(report.courses[0].1.name, "Base");
+        assert_eq!(
+            progress,
+            vec![
+                (0, 1, String::new(), String::new()),
+                (1, 1, "Group".to_string(), "course.crs".to_string()),
+            ]
+        );
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn load_course_paths_reports_parse_failures() {
+        let root = test_dir("load-course-failure");
+        let course = root.join("missing.crs");
+        let mut progress = Vec::new();
+
+        let report = load_course_paths_with_progress(
+            vec![course.clone()],
+            &root,
+            &[],
+            0,
+            Some(&mut |done, total, group, item| {
+                progress.push((done, total, group.to_string(), item.to_string()));
+            }),
+        );
+
+        assert!(report.courses.is_empty());
+        assert_eq!(report.failures.len(), 1);
+        assert_eq!(report.failures[0].path, course);
+        assert!(report.failures[0].message.contains("Failed to read course"));
+        assert_eq!(
+            progress,
+            vec![
+                (0, 1, String::new(), String::new()),
+                (
+                    1,
+                    1,
+                    root.file_name().unwrap().to_string_lossy().to_string(),
+                    "missing.crs".to_string()
+                ),
+            ]
         );
 
         let _ = fs::remove_dir_all(root);

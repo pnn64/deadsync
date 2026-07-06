@@ -1,12 +1,11 @@
 use crate::game::{parsing::simfile::collect_song_scan_roots, song::get_song_cache};
 use deadlib_platform::dirs;
 use deadsync_simfile::course::{
-    CourseFile, autogen_nonstop_group_courses, collect_merged_course_paths, course_progress_names,
-    parse_course_file, validate_course_refs,
+    CourseFile, autogen_nonstop_group_courses, collect_merged_course_paths,
+    load_course_paths_with_progress,
 };
 use deadsync_simfile::scan::{fmt_scan_time, push_unique_path};
 use log::{info, warn};
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Instant;
@@ -22,21 +21,6 @@ pub fn get_course_cache() -> std::sync::MutexGuard<'static, Vec<CourseData>> {
 
 fn set_course_cache(courses: Vec<CourseData>) {
     *COURSE_CACHE.lock().unwrap() = courses;
-}
-
-#[inline(always)]
-fn report_load_progress<F>(
-    progress: &mut Option<&mut F>,
-    done: usize,
-    total: usize,
-    group: &str,
-    item: &str,
-) where
-    F: FnMut(usize, usize, &str, &str),
-{
-    if let Some(cb) = progress.as_mut() {
-        cb(done, total, group, item);
-    }
 }
 
 fn collect_course_scan_roots(root_path: &Path) -> Vec<PathBuf> {
@@ -65,11 +49,8 @@ pub fn scan_and_load_courses_with_progress_counts<F>(
     scan_and_load_courses_impl(courses_root, songs_root, Some(progress));
 }
 
-fn scan_and_load_courses_impl<F>(
-    courses_root: &Path,
-    songs_root: &Path,
-    mut progress: Option<&mut F>,
-) where
+fn scan_and_load_courses_impl<F>(courses_root: &Path, songs_root: &Path, progress: Option<&mut F>)
+where
     F: FnMut(usize, usize, &str, &str),
 {
     info!("Starting course scan in '{}'...", courses_root.display());
@@ -88,9 +69,6 @@ fn scan_and_load_courses_impl<F>(
         return;
     }
 
-    let mut loaded_courses = Vec::new();
-    let mut courses_failed = 0usize;
-    let mut group_dirs: HashMap<String, PathBuf> = HashMap::new();
     let total_song_count = {
         let song_cache = get_song_cache();
         song_cache
@@ -99,43 +77,15 @@ fn scan_and_load_courses_impl<F>(
             .sum::<usize>()
     };
     let course_paths = collect_merged_course_paths(&course_roots);
-    let total_courses = course_paths.len();
-    let mut courses_done = 0usize;
-    report_load_progress(&mut progress, 0, total_courses, "", "");
-
-    for course_path in course_paths {
-        let (group_display, course_display) = course_progress_names(&course_path, courses_root);
-        let group_display = group_display.to_owned();
-        let course_display = course_display.to_owned();
-        let mut report_done = || {
-            courses_done = courses_done.saturating_add(1);
-            report_load_progress(
-                &mut progress,
-                courses_done,
-                total_courses,
-                &group_display,
-                &course_display,
-            );
-        };
-        let course = match parse_course_file(&course_path) {
-            Ok(c) => c,
-            Err(error) => {
-                courses_failed += 1;
-                warn!("{error}");
-                report_done();
-                continue;
-            }
-        };
-
-        if let Err(error) =
-            validate_course_refs(&course, &song_roots, &mut group_dirs, total_song_count)
-        {
-            warn!("{error}");
-            courses_failed += 1;
-        } else {
-            loaded_courses.push((course_path, course));
-        }
-        report_done();
+    let mut report = load_course_paths_with_progress(
+        course_paths,
+        courses_root,
+        &song_roots,
+        total_song_count,
+        progress,
+    );
+    for failure in &report.failures {
+        warn!("{}", failure.message);
     }
 
     let autogen_courses = {
@@ -144,14 +94,14 @@ fn scan_and_load_courses_impl<F>(
         autogen_nonstop_group_courses(&courses_dir, &song_cache)
     };
     let autogen_count = autogen_courses.len();
-    loaded_courses.extend(autogen_courses);
+    report.courses.extend(autogen_courses);
 
     info!(
         "Finished course scan. Loaded {} courses ({} autogen, failed {}) in {}.",
-        loaded_courses.len(),
+        report.courses.len(),
         autogen_count,
-        courses_failed,
+        report.failures.len(),
         fmt_scan_time(started.elapsed())
     );
-    set_course_cache(loaded_courses);
+    set_course_cache(report.courses);
 }
