@@ -605,6 +605,7 @@ fn select_music_options(cfg: &Config) -> SelectMusicOptions {
         show_previews: cfg.show_select_music_previews,
         show_preview_marker: cfg.show_select_music_preview_marker,
         preview_loop: cfg.select_music_preview_loop,
+        preview_starts_immediately: cfg.select_music_preview_starts_immediately,
         pattern_info_mode: cfg.select_music_pattern_info_mode,
         step_artist_box_mode: cfg.select_music_step_artist_box_mode,
         show_scorebox: cfg.show_select_music_scorebox,

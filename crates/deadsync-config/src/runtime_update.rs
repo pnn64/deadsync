@@ -169,6 +169,7 @@ update_config_fn!(pub fn update_show_select_music_folder_stats(enabled: bool) =>
 update_config_fn!(pub fn update_show_select_music_previews(enabled: bool) => set_show_select_music_previews);
 update_config_fn!(pub fn update_show_select_music_preview_marker(enabled: bool) => set_show_select_music_preview_marker);
 update_config_fn!(pub fn update_select_music_preview_loop(enabled: bool) => set_select_music_preview_loop);
+update_config_fn!(pub fn update_select_music_preview_starts_immediately(enabled: bool) => set_select_music_preview_starts_immediately);
 update_config_fn!(pub fn update_select_music_pattern_info_mode(mode: SelectMusicPatternInfoMode) => set_select_music_pattern_info_mode);
 update_config_fn!(pub fn update_select_music_step_artist_box_mode(mode: SelectMusicStepArtistBoxMode) => set_select_music_step_artist_box_mode);
 update_config_fn!(pub fn update_show_select_music_gameplay_timer(enabled: bool) => set_show_select_music_gameplay_timer);

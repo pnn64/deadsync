@@ -1121,6 +1121,12 @@ pub fn init() -> State {
     set_choice_by_id(
         &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
         SELECT_MUSIC_OPTIONS_ROWS,
+        SubRowId::PreviewStartsImmediately,
+        yes_no_choice_index(cfg.select_music_preview_starts_immediately),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
+        SELECT_MUSIC_OPTIONS_ROWS,
         SubRowId::ShowGameplayTimer,
         yes_no_choice_index(cfg.show_select_music_gameplay_timer),
     );

@@ -705,6 +705,8 @@ pub(super) fn apply_submenu_choice_delta(
             config::update_show_select_music_preview_marker(yes_no_from_choice(new_index));
         } else if row.id == SubRowId::LoopMusic {
             config::update_select_music_preview_loop(new_index == 1);
+        } else if row.id == SubRowId::PreviewStartsImmediately {
+            config::update_select_music_preview_starts_immediately(yes_no_from_choice(new_index));
         } else if row.id == SubRowId::ShowGameplayTimer {
             config::update_show_select_music_gameplay_timer(yes_no_from_choice(new_index));
         } else if row.id == SubRowId::ShowStageDisplay {
