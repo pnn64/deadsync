@@ -1,35 +1,37 @@
 use crate::assets::AssetManager;
 pub use deadlib_assets::{
-    TextureHints, apply_texture_hints, ascii_ci_hash, direct_texture_key_path, fix_hidden_alpha,
-    open_image_fallback, parse_sprite_sheet_dims, parse_texture_hints, strip_sprite_hints,
-    texture_filename_has_multiframe_hint, texture_source_dims_from_real,
+    TexMeta, TextureHints, apply_texture_hints, direct_texture_key_path, fix_hidden_alpha,
+    open_image_fallback, parse_sprite_sheet_dims, parse_texture_hints, register_generated_texture,
+    register_texture_dims, sprite_sheet_dims, strip_sprite_hints, texture_dims, texture_handle,
+    texture_registry_generation, texture_source_dims_from_real,
     texture_source_frame_dims_from_real,
+};
+pub(crate) use deadlib_assets::{
+    clear_texture_handles, generated_texture, register_texture_handle, remove_texture_handle,
+    take_pending_generated_texture_keys,
 };
 use deadlib_platform::dirs;
 use deadlib_present::actors::TextureKeyHandle;
 use deadlib_present::texture as present_texture;
-use deadlib_render::{FastU64Map, INVALID_TEXTURE_HANDLE, SamplerDesc, SamplerWrap, TextureHandle};
+use deadlib_render::{INVALID_TEXTURE_HANDLE, SamplerDesc, SamplerWrap};
 use deadlib_renderer::Backend;
 use image::RgbaImage;
 use log::{debug, warn};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     fs,
     path::{Path, PathBuf},
     sync::{
-        Arc, Mutex, OnceLock, RwLock,
+        Arc, Mutex, OnceLock,
         atomic::{AtomicU64, Ordering},
         mpsc,
     },
 };
 
 use super::{AssetError, PRESENT_TEXTURE_CONTEXT, visual_styles};
-
-#[derive(Clone, Copy, Debug)]
-pub struct TexMeta {
-    pub w: u32,
-    pub h: u32,
-}
+use deadlib_assets::{
+    DiscoveredTexture, NONE_TEXTURE_CHOICE_KEY, discover_graphic_textures_in_roots,
+};
 
 pub struct TextureChoice {
     pub key: Arc<str>,
@@ -87,17 +89,9 @@ impl PartialEq for TextureChoice {
 
 impl Eq for TextureChoice {}
 
-#[derive(Clone, Debug)]
-struct DiscoveredTexture {
-    key: String,
-    label: String,
-    source_path: String,
-}
-
 static JUDGMENT_TEXTURE_CHOICES: OnceLock<Vec<TextureChoice>> = OnceLock::new();
 static HOLD_JUDGMENT_TEXTURE_CHOICES: OnceLock<Vec<TextureChoice>> = OnceLock::new();
 static HELD_MISS_TEXTURE_CHOICES: OnceLock<Vec<TextureChoice>> = OnceLock::new();
-const NONE_TEXTURE_CHOICE_KEY: &str = "None";
 
 #[inline(always)]
 fn needs_repeat_sampler(key: &str) -> bool {
@@ -141,66 +135,17 @@ fn graphics_roots(folder: &str) -> Vec<PathBuf> {
     roots
 }
 
-fn is_png_file(filename: &str) -> bool {
-    Path::new(filename)
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("png"))
-}
-
 fn discover_graphic_textures(
     folder: &str,
     love_first: bool,
     require_multiframe_hint: bool,
 ) -> Vec<DiscoveredTexture> {
-    let mut discovered = Vec::new();
-    let mut seen_keys = HashSet::new();
-    for root in graphics_roots(folder) {
-        let Ok(entries) = fs::read_dir(&root) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if !path.is_file() {
-                continue;
-            }
-            let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
-                continue;
-            };
-            if require_multiframe_hint && !texture_filename_has_multiframe_hint(file_name) {
-                continue;
-            }
-            if !require_multiframe_hint && !is_png_file(file_name) {
-                continue;
-            }
-            let key = format!("{folder}/{file_name}");
-            if !seen_keys.insert(key.to_ascii_lowercase()) {
-                continue;
-            }
-            let label = strip_sprite_hints(file_name);
-            if label.eq_ignore_ascii_case(NONE_TEXTURE_CHOICE_KEY) {
-                continue;
-            }
-            discovered.push(DiscoveredTexture {
-                key,
-                label,
-                source_path: absolute_or_self(&path).to_string_lossy().replace('\\', "/"),
-            });
-        }
-    }
-    discovered.sort_by(|a, b| {
-        let a_love = love_first && a.label.eq_ignore_ascii_case("Love");
-        let b_love = love_first && b.label.eq_ignore_ascii_case("Love");
-        match (a_love, b_love) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => a
-                .label
-                .to_ascii_lowercase()
-                .cmp(&b.label.to_ascii_lowercase()),
-        }
-    });
-    discovered
+    discover_graphic_textures_in_roots(
+        folder,
+        graphics_roots(folder),
+        love_first,
+        require_multiframe_hint,
+    )
 }
 
 fn texture_choices_from_discovered(
@@ -268,178 +213,6 @@ pub fn resolve_texture_choice_entry<'a>(
                     .eq_ignore_ascii_case(NONE_TEXTURE_CHOICE_KEY)
             })
         })
-}
-
-static TEX_META: std::sync::LazyLock<RwLock<HashMap<String, TexMeta>>> =
-    std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
-
-static SHEET_DIMS: std::sync::LazyLock<RwLock<HashMap<String, (u32, u32)>>> =
-    std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
-
-static TEXTURE_HANDLES: std::sync::LazyLock<RwLock<HashMap<String, TextureHandle>>> =
-    std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
-
-static TEXTURE_HANDLE_ALIASES: std::sync::LazyLock<RwLock<FastU64Map<TextureHandle>>> =
-    std::sync::LazyLock::new(|| RwLock::new(FastU64Map::default()));
-
-#[derive(Clone)]
-pub(crate) struct GeneratedTexture {
-    pub image: Arc<RgbaImage>,
-    pub sampler: SamplerDesc,
-}
-
-static GENERATED_TEXTURES: std::sync::LazyLock<RwLock<HashMap<String, GeneratedTexture>>> =
-    std::sync::LazyLock::new(|| RwLock::new(HashMap::new()));
-static GENERATED_TEXTURES_PENDING: std::sync::LazyLock<Mutex<HashSet<String>>> =
-    std::sync::LazyLock::new(|| Mutex::new(HashSet::new()));
-static TEXTURE_REGISTRY_GENERATION: AtomicU64 = AtomicU64::new(1);
-
-#[inline(always)]
-fn touch_texture_registry() {
-    TEXTURE_REGISTRY_GENERATION.fetch_add(1, Ordering::Relaxed);
-}
-
-#[inline(always)]
-pub fn texture_registry_generation() -> u64 {
-    TEXTURE_REGISTRY_GENERATION.load(Ordering::Relaxed)
-}
-
-fn note_texture_handle_alias(
-    aliases: &mut FastU64Map<TextureHandle>,
-    key: &str,
-    handle: TextureHandle,
-) {
-    let folded = ascii_ci_hash(key);
-    match aliases.get_mut(&folded) {
-        Some(existing) if *existing != handle => *existing = INVALID_TEXTURE_HANDLE,
-        Some(_) => {}
-        None => {
-            aliases.insert(folded, handle);
-        }
-    }
-}
-
-fn rebuild_texture_handle_aliases(
-    handles: &HashMap<String, TextureHandle>,
-    aliases: &mut FastU64Map<TextureHandle>,
-) {
-    aliases.clear();
-    aliases.reserve(handles.len());
-    for (key, &handle) in handles {
-        note_texture_handle_alias(aliases, key, handle);
-    }
-}
-
-pub(crate) fn register_texture_handle(key: &str, handle: TextureHandle) {
-    let mut handles = TEXTURE_HANDLES.write().unwrap();
-    let mut aliases = TEXTURE_HANDLE_ALIASES.write().unwrap();
-    let replaced = handles.insert(key.to_string(), handle);
-    if replaced.is_some_and(|old| old != handle) {
-        rebuild_texture_handle_aliases(&handles, &mut aliases);
-        touch_texture_registry();
-    } else if replaced.is_none() {
-        note_texture_handle_alias(&mut aliases, key, handle);
-        touch_texture_registry();
-    }
-}
-
-pub(crate) fn remove_texture_handle(key: &str) {
-    let mut handles = TEXTURE_HANDLES.write().unwrap();
-    if handles.remove(key).is_none() {
-        return;
-    }
-    let mut aliases = TEXTURE_HANDLE_ALIASES.write().unwrap();
-    rebuild_texture_handle_aliases(&handles, &mut aliases);
-    touch_texture_registry();
-}
-
-pub(crate) fn clear_texture_handles() {
-    TEXTURE_HANDLES.write().unwrap().clear();
-    TEXTURE_HANDLE_ALIASES.write().unwrap().clear();
-    touch_texture_registry();
-}
-
-pub fn register_texture_dims(key: &str, w: u32, h: u32) {
-    let sheet = parse_sprite_sheet_dims(key);
-    let same_meta = TEX_META
-        .read()
-        .unwrap()
-        .get(key)
-        .is_some_and(|meta| meta.w == w && meta.h == h);
-    if same_meta && SHEET_DIMS.read().unwrap().get(key).copied() == Some(sheet) {
-        return;
-    }
-
-    let key = key.to_string();
-    let mut m = TEX_META.write().unwrap();
-    m.insert(key.clone(), TexMeta { w, h });
-    drop(m);
-    SHEET_DIMS.write().unwrap().insert(key, sheet);
-    touch_texture_registry();
-}
-
-pub fn texture_dims(key: &str) -> Option<TexMeta> {
-    TEX_META.read().unwrap().get(key).copied()
-}
-
-pub fn sprite_sheet_dims(key: &str) -> (u32, u32) {
-    if let Some(dims) = SHEET_DIMS.read().unwrap().get(key).copied() {
-        return dims;
-    }
-    let dims = parse_sprite_sheet_dims(key);
-    SHEET_DIMS.write().unwrap().insert(key.to_string(), dims);
-    dims
-}
-
-pub fn texture_handle(key: &str) -> TextureHandle {
-    if let Some(handle) = TEXTURE_HANDLES.read().unwrap().get(key).copied() {
-        return handle;
-    }
-    if let Some(handle) = TEXTURE_HANDLE_ALIASES
-        .read()
-        .unwrap()
-        .get(&ascii_ci_hash(key))
-        .copied()
-        && handle != INVALID_TEXTURE_HANDLE
-    {
-        return handle;
-    }
-    TEXTURE_HANDLES
-        .read()
-        .unwrap()
-        .iter()
-        .find_map(|(candidate, handle)| candidate.eq_ignore_ascii_case(key).then_some(*handle))
-        .unwrap_or(INVALID_TEXTURE_HANDLE)
-}
-
-pub fn register_generated_texture(key: &str, image: RgbaImage, sampler: SamplerDesc) {
-    let (w, h) = (image.width(), image.height());
-    GENERATED_TEXTURES.write().unwrap().insert(
-        key.to_string(),
-        GeneratedTexture {
-            image: Arc::new(image),
-            sampler,
-        },
-    );
-    GENERATED_TEXTURES_PENDING
-        .lock()
-        .unwrap()
-        .insert(key.to_string());
-    register_texture_dims(key, w, h);
-}
-
-pub(crate) fn generated_texture(key: &str) -> Option<GeneratedTexture> {
-    GENERATED_TEXTURES.read().unwrap().get(key).cloned()
-}
-
-pub(crate) fn take_pending_generated_texture_keys() -> Vec<String> {
-    let mut pending = GENERATED_TEXTURES_PENDING.lock().unwrap();
-    if pending.is_empty() {
-        return Vec::new();
-    }
-    let mut out = Vec::with_capacity(pending.len());
-    out.extend(pending.drain());
-    out
 }
 
 pub fn canonical_texture_key<P: AsRef<Path>>(p: P) -> String {
@@ -1016,27 +789,5 @@ mod tests {
     #[test]
     fn goldstar_uses_repeat_sampler() {
         assert!(needs_repeat_sampler("grades/goldstar (stretch).png"));
-    }
-
-    #[test]
-    fn texture_handle_lookup_tracks_registry_lifecycle() {
-        clear_texture_handles();
-
-        register_texture_handle("Graphics/Banner.png", 17);
-        assert_eq!(texture_handle("Graphics/Banner.png"), 17);
-        assert_eq!(texture_handle("graphics/banner.png"), 17);
-
-        remove_texture_handle("Graphics/Banner.png");
-        assert_eq!(
-            texture_handle("graphics/banner.png"),
-            deadlib_render::INVALID_TEXTURE_HANDLE
-        );
-
-        register_texture_handle("Other.png", 23);
-        clear_texture_handles();
-        assert_eq!(
-            texture_handle("other.png"),
-            deadlib_render::INVALID_TEXTURE_HANDLE
-        );
     }
 }

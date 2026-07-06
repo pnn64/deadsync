@@ -95,9 +95,12 @@ pub(super) fn build_rows(
             return_screen,
             fixed_stepchart,
         ),
-        OptionsPane::Display => {
-            build_display_rows(noteskin_names, smx_bg_pack_names, smx_judge_pack_names, return_screen)
-        }
+        OptionsPane::Display => build_display_rows(
+            noteskin_names,
+            smx_bg_pack_names,
+            smx_judge_pack_names,
+            return_screen,
+        ),
         OptionsPane::Advanced => build_advanced_rows(return_screen),
         OptionsPane::Uncommon => build_uncommon_rows(return_screen),
     }

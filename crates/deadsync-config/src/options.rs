@@ -12,10 +12,9 @@ use crate::defaults::{
     DEFAULT_ONLY_DEDICATED_MENU_BUTTONS, DEFAULT_SELECT_MUSIC_CHART_INFO_EFFECTIVE_BPM,
     DEFAULT_SELECT_MUSIC_CHART_INFO_MATRIX_RATING, DEFAULT_SELECT_MUSIC_CHART_INFO_PEAK_NPS,
     DEFAULT_SELECT_MUSIC_PREVIEW_LOOP, DEFAULT_SELECT_MUSIC_PREVIEW_STARTS_IMMEDIATELY,
-    DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_EX,
-    DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_HARD_EX, DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_ITG,
-    DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_TOURNAMENTS, DEFAULT_SEPARATE_UNLOCKS_BY_PLAYER,
-    DEFAULT_SHADE_SCATTERPLOT_JUDGMENTS, DEFAULT_SHOW_CONSOLE,
+    DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_EX, DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_HARD_EX,
+    DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_ITG, DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_TOURNAMENTS,
+    DEFAULT_SEPARATE_UNLOCKS_BY_PLAYER, DEFAULT_SHADE_SCATTERPLOT_JUDGMENTS, DEFAULT_SHOW_CONSOLE,
     DEFAULT_SHOW_COURSE_INDIVIDUAL_SCORES, DEFAULT_SHOW_MOST_PLAYED_COURSES,
     DEFAULT_SHOW_MUSIC_WHEEL_GRADES, DEFAULT_SHOW_MUSIC_WHEEL_LAMPS, DEFAULT_SHOW_RANDOM_COURSES,
     DEFAULT_SHOW_SELECT_MUSIC_BANNERS, DEFAULT_SHOW_SELECT_MUSIC_BREAKDOWN,
@@ -1073,7 +1072,8 @@ pub fn load_select_music_options(
             default.preview_loop,
         ),
         preview_starts_immediately: parse_u8_bool_or_default(
-            conf.get("Options", "SelectMusicPreviewStartsImmediately").as_deref(),
+            conf.get("Options", "SelectMusicPreviewStartsImmediately")
+                .as_deref(),
             default.preview_starts_immediately,
         ),
         pattern_info_mode: conf
@@ -1196,7 +1196,11 @@ pub fn push_select_music_option_lines(content: &mut String, options: SelectMusic
         select.show_preview_marker,
     );
     push_bool(content, "SelectMusicPreviewLoop", select.preview_loop);
-    push_bool(content, "SelectMusicPreviewStartsImmediately", select.preview_starts_immediately);
+    push_bool(
+        content,
+        "SelectMusicPreviewStartsImmediately",
+        select.preview_starts_immediately,
+    );
     push_line(
         content,
         "SelectMusicPatternInfo",
@@ -2473,7 +2477,10 @@ mod tests {
 
     #[test]
     fn smx_pack_name_parse_trims_and_caps() {
-        assert_eq!(SmxPackName::parse("  senpi-basic  ").as_str(), "senpi-basic");
+        assert_eq!(
+            SmxPackName::parse("  senpi-basic  ").as_str(),
+            "senpi-basic"
+        );
         assert!(SmxPackName::parse("").is_empty());
         assert!(SmxPackName::parse("   ").is_empty());
         // Over-capacity names fall back to empty (the built-in set).

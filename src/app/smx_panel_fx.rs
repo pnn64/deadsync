@@ -114,7 +114,10 @@ fn sustain_drive(kind: Option<NoteType>, resume: bool) -> OverlayDrive {
 /// chain; the caller appends the plain `results` and `default` roles itself:
 /// `results@{diff}@S+ -> results@S+ -> results@{diff}@S -> results@S ->
 /// results@{diff}` (then `results -> default`).
-pub fn results_role_candidates(grade: deadsync_score::Grade, difficulty: Option<&str>) -> Vec<String> {
+pub fn results_role_candidates(
+    grade: deadsync_score::Grade,
+    difficulty: Option<&str>,
+) -> Vec<String> {
     let mut suffixes = vec![grade.gif_suffix()];
     if let Some(base) = grade.gif_base() {
         suffixes.push(base.gif_suffix());
@@ -242,7 +245,8 @@ impl SmxPanelDriver {
                     // First engage: play the intro, then loop (freeze) or drain
                     // into the outro (roll). No gif = no effect on this column.
                     if let Some(anim) = sustain_anim(&self.judgement_gifs[pad], kind) {
-                        self.lights.play_overlay(pad, p, anim.clone(), sustain_drive(kind, false));
+                        self.lights
+                            .play_overlay(pad, p, anim.clone(), sustain_drive(kind, false));
                         self.prev_hold_fx[col] = HoldFx::Overlay;
                     }
                 } else {
@@ -271,8 +275,12 @@ impl SmxPanelDriver {
                     if press_edge == Some(true)
                         && let Some(anim) = sustain_anim(&self.judgement_gifs[pad], kind)
                     {
-                        self.lights
-                            .play_overlay(pad, p, anim.clone(), OverlayDrive::Roll { resume: true });
+                        self.lights.play_overlay(
+                            pad,
+                            p,
+                            anim.clone(),
+                            OverlayDrive::Roll { resume: true },
+                        );
                     }
                 } else if released {
                     self.lights.release_overlay(pad, p);
@@ -297,13 +305,19 @@ impl SmxPanelDriver {
                     _ => self.judgement_gifs[pad].bad.as_ref(),
                 };
                 if let Some(anim) = anim {
-                    self.lights
-                        .play_overlay(pad, p, anim.clone(), OverlayDrive::OneShot { pressed });
+                    self.lights.play_overlay(
+                        pad,
+                        p,
+                        anim.clone(),
+                        OverlayDrive::OneShot { pressed },
+                    );
                 }
             }
 
-            if mine_event(state.mine_started_at_screen_s(col), &mut self.prev_mine[col])
-                && let Some((pad, p)) = panel
+            if mine_event(
+                state.mine_started_at_screen_s(col),
+                &mut self.prev_mine[col],
+            ) && let Some((pad, p)) = panel
                 && let Some(anim) = &self.judgement_gifs[pad].mine
             {
                 self.lights
@@ -350,7 +364,11 @@ impl SmxPanelDriver {
     /// Show, swap, or clear the background animation for a specific pad slot. Deduplicates,
     /// so calling every frame with the screen's resolved background is cheap; only an actual
     /// change is sent to the worker.
-    pub fn set_background_for_pad(&mut self, pad: usize, background: Option<(Arc<FullPadAnim>, Clock)>) {
+    pub fn set_background_for_pad(
+        &mut self,
+        pad: usize,
+        background: Option<(Arc<FullPadAnim>, Clock)>,
+    ) {
         if pad >= PADS {
             return;
         }
@@ -390,8 +408,12 @@ impl SmxPanelDriver {
         }
         if pressed {
             if let Some(anim) = self.judgement_gifs.get(pad).and_then(|g| g.press.clone()) {
-                self.lights
-                    .play_press_overlay(pad, panel, anim, OverlayDrive::Sustain { resume: false });
+                self.lights.play_press_overlay(
+                    pad,
+                    panel,
+                    anim,
+                    OverlayDrive::Sustain { resume: false },
+                );
             }
         } else {
             self.lights.release_press_overlay(pad, panel);
@@ -401,7 +423,11 @@ impl SmxPanelDriver {
     /// Feed the current song beat position. Dropped unless the active background is
     /// beat-locked, so callers can push it every frame without flooding the worker.
     pub fn set_beat(&self, beat: f32) {
-        if self.backgrounds.iter().any(|b| matches!(b, Some((_, Clock::BeatLocked { .. })))) {
+        if self
+            .backgrounds
+            .iter()
+            .any(|b| matches!(b, Some((_, Clock::BeatLocked { .. }))))
+        {
             self.lights.set_beat(beat);
         }
     }
@@ -690,7 +716,10 @@ mod tests {
             ["results@edit@S", "results@S", "results@edit"]
         );
         // Star grades never fall back to a letter grade.
-        assert_eq!(results_role_candidates(Grade::Quint, None), ["results@star5"]);
+        assert_eq!(
+            results_role_candidates(Grade::Quint, None),
+            ["results@star5"]
+        );
         assert_eq!(
             results_role_candidates(Grade::Failed, Some("challenge")),
             ["results@challenge@F", "results@F", "results@challenge"]

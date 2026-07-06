@@ -63,7 +63,9 @@ pub(super) fn row_choices(
             .map(Cow::Owned)
             .collect();
     }
-    if let Some(row) = rows.get(row_idx) && matches!(kind, SubmenuKind::SmxConfig) {
+    if let Some(row) = rows.get(row_idx)
+        && matches!(kind, SubmenuKind::SmxConfig)
+    {
         if row.id == SubRowId::SmxBgPack {
             let default_label = tr("Common", "Default").to_string();
             let mut choices = vec![Cow::Owned(default_label)];

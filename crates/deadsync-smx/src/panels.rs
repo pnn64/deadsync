@@ -193,7 +193,11 @@ impl PanelFx {
 
     /// Set or clear the background animation for a specific pad slot.
     /// Playback restarts from the first frame. Out-of-range pad index is ignored.
-    pub fn set_background_for_pad(&mut self, pad: usize, background: Option<(Arc<FullPadAnim>, Clock)>) {
+    pub fn set_background_for_pad(
+        &mut self,
+        pad: usize,
+        background: Option<(Arc<FullPadAnim>, Clock)>,
+    ) {
         if pad < PADS {
             self.backgrounds[pad] = background.map(|(anim, clock)| Background {
                 anim,
@@ -280,7 +284,8 @@ impl PanelFx {
         // Advance all backgrounds first, then composite each pad with its own.
         let mut bg_frames = [None::<usize>; PADS];
         for pad in 0..PADS {
-            bg_frames[pad] = advance_background(&mut self.backgrounds[pad], self.beat, self.beat_rate, dt);
+            bg_frames[pad] =
+                advance_background(&mut self.backgrounds[pad], self.beat, self.beat_rate, dt);
         }
         for pad in 0..PADS {
             for panel in 0..PANELS {
@@ -294,7 +299,11 @@ impl PanelFx {
                 let base = pad * BYTES_PER_PAD + panel * (LEDS_PER_PANEL * 3);
                 // When blacked out, suppress the background so overlays (e.g.
                 // press feedback) still composite on top of black.
-                let bg = if self.blackout[pad] { &None } else { &self.backgrounds[pad] };
+                let bg = if self.blackout[pad] {
+                    &None
+                } else {
+                    &self.backgrounds[pad]
+                };
                 for led in 0..LEDS_PER_PANEL {
                     let rgb = composite_led(p, bg, bg_frames[pad], panel, led);
                     let o = base + led * 3;
@@ -553,7 +562,10 @@ const FRAME_INTERVAL: Duration = Duration::from_micros(33_333);
 /// and style knowledge; animations travel as cheap `Arc` handles.
 enum Ev {
     /// Set or clear the background animation for a specific pad slot.
-    Background { pad: u8, background: Option<(Arc<FullPadAnim>, Clock)> },
+    Background {
+        pad: u8,
+        background: Option<(Arc<FullPadAnim>, Clock)>,
+    },
     /// Latest song beat position for a `BeatLocked` background.
     Beat(f32),
     /// Play a GIF on one panel, over the background.
@@ -584,7 +596,10 @@ enum Ev {
     /// back to its firmware idle lighting.
     Active(bool),
     /// Force a pad slot to solid black (true) or restore normal compositing (false).
-    Blackout { pad: u8, on: bool },
+    Blackout {
+        pad: u8,
+        on: bool,
+    },
     /// Clear all per-panel overlays without affecting the
     /// background or the active state. Used when leaving gameplay while the worker
     /// stays alive for a background animation.
@@ -620,8 +635,15 @@ impl SmxPanelLights {
     }
 
     /// Set or clear the background animation for a specific pad slot.
-    pub fn set_background_for_pad(&self, pad: usize, background: Option<(Arc<FullPadAnim>, Clock)>) {
-        self.send(Ev::Background { pad: pad as u8, background });
+    pub fn set_background_for_pad(
+        &self,
+        pad: usize,
+        background: Option<(Arc<FullPadAnim>, Clock)>,
+    ) {
+        self.send(Ev::Background {
+            pad: pad as u8,
+            background,
+        });
     }
 
     /// Update the song beat position driving a `BeatLocked` background.
@@ -873,8 +895,18 @@ mod tests {
     #[test]
     fn clear_all_blacks_everything() {
         let mut fx = PanelFx::new();
-        fx.play_overlay(0, 0, panel_anim(&[5], 0), OverlayDrive::Sustain { resume: false });
-        fx.play_press_overlay(1, 8, panel_anim(&[6], 0), OverlayDrive::Sustain { resume: false });
+        fx.play_overlay(
+            0,
+            0,
+            panel_anim(&[5], 0),
+            OverlayDrive::Sustain { resume: false },
+        );
+        fx.play_press_overlay(
+            1,
+            8,
+            panel_anim(&[6], 0),
+            OverlayDrive::Sustain { resume: false },
+        );
         fx.clear_all();
         let frame = fx.tick(0.0);
         assert!(frame.iter().all(|&b| b == 0));
@@ -1016,12 +1048,15 @@ mod tests {
     fn beat_locked_background_maps_beats_to_frames() {
         let mut fx = PanelFx::new();
         // 4 frames over 2 beats: half a beat per frame, wall-clock dt ignored.
-        fx.set_background_for_pad(0, Some((
-            bg_anim(&[1, 2, 3, 4], 0),
-            Clock::BeatLocked {
-                beats_per_loop: 2.0,
-            },
-        )));
+        fx.set_background_for_pad(
+            0,
+            Some((
+                bg_anim(&[1, 2, 3, 4], 0),
+                Clock::BeatLocked {
+                    beats_per_loop: 2.0,
+                },
+            )),
+        );
         for (beat, expected) in [
             (0.0, 1),
             (0.5, 2),
@@ -1040,12 +1075,15 @@ mod tests {
     fn beat_locked_background_loops_over_its_marker_region() {
         let mut fx = PanelFx::new();
         // Loop region is frames 1..4 (intro frame 0 excluded from the cycle).
-        fx.set_background_for_pad(0, Some((
-            bg_anim(&[1, 2, 3, 4], 1),
-            Clock::BeatLocked {
-                beats_per_loop: 3.0,
-            },
-        )));
+        fx.set_background_for_pad(
+            0,
+            Some((
+                bg_anim(&[1, 2, 3, 4], 1),
+                Clock::BeatLocked {
+                    beats_per_loop: 3.0,
+                },
+            )),
+        );
         for (beat, expected) in [(0.0, 2), (1.0, 3), (2.0, 4), (3.0, 2)] {
             fx.set_beat(beat);
             assert_eq!(led0(fx.tick(1.0), 0, 0), expected, "beat {beat}");
@@ -1090,7 +1128,12 @@ mod tests {
     fn looping_overlay_holds_until_ended() {
         let mut fx = PanelFx::new();
         fx.set_background_for_pad(1, Some((bg_anim(&[10], 0), Clock::Realtime)));
-        fx.play_overlay(1, 7, panel_anim(&[91, 92], 0), OverlayDrive::Sustain { resume: false });
+        fx.play_overlay(
+            1,
+            7,
+            panel_anim(&[91, 92], 0),
+            OverlayDrive::Sustain { resume: false },
+        );
         let mut seen = Vec::new();
         for _ in 0..4 {
             seen.push(led0(fx.tick(0.1), 1, 7));
@@ -1225,9 +1268,12 @@ mod tests {
         let mut fx = PanelFx::new();
         fx.set_background_for_pad(0, Some((bg_anim(&[10], 0), Clock::Realtime)));
         // Press feedback fills the whole panel (would show 91 on its own).
-        fx.play_press_overlay(0, 3, panel_anim(&[91], 0), OverlayDrive::Sustain {
-            resume: false,
-        });
+        fx.play_press_overlay(
+            0,
+            3,
+            panel_anim(&[91], 0),
+            OverlayDrive::Sustain { resume: false },
+        );
         // A judgement overlay: LED 0 black, LED 1 lit (50).
         let mut f = [0u8; PANEL_RGB_BYTES];
         f[3] = 50;
@@ -1253,12 +1299,20 @@ mod tests {
         let mut fx = PanelFx::new();
         fx.set_background_for_pad(0, Some((bg_anim(&[10], 0), Clock::Realtime)));
         // A press with no note lights the panel over the background.
-        fx.play_press_overlay(0, 3, panel_anim(&[91, 92], 0), OverlayDrive::Sustain {
-            resume: false,
-        });
+        fx.play_press_overlay(
+            0,
+            3,
+            panel_anim(&[91, 92], 0),
+            OverlayDrive::Sustain { resume: false },
+        );
         assert_eq!(led0(fx.tick(0.05), 0, 3), 91);
         // A judgement overlay (a real hit) on the same panel draws over it.
-        fx.play_overlay(0, 3, panel_anim(&[80], 0), OverlayDrive::OneShot { pressed: false });
+        fx.play_overlay(
+            0,
+            3,
+            panel_anim(&[80], 0),
+            OverlayDrive::OneShot { pressed: false },
+        );
         assert_eq!(led0(fx.tick(0.0), 0, 3), 80);
         // The one-shot clears; the still-held press feedback shows again.
         assert_eq!(led0(fx.tick(0.1), 0, 3), 92);
@@ -1294,8 +1348,18 @@ mod tests {
     fn clear_panels_keeps_the_background_and_clear_all_drops_it() {
         let mut fx = PanelFx::new();
         fx.set_background_for_pad(0, Some((bg_anim(&[10], 0), Clock::Realtime)));
-        fx.play_overlay(0, 1, panel_anim(&[91], 0), OverlayDrive::Sustain { resume: false });
-        fx.play_press_overlay(0, 2, panel_anim(&[40], 0), OverlayDrive::Sustain { resume: false });
+        fx.play_overlay(
+            0,
+            1,
+            panel_anim(&[91], 0),
+            OverlayDrive::Sustain { resume: false },
+        );
+        fx.play_press_overlay(
+            0,
+            2,
+            panel_anim(&[40], 0),
+            OverlayDrive::Sustain { resume: false },
+        );
 
         fx.clear_panels();
         let frame = fx.tick(0.0);
@@ -1309,8 +1373,18 @@ mod tests {
     #[test]
     fn overlay_on_out_of_range_panel_is_ignored() {
         let mut fx = PanelFx::new();
-        fx.play_overlay(PADS, 0, panel_anim(&[91], 0), OverlayDrive::Sustain { resume: false });
-        fx.play_overlay(0, PANELS, panel_anim(&[91], 0), OverlayDrive::Sustain { resume: false });
+        fx.play_overlay(
+            PADS,
+            0,
+            panel_anim(&[91], 0),
+            OverlayDrive::Sustain { resume: false },
+        );
+        fx.play_overlay(
+            0,
+            PANELS,
+            panel_anim(&[91], 0),
+            OverlayDrive::Sustain { resume: false },
+        );
         assert!(fx.tick(0.0).iter().all(|&b| b == 0));
     }
 }

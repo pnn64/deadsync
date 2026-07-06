@@ -8,7 +8,12 @@ pub(super) fn build_display_rows(
     return_screen: Screen,
 ) -> RowMap {
     let mut b = RowBuilder::new();
-    push_display_modifier_rows(&mut b, noteskin_names, smx_bg_pack_names, smx_judge_pack_names);
+    push_display_modifier_rows(
+        &mut b,
+        noteskin_names,
+        smx_bg_pack_names,
+        smx_judge_pack_names,
+    );
     b.push(
         Row::custom(
             RowId::WhatComesNext,

@@ -843,7 +843,8 @@ pub(super) fn build_smx_pack_choices(pack_names: &[String]) -> Vec<String> {
 
 const SMX_BG_PACK: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta, wrap| {
-        let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap) else {
+        let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
+        else {
             return Outcome::NONE;
         };
         let pack = if new_index == 0 {
@@ -858,8 +859,11 @@ const SMX_BG_PACK: CustomBinding = CustomBinding {
                 .unwrap_or_default()
         };
         let (should_persist, side) = choice::persist_ctx(player_idx);
-        state.player_profiles[player_idx].smx_bg_pack =
-            if pack.is_empty() { None } else { Some(pack.clone()) };
+        state.player_profiles[player_idx].smx_bg_pack = if pack.is_empty() {
+            None
+        } else {
+            Some(pack.clone())
+        };
         if should_persist {
             gp::update_smx_bg_pack_for_side(side, &pack);
         }
@@ -869,7 +873,8 @@ const SMX_BG_PACK: CustomBinding = CustomBinding {
 
 const SMX_JUDGE_PACK: CustomBinding = CustomBinding {
     apply: |state, player_idx, row_id, delta, wrap| {
-        let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap) else {
+        let Some(new_index) = choice::cycle_choice_index(state, player_idx, row_id, delta, wrap)
+        else {
             return Outcome::NONE;
         };
         let pack = if new_index == 0 {
@@ -884,8 +889,11 @@ const SMX_JUDGE_PACK: CustomBinding = CustomBinding {
                 .unwrap_or_default()
         };
         let (should_persist, side) = choice::persist_ctx(player_idx);
-        state.player_profiles[player_idx].smx_judge_pack =
-            if pack.is_empty() { None } else { Some(pack.clone()) };
+        state.player_profiles[player_idx].smx_judge_pack = if pack.is_empty() {
+            None
+        } else {
+            Some(pack.clone())
+        };
         if should_persist {
             gp::update_smx_judge_pack_for_side(side, &pack);
         }

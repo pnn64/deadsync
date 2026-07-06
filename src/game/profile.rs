@@ -1117,7 +1117,10 @@ pub fn get_for_side(side: PlayerSide) -> Profile {
 pub fn smx_gif_packs(
     machine_bg: crate::config::SmxPackName,
     machine_judge: crate::config::SmxPackName,
-) -> ([crate::config::SmxPackName; 2], [crate::config::SmxPackName; 2]) {
+) -> (
+    [crate::config::SmxPackName; 2],
+    [crate::config::SmxPackName; 2],
+) {
     let profiles = lock_profiles();
     let resolve = |pack: &Option<String>, machine: crate::config::SmxPackName| match pack {
         Some(p) => crate::config::SmxPackName::parse(p),

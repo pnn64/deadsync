@@ -1,5 +1,17 @@
+pub mod discover;
 pub mod dynamic;
+pub mod registry;
 pub mod upload;
+
+pub use discover::{
+    DiscoveredTexture, NONE_TEXTURE_CHOICE_KEY, discover_graphic_textures_in_roots,
+};
+pub use registry::{
+    GeneratedTexture, TexMeta, clear_texture_handles, generated_texture,
+    register_generated_texture, register_texture_dims, register_texture_handle,
+    remove_texture_handle, sprite_sheet_dims, take_pending_generated_texture_keys, texture_dims,
+    texture_handle, texture_registry_generation,
+};
 
 use deadlib_render::{SamplerDesc, SamplerFilter, SamplerWrap};
 use image::{ImageFormat, ImageReader, RgbaImage};

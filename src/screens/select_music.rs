@@ -3890,7 +3890,12 @@ fn maybe_prewarm_replaygain_for_pack(state: &mut State) {
 }
 
 #[inline(always)]
-fn sync_preview_song(state: &mut State, selected_song: Option<&Arc<SongData>>, loop_preview: bool, preview_starts_immediately: bool) {
+fn sync_preview_song(
+    state: &mut State,
+    selected_song: Option<&Arc<SongData>>,
+    loop_preview: bool,
+    preview_starts_immediately: bool,
+) {
     if !state.music_wheel_moved && !preview_starts_immediately {
         return;
     }
@@ -9305,7 +9310,12 @@ pub fn handle_confirm(state: &mut State) -> ScreenAction {
             // ITGmania parity: force sample preview to start on selection finalize.
             let cfg = config::get();
             if cfg.show_select_music_previews && !state.preview_music_muted {
-                sync_preview_song(state, Some(&song), cfg.select_music_preview_loop, cfg.select_music_preview_starts_immediately);
+                sync_preview_song(
+                    state,
+                    Some(&song),
+                    cfg.select_music_preview_loop,
+                    cfg.select_music_preview_starts_immediately,
+                );
             }
             state.out_prompt = OutPromptState::PressStartForOptions { elapsed: 0.0 };
             ScreenAction::None
@@ -10309,7 +10319,12 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         && !state.preview_music_muted
         && allow_gs_fetch_for_selection(state)
     {
-        sync_preview_song(state, selected_song.as_ref(), cfg.select_music_preview_loop, cfg.select_music_preview_starts_immediately);
+        sync_preview_song(
+            state,
+            selected_song.as_ref(),
+            cfg.select_music_preview_loop,
+            cfg.select_music_preview_starts_immediately,
+        );
     } else if state.currently_playing_preview_path.is_some() {
         clear_preview(state);
     }

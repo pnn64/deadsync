@@ -4901,7 +4901,12 @@ impl App {
     /// follows the (enabled, pack) pair. Cheap per frame: lookups only happen
     /// when the toggle, screen role, pack, or current song folder changes, and
     /// the driver deduplicates the rest.
-    fn sync_smx_pad_gifs(&mut self, enabled: bool, bg_packs: [config::SmxPackName; 2], judge_packs: [config::SmxPackName; 2]) {
+    fn sync_smx_pad_gifs(
+        &mut self,
+        enabled: bool,
+        bg_packs: [config::SmxPackName; 2],
+        judge_packs: [config::SmxPackName; 2],
+    ) {
         // The StepManiaX options page lights the pads blue/red to preview the
         // player assignment (`drive_smx_options_lights`), writing the pad
         // directly. Suppress the gif background there so the two don't fight
@@ -4936,9 +4941,7 @@ impl App {
         // grade/difficulty-specific gif even when the role and song haven't changed.
         let eval_grade_and_difficulty = if matches!(
             self.state.screens.current_screen,
-            CurrentScreen::Evaluation
-                | CurrentScreen::EvaluationSummary
-                | CurrentScreen::Initials
+            CurrentScreen::Evaluation | CurrentScreen::EvaluationSummary | CurrentScreen::Initials
         ) {
             self.state
                 .screens
@@ -4946,7 +4949,12 @@ impl App {
                 .score_info
                 .iter()
                 .flatten()
-                .map(|si| (si.grade, deadlib_present::color::difficulty_gif_tag(&si.chart.difficulty)))
+                .map(|si| {
+                    (
+                        si.grade,
+                        deadlib_present::color::difficulty_gif_tag(&si.chart.difficulty),
+                    )
+                })
                 .min_by_key(|(g, _)| g.to_sprite_state())
         } else {
             None
@@ -5002,7 +5010,8 @@ impl App {
                 scoped.or_else(|| {
                     let registry = self.smx_gif_registry();
                     let size = deadsync_smx::gifs::PadSize::Leds25;
-                    let try_role = |role_str: &str| registry.background(pack_str, role_str, size, song_bpm);
+                    let try_role =
+                        |role_str: &str| registry.background(pack_str, role_str, size, song_bpm);
                     // On results screens, try grade- and difficulty-specific roles
                     // before the plain role; `results_role_candidates` documents and
                     // tests the exact order.
@@ -5021,7 +5030,9 @@ impl App {
                     // Only pack-resolved gifs get tinted; a per-song/pack scoped gif
                     // (the `scoped` branch above, handled outside this closure) is
                     // fully authored by the song and left as-is.
-                    resolved.map(|anim| self.maybe_tint_smx_background(pack_str, role, eval_difficulty, anim))
+                    resolved.map(|anim| {
+                        self.maybe_tint_smx_background(pack_str, role, eval_difficulty, anim)
+                    })
                 })
             });
             let background = anim.map(|anim| {
@@ -5043,7 +5054,8 @@ impl App {
             for pad in 0..deadsync_smx::panels::PADS {
                 let gifs = if enabled {
                     let registry = self.smx_gif_registry().clone();
-                    let judge_pack_str = (!judge_packs[pad].is_empty()).then_some(judge_packs[pad].as_str());
+                    let judge_pack_str =
+                        (!judge_packs[pad].is_empty()).then_some(judge_packs[pad].as_str());
                     smx_panel_fx::JudgementGifs::resolve(&registry, judge_pack_str)
                 } else {
                     smx_panel_fx::JudgementGifs::default()
@@ -5170,12 +5182,17 @@ impl App {
         let Some(difficulty) = difficulty else {
             return anim;
         };
-        if !self.smx_gif_registry().background_wants_difficulty_tint(pack_str, role) {
+        if !self
+            .smx_gif_registry()
+            .background_wants_difficulty_tint(pack_str, role)
+        {
             return anim;
         }
         let theme_index = config::get().simply_love_color;
         let cache_key = (
-            pack_str.unwrap_or(deadsync_smx::gifs::DEFAULT_PACK).to_owned(),
+            pack_str
+                .unwrap_or(deadsync_smx::gifs::DEFAULT_PACK)
+                .to_owned(),
             role,
             difficulty,
         );
@@ -5188,11 +5205,8 @@ impl App {
             .map(|c| (c * 255.0).round() as u8);
         // The palette is sRGB for screen use; the pad LEDs are linear, so the
         // pastel difficulty colors read as off-white without this correction.
-        let target_rgb = deadsync_smx::gifs::saturate_for_leds([
-            target_rgba[0],
-            target_rgba[1],
-            target_rgba[2],
-        ]);
+        let target_rgb =
+            deadsync_smx::gifs::saturate_for_leds([target_rgba[0], target_rgba[1], target_rgba[2]]);
         let tinted = std::sync::Arc::new(deadsync_smx::gifs::tint_full_pad(&anim, target_rgb));
         self.smx_difficulty_tint_cache
             .insert(cache_key, (theme_index, tinted.clone()));
@@ -9357,7 +9371,10 @@ impl App {
         // (which are higher priority) own gameplay fully.
         let cfg = config::get();
         if cfg.smx_input && cfg.smx_panel_lights {
-            if let PadEvent::RawButton { id, code, pressed, .. } = ev {
+            if let PadEvent::RawButton {
+                id, code, pressed, ..
+            } = ev
+            {
                 let pad_slot = id.0 as usize;
                 let is_gameplay = matches!(
                     self.state.screens.current_screen,
@@ -9365,12 +9382,15 @@ impl App {
                 );
                 // During gameplay, only fire press feedback on the blacked-out (unused) pad.
                 // Outside gameplay, fire on all pads.
-                let is_blacked_out =
-                    self.smx_blackout_synced.get(pad_slot).copied().unwrap_or(false);
-                if (!is_gameplay || is_blacked_out)
-                    && code.0 as usize != deadsync_smx::CENTER_PANEL
+                let is_blacked_out = self
+                    .smx_blackout_synced
+                    .get(pad_slot)
+                    .copied()
+                    .unwrap_or(false);
+                if (!is_gameplay || is_blacked_out) && code.0 as usize != deadsync_smx::CENTER_PANEL
                 {
-                    self.smx_panels.on_raw_panel(pad_slot, code.0 as usize, pressed);
+                    self.smx_panels
+                        .on_raw_panel(pad_slot, code.0 as usize, pressed);
                 }
             }
         }

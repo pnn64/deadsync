@@ -117,7 +117,10 @@ pub struct BackgroundVariant {
 /// when the song is faster than every variant (those half-time via the playback
 /// cap). With no song BPM or no tagged variants, the lowest-reference (or only)
 /// variant is used, deterministically regardless of load order.
-pub fn select_variant(variants: &[BackgroundVariant], song_bpm: Option<f32>) -> Option<Arc<FullPadAnim>> {
+pub fn select_variant(
+    variants: &[BackgroundVariant],
+    song_bpm: Option<f32>,
+) -> Option<Arc<FullPadAnim>> {
     if let Some(bpm) = song_bpm.filter(|b| b.is_finite() && *b > 0.0) {
         let at_or_above = variants
             .iter()
@@ -459,7 +462,8 @@ fn parse_stem(stem: &str) -> Option<(String, PadSize, Option<BeatSpec>)> {
         return Some((name_base.to_owned(), size, None));
     }
     let tag = rest.strip_prefix('@')?;
-    let looks_like_bpm = matches!(tag.chars().next(), Some(c) if c.is_ascii_digit() || c == '-' || c == '.');
+    let looks_like_bpm =
+        matches!(tag.chars().next(), Some(c) if c.is_ascii_digit() || c == '-' || c == '.');
     if looks_like_bpm {
         Some((name_base.to_owned(), size, Some(parse_beats(tag)?)))
     } else {
@@ -643,8 +647,14 @@ impl GifRegistry {
         {
             return self.merged_background(p, meta, role, size, song_bpm);
         }
-        resolve(&self.backgrounds, &self.background_pack_meta, pack, role, size)
-            .and_then(|v| select_variant(v, song_bpm))
+        resolve(
+            &self.backgrounds,
+            &self.background_pack_meta,
+            pack,
+            role,
+            size,
+        )
+        .and_then(|v| select_variant(v, song_bpm))
     }
 
     /// The `MergeCommonBPMVariants`/`MergeFallbackBPMVariants` path: pools
@@ -684,8 +694,14 @@ impl GifRegistry {
             push_unique_by_bpm(&mut merged, v);
         }
         if merged.is_empty() {
-            return resolve(&self.backgrounds, &self.background_pack_meta, Some(pack), role, size)
-                .and_then(|v| select_variant(v, song_bpm));
+            return resolve(
+                &self.backgrounds,
+                &self.background_pack_meta,
+                Some(pack),
+                role,
+                size,
+            )
+            .and_then(|v| select_variant(v, song_bpm));
         }
         select_variant(&merged, song_bpm)
     }
@@ -698,7 +714,14 @@ impl GifRegistry {
         name: &str,
         size: PadSize,
     ) -> Option<Arc<PanelAnim>> {
-        resolve(&self.judgements, &self.judgement_pack_meta, pack, name, size).cloned()
+        resolve(
+            &self.judgements,
+            &self.judgement_pack_meta,
+            pack,
+            name,
+            size,
+        )
+        .cloned()
     }
 
     /// Sorted pack names (other than the default) that supply at least one
@@ -1183,18 +1206,29 @@ mod tests {
         // The full form: beats at an authored reference bpm.
         assert_eq!(
             parse_stem("song_select_25@1B120"),
-            Some((s("song_select"), PadSize::Leds25, Some(spec(1.0, Some(120.0)))))
+            Some((
+                s("song_select"),
+                PadSize::Leds25,
+                Some(spec(1.0, Some(120.0)))
+            ))
         );
         assert_eq!(
             parse_stem("song_select_25@0.5B90"),
-            Some((s("song_select"), PadSize::Leds25, Some(spec(0.5, Some(90.0)))))
+            Some((
+                s("song_select"),
+                PadSize::Leds25,
+                Some(spec(0.5, Some(90.0)))
+            ))
         );
         // Bare beat counts (no bpm) are accepted too.
         assert_eq!(
             parse_stem("song_select_25@2b"),
             Some((s("song_select"), PadSize::Leds25, Some(spec(2.0, None))))
         );
-        assert_eq!(parse_stem("bad_16"), Some((s("bad"), PadSize::Leds16, None)));
+        assert_eq!(
+            parse_stem("bad_16"),
+            Some((s("bad"), PadSize::Leds16, None))
+        );
         assert_eq!(
             parse_stem("fantastic_blue_25"),
             Some((s("fantastic_blue"), PadSize::Leds25, None))
@@ -1434,8 +1468,10 @@ mod tests {
     #[test]
     fn background_falls_back_to_default_pack_even_without_gifpack_ini() {
         let mut reg = GifRegistry::default();
-        reg.backgrounds
-            .insert(key(DEFAULT_PACK, "default", PadSize::Leds25), dummy_variants());
+        reg.backgrounds.insert(
+            key(DEFAULT_PACK, "default", PadSize::Leds25),
+            dummy_variants(),
+        );
         // "foo" pack exists but has no gifpack.ini at all: still resolves through common.
         let got = reg
             .background(Some("foo"), "default", PadSize::Leds25, None)
@@ -1460,8 +1496,10 @@ mod tests {
     #[test]
     fn pack_with_gifpack_ini_fallback_reaches_declared_pack_before_default() {
         let mut reg = GifRegistry::default();
-        reg.backgrounds
-            .insert(key(DEFAULT_PACK, "default", PadSize::Leds25), dummy_variants());
+        reg.backgrounds.insert(
+            key(DEFAULT_PACK, "default", PadSize::Leds25),
+            dummy_variants(),
+        );
         reg.backgrounds
             .insert(key("other", "default", PadSize::Leds25), dummy_variants());
         // "foo" pack declares fallback = "other" (not common).
@@ -1500,8 +1538,10 @@ mod tests {
     #[test]
     fn fallback_none_opts_a_pack_out_of_the_automatic_default_fallback() {
         let mut reg = GifRegistry::default();
-        reg.backgrounds
-            .insert(key(DEFAULT_PACK, "default", PadSize::Leds25), dummy_variants());
+        reg.backgrounds.insert(
+            key(DEFAULT_PACK, "default", PadSize::Leds25),
+            dummy_variants(),
+        );
         reg.background_pack_meta.insert(
             "foo".to_owned(),
             PackMeta {
@@ -1538,7 +1578,10 @@ mod tests {
         );
 
         // "miss" is listed under CanBeEmpty: no fallback, resolves to nothing.
-        assert!(reg.judgement(Some("foo"), "miss", PadSize::Leds25).is_none());
+        assert!(
+            reg.judgement(Some("foo"), "miss", PadSize::Leds25)
+                .is_none()
+        );
         // "ok" is not listed: still gets the automatic default-pack fallback.
         assert!(reg.judgement(Some("foo"), "ok", PadSize::Leds25).is_some());
     }
@@ -1563,15 +1606,23 @@ mod tests {
         assert!(Arc::ptr_eq(&got2, &foo));
 
         // Default pack has nothing for this name either: still None.
-        assert!(reg.judgement(Some("foo"), "nope", PadSize::Leds25).is_none());
+        assert!(
+            reg.judgement(Some("foo"), "nope", PadSize::Leds25)
+                .is_none()
+        );
     }
 
     #[test]
     fn no_pack_and_basic_by_name_both_use_the_default_pack() {
         let mut reg = GifRegistry::default();
-        reg.backgrounds
-            .insert(key(DEFAULT_PACK, "default", PadSize::Leds25), dummy_variants());
-        assert!(reg.background(None, "default", PadSize::Leds25, None).is_some());
+        reg.backgrounds.insert(
+            key(DEFAULT_PACK, "default", PadSize::Leds25),
+            dummy_variants(),
+        );
+        assert!(
+            reg.background(None, "default", PadSize::Leds25, None)
+                .is_some()
+        );
         // Selecting common by name is the same as selecting nothing.
         assert!(
             reg.background(Some(DEFAULT_PACK), "default", PadSize::Leds25, None)
@@ -1603,9 +1654,15 @@ mod tests {
             PackFallback::Pack("basic".to_owned())
         );
         // "none" and absent key both yield PackFallback::None/Auto respectively.
-        assert_eq!(parse_gifpack_ini("Fallback = \"none\"").fallback, PackFallback::None);
+        assert_eq!(
+            parse_gifpack_ini("Fallback = \"none\"").fallback,
+            PackFallback::None
+        );
         assert_eq!(parse_gifpack_ini("").fallback, PackFallback::Auto);
-        assert_eq!(parse_gifpack_ini("# just a comment").fallback, PackFallback::Auto);
+        assert_eq!(
+            parse_gifpack_ini("# just a comment").fallback,
+            PackFallback::Auto
+        );
         // Unknown keys are ignored.
         assert_eq!(
             parse_gifpack_ini("name = \"cool pack\"\nFallback = \"basic\"").fallback,
@@ -1623,7 +1680,11 @@ mod tests {
                 .collect()
         );
         // Absent key yields an empty set.
-        assert!(parse_gifpack_ini("Fallback = \"basic\"").can_be_empty.is_empty());
+        assert!(
+            parse_gifpack_ini("Fallback = \"basic\"")
+                .can_be_empty
+                .is_empty()
+        );
         // Both keys together.
         let meta = parse_gifpack_ini("Fallback = \"basic\"\nCanBeEmpty = \"miss\"");
         assert_eq!(meta.fallback, PackFallback::Pack("basic".to_owned()));
@@ -1639,7 +1700,10 @@ mod tests {
         assert_eq!(
             parse_gifpack_ini("MatchColorToDifficulty = \"results, gameplay\"")
                 .match_color_to_difficulty,
-            ["results", "gameplay"].into_iter().map(str::to_owned).collect()
+            ["results", "gameplay"]
+                .into_iter()
+                .map(str::to_owned)
+                .collect()
         );
         // Absent key yields an empty set.
         assert!(
@@ -1660,7 +1724,10 @@ mod tests {
         );
         assert_eq!(
             meta.merge_fallback_bpm_variants,
-            ["song_select", "gameplay"].into_iter().map(str::to_owned).collect()
+            ["song_select", "gameplay"]
+                .into_iter()
+                .map(str::to_owned)
+                .collect()
         );
         // Absent keys yield empty sets.
         let meta = parse_gifpack_ini("Fallback = \"basic\"");
@@ -1802,7 +1869,13 @@ mod tests {
         let mut frame = [0u8; PANEL_RGB_BYTES];
         frame[0..9].copy_from_slice(&[255, 255, 255, 128, 128, 128, 0, 0, 0]);
         let anim = FullPadAnim {
-            panels: std::array::from_fn(|i| if i == 0 { vec![frame] } else { vec![[0u8; PANEL_RGB_BYTES]] }),
+            panels: std::array::from_fn(|i| {
+                if i == 0 {
+                    vec![frame]
+                } else {
+                    vec![[0u8; PANEL_RGB_BYTES]]
+                }
+            }),
             durations: vec![1.0 / 30.0],
             loop_frame: 0,
             beats_per_loop: None,
@@ -1894,7 +1967,10 @@ mod tests {
         let reg = GifRegistry::load(&root);
         fs::remove_dir_all(&root).unwrap();
 
-        assert!(reg.background(None, "default", PadSize::Leds25, None).is_some());
+        assert!(
+            reg.background(None, "default", PadSize::Leds25, None)
+                .is_some()
+        );
         let song = reg
             .background(Some("mypack"), "song_select", PadSize::Leds25, None)
             .unwrap();
@@ -1903,7 +1979,10 @@ mod tests {
         // The 16-LED request falls back to the only (_25) asset.
         assert!(reg.judgement(None, "bad", PadSize::Leds16).is_some());
 
-        assert!(reg.background(None, "broken", PadSize::Leds25, None).is_none());
+        assert!(
+            reg.background(None, "broken", PadSize::Leds25, None)
+                .is_none()
+        );
         assert!(reg.judgement(None, "badname", PadSize::Leds25).is_none());
         assert_eq!(reg.background_packs(), vec!["mypack".to_owned()]);
         assert!(reg.judgement_packs().is_empty());
@@ -1923,10 +2002,8 @@ mod tests {
 
     #[test]
     fn dance_pack_shadows_a_same_name_shipped_pack_instead_of_pooling() {
-        let root = std::env::temp_dir().join(format!(
-            "deadsync-smx-shadow-test-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("deadsync-smx-shadow-test-{}", std::process::id()));
         let shipped = root.join("smx-pad-lights/common/shadowpack");
         let user = root.join("smx-pad-lights/dance/shadowpack");
         fs::create_dir_all(&shipped).unwrap();
@@ -1942,7 +2019,12 @@ mod tests {
         // If the two trees pooled, the shipped 100bpm variant would be the
         // exact fit here; shadowing means only the user pack's file exists.
         let got = reg
-            .background(Some("shadowpack"), "song_select", PadSize::Leds25, Some(100.0))
+            .background(
+                Some("shadowpack"),
+                "song_select",
+                PadSize::Leds25,
+                Some(100.0),
+            )
             .unwrap();
         assert_eq!(
             got.beats_per_loop,
@@ -2007,10 +2089,15 @@ mod tests {
             },
         );
 
-        let got = reg.judgement(Some("mine"), "miss", PadSize::Leds25).unwrap();
+        let got = reg
+            .judgement(Some("mine"), "miss", PadSize::Leds25)
+            .unwrap();
         let other = reg.judgements[&key("other", "miss", PadSize::Leds25)].clone();
         let common = reg.judgements[&key(DEFAULT_PACK, "miss", PadSize::Leds25)].clone();
-        assert!(Arc::ptr_eq(&got, &other), "should chain to declared fallback, not common");
+        assert!(
+            Arc::ptr_eq(&got, &other),
+            "should chain to declared fallback, not common"
+        );
         assert!(!Arc::ptr_eq(&got, &common));
     }
 
@@ -2020,8 +2107,10 @@ mod tests {
         // smx-judge-lights/ with unrelated (or absent) gifpack.ini fallback
         // declarations in each; one category's chain must not leak into the other.
         let mut reg = GifRegistry::default();
-        reg.backgrounds
-            .insert(key(DEFAULT_PACK, "default", PadSize::Leds25), dummy_variants());
+        reg.backgrounds.insert(
+            key(DEFAULT_PACK, "default", PadSize::Leds25),
+            dummy_variants(),
+        );
         reg.judgements
             .insert(key("bg-fallback", "miss", PadSize::Leds25), dummy_panel());
         reg.background_pack_meta.insert(
