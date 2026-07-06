@@ -1,26 +1,22 @@
 use crate::game::{parsing::simfile::collect_song_scan_roots, song::get_song_cache};
 use deadlib_platform::dirs;
 use deadsync_simfile::course::{
-    CourseFile, autogen_nonstop_group_courses, collect_merged_course_paths,
-    load_course_paths_with_progress,
+    autogen_nonstop_group_courses, collect_merged_course_paths, load_course_paths_with_progress,
 };
+use deadsync_simfile::runtime_cache;
 use deadsync_simfile::scan::{fmt_scan_time, push_unique_path};
 use log::{info, warn};
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 use std::time::Instant;
 
-pub type CourseData = (PathBuf, CourseFile);
-
-static COURSE_CACHE: std::sync::LazyLock<Mutex<Vec<CourseData>>> =
-    std::sync::LazyLock::new(|| Mutex::new(Vec::new()));
+pub type CourseData = runtime_cache::CourseData;
 
 pub fn get_course_cache() -> std::sync::MutexGuard<'static, Vec<CourseData>> {
-    COURSE_CACHE.lock().unwrap()
+    runtime_cache::get_course_cache()
 }
 
 fn set_course_cache(courses: Vec<CourseData>) {
-    *COURSE_CACHE.lock().unwrap() = courses;
+    runtime_cache::set_course_cache(courses);
 }
 
 fn collect_course_scan_roots(root_path: &Path) -> Vec<PathBuf> {

@@ -6,6 +6,7 @@ pub mod changes;
 pub mod course;
 pub mod media;
 pub mod notes;
+pub mod runtime_cache;
 pub mod scan;
 pub mod song;
 pub mod stats;

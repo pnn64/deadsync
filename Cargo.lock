@@ -1133,7 +1133,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.4.1982"
+version = "0.4.2000"
 dependencies = [
  "bincode",
  "bitflags 2.13.0",
@@ -1295,9 +1295,19 @@ dependencies = [
 name = "deadsync-config"
 version = "0.1.0"
 dependencies = [
+ "deadlib-platform",
+ "deadlib-present",
+ "deadlib-render",
+ "deadsync-audio",
+ "deadsync-audio-stream",
  "deadsync-chart",
+ "deadsync-input",
+ "deadsync-input-native",
+ "deadsync-lights",
+ "deadsync-smx",
  "log",
  "null-or-die",
+ "winit",
 ]
 
 [[package]]
@@ -1527,7 +1537,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.4.1982"
+version = "0.4.2000"
 dependencies = [
  "log",
  "semver",
