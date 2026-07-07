@@ -101,36 +101,19 @@ pub fn srpg10_gameover_music_path() -> std::path::PathBuf {
     deadlib_platform::dirs::app_dirs().resolve_asset_path(SRPG10_GAMEOVER_MUSIC)
 }
 
-/// Returns the absolute path to the menu music file that should play for the
-/// current visual style. If the user has dropped one or more `.ogg` files
-/// into `{data_dir}/assets/music/menu/{style}/` (lowercase style name) a
-/// random one of those is returned; otherwise the bundled per-style file
-/// from [`menu_music_asset_path`] is used. Folder override + bundled file
-/// satisfy issue #375 without requiring users to overwrite anything inside
-/// the bundle.
 pub fn menu_music_resolved_path() -> std::path::PathBuf {
-    let style = current_style();
-    let folder = deadsync_theme::menu_music_folder_name(style, current_srpg_variant());
-    let folder_rel = format!("assets/music/menu/{}", folder.to_ascii_lowercase());
-    if let Some(p) = crate::assets::audio_folder::random_music_path(&folder_rel) {
-        return p;
-    }
-    deadlib_platform::dirs::app_dirs().resolve_asset_path(menu_music_asset_path())
+    deadsync_theme::resolve_menu_music_path(
+        current_style(),
+        current_srpg_variant(),
+        crate::assets::audio_folder::random_music_path,
+        |path| deadlib_platform::dirs::app_dirs().resolve_asset_path(path),
+    )
 }
 
-/// Background-music tracks bundled with the game: the per-style menu loops plus
-/// the course-select and credits loops. Each relative asset key is resolved
-/// through the normal overlay so the returned paths match what actually plays.
-/// Used to pre-warm the ReplayGain cache at startup so a fresh install (or a
-/// cleared cache) doesn't audibly adjust loudness the first time a menu track
-/// plays.
 pub fn bundled_music_paths() -> Vec<std::path::PathBuf> {
-    use std::collections::BTreeSet;
-    let rels: BTreeSet<&'static str> = deadsync_theme::bundled_music_asset_paths().collect();
-    let dirs = deadlib_platform::dirs::app_dirs();
-    rels.into_iter()
-        .map(|rel| dirs.resolve_asset_path(rel))
-        .collect()
+    deadsync_theme::resolved_bundled_music_paths(|path| {
+        deadlib_platform::dirs::app_dirs().resolve_asset_path(path)
+    })
 }
 
 #[inline(always)]

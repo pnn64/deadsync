@@ -4,6 +4,7 @@ pub mod step_stats;
 pub mod step_stats_gifs;
 
 use deadsync_config::theme::{MachineFont, SrpgVariant, VisualStyle};
+use std::path::PathBuf;
 
 pub struct Assets {
     pub select_color: &'static str,
@@ -722,6 +723,24 @@ pub const fn menu_music_folder_name(style: VisualStyle, variant: SrpgVariant) ->
     }
 }
 
+pub fn menu_music_override_dir(style: VisualStyle, variant: SrpgVariant) -> String {
+    format!(
+        "assets/music/menu/{}",
+        menu_music_folder_name(style, variant).to_ascii_lowercase()
+    )
+}
+
+pub fn resolve_menu_music_path(
+    style: VisualStyle,
+    variant: SrpgVariant,
+    random_music_path: impl FnOnce(&str) -> Option<PathBuf>,
+    resolve_asset_path: impl FnOnce(&str) -> PathBuf,
+) -> PathBuf {
+    let override_dir = menu_music_override_dir(style, variant);
+    random_music_path(&override_dir)
+        .unwrap_or_else(|| resolve_asset_path(menu_music_asset_path(style, variant)))
+}
+
 pub fn all_assets() -> impl Iterator<Item = &'static Assets> {
     ASSETS.iter().chain(std::iter::once(&SRPG10_ASSETS))
 }
@@ -810,6 +829,13 @@ pub fn bundled_music_asset_paths() -> impl Iterator<Item = &'static str> {
     ]
     .into_iter()
     .chain(all_assets().map(|assets| assets.menu_music))
+}
+
+pub fn resolved_bundled_music_paths(resolve_asset_path: impl Fn(&str) -> PathBuf) -> Vec<PathBuf> {
+    use std::collections::BTreeSet;
+
+    let rels: BTreeSet<&'static str> = bundled_music_asset_paths().collect();
+    rels.into_iter().map(resolve_asset_path).collect()
 }
 
 const fn style_index(style: VisualStyle) -> usize {
@@ -1049,10 +1075,57 @@ mod tests {
     }
 
     #[test]
+    fn menu_music_override_dir_uses_lowercase_folder_name() {
+        assert_eq!(
+            menu_music_override_dir(VisualStyle::Srpg9, SrpgVariant::Srpg10),
+            "assets/music/menu/srpg10"
+        );
+        assert_eq!(
+            menu_music_override_dir(VisualStyle::Hearts, SrpgVariant::Srpg9),
+            "assets/music/menu/hearts"
+        );
+    }
+
+    #[test]
+    fn resolve_menu_music_path_prefers_override_folder_pick() {
+        let resolved = resolve_menu_music_path(
+            VisualStyle::Hearts,
+            SrpgVariant::Srpg9,
+            |folder| Some(PathBuf::from(format!("{folder}/custom.ogg"))),
+            |path| PathBuf::from(path),
+        );
+
+        assert_eq!(
+            resolved,
+            PathBuf::from("assets/music/menu/hearts/custom.ogg")
+        );
+    }
+
+    #[test]
+    fn resolve_menu_music_path_falls_back_to_style_asset() {
+        let resolved = resolve_menu_music_path(
+            VisualStyle::Hearts,
+            SrpgVariant::Srpg9,
+            |_| None,
+            |path| PathBuf::from(path),
+        );
+
+        assert_eq!(resolved, PathBuf::from("assets/music/in_two (loop).ogg"));
+    }
+
+    #[test]
     fn bundled_music_assets_are_deduped_by_callers_not_table() {
         let paths: Vec<_> = bundled_music_asset_paths().collect();
         assert!(paths.contains(&SRPG10_GAMEOVER_MUSIC));
         assert!(paths.contains(&"assets/music/in_two (loop).ogg"));
+    }
+
+    #[test]
+    fn resolved_bundled_music_paths_dedupes_and_resolves_assets() {
+        let paths = resolved_bundled_music_paths(|path| PathBuf::from(path));
+
+        assert!(paths.contains(&PathBuf::from(SRPG10_GAMEOVER_MUSIC)));
+        assert!(paths.contains(&PathBuf::from("assets/music/in_two (loop).ogg")));
     }
 
     #[test]
