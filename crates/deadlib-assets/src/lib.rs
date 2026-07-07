@@ -473,6 +473,37 @@ pub fn parse_texture_hints(raw: &str) -> TextureHints {
     hints
 }
 
+#[inline(always)]
+pub fn is_noteskin_texture_key(key: &str) -> bool {
+    key.starts_with("noteskins/")
+}
+
+#[inline(always)]
+pub fn initial_texture_sampler(key: &str, needs_repeat: bool) -> SamplerDesc {
+    if needs_repeat {
+        SamplerDesc {
+            wrap: SamplerWrap::Repeat,
+            ..SamplerDesc::default()
+        }
+    } else if is_noteskin_texture_key(key) {
+        parse_texture_hints(key).sampler_desc()
+    } else {
+        SamplerDesc::default()
+    }
+}
+
+#[inline(always)]
+pub fn texture_key_sampler(hints: &TextureHints, needs_repeat: bool) -> SamplerDesc {
+    if needs_repeat {
+        SamplerDesc {
+            wrap: SamplerWrap::Repeat,
+            ..hints.sampler_desc()
+        }
+    } else {
+        hints.sampler_desc()
+    }
+}
+
 pub fn apply_texture_hints(image: &mut RgbaImage, hints: &TextureHints) {
     if !(hints.grayscale || hints.alphamap) {
         return;
@@ -757,6 +788,27 @@ mod tests {
     fn ascii_hash_is_case_insensitive() {
         assert_eq!(ascii_ci_hash("Texture.PNG"), ascii_ci_hash("texture.png"));
         assert_ne!(ascii_ci_hash("Texture.PNG"), ascii_ci_hash("texture2.png"));
+    }
+
+    #[test]
+    fn initial_texture_sampler_uses_noteskin_hints_only_for_noteskins() {
+        assert_eq!(
+            initial_texture_sampler("noteskins/foo (nearest).png", false).filter,
+            SamplerFilter::Nearest
+        );
+        assert_eq!(
+            initial_texture_sampler("graphics/foo (nearest).png", false).filter,
+            SamplerFilter::Linear
+        );
+    }
+
+    #[test]
+    fn texture_key_sampler_preserves_hints_with_repeat_override() {
+        let hints = parse_texture_hints("foo (nearest).png");
+        let sampler = texture_key_sampler(&hints, true);
+
+        assert_eq!(sampler.filter, SamplerFilter::Nearest);
+        assert_eq!(sampler.wrap, SamplerWrap::Repeat);
     }
 
     #[test]

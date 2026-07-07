@@ -10,7 +10,7 @@ pub use deadlib_assets::{
 use deadlib_platform::dirs;
 use deadlib_present::actors::TextureKeyHandle;
 use deadlib_present::texture as present_texture;
-use deadlib_render::{INVALID_TEXTURE_HANDLE, SamplerDesc, SamplerWrap};
+use deadlib_render::{INVALID_TEXTURE_HANDLE, SamplerDesc};
 use deadlib_renderer::Backend;
 use log::{debug, warn};
 use std::{
@@ -26,8 +26,8 @@ use deadlib_assets::{
     BuiltinTextureImage, DiscoveredTexture, TextureChoiceLike, TextureChoiceSpec, TextureDecodeJob,
     TextureDecodeResult, black_texture_image, canonical_texture_key_with_asset_roots,
     decode_texture_image, decode_texture_jobs_parallel, discover_graphic_textures_in_roots,
-    fallback_texture_image, graphic_texture_roots, initial_texture_source_path,
-    noteskin_png_texture_entries,
+    fallback_texture_image, graphic_texture_roots, initial_texture_sampler,
+    initial_texture_source_path, noteskin_png_texture_entries,
     texture_choices_from_discovered as texture_choice_specs_from_discovered, white_texture_image,
 };
 
@@ -229,16 +229,7 @@ impl AssetManager {
         for result in decode_texture_jobs_parallel(texture_jobs) {
             match result {
                 TextureDecodeResult::Decoded { key, image } => {
-                    let sampler = if needs_repeat_sampler(&key) {
-                        SamplerDesc {
-                            wrap: SamplerWrap::Repeat,
-                            ..SamplerDesc::default()
-                        }
-                    } else if key.starts_with("noteskins/") {
-                        parse_texture_hints(&key).sampler_desc()
-                    } else {
-                        SamplerDesc::default()
-                    };
+                    let sampler = initial_texture_sampler(&key, needs_repeat_sampler(&key));
                     let texture = backend.create_texture(&image, sampler)?;
                     register_texture_dims(&key, image.width(), image.height());
                     debug!("Loaded texture: {key}");
@@ -246,16 +237,7 @@ impl AssetManager {
                 }
                 TextureDecodeResult::Failed { key, message } => {
                     warn!("Failed to load texture for key '{key}': {message}. Using fallback.");
-                    let sampler = if needs_repeat_sampler(&key) {
-                        SamplerDesc {
-                            wrap: SamplerWrap::Repeat,
-                            ..SamplerDesc::default()
-                        }
-                    } else if key.starts_with("noteskins/") {
-                        parse_texture_hints(&key).sampler_desc()
-                    } else {
-                        SamplerDesc::default()
-                    };
+                    let sampler = initial_texture_sampler(&key, needs_repeat_sampler(&key));
                     let texture = backend.create_texture(&fallback_image, sampler)?;
                     register_texture_dims(&key, fallback_image.width(), fallback_image.height());
                     self.insert_texture(
@@ -330,14 +312,7 @@ impl AssetManager {
 
         let hints = parse_texture_hints(&key);
         let sampler = sampler_override.unwrap_or_else(|| {
-            if needs_repeat_sampler(&key) {
-                SamplerDesc {
-                    wrap: SamplerWrap::Repeat,
-                    ..hints.sampler_desc()
-                }
-            } else {
-                hints.sampler_desc()
-            }
+            deadlib_assets::texture_key_sampler(&hints, needs_repeat_sampler(&key))
         });
         match decode_texture_image(&path, &hints) {
             Ok(rgba) => match backend.create_texture(&rgba, sampler) {
