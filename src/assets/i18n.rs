@@ -4,15 +4,8 @@ use std::path::PathBuf;
 
 pub use deadsync_theme::i18n::{LookupKey, current_locale, lookup_key, revision, tr, tr_fmt};
 
-fn language_file_path(locale: &str) -> PathBuf {
-    languages_dir_path().join(format!("{locale}.ini"))
-}
-
 fn languages_dir_path() -> PathBuf {
-    deadlib_platform::dirs::app_dirs()
-        .exe_dir
-        .join("assets")
-        .join("languages")
+    deadsync_theme::i18n::languages_dir_path(&deadlib_platform::dirs::app_dirs().exe_dir)
 }
 
 /// Initialize the i18n system. Call once at startup after config is loaded.
@@ -26,25 +19,13 @@ pub fn set_locale(locale: &str) {
 }
 
 pub fn resolve_locale(flag: LanguageFlag) -> String {
-    deadsync_theme::i18n::resolve_locale(
-        flag,
-        deadsync_theme::i18n::raw_os_locale().as_deref(),
-        locale_file_exists,
-    )
+    deadsync_theme::i18n::resolve_locale_in_dir(flag, &languages_dir_path())
 }
 
 /// Detect the best locale from the OS settings, falling back to `"en"` if
 /// no matching language file is found.
 pub fn detect_os_locale() -> String {
-    deadsync_theme::i18n::resolve_locale(
-        config::LanguageFlag::Auto,
-        deadsync_theme::i18n::raw_os_locale().as_deref(),
-        locale_file_exists,
-    )
-}
-
-fn locale_file_exists(code: &str) -> bool {
-    language_file_path(code).exists()
+    deadsync_theme::i18n::resolve_locale_in_dir(config::LanguageFlag::Auto, &languages_dir_path())
 }
 
 /// Scan `assets/languages/*.ini` and return `(locale_code, native_name)` pairs

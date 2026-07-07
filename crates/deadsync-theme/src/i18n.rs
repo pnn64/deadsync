@@ -42,6 +42,20 @@ fn language_file_path(languages_dir: &Path, locale: &str) -> PathBuf {
     languages_dir.join(format!("{locale}.ini"))
 }
 
+pub fn languages_dir_path(exe_dir: &Path) -> PathBuf {
+    exe_dir.join("assets").join("languages")
+}
+
+pub fn locale_file_exists(languages_dir: &Path, code: &str) -> bool {
+    language_file_path(languages_dir, code).exists()
+}
+
+pub fn resolve_locale_in_dir(flag: LanguageFlag, languages_dir: &Path) -> String {
+    resolve_locale(flag, raw_os_locale().as_deref(), |code| {
+        locale_file_exists(languages_dir, code)
+    })
+}
+
 fn load_ini_to_map(path: &Path) -> HashMap<Box<str>, HashMap<Box<str>, Arc<str>>> {
     let mut ini = SimpleIni::new();
     if let Err(e) = ini.load(path) {
@@ -271,5 +285,26 @@ mod tests {
     #[test]
     fn raw_os_locale_returns_none_without_nonempty_values() {
         assert_eq!(raw_os_locale_from_values(["", "  "]), None);
+    }
+
+    #[test]
+    fn languages_dir_path_uses_exe_assets_languages() {
+        assert_eq!(
+            languages_dir_path(Path::new("/game")),
+            PathBuf::from("/game/assets/languages")
+        );
+    }
+
+    #[test]
+    fn locale_file_exists_checks_language_ini() {
+        let dir =
+            std::env::temp_dir().join(format!("deadsync-theme-i18n-locale-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("create locale dir");
+        std::fs::write(dir.join("en.ini"), "").expect("write locale file");
+
+        assert!(locale_file_exists(&dir, "en"));
+        assert!(!locale_file_exists(&dir, "missing"));
+
+        let _ = std::fs::remove_dir_all(dir);
     }
 }
