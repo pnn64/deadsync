@@ -17,8 +17,9 @@ pub use builtin::{
 };
 pub use context::{ASSET_TEXTURE_CONTEXT, AssetTextureContext};
 pub use decode::{
-    GraphicTextureDiscovery, TextureDecodeJob, TextureDecodeResult, decode_texture_image,
-    decode_texture_jobs_parallel, initial_texture_decode_jobs,
+    GraphicTextureDiscovery, PreparedTextureImage, TextureDecodeJob, TextureDecodeResult,
+    decode_texture_image, decode_texture_jobs_parallel, initial_texture_decode_jobs,
+    prepare_initial_texture_images,
 };
 pub use discover::{
     DiscoveredTexture, GraphicTextureChoiceCache, INITIAL_GRAPHIC_TEXTURES,

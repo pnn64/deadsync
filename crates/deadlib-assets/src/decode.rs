@@ -1,8 +1,12 @@
 use crate::{
     TextureHints, apply_texture_hints, discover_graphic_textures_in_roots, fix_hidden_alpha,
-    initial_texture_source_path, noteskin_png_texture_entries, open_image_fallback,
+    initial_texture_sampler, initial_texture_source_path, noteskin_png_texture_entries,
+    open_image_fallback,
 };
+use crate::{black_texture_image, fallback_texture_image, white_texture_image};
+use deadlib_render::SamplerDesc;
 use image::RgbaImage;
+use log::warn;
 use std::{
     path::{Path, PathBuf},
     sync::{Arc, Mutex, mpsc},
@@ -16,6 +20,13 @@ pub struct TextureDecodeJob {
 pub enum TextureDecodeResult {
     Decoded { key: String, image: RgbaImage },
     Failed { key: String, message: String },
+}
+
+pub struct PreparedTextureImage {
+    pub key: String,
+    pub image: Arc<RgbaImage>,
+    pub sampler: SamplerDesc,
+    pub built_in: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -80,6 +91,47 @@ pub fn initial_texture_decode_jobs(
         .collect()
 }
 
+pub fn prepare_initial_texture_images(
+    jobs: Vec<TextureDecodeJob>,
+    needs_repeat_sampler: impl Fn(&str) -> bool,
+) -> Vec<PreparedTextureImage> {
+    let mut prepared = Vec::new();
+    for built_in in [white_texture_image(), black_texture_image()] {
+        prepared.push(PreparedTextureImage {
+            key: built_in.key.to_string(),
+            image: Arc::new(built_in.image),
+            sampler: SamplerDesc::default(),
+            built_in: true,
+        });
+    }
+
+    let fallback_image = Arc::new(fallback_texture_image());
+    for result in decode_texture_jobs_parallel(jobs) {
+        match result {
+            TextureDecodeResult::Decoded { key, image } => {
+                let sampler = initial_texture_sampler(&key, needs_repeat_sampler(&key));
+                prepared.push(PreparedTextureImage {
+                    key,
+                    image: Arc::new(image),
+                    sampler,
+                    built_in: false,
+                });
+            }
+            TextureDecodeResult::Failed { key, message } => {
+                warn!("Failed to load texture for key '{key}': {message}. Using fallback.");
+                let sampler = initial_texture_sampler(&key, needs_repeat_sampler(&key));
+                prepared.push(PreparedTextureImage {
+                    key,
+                    image: Arc::clone(&fallback_image),
+                    sampler,
+                    built_in: false,
+                });
+            }
+        }
+    }
+    prepared
+}
+
 pub fn decode_texture_jobs_parallel(jobs: Vec<TextureDecodeJob>) -> Vec<TextureDecodeResult> {
     let job_count = jobs.len();
     if job_count == 0 {
@@ -135,6 +187,38 @@ mod tests {
     #[test]
     fn decodes_empty_job_list() {
         assert!(decode_texture_jobs_parallel(Vec::new()).is_empty());
+    }
+
+    #[test]
+    fn prepare_initial_texture_images_includes_builtins() {
+        let prepared = prepare_initial_texture_images(Vec::new(), |_| false);
+
+        assert_eq!(prepared.len(), 2);
+        assert_eq!(prepared[0].key, crate::WHITE_TEXTURE_KEY);
+        assert!(prepared[0].built_in);
+        assert_eq!(prepared[1].key, crate::BLACK_TEXTURE_KEY);
+        assert!(prepared[1].built_in);
+    }
+
+    #[test]
+    fn prepare_initial_texture_images_uses_fallback_for_failed_decode() {
+        let prepared = prepare_initial_texture_images(
+            vec![TextureDecodeJob {
+                key: "grades/goldstar (stretch).png".to_string(),
+                path: PathBuf::from("__missing_initial_texture__.png"),
+            }],
+            |_| true,
+        );
+
+        assert_eq!(prepared.len(), 3);
+        assert_eq!(prepared[2].key, "grades/goldstar (stretch).png");
+        assert!(!prepared[2].built_in);
+        assert_eq!(prepared[2].image.width(), 2);
+        assert_eq!(prepared[2].image.height(), 2);
+        assert_eq!(
+            prepared[2].sampler.wrap,
+            deadlib_render::SamplerWrap::Repeat
+        );
     }
 
     #[test]

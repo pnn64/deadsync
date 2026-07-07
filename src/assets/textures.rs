@@ -10,17 +10,13 @@ use deadlib_platform::dirs;
 use deadlib_render::SamplerDesc;
 use deadlib_renderer::Backend;
 use log::{debug, warn};
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::path::{Path, PathBuf};
 
 use super::AssetError;
 use deadlib_assets::{
-    BuiltinTextureImage, GraphicTextureChoiceCache, INITIAL_GRAPHIC_TEXTURES, TextureDecodeResult,
-    black_texture_image, canonical_texture_key_with_asset_roots, decode_texture_image,
-    decode_texture_jobs_parallel, fallback_texture_image, graphic_texture_roots,
-    initial_texture_decode_jobs, initial_texture_sampler, white_texture_image,
+    GraphicTextureChoiceCache, INITIAL_GRAPHIC_TEXTURES, PreparedTextureImage,
+    canonical_texture_key_with_asset_roots, decode_texture_image, graphic_texture_roots,
+    initial_texture_decode_jobs, prepare_initial_texture_images,
 };
 
 static GRAPHIC_TEXTURE_CHOICES: GraphicTextureChoiceCache = GraphicTextureChoiceCache::new();
@@ -73,13 +69,6 @@ impl AssetManager {
     pub fn load_initial_textures(&mut self, backend: &mut Backend) -> Result<(), AssetError> {
         debug!("Loading initial textures...");
 
-        for BuiltinTextureImage { key, image } in [white_texture_image(), black_texture_image()] {
-            let texture = backend.create_texture(&image, SamplerDesc::default())?;
-            self.insert_texture(key.to_string(), texture, image.width(), image.height());
-            register_texture_dims(key, image.width(), image.height());
-            debug!("Loaded built-in texture: {key}");
-        }
-
         let texture_assets = deadsync_theme::initial_texture_assets()
             .map(|asset| (asset.key.to_string(), asset.path.to_string()))
             .collect::<Vec<_>>();
@@ -92,28 +81,20 @@ impl AssetManager {
             |path| dirs::app_dirs().resolve_asset_path(path),
         );
 
-        let fallback_image = Arc::new(fallback_texture_image());
-        for result in decode_texture_jobs_parallel(texture_jobs) {
-            match result {
-                TextureDecodeResult::Decoded { key, image } => {
-                    let sampler = initial_texture_sampler(&key, needs_repeat_sampler(&key));
-                    let texture = backend.create_texture(&image, sampler)?;
-                    register_texture_dims(&key, image.width(), image.height());
-                    debug!("Loaded texture: {key}");
-                    self.insert_texture(key, texture, image.width(), image.height());
-                }
-                TextureDecodeResult::Failed { key, message } => {
-                    warn!("Failed to load texture for key '{key}': {message}. Using fallback.");
-                    let sampler = initial_texture_sampler(&key, needs_repeat_sampler(&key));
-                    let texture = backend.create_texture(&fallback_image, sampler)?;
-                    register_texture_dims(&key, fallback_image.width(), fallback_image.height());
-                    self.insert_texture(
-                        key,
-                        texture,
-                        fallback_image.width(),
-                        fallback_image.height(),
-                    );
-                }
+        for PreparedTextureImage {
+            key,
+            image,
+            sampler,
+            built_in,
+        } in prepare_initial_texture_images(texture_jobs, needs_repeat_sampler)
+        {
+            let texture = backend.create_texture(image.as_ref(), sampler)?;
+            register_texture_dims(&key, image.width(), image.height());
+            self.insert_texture(key.clone(), texture, image.width(), image.height());
+            if built_in {
+                debug!("Loaded built-in texture: {key}");
+            } else {
+                debug!("Loaded texture: {key}");
             }
         }
 
