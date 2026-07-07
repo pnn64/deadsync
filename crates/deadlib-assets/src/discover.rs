@@ -1,8 +1,15 @@
-use crate::{strip_sprite_hints, texture_filename_has_multiframe_hint};
+use crate::{ASSET_TEXTURE_CONTEXT, strip_sprite_hints, texture_filename_has_multiframe_hint};
+use deadlib_present::actors::TextureKeyHandle;
+use deadlib_present::texture as present_texture;
+use deadlib_render::INVALID_TEXTURE_HANDLE;
 use std::{
     collections::HashSet,
     fs,
     path::{Path, PathBuf},
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
 };
 
 pub const NONE_TEXTURE_CHOICE_KEY: &str = "None";
@@ -14,10 +21,66 @@ pub struct DiscoveredTexture {
     pub source_path: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TextureChoiceSpec {
-    pub key: String,
+pub struct TextureChoice {
+    pub key: Arc<str>,
     pub label: String,
+    cached_handle: AtomicU64,
+    cached_generation: AtomicU64,
+}
+
+impl TextureChoice {
+    pub fn new(key: String, label: String) -> Self {
+        Self {
+            key: Arc::from(key),
+            label,
+            cached_handle: AtomicU64::new(INVALID_TEXTURE_HANDLE),
+            cached_generation: AtomicU64::new(u64::MAX),
+        }
+    }
+
+    #[inline(always)]
+    pub fn texture_key_handle(&self) -> TextureKeyHandle {
+        present_texture::cached_texture_key_handle(
+            &self.key,
+            &self.cached_handle,
+            &self.cached_generation,
+            &ASSET_TEXTURE_CONTEXT,
+        )
+    }
+}
+
+impl Clone for TextureChoice {
+    fn clone(&self) -> Self {
+        Self {
+            key: Arc::clone(&self.key),
+            label: self.label.clone(),
+            cached_handle: AtomicU64::new(self.cached_handle.load(Ordering::Relaxed)),
+            cached_generation: AtomicU64::new(self.cached_generation.load(Ordering::Relaxed)),
+        }
+    }
+}
+
+impl core::fmt::Debug for TextureChoice {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("TextureChoice")
+            .field("key", &self.key)
+            .field("label", &self.label)
+            .finish()
+    }
+}
+
+impl PartialEq for TextureChoice {
+    fn eq(&self, other: &Self) -> bool {
+        self.key == other.key && self.label == other.label
+    }
+}
+
+impl Eq for TextureChoice {}
+
+impl TextureChoiceLike for TextureChoice {
+    fn key(&self) -> &str {
+        self.key.as_ref()
+    }
 }
 
 pub trait TextureChoiceLike {
@@ -128,27 +191,18 @@ pub fn discover_graphic_textures_in_roots(
 pub fn texture_choices_from_discovered(
     discovered: impl IntoIterator<Item = DiscoveredTexture>,
     include_none: bool,
-) -> Vec<TextureChoiceSpec> {
-    let mut choices: Vec<TextureChoiceSpec> = discovered
+) -> Vec<TextureChoice> {
+    let mut choices: Vec<TextureChoice> = discovered
         .into_iter()
-        .map(|texture| TextureChoiceSpec {
-            key: texture.key,
-            label: texture.label,
-        })
+        .map(|texture| TextureChoice::new(texture.key, texture.label))
         .collect();
     if include_none {
-        choices.push(TextureChoiceSpec {
-            key: NONE_TEXTURE_CHOICE_KEY.to_string(),
-            label: NONE_TEXTURE_CHOICE_KEY.to_string(),
-        });
+        choices.push(TextureChoice::new(
+            NONE_TEXTURE_CHOICE_KEY.to_string(),
+            NONE_TEXTURE_CHOICE_KEY.to_string(),
+        ));
     }
     choices
-}
-
-impl TextureChoiceLike for TextureChoiceSpec {
-    fn key(&self) -> &str {
-        &self.key
-    }
 }
 
 pub fn canonical_texture_key_with_asset_roots(
@@ -322,16 +376,20 @@ mod tests {
         assert_eq!(
             choices,
             [
-                TextureChoiceSpec {
-                    key: "judgements/Love 2x6.png".to_string(),
-                    label: "Love".to_string(),
-                },
-                TextureChoiceSpec {
-                    key: NONE_TEXTURE_CHOICE_KEY.to_string(),
-                    label: NONE_TEXTURE_CHOICE_KEY.to_string(),
-                },
+                TextureChoice::new("judgements/Love 2x6.png".to_string(), "Love".to_string()),
+                TextureChoice::new(
+                    NONE_TEXTURE_CHOICE_KEY.to_string(),
+                    NONE_TEXTURE_CHOICE_KEY.to_string()
+                ),
             ]
         );
+    }
+
+    #[test]
+    fn texture_choice_exposes_key_for_resolution() {
+        let choice = TextureChoice::new("key.png".to_string(), "Key".to_string());
+
+        assert_eq!(choice.key(), "key.png");
     }
 
     #[test]

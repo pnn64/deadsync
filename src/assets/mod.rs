@@ -7,7 +7,6 @@ pub mod visual_styles;
 
 use deadlib_platform::dirs;
 use deadlib_present::font::{self, Font, FontParseError};
-use deadlib_present::texture as present_texture;
 use deadlib_render::{SamplerDesc, TextureHandle, TextureHandleMap};
 use deadlib_renderer::{Backend, Texture as RendererTexture};
 use image::RgbaImage;
@@ -25,6 +24,9 @@ pub use self::textures::{
 };
 pub use deadlib_assets::media_path_key;
 pub use deadlib_assets::upload::TextureUploadBudget;
+pub use deadlib_assets::{
+    ASSET_TEXTURE_CONTEXT as PRESENT_TEXTURE_CONTEXT, AssetTextureContext as PresentTextureContext,
+};
 use deadlib_assets::{
     PreparedFontTexture, TextureStore, font_texture_asset_roots, font_texture_key,
     parse_font_with_asset_context, prepare_font_texture, set_font_fallback,
@@ -75,35 +77,6 @@ impl From<Box<dyn StdError>> for AssetError {
         Self::Backend(value.to_string())
     }
 }
-
-pub struct PresentTextureContext;
-
-impl present_texture::TextureContext for PresentTextureContext {
-    #[inline(always)]
-    fn texture_registry_generation(&self) -> u64 {
-        texture_registry_generation()
-    }
-
-    #[inline(always)]
-    fn texture_dims(&self, key: &str) -> Option<present_texture::TextureMeta> {
-        texture_dims(key).map(|meta| present_texture::TextureMeta {
-            w: meta.w,
-            h: meta.h,
-        })
-    }
-
-    #[inline(always)]
-    fn sprite_sheet_dims(&self, key: &str) -> (u32, u32) {
-        sprite_sheet_dims(key)
-    }
-
-    #[inline(always)]
-    fn texture_handle(&self, key: &str) -> TextureHandle {
-        texture_handle(key)
-    }
-}
-
-pub const PRESENT_TEXTURE_CONTEXT: PresentTextureContext = PresentTextureContext;
 
 pub struct AssetManager {
     texture_store: TextureStore<RendererTexture>,

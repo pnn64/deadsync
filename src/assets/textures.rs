@@ -1,96 +1,28 @@
 use crate::assets::AssetManager;
 pub(crate) use deadlib_assets::generated_texture;
 pub use deadlib_assets::{
-    TexMeta, TextureHints, open_image_fallback, parse_sprite_sheet_dims, parse_texture_hints,
-    register_generated_texture, register_texture_dims, sprite_sheet_dims, strip_sprite_hints,
-    texture_dims, texture_handle, texture_registry_generation, texture_source_dims_from_real,
-    texture_source_frame_dims_from_real,
+    TexMeta, TextureChoice, TextureHints, open_image_fallback, parse_sprite_sheet_dims,
+    parse_texture_hints, register_generated_texture, register_texture_dims, sprite_sheet_dims,
+    strip_sprite_hints, texture_dims, texture_handle, texture_registry_generation,
+    texture_source_dims_from_real, texture_source_frame_dims_from_real,
 };
 use deadlib_platform::dirs;
-use deadlib_present::actors::TextureKeyHandle;
-use deadlib_present::texture as present_texture;
-use deadlib_render::{INVALID_TEXTURE_HANDLE, SamplerDesc};
+use deadlib_render::SamplerDesc;
 use deadlib_renderer::Backend;
 use log::{debug, warn};
 use std::{
     path::{Path, PathBuf},
-    sync::{
-        Arc, OnceLock,
-        atomic::{AtomicU64, Ordering},
-    },
+    sync::{Arc, OnceLock},
 };
 
-use super::{AssetError, PRESENT_TEXTURE_CONTEXT};
+use super::AssetError;
 use deadlib_assets::{
-    BuiltinTextureImage, DiscoveredTexture, GraphicTextureDiscovery, TextureChoiceLike,
-    TextureChoiceSpec, TextureDecodeResult, black_texture_image,
-    canonical_texture_key_with_asset_roots, decode_texture_image, decode_texture_jobs_parallel,
-    discover_graphic_textures_in_roots, fallback_texture_image, graphic_texture_roots,
-    initial_texture_decode_jobs, initial_texture_sampler,
-    texture_choices_from_discovered as texture_choice_specs_from_discovered, white_texture_image,
+    BuiltinTextureImage, DiscoveredTexture, GraphicTextureDiscovery, TextureDecodeResult,
+    black_texture_image, canonical_texture_key_with_asset_roots, decode_texture_image,
+    decode_texture_jobs_parallel, discover_graphic_textures_in_roots, fallback_texture_image,
+    graphic_texture_roots, initial_texture_decode_jobs, initial_texture_sampler,
+    white_texture_image,
 };
-
-pub struct TextureChoice {
-    pub key: Arc<str>,
-    pub label: String,
-    cached_handle: AtomicU64,
-    cached_generation: AtomicU64,
-}
-
-impl TextureChoice {
-    fn new(key: String, label: String) -> Self {
-        Self {
-            key: Arc::from(key),
-            label,
-            cached_handle: AtomicU64::new(INVALID_TEXTURE_HANDLE),
-            cached_generation: AtomicU64::new(u64::MAX),
-        }
-    }
-
-    #[inline(always)]
-    pub fn texture_key_handle(&self) -> TextureKeyHandle {
-        present_texture::cached_texture_key_handle(
-            &self.key,
-            &self.cached_handle,
-            &self.cached_generation,
-            &PRESENT_TEXTURE_CONTEXT,
-        )
-    }
-}
-
-impl Clone for TextureChoice {
-    fn clone(&self) -> Self {
-        Self {
-            key: Arc::clone(&self.key),
-            label: self.label.clone(),
-            cached_handle: AtomicU64::new(self.cached_handle.load(Ordering::Relaxed)),
-            cached_generation: AtomicU64::new(self.cached_generation.load(Ordering::Relaxed)),
-        }
-    }
-}
-
-impl core::fmt::Debug for TextureChoice {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("TextureChoice")
-            .field("key", &self.key)
-            .field("label", &self.label)
-            .finish()
-    }
-}
-
-impl PartialEq for TextureChoice {
-    fn eq(&self, other: &Self) -> bool {
-        self.key == other.key && self.label == other.label
-    }
-}
-
-impl Eq for TextureChoice {}
-
-impl TextureChoiceLike for TextureChoice {
-    fn key(&self) -> &str {
-        self.key.as_ref()
-    }
-}
 
 static JUDGMENT_TEXTURE_CHOICES: OnceLock<Vec<TextureChoice>> = OnceLock::new();
 static HOLD_JUDGMENT_TEXTURE_CHOICES: OnceLock<Vec<TextureChoice>> = OnceLock::new();
@@ -143,10 +75,7 @@ fn texture_choices_from_discovered(
     require_multiframe_hint: bool,
 ) -> Vec<TextureChoice> {
     let discovered = discover_graphic_textures(folder, love_first, require_multiframe_hint);
-    texture_choice_specs_from_discovered(discovered, include_none)
-        .into_iter()
-        .map(|TextureChoiceSpec { key, label }| TextureChoice::new(key, label))
-        .collect()
+    deadlib_assets::texture_choices_from_discovered(discovered, include_none)
 }
 
 pub fn judgment_texture_choices() -> &'static [TextureChoice] {
