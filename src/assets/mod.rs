@@ -6,13 +6,13 @@ mod textures;
 pub mod visual_styles;
 
 use deadlib_platform::dirs;
-use deadlib_present::font::{self, Font, FontParseError};
+use deadlib_present::font::Font;
 use deadlib_render::{SamplerDesc, TextureHandle, TextureHandleMap};
 use deadlib_renderer::{Backend, Texture as RendererTexture};
 use image::RgbaImage;
 use log::{debug, warn};
 use std::collections::HashMap;
-use std::{error::Error as StdError, fmt, path::Path};
+use std::path::Path;
 
 pub use self::textures::{
     TexMeta, TextureChoice, TextureHints, canonical_texture_key, held_miss_texture_choices,
@@ -22,84 +22,36 @@ pub use self::textures::{
     strip_sprite_hints, texture_dims, texture_handle, texture_registry_generation,
     texture_source_dims_from_real, texture_source_frame_dims_from_real,
 };
-pub use deadlib_assets::media_path_key;
 pub use deadlib_assets::upload::TextureUploadBudget;
 pub use deadlib_assets::{
     ASSET_TEXTURE_CONTEXT as PRESENT_TEXTURE_CONTEXT, AssetTextureContext as PresentTextureContext,
 };
+pub use deadlib_assets::{AssetError, media_path_key};
 use deadlib_assets::{
-    PreparedFontTexture, TextureStore, font_texture_asset_roots, font_texture_key,
+    FontStore, PreparedFontTexture, TextureStore, font_texture_asset_roots, font_texture_key,
     parse_font_with_asset_context, prepare_font_texture, set_font_fallback,
 };
 pub use deadsync_theme::{FontRole, machine_font_key, machine_font_key_for_text};
 
-#[derive(Debug)]
-pub enum AssetError {
-    FontParse(FontParseError),
-    Image(image::ImageError),
-    Backend(String),
-}
-
-impl fmt::Display for AssetError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::FontParse(err) => write!(f, "{err}"),
-            Self::Image(err) => write!(f, "{err}"),
-            Self::Backend(err) => write!(f, "GPU texture operation failed: {err}"),
-        }
-    }
-}
-
-impl StdError for AssetError {
-    fn source(&self) -> Option<&(dyn StdError + 'static)> {
-        match self {
-            Self::FontParse(err) => Some(err),
-            Self::Image(err) => Some(err),
-            Self::Backend(_) => None,
-        }
-    }
-}
-
-impl From<FontParseError> for AssetError {
-    fn from(value: FontParseError) -> Self {
-        Self::FontParse(value)
-    }
-}
-
-impl From<image::ImageError> for AssetError {
-    fn from(value: image::ImageError) -> Self {
-        Self::Image(value)
-    }
-}
-
-impl From<Box<dyn StdError>> for AssetError {
-    fn from(value: Box<dyn StdError>) -> Self {
-        Self::Backend(value.to_string())
-    }
-}
-
 pub struct AssetManager {
     texture_store: TextureStore<RendererTexture>,
-    fonts: HashMap<&'static str, Font>,
+    font_store: FontStore,
 }
 
 impl AssetManager {
     pub fn new() -> Self {
         Self {
             texture_store: TextureStore::new(),
-            fonts: HashMap::new(),
+            font_store: FontStore::new(),
         }
     }
 
-    pub fn register_font(&mut self, name: &'static str, mut font: Font) {
-        font.cache_tag = 0;
-        font.chain_key = 0;
-        self.fonts.insert(name, font);
-        font::refresh_chain_keys(&mut self.fonts);
+    pub fn register_font(&mut self, name: &'static str, font: Font) {
+        self.font_store.register_font(name, font);
     }
 
     pub const fn fonts(&self) -> &HashMap<&'static str, Font> {
-        &self.fonts
+        self.font_store.fonts()
     }
 
     #[inline(always)]
@@ -130,14 +82,14 @@ impl AssetManager {
     where
         F: FnOnce(&HashMap<&'static str, Font>) -> R,
     {
-        f(&self.fonts)
+        self.font_store.with_fonts(f)
     }
 
     pub fn with_font<F, R>(&self, name: &str, f: F) -> Option<R>
     where
         F: FnOnce(&Font) -> R,
     {
-        self.fonts.get(name).map(f)
+        self.font_store.with_font(name, f)
     }
 
     fn register_parsed_font(
@@ -171,7 +123,7 @@ impl AssetManager {
         name: &'static str,
         ini_path: &Path,
     ) -> Result<(), AssetError> {
-        if self.fonts.contains_key(name) {
+        if self.font_store.has_font(name) {
             return Ok(());
         }
         let dirs = dirs::app_dirs();

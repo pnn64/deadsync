@@ -3,7 +3,9 @@ pub mod context;
 pub mod decode;
 pub mod discover;
 pub mod dynamic;
+pub mod error;
 pub mod font;
+pub mod font_store;
 pub mod present_dsl;
 pub mod registry;
 pub mod texture_store;
@@ -26,10 +28,12 @@ pub use discover::{
     resolve_texture_choice_entry, resolve_texture_choice_key, texture_choices_from_discovered,
     texture_key_source_path,
 };
+pub use error::AssetError;
 pub use font::{
     AssetFontTextureContext, PreparedFontTexture, font_texture_asset_roots, font_texture_key,
     parse_font_with_asset_context, prepare_font_texture, set_font_fallback,
 };
+pub use font_store::FontStore;
 pub use present_dsl::SpriteBuilder;
 pub use registry::{
     GeneratedTexture, TexMeta, clear_texture_handles, generated_texture,
