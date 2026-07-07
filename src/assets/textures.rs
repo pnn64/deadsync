@@ -26,7 +26,8 @@ use super::{AssetError, PRESENT_TEXTURE_CONTEXT};
 use deadlib_assets::{
     DiscoveredTexture, NONE_TEXTURE_CHOICE_KEY, TextureChoiceLike, TextureDecodeJob,
     TextureDecodeResult, canonical_texture_key_with_asset_roots, decode_texture_jobs_parallel,
-    discover_graphic_textures_in_roots, noteskin_png_texture_entries,
+    discover_graphic_textures_in_roots, graphic_texture_roots, initial_texture_source_path,
+    noteskin_png_texture_entries,
 };
 
 pub struct TextureChoice {
@@ -100,38 +101,9 @@ fn needs_repeat_sampler(key: &str) -> bool {
     deadsync_theme::texture_needs_repeat_sampler(key)
 }
 
-fn absolute_or_self(path: &Path) -> PathBuf {
-    if path.is_absolute() {
-        return path.to_path_buf();
-    }
-    std::env::current_dir()
-        .map(|cwd| cwd.join(path))
-        .unwrap_or_else(|_| path.to_path_buf())
-}
-
 fn graphics_roots(folder: &str) -> Vec<PathBuf> {
     let dirs = dirs::app_dirs();
-    let mut roots = Vec::with_capacity(3);
-    if !dirs.portable {
-        let data_root = dirs.data_dir.join("assets").join("graphics").join(folder);
-        if data_root.is_dir() {
-            roots.push(data_root);
-        }
-    }
-
-    let cwd_root = Path::new("assets").join("graphics").join(folder);
-    if cwd_root.is_dir() {
-        let cwd_root = absolute_or_self(&cwd_root);
-        if !roots.iter().any(|root| root == &cwd_root) {
-            roots.push(cwd_root);
-        }
-    }
-
-    let exe_root = dirs.exe_dir.join("assets").join("graphics").join(folder);
-    if exe_root.is_dir() && !roots.iter().any(|root| root == &exe_root) {
-        roots.push(exe_root);
-    }
-    roots
+    graphic_texture_roots(folder, dirs.portable, &dirs.data_dir, &dirs.exe_dir)
 }
 
 fn discover_graphic_textures(
@@ -226,15 +198,9 @@ fn append_graphic_textures(
 }
 
 fn initial_texture_path(relative_path: &str) -> PathBuf {
-    let rel = Path::new(relative_path);
-    let path = if rel.is_absolute() {
-        rel.to_path_buf()
-    } else if relative_path.starts_with("noteskins/") {
-        Path::new("assets").join(relative_path)
-    } else {
-        Path::new("assets/graphics").join(relative_path)
-    };
-    dirs::app_dirs().resolve_asset_path(&path.to_string_lossy())
+    initial_texture_source_path(relative_path, |path| {
+        dirs::app_dirs().resolve_asset_path(path)
+    })
 }
 
 impl AssetManager {

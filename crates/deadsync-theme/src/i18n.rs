@@ -36,6 +36,7 @@ struct LangData {
 
 static LANG: OnceLock<RwLock<LangData>> = OnceLock::new();
 static LANG_REVISION: AtomicU64 = AtomicU64::new(0);
+const OS_LOCALE_ENV_KEYS: [&str; 4] = ["LC_ALL", "LC_MESSAGES", "LANG", "LANGUAGE"];
 
 fn language_file_path(languages_dir: &Path, locale: &str) -> PathBuf {
     languages_dir.join(format!("{locale}.ini"))
@@ -192,6 +193,26 @@ pub fn resolve_locale(
     resolve_language_locale(flag, raw_os_locale, locale_file_exists)
 }
 
+pub fn raw_os_locale_from_values<T: AsRef<str>>(
+    values: impl IntoIterator<Item = T>,
+) -> Option<String> {
+    for value in values {
+        let locale = value.as_ref().split(':').next().unwrap_or_default().trim();
+        if !locale.is_empty() {
+            return Some(locale.to_string());
+        }
+    }
+    None
+}
+
+pub fn raw_os_locale() -> Option<String> {
+    raw_os_locale_from_values(
+        OS_LOCALE_ENV_KEYS
+            .into_iter()
+            .filter_map(|key| std::env::var(key).ok()),
+    )
+}
+
 /// Scan `languages_dir/*.ini` and return `(locale_code, native_name)` pairs
 /// sorted by locale code.
 pub fn available_locales(languages_dir: &Path) -> Vec<(String, String)> {
@@ -225,4 +246,30 @@ pub fn available_locales(languages_dir: &Path) -> Vec<(String, String)> {
 
     locales.sort_by(|a, b| a.0.cmp(&b.0));
     locales
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn raw_os_locale_uses_first_colon_separated_locale() {
+        assert_eq!(
+            raw_os_locale_from_values([" fr_FR.UTF-8:en_US.UTF-8 "]),
+            Some("fr_FR.UTF-8".to_string())
+        );
+    }
+
+    #[test]
+    fn raw_os_locale_skips_empty_values() {
+        assert_eq!(
+            raw_os_locale_from_values(["", "  ", "ja_JP.UTF-8"]),
+            Some("ja_JP.UTF-8".to_string())
+        );
+    }
+
+    #[test]
+    fn raw_os_locale_returns_none_without_nonempty_values() {
+        assert_eq!(raw_os_locale_from_values(["", "  "]), None);
+    }
 }

@@ -27,6 +27,35 @@ fn absolute_or_self(path: &Path) -> PathBuf {
         .unwrap_or_else(|_| path.to_path_buf())
 }
 
+pub fn graphic_texture_roots(
+    folder: &str,
+    portable: bool,
+    data_dir: &Path,
+    exe_dir: &Path,
+) -> Vec<PathBuf> {
+    let mut roots = Vec::with_capacity(3);
+    if !portable {
+        let data_root = data_dir.join("assets").join("graphics").join(folder);
+        if data_root.is_dir() {
+            roots.push(data_root);
+        }
+    }
+
+    let cwd_root = Path::new("assets").join("graphics").join(folder);
+    if cwd_root.is_dir() {
+        let cwd_root = absolute_or_self(&cwd_root);
+        if !roots.iter().any(|root| root == &cwd_root) {
+            roots.push(cwd_root);
+        }
+    }
+
+    let exe_root = exe_dir.join("assets").join("graphics").join(folder);
+    if exe_root.is_dir() && !roots.iter().any(|root| root == &exe_root) {
+        roots.push(exe_root);
+    }
+    roots
+}
+
 fn is_png_file(filename: &str) -> bool {
     Path::new(filename)
         .extension()
@@ -101,6 +130,21 @@ pub fn canonical_texture_key_with_asset_roots(
     }
     let rel = path.strip_prefix(Path::new("assets")).unwrap_or(path);
     rel.to_string_lossy().replace('\\', "/")
+}
+
+pub fn initial_texture_source_path(
+    relative_path: &str,
+    resolve_asset_path: impl FnOnce(&str) -> PathBuf,
+) -> PathBuf {
+    let rel = Path::new(relative_path);
+    let path = if rel.is_absolute() {
+        rel.to_path_buf()
+    } else if relative_path.starts_with("noteskins/") {
+        Path::new("assets").join(relative_path)
+    } else {
+        Path::new("assets/graphics").join(relative_path)
+    };
+    resolve_asset_path(&path.to_string_lossy())
 }
 
 pub fn noteskin_png_texture_entries(
@@ -214,5 +258,31 @@ mod tests {
         let choices = [Choice("Love")];
 
         assert_eq!(resolve_texture_choice_key(None, &choices), None);
+    }
+
+    #[test]
+    fn initial_texture_source_path_maps_relative_asset_roots() {
+        let resolved =
+            initial_texture_source_path("judgements/Love 2x6.png", |path| PathBuf::from(path));
+        assert_eq!(
+            resolved,
+            PathBuf::from("assets/graphics/judgements/Love 2x6.png")
+        );
+
+        let resolved =
+            initial_texture_source_path("noteskins/dance/foo.png", |path| PathBuf::from(path));
+        assert_eq!(resolved, PathBuf::from("assets/noteskins/dance/foo.png"));
+    }
+
+    #[test]
+    fn initial_texture_source_path_keeps_absolute_paths() {
+        let path = if cfg!(windows) {
+            PathBuf::from("C:/tmp/texture.png")
+        } else {
+            PathBuf::from("/tmp/texture.png")
+        };
+        let resolved =
+            initial_texture_source_path(&path.to_string_lossy(), |path| PathBuf::from(path));
+        assert_eq!(resolved, path);
     }
 }

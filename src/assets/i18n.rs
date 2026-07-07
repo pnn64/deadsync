@@ -26,7 +26,11 @@ pub fn set_locale(locale: &str) {
 }
 
 pub fn resolve_locale(flag: LanguageFlag) -> String {
-    deadsync_theme::i18n::resolve_locale(flag, raw_os_locale().as_deref(), locale_file_exists)
+    deadsync_theme::i18n::resolve_locale(
+        flag,
+        deadsync_theme::i18n::raw_os_locale().as_deref(),
+        locale_file_exists,
+    )
 }
 
 /// Detect the best locale from the OS settings, falling back to `"en"` if
@@ -34,22 +38,9 @@ pub fn resolve_locale(flag: LanguageFlag) -> String {
 pub fn detect_os_locale() -> String {
     deadsync_theme::i18n::resolve_locale(
         config::LanguageFlag::Auto,
-        raw_os_locale().as_deref(),
+        deadsync_theme::i18n::raw_os_locale().as_deref(),
         locale_file_exists,
     )
-}
-
-fn raw_os_locale() -> Option<String> {
-    for key in ["LC_ALL", "LC_MESSAGES", "LANG", "LANGUAGE"] {
-        let Some(value) = std::env::var(key).ok() else {
-            continue;
-        };
-        let locale = value.split(':').next().unwrap_or_default().trim();
-        if !locale.is_empty() {
-            return Some(locale.to_string());
-        }
-    }
-    None
 }
 
 fn locale_file_exists(code: &str) -> bool {
