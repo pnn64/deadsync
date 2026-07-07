@@ -1,3 +1,4 @@
+pub mod builtin;
 pub mod decode;
 pub mod discover;
 pub mod dynamic;
@@ -5,12 +6,16 @@ pub mod registry;
 pub mod texture_store;
 pub mod upload;
 
+pub use builtin::{
+    BLACK_TEXTURE_KEY, BuiltinTextureImage, WHITE_TEXTURE_KEY, black_texture_image,
+    fallback_texture_image, solid_texture_image, white_texture_image,
+};
 pub use decode::{TextureDecodeJob, TextureDecodeResult, decode_texture_jobs_parallel};
 pub use discover::{
-    DiscoveredTexture, NONE_TEXTURE_CHOICE_KEY, TextureChoiceLike,
+    DiscoveredTexture, NONE_TEXTURE_CHOICE_KEY, TextureChoiceLike, TextureChoiceSpec,
     canonical_texture_key_with_asset_roots, discover_graphic_textures_in_roots,
     graphic_texture_roots, initial_texture_source_path, noteskin_png_texture_entries,
-    resolve_texture_choice_entry, resolve_texture_choice_key,
+    resolve_texture_choice_entry, resolve_texture_choice_key, texture_choices_from_discovered,
 };
 pub use registry::{
     GeneratedTexture, TexMeta, clear_texture_handles, generated_texture,

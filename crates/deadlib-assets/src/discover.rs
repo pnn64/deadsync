@@ -14,6 +14,12 @@ pub struct DiscoveredTexture {
     pub source_path: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TextureChoiceSpec {
+    pub key: String,
+    pub label: String,
+}
+
 pub trait TextureChoiceLike {
     fn key(&self) -> &str;
 }
@@ -117,6 +123,32 @@ pub fn discover_graphic_textures_in_roots(
         }
     });
     discovered
+}
+
+pub fn texture_choices_from_discovered(
+    discovered: impl IntoIterator<Item = DiscoveredTexture>,
+    include_none: bool,
+) -> Vec<TextureChoiceSpec> {
+    let mut choices: Vec<TextureChoiceSpec> = discovered
+        .into_iter()
+        .map(|texture| TextureChoiceSpec {
+            key: texture.key,
+            label: texture.label,
+        })
+        .collect();
+    if include_none {
+        choices.push(TextureChoiceSpec {
+            key: NONE_TEXTURE_CHOICE_KEY.to_string(),
+            label: NONE_TEXTURE_CHOICE_KEY.to_string(),
+        });
+    }
+    choices
+}
+
+impl TextureChoiceLike for TextureChoiceSpec {
+    fn key(&self) -> &str {
+        &self.key
+    }
 }
 
 pub fn canonical_texture_key_with_asset_roots(
@@ -258,6 +290,32 @@ mod tests {
         let choices = [Choice("Love")];
 
         assert_eq!(resolve_texture_choice_key(None, &choices), None);
+    }
+
+    #[test]
+    fn texture_choices_from_discovered_appends_none_choice() {
+        let choices = texture_choices_from_discovered(
+            [DiscoveredTexture {
+                key: "judgements/Love 2x6.png".to_string(),
+                label: "Love".to_string(),
+                source_path: "assets/graphics/judgements/Love 2x6.png".to_string(),
+            }],
+            true,
+        );
+
+        assert_eq!(
+            choices,
+            [
+                TextureChoiceSpec {
+                    key: "judgements/Love 2x6.png".to_string(),
+                    label: "Love".to_string(),
+                },
+                TextureChoiceSpec {
+                    key: NONE_TEXTURE_CHOICE_KEY.to_string(),
+                    label: NONE_TEXTURE_CHOICE_KEY.to_string(),
+                },
+            ]
+        );
     }
 
     #[test]

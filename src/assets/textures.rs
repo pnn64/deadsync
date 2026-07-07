@@ -12,7 +12,6 @@ use deadlib_present::actors::TextureKeyHandle;
 use deadlib_present::texture as present_texture;
 use deadlib_render::{INVALID_TEXTURE_HANDLE, SamplerDesc, SamplerWrap};
 use deadlib_renderer::Backend;
-use image::RgbaImage;
 use log::{debug, warn};
 use std::{
     path::{Path, PathBuf},
@@ -24,10 +23,11 @@ use std::{
 
 use super::{AssetError, PRESENT_TEXTURE_CONTEXT};
 use deadlib_assets::{
-    DiscoveredTexture, NONE_TEXTURE_CHOICE_KEY, TextureChoiceLike, TextureDecodeJob,
-    TextureDecodeResult, canonical_texture_key_with_asset_roots, decode_texture_jobs_parallel,
-    discover_graphic_textures_in_roots, graphic_texture_roots, initial_texture_source_path,
-    noteskin_png_texture_entries,
+    BuiltinTextureImage, DiscoveredTexture, TextureChoiceLike, TextureChoiceSpec, TextureDecodeJob,
+    TextureDecodeResult, black_texture_image, canonical_texture_key_with_asset_roots,
+    decode_texture_jobs_parallel, discover_graphic_textures_in_roots, fallback_texture_image,
+    graphic_texture_roots, initial_texture_source_path, noteskin_png_texture_entries,
+    texture_choices_from_discovered as texture_choice_specs_from_discovered, white_texture_image,
 };
 
 pub struct TextureChoice {
@@ -125,18 +125,11 @@ fn texture_choices_from_discovered(
     include_none: bool,
     require_multiframe_hint: bool,
 ) -> Vec<TextureChoice> {
-    let mut choices: Vec<TextureChoice> =
-        discover_graphic_textures(folder, love_first, require_multiframe_hint)
-            .into_iter()
-            .map(|texture| TextureChoice::new(texture.key, texture.label))
-            .collect();
-    if include_none {
-        choices.push(TextureChoice::new(
-            NONE_TEXTURE_CHOICE_KEY.to_string(),
-            NONE_TEXTURE_CHOICE_KEY.to_string(),
-        ));
-    }
-    choices
+    let discovered = discover_graphic_textures(folder, love_first, require_multiframe_hint);
+    texture_choice_specs_from_discovered(discovered, include_none)
+        .into_iter()
+        .map(|TextureChoiceSpec { key, label }| TextureChoice::new(key, label))
+        .collect()
 }
 
 pub fn judgment_texture_choices() -> &'static [TextureChoice] {
@@ -207,25 +200,12 @@ impl AssetManager {
     pub fn load_initial_textures(&mut self, backend: &mut Backend) -> Result<(), AssetError> {
         debug!("Loading initial textures...");
 
-        #[inline(always)]
-        fn fallback_rgba() -> RgbaImage {
-            let data: [u8; 16] = [
-                255, 0, 255, 255, 128, 128, 128, 255, 128, 128, 128, 255, 255, 0, 255, 255,
-            ];
-            RgbaImage::from_raw(2, 2, data.to_vec()).expect("fallback image")
+        for BuiltinTextureImage { key, image } in [white_texture_image(), black_texture_image()] {
+            let texture = backend.create_texture(&image, SamplerDesc::default())?;
+            self.insert_texture(key.to_string(), texture, image.width(), image.height());
+            register_texture_dims(key, image.width(), image.height());
+            debug!("Loaded built-in texture: {key}");
         }
-
-        let white_img = RgbaImage::from_raw(1, 1, vec![255, 255, 255, 255]).unwrap();
-        let white_tex = backend.create_texture(&white_img, SamplerDesc::default())?;
-        self.insert_texture("__white".to_string(), white_tex, 1, 1);
-        register_texture_dims("__white", 1, 1);
-        debug!("Loaded built-in texture: __white");
-
-        let black_img = RgbaImage::from_raw(1, 1, vec![0, 0, 0, 255]).unwrap();
-        let black_tex = backend.create_texture(&black_img, SamplerDesc::default())?;
-        self.insert_texture("__black".to_string(), black_tex, 1, 1);
-        register_texture_dims("__black", 1, 1);
-        debug!("Loaded built-in texture: __black");
 
         let mut textures_to_load: Vec<(String, String)> = deadsync_theme::initial_texture_assets()
             .map(|asset| (asset.key.to_string(), asset.path.to_string()))
@@ -244,7 +224,7 @@ impl AssetManager {
             })
             .collect();
 
-        let fallback_image = Arc::new(fallback_rgba());
+        let fallback_image = Arc::new(fallback_texture_image());
         for result in decode_texture_jobs_parallel(texture_jobs) {
             match result {
                 TextureDecodeResult::Decoded { key, image } => {
