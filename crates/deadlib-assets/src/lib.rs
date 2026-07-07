@@ -2,6 +2,7 @@ pub mod builtin;
 pub mod decode;
 pub mod discover;
 pub mod dynamic;
+pub mod font;
 pub mod registry;
 pub mod texture_store;
 pub mod upload;
@@ -20,6 +21,10 @@ pub use discover::{
     graphic_texture_roots, initial_texture_source_path, noteskin_png_texture_entries,
     resolve_texture_choice_entry, resolve_texture_choice_key, texture_choices_from_discovered,
     texture_key_source_path,
+};
+pub use font::{
+    AssetFontTextureContext, PreparedFontTexture, font_texture_asset_roots, font_texture_key,
+    parse_font_with_asset_context, prepare_font_texture, set_font_fallback,
 };
 pub use registry::{
     GeneratedTexture, TexMeta, clear_texture_handles, generated_texture,

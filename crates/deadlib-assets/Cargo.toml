@@ -5,6 +5,7 @@ edition = "2024"
 license = "GPL-3.0"
 
 [dependencies]
+deadlib-present = { path = "../deadlib-present" }
 deadlib-render = { path = "../deadlib-render" }
 deadlib-video = { path = "../deadlib-video" }
 image = "0.25.10"
