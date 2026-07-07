@@ -28,8 +28,8 @@ pub use deadlib_assets::{
 };
 pub use deadlib_assets::{AssetError, media_path_key};
 use deadlib_assets::{
-    FontStore, PreparedFontTexture, TextureStore, font_texture_asset_roots, font_texture_key,
-    parse_font_with_asset_context, prepare_font_texture, set_font_fallback,
+    FontAssetSpec, FontStore, PreparedFontTexture, TextureStore, font_texture_asset_roots,
+    parse_font_asset_specs, parse_font_with_asset_dirs, prepare_required_font_textures,
 };
 pub use deadsync_theme::{FontRole, machine_font_key, machine_font_key_for_text};
 
@@ -101,13 +101,11 @@ impl AssetManager {
     ) -> Result<(), AssetError> {
         let dirs = dirs::app_dirs();
         let asset_roots = font_texture_asset_roots(&dirs.data_dir, &dirs.exe_dir);
-        for tex_path in required_textures {
-            let key = font_texture_key(tex_path, &asset_roots);
-            if self.has_texture_key(&key) {
-                continue;
-            }
-            let PreparedFontTexture { key, image, hints } =
-                prepare_font_texture(tex_path, &font.texture_hints_map, &asset_roots)?;
+        let textures =
+            prepare_required_font_textures(&font, required_textures, &asset_roots, |key| {
+                self.has_texture_key(key)
+            })?;
+        for PreparedFontTexture { key, image, hints } in textures {
             let texture = backend.create_texture(&image, hints.sampler_desc())?;
             register_texture_dims(&key, image.width(), image.height());
             self.insert_texture(key.clone(), texture, image.width(), image.height());
@@ -130,10 +128,7 @@ impl AssetManager {
         let deadlib_present::font::FontLoadData {
             font,
             required_textures,
-        } = parse_font_with_asset_context(
-            ini_path,
-            font_texture_asset_roots(&dirs.data_dir, &dirs.exe_dir),
-        )?;
+        } = parse_font_with_asset_dirs(ini_path, &dirs.data_dir, &dirs.exe_dir)?;
         self.register_parsed_font(backend, name, font, &required_textures)?;
         debug!("Loaded font '{name}' from '{}'", ini_path.display());
         Ok(())
@@ -292,22 +287,22 @@ impl AssetManager {
     pub(crate) fn load_initial_fonts(&mut self, backend: &mut Backend) -> Result<(), AssetError> {
         let dirs = dirs::app_dirs();
         let asset_roots = font_texture_asset_roots(&dirs.data_dir, &dirs.exe_dir);
-        for spec in deadsync_theme::initial_font_assets() {
-            let resolved = dirs.resolve_asset_path(spec.ini_path);
-            let deadlib_present::font::FontLoadData {
-                mut font,
-                required_textures,
-            } = parse_font_with_asset_context(&resolved, asset_roots.clone())?;
-
-            set_font_fallback(&mut font, spec.fallback_font_name);
-            if let Some(fallback) = font.fallback_font_name {
+        let specs = deadsync_theme::initial_font_assets().map(|spec| FontAssetSpec {
+            name: spec.name,
+            ini_path: spec.ini_path,
+            fallback_font_name: spec.fallback_font_name,
+        });
+        for asset in
+            parse_font_asset_specs(specs, &asset_roots, |path| dirs.resolve_asset_path(path))?
+        {
+            if let Some(fallback) = asset.font.fallback_font_name {
                 debug!(
                     "Font '{}' configured to use '{}' as fallback.",
-                    spec.name, fallback
+                    asset.name, fallback
                 );
             }
-            self.register_parsed_font(backend, spec.name, font, &required_textures)?;
-            debug!("Loaded font '{}' from '{}'", spec.name, spec.ini_path);
+            self.register_parsed_font(backend, asset.name, asset.font, &asset.required_textures)?;
+            debug!("Loaded font '{}' from '{}'", asset.name, asset.ini_path);
         }
         Ok(())
     }

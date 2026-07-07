@@ -30,8 +30,10 @@ pub use discover::{
 };
 pub use error::AssetError;
 pub use font::{
-    AssetFontTextureContext, PreparedFontTexture, font_texture_asset_roots, font_texture_key,
-    parse_font_with_asset_context, prepare_font_texture, set_font_fallback,
+    AssetFontTextureContext, FontAssetSpec, ParsedFontAsset, PreparedFontTexture,
+    font_texture_asset_roots, font_texture_key, parse_font_asset_specs,
+    parse_font_with_asset_context, parse_font_with_asset_dirs, prepare_font_texture,
+    prepare_required_font_textures, set_font_fallback,
 };
 pub use font_store::FontStore;
 pub use present_dsl::SpriteBuilder;
