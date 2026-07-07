@@ -29,7 +29,7 @@ fn enabled() -> bool {
 /// distinguish "no files" from "feature disabled". Returns `None` when the
 /// directory is missing or contains no eligible `.ogg` files.
 pub fn random_sfx_in(rel_dir: &str) -> Option<PathBuf> {
-    pick_random_in(&dirs::app_dirs().resolve_asset_path(rel_dir))
+    audio_folder::random_sfx_path(rel_dir, |path| dirs::app_dirs().resolve_asset_path(path))
 }
 
 /// Same as [`random_sfx_in`] but takes a fully resolved directory.
@@ -41,8 +41,9 @@ pub fn pick_random_in(dir: &Path) -> Option<PathBuf> {
 /// by `rel_dir`, falling back to `fallback_name` (e.g. `"restart.ogg"`) when
 /// the indexed file is missing. Returns `None` if neither exists.
 pub fn indexed_sfx_in(rel_dir: &str, index: u32, fallback_name: &str) -> Option<PathBuf> {
-    let dir = dirs::app_dirs().resolve_asset_path(rel_dir);
-    pick_indexed_in(&dir, index, fallback_name)
+    audio_folder::indexed_sfx_path(rel_dir, index, fallback_name, |path| {
+        dirs::app_dirs().resolve_asset_path(path)
+    })
 }
 
 /// Same as [`indexed_sfx_in`] but takes a fully resolved directory.
@@ -95,17 +96,17 @@ pub fn play_indexed_sfx(rel_dir: &str, index: u32, fallback_name: &str) {
 /// it powers the per-visual-style menu music selection, not the SFX folder
 /// feature.
 pub fn random_music_path(rel_path: &str) -> Option<PathBuf> {
-    let resolved = dirs::app_dirs().resolve_asset_path(rel_path);
-    if resolved.is_dir() {
-        let picked = audio_folder::pick_music_path(&resolved);
-        if picked.is_none() {
+    match audio_folder::music_path_result(rel_path, |path| {
+        dirs::app_dirs().resolve_asset_path(path)
+    }) {
+        audio_folder::MusicPathResult::Picked(path) => Some(path),
+        audio_folder::MusicPathResult::EmptyDirectory(path) => {
             warn!(
                 "Menu music folder {} is empty; falling back to no music",
-                resolved.display()
+                path.display()
             );
+            None
         }
-        picked
-    } else {
-        audio_folder::pick_music_path(&resolved)
+        audio_folder::MusicPathResult::Missing => None,
     }
 }

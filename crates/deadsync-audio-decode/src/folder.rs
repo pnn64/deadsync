@@ -111,6 +111,53 @@ pub fn pick_music_path(path: &Path) -> Option<PathBuf> {
     }
 }
 
+pub fn random_sfx_path(
+    rel_dir: &str,
+    resolve_asset_path: impl FnOnce(&str) -> PathBuf,
+) -> Option<PathBuf> {
+    pick_random_ogg(&resolve_asset_path(rel_dir))
+}
+
+pub fn indexed_sfx_path(
+    rel_dir: &str,
+    index: u32,
+    fallback_name: &str,
+    resolve_asset_path: impl FnOnce(&str) -> PathBuf,
+) -> Option<PathBuf> {
+    let dir = resolve_asset_path(rel_dir);
+    pick_indexed_ogg(&dir, index, fallback_name)
+}
+
+pub enum MusicPathResult {
+    Picked(PathBuf),
+    EmptyDirectory(PathBuf),
+    Missing,
+}
+
+impl MusicPathResult {
+    pub fn path(self) -> Option<PathBuf> {
+        match self {
+            Self::Picked(path) => Some(path),
+            Self::EmptyDirectory(_) | Self::Missing => None,
+        }
+    }
+}
+
+pub fn music_path_result(
+    rel_path: &str,
+    resolve_asset_path: impl FnOnce(&str) -> PathBuf,
+) -> MusicPathResult {
+    let resolved = resolve_asset_path(rel_path);
+    if resolved.is_dir() {
+        return pick_music_path(&resolved)
+            .map(MusicPathResult::Picked)
+            .unwrap_or(MusicPathResult::EmptyDirectory(resolved));
+    }
+    pick_music_path(&resolved)
+        .map(MusicPathResult::Picked)
+        .unwrap_or(MusicPathResult::Missing)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -319,5 +366,54 @@ mod tests {
         let dir = TmpDir::new("music-missing");
 
         assert_eq!(pick_music_path(&dir.path().join("missing.ogg")), None);
+    }
+
+    #[test]
+    fn random_sfx_path_resolves_relative_directory() {
+        let dir = TmpDir::new("random-resolved");
+        let kept = write(dir.path(), "picked.ogg");
+        invalidate_ogg_listing_cache(dir.path());
+
+        assert_eq!(
+            random_sfx_path("assets/sounds/test", |_| dir.path().to_path_buf()),
+            Some(kept)
+        );
+    }
+
+    #[test]
+    fn indexed_sfx_path_resolves_relative_directory() {
+        let dir = TmpDir::new("indexed-resolved");
+        let indexed = write(dir.path(), "2.ogg");
+
+        assert_eq!(
+            indexed_sfx_path("assets/sounds/test", 2, "fallback.ogg", |_| {
+                dir.path().to_path_buf()
+            }),
+            Some(indexed)
+        );
+    }
+
+    #[test]
+    fn music_path_result_reports_empty_directory() {
+        let dir = TmpDir::new("music-empty-result");
+        invalidate_ogg_listing_cache(dir.path());
+
+        match music_path_result("assets/music/menu/test", |_| dir.path().to_path_buf()) {
+            MusicPathResult::EmptyDirectory(path) => assert_eq!(path, dir.path()),
+            MusicPathResult::Picked(_) | MusicPathResult::Missing => {
+                panic!("empty directory should be reported")
+            }
+        }
+    }
+
+    #[test]
+    fn music_path_result_accepts_direct_file() {
+        let dir = TmpDir::new("music-direct-result");
+        let file = write(dir.path(), "loop.ogg");
+
+        assert_eq!(
+            music_path_result("assets/music/loop.ogg", |_| file.clone()).path(),
+            Some(file)
+        );
     }
 }
