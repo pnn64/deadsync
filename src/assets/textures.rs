@@ -12,38 +12,18 @@ use deadlib_renderer::Backend;
 use log::{debug, warn};
 use std::{
     path::{Path, PathBuf},
-    sync::{Arc, OnceLock},
+    sync::Arc,
 };
 
 use super::AssetError;
 use deadlib_assets::{
-    BuiltinTextureImage, DiscoveredTexture, GraphicTextureDiscovery, TextureDecodeResult,
+    BuiltinTextureImage, GraphicTextureChoiceCache, INITIAL_GRAPHIC_TEXTURES, TextureDecodeResult,
     black_texture_image, canonical_texture_key_with_asset_roots, decode_texture_image,
-    decode_texture_jobs_parallel, discover_graphic_textures_in_roots, fallback_texture_image,
-    graphic_texture_roots, initial_texture_decode_jobs, initial_texture_sampler,
-    white_texture_image,
+    decode_texture_jobs_parallel, fallback_texture_image, graphic_texture_roots,
+    initial_texture_decode_jobs, initial_texture_sampler, white_texture_image,
 };
 
-static JUDGMENT_TEXTURE_CHOICES: OnceLock<Vec<TextureChoice>> = OnceLock::new();
-static HOLD_JUDGMENT_TEXTURE_CHOICES: OnceLock<Vec<TextureChoice>> = OnceLock::new();
-static HELD_MISS_TEXTURE_CHOICES: OnceLock<Vec<TextureChoice>> = OnceLock::new();
-const INITIAL_GRAPHIC_TEXTURES: [GraphicTextureDiscovery; 3] = [
-    GraphicTextureDiscovery {
-        folder: "judgements",
-        love_first: true,
-        require_multiframe_hint: true,
-    },
-    GraphicTextureDiscovery {
-        folder: "hold_judgements",
-        love_first: false,
-        require_multiframe_hint: true,
-    },
-    GraphicTextureDiscovery {
-        folder: "held_miss",
-        love_first: false,
-        require_multiframe_hint: false,
-    },
-];
+static GRAPHIC_TEXTURE_CHOICES: GraphicTextureChoiceCache = GraphicTextureChoiceCache::new();
 
 #[inline(always)]
 fn needs_repeat_sampler(key: &str) -> bool {
@@ -55,45 +35,16 @@ fn graphics_roots(folder: &str) -> Vec<PathBuf> {
     graphic_texture_roots(folder, dirs.portable, &dirs.data_dir, &dirs.exe_dir)
 }
 
-fn discover_graphic_textures(
-    folder: &str,
-    love_first: bool,
-    require_multiframe_hint: bool,
-) -> Vec<DiscoveredTexture> {
-    discover_graphic_textures_in_roots(
-        folder,
-        graphics_roots(folder),
-        love_first,
-        require_multiframe_hint,
-    )
-}
-
-fn texture_choices_from_discovered(
-    folder: &str,
-    love_first: bool,
-    include_none: bool,
-    require_multiframe_hint: bool,
-) -> Vec<TextureChoice> {
-    let discovered = discover_graphic_textures(folder, love_first, require_multiframe_hint);
-    deadlib_assets::texture_choices_from_discovered(discovered, include_none)
-}
-
 pub fn judgment_texture_choices() -> &'static [TextureChoice] {
-    JUDGMENT_TEXTURE_CHOICES
-        .get_or_init(|| texture_choices_from_discovered("judgements", true, true, true))
-        .as_slice()
+    GRAPHIC_TEXTURE_CHOICES.judgment_texture_choices(graphics_roots)
 }
 
 pub fn hold_judgment_texture_choices() -> &'static [TextureChoice] {
-    HOLD_JUDGMENT_TEXTURE_CHOICES
-        .get_or_init(|| texture_choices_from_discovered("hold_judgements", false, true, true))
-        .as_slice()
+    GRAPHIC_TEXTURE_CHOICES.hold_judgment_texture_choices(graphics_roots)
 }
 
 pub fn held_miss_texture_choices() -> &'static [TextureChoice] {
-    HELD_MISS_TEXTURE_CHOICES
-        .get_or_init(|| texture_choices_from_discovered("held_miss", false, true, false))
-        .as_slice()
+    GRAPHIC_TEXTURE_CHOICES.held_miss_texture_choices(graphics_roots)
 }
 
 pub fn resolve_texture_choice<'a>(

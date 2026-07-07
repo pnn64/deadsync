@@ -19,7 +19,8 @@ pub use decode::{
     decode_texture_jobs_parallel, initial_texture_decode_jobs,
 };
 pub use discover::{
-    DiscoveredTexture, NONE_TEXTURE_CHOICE_KEY, TextureChoice, TextureChoiceLike,
+    DiscoveredTexture, GraphicTextureChoiceCache, INITIAL_GRAPHIC_TEXTURES,
+    NONE_TEXTURE_CHOICE_KEY, TextureChoice, TextureChoiceLike,
     canonical_texture_key_with_asset_roots, discover_graphic_textures_in_roots,
     graphic_texture_roots, initial_texture_source_path, noteskin_png_texture_entries,
     resolve_texture_choice_entry, resolve_texture_choice_key, texture_choices_from_discovered,

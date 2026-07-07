@@ -1,4 +1,7 @@
-use crate::{ASSET_TEXTURE_CONTEXT, strip_sprite_hints, texture_filename_has_multiframe_hint};
+use crate::{
+    ASSET_TEXTURE_CONTEXT, GraphicTextureDiscovery, strip_sprite_hints,
+    texture_filename_has_multiframe_hint,
+};
 use deadlib_present::actors::TextureKeyHandle;
 use deadlib_present::texture as present_texture;
 use deadlib_render::INVALID_TEXTURE_HANDLE;
@@ -7,12 +10,98 @@ use std::{
     fs,
     path::{Path, PathBuf},
     sync::{
-        Arc,
+        Arc, OnceLock,
         atomic::{AtomicU64, Ordering},
     },
 };
 
 pub const NONE_TEXTURE_CHOICE_KEY: &str = "None";
+pub const INITIAL_GRAPHIC_TEXTURES: [GraphicTextureDiscovery; 3] = [
+    GraphicTextureDiscovery {
+        folder: "judgements",
+        love_first: true,
+        require_multiframe_hint: true,
+    },
+    GraphicTextureDiscovery {
+        folder: "hold_judgements",
+        love_first: false,
+        require_multiframe_hint: true,
+    },
+    GraphicTextureDiscovery {
+        folder: "held_miss",
+        love_first: false,
+        require_multiframe_hint: false,
+    },
+];
+
+pub struct GraphicTextureChoiceCache {
+    judgment: OnceLock<Vec<TextureChoice>>,
+    hold_judgment: OnceLock<Vec<TextureChoice>>,
+    held_miss: OnceLock<Vec<TextureChoice>>,
+}
+
+impl GraphicTextureChoiceCache {
+    pub const fn new() -> Self {
+        Self {
+            judgment: OnceLock::new(),
+            hold_judgment: OnceLock::new(),
+            held_miss: OnceLock::new(),
+        }
+    }
+
+    pub fn judgment_texture_choices(
+        &self,
+        graphic_roots: impl Fn(&str) -> Vec<PathBuf>,
+    ) -> &[TextureChoice] {
+        self.judgment
+            .get_or_init(|| {
+                texture_choices_from_folder(INITIAL_GRAPHIC_TEXTURES[0], true, graphic_roots)
+            })
+            .as_slice()
+    }
+
+    pub fn hold_judgment_texture_choices(
+        &self,
+        graphic_roots: impl Fn(&str) -> Vec<PathBuf>,
+    ) -> &[TextureChoice] {
+        self.hold_judgment
+            .get_or_init(|| {
+                texture_choices_from_folder(INITIAL_GRAPHIC_TEXTURES[1], true, graphic_roots)
+            })
+            .as_slice()
+    }
+
+    pub fn held_miss_texture_choices(
+        &self,
+        graphic_roots: impl Fn(&str) -> Vec<PathBuf>,
+    ) -> &[TextureChoice] {
+        self.held_miss
+            .get_or_init(|| {
+                texture_choices_from_folder(INITIAL_GRAPHIC_TEXTURES[2], true, graphic_roots)
+            })
+            .as_slice()
+    }
+}
+
+impl Default for GraphicTextureChoiceCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+fn texture_choices_from_folder(
+    spec: GraphicTextureDiscovery,
+    include_none: bool,
+    graphic_roots: impl Fn(&str) -> Vec<PathBuf>,
+) -> Vec<TextureChoice> {
+    let discovered = discover_graphic_textures_in_roots(
+        spec.folder,
+        graphic_roots(spec.folder),
+        spec.love_first,
+        spec.require_multiframe_hint,
+    );
+    texture_choices_from_discovered(discovered, include_none)
+}
 
 #[derive(Clone, Debug)]
 pub struct DiscoveredTexture {
@@ -390,6 +479,36 @@ mod tests {
         let choice = TextureChoice::new("key.png".to_string(), "Key".to_string());
 
         assert_eq!(choice.key(), "key.png");
+    }
+
+    #[test]
+    fn graphic_texture_choice_cache_discovers_judgments() {
+        let root = std::env::temp_dir().join(format!(
+            "deadsync-graphic-choice-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("Metal 2x7.png"), [0u8]).unwrap();
+        std::fs::write(root.join("Love 2x7.png"), [0u8]).unwrap();
+
+        let cache = GraphicTextureChoiceCache::new();
+        let choices = cache.judgment_texture_choices(|folder| {
+            if folder == "judgements" {
+                vec![root.clone()]
+            } else {
+                Vec::new()
+            }
+        });
+
+        assert_eq!(choices[0].key(), "judgements/Love 2x7.png");
+        assert_eq!(choices[1].key(), "judgements/Metal 2x7.png");
+        assert_eq!(choices[2].key(), NONE_TEXTURE_CHOICE_KEY);
+
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]
