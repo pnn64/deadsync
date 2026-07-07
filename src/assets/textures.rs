@@ -23,11 +23,11 @@ use std::{
 
 use super::{AssetError, PRESENT_TEXTURE_CONTEXT};
 use deadlib_assets::{
-    BuiltinTextureImage, DiscoveredTexture, TextureChoiceLike, TextureChoiceSpec, TextureDecodeJob,
-    TextureDecodeResult, black_texture_image, canonical_texture_key_with_asset_roots,
-    decode_texture_image, decode_texture_jobs_parallel, discover_graphic_textures_in_roots,
-    fallback_texture_image, graphic_texture_roots, initial_texture_sampler,
-    initial_texture_source_path, noteskin_png_texture_entries,
+    BuiltinTextureImage, DiscoveredTexture, GraphicTextureDiscovery, TextureChoiceLike,
+    TextureChoiceSpec, TextureDecodeResult, black_texture_image,
+    canonical_texture_key_with_asset_roots, decode_texture_image, decode_texture_jobs_parallel,
+    discover_graphic_textures_in_roots, fallback_texture_image, graphic_texture_roots,
+    initial_texture_decode_jobs, initial_texture_sampler,
     texture_choices_from_discovered as texture_choice_specs_from_discovered, white_texture_image,
 };
 
@@ -96,6 +96,23 @@ impl TextureChoiceLike for TextureChoice {
 static JUDGMENT_TEXTURE_CHOICES: OnceLock<Vec<TextureChoice>> = OnceLock::new();
 static HOLD_JUDGMENT_TEXTURE_CHOICES: OnceLock<Vec<TextureChoice>> = OnceLock::new();
 static HELD_MISS_TEXTURE_CHOICES: OnceLock<Vec<TextureChoice>> = OnceLock::new();
+const INITIAL_GRAPHIC_TEXTURES: [GraphicTextureDiscovery; 3] = [
+    GraphicTextureDiscovery {
+        folder: "judgements",
+        love_first: true,
+        require_multiframe_hint: true,
+    },
+    GraphicTextureDiscovery {
+        folder: "hold_judgements",
+        love_first: false,
+        require_multiframe_hint: true,
+    },
+    GraphicTextureDiscovery {
+        folder: "held_miss",
+        love_first: false,
+        require_multiframe_hint: false,
+    },
+];
 
 #[inline(always)]
 fn needs_repeat_sampler(key: &str) -> bool {
@@ -173,30 +190,6 @@ pub fn canonical_texture_key<P: AsRef<Path>>(p: P) -> String {
     )
 }
 
-pub(crate) fn append_noteskins_pngs_recursive(list: &mut Vec<(String, String)>, folder: &str) {
-    let roots = dirs::app_dirs().noteskin_roots();
-    list.extend(noteskin_png_texture_entries(&roots, folder, |path| {
-        canonical_texture_key(path)
-    }));
-}
-
-fn append_graphic_textures(
-    list: &mut Vec<(String, String)>,
-    folder: &str,
-    love_first: bool,
-    require_multiframe_hint: bool,
-) {
-    for texture in discover_graphic_textures(folder, love_first, require_multiframe_hint) {
-        list.push((texture.key, texture.source_path));
-    }
-}
-
-fn initial_texture_path(relative_path: &str) -> PathBuf {
-    initial_texture_source_path(relative_path, |path| {
-        dirs::app_dirs().resolve_asset_path(path)
-    })
-}
-
 impl AssetManager {
     pub fn load_initial_textures(&mut self, backend: &mut Backend) -> Result<(), AssetError> {
         debug!("Loading initial textures...");
@@ -208,22 +201,17 @@ impl AssetManager {
             debug!("Loaded built-in texture: {key}");
         }
 
-        let mut textures_to_load: Vec<(String, String)> = deadsync_theme::initial_texture_assets()
+        let texture_assets = deadsync_theme::initial_texture_assets()
             .map(|asset| (asset.key.to_string(), asset.path.to_string()))
-            .collect();
-
-        append_noteskins_pngs_recursive(&mut textures_to_load, "noteskins");
-        append_graphic_textures(&mut textures_to_load, "judgements", true, true);
-        append_graphic_textures(&mut textures_to_load, "hold_judgements", false, true);
-        append_graphic_textures(&mut textures_to_load, "held_miss", false, false);
-
-        let texture_jobs: Vec<TextureDecodeJob> = textures_to_load
-            .into_iter()
-            .map(|(key, relative_path)| TextureDecodeJob {
-                key,
-                path: initial_texture_path(&relative_path),
-            })
-            .collect();
+            .collect::<Vec<_>>();
+        let texture_jobs = initial_texture_decode_jobs(
+            texture_assets,
+            &dirs::app_dirs().noteskin_roots(),
+            |path| canonical_texture_key(path),
+            &INITIAL_GRAPHIC_TEXTURES,
+            graphics_roots,
+            |path| dirs::app_dirs().resolve_asset_path(path),
+        );
 
         let fallback_image = Arc::new(fallback_texture_image());
         for result in decode_texture_jobs_parallel(texture_jobs) {

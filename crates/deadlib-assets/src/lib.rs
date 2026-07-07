@@ -11,7 +11,8 @@ pub use builtin::{
     fallback_texture_image, solid_texture_image, white_texture_image,
 };
 pub use decode::{
-    TextureDecodeJob, TextureDecodeResult, decode_texture_image, decode_texture_jobs_parallel,
+    GraphicTextureDiscovery, TextureDecodeJob, TextureDecodeResult, decode_texture_image,
+    decode_texture_jobs_parallel, initial_texture_decode_jobs,
 };
 pub use discover::{
     DiscoveredTexture, NONE_TEXTURE_CHOICE_KEY, TextureChoiceLike, TextureChoiceSpec,

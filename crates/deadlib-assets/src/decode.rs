@@ -1,4 +1,7 @@
-use crate::{TextureHints, apply_texture_hints, fix_hidden_alpha, open_image_fallback};
+use crate::{
+    TextureHints, apply_texture_hints, discover_graphic_textures_in_roots, fix_hidden_alpha,
+    initial_texture_source_path, noteskin_png_texture_entries, open_image_fallback,
+};
 use image::RgbaImage;
 use std::{
     path::{Path, PathBuf},
@@ -13,6 +16,13 @@ pub struct TextureDecodeJob {
 pub enum TextureDecodeResult {
     Decoded { key: String, image: RgbaImage },
     Failed { key: String, message: String },
+}
+
+#[derive(Clone, Copy)]
+pub struct GraphicTextureDiscovery {
+    pub folder: &'static str,
+    pub love_first: bool,
+    pub require_multiframe_hint: bool,
 }
 
 fn decode_rgba(job: TextureDecodeJob) -> TextureDecodeResult {
@@ -35,6 +45,39 @@ pub fn decode_texture_image(path: &Path, hints: &TextureHints) -> image::ImageRe
     }
     fix_hidden_alpha(&mut image);
     Ok(image)
+}
+
+pub fn initial_texture_decode_jobs(
+    texture_assets: impl IntoIterator<Item = (String, String)>,
+    noteskin_roots: &[PathBuf],
+    canonical_key: impl Fn(&Path) -> String,
+    graphic_folders: &[GraphicTextureDiscovery],
+    graphic_roots: impl Fn(&str) -> Vec<PathBuf>,
+    resolve_asset_path: impl Fn(&str) -> PathBuf,
+) -> Vec<TextureDecodeJob> {
+    let mut textures: Vec<(String, String)> = texture_assets.into_iter().collect();
+    textures.extend(noteskin_png_texture_entries(
+        noteskin_roots,
+        "noteskins",
+        canonical_key,
+    ));
+    for spec in graphic_folders {
+        for texture in discover_graphic_textures_in_roots(
+            spec.folder,
+            graphic_roots(spec.folder),
+            spec.love_first,
+            spec.require_multiframe_hint,
+        ) {
+            textures.push((texture.key, texture.source_path));
+        }
+    }
+    textures
+        .into_iter()
+        .map(|(key, relative_path)| TextureDecodeJob {
+            key,
+            path: initial_texture_source_path(&relative_path, &resolve_asset_path),
+        })
+        .collect()
 }
 
 pub fn decode_texture_jobs_parallel(jobs: Vec<TextureDecodeJob>) -> Vec<TextureDecodeResult> {
@@ -120,5 +163,21 @@ mod tests {
         .expect_err("missing image should fail");
 
         assert!(!err.to_string().is_empty());
+    }
+
+    #[test]
+    fn initial_texture_decode_jobs_maps_theme_assets() {
+        let jobs = initial_texture_decode_jobs(
+            [("logo.png".to_string(), "logo.png".to_string())],
+            &[],
+            |path| path.to_string_lossy().replace('\\', "/"),
+            &[],
+            |_| Vec::new(),
+            |path| PathBuf::from(path),
+        );
+
+        assert_eq!(jobs.len(), 1);
+        assert_eq!(jobs[0].key, "logo.png");
+        assert_eq!(jobs[0].path, PathBuf::from("assets/graphics/logo.png"));
     }
 }
