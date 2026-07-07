@@ -10,12 +10,15 @@ pub use builtin::{
     BLACK_TEXTURE_KEY, BuiltinTextureImage, WHITE_TEXTURE_KEY, black_texture_image,
     fallback_texture_image, solid_texture_image, white_texture_image,
 };
-pub use decode::{TextureDecodeJob, TextureDecodeResult, decode_texture_jobs_parallel};
+pub use decode::{
+    TextureDecodeJob, TextureDecodeResult, decode_texture_image, decode_texture_jobs_parallel,
+};
 pub use discover::{
     DiscoveredTexture, NONE_TEXTURE_CHOICE_KEY, TextureChoiceLike, TextureChoiceSpec,
     canonical_texture_key_with_asset_roots, discover_graphic_textures_in_roots,
     graphic_texture_roots, initial_texture_source_path, noteskin_png_texture_entries,
     resolve_texture_choice_entry, resolve_texture_choice_key, texture_choices_from_discovered,
+    texture_key_source_path,
 };
 pub use registry::{
     GeneratedTexture, TexMeta, clear_texture_handles, generated_texture,
@@ -28,7 +31,10 @@ pub use texture_store::TextureStore;
 use deadlib_render::{SamplerDesc, SamplerFilter, SamplerWrap};
 use image::{ImageFormat, ImageReader, RgbaImage};
 use log::warn;
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 #[derive(Clone, Debug, Default)]
 pub struct TextureHints {
@@ -402,6 +408,13 @@ pub fn ascii_ci_hash(input: &str) -> u64 {
     hash
 }
 
+pub fn media_path_key(path: &Path) -> Arc<str> {
+    match path.to_string_lossy() {
+        std::borrow::Cow::Borrowed(key) => Arc::from(key),
+        std::borrow::Cow::Owned(key) => Arc::from(key),
+    }
+}
+
 pub fn parse_texture_hints(raw: &str) -> TextureHints {
     let mut hints = TextureHints::default();
     let trimmed = raw.trim();
@@ -744,5 +757,13 @@ mod tests {
     fn ascii_hash_is_case_insensitive() {
         assert_eq!(ascii_ci_hash("Texture.PNG"), ascii_ci_hash("texture.png"));
         assert_ne!(ascii_ci_hash("Texture.PNG"), ascii_ci_hash("texture2.png"));
+    }
+
+    #[test]
+    fn media_path_key_uses_lossless_path_text() {
+        assert_eq!(
+            media_path_key(Path::new("assets/music/loop.ogg")).as_ref(),
+            "assets/music/loop.ogg"
+        );
     }
 }

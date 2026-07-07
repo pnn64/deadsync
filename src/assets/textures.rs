@@ -1,8 +1,8 @@
 use crate::assets::AssetManager;
 pub(crate) use deadlib_assets::generated_texture;
 pub use deadlib_assets::{
-    TexMeta, TextureHints, apply_texture_hints, direct_texture_key_path, fix_hidden_alpha,
-    open_image_fallback, parse_sprite_sheet_dims, parse_texture_hints, register_generated_texture,
+    TexMeta, TextureHints, apply_texture_hints, fix_hidden_alpha, open_image_fallback,
+    parse_sprite_sheet_dims, parse_texture_hints, register_generated_texture,
     register_texture_dims, sprite_sheet_dims, strip_sprite_hints, texture_dims, texture_handle,
     texture_registry_generation, texture_source_dims_from_real,
     texture_source_frame_dims_from_real,
@@ -25,8 +25,9 @@ use super::{AssetError, PRESENT_TEXTURE_CONTEXT};
 use deadlib_assets::{
     BuiltinTextureImage, DiscoveredTexture, TextureChoiceLike, TextureChoiceSpec, TextureDecodeJob,
     TextureDecodeResult, black_texture_image, canonical_texture_key_with_asset_roots,
-    decode_texture_jobs_parallel, discover_graphic_textures_in_roots, fallback_texture_image,
-    graphic_texture_roots, initial_texture_source_path, noteskin_png_texture_entries,
+    decode_texture_image, decode_texture_jobs_parallel, discover_graphic_textures_in_roots,
+    fallback_texture_image, graphic_texture_roots, initial_texture_source_path,
+    noteskin_png_texture_entries,
     texture_choices_from_discovered as texture_choice_specs_from_discovered, white_texture_image,
 };
 
@@ -319,14 +320,8 @@ impl AssetManager {
             return;
         }
 
-        let path = direct_texture_key_path(texture_key, &key).unwrap_or_else(|| {
-            let dirs = dirs::app_dirs();
-            let path = dirs.resolve_asset_path(&format!("assets/{key}"));
-            if path.is_file() {
-                path
-            } else {
-                dirs.resolve_asset_path(&format!("assets/graphics/{key}"))
-            }
+        let path = deadlib_assets::texture_key_source_path(texture_key, &key, |path| {
+            dirs::app_dirs().resolve_asset_path(path)
         });
         if !path.is_file() {
             warn!("Failed to resolve texture key '{key}' for preload.");
@@ -344,29 +339,22 @@ impl AssetManager {
                 hints.sampler_desc()
             }
         });
-        match open_image_fallback(&path) {
-            Ok(img) => {
-                let mut rgba = img.to_rgba8();
-                if !hints.is_default() {
-                    apply_texture_hints(&mut rgba, &hints);
+        match decode_texture_image(&path, &hints) {
+            Ok(rgba) => match backend.create_texture(&rgba, sampler) {
+                Ok(texture) => {
+                    self.set_texture_for_key(
+                        backend,
+                        key.clone(),
+                        texture,
+                        rgba.width(),
+                        rgba.height(),
+                    );
+                    register_texture_dims(&key, rgba.width(), rgba.height());
                 }
-                fix_hidden_alpha(&mut rgba);
-                match backend.create_texture(&rgba, sampler) {
-                    Ok(texture) => {
-                        self.set_texture_for_key(
-                            backend,
-                            key.clone(),
-                            texture,
-                            rgba.width(),
-                            rgba.height(),
-                        );
-                        register_texture_dims(&key, rgba.width(), rgba.height());
-                    }
-                    Err(e) => {
-                        warn!("Failed to create GPU texture for key '{key}': {e}");
-                    }
+                Err(e) => {
+                    warn!("Failed to create GPU texture for key '{key}': {e}");
                 }
-            }
+            },
             Err(e) => {
                 warn!("Failed to open texture for key '{key}': {e}");
             }

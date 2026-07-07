@@ -1,7 +1,7 @@
-use crate::{fix_hidden_alpha, open_image_fallback};
+use crate::{TextureHints, apply_texture_hints, fix_hidden_alpha, open_image_fallback};
 use image::RgbaImage;
 use std::{
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex, mpsc},
 };
 
@@ -16,20 +16,25 @@ pub enum TextureDecodeResult {
 }
 
 fn decode_rgba(job: TextureDecodeJob) -> TextureDecodeResult {
-    match open_image_fallback(&job.path) {
-        Ok(img) => {
-            let mut image = img.to_rgba8();
-            fix_hidden_alpha(&mut image);
-            TextureDecodeResult::Decoded {
-                key: job.key,
-                image,
-            }
-        }
+    match decode_texture_image(&job.path, &TextureHints::default()) {
+        Ok(image) => TextureDecodeResult::Decoded {
+            key: job.key,
+            image,
+        },
         Err(e) => TextureDecodeResult::Failed {
             key: job.key,
             message: e.to_string(),
         },
     }
+}
+
+pub fn decode_texture_image(path: &Path, hints: &TextureHints) -> image::ImageResult<RgbaImage> {
+    let mut image = open_image_fallback(path)?.to_rgba8();
+    if !hints.is_default() {
+        apply_texture_hints(&mut image, hints);
+    }
+    fix_hidden_alpha(&mut image);
+    Ok(image)
 }
 
 pub fn decode_texture_jobs_parallel(jobs: Vec<TextureDecodeJob>) -> Vec<TextureDecodeResult> {
@@ -104,5 +109,16 @@ mod tests {
             }
             TextureDecodeResult::Decoded { .. } => panic!("missing texture decoded"),
         }
+    }
+
+    #[test]
+    fn decode_texture_image_reports_missing_file() {
+        let err = decode_texture_image(
+            Path::new("__missing_texture_decode_image__.png"),
+            &TextureHints::default(),
+        )
+        .expect_err("missing image should fail");
+
+        assert!(!err.to_string().is_empty());
     }
 }

@@ -13,7 +13,7 @@ use deadlib_renderer::{Backend, Texture as RendererTexture};
 use image::RgbaImage;
 use log::{debug, warn};
 use std::collections::HashMap;
-use std::{error::Error as StdError, fmt, path::Path, sync::Arc};
+use std::{error::Error as StdError, fmt, path::Path};
 
 pub use self::textures::{
     TexMeta, TextureChoice, TextureHints, canonical_texture_key, held_miss_texture_choices,
@@ -25,15 +25,9 @@ pub use self::textures::{
 };
 use self::textures::{apply_texture_hints, fix_hidden_alpha};
 use deadlib_assets::TextureStore;
+pub use deadlib_assets::media_path_key;
 pub use deadlib_assets::upload::TextureUploadBudget;
 pub use deadsync_theme::{FontRole, machine_font_key, machine_font_key_for_text};
-
-pub fn media_path_key(path: &Path) -> Arc<str> {
-    match path.to_string_lossy() {
-        std::borrow::Cow::Borrowed(key) => Arc::from(key),
-        std::borrow::Cow::Owned(key) => Arc::from(key),
-    }
-}
 
 #[derive(Debug)]
 pub enum AssetError {

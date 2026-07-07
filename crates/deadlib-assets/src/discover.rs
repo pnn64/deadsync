@@ -179,6 +179,22 @@ pub fn initial_texture_source_path(
     resolve_asset_path(&path.to_string_lossy())
 }
 
+pub fn texture_key_source_path(
+    raw: &str,
+    key: &str,
+    resolve_asset_path: impl Fn(&str) -> PathBuf,
+) -> PathBuf {
+    if let Some(path) = crate::direct_texture_key_path(raw, key) {
+        return path;
+    }
+    let asset_path = resolve_asset_path(&format!("assets/{key}"));
+    if asset_path.is_file() {
+        asset_path
+    } else {
+        resolve_asset_path(&format!("assets/graphics/{key}"))
+    }
+}
+
 pub fn noteskin_png_texture_entries(
     roots: &[PathBuf],
     folder: &str,
@@ -342,5 +358,26 @@ mod tests {
         let resolved =
             initial_texture_source_path(&path.to_string_lossy(), |path| PathBuf::from(path));
         assert_eq!(resolved, path);
+    }
+
+    #[test]
+    fn texture_key_source_path_prefers_assets_root_when_present() {
+        let dir =
+            std::env::temp_dir().join(format!("deadsync-texture-source-{}", std::process::id()));
+        let asset_path = dir.join("assets").join("foo.png");
+        std::fs::create_dir_all(asset_path.parent().unwrap()).expect("create fixture dir");
+        std::fs::write(&asset_path, [0u8]).expect("write fixture");
+
+        let resolved = texture_key_source_path("foo.png", "foo.png", |path| dir.join(path));
+
+        assert_eq!(resolved, asset_path);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn texture_key_source_path_falls_back_to_graphics_root() {
+        let resolved = texture_key_source_path("foo.png", "foo.png", |path| PathBuf::from(path));
+
+        assert_eq!(resolved, PathBuf::from("assets/graphics/foo.png"));
     }
 }
