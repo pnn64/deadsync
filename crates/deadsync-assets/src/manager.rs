@@ -1,95 +1,74 @@
-pub mod audio_folder;
-pub mod i18n;
-#[doc(hidden)]
-pub mod present_dsl;
-mod textures;
-pub mod visual_styles;
-
+use deadlib_assets::{
+    AssetStore, PreparedFontTexture, TextureUploadAction, TextureUploadDrainError,
+    font_texture_asset_roots, parse_font_asset_specs, parse_font_with_asset_dirs,
+    prepare_required_font_textures, register_texture_dims,
+};
 use deadlib_platform::dirs;
 use deadlib_present::font::Font;
 use deadlib_render::{SamplerDesc, TextureHandle, TextureHandleMap};
 use deadlib_renderer::{Backend, Texture as RendererTexture};
+use deadsync_config::prelude::get;
+use deadsync_theme::{FontRole, machine_font_key, machine_font_key_for_text};
 use image::RgbaImage;
 use log::{debug, warn};
 use std::collections::HashMap;
 use std::path::Path;
 
-pub use self::textures::{
-    TexMeta, TextureChoice, TextureHints, canonical_texture_key, held_miss_texture_choices,
-    hold_judgment_texture_choices, judgment_texture_choices, open_image_fallback,
-    parse_sprite_sheet_dims, parse_texture_hints, register_generated_texture,
-    register_texture_dims, resolve_texture_choice, resolve_texture_choice_entry, sprite_sheet_dims,
-    strip_sprite_hints, texture_dims, texture_handle, texture_registry_generation,
-    texture_source_dims_from_real, texture_source_frame_dims_from_real,
-};
-pub use deadlib_assets::upload::TextureUploadBudget;
-pub use deadlib_assets::{
-    ASSET_TEXTURE_CONTEXT as PRESENT_TEXTURE_CONTEXT, AssetTextureContext as PresentTextureContext,
-};
-pub use deadlib_assets::{AssetError, media_path_key};
-use deadlib_assets::{
-    FontAssetSpec, FontStore, PreparedFontTexture, TextureStore, font_texture_asset_roots,
-    parse_font_asset_specs, parse_font_with_asset_dirs, prepare_required_font_textures,
-};
-pub use deadsync_theme::{FontRole, machine_font_key, machine_font_key_for_text};
-
 pub struct AssetManager {
-    texture_store: TextureStore<RendererTexture>,
-    font_store: FontStore,
+    pub(crate) store: AssetStore<RendererTexture>,
 }
 
 impl AssetManager {
     pub fn new() -> Self {
         Self {
-            texture_store: TextureStore::new(),
-            font_store: FontStore::new(),
+            store: AssetStore::new(),
         }
     }
 
     pub fn register_font(&mut self, name: &'static str, font: Font) {
-        self.font_store.register_font(name, font);
+        self.store.register_font(name, font);
     }
 
     pub const fn fonts(&self) -> &HashMap<&'static str, Font> {
-        self.font_store.fonts()
+        self.store.fonts()
     }
 
     #[inline(always)]
     pub fn textures(&self) -> &TextureHandleMap<RendererTexture> {
-        self.texture_store.textures()
+        self.store.textures()
     }
 
     #[inline(always)]
     pub fn has_texture_key(&self, key: &str) -> bool {
-        self.texture_store.has_texture_key(key)
+        self.store.has_texture_key(key)
     }
 
     #[inline(always)]
     pub fn has_uploaded_texture_key(&self, key: &str) -> bool {
-        self.texture_store.has_uploaded_texture_key(key)
+        self.store.has_uploaded_texture_key(key)
     }
 
     #[inline(always)]
-    pub(crate) fn has_pending_texture_upload(&self, key: &str) -> bool {
-        self.texture_store.has_pending_texture_upload(key)
+    pub fn has_pending_texture_upload(&self, key: &str) -> bool {
+        self.store.has_pending_texture_upload(key)
     }
 
     pub fn take_textures(&mut self) -> TextureHandleMap<RendererTexture> {
-        self.texture_store.take_textures()
+        self.store.take_textures()
     }
 
     pub fn with_fonts<F, R>(&self, f: F) -> R
     where
         F: FnOnce(&HashMap<&'static str, Font>) -> R,
     {
-        self.font_store.with_fonts(f)
+        self.store.with_fonts(f)
     }
 
     pub fn with_font<F, R>(&self, name: &str, f: F) -> Option<R>
     where
         F: FnOnce(&Font) -> R,
     {
-        self.font_store.with_font(name, f)
+        self.store.with_font(name, f)
     }
 
     fn register_parsed_font(
@@ -98,7 +77,7 @@ impl AssetManager {
         name: &'static str,
         font: Font,
         required_textures: &[std::path::PathBuf],
-    ) -> Result<(), AssetError> {
+    ) -> Result<(), deadlib_assets::AssetError> {
         let dirs = dirs::app_dirs();
         let asset_roots = font_texture_asset_roots(&dirs.data_dir, &dirs.exe_dir);
         let textures =
@@ -115,13 +94,13 @@ impl AssetManager {
         Ok(())
     }
 
-    pub(crate) fn load_font_from_ini_path(
+    pub fn load_font_from_ini_path(
         &mut self,
         backend: &mut Backend,
         name: &'static str,
         ini_path: &Path,
-    ) -> Result<(), AssetError> {
-        if self.font_store.has_font(name) {
+    ) -> Result<(), deadlib_assets::AssetError> {
+        if self.store.has_font(name) {
             return Ok(());
         }
         let dirs = dirs::app_dirs();
@@ -134,26 +113,25 @@ impl AssetManager {
         Ok(())
     }
 
-    pub(crate) fn reserve_texture_handle(&mut self, key: String) -> TextureHandle {
-        self.texture_store.reserve_texture_handle(key)
+    pub fn reserve_texture_handle(&mut self, key: String) -> TextureHandle {
+        self.store.reserve_texture_handle(key)
     }
 
-    pub(crate) fn insert_texture(
+    pub fn insert_texture(
         &mut self,
         key: String,
         texture: RendererTexture,
         width: u32,
         height: u32,
     ) -> Option<RendererTexture> {
-        self.texture_store
-            .insert_texture(key, texture, width, height)
+        self.store.insert_texture(key, texture, width, height)
     }
 
-    pub(crate) fn remove_texture(&mut self, key: &str) -> Option<(TextureHandle, RendererTexture)> {
-        self.texture_store.remove_texture(key)
+    pub fn remove_texture(&mut self, key: &str) -> Option<(TextureHandle, RendererTexture)> {
+        self.store.remove_texture(key)
     }
 
-    pub(crate) fn retire_texture(
+    pub fn retire_texture(
         &mut self,
         backend: &mut Backend,
         handle: TextureHandle,
@@ -164,7 +142,7 @@ impl AssetManager {
         backend.retire_textures(&mut textures);
     }
 
-    pub(crate) fn set_texture_for_key(
+    pub fn set_texture_for_key(
         &mut self,
         backend: &mut Backend,
         key: String,
@@ -172,24 +150,22 @@ impl AssetManager {
         width: u32,
         height: u32,
     ) -> TextureHandle {
-        let (handle, old) = self
-            .texture_store
-            .set_texture_for_key(key, texture, width, height);
+        let (handle, old) = self.store.set_texture_for_key(key, texture, width, height);
         if let Some(old) = old {
             self.retire_texture(backend, handle, old);
         }
         handle
     }
 
-    pub(crate) fn update_texture_for_key(
+    pub fn update_texture_for_key(
         &mut self,
         backend: &mut Backend,
         key: &str,
         rgba: &RgbaImage,
-    ) -> Result<(), AssetError> {
-        if let Some(texture) =
-            self.texture_store
-                .uploaded_texture_mut(key, rgba.width(), rgba.height())
+    ) -> Result<(), deadlib_assets::AssetError> {
+        if let Some(texture) = self
+            .store
+            .uploaded_texture_mut(key, rgba.width(), rgba.height())
         {
             backend.update_texture(texture, rgba)?;
             return Ok(());
@@ -207,13 +183,13 @@ impl AssetManager {
         Ok(())
     }
 
-    pub(crate) fn update_texture_for_key_with_sampler(
+    pub fn update_texture_for_key_with_sampler(
         &mut self,
         backend: &mut Backend,
         key: &str,
         rgba: &RgbaImage,
         sampler: SamplerDesc,
-    ) -> Result<(), AssetError> {
+    ) -> Result<(), deadlib_assets::AssetError> {
         let texture = backend.create_texture(rgba, sampler)?;
         self.set_texture_for_key(
             backend,
@@ -226,75 +202,59 @@ impl AssetManager {
         Ok(())
     }
 
-    pub(crate) fn queue_texture_upload(&mut self, key: String, image: RgbaImage) {
-        self.texture_store.queue_texture_upload(key, image);
+    pub fn queue_texture_upload(&mut self, key: String, image: RgbaImage) {
+        self.store.queue_texture_upload(key, image);
     }
 
-    pub(crate) fn queue_pending_generated_textures(&mut self) {
-        self.texture_store.queue_pending_generated_textures();
+    pub fn queue_pending_generated_textures(&mut self) {
+        self.store.queue_pending_generated_textures();
     }
 
-    pub(crate) fn drain_texture_uploads(
+    pub fn drain_texture_uploads(
         &mut self,
         backend: &mut Backend,
-        budget: TextureUploadBudget,
+        budget: deadlib_assets::upload::TextureUploadBudget,
     ) {
-        let mut drained_uploads = 0usize;
-        let mut drained_bytes = 0usize;
-        while let Some((key, upload)) =
-            self.texture_store
-                .pop_next_upload(budget, drained_uploads, drained_bytes)
-        {
-            drained_uploads = drained_uploads.saturating_add(1);
-            drained_bytes = drained_bytes.saturating_add(upload.bytes);
-
-            let mut updated = false;
-            if let Some(texture) = self.texture_store.uploaded_texture_mut(
-                &key,
-                upload.image.width(),
-                upload.image.height(),
-            ) {
-                match backend.update_texture(texture, upload.image.as_ref()) {
-                    Ok(()) => {
-                        updated = true;
+        let (retired, errors) = self.store.drain_texture_uploads_with(
+            budget,
+            |action| -> Result<Option<RendererTexture>, Box<dyn std::error::Error>> {
+                match action {
+                    TextureUploadAction::Update { texture, image } => {
+                        backend.update_texture(texture, image)?;
+                        Ok(None)
                     }
-                    Err(e) => {
-                        warn!("Failed to update queued GPU texture for key '{key}': {e}");
+                    TextureUploadAction::Create { image, sampler } => {
+                        backend.create_texture(image, sampler).map(Some)
                     }
                 }
-            }
-            if updated {
-                continue;
-            }
-
-            match backend.create_texture(upload.image.as_ref(), upload.sampler) {
-                Ok(texture) => {
-                    self.set_texture_for_key(
-                        backend,
-                        key,
-                        texture,
-                        upload.image.width(),
-                        upload.image.height(),
-                    );
+            },
+        );
+        for (handle, texture) in retired {
+            self.retire_texture(backend, handle, texture);
+        }
+        for error in errors {
+            match error {
+                TextureUploadDrainError::Update { key, error } => {
+                    warn!("Failed to update queued GPU texture for key '{key}': {error}");
                 }
-                Err(e) => {
-                    warn!("Failed to create queued GPU texture for key '{key}': {e}");
+                TextureUploadDrainError::Create { key, error } => {
+                    warn!("Failed to create queued GPU texture for key '{key}': {error}");
                 }
             }
         }
     }
 
-    pub(crate) fn load_initial_fonts(&mut self, backend: &mut Backend) -> Result<(), AssetError> {
+    pub fn load_initial_fonts(
+        &mut self,
+        backend: &mut Backend,
+    ) -> Result<(), deadlib_assets::AssetError> {
         let dirs = dirs::app_dirs();
         let asset_roots = font_texture_asset_roots(&dirs.data_dir, &dirs.exe_dir);
-        let specs = deadsync_theme::initial_font_assets().map(|spec| FontAssetSpec {
-            name: spec.name,
-            ini_path: spec.ini_path,
-            fallback_font_name: spec.fallback_font_name,
-        });
-        for asset in
-            parse_font_asset_specs(specs, &asset_roots, |path| dirs.resolve_asset_path(path))?
-        {
+        for asset in parse_font_asset_specs(
+            deadsync_theme::initial_font_assets().copied(),
+            &asset_roots,
+            |path| dirs.resolve_asset_path(path),
+        )? {
             if let Some(fallback) = asset.font.fallback_font_name {
                 debug!(
                     "Font '{}' configured to use '{}' as fallback.",
@@ -307,25 +267,28 @@ impl AssetManager {
         Ok(())
     }
 
-    pub fn load_initial_assets(&mut self, backend: &mut Backend) -> Result<(), AssetError> {
+    pub fn load_initial_assets(
+        &mut self,
+        backend: &mut Backend,
+    ) -> Result<(), deadlib_assets::AssetError> {
         self.load_initial_textures(backend)?;
         self.load_initial_fonts(backend)?;
         Ok(())
     }
 }
 
-/// Convenience wrapper that reads the active [`crate::config::MachineFont`]
-/// from the global config and resolves the role.
+/// Convenience wrapper that reads the active machine font from the global
+/// config and resolves the role.
 #[inline]
 pub fn current_machine_font_key(role: FontRole) -> &'static str {
-    machine_font_key(crate::config::get().machine_font, role)
+    machine_font_key(get().machine_font, role)
 }
 
-/// Convenience wrapper that reads the active [`crate::config::MachineFont`]
-/// from the global config and applies the wholesale-fallback policy.
+/// Convenience wrapper that reads the active machine font from the global
+/// config and applies the wholesale-fallback policy.
 #[inline]
 pub fn current_machine_font_key_for_text(role: FontRole, text: &str) -> &'static str {
-    machine_font_key_for_text(crate::config::get().machine_font, role, text)
+    machine_font_key_for_text(get().machine_font, role, text)
 }
 
 impl Default for AssetManager {

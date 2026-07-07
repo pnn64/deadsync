@@ -48,6 +48,11 @@ impl<T> TextureStore<T> {
         self.pending_texture_uploads.contains(key)
     }
 
+    #[inline(always)]
+    pub fn texture_handle(&self, key: &str) -> Option<TextureHandle> {
+        self.texture_handles.get(key).copied()
+    }
+
     pub fn take_textures(&mut self) -> TextureHandleMap<T> {
         self.texture_handles.clear();
         clear_texture_handles();

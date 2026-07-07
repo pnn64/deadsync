@@ -1549,12 +1549,12 @@ fn audio_decode_helpers_live_in_decode_crate() {
     let engine_folder = root.join("src/engine/audio/folder.rs");
     if engine_folder.exists() {
         failures.push(format!(
-            "{} still exists; asset-path audio folder helpers should live in src/assets/audio_folder.rs",
+            "{} still exists; asset-path audio folder helpers should live in crates/deadsync-assets/src/audio_folder.rs",
             rel_path(&root, &engine_folder)
         ));
     }
 
-    let assets_folder = root.join("src/assets/audio_folder.rs");
+    let assets_folder = root.join("crates/deadsync-assets/src/audio_folder.rs");
     if !assets_folder.exists() {
         failures.push(format!("{} is missing", rel_path(&root, &assets_folder)));
     }
@@ -2329,35 +2329,52 @@ fn present_model_lives_in_present_crate() {
         }
     }
 
-    let assets_mod = root.join("src/assets/mod.rs");
-    if let Ok(text) = fs::read_to_string(&assets_mod) {
-        if !text.contains("impl present_texture::TextureContext for PresentTextureContext")
-            || !text.contains("pub const PRESENT_TEXTURE_CONTEXT")
-            || !text.contains("pub mod present_dsl")
+    let src_assets = root.join("src/assets");
+    if src_assets.exists() {
+        failures.push(format!(
+            "{} still exists; root assets should be re-exported from deadsync-assets",
+            rel_path(&root, &src_assets)
+        ));
+    }
+
+    let assets_lib = root.join("crates/deadsync-assets/src/lib.rs");
+    if let Ok(text) = fs::read_to_string(&assets_lib) {
+        for token in [
+            "pub mod present_dsl",
+            "PRESENT_TEXTURE_CONTEXT",
+            "pub use manager::",
+            "pub use textures::",
+        ] {
+            if !text.contains(token) {
+                failures.push(format!(
+                    "{} should expose app asset facade token {token}",
+                    rel_path(&root, &assets_lib)
+                ));
+            }
+        }
+    } else {
+        failures.push(format!("{} is missing", rel_path(&root, &assets_lib)));
+    }
+
+    let deadlib_assets_lib = root.join("crates/deadlib-assets/src/lib.rs");
+    if let Ok(text) = fs::read_to_string(&deadlib_assets_lib) {
+        if !text.contains("ASSET_TEXTURE_CONTEXT")
+            || !text.contains("AssetTextureContext")
+            || !text.contains("pub use present_dsl::SpriteBuilder")
         {
             failures.push(format!(
-                "{} should own the asset-backed presentation texture context and DSL bridge",
-                rel_path(&root, &assets_mod)
+                "{} should own reusable asset-backed presentation texture context exports",
+                rel_path(&root, &deadlib_assets_lib)
             ));
         }
     }
 
-    let asset_dsl = root.join("src/assets/present_dsl.rs");
+    let asset_dsl = root.join("crates/deadsync-assets/src/present_dsl.rs");
     if let Ok(text) = fs::read_to_string(&asset_dsl) {
-        for token in [
-            "use deadlib_present::dsl as present_dsl",
-            "pub struct SpriteBuilder",
-            "static_texture_cached",
-            "static_texture_cached_with_texture_context",
-            "zoomto_with_texture_context",
-            "build_with_texture_context",
-            "$crate::assets::present_dsl::SpriteBuilder",
-            "$crate::assets::present_dsl::TextBuilder",
-            "::deadlib_present::__act_from_builder!",
-        ] {
+        for token in ["SpriteBuilder", "TextBuilder", "TextureKeyHandle"] {
             if !text.contains(token) {
                 failures.push(format!(
-                    "{} should own asset-backed act! DSL token {token}",
+                    "{} should re-export asset-backed act! DSL token {token}",
                     rel_path(&root, &asset_dsl)
                 ));
             }
@@ -2368,6 +2385,19 @@ fn present_model_lives_in_present_crate() {
 
     let root_lib = root.join("src/lib.rs");
     if let Ok(text) = fs::read_to_string(&root_lib) {
+        for token in [
+            "pub use deadsync_assets as assets;",
+            "::deadsync_assets::present_dsl::SpriteBuilder",
+            "::deadsync_assets::present_dsl::TextBuilder",
+            "::deadlib_present::__act_from_builder!",
+        ] {
+            if !text.contains(token) {
+                failures.push(format!(
+                    "{} should expose root asset facade or act! macro token {token}",
+                    rel_path(&root, &root_lib)
+                ));
+            }
+        }
         if !text.contains("pub use deadlib_present::{rgba, rgba_const};") {
             failures.push(format!(
                 "{} should re-export presentation color macros from deadlib-present",
@@ -2376,11 +2406,14 @@ fn present_model_lives_in_present_crate() {
         }
     }
 
-    let asset_textures = root.join("src/assets/textures.rs");
+    let asset_textures = root.join("crates/deadsync-assets/src/textures.rs");
     if let Ok(text) = fs::read_to_string(&asset_textures) {
-        if !text.contains("present_texture::cached_texture_key_handle") {
+        if !text.contains("GraphicTextureChoiceCache")
+            || !text.contains("load_initial_textures")
+            || !text.contains("load_texture_key")
+        {
             failures.push(format!(
-                "{} should delegate TextureChoice handle caching to deadlib-present",
+                "{} should own app texture loading and choice discovery",
                 rel_path(&root, &asset_textures)
             ));
         }

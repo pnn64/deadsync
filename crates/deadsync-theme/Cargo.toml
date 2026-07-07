@@ -5,6 +5,7 @@ edition = "2024"
 license = "GPL-3.0"
 
 [dependencies]
+deadlib-assets = { path = "../deadlib-assets" }
 deadsync-config = { path = "../deadsync-config" }
 deadsync-profile = { path = "../deadsync-profile" }
 log = "0.4.33"

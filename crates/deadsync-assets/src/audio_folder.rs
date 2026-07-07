@@ -10,7 +10,6 @@
 //! `{data_dir}/assets/sounds/<folder>/...` overlay is automatically picked up
 //! on top of the bundled `assets/` directory.
 
-use crate::config;
 use deadlib_platform::dirs;
 use deadsync_audio_decode::folder as audio_folder;
 use deadsync_audio_stream as audio;
@@ -20,7 +19,7 @@ use std::path::{Path, PathBuf};
 /// Returns true when the folder feature is enabled in config.
 #[inline(always)]
 fn enabled() -> bool {
-    config::get().custom_sounds_enabled
+    deadsync_config::prelude::get().custom_sounds_enabled
 }
 
 /// Picks a random `.ogg` file from the directory referenced by `rel_dir`
@@ -64,8 +63,7 @@ fn play_random_sfx_with(rel_dir: &str, play: fn(&str)) {
 }
 
 /// Plays a random `.ogg` from `rel_dir` via [`audio::play_sfx`]. No-op when
-/// the [`config::Config::custom_sounds_enabled`] flag is off or the folder
-/// is empty.
+/// custom sounds are disabled or the folder is empty.
 pub fn play_random_sfx(rel_dir: &str) {
     play_random_sfx_with(rel_dir, audio::play_sfx);
 }
@@ -76,7 +74,7 @@ pub fn play_random_screen_sfx(rel_dir: &str) {
 }
 
 /// Plays the indexed `.ogg` (or fallback) from `rel_dir` via [`audio::play_sfx`].
-/// No-op when [`config::Config::custom_sounds_enabled`] is off.
+/// No-op when custom sounds are disabled.
 pub fn play_indexed_sfx(rel_dir: &str, index: u32, fallback_name: &str) {
     if !enabled() {
         return;

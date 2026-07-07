@@ -1,4 +1,3 @@
-use crate::config;
 use deadsync_config::theme::LanguageFlag;
 use std::path::PathBuf;
 
@@ -25,7 +24,7 @@ pub fn resolve_locale(flag: LanguageFlag) -> String {
 /// Detect the best locale from the OS settings, falling back to `"en"` if
 /// no matching language file is found.
 pub fn detect_os_locale() -> String {
-    deadsync_theme::i18n::resolve_locale_in_dir(config::LanguageFlag::Auto, &languages_dir_path())
+    deadsync_theme::i18n::resolve_locale_in_dir(LanguageFlag::Auto, &languages_dir_path())
 }
 
 /// Scan `assets/languages/*.ini` and return `(locale_code, native_name)` pairs
@@ -34,16 +33,17 @@ pub fn available_locales() -> Vec<(String, String)> {
     deadsync_theme::i18n::available_locales(&languages_dir_path())
 }
 
-/// Test-only initializer that loads `en.ini` from the root crate's
-/// `assets/languages/` directory using `CARGO_MANIFEST_DIR`.
-#[cfg(test)]
-pub(crate) fn init_for_tests() {
+/// Test initializer that loads `en.ini` from the root crate's assets.
+#[doc(hidden)]
+pub fn init_for_tests() {
     use std::sync::Once;
     static ONCE: Once = Once::new();
     ONCE.call_once(|| {
-        let languages_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("assets")
-            .join("languages");
-        deadsync_theme::i18n::init(&languages_dir, "en");
+        let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let root_dir = manifest_dir
+            .parent()
+            .and_then(std::path::Path::parent)
+            .unwrap_or(manifest_dir);
+        deadsync_theme::i18n::init(&root_dir.join("assets").join("languages"), "en");
     });
 }

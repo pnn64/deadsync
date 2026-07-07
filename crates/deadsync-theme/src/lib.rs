@@ -3,6 +3,7 @@ pub mod scorebox;
 pub mod step_stats;
 pub mod step_stats_gifs;
 
+pub use deadlib_assets::{FontAssetSpec, TextureAssetSpec, texture_asset};
 use deadsync_config::theme::{MachineFont, SrpgVariant, VisualStyle};
 use std::path::PathBuf;
 
@@ -25,18 +26,6 @@ pub struct EffectAssets {
     pub combo_100milestone_splode: &'static str,
     pub combo_100milestone_minisplode: &'static str,
     pub combo_1000milestone_swoosh: &'static str,
-}
-
-pub struct FontAssetSpec {
-    pub name: &'static str,
-    pub ini_path: &'static str,
-    pub fallback_font_name: Option<&'static str>,
-}
-
-#[derive(Clone, Copy)]
-pub struct TextureAssetSpec {
-    pub key: &'static str,
-    pub path: &'static str,
 }
 
 pub const FONT_ASSETS: [FontAssetSpec; 20] = [
@@ -281,10 +270,6 @@ pub const SUBMIT_TEXTURE_ASSETS: &[TextureAssetSpec] = &[
     texture_asset("submit/Refresh_1x1.png"),
     texture_asset("submit/Rejected_1x1.png"),
 ];
-
-pub const fn texture_asset(path: &'static str) -> TextureAssetSpec {
-    TextureAssetSpec { key: path, path }
-}
 
 /// Logical font role in the theme, mirroring Simply Love's per-role .redir
 /// table.

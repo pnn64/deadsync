@@ -1134,7 +1134,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.4.2025"
+version = "0.4.2036"
 dependencies = [
  "bincode",
  "bitflags 2.13.0",
@@ -1147,6 +1147,7 @@ dependencies = [
  "deadlib-render",
  "deadlib-renderer",
  "deadlib-video",
+ "deadsync-assets",
  "deadsync-audio",
  "deadsync-audio-analysis",
  "deadsync-audio-backend-native",
@@ -1218,6 +1219,23 @@ dependencies = [
  "winres",
  "xcb",
  "zip",
+]
+
+[[package]]
+name = "deadsync-assets"
+version = "0.1.0"
+dependencies = [
+ "deadlib-assets",
+ "deadlib-platform",
+ "deadlib-present",
+ "deadlib-render",
+ "deadlib-renderer",
+ "deadsync-audio-decode",
+ "deadsync-audio-stream",
+ "deadsync-config",
+ "deadsync-theme",
+ "image",
+ "log",
 ]
 
 [[package]]
@@ -1512,6 +1530,7 @@ dependencies = [
 name = "deadsync-theme"
 version = "0.1.0"
 dependencies = [
+ "deadlib-assets",
  "deadsync-config",
  "deadsync-profile",
  "log",
@@ -1539,7 +1558,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.4.2025"
+version = "0.4.2036"
 dependencies = [
  "log",
  "semver",

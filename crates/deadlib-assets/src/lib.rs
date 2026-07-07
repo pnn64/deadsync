@@ -1,3 +1,4 @@
+pub mod asset_store;
 pub mod builtin;
 pub mod context;
 pub mod decode;
@@ -11,15 +12,20 @@ pub mod registry;
 pub mod texture_store;
 pub mod upload;
 
+pub use asset_store::{
+    AssetStore, InitialTextureLoad, TextureKeyStoreLoad, TextureUploadAction,
+    TextureUploadDrainError,
+};
 pub use builtin::{
     BLACK_TEXTURE_KEY, BuiltinTextureImage, WHITE_TEXTURE_KEY, black_texture_image,
     fallback_texture_image, solid_texture_image, white_texture_image,
 };
 pub use context::{ASSET_TEXTURE_CONTEXT, AssetTextureContext};
 pub use decode::{
-    GraphicTextureDiscovery, PreparedTextureImage, TextureDecodeJob, TextureDecodeResult,
-    decode_texture_image, decode_texture_jobs_parallel, initial_texture_decode_jobs,
-    prepare_initial_texture_images,
+    GraphicTextureDiscovery, PreparedTextureImage, TextureAssetSpec, TextureDecodeJob,
+    TextureDecodeResult, TextureKeyLoad, decode_texture_image, decode_texture_jobs_parallel,
+    initial_texture_decode_jobs, prepare_initial_texture_images, prepare_texture_key_load,
+    texture_asset,
 };
 pub use discover::{
     DiscoveredTexture, GraphicTextureChoiceCache, INITIAL_GRAPHIC_TEXTURES,

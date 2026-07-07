@@ -1,9 +1,9 @@
 use crate::{
     TextureHints, apply_texture_hints, discover_graphic_textures_in_roots, fix_hidden_alpha,
     initial_texture_sampler, initial_texture_source_path, noteskin_png_texture_entries,
-    open_image_fallback,
+    open_image_fallback, parse_texture_hints, texture_key_sampler, texture_key_source_path,
 };
-use crate::{black_texture_image, fallback_texture_image, white_texture_image};
+use crate::{black_texture_image, fallback_texture_image, generated_texture, white_texture_image};
 use deadlib_render::SamplerDesc;
 use image::RgbaImage;
 use log::warn;
@@ -29,11 +29,38 @@ pub struct PreparedTextureImage {
     pub built_in: bool,
 }
 
+pub enum TextureKeyLoad {
+    Skip,
+    Missing {
+        key: String,
+    },
+    DecodeFailed {
+        key: String,
+        message: String,
+    },
+    Image {
+        key: String,
+        image: Arc<RgbaImage>,
+        sampler: SamplerDesc,
+        register_dims: bool,
+    },
+}
+
 #[derive(Clone, Copy)]
 pub struct GraphicTextureDiscovery {
     pub folder: &'static str,
     pub love_first: bool,
     pub require_multiframe_hint: bool,
+}
+
+#[derive(Clone, Copy)]
+pub struct TextureAssetSpec {
+    pub key: &'static str,
+    pub path: &'static str,
+}
+
+pub const fn texture_asset(path: &'static str) -> TextureAssetSpec {
+    TextureAssetSpec { key: path, path }
 }
 
 fn decode_rgba(job: TextureDecodeJob) -> TextureDecodeResult {
@@ -59,14 +86,17 @@ pub fn decode_texture_image(path: &Path, hints: &TextureHints) -> image::ImageRe
 }
 
 pub fn initial_texture_decode_jobs(
-    texture_assets: impl IntoIterator<Item = (String, String)>,
+    texture_assets: impl IntoIterator<Item = TextureAssetSpec>,
     noteskin_roots: &[PathBuf],
     canonical_key: impl Fn(&Path) -> String,
     graphic_folders: &[GraphicTextureDiscovery],
     graphic_roots: impl Fn(&str) -> Vec<PathBuf>,
     resolve_asset_path: impl Fn(&str) -> PathBuf,
 ) -> Vec<TextureDecodeJob> {
-    let mut textures: Vec<(String, String)> = texture_assets.into_iter().collect();
+    let mut textures: Vec<(String, String)> = texture_assets
+        .into_iter()
+        .map(|asset| (asset.key.to_string(), asset.path.to_string()))
+        .collect();
     textures.extend(noteskin_png_texture_entries(
         noteskin_roots,
         "noteskins",
@@ -130,6 +160,58 @@ pub fn prepare_initial_texture_images(
         }
     }
     prepared
+}
+
+pub fn prepare_texture_key_load(
+    texture_key: &str,
+    sampler_override: Option<SamplerDesc>,
+    force_reload: bool,
+    has_texture_key: impl Fn(&str) -> bool,
+    canonical_texture_key: impl Fn(&str) -> String,
+    resolve_asset_path: impl Fn(&str) -> PathBuf,
+    needs_repeat_sampler: impl Fn(&str) -> bool,
+) -> TextureKeyLoad {
+    if texture_key.is_empty() {
+        return TextureKeyLoad::Skip;
+    }
+
+    let key = canonical_texture_key(texture_key);
+    if !force_reload && has_texture_key(&key) {
+        return TextureKeyLoad::Skip;
+    }
+
+    if let Some(generated) = generated_texture(&key) {
+        return TextureKeyLoad::Image {
+            key,
+            image: generated.image,
+            sampler: sampler_override.unwrap_or(generated.sampler),
+            register_dims: false,
+        };
+    }
+    if key.starts_with("__") {
+        return TextureKeyLoad::Skip;
+    }
+
+    let path = texture_key_source_path(texture_key, &key, resolve_asset_path);
+    if !path.is_file() {
+        return TextureKeyLoad::Missing { key };
+    }
+
+    let hints = parse_texture_hints(&key);
+    let sampler =
+        sampler_override.unwrap_or_else(|| texture_key_sampler(&hints, needs_repeat_sampler(&key)));
+    match decode_texture_image(&path, &hints) {
+        Ok(image) => TextureKeyLoad::Image {
+            key,
+            image: Arc::new(image),
+            sampler,
+            register_dims: true,
+        },
+        Err(e) => TextureKeyLoad::DecodeFailed {
+            key,
+            message: e.to_string(),
+        },
+    }
 }
 
 pub fn decode_texture_jobs_parallel(jobs: Vec<TextureDecodeJob>) -> Vec<TextureDecodeResult> {
@@ -222,6 +304,66 @@ mod tests {
     }
 
     #[test]
+    fn prepare_texture_key_load_skips_empty_and_internal_keys() {
+        assert!(matches!(
+            prepare_texture_key_load(
+                "",
+                None,
+                false,
+                |_| false,
+                |key| key.to_string(),
+                |path| PathBuf::from(path),
+                |_| false
+            ),
+            TextureKeyLoad::Skip
+        ));
+        assert!(matches!(
+            prepare_texture_key_load(
+                "__white",
+                None,
+                false,
+                |_| false,
+                |key| key.to_string(),
+                |path| PathBuf::from(path),
+                |_| false
+            ),
+            TextureKeyLoad::Skip
+        ));
+    }
+
+    #[test]
+    fn prepare_texture_key_load_skips_cached_key_without_force() {
+        assert!(matches!(
+            prepare_texture_key_load(
+                "cached.png",
+                None,
+                false,
+                |key| key == "cached.png",
+                |key| key.to_string(),
+                |path| PathBuf::from(path),
+                |_| false
+            ),
+            TextureKeyLoad::Skip
+        ));
+    }
+
+    #[test]
+    fn prepare_texture_key_load_reports_missing_source() {
+        match prepare_texture_key_load(
+            "missing.png",
+            None,
+            false,
+            |_| false,
+            str::to_string,
+            |_| PathBuf::from("__missing_texture_key_source__.png"),
+            |_| false,
+        ) {
+            TextureKeyLoad::Missing { key } => assert_eq!(key, "missing.png"),
+            _ => panic!("missing source should be reported"),
+        }
+    }
+
+    #[test]
     fn reports_missing_texture_decode_failure() {
         let results = decode_texture_jobs_parallel(vec![TextureDecodeJob {
             key: "missing".to_string(),
@@ -252,7 +394,7 @@ mod tests {
     #[test]
     fn initial_texture_decode_jobs_maps_theme_assets() {
         let jobs = initial_texture_decode_jobs(
-            [("logo.png".to_string(), "logo.png".to_string())],
+            [texture_asset("logo.png")],
             &[],
             |path| path.to_string_lossy().replace('\\', "/"),
             &[],

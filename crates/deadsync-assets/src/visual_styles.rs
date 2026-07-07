@@ -1,4 +1,4 @@
-use crate::config::{self, SrpgVariant, VisualStyle};
+use deadsync_config::prelude::{SrpgVariant, VisualStyle, get};
 
 pub use deadsync_theme::{
     ASSETS, Assets, EffectAssets, SRPG10_EVAL_EXPEDITION_FAILED, SRPG10_EVAL_FAILED_SFX,
@@ -10,12 +10,12 @@ pub use deadsync_theme::{
 
 #[inline(always)]
 pub fn current_style() -> VisualStyle {
-    std::panic::catch_unwind(|| config::get().visual_style).unwrap_or(VisualStyle::Hearts)
+    std::panic::catch_unwind(|| get().visual_style).unwrap_or(VisualStyle::Hearts)
 }
 
 #[inline(always)]
 pub fn current_srpg_variant() -> SrpgVariant {
-    std::panic::catch_unwind(|| config::get().srpg_variant).unwrap_or(SrpgVariant::Srpg9)
+    std::panic::catch_unwind(|| get().srpg_variant).unwrap_or(SrpgVariant::Srpg9)
 }
 
 #[inline(always)]
@@ -105,7 +105,7 @@ pub fn menu_music_resolved_path() -> std::path::PathBuf {
     deadsync_theme::resolve_menu_music_path(
         current_style(),
         current_srpg_variant(),
-        crate::assets::audio_folder::random_music_path,
+        crate::audio_folder::random_music_path,
         |path| deadlib_platform::dirs::app_dirs().resolve_asset_path(path),
     )
 }
