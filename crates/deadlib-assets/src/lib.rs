@@ -4,6 +4,7 @@ pub mod decode;
 pub mod discover;
 pub mod dynamic;
 pub mod font;
+pub mod present_dsl;
 pub mod registry;
 pub mod texture_store;
 pub mod upload;
@@ -28,6 +29,7 @@ pub use font::{
     AssetFontTextureContext, PreparedFontTexture, font_texture_asset_roots, font_texture_key,
     parse_font_with_asset_context, prepare_font_texture, set_font_fallback,
 };
+pub use present_dsl::SpriteBuilder;
 pub use registry::{
     GeneratedTexture, TexMeta, clear_texture_handles, generated_texture,
     register_generated_texture, register_texture_dims, register_texture_handle,
