@@ -13,7 +13,7 @@ use crate::{
     NoteColorType, NoteDisplayMetrics, NotePartTextureTranslate, ReceptorGlowBehavior,
     ReceptorPulse, ReceptorReverseBehavior, ReceptorStepBehavior, ReceptorStepBehaviors,
 };
-use crate::{actor, compiled, itg, receptor};
+use crate::{actor, compiled, itg, model, receptor};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::Arc;
@@ -106,6 +106,23 @@ pub struct ItgReceptorColumn<T> {
     pub glow_reverse: ReceptorReverseBehavior,
     pub step_behaviors: ReceptorStepBehaviors,
     pub pulse_command: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ItgRuntimeColumns<T> {
+    pub notes: Vec<T>,
+    pub note_layers: Vec<Arc<[T]>>,
+    pub lift_note_layers: Vec<Arc<[T]>>,
+    pub receptor_off: Vec<T>,
+    pub receptor_glow: Vec<Option<T>>,
+    pub receptor_off_reverse: Vec<ReceptorReverseBehavior>,
+    pub receptor_glow_reverse: Vec<ReceptorReverseBehavior>,
+    pub receptor_step_behaviors: Vec<ReceptorStepBehaviors>,
+    pub mines: Vec<Option<T>>,
+    pub mine_frames: Vec<Option<T>>,
+    pub hold_columns: Vec<HoldVisuals<T>>,
+    pub roll_columns: Vec<HoldVisuals<T>>,
+    pub receptor_pulse_command: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -780,6 +797,26 @@ pub fn itg_apply_loader_command<T>(
     }
 }
 
+pub fn itg_apply_child_actor_commands<T>(
+    sprites: &mut [ItgResolvedSprite<T>],
+    frame_override: Option<usize>,
+    command_sets: &[&HashMap<String, String>],
+    mut apply_frame: impl FnMut(&mut T, usize),
+    mut apply_state: impl FnMut(&mut T, &HashMap<String, String>),
+) {
+    for sprite in sprites {
+        if let Some(frame) = frame_override {
+            apply_frame(&mut sprite.slot, frame);
+        }
+        for commands in command_sets {
+            for (key, value) in *commands {
+                sprite.commands.insert(key.clone(), value.clone());
+            }
+        }
+        apply_state(&mut sprite.slot, &sprite.commands);
+    }
+}
+
 pub fn itg_slot_with_active_model_draw<T: Clone>(
     slot: &T,
     commands: &HashMap<String, String>,
@@ -805,6 +842,343 @@ pub fn itg_first_resolved_slot_or_fallback<T>(
         .or_else(|| (!blank).then(fallback).flatten())
 }
 
+pub fn itg_load_sprite_decl_slot<T>(
+    data: &itg::NoteskinData,
+    sprite: &actor::ItgLuaSpriteDecl,
+    arg0_path: Option<&Path>,
+    default_anim_is_beat: bool,
+    mut load_texture: impl FnMut(&Path) -> Option<T>,
+    mut load_frame: impl FnMut(&Path, usize) -> Option<T>,
+    mut load_animated: impl FnMut(
+        &Path,
+        usize,
+        usize,
+        Option<&[usize]>,
+        Option<&[f32]>,
+        bool,
+    ) -> Option<T>,
+) -> Option<T> {
+    let texture_path = itg::resolve_texture_expr(data, &sprite.texture_expr, arg0_path)?;
+    let anim_is_beat =
+        crate::script::sprite_animation_is_beat_based(&sprite.commands, default_anim_is_beat);
+    if sprite.frame_count > 1 {
+        load_animated(
+            &texture_path,
+            sprite.frame0,
+            sprite.frame_count,
+            sprite.frame_indices.as_deref(),
+            sprite.frame_delays.as_deref(),
+            anim_is_beat,
+        )
+        .or_else(|| load_frame(&texture_path, sprite.frame0))
+        .or_else(|| load_texture(&texture_path))
+    } else {
+        load_frame(&texture_path, sprite.frame0).or_else(|| load_texture(&texture_path))
+    }
+}
+
+pub fn itg_resolve_sprite_decl<T>(
+    data: &itg::NoteskinData,
+    element: &str,
+    sprite: actor::ItgLuaSpriteDecl,
+    arg0_path: Option<&Path>,
+    default_anim_is_beat: bool,
+    rotation_z: Option<i32>,
+    load_texture: impl FnMut(&Path) -> Option<T>,
+    load_frame: impl FnMut(&Path, usize) -> Option<T>,
+    load_animated: impl FnMut(&Path, usize, usize, Option<&[usize]>, Option<&[f32]>, bool) -> Option<T>,
+    mut apply_rotation: impl FnMut(&mut T, i32),
+    mut apply_state: impl FnMut(&mut T, &HashMap<String, String>),
+) -> Option<ItgResolvedSprite<T>> {
+    let mut slot = itg_load_sprite_decl_slot(
+        data,
+        &sprite,
+        arg0_path,
+        default_anim_is_beat,
+        load_texture,
+        load_frame,
+        load_animated,
+    )?;
+    if let Some(rotation_z) = rotation_z {
+        apply_rotation(&mut slot, rotation_z);
+    }
+    apply_state(&mut slot, &sprite.commands);
+    Some(ItgResolvedSprite {
+        element: element.to_string(),
+        slot,
+        commands: sprite.commands,
+    })
+}
+
+pub fn itg_resolve_model_decl<T>(
+    data: &itg::NoteskinData,
+    button: &str,
+    element: &str,
+    model_decl: actor::ItgLuaModelDecl,
+    arg0_path: Option<&Path>,
+    rotation_z: Option<i32>,
+    mut load_texture: impl FnMut(&Path) -> Option<T>,
+    mut load_frame: impl FnMut(&Path, usize) -> Option<T>,
+    mut apply_model: impl FnMut(&mut T, model::ItgModelSlotPlan),
+    mut apply_rotation: impl FnMut(&mut T, i32),
+) -> Vec<ItgResolvedSprite<T>> {
+    let model_path = model_decl
+        .materials_expr
+        .as_deref()
+        .or(model_decl.meshes_expr.as_deref())
+        .or(model_decl.texture_expr.as_deref())
+        .and_then(|expr| itg::resolve_texture_expr(data, expr, arg0_path));
+    let Some(model_path) = model_path else {
+        return Vec::new();
+    };
+
+    let (draw, timeline, effect) = model_draw_program(&model_decl.commands);
+    let model_auto_rot = model::itg_parse_milkshape_model_auto_rot(&model_path);
+    if let Some(model_layers) = model::itg_parse_milkshape_model_layers(data, &model_path) {
+        let mut out = Vec::new();
+        for layer in model_layers {
+            let mut slot = load_frame(&layer.texture.texture_path, model_decl.frame0)
+                .or_else(|| load_texture(&layer.texture.texture_path));
+            let Some(mut slot) = slot.take() else {
+                continue;
+            };
+            apply_model(
+                &mut slot,
+                model::ItgModelSlotPlan::from_layer(
+                    layer,
+                    draw,
+                    Arc::clone(&timeline),
+                    effect,
+                    model_auto_rot.as_ref(),
+                ),
+            );
+            if let Some(rotation_z) = rotation_z {
+                apply_rotation(&mut slot, rotation_z);
+            }
+            out.push(ItgResolvedSprite {
+                element: element.to_string(),
+                slot,
+                commands: model_decl.commands.clone(),
+            });
+        }
+        if !out.is_empty() {
+            return out;
+        }
+    }
+
+    let Some(model_texture) = model::itg_resolve_model_texture_path(data, &model_path) else {
+        log::warn!(
+            "noteskin model '{}' for '{button} {element}' did not resolve a texture fallback",
+            model_path.display()
+        );
+        return Vec::new();
+    };
+    let mut slot = load_frame(&model_texture.texture_path, model_decl.frame0)
+        .or_else(|| load_texture(&model_texture.texture_path));
+    let Some(mut slot) = slot.take() else {
+        return Vec::new();
+    };
+    apply_model(
+        &mut slot,
+        model::ItgModelSlotPlan::from_texture(
+            model::itg_parse_milkshape_model(data, &model_path),
+            model_texture,
+            draw,
+            timeline,
+            effect,
+            model_auto_rot.as_ref(),
+        ),
+    );
+    if let Some(rotation_z) = rotation_z {
+        apply_rotation(&mut slot, rotation_z);
+    }
+    vec![ItgResolvedSprite {
+        element: element.to_string(),
+        slot,
+        commands: model_decl.commands,
+    }]
+}
+
+pub fn itg_resolve_path_ref_decl<T>(
+    data: &itg::NoteskinData,
+    path_ref: actor::ItgLuaPathRefDecl,
+    arg0_path: Option<&Path>,
+    mut resolve_file: impl FnMut(&Path, Option<&Path>) -> Vec<ItgResolvedSprite<T>>,
+    apply_frame: impl FnMut(&mut T, usize),
+    apply_state: impl FnMut(&mut T, &HashMap<String, String>),
+) -> Vec<ItgResolvedSprite<T>> {
+    let Some(path) = itg::resolve_texture_expr(data, &path_ref.path_expr, arg0_path) else {
+        return Vec::new();
+    };
+    let path_ref_arg = path_ref
+        .arg_expr
+        .as_deref()
+        .and_then(|expr| itg::resolve_texture_expr(data, expr, arg0_path));
+    let mut child = resolve_file(&path, path_ref_arg.as_deref());
+    itg_apply_child_actor_commands(
+        &mut child,
+        path_ref.frame_override,
+        &[&path_ref.commands],
+        apply_frame,
+        apply_state,
+    );
+    child
+}
+
+pub fn itg_resolve_ref_decl<T>(
+    data: &itg::NoteskinData,
+    button: &str,
+    reference: actor::ItgLuaRefDecl,
+    arg0_path: Option<&Path>,
+    mut resolve_element: impl FnMut(&str, &str) -> Vec<ItgResolvedSprite<T>>,
+    apply_frame: impl FnMut(&mut T, usize),
+    apply_state: impl FnMut(&mut T, &HashMap<String, String>),
+) -> Vec<ItgResolvedSprite<T>> {
+    let child_button = reference.button_override.as_deref().unwrap_or(button);
+    let wrapper_commands = reference
+        .wrapper_expr
+        .as_deref()
+        .and_then(|expr| itg::resolve_texture_expr(data, expr, arg0_path))
+        .and_then(|path| actor::parse_wrapper_commands_from_file(&path, &data.metrics))
+        .unwrap_or_default();
+    let mut child = resolve_element(child_button, &reference.element);
+    itg_apply_child_actor_commands(
+        &mut child,
+        reference.frame_override,
+        &[&wrapper_commands, &reference.commands],
+        apply_frame,
+        apply_state,
+    );
+    child
+}
+
+pub fn itg_resolve_actor_file_compiled<T>(
+    data: &itg::NoteskinData,
+    compiled_actors: &compiled::CompiledActors,
+    button: &str,
+    element: &str,
+    path: &Path,
+    rotation_z: Option<i32>,
+    depth: usize,
+    visiting: &mut HashSet<String>,
+    arg0_path: Option<&Path>,
+    mut load_texture: impl FnMut(&Path) -> Option<T>,
+    mut load_frame: impl FnMut(&Path, usize) -> Option<T>,
+    mut load_animated: impl FnMut(
+        &Path,
+        usize,
+        usize,
+        Option<&[usize]>,
+        Option<&[f32]>,
+        bool,
+    ) -> Option<T>,
+    mut apply_model: impl FnMut(&mut T, model::ItgModelSlotPlan),
+    mut apply_rotation: impl FnMut(&mut T, i32),
+    mut apply_frame: impl FnMut(&mut T, usize),
+    mut apply_state: impl FnMut(&mut T, &HashMap<String, String>),
+    mut resolve_file: impl FnMut(
+        &Path,
+        Option<&Path>,
+        &mut HashSet<String>,
+    ) -> Vec<ItgResolvedSprite<T>>,
+    mut resolve_element: impl FnMut(&str, &str, &mut HashSet<String>) -> Vec<ItgResolvedSprite<T>>,
+) -> Vec<ItgResolvedSprite<T>> {
+    if depth > compiled::ACTOR_FILE_RECURSION_MAX_DEPTH {
+        log::warn!(
+            "noteskin lua file recursion depth exceeded at '{}' for '{button} {element}'",
+            path.display()
+        );
+        return Vec::new();
+    }
+
+    if !actor::is_lua_path(path) {
+        let Some(mut slot) = load_frame(path, 0).or_else(|| load_texture(path)) else {
+            return Vec::new();
+        };
+        if let Some(rotation_z) = rotation_z {
+            apply_rotation(&mut slot, rotation_z);
+        }
+        return vec![ItgResolvedSprite {
+            element: element.to_string(),
+            slot,
+            commands: HashMap::new(),
+        }];
+    }
+
+    let path_key = compiled::actor_file_visit_key(path);
+    if !visiting.insert(path_key.clone()) {
+        log::warn!(
+            "noteskin lua file recursion loop detected at '{}' for '{button} {element}'",
+            path.display()
+        );
+        return Vec::new();
+    }
+
+    let Some(decl) = compiled_actors.decl_for_path(&data.search_dirs, path) else {
+        log::warn!("compiled noteskin actors are missing '{}'", path.display());
+        visiting.remove(&path_key);
+        return Vec::new();
+    };
+
+    let mut out = Vec::new();
+    let default_anim_is_beat = itg::animation_is_beat_based(data);
+    for sprite in decl.sprites {
+        if let Some(sprite) = itg_resolve_sprite_decl(
+            data,
+            element,
+            sprite,
+            arg0_path,
+            default_anim_is_beat,
+            rotation_z,
+            &mut load_texture,
+            &mut load_frame,
+            &mut load_animated,
+            &mut apply_rotation,
+            &mut apply_state,
+        ) {
+            out.push(sprite);
+        }
+    }
+    for model in decl.models {
+        out.extend(itg_resolve_model_decl(
+            data,
+            button,
+            element,
+            model,
+            arg0_path,
+            rotation_z,
+            &mut load_texture,
+            &mut load_frame,
+            &mut apply_model,
+            &mut apply_rotation,
+        ));
+    }
+    for path_ref in decl.path_refs {
+        out.extend(itg_resolve_path_ref_decl(
+            data,
+            path_ref,
+            arg0_path,
+            |path, path_ref_arg| resolve_file(path, path_ref_arg, visiting),
+            &mut apply_frame,
+            &mut apply_state,
+        ));
+    }
+    for reference in decl.refs {
+        out.extend(itg_resolve_ref_decl(
+            data,
+            button,
+            reference,
+            arg0_path,
+            |child_button, child_element| resolve_element(child_button, child_element, visiting),
+            &mut apply_frame,
+            &mut apply_state,
+        ));
+    }
+
+    visiting.remove(&path_key);
+    out
+}
+
 pub fn itg_first_actor_sprite_slot<T>(
     data: &itg::NoteskinData,
     compiled_actors: &compiled::CompiledActors,
@@ -827,23 +1201,15 @@ pub fn itg_first_actor_sprite_slot<T>(
     let decl = compiled_actors.decl_for_path(&data.search_dirs, path)?;
     let default_anim_is_beat = itg::animation_is_beat_based(data);
     for sprite in decl.sprites {
-        let texture_path = itg::resolve_texture_expr(data, &sprite.texture_expr, None)?;
-        let anim_is_beat =
-            crate::script::sprite_animation_is_beat_based(&sprite.commands, default_anim_is_beat);
-        let slot = if sprite.frame_count > 1 {
-            load_animated(
-                &texture_path,
-                sprite.frame0,
-                sprite.frame_count,
-                sprite.frame_indices.as_deref(),
-                sprite.frame_delays.as_deref(),
-                anim_is_beat,
-            )
-            .or_else(|| load_frame(&texture_path, sprite.frame0))
-        } else {
-            load_frame(&texture_path, sprite.frame0)
-        }
-        .or_else(|| load_texture(&texture_path));
+        let slot = itg_load_sprite_decl_slot(
+            data,
+            &sprite,
+            None,
+            default_anim_is_beat,
+            &mut load_texture,
+            &mut load_frame,
+            &mut load_animated,
+        );
         if let Some(slot) = slot {
             return Some(slot);
         }
@@ -983,6 +1349,127 @@ pub fn itg_lift_layers_for_col<T: Clone>(lift_layers: Vec<T>, note_layers: &[T])
     } else {
         Arc::from(lift_layers)
     }
+}
+
+pub fn itg_runtime_columns_compiled<T: Clone>(
+    data: &itg::NoteskinData,
+    style: crate::Style,
+    compiled: &compiled::CompiledLoader,
+    quantizations: usize,
+    mut resolve_sprites: impl FnMut(&str, &str) -> Vec<ItgResolvedSprite<T>>,
+    mut resolve_slots: impl FnMut(&str, &str) -> Vec<T>,
+    mut resolve_direct_slot: impl FnMut(&str, &str) -> Option<T>,
+    mut resolve_prefix_slot: impl FnMut(&str) -> Option<T>,
+    mut apply_receptor_init: impl FnMut(&mut T, &str),
+    mut receptor_base_zoom: impl FnMut(&T) -> f32,
+    mut tap_layer_info: impl FnMut(&T) -> (bool, [f32; 2]),
+) -> Result<ItgRuntimeColumns<T>, String> {
+    let mut notes = Vec::with_capacity(style.num_cols * quantizations);
+    let mut note_layers = Vec::with_capacity(style.num_cols * quantizations);
+    let mut lift_note_layers: Vec<Arc<[T]>> = Vec::with_capacity(style.num_cols * quantizations);
+    let mut receptor_off = Vec::with_capacity(style.num_cols);
+    let mut receptor_glow = Vec::with_capacity(style.num_cols);
+    let mut receptor_off_reverse = Vec::with_capacity(style.num_cols);
+    let mut receptor_glow_reverse = Vec::with_capacity(style.num_cols);
+    let mut receptor_step_behaviors = Vec::with_capacity(style.num_cols);
+    let mut mines = Vec::with_capacity(style.num_cols);
+    let mut mine_frames = Vec::with_capacity(style.num_cols);
+    let mut hold_columns = Vec::with_capacity(style.num_cols);
+    let mut roll_columns = Vec::with_capacity(style.num_cols);
+    let mut receptor_pulse_command: Option<String> = None;
+
+    for col in 0..style.num_cols {
+        let button = itg::button_for_col(col);
+        let note_sprites = resolve_slots(button, "Tap Note");
+        let note_sprites = itg_tap_note_layers(note_sprites, || resolve_prefix_slot("_arrow"));
+        let note_column = itg_tap_note_column(note_sprites, quantizations, &mut tap_layer_info)
+            .ok_or_else(|| format!("failed to resolve Tap Note for button '{button}'"))?;
+        let note_sprites = note_column.layers;
+        notes.extend(note_column.notes);
+        note_layers.extend(note_column.note_layers);
+
+        let lift_sprites = resolve_slots(button, "Tap Lift");
+        let lift_layers_for_col = itg_lift_layers_for_col(lift_sprites, &note_sprites);
+        for _ in 0..quantizations {
+            lift_note_layers.push(Arc::clone(&lift_layers_for_col));
+        }
+
+        let receptor_sprites = resolve_sprites(button, "Receptor");
+        let receptor_fallback = resolve_prefix_slot("_receptor");
+        let rflash_fallback = resolve_prefix_slot("_rflash");
+        let glow_fallback = resolve_prefix_slot("_glow");
+        let receptor_column = itg_receptor_column(
+            &receptor_sprites,
+            &data.metrics,
+            || receptor_fallback,
+            || rflash_fallback,
+            || glow_fallback,
+            &mut apply_receptor_init,
+            &mut receptor_base_zoom,
+        )
+        .ok_or_else(|| format!("failed to resolve Receptor for button '{button}'"))?;
+        if receptor_pulse_command.is_none() {
+            receptor_pulse_command = receptor_column.pulse_command.clone();
+        }
+        receptor_off.push(receptor_column.off);
+        receptor_glow.push(receptor_column.glow);
+        receptor_off_reverse.push(receptor_column.off_reverse);
+        receptor_glow_reverse.push(receptor_column.glow_reverse);
+        receptor_step_behaviors.push(receptor_column.step_behaviors);
+
+        let mine_sprites = resolve_slots(button, "Tap Mine");
+        let mine_fallback = resolve_prefix_slot("_mine");
+        let (mine_fill, mine_frame) = itg_mine_visuals_from_layers(&mine_sprites, mine_fallback);
+        mines.push(mine_fill);
+        mine_frames.push(mine_frame);
+
+        let mut resolve_head_slots = |element: &str| {
+            let slots = resolve_slots(button, element);
+            itg_hold_head_layers(slots)
+        };
+        let mut resolve_single_slot = |element: &str| {
+            let request = compiled.load_request(button, element);
+            itg_first_resolved_slot_or_fallback(
+                resolve_sprites(button, element),
+                request.blank,
+                || resolve_direct_slot(&request.load_button, &request.load_element),
+            )
+        };
+        let hold_parts = itg_hold_visual_parts(
+            ItgHoldKind::Hold,
+            |element| compiled.load_request(button, element).maps_head_to_tap(),
+            &mut resolve_head_slots,
+            &mut resolve_single_slot,
+        );
+        let hold_visual = itg_hold_visuals_from_parts(hold_parts);
+
+        let roll_parts = itg_hold_visual_parts(
+            ItgHoldKind::Roll,
+            |element| compiled.load_request(button, element).maps_head_to_tap(),
+            &mut resolve_head_slots,
+            &mut resolve_single_slot,
+        );
+        let roll_visual = itg_roll_visuals_from_parts(roll_parts, &hold_visual);
+
+        hold_columns.push(hold_visual);
+        roll_columns.push(roll_visual);
+    }
+
+    Ok(ItgRuntimeColumns {
+        notes,
+        note_layers,
+        lift_note_layers,
+        receptor_off,
+        receptor_glow,
+        receptor_off_reverse,
+        receptor_glow_reverse,
+        receptor_step_behaviors,
+        mines,
+        mine_frames,
+        hold_columns,
+        roll_columns,
+        receptor_pulse_command,
+    })
 }
 
 #[derive(Debug)]
@@ -1317,21 +1804,23 @@ mod tests {
     use super::{
         HoldVisualParts, HoldVisuals, ItgHoldKind, ItgResolvedSprite, NoteskinRuntime,
         TapExplosion, TapExplosionLayer, bright_tap_explosion_key, default_hold_visuals,
-        default_tap_explosions, itg_apply_loader_command, itg_direct_tap_explosion_resolved_layers,
-        itg_first_actor_sprite_slot, itg_first_resolved_slot_or_fallback,
-        itg_hit_mine_explosion_from_layers, itg_hit_mine_explosion_from_slot,
-        itg_hold_explosion_from_resolved_layers, itg_hold_head_layers, itg_hold_visual_parts,
-        itg_hold_visuals_from_parts, itg_is_common_fallback_hold_explosion_key,
-        itg_is_common_noteskin_key, itg_lift_layers_for_col, itg_mine_explosion_from_commands,
+        default_tap_explosions, itg_apply_child_actor_commands, itg_apply_loader_command,
+        itg_direct_tap_explosion_resolved_layers, itg_first_actor_sprite_slot,
+        itg_first_resolved_slot_or_fallback, itg_hit_mine_explosion_from_layers,
+        itg_hit_mine_explosion_from_slot, itg_hold_explosion_from_resolved_layers,
+        itg_hold_head_layers, itg_hold_visual_parts, itg_hold_visuals_from_parts,
+        itg_is_common_fallback_hold_explosion_key, itg_is_common_noteskin_key,
+        itg_lift_layers_for_col, itg_load_sprite_decl_slot, itg_mine_explosion_from_commands,
         itg_mine_visuals_from_layers, itg_receptor_column, itg_receptor_glow_behavior_from_layers,
-        itg_receptor_pulse_from_command, itg_resolve_actor_sprites_compiled,
-        itg_resolved_slots_with_model_draw, itg_roll_explosion_commands,
-        itg_roll_explosion_from_resolved, itg_roll_explosion_from_resolved_layers,
-        itg_roll_explosion_should_use_hold, itg_roll_visuals_from_parts,
-        itg_slot_with_active_model_draw, itg_tap_explosion_map_from_layers,
-        itg_tap_explosion_map_from_resolved_layers, itg_tap_explosion_map_from_sources,
-        itg_tap_note_base_layer, itg_tap_note_column, itg_tap_note_layer_priority,
-        itg_tap_note_layers,
+        itg_receptor_pulse_from_command, itg_resolve_actor_file_compiled,
+        itg_resolve_actor_sprites_compiled, itg_resolve_model_decl, itg_resolve_path_ref_decl,
+        itg_resolve_ref_decl, itg_resolve_sprite_decl, itg_resolved_slots_with_model_draw,
+        itg_roll_explosion_commands, itg_roll_explosion_from_resolved,
+        itg_roll_explosion_from_resolved_layers, itg_roll_explosion_should_use_hold,
+        itg_roll_visuals_from_parts, itg_runtime_columns_compiled, itg_slot_with_active_model_draw,
+        itg_tap_explosion_map_from_layers, itg_tap_explosion_map_from_resolved_layers,
+        itg_tap_explosion_map_from_sources, itg_tap_note_base_layer, itg_tap_note_column,
+        itg_tap_note_layer_priority, itg_tap_note_layers,
     };
     use crate::explosion::{
         ItgTapExplosionMode, ItgTapExplosionSource, itg_has_tap_explosion_command,
@@ -1339,9 +1828,9 @@ mod tests {
     use crate::{
         ExplosionAnimation, ExplosionSegment, ExplosionState, NoteAnimPart, NoteDisplayMetrics,
         NotePartAnimation, NotePartTextureTranslate, ReceptorStepBehavior, ReceptorStepBehaviors,
-        TweenType, compiled, itg,
+        Style, TweenType, compiled, itg,
     };
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
     use std::sync::Arc;
 
     #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1995,6 +2484,67 @@ mod tests {
     }
 
     #[test]
+    fn runtime_columns_compiled_builds_column_runtime_state() {
+        let data = itg::NoteskinData {
+            name: "default".to_string(),
+            metrics: itg::IniData::default(),
+            search_dirs: Vec::new(),
+        };
+        let style = Style {
+            num_cols: 1,
+            num_players: 1,
+        };
+        let compiled = compiled::CompiledLoader::default();
+
+        let columns = itg_runtime_columns_compiled(
+            &data,
+            style,
+            &compiled,
+            4,
+            |_, element| {
+                if element == "Receptor" {
+                    vec![ItgResolvedSprite {
+                        element: element.to_string(),
+                        slot: 10,
+                        commands: HashMap::from([(
+                            "initcommand".to_string(),
+                            "zoom,2".to_string(),
+                        )]),
+                    }]
+                } else {
+                    Vec::new()
+                }
+            },
+            |_, element| match element {
+                "Tap Note" => vec![1],
+                "Tap Lift" => vec![2],
+                "Tap Mine" => vec![3],
+                "Hold Head Inactive" | "Hold Head Active" => vec![4],
+                "Roll Head Inactive" | "Roll Head Active" => vec![5],
+                _ => Vec::new(),
+            },
+            |_, _| Some(40),
+            |_| Some(90),
+            |slot, _| *slot += 100,
+            |_| 1.0,
+            |_| (false, [0.0, 0.0]),
+        )
+        .expect("one-column runtime should build");
+
+        assert_eq!(columns.notes, vec![1, 1, 1, 1]);
+        assert_eq!(columns.note_layers.len(), 4);
+        assert_eq!(columns.lift_note_layers.len(), 4);
+        assert_eq!(columns.receptor_off, vec![110]);
+        assert_eq!(columns.receptor_pulse_command.as_deref(), Some("zoom,2"));
+        assert_eq!(columns.mines, vec![Some(3)]);
+        assert_eq!(columns.mine_frames, vec![None]);
+        assert_eq!(columns.hold_columns.len(), 1);
+        assert_eq!(columns.hold_columns[0].head_inactive, Some(4));
+        assert_eq!(columns.roll_columns.len(), 1);
+        assert_eq!(columns.roll_columns[0].head_active, Some(5));
+    }
+
+    #[test]
     fn loader_command_applies_nonempty_command_to_slots() {
         let mut sprites = vec![
             ItgResolvedSprite {
@@ -2021,6 +2571,64 @@ mod tests {
         assert_eq!(
             sprites.iter().map(|sprite| sprite.slot).collect::<Vec<_>>(),
             vec![7, 8]
+        );
+    }
+
+    #[test]
+    fn child_actor_commands_apply_frame_then_merged_state() {
+        let first = HashMap::from([
+            ("initcommand".to_string(), "zoom,2".to_string()),
+            ("diffuse".to_string(), "red".to_string()),
+        ]);
+        let second = HashMap::from([
+            ("initcommand".to_string(), "zoom,4".to_string()),
+            ("glow".to_string(), "blue".to_string()),
+        ]);
+        let mut sprites = vec![ItgResolvedSprite {
+            element: "Tap Note".to_string(),
+            slot: 1,
+            commands: HashMap::from([("base".to_string(), "true".to_string())]),
+        }];
+        let calls = std::cell::RefCell::new(Vec::new());
+
+        itg_apply_child_actor_commands(
+            &mut sprites,
+            Some(3),
+            &[&first, &second],
+            |slot, frame| {
+                calls.borrow_mut().push(format!("frame:{frame}:{slot}"));
+                *slot += frame as i32;
+            },
+            |slot, commands| {
+                calls.borrow_mut().push(format!(
+                    "state:{}:{}",
+                    commands.get("initcommand").unwrap(),
+                    slot
+                ));
+                *slot += commands.len() as i32;
+            },
+        );
+
+        assert_eq!(sprites[0].slot, 8);
+        assert_eq!(
+            calls.into_inner(),
+            ["frame:3:1".to_string(), "state:zoom,4:4".to_string()]
+        );
+        assert_eq!(
+            sprites[0].commands.get("base").map(String::as_str),
+            Some("true")
+        );
+        assert_eq!(
+            sprites[0].commands.get("initcommand").map(String::as_str),
+            Some("zoom,4")
+        );
+        assert_eq!(
+            sprites[0].commands.get("diffuse").map(String::as_str),
+            Some("red")
+        );
+        assert_eq!(
+            sprites[0].commands.get("glow").map(String::as_str),
+            Some("blue")
         );
     }
 
@@ -2194,6 +2802,123 @@ mod tests {
     }
 
     #[test]
+    fn actor_file_resolver_loads_non_lua_paths() {
+        let data = crate::itg::NoteskinData {
+            name: "default".to_string(),
+            metrics: crate::itg::IniData::default(),
+            search_dirs: Vec::new(),
+        };
+        let actors = crate::compiled::CompiledActors::default();
+        let mut visiting = HashSet::new();
+
+        let sprites = itg_resolve_actor_file_compiled(
+            &data,
+            &actors,
+            "Down",
+            "Tap Note",
+            std::path::Path::new("Tap Note.png"),
+            Some(90),
+            0,
+            &mut visiting,
+            None,
+            |_| Some(1),
+            |path, frame| {
+                assert_eq!(path, std::path::Path::new("Tap Note.png"));
+                assert_eq!(frame, 0);
+                Some(5)
+            },
+            |_, _, _, _, _, _| panic!("animated loader should not run"),
+            |_, _| panic!("model plan should not apply"),
+            |slot, rotation_z| *slot += rotation_z / 10,
+            |_, _| panic!("frame override should not apply"),
+            |_, _| panic!("state commands should not apply"),
+            |_, _, _| panic!("non-lua paths should not recurse"),
+            |_, _, _| panic!("non-lua paths should not resolve references"),
+        );
+
+        assert!(visiting.is_empty());
+        assert_eq!(sprites.len(), 1);
+        assert_eq!(sprites[0].element, "Tap Note");
+        assert_eq!(sprites[0].slot, 14);
+        assert!(sprites[0].commands.is_empty());
+    }
+
+    #[test]
+    fn actor_file_resolver_uses_compiled_actor_declarations() {
+        let root = std::env::temp_dir().join(format!(
+            "deadsync-actor-file-resolver-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        let search_dir = root.join("dance").join("default");
+        std::fs::create_dir_all(&search_dir).unwrap();
+        let actor_path = search_dir.join("Down Tap Note.lua");
+        let texture_path = search_dir.join("Tap Note.png");
+        std::fs::write(&texture_path, []).unwrap();
+        let data = crate::itg::NoteskinData {
+            name: "default".to_string(),
+            metrics: crate::itg::IniData::default(),
+            search_dirs: vec![search_dir],
+        };
+        let actors = crate::compiled::CompiledActors {
+            version: crate::compiled::CACHE_SCHEMA_VERSION,
+            files: vec![crate::compiled::CompiledActorFile {
+                key: "dance/default/down tap note.lua".to_string(),
+                decl: crate::actor::ItgLuaActorDecl {
+                    sprites: vec![crate::actor::ItgLuaSpriteDecl {
+                        texture_expr: "\"Tap Note.png\"".to_string(),
+                        frame0: 2,
+                        frame_count: 1,
+                        frame_indices: None,
+                        frame_delays: None,
+                        commands: HashMap::from([(
+                            "initcommand".to_string(),
+                            "zoom,2".to_string(),
+                        )]),
+                    }],
+                    ..crate::actor::ItgLuaActorDecl::default()
+                },
+            }],
+        };
+        let mut visiting = HashSet::new();
+
+        let sprites = itg_resolve_actor_file_compiled(
+            &data,
+            &actors,
+            "Down",
+            "Tap Note",
+            &actor_path,
+            Some(90),
+            0,
+            &mut visiting,
+            None,
+            |_| Some(1),
+            |path, frame| {
+                assert_eq!(path, texture_path.as_path());
+                assert_eq!(frame, 2);
+                Some(5)
+            },
+            |_, _, _, _, _, _| panic!("animated loader should not run"),
+            |_, _| panic!("model plan should not apply"),
+            |slot, rotation_z| *slot += rotation_z / 10,
+            |_, _| panic!("frame override should not apply"),
+            |slot, commands| *slot += commands.len() as i32,
+            |_, _, _| panic!("sprite-only actor files should not recurse"),
+            |_, _, _| panic!("sprite-only actor files should not resolve references"),
+        );
+
+        assert!(visiting.is_empty());
+        assert_eq!(sprites.len(), 1);
+        assert_eq!(sprites[0].element, "Tap Note");
+        assert_eq!(sprites[0].slot, 15);
+        assert_eq!(
+            sprites[0].commands.get("initcommand").map(String::as_str),
+            Some("zoom,2")
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn first_actor_sprite_slot_uses_compiled_animation_metadata() {
         #[derive(Debug, PartialEq)]
         enum Loaded {
@@ -2270,6 +2995,274 @@ mod tests {
                 frame_delays: Some(vec![0.1, 0.2, 0.3, 0.4]),
                 beat_based: false,
             })
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn sprite_decl_slot_falls_back_from_animation_to_frame() {
+        let root =
+            std::env::temp_dir().join(format!("deadsync-sprite-decl-slot-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let texture_path = root.join("Tap Note.png");
+        std::fs::write(&texture_path, []).unwrap();
+        let data = crate::itg::NoteskinData {
+            name: "default".to_string(),
+            metrics: crate::itg::IniData::default(),
+            search_dirs: vec![root.clone()],
+        };
+        let sprite = crate::actor::ItgLuaSpriteDecl {
+            texture_expr: "\"Tap Note.png\"".to_string(),
+            frame0: 2,
+            frame_count: 4,
+            frame_indices: Some(vec![2, 3, 4, 5]),
+            frame_delays: Some(vec![0.1, 0.2, 0.3, 0.4]),
+            commands: HashMap::new(),
+        };
+
+        let slot = itg_load_sprite_decl_slot(
+            &data,
+            &sprite,
+            None,
+            false,
+            |_| Some("texture".to_string()),
+            |path, frame| Some(format!("frame:{frame}:{}", path.display())),
+            |_, _, _, _, _, _| None,
+        );
+
+        assert_eq!(slot, Some(format!("frame:2:{}", texture_path.display())));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn resolved_sprite_decl_applies_rotation_before_state() {
+        let root = std::env::temp_dir().join(format!(
+            "deadsync-resolved-sprite-decl-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("Tap Note.png"), []).unwrap();
+        let data = crate::itg::NoteskinData {
+            name: "default".to_string(),
+            metrics: crate::itg::IniData::default(),
+            search_dirs: vec![root.clone()],
+        };
+        let sprite = crate::actor::ItgLuaSpriteDecl {
+            texture_expr: "\"Tap Note.png\"".to_string(),
+            frame0: 0,
+            frame_count: 1,
+            frame_indices: None,
+            frame_delays: None,
+            commands: HashMap::from([("initcommand".to_string(), "zoom,2".to_string())]),
+        };
+        let calls = std::cell::RefCell::new(Vec::new());
+
+        let resolved = itg_resolve_sprite_decl(
+            &data,
+            "Tap Note",
+            sprite,
+            None,
+            true,
+            Some(90),
+            |_| Some(1),
+            |_, _| Some(5),
+            |_, _, _, _, _, _| panic!("single-frame sprite should not use animation loader"),
+            |slot, rotation_z| {
+                calls
+                    .borrow_mut()
+                    .push(format!("rotate:{rotation_z}:{slot}"));
+                *slot += rotation_z / 10;
+            },
+            |slot, commands| {
+                calls.borrow_mut().push(format!(
+                    "state:{}:{}",
+                    commands.get("initcommand").unwrap(),
+                    slot
+                ));
+                *slot += commands.len() as i32;
+            },
+        )
+        .expect("resolved sprite");
+
+        assert_eq!(resolved.element, "Tap Note");
+        assert_eq!(resolved.slot, 15);
+        assert_eq!(
+            calls.into_inner(),
+            ["rotate:90:5".to_string(), "state:zoom,2:14".to_string()]
+        );
+        assert_eq!(
+            resolved.commands.get("initcommand").map(String::as_str),
+            Some("zoom,2")
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn model_decl_resolves_fallback_texture_and_applies_plan() {
+        let root = std::env::temp_dir().join(format!("deadsync-model-decl-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let texture_path = root.join("Model Texture.png");
+        std::fs::write(&texture_path, []).unwrap();
+        let data = crate::itg::NoteskinData {
+            name: "default".to_string(),
+            metrics: crate::itg::IniData::default(),
+            search_dirs: vec![root.clone()],
+        };
+        let model = crate::actor::ItgLuaModelDecl {
+            meshes_expr: None,
+            materials_expr: None,
+            texture_expr: Some("\"Model Texture.png\"".to_string()),
+            frame0: 3,
+            commands: HashMap::from([("initcommand".to_string(), "zoom,2".to_string())]),
+        };
+        let calls = std::cell::RefCell::new(Vec::new());
+
+        let resolved = itg_resolve_model_decl(
+            &data,
+            "Down",
+            "Tap Note",
+            model,
+            None,
+            Some(90),
+            |_| Some(1),
+            |path, frame| {
+                Some(if path == texture_path.as_path() {
+                    frame as i32
+                } else {
+                    -1
+                })
+            },
+            |slot, plan| {
+                calls.borrow_mut().push(format!(
+                    "model:{}:{}",
+                    plan.model.is_some(),
+                    plan.model_draw.zoom[0]
+                ));
+                *slot += 10;
+            },
+            |slot, rotation_z| {
+                calls
+                    .borrow_mut()
+                    .push(format!("rotate:{rotation_z}:{slot}"));
+                *slot += rotation_z / 10;
+            },
+        );
+
+        assert_eq!(resolved.len(), 1);
+        assert_eq!(resolved[0].element, "Tap Note");
+        assert_eq!(resolved[0].slot, 22);
+        assert_eq!(
+            resolved[0].commands.get("initcommand").map(String::as_str),
+            Some("zoom,2")
+        );
+        assert_eq!(
+            calls.into_inner(),
+            ["model:false:2", "rotate:90:13"]
+                .into_iter()
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn path_ref_decl_resolves_child_arg_and_commands() {
+        let root =
+            std::env::temp_dir().join(format!("deadsync-path-ref-decl-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let child_path = root.join("Child.lua");
+        let arg_path = root.join("Arg.png");
+        std::fs::write(&child_path, []).unwrap();
+        std::fs::write(&arg_path, []).unwrap();
+        let data = crate::itg::NoteskinData {
+            name: "default".to_string(),
+            metrics: crate::itg::IniData::default(),
+            search_dirs: vec![root.clone()],
+        };
+        let path_ref = crate::actor::ItgLuaPathRefDecl {
+            path_expr: "\"Child.lua\"".to_string(),
+            arg_expr: Some("\"Arg.png\"".to_string()),
+            frame_override: Some(2),
+            commands: HashMap::from([("initcommand".to_string(), "zoom,2".to_string())]),
+        };
+
+        let child = itg_resolve_path_ref_decl(
+            &data,
+            path_ref,
+            None,
+            |path, arg| {
+                assert_eq!(path, child_path.as_path());
+                assert_eq!(arg, Some(arg_path.as_path()));
+                vec![ItgResolvedSprite {
+                    element: "Tap Note".to_string(),
+                    slot: 1,
+                    commands: HashMap::new(),
+                }]
+            },
+            |slot, frame| *slot += frame as i32,
+            |slot, commands| *slot += commands.len() as i32,
+        );
+
+        assert_eq!(child.len(), 1);
+        assert_eq!(child[0].slot, 4);
+        assert_eq!(
+            child[0].commands.get("initcommand").map(String::as_str),
+            Some("zoom,2")
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn ref_decl_merges_wrapper_then_reference_commands() {
+        let root = std::env::temp_dir().join(format!("deadsync-ref-decl-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let wrapper_path = root.join("Wrapper.lua");
+        std::fs::write(
+            &wrapper_path,
+            "return Def.ActorFrame { InitCommand=function(self) self:zoom(2) end }",
+        )
+        .unwrap();
+        let data = crate::itg::NoteskinData {
+            name: "default".to_string(),
+            metrics: crate::itg::IniData::default(),
+            search_dirs: vec![root.clone()],
+        };
+        let reference = crate::actor::ItgLuaRefDecl {
+            button_override: Some("Up".to_string()),
+            element: "Explosion".to_string(),
+            wrapper_expr: Some("\"Wrapper.lua\"".to_string()),
+            frame_override: Some(3),
+            commands: HashMap::from([("initcommand".to_string(), "zoom,4".to_string())]),
+        };
+
+        let child = itg_resolve_ref_decl(
+            &data,
+            "Down",
+            reference,
+            None,
+            |button, element| {
+                assert_eq!(button, "Up");
+                assert_eq!(element, "Explosion");
+                vec![ItgResolvedSprite {
+                    element: element.to_string(),
+                    slot: 1,
+                    commands: HashMap::new(),
+                }]
+            },
+            |slot, frame| *slot += frame as i32,
+            |slot, commands| *slot += commands.len() as i32,
+        );
+
+        assert_eq!(child.len(), 1);
+        assert_eq!(child[0].slot, 5);
+        assert_eq!(
+            child[0].commands.get("initcommand").map(String::as_str),
+            Some("zoom,4")
         );
         let _ = std::fs::remove_dir_all(&root);
     }

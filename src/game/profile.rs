@@ -11,23 +11,50 @@
 use crate::config;
 use chrono::Local;
 use deadlib_platform::dirs;
-use deadsync_rules::scroll::ScrollSpeedSetting;
 use log::{info, warn};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-mod update;
-
 pub use deadsync_profile::ImportProfileData;
+pub use deadsync_profile::update::*;
 use deadsync_profile::{
-    ActiveProfile, ActiveProfileLoadSelection, GameplayHudSnapshot, LocalProfileSummary, NoteSkin,
-    PLAYER_SLOTS, PlayMode, PlayStyle, PlayerOptionsData, PlayerSide, Profile, ProfileStats,
-    ProfileStatsDecodeError, ProfileStatsLoadError, ProfileStatsWriteError, TimingTickMode,
-    is_local_profile_id, player_side_index as side_ix, rename_local_profile_dir,
-    runtime_invalidate_profile_dir_cache as invalidate_profile_dir_cache,
+    ActiveProfile, ActiveProfileLoadSelection, LocalProfileSummary, NoteSkin, PLAYER_SLOTS,
+    PlayerOptionsData, PlayerSide, Profile, ProfileStatsDecodeError, ProfileStatsLoadError,
+    ProfileStatsWriteError, is_local_profile_id, player_side_index as side_ix,
+    rename_local_profile_dir, runtime_invalidate_profile_dir_cache as invalidate_profile_dir_cache,
     runtime_set_profile_dir_cache,
 };
-pub use update::*;
+pub use deadsync_profile::{
+    runtime_active_local_profile_id_for_side as active_local_profile_id_for_side,
+    runtime_active_profile_for_side as get_active_profile_for_side, runtime_current_profile as get,
+    runtime_fast_profile_switch_from_select_music as fast_profile_switch_from_select_music,
+    runtime_footer_fields_for_side as footer_fields_for_side,
+    runtime_gameplay_hud_snapshot as gameplay_hud_snapshot,
+    runtime_groovestats_api_key_for_side as groovestats_api_key_for_side,
+    runtime_known_pack_names_for_local_profile as known_pack_names_for_local_profile,
+    runtime_local_profile_id_for_pad as active_local_profile_id_for_pad,
+    runtime_pad_light_brightness_for_pad as pad_light_brightness_for_pad,
+    runtime_profile_for_side as get_for_side, runtime_profile_has_favorite_for_side as is_favorite,
+    runtime_profile_has_favorited_pack_for_side as is_pack_favorite,
+    runtime_seed_favorite_for_side as seed_session_favorite,
+    runtime_seed_favorited_pack_for_side as seed_session_favorited_pack,
+    runtime_session_music_rate as get_session_music_rate,
+    runtime_session_play_mode as get_session_play_mode,
+    runtime_session_play_style as get_session_play_style,
+    runtime_session_player_side as get_session_player_side,
+    runtime_session_side_guest as is_session_side_guest,
+    runtime_session_side_joined as is_session_side_joined,
+    runtime_session_timing_tick_mode as get_session_timing_tick_mode,
+    runtime_set_avatar_texture_key_for_side as set_avatar_texture_key_for_side,
+    runtime_set_fast_profile_switch_from_select_music as set_fast_profile_switch_from_select_music,
+    runtime_set_session_joined as set_session_joined,
+    runtime_set_session_music_rate as set_session_music_rate,
+    runtime_set_session_play_mode as set_session_play_mode,
+    runtime_set_session_play_style as set_session_play_style,
+    runtime_set_session_player_side as set_session_player_side,
+    runtime_set_session_timing_tick_mode as set_session_timing_tick_mode,
+    runtime_take_fast_profile_switch_from_select_music as take_fast_profile_switch_from_select_music,
+};
 
 #[inline(always)]
 fn profiles_root() -> PathBuf {
@@ -88,18 +115,13 @@ pub fn save_pad_configs(
     profile_id: &str,
     profiles: &[deadsync_profile::pad_config::PadConfigProfile],
 ) {
-    if let Err(e) = deadsync_profile::pad_config::save_profile_id(
+    if let Err(e) = deadsync_profile::pad_config::save_profile_id_report(
         &profiles_root(),
         profile_id,
         profiles,
         warn_duplicate_profile_guid,
     ) {
-        let path = deadsync_profile::pad_config::pad_config_path_for_profile_id(
-            &profiles_root(),
-            profile_id,
-            warn_duplicate_profile_guid,
-        );
-        warn!("Failed to save {}: {e}", path.display());
+        warn!("Failed to save {}: {}", e.path.display(), e.error);
     }
 }
 
@@ -113,7 +135,7 @@ pub fn upsert_pad_config(
     make_default: bool,
     settings: Vec<(String, String)>,
 ) {
-    if let Err(e) = deadsync_profile::pad_config::upsert_profile_id(
+    if let Err(e) = deadsync_profile::pad_config::upsert_profile_id_report(
         &profiles_root(),
         profile_id,
         name,
@@ -124,68 +146,43 @@ pub fn upsert_pad_config(
         settings,
         warn_duplicate_profile_guid,
     ) {
-        let path = deadsync_profile::pad_config::pad_config_path_for_profile_id(
-            &profiles_root(),
-            profile_id,
-            warn_duplicate_profile_guid,
-        );
-        warn!("Failed to save {}: {e}", path.display());
+        warn!("Failed to save {}: {}", e.path.display(), e.error);
     }
 }
 
 pub fn set_default_pad_config(profile_id: &str, serial: &str, name: &str) {
-    if let Err(e) = deadsync_profile::pad_config::set_default_profile_id(
+    if let Err(e) = deadsync_profile::pad_config::set_default_profile_id_report(
         &profiles_root(),
         profile_id,
         serial,
         name,
         warn_duplicate_profile_guid,
     ) {
-        let path = deadsync_profile::pad_config::pad_config_path_for_profile_id(
-            &profiles_root(),
-            profile_id,
-            warn_duplicate_profile_guid,
-        );
-        warn!("Failed to save {}: {e}", path.display());
+        warn!("Failed to save {}: {}", e.path.display(), e.error);
     }
 }
 
 pub fn rename_pad_config(profile_id: &str, old: &str, new: &str) {
-    if let Err(e) = deadsync_profile::pad_config::rename_profile_id(
+    if let Err(e) = deadsync_profile::pad_config::rename_profile_id_report(
         &profiles_root(),
         profile_id,
         old,
         new,
         warn_duplicate_profile_guid,
     ) {
-        let path = deadsync_profile::pad_config::pad_config_path_for_profile_id(
-            &profiles_root(),
-            profile_id,
-            warn_duplicate_profile_guid,
-        );
-        warn!("Failed to save {}: {e}", path.display());
+        warn!("Failed to save {}: {}", e.path.display(), e.error);
     }
 }
 
 pub fn delete_pad_config(profile_id: &str, name: &str) {
-    if let Err(e) = deadsync_profile::pad_config::delete_profile_id(
+    if let Err(e) = deadsync_profile::pad_config::delete_profile_id_report(
         &profiles_root(),
         profile_id,
         name,
         warn_duplicate_profile_guid,
     ) {
-        let path = deadsync_profile::pad_config::pad_config_path_for_profile_id(
-            &profiles_root(),
-            profile_id,
-            warn_duplicate_profile_guid,
-        );
-        warn!("Failed to save {}: {e}", path.display());
+        warn!("Failed to save {}: {}", e.path.display(), e.error);
     }
-}
-
-#[inline(always)]
-fn session_side_is_guest(side: PlayerSide) -> bool {
-    deadsync_profile::runtime_session_side_guest(side)
 }
 
 #[inline(always)]
@@ -267,14 +264,6 @@ fn save_profile_stats_for_side(side: PlayerSide) {
         warn_duplicate_profile_guid,
     ) {
         log_profile_stats_write_error(error.profile_id.as_str(), error.error);
-    }
-}
-
-fn write_profile_stats(profile_id: &str, payload: &ProfileStats) {
-    if let Err(e) =
-        deadsync_profile::write_profile_stats_dir(&local_profile_dir(profile_id), payload)
-    {
-        log_profile_stats_write_error(profile_id, e);
     }
 }
 
@@ -502,6 +491,10 @@ fn load_for_side(side: PlayerSide) {
 }
 
 pub fn load() {
+    deadsync_profile::update::set_profile_update_persistence_callbacks(
+        save_profile_ini_for_side,
+        save_profile_stats_for_side,
+    );
     migrate_local_profiles();
     restore_default_profiles();
     load_for_side(PlayerSide::P1);
@@ -570,15 +563,6 @@ fn restore_default_profiles() {
     });
 }
 
-/// Returns a copy of the currently loaded profile data.
-pub fn get() -> Profile {
-    deadsync_profile::runtime_current_profile()
-}
-
-pub fn get_for_side(side: PlayerSide) -> Profile {
-    deadsync_profile::runtime_profile_for_side(side)
-}
-
 /// Per-player SMX gif pack overrides for both sides (`[P1, P2]` bg packs, then
 /// judge packs), each falling back to its machine default when the profile has
 /// no override. One lock, no `Profile` clone: called every frame by
@@ -596,31 +580,6 @@ pub fn smx_gif_packs(
         machine_judge,
         crate::config::SmxPackName::parse,
     )
-}
-
-pub fn footer_fields_for_side(side: PlayerSide) -> (Option<String>, String) {
-    deadsync_profile::runtime_footer_fields_for_side(side)
-}
-
-pub fn groovestats_api_key_for_side(side: PlayerSide) -> String {
-    deadsync_profile::runtime_groovestats_api_key_for_side(side)
-}
-
-pub fn gameplay_hud_snapshot() -> GameplayHudSnapshot {
-    deadsync_profile::runtime_gameplay_hud_snapshot()
-}
-
-pub fn set_avatar_texture_key_for_side(side: PlayerSide, key: Option<String>) {
-    deadsync_profile::runtime_set_avatar_texture_key_for_side(side, key);
-}
-
-// --- Session helpers ---
-pub fn get_active_profile_for_side(side: PlayerSide) -> ActiveProfile {
-    deadsync_profile::runtime_active_profile_for_side(side)
-}
-
-pub fn active_local_profile_id_for_side(side: PlayerSide) -> Option<String> {
-    deadsync_profile::runtime_active_local_profile_id_for_side(side)
 }
 
 pub fn get_default_profile_for_side(side: PlayerSide) -> ActiveProfile {
@@ -655,26 +614,6 @@ fn update_default_profiles_from_selection() {
         p1_default, p2_default,
     ]);
     config::update_default_profiles(defaults[0].clone(), defaults[1].clone());
-}
-
-/// The local profile that owns a given physical pad. `is_p2_side` is the pad's
-/// player side (P2 vs P1), taken from its SDK slot (slot 1 = P2), NOT the raw
-/// hardware jumper bit. In Doubles one player drives both pads, so both map to the
-/// joined player's side; otherwise the pad maps to its own side.
-pub fn active_local_profile_id_for_pad(is_p2_side: bool) -> Option<String> {
-    deadsync_profile::runtime_local_profile_id_for_pad(is_p2_side)
-}
-
-/// Pad-light brightness (0..=100) for the player on a given physical pad slot,
-/// using the same side mapping as `active_local_profile_id_for_pad` (Doubles →
-/// the one joined player for both pads; otherwise the pad's own side). Reads the
-/// active profile's value (guest profiles are seeded from the machine default).
-pub fn pad_light_brightness_for_pad(is_p2_side: bool) -> u8 {
-    deadsync_profile::runtime_pad_light_brightness_for_pad(is_p2_side)
-}
-
-pub fn known_pack_names_for_local_profile(profile_id: &str) -> Option<HashSet<String>> {
-    deadsync_profile::runtime_known_pack_names_for_local_profile(profile_id)
 }
 
 pub fn mark_known_pack_names_for_local_profile<'a>(
@@ -739,18 +678,6 @@ pub fn toggle_favorite(side: PlayerSide, chart_hash: &str) -> bool {
     )
 }
 
-/// Check if a chart hash is favorited for the given player side.
-pub fn is_favorite(side: PlayerSide, chart_hash: &str) -> bool {
-    deadsync_profile::runtime_profile_has_favorite_for_side(side, chart_hash)
-}
-
-/// Test/bench helper: mark a chart hash as favorited for the given side in the
-/// in-memory profile only, without persisting to disk. Lets benchmarks exercise
-/// the favorites render path deterministically.
-pub fn seed_session_favorite(side: PlayerSide, chart_hash: &str) {
-    deadsync_profile::runtime_seed_favorite_for_side(side, chart_hash);
-}
-
 /// Toggle a pack's favorite status for the given player side, identifying the
 /// pack by its display name. Returns `true` if the pack is
 /// now a favorite, `false` if it was removed.
@@ -761,17 +688,6 @@ pub fn toggle_pack_favorite(side: PlayerSide, pack_name: &str) -> bool {
         pack_name,
         warn_duplicate_profile_guid,
     )
-}
-
-/// Check if a pack name is favorited for the given player side.
-pub fn is_pack_favorite(side: PlayerSide, pack_name: &str) -> bool {
-    deadsync_profile::runtime_profile_has_favorited_pack_for_side(side, pack_name)
-}
-
-/// Test/bench helper: mark a pack as favorited for the given side in the
-/// in-memory profile only, without persisting to disk.
-pub fn seed_session_favorited_pack(side: PlayerSide, pack_name: &str) {
-    deadsync_profile::runtime_seed_favorited_pack_for_side(side, pack_name);
 }
 
 pub fn set_active_profile_for_side(side: PlayerSide, profile: ActiveProfile) -> Profile {
@@ -900,68 +816,4 @@ pub fn delete_local_profile(id: &str) -> Result<(), std::io::Error> {
     }
 
     Ok(())
-}
-
-pub fn get_session_music_rate() -> f32 {
-    deadsync_profile::runtime_session_music_rate()
-}
-
-pub fn set_session_music_rate(rate: f32) {
-    deadsync_profile::runtime_set_session_music_rate(rate);
-}
-
-pub fn get_session_timing_tick_mode() -> TimingTickMode {
-    deadsync_profile::runtime_session_timing_tick_mode()
-}
-
-pub fn set_session_timing_tick_mode(mode: TimingTickMode) {
-    deadsync_profile::runtime_set_session_timing_tick_mode(mode);
-}
-
-pub fn get_session_play_style() -> PlayStyle {
-    deadsync_profile::runtime_session_play_style()
-}
-
-pub fn set_session_play_style(style: PlayStyle) {
-    deadsync_profile::runtime_set_session_play_style(style);
-}
-
-pub fn get_session_play_mode() -> PlayMode {
-    deadsync_profile::runtime_session_play_mode()
-}
-
-pub fn set_session_play_mode(mode: PlayMode) {
-    deadsync_profile::runtime_set_session_play_mode(mode);
-}
-
-pub fn get_session_player_side() -> PlayerSide {
-    deadsync_profile::runtime_session_player_side()
-}
-
-pub fn set_session_player_side(side: PlayerSide) {
-    deadsync_profile::runtime_set_session_player_side(side);
-}
-
-pub fn is_session_side_joined(side: PlayerSide) -> bool {
-    deadsync_profile::runtime_session_side_joined(side)
-}
-
-pub fn is_session_side_guest(side: PlayerSide) -> bool {
-    deadsync_profile::runtime_session_side_guest(side)
-}
-
-pub fn set_session_joined(p1: bool, p2: bool) {
-    deadsync_profile::runtime_set_session_joined(p1, p2);
-}
-
-pub fn set_fast_profile_switch_from_select_music(enabled: bool) {
-    deadsync_profile::runtime_set_fast_profile_switch_from_select_music(enabled);
-}
-
-pub fn fast_profile_switch_from_select_music() -> bool {
-    deadsync_profile::runtime_fast_profile_switch_from_select_music()
-}
-
-pub fn take_fast_profile_switch_from_select_music() -> bool {
-    deadsync_profile::runtime_take_fast_profile_switch_from_select_music()
 }

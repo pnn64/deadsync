@@ -53,6 +53,13 @@ pub enum MineGradientSampleRegionError {
     ZeroSampleSize,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum MineGradientSampleWarning {
+    InvalidSlotSize,
+    RegionOutsideTexture { texture_key: String, src: [i32; 2] },
+    ZeroSampleSize { texture_key: String },
+}
+
 #[inline(always)]
 fn mine_grad_byte(v: f32) -> u8 {
     (v.clamp(0.0, 1.0) * 255.0).round() as u8
@@ -207,6 +214,40 @@ pub fn mine_gradient_samples(
     mine_gradient_resample(&colors, sample_count)
 }
 
+pub fn mine_gradient_samples_from_slot(
+    image: &RgbaImage,
+    texture_key: &str,
+    src: [i32; 2],
+    size: [i32; 2],
+    frame_size: Option<[i32; 2]>,
+    sample_count: usize,
+    mut warn: impl FnMut(MineGradientSampleWarning),
+) -> Option<Vec<[f32; 4]>> {
+    let region =
+        match mine_gradient_sample_region([image.width(), image.height()], src, size, frame_size) {
+            Ok(region) => region,
+            Err(MineGradientSampleRegionError::InvalidSlotSize) => {
+                warn(MineGradientSampleWarning::InvalidSlotSize);
+                return None;
+            }
+            Err(MineGradientSampleRegionError::RegionOutsideTexture) => {
+                warn(MineGradientSampleWarning::RegionOutsideTexture {
+                    texture_key: texture_key.to_string(),
+                    src: [src[0].max(0), src[1].max(0)],
+                });
+                return None;
+            }
+            Err(MineGradientSampleRegionError::ZeroSampleSize) => {
+                warn(MineGradientSampleWarning::ZeroSampleSize {
+                    texture_key: texture_key.to_string(),
+                });
+                return None;
+            }
+        };
+
+    mine_gradient_samples(image, region.src, region.size, sample_count)
+}
+
 pub fn mine_gradient_resample(colors: &[[f32; 4]], sample_count: usize) -> Option<Vec<[f32; 4]>> {
     if colors.is_empty() {
         return None;
@@ -288,6 +329,51 @@ mod tests {
         assert_ne!(a, b);
         assert!(a.starts_with(MINE_GRADIENT_KEY_PREFIX));
         assert!(a.ends_with(".png"));
+    }
+
+    #[test]
+    fn mine_gradient_samples_from_slot_reports_region_warning() {
+        let image = RgbaImage::from_pixel(4, 4, Rgba([255, 0, 0, 255]));
+        let mut warnings = Vec::new();
+
+        let samples = mine_gradient_samples_from_slot(
+            &image,
+            "mine.png",
+            [8, 0],
+            [2, 2],
+            None,
+            4,
+            |warning| warnings.push(warning),
+        );
+
+        assert!(samples.is_none());
+        assert_eq!(
+            warnings,
+            vec![MineGradientSampleWarning::RegionOutsideTexture {
+                texture_key: "mine.png".to_string(),
+                src: [8, 0],
+            }]
+        );
+    }
+
+    #[test]
+    fn mine_gradient_samples_from_slot_samples_valid_region() {
+        let image = RgbaImage::from_pixel(4, 4, Rgba([255, 0, 0, 255]));
+        let mut warnings = Vec::new();
+
+        let samples = mine_gradient_samples_from_slot(
+            &image,
+            "mine.png",
+            [0, 0],
+            [4, 4],
+            None,
+            3,
+            |warning| warnings.push(warning),
+        )
+        .expect("valid slot should sample colors");
+
+        assert!(warnings.is_empty());
+        assert_eq!(samples, vec![[1.0, 0.0, 0.0, 1.0]; 3]);
     }
 
     #[test]

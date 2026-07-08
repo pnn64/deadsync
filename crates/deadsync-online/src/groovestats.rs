@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{LazyLock, Mutex};
 use std::thread;
+use std::time::Instant;
 
 use crate::OnlineRequestError;
 use deadsync_net::{self as network, NetworkError};
@@ -11,11 +12,14 @@ use deadsync_profile as profile_data;
 use deadsync_profile::{Profile, RemoveMask, TimingWindowsOption};
 use deadsync_rules::{judgment, scroll::ScrollSpeedSetting, timing::WindowCounts};
 use deadsync_score::{
+    EventProgress, GrooveStatsAutosubmitLog, GrooveStatsAutosubmitLogLevel,
     GrooveStatsSubmitRecordBanner, GrooveStatsSubmitUiStatus, GsExEvidence, ImportedPlayerScore,
-    LeaderboardEntry, LeaderboardPane, PlayerLeaderboardData, PlayerScoreImportResult,
-    RejectReason, ScoreImportEndpoint, SubmitAchievement, SubmitAchievementReward,
-    SubmitEventProgressData, SubmitProgress, SubmitQuest, SubmitQuestReward, SubmitStatImprovement,
-    groovestats_submit_record_banner, leaderboard_nonzero_rank, leaderboard_pane,
+    ItlEventProgress, LeaderboardEntry, LeaderboardPane, PlayerLeaderboardData,
+    PlayerScoreImportResult, RejectReason, SUBMIT_RETRY_MAX_ATTEMPTS, ScoreImportEndpoint,
+    SubmitAchievement, SubmitAchievementReward, SubmitEventProgressData, SubmitEventProgressInput,
+    SubmitProgress, SubmitQuest, SubmitQuestReward, SubmitRetryState, SubmitStatImprovement,
+    event_name_or_unknown, event_progress_from_submit, groovestats_submit_record_banner,
+    groovestats_submit_ui_status, leaderboard_nonzero_rank, leaderboard_pane,
     leaderboard_score_10000, leaderboard_username_matches, score_import_entry_matches_profile,
 };
 use serde_json::{Map as JsonMap, Value as JsonValue};
@@ -31,6 +35,8 @@ pub const GROOVESTATS_QR_LOGIN_WS_READ_TIMEOUT_MS: u64 = 100;
 pub const GROOVESTATS_CHART_HASH_VERSION: u8 = 3;
 pub const GROOVESTATS_COMMENT_PREFIX: &str = "[DS]";
 pub const GROOVESTATS_SUBMIT_MAX_ENTRIES: usize = 10;
+const GROOVESTATS_RETRY_MAX_ATTEMPTS: u8 = SUBMIT_RETRY_MAX_ATTEMPTS;
+const GROOVESTATS_SUBMIT_RETRY_TRACKED_PER_SIDE: usize = 128;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Service {
@@ -138,10 +144,67 @@ impl Service {
 }
 
 #[inline(always)]
+pub const fn boogiestats_active(enable_groovestats: bool, enable_boogiestats: bool) -> bool {
+    enable_groovestats && enable_boogiestats
+}
+
+#[inline(always)]
+pub const fn active_service(enable_groovestats: bool, enable_boogiestats: bool) -> Service {
+    Service::from_boogiestats_active(boogiestats_active(enable_groovestats, enable_boogiestats))
+}
+
+#[inline(always)]
 pub const fn service_name(service: Service) -> &'static str {
     match service {
         Service::GrooveStats => "GrooveStats",
         Service::BoogieStats => "BoogieStats",
+    }
+}
+
+#[inline(always)]
+pub fn warn_submit_skip(
+    service_name: &str,
+    side: profile_data::PlayerSide,
+    chart_hash: &str,
+    reason: &str,
+) {
+    log::warn!(
+        "Skipping {service_name} submit for {:?} ({}): {}.",
+        side,
+        chart_hash,
+        reason
+    );
+}
+
+#[inline(always)]
+pub fn log_global_submit_skip(service_name: &str, log: GrooveStatsAutosubmitLog) {
+    match log.level {
+        GrooveStatsAutosubmitLogLevel::Debug => {
+            log::debug!("Skipping {service_name} submit: {}.", log.reason)
+        }
+        GrooveStatsAutosubmitLogLevel::Warn => {
+            log::warn!("Skipping {service_name} submit: {}.", log.reason)
+        }
+    }
+}
+
+#[inline(always)]
+pub fn log_player_submit_skip(
+    service_name: &str,
+    side: profile_data::PlayerSide,
+    chart_hash: &str,
+    log: GrooveStatsAutosubmitLog,
+) {
+    match log.level {
+        GrooveStatsAutosubmitLogLevel::Debug => log::debug!(
+            "Skipping {service_name} submit for {:?} ({}): {}.",
+            side,
+            chart_hash,
+            log.reason
+        ),
+        GrooveStatsAutosubmitLogLevel::Warn => {
+            warn_submit_skip(service_name, side, chart_hash, log.reason)
+        }
     }
 }
 
@@ -1171,11 +1234,117 @@ pub struct GrooveStatsSubmitPlayerRequest {
     pub payload: GrooveStatsSubmitPlayerPayload,
 }
 
+#[derive(Debug)]
+pub struct GrooveStatsSubmitPlayerJob {
+    pub side: profile_data::PlayerSide,
+    pub slot: u8,
+    pub chart_hash: String,
+    pub username: String,
+    pub profile_name: String,
+    pub profile_id: Option<String>,
+    pub token: u64,
+    pub itl_score_hundredths: Option<u32>,
+    pub show_ex_score: bool,
+    pub score_10000: u32,
+    pub rate_hundredths: u32,
+    pub comment: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct GrooveStatsSubmitPlayerDraft {
+    pub side: profile_data::PlayerSide,
+    pub slot: u8,
+    pub chart_hash: String,
+    pub username: String,
+    pub profile_name: String,
+    pub profile_id: Option<String>,
+    pub itl_score_hundredths: Option<u32>,
+    pub show_ex_score: bool,
+    pub api_key: String,
+    pub payload: GrooveStatsSubmitPlayerPayload,
+}
+
+impl GrooveStatsSubmitPlayerDraft {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        side: profile_data::PlayerSide,
+        slot: u8,
+        chart_hash: String,
+        username: String,
+        profile_name: String,
+        profile_id: Option<String>,
+        itl_score_hundredths: Option<u32>,
+        show_ex_score: bool,
+        api_key: String,
+        payload: GrooveStatsSubmitPlayerPayload,
+    ) -> Self {
+        Self {
+            side,
+            slot,
+            chart_hash,
+            username,
+            profile_name,
+            profile_id,
+            itl_score_hundredths,
+            show_ex_score,
+            api_key,
+            payload,
+        }
+    }
+
+    pub fn retry_entry(&self) -> GrooveStatsSubmitRetryEntry {
+        GrooveStatsSubmitRetryEntry::new(
+            self.side,
+            self.slot,
+            self.chart_hash.clone(),
+            self.username.clone(),
+            self.profile_name.clone(),
+            self.profile_id.clone(),
+            self.itl_score_hundredths,
+            self.show_ex_score,
+            self.api_key.clone(),
+            self.payload.clone(),
+        )
+    }
+
+    pub fn player_job(&self, token: u64) -> GrooveStatsSubmitPlayerJob {
+        GrooveStatsSubmitPlayerJob {
+            side: self.side,
+            slot: self.slot,
+            chart_hash: self.chart_hash.clone(),
+            username: self.username.clone(),
+            profile_name: self.profile_name.clone(),
+            profile_id: self.profile_id.clone(),
+            token,
+            itl_score_hundredths: self.itl_score_hundredths,
+            show_ex_score: self.show_ex_score,
+            score_10000: self.payload.score,
+            rate_hundredths: self.payload.rate,
+            comment: self.payload.comment.clone(),
+        }
+    }
+
+    pub fn player_request(&self) -> GrooveStatsSubmitPlayerRequest {
+        GrooveStatsSubmitPlayerRequest {
+            slot: self.slot,
+            chart_hash: self.chart_hash.clone(),
+            api_key: self.api_key.clone(),
+            payload: self.payload.clone(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct GrooveStatsSubmitRequestParts {
     pub headers: Vec<(String, String)>,
     pub query: Vec<(String, String)>,
     pub body: JsonValue,
+}
+
+#[derive(Debug)]
+pub struct GrooveStatsSubmitRequest {
+    pub players: Vec<GrooveStatsSubmitPlayerJob>,
+    pub parts: GrooveStatsSubmitRequestParts,
 }
 
 pub fn submit_request_parts(
@@ -1212,6 +1381,485 @@ pub fn submit_request_parts(
     }
 }
 
+pub fn submit_request_from_drafts(
+    players: Vec<(GrooveStatsSubmitPlayerDraft, u64)>,
+) -> GrooveStatsSubmitRequest {
+    let request_players: Vec<_> = players
+        .iter()
+        .map(|(player, _)| player.player_request())
+        .collect();
+    GrooveStatsSubmitRequest {
+        players: players
+            .into_iter()
+            .map(|(player, token)| player.player_job(token))
+            .collect(),
+        parts: submit_request_parts(&request_players),
+    }
+}
+
+pub fn begin_submit_request_from_drafts(
+    drafts: Vec<GrooveStatsSubmitPlayerDraft>,
+) -> Option<GrooveStatsSubmitRequest> {
+    if drafts.is_empty() {
+        return None;
+    }
+    let players = drafts
+        .into_iter()
+        .map(|draft| {
+            store_submit_retry(draft.retry_entry());
+            let token = next_submit_ui_token();
+            set_submit_ui_status(
+                draft.side,
+                draft.chart_hash.as_str(),
+                token,
+                GrooveStatsSubmitUiStatus::Submitting,
+            );
+            arm_submit_event_ui(draft.side, draft.chart_hash.as_str(), token);
+            (draft, token)
+        })
+        .collect();
+    Some(submit_request_from_drafts(players))
+}
+
+pub fn retry_submit_request(
+    entry: &GrooveStatsSubmitRetryEntry,
+    token: u64,
+) -> GrooveStatsSubmitRequest {
+    let player = GrooveStatsSubmitPlayerJob {
+        side: entry.side,
+        slot: entry.slot,
+        chart_hash: entry.chart_hash.clone(),
+        username: entry.username.clone(),
+        profile_name: entry.profile_name.clone(),
+        profile_id: entry.profile_id.clone(),
+        token,
+        itl_score_hundredths: entry.itl_score_hundredths,
+        show_ex_score: entry.show_ex_score,
+        score_10000: entry.payload.score,
+        rate_hundredths: entry.payload.rate,
+        comment: entry.payload.comment.clone(),
+    };
+    let request_player = GrooveStatsSubmitPlayerRequest {
+        slot: entry.slot,
+        chart_hash: entry.chart_hash.clone(),
+        api_key: entry.api_key.clone(),
+        payload: entry.payload.clone(),
+    };
+    GrooveStatsSubmitRequest {
+        players: vec![player],
+        parts: submit_request_parts(&[request_player]),
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct GrooveStatsSubmitRetryEntry {
+    pub side: profile_data::PlayerSide,
+    pub slot: u8,
+    pub chart_hash: String,
+    pub username: String,
+    pub profile_name: String,
+    pub profile_id: Option<String>,
+    pub itl_score_hundredths: Option<u32>,
+    pub show_ex_score: bool,
+    pub api_key: String,
+    pub payload: GrooveStatsSubmitPlayerPayload,
+    retry_attempt: u8,
+    next_retry_at: Option<Instant>,
+}
+
+impl GrooveStatsSubmitRetryEntry {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        side: profile_data::PlayerSide,
+        slot: u8,
+        chart_hash: String,
+        username: String,
+        profile_name: String,
+        profile_id: Option<String>,
+        itl_score_hundredths: Option<u32>,
+        show_ex_score: bool,
+        api_key: String,
+        payload: GrooveStatsSubmitPlayerPayload,
+    ) -> Self {
+        Self {
+            side,
+            slot,
+            chart_hash,
+            username,
+            profile_name,
+            profile_id,
+            itl_score_hundredths,
+            show_ex_score,
+            api_key,
+            payload,
+            retry_attempt: 0,
+            next_retry_at: None,
+        }
+    }
+}
+
+static GROOVESTATS_SUBMIT_RETRY: LazyLock<Mutex<SubmitRetryState<GrooveStatsSubmitRetryEntry>>> =
+    LazyLock::new(|| Mutex::new(SubmitRetryState::default()));
+
+#[inline(always)]
+pub fn reset_submit_ui_status(side: profile_data::PlayerSide, chart_hash: &str) {
+    deadsync_score::groovestats_reset_submit_ui_status(
+        profile_data::player_side_index(side),
+        chart_hash,
+    );
+}
+
+#[inline(always)]
+pub fn reset_submit_event_ui(side: profile_data::PlayerSide, chart_hash: &str) {
+    deadsync_score::groovestats_reset_submit_event_ui(
+        profile_data::player_side_index(side),
+        chart_hash,
+    );
+}
+
+#[inline(always)]
+pub fn set_submit_ui_status(
+    side: profile_data::PlayerSide,
+    chart_hash: &str,
+    token: u64,
+    status: GrooveStatsSubmitUiStatus,
+) {
+    deadsync_score::groovestats_set_submit_ui_status(
+        profile_data::player_side_index(side),
+        chart_hash,
+        token,
+        status,
+    );
+}
+
+#[inline(always)]
+pub fn update_submit_ui_status_if_token(
+    side: profile_data::PlayerSide,
+    chart_hash: &str,
+    token: u64,
+    status: GrooveStatsSubmitUiStatus,
+) -> bool {
+    deadsync_score::groovestats_update_submit_ui_status_if_token(
+        profile_data::player_side_index(side),
+        chart_hash,
+        token,
+        status,
+    )
+}
+
+#[inline(always)]
+pub fn arm_submit_event_ui(side: profile_data::PlayerSide, chart_hash: &str, token: u64) {
+    deadsync_score::groovestats_arm_submit_event_ui(
+        profile_data::player_side_index(side),
+        chart_hash,
+        token,
+    );
+}
+
+#[inline(always)]
+pub fn update_submit_event_ui_if_token(
+    side: profile_data::PlayerSide,
+    chart_hash: &str,
+    token: u64,
+    event_progress: Vec<EventProgress>,
+    record_banner: Option<GrooveStatsSubmitRecordBanner>,
+) {
+    deadsync_score::groovestats_update_submit_event_ui_if_token(
+        profile_data::player_side_index(side),
+        chart_hash,
+        token,
+        event_progress,
+        record_banner,
+    );
+}
+
+#[inline(always)]
+pub fn next_submit_ui_token() -> u64 {
+    deadsync_score::groovestats_next_submit_ui_token()
+}
+
+#[inline(always)]
+pub fn submit_ui_status_for_side(
+    chart_hash: &str,
+    side: profile_data::PlayerSide,
+) -> Option<GrooveStatsSubmitUiStatus> {
+    groovestats_submit_ui_status(profile_data::player_side_index(side), chart_hash)
+}
+
+#[inline(always)]
+pub fn submit_event_progress_for_side(
+    chart_hash: &str,
+    side: profile_data::PlayerSide,
+) -> Vec<EventProgress> {
+    deadsync_score::groovestats_submit_event_progress(
+        profile_data::player_side_index(side),
+        chart_hash,
+    )
+}
+
+#[inline(always)]
+pub fn submit_record_banner_for_side(
+    chart_hash: &str,
+    side: profile_data::PlayerSide,
+) -> Option<GrooveStatsSubmitRecordBanner> {
+    deadsync_score::groovestats_submit_record_banner_ui(
+        profile_data::player_side_index(side),
+        chart_hash,
+    )
+}
+
+#[inline(always)]
+pub fn reset_submit_retry(side: profile_data::PlayerSide, chart_hash: &str) {
+    GROOVESTATS_SUBMIT_RETRY.lock().unwrap().reset_by_key(
+        profile_data::player_side_index(side),
+        chart_hash,
+        |entry| entry.chart_hash.as_str(),
+    );
+}
+
+#[inline(always)]
+pub fn store_submit_retry(entry: GrooveStatsSubmitRetryEntry) {
+    let side = entry.side;
+    GROOVESTATS_SUBMIT_RETRY.lock().unwrap().upsert_by_key(
+        profile_data::player_side_index(side),
+        entry,
+        |entry| entry.chart_hash.as_str(),
+        GROOVESTATS_SUBMIT_RETRY_TRACKED_PER_SIDE,
+    );
+}
+
+#[inline(always)]
+pub fn take_ready_submit_retry(
+    chart_hash: &str,
+    side: profile_data::PlayerSide,
+    manual: bool,
+) -> Option<GrooveStatsSubmitRetryEntry> {
+    GROOVESTATS_SUBMIT_RETRY.lock().unwrap().take_ready_by_key(
+        profile_data::player_side_index(side),
+        chart_hash,
+        manual,
+        Instant::now(),
+        |entry| entry.chart_hash.as_str(),
+        |entry| &mut entry.next_retry_at,
+    )
+}
+
+pub fn take_ready_submit_retry_request(
+    chart_hash: &str,
+    side: profile_data::PlayerSide,
+    manual: bool,
+    token: u64,
+) -> Option<GrooveStatsSubmitRequest> {
+    take_ready_submit_retry(chart_hash, side, manual)
+        .map(|entry| retry_submit_request(&entry, token))
+}
+
+pub fn begin_ready_submit_retry_request(
+    chart_hash: &str,
+    side: profile_data::PlayerSide,
+    manual: bool,
+    service_name: &str,
+) -> Option<GrooveStatsSubmitRequest> {
+    let hash = chart_hash.trim();
+    if hash.is_empty() {
+        return None;
+    }
+    if !submit_ui_status_for_side(hash, side)?.can_retry() {
+        return None;
+    }
+    let token = next_submit_ui_token();
+    let request = take_ready_submit_retry_request(hash, side, manual, token)?;
+    set_submit_ui_status(side, hash, token, GrooveStatsSubmitUiStatus::Submitting);
+    arm_submit_event_ui(side, hash, token);
+    log::debug!("Retrying {service_name} submit for {:?} ({}).", side, hash);
+    Some(request)
+}
+
+pub fn retry_submit_if_enabled(
+    enabled: bool,
+    chart_hash: &str,
+    side: profile_data::PlayerSide,
+    manual: bool,
+    service: Service,
+    service_name: &'static str,
+    cache_success: fn(&GrooveStatsSubmitPlayerJob, &GrooveStatsSubmitApiPlayer),
+    after_player: fn(&GrooveStatsSubmitPlayerJob),
+) -> bool {
+    if !enabled {
+        return false;
+    }
+    let Some(request) = begin_ready_submit_retry_request(chart_hash, side, manual, service_name)
+    else {
+        return false;
+    };
+    spawn_submit_request(request, service, service_name, cache_success, after_player);
+    true
+}
+
+pub fn tick_auto_submit_retries_if_enabled(
+    enabled: bool,
+    service: Service,
+    service_name: &'static str,
+    cache_success: fn(&GrooveStatsSubmitPlayerJob, &GrooveStatsSubmitApiPlayer),
+    after_player: fn(&GrooveStatsSubmitPlayerJob),
+) -> bool {
+    let mut fired = false;
+    for (hash, side, _) in due_auto_submit_retries() {
+        if retry_submit_if_enabled(
+            enabled,
+            hash.as_str(),
+            side,
+            false,
+            service,
+            service_name,
+            cache_success,
+            after_player,
+        ) {
+            fired = true;
+        }
+    }
+    fired
+}
+
+pub fn reject_submit_player_response(player: &GrooveStatsSubmitPlayerJob) -> bool {
+    update_submit_ui_status_if_token(
+        player.side,
+        player.chart_hash.as_str(),
+        player.token,
+        GrooveStatsSubmitUiStatus::Rejected {
+            reason: RejectReason::InvalidScore,
+        },
+    )
+}
+
+pub fn complete_submit_player_success(
+    player: &GrooveStatsSubmitPlayerJob,
+    response: &GrooveStatsSubmitApiPlayer,
+) -> bool {
+    update_submit_event_ui_if_token(
+        player.side,
+        player.chart_hash.as_str(),
+        player.token,
+        event_progress_from_submit_response(player, response),
+        submit_record_banner_from_api(response, player.username.as_str(), player.show_ex_score),
+    );
+    let accepted = update_submit_ui_status_if_token(
+        player.side,
+        player.chart_hash.as_str(),
+        player.token,
+        GrooveStatsSubmitUiStatus::Submitted,
+    );
+    if accepted {
+        reset_submit_retry(player.side, player.chart_hash.as_str());
+    }
+    accepted
+}
+
+pub fn complete_submit_player_failure(
+    player: &GrooveStatsSubmitPlayerJob,
+    status: GrooveStatsSubmitUiStatus,
+) -> bool {
+    let accepted = update_submit_ui_status_if_token(
+        player.side,
+        player.chart_hash.as_str(),
+        player.token,
+        status,
+    );
+    if accepted {
+        record_submit_failure(player.side, player.chart_hash.as_str(), status);
+    }
+    accepted
+}
+
+#[inline(always)]
+pub fn record_submit_failure(
+    side: profile_data::PlayerSide,
+    chart_hash: &str,
+    status: GrooveStatsSubmitUiStatus,
+) {
+    GROOVESTATS_SUBMIT_RETRY
+        .lock()
+        .unwrap()
+        .record_failure_by_key(
+            profile_data::player_side_index(side),
+            chart_hash,
+            status.can_retry(),
+            GROOVESTATS_RETRY_MAX_ATTEMPTS,
+            Instant::now(),
+            |entry| entry.chart_hash.as_str(),
+            |entry| &mut entry.retry_attempt,
+            |entry| &mut entry.next_retry_at,
+        );
+}
+
+#[inline(always)]
+pub fn next_retry_remaining_secs(chart_hash: &str, side: profile_data::PlayerSide) -> Option<u32> {
+    let hash = chart_hash.trim();
+    if hash.is_empty() {
+        return None;
+    }
+    GROOVESTATS_SUBMIT_RETRY
+        .lock()
+        .unwrap()
+        .remaining_secs_by_key(
+            profile_data::player_side_index(side),
+            hash,
+            Instant::now(),
+            |entry| entry.chart_hash.as_str(),
+            |entry| entry.next_retry_at,
+        )
+}
+
+#[inline(always)]
+pub fn next_retry_is_auto(chart_hash: &str, side: profile_data::PlayerSide) -> bool {
+    let hash = chart_hash.trim();
+    if hash.is_empty() {
+        return false;
+    }
+    let attempt = {
+        let lock = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
+        let Some(attempt) = lock.retry_attempt_by_key(
+            profile_data::player_side_index(side),
+            hash,
+            |entry| entry.chart_hash.as_str(),
+            |entry| entry.retry_attempt,
+        ) else {
+            return false;
+        };
+        attempt
+    };
+    if attempt >= GROOVESTATS_RETRY_MAX_ATTEMPTS {
+        return false;
+    }
+    matches!(
+        groovestats_submit_ui_status(profile_data::player_side_index(side), hash),
+        Some(s) if s.is_auto_retryable()
+    )
+}
+
+#[inline(always)]
+pub fn due_auto_submit_retries() -> Vec<(String, profile_data::PlayerSide, u8)> {
+    let due = {
+        let lock = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
+        lock.due_retries(
+            Instant::now(),
+            |entry| entry.chart_hash.as_str(),
+            |entry| entry.side,
+            |entry| entry.retry_attempt,
+            |entry| entry.next_retry_at,
+        )
+    };
+    due.into_iter()
+        .filter(|(hash, side, attempt)| {
+            *attempt < GROOVESTATS_RETRY_MAX_ATTEMPTS
+                && matches!(
+                    groovestats_submit_ui_status(profile_data::player_side_index(*side), hash),
+                    Some(status) if status.is_auto_retryable()
+                )
+        })
+        .collect()
+}
+
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct GrooveStatsSubmitApiResponse {
@@ -1232,6 +1880,31 @@ impl GrooveStatsSubmitApiResponse {
     }
 }
 
+pub enum GrooveStatsSubmitPlayerResponse<'a> {
+    Accepted(&'a GrooveStatsSubmitApiPlayer),
+    Missing,
+    HashMismatch { actual_chart_hash: &'a str },
+}
+
+pub fn submit_player_response_for_job<'a>(
+    response: &'a GrooveStatsSubmitApiResponse,
+    player: &GrooveStatsSubmitPlayerJob,
+) -> GrooveStatsSubmitPlayerResponse<'a> {
+    let Some(player_response) = response.player_for_slot(player.slot) else {
+        return GrooveStatsSubmitPlayerResponse::Missing;
+    };
+    if !player_response.chart_hash.trim().is_empty()
+        && !player_response
+            .chart_hash
+            .eq_ignore_ascii_case(player.chart_hash.as_str())
+    {
+        return GrooveStatsSubmitPlayerResponse::HashMismatch {
+            actual_chart_hash: player_response.chart_hash.as_str(),
+        };
+    }
+    GrooveStatsSubmitPlayerResponse::Accepted(player_response)
+}
+
 #[derive(Debug)]
 pub struct GrooveStatsSubmitRequestSuccess {
     pub response: GrooveStatsSubmitApiResponse,
@@ -1244,6 +1917,12 @@ pub enum GrooveStatsSubmitRequestError {
     Http { status: u16, body_snippet: String },
     Decode { message: String },
     Api { message: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GrooveStatsSubmitError {
+    pub status: GrooveStatsSubmitUiStatus,
+    pub message: String,
 }
 
 pub fn submit_error_status_and_message(
@@ -1288,6 +1967,14 @@ pub fn submit_error_status_and_message(
     }
 }
 
+pub fn submit_error_from_request(
+    service_name: &str,
+    error: GrooveStatsSubmitRequestError,
+) -> GrooveStatsSubmitError {
+    let (status, message) = submit_error_status_and_message(service_name, &error);
+    GrooveStatsSubmitError { status, message }
+}
+
 pub fn submit_record_banner_from_api(
     response: &GrooveStatsSubmitApiPlayer,
     username: &str,
@@ -1317,6 +2004,151 @@ pub fn imported_player_score_from_submit_response(
             username,
             Some(comment),
         ),
+    }
+}
+
+pub fn event_progress_from_submit_response(
+    player: &GrooveStatsSubmitPlayerJob,
+    response: &GrooveStatsSubmitApiPlayer,
+) -> Vec<ItlEventProgress> {
+    let input = SubmitEventProgressInput {
+        result: response.result.clone(),
+        score_10000: player.score_10000,
+        rate_hundredths: player.rate_hundredths,
+        itl_score_hundredths: player.itl_score_hundredths,
+        itl: response
+            .itl
+            .as_ref()
+            .map(|event| submit_event_progress_from_api(event, event.itl_leaderboard.clone())),
+        srpg: response
+            .srpg
+            .as_ref()
+            .map(|event| submit_event_progress_from_api(event, event.srpg_leaderboard.clone())),
+    };
+    event_progress_from_submit(&input)
+}
+
+pub fn itl_unlock_folder_groups_from_submit_response<'a>(
+    player: &GrooveStatsSubmitPlayerJob,
+    response: &'a GrooveStatsSubmitApiPlayer,
+) -> Vec<&'a [String]> {
+    if player.itl_score_hundredths.is_none() {
+        return Vec::new();
+    }
+    response
+        .itl
+        .as_ref()
+        .and_then(|event| event.progress.as_ref())
+        .map(|progress| {
+            progress
+                .quests_completed
+                .iter()
+                .map(|quest| quest.song_download_folders.as_slice())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+pub fn unlock_events_from_submit_response<'a>(
+    player: &GrooveStatsSubmitPlayerJob,
+    response: &'a GrooveStatsSubmitApiPlayer,
+) -> Vec<&'a GrooveStatsSubmitApiEvent> {
+    let mut events = Vec::with_capacity(2);
+    if let Some(srpg) = response.srpg.as_ref() {
+        events.push(srpg);
+    }
+    if player.itl_score_hundredths.is_some()
+        && let Some(itl) = response.itl.as_ref()
+    {
+        events.push(itl);
+    }
+    events
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GrooveStatsUnlockDownload {
+    pub url: String,
+    pub download_name: String,
+    pub pack_name: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct GrooveStatsSubmitUnlockPlan {
+    pub itl_folder_groups: Vec<Vec<String>>,
+    pub downloads: Vec<GrooveStatsUnlockDownload>,
+}
+
+pub fn unlock_downloads_from_submit_event(
+    event: &GrooveStatsSubmitApiEvent,
+    profile_name: &str,
+    separate_by_player: bool,
+) -> Vec<GrooveStatsUnlockDownload> {
+    let Some(progress) = event.progress.as_ref() else {
+        return Vec::new();
+    };
+    let event_name = event_name_or_unknown(event.name.as_str());
+    let profile_name = if profile_name.trim().is_empty() {
+        "NoName"
+    } else {
+        profile_name.trim()
+    };
+
+    progress
+        .quests_completed
+        .iter()
+        .filter_map(|quest| {
+            let url = quest.song_download_url.trim();
+            if url.is_empty() {
+                return None;
+            }
+            let title = quest.title.trim();
+            let (download_name, pack_name) = if separate_by_player {
+                (
+                    format!("[{event_name}] {title} - {profile_name}"),
+                    format!("{event_name} Unlocks - {profile_name}"),
+                )
+            } else {
+                (
+                    format!("[{event_name}] {title}"),
+                    format!("{event_name} Unlocks"),
+                )
+            };
+            Some(GrooveStatsUnlockDownload {
+                url: url.to_string(),
+                download_name: download_name.trim_end().to_string(),
+                pack_name,
+            })
+        })
+        .collect()
+}
+
+pub fn submit_unlock_plan_from_response(
+    player: &GrooveStatsSubmitPlayerJob,
+    response: &GrooveStatsSubmitApiPlayer,
+    auto_download_unlocks: bool,
+    separate_unlocks_by_player: bool,
+) -> GrooveStatsSubmitUnlockPlan {
+    let itl_folder_groups = itl_unlock_folder_groups_from_submit_response(player, response)
+        .into_iter()
+        .map(|group| group.to_vec())
+        .collect();
+    let downloads = if auto_download_unlocks {
+        unlock_events_from_submit_response(player, response)
+            .into_iter()
+            .flat_map(|event| {
+                unlock_downloads_from_submit_event(
+                    event,
+                    player.profile_name.as_str(),
+                    separate_unlocks_by_player,
+                )
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+    GrooveStatsSubmitUnlockPlan {
+        itl_folder_groups,
+        downloads,
     }
 }
 
@@ -1371,6 +2203,134 @@ pub fn submit_score_request(
         response,
         body_snippet,
     })
+}
+
+pub fn submit_request(
+    job: &GrooveStatsSubmitRequest,
+    service: Service,
+    service_name: &str,
+) -> Result<GrooveStatsSubmitApiResponse, GrooveStatsSubmitError> {
+    match submit_score_request(
+        service,
+        &job.parts.headers,
+        &job.parts.query,
+        &job.parts.body,
+    ) {
+        Ok(success) => {
+            if success.body_snippet.is_empty() {
+                log::debug!("{service_name} submit success");
+            } else {
+                log::debug!(
+                    "{service_name} submit success body='{}'",
+                    success.body_snippet.as_str()
+                );
+            }
+            Ok(success.response)
+        }
+        Err(error) => Err(submit_error_from_request(service_name, error)),
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct GrooveStatsSubmitRunSummary {
+    pub accepted: usize,
+    pub rejected: usize,
+    pub failed: usize,
+}
+
+pub fn run_submit_request_with<S, A, P>(
+    job: GrooveStatsSubmitRequest,
+    service_name: &str,
+    submit: S,
+    mut accepted_player: A,
+    mut after_player: P,
+) -> GrooveStatsSubmitRunSummary
+where
+    S: FnOnce(
+        &GrooveStatsSubmitRequest,
+    ) -> Result<GrooveStatsSubmitApiResponse, GrooveStatsSubmitError>,
+    A: FnMut(&GrooveStatsSubmitPlayerJob, &GrooveStatsSubmitApiPlayer),
+    P: FnMut(&GrooveStatsSubmitPlayerJob),
+{
+    let mut summary = GrooveStatsSubmitRunSummary::default();
+    match submit(&job) {
+        Ok(response) => {
+            for player in &job.players {
+                let player_response = match submit_player_response_for_job(&response, player) {
+                    GrooveStatsSubmitPlayerResponse::Accepted(player_response) => player_response,
+                    GrooveStatsSubmitPlayerResponse::Missing => {
+                        summary.rejected += 1;
+                        reject_submit_player_response(player);
+                        log::warn!(
+                            "{service_name} submit response omitted player{} for {:?} ({}).",
+                            player.slot,
+                            player.side,
+                            player.chart_hash
+                        );
+                        after_player(player);
+                        continue;
+                    }
+                    GrooveStatsSubmitPlayerResponse::HashMismatch { actual_chart_hash } => {
+                        summary.rejected += 1;
+                        reject_submit_player_response(player);
+                        log::warn!(
+                            "{service_name} submit response hash mismatch for {:?}: expected {}, got {}.",
+                            player.side,
+                            player.chart_hash,
+                            actual_chart_hash
+                        );
+                        after_player(player);
+                        continue;
+                    }
+                };
+
+                summary.accepted += 1;
+                complete_submit_player_success(player, player_response);
+                accepted_player(player, player_response);
+                log::debug!(
+                    "{service_name} submit succeeded for {:?} ({}) result='{}'",
+                    player.side,
+                    player.chart_hash,
+                    player_response.result
+                );
+                after_player(player);
+            }
+        }
+        Err(err) => {
+            let status = err.status;
+            for player in &job.players {
+                summary.failed += 1;
+                complete_submit_player_failure(player, status);
+                log::warn!(
+                    "{service_name} submit failed for {:?} ({}) status={:?}: {}",
+                    player.side,
+                    player.chart_hash,
+                    status,
+                    err.message
+                );
+                after_player(player);
+            }
+        }
+    }
+    summary
+}
+
+pub fn spawn_submit_request(
+    job: GrooveStatsSubmitRequest,
+    service: Service,
+    service_name: &'static str,
+    accepted_player: fn(&GrooveStatsSubmitPlayerJob, &GrooveStatsSubmitApiPlayer),
+    after_player: fn(&GrooveStatsSubmitPlayerJob),
+) {
+    thread::spawn(move || {
+        run_submit_request_with(
+            job,
+            service_name,
+            |job| submit_request(job, service, service_name),
+            accepted_player,
+            after_player,
+        );
+    });
 }
 
 #[derive(Deserialize, Debug)]
@@ -1762,6 +2722,21 @@ mod tests {
             Service::GrooveStats
         );
         assert_eq!(Service::from_boogiestats_active(true), Service::BoogieStats);
+    }
+
+    #[test]
+    fn boogiestats_requires_both_service_flags() {
+        assert!(!boogiestats_active(false, false));
+        assert!(!boogiestats_active(false, true));
+        assert!(!boogiestats_active(true, false));
+        assert!(boogiestats_active(true, true));
+    }
+
+    #[test]
+    fn active_service_uses_boogiestats_only_when_enabled() {
+        assert_eq!(active_service(false, true), Service::GrooveStats);
+        assert_eq!(active_service(true, false), Service::GrooveStats);
+        assert_eq!(active_service(true, true), Service::BoogieStats);
     }
 
     #[test]
@@ -2838,6 +3813,117 @@ mod tests {
         }
     }
 
+    fn submit_player_job(itl_score_hundredths: Option<u32>) -> GrooveStatsSubmitPlayerJob {
+        GrooveStatsSubmitPlayerJob {
+            side: profile_data::PlayerSide::P1,
+            slot: 1,
+            chart_hash: "deadbeef".to_string(),
+            username: "PerfectTaste".to_string(),
+            profile_name: "Perfect Taste".to_string(),
+            profile_id: Some("profile-guid".to_string()),
+            token: 7,
+            itl_score_hundredths,
+            show_ex_score: true,
+            score_10000: 9876,
+            rate_hundredths: 150,
+            comment: "[DS], FA+".to_string(),
+        }
+    }
+
+    fn submit_player_with_unlocks() -> GrooveStatsSubmitApiPlayer {
+        serde_json::from_value(serde_json::json!({
+            "chartHash": "deadbeef",
+            "result": "improved",
+            "rpg": {
+                "name": "SRPG",
+                "progress": {
+                    "questsCompleted": [
+                        {
+                            "title": "SRPG Quest",
+                            "songDownloadUrl": "https://example.invalid/srpg.zip",
+                            "songDownloadFolders": ["SRPG Pack"]
+                        }
+                    ]
+                }
+            },
+            "itl": {
+                "name": "ITL",
+                "progress": {
+                    "questsCompleted": [
+                        {
+                            "title": "ITL Quest",
+                            "songDownloadUrl": "https://example.invalid/itl.zip",
+                            "songDownloadFolders": ["ITL Pack", "ITL Bonus"]
+                        },
+                        {
+                            "title": "ITL Empty",
+                            "songDownloadUrl": "",
+                            "songDownloadFolders": []
+                        }
+                    ]
+                }
+            }
+        }))
+        .expect("submit response with unlocks")
+    }
+
+    fn sample_player_payload() -> GrooveStatsSubmitPlayerPayload {
+        GrooveStatsSubmitPlayerPayload {
+            rate: 150,
+            score: 9_975,
+            judgment_counts: GrooveStatsJudgmentCounts {
+                fantastic_plus: 7,
+                fantastic: 12,
+                excellent: 18,
+                great: 4,
+                decent: Some(1),
+                way_off: Some(0),
+                miss: 2,
+                total_steps: 213,
+                holds_held: 5,
+                total_holds: 6,
+                mines_hit: 1,
+                total_mines: 8,
+                rolls_held: 2,
+                total_rolls: 3,
+            },
+            rescore_counts: GrooveStatsRescoreCounts {
+                fantastic_plus: 1,
+                fantastic: 2,
+                excellent: 3,
+                great: 4,
+                decent: 5,
+                way_off: 6,
+            },
+            used_cmod: true,
+            comment: "[DS], FA+, 99.50EX, 2w, 1m, C650".to_string(),
+            player_options: "{\"SpeedModType\":2,\"SpeedMod\":650}".to_string(),
+        }
+    }
+
+    fn sample_retry_draft(
+        hash: &str,
+        side: profile_data::PlayerSide,
+    ) -> GrooveStatsSubmitPlayerDraft {
+        let slot = if side == profile_data::PlayerSide::P1 {
+            1
+        } else {
+            2
+        };
+        GrooveStatsSubmitPlayerDraft::new(
+            side,
+            slot,
+            hash.to_string(),
+            "PerfectTaste".to_string(),
+            "PerfectTaste".to_string(),
+            None,
+            None,
+            true,
+            "test-api-key".to_string(),
+            sample_player_payload(),
+        )
+    }
+
     #[test]
     fn submit_record_banner_from_api_maps_response_rank() {
         let banner = submit_record_banner_from_api(
@@ -2906,6 +3992,461 @@ mod tests {
         );
         assert!(!imported.is_fail);
         assert!(imported.ex_evidence.proves_nonquint());
+    }
+
+    #[test]
+    fn itl_unlock_folder_groups_require_itl_submit_score() {
+        let response = submit_player_with_unlocks();
+        let groups = itl_unlock_folder_groups_from_submit_response(
+            &submit_player_job(Some(12_345)),
+            &response,
+        );
+        assert_eq!(
+            groups,
+            vec![
+                &["ITL Pack".to_string(), "ITL Bonus".to_string()][..],
+                &[][..]
+            ]
+        );
+
+        let groups =
+            itl_unlock_folder_groups_from_submit_response(&submit_player_job(None), &response);
+        assert!(groups.is_empty());
+    }
+
+    #[test]
+    fn unlock_events_from_submit_response_keeps_srpg_and_accepted_itl() {
+        let response = submit_player_with_unlocks();
+        let events =
+            unlock_events_from_submit_response(&submit_player_job(Some(12_345)), &response);
+        assert_eq!(
+            events
+                .iter()
+                .map(|event| event.name.as_str())
+                .collect::<Vec<_>>(),
+            ["SRPG", "ITL"]
+        );
+
+        let events = unlock_events_from_submit_response(&submit_player_job(None), &response);
+        assert_eq!(
+            events
+                .iter()
+                .map(|event| event.name.as_str())
+                .collect::<Vec<_>>(),
+            ["SRPG"]
+        );
+    }
+
+    #[test]
+    fn submit_unlock_plan_collects_itl_folders_and_downloads() {
+        let response = submit_player_with_unlocks();
+        let plan = submit_unlock_plan_from_response(
+            &submit_player_job(Some(12_345)),
+            &response,
+            true,
+            true,
+        );
+
+        assert_eq!(
+            plan.itl_folder_groups,
+            vec![
+                vec!["ITL Pack".to_string(), "ITL Bonus".to_string()],
+                Vec::<String>::new()
+            ]
+        );
+        assert_eq!(
+            plan.downloads
+                .iter()
+                .map(|download| (
+                    download.url.as_str(),
+                    download.download_name.as_str(),
+                    download.pack_name.as_str()
+                ))
+                .collect::<Vec<_>>(),
+            vec![
+                (
+                    "https://example.invalid/srpg.zip",
+                    "[SRPG] SRPG Quest - Perfect Taste",
+                    "SRPG Unlocks - Perfect Taste"
+                ),
+                (
+                    "https://example.invalid/itl.zip",
+                    "[ITL] ITL Quest - Perfect Taste",
+                    "ITL Unlocks - Perfect Taste"
+                )
+            ]
+        );
+    }
+
+    #[test]
+    fn submit_unlock_plan_respects_download_gate_and_itl_acceptance() {
+        let response = submit_player_with_unlocks();
+        let plan =
+            submit_unlock_plan_from_response(&submit_player_job(None), &response, false, false);
+
+        assert!(plan.itl_folder_groups.is_empty());
+        assert!(plan.downloads.is_empty());
+    }
+
+    #[test]
+    fn submit_ui_tracks_multiple_hashes_per_side() {
+        let side = profile_data::PlayerSide::P1;
+        let first = "gs-course-status-first";
+        let second = "gs-course-status-second";
+        reset_submit_ui_status(side, first);
+        reset_submit_ui_status(side, second);
+        reset_submit_event_ui(side, first);
+        reset_submit_event_ui(side, second);
+
+        set_submit_ui_status(side, first, 11, GrooveStatsSubmitUiStatus::Submitting);
+        set_submit_ui_status(side, second, 12, GrooveStatsSubmitUiStatus::Submitted);
+        arm_submit_event_ui(side, first, 11);
+        arm_submit_event_ui(side, second, 12);
+        update_submit_event_ui_if_token(
+            side,
+            first,
+            11,
+            Vec::new(),
+            Some(GrooveStatsSubmitRecordBanner::PersonalBest),
+        );
+        update_submit_event_ui_if_token(
+            side,
+            second,
+            12,
+            Vec::new(),
+            Some(GrooveStatsSubmitRecordBanner::WorldRecord),
+        );
+
+        assert_eq!(
+            submit_ui_status_for_side(first, side),
+            Some(GrooveStatsSubmitUiStatus::Submitting)
+        );
+        assert_eq!(
+            submit_ui_status_for_side(second, side),
+            Some(GrooveStatsSubmitUiStatus::Submitted)
+        );
+        assert_eq!(
+            submit_record_banner_for_side(first, side),
+            Some(GrooveStatsSubmitRecordBanner::PersonalBest)
+        );
+        assert_eq!(
+            submit_record_banner_for_side(second, side),
+            Some(GrooveStatsSubmitRecordBanner::WorldRecord)
+        );
+        assert!(update_submit_ui_status_if_token(
+            side,
+            first,
+            11,
+            GrooveStatsSubmitUiStatus::TimedOut,
+        ));
+        assert!(!update_submit_ui_status_if_token(
+            side,
+            first,
+            12,
+            GrooveStatsSubmitUiStatus::Submitted,
+        ));
+        assert_eq!(
+            submit_ui_status_for_side(first, side),
+            Some(GrooveStatsSubmitUiStatus::TimedOut)
+        );
+        assert_eq!(
+            submit_ui_status_for_side(second, side),
+            Some(GrooveStatsSubmitUiStatus::Submitted)
+        );
+
+        reset_submit_ui_status(side, first);
+        reset_submit_ui_status(side, second);
+        reset_submit_event_ui(side, first);
+        reset_submit_event_ui(side, second);
+    }
+
+    #[test]
+    fn submit_retry_tracks_multiple_hashes_per_side() {
+        let side = profile_data::PlayerSide::P1;
+        let first = "gs-course-retry-first";
+        let second = "gs-course-retry-second";
+        reset_submit_ui_status(side, first);
+        reset_submit_ui_status(side, second);
+        reset_submit_retry(side, first);
+        reset_submit_retry(side, second);
+
+        store_submit_retry(sample_retry_draft(first, side).retry_entry());
+        store_submit_retry(sample_retry_draft(second, side).retry_entry());
+        set_submit_ui_status(side, first, 21, GrooveStatsSubmitUiStatus::TimedOut);
+        set_submit_ui_status(side, second, 22, GrooveStatsSubmitUiStatus::NetworkError);
+
+        record_submit_failure(side, first, GrooveStatsSubmitUiStatus::TimedOut);
+        record_submit_failure(side, second, GrooveStatsSubmitUiStatus::NetworkError);
+
+        assert!(next_retry_remaining_secs(first, side).is_some());
+        assert!(next_retry_is_auto(first, side));
+        assert!(next_retry_remaining_secs(second, side).is_some());
+        assert!(!next_retry_is_auto(second, side));
+
+        reset_submit_retry(side, first);
+        assert_eq!(next_retry_remaining_secs(first, side), None);
+        assert!(next_retry_remaining_secs(second, side).is_some());
+
+        reset_submit_ui_status(side, first);
+        reset_submit_ui_status(side, second);
+        reset_submit_retry(side, first);
+        reset_submit_retry(side, second);
+    }
+
+    #[test]
+    fn begin_ready_submit_retry_request_arms_ui_and_consumes_retry() {
+        let side = profile_data::PlayerSide::P1;
+        let hash = "gs-begin-ready-retry";
+        reset_submit_ui_status(side, hash);
+        reset_submit_event_ui(side, hash);
+        reset_submit_retry(side, hash);
+
+        store_submit_retry(sample_retry_draft(hash, side).retry_entry());
+        set_submit_ui_status(side, hash, 31, GrooveStatsSubmitUiStatus::TimedOut);
+
+        let request = begin_ready_submit_retry_request(hash, side, true, "GrooveStats")
+            .expect("ready retry request");
+        assert_eq!(request.players.len(), 1);
+        assert_eq!(request.players[0].chart_hash, hash);
+        assert_eq!(
+            submit_ui_status_for_side(hash, side),
+            Some(GrooveStatsSubmitUiStatus::Submitting)
+        );
+        assert!(begin_ready_submit_retry_request(hash, side, true, "GrooveStats").is_none());
+
+        reset_submit_ui_status(side, hash);
+        reset_submit_event_ui(side, hash);
+        reset_submit_retry(side, hash);
+    }
+
+    #[test]
+    fn begin_submit_request_from_drafts_stores_retry_and_arms_ui() {
+        let side = profile_data::PlayerSide::P1;
+        let hash = "gs-begin-submit-draft";
+        reset_submit_ui_status(side, hash);
+        reset_submit_event_ui(side, hash);
+        reset_submit_retry(side, hash);
+
+        let request =
+            begin_submit_request_from_drafts(vec![sample_retry_draft(hash, side)]).unwrap();
+        assert_eq!(request.players.len(), 1);
+        assert_eq!(request.players[0].chart_hash, hash);
+        assert_eq!(
+            submit_ui_status_for_side(hash, side),
+            Some(GrooveStatsSubmitUiStatus::Submitting)
+        );
+
+        assert!(complete_submit_player_failure(
+            &request.players[0],
+            GrooveStatsSubmitUiStatus::TimedOut,
+        ));
+        assert!(next_retry_remaining_secs(hash, side).is_some());
+
+        reset_submit_ui_status(side, hash);
+        reset_submit_event_ui(side, hash);
+        reset_submit_retry(side, hash);
+    }
+
+    #[test]
+    fn run_submit_request_with_accepts_player_and_runs_after_hook() {
+        let side = profile_data::PlayerSide::P1;
+        let hash = "gs-run-submit-success";
+        reset_submit_ui_status(side, hash);
+        reset_submit_event_ui(side, hash);
+        reset_submit_retry(side, hash);
+
+        let request =
+            begin_submit_request_from_drafts(vec![sample_retry_draft(hash, side)]).unwrap();
+        let mut response_player = submit_player(
+            "improved",
+            vec![leaderboard_entry(3, "PerfectTaste", 9876.0, true)],
+            Vec::new(),
+        );
+        response_player.chart_hash = hash.to_string();
+        let mut accepted = 0;
+        let mut after = 0;
+        let summary = run_submit_request_with(
+            request,
+            "GrooveStats",
+            |_| {
+                Ok(GrooveStatsSubmitApiResponse {
+                    error: String::new(),
+                    player1: Some(response_player),
+                    player2: None,
+                })
+            },
+            |_, _| accepted += 1,
+            |_| after += 1,
+        );
+
+        assert_eq!(
+            summary,
+            GrooveStatsSubmitRunSummary {
+                accepted: 1,
+                rejected: 0,
+                failed: 0
+            }
+        );
+        assert_eq!(accepted, 1);
+        assert_eq!(after, 1);
+        assert_eq!(
+            submit_ui_status_for_side(hash, side),
+            Some(GrooveStatsSubmitUiStatus::Submitted)
+        );
+        assert_eq!(
+            submit_record_banner_for_side(hash, side),
+            Some(GrooveStatsSubmitRecordBanner::PersonalBest)
+        );
+
+        reset_submit_ui_status(side, hash);
+        reset_submit_event_ui(side, hash);
+        reset_submit_retry(side, hash);
+    }
+
+    #[test]
+    fn run_submit_request_with_records_request_failure_and_runs_after_hook() {
+        let side = profile_data::PlayerSide::P1;
+        let hash = "gs-run-submit-failure";
+        reset_submit_ui_status(side, hash);
+        reset_submit_event_ui(side, hash);
+        reset_submit_retry(side, hash);
+
+        let request =
+            begin_submit_request_from_drafts(vec![sample_retry_draft(hash, side)]).unwrap();
+        let mut accepted = 0;
+        let mut after = 0;
+        let summary = run_submit_request_with(
+            request,
+            "GrooveStats",
+            |_| {
+                Err(GrooveStatsSubmitError {
+                    status: GrooveStatsSubmitUiStatus::TimedOut,
+                    message: "timed out".to_string(),
+                })
+            },
+            |_, _| accepted += 1,
+            |_| after += 1,
+        );
+
+        assert_eq!(
+            summary,
+            GrooveStatsSubmitRunSummary {
+                accepted: 0,
+                rejected: 0,
+                failed: 1
+            }
+        );
+        assert_eq!(accepted, 0);
+        assert_eq!(after, 1);
+        assert_eq!(
+            submit_ui_status_for_side(hash, side),
+            Some(GrooveStatsSubmitUiStatus::TimedOut)
+        );
+        assert!(next_retry_remaining_secs(hash, side).is_some());
+
+        reset_submit_ui_status(side, hash);
+        reset_submit_event_ui(side, hash);
+        reset_submit_retry(side, hash);
+    }
+
+    #[test]
+    fn complete_submit_player_success_updates_ui_and_resets_retry() {
+        let side = profile_data::PlayerSide::P1;
+        let hash = "gs-complete-submit-success";
+        let mut player = submit_player_job(Some(12_345));
+        player.chart_hash = hash.to_string();
+        let response = submit_player(
+            "improved",
+            vec![leaderboard_entry(3, "PerfectTaste", 9876.0, true)],
+            Vec::new(),
+        );
+        reset_submit_ui_status(side, hash);
+        reset_submit_event_ui(side, hash);
+        reset_submit_retry(side, hash);
+
+        store_submit_retry(sample_retry_draft(hash, side).retry_entry());
+        set_submit_ui_status(side, hash, 3, GrooveStatsSubmitUiStatus::TimedOut);
+        record_submit_failure(side, hash, GrooveStatsSubmitUiStatus::TimedOut);
+        assert!(next_retry_remaining_secs(hash, side).is_some());
+        set_submit_ui_status(
+            side,
+            hash,
+            player.token,
+            GrooveStatsSubmitUiStatus::Submitting,
+        );
+        arm_submit_event_ui(side, hash, player.token);
+
+        assert!(complete_submit_player_success(&player, &response));
+        assert_eq!(
+            submit_ui_status_for_side(hash, side),
+            Some(GrooveStatsSubmitUiStatus::Submitted)
+        );
+        assert_eq!(
+            submit_record_banner_for_side(hash, side),
+            Some(GrooveStatsSubmitRecordBanner::PersonalBest)
+        );
+        assert_eq!(next_retry_remaining_secs(hash, side), None);
+
+        reset_submit_ui_status(side, hash);
+        reset_submit_event_ui(side, hash);
+        reset_submit_retry(side, hash);
+    }
+
+    #[test]
+    fn complete_submit_player_failure_records_retry() {
+        let side = profile_data::PlayerSide::P1;
+        let hash = "gs-complete-submit-failure";
+        let mut player = submit_player_job(None);
+        player.chart_hash = hash.to_string();
+        reset_submit_ui_status(side, hash);
+        reset_submit_retry(side, hash);
+
+        store_submit_retry(sample_retry_draft(hash, side).retry_entry());
+        set_submit_ui_status(
+            side,
+            hash,
+            player.token,
+            GrooveStatsSubmitUiStatus::Submitting,
+        );
+
+        assert!(complete_submit_player_failure(
+            &player,
+            GrooveStatsSubmitUiStatus::TimedOut
+        ));
+        assert_eq!(
+            submit_ui_status_for_side(hash, side),
+            Some(GrooveStatsSubmitUiStatus::TimedOut)
+        );
+        assert!(next_retry_remaining_secs(hash, side).is_some());
+
+        reset_submit_ui_status(side, hash);
+        reset_submit_retry(side, hash);
+    }
+
+    #[test]
+    fn reject_submit_player_response_marks_invalid_score() {
+        let side = profile_data::PlayerSide::P1;
+        let hash = "gs-reject-submit-response";
+        let mut player = submit_player_job(None);
+        player.chart_hash = hash.to_string();
+        reset_submit_ui_status(side, hash);
+
+        set_submit_ui_status(
+            side,
+            hash,
+            player.token,
+            GrooveStatsSubmitUiStatus::Submitting,
+        );
+
+        assert!(reject_submit_player_response(&player));
+        assert_eq!(
+            submit_ui_status_for_side(hash, side),
+            Some(GrooveStatsSubmitUiStatus::Rejected {
+                reason: RejectReason::InvalidScore
+            })
+        );
+
+        reset_submit_ui_status(side, hash);
     }
 
     #[test]

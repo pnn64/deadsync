@@ -8,12 +8,15 @@ use deadsync_rules::{
     timing::{ScatterPoint, WindowCounts},
 };
 use deadsync_score::{
-    ArrowCloudLeaderboard, ArrowCloudPaneKind, ArrowCloudScore, ArrowCloudScores,
-    ArrowCloudSubmitStats, ArrowCloudSubmitUiStatus, ArrowCloudUserContext, LeaderboardEntry,
-    LeaderboardPane, RejectReason, arrowcloud_empty_hard_ex_leaderboard_pane,
-    arrowcloud_entry_flags, arrowcloud_hard_ex_leaderboard_pane, arrowcloud_leaderboard_entry,
+    ArrowCloudAutosubmitLog, ArrowCloudAutosubmitLogLevel, ArrowCloudLeaderboard,
+    ArrowCloudPaneKind, ArrowCloudScore, ArrowCloudScores, ArrowCloudSubmitStats,
+    ArrowCloudSubmitUiStatus, ArrowCloudUserContext, LeaderboardEntry, LeaderboardPane,
+    RejectReason, SUBMIT_RETRY_MAX_ATTEMPTS, SubmitRetryState,
+    arrowcloud_empty_hard_ex_leaderboard_pane, arrowcloud_entry_flags,
+    arrowcloud_hard_ex_leaderboard_pane, arrowcloud_leaderboard_entry,
     arrowcloud_pane_kind_from_type, arrowcloud_score_from_retrieve_fields,
-    arrowcloud_target_user_ids, arrowcloud_user_id, set_arrowcloud_score_for_leaderboard,
+    arrowcloud_submit_ui_status, arrowcloud_target_user_ids, arrowcloud_user_id,
+    set_arrowcloud_score_for_leaderboard,
 };
 use serde::Deserializer;
 use serde::de::DeserializeOwned;
@@ -23,6 +26,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{LazyLock, Mutex};
 use std::thread;
+use std::time::Instant;
 
 const ARROWCLOUD_API_BASE_URL: &str = "https://api.arrowcloud.dance";
 const ARROWCLOUD_USER_URL: &str = "https://api.arrowcloud.dance/user";
@@ -34,6 +38,8 @@ pub const ARROWCLOUD_BULK_MAX_HASHES: usize = 1000;
 pub const ARROWCLOUD_LIFEBAR_POINTS: usize = 100;
 pub const ARROWCLOUD_BODY_VERSION: &str = "1.4";
 pub const ARROWCLOUD_ENGINE_NAME: &str = "DeadSync";
+const ARROWCLOUD_RETRY_MAX_ATTEMPTS: u8 = SUBMIT_RETRY_MAX_ATTEMPTS;
+const ARROWCLOUD_SUBMIT_RETRY_TRACKED_PER_SIDE: usize = 128;
 const ARROWCLOUD_ACCEL_NAMES: [&str; 5] = ["Boost", "Brake", "Wave", "Expand", "Boomerang"];
 const ARROWCLOUD_EFFECT_NAMES: [&str; 10] = [
     "Drunk",
@@ -48,6 +54,45 @@ const ARROWCLOUD_EFFECT_NAMES: [&str; 10] = [
     "Beat",
 ];
 const ARROWCLOUD_APPEARANCE_NAMES: [&str; 5] = ["Hidden", "Sudden", "Stealth", "Blink", "R.Vanish"];
+
+#[inline(always)]
+pub fn warn_submit_skip(side: profile_data::PlayerSide, chart_hash: &str, reason: &str) {
+    log::warn!(
+        "Skipping ArrowCloud submit for {:?} ({}): {}.",
+        side,
+        chart_hash,
+        reason
+    );
+}
+
+#[inline(always)]
+pub fn log_global_submit_skip(log: ArrowCloudAutosubmitLog) {
+    match log.level {
+        ArrowCloudAutosubmitLogLevel::Debug => {
+            log::debug!("Skipping ArrowCloud submit: {}.", log.reason)
+        }
+        ArrowCloudAutosubmitLogLevel::Warn => {
+            log::warn!("Skipping ArrowCloud submit: {}.", log.reason)
+        }
+    }
+}
+
+#[inline(always)]
+pub fn log_player_submit_skip(
+    side: profile_data::PlayerSide,
+    chart_hash: &str,
+    log: ArrowCloudAutosubmitLog,
+) {
+    match log.level {
+        ArrowCloudAutosubmitLogLevel::Debug => log::debug!(
+            "Skipping ArrowCloud submit for {:?} ({}): {}.",
+            side,
+            chart_hash,
+            log.reason
+        ),
+        ArrowCloudAutosubmitLogLevel::Warn => warn_submit_skip(side, chart_hash, log.reason),
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConnectionError {
@@ -180,6 +225,158 @@ pub enum ArrowCloudSubmitRequestError {
     Http { status: u16, body_snippet: String },
 }
 
+#[derive(Debug, Clone)]
+pub struct ArrowCloudSubmitJob {
+    pub side: profile_data::PlayerSide,
+    pub api_key: String,
+    pub token: u64,
+    pub payload: ArrowCloudPayload,
+    /// Active local profile id whose AC cache should be updated on submit
+    /// success. `None` if the submitting side is in Guest mode.
+    pub profile_id: Option<String>,
+    /// Gameplay-computed score percents (0..=100) captured at job creation
+    /// time so the AC cache can be populated without waiting for a server echo.
+    pub itg_percent: f64,
+    pub ex_percent: f64,
+    pub hard_ex_percent: f64,
+    pub is_fail: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct ArrowCloudSubmitDraft {
+    pub side: profile_data::PlayerSide,
+    pub api_key: String,
+    pub payload: ArrowCloudPayload,
+    /// Active local profile id whose AC cache should be updated on submit
+    /// success. `None` if the submitting side is in Guest mode.
+    pub profile_id: Option<String>,
+    /// Gameplay-computed score percents (0..=100) captured at draft creation
+    /// time so retries and cache writes preserve the original result.
+    pub itg_percent: f64,
+    pub ex_percent: f64,
+    pub hard_ex_percent: f64,
+    pub is_fail: bool,
+}
+
+impl ArrowCloudSubmitDraft {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        side: profile_data::PlayerSide,
+        api_key: String,
+        payload: ArrowCloudPayload,
+        profile_id: Option<String>,
+        itg_percent: f64,
+        ex_percent: f64,
+        hard_ex_percent: f64,
+        is_fail: bool,
+    ) -> Self {
+        Self {
+            side,
+            api_key,
+            payload,
+            profile_id,
+            itg_percent,
+            ex_percent,
+            hard_ex_percent,
+            is_fail,
+        }
+    }
+
+    pub fn retry_entry(&self) -> ArrowCloudSubmitRetryEntry {
+        ArrowCloudSubmitRetryEntry::new(
+            self.side,
+            self.api_key.clone(),
+            self.payload.clone(),
+            self.profile_id.clone(),
+            self.itg_percent,
+            self.ex_percent,
+            self.hard_ex_percent,
+            self.is_fail,
+        )
+    }
+
+    pub fn submit_job(self, token: u64) -> ArrowCloudSubmitJob {
+        ArrowCloudSubmitJob {
+            side: self.side,
+            api_key: self.api_key,
+            token,
+            payload: self.payload,
+            profile_id: self.profile_id,
+            itg_percent: self.itg_percent,
+            ex_percent: self.ex_percent,
+            hard_ex_percent: self.hard_ex_percent,
+            is_fail: self.is_fail,
+        }
+    }
+}
+
+pub fn begin_submit_jobs_from_drafts(
+    drafts: Vec<ArrowCloudSubmitDraft>,
+) -> Vec<ArrowCloudSubmitJob> {
+    drafts
+        .into_iter()
+        .map(|draft| {
+            store_submit_retry(draft.retry_entry());
+            let side = draft.side;
+            let chart_hash = draft.payload.hash.clone();
+            let token = next_submit_ui_token();
+            set_submit_ui_status(
+                side,
+                chart_hash.as_str(),
+                token,
+                ArrowCloudSubmitUiStatus::Submitting,
+            );
+            draft.submit_job(token)
+        })
+        .collect()
+}
+
+impl ArrowCloudSubmitJob {
+    pub fn new(
+        side: profile_data::PlayerSide,
+        api_key: String,
+        token: u64,
+        payload: ArrowCloudPayload,
+        profile_id: Option<String>,
+        itg_percent: f64,
+        ex_percent: f64,
+        hard_ex_percent: f64,
+        is_fail: bool,
+    ) -> Self {
+        Self {
+            side,
+            api_key,
+            token,
+            payload,
+            profile_id,
+            itg_percent,
+            ex_percent,
+            hard_ex_percent,
+            is_fail,
+        }
+    }
+
+    pub fn from_retry_entry(entry: ArrowCloudSubmitRetryEntry, token: u64) -> Self {
+        Self {
+            side: entry.side,
+            api_key: entry.api_key,
+            token,
+            payload: entry.payload,
+            profile_id: entry.profile_id,
+            itg_percent: entry.itg_percent,
+            ex_percent: entry.ex_percent,
+            hard_ex_percent: entry.hard_ex_percent,
+            is_fail: entry.is_fail,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArrowCloudSubmitError {
+    pub status: ArrowCloudSubmitUiStatus,
+    pub message: String,
+}
+
 pub fn submit_error_status_and_message(
     error: &ArrowCloudSubmitRequestError,
 ) -> (ArrowCloudSubmitUiStatus, String) {
@@ -216,6 +413,403 @@ pub fn submit_error_status_and_message(
             (status_kind, message)
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct ArrowCloudSubmitRetryEntry {
+    pub side: profile_data::PlayerSide,
+    pub api_key: String,
+    pub payload: ArrowCloudPayload,
+    pub profile_id: Option<String>,
+    pub itg_percent: f64,
+    pub ex_percent: f64,
+    pub hard_ex_percent: f64,
+    pub is_fail: bool,
+    retry_attempt: u8,
+    next_retry_at: Option<Instant>,
+}
+
+impl ArrowCloudSubmitRetryEntry {
+    pub fn new(
+        side: profile_data::PlayerSide,
+        api_key: String,
+        payload: ArrowCloudPayload,
+        profile_id: Option<String>,
+        itg_percent: f64,
+        ex_percent: f64,
+        hard_ex_percent: f64,
+        is_fail: bool,
+    ) -> Self {
+        Self {
+            side,
+            api_key,
+            payload,
+            profile_id,
+            itg_percent,
+            ex_percent,
+            hard_ex_percent,
+            is_fail,
+            retry_attempt: 0,
+            next_retry_at: None,
+        }
+    }
+}
+
+pub fn arrowcloud_submit_error_from_request(
+    error: ArrowCloudSubmitRequestError,
+) -> ArrowCloudSubmitError {
+    let (status, message) = submit_error_status_and_message(&error);
+    ArrowCloudSubmitError { status, message }
+}
+
+pub fn submit_job_request(job: &ArrowCloudSubmitJob) -> Result<(), ArrowCloudSubmitError> {
+    match submit_score_request(job.api_key.as_str(), &job.payload) {
+        Ok(success) => {
+            if success.body_snippet.is_empty() {
+                log::debug!(
+                    "ArrowCloud submit success for {:?} ({}) status={}",
+                    job.side,
+                    job.payload.hash,
+                    success.status
+                );
+            } else {
+                log::debug!(
+                    "ArrowCloud submit success for {:?} ({}) status={} body='{}'",
+                    job.side,
+                    job.payload.hash,
+                    success.status,
+                    success.body_snippet.as_str()
+                );
+            }
+            Ok(())
+        }
+        Err(error) => Err(arrowcloud_submit_error_from_request(error)),
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ArrowCloudSubmitRunSummary {
+    pub succeeded: usize,
+    pub failed: usize,
+}
+
+static ARROWCLOUD_SUBMIT_RETRY: LazyLock<Mutex<SubmitRetryState<ArrowCloudSubmitRetryEntry>>> =
+    LazyLock::new(|| Mutex::new(SubmitRetryState::default()));
+
+#[inline(always)]
+pub fn reset_submit_ui_status(side: profile_data::PlayerSide, chart_hash: &str) {
+    deadsync_score::arrowcloud_reset_submit_ui_status(
+        profile_data::player_side_index(side),
+        chart_hash,
+    );
+}
+
+#[inline(always)]
+pub fn set_submit_ui_status(
+    side: profile_data::PlayerSide,
+    chart_hash: &str,
+    token: u64,
+    status: ArrowCloudSubmitUiStatus,
+) {
+    deadsync_score::arrowcloud_set_submit_ui_status(
+        profile_data::player_side_index(side),
+        chart_hash,
+        token,
+        status,
+    );
+}
+
+#[inline(always)]
+pub fn update_submit_ui_status_if_token(
+    side: profile_data::PlayerSide,
+    chart_hash: &str,
+    token: u64,
+    status: ArrowCloudSubmitUiStatus,
+) -> bool {
+    deadsync_score::arrowcloud_update_submit_ui_status_if_token(
+        profile_data::player_side_index(side),
+        chart_hash,
+        token,
+        status,
+    )
+}
+
+#[inline(always)]
+pub fn next_submit_ui_token() -> u64 {
+    deadsync_score::arrowcloud_next_submit_ui_token()
+}
+
+#[inline(always)]
+pub fn submit_ui_status_for_side(
+    chart_hash: &str,
+    side: profile_data::PlayerSide,
+) -> Option<ArrowCloudSubmitUiStatus> {
+    arrowcloud_submit_ui_status(profile_data::player_side_index(side), chart_hash)
+}
+
+#[inline(always)]
+pub fn reset_submit_retry(side: profile_data::PlayerSide, chart_hash: &str) {
+    ARROWCLOUD_SUBMIT_RETRY.lock().unwrap().reset_by_key(
+        profile_data::player_side_index(side),
+        chart_hash,
+        |entry| entry.payload.hash.as_str(),
+    );
+}
+
+#[inline(always)]
+pub fn store_submit_retry(entry: ArrowCloudSubmitRetryEntry) {
+    let side = entry.side;
+    ARROWCLOUD_SUBMIT_RETRY.lock().unwrap().upsert_by_key(
+        profile_data::player_side_index(side),
+        entry,
+        |entry| entry.payload.hash.as_str(),
+        ARROWCLOUD_SUBMIT_RETRY_TRACKED_PER_SIDE,
+    );
+}
+
+#[inline(always)]
+pub fn take_ready_submit_retry(
+    chart_hash: &str,
+    side: profile_data::PlayerSide,
+    manual: bool,
+) -> Option<ArrowCloudSubmitRetryEntry> {
+    ARROWCLOUD_SUBMIT_RETRY.lock().unwrap().take_ready_by_key(
+        profile_data::player_side_index(side),
+        chart_hash,
+        manual,
+        Instant::now(),
+        |entry| entry.payload.hash.as_str(),
+        |entry| &mut entry.next_retry_at,
+    )
+}
+
+pub fn take_ready_submit_retry_job(
+    chart_hash: &str,
+    side: profile_data::PlayerSide,
+    manual: bool,
+    token: u64,
+) -> Option<ArrowCloudSubmitJob> {
+    take_ready_submit_retry(chart_hash, side, manual)
+        .map(|entry| ArrowCloudSubmitJob::from_retry_entry(entry, token))
+}
+
+pub fn begin_ready_submit_retry_job(
+    chart_hash: &str,
+    side: profile_data::PlayerSide,
+    manual: bool,
+) -> Option<ArrowCloudSubmitJob> {
+    let hash = chart_hash.trim();
+    if hash.is_empty() {
+        return None;
+    }
+    if !submit_ui_status_for_side(hash, side)?.can_retry() {
+        return None;
+    }
+    let token = next_submit_ui_token();
+    let job = take_ready_submit_retry_job(hash, side, manual, token)?;
+    set_submit_ui_status(side, hash, token, ArrowCloudSubmitUiStatus::Submitting);
+    log::debug!("Retrying ArrowCloud submit for {:?} ({}).", side, hash);
+    Some(job)
+}
+
+pub fn retry_submit_if_enabled(
+    enabled: bool,
+    chart_hash: &str,
+    side: profile_data::PlayerSide,
+    manual: bool,
+    cache_success: fn(&ArrowCloudSubmitJob),
+    after_submit: fn(&ArrowCloudSubmitJob),
+) -> bool {
+    if !enabled {
+        return false;
+    }
+    let Some(job) = begin_ready_submit_retry_job(chart_hash, side, manual) else {
+        return false;
+    };
+    spawn_submit_jobs(vec![job], cache_success, after_submit);
+    true
+}
+
+pub fn tick_auto_submit_retries_if_enabled(
+    enabled: bool,
+    cache_success: fn(&ArrowCloudSubmitJob),
+    after_submit: fn(&ArrowCloudSubmitJob),
+) -> bool {
+    let mut fired = false;
+    for (hash, side, _) in due_auto_submit_retries() {
+        if retry_submit_if_enabled(
+            enabled,
+            hash.as_str(),
+            side,
+            false,
+            cache_success,
+            after_submit,
+        ) {
+            fired = true;
+        }
+    }
+    fired
+}
+
+pub fn complete_submit_job_success(job: &ArrowCloudSubmitJob) -> bool {
+    let accepted = update_submit_ui_status_if_token(
+        job.side,
+        job.payload.hash.as_str(),
+        job.token,
+        ArrowCloudSubmitUiStatus::Submitted,
+    );
+    if accepted {
+        reset_submit_retry(job.side, job.payload.hash.as_str());
+    }
+    accepted
+}
+
+pub fn complete_submit_job_failure(
+    job: &ArrowCloudSubmitJob,
+    status: ArrowCloudSubmitUiStatus,
+) -> bool {
+    let accepted =
+        update_submit_ui_status_if_token(job.side, job.payload.hash.as_str(), job.token, status);
+    if accepted {
+        record_submit_failure(job.side, job.payload.hash.as_str(), status);
+    }
+    accepted
+}
+
+pub fn run_submit_jobs_with<S, C, A>(
+    jobs: Vec<ArrowCloudSubmitJob>,
+    mut submit_job: S,
+    mut cache_success: C,
+    mut after_submit: A,
+) -> ArrowCloudSubmitRunSummary
+where
+    S: FnMut(&ArrowCloudSubmitJob) -> Result<(), ArrowCloudSubmitError>,
+    C: FnMut(&ArrowCloudSubmitJob),
+    A: FnMut(&ArrowCloudSubmitJob),
+{
+    let mut summary = ArrowCloudSubmitRunSummary::default();
+    for job in jobs {
+        match submit_job(&job) {
+            Ok(()) => {
+                summary.succeeded += 1;
+                if complete_submit_job_success(&job) {
+                    cache_success(&job);
+                }
+            }
+            Err(err) => {
+                summary.failed += 1;
+                complete_submit_job_failure(&job, err.status);
+                log::warn!(
+                    "ArrowCloud submit failed for {:?} ({}) status={:?}: {}",
+                    job.side,
+                    job.payload.hash,
+                    err.status,
+                    err.message
+                );
+            }
+        }
+        after_submit(&job);
+    }
+    summary
+}
+
+pub fn spawn_submit_jobs(
+    jobs: Vec<ArrowCloudSubmitJob>,
+    cache_success: fn(&ArrowCloudSubmitJob),
+    after_submit: fn(&ArrowCloudSubmitJob),
+) {
+    thread::spawn(move || {
+        run_submit_jobs_with(jobs, submit_job_request, cache_success, after_submit);
+    });
+}
+
+#[inline(always)]
+pub fn record_submit_failure(
+    side: profile_data::PlayerSide,
+    chart_hash: &str,
+    status: ArrowCloudSubmitUiStatus,
+) {
+    ARROWCLOUD_SUBMIT_RETRY
+        .lock()
+        .unwrap()
+        .record_failure_by_key(
+            profile_data::player_side_index(side),
+            chart_hash,
+            status.can_retry(),
+            ARROWCLOUD_RETRY_MAX_ATTEMPTS,
+            Instant::now(),
+            |entry| entry.payload.hash.as_str(),
+            |entry| &mut entry.retry_attempt,
+            |entry| &mut entry.next_retry_at,
+        );
+}
+
+#[inline(always)]
+pub fn next_retry_remaining_secs(chart_hash: &str, side: profile_data::PlayerSide) -> Option<u32> {
+    let hash = chart_hash.trim();
+    if hash.is_empty() {
+        return None;
+    }
+    ARROWCLOUD_SUBMIT_RETRY
+        .lock()
+        .unwrap()
+        .remaining_secs_by_key(
+            profile_data::player_side_index(side),
+            hash,
+            Instant::now(),
+            |entry| entry.payload.hash.as_str(),
+            |entry| entry.next_retry_at,
+        )
+}
+
+#[inline(always)]
+pub fn next_retry_is_auto(chart_hash: &str, side: profile_data::PlayerSide) -> bool {
+    let hash = chart_hash.trim();
+    if hash.is_empty() {
+        return false;
+    }
+    let attempt = {
+        let lock = ARROWCLOUD_SUBMIT_RETRY.lock().unwrap();
+        let Some(attempt) = lock.retry_attempt_by_key(
+            profile_data::player_side_index(side),
+            hash,
+            |entry| entry.payload.hash.as_str(),
+            |entry| entry.retry_attempt,
+        ) else {
+            return false;
+        };
+        attempt
+    };
+    if attempt >= ARROWCLOUD_RETRY_MAX_ATTEMPTS {
+        return false;
+    }
+    matches!(
+        arrowcloud_submit_ui_status(profile_data::player_side_index(side), hash),
+        Some(s) if s.is_auto_retryable()
+    )
+}
+
+#[inline(always)]
+pub fn due_auto_submit_retries() -> Vec<(String, profile_data::PlayerSide, u8)> {
+    let due = {
+        let lock = ARROWCLOUD_SUBMIT_RETRY.lock().unwrap();
+        lock.due_retries(
+            Instant::now(),
+            |entry| entry.payload.hash.as_str(),
+            |entry| entry.side,
+            |entry| entry.retry_attempt,
+            |entry| entry.next_retry_at,
+        )
+    };
+    due.into_iter()
+        .filter(|(hash, side, attempt)| {
+            *attempt < ARROWCLOUD_RETRY_MAX_ATTEMPTS
+                && matches!(
+                    arrowcloud_submit_ui_status(profile_data::player_side_index(*side), hash),
+                    Some(status) if status.is_auto_retryable()
+                )
+        })
+        .collect()
 }
 
 pub fn submit_score_request(
@@ -2381,6 +2975,254 @@ mod tests {
         );
     }
 
+    #[test]
+    fn submit_ui_tracks_multiple_hashes_per_side() {
+        let side = profile_data::PlayerSide::P1;
+        let first = "ac-course-status-first";
+        let second = "ac-course-status-second";
+        reset_submit_ui_status(side, first);
+        reset_submit_ui_status(side, second);
+
+        set_submit_ui_status(side, first, 11, ArrowCloudSubmitUiStatus::Submitting);
+        set_submit_ui_status(side, second, 12, ArrowCloudSubmitUiStatus::Submitted);
+
+        assert_eq!(
+            submit_ui_status_for_side(first, side),
+            Some(ArrowCloudSubmitUiStatus::Submitting)
+        );
+        assert_eq!(
+            submit_ui_status_for_side(second, side),
+            Some(ArrowCloudSubmitUiStatus::Submitted)
+        );
+        assert!(update_submit_ui_status_if_token(
+            side,
+            first,
+            11,
+            ArrowCloudSubmitUiStatus::TimedOut,
+        ));
+        assert!(!update_submit_ui_status_if_token(
+            side,
+            first,
+            12,
+            ArrowCloudSubmitUiStatus::Submitted,
+        ));
+        assert_eq!(
+            submit_ui_status_for_side(first, side),
+            Some(ArrowCloudSubmitUiStatus::TimedOut)
+        );
+        assert_eq!(
+            submit_ui_status_for_side(second, side),
+            Some(ArrowCloudSubmitUiStatus::Submitted)
+        );
+
+        reset_submit_ui_status(side, first);
+        reset_submit_ui_status(side, second);
+    }
+
+    #[test]
+    fn submit_retry_tracks_multiple_hashes_per_side() {
+        let side = profile_data::PlayerSide::P1;
+        let first = "ac-course-retry-first";
+        let second = "ac-course-retry-second";
+        reset_submit_ui_status(side, first);
+        reset_submit_ui_status(side, second);
+        reset_submit_retry(side, first);
+        reset_submit_retry(side, second);
+
+        store_submit_retry(sample_submit_draft(first, side).retry_entry());
+        store_submit_retry(sample_submit_draft(second, side).retry_entry());
+        set_submit_ui_status(side, first, 21, ArrowCloudSubmitUiStatus::TimedOut);
+        set_submit_ui_status(side, second, 22, ArrowCloudSubmitUiStatus::NetworkError);
+
+        record_submit_failure(side, first, ArrowCloudSubmitUiStatus::TimedOut);
+        record_submit_failure(side, second, ArrowCloudSubmitUiStatus::NetworkError);
+
+        assert!(next_retry_remaining_secs(first, side).is_some());
+        assert!(next_retry_is_auto(first, side));
+        assert!(next_retry_remaining_secs(second, side).is_some());
+        assert!(!next_retry_is_auto(second, side));
+
+        reset_submit_retry(side, first);
+        assert_eq!(next_retry_remaining_secs(first, side), None);
+        assert!(next_retry_remaining_secs(second, side).is_some());
+
+        reset_submit_ui_status(side, first);
+        reset_submit_ui_status(side, second);
+        reset_submit_retry(side, first);
+        reset_submit_retry(side, second);
+    }
+
+    #[test]
+    fn begin_ready_submit_retry_job_arms_ui_and_consumes_retry() {
+        let side = profile_data::PlayerSide::P1;
+        let hash = "ac-begin-ready-retry";
+        reset_submit_ui_status(side, hash);
+        reset_submit_retry(side, hash);
+
+        store_submit_retry(sample_submit_draft(hash, side).retry_entry());
+        set_submit_ui_status(side, hash, 31, ArrowCloudSubmitUiStatus::TimedOut);
+
+        let job = begin_ready_submit_retry_job(hash, side, true).expect("ready retry job");
+        assert_eq!(job.payload.hash, hash);
+        assert_eq!(
+            submit_ui_status_for_side(hash, side),
+            Some(ArrowCloudSubmitUiStatus::Submitting)
+        );
+        assert!(begin_ready_submit_retry_job(hash, side, true).is_none());
+
+        reset_submit_ui_status(side, hash);
+        reset_submit_retry(side, hash);
+    }
+
+    #[test]
+    fn begin_submit_jobs_from_drafts_stores_retry_and_sets_ui() {
+        let side = profile_data::PlayerSide::P1;
+        let hash = "ac-begin-submit-draft";
+        reset_submit_ui_status(side, hash);
+        reset_submit_retry(side, hash);
+
+        let jobs = begin_submit_jobs_from_drafts(vec![sample_submit_draft(hash, side)]);
+        assert_eq!(jobs.len(), 1);
+        assert_eq!(jobs[0].payload.hash, hash);
+        assert_eq!(
+            submit_ui_status_for_side(hash, side),
+            Some(ArrowCloudSubmitUiStatus::Submitting)
+        );
+
+        assert!(complete_submit_job_failure(
+            &jobs[0],
+            ArrowCloudSubmitUiStatus::TimedOut
+        ));
+        assert!(next_retry_remaining_secs(hash, side).is_some());
+
+        reset_submit_ui_status(side, hash);
+        reset_submit_retry(side, hash);
+    }
+
+    #[test]
+    fn complete_submit_job_success_updates_ui_and_resets_retry() {
+        let side = profile_data::PlayerSide::P1;
+        let hash = "ac-complete-success";
+        let job = sample_submit_draft(hash, side).submit_job(41);
+        reset_submit_ui_status(side, hash);
+        reset_submit_retry(side, hash);
+
+        store_submit_retry(sample_submit_draft(hash, side).retry_entry());
+        set_submit_ui_status(side, hash, 9, ArrowCloudSubmitUiStatus::TimedOut);
+        record_submit_failure(side, hash, ArrowCloudSubmitUiStatus::TimedOut);
+        assert!(next_retry_remaining_secs(hash, side).is_some());
+        set_submit_ui_status(side, hash, job.token, ArrowCloudSubmitUiStatus::Submitting);
+
+        assert!(complete_submit_job_success(&job));
+        assert_eq!(
+            submit_ui_status_for_side(hash, side),
+            Some(ArrowCloudSubmitUiStatus::Submitted)
+        );
+        assert_eq!(next_retry_remaining_secs(hash, side), None);
+
+        reset_submit_ui_status(side, hash);
+        reset_submit_retry(side, hash);
+    }
+
+    #[test]
+    fn complete_submit_job_failure_records_retry() {
+        let side = profile_data::PlayerSide::P1;
+        let hash = "ac-complete-failure";
+        let job = sample_submit_draft(hash, side).submit_job(42);
+        reset_submit_ui_status(side, hash);
+        reset_submit_retry(side, hash);
+
+        store_submit_retry(sample_submit_draft(hash, side).retry_entry());
+        set_submit_ui_status(side, hash, job.token, ArrowCloudSubmitUiStatus::Submitting);
+
+        assert!(complete_submit_job_failure(
+            &job,
+            ArrowCloudSubmitUiStatus::TimedOut
+        ));
+        assert_eq!(
+            submit_ui_status_for_side(hash, side),
+            Some(ArrowCloudSubmitUiStatus::TimedOut)
+        );
+        assert!(next_retry_remaining_secs(hash, side).is_some());
+
+        reset_submit_ui_status(side, hash);
+        reset_submit_retry(side, hash);
+    }
+
+    #[test]
+    fn run_submit_jobs_with_caches_success_and_runs_after_hook() {
+        let side = profile_data::PlayerSide::P1;
+        let hash = "ac-run-submit-success";
+        let job = sample_submit_draft(hash, side).submit_job(51);
+        reset_submit_ui_status(side, hash);
+        reset_submit_retry(side, hash);
+        set_submit_ui_status(side, hash, job.token, ArrowCloudSubmitUiStatus::Submitting);
+
+        let mut cached = 0;
+        let mut after = 0;
+        let summary = run_submit_jobs_with(vec![job], |_| Ok(()), |_| cached += 1, |_| after += 1);
+
+        assert_eq!(
+            summary,
+            ArrowCloudSubmitRunSummary {
+                succeeded: 1,
+                failed: 0
+            }
+        );
+        assert_eq!(cached, 1);
+        assert_eq!(after, 1);
+        assert_eq!(
+            submit_ui_status_for_side(hash, side),
+            Some(ArrowCloudSubmitUiStatus::Submitted)
+        );
+
+        reset_submit_ui_status(side, hash);
+        reset_submit_retry(side, hash);
+    }
+
+    #[test]
+    fn run_submit_jobs_with_records_failure_and_runs_after_hook() {
+        let side = profile_data::PlayerSide::P1;
+        let hash = "ac-run-submit-failure";
+        let job = sample_submit_draft(hash, side).submit_job(52);
+        reset_submit_ui_status(side, hash);
+        reset_submit_retry(side, hash);
+        store_submit_retry(sample_submit_draft(hash, side).retry_entry());
+        set_submit_ui_status(side, hash, job.token, ArrowCloudSubmitUiStatus::Submitting);
+
+        let mut cached = 0;
+        let mut after = 0;
+        let summary = run_submit_jobs_with(
+            vec![job],
+            |_| {
+                Err(ArrowCloudSubmitError {
+                    status: ArrowCloudSubmitUiStatus::TimedOut,
+                    message: "timed out".to_string(),
+                })
+            },
+            |_| cached += 1,
+            |_| after += 1,
+        );
+
+        assert_eq!(
+            summary,
+            ArrowCloudSubmitRunSummary {
+                succeeded: 0,
+                failed: 1
+            }
+        );
+        assert_eq!(cached, 0);
+        assert_eq!(after, 1);
+        assert_eq!(
+            submit_ui_status_for_side(hash, side),
+            Some(ArrowCloudSubmitUiStatus::TimedOut)
+        );
+        assert!(next_retry_remaining_secs(hash, side).is_some());
+
+        reset_submit_ui_status(side, hash);
+        reset_submit_retry(side, hash);
+    }
+
     fn make_start_ok() -> DeviceLoginStartResp {
         DeviceLoginStartResp {
             session_id: "sess-1".into(),
@@ -2409,6 +3251,83 @@ mod tests {
             |_, _| true,
         );
         events
+    }
+
+    fn sample_payload(hash: &str) -> ArrowCloudPayload {
+        let mut payload = ArrowCloudPayload {
+            song_name: "Test Song".to_string(),
+            artist: "Test Artist".to_string(),
+            pack: "Test Pack".to_string(),
+            length: "1:23".to_string(),
+            hash: hash.to_string(),
+            timing_data: vec![(24.488_208_770_752, ArrowCloudTimingOffset::Miss("Miss"))],
+            difficulty: 12,
+            stepartist: "Tester".to_string(),
+            radar: ArrowCloudRadar {
+                holds: [1, 2],
+                mines: [3, 4],
+                rolls: [5, 6],
+            },
+            judgment_counts: ArrowCloudJudgmentCounts {
+                fantastic_plus: 10,
+                fantastic: 20,
+                excellent: 30,
+                great: 40,
+                decent: 50,
+                way_off: 60,
+                miss: 3,
+                total_steps: 213,
+                holds_held: 1,
+                total_holds: 2,
+                mines_hit: 3,
+                total_mines: 4,
+                rolls_held: 5,
+                total_rolls: 6,
+            },
+            nps_info: ArrowCloudNpsInfo {
+                peak_nps: 0.0,
+                points: Vec::new(),
+            },
+            lifebar_info: Vec::new(),
+            modifiers: ArrowCloudModifiers {
+                visual_delay: 0,
+                acceleration: Vec::new(),
+                appearance: Vec::new(),
+                effect: Vec::new(),
+                mini: 0,
+                turn: "None".to_string(),
+                disabled_windows: "None".to_string(),
+                speed: ArrowCloudSpeed {
+                    value: 600.0,
+                    speed_type: "C",
+                },
+                perspective: "Overhead".to_string(),
+                noteskin: "cel".to_string(),
+                scroll: None,
+            },
+            music_rate: 1.0,
+            used_autoplay: false,
+            passed: true,
+            body_version: "",
+            arrow_cloud_body_version: "",
+            engine_name: "",
+            engine_version: "",
+        };
+        payload.fill_metadata();
+        payload
+    }
+
+    fn sample_submit_draft(hash: &str, side: profile_data::PlayerSide) -> ArrowCloudSubmitDraft {
+        ArrowCloudSubmitDraft::new(
+            side,
+            "test-api-key".to_string(),
+            sample_payload(hash),
+            None,
+            99.0,
+            98.0,
+            97.0,
+            false,
+        )
     }
 
     #[test]

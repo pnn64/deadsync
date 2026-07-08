@@ -269,6 +269,30 @@ pub fn sprite_state_properties_command_plans(
     (beat_based, plans)
 }
 
+pub fn apply_sprite_animation_command_plans<T>(
+    slot: &mut T,
+    commands: &HashMap<String, String>,
+    default_is_beat_based: bool,
+    mut apply_plan: impl FnMut(&mut T, SpriteAnimationCommandPlan, bool),
+) {
+    let (beat_based, plans) =
+        sprite_animation_command_plans_from_commands(commands, default_is_beat_based);
+    for plan in plans {
+        apply_plan(slot, plan, beat_based);
+    }
+}
+
+pub fn apply_sprite_animation_script_plans<T>(
+    slot: &mut T,
+    script: &str,
+    beat_based: bool,
+    mut apply_plan: impl FnMut(&mut T, SpriteAnimationCommandPlan, bool),
+) {
+    for plan in sprite_animation_command_plans(script) {
+        apply_plan(slot, plan, beat_based);
+    }
+}
+
 #[inline(always)]
 fn parse_script_f32_list(raw: &str) -> Vec<f32> {
     raw.split(',').filter_map(parse_script_number).collect()
@@ -1279,6 +1303,38 @@ mod tests {
         assert_eq!(plans.len(), 2);
         assert_eq!(plans[0].frame_count, 2);
         assert_eq!(plans[1].frame_count, 3);
+    }
+
+    #[test]
+    fn apply_sprite_animation_commands_preserves_clock_and_plan_order() {
+        let commands = HashMap::from([
+            (
+                "zcommand".to_string(),
+                "effectclock,time;SetStateProperties,Sprite.LinearFrames(3,0.3)".to_string(),
+            ),
+            (
+                "acommand".to_string(),
+                "effectclock,beat;SetAllStateDelays,0.05".to_string(),
+            ),
+        ]);
+        let mut applied = Vec::new();
+
+        apply_sprite_animation_command_plans(&mut 0, &commands, true, |slot, plan, beat_based| {
+            *slot += 1;
+            match plan {
+                SpriteAnimationCommandPlan::StateProperties(plan) => {
+                    applied.push(format!("state:{}:{beat_based}", plan.frame_count));
+                }
+                SpriteAnimationCommandPlan::AllStateDelays(delay) => {
+                    applied.push(format!("delay:{delay}:{beat_based}"));
+                }
+            }
+        });
+
+        assert_eq!(
+            applied,
+            ["delay:0.05:false", "state:3:false"].map(str::to_string)
+        );
     }
 
     #[test]

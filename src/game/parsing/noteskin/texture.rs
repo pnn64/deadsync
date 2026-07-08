@@ -4,27 +4,22 @@ use deadlib_present::actors::TextureKeyHandle;
 use deadlib_render::{SamplerDesc, TexturedMeshVertex};
 #[cfg(test)]
 use deadsync_noteskin::ModelVertex;
-use deadsync_noteskin::itg as noteskin_itg;
 use deadsync_noteskin::mine::{
-    MINE_GRADIENT_SAMPLES, MineGradientSampleRegionError, mine_fill_slots as crate_mine_fill_slots,
-    mine_gradient_sample_region, mine_gradient_samples, mine_gradient_slot_plan,
-    mine_gradient_texture,
+    MINE_GRADIENT_SAMPLES, MineGradientSampleWarning, mine_fill_slots as crate_mine_fill_slots,
+    mine_gradient_samples_from_slot, mine_gradient_slot_plan, mine_gradient_texture,
 };
-use deadsync_noteskin::model::{
-    itg_parse_milkshape_model, itg_parse_milkshape_model_auto_rot,
-    itg_parse_milkshape_model_layers, itg_resolve_model_texture_path,
-};
+use deadsync_noteskin::model::ItgModelSlotPlan;
 #[cfg(test)]
-use deadsync_noteskin::script::sprite_animation_command_plans;
-use deadsync_noteskin::script::{
-    SpriteAnimationCommandPlan, sprite_animation_command_plans_from_commands,
-};
+use deadsync_noteskin::script::apply_sprite_animation_script_plans;
+use deadsync_noteskin::script::{SpriteAnimationCommandPlan, apply_sprite_animation_command_plans};
 use deadsync_noteskin::{
     AnimationRate, ModelAutoRotKey, ModelDrawState, ModelEffectState, ModelMesh, ModelTweenSegment,
-    SpriteAnimationPlan, SpriteDefinition, model_draw_at, model_glow_at, model_glow_with_draw,
-    neg_rot_sin_cos, sprite_all_frames_animation_plan, sprite_animated_uv, sprite_animation_plan,
-    sprite_atlas_uv, sprite_frame_index, sprite_frame_index_from_phase, sprite_scrolled_uv,
-    sprite_sheet_frame, sprite_state_properties_animation,
+    SpriteDefinition, SpriteSlotPlan, SpriteSourcePlan, all_frames_sprite_slot_plan,
+    all_state_delays_source_plan, animation_sprite_slot_plan, atlas_sprite_slot_plan,
+    frame_sprite_slot_plan, generated_animation_sprite_slot_plan, model_draw_at, model_glow_at,
+    model_glow_with_draw, neg_rot_sin_cos, sprite_animated_uv, sprite_atlas_uv, sprite_frame_index,
+    sprite_frame_index_from_phase, sprite_scrolled_uv, sprite_sheet_frame,
+    sprite_state_properties_animation, state_properties_source_plan,
 };
 use image::image_dimensions;
 use log::warn;
@@ -397,118 +392,97 @@ pub(super) fn itg_model_slot_from_texture_path(path: &Path) -> Option<SpriteSlot
     itg_slot_from_path(path)
 }
 
+pub(super) fn apply_model_slot_plan(slot: &mut SpriteSlot, plan: ItgModelSlotPlan) {
+    slot.model = plan.model;
+    slot.model_draw = plan.model_draw;
+    slot.model_timeline = plan.model_timeline;
+    slot.model_effect = plan.model_effect;
+    slot.model_auto_rot_total_frames = plan.model_auto_rot_total_frames;
+    slot.model_auto_rot_z_keys = plan.model_auto_rot_z_keys;
+    slot.note_color_translate = plan.note_color_translate;
+    slot.uv_velocity = plan.uv_velocity;
+    slot.uv_offset = plan.uv_offset;
+    slot.uv_cycle_seconds = plan.uv_cycle_seconds;
+}
+
 pub(crate) fn load_itg_model_slots_from_path(path: &Path) -> Result<Arc<[SpriteSlot]>, String> {
     let model_path = if path.is_absolute() {
         path.to_path_buf()
     } else {
         dirs::app_dirs().resolve_asset_path(&path.to_string_lossy())
     };
-    if !model_path.is_file() {
-        return Err(format!("model '{}' was not found", model_path.display()));
-    }
-
-    let Some(search_dir) = model_path.parent() else {
-        return Err(format!(
-            "model '{}' has no parent directory",
-            model_path.display()
-        ));
-    };
-    let data = noteskin_itg::NoteskinData {
-        name: "shared-model".to_string(),
-        metrics: noteskin_itg::IniData::default(),
-        search_dirs: vec![search_dir.to_path_buf()],
-    };
-    let model_auto_rot = itg_parse_milkshape_model_auto_rot(&model_path);
-    let mut slots = Vec::new();
-
-    if let Some(model_layers) = itg_parse_milkshape_model_layers(&data, &model_path) {
-        for layer in model_layers {
-            let Some(mut slot) = itg_model_slot_from_texture_path(&layer.texture.texture_path)
-            else {
-                continue;
-            };
-            slot.model = Some(layer.mesh);
-            if let Some(auto_rot) = model_auto_rot.as_ref() {
-                slot.model_auto_rot_total_frames = auto_rot.total_frames;
-                slot.model_auto_rot_z_keys = Arc::clone(&auto_rot.z_keys);
-            }
-            slot.note_color_translate = !layer.flags.nomove;
-            slot.uv_velocity = if layer.flags.nomove {
-                [0.0, 0.0]
-            } else {
-                layer.texture.tex.uv_velocity
-            };
-            slot.uv_offset = layer.texture.tex.uv_offset;
-            slot.uv_cycle_seconds = layer.texture.tex.uv_cycle_seconds;
-            slots.push(slot);
-        }
-    }
-
-    if slots.is_empty() {
-        let Some(model_texture) = itg_resolve_model_texture_path(&data, &model_path) else {
-            return Err(format!(
-                "model '{}' did not resolve a texture",
-                model_path.display()
-            ));
-        };
-        let Some(mut slot) = itg_model_slot_from_texture_path(&model_texture.texture_path) else {
-            return Err(format!(
-                "model texture '{}' did not load",
-                model_texture.texture_path.display()
-            ));
-        };
-        slot.model = itg_parse_milkshape_model(&data, &model_path);
-        if slot.model.is_none() {
-            return Err(format!(
-                "model '{}' did not produce any geometry",
-                model_path.display()
-            ));
-        }
-        if let Some(auto_rot) = model_auto_rot.as_ref() {
-            slot.model_auto_rot_total_frames = auto_rot.total_frames;
-            slot.model_auto_rot_z_keys = Arc::clone(&auto_rot.z_keys);
-        }
-        slot.uv_velocity = model_texture.tex.uv_velocity;
-        slot.uv_offset = model_texture.tex.uv_offset;
-        slot.uv_cycle_seconds = model_texture.tex.uv_cycle_seconds;
-        slots.push(slot);
-    }
-
-    Ok(Arc::from(slots))
+    deadsync_noteskin::itg_load_model_slots_from_path(
+        &model_path,
+        itg_model_slot_from_texture_path,
+        apply_model_slot_plan,
+    )
+    .map(Arc::from)
 }
 
-pub(super) fn itg_slot_from_path(path: &Path) -> Option<SpriteSlot> {
-    let key = itg_texture_key(path)?;
-    let dims = texture_dimensions(&key)?;
-    let source_frame = assets::texture_source_frame_dims_from_real(&key, dims.0, dims.1);
-    let source = Arc::new(SpriteSource::Atlas {
-        texture_key: key.into(),
-        tex_dims: dims,
-        cached_handle: AtomicU64::new(deadlib_render::INVALID_TEXTURE_HANDLE),
-        cached_generation: AtomicU64::new(u64::MAX),
-    });
-    Some(SpriteSlot {
-        def: SpriteDefinition {
-            src: [0, 0],
-            size: [dims.0 as i32, dims.1 as i32],
-            rotation_deg: 0,
-            mirror_h: false,
-            mirror_v: false,
-        },
+fn source_from_plan(plan: SpriteSourcePlan) -> Arc<SpriteSource> {
+    match plan {
+        SpriteSourcePlan::Atlas {
+            texture_key,
+            tex_dims,
+        } => Arc::new(SpriteSource::Atlas {
+            texture_key: texture_key.into(),
+            tex_dims,
+            cached_handle: AtomicU64::new(deadlib_render::INVALID_TEXTURE_HANDLE),
+            cached_generation: AtomicU64::new(u64::MAX),
+        }),
+        SpriteSourcePlan::Animated {
+            texture_key,
+            tex_dims,
+            frame_size,
+            grid,
+            frame_count,
+            frame_indices,
+            rate,
+            frame_durations,
+        } => Arc::new(SpriteSource::Animated {
+            texture_key: texture_key.into(),
+            tex_dims,
+            frame_size,
+            grid,
+            frame_count,
+            frame_indices: frame_indices.map(Arc::<[usize]>::from),
+            rate,
+            frame_durations: frame_durations.map(Arc::<[f32]>::from),
+            cached_handle: AtomicU64::new(deadlib_render::INVALID_TEXTURE_HANDLE),
+            cached_generation: AtomicU64::new(u64::MAX),
+        }),
+    }
+}
+
+fn slot_from_plan(plan: SpriteSlotPlan) -> SpriteSlot {
+    SpriteSlot {
+        def: plan.def,
         base_rot_sin_cos: [0.0, 1.0],
-        source_size: [source_frame.0 as i32, source_frame.1 as i32],
-        source,
+        source_size: plan.source_size,
+        source: source_from_plan(plan.source),
         uv_velocity: [0.0, 0.0],
         uv_offset: [0.0, 0.0],
         uv_cycle_seconds: None,
-        note_color_translate: true,
+        note_color_translate: plan.note_color_translate,
         model: None,
         model_draw: ModelDrawState::default(),
         model_timeline: Arc::from(Vec::<ModelTweenSegment>::new()),
         model_effect: ModelEffectState::default(),
         model_auto_rot_total_frames: 0.0,
         model_auto_rot_z_keys: Arc::from(Vec::<ModelAutoRotKey>::new()),
-    })
+    }
+}
+
+pub(super) fn itg_slot_from_path(path: &Path) -> Option<SpriteSlot> {
+    let key = itg_texture_key(path)?;
+    let dims = texture_dimensions(&key)?;
+    let source_frame = assets::texture_source_frame_dims_from_real(&key, dims.0, dims.1);
+    Some(slot_from_plan(atlas_sprite_slot_plan(
+        key,
+        dims,
+        source_frame,
+        true,
+    )))
 }
 
 pub(super) fn itg_apply_frame_override(slot: &mut SpriteSlot, frame: usize) {
@@ -530,34 +504,15 @@ pub(super) fn itg_slot_from_path_with_frame(path: &Path, frame: usize) -> Option
     let key = itg_texture_key(path)?;
     let dims = texture_dimensions(&key)?;
     let (grid_x, grid_y) = assets::sprite_sheet_dims(&key);
-    let frame = sprite_sheet_frame(
-        [dims.0, dims.1],
-        [grid_x.max(1) as usize, grid_y.max(1) as usize],
-        frame,
-    );
     let source_frame = assets::texture_source_frame_dims_from_real(&key, dims.0, dims.1);
-    let source = Arc::new(SpriteSource::Atlas {
-        texture_key: key.into(),
-        tex_dims: dims,
-        cached_handle: AtomicU64::new(deadlib_render::INVALID_TEXTURE_HANDLE),
-        cached_generation: AtomicU64::new(u64::MAX),
-    });
-    Some(SpriteSlot {
-        def: frame.def,
-        base_rot_sin_cos: [0.0, 1.0],
-        source_size: [source_frame.0 as i32, source_frame.1 as i32],
-        source,
-        uv_velocity: [0.0, 0.0],
-        uv_offset: [0.0, 0.0],
-        uv_cycle_seconds: None,
-        note_color_translate: true,
-        model: None,
-        model_draw: ModelDrawState::default(),
-        model_timeline: Arc::from(Vec::<ModelTweenSegment>::new()),
-        model_effect: ModelEffectState::default(),
-        model_auto_rot_total_frames: 0.0,
-        model_auto_rot_z_keys: Arc::from(Vec::<ModelAutoRotKey>::new()),
-    })
+    Some(slot_from_plan(frame_sprite_slot_plan(
+        key,
+        dims,
+        (grid_x as usize, grid_y as usize),
+        frame,
+        source_frame,
+        true,
+    )))
 }
 
 pub(super) fn itg_slot_from_path_animated(
@@ -571,54 +526,22 @@ pub(super) fn itg_slot_from_path_animated(
     let key = itg_texture_key(path)?;
     let dims = texture_dimensions(&key)?;
     let (grid_x, grid_y) = assets::sprite_sheet_dims(&key);
-    let Some(plan) = sprite_animation_plan(
-        [dims.0, dims.1],
-        [grid_x.max(1) as usize, grid_y.max(1) as usize],
+    let source_frame = assets::texture_source_frame_dims_from_real(&key, dims.0, dims.1);
+    let Some(plan) = animation_sprite_slot_plan(
+        key,
+        dims,
+        (grid_x as usize, grid_y as usize),
         frame0,
         frame_count,
         frame_indices,
         frame_delays,
         beat_based,
+        source_frame,
+        true,
     ) else {
         return itg_slot_from_path_with_frame(path, frame0);
     };
-    Some(slot_from_animation_plan(key, dims, plan))
-}
-
-fn slot_from_animation_plan(
-    key: String,
-    dims: (u32, u32),
-    plan: SpriteAnimationPlan,
-) -> SpriteSlot {
-    let source_frame = assets::texture_source_frame_dims_from_real(&key, dims.0, dims.1);
-    let source = Arc::new(SpriteSource::Animated {
-        texture_key: key.into(),
-        tex_dims: dims,
-        frame_size: plan.frame_size,
-        grid: (plan.grid[0], plan.grid[1]),
-        frame_count: plan.frame_count,
-        frame_indices: plan.frame_indices.map(Arc::<[usize]>::from),
-        rate: plan.rate,
-        frame_durations: plan.frame_durations.map(Arc::<[f32]>::from),
-        cached_handle: AtomicU64::new(deadlib_render::INVALID_TEXTURE_HANDLE),
-        cached_generation: AtomicU64::new(u64::MAX),
-    });
-    SpriteSlot {
-        def: plan.def,
-        base_rot_sin_cos: [0.0, 1.0],
-        source_size: [source_frame.0 as i32, source_frame.1 as i32],
-        source,
-        uv_velocity: [0.0, 0.0],
-        uv_offset: [0.0, 0.0],
-        uv_cycle_seconds: None,
-        note_color_translate: true,
-        model: None,
-        model_draw: ModelDrawState::default(),
-        model_timeline: Arc::from(Vec::<ModelTweenSegment>::new()),
-        model_effect: ModelEffectState::default(),
-        model_auto_rot_total_frames: 0.0,
-        model_auto_rot_z_keys: Arc::from(Vec::<ModelAutoRotKey>::new()),
-    }
+    Some(slot_from_plan(plan))
 }
 
 pub(super) fn itg_slot_from_path_all_frames(
@@ -629,15 +552,19 @@ pub(super) fn itg_slot_from_path_all_frames(
     let key = itg_texture_key(path)?;
     let (cols, rows) = assets::sprite_sheet_dims(&key);
     let dims = texture_dimensions(&key)?;
-    let Some(plan) = sprite_all_frames_animation_plan(
-        [dims.0, dims.1],
-        [cols.max(1) as usize, rows.max(1) as usize],
+    let source_frame = assets::texture_source_frame_dims_from_real(&key, dims.0, dims.1);
+    let Some(plan) = all_frames_sprite_slot_plan(
+        key,
+        dims,
+        (cols as usize, rows as usize),
         frame_delay,
         beat_based,
+        source_frame,
+        true,
     ) else {
         return itg_slot_from_path(path);
     };
-    Some(slot_from_animation_plan(key, dims, plan))
+    Some(slot_from_plan(plan))
 }
 
 pub(super) fn texture_dimensions(key: &str) -> Option<(u32, u32)> {
@@ -691,20 +618,16 @@ fn itg_apply_slot_state_properties(
         return;
     };
 
-    slot.source = Arc::new(SpriteSource::Animated {
-        texture_key: texture_key.clone(),
+    let start_src = animation.start_src;
+    let frame_size = animation.frame_size;
+    slot.source = source_from_plan(state_properties_source_plan(
+        texture_key.clone().to_string(),
         tex_dims,
-        frame_size: animation.frame_size,
-        grid: (grid_x.max(1) as usize, grid_y.max(1) as usize),
-        frame_count: animation.frame_count,
-        frame_indices: None,
-        rate: animation.rate,
-        frame_durations: Some(Arc::<[f32]>::from(animation.frame_durations)),
-        cached_handle: AtomicU64::new(deadlib_render::INVALID_TEXTURE_HANDLE),
-        cached_generation: AtomicU64::new(u64::MAX),
-    });
-    slot.def.src = animation.start_src;
-    slot.def.size = animation.frame_size;
+        (grid_x as usize, grid_y as usize),
+        animation,
+    ));
+    slot.def.src = start_src;
+    slot.def.size = frame_size;
     let source_frame =
         assets::texture_source_frame_dims_from_real(&texture_key, tex_dims.0, tex_dims.1);
     slot.source_size = [source_frame.0 as i32, source_frame.1 as i32];
@@ -727,23 +650,16 @@ fn itg_apply_slot_all_state_delays(slot: &mut SpriteSlot, delay: f32, beat_based
     else {
         return;
     };
-    let frame_count = (*frame_count).max(1);
-    slot.source = Arc::new(SpriteSource::Animated {
-        texture_key: texture_key.clone(),
-        tex_dims: *tex_dims,
-        frame_size: *frame_size,
-        grid: *grid,
-        frame_count,
-        frame_indices: frame_indices.clone(),
-        rate: if beat_based {
-            AnimationRate::FramesPerBeat(1.0 / delay)
-        } else {
-            AnimationRate::FramesPerSecond(1.0 / delay)
-        },
-        frame_durations: Some(Arc::<[f32]>::from(vec![delay; frame_count])),
-        cached_handle: AtomicU64::new(deadlib_render::INVALID_TEXTURE_HANDLE),
-        cached_generation: AtomicU64::new(u64::MAX),
-    });
+    slot.source = source_from_plan(all_state_delays_source_plan(
+        texture_key.to_string(),
+        *tex_dims,
+        *frame_size,
+        *grid,
+        *frame_count,
+        frame_indices.as_ref().map(|indices| indices.to_vec()),
+        delay,
+        beat_based,
+    ));
 }
 
 fn itg_apply_sprite_animation_plan(
@@ -765,11 +681,10 @@ pub(super) fn itg_apply_state_properties_from_commands(
     slot: &mut SpriteSlot,
     commands: &std::collections::HashMap<String, String>,
 ) {
-    let (beat_based, plans) =
-        sprite_animation_command_plans_from_commands(commands, slot_is_beat_based(slot));
-    for plan in plans {
+    let beat_based = slot_is_beat_based(slot);
+    apply_sprite_animation_command_plans(slot, commands, beat_based, |slot, plan, beat_based| {
         itg_apply_sprite_animation_plan(slot, plan, beat_based);
-    }
+    });
 }
 
 #[cfg(test)]
@@ -778,9 +693,9 @@ pub(super) fn itg_apply_state_properties_from_script(
     script: &str,
     beat_based: bool,
 ) {
-    for plan in sprite_animation_command_plans(script) {
+    apply_sprite_animation_script_plans(slot, script, beat_based, |slot, plan, beat_based| {
         itg_apply_sprite_animation_plan(slot, plan, beat_based);
-    }
+    });
 }
 
 pub(super) fn mine_fill_slots(mines: &[Option<SpriteSlot>]) -> Vec<Option<SpriteSlot>> {
@@ -796,30 +711,28 @@ fn load_mine_gradient_colors(slot: &SpriteSlot) -> Option<Vec<[f32; 4]>> {
     let path = dirs::app_dirs().resolve_asset_path(&candidate.to_string_lossy());
     let image = assets::open_image_fallback(&path).ok()?.to_rgba8();
 
-    let region = match mine_gradient_sample_region(
-        [image.width(), image.height()],
+    mine_gradient_samples_from_slot(
+        &image,
+        texture_key,
         slot.def.src,
         slot.def.size,
         slot.source.frame_size(),
-    ) {
-        Ok(region) => region,
-        Err(MineGradientSampleRegionError::InvalidSlotSize) => {
-            warn!("Mine fill slot has invalid size for gradient sampling");
-            return None;
-        }
-        Err(MineGradientSampleRegionError::RegionOutsideTexture) => {
-            let src_x = slot.def.src[0].max(0);
-            let src_y = slot.def.src[1].max(0);
-            warn!("Mine fill region ({src_x}, {src_y}) is outside of texture {texture_key}");
-            return None;
-        }
-        Err(MineGradientSampleRegionError::ZeroSampleSize) => {
-            warn!("Mine fill region has zero sample size for texture {texture_key}");
-            return None;
-        }
-    };
-
-    mine_gradient_samples(&image, region.src, region.size, MINE_GRADIENT_SAMPLES)
+        MINE_GRADIENT_SAMPLES,
+        |warning| match warning {
+            MineGradientSampleWarning::InvalidSlotSize => {
+                warn!("Mine fill slot has invalid size for gradient sampling");
+            }
+            MineGradientSampleWarning::RegionOutsideTexture { texture_key, src } => {
+                warn!(
+                    "Mine fill region ({}, {}) is outside of texture {}",
+                    src[0], src[1], texture_key
+                );
+            }
+            MineGradientSampleWarning::ZeroSampleSize { texture_key } => {
+                warn!("Mine fill region has zero sample size for texture {texture_key}");
+            }
+        },
+    )
 }
 
 fn build_mine_gradient_slot(colors: &[[f32; 4]]) -> SpriteSlot {
@@ -829,39 +742,12 @@ fn build_mine_gradient_slot(colors: &[[f32; 4]]) -> SpriteSlot {
         assets::register_generated_texture(&plan.texture_key, texture, SamplerDesc::default());
     }
 
-    let source = Arc::new(SpriteSource::Animated {
-        texture_key: plan.texture_key.into(),
-        tex_dims: plan.tex_dims,
-        frame_size: plan.frame_size,
-        grid: (plan.frame_count, 1),
-        frame_count: plan.frame_count,
-        frame_indices: None,
-        rate: AnimationRate::FramesPerBeat(1.0),
-        frame_durations: None,
-        cached_handle: AtomicU64::new(deadlib_render::INVALID_TEXTURE_HANDLE),
-        cached_generation: AtomicU64::new(u64::MAX),
-    });
-
-    SpriteSlot {
-        def: SpriteDefinition {
-            src: [0, 0],
-            size: plan.frame_size,
-            rotation_deg: 0,
-            mirror_h: false,
-            mirror_v: false,
-        },
-        base_rot_sin_cos: [0.0, 1.0],
-        source_size: plan.frame_size,
-        source,
-        uv_velocity: [0.0, 0.0],
-        uv_offset: [0.0, 0.0],
-        uv_cycle_seconds: None,
-        note_color_translate: false,
-        model: None,
-        model_draw: ModelDrawState::default(),
-        model_timeline: Arc::from(Vec::<ModelTweenSegment>::new()),
-        model_effect: ModelEffectState::default(),
-        model_auto_rot_total_frames: 0.0,
-        model_auto_rot_z_keys: Arc::from(Vec::<ModelAutoRotKey>::new()),
-    }
+    slot_from_plan(generated_animation_sprite_slot_plan(
+        plan.texture_key,
+        plan.tex_dims,
+        plan.frame_size,
+        plan.frame_count,
+        AnimationRate::FramesPerBeat(1.0),
+        false,
+    ))
 }

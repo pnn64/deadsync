@@ -270,6 +270,26 @@ pub fn save_profile_id(
     )
 }
 
+#[derive(Debug)]
+pub struct PadConfigIoError {
+    pub path: PathBuf,
+    pub error: std::io::Error,
+}
+
+fn pad_config_io_error(path: PathBuf, error: std::io::Error) -> PadConfigIoError {
+    PadConfigIoError { path, error }
+}
+
+pub fn save_profile_id_report(
+    root: &Path,
+    profile_id: &str,
+    profiles: &[PadConfigProfile],
+    duplicate: impl FnMut(&str, &Path, &Path, &Path),
+) -> Result<(), PadConfigIoError> {
+    let path = pad_config_path_for_profile_id(root, profile_id, duplicate);
+    save_path(&path, profiles).map_err(|error| pad_config_io_error(path, error))
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn upsert_path(
     path: &Path,
@@ -340,6 +360,31 @@ pub fn upsert_profile_id(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
+pub fn upsert_profile_id_report(
+    root: &Path,
+    profile_id: &str,
+    name: &str,
+    backend: &str,
+    pad_type: Option<String>,
+    serial: Option<String>,
+    make_default: bool,
+    settings: Vec<(String, String)>,
+    duplicate: impl FnMut(&str, &Path, &Path, &Path),
+) -> Result<bool, PadConfigIoError> {
+    let path = pad_config_path_for_profile_id(root, profile_id, duplicate);
+    upsert_path(
+        &path,
+        name,
+        backend,
+        pad_type,
+        serial,
+        make_default,
+        settings,
+    )
+    .map_err(|error| pad_config_io_error(path, error))
+}
+
 pub fn set_default_path(path: &Path, serial: &str, name: &str) -> std::io::Result<bool> {
     let mut list = load_path(path).unwrap_or_default();
     let changed = set_default_config(&mut list, serial, name);
@@ -365,6 +410,17 @@ pub fn set_default_profile_id(
         serial,
         name,
     )
+}
+
+pub fn set_default_profile_id_report(
+    root: &Path,
+    profile_id: &str,
+    serial: &str,
+    name: &str,
+    duplicate: impl FnMut(&str, &Path, &Path, &Path),
+) -> Result<bool, PadConfigIoError> {
+    let path = pad_config_path_for_profile_id(root, profile_id, duplicate);
+    set_default_path(&path, serial, name).map_err(|error| pad_config_io_error(path, error))
 }
 
 pub fn rename_path(path: &Path, old: &str, new: &str) -> std::io::Result<bool> {
@@ -394,6 +450,17 @@ pub fn rename_profile_id(
     )
 }
 
+pub fn rename_profile_id_report(
+    root: &Path,
+    profile_id: &str,
+    old: &str,
+    new: &str,
+    duplicate: impl FnMut(&str, &Path, &Path, &Path),
+) -> Result<bool, PadConfigIoError> {
+    let path = pad_config_path_for_profile_id(root, profile_id, duplicate);
+    rename_path(&path, old, new).map_err(|error| pad_config_io_error(path, error))
+}
+
 pub fn delete_path(path: &Path, name: &str) -> std::io::Result<bool> {
     let mut list = load_path(path).unwrap_or_default();
     let changed = delete_config(&mut list, name);
@@ -417,6 +484,16 @@ pub fn delete_profile_id(
         &pad_config_path_for_profile_id(root, profile_id, duplicate),
         name,
     )
+}
+
+pub fn delete_profile_id_report(
+    root: &Path,
+    profile_id: &str,
+    name: &str,
+    duplicate: impl FnMut(&str, &Path, &Path, &Path),
+) -> Result<bool, PadConfigIoError> {
+    let path = pad_config_path_for_profile_id(root, profile_id, duplicate);
+    delete_path(&path, name).map_err(|error| pad_config_io_error(path, error))
 }
 
 #[allow(clippy::too_many_arguments)]

@@ -40,6 +40,32 @@ pub struct SpriteAnimationPlan {
     pub rate: AnimationRate,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum SpriteSourcePlan {
+    Atlas {
+        texture_key: String,
+        tex_dims: (u32, u32),
+    },
+    Animated {
+        texture_key: String,
+        tex_dims: (u32, u32),
+        frame_size: [i32; 2],
+        grid: (usize, usize),
+        frame_count: usize,
+        frame_indices: Option<Vec<usize>>,
+        rate: AnimationRate,
+        frame_durations: Option<Vec<f32>>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SpriteSlotPlan {
+    pub def: SpriteDefinition,
+    pub source_size: [i32; 2],
+    pub source: SpriteSourcePlan,
+    pub note_color_translate: bool,
+}
+
 #[inline(always)]
 pub fn neg_rot_sin_cos(rotation_deg: i32) -> [f32; 2] {
     match rotation_deg.rem_euclid(360) {
@@ -51,6 +77,208 @@ pub fn neg_rot_sin_cos(rotation_deg: i32) -> [f32; 2] {
             let (sin_r, cos_r) = (-(rotation_deg as f32)).to_radians().sin_cos();
             [sin_r, cos_r]
         }
+    }
+}
+
+pub fn atlas_sprite_slot_plan(
+    texture_key: String,
+    tex_dims: (u32, u32),
+    source_frame: (u32, u32),
+    note_color_translate: bool,
+) -> SpriteSlotPlan {
+    SpriteSlotPlan {
+        def: SpriteDefinition {
+            src: [0, 0],
+            size: [tex_dims.0 as i32, tex_dims.1 as i32],
+            rotation_deg: 0,
+            mirror_h: false,
+            mirror_v: false,
+        },
+        source_size: [source_frame.0 as i32, source_frame.1 as i32],
+        source: SpriteSourcePlan::Atlas {
+            texture_key,
+            tex_dims,
+        },
+        note_color_translate,
+    }
+}
+
+pub fn frame_sprite_slot_plan(
+    texture_key: String,
+    tex_dims: (u32, u32),
+    sheet_grid: (usize, usize),
+    frame: usize,
+    source_frame: (u32, u32),
+    note_color_translate: bool,
+) -> SpriteSlotPlan {
+    let frame = sprite_sheet_frame(
+        [tex_dims.0, tex_dims.1],
+        [sheet_grid.0.max(1), sheet_grid.1.max(1)],
+        frame,
+    );
+    SpriteSlotPlan {
+        def: frame.def,
+        source_size: [source_frame.0 as i32, source_frame.1 as i32],
+        source: SpriteSourcePlan::Atlas {
+            texture_key,
+            tex_dims,
+        },
+        note_color_translate,
+    }
+}
+
+pub fn animation_sprite_slot_plan(
+    texture_key: String,
+    tex_dims: (u32, u32),
+    sheet_grid: (usize, usize),
+    frame0: usize,
+    frame_count: usize,
+    frame_indices: Option<&[usize]>,
+    frame_delays: Option<&[f32]>,
+    beat_based: bool,
+    source_frame: (u32, u32),
+    note_color_translate: bool,
+) -> Option<SpriteSlotPlan> {
+    let plan = sprite_animation_plan(
+        [tex_dims.0, tex_dims.1],
+        [sheet_grid.0.max(1), sheet_grid.1.max(1)],
+        frame0,
+        frame_count,
+        frame_indices,
+        frame_delays,
+        beat_based,
+    )?;
+    Some(animation_plan_to_slot_plan(
+        texture_key,
+        tex_dims,
+        source_frame,
+        plan,
+        note_color_translate,
+    ))
+}
+
+pub fn all_frames_sprite_slot_plan(
+    texture_key: String,
+    tex_dims: (u32, u32),
+    sheet_grid: (usize, usize),
+    frame_delay: Option<f32>,
+    beat_based: bool,
+    source_frame: (u32, u32),
+    note_color_translate: bool,
+) -> Option<SpriteSlotPlan> {
+    let plan = sprite_all_frames_animation_plan(
+        [tex_dims.0, tex_dims.1],
+        [sheet_grid.0.max(1), sheet_grid.1.max(1)],
+        frame_delay,
+        beat_based,
+    )?;
+    Some(animation_plan_to_slot_plan(
+        texture_key,
+        tex_dims,
+        source_frame,
+        plan,
+        note_color_translate,
+    ))
+}
+
+pub fn animation_plan_to_slot_plan(
+    texture_key: String,
+    tex_dims: (u32, u32),
+    source_frame: (u32, u32),
+    plan: SpriteAnimationPlan,
+    note_color_translate: bool,
+) -> SpriteSlotPlan {
+    SpriteSlotPlan {
+        def: plan.def,
+        source_size: [source_frame.0 as i32, source_frame.1 as i32],
+        source: SpriteSourcePlan::Animated {
+            texture_key,
+            tex_dims,
+            frame_size: plan.frame_size,
+            grid: (plan.grid[0], plan.grid[1]),
+            frame_count: plan.frame_count,
+            frame_indices: plan.frame_indices,
+            rate: plan.rate,
+            frame_durations: plan.frame_durations,
+        },
+        note_color_translate,
+    }
+}
+
+pub fn generated_animation_sprite_slot_plan(
+    texture_key: String,
+    tex_dims: (u32, u32),
+    frame_size: [i32; 2],
+    frame_count: usize,
+    rate: AnimationRate,
+    note_color_translate: bool,
+) -> SpriteSlotPlan {
+    SpriteSlotPlan {
+        def: SpriteDefinition {
+            src: [0, 0],
+            size: frame_size,
+            rotation_deg: 0,
+            mirror_h: false,
+            mirror_v: false,
+        },
+        source_size: frame_size,
+        source: SpriteSourcePlan::Animated {
+            texture_key,
+            tex_dims,
+            frame_size,
+            grid: (frame_count, 1),
+            frame_count,
+            frame_indices: None,
+            rate,
+            frame_durations: None,
+        },
+        note_color_translate,
+    }
+}
+
+pub fn state_properties_source_plan(
+    texture_key: String,
+    tex_dims: (u32, u32),
+    sheet_grid: (usize, usize),
+    animation: SpriteStatePropertiesAnimation,
+) -> SpriteSourcePlan {
+    SpriteSourcePlan::Animated {
+        texture_key,
+        tex_dims,
+        frame_size: animation.frame_size,
+        grid: (sheet_grid.0.max(1), sheet_grid.1.max(1)),
+        frame_count: animation.frame_count,
+        frame_indices: None,
+        rate: animation.rate,
+        frame_durations: Some(animation.frame_durations),
+    }
+}
+
+pub fn all_state_delays_source_plan(
+    texture_key: String,
+    tex_dims: (u32, u32),
+    frame_size: [i32; 2],
+    grid: (usize, usize),
+    frame_count: usize,
+    frame_indices: Option<Vec<usize>>,
+    delay: f32,
+    beat_based: bool,
+) -> SpriteSourcePlan {
+    let frame_count = frame_count.max(1);
+    let delay = delay.max(1e-6);
+    SpriteSourcePlan::Animated {
+        texture_key,
+        tex_dims,
+        frame_size,
+        grid,
+        frame_count,
+        frame_indices,
+        rate: if beat_based {
+            AnimationRate::FramesPerBeat(1.0 / delay)
+        } else {
+            AnimationRate::FramesPerSecond(1.0 / delay)
+        },
+        frame_durations: Some(vec![delay; frame_count]),
     }
 }
 
@@ -415,11 +643,13 @@ pub fn duration_frame_index(durations: &[f32], frames: usize, mut position: f32)
 #[cfg(test)]
 mod tests {
     use super::{
-        AnimationRate, SpriteAnimationPlan, SpriteDefinition, SpriteStatePropertiesAnimation,
-        duration_frame_index, frame_duration_total, neg_rot_sin_cos,
-        sprite_all_frames_animation_plan, sprite_animated_uv, sprite_animation_plan,
-        sprite_atlas_uv, sprite_frame_index, sprite_frame_index_from_phase, sprite_scrolled_uv,
-        sprite_sheet_frame, sprite_state_properties_animation,
+        AnimationRate, SpriteAnimationPlan, SpriteDefinition, SpriteSourcePlan,
+        SpriteStatePropertiesAnimation, all_frames_sprite_slot_plan, atlas_sprite_slot_plan,
+        duration_frame_index, frame_duration_total, frame_sprite_slot_plan,
+        generated_animation_sprite_slot_plan, neg_rot_sin_cos, sprite_all_frames_animation_plan,
+        sprite_animated_uv, sprite_animation_plan, sprite_atlas_uv, sprite_frame_index,
+        sprite_frame_index_from_phase, sprite_scrolled_uv, sprite_sheet_frame,
+        sprite_state_properties_animation,
     };
 
     #[test]
@@ -435,6 +665,77 @@ mod tests {
     fn frame_duration_total_skips_non_positive_spans() {
         assert_eq!(frame_duration_total(&[0.1, 0.0, -1.0, 0.2], 4), Some(0.3));
         assert_eq!(frame_duration_total(&[0.0, -1.0], 2), None);
+    }
+
+    #[test]
+    fn atlas_slot_plan_uses_full_texture() {
+        let plan = atlas_sprite_slot_plan("tap.png".to_string(), (128, 64), (64, 32), true);
+
+        assert_eq!(plan.def.src, [0, 0]);
+        assert_eq!(plan.def.size, [128, 64]);
+        assert_eq!(plan.source_size, [64, 32]);
+        assert!(plan.note_color_translate);
+        assert_eq!(
+            plan.source,
+            SpriteSourcePlan::Atlas {
+                texture_key: "tap.png".to_string(),
+                tex_dims: (128, 64),
+            }
+        );
+    }
+
+    #[test]
+    fn frame_slot_plan_uses_sheet_frame() {
+        let plan =
+            frame_sprite_slot_plan("tap.png".to_string(), (128, 64), (4, 2), 5, (32, 32), true);
+
+        assert_eq!(plan.def.src, [32, 32]);
+        assert_eq!(plan.def.size, [32, 32]);
+        assert_eq!(plan.source_size, [32, 32]);
+    }
+
+    #[test]
+    fn generated_animation_slot_plan_builds_single_row_source() {
+        let plan = generated_animation_sprite_slot_plan(
+            "generated/mine".to_string(),
+            (256, 64),
+            [64, 64],
+            4,
+            AnimationRate::FramesPerBeat(1.0),
+            false,
+        );
+
+        assert_eq!(plan.def.size, [64, 64]);
+        assert!(!plan.note_color_translate);
+        assert_eq!(
+            plan.source,
+            SpriteSourcePlan::Animated {
+                texture_key: "generated/mine".to_string(),
+                tex_dims: (256, 64),
+                frame_size: [64, 64],
+                grid: (4, 1),
+                frame_count: 4,
+                frame_indices: None,
+                rate: AnimationRate::FramesPerBeat(1.0),
+                frame_durations: None,
+            }
+        );
+    }
+
+    #[test]
+    fn all_frames_slot_plan_returns_none_for_single_frame_sheet() {
+        assert!(
+            all_frames_sprite_slot_plan(
+                "tap.png".to_string(),
+                (64, 64),
+                (1, 1),
+                Some(0.1),
+                false,
+                (64, 64),
+                true,
+            )
+            .is_none()
+        );
     }
 
     #[test]

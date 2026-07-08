@@ -11,7 +11,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use deadsync_online::arrowcloud::{self as arrowcloud_api, ARROWCLOUD_BULK_MAX_HASHES};
 use deadsync_online::boxed_request_error;
-use deadsync_online::groovestats::{self as groovestats_api, GrooveStatsSubmitApiPlayer};
+use deadsync_online::groovestats as groovestats_api;
 use deadsync_profile as profile_data;
 use deadsync_profile_gameplay::score_invalid_reason_lines_for_profile;
 use deadsync_rules::judgment;
@@ -33,14 +33,13 @@ pub use arrowcloud::{
 use deadsync_score::{
     ArrowCloudBulkChunkResult, ArrowCloudLeaderboard, ArrowCloudScores,
     CachedPlayerLeaderboardData, CachedScore, CachedScoreImportResult,
-    GameplayScoreboxProfileSnapshot, GrooveStatsSubmitRecordBanner, HeldScoreCaches,
-    ImportedPlayerScore, LeaderboardEntry, LocalReplayEdgeInput, LocalScalarScore, LocalScoreEntry,
-    LocalScoreGameplayEntryInput, MachineReplayEntry, PlayerLeaderboardFetchRequest,
-    PlayerLeaderboardFetchSuccess, ScoreBulkImportSummary, ScoreCacheLoadKind,
-    ScoreCacheLoadReport, ScoreCacheRuntimeKind, ScoreCacheRuntimeResult, ScoreImportEndpoint,
-    ScoreImportProgress, ScoreIndexWriteError, ScoreProfilePaths, ScoreStoreWriteError,
-    ScoreStoreWriteStatus, cached_missing_gs_score, cached_score_from_leaderboard_import,
-    cached_score_import_result_from_imported,
+    GameplayScoreboxProfileSnapshot, HeldScoreCaches, ImportedPlayerScore, LeaderboardEntry,
+    LocalReplayEdgeInput, LocalScalarScore, LocalScoreEntry, LocalScoreGameplayEntryInput,
+    MachineReplayEntry, PlayerLeaderboardFetchRequest, PlayerLeaderboardFetchSuccess,
+    ScoreBulkImportSummary, ScoreCacheLoadKind, ScoreCacheLoadReport, ScoreCacheRuntimeKind,
+    ScoreCacheRuntimeResult, ScoreImportEndpoint, ScoreImportProgress, ScoreIndexWriteError,
+    ScoreProfilePaths, ScoreStoreWriteError, ScoreStoreWriteStatus, cached_missing_gs_score,
+    cached_score_from_leaderboard_import, cached_score_import_result_from_imported,
     collect_chart_hashes_per_pack_for_import as score_collect_chart_hashes_per_pack_for_import,
     import_local_scores_with_writer, imported_score_chart_stats, local_replay_edges_for_player,
     local_score_entry_from_gameplay_input, local_score_entry_from_stage_summary,
@@ -61,8 +60,8 @@ use deadsync_score::{
     runtime_read_local_scalar_score_for_profile, runtime_recent_played_chart_hashes_for_machine,
     runtime_recent_played_chart_hashes_for_profile, runtime_seed_gs_score_access,
     runtime_seed_local_itg_score_access, runtime_total_songs_played_for_profile,
-    runtime_update_machine_cache_if_loaded, runtime_write_ac_scores_for_profile_bulk,
-    runtime_write_ac_submit_scores, runtime_write_gs_score_for_profile,
+    runtime_write_ac_scores_for_profile_bulk, runtime_write_ac_submit_scores,
+    runtime_write_gs_score_for_profile, validate_score_import_credentials,
 };
 use deadsync_score::{ArrowCloudBulkImportRunEvent, ScoreImportRunEvent};
 pub use deadsync_score::{Grade, gameplay_run_failed, gameplay_run_passed};
@@ -71,7 +70,7 @@ use deadsync_score::{
     player_leaderboard_cache_key, runtime_lock_player_leaderboard_cache,
     runtime_remove_player_leaderboard_entry, runtime_seed_player_leaderboard_entry,
 };
-use groovestats::{GrooveStatsSubmitPlayerJob, groovestats_judgment_counts};
+use groovestats::groovestats_judgment_counts;
 pub use groovestats::{
     get_groovestats_submit_event_progress_for_side, get_groovestats_submit_record_banner_for_side,
     get_groovestats_submit_ui_status_for_side, groovestats_eval_state_from_gameplay,
@@ -326,10 +325,6 @@ pub fn prewarm_select_music_score_caches() {
     debug!("Prewarmed SelectMusic score caches in {elapsed_ms:.2}ms.");
 }
 
-fn update_machine_cache_if_loaded(chart_hash: &str, score: CachedScore, initials: &str) {
-    runtime_update_machine_cache_if_loaded(chart_hash, score, initials);
-}
-
 pub fn get_cached_local_score_for_side(
     chart_hash: &str,
     side: profile_data::PlayerSide,
@@ -435,13 +430,11 @@ pub fn is_gs_get_scores_service_allowed() -> bool {
 
 #[inline(always)]
 pub fn is_gs_active_for_side(side: profile_data::PlayerSide) -> bool {
-    if !is_gs_get_scores_service_allowed() || !profile::is_session_side_joined(side) {
-        return false;
-    }
-    !profile::get_for_side(side)
-        .groovestats_api_key
-        .trim()
-        .is_empty()
+    profile_data::groovestats_side_active(
+        is_gs_get_scores_service_allowed(),
+        profile::is_session_side_joined(side),
+        &profile::get_for_side(side).groovestats_api_key,
+    )
 }
 
 pub fn get_machine_record_local(chart_hash: &str) -> Option<(String, CachedScore)> {
@@ -698,18 +691,6 @@ pub fn scorebox_profile_snapshot(
 
 const PLAYER_LEADERBOARD_ERROR_RETRY_INTERVAL: Duration = Duration::from_secs(10);
 const EVENT_WHEEL_FETCH_ENTRIES: usize = 5;
-
-#[inline(always)]
-fn submit_record_banner(
-    player: &GrooveStatsSubmitPlayerJob,
-    response: &GrooveStatsSubmitApiPlayer,
-) -> Option<GrooveStatsSubmitRecordBanner> {
-    groovestats_api::submit_record_banner_from_api(
-        response,
-        player.username.as_str(),
-        player.show_ex_score,
-    )
-}
 
 fn cache_gs_score_for_profile(
     profile_id: &str,
@@ -1144,21 +1125,10 @@ fn fetch_player_score_from_endpoint(
         return Err("Missing chart hash for score request.".into());
     }
 
-    let api_key = profile.score_import_api_key(endpoint);
-    if api_key.is_empty() {
-        return Err(format!(
-            "{} API key is missing in profile configuration.",
-            endpoint.display_name()
-        )
-        .into());
-    }
     let username = profile.score_import_username(endpoint);
-    if endpoint.requires_username() && username.is_empty() {
-        return Err(format!(
-            "{} username is missing in profile configuration.",
-            endpoint.display_name()
-        )
-        .into());
+    let api_key = profile.score_import_api_key(endpoint);
+    if let Err(error) = validate_score_import_credentials(endpoint, api_key, username) {
+        return Err(error.request_message().into());
     }
 
     let imported =
@@ -1206,12 +1176,14 @@ where
     F: FnMut(ScoreImportProgress),
 {
     let mut on_progress = on_progress;
-    let api_key = profile
-        .score_import_api_key(ScoreImportEndpoint::ArrowCloud)
-        .to_string();
-    if api_key.is_empty() {
-        return Err("ArrowCloud API key is not set in profile configuration.".into());
+    let api_key = profile.score_import_api_key(ScoreImportEndpoint::ArrowCloud);
+    let username = profile.score_import_username(ScoreImportEndpoint::ArrowCloud);
+    if let Err(error) =
+        validate_score_import_credentials(ScoreImportEndpoint::ArrowCloud, api_key, username)
+    {
+        return Err(error.import_message().into());
     }
+    let api_key = api_key.to_string();
 
     // Resolve our user id once up front. The bulk endpoint accepts a missing
     // userId (it'll resolve from the bearer token), but sending it explicitly
@@ -1314,22 +1286,12 @@ where
 
     let mut on_progress = on_progress;
     let api_key = profile.score_import_api_key(endpoint);
-    if api_key.is_empty() {
-        return Err(format!(
-            "{} API key is not set in profile configuration.",
-            endpoint.display_name()
-        )
-        .into());
-    }
-    if endpoint.requires_username() && profile.score_import_username(endpoint).is_empty() {
-        return Err(format!(
-            "{} username is not set in profile configuration.",
-            endpoint.display_name()
-        )
-        .into());
+    let username = profile.score_import_username(endpoint);
+    if let Err(error) = validate_score_import_credentials(endpoint, api_key, username) {
+        return Err(error.import_message().into());
     }
 
-    let username = profile.score_import_username(endpoint).to_string();
+    let username = username.to_string();
     let pack_chart_groups =
         collect_chart_hashes_for_import(&pack_groups, &profile_id, only_missing_gs_scores);
     let summary = run_score_import_pack_groups(

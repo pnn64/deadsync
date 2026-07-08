@@ -6,6 +6,8 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
+use std::sync::{Arc, LazyLock, Mutex};
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct ItlFileData {
@@ -46,6 +48,18 @@ impl hashbrown::Equivalent<OnlineItlSelfScoreKey> for OnlineItlSelfScoreKeyRef<'
 
 pub type OnlineItlSelfCacheMap = hashbrown::HashMap<OnlineItlSelfScoreKey, u32>;
 pub type OnlineItlSelfIndexMap = HashMap<OnlineItlSelfScoreKey, u32>;
+
+static ONLINE_ITL_SELF_SCORE_CACHE: LazyLock<Mutex<OnlineItlSelfCacheState>> =
+    LazyLock::new(|| Mutex::new(OnlineItlSelfCacheState::default()));
+static ONLINE_ITL_SELF_SCORE_GENERATION: AtomicU64 = AtomicU64::new(1);
+static ONLINE_ITL_SELF_RANK_CACHE: LazyLock<Mutex<OnlineItlSelfCacheState>> =
+    LazyLock::new(|| Mutex::new(OnlineItlSelfCacheState::default()));
+static ONLINE_ITL_OVERALL_RANK_CACHE: LazyLock<Mutex<OnlineItlOverallRankCacheState>> =
+    LazyLock::new(|| Mutex::new(OnlineItlOverallRankCacheState::default()));
+static EMPTY_ONLINE_ITL_OVERALL_RANKS: LazyLock<Arc<HashMap<String, u32>>> =
+    LazyLock::new(|| Arc::new(HashMap::new()));
+static ITL_SCORE_CACHE: LazyLock<Mutex<ItlScoreCacheState>> =
+    LazyLock::new(|| Mutex::new(ItlScoreCacheState::default()));
 
 #[derive(Default)]
 pub struct OnlineItlSelfCacheState {
@@ -173,6 +187,279 @@ impl OnlineItlSelfCacheState {
     }
 }
 
+pub fn online_itl_self_score_profile_loaded(profile_id: &str) -> bool {
+    ONLINE_ITL_SELF_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .profile_loaded(profile_id)
+}
+
+pub fn insert_online_itl_self_score_profile(profile_id: &str, by_key: OnlineItlSelfIndexMap) {
+    ONLINE_ITL_SELF_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .insert_loaded_profile(profile_id, by_key);
+}
+
+pub fn runtime_ensure_online_itl_self_score_profile_loaded<L>(profile_id: &str, mut load_profile: L)
+where
+    L: FnMut(&str) -> OnlineItlSelfIndexMap,
+{
+    let profile_id = profile_id.trim();
+    if profile_id.is_empty() || online_itl_self_score_profile_loaded(profile_id) {
+        return;
+    }
+    insert_online_itl_self_score_profile(profile_id, load_profile(profile_id));
+}
+
+pub fn set_online_itl_self_score(
+    profile_id: Option<&str>,
+    api_key: &str,
+    chart_hash: &str,
+    score: Option<u32>,
+) -> OnlineItlSelfCacheUpdate {
+    let update = ONLINE_ITL_SELF_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .set_value(profile_id, api_key, chart_hash, score);
+    if update.changed {
+        ONLINE_ITL_SELF_SCORE_GENERATION.fetch_add(1, AtomicOrdering::Relaxed);
+    }
+    update
+}
+
+pub fn runtime_set_online_itl_self_score<L, S>(
+    profile_id: Option<&str>,
+    api_key: &str,
+    chart_hash: &str,
+    score: Option<u32>,
+    mut load_profile: L,
+    mut save_profile: S,
+) where
+    L: FnMut(&str) -> OnlineItlSelfIndexMap,
+    S: FnMut(&str, &OnlineItlSelfCacheMap),
+{
+    let profile_id = profile_id.map(str::trim).filter(|id| !id.is_empty());
+    if let Some(profile_id) = profile_id {
+        runtime_ensure_online_itl_self_score_profile_loaded(profile_id, &mut load_profile);
+    }
+
+    let update = set_online_itl_self_score(profile_id, api_key, chart_hash, score);
+    if let Some((profile_id, by_key)) = update.profile_snapshot {
+        save_profile(profile_id.as_str(), &by_key);
+    }
+}
+
+pub fn online_itl_self_score_generation() -> u64 {
+    ONLINE_ITL_SELF_SCORE_GENERATION.load(AtomicOrdering::Relaxed)
+}
+
+pub fn online_itl_self_scores_by_chart_for_api(
+    profile_id: Option<&str>,
+    api_key: &str,
+) -> HashMap<String, u32> {
+    ONLINE_ITL_SELF_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .values_by_chart_for_api(profile_id, api_key)
+}
+
+pub fn get_online_itl_self_score(
+    chart_hash: &str,
+    profile_id: Option<&str>,
+    api_key: &str,
+) -> Option<u32> {
+    ONLINE_ITL_SELF_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .get_value(chart_hash, profile_id, api_key)
+}
+
+pub fn online_itl_self_rank_profile_loaded(profile_id: &str) -> bool {
+    ONLINE_ITL_SELF_RANK_CACHE
+        .lock()
+        .unwrap()
+        .profile_loaded(profile_id)
+}
+
+pub fn insert_online_itl_self_rank_profile(profile_id: &str, by_key: OnlineItlSelfIndexMap) {
+    ONLINE_ITL_SELF_RANK_CACHE
+        .lock()
+        .unwrap()
+        .insert_loaded_profile(profile_id, by_key);
+}
+
+pub fn runtime_ensure_online_itl_self_rank_profile_loaded<L>(profile_id: &str, mut load_profile: L)
+where
+    L: FnMut(&str) -> OnlineItlSelfIndexMap,
+{
+    let profile_id = profile_id.trim();
+    if profile_id.is_empty() || online_itl_self_rank_profile_loaded(profile_id) {
+        return;
+    }
+    insert_online_itl_self_rank_profile(profile_id, load_profile(profile_id));
+}
+
+pub fn set_online_itl_self_rank(
+    profile_id: Option<&str>,
+    api_key: &str,
+    chart_hash: &str,
+    rank: Option<u32>,
+) -> OnlineItlSelfCacheUpdate {
+    ONLINE_ITL_SELF_RANK_CACHE
+        .lock()
+        .unwrap()
+        .set_value(profile_id, api_key, chart_hash, rank)
+}
+
+pub fn runtime_set_online_itl_self_rank<L, S>(
+    profile_id: Option<&str>,
+    api_key: &str,
+    chart_hash: &str,
+    rank: Option<u32>,
+    mut load_profile: L,
+    mut save_profile: S,
+) where
+    L: FnMut(&str) -> OnlineItlSelfIndexMap,
+    S: FnMut(&str, &OnlineItlSelfCacheMap),
+{
+    let profile_id = profile_id.map(str::trim).filter(|id| !id.is_empty());
+    if let Some(profile_id) = profile_id {
+        runtime_ensure_online_itl_self_rank_profile_loaded(profile_id, &mut load_profile);
+    }
+
+    let update = set_online_itl_self_rank(profile_id, api_key, chart_hash, rank);
+    if let Some((profile_id, by_key)) = update.profile_snapshot {
+        save_profile(profile_id.as_str(), &by_key);
+    }
+}
+
+pub fn get_online_itl_self_rank(
+    chart_hash: &str,
+    profile_id: Option<&str>,
+    api_key: &str,
+) -> Option<u32> {
+    ONLINE_ITL_SELF_RANK_CACHE
+        .lock()
+        .unwrap()
+        .get_value(chart_hash, profile_id, api_key)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OnlineItlOverallRankCacheKey {
+    pub api_key: String,
+    pub profile_id: Option<String>,
+    pub song_cache_generation: u64,
+    pub self_score_generation: u64,
+}
+
+#[derive(Clone)]
+struct OnlineItlOverallRankCacheEntry {
+    key: OnlineItlOverallRankCacheKey,
+    ranks: Arc<HashMap<String, u32>>,
+}
+
+#[derive(Default)]
+struct OnlineItlOverallRankCacheState {
+    p1: Option<OnlineItlOverallRankCacheEntry>,
+    p2: Option<OnlineItlOverallRankCacheEntry>,
+}
+
+#[inline(always)]
+fn online_itl_overall_rank_entry_for_side(
+    state: &OnlineItlOverallRankCacheState,
+    side_idx: usize,
+) -> Option<&OnlineItlOverallRankCacheEntry> {
+    match side_idx {
+        1 => state.p2.as_ref(),
+        _ => state.p1.as_ref(),
+    }
+}
+
+#[inline(always)]
+fn online_itl_overall_rank_entry_for_side_mut(
+    state: &mut OnlineItlOverallRankCacheState,
+    side_idx: usize,
+) -> &mut Option<OnlineItlOverallRankCacheEntry> {
+    match side_idx {
+        1 => &mut state.p2,
+        _ => &mut state.p1,
+    }
+}
+
+pub fn empty_online_itl_overall_ranks() -> Arc<HashMap<String, u32>> {
+    EMPTY_ONLINE_ITL_OVERALL_RANKS.clone()
+}
+
+pub fn cached_online_itl_overall_ranks_for_side(
+    side_idx: usize,
+    key: &OnlineItlOverallRankCacheKey,
+) -> Option<Arc<HashMap<String, u32>>> {
+    let cache = ONLINE_ITL_OVERALL_RANK_CACHE.lock().unwrap();
+    online_itl_overall_rank_entry_for_side(&cache, side_idx)
+        .filter(|entry| entry.key == *key)
+        .map(|entry| entry.ranks.clone())
+}
+
+pub fn store_online_itl_overall_ranks_for_side(
+    side_idx: usize,
+    key: OnlineItlOverallRankCacheKey,
+    ranks: Arc<HashMap<String, u32>>,
+) -> Arc<HashMap<String, u32>> {
+    let mut cache = ONLINE_ITL_OVERALL_RANK_CACHE.lock().unwrap();
+    *online_itl_overall_rank_entry_for_side_mut(&mut cache, side_idx) =
+        Some(OnlineItlOverallRankCacheEntry {
+            key,
+            ranks: ranks.clone(),
+        });
+    ranks
+}
+
+pub fn runtime_online_itl_overall_ranks_for_side<L>(
+    side_idx: usize,
+    side_joined: bool,
+    api_key: &str,
+    profile_id: Option<&str>,
+    song_cache_generation: u64,
+    song_cache: &[deadsync_chart::SongPack],
+    mut load_profile: L,
+) -> Arc<HashMap<String, u32>>
+where
+    L: FnMut(&str) -> OnlineItlSelfIndexMap,
+{
+    if !side_joined {
+        return empty_online_itl_overall_ranks();
+    }
+
+    let api_key = api_key.trim();
+    if api_key.is_empty() {
+        return empty_online_itl_overall_ranks();
+    }
+
+    let profile_id = profile_id.map(str::trim).filter(|id| !id.is_empty());
+    if let Some(profile_id) = profile_id {
+        runtime_ensure_online_itl_self_score_profile_loaded(profile_id, &mut load_profile);
+    }
+
+    let self_score_generation = online_itl_self_score_generation();
+    let key = OnlineItlOverallRankCacheKey {
+        api_key: api_key.to_string(),
+        profile_id: profile_id.map(str::to_string),
+        song_cache_generation,
+        self_score_generation,
+    };
+    if let Some(ranks) = cached_online_itl_overall_ranks_for_side(side_idx, &key) {
+        return ranks;
+    }
+
+    let by_chart_score = online_itl_self_scores_by_chart_for_api(profile_id, api_key);
+    let ranks = Arc::new(itl_overall_ranks_from_song_cache(
+        song_cache,
+        &by_chart_score,
+    ));
+    store_online_itl_overall_ranks_for_side(side_idx, key, ranks)
+}
+
 #[derive(Debug)]
 pub enum OnlineItlSelfIndexWriteError {
     CreateDir {
@@ -198,6 +485,38 @@ pub fn load_online_itl_self_index_file(path: &Path) -> Option<OnlineItlSelfIndex
         bincode::decode_from_slice::<OnlineItlSelfIndexMap, _>(&bytes, bincode::config::standard())
             .ok()?;
     Some(by_key)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OnlineItlSelfIndexKind {
+    Score,
+    Rank,
+}
+
+pub fn online_itl_self_index_path(profile_dir: &Path, kind: OnlineItlSelfIndexKind) -> PathBuf {
+    let file_name = match kind {
+        OnlineItlSelfIndexKind::Score => "itl_self.bin",
+        OnlineItlSelfIndexKind::Rank => "itl_rank.bin",
+    };
+    profile_dir.join("scores").join("gs").join(file_name)
+}
+
+pub fn load_online_itl_self_index_for_profile_dir(
+    profile_dir: &Path,
+    kind: OnlineItlSelfIndexKind,
+) -> OnlineItlSelfIndexMap {
+    load_online_itl_self_index_file(&online_itl_self_index_path(profile_dir, kind))
+        .unwrap_or_default()
+}
+
+pub fn save_online_itl_self_index_for_profile_dir(
+    profile_dir: &Path,
+    kind: OnlineItlSelfIndexKind,
+    by_key: &OnlineItlSelfCacheMap,
+) -> Result<PathBuf, OnlineItlSelfIndexWriteError> {
+    let path = online_itl_self_index_path(profile_dir, kind);
+    save_online_itl_self_index_file(&path, by_key)?;
+    Ok(path)
 }
 
 pub fn save_online_itl_self_index_file(
@@ -309,6 +628,257 @@ impl ItlScoreCacheState {
     }
 }
 
+pub fn itl_score_profile_loaded(profile_id: &str) -> bool {
+    ITL_SCORE_CACHE.lock().unwrap().profile_loaded(profile_id)
+}
+
+pub fn insert_itl_score_profile(profile_id: &str, data: ItlFileData) {
+    ITL_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .insert_loaded_profile(profile_id, data);
+}
+
+pub fn set_itl_score_profile(profile_id: &str, data: ItlFileData) {
+    ITL_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .set_profile_data(profile_id, data);
+}
+
+pub fn runtime_ensure_itl_score_profile_loaded<L>(profile_id: &str, mut load_profile: L)
+where
+    L: FnMut(&str) -> ItlFileData,
+{
+    let profile_id = profile_id.trim();
+    if profile_id.is_empty() || itl_score_profile_loaded(profile_id) {
+        return;
+    }
+
+    let mut data = load_profile(profile_id);
+    itl_rebuild_song_ranks(&mut data);
+    insert_itl_score_profile(profile_id, data);
+}
+
+pub fn runtime_set_itl_score_file(profile_id: &str, data: ItlFileData) {
+    let profile_id = profile_id.trim();
+    if profile_id.is_empty() {
+        return;
+    }
+    set_itl_score_profile(profile_id, data);
+}
+
+pub fn runtime_import_itl_json<W>(profile_id: &str, json_text: &str, mut write_profile: W) -> usize
+where
+    W: FnMut(&str, &ItlFileData),
+{
+    let profile_id = profile_id.trim();
+    if profile_id.is_empty() {
+        return 0;
+    }
+    let Some(data) = itl_data_from_json(json_text) else {
+        return 0;
+    };
+    let count = data.hash_map.len();
+    write_profile(profile_id, &data);
+    count
+}
+
+pub fn runtime_update_itl_unlock_folders<'a, I, R, W>(
+    profile_id: &str,
+    folders: I,
+    mut read_profile: R,
+    mut write_profile: W,
+) -> bool
+where
+    I: IntoIterator<Item = &'a str>,
+    R: FnMut(&str) -> ItlFileData,
+    W: FnMut(&str, &ItlFileData),
+{
+    let profile_id = profile_id.trim();
+    if profile_id.is_empty() {
+        return false;
+    }
+    let folders: Vec<&str> = folders.into_iter().collect();
+    if folders.is_empty() {
+        return false;
+    }
+
+    let mut data = read_profile(profile_id);
+    if !itl_mark_unlock_folders(&mut data, folders) {
+        return false;
+    }
+    write_profile(profile_id, &data);
+    set_itl_score_profile(profile_id, data);
+    true
+}
+
+pub fn mark_itl_unlock_folders<'a, I>(profile_id: &str, folders: I)
+where
+    I: IntoIterator<Item = &'a str>,
+{
+    ITL_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .mark_unlock_folders(profile_id, folders);
+}
+
+pub fn cached_itl_chart_score(profile_id: &str, chart_hash: &str) -> Option<CachedItlScore> {
+    ITL_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .chart_score(profile_id, chart_hash)
+}
+
+pub fn runtime_cached_itl_chart_score<L>(
+    profile_id: Option<&str>,
+    chart_hash: &str,
+    mut load_profile: L,
+) -> Option<CachedItlScore>
+where
+    L: FnMut(&str) -> ItlFileData,
+{
+    let profile_id = profile_id.map(str::trim).filter(|id| !id.is_empty())?;
+    runtime_ensure_itl_score_profile_loaded(profile_id, &mut load_profile);
+    cached_itl_chart_score(profile_id, chart_hash)
+}
+
+pub fn cached_itl_song_score(
+    profile_id: &str,
+    song: &deadsync_chart::SongData,
+) -> Option<CachedItlScore> {
+    ITL_SCORE_CACHE.lock().unwrap().song_score(profile_id, song)
+}
+
+pub fn runtime_cached_itl_song_score<L>(
+    song: &deadsync_chart::SongData,
+    profile_id: Option<&str>,
+    mut load_profile: L,
+) -> Option<CachedItlScore>
+where
+    L: FnMut(&str) -> ItlFileData,
+{
+    let profile_id = profile_id.map(str::trim).filter(|id| !id.is_empty())?;
+    runtime_ensure_itl_score_profile_loaded(profile_id, &mut load_profile);
+    cached_itl_song_score(profile_id, song)
+}
+
+pub fn runtime_cached_itl_song_score_assume_loaded(
+    song: &deadsync_chart::SongData,
+    profile_id: Option<&str>,
+) -> Option<CachedItlScore> {
+    let profile_id = profile_id.map(str::trim).filter(|id| !id.is_empty())?;
+    cached_itl_song_score(profile_id, song)
+}
+
+pub fn cached_itl_song_folder_unlocked(profile_id: &str, song_folder: &str) -> bool {
+    ITL_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .song_folder_unlocked(profile_id, song_folder)
+}
+
+pub fn runtime_cached_itl_song_folder_unlocked<L>(
+    song_folder: &str,
+    profile_id: Option<&str>,
+    mut load_profile: L,
+) -> bool
+where
+    L: FnMut(&str) -> ItlFileData,
+{
+    let Some(profile_id) = profile_id.map(str::trim).filter(|id| !id.is_empty()) else {
+        return false;
+    };
+    runtime_ensure_itl_score_profile_loaded(profile_id, &mut load_profile);
+    cached_itl_song_folder_unlocked(profile_id, song_folder)
+}
+
+pub fn cached_itl_chart_no_cmod_for_song(
+    profile_id: &str,
+    song_dir: Option<&str>,
+    group_name: Option<&str>,
+    chart_hash: &str,
+    subtitle: &str,
+) -> Option<bool> {
+    ITL_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .chart_no_cmod_for_song(profile_id, song_dir, group_name, chart_hash, subtitle)
+}
+
+pub fn runtime_cached_online_itl_self_score<L>(
+    chart_hash: &str,
+    profile_id: Option<&str>,
+    api_key: &str,
+    mut load_profile: L,
+) -> Option<u32>
+where
+    L: FnMut(&str) -> OnlineItlSelfIndexMap,
+{
+    let profile_id = profile_id.map(str::trim).filter(|id| !id.is_empty());
+    if let Some(profile_id) = profile_id {
+        runtime_ensure_online_itl_self_score_profile_loaded(profile_id, &mut load_profile);
+    }
+    runtime_cached_online_itl_self_score_assume_loaded(chart_hash, profile_id, api_key)
+}
+
+pub fn runtime_cached_online_itl_self_score_assume_loaded(
+    chart_hash: &str,
+    profile_id: Option<&str>,
+    api_key: &str,
+) -> Option<u32> {
+    let chart_hash = chart_hash.trim();
+    let api_key = api_key.trim();
+    if chart_hash.is_empty() || api_key.is_empty() {
+        return None;
+    }
+    get_online_itl_self_score(chart_hash, profile_id, api_key)
+}
+
+pub fn runtime_cached_online_itl_self_rank<L>(
+    chart_hash: &str,
+    profile_id: Option<&str>,
+    api_key: &str,
+    mut load_profile: L,
+) -> Option<u32>
+where
+    L: FnMut(&str) -> OnlineItlSelfIndexMap,
+{
+    let profile_id = profile_id.map(str::trim).filter(|id| !id.is_empty());
+    if let Some(profile_id) = profile_id {
+        runtime_ensure_online_itl_self_rank_profile_loaded(profile_id, &mut load_profile);
+    }
+    runtime_cached_online_itl_self_rank_assume_loaded(chart_hash, profile_id, api_key)
+}
+
+pub fn runtime_cached_online_itl_self_rank_assume_loaded(
+    chart_hash: &str,
+    profile_id: Option<&str>,
+    api_key: &str,
+) -> Option<u32> {
+    let chart_hash = chart_hash.trim();
+    let api_key = api_key.trim();
+    if chart_hash.is_empty() || api_key.is_empty() {
+        return None;
+    }
+    get_online_itl_self_rank(chart_hash, profile_id, api_key)
+}
+
+pub fn runtime_ensure_itl_wheel_caches_loaded<I, S, R>(
+    profile_id: &str,
+    load_itl_profile: I,
+    load_self_score_profile: S,
+    load_self_rank_profile: R,
+) where
+    I: FnMut(&str) -> ItlFileData,
+    S: FnMut(&str) -> OnlineItlSelfIndexMap,
+    R: FnMut(&str) -> OnlineItlSelfIndexMap,
+{
+    runtime_ensure_itl_score_profile_loaded(profile_id, load_itl_profile);
+    runtime_ensure_online_itl_self_score_profile_loaded(profile_id, load_self_score_profile);
+    runtime_ensure_online_itl_self_rank_profile_loaded(profile_id, load_self_rank_profile);
+}
+
 #[derive(Debug)]
 pub enum ItlFileReadError {
     Read {
@@ -347,6 +917,35 @@ pub fn read_itl_file_from_path(path: &Path) -> Result<ItlFileData, ItlFileReadEr
         path: path.to_path_buf(),
         error,
     })
+}
+
+pub const ITL_PROFILE_FILE_NAME: &str = "ITL2026.json";
+
+pub fn itl_profile_file_path(profile_dir: &Path) -> PathBuf {
+    profile_dir.join(ITL_PROFILE_FILE_NAME)
+}
+
+pub fn read_itl_file_for_profile_dir(profile_dir: &Path) -> Result<ItlFileData, ItlFileReadError> {
+    read_itl_file_from_path(&itl_profile_file_path(profile_dir))
+}
+
+pub fn read_itl_file_or_default_for_profile_dir(
+    profile_dir: &Path,
+) -> Result<ItlFileData, ItlFileReadError> {
+    match read_itl_file_for_profile_dir(profile_dir) {
+        Ok(data) => Ok(data),
+        Err(ItlFileReadError::Read { .. }) => Ok(ItlFileData::default()),
+        Err(error) => Err(error),
+    }
+}
+
+pub fn write_itl_file_for_profile_dir(
+    profile_dir: &Path,
+    data: &ItlFileData,
+) -> Result<PathBuf, ItlFileWriteError> {
+    let path = itl_profile_file_path(profile_dir);
+    write_itl_file_to_path(&path, data)?;
+    Ok(path)
 }
 
 pub fn write_itl_file_to_path(path: &Path, data: &ItlFileData) -> Result<(), ItlFileWriteError> {
@@ -443,6 +1042,77 @@ pub struct ItlJudgments {
     pub rolls: u32,
     #[serde(rename = "totalRolls", default)]
     pub total_rolls: u32,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ItlJudgmentCountsInput {
+    pub fantastic_plus: u32,
+    pub fantastic: u32,
+    pub excellent: u32,
+    pub great: u32,
+    pub decent: u32,
+    pub way_off: u32,
+    pub miss: u32,
+    pub total_steps: u32,
+    pub holds_held: u32,
+    pub total_holds: u32,
+    pub mines_hit: u32,
+    pub total_mines: u32,
+    pub rolls_held: u32,
+    pub total_rolls: u32,
+}
+
+pub fn itl_judgments_from_counts(input: ItlJudgmentCountsInput) -> ItlJudgments {
+    ItlJudgments {
+        w0: input.fantastic_plus,
+        w1: input.fantastic,
+        w2: input.excellent,
+        w3: input.great,
+        w4: input.decent,
+        w5: input.way_off,
+        miss: input.miss,
+        total_steps: input.total_steps,
+        holds: input.holds_held,
+        total_holds: input.total_holds,
+        mines: input.mines_hit,
+        total_mines: input.total_mines,
+        rolls: input.rolls_held,
+        total_rolls: input.total_rolls,
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ItlScoreCalcInput<'a> {
+    pub notes: &'a [deadsync_rules::note::Note],
+    pub note_times: &'a [deadsync_core::song_time::SongTimeNs],
+    pub hold_end_times: &'a [Option<deadsync_core::song_time::SongTimeNs>],
+    pub total_steps: u32,
+    pub holds_total: u32,
+    pub rolls_total: u32,
+    pub mines_total: u32,
+    pub fail_time: Option<deadsync_core::song_time::SongTimeNs>,
+}
+
+pub fn itl_ex_score_percent(input: ItlScoreCalcInput<'_>) -> f64 {
+    deadsync_rules::judgment::calculate_ex_score_from_notes(
+        input.notes,
+        input.note_times,
+        input.hold_end_times,
+        input.total_steps,
+        input.holds_total,
+        input.rolls_total,
+        input.mines_total,
+        input.fail_time,
+        false,
+    )
+}
+
+pub fn itl_current_score_hundredths(input: ItlScoreCalcInput<'_>) -> u32 {
+    ex_hundredths(itl_ex_score_percent(input))
+}
+
+pub fn itl_timing_windows_all_enabled(disabled_windows: &[bool]) -> bool {
+    disabled_windows.iter().all(|disabled| !*disabled)
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -985,6 +1655,190 @@ mod tests {
     }
 
     #[test]
+    fn runtime_online_itl_overall_ranks_loads_profile_and_caches_result() {
+        let profile_id = "runtime-overall-itl-profile";
+        let api_key = "runtime-overall-itl-api";
+        let chart_hash = "runtime-overall-itl-chart";
+        let song_cache = vec![song_pack(
+            "ITL Online 2026",
+            vec![ranked_chart(chart_hash, "dance-single", "10 20")],
+        )];
+        let mut loads = 0;
+
+        let ranks = runtime_online_itl_overall_ranks_for_side(
+            0,
+            true,
+            api_key,
+            Some(profile_id),
+            314_159,
+            &song_cache,
+            |loaded_profile| {
+                assert_eq!(loaded_profile, profile_id);
+                loads += 1;
+                HashMap::from([(
+                    OnlineItlSelfScoreKey {
+                        chart_hash: chart_hash.to_string(),
+                        api_key: api_key.to_string(),
+                    },
+                    10_000,
+                )])
+            },
+        );
+
+        assert_eq!(loads, 1);
+        assert_eq!(ranks.get(chart_hash), Some(&1));
+
+        let cached_ranks = runtime_online_itl_overall_ranks_for_side(
+            0,
+            true,
+            api_key,
+            Some(profile_id),
+            314_159,
+            &song_cache,
+            |_| {
+                loads += 1;
+                HashMap::new()
+            },
+        );
+
+        assert_eq!(loads, 1);
+        assert_eq!(cached_ranks.get(chart_hash), Some(&1));
+    }
+
+    #[test]
+    fn runtime_online_itl_overall_ranks_ignores_unjoined_side() {
+        let mut loads = 0;
+        let ranks = runtime_online_itl_overall_ranks_for_side(
+            0,
+            false,
+            "runtime-overall-unjoined-api",
+            Some("runtime-overall-unjoined-profile"),
+            271_828,
+            &[],
+            |_| {
+                loads += 1;
+                HashMap::new()
+            },
+        );
+
+        assert_eq!(loads, 0);
+        assert!(ranks.is_empty());
+    }
+
+    #[test]
+    fn runtime_ensures_itl_score_profile_once() {
+        let profile_id = "runtime-ensure-itl-score-profile";
+        let chart_hash = "runtime-ensure-itl-score-chart";
+        let mut loads = 0;
+
+        runtime_ensure_itl_score_profile_loaded(profile_id, |loaded_profile| {
+            assert_eq!(loaded_profile, profile_id);
+            loads += 1;
+            let mut data = ItlFileData::default();
+            data.hash_map.insert(
+                chart_hash.to_string(),
+                ItlHashEntry {
+                    ex: 9876,
+                    points: 4321,
+                    clear_type: 5,
+                    steps_type: "single".to_string(),
+                    ..ItlHashEntry::default()
+                },
+            );
+            data
+        });
+        runtime_ensure_itl_score_profile_loaded(profile_id, |_| {
+            loads += 1;
+            ItlFileData::default()
+        });
+
+        let score = cached_itl_chart_score(profile_id, chart_hash).expect("cached ITL score");
+        assert_eq!(loads, 1);
+        assert_eq!(score.ex_hundredths, 9876);
+        assert_eq!(score.points, 4321);
+        assert_eq!(score.clear_type, 5);
+    }
+
+    #[test]
+    fn runtime_import_itl_json_writes_valid_payload() {
+        let profile_id = "runtime-import-itl-profile";
+        let json_text = serde_json::to_string(&json!({
+            "pathMap": { "/Songs/ITL Online 2026/Example": "runtime-import-itl-chart" },
+            "hashMap": {
+                "runtime-import-itl-chart": { "ex": 98.76, "points": 4321 }
+            }
+        }))
+        .unwrap();
+        let mut saved_profile = String::new();
+        let mut saved_hashes = 0usize;
+
+        let count = runtime_import_itl_json(profile_id, &json_text, |profile, data| {
+            saved_profile = profile.to_string();
+            saved_hashes = data.hash_map.len();
+        });
+
+        assert_eq!(count, 1);
+        assert_eq!(saved_profile, profile_id);
+        assert_eq!(saved_hashes, 1);
+    }
+
+    #[test]
+    fn runtime_update_itl_unlock_folders_writes_changed_profile() {
+        let profile_id = "runtime-update-itl-unlocks-profile";
+        let mut reads = 0;
+        let mut saved = None;
+
+        let changed = runtime_update_itl_unlock_folders(
+            profile_id,
+            ["/Songs/Unlock/A", "/Songs/Unlock/B"],
+            |loaded_profile| {
+                assert_eq!(loaded_profile, profile_id);
+                reads += 1;
+                ItlFileData::default()
+            },
+            |saved_profile, data| {
+                assert_eq!(saved_profile, profile_id);
+                saved = Some(data.unlock_folders.len());
+            },
+        );
+
+        assert!(changed);
+        assert_eq!(reads, 1);
+        assert_eq!(saved, Some(2));
+        assert!(cached_itl_song_folder_unlocked(
+            profile_id,
+            "/Songs/Unlock/A"
+        ));
+        assert!(cached_itl_song_folder_unlocked(
+            profile_id,
+            "/Songs/Unlock/B"
+        ));
+    }
+
+    #[test]
+    fn runtime_update_itl_unlock_folders_skips_unchanged_profile() {
+        let profile_id = "runtime-update-itl-unlocks-unchanged-profile";
+        let mut writes = 0;
+
+        let changed = runtime_update_itl_unlock_folders(
+            profile_id,
+            ["/Songs/Unlock/A"],
+            |_| {
+                let mut data = ItlFileData::default();
+                data.unlock_folders
+                    .insert("/Songs/Unlock/A".to_string(), true);
+                data
+            },
+            |_, _| {
+                writes += 1;
+            },
+        );
+
+        assert!(!changed);
+        assert_eq!(writes, 0);
+    }
+
+    #[test]
     fn itl_judgments_compare_from_top_window() {
         let prev = ItlJudgments {
             w0: 10,
@@ -1004,6 +1858,65 @@ mod tests {
 
         assert!(itl_judgments_better(&better, &prev));
         assert!(!itl_judgments_better(&worse, &prev));
+    }
+
+    #[test]
+    fn itl_judgments_from_counts_maps_all_fields() {
+        let judgments = itl_judgments_from_counts(ItlJudgmentCountsInput {
+            fantastic_plus: 1,
+            fantastic: 2,
+            excellent: 3,
+            great: 4,
+            decent: 5,
+            way_off: 6,
+            miss: 7,
+            total_steps: 8,
+            holds_held: 9,
+            total_holds: 10,
+            mines_hit: 11,
+            total_mines: 12,
+            rolls_held: 13,
+            total_rolls: 14,
+        });
+
+        assert_eq!(judgments.w0, 1);
+        assert_eq!(judgments.w1, 2);
+        assert_eq!(judgments.w2, 3);
+        assert_eq!(judgments.w3, 4);
+        assert_eq!(judgments.w4, 5);
+        assert_eq!(judgments.w5, 6);
+        assert_eq!(judgments.miss, 7);
+        assert_eq!(judgments.total_steps, 8);
+        assert_eq!(judgments.holds, 9);
+        assert_eq!(judgments.total_holds, 10);
+        assert_eq!(judgments.mines, 11);
+        assert_eq!(judgments.total_mines, 12);
+        assert_eq!(judgments.rolls, 13);
+        assert_eq!(judgments.total_rolls, 14);
+    }
+
+    #[test]
+    fn itl_timing_and_current_score_helpers_normalize_inputs() {
+        assert!(itl_timing_windows_all_enabled(&[]));
+        assert!(itl_timing_windows_all_enabled(&[false, false]));
+        assert!(!itl_timing_windows_all_enabled(&[false, true]));
+
+        let notes: Vec<deadsync_rules::note::Note> = Vec::new();
+        let note_times: Vec<deadsync_core::song_time::SongTimeNs> = Vec::new();
+        let hold_end_times: Vec<Option<deadsync_core::song_time::SongTimeNs>> = Vec::new();
+        assert_eq!(
+            itl_current_score_hundredths(ItlScoreCalcInput {
+                notes: notes.as_slice(),
+                note_times: note_times.as_slice(),
+                hold_end_times: hold_end_times.as_slice(),
+                total_steps: 0,
+                holds_total: 0,
+                rolls_total: 0,
+                mines_total: 0,
+                fail_time: None,
+            }),
+            0
+        );
     }
 
     #[test]
@@ -1063,6 +1976,358 @@ mod tests {
         assert_eq!(load_online_itl_self_index_file(&path), Some(expected));
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn online_itl_self_index_paths_use_profile_score_layout() {
+        let profile_dir = PathBuf::from("Profile");
+
+        assert_eq!(
+            online_itl_self_index_path(&profile_dir, OnlineItlSelfIndexKind::Score),
+            profile_dir.join("scores").join("gs").join("itl_self.bin")
+        );
+        assert_eq!(
+            online_itl_self_index_path(&profile_dir, OnlineItlSelfIndexKind::Rank),
+            profile_dir.join("scores").join("gs").join("itl_rank.bin")
+        );
+    }
+
+    #[test]
+    fn online_itl_self_index_profile_dir_helpers_round_trip() {
+        let dir = temp_test_dir("itl-self-profile-dir");
+        let key = OnlineItlSelfScoreKey {
+            chart_hash: "profile-dir-chart".to_string(),
+            api_key: "profile-dir-api".to_string(),
+        };
+        let in_memory: OnlineItlSelfCacheMap = [(key.clone(), 1234)].into_iter().collect();
+
+        let saved_path = save_online_itl_self_index_for_profile_dir(
+            &dir,
+            OnlineItlSelfIndexKind::Rank,
+            &in_memory,
+        )
+        .expect("save index");
+
+        assert_eq!(
+            saved_path,
+            dir.join("scores").join("gs").join("itl_rank.bin")
+        );
+        assert_eq!(
+            load_online_itl_self_index_for_profile_dir(&dir, OnlineItlSelfIndexKind::Rank)
+                .get(&key),
+            Some(&1234)
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn itl_profile_file_helpers_use_profile_root() {
+        let profile_dir = PathBuf::from("Profile");
+
+        assert_eq!(
+            itl_profile_file_path(&profile_dir),
+            profile_dir.join("ITL2026.json")
+        );
+    }
+
+    #[test]
+    fn itl_profile_file_helpers_round_trip_and_default_missing() {
+        let dir = temp_test_dir("itl-profile-file");
+        let mut data = ItlFileData::default();
+        data.hash_map.insert(
+            "profile-file-chart".to_string(),
+            ItlHashEntry {
+                ex: 9900,
+                points: 100,
+                clear_type: 5,
+                no_cmod: true,
+                rank: Some(1),
+                ..ItlHashEntry::default()
+            },
+        );
+
+        let saved_path = write_itl_file_for_profile_dir(&dir, &data).expect("write itl file");
+
+        assert_eq!(saved_path, dir.join("ITL2026.json"));
+        assert_eq!(
+            read_itl_file_or_default_for_profile_dir(&dir)
+                .expect("read itl file")
+                .hash_map["profile-file-chart"]
+                .ex,
+            9900
+        );
+
+        let missing_dir = temp_test_dir("itl-profile-file-missing");
+        assert!(
+            read_itl_file_or_default_for_profile_dir(&missing_dir)
+                .expect("missing file defaults")
+                .is_empty()
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&missing_dir);
+    }
+
+    #[test]
+    fn runtime_ensures_online_itl_self_score_profile_once() {
+        let profile_id = "runtime-ensure-itl-self-score-profile";
+        let api_key = "runtime-ensure-itl-self-score-api";
+        let chart_hash = "runtime-ensure-itl-self-score-chart";
+        let mut loads = 0;
+
+        runtime_ensure_online_itl_self_score_profile_loaded(profile_id, |loaded_profile| {
+            assert_eq!(loaded_profile, profile_id);
+            loads += 1;
+            HashMap::from([(
+                OnlineItlSelfScoreKey {
+                    chart_hash: chart_hash.to_string(),
+                    api_key: api_key.to_string(),
+                },
+                9876,
+            )])
+        });
+        runtime_ensure_online_itl_self_score_profile_loaded(profile_id, |_| {
+            loads += 1;
+            HashMap::new()
+        });
+
+        assert_eq!(loads, 1);
+        assert_eq!(
+            get_online_itl_self_score(chart_hash, Some(profile_id), api_key),
+            Some(9876)
+        );
+    }
+
+    #[test]
+    fn runtime_sets_online_itl_self_score_and_saves_snapshot() {
+        let profile_id = "runtime-set-itl-self-score-profile";
+        let api_key = "runtime-set-itl-self-score-api";
+        let chart_hash = "runtime-set-itl-self-score-chart";
+        let mut loads = 0;
+        let mut saved = None;
+
+        runtime_set_online_itl_self_score(
+            Some(profile_id),
+            api_key,
+            chart_hash,
+            Some(9988),
+            |loaded_profile| {
+                assert_eq!(loaded_profile, profile_id);
+                loads += 1;
+                HashMap::new()
+            },
+            |saved_profile, by_key| {
+                assert_eq!(saved_profile, profile_id);
+                saved = by_key
+                    .get(&OnlineItlSelfScoreKey {
+                        chart_hash: chart_hash.to_string(),
+                        api_key: api_key.to_string(),
+                    })
+                    .copied();
+            },
+        );
+
+        assert_eq!(loads, 1);
+        assert_eq!(saved, Some(9988));
+        assert_eq!(
+            get_online_itl_self_score(chart_hash, Some(profile_id), api_key),
+            Some(9988)
+        );
+    }
+
+    #[test]
+    fn runtime_ensures_online_itl_self_rank_profile_once() {
+        let profile_id = "runtime-ensure-itl-self-rank-profile";
+        let api_key = "runtime-ensure-itl-self-rank-api";
+        let chart_hash = "runtime-ensure-itl-self-rank-chart";
+        let mut loads = 0;
+
+        runtime_ensure_online_itl_self_rank_profile_loaded(profile_id, |loaded_profile| {
+            assert_eq!(loaded_profile, profile_id);
+            loads += 1;
+            HashMap::from([(
+                OnlineItlSelfScoreKey {
+                    chart_hash: chart_hash.to_string(),
+                    api_key: api_key.to_string(),
+                },
+                42,
+            )])
+        });
+        runtime_ensure_online_itl_self_rank_profile_loaded(profile_id, |_| {
+            loads += 1;
+            HashMap::new()
+        });
+
+        assert_eq!(loads, 1);
+        assert_eq!(
+            get_online_itl_self_rank(chart_hash, Some(profile_id), api_key),
+            Some(42)
+        );
+    }
+
+    #[test]
+    fn runtime_sets_online_itl_self_rank_and_saves_snapshot() {
+        let profile_id = "runtime-set-itl-self-rank-profile";
+        let api_key = "runtime-set-itl-self-rank-api";
+        let chart_hash = "runtime-set-itl-self-rank-chart";
+        let mut loads = 0;
+        let mut saved = None;
+
+        runtime_set_online_itl_self_rank(
+            Some(profile_id),
+            api_key,
+            chart_hash,
+            Some(7),
+            |loaded_profile| {
+                assert_eq!(loaded_profile, profile_id);
+                loads += 1;
+                HashMap::new()
+            },
+            |saved_profile, by_key| {
+                assert_eq!(saved_profile, profile_id);
+                saved = by_key
+                    .get(&OnlineItlSelfScoreKey {
+                        chart_hash: chart_hash.to_string(),
+                        api_key: api_key.to_string(),
+                    })
+                    .copied();
+            },
+        );
+
+        assert_eq!(loads, 1);
+        assert_eq!(saved, Some(7));
+        assert_eq!(
+            get_online_itl_self_rank(chart_hash, Some(profile_id), api_key),
+            Some(7)
+        );
+    }
+
+    #[test]
+    fn runtime_cached_itl_chart_score_loads_profile_once() {
+        let profile_id = "runtime-cached-itl-chart-profile";
+        let chart_hash = "runtime-cached-itl-chart";
+        let mut loads = 0;
+
+        let score = runtime_cached_itl_chart_score(Some(profile_id), chart_hash, |loaded| {
+            assert_eq!(loaded, profile_id);
+            loads += 1;
+            let mut data = ItlFileData::default();
+            data.hash_map.insert(
+                chart_hash.to_string(),
+                ItlHashEntry {
+                    ex: 9876,
+                    clear_type: 5,
+                    points: 1234,
+                    ..ItlHashEntry::default()
+                },
+            );
+            data
+        })
+        .expect("cached score");
+
+        assert_eq!(score.ex_hundredths, 9876);
+        assert_eq!(score.clear_type, 5);
+        assert_eq!(score.points, 1234);
+
+        let score = runtime_cached_itl_chart_score(Some(profile_id), chart_hash, |_| {
+            loads += 1;
+            ItlFileData::default()
+        })
+        .expect("cached score remains loaded");
+        assert_eq!(score.ex_hundredths, 9876);
+        assert_eq!(loads, 1);
+    }
+
+    #[test]
+    fn runtime_cached_itl_song_folder_unlocked_loads_profile() {
+        let profile_id = "runtime-cached-itl-folder-profile";
+        let folder = "/Songs/ITL Online 2026/Example";
+
+        assert!(runtime_cached_itl_song_folder_unlocked(
+            folder,
+            Some(profile_id),
+            |loaded| {
+                assert_eq!(loaded, profile_id);
+                let mut data = ItlFileData::default();
+                data.unlock_folders.insert(folder.to_string(), true);
+                data
+            }
+        ));
+        assert!(!runtime_cached_itl_song_folder_unlocked(
+            "/Songs/Other",
+            Some(profile_id),
+            |_| ItlFileData::default()
+        ));
+    }
+
+    #[test]
+    fn runtime_cached_online_itl_self_score_loads_and_trims() {
+        let profile_id = "runtime-cached-online-itl-score-profile";
+        let api_key = "runtime-cached-online-itl-score-api";
+        let chart_hash = "runtime-cached-online-itl-score-chart";
+        let mut loads = 0;
+
+        let score = runtime_cached_online_itl_self_score(
+            chart_hash,
+            Some(" runtime-cached-online-itl-score-profile "),
+            api_key,
+            |loaded| {
+                assert_eq!(loaded, profile_id);
+                loads += 1;
+                HashMap::from([(
+                    OnlineItlSelfScoreKey {
+                        chart_hash: chart_hash.to_string(),
+                        api_key: api_key.to_string(),
+                    },
+                    9999,
+                )])
+            },
+        );
+
+        assert_eq!(score, Some(9999));
+        assert_eq!(
+            runtime_cached_online_itl_self_score_assume_loaded(
+                chart_hash,
+                Some(profile_id),
+                api_key
+            ),
+            Some(9999)
+        );
+        assert_eq!(loads, 1);
+    }
+
+    #[test]
+    fn runtime_cached_online_itl_self_rank_loads_and_trims() {
+        let profile_id = "runtime-cached-online-itl-rank-profile";
+        let api_key = "runtime-cached-online-itl-rank-api";
+        let chart_hash = "runtime-cached-online-itl-rank-chart";
+
+        let rank = runtime_cached_online_itl_self_rank(
+            chart_hash,
+            Some(" runtime-cached-online-itl-rank-profile "),
+            api_key,
+            |loaded| {
+                assert_eq!(loaded, profile_id);
+                HashMap::from([(
+                    OnlineItlSelfScoreKey {
+                        chart_hash: chart_hash.to_string(),
+                        api_key: api_key.to_string(),
+                    },
+                    17,
+                )])
+            },
+        );
+
+        assert_eq!(rank, Some(17));
+        assert_eq!(
+            runtime_cached_online_itl_self_rank_assume_loaded(
+                chart_hash,
+                Some(profile_id),
+                api_key
+            ),
+            Some(17)
+        );
     }
 
     #[test]

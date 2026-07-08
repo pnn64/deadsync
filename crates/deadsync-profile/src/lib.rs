@@ -1664,6 +1664,15 @@ pub fn scorebox_profile_snapshot(
     )
 }
 
+#[inline(always)]
+pub fn groovestats_side_active(
+    enable_groovestats: bool,
+    side_joined: bool,
+    groovestats_api_key: &str,
+) -> bool {
+    enable_groovestats && side_joined && !groovestats_api_key.trim().is_empty()
+}
+
 pub fn scorebox_profile_snapshot_for_side(
     profiles: &[Profile; PLAYER_SLOTS],
     active_profiles: &[ActiveProfile; PLAYER_SLOTS],
@@ -9015,6 +9024,14 @@ mod tests {
             scorebox_profile_snapshot(&profile, true, false, false, true, Some("profile-1".into()));
         assert!(!disabled.gs_active);
         assert!(!disabled.include_arrowcloud());
+    }
+
+    #[test]
+    fn groovestats_side_active_requires_enabled_joined_key() {
+        assert!(!groovestats_side_active(false, true, "gs-key"));
+        assert!(!groovestats_side_active(true, false, "gs-key"));
+        assert!(!groovestats_side_active(true, true, "   "));
+        assert!(groovestats_side_active(true, true, " gs-key "));
     }
 
     #[test]

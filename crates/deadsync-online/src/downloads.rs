@@ -1,3 +1,4 @@
+use crate::groovestats::ConnectionStatus;
 use deadsync_net as network;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -144,6 +145,27 @@ pub fn log_runtime_event(event: DownloadRuntimeEvent) {
             log::warn!("Attempted to download non-zip unlock from '{url}' ({content_type}).");
         }
     }
+}
+
+pub fn unlock_downloads_available(
+    auto_download_unlocks: bool,
+    groovestats_status: &ConnectionStatus,
+) -> bool {
+    auto_download_unlocks && matches!(groovestats_status, ConnectionStatus::Connected(_))
+}
+
+pub fn unlock_destination_roots(
+    songs_dir: PathBuf,
+    additional_roots: impl IntoIterator<Item = (PathBuf, bool)>,
+) -> Vec<PathBuf> {
+    let mut roots = Vec::new();
+    roots.push(songs_dir);
+    roots.extend(
+        additional_roots
+            .into_iter()
+            .filter_map(|(path, writable)| writable.then_some(path)),
+    );
+    roots
 }
 
 static RUNTIME_DOWNLOAD_STATE: LazyLock<Mutex<DownloadState>> =
@@ -776,6 +798,35 @@ mod tests {
         assert_eq!(
             mime_token("application/zip; charset=binary"),
             "application/zip"
+        );
+    }
+
+    #[test]
+    fn unlock_downloads_require_enabled_connected_groovestats() {
+        let connected = ConnectionStatus::Connected(crate::groovestats::Services {
+            get_scores: true,
+            leaderboard: true,
+            auto_submit: true,
+        });
+        assert!(unlock_downloads_available(true, &connected));
+        assert!(!unlock_downloads_available(false, &connected));
+        assert!(!unlock_downloads_available(
+            true,
+            &ConnectionStatus::Pending
+        ));
+    }
+
+    #[test]
+    fn unlock_destination_roots_keep_primary_and_writable_additional() {
+        assert_eq!(
+            unlock_destination_roots(
+                PathBuf::from("Songs"),
+                [
+                    (PathBuf::from("Writable"), true),
+                    (PathBuf::from("ReadOnly"), false),
+                ],
+            ),
+            vec![PathBuf::from("Songs"), PathBuf::from("Writable")]
         );
     }
 

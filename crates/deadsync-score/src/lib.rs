@@ -9,6 +9,7 @@ use deadsync_rules::{judgment, timing};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::sync::{LazyLock, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
@@ -21,16 +22,39 @@ pub mod stage_stats;
 pub use event_progress::*;
 pub use import::{ImportedHighScore, grade_from_itg, local_score_from_itg, parse_itg_datetime_ms};
 pub use itl::{
-    ItlFileData, ItlFileReadError, ItlFileWriteError, ItlHashEntry, ItlJudgments, ItlPointTotals,
-    ItlScoreCacheState, OnlineItlSelfCacheMap, OnlineItlSelfCacheState, OnlineItlSelfIndexMap,
-    OnlineItlSelfIndexWriteError, OnlineItlSelfScoreKey, ex_hundredths, is_itl_unlocks_pack,
-    itl_chart_no_cmod, itl_clear_type, itl_data_from_json, itl_event_name_from_group,
-    itl_group_name_matches, itl_judgments_better, itl_mark_unlock_folders,
-    itl_overall_ranks_from_song_cache, itl_point_totals, itl_points_for_chart, itl_points_for_song,
-    itl_rebuild_song_ranks, itl_score_for_song, itl_score_from_entry, itl_song_dir,
-    itl_song_folder_unlocked, itl_song_matches, itl_song_matches_context,
-    itl_steps_type_from_chart_type, load_online_itl_self_index_file, parse_itl_points,
-    read_itl_file_from_path, save_online_itl_self_index_file, write_itl_file_to_path,
+    ItlFileData, ItlFileReadError, ItlFileWriteError, ItlHashEntry, ItlJudgmentCountsInput,
+    ItlJudgments, ItlPointTotals, ItlScoreCacheState, ItlScoreCalcInput,
+    OnlineItlOverallRankCacheKey, OnlineItlSelfCacheMap, OnlineItlSelfCacheState,
+    OnlineItlSelfIndexKind, OnlineItlSelfIndexMap, OnlineItlSelfIndexWriteError,
+    OnlineItlSelfScoreKey, cached_itl_chart_no_cmod_for_song, cached_itl_chart_score,
+    cached_itl_song_folder_unlocked, cached_itl_song_score,
+    cached_online_itl_overall_ranks_for_side, empty_online_itl_overall_ranks, ex_hundredths,
+    get_online_itl_self_rank, get_online_itl_self_score, insert_itl_score_profile,
+    insert_online_itl_self_rank_profile, insert_online_itl_self_score_profile, is_itl_unlocks_pack,
+    itl_chart_no_cmod, itl_clear_type, itl_current_score_hundredths, itl_data_from_json,
+    itl_event_name_from_group, itl_ex_score_percent, itl_group_name_matches, itl_judgments_better,
+    itl_judgments_from_counts, itl_mark_unlock_folders, itl_overall_ranks_from_song_cache,
+    itl_point_totals, itl_points_for_chart, itl_points_for_song, itl_profile_file_path,
+    itl_rebuild_song_ranks, itl_score_for_song, itl_score_from_entry, itl_score_profile_loaded,
+    itl_song_dir, itl_song_folder_unlocked, itl_song_matches, itl_song_matches_context,
+    itl_steps_type_from_chart_type, itl_timing_windows_all_enabled,
+    load_online_itl_self_index_file, load_online_itl_self_index_for_profile_dir,
+    mark_itl_unlock_folders, online_itl_self_index_path, online_itl_self_rank_profile_loaded,
+    online_itl_self_score_generation, online_itl_self_score_profile_loaded,
+    online_itl_self_scores_by_chart_for_api, parse_itl_points, read_itl_file_from_path,
+    read_itl_file_or_default_for_profile_dir, runtime_cached_itl_chart_score,
+    runtime_cached_itl_song_folder_unlocked, runtime_cached_itl_song_score,
+    runtime_cached_itl_song_score_assume_loaded, runtime_cached_online_itl_self_rank,
+    runtime_cached_online_itl_self_rank_assume_loaded, runtime_cached_online_itl_self_score,
+    runtime_cached_online_itl_self_score_assume_loaded, runtime_ensure_itl_score_profile_loaded,
+    runtime_ensure_itl_wheel_caches_loaded, runtime_ensure_online_itl_self_rank_profile_loaded,
+    runtime_ensure_online_itl_self_score_profile_loaded, runtime_import_itl_json,
+    runtime_online_itl_overall_ranks_for_side, runtime_set_itl_score_file,
+    runtime_set_online_itl_self_rank, runtime_set_online_itl_self_score,
+    runtime_update_itl_unlock_folders, save_online_itl_self_index_file,
+    save_online_itl_self_index_for_profile_dir, set_itl_score_profile, set_online_itl_self_rank,
+    set_online_itl_self_score, store_online_itl_overall_ranks_for_side,
+    write_itl_file_for_profile_dir, write_itl_file_to_path,
 };
 pub use leaderboard::*;
 pub use local_store::*;
@@ -3715,6 +3739,62 @@ impl ScoreImportEndpoint {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ScoreImportCredentialError {
+    MissingApiKey { endpoint: ScoreImportEndpoint },
+    MissingUsername { endpoint: ScoreImportEndpoint },
+}
+
+impl ScoreImportCredentialError {
+    pub fn request_message(&self) -> String {
+        match self {
+            Self::MissingApiKey { endpoint } => {
+                format!(
+                    "{} API key is missing in profile configuration.",
+                    endpoint.display_name()
+                )
+            }
+            Self::MissingUsername { endpoint } => {
+                format!(
+                    "{} username is missing in profile configuration.",
+                    endpoint.display_name()
+                )
+            }
+        }
+    }
+
+    pub fn import_message(&self) -> String {
+        match self {
+            Self::MissingApiKey { endpoint } => {
+                format!(
+                    "{} API key is not set in profile configuration.",
+                    endpoint.display_name()
+                )
+            }
+            Self::MissingUsername { endpoint } => {
+                format!(
+                    "{} username is not set in profile configuration.",
+                    endpoint.display_name()
+                )
+            }
+        }
+    }
+}
+
+pub fn validate_score_import_credentials(
+    endpoint: ScoreImportEndpoint,
+    api_key: &str,
+    username: &str,
+) -> Result<(), ScoreImportCredentialError> {
+    if api_key.trim().is_empty() {
+        return Err(ScoreImportCredentialError::MissingApiKey { endpoint });
+    }
+    if endpoint.requires_username() && username.trim().is_empty() {
+        return Err(ScoreImportCredentialError::MissingUsername { endpoint });
+    }
+    Ok(())
+}
+
 pub const SCORE_IMPORT_ENDPOINT_CHOICES: [ScoreImportEndpoint; 3] = [
     ScoreImportEndpoint::GrooveStats,
     ScoreImportEndpoint::BoogieStats,
@@ -4972,6 +5052,173 @@ pub fn groovestats_submit_record_banner(
     } else {
         GrooveStatsSubmitRecordBanner::PersonalBest
     })
+}
+
+static GROOVESTATS_SUBMIT_UI_STATUS: LazyLock<Mutex<SubmitUiState<GrooveStatsSubmitUiStatus>>> =
+    LazyLock::new(|| Mutex::new(SubmitUiState::default()));
+static GROOVESTATS_SUBMIT_UI_TOKEN: AtomicU64 = AtomicU64::new(1);
+
+static GROOVESTATS_SUBMIT_EVENT_UI: LazyLock<
+    Mutex<SubmitEventUiState<Vec<EventProgress>, GrooveStatsSubmitRecordBanner>>,
+> = LazyLock::new(|| Mutex::new(SubmitEventUiState::default()));
+
+static ARROWCLOUD_SUBMIT_UI_STATUS: LazyLock<Mutex<SubmitUiState<ArrowCloudSubmitUiStatus>>> =
+    LazyLock::new(|| Mutex::new(SubmitUiState::default()));
+static ARROWCLOUD_SUBMIT_UI_TOKEN: AtomicU64 = AtomicU64::new(1);
+
+#[inline(always)]
+pub fn groovestats_reset_submit_ui_status(side_index: usize, chart_hash: &str) {
+    GROOVESTATS_SUBMIT_UI_STATUS
+        .lock()
+        .unwrap()
+        .reset(side_index, chart_hash);
+}
+
+#[inline(always)]
+pub fn groovestats_set_submit_ui_status(
+    side_index: usize,
+    chart_hash: &str,
+    token: u64,
+    status: GrooveStatsSubmitUiStatus,
+) {
+    GROOVESTATS_SUBMIT_UI_STATUS
+        .lock()
+        .unwrap()
+        .set(side_index, chart_hash, token, status);
+}
+
+#[inline(always)]
+pub fn groovestats_update_submit_ui_status_if_token(
+    side_index: usize,
+    chart_hash: &str,
+    token: u64,
+    status: GrooveStatsSubmitUiStatus,
+) -> bool {
+    GROOVESTATS_SUBMIT_UI_STATUS
+        .lock()
+        .unwrap()
+        .update_if_token(side_index, chart_hash, token, status)
+}
+
+#[inline(always)]
+pub fn groovestats_next_submit_ui_token() -> u64 {
+    GROOVESTATS_SUBMIT_UI_TOKEN.fetch_add(1, AtomicOrdering::Relaxed)
+}
+
+#[inline(always)]
+pub fn groovestats_submit_ui_status(
+    side_index: usize,
+    chart_hash: &str,
+) -> Option<GrooveStatsSubmitUiStatus> {
+    GROOVESTATS_SUBMIT_UI_STATUS
+        .lock()
+        .unwrap()
+        .get(side_index, chart_hash)
+}
+
+#[inline(always)]
+pub fn groovestats_reset_submit_event_ui(side_index: usize, chart_hash: &str) {
+    GROOVESTATS_SUBMIT_EVENT_UI
+        .lock()
+        .unwrap()
+        .reset(side_index, chart_hash);
+}
+
+#[inline(always)]
+pub fn groovestats_arm_submit_event_ui(side_index: usize, chart_hash: &str, token: u64) {
+    GROOVESTATS_SUBMIT_EVENT_UI
+        .lock()
+        .unwrap()
+        .arm(side_index, chart_hash, token);
+}
+
+#[inline(always)]
+pub fn groovestats_update_submit_event_ui_if_token(
+    side_index: usize,
+    chart_hash: &str,
+    token: u64,
+    event_progress: Vec<EventProgress>,
+    record_banner: Option<GrooveStatsSubmitRecordBanner>,
+) {
+    GROOVESTATS_SUBMIT_EVENT_UI.lock().unwrap().update_if_token(
+        side_index,
+        chart_hash,
+        token,
+        event_progress,
+        record_banner,
+    );
+}
+
+#[inline(always)]
+pub fn groovestats_submit_event_progress(
+    side_index: usize,
+    chart_hash: &str,
+) -> Vec<EventProgress> {
+    GROOVESTATS_SUBMIT_EVENT_UI
+        .lock()
+        .unwrap()
+        .progress(side_index, chart_hash)
+}
+
+#[inline(always)]
+pub fn groovestats_submit_record_banner_ui(
+    side_index: usize,
+    chart_hash: &str,
+) -> Option<GrooveStatsSubmitRecordBanner> {
+    GROOVESTATS_SUBMIT_EVENT_UI
+        .lock()
+        .unwrap()
+        .banner(side_index, chart_hash)
+}
+
+#[inline(always)]
+pub fn arrowcloud_reset_submit_ui_status(side_index: usize, chart_hash: &str) {
+    ARROWCLOUD_SUBMIT_UI_STATUS
+        .lock()
+        .unwrap()
+        .reset(side_index, chart_hash);
+}
+
+#[inline(always)]
+pub fn arrowcloud_set_submit_ui_status(
+    side_index: usize,
+    chart_hash: &str,
+    token: u64,
+    status: ArrowCloudSubmitUiStatus,
+) {
+    ARROWCLOUD_SUBMIT_UI_STATUS
+        .lock()
+        .unwrap()
+        .set(side_index, chart_hash, token, status);
+}
+
+#[inline(always)]
+pub fn arrowcloud_update_submit_ui_status_if_token(
+    side_index: usize,
+    chart_hash: &str,
+    token: u64,
+    status: ArrowCloudSubmitUiStatus,
+) -> bool {
+    ARROWCLOUD_SUBMIT_UI_STATUS
+        .lock()
+        .unwrap()
+        .update_if_token(side_index, chart_hash, token, status)
+}
+
+#[inline(always)]
+pub fn arrowcloud_next_submit_ui_token() -> u64 {
+    ARROWCLOUD_SUBMIT_UI_TOKEN.fetch_add(1, AtomicOrdering::Relaxed)
+}
+
+#[inline(always)]
+pub fn arrowcloud_submit_ui_status(
+    side_index: usize,
+    chart_hash: &str,
+) -> Option<ArrowCloudSubmitUiStatus> {
+    ARROWCLOUD_SUBMIT_UI_STATUS
+        .lock()
+        .unwrap()
+        .get(side_index, chart_hash)
 }
 
 #[cfg(test)]
@@ -7779,6 +8026,56 @@ mod tests {
         assert_eq!(
             score_import_endpoint_from_choice_index(99),
             ScoreImportEndpoint::GrooveStats
+        );
+    }
+
+    #[test]
+    fn score_import_credential_validation_requires_endpoint_fields() {
+        assert_eq!(
+            validate_score_import_credentials(ScoreImportEndpoint::GrooveStats, "", "player"),
+            Err(ScoreImportCredentialError::MissingApiKey {
+                endpoint: ScoreImportEndpoint::GrooveStats,
+            })
+        );
+        assert_eq!(
+            validate_score_import_credentials(ScoreImportEndpoint::BoogieStats, "key", ""),
+            Err(ScoreImportCredentialError::MissingUsername {
+                endpoint: ScoreImportEndpoint::BoogieStats,
+            })
+        );
+        assert!(
+            validate_score_import_credentials(ScoreImportEndpoint::ArrowCloud, "key", "").is_ok()
+        );
+        assert!(
+            validate_score_import_credentials(ScoreImportEndpoint::GrooveStats, "key", "player")
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn score_import_credential_errors_use_context_messages() {
+        let request_error = ScoreImportCredentialError::MissingApiKey {
+            endpoint: ScoreImportEndpoint::GrooveStats,
+        };
+        assert_eq!(
+            request_error.request_message(),
+            "GrooveStats API key is missing in profile configuration."
+        );
+        assert_eq!(
+            request_error.import_message(),
+            "GrooveStats API key is not set in profile configuration."
+        );
+
+        let import_error = ScoreImportCredentialError::MissingUsername {
+            endpoint: ScoreImportEndpoint::BoogieStats,
+        };
+        assert_eq!(
+            import_error.request_message(),
+            "BoogieStats username is missing in profile configuration."
+        );
+        assert_eq!(
+            import_error.import_message(),
+            "BoogieStats username is not set in profile configuration."
         );
     }
 

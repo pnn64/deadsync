@@ -1,11 +1,16 @@
 use crate::config;
 use deadlib_platform::dirs;
 use deadsync_online::downloads::{
-    DownloadSnapshot, UnlockCache, UnlockDownloadRuntimeHooks, read_unlock_cache_file,
-    runtime_completion_counts, runtime_queue_event_unlock_download, runtime_snapshots,
-    runtime_take_ready_song_reload_request, write_unlock_cache_file,
+    UnlockCache, UnlockDownloadRuntimeHooks, read_unlock_cache_file,
+    runtime_queue_event_unlock_download,
+    unlock_destination_roots as online_unlock_destination_roots,
+    unlock_downloads_available as online_unlock_downloads_available, write_unlock_cache_file,
 };
-use deadsync_online::groovestats::ConnectionStatus;
+pub use deadsync_online::downloads::{
+    runtime_completion_counts as unlock_download_completion_counts,
+    runtime_snapshots as unlock_download_snapshots,
+    runtime_take_ready_song_reload_request as take_ready_song_reload_request,
+};
 use log::warn;
 use std::path::PathBuf;
 
@@ -38,32 +43,20 @@ pub fn refresh_arrowcloud_status() {
 
 pub fn is_boogiestats_active() -> bool {
     let cfg = crate::config::get();
-    cfg.enable_groovestats && cfg.enable_boogiestats
+    deadsync_online::groovestats::boogiestats_active(cfg.enable_groovestats, cfg.enable_boogiestats)
 }
 
 #[inline(always)]
 pub fn active_groovestats_service() -> deadsync_online::groovestats::Service {
-    deadsync_online::groovestats::Service::from_boogiestats_active(is_boogiestats_active())
+    let cfg = crate::config::get();
+    deadsync_online::groovestats::active_service(cfg.enable_groovestats, cfg.enable_boogiestats)
 }
 
 pub fn unlock_downloads_available() -> bool {
-    config::get().auto_download_unlocks
-        && matches!(
-            deadsync_online::groovestats::runtime_get_status(),
-            ConnectionStatus::Connected(_)
-        )
-}
-
-pub fn unlock_download_snapshots() -> Vec<DownloadSnapshot> {
-    runtime_snapshots()
-}
-
-pub fn unlock_download_completion_counts() -> (usize, usize) {
-    runtime_completion_counts()
-}
-
-pub fn take_ready_song_reload_request() -> Vec<PathBuf> {
-    runtime_take_ready_song_reload_request()
+    online_unlock_downloads_available(
+        config::get().auto_download_unlocks,
+        &deadsync_online::groovestats::runtime_get_status(),
+    )
 }
 
 pub fn queue_event_unlock_download(url: &str, unlock_name: &str, pack_name: &str) {
@@ -75,16 +68,12 @@ fn downloads_dir() -> PathBuf {
 }
 
 fn unlock_destination_roots() -> Vec<PathBuf> {
-    let folders = config::additional_song_folder_roots();
-    let mut roots = Vec::with_capacity(1 + folders.len());
-    roots.push(dirs::app_dirs().songs_dir());
-    roots.extend(
-        folders
+    online_unlock_destination_roots(
+        dirs::app_dirs().songs_dir(),
+        config::additional_song_folder_roots()
             .into_iter()
-            .filter(|folder| folder.writable)
-            .map(|folder| PathBuf::from(folder.path)),
-    );
-    roots
+            .map(|folder| (PathBuf::from(folder.path), folder.writable)),
+    )
 }
 
 fn load_unlock_cache() -> UnlockCache {

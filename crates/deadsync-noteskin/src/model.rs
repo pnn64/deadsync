@@ -1,6 +1,8 @@
 use crate::itg as noteskin_itg;
 use crate::lua::itg_extract_quoted_strings;
-use crate::{ModelAutoRotKey, ModelMesh, ModelVertex};
+use crate::{
+    ModelAutoRotKey, ModelDrawState, ModelEffectState, ModelMesh, ModelTweenSegment, ModelVertex,
+};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -254,6 +256,155 @@ pub struct ItgModelMaterialFlags {
 pub struct ItgModelAutoRot {
     pub total_frames: f32,
     pub z_keys: Arc<[ModelAutoRotKey]>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ItgModelSlotPlan {
+    pub model: Option<Arc<ModelMesh>>,
+    pub model_draw: ModelDrawState,
+    pub model_timeline: Arc<[ModelTweenSegment]>,
+    pub model_effect: ModelEffectState,
+    pub model_auto_rot_total_frames: f32,
+    pub model_auto_rot_z_keys: Arc<[ModelAutoRotKey]>,
+    pub note_color_translate: bool,
+    pub uv_velocity: [f32; 2],
+    pub uv_offset: [f32; 2],
+    pub uv_cycle_seconds: Option<f32>,
+}
+
+impl ItgModelSlotPlan {
+    pub fn from_layer(
+        layer: ItgResolvedModelLayer,
+        model_draw: ModelDrawState,
+        model_timeline: Arc<[ModelTweenSegment]>,
+        model_effect: ModelEffectState,
+        auto_rot: Option<&ItgModelAutoRot>,
+    ) -> Self {
+        let tex = layer.texture.tex;
+        let (note_color_translate, uv_velocity) = if layer.flags.nomove {
+            (false, [0.0, 0.0])
+        } else {
+            (true, tex.uv_velocity)
+        };
+        Self {
+            model: Some(layer.mesh),
+            model_draw,
+            model_timeline,
+            model_effect,
+            model_auto_rot_total_frames: auto_rot.map_or(0.0, |auto_rot| auto_rot.total_frames),
+            model_auto_rot_z_keys: auto_rot
+                .map(|auto_rot| Arc::clone(&auto_rot.z_keys))
+                .unwrap_or_else(|| Arc::from(Vec::<ModelAutoRotKey>::new())),
+            note_color_translate,
+            uv_velocity,
+            uv_offset: tex.uv_offset,
+            uv_cycle_seconds: tex.uv_cycle_seconds,
+        }
+    }
+
+    pub fn from_texture(
+        model: Option<Arc<ModelMesh>>,
+        texture: ItgResolvedModelTexture,
+        model_draw: ModelDrawState,
+        model_timeline: Arc<[ModelTweenSegment]>,
+        model_effect: ModelEffectState,
+        auto_rot: Option<&ItgModelAutoRot>,
+    ) -> Self {
+        let tex = texture.tex;
+        Self {
+            model,
+            model_draw,
+            model_timeline,
+            model_effect,
+            model_auto_rot_total_frames: auto_rot.map_or(0.0, |auto_rot| auto_rot.total_frames),
+            model_auto_rot_z_keys: auto_rot
+                .map(|auto_rot| Arc::clone(&auto_rot.z_keys))
+                .unwrap_or_else(|| Arc::from(Vec::<ModelAutoRotKey>::new())),
+            note_color_translate: true,
+            uv_velocity: tex.uv_velocity,
+            uv_offset: tex.uv_offset,
+            uv_cycle_seconds: tex.uv_cycle_seconds,
+        }
+    }
+}
+
+pub fn itg_load_model_slots_from_path<T>(
+    model_path: &Path,
+    mut slot_from_texture_path: impl FnMut(&Path) -> Option<T>,
+    mut apply_slot_plan: impl FnMut(&mut T, ItgModelSlotPlan),
+) -> Result<Vec<T>, String> {
+    if !model_path.is_file() {
+        return Err(format!("model '{}' was not found", model_path.display()));
+    }
+
+    let Some(search_dir) = model_path.parent() else {
+        return Err(format!(
+            "model '{}' has no parent directory",
+            model_path.display()
+        ));
+    };
+    let data = noteskin_itg::NoteskinData {
+        name: "shared-model".to_string(),
+        metrics: noteskin_itg::IniData::default(),
+        search_dirs: vec![search_dir.to_path_buf()],
+    };
+    let model_auto_rot = itg_parse_milkshape_model_auto_rot(model_path);
+    let mut slots = Vec::new();
+
+    if let Some(model_layers) = itg_parse_milkshape_model_layers(&data, model_path) {
+        for layer in model_layers {
+            let Some(mut slot) = slot_from_texture_path(&layer.texture.texture_path) else {
+                continue;
+            };
+            apply_slot_plan(
+                &mut slot,
+                ItgModelSlotPlan::from_layer(
+                    layer,
+                    ModelDrawState::default(),
+                    Arc::from(Vec::<ModelTweenSegment>::new()),
+                    ModelEffectState::default(),
+                    model_auto_rot.as_ref(),
+                ),
+            );
+            slots.push(slot);
+        }
+    }
+
+    if slots.is_empty() {
+        let Some(model_texture) = itg_resolve_model_texture_path(&data, model_path) else {
+            return Err(format!(
+                "model '{}' did not resolve a texture",
+                model_path.display()
+            ));
+        };
+        let Some(mut slot) = slot_from_texture_path(&model_texture.texture_path) else {
+            return Err(format!(
+                "model texture '{}' did not load",
+                model_texture.texture_path.display()
+            ));
+        };
+        let model = itg_parse_milkshape_model(&data, model_path);
+        if model.is_none() {
+            return Err(format!(
+                "model '{}' did not produce any geometry",
+                model_path.display()
+            ));
+        }
+        apply_slot_plan(
+            &mut slot,
+            ItgModelSlotPlan::from_texture(
+                model,
+                model_texture,
+                ModelDrawState::default(),
+                Arc::from(Vec::<ModelTweenSegment>::new()),
+                ModelEffectState::default(),
+                model_auto_rot.as_ref(),
+            ),
+        );
+        slots.push(slot);
+    }
+
+    Ok(slots)
 }
 
 fn itg_parse_model_material_flags(name: &str) -> ItgModelMaterialFlags {
@@ -589,6 +740,7 @@ fn itg_is_texture_image_ext(ext: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn temp_model_root(name: &str) -> PathBuf {
@@ -603,6 +755,135 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    fn test_mesh() -> Arc<ModelMesh> {
+        Arc::new(ModelMesh {
+            vertices: Arc::from([ModelVertex {
+                pos: [0.0, 0.0, 0.0],
+                uv: [0.0, 0.0],
+                tex_matrix_scale: [1.0, 1.0],
+            }]),
+            bounds: [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+        })
+    }
+
+    #[test]
+    fn model_slot_plan_from_layer_honors_nomove_flags() {
+        let layer = ItgResolvedModelLayer {
+            mesh: test_mesh(),
+            texture: ItgResolvedModelTexture {
+                texture_path: PathBuf::from("tap.png"),
+                tex: ItgModelTexturePath {
+                    uv_velocity: [2.0, -1.0],
+                    uv_offset: [0.25, 0.5],
+                    uv_cycle_seconds: Some(0.75),
+                },
+            },
+            flags: ItgModelMaterialFlags { nomove: true },
+        };
+
+        let plan = ItgModelSlotPlan::from_layer(
+            layer,
+            ModelDrawState::default(),
+            Arc::from(Vec::<ModelTweenSegment>::new()),
+            ModelEffectState::default(),
+            None,
+        );
+
+        assert!(plan.model.is_some());
+        assert!(!plan.note_color_translate);
+        assert_eq!(plan.uv_velocity, [0.0, 0.0]);
+        assert_eq!(plan.uv_offset, [0.25, 0.5]);
+        assert_eq!(plan.uv_cycle_seconds, Some(0.75));
+    }
+
+    #[test]
+    fn model_slot_plan_carries_auto_rot_and_texture_motion() {
+        let auto_rot = ItgModelAutoRot {
+            total_frames: 120.0,
+            z_keys: Arc::from([ModelAutoRotKey {
+                frame: 10.0,
+                z_deg: 45.0,
+            }]),
+        };
+        let texture = ItgResolvedModelTexture {
+            texture_path: PathBuf::from("tap.png"),
+            tex: ItgModelTexturePath {
+                uv_velocity: [1.0, 2.0],
+                uv_offset: [0.1, 0.2],
+                uv_cycle_seconds: Some(3.0),
+            },
+        };
+
+        let plan = ItgModelSlotPlan::from_texture(
+            Some(test_mesh()),
+            texture,
+            ModelDrawState::default(),
+            Arc::from(Vec::<ModelTweenSegment>::new()),
+            ModelEffectState::default(),
+            Some(&auto_rot),
+        );
+
+        assert!(plan.note_color_translate);
+        assert_eq!(plan.uv_velocity, [1.0, 2.0]);
+        assert_eq!(plan.uv_offset, [0.1, 0.2]);
+        assert_eq!(plan.model_auto_rot_total_frames, 120.0);
+        assert_eq!(plan.model_auto_rot_z_keys.len(), 1);
+        assert_eq!(plan.model_auto_rot_z_keys[0].z_deg, 45.0);
+    }
+
+    #[test]
+    fn load_model_slots_builds_layer_plans() {
+        let root = temp_model_root("slot-loader");
+        let texture_path = root.join("Tap Note.png");
+        image::RgbaImage::from_pixel(2, 2, image::Rgba([255, 0, 0, 255]))
+            .save(&texture_path)
+            .unwrap();
+        let model_path = root.join("_down tap note model.txt");
+        fs::write(
+            &model_path,
+            r#"MilkShape 3D ASCII
+Meshes: 1
+"mesh" 0 0
+3
+0 -1.0 -1.0 0.0 0.0 0.0 -1
+0 1.0 -1.0 0.0 1.0 0.0 -1
+0 0.0 1.0 0.0 0.0 1.0 -1
+0
+1
+0 0 1 2 0 0 0 1
+Materials: 1
+"mat"
+0.0 0.0 0.0 1.0
+1.0 1.0 1.0 1.0
+0.0 0.0 0.0 1.0
+0.0 0.0 0.0 1.0
+0.0
+1.0
+"Tap Note.png"
+""
+"#,
+        )
+        .unwrap();
+
+        let slots = itg_load_model_slots_from_path(
+            &model_path,
+            |path| {
+                assert_eq!(path, texture_path.as_path());
+                Some("tap".to_string())
+            },
+            |slot, plan| {
+                assert!(plan.model.is_some());
+                if plan.note_color_translate {
+                    slot.push_str(":model");
+                }
+            },
+        )
+        .expect("model slot loader should build one layer-backed slot");
+
+        assert_eq!(slots, ["tap:model"]);
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
