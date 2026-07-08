@@ -17,15 +17,15 @@ use deadsync_profile::Profile;
 use deadsync_rules::judgment;
 use deadsync_score::{
     EventProgress, GrooveStatsEvalInput, GrooveStatsEvalState, GrooveStatsSubmitRecordBanner,
-    GrooveStatsSubmitUiStatus, RejectReason, SUBMIT_RETRY_MAX_ATTEMPTS,
-    cached_score_from_imported_player_score, duration_to_ceil_secs,
+    GrooveStatsSubmitUiStatus, RejectReason, SUBMIT_RETRY_MAX_ATTEMPTS, SubmitEventUiState,
+    SubmitRetryState, SubmitUiState, cached_score_from_imported_player_score,
     groovestats_eval_state_from_parts, groovestats_rate_hundredths,
-    groovestats_score_10000_from_counts, groovestats_used_cmod, submit_retry_delay_secs,
+    groovestats_score_10000_from_counts, groovestats_used_cmod,
 };
 use log::{debug, warn};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 #[inline(always)]
 fn active_groovestats_service() -> groovestats_api::Service {
@@ -37,29 +37,14 @@ fn active_groovestats_service_name() -> &'static str {
     groovestats_api::service_name(active_groovestats_service())
 }
 
-#[derive(Debug, Clone)]
-struct GrooveStatsSubmitUiEntry {
-    chart_hash: String,
-    token: u64,
-    status: GrooveStatsSubmitUiStatus,
-}
-
 static GROOVESTATS_SUBMIT_UI_STATUS: std::sync::LazyLock<
-    Mutex<[Vec<GrooveStatsSubmitUiEntry>; 2]>,
-> = std::sync::LazyLock::new(|| Mutex::new(std::array::from_fn(|_| Vec::new())));
+    Mutex<SubmitUiState<GrooveStatsSubmitUiStatus>>,
+> = std::sync::LazyLock::new(|| Mutex::new(SubmitUiState::default()));
 static GROOVESTATS_SUBMIT_UI_TOKEN: AtomicU64 = AtomicU64::new(1);
 
-#[derive(Debug, Clone)]
-struct GrooveStatsSubmitEventUiEntry {
-    chart_hash: String,
-    token: u64,
-    event_progress: Vec<EventProgress>,
-    record_banner: Option<GrooveStatsSubmitRecordBanner>,
-}
-
 static GROOVESTATS_SUBMIT_EVENT_UI: std::sync::LazyLock<
-    Mutex<[Vec<GrooveStatsSubmitEventUiEntry>; 2]>,
-> = std::sync::LazyLock::new(|| Mutex::new(std::array::from_fn(|_| Vec::new())));
+    Mutex<SubmitEventUiState<Vec<EventProgress>, GrooveStatsSubmitRecordBanner>>,
+> = std::sync::LazyLock::new(|| Mutex::new(SubmitEventUiState::default()));
 
 #[derive(Debug, Clone)]
 struct GrooveStatsSubmitRetryEntry {
@@ -90,17 +75,11 @@ struct GrooveStatsSubmitRetryEntry {
 /// Alias of the shared [`SUBMIT_RETRY_MAX_ATTEMPTS`].
 const GROOVESTATS_RETRY_MAX_ATTEMPTS: u8 = SUBMIT_RETRY_MAX_ATTEMPTS;
 
-static GROOVESTATS_SUBMIT_RETRY: std::sync::LazyLock<Mutex<[Vec<GrooveStatsSubmitRetryEntry>; 2]>> =
-    std::sync::LazyLock::new(|| Mutex::new(std::array::from_fn(|_| Vec::new())));
+static GROOVESTATS_SUBMIT_RETRY: std::sync::LazyLock<
+    Mutex<SubmitRetryState<GrooveStatsSubmitRetryEntry>>,
+> = std::sync::LazyLock::new(|| Mutex::new(SubmitRetryState::default()));
 
 const GROOVESTATS_SUBMIT_RETRY_TRACKED_PER_SIDE: usize = 128;
-
-#[inline(always)]
-fn groovestats_trim_submit_retry_entries(entries: &mut Vec<GrooveStatsSubmitRetryEntry>) {
-    if entries.len() > GROOVESTATS_SUBMIT_RETRY_TRACKED_PER_SIDE {
-        entries.drain(0..entries.len() - GROOVESTATS_SUBMIT_RETRY_TRACKED_PER_SIDE);
-    }
-}
 
 #[derive(Debug)]
 pub(super) struct GrooveStatsSubmitPlayerJob {
@@ -132,35 +111,27 @@ struct GrooveStatsSubmitError {
 
 #[inline(always)]
 fn groovestats_reset_submit_ui_status(side: profile_data::PlayerSide, chart_hash: &str) {
-    let hash = chart_hash.trim();
-    if hash.is_empty() {
-        return;
-    }
-    let mut state = GROOVESTATS_SUBMIT_UI_STATUS.lock().unwrap();
-    state[profile_data::player_side_index(side)]
-        .retain(|entry| !entry.chart_hash.eq_ignore_ascii_case(hash));
+    GROOVESTATS_SUBMIT_UI_STATUS
+        .lock()
+        .unwrap()
+        .reset(profile_data::player_side_index(side), chart_hash);
 }
 
 #[inline(always)]
 fn groovestats_reset_submit_event_ui(side: profile_data::PlayerSide, chart_hash: &str) {
-    let hash = chart_hash.trim();
-    if hash.is_empty() {
-        return;
-    }
-    let mut state = GROOVESTATS_SUBMIT_EVENT_UI.lock().unwrap();
-    state[profile_data::player_side_index(side)]
-        .retain(|entry| !entry.chart_hash.eq_ignore_ascii_case(hash));
+    GROOVESTATS_SUBMIT_EVENT_UI
+        .lock()
+        .unwrap()
+        .reset(profile_data::player_side_index(side), chart_hash);
 }
 
 #[inline(always)]
 fn groovestats_reset_submit_retry(side: profile_data::PlayerSide, chart_hash: &str) {
-    let hash = chart_hash.trim();
-    if hash.is_empty() {
-        return;
-    }
-    let mut state = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
-    state[profile_data::player_side_index(side)]
-        .retain(|entry| !entry.chart_hash.eq_ignore_ascii_case(hash));
+    GROOVESTATS_SUBMIT_RETRY.lock().unwrap().reset_by_key(
+        profile_data::player_side_index(side),
+        chart_hash,
+        |entry| entry.chart_hash.as_str(),
+    );
 }
 
 #[inline(always)]
@@ -170,25 +141,12 @@ fn groovestats_set_submit_ui_status(
     token: u64,
     status: GrooveStatsSubmitUiStatus,
 ) {
-    let hash = chart_hash.trim();
-    if hash.is_empty() {
-        return;
-    }
-    let mut state = GROOVESTATS_SUBMIT_UI_STATUS.lock().unwrap();
-    let entries = &mut state[profile_data::player_side_index(side)];
-    if let Some(entry) = entries
-        .iter_mut()
-        .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
-    {
-        entry.token = token;
-        entry.status = status;
-        return;
-    }
-    entries.push(GrooveStatsSubmitUiEntry {
-        chart_hash: hash.to_string(),
+    GROOVESTATS_SUBMIT_UI_STATUS.lock().unwrap().set(
+        profile_data::player_side_index(side),
+        chart_hash,
         token,
         status,
-    });
+    );
 }
 
 #[inline(always)]
@@ -198,47 +156,24 @@ fn groovestats_update_submit_ui_status_if_token(
     token: u64,
     status: GrooveStatsSubmitUiStatus,
 ) -> bool {
-    let hash = chart_hash.trim();
-    if hash.is_empty() {
-        return false;
-    }
-    let mut state = GROOVESTATS_SUBMIT_UI_STATUS.lock().unwrap();
-    let Some(entry) = state[profile_data::player_side_index(side)]
-        .iter_mut()
-        .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
-    else {
-        return false;
-    };
-    if entry.token != token {
-        return false;
-    }
-    entry.status = status;
-    true
+    GROOVESTATS_SUBMIT_UI_STATUS
+        .lock()
+        .unwrap()
+        .update_if_token(
+            profile_data::player_side_index(side),
+            chart_hash,
+            token,
+            status,
+        )
 }
 
 #[inline(always)]
 fn groovestats_arm_submit_event_ui(side: profile_data::PlayerSide, chart_hash: &str, token: u64) {
-    let hash = chart_hash.trim();
-    if hash.is_empty() {
-        return;
-    }
-    let mut state = GROOVESTATS_SUBMIT_EVENT_UI.lock().unwrap();
-    let entries = &mut state[profile_data::player_side_index(side)];
-    if let Some(entry) = entries
-        .iter_mut()
-        .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
-    {
-        entry.token = token;
-        entry.event_progress.clear();
-        entry.record_banner = None;
-        return;
-    }
-    entries.push(GrooveStatsSubmitEventUiEntry {
-        chart_hash: hash.to_string(),
+    GROOVESTATS_SUBMIT_EVENT_UI.lock().unwrap().arm(
+        profile_data::player_side_index(side),
+        chart_hash,
         token,
-        event_progress: Vec::new(),
-        record_banner: None,
-    });
+    );
 }
 
 #[inline(always)]
@@ -249,22 +184,13 @@ fn groovestats_update_submit_event_ui_if_token(
     event_progress: Vec<EventProgress>,
     record_banner: Option<GrooveStatsSubmitRecordBanner>,
 ) {
-    let hash = chart_hash.trim();
-    if hash.is_empty() {
-        return;
-    }
-    let mut state = GROOVESTATS_SUBMIT_EVENT_UI.lock().unwrap();
-    let Some(entry) = state[profile_data::player_side_index(side)]
-        .iter_mut()
-        .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
-    else {
-        return;
-    };
-    if entry.token != token {
-        return;
-    }
-    entry.event_progress = event_progress;
-    entry.record_banner = record_banner;
+    GROOVESTATS_SUBMIT_EVENT_UI.lock().unwrap().update_if_token(
+        profile_data::player_side_index(side),
+        chart_hash,
+        token,
+        event_progress,
+        record_banner,
+    );
 }
 
 #[inline(always)]
@@ -274,65 +200,43 @@ fn groovestats_next_submit_ui_token() -> u64 {
 
 #[inline(always)]
 fn groovestats_store_submit_retry(entry: GrooveStatsSubmitRetryEntry) {
-    let hash = entry.chart_hash.trim();
-    if hash.is_empty() {
-        return;
-    }
     let side = entry.side;
-    let mut state = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
-    let entries = &mut state[profile_data::player_side_index(side)];
-    if let Some(stored) = entries
-        .iter_mut()
-        .find(|stored| stored.chart_hash.eq_ignore_ascii_case(hash))
-    {
-        *stored = entry;
-        return;
-    }
-    entries.push(entry);
-    groovestats_trim_submit_retry_entries(entries);
+    GROOVESTATS_SUBMIT_RETRY.lock().unwrap().upsert_by_key(
+        profile_data::player_side_index(side),
+        entry,
+        |entry| entry.chart_hash.as_str(),
+        GROOVESTATS_SUBMIT_RETRY_TRACKED_PER_SIDE,
+    );
 }
 
 pub fn get_groovestats_submit_ui_status_for_side(
     chart_hash: &str,
     side: profile_data::PlayerSide,
 ) -> Option<GrooveStatsSubmitUiStatus> {
-    let hash = chart_hash.trim();
-    if hash.is_empty() {
-        return None;
-    }
-    GROOVESTATS_SUBMIT_UI_STATUS.lock().unwrap()[profile_data::player_side_index(side)]
-        .iter()
-        .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
-        .map(|entry| entry.status)
+    GROOVESTATS_SUBMIT_UI_STATUS
+        .lock()
+        .unwrap()
+        .get(profile_data::player_side_index(side), chart_hash)
 }
 
 pub fn get_groovestats_submit_event_progress_for_side(
     chart_hash: &str,
     side: profile_data::PlayerSide,
 ) -> Vec<EventProgress> {
-    let hash = chart_hash.trim();
-    if hash.is_empty() {
-        return Vec::new();
-    }
-    GROOVESTATS_SUBMIT_EVENT_UI.lock().unwrap()[profile_data::player_side_index(side)]
-        .iter()
-        .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
-        .map(|entry| entry.event_progress.clone())
-        .unwrap_or_default()
+    GROOVESTATS_SUBMIT_EVENT_UI
+        .lock()
+        .unwrap()
+        .progress(profile_data::player_side_index(side), chart_hash)
 }
 
 pub fn get_groovestats_submit_record_banner_for_side(
     chart_hash: &str,
     side: profile_data::PlayerSide,
 ) -> Option<GrooveStatsSubmitRecordBanner> {
-    let hash = chart_hash.trim();
-    if hash.is_empty() {
-        return None;
-    }
-    GROOVESTATS_SUBMIT_EVENT_UI.lock().unwrap()[profile_data::player_side_index(side)]
-        .iter()
-        .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
-        .and_then(|entry| entry.record_banner)
+    GROOVESTATS_SUBMIT_EVENT_UI
+        .lock()
+        .unwrap()
+        .banner(profile_data::player_side_index(side), chart_hash)
 }
 
 fn groovestats_eval_state(
@@ -953,22 +857,20 @@ fn retry_groovestats_submit_inner(
     }
     let entry = {
         let mut lock = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
-        let Some(stored) = lock[profile_data::player_side_index(side)]
-            .iter_mut()
-            .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
-        else {
+        let Some(stored) = lock.take_ready_by_key(
+            profile_data::player_side_index(side),
+            hash,
+            manual,
+            Instant::now(),
+            |entry| entry.chart_hash.as_str(),
+            |entry| &mut entry.next_retry_at,
+        ) else {
             return false;
         };
         // Manual fires are gated by the cooldown — refuse if it hasn't elapsed.
         // Auto fires (driven by tick) are already filtered by the schedule, so
         // they bypass this gate.
-        if manual && let Some(t) = stored.next_retry_at {
-            if t > Instant::now() {
-                return false;
-            }
-        }
-        stored.next_retry_at = None;
-        stored.clone()
+        stored
     };
 
     let token = groovestats_next_submit_ui_token();
@@ -1002,31 +904,22 @@ fn groovestats_record_submit_failure(
     status: GrooveStatsSubmitUiStatus,
 ) {
     let mut lock = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
-    let Some(entry) = lock[profile_data::player_side_index(side)]
-        .iter_mut()
-        .find(|entry| entry.chart_hash.eq_ignore_ascii_case(chart_hash))
-    else {
-        return;
-    };
-    if !status.can_retry() {
-        // Terminal (e.g., Rejected) — clear any prior gate.
-        entry.next_retry_at = None;
-        return;
-    }
-    entry.retry_attempt = entry
-        .retry_attempt
-        .saturating_add(1)
-        .min(GROOVESTATS_RETRY_MAX_ATTEMPTS);
-    let delay = submit_retry_delay_secs(entry.retry_attempt);
-    entry.next_retry_at = Some(Instant::now() + Duration::from_secs(delay));
+    lock.record_failure_by_key(
+        profile_data::player_side_index(side),
+        chart_hash,
+        status.can_retry(),
+        GROOVESTATS_RETRY_MAX_ATTEMPTS,
+        Instant::now(),
+        |entry| entry.chart_hash.as_str(),
+        |entry| &mut entry.retry_attempt,
+        |entry| &mut entry.next_retry_at,
+    );
 }
 
 /// Clears retry/backoff bookkeeping after a successful submit. Called from the
 /// worker's success path when the status update was accepted.
 fn groovestats_record_submit_success(side: profile_data::PlayerSide, chart_hash: &str) {
-    let mut lock = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
-    lock[profile_data::player_side_index(side)]
-        .retain(|entry| !entry.chart_hash.eq_ignore_ascii_case(chart_hash));
+    groovestats_reset_submit_retry(side, chart_hash);
 }
 
 /// Returns the seconds remaining until the next retry is allowed (manual
@@ -1042,13 +935,13 @@ pub fn groovestats_next_retry_remaining_secs(
         return None;
     }
     let lock = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
-    let target = lock[profile_data::player_side_index(side)]
-        .iter()
-        .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))?
-        .next_retry_at?;
-    Some(duration_to_ceil_secs(
-        target.saturating_duration_since(Instant::now()),
-    ))
+    lock.remaining_secs_by_key(
+        profile_data::player_side_index(side),
+        hash,
+        Instant::now(),
+        |entry| entry.chart_hash.as_str(),
+        |entry| entry.next_retry_at,
+    )
 }
 
 /// Returns true when the next scheduled retry will be fired automatically by
@@ -1062,13 +955,15 @@ pub fn groovestats_next_retry_is_auto(chart_hash: &str, side: profile_data::Play
     }
     let attempt = {
         let lock = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
-        let Some(entry) = lock[profile_data::player_side_index(side)]
-            .iter()
-            .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
-        else {
+        let Some(attempt) = lock.retry_attempt_by_key(
+            profile_data::player_side_index(side),
+            hash,
+            |entry| entry.chart_hash.as_str(),
+            |entry| entry.retry_attempt,
+        ) else {
             return false;
         };
-        entry.retry_attempt
+        attempt
     };
     if attempt >= GROOVESTATS_RETRY_MAX_ATTEMPTS {
         return false;
@@ -1089,16 +984,13 @@ pub fn groovestats_next_retry_is_auto(chart_hash: &str, side: profile_data::Play
 pub fn tick_groovestats_auto_retries() -> bool {
     let due: Vec<(String, profile_data::PlayerSide, u8)> = {
         let lock = GROOVESTATS_SUBMIT_RETRY.lock().unwrap();
-        let now = Instant::now();
-        lock.iter()
-            .flat_map(|entries| entries.iter())
-            .filter_map(|entry| {
-                entry
-                    .next_retry_at
-                    .filter(|t| *t <= now)
-                    .map(|_| (entry.chart_hash.clone(), entry.side, entry.retry_attempt))
-            })
-            .collect()
+        lock.due_retries(
+            Instant::now(),
+            |entry| entry.chart_hash.as_str(),
+            |entry| entry.side,
+            |entry| entry.retry_attempt,
+            |entry| entry.next_retry_at,
+        )
     };
     let mut fired = false;
     for (hash, side, attempt) in due {

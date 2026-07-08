@@ -1,8 +1,11 @@
 use crate::CachedItlScore;
+use bincode::{Decode, Encode};
 use serde::de::Deserializer;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct ItlFileData {
@@ -18,6 +21,359 @@ pub struct ItlFileData {
     pub points_double: Vec<u32>,
     #[serde(rename = "unlockFolders", default)]
     pub unlock_folders: HashMap<String, bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Encode, Decode)]
+pub struct OnlineItlSelfScoreKey {
+    pub chart_hash: String,
+    pub api_key: String,
+}
+
+/// Borrowed view of [`OnlineItlSelfScoreKey`] for allocation-free cache probes.
+/// Hashes identically to the owned key, so it can look up entries in the
+/// hashbrown caches without building an owned key.
+#[derive(Hash)]
+pub struct OnlineItlSelfScoreKeyRef<'a> {
+    pub chart_hash: &'a str,
+    pub api_key: &'a str,
+}
+
+impl hashbrown::Equivalent<OnlineItlSelfScoreKey> for OnlineItlSelfScoreKeyRef<'_> {
+    fn equivalent(&self, key: &OnlineItlSelfScoreKey) -> bool {
+        self.chart_hash == key.chart_hash && self.api_key == key.api_key
+    }
+}
+
+pub type OnlineItlSelfCacheMap = hashbrown::HashMap<OnlineItlSelfScoreKey, u32>;
+pub type OnlineItlSelfIndexMap = HashMap<OnlineItlSelfScoreKey, u32>;
+
+#[derive(Default)]
+pub struct OnlineItlSelfCacheState {
+    session_by_key: OnlineItlSelfCacheMap,
+    loaded_profiles: HashMap<String, OnlineItlSelfCacheMap>,
+}
+
+pub struct OnlineItlSelfCacheUpdate {
+    pub changed: bool,
+    pub profile_snapshot: Option<(String, OnlineItlSelfCacheMap)>,
+}
+
+impl OnlineItlSelfCacheState {
+    #[inline(always)]
+    pub fn profile_loaded(&self, profile_id: &str) -> bool {
+        self.loaded_profiles.contains_key(profile_id)
+    }
+
+    pub fn insert_loaded_profile(&mut self, profile_id: &str, by_key: OnlineItlSelfIndexMap) {
+        self.loaded_profiles
+            .entry(profile_id.to_string())
+            .or_insert_with(|| by_key.into_iter().collect());
+    }
+
+    pub fn set_value(
+        &mut self,
+        profile_id: Option<&str>,
+        api_key: &str,
+        chart_hash: &str,
+        value: Option<u32>,
+    ) -> OnlineItlSelfCacheUpdate {
+        let api_key = api_key.trim();
+        let chart_hash = chart_hash.trim();
+        if api_key.is_empty() || chart_hash.is_empty() {
+            return OnlineItlSelfCacheUpdate {
+                changed: false,
+                profile_snapshot: None,
+            };
+        }
+
+        let key = OnlineItlSelfScoreKey {
+            chart_hash: chart_hash.to_string(),
+            api_key: api_key.to_string(),
+        };
+        let session_changed = if let Some(value) = value {
+            self.session_by_key.insert(key.clone(), value) != Some(value)
+        } else {
+            self.session_by_key.remove(&key).is_some()
+        };
+
+        let Some(profile_id) = profile_id.map(str::trim).filter(|id| !id.is_empty()) else {
+            return OnlineItlSelfCacheUpdate {
+                changed: session_changed,
+                profile_snapshot: None,
+            };
+        };
+        let Some(profile_values) = self.loaded_profiles.get_mut(profile_id) else {
+            return OnlineItlSelfCacheUpdate {
+                changed: session_changed,
+                profile_snapshot: None,
+            };
+        };
+        let profile_changed = if let Some(value) = value {
+            profile_values.insert(key, value) != Some(value)
+        } else {
+            profile_values.remove(&key).is_some()
+        };
+
+        OnlineItlSelfCacheUpdate {
+            changed: session_changed || profile_changed,
+            profile_snapshot: profile_changed
+                .then(|| (profile_id.to_string(), profile_values.clone())),
+        }
+    }
+
+    pub fn get_value(
+        &self,
+        chart_hash: &str,
+        profile_id: Option<&str>,
+        api_key: &str,
+    ) -> Option<u32> {
+        let chart_hash = chart_hash.trim();
+        let api_key = api_key.trim();
+        if chart_hash.is_empty() || api_key.is_empty() {
+            return None;
+        }
+        let kref = OnlineItlSelfScoreKeyRef {
+            chart_hash,
+            api_key,
+        };
+        profile_id
+            .and_then(|profile_id| self.loaded_profiles.get(profile_id))
+            .and_then(|values| values.get(&kref).copied())
+            .or_else(|| self.session_by_key.get(&kref).copied())
+    }
+
+    pub fn values_by_chart_for_api(
+        &self,
+        profile_id: Option<&str>,
+        api_key: &str,
+    ) -> HashMap<String, u32> {
+        let api_key = api_key.trim();
+        if api_key.is_empty() {
+            return HashMap::new();
+        }
+        let loaded_count = profile_id
+            .and_then(|profile_id| self.loaded_profiles.get(profile_id))
+            .map_or(0, |scores| scores.len());
+        let mut by_chart = HashMap::with_capacity(loaded_count + self.session_by_key.len());
+        if let Some(profile_id) = profile_id
+            && let Some(values) = self.loaded_profiles.get(profile_id)
+        {
+            for (key, value) in values {
+                if key.api_key == api_key {
+                    by_chart.insert(key.chart_hash.clone(), *value);
+                }
+            }
+        }
+        for (key, value) in &self.session_by_key {
+            if key.api_key == api_key {
+                by_chart.insert(key.chart_hash.clone(), *value);
+            }
+        }
+        by_chart
+    }
+}
+
+#[derive(Debug)]
+pub enum OnlineItlSelfIndexWriteError {
+    CreateDir {
+        dir: PathBuf,
+        error: std::io::Error,
+    },
+    Encode {
+        path: PathBuf,
+    },
+    WriteTemp {
+        path: PathBuf,
+        error: std::io::Error,
+    },
+    Commit {
+        path: PathBuf,
+        error: std::io::Error,
+    },
+}
+
+pub fn load_online_itl_self_index_file(path: &Path) -> Option<OnlineItlSelfIndexMap> {
+    let bytes = fs::read(path).ok()?;
+    let (by_key, _) =
+        bincode::decode_from_slice::<OnlineItlSelfIndexMap, _>(&bytes, bincode::config::standard())
+            .ok()?;
+    Some(by_key)
+}
+
+pub fn save_online_itl_self_index_file(
+    path: &Path,
+    by_key: &OnlineItlSelfCacheMap,
+) -> Result<(), OnlineItlSelfIndexWriteError> {
+    let Some(parent) = path.parent() else {
+        return Ok(());
+    };
+    fs::create_dir_all(parent).map_err(|error| OnlineItlSelfIndexWriteError::CreateDir {
+        dir: parent.to_path_buf(),
+        error,
+    })?;
+
+    let std_by_key: OnlineItlSelfIndexMap = by_key
+        .iter()
+        .map(|(key, value)| (key.clone(), *value))
+        .collect();
+    let buf = bincode::encode_to_vec(&std_by_key, bincode::config::standard()).map_err(|_| {
+        OnlineItlSelfIndexWriteError::Encode {
+            path: path.to_path_buf(),
+        }
+    })?;
+    let tmp_path = path.with_extension("tmp");
+    fs::write(&tmp_path, buf).map_err(|error| OnlineItlSelfIndexWriteError::WriteTemp {
+        path: tmp_path.clone(),
+        error,
+    })?;
+    if let Err(error) = fs::rename(&tmp_path, path) {
+        let _ = fs::remove_file(&tmp_path);
+        return Err(OnlineItlSelfIndexWriteError::Commit {
+            path: path.to_path_buf(),
+            error,
+        });
+    }
+    Ok(())
+}
+
+#[derive(Default)]
+pub struct ItlScoreCacheState {
+    loaded_profiles: HashMap<String, ItlFileData>,
+}
+
+impl ItlScoreCacheState {
+    #[inline(always)]
+    pub fn profile_loaded(&self, profile_id: &str) -> bool {
+        self.loaded_profiles.contains_key(profile_id)
+    }
+
+    pub fn insert_loaded_profile(&mut self, profile_id: &str, data: ItlFileData) {
+        self.loaded_profiles
+            .entry(profile_id.to_string())
+            .or_insert(data);
+    }
+
+    pub fn set_profile_data(&mut self, profile_id: &str, data: ItlFileData) {
+        self.loaded_profiles.insert(profile_id.to_string(), data);
+    }
+
+    pub fn mark_unlock_folders<'a, I>(&mut self, profile_id: &str, folders: I)
+    where
+        I: IntoIterator<Item = &'a str>,
+    {
+        let data = self
+            .loaded_profiles
+            .entry(profile_id.to_string())
+            .or_default();
+        itl_mark_unlock_folders(data, folders);
+    }
+
+    pub fn chart_score(&self, profile_id: &str, chart_hash: &str) -> Option<CachedItlScore> {
+        self.loaded_profiles
+            .get(profile_id)
+            .and_then(|data| data.hash_map.get(chart_hash))
+            .map(itl_score_from_entry)
+    }
+
+    pub fn song_score(
+        &self,
+        profile_id: &str,
+        song: &deadsync_chart::SongData,
+    ) -> Option<CachedItlScore> {
+        self.loaded_profiles
+            .get(profile_id)
+            .and_then(|data| itl_score_for_song(song, data))
+    }
+
+    pub fn song_folder_unlocked(&self, profile_id: &str, song_folder: &str) -> bool {
+        self.loaded_profiles
+            .get(profile_id)
+            .map(|data| itl_song_folder_unlocked(data, song_folder))
+            .unwrap_or(false)
+    }
+
+    pub fn chart_no_cmod_for_song(
+        &self,
+        profile_id: &str,
+        song_dir: Option<&str>,
+        group_name: Option<&str>,
+        chart_hash: &str,
+        subtitle: &str,
+    ) -> Option<bool> {
+        let data = self.loaded_profiles.get(profile_id)?;
+        if !itl_song_matches_context(song_dir, group_name, data) {
+            return Some(false);
+        }
+        let prev = data.hash_map.get(chart_hash);
+        Some(itl_chart_no_cmod(subtitle, prev))
+    }
+}
+
+#[derive(Debug)]
+pub enum ItlFileReadError {
+    Read {
+        path: PathBuf,
+        error: std::io::Error,
+    },
+    Parse {
+        path: PathBuf,
+        error: serde_json::Error,
+    },
+}
+
+#[derive(Debug)]
+pub enum ItlFileWriteError {
+    CreateDir {
+        dir: PathBuf,
+        error: std::io::Error,
+    },
+    Encode,
+    WriteTemp {
+        path: PathBuf,
+        error: std::io::Error,
+    },
+    Commit {
+        path: PathBuf,
+        error: std::io::Error,
+    },
+}
+
+pub fn read_itl_file_from_path(path: &Path) -> Result<ItlFileData, ItlFileReadError> {
+    let text = fs::read_to_string(path).map_err(|error| ItlFileReadError::Read {
+        path: path.to_path_buf(),
+        error,
+    })?;
+    serde_json::from_str(text.as_str()).map_err(|error| ItlFileReadError::Parse {
+        path: path.to_path_buf(),
+        error,
+    })
+}
+
+pub fn write_itl_file_to_path(path: &Path, data: &ItlFileData) -> Result<(), ItlFileWriteError> {
+    if data.is_empty() {
+        return Ok(());
+    }
+    let Some(parent) = path.parent() else {
+        return Ok(());
+    };
+    fs::create_dir_all(parent).map_err(|error| ItlFileWriteError::CreateDir {
+        dir: parent.to_path_buf(),
+        error,
+    })?;
+    let text = serde_json::to_string(data).map_err(|_| ItlFileWriteError::Encode)?;
+    let tmp = path.with_extension("tmp");
+    fs::write(&tmp, text).map_err(|error| ItlFileWriteError::WriteTemp {
+        path: tmp.clone(),
+        error,
+    })?;
+    if let Err(error) = fs::rename(&tmp, path) {
+        let _ = fs::remove_file(&tmp);
+        return Err(ItlFileWriteError::Commit {
+            path: path.to_path_buf(),
+            error,
+        });
+    }
+    Ok(())
 }
 
 impl ItlFileData {
@@ -150,6 +506,36 @@ pub fn itl_song_matches(
         return true;
     }
     group_name.is_some_and(itl_group_name_matches)
+}
+
+pub fn itl_song_dir(song: &deadsync_chart::SongData) -> Option<String> {
+    song.simfile_path
+        .parent()
+        .map(|dir| dir.to_string_lossy().into_owned())
+}
+
+pub fn itl_song_matches_context(
+    song_dir: Option<&str>,
+    group_name: Option<&str>,
+    data: &ItlFileData,
+) -> bool {
+    itl_song_matches(song_dir, None, data) || itl_song_matches(None, group_name, data)
+}
+
+fn itl_entry_for_song<'a>(
+    song: &deadsync_chart::SongData,
+    data: &'a ItlFileData,
+) -> Option<&'a ItlHashEntry> {
+    let song_dir = song.simfile_path.parent()?.to_string_lossy();
+    let chart_hash = data.path_map.get(song_dir.as_ref())?;
+    data.hash_map.get(chart_hash)
+}
+
+pub fn itl_score_for_song(
+    song: &deadsync_chart::SongData,
+    data: &ItlFileData,
+) -> Option<CachedItlScore> {
+    itl_entry_for_song(song, data).map(itl_score_from_entry)
 }
 
 pub fn itl_chart_no_cmod(subtitle: &str, prev: Option<&ItlHashEntry>) -> bool {
@@ -428,6 +814,18 @@ mod tests {
     use serde_json::json;
     use std::path::PathBuf;
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static NEXT_TMP_ID: AtomicU64 = AtomicU64::new(1);
+
+    fn temp_test_dir(name: &str) -> PathBuf {
+        let id = NEXT_TMP_ID.fetch_add(1, Ordering::Relaxed);
+        let dir =
+            std::env::temp_dir().join(format!("deadsync-score-{name}-{}-{id}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        dir
+    }
 
     fn sample_chart(chart_type: &str) -> deadsync_chart::ChartData {
         deadsync_chart::ChartData {
@@ -646,6 +1044,25 @@ mod tests {
         assert!(itl_data_from_json("{}").is_none());
         assert!(itl_data_from_json("not json").is_none());
         assert!(itl_data_from_json(r#"{"hashMap":{}}"#).is_none());
+    }
+
+    #[test]
+    fn online_itl_self_score_index_round_trips() {
+        let dir = temp_test_dir("itl-self-score");
+        let path = dir.join("itl_self.bin");
+        let key = OnlineItlSelfScoreKey {
+            chart_hash: "deadbeefcafebabe".to_string(),
+            api_key: "api-key".to_string(),
+        };
+        let mut expected = HashMap::new();
+        expected.insert(key, 9912);
+
+        let in_memory: OnlineItlSelfCacheMap = expected.clone().into_iter().collect();
+        save_online_itl_self_index_file(&path, &in_memory).expect("save index");
+
+        assert_eq!(load_online_itl_self_index_file(&path), Some(expected));
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

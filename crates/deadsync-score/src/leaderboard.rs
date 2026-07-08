@@ -2,7 +2,8 @@ use chrono::{Local, TimeZone};
 use deadsync_core::input::InputSource;
 use deadsync_core::song_time::{SongTimeNs, song_time_ns_invalid};
 use std::cmp::Ordering;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::time::Instant;
 
 use crate::{LocalReplayEdge, ScoreImportEndpoint};
 
@@ -597,6 +598,102 @@ pub struct PlayerLeaderboardData {
     pub itl_self_rank: Option<u32>,
 }
 
+#[derive(Debug, Clone)]
+pub enum PlayerLeaderboardCacheValue {
+    Ready(PlayerLeaderboardData),
+    Error(String),
+}
+
+#[derive(Debug, Clone)]
+pub struct PlayerLeaderboardCacheEntry {
+    pub value: PlayerLeaderboardCacheValue,
+    pub max_entries: usize,
+    pub refreshed_at: Instant,
+    pub retry_after: Option<Instant>,
+}
+
+#[derive(Default)]
+pub struct PlayerLeaderboardCacheState {
+    pub by_key: hashbrown::HashMap<PlayerLeaderboardCacheKey, PlayerLeaderboardCacheEntry>,
+    pub in_flight: HashMap<PlayerLeaderboardCacheKey, usize>,
+    pub pending_refresh: HashMap<PlayerLeaderboardCacheKey, usize>,
+    pub invalidated_after: HashMap<PlayerLeaderboardCacheKey, Instant>,
+}
+
+pub struct PlayerLeaderboardRequestDecision {
+    pub snapshot: CachedPlayerLeaderboardData,
+    pub should_spawn: bool,
+    pub requested_max_entries: usize,
+}
+
+impl PlayerLeaderboardCacheState {
+    pub fn request_leaderboard(
+        &mut self,
+        key: &PlayerLeaderboardCacheKey,
+        max_entries: usize,
+        refresh_cached: bool,
+        now: Instant,
+    ) -> PlayerLeaderboardRequestDecision {
+        let entry = self.by_key.get(key);
+        let requested_max_entries =
+            entry.map_or(max_entries, |entry| max_entries.max(entry.max_entries));
+        let snapshot = entry.map_or_else(
+            player_leaderboard_loading_snapshot,
+            player_leaderboard_snapshot_from_entry,
+        );
+
+        let mut should_spawn = false;
+        if should_fetch_player_leaderboard_entry(entry, requested_max_entries, refresh_cached, now)
+        {
+            if let Some(in_flight_max_entries) = self.in_flight.get(key).copied() {
+                if should_rerun_in_flight_player_leaderboard_fetch(
+                    in_flight_max_entries,
+                    requested_max_entries,
+                    refresh_cached,
+                ) {
+                    queue_player_leaderboard_refresh(
+                        &mut self.pending_refresh,
+                        key,
+                        requested_max_entries,
+                    );
+                }
+            } else {
+                self.in_flight.insert(key.clone(), requested_max_entries);
+                should_spawn = true;
+            }
+        }
+
+        PlayerLeaderboardRequestDecision {
+            snapshot,
+            should_spawn,
+            requested_max_entries,
+        }
+    }
+
+    pub fn invalidate_chart_for_api(
+        &mut self,
+        api_key: &str,
+        chart_hash: &str,
+        invalidated_at: Instant,
+    ) {
+        let matching_keys: HashSet<PlayerLeaderboardCacheKey> = self
+            .by_key
+            .keys()
+            .chain(self.in_flight.keys())
+            .chain(self.pending_refresh.keys())
+            .chain(self.invalidated_after.keys())
+            .filter(|key| key.api_key == api_key && key.chart_hash.eq_ignore_ascii_case(chart_hash))
+            .cloned()
+            .collect();
+        for key in matching_keys {
+            self.by_key.remove(&key);
+            self.in_flight.remove(&key);
+            self.pending_refresh.remove(&key);
+            self.invalidated_after.insert(key, invalidated_at);
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PlayerLeaderboardCacheKey {
     pub chart_hash: String,
@@ -604,6 +701,17 @@ pub struct PlayerLeaderboardCacheKey {
     pub arrowcloud_api_key: String,
     pub include_arrowcloud: bool,
     pub show_ex_score: bool,
+}
+
+/// Borrowed view of [`PlayerLeaderboardCacheKey`] for allocation-free cache
+/// probes from per-frame leaderboard rank/score lookups.
+#[derive(Hash)]
+pub struct PlayerLeaderboardCacheKeyRef<'a> {
+    chart_hash: &'a str,
+    api_key: &'a str,
+    arrowcloud_api_key: &'a str,
+    include_arrowcloud: bool,
+    show_ex_score: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -638,6 +746,25 @@ impl CachedPlayerLeaderboardData {
             loading: false,
             data: None,
             error: Some(error),
+        }
+    }
+}
+
+#[inline(always)]
+pub const fn player_leaderboard_loading_snapshot() -> CachedPlayerLeaderboardData {
+    CachedPlayerLeaderboardData::loading()
+}
+
+#[inline(always)]
+pub fn player_leaderboard_snapshot_from_entry(
+    entry: &PlayerLeaderboardCacheEntry,
+) -> CachedPlayerLeaderboardData {
+    match &entry.value {
+        PlayerLeaderboardCacheValue::Ready(data) => {
+            CachedPlayerLeaderboardData::ready(data.clone())
+        }
+        PlayerLeaderboardCacheValue::Error(error) => {
+            CachedPlayerLeaderboardData::error(error.clone())
         }
     }
 }
@@ -772,6 +899,124 @@ pub fn player_leaderboard_cache_key(
         include_arrowcloud: profile_snapshot.include_arrowcloud,
         show_ex_score: profile_snapshot.show_ex_score,
     })
+}
+
+pub fn player_leaderboard_cache_key_ref<'a>(
+    chart_hash: &'a str,
+    profile_snapshot: &'a GameplayScoreboxProfileSnapshot,
+) -> Option<PlayerLeaderboardCacheKeyRef<'a>> {
+    let chart_hash = chart_hash.trim();
+    if chart_hash.is_empty() || !profile_snapshot.gs_active {
+        return None;
+    }
+    Some(PlayerLeaderboardCacheKeyRef {
+        chart_hash,
+        api_key: profile_snapshot.api_key(),
+        arrowcloud_api_key: profile_snapshot.arrowcloud_api_key(),
+        include_arrowcloud: profile_snapshot.include_arrowcloud(),
+        show_ex_score: profile_snapshot.show_ex_score,
+    })
+}
+
+impl hashbrown::Equivalent<PlayerLeaderboardCacheKey> for PlayerLeaderboardCacheKeyRef<'_> {
+    fn equivalent(&self, key: &PlayerLeaderboardCacheKey) -> bool {
+        self.chart_hash == key.chart_hash
+            && self.api_key == key.api_key
+            && self.arrowcloud_api_key == key.arrowcloud_api_key
+            && self.include_arrowcloud == key.include_arrowcloud
+            && self.show_ex_score == key.show_ex_score
+    }
+}
+
+pub fn cached_player_leaderboard_itl_self_rank(
+    by_key: &hashbrown::HashMap<PlayerLeaderboardCacheKey, PlayerLeaderboardCacheEntry>,
+    chart_hash: &str,
+    profile_snapshot: &GameplayScoreboxProfileSnapshot,
+) -> Option<u32> {
+    let kref = player_leaderboard_cache_key_ref(chart_hash, profile_snapshot)?;
+    let entry = by_key.get(&kref)?;
+    let PlayerLeaderboardCacheValue::Ready(data) = &entry.value else {
+        return None;
+    };
+    data.itl_self_rank
+}
+
+pub fn cached_player_leaderboard_srpg_self_score(
+    by_key: &hashbrown::HashMap<PlayerLeaderboardCacheKey, PlayerLeaderboardCacheEntry>,
+    chart_hash: &str,
+    profile_snapshot: &GameplayScoreboxProfileSnapshot,
+) -> Option<u32> {
+    let kref = player_leaderboard_cache_key_ref(chart_hash, profile_snapshot)?;
+    let entry = by_key.get(&kref)?;
+    let PlayerLeaderboardCacheValue::Ready(data) = &entry.value else {
+        return None;
+    };
+    data.srpg_self_score
+}
+
+#[inline(always)]
+pub fn should_keep_newer_player_leaderboard_entry(
+    entry: Option<&PlayerLeaderboardCacheEntry>,
+    request_started_at: Instant,
+) -> bool {
+    entry.is_some_and(|entry| entry.refreshed_at > request_started_at)
+}
+
+#[inline(always)]
+pub fn player_leaderboard_request_was_invalidated(
+    invalidated_after: Option<Instant>,
+    request_started_at: Instant,
+) -> bool {
+    invalidated_after.is_some_and(|invalidated_after| request_started_at <= invalidated_after)
+}
+
+#[inline(always)]
+pub fn should_fetch_player_leaderboard_entry(
+    entry: Option<&PlayerLeaderboardCacheEntry>,
+    max_entries: usize,
+    refresh_cached: bool,
+    now: Instant,
+) -> bool {
+    let Some(entry) = entry else {
+        return true;
+    };
+    match entry.value {
+        PlayerLeaderboardCacheValue::Ready(_) => {
+            if refresh_cached {
+                return entry
+                    .retry_after
+                    .is_none_or(|retry_after| now >= retry_after);
+            }
+            entry.max_entries < max_entries
+                && entry
+                    .retry_after
+                    .is_none_or(|retry_after| now >= retry_after)
+        }
+        PlayerLeaderboardCacheValue::Error(_) => entry
+            .retry_after
+            .is_none_or(|retry_after| now >= retry_after),
+    }
+}
+
+#[inline(always)]
+pub fn should_rerun_in_flight_player_leaderboard_fetch(
+    in_flight_max_entries: usize,
+    requested_max_entries: usize,
+    refresh_cached: bool,
+) -> bool {
+    refresh_cached || requested_max_entries > in_flight_max_entries
+}
+
+#[inline(always)]
+pub fn queue_player_leaderboard_refresh(
+    pending_refresh: &mut HashMap<PlayerLeaderboardCacheKey, usize>,
+    key: &PlayerLeaderboardCacheKey,
+    requested_max_entries: usize,
+) {
+    pending_refresh
+        .entry(key.clone())
+        .and_modify(|max_entries| *max_entries = (*max_entries).max(requested_max_entries))
+        .or_insert(requested_max_entries);
 }
 
 #[cfg(test)]
@@ -978,5 +1223,147 @@ mod tests {
             Some(ScoreboxPaneKind::Itl)
         );
         assert!(preferred_primary_scorebox_pane(&[], true).is_none());
+    }
+
+    #[test]
+    fn player_leaderboard_cache_reuses_success_until_more_rows_are_needed() {
+        let now = Instant::now();
+        let ready = PlayerLeaderboardCacheEntry {
+            value: PlayerLeaderboardCacheValue::Ready(PlayerLeaderboardData {
+                panes: Vec::new(),
+                srpg_self_score: None,
+                itl_self_score: None,
+                itl_self_rank: None,
+            }),
+            max_entries: 5,
+            refreshed_at: now,
+            retry_after: None,
+        };
+        assert!(!should_fetch_player_leaderboard_entry(
+            Some(&ready),
+            5,
+            false,
+            now
+        ));
+        assert!(!should_fetch_player_leaderboard_entry(
+            Some(&ready),
+            3,
+            false,
+            now
+        ));
+        assert!(should_fetch_player_leaderboard_entry(
+            Some(&ready),
+            10,
+            false,
+            now
+        ));
+        assert!(should_fetch_player_leaderboard_entry(
+            Some(&ready),
+            5,
+            true,
+            now
+        ));
+
+        let cooled_down_ready = PlayerLeaderboardCacheEntry {
+            value: PlayerLeaderboardCacheValue::Ready(PlayerLeaderboardData {
+                panes: Vec::new(),
+                srpg_self_score: None,
+                itl_self_score: None,
+                itl_self_rank: None,
+            }),
+            max_entries: 5,
+            refreshed_at: now,
+            retry_after: Some(now + std::time::Duration::from_secs(10)),
+        };
+        assert!(!should_fetch_player_leaderboard_entry(
+            Some(&cooled_down_ready),
+            10,
+            false,
+            now
+        ));
+        assert!(!should_fetch_player_leaderboard_entry(
+            Some(&cooled_down_ready),
+            5,
+            true,
+            now
+        ));
+
+        let stale_error = PlayerLeaderboardCacheEntry {
+            value: PlayerLeaderboardCacheValue::Error("boom".to_string()),
+            max_entries: 5,
+            refreshed_at: now - std::time::Duration::from_secs(10),
+            retry_after: Some(now - std::time::Duration::from_millis(1)),
+        };
+        assert!(should_fetch_player_leaderboard_entry(
+            Some(&stale_error),
+            5,
+            false,
+            now
+        ));
+    }
+
+    #[test]
+    fn in_flight_leaderboard_fetch_reruns_for_submit_refresh() {
+        assert!(!should_rerun_in_flight_player_leaderboard_fetch(
+            5, 5, false
+        ));
+        assert!(should_rerun_in_flight_player_leaderboard_fetch(
+            5, 10, false
+        ));
+        assert!(should_rerun_in_flight_player_leaderboard_fetch(5, 5, true));
+    }
+
+    #[test]
+    fn queued_leaderboard_refresh_keeps_largest_request() {
+        let key = PlayerLeaderboardCacheKey {
+            chart_hash: "deadbeef".to_string(),
+            api_key: "gs".to_string(),
+            arrowcloud_api_key: "ac".to_string(),
+            include_arrowcloud: true,
+            show_ex_score: false,
+        };
+        let mut pending_refresh = HashMap::new();
+
+        queue_player_leaderboard_refresh(&mut pending_refresh, &key, 5);
+        queue_player_leaderboard_refresh(&mut pending_refresh, &key, 10);
+        queue_player_leaderboard_refresh(&mut pending_refresh, &key, 3);
+
+        assert_eq!(pending_refresh.get(&key), Some(&10));
+    }
+
+    #[test]
+    fn newer_player_leaderboard_entry_blocks_older_fetch_result() {
+        let newer_entry = PlayerLeaderboardCacheEntry {
+            value: PlayerLeaderboardCacheValue::Ready(PlayerLeaderboardData {
+                panes: Vec::new(),
+                srpg_self_score: None,
+                itl_self_score: None,
+                itl_self_rank: None,
+            }),
+            max_entries: 0,
+            refreshed_at: Instant::now(),
+            retry_after: None,
+        };
+        let older_request_started_at = Instant::now() - std::time::Duration::from_millis(1);
+        assert!(should_keep_newer_player_leaderboard_entry(
+            Some(&newer_entry),
+            older_request_started_at,
+        ));
+
+        let older_entry = PlayerLeaderboardCacheEntry {
+            value: PlayerLeaderboardCacheValue::Ready(PlayerLeaderboardData {
+                panes: Vec::new(),
+                srpg_self_score: None,
+                itl_self_score: None,
+                itl_self_rank: None,
+            }),
+            max_entries: 0,
+            refreshed_at: Instant::now() - std::time::Duration::from_secs(1),
+            retry_after: None,
+        };
+        assert!(!should_keep_newer_player_leaderboard_entry(
+            Some(&older_entry),
+            Instant::now(),
+        ));
     }
 }

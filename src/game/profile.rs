@@ -12,30 +12,29 @@ use crate::config::{self, SimpleIni};
 use chrono::Local;
 use deadlib_platform::dirs;
 use deadsync_rules::scroll::{GUEST_SCROLL_SPEED, ScrollSpeedSetting};
-use log::{debug, info, warn};
+use log::{info, warn};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::Instant;
 
 mod update;
 
+pub use deadsync_profile::ImportProfileData;
 use deadsync_profile::{
     ActiveProfile, GameplayHudPlayerSnapshot, GameplayHudSnapshot, LastPlayed, LastPlayedCourse,
     LocalProfileSummary, NoteSkin, PLAYER_SLOTS, PlayMode, PlayStyle, PlayerOptionsData,
-    PlayerSide, Profile, ProfileStats, ProfileStatsDecodeError, TimingTickMode,
-    active_profile_is_guest, active_profile_local_id, add_known_pack_names, clamp_weight_pounds,
-    decode_profile_stats as decode_profile_stats_bytes, encode_profile_stats,
-    find_profile_avatar_path, folder_name_for_display, generate_profile_guid, initials_from_name,
-    is_local_profile_id, is_valid_profile_guid, joined_player_mask,
-    load_last_played_course_section, load_last_played_section, load_player_options_section,
-    parse_favorited_packs_content, parse_favorites_content, parse_groovestats_is_pad_player,
-    player_options_section, player_side_index as side_ix, player_side_is_joined,
-    read_userprofile_identity, render_arrowcloud_ini_content, render_favorited_packs_content,
-    render_favorites_content, render_groovestats_ini_content, render_profile_ini_content,
-    sanitize_player_initials, unknown_pack_names, upsert_profile_guid_content,
+    PlayerSide, Profile, ProfileStats, ProfileStatsDecodeError, ProfileStatsLoadError,
+    ProfileStatsWriteError, SessionState, TimingTickMode, active_profile_is_guest,
+    active_profile_local_id, add_known_pack_names, clamp_weight_pounds, find_profile_avatar_path,
+    folder_name_for_display, generate_profile_guid, is_local_profile_id, is_valid_profile_guid,
+    joined_player_mask, load_last_played_course_section, load_last_played_section,
+    load_player_options_section,
+    lock_wait::{LockWaitStats, lock_with_wait_stats},
+    parse_groovestats_is_pad_player, player_options_section, player_side_index as side_ix,
+    player_side_is_joined, read_userprofile_identity, render_arrowcloud_ini_content,
+    render_groovestats_ini_content, render_profile_ini_content, sanitize_player_initials,
+    unknown_pack_names, upsert_profile_guid_content,
 };
 pub use update::*;
 
@@ -159,144 +158,27 @@ fn load_last_played_course(profile_conf: &SimpleIni, section: &str) -> Option<La
     load_last_played_course_section(has_any, |key| profile_conf.get(section, key))
 }
 
-#[inline(always)]
-fn profile_stats_tmp_path(id: &str) -> PathBuf {
-    deadsync_profile::profile_stats_tmp_path(&local_profile_dir(id))
-}
-
 // Global statics for the loaded player profiles.
 static PROFILES: std::sync::LazyLock<Mutex<[Profile; PLAYER_SLOTS]>> =
     std::sync::LazyLock::new(|| Mutex::new(std::array::from_fn(|_| Profile::default())));
 
-#[derive(Debug)]
-struct SessionState {
-    active_profiles: [ActiveProfile; PLAYER_SLOTS],
-    joined_mask: u8,
-    music_rate: f32,
-    timing_tick_mode: TimingTickMode,
-    play_style: PlayStyle,
-    play_mode: PlayMode,
-    player_side: PlayerSide,
-    fast_profile_switch_from_select_music: bool,
-}
-
 static SESSION: std::sync::LazyLock<Mutex<SessionState>> = std::sync::LazyLock::new(|| {
-    Mutex::new(SessionState {
-        // Both sides start as Guest; `restore_default_profiles()` seeds the
-        // real active profiles from config during `load()`.
-        active_profiles: [ActiveProfile::Guest, ActiveProfile::Guest],
-        joined_mask: joined_player_mask(true, false),
-        music_rate: 1.0,
-        timing_tick_mode: TimingTickMode::Off,
-        play_style: PlayStyle::Single,
-        play_mode: PlayMode::Regular,
-        player_side: PlayerSide::P1,
-        fast_profile_switch_from_select_music: false,
-    })
+    // Both sides start as Guest; `restore_default_profiles()` seeds the real
+    // active profiles from config during `load()`.
+    Mutex::new(SessionState::default())
 });
-
-static LOCK_WAIT_EPOCH: std::sync::LazyLock<Instant> = std::sync::LazyLock::new(Instant::now);
-const LOCK_WAIT_REPORT_INTERVAL_NS: u64 = 5_000_000_000;
-const LOCK_WAIT_SLOW_NS: u64 = 50_000;
-const LOCK_WAIT_SPIKE_NS: u64 = 2_000_000;
-
-struct LockWaitStats {
-    lock_count: AtomicU64,
-    wait_ns_total: AtomicU64,
-    wait_ns_max: AtomicU64,
-    slow_wait_count: AtomicU64,
-    last_report_ns: AtomicU64,
-}
-
-impl LockWaitStats {
-    const fn new() -> Self {
-        Self {
-            lock_count: AtomicU64::new(0),
-            wait_ns_total: AtomicU64::new(0),
-            wait_ns_max: AtomicU64::new(0),
-            slow_wait_count: AtomicU64::new(0),
-            last_report_ns: AtomicU64::new(0),
-        }
-    }
-}
 
 static SESSION_LOCK_WAIT_STATS: LockWaitStats = LockWaitStats::new();
 static PROFILES_LOCK_WAIT_STATS: LockWaitStats = LockWaitStats::new();
 
 #[inline(always)]
-fn lock_wait_stats_enabled() -> bool {
-    log::max_level() >= log::LevelFilter::Debug
-}
-
-#[inline(always)]
-fn lock_wait_now_ns() -> u64 {
-    LOCK_WAIT_EPOCH.elapsed().as_nanos().min(u64::MAX as u128) as u64
-}
-
-#[inline(always)]
-fn record_lock_wait(lock_name: &str, stats: &LockWaitStats, waited_ns: u64) {
-    stats.lock_count.fetch_add(1, Ordering::Relaxed);
-    stats.wait_ns_total.fetch_add(waited_ns, Ordering::Relaxed);
-    stats.wait_ns_max.fetch_max(waited_ns, Ordering::Relaxed);
-    if waited_ns >= LOCK_WAIT_SLOW_NS {
-        stats.slow_wait_count.fetch_add(1, Ordering::Relaxed);
-    }
-    if waited_ns >= LOCK_WAIT_SPIKE_NS {
-        debug!(
-            "lock-wait[{lock_name}] spike={:.3}ms",
-            waited_ns as f64 / 1_000_000.0
-        );
-    }
-    let now_ns = lock_wait_now_ns();
-    let last_ns = stats.last_report_ns.load(Ordering::Relaxed);
-    if now_ns.saturating_sub(last_ns) < LOCK_WAIT_REPORT_INTERVAL_NS {
-        return;
-    }
-    if stats
-        .last_report_ns
-        .compare_exchange(last_ns, now_ns, Ordering::Relaxed, Ordering::Relaxed)
-        .is_err()
-    {
-        return;
-    }
-    let lock_count = stats.lock_count.swap(0, Ordering::Relaxed);
-    if lock_count == 0 {
-        return;
-    }
-    let total_ns = stats.wait_ns_total.swap(0, Ordering::Relaxed);
-    let max_ns = stats.wait_ns_max.swap(0, Ordering::Relaxed);
-    let slow_count = stats.slow_wait_count.swap(0, Ordering::Relaxed);
-    let avg_us = (total_ns as f64 / lock_count as f64) / 1_000.0;
-    debug!(
-        "lock-wait[{lock_name}] n={} avg={avg_us:.3}us max={:.3}us slow(>50us)={}",
-        lock_count,
-        max_ns as f64 / 1_000.0,
-        slow_count
-    );
-}
-
-#[inline(always)]
 fn lock_session() -> std::sync::MutexGuard<'static, SessionState> {
-    if !lock_wait_stats_enabled() {
-        return SESSION.lock().unwrap();
-    }
-    let start = Instant::now();
-    let guard = SESSION.lock().unwrap();
-    let waited_ns = start.elapsed().as_nanos().min(u64::MAX as u128) as u64;
-    record_lock_wait("SESSION", &SESSION_LOCK_WAIT_STATS, waited_ns);
-    guard
+    lock_with_wait_stats("SESSION", &SESSION_LOCK_WAIT_STATS, &SESSION)
 }
 
 #[inline(always)]
 fn lock_profiles() -> std::sync::MutexGuard<'static, [Profile; PLAYER_SLOTS]> {
-    if !lock_wait_stats_enabled() {
-        return PROFILES.lock().unwrap();
-    }
-    let start = Instant::now();
-    let guard = PROFILES.lock().unwrap();
-    let waited_ns = start.elapsed().as_nanos().min(u64::MAX as u128) as u64;
-    record_lock_wait("PROFILES", &PROFILES_LOCK_WAIT_STATS, waited_ns);
-    guard
+    lock_with_wait_stats("PROFILES", &PROFILES_LOCK_WAIT_STATS, &PROFILES)
 }
 
 #[inline(always)]
@@ -421,35 +303,33 @@ fn save_profile_ini_for_side(side: PlayerSide) {
 }
 
 #[inline(always)]
-fn decode_profile_stats(bytes: &[u8], path: &Path) -> Option<ProfileStats> {
-    match decode_profile_stats_bytes(bytes) {
-        Ok(stats) => Some(stats),
-        Err(ProfileStatsDecodeError::UnsupportedVersion(version)) => {
+fn log_profile_stats_load_error(path: &Path, error: ProfileStatsLoadError) {
+    match error {
+        ProfileStatsLoadError::Read(e) => {
+            warn!("Failed to read {}: {}", path.display(), e);
+        }
+        ProfileStatsLoadError::Decode(ProfileStatsDecodeError::UnsupportedVersion(version)) => {
             warn!(
                 "Unsupported profile stats version {} in '{}'.",
                 version,
                 path.display()
             );
-            None
         }
-        Err(ProfileStatsDecodeError::InvalidPayload) => {
+        ProfileStatsLoadError::Decode(ProfileStatsDecodeError::InvalidPayload) => {
             warn!("Failed to decode profile stats '{}'.", path.display());
-            None
         }
     }
 }
 
-fn load_profile_stats(path: &Path) -> Option<ProfileStats> {
-    let bytes = match fs::read(path) {
-        Ok(bytes) => bytes,
+fn load_profile_stats(profile_id: &str) -> Option<ProfileStats> {
+    let path = profile_stats_path(profile_id);
+    match deadsync_profile::load_profile_stats_file(&path) {
+        Ok(stats) => stats,
         Err(e) => {
-            if e.kind() != std::io::ErrorKind::NotFound {
-                warn!("Failed to read {}: {}", path.display(), e);
-            }
-            return None;
+            log_profile_stats_load_error(&path, e);
+            None
         }
-    };
-    decode_profile_stats(&bytes, path)
+    }
 }
 
 fn save_profile_stats_for_side(side: PlayerSide) {
@@ -476,30 +356,31 @@ fn save_profile_stats_for_side(side: PlayerSide) {
 }
 
 fn write_profile_stats(profile_id: &str, payload: &ProfileStats) {
-    let Some(buf) = encode_profile_stats(payload) else {
-        warn!("Failed to encode profile stats for '{}'.", profile_id);
-        return;
-    };
-
-    let path = profile_stats_path(profile_id);
-    let tmp_path = profile_stats_tmp_path(profile_id);
-    if let Some(parent) = path.parent()
-        && let Err(e) = fs::create_dir_all(parent)
+    if let Err(e) =
+        deadsync_profile::write_profile_stats_dir(&local_profile_dir(profile_id), payload)
     {
-        warn!(
-            "Failed to create profile stats directory '{}': {}",
-            parent.display(),
-            e
-        );
-        return;
+        log_profile_stats_write_error(profile_id, e);
     }
-    if let Err(e) = fs::write(&tmp_path, buf) {
-        warn!("Failed to write {}: {}", tmp_path.display(), e);
-        return;
-    }
-    if let Err(e) = fs::rename(&tmp_path, &path) {
-        warn!("Failed to save {}: {}", path.display(), e);
-        let _ = fs::remove_file(&tmp_path);
+}
+
+fn log_profile_stats_write_error(profile_id: &str, error: ProfileStatsWriteError) {
+    match error {
+        ProfileStatsWriteError::Encode => {
+            warn!("Failed to encode profile stats for '{}'.", profile_id);
+        }
+        ProfileStatsWriteError::CreateDir { path, error } => {
+            warn!(
+                "Failed to create profile stats directory '{}': {}",
+                path.display(),
+                error
+            );
+        }
+        ProfileStatsWriteError::WriteTmp { path, error } => {
+            warn!("Failed to write {}: {}", path.display(), error);
+        }
+        ProfileStatsWriteError::Rename { path, error, .. } => {
+            warn!("Failed to save {}: {}", path.display(), error);
+        }
     }
 }
 
@@ -508,16 +389,12 @@ fn write_profile_stats(profile_id: &str, payload: &ProfileStats) {
 /// empty so the normal first-load reconciliation still marks the current packs
 /// as known. Does nothing when there's no stat worth persisting.
 pub fn write_imported_profile_stats(profile_id: &str, current_combo: u32) {
-    if current_combo == 0 {
-        return;
+    if let Err(e) = deadsync_profile::write_imported_profile_stats_dir(
+        &local_profile_dir(profile_id),
+        current_combo,
+    ) {
+        log_profile_stats_write_error(profile_id, e);
     }
-    write_profile_stats(
-        profile_id,
-        &ProfileStats {
-            current_combo,
-            known_pack_names: HashSet::new(),
-        },
-    );
 }
 
 fn save_groovestats_ini_for_side(side: PlayerSide) {
@@ -874,11 +751,10 @@ fn load_for_side(side: PlayerSide) {
             );
         }
 
-        let stats =
-            load_profile_stats(&profile_stats_path(&profile_id)).unwrap_or_else(|| ProfileStats {
-                current_combo: default_profile.current_combo,
-                known_pack_names: HashSet::new(),
-            });
+        let stats = load_profile_stats(&profile_id).unwrap_or_else(|| ProfileStats {
+            current_combo: default_profile.current_combo,
+            known_pack_names: HashSet::new(),
+        });
         profile.current_combo = stats.current_combo;
         profile.known_pack_names = stats.known_pack_names;
         profile.favorites = load_favorites(&profile_id);
@@ -1376,40 +1252,19 @@ pub fn mark_packs_known<'a>(profile_ids: &[String], pack_names: impl IntoIterato
 
 // --- Favorites ---
 
-fn favorites_path(profile_id: &str) -> PathBuf {
-    deadsync_profile::favorites_path(&local_profile_dir(profile_id))
-}
-
 fn load_favorites(profile_id: &str) -> HashSet<String> {
-    let path = favorites_path(profile_id);
-    let Ok(text) = fs::read_to_string(&path) else {
-        return HashSet::new();
-    };
-    parse_favorites_content(&text)
+    deadsync_profile::load_favorites_dir(&local_profile_dir(profile_id))
 }
 
 fn save_favorites(profile_id: &str, favorites: &HashSet<String>) {
-    let path = favorites_path(profile_id);
-    if let Some(parent) = path.parent() {
-        let _ = fs::create_dir_all(parent);
-    }
-    let text = render_favorites_content(favorites);
-    let tmp_path = path.with_extension("tmp");
-    if fs::write(&tmp_path, text.as_bytes()).is_ok() {
-        let _ = fs::rename(&tmp_path, &path);
-    }
+    deadsync_profile::save_favorites_dir(&local_profile_dir(profile_id), favorites);
 }
 
 /// Writes imported favorites (chart `short_hash`es) into a freshly-created
 /// profile's `favorites.txt`, merging with anything already present. Used by the
 /// ITGmania importer, which resolves Simply Love song favorites to chart hashes.
 pub fn write_imported_favorites(profile_id: &str, hashes: &HashSet<String>) {
-    if hashes.is_empty() {
-        return;
-    }
-    let mut merged = load_favorites(profile_id);
-    merged.extend(hashes.iter().cloned());
-    save_favorites(profile_id, &merged);
+    deadsync_profile::merge_imported_favorites_dir(&local_profile_dir(profile_id), hashes);
 }
 
 /// Toggle a song's favorite status for the given player side.
@@ -1421,13 +1276,7 @@ pub fn toggle_favorite(side: PlayerSide, chart_hash: &str) -> bool {
     let is_now_favorite = {
         let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
-        if profile.favorites.contains(chart_hash) {
-            profile.favorites.remove(chart_hash);
-            false
-        } else {
-            profile.favorites.insert(chart_hash.to_string());
-            true
-        }
+        deadsync_profile::toggle_favorite_hash(&mut profile.favorites, chart_hash)
     };
     let favorites = lock_profiles()[side_ix(side)].favorites.clone();
     save_favorites(&profile_id, &favorites);
@@ -1450,28 +1299,12 @@ pub fn seed_session_favorite(side: PlayerSide, chart_hash: &str) {
         .insert(chart_hash.to_string());
 }
 
-fn favorited_packs_path(profile_id: &str) -> PathBuf {
-    deadsync_profile::favorited_packs_path(&local_profile_dir(profile_id))
-}
-
 fn load_favorited_packs(profile_id: &str) -> HashSet<String> {
-    let path = favorited_packs_path(profile_id);
-    let Ok(text) = fs::read_to_string(&path) else {
-        return HashSet::new();
-    };
-    parse_favorited_packs_content(&text)
+    deadsync_profile::load_favorited_packs_dir(&local_profile_dir(profile_id))
 }
 
 fn save_favorited_packs(profile_id: &str, packs: &HashSet<String>) {
-    let path = favorited_packs_path(profile_id);
-    if let Some(parent) = path.parent() {
-        let _ = fs::create_dir_all(parent);
-    }
-    let text = render_favorited_packs_content(packs);
-    let tmp_path = path.with_extension("tmp");
-    if fs::write(&tmp_path, text.as_bytes()).is_ok() {
-        let _ = fs::rename(&tmp_path, &path);
-    }
+    deadsync_profile::save_favorited_packs_dir(&local_profile_dir(profile_id), packs);
 }
 
 /// Toggle a pack's favorite status for the given player side, identifying the
@@ -1484,18 +1317,7 @@ pub fn toggle_pack_favorite(side: PlayerSide, pack_name: &str) -> bool {
     let is_now_favorite = {
         let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
-        let existing = profile
-            .favorited_packs
-            .iter()
-            .find(|p| *p == pack_name)
-            .cloned();
-        if let Some(existing) = existing {
-            profile.favorited_packs.remove(&existing);
-            false
-        } else {
-            profile.favorited_packs.insert(pack_name.to_string());
-            true
-        }
+        deadsync_profile::toggle_favorited_pack(&mut profile.favorited_packs, pack_name)
     };
     let packs = lock_profiles()[side_ix(side)].favorited_packs.clone();
     save_favorited_packs(&profile_id, &packs);
@@ -1563,43 +1385,11 @@ pub fn scan_local_profiles() -> Vec<LocalProfileSummary> {
 }
 
 pub fn create_local_profile(display_name: &str) -> Result<String, std::io::Error> {
-    let name = display_name.trim();
-    if name.is_empty() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "Display name is empty",
-        ));
-    }
-
-    let id = generate_profile_guid();
-    let folder = folder_name_for_display(name, &id, &existing_profile_folder_names());
-    let dir = profile_dir_by_folder(&folder);
-    fs::create_dir_all(&dir)?;
-
-    let mut default_profile = Profile::default();
-    default_profile.noteskin = machine_default_noteskin_value();
-    default_profile.pad_light_brightness = machine_default_light_brightness();
-    default_profile.store_current_player_options_for_all_styles();
-    let initials = initials_from_name(name);
-    let today = Local::now().date_naive().to_string();
-    default_profile.display_name = name.to_string();
-    default_profile.player_initials = initials;
-    default_profile.weight_pounds = 0;
-    default_profile.birth_year = 0;
-    default_profile.ignore_step_count_calories = false;
-    default_profile.calories_burned_day = today;
-    default_profile.calories_burned_today = 0.0;
-    fs::write(
-        dir.join("profile.ini"),
-        render_profile_ini_content(&id, &default_profile),
-    )?;
-    fs::write(
-        dir.join("groovestats.ini"),
-        render_groovestats_ini_content("", false, ""),
-    )?;
-    fs::write(
-        dir.join("arrowcloud.ini"),
-        render_arrowcloud_ini_content(""),
+    let id = deadsync_profile::create_local_profile_dir(
+        &profiles_root(),
+        display_name,
+        machine_default_noteskin_value(),
+        machine_default_light_brightness(),
     )?;
 
     // Make the new GUID -> folder mapping visible to later path lookups.
@@ -1629,32 +1419,6 @@ pub fn default_local_profile_options() -> (PlayerOptionsData, PlayerOptionsData)
     )
 }
 
-/// Everything needed to materialise a new local profile from an external source
-/// (the ITGmania / Simply Love importer).
-pub struct ImportProfileData<'a> {
-    pub display_name: &'a str,
-    pub weight_pounds: u32,
-    pub birth_year: u32,
-    /// Preferred player initials (e.g. ITGmania `LastUsedHighScoreName`). Falls
-    /// back to initials derived from the display name when empty.
-    pub initials: &'a str,
-    pub groovestats_api_key: &'a str,
-    pub groovestats_username: &'a str,
-    pub groovestats_is_pad_player: bool,
-    pub arrowcloud_api_key: &'a str,
-    /// Whether step-count calorie estimation is disabled (ITGmania
-    /// `IgnoreStepCountCalories`).
-    pub ignore_step_count_calories: bool,
-    /// Source avatar image to copy in as `profile.png`, if any.
-    pub avatar_src: Option<&'a Path>,
-    pub options_singles: &'a PlayerOptionsData,
-    pub options_doubles: &'a PlayerOptionsData,
-    /// Desired profile GUID (canonical identity). For ITGmania imports this is
-    /// derived deterministically from the source profile's `Guid`. When empty or
-    /// not a valid GUID, a fresh one is generated.
-    pub guid: &'a str,
-}
-
 /// Create a new local profile from imported data, writing `profile.ini`,
 /// `groovestats.ini`, `arrowcloud.ini`, and copying the avatar. Returns the new
 /// profile id. Scores are written separately via
@@ -1662,65 +1426,9 @@ pub struct ImportProfileData<'a> {
 pub fn create_local_profile_from_import(
     data: &ImportProfileData<'_>,
 ) -> Result<String, std::io::Error> {
-    let name = data.display_name.trim();
-    if name.is_empty() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "Display name is empty",
-        ));
-    }
-
-    let id = if is_valid_profile_guid(data.guid.trim()) {
-        data.guid.trim().to_string()
-    } else {
-        generate_profile_guid()
-    };
-    let folder = folder_name_for_display(name, &id, &existing_profile_folder_names());
-    let dir = profile_dir_by_folder(&folder);
-    fs::create_dir_all(&dir)?;
-
-    let initials = {
-        let sanitized = sanitize_player_initials(data.initials);
-        if sanitized.is_empty() {
-            initials_from_name(name)
-        } else {
-            sanitized
-        }
-    };
-    let weight = clamp_weight_pounds(data.weight_pounds.min(i32::MAX as u32) as i32);
-
-    let today = Local::now().date_naive().to_string();
-    let profile = Profile {
-        display_name: name.to_string(),
-        player_initials: initials,
-        weight_pounds: weight,
-        birth_year: data.birth_year.min(i32::MAX as u32) as i32,
-        ignore_step_count_calories: data.ignore_step_count_calories,
-        calories_burned_day: today,
-        calories_burned_today: 0.0,
-        player_options_singles: data.options_singles.clone(),
-        player_options_doubles: data.options_doubles.clone(),
-        ..Profile::default()
-    };
-    fs::write(
-        dir.join("profile.ini"),
-        render_profile_ini_content(&id, &profile),
-    )?;
-    fs::write(
-        dir.join("groovestats.ini"),
-        render_groovestats_ini_content(
-            data.groovestats_api_key,
-            data.groovestats_is_pad_player,
-            data.groovestats_username,
-        ),
-    )?;
-    fs::write(
-        dir.join("arrowcloud.ini"),
-        render_arrowcloud_ini_content(data.arrowcloud_api_key),
-    )?;
-
-    if let Some(src) = data.avatar_src {
-        if let Err(e) = fs::copy(src, dir.join("profile.png")) {
+    let result = deadsync_profile::create_local_profile_from_import_dir(&profiles_root(), data)?;
+    if let Some(e) = result.avatar_copy_error {
+        if let Some(src) = data.avatar_src {
             warn!("Failed to copy imported avatar {src:?}: {e}");
         }
     }
@@ -1729,7 +1437,7 @@ pub fn create_local_profile_from_import(
     // favorites and profile-stats writes all resolve the profile dir by GUID).
     invalidate_profile_dir_cache();
 
-    Ok(id)
+    Ok(result.id)
 }
 
 pub fn rename_local_profile(id: &str, display_name: &str) -> Result<(), std::io::Error> {

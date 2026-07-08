@@ -2,30 +2,37 @@ use bincode::{Decode, Encode};
 use chrono::{DateTime, TimeZone, Utc};
 use deadsync_core::input::InputSource;
 use deadsync_core::note::NoteType;
-use deadsync_core::song_time::{SongTimeNs, song_time_ns_invalid};
+use deadsync_core::song_time::{SongTimeNs, song_time_ns_from_seconds, song_time_ns_invalid};
 use deadsync_rules::note::{HoldResult, MineResult, Note};
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::{judgment, timing};
 use serde::Serialize;
-use std::collections::HashMap;
-use std::time::Duration;
+use std::collections::{HashMap, HashSet};
+use std::sync::MutexGuard;
+use std::time::{Duration, Instant};
 
 pub mod event_progress;
 pub mod import;
 pub mod itl;
 pub mod leaderboard;
+pub mod local_store;
 pub mod stage_stats;
 pub use event_progress::*;
 pub use import::{ImportedHighScore, grade_from_itg, local_score_from_itg, parse_itg_datetime_ms};
 pub use itl::{
-    ItlFileData, ItlHashEntry, ItlJudgments, ItlPointTotals, ex_hundredths, is_itl_unlocks_pack,
+    ItlFileData, ItlFileReadError, ItlFileWriteError, ItlHashEntry, ItlJudgments, ItlPointTotals,
+    ItlScoreCacheState, OnlineItlSelfCacheMap, OnlineItlSelfCacheState, OnlineItlSelfIndexMap,
+    OnlineItlSelfIndexWriteError, OnlineItlSelfScoreKey, ex_hundredths, is_itl_unlocks_pack,
     itl_chart_no_cmod, itl_clear_type, itl_data_from_json, itl_event_name_from_group,
     itl_group_name_matches, itl_judgments_better, itl_mark_unlock_folders,
     itl_overall_ranks_from_song_cache, itl_point_totals, itl_points_for_chart, itl_points_for_song,
-    itl_rebuild_song_ranks, itl_score_from_entry, itl_song_folder_unlocked, itl_song_matches,
-    itl_steps_type_from_chart_type, parse_itl_points,
+    itl_rebuild_song_ranks, itl_score_for_song, itl_score_from_entry, itl_song_dir,
+    itl_song_folder_unlocked, itl_song_matches, itl_song_matches_context,
+    itl_steps_type_from_chart_type, load_online_itl_self_index_file, parse_itl_points,
+    read_itl_file_from_path, save_online_itl_self_index_file, write_itl_file_to_path,
 };
 pub use leaderboard::*;
+pub use local_store::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub enum Grade {
@@ -142,6 +149,260 @@ pub struct LocalScoreIndex {
     pub best_pass_rate: HashMap<String, u32>,
 }
 
+#[derive(Default)]
+pub struct GsScoreCacheState {
+    pub loaded_profiles: HashMap<String, HashMap<String, CachedScore>>,
+}
+
+#[derive(Default)]
+pub struct AcScoreCacheState {
+    pub loaded_profiles: HashMap<String, HashMap<String, ArrowCloudScores>>,
+}
+
+#[derive(Default)]
+pub struct LocalScoreCacheState {
+    pub loaded_profiles: HashMap<String, LocalScoreIndex>,
+}
+
+#[derive(Clone, Debug)]
+pub struct MachineBest {
+    pub score: CachedScore,
+    pub initials: String,
+}
+
+#[derive(Default)]
+pub struct MachineLocalScoreCacheState {
+    pub loaded: bool,
+    pub best_itg: HashMap<String, MachineBest>,
+}
+
+impl GsScoreCacheState {
+    pub fn get_profile_score(&self, profile_id: &str, chart_hash: &str) -> Option<CachedScore> {
+        self.loaded_profiles
+            .get(profile_id)
+            .and_then(|scores| scores.get(chart_hash).copied())
+    }
+
+    pub fn profile_chart_hashes(&self, profile_id: &str) -> HashSet<String> {
+        self.loaded_profiles
+            .get(profile_id)
+            .map_or_else(HashSet::new, |scores| scores.keys().cloned().collect())
+    }
+
+    pub fn set_profile_score(
+        &mut self,
+        profile_id: &str,
+        chart_hash: String,
+        score: CachedScore,
+    ) -> Option<HashMap<String, CachedScore>> {
+        let map = self.loaded_profiles.get_mut(profile_id)?;
+        map.insert(chart_hash, fix_gs_cached_score(score));
+        Some(map.clone())
+    }
+
+    pub fn seed_profile_score(&mut self, profile_id: &str, chart_hash: &str, score: CachedScore) {
+        self.loaded_profiles
+            .entry(profile_id.to_string())
+            .or_default()
+            .insert(chart_hash.to_string(), score);
+    }
+}
+
+impl AcScoreCacheState {
+    pub fn get_profile_scores(
+        &self,
+        profile_id: &str,
+        chart_hash: &str,
+    ) -> Option<ArrowCloudScores> {
+        self.loaded_profiles
+            .get(profile_id)
+            .and_then(|scores| scores.get(chart_hash).copied())
+    }
+
+    pub fn profile_chart_hashes_with_itg(&self, profile_id: &str) -> HashSet<String> {
+        self.loaded_profiles
+            .get(profile_id)
+            .map_or_else(HashSet::new, |scores| {
+                scores
+                    .iter()
+                    .filter_map(|(hash, ac)| ac.itg.is_some().then(|| hash.clone()))
+                    .collect()
+            })
+    }
+
+    pub fn set_profile_scores_bulk(
+        &mut self,
+        profile_id: &str,
+        entries: impl IntoIterator<Item = (String, ArrowCloudScores)>,
+    ) -> Option<HashMap<String, ArrowCloudScores>> {
+        let map = self.loaded_profiles.get_mut(profile_id)?;
+        for (hash, scores) in entries {
+            map.insert(hash, scores);
+        }
+        Some(map.clone())
+    }
+
+    pub fn merge_profile_submit_scores(
+        &mut self,
+        profile_id: &str,
+        chart_hash: &str,
+        itg_percent: f64,
+        ex_percent: f64,
+        hard_ex_percent: f64,
+        is_fail: bool,
+        submitted_at: DateTime<Utc>,
+    ) -> Option<HashMap<String, ArrowCloudScores>> {
+        let new_scores = ArrowCloudScores {
+            itg: arrowcloud_score_from_submit_percent(itg_percent, is_fail, submitted_at),
+            ex: arrowcloud_score_from_submit_percent(ex_percent, is_fail, submitted_at),
+            hard_ex: arrowcloud_score_from_submit_percent(hard_ex_percent, is_fail, submitted_at),
+        };
+
+        let map = self.loaded_profiles.get_mut(profile_id)?;
+        let entry = map.entry(chart_hash.to_string()).or_default();
+        merge_arrowcloud_score_slot(&mut entry.itg, new_scores.itg);
+        merge_arrowcloud_score_slot(&mut entry.ex, new_scores.ex);
+        merge_arrowcloud_score_slot(&mut entry.hard_ex, new_scores.hard_ex);
+        Some(map.clone())
+    }
+}
+
+impl LocalScoreCacheState {
+    pub fn get_profile_itg_score(&self, profile_id: &str, chart_hash: &str) -> Option<CachedScore> {
+        self.loaded_profiles
+            .get(profile_id)
+            .and_then(|idx| idx.best_itg.get(chart_hash).copied())
+    }
+
+    pub fn get_profile_pass_rate(&self, profile_id: &str, chart_hash: &str) -> Option<u32> {
+        self.loaded_profiles
+            .get(profile_id)
+            .and_then(|idx| idx.best_pass_rate.get(chart_hash).copied())
+    }
+
+    pub fn get_profile_scalar_score(
+        &self,
+        profile_id: &str,
+        chart_hash: &str,
+        hard_ex: bool,
+    ) -> Option<LocalScalarScore> {
+        let index = self.loaded_profiles.get(profile_id)?;
+        let best = if hard_ex {
+            index.best_hard_ex.get(chart_hash)
+        } else {
+            index.best_ex.get(chart_hash)
+        }?;
+        Some(LocalScalarScore {
+            percent: best.percent,
+            is_fail: best.grade == Grade::Failed,
+        })
+    }
+
+    pub fn update_loaded_profile_index(
+        &mut self,
+        profile_id: &str,
+        chart_hash: &str,
+        header: &LocalScoreHeader,
+    ) -> Option<LocalScoreIndex> {
+        let index = self.loaded_profiles.get_mut(profile_id)?;
+        update_local_score_index(index, chart_hash, header);
+        Some(index.clone())
+    }
+
+    pub fn seed_profile_itg_score(
+        &mut self,
+        profile_id: &str,
+        chart_hash: &str,
+        score: CachedScore,
+    ) {
+        self.loaded_profiles
+            .entry(profile_id.to_string())
+            .or_default()
+            .best_itg
+            .insert(chart_hash.to_string(), score);
+    }
+}
+
+impl MachineLocalScoreCacheState {
+    pub fn record(&self, chart_hash: &str) -> Option<(String, CachedScore)> {
+        self.best_itg
+            .get(chart_hash)
+            .map(|score| (score.initials.clone(), score.score))
+    }
+
+    pub fn update_if_loaded(&mut self, chart_hash: &str, score: CachedScore, initials: &str) {
+        if !self.loaded {
+            return;
+        }
+        match self.best_itg.get_mut(chart_hash) {
+            Some(existing) => {
+                if is_better_itg(&score, &existing.score) {
+                    existing.score = score;
+                    existing.initials = initials.to_string();
+                }
+            }
+            None => {
+                self.best_itg.insert(
+                    chart_hash.to_string(),
+                    MachineBest {
+                        score,
+                        initials: initials.to_string(),
+                    },
+                );
+            }
+        }
+    }
+}
+
+pub fn best_cached_itg_score(
+    scores: impl IntoIterator<Item = Option<CachedScore>>,
+) -> Option<CachedScore> {
+    scores.into_iter().flatten().reduce(|a, b| {
+        failed_score_override(&a, &b).unwrap_or_else(|| if is_better_itg(&a, &b) { a } else { b })
+    })
+}
+
+pub struct HeldScoreCaches {
+    local: MutexGuard<'static, LocalScoreCacheState>,
+    gs: MutexGuard<'static, GsScoreCacheState>,
+    ac: MutexGuard<'static, AcScoreCacheState>,
+}
+
+impl HeldScoreCaches {
+    pub fn new(
+        local: MutexGuard<'static, LocalScoreCacheState>,
+        gs: MutexGuard<'static, GsScoreCacheState>,
+        ac: MutexGuard<'static, AcScoreCacheState>,
+    ) -> Self {
+        Self { local, gs, ac }
+    }
+
+    /// Resolve the merged "best ITG" score for `chart_hash` under `profile_id`.
+    pub fn merged(&self, profile_id: &str, chart_hash: &str) -> Option<CachedScore> {
+        if profile_id.trim().is_empty() {
+            return None;
+        }
+        let local = self
+            .local
+            .loaded_profiles
+            .get(profile_id)
+            .and_then(|idx| idx.best_itg.get(chart_hash).copied());
+        let gs = self
+            .gs
+            .loaded_profiles
+            .get(profile_id)
+            .and_then(|m| m.get(chart_hash).copied());
+        let ac = self
+            .ac
+            .loaded_profiles
+            .get(profile_id)
+            .and_then(|m| m.get(chart_hash).copied())
+            .and_then(|s| s.itg)
+            .map(|ac| ac.to_cached_score());
+        best_cached_itg_score([local, gs, ac])
+    }
+}
+
 /// Maximum number of attempts before the backoff schedule saturates. For
 /// auto-retryable statuses this is also the auto-retry budget. For manual-only
 /// statuses the cooldown caps here and stays there for subsequent failures.
@@ -161,6 +422,413 @@ pub fn duration_to_ceil_secs(remaining: Duration) -> u32 {
     let secs = remaining.as_secs();
     let bumped = secs.saturating_add(if remaining.subsec_nanos() > 0 { 1 } else { 0 });
     bumped.min(u32::MAX as u64) as u32
+}
+
+pub struct SubmitRetryState<T> {
+    by_side: [Vec<T>; 2],
+}
+
+impl<T> Default for SubmitRetryState<T> {
+    fn default() -> Self {
+        Self {
+            by_side: std::array::from_fn(|_| Vec::new()),
+        }
+    }
+}
+
+impl<T> SubmitRetryState<T> {
+    #[inline(always)]
+    pub fn entries(&self, side_index: usize) -> &[T] {
+        &self.by_side[side_index.min(1)]
+    }
+
+    #[inline(always)]
+    pub fn entries_mut(&mut self, side_index: usize) -> &mut Vec<T> {
+        &mut self.by_side[side_index.min(1)]
+    }
+
+    pub fn reset_by_key<K>(&mut self, side_index: usize, chart_hash: &str, key: K)
+    where
+        K: Fn(&T) -> &str,
+    {
+        let hash = chart_hash.trim();
+        if hash.is_empty() {
+            return;
+        }
+        self.entries_mut(side_index)
+            .retain(|entry| !key(entry).eq_ignore_ascii_case(hash));
+    }
+
+    pub fn upsert_by_key<K>(&mut self, side_index: usize, entry: T, key: K, cap: usize)
+    where
+        K: Fn(&T) -> &str,
+    {
+        let hash = key(&entry).trim().to_string();
+        if hash.is_empty() {
+            return;
+        }
+        let entries = self.entries_mut(side_index);
+        if let Some(stored) = entries
+            .iter_mut()
+            .find(|stored| key(stored).eq_ignore_ascii_case(hash.as_str()))
+        {
+            *stored = entry;
+            return;
+        }
+        entries.push(entry);
+        if entries.len() > cap {
+            entries.drain(0..entries.len() - cap);
+        }
+    }
+
+    pub fn get_by_key<K>(&self, side_index: usize, chart_hash: &str, key: K) -> Option<&T>
+    where
+        K: Fn(&T) -> &str,
+    {
+        let hash = chart_hash.trim();
+        if hash.is_empty() {
+            return None;
+        }
+        self.entries(side_index)
+            .iter()
+            .find(|entry| key(entry).eq_ignore_ascii_case(hash))
+    }
+
+    pub fn get_mut_by_key<K>(
+        &mut self,
+        side_index: usize,
+        chart_hash: &str,
+        key: K,
+    ) -> Option<&mut T>
+    where
+        K: Fn(&T) -> &str,
+    {
+        let hash = chart_hash.trim();
+        if hash.is_empty() {
+            return None;
+        }
+        self.entries_mut(side_index)
+            .iter_mut()
+            .find(|entry| key(entry).eq_ignore_ascii_case(hash))
+    }
+
+    pub fn take_ready_by_key<K, N>(
+        &mut self,
+        side_index: usize,
+        chart_hash: &str,
+        manual: bool,
+        now: Instant,
+        key: K,
+        next_retry_at: N,
+    ) -> Option<T>
+    where
+        T: Clone,
+        K: Fn(&T) -> &str,
+        N: Fn(&mut T) -> &mut Option<Instant>,
+    {
+        let stored = self.get_mut_by_key(side_index, chart_hash, key)?;
+        let next = next_retry_at(stored);
+        if manual && next.is_some_and(|t| t > now) {
+            return None;
+        }
+        *next = None;
+        Some(stored.clone())
+    }
+
+    pub fn record_failure_by_key<K, A, N>(
+        &mut self,
+        side_index: usize,
+        chart_hash: &str,
+        can_retry: bool,
+        max_attempts: u8,
+        now: Instant,
+        key: K,
+        retry_attempt: A,
+        next_retry_at: N,
+    ) -> bool
+    where
+        K: Fn(&T) -> &str,
+        A: Fn(&mut T) -> &mut u8,
+        N: Fn(&mut T) -> &mut Option<Instant>,
+    {
+        let Some(entry) = self.get_mut_by_key(side_index, chart_hash, key) else {
+            return false;
+        };
+        if !can_retry {
+            *next_retry_at(entry) = None;
+            return true;
+        }
+        let attempt = retry_attempt(entry);
+        *attempt = attempt.saturating_add(1).min(max_attempts);
+        *next_retry_at(entry) = Some(now + Duration::from_secs(submit_retry_delay_secs(*attempt)));
+        true
+    }
+
+    pub fn remaining_secs_by_key<K, N>(
+        &self,
+        side_index: usize,
+        chart_hash: &str,
+        now: Instant,
+        key: K,
+        next_retry_at: N,
+    ) -> Option<u32>
+    where
+        K: Fn(&T) -> &str,
+        N: Fn(&T) -> Option<Instant>,
+    {
+        let target = next_retry_at(self.get_by_key(side_index, chart_hash, key)?)?;
+        Some(duration_to_ceil_secs(target.saturating_duration_since(now)))
+    }
+
+    pub fn retry_attempt_by_key<K, A>(
+        &self,
+        side_index: usize,
+        chart_hash: &str,
+        key: K,
+        retry_attempt: A,
+    ) -> Option<u8>
+    where
+        K: Fn(&T) -> &str,
+        A: Fn(&T) -> u8,
+    {
+        self.get_by_key(side_index, chart_hash, key)
+            .map(retry_attempt)
+    }
+
+    pub fn due_retries<K, S, A, N, Side>(
+        &self,
+        now: Instant,
+        key: K,
+        side: S,
+        retry_attempt: A,
+        next_retry_at: N,
+    ) -> Vec<(String, Side, u8)>
+    where
+        K: Fn(&T) -> &str,
+        S: Fn(&T) -> Side,
+        A: Fn(&T) -> u8,
+        N: Fn(&T) -> Option<Instant>,
+        Side: Copy,
+    {
+        (0..2)
+            .flat_map(|side_index| self.entries(side_index).iter())
+            .filter_map(|entry| {
+                next_retry_at(entry)
+                    .filter(|t| *t <= now)
+                    .map(|_| (key(entry).to_string(), side(entry), retry_attempt(entry)))
+            })
+            .collect()
+    }
+}
+
+#[derive(Debug, Clone)]
+struct SubmitUiEntry<S> {
+    chart_hash: String,
+    token: u64,
+    status: S,
+}
+
+pub struct SubmitUiState<S> {
+    by_side: [Vec<SubmitUiEntry<S>>; 2],
+}
+
+impl<S> Default for SubmitUiState<S> {
+    fn default() -> Self {
+        Self {
+            by_side: std::array::from_fn(|_| Vec::new()),
+        }
+    }
+}
+
+impl<S: Copy> SubmitUiState<S> {
+    #[inline(always)]
+    fn entries_mut(&mut self, side_index: usize) -> &mut Vec<SubmitUiEntry<S>> {
+        &mut self.by_side[side_index.min(1)]
+    }
+
+    #[inline(always)]
+    fn entries(&self, side_index: usize) -> &[SubmitUiEntry<S>] {
+        &self.by_side[side_index.min(1)]
+    }
+
+    pub fn reset(&mut self, side_index: usize, chart_hash: &str) {
+        let hash = chart_hash.trim();
+        if hash.is_empty() {
+            return;
+        }
+        self.entries_mut(side_index)
+            .retain(|entry| !entry.chart_hash.eq_ignore_ascii_case(hash));
+    }
+
+    pub fn set(&mut self, side_index: usize, chart_hash: &str, token: u64, status: S) {
+        let hash = chart_hash.trim();
+        if hash.is_empty() {
+            return;
+        }
+        let entries = self.entries_mut(side_index);
+        if let Some(entry) = entries
+            .iter_mut()
+            .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
+        {
+            entry.token = token;
+            entry.status = status;
+            return;
+        }
+        entries.push(SubmitUiEntry {
+            chart_hash: hash.to_string(),
+            token,
+            status,
+        });
+    }
+
+    pub fn update_if_token(
+        &mut self,
+        side_index: usize,
+        chart_hash: &str,
+        token: u64,
+        status: S,
+    ) -> bool {
+        let hash = chart_hash.trim();
+        if hash.is_empty() {
+            return false;
+        }
+        let Some(entry) = self
+            .entries_mut(side_index)
+            .iter_mut()
+            .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
+        else {
+            return false;
+        };
+        if entry.token != token {
+            return false;
+        }
+        entry.status = status;
+        true
+    }
+
+    pub fn get(&self, side_index: usize, chart_hash: &str) -> Option<S> {
+        let hash = chart_hash.trim();
+        if hash.is_empty() {
+            return None;
+        }
+        self.entries(side_index)
+            .iter()
+            .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
+            .map(|entry| entry.status)
+    }
+}
+
+#[derive(Debug, Clone)]
+struct SubmitEventUiEntry<P, B> {
+    chart_hash: String,
+    token: u64,
+    progress: P,
+    banner: Option<B>,
+}
+
+pub struct SubmitEventUiState<P, B> {
+    by_side: [Vec<SubmitEventUiEntry<P, B>>; 2],
+}
+
+impl<P, B> Default for SubmitEventUiState<P, B> {
+    fn default() -> Self {
+        Self {
+            by_side: std::array::from_fn(|_| Vec::new()),
+        }
+    }
+}
+
+impl<P: Clone + Default, B: Clone> SubmitEventUiState<P, B> {
+    #[inline(always)]
+    fn entries_mut(&mut self, side_index: usize) -> &mut Vec<SubmitEventUiEntry<P, B>> {
+        &mut self.by_side[side_index.min(1)]
+    }
+
+    #[inline(always)]
+    fn entries(&self, side_index: usize) -> &[SubmitEventUiEntry<P, B>] {
+        &self.by_side[side_index.min(1)]
+    }
+
+    pub fn reset(&mut self, side_index: usize, chart_hash: &str) {
+        let hash = chart_hash.trim();
+        if hash.is_empty() {
+            return;
+        }
+        self.entries_mut(side_index)
+            .retain(|entry| !entry.chart_hash.eq_ignore_ascii_case(hash));
+    }
+
+    pub fn arm(&mut self, side_index: usize, chart_hash: &str, token: u64) {
+        let hash = chart_hash.trim();
+        if hash.is_empty() {
+            return;
+        }
+        let entries = self.entries_mut(side_index);
+        if let Some(entry) = entries
+            .iter_mut()
+            .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
+        {
+            entry.token = token;
+            entry.progress = P::default();
+            entry.banner = None;
+            return;
+        }
+        entries.push(SubmitEventUiEntry {
+            chart_hash: hash.to_string(),
+            token,
+            progress: P::default(),
+            banner: None,
+        });
+    }
+
+    pub fn update_if_token(
+        &mut self,
+        side_index: usize,
+        chart_hash: &str,
+        token: u64,
+        progress: P,
+        banner: Option<B>,
+    ) {
+        let hash = chart_hash.trim();
+        if hash.is_empty() {
+            return;
+        }
+        let Some(entry) = self
+            .entries_mut(side_index)
+            .iter_mut()
+            .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
+        else {
+            return;
+        };
+        if entry.token != token {
+            return;
+        }
+        entry.progress = progress;
+        entry.banner = banner;
+    }
+
+    pub fn progress(&self, side_index: usize, chart_hash: &str) -> P {
+        let hash = chart_hash.trim();
+        if hash.is_empty() {
+            return P::default();
+        }
+        self.entries(side_index)
+            .iter()
+            .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
+            .map(|entry| entry.progress.clone())
+            .unwrap_or_default()
+    }
+
+    pub fn banner(&self, side_index: usize, chart_hash: &str) -> Option<B> {
+        let hash = chart_hash.trim();
+        if hash.is_empty() {
+            return None;
+        }
+        self.entries(side_index)
+            .iter()
+            .find(|entry| entry.chart_hash.eq_ignore_ascii_case(hash))
+            .and_then(|entry| entry.banner.clone())
+    }
 }
 
 /// Why a submitted score was rejected by the backend.
@@ -1367,6 +2035,143 @@ impl LocalScoreEntry {
     }
 }
 
+pub struct LocalScoreGameplayEntryInput<'a> {
+    pub played_at_ms: i64,
+    pub music_rate: f32,
+    pub score_percent: f64,
+    pub song_completed_naturally: bool,
+    pub is_failing: bool,
+    pub life: f32,
+    pub fail_time: Option<f32>,
+    pub notes: &'a [Note],
+    pub note_times: &'a [SongTimeNs],
+    pub hold_end_times: &'a [Option<SongTimeNs>],
+    pub total_steps: u32,
+    pub holds_total: u32,
+    pub rolls_total: u32,
+    pub mines_total: u32,
+    pub counts: [u32; 6],
+    pub white_fantastics: Option<u32>,
+    pub holds_held: u32,
+    pub rolls_held: u32,
+    pub mines_avoided: u32,
+    pub hands_achieved: u32,
+    pub beat0_time_ns: SongTimeNs,
+    pub replay: Vec<LocalReplayEdge>,
+}
+
+pub fn local_score_entry_from_gameplay_input(
+    input: LocalScoreGameplayEntryInput<'_>,
+) -> LocalScoreEntry {
+    let mines_disabled = false;
+    let mut grade = if gameplay_run_passed(
+        input.song_completed_naturally,
+        input.is_failing,
+        input.life,
+        input.fail_time.is_some(),
+    ) {
+        score_to_grade(input.score_percent * 10000.0)
+    } else {
+        Grade::Failed
+    };
+
+    let ex_score_percent = judgment::calculate_ex_score_from_notes(
+        input.notes,
+        input.note_times,
+        input.hold_end_times,
+        input.total_steps,
+        input.holds_total,
+        input.rolls_total,
+        input.mines_total,
+        input.fail_time.map(song_time_ns_from_seconds),
+        mines_disabled,
+    );
+    let hard_ex_score_percent = judgment::calculate_hard_ex_score_from_notes(
+        input.notes,
+        input.note_times,
+        input.hold_end_times,
+        input.total_steps,
+        input.holds_total,
+        input.rolls_total,
+        input.mines_total,
+        input.fail_time.map(song_time_ns_from_seconds),
+        mines_disabled,
+    );
+
+    grade = promote_quint_grade(grade, ex_score_percent);
+    let (lamp_index, lamp_judge_count) =
+        compute_local_lamp(input.counts, grade, input.white_fantastics);
+
+    LocalScoreEntry {
+        version: LOCAL_SCORE_VERSION,
+        played_at_ms: input.played_at_ms,
+        music_rate: input.music_rate,
+        score_percent: input.score_percent,
+        grade_code: grade_to_code(grade),
+        lamp_index,
+        lamp_judge_count,
+        ex_score_percent,
+        hard_ex_score_percent,
+        judgment_counts: input.counts,
+        holds_held: input.holds_held,
+        holds_total: input.holds_total,
+        rolls_held: input.rolls_held,
+        rolls_total: input.rolls_total,
+        mines_avoided: input.mines_avoided,
+        mines_total: input.mines_total,
+        hands_achieved: input.hands_achieved,
+        fail_time: input.fail_time,
+        beat0_time_ns: input.beat0_time_ns,
+        replay: input.replay,
+    }
+}
+
+pub fn local_score_entry_from_stage_summary(
+    played_at_ms: i64,
+    music_rate: f32,
+    summary: &stage_stats::PlayerStageSummary,
+) -> LocalScoreEntry {
+    let counts = [
+        summary
+            .window_counts
+            .w0
+            .saturating_add(summary.window_counts.w1),
+        summary.window_counts.w2,
+        summary.window_counts.w3,
+        summary.window_counts.w4,
+        summary.window_counts.w5,
+        summary.window_counts.miss,
+    ];
+    let (lamp_index, lamp_judge_count) =
+        compute_local_lamp(counts, summary.grade, Some(summary.window_counts.w1));
+    LocalScoreEntry {
+        version: LOCAL_SCORE_VERSION,
+        played_at_ms,
+        music_rate: if music_rate.is_finite() && music_rate > 0.0 {
+            music_rate
+        } else {
+            1.0
+        },
+        score_percent: summary.score_percent.clamp(0.0, 1.0),
+        grade_code: grade_to_code(summary.grade),
+        lamp_index,
+        lamp_judge_count,
+        ex_score_percent: summary.ex_score_percent.clamp(0.0, 100.0),
+        hard_ex_score_percent: summary.hard_ex_score_percent.clamp(0.0, 100.0),
+        judgment_counts: counts,
+        holds_held: 0,
+        holds_total: 0,
+        rolls_held: 0,
+        rolls_total: 0,
+        mines_avoided: 0,
+        mines_total: 0,
+        hands_achieved: 0,
+        fail_time: (summary.grade == Grade::Failed).then_some(0.0),
+        beat0_time_ns: 0,
+        replay: Vec::new(),
+    }
+}
+
 #[inline(always)]
 fn local_lamp_judge_count(count: u32) -> Option<u8> {
     if (1..=9).contains(&count) {
@@ -1773,6 +2578,26 @@ pub fn cached_score_import_result_from_imported(
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LeaderboardCachedScore {
+    pub score: CachedScore,
+    pub score_proves_nonquint_ex: bool,
+}
+
+pub fn cached_score_from_leaderboard_import(
+    imported: Option<ImportedPlayerScore>,
+    local_score: Option<CachedScore>,
+    stats: Option<GsLampChartStats>,
+) -> Option<LeaderboardCachedScore> {
+    let imported = merge_local_fail(imported?, local_score);
+    let score_proves_nonquint_ex = imported.ex_evidence.proves_nonquint();
+    let score = cached_score_from_imported_player_score(imported, stats);
+    Some(LeaderboardCachedScore {
+        score,
+        score_proves_nonquint_ex,
+    })
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct ScoreBulkImportSummary {
     pub requested_charts: usize,
@@ -1792,6 +2617,208 @@ pub struct ScoreImportProgress {
     pub missing_scores: usize,
     pub failed_requests: usize,
     pub detail: String,
+}
+
+pub const SCORE_IMPORT_RATE_LIMIT_PER_SECOND: u32 = 3;
+pub const SCORE_IMPORT_REQUEST_INTERVAL: Duration = Duration::from_millis(334);
+pub const SCORE_IMPORT_PROGRESS_LOG_EVERY: usize = 100;
+
+#[inline(always)]
+pub const fn score_import_filter_note(only_missing_scores: bool) -> &'static str {
+    if only_missing_scores {
+        " (missing only)"
+    } else {
+        ""
+    }
+}
+
+pub fn queued_score_import_progress(
+    requested_charts: usize,
+    total_packs: usize,
+    import_name: &str,
+    only_missing_scores: bool,
+) -> ScoreImportProgress {
+    ScoreImportProgress {
+        processed_charts: 0,
+        total_charts: requested_charts,
+        imported_scores: 0,
+        missing_scores: 0,
+        failed_requests: 0,
+        detail: format!(
+            "Queued {requested_charts} chart hashes across {total_packs} pack(s) for {import_name} import{}.",
+            score_import_filter_note(only_missing_scores),
+        ),
+    }
+}
+
+pub const fn empty_score_import_summary() -> ScoreBulkImportSummary {
+    ScoreBulkImportSummary {
+        requested_charts: 0,
+        imported_scores: 0,
+        missing_scores: 0,
+        failed_requests: 0,
+        rate_limit_per_second: SCORE_IMPORT_RATE_LIMIT_PER_SECOND,
+        elapsed_seconds: 0.0,
+        canceled: false,
+    }
+}
+
+pub fn score_import_summary(
+    requested_charts: usize,
+    imported_scores: usize,
+    missing_scores: usize,
+    failed_requests: usize,
+    import_started: Instant,
+    canceled: bool,
+) -> ScoreBulkImportSummary {
+    ScoreBulkImportSummary {
+        requested_charts,
+        imported_scores,
+        missing_scores,
+        failed_requests,
+        rate_limit_per_second: SCORE_IMPORT_RATE_LIMIT_PER_SECOND,
+        elapsed_seconds: import_started.elapsed().as_secs_f32(),
+        canceled,
+    }
+}
+
+pub fn score_import_pack_detail(
+    pack_idx: usize,
+    total_packs: usize,
+    pack_name: &str,
+    pack_hits: usize,
+    pack_misses: usize,
+    pack_failures: usize,
+) -> String {
+    format!(
+        "Pack {}/{}: {pack_name} -> {pack_hits} hit, {pack_misses} missing{}",
+        pack_idx + 1,
+        total_packs,
+        if pack_failures > 0 {
+            format!(", {pack_failures} failed")
+        } else {
+            String::new()
+        },
+    )
+}
+
+pub fn score_import_pack_complete_detail(
+    pack_idx: usize,
+    total_packs: usize,
+    pack_name: &str,
+    pack_chart_count: usize,
+    pack_hits: usize,
+    pack_misses: usize,
+    pack_failures: usize,
+) -> String {
+    format!(
+        "Pack {}/{} complete: {pack_name} ({pack_chart_count} charts -> {pack_hits} hit, {pack_misses} missing{}).",
+        pack_idx + 1,
+        total_packs,
+        if pack_failures > 0 {
+            format!(", {pack_failures} failed")
+        } else {
+            String::new()
+        },
+    )
+}
+
+pub fn arrowcloud_bulk_success_detail(
+    pack_idx: usize,
+    total_packs: usize,
+    pack_name: &str,
+    hits: usize,
+    misses: usize,
+    request_elapsed: Duration,
+) -> String {
+    format!(
+        "Pack {}/{}: {pack_name} -> {hits} hit, {misses} missing ({:.0}ms)",
+        pack_idx + 1,
+        total_packs,
+        request_elapsed.as_secs_f32() * 1000.0,
+    )
+}
+
+pub fn arrowcloud_bulk_failure_detail(
+    pack_idx: usize,
+    total_packs: usize,
+    pack_name: &str,
+    chart_count: usize,
+    request_elapsed: Duration,
+    error: &str,
+) -> String {
+    format!(
+        "Pack {}/{}: {pack_name} request failed ({} charts, {:.0}ms): {error}",
+        pack_idx + 1,
+        total_packs,
+        chart_count,
+        request_elapsed.as_secs_f32() * 1000.0,
+    )
+}
+
+#[inline(always)]
+pub fn should_log_score_import_progress(processed_charts: usize, requested_charts: usize) -> bool {
+    processed_charts == requested_charts
+        || processed_charts % SCORE_IMPORT_PROGRESS_LOG_EVERY == 0
+        || processed_charts == 1
+}
+
+#[inline(always)]
+pub fn wait_for_next_score_import_request(last_request_started_at: Option<Instant>) {
+    let Some(last_started) = last_request_started_at else {
+        return;
+    };
+    let elapsed = last_started.elapsed();
+    if elapsed < SCORE_IMPORT_REQUEST_INTERVAL {
+        std::thread::sleep(SCORE_IMPORT_REQUEST_INTERVAL - elapsed);
+    }
+}
+
+pub fn collect_chart_hashes_per_pack_for_import(
+    song_packs: &[deadsync_chart::SongPack],
+    pack_groups_filter: &[String],
+    existing_scores: &HashSet<String>,
+) -> Vec<(String, Vec<String>)> {
+    let filter_set: HashSet<String> = pack_groups_filter
+        .iter()
+        .map(|v| v.trim().to_ascii_lowercase())
+        .filter(|v| !v.is_empty())
+        .collect();
+
+    let mut out: Vec<(String, Vec<String>)> = Vec::new();
+    let mut seen: HashSet<String> = HashSet::new();
+    for pack in song_packs {
+        let group_name = pack.group_name.trim();
+        let display_name = if pack.name.trim().is_empty() {
+            group_name
+        } else {
+            pack.name.trim()
+        };
+        if !filter_set.is_empty() {
+            let group_lc = group_name.to_ascii_lowercase();
+            let display_lc = display_name.to_ascii_lowercase();
+            if !filter_set.contains(&group_lc) && !filter_set.contains(&display_lc) {
+                continue;
+            }
+        }
+
+        let mut hashes = Vec::new();
+        for song in &pack.songs {
+            for chart in &song.charts {
+                let chart_hash = chart.short_hash.trim();
+                if chart_hash.is_empty() || existing_scores.contains(chart_hash) {
+                    continue;
+                }
+                if seen.insert(chart_hash.to_string()) {
+                    hashes.push(chart_hash.to_string());
+                }
+            }
+        }
+        if !hashes.is_empty() {
+            out.push((display_name.to_string(), hashes));
+        }
+    }
+    out
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -3145,6 +4172,236 @@ mod tests {
         assert_eq!(duration_to_ceil_secs(Duration::from_millis(15_001)), 16);
     }
 
+    #[derive(Debug, Clone, PartialEq)]
+    struct RetryProbe {
+        hash: String,
+        side: u8,
+        value: u8,
+        attempt: u8,
+        next_retry_at: Option<Instant>,
+    }
+
+    fn retry_probe(hash: &str, side: u8, value: u8) -> RetryProbe {
+        RetryProbe {
+            hash: hash.to_string(),
+            side,
+            value,
+            attempt: 0,
+            next_retry_at: None,
+        }
+    }
+
+    #[test]
+    fn submit_retry_state_upserts_caps_and_resets_by_key() {
+        let mut state = SubmitRetryState::<RetryProbe>::default();
+
+        state.upsert_by_key(0, retry_probe("one", 0, 1), |entry| entry.hash.as_str(), 2);
+        state.upsert_by_key(0, retry_probe("ONE", 0, 2), |entry| entry.hash.as_str(), 2);
+        assert_eq!(state.entries(0).len(), 1);
+        assert_eq!(
+            state
+                .get_by_key(0, "one", |entry| entry.hash.as_str())
+                .map(|entry| entry.value),
+            Some(2)
+        );
+
+        state.upsert_by_key(0, retry_probe("two", 0, 3), |entry| entry.hash.as_str(), 2);
+        state.upsert_by_key(
+            0,
+            retry_probe("three", 0, 4),
+            |entry| entry.hash.as_str(),
+            2,
+        );
+        assert_eq!(
+            state
+                .entries(0)
+                .iter()
+                .map(|entry| entry.hash.as_str())
+                .collect::<Vec<_>>(),
+            vec!["two", "three"]
+        );
+
+        state
+            .get_mut_by_key(0, "THREE", |entry| entry.hash.as_str())
+            .unwrap()
+            .value = 5;
+        assert_eq!(
+            state.get_by_key(0, "three", |entry| entry.hash.as_str()),
+            Some(&RetryProbe {
+                hash: "three".to_string(),
+                side: 0,
+                value: 5,
+                attempt: 0,
+                next_retry_at: None,
+            })
+        );
+
+        state.reset_by_key(0, "TWO", |entry| entry.hash.as_str());
+        assert_eq!(state.entries(0).len(), 1);
+        assert_eq!(
+            state.get_by_key(0, "two", |entry| entry.hash.as_str()),
+            None
+        );
+    }
+
+    #[test]
+    fn submit_retry_state_tracks_schedule_and_due_retries() {
+        let mut state = SubmitRetryState::<RetryProbe>::default();
+        let now = Instant::now();
+        state.upsert_by_key(0, retry_probe("one", 0, 1), |entry| entry.hash.as_str(), 4);
+        state.upsert_by_key(1, retry_probe("two", 1, 2), |entry| entry.hash.as_str(), 4);
+
+        assert!(state.record_failure_by_key(
+            0,
+            "ONE",
+            true,
+            SUBMIT_RETRY_MAX_ATTEMPTS,
+            now,
+            |entry| entry.hash.as_str(),
+            |entry| &mut entry.attempt,
+            |entry| &mut entry.next_retry_at,
+        ));
+        assert_eq!(
+            state.retry_attempt_by_key(
+                0,
+                "one",
+                |entry| entry.hash.as_str(),
+                |entry| entry.attempt
+            ),
+            Some(1)
+        );
+        assert_eq!(
+            state.remaining_secs_by_key(
+                0,
+                "one",
+                now,
+                |entry| entry.hash.as_str(),
+                |entry| entry.next_retry_at,
+            ),
+            Some(2)
+        );
+        assert!(
+            state
+                .take_ready_by_key(
+                    0,
+                    "one",
+                    true,
+                    now,
+                    |entry| entry.hash.as_str(),
+                    |entry| &mut entry.next_retry_at,
+                )
+                .is_none()
+        );
+
+        let due_at = now + Duration::from_secs(2);
+        assert_eq!(
+            state.due_retries(
+                due_at,
+                |entry| entry.hash.as_str(),
+                |entry| entry.side,
+                |entry| entry.attempt,
+                |entry| entry.next_retry_at,
+            ),
+            vec![("one".to_string(), 0, 1)]
+        );
+        assert_eq!(
+            state
+                .take_ready_by_key(
+                    0,
+                    "one",
+                    true,
+                    due_at,
+                    |entry| entry.hash.as_str(),
+                    |entry| &mut entry.next_retry_at,
+                )
+                .map(|entry| entry.hash),
+            Some("one".to_string())
+        );
+        assert_eq!(
+            state.remaining_secs_by_key(
+                0,
+                "one",
+                due_at,
+                |entry| entry.hash.as_str(),
+                |entry| entry.next_retry_at,
+            ),
+            None
+        );
+
+        assert!(state.record_failure_by_key(
+            1,
+            "two",
+            false,
+            SUBMIT_RETRY_MAX_ATTEMPTS,
+            now,
+            |entry| entry.hash.as_str(),
+            |entry| &mut entry.attempt,
+            |entry| &mut entry.next_retry_at,
+        ));
+        assert_eq!(
+            state.retry_attempt_by_key(
+                1,
+                "two",
+                |entry| entry.hash.as_str(),
+                |entry| entry.attempt
+            ),
+            Some(0)
+        );
+    }
+
+    #[test]
+    fn submit_ui_state_updates_matching_tokens_only() {
+        let mut state = SubmitUiState::<GrooveStatsSubmitUiStatus>::default();
+        state.set(0, "abc", 11, GrooveStatsSubmitUiStatus::Submitting);
+
+        assert_eq!(
+            state.get(0, "ABC"),
+            Some(GrooveStatsSubmitUiStatus::Submitting)
+        );
+        assert!(!state.update_if_token(0, "abc", 12, GrooveStatsSubmitUiStatus::Submitted));
+        assert_eq!(
+            state.get(0, "abc"),
+            Some(GrooveStatsSubmitUiStatus::Submitting)
+        );
+        assert!(state.update_if_token(0, "abc", 11, GrooveStatsSubmitUiStatus::Submitted));
+        assert_eq!(
+            state.get(0, "abc"),
+            Some(GrooveStatsSubmitUiStatus::Submitted)
+        );
+
+        state.reset(0, "ABC");
+        assert_eq!(state.get(0, "abc"), None);
+    }
+
+    #[test]
+    fn submit_event_ui_state_tracks_progress_and_banner() {
+        let mut state =
+            SubmitEventUiState::<Vec<EventProgress>, GrooveStatsSubmitRecordBanner>::default();
+        let progress = EventProgress {
+            name: "ITL".to_string(),
+            current_points: 10,
+            ..EventProgress::default()
+        };
+
+        state.arm(1, "abc", 7);
+        state.update_if_token(
+            1,
+            "ABC",
+            7,
+            vec![progress],
+            Some(GrooveStatsSubmitRecordBanner::WorldRecord),
+        );
+        assert_eq!(state.progress(1, "abc").len(), 1);
+        assert_eq!(
+            state.banner(1, "abc"),
+            Some(GrooveStatsSubmitRecordBanner::WorldRecord)
+        );
+
+        state.arm(1, "abc", 8);
+        assert!(state.progress(1, "abc").is_empty());
+        assert_eq!(state.banner(1, "abc"), None);
+    }
+
     #[test]
     fn groovestats_submit_status_policy_classifies_retry_and_http() {
         assert!(!GrooveStatsSubmitUiStatus::Submitting.can_retry());
@@ -4142,6 +5399,35 @@ mod tests {
             ..matching_fail
         };
         assert!(!merge_local_fail(imported, Some(different_fail)).is_fail);
+    }
+
+    #[test]
+    fn leaderboard_import_cache_result_skips_missing_self_row() {
+        let local = cached_score(Grade::Tier01, 0.9934, Some(1), Some(2));
+        assert_eq!(
+            cached_score_from_leaderboard_import(None, Some(local), None),
+            None
+        );
+    }
+
+    #[test]
+    fn leaderboard_import_cache_result_applies_matching_local_fail() {
+        let imported = ImportedPlayerScore {
+            score_10000: 1_358.0,
+            comments: None,
+            is_fail: false,
+            ex_evidence: GsExEvidence::default(),
+        };
+        let local_fail = CachedScore {
+            grade: Grade::Failed,
+            score_percent: 0.1358,
+            lamp_index: None,
+            lamp_judge_count: None,
+        };
+        let cached = cached_score_from_leaderboard_import(Some(imported), Some(local_fail), None)
+            .expect("leaderboard score should cache");
+        assert_eq!(cached.score.grade, Grade::Failed);
+        assert!(!cached.score_proves_nonquint_ex);
     }
 
     #[test]

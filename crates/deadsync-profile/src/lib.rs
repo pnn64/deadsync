@@ -10,6 +10,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
+pub mod lock_wait;
 pub mod pad_config;
 
 pub const PLAYER_SLOTS: usize = 2;
@@ -893,6 +894,140 @@ pub fn scan_local_profile_summaries(root: &Path) -> Vec<LocalProfileSummary> {
     out
 }
 
+pub fn create_local_profile_dir(
+    root: &Path,
+    display_name: &str,
+    noteskin: NoteSkin,
+    pad_light_brightness: u8,
+) -> Result<String, std::io::Error> {
+    let name = display_name.trim();
+    if name.is_empty() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "Display name is empty",
+        ));
+    }
+
+    let id = generate_profile_guid();
+    let folder = folder_name_for_display(name, &id, &profile_folder_names(root));
+    let dir = root.join(folder);
+    fs::create_dir_all(&dir)?;
+
+    let mut profile = Profile::default();
+    profile.noteskin = noteskin;
+    profile.pad_light_brightness = pad_light_brightness;
+    profile.store_current_player_options_for_all_styles();
+    profile.display_name = name.to_string();
+    profile.player_initials = initials_from_name(name);
+    profile.weight_pounds = 0;
+    profile.birth_year = 0;
+    profile.ignore_step_count_calories = false;
+    profile.calories_burned_day = Local::now().date_naive().to_string();
+    profile.calories_burned_today = 0.0;
+
+    fs::write(
+        profile_ini_path(&dir),
+        render_profile_ini_content(&id, &profile),
+    )?;
+    fs::write(
+        groovestats_ini_path(&dir),
+        render_groovestats_ini_content("", false, ""),
+    )?;
+    fs::write(arrowcloud_ini_path(&dir), render_arrowcloud_ini_content(""))?;
+    Ok(id)
+}
+
+/// Everything needed to materialise a new local profile from an external source.
+pub struct ImportProfileData<'a> {
+    pub display_name: &'a str,
+    pub weight_pounds: u32,
+    pub birth_year: u32,
+    pub initials: &'a str,
+    pub groovestats_api_key: &'a str,
+    pub groovestats_username: &'a str,
+    pub groovestats_is_pad_player: bool,
+    pub arrowcloud_api_key: &'a str,
+    pub ignore_step_count_calories: bool,
+    pub avatar_src: Option<&'a Path>,
+    pub options_singles: &'a PlayerOptionsData,
+    pub options_doubles: &'a PlayerOptionsData,
+    pub guid: &'a str,
+}
+
+pub struct ImportedProfileCreateResult {
+    pub id: String,
+    pub avatar_copy_error: Option<std::io::Error>,
+}
+
+pub fn create_local_profile_from_import_dir(
+    root: &Path,
+    data: &ImportProfileData<'_>,
+) -> Result<ImportedProfileCreateResult, std::io::Error> {
+    let name = data.display_name.trim();
+    if name.is_empty() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "Display name is empty",
+        ));
+    }
+
+    let id = if is_valid_profile_guid(data.guid.trim()) {
+        data.guid.trim().to_string()
+    } else {
+        generate_profile_guid()
+    };
+    let folder = folder_name_for_display(name, &id, &profile_folder_names(root));
+    let dir = root.join(folder);
+    fs::create_dir_all(&dir)?;
+
+    let initials = {
+        let sanitized = sanitize_player_initials(data.initials);
+        if sanitized.is_empty() {
+            initials_from_name(name)
+        } else {
+            sanitized
+        }
+    };
+    let profile = Profile {
+        display_name: name.to_string(),
+        player_initials: initials,
+        weight_pounds: clamp_weight_pounds(data.weight_pounds.min(i32::MAX as u32) as i32),
+        birth_year: data.birth_year.min(i32::MAX as u32) as i32,
+        ignore_step_count_calories: data.ignore_step_count_calories,
+        calories_burned_day: Local::now().date_naive().to_string(),
+        calories_burned_today: 0.0,
+        player_options_singles: data.options_singles.clone(),
+        player_options_doubles: data.options_doubles.clone(),
+        ..Profile::default()
+    };
+
+    fs::write(
+        profile_ini_path(&dir),
+        render_profile_ini_content(&id, &profile),
+    )?;
+    fs::write(
+        groovestats_ini_path(&dir),
+        render_groovestats_ini_content(
+            data.groovestats_api_key,
+            data.groovestats_is_pad_player,
+            data.groovestats_username,
+        ),
+    )?;
+    fs::write(
+        arrowcloud_ini_path(&dir),
+        render_arrowcloud_ini_content(data.arrowcloud_api_key),
+    )?;
+
+    let avatar_copy_error = data
+        .avatar_src
+        .and_then(|src| fs::copy(src, dir.join("profile.png")).err());
+
+    Ok(ImportedProfileCreateResult {
+        id,
+        avatar_copy_error,
+    })
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ActiveProfile {
     Guest,
@@ -1088,6 +1223,33 @@ pub enum TimingTickMode {
     Off,
     Assist,
     Hit,
+}
+
+#[derive(Debug)]
+pub struct SessionState {
+    pub active_profiles: [ActiveProfile; PLAYER_SLOTS],
+    pub joined_mask: u8,
+    pub music_rate: f32,
+    pub timing_tick_mode: TimingTickMode,
+    pub play_style: PlayStyle,
+    pub play_mode: PlayMode,
+    pub player_side: PlayerSide,
+    pub fast_profile_switch_from_select_music: bool,
+}
+
+impl Default for SessionState {
+    fn default() -> Self {
+        Self {
+            active_profiles: [ActiveProfile::Guest, ActiveProfile::Guest],
+            joined_mask: joined_player_mask(true, false),
+            music_rate: 1.0,
+            timing_tick_mode: TimingTickMode::Off,
+            play_style: PlayStyle::Single,
+            play_mode: PlayMode::Regular,
+            player_side: PlayerSide::P1,
+            fast_profile_switch_from_select_music: false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -3378,6 +3540,30 @@ pub enum ProfileStatsDecodeError {
     InvalidPayload,
 }
 
+#[derive(Debug)]
+pub enum ProfileStatsLoadError {
+    Read(std::io::Error),
+    Decode(ProfileStatsDecodeError),
+}
+
+#[derive(Debug)]
+pub enum ProfileStatsWriteError {
+    Encode,
+    CreateDir {
+        path: PathBuf,
+        error: std::io::Error,
+    },
+    WriteTmp {
+        path: PathBuf,
+        error: std::io::Error,
+    },
+    Rename {
+        path: PathBuf,
+        tmp_path: PathBuf,
+        error: std::io::Error,
+    },
+}
+
 pub fn decode_profile_stats(bytes: &[u8]) -> Result<ProfileStats, ProfileStatsDecodeError> {
     if let Ok((stats, _)) =
         bincode::decode_from_slice::<ProfileStatsV1, _>(bytes, bincode::config::standard())
@@ -3418,6 +3604,60 @@ pub fn encode_profile_stats(stats: &ProfileStats) -> Option<Vec<u8>> {
     .ok()
 }
 
+pub fn load_profile_stats_file(path: &Path) -> Result<Option<ProfileStats>, ProfileStatsLoadError> {
+    let bytes = match fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(ProfileStatsLoadError::Read(e)),
+    };
+    decode_profile_stats(&bytes)
+        .map(Some)
+        .map_err(ProfileStatsLoadError::Decode)
+}
+
+pub fn write_profile_stats_dir(
+    dir: &Path,
+    payload: &ProfileStats,
+) -> Result<(), ProfileStatsWriteError> {
+    let buf = encode_profile_stats(payload).ok_or(ProfileStatsWriteError::Encode)?;
+    let path = profile_stats_path(dir);
+    let tmp_path = profile_stats_tmp_path(dir);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| ProfileStatsWriteError::CreateDir {
+            path: parent.to_path_buf(),
+            error,
+        })?;
+    }
+    fs::write(&tmp_path, buf).map_err(|error| ProfileStatsWriteError::WriteTmp {
+        path: tmp_path.clone(),
+        error,
+    })?;
+    fs::rename(&tmp_path, &path).map_err(|error| {
+        let _ = fs::remove_file(&tmp_path);
+        ProfileStatsWriteError::Rename {
+            path,
+            tmp_path,
+            error,
+        }
+    })
+}
+
+pub fn write_imported_profile_stats_dir(
+    dir: &Path,
+    current_combo: u32,
+) -> Result<(), ProfileStatsWriteError> {
+    if current_combo == 0 {
+        return Ok(());
+    }
+    write_profile_stats_dir(
+        dir,
+        &ProfileStats {
+            current_combo,
+            known_pack_names: HashSet::new(),
+        },
+    )
+}
+
 pub fn parse_favorites_content(text: &str) -> HashSet<String> {
     text.lines()
         .map(str::trim)
@@ -3432,6 +3672,49 @@ pub fn render_favorites_content(favorites: &HashSet<String>) -> String {
     sorted.join("\n")
 }
 
+fn save_set_file(path: &Path, text: String) {
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    let tmp_path = path.with_extension("tmp");
+    if fs::write(&tmp_path, text.as_bytes()).is_ok() {
+        let _ = fs::rename(&tmp_path, path);
+    }
+}
+
+pub fn load_favorites_dir(dir: &Path) -> HashSet<String> {
+    let Ok(text) = fs::read_to_string(favorites_path(dir)) else {
+        return HashSet::new();
+    };
+    parse_favorites_content(&text)
+}
+
+pub fn save_favorites_dir(dir: &Path, favorites: &HashSet<String>) {
+    save_set_file(
+        favorites_path(dir).as_path(),
+        render_favorites_content(favorites),
+    );
+}
+
+pub fn merge_imported_favorites_dir(dir: &Path, hashes: &HashSet<String>) {
+    if hashes.is_empty() {
+        return;
+    }
+    let mut merged = load_favorites_dir(dir);
+    merged.extend(hashes.iter().cloned());
+    save_favorites_dir(dir, &merged);
+}
+
+pub fn toggle_favorite_hash(favorites: &mut HashSet<String>, chart_hash: &str) -> bool {
+    if favorites.contains(chart_hash) {
+        favorites.remove(chart_hash);
+        false
+    } else {
+        favorites.insert(chart_hash.to_string());
+        true
+    }
+}
+
 pub fn parse_favorited_packs_content(text: &str) -> HashSet<String> {
     text.lines()
         .map(str::trim)
@@ -3444,6 +3727,31 @@ pub fn render_favorited_packs_content(packs: &HashSet<String>) -> String {
     let mut sorted: Vec<&str> = packs.iter().map(String::as_str).collect();
     sorted.sort_unstable_by(|a, b| a.to_ascii_lowercase().cmp(&b.to_ascii_lowercase()));
     sorted.join("\n")
+}
+
+pub fn load_favorited_packs_dir(dir: &Path) -> HashSet<String> {
+    let Ok(text) = fs::read_to_string(favorited_packs_path(dir)) else {
+        return HashSet::new();
+    };
+    parse_favorited_packs_content(&text)
+}
+
+pub fn save_favorited_packs_dir(dir: &Path, packs: &HashSet<String>) {
+    save_set_file(
+        favorited_packs_path(dir).as_path(),
+        render_favorited_packs_content(packs),
+    );
+}
+
+pub fn toggle_favorited_pack(packs: &mut HashSet<String>, pack_name: &str) -> bool {
+    let existing = packs.iter().find(|p| *p == pack_name).cloned();
+    if let Some(existing) = existing {
+        packs.remove(&existing);
+        false
+    } else {
+        packs.insert(pack_name.to_string());
+        true
+    }
 }
 
 pub fn add_known_pack_names<'a>(
@@ -7313,6 +7621,148 @@ mod tests {
     }
 
     #[test]
+    fn profile_stats_file_load_write_and_import_helpers_round_trip() {
+        let dir = temp_profile_dir("profile-stats");
+        assert_eq!(
+            load_profile_stats_file(&profile_stats_path(&dir)).expect("missing stats should load"),
+            None
+        );
+
+        let stats = ProfileStats {
+            current_combo: 12,
+            known_pack_names: ["Beta", "Alpha"].into_iter().map(str::to_owned).collect(),
+        };
+        write_profile_stats_dir(&dir, &stats).expect("profile stats should write");
+        assert_eq!(
+            load_profile_stats_file(&profile_stats_path(&dir)).expect("stats should load"),
+            Some(stats)
+        );
+
+        let imported_dir = temp_profile_dir("profile-stats-import");
+        write_imported_profile_stats_dir(&imported_dir, 42)
+            .expect("imported profile stats should write");
+        assert_eq!(
+            load_profile_stats_file(&profile_stats_path(&imported_dir))
+                .expect("imported stats should load"),
+            Some(ProfileStats {
+                current_combo: 42,
+                known_pack_names: HashSet::new(),
+            })
+        );
+
+        let empty_dir = temp_profile_dir("profile-stats-empty-import");
+        write_imported_profile_stats_dir(&empty_dir, 0)
+            .expect("zero combo import should be a no-op");
+        assert!(!profile_stats_path(&empty_dir).exists());
+
+        let _ = fs::remove_dir_all(dir);
+        let _ = fs::remove_dir_all(imported_dir);
+        let _ = fs::remove_dir_all(empty_dir);
+    }
+
+    #[test]
+    fn create_local_profile_dir_writes_default_profile_files() {
+        let root = temp_profile_dir("create-profile-root");
+
+        let id = create_local_profile_dir(&root, "Alice", NoteSkin::new("cel"), 88)
+            .expect("profile should be created");
+
+        assert!(is_valid_profile_guid(&id));
+        let summaries = scan_local_profile_summaries(&root);
+        assert_eq!(summaries.len(), 1);
+        assert_eq!(summaries[0].id, id);
+        assert_eq!(summaries[0].display_name, "Alice");
+
+        let dir = root.join("Alice");
+        assert!(profile_ini_path(&dir).is_file());
+        assert!(groovestats_ini_path(&dir).is_file());
+        assert!(arrowcloud_ini_path(&dir).is_file());
+
+        let profile_ini =
+            fs::read_to_string(profile_ini_path(&dir)).expect("profile ini should be readable");
+        assert!(profile_ini.contains("DisplayName=Alice\n"));
+        assert!(profile_ini.contains("PlayerInitials=ALIC\n"));
+        assert!(profile_ini.contains("NoteSkin=cel\n"));
+        assert!(profile_ini.contains("PadLightBrightness=88\n"));
+        assert!(profile_ini.contains(&format!("Guid={id}\n")));
+
+        assert_eq!(
+            fs::read_to_string(groovestats_ini_path(&dir)).unwrap(),
+            "[GrooveStats]\nApiKey=\nIsPadPlayer=0\nUsername=\n\n"
+        );
+        assert_eq!(
+            fs::read_to_string(arrowcloud_ini_path(&dir)).unwrap(),
+            "[ArrowCloud]\nApiKey=\n\n"
+        );
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn create_local_profile_from_import_dir_writes_import_payload() {
+        let root = temp_profile_dir("import-profile-root");
+        let avatar_root = temp_profile_dir("import-avatar-root");
+        let avatar = avatar_root.join("source.png");
+        fs::write(&avatar, b"avatar").expect("avatar source should write");
+
+        let singles = PlayerOptionsData {
+            noteskin: NoteSkin::new("metal"),
+            ..PlayerOptionsData::default()
+        };
+        let doubles = PlayerOptionsData {
+            noteskin: NoteSkin::new("cyber"),
+            ..PlayerOptionsData::default()
+        };
+        let guid = "17c7b8a2-3b73-4e8a-9d7d-cfa7e783c00b";
+        let data = ImportProfileData {
+            display_name: "Imported",
+            weight_pounds: 155,
+            birth_year: 1988,
+            initials: "itgmania-player",
+            groovestats_api_key: "gs-key",
+            groovestats_username: "gs-user",
+            groovestats_is_pad_player: true,
+            arrowcloud_api_key: "ac-key",
+            ignore_step_count_calories: true,
+            avatar_src: Some(&avatar),
+            options_singles: &singles,
+            options_doubles: &doubles,
+            guid,
+        };
+
+        let result = create_local_profile_from_import_dir(&root, &data)
+            .expect("import profile should be created");
+
+        assert_eq!(result.id, guid);
+        assert!(result.avatar_copy_error.is_none());
+
+        let dir = root.join("Imported");
+        assert_eq!(fs::read(dir.join("profile.png")).unwrap(), b"avatar");
+
+        let profile_ini =
+            fs::read_to_string(profile_ini_path(&dir)).expect("profile ini should be readable");
+        assert!(profile_ini.contains(&format!("Guid={guid}\n")));
+        assert!(profile_ini.contains("DisplayName=Imported\n"));
+        assert!(profile_ini.contains("PlayerInitials=ITGM\n"));
+        assert!(profile_ini.contains("WeightPounds=155\nBirthYear=1988\n"));
+        assert!(profile_ini.contains("IgnoreStepCountCalories=1\n"));
+        assert!(profile_ini.contains("NoteSkin=metal\n"));
+        assert!(profile_ini.contains("NoteSkin=cyber\n"));
+
+        assert_eq!(
+            fs::read_to_string(groovestats_ini_path(&dir)).unwrap(),
+            "[GrooveStats]\nApiKey=gs-key\nIsPadPlayer=1\nUsername=gs-user\n\n"
+        );
+        assert_eq!(
+            fs::read_to_string(arrowcloud_ini_path(&dir)).unwrap(),
+            "[ArrowCloud]\nApiKey=ac-key\n\n"
+        );
+
+        let _ = fs::remove_dir_all(root);
+        let _ = fs::remove_dir_all(avatar_root);
+    }
+
+    #[test]
     fn favorites_content_trims_ignores_empty_lines_and_dedupes() {
         let favorites = parse_favorites_content(" abc123 \n\nxyz789\nabc123\n   \n");
 
@@ -7334,6 +7784,43 @@ mod tests {
             "abc123\nmid456\nxyz789"
         );
         assert_eq!(render_favorites_content(&HashSet::new()), "");
+    }
+
+    fn temp_profile_dir(name: &str) -> PathBuf {
+        let mut dir = std::env::temp_dir();
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time should be after unix epoch")
+            .as_nanos();
+        dir.push(format!(
+            "deadsync-profile-test-{}-{}-{}",
+            name,
+            std::process::id(),
+            stamp
+        ));
+        fs::create_dir_all(&dir).expect("test profile dir should be created");
+        dir
+    }
+
+    #[test]
+    fn favorites_dir_load_save_merge_and_toggle_round_trip() {
+        let dir = temp_profile_dir("favorites");
+        assert!(load_favorites_dir(&dir).is_empty());
+
+        let mut favorites = HashSet::from(["xyz789".to_string(), "abc123".to_string()]);
+        save_favorites_dir(&dir, &favorites);
+        assert_eq!(load_favorites_dir(&dir), favorites);
+
+        merge_imported_favorites_dir(&dir, &HashSet::from(["mid456".to_string()]));
+        favorites.insert("mid456".to_string());
+        assert_eq!(load_favorites_dir(&dir), favorites);
+
+        assert!(!toggle_favorite_hash(&mut favorites, "abc123"));
+        assert!(!favorites.contains("abc123"));
+        assert!(toggle_favorite_hash(&mut favorites, "abc123"));
+        assert!(favorites.contains("abc123"));
+
+        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
@@ -7359,6 +7846,23 @@ mod tests {
             "Alpha Pack\nmidpack\nzebra mix"
         );
         assert_eq!(render_favorited_packs_content(&HashSet::new()), "");
+    }
+
+    #[test]
+    fn favorited_packs_dir_load_save_and_toggle_round_trip() {
+        let dir = temp_profile_dir("favorited-packs");
+        assert!(load_favorited_packs_dir(&dir).is_empty());
+
+        let mut packs = HashSet::from(["zebra mix".to_string(), "Alpha Pack".to_string()]);
+        save_favorited_packs_dir(&dir, &packs);
+        assert_eq!(load_favorited_packs_dir(&dir), packs);
+
+        assert!(!toggle_favorited_pack(&mut packs, "zebra mix"));
+        assert!(!packs.contains("zebra mix"));
+        assert!(toggle_favorited_pack(&mut packs, "zebra mix"));
+        assert!(packs.contains("zebra mix"));
+
+        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
