@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::{
     NoteAnimPart, NoteColorType, NoteDisplayMetrics, NotePartAnimation, NotePartTextureTranslate,
+    Style,
     actor::ITG_ARG0_TOKEN,
     lua::{itg_extract_quoted_strings, itg_parse_lua_quoted},
 };
@@ -27,6 +28,65 @@ struct NoteskinDataCacheKey {
     root: String,
     game: String,
     skin: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ItgSkinCacheKey {
+    num_cols: usize,
+    num_players: usize,
+    skin: String,
+}
+
+pub struct ItgSkinRuntimeCache<T> {
+    entries: Mutex<HashMap<ItgSkinCacheKey, Arc<T>>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct LoadedItgSkin<T> {
+    pub skin: String,
+    pub value: T,
+    pub used_default_fallback: bool,
+}
+
+impl<T> Default for ItgSkinRuntimeCache<T> {
+    fn default() -> Self {
+        Self {
+            entries: Mutex::new(HashMap::new()),
+        }
+    }
+}
+
+impl<T> ItgSkinRuntimeCache<T> {
+    pub fn clear(&self) {
+        self.entries
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
+    }
+
+    pub fn get_or_load<F>(&self, style: &Style, skin: &str, load: F) -> Result<Arc<T>, String>
+    where
+        F: FnOnce() -> Result<T, String>,
+    {
+        let key = itg_skin_cache_key(style, skin);
+        if let Some(cached) = self
+            .entries
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&key)
+            .cloned()
+        {
+            return Ok(cached);
+        }
+
+        let loaded = Arc::new(load()?);
+        let mut guard = self
+            .entries
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let entry = guard.entry(key).or_insert_with(|| loaded.clone());
+        Ok(entry.clone())
+    }
 }
 
 pub fn clear_lookup_caches() {
@@ -92,6 +152,15 @@ pub const fn default_skin_name() -> &'static str {
 
 pub const fn default_skin_candidates() -> &'static [&'static str] {
     DEFAULT_SKIN_CANDIDATES
+}
+
+#[inline(always)]
+pub fn itg_skin_cache_key(style: &Style, skin: &str) -> ItgSkinCacheKey {
+    ItgSkinCacheKey {
+        num_cols: style.num_cols,
+        num_players: style.num_players,
+        skin: normalized_skin_name(skin),
+    }
 }
 
 fn noteskin_data_cache_key(root: &Path, game: &str, skin: &str) -> NoteskinDataCacheKey {
@@ -390,6 +459,60 @@ fn order_discovered_skins(mut found: Vec<String>) -> Vec<String> {
     }
 }
 
+pub fn load_itg_default_from_roots<T, F>(
+    roots: &[PathBuf],
+    game: &str,
+    mut load: F,
+) -> Result<LoadedItgSkin<T>, String>
+where
+    F: FnMut(&Path, &str, &str) -> Result<T, String>,
+{
+    for skin in default_skin_candidates() {
+        for root in roots {
+            if let Ok(value) = load(root, game, skin) {
+                return Ok(LoadedItgSkin {
+                    skin: (*skin).to_string(),
+                    value,
+                    used_default_fallback: *skin != default_skin_name(),
+                });
+            }
+        }
+    }
+    Err(format!(
+        "failed to load ITG default noteskin for game '{game}' from any root"
+    ))
+}
+
+pub fn load_itg_skin_from_roots<T, F>(
+    roots: &[PathBuf],
+    game: &str,
+    skin: &str,
+    mut load: F,
+) -> Result<LoadedItgSkin<T>, String>
+where
+    F: FnMut(&Path, &str, &str) -> Result<T, String>,
+{
+    let requested = normalized_skin_name(skin);
+    if skin_name_is_default(&requested) {
+        return load_itg_default_from_roots(roots, game, load);
+    }
+
+    let mut last_err = format!("noteskin '{game}/{requested}' not found in any root");
+    for root in roots {
+        match load(root, game, &requested) {
+            Ok(value) => {
+                return Ok(LoadedItgSkin {
+                    skin: requested,
+                    value,
+                    used_default_fallback: false,
+                });
+            }
+            Err(error) => last_err = error,
+        }
+    }
+    Err(last_err)
+}
+
 pub fn load_noteskin_data(root: &Path, game: &str, skin: &str) -> Result<NoteskinData, String> {
     let mut metrics = IniData::default();
     let mut search_dirs = Vec::new();
@@ -491,6 +614,20 @@ pub fn load_noteskin_data_cached(
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let entry = guard.entry(key).or_insert_with(|| loaded.clone());
     Ok(entry.clone())
+}
+
+pub fn load_noteskin_data_cached_from_roots(
+    roots: &[PathBuf],
+    game: &str,
+    skin: &str,
+) -> Option<Arc<NoteskinData>> {
+    let skin = normalized_skin_name(skin);
+    for root in roots {
+        if let Ok(data) = load_noteskin_data_cached(root, game, &skin) {
+            return Some(data);
+        }
+    }
+    None
 }
 
 pub fn note_display_metrics(metrics: &IniData) -> NoteDisplayMetrics {
@@ -745,17 +882,18 @@ fn is_redir(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        IniData, NoteskinData, animation_is_beat_based, button_for_col, clear_data_cache,
-        clear_lookup_caches, default_skin_candidates, default_skin_name, down_col,
-        find_file_with_prefix, find_texture_with_prefix, load_noteskin_data_cached,
-        normalized_game_name, normalized_skin_name, note_display_metrics, parse_ini_float,
-        resolve_skin_dir, resolve_texture_expr, skin_name_is_default, texture_key_for_path,
+        IniData, ItgSkinRuntimeCache, NoteskinData, animation_is_beat_based, button_for_col,
+        clear_data_cache, clear_lookup_caches, default_skin_candidates, default_skin_name,
+        down_col, find_file_with_prefix, find_texture_with_prefix, load_itg_skin_from_roots,
+        load_noteskin_data_cached, load_noteskin_data_cached_from_roots, normalized_game_name,
+        normalized_skin_name, note_display_metrics, parse_ini_float, resolve_skin_dir,
+        resolve_texture_expr, skin_name_is_default, texture_key_for_path,
     };
-    use crate::{NoteAnimPart, NoteColorType};
+    use crate::{NoteAnimPart, NoteColorType, Style};
     use std::collections::HashMap;
     use std::fs;
     use std::path::{Path, PathBuf};
-    use std::sync::Mutex;
+    use std::sync::{Arc, Mutex};
     use std::time::{SystemTime, UNIX_EPOCH};
 
     static LOOKUP_CACHE_TEST_LOCK: Mutex<()> = Mutex::new(());
@@ -881,6 +1019,113 @@ mod tests {
         let root = temp_root("discover-empty");
 
         assert_eq!(super::discover_skins(&[root], "dance"), ["default", "cel"]);
+    }
+
+    #[test]
+    fn load_noteskin_data_cached_from_roots_uses_first_loadable_root() {
+        let _guard = LOOKUP_CACHE_TEST_LOCK.lock().unwrap();
+        clear_lookup_caches();
+        clear_data_cache();
+        let missing_root = temp_root("data-roots-missing");
+        let root = temp_root("data-roots");
+        let skin_dir = root.join("dance/cel");
+        fs::create_dir_all(&skin_dir).unwrap();
+        fs::write(
+            skin_dir.join("metrics.ini"),
+            b"[Global]\nFallbackNoteSkin=cel\n[Down]\nFoo=bar\n",
+        )
+        .unwrap();
+
+        let loaded = load_noteskin_data_cached_from_roots(
+            &[missing_root.clone(), root.clone()],
+            "dance",
+            "cel",
+        )
+        .expect("load from second root");
+
+        assert_eq!(loaded.name, "cel");
+        assert_eq!(loaded.get_metric("Down", "Foo"), Some("bar"));
+
+        let _ = fs::remove_dir_all(missing_root);
+        let _ = fs::remove_dir_all(root);
+        clear_lookup_caches();
+        clear_data_cache();
+    }
+
+    #[test]
+    fn load_itg_skin_from_roots_uses_default_fallback_candidates() {
+        let missing_root = PathBuf::from("missing-root");
+        let root = PathBuf::from("root");
+        let mut calls = Vec::new();
+
+        let loaded = load_itg_skin_from_roots(
+            &[missing_root.clone(), root.clone()],
+            "dance",
+            "default",
+            |root, game, skin| {
+                calls.push((root.to_path_buf(), game.to_string(), skin.to_string()));
+                if root == Path::new("root") && skin == "cel" {
+                    Ok("loaded")
+                } else {
+                    Err("missing".to_string())
+                }
+            },
+        )
+        .expect("fallback skin should load");
+
+        assert_eq!(loaded.value, "loaded");
+        assert_eq!(loaded.skin, "cel");
+        assert!(loaded.used_default_fallback);
+        assert_eq!(
+            calls,
+            vec![
+                (
+                    missing_root.clone(),
+                    "dance".to_string(),
+                    "default".to_string()
+                ),
+                (root.clone(), "dance".to_string(), "default".to_string()),
+                (missing_root, "dance".to_string(), "cel".to_string()),
+                (root, "dance".to_string(), "cel".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn itg_skin_runtime_cache_reuses_loaded_skin_by_style_and_name() {
+        let cache = ItgSkinRuntimeCache::<String>::default();
+        let style = Style {
+            num_cols: 4,
+            num_players: 1,
+        };
+        let mut loads = 0usize;
+
+        let first = cache
+            .get_or_load(&style, " CeL ", || {
+                loads += 1;
+                Ok("loaded".to_string())
+            })
+            .unwrap();
+        let second = cache
+            .get_or_load(&style, "cel", || {
+                loads += 1;
+                Ok("other".to_string())
+            })
+            .unwrap();
+
+        assert_eq!(loads, 1);
+        assert!(Arc::ptr_eq(&first, &second));
+        assert_eq!(first.as_str(), "loaded");
+
+        cache.clear();
+        let reloaded = cache
+            .get_or_load(&style, "cel", || {
+                loads += 1;
+                Ok("reloaded".to_string())
+            })
+            .unwrap();
+        assert_eq!(loads, 2);
+        assert_eq!(reloaded.as_str(), "reloaded");
     }
 
     #[test]

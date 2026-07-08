@@ -3,15 +3,13 @@ use crate::game::song::{get_song_cache, set_song_cache};
 use deadlib_platform::dirs;
 use deadsync_chart::{SongData, SongPack};
 use deadsync_simfile::scan::{
-    PackScan, ScanFailure, collect_reload_pack_dirs, count_loaded_songs, empty_song_pack_from_scan,
-    finalize_loaded_packs, fmt_scan_time, push_unique_path, replace_song_packs, scan_pack_dirs,
-    scan_song_roots, song_pack_progress_name, song_progress_name,
+    PackScan, ScanFailure, SongLoadOptions, collect_reload_pack_dirs, count_loaded_songs,
+    fmt_scan_time, load_pack_scans_with, push_unique_path, replace_song_packs, scan_pack_dirs,
+    scan_song_roots,
 };
 use log::{debug, info, warn};
 use std::fs;
-use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 pub fn scan_and_load_songs_with_progress_counts<F>(root_path: &Path, progress: &mut F)
 where
@@ -58,13 +56,6 @@ pub(crate) fn collect_song_scan_roots(root_path: &Path) -> Vec<PathBuf> {
     roots
 }
 
-#[derive(Default)]
-struct SongLoadStats {
-    songs_cache_hits: usize,
-    songs_parsed: usize,
-    songs_failed: usize,
-}
-
 fn ensure_song_cache_dir() {
     let cache_dir = dirs::app_dirs().song_cache_dir();
     if let Err(error) = fs::create_dir_all(&cache_dir) {
@@ -85,23 +76,6 @@ fn warn_scan_failures(kind: &str, failures: &[ScanFailure]) {
         );
     }
 }
-
-#[inline(always)]
-fn report_load_progress<F>(
-    progress: &mut Option<&mut F>,
-    done: usize,
-    total: usize,
-    group: &str,
-    item: &str,
-) where
-    F: FnMut(usize, usize, &str, &str),
-{
-    if let Some(cb) = progress.as_mut() {
-        cb(done, total, group, item);
-    }
-}
-
-type SongParseMsg = (usize, PathBuf, Result<(Arc<SongData>, bool), String>);
 
 fn process_song(
     simfile_path: PathBuf,
@@ -133,245 +107,37 @@ fn process_song(
     Ok((song_data, false))
 }
 
-fn reap_song_parse<F>(
-    rx: Option<&std::sync::mpsc::Receiver<SongParseMsg>>,
-    in_flight: &mut usize,
-    loaded_packs: &mut Vec<SongPack>,
-    stats: &mut SongLoadStats,
-    songs_done: &mut usize,
-    total_songs: usize,
-    progress: &mut Option<&mut F>,
-) where
-    F: FnMut(usize, usize, &str, &str),
-{
-    let Some(rx) = rx else {
-        return;
-    };
-    match rx.recv() {
-        Ok((pack_idx, simfile_path, result)) => {
-            *in_flight = in_flight.saturating_sub(1);
-            match result {
-                Ok((song_data, is_hit)) => {
-                    if is_hit {
-                        stats.songs_cache_hits += 1;
-                    } else {
-                        stats.songs_parsed += 1;
-                    }
-                    if let Some(pack) = loaded_packs.get_mut(pack_idx) {
-                        pack.songs.push(song_data);
-                    }
-                }
-                Err(error) => {
-                    stats.songs_failed += 1;
-                    warn!("Failed to load '{simfile_path:?}': {error}")
-                }
-            }
-            *songs_done = songs_done.saturating_add(1);
-            let pack_display = loaded_packs
-                .get(pack_idx)
-                .map_or("", song_pack_progress_name);
-            report_load_progress(
-                progress,
-                *songs_done,
-                total_songs,
-                pack_display,
-                song_progress_name(&simfile_path),
-            );
-        }
-        Err(_) => {
-            *in_flight = 0;
-        }
-    }
-}
-
 fn load_pack_scans<F>(
     packs: Vec<PackScan>,
-    mut progress: Option<&mut F>,
-) -> (Vec<SongPack>, SongLoadStats)
+    progress: Option<&mut F>,
+) -> (Vec<SongPack>, deadsync_simfile::scan::SongLoadStats)
 where
     F: FnMut(usize, usize, &str, &str),
 {
     let config = crate::config::get();
-    let fastload = config.fastload;
-    let cachesongs = config.cachesongs;
-    let global_offset_seconds = config.global_offset_seconds;
-
-    let avail_threads = std::thread::available_parallelism()
-        .map(std::num::NonZero::get)
-        .unwrap_or(1);
-    let mut parse_threads = match config.song_parsing_threads {
-        0 => avail_threads,
-        1 => 1,
-        n => (n as usize).min(avail_threads).max(1),
+    let options = SongLoadOptions {
+        fastload: config.fastload,
+        cachesongs: config.cachesongs,
+        global_offset_seconds: config.global_offset_seconds,
+        song_parsing_threads: u32::from(config.song_parsing_threads),
     };
-    if parse_threads < 1 {
-        parse_threads = 1;
-    }
-    let parallel_parsing = parse_threads > 1;
-
-    let mut loaded_packs = Vec::new();
-    let mut stats = SongLoadStats::default();
-    let total_songs = packs.iter().map(|pack| pack.songs.len()).sum::<usize>();
-    let mut songs_done = 0usize;
-    report_load_progress(&mut progress, 0, total_songs, "", "");
-
-    let mut runtime: Option<tokio::runtime::Runtime> = None;
-    let mut tx_opt: Option<std::sync::mpsc::Sender<SongParseMsg>> = None;
-    let mut rx_opt: Option<std::sync::mpsc::Receiver<SongParseMsg>> = None;
-    let mut in_flight = 0usize;
-
-    for pack in packs {
-        let pack_display = pack
-            .dir
-            .file_name()
-            .and_then(|name| name.to_str())
-            .filter(|name| !name.is_empty())
-            .unwrap_or(pack.group_name.as_str())
-            .to_owned();
-
-        let current_pack = empty_song_pack_from_scan(&pack);
-        debug!("Scanning pack: {}", current_pack.name);
-        let pack_idx = loaded_packs.len();
-        loaded_packs.push(current_pack);
-
-        // Honor NeverCacheList: WIP packs listed here always re-parse from disk
-        // and never read or write the on-disk song cache.
-        let pack_never_cache = crate::config::group_is_never_cached(&pack.group_name)
-            || crate::config::group_is_never_cached(&pack_display);
-        if pack_never_cache {
-            debug!("Skipping song cache for pack '{pack_display}' (NeverCacheList).");
-        }
-        let pack_fastload = fastload && !pack_never_cache;
-        let pack_cachesongs = cachesongs && !pack_never_cache;
-
-        for song in pack.songs {
-            let simfile_path = song.simfile;
-            let song_display = song_progress_name(&simfile_path);
-
-            if parallel_parsing {
-                let rt = runtime.get_or_insert_with(|| {
-                    tokio::runtime::Builder::new_current_thread()
-                        .max_blocking_threads(parse_threads)
-                        .build()
-                        .unwrap()
-                });
-                if tx_opt.is_none() || rx_opt.is_none() {
-                    let (tx, rx) = std::sync::mpsc::channel::<SongParseMsg>();
-                    tx_opt = Some(tx);
-                    rx_opt = Some(rx);
-                }
-
-                while in_flight >= parse_threads {
-                    reap_song_parse(
-                        rx_opt.as_ref(),
-                        &mut in_flight,
-                        &mut loaded_packs,
-                        &mut stats,
-                        &mut songs_done,
-                        total_songs,
-                        &mut progress,
-                    );
-                }
-
-                let Some(tx) = tx_opt.as_ref() else {
-                    match process_song(
-                        simfile_path.clone(),
-                        pack_fastload,
-                        pack_cachesongs,
-                        global_offset_seconds,
-                    ) {
-                        Ok((song_data, is_hit)) => {
-                            if is_hit {
-                                stats.songs_cache_hits += 1;
-                            } else {
-                                stats.songs_parsed += 1;
-                            }
-                            loaded_packs[pack_idx].songs.push(Arc::new(song_data));
-                        }
-                        Err(error) => {
-                            stats.songs_failed += 1;
-                            warn!("Failed to load '{simfile_path:?}': {error}")
-                        }
-                    }
-                    songs_done = songs_done.saturating_add(1);
-                    report_load_progress(
-                        &mut progress,
-                        songs_done,
-                        total_songs,
-                        pack_display.as_str(),
-                        song_display,
-                    );
-                    continue;
-                };
-
-                let tx = tx.clone();
-                let simfile_path_owned = simfile_path.clone();
-                rt.handle().spawn_blocking(move || {
-                    let out = catch_unwind(AssertUnwindSafe(|| {
-                        process_song(
-                            simfile_path_owned.clone(),
-                            pack_fastload,
-                            pack_cachesongs,
-                            global_offset_seconds,
-                        )
-                        .map(|(data, is_hit)| (Arc::new(data), is_hit))
-                    }))
-                    .unwrap_or_else(|_| Err("Song parse panicked".to_string()));
-                    let _ = tx.send((pack_idx, simfile_path_owned, out));
-                });
-                in_flight += 1;
-            } else {
-                match process_song(
-                    simfile_path.clone(),
-                    pack_fastload,
-                    pack_cachesongs,
-                    global_offset_seconds,
-                ) {
-                    Ok((song_data, is_hit)) => {
-                        if is_hit {
-                            stats.songs_cache_hits += 1;
-                        } else {
-                            stats.songs_parsed += 1;
-                        }
-                        loaded_packs[pack_idx].songs.push(Arc::new(song_data));
-                    }
-                    Err(error) => {
-                        stats.songs_failed += 1;
-                        warn!("Failed to load '{simfile_path:?}': {error}")
-                    }
-                }
-                songs_done = songs_done.saturating_add(1);
-                report_load_progress(
-                    &mut progress,
-                    songs_done,
-                    total_songs,
-                    pack_display.as_str(),
-                    song_display,
-                );
-            }
-        }
-    }
-
-    while in_flight > 0 {
-        reap_song_parse(
-            rx_opt.as_ref(),
-            &mut in_flight,
-            &mut loaded_packs,
-            &mut stats,
-            &mut songs_done,
-            total_songs,
-            &mut progress,
-        );
-    }
-
-    if runtime.is_some() {
+    let requested_threads = config.song_parsing_threads;
+    let (loaded_packs, stats) = load_pack_scans_with(
+        packs,
+        options,
+        progress,
+        process_song,
+        crate::config::group_is_never_cached,
+        |simfile_path, error| warn!("Failed to load '{simfile_path:?}': {error}"),
+        |pack| debug!("Scanning pack: {}", pack.name),
+        |pack_display| debug!("Skipping song cache for pack '{pack_display}' (NeverCacheList)."),
+    );
+    if stats.used_parallel {
         debug!(
             "Song parsing: used {} threads for cache/parsing (SongParsingThreads={}).",
-            parse_threads, config.song_parsing_threads
+            stats.parse_threads, requested_threads
         );
     }
-
-    finalize_loaded_packs(&mut loaded_packs);
     (loaded_packs, stats)
 }
 

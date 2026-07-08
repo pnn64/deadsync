@@ -8,7 +8,7 @@ use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::{judgment, timing};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
-use std::sync::MutexGuard;
+use std::sync::{LazyLock, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 pub mod event_progress;
@@ -177,6 +177,21 @@ pub struct MachineLocalScoreCacheState {
 }
 
 impl GsScoreCacheState {
+    #[inline(always)]
+    pub fn profile_is_loaded(&self, profile_id: &str) -> bool {
+        self.loaded_profiles.contains_key(profile_id)
+    }
+
+    pub fn insert_loaded_profile(
+        &mut self,
+        profile_id: &str,
+        by_chart: HashMap<String, CachedScore>,
+    ) {
+        self.loaded_profiles
+            .entry(profile_id.to_string())
+            .or_insert(by_chart);
+    }
+
     pub fn get_profile_score(&self, profile_id: &str, chart_hash: &str) -> Option<CachedScore> {
         self.loaded_profiles
             .get(profile_id)
@@ -209,6 +224,21 @@ impl GsScoreCacheState {
 }
 
 impl AcScoreCacheState {
+    #[inline(always)]
+    pub fn profile_is_loaded(&self, profile_id: &str) -> bool {
+        self.loaded_profiles.contains_key(profile_id)
+    }
+
+    pub fn insert_loaded_profile(
+        &mut self,
+        profile_id: &str,
+        by_chart: HashMap<String, ArrowCloudScores>,
+    ) {
+        self.loaded_profiles
+            .entry(profile_id.to_string())
+            .or_insert(by_chart);
+    }
+
     pub fn get_profile_scores(
         &self,
         profile_id: &str,
@@ -268,6 +298,17 @@ impl AcScoreCacheState {
 }
 
 impl LocalScoreCacheState {
+    #[inline(always)]
+    pub fn profile_is_loaded(&self, profile_id: &str) -> bool {
+        self.loaded_profiles.contains_key(profile_id)
+    }
+
+    pub fn insert_loaded_profile(&mut self, profile_id: &str, index: LocalScoreIndex) {
+        self.loaded_profiles
+            .entry(profile_id.to_string())
+            .or_insert(index);
+    }
+
     pub fn get_profile_itg_score(&self, profile_id: &str, chart_hash: &str) -> Option<CachedScore> {
         self.loaded_profiles
             .get(profile_id)
@@ -352,6 +393,398 @@ impl MachineLocalScoreCacheState {
             }
         }
     }
+}
+
+static RUNTIME_GS_SCORE_CACHE: LazyLock<Mutex<GsScoreCacheState>> =
+    LazyLock::new(|| Mutex::new(GsScoreCacheState::default()));
+static RUNTIME_AC_SCORE_CACHE: LazyLock<Mutex<AcScoreCacheState>> =
+    LazyLock::new(|| Mutex::new(AcScoreCacheState::default()));
+static RUNTIME_LOCAL_SCORE_CACHE: LazyLock<Mutex<LocalScoreCacheState>> =
+    LazyLock::new(|| Mutex::new(LocalScoreCacheState::default()));
+static RUNTIME_MACHINE_LOCAL_SCORE_CACHE: LazyLock<Mutex<MachineLocalScoreCacheState>> =
+    LazyLock::new(|| Mutex::new(MachineLocalScoreCacheState::default()));
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScoreCacheLoadKind {
+    GrooveStats,
+    Local,
+    MachineLocal,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ScoreCacheLoadReport {
+    pub kind: ScoreCacheLoadKind,
+    pub profile_id: Option<String>,
+    pub primary_entries: usize,
+    pub secondary_entries: usize,
+    pub elapsed_ms: f64,
+}
+
+#[derive(Debug, Default)]
+pub struct ScoreCacheRuntimeResult {
+    pub load_report: Option<ScoreCacheLoadReport>,
+    pub write_errors: Vec<ScoreIndexWriteError>,
+}
+
+type ProfilePathsFn = fn(&str) -> ScoreProfilePaths;
+
+pub fn runtime_ensure_gs_score_cache_loaded(
+    profile_id: &str,
+    score_paths: ProfilePathsFn,
+) -> ScoreCacheRuntimeResult {
+    if RUNTIME_GS_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .profile_is_loaded(profile_id)
+    {
+        return ScoreCacheRuntimeResult::default();
+    }
+
+    let load_started = Instant::now();
+    let loaded = load_gs_score_cache_from_paths(&score_paths(profile_id));
+    let loaded_entries = loaded.by_chart.len();
+    let elapsed_ms = load_started.elapsed().as_secs_f64() * 1000.0;
+
+    let mut result = ScoreCacheRuntimeResult {
+        load_report: Some(ScoreCacheLoadReport {
+            kind: ScoreCacheLoadKind::GrooveStats,
+            profile_id: Some(profile_id.to_string()),
+            primary_entries: loaded_entries,
+            secondary_entries: 0,
+            elapsed_ms,
+        }),
+        write_errors: Vec::new(),
+    };
+    if let Some(error) = loaded.write_error {
+        result.write_errors.push(error);
+    }
+
+    RUNTIME_GS_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .insert_loaded_profile(profile_id, loaded.by_chart);
+    result
+}
+
+pub fn runtime_get_gs_score_for_profile(
+    profile_id: &str,
+    chart_hash: &str,
+    score_paths: ProfilePathsFn,
+) -> (Option<CachedScore>, ScoreCacheRuntimeResult) {
+    let result = runtime_ensure_gs_score_cache_loaded(profile_id, score_paths);
+    let score = RUNTIME_GS_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .get_profile_score(profile_id, chart_hash);
+    (score, result)
+}
+
+pub fn runtime_gs_chart_hashes_for_profile(
+    profile_id: &str,
+    score_paths: ProfilePathsFn,
+) -> (HashSet<String>, ScoreCacheRuntimeResult) {
+    let result = runtime_ensure_gs_score_cache_loaded(profile_id, score_paths);
+    let hashes = RUNTIME_GS_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .profile_chart_hashes(profile_id);
+    (hashes, result)
+}
+
+pub fn runtime_set_gs_score_for_profile(
+    profile_id: &str,
+    chart_hash: String,
+    score: CachedScore,
+    score_paths: ProfilePathsFn,
+) -> ScoreCacheRuntimeResult {
+    let mut result = runtime_ensure_gs_score_cache_loaded(profile_id, score_paths);
+    let Some(snapshot) = RUNTIME_GS_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .set_profile_score(profile_id, chart_hash, score)
+    else {
+        return result;
+    };
+    if let Err(error) =
+        save_gs_score_index_file(&score_paths(profile_id).gs_index_path(), &snapshot)
+    {
+        result.write_errors.push(error);
+    }
+    result
+}
+
+pub fn runtime_seed_gs_score(
+    profile_id: &str,
+    chart_hash: &str,
+    score: CachedScore,
+    score_paths: ProfilePathsFn,
+) -> ScoreCacheRuntimeResult {
+    let result = runtime_ensure_gs_score_cache_loaded(profile_id, score_paths);
+    RUNTIME_GS_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .seed_profile_score(profile_id, chart_hash, score);
+    result
+}
+
+pub fn runtime_ensure_ac_score_cache_loaded(
+    profile_id: &str,
+    score_paths: ProfilePathsFn,
+) -> ScoreCacheRuntimeResult {
+    if RUNTIME_AC_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .profile_is_loaded(profile_id)
+    {
+        return ScoreCacheRuntimeResult::default();
+    }
+    let disk_cache = load_ac_score_index_for_profile(&score_paths(profile_id));
+    RUNTIME_AC_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .insert_loaded_profile(profile_id, disk_cache);
+    ScoreCacheRuntimeResult::default()
+}
+
+pub fn runtime_get_ac_scores_for_profile(
+    profile_id: &str,
+    chart_hash: &str,
+    score_paths: ProfilePathsFn,
+) -> (Option<ArrowCloudScores>, ScoreCacheRuntimeResult) {
+    let result = runtime_ensure_ac_score_cache_loaded(profile_id, score_paths);
+    let scores = RUNTIME_AC_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .get_profile_scores(profile_id, chart_hash);
+    (scores, result)
+}
+
+pub fn runtime_ac_chart_hashes_with_itg_for_profile(
+    profile_id: &str,
+    score_paths: ProfilePathsFn,
+) -> (HashSet<String>, ScoreCacheRuntimeResult) {
+    let result = runtime_ensure_ac_score_cache_loaded(profile_id, score_paths);
+    let hashes = RUNTIME_AC_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .profile_chart_hashes_with_itg(profile_id);
+    (hashes, result)
+}
+
+pub fn runtime_set_ac_scores_for_profile_bulk(
+    profile_id: &str,
+    entries: impl IntoIterator<Item = (String, ArrowCloudScores)>,
+    score_paths: ProfilePathsFn,
+) -> ScoreCacheRuntimeResult {
+    let mut result = runtime_ensure_ac_score_cache_loaded(profile_id, score_paths);
+    let Some(snapshot) = RUNTIME_AC_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .set_profile_scores_bulk(profile_id, entries)
+    else {
+        return result;
+    };
+    if let Err(error) =
+        save_ac_score_index_file(&score_paths(profile_id).ac_index_path(), &snapshot)
+    {
+        result.write_errors.push(error);
+    }
+    result
+}
+
+pub fn runtime_merge_ac_submit_scores(
+    profile_id: &str,
+    chart_hash: &str,
+    itg_percent: f64,
+    ex_percent: f64,
+    hard_ex_percent: f64,
+    is_fail: bool,
+    submitted_at: DateTime<Utc>,
+    score_paths: ProfilePathsFn,
+) -> ScoreCacheRuntimeResult {
+    let mut result = runtime_ensure_ac_score_cache_loaded(profile_id, score_paths);
+    let Some(snapshot) = RUNTIME_AC_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .merge_profile_submit_scores(
+            profile_id,
+            chart_hash,
+            itg_percent,
+            ex_percent,
+            hard_ex_percent,
+            is_fail,
+            submitted_at,
+        )
+    else {
+        return result;
+    };
+    if let Err(error) =
+        save_ac_score_index_file(&score_paths(profile_id).ac_index_path(), &snapshot)
+    {
+        result.write_errors.push(error);
+    }
+    result
+}
+
+pub fn runtime_ensure_local_score_cache_loaded(
+    profile_id: &str,
+    score_paths: ProfilePathsFn,
+) -> ScoreCacheRuntimeResult {
+    if RUNTIME_LOCAL_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .profile_is_loaded(profile_id)
+    {
+        return ScoreCacheRuntimeResult::default();
+    }
+
+    let load_started = Instant::now();
+    let loaded = load_local_score_cache_from_paths(&score_paths(profile_id));
+    let elapsed_ms = load_started.elapsed().as_secs_f64() * 1000.0;
+    let result = ScoreCacheRuntimeResult {
+        load_report: Some(ScoreCacheLoadReport {
+            kind: ScoreCacheLoadKind::Local,
+            profile_id: Some(profile_id.to_string()),
+            primary_entries: loaded.best_itg_count,
+            secondary_entries: loaded.best_ex_count,
+            elapsed_ms,
+        }),
+        write_errors: Vec::new(),
+    };
+
+    RUNTIME_LOCAL_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .insert_loaded_profile(profile_id, loaded.index);
+    result
+}
+
+pub fn runtime_get_local_itg_score_for_profile(
+    profile_id: &str,
+    chart_hash: &str,
+    score_paths: ProfilePathsFn,
+) -> (Option<CachedScore>, ScoreCacheRuntimeResult) {
+    let result = runtime_ensure_local_score_cache_loaded(profile_id, score_paths);
+    let score = RUNTIME_LOCAL_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .get_profile_itg_score(profile_id, chart_hash);
+    (score, result)
+}
+
+pub fn runtime_get_local_pass_rate_for_profile(
+    profile_id: &str,
+    chart_hash: &str,
+    score_paths: ProfilePathsFn,
+) -> (Option<u32>, ScoreCacheRuntimeResult) {
+    let result = runtime_ensure_local_score_cache_loaded(profile_id, score_paths);
+    let pass_rate = RUNTIME_LOCAL_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .get_profile_pass_rate(profile_id, chart_hash);
+    (pass_rate, result)
+}
+
+pub fn runtime_get_local_scalar_score_for_profile(
+    profile_id: &str,
+    chart_hash: &str,
+    hard_ex: bool,
+    score_paths: ProfilePathsFn,
+) -> (Option<LocalScalarScore>, ScoreCacheRuntimeResult) {
+    let result = runtime_ensure_local_score_cache_loaded(profile_id, score_paths);
+    let score = RUNTIME_LOCAL_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .get_profile_scalar_score(profile_id, chart_hash, hard_ex);
+    (score, result)
+}
+
+pub fn runtime_update_local_score_cache_after_append(
+    profile_id: &str,
+    chart_hash: &str,
+    header: &LocalScoreHeader,
+) -> Option<LocalScoreIndex> {
+    RUNTIME_LOCAL_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .update_loaded_profile_index(profile_id, chart_hash, header)
+}
+
+pub fn runtime_seed_local_itg_score(
+    profile_id: &str,
+    chart_hash: &str,
+    score: CachedScore,
+    score_paths: ProfilePathsFn,
+) -> ScoreCacheRuntimeResult {
+    let result = runtime_ensure_local_score_cache_loaded(profile_id, score_paths);
+    RUNTIME_LOCAL_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .seed_profile_itg_score(profile_id, chart_hash, score);
+    result
+}
+
+pub fn runtime_ensure_machine_local_score_cache_loaded(
+    profiles: &[LocalScoreProfileSource],
+) -> ScoreCacheRuntimeResult {
+    let needs_load = {
+        let state = RUNTIME_MACHINE_LOCAL_SCORE_CACHE.lock().unwrap();
+        !state.loaded
+    };
+    if !needs_load {
+        return ScoreCacheRuntimeResult::default();
+    }
+
+    let load_started = Instant::now();
+    let best_itg = machine_best_itg_from_profiles(profiles);
+    let mut state = RUNTIME_MACHINE_LOCAL_SCORE_CACHE.lock().unwrap();
+    if state.loaded {
+        return ScoreCacheRuntimeResult::default();
+    }
+
+    state.loaded = true;
+    state.best_itg = best_itg;
+    ScoreCacheRuntimeResult {
+        load_report: Some(ScoreCacheLoadReport {
+            kind: ScoreCacheLoadKind::MachineLocal,
+            profile_id: None,
+            primary_entries: state.best_itg.len(),
+            secondary_entries: 0,
+            elapsed_ms: load_started.elapsed().as_secs_f64() * 1000.0,
+        }),
+        write_errors: Vec::new(),
+    }
+}
+
+pub fn runtime_update_machine_cache_if_loaded(
+    chart_hash: &str,
+    score: CachedScore,
+    initials: &str,
+) {
+    RUNTIME_MACHINE_LOCAL_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .update_if_loaded(chart_hash, score, initials);
+}
+
+pub fn runtime_machine_record_local(
+    chart_hash: &str,
+    profiles: &[LocalScoreProfileSource],
+) -> (Option<(String, CachedScore)>, ScoreCacheRuntimeResult) {
+    let result = runtime_ensure_machine_local_score_cache_loaded(profiles);
+    let record = RUNTIME_MACHINE_LOCAL_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .record(chart_hash);
+    (record, result)
+}
+
+pub fn runtime_lock_score_caches() -> HeldScoreCaches {
+    HeldScoreCaches::new(
+        RUNTIME_LOCAL_SCORE_CACHE.lock().unwrap(),
+        RUNTIME_GS_SCORE_CACHE.lock().unwrap(),
+        RUNTIME_AC_SCORE_CACHE.lock().unwrap(),
+    )
 }
 
 pub fn best_cached_itg_score(
@@ -1961,6 +2394,46 @@ impl LocalReplayEdge {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LocalReplayEdgeInput {
+    pub event_music_time_ns: SongTimeNs,
+    pub lane_index: u8,
+    pub pressed: bool,
+    pub source: InputSource,
+}
+
+pub fn local_replay_edges_for_player(
+    replay_edges: impl IntoIterator<Item = LocalReplayEdgeInput>,
+    player: usize,
+    num_players: usize,
+    num_cols: usize,
+    cols_per_player: usize,
+) -> Vec<LocalReplayEdge> {
+    let replay_edges = replay_edges.into_iter();
+    let (col_start, col_end) = if num_players <= 1 {
+        (0usize, num_cols)
+    } else {
+        let start = player.saturating_mul(cols_per_player);
+        (start, start.saturating_add(cols_per_player))
+    };
+
+    let mut out = Vec::new();
+    out.reserve(replay_edges.size_hint().1.unwrap_or(4096).min(4096));
+    for e in replay_edges {
+        let lane = e.lane_index as usize;
+        if lane < col_start || lane >= col_end || song_time_ns_invalid(e.event_music_time_ns) {
+            continue;
+        }
+        out.push(LocalReplayEdge::new(
+            e.event_music_time_ns,
+            (lane - col_start) as u8,
+            e.pressed,
+            e.source,
+        ));
+    }
+    out
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Encode, Decode)]
 pub struct LocalScoreHeader {
     pub version: u16,
@@ -2702,6 +3175,345 @@ pub fn score_import_pack_detail(
     )
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ScoreImportRunEvent {
+    Canceled {
+        import_name: &'static str,
+        pack_idx: usize,
+        total_packs: usize,
+        processed_charts: usize,
+        requested_charts: usize,
+    },
+    RequestFailed {
+        import_name: &'static str,
+        chart_hash: String,
+        error: String,
+    },
+    ProgressLog {
+        import_name: &'static str,
+        username: String,
+        processed_charts: usize,
+        requested_charts: usize,
+        imported_scores: usize,
+        missing_scores: usize,
+        failed_requests: usize,
+    },
+    PackComplete {
+        detail: String,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ArrowCloudBulkChunkResult {
+    pub hits: usize,
+    pub misses: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ArrowCloudBulkImportRunEvent {
+    Canceled {
+        pack_name: String,
+        pack_idx: usize,
+        total_packs: usize,
+    },
+    ChunkSucceeded {
+        pack_idx: usize,
+        total_packs: usize,
+        pack_name: String,
+        chunk_len: usize,
+        request_elapsed: Duration,
+        hits: usize,
+        misses: usize,
+    },
+    RequestFailed {
+        detail: String,
+    },
+    ChunkDetail {
+        detail: String,
+    },
+    PackComplete {
+        detail: String,
+    },
+}
+
+pub fn run_arrowcloud_bulk_import_pack_groups<F, P, C, E>(
+    pack_chart_groups: Vec<(String, Vec<String>)>,
+    chunk_size: usize,
+    only_missing_scores: bool,
+    mut fetch_chunk: F,
+    mut on_progress: P,
+    should_cancel: C,
+    mut on_event: E,
+) -> ScoreBulkImportSummary
+where
+    F: FnMut(&[String]) -> Result<ArrowCloudBulkChunkResult, String>,
+    P: FnMut(ScoreImportProgress),
+    C: Fn() -> bool,
+    E: FnMut(ArrowCloudBulkImportRunEvent),
+{
+    let requested_charts: usize = pack_chart_groups.iter().map(|(_, h)| h.len()).sum();
+    let total_packs = pack_chart_groups.len();
+    on_progress(queued_score_import_progress(
+        requested_charts,
+        total_packs,
+        "ArrowCloud bulk",
+        only_missing_scores,
+    ));
+    if requested_charts == 0 {
+        return empty_score_import_summary();
+    }
+
+    let import_started = Instant::now();
+    let mut last_request_started_at: Option<Instant> = None;
+    let mut imported_scores = 0usize;
+    let mut missing_scores = 0usize;
+    let mut failed_requests = 0usize;
+    let mut processed_charts = 0usize;
+    let mut canceled = false;
+    let chunk_size = chunk_size.max(1);
+
+    'packs: for (pack_idx, (pack_name, hashes)) in pack_chart_groups.into_iter().enumerate() {
+        let pack_chart_count = hashes.len();
+        let mut pack_hits = 0usize;
+        let mut pack_misses = 0usize;
+        let mut pack_failures = 0usize;
+
+        for chunk in hashes.chunks(chunk_size) {
+            if should_cancel() {
+                canceled = true;
+                on_event(ArrowCloudBulkImportRunEvent::Canceled {
+                    pack_name: pack_name.clone(),
+                    pack_idx,
+                    total_packs,
+                });
+                break 'packs;
+            }
+            wait_for_next_score_import_request(last_request_started_at);
+            if should_cancel() {
+                canceled = true;
+                break 'packs;
+            }
+            last_request_started_at = Some(Instant::now());
+
+            let request_started = Instant::now();
+            let detail = match fetch_chunk(chunk) {
+                Ok(result) => {
+                    let request_elapsed = request_started.elapsed();
+                    imported_scores += result.hits;
+                    missing_scores += result.misses;
+                    pack_hits += result.hits;
+                    pack_misses += result.misses;
+                    on_event(ArrowCloudBulkImportRunEvent::ChunkSucceeded {
+                        pack_idx,
+                        total_packs,
+                        pack_name: pack_name.clone(),
+                        chunk_len: chunk.len(),
+                        request_elapsed,
+                        hits: result.hits,
+                        misses: result.misses,
+                    });
+                    arrowcloud_bulk_success_detail(
+                        pack_idx,
+                        total_packs,
+                        &pack_name,
+                        result.hits,
+                        result.misses,
+                        request_elapsed,
+                    )
+                }
+                Err(error) => {
+                    let request_elapsed = request_started.elapsed();
+                    failed_requests += 1;
+                    pack_failures += 1;
+                    let detail = arrowcloud_bulk_failure_detail(
+                        pack_idx,
+                        total_packs,
+                        &pack_name,
+                        chunk.len(),
+                        request_elapsed,
+                        &error,
+                    );
+                    on_event(ArrowCloudBulkImportRunEvent::RequestFailed {
+                        detail: detail.clone(),
+                    });
+                    detail
+                }
+            };
+
+            processed_charts += chunk.len();
+            on_progress(ScoreImportProgress {
+                processed_charts,
+                total_charts: requested_charts,
+                imported_scores,
+                missing_scores,
+                failed_requests,
+                detail: detail.clone(),
+            });
+            on_event(ArrowCloudBulkImportRunEvent::ChunkDetail { detail });
+        }
+
+        on_event(ArrowCloudBulkImportRunEvent::PackComplete {
+            detail: score_import_pack_complete_detail(
+                pack_idx,
+                total_packs,
+                &pack_name,
+                pack_chart_count,
+                pack_hits,
+                pack_misses,
+                pack_failures,
+            ),
+        });
+    }
+
+    score_import_summary(
+        requested_charts,
+        imported_scores,
+        missing_scores,
+        failed_requests,
+        import_started,
+        canceled,
+    )
+}
+
+pub fn run_score_import_pack_groups<F, H, P, C, E>(
+    endpoint: ScoreImportEndpoint,
+    username: &str,
+    pack_chart_groups: Vec<(String, Vec<String>)>,
+    only_missing_scores: bool,
+    mut fetch_chart: F,
+    mut handle_result: H,
+    mut on_progress: P,
+    should_cancel: C,
+    mut on_event: E,
+) -> ScoreBulkImportSummary
+where
+    F: FnMut(&str) -> Result<CachedScoreImportResult, String>,
+    H: FnMut(&str, &CachedScoreImportResult),
+    P: FnMut(ScoreImportProgress),
+    C: Fn() -> bool,
+    E: FnMut(ScoreImportRunEvent),
+{
+    let import_name = endpoint.display_name();
+    let requested_charts: usize = pack_chart_groups.iter().map(|(_, h)| h.len()).sum();
+    let total_packs = pack_chart_groups.len();
+    on_progress(queued_score_import_progress(
+        requested_charts,
+        total_packs,
+        import_name,
+        only_missing_scores,
+    ));
+    if requested_charts == 0 {
+        return empty_score_import_summary();
+    }
+
+    let import_started = Instant::now();
+    let mut last_request_started_at: Option<Instant> = None;
+    let mut imported_scores = 0usize;
+    let mut missing_scores = 0usize;
+    let mut failed_requests = 0usize;
+    let mut processed_charts = 0usize;
+    let mut canceled = false;
+
+    'packs: for (pack_idx, (pack_name, hashes)) in pack_chart_groups.into_iter().enumerate() {
+        let pack_chart_count = hashes.len();
+        let mut pack_hits = 0usize;
+        let mut pack_misses = 0usize;
+        let mut pack_failures = 0usize;
+
+        for chart_hash in &hashes {
+            if should_cancel() {
+                canceled = true;
+                on_event(ScoreImportRunEvent::Canceled {
+                    import_name,
+                    pack_idx,
+                    total_packs,
+                    processed_charts,
+                    requested_charts,
+                });
+                break 'packs;
+            }
+            wait_for_next_score_import_request(last_request_started_at);
+            if should_cancel() {
+                canceled = true;
+                break 'packs;
+            }
+            last_request_started_at = Some(Instant::now());
+            match fetch_chart(chart_hash) {
+                Ok(result) => {
+                    let imported = result.score.is_some();
+                    handle_result(chart_hash, &result);
+                    if imported {
+                        imported_scores += 1;
+                        pack_hits += 1;
+                    } else {
+                        missing_scores += 1;
+                        pack_misses += 1;
+                    }
+                }
+                Err(error) => {
+                    failed_requests += 1;
+                    pack_failures += 1;
+                    on_event(ScoreImportRunEvent::RequestFailed {
+                        import_name,
+                        chart_hash: chart_hash.clone(),
+                        error,
+                    });
+                }
+            }
+
+            processed_charts += 1;
+            let detail = score_import_pack_detail(
+                pack_idx,
+                total_packs,
+                &pack_name,
+                pack_hits,
+                pack_misses,
+                pack_failures,
+            );
+            on_progress(ScoreImportProgress {
+                processed_charts,
+                total_charts: requested_charts,
+                imported_scores,
+                missing_scores,
+                failed_requests,
+                detail,
+            });
+            if should_log_score_import_progress(processed_charts, requested_charts) {
+                on_event(ScoreImportRunEvent::ProgressLog {
+                    import_name,
+                    username: username.to_string(),
+                    processed_charts,
+                    requested_charts,
+                    imported_scores,
+                    missing_scores,
+                    failed_requests,
+                });
+            }
+        }
+
+        on_event(ScoreImportRunEvent::PackComplete {
+            detail: score_import_pack_complete_detail(
+                pack_idx,
+                total_packs,
+                &pack_name,
+                pack_chart_count,
+                pack_hits,
+                pack_misses,
+                pack_failures,
+            ),
+        });
+    }
+
+    score_import_summary(
+        requested_charts,
+        imported_scores,
+        missing_scores,
+        failed_requests,
+        import_started,
+        canceled,
+    )
+}
+
 pub fn score_import_pack_complete_detail(
     pack_idx: usize,
     total_packs: usize,
@@ -2819,6 +3631,41 @@ pub fn collect_chart_hashes_per_pack_for_import(
         }
     }
     out
+}
+
+pub fn gs_lamp_chart_stats_for_hash(
+    song_packs: &[deadsync_chart::SongPack],
+    chart_hash: &str,
+) -> Option<GsLampChartStats> {
+    let chart_hash = chart_hash.trim();
+    if chart_hash.is_empty() {
+        return None;
+    }
+    for pack in song_packs {
+        for song in &pack.songs {
+            for chart in &song.charts {
+                if chart.short_hash == chart_hash {
+                    return Some(GsLampChartStats {
+                        total_steps: chart.stats.total_steps,
+                        holds: chart.stats.holds,
+                        rolls: chart.stats.rolls,
+                    });
+                }
+            }
+        }
+    }
+    None
+}
+
+pub fn imported_score_chart_stats(
+    score: &ImportedPlayerScore,
+    song_packs: &[deadsync_chart::SongPack],
+    chart_hash: &str,
+) -> Option<GsLampChartStats> {
+    score
+        .needs_chart_stats()
+        .then(|| gs_lamp_chart_stats_for_hash(song_packs, chart_hash))
+        .flatten()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -3271,6 +4118,23 @@ pub fn groovestats_submit_record_banner(
 mod tests {
     use super::*;
     use std::collections::HashSet;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn test_dir(name: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!(
+            "deadsync-score-{name}-{}-{nanos}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
 
     fn entry(score: f64) -> LeaderboardEntry {
         LeaderboardEntry {
@@ -3618,6 +4482,143 @@ mod tests {
     }
 
     #[test]
+    fn score_profile_paths_match_profile_score_layout() {
+        let paths = ScoreProfilePaths::new(PathBuf::from("Profiles/A"));
+        assert_eq!(paths.scores_dir(), PathBuf::from("Profiles/A/scores"));
+        assert_eq!(paths.gs_dir(), PathBuf::from("Profiles/A/scores/gs"));
+        assert_eq!(
+            paths.gs_chart_dir("abcdef"),
+            PathBuf::from("Profiles/A/scores/gs/ab")
+        );
+        assert_eq!(
+            paths.gs_index_path(),
+            PathBuf::from("Profiles/A/scores/gs/index.bin")
+        );
+        assert_eq!(paths.ac_dir(), PathBuf::from("Profiles/A/scores/ac"));
+        assert_eq!(
+            paths.ac_index_path(),
+            PathBuf::from("Profiles/A/scores/ac/index.bin")
+        );
+        assert_eq!(paths.local_dir(), PathBuf::from("Profiles/A/scores/local"));
+        assert_eq!(
+            paths.local_index_path(),
+            PathBuf::from("Profiles/A/scores/local/index.bin")
+        );
+    }
+
+    #[test]
+    fn score_cache_states_insert_loaded_profiles_once() {
+        let first = CachedScore {
+            grade: Grade::Tier03,
+            score_percent: 0.96,
+            lamp_index: Some(3),
+            lamp_judge_count: None,
+        };
+        let second = CachedScore {
+            grade: Grade::Tier01,
+            score_percent: 1.0,
+            lamp_index: Some(1),
+            lamp_judge_count: Some(2),
+        };
+
+        let mut gs = GsScoreCacheState::default();
+        let mut first_gs = HashMap::new();
+        first_gs.insert("chart".to_string(), first);
+        let mut second_gs = HashMap::new();
+        second_gs.insert("chart".to_string(), second);
+        assert!(!gs.profile_is_loaded("profile"));
+        gs.insert_loaded_profile("profile", first_gs);
+        gs.insert_loaded_profile("profile", second_gs);
+        assert!(gs.profile_is_loaded("profile"));
+        assert_eq!(gs.get_profile_score("profile", "chart"), Some(first));
+
+        let mut ac = AcScoreCacheState::default();
+        let mut first_ac = HashMap::new();
+        first_ac.insert(
+            "chart".to_string(),
+            ArrowCloudScores {
+                itg: Some(ArrowCloudScore {
+                    score_percent: 0.9,
+                    server_grade: None,
+                    played_at: Some(Utc.timestamp_opt(1, 0).unwrap()),
+                    play_id: Some(1),
+                    is_fail: false,
+                }),
+                ..ArrowCloudScores::default()
+            },
+        );
+        let mut second_ac = HashMap::new();
+        second_ac.insert("chart".to_string(), ArrowCloudScores::default());
+        assert!(!ac.profile_is_loaded("profile"));
+        ac.insert_loaded_profile("profile", first_ac);
+        ac.insert_loaded_profile("profile", second_ac);
+        assert!(ac.profile_is_loaded("profile"));
+        assert!(
+            ac.get_profile_scores("profile", "chart")
+                .unwrap()
+                .itg
+                .is_some()
+        );
+
+        let mut local = LocalScoreCacheState::default();
+        let mut first_index = LocalScoreIndex::default();
+        first_index.best_itg.insert("chart".to_string(), first);
+        let mut second_index = LocalScoreIndex::default();
+        second_index.best_itg.insert("chart".to_string(), second);
+        assert!(!local.profile_is_loaded("profile"));
+        local.insert_loaded_profile("profile", first_index);
+        local.insert_loaded_profile("profile", second_index);
+        assert!(local.profile_is_loaded("profile"));
+        assert_eq!(local.get_profile_itg_score("profile", "chart"), Some(first));
+    }
+
+    #[test]
+    fn load_gs_score_index_or_scan_normalizes_existing_index() {
+        let dir = test_dir("gs-index-normalize");
+        let paths = ScoreProfilePaths::new(&dir);
+        let stale = CachedScore {
+            grade: Grade::Quint,
+            score_percent: 1.0,
+            lamp_index: Some(1),
+            lamp_judge_count: Some(3),
+        };
+        let mut map = HashMap::new();
+        map.insert("chart".to_string(), stale);
+        save_gs_score_index_file(&paths.gs_index_path(), &map).unwrap();
+
+        let (loaded, write_error) = load_gs_score_index_or_scan(&paths);
+        assert!(write_error.is_none());
+        assert_eq!(loaded["chart"].grade, Grade::Tier01);
+
+        let (persisted, changed) = load_gs_score_index_file(&paths.gs_index_path()).unwrap();
+        assert!(!changed);
+        assert_eq!(persisted["chart"].grade, Grade::Tier01);
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn load_gs_score_index_or_scan_rebuilds_missing_index_from_files() {
+        let dir = test_dir("gs-index-scan");
+        let paths = ScoreProfilePaths::new(&dir);
+        let score = CachedScore {
+            grade: Grade::Tier03,
+            score_percent: 0.96,
+            lamp_index: Some(3),
+            lamp_judge_count: Some(4),
+        };
+        write_gs_score_entry_file(&paths.gs_chart_dir("abcdef"), "abcdef", score, "AAA", 123)
+            .unwrap();
+
+        let (loaded, write_error) = load_gs_score_index_or_scan(&paths);
+        assert!(write_error.is_none());
+        assert_eq!(loaded.get("abcdef").copied(), Some(score));
+        assert!(paths.gs_index_path().exists());
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
     fn gs_score_entry_roundtrip_preserves_lamp_judge_count() {
         let score = CachedScore {
             grade: Grade::Tier01,
@@ -3810,6 +4811,80 @@ mod tests {
         assert_eq!(decoded, entry);
         assert_eq!(header, entry.header());
         assert_eq!(decoded.replay[0].input_source(), InputSource::Gamepad);
+    }
+
+    fn test_local_score_entry(played_at_ms: i64, score_percent: f64) -> LocalScoreEntry {
+        LocalScoreEntry {
+            version: LOCAL_SCORE_VERSION,
+            played_at_ms,
+            music_rate: 1.0,
+            score_percent,
+            grade_code: grade_to_code(Grade::Tier03),
+            lamp_index: Some(2),
+            lamp_judge_count: Some(4),
+            ex_score_percent: score_percent * 100.0,
+            hard_ex_score_percent: score_percent * 100.0,
+            judgment_counts: [100, 4, 3, 2, 1, 0],
+            holds_held: 5,
+            holds_total: 6,
+            rolls_held: 7,
+            rolls_total: 8,
+            mines_avoided: 9,
+            mines_total: 10,
+            hands_achieved: 11,
+            fail_time: None,
+            beat0_time_ns: 0,
+            replay: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn local_score_append_updates_disk_index() {
+        let dir = test_dir("local-append-index");
+        let paths = ScoreProfilePaths::new(&dir);
+        let mut entry = test_local_score_entry(1234, 0.9876);
+        let append = write_local_score_entry_for_profile(&paths, "deadbeef", &mut entry).unwrap();
+
+        save_local_score_index_after_append(&paths, "deadbeef", &append.header, None).unwrap();
+
+        let index = load_local_score_index_file(&paths.local_index_path()).unwrap();
+        assert_eq!(append.header, entry.header());
+        assert_eq!(
+            append.cached_score,
+            cached_score_from_local_header(&entry.header())
+        );
+        assert_eq!(index.best_itg["deadbeef"], append.cached_score);
+        assert!(append.path.is_file());
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn import_local_scores_with_writer_counts_progress_and_cancel() {
+        let mut scores = vec![
+            ("one".to_string(), test_local_score_entry(1, 0.9)),
+            ("two".to_string(), test_local_score_entry(2, 0.95)),
+            ("three".to_string(), test_local_score_entry(3, 0.97)),
+        ];
+        let mut progress = Vec::new();
+        let mut attempted = Vec::new();
+        let attempts = std::cell::Cell::new(0);
+
+        let (written, canceled) = import_local_scores_with_writer(
+            &mut scores,
+            |done, total| progress.push((done, total)),
+            || attempts.get() == 2,
+            |chart_hash, _entry| {
+                attempts.set(attempts.get() + 1);
+                attempted.push(chart_hash.to_string());
+                chart_hash != "two"
+            },
+        );
+
+        assert_eq!(written, 1);
+        assert!(canceled);
+        assert_eq!(attempted, ["one", "two"]);
+        assert_eq!(progress, [(1, 3), (2, 3)]);
     }
 
     #[test]
@@ -4023,6 +5098,42 @@ mod tests {
         assert_eq!(entries[0].replay.len(), 1);
         assert_eq!(entries[0].replay[0].lane_index, 2);
         assert_eq!(entries[0].replay[0].source, InputSource::Gamepad);
+    }
+
+    #[test]
+    fn local_replay_edges_for_player_filters_lanes_and_invalid_times() {
+        let edges = local_replay_edges_for_player(
+            [
+                LocalReplayEdgeInput {
+                    event_music_time_ns: 1_000,
+                    lane_index: 1,
+                    pressed: true,
+                    source: InputSource::Keyboard,
+                },
+                LocalReplayEdgeInput {
+                    event_music_time_ns: 2_000,
+                    lane_index: 4,
+                    pressed: false,
+                    source: InputSource::Gamepad,
+                },
+                LocalReplayEdgeInput {
+                    event_music_time_ns: deadsync_core::song_time::INVALID_SONG_TIME_NS,
+                    lane_index: 5,
+                    pressed: true,
+                    source: InputSource::Keyboard,
+                },
+            ],
+            1,
+            2,
+            8,
+            4,
+        );
+
+        assert_eq!(edges.len(), 1);
+        assert_eq!(edges[0].event_music_time_ns, 2_000);
+        assert_eq!(edges[0].lane, 0);
+        assert!(!edges[0].pressed);
+        assert_eq!(edges[0].input_source(), InputSource::Gamepad);
     }
 
     #[test]
@@ -5610,6 +6721,135 @@ mod tests {
         assert_eq!(score.grade, Grade::Tier01);
         assert_eq!(score.lamp_index, Some(1));
         assert!(result.score_proves_nonquint_ex);
+    }
+
+    #[test]
+    fn score_import_runner_tracks_progress_and_events() {
+        let packs = vec![
+            (
+                "Pack A".to_string(),
+                vec!["hit".to_string(), "missing".to_string()],
+            ),
+            ("Pack B".to_string(), vec!["fail".to_string()]),
+        ];
+        let mut stored = Vec::new();
+        let mut progress = Vec::new();
+        let mut events = Vec::new();
+
+        let summary = run_score_import_pack_groups(
+            ScoreImportEndpoint::GrooveStats,
+            "player",
+            packs,
+            true,
+            |chart_hash| match chart_hash {
+                "hit" => Ok(CachedScoreImportResult {
+                    score: Some(cached_score(Grade::Tier03, 0.9876, Some(1), None)),
+                    score_proves_nonquint_ex: true,
+                    itl_self_score: Some(9876),
+                    itl_self_rank: Some(4),
+                    itl_self_found: true,
+                }),
+                "missing" => Ok(CachedScoreImportResult {
+                    score: None,
+                    score_proves_nonquint_ex: false,
+                    itl_self_score: None,
+                    itl_self_rank: None,
+                    itl_self_found: false,
+                }),
+                _ => Err("network".to_string()),
+            },
+            |chart_hash, result| {
+                stored.push((chart_hash.to_string(), result.score.is_some()));
+            },
+            |p| progress.push(p),
+            || false,
+            |event| events.push(event),
+        );
+
+        assert_eq!(summary.requested_charts, 3);
+        assert_eq!(summary.imported_scores, 1);
+        assert_eq!(summary.missing_scores, 1);
+        assert_eq!(summary.failed_requests, 1);
+        assert!(!summary.canceled);
+        assert_eq!(
+            stored,
+            vec![("hit".to_string(), true), ("missing".to_string(), false)]
+        );
+        assert_eq!(progress.len(), 4);
+        assert_eq!(progress[0].processed_charts, 0);
+        assert!(progress[0].detail.contains("missing only"));
+        assert_eq!(progress[3].processed_charts, 3);
+        assert_eq!(progress[3].failed_requests, 1);
+        assert!(events.contains(&ScoreImportRunEvent::PackComplete {
+            detail: "Pack 1/2 complete: Pack A (2 charts -> 1 hit, 1 missing).".to_string(),
+        }));
+        assert!(events.contains(&ScoreImportRunEvent::RequestFailed {
+            import_name: "GrooveStats",
+            chart_hash: "fail".to_string(),
+            error: "network".to_string(),
+        }));
+    }
+
+    #[test]
+    fn arrowcloud_bulk_runner_tracks_chunk_progress_and_events() {
+        let packs = vec![(
+            "Pack A".to_string(),
+            vec!["hit".to_string(), "missing".to_string(), "fail".to_string()],
+        )];
+        let mut progress = Vec::new();
+        let mut events = Vec::new();
+
+        let summary = run_arrowcloud_bulk_import_pack_groups(
+            packs,
+            2,
+            false,
+            |chunk| {
+                if chunk.iter().any(|hash| hash == "fail") {
+                    return Err("network".to_string());
+                }
+                Ok(ArrowCloudBulkChunkResult { hits: 1, misses: 1 })
+            },
+            |p| progress.push(p),
+            || false,
+            |event| events.push(event),
+        );
+
+        assert_eq!(summary.requested_charts, 3);
+        assert_eq!(summary.imported_scores, 1);
+        assert_eq!(summary.missing_scores, 1);
+        assert_eq!(summary.failed_requests, 1);
+        assert!(!summary.canceled);
+        assert_eq!(progress.len(), 3);
+        assert_eq!(progress[0].processed_charts, 0);
+        assert_eq!(progress[1].processed_charts, 2);
+        assert_eq!(progress[2].processed_charts, 3);
+        assert_eq!(progress[2].failed_requests, 1);
+        assert!(events.iter().any(|event| {
+            matches!(
+                event,
+                ArrowCloudBulkImportRunEvent::ChunkSucceeded {
+                    pack_name,
+                    chunk_len: 2,
+                    hits: 1,
+                    misses: 1,
+                    ..
+                } if pack_name == "Pack A"
+            )
+        }));
+        assert!(events.iter().any(|event| {
+            matches!(
+                event,
+                ArrowCloudBulkImportRunEvent::RequestFailed { detail }
+                    if detail.contains("network")
+            )
+        }));
+        assert!(events.iter().any(|event| {
+            matches!(
+                event,
+                ArrowCloudBulkImportRunEvent::PackComplete { detail }
+                    if detail.contains("1 failed")
+            )
+        }));
     }
 
     #[test]

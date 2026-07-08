@@ -4,9 +4,14 @@ use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 use std::io::ErrorKind;
 use std::net::TcpStream;
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::{LazyLock, Mutex};
+use std::thread;
 use std::time::{Duration, Instant};
 use tungstenite::stream::MaybeTlsStream;
 use tungstenite::{Message, WebSocket};
+
+use deadsync_profile::PlayerSide;
 
 pub const LOBBY_SERVICE_URL: &str = "ws://syncservice.groovestats.com:1337";
 pub const LOBBY_PASSWORD_MAX_LEN: usize = 4;
@@ -21,6 +26,9 @@ pub const EVENT_LOBBY_STATE: &str = "lobbyState";
 pub const EVENT_LOBBY_LEFT: &str = "lobbyLeft";
 pub const EVENT_CLIENT_DISCONNECTED: &str = "clientDisconnected";
 pub const EVENT_RESPONSE_STATUS: &str = "responseStatus";
+pub const LOBBY_SOCKET_POLL_SLEEP: Duration = Duration::from_millis(16);
+pub const LOBBY_SOCKET_PING_INTERVAL: Duration = Duration::from_secs(15);
+pub const LOBBY_DISCONNECT_HOLD_SECONDS: f32 = 5.0;
 const LOBBY_PROFILE_PREFIX: &str = "[DS] ";
 
 pub struct LobbySocket {
@@ -200,6 +208,173 @@ pub fn select_song_text(song_info: &LobbySongInfo) -> String {
             "songInfo": song_info,
         }),
     )
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum LobbyCommand {
+    Search,
+    Create {
+        password: String,
+    },
+    Join {
+        code: String,
+        password: String,
+    },
+    Leave,
+    UpdateMachine {
+        screen_name: String,
+        p1_ready: bool,
+        p2_ready: bool,
+        p1_stats: Option<MachinePlayerStats>,
+        p2_stats: Option<MachinePlayerStats>,
+    },
+    SelectSong {
+        song_info: LobbySongInfo,
+    },
+    Disconnect,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LobbyCommandAction {
+    Send(String),
+    Close,
+}
+
+pub fn lobby_command_action(
+    command: &LobbyCommand,
+    mut local_machine_state: impl FnMut(
+        &str,
+        bool,
+        bool,
+        Option<&MachinePlayerStats>,
+        Option<&MachinePlayerStats>,
+    ) -> Value,
+) -> LobbyCommandAction {
+    match command {
+        LobbyCommand::Search => LobbyCommandAction::Send(search_lobby_text()),
+        LobbyCommand::Create { password } => LobbyCommandAction::Send(create_lobby_text(
+            &local_machine_state("ScreenSelectMusic", true, true, None, None),
+            password.as_str(),
+        )),
+        LobbyCommand::Join { code, password } => LobbyCommandAction::Send(join_lobby_text(
+            &local_machine_state("ScreenSelectMusic", true, true, None, None),
+            code.as_str(),
+            password.as_str(),
+        )),
+        LobbyCommand::Leave => LobbyCommandAction::Send(leave_lobby_text()),
+        LobbyCommand::UpdateMachine {
+            screen_name,
+            p1_ready,
+            p2_ready,
+            p1_stats,
+            p2_stats,
+        } => LobbyCommandAction::Send(update_machine_text(&local_machine_state(
+            screen_name.as_str(),
+            *p1_ready,
+            *p2_ready,
+            p1_stats.as_ref(),
+            p2_stats.as_ref(),
+        ))),
+        LobbyCommand::SelectSong { song_info } => {
+            LobbyCommandAction::Send(select_song_text(song_info))
+        }
+        LobbyCommand::Disconnect => LobbyCommandAction::Close,
+    }
+}
+
+pub fn connection_state_from_lobby_socket_error(error: &LobbySocketError) -> ConnectionState {
+    match error {
+        LobbySocketError::Closed => ConnectionState::Disconnected,
+        _ => ConnectionState::Error(error.to_string()),
+    }
+}
+
+pub fn run_lobby_socket_worker<M, T, C, L>(
+    rx: Receiver<LobbyCommand>,
+    mut local_machine_state: M,
+    mut handle_text_message: T,
+    mut handle_connected: C,
+    mut handle_connection_loss: L,
+) where
+    M: FnMut(&str, bool, bool, Option<&MachinePlayerStats>, Option<&MachinePlayerStats>) -> Value,
+    T: FnMut(&str) -> Result<(), String>,
+    C: FnMut(),
+    L: FnMut(ConnectionState),
+{
+    let mut socket = match connect_lobby_socket() {
+        Ok(socket) => socket,
+        Err(error) => {
+            handle_connection_loss(ConnectionState::Error(error.to_string()));
+            return;
+        }
+    };
+
+    handle_connected();
+
+    let mut last_ping_at = Instant::now();
+    loop {
+        while let Ok(command) = rx.try_recv() {
+            if let Err(error) = handle_lobby_command(&mut socket, command, &mut local_machine_state)
+                && !is_transient_lobby_socket_error(&error)
+            {
+                handle_connection_loss(connection_state_from_lobby_socket_error(&error));
+                return;
+            }
+        }
+
+        match read_lobby_text(&mut socket) {
+            Ok(Some(text)) => {
+                if let Err(error) = handle_text_message(text.as_str()) {
+                    handle_connection_loss(ConnectionState::Error(error));
+                    return;
+                }
+            }
+            Ok(None) => {}
+            Err(error) => {
+                handle_connection_loss(connection_state_from_lobby_socket_error(&error));
+                return;
+            }
+        }
+
+        if last_ping_at.elapsed() >= LOBBY_SOCKET_PING_INTERVAL {
+            if let Err(error) = send_lobby_ping(&mut socket)
+                && !is_transient_lobby_socket_error(&error)
+            {
+                handle_connection_loss(connection_state_from_lobby_socket_error(&error));
+                return;
+            }
+            last_ping_at = Instant::now();
+        }
+
+        if let Err(error) = flush_lobby_socket(&mut socket)
+            && !is_transient_lobby_socket_error(&error)
+        {
+            handle_connection_loss(connection_state_from_lobby_socket_error(&error));
+            return;
+        }
+
+        thread::sleep(LOBBY_SOCKET_POLL_SLEEP);
+    }
+}
+
+fn handle_lobby_command(
+    socket: &mut LobbySocket,
+    command: LobbyCommand,
+    local_machine_state: &mut impl FnMut(
+        &str,
+        bool,
+        bool,
+        Option<&MachinePlayerStats>,
+        Option<&MachinePlayerStats>,
+    ) -> Value,
+) -> Result<(), LobbySocketError> {
+    match lobby_command_action(&command, local_machine_state) {
+        LobbyCommandAction::Send(text) => send_lobby_text(socket, text),
+        LobbyCommandAction::Close => {
+            close_lobby_socket(socket);
+            Err(LobbySocketError::Closed)
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -390,6 +565,51 @@ pub fn lobby_machine_state_value(
         .expect("serialize lobby machine state")
 }
 
+pub struct LocalLobbyPlayer<'a> {
+    pub side: PlayerSide,
+    pub display_name: &'a str,
+    pub joined: bool,
+    pub screen_name: &'a str,
+    pub ready: bool,
+    pub stats: Option<&'a MachinePlayerStats>,
+}
+
+pub fn local_lobby_machine_state_value(
+    p1: LocalLobbyPlayer<'_>,
+    p2: LocalLobbyPlayer<'_>,
+    session_side: PlayerSide,
+) -> Value {
+    if !(p1.joined || p2.joined) {
+        return lobby_machine_state_value(
+            (session_side == PlayerSide::P1).then(|| local_lobby_machine_player(p1)),
+            (session_side == PlayerSide::P2).then(|| local_lobby_machine_player(p2)),
+        );
+    }
+
+    lobby_machine_state_value(
+        p1.joined.then(|| local_lobby_machine_player(p1)),
+        p2.joined.then(|| local_lobby_machine_player(p2)),
+    )
+}
+
+pub fn local_lobby_machine_player(player: LocalLobbyPlayer<'_>) -> LobbyMachinePlayer {
+    lobby_machine_player(
+        lobby_player_id(player.side),
+        player.display_name,
+        player.screen_name,
+        player.ready,
+        player.stats,
+    )
+}
+
+#[inline(always)]
+pub const fn lobby_player_id(side: PlayerSide) -> &'static str {
+    match side {
+        PlayerSide::P1 => "P1",
+        PlayerSide::P2 => "P2",
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct LobbyPlayer {
     pub label: String,
@@ -400,7 +620,7 @@ pub struct LobbyPlayer {
     pub ex_score: Option<f32>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct LobbySongInfo {
     #[serde(default)]
@@ -536,6 +756,126 @@ impl Default for Snapshot {
     }
 }
 
+#[inline(always)]
+pub fn can_update_machine_state(snapshot: &Snapshot) -> bool {
+    matches!(snapshot.connection, ConnectionState::Connected) && snapshot.joined_lobby.is_some()
+}
+
+pub fn apply_local_lobby_leave(snapshot: &mut Snapshot) -> bool {
+    let connected = matches!(snapshot.connection, ConnectionState::Connected);
+    let was_joined = snapshot.joined_lobby.take().is_some();
+    if !connected {
+        snapshot.last_status = None;
+    }
+    connected && was_joined
+}
+
+pub fn apply_local_lobby_disconnect(snapshot: &mut Snapshot) {
+    snapshot.connection = ConnectionState::Disconnected;
+    snapshot.joined_lobby = None;
+    snapshot.last_status = None;
+}
+
+pub fn select_song_command(snapshot: &Snapshot, song_info: LobbySongInfo) -> Option<LobbyCommand> {
+    can_update_machine_state(snapshot).then_some(LobbyCommand::SelectSong { song_info })
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MachineStateUpdate {
+    pub signature: String,
+    pub command: LobbyCommand,
+}
+
+pub fn machine_state_signature(joined_code: &str, machine_state: &Value) -> String {
+    format!("{joined_code}|{machine_state}")
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn machine_state_update_command(
+    snapshot: &Snapshot,
+    last_signature: Option<&str>,
+    machine_state: &Value,
+    screen_name: &str,
+    p1_ready: bool,
+    p2_ready: bool,
+    p1_stats: Option<MachinePlayerStats>,
+    p2_stats: Option<MachinePlayerStats>,
+) -> Option<MachineStateUpdate> {
+    if !matches!(snapshot.connection, ConnectionState::Connected) {
+        return None;
+    }
+    let joined = snapshot.joined_lobby.as_ref()?;
+    let signature = machine_state_signature(joined.code.as_str(), machine_state);
+    if last_signature == Some(signature.as_str()) {
+        return None;
+    }
+    Some(MachineStateUpdate {
+        signature,
+        command: LobbyCommand::UpdateMachine {
+            screen_name: screen_name.to_string(),
+            p1_ready,
+            p2_ready,
+            p1_stats,
+            p2_stats,
+        },
+    })
+}
+
+pub fn apply_lobby_inbound_effect(
+    snapshot: &mut Snapshot,
+    reconnect: &mut ReconnectState,
+    effect: LobbyInboundEffect,
+) -> bool {
+    match effect {
+        LobbyInboundEffect::Ignore => false,
+        LobbyInboundEffect::LobbySearched(data) => {
+            snapshot.available_lobbies = public_lobbies_from_search(data);
+            false
+        }
+        LobbyInboundEffect::LobbyState(data) => {
+            reconnect.set_joined_lobby(data.code.clone());
+            snapshot.joined_lobby = Some(joined_lobby_from_state(data));
+            false
+        }
+        LobbyInboundEffect::LobbyLeft(data) => {
+            if !lobby_left_clears_joined(&data) {
+                return false;
+            }
+            reconnect.clear();
+            snapshot.joined_lobby = None;
+            true
+        }
+        LobbyInboundEffect::ClientDisconnected => {
+            reconnect.clear();
+            snapshot.joined_lobby = None;
+            true
+        }
+        LobbyInboundEffect::ResponseStatus(data) => {
+            let clears_lobby = response_status_clears_joined(&data);
+            let status = response_status_from_data(data);
+            if clears_lobby {
+                reconnect.clear();
+                snapshot.joined_lobby = None;
+                snapshot.last_status = Some(status);
+                return true;
+            }
+            snapshot.last_status = Some(status);
+            false
+        }
+    }
+}
+
+pub fn apply_lobby_connection_loss(
+    snapshot: &mut Snapshot,
+    connection: ConnectionState,
+    preserve_joined: bool,
+) {
+    snapshot.connection = connection;
+    if !preserve_joined {
+        snapshot.joined_lobby = None;
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ReconnectTarget {
     pub code: String,
@@ -634,9 +974,312 @@ pub fn reconnect_delay(attempt: u32) -> Duration {
     })
 }
 
+pub type LocalMachineStateFn =
+    fn(&str, bool, bool, Option<&MachinePlayerStats>, Option<&MachinePlayerStats>) -> Value;
+pub type MalformedLobbyPayloadFn = fn(Option<&str>, &str, &str);
+
+#[derive(Clone, Copy)]
+pub struct LobbyRuntimeHooks {
+    local_machine_state: LocalMachineStateFn,
+    malformed_payload: MalformedLobbyPayloadFn,
+}
+
+impl LobbyRuntimeHooks {
+    #[inline(always)]
+    pub const fn new(
+        local_machine_state: LocalMachineStateFn,
+        malformed_payload: MalformedLobbyPayloadFn,
+    ) -> Self {
+        Self {
+            local_machine_state,
+            malformed_payload,
+        }
+    }
+}
+
+static RUNTIME_SNAPSHOT: LazyLock<Mutex<Snapshot>> =
+    LazyLock::new(|| Mutex::new(Snapshot::default()));
+static RUNTIME_COMMAND_TX: LazyLock<Mutex<Option<Sender<LobbyCommand>>>> =
+    LazyLock::new(|| Mutex::new(None));
+static RUNTIME_LAST_MACHINE_STATE_SIG: LazyLock<Mutex<Option<String>>> =
+    LazyLock::new(|| Mutex::new(None));
+static RUNTIME_RECONNECT_STATE: LazyLock<Mutex<ReconnectState>> =
+    LazyLock::new(|| Mutex::new(ReconnectState::default()));
+#[cfg(test)]
+static RUNTIME_TEST_MUTEX: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+pub fn runtime_snapshot() -> Snapshot {
+    RUNTIME_SNAPSHOT.lock().unwrap().clone()
+}
+
+#[cfg(test)]
+pub fn runtime_with_snapshot_for_test<R>(snapshot: Snapshot, f: impl FnOnce() -> R) -> R {
+    let _guard = RUNTIME_TEST_MUTEX.lock().unwrap();
+    let prev = std::mem::replace(&mut *RUNTIME_SNAPSHOT.lock().unwrap(), snapshot);
+    let result = f();
+    *RUNTIME_SNAPSHOT.lock().unwrap() = prev;
+    result
+}
+
+pub fn runtime_can_update_machine_state() -> bool {
+    let snapshot = RUNTIME_SNAPSHOT.lock().unwrap();
+    can_update_machine_state(&snapshot)
+}
+
+pub fn runtime_search_lobbies(hooks: LobbyRuntimeHooks) {
+    let _ = runtime_send_command(hooks, LobbyCommand::Search);
+}
+
+pub fn runtime_create_lobby_with_password(hooks: LobbyRuntimeHooks, password: &str) {
+    let password = normalize_lobby_password(password);
+    {
+        let mut reconnect = RUNTIME_RECONNECT_STATE.lock().unwrap();
+        reconnect.set_pending_create(password.clone());
+    }
+    let _ = runtime_send_command(hooks, LobbyCommand::Create { password });
+}
+
+pub fn runtime_join_lobby_with_password(hooks: LobbyRuntimeHooks, code: &str, password: &str) {
+    let code = code.trim();
+    if code.is_empty() {
+        return;
+    }
+    let password = normalize_lobby_password(password);
+    {
+        let mut reconnect = RUNTIME_RECONNECT_STATE.lock().unwrap();
+        reconnect.set_join_target(code.to_string(), password.clone());
+    }
+    let _ = runtime_send_command(
+        hooks,
+        LobbyCommand::Join {
+            code: code.to_string(),
+            password,
+        },
+    );
+}
+
+pub fn runtime_leave_lobby(hooks: LobbyRuntimeHooks) {
+    runtime_clear_reconnect_target();
+    *RUNTIME_LAST_MACHINE_STATE_SIG.lock().unwrap() = None;
+    let should_send_leave = {
+        let mut snapshot = RUNTIME_SNAPSHOT.lock().unwrap();
+        apply_local_lobby_leave(&mut snapshot)
+    };
+    if should_send_leave {
+        let _ = runtime_send_command(hooks, LobbyCommand::Leave);
+    }
+}
+
+pub fn runtime_update_machine_state(hooks: LobbyRuntimeHooks, screen_name: &str, ready: bool) {
+    runtime_update_machine_state_sides_with_stats(hooks, screen_name, ready, ready, None, None);
+}
+
+pub fn runtime_update_machine_state_sides_with_stats(
+    hooks: LobbyRuntimeHooks,
+    screen_name: &str,
+    p1_ready: bool,
+    p2_ready: bool,
+    p1_stats: Option<MachinePlayerStats>,
+    p2_stats: Option<MachinePlayerStats>,
+) {
+    let machine_state = (hooks.local_machine_state)(
+        screen_name,
+        p1_ready,
+        p2_ready,
+        p1_stats.as_ref(),
+        p2_stats.as_ref(),
+    );
+    let update = {
+        let snapshot = RUNTIME_SNAPSHOT.lock().unwrap();
+        let last_sig = RUNTIME_LAST_MACHINE_STATE_SIG.lock().unwrap();
+        machine_state_update_command(
+            &snapshot,
+            last_sig.as_deref(),
+            &machine_state,
+            screen_name,
+            p1_ready,
+            p2_ready,
+            p1_stats,
+            p2_stats,
+        )
+    };
+    if let Some(update) = update
+        && runtime_send_command(hooks, update.command)
+    {
+        *RUNTIME_LAST_MACHINE_STATE_SIG.lock().unwrap() = Some(update.signature);
+    }
+}
+
+pub fn runtime_select_song(hooks: LobbyRuntimeHooks, song_info: LobbySongInfo) {
+    let snapshot = RUNTIME_SNAPSHOT.lock().unwrap().clone();
+    if let Some(command) = select_song_command(&snapshot, song_info) {
+        let _ = runtime_send_command(hooks, command);
+    }
+}
+
+pub fn runtime_disconnect() {
+    runtime_clear_reconnect_target();
+    if let Some(tx) = RUNTIME_COMMAND_TX.lock().unwrap().take() {
+        let _ = tx.send(LobbyCommand::Disconnect);
+    }
+    *RUNTIME_LAST_MACHINE_STATE_SIG.lock().unwrap() = None;
+    let mut snapshot = RUNTIME_SNAPSHOT.lock().unwrap();
+    apply_local_lobby_disconnect(&mut snapshot);
+}
+
+pub fn runtime_poll_reconnect(hooks: LobbyRuntimeHooks) {
+    let target = {
+        let snapshot = RUNTIME_SNAPSHOT.lock().unwrap().clone();
+        if matches!(
+            snapshot.connection,
+            ConnectionState::Connected | ConnectionState::Connecting
+        ) {
+            return;
+        }
+        let mut reconnect = RUNTIME_RECONNECT_STATE.lock().unwrap();
+        let Some(target) = reconnect.ready_target(Instant::now()) else {
+            return;
+        };
+        target
+    };
+
+    let _ = runtime_send_command(
+        hooks,
+        LobbyCommand::Join {
+            code: target.code,
+            password: target.password,
+        },
+    );
+}
+
+pub fn runtime_reconnect_status_text() -> Option<String> {
+    let snapshot = RUNTIME_SNAPSHOT.lock().unwrap().clone();
+    let reconnect = RUNTIME_RECONNECT_STATE.lock().unwrap();
+    reconnect.status_text(&snapshot.connection, Instant::now())
+}
+
+fn runtime_ensure_worker(hooks: LobbyRuntimeHooks) {
+    let mut tx_slot = RUNTIME_COMMAND_TX.lock().unwrap();
+    if tx_slot.is_some() {
+        return;
+    }
+
+    let (tx, rx) = mpsc::channel();
+    *tx_slot = Some(tx);
+    drop(tx_slot);
+
+    let mut snapshot = RUNTIME_SNAPSHOT.lock().unwrap();
+    snapshot.connection = ConnectionState::Connecting;
+    snapshot.last_status = None;
+    drop(snapshot);
+
+    thread::spawn(move || runtime_worker_main(rx, hooks));
+}
+
+fn runtime_send_command(hooks: LobbyRuntimeHooks, command: LobbyCommand) -> bool {
+    runtime_ensure_worker(hooks);
+    let tx_opt = RUNTIME_COMMAND_TX.lock().unwrap().clone();
+    let Some(tx) = tx_opt else {
+        return false;
+    };
+    if tx.send(command).is_ok() {
+        return true;
+    }
+
+    RUNTIME_COMMAND_TX.lock().unwrap().take();
+    false
+}
+
+fn runtime_clear_reconnect_target() {
+    let mut reconnect = RUNTIME_RECONNECT_STATE.lock().unwrap();
+    reconnect.clear();
+}
+
+fn runtime_schedule_reconnect() {
+    let mut reconnect = RUNTIME_RECONNECT_STATE.lock().unwrap();
+    reconnect.schedule(Instant::now());
+}
+
+fn runtime_should_preserve_joined_lobby() -> bool {
+    RUNTIME_RECONNECT_STATE.lock().unwrap().has_target()
+}
+
+fn runtime_handle_connection_loss(connection: ConnectionState) {
+    let preserve_joined = runtime_should_preserve_joined_lobby();
+    {
+        let mut snapshot = RUNTIME_SNAPSHOT.lock().unwrap();
+        apply_lobby_connection_loss(&mut snapshot, connection, preserve_joined);
+    }
+    *RUNTIME_LAST_MACHINE_STATE_SIG.lock().unwrap() = None;
+    RUNTIME_COMMAND_TX.lock().unwrap().take();
+    if preserve_joined {
+        runtime_schedule_reconnect();
+    }
+}
+
+fn runtime_worker_main(rx: Receiver<LobbyCommand>, hooks: LobbyRuntimeHooks) {
+    run_lobby_socket_worker(
+        rx,
+        hooks.local_machine_state,
+        |text| runtime_handle_text_message(text, hooks.malformed_payload),
+        || {
+            let mut snapshot = RUNTIME_SNAPSHOT.lock().unwrap();
+            snapshot.connection = ConnectionState::Connected;
+            snapshot.last_status = None;
+        },
+        runtime_handle_connection_loss,
+    );
+}
+
+fn runtime_handle_text_message(
+    text: &str,
+    malformed_payload: MalformedLobbyPayloadFn,
+) -> Result<(), String> {
+    let effect = match parse_inbound_text(text) {
+        Ok(effect) => effect,
+        Err(error) => {
+            malformed_payload(error.event.as_deref(), error.error.as_str(), text);
+            return Ok(());
+        }
+    };
+
+    let clear_machine_state_sig = {
+        let mut reconnect = RUNTIME_RECONNECT_STATE.lock().unwrap();
+        let mut snapshot = RUNTIME_SNAPSHOT.lock().unwrap();
+        apply_lobby_inbound_effect(&mut snapshot, &mut reconnect, effect)
+    };
+    if clear_machine_state_sig {
+        *RUNTIME_LAST_MACHINE_STATE_SIG.lock().unwrap() = None;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn test_machine_state(
+        _screen_name: &str,
+        _p1_ready: bool,
+        _p2_ready: bool,
+        _p1_stats: Option<&MachinePlayerStats>,
+        _p2_stats: Option<&MachinePlayerStats>,
+    ) -> Value {
+        serde_json::json!({})
+    }
+
+    fn ignore_malformed_payload(_event: Option<&str>, _error: &str, _raw_text: &str) {}
+
+    fn runtime_hooks() -> LobbyRuntimeHooks {
+        LobbyRuntimeHooks::new(test_machine_state, ignore_malformed_payload)
+    }
+
+    fn reset_runtime_test_state() {
+        *RUNTIME_SNAPSHOT.lock().unwrap() = Snapshot::default();
+        *RUNTIME_LAST_MACHINE_STATE_SIG.lock().unwrap() = None;
+        *RUNTIME_RECONNECT_STATE.lock().unwrap() = ReconnectState::default();
+        RUNTIME_COMMAND_TX.lock().unwrap().take();
+    }
 
     #[test]
     fn snapshot_defaults_to_disconnected_empty_state() {
@@ -721,6 +1364,526 @@ mod tests {
             reconnect.status_text(&ConnectionState::Error("closed".to_string()), now),
             Some("Connection lost. Retrying in 3s...".to_string())
         );
+    }
+
+    #[test]
+    fn apply_lobby_inbound_effect_updates_search_and_join_state() {
+        let mut snapshot = Snapshot::default();
+        let mut reconnect = ReconnectState::default();
+        reconnect.set_pending_create("PASS".to_string());
+
+        let clear_sig = apply_lobby_inbound_effect(
+            &mut snapshot,
+            &mut reconnect,
+            LobbyInboundEffect::LobbySearched(LobbySearchedData {
+                lobbies: vec![PublicLobbyData {
+                    code: "ABCD".to_string(),
+                    player_count: 2,
+                    is_password_protected: true,
+                }],
+            }),
+        );
+        assert!(!clear_sig);
+        assert_eq!(
+            snapshot.available_lobbies,
+            vec![PublicLobby {
+                code: "ABCD".to_string(),
+                player_count: 2,
+                is_password_protected: true,
+            }]
+        );
+
+        let clear_sig = apply_lobby_inbound_effect(
+            &mut snapshot,
+            &mut reconnect,
+            LobbyInboundEffect::LobbyState(LobbyStateData {
+                code: "ROOM".to_string(),
+                players: vec![LobbyStatePlayerData {
+                    profile_name: Some("Remote".to_string()),
+                    screen_name: Some("ScreenGameplay".to_string()),
+                    ready: true,
+                    score: Some(99.0),
+                    ..LobbyStatePlayerData::default()
+                }],
+                song_info: None,
+            }),
+        );
+        assert!(!clear_sig);
+        assert_eq!(
+            reconnect.target.as_ref().map(|target| target.code.as_str()),
+            Some("ROOM")
+        );
+        assert_eq!(
+            reconnect
+                .target
+                .as_ref()
+                .map(|target| target.password.as_str()),
+            Some("PASS")
+        );
+        assert_eq!(
+            snapshot
+                .joined_lobby
+                .as_ref()
+                .map(|lobby| lobby.code.as_str()),
+            Some("ROOM")
+        );
+        assert_eq!(snapshot.joined_lobby.as_ref().unwrap().players.len(), 1);
+    }
+
+    #[test]
+    fn apply_lobby_inbound_effect_clears_join_state_when_server_leaves() {
+        let mut snapshot = Snapshot {
+            connection: ConnectionState::Connected,
+            available_lobbies: Vec::new(),
+            joined_lobby: Some(JoinedLobby {
+                code: "ROOM".to_string(),
+                players: Vec::new(),
+                song_info: None,
+            }),
+            last_status: None,
+        };
+        let mut reconnect = ReconnectState::default();
+        reconnect.set_join_target("ROOM".to_string(), "PASS".to_string());
+
+        let clear_sig = apply_lobby_inbound_effect(
+            &mut snapshot,
+            &mut reconnect,
+            LobbyInboundEffect::LobbyLeft(LobbyLeftData { left: Some(false) }),
+        );
+        assert!(!clear_sig);
+        assert!(snapshot.joined_lobby.is_some());
+        assert!(reconnect.target.is_some());
+
+        let clear_sig = apply_lobby_inbound_effect(
+            &mut snapshot,
+            &mut reconnect,
+            LobbyInboundEffect::ClientDisconnected,
+        );
+        assert!(clear_sig);
+        assert!(snapshot.joined_lobby.is_none());
+        assert!(reconnect.target.is_none());
+    }
+
+    #[test]
+    fn apply_lobby_inbound_effect_failed_join_clears_and_sets_status() {
+        let mut snapshot = Snapshot {
+            connection: ConnectionState::Connected,
+            available_lobbies: Vec::new(),
+            joined_lobby: Some(JoinedLobby {
+                code: "ROOM".to_string(),
+                players: Vec::new(),
+                song_info: None,
+            }),
+            last_status: None,
+        };
+        let mut reconnect = ReconnectState::default();
+        reconnect.set_join_target("ROOM".to_string(), "PASS".to_string());
+
+        let clear_sig = apply_lobby_inbound_effect(
+            &mut snapshot,
+            &mut reconnect,
+            LobbyInboundEffect::ResponseStatus(ResponseStatusData {
+                event: EVENT_JOIN_LOBBY.to_string(),
+                success: false,
+                message: Some("bad password".to_string()),
+            }),
+        );
+
+        assert!(clear_sig);
+        assert!(snapshot.joined_lobby.is_none());
+        assert!(reconnect.target.is_none());
+        assert_eq!(
+            snapshot.last_status,
+            Some(ResponseStatus {
+                event: EVENT_JOIN_LOBBY.to_string(),
+                success: false,
+                message: Some("bad password".to_string()),
+            })
+        );
+    }
+
+    #[test]
+    fn apply_lobby_connection_loss_preserves_or_clears_joined_lobby() {
+        let joined = JoinedLobby {
+            code: "ROOM".to_string(),
+            players: Vec::new(),
+            song_info: None,
+        };
+        let mut snapshot = Snapshot {
+            connection: ConnectionState::Connected,
+            available_lobbies: Vec::new(),
+            joined_lobby: Some(joined.clone()),
+            last_status: None,
+        };
+
+        apply_lobby_connection_loss(
+            &mut snapshot,
+            ConnectionState::Error("lost".to_string()),
+            true,
+        );
+        assert_eq!(snapshot.joined_lobby, Some(joined));
+
+        apply_lobby_connection_loss(&mut snapshot, ConnectionState::Disconnected, false);
+        assert_eq!(snapshot.connection, ConnectionState::Disconnected);
+        assert!(snapshot.joined_lobby.is_none());
+    }
+
+    #[test]
+    fn local_lobby_leave_transition_clears_joined_and_reports_send() {
+        let mut snapshot = Snapshot {
+            connection: ConnectionState::Connected,
+            available_lobbies: Vec::new(),
+            joined_lobby: Some(JoinedLobby {
+                code: "ABCD".to_string(),
+                players: Vec::new(),
+                song_info: None,
+            }),
+            last_status: None,
+        };
+
+        assert!(can_update_machine_state(&snapshot));
+        assert!(apply_local_lobby_leave(&mut snapshot));
+        assert!(snapshot.joined_lobby.is_none());
+        assert!(!can_update_machine_state(&snapshot));
+
+        let mut disconnected = Snapshot {
+            connection: ConnectionState::Disconnected,
+            last_status: Some(ResponseStatus {
+                event: EVENT_JOIN_LOBBY.to_string(),
+                success: false,
+                message: Some("bad".to_string()),
+            }),
+            ..Snapshot::default()
+        };
+        assert!(!apply_local_lobby_leave(&mut disconnected));
+        assert!(disconnected.last_status.is_none());
+    }
+
+    #[test]
+    fn local_lobby_disconnect_transition_clears_state() {
+        let mut snapshot = Snapshot {
+            connection: ConnectionState::Connected,
+            available_lobbies: Vec::new(),
+            joined_lobby: Some(JoinedLobby {
+                code: "ABCD".to_string(),
+                players: Vec::new(),
+                song_info: None,
+            }),
+            last_status: Some(ResponseStatus {
+                event: EVENT_JOIN_LOBBY.to_string(),
+                success: true,
+                message: None,
+            }),
+        };
+
+        apply_local_lobby_disconnect(&mut snapshot);
+
+        assert_eq!(snapshot.connection, ConnectionState::Disconnected);
+        assert!(snapshot.joined_lobby.is_none());
+        assert!(snapshot.last_status.is_none());
+    }
+
+    #[test]
+    fn runtime_ignores_malformed_payload_without_changing_snapshot() {
+        let _guard = RUNTIME_TEST_MUTEX.lock().unwrap();
+        reset_runtime_test_state();
+
+        let existing_player = LobbyPlayer {
+            label: "Existing".to_string(),
+            ready: true,
+            screen_name: "ScreenGameplay".to_string(),
+            judgments: None,
+            score: Some(98.5),
+            ex_score: Some(97.25),
+        };
+        {
+            let mut snapshot = RUNTIME_SNAPSHOT.lock().unwrap();
+            snapshot.connection = ConnectionState::Connected;
+            snapshot.joined_lobby = Some(JoinedLobby {
+                code: "ABCD".to_string(),
+                players: vec![existing_player.clone()],
+                song_info: None,
+            });
+        }
+
+        let malformed = r#"{
+            "event":"lobbyState",
+            "data":{
+                "code":"ABCD",
+                "players":[{
+                    "profileName":"Remote",
+                    "screenName":"ScreenGameplay",
+                    "ready":true,
+                    "score":"98.50"
+                }]
+            }
+        }"#;
+
+        assert!(runtime_handle_text_message(malformed, ignore_malformed_payload).is_ok());
+
+        let snapshot = RUNTIME_SNAPSHOT.lock().unwrap().clone();
+        assert_eq!(snapshot.connection, ConnectionState::Connected);
+        assert_eq!(
+            snapshot.joined_lobby,
+            Some(JoinedLobby {
+                code: "ABCD".to_string(),
+                players: vec![existing_player],
+                song_info: None,
+            })
+        );
+
+        reset_runtime_test_state();
+    }
+
+    #[test]
+    fn runtime_leave_lobby_clears_local_state_before_server_reply() {
+        let _guard = RUNTIME_TEST_MUTEX.lock().unwrap();
+        reset_runtime_test_state();
+
+        let (tx, rx) = std::sync::mpsc::channel();
+        *RUNTIME_COMMAND_TX.lock().unwrap() = Some(tx);
+        *RUNTIME_LAST_MACHINE_STATE_SIG.lock().unwrap() = Some("ABCD|{}".to_string());
+        *RUNTIME_RECONNECT_STATE.lock().unwrap() = ReconnectState {
+            target: Some(ReconnectTarget {
+                code: "ABCD".to_string(),
+                password: "PASS".to_string(),
+            }),
+            pending_create_password: None,
+            retry_attempts: 2,
+            next_retry_at: Some(std::time::Instant::now()),
+        };
+        {
+            let mut snapshot = RUNTIME_SNAPSHOT.lock().unwrap();
+            snapshot.connection = ConnectionState::Connected;
+            snapshot.joined_lobby = Some(JoinedLobby {
+                code: "ABCD".to_string(),
+                players: vec![LobbyPlayer {
+                    label: "Local".to_string(),
+                    ready: true,
+                    screen_name: "ScreenSelectMusic".to_string(),
+                    judgments: None,
+                    score: None,
+                    ex_score: None,
+                }],
+                song_info: None,
+            });
+        }
+
+        runtime_leave_lobby(runtime_hooks());
+
+        let snapshot = RUNTIME_SNAPSHOT.lock().unwrap().clone();
+        assert!(snapshot.joined_lobby.is_none());
+        assert!(RUNTIME_LAST_MACHINE_STATE_SIG.lock().unwrap().is_none());
+        let reconnect = RUNTIME_RECONNECT_STATE.lock().unwrap();
+        assert!(reconnect.target.is_none());
+        assert!(reconnect.pending_create_password.is_none());
+        assert_eq!(reconnect.retry_attempts, 0);
+        assert!(reconnect.next_retry_at.is_none());
+        assert!(matches!(rx.try_recv(), Ok(LobbyCommand::Leave)));
+
+        drop(reconnect);
+        reset_runtime_test_state();
+    }
+
+    #[test]
+    fn local_lobby_select_song_requires_connected_joined_lobby() {
+        let song_info = LobbySongInfo {
+            song_path: "Songs/Pack/Song".to_string(),
+            title: Some("Song".to_string()),
+            ..LobbySongInfo::default()
+        };
+        assert_eq!(
+            select_song_command(&Snapshot::default(), song_info.clone()),
+            None
+        );
+
+        let snapshot = Snapshot {
+            connection: ConnectionState::Connected,
+            joined_lobby: Some(JoinedLobby {
+                code: "ABCD".to_string(),
+                players: Vec::new(),
+                song_info: None,
+            }),
+            ..Snapshot::default()
+        };
+        assert_eq!(
+            select_song_command(&snapshot, song_info.clone()),
+            Some(LobbyCommand::SelectSong { song_info })
+        );
+    }
+
+    #[test]
+    fn machine_state_update_command_skips_unjoined_and_duplicates() {
+        let machine = serde_json::json!({
+            "player1": {"profileName": "[DS] Alice"},
+            "player2": null
+        });
+        let snapshot = Snapshot {
+            connection: ConnectionState::Connected,
+            joined_lobby: Some(JoinedLobby {
+                code: "ROOM".to_string(),
+                players: Vec::new(),
+                song_info: None,
+            }),
+            ..Snapshot::default()
+        };
+        let signature = machine_state_signature("ROOM", &machine);
+
+        assert_eq!(
+            machine_state_update_command(
+                &Snapshot::default(),
+                None,
+                &machine,
+                "ScreenGameplay",
+                true,
+                false,
+                None,
+                None,
+            ),
+            None
+        );
+        assert_eq!(
+            machine_state_update_command(
+                &snapshot,
+                Some(signature.as_str()),
+                &machine,
+                "ScreenGameplay",
+                true,
+                false,
+                None,
+                None,
+            ),
+            None
+        );
+
+        let update = machine_state_update_command(
+            &snapshot,
+            None,
+            &machine,
+            "ScreenGameplay",
+            true,
+            false,
+            None,
+            None,
+        )
+        .expect("update");
+        assert_eq!(update.signature, signature);
+        assert_eq!(
+            update.command,
+            LobbyCommand::UpdateMachine {
+                screen_name: "ScreenGameplay".to_string(),
+                p1_ready: true,
+                p2_ready: false,
+                p1_stats: None,
+                p2_stats: None,
+            }
+        );
+    }
+
+    #[test]
+    fn lobby_command_action_builds_update_machine_payload() {
+        let command = LobbyCommand::UpdateMachine {
+            screen_name: "ScreenGameplay".to_string(),
+            p1_ready: true,
+            p2_ready: false,
+            p1_stats: Some(MachinePlayerStats {
+                score: Some(98.5),
+                ..MachinePlayerStats::default()
+            }),
+            p2_stats: None,
+        };
+
+        let action = lobby_command_action(&command, |screen, p1_ready, p2_ready, p1, p2| {
+            serde_json::json!({
+                "screen": screen,
+                "p1Ready": p1_ready,
+                "p2Ready": p2_ready,
+                "p1Score": p1.and_then(|stats| stats.score),
+                "p2Present": p2.is_some(),
+            })
+        });
+
+        let LobbyCommandAction::Send(text) = action else {
+            panic!("update machine command should send wire text");
+        };
+        let payload: Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(payload["event"], EVENT_UPDATE_MACHINE);
+        assert_eq!(payload["data"]["machine"]["screen"], "ScreenGameplay");
+        assert_eq!(payload["data"]["machine"]["p1Ready"], true);
+        assert_eq!(payload["data"]["machine"]["p2Ready"], false);
+        assert_eq!(payload["data"]["machine"]["p1Score"], 98.5);
+        assert_eq!(payload["data"]["machine"]["p2Present"], false);
+        assert_eq!(
+            lobby_command_action(&LobbyCommand::Disconnect, |_, _, _, _, _| {
+                serde_json::json!({})
+            }),
+            LobbyCommandAction::Close
+        );
+    }
+
+    #[test]
+    fn local_lobby_machine_state_uses_session_side_when_no_sides_joined() {
+        let value = local_lobby_machine_state_value(
+            LocalLobbyPlayer {
+                side: PlayerSide::P1,
+                display_name: "Alice",
+                joined: false,
+                screen_name: "ScreenSelectMusic",
+                ready: true,
+                stats: None,
+            },
+            LocalLobbyPlayer {
+                side: PlayerSide::P2,
+                display_name: "Bob",
+                joined: false,
+                screen_name: "ScreenGameplay",
+                ready: false,
+                stats: Some(&MachinePlayerStats {
+                    score: Some(98.5),
+                    ..MachinePlayerStats::default()
+                }),
+            },
+            PlayerSide::P2,
+        );
+
+        assert!(value["player1"].is_null());
+        assert_eq!(value["player2"]["playerId"], "P2");
+        assert_eq!(value["player2"]["profileName"], "[DS] Bob");
+        assert_eq!(value["player2"]["screenName"], "ScreenGameplay");
+        assert_eq!(value["player2"]["ready"], false);
+        assert_eq!(value["player2"]["score"], 98.5);
+    }
+
+    #[test]
+    fn local_lobby_machine_state_uses_joined_sides_when_present() {
+        let value = local_lobby_machine_state_value(
+            LocalLobbyPlayer {
+                side: PlayerSide::P1,
+                display_name: "[DS] Alice",
+                joined: true,
+                screen_name: "ScreenGameplay",
+                ready: true,
+                stats: Some(&MachinePlayerStats {
+                    ex_score: Some(97.25),
+                    ..MachinePlayerStats::default()
+                }),
+            },
+            LocalLobbyPlayer {
+                side: PlayerSide::P2,
+                display_name: "Bob",
+                joined: false,
+                screen_name: "ScreenSelectMusic",
+                ready: true,
+                stats: None,
+            },
+            PlayerSide::P2,
+        );
+
+        assert_eq!(value["player1"]["playerId"], "P1");
+        assert_eq!(value["player1"]["profileName"], "[DS] Alice");
+        assert_eq!(value["player1"]["screenName"], "ScreenGameplay");
+        assert_eq!(value["player1"]["exScore"], 97.25);
+        assert!(value["player2"].is_null());
     }
 
     #[test]

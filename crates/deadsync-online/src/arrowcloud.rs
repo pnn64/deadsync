@@ -21,6 +21,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{LazyLock, Mutex};
+use std::thread;
 
 const ARROWCLOUD_API_BASE_URL: &str = "https://api.arrowcloud.dance";
 const ARROWCLOUD_USER_URL: &str = "https://api.arrowcloud.dance/user";
@@ -66,6 +68,18 @@ pub enum ConnectionStatus {
 pub struct ConnectionProbeError {
     pub connection_error: ConnectionError,
     pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ConnectionProbeLog {
+    Connected,
+    CannotConnect { error: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConnectionProbeTransition {
+    pub status: ConnectionStatus,
+    pub log: Option<ConnectionProbeLog>,
 }
 
 impl std::fmt::Display for ConnectionProbeError {
@@ -279,6 +293,58 @@ pub fn check_connection() -> Result<ConnectionStatus, NetworkError> {
 
 pub fn probe_connection() -> Result<ConnectionStatus, ConnectionProbeError> {
     check_connection().map_err(ConnectionProbeError::from)
+}
+
+pub fn connection_transition_from_probe_result(
+    result: Result<ConnectionStatus, ConnectionProbeError>,
+) -> ConnectionProbeTransition {
+    match result {
+        Ok(ConnectionStatus::Connected) => ConnectionProbeTransition {
+            status: ConnectionStatus::Connected,
+            log: Some(ConnectionProbeLog::Connected),
+        },
+        Ok(status) => ConnectionProbeTransition { status, log: None },
+        Err(error) => ConnectionProbeTransition {
+            status: ConnectionStatus::Error(error.connection_error),
+            log: Some(ConnectionProbeLog::CannotConnect {
+                error: error.message,
+            }),
+        },
+    }
+}
+
+pub fn probe_connection_transition() -> ConnectionProbeTransition {
+    connection_transition_from_probe_result(probe_connection())
+}
+
+static RUNTIME_STATUS: LazyLock<Mutex<ConnectionStatus>> =
+    LazyLock::new(|| Mutex::new(ConnectionStatus::Pending));
+
+pub type ConnectionProbeLogFn = fn(Option<ConnectionProbeLog>);
+
+#[inline(always)]
+fn runtime_set_status(status: ConnectionStatus) {
+    *RUNTIME_STATUS.lock().unwrap() = status;
+}
+
+pub fn runtime_get_status() -> ConnectionStatus {
+    RUNTIME_STATUS.lock().unwrap().clone()
+}
+
+pub fn runtime_init(enabled: bool, log_probe: ConnectionProbeLogFn) {
+    if !enabled {
+        runtime_set_status(ConnectionStatus::Error(ConnectionError::Disabled));
+        return;
+    }
+
+    runtime_set_status(ConnectionStatus::Pending);
+    thread::spawn(move || runtime_perform_check(log_probe));
+}
+
+fn runtime_perform_check(log_probe: ConnectionProbeLogFn) {
+    let transition = probe_connection_transition();
+    log_probe(transition.log);
+    runtime_set_status(transition.status);
 }
 
 impl From<NetworkError> for ConnectionProbeError {
@@ -2251,6 +2317,51 @@ mod tests {
         let blocked = ConnectionProbeError::from(NetworkError::HttpStatus(403));
         assert_eq!(blocked.connection_error, ConnectionError::HostBlocked);
         assert_eq!(blocked.to_string(), "http status 403");
+    }
+
+    #[test]
+    fn probe_result_transition_selects_status_and_log_intent() {
+        assert_eq!(
+            connection_transition_from_probe_result(Ok(ConnectionStatus::Connected)),
+            ConnectionProbeTransition {
+                status: ConnectionStatus::Connected,
+                log: Some(ConnectionProbeLog::Connected),
+            }
+        );
+
+        assert_eq!(
+            connection_transition_from_probe_result(Ok(ConnectionStatus::Pending)),
+            ConnectionProbeTransition {
+                status: ConnectionStatus::Pending,
+                log: None,
+            }
+        );
+
+        assert_eq!(
+            connection_transition_from_probe_result(Ok(ConnectionStatus::Error(
+                ConnectionError::Disabled
+            ))),
+            ConnectionProbeTransition {
+                status: ConnectionStatus::Error(ConnectionError::Disabled),
+                log: None,
+            }
+        );
+    }
+
+    #[test]
+    fn probe_result_transition_maps_errors_to_log_intent() {
+        assert_eq!(
+            connection_transition_from_probe_result(Err(ConnectionProbeError {
+                connection_error: ConnectionError::HostBlocked,
+                message: "http status 403".to_string(),
+            })),
+            ConnectionProbeTransition {
+                status: ConnectionStatus::Error(ConnectionError::HostBlocked),
+                log: Some(ConnectionProbeLog::CannotConnect {
+                    error: "http status 403".to_string()
+                }),
+            }
+        );
     }
 
     fn make_start_ok() -> DeviceLoginStartResp {

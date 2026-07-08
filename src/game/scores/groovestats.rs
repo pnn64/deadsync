@@ -1,11 +1,11 @@
 use super::{
-    GameplayCoreState, cache_gs_score_for_profile, chart_stats_for_imported_score,
-    gameplay_run_failed, gameplay_run_passed, gameplay_side_for_player,
-    get_or_fetch_player_leaderboards_for_side, invalidate_player_leaderboards_for_side, itl,
-    lua_chart_submit_allowed, submit_record_banner,
+    GameplayCoreState, cache_gs_score_for_profile, gameplay_run_failed, gameplay_run_passed,
+    gameplay_side_for_player, get_or_fetch_player_leaderboards_for_side,
+    invalidate_player_leaderboards_for_side, itl, lua_chart_submit_allowed, submit_record_banner,
 };
 use crate::game::online::groovestats as online_groovestats;
 use crate::game::profile;
+use crate::game::song::get_song_cache;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_online::groovestats::{
     self as groovestats_api, GROOVESTATS_SUBMIT_MAX_ENTRIES, GrooveStatsJudgmentCounts,
@@ -20,7 +20,7 @@ use deadsync_score::{
     GrooveStatsSubmitUiStatus, RejectReason, SUBMIT_RETRY_MAX_ATTEMPTS, SubmitEventUiState,
     SubmitRetryState, SubmitUiState, cached_score_from_imported_player_score,
     groovestats_eval_state_from_parts, groovestats_rate_hundredths,
-    groovestats_score_10000_from_counts, groovestats_used_cmod,
+    groovestats_score_10000_from_counts, groovestats_used_cmod, imported_score_chart_stats,
 };
 use log::{debug, warn};
 use std::sync::Mutex;
@@ -589,8 +589,12 @@ fn spawn_groovestats_submit(job: GrooveStatsSubmitRequest) {
                         player.comment.as_str(),
                     );
                     let proves_nonquint_ex = imported.ex_evidence.proves_nonquint();
-                    let stats =
-                        chart_stats_for_imported_score(&imported, player.chart_hash.as_str());
+                    let song_cache = get_song_cache();
+                    let stats = imported_score_chart_stats(
+                        &imported,
+                        &song_cache,
+                        player.chart_hash.as_str(),
+                    );
                     let score = cached_score_from_imported_player_score(imported, stats);
                     cache_gs_score_for_profile(
                         profile_id,

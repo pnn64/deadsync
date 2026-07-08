@@ -5,7 +5,10 @@ use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 use std::fs::{self, File};
 use std::io::{Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{LazyLock, Mutex};
+use std::thread;
 use zip::ZipArchive;
 
 const ITL_UNLOCK_PACK_YEAR: u32 = 2026;
@@ -24,6 +27,435 @@ pub struct DownloadSnapshot {
     pub total_bytes: u64,
     pub complete: bool,
     pub error_message: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+struct DownloadEntry {
+    id: u64,
+    name: String,
+    url: String,
+    destination: String,
+    current_bytes: u64,
+    total_bytes: u64,
+    complete: bool,
+    error_message: Option<String>,
+}
+
+#[derive(Default)]
+pub struct DownloadState {
+    cache_loaded: bool,
+    unlock_cache: UnlockCache,
+    entries: Vec<DownloadEntry>,
+    ready_song_reload_dirs: Vec<PathBuf>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum QueueDownloadResult {
+    Queued(u64),
+    Cached,
+    Duplicate,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EventUnlockDownload {
+    pub id: u64,
+    pub url: String,
+    pub destination: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum QueueEventUnlockDownloadResult {
+    Queued(EventUnlockDownload),
+    EmptyUrl,
+    Cached { destination: String },
+    Duplicate { destination: String },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UnlockDownloadSuccess {
+    pub url: String,
+    pub destination: String,
+    pub destination_pack: PathBuf,
+    pub final_bytes: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UnlockDownloadFailure {
+    pub error_message: String,
+    pub not_zip_content_type: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum UnlockDownloadWorkerResult {
+    Success(UnlockDownloadSuccess),
+    Failure(UnlockDownloadFailure),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum DownloadRuntimeEvent {
+    Cached { url: String, destination: String },
+    Duplicate { url: String, destination: String },
+    NonZip { url: String, content_type: String },
+}
+
+pub type DownloadsDirFn = fn() -> PathBuf;
+pub type UnlockDestinationRootsFn = fn() -> Vec<PathBuf>;
+pub type LoadUnlockCacheFn = fn() -> UnlockCache;
+pub type WriteUnlockCacheFn = fn(&UnlockCache);
+pub type DownloadRuntimeEventFn = fn(DownloadRuntimeEvent);
+
+#[derive(Clone, Copy)]
+pub struct UnlockDownloadRuntimeHooks {
+    downloads_dir: DownloadsDirFn,
+    unlock_destination_roots: UnlockDestinationRootsFn,
+    load_unlock_cache: LoadUnlockCacheFn,
+    write_unlock_cache: WriteUnlockCacheFn,
+    on_event: DownloadRuntimeEventFn,
+}
+
+impl UnlockDownloadRuntimeHooks {
+    #[inline(always)]
+    pub const fn new(
+        downloads_dir: DownloadsDirFn,
+        unlock_destination_roots: UnlockDestinationRootsFn,
+        load_unlock_cache: LoadUnlockCacheFn,
+        write_unlock_cache: WriteUnlockCacheFn,
+        on_event: DownloadRuntimeEventFn,
+    ) -> Self {
+        Self {
+            downloads_dir,
+            unlock_destination_roots,
+            load_unlock_cache,
+            write_unlock_cache,
+            on_event,
+        }
+    }
+}
+
+static RUNTIME_DOWNLOAD_STATE: LazyLock<Mutex<DownloadState>> =
+    LazyLock::new(|| Mutex::new(DownloadState::default()));
+static RUNTIME_NEXT_DOWNLOAD_ID: AtomicU64 = AtomicU64::new(1);
+
+impl DownloadState {
+    pub fn snapshots(&self) -> Vec<DownloadSnapshot> {
+        self.entries
+            .iter()
+            .map(|entry| DownloadSnapshot {
+                name: entry.name.clone(),
+                current_bytes: entry.current_bytes,
+                total_bytes: entry.total_bytes,
+                complete: entry.complete,
+                error_message: entry.error_message.clone(),
+            })
+            .collect()
+    }
+
+    pub fn completion_counts(&self) -> (usize, usize) {
+        let total = self.entries.len();
+        let finished = self.entries.iter().filter(|entry| entry.complete).count();
+        (finished, total)
+    }
+
+    pub fn take_ready_song_reload_request(&mut self) -> Vec<PathBuf> {
+        if self.ready_song_reload_dirs.is_empty()
+            || self.entries.iter().any(|entry| !entry.complete)
+        {
+            return Vec::new();
+        }
+        std::mem::take(&mut self.ready_song_reload_dirs)
+    }
+
+    pub fn ensure_cache_loaded_with<F>(&mut self, load: F)
+    where
+        F: FnOnce() -> UnlockCache,
+    {
+        if self.cache_loaded {
+            return;
+        }
+        self.unlock_cache = load();
+        self.cache_loaded = true;
+    }
+
+    pub fn queue_download<F>(
+        &mut self,
+        url: &str,
+        name: String,
+        destination: String,
+        next_id: F,
+    ) -> QueueDownloadResult
+    where
+        F: FnOnce() -> u64,
+    {
+        if cache_has_destination(&self.unlock_cache, url, destination.as_str()) {
+            return QueueDownloadResult::Cached;
+        }
+        if self
+            .entries
+            .iter()
+            .any(|entry| entry.url == url && entry.destination == destination)
+        {
+            return QueueDownloadResult::Duplicate;
+        }
+
+        let id = next_id();
+        self.entries.push(DownloadEntry {
+            id,
+            name,
+            url: url.to_string(),
+            destination,
+            current_bytes: 0,
+            total_bytes: 0,
+            complete: false,
+            error_message: None,
+        });
+        QueueDownloadResult::Queued(id)
+    }
+
+    pub fn mark_cache_success_with<F>(
+        &mut self,
+        url: &str,
+        destination: &str,
+        load: F,
+    ) -> UnlockCache
+    where
+        F: FnOnce() -> UnlockCache,
+    {
+        self.ensure_cache_loaded_with(load);
+        self.unlock_cache
+            .entry(url.to_string())
+            .or_default()
+            .insert(destination.to_string(), true);
+        self.unlock_cache.clone()
+    }
+
+    pub fn queue_ready_song_reload_dir(&mut self, path: PathBuf) {
+        if self
+            .ready_song_reload_dirs
+            .iter()
+            .any(|existing| existing == &path)
+        {
+            return;
+        }
+        self.ready_song_reload_dirs.push(path);
+    }
+
+    pub fn set_download_progress(&mut self, id: u64, current_bytes: u64, total_bytes: u64) {
+        if let Some(entry) = self.entries.iter_mut().find(|entry| entry.id == id) {
+            entry.current_bytes = current_bytes;
+            entry.total_bytes = total_bytes;
+        }
+    }
+
+    pub fn finish_download(&mut self, id: u64, error_message: Option<String>) {
+        if let Some(entry) = self.entries.iter_mut().find(|entry| entry.id == id) {
+            entry.complete = true;
+            entry.error_message = error_message;
+            if entry.total_bytes == 0 {
+                entry.total_bytes = entry.current_bytes;
+            }
+        }
+    }
+}
+
+pub fn runtime_snapshots() -> Vec<DownloadSnapshot> {
+    RUNTIME_DOWNLOAD_STATE.lock().unwrap().snapshots()
+}
+
+pub fn runtime_completion_counts() -> (usize, usize) {
+    RUNTIME_DOWNLOAD_STATE.lock().unwrap().completion_counts()
+}
+
+pub fn runtime_take_ready_song_reload_request() -> Vec<PathBuf> {
+    RUNTIME_DOWNLOAD_STATE
+        .lock()
+        .unwrap()
+        .take_ready_song_reload_request()
+}
+
+pub fn runtime_queue_event_unlock_download(
+    hooks: UnlockDownloadRuntimeHooks,
+    url: &str,
+    unlock_name: &str,
+    pack_name: &str,
+) {
+    let start = {
+        let mut state = RUNTIME_DOWNLOAD_STATE.lock().unwrap();
+        queue_event_unlock_download(
+            &mut state,
+            url,
+            unlock_name,
+            pack_name,
+            hooks.load_unlock_cache,
+            || RUNTIME_NEXT_DOWNLOAD_ID.fetch_add(1, Ordering::Relaxed),
+        )
+    };
+    let download = match start {
+        QueueEventUnlockDownloadResult::Queued(download) => download,
+        QueueEventUnlockDownloadResult::EmptyUrl => return,
+        QueueEventUnlockDownloadResult::Cached { destination } => {
+            (hooks.on_event)(DownloadRuntimeEvent::Cached {
+                url: url.to_string(),
+                destination,
+            });
+            return;
+        }
+        QueueEventUnlockDownloadResult::Duplicate { destination } => {
+            (hooks.on_event)(DownloadRuntimeEvent::Duplicate {
+                url: url.to_string(),
+                destination,
+            });
+            return;
+        }
+    };
+    thread::spawn(move || {
+        runtime_download_worker(hooks, download.id, download.url, download.destination);
+    });
+}
+
+fn runtime_download_worker(
+    hooks: UnlockDownloadRuntimeHooks,
+    id: u64,
+    url: String,
+    destination: String,
+) {
+    let zip_path = (hooks.downloads_dir)().join(download_filename(id));
+    let result = run_unlock_download_worker(
+        url.clone(),
+        destination,
+        zip_path,
+        &(hooks.unlock_destination_roots)(),
+        |downloaded, total| runtime_set_download_progress(id, downloaded, total),
+    );
+    match result {
+        UnlockDownloadWorkerResult::Success(success) => {
+            runtime_mark_cache_success(hooks, success.url.as_str(), success.destination.as_str());
+            runtime_queue_ready_song_reload_dir(success.destination_pack);
+            runtime_set_download_progress(id, success.final_bytes, success.final_bytes);
+            runtime_finish_download(id, None);
+        }
+        UnlockDownloadWorkerResult::Failure(failure) => {
+            if let Some(content_type) = failure.not_zip_content_type {
+                (hooks.on_event)(DownloadRuntimeEvent::NonZip { url, content_type });
+            }
+            runtime_finish_download(id, Some(failure.error_message));
+        }
+    }
+}
+
+fn runtime_mark_cache_success(hooks: UnlockDownloadRuntimeHooks, url: &str, destination: &str) {
+    let cache_snapshot = {
+        let mut state = RUNTIME_DOWNLOAD_STATE.lock().unwrap();
+        state.mark_cache_success_with(url, destination, hooks.load_unlock_cache)
+    };
+    (hooks.write_unlock_cache)(&cache_snapshot);
+}
+
+fn runtime_queue_ready_song_reload_dir(path: PathBuf) {
+    RUNTIME_DOWNLOAD_STATE
+        .lock()
+        .unwrap()
+        .queue_ready_song_reload_dir(path);
+}
+
+fn runtime_set_download_progress(id: u64, current_bytes: u64, total_bytes: u64) {
+    RUNTIME_DOWNLOAD_STATE
+        .lock()
+        .unwrap()
+        .set_download_progress(id, current_bytes, total_bytes);
+}
+
+fn runtime_finish_download(id: u64, error_message: Option<String>) {
+    RUNTIME_DOWNLOAD_STATE
+        .lock()
+        .unwrap()
+        .finish_download(id, error_message);
+}
+
+pub fn queue_event_unlock_download<F, L>(
+    state: &mut DownloadState,
+    url: &str,
+    unlock_name: &str,
+    pack_name: &str,
+    load_cache: L,
+    next_id: F,
+) -> QueueEventUnlockDownloadResult
+where
+    F: FnOnce() -> u64,
+    L: FnOnce() -> UnlockCache,
+{
+    let url = url.trim();
+    if url.is_empty() {
+        return QueueEventUnlockDownloadResult::EmptyUrl;
+    }
+    let name = if unlock_name.trim().is_empty() {
+        pack_name.trim().to_string()
+    } else {
+        unlock_name.trim().to_string()
+    };
+    let destination = sanitize_pack_name(pack_name);
+    state.ensure_cache_loaded_with(load_cache);
+    match state.queue_download(url, name, destination.clone(), next_id) {
+        QueueDownloadResult::Queued(id) => {
+            QueueEventUnlockDownloadResult::Queued(EventUnlockDownload {
+                id,
+                url: url.to_string(),
+                destination,
+            })
+        }
+        QueueDownloadResult::Cached => QueueEventUnlockDownloadResult::Cached { destination },
+        QueueDownloadResult::Duplicate => QueueEventUnlockDownloadResult::Duplicate { destination },
+    }
+}
+
+pub fn run_unlock_download_worker<F>(
+    url: String,
+    destination: String,
+    zip_path: PathBuf,
+    roots: &[PathBuf],
+    report_progress: F,
+) -> UnlockDownloadWorkerResult
+where
+    F: FnMut(u64, u64),
+{
+    if let Err(error) = download_zip_to_path(url.as_str(), &zip_path, report_progress) {
+        return UnlockDownloadWorkerResult::Failure(download_failure(error));
+    }
+
+    let destination_pack = unlock_destination_pack(destination.as_str(), roots);
+    if unzip_to_destination(&zip_path, &destination_pack).is_err() {
+        return UnlockDownloadWorkerResult::Failure(UnlockDownloadFailure {
+            error_message: "Failed to Unzip!".to_string(),
+            not_zip_content_type: None,
+        });
+    }
+    if let Err(error) = write_pack_ini_if_needed(&destination_pack, destination.as_str()) {
+        return UnlockDownloadWorkerResult::Failure(UnlockDownloadFailure {
+            error_message: error.to_string(),
+            not_zip_content_type: None,
+        });
+    }
+    UnlockDownloadWorkerResult::Success(UnlockDownloadSuccess {
+        url,
+        destination,
+        destination_pack,
+        final_bytes: file_len(&zip_path),
+    })
+}
+
+pub fn unlock_destination_pack(destination: &str, roots: &[PathBuf]) -> PathBuf {
+    let root_idx = choose_unlock_root(destination, roots).unwrap_or(0);
+    roots[root_idx].join(destination)
+}
+
+fn download_failure(error: DownloadZipError) -> UnlockDownloadFailure {
+    let not_zip_content_type = match &error {
+        DownloadZipError::NotZip { content_type } => Some(content_type.clone()),
+        _ => None,
+    };
+    UnlockDownloadFailure {
+        error_message: error.to_string(),
+        not_zip_content_type,
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -354,6 +786,202 @@ mod tests {
     }
 
     #[test]
+    fn download_state_queues_snapshots_and_finishes_entries() {
+        let mut state = DownloadState::default();
+        state.ensure_cache_loaded_with(UnlockCache::new);
+
+        assert_eq!(
+            state.queue_download(
+                "https://example.com/unlock.zip",
+                "Unlock".to_string(),
+                "ITL Unlocks".to_string(),
+                || 7,
+            ),
+            QueueDownloadResult::Queued(7)
+        );
+        assert_eq!(state.completion_counts(), (0, 1));
+
+        state.set_download_progress(7, 10, 30);
+        let snapshots = state.snapshots();
+        assert_eq!(snapshots.len(), 1);
+        let snapshot = &snapshots[0];
+        assert_eq!(snapshot.name, "Unlock");
+        assert_eq!(snapshot.current_bytes, 10);
+        assert_eq!(snapshot.total_bytes, 30);
+        assert!(!snapshot.complete);
+        assert_eq!(snapshot.error_message, None);
+
+        state.finish_download(7, Some("failed".to_string()));
+        let snapshots = state.snapshots();
+        let snapshot = &snapshots[0];
+        assert!(snapshot.complete);
+        assert_eq!(snapshot.error_message.as_deref(), Some("failed"));
+        assert_eq!(state.completion_counts(), (1, 1));
+    }
+
+    #[test]
+    fn download_state_skips_cached_and_duplicate_entries() {
+        let mut cache = UnlockCache::new();
+        cache
+            .entry("https://example.com/cached.zip".to_string())
+            .or_default()
+            .insert("ITL Unlocks".to_string(), true);
+        let mut state = DownloadState::default();
+        state.ensure_cache_loaded_with(|| cache);
+
+        assert_eq!(
+            state.queue_download(
+                "https://example.com/cached.zip",
+                "Cached".to_string(),
+                "ITL Unlocks".to_string(),
+                || 1,
+            ),
+            QueueDownloadResult::Cached
+        );
+        assert_eq!(
+            state.queue_download(
+                "https://example.com/unlock.zip",
+                "Unlock".to_string(),
+                "ITL Unlocks".to_string(),
+                || 2,
+            ),
+            QueueDownloadResult::Queued(2)
+        );
+        assert_eq!(
+            state.queue_download(
+                "https://example.com/unlock.zip",
+                "Unlock".to_string(),
+                "ITL Unlocks".to_string(),
+                || 3,
+            ),
+            QueueDownloadResult::Duplicate
+        );
+        assert_eq!(state.completion_counts(), (0, 1));
+    }
+
+    #[test]
+    fn event_unlock_queue_trims_url_and_falls_back_to_pack_name() {
+        let mut state = DownloadState::default();
+        let result = queue_event_unlock_download(
+            &mut state,
+            " https://example.com/unlock.zip ",
+            "",
+            "ITL/Unlocks:*?",
+            UnlockCache::new,
+            || 9,
+        );
+
+        assert_eq!(
+            result,
+            QueueEventUnlockDownloadResult::Queued(EventUnlockDownload {
+                id: 9,
+                url: "https://example.com/unlock.zip".to_string(),
+                destination: "ITLUnlocks".to_string(),
+            })
+        );
+        let snapshots = state.snapshots();
+        assert_eq!(snapshots.len(), 1);
+        assert_eq!(snapshots[0].name, "ITL/Unlocks:*?");
+    }
+
+    #[test]
+    fn event_unlock_queue_reports_empty_cached_and_duplicate() {
+        let mut cache = UnlockCache::new();
+        cache
+            .entry("https://example.com/cached.zip".to_string())
+            .or_default()
+            .insert("ITL Unlocks".to_string(), true);
+        let mut state = DownloadState::default();
+
+        assert_eq!(
+            queue_event_unlock_download(
+                &mut state,
+                " ",
+                "Unlock",
+                "ITL Unlocks",
+                UnlockCache::new,
+                || 1
+            ),
+            QueueEventUnlockDownloadResult::EmptyUrl
+        );
+        assert_eq!(
+            queue_event_unlock_download(
+                &mut state,
+                "https://example.com/cached.zip",
+                "Cached",
+                "ITL Unlocks",
+                || cache,
+                || 2,
+            ),
+            QueueEventUnlockDownloadResult::Cached {
+                destination: "ITL Unlocks".to_string(),
+            }
+        );
+        assert_eq!(
+            queue_event_unlock_download(
+                &mut state,
+                "https://example.com/unlock.zip",
+                "Unlock",
+                "ITL Unlocks",
+                UnlockCache::new,
+                || 3,
+            ),
+            QueueEventUnlockDownloadResult::Queued(EventUnlockDownload {
+                id: 3,
+                url: "https://example.com/unlock.zip".to_string(),
+                destination: "ITL Unlocks".to_string(),
+            })
+        );
+        assert_eq!(
+            queue_event_unlock_download(
+                &mut state,
+                "https://example.com/unlock.zip",
+                "Unlock",
+                "ITL Unlocks",
+                UnlockCache::new,
+                || 4,
+            ),
+            QueueEventUnlockDownloadResult::Duplicate {
+                destination: "ITL Unlocks".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn download_state_marks_cache_success_and_waits_for_downloads() {
+        let mut state = DownloadState::default();
+        state.ensure_cache_loaded_with(UnlockCache::new);
+        assert_eq!(
+            state.queue_download(
+                "https://example.com/unlock.zip",
+                "Unlock".to_string(),
+                "ITL Unlocks".to_string(),
+                || 1,
+            ),
+            QueueDownloadResult::Queued(1)
+        );
+
+        let reload_dir = PathBuf::from("Songs/ITL Unlocks");
+        state.queue_ready_song_reload_dir(reload_dir.clone());
+        state.queue_ready_song_reload_dir(reload_dir.clone());
+        assert!(state.take_ready_song_reload_request().is_empty());
+
+        let cache =
+            state.mark_cache_success_with("https://example.com/unlock.zip", "ITL Unlocks", || {
+                panic!("cache should already be loaded")
+            });
+        assert!(cache_has_destination(
+            &cache,
+            "https://example.com/unlock.zip",
+            "ITL Unlocks"
+        ));
+
+        state.finish_download(1, None);
+        assert_eq!(state.take_ready_song_reload_request(), vec![reload_dir]);
+        assert!(state.take_ready_song_reload_request().is_empty());
+    }
+
+    #[test]
     fn itl_unlock_pack_ini_content_matches_pack_ini_shape() {
         let content =
             itl_unlock_pack_ini_content("ITL Online 2026 Unlocks").expect("pack ini content");
@@ -408,6 +1036,22 @@ mod tests {
         assert_eq!(
             choose_unlock_root("Stamina RPG 10 Unlocks", &roots),
             Some(1)
+        );
+        fs::remove_dir_all(root).expect("remove test root");
+    }
+
+    #[test]
+    fn unlock_destination_pack_uses_existing_root_selection() {
+        let root = temp_root("worker-destination");
+        let primary = root.join("songs");
+        let extra = root.join("extra");
+        fs::create_dir_all(&primary).expect("create primary song root");
+        fs::create_dir_all(extra.join("ITL Online 2026 Unlocks")).expect("create extra pack");
+        let roots = vec![primary, extra.clone()];
+
+        assert_eq!(
+            unlock_destination_pack("ITL Online 2026 Unlocks", &roots),
+            extra.join("ITL Online 2026 Unlocks")
         );
         fs::remove_dir_all(root).expect("remove test root");
     }

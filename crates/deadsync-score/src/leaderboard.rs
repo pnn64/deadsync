@@ -3,6 +3,7 @@ use deadsync_core::input::InputSource;
 use deadsync_core::song_time::{SongTimeNs, song_time_ns_invalid};
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
+use std::sync::{LazyLock, Mutex, MutexGuard};
 use std::time::Instant;
 
 use crate::{LocalReplayEdge, ScoreImportEndpoint};
@@ -626,6 +627,23 @@ pub struct PlayerLeaderboardRequestDecision {
     pub requested_max_entries: usize,
 }
 
+pub struct PlayerLeaderboardFetchSuccess<T> {
+    pub data: PlayerLeaderboardData,
+    pub imported_score: Option<T>,
+    pub itl_self_found: bool,
+}
+
+pub struct QueuedPlayerLeaderboardFetch {
+    pub key: PlayerLeaderboardCacheKey,
+    pub max_entries: usize,
+}
+
+pub struct PlayerLeaderboardFetchCompletion<T> {
+    pub fetched_itl_self: Option<(Option<u32>, Option<u32>)>,
+    pub fetched_imported_score: Option<T>,
+    pub queued_fetch: Option<QueuedPlayerLeaderboardFetch>,
+}
+
 impl PlayerLeaderboardCacheState {
     pub fn request_leaderboard(
         &mut self,
@@ -692,6 +710,188 @@ impl PlayerLeaderboardCacheState {
             self.invalidated_after.insert(key, invalidated_at);
         }
     }
+
+    pub fn complete_fetch<T>(
+        &mut self,
+        key: &PlayerLeaderboardCacheKey,
+        requested_max_entries: usize,
+        request_started_at: Instant,
+        refresh_finished_at: Instant,
+        error_retry_interval: std::time::Duration,
+        fetched: Result<PlayerLeaderboardFetchSuccess<T>, String>,
+        should_auto_populate: bool,
+        auto_profile_id_exists: bool,
+    ) -> PlayerLeaderboardFetchCompletion<T> {
+        self.in_flight.remove(key);
+        let request_invalidated = player_leaderboard_request_was_invalidated(
+            self.invalidated_after.get(key).copied(),
+            request_started_at,
+        );
+
+        let mut fetched_itl_self = None;
+        let mut fetched_imported_score = None;
+        if !request_invalidated {
+            match fetched {
+                Ok(fetched) => {
+                    if !should_keep_newer_player_leaderboard_entry(
+                        self.by_key.get(key),
+                        request_started_at,
+                    ) {
+                        let PlayerLeaderboardFetchSuccess {
+                            data,
+                            imported_score,
+                            itl_self_found,
+                        } = fetched;
+                        if itl_self_found {
+                            fetched_itl_self = Some((data.itl_self_score, data.itl_self_rank));
+                        }
+                        if should_auto_populate && auto_profile_id_exists {
+                            fetched_imported_score = imported_score;
+                        }
+                        self.by_key.insert(
+                            key.clone(),
+                            PlayerLeaderboardCacheEntry {
+                                value: PlayerLeaderboardCacheValue::Ready(data),
+                                max_entries: requested_max_entries,
+                                refreshed_at: refresh_finished_at,
+                                retry_after: None,
+                            },
+                        );
+                        self.invalidated_after.remove(key);
+                    }
+                }
+                Err(error) => {
+                    if !should_keep_newer_player_leaderboard_entry(
+                        self.by_key.get(key),
+                        request_started_at,
+                    ) {
+                        let retry_after = Some(refresh_finished_at + error_retry_interval);
+                        if let Some(entry) = self.by_key.get_mut(key)
+                            && matches!(entry.value, PlayerLeaderboardCacheValue::Ready(_))
+                        {
+                            entry.refreshed_at = refresh_finished_at;
+                            entry.retry_after = retry_after;
+                        } else {
+                            self.by_key.insert(
+                                key.clone(),
+                                PlayerLeaderboardCacheEntry {
+                                    value: PlayerLeaderboardCacheValue::Error(error),
+                                    max_entries: requested_max_entries,
+                                    refreshed_at: refresh_finished_at,
+                                    retry_after,
+                                },
+                            );
+                        }
+                        self.invalidated_after.remove(key);
+                    }
+                }
+            }
+        }
+
+        let queued_fetch = self.pending_refresh.remove(key).map(|max_entries| {
+            self.in_flight.insert(key.clone(), max_entries);
+            QueuedPlayerLeaderboardFetch {
+                key: key.clone(),
+                max_entries,
+            }
+        });
+
+        PlayerLeaderboardFetchCompletion {
+            fetched_itl_self,
+            fetched_imported_score,
+            queued_fetch,
+        }
+    }
+}
+
+static RUNTIME_PLAYER_LEADERBOARD_CACHE: LazyLock<Mutex<PlayerLeaderboardCacheState>> =
+    LazyLock::new(|| Mutex::new(PlayerLeaderboardCacheState::default()));
+
+pub fn runtime_request_player_leaderboard(
+    key: &PlayerLeaderboardCacheKey,
+    max_entries: usize,
+    refresh_cached: bool,
+    now: Instant,
+) -> PlayerLeaderboardRequestDecision {
+    RUNTIME_PLAYER_LEADERBOARD_CACHE
+        .lock()
+        .unwrap()
+        .request_leaderboard(key, max_entries, refresh_cached, now)
+}
+
+pub fn runtime_complete_player_leaderboard_fetch<T>(
+    key: &PlayerLeaderboardCacheKey,
+    requested_max_entries: usize,
+    request_started_at: Instant,
+    refresh_finished_at: Instant,
+    error_retry_interval: std::time::Duration,
+    fetched: Result<PlayerLeaderboardFetchSuccess<T>, String>,
+    should_auto_populate: bool,
+    auto_profile_id_exists: bool,
+) -> PlayerLeaderboardFetchCompletion<T> {
+    RUNTIME_PLAYER_LEADERBOARD_CACHE
+        .lock()
+        .unwrap()
+        .complete_fetch(
+            key,
+            requested_max_entries,
+            request_started_at,
+            refresh_finished_at,
+            error_retry_interval,
+            fetched,
+            should_auto_populate,
+            auto_profile_id_exists,
+        )
+}
+
+pub fn runtime_cached_player_leaderboard_itl_self_rank(
+    chart_hash: &str,
+    profile_snapshot: &GameplayScoreboxProfileSnapshot,
+) -> Option<u32> {
+    let cache = RUNTIME_PLAYER_LEADERBOARD_CACHE.lock().unwrap();
+    cached_player_leaderboard_itl_self_rank(&cache.by_key, chart_hash, profile_snapshot)
+}
+
+pub fn runtime_cached_player_leaderboard_srpg_self_score(
+    chart_hash: &str,
+    profile_snapshot: &GameplayScoreboxProfileSnapshot,
+) -> Option<u32> {
+    let cache = RUNTIME_PLAYER_LEADERBOARD_CACHE.lock().unwrap();
+    cached_player_leaderboard_srpg_self_score(&cache.by_key, chart_hash, profile_snapshot)
+}
+
+pub fn runtime_invalidate_player_leaderboard_chart_for_api(
+    api_key: &str,
+    chart_hash: &str,
+    invalidated_at: Instant,
+) {
+    RUNTIME_PLAYER_LEADERBOARD_CACHE
+        .lock()
+        .unwrap()
+        .invalidate_chart_for_api(api_key, chart_hash, invalidated_at);
+}
+
+pub fn runtime_seed_player_leaderboard_entry(
+    key: PlayerLeaderboardCacheKey,
+    entry: PlayerLeaderboardCacheEntry,
+) {
+    RUNTIME_PLAYER_LEADERBOARD_CACHE
+        .lock()
+        .unwrap()
+        .by_key
+        .insert(key, entry);
+}
+
+pub fn runtime_remove_player_leaderboard_entry(key: &PlayerLeaderboardCacheKey) {
+    RUNTIME_PLAYER_LEADERBOARD_CACHE
+        .lock()
+        .unwrap()
+        .by_key
+        .remove(key);
+}
+
+pub fn runtime_lock_player_leaderboard_cache() -> MutexGuard<'static, PlayerLeaderboardCacheState> {
+    RUNTIME_PLAYER_LEADERBOARD_CACHE.lock().unwrap()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -1365,5 +1565,130 @@ mod tests {
             Some(&older_entry),
             Instant::now(),
         ));
+    }
+
+    #[test]
+    fn leaderboard_fetch_completion_stores_ready_data_and_effects() {
+        let key = PlayerLeaderboardCacheKey {
+            chart_hash: "deadbeef".to_string(),
+            api_key: "gs".to_string(),
+            arrowcloud_api_key: "ac".to_string(),
+            include_arrowcloud: true,
+            show_ex_score: false,
+        };
+        let request_started_at = Instant::now();
+        let refresh_finished_at = request_started_at + std::time::Duration::from_millis(5);
+        let mut cache = PlayerLeaderboardCacheState::default();
+        cache.in_flight.insert(key.clone(), 5);
+
+        let completion = cache.complete_fetch(
+            &key,
+            5,
+            request_started_at,
+            refresh_finished_at,
+            std::time::Duration::from_secs(10),
+            Ok(PlayerLeaderboardFetchSuccess {
+                data: PlayerLeaderboardData {
+                    panes: Vec::new(),
+                    srpg_self_score: Some(9910),
+                    itl_self_score: Some(9900),
+                    itl_self_rank: Some(7),
+                },
+                imported_score: Some("score"),
+                itl_self_found: true,
+            }),
+            true,
+            true,
+        );
+
+        assert_eq!(completion.fetched_itl_self, Some((Some(9900), Some(7))));
+        assert_eq!(completion.fetched_imported_score, Some("score"));
+        assert!(completion.queued_fetch.is_none());
+        assert!(cache.in_flight.is_empty());
+        assert!(matches!(
+            cache.by_key.get(&key).map(|entry| &entry.value),
+            Some(PlayerLeaderboardCacheValue::Ready(data))
+                if data.srpg_self_score == Some(9910)
+        ));
+    }
+
+    #[test]
+    fn leaderboard_fetch_completion_keeps_stale_ready_on_error() {
+        let key = PlayerLeaderboardCacheKey {
+            chart_hash: "deadbeef".to_string(),
+            api_key: "gs".to_string(),
+            arrowcloud_api_key: String::new(),
+            include_arrowcloud: false,
+            show_ex_score: false,
+        };
+        let request_started_at = Instant::now();
+        let refresh_finished_at = request_started_at + std::time::Duration::from_millis(5);
+        let retry = std::time::Duration::from_secs(10);
+        let mut cache = PlayerLeaderboardCacheState::default();
+        cache.in_flight.insert(key.clone(), 5);
+        cache.by_key.insert(
+            key.clone(),
+            PlayerLeaderboardCacheEntry {
+                value: PlayerLeaderboardCacheValue::Ready(PlayerLeaderboardData {
+                    panes: Vec::new(),
+                    srpg_self_score: Some(9910),
+                    itl_self_score: None,
+                    itl_self_rank: None,
+                }),
+                max_entries: 5,
+                refreshed_at: request_started_at - std::time::Duration::from_secs(1),
+                retry_after: None,
+            },
+        );
+
+        let completion = cache.complete_fetch::<&str>(
+            &key,
+            5,
+            request_started_at,
+            refresh_finished_at,
+            retry,
+            Err("network".to_string()),
+            true,
+            true,
+        );
+
+        assert!(completion.fetched_itl_self.is_none());
+        assert!(completion.fetched_imported_score.is_none());
+        let entry = cache.by_key.get(&key).unwrap();
+        assert!(matches!(entry.value, PlayerLeaderboardCacheValue::Ready(_)));
+        assert_eq!(entry.refreshed_at, refresh_finished_at);
+        assert_eq!(entry.retry_after, Some(refresh_finished_at + retry));
+    }
+
+    #[test]
+    fn leaderboard_fetch_completion_queues_pending_refresh() {
+        let key = PlayerLeaderboardCacheKey {
+            chart_hash: "deadbeef".to_string(),
+            api_key: "gs".to_string(),
+            arrowcloud_api_key: String::new(),
+            include_arrowcloud: false,
+            show_ex_score: false,
+        };
+        let request_started_at = Instant::now();
+        let mut cache = PlayerLeaderboardCacheState::default();
+        cache.in_flight.insert(key.clone(), 5);
+        cache.pending_refresh.insert(key.clone(), 10);
+
+        let completion = cache.complete_fetch::<&str>(
+            &key,
+            5,
+            request_started_at,
+            request_started_at + std::time::Duration::from_millis(5),
+            std::time::Duration::from_secs(10),
+            Err("network".to_string()),
+            false,
+            false,
+        );
+
+        let queued = completion.queued_fetch.expect("queued refresh");
+        assert_eq!(queued.key, key);
+        assert_eq!(queued.max_entries, 10);
+        assert_eq!(cache.in_flight.get(&queued.key), Some(&10));
+        assert!(cache.pending_refresh.is_empty());
     }
 }

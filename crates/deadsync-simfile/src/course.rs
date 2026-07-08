@@ -1,3 +1,4 @@
+use crate::scan::push_unique_path;
 use deadsync_chart::SongPack;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -26,6 +27,19 @@ pub struct CourseLoadFailure {
 pub struct CourseLoadReport {
     pub courses: Vec<LoadedCourse>,
     pub failures: Vec<CourseLoadFailure>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CourseScanReport {
+    pub courses: Vec<LoadedCourse>,
+    pub failures: Vec<CourseLoadFailure>,
+    pub autogen_count: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CourseScanRoots {
+    pub roots: Vec<PathBuf>,
+    pub primary_missing: bool,
 }
 
 impl fmt::Display for CourseRefError {
@@ -61,6 +75,25 @@ pub fn collect_merged_course_paths(roots: &[PathBuf]) -> Vec<PathBuf> {
     }
     out.sort_by_cached_key(|p| p.to_string_lossy().to_ascii_lowercase());
     out
+}
+
+pub fn collect_course_scan_roots(
+    primary_root: &Path,
+    extra_roots: impl IntoIterator<Item = PathBuf>,
+) -> CourseScanRoots {
+    let mut roots = Vec::with_capacity(2);
+    let mut keys = Vec::with_capacity(2);
+    let primary_missing = !primary_root.is_dir();
+    if !primary_missing {
+        push_unique_path(primary_root.to_path_buf(), &mut roots, &mut keys);
+    }
+    for extra in extra_roots {
+        push_unique_path(extra, &mut roots, &mut keys);
+    }
+    CourseScanRoots {
+        roots,
+        primary_missing,
+    }
 }
 
 pub fn course_progress_names<'a>(path: &'a Path, root: &'a Path) -> (&'a str, &'a str) {
@@ -137,6 +170,39 @@ where
     }
 
     CourseLoadReport { courses, failures }
+}
+
+pub fn count_course_songs(packs: &[SongPack]) -> usize {
+    packs.iter().map(|pack| pack.songs.len()).sum()
+}
+
+pub fn load_course_scan_with_progress<F>(
+    course_roots: &[PathBuf],
+    progress_root: &Path,
+    song_roots: &[PathBuf],
+    autogen_courses_root: &Path,
+    packs: &[SongPack],
+    progress: Option<&mut F>,
+) -> CourseScanReport
+where
+    F: FnMut(usize, usize, &str, &str),
+{
+    let course_paths = collect_merged_course_paths(course_roots);
+    let mut report = load_course_paths_with_progress(
+        course_paths,
+        progress_root,
+        song_roots,
+        count_course_songs(packs),
+        progress,
+    );
+    let autogen_courses = autogen_nonstop_group_courses(autogen_courses_root, packs);
+    let autogen_count = autogen_courses.len();
+    report.courses.extend(autogen_courses);
+    CourseScanReport {
+        courses: report.courses,
+        failures: report.failures,
+        autogen_count,
+    }
 }
 
 pub fn autogen_nonstop_group_courses(
@@ -612,6 +678,25 @@ mod tests {
     }
 
     #[test]
+    fn collect_course_scan_roots_reports_missing_primary_and_dedupes_extras() {
+        let root = test_dir("course-roots");
+        let primary = root.join("courses");
+        let extra = root.join("extra");
+        fs::create_dir_all(&extra).unwrap();
+
+        let missing = collect_course_scan_roots(&primary, [extra.clone(), extra.clone()]);
+        assert!(missing.primary_missing);
+        assert_eq!(missing.roots, vec![extra.clone()]);
+
+        fs::create_dir_all(&primary).unwrap();
+        let present = collect_course_scan_roots(&primary, [extra.clone()]);
+        assert!(!present.primary_missing);
+        assert_eq!(present.roots, vec![primary, extra]);
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn course_progress_names_use_group_and_file_fallbacks() {
         let root = test_dir("course-progress");
         let course = root.join("Group").join("course.crs");
@@ -695,6 +780,45 @@ mod tests {
                     root.file_name().unwrap().to_string_lossy().to_string(),
                     "missing.crs".to_string()
                 ),
+            ]
+        );
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn load_course_scan_merges_loaded_and_autogen_courses() {
+        let root = test_dir("load-course-scan");
+        let courses_root = root.join("courses");
+        let course = courses_root.join("Group").join("course.crs");
+        fs::create_dir_all(course.parent().unwrap()).unwrap();
+        fs::write(&course, b"#COURSE:Base;").unwrap();
+        let packs = vec![song_pack("Pack", "Display", 2)];
+        let mut progress = Vec::new();
+
+        let report = load_course_scan_with_progress(
+            std::slice::from_ref(&courses_root),
+            &courses_root,
+            &[],
+            &courses_root,
+            &packs,
+            Some(&mut |done, total, group, item| {
+                progress.push((done, total, group.to_string(), item.to_string()));
+            }),
+        );
+
+        assert_eq!(report.failures, Vec::new());
+        assert_eq!(report.autogen_count, 1);
+        assert_eq!(report.courses.len(), 2);
+        assert_eq!(report.courses[0].0, course);
+        assert_eq!(report.courses[0].1.name, "Base");
+        assert_eq!(report.courses[1].1.name, "Display Random");
+        assert_eq!(count_course_songs(&packs), 2);
+        assert_eq!(
+            progress,
+            vec![
+                (0, 1, String::new(), String::new()),
+                (1, 1, "Group".to_string(), "course.crs".to_string()),
             ]
         );
 

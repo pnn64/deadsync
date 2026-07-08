@@ -4,8 +4,10 @@ use deadlib_platform::dirs;
 use deadsync_audio_decode as decode;
 use deadsync_chart::{GameplayChartData, SongData};
 use deadsync_simfile::cache::{
-    SerializableSongData, build_requested_gameplay_charts, build_song_meta,
-    load_gameplay_charts_cache_file, load_song_cache_file, song_cache_path, write_song_cache_file,
+    GameplayChartLoadOptions, GameplayChartLoadReport, GameplayChartLoadSource,
+    GameplayChartLoadWarning, SerializableSongData, build_song_meta,
+    load_gameplay_charts_with_options, load_song_cache_file, load_sync_analysis_chart_with_options,
+    song_cache_path, write_song_cache_file,
 };
 use deadsync_simfile::media::{
     BG_ANIMATIONS_DIR, RANDOM_MOVIES_DIR, SONG_MOVIES_DIR, collect_media_roots,
@@ -14,8 +16,6 @@ use deadsync_simfile::song::{ParseSongOptions, parse_song_data_file};
 use log::{debug, info, warn};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-
-use std::time::Instant;
 
 mod scan;
 
@@ -70,34 +70,6 @@ fn write_song_cache(cache_path: &Path, data: &SerializableSongData, global_offse
     }
 }
 
-fn load_gameplay_charts_from_cache(
-    song: &SongData,
-    requested_chart_ixs: &[usize],
-    global_offset_seconds: f32,
-    verify_freshness: bool,
-) -> Option<Vec<GameplayChartData>> {
-    let cache_path = compute_song_cache_path(&song.simfile_path)?;
-    let charts = load_gameplay_charts_cache_file(
-        song,
-        &cache_path,
-        requested_chart_ixs,
-        global_offset_seconds,
-        verify_freshness,
-    )?;
-    if verify_freshness {
-        debug!(
-            "Gameplay cache hit for: {:?}",
-            song.simfile_path.file_name().unwrap_or_default()
-        );
-    } else {
-        debug!(
-            "Gameplay cache hit (no freshness check) for: {:?}",
-            song.simfile_path.file_name().unwrap_or_default()
-        );
-    }
-    Some(charts)
-}
-
 /// Re-parse one simfile and replace its in-memory song-cache entry.
 ///
 /// This is used after writing sync edits to disk so immediate replays use the
@@ -137,98 +109,31 @@ pub fn reload_song_in_cache(simfile_path: &Path) -> Result<Arc<SongData>, String
     Ok(updated)
 }
 
-fn load_gameplay_song_data(
-    simfile_path: &Path,
-    allow_cache_write: bool,
-    global_offset_seconds: f32,
-) -> Result<SerializableSongData, String> {
-    let started = Instant::now();
-    let cache_path = allow_cache_write
-        .then(|| compute_song_cache_path(simfile_path))
-        .flatten();
-    let parse_started = Instant::now();
-    let song_data = parse_song_cache_data(simfile_path, global_offset_seconds)?;
-    let parse_ms = parse_started.elapsed().as_secs_f64() * 1000.0;
-    let write_started = Instant::now();
-    if allow_cache_write && let Some(cp) = cache_path.as_deref() {
-        write_song_cache(cp, &song_data, global_offset_seconds);
-    }
-    let write_ms = write_started.elapsed().as_secs_f64() * 1000.0;
-    let total_ms = started.elapsed().as_secs_f64() * 1000.0;
-    if total_ms >= 25.0 {
-        info!(
-            "Gameplay song data load: source=parse file={:?} parse_ms={parse_ms:.3} write_ms={write_ms:.3} elapsed_ms={total_ms:.3}",
-            simfile_path.file_name().unwrap_or_default()
-        );
-    } else {
-        debug!(
-            "Gameplay song data load: source=parse file={:?} parse_ms={parse_ms:.3} write_ms={write_ms:.3} elapsed_ms={total_ms:.3}",
-            simfile_path.file_name().unwrap_or_default()
-        );
-    }
-    Ok(song_data)
-}
-
 pub fn load_gameplay_charts(
     song: &SongData,
     requested_chart_ixs: &[usize],
     global_offset_seconds: f32,
 ) -> Result<Vec<GameplayChartData>, String> {
-    let started = Instant::now();
     let config = config::get();
     let never_cache = song_group_is_never_cached(&song.simfile_path);
-    let allow_cache_read = (config.fastload || config.cachesongs) && !never_cache;
-    let allow_cache_write = config.cachesongs && !never_cache;
-    let verify_cache_freshness = !config.fastload;
-    let load_started = Instant::now();
-    if allow_cache_read
-        && let Some(charts) = load_gameplay_charts_from_cache(
-            song,
-            requested_chart_ixs,
-            global_offset_seconds,
-            verify_cache_freshness,
-        )
-    {
-        let load_ms = load_started.elapsed().as_secs_f64() * 1000.0;
-        let total_ms = started.elapsed().as_secs_f64() * 1000.0;
-        if total_ms >= 25.0 {
-            info!(
-                "Gameplay chart payload load: song='{}' requested={} load_ms={load_ms:.3} materialize_ms=0.000 elapsed_ms={total_ms:.3}",
-                song.title,
-                requested_chart_ixs.len()
-            );
-        } else {
-            debug!(
-                "Gameplay chart payload load: song='{}' requested={} load_ms={load_ms:.3} materialize_ms=0.000 elapsed_ms={total_ms:.3}",
-                song.title,
-                requested_chart_ixs.len()
-            );
-        }
-        return Ok(charts);
-    }
-
-    let song_data =
-        load_gameplay_song_data(&song.simfile_path, allow_cache_write, global_offset_seconds)?;
-    let load_ms = load_started.elapsed().as_secs_f64() * 1000.0;
-    let build_started = Instant::now();
-    let charts =
-        build_requested_gameplay_charts(&song_data, requested_chart_ixs, global_offset_seconds)?;
-    let build_ms = build_started.elapsed().as_secs_f64() * 1000.0;
-    let total_ms = started.elapsed().as_secs_f64() * 1000.0;
-    if total_ms >= 25.0 {
-        info!(
-            "Gameplay chart payload load: song='{}' requested={} load_ms={load_ms:.3} materialize_ms={build_ms:.3} elapsed_ms={total_ms:.3}",
-            song.title,
-            requested_chart_ixs.len()
-        );
-    } else {
-        debug!(
-            "Gameplay chart payload load: song='{}' requested={} load_ms={load_ms:.3} materialize_ms={build_ms:.3} elapsed_ms={total_ms:.3}",
-            song.title,
-            requested_chart_ixs.len()
-        );
-    }
-    Ok(charts)
+    let cache_dir = dirs::app_dirs().song_cache_dir();
+    let parse_options = parse_song_options();
+    let options = GameplayChartLoadOptions {
+        cache_dir: &cache_dir,
+        parse_options: &parse_options,
+        allow_cache_read: (config.fastload || config.cachesongs) && !never_cache,
+        allow_cache_write: config.cachesongs && !never_cache,
+        verify_cache_freshness: !config.fastload,
+        global_offset_seconds,
+    };
+    let result = load_gameplay_charts_with_options(
+        song,
+        requested_chart_ixs,
+        &options,
+        compute_music_length_seconds,
+    )?;
+    log_gameplay_chart_load(song, &result.report);
+    Ok(result.charts)
 }
 
 pub fn load_sync_analysis_chart(
@@ -236,22 +141,97 @@ pub fn load_sync_analysis_chart(
     chart_ix: usize,
 ) -> Result<GameplayChartData, String> {
     let config = config::get();
-    let allow_cache_read =
-        (config.fastload || config.cachesongs) && !song_group_is_never_cached(&song.simfile_path);
-    let verify_cache_freshness = !config.fastload;
-    if allow_cache_read
-        && let Some(mut charts) =
-            load_gameplay_charts_from_cache(song, &[chart_ix], 0.0, verify_cache_freshness)
-        && let Some(chart) = charts.pop()
-    {
-        return Ok(chart);
-    }
-
-    let song_data = load_gameplay_song_data(&song.simfile_path, false, 0.0)?;
-    let mut charts = build_requested_gameplay_charts(&song_data, &[chart_ix], 0.0)?;
-    charts
+    let cache_dir = dirs::app_dirs().song_cache_dir();
+    let parse_options = parse_song_options();
+    let options = GameplayChartLoadOptions {
+        cache_dir: &cache_dir,
+        parse_options: &parse_options,
+        allow_cache_read: (config.fastload || config.cachesongs)
+            && !song_group_is_never_cached(&song.simfile_path),
+        allow_cache_write: false,
+        verify_cache_freshness: !config.fastload,
+        global_offset_seconds: 0.0,
+    };
+    let mut result = load_sync_analysis_chart_with_options(
+        song,
+        chart_ix,
+        &options,
+        compute_music_length_seconds,
+    )?;
+    log_gameplay_chart_load(song, &result.report);
+    result
+        .charts
         .pop()
         .ok_or_else(|| format!("Chart index {chart_ix} out of range"))
+}
+
+fn log_gameplay_chart_load(song: &SongData, report: &GameplayChartLoadReport) {
+    log_gameplay_cache_warnings(&report.warnings);
+    if let GameplayChartLoadSource::Cache { verify_freshness } = report.source {
+        if verify_freshness {
+            debug!(
+                "Gameplay cache hit for: {:?}",
+                song.simfile_path.file_name().unwrap_or_default()
+            );
+        } else {
+            debug!(
+                "Gameplay cache hit (no freshness check) for: {:?}",
+                song.simfile_path.file_name().unwrap_or_default()
+            );
+        }
+    }
+    if let Some(song_data_load) = &report.song_data_load {
+        if song_data_load.elapsed_ms >= 25.0 {
+            info!(
+                "Gameplay song data load: source=parse file={:?} parse_ms={:.3} write_ms={:.3} elapsed_ms={:.3}",
+                song.simfile_path.file_name().unwrap_or_default(),
+                song_data_load.parse_ms,
+                song_data_load.write_ms,
+                song_data_load.elapsed_ms
+            );
+        } else {
+            debug!(
+                "Gameplay song data load: source=parse file={:?} parse_ms={:.3} write_ms={:.3} elapsed_ms={:.3}",
+                song.simfile_path.file_name().unwrap_or_default(),
+                song_data_load.parse_ms,
+                song_data_load.write_ms,
+                song_data_load.elapsed_ms
+            );
+        }
+    }
+    if report.elapsed_ms >= 25.0 {
+        info!(
+            "Gameplay chart payload load: song='{}' requested={} load_ms={:.3} materialize_ms={:.3} elapsed_ms={:.3}",
+            song.title,
+            report.requested_count,
+            report.load_ms,
+            report.materialize_ms,
+            report.elapsed_ms
+        );
+    } else {
+        debug!(
+            "Gameplay chart payload load: song='{}' requested={} load_ms={:.3} materialize_ms={:.3} elapsed_ms={:.3}",
+            song.title,
+            report.requested_count,
+            report.load_ms,
+            report.materialize_ms,
+            report.elapsed_ms
+        );
+    }
+}
+
+fn log_gameplay_cache_warnings(warnings: &[GameplayChartLoadWarning]) {
+    for warning in warnings {
+        match warning {
+            GameplayChartLoadWarning::CachePath { path, error } => warn!(
+                "Could not generate cache path for {path:?}: {error}. Caching disabled for this file."
+            ),
+            GameplayChartLoadWarning::CacheWrite {
+                simfile_name,
+                error,
+            } => warn!("Could not write song cache for {simfile_name:?}: {error}"),
+        }
+    }
 }
 
 pub(super) fn parse_song_and_maybe_write_cache(

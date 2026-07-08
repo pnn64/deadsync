@@ -59,6 +59,85 @@ pub enum ScoreIndexWriteError {
     },
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScoreProfilePaths {
+    profile_dir: PathBuf,
+}
+
+#[derive(Debug)]
+pub struct GsScoreCacheLoad {
+    pub by_chart: HashMap<String, CachedScore>,
+    pub write_error: Option<ScoreIndexWriteError>,
+}
+
+#[derive(Debug)]
+pub struct LocalScoreCacheLoad {
+    pub index: LocalScoreIndex,
+    pub best_itg_count: usize,
+    pub best_ex_count: usize,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct LocalScoreAppendRecord {
+    pub path: PathBuf,
+    pub header: LocalScoreHeader,
+    pub cached_score: CachedScore,
+}
+
+impl ScoreProfilePaths {
+    #[inline(always)]
+    pub fn new(profile_dir: impl Into<PathBuf>) -> Self {
+        Self {
+            profile_dir: profile_dir.into(),
+        }
+    }
+
+    #[inline(always)]
+    pub fn profile_dir(&self) -> &Path {
+        &self.profile_dir
+    }
+
+    #[inline(always)]
+    pub fn scores_dir(&self) -> PathBuf {
+        self.profile_dir.join("scores")
+    }
+
+    #[inline(always)]
+    pub fn gs_dir(&self) -> PathBuf {
+        self.scores_dir().join("gs")
+    }
+
+    #[inline(always)]
+    pub fn gs_chart_dir(&self, chart_hash: &str) -> PathBuf {
+        self.gs_dir().join(score_file_shard(chart_hash))
+    }
+
+    #[inline(always)]
+    pub fn gs_index_path(&self) -> PathBuf {
+        self.gs_dir().join("index.bin")
+    }
+
+    #[inline(always)]
+    pub fn ac_dir(&self) -> PathBuf {
+        self.scores_dir().join("ac")
+    }
+
+    #[inline(always)]
+    pub fn ac_index_path(&self) -> PathBuf {
+        self.ac_dir().join("index.bin")
+    }
+
+    #[inline(always)]
+    pub fn local_dir(&self) -> PathBuf {
+        self.scores_dir().join("local")
+    }
+
+    #[inline(always)]
+    pub fn local_index_path(&self) -> PathBuf {
+        self.local_dir().join("index.bin")
+    }
+}
+
 fn write_index_file<T: bincode::Encode>(
     path: &Path,
     value: &T,
@@ -114,6 +193,30 @@ pub fn save_gs_score_index_file(
     write_index_file(path, by_chart)
 }
 
+pub fn load_gs_score_index_or_scan(
+    paths: &ScoreProfilePaths,
+) -> (HashMap<String, CachedScore>, Option<ScoreIndexWriteError>) {
+    let index_path = paths.gs_index_path();
+    if let Some((by_chart, changed)) = load_gs_score_index_file(&index_path) {
+        let write_error = changed
+            .then(|| save_gs_score_index_file(&index_path, &by_chart).err())
+            .flatten();
+        return (by_chart, write_error);
+    }
+
+    let scanned = best_gs_scores_from_dir(&paths.gs_dir());
+    let write_error = save_gs_score_index_file(&index_path, &scanned).err();
+    (scanned, write_error)
+}
+
+pub fn load_gs_score_cache_from_paths(paths: &ScoreProfilePaths) -> GsScoreCacheLoad {
+    let (by_chart, write_error) = load_gs_score_index_or_scan(paths);
+    GsScoreCacheLoad {
+        by_chart,
+        write_error,
+    }
+}
+
 pub fn load_ac_score_index_file(path: &Path) -> Option<HashMap<String, ArrowCloudScores>> {
     let bytes = fs::read(path).ok()?;
     let (by_chart, _) = bincode::decode_from_slice::<HashMap<String, ArrowCloudScores>, _>(
@@ -129,6 +232,12 @@ pub fn save_ac_score_index_file(
     by_chart: &HashMap<String, ArrowCloudScores>,
 ) -> Result<(), ScoreIndexWriteError> {
     write_index_file(path, by_chart)
+}
+
+pub fn load_ac_score_index_for_profile(
+    paths: &ScoreProfilePaths,
+) -> HashMap<String, ArrowCloudScores> {
+    load_ac_score_index_file(&paths.ac_index_path()).unwrap_or_default()
 }
 
 pub fn load_local_score_index_file(path: &Path) -> Option<LocalScoreIndex> {
@@ -166,6 +275,19 @@ pub fn save_local_score_index_file(
         });
     }
     Ok(())
+}
+
+pub fn load_local_score_index_file_or_default(path: &Path) -> LocalScoreIndex {
+    load_local_score_index_file(path).unwrap_or_default()
+}
+
+pub fn load_local_score_cache_from_paths(paths: &ScoreProfilePaths) -> LocalScoreCacheLoad {
+    let index = load_local_score_index_from_root(&paths.local_dir());
+    LocalScoreCacheLoad {
+        best_itg_count: index.best_itg.len(),
+        best_ex_count: index.best_ex.len(),
+        index,
+    }
 }
 
 fn count_score_bins_in_dir(dir: &Path) -> u32 {
@@ -676,6 +798,62 @@ pub fn write_local_score_entry_file(
     }
 
     Ok(path)
+}
+
+pub fn write_local_score_entry_for_profile(
+    paths: &ScoreProfilePaths,
+    chart_hash: &str,
+    entry: &mut LocalScoreEntry,
+) -> Result<LocalScoreAppendRecord, ScoreStoreWriteError> {
+    let dir = local_score_shard_dir(&paths.local_dir(), chart_hash);
+    let path = write_local_score_entry_file(&dir, chart_hash, entry)?;
+    let header = entry.header();
+    Ok(LocalScoreAppendRecord {
+        path,
+        header,
+        cached_score: crate::cached_score_from_local_header(&header),
+    })
+}
+
+pub fn save_local_score_index_after_append(
+    paths: &ScoreProfilePaths,
+    chart_hash: &str,
+    header: &LocalScoreHeader,
+    loaded_snapshot: Option<&LocalScoreIndex>,
+) -> Result<(), ScoreIndexWriteError> {
+    let index_path = paths.local_index_path();
+    if let Some(index) = loaded_snapshot {
+        return save_local_score_index_file(&index_path, index);
+    }
+
+    let mut index = load_local_score_index_file_or_default(&index_path);
+    update_local_score_index(&mut index, chart_hash, header);
+    save_local_score_index_file(&index_path, &index)
+}
+
+pub fn import_local_scores_with_writer<F, C, W>(
+    scores: &mut [(String, LocalScoreEntry)],
+    mut on_progress: F,
+    should_cancel: C,
+    mut write_score: W,
+) -> (usize, bool)
+where
+    F: FnMut(usize, usize),
+    C: Fn() -> bool,
+    W: FnMut(&str, &mut LocalScoreEntry) -> bool,
+{
+    let total = scores.len();
+    let mut written = 0usize;
+    for (idx, (chart_hash, entry)) in scores.iter_mut().enumerate() {
+        if should_cancel() {
+            return (written, true);
+        }
+        if write_score(chart_hash, entry) {
+            written += 1;
+        }
+        on_progress(idx + 1, total);
+    }
+    (written, false)
 }
 
 fn scan_gs_scores_dir(dir: &Path, best_by_chart: &mut HashMap<String, CachedScore>) {

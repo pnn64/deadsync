@@ -37,49 +37,25 @@ use log::warn;
 use noteskin_script::{parse_script_bool, parse_script_number};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, OnceLock};
 
 pub type TapExplosion = deadsync_noteskin::TapExplosion<SpriteSlot>;
 pub type HoldVisuals = deadsync_noteskin::HoldVisuals<SpriteSlot>;
 pub type Noteskin = deadsync_noteskin::NoteskinRuntime<SpriteSlot>;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct ItgSkinCacheKey {
-    num_cols: usize,
-    num_players: usize,
-    skin: String,
-}
-
-static ITG_SKIN_CACHE: OnceLock<Mutex<HashMap<ItgSkinCacheKey, Arc<Noteskin>>>> = OnceLock::new();
-
-#[inline(always)]
-fn itg_skin_cache_key(style: &Style, skin: &str) -> ItgSkinCacheKey {
-    ItgSkinCacheKey {
-        num_cols: style.num_cols,
-        num_players: style.num_players,
-        skin: noteskin_itg::normalized_skin_name(skin),
-    }
-}
+static ITG_SKIN_CACHE: OnceLock<noteskin_itg::ItgSkinRuntimeCache<Noteskin>> = OnceLock::new();
 
 pub fn clear_itg_runtime_caches() {
     if let Some(cache) = ITG_SKIN_CACHE.get() {
-        cache
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clear();
+        cache.clear();
     }
     noteskin_itg::clear_data_cache();
     noteskin_itg::clear_lookup_caches();
 }
 
 fn song_lua_itg_data(skin: &str) -> Option<Arc<noteskin_itg::NoteskinData>> {
-    let skin = noteskin_itg::normalized_skin_name(skin);
-    for root in &dirs::app_dirs().noteskin_roots() {
-        if let Ok(data) = noteskin_itg::load_noteskin_data_cached(root, "dance", &skin) {
-            return Some(data);
-        }
-    }
-    None
+    let roots = dirs::app_dirs().noteskin_roots();
+    noteskin_itg::load_noteskin_data_cached_from_roots(&roots, "dance", skin)
 }
 
 pub(crate) fn song_lua_noteskin_resolve_path(
@@ -121,23 +97,9 @@ fn compiled_bundle_path(game: &str, skin: &str, source_hash: &str) -> PathBuf {
 }
 
 pub fn load_itg_skin_cached(style: &Style, skin: &str) -> Result<Arc<Noteskin>, String> {
-    let key = itg_skin_cache_key(style, skin);
-    let cache = ITG_SKIN_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
-    if let Some(cached) = cache
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .get(&key)
-        .cloned()
-    {
-        return Ok(cached);
-    }
-
-    let loaded = Arc::new(load_itg_skin(style, skin)?);
-    let mut guard = cache
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    let entry = guard.entry(key).or_insert_with(|| loaded.clone());
-    Ok(entry.clone())
+    ITG_SKIN_CACHE
+        .get_or_init(noteskin_itg::ItgSkinRuntimeCache::default)
+        .get_or_load(style, skin, || load_itg_skin(style, skin))
 }
 
 pub fn prewarm_itg_preview_cache() {
@@ -186,34 +148,31 @@ where
 
 pub fn load_itg_default(style: &Style) -> Result<Noteskin, String> {
     let roots = dirs::app_dirs().noteskin_roots();
-    for skin in noteskin_itg::default_skin_candidates() {
-        for root in &roots {
-            if let Ok(ns) = load_itg(root, "dance", skin, style) {
-                if *skin != noteskin_itg::default_skin_name() {
-                    warn!("ITG default noteskin load failed; using dance/{skin} fallback");
-                }
-                return Ok(ns);
-            }
-        }
+    let loaded = noteskin_itg::load_itg_default_from_roots(&roots, "dance", |root, game, skin| {
+        load_itg(root, game, skin, style)
+    })?;
+    if loaded.used_default_fallback {
+        warn!(
+            "ITG default noteskin load failed; using dance/{} fallback",
+            loaded.skin
+        );
     }
-    Err("failed to load ITG default noteskin from any root".to_string())
+    Ok(loaded.value)
 }
 
 pub fn load_itg_skin(style: &Style, skin: &str) -> Result<Noteskin, String> {
-    let requested = noteskin_itg::normalized_skin_name(skin);
-    if noteskin_itg::skin_name_is_default(&requested) {
-        return load_itg_default(style);
-    }
-
     let roots = dirs::app_dirs().noteskin_roots();
-    let mut last_err = String::new();
-    for root in &roots {
-        match load_itg(root, "dance", &requested, style) {
-            Ok(ns) => return Ok(ns),
-            Err(e) => last_err = e,
-        }
+    let loaded =
+        noteskin_itg::load_itg_skin_from_roots(&roots, "dance", skin, |root, game, skin| {
+            load_itg(root, game, skin, style)
+        })?;
+    if loaded.used_default_fallback {
+        warn!(
+            "ITG default noteskin load failed; using dance/{} fallback",
+            loaded.skin
+        );
     }
-    Err(last_err)
+    Ok(loaded.value)
 }
 
 pub fn load_itg(root: &Path, game: &str, skin: &str, style: &Style) -> Result<Noteskin, String> {

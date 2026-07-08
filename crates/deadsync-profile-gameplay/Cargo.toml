@@ -5,6 +5,7 @@ edition = "2024"
 license = "GPL-3.0"
 
 [dependencies]
+deadsync-chart = { path = "../deadsync-chart" }
 deadsync-gameplay = { path = "../deadsync-gameplay" }
 deadsync-profile = { path = "../deadsync-profile" }
 

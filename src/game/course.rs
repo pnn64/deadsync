@@ -1,10 +1,10 @@
 use crate::game::{parsing::simfile::collect_song_scan_roots, song::get_song_cache};
 use deadlib_platform::dirs;
 use deadsync_simfile::course::{
-    autogen_nonstop_group_courses, collect_merged_course_paths, load_course_paths_with_progress,
+    collect_course_scan_roots as simfile_collect_course_scan_roots, load_course_scan_with_progress,
 };
 use deadsync_simfile::runtime_cache;
-use deadsync_simfile::scan::{fmt_scan_time, push_unique_path};
+use deadsync_simfile::scan::fmt_scan_time;
 use log::{info, warn};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -20,19 +20,12 @@ fn set_course_cache(courses: Vec<CourseData>) {
 }
 
 fn collect_course_scan_roots(root_path: &Path) -> Vec<PathBuf> {
-    let mut roots = Vec::with_capacity(2);
-    let mut keys = Vec::with_capacity(2);
-    if root_path.is_dir() {
-        push_unique_path(root_path.to_path_buf(), &mut roots, &mut keys);
-    } else {
+    let report =
+        simfile_collect_course_scan_roots(root_path, dirs::app_dirs().extra_course_roots());
+    if report.primary_missing {
         warn!("Courses directory '{}' not found.", root_path.display());
     }
-
-    for extra in dirs::app_dirs().extra_course_roots() {
-        push_unique_path(extra, &mut roots, &mut keys);
-    }
-
-    roots
+    report.roots
 }
 
 pub fn scan_and_load_courses_with_progress_counts<F>(
@@ -65,37 +58,26 @@ where
         return;
     }
 
-    let total_song_count = {
+    let report = {
+        let courses_dir = dirs::app_dirs().courses_dir();
         let song_cache = get_song_cache();
-        song_cache
-            .iter()
-            .map(|pack| pack.songs.len())
-            .sum::<usize>()
+        load_course_scan_with_progress(
+            &course_roots,
+            courses_root,
+            &song_roots,
+            &courses_dir,
+            &song_cache,
+            progress,
+        )
     };
-    let course_paths = collect_merged_course_paths(&course_roots);
-    let mut report = load_course_paths_with_progress(
-        course_paths,
-        courses_root,
-        &song_roots,
-        total_song_count,
-        progress,
-    );
     for failure in &report.failures {
         warn!("{}", failure.message);
     }
 
-    let autogen_courses = {
-        let courses_dir = dirs::app_dirs().courses_dir();
-        let song_cache = get_song_cache();
-        autogen_nonstop_group_courses(&courses_dir, &song_cache)
-    };
-    let autogen_count = autogen_courses.len();
-    report.courses.extend(autogen_courses);
-
     info!(
         "Finished course scan. Loaded {} courses ({} autogen, failed {}) in {}.",
         report.courses.len(),
-        autogen_count,
+        report.autogen_count,
         report.failures.len(),
         fmt_scan_time(started.elapsed())
     );

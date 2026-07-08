@@ -7,9 +7,11 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use deadsync_chart::{ChartData, SongData, SongPack};
+use deadsync_profile::PlayerOptionsData;
 use deadsync_score::{decode_local_score_entry, encode_local_score_entry, local_score_from_itg};
 
 use super::itg::parse_song_scores;
+use super::pipeline::{prepare_import, run_import};
 use super::resolver::{ChartResolver, Resolution};
 use super::xml;
 
@@ -219,4 +221,118 @@ fn resolves_favorite_song_to_chart_hashes() {
         resolver.resolve_song("Ghost Pack/Ghost Song").is_none(),
         "unknown favorite song does not resolve"
     );
+}
+
+#[test]
+fn prepare_import_maps_scores_favorites_options_and_summary() {
+    let root = xml::parse(STATS_XML).expect("parse Stats.xml");
+    let mut source = super::itg::ItgSource::default();
+    source.guid = "99f55b745304ebcf".to_string();
+    source.editable.display_name = "Alice".to_string();
+    source.editable.last_used_high_score_name = "itgmania-player".to_string();
+    source.online.groovestats_api_key = "gs-key".to_string();
+    source.online.arrowcloud_api_key = "ac-key".to_string();
+    source.simply_love.insert("SpeedModType".into(), "C".into());
+    source.simply_love.insert("SpeedMod".into(), "400".into());
+    source.songs = parse_song_scores(&root);
+    source.favorites = vec![
+        "My Pack/Cool Song".to_string(),
+        "Ghost Pack/Ghost Song".to_string(),
+    ];
+    source.itl_json = Some("{}".to_string());
+
+    let packs = library();
+    let prepared = prepare_import(
+        &source,
+        &PlayerOptionsData::default(),
+        &PlayerOptionsData::default(),
+        &packs,
+    );
+
+    assert!(!prepared.profile_guid.is_empty());
+    assert_eq!(prepared.initials, "ITGM");
+    assert_eq!(prepared.summary.display_name, "Alice");
+    assert_eq!(prepared.summary.scores_total, 2);
+    assert_eq!(prepared.summary.charts_song_not_found, 1);
+    assert_eq!(prepared.summary.charts_chart_not_found, 0);
+    assert_eq!(prepared.summary.scores_unmapped, 0);
+    assert_eq!(prepared.summary.favorites_total, 2);
+    assert_eq!(prepared.summary.favorites_imported, 1);
+    assert_eq!(prepared.summary.favorites_song_not_found, 1);
+    assert!(prepared.summary.simply_love_options_imported);
+    assert!(prepared.summary.groovestats_imported);
+    assert!(prepared.summary.arrowcloud_imported);
+    assert!(prepared.summary.itl_present);
+    assert_eq!(prepared.score_entries.len(), 1);
+    assert_eq!(prepared.score_entries[0].0, "abc123def456");
+    assert!(prepared.favorite_hashes.contains("abc123def456"));
+    assert_eq!(
+        prepared.options_singles.scroll_speed,
+        deadsync_rules::scroll::ScrollSpeedSetting::CMod(400.0)
+    );
+}
+
+#[test]
+fn run_import_refuses_duplicate_profile_guid_before_writes() {
+    let mut source = super::itg::ItgSource::default();
+    source.guid = "99f55b745304ebcf".to_string();
+    source.editable.display_name = "Alice".to_string();
+
+    let packs = library();
+    let summary = run_import(
+        &source,
+        &PlayerOptionsData::default(),
+        &PlayerOptionsData::default(),
+        &packs,
+        |_| Some("Existing Alice".to_string()),
+        |_| panic!("duplicate import must not create a profile"),
+        |_, _, _| panic!("duplicate import must not write scores"),
+        |_| panic!("duplicate import must not delete a profile"),
+        |_, _| panic!("duplicate import must not write favorites"),
+        |_, _| panic!("duplicate import must not write stats"),
+        |_, _| panic!("duplicate import must not write ITL data"),
+    )
+    .expect("duplicate import should report summary");
+
+    assert_eq!(summary.display_name, "Alice");
+    assert_eq!(
+        summary.already_imported_as.as_deref(),
+        Some("Existing Alice")
+    );
+    assert!(summary.profile_id.is_empty());
+}
+
+#[test]
+fn run_import_cleans_up_canceled_profile() {
+    let root = xml::parse(STATS_XML).expect("parse Stats.xml");
+    let mut source = super::itg::ItgSource::default();
+    source.editable.display_name = "Alice".to_string();
+    source.songs = parse_song_scores(&root);
+
+    let packs = library();
+    let mut deleted_profile = None;
+    let summary = run_import(
+        &source,
+        &PlayerOptionsData::default(),
+        &PlayerOptionsData::default(),
+        &packs,
+        |_| None,
+        |_| Ok("profile-1".to_string()),
+        |profile_id, initials, entries| {
+            assert_eq!(profile_id, "profile-1");
+            assert_eq!(initials, "ALIC");
+            assert_eq!(entries.len(), 1);
+            (0, true)
+        },
+        |profile_id| deleted_profile = Some(profile_id.to_string()),
+        |_, _| panic!("canceled import must not write favorites"),
+        |_, _| panic!("canceled import must not write stats"),
+        |_, _| panic!("canceled import must not write ITL data"),
+    )
+    .expect("canceled import should report summary");
+
+    assert!(summary.canceled);
+    assert_eq!(summary.profile_id, "profile-1");
+    assert_eq!(summary.scores_imported, 0);
+    assert_eq!(deleted_profile.as_deref(), Some("profile-1"));
 }

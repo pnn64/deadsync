@@ -10,6 +10,7 @@ mod ini;
 pub mod detect;
 pub mod itg;
 pub mod options;
+pub mod pipeline;
 pub mod resolver;
 pub mod xml;
 

@@ -9,6 +9,7 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::sync::{LazyLock, Mutex, MutexGuard};
 
 pub mod lock_wait;
 pub mod pad_config;
@@ -56,6 +57,35 @@ pub const LONG_ERROR_BAR_MIN_SAMPLES_DEFAULT: u32 = 16;
 pub const CUSTOM_FANTASTIC_WINDOW_MIN_MS: u8 = 1;
 pub const CUSTOM_FANTASTIC_WINDOW_MAX_MS: u8 = 22;
 pub const CUSTOM_FANTASTIC_WINDOW_DEFAULT_MS: u8 = 10;
+
+static RUNTIME_PROFILES: LazyLock<Mutex<[Profile; PLAYER_SLOTS]>> =
+    LazyLock::new(|| Mutex::new(std::array::from_fn(|_| Profile::default())));
+
+static RUNTIME_SESSION: LazyLock<Mutex<SessionState>> = LazyLock::new(|| {
+    // Both sides start as Guest; root profile loading seeds configured defaults.
+    Mutex::new(SessionState::default())
+});
+
+static RUNTIME_SESSION_LOCK_WAIT_STATS: lock_wait::LockWaitStats = lock_wait::LockWaitStats::new();
+static RUNTIME_PROFILES_LOCK_WAIT_STATS: lock_wait::LockWaitStats = lock_wait::LockWaitStats::new();
+
+#[inline(always)]
+pub fn runtime_lock_session() -> MutexGuard<'static, SessionState> {
+    lock_wait::lock_with_wait_stats(
+        "SESSION",
+        &RUNTIME_SESSION_LOCK_WAIT_STATS,
+        &RUNTIME_SESSION,
+    )
+}
+
+#[inline(always)]
+pub fn runtime_lock_profiles() -> MutexGuard<'static, [Profile; PLAYER_SLOTS]> {
+    lock_wait::lock_with_wait_stats(
+        "PROFILES",
+        &RUNTIME_PROFILES_LOCK_WAIT_STATS,
+        &RUNTIME_PROFILES,
+    )
+}
 
 // Crossover Cues. A cue flashes a notefield column shortly before an
 // upcoming crossover step.
@@ -412,6 +442,9 @@ pub const PROFILE_SECTION: &str = "userprofile";
 pub const PROFILE_GUID_KEY: &str = "Guid";
 /// INI key (under `[userprofile]`) holding the human-readable display name.
 pub const PROFILE_DISPLAY_NAME_KEY: &str = "DisplayName";
+/// INI key (under `[userprofile]`) holding score display initials.
+pub const PROFILE_INITIALS_KEY: &str = "PlayerInitials";
+pub const DEFAULT_SCORE_INITIALS: &str = "----";
 
 /// Stable per-profile identity so the on-disk folder can be freely renamed
 /// without losing scores, settings, or online logins.
@@ -709,6 +742,563 @@ pub fn read_userprofile_identity(content: &str) -> (Option<String>, Option<Strin
     }
 
     (guid, display)
+}
+
+pub fn read_userprofile_initials_content(content: &str) -> Option<String> {
+    let mut in_section = false;
+    let mut seen_section = false;
+
+    for line in content.lines() {
+        let t = line.trim();
+        if t.starts_with('[') && t.ends_with(']') {
+            if seen_section {
+                break;
+            }
+            in_section = t[1..t.len() - 1]
+                .trim()
+                .eq_ignore_ascii_case(PROFILE_SECTION);
+            seen_section = in_section;
+            continue;
+        }
+        if !in_section {
+            continue;
+        }
+        let Some(eq) = t.find('=') else {
+            continue;
+        };
+        let key = t[..eq].trim();
+        if !key.eq_ignore_ascii_case(PROFILE_INITIALS_KEY) {
+            continue;
+        }
+        let initials = sanitize_player_initials(t[eq + 1..].trim());
+        return (!initials.is_empty()).then_some(initials);
+    }
+
+    None
+}
+
+pub fn read_player_initials_dir(dir: &Path) -> Option<String> {
+    fs::read_to_string(profile_ini_path(dir))
+        .ok()
+        .and_then(|content| read_userprofile_initials_content(&content))
+}
+
+pub fn local_score_profile_source(
+    display_name: &str,
+    dir: PathBuf,
+) -> deadsync_score::LocalScoreProfileSource {
+    let initials =
+        read_player_initials_dir(&dir).unwrap_or_else(|| DEFAULT_SCORE_INITIALS.to_string());
+    deadsync_score::LocalScoreProfileSource {
+        root: dir.join("scores").join("local"),
+        initials,
+        display_name: display_name.to_string(),
+    }
+}
+
+pub fn local_score_profile_sources_from_summaries(
+    profiles: impl IntoIterator<Item = LocalProfileSummary>,
+    mut resolve_dir: impl FnMut(&str) -> PathBuf,
+) -> Vec<deadsync_score::LocalScoreProfileSource> {
+    profiles
+        .into_iter()
+        .map(|profile| local_score_profile_source(&profile.display_name, resolve_dir(&profile.id)))
+        .collect()
+}
+
+pub fn scorebox_profile_snapshot(
+    profile: &Profile,
+    side_joined: bool,
+    enable_groovestats: bool,
+    enable_arrowcloud: bool,
+    auto_populate_gs_scores: bool,
+    persistent_profile_id: Option<String>,
+) -> deadsync_score::GameplayScoreboxProfileSnapshot {
+    deadsync_score::scorebox_snapshot(
+        profile.display_scorebox,
+        profile.show_ex_score,
+        side_joined,
+        enable_groovestats,
+        enable_arrowcloud,
+        auto_populate_gs_scores,
+        profile.groovestats_api_key.as_str(),
+        profile.arrowcloud_api_key.as_str(),
+        profile.groovestats_username.as_str(),
+        persistent_profile_id,
+    )
+}
+
+pub fn gameplay_hud_snapshot_from_parts(
+    play_style: PlayStyle,
+    player_side: PlayerSide,
+    joined_mask: u8,
+    active_profiles: &[ActiveProfile; PLAYER_SLOTS],
+    profiles: &[Profile; PLAYER_SLOTS],
+) -> GameplayHudSnapshot {
+    GameplayHudSnapshot {
+        play_style,
+        player_side,
+        p1: gameplay_hud_player_snapshot(
+            joined_mask,
+            PlayerSide::P1,
+            &active_profiles[player_side_index(PlayerSide::P1)],
+            &profiles[player_side_index(PlayerSide::P1)],
+        ),
+        p2: gameplay_hud_player_snapshot(
+            joined_mask,
+            PlayerSide::P2,
+            &active_profiles[player_side_index(PlayerSide::P2)],
+            &profiles[player_side_index(PlayerSide::P2)],
+        ),
+    }
+}
+
+fn gameplay_hud_player_snapshot(
+    joined_mask: u8,
+    side: PlayerSide,
+    active_profile: &ActiveProfile,
+    profile: &Profile,
+) -> GameplayHudPlayerSnapshot {
+    GameplayHudPlayerSnapshot {
+        joined: player_side_is_joined(joined_mask, side),
+        guest: active_profile_is_guest(active_profile),
+        display_name: profile.display_name.clone(),
+        avatar_texture_key: profile.avatar_texture_key.clone(),
+        hide_username: profile.hide_username,
+    }
+}
+
+pub fn side_for_physical_pad(
+    play_style: PlayStyle,
+    player_side: PlayerSide,
+    is_p2_side: bool,
+) -> PlayerSide {
+    if matches!(play_style, PlayStyle::Double) {
+        player_side
+    } else if is_p2_side {
+        PlayerSide::P2
+    } else {
+        PlayerSide::P1
+    }
+}
+
+pub fn side_for_gameplay_player(
+    num_players: usize,
+    player_idx: usize,
+    session_side: PlayerSide,
+) -> PlayerSide {
+    if num_players >= 2 {
+        player_side_for_index(player_idx)
+    } else {
+        session_side
+    }
+}
+
+pub fn default_profile_ids_after_side_update(
+    defaults: [Option<String>; PLAYER_SLOTS],
+    side: PlayerSide,
+    profile: &ActiveProfile,
+    is_valid_local_id: impl FnOnce(&str) -> bool,
+) -> [Option<String>; PLAYER_SLOTS] {
+    let mut defaults = defaults;
+    let side_idx = player_side_index(side);
+    let new_id = active_profile_local_id(profile)
+        .filter(|id| is_valid_local_id(id))
+        .map(str::to_owned);
+    set_default_profile_id(&mut defaults, side_idx, new_id);
+    defaults
+}
+
+pub fn default_profile_ids_after_joined_selection(
+    defaults: [Option<String>; PLAYER_SLOTS],
+    joined_mask: u8,
+    p1: &ActiveProfile,
+    p2: &ActiveProfile,
+) -> [Option<String>; PLAYER_SLOTS] {
+    let mut defaults = defaults;
+    for (side, profile) in [(PlayerSide::P1, p1), (PlayerSide::P2, p2)] {
+        if !player_side_is_joined(joined_mask, side) {
+            continue;
+        }
+        let side_idx = player_side_index(side);
+        set_default_profile_id(
+            &mut defaults,
+            side_idx,
+            active_profile_local_id(profile).map(str::to_owned),
+        );
+    }
+    defaults
+}
+
+fn set_default_profile_id(
+    defaults: &mut [Option<String>; PLAYER_SLOTS],
+    side_idx: usize,
+    new_id: Option<String>,
+) {
+    if let Some(id) = new_id.as_deref() {
+        for (idx, slot) in defaults.iter_mut().enumerate() {
+            if idx != side_idx && slot.as_deref() == Some(id) {
+                *slot = None;
+            }
+        }
+    }
+    defaults[side_idx] = new_id;
+}
+
+pub fn known_pack_names_for_loaded_profile(
+    active_profiles: &[ActiveProfile; PLAYER_SLOTS],
+    profiles: &[Profile; PLAYER_SLOTS],
+    profile_id: &str,
+) -> Option<HashSet<String>> {
+    for side in [PlayerSide::P1, PlayerSide::P2] {
+        let side_idx = player_side_index(side);
+        let Some(id) = active_profile_local_id(&active_profiles[side_idx]) else {
+            continue;
+        };
+        if id == profile_id {
+            return Some(profiles[side_idx].known_pack_names.clone());
+        }
+    }
+    None
+}
+
+pub fn mark_known_pack_names_for_loaded_profile(
+    active_profiles: &[ActiveProfile; PLAYER_SLOTS],
+    profiles: &mut [Profile; PLAYER_SLOTS],
+    profile_id: &str,
+    pack_names: &[&str],
+) -> Option<PlayerSide> {
+    let mut save_side = None;
+    for side in [PlayerSide::P1, PlayerSide::P2] {
+        let side_idx = player_side_index(side);
+        let Some(id) = active_profile_local_id(&active_profiles[side_idx]) else {
+            continue;
+        };
+        if id != profile_id {
+            continue;
+        }
+        let changed = add_known_pack_names(
+            &mut profiles[side_idx].known_pack_names,
+            pack_names.iter().copied(),
+        );
+        if changed && save_side.is_none() {
+            save_side = Some(side);
+        }
+    }
+    save_side
+}
+
+pub fn set_arrowcloud_api_key_for_side(
+    profiles: &mut [Profile; PLAYER_SLOTS],
+    side: PlayerSide,
+    api_key: &str,
+) {
+    profiles[player_side_index(side)].arrowcloud_api_key = api_key.to_string();
+}
+
+pub fn footer_fields_for_side(
+    profiles: &[Profile; PLAYER_SLOTS],
+    side: PlayerSide,
+) -> (Option<String>, String) {
+    let profile = &profiles[player_side_index(side)];
+    (
+        profile.avatar_texture_key.clone(),
+        profile.display_name.clone(),
+    )
+}
+
+pub fn groovestats_api_key_for_side(
+    profiles: &[Profile; PLAYER_SLOTS],
+    side: PlayerSide,
+) -> String {
+    profiles[player_side_index(side)]
+        .groovestats_api_key
+        .trim()
+        .to_string()
+}
+
+pub fn set_avatar_texture_key_for_side(
+    profiles: &mut [Profile; PLAYER_SLOTS],
+    side: PlayerSide,
+    key: Option<String>,
+) {
+    profiles[player_side_index(side)].avatar_texture_key = key;
+}
+
+pub fn pad_light_brightness_for_physical_pad(
+    profiles: &[Profile; PLAYER_SLOTS],
+    play_style: PlayStyle,
+    player_side: PlayerSide,
+    is_p2_side: bool,
+) -> u8 {
+    let side = side_for_physical_pad(play_style, player_side, is_p2_side);
+    profiles[player_side_index(side)].pad_light_brightness
+}
+
+pub fn smx_pack_names_for_profiles<T: Copy>(
+    profiles: &[Profile; PLAYER_SLOTS],
+    machine_bg: T,
+    machine_judge: T,
+    mut parse: impl FnMut(&str) -> T,
+) -> ([T; PLAYER_SLOTS], [T; PLAYER_SLOTS]) {
+    fn resolve<T: Copy>(
+        value: &Option<String>,
+        machine: T,
+        parse: &mut impl FnMut(&str) -> T,
+    ) -> T {
+        match value {
+            Some(value) => parse(value),
+            None => machine,
+        }
+    }
+
+    (
+        std::array::from_fn(|idx| resolve(&profiles[idx].smx_bg_pack, machine_bg, &mut parse)),
+        std::array::from_fn(|idx| {
+            resolve(&profiles[idx].smx_judge_pack, machine_judge, &mut parse)
+        }),
+    )
+}
+
+pub fn set_groovestats_credentials_for_side(
+    profiles: &mut [Profile; PLAYER_SLOTS],
+    side: PlayerSide,
+    api_key: &str,
+    username: &str,
+) {
+    let profile = &mut profiles[player_side_index(side)];
+    profile.groovestats_api_key = api_key.to_string();
+    profile.groovestats_username = username.to_string();
+    profile.groovestats_is_pad_player = true;
+}
+
+pub fn set_arrowcloud_api_key_for_loaded_profile(
+    active_profiles: &[ActiveProfile; PLAYER_SLOTS],
+    profiles: &mut [Profile; PLAYER_SLOTS],
+    profile_id: &str,
+    api_key: &str,
+) -> bool {
+    let mut changed = false;
+    for side in [PlayerSide::P1, PlayerSide::P2] {
+        let side_idx = player_side_index(side);
+        let Some(id) = active_profile_local_id(&active_profiles[side_idx]) else {
+            continue;
+        };
+        if id != profile_id {
+            continue;
+        }
+        profiles[side_idx].arrowcloud_api_key = api_key.to_string();
+        changed = true;
+    }
+    changed
+}
+
+pub fn set_groovestats_credentials_for_loaded_profile(
+    active_profiles: &[ActiveProfile; PLAYER_SLOTS],
+    profiles: &mut [Profile; PLAYER_SLOTS],
+    profile_id: &str,
+    api_key: &str,
+    username: &str,
+) -> bool {
+    let mut changed = false;
+    for side in [PlayerSide::P1, PlayerSide::P2] {
+        let side_idx = player_side_index(side);
+        let Some(id) = active_profile_local_id(&active_profiles[side_idx]) else {
+            continue;
+        };
+        if id != profile_id {
+            continue;
+        }
+        let profile = &mut profiles[side_idx];
+        profile.groovestats_api_key = api_key.to_string();
+        profile.groovestats_username = username.to_string();
+        profile.groovestats_is_pad_player = true;
+        changed = true;
+    }
+    changed
+}
+
+pub fn toggle_favorite_for_side(
+    profiles: &mut [Profile; PLAYER_SLOTS],
+    side: PlayerSide,
+    chart_hash: &str,
+) -> (bool, HashSet<String>) {
+    let profile = &mut profiles[player_side_index(side)];
+    let is_now_favorite = toggle_favorite_hash(&mut profile.favorites, chart_hash);
+    (is_now_favorite, profile.favorites.clone())
+}
+
+pub fn seed_favorite_for_side(
+    profiles: &mut [Profile; PLAYER_SLOTS],
+    side: PlayerSide,
+    chart_hash: &str,
+) {
+    profiles[player_side_index(side)]
+        .favorites
+        .insert(chart_hash.to_string());
+}
+
+pub fn profile_has_favorite(
+    profiles: &[Profile; PLAYER_SLOTS],
+    side: PlayerSide,
+    chart_hash: &str,
+) -> bool {
+    profiles[player_side_index(side)]
+        .favorites
+        .contains(chart_hash)
+}
+
+pub fn toggle_favorited_pack_for_side(
+    profiles: &mut [Profile; PLAYER_SLOTS],
+    side: PlayerSide,
+    pack_name: &str,
+) -> (bool, HashSet<String>) {
+    let profile = &mut profiles[player_side_index(side)];
+    let is_now_favorite = toggle_favorited_pack(&mut profile.favorited_packs, pack_name);
+    (is_now_favorite, profile.favorited_packs.clone())
+}
+
+pub fn seed_favorited_pack_for_side(
+    profiles: &mut [Profile; PLAYER_SLOTS],
+    side: PlayerSide,
+    pack_name: &str,
+) {
+    profiles[player_side_index(side)]
+        .favorited_packs
+        .insert(pack_name.to_string());
+}
+
+pub fn profile_has_favorited_pack(profile: &Profile, pack_name: &str) -> bool {
+    profile.favorited_packs.iter().any(|p| *p == pack_name)
+}
+
+pub fn profile_side_has_favorited_pack(
+    profiles: &[Profile; PLAYER_SLOTS],
+    side: PlayerSide,
+    pack_name: &str,
+) -> bool {
+    profile_has_favorited_pack(&profiles[player_side_index(side)], pack_name)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn apply_loaded_profile_data(
+    profile: &mut Profile,
+    default_profile: &Profile,
+    play_style: PlayStyle,
+    today: &str,
+    profile_ini_loaded: bool,
+    mut profile_section_has_any: impl FnMut(&str) -> bool,
+    mut profile_get: impl FnMut(&str, &str) -> Option<String>,
+    stats: ProfileStats,
+    favorites: HashSet<String>,
+    favorited_packs: HashSet<String>,
+    groovestats_ini_loaded: bool,
+    mut groovestats_get: impl FnMut(&str, &str) -> Option<String>,
+    arrowcloud_ini_loaded: bool,
+    mut arrowcloud_get: impl FnMut(&str, &str) -> Option<String>,
+) {
+    if profile_ini_loaded {
+        profile.display_name = profile_get("userprofile", "DisplayName")
+            .unwrap_or_else(|| default_profile.display_name.clone());
+        profile.player_initials = profile_get("userprofile", "PlayerInitials")
+            .map(|initials| sanitize_player_initials(&initials))
+            .filter(|initials| !initials.is_empty())
+            .unwrap_or_else(|| default_profile.player_initials.clone());
+
+        let mut load_player_options = |section: &str, default: &PlayerOptionsData| {
+            load_player_options_section(
+                profile_section_has_any(section),
+                |key| profile_get(section, key),
+                default,
+            )
+        };
+        profile.player_options_singles = load_player_options(
+            player_options_section(PlayStyle::Single),
+            &default_profile.player_options_singles,
+        )
+        .unwrap_or_else(|| default_profile.player_options_singles.clone());
+        profile.player_options_doubles = load_player_options(
+            player_options_section(PlayStyle::Double),
+            &default_profile.player_options_doubles,
+        )
+        .unwrap_or_else(|| default_profile.player_options_doubles.clone());
+        profile.apply_player_options_for_style(play_style);
+
+        let mut load_last_played = |section: &str, default: &LastPlayed| {
+            load_last_played_section(
+                profile_section_has_any(section),
+                |key| profile_get(section, key),
+                default,
+            )
+        };
+        profile.last_played_singles =
+            load_last_played("LastPlayedSingles", &default_profile.last_played_singles)
+                .or_else(|| load_last_played("LastPlayed", &default_profile.last_played_singles))
+                .unwrap_or_else(|| default_profile.last_played_singles.clone());
+        profile.last_played_doubles =
+            load_last_played("LastPlayedDoubles", &default_profile.last_played_doubles)
+                .or_else(|| load_last_played("LastPlayed", &default_profile.last_played_doubles))
+                .unwrap_or_else(|| default_profile.last_played_doubles.clone());
+
+        let mut load_last_played_course = |section: &str| {
+            load_last_played_course_section(profile_section_has_any(section), |key| {
+                profile_get(section, key)
+            })
+        };
+        profile.last_played_course_singles = load_last_played_course("LastPlayedCourseSingles")
+            .or_else(|| load_last_played_course("LastPlayedCourse"))
+            .unwrap_or_else(|| default_profile.last_played_course_singles.clone());
+        profile.last_played_course_doubles = load_last_played_course("LastPlayedCourseDoubles")
+            .or_else(|| load_last_played_course("LastPlayedCourse"))
+            .unwrap_or_else(|| default_profile.last_played_course_doubles.clone());
+
+        profile.weight_pounds = profile_get("Editable", "WeightPounds")
+            .and_then(|s| s.parse::<i32>().ok())
+            .map(clamp_weight_pounds)
+            .unwrap_or(default_profile.weight_pounds);
+        profile.birth_year = profile_get("Editable", "BirthYear")
+            .and_then(|s| s.parse::<i32>().ok())
+            .map(|year| year.max(0))
+            .unwrap_or(default_profile.birth_year);
+        profile.ignore_step_count_calories = profile_get("Editable", "IgnoreStepCountCalories")
+            .or_else(|| profile_get("Stats", "IgnoreStepCountCalories"))
+            .and_then(|s| s.parse::<u8>().ok())
+            .map_or(default_profile.ignore_step_count_calories, |v| v != 0);
+
+        let saved_day = profile_get("Stats", "CaloriesBurnedDate").unwrap_or_default();
+        let saved_cals = profile_get("Stats", "CaloriesBurnedToday")
+            .and_then(|s| s.parse::<f32>().ok())
+            .filter(|v| v.is_finite() && *v >= 0.0)
+            .unwrap_or(default_profile.calories_burned_today);
+        if saved_day.trim() == today {
+            profile.calories_burned_day = today.to_string();
+            profile.calories_burned_today = saved_cals;
+        } else {
+            profile.calories_burned_day = today.to_string();
+            profile.calories_burned_today = 0.0;
+        }
+    }
+
+    profile.current_combo = stats.current_combo;
+    profile.known_pack_names = stats.known_pack_names;
+    profile.favorites = favorites;
+    profile.favorited_packs = favorited_packs;
+
+    if groovestats_ini_loaded {
+        profile.groovestats_api_key = groovestats_get("GrooveStats", "ApiKey")
+            .unwrap_or_else(|| default_profile.groovestats_api_key.clone());
+        profile.groovestats_is_pad_player = parse_groovestats_is_pad_player(
+            groovestats_get("GrooveStats", "IsPadPlayer").as_deref(),
+            default_profile.groovestats_is_pad_player,
+        );
+        profile.groovestats_username = groovestats_get("GrooveStats", "Username")
+            .unwrap_or_else(|| default_profile.groovestats_username.clone());
+    }
+
+    if arrowcloud_ini_loaded {
+        profile.arrowcloud_api_key = arrowcloud_get("ArrowCloud", "ApiKey")
+            .unwrap_or_else(|| default_profile.arrowcloud_api_key.clone());
+    }
 }
 
 pub fn find_profile_avatar_path(dir: &Path) -> Option<PathBuf> {
@@ -1028,10 +1618,272 @@ pub fn create_local_profile_from_import_dir(
     })
 }
 
+pub struct LocalProfileFolderRename {
+    pub current_folder: String,
+    pub desired_folder: String,
+    pub error: Option<std::io::Error>,
+}
+
+pub struct LocalProfileRenameResult {
+    pub display_name: String,
+    pub folder_rename: Option<LocalProfileFolderRename>,
+}
+
+pub fn rename_local_profile_dir(
+    root: &Path,
+    current_dir: &Path,
+    id: &str,
+    display_name: &str,
+) -> Result<LocalProfileRenameResult, std::io::Error> {
+    if !is_local_profile_id(id) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "Invalid local profile id",
+        ));
+    }
+
+    let name = display_name.trim();
+    if name.is_empty() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "Display name is empty",
+        ));
+    }
+
+    let ini_path = profile_ini_path(current_dir);
+    if !ini_path.is_file() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "Profile does not exist",
+        ));
+    }
+    rewrite_profile_display_name_file(&ini_path, name)?;
+
+    let folder_rename = current_dir
+        .file_name()
+        .and_then(|name| name.to_str())
+        .and_then(|current_folder| {
+            let others: Vec<String> = profile_folder_names(root)
+                .into_iter()
+                .filter(|folder| !folder.eq_ignore_ascii_case(current_folder))
+                .collect();
+            let desired_folder = folder_name_for_display(name, id, &others);
+            if desired_folder.eq_ignore_ascii_case(current_folder) {
+                return None;
+            }
+            let error = fs::rename(current_dir, root.join(&desired_folder)).err();
+            Some(LocalProfileFolderRename {
+                current_folder: current_folder.to_string(),
+                desired_folder,
+                error,
+            })
+        });
+
+    Ok(LocalProfileRenameResult {
+        display_name: name.to_string(),
+        folder_rename,
+    })
+}
+
+pub fn delete_local_profile_dir(dir: &Path, id: &str) -> Result<(), std::io::Error> {
+    if !is_local_profile_id(id) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "Invalid local profile id",
+        ));
+    }
+    if !dir.is_dir() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "Profile does not exist",
+        ));
+    }
+    fs::remove_dir_all(dir)
+}
+
+pub struct LocalProfileGuidBackfill {
+    pub path: PathBuf,
+    pub guid: String,
+    pub error: Option<std::io::Error>,
+}
+
+pub struct LocalProfileMigrationEntry {
+    pub original_folder: String,
+    pub folder: String,
+    pub guid: String,
+}
+
+pub struct LocalProfilesMigrationResult {
+    pub entries: Vec<LocalProfileMigrationEntry>,
+    pub guid_backfills: Vec<LocalProfileGuidBackfill>,
+    pub folder_renames: Vec<LocalProfileFolderRename>,
+    pub cache_map: HashMap<String, PathBuf>,
+}
+
+pub fn migrate_local_profile_dirs(root: &Path) -> LocalProfilesMigrationResult {
+    struct Entry {
+        original_folder: String,
+        folder: String,
+        guid: String,
+        display: Option<String>,
+    }
+
+    let mut entries: Vec<Entry> = Vec::new();
+    let mut taken: Vec<String> = Vec::new();
+    let mut guid_backfills = Vec::new();
+
+    if let Ok(read_dir) = fs::read_dir(root) {
+        for de in read_dir.flatten() {
+            if !de.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
+                continue;
+            }
+            let path = de.path();
+            let Some(folder) = path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .map(str::to_string)
+            else {
+                continue;
+            };
+            taken.push(folder.clone());
+
+            let ini_path = profile_ini_path(&path);
+            let Ok(content) = fs::read_to_string(&ini_path) else {
+                continue;
+            };
+            let (guid_opt, display) = read_userprofile_identity(&content);
+            let guid = match guid_opt {
+                Some(guid) => guid,
+                None => {
+                    let guid = generate_profile_guid();
+                    let updated = upsert_profile_guid_content(&content, &guid);
+                    let error = write_profile_file_atomic(&ini_path, &updated).err();
+                    guid_backfills.push(LocalProfileGuidBackfill {
+                        path: path.clone(),
+                        guid: guid.clone(),
+                        error,
+                    });
+                    if guid_backfills
+                        .last()
+                        .is_some_and(|backfill| backfill.error.is_some())
+                    {
+                        continue;
+                    }
+                    guid
+                }
+            };
+            entries.push(Entry {
+                original_folder: folder.clone(),
+                folder,
+                guid,
+                display,
+            });
+        }
+    }
+
+    let mut folder_renames = Vec::new();
+    for entry in &mut entries {
+        let Some(display) = entry.display.clone() else {
+            continue;
+        };
+        let folder = entry.folder.clone();
+        if let Some(pos) = taken.iter().position(|f| *f == folder) {
+            taken.swap_remove(pos);
+        }
+        let desired = folder_name_for_display(&display, &folder, &taken);
+        if desired.eq_ignore_ascii_case(&folder) {
+            taken.push(folder);
+            continue;
+        }
+        let error = fs::rename(root.join(&folder), root.join(&desired)).err();
+        folder_renames.push(LocalProfileFolderRename {
+            current_folder: folder.clone(),
+            desired_folder: desired.clone(),
+            error,
+        });
+        if folder_renames
+            .last()
+            .is_some_and(|rename| rename.error.is_none())
+        {
+            taken.push(desired.clone());
+            entry.folder = desired;
+        } else {
+            taken.push(folder);
+        }
+    }
+
+    use std::collections::hash_map::Entry as MapEntry;
+    let mut cache_map: HashMap<String, PathBuf> = HashMap::new();
+    for entry in &entries {
+        let path = root.join(&entry.folder);
+        match cache_map.entry(entry.guid.clone()) {
+            MapEntry::Vacant(slot) => {
+                slot.insert(path);
+            }
+            MapEntry::Occupied(mut slot) => {
+                if path.file_name() < slot.get().file_name() {
+                    slot.insert(path);
+                }
+            }
+        }
+    }
+
+    LocalProfilesMigrationResult {
+        entries: entries
+            .into_iter()
+            .map(|entry| LocalProfileMigrationEntry {
+                original_folder: entry.original_folder,
+                folder: entry.folder,
+                guid: entry.guid,
+            })
+            .collect(),
+        guid_backfills,
+        folder_renames,
+        cache_map,
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ActiveProfile {
     Guest,
     Local { id: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ActiveProfileLoadSelection {
+    Guest,
+    Local {
+        id: String,
+    },
+    MissingFallbackLocal {
+        missing_id: String,
+        fallback_id: String,
+    },
+    MissingFallbackGuest {
+        missing_id: String,
+    },
+}
+
+impl ActiveProfileLoadSelection {
+    #[inline(always)]
+    pub fn local_id(&self) -> Option<&str> {
+        match self {
+            Self::Local { id } => Some(id),
+            Self::MissingFallbackLocal { fallback_id, .. } => Some(fallback_id),
+            Self::Guest | Self::MissingFallbackGuest { .. } => None,
+        }
+    }
+
+    #[inline(always)]
+    pub fn session_profile(&self) -> ActiveProfile {
+        match self {
+            Self::Local { id } => ActiveProfile::Local { id: id.clone() },
+            Self::MissingFallbackLocal { fallback_id, .. } => ActiveProfile::Local {
+                id: fallback_id.clone(),
+            },
+            Self::Guest | Self::MissingFallbackGuest { .. } => ActiveProfile::Guest,
+        }
+    }
 }
 
 #[inline(always)]
@@ -1045,6 +1897,68 @@ pub fn active_profile_local_id(profile: &ActiveProfile) -> Option<&str> {
         ActiveProfile::Local { id } => Some(id),
         ActiveProfile::Guest => None,
     }
+}
+
+pub fn resolve_active_profile_for_load(
+    active: &ActiveProfile,
+    local_profile_exists: impl FnOnce(&str) -> bool,
+    fallback_local_profile_id: impl FnOnce() -> Option<String>,
+) -> ActiveProfileLoadSelection {
+    let Some(id) = active_profile_local_id(active) else {
+        return ActiveProfileLoadSelection::Guest;
+    };
+    if local_profile_exists(id) {
+        return ActiveProfileLoadSelection::Local { id: id.to_string() };
+    }
+    match fallback_local_profile_id() {
+        Some(fallback_id) => ActiveProfileLoadSelection::MissingFallbackLocal {
+            missing_id: id.to_string(),
+            fallback_id,
+        },
+        None => ActiveProfileLoadSelection::MissingFallbackGuest {
+            missing_id: id.to_string(),
+        },
+    }
+}
+
+/// Translate a stored default-profile id to a canonical GUID: pass valid GUIDs
+/// through, map a legacy folder-name id to that folder's GUID, and otherwise
+/// keep the value unchanged (for example, a stale id with no matching folder).
+pub fn heal_default_profile_id(
+    stored: Option<String>,
+    folder_to_guid: &HashMap<&str, &str>,
+) -> Option<String> {
+    let id = stored?;
+    if is_valid_profile_guid(&id) {
+        return Some(id);
+    }
+    folder_to_guid
+        .get(id.as_str())
+        .map(|guid| (*guid).to_string())
+        .or(Some(id))
+}
+
+pub fn default_active_profile_from_id(
+    id: Option<String>,
+    local_profile_exists: impl FnOnce(&str) -> bool,
+) -> ActiveProfile {
+    match id {
+        Some(id) if is_local_profile_id(&id) && local_profile_exists(&id) => {
+            ActiveProfile::Local { id }
+        }
+        _ => ActiveProfile::Guest,
+    }
+}
+
+pub fn default_active_profile_for_side(
+    defaults: &[Option<String>; PLAYER_SLOTS],
+    side: PlayerSide,
+    local_profile_exists: impl FnOnce(&str) -> bool,
+) -> ActiveProfile {
+    default_active_profile_from_id(
+        defaults[player_side_index(side)].clone(),
+        local_profile_exists,
+    )
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -1249,6 +2163,146 @@ impl Default for SessionState {
             player_side: PlayerSide::P1,
             fast_profile_switch_from_select_music: false,
         }
+    }
+}
+
+impl SessionState {
+    #[inline(always)]
+    pub fn active_profile(&self, side: PlayerSide) -> ActiveProfile {
+        self.active_profiles[player_side_index(side)].clone()
+    }
+
+    #[inline(always)]
+    pub fn active_local_profile_id(&self, side: PlayerSide) -> Option<&str> {
+        active_profile_local_id(&self.active_profiles[player_side_index(side)])
+    }
+
+    #[inline(always)]
+    pub fn set_active_profile(&mut self, side: PlayerSide, profile: ActiveProfile) -> bool {
+        let slot = &mut self.active_profiles[player_side_index(side)];
+        if *slot == profile {
+            return false;
+        }
+        *slot = profile;
+        true
+    }
+
+    pub fn restore_default_profiles(
+        &mut self,
+        defaults: &[Option<String>; PLAYER_SLOTS],
+        mut local_profile_exists: impl FnMut(&str) -> bool,
+    ) {
+        for side in [PlayerSide::P1, PlayerSide::P2] {
+            self.active_profiles[player_side_index(side)] =
+                default_active_profile_for_side(defaults, side, |id| local_profile_exists(id));
+        }
+    }
+
+    pub fn restore_joined_default_profiles(
+        &mut self,
+        defaults: &[Option<String>; PLAYER_SLOTS],
+        mut local_profile_exists: impl FnMut(&str) -> bool,
+    ) -> [bool; PLAYER_SLOTS] {
+        let mut changed = [false; PLAYER_SLOTS];
+        for side in [PlayerSide::P1, PlayerSide::P2] {
+            if !self.side_joined(side) {
+                continue;
+            }
+            let idx = player_side_index(side);
+            self.active_profiles[idx] =
+                default_active_profile_for_side(defaults, side, |id| local_profile_exists(id));
+            changed[idx] = true;
+        }
+        changed
+    }
+
+    #[inline(always)]
+    pub fn music_rate(&self) -> f32 {
+        if self.music_rate.is_finite() && self.music_rate > 0.0 {
+            self.music_rate
+        } else {
+            1.0
+        }
+    }
+
+    #[inline(always)]
+    pub fn set_music_rate(&mut self, rate: f32) {
+        self.music_rate = if rate.is_finite() && rate > 0.0 {
+            rate.clamp(0.5, 3.0)
+        } else {
+            1.0
+        };
+    }
+
+    #[inline(always)]
+    pub const fn timing_tick_mode(&self) -> TimingTickMode {
+        self.timing_tick_mode
+    }
+
+    #[inline(always)]
+    pub fn set_timing_tick_mode(&mut self, mode: TimingTickMode) {
+        self.timing_tick_mode = mode;
+    }
+
+    #[inline(always)]
+    pub const fn play_style(&self) -> PlayStyle {
+        self.play_style
+    }
+
+    pub fn set_play_style(&mut self, style: PlayStyle) -> Option<PlayStyle> {
+        let prev_style = self.play_style;
+        if prev_style == style {
+            return None;
+        }
+        self.play_style = style;
+        Some(prev_style)
+    }
+
+    #[inline(always)]
+    pub const fn play_mode(&self) -> PlayMode {
+        self.play_mode
+    }
+
+    #[inline(always)]
+    pub fn set_play_mode(&mut self, mode: PlayMode) {
+        self.play_mode = mode;
+    }
+
+    #[inline(always)]
+    pub const fn player_side(&self) -> PlayerSide {
+        self.player_side
+    }
+
+    #[inline(always)]
+    pub fn set_player_side(&mut self, side: PlayerSide) {
+        self.player_side = side;
+    }
+
+    #[inline(always)]
+    pub const fn side_joined(&self, side: PlayerSide) -> bool {
+        player_side_is_joined(self.joined_mask, side)
+    }
+
+    #[inline(always)]
+    pub fn set_joined_sides(&mut self, p1: bool, p2: bool) {
+        self.joined_mask = joined_player_mask(p1, p2);
+    }
+
+    #[inline(always)]
+    pub const fn fast_profile_switch_from_select_music(&self) -> bool {
+        self.fast_profile_switch_from_select_music
+    }
+
+    #[inline(always)]
+    pub fn set_fast_profile_switch_from_select_music(&mut self, enabled: bool) {
+        self.fast_profile_switch_from_select_music = enabled;
+    }
+
+    #[inline(always)]
+    pub fn take_fast_profile_switch_from_select_music(&mut self) -> bool {
+        let was_set = self.fast_profile_switch_from_select_music;
+        self.fast_profile_switch_from_select_music = false;
+        was_set
     }
 }
 
@@ -5210,6 +6264,98 @@ pub fn render_arrowcloud_ini_content(api_key: &str) -> String {
     content
 }
 
+pub fn write_groovestats_ini_file(
+    path: &Path,
+    api_key: &str,
+    is_pad_player: bool,
+    username: &str,
+) -> std::io::Result<()> {
+    fs::write(
+        path,
+        render_groovestats_ini_content(api_key, is_pad_player, username),
+    )
+}
+
+pub fn write_arrowcloud_ini_file(path: &Path, api_key: &str) -> std::io::Result<()> {
+    fs::write(path, render_arrowcloud_ini_content(api_key))
+}
+
+pub fn write_profile_ini_dir(dir: &Path, guid: &str, profile: &Profile) -> std::io::Result<()> {
+    fs::write(
+        profile_ini_path(dir),
+        render_profile_ini_content(guid, profile),
+    )
+}
+
+pub fn ensure_local_profile_files_dir(
+    dir: &Path,
+    guid: &str,
+    default_profile: &Profile,
+) -> std::io::Result<()> {
+    fs::create_dir_all(dir)?;
+    let profile_ini = profile_ini_path(dir);
+    if !profile_ini.exists() {
+        write_profile_ini_dir(dir, guid, default_profile)?;
+    }
+    let groovestats_ini = groovestats_ini_path(dir);
+    if !groovestats_ini.exists() {
+        write_groovestats_ini_file(&groovestats_ini, "", false, "")?;
+    }
+    let arrowcloud_ini = arrowcloud_ini_path(dir);
+    if !arrowcloud_ini.exists() {
+        write_arrowcloud_ini_file(&arrowcloud_ini, "")?;
+    }
+    Ok(())
+}
+
+pub fn write_groovestats_credentials_dir(
+    dir: &Path,
+    api_key: &str,
+    is_pad_player: bool,
+    username: &str,
+) -> std::io::Result<()> {
+    write_groovestats_ini_file(&groovestats_ini_path(dir), api_key, is_pad_player, username)
+}
+
+pub fn write_arrowcloud_api_key_dir(dir: &Path, api_key: &str) -> std::io::Result<()> {
+    write_arrowcloud_ini_file(&arrowcloud_ini_path(dir), api_key)
+}
+
+pub fn read_arrowcloud_api_key_file(path: &Path) -> String {
+    fs::read_to_string(path)
+        .ok()
+        .and_then(|text| api_key_from_ini_text(&text))
+        .unwrap_or_default()
+}
+
+pub fn read_groovestats_api_key_file(path: &Path) -> Option<String> {
+    fs::read_to_string(path)
+        .ok()
+        .and_then(|text| api_key_from_ini_text(&text))
+        .filter(|key| !key.is_empty())
+}
+
+pub fn read_arrowcloud_api_key_dir(dir: &Path) -> String {
+    read_arrowcloud_api_key_file(&arrowcloud_ini_path(dir))
+}
+
+pub fn read_groovestats_api_key_dir(dir: &Path) -> Option<String> {
+    read_groovestats_api_key_file(&groovestats_ini_path(dir))
+}
+
+pub fn api_key_from_ini_text(text: &str) -> Option<String> {
+    for line in text.lines() {
+        let line = line.trim();
+        let rest = line
+            .strip_prefix("ApiKey=")
+            .or_else(|| line.strip_prefix("ApiKey ="));
+        if let Some(rest) = rest {
+            return Some(rest.trim().to_string());
+        }
+    }
+    None
+}
+
 #[derive(Debug, Clone)]
 pub struct Profile {
     pub display_name: String,
@@ -6807,6 +7953,34 @@ mod tests {
     }
 
     #[test]
+    fn scorebox_profile_snapshot_uses_profile_fields_and_service_flags() {
+        let mut profile = Profile::default();
+        profile.display_scorebox = true;
+        profile.show_ex_score = true;
+        profile.groovestats_api_key = " gs-key ".to_string();
+        profile.arrowcloud_api_key = " ac-key ".to_string();
+        profile.groovestats_username = " player ".to_string();
+
+        let snapshot =
+            scorebox_profile_snapshot(&profile, true, true, true, true, Some("profile-1".into()));
+        assert!(snapshot.display_scorebox);
+        assert!(snapshot.gs_active);
+        assert!(snapshot.show_ex_score);
+        assert_eq!(snapshot.api_key(), "gs-key");
+        assert_eq!(snapshot.arrowcloud_api_key(), "ac-key");
+        assert!(snapshot.include_arrowcloud());
+        assert_eq!(snapshot.gs_username(), "player");
+        assert_eq!(snapshot.persistent_profile_id(), Some("profile-1"));
+        assert_eq!(snapshot.auto_profile_id(), Some("profile-1"));
+        assert!(snapshot.should_auto_populate());
+
+        let disabled =
+            scorebox_profile_snapshot(&profile, true, false, false, true, Some("profile-1".into()));
+        assert!(!disabled.gs_active);
+        assert!(!disabled.include_arrowcloud());
+    }
+
+    #[test]
     fn profile_last_played_updates_style_entry() {
         let mut profile = Profile::default();
 
@@ -7367,6 +8541,58 @@ mod tests {
     }
 
     #[test]
+    fn session_state_normalizes_rate_and_updates_modes() {
+        let mut session = SessionState::default();
+        assert_eq!(session.music_rate(), 1.0);
+
+        session.set_music_rate(2.5);
+        assert_eq!(session.music_rate(), 2.5);
+        session.set_music_rate(9.0);
+        assert_eq!(session.music_rate(), 3.0);
+        session.set_music_rate(0.0);
+        assert_eq!(session.music_rate(), 1.0);
+        session.music_rate = f32::NAN;
+        assert_eq!(session.music_rate(), 1.0);
+
+        session.set_timing_tick_mode(TimingTickMode::Hit);
+        assert_eq!(session.timing_tick_mode(), TimingTickMode::Hit);
+        session.set_play_mode(PlayMode::Marathon);
+        assert_eq!(session.play_mode(), PlayMode::Marathon);
+        session.set_player_side(PlayerSide::P2);
+        assert_eq!(session.player_side(), PlayerSide::P2);
+    }
+
+    #[test]
+    fn session_state_reports_play_style_changes() {
+        let mut session = SessionState::default();
+        assert_eq!(session.play_style(), PlayStyle::Single);
+        assert_eq!(
+            session.set_play_style(PlayStyle::Double),
+            Some(PlayStyle::Single)
+        );
+        assert_eq!(session.play_style(), PlayStyle::Double);
+        assert_eq!(session.set_play_style(PlayStyle::Double), None);
+    }
+
+    #[test]
+    fn session_state_tracks_joined_sides_and_fast_switch() {
+        let mut session = SessionState::default();
+        assert!(session.side_joined(PlayerSide::P1));
+        assert!(!session.side_joined(PlayerSide::P2));
+
+        session.set_joined_sides(false, true);
+        assert!(!session.side_joined(PlayerSide::P1));
+        assert!(session.side_joined(PlayerSide::P2));
+
+        assert!(!session.fast_profile_switch_from_select_music());
+        session.set_fast_profile_switch_from_select_music(true);
+        assert!(session.fast_profile_switch_from_select_music());
+        assert!(session.take_fast_profile_switch_from_select_music());
+        assert!(!session.fast_profile_switch_from_select_music());
+        assert!(!session.take_fast_profile_switch_from_select_music());
+    }
+
+    #[test]
     fn play_style_follows_join_count() {
         assert_eq!(
             play_style_for_joined(PlayStyle::Single, true, true),
@@ -7594,6 +8820,62 @@ mod tests {
     }
 
     #[test]
+    fn read_userprofile_initials_sanitizes_first_profile_section() {
+        let src = "[UserProfile]\nPlayerInitials= a b-c_d \n\n[UserProfile]\nPlayerInitials=NOPE\n";
+        assert_eq!(
+            read_userprofile_initials_content(src).as_deref(),
+            Some("ABCD")
+        );
+        assert_eq!(
+            read_userprofile_initials_content("[Editable]\nPlayerInitials=ABCD\n"),
+            None
+        );
+        assert_eq!(
+            read_userprofile_initials_content("[userprofile]\nPlayerInitials=\n"),
+            None
+        );
+    }
+
+    #[test]
+    fn local_score_profile_sources_use_profile_initials_or_default() {
+        let root = temp_profile_dir("score-profile-sources");
+        let alice = root.join("alice-guid");
+        let bob = root.join("bob-guid");
+        fs::create_dir_all(&alice).expect("alice profile dir should create");
+        fs::create_dir_all(&bob).expect("bob profile dir should create");
+        fs::write(
+            profile_ini_path(&alice),
+            "[userprofile]\nPlayerInitials=ALIC\n",
+        )
+        .expect("alice profile ini should write");
+
+        let sources = local_score_profile_sources_from_summaries(
+            vec![
+                LocalProfileSummary {
+                    id: "alice-guid".to_string(),
+                    display_name: "Alice".to_string(),
+                    avatar_path: None,
+                },
+                LocalProfileSummary {
+                    id: "bob-guid".to_string(),
+                    display_name: "Bob".to_string(),
+                    avatar_path: None,
+                },
+            ],
+            |id| root.join(id),
+        );
+
+        assert_eq!(sources[0].root, alice.join("scores").join("local"));
+        assert_eq!(sources[0].initials, "ALIC");
+        assert_eq!(sources[0].display_name, "Alice");
+        assert_eq!(sources[1].root, bob.join("scores").join("local"));
+        assert_eq!(sources[1].initials, DEFAULT_SCORE_INITIALS);
+        assert_eq!(sources[1].display_name, "Bob");
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn profile_id_sorting_is_case_insensitive_with_stable_tiebreak() {
         let mut ids = ["beta", "Alpha", "alpha", "Beta", "00000000"];
         ids.sort_by(|a, b| cmp_profile_ids_case_insensitive(a, b));
@@ -7760,6 +9042,111 @@ mod tests {
 
         let _ = fs::remove_dir_all(root);
         let _ = fs::remove_dir_all(avatar_root);
+    }
+
+    #[test]
+    fn rename_local_profile_dir_rewrites_display_and_cosmetic_folder() {
+        let root = temp_profile_dir("rename-profile-root");
+        let alice_id = create_local_profile_dir(&root, "Alice", NoteSkin::default(), 100)
+            .expect("Alice profile should be created");
+        create_local_profile_dir(&root, "Bob", NoteSkin::default(), 100)
+            .expect("Bob profile should be created");
+        let alice_dir = root.join("Alice");
+
+        let result = rename_local_profile_dir(&root, &alice_dir, &alice_id, " Bob ")
+            .expect("profile should rename");
+
+        assert_eq!(result.display_name, "Bob");
+        let folder = result.folder_rename.expect("folder should be renamed");
+        assert_eq!(folder.current_folder, "Alice");
+        assert_ne!(folder.desired_folder, "Bob");
+        assert!(folder.error.is_none());
+        assert!(!alice_dir.exists());
+
+        let summaries = scan_local_profile_summaries(&root);
+        let renamed = summaries
+            .iter()
+            .find(|summary| summary.id == alice_id)
+            .expect("renamed profile should scan");
+        assert_eq!(renamed.display_name, "Bob");
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn delete_local_profile_dir_removes_profile_and_validates_inputs() {
+        let root = temp_profile_dir("delete-profile-root");
+        let id = create_local_profile_dir(&root, "Delete Me", NoteSkin::default(), 100)
+            .expect("profile should be created");
+        let dir = root.join("Delete Me");
+
+        delete_local_profile_dir(&dir, "../bad").expect_err("invalid id should fail");
+        assert!(dir.is_dir());
+
+        delete_local_profile_dir(&dir, &id).expect("profile should delete");
+        assert!(!dir.exists());
+        assert_eq!(
+            delete_local_profile_dir(&dir, &id)
+                .expect_err("missing profile should fail")
+                .kind(),
+            std::io::ErrorKind::NotFound
+        );
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn migrate_local_profile_dirs_backfills_renames_and_builds_cache() {
+        let root = temp_profile_dir("migrate-profile-root");
+        let existing_id = "17c7b8a2-3b73-4e8a-9d7d-cfa7e783c00b";
+        let existing_dir = root.join("Alice");
+        let legacy_dir = root.join("Legacy");
+        fs::create_dir_all(&existing_dir).expect("existing profile dir should be created");
+        fs::create_dir_all(&legacy_dir).expect("legacy profile dir should be created");
+        fs::write(
+            profile_ini_path(&existing_dir),
+            format!("[userprofile]\nGuid={existing_id}\nDisplayName=Alice\n"),
+        )
+        .expect("existing profile should write");
+        fs::write(
+            profile_ini_path(&legacy_dir),
+            "[userprofile]\nDisplayName=Alice\n",
+        )
+        .expect("legacy profile should write");
+
+        let result = migrate_local_profile_dirs(&root);
+
+        assert_eq!(result.guid_backfills.len(), 1);
+        assert_eq!(result.guid_backfills[0].path, legacy_dir);
+        assert!(result.guid_backfills[0].error.is_none());
+        assert_eq!(result.folder_renames.len(), 1);
+        assert_eq!(result.folder_renames[0].current_folder, "Legacy");
+        assert_eq!(result.folder_renames[0].desired_folder, "Alice-2");
+        assert!(result.folder_renames[0].error.is_none());
+        assert!(!root.join("Legacy").exists());
+        assert!(root.join("Alice-2").is_dir());
+
+        let migrated = result
+            .entries
+            .iter()
+            .find(|entry| entry.original_folder == "Legacy")
+            .expect("legacy entry should be present");
+        assert_eq!(migrated.folder, "Alice-2");
+        assert!(is_valid_profile_guid(&migrated.guid));
+        assert_eq!(
+            result.cache_map.get(&migrated.guid),
+            Some(&root.join("Alice-2"))
+        );
+        assert_eq!(result.cache_map.get(existing_id), Some(&root.join("Alice")));
+
+        let migrated_ini =
+            fs::read_to_string(profile_ini_path(&root.join("Alice-2"))).expect("ini should read");
+        assert_eq!(
+            read_userprofile_identity(&migrated_ini).0.as_deref(),
+            Some(migrated.guid.as_str())
+        );
+
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
@@ -7987,6 +9374,48 @@ mod tests {
         };
         assert!(!active_profile_is_guest(&local));
         assert_eq!(active_profile_local_id(&local), Some("00000042"));
+    }
+
+    #[test]
+    fn resolve_active_profile_load_selects_fallback_for_missing_local() {
+        let active = ActiveProfile::Local {
+            id: "missing".to_string(),
+        };
+
+        let selected =
+            resolve_active_profile_for_load(&active, |_| false, || Some("fallback".to_string()));
+
+        assert_eq!(
+            selected,
+            ActiveProfileLoadSelection::MissingFallbackLocal {
+                missing_id: "missing".to_string(),
+                fallback_id: "fallback".to_string(),
+            }
+        );
+        assert_eq!(selected.local_id(), Some("fallback"));
+        assert_eq!(
+            selected.session_profile(),
+            ActiveProfile::Local {
+                id: "fallback".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn resolve_active_profile_load_selects_guest_without_fallback() {
+        let active = ActiveProfile::Local {
+            id: "missing".to_string(),
+        };
+        let selected = resolve_active_profile_for_load(&active, |_| false, || None);
+
+        assert_eq!(
+            selected,
+            ActiveProfileLoadSelection::MissingFallbackGuest {
+                missing_id: "missing".to_string(),
+            }
+        );
+        assert_eq!(selected.local_id(), None);
+        assert_eq!(selected.session_profile(), ActiveProfile::Guest);
     }
 
     #[test]
@@ -8430,6 +9859,69 @@ mod tests {
     }
 
     #[test]
+    fn profile_credential_files_round_trip_api_keys() {
+        let dir = temp_profile_dir("credentials");
+
+        write_groovestats_credentials_dir(&dir, "gs-key", true, "player")
+            .expect("GrooveStats credentials should write");
+        write_arrowcloud_api_key_dir(&dir, "ac-key").expect("ArrowCloud credentials should write");
+
+        assert_eq!(
+            fs::read_to_string(groovestats_ini_path(&dir)).unwrap(),
+            "[GrooveStats]\nApiKey=gs-key\nIsPadPlayer=1\nUsername=player\n\n"
+        );
+        assert_eq!(
+            read_groovestats_api_key_dir(&dir).as_deref(),
+            Some("gs-key")
+        );
+        assert_eq!(read_arrowcloud_api_key_dir(&dir), "ac-key");
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn ensure_local_profile_files_dir_creates_only_missing_files() {
+        let dir = temp_profile_dir("ensure-profile-files");
+        let guid = "17c7b8a2-3b73-4e8a-9d7d-cfa7e783c00b";
+        let profile = Profile {
+            display_name: "Default Player".to_string(),
+            player_initials: "DFLT".to_string(),
+            ..Profile::default()
+        };
+
+        ensure_local_profile_files_dir(&dir, guid, &profile)
+            .expect("default profile files should be created");
+        assert!(profile_ini_path(&dir).is_file());
+        assert!(groovestats_ini_path(&dir).is_file());
+        assert!(arrowcloud_ini_path(&dir).is_file());
+        assert!(
+            fs::read_to_string(profile_ini_path(&dir))
+                .expect("profile ini should read")
+                .contains("DisplayName=Default Player\n")
+        );
+
+        write_arrowcloud_api_key_dir(&dir, "existing-key").expect("arrowcloud key should write");
+        ensure_local_profile_files_dir(&dir, guid, &profile)
+            .expect("existing files should be preserved");
+        assert_eq!(read_arrowcloud_api_key_dir(&dir), "existing-key");
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn api_key_from_ini_text_supports_spacing_and_empty_keys() {
+        assert_eq!(
+            api_key_from_ini_text("[ArrowCloud]\nApiKey =  key  \n").as_deref(),
+            Some("key")
+        );
+        assert_eq!(
+            api_key_from_ini_text("[GrooveStats]\nApiKey=\n").as_deref(),
+            Some("")
+        );
+        assert_eq!(api_key_from_ini_text("[Other]\nToken=key\n"), None);
+    }
+
+    #[test]
     fn no_cmod_alternative_parses_display_and_aliases() {
         // Display round-trips.
         for v in [
@@ -8531,6 +10023,403 @@ mod tests {
         assert!(!snapshot.guest);
         assert_eq!(snapshot.display_name, "");
         assert_eq!(snapshot.avatar_texture_key, None);
+    }
+
+    #[test]
+    fn gameplay_hud_snapshot_from_parts_copies_session_profile_state() {
+        let mut p1 = Profile::default();
+        p1.display_name = "Alice".to_string();
+        p1.avatar_texture_key = Some("avatar-p1".to_string());
+        p1.hide_username = true;
+
+        let mut p2 = Profile::default();
+        p2.display_name = "Bob".to_string();
+        p2.avatar_texture_key = Some("avatar-p2".to_string());
+
+        let profiles = [p1, p2];
+        let active_profiles = [
+            ActiveProfile::Local {
+                id: "profile-1".to_string(),
+            },
+            ActiveProfile::Guest,
+        ];
+        let snapshot = gameplay_hud_snapshot_from_parts(
+            PlayStyle::Versus,
+            PlayerSide::P2,
+            SESSION_JOINED_MASK_P1,
+            &active_profiles,
+            &profiles,
+        );
+
+        assert_eq!(snapshot.play_style, PlayStyle::Versus);
+        assert_eq!(snapshot.player_side, PlayerSide::P2);
+        assert!(snapshot.p1.joined);
+        assert!(!snapshot.p1.guest);
+        assert_eq!(snapshot.p1.display_name, "Alice");
+        assert_eq!(snapshot.p1.avatar_texture_key.as_deref(), Some("avatar-p1"));
+        assert!(snapshot.p1.hide_username);
+        assert!(!snapshot.p2.joined);
+        assert!(snapshot.p2.guest);
+        assert_eq!(snapshot.p2.display_name, "Bob");
+        assert_eq!(snapshot.p2.avatar_texture_key.as_deref(), Some("avatar-p2"));
+        assert!(!snapshot.p2.hide_username);
+    }
+
+    #[test]
+    fn apply_loaded_profile_data_updates_profile_sections_and_sidecars() {
+        let mut profile = Profile::default();
+        profile.display_name = "stale".to_string();
+        let mut default_profile = Profile::default();
+        default_profile.store_current_player_options_for_all_styles();
+
+        let today = "2026-07-08";
+        let profile_values = HashMap::from([
+            (("userprofile", "DisplayName"), "Alice".to_string()),
+            (("userprofile", "PlayerInitials"), " a-b_c ".to_string()),
+            (("Editable", "WeightPounds"), "180".to_string()),
+            (("Stats", "IgnoreStepCountCalories"), "1".to_string()),
+            (("Stats", "CaloriesBurnedDate"), today.to_string()),
+            (("Stats", "CaloriesBurnedToday"), "12.5".to_string()),
+        ]);
+        let gs_values = HashMap::from([
+            (("GrooveStats", "ApiKey"), "gs-key".to_string()),
+            (("GrooveStats", "IsPadPlayer"), "1".to_string()),
+            (("GrooveStats", "Username"), "player".to_string()),
+        ]);
+        let ac_values = HashMap::from([(("ArrowCloud", "ApiKey"), "ac-key".to_string())]);
+
+        apply_loaded_profile_data(
+            &mut profile,
+            &default_profile,
+            PlayStyle::Double,
+            today,
+            true,
+            |section| profile_values.keys().any(|(s, _)| *s == section),
+            |section, key| profile_values.get(&(section, key)).cloned(),
+            ProfileStats {
+                current_combo: 42,
+                known_pack_names: HashSet::from(["Pack A".to_string()]),
+            },
+            HashSet::from(["chart-a".to_string()]),
+            HashSet::from(["Pack A".to_string()]),
+            true,
+            |section, key| gs_values.get(&(section, key)).cloned(),
+            true,
+            |section, key| ac_values.get(&(section, key)).cloned(),
+        );
+
+        assert_eq!(profile.display_name, "Alice");
+        assert_eq!(profile.player_initials, "ABC");
+        assert_eq!(profile.weight_pounds, 180);
+        assert!(profile.ignore_step_count_calories);
+        assert_eq!(profile.calories_burned_day, today);
+        assert_eq!(profile.calories_burned_today, 12.5);
+        assert_eq!(profile.current_combo, 42);
+        assert!(profile.known_pack_names.contains("Pack A"));
+        assert!(profile.favorites.contains("chart-a"));
+        assert!(profile.favorited_packs.contains("Pack A"));
+        assert_eq!(profile.groovestats_api_key, "gs-key");
+        assert!(profile.groovestats_is_pad_player);
+        assert_eq!(profile.groovestats_username, "player");
+        assert_eq!(profile.arrowcloud_api_key, "ac-key");
+    }
+
+    #[test]
+    fn physical_pad_side_follows_doubles_session_side() {
+        assert_eq!(
+            side_for_physical_pad(PlayStyle::Single, PlayerSide::P1, false),
+            PlayerSide::P1
+        );
+        assert_eq!(
+            side_for_physical_pad(PlayStyle::Single, PlayerSide::P1, true),
+            PlayerSide::P2
+        );
+        assert_eq!(
+            side_for_physical_pad(PlayStyle::Double, PlayerSide::P2, false),
+            PlayerSide::P2
+        );
+        assert_eq!(
+            side_for_physical_pad(PlayStyle::Double, PlayerSide::P2, true),
+            PlayerSide::P2
+        );
+    }
+
+    #[test]
+    fn gameplay_player_side_uses_session_side_for_solo_and_index_for_versus() {
+        assert_eq!(
+            side_for_gameplay_player(1, 0, PlayerSide::P2),
+            PlayerSide::P2
+        );
+        assert_eq!(
+            side_for_gameplay_player(2, 0, PlayerSide::P2),
+            PlayerSide::P1
+        );
+        assert_eq!(
+            side_for_gameplay_player(2, 1, PlayerSide::P1),
+            PlayerSide::P2
+        );
+    }
+
+    #[test]
+    fn default_profile_id_updates_clear_duplicates_and_respect_joined_sides() {
+        let p1 = ActiveProfile::Local {
+            id: "alpha".to_string(),
+        };
+        let p2 = ActiveProfile::Local {
+            id: "beta".to_string(),
+        };
+
+        let defaults = default_profile_ids_after_side_update(
+            [Some("old".to_string()), Some("alpha".to_string())],
+            PlayerSide::P1,
+            &p1,
+            |_| true,
+        );
+        assert_eq!(defaults, [Some("alpha".to_string()), None]);
+
+        let defaults = default_profile_ids_after_side_update(
+            [Some("old".to_string()), Some("beta".to_string())],
+            PlayerSide::P1,
+            &p1,
+            |_| false,
+        );
+        assert_eq!(defaults, [None, Some("beta".to_string())]);
+
+        let defaults = default_profile_ids_after_joined_selection(
+            [Some("old-p1".to_string()), Some("old-p2".to_string())],
+            SESSION_JOINED_MASK_P2,
+            &p1,
+            &p2,
+        );
+        assert_eq!(
+            defaults,
+            [Some("old-p1".to_string()), Some("beta".to_string())]
+        );
+    }
+
+    #[test]
+    fn default_profile_helpers_heal_legacy_ids_and_resolve_active_profiles() {
+        let guid = "17c7b8a2-3b73-4e8a-9d7d-cfa7e783c00b";
+        let mut folder_to_guid: HashMap<&str, &str> = HashMap::new();
+        folder_to_guid.insert("00000000", guid);
+
+        assert_eq!(
+            heal_default_profile_id(Some("00000000".to_string()), &folder_to_guid).as_deref(),
+            Some(guid)
+        );
+        assert_eq!(
+            heal_default_profile_id(Some(guid.to_string()), &folder_to_guid).as_deref(),
+            Some(guid)
+        );
+        assert_eq!(
+            heal_default_profile_id(Some("99999999".to_string()), &folder_to_guid).as_deref(),
+            Some("99999999")
+        );
+        assert_eq!(heal_default_profile_id(None, &folder_to_guid), None);
+
+        assert_eq!(
+            default_active_profile_from_id(Some("local".to_string()), |_| true),
+            ActiveProfile::Local {
+                id: "local".to_string()
+            }
+        );
+        assert_eq!(
+            default_active_profile_from_id(Some("missing".to_string()), |_| false),
+            ActiveProfile::Guest
+        );
+        assert_eq!(
+            default_active_profile_from_id(None, |_| true),
+            ActiveProfile::Guest
+        );
+    }
+
+    #[test]
+    fn session_state_restores_defaults_for_joined_sides() {
+        let defaults = [Some("p1".to_string()), Some("p2".to_string())];
+        let mut session = SessionState::default();
+        session.restore_default_profiles(&defaults, |id| id == "p2");
+        assert_eq!(session.active_profile(PlayerSide::P1), ActiveProfile::Guest);
+        assert_eq!(
+            session.active_profile(PlayerSide::P2),
+            ActiveProfile::Local {
+                id: "p2".to_string()
+            }
+        );
+
+        session.set_joined_sides(false, true);
+        let changed = session.restore_joined_default_profiles(&defaults, |_| true);
+        assert_eq!(changed, [false, true]);
+        assert_eq!(session.active_profile(PlayerSide::P1), ActiveProfile::Guest);
+        assert_eq!(session.active_local_profile_id(PlayerSide::P2), Some("p2"));
+
+        assert!(!session.set_active_profile(
+            PlayerSide::P2,
+            ActiveProfile::Local {
+                id: "p2".to_string()
+            }
+        ));
+        assert!(session.set_active_profile(PlayerSide::P2, ActiveProfile::Guest));
+    }
+
+    #[test]
+    fn known_pack_loaded_profile_helpers_select_active_matching_profile() {
+        let active_profiles = [
+            ActiveProfile::Local {
+                id: "same".to_string(),
+            },
+            ActiveProfile::Local {
+                id: "same".to_string(),
+            },
+        ];
+        let mut p1 = Profile::default();
+        p1.known_pack_names.insert("Alpha".to_string());
+        let mut p2 = Profile::default();
+        p2.known_pack_names.insert("Beta".to_string());
+        let mut profiles = [p1, p2];
+
+        let known = known_pack_names_for_loaded_profile(&active_profiles, &profiles, "same")
+            .expect("known packs for active profile");
+        assert_eq!(known, HashSet::from(["Alpha".to_string()]));
+
+        let save_side = mark_known_pack_names_for_loaded_profile(
+            &active_profiles,
+            &mut profiles,
+            "same",
+            &["Gamma"],
+        );
+        assert_eq!(save_side, Some(PlayerSide::P1));
+        assert!(profiles[0].known_pack_names.contains("Gamma"));
+        assert!(profiles[1].known_pack_names.contains("Gamma"));
+        assert!(!profile_has_favorited_pack(&profiles[0], "Missing"));
+    }
+
+    #[test]
+    fn loaded_profile_credential_helpers_update_matching_sides() {
+        let active_profiles = [
+            ActiveProfile::Local {
+                id: "same".to_string(),
+            },
+            ActiveProfile::Local {
+                id: "other".to_string(),
+            },
+        ];
+        let mut profiles = [Profile::default(), Profile::default()];
+
+        set_arrowcloud_api_key_for_side(&mut profiles, PlayerSide::P2, "side-ac");
+        assert_eq!(profiles[1].arrowcloud_api_key, "side-ac");
+
+        assert!(set_arrowcloud_api_key_for_loaded_profile(
+            &active_profiles,
+            &mut profiles,
+            "same",
+            "loaded-ac",
+        ));
+        assert_eq!(profiles[0].arrowcloud_api_key, "loaded-ac");
+        assert_eq!(profiles[1].arrowcloud_api_key, "side-ac");
+
+        assert!(set_groovestats_credentials_for_loaded_profile(
+            &active_profiles,
+            &mut profiles,
+            "other",
+            "gs-key",
+            "player",
+        ));
+        assert_eq!(profiles[1].groovestats_api_key, "gs-key");
+        assert_eq!(profiles[1].groovestats_username, "player");
+        assert!(profiles[1].groovestats_is_pad_player);
+
+        assert!(!set_arrowcloud_api_key_for_loaded_profile(
+            &active_profiles,
+            &mut profiles,
+            "missing",
+            "unused",
+        ));
+    }
+
+    #[test]
+    fn side_favorite_helpers_mutate_and_return_persistable_sets() {
+        let mut profiles = [Profile::default(), Profile::default()];
+
+        let (added, favorites) = toggle_favorite_for_side(&mut profiles, PlayerSide::P1, "abc");
+        assert!(added);
+        assert_eq!(favorites, HashSet::from(["abc".to_string()]));
+
+        let (added, favorites) = toggle_favorite_for_side(&mut profiles, PlayerSide::P1, "abc");
+        assert!(!added);
+        assert!(favorites.is_empty());
+
+        seed_favorite_for_side(&mut profiles, PlayerSide::P2, "xyz");
+        assert!(profiles[1].favorites.contains("xyz"));
+
+        let (added, packs) = toggle_favorited_pack_for_side(&mut profiles, PlayerSide::P2, "Mix");
+        assert!(added);
+        assert_eq!(packs, HashSet::from(["Mix".to_string()]));
+
+        seed_favorited_pack_for_side(&mut profiles, PlayerSide::P1, "Alpha");
+        assert!(profile_has_favorited_pack(&profiles[0], "Alpha"));
+    }
+
+    #[test]
+    fn side_profile_views_read_display_credentials_and_packs() {
+        let mut p1 = Profile::default();
+        p1.display_name = "Player One".to_string();
+        p1.avatar_texture_key = Some("avatar:p1".to_string());
+        p1.groovestats_api_key = "  gs-key  ".to_string();
+        p1.pad_light_brightness = 25;
+        p1.smx_bg_pack = Some("custom-bg".to_string());
+        p1.favorites.insert("chart".to_string());
+        p1.favorited_packs.insert("Pack".to_string());
+
+        let mut p2 = Profile::default();
+        p2.pad_light_brightness = 75;
+        p2.smx_judge_pack = Some("custom-judge".to_string());
+
+        let mut profiles = [p1, p2];
+        assert_eq!(
+            footer_fields_for_side(&profiles, PlayerSide::P1),
+            (Some("avatar:p1".to_string()), "Player One".to_string())
+        );
+        assert_eq!(
+            groovestats_api_key_for_side(&profiles, PlayerSide::P1),
+            "gs-key"
+        );
+
+        set_avatar_texture_key_for_side(&mut profiles, PlayerSide::P1, None);
+        assert_eq!(profiles[0].avatar_texture_key, None);
+
+        assert_eq!(
+            pad_light_brightness_for_physical_pad(
+                &profiles,
+                PlayStyle::Single,
+                PlayerSide::P1,
+                false,
+            ),
+            25
+        );
+        assert_eq!(
+            pad_light_brightness_for_physical_pad(
+                &profiles,
+                PlayStyle::Double,
+                PlayerSide::P2,
+                false,
+            ),
+            75
+        );
+
+        assert!(profile_has_favorite(&profiles, PlayerSide::P1, "chart"));
+        assert!(profile_side_has_favorited_pack(
+            &profiles,
+            PlayerSide::P1,
+            "Pack"
+        ));
+
+        let (bg, judge) = smx_pack_names_for_profiles(&profiles, 1u8, 2u8, |name| match name {
+            "custom-bg" => 10,
+            "custom-judge" => 20,
+            _ => 0,
+        });
+        assert_eq!(bg, [10, 1]);
+        assert_eq!(judge, [2, 20]);
     }
 
     #[test]

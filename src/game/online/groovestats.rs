@@ -1,20 +1,8 @@
-use deadsync_online::groovestats::{
-    self as groovestats_api, ConnectionError, ConnectionProbeError, ConnectionStatus,
-};
+use deadsync_online::groovestats::{self as groovestats_api, ConnectionProbeLog, ConnectionStatus};
 use log::{debug, info, warn};
-use std::sync::{LazyLock, Mutex};
-use std::thread;
-
-static STATUS: LazyLock<Mutex<ConnectionStatus>> =
-    LazyLock::new(|| Mutex::new(ConnectionStatus::Pending));
-
-#[inline(always)]
-fn set_status(status: ConnectionStatus) {
-    *STATUS.lock().unwrap() = status;
-}
 
 pub fn get_status() -> ConnectionStatus {
-    STATUS.lock().unwrap().clone()
+    groovestats_api::runtime_get_status()
 }
 
 pub fn is_boogiestats_active() -> bool {
@@ -29,51 +17,39 @@ pub fn active_service() -> groovestats_api::Service {
 
 pub fn init() {
     let cfg = crate::config::get();
-    if !cfg.enable_groovestats {
-        set_status(ConnectionStatus::Error(ConnectionError::Disabled));
-        return;
-    }
-
     let service = active_service();
     let service_name = groovestats_api::service_name(service);
-    set_status(ConnectionStatus::Pending);
-    debug!("Initializing {service_name} network check...");
-    thread::spawn(perform_check);
+    if cfg.enable_groovestats {
+        debug!("Initializing {service_name} network check...");
+    }
+    groovestats_api::runtime_init(cfg.enable_groovestats, service, log_probe_transition);
 }
 
-fn perform_check() {
-    let service = active_service();
-    let service_name = groovestats_api::service_name(service);
-    debug!("Performing {service_name} connectivity check...");
-
-    match groovestats_api::probe_connection(service) {
-        Ok(status) => {
-            match &status {
-                ConnectionStatus::Connected(services) => info!(
-                    "Connected to {service_name} (scores={}, leaderboards={}, autosubmit={}).",
-                    services.get_scores, services.leaderboard, services.auto_submit
-                ),
-                ConnectionStatus::Error(ConnectionError::MachineOffline) => {
-                    warn!("{service_name} servicesResult != OK.")
-                }
-                _ => {}
-            }
-            set_status(status);
+fn log_probe_transition(log: Option<ConnectionProbeLog>) {
+    match log {
+        Some(ConnectionProbeLog::Connected { service, services }) => {
+            let service_name = groovestats_api::service_name(service);
+            info!(
+                "Connected to {service_name} (scores={}, leaderboards={}, autosubmit={}).",
+                services.get_scores, services.leaderboard, services.auto_submit
+            );
         }
-        Err(error) => {
-            let connection_error = error.connection_error();
-            match error {
-                ConnectionProbeError::Timeout => {
-                    warn!("{service_name} connectivity check timed out.")
-                }
-                ConnectionProbeError::InvalidResponse(error) => {
-                    warn!("Failed to parse {service_name} response: {error}")
-                }
-                ConnectionProbeError::CannotConnect(error) => {
-                    warn!("HTTP error to {service_name}: {error}")
-                }
-            }
-            set_status(ConnectionStatus::Error(connection_error));
+        Some(ConnectionProbeLog::MachineOffline { service }) => {
+            let service_name = groovestats_api::service_name(service);
+            warn!("{service_name} servicesResult != OK.");
         }
+        Some(ConnectionProbeLog::Timeout { service }) => {
+            let service_name = groovestats_api::service_name(service);
+            warn!("{service_name} connectivity check timed out.");
+        }
+        Some(ConnectionProbeLog::InvalidResponse { service, error }) => {
+            let service_name = groovestats_api::service_name(service);
+            warn!("Failed to parse {service_name} response: {error}");
+        }
+        Some(ConnectionProbeLog::CannotConnect { service, error }) => {
+            let service_name = groovestats_api::service_name(service);
+            warn!("HTTP error to {service_name}: {error}");
+        }
+        None => {}
     }
 }

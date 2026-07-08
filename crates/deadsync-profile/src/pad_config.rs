@@ -6,7 +6,7 @@
 //! settings owned by the input backend.
 
 use std::fmt::Write as _;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PadConfigProfile {
@@ -27,6 +27,13 @@ const META_KEYS: [&str; 6] = [
     "DefaultFor",
     "GlobalDefault",
 ];
+
+pub const PAD_CONFIG_FILE: &str = "padconfig.ini";
+
+#[inline(always)]
+pub fn pad_config_path(profile_dir: &Path) -> PathBuf {
+    profile_dir.join(PAD_CONFIG_FILE)
+}
 
 #[allow(clippy::too_many_arguments)]
 pub fn upsert_config(
@@ -221,8 +228,16 @@ pub fn load_path(path: &Path) -> std::io::Result<Vec<PadConfigProfile>> {
     Ok(parse(&content))
 }
 
+pub fn load_dir(profile_dir: &Path) -> Vec<PadConfigProfile> {
+    load_path(&pad_config_path(profile_dir)).unwrap_or_default()
+}
+
 pub fn save_path(path: &Path, profiles: &[PadConfigProfile]) -> std::io::Result<()> {
     std::fs::write(path, serialize(profiles))
+}
+
+pub fn save_dir(profile_dir: &Path, profiles: &[PadConfigProfile]) -> std::io::Result<()> {
+    save_path(&pad_config_path(profile_dir), profiles)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -251,6 +266,27 @@ pub fn upsert_path(
     Ok(changed)
 }
 
+#[allow(clippy::too_many_arguments)]
+pub fn upsert_dir(
+    profile_dir: &Path,
+    name: &str,
+    backend: &str,
+    pad_type: Option<String>,
+    serial: Option<String>,
+    make_default: bool,
+    settings: Vec<(String, String)>,
+) -> std::io::Result<bool> {
+    upsert_path(
+        &pad_config_path(profile_dir),
+        name,
+        backend,
+        pad_type,
+        serial,
+        make_default,
+        settings,
+    )
+}
+
 pub fn set_default_path(path: &Path, serial: &str, name: &str) -> std::io::Result<bool> {
     let mut list = load_path(path).unwrap_or_default();
     let changed = set_default_config(&mut list, serial, name);
@@ -258,6 +294,10 @@ pub fn set_default_path(path: &Path, serial: &str, name: &str) -> std::io::Resul
         save_path(path, &list)?;
     }
     Ok(changed)
+}
+
+pub fn set_default_dir(profile_dir: &Path, serial: &str, name: &str) -> std::io::Result<bool> {
+    set_default_path(&pad_config_path(profile_dir), serial, name)
 }
 
 pub fn rename_path(path: &Path, old: &str, new: &str) -> std::io::Result<bool> {
@@ -269,6 +309,10 @@ pub fn rename_path(path: &Path, old: &str, new: &str) -> std::io::Result<bool> {
     Ok(changed)
 }
 
+pub fn rename_dir(profile_dir: &Path, old: &str, new: &str) -> std::io::Result<bool> {
+    rename_path(&pad_config_path(profile_dir), old, new)
+}
+
 pub fn delete_path(path: &Path, name: &str) -> std::io::Result<bool> {
     let mut list = load_path(path).unwrap_or_default();
     let changed = delete_config(&mut list, name);
@@ -276,6 +320,10 @@ pub fn delete_path(path: &Path, name: &str) -> std::io::Result<bool> {
         save_path(path, &list)?;
     }
     Ok(changed)
+}
+
+pub fn delete_dir(profile_dir: &Path, name: &str) -> std::io::Result<bool> {
+    delete_path(&pad_config_path(profile_dir), name)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -350,6 +398,14 @@ mod tests {
             sample("Beta", "smx", None, None, &[]),
         ];
         assert_eq!(parse(&serialize(&profiles)), profiles);
+    }
+
+    #[test]
+    fn pad_config_path_uses_profile_dir() {
+        assert_eq!(
+            pad_config_path(Path::new("Profiles/abc")),
+            Path::new("Profiles/abc").join(PAD_CONFIG_FILE)
+        );
     }
 
     #[test]

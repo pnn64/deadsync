@@ -160,6 +160,21 @@ pub fn chart_effects_from_profile(
     }
 }
 
+pub fn score_invalid_reason_lines_for_profile(
+    chart: &deadsync_chart::ChartData,
+    profile: &deadsync_profile::Profile,
+    music_rate: f32,
+) -> Vec<&'static str> {
+    deadsync_gameplay::score_invalid_reason_lines_for_options(
+        chart,
+        deadsync_gameplay::ScoreValidityOptions {
+            chart_effects: chart_effects_from_profile(profile),
+            attack_mode: gameplay_attack_mode(profile.attack_mode),
+            music_rate,
+        },
+    )
+}
+
 pub fn scroll_effects_from_option(
     scroll: deadsync_profile::ScrollOption,
 ) -> deadsync_gameplay::ScrollEffects {

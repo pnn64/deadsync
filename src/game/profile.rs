@@ -14,7 +14,6 @@ use deadlib_platform::dirs;
 use deadsync_rules::scroll::{GUEST_SCROLL_SPEED, ScrollSpeedSetting};
 use log::{info, warn};
 use std::collections::{HashMap, HashSet};
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -22,19 +21,18 @@ mod update;
 
 pub use deadsync_profile::ImportProfileData;
 use deadsync_profile::{
-    ActiveProfile, GameplayHudPlayerSnapshot, GameplayHudSnapshot, LastPlayed, LastPlayedCourse,
-    LocalProfileSummary, NoteSkin, PLAYER_SLOTS, PlayMode, PlayStyle, PlayerOptionsData,
-    PlayerSide, Profile, ProfileStats, ProfileStatsDecodeError, ProfileStatsLoadError,
-    ProfileStatsWriteError, SessionState, TimingTickMode, active_profile_is_guest,
-    active_profile_local_id, add_known_pack_names, clamp_weight_pounds, find_profile_avatar_path,
-    folder_name_for_display, generate_profile_guid, is_local_profile_id, is_valid_profile_guid,
-    joined_player_mask, load_last_played_course_section, load_last_played_section,
-    load_player_options_section,
-    lock_wait::{LockWaitStats, lock_with_wait_stats},
-    parse_groovestats_is_pad_player, player_options_section, player_side_index as side_ix,
-    player_side_is_joined, read_userprofile_identity, render_arrowcloud_ini_content,
-    render_groovestats_ini_content, render_profile_ini_content, sanitize_player_initials,
-    unknown_pack_names, upsert_profile_guid_content,
+    ActiveProfile, ActiveProfileLoadSelection, GameplayHudSnapshot, LocalProfileSummary, NoteSkin,
+    PLAYER_SLOTS, PlayMode, PlayStyle, PlayerOptionsData, PlayerSide, Profile, ProfileStats,
+    ProfileStatsDecodeError, ProfileStatsLoadError, ProfileStatsWriteError, TimingTickMode,
+    active_profile_is_guest, find_profile_avatar_path, is_local_profile_id, is_valid_profile_guid,
+    player_side_index as side_ix, rename_local_profile_dir, resolve_active_profile_for_load,
+    runtime_lock_profiles as lock_profiles, runtime_lock_session as lock_session,
+    unknown_pack_names,
+};
+#[cfg(test)]
+use deadsync_profile::{
+    LastPlayed, LastPlayedCourse, load_last_played_course_section, load_last_played_section,
+    load_player_options_section, parse_groovestats_is_pad_player,
 };
 pub use update::*;
 
@@ -102,10 +100,6 @@ pub fn local_profile_dir_for_id(id: &str) -> PathBuf {
     local_profile_dir(id)
 }
 
-fn existing_profile_folder_names() -> Vec<String> {
-    deadsync_profile::profile_folder_names(&profiles_root())
-}
-
 #[inline(always)]
 fn profile_ini_path(id: &str) -> PathBuf {
     deadsync_profile::profile_ini_path(&local_profile_dir(id))
@@ -127,6 +121,7 @@ fn profile_stats_path(id: &str) -> PathBuf {
 }
 
 #[inline(always)]
+#[cfg(test)]
 fn load_player_options(
     profile_conf: &SimpleIni,
     section: &str,
@@ -139,6 +134,7 @@ fn load_player_options(
 }
 
 #[inline(always)]
+#[cfg(test)]
 fn load_last_played(
     profile_conf: &SimpleIni,
     section: &str,
@@ -151,34 +147,12 @@ fn load_last_played(
 }
 
 #[inline(always)]
+#[cfg(test)]
 fn load_last_played_course(profile_conf: &SimpleIni, section: &str) -> Option<LastPlayedCourse> {
     let has_any = profile_conf
         .get_section(section)
         .is_some_and(|s| !s.is_empty());
     load_last_played_course_section(has_any, |key| profile_conf.get(section, key))
-}
-
-// Global statics for the loaded player profiles.
-static PROFILES: std::sync::LazyLock<Mutex<[Profile; PLAYER_SLOTS]>> =
-    std::sync::LazyLock::new(|| Mutex::new(std::array::from_fn(|_| Profile::default())));
-
-static SESSION: std::sync::LazyLock<Mutex<SessionState>> = std::sync::LazyLock::new(|| {
-    // Both sides start as Guest; `restore_default_profiles()` seeds the real
-    // active profiles from config during `load()`.
-    Mutex::new(SessionState::default())
-});
-
-static SESSION_LOCK_WAIT_STATS: LockWaitStats = LockWaitStats::new();
-static PROFILES_LOCK_WAIT_STATS: LockWaitStats = LockWaitStats::new();
-
-#[inline(always)]
-fn lock_session() -> std::sync::MutexGuard<'static, SessionState> {
-    lock_with_wait_stats("SESSION", &SESSION_LOCK_WAIT_STATS, &SESSION)
-}
-
-#[inline(always)]
-fn lock_profiles() -> std::sync::MutexGuard<'static, [Profile; PLAYER_SLOTS]> {
-    lock_with_wait_stats("PROFILES", &PROFILES_LOCK_WAIT_STATS, &PROFILES)
 }
 
 #[inline(always)]
@@ -235,42 +209,17 @@ fn make_guest_profile() -> Profile {
 
 fn ensure_local_profile_files(id: &str) -> Result<(), std::io::Error> {
     let dir = local_profile_dir(id);
-    let profile_ini = profile_ini_path(id);
-    let groovestats_ini = groovestats_ini_path(id);
-    let arrowcloud_ini = arrowcloud_ini_path(id);
-
     info!(
         "Profile files not found, creating defaults in '{}'.",
         dir.display()
     );
-    fs::create_dir_all(&dir)?;
 
-    // Create profile.ini
-    if !profile_ini.exists() {
-        let mut default_profile = Profile::default();
-        default_profile.noteskin = machine_default_noteskin_value();
-        default_profile.pad_light_brightness = machine_default_light_brightness();
-        default_profile.store_current_player_options_for_all_styles();
-        default_profile.calories_burned_day = Local::now().date_naive().to_string();
-
-        fs::write(
-            profile_ini,
-            render_profile_ini_content(id, &default_profile),
-        )?;
-    }
-
-    // Create groovestats.ini
-    if !groovestats_ini.exists() {
-        fs::write(
-            groovestats_ini,
-            render_groovestats_ini_content("", false, ""),
-        )?;
-    }
-
-    // Create arrowcloud.ini
-    if !arrowcloud_ini.exists() {
-        fs::write(arrowcloud_ini, render_arrowcloud_ini_content(""))?;
-    }
+    let mut default_profile = Profile::default();
+    default_profile.noteskin = machine_default_noteskin_value();
+    default_profile.pad_light_brightness = machine_default_light_brightness();
+    default_profile.store_current_player_options_for_all_styles();
+    default_profile.calories_burned_day = Local::now().date_naive().to_string();
+    deadsync_profile::ensure_local_profile_files_dir(&dir, id, &default_profile)?;
 
     // A new folder may have appeared; let the resolver pick it up.
     invalidate_profile_dir_cache();
@@ -296,8 +245,9 @@ fn save_profile_ini_for_side(side: PlayerSide) {
         profile.store_current_player_options(play_style);
         profile.clone()
     };
-    let path = profile_ini_path(&profile_id);
-    if let Err(e) = fs::write(&path, render_profile_ini_content(&profile_id, &profile)) {
+    let dir = local_profile_dir(&profile_id);
+    if let Err(e) = deadsync_profile::write_profile_ini_dir(&dir, &profile_id, &profile) {
+        let path = deadsync_profile::profile_ini_path(&dir);
         warn!("Failed to save {}: {}", path.display(), e);
     }
 }
@@ -411,15 +361,14 @@ fn save_groovestats_ini_for_side(side: PlayerSide) {
 
     let profile = lock_profiles()[side_ix(side)].clone();
 
-    let path = groovestats_ini_path(&profile_id);
-    if let Err(e) = fs::write(
-        &path,
-        render_groovestats_ini_content(
-            &profile.groovestats_api_key,
-            profile.groovestats_is_pad_player,
-            &profile.groovestats_username,
-        ),
+    let dir = local_profile_dir(&profile_id);
+    if let Err(e) = deadsync_profile::write_groovestats_credentials_dir(
+        &dir,
+        &profile.groovestats_api_key,
+        profile.groovestats_is_pad_player,
+        &profile.groovestats_username,
     ) {
+        let path = deadsync_profile::groovestats_ini_path(&dir);
         warn!("Failed to save {}: {}", path.display(), e);
     }
 }
@@ -438,11 +387,11 @@ fn save_arrowcloud_ini_for_side(side: PlayerSide) {
 
     let profile = lock_profiles()[side_ix(side)].clone();
 
-    let path = arrowcloud_ini_path(&profile_id);
-    if let Err(e) = fs::write(
-        &path,
-        render_arrowcloud_ini_content(&profile.arrowcloud_api_key),
-    ) {
+    let dir = local_profile_dir(&profile_id);
+    if let Err(e) =
+        deadsync_profile::write_arrowcloud_api_key_dir(&dir, &profile.arrowcloud_api_key)
+    {
+        let path = deadsync_profile::arrowcloud_ini_path(&dir);
         warn!("Failed to save {}: {}", path.display(), e);
     }
 }
@@ -452,7 +401,7 @@ fn save_arrowcloud_ini_for_side(side: PlayerSide) {
 pub fn set_arrowcloud_api_key_for_side(side: PlayerSide, api_key: &str) {
     {
         let mut profiles = lock_profiles();
-        profiles[side_ix(side)].arrowcloud_api_key = api_key.to_string();
+        deadsync_profile::set_arrowcloud_api_key_for_side(&mut profiles, side, api_key);
     }
     save_arrowcloud_ini_for_side(side);
 }
@@ -464,31 +413,22 @@ pub fn set_arrowcloud_api_key_for_side(side: PlayerSide, api_key: &str) {
 /// on any session side currently loading that profile, so other screens
 /// see the new key immediately.
 pub fn set_arrowcloud_api_key_for_id(profile_id: &str, api_key: &str) {
-    // Update any session side currently bound to this profile id.
-    let matching_sides: Vec<PlayerSide> = {
+    {
         let session = lock_session();
-        [PlayerSide::P1, PlayerSide::P2]
-            .iter()
-            .copied()
-            .filter(|side| {
-                matches!(
-                    &session.active_profiles[side_ix(*side)],
-                    ActiveProfile::Local { id } if id == profile_id
-                )
-            })
-            .collect()
-    };
-    if !matching_sides.is_empty() {
         let mut profiles = lock_profiles();
-        for side in &matching_sides {
-            profiles[side_ix(*side)].arrowcloud_api_key = api_key.to_string();
-        }
+        deadsync_profile::set_arrowcloud_api_key_for_loaded_profile(
+            &session.active_profiles,
+            &mut profiles,
+            profile_id,
+            api_key,
+        );
     }
 
     // Persist directly to that profile's ArrowCloud.ini, even if the
     // profile isn't loaded on any side right now.
-    let path = arrowcloud_ini_path(profile_id);
-    if let Err(e) = fs::write(&path, render_arrowcloud_ini_content(api_key)) {
+    let dir = local_profile_dir(profile_id);
+    if let Err(e) = deadsync_profile::write_arrowcloud_api_key_dir(&dir, api_key) {
+        let path = deadsync_profile::arrowcloud_ini_path(&dir);
         warn!("Failed to save {}: {}", path.display(), e);
     }
 }
@@ -498,20 +438,7 @@ pub fn set_arrowcloud_api_key_for_id(profile_id: &str, api_key: &str) {
 /// session side.  Empty string if the profile has no key yet or the
 /// file is missing / malformed.
 pub fn get_arrowcloud_api_key_for_id(profile_id: &str) -> String {
-    let path = arrowcloud_ini_path(profile_id);
-    let Ok(text) = fs::read_to_string(&path) else {
-        return String::new();
-    };
-    for line in text.lines() {
-        let line = line.trim();
-        if let Some(rest) = line.strip_prefix("ApiKey=") {
-            return rest.trim().to_string();
-        }
-        if let Some(rest) = line.strip_prefix("ApiKey =") {
-            return rest.trim().to_string();
-        }
-    }
-    String::new()
+    deadsync_profile::read_arrowcloud_api_key_dir(&local_profile_dir(profile_id))
 }
 
 /// Update the active profile's GrooveStats credentials (API key,
@@ -522,10 +449,12 @@ pub fn get_arrowcloud_api_key_for_id(profile_id: &str) -> String {
 pub fn set_groovestats_credentials_for_side(side: PlayerSide, api_key: &str, username: &str) {
     {
         let mut profiles = lock_profiles();
-        let p = &mut profiles[side_ix(side)];
-        p.groovestats_api_key = api_key.to_string();
-        p.groovestats_username = username.to_string();
-        p.groovestats_is_pad_player = true;
+        deadsync_profile::set_groovestats_credentials_for_side(
+            &mut profiles,
+            side,
+            api_key,
+            username,
+        );
     }
     save_groovestats_ini_for_side(side);
 }
@@ -535,36 +464,25 @@ pub fn set_groovestats_credentials_for_side(side: PlayerSide, api_key: &str, use
 /// "Link GrooveStats" flow.  Also refreshes the in-memory copy on any
 /// session side currently bound to that profile id.
 pub fn set_groovestats_credentials_for_id(profile_id: &str, api_key: &str, username: &str) {
-    let matching_sides: Vec<PlayerSide> = {
+    {
         let session = lock_session();
-        [PlayerSide::P1, PlayerSide::P2]
-            .iter()
-            .copied()
-            .filter(|side| {
-                matches!(
-                    &session.active_profiles[side_ix(*side)],
-                    ActiveProfile::Local { id } if id == profile_id
-                )
-            })
-            .collect()
-    };
-    if !matching_sides.is_empty() {
         let mut profiles = lock_profiles();
-        for side in &matching_sides {
-            let p = &mut profiles[side_ix(*side)];
-            p.groovestats_api_key = api_key.to_string();
-            p.groovestats_username = username.to_string();
-            p.groovestats_is_pad_player = true;
-        }
+        deadsync_profile::set_groovestats_credentials_for_loaded_profile(
+            &session.active_profiles,
+            &mut profiles,
+            profile_id,
+            api_key,
+            username,
+        );
     }
 
     // Persist directly to that profile's GrooveStats.ini, even if the
     // profile isn't loaded on any side right now.
-    let path = groovestats_ini_path(profile_id);
-    if let Err(e) = fs::write(
-        &path,
-        render_groovestats_ini_content(api_key, true, username),
-    ) {
+    let dir = local_profile_dir(profile_id);
+    if let Err(e) =
+        deadsync_profile::write_groovestats_credentials_dir(&dir, api_key, true, username)
+    {
+        let path = deadsync_profile::groovestats_ini_path(&dir);
         warn!("Failed to save {}: {}", path.display(), e);
     }
 }
@@ -574,54 +492,39 @@ pub fn set_groovestats_credentials_for_id(profile_id: &str, api_key: &str, usern
 /// session side.  `None` if the profile has no key yet or the file is
 /// missing / malformed; `Some` always wraps a non-empty trimmed key.
 pub fn get_groovestats_api_key_for_id(profile_id: &str) -> Option<String> {
-    let path = groovestats_ini_path(profile_id);
-    let text = fs::read_to_string(&path).ok()?;
-    for line in text.lines() {
-        let line = line.trim();
-        let rest = line
-            .strip_prefix("ApiKey=")
-            .or_else(|| line.strip_prefix("ApiKey ="));
-        if let Some(rest) = rest {
-            let key = rest.trim();
-            if key.is_empty() {
-                return None;
-            }
-            return Some(key.to_string());
-        }
-    }
-    None
+    deadsync_profile::read_groovestats_api_key_dir(&local_profile_dir(profile_id))
 }
 
 fn load_for_side(side: PlayerSide) {
-    let profile_id = {
+    let selection = {
         let session = lock_session();
-        match &session.active_profiles[side_ix(side)] {
-            ActiveProfile::Local { id } => Some(id.clone()),
-            ActiveProfile::Guest => None,
-        }
+        resolve_active_profile_for_load(
+            &session.active_profiles[side_ix(side)],
+            |id| local_profile_dir(id).is_dir(),
+            || scan_local_profiles().into_iter().next().map(|p| p.id),
+        )
     };
 
-    // If the requested profile folder no longer exists (e.g. the user renamed
-    // the default folder on disk), fall back to the first available local
-    // profile or Guest.
-    let profile_id = match profile_id {
-        Some(id) if !local_profile_dir(&id).is_dir() => {
-            let fallback = scan_local_profiles().into_iter().next().map(|p| p.id);
-            if let Some(ref fb_id) = fallback {
-                info!("Profile folder '{id}' not found; falling back to '{fb_id}'.");
-                let mut session = lock_session();
-                session.active_profiles[side_ix(side)] = ActiveProfile::Local { id: fb_id.clone() };
-            } else {
-                info!("Profile folder '{id}' not found and no other profiles exist; using Guest.");
-                let mut session = lock_session();
-                session.active_profiles[side_ix(side)] = ActiveProfile::Guest;
-            }
-            fallback
+    match &selection {
+        ActiveProfileLoadSelection::MissingFallbackLocal {
+            missing_id,
+            fallback_id,
+        } => {
+            info!("Profile folder '{missing_id}' not found; falling back to '{fallback_id}'.");
+            let mut session = lock_session();
+            session.active_profiles[side_ix(side)] = selection.session_profile();
         }
-        other => other,
-    };
+        ActiveProfileLoadSelection::MissingFallbackGuest { missing_id } => {
+            info!(
+                "Profile folder '{missing_id}' not found and no other profiles exist; using Guest."
+            );
+            let mut session = lock_session();
+            session.active_profiles[side_ix(side)] = selection.session_profile();
+        }
+        ActiveProfileLoadSelection::Guest | ActiveProfileLoadSelection::Local { .. } => {}
+    }
 
-    let Some(profile_id) = profile_id else {
+    let Some(profile_id) = selection.local_id().map(str::to_owned) else {
         let mut profiles = lock_profiles();
         profiles[side_ix(side)] = make_guest_profile();
         return;
@@ -637,6 +540,33 @@ fn load_for_side(side: PlayerSide) {
         // Proceed with default struct values and attempt to save them.
     }
 
+    let mut profile_conf = SimpleIni::new();
+    let profile_ini_loaded = profile_conf.load(&profile_ini).is_ok();
+    if !profile_ini_loaded {
+        warn!(
+            "Failed to load '{}', using default profile settings.",
+            profile_ini.display()
+        );
+    }
+
+    let mut gs_conf = SimpleIni::new();
+    let groovestats_ini_loaded = gs_conf.load(&groovestats_ini).is_ok();
+    if !groovestats_ini_loaded {
+        warn!(
+            "Failed to load '{}', using default GrooveStats info.",
+            groovestats_ini.display()
+        );
+    }
+
+    let mut ac_conf = SimpleIni::new();
+    let arrowcloud_ini_loaded = ac_conf.load(&arrowcloud_ini).is_ok();
+    if !arrowcloud_ini_loaded {
+        warn!(
+            "Failed to load '{}', using default ArrowCloud info.",
+            arrowcloud_ini.display()
+        );
+    }
+
     {
         let mut profiles = lock_profiles();
         let profile = &mut profiles[side_ix(side)];
@@ -644,156 +574,31 @@ fn load_for_side(side: PlayerSide) {
         default_profile.noteskin = machine_default_noteskin_value();
         default_profile.pad_light_brightness = machine_default_light_brightness();
         default_profile.store_current_player_options_for_all_styles();
-
-        // Load profile.ini
-        let mut profile_conf = SimpleIni::new();
-        if profile_conf.load(&profile_ini).is_ok() {
-            profile.display_name = profile_conf
-                .get("userprofile", "DisplayName")
-                .unwrap_or(default_profile.display_name.clone());
-            profile.player_initials = profile_conf
-                .get("userprofile", "PlayerInitials")
-                .map(|initials| sanitize_player_initials(&initials))
-                .filter(|initials| !initials.is_empty())
-                .unwrap_or(default_profile.player_initials.clone());
-            profile.player_options_singles = load_player_options(
-                &profile_conf,
-                player_options_section(PlayStyle::Single),
-                &default_profile.player_options_singles,
-            )
-            .unwrap_or_else(|| default_profile.player_options_singles.clone());
-            profile.player_options_doubles = load_player_options(
-                &profile_conf,
-                player_options_section(PlayStyle::Double),
-                &default_profile.player_options_doubles,
-            )
-            .unwrap_or_else(|| default_profile.player_options_doubles.clone());
-            profile.apply_player_options_for_style(get_session_play_style());
-
-            // Optional last-played sections: keep the legacy [LastPlayed]
-            // fallback so older profile.ini files still load cleanly.
-            profile.last_played_singles = load_last_played(
-                &profile_conf,
-                "LastPlayedSingles",
-                &default_profile.last_played_singles,
-            )
-            .or_else(|| {
-                load_last_played(
-                    &profile_conf,
-                    "LastPlayed",
-                    &default_profile.last_played_singles,
-                )
-            })
-            .unwrap_or_else(|| default_profile.last_played_singles.clone());
-            profile.last_played_doubles = load_last_played(
-                &profile_conf,
-                "LastPlayedDoubles",
-                &default_profile.last_played_doubles,
-            )
-            .or_else(|| {
-                load_last_played(
-                    &profile_conf,
-                    "LastPlayed",
-                    &default_profile.last_played_doubles,
-                )
-            })
-            .unwrap_or_else(|| default_profile.last_played_doubles.clone());
-            profile.last_played_course_singles =
-                load_last_played_course(&profile_conf, "LastPlayedCourseSingles")
-                    .or_else(|| load_last_played_course(&profile_conf, "LastPlayedCourse"))
-                    .unwrap_or_else(|| default_profile.last_played_course_singles.clone());
-            profile.last_played_course_doubles =
-                load_last_played_course(&profile_conf, "LastPlayedCourseDoubles")
-                    .or_else(|| load_last_played_course(&profile_conf, "LastPlayedCourse"))
-                    .unwrap_or_else(|| default_profile.last_played_course_doubles.clone());
-
-            profile.weight_pounds = profile_conf
-                .get("Editable", "WeightPounds")
-                .and_then(|s| s.parse::<i32>().ok())
-                .map(clamp_weight_pounds)
-                .unwrap_or(default_profile.weight_pounds);
-
-            profile.birth_year = profile_conf
-                .get("Editable", "BirthYear")
-                .and_then(|s| s.parse::<i32>().ok())
-                .map(|year| year.max(0))
-                .unwrap_or(default_profile.birth_year);
-
-            // Profile stats (ScreenGameOver parity). Keep the legacy [Stats]
-            // fallback so older profile.ini files still load cleanly.
-            profile.ignore_step_count_calories = profile_conf
-                .get("Editable", "IgnoreStepCountCalories")
-                .or_else(|| profile_conf.get("Stats", "IgnoreStepCountCalories"))
-                .and_then(|s| s.parse::<u8>().ok())
-                .map_or(default_profile.ignore_step_count_calories, |v| v != 0);
-
-            let today = Local::now().date_naive().to_string();
-            let saved_day = profile_conf
-                .get("Stats", "CaloriesBurnedDate")
-                .unwrap_or_default();
-            let saved_cals = profile_conf
-                .get("Stats", "CaloriesBurnedToday")
-                .and_then(|s| s.parse::<f32>().ok())
-                .filter(|v| v.is_finite() && *v >= 0.0)
-                .unwrap_or(default_profile.calories_burned_today);
-
-            if saved_day.trim() == today {
-                profile.calories_burned_day = today;
-                profile.calories_burned_today = saved_cals;
-            } else {
-                profile.calories_burned_day = today;
-                profile.calories_burned_today = 0.0;
-            }
-        } else {
-            warn!(
-                "Failed to load '{}', using default profile settings.",
-                profile_ini.display()
-            );
-        }
-
         let stats = load_profile_stats(&profile_id).unwrap_or_else(|| ProfileStats {
             current_combo: default_profile.current_combo,
             known_pack_names: HashSet::new(),
         });
-        profile.current_combo = stats.current_combo;
-        profile.known_pack_names = stats.known_pack_names;
-        profile.favorites = load_favorites(&profile_id);
-        profile.favorited_packs = load_favorited_packs(&profile_id);
-
-        // Load groovestats.ini
-        let mut gs_conf = SimpleIni::new();
-        if gs_conf.load(&groovestats_ini).is_ok() {
-            profile.groovestats_api_key = gs_conf
-                .get("GrooveStats", "ApiKey")
-                .unwrap_or(default_profile.groovestats_api_key.clone());
-            let is_pad_player = gs_conf.get("GrooveStats", "IsPadPlayer");
-            profile.groovestats_is_pad_player = parse_groovestats_is_pad_player(
-                is_pad_player.as_deref(),
-                default_profile.groovestats_is_pad_player,
-            );
-            profile.groovestats_username = gs_conf
-                .get("GrooveStats", "Username")
-                .unwrap_or(default_profile.groovestats_username);
-        } else {
-            warn!(
-                "Failed to load '{}', using default GrooveStats info.",
-                groovestats_ini.display()
-            );
-        }
-
-        // Load arrowcloud.ini
-        let mut ac_conf = SimpleIni::new();
-        if ac_conf.load(&arrowcloud_ini).is_ok() {
-            profile.arrowcloud_api_key = ac_conf
-                .get("ArrowCloud", "ApiKey")
-                .unwrap_or(default_profile.arrowcloud_api_key.clone());
-        } else {
-            warn!(
-                "Failed to load '{}', using default ArrowCloud info.",
-                arrowcloud_ini.display()
-            );
-        }
-
+        let today = Local::now().date_naive().to_string();
+        deadsync_profile::apply_loaded_profile_data(
+            profile,
+            &default_profile,
+            get_session_play_style(),
+            &today,
+            profile_ini_loaded,
+            |section| {
+                profile_conf
+                    .get_section(section)
+                    .is_some_and(|s| !s.is_empty())
+            },
+            |section, key| profile_conf.get(section, key),
+            stats,
+            load_favorites(&profile_id),
+            load_favorited_packs(&profile_id),
+            groovestats_ini_loaded,
+            |section, key| gs_conf.get(section, key),
+            arrowcloud_ini_loaded,
+            |section, key| ac_conf.get(section, key),
+        );
         profile.avatar_path = find_profile_avatar_path(&local_profile_dir(&profile_id));
         profile.avatar_texture_key = None;
     } // Lock is released here.
@@ -812,148 +617,56 @@ pub fn load() {
     load_for_side(PlayerSide::P2);
 }
 
-/// Translate a stored default-profile id to a canonical GUID: pass valid GUIDs
-/// through, map a legacy folder-name id to that folder's GUID, and otherwise
-/// keep the value unchanged (e.g. a stale id with no matching folder).
-fn heal_default_profile_id(
-    stored: Option<String>,
-    folder_to_guid: &HashMap<&str, &str>,
-) -> Option<String> {
-    let s = stored?;
-    if is_valid_profile_guid(&s) {
-        return Some(s);
-    }
-    folder_to_guid
-        .get(s.as_str())
-        .map(|g| (*g).to_string())
-        .or(Some(s))
-}
-
 /// Idempotent startup migration to embedded-GUID identity. In a single pass over
 /// the profiles directory it backfills GUIDs into legacy profiles, rewrites
 /// stored default ids that still hold a folder name, renames legacy folders to
 /// match their display name (best-effort), and seeds the resolver cache.
 fn migrate_local_profiles() {
-    struct ProfileEntry {
-        /// Folder name as found on disk before any rename (config heal key).
-        original_folder: String,
-        /// Current folder name (updated if renamed below).
-        folder: String,
-        guid: String,
-        display: Option<String>,
-    }
-
-    // Single directory walk: read each profile.ini exactly once, backfilling a
-    // GUID when absent.
-    let mut entries: Vec<ProfileEntry> = Vec::new();
-    let mut taken: Vec<String> = Vec::new();
-    if let Ok(read_dir) = fs::read_dir(profiles_root()) {
-        for de in read_dir.flatten() {
-            if !de.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
-                continue;
-            }
-            let path = de.path();
-            let Some(folder) = path
-                .file_name()
-                .and_then(|s| s.to_str())
-                .map(str::to_string)
-            else {
-                continue;
-            };
-            taken.push(folder.clone());
-
-            let ini_path = path.join("profile.ini");
-            let Ok(content) = fs::read_to_string(&ini_path) else {
-                continue; // not a profile folder
-            };
-            let (guid_opt, display) = read_userprofile_identity(&content);
-            let guid = match guid_opt {
-                Some(g) => g,
-                None => {
-                    let g = generate_profile_guid();
-                    let updated = upsert_profile_guid_content(&content, &g);
-                    if let Err(e) = deadsync_profile::write_profile_file_atomic(&ini_path, &updated)
-                    {
-                        warn!("Failed to backfill GUID for '{}': {e}", path.display());
-                        continue;
-                    }
-                    info!("Assigned profile GUID {g} to '{}'.", path.display());
-                    g
-                }
-            };
-            entries.push(ProfileEntry {
-                original_folder: folder.clone(),
-                folder,
-                guid,
-                display,
-            });
+    let migration = deadsync_profile::migrate_local_profile_dirs(&profiles_root());
+    for backfill in &migration.guid_backfills {
+        match &backfill.error {
+            None => info!(
+                "Assigned profile GUID {} to '{}'.",
+                backfill.guid,
+                backfill.path.display()
+            ),
+            Some(e) => warn!(
+                "Failed to backfill GUID for '{}': {e}",
+                backfill.path.display()
+            ),
         }
     }
 
     // Self-heal stored default ids that still reference a legacy folder name.
-    let folder_to_guid: HashMap<&str, &str> = entries
+    let folder_to_guid: HashMap<&str, &str> = migration
+        .entries
         .iter()
         .map(|e| (e.original_folder.as_str(), e.guid.as_str()))
         .collect();
     let (p1, p2) = config::default_profiles();
-    let new_p1 = heal_default_profile_id(p1.clone(), &folder_to_guid);
-    let new_p2 = heal_default_profile_id(p2.clone(), &folder_to_guid);
+    let new_p1 = deadsync_profile::heal_default_profile_id(p1.clone(), &folder_to_guid);
+    let new_p2 = deadsync_profile::heal_default_profile_id(p2.clone(), &folder_to_guid);
     if new_p1 != p1 || new_p2 != p2 {
         info!("Migrated default profile ids to embedded GUIDs.");
         config::update_default_profiles(new_p1, new_p2);
     }
 
-    // Rename legacy folders to match their display name. Identity is the GUID,
-    // so this never breaks active bindings; failures are logged and skipped.
-    for entry in &mut entries {
-        let Some(display) = entry.display.clone() else {
-            continue;
-        };
-        let folder = entry.folder.clone();
-        // Take this folder out of `taken` so it doesn't collide with itself
-        // (order is irrelevant for collision checks).
-        if let Some(pos) = taken.iter().position(|f| *f == folder) {
-            taken.swap_remove(pos);
-        }
-        let desired = folder_name_for_display(&display, &folder, &taken);
-        if desired.eq_ignore_ascii_case(&folder) {
-            taken.push(folder);
-            continue;
-        }
-        match fs::rename(
-            profile_dir_by_folder(&folder),
-            profile_dir_by_folder(&desired),
-        ) {
-            Ok(()) => {
-                info!("Renamed profile folder '{folder}' -> '{desired}'.");
-                taken.push(desired.clone());
-                entry.folder = desired;
-            }
-            Err(e) => {
-                warn!("Failed to rename profile folder '{folder}' -> '{desired}': {e}");
-                taken.push(folder);
-            }
+    for rename in &migration.folder_renames {
+        match &rename.error {
+            None => info!(
+                "Renamed profile folder '{}' -> '{}'.",
+                rename.current_folder, rename.desired_folder
+            ),
+            Some(e) => warn!(
+                "Failed to rename profile folder '{}' -> '{}': {e}",
+                rename.current_folder, rename.desired_folder
+            ),
         }
     }
 
     // Seed the resolver cache from the post-migration snapshot (dedup duplicate
     // GUIDs by smallest folder name) so the first lookup needn't rescan.
-    use std::collections::hash_map::Entry as MapEntry;
-    let mut map: HashMap<String, PathBuf> = HashMap::new();
-    for e in &entries {
-        let path = profile_dir_by_folder(&e.folder);
-        match map.entry(e.guid.clone()) {
-            MapEntry::Vacant(slot) => {
-                slot.insert(path);
-            }
-            MapEntry::Occupied(mut slot) => {
-                if path.file_name() < slot.get().file_name() {
-                    slot.insert(path);
-                }
-            }
-        }
-    }
-    *PROFILE_DIR_CACHE.lock().unwrap() = Some(map);
+    *PROFILE_DIR_CACHE.lock().unwrap() = Some(migration.cache_map);
 }
 
 /// Seeds the session's active profiles from the configured default local
@@ -962,18 +675,7 @@ fn migrate_local_profiles() {
 fn restore_default_profiles() {
     let (p1, p2) = config::default_profiles();
     let mut session = lock_session();
-    for (side, saved) in [(PlayerSide::P1, p1), (PlayerSide::P2, p2)] {
-        session.active_profiles[side_ix(side)] = default_profile_from_id(saved);
-    }
-}
-
-fn default_profile_from_id(id: Option<String>) -> ActiveProfile {
-    match id {
-        Some(id) if is_local_profile_id(&id) && local_profile_dir(&id).is_dir() => {
-            ActiveProfile::Local { id }
-        }
-        _ => ActiveProfile::Guest,
-    }
+    session.restore_default_profiles(&[p1, p2], |id| local_profile_dir(id).is_dir());
 }
 
 /// Returns a copy of the currently loaded profile data.
@@ -998,95 +700,59 @@ pub fn smx_gif_packs(
     [crate::config::SmxPackName; 2],
 ) {
     let profiles = lock_profiles();
-    let resolve = |pack: &Option<String>, machine: crate::config::SmxPackName| match pack {
-        Some(p) => crate::config::SmxPackName::parse(p),
-        None => machine,
-    };
-    (
-        std::array::from_fn(|i| resolve(&profiles[i].smx_bg_pack, machine_bg)),
-        std::array::from_fn(|i| resolve(&profiles[i].smx_judge_pack, machine_judge)),
-    )
+    deadsync_profile::smx_pack_names_for_profiles(&profiles, machine_bg, machine_judge, |pack| {
+        crate::config::SmxPackName::parse(pack)
+    })
 }
 
 pub fn footer_fields_for_side(side: PlayerSide) -> (Option<String>, String) {
-    let profiles = lock_profiles();
-    let p = &profiles[side_ix(side)];
-    (p.avatar_texture_key.clone(), p.display_name.clone())
+    deadsync_profile::footer_fields_for_side(&lock_profiles(), side)
 }
 
 pub fn groovestats_api_key_for_side(side: PlayerSide) -> String {
-    lock_profiles()[side_ix(side)]
-        .groovestats_api_key
-        .trim()
-        .to_string()
-}
-
-pub fn scorebox_fields_for_side(side: PlayerSide) -> (bool, bool, String, String, String) {
-    let profiles = lock_profiles();
-    let p = &profiles[side_ix(side)];
-    (
-        p.display_scorebox,
-        p.show_ex_score,
-        p.groovestats_api_key.clone(),
-        p.arrowcloud_api_key.clone(),
-        p.groovestats_username.clone(),
-    )
+    deadsync_profile::groovestats_api_key_for_side(&lock_profiles(), side)
 }
 
 pub fn gameplay_hud_snapshot() -> GameplayHudSnapshot {
-    let (play_style, player_side, joined_mask, p1_guest, p2_guest) = {
+    let (play_style, player_side, joined_mask, active_profiles) = {
         let session = lock_session();
         (
             session.play_style,
             session.player_side,
             session.joined_mask,
-            active_profile_is_guest(&session.active_profiles[side_ix(PlayerSide::P1)]),
-            active_profile_is_guest(&session.active_profiles[side_ix(PlayerSide::P2)]),
+            session.active_profiles.clone(),
         )
     };
     let profiles = lock_profiles();
-    let p1_profile = &profiles[side_ix(PlayerSide::P1)];
-    let p2_profile = &profiles[side_ix(PlayerSide::P2)];
-    GameplayHudSnapshot {
+    deadsync_profile::gameplay_hud_snapshot_from_parts(
         play_style,
         player_side,
-        p1: GameplayHudPlayerSnapshot {
-            joined: player_side_is_joined(joined_mask, PlayerSide::P1),
-            guest: p1_guest,
-            display_name: p1_profile.display_name.clone(),
-            avatar_texture_key: p1_profile.avatar_texture_key.clone(),
-            hide_username: p1_profile.hide_username,
-        },
-        p2: GameplayHudPlayerSnapshot {
-            joined: player_side_is_joined(joined_mask, PlayerSide::P2),
-            guest: p2_guest,
-            display_name: p2_profile.display_name.clone(),
-            avatar_texture_key: p2_profile.avatar_texture_key.clone(),
-            hide_username: p2_profile.hide_username,
-        },
-    }
+        joined_mask,
+        &active_profiles,
+        &profiles,
+    )
 }
 
 pub fn set_avatar_texture_key_for_side(side: PlayerSide, key: Option<String>) {
     let mut profiles = lock_profiles();
-    profiles[side_ix(side)].avatar_texture_key = key;
+    deadsync_profile::set_avatar_texture_key_for_side(&mut profiles, side, key);
 }
 
 // --- Session helpers ---
 pub fn get_active_profile_for_side(side: PlayerSide) -> ActiveProfile {
-    lock_session().active_profiles[side_ix(side)].clone()
+    lock_session().active_profile(side)
 }
 
 pub fn active_local_profile_id_for_side(side: PlayerSide) -> Option<String> {
-    let session = lock_session();
-    active_profile_local_id(&session.active_profiles[side_ix(side)]).map(str::to_owned)
+    lock_session()
+        .active_local_profile_id(side)
+        .map(str::to_owned)
 }
 
 pub fn get_default_profile_for_side(side: PlayerSide) -> ActiveProfile {
     let (p1, p2) = config::default_profiles();
-    default_profile_from_id(match side {
-        PlayerSide::P1 => p1,
-        PlayerSide::P2 => p2,
+    deadsync_profile::default_active_profile_for_side(&[p1, p2], side, |id| {
+        local_profile_dir(id).is_dir()
     })
 }
 
@@ -1098,45 +764,26 @@ pub fn default_local_profile_id_for_side(side: PlayerSide) -> Option<String> {
 }
 
 pub fn set_default_profile_for_side(side: PlayerSide, profile: ActiveProfile) {
-    let mut defaults = {
+    let defaults = {
         let (p1, p2) = config::default_profiles();
         [p1, p2]
     };
-    let side_idx = side_ix(side);
-    let new_id = active_profile_local_id(&profile)
-        .filter(|id| is_local_profile_id(id) && local_profile_dir(id).is_dir())
-        .map(str::to_owned);
-
-    if let Some(id) = new_id.as_deref() {
-        for (idx, slot) in defaults.iter_mut().enumerate() {
-            if idx != side_idx && slot.as_deref() == Some(id) {
-                *slot = None;
-            }
-        }
-    }
-    defaults[side_idx] = new_id;
+    let defaults =
+        deadsync_profile::default_profile_ids_after_side_update(defaults, side, &profile, |id| {
+            is_local_profile_id(id) && local_profile_dir(id).is_dir()
+        });
     config::update_default_profiles(defaults[0].clone(), defaults[1].clone());
 }
 
 fn update_default_profiles_from_selection(p1: &ActiveProfile, p2: &ActiveProfile) {
     let (p1_default, p2_default) = config::default_profiles();
-    let mut defaults = [p1_default, p2_default];
     let joined_mask = lock_session().joined_mask;
-    for (side, profile) in [(PlayerSide::P1, p1), (PlayerSide::P2, p2)] {
-        if !player_side_is_joined(joined_mask, side) {
-            continue;
-        }
-        let side_idx = side_ix(side);
-        let new_id = active_profile_local_id(profile).map(str::to_owned);
-        if let Some(id) = new_id.as_deref() {
-            for (idx, slot) in defaults.iter_mut().enumerate() {
-                if idx != side_idx && slot.as_deref() == Some(id) {
-                    *slot = None;
-                }
-            }
-        }
-        defaults[side_idx] = new_id;
-    }
+    let defaults = deadsync_profile::default_profile_ids_after_joined_selection(
+        [p1_default, p2_default],
+        joined_mask,
+        p1,
+        p2,
+    );
     config::update_default_profiles(defaults[0].clone(), defaults[1].clone());
 }
 
@@ -1145,13 +792,11 @@ fn update_default_profiles_from_selection(p1: &ActiveProfile, p2: &ActiveProfile
 /// hardware jumper bit. In Doubles one player drives both pads, so both map to the
 /// joined player's side; otherwise the pad maps to its own side.
 pub fn active_local_profile_id_for_pad(is_p2_side: bool) -> Option<String> {
-    let side = if get_session_play_style() == PlayStyle::Double {
-        get_session_player_side()
-    } else if is_p2_side {
-        PlayerSide::P2
-    } else {
-        PlayerSide::P1
-    };
+    let side = deadsync_profile::side_for_physical_pad(
+        get_session_play_style(),
+        get_session_player_side(),
+        is_p2_side,
+    );
     active_local_profile_id_for_side(side)
 }
 
@@ -1160,28 +805,22 @@ pub fn active_local_profile_id_for_pad(is_p2_side: bool) -> Option<String> {
 /// the one joined player for both pads; otherwise the pad's own side). Reads the
 /// active profile's value (guest profiles are seeded from the machine default).
 pub fn pad_light_brightness_for_pad(is_p2_side: bool) -> u8 {
-    let side = if get_session_play_style() == PlayStyle::Double {
-        get_session_player_side()
-    } else if is_p2_side {
-        PlayerSide::P2
-    } else {
-        PlayerSide::P1
-    };
-    lock_profiles()[side_ix(side)].pad_light_brightness
+    deadsync_profile::pad_light_brightness_for_physical_pad(
+        &lock_profiles(),
+        get_session_play_style(),
+        get_session_player_side(),
+        is_p2_side,
+    )
 }
 
 pub fn known_pack_names_for_local_profile(profile_id: &str) -> Option<HashSet<String>> {
     let session = lock_session();
     let profiles = lock_profiles();
-    for side in [PlayerSide::P1, PlayerSide::P2] {
-        let Some(id) = active_profile_local_id(&session.active_profiles[side_ix(side)]) else {
-            continue;
-        };
-        if id == profile_id {
-            return Some(profiles[side_ix(side)].known_pack_names.clone());
-        }
-    }
-    None
+    deadsync_profile::known_pack_names_for_loaded_profile(
+        &session.active_profiles,
+        &profiles,
+        profile_id,
+    )
 }
 
 pub fn mark_known_pack_names_for_local_profile<'a>(
@@ -1195,22 +834,12 @@ pub fn mark_known_pack_names_for_local_profile<'a>(
     let save_side = {
         let session = lock_session();
         let mut profiles = lock_profiles();
-        let mut save_side = None;
-        for side in [PlayerSide::P1, PlayerSide::P2] {
-            let Some(id) = active_profile_local_id(&session.active_profiles[side_ix(side)]) else {
-                continue;
-            };
-            if id != profile_id {
-                continue;
-            }
-            let profile = &mut profiles[side_ix(side)];
-            let changed =
-                add_known_pack_names(&mut profile.known_pack_names, pack_names.iter().copied());
-            if changed && save_side.is_none() {
-                save_side = Some(side);
-            }
-        }
-        save_side
+        deadsync_profile::mark_known_pack_names_for_loaded_profile(
+            &session.active_profiles,
+            &mut profiles,
+            profile_id,
+            &pack_names,
+        )
     };
     if let Some(side) = save_side {
         save_profile_stats_for_side(side);
@@ -1273,20 +902,17 @@ pub fn toggle_favorite(side: PlayerSide, chart_hash: &str) -> bool {
     let Some(profile_id) = active_local_profile_id_for_side(side) else {
         return false;
     };
-    let is_now_favorite = {
+    let (is_now_favorite, favorites) = {
         let mut profiles = lock_profiles();
-        let profile = &mut profiles[side_ix(side)];
-        deadsync_profile::toggle_favorite_hash(&mut profile.favorites, chart_hash)
+        deadsync_profile::toggle_favorite_for_side(&mut profiles, side, chart_hash)
     };
-    let favorites = lock_profiles()[side_ix(side)].favorites.clone();
     save_favorites(&profile_id, &favorites);
     is_now_favorite
 }
 
 /// Check if a chart hash is favorited for the given player side.
 pub fn is_favorite(side: PlayerSide, chart_hash: &str) -> bool {
-    let profiles = lock_profiles();
-    profiles[side_ix(side)].favorites.contains(chart_hash)
+    deadsync_profile::profile_has_favorite(&lock_profiles(), side, chart_hash)
 }
 
 /// Test/bench helper: mark a chart hash as favorited for the given side in the
@@ -1294,9 +920,7 @@ pub fn is_favorite(side: PlayerSide, chart_hash: &str) -> bool {
 /// the favorites render path deterministically.
 pub fn seed_session_favorite(side: PlayerSide, chart_hash: &str) {
     let mut profiles = lock_profiles();
-    profiles[side_ix(side)]
-        .favorites
-        .insert(chart_hash.to_string());
+    deadsync_profile::seed_favorite_for_side(&mut profiles, side, chart_hash);
 }
 
 fn load_favorited_packs(profile_id: &str) -> HashSet<String> {
@@ -1314,42 +938,32 @@ pub fn toggle_pack_favorite(side: PlayerSide, pack_name: &str) -> bool {
     let Some(profile_id) = active_local_profile_id_for_side(side) else {
         return false;
     };
-    let is_now_favorite = {
+    let (is_now_favorite, packs) = {
         let mut profiles = lock_profiles();
-        let profile = &mut profiles[side_ix(side)];
-        deadsync_profile::toggle_favorited_pack(&mut profile.favorited_packs, pack_name)
+        deadsync_profile::toggle_favorited_pack_for_side(&mut profiles, side, pack_name)
     };
-    let packs = lock_profiles()[side_ix(side)].favorited_packs.clone();
     save_favorited_packs(&profile_id, &packs);
     is_now_favorite
 }
 
 /// Check if a pack name is favorited for the given player side.
 pub fn is_pack_favorite(side: PlayerSide, pack_name: &str) -> bool {
-    let profiles = lock_profiles();
-    profiles[side_ix(side)]
-        .favorited_packs
-        .iter()
-        .any(|p| *p == pack_name)
+    deadsync_profile::profile_side_has_favorited_pack(&lock_profiles(), side, pack_name)
 }
 
 /// Test/bench helper: mark a pack as favorited for the given side in the
 /// in-memory profile only, without persisting to disk.
 pub fn seed_session_favorited_pack(side: PlayerSide, pack_name: &str) {
     let mut profiles = lock_profiles();
-    profiles[side_ix(side)]
-        .favorited_packs
-        .insert(pack_name.to_string());
+    deadsync_profile::seed_favorited_pack_for_side(&mut profiles, side, pack_name);
 }
 
 pub fn set_active_profile_for_side(side: PlayerSide, profile: ActiveProfile) -> Profile {
     {
         let mut session = lock_session();
-        let slot = &mut session.active_profiles[side_ix(side)];
-        if *slot == profile {
+        if !session.set_active_profile(side, profile) {
             return get_for_side(side);
         }
-        *slot = profile;
     }
     load_for_side(side);
     get_for_side(side)
@@ -1367,15 +981,12 @@ pub fn set_active_profiles(p1: ActiveProfile, p2: ActiveProfile) -> [Profile; PL
 
 pub fn load_default_profiles_for_joined_sides() -> [Profile; PLAYER_SLOTS] {
     let (p1, p2) = config::default_profiles();
-    let defaults = [p1, p2];
-    let joined_mask = lock_session().joined_mask;
+    let changed = lock_session()
+        .restore_joined_default_profiles(&[p1, p2], |id| local_profile_dir(id).is_dir());
     for side in [PlayerSide::P1, PlayerSide::P2] {
-        if !player_side_is_joined(joined_mask, side) {
-            continue;
+        if changed[side_ix(side)] {
+            load_for_side(side);
         }
-        let active = default_profile_from_id(defaults[side_ix(side)].clone());
-        lock_session().active_profiles[side_ix(side)] = active;
-        load_for_side(side);
     }
     [get_for_side(PlayerSide::P1), get_for_side(PlayerSide::P2)]
 }
@@ -1441,46 +1052,18 @@ pub fn create_local_profile_from_import(
 }
 
 pub fn rename_local_profile(id: &str, display_name: &str) -> Result<(), std::io::Error> {
-    if !is_local_profile_id(id) {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "Invalid local profile id",
-        ));
-    }
-
-    let name = display_name.trim();
-    if name.is_empty() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "Display name is empty",
-        ));
-    }
-
-    let ini_path = profile_ini_path(id);
-    if !ini_path.is_file() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "Profile does not exist",
-        ));
-    }
-    deadsync_profile::rewrite_profile_display_name_file(&ini_path, name)?;
-
-    // Keep the folder readable; safe because identity is the GUID, not the name.
-    let current_dir = local_profile_dir(id);
-    if let Some(current_folder) = current_dir.file_name().and_then(|s| s.to_str()) {
-        let others: Vec<String> = existing_profile_folder_names()
-            .into_iter()
-            .filter(|f| !f.eq_ignore_ascii_case(current_folder))
-            .collect();
-        let desired = folder_name_for_display(name, id, &others);
-        if !desired.eq_ignore_ascii_case(current_folder) {
-            let target = profile_dir_by_folder(&desired);
-            match fs::rename(&current_dir, &target) {
-                Ok(()) => info!("Renamed profile folder '{current_folder}' -> '{desired}'."),
-                Err(e) => {
-                    warn!("Failed to rename profile folder '{current_folder}' -> '{desired}': {e}");
-                }
-            }
+    let result =
+        rename_local_profile_dir(&profiles_root(), &local_profile_dir(id), id, display_name)?;
+    if let Some(folder) = result.folder_rename {
+        match folder.error {
+            None => info!(
+                "Renamed profile folder '{}' -> '{}'.",
+                folder.current_folder, folder.desired_folder
+            ),
+            Some(e) => warn!(
+                "Failed to rename profile folder '{}' -> '{}': {e}",
+                folder.current_folder, folder.desired_folder
+            ),
         }
     }
     invalidate_profile_dir_cache();
@@ -1494,10 +1077,10 @@ pub fn rename_local_profile(id: &str, display_name: &str) -> Result<(), std::io:
     if p1_active || p2_active {
         let mut profiles = lock_profiles();
         if p1_active {
-            profiles[side_ix(PlayerSide::P1)].display_name = name.to_string();
+            profiles[side_ix(PlayerSide::P1)].display_name = result.display_name.clone();
         }
         if p2_active {
-            profiles[side_ix(PlayerSide::P2)].display_name = name.to_string();
+            profiles[side_ix(PlayerSide::P2)].display_name = result.display_name.clone();
         }
     }
 
@@ -1505,22 +1088,7 @@ pub fn rename_local_profile(id: &str, display_name: &str) -> Result<(), std::io:
 }
 
 pub fn delete_local_profile(id: &str) -> Result<(), std::io::Error> {
-    if !is_local_profile_id(id) {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidInput,
-            "Invalid local profile id",
-        ));
-    }
-
-    let dir = local_profile_dir(id);
-    if !dir.is_dir() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "Profile does not exist",
-        ));
-    }
-
-    fs::remove_dir_all(&dir)?;
+    deadsync_profile::delete_local_profile_dir(&local_profile_dir(id), id)?;
     invalidate_profile_dir_cache();
 
     let (p1_default, p2_default) = config::default_profiles();
@@ -1541,40 +1109,31 @@ pub fn delete_local_profile(id: &str) -> Result<(), std::io::Error> {
 }
 
 pub fn get_session_music_rate() -> f32 {
-    let s = lock_session();
-    let r = s.music_rate;
-    if r.is_finite() && r > 0.0 { r } else { 1.0 }
+    lock_session().music_rate()
 }
 
 pub fn set_session_music_rate(rate: f32) {
-    let mut s = lock_session();
-    s.music_rate = if rate.is_finite() && rate > 0.0 {
-        rate.clamp(0.5, 3.0)
-    } else {
-        1.0
-    };
+    lock_session().set_music_rate(rate);
 }
 
 pub fn get_session_timing_tick_mode() -> TimingTickMode {
-    lock_session().timing_tick_mode
+    lock_session().timing_tick_mode()
 }
 
 pub fn set_session_timing_tick_mode(mode: TimingTickMode) {
-    lock_session().timing_tick_mode = mode;
+    lock_session().set_timing_tick_mode(mode);
 }
 
 pub fn get_session_play_style() -> PlayStyle {
-    lock_session().play_style
+    lock_session().play_style()
 }
 
 pub fn set_session_play_style(style: PlayStyle) {
     let prev_style = {
         let mut session = lock_session();
-        let prev_style = session.play_style;
-        if prev_style == style {
+        let Some(prev_style) = session.set_play_style(style) else {
             return;
-        }
-        session.play_style = style;
+        };
         prev_style
     };
 
@@ -1586,24 +1145,23 @@ pub fn set_session_play_style(style: PlayStyle) {
 }
 
 pub fn get_session_play_mode() -> PlayMode {
-    lock_session().play_mode
+    lock_session().play_mode()
 }
 
 pub fn set_session_play_mode(mode: PlayMode) {
-    lock_session().play_mode = mode;
+    lock_session().set_play_mode(mode);
 }
 
 pub fn get_session_player_side() -> PlayerSide {
-    lock_session().player_side
+    lock_session().player_side()
 }
 
 pub fn set_session_player_side(side: PlayerSide) {
-    lock_session().player_side = side;
+    lock_session().set_player_side(side);
 }
 
 pub fn is_session_side_joined(side: PlayerSide) -> bool {
-    let mask = lock_session().joined_mask;
-    player_side_is_joined(mask, side)
+    lock_session().side_joined(side)
 }
 
 pub fn is_session_side_guest(side: PlayerSide) -> bool {
@@ -1611,29 +1169,24 @@ pub fn is_session_side_guest(side: PlayerSide) -> bool {
 }
 
 pub fn set_session_joined(p1: bool, p2: bool) {
-    lock_session().joined_mask = joined_player_mask(p1, p2);
+    lock_session().set_joined_sides(p1, p2);
 }
 
 pub fn set_fast_profile_switch_from_select_music(enabled: bool) {
-    lock_session().fast_profile_switch_from_select_music = enabled;
+    lock_session().set_fast_profile_switch_from_select_music(enabled);
 }
 
 pub fn fast_profile_switch_from_select_music() -> bool {
-    lock_session().fast_profile_switch_from_select_music
+    lock_session().fast_profile_switch_from_select_music()
 }
 
 pub fn take_fast_profile_switch_from_select_music() -> bool {
-    let mut session = lock_session();
-    let was_set = session.fast_profile_switch_from_select_music;
-    session.fast_profile_switch_from_select_music = false;
-    was_set
+    lock_session().take_fast_profile_switch_from_select_music()
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        SimpleIni, heal_default_profile_id, load_player_options, parse_groovestats_is_pad_player,
-    };
+    use super::{SimpleIni, load_player_options, parse_groovestats_is_pad_player};
     use deadsync_profile::{
         AccelEffectsMask, AppearanceEffectsMask, DEFAULT_BIRTH_YEAR, DEFAULT_WEIGHT_POUNDS,
         ErrorBarMask, ErrorBarStyle, HoldsMask, InsertMask, LastPlayed, LastPlayedCourse,
@@ -1643,33 +1196,7 @@ mod tests {
         append_player_options_section, error_bar_mask_from_style, error_bar_style_from_mask,
         error_bar_text_from_mask, normalize_tap_explosion_mask, player_options_section,
     };
-    use std::collections::HashMap;
     use std::str::FromStr;
-
-    #[test]
-    fn heal_default_profile_id_translates_folder_names_to_guids() {
-        let guid = "17c7b8a2-3b73-4e8a-9d7d-cfa7e783c00b";
-        let mut folder_to_guid: HashMap<&str, &str> = HashMap::new();
-        folder_to_guid.insert("00000000", guid);
-
-        // A legacy folder-name id is rewritten to that folder's GUID.
-        assert_eq!(
-            heal_default_profile_id(Some("00000000".to_string()), &folder_to_guid).as_deref(),
-            Some(guid)
-        );
-        // An already-valid GUID passes through untouched.
-        assert_eq!(
-            heal_default_profile_id(Some(guid.to_string()), &folder_to_guid).as_deref(),
-            Some(guid)
-        );
-        // A stale id with no matching folder is preserved (not dropped to Guest).
-        assert_eq!(
-            heal_default_profile_id(Some("99999999".to_string()), &folder_to_guid).as_deref(),
-            Some("99999999")
-        );
-        // No stored default stays absent.
-        assert_eq!(heal_default_profile_id(None, &folder_to_guid), None);
-    }
 
     #[test]
     fn mini_indicator_style_settings_round_trip() {

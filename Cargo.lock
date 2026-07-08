@@ -1134,7 +1134,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.4.2062"
+version = "0.4.2102"
 dependencies = [
  "bincode",
  "bitflags 2.13.0",
@@ -1463,6 +1463,7 @@ dependencies = [
 name = "deadsync-profile-gameplay"
 version = "0.1.0"
 dependencies = [
+ "deadsync-chart",
  "deadsync-gameplay",
  "deadsync-profile",
 ]
@@ -1560,7 +1561,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.4.2062"
+version = "0.4.2102"
 dependencies = [
  "log",
  "semver",

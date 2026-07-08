@@ -2,6 +2,8 @@ use serde::de::Deserializer;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{LazyLock, Mutex};
+use std::thread;
 
 use crate::OnlineRequestError;
 use deadsync_net::{self as network, NetworkError};
@@ -64,6 +66,34 @@ pub enum ConnectionProbeError {
     Timeout,
     InvalidResponse(String),
     CannotConnect(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ConnectionProbeLog {
+    Connected {
+        service: Service,
+        services: Services,
+    },
+    MachineOffline {
+        service: Service,
+    },
+    Timeout {
+        service: Service,
+    },
+    InvalidResponse {
+        service: Service,
+        error: String,
+    },
+    CannotConnect {
+        service: Service,
+        error: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConnectionProbeTransition {
+    pub status: ConnectionStatus,
+    pub log: Option<ConnectionProbeLog>,
 }
 
 impl std::fmt::Display for ConnectionProbeError {
@@ -257,6 +287,83 @@ pub fn check_connection(service: Service) -> Result<ConnectionStatus, NetworkErr
 
 pub fn probe_connection(service: Service) -> Result<ConnectionStatus, ConnectionProbeError> {
     check_connection(service).map_err(ConnectionProbeError::from)
+}
+
+pub fn connection_transition_from_probe_result(
+    service: Service,
+    result: Result<ConnectionStatus, ConnectionProbeError>,
+) -> ConnectionProbeTransition {
+    match result {
+        Ok(status) => {
+            let log = match &status {
+                ConnectionStatus::Connected(services) => Some(ConnectionProbeLog::Connected {
+                    service,
+                    services: services.clone(),
+                }),
+                ConnectionStatus::Error(ConnectionError::MachineOffline) => {
+                    Some(ConnectionProbeLog::MachineOffline { service })
+                }
+                ConnectionStatus::Pending
+                | ConnectionStatus::Error(
+                    ConnectionError::Disabled
+                    | ConnectionError::CannotConnect
+                    | ConnectionError::TimedOut
+                    | ConnectionError::InvalidResponse,
+                ) => None,
+            };
+            ConnectionProbeTransition { status, log }
+        }
+        Err(error) => {
+            let status = ConnectionStatus::Error(error.connection_error());
+            let log = match error {
+                ConnectionProbeError::Timeout => ConnectionProbeLog::Timeout { service },
+                ConnectionProbeError::InvalidResponse(error) => {
+                    ConnectionProbeLog::InvalidResponse { service, error }
+                }
+                ConnectionProbeError::CannotConnect(error) => {
+                    ConnectionProbeLog::CannotConnect { service, error }
+                }
+            };
+            ConnectionProbeTransition {
+                status,
+                log: Some(log),
+            }
+        }
+    }
+}
+
+pub fn probe_connection_transition(service: Service) -> ConnectionProbeTransition {
+    connection_transition_from_probe_result(service, probe_connection(service))
+}
+
+static RUNTIME_STATUS: LazyLock<Mutex<ConnectionStatus>> =
+    LazyLock::new(|| Mutex::new(ConnectionStatus::Pending));
+
+pub type ConnectionProbeLogFn = fn(Option<ConnectionProbeLog>);
+
+#[inline(always)]
+fn runtime_set_status(status: ConnectionStatus) {
+    *RUNTIME_STATUS.lock().unwrap() = status;
+}
+
+pub fn runtime_get_status() -> ConnectionStatus {
+    RUNTIME_STATUS.lock().unwrap().clone()
+}
+
+pub fn runtime_init(enabled: bool, service: Service, log_probe: ConnectionProbeLogFn) {
+    if !enabled {
+        runtime_set_status(ConnectionStatus::Error(ConnectionError::Disabled));
+        return;
+    }
+
+    runtime_set_status(ConnectionStatus::Pending);
+    thread::spawn(move || runtime_perform_check(service, log_probe));
+}
+
+fn runtime_perform_check(service: Service, log_probe: ConnectionProbeLogFn) {
+    let transition = probe_connection_transition(service);
+    log_probe(transition.log);
+    runtime_set_status(transition.status);
 }
 
 impl From<NetworkError> for ConnectionProbeError {
@@ -1996,6 +2103,98 @@ mod tests {
         let error = ConnectionProbeError::from(NetworkError::HttpStatus(500));
         assert_eq!(error.connection_error(), ConnectionError::CannotConnect);
         assert_eq!(error.to_string(), "http status 500");
+    }
+
+    #[test]
+    fn probe_result_transition_selects_status_and_log_intent() {
+        let services = Services {
+            get_scores: true,
+            leaderboard: false,
+            auto_submit: true,
+        };
+        assert_eq!(
+            connection_transition_from_probe_result(
+                Service::GrooveStats,
+                Ok(ConnectionStatus::Connected(services.clone()))
+            ),
+            ConnectionProbeTransition {
+                status: ConnectionStatus::Connected(services.clone()),
+                log: Some(ConnectionProbeLog::Connected {
+                    service: Service::GrooveStats,
+                    services
+                }),
+            }
+        );
+
+        assert_eq!(
+            connection_transition_from_probe_result(
+                Service::BoogieStats,
+                Ok(ConnectionStatus::Error(ConnectionError::MachineOffline))
+            ),
+            ConnectionProbeTransition {
+                status: ConnectionStatus::Error(ConnectionError::MachineOffline),
+                log: Some(ConnectionProbeLog::MachineOffline {
+                    service: Service::BoogieStats
+                }),
+            }
+        );
+
+        assert_eq!(
+            connection_transition_from_probe_result(
+                Service::BoogieStats,
+                Ok(ConnectionStatus::Pending)
+            ),
+            ConnectionProbeTransition {
+                status: ConnectionStatus::Pending,
+                log: None,
+            }
+        );
+    }
+
+    #[test]
+    fn probe_result_transition_maps_errors_to_log_intent() {
+        assert_eq!(
+            connection_transition_from_probe_result(
+                Service::GrooveStats,
+                Err(ConnectionProbeError::Timeout)
+            ),
+            ConnectionProbeTransition {
+                status: ConnectionStatus::Error(ConnectionError::TimedOut),
+                log: Some(ConnectionProbeLog::Timeout {
+                    service: Service::GrooveStats
+                }),
+            }
+        );
+
+        assert_eq!(
+            connection_transition_from_probe_result(
+                Service::BoogieStats,
+                Err(ConnectionProbeError::InvalidResponse(
+                    "bad json".to_string()
+                ))
+            ),
+            ConnectionProbeTransition {
+                status: ConnectionStatus::Error(ConnectionError::InvalidResponse),
+                log: Some(ConnectionProbeLog::InvalidResponse {
+                    service: Service::BoogieStats,
+                    error: "bad json".to_string()
+                }),
+            }
+        );
+
+        assert_eq!(
+            connection_transition_from_probe_result(
+                Service::GrooveStats,
+                Err(ConnectionProbeError::CannotConnect("refused".to_string()))
+            ),
+            ConnectionProbeTransition {
+                status: ConnectionStatus::Error(ConnectionError::CannotConnect),
+                log: Some(ConnectionProbeLog::CannotConnect {
+                    service: Service::GrooveStats,
+                    error: "refused".to_string()
+                }),
+            }
+        );
     }
 
     #[test]
