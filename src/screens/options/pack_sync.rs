@@ -59,7 +59,7 @@ pub(super) fn begin_pack_sync(state: &mut State, selection: SyncPackSelection) {
     let target_chart_type = profile::get_session_play_style().chart_type();
     let preferred_difficulty_index = sync_pack_preferred_difficulty_index();
     let pack_group = selection.pack_group.as_deref();
-    let song_cache = crate::game::song::get_song_cache();
+    let song_cache = deadsync_simfile::runtime_cache::get_song_cache();
     let mut targets = Vec::new();
 
     for pack in song_cache.iter() {

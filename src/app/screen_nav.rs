@@ -155,7 +155,7 @@ impl App {
     pub(super) fn commit_screen_change(&mut self, target: CurrentScreen) {
         let prev = self.state.screens.current_screen;
         if prev != target && target == CurrentScreen::Menu {
-            crate::game::online::lobbies::leave_lobby();
+            deadsync_online::lobbies::runtime_leave_lobby_default();
         }
         // Leaving gameplay by ANY path (bail-out to the song wheel, fail, give up,
         // course abort, results, etc.) must stop SMX sensor test mode, or it keeps

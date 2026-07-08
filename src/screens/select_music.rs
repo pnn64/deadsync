@@ -6,11 +6,10 @@ use crate::config::{
     self, BreakdownStyle, NewPackMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
     SyncGraphMode,
 };
-use crate::game::course;
+
 use crate::game::parsing::simfile as song_loading;
 use crate::game::profile;
 use crate::game::scores;
-use crate::game::song::get_song_cache;
 use crate::rgba_const;
 use crate::screens::components::{
     select_music::{
@@ -51,6 +50,7 @@ use deadsync_profile as profile_data;
 use deadsync_profile::pad_config as pad_profile_data;
 use deadsync_score as score_data;
 use deadsync_simfile::bpm::{beat_at_sec_from_bpms, sec_at_beat_from_bpms};
+use deadsync_simfile::runtime_cache::get_song_cache;
 use image::{Rgba, RgbaImage};
 use log::{debug, warn};
 use null_or_die::{
@@ -4332,7 +4332,7 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
         // Only the configs that match this pad's sensor type (FSR vs load cell).
         let pad_type = deadsync_smx::pad_sensor_type(*slot).map(|t| t.as_str().to_owned());
         let serial = deadsync_smx::get_info(*slot).serial;
-        let configs: Vec<_> = crate::game::pad_profiles::load(pid)
+        let configs: Vec<_> = profile::load_pad_configs(pid)
             .into_iter()
             .filter(|c| {
                 pad_profile_data::config_matches(c, deadsync_smx::BACKEND_ID, pad_type.as_deref())
@@ -4361,7 +4361,7 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
 
 fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
     let replays_enabled = config::get().machine_enable_replays;
-    let downloads_enabled = crate::game::online::downloads::sort_menu_available();
+    let downloads_enabled = crate::game::online::unlock_downloads_available();
     let has_song_selected = matches!(
         state.entries.get(state.selected_index),
         Some(MusicWheelEntry::Song(_))
@@ -4578,7 +4578,7 @@ fn show_lobby_overlay(state: &mut State) {
     clear_overlay_nav_hold(state);
     clear_nav_hold(state);
     state.lobby_overlay = lobby_overlay::show_overlay();
-    crate::game::online::lobbies::search_lobbies();
+    deadsync_online::lobbies::runtime_search_lobbies_default();
     clear_preview(state);
 }
 
@@ -4818,7 +4818,7 @@ fn start_reload_songs_and_courses(state: &mut State) {
             });
         };
         let dirs = dirs::app_dirs();
-        course::scan_and_load_courses_with_progress_counts(
+        song_loading::scan_and_load_courses_with_progress_counts(
             &dirs.courses_dir(),
             &dirs.songs_dir(),
             &mut on_course,
@@ -6270,22 +6270,22 @@ fn handle_lobby_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenActio
         lobby_overlay::InputOutcome::ConnectRequested
         | lobby_overlay::InputOutcome::SearchRequested => {
             audio::play_sfx("assets/sounds/start.ogg");
-            crate::game::online::lobbies::search_lobbies();
+            deadsync_online::lobbies::runtime_search_lobbies_default();
         }
         lobby_overlay::InputOutcome::CreateRequested(password) => {
             audio::play_sfx("assets/sounds/start.ogg");
-            crate::game::online::lobbies::create_lobby_with_password(password.as_str());
+            deadsync_online::lobbies::runtime_create_lobby_with_password_default(password.as_str());
         }
         lobby_overlay::InputOutcome::JoinRequested { code, password } => {
             audio::play_sfx("assets/sounds/start.ogg");
-            crate::game::online::lobbies::join_lobby_with_password(
+            deadsync_online::lobbies::runtime_join_lobby_with_password_default(
                 code.as_str(),
                 password.as_str(),
             );
         }
         lobby_overlay::InputOutcome::LeaveRequested => {
             audio::play_sfx("assets/sounds/start.ogg");
-            crate::game::online::lobbies::leave_lobby();
+            deadsync_online::lobbies::runtime_leave_lobby_default();
         }
     }
     ScreenAction::None
@@ -6307,22 +6307,22 @@ fn handle_lobby_overlay_raw_key(
         lobby_overlay::InputOutcome::ConnectRequested
         | lobby_overlay::InputOutcome::SearchRequested => {
             audio::play_sfx("assets/sounds/start.ogg");
-            crate::game::online::lobbies::search_lobbies();
+            deadsync_online::lobbies::runtime_search_lobbies_default();
         }
         lobby_overlay::InputOutcome::CreateRequested(password) => {
             audio::play_sfx("assets/sounds/start.ogg");
-            crate::game::online::lobbies::create_lobby_with_password(password.as_str());
+            deadsync_online::lobbies::runtime_create_lobby_with_password_default(password.as_str());
         }
         lobby_overlay::InputOutcome::JoinRequested { code, password } => {
             audio::play_sfx("assets/sounds/start.ogg");
-            crate::game::online::lobbies::join_lobby_with_password(
+            deadsync_online::lobbies::runtime_join_lobby_with_password_default(
                 code.as_str(),
                 password.as_str(),
             );
         }
         lobby_overlay::InputOutcome::LeaveRequested => {
             audio::play_sfx("assets/sounds/start.ogg");
-            crate::game::online::lobbies::leave_lobby();
+            deadsync_online::lobbies::runtime_leave_lobby_default();
         }
     }
     ScreenAction::None
@@ -6806,7 +6806,7 @@ fn apply_remote_lobby_song_selection(
 }
 
 fn publish_lobby_confirmed_song_selection(state: &mut State) {
-    let snapshot = crate::game::online::lobbies::snapshot();
+    let snapshot = deadsync_online::lobbies::runtime_snapshot();
     let Some(joined) = snapshot.joined_lobby.as_ref() else {
         return;
     };
@@ -6830,12 +6830,12 @@ fn publish_lobby_confirmed_song_selection(state: &mut State) {
         return;
     }
 
-    crate::game::online::lobbies::select_song(song_info);
+    deadsync_online::lobbies::runtime_select_song_default(song_info);
     state.lobby_last_published_song_sig = Some(local_sig);
 }
 
 fn sync_lobby_select_music(state: &mut State) {
-    let snapshot = crate::game::online::lobbies::snapshot();
+    let snapshot = deadsync_online::lobbies::runtime_snapshot();
     let Some(joined) = snapshot.joined_lobby.as_ref() else {
         state.lobby_last_joined_code = None;
         state.lobby_last_published_machine_sig = None;
@@ -6867,7 +6867,7 @@ fn sync_lobby_select_music(state: &mut State) {
     // identical machine-state payloads, and SelectMusic can be re-entered multiple
     // times during a session while this screen state persists locally.
     let machine_sig = local_lobby_machine_signature();
-    crate::game::online::lobbies::update_machine_state("ScreenSelectMusic", true);
+    deadsync_online::lobbies::runtime_update_machine_state_default("ScreenSelectMusic", true);
     state.lobby_last_published_machine_sig = Some(machine_sig);
 
     if let Some(song_info) = joined.song_info.as_ref() {
@@ -6925,10 +6925,10 @@ fn sync_lobby_select_music(state: &mut State) {
 }
 
 fn select_music_lobby_lock_text(state: &State) -> Option<String> {
-    let snapshot = crate::game::online::lobbies::snapshot();
+    let snapshot = deadsync_online::lobbies::runtime_snapshot();
     let joined = snapshot.joined_lobby.as_ref()?;
     let local_song_info = build_local_lobby_song_info(state);
-    let reconnect_status_text = crate::game::online::lobbies::reconnect_status_text();
+    let reconnect_status_text = deadsync_online::lobbies::runtime_reconnect_status_text();
     select_music_lobby_lock_text_for(
         joined,
         local_lobby_player_count(),
@@ -6944,7 +6944,7 @@ fn select_music_lobby_status_text(state: &State) -> Option<String> {
     let mut text = select_music_lobby_lock_text(state)?;
     let prompt = if let Some(elapsed) = lobby_disconnect_hold_elapsed(state) {
         let remaining =
-            (crate::game::online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS - elapsed).ceil() as i32;
+            (deadsync_online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS - elapsed).ceil() as i32;
         let remaining = remaining.max(0);
         tr_fmt(
             "Lobby",
@@ -8307,7 +8307,7 @@ fn handle_pad_config_overlay_input(state: &mut State, ev: &InputEvent, fine: boo
 /// SMX pad in `slot`. Returns whether it was applied — the shared core of quick
 /// recall and the overlay's Apply, so both resolve a saved config the same way.
 fn apply_saved_pad_config(profile_id: &str, slot: usize, name: &str) -> bool {
-    let configs = crate::game::pad_profiles::load(profile_id);
+    let configs = profile::load_pad_configs(profile_id);
     let Some(c) = configs.iter().find(|c| c.name == name) else {
         return false;
     };
@@ -8431,10 +8431,10 @@ fn perform_pad_profile_save(state: &mut State) {
     // Rename: just relabel the existing config (and honor the default toggle,
     // scoped to the pad being edited).
     if let Some(old) = draft.rename_of {
-        crate::game::pad_profiles::rename(&profile_id, &old, &name);
+        profile::rename_pad_config(&profile_id, &old, &name);
         let pad = slot;
         if draft.set_default {
-            crate::game::pad_profiles::set_default(&profile_id, &info.serial, &name);
+            profile::set_default_pad_config(&profile_id, &info.serial, &name);
             // New default → re-resolve (applies it) and rebuild the list.
             state
                 .pad_config_intents
@@ -8471,7 +8471,7 @@ fn perform_pad_profile_save(state: &mut State) {
         return;
     };
     let pad_type = deadsync_smx::pad_sensor_type(slot).map(|t| t.as_str().to_owned());
-    crate::game::pad_profiles::upsert(
+    profile::upsert_pad_config(
         &profile_id,
         &name,
         deadsync_smx::BACKEND_ID,
@@ -8544,7 +8544,7 @@ fn perform_pad_profile_overwrite(state: &mut State) {
         return;
     };
     let pad_type = deadsync_smx::pad_sensor_type(slot).map(|t| t.as_str().to_owned());
-    crate::game::pad_profiles::upsert(
+    profile::upsert_pad_config(
         &profile_id,
         &name,
         deadsync_smx::BACKEND_ID,
@@ -8564,7 +8564,7 @@ fn perform_pad_profile_set_default(state: &mut State) {
     if let Some((profile_id, name, slot)) = pad_overlay_profile_target(state) {
         // Default is per pad: make this config the default for the cursor pad.
         let info = deadsync_smx::get_info(slot);
-        crate::game::pad_profiles::set_default(&profile_id, &info.serial, &name);
+        profile::set_default_pad_config(&profile_id, &info.serial, &name);
         // A default change doesn't move the resolve signature, so ask the
         // controller to re-resolve (applies the new default + refreshes marker).
         state
@@ -8576,7 +8576,7 @@ fn perform_pad_profile_set_default(state: &mut State) {
 
 fn perform_pad_profile_delete(state: &mut State) {
     if let Some((profile_id, name, slot)) = pad_overlay_profile_target(state) {
-        crate::game::pad_profiles::delete(&profile_id, &name);
+        profile::delete_pad_config(&profile_id, &name);
         // It may have been this pad's active/default config; re-resolve so the
         // controller falls back (and the marker updates).
         state
@@ -10028,7 +10028,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ScreenAct
 }
 
 pub fn update(state: &mut State, dt: f32) -> ScreenAction {
-    crate::game::online::lobbies::poll_reconnect();
+    deadsync_online::lobbies::runtime_poll_reconnect_default();
 
     let lobby_locked = select_music_lobby_lock_text(state).is_some();
     if state.lobby_notice_time_left > 0.0 {
@@ -10048,10 +10048,10 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         state.last_steps_nav_dir_p2 = None;
         state.last_steps_nav_time_p2 = None;
         if lobby_disconnect_hold_elapsed(state).is_some_and(|elapsed| {
-            elapsed >= crate::game::online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS
+            elapsed >= deadsync_online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS
         }) {
             clear_lobby_disconnect_holds(state);
-            crate::game::online::lobbies::disconnect();
+            deadsync_online::lobbies::runtime_disconnect();
             set_lobby_notice(state, "Disconnected from lobby.");
         }
     } else {
@@ -10097,7 +10097,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         profile_boxes::update(overlay, dt);
         return ScreenAction::None;
     }
-    let reload_dirs = crate::game::online::downloads::take_ready_song_reload_request();
+    let reload_dirs = crate::game::online::take_ready_song_reload_request();
     if !reload_dirs.is_empty() {
         start_reload_song_dirs(state, reload_dirs);
         return ScreenAction::None;
@@ -12335,7 +12335,7 @@ pub fn push_actors(
         return;
     }
 
-    let lobby_snapshot = crate::game::online::lobbies::snapshot();
+    let lobby_snapshot = deadsync_online::lobbies::runtime_snapshot();
     if let Some(joined) = lobby_snapshot.joined_lobby.as_ref() {
         actors.extend(lobby_hud::build_panel(lobby_hud::RenderParams {
             screen_name: "ScreenSelectMusic",
@@ -13410,7 +13410,7 @@ mod tests {
             last_status: None,
         };
 
-        crate::game::online::lobbies::with_snapshot_for_test(snapshot, || {
+        deadsync_online::lobbies::runtime_with_snapshot_for_test(snapshot, || {
             assert_eq!(
                 select_music_lobby_lock_text(&state).as_deref(),
                 Some("Waiting for players to finish evaluation...")

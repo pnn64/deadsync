@@ -2,10 +2,8 @@ use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::tr;
 use crate::assets::{FontRole, current_machine_font_key};
-use crate::game::course::get_course_cache;
 use crate::game::profile;
 use crate::game::scores;
-use crate::game::song::get_song_cache;
 use crate::rgba_const;
 use crate::screens::components::{
     select_music::{music_wheel, screen_bars, select_pane, step_artist_bar},
@@ -30,6 +28,8 @@ use deadsync_score as score_data;
 use deadsync_simfile::course::{
     self, CourseEntry, CourseFile, CourseSong, Difficulty, SongSort, StepsSpec,
 };
+use deadsync_simfile::runtime_cache::get_course_cache;
+use deadsync_simfile::runtime_cache::get_song_cache;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hasher;

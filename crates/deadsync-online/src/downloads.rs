@@ -132,6 +132,20 @@ impl UnlockDownloadRuntimeHooks {
     }
 }
 
+pub fn log_runtime_event(event: DownloadRuntimeEvent) {
+    match event {
+        DownloadRuntimeEvent::Cached { url, destination } => {
+            log::debug!("Skipping unlock download for cached url='{url}' dest='{destination}'.");
+        }
+        DownloadRuntimeEvent::Duplicate { url, destination } => {
+            log::debug!("Skipping duplicate unlock download url='{url}' dest='{destination}'.");
+        }
+        DownloadRuntimeEvent::NonZip { url, content_type } => {
+            log::warn!("Attempted to download non-zip unlock from '{url}' ({content_type}).");
+        }
+    }
+}
+
 static RUNTIME_DOWNLOAD_STATE: LazyLock<Mutex<DownloadState>> =
     LazyLock::new(|| Mutex::new(DownloadState::default()));
 static RUNTIME_NEXT_DOWNLOAD_ID: AtomicU64 = AtomicU64::new(1);

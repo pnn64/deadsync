@@ -1134,6 +1134,22 @@ mod tests {
     }
 
     #[test]
+    fn model_draw_program_parses_vertalign_and_base_glow() {
+        let commands = HashMap::from([(
+            "initcommand".to_string(),
+            "SetTextureFiltering,false;vertalign,bottom;glow,0.1,0.2,0.3,0.4".to_string(),
+        )]);
+
+        let (draw, timeline, effect) = model_draw_program(&commands);
+
+        assert!(parse_script_control("settexturefiltering").is_some());
+        assert!(timeline.is_empty());
+        assert!((draw.vert_align - 1.0).abs() <= f32::EPSILON);
+        assert_eq!(draw.glow, [0.1, 0.2, 0.3, 0.4]);
+        assert!(matches!(effect.mode, ModelEffectMode::None));
+    }
+
+    #[test]
     fn model_draw_program_ignores_all_state_delay_control() {
         let commands = HashMap::from([(
             "nonecommand".to_string(),
@@ -1187,6 +1203,17 @@ mod tests {
         assert_eq!(effect.target_zoom, Some(1.5));
         assert_eq!(effect.blend_add, Some(true));
         assert!(effect.interrupts);
+    }
+
+    #[test]
+    fn itg_parse_command_effect_handles_lua_function_zoom_pulse() {
+        let effect = itg_parse_command_effect(
+            "function(self) self:finishtweening():zoom(0.75):linear(0.11):zoom(1.0)end",
+        );
+
+        assert!((effect.duration - 0.11).abs() <= 1e-6);
+        assert!((effect.start_zoom.unwrap_or_default() - 0.75).abs() <= 1e-6);
+        assert!((effect.target_zoom.unwrap_or_default() - 1.0).abs() <= 1e-6);
     }
 
     #[test]

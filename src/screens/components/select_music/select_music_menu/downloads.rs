@@ -1,6 +1,6 @@
 use crate::act;
 use crate::assets::{FontRole, current_machine_font_key};
-use crate::game::online::downloads;
+use crate::game::online;
 use crate::screens::components::shared::loading_bar;
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
@@ -59,14 +59,14 @@ pub fn update_downloads_overlay(state: &mut DownloadsOverlayState, _dt: f32) {
     let DownloadsOverlayState::Visible(overlay) = state else {
         return;
     };
-    overlay.scroll_index = overlay
-        .scroll_index
-        .min(downloads_scroll_limit(downloads::snapshots().len()));
+    overlay.scroll_index = overlay.scroll_index.min(downloads_scroll_limit(
+        online::unlock_download_snapshots().len(),
+    ));
 }
 
 #[inline(always)]
 fn downloads_shift(overlay: &mut DownloadsOverlayStateData, delta: isize) -> bool {
-    let limit = downloads_scroll_limit(downloads::snapshots().len());
+    let limit = downloads_scroll_limit(online::unlock_download_snapshots().len());
     let next = (overlay.scroll_index as isize + delta).clamp(0, limit as isize) as usize;
     if next == overlay.scroll_index {
         return false;
@@ -162,8 +162,8 @@ pub fn build_downloads_overlay(
     let DownloadsOverlayState::Visible(overlay) = state else {
         return None;
     };
-    let snapshots = downloads::snapshots();
-    let (finished, total) = downloads::completion_counts();
+    let snapshots = online::unlock_download_snapshots();
+    let (finished, total) = online::unlock_download_completion_counts();
     let mut actors = Vec::new();
     let center_x = screen_center_x();
     let center_y = screen_center_y();

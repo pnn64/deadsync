@@ -341,6 +341,23 @@ pub fn runtime_init(enabled: bool, log_probe: ConnectionProbeLogFn) {
     thread::spawn(move || runtime_perform_check(log_probe));
 }
 
+pub fn runtime_init_with_default_log(enabled: bool) {
+    if enabled {
+        log::debug!("Initializing ArrowCloud network check...");
+    }
+    runtime_init(enabled, log_probe_transition);
+}
+
+pub fn log_probe_transition(log: Option<ConnectionProbeLog>) {
+    match log {
+        Some(ConnectionProbeLog::Connected) => log::info!("Connected to ArrowCloud."),
+        Some(ConnectionProbeLog::CannotConnect { error }) => {
+            log::warn!("HTTP error to ArrowCloud: {error}");
+        }
+        None => {}
+    }
+}
+
 fn runtime_perform_check(log_probe: ConnectionProbeLogFn) {
     let transition = probe_connection_transition();
     log_probe(transition.log);

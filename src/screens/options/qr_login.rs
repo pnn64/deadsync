@@ -15,7 +15,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::act;
 use crate::assets::i18n::{tr, tr_fmt};
-use crate::game::online::arrowcloud as ac_online;
 use crate::game::profile;
 use crate::screens::components::shared::qr_code;
 use deadlib_present::actors::Actor;
@@ -411,7 +410,7 @@ fn persist_consumed_key(slot: &mut LoginSlot, api_key: &str, username: Option<&s
                 // Refresh display_name in case profile state changed.
                 slot.display_name = profile::get_for_side(slot.side).display_name;
             }
-            ac_online::refresh_status();
+            crate::game::online::refresh_arrowcloud_status();
             let _ = username; // ArrowCloud's device-login never returns one.
         }
         BackendKind::GrooveStats => {

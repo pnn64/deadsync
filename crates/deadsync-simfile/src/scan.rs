@@ -1,10 +1,14 @@
 use deadsync_chart::{SongData, SongPack, SyncPref};
 use rssp::pack::{PackScan as RsspPackScan, SongScan as RsspSongScan};
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::fs;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
+
+use crate::runtime_cache;
 
 #[derive(Clone, Debug)]
 pub struct SongScan {
@@ -52,6 +56,113 @@ pub struct SongLoadStats {
     pub parse_threads: usize,
 }
 
+#[derive(Clone, Debug)]
+pub struct RuntimeSongScanInput {
+    pub base_root: PathBuf,
+    pub song_roots: Vec<PathBuf>,
+    pub cache_dir: PathBuf,
+    pub load_options: SongLoadOptions,
+    pub requested_threads: u8,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SongScanRootReport {
+    pub roots: Vec<PathBuf>,
+    pub events: Vec<SongScanRootEvent>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SongScanRootEvent {
+    PrimaryMissing { root: PathBuf },
+    AdditionalMissing { label: String, root: PathBuf },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RuntimeSongScanEvent {
+    StartScan {
+        base_root: PathBuf,
+    },
+    CacheDirError {
+        cache_dir: PathBuf,
+        error: String,
+    },
+    NoSongRoots,
+    ScanFailure {
+        kind: &'static str,
+        path: PathBuf,
+        error: String,
+    },
+    PackScan {
+        name: String,
+    },
+    NeverCache {
+        pack_display: String,
+    },
+    SongLoadFailed {
+        simfile_path: PathBuf,
+        error: String,
+    },
+    UsedParallel {
+        parse_threads: usize,
+        requested_threads: u8,
+    },
+    FinishedScan {
+        packs: usize,
+        songs: usize,
+        stats: SongLoadStats,
+        elapsed: Duration,
+    },
+    NoReloadSongRoots,
+    NoReloadPackDirs,
+    StartReload {
+        packs: usize,
+    },
+    FinishedReload {
+        reloaded_packs: usize,
+        reloaded_songs: usize,
+        stats: SongLoadStats,
+        elapsed: Duration,
+        total_packs: usize,
+        total_songs: usize,
+    },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RuntimeScanLogLevel {
+    Debug,
+    Info,
+    Warn,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RuntimeScanLogEntry {
+    pub level: RuntimeScanLogLevel,
+    pub message: String,
+}
+
+impl RuntimeScanLogEntry {
+    pub fn debug(message: impl Into<String>) -> Self {
+        Self {
+            level: RuntimeScanLogLevel::Debug,
+            message: message.into(),
+        }
+    }
+
+    pub fn info(message: impl Into<String>) -> Self {
+        Self {
+            level: RuntimeScanLogLevel::Info,
+            message: message.into(),
+        }
+    }
+
+    pub fn warn(message: impl Into<String>) -> Self {
+        Self {
+            level: RuntimeScanLogLevel::Warn,
+            message: message.into(),
+        }
+    }
+}
+
 type SongParseMsg = (usize, PathBuf, Result<(Arc<SongData>, bool), String>);
 
 pub fn push_unique_path(path: PathBuf, roots: &mut Vec<PathBuf>, keys: &mut Vec<String>) {
@@ -61,6 +172,42 @@ pub fn push_unique_path(path: PathBuf, roots: &mut Vec<PathBuf>, keys: &mut Vec<
     }
     keys.push(key);
     roots.push(path);
+}
+
+pub fn collect_song_scan_roots(
+    primary_root: &Path,
+    extra_roots: impl IntoIterator<Item = PathBuf>,
+    additional_roots: impl IntoIterator<Item = (String, PathBuf)>,
+) -> SongScanRootReport {
+    let mut report = SongScanRootReport {
+        roots: Vec::with_capacity(4),
+        events: Vec::new(),
+    };
+    let mut keys = Vec::with_capacity(4);
+
+    if primary_root.is_dir() {
+        push_unique_path(primary_root.to_path_buf(), &mut report.roots, &mut keys);
+    } else {
+        report.events.push(SongScanRootEvent::PrimaryMissing {
+            root: primary_root.to_path_buf(),
+        });
+    }
+
+    for extra in extra_roots {
+        push_unique_path(extra, &mut report.roots, &mut keys);
+    }
+
+    for (label, root) in additional_roots {
+        if root.is_dir() {
+            push_unique_path(root, &mut report.roots, &mut keys);
+        } else {
+            report
+                .events
+                .push(SongScanRootEvent::AdditionalMissing { label, root });
+        }
+    }
+
+    report
 }
 
 pub fn fmt_scan_time(d: Duration) -> String {
@@ -75,6 +222,85 @@ pub fn fmt_scan_time(d: Duration) -> String {
     let m = (total_s / 60.0).floor() as u64;
     let s = (m as f64).mul_add(-60.0, total_s);
     format!("{m}m{s:.1}s")
+}
+
+pub fn runtime_song_scan_log_entry(event: RuntimeSongScanEvent) -> RuntimeScanLogEntry {
+    match event {
+        RuntimeSongScanEvent::StartScan { base_root } => RuntimeScanLogEntry::info(format!(
+            "Starting simfile scan (base songs root '{}')...",
+            base_root.display()
+        )),
+        RuntimeSongScanEvent::CacheDirError { cache_dir, error } => {
+            RuntimeScanLogEntry::warn(format!(
+                "Could not create cache directory '{}': {}. Caching will be disabled.",
+                cache_dir.to_string_lossy(),
+                error
+            ))
+        }
+        RuntimeSongScanEvent::NoSongRoots => {
+            RuntimeScanLogEntry::warn("No valid song roots found. No songs will be loaded.")
+        }
+        RuntimeSongScanEvent::ScanFailure { kind, path, error } => RuntimeScanLogEntry::warn(
+            format!("Could not scan {kind} '{}': {}", path.display(), error),
+        ),
+        RuntimeSongScanEvent::PackScan { name } => {
+            RuntimeScanLogEntry::debug(format!("Scanning pack: {name}"))
+        }
+        RuntimeSongScanEvent::NeverCache { pack_display } => RuntimeScanLogEntry::debug(format!(
+            "Skipping song cache for pack '{pack_display}' (NeverCacheList)."
+        )),
+        RuntimeSongScanEvent::SongLoadFailed {
+            simfile_path,
+            error,
+        } => RuntimeScanLogEntry::warn(format!("Failed to load '{simfile_path:?}': {error}")),
+        RuntimeSongScanEvent::UsedParallel {
+            parse_threads,
+            requested_threads,
+        } => RuntimeScanLogEntry::debug(format!(
+            "Song parsing: used {parse_threads} threads for cache/parsing (SongParsingThreads={requested_threads})."
+        )),
+        RuntimeSongScanEvent::FinishedScan {
+            packs,
+            songs,
+            stats,
+            elapsed,
+        } => RuntimeScanLogEntry::info(format!(
+            "Finished scan. Found {} packs / {} songs (parsed {}, cache hits {}, failed {}) in {}.",
+            packs,
+            songs,
+            stats.songs_parsed,
+            stats.songs_cache_hits,
+            stats.songs_failed,
+            fmt_scan_time(elapsed)
+        )),
+        RuntimeSongScanEvent::NoReloadSongRoots => {
+            RuntimeScanLogEntry::warn("No valid song roots found. No songs will be reloaded.")
+        }
+        RuntimeSongScanEvent::NoReloadPackDirs => RuntimeScanLogEntry::warn(
+            "No valid song pack directories were requested for targeted reload.",
+        ),
+        RuntimeSongScanEvent::StartReload { packs } => RuntimeScanLogEntry::info(format!(
+            "Starting targeted song reload for {packs} affected pack(s)..."
+        )),
+        RuntimeSongScanEvent::FinishedReload {
+            reloaded_packs,
+            reloaded_songs,
+            stats,
+            elapsed,
+            total_packs,
+            total_songs,
+        } => RuntimeScanLogEntry::info(format!(
+            "Finished targeted reload. Reloaded {} packs / {} songs (parsed {}, cache hits {}, failed {}) in {}. Song cache now has {} packs / {} songs.",
+            reloaded_packs,
+            reloaded_songs,
+            stats.songs_parsed,
+            stats.songs_cache_hits,
+            stats.songs_failed,
+            fmt_scan_time(elapsed),
+            total_packs,
+            total_songs,
+        )),
+    }
 }
 
 pub fn scan_song_roots(song_roots: &[PathBuf]) -> (Vec<PackScan>, Vec<ScanFailure>) {
@@ -403,6 +629,196 @@ where
 
     finalize_loaded_packs(&mut loaded_packs);
     (loaded_packs, stats)
+}
+
+fn ensure_runtime_song_cache_dir(cache_dir: &Path, event: &mut impl FnMut(RuntimeSongScanEvent)) {
+    if let Err(error) = fs::create_dir_all(cache_dir) {
+        event(RuntimeSongScanEvent::CacheDirError {
+            cache_dir: cache_dir.to_path_buf(),
+            error: error.to_string(),
+        });
+    }
+}
+
+fn emit_scan_failures(
+    kind: &'static str,
+    failures: &[ScanFailure],
+    event: &mut impl FnMut(RuntimeSongScanEvent),
+) {
+    for failure in failures {
+        event(RuntimeSongScanEvent::ScanFailure {
+            kind,
+            path: failure.path.clone(),
+            error: failure.error.clone(),
+        });
+    }
+}
+
+fn load_runtime_pack_scans<Progress, Process, NeverCache>(
+    packs: Vec<PackScan>,
+    input: &RuntimeSongScanInput,
+    progress: Option<&mut Progress>,
+    process_song: Process,
+    group_is_never_cached: NeverCache,
+    event: &mut impl FnMut(RuntimeSongScanEvent),
+) -> (Vec<SongPack>, SongLoadStats)
+where
+    Progress: FnMut(usize, usize, &str, &str),
+    Process: Fn(PathBuf, bool, bool, f32) -> Result<(SongData, bool), String>
+        + Copy
+        + Send
+        + Sync
+        + 'static,
+    NeverCache: Fn(&str) -> bool,
+{
+    let pending_events = RefCell::new(Vec::new());
+    let (loaded_packs, stats) = load_pack_scans_with(
+        packs,
+        input.load_options,
+        progress,
+        process_song,
+        group_is_never_cached,
+        |simfile_path, error| {
+            pending_events
+                .borrow_mut()
+                .push(RuntimeSongScanEvent::SongLoadFailed {
+                    simfile_path: simfile_path.to_path_buf(),
+                    error: error.to_string(),
+                });
+        },
+        |pack| {
+            pending_events
+                .borrow_mut()
+                .push(RuntimeSongScanEvent::PackScan {
+                    name: pack.name.clone(),
+                });
+        },
+        |pack_display| {
+            pending_events
+                .borrow_mut()
+                .push(RuntimeSongScanEvent::NeverCache {
+                    pack_display: pack_display.to_string(),
+                });
+        },
+    );
+    for pending in pending_events.into_inner() {
+        event(pending);
+    }
+    if stats.used_parallel {
+        event(RuntimeSongScanEvent::UsedParallel {
+            parse_threads: stats.parse_threads,
+            requested_threads: input.requested_threads,
+        });
+    }
+    (loaded_packs, stats)
+}
+
+pub fn scan_and_load_songs_runtime<Progress, Process, NeverCache>(
+    input: RuntimeSongScanInput,
+    progress: Option<&mut Progress>,
+    process_song: Process,
+    group_is_never_cached: NeverCache,
+    mut event: impl FnMut(RuntimeSongScanEvent),
+) where
+    Progress: FnMut(usize, usize, &str, &str),
+    Process: Fn(PathBuf, bool, bool, f32) -> Result<(SongData, bool), String>
+        + Copy
+        + Send
+        + Sync
+        + 'static,
+    NeverCache: Fn(&str) -> bool,
+{
+    event(RuntimeSongScanEvent::StartScan {
+        base_root: input.base_root.clone(),
+    });
+    let started = Instant::now();
+    ensure_runtime_song_cache_dir(&input.cache_dir, &mut event);
+
+    if input.song_roots.is_empty() {
+        event(RuntimeSongScanEvent::NoSongRoots);
+        runtime_cache::set_song_cache(Vec::new());
+        return;
+    }
+
+    let (packs, failures) = scan_song_roots(&input.song_roots);
+    emit_scan_failures("songs dir", &failures, &mut event);
+    let (loaded_packs, stats) = load_runtime_pack_scans(
+        packs,
+        &input,
+        progress,
+        process_song,
+        group_is_never_cached,
+        &mut event,
+    );
+    let songs_loaded = count_loaded_songs(&loaded_packs);
+    event(RuntimeSongScanEvent::FinishedScan {
+        packs: loaded_packs.len(),
+        songs: songs_loaded,
+        stats,
+        elapsed: started.elapsed(),
+    });
+    runtime_cache::set_song_cache(loaded_packs);
+}
+
+pub fn reload_song_dirs_runtime<Progress, Process, NeverCache>(
+    input: RuntimeSongScanInput,
+    pack_dirs: &[PathBuf],
+    progress: Option<&mut Progress>,
+    process_song: Process,
+    group_is_never_cached: NeverCache,
+    mut event: impl FnMut(RuntimeSongScanEvent),
+) where
+    Progress: FnMut(usize, usize, &str, &str),
+    Process: Fn(PathBuf, bool, bool, f32) -> Result<(SongData, bool), String>
+        + Copy
+        + Send
+        + Sync
+        + 'static,
+    NeverCache: Fn(&str) -> bool,
+{
+    ensure_runtime_song_cache_dir(&input.cache_dir, &mut event);
+    if input.song_roots.is_empty() {
+        event(RuntimeSongScanEvent::NoReloadSongRoots);
+        return;
+    }
+
+    let (scan_dirs, pack_keys) = collect_reload_pack_dirs(&input.song_roots, pack_dirs);
+    if pack_keys.is_empty() {
+        event(RuntimeSongScanEvent::NoReloadPackDirs);
+        return;
+    }
+
+    event(RuntimeSongScanEvent::StartReload {
+        packs: pack_keys.len(),
+    });
+    let started = Instant::now();
+    let (packs, failures) = scan_pack_dirs(&scan_dirs);
+    emit_scan_failures("pack dir", &failures, &mut event);
+    let (reloaded_packs, stats) = load_runtime_pack_scans(
+        packs,
+        &input,
+        progress,
+        process_song,
+        group_is_never_cached,
+        &mut event,
+    );
+    let reloaded_pack_count = reloaded_packs.len();
+    let reloaded_song_count = count_loaded_songs(&reloaded_packs);
+
+    let (total_packs, total_songs) = {
+        let mut song_cache = runtime_cache::get_song_cache();
+        replace_song_packs(&mut song_cache, &pack_keys, reloaded_packs);
+        (song_cache.len(), count_loaded_songs(&song_cache))
+    };
+
+    event(RuntimeSongScanEvent::FinishedReload {
+        reloaded_packs: reloaded_pack_count,
+        reloaded_songs: reloaded_song_count,
+        stats,
+        elapsed: started.elapsed(),
+        total_packs,
+        total_songs,
+    });
 }
 
 #[inline(always)]
@@ -800,6 +1216,54 @@ mod tests {
             precise_last_second_seconds: 0.0,
             charts: Vec::new(),
         }
+    }
+
+    #[test]
+    fn collect_song_scan_roots_dedupes_and_reports_missing_roots() {
+        let root = test_dir("song-scan-roots");
+        let primary = root.join("primary");
+        let extra = root.join("extra");
+        let additional = root.join("additional");
+        let missing = root.join("missing");
+        fs::create_dir_all(&primary).unwrap();
+        fs::create_dir_all(&additional).unwrap();
+
+        let report = collect_song_scan_roots(
+            &primary,
+            vec![primary.clone(), extra.clone()],
+            vec![
+                ("missing-label".to_string(), missing.clone()),
+                ("additional-label".to_string(), additional.clone()),
+                ("additional-dupe".to_string(), additional.clone()),
+            ],
+        );
+
+        assert_eq!(report.roots, vec![primary, extra, additional]);
+        assert_eq!(
+            report.events,
+            vec![SongScanRootEvent::AdditionalMissing {
+                label: "missing-label".to_string(),
+                root: missing
+            }]
+        );
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn collect_song_scan_roots_reports_missing_primary_root() {
+        let root = test_dir("song-scan-root-missing-primary");
+        let primary = root.join("missing-primary");
+
+        let report = collect_song_scan_roots(&primary, Vec::new(), Vec::new());
+
+        assert!(report.roots.is_empty());
+        assert_eq!(
+            report.events,
+            vec![SongScanRootEvent::PrimaryMissing { root: primary }]
+        );
+
+        let _ = fs::remove_dir_all(root);
     }
 
     fn process_test_song(

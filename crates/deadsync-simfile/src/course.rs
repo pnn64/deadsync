@@ -1,9 +1,11 @@
-use crate::scan::push_unique_path;
+use crate::runtime_cache;
+use crate::scan::{RuntimeScanLogEntry, fmt_scan_time, push_unique_path};
 use deadsync_chart::SongPack;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 pub use rssp::course::{
     CourseEntry, CourseFile, CourseSong, Difficulty, SongSort, StepsSpec, difficulty_label,
@@ -40,6 +42,60 @@ pub struct CourseScanReport {
 pub struct CourseScanRoots {
     pub roots: Vec<PathBuf>,
     pub primary_missing: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct RuntimeCourseScanInput {
+    pub courses_root: PathBuf,
+    pub course_roots: Vec<PathBuf>,
+    pub song_roots: Vec<PathBuf>,
+    pub autogen_courses_root: PathBuf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RuntimeCourseScanEvent {
+    Start {
+        courses_root: PathBuf,
+    },
+    NoSongRoots,
+    NoCourseRoots,
+    Failure {
+        message: String,
+    },
+    Finished {
+        courses: usize,
+        autogen_count: usize,
+        failures: usize,
+        elapsed: Duration,
+    },
+}
+
+pub fn runtime_course_scan_log_entry(event: RuntimeCourseScanEvent) -> RuntimeScanLogEntry {
+    match event {
+        RuntimeCourseScanEvent::Start { courses_root } => RuntimeScanLogEntry::info(format!(
+            "Starting course scan in '{}'...",
+            courses_root.display()
+        )),
+        RuntimeCourseScanEvent::NoSongRoots => {
+            RuntimeScanLogEntry::warn("No valid song roots found. No courses will be loaded.")
+        }
+        RuntimeCourseScanEvent::NoCourseRoots => {
+            RuntimeScanLogEntry::warn("No valid course roots found. No courses will be loaded.")
+        }
+        RuntimeCourseScanEvent::Failure { message } => RuntimeScanLogEntry::warn(message),
+        RuntimeCourseScanEvent::Finished {
+            courses,
+            autogen_count,
+            failures,
+            elapsed,
+        } => RuntimeScanLogEntry::info(format!(
+            "Finished course scan. Loaded {} courses ({} autogen, failed {}) in {}.",
+            courses,
+            autogen_count,
+            failures,
+            fmt_scan_time(elapsed)
+        )),
+    }
 }
 
 impl fmt::Display for CourseRefError {
@@ -203,6 +259,58 @@ where
         failures: report.failures,
         autogen_count,
     }
+}
+
+pub fn scan_and_load_courses_runtime<F>(
+    input: RuntimeCourseScanInput,
+    progress: Option<&mut F>,
+    mut event: impl FnMut(RuntimeCourseScanEvent),
+) where
+    F: FnMut(usize, usize, &str, &str),
+{
+    event(RuntimeCourseScanEvent::Start {
+        courses_root: input.courses_root.clone(),
+    });
+    let started = Instant::now();
+
+    if input.song_roots.is_empty() {
+        event(RuntimeCourseScanEvent::NoSongRoots);
+        runtime_cache::set_course_cache(Vec::new());
+        return;
+    }
+    if input.course_roots.is_empty() {
+        event(RuntimeCourseScanEvent::NoCourseRoots);
+        runtime_cache::set_course_cache(Vec::new());
+        return;
+    }
+
+    let report = {
+        let song_cache = runtime_cache::get_song_cache();
+        load_course_scan_with_progress(
+            &input.course_roots,
+            &input.courses_root,
+            &input.song_roots,
+            &input.autogen_courses_root,
+            &song_cache,
+            progress,
+        )
+    };
+    for failure in &report.failures {
+        event(RuntimeCourseScanEvent::Failure {
+            message: failure.message.clone(),
+        });
+    }
+
+    let courses = report.courses.len();
+    let autogen_count = report.autogen_count;
+    let failures = report.failures.len();
+    runtime_cache::set_course_cache(report.courses);
+    event(RuntimeCourseScanEvent::Finished {
+        courses,
+        autogen_count,
+        failures,
+        elapsed: started.elapsed(),
+    });
 }
 
 pub fn autogen_nonstop_group_courses(

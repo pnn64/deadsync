@@ -12,9 +12,7 @@ use self::texture::{
     mine_fill_slots,
 };
 #[cfg(test)]
-use self::texture::{
-    itg_apply_state_properties_from_script, itg_register_texture_dims_for_path, itg_texture_key,
-};
+use self::texture::{itg_apply_state_properties_from_script, itg_register_texture_dims_for_path};
 use deadlib_platform::dirs;
 use deadsync_noteskin::model::{
     itg_parse_milkshape_model, itg_parse_milkshape_model_auto_rot,
@@ -34,7 +32,6 @@ use deadsync_noteskin::{
     itg as noteskin_itg, script as noteskin_script,
 };
 use log::warn;
-use noteskin_script::{parse_script_bool, parse_script_number};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
@@ -53,47 +50,37 @@ pub fn clear_itg_runtime_caches() {
     noteskin_itg::clear_lookup_caches();
 }
 
-fn song_lua_itg_data(skin: &str) -> Option<Arc<noteskin_itg::NoteskinData>> {
-    let roots = dirs::app_dirs().noteskin_roots();
-    noteskin_itg::load_noteskin_data_cached_from_roots(&roots, "dance", skin)
-}
-
 pub(crate) fn song_lua_noteskin_resolve_path(
     skin: &str,
     button: &str,
     element: &str,
 ) -> Option<PathBuf> {
-    song_lua_itg_data(skin)?.resolve_path(button, element)
+    let roots = dirs::app_dirs().noteskin_roots();
+    noteskin_itg::song_lua_noteskin_resolve_path_from_roots(&roots, "dance", skin, button, element)
 }
 
 pub(crate) fn song_lua_noteskin_metric(skin: &str, element: &str, value: &str) -> Option<String> {
-    song_lua_itg_data(skin)?
-        .get_metric(element, value)
-        .map(str::to_string)
+    let roots = dirs::app_dirs().noteskin_roots();
+    noteskin_itg::song_lua_noteskin_metric_from_roots(&roots, "dance", skin, element, value)
 }
 
 pub(crate) fn song_lua_noteskin_metric_f(skin: &str, element: &str, value: &str) -> Option<f32> {
-    parse_script_number(song_lua_noteskin_metric(skin, element, value)?.as_str())
+    let roots = dirs::app_dirs().noteskin_roots();
+    noteskin_itg::song_lua_noteskin_metric_f_from_roots(&roots, "dance", skin, element, value)
 }
 
 pub(crate) fn song_lua_noteskin_metric_b(skin: &str, element: &str, value: &str) -> Option<bool> {
-    Some(parse_script_bool(
-        song_lua_noteskin_metric(skin, element, value)?.as_str(),
-    ))
+    let roots = dirs::app_dirs().noteskin_roots();
+    noteskin_itg::song_lua_noteskin_metric_b_from_roots(&roots, "dance", skin, element, value)
 }
 
 pub(crate) fn song_lua_noteskin_exists(skin: &str) -> bool {
-    song_lua_itg_data(skin).is_some()
+    let roots = dirs::app_dirs().noteskin_roots();
+    noteskin_itg::song_lua_noteskin_exists_from_roots(&roots, "dance", skin)
 }
 
 fn noteskin_cache_dir() -> PathBuf {
     dirs::app_dirs().noteskin_cache_dir()
-}
-
-#[cfg(test)]
-fn compiled_bundle_path(game: &str, skin: &str, source_hash: &str) -> PathBuf {
-    let cache_dir = noteskin_cache_dir();
-    noteskin_compiled::compiled_bundle_path(&cache_dir, game, skin, source_hash)
 }
 
 pub fn load_itg_skin_cached(style: &Style, skin: &str) -> Result<Arc<Noteskin>, String> {
@@ -972,49 +959,18 @@ fn itg_slot_from_actor_path_first_sprite_compiled(
 #[cfg(test)]
 mod tests {
     use super::{
-        AnimationRate, ModelAutoRotKey, ModelDrawState, ModelEffectClock, ModelEffectMode,
-        ModelTweenSegment, NUM_QUANTIZATIONS, NoteAnimPart, NoteColorType, Quantization,
-        SpriteDefinition, SpriteSlot, SpriteSource, Style, clear_itg_runtime_caches,
-        compiled_bundle_path, itg_apply_state_properties_from_script,
-        itg_register_texture_dims_for_path, itg_texture_key, load_itg,
-        load_itg_model_slots_from_path, load_itg_skin, noteskin_compiled, noteskin_itg,
+        AnimationRate, ModelDrawState, ModelEffectClock, ModelEffectMode, NUM_QUANTIZATIONS,
+        NoteAnimPart, NoteColorType, Quantization, SpriteSlot, SpriteSource, Style,
+        clear_itg_runtime_caches, itg_apply_state_properties_from_script,
+        itg_register_texture_dims_for_path, load_itg, load_itg_model_slots_from_path,
+        load_itg_skin, noteskin_itg,
     };
-    use deadsync_noteskin::parse_explosion_animation;
-    use deadsync_noteskin::receptor::receptor_pulse_from_script;
-    use deadsync_noteskin::script::{
-        itg_parse_command_effect, model_draw_program, parse_script_control,
-    };
-    use std::collections::{HashMap, HashSet};
-    use std::ffi::OsStr;
+    use std::collections::HashSet;
     use std::fs;
     use std::path::{Path, PathBuf};
     use std::sync::Arc;
     use std::sync::atomic::AtomicU64;
     use std::time::{SystemTime, UNIX_EPOCH};
-
-    fn test_auto_rot_slot(total_frames: f32, keys: Vec<ModelAutoRotKey>) -> SpriteSlot {
-        SpriteSlot {
-            def: SpriteDefinition::default(),
-            base_rot_sin_cos: [0.0, 1.0],
-            source_size: [64, 64],
-            source: Arc::new(SpriteSource::Atlas {
-                texture_key: Arc::from("test"),
-                tex_dims: (64, 64),
-                cached_handle: AtomicU64::new(deadlib_render::INVALID_TEXTURE_HANDLE),
-                cached_generation: AtomicU64::new(u64::MAX),
-            }),
-            uv_velocity: [0.0, 0.0],
-            uv_offset: [0.0, 0.0],
-            uv_cycle_seconds: None,
-            note_color_translate: false,
-            model: None,
-            model_draw: ModelDrawState::default(),
-            model_timeline: Arc::from(Vec::<ModelTweenSegment>::new()),
-            model_effect: Default::default(),
-            model_auto_rot_total_frames: total_frames,
-            model_auto_rot_z_keys: Arc::from(keys),
-        }
-    }
 
     fn temp_noteskin_root(name: &str) -> PathBuf {
         let suffix = SystemTime::now()
@@ -1038,103 +994,6 @@ mod tests {
             .save(path)
             .unwrap();
         itg_register_texture_dims_for_path(path);
-    }
-
-    #[test]
-    fn compiled_bundle_path_omits_version_dir() {
-        let path = compiled_bundle_path(" Dance ", " Default ", "hash123");
-        let suffix = Path::new("noteskins")
-            .join("dance")
-            .join("default")
-            .join("hash123.bin");
-        let version_dir = format!("v{}", noteskin_compiled::CACHE_SCHEMA_VERSION);
-        assert!(path.ends_with(&suffix));
-        assert!(
-            path.components()
-                .all(|component| component.as_os_str() != OsStr::new(&version_dir))
-        );
-    }
-
-    #[test]
-    fn itg_texture_key_preserves_absolute_external_paths() {
-        let root = temp_noteskin_root("absolute-texture-key");
-        let texture = root.join("Tap Note parts (mipmaps).png");
-        write_noteskin_png(&texture);
-
-        let key = itg_texture_key(&texture).unwrap();
-        assert!(
-            Path::new(&key).is_absolute(),
-            "external model texture keys must stay absolute; got {key}"
-        );
-        assert!(
-            Path::new(&key).is_file(),
-            "absolute texture key should still resolve to the source file"
-        );
-
-        let _ = fs::remove_dir_all(&root);
-    }
-
-    #[test]
-    fn clear_itg_runtime_caches_reloads_data_cache() {
-        clear_itg_runtime_caches();
-        let root = temp_noteskin_root("data-cache");
-        let skin_dir = root.join("dance/hot");
-        fs::create_dir_all(&skin_dir).unwrap();
-        let metrics = skin_dir.join("metrics.ini");
-        fs::write(
-            &metrics,
-            "[Global]\nFallbackNoteSkin=hot\n[Down]\nFoo=old\n",
-        )
-        .unwrap();
-
-        let loaded = noteskin_itg::load_noteskin_data_cached(&root, "dance", "hot").unwrap();
-        assert_eq!(loaded.get_metric("Down", "Foo"), Some("old"));
-
-        fs::write(
-            &metrics,
-            "[Global]\nFallbackNoteSkin=hot\n[Down]\nFoo=new\n",
-        )
-        .unwrap();
-        let stale = noteskin_itg::load_noteskin_data_cached(&root, "dance", "hot").unwrap();
-        assert_eq!(
-            stale.get_metric("Down", "Foo"),
-            Some("old"),
-            "loaded noteskin data should stay cached until refresh"
-        );
-
-        clear_itg_runtime_caches();
-        let refreshed = noteskin_itg::load_noteskin_data_cached(&root, "dance", "hot").unwrap();
-        assert_eq!(refreshed.get_metric("Down", "Foo"), Some("new"));
-        let _ = fs::remove_dir_all(&root);
-        clear_itg_runtime_caches();
-    }
-
-    #[test]
-    fn actor_mod_parser_supports_vertalign_and_glow() {
-        let mut commands = HashMap::new();
-        commands.insert(
-            "initcommand".to_string(),
-            "SetTextureFiltering,false;vertalign,bottom;glow,0.1,0.2,0.3,0.4".to_string(),
-        );
-        let (draw, timeline, effect) = model_draw_program(&commands);
-        assert!(parse_script_control("settexturefiltering").is_some());
-        assert!(timeline.is_empty(), "expected no tween timeline");
-        assert!(
-            (draw.vert_align - 1.0).abs() <= f32::EPSILON,
-            "vertalign,bottom should map to 1.0"
-        );
-        assert!(
-            (draw.glow[0] - 0.1).abs() <= 1e-6
-                && (draw.glow[1] - 0.2).abs() <= 1e-6
-                && (draw.glow[2] - 0.3).abs() <= 1e-6
-                && (draw.glow[3] - 0.4).abs() <= 1e-6,
-            "glow command should populate base glow color; got {:?}",
-            draw.glow
-        );
-        assert!(
-            matches!(effect.mode, ModelEffectMode::None),
-            "plain actor mods should not set an effect mode"
-        );
     }
 
     #[test]
@@ -1203,61 +1062,6 @@ mod tests {
             (uv_10[1] - uv_0[1]).abs() <= 1e-6 && (uv_10[3] - uv_0[3]).abs() <= 1e-6,
             "expected UVs to wrap after one 10-second cycle, got {uv_0:?} -> {uv_10:?}"
         );
-    }
-
-    #[test]
-    fn model_material_paths_accept_windows_separators() {
-        let root = temp_noteskin_root("model-paths");
-        let texture_dir = root.join("textures");
-        fs::create_dir_all(&texture_dir).unwrap();
-        image::RgbaImage::from_pixel(2, 2, image::Rgba([255, 0, 0, 255]))
-            .save(texture_dir.join("Tap Note parts.png"))
-            .unwrap();
-        fs::write(
-            texture_dir.join("Tap Note parts.ini"),
-            "[AnimatedTexture]\nTexVelocityY=-1\nFrame0000=Tap Note parts.png\nDelay0000=1.0\n",
-        )
-        .unwrap();
-
-        let model_path = root.join("_down tap note model.txt");
-        fs::write(
-            &model_path,
-            r#"MilkShape 3D ASCII
-Meshes: 1
-"mesh" 0 0
-3
-0 -1.0 -1.0 0.0 0.0 0.0 -1
-0 1.0 -1.0 0.0 1.0 0.0 -1
-0 0.0 1.0 0.0 0.0 1.0 -1
-0
-1
-0 0 1 2 0 0 0 1
-Materials: 1
-"mat"
-0.0 0.0 0.0 1.0
-1.0 1.0 1.0 1.0
-0.0 0.0 0.0 1.0
-0.0 0.0 0.0 1.0
-0.0
-1.0
-"textures\Tap Note parts.ini"
-""
-"#,
-        )
-        .unwrap();
-
-        let slots = load_itg_model_slots_from_path(&model_path)
-            .expect("model should resolve backslash material texture path");
-        let slot = slots.first().expect("expected one model-backed slot");
-        assert!(slot.model.is_some());
-        assert!(
-            slot.texture_key()
-                .replace('\\', "/")
-                .ends_with("textures/Tap Note parts.png")
-        );
-        assert_eq!(slot.uv_velocity, [0.0, -1.0]);
-
-        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
@@ -1514,46 +1318,6 @@ Materials: 1
     }
 
     #[test]
-    fn lua_function_receptor_none_command_parses_zoom_pulse() {
-        let effect = itg_parse_command_effect(
-            "function(self) self:finishtweening():zoom(0.75):linear(0.11):zoom(1.0)end",
-        );
-
-        assert!((effect.duration - 0.11).abs() <= 1e-6);
-        assert!((effect.start_zoom.unwrap_or_default() - 0.75).abs() <= 1e-6);
-        assert!((effect.target_zoom.unwrap_or_default() - 1.0).abs() <= 1e-6);
-    }
-
-    #[test]
-    fn lua_function_explosion_command_parses_expression_duration_and_blend() {
-        let anim = parse_explosion_animation(
-            "function (self) self:finishtweening():diffusealpha(1.0):blend(Blend.Add):linear(12/60):diffusealpha(0.0) end",
-        );
-
-        assert!(anim.blend_add);
-        assert!((anim.initial.color[3] - 1.0).abs() <= 1e-6);
-        assert_eq!(anim.segments.len(), 1);
-        assert!((anim.segments[0].duration - 0.2).abs() <= 1e-6);
-        assert_eq!(anim.segments[0].end_color.map(|c| c[3]), Some(0.0));
-    }
-
-    #[test]
-    fn explosion_finishtweening_cancels_same_frame_preflash() {
-        let anim = parse_explosion_animation(
-            "diffusealpha,1;linear,0.2;diffusealpha,0;finishtweening;diffusealpha,1;linear,0.1;diffusealpha,0",
-        );
-
-        assert_eq!(anim.segments.len(), 1);
-        assert!((anim.duration() - 0.1).abs() <= 1e-6);
-        assert!((anim.state_at(0.05).diffuse[3] - 0.5).abs() <= 1e-6);
-
-        let canceled =
-            parse_explosion_animation("diffusealpha,1;linear,0.2;diffusealpha,0;finishtweening");
-        assert_eq!(canceled.duration(), 0.0);
-        assert_eq!(canceled.state_at(0.0).diffuse[3], 0.0);
-    }
-
-    #[test]
     fn cf_chrome_family_receptor_none_command_drives_empty_press_pulse() {
         clear_itg_runtime_caches();
         let style = Style {
@@ -1732,31 +1496,6 @@ return t
 
         let _ = fs::remove_dir_all(&root);
         clear_itg_runtime_caches();
-    }
-
-    #[test]
-    fn receptor_pulse_effecttiming_recalculates_period() {
-        let pulse = receptor_pulse_from_script(
-            "effectclock,'beat';diffuseramp;effectcolor1,0.1,0.1,0.1,1;\
-             effectcolor2,1,1,1,1;effectperiod,0.5;\
-             effecttiming,0.25,0.50,0,0.25;effectoffset,-0.25",
-        );
-
-        assert!(
-            (pulse.effect_period - 1.0).abs() <= 1e-6,
-            "ITG SetEffectTiming should replace the prior effectperiod"
-        );
-        let beat_0 = pulse.color_for_beat(0.0);
-        let beat_half = pulse.color_for_beat(0.5);
-        let beat_1 = pulse.color_for_beat(1.0);
-        assert!(
-            (beat_0[0] - beat_1[0]).abs() <= 1e-6,
-            "one full cycle should take one beat"
-        );
-        assert!(
-            (beat_0[0] - beat_half[0]).abs() > 0.2,
-            "half a beat should not complete the cycle; got {beat_0:?} and {beat_half:?}"
-        );
     }
 
     #[test]
@@ -3043,84 +2782,6 @@ return skin
     }
 
     #[test]
-    fn explosion_animation_honors_visible_commands() {
-        let anim = parse_explosion_animation("visible,false;sleep,0.1;visible,true");
-        let at_start = anim.state_at(0.0);
-        let mid_sleep = anim.state_at(0.05);
-        let after = anim.state_at(0.11);
-        assert!(!at_start.visible, "expected animation to start hidden");
-        assert!(
-            !mid_sleep.visible,
-            "expected sleep segment to keep actor hidden"
-        );
-        assert!(
-            after.visible,
-            "expected actor to become visible after final command"
-        );
-    }
-
-    #[test]
-    fn explosion_animation_parses_judgment_line_to_color_diffuse() {
-        let anim = parse_explosion_animation(
-            r#"finishtweening;diffuse,JudgmentLineToColor("JudgmentLine_W5");diffusealpha,1;sleep,.1;decelerate,.2;diffusealpha,0"#,
-        );
-        let color = anim.initial.color;
-        assert!(
-            (color[0] - (228.0 / 255.0)).abs() <= f32::EPSILON,
-            "unexpected W5 red component: {:?}",
-            color
-        );
-        assert!(
-            (color[1] - (77.0 / 255.0)).abs() <= f32::EPSILON,
-            "unexpected W5 green component: {:?}",
-            color
-        );
-        assert!(
-            (color[2] - 1.0).abs() <= f32::EPSILON,
-            "unexpected W5 blue component: {:?}",
-            color
-        );
-        assert!(
-            (color[3] - 1.0).abs() <= f32::EPSILON,
-            "unexpected W5 alpha component: {:?}",
-            color
-        );
-    }
-
-    #[test]
-    fn explosion_animation_clamps_overbright_color_to_itg_vertex_range() {
-        let anim = parse_explosion_animation(
-            "diffuse,1.5,1.25,1.75,1.2;glowshift;effectperiod,0.05;effectcolor1,1,1,1,1;effectcolor2,1,1,1,1",
-        );
-        let state = anim.state_at(0.0);
-        assert_eq!(
-            state.diffuse,
-            [1.0, 1.0, 1.0, 1.0],
-            "ITG converts Sprite vertex colors to 8-bit and clamps >1.0 channels"
-        );
-        assert!(
-            state.glow.iter().all(|c| *c >= 0.0 && *c <= 1.0),
-            "glow channels should also be clamped to [0,1], got {:?}",
-            state.glow
-        );
-    }
-
-    #[test]
-    fn explosion_animation_tracks_blend_command_for_render_parity() {
-        let add = parse_explosion_animation("blend,'BlendMode_Add';diffusealpha,1");
-        assert!(
-            add.blend_add,
-            "blend,BlendMode_Add should mark explosion as additive"
-        );
-
-        let normal = parse_explosion_animation("blend,'BlendMode_Normal';diffusealpha,1");
-        assert!(
-            !normal.blend_add,
-            "non-add blend commands should keep explosion on normal blend"
-        );
-    }
-
-    #[test]
     fn cel_roll_glowshift_keeps_diffuse_and_uses_glow_channel() {
         let style = Style {
             num_cols: 4,
@@ -3445,36 +3106,6 @@ return skin
             (delta + 33.0).abs() <= 1e-3,
             "one beat should rotate lambda mine by -33 degrees; got delta={delta}"
         );
-    }
-
-    #[test]
-    fn model_auto_rot_interpolates_and_wraps() {
-        let slot = test_auto_rot_slot(
-            80.0,
-            vec![
-                ModelAutoRotKey {
-                    frame: 10.0,
-                    z_deg: 20.0,
-                },
-                ModelAutoRotKey {
-                    frame: 40.0,
-                    z_deg: 80.0,
-                },
-            ],
-        );
-        let auto_rot = |time| {
-            deadsync_noteskin::model_auto_rot_z_at(80.0, slot.model_auto_rot_z_keys.as_ref(), time)
-        };
-
-        assert_eq!(auto_rot(0.0), Some(20.0));
-        let interp = auto_rot(25.0 / 30.0).expect("frame 25 should interpolate between keys");
-        assert!(
-            (interp - 50.0).abs() <= 1e-6,
-            "frame 25 should interpolate to 50 degrees; got {interp}"
-        );
-        assert_eq!(auto_rot(40.0 / 30.0), Some(80.0));
-        assert_eq!(auto_rot(70.0 / 30.0), Some(80.0));
-        assert_eq!(auto_rot(80.0 / 30.0), Some(20.0));
     }
 
     #[test]

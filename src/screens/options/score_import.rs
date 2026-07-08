@@ -343,7 +343,7 @@ pub(super) fn score_import_selected_endpoint(state: &State) -> score_data::Score
 }
 
 fn installed_pack_entries() -> Vec<(String, String)> {
-    let cache = crate::game::song::get_song_cache();
+    let cache = deadsync_simfile::runtime_cache::get_song_cache();
     let mut packs: Vec<(String, String)> = Vec::with_capacity(cache.len());
     let mut seen_groups: HashSet<String> = HashSet::with_capacity(cache.len());
 

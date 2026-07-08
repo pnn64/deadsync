@@ -2,9 +2,6 @@ use crate::act;
 use crate::assets::i18n::{self, tr, tr_fmt};
 use crate::assets::{FontRole, current_machine_font_key};
 // Screen navigation is handled in app
-use crate::game::course::get_course_cache;
-use crate::game::online::{arrowcloud as arrowcloud_online, groovestats as groovestats_online};
-use crate::game::song::get_song_cache;
 use crate::screens::components::menu::logo::{self, LogoParams};
 use crate::screens::components::menu::menu_list::{self};
 use crate::screens::components::menu::menu_splash;
@@ -19,6 +16,8 @@ use deadsync_online::arrowcloud::{
     ConnectionError as ArrowCloudError, ConnectionStatus as ArrowCloudConnectionStatus,
 };
 use deadsync_online::groovestats::{ConnectionError as GrooveStatsError, ConnectionStatus};
+use deadsync_simfile::runtime_cache::get_course_cache;
+use deadsync_simfile::runtime_cache::get_song_cache;
 use std::cell::{Cell, RefCell};
 use std::sync::Arc;
 use winit::keyboard::KeyCode;
@@ -241,8 +240,8 @@ fn groove_service_name(boogie: bool) -> Arc<str> {
 
 #[inline(always)]
 fn groove_status_key() -> GrooveStatusKey {
-    let boogie = groovestats_online::is_boogiestats_active();
-    match groovestats_online::get_status() {
+    let boogie = crate::game::online::is_boogiestats_active();
+    match deadsync_online::groovestats::runtime_get_status() {
         ConnectionStatus::Pending => GrooveStatusKey::Pending { boogie },
         ConnectionStatus::Error(kind) => GrooveStatusKey::Error { boogie, kind },
         ConnectionStatus::Connected(services) => GrooveStatusKey::Connected {
@@ -332,7 +331,7 @@ fn groovestats_text(state: &State) -> StatusTextCache<GrooveStatusKey, 3> {
 
 #[inline(always)]
 fn arrowcloud_status_key() -> ArrowCloudStatusKey {
-    match arrowcloud_online::get_status() {
+    match deadsync_online::arrowcloud::runtime_get_status() {
         ArrowCloudConnectionStatus::Pending => ArrowCloudStatusKey::Pending,
         ArrowCloudConnectionStatus::Connected => ArrowCloudStatusKey::Connected,
         ArrowCloudConnectionStatus::Error(kind) => ArrowCloudStatusKey::Error(kind),

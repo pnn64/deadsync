@@ -360,6 +360,46 @@ pub fn runtime_init(enabled: bool, service: Service, log_probe: ConnectionProbeL
     thread::spawn(move || runtime_perform_check(service, log_probe));
 }
 
+pub fn runtime_init_with_default_log(enabled: bool, boogiestats_active: bool) {
+    let service = Service::from_boogiestats_active(boogiestats_active);
+    if enabled {
+        let service_name = service_name(service);
+        log::debug!("Initializing {service_name} network check...");
+    }
+    runtime_init(enabled, service, log_probe_transition);
+}
+
+pub fn log_probe_transition(log: Option<ConnectionProbeLog>) {
+    match log {
+        Some(ConnectionProbeLog::Connected { service, services }) => {
+            let service_name = service_name(service);
+            log::info!(
+                "Connected to {service_name} (scores={}, leaderboards={}, autosubmit={}).",
+                services.get_scores,
+                services.leaderboard,
+                services.auto_submit
+            );
+        }
+        Some(ConnectionProbeLog::MachineOffline { service }) => {
+            let service_name = service_name(service);
+            log::warn!("{service_name} servicesResult != OK.");
+        }
+        Some(ConnectionProbeLog::Timeout { service }) => {
+            let service_name = service_name(service);
+            log::warn!("{service_name} connectivity check timed out.");
+        }
+        Some(ConnectionProbeLog::InvalidResponse { service, error }) => {
+            let service_name = service_name(service);
+            log::warn!("Failed to parse {service_name} response: {error}");
+        }
+        Some(ConnectionProbeLog::CannotConnect { service, error }) => {
+            let service_name = service_name(service);
+            log::warn!("HTTP error to {service_name}: {error}");
+        }
+        None => {}
+    }
+}
+
 fn runtime_perform_check(service: Service, log_probe: ConnectionProbeLogFn) {
     let transition = probe_connection_transition(service);
     log_probe(transition.log);

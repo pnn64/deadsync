@@ -562,7 +562,7 @@ fn gameplay_light_pack_sync_offset(song: &deadsync_chart::SongData) -> f32 {
     let Some(pack_group) = song_pack_group(song) else {
         return 0.0;
     };
-    let pack_sync_pref = crate::game::song::get_song_cache()
+    let pack_sync_pref = deadsync_simfile::runtime_cache::get_song_cache()
         .iter()
         .find(|p| p.group_name == pack_group)
         .map(|p| p.sync_pref)
@@ -4322,7 +4322,7 @@ impl App {
                     .pad_config_sync
                     .profiles_stale(pad, Some(pid), cursor_pad_type.as_deref())
             {
-                let list = crate::game::pad_profiles::load(pid)
+                let list = crate::game::profile::load_pad_configs(pid)
                     .into_iter()
                     .filter(|c| {
                         pad_profile_data::config_matches(
@@ -4442,7 +4442,7 @@ impl App {
         let Some(id) = profile_id else {
             return (deadsync_smx::apply_preset(pad, preset), preset_label);
         };
-        let configs = crate::game::pad_profiles::load(id);
+        let configs = crate::game::profile::load_pad_configs(id);
         match pad_profile_data::resolve(&configs, deadsync_smx::BACKEND_ID, pad_type, serial)
             .and_then(|c| {
                 deadsync_smx::PadConfigData::from_settings(&c.settings).map(|d| (c.name.clone(), d))
@@ -4923,7 +4923,7 @@ impl App {
         // A song rescan may have changed per-song/per-pack files; drop the
         // scoped cache and force a re-resolve (a recycled `Arc` pointer must not
         // read as the same song).
-        let generation = crate::game::song::song_cache_generation();
+        let generation = deadsync_simfile::runtime_cache::song_cache_generation();
         if generation != self.smx_scoped_bg_generation {
             self.smx_scoped_bg_generation = generation;
             self.smx_scoped_bg_cache.clear();

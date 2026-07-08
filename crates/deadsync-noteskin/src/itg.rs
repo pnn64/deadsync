@@ -9,6 +9,7 @@ use crate::{
     Style,
     actor::ITG_ARG0_TOKEN,
     lua::{itg_extract_quoted_strings, itg_parse_lua_quoted},
+    script::{parse_script_bool, parse_script_number},
 };
 
 const MAX_FALLBACK_DEPTH: usize = 20;
@@ -630,6 +631,60 @@ pub fn load_noteskin_data_cached_from_roots(
     None
 }
 
+pub fn song_lua_noteskin_resolve_path_from_roots(
+    roots: &[PathBuf],
+    game: &str,
+    skin: &str,
+    button: &str,
+    element: &str,
+) -> Option<PathBuf> {
+    load_noteskin_data_cached_from_roots(roots, game, skin)?.resolve_path(button, element)
+}
+
+pub fn song_lua_noteskin_metric_from_roots(
+    roots: &[PathBuf],
+    game: &str,
+    skin: &str,
+    element: &str,
+    value: &str,
+) -> Option<String> {
+    load_noteskin_data_cached_from_roots(roots, game, skin)?
+        .get_metric(element, value)
+        .map(str::to_string)
+}
+
+pub fn song_lua_noteskin_metric_f_from_roots(
+    roots: &[PathBuf],
+    game: &str,
+    skin: &str,
+    element: &str,
+    value: &str,
+) -> Option<f32> {
+    parse_script_number(
+        song_lua_noteskin_metric_from_roots(roots, game, skin, element, value)?.as_str(),
+    )
+}
+
+pub fn song_lua_noteskin_metric_b_from_roots(
+    roots: &[PathBuf],
+    game: &str,
+    skin: &str,
+    element: &str,
+    value: &str,
+) -> Option<bool> {
+    Some(parse_script_bool(
+        song_lua_noteskin_metric_from_roots(roots, game, skin, element, value)?.as_str(),
+    ))
+}
+
+pub fn song_lua_noteskin_exists_from_roots(roots: &[PathBuf], game: &str, skin: &str) -> bool {
+    load_noteskin_data_cached_from_roots(roots, game, skin).is_some()
+}
+
+pub fn song_lua_noteskin_names_from_roots(roots: &[PathBuf], game: &str) -> Vec<String> {
+    discover_skins(roots, game)
+}
+
 pub fn note_display_metrics(metrics: &IniData) -> NoteDisplayMetrics {
     let mut out = NoteDisplayMetrics::default();
     let read_bool = |key: &str, default: bool| {
@@ -887,7 +942,10 @@ mod tests {
         down_col, find_file_with_prefix, find_texture_with_prefix, load_itg_skin_from_roots,
         load_noteskin_data_cached, load_noteskin_data_cached_from_roots, normalized_game_name,
         normalized_skin_name, note_display_metrics, parse_ini_float, resolve_skin_dir,
-        resolve_texture_expr, skin_name_is_default, texture_key_for_path,
+        resolve_texture_expr, skin_name_is_default, song_lua_noteskin_exists_from_roots,
+        song_lua_noteskin_metric_b_from_roots, song_lua_noteskin_metric_f_from_roots,
+        song_lua_noteskin_metric_from_roots, song_lua_noteskin_names_from_roots,
+        song_lua_noteskin_resolve_path_from_roots, texture_key_for_path,
     };
     use crate::{NoteAnimPart, NoteColorType, Style};
     use std::collections::HashMap;
@@ -1047,6 +1105,53 @@ mod tests {
         assert_eq!(loaded.get_metric("Down", "Foo"), Some("bar"));
 
         let _ = fs::remove_dir_all(missing_root);
+        let _ = fs::remove_dir_all(root);
+        clear_lookup_caches();
+        clear_data_cache();
+    }
+
+    #[test]
+    fn song_lua_noteskin_helpers_use_cached_root_data() {
+        let _guard = LOOKUP_CACHE_TEST_LOCK.lock().unwrap();
+        clear_lookup_caches();
+        clear_data_cache();
+        let root = temp_root("song-lua");
+        let skin_dir = root.join("dance/lambda");
+        fs::create_dir_all(&skin_dir).unwrap();
+        fs::write(skin_dir.join("Down Tap Note.png"), b"fake").unwrap();
+        fs::write(
+            skin_dir.join("metrics.ini"),
+            b"[Global]\nFallbackNoteSkin=lambda\n[Down]\nFoo=bar\nZoom=1.25\nEnabled=1\nTap Note=Tap Note.png\n",
+        )
+        .unwrap();
+        let roots = vec![root.clone()];
+
+        assert!(song_lua_noteskin_exists_from_roots(
+            &roots, "dance", "lambda"
+        ));
+        assert_eq!(
+            song_lua_noteskin_names_from_roots(&roots, "dance"),
+            ["lambda"]
+        );
+        assert_eq!(
+            song_lua_noteskin_metric_from_roots(&roots, "dance", "lambda", "Down", "Foo"),
+            Some("bar".to_string())
+        );
+        assert_eq!(
+            song_lua_noteskin_metric_f_from_roots(&roots, "dance", "lambda", "Down", "Zoom"),
+            Some(1.25)
+        );
+        assert_eq!(
+            song_lua_noteskin_metric_b_from_roots(&roots, "dance", "lambda", "Down", "Enabled"),
+            Some(true)
+        );
+        assert_eq!(
+            song_lua_noteskin_resolve_path_from_roots(
+                &roots, "dance", "lambda", "Down", "Tap Note"
+            ),
+            Some(skin_dir.join("Down Tap Note.png"))
+        );
+
         let _ = fs::remove_dir_all(root);
         clear_lookup_caches();
         clear_data_cache();

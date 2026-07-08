@@ -1,12 +1,12 @@
 use crate::act;
 use crate::assets::{FontRole, current_machine_font_key};
-use crate::game::online::lobbies;
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_audio_stream as audio;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_online::lobbies;
 use deadsync_online::lobbies as lobby_data;
 use std::time::{Duration, Instant};
 
@@ -273,7 +273,7 @@ pub fn update_overlay(state: &mut OverlayState, dt: f32) {
         return;
     };
 
-    let snapshot = lobbies::snapshot();
+    let snapshot = lobbies::runtime_snapshot();
     match snapshot.joined_lobby.as_ref() {
         Some(_) => {
             overlay.joined_action_index = overlay.joined_action_index.min(1);
@@ -311,7 +311,7 @@ pub fn handle_input(state: &mut OverlayState, ev: &InputEvent) -> InputOutcome {
         return InputOutcome::None;
     }
 
-    let snapshot = lobbies::snapshot();
+    let snapshot = lobbies::runtime_snapshot();
     if snapshot.joined_lobby.is_some() {
         match ev.action {
             VirtualAction::p1_left
@@ -483,7 +483,7 @@ pub fn build_overlay(state: &OverlayState, active_color_index: i32) -> Option<Ve
         return None;
     };
 
-    let snapshot = lobbies::snapshot();
+    let snapshot = lobbies::runtime_snapshot();
     let center_x = screen_center_x();
     let center_y = screen_center_y();
     let fill = color::decorative_rgba(active_color_index);
@@ -1069,7 +1069,7 @@ fn status_text(overlay: &OverlayStateData, snapshot: &lobby_data::Snapshot) -> S
             }
         };
     }
-    if let Some(text) = lobbies::reconnect_status_text() {
+    if let Some(text) = lobbies::runtime_reconnect_status_text() {
         return text;
     }
     if let Some(status) = snapshot.last_status.as_ref()

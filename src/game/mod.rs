@@ -1,12 +1,8 @@
-pub mod course;
 pub mod import;
 pub mod online;
-pub mod pad_profiles;
 pub mod parsing;
 pub mod profile;
-pub mod random_movies;
 pub mod scores;
-pub mod song;
 
 pub use deadsync_profile_gameplay::{
     GameplayProfile, chart_effects_from_profile, gameplay_attack_mode,

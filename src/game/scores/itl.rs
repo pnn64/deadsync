@@ -5,15 +5,15 @@ use super::{
     groovestats_judgment_counts,
 };
 
-use crate::game::online::downloads;
+use crate::game::online;
 use crate::game::profile;
-use crate::game::song::{get_song_cache, song_cache_generation};
 use chrono::Local;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_online::groovestats::{
     GrooveStatsSubmitApiEvent, GrooveStatsSubmitApiPlayer, submit_event_progress_from_api,
 };
 use deadsync_profile as profile_data;
+use deadsync_simfile::runtime_cache::{get_song_cache, song_cache_generation};
 use log::{debug, warn};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -32,12 +32,6 @@ use deadsync_score::{
     save_itl_chart_result, save_online_itl_self_index_file, write_itl_file_to_path,
 };
 pub use deadsync_score::{is_itl_unlocks_pack, itl_points_for_chart};
-
-#[cfg(test)]
-use deadsync_score::{
-    ItlHashEntry, ItlPointTotals, itl_judgments_better, itl_point_totals, itl_points_for_song,
-    itl_score_for_song, parse_itl_points,
-};
 
 const ITL_FILE_NAME: &str = "ITL2026.json";
 const ITL_WHEEL_FETCH_ENTRIES: usize = 5;
@@ -746,7 +740,7 @@ fn handle_submit_event_unlocks(
                 format!("{event_name} Unlocks"),
             )
         };
-        downloads::queue_event_unlock_download(url, download_name.trim_end(), pack_name.as_str());
+        online::queue_event_unlock_download(url, download_name.trim_end(), pack_name.as_str());
     }
 }
 
@@ -1022,285 +1016,4 @@ pub fn get_or_fetch_itl_tournament_rank_for_side(
     }
     let _ = get_or_fetch_player_leaderboards_for_side(chart_hash, side, ITL_WHEEL_FETCH_ENTRIES)?;
     get_cached_itl_tournament_rank_for_side(chart_hash, side)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use deadsync_chart::SongData;
-    use deadsync_chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
-    use serde_json::json;
-    use std::path::PathBuf;
-
-    fn sample_chart(chart_type: &str) -> ChartData {
-        ChartData {
-            chart_type: chart_type.to_string(),
-            difficulty: "Challenge".to_string(),
-            description: String::new(),
-            chart_name: String::new(),
-            meter: 12,
-            step_artist: String::new(),
-            music_path: None,
-            short_hash: "deadbeefcafebabe".to_string(),
-            stats: ArrowStats::default(),
-            tech_counts: TechCounts::default(),
-            mines_nonfake: 12,
-            stamina_counts: StaminaCounts::default(),
-            total_streams: 0,
-            matrix_rating: 0.0,
-            max_nps: 0.0,
-            sn_detailed_breakdown: String::new(),
-            sn_partial_breakdown: String::new(),
-            sn_simple_breakdown: String::new(),
-            detailed_breakdown: String::new(),
-            partial_breakdown: String::new(),
-            simple_breakdown: String::new(),
-            total_measures: 0,
-            measure_nps_vec: Vec::new(),
-            measure_seconds_vec: Vec::new(),
-            first_second: 0.0,
-            has_note_data: true,
-            has_chart_attacks: false,
-            possible_grade_points: 0,
-            holds_total: 0,
-            rolls_total: 0,
-            mines_total: 12,
-            display_bpm: None,
-            min_bpm: 0.0,
-            max_bpm: 0.0,
-        }
-    }
-
-    fn sample_song(dir: &str) -> SongData {
-        SongData {
-            simfile_path: PathBuf::from(dir).join("song.ssc"),
-            title: "Song".to_string(),
-            subtitle: String::new(),
-            translit_title: String::new(),
-            translit_subtitle: String::new(),
-            artist: String::new(),
-            genre: String::new(),
-            banner_path: None,
-            background_path: None,
-            background_changes: Vec::new(),
-            background_layer2_changes: Vec::new(),
-            foreground_changes: Vec::new(),
-            background_lua_changes: Vec::new(),
-            foreground_lua_changes: Vec::new(),
-            has_lua: false,
-            cdtitle_path: None,
-            music_path: None,
-            display_bpm: String::new(),
-            offset: 0.0,
-            sample_start: None,
-            sample_length: None,
-            min_bpm: 0.0,
-            max_bpm: 0.0,
-            normalized_bpms: String::new(),
-            music_length_seconds: 0.0,
-            first_second: 0.0,
-            total_length_seconds: 0,
-            precise_last_second_seconds: 0.0,
-            charts: Vec::new(),
-        }
-    }
-
-    #[test]
-    fn parse_itl_points_reads_chart_name_values() {
-        assert_eq!(
-            parse_itl_points("7500 (P) + 12000 (S)"),
-            Some((7500, 12000))
-        );
-        assert_eq!(parse_itl_points("No points here"), None);
-    }
-
-    #[test]
-    fn itl_points_for_chart_uses_chart_name_curve() {
-        let mut chart = sample_chart("dance-single");
-        chart.chart_name = "7500 (P) + 12000 (S)".to_string();
-
-        assert_eq!(itl_points_for_chart(&chart, 10_000), Some(19_500));
-    }
-
-    #[test]
-    fn itl_points_curve_keeps_full_ex_exact() {
-        assert_eq!(itl_points_for_song(7500, 12000, 100.0), 19_500);
-    }
-
-    #[test]
-    fn itl_judgments_compare_from_top_window() {
-        let prev = ItlJudgments {
-            w0: 10,
-            w1: 20,
-            ..ItlJudgments::default()
-        };
-        let better = ItlJudgments {
-            w0: 11,
-            w1: 19,
-            ..ItlJudgments::default()
-        };
-        let worse = ItlJudgments {
-            w0: 9,
-            w1: 25,
-            ..ItlJudgments::default()
-        };
-
-        assert!(itl_judgments_better(&better, &prev));
-        assert!(!itl_judgments_better(&worse, &prev));
-    }
-
-    #[test]
-    fn itl_requires_all_timing_windows_enabled() {
-        let mut profile = profile_data::Profile::default();
-        assert!(itl_all_timing_windows_enabled(&profile));
-
-        for setting in [
-            profile_data::TimingWindowsOption::WayOffs,
-            profile_data::TimingWindowsOption::DecentsAndWayOffs,
-            profile_data::TimingWindowsOption::FantasticsAndExcellents,
-        ] {
-            profile.timing_windows = setting;
-            assert!(!itl_all_timing_windows_enabled(&profile));
-        }
-    }
-
-    #[test]
-    fn itl_file_reads_simply_love_and_legacy_ex_values() {
-        let sl: ItlFileData = serde_json::from_value(json!({
-            "hashMap": {
-                "sl": { "ex": 9437 }
-            }
-        }))
-        .unwrap();
-        let legacy: ItlFileData = serde_json::from_value(json!({
-            "hashMap": {
-                "legacy": { "ex": 94.37 }
-            }
-        }))
-        .unwrap();
-
-        assert_eq!(sl.hash_map["sl"].ex, 9437);
-        assert_eq!(legacy.hash_map["legacy"].ex, 9437);
-    }
-
-    #[test]
-    fn itl_data_from_json_parses_and_guards() {
-        // A Simply Love ITL2026.json with pathMap, hashMap and unlockFolders.
-        let text = serde_json::to_string(&json!({
-            "pathMap": { "/Songs/ITL Online 2026/Example": "deadbeefcafebabe" },
-            "hashMap": {
-                "deadbeefcafebabe": { "ex": 94.37, "points": 4200, "clearType": 5 }
-            },
-            "unlockFolders": { "/Songs/ITL Online 2026/Example": true }
-        }))
-        .unwrap();
-        let data = itl_data_from_json(&text).expect("parses");
-        assert_eq!(data.hash_map.len(), 1);
-        assert_eq!(data.hash_map["deadbeefcafebabe"].ex, 9437);
-        assert_eq!(data.path_map.len(), 1);
-        assert!(data.unlock_folders["/Songs/ITL Online 2026/Example"]);
-
-        // Empty and malformed inputs yield None (nothing to import).
-        assert!(itl_data_from_json("{}").is_none());
-        assert!(itl_data_from_json("not json").is_none());
-        assert!(itl_data_from_json(r#"{"hashMap":{}}"#).is_none());
-    }
-
-    #[test]
-    fn itl_score_lookup_uses_song_path_map() {
-        let song = sample_song("/Songs/ITL Online 2026/Example");
-        let mut data = ItlFileData::default();
-        data.path_map.insert(
-            "/Songs/ITL Online 2026/Example".to_string(),
-            "deadbeefcafebabe".to_string(),
-        );
-        data.hash_map.insert(
-            "deadbeefcafebabe".to_string(),
-            ItlHashEntry {
-                ex: 9754,
-                clear_type: 4,
-                points: 12345,
-                ..ItlHashEntry::default()
-            },
-        );
-
-        assert_eq!(
-            itl_score_for_song(&song, &data),
-            Some(CachedItlScore {
-                ex_hundredths: 9754,
-                clear_type: 4,
-                points: 12345,
-            })
-        );
-    }
-
-    #[test]
-    fn itl_chart_no_cmod_uses_subtitle_fallback() {
-        let mut song = sample_song("/Songs/ITL Online 2026/Example");
-        song.subtitle = "(NO CMOD)".to_string();
-
-        assert!(itl_chart_no_cmod(song.display_subtitle(false), None));
-    }
-
-    #[test]
-    fn itl_song_matches_context_accepts_cached_path_map() {
-        let mut data = ItlFileData::default();
-        data.path_map.insert(
-            "/Songs/Custom Pack/Example".to_string(),
-            "deadbeefcafebabe".to_string(),
-        );
-
-        assert!(itl_song_matches_context(
-            Some("/Songs/Custom Pack/Example"),
-            None,
-            &data
-        ));
-    }
-
-    #[test]
-    fn itl_totals_split_song_and_ex_points() {
-        let mut data = ItlFileData::default();
-        data.hash_map.insert(
-            "a".to_string(),
-            ItlHashEntry {
-                points: 100,
-                passing_points: 60,
-                steps_type: "single".to_string(),
-                ..ItlHashEntry::default()
-            },
-        );
-        data.hash_map.insert(
-            "b".to_string(),
-            ItlHashEntry {
-                points: 50,
-                passing_points: 20,
-                steps_type: "double".to_string(),
-                ..ItlHashEntry::default()
-            },
-        );
-
-        itl_rebuild_song_ranks(&mut data);
-
-        assert_eq!(data.points, vec![100, 50]);
-        assert_eq!(data.hash_map["a"].rank, Some(1));
-        assert_eq!(data.hash_map["b"].rank, Some(1));
-        assert_eq!(
-            itl_point_totals(&data),
-            ItlPointTotals {
-                ranking_points: 150,
-                song_points: 80,
-                ex_points: 70,
-                total_points: 150,
-            }
-        );
-    }
-
-    #[test]
-    fn itl_run_passed_rejects_failed_runs() {
-        assert!(gameplay_run_passed(true, false, 1.0, false));
-        assert!(!gameplay_run_passed(false, false, 1.0, false));
-        assert!(!gameplay_run_passed(true, true, 1.0, false));
-        assert!(!gameplay_run_passed(true, false, 1.0, true));
-        assert!(!gameplay_run_passed(true, false, 0.0, false));
-    }
 }

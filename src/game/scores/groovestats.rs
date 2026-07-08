@@ -1,11 +1,9 @@
 use super::{
-    GameplayCoreState, cache_gs_score_for_profile, gameplay_run_failed, gameplay_run_passed,
-    gameplay_side_for_player, get_or_fetch_player_leaderboards_for_side,
-    invalidate_player_leaderboards_for_side, itl, lua_chart_submit_allowed, submit_record_banner,
+    GameplayCoreState, cache_gs_score_for_profile, gameplay_side_for_player,
+    get_or_fetch_player_leaderboards_for_side, invalidate_player_leaderboards_for_side, itl,
+    lua_chart_submit_allowed, submit_record_banner,
 };
-use crate::game::online::groovestats as online_groovestats;
 use crate::game::profile;
-use crate::game::song::get_song_cache;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_online::groovestats::{
     self as groovestats_api, GROOVESTATS_SUBMIT_MAX_ENTRIES, GrooveStatsJudgmentCounts,
@@ -16,12 +14,18 @@ use deadsync_profile as profile_data;
 use deadsync_profile::Profile;
 use deadsync_rules::judgment;
 use deadsync_score::{
-    EventProgress, GrooveStatsEvalInput, GrooveStatsEvalState, GrooveStatsSubmitRecordBanner,
+    EventProgress, GrooveStatsAutosubmitLog, GrooveStatsAutosubmitLogLevel,
+    GrooveStatsAutosubmitPlayerAction, GrooveStatsAutosubmitPlayerInput,
+    GrooveStatsAutosubmitSessionDecision, GrooveStatsAutosubmitSessionInput, GrooveStatsEvalInput,
+    GrooveStatsEvalState, GrooveStatsGameplayEvalInput, GrooveStatsSubmitRecordBanner,
     GrooveStatsSubmitUiStatus, RejectReason, SUBMIT_RETRY_MAX_ATTEMPTS, SubmitEventUiState,
     SubmitRetryState, SubmitUiState, cached_score_from_imported_player_score,
-    groovestats_eval_state_from_parts, groovestats_rate_hundredths,
-    groovestats_score_10000_from_counts, groovestats_used_cmod, imported_score_chart_stats,
+    groovestats_autosubmit_player_decision, groovestats_autosubmit_session_decision,
+    groovestats_eval_state_from_gameplay_parts, groovestats_eval_state_from_parts,
+    groovestats_rate_hundredths, groovestats_score_10000_from_counts, groovestats_used_cmod,
+    imported_score_chart_stats,
 };
+use deadsync_simfile::runtime_cache::get_song_cache;
 use log::{debug, warn};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
@@ -29,7 +33,7 @@ use std::time::Instant;
 
 #[inline(always)]
 fn active_groovestats_service() -> groovestats_api::Service {
-    online_groovestats::active_service()
+    crate::game::online::active_groovestats_service()
 }
 
 #[inline(always)]
@@ -296,7 +300,7 @@ pub fn groovestats_eval_state_from_gameplay(
     if player_idx >= gs.num_players().min(MAX_PLAYERS) {
         return GrooveStatsEvalState::default();
     }
-    let mut state = groovestats_eval_state(
+    let base_state = groovestats_eval_state(
         gs.charts()[player_idx].as_ref(),
         &gs.profiles()[player_idx],
         gs.music_rate(),
@@ -304,50 +308,24 @@ pub fn groovestats_eval_state_from_gameplay(
         gs.course_display_is_course_stage(),
         crate::config::get().autosubmit_course_scores_individually,
     );
-    if state.valid
-        && gs.song().has_lua
-        && !lua_chart_submit_allowed(gs.charts()[player_idx].short_hash.as_str())
-    {
-        state.valid = false;
-        state.reason_lines.push("simfile relies on lua".to_string());
-        return state;
-    }
-    let failed = gameplay_run_failed(
-        gs.players()[player_idx].is_failing,
-        gs.players()[player_idx].fail_time.is_some(),
+    let mut result = groovestats_eval_state_from_gameplay_parts(
+        base_state,
+        GrooveStatsGameplayEvalInput {
+            song_has_lua: gs.song().has_lua,
+            lua_submit_allowed: lua_chart_submit_allowed(
+                gs.charts()[player_idx].short_hash.as_str(),
+            ),
+            song_completed_naturally: gs.song_completed_naturally(),
+            is_failing: gs.players()[player_idx].is_failing,
+            life: gs.players()[player_idx].life,
+            has_fail_time: gs.players()[player_idx].fail_time.is_some(),
+            course_stage_life_submit_eligible: gs.course_stage_life_submit_eligible(player_idx),
+        },
     );
-    let passed = gameplay_run_passed(
-        gs.song_completed_naturally(),
-        gs.players()[player_idx].is_failing,
-        gs.players()[player_idx].life,
-        gs.players()[player_idx].fail_time.is_some(),
-    );
-    let finished = gs.song_completed_naturally() || failed;
-    if state.valid && !finished {
-        state.valid = false;
-        state
-            .reason_lines
-            .push("Only completed stages can be submitted.".to_string());
-        return state;
+    if result.should_set_manual_qr_url {
+        result.state.manual_qr_url = groovestats_manual_qr_url_from_gameplay(gs, player_idx);
     }
-    if state.valid && failed {
-        state.valid = false;
-        state
-            .reason_lines
-            .push("Only passing scores are submitted.".to_string());
-        return state;
-    }
-    if state.valid && !gs.course_stage_life_submit_eligible(player_idx) {
-        state.valid = false;
-        state
-            .reason_lines
-            .push("Course stage would have failed from normal life.".to_string());
-        return state;
-    }
-    if state.valid && passed {
-        state.manual_qr_url = groovestats_manual_qr_url_from_gameplay(gs, player_idx);
-    }
-    state
+    result.state
 }
 
 fn groovestats_submit_invalid_reason(
@@ -396,6 +374,42 @@ fn groovestats_warn_submit_skip(side: profile_data::PlayerSide, chart_hash: &str
         chart_hash,
         reason
     );
+}
+
+#[inline(always)]
+fn groovestats_log_global_submit_skip(log: GrooveStatsAutosubmitLog) {
+    match log.level {
+        GrooveStatsAutosubmitLogLevel::Debug => debug!(
+            "Skipping {} submit: {}.",
+            active_groovestats_service_name(),
+            log.reason
+        ),
+        GrooveStatsAutosubmitLogLevel::Warn => warn!(
+            "Skipping {} submit: {}.",
+            active_groovestats_service_name(),
+            log.reason
+        ),
+    }
+}
+
+#[inline(always)]
+fn groovestats_log_player_submit_skip(
+    side: profile_data::PlayerSide,
+    chart_hash: &str,
+    log: GrooveStatsAutosubmitLog,
+) {
+    match log.level {
+        GrooveStatsAutosubmitLogLevel::Debug => debug!(
+            "Skipping {} submit for {:?} ({}): {}.",
+            active_groovestats_service_name(),
+            side,
+            chart_hash,
+            log.reason
+        ),
+        GrooveStatsAutosubmitLogLevel::Warn => {
+            groovestats_warn_submit_skip(side, chart_hash, log.reason)
+        }
+    }
 }
 
 fn groovestats_rescore_counts(
@@ -693,22 +707,20 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &GameplayCoreState) {
     }
 
     let cfg = crate::config::get();
-    if !cfg.enable_groovestats || gs.num_players() == 0 {
-        return;
-    }
-    if gs.autoplay_used() {
-        debug!(
-            "Skipping {} submit: autoplay/replay was used.",
-            active_groovestats_service_name()
-        );
-        return;
-    }
-    if gs.course_display_is_course_stage() && !cfg.autosubmit_course_scores_individually {
-        debug!(
-            "Skipping {} submit: course per-song autosubmit is disabled.",
-            active_groovestats_service_name()
-        );
-        return;
+    match groovestats_autosubmit_session_decision(GrooveStatsAutosubmitSessionInput {
+        enabled: cfg.enable_groovestats,
+        player_count: gs.num_players(),
+        autoplay_used: gs.autoplay_used(),
+        is_course_stage: gs.course_display_is_course_stage(),
+        autosubmit_course_scores_individually: cfg.autosubmit_course_scores_individually,
+    }) {
+        GrooveStatsAutosubmitSessionDecision::Submit => {}
+        GrooveStatsAutosubmitSessionDecision::Skip { log } => {
+            if let Some(log) = log {
+                groovestats_log_global_submit_skip(log);
+            }
+            return;
+        }
     }
     let mut players = Vec::with_capacity(gs.num_players().min(MAX_PLAYERS));
     let mut request_players = Vec::with_capacity(gs.num_players().min(MAX_PLAYERS));
@@ -723,57 +735,32 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &GameplayCoreState) {
         let profile = &gs.profiles()[player_idx];
         let chart = gs.charts()[player_idx].as_ref();
         let chart_hash = chart.short_hash.as_str();
-        let failed = gameplay_run_failed(
-            gs.players()[player_idx].is_failing,
-            gs.players()[player_idx].fail_time.is_some(),
-        );
-        let passed = gameplay_run_passed(
-            gs.song_completed_naturally(),
-            gs.players()[player_idx].is_failing,
-            gs.players()[player_idx].life,
-            gs.players()[player_idx].fail_time.is_some(),
-        );
-        let finished = gs.song_completed_naturally() || failed;
-
-        if let Some(reason) =
-            groovestats_submit_invalid_reason(chart, gs.song().has_lua, profile, gs.music_rate())
-        {
-            groovestats_warn_submit_skip(side, chart_hash, reason.as_str());
-            continue;
-        }
-        if !profile.groovestats_is_pad_player {
-            groovestats_warn_submit_skip(side, chart_hash, "profile is not marked as a pad player");
-            continue;
-        }
-        if !finished {
-            debug!(
-                "Skipping {} submit for {:?} ({}): stage was not completed.",
-                active_groovestats_service_name(),
-                side,
-                chart_hash
-            );
-            continue;
-        }
-        if !passed {
-            debug!(
-                "Skipping {} submit for {:?} ({}): stage was not passed.",
-                active_groovestats_service_name(),
-                side,
-                chart_hash
-            );
-            continue;
-        }
-        if !gs.course_stage_life_submit_eligible(player_idx) {
-            groovestats_warn_submit_skip(
-                side,
-                chart_hash,
-                "course stage would have failed from normal life",
-            );
-            continue;
-        }
-        if profile.groovestats_api_key.trim().is_empty() {
-            groovestats_warn_submit_skip(side, chart_hash, "profile is missing API key");
-            continue;
+        let invalid_reason =
+            groovestats_submit_invalid_reason(chart, gs.song().has_lua, profile, gs.music_rate());
+        let decision = groovestats_autosubmit_player_decision(GrooveStatsAutosubmitPlayerInput {
+            has_invalid_reason: invalid_reason.is_some(),
+            is_pad_player: profile.groovestats_is_pad_player,
+            song_completed_naturally: gs.song_completed_naturally(),
+            is_failing: gs.players()[player_idx].is_failing,
+            life: gs.players()[player_idx].life,
+            has_fail_time: gs.players()[player_idx].fail_time.is_some(),
+            course_stage_life_submit_eligible: gs.course_stage_life_submit_eligible(player_idx),
+            api_key_present: !profile.groovestats_api_key.trim().is_empty(),
+        });
+        match decision.action {
+            GrooveStatsAutosubmitPlayerAction::BuildPayload => {}
+            GrooveStatsAutosubmitPlayerAction::SkipInvalidReason => {
+                if let Some(reason) = invalid_reason {
+                    groovestats_warn_submit_skip(side, chart_hash, reason.as_str());
+                }
+                continue;
+            }
+            GrooveStatsAutosubmitPlayerAction::Skip { log } => {
+                if let Some(log) = log {
+                    groovestats_log_player_submit_skip(side, chart_hash, log);
+                }
+                continue;
+            }
         }
 
         let itl_score_hundredths = itl::current_score_hundredths_for_submit(gs, player_idx);
@@ -1016,48 +1003,6 @@ pub fn tick_groovestats_auto_retries() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadsync_chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
-    use deadsync_profile::RemoveMask;
-    use deadsync_rules::scroll::ScrollSpeedSetting;
-
-    fn sample_chart(chart_type: &str) -> ChartData {
-        ChartData {
-            chart_type: chart_type.to_string(),
-            difficulty: "Challenge".to_string(),
-            description: String::new(),
-            chart_name: String::new(),
-            meter: 12,
-            step_artist: String::new(),
-            music_path: None,
-            short_hash: "deadbeefcafebabe".to_string(),
-            stats: ArrowStats::default(),
-            tech_counts: TechCounts::default(),
-            mines_nonfake: 12,
-            stamina_counts: StaminaCounts::default(),
-            total_streams: 0,
-            matrix_rating: 0.0,
-            max_nps: 0.0,
-            sn_detailed_breakdown: String::new(),
-            sn_partial_breakdown: String::new(),
-            sn_simple_breakdown: String::new(),
-            detailed_breakdown: String::new(),
-            partial_breakdown: String::new(),
-            simple_breakdown: String::new(),
-            total_measures: 0,
-            measure_nps_vec: Vec::new(),
-            measure_seconds_vec: Vec::new(),
-            first_second: 0.0,
-            has_note_data: true,
-            has_chart_attacks: false,
-            possible_grade_points: 0,
-            holds_total: 0,
-            rolls_total: 0,
-            mines_total: 12,
-            display_bpm: None,
-            min_bpm: 0.0,
-            max_bpm: 0.0,
-        }
-    }
 
     fn sample_player_payload() -> GrooveStatsSubmitPlayerPayload {
         GrooveStatsSubmitPlayerPayload {
@@ -1116,66 +1061,6 @@ mod tests {
             retry_attempt: 0,
             next_retry_at: None,
         }
-    }
-
-    #[test]
-    fn groovestats_validity_allows_cmod_and_no_mines() {
-        let mut profile = Profile::default();
-        profile.scroll_speed = ScrollSpeedSetting::CMod(650.0);
-        profile.remove_active_mask = RemoveMask::from_bits_truncate(1u8 << 1);
-
-        assert_eq!(
-            groovestats_submit_invalid_reason(&sample_chart("dance-single"), false, &profile, 1.5),
-            None
-        );
-    }
-
-    #[test]
-    fn groovestats_validity_rejects_custom_window_and_solo() {
-        let mut profile = Profile::default();
-        profile.custom_fantastic_window = true;
-
-        assert_eq!(
-            groovestats_submit_invalid_reason(&sample_chart("dance-single"), false, &profile, 1.0),
-            Some("Metrics or preferences are incorrect.".to_string())
-        );
-        assert_eq!(
-            groovestats_submit_invalid_reason(
-                &sample_chart("dance-solo"),
-                false,
-                &Profile::default(),
-                1.0
-            ),
-            Some("GrooveStats does not support dance-solo charts.".to_string())
-        );
-    }
-
-    #[test]
-    fn groovestats_validity_rejects_lua_simfiles() {
-        let mut formerly_allowed = sample_chart("dance-single");
-        formerly_allowed.short_hash = "d5bd4dd7224f68ff".to_string();
-        assert_eq!(
-            groovestats_submit_invalid_reason(&formerly_allowed, true, &Profile::default(), 1.0),
-            Some("simfile relies on lua".to_string())
-        );
-        assert_eq!(
-            groovestats_submit_invalid_reason(
-                &sample_chart("dance-single"),
-                true,
-                &Profile::default(),
-                1.0,
-            ),
-            Some("simfile relies on lua".to_string())
-        );
-    }
-
-    #[test]
-    fn groovestats_course_validity_follows_per_song_submit_setting() {
-        let chart = sample_chart("dance-single");
-        let profile = Profile::default();
-
-        assert!(!groovestats_eval_state(&chart, &profile, 1.0, false, true, false).valid);
-        assert!(groovestats_eval_state(&chart, &profile, 1.0, false, true, true).valid);
     }
 
     #[test]

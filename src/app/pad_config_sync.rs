@@ -128,7 +128,7 @@ impl PadConfigSync {
     }
 
     /// Whether `profiles[pad]` needs rebuilding for these inputs. Cheap (no I/O):
-    /// the caller does the `pad_profiles::load` + filter only when this is `true`.
+    /// the caller does the profile pad-config load + filter only when this is `true`.
     pub fn profiles_stale(
         &self,
         pad: usize,

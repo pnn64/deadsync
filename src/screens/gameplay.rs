@@ -1158,7 +1158,7 @@ fn gameplay_pack_data(
     let mut pack_banner_path = None;
     let mut sync_pref = SyncPref::Default;
     if !pack_group.is_empty()
-        && let Some(pack) = crate::game::song::get_song_cache()
+        && let Some(pack) = deadsync_simfile::runtime_cache::get_song_cache()
             .iter()
             .find(|pack| pack.group_name == pack_group.as_ref())
     {
@@ -2292,8 +2292,10 @@ pub fn init(
     course_banner_path: Option<PathBuf>,
     combo_carry: [u32; MAX_PLAYERS],
 ) -> State {
-    let random_movie_paths =
-        crate::game::random_movies::random_movie_paths(&song, random_background_movies_enabled());
+    let random_movie_paths = crate::game::parsing::simfile::random_movie_paths(
+        &song,
+        random_background_movies_enabled(),
+    );
     let cols_per_player = session.play_style.cols_per_player();
     let num_players = session.play_style.player_count();
     let runtime_profile_data = gameplay_runtime_profile_data(&player_profiles, &session);
@@ -2617,12 +2619,12 @@ fn gameplay_lobby_player_stats(
 }
 
 fn update_lobby_machine_state(state: &State) {
-    if !crate::game::online::lobbies::can_update_machine_state() {
+    if !deadsync_online::lobbies::runtime_can_update_machine_state() {
         return;
     }
 
     let (p1_ready, p2_ready) = local_lobby_ready_tuple(state);
-    crate::game::online::lobbies::update_machine_state_sides_with_stats(
+    deadsync_online::lobbies::runtime_update_machine_state_sides_with_stats_default(
         "ScreenGameplay",
         p1_ready,
         p2_ready,
@@ -2719,7 +2721,7 @@ fn gameplay_requires_lobby_wait_for(joined: Option<&lobby_data::JoinedLobby>) ->
 }
 
 fn gameplay_requires_lobby_wait() -> bool {
-    let snapshot = crate::game::online::lobbies::snapshot();
+    let snapshot = deadsync_online::lobbies::runtime_snapshot();
     gameplay_requires_lobby_wait_for(snapshot.joined_lobby.as_ref())
 }
 
@@ -2759,9 +2761,9 @@ fn gameplay_lobby_wait_text(state: &State) -> Option<String> {
         return None;
     }
 
-    let snapshot = crate::game::online::lobbies::snapshot();
+    let snapshot = deadsync_online::lobbies::runtime_snapshot();
     let joined = snapshot.joined_lobby.as_ref()?;
-    let reconnect_status_text = crate::game::online::lobbies::reconnect_status_text();
+    let reconnect_status_text = deadsync_online::lobbies::runtime_reconnect_status_text();
     gameplay_lobby_wait_text_for(
         joined,
         local_lobby_players_ready(state),
@@ -2775,7 +2777,7 @@ fn gameplay_lobby_disconnect_prompt(state: &State) -> Option<String> {
         return Some(tr("Lobby", "DisconnectBasicPrompt").to_string());
     };
     let remaining =
-        (crate::game::online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS - elapsed).ceil() as i32;
+        (deadsync_online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS - elapsed).ceil() as i32;
     let remaining = remaining.max(0);
     Some(
         tr_fmt(
@@ -2964,14 +2966,14 @@ pub fn on_exit(state: &mut State) {
 }
 
 pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
-    crate::game::online::lobbies::poll_reconnect();
+    deadsync_online::lobbies::runtime_poll_reconnect_default();
 
     if !state.lobby_music_started {
         if lobby_disconnect_hold_elapsed(state).is_some_and(|elapsed| {
-            elapsed >= crate::game::online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS
+            elapsed >= deadsync_online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS
         }) {
             clear_lobby_disconnect_holds(state);
-            crate::game::online::lobbies::disconnect();
+            deadsync_online::lobbies::runtime_disconnect();
         }
 
         update_lobby_machine_state(state);
@@ -10010,7 +10012,7 @@ pub fn push_actors(
 
     if !hide_gameplay_hud {
         let overlay_start = actors.len();
-        let lobby_snapshot = crate::game::online::lobbies::snapshot();
+        let lobby_snapshot = deadsync_online::lobbies::runtime_snapshot();
         if let Some(joined) = lobby_snapshot.joined_lobby.as_ref() {
             actors.extend(lobby_hud::build_panel(lobby_hud::RenderParams {
                 screen_name: "ScreenGameplay",

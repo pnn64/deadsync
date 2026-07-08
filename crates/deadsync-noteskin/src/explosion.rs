@@ -1005,6 +1005,67 @@ mod tests {
         assert_eq!(glow.period, 0.5);
         assert_eq!(glow.color1, [1.0, 0.0, 0.0, 0.5019608]);
         assert_eq!(glow.color2, [0.0, 1.0, 0.0, 0.5019608]);
+
+        let normal = parse_explosion_animation("blend,'BlendMode_Normal';diffusealpha,1");
+        assert!(!normal.blend_add);
+    }
+
+    #[test]
+    fn parse_explosion_animation_handles_function_duration_and_blend() {
+        let anim = parse_explosion_animation(
+            "function (self) self:finishtweening():diffusealpha(1.0):blend(Blend.Add):linear(12/60):diffusealpha(0.0) end",
+        );
+
+        assert!(anim.blend_add);
+        assert!((anim.initial.color[3] - 1.0).abs() <= 1e-6);
+        assert_eq!(anim.segments.len(), 1);
+        assert!((anim.segments[0].duration - 0.2).abs() <= 1e-6);
+        assert_eq!(anim.segments[0].end_color.map(|c| c[3]), Some(0.0));
+    }
+
+    #[test]
+    fn parse_explosion_animation_finish_tweening_resets_prior_segments() {
+        let anim = parse_explosion_animation(
+            "diffusealpha,1;linear,0.2;diffusealpha,0;finishtweening;diffusealpha,1;linear,0.1;diffusealpha,0",
+        );
+
+        assert_eq!(anim.segments.len(), 1);
+        assert!((anim.duration() - 0.1).abs() <= 1e-6);
+        assert!((anim.state_at(0.05).diffuse[3] - 0.5).abs() <= 1e-6);
+
+        let canceled =
+            parse_explosion_animation("diffusealpha,1;linear,0.2;diffusealpha,0;finishtweening");
+        assert_eq!(canceled.duration(), 0.0);
+        assert_eq!(canceled.state_at(0.0).diffuse[3], 0.0);
+    }
+
+    #[test]
+    fn parse_explosion_animation_honors_visible_commands() {
+        let anim = parse_explosion_animation("visible,false;sleep,0.1;visible,true");
+
+        assert!(!anim.state_at(0.0).visible);
+        assert!(!anim.state_at(0.05).visible);
+        assert!(anim.state_at(0.11).visible);
+    }
+
+    #[test]
+    fn parse_explosion_animation_parses_judgment_line_color() {
+        let anim = parse_explosion_animation(
+            r#"finishtweening;diffuse,JudgmentLineToColor("JudgmentLine_W5");diffusealpha,1;sleep,.1;decelerate,.2;diffusealpha,0"#,
+        );
+
+        assert_eq!(anim.initial.color, [228.0 / 255.0, 77.0 / 255.0, 1.0, 1.0]);
+    }
+
+    #[test]
+    fn parse_explosion_animation_clamps_overbright_color() {
+        let anim = parse_explosion_animation(
+            "diffuse,1.5,1.25,1.75,1.2;glowshift;effectperiod,0.05;effectcolor1,1,1,1,1;effectcolor2,1,1,1,1",
+        );
+        let state = anim.state_at(0.0);
+
+        assert_eq!(state.diffuse, [1.0, 1.0, 1.0, 1.0]);
+        assert!(state.glow.iter().all(|c| *c >= 0.0 && *c <= 1.0));
     }
 
     #[test]

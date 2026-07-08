@@ -251,7 +251,7 @@ fn submit_record_text(banner: score_data::GrooveStatsSubmitRecordBanner) -> Arc<
 
 #[inline(always)]
 fn submit_footer_gs_label() -> Arc<str> {
-    if online::groovestats::is_boogiestats_active() {
+    if online::is_boogiestats_active() {
         tr("SubmitStatus", "BSLabel")
     } else {
         tr("SubmitStatus", "GSLabel")
@@ -260,7 +260,7 @@ fn submit_footer_gs_label() -> Arc<str> {
 
 #[inline(always)]
 fn active_groovestats_service_name() -> &'static str {
-    groovestats_api::service_name(online::groovestats::active_service())
+    groovestats_api::service_name(online::active_groovestats_service())
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -3232,8 +3232,8 @@ pub fn update(state: &mut State, dt: f32) {
         state.screen_elapsed += dt;
     }
 
-    online::lobbies::poll_reconnect();
-    online::lobbies::update_machine_state_sides_with_stats(
+    deadsync_online::lobbies::runtime_poll_reconnect_default();
+    deadsync_online::lobbies::runtime_update_machine_state_sides_with_stats_default(
         "ScreenEvaluationStage",
         true,
         true,
@@ -3241,11 +3241,11 @@ pub fn update(state: &mut State, dt: f32) {
         evaluation_lobby_player_stats(state, profile_data::PlayerSide::P2),
     );
     if evaluation_lobby_lock_text().is_some() {
-        if lobby_disconnect_hold_elapsed(state)
-            .is_some_and(|elapsed| elapsed >= online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS)
-        {
+        if lobby_disconnect_hold_elapsed(state).is_some_and(|elapsed| {
+            elapsed >= deadsync_online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS
+        }) {
             clear_lobby_disconnect_holds(state);
-            online::lobbies::disconnect();
+            deadsync_online::lobbies::runtime_disconnect();
         }
     } else {
         clear_lobby_disconnect_holds(state);
@@ -3395,12 +3395,12 @@ fn lobby_disconnect_hold_elapsed(state: &State) -> Option<f32> {
 }
 
 fn evaluation_lobby_lock_text() -> Option<String> {
-    let snapshot = online::lobbies::snapshot();
+    let snapshot = deadsync_online::lobbies::runtime_snapshot();
     let joined = snapshot.joined_lobby.as_ref()?;
     if joined.players.len() <= local_lobby_player_count() {
         return None;
     }
-    if let Some(text) = online::lobbies::reconnect_status_text() {
+    if let Some(text) = deadsync_online::lobbies::runtime_reconnect_status_text() {
         return Some(text);
     }
     joined
@@ -3413,7 +3413,8 @@ fn evaluation_lobby_lock_text() -> Option<String> {
 fn evaluation_lobby_status_text(state: &State) -> Option<String> {
     let mut text = evaluation_lobby_lock_text()?;
     let prompt = if let Some(elapsed) = lobby_disconnect_hold_elapsed(state) {
-        let remaining = (online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS - elapsed).ceil() as i32;
+        let remaining =
+            (deadsync_online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS - elapsed).ceil() as i32;
         let remaining = remaining.max(0);
         format!(
             "Continue holding &START; for {remaining} more second{} to disconnect...",
@@ -5814,7 +5815,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
         z(121) // a bit above the screen bar (z=120)
     ));
 
-    let lobby_snapshot = online::lobbies::snapshot();
+    let lobby_snapshot = deadsync_online::lobbies::runtime_snapshot();
     if let Some(joined) = lobby_snapshot.joined_lobby.as_ref() {
         actors.extend(lobby_hud::build_panel(lobby_hud::RenderParams {
             screen_name: "ScreenEvaluationStage",

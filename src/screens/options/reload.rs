@@ -93,7 +93,7 @@ pub(super) fn start_reload_songs_and_courses(state: &mut State) {
             });
         };
         let dirs = dirs::app_dirs();
-        course::scan_and_load_courses_with_progress_counts(
+        song_loading::scan_and_load_courses_with_progress_counts(
             &dirs.courses_dir(),
             &dirs.songs_dir(),
             &mut on_course,

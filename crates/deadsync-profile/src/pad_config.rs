@@ -232,12 +232,42 @@ pub fn load_dir(profile_dir: &Path) -> Vec<PadConfigProfile> {
     load_path(&pad_config_path(profile_dir)).unwrap_or_default()
 }
 
+pub fn pad_config_path_for_profile_id(
+    root: &Path,
+    profile_id: &str,
+    duplicate: impl FnMut(&str, &Path, &Path, &Path),
+) -> PathBuf {
+    pad_config_path(&crate::runtime_profile_dir_for_id(
+        root, profile_id, duplicate,
+    ))
+}
+
+pub fn load_profile_id(
+    root: &Path,
+    profile_id: &str,
+    duplicate: impl FnMut(&str, &Path, &Path, &Path),
+) -> Vec<PadConfigProfile> {
+    load_path(&pad_config_path_for_profile_id(root, profile_id, duplicate)).unwrap_or_default()
+}
+
 pub fn save_path(path: &Path, profiles: &[PadConfigProfile]) -> std::io::Result<()> {
     std::fs::write(path, serialize(profiles))
 }
 
 pub fn save_dir(profile_dir: &Path, profiles: &[PadConfigProfile]) -> std::io::Result<()> {
     save_path(&pad_config_path(profile_dir), profiles)
+}
+
+pub fn save_profile_id(
+    root: &Path,
+    profile_id: &str,
+    profiles: &[PadConfigProfile],
+    duplicate: impl FnMut(&str, &Path, &Path, &Path),
+) -> std::io::Result<()> {
+    save_path(
+        &pad_config_path_for_profile_id(root, profile_id, duplicate),
+        profiles,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -287,6 +317,29 @@ pub fn upsert_dir(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
+pub fn upsert_profile_id(
+    root: &Path,
+    profile_id: &str,
+    name: &str,
+    backend: &str,
+    pad_type: Option<String>,
+    serial: Option<String>,
+    make_default: bool,
+    settings: Vec<(String, String)>,
+    duplicate: impl FnMut(&str, &Path, &Path, &Path),
+) -> std::io::Result<bool> {
+    upsert_path(
+        &pad_config_path_for_profile_id(root, profile_id, duplicate),
+        name,
+        backend,
+        pad_type,
+        serial,
+        make_default,
+        settings,
+    )
+}
+
 pub fn set_default_path(path: &Path, serial: &str, name: &str) -> std::io::Result<bool> {
     let mut list = load_path(path).unwrap_or_default();
     let changed = set_default_config(&mut list, serial, name);
@@ -298,6 +351,20 @@ pub fn set_default_path(path: &Path, serial: &str, name: &str) -> std::io::Resul
 
 pub fn set_default_dir(profile_dir: &Path, serial: &str, name: &str) -> std::io::Result<bool> {
     set_default_path(&pad_config_path(profile_dir), serial, name)
+}
+
+pub fn set_default_profile_id(
+    root: &Path,
+    profile_id: &str,
+    serial: &str,
+    name: &str,
+    duplicate: impl FnMut(&str, &Path, &Path, &Path),
+) -> std::io::Result<bool> {
+    set_default_path(
+        &pad_config_path_for_profile_id(root, profile_id, duplicate),
+        serial,
+        name,
+    )
 }
 
 pub fn rename_path(path: &Path, old: &str, new: &str) -> std::io::Result<bool> {
@@ -313,6 +380,20 @@ pub fn rename_dir(profile_dir: &Path, old: &str, new: &str) -> std::io::Result<b
     rename_path(&pad_config_path(profile_dir), old, new)
 }
 
+pub fn rename_profile_id(
+    root: &Path,
+    profile_id: &str,
+    old: &str,
+    new: &str,
+    duplicate: impl FnMut(&str, &Path, &Path, &Path),
+) -> std::io::Result<bool> {
+    rename_path(
+        &pad_config_path_for_profile_id(root, profile_id, duplicate),
+        old,
+        new,
+    )
+}
+
 pub fn delete_path(path: &Path, name: &str) -> std::io::Result<bool> {
     let mut list = load_path(path).unwrap_or_default();
     let changed = delete_config(&mut list, name);
@@ -324,6 +405,18 @@ pub fn delete_path(path: &Path, name: &str) -> std::io::Result<bool> {
 
 pub fn delete_dir(profile_dir: &Path, name: &str) -> std::io::Result<bool> {
     delete_path(&pad_config_path(profile_dir), name)
+}
+
+pub fn delete_profile_id(
+    root: &Path,
+    profile_id: &str,
+    name: &str,
+    duplicate: impl FnMut(&str, &Path, &Path, &Path),
+) -> std::io::Result<bool> {
+    delete_path(
+        &pad_config_path_for_profile_id(root, profile_id, duplicate),
+        name,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]

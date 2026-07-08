@@ -592,6 +592,36 @@ pub fn local_lobby_machine_state_value(
     )
 }
 
+pub fn runtime_local_lobby_machine_state_value(
+    screen_name: &str,
+    p1_ready: bool,
+    p2_ready: bool,
+    p1_stats: Option<&MachinePlayerStats>,
+    p2_stats: Option<&MachinePlayerStats>,
+) -> Value {
+    let p1_profile = deadsync_profile::runtime_profile_for_side(PlayerSide::P1);
+    let p2_profile = deadsync_profile::runtime_profile_for_side(PlayerSide::P2);
+    local_lobby_machine_state_value(
+        LocalLobbyPlayer {
+            side: PlayerSide::P1,
+            display_name: p1_profile.display_name.as_str(),
+            joined: deadsync_profile::runtime_session_side_joined(PlayerSide::P1),
+            screen_name,
+            ready: p1_ready,
+            stats: p1_stats,
+        },
+        LocalLobbyPlayer {
+            side: PlayerSide::P2,
+            display_name: p2_profile.display_name.as_str(),
+            joined: deadsync_profile::runtime_session_side_joined(PlayerSide::P2),
+            screen_name,
+            ready: p2_ready,
+            stats: p2_stats,
+        },
+        deadsync_profile::runtime_session_player_side(),
+    )
+}
+
 pub fn local_lobby_machine_player(player: LocalLobbyPlayer<'_>) -> LobbyMachinePlayer {
     lobby_machine_player(
         lobby_player_id(player.side),
@@ -997,6 +1027,11 @@ impl LobbyRuntimeHooks {
     }
 }
 
+const DEFAULT_RUNTIME_HOOKS: LobbyRuntimeHooks = LobbyRuntimeHooks::new(
+    runtime_local_lobby_machine_state_value,
+    log_malformed_payload,
+);
+
 static RUNTIME_SNAPSHOT: LazyLock<Mutex<Snapshot>> =
     LazyLock::new(|| Mutex::new(Snapshot::default()));
 static RUNTIME_COMMAND_TX: LazyLock<Mutex<Option<Sender<LobbyCommand>>>> =
@@ -1024,6 +1059,51 @@ pub fn runtime_with_snapshot_for_test<R>(snapshot: Snapshot, f: impl FnOnce() ->
 pub fn runtime_can_update_machine_state() -> bool {
     let snapshot = RUNTIME_SNAPSHOT.lock().unwrap();
     can_update_machine_state(&snapshot)
+}
+
+pub fn runtime_search_lobbies_default() {
+    runtime_search_lobbies(DEFAULT_RUNTIME_HOOKS);
+}
+
+pub fn runtime_create_lobby_with_password_default(password: &str) {
+    runtime_create_lobby_with_password(DEFAULT_RUNTIME_HOOKS, password);
+}
+
+pub fn runtime_join_lobby_with_password_default(code: &str, password: &str) {
+    runtime_join_lobby_with_password(DEFAULT_RUNTIME_HOOKS, code, password);
+}
+
+pub fn runtime_leave_lobby_default() {
+    runtime_leave_lobby(DEFAULT_RUNTIME_HOOKS);
+}
+
+pub fn runtime_update_machine_state_default(screen_name: &str, ready: bool) {
+    runtime_update_machine_state(DEFAULT_RUNTIME_HOOKS, screen_name, ready);
+}
+
+pub fn runtime_update_machine_state_sides_with_stats_default(
+    screen_name: &str,
+    p1_ready: bool,
+    p2_ready: bool,
+    p1_stats: Option<MachinePlayerStats>,
+    p2_stats: Option<MachinePlayerStats>,
+) {
+    runtime_update_machine_state_sides_with_stats(
+        DEFAULT_RUNTIME_HOOKS,
+        screen_name,
+        p1_ready,
+        p2_ready,
+        p1_stats,
+        p2_stats,
+    );
+}
+
+pub fn runtime_select_song_default(song_info: LobbySongInfo) {
+    runtime_select_song(DEFAULT_RUNTIME_HOOKS, song_info);
+}
+
+pub fn runtime_poll_reconnect_default() {
+    runtime_poll_reconnect(DEFAULT_RUNTIME_HOOKS);
 }
 
 pub fn runtime_search_lobbies(hooks: LobbyRuntimeHooks) {
@@ -1156,6 +1236,14 @@ pub fn runtime_reconnect_status_text() -> Option<String> {
     let snapshot = RUNTIME_SNAPSHOT.lock().unwrap().clone();
     let reconnect = RUNTIME_RECONNECT_STATE.lock().unwrap();
     reconnect.status_text(&snapshot.connection, Instant::now())
+}
+
+pub fn log_malformed_payload(event: Option<&str>, error: &str, raw_text: &str) {
+    match event {
+        Some(event) => log::warn!("Ignoring malformed lobby payload for event '{event}': {error}"),
+        None => log::warn!("Ignoring malformed lobby payload: {error}"),
+    }
+    log::debug!("Malformed lobby payload: {raw_text}");
 }
 
 fn runtime_ensure_worker(hooks: LobbyRuntimeHooks) {
@@ -1884,6 +1972,53 @@ mod tests {
         assert_eq!(value["player1"]["screenName"], "ScreenGameplay");
         assert_eq!(value["player1"]["exScore"], 97.25);
         assert!(value["player2"].is_null());
+    }
+
+    #[test]
+    fn runtime_local_lobby_machine_state_reads_profile_session_state() {
+        {
+            let mut profiles = deadsync_profile::runtime_lock_profiles();
+            *profiles = [
+                deadsync_profile::Profile {
+                    display_name: "Alice".to_string(),
+                    ..deadsync_profile::Profile::default()
+                },
+                deadsync_profile::Profile {
+                    display_name: "Bob".to_string(),
+                    ..deadsync_profile::Profile::default()
+                },
+            ];
+        }
+        {
+            let mut session = deadsync_profile::runtime_lock_session();
+            session.joined_mask = deadsync_profile::player_side_joined_mask(PlayerSide::P1);
+            session.player_side = PlayerSide::P2;
+        }
+        let p1_stats = MachinePlayerStats {
+            ex_score: Some(97.25),
+            ..MachinePlayerStats::default()
+        };
+
+        let value = runtime_local_lobby_machine_state_value(
+            "ScreenGameplay",
+            true,
+            false,
+            Some(&p1_stats),
+            None,
+        );
+
+        assert_eq!(value["player1"]["playerId"], "P1");
+        assert_eq!(value["player1"]["profileName"], "[DS] Alice");
+        assert_eq!(value["player1"]["screenName"], "ScreenGameplay");
+        assert_eq!(value["player1"]["ready"], true);
+        assert_eq!(value["player1"]["exScore"], 97.25);
+        assert!(value["player2"].is_null());
+
+        *deadsync_profile::runtime_lock_session() = deadsync_profile::SessionState::default();
+        *deadsync_profile::runtime_lock_profiles() = [
+            deadsync_profile::Profile::default(),
+            deadsync_profile::Profile::default(),
+        ];
     }
 
     #[test]

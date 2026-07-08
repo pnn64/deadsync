@@ -1,18 +1,19 @@
 use crate::config::{self};
-use crate::game::song::get_song_cache;
 use deadlib_platform::dirs;
 use deadsync_audio_decode as decode;
 use deadsync_chart::{GameplayChartData, SongData};
 use deadsync_simfile::cache::{
-    GameplayChartLoadOptions, GameplayChartLoadReport, GameplayChartLoadSource,
-    GameplayChartLoadWarning, SerializableSongData, build_song_meta,
-    load_gameplay_charts_with_options, load_song_cache_file, load_sync_analysis_chart_with_options,
-    song_cache_path, write_song_cache_file,
+    GameplayChartLoadLogEntry, GameplayChartLoadLogLevel, GameplayChartLoadOptions,
+    GameplayChartLoadReport, RuntimeSongLoadLogEntry, RuntimeSongLoadLogLevel,
+    RuntimeSongLoadOptions, gameplay_chart_load_log_entries, load_gameplay_charts_with_options,
+    load_song_with_cache_options, load_sync_analysis_chart_with_options,
 };
 use deadsync_simfile::media::{
     BG_ANIMATIONS_DIR, RANDOM_MOVIES_DIR, SONG_MOVIES_DIR, collect_media_roots,
+    random_movie_paths_for_song,
 };
-use deadsync_simfile::song::{ParseSongOptions, parse_song_data_file};
+use deadsync_simfile::runtime_cache::reload_song_in_cache_with;
+use deadsync_simfile::song::ParseSongOptions;
 use log::{debug, info, warn};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -20,6 +21,7 @@ use std::sync::Arc;
 mod scan;
 
 pub(crate) use scan::collect_song_scan_roots;
+pub use scan::scan_and_load_courses_with_progress_counts;
 pub use scan::{reload_song_dirs_with_progress_counts, scan_and_load_songs_with_progress_counts};
 
 /// Returns true when the pack (song-folder group) that owns this simfile is
@@ -36,40 +38,6 @@ fn song_group_is_never_cached(simfile_path: &Path) -> bool {
         .is_some_and(config::group_is_never_cached)
 }
 
-pub(super) fn compute_song_cache_path(path: &Path) -> Option<PathBuf> {
-    let cache_dir = dirs::app_dirs().song_cache_dir();
-    match song_cache_path(&cache_dir, path) {
-        Ok(path) => Some(path),
-        Err(error) => {
-            warn!(
-                "Could not generate cache path for {path:?}: {error}. Caching disabled for this file."
-            );
-            None
-        }
-    }
-}
-
-pub(super) fn load_song_from_cache(
-    path: &Path,
-    cache_path: &Path,
-    verify_freshness: bool,
-) -> Option<SongData> {
-    let song = load_song_cache_file(path, cache_path, verify_freshness)?;
-    debug!("Cache hit for: {:?}", path.file_name().unwrap_or_default());
-    Some(song)
-}
-
-fn write_song_cache(cache_path: &Path, data: &SerializableSongData, global_offset_seconds: f32) {
-    if let Err(error) = write_song_cache_file(cache_path, data, global_offset_seconds) {
-        warn!(
-            "Could not write song cache for {:?}: {error}",
-            Path::new(&data.simfile_path)
-                .file_name()
-                .unwrap_or_default()
-        );
-    }
-}
-
 /// Re-parse one simfile and replace its in-memory song-cache entry.
 ///
 /// This is used after writing sync edits to disk so immediate replays use the
@@ -78,35 +46,10 @@ pub fn reload_song_in_cache(simfile_path: &Path) -> Result<Arc<SongData>, String
     let config = config::get();
     let global_offset_seconds = config.global_offset_seconds;
     let cachesongs = config.cachesongs && !song_group_is_never_cached(simfile_path);
-    let cache_path = cachesongs
-        .then(|| compute_song_cache_path(simfile_path))
-        .flatten();
-    let song_data = parse_song_and_maybe_write_cache(
-        simfile_path,
-        false,
-        cachesongs,
-        cache_path.as_deref(),
-        global_offset_seconds,
-    )?;
-    let updated = Arc::new(song_data);
-
-    let mut song_cache = get_song_cache();
-    let mut replaced = false;
-    for pack in song_cache.iter_mut() {
-        for song in &mut pack.songs {
-            if song.simfile_path == simfile_path {
-                *song = updated.clone();
-                replaced = true;
-            }
-        }
-    }
-    if !replaced {
-        return Err(format!(
-            "Song '{}' not found in song cache",
-            simfile_path.display()
-        ));
-    }
-    Ok(updated)
+    reload_song_in_cache_with(simfile_path, |path| {
+        load_song_for_scan(path.to_path_buf(), false, cachesongs, global_offset_seconds)
+            .map(|(song, _)| song)
+    })
 }
 
 pub fn load_gameplay_charts(
@@ -166,94 +109,48 @@ pub fn load_sync_analysis_chart(
 }
 
 fn log_gameplay_chart_load(song: &SongData, report: &GameplayChartLoadReport) {
-    log_gameplay_cache_warnings(&report.warnings);
-    if let GameplayChartLoadSource::Cache { verify_freshness } = report.source {
-        if verify_freshness {
-            debug!(
-                "Gameplay cache hit for: {:?}",
-                song.simfile_path.file_name().unwrap_or_default()
-            );
-        } else {
-            debug!(
-                "Gameplay cache hit (no freshness check) for: {:?}",
-                song.simfile_path.file_name().unwrap_or_default()
-            );
-        }
-    }
-    if let Some(song_data_load) = &report.song_data_load {
-        if song_data_load.elapsed_ms >= 25.0 {
-            info!(
-                "Gameplay song data load: source=parse file={:?} parse_ms={:.3} write_ms={:.3} elapsed_ms={:.3}",
-                song.simfile_path.file_name().unwrap_or_default(),
-                song_data_load.parse_ms,
-                song_data_load.write_ms,
-                song_data_load.elapsed_ms
-            );
-        } else {
-            debug!(
-                "Gameplay song data load: source=parse file={:?} parse_ms={:.3} write_ms={:.3} elapsed_ms={:.3}",
-                song.simfile_path.file_name().unwrap_or_default(),
-                song_data_load.parse_ms,
-                song_data_load.write_ms,
-                song_data_load.elapsed_ms
-            );
-        }
-    }
-    if report.elapsed_ms >= 25.0 {
-        info!(
-            "Gameplay chart payload load: song='{}' requested={} load_ms={:.3} materialize_ms={:.3} elapsed_ms={:.3}",
-            song.title,
-            report.requested_count,
-            report.load_ms,
-            report.materialize_ms,
-            report.elapsed_ms
-        );
-    } else {
-        debug!(
-            "Gameplay chart payload load: song='{}' requested={} load_ms={:.3} materialize_ms={:.3} elapsed_ms={:.3}",
-            song.title,
-            report.requested_count,
-            report.load_ms,
-            report.materialize_ms,
-            report.elapsed_ms
-        );
+    for entry in gameplay_chart_load_log_entries(song, report) {
+        emit_gameplay_chart_load_log(entry);
     }
 }
 
-fn log_gameplay_cache_warnings(warnings: &[GameplayChartLoadWarning]) {
-    for warning in warnings {
-        match warning {
-            GameplayChartLoadWarning::CachePath { path, error } => warn!(
-                "Could not generate cache path for {path:?}: {error}. Caching disabled for this file."
-            ),
-            GameplayChartLoadWarning::CacheWrite {
-                simfile_name,
-                error,
-            } => warn!("Could not write song cache for {simfile_name:?}: {error}"),
-        }
+fn emit_gameplay_chart_load_log(entry: GameplayChartLoadLogEntry) {
+    match entry.level {
+        GameplayChartLoadLogLevel::Debug => debug!("{}", entry.message),
+        GameplayChartLoadLogLevel::Info => info!("{}", entry.message),
+        GameplayChartLoadLogLevel::Warn => warn!("{}", entry.message),
     }
 }
 
-pub(super) fn parse_song_and_maybe_write_cache(
-    path: &Path,
+pub(super) fn load_song_for_scan(
+    simfile_path: PathBuf,
     fastload: bool,
     cachesongs: bool,
-    cache_path: Option<&Path>,
     global_offset_seconds: f32,
-) -> Result<SongData, String> {
-    if fastload {
-        debug!("Cache miss for: {:?}", path.file_name().unwrap_or_default());
-    } else {
-        debug!(
-            "Parsing (fastload disabled): {:?}",
-            path.file_name().unwrap_or_default()
-        );
+) -> Result<(SongData, bool), String> {
+    let cache_dir = dirs::app_dirs().song_cache_dir();
+    let parse_options = parse_song_options();
+    let options = RuntimeSongLoadOptions {
+        cache_dir: &cache_dir,
+        parse_options: &parse_options,
+        fastload,
+        cachesongs,
+        verify_cache_freshness: !fastload,
+        global_offset_seconds,
+    };
+    let result =
+        load_song_with_cache_options(&simfile_path, &options, compute_music_length_seconds)?;
+    for entry in result.log_entries {
+        emit_runtime_song_load_log(entry);
     }
-    let song_data = parse_song_cache_data(path, global_offset_seconds)?;
-    if cachesongs && let Some(cp) = cache_path {
-        write_song_cache(cp, &song_data, global_offset_seconds);
+    Ok((result.song, result.cache_hit))
+}
+
+fn emit_runtime_song_load_log(entry: RuntimeSongLoadLogEntry) {
+    match entry.level {
+        RuntimeSongLoadLogLevel::Debug => debug!("{}", entry.message),
+        RuntimeSongLoadLogLevel::Warn => warn!("{}", entry.message),
     }
-    Ok(build_song_meta(song_data, global_offset_seconds))
 }
 
 #[cfg(test)]
@@ -275,24 +172,18 @@ fn bgchange_asset_roots(dirname: &str) -> Vec<PathBuf> {
     collect_media_roots(dirname, &dirs.data_dir, &dirs.exe_dir, cwd.as_deref())
 }
 
+pub fn random_movie_paths(song: &SongData, random_movies: bool) -> Vec<PathBuf> {
+    if !random_movies {
+        return Vec::new();
+    }
+    random_movie_paths_for_song(song, &bgchange_asset_roots(RANDOM_MOVIES_DIR))
+}
+
 fn parse_song_options() -> ParseSongOptions {
     ParseSongOptions::new(
         bgchange_asset_roots(SONG_MOVIES_DIR),
         bgchange_asset_roots(RANDOM_MOVIES_DIR),
         bgchange_asset_roots(BG_ANIMATIONS_DIR),
-    )
-}
-
-/// Parse and normalize a simfile on a cache miss.
-fn parse_song_cache_data(
-    path: &Path,
-    global_offset_seconds: f32,
-) -> Result<SerializableSongData, String> {
-    parse_song_data_file(
-        path,
-        &parse_song_options(),
-        global_offset_seconds,
-        compute_music_length_seconds,
     )
 }
 

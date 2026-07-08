@@ -1,5 +1,5 @@
 use super::{
-    GameplayCoreState, gameplay_run_failed, gameplay_run_passed, gameplay_side_for_player,
+    GameplayCoreState, gameplay_run_failed, gameplay_side_for_player,
     get_or_fetch_player_leaderboards_for_side, invalidate_player_leaderboards_for_side,
     lua_chart_submit_allowed,
 };
@@ -14,8 +14,12 @@ use deadsync_online::groovestats::GROOVESTATS_SUBMIT_MAX_ENTRIES;
 use deadsync_profile as profile_data;
 use deadsync_rules::timing;
 use deadsync_score::{
-    ArrowCloudSubmitStats, ArrowCloudSubmitUiStatus, SUBMIT_RETRY_MAX_ATTEMPTS, SubmitRetryState,
-    SubmitUiState, arrowcloud_submit_stats_from_results,
+    ArrowCloudAutosubmitLog, ArrowCloudAutosubmitLogLevel, ArrowCloudAutosubmitPlayerAction,
+    ArrowCloudAutosubmitPlayerInput, ArrowCloudAutosubmitSessionDecision,
+    ArrowCloudAutosubmitSessionInput, ArrowCloudSubmitStats, ArrowCloudSubmitUiStatus,
+    SUBMIT_RETRY_MAX_ATTEMPTS, SubmitRetryState, SubmitUiState,
+    arrowcloud_autosubmit_after_payload_decision, arrowcloud_autosubmit_player_decision,
+    arrowcloud_autosubmit_session_decision, arrowcloud_submit_stats_from_results,
 };
 use log::{debug, warn};
 use std::sync::Mutex;
@@ -135,6 +139,35 @@ fn arrowcloud_warn_submit_skip(side: profile_data::PlayerSide, chart_hash: &str,
         "Skipping ArrowCloud submit for {:?} ({}): {}.",
         side, chart_hash, reason
     );
+}
+
+#[inline(always)]
+fn arrowcloud_log_global_submit_skip(log: ArrowCloudAutosubmitLog) {
+    match log.level {
+        ArrowCloudAutosubmitLogLevel::Debug => {
+            debug!("Skipping ArrowCloud submit: {}.", log.reason)
+        }
+        ArrowCloudAutosubmitLogLevel::Warn => {
+            warn!("Skipping ArrowCloud submit: {}.", log.reason)
+        }
+    }
+}
+
+#[inline(always)]
+fn arrowcloud_log_player_submit_skip(
+    side: profile_data::PlayerSide,
+    chart_hash: &str,
+    log: ArrowCloudAutosubmitLog,
+) {
+    match log.level {
+        ArrowCloudAutosubmitLogLevel::Debug => debug!(
+            "Skipping ArrowCloud submit for {:?} ({}): {}.",
+            side, chart_hash, log.reason
+        ),
+        ArrowCloudAutosubmitLogLevel::Warn => {
+            arrowcloud_warn_submit_skip(side, chart_hash, log.reason)
+        }
+    }
 }
 
 #[inline(always)]
@@ -425,71 +458,55 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &GameplayCoreState, pack_gro
     }
 
     let cfg = crate::config::get();
-    if !cfg.enable_arrowcloud || gs.num_players() == 0 {
-        return;
-    }
-    if gs.autoplay_used() {
-        debug!("Skipping ArrowCloud submit: autoplay/replay was used.");
-        return;
-    }
-    if gs.course_display_is_course_stage() && !cfg.autosubmit_course_scores_individually {
-        debug!("Skipping ArrowCloud submit: course per-song autosubmit is disabled.");
-        return;
+    match arrowcloud_autosubmit_session_decision(ArrowCloudAutosubmitSessionInput {
+        enabled: cfg.enable_arrowcloud,
+        player_count: gs.num_players(),
+        autoplay_used: gs.autoplay_used(),
+        is_course_stage: gs.course_display_is_course_stage(),
+        autosubmit_course_scores_individually: cfg.autosubmit_course_scores_individually,
+    }) {
+        ArrowCloudAutosubmitSessionDecision::Submit => {}
+        ArrowCloudAutosubmitSessionDecision::Skip { log } => {
+            if let Some(log) = log {
+                arrowcloud_log_global_submit_skip(log);
+            }
+            return;
+        }
     }
     let mut jobs = Vec::with_capacity(gs.num_players().min(MAX_PLAYERS));
     for player_idx in 0..gs.num_players().min(MAX_PLAYERS) {
         let side = gameplay_side_for_player(gs, player_idx);
         let chart_hash = gs.charts()[player_idx].short_hash.as_str();
-        if gs.song().has_lua && !lua_chart_submit_allowed(chart_hash) {
-            debug!(
-                "Skipping ArrowCloud submit for {:?} ({}): simfile relies on lua.",
-                side, chart_hash
-            );
-            continue;
-        }
-        let failed = gameplay_run_failed(
-            gs.players()[player_idx].is_failing,
-            gs.players()[player_idx].fail_time.is_some(),
-        );
-        let passed = gameplay_run_passed(
-            gs.song_completed_naturally(),
-            gs.players()[player_idx].is_failing,
-            gs.players()[player_idx].life,
-            gs.players()[player_idx].fail_time.is_some(),
-        );
-        let allow_failed_submit = failed && cfg.submit_arrowcloud_fails;
-        let finished = gs.song_completed_naturally() || failed;
         let api_key = gs.profiles()[player_idx].arrowcloud_api_key.trim();
-        if !finished {
-            debug!(
-                "Skipping ArrowCloud submit for {:?} ({}): stage was not completed.",
-                side, chart_hash
-            );
-            continue;
-        }
-        if api_key.is_empty() {
-            if passed || allow_failed_submit {
-                arrowcloud_warn_submit_skip(side, chart_hash, "profile is missing API key");
+        let decision = arrowcloud_autosubmit_player_decision(ArrowCloudAutosubmitPlayerInput {
+            song_has_lua: gs.song().has_lua,
+            lua_submit_allowed: lua_chart_submit_allowed(chart_hash),
+            song_completed_naturally: gs.song_completed_naturally(),
+            is_failing: gs.players()[player_idx].is_failing,
+            life: gs.players()[player_idx].life,
+            has_fail_time: gs.players()[player_idx].fail_time.is_some(),
+            submit_fails_enabled: cfg.submit_arrowcloud_fails,
+            api_key_present: !api_key.is_empty(),
+            course_stage_life_submit_eligible: gs.course_stage_life_submit_eligible(player_idx),
+        });
+        match decision.action {
+            ArrowCloudAutosubmitPlayerAction::BuildPayload => {}
+            ArrowCloudAutosubmitPlayerAction::Skip { log } => {
+                if let Some(log) = log {
+                    arrowcloud_log_player_submit_skip(side, chart_hash, log);
+                }
+                continue;
             }
-            continue;
-        }
-        if !gs.course_stage_life_submit_eligible(player_idx) && !allow_failed_submit {
-            arrowcloud_warn_submit_skip(
-                side,
-                chart_hash,
-                "course stage would have failed from normal life",
-            );
-            continue;
         }
         let Some(payload) = arrowcloud_payload_for_player(gs, player_idx, pack_group) else {
             arrowcloud_warn_submit_skip(side, chart_hash, "failed to build submit payload");
             continue;
         };
-        if failed && !allow_failed_submit {
-            debug!(
-                "Skipping ArrowCloud submit for {:?} ({}): failed-stage submits are disabled.",
-                side, payload.hash
-            );
+        if let Some(log) = arrowcloud_autosubmit_after_payload_decision(
+            decision.failed,
+            decision.allow_failed_submit,
+        ) {
+            arrowcloud_log_player_submit_skip(side, payload.hash.as_str(), log);
             continue;
         }
         let profile_id = profile::active_local_profile_id_for_side(side);
@@ -510,7 +527,7 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &GameplayCoreState, pack_gro
             itg_percent,
             ex_percent,
             hard_ex_percent,
-            is_fail: failed,
+            is_fail: decision.failed,
             retry_attempt: 0,
             next_retry_at: None,
         });
@@ -530,7 +547,7 @@ pub fn submit_arrowcloud_payloads_from_gameplay(gs: &GameplayCoreState, pack_gro
             itg_percent,
             ex_percent,
             hard_ex_percent,
-            is_fail: failed,
+            is_fail: decision.failed,
         });
     }
     if jobs.is_empty() {
@@ -722,19 +739,6 @@ mod tests {
         ArrowCloudJudgmentCounts, ArrowCloudModifiers, ArrowCloudNpsInfo, ArrowCloudRadar,
         ArrowCloudSpeed, ArrowCloudTimingOffset,
     };
-    use deadsync_rules::timing::ScatterPoint;
-    use serde_json::{Value, json};
-
-    fn sample_scatter(time_sec: f32, offset_ms: Option<f32>) -> ScatterPoint {
-        ScatterPoint {
-            time_sec,
-            offset_ms,
-            direction_code: 1,
-            is_stream: false,
-            is_left_foot: false,
-            miss_because_held: false,
-        }
-    }
 
     fn sample_payload(hash: &str) -> ArrowCloudPayload {
         let mut payload = ArrowCloudPayload {
@@ -816,73 +820,6 @@ mod tests {
             retry_attempt: 0,
             next_retry_at: None,
         }
-    }
-
-    #[test]
-    fn arrowcloud_timing_data_keeps_miss_rows() {
-        let scatter = [
-            sample_scatter(12.5, Some(8.0)),
-            sample_scatter(12.75, None),
-            sample_scatter(f32::NAN, Some(2.0)),
-        ];
-        let timing_data = arrowcloud_api::timing_data_from_scatter(&scatter, None);
-        assert_eq!(timing_data.len(), 2);
-
-        let value = serde_json::to_value(&timing_data).expect("serialize timingData");
-        assert_eq!(value[0][0], json!(12.5));
-        let first_offset = value[0][1]
-            .as_f64()
-            .expect("timingData[0][1] should be numeric");
-        assert!((first_offset - 0.008).abs() < 1e-6);
-        assert_eq!(value[1][0], json!(12.75));
-        assert_eq!(value[1][1], json!("Miss"));
-    }
-
-    #[test]
-    fn arrowcloud_timing_data_caps_failed_runs_at_fail_time() {
-        let scatter = [
-            sample_scatter(1.0, Some(8.0)),
-            sample_scatter(2.0, None),
-            sample_scatter(3.0, Some(12.0)),
-        ];
-        let timing_data = arrowcloud_api::timing_data_from_scatter(&scatter, Some(2.0));
-
-        let value = serde_json::to_value(&timing_data).expect("serialize timingData");
-        assert_eq!(value.as_array().map(Vec::len), Some(2));
-        assert_eq!(value[0][0], json!(1.0));
-        assert_eq!(value[1][0], json!(2.0));
-        assert_eq!(value[1][1], json!("Miss"));
-    }
-
-    #[test]
-    fn arrowcloud_payload_serializes_miss_and_counts() {
-        let payload = sample_payload("deadbeefcafebabe");
-
-        let value = serde_json::to_value(&payload).expect("serialize ArrowCloud payload");
-        assert_eq!(value["timingData"][0][1], json!("Miss"));
-        assert_eq!(value["judgmentCounts"]["miss"], json!(3));
-        assert_eq!(value["judgmentCounts"]["wayOff"], json!(60));
-        assert_eq!(value["bodyVersion"], Value::String("1.4".to_string()));
-        assert_eq!(
-            value["_arrowCloudBodyVersion"],
-            Value::String("1.4".to_string())
-        );
-    }
-
-    #[test]
-    fn arrowcloud_run_passed_rejects_failed_runs() {
-        assert!(gameplay_run_passed(true, false, 1.0, false));
-        assert!(!gameplay_run_passed(false, false, 1.0, false));
-        assert!(!gameplay_run_passed(true, true, 1.0, false));
-        assert!(!gameplay_run_passed(true, false, 1.0, true));
-        assert!(!gameplay_run_passed(true, false, 0.0, false));
-    }
-
-    #[test]
-    fn arrowcloud_run_failed_uses_fail_signals_only() {
-        assert!(!gameplay_run_failed(false, false));
-        assert!(gameplay_run_failed(true, false));
-        assert!(gameplay_run_failed(false, true));
     }
 
     #[test]

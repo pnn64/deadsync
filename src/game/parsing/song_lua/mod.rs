@@ -58,7 +58,7 @@ fn song_lua_noteskin_resolver() -> SongLuaNoteskinResolver {
 
 fn song_lua_noteskin_names() -> Vec<String> {
     let roots = dirs::app_dirs().noteskin_roots();
-    deadsync_noteskin::itg::discover_skins(&roots, "dance")
+    deadsync_noteskin::itg::song_lua_noteskin_names_from_roots(&roots, "dance")
 }
 
 fn model_layer_from_slot(

@@ -1482,6 +1482,256 @@ pub struct GameplayChartLoadResult {
     pub report: GameplayChartLoadReport,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GameplayChartLoadLogLevel {
+    Debug,
+    Info,
+    Warn,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GameplayChartLoadLogEntry {
+    pub level: GameplayChartLoadLogLevel,
+    pub message: String,
+}
+
+impl GameplayChartLoadLogEntry {
+    pub fn debug(message: impl Into<String>) -> Self {
+        Self {
+            level: GameplayChartLoadLogLevel::Debug,
+            message: message.into(),
+        }
+    }
+
+    pub fn info(message: impl Into<String>) -> Self {
+        Self {
+            level: GameplayChartLoadLogLevel::Info,
+            message: message.into(),
+        }
+    }
+
+    pub fn warn(message: impl Into<String>) -> Self {
+        Self {
+            level: GameplayChartLoadLogLevel::Warn,
+            message: message.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuntimeSongLoadLogLevel {
+    Debug,
+    Warn,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeSongLoadLogEntry {
+    pub level: RuntimeSongLoadLogLevel,
+    pub message: String,
+}
+
+impl RuntimeSongLoadLogEntry {
+    pub fn debug(message: impl Into<String>) -> Self {
+        Self {
+            level: RuntimeSongLoadLogLevel::Debug,
+            message: message.into(),
+        }
+    }
+
+    pub fn warn(message: impl Into<String>) -> Self {
+        Self {
+            level: RuntimeSongLoadLogLevel::Warn,
+            message: message.into(),
+        }
+    }
+}
+
+pub struct RuntimeSongLoadOptions<'a> {
+    pub cache_dir: &'a Path,
+    pub parse_options: &'a ParseSongOptions,
+    pub fastload: bool,
+    pub cachesongs: bool,
+    pub verify_cache_freshness: bool,
+    pub global_offset_seconds: f32,
+}
+
+pub struct RuntimeSongLoadResult {
+    pub song: SongData,
+    pub cache_hit: bool,
+    pub log_entries: Vec<RuntimeSongLoadLogEntry>,
+}
+
+pub fn load_song_with_cache_options<F>(
+    simfile_path: &Path,
+    options: &RuntimeSongLoadOptions<'_>,
+    music_len: F,
+) -> Result<RuntimeSongLoadResult, String>
+where
+    F: FnOnce(Option<&Path>) -> f32,
+{
+    let mut log_entries = Vec::with_capacity(3);
+    let cache_path = if options.fastload || options.cachesongs {
+        runtime_song_cache_path(options.cache_dir, simfile_path, &mut log_entries)
+    } else {
+        None
+    };
+
+    if (options.fastload || options.cachesongs)
+        && let Some(cache_path) = cache_path.as_deref()
+        && let Some(song) =
+            load_song_cache_file(simfile_path, cache_path, options.verify_cache_freshness)
+    {
+        log_entries.push(RuntimeSongLoadLogEntry::debug(format!(
+            "Cache hit for: {:?}",
+            simfile_path.file_name().unwrap_or_default()
+        )));
+        return Ok(RuntimeSongLoadResult {
+            song,
+            cache_hit: true,
+            log_entries,
+        });
+    }
+
+    log_entries.push(runtime_song_parse_log_entry(simfile_path, options.fastload));
+    let song_data = parse_song_data_file(
+        simfile_path,
+        options.parse_options,
+        options.global_offset_seconds,
+        music_len,
+    )?;
+    if options.cachesongs
+        && let Some(cache_path) = cache_path.as_deref()
+        && let Err(error) =
+            write_song_cache_file(cache_path, &song_data, options.global_offset_seconds)
+    {
+        log_entries.push(RuntimeSongLoadLogEntry::warn(format!(
+            "Could not write song cache for {:?}: {error}",
+            Path::new(&song_data.simfile_path)
+                .file_name()
+                .unwrap_or_default()
+        )));
+    }
+
+    Ok(RuntimeSongLoadResult {
+        song: build_song_meta(song_data, options.global_offset_seconds),
+        cache_hit: false,
+        log_entries,
+    })
+}
+
+fn runtime_song_cache_path(
+    cache_dir: &Path,
+    simfile_path: &Path,
+    log_entries: &mut Vec<RuntimeSongLoadLogEntry>,
+) -> Option<PathBuf> {
+    match song_cache_path(cache_dir, simfile_path) {
+        Ok(path) => Some(path),
+        Err(error) => {
+            log_entries.push(RuntimeSongLoadLogEntry::warn(format!(
+                "Could not generate cache path for {simfile_path:?}: {error}. Caching disabled for this file."
+            )));
+            None
+        }
+    }
+}
+
+fn runtime_song_parse_log_entry(simfile_path: &Path, fastload: bool) -> RuntimeSongLoadLogEntry {
+    let file_name = simfile_path.file_name().unwrap_or_default();
+    if fastload {
+        RuntimeSongLoadLogEntry::debug(format!("Cache miss for: {file_name:?}"))
+    } else {
+        RuntimeSongLoadLogEntry::debug(format!("Parsing (fastload disabled): {file_name:?}"))
+    }
+}
+
+pub fn gameplay_chart_load_log_entries(
+    song: &SongData,
+    report: &GameplayChartLoadReport,
+) -> Vec<GameplayChartLoadLogEntry> {
+    let mut entries = Vec::with_capacity(report.warnings.len() + 3);
+    entries.extend(
+        report
+            .warnings
+            .iter()
+            .map(gameplay_chart_load_warning_log_entry),
+    );
+    if let GameplayChartLoadSource::Cache { verify_freshness } = report.source {
+        entries.push(gameplay_chart_cache_hit_log_entry(song, verify_freshness));
+    }
+    if let Some(song_data_load) = &report.song_data_load {
+        entries.push(gameplay_song_data_load_log_entry(song, song_data_load));
+    }
+    entries.push(gameplay_chart_payload_load_log_entry(song, report));
+    entries
+}
+
+fn gameplay_chart_load_warning_log_entry(
+    warning: &GameplayChartLoadWarning,
+) -> GameplayChartLoadLogEntry {
+    match warning {
+        GameplayChartLoadWarning::CachePath { path, error } => {
+            GameplayChartLoadLogEntry::warn(format!(
+                "Could not generate cache path for {path:?}: {error}. Caching disabled for this file."
+            ))
+        }
+        GameplayChartLoadWarning::CacheWrite {
+            simfile_name,
+            error,
+        } => GameplayChartLoadLogEntry::warn(format!(
+            "Could not write song cache for {simfile_name:?}: {error}"
+        )),
+    }
+}
+
+fn gameplay_chart_cache_hit_log_entry(
+    song: &SongData,
+    verify_freshness: bool,
+) -> GameplayChartLoadLogEntry {
+    let file_name = song.simfile_path.file_name().unwrap_or_default();
+    if verify_freshness {
+        GameplayChartLoadLogEntry::debug(format!("Gameplay cache hit for: {file_name:?}"))
+    } else {
+        GameplayChartLoadLogEntry::debug(format!(
+            "Gameplay cache hit (no freshness check) for: {file_name:?}"
+        ))
+    }
+}
+
+fn gameplay_song_data_load_log_entry(
+    song: &SongData,
+    report: &GameplaySongDataLoadReport,
+) -> GameplayChartLoadLogEntry {
+    let file_name = song.simfile_path.file_name().unwrap_or_default();
+    let message = format!(
+        "Gameplay song data load: source=parse file={:?} parse_ms={:.3} write_ms={:.3} elapsed_ms={:.3}",
+        file_name, report.parse_ms, report.write_ms, report.elapsed_ms
+    );
+    if report.elapsed_ms >= 25.0 {
+        GameplayChartLoadLogEntry::info(message)
+    } else {
+        GameplayChartLoadLogEntry::debug(message)
+    }
+}
+
+fn gameplay_chart_payload_load_log_entry(
+    song: &SongData,
+    report: &GameplayChartLoadReport,
+) -> GameplayChartLoadLogEntry {
+    let message = format!(
+        "Gameplay chart payload load: song='{}' requested={} load_ms={:.3} materialize_ms={:.3} elapsed_ms={:.3}",
+        song.title,
+        report.requested_count,
+        report.load_ms,
+        report.materialize_ms,
+        report.elapsed_ms
+    );
+    if report.elapsed_ms >= 25.0 {
+        GameplayChartLoadLogEntry::info(message)
+    } else {
+        GameplayChartLoadLogEntry::debug(message)
+    }
+}
+
 pub fn load_gameplay_charts_with_options<F>(
     song: &SongData,
     requested_chart_ixs: &[usize],

@@ -8,6 +8,7 @@ use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::{judgment, timing};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
+use std::path::Path;
 use std::sync::{LazyLock, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
@@ -426,7 +427,85 @@ pub struct ScoreCacheRuntimeResult {
     pub write_errors: Vec<ScoreIndexWriteError>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScoreCacheRuntimeKind {
+    GrooveStats,
+    ArrowCloud,
+    Local,
+    MachineLocal,
+}
+
+#[derive(Debug, Default)]
+pub struct ScoreCacheWarmupResult {
+    pub results: Vec<(ScoreCacheRuntimeKind, ScoreCacheRuntimeResult)>,
+    pub elapsed_ms: f64,
+}
+
+#[derive(Debug)]
+pub struct ScoreCacheAccess<T> {
+    pub value: T,
+    pub results: Vec<(ScoreCacheRuntimeKind, ScoreCacheRuntimeResult)>,
+}
+
 type ProfilePathsFn = fn(&str) -> ScoreProfilePaths;
+
+pub fn runtime_ensure_profile_score_caches_loaded(
+    profile_id: &str,
+    score_paths: ProfilePathsFn,
+) -> Vec<(ScoreCacheRuntimeKind, ScoreCacheRuntimeResult)> {
+    if profile_id.trim().is_empty() {
+        return Vec::new();
+    }
+    vec![
+        (
+            ScoreCacheRuntimeKind::Local,
+            runtime_ensure_local_score_cache_loaded(profile_id, score_paths),
+        ),
+        (
+            ScoreCacheRuntimeKind::GrooveStats,
+            runtime_ensure_gs_score_cache_loaded(profile_id, score_paths),
+        ),
+        (
+            ScoreCacheRuntimeKind::ArrowCloud,
+            runtime_ensure_ac_score_cache_loaded(profile_id, score_paths),
+        ),
+    ]
+}
+
+pub fn runtime_prewarm_select_music_score_caches(
+    p1_profile_id: Option<&str>,
+    p2_profile_id: Option<&str>,
+    profiles: &[LocalScoreProfileSource],
+    score_paths: ProfilePathsFn,
+) -> ScoreCacheWarmupResult {
+    let started = Instant::now();
+    let mut results = Vec::new();
+
+    if let Some(profile_id) = p1_profile_id {
+        results.extend(runtime_ensure_profile_score_caches_loaded(
+            profile_id,
+            score_paths,
+        ));
+    }
+    if let Some(profile_id) = p2_profile_id
+        && p1_profile_id != Some(profile_id)
+    {
+        results.extend(runtime_ensure_profile_score_caches_loaded(
+            profile_id,
+            score_paths,
+        ));
+    }
+
+    results.push((
+        ScoreCacheRuntimeKind::MachineLocal,
+        runtime_ensure_machine_local_score_cache_loaded(profiles),
+    ));
+
+    ScoreCacheWarmupResult {
+        results,
+        elapsed_ms: started.elapsed().as_secs_f64() * 1000.0,
+    }
+}
 
 pub fn runtime_ensure_gs_score_cache_loaded(
     profile_id: &str,
@@ -479,6 +558,24 @@ pub fn runtime_get_gs_score_for_profile(
     (score, result)
 }
 
+pub fn runtime_read_gs_score_for_profile(
+    profile_id: &str,
+    chart_hash: &str,
+    score_paths: ProfilePathsFn,
+) -> ScoreCacheAccess<Option<CachedScore>> {
+    if profile_id.trim().is_empty() {
+        return ScoreCacheAccess {
+            value: None,
+            results: Vec::new(),
+        };
+    }
+    let (value, result) = runtime_get_gs_score_for_profile(profile_id, chart_hash, score_paths);
+    ScoreCacheAccess {
+        value,
+        results: vec![(ScoreCacheRuntimeKind::GrooveStats, result)],
+    }
+}
+
 pub fn runtime_gs_chart_hashes_for_profile(
     profile_id: &str,
     score_paths: ProfilePathsFn,
@@ -489,6 +586,23 @@ pub fn runtime_gs_chart_hashes_for_profile(
         .unwrap()
         .profile_chart_hashes(profile_id);
     (hashes, result)
+}
+
+pub fn runtime_read_gs_chart_hashes_for_profile(
+    profile_id: &str,
+    score_paths: ProfilePathsFn,
+) -> ScoreCacheAccess<HashSet<String>> {
+    if profile_id.trim().is_empty() {
+        return ScoreCacheAccess {
+            value: HashSet::new(),
+            results: Vec::new(),
+        };
+    }
+    let (value, result) = runtime_gs_chart_hashes_for_profile(profile_id, score_paths);
+    ScoreCacheAccess {
+        value,
+        results: vec![(ScoreCacheRuntimeKind::GrooveStats, result)],
+    }
 }
 
 pub fn runtime_set_gs_score_for_profile(
@@ -513,6 +627,84 @@ pub fn runtime_set_gs_score_for_profile(
     result
 }
 
+pub fn runtime_write_gs_score_for_profile(
+    profile_id: &str,
+    chart_hash: String,
+    score: CachedScore,
+    score_paths: ProfilePathsFn,
+) -> Vec<(ScoreCacheRuntimeKind, ScoreCacheRuntimeResult)> {
+    vec![(
+        ScoreCacheRuntimeKind::GrooveStats,
+        runtime_set_gs_score_for_profile(
+            profile_id,
+            chart_hash,
+            fix_gs_cached_score(score),
+            score_paths,
+        ),
+    )]
+}
+
+#[derive(Debug)]
+pub struct RuntimeGsScoreCacheResult {
+    pub cache_result: ScoreCacheRuntimeResult,
+    pub store_status: Option<ScoreStoreWriteStatus>,
+    pub store_error: Option<ScoreStoreWriteError>,
+    pub replaced: bool,
+}
+
+pub fn runtime_cache_gs_score_for_profile(
+    profile_id: &str,
+    chart_hash: &str,
+    score: CachedScore,
+    username: &str,
+    proves_nonquint_ex: bool,
+    fetched_at_ms: i64,
+    score_paths: ProfilePathsFn,
+) -> RuntimeGsScoreCacheResult {
+    let score = fix_gs_cached_score(score);
+    let (existing, mut cache_result) =
+        runtime_get_gs_score_for_profile(profile_id, chart_hash, score_paths);
+    if let Some(existing) = existing
+        && !should_replace_cached_gs_score(&score, &existing, proves_nonquint_ex)
+    {
+        return RuntimeGsScoreCacheResult {
+            cache_result,
+            store_status: None,
+            store_error: None,
+            replaced: false,
+        };
+    }
+
+    let set_result =
+        runtime_set_gs_score_for_profile(profile_id, chart_hash.to_string(), score, score_paths);
+    cache_result.write_errors.extend(set_result.write_errors);
+    if cache_result.load_report.is_none() {
+        cache_result.load_report = set_result.load_report;
+    }
+
+    let (store_status, store_error) = if username.trim().is_empty() {
+        (None, None)
+    } else {
+        match write_gs_score_entry_file(
+            &score_paths(profile_id).gs_chart_dir(chart_hash),
+            chart_hash,
+            score,
+            username,
+            fetched_at_ms,
+        ) {
+            Ok(status) => (Some(status), None),
+            Err(error) => (None, Some(error)),
+        }
+    };
+
+    RuntimeGsScoreCacheResult {
+        cache_result,
+        store_status,
+        store_error,
+        replaced: true,
+    }
+}
+
 pub fn runtime_seed_gs_score(
     profile_id: &str,
     chart_hash: &str,
@@ -525,6 +717,18 @@ pub fn runtime_seed_gs_score(
         .unwrap()
         .seed_profile_score(profile_id, chart_hash, score);
     result
+}
+
+pub fn runtime_seed_gs_score_access(
+    profile_id: &str,
+    chart_hash: &str,
+    score: CachedScore,
+    score_paths: ProfilePathsFn,
+) -> Vec<(ScoreCacheRuntimeKind, ScoreCacheRuntimeResult)> {
+    vec![(
+        ScoreCacheRuntimeKind::GrooveStats,
+        runtime_seed_gs_score(profile_id, chart_hash, score, score_paths),
+    )]
 }
 
 pub fn runtime_ensure_ac_score_cache_loaded(
@@ -559,6 +763,24 @@ pub fn runtime_get_ac_scores_for_profile(
     (scores, result)
 }
 
+pub fn runtime_read_ac_scores_for_profile(
+    profile_id: &str,
+    chart_hash: &str,
+    score_paths: ProfilePathsFn,
+) -> ScoreCacheAccess<Option<ArrowCloudScores>> {
+    if profile_id.trim().is_empty() {
+        return ScoreCacheAccess {
+            value: None,
+            results: Vec::new(),
+        };
+    }
+    let (value, result) = runtime_get_ac_scores_for_profile(profile_id, chart_hash, score_paths);
+    ScoreCacheAccess {
+        value,
+        results: vec![(ScoreCacheRuntimeKind::ArrowCloud, result)],
+    }
+}
+
 pub fn runtime_ac_chart_hashes_with_itg_for_profile(
     profile_id: &str,
     score_paths: ProfilePathsFn,
@@ -569,6 +791,23 @@ pub fn runtime_ac_chart_hashes_with_itg_for_profile(
         .unwrap()
         .profile_chart_hashes_with_itg(profile_id);
     (hashes, result)
+}
+
+pub fn runtime_read_ac_chart_hashes_with_itg_for_profile(
+    profile_id: &str,
+    score_paths: ProfilePathsFn,
+) -> ScoreCacheAccess<HashSet<String>> {
+    if profile_id.trim().is_empty() {
+        return ScoreCacheAccess {
+            value: HashSet::new(),
+            results: Vec::new(),
+        };
+    }
+    let (value, result) = runtime_ac_chart_hashes_with_itg_for_profile(profile_id, score_paths);
+    ScoreCacheAccess {
+        value,
+        results: vec![(ScoreCacheRuntimeKind::ArrowCloud, result)],
+    }
 }
 
 pub fn runtime_set_ac_scores_for_profile_bulk(
@@ -590,6 +829,17 @@ pub fn runtime_set_ac_scores_for_profile_bulk(
         result.write_errors.push(error);
     }
     result
+}
+
+pub fn runtime_write_ac_scores_for_profile_bulk(
+    profile_id: &str,
+    entries: impl IntoIterator<Item = (String, ArrowCloudScores)>,
+    score_paths: ProfilePathsFn,
+) -> Vec<(ScoreCacheRuntimeKind, ScoreCacheRuntimeResult)> {
+    vec![(
+        ScoreCacheRuntimeKind::ArrowCloud,
+        runtime_set_ac_scores_for_profile_bulk(profile_id, entries, score_paths),
+    )]
 }
 
 pub fn runtime_merge_ac_submit_scores(
@@ -624,6 +874,31 @@ pub fn runtime_merge_ac_submit_scores(
         result.write_errors.push(error);
     }
     result
+}
+
+pub fn runtime_write_ac_submit_scores(
+    profile_id: &str,
+    chart_hash: &str,
+    itg_percent: f64,
+    ex_percent: f64,
+    hard_ex_percent: f64,
+    is_fail: bool,
+    submitted_at: DateTime<Utc>,
+    score_paths: ProfilePathsFn,
+) -> Vec<(ScoreCacheRuntimeKind, ScoreCacheRuntimeResult)> {
+    vec![(
+        ScoreCacheRuntimeKind::ArrowCloud,
+        runtime_merge_ac_submit_scores(
+            profile_id,
+            chart_hash,
+            itg_percent,
+            ex_percent,
+            hard_ex_percent,
+            is_fail,
+            submitted_at,
+            score_paths,
+        ),
+    )]
 }
 
 pub fn runtime_ensure_local_score_cache_loaded(
@@ -672,6 +947,25 @@ pub fn runtime_get_local_itg_score_for_profile(
     (score, result)
 }
 
+pub fn runtime_read_local_itg_score_for_profile(
+    profile_id: &str,
+    chart_hash: &str,
+    score_paths: ProfilePathsFn,
+) -> ScoreCacheAccess<Option<CachedScore>> {
+    if profile_id.trim().is_empty() {
+        return ScoreCacheAccess {
+            value: None,
+            results: Vec::new(),
+        };
+    }
+    let (value, result) =
+        runtime_get_local_itg_score_for_profile(profile_id, chart_hash, score_paths);
+    ScoreCacheAccess {
+        value,
+        results: vec![(ScoreCacheRuntimeKind::Local, result)],
+    }
+}
+
 pub fn runtime_get_local_pass_rate_for_profile(
     profile_id: &str,
     chart_hash: &str,
@@ -683,6 +977,25 @@ pub fn runtime_get_local_pass_rate_for_profile(
         .unwrap()
         .get_profile_pass_rate(profile_id, chart_hash);
     (pass_rate, result)
+}
+
+pub fn runtime_read_local_pass_rate_for_profile(
+    profile_id: &str,
+    chart_hash: &str,
+    score_paths: ProfilePathsFn,
+) -> ScoreCacheAccess<Option<u32>> {
+    if profile_id.trim().is_empty() {
+        return ScoreCacheAccess {
+            value: None,
+            results: Vec::new(),
+        };
+    }
+    let (value, result) =
+        runtime_get_local_pass_rate_for_profile(profile_id, chart_hash, score_paths);
+    ScoreCacheAccess {
+        value,
+        results: vec![(ScoreCacheRuntimeKind::Local, result)],
+    }
 }
 
 pub fn runtime_get_local_scalar_score_for_profile(
@@ -699,6 +1012,55 @@ pub fn runtime_get_local_scalar_score_for_profile(
     (score, result)
 }
 
+pub fn runtime_read_local_scalar_score_for_profile(
+    profile_id: &str,
+    chart_hash: &str,
+    hard_ex: bool,
+    score_paths: ProfilePathsFn,
+) -> ScoreCacheAccess<Option<LocalScalarScore>> {
+    if profile_id.trim().is_empty() {
+        return ScoreCacheAccess {
+            value: None,
+            results: Vec::new(),
+        };
+    }
+    let (value, result) =
+        runtime_get_local_scalar_score_for_profile(profile_id, chart_hash, hard_ex, score_paths);
+    ScoreCacheAccess {
+        value,
+        results: vec![(ScoreCacheRuntimeKind::Local, result)],
+    }
+}
+
+pub fn runtime_read_best_itg_score_for_profile(
+    profile_id: &str,
+    chart_hash: &str,
+    score_paths: ProfilePathsFn,
+) -> ScoreCacheAccess<Option<CachedScore>> {
+    if profile_id.trim().is_empty() {
+        return ScoreCacheAccess {
+            value: None,
+            results: Vec::new(),
+        };
+    }
+
+    let (local, local_result) =
+        runtime_get_local_itg_score_for_profile(profile_id, chart_hash, score_paths);
+    let (gs, gs_result) = runtime_get_gs_score_for_profile(profile_id, chart_hash, score_paths);
+    let (ac, ac_result) = runtime_get_ac_scores_for_profile(profile_id, chart_hash, score_paths);
+    let ac = ac
+        .and_then(|scores| scores.itg)
+        .map(|score| score.to_cached_score());
+    ScoreCacheAccess {
+        value: best_cached_itg_score([local, gs, ac]),
+        results: vec![
+            (ScoreCacheRuntimeKind::Local, local_result),
+            (ScoreCacheRuntimeKind::GrooveStats, gs_result),
+            (ScoreCacheRuntimeKind::ArrowCloud, ac_result),
+        ],
+    }
+}
+
 pub fn runtime_update_local_score_cache_after_append(
     profile_id: &str,
     chart_hash: &str,
@@ -708,6 +1070,50 @@ pub fn runtime_update_local_score_cache_after_append(
         .lock()
         .unwrap()
         .update_loaded_profile_index(profile_id, chart_hash, header)
+}
+
+#[derive(Debug)]
+pub struct RuntimeLocalScoreAppendResult {
+    pub append: Option<LocalScoreAppendRecord>,
+    pub store_error: Option<ScoreStoreWriteError>,
+    pub index_error: Option<ScoreIndexWriteError>,
+}
+
+pub fn runtime_append_local_score_for_profile(
+    profile_id: &str,
+    profile_initials: &str,
+    chart_hash: &str,
+    entry: &mut LocalScoreEntry,
+    score_paths: ProfilePathsFn,
+) -> RuntimeLocalScoreAppendResult {
+    let paths = score_paths(profile_id);
+    let append = match write_local_score_entry_for_profile(&paths, chart_hash, entry) {
+        Ok(append) => append,
+        Err(error) => {
+            return RuntimeLocalScoreAppendResult {
+                append: None,
+                store_error: Some(error),
+                index_error: None,
+            };
+        }
+    };
+
+    let loaded_snapshot =
+        runtime_update_local_score_cache_after_append(profile_id, chart_hash, &append.header);
+    let index_error = save_local_score_index_after_append(
+        &paths,
+        chart_hash,
+        &append.header,
+        loaded_snapshot.as_ref(),
+    )
+    .err();
+
+    runtime_update_machine_cache_if_loaded(chart_hash, append.cached_score, profile_initials);
+    RuntimeLocalScoreAppendResult {
+        append: Some(append),
+        store_error: None,
+        index_error,
+    }
 }
 
 pub fn runtime_seed_local_itg_score(
@@ -722,6 +1128,47 @@ pub fn runtime_seed_local_itg_score(
         .unwrap()
         .seed_profile_itg_score(profile_id, chart_hash, score);
     result
+}
+
+pub fn runtime_seed_local_itg_score_access(
+    profile_id: &str,
+    chart_hash: &str,
+    score: CachedScore,
+    score_paths: ProfilePathsFn,
+) -> Vec<(ScoreCacheRuntimeKind, ScoreCacheRuntimeResult)> {
+    vec![(
+        ScoreCacheRuntimeKind::Local,
+        runtime_seed_local_itg_score(profile_id, chart_hash, score, score_paths),
+    )]
+}
+
+pub fn runtime_total_songs_played_for_profile(
+    profile_id: &str,
+    score_paths: ProfilePathsFn,
+) -> u32 {
+    total_local_score_bins_in_root(&score_paths(profile_id).local_dir())
+}
+
+pub fn runtime_recent_played_chart_hashes_for_machine(profiles_root: &Path) -> Vec<String> {
+    recent_played_chart_hashes_in_profiles_root(profiles_root)
+}
+
+pub fn runtime_played_chart_counts_for_machine(profiles_root: &Path) -> Vec<(String, u32)> {
+    played_chart_counts_in_profiles_root(profiles_root)
+}
+
+pub fn runtime_recent_played_chart_hashes_for_profile(
+    profile_id: &str,
+    score_paths: ProfilePathsFn,
+) -> Vec<String> {
+    recent_played_chart_hashes_in_root(&score_paths(profile_id).local_dir())
+}
+
+pub fn runtime_played_chart_counts_for_profile(
+    profile_id: &str,
+    score_paths: ProfilePathsFn,
+) -> Vec<(String, u32)> {
+    played_chart_counts_in_root(&score_paths(profile_id).local_dir())
 }
 
 pub fn runtime_ensure_machine_local_score_cache_loaded(
@@ -2041,6 +2488,346 @@ pub const fn gameplay_run_passed(
 #[inline(always)]
 pub const fn gameplay_run_failed(is_failing: bool, has_fail_time: bool) -> bool {
     is_failing || has_fail_time
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArrowCloudAutosubmitLogLevel {
+    Debug,
+    Warn,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ArrowCloudAutosubmitLog {
+    pub level: ArrowCloudAutosubmitLogLevel,
+    pub reason: &'static str,
+}
+
+impl ArrowCloudAutosubmitLog {
+    pub const fn debug(reason: &'static str) -> Self {
+        Self {
+            level: ArrowCloudAutosubmitLogLevel::Debug,
+            reason,
+        }
+    }
+
+    pub const fn warn(reason: &'static str) -> Self {
+        Self {
+            level: ArrowCloudAutosubmitLogLevel::Warn,
+            reason,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArrowCloudAutosubmitSessionDecision {
+    Submit,
+    Skip {
+        log: Option<ArrowCloudAutosubmitLog>,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ArrowCloudAutosubmitSessionInput {
+    pub enabled: bool,
+    pub player_count: usize,
+    pub autoplay_used: bool,
+    pub is_course_stage: bool,
+    pub autosubmit_course_scores_individually: bool,
+}
+
+pub const fn arrowcloud_autosubmit_session_decision(
+    input: ArrowCloudAutosubmitSessionInput,
+) -> ArrowCloudAutosubmitSessionDecision {
+    if !input.enabled || input.player_count == 0 {
+        return ArrowCloudAutosubmitSessionDecision::Skip { log: None };
+    }
+    if input.autoplay_used {
+        return ArrowCloudAutosubmitSessionDecision::Skip {
+            log: Some(ArrowCloudAutosubmitLog::debug("autoplay/replay was used")),
+        };
+    }
+    if input.is_course_stage && !input.autosubmit_course_scores_individually {
+        return ArrowCloudAutosubmitSessionDecision::Skip {
+            log: Some(ArrowCloudAutosubmitLog::debug(
+                "course per-song autosubmit is disabled",
+            )),
+        };
+    }
+    ArrowCloudAutosubmitSessionDecision::Submit
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArrowCloudAutosubmitPlayerAction {
+    BuildPayload,
+    Skip {
+        log: Option<ArrowCloudAutosubmitLog>,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ArrowCloudAutosubmitPlayerDecision {
+    pub failed: bool,
+    pub passed: bool,
+    pub allow_failed_submit: bool,
+    pub action: ArrowCloudAutosubmitPlayerAction,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ArrowCloudAutosubmitPlayerInput {
+    pub song_has_lua: bool,
+    pub lua_submit_allowed: bool,
+    pub song_completed_naturally: bool,
+    pub is_failing: bool,
+    pub life: f32,
+    pub has_fail_time: bool,
+    pub submit_fails_enabled: bool,
+    pub api_key_present: bool,
+    pub course_stage_life_submit_eligible: bool,
+}
+
+pub const fn arrowcloud_autosubmit_player_decision(
+    input: ArrowCloudAutosubmitPlayerInput,
+) -> ArrowCloudAutosubmitPlayerDecision {
+    if input.song_has_lua && !input.lua_submit_allowed {
+        return ArrowCloudAutosubmitPlayerDecision {
+            failed: false,
+            passed: false,
+            allow_failed_submit: false,
+            action: ArrowCloudAutosubmitPlayerAction::Skip {
+                log: Some(ArrowCloudAutosubmitLog::debug("simfile relies on lua")),
+            },
+        };
+    }
+
+    let failed = gameplay_run_failed(input.is_failing, input.has_fail_time);
+    let passed = gameplay_run_passed(
+        input.song_completed_naturally,
+        input.is_failing,
+        input.life,
+        input.has_fail_time,
+    );
+    let allow_failed_submit = failed && input.submit_fails_enabled;
+    if !input.song_completed_naturally && !failed {
+        return ArrowCloudAutosubmitPlayerDecision {
+            failed,
+            passed,
+            allow_failed_submit,
+            action: ArrowCloudAutosubmitPlayerAction::Skip {
+                log: Some(ArrowCloudAutosubmitLog::debug("stage was not completed")),
+            },
+        };
+    }
+    if !input.api_key_present {
+        let log = if passed || allow_failed_submit {
+            Some(ArrowCloudAutosubmitLog::warn("profile is missing API key"))
+        } else {
+            None
+        };
+        return ArrowCloudAutosubmitPlayerDecision {
+            failed,
+            passed,
+            allow_failed_submit,
+            action: ArrowCloudAutosubmitPlayerAction::Skip { log },
+        };
+    }
+    if !input.course_stage_life_submit_eligible && !allow_failed_submit {
+        return ArrowCloudAutosubmitPlayerDecision {
+            failed,
+            passed,
+            allow_failed_submit,
+            action: ArrowCloudAutosubmitPlayerAction::Skip {
+                log: Some(ArrowCloudAutosubmitLog::warn(
+                    "course stage would have failed from normal life",
+                )),
+            },
+        };
+    }
+    ArrowCloudAutosubmitPlayerDecision {
+        failed,
+        passed,
+        allow_failed_submit,
+        action: ArrowCloudAutosubmitPlayerAction::BuildPayload,
+    }
+}
+
+pub const fn arrowcloud_autosubmit_after_payload_decision(
+    failed: bool,
+    allow_failed_submit: bool,
+) -> Option<ArrowCloudAutosubmitLog> {
+    if failed && !allow_failed_submit {
+        Some(ArrowCloudAutosubmitLog::debug(
+            "failed-stage submits are disabled",
+        ))
+    } else {
+        None
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GrooveStatsAutosubmitLogLevel {
+    Debug,
+    Warn,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GrooveStatsAutosubmitLog {
+    pub level: GrooveStatsAutosubmitLogLevel,
+    pub reason: &'static str,
+}
+
+impl GrooveStatsAutosubmitLog {
+    pub const fn debug(reason: &'static str) -> Self {
+        Self {
+            level: GrooveStatsAutosubmitLogLevel::Debug,
+            reason,
+        }
+    }
+
+    pub const fn warn(reason: &'static str) -> Self {
+        Self {
+            level: GrooveStatsAutosubmitLogLevel::Warn,
+            reason,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GrooveStatsAutosubmitSessionDecision {
+    Submit,
+    Skip {
+        log: Option<GrooveStatsAutosubmitLog>,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GrooveStatsAutosubmitSessionInput {
+    pub enabled: bool,
+    pub player_count: usize,
+    pub autoplay_used: bool,
+    pub is_course_stage: bool,
+    pub autosubmit_course_scores_individually: bool,
+}
+
+pub const fn groovestats_autosubmit_session_decision(
+    input: GrooveStatsAutosubmitSessionInput,
+) -> GrooveStatsAutosubmitSessionDecision {
+    if !input.enabled || input.player_count == 0 {
+        return GrooveStatsAutosubmitSessionDecision::Skip { log: None };
+    }
+    if input.autoplay_used {
+        return GrooveStatsAutosubmitSessionDecision::Skip {
+            log: Some(GrooveStatsAutosubmitLog::debug("autoplay/replay was used")),
+        };
+    }
+    if input.is_course_stage && !input.autosubmit_course_scores_individually {
+        return GrooveStatsAutosubmitSessionDecision::Skip {
+            log: Some(GrooveStatsAutosubmitLog::debug(
+                "course per-song autosubmit is disabled",
+            )),
+        };
+    }
+    GrooveStatsAutosubmitSessionDecision::Submit
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GrooveStatsAutosubmitPlayerAction {
+    BuildPayload,
+    SkipInvalidReason,
+    Skip {
+        log: Option<GrooveStatsAutosubmitLog>,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GrooveStatsAutosubmitPlayerDecision {
+    pub failed: bool,
+    pub passed: bool,
+    pub action: GrooveStatsAutosubmitPlayerAction,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GrooveStatsAutosubmitPlayerInput {
+    pub has_invalid_reason: bool,
+    pub is_pad_player: bool,
+    pub song_completed_naturally: bool,
+    pub is_failing: bool,
+    pub life: f32,
+    pub has_fail_time: bool,
+    pub course_stage_life_submit_eligible: bool,
+    pub api_key_present: bool,
+}
+
+pub const fn groovestats_autosubmit_player_decision(
+    input: GrooveStatsAutosubmitPlayerInput,
+) -> GrooveStatsAutosubmitPlayerDecision {
+    let failed = gameplay_run_failed(input.is_failing, input.has_fail_time);
+    let passed = gameplay_run_passed(
+        input.song_completed_naturally,
+        input.is_failing,
+        input.life,
+        input.has_fail_time,
+    );
+    if input.has_invalid_reason {
+        return GrooveStatsAutosubmitPlayerDecision {
+            failed,
+            passed,
+            action: GrooveStatsAutosubmitPlayerAction::SkipInvalidReason,
+        };
+    }
+    if !input.is_pad_player {
+        return GrooveStatsAutosubmitPlayerDecision {
+            failed,
+            passed,
+            action: GrooveStatsAutosubmitPlayerAction::Skip {
+                log: Some(GrooveStatsAutosubmitLog::warn(
+                    "profile is not marked as a pad player",
+                )),
+            },
+        };
+    }
+    if !input.song_completed_naturally && !failed {
+        return GrooveStatsAutosubmitPlayerDecision {
+            failed,
+            passed,
+            action: GrooveStatsAutosubmitPlayerAction::Skip {
+                log: Some(GrooveStatsAutosubmitLog::debug("stage was not completed")),
+            },
+        };
+    }
+    if !passed {
+        return GrooveStatsAutosubmitPlayerDecision {
+            failed,
+            passed,
+            action: GrooveStatsAutosubmitPlayerAction::Skip {
+                log: Some(GrooveStatsAutosubmitLog::debug("stage was not passed")),
+            },
+        };
+    }
+    if !input.course_stage_life_submit_eligible {
+        return GrooveStatsAutosubmitPlayerDecision {
+            failed,
+            passed,
+            action: GrooveStatsAutosubmitPlayerAction::Skip {
+                log: Some(GrooveStatsAutosubmitLog::warn(
+                    "course stage would have failed from normal life",
+                )),
+            },
+        };
+    }
+    if !input.api_key_present {
+        return GrooveStatsAutosubmitPlayerDecision {
+            failed,
+            passed,
+            action: GrooveStatsAutosubmitPlayerAction::Skip {
+                log: Some(GrooveStatsAutosubmitLog::warn("profile is missing API key")),
+            },
+        };
+    }
+    GrooveStatsAutosubmitPlayerDecision {
+        failed,
+        passed,
+        action: GrooveStatsAutosubmitPlayerAction::BuildPayload,
+    }
 }
 
 #[inline(always)]
@@ -3815,6 +4602,79 @@ pub fn groovestats_eval_state_from_parts(input: GrooveStatsEvalInput<'_>) -> Gro
         valid: checks.iter().all(|passed| *passed),
         reason_lines: groovestats_reason_lines(&checks, bad.as_slice()),
         manual_qr_url: None,
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct GrooveStatsGameplayEvalInput {
+    pub song_has_lua: bool,
+    pub lua_submit_allowed: bool,
+    pub song_completed_naturally: bool,
+    pub is_failing: bool,
+    pub life: f32,
+    pub has_fail_time: bool,
+    pub course_stage_life_submit_eligible: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct GrooveStatsGameplayEvalResult {
+    pub state: GrooveStatsEvalState,
+    pub should_set_manual_qr_url: bool,
+}
+
+pub fn groovestats_eval_state_from_gameplay_parts(
+    mut state: GrooveStatsEvalState,
+    input: GrooveStatsGameplayEvalInput,
+) -> GrooveStatsGameplayEvalResult {
+    if state.valid && input.song_has_lua && !input.lua_submit_allowed {
+        state.valid = false;
+        state.reason_lines.push("simfile relies on lua".to_string());
+        return GrooveStatsGameplayEvalResult {
+            state,
+            should_set_manual_qr_url: false,
+        };
+    }
+    let failed = gameplay_run_failed(input.is_failing, input.has_fail_time);
+    let passed = gameplay_run_passed(
+        input.song_completed_naturally,
+        input.is_failing,
+        input.life,
+        input.has_fail_time,
+    );
+    let finished = input.song_completed_naturally || failed;
+    if state.valid && !finished {
+        state.valid = false;
+        state
+            .reason_lines
+            .push("Only completed stages can be submitted.".to_string());
+        return GrooveStatsGameplayEvalResult {
+            state,
+            should_set_manual_qr_url: false,
+        };
+    }
+    if state.valid && failed {
+        state.valid = false;
+        state
+            .reason_lines
+            .push("Only passing scores are submitted.".to_string());
+        return GrooveStatsGameplayEvalResult {
+            state,
+            should_set_manual_qr_url: false,
+        };
+    }
+    if state.valid && !input.course_stage_life_submit_eligible {
+        state.valid = false;
+        state
+            .reason_lines
+            .push("Course stage would have failed from normal life.".to_string());
+        return GrooveStatsGameplayEvalResult {
+            state,
+            should_set_manual_qr_url: false,
+        };
+    }
+    GrooveStatsGameplayEvalResult {
+        should_set_manual_qr_url: state.valid && passed,
+        state,
     }
 }
 
@@ -5646,6 +6506,79 @@ mod tests {
     }
 
     #[test]
+    fn groovestats_gameplay_eval_policy_adds_runtime_reasons() {
+        let base = GrooveStatsEvalState {
+            valid: true,
+            reason_lines: Vec::new(),
+            manual_qr_url: None,
+        };
+        let input = GrooveStatsGameplayEvalInput {
+            song_has_lua: false,
+            lua_submit_allowed: true,
+            song_completed_naturally: true,
+            is_failing: false,
+            life: 1.0,
+            has_fail_time: false,
+            course_stage_life_submit_eligible: true,
+        };
+
+        let result = groovestats_eval_state_from_gameplay_parts(base.clone(), input);
+        assert!(result.state.valid);
+        assert!(result.should_set_manual_qr_url);
+
+        let result = groovestats_eval_state_from_gameplay_parts(
+            base.clone(),
+            GrooveStatsGameplayEvalInput {
+                song_has_lua: true,
+                lua_submit_allowed: false,
+                ..input
+            },
+        );
+        assert!(!result.state.valid);
+        assert_eq!(result.state.reason_lines, vec!["simfile relies on lua"]);
+        assert!(!result.should_set_manual_qr_url);
+
+        let result = groovestats_eval_state_from_gameplay_parts(
+            base.clone(),
+            GrooveStatsGameplayEvalInput {
+                song_completed_naturally: false,
+                ..input
+            },
+        );
+        assert!(!result.state.valid);
+        assert_eq!(
+            result.state.reason_lines,
+            vec!["Only completed stages can be submitted."]
+        );
+
+        let result = groovestats_eval_state_from_gameplay_parts(
+            base.clone(),
+            GrooveStatsGameplayEvalInput {
+                is_failing: true,
+                ..input
+            },
+        );
+        assert!(!result.state.valid);
+        assert_eq!(
+            result.state.reason_lines,
+            vec!["Only passing scores are submitted."]
+        );
+
+        let result = groovestats_eval_state_from_gameplay_parts(
+            base,
+            GrooveStatsGameplayEvalInput {
+                course_stage_life_submit_eligible: false,
+                ..input
+            },
+        );
+        assert!(!result.state.valid);
+        assert_eq!(
+            result.state.reason_lines,
+            vec!["Course stage would have failed from normal life."]
+        );
+    }
+
+    #[test]
     fn itl_eval_state_from_parts_accepts_valid_play() {
         let state = itl_eval_state_from_parts(ItlEvalInput {
             chart_no_cmod: false,
@@ -6570,6 +7503,227 @@ mod tests {
         assert!(!gameplay_run_failed(false, false));
         assert!(gameplay_run_failed(true, false));
         assert!(gameplay_run_failed(false, true));
+    }
+
+    #[test]
+    fn arrowcloud_autosubmit_session_policy_skips_global_blockers() {
+        assert_eq!(
+            arrowcloud_autosubmit_session_decision(ArrowCloudAutosubmitSessionInput {
+                enabled: false,
+                player_count: 1,
+                autoplay_used: false,
+                is_course_stage: false,
+                autosubmit_course_scores_individually: false,
+            }),
+            ArrowCloudAutosubmitSessionDecision::Skip { log: None }
+        );
+        assert_eq!(
+            arrowcloud_autosubmit_session_decision(ArrowCloudAutosubmitSessionInput {
+                enabled: true,
+                player_count: 1,
+                autoplay_used: true,
+                is_course_stage: false,
+                autosubmit_course_scores_individually: false,
+            }),
+            ArrowCloudAutosubmitSessionDecision::Skip {
+                log: Some(ArrowCloudAutosubmitLog::debug("autoplay/replay was used"))
+            }
+        );
+        assert_eq!(
+            arrowcloud_autosubmit_session_decision(ArrowCloudAutosubmitSessionInput {
+                enabled: true,
+                player_count: 1,
+                autoplay_used: false,
+                is_course_stage: true,
+                autosubmit_course_scores_individually: false,
+            }),
+            ArrowCloudAutosubmitSessionDecision::Skip {
+                log: Some(ArrowCloudAutosubmitLog::debug(
+                    "course per-song autosubmit is disabled"
+                ))
+            }
+        );
+    }
+
+    #[test]
+    fn arrowcloud_autosubmit_player_policy_preserves_submit_gates() {
+        let base = ArrowCloudAutosubmitPlayerInput {
+            song_has_lua: false,
+            lua_submit_allowed: true,
+            song_completed_naturally: true,
+            is_failing: false,
+            life: 1.0,
+            has_fail_time: false,
+            submit_fails_enabled: false,
+            api_key_present: true,
+            course_stage_life_submit_eligible: true,
+        };
+        assert_eq!(
+            arrowcloud_autosubmit_player_decision(base).action,
+            ArrowCloudAutosubmitPlayerAction::BuildPayload
+        );
+        assert_eq!(
+            arrowcloud_autosubmit_player_decision(ArrowCloudAutosubmitPlayerInput {
+                song_has_lua: true,
+                lua_submit_allowed: false,
+                ..base
+            })
+            .action,
+            ArrowCloudAutosubmitPlayerAction::Skip {
+                log: Some(ArrowCloudAutosubmitLog::debug("simfile relies on lua"))
+            }
+        );
+        assert_eq!(
+            arrowcloud_autosubmit_player_decision(ArrowCloudAutosubmitPlayerInput {
+                api_key_present: false,
+                ..base
+            })
+            .action,
+            ArrowCloudAutosubmitPlayerAction::Skip {
+                log: Some(ArrowCloudAutosubmitLog::warn("profile is missing API key"))
+            }
+        );
+        let failed = arrowcloud_autosubmit_player_decision(ArrowCloudAutosubmitPlayerInput {
+            song_completed_naturally: false,
+            is_failing: true,
+            submit_fails_enabled: true,
+            api_key_present: false,
+            ..base
+        });
+        assert!(failed.failed);
+        assert!(failed.allow_failed_submit);
+        assert_eq!(
+            failed.action,
+            ArrowCloudAutosubmitPlayerAction::Skip {
+                log: Some(ArrowCloudAutosubmitLog::warn("profile is missing API key"))
+            }
+        );
+    }
+
+    #[test]
+    fn arrowcloud_autosubmit_payload_policy_keeps_failed_skip_after_payload() {
+        assert_eq!(
+            arrowcloud_autosubmit_after_payload_decision(true, false),
+            Some(ArrowCloudAutosubmitLog::debug(
+                "failed-stage submits are disabled"
+            ))
+        );
+        assert_eq!(
+            arrowcloud_autosubmit_after_payload_decision(true, true),
+            None
+        );
+        assert_eq!(
+            arrowcloud_autosubmit_after_payload_decision(false, false),
+            None
+        );
+    }
+
+    #[test]
+    fn groovestats_autosubmit_session_policy_skips_global_blockers() {
+        assert_eq!(
+            groovestats_autosubmit_session_decision(GrooveStatsAutosubmitSessionInput {
+                enabled: false,
+                player_count: 1,
+                autoplay_used: false,
+                is_course_stage: false,
+                autosubmit_course_scores_individually: false,
+            }),
+            GrooveStatsAutosubmitSessionDecision::Skip { log: None }
+        );
+        assert_eq!(
+            groovestats_autosubmit_session_decision(GrooveStatsAutosubmitSessionInput {
+                enabled: true,
+                player_count: 1,
+                autoplay_used: true,
+                is_course_stage: false,
+                autosubmit_course_scores_individually: false,
+            }),
+            GrooveStatsAutosubmitSessionDecision::Skip {
+                log: Some(GrooveStatsAutosubmitLog::debug("autoplay/replay was used"))
+            }
+        );
+        assert_eq!(
+            groovestats_autosubmit_session_decision(GrooveStatsAutosubmitSessionInput {
+                enabled: true,
+                player_count: 1,
+                autoplay_used: false,
+                is_course_stage: true,
+                autosubmit_course_scores_individually: false,
+            }),
+            GrooveStatsAutosubmitSessionDecision::Skip {
+                log: Some(GrooveStatsAutosubmitLog::debug(
+                    "course per-song autosubmit is disabled"
+                ))
+            }
+        );
+    }
+
+    #[test]
+    fn groovestats_autosubmit_player_policy_preserves_submit_gates() {
+        let base = GrooveStatsAutosubmitPlayerInput {
+            has_invalid_reason: false,
+            is_pad_player: true,
+            song_completed_naturally: true,
+            is_failing: false,
+            life: 1.0,
+            has_fail_time: false,
+            course_stage_life_submit_eligible: true,
+            api_key_present: true,
+        };
+        assert_eq!(
+            groovestats_autosubmit_player_decision(base).action,
+            GrooveStatsAutosubmitPlayerAction::BuildPayload
+        );
+        assert_eq!(
+            groovestats_autosubmit_player_decision(GrooveStatsAutosubmitPlayerInput {
+                has_invalid_reason: true,
+                ..base
+            })
+            .action,
+            GrooveStatsAutosubmitPlayerAction::SkipInvalidReason
+        );
+        assert_eq!(
+            groovestats_autosubmit_player_decision(GrooveStatsAutosubmitPlayerInput {
+                is_pad_player: false,
+                ..base
+            })
+            .action,
+            GrooveStatsAutosubmitPlayerAction::Skip {
+                log: Some(GrooveStatsAutosubmitLog::warn(
+                    "profile is not marked as a pad player"
+                ))
+            }
+        );
+        assert_eq!(
+            groovestats_autosubmit_player_decision(GrooveStatsAutosubmitPlayerInput {
+                song_completed_naturally: false,
+                ..base
+            })
+            .action,
+            GrooveStatsAutosubmitPlayerAction::Skip {
+                log: Some(GrooveStatsAutosubmitLog::debug("stage was not completed"))
+            }
+        );
+        assert_eq!(
+            groovestats_autosubmit_player_decision(GrooveStatsAutosubmitPlayerInput {
+                is_failing: true,
+                ..base
+            })
+            .action,
+            GrooveStatsAutosubmitPlayerAction::Skip {
+                log: Some(GrooveStatsAutosubmitLog::debug("stage was not passed"))
+            }
+        );
+        assert_eq!(
+            groovestats_autosubmit_player_decision(GrooveStatsAutosubmitPlayerInput {
+                api_key_present: false,
+                ..base
+            })
+            .action,
+            GrooveStatsAutosubmitPlayerAction::Skip {
+                log: Some(GrooveStatsAutosubmitLog::warn("profile is missing API key"))
+            }
+        );
     }
 
     #[test]

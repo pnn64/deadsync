@@ -2,7 +2,7 @@ use bincode::{Decode, Encode};
 use bitflags::bitflags;
 use chrono::{Datelike, Local};
 use deadsync_rules::judgment::JudgeGrade;
-use deadsync_rules::scroll::ScrollSpeedSetting;
+use deadsync_rules::scroll::{GUEST_SCROLL_SPEED, ScrollSpeedSetting};
 use deadsync_score::ScoreImportEndpoint;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write as _;
@@ -13,6 +13,7 @@ use std::sync::{LazyLock, Mutex, MutexGuard};
 
 pub mod lock_wait;
 pub mod pad_config;
+pub mod update;
 
 pub const PLAYER_SLOTS: usize = 2;
 pub const SESSION_JOINED_MASK_P1: u8 = 1 << 0;
@@ -66,6 +67,9 @@ static RUNTIME_SESSION: LazyLock<Mutex<SessionState>> = LazyLock::new(|| {
     Mutex::new(SessionState::default())
 });
 
+static RUNTIME_PROFILE_DIR_CACHE: LazyLock<Mutex<Option<HashMap<String, PathBuf>>>> =
+    LazyLock::new(|| Mutex::new(None));
+
 static RUNTIME_SESSION_LOCK_WAIT_STATS: lock_wait::LockWaitStats = lock_wait::LockWaitStats::new();
 static RUNTIME_PROFILES_LOCK_WAIT_STATS: lock_wait::LockWaitStats = lock_wait::LockWaitStats::new();
 
@@ -85,6 +89,817 @@ pub fn runtime_lock_profiles() -> MutexGuard<'static, [Profile; PLAYER_SLOTS]> {
         &RUNTIME_PROFILES_LOCK_WAIT_STATS,
         &RUNTIME_PROFILES,
     )
+}
+
+pub fn runtime_update_profile_for_side(
+    side: PlayerSide,
+    update: impl FnOnce(&mut Profile) -> bool,
+) -> bool {
+    let mut profiles = runtime_lock_profiles();
+    update(&mut profiles[player_side_index(side)])
+}
+
+pub fn runtime_profile_for_side(side: PlayerSide) -> Profile {
+    runtime_lock_profiles()[player_side_index(side)].clone()
+}
+
+pub fn runtime_current_profile() -> Profile {
+    let side = runtime_lock_session().player_side();
+    runtime_profile_for_side(side)
+}
+
+pub fn runtime_footer_fields_for_side(side: PlayerSide) -> (Option<String>, String) {
+    footer_fields_for_side(&runtime_lock_profiles(), side)
+}
+
+pub fn runtime_groovestats_api_key_for_side(side: PlayerSide) -> String {
+    groovestats_api_key_for_side(&runtime_lock_profiles(), side)
+}
+
+pub fn runtime_gameplay_hud_snapshot() -> GameplayHudSnapshot {
+    let (play_style, player_side, joined_mask, active_profiles) = {
+        let session = runtime_lock_session();
+        (
+            session.play_style,
+            session.player_side,
+            session.joined_mask,
+            session.active_profiles.clone(),
+        )
+    };
+    let profiles = runtime_lock_profiles();
+    gameplay_hud_snapshot_from_parts(
+        play_style,
+        player_side,
+        joined_mask,
+        &active_profiles,
+        &profiles,
+    )
+}
+
+pub fn runtime_set_avatar_texture_key_for_side(side: PlayerSide, key: Option<String>) {
+    let mut profiles = runtime_lock_profiles();
+    set_avatar_texture_key_for_side(&mut profiles, side, key);
+}
+
+pub fn runtime_update_guest_profile_noteskin(noteskin: NoteSkin) {
+    let active_profiles = runtime_lock_session().active_profiles.clone();
+    let mut profiles = runtime_lock_profiles();
+    update_guest_profile_noteskins(&active_profiles, &mut profiles, noteskin);
+}
+
+pub fn runtime_active_profile_for_side(side: PlayerSide) -> ActiveProfile {
+    runtime_lock_session().active_profile(side)
+}
+
+pub fn runtime_active_profiles() -> [ActiveProfile; PLAYER_SLOTS] {
+    runtime_lock_session().active_profiles.clone()
+}
+
+pub fn runtime_set_active_profile_for_side(side: PlayerSide, profile: ActiveProfile) -> bool {
+    runtime_lock_session().set_active_profile(side, profile)
+}
+
+pub fn runtime_set_active_profiles(
+    profiles: [ActiveProfile; PLAYER_SLOTS],
+) -> [bool; PLAYER_SLOTS] {
+    let mut changed = [false; PLAYER_SLOTS];
+    let mut session = runtime_lock_session();
+    for side in [PlayerSide::P1, PlayerSide::P2] {
+        let idx = player_side_index(side);
+        changed[idx] = session.set_active_profile(side, profiles[idx].clone());
+    }
+    changed
+}
+
+pub fn runtime_rename_loaded_local_profile(profile_id: &str, display_name: &str) {
+    let active_profiles = runtime_lock_session().active_profiles.clone();
+    let mut profiles = runtime_lock_profiles();
+    rename_loaded_local_profile(&active_profiles, &mut profiles, profile_id, display_name);
+}
+
+pub fn runtime_clear_deleted_local_profile(profile_id: &str) -> [bool; PLAYER_SLOTS] {
+    let mut changed = [false; PLAYER_SLOTS];
+    let mut session = runtime_lock_session();
+    for side in [PlayerSide::P1, PlayerSide::P2] {
+        let side_idx = player_side_index(side);
+        if active_profile_local_id(&session.active_profiles[side_idx]) == Some(profile_id) {
+            changed[side_idx] = session.set_active_profile(side, ActiveProfile::Guest);
+        }
+    }
+    changed
+}
+
+pub fn runtime_resolve_active_profile_load_for_side(
+    side: PlayerSide,
+    local_profile_exists: impl FnOnce(&str) -> bool,
+    fallback_local_profile_id: impl FnOnce() -> Option<String>,
+) -> ActiveProfileLoadSelection {
+    let active = runtime_lock_session().active_profiles[player_side_index(side)].clone();
+    let selection =
+        resolve_active_profile_for_load(&active, local_profile_exists, fallback_local_profile_id);
+    if matches!(
+        selection,
+        ActiveProfileLoadSelection::MissingFallbackLocal { .. }
+            | ActiveProfileLoadSelection::MissingFallbackGuest { .. }
+    ) {
+        runtime_lock_session().active_profiles[player_side_index(side)] =
+            selection.session_profile();
+    }
+    selection
+}
+
+pub fn guest_profile(noteskin: NoteSkin, pad_light_brightness: u8) -> Profile {
+    let mut guest = Profile::default();
+    guest.display_name = "[ GUEST ]".to_string();
+    guest.scroll_speed = GUEST_SCROLL_SPEED;
+    guest.noteskin = noteskin;
+    guest.pad_light_brightness = clamp_pad_light_brightness(pad_light_brightness);
+    guest.avatar_path = None;
+    guest.avatar_texture_key = None;
+    guest.store_current_player_options_for_all_styles();
+    guest
+}
+
+pub fn default_profile_with_machine_settings(
+    noteskin: NoteSkin,
+    pad_light_brightness: u8,
+) -> Profile {
+    let mut profile = Profile::default();
+    profile.noteskin = noteskin;
+    profile.pad_light_brightness = clamp_pad_light_brightness(pad_light_brightness);
+    profile.store_current_player_options_for_all_styles();
+    profile
+}
+
+pub fn runtime_set_guest_profile_for_side(
+    side: PlayerSide,
+    noteskin: NoteSkin,
+    pad_light_brightness: u8,
+) {
+    runtime_lock_profiles()[player_side_index(side)] =
+        guest_profile(noteskin, pad_light_brightness);
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn runtime_apply_loaded_profile_data_for_side(
+    side: PlayerSide,
+    default_profile: &Profile,
+    today: &str,
+    profile_ini_loaded: bool,
+    profile_section_has_any: impl FnMut(&str) -> bool,
+    profile_get: impl FnMut(&str, &str) -> Option<String>,
+    stats: ProfileStats,
+    favorites: HashSet<String>,
+    favorited_packs: HashSet<String>,
+    groovestats_ini_loaded: bool,
+    groovestats_get: impl FnMut(&str, &str) -> Option<String>,
+    arrowcloud_ini_loaded: bool,
+    arrowcloud_get: impl FnMut(&str, &str) -> Option<String>,
+    avatar_path: Option<PathBuf>,
+) {
+    let play_style = runtime_session_play_style();
+    let mut profiles = runtime_lock_profiles();
+    let profile = &mut profiles[player_side_index(side)];
+    apply_loaded_profile_data(
+        profile,
+        default_profile,
+        play_style,
+        today,
+        profile_ini_loaded,
+        profile_section_has_any,
+        profile_get,
+        stats,
+        favorites,
+        favorited_packs,
+        groovestats_ini_loaded,
+        groovestats_get,
+        arrowcloud_ini_loaded,
+        arrowcloud_get,
+    );
+    profile.avatar_path = avatar_path;
+    profile.avatar_texture_key = None;
+}
+
+#[derive(Debug)]
+pub struct RuntimeProfileLoadReport {
+    pub profile_ini_path: PathBuf,
+    pub profile_ini_loaded: bool,
+    pub groovestats_ini_path: PathBuf,
+    pub groovestats_ini_loaded: bool,
+    pub arrowcloud_ini_path: PathBuf,
+    pub arrowcloud_ini_loaded: bool,
+    pub stats_path: PathBuf,
+    pub stats_error: Option<ProfileStatsLoadError>,
+}
+
+pub fn runtime_load_profile_data_for_side(
+    side: PlayerSide,
+    profile_dir: &Path,
+    default_profile: &Profile,
+    today: &str,
+) -> RuntimeProfileLoadReport {
+    let profile_ini_path = profile_ini_path(profile_dir);
+    let groovestats_ini_path = groovestats_ini_path(profile_dir);
+    let arrowcloud_ini_path = arrowcloud_ini_path(profile_dir);
+    let stats_path = profile_stats_path(profile_dir);
+    let profile_ini = ProfileIni::load(&profile_ini_path).ok();
+    let groovestats_ini = ProfileIni::load(&groovestats_ini_path).ok();
+    let arrowcloud_ini = ProfileIni::load(&arrowcloud_ini_path).ok();
+
+    let ProfileSidecarLoadData {
+        stats,
+        stats_error,
+        favorites,
+        favorited_packs,
+        avatar_path,
+    } = load_profile_sidecars_dir(profile_dir, default_profile);
+
+    runtime_apply_loaded_profile_data_for_side(
+        side,
+        default_profile,
+        today,
+        profile_ini.is_some(),
+        |section| {
+            profile_ini
+                .as_ref()
+                .is_some_and(|ini| ini.section_has_any(section))
+        },
+        |section, key| profile_ini.as_ref().and_then(|ini| ini.get(section, key)),
+        stats,
+        favorites,
+        favorited_packs,
+        groovestats_ini.is_some(),
+        |section, key| {
+            groovestats_ini
+                .as_ref()
+                .and_then(|ini| ini.get(section, key))
+        },
+        arrowcloud_ini.is_some(),
+        |section, key| {
+            arrowcloud_ini
+                .as_ref()
+                .and_then(|ini| ini.get(section, key))
+        },
+        avatar_path,
+    );
+
+    RuntimeProfileLoadReport {
+        profile_ini_path,
+        profile_ini_loaded: profile_ini.is_some(),
+        groovestats_ini_path,
+        groovestats_ini_loaded: groovestats_ini.is_some(),
+        arrowcloud_ini_path,
+        arrowcloud_ini_loaded: arrowcloud_ini.is_some(),
+        stats_path,
+        stats_error,
+    }
+}
+
+pub fn runtime_restore_default_profiles(
+    defaults: &[Option<String>; PLAYER_SLOTS],
+    local_profile_exists: impl FnMut(&str) -> bool,
+) {
+    runtime_lock_session().restore_default_profiles(defaults, local_profile_exists);
+}
+
+pub fn runtime_restore_joined_default_profiles(
+    defaults: &[Option<String>; PLAYER_SLOTS],
+    local_profile_exists: impl FnMut(&str) -> bool,
+) -> [bool; PLAYER_SLOTS] {
+    runtime_lock_session().restore_joined_default_profiles(defaults, local_profile_exists)
+}
+
+pub fn runtime_default_profile_ids_after_current_selection(
+    defaults: [Option<String>; PLAYER_SLOTS],
+) -> [Option<String>; PLAYER_SLOTS] {
+    let session = runtime_lock_session();
+    default_profile_ids_after_joined_selection(
+        defaults,
+        session.joined_mask,
+        &session.active_profiles[player_side_index(PlayerSide::P1)],
+        &session.active_profiles[player_side_index(PlayerSide::P2)],
+    )
+}
+
+pub fn default_player_options_with_machine_settings(
+    noteskin: NoteSkin,
+    pad_light_brightness: u8,
+) -> (PlayerOptionsData, PlayerOptionsData) {
+    let profile = default_profile_with_machine_settings(noteskin, pad_light_brightness);
+    (
+        profile.player_options_singles,
+        profile.player_options_doubles,
+    )
+}
+
+pub fn runtime_local_profile_id_for_pad(is_p2_side: bool) -> Option<String> {
+    let side = {
+        let session = runtime_lock_session();
+        side_for_physical_pad(session.play_style, session.player_side, is_p2_side)
+    };
+    runtime_active_local_profile_id_for_side(side)
+}
+
+pub fn runtime_pad_light_brightness_for_pad(is_p2_side: bool) -> u8 {
+    let (play_style, player_side) = {
+        let session = runtime_lock_session();
+        (session.play_style, session.player_side)
+    };
+    pad_light_brightness_for_physical_pad(
+        &runtime_lock_profiles(),
+        play_style,
+        player_side,
+        is_p2_side,
+    )
+}
+
+pub fn runtime_smx_pack_names_for_profiles<T: Copy>(
+    machine_bg: T,
+    machine_judge: T,
+    parse: impl FnMut(&str) -> T,
+) -> ([T; PLAYER_SLOTS], [T; PLAYER_SLOTS]) {
+    smx_pack_names_for_profiles(&runtime_lock_profiles(), machine_bg, machine_judge, parse)
+}
+
+pub fn runtime_session_music_rate() -> f32 {
+    runtime_lock_session().music_rate()
+}
+
+pub fn runtime_set_session_music_rate(rate: f32) {
+    runtime_lock_session().set_music_rate(rate);
+}
+
+pub fn runtime_session_timing_tick_mode() -> TimingTickMode {
+    runtime_lock_session().timing_tick_mode()
+}
+
+pub fn runtime_set_session_timing_tick_mode(mode: TimingTickMode) {
+    runtime_lock_session().set_timing_tick_mode(mode);
+}
+
+pub fn runtime_session_play_style() -> PlayStyle {
+    runtime_lock_session().play_style()
+}
+
+pub fn runtime_set_session_play_style(style: PlayStyle) {
+    let prev_style = {
+        let mut session = runtime_lock_session();
+        let Some(prev_style) = session.set_play_style(style) else {
+            return;
+        };
+        prev_style
+    };
+
+    let mut profiles = runtime_lock_profiles();
+    for profile in profiles.iter_mut() {
+        profile.store_current_player_options(prev_style);
+        profile.apply_player_options_for_style(style);
+    }
+}
+
+pub fn runtime_session_play_mode() -> PlayMode {
+    runtime_lock_session().play_mode()
+}
+
+pub fn runtime_set_session_play_mode(mode: PlayMode) {
+    runtime_lock_session().set_play_mode(mode);
+}
+
+pub fn runtime_session_player_side() -> PlayerSide {
+    runtime_lock_session().player_side()
+}
+
+pub fn runtime_set_session_player_side(side: PlayerSide) {
+    runtime_lock_session().set_player_side(side);
+}
+
+pub fn runtime_session_side_joined(side: PlayerSide) -> bool {
+    runtime_lock_session().side_joined(side)
+}
+
+pub fn runtime_session_joined_mask() -> u8 {
+    runtime_lock_session().joined_mask
+}
+
+pub fn runtime_session_side_guest(side: PlayerSide) -> bool {
+    active_profile_is_guest(&runtime_lock_session().active_profiles[player_side_index(side)])
+}
+
+pub fn runtime_set_session_joined(p1: bool, p2: bool) {
+    runtime_lock_session().set_joined_sides(p1, p2);
+}
+
+pub fn runtime_set_fast_profile_switch_from_select_music(enabled: bool) {
+    runtime_lock_session().set_fast_profile_switch_from_select_music(enabled);
+}
+
+pub fn runtime_fast_profile_switch_from_select_music() -> bool {
+    runtime_lock_session().fast_profile_switch_from_select_music()
+}
+
+pub fn runtime_take_fast_profile_switch_from_select_music() -> bool {
+    runtime_lock_session().take_fast_profile_switch_from_select_music()
+}
+
+pub fn runtime_invalidate_profile_dir_cache() {
+    *RUNTIME_PROFILE_DIR_CACHE.lock().unwrap() = None;
+}
+
+pub fn runtime_set_profile_dir_cache(cache_map: HashMap<String, PathBuf>) {
+    *RUNTIME_PROFILE_DIR_CACHE.lock().unwrap() = Some(cache_map);
+}
+
+pub fn runtime_resolve_profile_dir(
+    root: &Path,
+    guid: &str,
+    duplicate: impl FnMut(&str, &Path, &Path, &Path),
+) -> Option<PathBuf> {
+    let mut guard = RUNTIME_PROFILE_DIR_CACHE.lock().unwrap();
+    if guard.is_none() {
+        *guard = Some(build_profile_dir_map(root, duplicate));
+    }
+    guard.as_ref().unwrap().get(guid).cloned()
+}
+
+pub fn runtime_profile_dir_for_id(
+    root: &Path,
+    id: &str,
+    duplicate: impl FnMut(&str, &Path, &Path, &Path),
+) -> PathBuf {
+    if is_valid_profile_guid(id)
+        && let Some(dir) = runtime_resolve_profile_dir(root, id, duplicate)
+    {
+        return dir;
+    }
+    root.join(id)
+}
+
+pub fn runtime_active_local_profile_id_for_side(side: PlayerSide) -> Option<String> {
+    runtime_lock_session()
+        .active_local_profile_id(side)
+        .map(str::to_owned)
+}
+
+pub fn runtime_toggle_favorite_for_side(
+    root: &Path,
+    side: PlayerSide,
+    chart_hash: &str,
+    duplicate: impl FnMut(&str, &Path, &Path, &Path),
+) -> bool {
+    let Some(profile_id) = runtime_active_local_profile_id_for_side(side) else {
+        return false;
+    };
+    let (is_now_favorite, favorites) = {
+        let mut profiles = runtime_lock_profiles();
+        toggle_favorite_for_side(&mut profiles, side, chart_hash)
+    };
+    save_favorites_dir(
+        &runtime_profile_dir_for_id(root, &profile_id, duplicate),
+        &favorites,
+    );
+    is_now_favorite
+}
+
+pub fn runtime_profile_has_favorite_for_side(side: PlayerSide, chart_hash: &str) -> bool {
+    let profiles = runtime_lock_profiles();
+    profile_has_favorite(&profiles, side, chart_hash)
+}
+
+pub fn runtime_seed_favorite_for_side(side: PlayerSide, chart_hash: &str) {
+    let mut profiles = runtime_lock_profiles();
+    seed_favorite_for_side(&mut profiles, side, chart_hash);
+}
+
+pub fn runtime_toggle_favorited_pack_for_side(
+    root: &Path,
+    side: PlayerSide,
+    pack_name: &str,
+    duplicate: impl FnMut(&str, &Path, &Path, &Path),
+) -> bool {
+    let Some(profile_id) = runtime_active_local_profile_id_for_side(side) else {
+        return false;
+    };
+    let (is_now_favorite, packs) = {
+        let mut profiles = runtime_lock_profiles();
+        toggle_favorited_pack_for_side(&mut profiles, side, pack_name)
+    };
+    save_favorited_packs_dir(
+        &runtime_profile_dir_for_id(root, &profile_id, duplicate),
+        &packs,
+    );
+    is_now_favorite
+}
+
+pub fn runtime_profile_has_favorited_pack_for_side(side: PlayerSide, pack_name: &str) -> bool {
+    let profiles = runtime_lock_profiles();
+    profile_side_has_favorited_pack(&profiles, side, pack_name)
+}
+
+pub fn runtime_seed_favorited_pack_for_side(side: PlayerSide, pack_name: &str) {
+    let mut profiles = runtime_lock_profiles();
+    seed_favorited_pack_for_side(&mut profiles, side, pack_name);
+}
+
+#[derive(Debug)]
+pub struct RuntimeProfileStatsWriteError {
+    pub profile_id: String,
+    pub error: ProfileStatsWriteError,
+}
+
+#[derive(Debug, Default)]
+pub struct RuntimeKnownPackSyncResult {
+    pub unknown_pack_names: HashSet<String>,
+    pub write_errors: Vec<RuntimeProfileStatsWriteError>,
+}
+
+fn runtime_profile_stats_payload_for_side(side: PlayerSide) -> Option<(String, ProfileStats)> {
+    let session = runtime_lock_session();
+    let ActiveProfile::Local { id } = &session.active_profiles[player_side_index(side)] else {
+        return None;
+    };
+    let profile = runtime_lock_profiles()[player_side_index(side)].clone();
+    Some((
+        id.clone(),
+        ProfileStats {
+            current_combo: profile.current_combo,
+            known_pack_names: profile.known_pack_names,
+        },
+    ))
+}
+
+pub fn runtime_write_profile_stats_for_side(
+    root: &Path,
+    side: PlayerSide,
+    duplicate: impl FnMut(&str, &Path, &Path, &Path),
+) -> Option<RuntimeProfileStatsWriteError> {
+    let (profile_id, payload) = runtime_profile_stats_payload_for_side(side)?;
+    write_profile_stats_dir(
+        &runtime_profile_dir_for_id(root, &profile_id, duplicate),
+        &payload,
+    )
+    .err()
+    .map(|error| RuntimeProfileStatsWriteError { profile_id, error })
+}
+
+pub fn runtime_known_pack_names_for_local_profile(profile_id: &str) -> Option<HashSet<String>> {
+    let session = runtime_lock_session();
+    let profiles = runtime_lock_profiles();
+    known_pack_names_for_loaded_profile(&session.active_profiles, &profiles, profile_id)
+}
+
+pub fn runtime_mark_known_pack_names_for_local_profile<'a>(
+    root: &Path,
+    profile_id: &str,
+    pack_names: impl IntoIterator<Item = &'a str>,
+    mut duplicate: impl FnMut(&str, &Path, &Path, &Path),
+) -> Option<RuntimeProfileStatsWriteError> {
+    let pack_names: Vec<&str> = pack_names.into_iter().collect();
+    if profile_id.is_empty() || pack_names.is_empty() {
+        return None;
+    }
+    let save_side = {
+        let session = runtime_lock_session();
+        let mut profiles = runtime_lock_profiles();
+        mark_known_pack_names_for_loaded_profile(
+            &session.active_profiles,
+            &mut profiles,
+            profile_id,
+            &pack_names,
+        )
+    };
+    save_side.and_then(|side| runtime_write_profile_stats_for_side(root, side, &mut duplicate))
+}
+
+pub fn runtime_sync_known_packs(
+    root: &Path,
+    profile_ids: &[String],
+    scanned_pack_names: &[String],
+    mut duplicate: impl FnMut(&str, &Path, &Path, &Path),
+) -> RuntimeKnownPackSyncResult {
+    if profile_ids.is_empty() {
+        return RuntimeKnownPackSyncResult::default();
+    }
+
+    let mut result = RuntimeKnownPackSyncResult::default();
+    for profile_id in profile_ids {
+        let known = runtime_known_pack_names_for_local_profile(profile_id).unwrap_or_default();
+        if known.is_empty() && !scanned_pack_names.is_empty() {
+            if let Some(error) = runtime_mark_known_pack_names_for_local_profile(
+                root,
+                profile_id,
+                scanned_pack_names.iter().map(String::as_str),
+                &mut duplicate,
+            ) {
+                result.write_errors.push(error);
+            }
+            continue;
+        }
+        result
+            .unknown_pack_names
+            .extend(unknown_pack_names(&known, scanned_pack_names));
+    }
+    result
+}
+
+pub fn runtime_mark_packs_known<'a>(
+    root: &Path,
+    profile_ids: &[String],
+    pack_names: impl IntoIterator<Item = &'a str>,
+    mut duplicate: impl FnMut(&str, &Path, &Path, &Path),
+) -> Vec<RuntimeProfileStatsWriteError> {
+    let pack_names: Vec<&str> = pack_names.into_iter().collect();
+    if profile_ids.is_empty() || pack_names.is_empty() {
+        return Vec::new();
+    }
+    profile_ids
+        .iter()
+        .filter_map(|profile_id| {
+            runtime_mark_known_pack_names_for_local_profile(
+                root,
+                profile_id,
+                pack_names.iter().copied(),
+                &mut duplicate,
+            )
+        })
+        .collect()
+}
+
+#[derive(Debug)]
+pub struct RuntimeProfileSidecarWriteError {
+    pub path: PathBuf,
+    pub error: std::io::Error,
+}
+
+pub fn runtime_save_profile_ini_for_side(
+    root: &Path,
+    side: PlayerSide,
+    duplicate: impl FnMut(&str, &Path, &Path, &Path),
+) -> Option<RuntimeProfileSidecarWriteError> {
+    let profile_id = runtime_active_local_profile_id_for_side(side)?;
+    let play_style = runtime_session_play_style();
+    let profile = {
+        let mut profiles = runtime_lock_profiles();
+        let profile = &mut profiles[player_side_index(side)];
+        profile.store_current_player_options(play_style);
+        profile.clone()
+    };
+    let dir = runtime_profile_dir_for_profile_id(root, &profile_id, duplicate);
+    write_profile_ini_dir(&dir, &profile_id, &profile)
+        .err()
+        .map(|error| RuntimeProfileSidecarWriteError {
+            path: profile_ini_path(&dir),
+            error,
+        })
+}
+
+fn runtime_profile_dir_for_profile_id(
+    root: &Path,
+    profile_id: &str,
+    duplicate: impl FnMut(&str, &Path, &Path, &Path),
+) -> PathBuf {
+    runtime_profile_dir_for_id(root, profile_id, duplicate)
+}
+
+fn runtime_active_profile_id_and_data_for_side(side: PlayerSide) -> Option<(String, Profile)> {
+    let profile_id = runtime_active_local_profile_id_for_side(side)?;
+    let profile = runtime_lock_profiles()[player_side_index(side)].clone();
+    Some((profile_id, profile))
+}
+
+pub fn runtime_save_groovestats_credentials_for_side(
+    root: &Path,
+    side: PlayerSide,
+    duplicate: impl FnMut(&str, &Path, &Path, &Path),
+) -> Option<RuntimeProfileSidecarWriteError> {
+    let (profile_id, profile) = runtime_active_profile_id_and_data_for_side(side)?;
+    let dir = runtime_profile_dir_for_profile_id(root, &profile_id, duplicate);
+    write_groovestats_credentials_dir(
+        &dir,
+        &profile.groovestats_api_key,
+        profile.groovestats_is_pad_player,
+        &profile.groovestats_username,
+    )
+    .err()
+    .map(|error| RuntimeProfileSidecarWriteError {
+        path: groovestats_ini_path(&dir),
+        error,
+    })
+}
+
+pub fn runtime_save_arrowcloud_api_key_for_side(
+    root: &Path,
+    side: PlayerSide,
+    duplicate: impl FnMut(&str, &Path, &Path, &Path),
+) -> Option<RuntimeProfileSidecarWriteError> {
+    let (profile_id, profile) = runtime_active_profile_id_and_data_for_side(side)?;
+    let dir = runtime_profile_dir_for_profile_id(root, &profile_id, duplicate);
+    write_arrowcloud_api_key_dir(&dir, &profile.arrowcloud_api_key)
+        .err()
+        .map(|error| RuntimeProfileSidecarWriteError {
+            path: arrowcloud_ini_path(&dir),
+            error,
+        })
+}
+
+pub fn runtime_set_arrowcloud_api_key_for_side(
+    root: &Path,
+    side: PlayerSide,
+    api_key: &str,
+    duplicate: impl FnMut(&str, &Path, &Path, &Path),
+) -> Option<RuntimeProfileSidecarWriteError> {
+    {
+        let mut profiles = runtime_lock_profiles();
+        set_arrowcloud_api_key_for_side(&mut profiles, side, api_key);
+    }
+    runtime_save_arrowcloud_api_key_for_side(root, side, duplicate)
+}
+
+pub fn runtime_set_arrowcloud_api_key_for_id(
+    root: &Path,
+    profile_id: &str,
+    api_key: &str,
+    duplicate: impl FnMut(&str, &Path, &Path, &Path),
+) -> Option<RuntimeProfileSidecarWriteError> {
+    {
+        let session = runtime_lock_session();
+        let mut profiles = runtime_lock_profiles();
+        set_arrowcloud_api_key_for_loaded_profile(
+            &session.active_profiles,
+            &mut profiles,
+            profile_id,
+            api_key,
+        );
+    }
+
+    let dir = runtime_profile_dir_for_profile_id(root, profile_id, duplicate);
+    write_arrowcloud_api_key_dir(&dir, api_key)
+        .err()
+        .map(|error| RuntimeProfileSidecarWriteError {
+            path: arrowcloud_ini_path(&dir),
+            error,
+        })
+}
+
+pub fn runtime_read_arrowcloud_api_key_for_id(
+    root: &Path,
+    profile_id: &str,
+    duplicate: impl FnMut(&str, &Path, &Path, &Path),
+) -> String {
+    read_arrowcloud_api_key_dir(&runtime_profile_dir_for_profile_id(
+        root, profile_id, duplicate,
+    ))
+}
+
+pub fn runtime_set_groovestats_credentials_for_side(
+    root: &Path,
+    side: PlayerSide,
+    api_key: &str,
+    username: &str,
+    duplicate: impl FnMut(&str, &Path, &Path, &Path),
+) -> Option<RuntimeProfileSidecarWriteError> {
+    {
+        let mut profiles = runtime_lock_profiles();
+        set_groovestats_credentials_for_side(&mut profiles, side, api_key, username);
+    }
+    runtime_save_groovestats_credentials_for_side(root, side, duplicate)
+}
+
+pub fn runtime_set_groovestats_credentials_for_id(
+    root: &Path,
+    profile_id: &str,
+    api_key: &str,
+    username: &str,
+    duplicate: impl FnMut(&str, &Path, &Path, &Path),
+) -> Option<RuntimeProfileSidecarWriteError> {
+    {
+        let session = runtime_lock_session();
+        let mut profiles = runtime_lock_profiles();
+        set_groovestats_credentials_for_loaded_profile(
+            &session.active_profiles,
+            &mut profiles,
+            profile_id,
+            api_key,
+            username,
+        );
+    }
+
+    let dir = runtime_profile_dir_for_profile_id(root, profile_id, duplicate);
+    write_groovestats_credentials_dir(&dir, api_key, true, username)
+        .err()
+        .map(|error| RuntimeProfileSidecarWriteError {
+            path: groovestats_ini_path(&dir),
+            error,
+        })
+}
+
+pub fn runtime_read_groovestats_api_key_for_id(
+    root: &Path,
+    profile_id: &str,
+    duplicate: impl FnMut(&str, &Path, &Path, &Path),
+) -> Option<String> {
+    read_groovestats_api_key_dir(&runtime_profile_dir_for_profile_id(
+        root, profile_id, duplicate,
+    ))
 }
 
 // Crossover Cues. A cue flashes a notefield column shortly before an
@@ -806,6 +1621,27 @@ pub fn local_score_profile_sources_from_summaries(
         .collect()
 }
 
+pub fn runtime_local_score_profile_source(
+    root: &Path,
+    profile_id: &str,
+    display_name: &str,
+    duplicate: impl FnMut(&str, &Path, &Path, &Path),
+) -> deadsync_score::LocalScoreProfileSource {
+    local_score_profile_source(
+        display_name,
+        runtime_profile_dir_for_id(root, profile_id, duplicate),
+    )
+}
+
+pub fn runtime_local_score_profile_sources(
+    root: &Path,
+    mut duplicate: impl FnMut(&str, &Path, &Path, &Path),
+) -> Vec<deadsync_score::LocalScoreProfileSource> {
+    local_score_profile_sources_from_summaries(scan_local_profile_summaries(root), |profile_id| {
+        runtime_profile_dir_for_id(root, profile_id, &mut duplicate)
+    })
+}
+
 pub fn scorebox_profile_snapshot(
     profile: &Profile,
     side_joined: bool,
@@ -825,6 +1661,47 @@ pub fn scorebox_profile_snapshot(
         profile.arrowcloud_api_key.as_str(),
         profile.groovestats_username.as_str(),
         persistent_profile_id,
+    )
+}
+
+pub fn scorebox_profile_snapshot_for_side(
+    profiles: &[Profile; PLAYER_SLOTS],
+    active_profiles: &[ActiveProfile; PLAYER_SLOTS],
+    joined_mask: u8,
+    side: PlayerSide,
+    enable_groovestats: bool,
+    enable_arrowcloud: bool,
+    auto_populate_gs_scores: bool,
+) -> deadsync_score::GameplayScoreboxProfileSnapshot {
+    let side_idx = player_side_index(side);
+    scorebox_profile_snapshot(
+        &profiles[side_idx],
+        player_side_is_joined(joined_mask, side),
+        enable_groovestats,
+        enable_arrowcloud,
+        auto_populate_gs_scores,
+        active_profile_local_id(&active_profiles[side_idx]).map(str::to_string),
+    )
+}
+
+pub fn runtime_scorebox_profile_snapshot_for_side(
+    side: PlayerSide,
+    enable_groovestats: bool,
+    enable_arrowcloud: bool,
+    auto_populate_gs_scores: bool,
+) -> deadsync_score::GameplayScoreboxProfileSnapshot {
+    let (active_profiles, joined_mask) = {
+        let session = runtime_lock_session();
+        (session.active_profiles.clone(), session.joined_mask)
+    };
+    scorebox_profile_snapshot_for_side(
+        &runtime_lock_profiles(),
+        &active_profiles,
+        joined_mask,
+        side,
+        enable_groovestats,
+        enable_arrowcloud,
+        auto_populate_gs_scores,
     )
 }
 
@@ -930,6 +1807,45 @@ pub fn default_profile_ids_after_joined_selection(
     defaults
 }
 
+pub fn default_profile_ids_after_profile_delete(
+    defaults: [Option<String>; PLAYER_SLOTS],
+    profile_id: &str,
+) -> [Option<String>; PLAYER_SLOTS] {
+    defaults.map(|id| id.filter(|id| id != profile_id))
+}
+
+pub fn default_profile_ids_after_profile_create(
+    mut defaults: [Option<String>; PLAYER_SLOTS],
+    profile_id: String,
+) -> [Option<String>; PLAYER_SLOTS] {
+    if defaults[player_side_index(PlayerSide::P1)].is_none() {
+        defaults[player_side_index(PlayerSide::P1)] = Some(profile_id);
+    } else if defaults[player_side_index(PlayerSide::P2)].is_none() {
+        defaults[player_side_index(PlayerSide::P2)] = Some(profile_id);
+    }
+    defaults
+}
+
+pub fn rename_loaded_local_profile(
+    active_profiles: &[ActiveProfile; PLAYER_SLOTS],
+    profiles: &mut [Profile; PLAYER_SLOTS],
+    profile_id: &str,
+    display_name: &str,
+) -> [bool; PLAYER_SLOTS] {
+    let mut changed = [false; PLAYER_SLOTS];
+    for side in [PlayerSide::P1, PlayerSide::P2] {
+        let side_idx = player_side_index(side);
+        if active_profile_local_id(&active_profiles[side_idx]) != Some(profile_id) {
+            continue;
+        }
+        changed[side_idx] = set_value_if_changed(
+            &mut profiles[side_idx].display_name,
+            display_name.to_string(),
+        );
+    }
+    changed
+}
+
 fn set_default_profile_id(
     defaults: &mut [Option<String>; PLAYER_SLOTS],
     side_idx: usize,
@@ -1023,6 +1939,32 @@ pub fn set_avatar_texture_key_for_side(
     key: Option<String>,
 ) {
     profiles[player_side_index(side)].avatar_texture_key = key;
+}
+
+pub fn update_guest_profile_noteskins(
+    active_profiles: &[ActiveProfile; PLAYER_SLOTS],
+    profiles: &mut [Profile; PLAYER_SLOTS],
+    noteskin: NoteSkin,
+) -> [bool; PLAYER_SLOTS] {
+    let mut changed = [false; PLAYER_SLOTS];
+    for side in [PlayerSide::P1, PlayerSide::P2] {
+        let side_idx = player_side_index(side);
+        if !active_profile_is_guest(&active_profiles[side_idx]) {
+            continue;
+        }
+        let profile = &mut profiles[side_idx];
+        let mut side_changed = set_value_if_changed(&mut profile.noteskin, noteskin.clone());
+        side_changed |= set_value_if_changed(
+            &mut profile.player_options_singles.noteskin,
+            noteskin.clone(),
+        );
+        side_changed |= set_value_if_changed(
+            &mut profile.player_options_doubles.noteskin,
+            noteskin.clone(),
+        );
+        changed[side_idx] = side_changed;
+    }
+    changed
 }
 
 pub fn pad_light_brightness_for_physical_pad(
@@ -1178,6 +2120,64 @@ pub fn profile_side_has_favorited_pack(
     pack_name: &str,
 ) -> bool {
     profile_has_favorited_pack(&profiles[player_side_index(side)], pack_name)
+}
+
+#[derive(Debug, Default)]
+struct ProfileIni {
+    sections: HashMap<String, HashMap<String, String>>,
+}
+
+impl ProfileIni {
+    fn load(path: &Path) -> Result<Self, std::io::Error> {
+        let content = fs::read_to_string(path)?;
+        Ok(Self::parse(content.as_str()))
+    }
+
+    fn parse(content: &str) -> Self {
+        let mut ini = Self::default();
+        let mut current_section: Option<String> = None;
+
+        for raw_line in content.lines() {
+            let line = raw_line.trim();
+            if line.is_empty() || line.starts_with(';') || line.starts_with('#') {
+                continue;
+            }
+
+            if line.starts_with('[') && line.ends_with(']') && line.len() >= 2 {
+                let section = line[1..line.len() - 1].trim().to_string();
+                current_section = Some(section.clone());
+                ini.sections.entry(section).or_default();
+                continue;
+            }
+
+            let Some(eq_idx) = line.find('=') else {
+                continue;
+            };
+            let key = line[..eq_idx].trim();
+            if key.is_empty() {
+                continue;
+            }
+            let value = line[eq_idx + 1..].trim().to_string();
+            let section = current_section.clone().unwrap_or_default();
+            ini.sections
+                .entry(section)
+                .or_default()
+                .insert(key.to_string(), value);
+        }
+
+        ini
+    }
+
+    fn get(&self, section: &str, key: &str) -> Option<String> {
+        self.sections
+            .get(section)
+            .and_then(|section| section.get(key))
+            .cloned()
+    }
+
+    fn section_has_any(&self, section: &str) -> bool {
+        self.sections.get(section).is_some_and(|s| !s.is_empty())
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -4790,6 +5790,43 @@ pub fn load_favorited_packs_dir(dir: &Path) -> HashSet<String> {
     parse_favorited_packs_content(&text)
 }
 
+#[derive(Debug)]
+pub struct ProfileSidecarLoadData {
+    pub stats: ProfileStats,
+    pub stats_error: Option<ProfileStatsLoadError>,
+    pub favorites: HashSet<String>,
+    pub favorited_packs: HashSet<String>,
+    pub avatar_path: Option<PathBuf>,
+}
+
+pub fn load_profile_sidecars_dir(dir: &Path, default_profile: &Profile) -> ProfileSidecarLoadData {
+    let (stats, stats_error) = match load_profile_stats_file(&profile_stats_path(dir)) {
+        Ok(Some(stats)) => (stats, None),
+        Ok(None) => (
+            ProfileStats {
+                current_combo: default_profile.current_combo,
+                known_pack_names: HashSet::new(),
+            },
+            None,
+        ),
+        Err(error) => (
+            ProfileStats {
+                current_combo: default_profile.current_combo,
+                known_pack_names: HashSet::new(),
+            },
+            Some(error),
+        ),
+    };
+
+    ProfileSidecarLoadData {
+        stats,
+        stats_error,
+        favorites: load_favorites_dir(dir),
+        favorited_packs: load_favorited_packs_dir(dir),
+        avatar_path: find_profile_avatar_path(dir),
+    }
+}
+
 pub fn save_favorited_packs_dir(dir: &Path, packs: &HashSet<String>) {
     save_set_file(
         favorited_packs_path(dir).as_path(),
@@ -7981,6 +9018,50 @@ mod tests {
     }
 
     #[test]
+    fn scorebox_side_snapshot_uses_loaded_side_and_join_state() {
+        let active_profiles = [
+            ActiveProfile::Local {
+                id: "p1-profile".to_string(),
+            },
+            ActiveProfile::Local {
+                id: "p2-profile".to_string(),
+            },
+        ];
+        let mut profiles = [Profile::default(), Profile::default()];
+        profiles[1].display_scorebox = true;
+        profiles[1].show_ex_score = true;
+        profiles[1].groovestats_api_key = " gs-key ".to_string();
+        profiles[1].arrowcloud_api_key = " ac-key ".to_string();
+        profiles[1].groovestats_username = " player ".to_string();
+
+        let p2 = scorebox_profile_snapshot_for_side(
+            &profiles,
+            &active_profiles,
+            SESSION_JOINED_MASK_P2,
+            PlayerSide::P2,
+            true,
+            true,
+            true,
+        );
+        assert!(p2.gs_active);
+        assert!(p2.include_arrowcloud());
+        assert_eq!(p2.persistent_profile_id(), Some("p2-profile"));
+        assert_eq!(p2.auto_profile_id(), Some("p2-profile"));
+
+        let p1 = scorebox_profile_snapshot_for_side(
+            &profiles,
+            &active_profiles,
+            SESSION_JOINED_MASK_P2,
+            PlayerSide::P1,
+            true,
+            true,
+            true,
+        );
+        assert!(!p1.gs_active);
+        assert_eq!(p1.persistent_profile_id(), Some("p1-profile"));
+    }
+
+    #[test]
     fn profile_last_played_updates_style_entry() {
         let mut profile = Profile::default();
 
@@ -8876,6 +9957,30 @@ mod tests {
     }
 
     #[test]
+    fn runtime_local_score_profile_sources_resolve_guid_dirs() {
+        let root = temp_profile_dir("runtime-score-profile-sources");
+        runtime_invalidate_profile_dir_cache();
+        let id = create_local_profile_dir(&root, "Alice", NoteSkin::default(), 100)
+            .expect("profile should be created");
+        let score_root = root.join("Alice").join("scores").join("local");
+        runtime_set_profile_dir_cache(build_profile_dir_map(&root, |_, _, _, _| {}));
+
+        let sources = runtime_local_score_profile_sources(&root, |_, _, _, _| {});
+        assert_eq!(sources.len(), 1);
+        assert_eq!(sources[0].root, score_root);
+        assert_eq!(sources[0].initials, "ALIC");
+        assert_eq!(sources[0].display_name, "Alice");
+
+        let source = runtime_local_score_profile_source(&root, &id, "", |_, _, _, _| {});
+        assert_eq!(source.root, score_root);
+        assert_eq!(source.initials, "ALIC");
+        assert_eq!(source.display_name, "");
+
+        runtime_invalidate_profile_dir_cache();
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn profile_id_sorting_is_case_insensitive_with_stable_tiebreak() {
         let mut ids = ["beta", "Alpha", "alpha", "Beta", "00000000"];
         ids.sort_by(|a, b| cmp_profile_ids_case_insensitive(a, b));
@@ -8976,6 +10081,32 @@ mod tests {
             fs::read_to_string(arrowcloud_ini_path(&dir)).unwrap(),
             "[ArrowCloud]\nApiKey=\n\n"
         );
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn runtime_profile_dir_cache_seeds_and_invalidates() {
+        let root = temp_profile_dir("runtime-profile-dir-cache");
+        let id = create_local_profile_dir(&root, "Alice", NoteSkin::default(), 100)
+            .expect("profile should be created");
+        let real_dir = build_profile_dir_map(&root, |_, _, _, _| {})
+            .remove(&id)
+            .expect("created profile should map by guid");
+        let fake_dir = root.join("stale");
+
+        runtime_set_profile_dir_cache(HashMap::from([(id.clone(), fake_dir.clone())]));
+        assert_eq!(
+            runtime_profile_dir_for_id(&root, &id, |_, _, _, _| {}),
+            fake_dir
+        );
+
+        runtime_invalidate_profile_dir_cache();
+        assert_eq!(
+            runtime_profile_dir_for_id(&root, &id, |_, _, _, _| {}),
+            real_dir
+        );
+        runtime_invalidate_profile_dir_cache();
 
         let _ = fs::remove_dir_all(root);
     }
@@ -9253,6 +10384,52 @@ mod tests {
     }
 
     #[test]
+    fn profile_sidecars_load_defaults_when_files_are_missing() {
+        let dir = temp_profile_dir("profile-sidecars-missing");
+        let mut default_profile = Profile::default();
+        default_profile.current_combo = 17;
+
+        let sidecars = load_profile_sidecars_dir(&dir, &default_profile);
+
+        assert_eq!(sidecars.stats.current_combo, 17);
+        assert!(sidecars.stats.known_pack_names.is_empty());
+        assert!(sidecars.stats_error.is_none());
+        assert!(sidecars.favorites.is_empty());
+        assert!(sidecars.favorited_packs.is_empty());
+        assert!(sidecars.avatar_path.is_none());
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn profile_sidecars_load_stats_sets_and_avatar() {
+        let dir = temp_profile_dir("profile-sidecars");
+        let default_profile = Profile::default();
+        let stats = ProfileStats {
+            current_combo: 42,
+            known_pack_names: HashSet::from(["Known Pack".to_string()]),
+        };
+        let favorites = HashSet::from(["chart-hash".to_string()]);
+        let packs = HashSet::from(["Pack A".to_string()]);
+        let avatar = dir.join("profile.png");
+
+        write_profile_stats_dir(&dir, &stats).expect("stats should write");
+        save_favorites_dir(&dir, &favorites);
+        save_favorited_packs_dir(&dir, &packs);
+        fs::write(&avatar, b"avatar").expect("avatar should write");
+
+        let sidecars = load_profile_sidecars_dir(&dir, &default_profile);
+
+        assert_eq!(sidecars.stats, stats);
+        assert!(sidecars.stats_error.is_none());
+        assert_eq!(sidecars.favorites, favorites);
+        assert_eq!(sidecars.favorited_packs, packs);
+        assert_eq!(sidecars.avatar_path, Some(avatar));
+
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
     fn known_pack_names_add_only_new_entries() {
         let mut known = HashSet::from(["Alpha".to_string()]);
 
@@ -9374,6 +10551,30 @@ mod tests {
         };
         assert!(!active_profile_is_guest(&local));
         assert_eq!(active_profile_local_id(&local), Some("00000042"));
+    }
+
+    #[test]
+    fn machine_seeded_profiles_apply_guest_and_default_settings() {
+        let noteskin = NoteSkin::new("cel");
+        let guest = guest_profile(noteskin.clone(), 88);
+        assert_eq!(guest.display_name, "[ GUEST ]");
+        assert_eq!(guest.scroll_speed, GUEST_SCROLL_SPEED);
+        assert_eq!(guest.noteskin, noteskin);
+        assert_eq!(guest.pad_light_brightness, 88);
+        assert!(guest.avatar_path.is_none());
+        assert!(guest.avatar_texture_key.is_none());
+
+        let default_profile = default_profile_with_machine_settings(NoteSkin::new("metal"), 250);
+        assert_eq!(default_profile.noteskin.as_str(), "metal");
+        assert_eq!(default_profile.pad_light_brightness, 100);
+        assert_eq!(
+            default_profile.player_options_singles.noteskin.as_str(),
+            "metal"
+        );
+        assert_eq!(
+            default_profile.player_options_doubles.noteskin.as_str(),
+            "metal"
+        );
     }
 
     #[test]
@@ -9990,6 +11191,38 @@ mod tests {
     }
 
     #[test]
+    fn profile_ini_reader_matches_profile_load_section_rules() {
+        let ini = ProfileIni::parse(
+            "\
+; comment
+[userprofile]
+DisplayName = Alice
+PlayerInitials=ALC
+
+[Empty]
+
+LooseKey=loose
+# comment
+[GrooveStats]
+ApiKey = gs-key
+",
+        );
+
+        assert!(ini.section_has_any("userprofile"));
+        assert!(ini.section_has_any("Empty"));
+        assert_eq!(
+            ini.get("userprofile", "DisplayName").as_deref(),
+            Some("Alice")
+        );
+        assert_eq!(
+            ini.get("userprofile", "PlayerInitials").as_deref(),
+            Some("ALC")
+        );
+        assert_eq!(ini.get("GrooveStats", "ApiKey").as_deref(), Some("gs-key"));
+        assert_eq!(ini.get("Empty", "LooseKey").as_deref(), Some("loose"));
+    }
+
+    #[test]
     fn parse_last_played_value_trims_empty_optional_fields() {
         assert_eq!(parse_last_played_value(None), None);
         assert_eq!(parse_last_played_value(Some("")), None);
@@ -10194,6 +11427,103 @@ mod tests {
         assert_eq!(
             defaults,
             [Some("old-p1".to_string()), Some("beta".to_string())]
+        );
+    }
+
+    #[test]
+    fn profile_delete_clears_matching_default_slots() {
+        let defaults = default_profile_ids_after_profile_delete(
+            [Some("gone".to_string()), Some("keep".to_string())],
+            "gone",
+        );
+        assert_eq!(defaults, [None, Some("keep".to_string())]);
+
+        let defaults = default_profile_ids_after_profile_delete(
+            [Some("keep".to_string()), Some("gone".to_string())],
+            "gone",
+        );
+        assert_eq!(defaults, [Some("keep".to_string()), None]);
+    }
+
+    #[test]
+    fn profile_create_fills_first_empty_default_slot() {
+        let defaults =
+            default_profile_ids_after_profile_create([None, Some("p2".to_string())], "new".into());
+        assert_eq!(defaults, [Some("new".to_string()), Some("p2".to_string())]);
+
+        let defaults =
+            default_profile_ids_after_profile_create([Some("p1".to_string()), None], "new".into());
+        assert_eq!(defaults, [Some("p1".to_string()), Some("new".to_string())]);
+
+        let defaults = default_profile_ids_after_profile_create(
+            [Some("p1".to_string()), Some("p2".to_string())],
+            "new".into(),
+        );
+        assert_eq!(defaults, [Some("p1".to_string()), Some("p2".to_string())]);
+    }
+
+    #[test]
+    fn default_player_options_use_machine_noteskin() {
+        let (singles, doubles) =
+            default_player_options_with_machine_settings(NoteSkin::new("cel"), 60);
+
+        assert_eq!(singles.noteskin.as_str(), "cel");
+        assert_eq!(doubles.noteskin.as_str(), "cel");
+    }
+
+    #[test]
+    fn loaded_profile_rename_updates_matching_active_sides() {
+        let active_profiles = [
+            ActiveProfile::Local {
+                id: "same".to_string(),
+            },
+            ActiveProfile::Local {
+                id: "other".to_string(),
+            },
+        ];
+        let mut profiles = [Profile::default(), Profile::default()];
+        profiles[0].display_name = "Old".to_string();
+        profiles[1].display_name = "Other".to_string();
+
+        let changed =
+            rename_loaded_local_profile(&active_profiles, &mut profiles, "same", "New Name");
+
+        assert_eq!(changed, [true, false]);
+        assert_eq!(profiles[0].display_name, "New Name");
+        assert_eq!(profiles[1].display_name, "Other");
+    }
+
+    #[test]
+    fn guest_noteskin_update_skips_loaded_local_profiles() {
+        let active_profiles = [
+            ActiveProfile::Guest,
+            ActiveProfile::Local {
+                id: "local".to_string(),
+            },
+        ];
+        let mut profiles = [Profile::default(), Profile::default()];
+        profiles[0].noteskin = NoteSkin::new("old-guest");
+        profiles[0].player_options_singles.noteskin = NoteSkin::new("old-guest");
+        profiles[0].player_options_doubles.noteskin = NoteSkin::new("old-guest");
+        profiles[1].noteskin = NoteSkin::new("local-skin");
+        profiles[1].player_options_singles.noteskin = NoteSkin::new("local-skin");
+        profiles[1].player_options_doubles.noteskin = NoteSkin::new("local-skin");
+
+        let changed =
+            update_guest_profile_noteskins(&active_profiles, &mut profiles, NoteSkin::new("cel"));
+
+        assert_eq!(changed, [true, false]);
+        assert_eq!(profiles[0].noteskin.as_str(), "cel");
+        assert_eq!(profiles[0].player_options_singles.noteskin.as_str(), "cel");
+        assert_eq!(profiles[0].player_options_doubles.noteskin.as_str(), "cel");
+        assert_eq!(profiles[1].noteskin.as_str(), "local-skin");
+        assert_eq!(
+            profiles[1].player_options_singles.noteskin.as_str(),
+            "local-skin"
+        );
+        assert_eq!(
+            profiles[1].player_options_doubles.noteskin.as_str(),
+            "local-skin"
         );
     }
 

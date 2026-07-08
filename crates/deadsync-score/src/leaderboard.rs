@@ -627,6 +627,20 @@ pub struct PlayerLeaderboardRequestDecision {
     pub requested_max_entries: usize,
 }
 
+pub struct PlayerLeaderboardFetchRequest {
+    pub key: PlayerLeaderboardCacheKey,
+    pub gs_username: String,
+    pub persistent_profile_id: Option<String>,
+    pub auto_profile_id: Option<String>,
+    pub should_auto_populate: bool,
+    pub max_entries: usize,
+}
+
+pub struct PlayerLeaderboardRequestPlan {
+    pub snapshot: CachedPlayerLeaderboardData,
+    pub fetch: Option<PlayerLeaderboardFetchRequest>,
+}
+
 pub struct PlayerLeaderboardFetchSuccess<T> {
     pub data: PlayerLeaderboardData,
     pub imported_score: Option<T>,
@@ -817,6 +831,39 @@ pub fn runtime_request_player_leaderboard(
         .lock()
         .unwrap()
         .request_leaderboard(key, max_entries, refresh_cached, now)
+}
+
+pub fn runtime_plan_player_leaderboard_request(
+    chart_hash: &str,
+    profile_snapshot: &GameplayScoreboxProfileSnapshot,
+    max_entries: usize,
+    refresh_cached: bool,
+    now: Instant,
+) -> Option<PlayerLeaderboardRequestPlan> {
+    if max_entries == 0 {
+        return None;
+    }
+    let key = player_leaderboard_cache_key(chart_hash, profile_snapshot)?;
+    let gs_username = profile_snapshot.gs_username().to_string();
+    let persistent_profile_id = profile_snapshot.persistent_profile_id().map(str::to_string);
+    let auto_profile_id = profile_snapshot.auto_profile_id().map(str::to_string);
+    let should_auto_populate = profile_snapshot.should_auto_populate();
+    let decision = runtime_request_player_leaderboard(&key, max_entries, refresh_cached, now);
+    let fetch = decision
+        .should_spawn
+        .then(|| PlayerLeaderboardFetchRequest {
+            key,
+            gs_username,
+            persistent_profile_id,
+            auto_profile_id,
+            should_auto_populate,
+            max_entries: decision.requested_max_entries,
+        });
+
+    Some(PlayerLeaderboardRequestPlan {
+        snapshot: decision.snapshot,
+        fetch,
+    })
 }
 
 pub fn runtime_complete_player_leaderboard_fetch<T>(
@@ -1529,6 +1576,69 @@ mod tests {
         queue_player_leaderboard_refresh(&mut pending_refresh, &key, 3);
 
         assert_eq!(pending_refresh.get(&key), Some(&10));
+    }
+
+    #[test]
+    fn runtime_leaderboard_request_plan_builds_spawn_payload() {
+        let chart_hash = format!("plan-{}", std::process::id());
+        let snapshot = scorebox_snapshot(
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            "  gs-key  ",
+            "  ac-key  ",
+            "  player  ",
+            Some("profile-1".to_string()),
+        );
+
+        let plan = runtime_plan_player_leaderboard_request(
+            chart_hash.as_str(),
+            &snapshot,
+            7,
+            false,
+            Instant::now(),
+        )
+        .expect("active leaderboard should plan");
+
+        assert!(plan.snapshot.loading);
+        let fetch = plan.fetch.expect("uncached leaderboard should fetch");
+        assert_eq!(fetch.key.chart_hash, chart_hash);
+        assert_eq!(fetch.key.api_key, "gs-key");
+        assert_eq!(fetch.key.arrowcloud_api_key, "ac-key");
+        assert!(fetch.key.include_arrowcloud);
+        assert!(fetch.key.show_ex_score);
+        assert_eq!(fetch.gs_username, "player");
+        assert_eq!(fetch.persistent_profile_id.as_deref(), Some("profile-1"));
+        assert_eq!(fetch.auto_profile_id.as_deref(), Some("profile-1"));
+        assert!(fetch.should_auto_populate);
+        assert_eq!(fetch.max_entries, 7);
+
+        let mut cache = runtime_lock_player_leaderboard_cache();
+        cache.in_flight.remove(&fetch.key);
+        cache.pending_refresh.remove(&fetch.key);
+        cache.invalidated_after.remove(&fetch.key);
+        cache.by_key.remove(&fetch.key);
+    }
+
+    #[test]
+    fn runtime_leaderboard_request_plan_rejects_zero_rows() {
+        let snapshot = scorebox_snapshot(
+            true, true, true, true, true, true, "gs", "ac", "player", None,
+        );
+
+        assert!(
+            runtime_plan_player_leaderboard_request(
+                "deadbeef",
+                &snapshot,
+                0,
+                false,
+                Instant::now(),
+            )
+            .is_none()
+        );
     }
 
     #[test]

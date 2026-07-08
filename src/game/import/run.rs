@@ -9,11 +9,11 @@ use crate::game::profile::{
     write_imported_profile_stats,
 };
 use crate::game::scores::{import_itl_json, import_local_scores};
-use crate::game::song::get_song_cache;
 
 use deadsync_import::itg::{self, ItgReadError, ItgSource};
 pub use deadsync_import::pipeline::ImportSummary;
 use deadsync_import::pipeline::run_import;
+use deadsync_simfile::runtime_cache::get_song_cache;
 
 /// Read an ITGmania profile directory and import it into a new local profile.
 ///

@@ -3,21 +3,15 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 const GAME_UPWARD_DEP_BASELINE: &[(&str, &str, usize)] = &[
-    ("src/game/course.rs", "config", 1),
-    ("src/game/online/arrowcloud.rs", "config", 1),
-    ("src/game/online/downloads.rs", "config", 2),
-    ("src/game/online/groovestats.rs", "config", 2),
     ("src/game/parsing/noteskin/service.rs", "assets", 1),
     ("src/game/parsing/simfile.rs", "config", 3),
     ("src/game/parsing/simfile/cache.rs", "config", 1),
     ("src/game/parsing/simfile/scan.rs", "config", 3),
     ("src/game/profile.rs", "config", 1),
-    ("src/game/random_movies.rs", "config", 1),
     ("src/game/scores.rs", "config", 4),
     ("src/game/scores/arrowcloud.rs", "config", 2),
     ("src/game/scores/groovestats.rs", "config", 6),
     ("src/game/scores/itl.rs", "config", 2),
-    ("src/game/song.rs", "config", 9),
 ];
 
 const LOGICAL_INPUT_SYMBOLS: &[&str] = &[

@@ -585,3 +585,86 @@ pub fn itg_parse_milkshape_model(
 fn itg_is_texture_image_ext(ext: &str) -> bool {
     matches!(ext, "png" | "jpg" | "jpeg" | "bmp" | "gif" | "webp")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_model_root(name: &str) -> PathBuf {
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!(
+            "deadsync-noteskin-model-{name}-{}-{suffix}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn model_material_paths_accept_windows_separators() {
+        let root = temp_model_root("windows-separators");
+        let texture_dir = root.join("textures");
+        fs::create_dir_all(&texture_dir).unwrap();
+        image::RgbaImage::from_pixel(2, 2, image::Rgba([255, 0, 0, 255]))
+            .save(texture_dir.join("Tap Note parts.png"))
+            .unwrap();
+        fs::write(
+            texture_dir.join("Tap Note parts.ini"),
+            "[AnimatedTexture]\nTexVelocityY=-1\nFrame0000=Tap Note parts.png\nDelay0000=1.0\n",
+        )
+        .unwrap();
+
+        let model_path = root.join("_down tap note model.txt");
+        fs::write(
+            &model_path,
+            r#"MilkShape 3D ASCII
+Meshes: 1
+"mesh" 0 0
+3
+0 -1.0 -1.0 0.0 0.0 0.0 -1
+0 1.0 -1.0 0.0 1.0 0.0 -1
+0 0.0 1.0 0.0 0.0 1.0 -1
+0
+1
+0 0 1 2 0 0 0 1
+Materials: 1
+"mat"
+0.0 0.0 0.0 1.0
+1.0 1.0 1.0 1.0
+0.0 0.0 0.0 1.0
+0.0 0.0 0.0 1.0
+0.0
+1.0
+"textures\Tap Note parts.ini"
+""
+"#,
+        )
+        .unwrap();
+        let data = noteskin_itg::NoteskinData {
+            name: "test".to_string(),
+            metrics: noteskin_itg::IniData::default(),
+            search_dirs: vec![root.clone()],
+        };
+
+        let layers = itg_parse_milkshape_model_layers(&data, &model_path)
+            .expect("model should resolve backslash material texture path");
+        let layer = layers.first().expect("expected one model-backed layer");
+
+        assert!(
+            layer
+                .texture
+                .texture_path
+                .to_string_lossy()
+                .replace('\\', "/")
+                .ends_with("textures/Tap Note parts.png")
+        );
+        assert_eq!(layer.texture.tex.uv_velocity, [0.0, -1.0]);
+
+        let _ = fs::remove_dir_all(root);
+    }
+}

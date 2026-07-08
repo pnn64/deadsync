@@ -1,10 +1,7 @@
 use crate::act;
 use crate::assets::i18n::tr;
 use crate::assets::{FontRole, current_machine_font_key_for_text};
-use crate::game::{
-    course,
-    parsing::{noteskin, simfile as song_loading},
-};
+use crate::game::parsing::{noteskin, simfile as song_loading};
 use crate::screens::components::shared::{loading_bar, visual_style_bg};
 use crate::screens::{Screen, ScreenAction};
 use deadlib_platform::dirs;
@@ -211,7 +208,7 @@ fn collect_artwork_cache_paths() -> (Vec<PathBuf>, Vec<PathBuf>) {
     let mut banner = Vec::new();
     let mut cdtitle = Vec::new();
     {
-        let song_cache = crate::game::song::get_song_cache();
+        let song_cache = deadsync_simfile::runtime_cache::get_song_cache();
         for pack in song_cache.iter() {
             if let Some(path) = pack.banner_path.as_ref() {
                 banner.push(path.clone());
@@ -227,7 +224,7 @@ fn collect_artwork_cache_paths() -> (Vec<PathBuf>, Vec<PathBuf>) {
         }
     }
     {
-        let course_cache = crate::game::course::get_course_cache();
+        let course_cache = deadsync_simfile::runtime_cache::get_course_cache();
         for (course_path, course) in course_cache.iter() {
             if let Some(path) =
                 simfile_course::resolve_course_banner_path(course_path, &course.banner)
@@ -381,7 +378,7 @@ fn start_loading_thread(state: &mut State) {
                 course: course.to_owned(),
             });
         };
-        course::scan_and_load_courses_with_progress_counts(
+        song_loading::scan_and_load_courses_with_progress_counts(
             &dirs.courses_dir(),
             &dirs.songs_dir(),
             &mut on_course,
