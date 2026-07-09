@@ -40,6 +40,10 @@ pub struct SmxPanelDriver {
     gameplay_active: bool,
     /// The worker owns the pad lights (gameplay effects or a background).
     worker_active: bool,
+    /// Keep the worker active (pads held solid black) even with nothing to
+    /// show, instead of releasing the pads to the firmware's built-in
+    /// lighting. Mirrors the "Idle Pad Lights: Black" machine option.
+    idle_black: bool,
     /// Per-slot background currently applied to the worker, for change detection.
     backgrounds: [Option<(Arc<FullPadAnim>, Clock)>; PADS],
     /// Per-slot judgement animations; empty (all `None`) means no panel effects at all.
@@ -64,6 +68,7 @@ impl Default for SmxPanelDriver {
             lights: SmxPanelLights::new(),
             gameplay_active: false,
             worker_active: false,
+            idle_black: false,
             backgrounds: std::array::from_fn(|_| None),
             judgement_gifs: std::array::from_fn(|_| JudgementGifs::default()),
             notes_ptr: 0,
@@ -291,6 +296,18 @@ impl SmxPanelDriver {
         self.lights.set_pad_blackout(pad, on);
     }
 
+    /// Set whether an otherwise-idle worker keeps ownership of the pads and
+    /// holds them solid black (the "Idle Pad Lights: Black" option) instead of
+    /// releasing them to the pad firmware's built-in lighting. With it on, the
+    /// press gif also works on every screen, since the worker stays active.
+    /// Deduplicated, so calling every frame with the option value is cheap.
+    pub fn set_idle_black(&mut self, on: bool) {
+        if self.idle_black != on {
+            self.idle_black = on;
+            self.sync_worker();
+        }
+    }
+
     /// Handle a raw SMX panel press/release outside gameplay. Plays the `press` gif on
     /// contact and releases it on lift. No-op when the worker is idle or no press gif is
     /// configured; always safe to call regardless of current screen.
@@ -346,12 +363,16 @@ impl SmxPanelDriver {
         self.lights.set_active(true);
     }
 
-    /// Activate or release the worker from the gameplay and background states. Releasing
-    /// clears the worker (including its background copy) and restores firmware lighting;
-    /// `self.backgrounds` is already all `None` whenever that happens, so the driver and
-    /// worker stay in step.
+    /// Activate or release the worker from the gameplay, background, and idle-black
+    /// states. Releasing clears the worker (including its background copy) and restores
+    /// firmware lighting; `self.backgrounds` is already all `None` whenever that happens,
+    /// so the driver and worker stay in step. With `idle_black` set the worker stays
+    /// active regardless, holding the pads black (the keepalive in the worker makes a
+    /// static black frame nearly free on the wire).
     fn sync_worker(&mut self) {
-        let want = self.gameplay_active || self.backgrounds.iter().any(|b| b.is_some());
+        let want = self.gameplay_active
+            || self.idle_black
+            || self.backgrounds.iter().any(|b| b.is_some());
         if want != self.worker_active {
             self.worker_active = want;
             self.lights.set_active(want);

@@ -106,6 +106,7 @@ pub struct Config {
     /// effects, press feedback). While on, the game owns the LEDs and the
     /// pad's own firmware lighting is suppressed.
     pub smx_panel_lights: bool,
+    pub smx_idle_lights_black: bool,
     /// User animation pack supplying the pad backgrounds (a directory under
     /// `assets/smx-pad-lights/dance/`). Empty selects the built-in set.
     pub smx_pad_gifs_pack: SmxPackName,
@@ -390,6 +391,7 @@ impl Default for Config {
             smx_input: system.smx_input,
             smx_manages_pad_config: system.smx_manages_pad_config,
             smx_panel_lights: system.smx_panel_lights,
+            smx_idle_lights_black: system.smx_idle_lights_black,
             smx_pad_gifs_pack: system.smx_pad_gifs_pack,
             smx_judge_gifs_pack: system.smx_judge_gifs_pack,
             smx_underglow_theme: system.smx_underglow_theme,

@@ -108,6 +108,7 @@ update_config_fn!(pub fn update_use_fsrs(enabled: bool) => set_use_fsrs);
 runtime_config_fn!(pub fn update_smx_input(enabled: bool) => update_smx_input);
 runtime_config_fn!(pub fn update_smx_manages_pad_config(enabled: bool) => update_smx_manages_pad_config);
 runtime_config_fn!(pub fn update_smx_panel_lights(enabled: bool) => update_smx_panel_lights);
+runtime_config_fn!(pub fn update_smx_idle_lights_black(black: bool) => update_smx_idle_lights_black);
 runtime_config_fn!(pub fn update_smx_pad_gifs_pack(pack: crate::options::SmxPackName) => update_smx_pad_gifs_pack);
 runtime_config_fn!(pub fn update_smx_judge_gifs_pack(pack: crate::options::SmxPackName) => update_smx_judge_gifs_pack);
 runtime_config_fn!(pub fn update_smx_default_pad_config(preset: deadsync_smx::SmxPadPreset) => update_smx_default_pad_config);

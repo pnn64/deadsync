@@ -282,6 +282,10 @@ impl RuntimeConfigStore {
         self.update_config(|cfg| config_update::set_smx_underglow_grb(cfg, grb))
     }
 
+    pub fn update_smx_idle_lights_black(&self, black: bool) -> bool {
+        self.update_config(|cfg| config_update::set_smx_idle_lights_black(cfg, black))
+    }
+
     pub fn update_smx_default_pad_config(&self, preset: deadsync_smx::SmxPadPreset) -> bool {
         self.update_config(|cfg| config_update::set_smx_default_pad_config(cfg, preset))
     }

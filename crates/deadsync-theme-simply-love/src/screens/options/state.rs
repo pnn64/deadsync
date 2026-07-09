@@ -603,6 +603,12 @@ pub fn init(
     ) {
         *slot = judge_pack_idx;
     }
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::SmxConfig].choice_indices,
+        SMX_CONFIG_OPTIONS_ROWS,
+        SubRowId::SmxIdleLights,
+        usize::from(cfg.smx_idle_lights_black),
+    );
     // Single-pad P1/P2 picker: reflect the slot the SDK currently has the lone pad
     // in (slot 1 = P2, index 1; slot 0 = P1, index 0). The slot already accounts for
     // both the saved serial assignment and the hardware jumper, so reading it covers

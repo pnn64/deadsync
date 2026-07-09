@@ -293,7 +293,11 @@ pub(super) fn submenu_visible_row_indices(
                     SubRowId::SmxUnderglowGrb if !config::get().smx_underglow_theme => None,
                     SubRowId::SmxSinglePadPlayer if pad_count != 1 => None,
                     SubRowId::SmxAssignPads | SubRowId::SmxSwapPads if pad_count != 2 => None,
-                    SubRowId::SmxBgPack | SubRowId::SmxJudgePack if !panel_lights => None,
+                    SubRowId::SmxBgPack | SubRowId::SmxJudgePack | SubRowId::SmxIdleLights
+                        if !panel_lights =>
+                    {
+                        None
+                    }
                     _ => Some(idx),
                 })
                 .collect()

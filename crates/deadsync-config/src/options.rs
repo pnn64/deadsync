@@ -22,12 +22,12 @@ use crate::defaults::{
     DEFAULT_SHOW_SELECT_MUSIC_PREVIEW_MARKER, DEFAULT_SHOW_SELECT_MUSIC_PREVIEWS,
     DEFAULT_SHOW_SELECT_MUSIC_SCOREBOX, DEFAULT_SHOW_SELECT_MUSIC_STAGE_DISPLAY,
     DEFAULT_SHOW_SELECT_MUSIC_VIDEO_BANNERS, DEFAULT_SHOW_SRPG_SHOP, DEFAULT_SHOW_STATS_MODE,
-    DEFAULT_SHOW_VERSION_OVERLAY, DEFAULT_SMOOTH_HISTOGRAM, DEFAULT_SMX_INPUT,
-    DEFAULT_SMX_MANAGES_PAD_CONFIG, DEFAULT_SMX_PANEL_LIGHTS, DEFAULT_SMX_UNDERGLOW_GRB,
-    DEFAULT_SMX_UNDERGLOW_THEME, DEFAULT_SOFTWARE_RENDERER_THREADS, DEFAULT_SONG_PARSING_THREADS,
-    DEFAULT_SORT_MUSIC_WHEEL_BY_SERIES, DEFAULT_SUBMIT_ARROWCLOUD_FAILS,
-    DEFAULT_THREE_KEY_NAVIGATION, DEFAULT_TRANSLATED_TITLES, DEFAULT_UPDATER_INSTALL_ENABLED,
-    DEFAULT_USE_FSRS,
+    DEFAULT_SHOW_VERSION_OVERLAY, DEFAULT_SMOOTH_HISTOGRAM, DEFAULT_SMX_IDLE_LIGHTS_BLACK,
+    DEFAULT_SMX_INPUT, DEFAULT_SMX_MANAGES_PAD_CONFIG, DEFAULT_SMX_PANEL_LIGHTS,
+    DEFAULT_SMX_UNDERGLOW_GRB, DEFAULT_SMX_UNDERGLOW_THEME, DEFAULT_SOFTWARE_RENDERER_THREADS,
+    DEFAULT_SONG_PARSING_THREADS, DEFAULT_SORT_MUSIC_WHEEL_BY_SERIES,
+    DEFAULT_SUBMIT_ARROWCLOUD_FAILS, DEFAULT_THREE_KEY_NAVIGATION, DEFAULT_TRANSLATED_TITLES,
+    DEFAULT_UPDATER_INSTALL_ENABLED, DEFAULT_USE_FSRS,
 };
 use crate::ini::SimpleIni;
 use crate::machine::{
@@ -258,6 +258,10 @@ pub struct SystemOptions {
     /// Send platform strip (underglow) colours in GRB wire order instead of
     /// RGB, for strip hardware that consumes WS2812 channel order.
     pub smx_underglow_grb: bool,
+    /// When pad gif lighting is on but nothing resolves for the current
+    /// screen, hold the pads solid black (true) instead of releasing them to
+    /// the pad firmware's built-in lighting (false, the default).
+    pub smx_idle_lights_black: bool,
     /// User animation pack supplying the pad backgrounds (a directory under
     /// `assets/smx-pad-lights/dance/`). Empty selects the built-in set.
     pub smx_pad_gifs_pack: SmxPackName,
@@ -312,6 +316,7 @@ impl Default for SystemOptions {
             smx_input: DEFAULT_SMX_INPUT,
             smx_manages_pad_config: DEFAULT_SMX_MANAGES_PAD_CONFIG,
             smx_panel_lights: DEFAULT_SMX_PANEL_LIGHTS,
+            smx_idle_lights_black: DEFAULT_SMX_IDLE_LIGHTS_BLACK,
             smx_underglow_theme: DEFAULT_SMX_UNDERGLOW_THEME,
             smx_underglow_grb: DEFAULT_SMX_UNDERGLOW_GRB,
             smx_pad_gifs_pack: SmxPackName::default(),
@@ -698,6 +703,10 @@ pub fn load_system_options(conf: &SimpleIni, default: SystemOptions) -> SystemOp
             .get("Options", "SmxPanelLights")
             .and_then(|value| parse_loose_bool_str(&value))
             .unwrap_or(default.smx_panel_lights),
+        smx_idle_lights_black: conf
+            .get("Options", "SmxIdleLightsBlack")
+            .and_then(|value| parse_loose_bool_str(&value))
+            .unwrap_or(default.smx_idle_lights_black),
         smx_underglow_theme: conf
             .get("Options", "SmxUnderglowTheme")
             .and_then(|value| parse_loose_bool_str(&value))
@@ -861,6 +870,11 @@ pub fn push_system_input_hardware_option_lines(
         options.system.smx_manages_pad_config,
     );
     push_bool(content, "SmxPanelLights", options.system.smx_panel_lights);
+    push_bool(
+        content,
+        "SmxIdleLightsBlack",
+        options.system.smx_idle_lights_black,
+    );
     if let Some(enabled) = options.smx_underglow_theme {
         push_bool(content, "SmxUnderglowTheme", enabled);
     }
@@ -2306,6 +2320,7 @@ mod tests {
             smx_input: false,
             smx_manages_pad_config: false,
             smx_panel_lights: false,
+            smx_idle_lights_black: false,
             smx_underglow_theme: false,
             smx_underglow_grb: false,
             smx_pad_gifs_pack: SmxPackName::default(),
@@ -2587,6 +2602,7 @@ mod tests {
             SmxInput=1
             SmxManagesPadConfig=1
             SmxPanelLights=1
+            SmxIdleLightsBlack=1
             SmxUnderglowTheme=1
             SmxUnderglowGrb=1
             SmxPadGifsPack=senpi-basic
@@ -2645,6 +2661,7 @@ mod tests {
         assert!(loaded.smx_input);
         assert!(loaded.smx_manages_pad_config);
         assert!(loaded.smx_panel_lights);
+        assert!(loaded.smx_idle_lights_black);
         assert!(loaded.smx_underglow_theme);
         assert!(loaded.smx_underglow_grb);
         assert_eq!(loaded.smx_pad_gifs_pack.as_str(), "senpi-basic");
@@ -2775,6 +2792,7 @@ mod tests {
         options.smx_input = true;
         options.smx_manages_pad_config = true;
         options.smx_panel_lights = false;
+        options.smx_idle_lights_black = true;
         let hardware_options = SystemInputHardwareOptions {
             system: options,
             gamepad_backend: "RawInput",
@@ -2795,6 +2813,7 @@ mod tests {
                 "SmxInput=1\n",
                 "SmxManagesPadConfig=1\n",
                 "SmxPanelLights=0\n",
+                "SmxIdleLightsBlack=1\n",
                 "SmxUnderglowTheme=1\n",
                 "SmxUnderglowGrb=0\n",
                 "SmxPadGifsPack=\n",

@@ -28,6 +28,7 @@ pub const DEFAULT_SMX_MANAGES_PAD_CONFIG: bool = false;
 pub const DEFAULT_SMX_PANEL_LIGHTS: bool = false;
 pub const DEFAULT_SMX_UNDERGLOW_THEME: bool = false;
 pub const DEFAULT_SMX_UNDERGLOW_GRB: bool = false;
+pub const DEFAULT_SMX_IDLE_LIGHTS_BLACK: bool = false;
 pub const DEFAULT_SMX_DEFAULT_LIGHT_BRIGHTNESS: u8 = 100;
 pub const DEFAULT_SOFTWARE_RENDERER_THREADS: u8 = 1;
 pub const DEFAULT_SONG_PARSING_THREADS: u8 = 0;
