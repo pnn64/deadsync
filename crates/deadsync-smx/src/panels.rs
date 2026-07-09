@@ -557,6 +557,77 @@ fn composite_led(
 /// coalesces to the newest frame, so this only governs how often we rebuild a frame.
 const FRAME_INTERVAL: Duration = Duration::from_micros(33_333);
 
+/// How often an unchanged frame is re-sent anyway. The pad firmware falls back
+/// to its built-in auto lights after `autoLightsTimeout` without receiving a
+/// lights command (a pad-config value in 128ms units, default ~896ms), and
+/// there is no way to disable that fallback: holding any static frame (a black
+/// background between judgement events, a paused animation) requires periodic
+/// refreshes. 400ms keeps a wide margin under the default timeout while
+/// cutting a static frame's USB traffic from 30 sends/s to 2.5.
+const RESEND_INTERVAL: Duration = Duration::from_millis(400);
+
+/// Whether a built wire frame must go out now: always for the first frame
+/// after an (in)activation, on any byte change, or when the unchanged frame
+/// has been held for `RESEND_INTERVAL` (the firmware-takeover keepalive).
+fn should_send(
+    last: Option<&[u8; FRAME_BYTES]>,
+    buf: &[u8; FRAME_BYTES],
+    since_last_send: Duration,
+) -> bool {
+    match last {
+        Some(last) => last != buf || since_last_send >= RESEND_INTERVAL,
+        None => true,
+    }
+}
+
+/// Frame transmitter with duplicate suppression and the firmware keepalive.
+/// Compares the final wire bytes (after the user brightness scale), so a
+/// brightness change alone still triggers a send even when the composited
+/// frame is identical.
+struct LightsTx {
+    last: [u8; FRAME_BYTES],
+    have_last: bool,
+    sent_at: Instant,
+}
+
+impl LightsTx {
+    fn new() -> Self {
+        Self {
+            last: [0u8; FRAME_BYTES],
+            have_last: false,
+            sent_at: Instant::now(),
+        }
+    }
+
+    /// Forget the last-sent frame so the next send goes out unconditionally.
+    /// Called on every active transition: while we were inactive the pad was
+    /// showing firmware content, so an identical-looking frame must still be
+    /// re-sent to take the LEDs back.
+    fn invalidate(&mut self) {
+        self.have_last = false;
+    }
+
+    fn send(&mut self, frame: &[u8; FRAME_BYTES]) {
+        let Some(m) = crate::manager() else { return };
+        let mut buf = *frame;
+        // Apply the user brightness as a final per-slot scale. 100/100 is an
+        // exact identity, so skip the pass on the common full-brightness path.
+        let brightness = crate::light_brightness();
+        if brightness != [100, 100] {
+            crate::apply_brightness(&mut buf, brightness);
+        }
+        let now = Instant::now();
+        let last = self.have_last.then_some(&self.last);
+        if !should_send(last, &buf, now.duration_since(self.sent_at)) {
+            return;
+        }
+        self.last = buf;
+        self.have_last = true;
+        self.sent_at = now;
+        m.set_lights(&self.last);
+    }
+}
+
 /// Messages from the app to the worker. Pad/panel/animation are resolved
 /// app-side (including registry lookups) so the worker stays free of app policy
 /// and style knowledge; animations travel as cheap `Arc` handles.
@@ -742,6 +813,7 @@ impl Drop for SmxPanelLights {
 
 fn run_worker(rx: Receiver<Ev>) {
     let mut fx = PanelFx::new();
+    let mut lights = LightsTx::new();
     let mut active = false;
     let mut last_tick = Instant::now();
 
@@ -764,11 +836,11 @@ fn run_worker(rx: Receiver<Ev>) {
         if let Some(ev) = next {
             let was_active = active;
             // Apply this event, then drain any burst queued behind it.
-            if handle(&mut fx, &mut active, ev) {
+            if handle(&mut fx, &mut lights, &mut active, ev) {
                 break 'outer;
             }
             while let Ok(ev) = rx.try_recv() {
-                if handle(&mut fx, &mut active, ev) {
+                if handle(&mut fx, &mut lights, &mut active, ev) {
                     break 'outer;
                 }
             }
@@ -784,19 +856,20 @@ fn run_worker(rx: Receiver<Ev>) {
             let dt = now.saturating_duration_since(last_tick);
             if dt >= FRAME_INTERVAL {
                 last_tick = now;
-                send_lights(fx.tick(dt.as_secs_f32()));
+                lights.send(fx.tick(dt.as_secs_f32()));
             }
         }
     }
 
     // On exit, leave the panels dark and restore the pad firmware idle lighting.
     fx.clear_all();
-    send_lights(fx.tick(0.0));
+    lights.invalidate();
+    lights.send(fx.tick(0.0));
     reenable_auto();
 }
 
 /// Apply one event to the effect state. Returns `true` when the worker should stop.
-fn handle(fx: &mut PanelFx, active: &mut bool, ev: Ev) -> bool {
+fn handle(fx: &mut PanelFx, lights: &mut LightsTx, active: &mut bool, ev: Ev) -> bool {
     match ev {
         Ev::Background { pad, background } => fx.set_background_for_pad(pad.into(), background),
         Ev::Beat(beat) => fx.set_beat(beat),
@@ -818,6 +891,10 @@ fn handle(fx: &mut PanelFx, active: &mut bool, ev: Ev) -> bool {
         Ev::ClearPanels => fx.clear_panels(),
         Ev::Active(a) => {
             *active = a;
+            // Either transition means the pad's ownership is changing hands:
+            // forget the duplicate-suppression state so the next frame goes
+            // out unconditionally.
+            lights.invalidate();
             if a {
                 // Entering a screen: drop stale per-panel effects but keep any
                 // background the app set up for it.
@@ -826,30 +903,13 @@ fn handle(fx: &mut PanelFx, active: &mut bool, ev: Ev) -> bool {
                 // Going idle: drop everything, push one black frame, and hand
                 // the pad back to firmware.
                 fx.clear_all();
-                send_lights(fx.tick(0.0));
+                lights.send(fx.tick(0.0));
                 reenable_auto();
             }
         }
         Ev::Shutdown => return true,
     }
     false
-}
-
-fn send_lights(frame: &[u8]) {
-    let Some(m) = crate::manager() else { return };
-    // Apply the user brightness as a final per-slot scale. 100/100 is an exact
-    // identity, so skip the copy on the common full-brightness path. Otherwise scale
-    // into a stack buffer (no heap on the 30Hz worker) and send that.
-    let brightness = crate::light_brightness();
-    if brightness == [100, 100] || frame.len() > FRAME_BYTES {
-        m.set_lights(frame);
-        return;
-    }
-    let mut buf = [0u8; FRAME_BYTES];
-    let n = frame.len();
-    buf[..n].copy_from_slice(frame);
-    crate::apply_brightness(&mut buf[..n], brightness);
-    m.set_lights(&buf[..n]);
 }
 
 fn reenable_auto() {
@@ -1368,6 +1428,32 @@ mod tests {
 
         fx.clear_all();
         assert!(fx.tick(0.0).iter().all(|&b| b == 0));
+    }
+
+    // Wire-frame duplicate suppression + keepalive
+
+    #[test]
+    fn should_send_first_frame_changes_and_keepalive() {
+        let black = [0u8; FRAME_BYTES];
+        let mut lit = [0u8; FRAME_BYTES];
+        lit[0] = 1;
+
+        // No last frame (fresh activation): always send.
+        assert!(should_send(None, &black, Duration::ZERO));
+        // Unchanged frame inside the keepalive window: suppressed.
+        assert!(!should_send(Some(&black), &black, Duration::from_millis(100)));
+        // Any byte change sends immediately.
+        assert!(should_send(Some(&black), &lit, Duration::ZERO));
+        // Unchanged frame held past the keepalive: re-sent so the pad
+        // firmware's auto-lights timeout never elapses.
+        assert!(should_send(Some(&black), &black, RESEND_INTERVAL));
+    }
+
+    #[test]
+    fn keepalive_interval_stays_under_the_default_firmware_timeout() {
+        // SMXConfig.autoLightsTimeout default: 1000/128 units of 128ms.
+        let default_timeout = Duration::from_millis((1000 / 128) * 128);
+        assert!(RESEND_INTERVAL * 2 <= default_timeout);
     }
 
     #[test]
