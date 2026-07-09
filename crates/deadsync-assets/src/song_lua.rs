@@ -1,6 +1,5 @@
 use std::path::{Path, PathBuf};
 
-use deadlib_platform::dirs;
 use deadlib_present::actors::TextAttribute;
 use deadlib_render::TexturedMeshVertex;
 use deadsync_noteskin::{NUM_QUANTIZATIONS, Style};
@@ -24,7 +23,7 @@ pub use deadsync_song_lua::{
 
 pub type SongLuaOverlayModelLayer = deadsync_song_lua::SongLuaOverlayModelLayer<TexturedMeshVertex>;
 pub type SongLuaOverlayKind = deadsync_song_lua::SongLuaOverlayKind<
-    crate::game::parsing::noteskin::SpriteSlot,
+    crate::noteskin::SpriteSlot,
     TexturedMeshVertex,
     TextAttribute,
 >;
@@ -39,7 +38,7 @@ pub fn compile_song_lua(
         entry_path,
         context,
         song_lua_noteskin_resolver(),
-        crate::game::parsing::noteskin::load_itg_model_slots_from_path,
+        crate::noteskin::load_itg_model_slots_from_path,
         model_layer_from_slot,
         |context, noteskin| multitap_arrow_visual_spec(noteskin, context),
     )
@@ -47,28 +46,21 @@ pub fn compile_song_lua(
 
 fn song_lua_noteskin_resolver() -> SongLuaNoteskinResolver {
     SongLuaNoteskinResolver {
-        resolve_path: crate::game::parsing::noteskin::song_lua_noteskin_resolve_path,
-        metric: crate::game::parsing::noteskin::song_lua_noteskin_metric,
-        metric_f: crate::game::parsing::noteskin::song_lua_noteskin_metric_f,
-        metric_b: crate::game::parsing::noteskin::song_lua_noteskin_metric_b,
-        exists: crate::game::parsing::noteskin::song_lua_noteskin_exists,
-        names: song_lua_noteskin_names,
+        resolve_path: crate::noteskin::song_lua_noteskin_resolve_path,
+        metric: crate::noteskin::song_lua_noteskin_metric,
+        metric_f: crate::noteskin::song_lua_noteskin_metric_f,
+        metric_b: crate::noteskin::song_lua_noteskin_metric_b,
+        exists: crate::noteskin::song_lua_noteskin_exists,
+        names: crate::noteskin::song_lua_noteskin_names,
     }
 }
 
-fn song_lua_noteskin_names() -> Vec<String> {
-    let roots = dirs::app_dirs().noteskin_roots();
-    deadsync_noteskin::itg::song_lua_noteskin_names_from_roots(&roots, "dance")
-}
-
-fn model_layer_from_slot(
-    slot: &crate::game::parsing::noteskin::SpriteSlot,
-) -> Option<SongLuaOverlayModelLayer> {
+fn model_layer_from_slot(slot: &crate::noteskin::SpriteSlot) -> Option<SongLuaOverlayModelLayer> {
     model_layer_from_slot_frame(slot, 0)
 }
 
 fn model_layer_from_slot_frame(
-    slot: &crate::game::parsing::noteskin::SpriteSlot,
+    slot: &crate::noteskin::SpriteSlot,
     frame_index: usize,
 ) -> Option<SongLuaOverlayModelLayer> {
     let model = slot.model.as_ref()?;
@@ -79,7 +71,7 @@ fn model_layer_from_slot_frame(
     let (uv_scale, uv_offset, uv_tex_shift) = slot.model_uv_params(uv_rect);
     Some(SongLuaOverlayModelLayer::new(
         slot.texture_key_shared(),
-        crate::game::parsing::noteskin::build_model_geometry(slot),
+        crate::noteskin::build_model_geometry(slot),
         model.size(),
         uv_scale,
         uv_offset,
@@ -110,7 +102,7 @@ fn multitap_arrow_visual_spec(
         num_cols: song_lua_style_info(&context.style_name).columns,
         num_players: song_lua_human_player_count(context).max(1),
     };
-    let ns = crate::game::parsing::noteskin::load_itg_skin_cached(&style, noteskin).ok()?;
+    let ns = crate::noteskin::load_itg_skin_cached(&style, noteskin).ok()?;
     let down_col = 1.min(style.num_cols.saturating_sub(1));
     let note_idx = down_col * NUM_QUANTIZATIONS;
     let layers = ns.note_layers.get(note_idx)?;
@@ -148,7 +140,7 @@ fn multitap_arrow_visual_spec(
 }
 
 fn multitap_arrow_model_layer_from_slot(
-    slot: &crate::game::parsing::noteskin::SpriteSlot,
+    slot: &crate::noteskin::SpriteSlot,
 ) -> Option<SongLuaOverlayModelLayer> {
     model_layer_from_slot_frame(slot, slot.frame_index_from_phase(0.0))
 }

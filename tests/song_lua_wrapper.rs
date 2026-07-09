@@ -1,5 +1,5 @@
 use deadlib_present::anim::{EffectClock, EffectMode};
-use deadsync::game::parsing::song_lua::{
+use deadsync_assets::song_lua::{
     SongLuaCompileContext, SongLuaDifficulty, SongLuaEaseTarget, SongLuaOverlayBlendMode,
     SongLuaOverlayKind, SongLuaPlayerContext, SongLuaSpeedMod, THEME_RECEPTOR_Y_STD,
     compile_song_lua,

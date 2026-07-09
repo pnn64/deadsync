@@ -1,7 +1,6 @@
 use crate::act;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::{self, AssetManager, visual_styles};
-use crate::game::parsing::noteskin::{self, Noteskin};
 use crate::game::profile;
 use crate::game::scores;
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor;
@@ -11,6 +10,7 @@ use crate::screens::components::shared::screen_bar::{
 use crate::screens::components::shared::{screen_bar, visual_style_bg};
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ScreenAction};
+use deadsync_assets::noteskin::{self, Noteskin};
 
 use deadlib_present::actors::{self, Actor};
 use deadlib_present::color;

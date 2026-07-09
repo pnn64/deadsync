@@ -896,7 +896,7 @@ const NOTESKIN_CRATE_FORBIDDEN_TOKENS: &[&str] = &[
 ];
 
 const NOTEFIELD_CRATE_FORBIDDEN_TOKENS: &[&str] = &[
-    "crate::game::parsing::noteskin",
+    "deadsync_assets::noteskin",
     "deadsync::game::parsing::noteskin",
 ];
 

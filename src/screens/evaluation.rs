@@ -23,12 +23,11 @@ use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::{
     FontRole, current_machine_font_key, current_machine_font_key_for_text, visual_styles,
 };
-use crate::game::online;
-use crate::game::parsing::noteskin::Noteskin;
 use crate::game::scores;
 use crate::screens::gameplay;
 use crate::screens::input as screen_input;
 use deadlib_present::font;
+use deadsync_assets::noteskin::Noteskin;
 use deadsync_chart::ChartData;
 use deadsync_chart::SongData;
 use deadsync_core::input::MAX_PLAYERS;
@@ -50,6 +49,7 @@ use crate::screens::ScreenAction;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, PadEvent, VirtualAction, pad_dir_from_action};
 use deadsync_online::groovestats as groovestats_api;
+use deadsync_online::runtime as online;
 use deadsync_profile as profile_data;
 // Keyboard handling is centralized in app via virtual actions
 use chrono::Local;

@@ -10,17 +10,21 @@ use crate::OnlineRequestError;
 use deadsync_net::{self as network, NetworkError};
 use deadsync_profile as profile_data;
 use deadsync_profile::{Profile, RemoveMask, TimingWindowsOption};
-use deadsync_rules::{judgment, scroll::ScrollSpeedSetting, timing::WindowCounts};
+use deadsync_rules::{judgment, note::Note, scroll::ScrollSpeedSetting, timing::WindowCounts};
 use deadsync_score::{
     EventProgress, GrooveStatsAutosubmitLog, GrooveStatsAutosubmitLogLevel,
+    GrooveStatsAutosubmitPlayerAction, GrooveStatsAutosubmitPlayerInput,
+    GrooveStatsAutosubmitSessionDecision, GrooveStatsAutosubmitSessionInput,
     GrooveStatsSubmitRecordBanner, GrooveStatsSubmitUiStatus, GsExEvidence, ImportedPlayerScore,
     ItlEventProgress, LeaderboardEntry, LeaderboardPane, PlayerLeaderboardData,
     PlayerScoreImportResult, RejectReason, SUBMIT_RETRY_MAX_ATTEMPTS, ScoreImportEndpoint,
     SubmitAchievement, SubmitAchievementReward, SubmitEventProgressData, SubmitEventProgressInput,
     SubmitProgress, SubmitQuest, SubmitQuestReward, SubmitRetryState, SubmitStatImprovement,
-    event_name_or_unknown, event_progress_from_submit, groovestats_submit_record_banner,
+    event_name_or_unknown, event_progress_from_submit, groovestats_autosubmit_player_decision,
+    groovestats_autosubmit_session_decision, groovestats_submit_record_banner,
     groovestats_submit_ui_status, leaderboard_nonzero_rank, leaderboard_pane,
     leaderboard_score_10000, leaderboard_username_matches, score_import_entry_matches_profile,
+    validate_score_import_credentials,
 };
 use serde_json::{Map as JsonMap, Value as JsonValue};
 
@@ -768,6 +772,33 @@ pub fn fetch_combined_player_leaderboards(
     })
 }
 
+pub fn fetch_validated_combined_player_leaderboards(
+    service: Service,
+    api_key: &str,
+    username: &str,
+    chart_hash: &str,
+    arrowcloud_api_key: Option<&str>,
+    show_ex_score: bool,
+    max_entries: usize,
+) -> Result<CombinedPlayerLeaderboards, Box<dyn std::error::Error + Send + Sync>> {
+    if chart_hash.trim().is_empty() {
+        return Err("Missing chart hash for leaderboard request.".into());
+    }
+    if api_key.trim().is_empty() {
+        return Err("Missing GrooveStats API key for leaderboard request.".into());
+    }
+    fetch_combined_player_leaderboards(
+        service,
+        api_key,
+        username,
+        chart_hash,
+        arrowcloud_api_key,
+        show_ex_score,
+        max_entries,
+    )
+    .map_err(|error| crate::boxed_request_error("Leaderboard API", error))
+}
+
 pub fn player_score_import_result_from_api(
     decoded: LeaderboardsApiResponse,
     endpoint: ScoreImportEndpoint,
@@ -834,6 +865,23 @@ pub fn fetch_player_score_import_result(
     Ok(player_score_import_result_from_api(
         decoded, endpoint, username,
     ))
+}
+
+pub fn fetch_validated_player_score_import_result(
+    endpoint: ScoreImportEndpoint,
+    api_key: &str,
+    username: &str,
+    chart_hash: &str,
+) -> Result<PlayerScoreImportResult, Box<dyn std::error::Error + Send + Sync>> {
+    let chart_hash = chart_hash.trim();
+    if chart_hash.is_empty() {
+        return Err("Missing chart hash for score request.".into());
+    }
+    if let Err(error) = validate_score_import_credentials(endpoint, api_key, username) {
+        return Err(error.request_message().into());
+    }
+    fetch_player_score_import_result(endpoint, api_key, username, chart_hash)
+        .map_err(|error| crate::boxed_request_error("API", error))
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -1226,6 +1274,123 @@ pub struct GrooveStatsSubmitPlayerPayload {
     pub player_options: String,
 }
 
+pub struct GrooveStatsSubmitPlayerPayloadInput<'a> {
+    pub scoring_counts: &'a judgment::JudgeCounts,
+    pub holds_held_for_score: u32,
+    pub rolls_held_for_score: u32,
+    pub mines_hit_for_score: u32,
+    pub possible_grade_points: i32,
+    pub music_rate: f32,
+    pub judgment_counts: GrooveStatsJudgmentCounts,
+    pub rescore_counts: GrooveStatsRescoreCounts,
+    pub fa_plus_ex_score: Option<f64>,
+    pub timing_windows: profile_data::TimingWindowsOption,
+    pub scroll_speed: ScrollSpeedSetting,
+    pub player_options: &'a profile_data::Profile,
+}
+
+pub struct GrooveStatsGameplayPayloadInput<'a> {
+    pub scoring_counts: &'a judgment::JudgeCounts,
+    pub holds_held_for_score: u32,
+    pub rolls_held_for_score: u32,
+    pub mines_hit_for_score: u32,
+    pub possible_grade_points: i32,
+    pub music_rate: f32,
+    pub window_counts: WindowCounts,
+    pub total_steps: u32,
+    pub holds_held: u32,
+    pub total_holds: u32,
+    pub mines_hit: u32,
+    pub total_mines: u32,
+    pub rolls_held: u32,
+    pub total_rolls: u32,
+    pub notes: &'a [Note],
+    pub note_times: &'a [i64],
+    pub hold_end_times: &'a [Option<i64>],
+    pub fail_time_ns: Option<i64>,
+    pub profile: &'a profile_data::Profile,
+}
+
+pub fn submit_player_payload_from_input(
+    input: GrooveStatsSubmitPlayerPayloadInput<'_>,
+) -> GrooveStatsSubmitPlayerPayload {
+    let score = deadsync_score::groovestats_score_10000_from_counts(
+        input.scoring_counts,
+        input.holds_held_for_score,
+        input.rolls_held_for_score,
+        input.mines_hit_for_score,
+        input.possible_grade_points,
+    );
+    let comment = submit_comment(
+        &input.judgment_counts,
+        input.fa_plus_ex_score,
+        input.music_rate,
+        input.timing_windows,
+        input.scroll_speed,
+    );
+    GrooveStatsSubmitPlayerPayload {
+        rate: deadsync_score::groovestats_rate_hundredths(input.music_rate),
+        score,
+        judgment_counts: input.judgment_counts,
+        rescore_counts: input.rescore_counts,
+        used_cmod: deadsync_score::groovestats_used_cmod(input.scroll_speed),
+        comment,
+        player_options: player_options_json(input.player_options),
+    }
+}
+
+pub fn submit_player_payload_from_gameplay_input(
+    input: GrooveStatsGameplayPayloadInput<'_>,
+) -> GrooveStatsSubmitPlayerPayload {
+    let judgment_counts = judgment_counts_from_stats(
+        input.window_counts,
+        input.profile.timing_windows.disabled_windows(),
+        input.total_steps,
+        input.holds_held,
+        input.total_holds,
+        input.mines_hit,
+        input.total_mines,
+        input.rolls_held,
+        input.total_rolls,
+    );
+    let rescore_counts = rescore_counts_from_judgments(
+        input
+            .notes
+            .iter()
+            .filter_map(|note| Some((note.result.as_ref()?, note.early_result.as_ref()?))),
+    );
+    let fa_plus_ex_score = if input.profile.show_fa_plus_window {
+        Some(judgment::calculate_ex_score_from_notes(
+            input.notes,
+            input.note_times,
+            input.hold_end_times,
+            input.total_steps,
+            input.total_holds,
+            input.total_rolls,
+            input.total_mines,
+            input.fail_time_ns,
+            false,
+        ))
+    } else {
+        None
+    };
+
+    submit_player_payload_from_input(GrooveStatsSubmitPlayerPayloadInput {
+        scoring_counts: input.scoring_counts,
+        holds_held_for_score: input.holds_held_for_score,
+        rolls_held_for_score: input.rolls_held_for_score,
+        mines_hit_for_score: input.mines_hit_for_score,
+        possible_grade_points: input.possible_grade_points,
+        music_rate: input.music_rate,
+        judgment_counts,
+        rescore_counts,
+        fa_plus_ex_score,
+        timing_windows: input.profile.timing_windows,
+        scroll_speed: input.profile.scroll_speed,
+        player_options: input.profile,
+    })
+}
+
 #[derive(Debug, Clone)]
 pub struct GrooveStatsSubmitPlayerRequest {
     pub slot: u8,
@@ -1262,6 +1427,38 @@ pub struct GrooveStatsSubmitPlayerDraft {
     pub show_ex_score: bool,
     pub api_key: String,
     pub payload: GrooveStatsSubmitPlayerPayload,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct GrooveStatsGameplaySubmitInput {
+    pub enabled: bool,
+    pub service: Service,
+    pub service_name: &'static str,
+    pub player_count: usize,
+    pub autoplay_used: bool,
+    pub is_course_stage: bool,
+    pub autosubmit_course_scores_individually: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct GrooveStatsGameplaySubmitPlayer {
+    pub side: profile_data::PlayerSide,
+    pub slot: u8,
+    pub chart_hash: String,
+    pub username: String,
+    pub profile_name: String,
+    pub profile_id: Option<String>,
+    pub itl_score_hundredths: Option<u32>,
+    pub show_ex_score: bool,
+    pub api_key: String,
+    pub is_pad_player: bool,
+    pub invalid_reason: Option<String>,
+    pub song_completed_naturally: bool,
+    pub is_failing: bool,
+    pub life: f32,
+    pub has_fail_time: bool,
+    pub course_stage_life_submit_eligible: bool,
+    pub payload: Option<GrooveStatsSubmitPlayerPayload>,
 }
 
 impl GrooveStatsSubmitPlayerDraft {
@@ -1332,6 +1529,109 @@ impl GrooveStatsSubmitPlayerDraft {
             payload: self.payload.clone(),
         }
     }
+}
+
+pub fn submit_gameplay_players(
+    input: GrooveStatsGameplaySubmitInput,
+    players: impl IntoIterator<Item = GrooveStatsGameplaySubmitPlayer>,
+    cache_success: fn(&GrooveStatsSubmitPlayerJob, &GrooveStatsSubmitApiPlayer),
+    after_player: fn(&GrooveStatsSubmitPlayerJob),
+) -> bool {
+    let players: Vec<_> = players.into_iter().collect();
+    for player in &players {
+        reset_submit_ui_status(player.side, player.chart_hash.as_str());
+        reset_submit_event_ui(player.side, player.chart_hash.as_str());
+        reset_submit_retry(player.side, player.chart_hash.as_str());
+    }
+
+    match groovestats_autosubmit_session_decision(GrooveStatsAutosubmitSessionInput {
+        enabled: input.enabled,
+        player_count: input.player_count,
+        autoplay_used: input.autoplay_used,
+        is_course_stage: input.is_course_stage,
+        autosubmit_course_scores_individually: input.autosubmit_course_scores_individually,
+    }) {
+        GrooveStatsAutosubmitSessionDecision::Submit => {}
+        GrooveStatsAutosubmitSessionDecision::Skip { log } => {
+            if let Some(log) = log {
+                log_global_submit_skip(input.service_name, log);
+            }
+            return false;
+        }
+    }
+
+    let mut drafts = Vec::with_capacity(players.len());
+    for player in players {
+        let decision = groovestats_autosubmit_player_decision(GrooveStatsAutosubmitPlayerInput {
+            has_invalid_reason: player.invalid_reason.is_some(),
+            is_pad_player: player.is_pad_player,
+            song_completed_naturally: player.song_completed_naturally,
+            is_failing: player.is_failing,
+            life: player.life,
+            has_fail_time: player.has_fail_time,
+            course_stage_life_submit_eligible: player.course_stage_life_submit_eligible,
+            api_key_present: !player.api_key.trim().is_empty(),
+        });
+        match decision.action {
+            GrooveStatsAutosubmitPlayerAction::BuildPayload => {}
+            GrooveStatsAutosubmitPlayerAction::SkipInvalidReason => {
+                if let Some(reason) = player.invalid_reason {
+                    warn_submit_skip(
+                        input.service_name,
+                        player.side,
+                        player.chart_hash.as_str(),
+                        reason.as_str(),
+                    );
+                }
+                continue;
+            }
+            GrooveStatsAutosubmitPlayerAction::Skip { log } => {
+                if let Some(log) = log {
+                    log_player_submit_skip(
+                        input.service_name,
+                        player.side,
+                        player.chart_hash.as_str(),
+                        log,
+                    );
+                }
+                continue;
+            }
+        }
+
+        let Some(payload) = player.payload else {
+            warn_submit_skip(
+                input.service_name,
+                player.side,
+                player.chart_hash.as_str(),
+                "failed to build submit payload",
+            );
+            continue;
+        };
+        drafts.push(GrooveStatsSubmitPlayerDraft::new(
+            player.side,
+            player.slot,
+            player.chart_hash,
+            player.username.trim().to_string(),
+            player.profile_name,
+            player.profile_id,
+            player.itl_score_hundredths,
+            player.show_ex_score,
+            player.api_key.trim().to_string(),
+            payload,
+        ));
+    }
+
+    let Some(request) = begin_submit_request_from_drafts(drafts) else {
+        return false;
+    };
+    spawn_submit_request(
+        request,
+        input.service,
+        input.service_name,
+        cache_success,
+        after_player,
+    );
+    true
 }
 
 #[derive(Debug, Clone)]
@@ -2950,6 +3250,112 @@ mod tests {
     }
 
     #[test]
+    fn submit_player_payload_from_input_builds_wire_payload() {
+        let mut scoring_counts = [0u32; judgment::JUDGE_GRADE_COUNT];
+        scoring_counts[judgment::judge_grade_ix(judgment::JudgeGrade::Fantastic)] = 100;
+        let mut profile = Profile::default();
+        profile.scroll_speed = ScrollSpeedSetting::CMod(650.0);
+
+        let judgment_counts = GrooveStatsJudgmentCounts {
+            fantastic_plus: 1,
+            fantastic: 2,
+            excellent: 3,
+            great: 0,
+            decent: Some(4),
+            way_off: Some(5),
+            miss: 6,
+            total_steps: 20,
+            holds_held: 1,
+            total_holds: 2,
+            mines_hit: 0,
+            total_mines: 1,
+            rolls_held: 0,
+            total_rolls: 0,
+        };
+        let payload = submit_player_payload_from_input(GrooveStatsSubmitPlayerPayloadInput {
+            scoring_counts: &scoring_counts,
+            holds_held_for_score: 0,
+            rolls_held_for_score: 0,
+            mines_hit_for_score: 0,
+            possible_grade_points: 500,
+            music_rate: 1.5,
+            judgment_counts,
+            rescore_counts: GrooveStatsRescoreCounts::default(),
+            fa_plus_ex_score: Some(99.5),
+            timing_windows: TimingWindowsOption::DecentsAndWayOffs,
+            scroll_speed: profile.scroll_speed,
+            player_options: &profile,
+        });
+
+        assert_eq!(payload.rate, 150);
+        assert_eq!(payload.score, 10000);
+        assert!(payload.used_cmod);
+        assert_eq!(
+            payload.comment,
+            "[DS], FA+, 99.50EX, 1.5x Rate, 2w, 3e, 4d, 5wo, 6m, No Dec/WO, C650"
+        );
+        let options: serde_json::Value =
+            serde_json::from_str(&payload.player_options).expect("player options json");
+        assert_eq!(options["SpeedModType"], 2);
+        assert_eq!(options["SpeedMod"], 650.0);
+    }
+
+    #[test]
+    fn submit_player_payload_from_gameplay_input_builds_wire_payload() {
+        let mut scoring_counts = [0u32; judgment::JUDGE_GRADE_COUNT];
+        scoring_counts[judgment::judge_grade_ix(judgment::JudgeGrade::Fantastic)] = 80;
+        scoring_counts[judgment::judge_grade_ix(judgment::JudgeGrade::Excellent)] = 20;
+        let mut profile = Profile::default();
+        profile.scroll_speed = ScrollSpeedSetting::CMod(650.0);
+        let notes: [Note; 0] = [];
+        let note_times: [i64; 0] = [];
+        let hold_end_times: [Option<i64>; 0] = [];
+
+        let payload = submit_player_payload_from_gameplay_input(GrooveStatsGameplayPayloadInput {
+            scoring_counts: &scoring_counts,
+            holds_held_for_score: 0,
+            rolls_held_for_score: 0,
+            mines_hit_for_score: 0,
+            possible_grade_points: 500,
+            music_rate: 1.25,
+            window_counts: WindowCounts {
+                w0: 7,
+                w1: 93,
+                ..WindowCounts::default()
+            },
+            total_steps: 100,
+            holds_held: 1,
+            total_holds: 2,
+            mines_hit: 3,
+            total_mines: 4,
+            rolls_held: 5,
+            total_rolls: 6,
+            notes: &notes,
+            note_times: &note_times,
+            hold_end_times: &hold_end_times,
+            fail_time_ns: None,
+            profile: &profile,
+        });
+
+        assert_eq!(payload.rate, 125);
+        assert_eq!(payload.score, 9600);
+        assert!(payload.used_cmod);
+        assert_eq!(payload.judgment_counts.fantastic_plus, 7);
+        assert_eq!(payload.judgment_counts.fantastic, 93);
+        assert_eq!(payload.judgment_counts.holds_held, 1);
+        assert_eq!(payload.judgment_counts.mines_hit, 3);
+        assert_eq!(payload.judgment_counts.rolls_held, 5);
+        assert_eq!(payload.rescore_counts.fantastic_plus, 0);
+        assert_eq!(payload.rescore_counts.fantastic, 0);
+        assert_eq!(payload.rescore_counts.excellent, 0);
+        assert_eq!(payload.rescore_counts.great, 0);
+        assert_eq!(payload.rescore_counts.decent, 0);
+        assert_eq!(payload.rescore_counts.way_off, 0);
+        assert!(payload.comment.contains("1.25x Rate"));
+        assert!(payload.comment.contains("C650"));
+    }
+
+    #[test]
     fn submit_protocol_constants_match_legacy_api_shape() {
         assert_eq!(GROOVESTATS_CHART_HASH_VERSION, 3);
         assert_eq!(GROOVESTATS_COMMENT_PREFIX, "[DS]");
@@ -3001,8 +3407,9 @@ mod tests {
     #[test]
     fn qr_login_uuid_message_announces_uuid() {
         assert_eq!(
-            qr_login_uuid_message("ABC"),
-            r#"{"data":{"uuid":"ABC"},"event":"uuid"}"#
+            serde_json::from_str::<serde_json::Value>(&qr_login_uuid_message("ABC"))
+                .expect("uuid message should be valid json"),
+            serde_json::json!({"data":{"uuid":"ABC"},"event":"uuid"})
         );
     }
 
@@ -3035,6 +3442,66 @@ mod tests {
         assert_eq!(
             new_session_url(Service::GrooveStats),
             "https://apiservice.groovestats.com/api/?action=newSession&chartHashVersion=3"
+        );
+    }
+
+    #[test]
+    fn validated_leaderboard_fetch_rejects_missing_inputs_before_network() {
+        let missing_hash = fetch_validated_combined_player_leaderboards(
+            Service::GrooveStats,
+            "api-key",
+            "player",
+            " ",
+            None,
+            true,
+            10,
+        )
+        .expect_err("missing hash should fail before request");
+        assert_eq!(
+            missing_hash.to_string(),
+            "Missing chart hash for leaderboard request."
+        );
+
+        let missing_key = fetch_validated_combined_player_leaderboards(
+            Service::GrooveStats,
+            " ",
+            "player",
+            "deadbeef",
+            None,
+            true,
+            10,
+        )
+        .expect_err("missing key should fail before request");
+        assert_eq!(
+            missing_key.to_string(),
+            "Missing GrooveStats API key for leaderboard request."
+        );
+    }
+
+    #[test]
+    fn validated_score_fetch_rejects_missing_inputs_before_network() {
+        let missing_hash = fetch_validated_player_score_import_result(
+            ScoreImportEndpoint::GrooveStats,
+            "api-key",
+            "player",
+            " ",
+        )
+        .expect_err("missing hash should fail before request");
+        assert_eq!(
+            missing_hash.to_string(),
+            "Missing chart hash for score request."
+        );
+
+        let missing_user = fetch_validated_player_score_import_result(
+            ScoreImportEndpoint::GrooveStats,
+            "api-key",
+            " ",
+            "deadbeef",
+        )
+        .expect_err("missing username should fail before request");
+        assert_eq!(
+            missing_user.to_string(),
+            "GrooveStats username is missing in profile configuration."
         );
     }
 
@@ -3922,6 +4389,57 @@ mod tests {
             "test-api-key".to_string(),
             sample_player_payload(),
         )
+    }
+
+    #[test]
+    fn submit_gameplay_players_resets_state_before_disabled_skip() {
+        fn ignore_success(_: &GrooveStatsSubmitPlayerJob, _: &GrooveStatsSubmitApiPlayer) {}
+        fn ignore_after(_: &GrooveStatsSubmitPlayerJob) {}
+
+        let side = profile_data::PlayerSide::P1;
+        let hash = "gs-gameplay-disabled";
+        reset_submit_ui_status(side, hash);
+        reset_submit_event_ui(side, hash);
+        reset_submit_retry(side, hash);
+        set_submit_ui_status(side, hash, 77, GrooveStatsSubmitUiStatus::Submitted);
+        store_submit_retry(sample_retry_draft(hash, side).retry_entry());
+
+        let fired = submit_gameplay_players(
+            GrooveStatsGameplaySubmitInput {
+                enabled: false,
+                service: Service::GrooveStats,
+                service_name: service_name(Service::GrooveStats),
+                player_count: 1,
+                autoplay_used: false,
+                is_course_stage: false,
+                autosubmit_course_scores_individually: false,
+            },
+            vec![GrooveStatsGameplaySubmitPlayer {
+                side,
+                slot: 1,
+                chart_hash: hash.to_string(),
+                username: "PerfectTaste".to_string(),
+                profile_name: "PerfectTaste".to_string(),
+                profile_id: None,
+                itl_score_hundredths: None,
+                show_ex_score: true,
+                api_key: "test-api-key".to_string(),
+                is_pad_player: true,
+                invalid_reason: None,
+                song_completed_naturally: true,
+                is_failing: false,
+                life: 1.0,
+                has_fail_time: false,
+                course_stage_life_submit_eligible: true,
+                payload: Some(sample_player_payload()),
+            }],
+            ignore_success,
+            ignore_after,
+        );
+
+        assert!(!fired);
+        assert_eq!(submit_ui_status_for_side(hash, side), None);
+        assert!(take_ready_submit_retry(hash, side, true).is_none());
     }
 
     #[test]

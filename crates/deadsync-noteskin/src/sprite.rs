@@ -1,3 +1,6 @@
+use crate::script::SpriteAnimationCommandPlan;
+use std::path::Path;
+
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct SpriteDefinition {
     pub src: [i32; 2],
@@ -181,6 +184,107 @@ pub fn all_frames_sprite_slot_plan(
     ))
 }
 
+pub fn itg_sprite_slot_plan_from_path(
+    path: &Path,
+    mut texture_key: impl FnMut(&Path) -> Option<String>,
+    mut texture_dimensions: impl FnMut(&str) -> Option<(u32, u32)>,
+    mut source_frame_dims: impl FnMut(&str, u32, u32) -> (u32, u32),
+) -> Option<SpriteSlotPlan> {
+    let key = texture_key(path)?;
+    let dims = texture_dimensions(&key)?;
+    let source_frame = source_frame_dims(&key, dims.0, dims.1);
+    Some(atlas_sprite_slot_plan(key, dims, source_frame, true))
+}
+
+pub fn itg_frame_sprite_slot_plan_from_path(
+    path: &Path,
+    frame: usize,
+    mut texture_key: impl FnMut(&Path) -> Option<String>,
+    mut texture_dimensions: impl FnMut(&str) -> Option<(u32, u32)>,
+    mut sprite_sheet_dims: impl FnMut(&str) -> (u32, u32),
+    mut source_frame_dims: impl FnMut(&str, u32, u32) -> (u32, u32),
+) -> Option<SpriteSlotPlan> {
+    let key = texture_key(path)?;
+    let dims = texture_dimensions(&key)?;
+    let (grid_x, grid_y) = sprite_sheet_dims(&key);
+    let source_frame = source_frame_dims(&key, dims.0, dims.1);
+    Some(frame_sprite_slot_plan(
+        key,
+        dims,
+        (grid_x as usize, grid_y as usize),
+        frame,
+        source_frame,
+        true,
+    ))
+}
+
+pub fn itg_animation_sprite_slot_plan_from_path(
+    path: &Path,
+    frame0: usize,
+    frame_count: usize,
+    frame_indices: Option<&[usize]>,
+    frame_delays: Option<&[f32]>,
+    beat_based: bool,
+    mut texture_key: impl FnMut(&Path) -> Option<String>,
+    mut texture_dimensions: impl FnMut(&str) -> Option<(u32, u32)>,
+    mut sprite_sheet_dims: impl FnMut(&str) -> (u32, u32),
+    mut source_frame_dims: impl FnMut(&str, u32, u32) -> (u32, u32),
+) -> Option<SpriteSlotPlan> {
+    let key = texture_key(path)?;
+    let dims = texture_dimensions(&key)?;
+    let (grid_x, grid_y) = sprite_sheet_dims(&key);
+    let grid = (grid_x as usize, grid_y as usize);
+    let source_frame = source_frame_dims(&key, dims.0, dims.1);
+    animation_sprite_slot_plan(
+        key.clone(),
+        dims,
+        grid,
+        frame0,
+        frame_count,
+        frame_indices,
+        frame_delays,
+        beat_based,
+        source_frame,
+        true,
+    )
+    .or_else(|| {
+        Some(frame_sprite_slot_plan(
+            key,
+            dims,
+            grid,
+            frame0,
+            source_frame,
+            true,
+        ))
+    })
+}
+
+pub fn itg_all_frames_sprite_slot_plan_from_path(
+    path: &Path,
+    frame_delay: Option<f32>,
+    beat_based: bool,
+    mut texture_key: impl FnMut(&Path) -> Option<String>,
+    mut texture_dimensions: impl FnMut(&str) -> Option<(u32, u32)>,
+    mut sprite_sheet_dims: impl FnMut(&str) -> (u32, u32),
+    mut source_frame_dims: impl FnMut(&str, u32, u32) -> (u32, u32),
+) -> Option<SpriteSlotPlan> {
+    let key = texture_key(path)?;
+    let dims = texture_dimensions(&key)?;
+    let (cols, rows) = sprite_sheet_dims(&key);
+    let grid = (cols as usize, rows as usize);
+    let source_frame = source_frame_dims(&key, dims.0, dims.1);
+    all_frames_sprite_slot_plan(
+        key.clone(),
+        dims,
+        grid,
+        frame_delay,
+        beat_based,
+        source_frame,
+        true,
+    )
+    .or_else(|| Some(atlas_sprite_slot_plan(key, dims, source_frame, true)))
+}
+
 pub fn animation_plan_to_slot_plan(
     texture_key: String,
     tex_dims: (u32, u32),
@@ -280,6 +384,119 @@ pub fn all_state_delays_source_plan(
         },
         frame_durations: Some(vec![delay; frame_count]),
     }
+}
+
+pub fn itg_sprite_animation_slot_plan(
+    slot: SpriteSlotPlan,
+    command: SpriteAnimationCommandPlan,
+    beat_based: bool,
+    mut sprite_sheet_dims: impl FnMut(&str) -> (u32, u32),
+    mut source_frame_dims: impl FnMut(&str, u32, u32) -> (u32, u32),
+) -> Option<SpriteSlotPlan> {
+    match command {
+        SpriteAnimationCommandPlan::StateProperties(plan) => itg_state_properties_slot_plan(
+            slot,
+            plan.frame_count,
+            &plan.frame_delays,
+            beat_based,
+            &mut sprite_sheet_dims,
+            &mut source_frame_dims,
+        ),
+        SpriteAnimationCommandPlan::AllStateDelays(delay) => {
+            itg_all_state_delays_slot_plan(slot, delay, beat_based)
+        }
+    }
+}
+
+fn itg_state_properties_slot_plan(
+    slot: SpriteSlotPlan,
+    frame_count: usize,
+    frame_delays: &[f32],
+    beat_based: bool,
+    sprite_sheet_dims: &mut impl FnMut(&str) -> (u32, u32),
+    source_frame_dims: &mut impl FnMut(&str, u32, u32) -> (u32, u32),
+) -> Option<SpriteSlotPlan> {
+    let SpriteSlotPlan {
+        mut def,
+        source,
+        note_color_translate,
+        ..
+    } = slot;
+    let (texture_key, tex_dims) = match &source {
+        SpriteSourcePlan::Atlas {
+            texture_key,
+            tex_dims,
+        }
+        | SpriteSourcePlan::Animated {
+            texture_key,
+            tex_dims,
+            ..
+        } => (texture_key.clone(), *tex_dims),
+    };
+    let (grid_x, grid_y) = sprite_sheet_dims(&texture_key);
+    let animation = sprite_state_properties_animation(
+        [tex_dims.0, tex_dims.1],
+        [grid_x as usize, grid_y as usize],
+        def.src,
+        frame_count,
+        frame_delays,
+        beat_based,
+    )?;
+
+    def.src = animation.start_src;
+    def.size = animation.frame_size;
+    let source_frame = source_frame_dims(&texture_key, tex_dims.0, tex_dims.1);
+    Some(SpriteSlotPlan {
+        def,
+        source_size: [source_frame.0 as i32, source_frame.1 as i32],
+        source: state_properties_source_plan(
+            texture_key,
+            tex_dims,
+            (grid_x as usize, grid_y as usize),
+            animation,
+        ),
+        note_color_translate,
+    })
+}
+
+fn itg_all_state_delays_slot_plan(
+    slot: SpriteSlotPlan,
+    delay: f32,
+    beat_based: bool,
+) -> Option<SpriteSlotPlan> {
+    let SpriteSlotPlan {
+        def,
+        source_size,
+        source,
+        note_color_translate,
+    } = slot;
+    let SpriteSourcePlan::Animated {
+        texture_key,
+        tex_dims,
+        frame_size,
+        grid,
+        frame_count,
+        frame_indices,
+        ..
+    } = source
+    else {
+        return None;
+    };
+    Some(SpriteSlotPlan {
+        def,
+        source_size,
+        source: all_state_delays_source_plan(
+            texture_key,
+            tex_dims,
+            frame_size,
+            grid,
+            frame_count,
+            frame_indices,
+            delay,
+            beat_based,
+        ),
+        note_color_translate,
+    })
 }
 
 pub fn sprite_sheet_frame(
@@ -642,14 +859,20 @@ pub fn duration_frame_index(durations: &[f32], frames: usize, mut position: f32)
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
+    use crate::script::{SpriteAnimationCommandPlan, SpriteStatePropertiesPlan};
+
     use super::{
         AnimationRate, SpriteAnimationPlan, SpriteDefinition, SpriteSourcePlan,
         SpriteStatePropertiesAnimation, all_frames_sprite_slot_plan, atlas_sprite_slot_plan,
         duration_frame_index, frame_duration_total, frame_sprite_slot_plan,
-        generated_animation_sprite_slot_plan, neg_rot_sin_cos, sprite_all_frames_animation_plan,
-        sprite_animated_uv, sprite_animation_plan, sprite_atlas_uv, sprite_frame_index,
-        sprite_frame_index_from_phase, sprite_scrolled_uv, sprite_sheet_frame,
-        sprite_state_properties_animation,
+        generated_animation_sprite_slot_plan, itg_all_frames_sprite_slot_plan_from_path,
+        itg_animation_sprite_slot_plan_from_path, itg_frame_sprite_slot_plan_from_path,
+        itg_sprite_animation_slot_plan, itg_sprite_slot_plan_from_path, neg_rot_sin_cos,
+        sprite_all_frames_animation_plan, sprite_animated_uv, sprite_animation_plan,
+        sprite_atlas_uv, sprite_frame_index, sprite_frame_index_from_phase, sprite_scrolled_uv,
+        sprite_sheet_frame, sprite_state_properties_animation,
     };
 
     #[test]
@@ -735,6 +958,162 @@ mod tests {
                 true,
             )
             .is_none()
+        );
+    }
+
+    #[test]
+    fn itg_animation_slot_plan_applies_state_properties() {
+        let slot =
+            frame_sprite_slot_plan("tap.png".to_string(), (256, 128), (4, 2), 5, (64, 64), true);
+        let plan = itg_sprite_animation_slot_plan(
+            slot,
+            SpriteAnimationCommandPlan::StateProperties(SpriteStatePropertiesPlan {
+                frame_count: 3,
+                frame_delays: vec![0.25, 0.5],
+            }),
+            true,
+            |_| (4, 2),
+            |_, _, _| (64, 64),
+        )
+        .expect("state properties should animate a multi-frame sheet");
+
+        assert_eq!(plan.def.src, [64, 64]);
+        assert_eq!(plan.def.size, [64, 64]);
+        assert_eq!(
+            plan.source,
+            SpriteSourcePlan::Animated {
+                texture_key: "tap.png".to_string(),
+                tex_dims: (256, 128),
+                frame_size: [64, 64],
+                grid: (4, 2),
+                frame_count: 3,
+                frame_indices: None,
+                rate: AnimationRate::FramesPerBeat(4.0),
+                frame_durations: Some(vec![0.25, 0.5, 0.25]),
+            }
+        );
+    }
+
+    #[test]
+    fn itg_animation_slot_plan_applies_all_state_delays_to_animated_sources() {
+        let slot = all_frames_sprite_slot_plan(
+            "tap.png".to_string(),
+            (128, 64),
+            (2, 1),
+            Some(0.25),
+            false,
+            (64, 64),
+            true,
+        )
+        .expect("animated slot");
+        let plan = itg_sprite_animation_slot_plan(
+            slot,
+            SpriteAnimationCommandPlan::AllStateDelays(0.5),
+            false,
+            |_| (2, 1),
+            |_, _, _| (64, 64),
+        )
+        .expect("all state delays should rewrite animated source");
+
+        assert_eq!(
+            plan.source,
+            SpriteSourcePlan::Animated {
+                texture_key: "tap.png".to_string(),
+                tex_dims: (128, 64),
+                frame_size: [64, 64],
+                grid: (2, 1),
+                frame_count: 2,
+                frame_indices: None,
+                rate: AnimationRate::FramesPerSecond(2.0),
+                frame_durations: Some(vec![0.5, 0.5]),
+            }
+        );
+    }
+
+    #[test]
+    fn itg_path_slot_plan_uses_texture_metadata_callbacks() {
+        let plan = itg_sprite_slot_plan_from_path(
+            Path::new("Tap Note.png"),
+            |_| Some("noteskin/tap.png".to_string()),
+            |_| Some((128, 64)),
+            |_, _, _| (64, 32),
+        )
+        .expect("plan");
+
+        assert_eq!(plan.def.size, [128, 64]);
+        assert_eq!(plan.source_size, [64, 32]);
+        assert_eq!(
+            plan.source,
+            SpriteSourcePlan::Atlas {
+                texture_key: "noteskin/tap.png".to_string(),
+                tex_dims: (128, 64),
+            }
+        );
+    }
+
+    #[test]
+    fn itg_path_frame_slot_plan_uses_sheet_metadata_callbacks() {
+        let plan = itg_frame_sprite_slot_plan_from_path(
+            Path::new("Tap Note.png"),
+            5,
+            |_| Some("noteskin/tap.png".to_string()),
+            |_| Some((128, 64)),
+            |_| (4, 2),
+            |_, _, _| (32, 32),
+        )
+        .expect("plan");
+
+        assert_eq!(plan.def.src, [32, 32]);
+        assert_eq!(plan.def.size, [32, 32]);
+        assert_eq!(plan.source_size, [32, 32]);
+    }
+
+    #[test]
+    fn itg_path_animation_slot_plan_falls_back_to_frame_slot() {
+        let plan = itg_animation_sprite_slot_plan_from_path(
+            Path::new("Tap Note.png"),
+            1,
+            1,
+            None,
+            None,
+            false,
+            |_| Some("noteskin/tap.png".to_string()),
+            |_| Some((128, 64)),
+            |_| (4, 2),
+            |_, _, _| (32, 32),
+        )
+        .expect("plan");
+
+        assert_eq!(plan.def.src, [32, 0]);
+        assert_eq!(
+            plan.source,
+            SpriteSourcePlan::Atlas {
+                texture_key: "noteskin/tap.png".to_string(),
+                tex_dims: (128, 64),
+            }
+        );
+    }
+
+    #[test]
+    fn itg_path_all_frames_slot_plan_falls_back_to_atlas_slot() {
+        let plan = itg_all_frames_sprite_slot_plan_from_path(
+            Path::new("Tap Note.png"),
+            Some(0.25),
+            false,
+            |_| Some("noteskin/tap.png".to_string()),
+            |_| Some((64, 64)),
+            |_| (1, 1),
+            |_, _, _| (64, 64),
+        )
+        .expect("plan");
+
+        assert_eq!(plan.def.size, [64, 64]);
+        assert_eq!(
+            plan.source,
+            SpriteSourcePlan::Atlas {
+                texture_key: "noteskin/tap.png".to_string(),
+                tex_dims: (64, 64),
+            }
         );
     }
 

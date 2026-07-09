@@ -410,7 +410,7 @@ fn persist_consumed_key(slot: &mut LoginSlot, api_key: &str, username: Option<&s
                 // Refresh display_name in case profile state changed.
                 slot.display_name = profile::get_for_side(slot.side).display_name;
             }
-            crate::game::online::refresh_arrowcloud_status();
+            deadsync_online::runtime::refresh_arrowcloud_status();
             let _ = username; // ArrowCloud's device-login never returns one.
         }
         BackendKind::GrooveStats => {

@@ -1,25 +1,24 @@
-use crate::assets;
+use crate as assets;
 use deadlib_platform::dirs;
 use deadlib_present::actors::TextureKeyHandle;
 use deadlib_render::{SamplerDesc, TexturedMeshVertex};
-#[cfg(test)]
 use deadsync_noteskin::ModelVertex;
 use deadsync_noteskin::mine::{
     MINE_GRADIENT_SAMPLES, MineGradientSampleWarning, mine_fill_slots as crate_mine_fill_slots,
     mine_gradient_samples_from_slot, mine_gradient_slot_plan, mine_gradient_texture,
 };
 use deadsync_noteskin::model::ItgModelSlotPlan;
+use deadsync_noteskin::script::apply_sprite_animation_command_plans;
 #[cfg(test)]
 use deadsync_noteskin::script::apply_sprite_animation_script_plans;
-use deadsync_noteskin::script::{SpriteAnimationCommandPlan, apply_sprite_animation_command_plans};
 use deadsync_noteskin::{
     AnimationRate, ModelAutoRotKey, ModelDrawState, ModelEffectState, ModelMesh, ModelTweenSegment,
-    SpriteDefinition, SpriteSlotPlan, SpriteSourcePlan, all_frames_sprite_slot_plan,
-    all_state_delays_source_plan, animation_sprite_slot_plan, atlas_sprite_slot_plan,
-    frame_sprite_slot_plan, generated_animation_sprite_slot_plan, model_draw_at, model_glow_at,
-    model_glow_with_draw, neg_rot_sin_cos, sprite_animated_uv, sprite_atlas_uv, sprite_frame_index,
+    SpriteDefinition, SpriteSlotPlan, SpriteSourcePlan, generated_animation_sprite_slot_plan,
+    itg_all_frames_sprite_slot_plan_from_path, itg_animation_sprite_slot_plan_from_path,
+    itg_frame_sprite_slot_plan_from_path, itg_sprite_animation_slot_plan,
+    itg_sprite_slot_plan_from_path, model_draw_at, model_glow_at, model_glow_with_draw,
+    neg_rot_sin_cos, sprite_animated_uv, sprite_atlas_uv, sprite_frame_index,
     sprite_frame_index_from_phase, sprite_scrolled_uv, sprite_sheet_frame,
-    sprite_state_properties_animation, state_properties_source_plan,
 };
 use image::image_dimensions;
 use log::warn;
@@ -297,7 +296,7 @@ impl SpriteSlot {
 }
 
 #[inline(always)]
-pub(crate) fn build_model_geometry(slot: &SpriteSlot) -> Arc<[TexturedMeshVertex]> {
+pub fn build_model_geometry(slot: &SpriteSlot) -> Arc<[TexturedMeshVertex]> {
     let model = slot
         .model
         .as_ref()
@@ -331,8 +330,7 @@ pub(crate) fn build_model_geometry(slot: &SpriteSlot) -> Arc<[TexturedMeshVertex
     Arc::from(vertices)
 }
 
-#[cfg(test)]
-pub(crate) fn test_model_slot() -> SpriteSlot {
+pub fn test_model_slot() -> SpriteSlot {
     SpriteSlot {
         def: SpriteDefinition::default(),
         base_rot_sin_cos: [0.0, 1.0],
@@ -363,11 +361,13 @@ pub(crate) fn test_model_slot() -> SpriteSlot {
     }
 }
 
-pub(super) fn itg_texture_key(path: &Path) -> Option<String> {
-    let asset_relative_path = dirs::app_dirs()
+pub fn itg_texture_key(path: &Path) -> Option<String> {
+    let dirs = dirs::app_dirs();
+    let asset_relative_path = dirs
         .strip_asset_prefix(path)
-        .or_else(|| path.strip_prefix("assets").ok())
-        .map(Path::to_path_buf);
+        .map(Path::to_path_buf)
+        .or_else(|| path.strip_prefix("assets").ok().map(Path::to_path_buf))
+        .or_else(|| workspace_asset_relative_path(path));
     deadsync_noteskin::itg::texture_key_for_path(
         asset_relative_path.as_deref(),
         path,
@@ -375,7 +375,37 @@ pub(super) fn itg_texture_key(path: &Path) -> Option<String> {
     )
 }
 
-pub(super) fn itg_register_texture_dims_for_path(path: &Path) {
+fn workspace_asset_relative_path(path: &Path) -> Option<PathBuf> {
+    if let Ok(cwd) = std::env::current_dir()
+        && let Some(relative) = workspace_asset_relative_path_from_base(path, &cwd)
+    {
+        return Some(relative);
+    }
+    if let Ok(exe) = std::env::current_exe()
+        && let Some(exe_dir) = exe.parent()
+    {
+        if let Some(relative) = workspace_asset_relative_path_from_base(path, exe_dir) {
+            return Some(relative);
+        }
+    }
+    workspace_asset_relative_path_from_base(path, Path::new(env!("CARGO_MANIFEST_DIR")))
+}
+
+fn workspace_asset_relative_path_from_base(path: &Path, base: &Path) -> Option<PathBuf> {
+    for ancestor in base.ancestors() {
+        for asset_root in [
+            ancestor.join("assets"),
+            ancestor.join("deadsync").join("assets"),
+        ] {
+            if let Ok(relative) = path.strip_prefix(asset_root) {
+                return Some(relative.to_path_buf());
+            }
+        }
+    }
+    None
+}
+
+pub fn itg_register_texture_dims_for_path(path: &Path) {
     let Some(key) = itg_texture_key(path) else {
         return;
     };
@@ -387,12 +417,12 @@ pub(super) fn itg_register_texture_dims_for_path(path: &Path) {
     }
 }
 
-pub(super) fn itg_model_slot_from_texture_path(path: &Path) -> Option<SpriteSlot> {
+pub fn itg_model_slot_from_texture_path(path: &Path) -> Option<SpriteSlot> {
     itg_register_texture_dims_for_path(path);
     itg_slot_from_path(path)
 }
 
-pub(super) fn apply_model_slot_plan(slot: &mut SpriteSlot, plan: ItgModelSlotPlan) {
+pub fn apply_model_slot_plan(slot: &mut SpriteSlot, plan: ItgModelSlotPlan) {
     slot.model = plan.model;
     slot.model_draw = plan.model_draw;
     slot.model_timeline = plan.model_timeline;
@@ -405,11 +435,11 @@ pub(super) fn apply_model_slot_plan(slot: &mut SpriteSlot, plan: ItgModelSlotPla
     slot.uv_cycle_seconds = plan.uv_cycle_seconds;
 }
 
-pub(crate) fn load_itg_model_slots_from_path(path: &Path) -> Result<Arc<[SpriteSlot]>, String> {
+pub fn load_itg_model_slots_from_path(path: &Path) -> Result<Arc<[SpriteSlot]>, String> {
     let model_path = if path.is_absolute() {
         path.to_path_buf()
     } else {
-        dirs::app_dirs().resolve_asset_path(&path.to_string_lossy())
+        resolve_asset_path(path)
     };
     deadsync_noteskin::itg_load_model_slots_from_path(
         &model_path,
@@ -473,19 +503,66 @@ fn slot_from_plan(plan: SpriteSlotPlan) -> SpriteSlot {
     }
 }
 
-pub(super) fn itg_slot_from_path(path: &Path) -> Option<SpriteSlot> {
-    let key = itg_texture_key(path)?;
-    let dims = texture_dimensions(&key)?;
-    let source_frame = assets::texture_source_frame_dims_from_real(&key, dims.0, dims.1);
-    Some(slot_from_plan(atlas_sprite_slot_plan(
-        key,
-        dims,
-        source_frame,
-        true,
-    )))
+fn source_plan_from_slot(slot: &SpriteSlot) -> SpriteSourcePlan {
+    match slot.source.as_ref() {
+        SpriteSource::Atlas {
+            texture_key,
+            tex_dims,
+            ..
+        } => SpriteSourcePlan::Atlas {
+            texture_key: texture_key.to_string(),
+            tex_dims: *tex_dims,
+        },
+        SpriteSource::Animated {
+            texture_key,
+            tex_dims,
+            frame_size,
+            grid,
+            frame_count,
+            frame_indices,
+            rate,
+            frame_durations,
+            ..
+        } => SpriteSourcePlan::Animated {
+            texture_key: texture_key.to_string(),
+            tex_dims: *tex_dims,
+            frame_size: *frame_size,
+            grid: *grid,
+            frame_count: *frame_count,
+            frame_indices: frame_indices.as_ref().map(|indices| indices.to_vec()),
+            rate: *rate,
+            frame_durations: frame_durations.as_ref().map(|durations| durations.to_vec()),
+        },
+    }
 }
 
-pub(super) fn itg_apply_frame_override(slot: &mut SpriteSlot, frame: usize) {
+fn plan_from_slot(slot: &SpriteSlot) -> SpriteSlotPlan {
+    SpriteSlotPlan {
+        def: slot.def.clone(),
+        source_size: slot.source_size,
+        source: source_plan_from_slot(slot),
+        note_color_translate: slot.note_color_translate,
+    }
+}
+
+fn apply_slot_plan(slot: &mut SpriteSlot, plan: SpriteSlotPlan) {
+    slot.def = plan.def;
+    slot.source_size = plan.source_size;
+    slot.source = source_from_plan(plan.source);
+    slot.note_color_translate = plan.note_color_translate;
+}
+
+pub fn itg_slot_from_path(path: &Path) -> Option<SpriteSlot> {
+    itg_sprite_slot_plan_from_path(
+        path,
+        itg_texture_key,
+        texture_dimensions,
+        assets::texture_source_frame_dims_from_real,
+    )
+    .map(slot_from_plan)
+}
+
+pub fn itg_apply_frame_override(slot: &mut SpriteSlot, frame: usize) {
     let key = slot.texture_key().to_string();
     let Some((tex_w, tex_h)) = texture_dimensions(&key) else {
         return;
@@ -500,22 +577,19 @@ pub(super) fn itg_apply_frame_override(slot: &mut SpriteSlot, frame: usize) {
     slot.def.size = plan.def.size;
 }
 
-pub(super) fn itg_slot_from_path_with_frame(path: &Path, frame: usize) -> Option<SpriteSlot> {
-    let key = itg_texture_key(path)?;
-    let dims = texture_dimensions(&key)?;
-    let (grid_x, grid_y) = assets::sprite_sheet_dims(&key);
-    let source_frame = assets::texture_source_frame_dims_from_real(&key, dims.0, dims.1);
-    Some(slot_from_plan(frame_sprite_slot_plan(
-        key,
-        dims,
-        (grid_x as usize, grid_y as usize),
+pub fn itg_slot_from_path_with_frame(path: &Path, frame: usize) -> Option<SpriteSlot> {
+    itg_frame_sprite_slot_plan_from_path(
+        path,
         frame,
-        source_frame,
-        true,
-    )))
+        itg_texture_key,
+        texture_dimensions,
+        assets::sprite_sheet_dims,
+        assets::texture_source_frame_dims_from_real,
+    )
+    .map(slot_from_plan)
 }
 
-pub(super) fn itg_slot_from_path_animated(
+pub fn itg_slot_from_path_animated(
     path: &Path,
     frame0: usize,
     frame_count: usize,
@@ -523,161 +597,70 @@ pub(super) fn itg_slot_from_path_animated(
     frame_delays: Option<&[f32]>,
     beat_based: bool,
 ) -> Option<SpriteSlot> {
-    let key = itg_texture_key(path)?;
-    let dims = texture_dimensions(&key)?;
-    let (grid_x, grid_y) = assets::sprite_sheet_dims(&key);
-    let source_frame = assets::texture_source_frame_dims_from_real(&key, dims.0, dims.1);
-    let Some(plan) = animation_sprite_slot_plan(
-        key,
-        dims,
-        (grid_x as usize, grid_y as usize),
+    itg_animation_sprite_slot_plan_from_path(
+        path,
         frame0,
         frame_count,
         frame_indices,
         frame_delays,
         beat_based,
-        source_frame,
-        true,
-    ) else {
-        return itg_slot_from_path_with_frame(path, frame0);
-    };
-    Some(slot_from_plan(plan))
+        itg_texture_key,
+        texture_dimensions,
+        assets::sprite_sheet_dims,
+        assets::texture_source_frame_dims_from_real,
+    )
+    .map(slot_from_plan)
 }
 
-pub(super) fn itg_slot_from_path_all_frames(
+pub fn itg_slot_from_path_all_frames(
     path: &Path,
     frame_delay: Option<f32>,
     beat_based: bool,
 ) -> Option<SpriteSlot> {
-    let key = itg_texture_key(path)?;
-    let (cols, rows) = assets::sprite_sheet_dims(&key);
-    let dims = texture_dimensions(&key)?;
-    let source_frame = assets::texture_source_frame_dims_from_real(&key, dims.0, dims.1);
-    let Some(plan) = all_frames_sprite_slot_plan(
-        key,
-        dims,
-        (cols as usize, rows as usize),
+    itg_all_frames_sprite_slot_plan_from_path(
+        path,
         frame_delay,
         beat_based,
-        source_frame,
-        true,
-    ) else {
-        return itg_slot_from_path(path);
-    };
-    Some(slot_from_plan(plan))
+        itg_texture_key,
+        texture_dimensions,
+        assets::sprite_sheet_dims,
+        assets::texture_source_frame_dims_from_real,
+    )
+    .map(slot_from_plan)
 }
 
-pub(super) fn texture_dimensions(key: &str) -> Option<(u32, u32)> {
+pub fn texture_dimensions(key: &str) -> Option<(u32, u32)> {
     if let Some(meta) = assets::texture_dims(key) {
         return Some((meta.w, meta.h));
     }
-    let path = PathBuf::from("assets").join(key);
+    let path = resolve_asset_path(&PathBuf::from("assets").join(key));
     image_dimensions(&path).ok()
 }
 
 fn slot_is_beat_based(slot: &SpriteSlot) -> bool {
-    matches!(
-        slot.source.as_ref(),
-        SpriteSource::Animated {
-            rate: AnimationRate::FramesPerBeat(_),
-            ..
-        }
-    )
-}
-
-fn itg_apply_slot_state_properties(
-    slot: &mut SpriteSlot,
-    frame_count: usize,
-    frame_delays: &[f32],
-    beat_based: bool,
-) {
-    if slot.model.is_some() {
-        return;
-    }
-    let (texture_key, tex_dims) = match slot.source.as_ref() {
-        SpriteSource::Atlas {
-            texture_key,
-            tex_dims,
-            ..
-        }
-        | SpriteSource::Animated {
-            texture_key,
-            tex_dims,
-            ..
-        } => (texture_key.clone(), *tex_dims),
-    };
-    let (grid_x, grid_y) = assets::sprite_sheet_dims(&texture_key);
-    let Some(animation) = sprite_state_properties_animation(
-        [tex_dims.0, tex_dims.1],
-        [grid_x as usize, grid_y as usize],
-        slot.def.src,
-        frame_count,
-        frame_delays,
-        beat_based,
-    ) else {
-        return;
-    };
-
-    let start_src = animation.start_src;
-    let frame_size = animation.frame_size;
-    slot.source = source_from_plan(state_properties_source_plan(
-        texture_key.clone().to_string(),
-        tex_dims,
-        (grid_x as usize, grid_y as usize),
-        animation,
-    ));
-    slot.def.src = start_src;
-    slot.def.size = frame_size;
-    let source_frame =
-        assets::texture_source_frame_dims_from_real(&texture_key, tex_dims.0, tex_dims.1);
-    slot.source_size = [source_frame.0 as i32, source_frame.1 as i32];
-}
-
-fn itg_apply_slot_all_state_delays(slot: &mut SpriteSlot, delay: f32, beat_based: bool) {
-    if slot.model.is_some() {
-        return;
-    }
-    let delay = delay.max(1e-6);
-    let SpriteSource::Animated {
-        texture_key,
-        tex_dims,
-        frame_size,
-        grid,
-        frame_count,
-        frame_indices,
-        ..
-    } = slot.source.as_ref()
-    else {
-        return;
-    };
-    slot.source = source_from_plan(all_state_delays_source_plan(
-        texture_key.to_string(),
-        *tex_dims,
-        *frame_size,
-        *grid,
-        *frame_count,
-        frame_indices.as_ref().map(|indices| indices.to_vec()),
-        delay,
-        beat_based,
-    ));
+    slot.source.is_beat_based()
 }
 
 fn itg_apply_sprite_animation_plan(
     slot: &mut SpriteSlot,
-    plan: SpriteAnimationCommandPlan,
+    plan: deadsync_noteskin::script::SpriteAnimationCommandPlan,
     beat_based: bool,
 ) {
-    match plan {
-        SpriteAnimationCommandPlan::StateProperties(plan) => {
-            itg_apply_slot_state_properties(slot, plan.frame_count, &plan.frame_delays, beat_based);
-        }
-        SpriteAnimationCommandPlan::AllStateDelays(delay) => {
-            itg_apply_slot_all_state_delays(slot, delay, beat_based);
-        }
+    if slot.model.is_some() {
+        return;
+    }
+    if let Some(plan) = itg_sprite_animation_slot_plan(
+        plan_from_slot(slot),
+        plan,
+        beat_based,
+        assets::sprite_sheet_dims,
+        assets::texture_source_frame_dims_from_real,
+    ) {
+        apply_slot_plan(slot, plan);
     }
 }
 
-pub(super) fn itg_apply_state_properties_from_commands(
+pub fn itg_apply_state_properties_from_commands(
     slot: &mut SpriteSlot,
     commands: &std::collections::HashMap<String, String>,
 ) {
@@ -698,7 +681,7 @@ pub(super) fn itg_apply_state_properties_from_script(
     });
 }
 
-pub(super) fn mine_fill_slots(mines: &[Option<SpriteSlot>]) -> Vec<Option<SpriteSlot>> {
+pub fn mine_fill_slots(mines: &[Option<SpriteSlot>]) -> Vec<Option<SpriteSlot>> {
     crate_mine_fill_slots(mines, |mine| {
         let colors = load_mine_gradient_colors(mine)?;
         Some(build_mine_gradient_slot(&colors))
@@ -708,7 +691,7 @@ pub(super) fn mine_fill_slots(mines: &[Option<SpriteSlot>]) -> Vec<Option<Sprite
 fn load_mine_gradient_colors(slot: &SpriteSlot) -> Option<Vec<[f32; 4]>> {
     let texture_key = slot.texture_key();
     let candidate = Path::new("assets").join(texture_key);
-    let path = dirs::app_dirs().resolve_asset_path(&candidate.to_string_lossy());
+    let path = resolve_asset_path(&candidate);
     let image = assets::open_image_fallback(&path).ok()?.to_rgba8();
 
     mine_gradient_samples_from_slot(
@@ -733,6 +716,40 @@ fn load_mine_gradient_colors(slot: &SpriteSlot) -> Option<Vec<[f32; 4]>> {
             }
         },
     )
+}
+
+fn resolve_asset_path(path: &Path) -> PathBuf {
+    let resolved = dirs::app_dirs().resolve_asset_path(&path.to_string_lossy());
+    if resolved.exists() {
+        return resolved;
+    }
+    workspace_asset_path(path).unwrap_or(resolved)
+}
+
+fn workspace_asset_path(path: &Path) -> Option<PathBuf> {
+    if let Ok(cwd) = std::env::current_dir()
+        && let Some(candidate) = workspace_asset_path_from_base(path, &cwd)
+    {
+        return Some(candidate);
+    }
+    if let Ok(exe) = std::env::current_exe()
+        && let Some(exe_dir) = exe.parent()
+        && let Some(candidate) = workspace_asset_path_from_base(path, exe_dir)
+    {
+        return Some(candidate);
+    }
+    workspace_asset_path_from_base(path, Path::new(env!("CARGO_MANIFEST_DIR")))
+}
+
+fn workspace_asset_path_from_base(path: &Path, base: &Path) -> Option<PathBuf> {
+    for ancestor in base.ancestors() {
+        for candidate in [ancestor.join(path), ancestor.join("deadsync").join(path)] {
+            if candidate.exists() {
+                return Some(candidate);
+            }
+        }
+    }
+    None
 }
 
 fn build_mine_gradient_slot(colors: &[[f32; 4]]) -> SpriteSlot {

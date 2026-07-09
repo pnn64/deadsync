@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::{LazyLock, Mutex, MutexGuard};
 
+pub mod app_runtime;
 pub mod lock_wait;
 pub mod pad_config;
 pub mod update;
@@ -67,7 +68,12 @@ static RUNTIME_SESSION: LazyLock<Mutex<SessionState>> = LazyLock::new(|| {
     Mutex::new(SessionState::default())
 });
 
-static RUNTIME_PROFILE_DIR_CACHE: LazyLock<Mutex<Option<HashMap<String, PathBuf>>>> =
+struct RuntimeProfileDirCache {
+    root: PathBuf,
+    map: HashMap<String, PathBuf>,
+}
+
+static RUNTIME_PROFILE_DIR_CACHE: LazyLock<Mutex<Option<RuntimeProfileDirCache>>> =
     LazyLock::new(|| Mutex::new(None));
 
 static RUNTIME_SESSION_LOCK_WAIT_STATS: lock_wait::LockWaitStats = lock_wait::LockWaitStats::new();
@@ -187,6 +193,68 @@ pub fn runtime_clear_deleted_local_profile(profile_id: &str) -> [bool; PLAYER_SL
         }
     }
     changed
+}
+
+pub struct RuntimeLocalProfileCreateResult {
+    pub id: String,
+    pub default_profiles: [Option<String>; PLAYER_SLOTS],
+}
+
+pub fn runtime_create_local_profile(
+    root: &Path,
+    display_name: &str,
+    noteskin: NoteSkin,
+    pad_light_brightness: u8,
+    default_profiles: [Option<String>; PLAYER_SLOTS],
+) -> Result<RuntimeLocalProfileCreateResult, std::io::Error> {
+    let id = create_local_profile_dir(root, display_name, noteskin, pad_light_brightness)?;
+    runtime_invalidate_profile_dir_cache();
+    let default_profiles = default_profile_ids_after_profile_create(default_profiles, id.clone());
+    Ok(RuntimeLocalProfileCreateResult {
+        id,
+        default_profiles,
+    })
+}
+
+pub fn runtime_create_local_profile_from_import(
+    root: &Path,
+    data: &ImportProfileData<'_>,
+) -> Result<ImportedProfileCreateResult, std::io::Error> {
+    let result = create_local_profile_from_import_dir(root, data)?;
+    runtime_invalidate_profile_dir_cache();
+    Ok(result)
+}
+
+pub fn runtime_rename_local_profile(
+    root: &Path,
+    current_dir: &Path,
+    id: &str,
+    display_name: &str,
+) -> Result<LocalProfileRenameResult, std::io::Error> {
+    let result = rename_local_profile_dir(root, current_dir, id, display_name)?;
+    runtime_invalidate_profile_dir_cache();
+    runtime_rename_loaded_local_profile(id, &result.display_name);
+    Ok(result)
+}
+
+pub struct RuntimeLocalProfileDeleteResult {
+    pub default_profiles: [Option<String>; PLAYER_SLOTS],
+    pub changed_sides: [bool; PLAYER_SLOTS],
+}
+
+pub fn runtime_delete_local_profile(
+    dir: &Path,
+    id: &str,
+    default_profiles: [Option<String>; PLAYER_SLOTS],
+) -> Result<RuntimeLocalProfileDeleteResult, std::io::Error> {
+    delete_local_profile_dir(dir, id)?;
+    runtime_invalidate_profile_dir_cache();
+    let default_profiles = default_profile_ids_after_profile_delete(default_profiles, id);
+    let changed_sides = runtime_clear_deleted_local_profile(id);
+    Ok(RuntimeLocalProfileDeleteResult {
+        default_profiles,
+        changed_sides,
+    })
 }
 
 pub fn runtime_resolve_active_profile_load_for_side(
@@ -355,6 +423,89 @@ pub fn runtime_load_profile_data_for_side(
     }
 }
 
+#[derive(Debug)]
+pub struct RuntimeProfileSideLoadReport {
+    pub selection: ActiveProfileLoadSelection,
+    pub default_files_dir: Option<PathBuf>,
+    pub default_files_error: Option<std::io::Error>,
+    pub load_report: Option<RuntimeProfileLoadReport>,
+    pub profile_ini_save_error: Option<RuntimeProfileSidecarWriteError>,
+    pub stats_save_error: Option<RuntimeProfileStatsWriteError>,
+    pub groovestats_save_error: Option<RuntimeProfileSidecarWriteError>,
+    pub arrowcloud_save_error: Option<RuntimeProfileSidecarWriteError>,
+}
+
+impl RuntimeProfileSideLoadReport {
+    fn guest(selection: ActiveProfileLoadSelection) -> Self {
+        Self {
+            selection,
+            default_files_dir: None,
+            default_files_error: None,
+            load_report: None,
+            profile_ini_save_error: None,
+            stats_save_error: None,
+            groovestats_save_error: None,
+            arrowcloud_save_error: None,
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn runtime_load_profile_for_side(
+    root: &Path,
+    side: PlayerSide,
+    default_profile: &Profile,
+    today: &str,
+    guest_noteskin: NoteSkin,
+    guest_pad_light_brightness: u8,
+    local_profile_exists: impl FnOnce(&str) -> bool,
+    fallback_local_profile_id: impl FnOnce() -> Option<String>,
+    mut duplicate: impl FnMut(&str, &Path, &Path, &Path),
+) -> RuntimeProfileSideLoadReport {
+    let selection = runtime_resolve_active_profile_load_for_side(
+        side,
+        local_profile_exists,
+        fallback_local_profile_id,
+    );
+    let Some(profile_id) = selection.local_id().map(str::to_owned) else {
+        runtime_set_guest_profile_for_side(side, guest_noteskin, guest_pad_light_brightness);
+        return RuntimeProfileSideLoadReport::guest(selection);
+    };
+
+    let profile_dir = runtime_profile_dir_for_id(root, &profile_id, &mut duplicate);
+    let missing_default_files = !profile_ini_path(&profile_dir).exists()
+        || !groovestats_ini_path(&profile_dir).exists()
+        || !arrowcloud_ini_path(&profile_dir).exists();
+    let (default_files_dir, default_files_error) = if missing_default_files {
+        match ensure_local_profile_files_dir(&profile_dir, &profile_id, default_profile) {
+            Ok(()) => (Some(profile_dir.clone()), None),
+            Err(error) => (Some(profile_dir.clone()), Some(error)),
+        }
+    } else {
+        (None, None)
+    };
+
+    let load_report =
+        runtime_load_profile_data_for_side(side, &profile_dir, default_profile, today);
+    let profile_ini_save_error = runtime_save_profile_ini_for_side(root, side, &mut duplicate);
+    let stats_save_error = runtime_write_profile_stats_for_side(root, side, &mut duplicate);
+    let groovestats_save_error =
+        runtime_save_groovestats_credentials_for_side(root, side, &mut duplicate);
+    let arrowcloud_save_error =
+        runtime_save_arrowcloud_api_key_for_side(root, side, &mut duplicate);
+
+    RuntimeProfileSideLoadReport {
+        selection,
+        default_files_dir,
+        default_files_error,
+        load_report: Some(load_report),
+        profile_ini_save_error,
+        stats_save_error,
+        groovestats_save_error,
+        arrowcloud_save_error,
+    }
+}
+
 pub fn runtime_restore_default_profiles(
     defaults: &[Option<String>; PLAYER_SLOTS],
     local_profile_exists: impl FnMut(&str) -> bool,
@@ -505,8 +656,11 @@ pub fn runtime_invalidate_profile_dir_cache() {
     *RUNTIME_PROFILE_DIR_CACHE.lock().unwrap() = None;
 }
 
-pub fn runtime_set_profile_dir_cache(cache_map: HashMap<String, PathBuf>) {
-    *RUNTIME_PROFILE_DIR_CACHE.lock().unwrap() = Some(cache_map);
+pub fn runtime_set_profile_dir_cache(root: &Path, cache_map: HashMap<String, PathBuf>) {
+    *RUNTIME_PROFILE_DIR_CACHE.lock().unwrap() = Some(RuntimeProfileDirCache {
+        root: root.to_path_buf(),
+        map: cache_map,
+    });
 }
 
 pub fn runtime_resolve_profile_dir(
@@ -515,10 +669,17 @@ pub fn runtime_resolve_profile_dir(
     duplicate: impl FnMut(&str, &Path, &Path, &Path),
 ) -> Option<PathBuf> {
     let mut guard = RUNTIME_PROFILE_DIR_CACHE.lock().unwrap();
-    if guard.is_none() {
-        *guard = Some(build_profile_dir_map(root, duplicate));
+    if !guard
+        .as_ref()
+        .map(|cache| cache.root == root)
+        .unwrap_or(false)
+    {
+        *guard = Some(RuntimeProfileDirCache {
+            root: root.to_path_buf(),
+            map: build_profile_dir_map(root, duplicate),
+        });
     }
-    guard.as_ref().unwrap().get(guid).cloned()
+    guard.as_ref().unwrap().map.get(guid).cloned()
 }
 
 pub fn runtime_profile_dir_for_id(
@@ -9980,7 +10141,7 @@ mod tests {
         let id = create_local_profile_dir(&root, "Alice", NoteSkin::default(), 100)
             .expect("profile should be created");
         let score_root = root.join("Alice").join("scores").join("local");
-        runtime_set_profile_dir_cache(build_profile_dir_map(&root, |_, _, _, _| {}));
+        runtime_set_profile_dir_cache(&root, build_profile_dir_map(&root, |_, _, _, _| {}));
 
         let sources = runtime_local_score_profile_sources(&root, |_, _, _, _| {});
         assert_eq!(sources.len(), 1);
@@ -10103,6 +10264,63 @@ mod tests {
     }
 
     #[test]
+    fn runtime_local_profile_lifecycle_updates_runtime_state() {
+        let root = temp_profile_dir("runtime-profile-lifecycle");
+        runtime_invalidate_profile_dir_cache();
+        runtime_set_active_profile_for_side(PlayerSide::P1, ActiveProfile::Guest);
+        runtime_set_active_profile_for_side(PlayerSide::P2, ActiveProfile::Guest);
+
+        let created = runtime_create_local_profile(
+            &root,
+            "Alice",
+            NoteSkin::new("cel"),
+            88,
+            [None, Some("p2".to_string())],
+        )
+        .expect("profile should be created");
+        assert_eq!(created.default_profiles[0], Some(created.id.clone()));
+        assert_eq!(created.default_profiles[1].as_deref(), Some("p2"));
+
+        let original_dir = root.join("Alice");
+        assert!(original_dir.is_dir());
+        runtime_set_active_profile_for_side(
+            PlayerSide::P1,
+            ActiveProfile::Local {
+                id: created.id.clone(),
+            },
+        );
+        runtime_update_profile_for_side(PlayerSide::P1, |profile| {
+            *profile = Profile::default();
+            true
+        });
+
+        let renamed = runtime_rename_local_profile(&root, &original_dir, &created.id, "Bob")
+            .expect("profile should rename");
+        assert_eq!(renamed.display_name, "Bob");
+        assert_eq!(runtime_profile_for_side(PlayerSide::P1).display_name, "Bob");
+
+        let delete_dir = runtime_profile_dir_for_id(&root, &created.id, |_, _, _, _| {});
+        let deleted = runtime_delete_local_profile(
+            &delete_dir,
+            &created.id,
+            [Some(created.id.clone()), Some("p2".to_string())],
+        )
+        .expect("profile should delete");
+        assert_eq!(deleted.default_profiles[0], None);
+        assert_eq!(deleted.default_profiles[1].as_deref(), Some("p2"));
+        assert!(deleted.changed_sides[player_side_index(PlayerSide::P1)]);
+        assert_eq!(
+            runtime_active_profile_for_side(PlayerSide::P1),
+            ActiveProfile::Guest
+        );
+
+        runtime_set_active_profile_for_side(PlayerSide::P1, ActiveProfile::Guest);
+        runtime_set_active_profile_for_side(PlayerSide::P2, ActiveProfile::Guest);
+        runtime_invalidate_profile_dir_cache();
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn runtime_profile_dir_cache_seeds_and_invalidates() {
         let root = temp_profile_dir("runtime-profile-dir-cache");
         let id = create_local_profile_dir(&root, "Alice", NoteSkin::default(), 100)
@@ -10112,7 +10330,7 @@ mod tests {
             .expect("created profile should map by guid");
         let fake_dir = root.join("stale");
 
-        runtime_set_profile_dir_cache(HashMap::from([(id.clone(), fake_dir.clone())]));
+        runtime_set_profile_dir_cache(&root, HashMap::from([(id.clone(), fake_dir.clone())]));
         assert_eq!(
             runtime_profile_dir_for_id(&root, &id, |_, _, _, _| {}),
             fake_dir

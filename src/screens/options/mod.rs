@@ -27,7 +27,6 @@ use crate::config::{
     sync_graph_mode_from_choice, version_overlay_side_choice_index,
     version_overlay_side_from_choice, visual_style_choice_index, visual_style_from_choice,
 };
-use crate::game::parsing::simfile as song_loading;
 use crate::game::{profile, scores};
 use crate::screens::input as screen_input;
 use crate::screens::pack_sync as shared_pack_sync;
@@ -51,6 +50,7 @@ use deadsync_input_native::{
     windows_pad_backend_from_choice as windows_backend_from_choice,
 };
 use deadsync_score as score_data;
+use deadsync_simfile::app_runtime as song_loading;
 use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;

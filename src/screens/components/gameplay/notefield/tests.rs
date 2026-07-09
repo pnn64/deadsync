@@ -8,9 +8,9 @@ use super::{
     tipsy_y_extra,
 };
 use crate::assets;
-use crate::game::parsing::noteskin::load_itg_skin;
 use crate::test_support::notefield_bench;
 use deadlib_present::actors::Actor;
+use deadsync_assets::noteskin::load_itg_skin;
 use deadsync_core::note::NoteType;
 use deadsync_core::timing::beat_to_note_row;
 use deadsync_gameplay::{AccelEffects, ActiveHold, VisualEffects};

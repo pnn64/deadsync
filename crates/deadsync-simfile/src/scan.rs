@@ -65,6 +65,34 @@ pub struct RuntimeSongScanInput {
     pub requested_threads: u8,
 }
 
+#[derive(Clone, Debug)]
+pub struct RuntimeSongScanEnv {
+    pub base_root: PathBuf,
+    pub extra_song_roots: Vec<PathBuf>,
+    pub additional_song_roots: Vec<(String, PathBuf)>,
+    pub cache_dir: PathBuf,
+    pub load_options: SongLoadOptions,
+    pub requested_threads: u8,
+}
+
+#[derive(Clone, Debug)]
+pub struct RuntimeCourseScanEnv {
+    pub courses_root: PathBuf,
+    pub songs_root: PathBuf,
+    pub extra_course_roots: Vec<PathBuf>,
+    pub extra_song_roots: Vec<PathBuf>,
+    pub additional_song_roots: Vec<(String, PathBuf)>,
+    pub autogen_courses_root: PathBuf,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RuntimeScanAdapterEvent {
+    SongRoot(SongScanRootEvent),
+    CourseRootMissing { root: PathBuf },
+    Song(RuntimeSongScanEvent),
+    Course(crate::course::RuntimeCourseScanEvent),
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct SongScanRootReport {
     pub roots: Vec<PathBuf>,
@@ -208,6 +236,138 @@ pub fn collect_song_scan_roots(
     }
 
     report
+}
+
+pub fn runtime_collect_song_scan_roots(
+    env: &RuntimeSongScanEnv,
+    mut event: impl FnMut(RuntimeScanAdapterEvent),
+) -> Vec<PathBuf> {
+    let report = collect_song_scan_roots(
+        &env.base_root,
+        env.extra_song_roots.clone(),
+        env.additional_song_roots.clone(),
+    );
+    for root_event in report.events {
+        event(RuntimeScanAdapterEvent::SongRoot(root_event));
+    }
+    report.roots
+}
+
+fn runtime_collect_course_scan_roots(
+    env: &RuntimeCourseScanEnv,
+    event: &mut impl FnMut(RuntimeScanAdapterEvent),
+) -> Vec<PathBuf> {
+    let report =
+        crate::course::collect_course_scan_roots(&env.courses_root, env.extra_course_roots.clone());
+    if report.primary_missing {
+        event(RuntimeScanAdapterEvent::CourseRootMissing {
+            root: env.courses_root.clone(),
+        });
+    }
+    report.roots
+}
+
+fn runtime_song_scan_input(
+    env: &RuntimeSongScanEnv,
+    event: &mut impl FnMut(RuntimeScanAdapterEvent),
+) -> RuntimeSongScanInput {
+    RuntimeSongScanInput {
+        base_root: env.base_root.clone(),
+        song_roots: runtime_collect_song_scan_roots(env, event),
+        cache_dir: env.cache_dir.clone(),
+        load_options: env.load_options,
+        requested_threads: env.requested_threads,
+    }
+}
+
+fn runtime_course_scan_input(
+    env: &RuntimeCourseScanEnv,
+    event: &mut impl FnMut(RuntimeScanAdapterEvent),
+) -> crate::course::RuntimeCourseScanInput {
+    let song_env = RuntimeSongScanEnv {
+        base_root: env.songs_root.clone(),
+        extra_song_roots: env.extra_song_roots.clone(),
+        additional_song_roots: env.additional_song_roots.clone(),
+        cache_dir: PathBuf::new(),
+        load_options: SongLoadOptions {
+            fastload: false,
+            cachesongs: false,
+            global_offset_seconds: 0.0,
+            song_parsing_threads: 0,
+        },
+        requested_threads: 0,
+    };
+    crate::course::RuntimeCourseScanInput {
+        courses_root: env.courses_root.clone(),
+        course_roots: runtime_collect_course_scan_roots(env, event),
+        song_roots: runtime_collect_song_scan_roots(&song_env, event),
+        autogen_courses_root: env.autogen_courses_root.clone(),
+    }
+}
+
+pub fn scan_and_load_songs_with_progress_counts_runtime<Progress, Process, NeverCache>(
+    env: RuntimeSongScanEnv,
+    progress: &mut Progress,
+    process_song: Process,
+    group_is_never_cached: NeverCache,
+    mut event: impl FnMut(RuntimeScanAdapterEvent),
+) where
+    Progress: FnMut(usize, usize, &str, &str),
+    Process: Fn(PathBuf, bool, bool, f32) -> Result<(SongData, bool), String>
+        + Copy
+        + Send
+        + Sync
+        + 'static,
+    NeverCache: Fn(&str) -> bool,
+{
+    let input = runtime_song_scan_input(&env, &mut event);
+    scan_and_load_songs_runtime(
+        input,
+        Some(progress),
+        process_song,
+        group_is_never_cached,
+        |scan_event| event(RuntimeScanAdapterEvent::Song(scan_event)),
+    );
+}
+
+pub fn reload_song_dirs_with_progress_counts_runtime<Progress, Process, NeverCache>(
+    env: RuntimeSongScanEnv,
+    pack_dirs: &[PathBuf],
+    progress: &mut Progress,
+    process_song: Process,
+    group_is_never_cached: NeverCache,
+    mut event: impl FnMut(RuntimeScanAdapterEvent),
+) where
+    Progress: FnMut(usize, usize, &str, &str),
+    Process: Fn(PathBuf, bool, bool, f32) -> Result<(SongData, bool), String>
+        + Copy
+        + Send
+        + Sync
+        + 'static,
+    NeverCache: Fn(&str) -> bool,
+{
+    let input = runtime_song_scan_input(&env, &mut event);
+    reload_song_dirs_runtime(
+        input,
+        pack_dirs,
+        Some(progress),
+        process_song,
+        group_is_never_cached,
+        |scan_event| event(RuntimeScanAdapterEvent::Song(scan_event)),
+    );
+}
+
+pub fn scan_and_load_courses_with_progress_counts_runtime<Progress>(
+    env: RuntimeCourseScanEnv,
+    progress: &mut Progress,
+    mut event: impl FnMut(RuntimeScanAdapterEvent),
+) where
+    Progress: FnMut(usize, usize, &str, &str),
+{
+    let input = runtime_course_scan_input(&env, &mut event);
+    crate::course::scan_and_load_courses_runtime(input, Some(progress), |scan_event| {
+        event(RuntimeScanAdapterEvent::Course(scan_event));
+    });
 }
 
 pub fn fmt_scan_time(d: Duration) -> String {

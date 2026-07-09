@@ -1,7 +1,9 @@
 pub mod audio_folder;
 pub mod i18n;
 pub mod manager;
+pub mod noteskin;
 pub mod present_dsl;
+pub mod song_lua;
 pub mod textures;
 pub mod visual_styles;
 

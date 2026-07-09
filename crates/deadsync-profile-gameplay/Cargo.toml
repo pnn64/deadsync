@@ -8,6 +8,7 @@ license = "GPL-3.0"
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-gameplay = { path = "../deadsync-gameplay" }
 deadsync-profile = { path = "../deadsync-profile" }
+deadsync-score = { path = "../deadsync-score" }
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

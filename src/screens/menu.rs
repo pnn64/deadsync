@@ -240,7 +240,7 @@ fn groove_service_name(boogie: bool) -> Arc<str> {
 
 #[inline(always)]
 fn groove_status_key() -> GrooveStatusKey {
-    let boogie = crate::game::online::is_boogiestats_active();
+    let boogie = deadsync_online::runtime::is_boogiestats_active();
     match deadsync_online::groovestats::runtime_get_status() {
         ConnectionStatus::Pending => GrooveStatusKey::Pending { boogie },
         ConnectionStatus::Error(kind) => GrooveStatusKey::Error { boogie, kind },

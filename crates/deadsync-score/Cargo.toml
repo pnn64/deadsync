@@ -11,6 +11,7 @@ deadsync-chart = { path = "../deadsync-chart" }
 deadsync-core = { path = "../deadsync-core" }
 deadsync-rules = { path = "../deadsync-rules" }
 hashbrown = "0.17.1"
+log = "0.4.33"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
 

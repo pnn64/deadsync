@@ -3,8 +3,7 @@ use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::visual_styles;
 use crate::assets::{FontRole, current_machine_font_key};
-use crate::game::import::run::{ImportSummary, import_itg_profile_dir};
-use crate::game::profile;
+use crate::game::{profile, scores};
 use crate::screens::components::shared::loading_bar;
 use crate::screens::components::shared::screen_bar::{
     self, ScreenBarPosition, ScreenBarTitlePlacement,
@@ -17,13 +16,15 @@ use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_height, screen_width};
 use deadsync_audio_stream as audio;
+use deadsync_import::app_runtime::{ImportSummary, import_itg_profile_dir};
 use deadsync_import::detect::{
     ItgProfileCandidate, detect_itg_local_profiles, detect_itg_profiles_from_game_dir,
 };
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
-use std::path::PathBuf;
+use deadsync_simfile::runtime_cache::get_song_cache;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, TryRecvError};
@@ -206,6 +207,49 @@ fn compute_imported_as(candidates: &[ItgProfileCandidate]) -> Vec<Option<Arc<str
                 .map(Arc::from)
         })
         .collect()
+}
+
+fn import_itg_profile_for_screen<F, C>(
+    dir: &Path,
+    mut on_progress: F,
+    should_cancel: C,
+) -> Result<ImportSummary, deadsync_import::itg::ItgReadError>
+where
+    F: FnMut(usize, usize, &str),
+    C: Fn() -> bool,
+{
+    let (base_singles, base_doubles) = profile::default_local_profile_options();
+    let packs = get_song_cache();
+    import_itg_profile_dir(
+        dir,
+        &base_singles,
+        &base_doubles,
+        &packs,
+        |profile_guid| {
+            profile::scan_local_profiles()
+                .into_iter()
+                .find(|profile| profile.id == profile_guid)
+                .map(|profile| profile.display_name)
+        },
+        profile::create_local_profile_from_import,
+        |profile_id, initials, mut entries| {
+            scores::import_local_scores(
+                profile_id,
+                initials,
+                &mut entries,
+                |done, total| on_progress(done, total, ""),
+                &should_cancel,
+            )
+        },
+        |profile_id| {
+            if let Err(error) = profile::delete_local_profile(profile_id) {
+                log::warn!("Failed to delete canceled import profile {profile_id}: {error}");
+            }
+        },
+        profile::write_imported_favorites,
+        profile::write_imported_profile_stats,
+        scores::import_itl_json,
+    )
 }
 
 /// A running import on a worker thread. The screen polls `rx` each frame and
@@ -851,7 +895,7 @@ fn confirm_import_picker(state: &mut State) {
     let cancel = Arc::new(AtomicBool::new(false));
     let cancel_for_thread = Arc::clone(&cancel);
     thread::spawn(move || {
-        let result = import_itg_profile_dir(
+        let result = import_itg_profile_for_screen(
             &dir,
             |done, total, label| {
                 let _ = progress_tx.send(ImportMsg::Progress {

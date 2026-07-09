@@ -1,7 +1,6 @@
 use crate::act;
 use crate::assets;
 use crate::game::GameplayCoreState as State;
-use crate::game::parsing::noteskin::SpriteSlot;
 use crate::screens::components::shared::noteskin_model::{
     ModelMeshCache, noteskin_model_actor_from_draw_cached,
 };
@@ -10,6 +9,7 @@ use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::*;
 use deadlib_render::{BlendMode, TexturedMeshVertex};
+use deadsync_assets::noteskin::SpriteSlot;
 use deadsync_core::input::{MAX_COLS, MAX_PLAYERS};
 use deadsync_core::note::NoteType;
 use deadsync_core::song_time::SongTimeNs;

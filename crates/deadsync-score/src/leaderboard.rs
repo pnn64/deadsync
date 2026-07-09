@@ -4,9 +4,11 @@ use deadsync_core::song_time::{SongTimeNs, song_time_ns_invalid};
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::sync::{LazyLock, Mutex, MutexGuard};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crate::{LocalReplayEdge, ScoreImportEndpoint};
+
+pub const PLAYER_LEADERBOARD_ERROR_RETRY_INTERVAL: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Clone)]
 pub struct LeaderboardEntry {
@@ -658,6 +660,15 @@ pub struct PlayerLeaderboardFetchCompletion<T> {
     pub queued_fetch: Option<QueuedPlayerLeaderboardFetch>,
 }
 
+pub struct PlayerLeaderboardFetchJobResult<T> {
+    pub key: PlayerLeaderboardCacheKey,
+    pub gs_username: String,
+    pub persistent_profile_id: Option<String>,
+    pub auto_profile_id: Option<String>,
+    pub should_auto_populate: bool,
+    pub completion: PlayerLeaderboardFetchCompletion<T>,
+}
+
 impl PlayerLeaderboardCacheState {
     pub fn request_leaderboard(
         &mut self,
@@ -889,6 +900,46 @@ pub fn runtime_complete_player_leaderboard_fetch<T>(
             should_auto_populate,
             auto_profile_id_exists,
         )
+}
+
+pub fn runtime_run_player_leaderboard_fetch<T>(
+    request: PlayerLeaderboardFetchRequest,
+    mut fetch: impl FnMut(
+        &PlayerLeaderboardCacheKey,
+        &str,
+        usize,
+    ) -> Result<PlayerLeaderboardFetchSuccess<T>, String>,
+) -> PlayerLeaderboardFetchJobResult<T> {
+    let PlayerLeaderboardFetchRequest {
+        key,
+        gs_username,
+        persistent_profile_id,
+        auto_profile_id,
+        should_auto_populate,
+        max_entries,
+    } = request;
+    let request_started_at = Instant::now();
+    let fetched = fetch(&key, gs_username.as_str(), max_entries);
+    let refresh_finished_at = Instant::now();
+    let completion = runtime_complete_player_leaderboard_fetch(
+        &key,
+        max_entries,
+        request_started_at,
+        refresh_finished_at,
+        PLAYER_LEADERBOARD_ERROR_RETRY_INTERVAL,
+        fetched,
+        should_auto_populate,
+        auto_profile_id.is_some(),
+    );
+
+    PlayerLeaderboardFetchJobResult {
+        key,
+        gs_username,
+        persistent_profile_id,
+        auto_profile_id,
+        should_auto_populate,
+        completion,
+    }
 }
 
 pub fn runtime_cached_player_leaderboard_itl_self_rank(
@@ -1621,6 +1672,64 @@ mod tests {
         cache.pending_refresh.remove(&fetch.key);
         cache.invalidated_after.remove(&fetch.key);
         cache.by_key.remove(&fetch.key);
+    }
+
+    #[test]
+    fn runtime_leaderboard_fetch_job_completes_cache_and_keeps_context() {
+        let chart_hash = format!("job-{}", std::process::id());
+        let snapshot = scorebox_snapshot(
+            true,
+            true,
+            true,
+            true,
+            true,
+            true,
+            "gs-key",
+            "ac-key",
+            "player",
+            Some("profile-1".to_string()),
+        );
+        let fetch = runtime_plan_player_leaderboard_request(
+            chart_hash.as_str(),
+            &snapshot,
+            5,
+            false,
+            Instant::now(),
+        )
+        .and_then(|plan| plan.fetch)
+        .expect("fetch should be planned");
+
+        let result = runtime_run_player_leaderboard_fetch(fetch, |key, username, max_entries| {
+            assert_eq!(key.chart_hash, chart_hash);
+            assert_eq!(username, "player");
+            assert_eq!(max_entries, 5);
+            Ok(PlayerLeaderboardFetchSuccess {
+                data: PlayerLeaderboardData {
+                    panes: Vec::new(),
+                    srpg_self_score: Some(9910),
+                    itl_self_score: Some(9900),
+                    itl_self_rank: Some(7),
+                },
+                imported_score: Some("score"),
+                itl_self_found: true,
+            })
+        });
+
+        assert_eq!(result.gs_username, "player");
+        assert_eq!(result.persistent_profile_id.as_deref(), Some("profile-1"));
+        assert_eq!(result.auto_profile_id.as_deref(), Some("profile-1"));
+        assert!(result.should_auto_populate);
+        assert_eq!(
+            result.completion.fetched_itl_self,
+            Some((Some(9900), Some(7)))
+        );
+        assert_eq!(result.completion.fetched_imported_score, Some("score"));
+
+        let mut cache = runtime_lock_player_leaderboard_cache();
+        cache.in_flight.remove(&result.key);
+        cache.pending_refresh.remove(&result.key);
+        cache.invalidated_after.remove(&result.key);
+        cache.by_key.remove(&result.key);
     }
 
     #[test]

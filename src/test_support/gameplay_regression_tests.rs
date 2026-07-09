@@ -158,7 +158,7 @@ pub use crate::game::{
 
 pub type State = GameplayRuntimeState<
     GameplayProfile,
-    deadsync_song_lua::SongLuaOverlayActor<crate::game::parsing::song_lua::SongLuaOverlayKind>,
+    deadsync_song_lua::SongLuaOverlayActor<deadsync_assets::song_lua::SongLuaOverlayKind>,
     deadsync_song_lua::SongLuaCapturedActor,
     deadsync_gameplay::SongLuaRuntimeOverlayStateDelta<deadsync_song_lua::SongLuaOverlayStateDelta>,
 >;
@@ -392,10 +392,10 @@ mod tests {
         max_step_distance_ns, process_input_edges, refresh_active_attack_masks,
         song_time_ns_from_seconds,
     };
-    use crate::game::parsing::noteskin::{self, Noteskin};
-    use crate::game::parsing::song_lua::{SongLuaOverlayKind, compile_song_lua};
     use crate::game::profile;
     use crate::screens::gameplay as screen_gameplay;
+    use deadsync_assets::noteskin::{self, Noteskin};
+    use deadsync_assets::song_lua::{SongLuaOverlayKind, compile_song_lua};
     use deadsync_chart::SongData;
     use deadsync_chart::notes::ParsedNote;
     use deadsync_chart::{ArrowStats, ChartData, GameplayChartData, StaminaCounts, TechCounts};
@@ -1210,7 +1210,7 @@ return Def.ActorFrame{}
             .stack_size(SONG_LUA_TEST_STACK)
             .spawn(move || {
                 let song = Arc::new(
-                    crate::game::parsing::simfile::parse_song_for_test(&simfile, 0.0)
+                    deadsync_simfile::app_runtime::parse_song_for_test(&simfile, 0.0)
                         .expect("generated lua simfile should parse"),
                 );
                 let chart_ix = song
@@ -1219,7 +1219,7 @@ return Def.ActorFrame{}
                     .position(|chart| chart.difficulty.eq_ignore_ascii_case("challenge"))
                     .unwrap_or(0);
                 let gameplay_chart = Arc::new(
-                    crate::game::parsing::simfile::load_gameplay_charts(&song, &[chart_ix], 0.0)
+                    deadsync_simfile::app_runtime::load_gameplay_charts(&song, &[chart_ix], 0.0)
                         .expect("generated lua gameplay chart should load")
                         .remove(0),
                 );

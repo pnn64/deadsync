@@ -1,6 +1,3 @@
-pub mod import;
-pub mod online;
-pub mod parsing;
 pub mod profile;
 pub mod scores;
 
@@ -14,7 +11,7 @@ pub use deadsync_profile_gameplay::{
 
 pub type GameplayCoreState = deadsync_gameplay::GameplayRuntimeState<
     GameplayProfile,
-    parsing::song_lua::SongLuaOverlayActor,
+    deadsync_assets::song_lua::SongLuaOverlayActor,
     deadsync_song_lua::SongLuaCapturedActor,
     deadsync_gameplay::SongLuaRuntimeOverlayStateDelta<deadsync_song_lua::SongLuaOverlayStateDelta>,
 >;

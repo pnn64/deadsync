@@ -21,7 +21,6 @@ use self::screenshot::{ScreenshotPreviewState, should_auto_screenshot_eval};
 use crate::act;
 use crate::assets::{AssetManager, PRESENT_TEXTURE_CONTEXT, TextureUploadBudget, visual_styles};
 use crate::config::{self, DisplayMode};
-use crate::game::parsing::simfile as song_loading;
 use crate::game::{
     GameplayCoreState, gameplay_play_style_from_profile, gameplay_player_side_from_profile,
     gameplay_tick_mode_from_profile, profile, scores,
@@ -43,6 +42,7 @@ use deadlib_present::space::{self as space, Metrics};
 use deadlib_render as renderer;
 use deadlib_render::{BackendType, PresentModePolicy, SamplerDesc, SamplerFilter, SamplerWrap};
 use deadlib_renderer as renderer_backend;
+use deadsync_simfile::app_runtime as song_loading;
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalPosition,
@@ -3044,7 +3044,7 @@ fn prewarm_gameplay_assets(
     state: &gameplay::State,
 ) {
     fn song_lua_overlay_sampler(
-        overlay: &crate::game::parsing::song_lua::SongLuaOverlayActor,
+        overlay: &deadsync_assets::song_lua::SongLuaOverlayActor,
     ) -> SamplerDesc {
         SamplerDesc {
             filter: if deadsync_song_lua::overlay_actor_uses_nearest_sampler(overlay) {
@@ -3116,7 +3116,7 @@ fn prewarm_gameplay_assets(
         backend: &mut renderer_backend::Backend,
         seen: &mut HashSet<String>,
         seen_model_textures: &mut HashSet<String>,
-        noteskin: &crate::game::parsing::noteskin::Noteskin,
+        noteskin: &deadsync_assets::noteskin::Noteskin,
     ) {
         noteskin.for_each_slot(|slot| {
             let key = slot.texture_key();
@@ -3188,10 +3188,10 @@ fn prewarm_gameplay_assets(
         }
     }
     let mut prewarm_song_lua_overlays =
-        |overlays: &[crate::game::parsing::song_lua::SongLuaOverlayActor]| {
+        |overlays: &[deadsync_assets::song_lua::SongLuaOverlayActor]| {
             for overlay in overlays {
                 match &overlay.kind {
-                    crate::game::parsing::song_lua::SongLuaOverlayKind::BitmapText {
+                    deadsync_assets::song_lua::SongLuaOverlayKind::BitmapText {
                         font_name,
                         font_path,
                         ..
@@ -3208,7 +3208,7 @@ fn prewarm_gameplay_assets(
                             );
                         }
                     }
-                    crate::game::parsing::song_lua::SongLuaOverlayKind::Sprite {
+                    deadsync_assets::song_lua::SongLuaOverlayKind::Sprite {
                         texture_path,
                         texture_key,
                     } => {
@@ -3236,7 +3236,7 @@ fn prewarm_gameplay_assets(
                             media_cache::ensure_banner_texture(assets, backend, texture_path);
                         }
                     }
-                    crate::game::parsing::song_lua::SongLuaOverlayKind::ActorMultiVertex {
+                    deadsync_assets::song_lua::SongLuaOverlayKind::ActorMultiVertex {
                         texture_path: Some(texture_path),
                         texture_key: Some(texture_key),
                         ..
@@ -3265,7 +3265,7 @@ fn prewarm_gameplay_assets(
                             media_cache::ensure_banner_texture(assets, backend, texture_path);
                         }
                     }
-                    crate::game::parsing::song_lua::SongLuaOverlayKind::Model { layers } => {
+                    deadsync_assets::song_lua::SongLuaOverlayKind::Model { layers } => {
                         for layer in layers.iter() {
                             prewarm_model_texture_key(
                                 assets,
@@ -3276,7 +3276,7 @@ fn prewarm_gameplay_assets(
                             );
                         }
                     }
-                    crate::game::parsing::song_lua::SongLuaOverlayKind::NoteskinActor { slots } => {
+                    deadsync_assets::song_lua::SongLuaOverlayKind::NoteskinActor { slots } => {
                         for slot in slots.iter() {
                             if slot.model.is_some() {
                                 prewarm_model_texture_key(
@@ -3311,9 +3311,9 @@ fn prewarm_gameplay_sfx(state: &gameplay::State) {
 
     let mut seen = HashSet::<String>::with_capacity(state.song_lua_sound_paths.len());
     let mut prewarm_sound_overlays =
-        |overlays: &[crate::game::parsing::song_lua::SongLuaOverlayActor]| {
+        |overlays: &[deadsync_assets::song_lua::SongLuaOverlayActor]| {
             for overlay in overlays {
-                let crate::game::parsing::song_lua::SongLuaOverlayKind::Sound { sound_path } =
+                let deadsync_assets::song_lua::SongLuaOverlayKind::Sound { sound_path } =
                     &overlay.kind
                 else {
                     continue;
@@ -11208,7 +11208,7 @@ impl ApplicationHandler<UserEvent> for App {
                 event_loop.exit();
             }
             // After all initial loading is complete, start network checks.
-            crate::game::online::init();
+            deadsync_online::runtime::init();
         }
     }
 

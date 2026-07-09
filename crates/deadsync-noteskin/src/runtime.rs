@@ -125,6 +125,33 @@ pub struct ItgRuntimeColumns<T> {
     pub receptor_pulse_command: Option<String>,
 }
 
+pub struct ItgCompiledSpriteOps<T> {
+    pub load_texture: fn(&Path) -> Option<T>,
+    pub load_frame: fn(&Path, usize) -> Option<T>,
+    pub load_animated: fn(&Path, usize, usize, Option<&[usize]>, Option<&[f32]>, bool) -> Option<T>,
+    pub load_all_frames: fn(&Path, Option<f32>, bool) -> Option<T>,
+    pub apply_model: fn(&mut T, model::ItgModelSlotPlan),
+    pub apply_model_draw: fn(&mut T, ModelDrawState, Arc<[ModelTweenSegment]>, ModelEffectState),
+    pub apply_parent_command: fn(&mut T, &str),
+    pub apply_rotation: fn(&mut T, i32),
+    pub apply_frame: fn(&mut T, usize),
+    pub apply_state: fn(&mut T, &HashMap<String, String>),
+    pub apply_loader_command: fn(&mut [ItgResolvedSprite<T>], Option<&str>),
+    pub apply_active_cmd: fn(&T, &HashMap<String, String>, &str) -> T,
+    pub mine_fill_slots: fn(&[Option<T>]) -> Vec<Option<T>>,
+    pub base_zoom: fn(&T) -> f32,
+    pub model_info: fn(&T) -> (bool, [f32; 2]),
+    pub texture_key: fn(&T) -> String,
+}
+
+impl<T> Clone for ItgCompiledSpriteOps<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T> Copy for ItgCompiledSpriteOps<T> {}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ItgHoldKind {
     Hold,
@@ -1217,6 +1244,22 @@ pub fn itg_first_actor_sprite_slot<T>(
     None
 }
 
+pub fn itg_first_actor_sprite_slot_with_ops<T>(
+    data: &itg::NoteskinData,
+    compiled_actors: &compiled::CompiledActors,
+    path: &Path,
+    ops: ItgCompiledSpriteOps<T>,
+) -> Option<T> {
+    itg_first_actor_sprite_slot(
+        data,
+        compiled_actors,
+        path,
+        ops.load_texture,
+        ops.load_frame,
+        ops.load_animated,
+    )
+}
+
 pub fn itg_resolve_actor_sprites_compiled<T>(
     data: &itg::NoteskinData,
     compiled: &compiled::CompiledLoader,
@@ -1287,6 +1330,173 @@ pub fn itg_resolve_actor_sprites_inner_compiled<T>(
 
     visiting.remove(&visit_key);
     out
+}
+
+pub fn itg_resolve_actor_sprites_with_ops_compiled<T>(
+    data: &itg::NoteskinData,
+    compiled: &compiled::CompiledLoader,
+    compiled_actors: &compiled::CompiledActors,
+    button: &str,
+    element: &str,
+    ops: ItgCompiledSpriteOps<T>,
+) -> Vec<ItgResolvedSprite<T>> {
+    let mut visiting = HashSet::new();
+    itg_resolve_actor_sprites_with_ops_inner(
+        data,
+        compiled,
+        compiled_actors,
+        button,
+        element,
+        0,
+        &mut visiting,
+        &ops,
+    )
+}
+
+fn itg_resolve_actor_sprites_with_ops_inner<T>(
+    data: &itg::NoteskinData,
+    compiled: &compiled::CompiledLoader,
+    compiled_actors: &compiled::CompiledActors,
+    button: &str,
+    element: &str,
+    depth: usize,
+    visiting: &mut HashSet<String>,
+    ops: &ItgCompiledSpriteOps<T>,
+) -> Vec<ItgResolvedSprite<T>> {
+    itg_resolve_actor_sprites_inner_compiled(
+        data,
+        compiled,
+        button,
+        element,
+        depth,
+        visiting,
+        |path, rotation_z, depth, visiting, arg0_path| {
+            itg_resolve_actor_file_with_ops_inner(
+                data,
+                compiled,
+                compiled_actors,
+                button,
+                element,
+                path,
+                rotation_z,
+                depth,
+                visiting,
+                arg0_path,
+                ops,
+            )
+        },
+        ops.apply_loader_command,
+    )
+}
+
+fn itg_resolve_actor_file_with_ops_inner<T>(
+    data: &itg::NoteskinData,
+    compiled: &compiled::CompiledLoader,
+    compiled_actors: &compiled::CompiledActors,
+    button: &str,
+    element: &str,
+    path: &Path,
+    rotation_z: Option<i32>,
+    depth: usize,
+    visiting: &mut HashSet<String>,
+    arg0_path: Option<&Path>,
+    ops: &ItgCompiledSpriteOps<T>,
+) -> Vec<ItgResolvedSprite<T>> {
+    itg_resolve_actor_file_compiled(
+        data,
+        compiled_actors,
+        button,
+        element,
+        path,
+        rotation_z,
+        depth,
+        visiting,
+        arg0_path,
+        ops.load_texture,
+        ops.load_frame,
+        ops.load_animated,
+        ops.apply_model,
+        ops.apply_rotation,
+        ops.apply_frame,
+        ops.apply_state,
+        |path, path_ref_arg, visiting| {
+            itg_resolve_actor_file_with_ops_inner(
+                data,
+                compiled,
+                compiled_actors,
+                button,
+                element,
+                path,
+                rotation_z,
+                depth + 1,
+                visiting,
+                path_ref_arg,
+                ops,
+            )
+        },
+        |child_button, child_element, visiting| {
+            itg_resolve_actor_sprites_with_ops_inner(
+                data,
+                compiled,
+                compiled_actors,
+                child_button,
+                child_element,
+                depth + 1,
+                visiting,
+                ops,
+            )
+        },
+    )
+}
+
+pub fn itg_resolve_hold_explosion_slot_compiled<T: Clone>(
+    data: &itg::NoteskinData,
+    compiled_actors: &compiled::CompiledActors,
+    wrapper_sprites: &[ItgResolvedSprite<T>],
+    source_sprites: &[ItgResolvedSprite<T>],
+    button: &str,
+    active_key: &str,
+    element_hint: &str,
+    blank: bool,
+    asset_element: Option<&str>,
+    texture_prefix: Option<&str>,
+    fallback: Option<&T>,
+    ops: ItgCompiledSpriteOps<T>,
+    mut apply_active_cmd: impl FnMut(&T, &HashMap<String, String>, &str) -> T,
+) -> Option<T> {
+    itg_hold_explosion_from_resolved_layers(
+        wrapper_sprites,
+        source_sprites,
+        active_key,
+        element_hint,
+        blank,
+        fallback.cloned(),
+        || {
+            asset_element
+                .and_then(|element| data.resolve_path(button, element))
+                .and_then(|path| (ops.load_texture)(&path))
+        },
+        || {
+            if let Some(slot) = asset_element
+                .and_then(|element| data.resolve_path(button, element))
+                .and_then(|path| {
+                    itg_first_actor_sprite_slot_with_ops(data, compiled_actors, &path, ops)
+                })
+            {
+                return vec![slot];
+            }
+            if let Some(slot) = texture_prefix
+                .and_then(|prefix| itg::find_texture_with_prefix(data, prefix))
+                .and_then(|path| {
+                    (ops.load_all_frames)(&path, Some(0.01), itg::animation_is_beat_based(data))
+                })
+            {
+                return vec![slot];
+            }
+            Vec::new()
+        },
+        |slot, commands, key| apply_active_cmd(&slot, commands, key),
+    )
 }
 
 pub fn itg_receptor_column<T: Clone>(
@@ -1470,6 +1680,359 @@ pub fn itg_runtime_columns_compiled<T: Clone>(
         roll_columns,
         receptor_pulse_command,
     })
+}
+
+pub fn itg_apply_hold_explosions_by_col<T: Clone>(
+    hold_columns: &mut [HoldVisuals<T>],
+    roll_columns: &mut [HoldVisuals<T>],
+    default_hold_explosion: Option<&T>,
+    default_roll_explosion: Option<&T>,
+    mut resolve: impl FnMut(&str, &str, &str, &str, Option<&T>) -> Option<T>,
+) {
+    for (col, visuals) in hold_columns.iter_mut().enumerate() {
+        let button = itg::button_for_col(col);
+        visuals.explosion = resolve(
+            button,
+            "holdingoncommand",
+            "hold explosion",
+            "Hold Explosion",
+            default_hold_explosion,
+        );
+    }
+    for (col, visuals) in roll_columns.iter_mut().enumerate() {
+        let button = itg::button_for_col(col);
+        visuals.explosion = resolve(
+            button,
+            "rolloncommand",
+            "roll explosion",
+            "Roll Explosion",
+            default_roll_explosion,
+        );
+    }
+}
+
+pub fn itg_tap_explosions_by_col_compiled<T: Clone>(
+    data: &itg::NoteskinData,
+    style: crate::Style,
+    compiled: &compiled::CompiledLoader,
+    down_explosion_sprites: &[ItgResolvedSprite<T>],
+    mut resolve_sprites: impl FnMut(&str, &str) -> Vec<ItgResolvedSprite<T>>,
+) -> Vec<HashMap<String, TapExplosion<T>>> {
+    let mut out = Vec::with_capacity(style.num_cols);
+    for col in 0..style.num_cols {
+        let button = itg::button_for_col(col);
+        let column_explosion_sprites = if button.eq_ignore_ascii_case("Down") {
+            down_explosion_sprites.to_vec()
+        } else {
+            resolve_sprites(button, "Explosion")
+        };
+        out.push(itg_tap_explosion_map_from_resolved_layers(
+            &column_explosion_sprites,
+            |base_element| {
+                let base_request = compiled.load_request(button, base_element);
+                itg_direct_tap_explosion_resolved_layers(
+                    base_element,
+                    base_request.blank,
+                    |element| compiled.load_request(button, element).blank,
+                    |element| resolve_sprites(button, element),
+                )
+            },
+            |mode, metric_key| {
+                data.metrics
+                    .get(mode.metric_section(), metric_key)
+                    .map(str::to_string)
+            },
+        ));
+    }
+    out
+}
+
+pub fn itg_noteskin_runtime_compiled<T: Clone>(
+    data: &itg::NoteskinData,
+    style: crate::Style,
+    compiled: &compiled::CompiledLoader,
+    note_display_metrics: NoteDisplayMetrics,
+    animation_is_beat_based: bool,
+    columns: ItgRuntimeColumns<T>,
+    mut resolve_sprites: impl FnMut(&str, &str) -> Vec<ItgResolvedSprite<T>>,
+    mut resolve_hold_explosion: impl FnMut(
+        &[ItgResolvedSprite<T>],
+        &[ItgResolvedSprite<T>],
+        &str,
+        &str,
+        &str,
+        bool,
+        Option<&str>,
+        Option<&str>,
+        Option<&T>,
+    ) -> Option<T>,
+    mut resolve_direct_slot: impl FnMut(&str, &str) -> Option<T>,
+    mut resolve_actor_first_sprite: impl FnMut(&str, &str) -> Option<T>,
+    mut mine_fill_slots: impl FnMut(&[Option<T>]) -> Vec<Option<T>>,
+    mut texture_key: impl FnMut(&T) -> String,
+    mut apply_active_cmd: impl FnMut(&T, &HashMap<String, String>, &str) -> T,
+) -> NoteskinRuntime<T> {
+    let ItgRuntimeColumns {
+        notes,
+        note_layers,
+        lift_note_layers,
+        receptor_off,
+        receptor_glow,
+        receptor_off_reverse,
+        receptor_glow_reverse,
+        receptor_step_behaviors,
+        mines,
+        mine_frames,
+        mut hold_columns,
+        mut roll_columns,
+        receptor_pulse_command,
+    } = columns;
+    let down_col = itg::down_col(style.num_cols);
+    let (mut hold, mut roll) = default_hold_visuals(&hold_columns, &roll_columns, down_col);
+
+    let explosion_sprites = resolve_sprites("Down", "Explosion");
+    let hold_explosion_request = compiled.load_request("Down", "Hold Explosion");
+    let roll_explosion_request = compiled.load_request("Down", "Roll Explosion");
+    let hold_explosion_blank = hold_explosion_request.blank;
+    let roll_explosion_blank = roll_explosion_request.blank;
+    let hold_explosion_sprites = resolve_sprites("Down", "Hold Explosion");
+    hold.explosion = resolve_hold_explosion(
+        &explosion_sprites,
+        &hold_explosion_sprites,
+        "Down",
+        "holdingoncommand",
+        "hold explosion",
+        hold_explosion_blank,
+        Some("Hold Explosion"),
+        Some("_down hold explosion"),
+        None,
+    );
+    let roll_explosion_sprites = resolve_sprites("Down", "Roll Explosion");
+    let roll_explosion = resolve_hold_explosion(
+        &explosion_sprites,
+        &roll_explosion_sprites,
+        "Down",
+        "rolloncommand",
+        "roll explosion",
+        roll_explosion_blank,
+        Some("Roll Explosion"),
+        Some("_down hold explosion"),
+        None,
+    );
+    roll.explosion = itg_roll_explosion_from_resolved_layers(
+        &explosion_sprites,
+        roll_explosion_blank,
+        roll_explosion,
+        hold.explosion.clone(),
+        &mut texture_key,
+        |key| {
+            data.metrics
+                .get("HoldGhostArrow", key)
+                .map(ToString::to_string)
+        },
+        &mut apply_active_cmd,
+    );
+
+    {
+        let mut resolve_hold_explosion_for_button =
+            |button: &str,
+             active_key: &str,
+             element_hint: &str,
+             request_element: &str,
+             fallback: Option<&T>| {
+                let column_explosion_sprites = if button.eq_ignore_ascii_case("Down") {
+                    explosion_sprites.clone()
+                } else {
+                    resolve_sprites(button, "Explosion")
+                };
+                let request = compiled.load_request(button, request_element);
+                let source_sprites = if request.blank {
+                    Vec::new()
+                } else {
+                    resolve_sprites(button, request_element)
+                };
+                resolve_hold_explosion(
+                    &column_explosion_sprites,
+                    &source_sprites,
+                    button,
+                    active_key,
+                    element_hint,
+                    request.blank,
+                    None,
+                    None,
+                    fallback,
+                )
+            };
+        itg_apply_hold_explosions_by_col(
+            &mut hold_columns,
+            &mut roll_columns,
+            hold.explosion.as_ref(),
+            roll.explosion.as_ref(),
+            &mut resolve_hold_explosion_for_button,
+        );
+    }
+
+    let tap_explosions_by_col = itg_tap_explosions_by_col_compiled(
+        data,
+        style,
+        compiled,
+        &explosion_sprites,
+        |button, element| resolve_sprites(button, element),
+    );
+    let mine_hit_explosion = itg_hit_mine_explosion_from_layers(
+        &explosion_sprites,
+        || resolve_direct_slot("Down", "HitMine Explosion"),
+        || resolve_actor_first_sprite("Down", "HitMine Explosion"),
+        data.metrics
+            .get("GhostArrowBright", "HitMineCommand")
+            .map(str::to_string),
+    );
+    let tap_explosions = default_tap_explosions(&tap_explosions_by_col, down_col);
+    let hold_let_go_gray_percent =
+        crate::parts::clamped_hold_let_go_gray_percent(&note_display_metrics);
+    let receptor = resolve_sprites("Down", "Receptor");
+    let receptor_glow_behavior = itg_receptor_glow_behavior_from_layers(&receptor, |metric_key| {
+        data.metrics
+            .get("ReceptorOverlay", metric_key)
+            .map(str::to_string)
+    });
+    let receptor_pulse = itg_receptor_pulse_from_command(receptor_pulse_command.as_deref());
+    let mine_fill_slots = mine_fill_slots(&mines);
+    let column_xs = crate::parts::itg_column_xs(style.num_cols);
+
+    NoteskinRuntime {
+        notes,
+        note_layers,
+        lift_note_layers,
+        receptor_off,
+        receptor_glow,
+        receptor_off_reverse,
+        receptor_glow_reverse,
+        receptor_step_behaviors,
+        tap_explosions,
+        tap_explosions_by_col,
+        mine_hit_explosion,
+        hold,
+        roll,
+        mine_fill_slots,
+        mines,
+        mine_frames,
+        hold_columns,
+        roll_columns,
+        receptor_glow_behavior,
+        receptor_pulse,
+        column_xs,
+        note_display_metrics,
+        animation_is_beat_based,
+        hold_let_go_gray_percent,
+    }
+}
+
+pub fn itg_noteskin_runtime_with_ops_compiled<T: Clone>(
+    data: &itg::NoteskinData,
+    style: crate::Style,
+    compiled: &compiled::CompiledLoader,
+    compiled_actors: &compiled::CompiledActors,
+    quantizations: usize,
+    ops: ItgCompiledSpriteOps<T>,
+) -> Result<NoteskinRuntime<T>, String> {
+    let note_display_metrics = itg::note_display_metrics(&data.metrics);
+    let animation_is_beat_based = itg::animation_is_beat_based(data);
+    let columns = itg_runtime_columns_compiled(
+        data,
+        style,
+        compiled,
+        quantizations,
+        |button, element| {
+            itg_resolve_actor_sprites_with_ops_compiled(
+                data,
+                compiled,
+                compiled_actors,
+                button,
+                element,
+                ops,
+            )
+        },
+        |button, element| {
+            itg_resolved_slots_with_model_draw(
+                itg_resolve_actor_sprites_with_ops_compiled(
+                    data,
+                    compiled,
+                    compiled_actors,
+                    button,
+                    element,
+                    ops,
+                ),
+                ops.apply_model_draw,
+            )
+        },
+        |button, element| {
+            data.resolve_path(button, element)
+                .and_then(|path| (ops.load_texture)(&path))
+        },
+        |prefix| {
+            itg::find_texture_with_prefix(data, prefix).and_then(|path| (ops.load_texture)(&path))
+        },
+        ops.apply_parent_command,
+        ops.base_zoom,
+        ops.model_info,
+    )?;
+
+    Ok(itg_noteskin_runtime_compiled(
+        data,
+        style,
+        compiled,
+        note_display_metrics,
+        animation_is_beat_based,
+        columns,
+        |button, element| {
+            itg_resolve_actor_sprites_with_ops_compiled(
+                data,
+                compiled,
+                compiled_actors,
+                button,
+                element,
+                ops,
+            )
+        },
+        |wrapper_sprites,
+         source_sprites,
+         button,
+         active_key,
+         element_hint,
+         blank,
+         asset_element,
+         texture_prefix,
+         fallback| {
+            itg_resolve_hold_explosion_slot_compiled(
+                data,
+                compiled_actors,
+                wrapper_sprites,
+                source_sprites,
+                button,
+                active_key,
+                element_hint,
+                blank,
+                asset_element,
+                texture_prefix,
+                fallback,
+                ops,
+                ops.apply_active_cmd,
+            )
+        },
+        |button, element| {
+            data.resolve_path(button, element)
+                .and_then(|path| (ops.load_texture)(&path))
+        },
+        |button, element| {
+            data.resolve_path(button, element).and_then(|path| {
+                itg_first_actor_sprite_slot_with_ops(data, compiled_actors, &path, ops)
+            })
+        },
+        ops.mine_fill_slots,
+        ops.texture_key,
+        ops.apply_active_cmd,
+    ))
 }
 
 #[derive(Debug)]
@@ -1802,25 +2365,29 @@ fn beat_to_note_type_index(beat: f32) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::{
-        HoldVisualParts, HoldVisuals, ItgHoldKind, ItgResolvedSprite, NoteskinRuntime,
-        TapExplosion, TapExplosionLayer, bright_tap_explosion_key, default_hold_visuals,
-        default_tap_explosions, itg_apply_child_actor_commands, itg_apply_loader_command,
+        HoldVisualParts, HoldVisuals, ItgCompiledSpriteOps, ItgHoldKind, ItgResolvedSprite,
+        ItgRuntimeColumns, NoteskinRuntime, TapExplosion, TapExplosionLayer,
+        bright_tap_explosion_key, default_hold_visuals, default_tap_explosions,
+        itg_apply_child_actor_commands, itg_apply_hold_explosions_by_col, itg_apply_loader_command,
         itg_direct_tap_explosion_resolved_layers, itg_first_actor_sprite_slot,
         itg_first_resolved_slot_or_fallback, itg_hit_mine_explosion_from_layers,
         itg_hit_mine_explosion_from_slot, itg_hold_explosion_from_resolved_layers,
         itg_hold_head_layers, itg_hold_visual_parts, itg_hold_visuals_from_parts,
         itg_is_common_fallback_hold_explosion_key, itg_is_common_noteskin_key,
         itg_lift_layers_for_col, itg_load_sprite_decl_slot, itg_mine_explosion_from_commands,
-        itg_mine_visuals_from_layers, itg_receptor_column, itg_receptor_glow_behavior_from_layers,
-        itg_receptor_pulse_from_command, itg_resolve_actor_file_compiled,
-        itg_resolve_actor_sprites_compiled, itg_resolve_model_decl, itg_resolve_path_ref_decl,
-        itg_resolve_ref_decl, itg_resolve_sprite_decl, itg_resolved_slots_with_model_draw,
-        itg_roll_explosion_commands, itg_roll_explosion_from_resolved,
-        itg_roll_explosion_from_resolved_layers, itg_roll_explosion_should_use_hold,
-        itg_roll_visuals_from_parts, itg_runtime_columns_compiled, itg_slot_with_active_model_draw,
+        itg_mine_visuals_from_layers, itg_noteskin_runtime_compiled, itg_receptor_column,
+        itg_receptor_glow_behavior_from_layers, itg_receptor_pulse_from_command,
+        itg_resolve_actor_file_compiled, itg_resolve_actor_sprites_compiled,
+        itg_resolve_actor_sprites_with_ops_compiled, itg_resolve_model_decl,
+        itg_resolve_path_ref_decl, itg_resolve_ref_decl, itg_resolve_sprite_decl,
+        itg_resolved_slots_with_model_draw, itg_roll_explosion_commands,
+        itg_roll_explosion_from_resolved, itg_roll_explosion_from_resolved_layers,
+        itg_roll_explosion_should_use_hold, itg_roll_visuals_from_parts,
+        itg_runtime_columns_compiled, itg_slot_with_active_model_draw,
         itg_tap_explosion_map_from_layers, itg_tap_explosion_map_from_resolved_layers,
-        itg_tap_explosion_map_from_sources, itg_tap_note_base_layer, itg_tap_note_column,
-        itg_tap_note_layer_priority, itg_tap_note_layers,
+        itg_tap_explosion_map_from_sources, itg_tap_explosions_by_col_compiled,
+        itg_tap_note_base_layer, itg_tap_note_column, itg_tap_note_layer_priority,
+        itg_tap_note_layers,
     };
     use crate::explosion::{
         ItgTapExplosionMode, ItgTapExplosionSource, itg_has_tap_explosion_command,
@@ -2542,6 +3109,286 @@ mod tests {
         assert_eq!(columns.hold_columns[0].head_inactive, Some(4));
         assert_eq!(columns.roll_columns.len(), 1);
         assert_eq!(columns.roll_columns[0].head_active, Some(5));
+    }
+
+    #[test]
+    fn hold_explosion_helper_updates_hold_and_roll_columns() {
+        let mut hold_columns = vec![HoldVisuals::<i32>::default(), HoldVisuals::default()];
+        let mut roll_columns = vec![HoldVisuals::<i32>::default()];
+        let mut calls = Vec::new();
+
+        itg_apply_hold_explosions_by_col(
+            &mut hold_columns,
+            &mut roll_columns,
+            Some(&10),
+            Some(&20),
+            |button, active_key, element_hint, request_element, fallback| {
+                calls.push(format!(
+                    "{button}:{active_key}:{element_hint}:{request_element}:{}",
+                    fallback.copied().unwrap_or_default()
+                ));
+                Some(fallback.copied().unwrap_or_default() + button.len() as i32)
+            },
+        );
+
+        assert_eq!(hold_columns[0].explosion, Some(14));
+        assert_eq!(hold_columns[1].explosion, Some(14));
+        assert_eq!(roll_columns[0].explosion, Some(24));
+        assert_eq!(
+            calls,
+            [
+                "Left:holdingoncommand:hold explosion:Hold Explosion:10",
+                "Down:holdingoncommand:hold explosion:Hold Explosion:10",
+                "Left:rolloncommand:roll explosion:Roll Explosion:20",
+            ]
+            .map(str::to_string)
+        );
+    }
+
+    #[test]
+    fn tap_explosions_by_col_compiled_uses_down_cache_and_column_lookups() {
+        let data = itg::NoteskinData {
+            name: "default".to_string(),
+            metrics: itg::IniData::default(),
+            search_dirs: Vec::new(),
+        };
+        let style = Style {
+            num_cols: 2,
+            num_players: 1,
+        };
+        let compiled = compiled::CompiledLoader::default();
+        let down = vec![ItgResolvedSprite {
+            element: "Explosion".to_string(),
+            slot: 1,
+            commands: HashMap::from([("w1command".to_string(), "linear,0.1".to_string())]),
+        }];
+        let mut calls = Vec::new();
+
+        let maps = itg_tap_explosions_by_col_compiled(
+            &data,
+            style,
+            &compiled,
+            &down,
+            |button, element| {
+                calls.push(format!("{button}:{element}"));
+                if button == "Down" {
+                    return Vec::new();
+                }
+                vec![ItgResolvedSprite {
+                    element: element.to_string(),
+                    slot: 2,
+                    commands: HashMap::from([("w1command".to_string(), "linear,0.2".to_string())]),
+                }]
+            },
+        );
+
+        assert_eq!(maps.len(), 2);
+        assert_eq!(maps[0].get("W1").map(|explosion| explosion.slot), Some(2));
+        assert_eq!(maps[1].get("W1").map(|explosion| explosion.slot), Some(1));
+        assert!(calls.iter().any(|call| call == "Left:Explosion"));
+        assert!(!calls.iter().any(|call| call == "Down:Explosion"));
+    }
+
+    #[test]
+    fn runtime_compiled_assembles_post_column_state() {
+        let data = itg::NoteskinData {
+            name: "default".to_string(),
+            metrics: itg::IniData::default(),
+            search_dirs: Vec::new(),
+        };
+        let style = Style {
+            num_cols: 1,
+            num_players: 1,
+        };
+        let columns = ItgRuntimeColumns {
+            notes: vec![Slot(1)],
+            note_layers: vec![Arc::from([Slot(1)])],
+            lift_note_layers: vec![Arc::from([Slot(2)])],
+            receptor_off: vec![Slot(3)],
+            receptor_glow: vec![None],
+            receptor_off_reverse: vec![Default::default()],
+            receptor_glow_reverse: vec![Default::default()],
+            receptor_step_behaviors: vec![ReceptorStepBehaviors::default()],
+            mines: vec![Some(Slot(4))],
+            mine_frames: vec![None],
+            hold_columns: vec![HoldVisuals {
+                head_inactive: Some(Slot(5)),
+                ..Default::default()
+            }],
+            roll_columns: vec![HoldVisuals {
+                head_inactive: Some(Slot(6)),
+                ..Default::default()
+            }],
+            receptor_pulse_command: Some("zoom,1".to_string()),
+        };
+        let mut hold_calls = Vec::new();
+
+        let runtime = itg_noteskin_runtime_compiled(
+            &data,
+            style,
+            &compiled::CompiledLoader::default(),
+            NoteDisplayMetrics::default(),
+            true,
+            columns,
+            |_, element| match element {
+                "Explosion" => vec![ItgResolvedSprite {
+                    element: "Explosion".to_string(),
+                    slot: Slot(10),
+                    commands: HashMap::from([
+                        ("w1command".to_string(), "linear,0.1".to_string()),
+                        ("hitminecommand".to_string(), "linear,0.2".to_string()),
+                    ]),
+                }],
+                "Receptor" => vec![ItgResolvedSprite {
+                    element: "Receptor".to_string(),
+                    slot: Slot(11),
+                    commands: HashMap::new(),
+                }],
+                _ => Vec::new(),
+            },
+            |_, _, button, active_key, _, _, asset_element, texture_prefix, fallback| {
+                hold_calls.push(format!(
+                    "{button}:{active_key}:{}:{}",
+                    asset_element.unwrap_or("-"),
+                    texture_prefix.unwrap_or("-")
+                ));
+                fallback.cloned().or_else(|| {
+                    Some(if active_key == "holdingoncommand" {
+                        Slot(21)
+                    } else {
+                        Slot(31)
+                    })
+                })
+            },
+            |_, _| Some(Slot(40)),
+            |_, _| Some(Slot(41)),
+            |mines| {
+                mines
+                    .iter()
+                    .map(|slot| slot.as_ref().map(|s| Slot(s.0 + 100)))
+                    .collect()
+            },
+            |slot| format!("slot{}", slot.0),
+            |slot, _, _| Slot(slot.0 + 1),
+        );
+
+        assert_eq!(runtime.hold.explosion, Some(Slot(21)));
+        assert_eq!(runtime.roll.explosion, Some(Slot(31)));
+        assert_eq!(runtime.hold_columns[0].explosion, Some(Slot(21)));
+        assert_eq!(runtime.roll_columns[0].explosion, Some(Slot(31)));
+        assert_eq!(
+            runtime
+                .tap_explosions
+                .get("W1")
+                .map(|explosion| explosion.slot.clone()),
+            Some(Slot(10))
+        );
+        assert_eq!(
+            runtime.mine_hit_explosion.map(|explosion| explosion.slot),
+            Some(Slot(10))
+        );
+        assert_eq!(runtime.mine_fill_slots, vec![Some(Slot(104))]);
+        assert_eq!(runtime.column_xs, vec![0]);
+        assert!(
+            hold_calls.iter().any(|call| {
+                call == "Down:holdingoncommand:Hold Explosion:_down hold explosion"
+            })
+        );
+        assert!(
+            hold_calls
+                .iter()
+                .any(|call| call == "Down:rolloncommand:Roll Explosion:_down hold explosion")
+        );
+    }
+
+    #[test]
+    fn actor_sprites_with_ops_compiled_owns_reference_recursion() {
+        let root =
+            std::env::temp_dir().join(format!("deadsync-noteskin-runtime-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).expect("create runtime test dir");
+        let tap_path = root.join("Down Tap Note.lua");
+        let fake_path = root.join("Down Fake.lua");
+        let fake_texture = root.join("Down Fake.png");
+        std::fs::write(&tap_path, "return {}").expect("write tap actor");
+        std::fs::write(&fake_path, "return {}").expect("write fake actor");
+        std::fs::write(&fake_texture, []).expect("write fake texture");
+
+        let data = itg::NoteskinData {
+            name: "default".to_string(),
+            metrics: itg::IniData::default(),
+            search_dirs: vec![root.clone()],
+        };
+        let compiled = compiled::CompiledLoader::default();
+        let compiled_actors = compiled::CompiledActors {
+            version: compiled::CACHE_SCHEMA_VERSION,
+            files: vec![
+                crate::compiled::CompiledActorFile {
+                    key: crate::compiled::actor_manifest_key(&data.search_dirs, &tap_path)
+                        .expect("tap manifest key"),
+                    decl: crate::actor::ItgLuaActorDecl {
+                        refs: vec![crate::actor::ItgLuaRefDecl {
+                            button_override: None,
+                            element: "Fake".to_string(),
+                            wrapper_expr: None,
+                            frame_override: None,
+                            commands: HashMap::new(),
+                        }],
+                        ..Default::default()
+                    },
+                },
+                crate::compiled::CompiledActorFile {
+                    key: crate::compiled::actor_manifest_key(&data.search_dirs, &fake_path)
+                        .expect("fake manifest key"),
+                    decl: crate::actor::ItgLuaActorDecl {
+                        sprites: vec![crate::actor::ItgLuaSpriteDecl {
+                            texture_expr: "Down Fake.png".to_string(),
+                            frame0: 0,
+                            frame_count: 1,
+                            frame_indices: None,
+                            frame_delays: None,
+                            commands: HashMap::new(),
+                        }],
+                        ..Default::default()
+                    },
+                },
+            ],
+        };
+
+        let sprites = itg_resolve_actor_sprites_with_ops_compiled(
+            &data,
+            &compiled,
+            &compiled_actors,
+            "Down",
+            "Tap Note",
+            ItgCompiledSpriteOps {
+                load_texture: |_| Some(Slot(7)),
+                load_frame: |_, _| None,
+                load_animated: |_, _, _, _, _, _| None,
+                load_all_frames: |_, _, _| None,
+                apply_model: |_, _| {},
+                apply_model_draw: |_, _, _, _| {},
+                apply_parent_command: |_, _| {},
+                apply_rotation: |_, _| {},
+                apply_frame: |_, _| {},
+                apply_state: |_, _| {},
+                apply_loader_command: |_, _| {},
+                apply_active_cmd: |slot, _, _| slot.clone(),
+                mine_fill_slots: |mines| mines.to_vec(),
+                base_zoom: |_| 1.0,
+                model_info: |_| (false, [0.0, 0.0]),
+                texture_key: |slot| format!("slot{}", slot.0),
+            },
+        );
+
+        assert_eq!(
+            sprites
+                .iter()
+                .map(|sprite| sprite.slot.clone())
+                .collect::<Vec<_>>(),
+            vec![Slot(7)]
+        );
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]

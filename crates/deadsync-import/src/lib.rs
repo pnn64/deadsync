@@ -7,6 +7,7 @@
 
 mod ini;
 
+pub mod app_runtime;
 pub mod detect;
 pub mod itg;
 pub mod options;

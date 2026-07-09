@@ -1,27 +1,36 @@
 use crate::OnlineRequestError;
+use deadsync_core::song_time::{song_time_ns_invalid, song_time_ns_to_seconds};
 use deadsync_net::{self as network, NetworkError};
 use deadsync_profile as profile_data;
 use deadsync_profile::Profile;
 use deadsync_rules::{
     judgment,
+    note::Note,
     scroll::ScrollSpeedSetting,
+    stream::StreamSegment,
     timing::{ScatterPoint, WindowCounts},
 };
 use deadsync_score::{
-    ArrowCloudAutosubmitLog, ArrowCloudAutosubmitLogLevel, ArrowCloudLeaderboard,
-    ArrowCloudPaneKind, ArrowCloudScore, ArrowCloudScores, ArrowCloudSubmitStats,
-    ArrowCloudSubmitUiStatus, ArrowCloudUserContext, LeaderboardEntry, LeaderboardPane,
-    RejectReason, SUBMIT_RETRY_MAX_ATTEMPTS, SubmitRetryState,
-    arrowcloud_empty_hard_ex_leaderboard_pane, arrowcloud_entry_flags,
-    arrowcloud_hard_ex_leaderboard_pane, arrowcloud_leaderboard_entry,
+    ArrowCloudAutosubmitLog, ArrowCloudAutosubmitLogLevel, ArrowCloudAutosubmitPlayerAction,
+    ArrowCloudAutosubmitPlayerInput, ArrowCloudAutosubmitSessionDecision,
+    ArrowCloudAutosubmitSessionInput, ArrowCloudBulkChunkResult, ArrowCloudBulkImportRunEvent,
+    ArrowCloudLeaderboard, ArrowCloudPaneKind, ArrowCloudScore, ArrowCloudScores,
+    ArrowCloudSubmitStats, ArrowCloudSubmitUiStatus, ArrowCloudUserContext, LeaderboardEntry,
+    LeaderboardPane, RejectReason, SUBMIT_RETRY_MAX_ATTEMPTS, ScoreBulkImportSummary,
+    ScoreImportEndpoint, ScoreImportProgress, SubmitRetryState,
+    arrowcloud_autosubmit_after_payload_decision, arrowcloud_autosubmit_player_decision,
+    arrowcloud_autosubmit_session_decision, arrowcloud_empty_hard_ex_leaderboard_pane,
+    arrowcloud_entry_flags, arrowcloud_hard_ex_leaderboard_pane, arrowcloud_leaderboard_entry,
     arrowcloud_pane_kind_from_type, arrowcloud_score_from_retrieve_fields,
     arrowcloud_submit_ui_status, arrowcloud_target_user_ids, arrowcloud_user_id,
-    set_arrowcloud_score_for_leaderboard,
+    gameplay_run_failed, log_arrowcloud_bulk_import_event, run_arrowcloud_bulk_import_pack_groups,
+    set_arrowcloud_score_for_leaderboard, validate_score_import_credentials,
 };
 use serde::Deserializer;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::error::Error;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{LazyLock, Mutex};
@@ -310,6 +319,35 @@ impl ArrowCloudSubmitDraft {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct ArrowCloudGameplaySubmitInput {
+    pub enabled: bool,
+    pub player_count: usize,
+    pub autoplay_used: bool,
+    pub is_course_stage: bool,
+    pub autosubmit_course_scores_individually: bool,
+    pub submit_fails_enabled: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct ArrowCloudGameplaySubmitPlayer {
+    pub side: profile_data::PlayerSide,
+    pub chart_hash: String,
+    pub api_key: String,
+    pub profile_id: Option<String>,
+    pub itg_percent: f64,
+    pub ex_percent: f64,
+    pub hard_ex_percent: f64,
+    pub song_has_lua: bool,
+    pub lua_submit_allowed: bool,
+    pub song_completed_naturally: bool,
+    pub is_failing: bool,
+    pub life: f32,
+    pub has_fail_time: bool,
+    pub course_stage_life_submit_eligible: bool,
+    pub payload: Option<ArrowCloudPayload>,
+}
+
 pub fn begin_submit_jobs_from_drafts(
     drafts: Vec<ArrowCloudSubmitDraft>,
 ) -> Vec<ArrowCloudSubmitJob> {
@@ -329,6 +367,92 @@ pub fn begin_submit_jobs_from_drafts(
             draft.submit_job(token)
         })
         .collect()
+}
+
+pub fn submit_gameplay_players(
+    input: ArrowCloudGameplaySubmitInput,
+    players: impl IntoIterator<Item = ArrowCloudGameplaySubmitPlayer>,
+    cache_success: fn(&ArrowCloudSubmitJob),
+    after_submit: fn(&ArrowCloudSubmitJob),
+) -> bool {
+    let players: Vec<_> = players.into_iter().collect();
+    for player in &players {
+        reset_submit_ui_status(player.side, player.chart_hash.as_str());
+        reset_submit_retry(player.side, player.chart_hash.as_str());
+    }
+
+    match arrowcloud_autosubmit_session_decision(ArrowCloudAutosubmitSessionInput {
+        enabled: input.enabled,
+        player_count: input.player_count,
+        autoplay_used: input.autoplay_used,
+        is_course_stage: input.is_course_stage,
+        autosubmit_course_scores_individually: input.autosubmit_course_scores_individually,
+    }) {
+        ArrowCloudAutosubmitSessionDecision::Submit => {}
+        ArrowCloudAutosubmitSessionDecision::Skip { log } => {
+            if let Some(log) = log {
+                log_global_submit_skip(log);
+            }
+            return false;
+        }
+    }
+
+    let mut drafts = Vec::with_capacity(players.len());
+    for player in players {
+        let decision = arrowcloud_autosubmit_player_decision(ArrowCloudAutosubmitPlayerInput {
+            song_has_lua: player.song_has_lua,
+            lua_submit_allowed: player.lua_submit_allowed,
+            song_completed_naturally: player.song_completed_naturally,
+            is_failing: player.is_failing,
+            life: player.life,
+            has_fail_time: player.has_fail_time,
+            submit_fails_enabled: input.submit_fails_enabled,
+            api_key_present: !player.api_key.trim().is_empty(),
+            course_stage_life_submit_eligible: player.course_stage_life_submit_eligible,
+        });
+        match decision.action {
+            ArrowCloudAutosubmitPlayerAction::BuildPayload => {}
+            ArrowCloudAutosubmitPlayerAction::Skip { log } => {
+                if let Some(log) = log {
+                    log_player_submit_skip(player.side, player.chart_hash.as_str(), log);
+                }
+                continue;
+            }
+        }
+
+        let Some(payload) = player.payload else {
+            warn_submit_skip(
+                player.side,
+                player.chart_hash.as_str(),
+                "failed to build submit payload",
+            );
+            continue;
+        };
+        if let Some(log) = arrowcloud_autosubmit_after_payload_decision(
+            decision.failed,
+            decision.allow_failed_submit,
+        ) {
+            log_player_submit_skip(player.side, payload.hash.as_str(), log);
+            continue;
+        }
+        drafts.push(ArrowCloudSubmitDraft::new(
+            player.side,
+            player.api_key.trim().to_string(),
+            payload,
+            player.profile_id,
+            player.itg_percent,
+            player.ex_percent,
+            player.hard_ex_percent,
+            decision.failed,
+        ));
+    }
+
+    let jobs = begin_submit_jobs_from_drafts(drafts);
+    if jobs.is_empty() {
+        return false;
+    }
+    spawn_submit_jobs(jobs, cache_success, after_submit);
+    true
 }
 
 impl ArrowCloudSubmitJob {
@@ -1136,6 +1260,92 @@ pub fn retrieve_score_cache_entries(
         .map(score_cache_entries_from_retrieve_response)
 }
 
+pub fn run_bulk_score_import_pack_groups<F, C, Cache, E>(
+    api_key: &str,
+    user_id: Option<&str>,
+    pack_chart_groups: Vec<(String, Vec<String>)>,
+    only_missing_scores: bool,
+    mut cache_scores: Cache,
+    on_progress: &mut F,
+    should_cancel: C,
+    on_event: E,
+) -> ScoreBulkImportSummary
+where
+    F: FnMut(ScoreImportProgress),
+    C: Fn() -> bool,
+    Cache: FnMut(HashMap<String, ArrowCloudScores>),
+    E: FnMut(ArrowCloudBulkImportRunEvent),
+{
+    run_arrowcloud_bulk_import_pack_groups(
+        pack_chart_groups,
+        ARROWCLOUD_BULK_MAX_HASHES,
+        only_missing_scores,
+        |chunk| {
+            let scores_by_chart = retrieve_score_cache_entries(
+                api_key,
+                user_id,
+                chunk,
+                &ArrowCloudLeaderboard::ALL_GLOBAL,
+            )
+            .map_err(|error| error.to_string())?;
+            let hits = scores_by_chart.len();
+            let misses = chunk.len().saturating_sub(hits);
+            if !scores_by_chart.is_empty() {
+                cache_scores(scores_by_chart);
+            }
+            Ok(ArrowCloudBulkChunkResult { hits, misses })
+        },
+        on_progress,
+        should_cancel,
+        on_event,
+    )
+}
+
+pub fn run_validated_bulk_score_import_pack_groups<F, C, Cache>(
+    api_key: &str,
+    username: &str,
+    pack_chart_groups: Vec<(String, Vec<String>)>,
+    only_missing_scores: bool,
+    cache_scores: Cache,
+    on_progress: F,
+    should_cancel: C,
+) -> Result<ScoreBulkImportSummary, Box<dyn Error + Send + Sync>>
+where
+    F: FnMut(ScoreImportProgress),
+    C: Fn() -> bool,
+    Cache: FnMut(HashMap<String, ArrowCloudScores>),
+{
+    if let Err(error) =
+        validate_score_import_credentials(ScoreImportEndpoint::ArrowCloud, api_key, username)
+    {
+        return Err(error.import_message().into());
+    }
+
+    // Resolve our user id once up front. The bulk endpoint accepts a missing
+    // userId (it'll resolve from the bearer token), but sending it explicitly
+    // is preferred and matches the documented contract.
+    let user_id = match fetch_user_context(api_key) {
+        Ok(Some(ctx)) => ctx.self_user_id,
+        Ok(None) => None,
+        Err(e) => {
+            log::warn!("Could not resolve ArrowCloud user id, sending without it: {e}");
+            None
+        }
+    };
+
+    let mut on_progress = on_progress;
+    Ok(run_bulk_score_import_pack_groups(
+        api_key,
+        user_id.as_deref(),
+        pack_chart_groups,
+        only_missing_scores,
+        cache_scores,
+        &mut on_progress,
+        should_cancel,
+        log_arrowcloud_bulk_import_event,
+    ))
+}
+
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ArrowCloudLeaderboardsApiResponse {
@@ -1782,6 +1992,37 @@ pub struct ArrowCloudPayloadParts {
     pub passed: bool,
 }
 
+pub struct ArrowCloudGameplayPayloadInput<'a> {
+    pub song_name: String,
+    pub artist: String,
+    pub pack_group: &'a str,
+    pub music_length_seconds: f32,
+    pub chart_hash: String,
+    pub difficulty: u32,
+    pub stepartist: String,
+    pub notes: &'a [Note],
+    pub note_times: &'a [i64],
+    pub col_offset: usize,
+    pub cols_per_player: usize,
+    pub stream_segments: &'a [StreamSegment],
+    pub fail_time_ns: Option<i64>,
+    pub submit_stats: ArrowCloudSubmitStats,
+    pub total_holds: u32,
+    pub total_mines: u32,
+    pub total_rolls: u32,
+    pub max_nps: f64,
+    pub measure_nps: &'a [f64],
+    pub measure_seconds: &'a [f32],
+    pub density_first_second: f32,
+    pub density_last_second: f32,
+    pub life_history: &'a [(f32, f32)],
+    pub profile: &'a Profile,
+    pub music_rate: f32,
+    pub used_autoplay: bool,
+    pub is_failing: bool,
+    pub has_fail_time: bool,
+}
+
 impl ArrowCloudPayload {
     pub fn fill_metadata(&mut self) {
         self.body_version = ARROWCLOUD_BODY_VERSION;
@@ -1838,6 +2079,59 @@ pub fn payload_from_parts(input: ArrowCloudPayloadParts) -> ArrowCloudPayload {
     };
     payload.fill_metadata();
     payload
+}
+
+pub fn payload_from_gameplay_input(input: ArrowCloudGameplayPayloadInput<'_>) -> ArrowCloudPayload {
+    let first_second = input.density_first_second.min(0.0);
+    let last_second = input.density_last_second.max(first_second);
+    let chart_start_second = input
+        .note_times
+        .iter()
+        .find(|&&time| !song_time_ns_invalid(time))
+        .copied()
+        .map(song_time_ns_to_seconds)
+        .unwrap_or(first_second);
+    let scatter = deadsync_rules::timing::build_scatter_points(
+        input.notes,
+        input.note_times,
+        input.col_offset,
+        input.cols_per_player,
+        input.stream_segments,
+    );
+    let fail_time_s = input.fail_time_ns.map(song_time_ns_to_seconds);
+
+    payload_from_parts(ArrowCloudPayloadParts {
+        song_name: input.song_name,
+        artist: input.artist,
+        pack: input.pack_group.to_string(),
+        music_length_seconds: input.music_length_seconds,
+        hash: input.chart_hash,
+        timing_data: timing_data_from_scatter(&scatter, fail_time_s),
+        difficulty: input.difficulty,
+        stepartist: input.stepartist,
+        submit_stats: input.submit_stats,
+        total_holds: input.total_holds,
+        total_mines: input.total_mines,
+        total_rolls: input.total_rolls,
+        nps_info: nps_info_from_measure_data(
+            input.max_nps,
+            input.measure_nps,
+            input.measure_seconds,
+            first_second,
+            last_second,
+        ),
+        lifebar_info: lifebar_points(
+            input.life_history,
+            chart_start_second,
+            first_second,
+            last_second,
+            ARROWCLOUD_LIFEBAR_POINTS,
+        ),
+        modifiers: modifiers_from_profile(input.profile),
+        music_rate: input.music_rate,
+        used_autoplay: input.used_autoplay,
+        passed: !gameplay_run_failed(input.is_failing, input.has_fail_time),
+    })
 }
 
 #[derive(Deserialize)]
@@ -2340,6 +2634,34 @@ mod tests {
     }
 
     #[test]
+    fn run_bulk_score_import_pack_groups_handles_empty_queue_without_network() {
+        let mut progress = Vec::new();
+        let mut cached = Vec::new();
+        let mut events = Vec::new();
+        let mut on_progress = |entry| progress.push(entry);
+
+        let summary = run_bulk_score_import_pack_groups(
+            "key",
+            Some("user"),
+            Vec::new(),
+            false,
+            |scores| cached.push(scores.len()),
+            &mut on_progress,
+            || false,
+            |event| events.push(event),
+        );
+
+        assert_eq!(summary.requested_charts, 0);
+        assert_eq!(summary.imported_scores, 0);
+        assert_eq!(summary.missing_scores, 0);
+        assert_eq!(summary.failed_requests, 0);
+        assert!(cached.is_empty());
+        assert!(events.is_empty());
+        assert_eq!(progress.len(), 1);
+        assert_eq!(progress[0].total_charts, 0);
+    }
+
+    #[test]
     fn leaderboards_response_deserializes_numeric_strings() {
         let raw = r#"{
             "leaderboards": [{
@@ -2810,6 +3132,66 @@ mod tests {
     }
 
     #[test]
+    fn payload_from_gameplay_input_builds_runtime_fields() {
+        let notes: [deadsync_rules::note::Note; 0] = [];
+        let note_times: [i64; 0] = [];
+        let stream_segments: [deadsync_rules::stream::StreamSegment; 0] = [];
+        let life_history = [(0.0, 0.5), (10.0, 1.0)];
+        let profile = Profile::default();
+
+        let payload = payload_from_gameplay_input(ArrowCloudGameplayPayloadInput {
+            song_name: "Test Song".to_string(),
+            artist: "Test Artist".to_string(),
+            pack_group: " Test Pack ",
+            music_length_seconds: 83.5,
+            chart_hash: "deadbeefcafebabe".to_string(),
+            difficulty: 12,
+            stepartist: "Tester".to_string(),
+            notes: &notes,
+            note_times: &note_times,
+            col_offset: 0,
+            cols_per_player: 4,
+            stream_segments: &stream_segments,
+            fail_time_ns: None,
+            submit_stats: ArrowCloudSubmitStats {
+                judgment_counts: [10, 20, 30, 40, 50, 60],
+                window_counts: WindowCounts {
+                    w0: 4,
+                    ..WindowCounts::default()
+                },
+                holds_held: 1,
+                mines_hit: 2,
+                mines_avoided: 3,
+                rolls_held: 5,
+            },
+            total_holds: 2,
+            total_mines: 4,
+            total_rolls: 6,
+            max_nps: 20.0,
+            measure_nps: &[0.0, 10.0, 20.0],
+            measure_seconds: &[0.0, 5.0, 10.0],
+            density_first_second: 0.0,
+            density_last_second: 10.0,
+            life_history: &life_history,
+            profile: &profile,
+            music_rate: 1.0,
+            used_autoplay: false,
+            is_failing: true,
+            has_fail_time: true,
+        });
+
+        assert_eq!(payload.pack, "Test Pack");
+        assert_eq!(payload.hash, "deadbeefcafebabe");
+        assert_eq!(payload.timing_data.len(), 0);
+        assert_eq!(payload.nps_info.peak_nps, 20.0);
+        assert_eq!(payload.nps_info.points.len(), 2);
+        assert_eq!(payload.lifebar_info.len(), ARROWCLOUD_LIFEBAR_POINTS);
+        assert_eq!(payload.lifebar_info[0].y, 0.5);
+        assert!(!payload.passed);
+        assert_eq!(payload.judgment_counts.fantastic_plus, 4);
+    }
+
+    #[test]
     fn submit_error_maps_transport_errors_to_status() {
         let (status, message) =
             submit_error_status_and_message(&ArrowCloudSubmitRequestError::Transport {
@@ -3017,6 +3399,53 @@ mod tests {
 
         reset_submit_ui_status(side, first);
         reset_submit_ui_status(side, second);
+    }
+
+    #[test]
+    fn submit_gameplay_players_resets_state_before_disabled_skip() {
+        fn ignore_success(_: &ArrowCloudSubmitJob) {}
+        fn ignore_after(_: &ArrowCloudSubmitJob) {}
+
+        let side = profile_data::PlayerSide::P1;
+        let hash = "ac-gameplay-disabled";
+        reset_submit_ui_status(side, hash);
+        reset_submit_retry(side, hash);
+        set_submit_ui_status(side, hash, 77, ArrowCloudSubmitUiStatus::Submitted);
+        store_submit_retry(sample_submit_draft(hash, side).retry_entry());
+
+        let fired = submit_gameplay_players(
+            ArrowCloudGameplaySubmitInput {
+                enabled: false,
+                player_count: 1,
+                autoplay_used: false,
+                is_course_stage: false,
+                autosubmit_course_scores_individually: false,
+                submit_fails_enabled: true,
+            },
+            vec![ArrowCloudGameplaySubmitPlayer {
+                side,
+                chart_hash: hash.to_string(),
+                api_key: "test-api-key".to_string(),
+                profile_id: None,
+                itg_percent: 99.0,
+                ex_percent: 98.0,
+                hard_ex_percent: 97.0,
+                song_has_lua: false,
+                lua_submit_allowed: true,
+                song_completed_naturally: true,
+                is_failing: false,
+                life: 1.0,
+                has_fail_time: false,
+                course_stage_life_submit_eligible: true,
+                payload: Some(sample_payload(hash)),
+            }],
+            ignore_success,
+            ignore_after,
+        );
+
+        assert!(!fired);
+        assert_eq!(submit_ui_status_for_side(hash, side), None);
+        assert!(take_ready_submit_retry(hash, side, true).is_none());
     }
 
     #[test]

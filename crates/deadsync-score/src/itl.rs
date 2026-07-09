@@ -1,5 +1,6 @@
 use crate::CachedItlScore;
 use bincode::{Decode, Encode};
+use log::warn;
 use serde::de::Deserializer;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
@@ -519,6 +520,97 @@ pub fn save_online_itl_self_index_for_profile_dir(
     Ok(path)
 }
 
+pub fn runtime_load_online_itl_self_index_for_profile<P>(
+    profile_id: &str,
+    kind: OnlineItlSelfIndexKind,
+    profile_dir_for_id: P,
+) -> OnlineItlSelfIndexMap
+where
+    P: Fn(&str) -> PathBuf,
+{
+    let profile_dir = profile_dir_for_id(profile_id);
+    load_online_itl_self_index_for_profile_dir(&profile_dir, kind)
+}
+
+pub fn runtime_save_online_itl_self_index_for_profile<P>(
+    profile_id: &str,
+    kind: OnlineItlSelfIndexKind,
+    by_key: &OnlineItlSelfCacheMap,
+    profile_dir_for_id: P,
+) where
+    P: Fn(&str) -> PathBuf,
+{
+    let profile_dir = profile_dir_for_id(profile_id);
+    if let Err(error) = save_online_itl_self_index_for_profile_dir(&profile_dir, kind, by_key) {
+        let path = online_itl_self_index_path(&profile_dir, kind);
+        warn!("Failed to save ITL self-score cache {path:?}: {error:?}");
+    }
+}
+
+pub fn runtime_set_online_itl_self_score_for_profile_dirs<P>(
+    profile_id: Option<&str>,
+    api_key: &str,
+    chart_hash: &str,
+    score: Option<u32>,
+    profile_dir_for_id: P,
+) where
+    P: Fn(&str) -> PathBuf + Copy,
+{
+    runtime_set_online_itl_self_score(
+        profile_id,
+        api_key,
+        chart_hash,
+        score,
+        |id| {
+            runtime_load_online_itl_self_index_for_profile(
+                id,
+                OnlineItlSelfIndexKind::Score,
+                profile_dir_for_id,
+            )
+        },
+        |id, by_key| {
+            runtime_save_online_itl_self_index_for_profile(
+                id,
+                OnlineItlSelfIndexKind::Score,
+                by_key,
+                profile_dir_for_id,
+            );
+        },
+    );
+}
+
+pub fn runtime_set_online_itl_self_rank_for_profile_dirs<P>(
+    profile_id: Option<&str>,
+    api_key: &str,
+    chart_hash: &str,
+    rank: Option<u32>,
+    profile_dir_for_id: P,
+) where
+    P: Fn(&str) -> PathBuf + Copy,
+{
+    runtime_set_online_itl_self_rank(
+        profile_id,
+        api_key,
+        chart_hash,
+        rank,
+        |id| {
+            runtime_load_online_itl_self_index_for_profile(
+                id,
+                OnlineItlSelfIndexKind::Rank,
+                profile_dir_for_id,
+            )
+        },
+        |id, by_key| {
+            runtime_save_online_itl_self_index_for_profile(
+                id,
+                OnlineItlSelfIndexKind::Rank,
+                by_key,
+                profile_dir_for_id,
+            );
+        },
+    );
+}
+
 pub fn save_online_itl_self_index_file(
     path: &Path,
     by_key: &OnlineItlSelfCacheMap,
@@ -822,6 +914,24 @@ where
     runtime_cached_online_itl_self_score_assume_loaded(chart_hash, profile_id, api_key)
 }
 
+pub fn runtime_cached_online_itl_self_score_for_profile_dirs<P>(
+    chart_hash: &str,
+    profile_id: Option<&str>,
+    api_key: &str,
+    profile_dir_for_id: P,
+) -> Option<u32>
+where
+    P: Fn(&str) -> PathBuf + Copy,
+{
+    runtime_cached_online_itl_self_score(chart_hash, profile_id, api_key, |id| {
+        runtime_load_online_itl_self_index_for_profile(
+            id,
+            OnlineItlSelfIndexKind::Score,
+            profile_dir_for_id,
+        )
+    })
+}
+
 pub fn runtime_cached_online_itl_self_score_assume_loaded(
     chart_hash: &str,
     profile_id: Option<&str>,
@@ -851,6 +961,24 @@ where
     runtime_cached_online_itl_self_rank_assume_loaded(chart_hash, profile_id, api_key)
 }
 
+pub fn runtime_cached_online_itl_self_rank_for_profile_dirs<P>(
+    chart_hash: &str,
+    profile_id: Option<&str>,
+    api_key: &str,
+    profile_dir_for_id: P,
+) -> Option<u32>
+where
+    P: Fn(&str) -> PathBuf + Copy,
+{
+    runtime_cached_online_itl_self_rank(chart_hash, profile_id, api_key, |id| {
+        runtime_load_online_itl_self_index_for_profile(
+            id,
+            OnlineItlSelfIndexKind::Rank,
+            profile_dir_for_id,
+        )
+    })
+}
+
 pub fn runtime_cached_online_itl_self_rank_assume_loaded(
     chart_hash: &str,
     profile_id: Option<&str>,
@@ -877,6 +1005,32 @@ pub fn runtime_ensure_itl_wheel_caches_loaded<I, S, R>(
     runtime_ensure_itl_score_profile_loaded(profile_id, load_itl_profile);
     runtime_ensure_online_itl_self_score_profile_loaded(profile_id, load_self_score_profile);
     runtime_ensure_online_itl_self_rank_profile_loaded(profile_id, load_self_rank_profile);
+}
+
+pub fn runtime_ensure_itl_wheel_caches_loaded_for_profile_dirs<P>(
+    profile_id: &str,
+    profile_dir_for_id: P,
+) where
+    P: Fn(&str) -> PathBuf + Copy,
+{
+    runtime_ensure_itl_wheel_caches_loaded(
+        profile_id,
+        |id| runtime_read_itl_file_for_profile(id, profile_dir_for_id),
+        |id| {
+            runtime_load_online_itl_self_index_for_profile(
+                id,
+                OnlineItlSelfIndexKind::Score,
+                profile_dir_for_id,
+            )
+        },
+        |id| {
+            runtime_load_online_itl_self_index_for_profile(
+                id,
+                OnlineItlSelfIndexKind::Rank,
+                profile_dir_for_id,
+            )
+        },
+    );
 }
 
 #[derive(Debug)]
@@ -946,6 +1100,47 @@ pub fn write_itl_file_for_profile_dir(
     let path = itl_profile_file_path(profile_dir);
     write_itl_file_to_path(&path, data)?;
     Ok(path)
+}
+
+pub fn runtime_read_itl_file_for_profile<P>(profile_id: &str, profile_dir_for_id: P) -> ItlFileData
+where
+    P: Fn(&str) -> PathBuf,
+{
+    let profile_dir = profile_dir_for_id(profile_id);
+    match read_itl_file_or_default_for_profile_dir(&profile_dir) {
+        Ok(data) => data,
+        Err(ItlFileReadError::Parse { path, error }) => {
+            warn!("Failed to parse ITL data file {path:?}: {error}");
+            ItlFileData::default()
+        }
+        Err(ItlFileReadError::Read { .. }) => ItlFileData::default(),
+    }
+}
+
+pub fn runtime_write_itl_file_for_profile<P>(
+    profile_id: &str,
+    data: &ItlFileData,
+    profile_dir_for_id: P,
+) where
+    P: Fn(&str) -> PathBuf,
+{
+    let profile_dir = profile_dir_for_id(profile_id);
+    if let Err(error) = write_itl_file_for_profile_dir(&profile_dir, data) {
+        match error {
+            ItlFileWriteError::CreateDir { dir, error } => {
+                warn!("Failed to create ITL profile dir {dir:?}: {error}");
+            }
+            ItlFileWriteError::Encode => {
+                warn!("Failed to encode ITL data for profile {profile_id}");
+            }
+            ItlFileWriteError::WriteTemp { path, error } => {
+                warn!("Failed to write ITL temp file {path:?}: {error}");
+            }
+            ItlFileWriteError::Commit { path, error } => {
+                warn!("Failed to commit ITL file {path:?}: {error}");
+            }
+        }
+    }
 }
 
 pub fn write_itl_file_to_path(path: &Path, data: &ItlFileData) -> Result<(), ItlFileWriteError> {
@@ -1079,6 +1274,40 @@ pub fn itl_judgments_from_counts(input: ItlJudgmentCountsInput) -> ItlJudgments 
         rolls: input.rolls_held,
         total_rolls: input.total_rolls,
     }
+}
+
+pub fn itl_judgments_from_groovestats_counts(
+    fantastic_plus: u32,
+    fantastic: u32,
+    excellent: u32,
+    great: u32,
+    decent: Option<u32>,
+    way_off: Option<u32>,
+    miss: u32,
+    total_steps: u32,
+    holds_held: u32,
+    total_holds: u32,
+    mines_hit: u32,
+    total_mines: u32,
+    rolls_held: u32,
+    total_rolls: u32,
+) -> ItlJudgments {
+    itl_judgments_from_counts(ItlJudgmentCountsInput {
+        fantastic_plus,
+        fantastic,
+        excellent,
+        great,
+        decent: decent.unwrap_or(0),
+        way_off: way_off.unwrap_or(0),
+        miss,
+        total_steps,
+        holds_held,
+        total_holds,
+        mines_hit,
+        total_mines,
+        rolls_held,
+        total_rolls,
+    })
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1884,6 +2113,41 @@ mod tests {
         assert_eq!(judgments.w2, 3);
         assert_eq!(judgments.w3, 4);
         assert_eq!(judgments.w4, 5);
+        assert_eq!(judgments.w5, 6);
+        assert_eq!(judgments.miss, 7);
+        assert_eq!(judgments.total_steps, 8);
+        assert_eq!(judgments.holds, 9);
+        assert_eq!(judgments.total_holds, 10);
+        assert_eq!(judgments.mines, 11);
+        assert_eq!(judgments.total_mines, 12);
+        assert_eq!(judgments.rolls, 13);
+        assert_eq!(judgments.total_rolls, 14);
+    }
+
+    #[test]
+    fn itl_judgments_from_groovestats_counts_defaults_hidden_bad_windows() {
+        let judgments = itl_judgments_from_groovestats_counts(
+            1,
+            2,
+            3,
+            4,
+            None,
+            Some(6),
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+        );
+
+        assert_eq!(judgments.w0, 1);
+        assert_eq!(judgments.w1, 2);
+        assert_eq!(judgments.w2, 3);
+        assert_eq!(judgments.w3, 4);
+        assert_eq!(judgments.w4, 0);
         assert_eq!(judgments.w5, 6);
         assert_eq!(judgments.miss, 7);
         assert_eq!(judgments.total_steps, 8);

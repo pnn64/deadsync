@@ -724,10 +724,10 @@ pub(super) fn apply_submenu_choice_delta(
             let enabled = yes_no_from_choice(new_index);
             config::update_enable_groovestats(enabled);
             // Re-run connectivity logic so toggling this option applies immediately.
-            crate::game::online::init();
+            deadsync_online::runtime::init();
         } else if row.id == SubRowId::EnableBoogieStats {
             config::update_enable_boogiestats(yes_no_from_choice(new_index));
-            crate::game::online::init();
+            deadsync_online::runtime::init();
         } else if row.id == SubRowId::AutoPopulateScores {
             config::update_auto_populate_gs_scores(yes_no_from_choice(new_index));
         } else if row.id == SubRowId::AutoDownloadUnlocks {
@@ -743,7 +743,7 @@ pub(super) fn apply_submenu_choice_delta(
         let row = &rows[row_index];
         if row.id == SubRowId::EnableArrowCloud {
             config::update_enable_arrowcloud(yes_no_from_choice(new_index));
-            crate::game::online::init();
+            deadsync_online::runtime::init();
         } else if row.id == SubRowId::ArrowCloudSubmitFails {
             config::update_submit_arrowcloud_fails(yes_no_from_choice(new_index));
         } else if row.id == SubRowId::ArrowCloudQrLogin {

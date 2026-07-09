@@ -1,3 +1,4 @@
+pub mod app_runtime;
 pub mod artwork;
 pub mod bgchanges;
 pub mod bpm;
@@ -6,6 +7,7 @@ pub mod changes;
 pub mod course;
 pub mod media;
 pub mod notes;
+pub mod runtime;
 pub mod runtime_cache;
 pub mod scan;
 pub mod song;

@@ -1,6 +1,6 @@
-use crate::game::parsing::noteskin::{SpriteSlot, build_model_geometry};
 use deadlib_present::actors::{Actor, SizeSpec};
 use deadlib_render::{BlendMode, TMeshCacheKey, TexturedMeshVertex};
+use deadsync_assets::noteskin::{SpriteSlot, build_model_geometry};
 use deadsync_noteskin::{ModelDrawState, ModelMesh};
 use glam::{Mat4 as Matrix4, Vec3 as Vector3, Vec4};
 use std::collections::HashMap;
@@ -420,7 +420,7 @@ pub(crate) fn noteskin_model_actor(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::game::parsing::noteskin::test_model_slot;
+    use deadsync_assets::noteskin::test_model_slot;
 
     #[test]
     fn cached_geometry_reuses_key_across_tints() {

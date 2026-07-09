@@ -1,7 +1,6 @@
 use crate::act;
 use crate::assets::i18n::tr;
 use crate::assets::{FontRole, current_machine_font_key_for_text};
-use crate::game::parsing::{noteskin, simfile as song_loading};
 use crate::screens::components::shared::{loading_bar, visual_style_bg};
 use crate::screens::{Screen, ScreenAction};
 use deadlib_platform::dirs;
@@ -10,7 +9,9 @@ use deadlib_present::color;
 use deadlib_present::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
+use deadsync_assets::noteskin;
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_simfile::app_runtime as song_loading;
 use deadsync_simfile::course as simfile_course;
 use log::info;
 use std::cell::RefCell;

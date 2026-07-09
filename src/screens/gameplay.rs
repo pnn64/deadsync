@@ -3,14 +3,6 @@ use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::sprite_sheet_dims;
 use crate::assets::{FontRole, current_machine_font_key, visual_styles};
-use crate::game::parsing::noteskin::{self, Noteskin, SpriteSlot};
-use crate::game::parsing::song_lua::{
-    CompiledSongLua, SongLuaCapturedActor, SongLuaCompileContext, SongLuaDifficulty,
-    SongLuaOverlayActor, SongLuaOverlayBlendMode, SongLuaOverlayCommandBlock, SongLuaOverlayKind,
-    SongLuaOverlayMeshVertex, SongLuaOverlayMessageCommand, SongLuaOverlayModelDraw,
-    SongLuaOverlayModelLayer, SongLuaOverlayState, SongLuaOverlayStateDelta, SongLuaPlayerContext,
-    SongLuaProxyTarget, SongLuaSpeedMod, SongLuaTextGlowMode, compile_song_lua,
-};
 use crate::game::{
     GameplayProfile, profile, profile_side_from_gameplay, profile_tick_mode_from_gameplay,
     score_display_mode_from_profile, scores, scroll_effects_from_option,
@@ -35,6 +27,14 @@ use deadlib_present::space::{
     is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
 };
 use deadlib_render::{BlendMode, INVALID_TMESH_CACHE_KEY, MeshVertex, TexturedMeshVertex};
+use deadsync_assets::noteskin::{self, Noteskin, SpriteSlot};
+use deadsync_assets::song_lua::{
+    CompiledSongLua, SongLuaCapturedActor, SongLuaCompileContext, SongLuaDifficulty,
+    SongLuaOverlayActor, SongLuaOverlayBlendMode, SongLuaOverlayCommandBlock, SongLuaOverlayKind,
+    SongLuaOverlayMeshVertex, SongLuaOverlayMessageCommand, SongLuaOverlayModelDraw,
+    SongLuaOverlayModelLayer, SongLuaOverlayState, SongLuaOverlayStateDelta, SongLuaPlayerContext,
+    SongLuaProxyTarget, SongLuaSpeedMod, SongLuaTextGlowMode, compile_song_lua,
+};
 use deadsync_chart::background::expand_random_background_changes;
 use deadsync_chart::{
     ChartData, GameplayChartData, SongBackgroundChange, SongBackgroundChangeTarget, SongData,
@@ -1430,7 +1430,7 @@ pub(crate) fn gameplay_noteskin_assets(
 fn compile_primary_song_lua(
     song_title: &str,
     path: &Path,
-    context: &crate::game::parsing::song_lua::SongLuaCompileContext,
+    context: &deadsync_assets::song_lua::SongLuaCompileContext,
 ) -> Option<GameplayCompiledSongLua> {
     let compile_started = Instant::now();
     match compile_song_lua(path, context) {
@@ -1455,7 +1455,7 @@ fn compile_song_lua_layer(
     path: &Path,
     start_beat: f32,
     label: &str,
-    context: &crate::game::parsing::song_lua::SongLuaCompileContext,
+    context: &deadsync_assets::song_lua::SongLuaCompileContext,
 ) -> Option<GameplaySongLuaLayer> {
     match compile_song_lua(path, context) {
         Ok(compiled) => Some(GameplaySongLuaLayer {
@@ -2292,7 +2292,7 @@ pub fn init(
     course_banner_path: Option<PathBuf>,
     combo_carry: [u32; MAX_PLAYERS],
 ) -> State {
-    let random_movie_paths = crate::game::parsing::simfile::random_movie_paths(
+    let random_movie_paths = deadsync_simfile::app_runtime::random_movie_paths(
         &song,
         random_background_movies_enabled(),
     );
@@ -13320,9 +13320,9 @@ mod tests {
         };
         let entry = root.join("template/main.lua");
         let mut context =
-            crate::game::parsing::song_lua::SongLuaCompileContext::new(&root, "KENPO SAITO");
+            deadsync_assets::song_lua::SongLuaCompileContext::new(&root, "KENPO SAITO");
         context.style_name = "double".to_string();
-        let compiled = crate::game::parsing::song_lua::compile_song_lua(&entry, &context).unwrap();
+        let compiled = deadsync_assets::song_lua::compile_song_lua(&entry, &context).unwrap();
         let states = compiled
             .overlays
             .iter()
@@ -13688,7 +13688,7 @@ mod tests {
     fn song_lua_noteskin_actor_rotation_matches_noteskin_base_rotation() {
         let model_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("assets/noteskins/dance/ddr-note/_down tap note model.txt");
-        let slots = crate::game::parsing::noteskin::load_itg_model_slots_from_path(&model_path)
+        let slots = deadsync_assets::noteskin::load_itg_model_slots_from_path(&model_path)
             .expect("ddr-note tap model should load");
         let mut rotated_slots = slots.iter().cloned().collect::<Vec<_>>();
         for slot in &mut rotated_slots {

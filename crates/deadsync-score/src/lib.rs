@@ -6,12 +6,14 @@ use deadsync_core::song_time::{SongTimeNs, song_time_ns_from_seconds, song_time_
 use deadsync_rules::note::{HoldResult, MineResult, Note};
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::{judgment, timing};
+use log::{debug, warn};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
+use std::error::Error;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::sync::{LazyLock, Mutex, MutexGuard};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 pub mod event_progress;
 pub mod import;
@@ -33,11 +35,11 @@ pub use itl::{
     insert_online_itl_self_rank_profile, insert_online_itl_self_score_profile, is_itl_unlocks_pack,
     itl_chart_no_cmod, itl_clear_type, itl_current_score_hundredths, itl_data_from_json,
     itl_event_name_from_group, itl_ex_score_percent, itl_group_name_matches, itl_judgments_better,
-    itl_judgments_from_counts, itl_mark_unlock_folders, itl_overall_ranks_from_song_cache,
-    itl_point_totals, itl_points_for_chart, itl_points_for_song, itl_profile_file_path,
-    itl_rebuild_song_ranks, itl_score_for_song, itl_score_from_entry, itl_score_profile_loaded,
-    itl_song_dir, itl_song_folder_unlocked, itl_song_matches, itl_song_matches_context,
-    itl_steps_type_from_chart_type, itl_timing_windows_all_enabled,
+    itl_judgments_from_counts, itl_judgments_from_groovestats_counts, itl_mark_unlock_folders,
+    itl_overall_ranks_from_song_cache, itl_point_totals, itl_points_for_chart, itl_points_for_song,
+    itl_profile_file_path, itl_rebuild_song_ranks, itl_score_for_song, itl_score_from_entry,
+    itl_score_profile_loaded, itl_song_dir, itl_song_folder_unlocked, itl_song_matches,
+    itl_song_matches_context, itl_steps_type_from_chart_type, itl_timing_windows_all_enabled,
     load_online_itl_self_index_file, load_online_itl_self_index_for_profile_dir,
     mark_itl_unlock_folders, online_itl_self_index_path, online_itl_self_rank_profile_loaded,
     online_itl_self_score_generation, online_itl_self_score_profile_loaded,
@@ -45,13 +47,20 @@ pub use itl::{
     read_itl_file_or_default_for_profile_dir, runtime_cached_itl_chart_score,
     runtime_cached_itl_song_folder_unlocked, runtime_cached_itl_song_score,
     runtime_cached_itl_song_score_assume_loaded, runtime_cached_online_itl_self_rank,
-    runtime_cached_online_itl_self_rank_assume_loaded, runtime_cached_online_itl_self_score,
-    runtime_cached_online_itl_self_score_assume_loaded, runtime_ensure_itl_score_profile_loaded,
-    runtime_ensure_itl_wheel_caches_loaded, runtime_ensure_online_itl_self_rank_profile_loaded,
+    runtime_cached_online_itl_self_rank_assume_loaded,
+    runtime_cached_online_itl_self_rank_for_profile_dirs, runtime_cached_online_itl_self_score,
+    runtime_cached_online_itl_self_score_assume_loaded,
+    runtime_cached_online_itl_self_score_for_profile_dirs, runtime_ensure_itl_score_profile_loaded,
+    runtime_ensure_itl_wheel_caches_loaded,
+    runtime_ensure_itl_wheel_caches_loaded_for_profile_dirs,
+    runtime_ensure_online_itl_self_rank_profile_loaded,
     runtime_ensure_online_itl_self_score_profile_loaded, runtime_import_itl_json,
-    runtime_online_itl_overall_ranks_for_side, runtime_set_itl_score_file,
-    runtime_set_online_itl_self_rank, runtime_set_online_itl_self_score,
-    runtime_update_itl_unlock_folders, save_online_itl_self_index_file,
+    runtime_load_online_itl_self_index_for_profile, runtime_online_itl_overall_ranks_for_side,
+    runtime_read_itl_file_for_profile, runtime_save_online_itl_self_index_for_profile,
+    runtime_set_itl_score_file, runtime_set_online_itl_self_rank,
+    runtime_set_online_itl_self_rank_for_profile_dirs, runtime_set_online_itl_self_score,
+    runtime_set_online_itl_self_score_for_profile_dirs, runtime_update_itl_unlock_folders,
+    runtime_write_itl_file_for_profile, save_online_itl_self_index_file,
     save_online_itl_self_index_for_profile_dir, set_itl_score_profile, set_online_itl_self_rank,
     set_online_itl_self_score, store_online_itl_overall_ranks_for_side,
     write_itl_file_for_profile_dir, write_itl_file_to_path,
@@ -459,6 +468,103 @@ pub enum ScoreCacheRuntimeKind {
     MachineLocal,
 }
 
+pub fn log_score_index_write_error(kind: &str, error: ScoreIndexWriteError) {
+    match error {
+        ScoreIndexWriteError::CreateDir { dir, error } => {
+            warn!("Failed to create {kind} score index dir {dir:?}: {error}");
+        }
+        ScoreIndexWriteError::Encode { path } => {
+            warn!("Failed to encode {kind} score index at {path:?}");
+        }
+        ScoreIndexWriteError::WriteTemp { tmp_path, error } => {
+            warn!("Failed to write {kind} score index temp file {tmp_path:?}: {error}");
+        }
+        ScoreIndexWriteError::Commit {
+            path,
+            tmp_path: _,
+            error,
+        } => {
+            warn!("Failed to commit {kind} score index file {path:?}: {error}");
+        }
+    }
+}
+
+fn log_score_cache_load(report: ScoreCacheLoadReport) {
+    if report.elapsed_ms < 25.0 {
+        return;
+    }
+    match report.kind {
+        ScoreCacheLoadKind::GrooveStats => {
+            let profile_id = report.profile_id.unwrap_or_default();
+            let loaded_entries = report.primary_entries;
+            let load_ms = report.elapsed_ms;
+            debug!(
+                "Loaded GrooveStats score cache for profile {profile_id}: {loaded_entries} chart(s) in {load_ms:.2}ms."
+            );
+        }
+        ScoreCacheLoadKind::Local => {
+            let profile_id = report.profile_id.unwrap_or_default();
+            let loaded_itg = report.primary_entries;
+            let loaded_ex = report.secondary_entries;
+            let load_ms = report.elapsed_ms;
+            debug!(
+                "Loaded local score cache for profile {profile_id}: ITG={loaded_itg}, EX={loaded_ex} in {load_ms:.2}ms."
+            );
+        }
+        ScoreCacheLoadKind::MachineLocal => {
+            let total = report.primary_entries;
+            let load_ms = report.elapsed_ms;
+            debug!("Loaded machine local score cache: {total} chart(s) in {load_ms:.2}ms.");
+        }
+    }
+}
+
+pub fn log_score_cache_result(kind: &str, result: ScoreCacheRuntimeResult) {
+    for error in result.write_errors {
+        log_score_index_write_error(kind, error);
+    }
+    if let Some(report) = result.load_report {
+        log_score_cache_load(report);
+    }
+}
+
+pub fn score_cache_kind_label(kind: ScoreCacheRuntimeKind) -> &'static str {
+    match kind {
+        ScoreCacheRuntimeKind::GrooveStats => "GS",
+        ScoreCacheRuntimeKind::ArrowCloud => "AC",
+        ScoreCacheRuntimeKind::Local | ScoreCacheRuntimeKind::MachineLocal => "local",
+    }
+}
+
+pub fn log_score_cache_results(
+    results: impl IntoIterator<Item = (ScoreCacheRuntimeKind, ScoreCacheRuntimeResult)>,
+) {
+    for (kind, result) in results {
+        log_score_cache_result(score_cache_kind_label(kind), result);
+    }
+}
+
+pub fn log_score_store_write_error(kind: &str, chart_hash: &str, error: ScoreStoreWriteError) {
+    match error {
+        ScoreStoreWriteError::CreateDir { dir, error } => {
+            warn!("Failed to create {kind} score dir {dir:?}: {error}");
+        }
+        ScoreStoreWriteError::Encode { .. } => {
+            warn!("Failed to encode {kind} score for chart {chart_hash}");
+        }
+        ScoreStoreWriteError::WriteFile { path, error } => {
+            warn!("Failed to write {kind} score file {path:?}: {error}");
+        }
+        ScoreStoreWriteError::CommitFile {
+            path,
+            tmp_path: _,
+            error,
+        } => {
+            warn!("Failed to commit {kind} score file {path:?}: {error}");
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct ScoreCacheWarmupResult {
     pub results: Vec<(ScoreCacheRuntimeKind, ScoreCacheRuntimeResult)>,
@@ -472,6 +578,13 @@ pub struct ScoreCacheAccess<T> {
 }
 
 type ProfilePathsFn = fn(&str) -> ScoreProfilePaths;
+
+fn unix_time_ms_now() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
 
 pub fn runtime_ensure_profile_score_caches_loaded(
     profile_id: &str,
@@ -729,6 +842,32 @@ pub fn runtime_cache_gs_score_for_profile(
     }
 }
 
+pub fn runtime_cache_logged_gs_score_for_profile(
+    profile_id: &str,
+    chart_hash: &str,
+    score: CachedScore,
+    username: &str,
+    proves_nonquint_ex: bool,
+    score_paths: ProfilePathsFn,
+) {
+    let result = runtime_cache_gs_score_for_profile(
+        profile_id,
+        chart_hash,
+        score,
+        username,
+        proves_nonquint_ex,
+        unix_time_ms_now(),
+        score_paths,
+    );
+    log_score_cache_result("GS", result.cache_result);
+    if let Some(error) = result.store_error {
+        log_score_store_write_error("GrooveStats", chart_hash, error);
+    }
+    if let Some(ScoreStoreWriteStatus::Written(path)) = result.store_status {
+        debug!("Stored GrooveStats score on disk for chart {chart_hash} at {path:?}");
+    }
+}
+
 pub fn runtime_seed_gs_score(
     profile_id: &str,
     chart_hash: &str,
@@ -923,6 +1062,94 @@ pub fn runtime_write_ac_submit_scores(
             score_paths,
         ),
     )]
+}
+
+pub fn runtime_read_logged_gs_score_for_profile(
+    profile_id: &str,
+    chart_hash: &str,
+    score_paths: ProfilePathsFn,
+) -> Option<CachedScore> {
+    let access = runtime_read_gs_score_for_profile(profile_id, chart_hash, score_paths);
+    log_score_cache_results(access.results);
+    access.value
+}
+
+pub fn runtime_read_logged_gs_chart_hashes_for_profile(
+    profile_id: &str,
+    score_paths: ProfilePathsFn,
+) -> HashSet<String> {
+    let access = runtime_read_gs_chart_hashes_for_profile(profile_id, score_paths);
+    log_score_cache_results(access.results);
+    access.value
+}
+
+pub fn runtime_write_logged_gs_score_for_profile(
+    profile_id: &str,
+    chart_hash: String,
+    score: CachedScore,
+    score_paths: ProfilePathsFn,
+) {
+    debug!("Caching GrooveStats score {score:?} for chart hash {chart_hash}");
+    log_score_cache_results(runtime_write_gs_score_for_profile(
+        profile_id,
+        chart_hash,
+        score,
+        score_paths,
+    ));
+}
+
+pub fn runtime_read_logged_ac_scores_for_profile(
+    profile_id: &str,
+    chart_hash: &str,
+    score_paths: ProfilePathsFn,
+) -> Option<ArrowCloudScores> {
+    let access = runtime_read_ac_scores_for_profile(profile_id, chart_hash, score_paths);
+    log_score_cache_results(access.results);
+    access.value
+}
+
+pub fn runtime_read_logged_ac_chart_hashes_with_itg_for_profile(
+    profile_id: &str,
+    score_paths: ProfilePathsFn,
+) -> HashSet<String> {
+    let access = runtime_read_ac_chart_hashes_with_itg_for_profile(profile_id, score_paths);
+    log_score_cache_results(access.results);
+    access.value
+}
+
+pub fn runtime_write_logged_ac_scores_for_profile_bulk(
+    profile_id: &str,
+    entries: impl IntoIterator<Item = (String, ArrowCloudScores)>,
+    score_paths: ProfilePathsFn,
+) {
+    log_score_cache_results(runtime_write_ac_scores_for_profile_bulk(
+        profile_id,
+        entries,
+        score_paths,
+    ));
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn runtime_write_logged_ac_submit_scores(
+    profile_id: &str,
+    chart_hash: &str,
+    itg_percent: f64,
+    ex_percent: f64,
+    hard_ex_percent: f64,
+    is_fail: bool,
+    submitted_at: DateTime<Utc>,
+    score_paths: ProfilePathsFn,
+) {
+    log_score_cache_results(runtime_write_ac_submit_scores(
+        profile_id,
+        chart_hash,
+        itg_percent,
+        ex_percent,
+        hard_ex_percent,
+        is_fail,
+        submitted_at,
+        score_paths,
+    ));
 }
 
 pub fn runtime_ensure_local_score_cache_loaded(
@@ -1140,6 +1367,29 @@ pub fn runtime_append_local_score_for_profile(
     }
 }
 
+pub fn runtime_append_logged_local_score_for_profile(
+    profile_id: &str,
+    profile_initials: &str,
+    chart_hash: &str,
+    entry: &mut LocalScoreEntry,
+    score_paths: ProfilePathsFn,
+) -> bool {
+    let result = runtime_append_local_score_for_profile(
+        profile_id,
+        profile_initials,
+        chart_hash,
+        entry,
+        score_paths,
+    );
+    if let Some(error) = result.store_error {
+        log_score_store_write_error("local", chart_hash, error);
+    }
+    if let Some(error) = result.index_error {
+        log_score_index_write_error("local", error);
+    }
+    result.append.is_some()
+}
+
 pub fn runtime_seed_local_itg_score(
     profile_id: &str,
     chart_hash: &str,
@@ -1164,6 +1414,112 @@ pub fn runtime_seed_local_itg_score_access(
         ScoreCacheRuntimeKind::Local,
         runtime_seed_local_itg_score(profile_id, chart_hash, score, score_paths),
     )]
+}
+
+pub fn runtime_prewarm_logged_select_music_score_caches(
+    p1_profile_id: Option<&str>,
+    p2_profile_id: Option<&str>,
+    profiles: &[LocalScoreProfileSource],
+    score_paths: ProfilePathsFn,
+) {
+    let warmup = runtime_prewarm_select_music_score_caches(
+        p1_profile_id,
+        p2_profile_id,
+        profiles,
+        score_paths,
+    );
+    log_score_cache_results(warmup.results);
+    let elapsed_ms = warmup.elapsed_ms;
+    debug!("Prewarmed SelectMusic score caches in {elapsed_ms:.2}ms.");
+}
+
+pub fn runtime_read_logged_local_itg_score_for_profile(
+    profile_id: &str,
+    chart_hash: &str,
+    score_paths: ProfilePathsFn,
+) -> Option<CachedScore> {
+    let access = runtime_read_local_itg_score_for_profile(profile_id, chart_hash, score_paths);
+    log_score_cache_results(access.results);
+    access.value
+}
+
+pub fn runtime_read_logged_local_pass_rate_for_profile(
+    profile_id: &str,
+    chart_hash: &str,
+    score_paths: ProfilePathsFn,
+) -> Option<u32> {
+    let access = runtime_read_local_pass_rate_for_profile(profile_id, chart_hash, score_paths);
+    log_score_cache_results(access.results);
+    access.value
+}
+
+pub fn runtime_read_logged_local_scalar_score_for_profile(
+    profile_id: &str,
+    chart_hash: &str,
+    hard_ex: bool,
+    score_paths: ProfilePathsFn,
+) -> Option<LocalScalarScore> {
+    let access =
+        runtime_read_local_scalar_score_for_profile(profile_id, chart_hash, hard_ex, score_paths);
+    log_score_cache_results(access.results);
+    access.value
+}
+
+pub fn runtime_read_logged_best_itg_score_for_profile(
+    profile_id: &str,
+    chart_hash: &str,
+    score_paths: ProfilePathsFn,
+) -> Option<CachedScore> {
+    let access = runtime_read_best_itg_score_for_profile(profile_id, chart_hash, score_paths);
+    log_score_cache_results(access.results);
+    access.value
+}
+
+pub fn runtime_ensure_logged_profile_score_caches_loaded(
+    profile_id: &str,
+    score_paths: ProfilePathsFn,
+) {
+    log_score_cache_results(runtime_ensure_profile_score_caches_loaded(
+        profile_id,
+        score_paths,
+    ));
+}
+
+pub fn runtime_seed_logged_local_itg_score(
+    profile_id: &str,
+    chart_hash: &str,
+    score: CachedScore,
+    score_paths: ProfilePathsFn,
+) {
+    log_score_cache_results(runtime_seed_local_itg_score_access(
+        profile_id,
+        chart_hash,
+        score,
+        score_paths,
+    ));
+}
+
+pub fn runtime_seed_logged_gs_score(
+    profile_id: &str,
+    chart_hash: &str,
+    score: CachedScore,
+    score_paths: ProfilePathsFn,
+) {
+    log_score_cache_results(runtime_seed_gs_score_access(
+        profile_id,
+        chart_hash,
+        score,
+        score_paths,
+    ));
+}
+
+pub fn runtime_machine_record_logged_local(
+    chart_hash: &str,
+    profiles: &[LocalScoreProfileSource],
+) -> Option<(String, CachedScore)> {
+    let (record, result) = runtime_machine_record_local(chart_hash, profiles);
+    log_score_cache_result("local", result);
+    record
 }
 
 pub fn runtime_total_songs_played_for_profile(
@@ -2091,6 +2447,24 @@ pub fn arrowcloud_submit_stats_from_results(
     }
 
     stats
+}
+
+pub fn arrowcloud_submit_stats_from_live_or_results(
+    live_stats: ArrowCloudSubmitStats,
+    fail_time_ns: Option<i64>,
+    notes: &[Note],
+    note_times: &[i64],
+    hold_end_times: &[Option<i64>],
+) -> ArrowCloudSubmitStats {
+    match fail_time_ns {
+        None => live_stats,
+        Some(fail_time_ns) => arrowcloud_submit_stats_from_results(
+            notes,
+            note_times,
+            hold_end_times,
+            Some(fail_time_ns),
+        ),
+    }
 }
 
 /// Global ArrowCloud leaderboard variants. Numeric values match server IDs.
@@ -3245,6 +3619,188 @@ pub fn local_replay_edges_for_player(
     out
 }
 
+pub struct LocalScoreGameplaySaveInput<'a> {
+    pub autoplay_used: bool,
+    pub score_valid: bool,
+    pub invalid_reasons: &'a [&'a str],
+    pub scoring_counts: &'a judgment::JudgeCounts,
+    pub holds_held_for_score: u32,
+    pub rolls_held_for_score: u32,
+    pub mines_hit_for_score: u32,
+    pub possible_grade_points: i32,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum LocalScoreGameplaySaveDecision {
+    SkipAutoplay,
+    SkipInvalid { detail: String },
+    Save { score_percent: f64 },
+}
+
+pub struct LocalScoreGameplayPlayer<'a> {
+    pub player_idx: usize,
+    pub profile_id: String,
+    pub profile_initials: &'a str,
+    pub chart_hash: &'a str,
+    pub invalid_reasons: Vec<&'a str>,
+    pub score_valid: bool,
+    pub scoring_counts: &'a judgment::JudgeCounts,
+    pub holds_held_for_score: u32,
+    pub rolls_held_for_score: u32,
+    pub mines_hit_for_score: u32,
+    pub possible_grade_points: i32,
+    pub song_completed_naturally: bool,
+    pub is_failing: bool,
+    pub life: f32,
+    pub fail_time: Option<f32>,
+    pub notes: &'a [Note],
+    pub note_times: &'a [SongTimeNs],
+    pub hold_end_times: &'a [Option<SongTimeNs>],
+    pub total_steps: u32,
+    pub holds_total: u32,
+    pub rolls_total: u32,
+    pub mines_total: u32,
+    pub counts: [u32; 6],
+    pub white_fantastics: Option<u32>,
+    pub holds_held: u32,
+    pub rolls_held: u32,
+    pub mines_avoided: u32,
+    pub hands_achieved: u32,
+    pub beat0_time_ns: SongTimeNs,
+    pub replay: Vec<LocalReplayEdge>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LocalScoreGameplaySaveSkip {
+    Autoplay,
+    Invalid { player_idx: usize, detail: String },
+}
+
+pub fn local_score_gameplay_save_decision(
+    input: LocalScoreGameplaySaveInput<'_>,
+) -> LocalScoreGameplaySaveDecision {
+    if input.autoplay_used {
+        return LocalScoreGameplaySaveDecision::SkipAutoplay;
+    }
+    if !input.score_valid {
+        let detail = if input.invalid_reasons.is_empty() {
+            "ranking-invalid modifiers were used".to_string()
+        } else {
+            input.invalid_reasons.join("; ")
+        };
+        return LocalScoreGameplaySaveDecision::SkipInvalid { detail };
+    }
+    LocalScoreGameplaySaveDecision::Save {
+        score_percent: judgment::calculate_itg_score_percent_from_counts(
+            input.scoring_counts,
+            input.holds_held_for_score,
+            input.rolls_held_for_score,
+            input.mines_hit_for_score,
+            input.possible_grade_points,
+        ),
+    }
+}
+
+pub fn save_local_gameplay_scores<'a, W, L>(
+    played_at_ms: i64,
+    music_rate: f32,
+    autoplay_used: bool,
+    players: impl IntoIterator<Item = LocalScoreGameplayPlayer<'a>>,
+    mut write_score: W,
+    mut log_skip: L,
+) where
+    W: FnMut(&str, &str, &str, &mut LocalScoreEntry) -> bool,
+    L: FnMut(LocalScoreGameplaySaveSkip),
+{
+    for player in players {
+        let save_decision = local_score_gameplay_save_decision(LocalScoreGameplaySaveInput {
+            autoplay_used,
+            score_valid: player.score_valid,
+            invalid_reasons: player.invalid_reasons.as_slice(),
+            scoring_counts: player.scoring_counts,
+            holds_held_for_score: player.holds_held_for_score,
+            rolls_held_for_score: player.rolls_held_for_score,
+            mines_hit_for_score: player.mines_hit_for_score,
+            possible_grade_points: player.possible_grade_points,
+        });
+        let score_percent = match save_decision {
+            LocalScoreGameplaySaveDecision::SkipAutoplay => {
+                log_skip(LocalScoreGameplaySaveSkip::Autoplay);
+                return;
+            }
+            LocalScoreGameplaySaveDecision::SkipInvalid { detail } => {
+                log_skip(LocalScoreGameplaySaveSkip::Invalid {
+                    player_idx: player.player_idx,
+                    detail,
+                });
+                continue;
+            }
+            LocalScoreGameplaySaveDecision::Save { score_percent } => score_percent,
+        };
+
+        let mut entry = local_score_entry_from_gameplay_input(LocalScoreGameplayEntryInput {
+            played_at_ms,
+            music_rate,
+            score_percent,
+            song_completed_naturally: player.song_completed_naturally,
+            is_failing: player.is_failing,
+            life: player.life,
+            fail_time: player.fail_time,
+            notes: player.notes,
+            note_times: player.note_times,
+            hold_end_times: player.hold_end_times,
+            total_steps: player.total_steps,
+            holds_total: player.holds_total,
+            rolls_total: player.rolls_total,
+            mines_total: player.mines_total,
+            counts: player.counts,
+            white_fantastics: player.white_fantastics,
+            holds_held: player.holds_held,
+            rolls_held: player.rolls_held,
+            mines_avoided: player.mines_avoided,
+            hands_achieved: player.hands_achieved,
+            beat0_time_ns: player.beat0_time_ns,
+            replay: player.replay,
+        });
+        write_score(
+            player.profile_id.as_str(),
+            player.profile_initials,
+            player.chart_hash,
+            &mut entry,
+        );
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LocalSummaryScoreSaveDecision {
+    SkipEmptyChartHash,
+    SkipDisqualified,
+    SkipInvalid,
+    Save,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LocalSummaryScoreSaveInput<'a> {
+    pub chart_hash: &'a str,
+    pub disqualified: bool,
+    pub score_valid: bool,
+}
+
+pub fn local_summary_score_save_decision(
+    input: LocalSummaryScoreSaveInput<'_>,
+) -> LocalSummaryScoreSaveDecision {
+    if input.chart_hash.trim().is_empty() {
+        return LocalSummaryScoreSaveDecision::SkipEmptyChartHash;
+    }
+    if input.disqualified {
+        return LocalSummaryScoreSaveDecision::SkipDisqualified;
+    }
+    if !input.score_valid {
+        return LocalSummaryScoreSaveDecision::SkipInvalid;
+    }
+    LocalSummaryScoreSaveDecision::Save
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Encode, Decode)]
 pub struct LocalScoreHeader {
     pub version: u16,
@@ -3795,6 +4351,48 @@ pub fn validate_score_import_credentials(
     Ok(())
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct ScoreFetchAndCacheInput<'a> {
+    pub credentials_ready: bool,
+    pub missing_credentials_message: &'a str,
+    pub username: &'a str,
+    pub chart_hash: &'a str,
+}
+
+pub fn fetch_and_cache_score<F, C, M>(
+    input: ScoreFetchAndCacheInput<'_>,
+    fetch_score: F,
+    cache_score: C,
+    cache_missing_score: M,
+) -> Result<(), Box<dyn Error + Send + Sync>>
+where
+    F: FnOnce(&str) -> Result<CachedScoreImportResult, Box<dyn Error + Send + Sync>>,
+    C: FnOnce(CachedScore, bool),
+    M: FnOnce(CachedScore),
+{
+    if !input.credentials_ready {
+        return Err(input.missing_credentials_message.into());
+    }
+
+    debug!(
+        "Requesting scores for '{}' on chart '{}'...",
+        input.username, input.chart_hash
+    );
+
+    let result = fetch_score(input.chart_hash)?;
+    if let Some(cached_score) = result.score {
+        cache_score(cached_score, result.score_proves_nonquint_ex);
+    } else {
+        warn!(
+            "No score found for player '{}' on chart '{}'. Caching as Failed.",
+            input.username, input.chart_hash
+        );
+        cache_missing_score(cached_missing_gs_score());
+    }
+
+    Ok(())
+}
+
 pub const SCORE_IMPORT_ENDPOINT_CHOICES: [ScoreImportEndpoint; 3] = [
     ScoreImportEndpoint::GrooveStats,
     ScoreImportEndpoint::BoogieStats,
@@ -4103,6 +4701,73 @@ pub enum ArrowCloudBulkImportRunEvent {
     },
 }
 
+pub fn log_arrowcloud_bulk_import_event(event: ArrowCloudBulkImportRunEvent) {
+    match event {
+        ArrowCloudBulkImportRunEvent::Canceled {
+            pack_name,
+            pack_idx,
+            total_packs,
+        } => debug!(
+            "ArrowCloud bulk import canceled at pack {} ({}/{}).",
+            pack_name, pack_idx, total_packs
+        ),
+        ArrowCloudBulkImportRunEvent::ChunkSucceeded {
+            pack_idx,
+            total_packs,
+            pack_name,
+            chunk_len,
+            request_elapsed,
+            hits,
+            misses,
+        } => debug!(
+            "ArrowCloud /v1/retrieve-scores pack={}/{} pack_name='{}' chunk={} took={:.0}ms hits={} misses={}",
+            pack_idx + 1,
+            total_packs,
+            pack_name,
+            chunk_len,
+            request_elapsed.as_secs_f32() * 1000.0,
+            hits,
+            misses,
+        ),
+        ArrowCloudBulkImportRunEvent::RequestFailed { detail } => warn!("{detail}"),
+        ArrowCloudBulkImportRunEvent::ChunkDetail { detail }
+        | ArrowCloudBulkImportRunEvent::PackComplete { detail } => debug!("{detail}"),
+    }
+}
+
+pub fn log_score_import_event(event: ScoreImportRunEvent) {
+    match event {
+        ScoreImportRunEvent::Canceled {
+            import_name,
+            pack_idx,
+            total_packs,
+            processed_charts,
+            requested_charts,
+        } => debug!(
+            "{import_name} score import canceled at pack {}/{} after {processed_charts}/{requested_charts} charts.",
+            pack_idx + 1,
+            total_packs,
+        ),
+        ScoreImportRunEvent::RequestFailed {
+            import_name,
+            chart_hash,
+            error,
+        } => warn!("{import_name} import request failed for chart {chart_hash}: {error}"),
+        ScoreImportRunEvent::ProgressLog {
+            import_name,
+            username,
+            processed_charts,
+            requested_charts,
+            imported_scores,
+            missing_scores,
+            failed_requests,
+        } => debug!(
+            "{import_name} import progress for '{username}': {processed_charts}/{requested_charts} charts (imported={imported_scores}, missing={missing_scores}, failed={failed_requests})",
+        ),
+        ScoreImportRunEvent::PackComplete { detail } => debug!("{detail}"),
+    }
+}
+
 pub fn run_arrowcloud_bulk_import_pack_groups<F, P, C, E>(
     pack_chart_groups: Vec<(String, Vec<String>)>,
     chunk_size: usize,
@@ -4381,6 +5046,53 @@ where
     )
 }
 
+pub struct ValidatedScoreImportInput<'a> {
+    pub endpoint: ScoreImportEndpoint,
+    pub api_key: &'a str,
+    pub username: &'a str,
+    pub pack_chart_groups: Vec<(String, Vec<String>)>,
+    pub only_missing_scores: bool,
+}
+
+pub fn run_validated_score_import<F, S, I, P, C, E>(
+    input: ValidatedScoreImportInput<'_>,
+    fetch_chart: F,
+    mut store_score: S,
+    mut store_itl: I,
+    on_progress: P,
+    should_cancel: C,
+    on_event: E,
+) -> Result<ScoreBulkImportSummary, Box<dyn Error + Send + Sync>>
+where
+    F: FnMut(&str) -> Result<CachedScoreImportResult, String>,
+    S: FnMut(&str, CachedScore, bool),
+    I: FnMut(&str, Option<u32>, Option<u32>),
+    P: FnMut(ScoreImportProgress),
+    C: Fn() -> bool,
+    E: FnMut(ScoreImportRunEvent),
+{
+    validate_score_import_credentials(input.endpoint, input.api_key, input.username)
+        .map_err(|error| error.import_message())?;
+    Ok(run_score_import_pack_groups(
+        input.endpoint,
+        input.username,
+        input.pack_chart_groups,
+        input.only_missing_scores,
+        fetch_chart,
+        |chart_hash, result| {
+            if result.itl_self_found {
+                store_itl(chart_hash, result.itl_self_score, result.itl_self_rank);
+            }
+            if let Some(score) = result.score {
+                store_score(chart_hash, score, result.score_proves_nonquint_ex);
+            }
+        },
+        on_progress,
+        should_cancel,
+        on_event,
+    ))
+}
+
 pub fn score_import_pack_complete_detail(
     pack_idx: usize,
     total_packs: usize,
@@ -4563,6 +5275,22 @@ pub struct ItlEvalInput<'a> {
     pub passed: bool,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct ItlGameplayEvalInput<'a> {
+    pub song_dir: Option<&'a str>,
+    pub group_name: Option<&'a str>,
+    pub data: &'a ItlFileData,
+    pub chart_hash: &'a str,
+    pub subtitle: &'a str,
+    pub used_cmod: bool,
+    pub groovestats_valid: bool,
+    pub groovestats_reason_lines: &'a [String],
+    pub music_rate: f32,
+    pub remove_mask: u8,
+    pub disabled_windows: &'a [bool],
+    pub passed: bool,
+}
+
 #[derive(Debug, Clone)]
 pub struct ItlChartSaveInput<'a> {
     pub song_dir: &'a str,
@@ -4580,6 +5308,42 @@ pub struct ItlChartSaveInput<'a> {
 #[derive(Debug, Clone)]
 pub struct ItlChartSaveResult {
     pub needs_write: bool,
+    pub progress: ItlEventProgress,
+}
+
+#[derive(Debug, Clone)]
+pub struct ItlGameplaySavePlayer {
+    pub player_idx: usize,
+    pub profile_id: String,
+    pub song_dir: Option<String>,
+    pub event_name: Option<String>,
+    pub chart_hash: String,
+    pub chart_name: String,
+    pub chart_type: String,
+    pub subtitle: String,
+    pub used_cmod: bool,
+    pub groovestats_valid: bool,
+    pub groovestats_reason_lines: Vec<String>,
+    pub music_rate: f32,
+    pub remove_mask: u8,
+    pub disabled_windows: [bool; 5],
+    pub passed: bool,
+    pub judgments: ItlJudgments,
+    pub ex_percent: f64,
+    pub date: String,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ItlGameplaySaveSkip<'a> {
+    pub player_idx: usize,
+    pub profile_id: &'a str,
+    pub chart_hash: &'a str,
+    pub reason_lines: &'a [String],
+}
+
+#[derive(Debug, Clone)]
+pub struct ItlGameplaySaveProgress {
+    pub player_idx: usize,
     pub progress: ItlEventProgress,
 }
 
@@ -4798,6 +5562,62 @@ pub fn itl_eval_state_from_parts(input: ItlEvalInput<'_>) -> ItlEvalState {
     }
 }
 
+pub fn itl_eval_state_from_gameplay_context(input: ItlGameplayEvalInput<'_>) -> ItlEvalState {
+    let Some(song_dir) = input.song_dir else {
+        return ItlEvalState {
+            active: false,
+            eligible: false,
+            chart_no_cmod: false,
+            used_cmod: input.used_cmod,
+            reason_lines: Vec::new(),
+        };
+    };
+    if !itl_song_matches_context(Some(song_dir), input.group_name, input.data) {
+        return ItlEvalState {
+            active: false,
+            eligible: false,
+            chart_no_cmod: false,
+            used_cmod: input.used_cmod,
+            reason_lines: Vec::new(),
+        };
+    }
+
+    let prev = input.data.hash_map.get(input.chart_hash);
+    let chart_no_cmod = itl_chart_no_cmod(input.subtitle, prev);
+    let mines_enabled = (input.remove_mask & (1u8 << 1)) == 0;
+    let all_timing_windows_enabled = itl_timing_windows_all_enabled(input.disabled_windows);
+    itl_eval_state_from_parts(ItlEvalInput {
+        chart_no_cmod,
+        used_cmod: input.used_cmod,
+        groovestats_valid: input.groovestats_valid,
+        groovestats_reason_lines: input.groovestats_reason_lines,
+        music_rate: input.music_rate,
+        mines_enabled,
+        all_timing_windows_enabled,
+        passed: input.passed,
+    })
+}
+
+pub fn itl_should_warn_cmod_context(
+    cached_no_cmod: Option<bool>,
+    group_name: Option<&str>,
+    subtitle: &str,
+) -> bool {
+    if let Some(no_cmod) = cached_no_cmod {
+        return no_cmod;
+    }
+    group_name.is_some_and(|group_name| {
+        itl_group_name_matches(group_name) && itl_chart_no_cmod(subtitle, None)
+    })
+}
+
+pub fn itl_current_score_hundredths_for_submit(
+    input: ItlScoreCalcInput<'_>,
+    disabled_windows: &[bool],
+) -> Option<u32> {
+    itl_timing_windows_all_enabled(disabled_windows).then(|| itl_current_score_hundredths(input))
+}
+
 pub fn save_itl_chart_result(
     data: &mut ItlFileData,
     input: ItlChartSaveInput<'_>,
@@ -4928,6 +5748,86 @@ pub fn save_itl_chart_result(
         needs_write,
         progress,
     }
+}
+
+pub fn save_itl_gameplay_players<R, W, C, L>(
+    players: impl IntoIterator<Item = ItlGameplaySavePlayer>,
+    mut read_file: R,
+    mut write_file: W,
+    mut set_cached_file: C,
+    mut log_skip: L,
+) -> Vec<ItlGameplaySaveProgress>
+where
+    R: FnMut(&str) -> ItlFileData,
+    W: FnMut(&str, &ItlFileData),
+    C: FnMut(&str, ItlFileData),
+    L: FnMut(ItlGameplaySaveSkip<'_>),
+{
+    let mut progress = Vec::new();
+    for player in players {
+        let chart_hash = player.chart_hash.trim();
+        if chart_hash.is_empty() {
+            continue;
+        }
+
+        let mut data = read_file(player.profile_id.as_str());
+        itl_rebuild_song_ranks(&mut data);
+        let eval = itl_eval_state_from_gameplay_context(ItlGameplayEvalInput {
+            song_dir: player.song_dir.as_deref(),
+            group_name: player.event_name.as_deref(),
+            data: &data,
+            chart_hash,
+            subtitle: player.subtitle.as_str(),
+            used_cmod: player.used_cmod,
+            groovestats_valid: player.groovestats_valid,
+            groovestats_reason_lines: player.groovestats_reason_lines.as_slice(),
+            music_rate: player.music_rate,
+            remove_mask: player.remove_mask,
+            disabled_windows: player.disabled_windows.as_slice(),
+            passed: player.passed,
+        });
+        if !eval.active {
+            continue;
+        }
+        if !eval.eligible {
+            log_skip(ItlGameplaySaveSkip {
+                player_idx: player.player_idx,
+                profile_id: player.profile_id.as_str(),
+                chart_hash,
+                reason_lines: eval.reason_lines.as_slice(),
+            });
+            continue;
+        }
+
+        let Some(song_dir) = player.song_dir.as_deref() else {
+            continue;
+        };
+        let save_result = save_itl_chart_result(
+            &mut data,
+            ItlChartSaveInput {
+                song_dir,
+                chart_hash,
+                chart_name: player.chart_name.as_str(),
+                chart_type: player.chart_type.as_str(),
+                event_name: player.event_name.as_deref().unwrap_or_default(),
+                judgments: player.judgments,
+                ex_percent: player.ex_percent,
+                used_cmod: eval.used_cmod,
+                chart_no_cmod: eval.chart_no_cmod,
+                date: player.date,
+            },
+        );
+        progress.push(ItlGameplaySaveProgress {
+            player_idx: player.player_idx,
+            progress: save_result.progress,
+        });
+
+        if save_result.needs_write {
+            write_file(player.profile_id.as_str(), &data);
+            set_cached_file(player.profile_id.as_str(), data);
+        }
+    }
+    progress
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -6244,6 +7144,200 @@ mod tests {
     }
 
     #[test]
+    fn local_score_gameplay_save_decision_skips_autoplay_and_invalid_scores() {
+        let counts = [0u32; judgment::JUDGE_GRADE_COUNT];
+        assert_eq!(
+            local_score_gameplay_save_decision(LocalScoreGameplaySaveInput {
+                autoplay_used: true,
+                score_valid: true,
+                invalid_reasons: &[],
+                scoring_counts: &counts,
+                holds_held_for_score: 0,
+                rolls_held_for_score: 0,
+                mines_hit_for_score: 0,
+                possible_grade_points: 0,
+            }),
+            LocalScoreGameplaySaveDecision::SkipAutoplay
+        );
+
+        let reasons = vec!["profile uses CMod", "profile uses NoMines"];
+        assert_eq!(
+            local_score_gameplay_save_decision(LocalScoreGameplaySaveInput {
+                autoplay_used: false,
+                score_valid: false,
+                invalid_reasons: &reasons,
+                scoring_counts: &counts,
+                holds_held_for_score: 0,
+                rolls_held_for_score: 0,
+                mines_hit_for_score: 0,
+                possible_grade_points: 0,
+            }),
+            LocalScoreGameplaySaveDecision::SkipInvalid {
+                detail: "profile uses CMod; profile uses NoMines".to_string()
+            }
+        );
+
+        assert_eq!(
+            local_score_gameplay_save_decision(LocalScoreGameplaySaveInput {
+                autoplay_used: false,
+                score_valid: false,
+                invalid_reasons: &[],
+                scoring_counts: &counts,
+                holds_held_for_score: 0,
+                rolls_held_for_score: 0,
+                mines_hit_for_score: 0,
+                possible_grade_points: 0,
+            }),
+            LocalScoreGameplaySaveDecision::SkipInvalid {
+                detail: "ranking-invalid modifiers were used".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn local_score_gameplay_save_decision_calculates_score_percent() {
+        let mut counts = [0u32; judgment::JUDGE_GRADE_COUNT];
+        counts[judgment::judge_grade_ix(judgment::JudgeGrade::Fantastic)] = 80;
+        counts[judgment::judge_grade_ix(judgment::JudgeGrade::Excellent)] = 20;
+
+        let LocalScoreGameplaySaveDecision::Save { score_percent } =
+            local_score_gameplay_save_decision(LocalScoreGameplaySaveInput {
+                autoplay_used: false,
+                score_valid: true,
+                invalid_reasons: &["ignored when valid"],
+                scoring_counts: &counts,
+                holds_held_for_score: 0,
+                rolls_held_for_score: 0,
+                mines_hit_for_score: 0,
+                possible_grade_points: 500,
+            })
+        else {
+            panic!("valid score should be saved");
+        };
+        assert!((score_percent - 0.96).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn save_local_gameplay_scores_skips_invalid_and_writes_valid() {
+        let mut counts = [0u32; judgment::JUDGE_GRADE_COUNT];
+        counts[judgment::judge_grade_ix(judgment::JudgeGrade::Fantastic)] = 80;
+        counts[judgment::judge_grade_ix(judgment::JudgeGrade::Excellent)] = 20;
+        let notes: [Note; 0] = [];
+        let times: [SongTimeNs; 0] = [];
+        let hold_times: [Option<SongTimeNs>; 0] = [];
+        let mut written = Vec::new();
+        let mut skips = Vec::new();
+        let player = |player_idx,
+                      score_valid,
+                      invalid_reasons: Vec<&'static str>|
+         -> LocalScoreGameplayPlayer<'_> {
+            LocalScoreGameplayPlayer {
+                player_idx,
+                profile_id: format!("profile-{player_idx}"),
+                profile_initials: "AAA",
+                chart_hash: "deadbeef",
+                invalid_reasons,
+                score_valid,
+                scoring_counts: &counts,
+                holds_held_for_score: 0,
+                rolls_held_for_score: 0,
+                mines_hit_for_score: 0,
+                possible_grade_points: 500,
+                song_completed_naturally: true,
+                is_failing: false,
+                life: 1.0,
+                fail_time: None,
+                notes: &notes,
+                note_times: &times,
+                hold_end_times: &hold_times,
+                total_steps: 100,
+                holds_total: 0,
+                rolls_total: 0,
+                mines_total: 0,
+                counts: [80, 20, 0, 0, 0, 0],
+                white_fantastics: Some(80),
+                holds_held: 0,
+                rolls_held: 0,
+                mines_avoided: 0,
+                hands_achieved: 0,
+                beat0_time_ns: 123,
+                replay: Vec::new(),
+            }
+        };
+
+        save_local_gameplay_scores(
+            1234,
+            1.0,
+            false,
+            [
+                player(0, false, vec!["profile uses CMod"]),
+                player(1, true, Vec::new()),
+            ],
+            |profile_id, initials, chart_hash, entry| {
+                written.push((
+                    profile_id.to_string(),
+                    initials.to_string(),
+                    chart_hash.to_string(),
+                    entry.clone(),
+                ));
+                true
+            },
+            |skip| skips.push(skip),
+        );
+
+        assert_eq!(
+            skips,
+            vec![LocalScoreGameplaySaveSkip::Invalid {
+                player_idx: 0,
+                detail: "profile uses CMod".to_string()
+            }]
+        );
+        assert_eq!(written.len(), 1);
+        assert_eq!(written[0].0, "profile-1");
+        assert_eq!(written[0].1, "AAA");
+        assert_eq!(written[0].2, "deadbeef");
+        assert!((written[0].3.score_percent - 0.96).abs() < f64::EPSILON);
+        assert_eq!(written[0].3.played_at_ms, 1234);
+        assert_eq!(written[0].3.beat0_time_ns, 123);
+    }
+
+    #[test]
+    fn local_summary_score_save_decision_filters_unsaved_summaries() {
+        assert_eq!(
+            local_summary_score_save_decision(LocalSummaryScoreSaveInput {
+                chart_hash: " ",
+                disqualified: false,
+                score_valid: true,
+            }),
+            LocalSummaryScoreSaveDecision::SkipEmptyChartHash
+        );
+        assert_eq!(
+            local_summary_score_save_decision(LocalSummaryScoreSaveInput {
+                chart_hash: "abc",
+                disqualified: true,
+                score_valid: true,
+            }),
+            LocalSummaryScoreSaveDecision::SkipDisqualified
+        );
+        assert_eq!(
+            local_summary_score_save_decision(LocalSummaryScoreSaveInput {
+                chart_hash: "abc",
+                disqualified: false,
+                score_valid: false,
+            }),
+            LocalSummaryScoreSaveDecision::SkipInvalid
+        );
+        assert_eq!(
+            local_summary_score_save_decision(LocalSummaryScoreSaveInput {
+                chart_hash: "abc",
+                disqualified: false,
+                score_valid: true,
+            }),
+            LocalSummaryScoreSaveDecision::Save
+        );
+    }
+
+    #[test]
     fn leaderboard_pane_kind_helpers_match_legacy_names() {
         let hard_ex = LeaderboardPane {
             name: "Hard EX".to_string(),
@@ -6993,6 +8087,54 @@ mod tests {
         assert_eq!(result.progress.total_passes, 2);
         assert_eq!(result.progress.point_delta, 0);
         assert_eq!(result.progress.score_delta_hundredths, 0);
+    }
+
+    #[test]
+    fn save_itl_gameplay_players_writes_eligible_scores() {
+        let mut written = Vec::new();
+        let mut cached = Vec::new();
+        let mut skips = Vec::new();
+        let players = vec![ItlGameplaySavePlayer {
+            player_idx: 1,
+            profile_id: "profile-a".to_string(),
+            song_dir: Some("/Songs/ITL Online 2026/Example".to_string()),
+            event_name: Some("ITL Online 2026".to_string()),
+            chart_hash: "deadbeef".to_string(),
+            chart_name: "7500 (P) + 12000 (S)".to_string(),
+            chart_type: "dance-single".to_string(),
+            subtitle: String::new(),
+            used_cmod: false,
+            groovestats_valid: true,
+            groovestats_reason_lines: Vec::new(),
+            music_rate: 1.0,
+            remove_mask: 0,
+            disabled_windows: [false; 5],
+            passed: true,
+            judgments: ItlJudgments {
+                w0: 10,
+                total_steps: 10,
+                ..ItlJudgments::default()
+            },
+            ex_percent: 100.0,
+            date: "2026-06-25".to_string(),
+        }];
+
+        let progress = save_itl_gameplay_players(
+            players,
+            |_| ItlFileData::default(),
+            |profile_id, data| written.push((profile_id.to_string(), data.clone())),
+            |profile_id, data| cached.push((profile_id.to_string(), data)),
+            |skip| skips.push((skip.player_idx, skip.reason_lines.join("; "))),
+        );
+
+        assert!(skips.is_empty());
+        assert_eq!(progress.len(), 1);
+        assert_eq!(progress[0].player_idx, 1);
+        assert_eq!(progress[0].progress.current_points, 19_500);
+        assert_eq!(written.len(), 1);
+        assert_eq!(cached.len(), 1);
+        assert_eq!(written[0].0, "profile-a");
+        assert_eq!(cached[0].1.hash_map["deadbeef"].ex, 10_000);
     }
 
     #[test]
@@ -8239,6 +9381,73 @@ mod tests {
             chart_hash: "fail".to_string(),
             error: "network".to_string(),
         }));
+    }
+
+    #[test]
+    fn validated_score_import_rejects_missing_credentials() {
+        let result = run_validated_score_import(
+            ValidatedScoreImportInput {
+                endpoint: ScoreImportEndpoint::GrooveStats,
+                api_key: "",
+                username: "player",
+                pack_chart_groups: vec![("Pack".to_string(), vec!["hash".to_string()])],
+                only_missing_scores: false,
+            },
+            |_| panic!("fetch should not run"),
+            |_, _, _| panic!("score store should not run"),
+            |_, _, _| panic!("itl store should not run"),
+            |_| panic!("progress should not run"),
+            || false,
+            |_| panic!("event should not run"),
+        );
+
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "GrooveStats API key is not set in profile configuration."
+        );
+    }
+
+    #[test]
+    fn validated_score_import_dispatches_score_and_itl_results() {
+        let mut stored_scores = Vec::new();
+        let mut stored_itl = Vec::new();
+
+        let summary = run_validated_score_import(
+            ValidatedScoreImportInput {
+                endpoint: ScoreImportEndpoint::GrooveStats,
+                api_key: "key",
+                username: "player",
+                pack_chart_groups: vec![("Pack".to_string(), vec!["hit".to_string()])],
+                only_missing_scores: false,
+            },
+            |_| {
+                Ok(CachedScoreImportResult {
+                    score: Some(cached_score(Grade::Tier03, 0.9876, Some(1), None)),
+                    score_proves_nonquint_ex: true,
+                    itl_self_score: Some(9876),
+                    itl_self_rank: Some(4),
+                    itl_self_found: true,
+                })
+            },
+            |chart_hash, score, proves_nonquint| {
+                stored_scores.push((chart_hash.to_string(), score.grade, proves_nonquint));
+            },
+            |chart_hash, score, rank| {
+                stored_itl.push((chart_hash.to_string(), score, rank));
+            },
+            |_| {},
+            || false,
+            |_| {},
+        )
+        .expect("valid import should run");
+
+        assert_eq!(summary.requested_charts, 1);
+        assert_eq!(summary.imported_scores, 1);
+        assert_eq!(
+            stored_scores,
+            vec![("hit".to_string(), Grade::Tier03, true)]
+        );
+        assert_eq!(stored_itl, vec![("hit".to_string(), Some(9876), Some(4))]);
     }
 
     #[test]

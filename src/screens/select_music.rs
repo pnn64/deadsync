@@ -7,7 +7,6 @@ use crate::config::{
     SyncGraphMode,
 };
 
-use crate::game::parsing::simfile as song_loading;
 use crate::game::profile;
 use crate::game::scores;
 use crate::rgba_const;
@@ -49,6 +48,7 @@ use deadsync_online::lobbies as lobby_data;
 use deadsync_profile as profile_data;
 use deadsync_profile::pad_config as pad_profile_data;
 use deadsync_score as score_data;
+use deadsync_simfile::app_runtime as song_loading;
 use deadsync_simfile::bpm::{beat_at_sec_from_bpms, sec_at_beat_from_bpms};
 use deadsync_simfile::runtime_cache::get_song_cache;
 use image::{Rgba, RgbaImage};
@@ -4361,7 +4361,7 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
 
 fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
     let replays_enabled = config::get().machine_enable_replays;
-    let downloads_enabled = crate::game::online::unlock_downloads_available();
+    let downloads_enabled = deadsync_online::runtime::unlock_downloads_available();
     let has_song_selected = matches!(
         state.entries.get(state.selected_index),
         Some(MusicWheelEntry::Song(_))
@@ -10097,7 +10097,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         profile_boxes::update(overlay, dt);
         return ScreenAction::None;
     }
-    let reload_dirs = crate::game::online::take_ready_song_reload_request();
+    let reload_dirs = deadsync_online::runtime::take_ready_song_reload_request();
     if !reload_dirs.is_empty() {
         start_reload_song_dirs(state, reload_dirs);
         return ScreenAction::None;

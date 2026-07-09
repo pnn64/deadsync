@@ -5,6 +5,9 @@ edition = "2024"
 license = "GPL-3.0"
 
 [dependencies]
+deadlib-platform = { path = "../deadlib-platform" }
+deadsync-config = { path = "../deadsync-config" }
+deadsync-core = { path = "../deadsync-core" }
 deadsync-net = { path = "../deadsync-net" }
 deadsync-profile = { path = "../deadsync-profile" }
 deadsync-rules = { path = "../deadsync-rules" }

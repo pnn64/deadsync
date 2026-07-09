@@ -675,7 +675,7 @@ const PANE3_PREVIEW_ZOOM: f32 = 0.4;
 /// tints; `Some(rgba)` recolors the arrow to a solid tint (used by the
 /// glow-on-judge effect in pane 3).
 pub(crate) fn build_pane3_arrow_preview(
-    noteskin: &crate::game::parsing::noteskin::Noteskin,
+    noteskin: &deadsync_assets::noteskin::Noteskin,
     col_idx: usize,
     center: [f32; 2],
     arrow_color: Option<[f32; 4]>,

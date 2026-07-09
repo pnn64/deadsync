@@ -1,35 +1,28 @@
 use super::{
-    GameplayCoreState, cache_gs_score_for_profile, gameplay_side_for_player,
-    get_or_fetch_player_leaderboards_for_side, invalidate_player_leaderboards_for_side, itl,
-    lua_chart_submit_allowed,
+    GameplayCoreState, get_or_fetch_player_leaderboards_for_side,
+    invalidate_player_leaderboards_for_side, itl, lua_chart_submit_allowed,
 };
 use crate::game::profile;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_online::groovestats::{
-    self as groovestats_api, GROOVESTATS_SUBMIT_MAX_ENTRIES, GrooveStatsJudgmentCounts,
-    GrooveStatsRescoreCounts, GrooveStatsSubmitPlayerDraft, GrooveStatsSubmitPlayerPayload,
-    reset_submit_event_ui as groovestats_reset_submit_event_ui,
-    reset_submit_retry as groovestats_reset_submit_retry,
-    reset_submit_ui_status as groovestats_reset_submit_ui_status,
+    self as groovestats_api, GROOVESTATS_SUBMIT_MAX_ENTRIES, GrooveStatsGameplayPayloadInput,
+    GrooveStatsGameplaySubmitInput, GrooveStatsGameplaySubmitPlayer,
+    GrooveStatsSubmitPlayerPayload, submit_player_payload_from_gameplay_input,
 };
 use deadsync_profile as profile_data;
 use deadsync_profile::Profile;
-use deadsync_rules::judgment;
+use deadsync_profile_gameplay::{
+    groovestats_eval_state_from_profile, groovestats_submit_invalid_reason_from_profile,
+};
 use deadsync_score::{
-    EventProgress, GrooveStatsAutosubmitPlayerAction, GrooveStatsAutosubmitPlayerInput,
-    GrooveStatsAutosubmitSessionDecision, GrooveStatsAutosubmitSessionInput, GrooveStatsEvalInput,
-    GrooveStatsEvalState, GrooveStatsGameplayEvalInput, GrooveStatsSubmitRecordBanner,
-    GrooveStatsSubmitUiStatus, cached_score_from_imported_player_score,
-    groovestats_autosubmit_player_decision, groovestats_autosubmit_session_decision,
-    groovestats_eval_state_from_gameplay_parts, groovestats_eval_state_from_parts,
-    groovestats_rate_hundredths, groovestats_score_10000_from_counts, groovestats_used_cmod,
-    imported_score_chart_stats,
+    GrooveStatsEvalState, GrooveStatsGameplayEvalInput, cached_score_from_imported_player_score,
+    groovestats_eval_state_from_gameplay_parts, imported_score_chart_stats,
 };
 use deadsync_simfile::runtime_cache::get_song_cache;
 
 #[inline(always)]
 fn active_groovestats_service() -> groovestats_api::Service {
-    crate::game::online::active_groovestats_service()
+    deadsync_online::runtime::active_groovestats_service()
 }
 
 #[inline(always)]
@@ -39,57 +32,13 @@ fn active_groovestats_service_name() -> &'static str {
 
 pub(super) use groovestats_api::GrooveStatsSubmitPlayerJob;
 
-pub fn get_groovestats_submit_ui_status_for_side(
-    chart_hash: &str,
-    side: profile_data::PlayerSide,
-) -> Option<GrooveStatsSubmitUiStatus> {
-    groovestats_api::submit_ui_status_for_side(chart_hash, side)
-}
-
-pub fn get_groovestats_submit_event_progress_for_side(
-    chart_hash: &str,
-    side: profile_data::PlayerSide,
-) -> Vec<EventProgress> {
-    groovestats_api::submit_event_progress_for_side(chart_hash, side)
-}
-
-pub fn get_groovestats_submit_record_banner_for_side(
-    chart_hash: &str,
-    side: profile_data::PlayerSide,
-) -> Option<GrooveStatsSubmitRecordBanner> {
-    groovestats_api::submit_record_banner_for_side(chart_hash, side)
-}
-
-fn groovestats_eval_state(
-    chart: &deadsync_chart::ChartData,
-    profile: &Profile,
-    music_rate: f32,
-    autoplay_used: bool,
-    is_course_mode: bool,
-    course_submit_allowed: bool,
-) -> GrooveStatsEvalState {
-    let remove_mask = profile.remove_active_mask.bits();
-    let insert_mask = profile.insert_active_mask.bits();
-    let holds_mask = profile.holds_active_mask.bits();
-    let fail_type_ok = matches!(
+#[inline(always)]
+fn groovestats_fail_type_ok() -> bool {
+    matches!(
         crate::config::get().default_fail_type,
         crate::config::DefaultFailType::Immediate
             | crate::config::DefaultFailType::ImmediateContinue
-    );
-
-    groovestats_eval_state_from_parts(GrooveStatsEvalInput {
-        chart_type: chart.chart_type.as_str(),
-        music_rate,
-        remove_mask,
-        insert_mask,
-        holds_mask,
-        fail_type_ok,
-        autoplay_used,
-        is_course_mode,
-        course_submit_allowed,
-        custom_fantastic_window: profile.custom_fantastic_window,
-        custom_fantastic_window_ms: profile.custom_fantastic_window_ms,
-    })
+    )
 }
 
 fn groovestats_manual_qr_url_from_gameplay(
@@ -117,13 +66,14 @@ pub fn groovestats_eval_state_from_gameplay(
     if player_idx >= gs.num_players().min(MAX_PLAYERS) {
         return GrooveStatsEvalState::default();
     }
-    let base_state = groovestats_eval_state(
+    let base_state = groovestats_eval_state_from_profile(
         gs.charts()[player_idx].as_ref(),
         &gs.profiles()[player_idx],
         gs.music_rate(),
         gs.autoplay_used(),
         gs.course_display_is_course_stage(),
         crate::config::get().autosubmit_course_scores_individually,
+        groovestats_fail_type_ok(),
     );
     let mut result = groovestats_eval_state_from_gameplay_parts(
         base_state,
@@ -151,77 +101,13 @@ fn groovestats_submit_invalid_reason(
     profile: &Profile,
     music_rate: f32,
 ) -> Option<String> {
-    if song_has_lua && !lua_chart_submit_allowed(chart.short_hash.as_str()) {
-        return Some("simfile relies on lua".to_string());
-    }
-    groovestats_eval_state(chart, profile, music_rate, false, false, false)
-        .reason_lines
-        .into_iter()
-        .next()
-}
-
-#[inline(always)]
-pub(super) fn groovestats_judgment_counts(
-    gs: &GameplayCoreState,
-    player_idx: usize,
-) -> GrooveStatsJudgmentCounts {
-    let player = &gs.players()[player_idx];
-    let windows = gs.live_window_counts(player_idx);
-    let totals = gs.display_totals_for_player(player_idx);
-    let disabled_windows = gs.profiles()[player_idx].timing_windows.disabled_windows();
-    groovestats_api::judgment_counts_from_stats(
-        windows,
-        disabled_windows,
-        totals.total_steps,
-        player.holds_held,
-        totals.holds_total,
-        player.mines_hit,
-        totals.mines_total,
-        player.rolls_held,
-        totals.rolls_total,
-    )
-}
-
-fn groovestats_rescore_counts(
-    gs: &GameplayCoreState,
-    player_idx: usize,
-) -> GrooveStatsRescoreCounts {
-    let (start, end) = gs.note_range_for_player(player_idx);
-    groovestats_api::rescore_counts_from_judgments(
-        gs.notes()[start..end]
-            .iter()
-            .filter_map(|note| Some((note.result.as_ref()?, note.early_result.as_ref()?))),
-    )
-}
-
-fn groovestats_comment_string(gs: &GameplayCoreState, player_idx: usize) -> String {
-    let profile = &gs.profiles()[player_idx];
-    let counts = groovestats_judgment_counts(gs, player_idx);
-    let fa_plus_ex_score = if profile.show_fa_plus_window {
-        let (start, end) = gs.note_range_for_player(player_idx);
-        let totals = gs.display_totals_for_player(player_idx);
-        Some(judgment::calculate_ex_score_from_notes(
-            &gs.notes()[start..end],
-            &gs.note_time_cache_ns()[start..end],
-            &gs.hold_end_time_cache_ns()[start..end],
-            totals.total_steps,
-            totals.holds_total,
-            totals.rolls_total,
-            totals.mines_total,
-            gs.players()[player_idx]
-                .fail_time
-                .map(deadsync_core::song_time::song_time_ns_from_seconds),
-            false,
-        ))
-    } else {
-        None
-    };
-    groovestats_api::submit_comment(
-        &counts,
-        fa_plus_ex_score,
-        gs.music_rate(),
-        profile.timing_windows,
-        profile.scroll_speed,
+    groovestats_submit_invalid_reason_from_profile(
+        chart,
+        song_has_lua,
+        lua_chart_submit_allowed(chart.short_hash.as_str()),
+        profile,
+        music_rate,
+        groovestats_fail_type_ok(),
     )
 }
 
@@ -233,22 +119,34 @@ fn groovestats_payload_for_player(
         return None;
     }
     let totals = gs.display_totals_for_player(player_idx);
-    let score = groovestats_score_10000_from_counts(
-        &gs.players()[player_idx].scoring_counts,
-        gs.players()[player_idx].holds_held_for_score,
-        gs.players()[player_idx].rolls_held_for_score,
-        gs.players()[player_idx].mines_hit_for_score,
-        totals.possible_grade_points,
-    );
-    Some(GrooveStatsSubmitPlayerPayload {
-        rate: groovestats_rate_hundredths(gs.music_rate()),
-        score,
-        judgment_counts: groovestats_judgment_counts(gs, player_idx),
-        rescore_counts: groovestats_rescore_counts(gs, player_idx),
-        used_cmod: groovestats_used_cmod(gs.profiles()[player_idx].scroll_speed),
-        comment: groovestats_comment_string(gs, player_idx),
-        player_options: groovestats_api::player_options_json(&gs.profiles()[player_idx]),
-    })
+    let player = &gs.players()[player_idx];
+    let profile = &gs.profiles()[player_idx];
+    let (start, end) = gs.note_range_for_player(player_idx);
+    Some(submit_player_payload_from_gameplay_input(
+        GrooveStatsGameplayPayloadInput {
+            scoring_counts: &player.scoring_counts,
+            holds_held_for_score: player.holds_held_for_score,
+            rolls_held_for_score: player.rolls_held_for_score,
+            mines_hit_for_score: player.mines_hit_for_score,
+            possible_grade_points: totals.possible_grade_points,
+            music_rate: gs.music_rate(),
+            window_counts: gs.live_window_counts(player_idx),
+            total_steps: totals.total_steps,
+            holds_held: player.holds_held,
+            total_holds: totals.holds_total,
+            mines_hit: player.mines_hit,
+            total_mines: totals.mines_total,
+            rolls_held: player.rolls_held,
+            total_rolls: totals.rolls_total,
+            notes: &gs.notes()[start..end],
+            note_times: &gs.note_time_cache_ns()[start..end],
+            hold_end_times: &gs.hold_end_time_cache_ns()[start..end],
+            fail_time_ns: player
+                .fail_time
+                .map(deadsync_core::song_time::song_time_ns_from_seconds),
+            profile,
+        },
+    ))
 }
 
 fn refresh_groovestats_submit_leaderboards(player: &GrooveStatsSubmitPlayerJob) {
@@ -276,7 +174,7 @@ fn cache_groovestats_submit_success(
         let song_cache = get_song_cache();
         let stats = imported_score_chart_stats(&imported, &song_cache, player.chart_hash.as_str());
         let score = cached_score_from_imported_player_score(imported, stats);
-        cache_gs_score_for_profile(
+        profile::cache_logged_gs_score_for_id(
             profile_id,
             player.chart_hash.as_str(),
             score,
@@ -287,33 +185,9 @@ fn cache_groovestats_submit_success(
 }
 
 pub fn submit_groovestats_payloads_from_gameplay(gs: &GameplayCoreState) {
-    for player_idx in 0..gs.num_players().min(MAX_PLAYERS) {
-        let side = gameplay_side_for_player(gs, player_idx);
-        groovestats_reset_submit_ui_status(side, gs.charts()[player_idx].short_hash.as_str());
-        groovestats_reset_submit_event_ui(side, gs.charts()[player_idx].short_hash.as_str());
-        groovestats_reset_submit_retry(side, gs.charts()[player_idx].short_hash.as_str());
-    }
-
     let cfg = crate::config::get();
-    match groovestats_autosubmit_session_decision(GrooveStatsAutosubmitSessionInput {
-        enabled: cfg.enable_groovestats,
-        player_count: gs.num_players(),
-        autoplay_used: gs.autoplay_used(),
-        is_course_stage: gs.course_display_is_course_stage(),
-        autosubmit_course_scores_individually: cfg.autosubmit_course_scores_individually,
-    }) {
-        GrooveStatsAutosubmitSessionDecision::Submit => {}
-        GrooveStatsAutosubmitSessionDecision::Skip { log } => {
-            if let Some(log) = log {
-                groovestats_api::log_global_submit_skip(active_groovestats_service_name(), log);
-            }
-            return;
-        }
-    }
-    let mut drafts = Vec::with_capacity(gs.num_players().min(MAX_PLAYERS));
-
-    for player_idx in 0..gs.num_players().min(MAX_PLAYERS) {
-        let side = gameplay_side_for_player(gs, player_idx);
+    let players = (0..gs.num_players().min(MAX_PLAYERS)).map(|player_idx| {
+        let side = profile::gameplay_side_for_player(gs.num_players(), player_idx);
         let slot = if side == profile_data::PlayerSide::P1 {
             1
         } else {
@@ -322,77 +196,43 @@ pub fn submit_groovestats_payloads_from_gameplay(gs: &GameplayCoreState) {
         let profile = &gs.profiles()[player_idx];
         let chart = gs.charts()[player_idx].as_ref();
         let chart_hash = chart.short_hash.as_str();
-        let invalid_reason =
-            groovestats_submit_invalid_reason(chart, gs.song().has_lua, profile, gs.music_rate());
-        let decision = groovestats_autosubmit_player_decision(GrooveStatsAutosubmitPlayerInput {
-            has_invalid_reason: invalid_reason.is_some(),
+        GrooveStatsGameplaySubmitPlayer {
+            side,
+            slot,
+            chart_hash: chart_hash.to_string(),
+            username: profile.groovestats_username.clone(),
+            profile_name: profile.display_name.clone(),
+            profile_id: profile::active_local_profile_id_for_side(side),
+            itl_score_hundredths: itl::current_score_hundredths_for_submit(gs, player_idx),
+            show_ex_score: profile.show_ex_score,
+            api_key: profile.groovestats_api_key.clone(),
             is_pad_player: profile.groovestats_is_pad_player,
+            invalid_reason: groovestats_submit_invalid_reason(
+                chart,
+                gs.song().has_lua,
+                profile,
+                gs.music_rate(),
+            ),
             song_completed_naturally: gs.song_completed_naturally(),
             is_failing: gs.players()[player_idx].is_failing,
             life: gs.players()[player_idx].life,
             has_fail_time: gs.players()[player_idx].fail_time.is_some(),
             course_stage_life_submit_eligible: gs.course_stage_life_submit_eligible(player_idx),
-            api_key_present: !profile.groovestats_api_key.trim().is_empty(),
-        });
-        match decision.action {
-            GrooveStatsAutosubmitPlayerAction::BuildPayload => {}
-            GrooveStatsAutosubmitPlayerAction::SkipInvalidReason => {
-                if let Some(reason) = invalid_reason {
-                    groovestats_api::warn_submit_skip(
-                        active_groovestats_service_name(),
-                        side,
-                        chart_hash,
-                        reason.as_str(),
-                    );
-                }
-                continue;
-            }
-            GrooveStatsAutosubmitPlayerAction::Skip { log } => {
-                if let Some(log) = log {
-                    groovestats_api::log_player_submit_skip(
-                        active_groovestats_service_name(),
-                        side,
-                        chart_hash,
-                        log,
-                    );
-                }
-                continue;
-            }
+            payload: groovestats_payload_for_player(gs, player_idx),
         }
+    });
 
-        let itl_score_hundredths = itl::current_score_hundredths_for_submit(gs, player_idx);
-        let Some(payload) = groovestats_payload_for_player(gs, player_idx) else {
-            groovestats_api::warn_submit_skip(
-                active_groovestats_service_name(),
-                side,
-                chart_hash,
-                "failed to build submit payload",
-            );
-            continue;
-        };
-        let draft = GrooveStatsSubmitPlayerDraft::new(
-            side,
-            slot,
-            chart_hash.to_string(),
-            profile.groovestats_username.trim().to_string(),
-            profile.display_name.clone(),
-            profile::active_local_profile_id_for_side(side),
-            itl_score_hundredths,
-            profile.show_ex_score,
-            profile.groovestats_api_key.trim().to_string(),
-            payload,
-        );
-        drafts.push(draft);
-    }
-
-    let Some(request) = groovestats_api::begin_submit_request_from_drafts(drafts) else {
-        return;
-    };
-
-    groovestats_api::spawn_submit_request(
-        request,
-        active_groovestats_service(),
-        active_groovestats_service_name(),
+    groovestats_api::submit_gameplay_players(
+        GrooveStatsGameplaySubmitInput {
+            enabled: cfg.enable_groovestats,
+            service: active_groovestats_service(),
+            service_name: active_groovestats_service_name(),
+            player_count: gs.num_players(),
+            autoplay_used: gs.autoplay_used(),
+            is_course_stage: gs.course_display_is_course_stage(),
+            autosubmit_course_scores_individually: cfg.autosubmit_course_scores_individually,
+        },
+        players,
         cache_groovestats_submit_success,
         refresh_groovestats_submit_leaderboards,
     );
@@ -409,25 +249,6 @@ pub fn retry_groovestats_submit(chart_hash: &str, side: profile_data::PlayerSide
         cache_groovestats_submit_success,
         refresh_groovestats_submit_leaderboards,
     )
-}
-
-/// Returns the seconds remaining until the next retry is allowed (manual
-/// cooldown) or scheduled (auto). `Some(0)` means the gate has just elapsed
-/// or the auto-retry is due to fire on the next tick. `None` means no gate
-/// is currently armed (bare `F5 Retry`).
-pub fn groovestats_next_retry_remaining_secs(
-    chart_hash: &str,
-    side: profile_data::PlayerSide,
-) -> Option<u32> {
-    groovestats_api::next_retry_remaining_secs(chart_hash, side)
-}
-
-/// Returns true when the next scheduled retry will be fired automatically by
-/// the tick driver (i.e., the current UI status is auto-retryable AND the
-/// auto-retry budget hasn't been exhausted). When false, any pending
-/// `next_retry_at` is acting purely as a manual F5 cooldown gate.
-pub fn groovestats_next_retry_is_auto(chart_hash: &str, side: profile_data::PlayerSide) -> bool {
-    groovestats_api::next_retry_is_auto(chart_hash, side)
 }
 
 /// Fires any auto-retries whose scheduled time has elapsed. Only fires for

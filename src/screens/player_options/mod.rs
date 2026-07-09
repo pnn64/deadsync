@@ -1,9 +1,6 @@
 use crate::act;
 use crate::assets::i18n::{LookupKey, lookup_key, tr, tr_fmt};
 use crate::assets::{self, AssetManager};
-use crate::game::parsing::noteskin::{
-    self, NUM_QUANTIZATIONS, NoteAnimPart, Noteskin, Quantization, SpriteSlot,
-};
 use crate::screens::components::shared::noteskin_model::noteskin_model_actor;
 use crate::screens::components::shared::screen_bar::{
     self, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
@@ -15,6 +12,9 @@ use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, widescale};
 use deadlib_render::BlendMode;
+use deadsync_assets::noteskin::{
+    self, NUM_QUANTIZATIONS, NoteAnimPart, Noteskin, Quantization, SpriteSlot,
+};
 use deadsync_audio_stream as audio;
 use deadsync_chart::{ChartData, STANDARD_DIFFICULTY_COUNT, SongData};
 use deadsync_input::{InputEvent, VirtualAction};
