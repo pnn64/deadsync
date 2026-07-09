@@ -1747,35 +1747,54 @@ impl App {
                 // the global pack (selected -> basic), then the global `default`
                 // role. `_25` is the baseline both pad layouts render; 16-LED pads
                 // show its outer ring. Each tier picks the BPM-best variant.
+                // Scoped (song/pack folder) gifs are authored by the song and sit
+                // above pack policy, so the selected pack's `CanBeEmpty` does not
+                // affect them.
                 let scoped = song_dir
                     .as_deref()
                     .and_then(|dir| self.resolve_scoped_smx_background(dir, role, song_bpm));
                 scoped.or_else(|| {
-                    let registry = self.smx_gif_registry();
+                    let registry = self.smx_gif_registry().clone();
                     let size = deadsync_smx::gifs::PadSize::Leds25;
-                    let try_role =
-                        |role_str: &str| registry.background(pack_str, role_str, size, song_bpm);
-                    // On results screens, try grade- and difficulty-specific roles
-                    // before the plain role; `results_role_candidates` documents and
-                    // tests the exact order.
-                    let grade_anim = if role == "results" {
-                        eval_grade.and_then(|grade| {
-                            deadsync_smx::panel_fx::results_role_candidates(grade, eval_difficulty)
-                                .iter()
-                                .find_map(|r| try_role(r))
-                        })
+                    // Global-registry role candidates, most specific first: on
+                    // results screens the grade- and difficulty-specific roles
+                    // (`results_role_candidates` documents and tests the exact
+                    // order), then the screen role, then the global `default`
+                    // role. A candidate the selected pack declares under
+                    // `CanBeEmpty` (and doesn't supply) ends the chain with no
+                    // animation at all: the pack opted that name out, so a later
+                    // candidate must not resurrect one.
+                    let mut candidates: Vec<String> = if role == "results" {
+                        eval_grade
+                            .map(|grade| {
+                                deadsync_smx::panel_fx::results_role_candidates(
+                                    grade,
+                                    eval_difficulty,
+                                )
+                            })
+                            .unwrap_or_default()
                     } else {
-                        None
+                        Vec::new()
                     };
-                    let resolved = grade_anim
-                        .or_else(|| registry.background(pack_str, role, size, song_bpm))
-                        .or_else(|| registry.background(pack_str, "default", size, song_bpm));
-                    // Only pack-resolved gifs get tinted; a per-song/pack scoped gif
-                    // (the `scoped` branch above, handled outside this closure) is
-                    // fully authored by the song and left as-is.
-                    resolved.map(|anim| {
-                        self.maybe_tint_smx_background(pack_str, role, eval_difficulty, anim)
-                    })
+                    candidates.push(role.to_owned());
+                    candidates.push("default".to_owned());
+                    for name in &candidates {
+                        if registry.background_declared_empty(pack_str, name, size) {
+                            return None;
+                        }
+                        if let Some(anim) = registry.background(pack_str, name, size, song_bpm) {
+                            // Only pack-resolved gifs get tinted; a per-song/pack
+                            // scoped gif (the `scoped` branch above) is fully
+                            // authored by the song and left as-is.
+                            return Some(self.maybe_tint_smx_background(
+                                pack_str,
+                                role,
+                                eval_difficulty,
+                                anim,
+                            ));
+                        }
+                    }
+                    None
                 })
             });
             let background = anim.map(|anim| {

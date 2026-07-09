@@ -760,11 +760,16 @@ collapse to `common` directly.
 Every pack automatically falls back to `common` for any role it doesn't
 supply (steps 5 and 8) — a pack only has to author what it wants to
 customize. A pack can opt individual roles, or itself entirely, out of this
-via `gifpack.ini` (see §11e); an opted-out missing role shows **solid black**
-on the pad. This is not the same as the pad's own auto-lights: when Panel
-Lights is on the game holds ownership of the LEDs at all times and the
-firmware's built-in animations are suppressed. Auto-lights only resume when
-Panel Lights is turned off.
+via `gifpack.ini` (see §11e). A role the selected pack lists under
+`CanBeEmpty` (and doesn't supply) ends the chain at its step outright: no
+`Fallback` pack, no `common`, and no `default`-role fallback (steps 6-8 are
+skipped) — that role shows no animation at all.
+
+What "no animation" looks like depends on the screen. During gameplay the
+game still owns the pad LEDs (judgement effects may fire), so the background
+is solid black. On every other screen a pad with nothing to show is handed
+back to the firmware, which resumes the pad's own built-in lighting (its
+stored idle and step animations) until the game next takes the LEDs.
 
 The table below lists **role names** (the internal key used for lookup). The
 corresponding filename is `{role}_{size}.gif` — for grade-tagged roles like
@@ -823,6 +828,12 @@ results@F      -->  results  -->  default
 
 So authoring `results_25@A.gif` covers A+, A, and A- automatically unless you
 also provide the `+`/`-` variants.
+
+These grade chains are walked with the same `CanBeEmpty` rule as the main
+resolution chain: a candidate the selected pack lists under `CanBeEmpty` (and
+doesn't supply) stops the walk right there, so e.g. `CanBeEmpty = "results"`
+shows nothing for any grade you didn't author a grade-specific gif for,
+instead of falling through to `default`.
 
 **Difficulty tagging:** any `results@<grade>` role above can also be
 qualified with the difficulty of the chart that earned the grade:
@@ -924,7 +935,7 @@ are ignored).
 | Key | Values | Effect |
 | --- | --- | --- |
 | `Fallback` | any pack name, or `"none"` | Try the named pack (both LED sizes) before falling back to `common`. `"none"` opts the *whole pack* out of the automatic `common` fallback -- every role/judgement this pack doesn't supply shows nothing rather than pulling from `common`. Omitting the key is the default: no extra pack to try, but the automatic `common` fallback still applies. |
-| `CanBeEmpty` | comma-separated list of role or judgement names | These specific names never fall back to anything (not `Fallback`, not `common`) when this pack doesn't supply them -- they show nothing for that name specifically, while every other name still falls back normally. |
+| `CanBeEmpty` | comma-separated list of role or judgement names | These specific names never fall back to anything when this pack doesn't supply them -- not `Fallback`, not `common`, and for background roles not the `default`-role fallback either (the resolution chain stops dead at the listed name). They show nothing for that name specifically, while every other name still falls back normally. |
 | `MatchColorToDifficulty` | comma-separated list of base role names (background packs only, e.g. `"results"`) | Whatever gif actually resolves for that role gets recolored to match the played chart's difficulty color. See "Difficulty color matching" below. |
 | `MergeCommonBPMVariants` | comma-separated list of base role names (background packs only, e.g. `"song_select"`) | Pool this pack's own BPM-tagged variants for that role with `common`'s, instead of using only this pack's own variants. See "Merging BPM variants across packs" below. |
 | `MergeFallbackBPMVariants` | comma-separated list of base role names (background packs only) | Same as `MergeCommonBPMVariants`, but pools with the declared `Fallback` pack's variants instead. No-op if this pack has no `Fallback` declared. |
@@ -983,7 +994,10 @@ for the gameplay role and every other role from `cool-pack` (or `common` if
 events to show no gif at all rather than borrowing `common`'s (or a
 `Fallback` pack's) version -- for example a minimalist judgement pack that
 only lights up misses and mines, and wants everything else to stay dark
-instead of showing `common`'s style for the rest.
+instead of showing `common`'s style for the rest. For background packs the
+opt-out is total: a pack that supplies its own `default` but declares
+`CanBeEmpty = "gameplay"` gets no background during gameplay at all -- the
+`gameplay` role does not slide over to the pack's `default` gif.
 
 **Combining GIFs from more than two packs** is not directly supported beyond
 the automatic `common` step: `Fallback` is a single value pointing to one
