@@ -1,11 +1,11 @@
-use super::media_cache;
 use crate::assets::{AssetManager, open_image_fallback, register_texture_dims};
-use crate::game::profile;
 use deadlib_assets::dynamic;
 use deadlib_render::{SamplerDesc, TextureHandle};
 use deadlib_renderer::{Backend, Texture as RendererTexture};
 use deadlib_video as video;
+use deadsync_assets::media_cache;
 use deadsync_profile as profile_data;
+use deadsync_profile::compat as profile;
 use image::RgbaImage;
 use log::warn;
 use std::{
@@ -59,9 +59,7 @@ struct DynamicBackgroundState {
     key: String,
     path: PathBuf,
     video: Option<video::Player>,
-    video_anchor_gameplay_sec: f32,
-    video_anchor_media_sec: f32,
-    video_rate: f32,
+    video_timing: dynamic::DynamicVideoTiming,
 }
 
 impl DynamicBackgroundState {
@@ -76,34 +74,27 @@ impl DynamicBackgroundState {
             key,
             path,
             video,
-            video_anchor_gameplay_sec: gameplay_time_sec.max(0.0),
-            video_anchor_media_sec: 0.0,
-            video_rate: normalize_video_rate(video_rate),
+            video_timing: dynamic::DynamicVideoTiming::new(gameplay_time_sec, video_rate),
         }
     }
 
     fn video_play_time(&self, gameplay_time_sec: f32) -> f32 {
-        background_video_play_time(
-            gameplay_time_sec,
-            self.video_anchor_gameplay_sec,
-            self.video_anchor_media_sec,
-            self.video_rate,
-        )
+        self.video_timing.play_time(gameplay_time_sec)
     }
 
     fn set_video_rate(&mut self, video_rate: f32, gameplay_time_sec: f32) {
-        let media_time = self.video_play_time(gameplay_time_sec);
-        self.video_anchor_gameplay_sec = gameplay_time_sec.max(0.0);
-        self.video_anchor_media_sec = media_time;
-        self.video_rate = normalize_video_rate(video_rate);
+        self.video_timing.set_rate(video_rate, gameplay_time_sec);
     }
 
     fn restart_video(&mut self, player: video::Player, gameplay_time_sec: f32) {
         if let Some(old) = self.video.replace(player) {
             retire_video_player(old);
         }
-        self.video_anchor_gameplay_sec = gameplay_time_sec.max(0.0);
-        self.video_anchor_media_sec = 0.0;
+        self.video_timing.restart(gameplay_time_sec);
+    }
+
+    fn video_rate(&self) -> f32 {
+        self.video_timing.rate()
     }
 }
 
@@ -702,7 +693,7 @@ impl DynamicMedia {
             self.failed_gameplay_background_key = None;
         }
         let wants_video = animate_video && dynamic::is_dynamic_video_path(path);
-        let video_rate = normalize_video_rate(video_rate);
+        let video_rate = dynamic::normalize_video_rate(video_rate);
 
         if wants_video {
             self.drain_gameplay_background_preps(
@@ -736,7 +727,7 @@ impl DynamicMedia {
                 state.path == path
                     && state.key == desired_key
                     && (state.video.is_some() == wants_video)
-                    && (!wants_video || (state.video_rate - video_rate).abs() <= f32::EPSILON)
+                    && (!wants_video || (state.video_rate() - video_rate).abs() <= f32::EPSILON)
             });
         if current_matches {
             return None;
@@ -754,7 +745,7 @@ impl DynamicMedia {
         }
         if current_path_matches && wants_video {
             if let Some(state) = self.current_dynamic_background.as_mut()
-                && (state.video_rate - video_rate).abs() > f32::EPSILON
+                && (state.video_rate() - video_rate).abs() > f32::EPSILON
             {
                 state.set_video_rate(video_rate, gameplay_time_sec);
             }
@@ -1309,22 +1300,6 @@ fn retire_dynamic_background_state(mut state: DynamicBackgroundState) -> String 
     state.key
 }
 
-#[inline(always)]
-fn normalize_video_rate(rate: f32) -> f32 {
-    if rate.is_finite() { rate.max(0.0) } else { 1.0 }
-}
-
-#[inline(always)]
-fn background_video_play_time(
-    gameplay_time_sec: f32,
-    anchor_gameplay_sec: f32,
-    anchor_media_sec: f32,
-    rate: f32,
-) -> f32 {
-    let elapsed = (gameplay_time_sec.max(0.0) - anchor_gameplay_sec.max(0.0)).max(0.0);
-    (anchor_media_sec.max(0.0) + elapsed * normalize_video_rate(rate)).max(0.0)
-}
-
 impl Default for DynamicMedia {
     fn default() -> Self {
         Self::new()
@@ -1334,32 +1309,6 @@ impl Default for DynamicMedia {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn gameplay_background_video_uses_local_play_time() {
-        assert_eq!(background_video_play_time(12.5, 10.0, 0.0, 1.0), 2.5);
-        assert_eq!(background_video_play_time(9.0, 10.0, 0.0, 1.0), 0.0);
-        assert_eq!(background_video_play_time(12.5, 10.0, 4.0, 0.5), 5.25);
-        assert_eq!(background_video_play_time(20.0, 10.0, 3.0, 0.0), 3.0);
-    }
-
-    #[test]
-    fn gameplay_background_rate_change_preserves_media_time() {
-        let mut state = DynamicBackgroundState::new(
-            "movie.mpg".to_string(),
-            PathBuf::from("movie.mpg"),
-            None,
-            10.0,
-            1.0,
-        );
-        assert_eq!(state.video_play_time(12.0), 2.0);
-
-        state.set_video_rate(0.0, 12.0);
-        assert_eq!(state.video_play_time(20.0), 2.0);
-
-        state.set_video_rate(2.0, 20.0);
-        assert_eq!(state.video_play_time(21.5), 5.0);
-    }
 
     #[test]
     fn shared_dynamic_key_stays_until_last_owner_releases_it() {

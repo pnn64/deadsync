@@ -7,10 +7,10 @@ use super::{
 };
 use crate::assets::visual_styles;
 use crate::config;
-use crate::game::profile;
 use deadlib_platform::dirs;
 use deadlib_present::actors::Actor;
 use deadsync_profile as profile_data;
+use deadsync_profile::compat as profile;
 use log::{debug, info};
 use winit::event_loop::ActiveEventLoop;
 
@@ -38,100 +38,33 @@ pub(super) enum TransitionState {
 }
 
 #[inline(always)]
-const fn machine_startup_screen_enabled(cfg: &config::Config, screen: CurrentScreen) -> bool {
+const fn machine_flow_screen(screen: CurrentScreen) -> Option<config::MachineFlowScreen> {
     match screen {
-        CurrentScreen::SelectProfile => cfg.machine_show_select_profile,
-        CurrentScreen::SelectColor => cfg.machine_show_select_color,
-        CurrentScreen::SelectStyle => cfg.machine_show_select_style,
-        CurrentScreen::SelectPlayMode => cfg.machine_show_select_play_mode,
-        _ => true,
+        CurrentScreen::Menu => Some(config::MachineFlowScreen::Menu),
+        CurrentScreen::SelectProfile => Some(config::MachineFlowScreen::SelectProfile),
+        CurrentScreen::SelectColor => Some(config::MachineFlowScreen::SelectColor),
+        CurrentScreen::SelectStyle => Some(config::MachineFlowScreen::SelectStyle),
+        CurrentScreen::SelectPlayMode => Some(config::MachineFlowScreen::SelectPlayMode),
+        CurrentScreen::ProfileLoad => Some(config::MachineFlowScreen::ProfileLoad),
+        CurrentScreen::EvaluationSummary => Some(config::MachineFlowScreen::EvaluationSummary),
+        CurrentScreen::Initials => Some(config::MachineFlowScreen::Initials),
+        CurrentScreen::GameOver => Some(config::MachineFlowScreen::GameOver),
+        _ => None,
     }
 }
 
 #[inline(always)]
-const fn machine_preferred_style(
-    style: config::MachinePreferredPlayStyle,
-) -> profile_data::PlayStyle {
-    match style {
-        config::MachinePreferredPlayStyle::Single => profile_data::PlayStyle::Single,
-        config::MachinePreferredPlayStyle::Versus => profile_data::PlayStyle::Versus,
-        config::MachinePreferredPlayStyle::Double => profile_data::PlayStyle::Double,
-    }
-}
-
-#[inline(always)]
-const fn machine_preferred_mode(mode: config::MachinePreferredPlayMode) -> profile_data::PlayMode {
-    match mode {
-        config::MachinePreferredPlayMode::Regular => profile_data::PlayMode::Regular,
-        config::MachinePreferredPlayMode::Marathon => profile_data::PlayMode::Marathon,
-    }
-}
-
-fn machine_resolve_startup_target(cfg: &config::Config, target: CurrentScreen) -> CurrentScreen {
-    let order = [
-        CurrentScreen::SelectProfile,
-        CurrentScreen::SelectColor,
-        CurrentScreen::SelectStyle,
-        CurrentScreen::SelectPlayMode,
-    ];
-    let Some(start_idx) = order.iter().position(|screen| *screen == target) else {
-        return target;
-    };
-    for screen in order.iter().skip(start_idx) {
-        if machine_startup_screen_enabled(cfg, *screen) {
-            return *screen;
-        }
-    }
-    CurrentScreen::ProfileLoad
-}
-
-#[inline(always)]
-fn machine_first_post_select_target(cfg: &config::Config) -> CurrentScreen {
-    if cfg.machine_show_eval_summary {
-        CurrentScreen::EvaluationSummary
-    } else if cfg.machine_show_name_entry {
-        CurrentScreen::Initials
-    } else if cfg.machine_show_gameover {
-        CurrentScreen::GameOver
-    } else {
-        CurrentScreen::Menu
-    }
-}
-
-#[inline(always)]
-fn machine_resolve_post_select_target(
-    cfg: &config::Config,
-    target: CurrentScreen,
-) -> CurrentScreen {
-    match target {
-        CurrentScreen::EvaluationSummary => {
-            if cfg.machine_show_eval_summary {
-                CurrentScreen::EvaluationSummary
-            } else if cfg.machine_show_name_entry {
-                CurrentScreen::Initials
-            } else if cfg.machine_show_gameover {
-                CurrentScreen::GameOver
-            } else {
-                CurrentScreen::Menu
-            }
-        }
-        CurrentScreen::Initials => {
-            if cfg.machine_show_name_entry {
-                CurrentScreen::Initials
-            } else if cfg.machine_show_gameover {
-                CurrentScreen::GameOver
-            } else {
-                CurrentScreen::Menu
-            }
-        }
-        CurrentScreen::GameOver => {
-            if cfg.machine_show_gameover {
-                CurrentScreen::GameOver
-            } else {
-                CurrentScreen::Menu
-            }
-        }
-        other => other,
+const fn current_screen_from_machine_flow(screen: config::MachineFlowScreen) -> CurrentScreen {
+    match screen {
+        config::MachineFlowScreen::Menu => CurrentScreen::Menu,
+        config::MachineFlowScreen::SelectProfile => CurrentScreen::SelectProfile,
+        config::MachineFlowScreen::SelectColor => CurrentScreen::SelectColor,
+        config::MachineFlowScreen::SelectStyle => CurrentScreen::SelectStyle,
+        config::MachineFlowScreen::SelectPlayMode => CurrentScreen::SelectPlayMode,
+        config::MachineFlowScreen::ProfileLoad => CurrentScreen::ProfileLoad,
+        config::MachineFlowScreen::EvaluationSummary => CurrentScreen::EvaluationSummary,
+        config::MachineFlowScreen::Initials => CurrentScreen::Initials,
+        config::MachineFlowScreen::GameOver => CurrentScreen::GameOver,
     }
 }
 
@@ -350,7 +283,8 @@ impl App {
             && target == CurrentScreen::Menu
             && !self.state.session.played_stages.is_empty()
         {
-            target = machine_first_post_select_target(&cfg);
+            target =
+                current_screen_from_machine_flow(config::machine_first_post_select_target(&cfg));
             self.state.session.pending_post_select_summary_exit =
                 target == CurrentScreen::EvaluationSummary;
         } else if target == CurrentScreen::EvaluationSummary {
@@ -373,9 +307,17 @@ impl App {
                 | CurrentScreen::ProfileLoad
         );
         if startup_flow {
-            target = machine_resolve_startup_target(&cfg, target);
+            if let Some(route) = machine_flow_screen(target) {
+                target = current_screen_from_machine_flow(config::machine_resolve_startup_target(
+                    &cfg, route,
+                ));
+            }
         }
-        target = machine_resolve_post_select_target(&cfg, target);
+        if let Some(route) = machine_flow_screen(target) {
+            target = current_screen_from_machine_flow(config::machine_resolve_post_select_target(
+                &cfg, route,
+            ));
+        }
         if startup_flow {
             if !cfg.machine_show_select_style
                 && matches!(
@@ -383,13 +325,14 @@ impl App {
                     CurrentScreen::SelectPlayMode | CurrentScreen::ProfileLoad
                 )
             {
-                let play_style = machine_preferred_style(cfg.machine_preferred_style);
+                let play_style =
+                    profile_data::play_style_from_machine_preference(cfg.machine_preferred_style);
                 profile::set_session_play_style(play_style);
                 self.state.session.preferred_difficulty_index =
                     profile::get().last_played(play_style).difficulty_index;
             }
             if !cfg.machine_show_select_play_mode && target == CurrentScreen::ProfileLoad {
-                profile::set_session_play_mode(machine_preferred_mode(
+                profile::set_session_play_mode(profile_data::play_mode_from_machine_preference(
                     cfg.machine_preferred_play_mode,
                 ));
             }

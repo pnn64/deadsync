@@ -1,10 +1,10 @@
 use crate::act;
 use crate::assets::{FontRole, current_machine_font_key};
-use crate::game::profile;
 use crate::screens::components::shared::pad_display;
 use deadlib_present::actors::Actor;
 use deadlib_present::space::{screen_width, widescale};
 use deadsync_profile as profile_data;
+use deadsync_profile::compat as profile;
 
 pub fn build_label(text: String) -> Actor {
     act!(text:

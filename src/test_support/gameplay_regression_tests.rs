@@ -151,7 +151,7 @@ use deadsync_rules::judgment::{self, JudgeGrade, Judgment, TimingWindow};
 use deadsync_rules::note::{MAX_HOLD_LIFE, TIMING_WINDOW_SECONDS_HOLD, TIMING_WINDOW_SECONDS_ROLL};
 pub use deadsync_rules::scroll::ScrollSpeedSetting;
 
-pub use crate::game::{
+pub use crate::{
     GameplayProfile, gameplay_play_style_from_profile, gameplay_player_side_from_profile,
     gameplay_tick_mode_from_profile, profile_side_from_gameplay, profile_tick_mode_from_gameplay,
 };
@@ -392,7 +392,6 @@ mod tests {
         max_step_distance_ns, process_input_edges, refresh_active_attack_masks,
         song_time_ns_from_seconds,
     };
-    use crate::game::profile;
     use crate::screens::gameplay as screen_gameplay;
     use deadsync_assets::noteskin::{self, Noteskin};
     use deadsync_assets::song_lua::{SongLuaOverlayKind, compile_song_lua};
@@ -405,6 +404,7 @@ mod tests {
     use deadsync_input::{InputEvent, VirtualAction};
     use deadsync_noteskin::{ReceptorGlowBehavior, ReceptorStepBehavior, Style, TweenType};
     use deadsync_profile as profile_data;
+    use deadsync_profile::compat as profile;
     use deadsync_rules::judgment::{self, JudgeGrade, Judgment, TimingWindow};
     use deadsync_rules::note::{HoldData, HoldResult, MineResult, Note};
     use deadsync_rules::timing::{DelaySegment, TimingData, TimingSegments};
@@ -447,7 +447,7 @@ mod tests {
     ) -> Vec<deadsync_gameplay::AttackMaskWindow> {
         deadsync_gameplay::build_attack_mask_windows_for_player(
             chart_attacks,
-            crate::game::gameplay_attack_mode(attack_mode),
+            crate::gameplay_attack_mode(attack_mode),
             player,
             base_seed,
             song_length_seconds,

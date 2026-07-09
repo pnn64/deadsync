@@ -1,11 +1,11 @@
 use crate::assets::AssetManager;
-use crate::game::profile;
 use crate::screens::components::gameplay::gameplay_stats;
 use crate::screens::gameplay as gameplay_screen;
 use crate::test_support::{compose_scenarios, notefield_bench};
 use deadlib_present::actors::Actor;
 use deadlib_present::space::screen_center_x;
 use deadsync_profile as profile_data;
+use deadsync_profile::compat as profile;
 use deadsync_rules::timing::WindowCounts;
 use deadsync_score::{
     ArrowCloudPaneKind, CachedPlayerLeaderboardData, LeaderboardEntry, LeaderboardPane,

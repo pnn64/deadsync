@@ -2,7 +2,10 @@ pub mod arrowcloud;
 pub mod downloads;
 pub mod groovestats;
 pub mod lobbies;
+pub mod player_leaderboards;
 pub mod runtime;
+pub mod score_compat;
+pub mod score_import;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OnlineRequestError {

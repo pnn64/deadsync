@@ -3,10 +3,6 @@ use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::sprite_sheet_dims;
 use crate::assets::{FontRole, current_machine_font_key, visual_styles};
-use crate::game::{
-    GameplayProfile, profile, profile_side_from_gameplay, profile_tick_mode_from_gameplay,
-    score_display_mode_from_profile, scores, scroll_effects_from_option,
-};
 use crate::screens::components::gameplay::{gameplay_stats, notefield, step_stats_gifs};
 use crate::screens::components::shared::banner as shared_banner;
 use crate::screens::components::shared::gs_scorebox;
@@ -15,6 +11,14 @@ use crate::screens::components::shared::noteskin_model::noteskin_model_actor_fro
 use crate::screens::components::shared::noteskin_model::{ModelMeshCache, ModelMeshCacheStats};
 use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenBarParams};
 use crate::screens::{Screen, ScreenAction};
+use crate::{
+    GameplayProfile, SongLuaRuntimeOverlayStateDelta, gameplay_pack_data,
+    gameplay_runtime_profile_data, profile_side_from_gameplay, profile_tick_mode_from_gameplay,
+    score_display_mode_from_profile, scroll_effects_from_option, song_lua_compile_context,
+    song_lua_overlay_delta_mask, song_lua_runtime_column_offset_windows,
+    song_lua_runtime_ease_windows, song_lua_runtime_mod_windows,
+    song_lua_runtime_overlay_ease_window,
+};
 use deadlib_present::actors::{Actor, SizeSpec, SpriteSource, TextAttribute, TextContent};
 use deadlib_present::anim::EffectState;
 use deadlib_present::cache::{TextCache, cached_text};
@@ -29,16 +33,14 @@ use deadlib_present::space::{
 use deadlib_render::{BlendMode, INVALID_TMESH_CACHE_KEY, MeshVertex, TexturedMeshVertex};
 use deadsync_assets::noteskin::{self, Noteskin, SpriteSlot};
 use deadsync_assets::song_lua::{
-    CompiledSongLua, SongLuaCapturedActor, SongLuaCompileContext, SongLuaDifficulty,
-    SongLuaOverlayActor, SongLuaOverlayBlendMode, SongLuaOverlayCommandBlock, SongLuaOverlayKind,
-    SongLuaOverlayMeshVertex, SongLuaOverlayMessageCommand, SongLuaOverlayModelDraw,
-    SongLuaOverlayModelLayer, SongLuaOverlayState, SongLuaOverlayStateDelta, SongLuaPlayerContext,
-    SongLuaProxyTarget, SongLuaSpeedMod, SongLuaTextGlowMode, compile_song_lua,
+    CompiledSongLua, SongLuaCapturedActor, SongLuaOverlayActor, SongLuaOverlayBlendMode,
+    SongLuaOverlayCommandBlock, SongLuaOverlayKind, SongLuaOverlayMeshVertex,
+    SongLuaOverlayMessageCommand, SongLuaOverlayModelDraw, SongLuaOverlayModelLayer,
+    SongLuaOverlayState, SongLuaOverlayStateDelta, SongLuaProxyTarget, SongLuaTextGlowMode,
+    compile_song_lua,
 };
-use deadsync_chart::background::expand_random_background_changes;
 use deadsync_chart::{
     ChartData, GameplayChartData, SongBackgroundChange, SongBackgroundChangeTarget, SongData,
-    SyncPref,
 };
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_core::song_time::song_time_ns_to_seconds;
@@ -46,17 +48,14 @@ use deadsync_gameplay::{
     AUTOSYNC_OFFSET_SAMPLE_COUNT, AutosyncMode, CourseDisplayCarry, CourseDisplayTiming,
     CourseDisplayTotals, CrossoverRow, ExitTransitionKind, FantasticWindowOptions, GameplayAction,
     GameplayAudioCommand, GameplayAudioSnapshot, GameplayConfig, GameplayExit,
-    GameplayInputPlayStyle, GameplayInputPlayerSide, GameplayMiniIndicatorData, GameplayMusicCut,
-    GameplayNoteskinData, GameplayNoteskinEffects, GameplayReceptorGlowBehavior,
-    GameplayReceptorStepBehavior, GameplaySession, GameplaySessionCommand,
-    GameplayStreamClockSnapshot, GameplayTween, GameplayViewport, HoldToExitKey, LeadInTiming,
-    MINE_EXPLOSION_DURATION, RECEPTOR_STEP_WINDOWS, RECEPTOR_Y_OFFSET_FROM_CENTER,
-    RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, ReplayInputEdge, ReplayOffsetSnapshot,
-    SongLuaCompilePlayStyle, SongLuaOverlayMessageRuntime, TAP_EXPLOSION_WINDOWS,
+    GameplayMiniIndicatorData, GameplayMusicCut, GameplayNoteskinData, GameplayNoteskinEffects,
+    GameplayReceptorGlowBehavior, GameplayReceptorStepBehavior, GameplaySession,
+    GameplaySessionCommand, GameplayStreamClockSnapshot, GameplayTween, GameplayViewport,
+    HoldToExitKey, LeadInTiming, MINE_EXPLOSION_DURATION, RECEPTOR_STEP_WINDOWS,
+    RECEPTOR_Y_OFFSET_FROM_CENTER, RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, ReplayInputEdge,
+    ReplayOffsetSnapshot, SongLuaOverlayMessageRuntime, TAP_EXPLOSION_WINDOWS,
     autosync_mode_status_line, blue_fantastic_window_ms, build_crossover_rows,
-    exit_transition_alpha, gameplay_is_single_p2_side, gameplay_runtime_charts, handle_core_input,
-    scroll_receptor_y,
-    song_lua_compile_player_screen_x as gameplay_song_lua_compile_player_screen_x,
+    exit_transition_alpha, gameplay_runtime_charts, handle_core_input, scroll_receptor_y,
     song_lua_ease_factor, spacing_multiplier_for_percent, update_core,
 };
 use deadsync_input::{InputEvent, VirtualAction};
@@ -65,7 +64,9 @@ use deadsync_noteskin::{
     ModelDrawState, ReceptorGlowBehavior, ReceptorStepBehavior, Style, TweenType,
 };
 use deadsync_online::lobbies as lobby_data;
+use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
+use deadsync_profile::compat as profile;
 use deadsync_rules::note::Note;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::TimingSegments;
@@ -80,13 +81,11 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 
-pub use crate::game::GameplayCoreState;
+pub use crate::GameplayCoreState;
 
 const TEXT_CACHE_LIMIT: usize = 8192;
 type SongLuaOverlayEaseWindowRuntime =
     deadsync_gameplay::SongLuaOverlayEaseWindowRuntime<SongLuaRuntimeOverlayStateDelta>;
-type SongLuaRuntimeOverlayStateDelta =
-    deadsync_gameplay::SongLuaRuntimeOverlayStateDelta<SongLuaOverlayStateDelta>;
 
 #[derive(Clone, Debug)]
 pub(crate) struct GameplayCompiledSongLua {
@@ -148,423 +147,6 @@ fn player_blue_window_ms(state: &GameplayCoreState, player_idx: usize) -> f32 {
         }),
         fa_plus_10ms_blue_window: profile.fa_plus_10ms_blue_window,
     })
-}
-
-#[inline(always)]
-fn song_lua_difficulty_from_chart(difficulty: &str) -> SongLuaDifficulty {
-    if difficulty.eq_ignore_ascii_case("beginner") {
-        SongLuaDifficulty::Beginner
-    } else if difficulty.eq_ignore_ascii_case("easy") || difficulty.eq_ignore_ascii_case("basic") {
-        SongLuaDifficulty::Easy
-    } else if difficulty.eq_ignore_ascii_case("medium")
-        || difficulty.eq_ignore_ascii_case("standard")
-    {
-        SongLuaDifficulty::Medium
-    } else if difficulty.eq_ignore_ascii_case("hard")
-        || difficulty.eq_ignore_ascii_case("difficult")
-    {
-        SongLuaDifficulty::Hard
-    } else if difficulty.eq_ignore_ascii_case("edit") {
-        SongLuaDifficulty::Edit
-    } else {
-        SongLuaDifficulty::Challenge
-    }
-}
-
-#[inline(always)]
-const fn song_lua_speedmod_from_setting(speed: ScrollSpeedSetting) -> SongLuaSpeedMod {
-    match speed {
-        ScrollSpeedSetting::XMod(value) => SongLuaSpeedMod::X(value),
-        ScrollSpeedSetting::CMod(value) => SongLuaSpeedMod::C(value),
-        ScrollSpeedSetting::MMod(value) => SongLuaSpeedMod::M(value),
-    }
-}
-
-#[inline(always)]
-const fn song_lua_compile_play_style(
-    play_style: GameplayInputPlayStyle,
-) -> SongLuaCompilePlayStyle {
-    match play_style {
-        GameplayInputPlayStyle::Single => SongLuaCompilePlayStyle::Single,
-        GameplayInputPlayStyle::Versus => SongLuaCompilePlayStyle::Versus,
-        GameplayInputPlayStyle::Double => SongLuaCompilePlayStyle::Double,
-    }
-}
-
-const fn song_lua_runtime_time_unit(
-    unit: deadsync_song_lua::SongLuaTimeUnit,
-) -> deadsync_gameplay::SongLuaRuntimeTimeUnit {
-    match unit {
-        deadsync_song_lua::SongLuaTimeUnit::Beat => deadsync_gameplay::SongLuaRuntimeTimeUnit::Beat,
-        deadsync_song_lua::SongLuaTimeUnit::Second => {
-            deadsync_gameplay::SongLuaRuntimeTimeUnit::Second
-        }
-    }
-}
-
-const fn song_lua_runtime_span_mode(
-    span_mode: deadsync_song_lua::SongLuaSpanMode,
-) -> deadsync_gameplay::SongLuaRuntimeSpanMode {
-    match span_mode {
-        deadsync_song_lua::SongLuaSpanMode::Len => deadsync_gameplay::SongLuaRuntimeSpanMode::Len,
-        deadsync_song_lua::SongLuaSpanMode::End => deadsync_gameplay::SongLuaRuntimeSpanMode::End,
-    }
-}
-
-fn song_lua_runtime_ease_target(
-    target: &deadsync_song_lua::SongLuaEaseTarget,
-) -> deadsync_gameplay::SongLuaRuntimeEaseTargetOwned {
-    match target {
-        deadsync_song_lua::SongLuaEaseTarget::Mod(target_name) => {
-            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Mod(target_name.clone())
-        }
-        deadsync_song_lua::SongLuaEaseTarget::PlayerX => {
-            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Player(
-                deadsync_gameplay::SongLuaEaseMaskTarget::PlayerX,
-            )
-        }
-        deadsync_song_lua::SongLuaEaseTarget::PlayerY => {
-            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Player(
-                deadsync_gameplay::SongLuaEaseMaskTarget::PlayerY,
-            )
-        }
-        deadsync_song_lua::SongLuaEaseTarget::PlayerZ => {
-            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Player(
-                deadsync_gameplay::SongLuaEaseMaskTarget::PlayerZ,
-            )
-        }
-        deadsync_song_lua::SongLuaEaseTarget::PlayerRotationX => {
-            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Player(
-                deadsync_gameplay::SongLuaEaseMaskTarget::PlayerRotationX,
-            )
-        }
-        deadsync_song_lua::SongLuaEaseTarget::PlayerRotationY => {
-            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Player(
-                deadsync_gameplay::SongLuaEaseMaskTarget::PlayerRotationY,
-            )
-        }
-        deadsync_song_lua::SongLuaEaseTarget::PlayerRotationZ => {
-            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Player(
-                deadsync_gameplay::SongLuaEaseMaskTarget::PlayerRotationZ,
-            )
-        }
-        deadsync_song_lua::SongLuaEaseTarget::PlayerSkewX => {
-            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Player(
-                deadsync_gameplay::SongLuaEaseMaskTarget::PlayerSkewX,
-            )
-        }
-        deadsync_song_lua::SongLuaEaseTarget::PlayerSkewY => {
-            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Player(
-                deadsync_gameplay::SongLuaEaseMaskTarget::PlayerSkewY,
-            )
-        }
-        deadsync_song_lua::SongLuaEaseTarget::PlayerZoom => {
-            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Player(
-                deadsync_gameplay::SongLuaEaseMaskTarget::PlayerZoom,
-            )
-        }
-        deadsync_song_lua::SongLuaEaseTarget::PlayerZoomX => {
-            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Player(
-                deadsync_gameplay::SongLuaEaseMaskTarget::PlayerZoomX,
-            )
-        }
-        deadsync_song_lua::SongLuaEaseTarget::PlayerZoomY => {
-            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Player(
-                deadsync_gameplay::SongLuaEaseMaskTarget::PlayerZoomY,
-            )
-        }
-        deadsync_song_lua::SongLuaEaseTarget::PlayerZoomZ => {
-            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Player(
-                deadsync_gameplay::SongLuaEaseMaskTarget::PlayerZoomZ,
-            )
-        }
-        deadsync_song_lua::SongLuaEaseTarget::Function => {
-            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Function
-        }
-    }
-}
-
-pub(crate) fn song_lua_runtime_mod_windows(
-    windows: &[deadsync_song_lua::SongLuaModWindow],
-) -> Vec<deadsync_gameplay::SongLuaRuntimeModWindow> {
-    windows
-        .iter()
-        .map(|window| deadsync_gameplay::SongLuaRuntimeModWindow {
-            player: window.player,
-            unit: song_lua_runtime_time_unit(window.unit),
-            start: window.start,
-            limit: window.limit,
-            span_mode: song_lua_runtime_span_mode(window.span_mode),
-            mods: window.mods.clone(),
-        })
-        .collect()
-}
-
-pub(crate) fn song_lua_runtime_ease_windows(
-    windows: &[deadsync_song_lua::SongLuaEaseWindow],
-) -> Vec<deadsync_gameplay::SongLuaRuntimeEaseWindow> {
-    windows
-        .iter()
-        .map(|window| deadsync_gameplay::SongLuaRuntimeEaseWindow {
-            player: window.player,
-            unit: song_lua_runtime_time_unit(window.unit),
-            start: window.start,
-            limit: window.limit,
-            span_mode: song_lua_runtime_span_mode(window.span_mode),
-            target: song_lua_runtime_ease_target(&window.target),
-            from: window.from,
-            to: window.to,
-            easing: window.easing.clone(),
-            sustain: window.sustain,
-            opt1: window.opt1,
-            opt2: window.opt2,
-        })
-        .collect()
-}
-
-pub(crate) fn song_lua_runtime_column_offset_windows(
-    windows: &[deadsync_song_lua::SongLuaColumnOffsetWindow],
-) -> Vec<deadsync_gameplay::SongLuaRuntimeColumnOffsetWindow> {
-    windows
-        .iter()
-        .map(
-            |window| deadsync_gameplay::SongLuaRuntimeColumnOffsetWindow {
-                player: window.player,
-                unit: song_lua_runtime_time_unit(window.unit),
-                start: window.start,
-                limit: window.limit,
-                span_mode: song_lua_runtime_span_mode(window.span_mode),
-                column: window.column,
-                from_y: window.from_y,
-                to_y: window.to_y,
-                easing: window.easing.clone(),
-                sustain: window.sustain,
-                opt1: window.opt1,
-                opt2: window.opt2,
-            },
-        )
-        .collect()
-}
-
-fn song_lua_overlay_delta_mask(
-    delta: &SongLuaOverlayStateDelta,
-) -> deadsync_gameplay::SongLuaOverlayDeltaMask {
-    let mut mask = 0u128;
-    let mut bit = 0u32;
-    macro_rules! field {
-        ($field:ident) => {{
-            if delta.$field.is_some() {
-                mask |= 1u128 << bit;
-            }
-            bit += 1;
-        }};
-    }
-
-    field!(x);
-    field!(y);
-    field!(z);
-    field!(z_bias);
-    field!(draw_order);
-    field!(draw_by_z_position);
-    field!(halign);
-    field!(valign);
-    field!(text_align);
-    field!(uppercase);
-    field!(shadow_len);
-    field!(shadow_color);
-    field!(glow);
-    field!(fov);
-    field!(vanishpoint);
-    field!(diffuse);
-    field!(vertex_colors);
-    field!(visible);
-    field!(cropleft);
-    field!(cropright);
-    field!(croptop);
-    field!(cropbottom);
-    field!(fadeleft);
-    field!(faderight);
-    field!(fadetop);
-    field!(fadebottom);
-    field!(mask_source);
-    field!(mask_dest);
-    field!(depth_test);
-    field!(zoom);
-    field!(zoom_x);
-    field!(zoom_y);
-    field!(zoom_z);
-    field!(basezoom);
-    field!(basezoom_x);
-    field!(basezoom_y);
-    field!(basezoom_z);
-    field!(rot_x_deg);
-    field!(rot_y_deg);
-    field!(rot_z_deg);
-    field!(skew_x);
-    field!(skew_y);
-    field!(blend);
-    field!(vibrate);
-    field!(effect_magnitude);
-    field!(effect_clock);
-    field!(effect_mode);
-    field!(effect_color1);
-    field!(effect_color2);
-    field!(effect_period);
-    field!(effect_offset);
-    field!(effect_timing);
-    field!(rainbow);
-    field!(rainbow_scroll);
-    field!(text_jitter);
-    field!(text_distortion);
-    field!(text_glow_mode);
-    field!(mult_attrs_with_diffuse);
-    field!(sprite_animate);
-    field!(sprite_loop);
-    field!(sprite_playback_rate);
-    field!(sprite_state_delay);
-    field!(sprite_state_index);
-    field!(vert_spacing);
-    field!(wrap_width_pixels);
-    field!(max_width);
-    field!(max_height);
-    field!(max_w_pre_zoom);
-    field!(max_h_pre_zoom);
-    field!(max_dimension_uses_zoom);
-    field!(texture_filtering);
-    field!(texture_wrapping);
-    field!(texcoord_offset);
-    field!(custom_texture_rect);
-    field!(texcoord_velocity);
-    field!(size);
-    field!(stretch_rect);
-    field!(sound_play);
-
-    let _ = bit;
-    mask
-}
-
-fn song_lua_runtime_overlay_state_delta(
-    delta: SongLuaOverlayStateDelta,
-) -> SongLuaRuntimeOverlayStateDelta {
-    SongLuaRuntimeOverlayStateDelta {
-        overlap_mask: song_lua_overlay_delta_mask(&delta),
-        delta,
-    }
-}
-
-fn song_lua_runtime_overlay_ease_window(
-    ease: &deadsync_song_lua::SongLuaOverlayEase,
-) -> deadsync_gameplay::SongLuaRuntimeOverlayEaseWindow<SongLuaRuntimeOverlayStateDelta> {
-    deadsync_gameplay::SongLuaRuntimeOverlayEaseWindow {
-        overlay_index: ease.overlay_index,
-        unit: song_lua_runtime_time_unit(ease.unit),
-        start: ease.start,
-        limit: ease.limit,
-        span_mode: song_lua_runtime_span_mode(ease.span_mode),
-        sustain: ease.sustain,
-        from: song_lua_runtime_overlay_state_delta(ease.from),
-        to: song_lua_runtime_overlay_state_delta(ease.to),
-        easing: ease.easing.clone(),
-        opt1: ease.opt1,
-        opt2: ease.opt2,
-    }
-}
-
-fn song_lua_compile_player_screen_x(
-    num_players: usize,
-    player_index: usize,
-    profile: &profile_data::Profile,
-    viewport: GameplayViewport,
-    play_style: GameplayInputPlayStyle,
-    player_side: GameplayInputPlayerSide,
-    center_1player_notefield: bool,
-) -> f32 {
-    gameplay_song_lua_compile_player_screen_x(
-        num_players,
-        player_index,
-        viewport,
-        song_lua_compile_play_style(play_style),
-        gameplay_is_single_p2_side(play_style, player_side),
-        profile.note_field_offset_x as f32,
-        center_1player_notefield,
-    )
-}
-
-pub(crate) fn song_lua_compile_context(
-    song: &SongData,
-    charts: &[Arc<ChartData>; MAX_PLAYERS],
-    num_players: usize,
-    player_profiles: &[profile_data::Profile; MAX_PLAYERS],
-    scroll_speed: &[ScrollSpeedSetting; MAX_PLAYERS],
-    music_rate: f32,
-    machine_global_offset_seconds: f32,
-    viewport: GameplayViewport,
-    session: &GameplaySession,
-    center_1player_notefield: bool,
-) -> SongLuaCompileContext {
-    let play_style = session.play_style;
-    let player_side = session.player_side;
-    let mut context = SongLuaCompileContext::new(
-        song.simfile_path
-            .parent()
-            .map(|path| path.to_path_buf())
-            .unwrap_or_default(),
-        song.title.clone(),
-    );
-    context.song_display_bpms =
-        song.display_bpm_pair_or(charts.first().map(|chart| chart.as_ref()), [60.0, 60.0]);
-    context.song_music_rate = if music_rate.is_finite() && music_rate > 0.0 {
-        music_rate
-    } else {
-        1.0
-    };
-    context.music_length_seconds = song.music_length_seconds.max(song.precise_last_second());
-    context.style_name = match play_style {
-        GameplayInputPlayStyle::Single => "single",
-        GameplayInputPlayStyle::Versus => "versus",
-        GameplayInputPlayStyle::Double => "double",
-    }
-    .to_string();
-    context.global_offset_seconds = machine_global_offset_seconds;
-    context.screen_width = viewport.width();
-    context.screen_height = viewport.height();
-    context.confusion_offset_available = true;
-    context.confusion_available = true;
-    context.amod_available = false;
-    context.players = std::array::from_fn(|player| SongLuaPlayerContext {
-        enabled: player < num_players,
-        difficulty: if player < num_players {
-            song_lua_difficulty_from_chart(&charts[player].difficulty)
-        } else {
-            SongLuaDifficulty::default_enabled()
-        },
-        display_bpms: if player < num_players {
-            song.display_bpm_pair_or(Some(charts[player].as_ref()), [60.0, 60.0])
-        } else {
-            [60.0, 60.0]
-        },
-        speedmod: if player < num_players {
-            song_lua_speedmod_from_setting(scroll_speed[player])
-        } else {
-            SongLuaSpeedMod::default()
-        },
-        noteskin_name: if player < num_players {
-            player_profiles[player].noteskin.to_string()
-        } else {
-            profile_data::NoteSkin::default().to_string()
-        },
-        screen_x: song_lua_compile_player_screen_x(
-            num_players,
-            player,
-            &player_profiles[player],
-            viewport,
-            play_style,
-            player_side,
-            center_1player_notefield,
-        ),
-        screen_y: viewport.center_y(),
-    });
-    context
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1137,44 +719,6 @@ impl DerefMut for State {
     }
 }
 
-fn song_pack_group(song: &SongData) -> Arc<str> {
-    Arc::from(
-        song.simfile_path
-            .parent()
-            .and_then(|p| p.parent())
-            .and_then(|p| p.file_name())
-            .and_then(|s| s.to_str())
-            .unwrap_or("")
-            .to_owned(),
-    )
-}
-
-fn gameplay_pack_data(
-    song: &SongData,
-    course_display_info: Option<&CourseDisplayInfo>,
-    course_banner_path: Option<&PathBuf>,
-) -> (Arc<str>, Option<PathBuf>, SyncPref) {
-    let pack_group = song_pack_group(song);
-    let mut pack_banner_path = None;
-    let mut sync_pref = SyncPref::Default;
-    if !pack_group.is_empty()
-        && let Some(pack) = deadsync_simfile::runtime_cache::get_song_cache()
-            .iter()
-            .find(|pack| pack.group_name == pack_group.as_ref())
-    {
-        pack_banner_path = pack.banner_path.clone();
-        sync_pref = pack.sync_pref;
-    }
-    if let Some(course_info) = course_display_info {
-        return (
-            course_info.name.clone(),
-            course_banner_path.cloned(),
-            sync_pref,
-        );
-    }
-    (pack_group, pack_banner_path, sync_pref)
-}
-
 fn mini_indicator_personal_best_percent(
     chart_hash: &str,
     side: profile_data::PlayerSide,
@@ -1263,17 +807,6 @@ fn gameplay_scorebox_data(
         );
     }
     data
-}
-
-pub(crate) fn gameplay_runtime_profile_data(
-    player_profiles: &[profile_data::Profile; MAX_PLAYERS],
-    session: &GameplaySession,
-) -> [profile_data::Profile; MAX_PLAYERS] {
-    let mut runtime_profiles = (*player_profiles).clone();
-    if session.p2_runtime_player() {
-        runtime_profiles[0] = runtime_profiles[1].clone();
-    }
-    runtime_profiles
 }
 
 pub(crate) fn gameplay_crossover_annotations_for_player(
@@ -1568,27 +1101,14 @@ fn gameplay_song_lua_data(
     }
 }
 
-fn extend_song_lua_sound_paths(out: &mut Vec<PathBuf>, paths: &[PathBuf]) {
-    for path in paths {
-        if !out.contains(path) {
-            out.push(path.clone());
-        }
-    }
-}
-
 fn song_lua_sound_paths(data: &GameplaySongLuaData) -> Vec<PathBuf> {
-    let mut out = Vec::new();
-    if let Some(primary) = data.primary.as_ref() {
-        extend_song_lua_sound_paths(&mut out, &primary.compiled.sound_paths);
-    }
-    for layer in data
-        .background_layers
-        .iter()
-        .chain(data.foreground_layers.iter())
-    {
-        extend_song_lua_sound_paths(&mut out, &layer.compiled.sound_paths);
-    }
-    out
+    deadsync_song_lua::compiled_song_lua_sound_paths(
+        data.primary
+            .iter()
+            .map(|primary| &primary.compiled)
+            .chain(data.background_layers.iter().map(|layer| &layer.compiled))
+            .chain(data.foreground_layers.iter().map(|layer| &layer.compiled)),
+    )
 }
 
 fn build_song_lua_actor_message_events_for_commands(
@@ -2240,28 +1760,6 @@ fn build_song_lua_runtime_windows_for_data(
     )
 }
 
-fn build_background_changes(
-    song: &SongData,
-    gameplay_chart: &GameplayChartData,
-    random_movie_paths: Vec<PathBuf>,
-) -> Vec<SongBackgroundChange> {
-    if random_movie_paths.is_empty() {
-        return song.background_changes.clone();
-    }
-    let seed_text = song
-        .simfile_path
-        .parent()
-        .map(|path| path.to_string_lossy())
-        .unwrap_or_else(|| song.simfile_path.to_string_lossy());
-    expand_random_background_changes(
-        song,
-        &gameplay_chart.timing,
-        &gameplay_chart.timing_segments,
-        random_movie_paths,
-        seed_text.as_ref(),
-    )
-}
-
 fn random_background_movies_enabled() -> bool {
     matches!(
         crate::config::get().random_background_mode,
@@ -2321,12 +1819,19 @@ pub fn init(
     } else {
         &gameplay_charts[0]
     };
-    let background_changes = build_background_changes(&song, background_chart, random_movie_paths);
-    let (pack_group, pack_banner_path, pack_sync_pref) = gameplay_pack_data(
+    let background_changes = deadsync_simfile::app_runtime::gameplay_background_changes(
         &song,
-        course_display_info.as_ref(),
+        background_chart,
+        random_movie_paths,
+    );
+    let pack_data = gameplay_pack_data(
+        &song,
+        course_display_info.as_ref().map(|info| &info.name),
         course_banner_path.as_ref(),
     );
+    let pack_group = pack_data.pack_group;
+    let pack_banner_path = pack_data.pack_banner_path;
+    let pack_sync_pref = pack_data.sync_pref;
     let mini_indicator_data =
         gameplay_mini_indicator_data(&runtime_charts, &runtime_profile_data, &session);
     let scorebox_data = gameplay_scorebox_data(&runtime_charts, &runtime_profile_data, &session);
@@ -2712,17 +2217,9 @@ fn lobby_disconnect_hold_elapsed(state: &State) -> Option<f32> {
     .max_by(f32::total_cmp)
 }
 
-fn lobby_player_on_screen(player: &lobby_data::LobbyPlayer, screen_name: &str) -> bool {
-    player.screen_name.eq_ignore_ascii_case(screen_name)
-}
-
-fn gameplay_requires_lobby_wait_for(joined: Option<&lobby_data::JoinedLobby>) -> bool {
-    joined.is_some()
-}
-
 fn gameplay_requires_lobby_wait() -> bool {
     let snapshot = deadsync_online::lobbies::runtime_snapshot();
-    gameplay_requires_lobby_wait_for(snapshot.joined_lobby.as_ref())
+    lobby_data::gameplay_lobby_wait_required(snapshot.joined_lobby.as_ref())
 }
 
 fn gameplay_lobby_wait_text_for(
@@ -2734,20 +2231,14 @@ fn gameplay_lobby_wait_text_for(
         return Some(text.to_string());
     }
 
-    let all_in_gameplay = !joined.players.is_empty()
-        && joined
-            .players
-            .iter()
-            .all(|player| lobby_player_on_screen(player, "ScreenGameplay"));
-    let all_ready = !joined.players.is_empty() && joined.players.iter().all(|player| player.ready);
-    if all_in_gameplay && all_ready {
-        return None;
-    }
-
-    let mut message = if all_in_gameplay {
-        tr("Lobby", "WaitingForReadyUp").to_string()
-    } else {
-        tr("Lobby", "WaitingForSync").to_string()
+    let mut message = match lobby_data::gameplay_lobby_wait_status(joined, "ScreenGameplay") {
+        lobby_data::GameplayLobbyWaitStatus::Ready => return None,
+        lobby_data::GameplayLobbyWaitStatus::WaitingForReadyUp => {
+            tr("Lobby", "WaitingForReadyUp").to_string()
+        }
+        lobby_data::GameplayLobbyWaitStatus::WaitingForSync => {
+            tr("Lobby", "WaitingForSync").to_string()
+        }
     };
     if !local_players_ready {
         message.push('\n');
@@ -2870,7 +2361,7 @@ pub fn drain_core_session_commands(state: &mut GameplayCoreState) {
     for command in state.drain_session_commands() {
         match command {
             GameplaySessionCommand::SetTimingTickMode(mode) => {
-                crate::game::profile::set_session_timing_tick_mode(
+                deadsync_profile::compat::set_session_timing_tick_mode(
                     profile_tick_mode_from_gameplay(mode),
                 );
             }
@@ -12166,10 +11657,8 @@ mod tests {
             player_profiles[1].show_ex_score = true;
             player_profiles[1].groovestats_username = "p2-user".to_string();
             let session = GameplaySession {
-                play_style: crate::game::gameplay_play_style_from_profile(play_style),
-                player_side: crate::game::gameplay_player_side_from_profile(
-                    profile_data::PlayerSide::P2,
-                ),
+                play_style: crate::gameplay_play_style_from_profile(play_style),
+                player_side: crate::gameplay_player_side_from_profile(profile_data::PlayerSide::P2),
                 joined_sides: [false, true],
                 active_profile_ids: [None, Some("p2-profile".to_string())],
                 ..GameplaySession::default()
@@ -15566,7 +15055,7 @@ mod tests {
     #[test]
     fn gameplay_requires_wait_for_solo_joined_lobby() {
         let joined = test_joined_lobby(vec![test_lobby_player("ScreenGameplay", false)]);
-        assert!(gameplay_requires_lobby_wait_for(Some(&joined)));
+        assert!(lobby_data::gameplay_lobby_wait_required(Some(&joined)));
     }
 
     #[test]

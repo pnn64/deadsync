@@ -7,6 +7,10 @@ pub use deadsync_smx::SmxPadPreset;
 pub use crate::app_config::{Config, DisplayMode};
 pub use crate::defaults::*;
 pub use crate::folders::AdditionalSongFolder;
+pub use crate::frame_pacing::{
+    MAX_LOGIC_DT_PER_FRAME, TAB_FAST_MULTIPLIER, TAB_SLOW_DIVISOR, advance_redraw_deadline,
+    apply_tab_acceleration, frame_interval_for_max_fps,
+};
 pub use crate::ini::SimpleIni;
 pub use crate::keybinds::{
     clear_keymap_binding_saved as clear_keymap_binding, editable_key_binding_slot_indices,
@@ -16,6 +20,10 @@ pub use crate::keybinds::{
 };
 pub use crate::machine::{
     DEFAULT_FRAME_STATS_OVERLAY_ANCHOR, DEFAULT_FRAME_STATS_OVERLAY_STYLE, DEFAULT_MACHINE_NOTESKIN,
+};
+pub use crate::navigation::{
+    MachineFlowScreen, machine_first_post_select_target, machine_resolve_post_select_target,
+    machine_resolve_startup_target, machine_startup_screen_enabled,
 };
 pub use crate::null_or_die::{
     clamp_null_or_die_confidence_percent, clamp_null_or_die_magic_offset_ms,

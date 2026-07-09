@@ -1,11 +1,12 @@
 use crate::act;
 use crate::assets;
 use crate::config::{self, SrpgVariant};
-use crate::game::{profile, scores};
 use deadlib_present::actors::Actor;
 use deadlib_present::cache::{TextCache, cached_text};
 use deadlib_present::color;
+use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
+use deadsync_profile::compat as profile;
 use deadsync_score as score_data;
 use deadsync_theme::scorebox as scorebox_theme;
 use deadsync_theme::scorebox::{

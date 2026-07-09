@@ -1,18 +1,17 @@
 use super::{App, CurrentScreen, ShellState};
 use crate::act;
 use crate::assets;
-use crate::game::profile;
 use crate::screens::evaluation;
-use chrono::{Datelike, Local};
 use deadlib_platform::dirs;
 use deadlib_present::actors::Actor;
 use deadlib_present::space;
 use deadlib_render::TextureHandleMap;
+use deadsync_assets::screenshot as screenshot_data;
 use deadsync_profile as profile_data;
+use deadsync_profile::compat as profile;
 use deadsync_score as score_data;
 use log::{info, warn};
 use std::error::Error;
-use std::path::PathBuf;
 use std::time::Instant;
 
 const SCREENSHOT_FLASH_ATTACK_SECONDS: f32 = 0.02;
@@ -27,28 +26,6 @@ const SCREENSHOT_PREVIEW_GLOW_PERIOD_SECONDS: f32 = 0.5;
 const SCREENSHOT_PREVIEW_GLOW_ALPHA: f32 = 0.2;
 const SCREENSHOT_PREVIEW_BORDER_PX: f32 = 4.0;
 const SCREENSHOT_PREVIEW_Z: i16 = 32010;
-
-const MONTH_NAMES: [&str; 12] = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-];
-
-fn sanitize_song_title(title: &str) -> String {
-    title
-        .chars()
-        .map(|c| if c.is_alphanumeric() { c } else { '_' })
-        .collect()
-}
 
 fn current_song_title(state: &super::AppState) -> Option<(String, Option<u32>)> {
     match state.screens.current_screen {
@@ -115,54 +92,6 @@ pub(super) fn should_auto_screenshot_eval(eval: &evaluation::State, mask: u8) ->
     false
 }
 
-fn save_screenshot_image(
-    image: &image::RgbaImage,
-    song_info: Option<(&str, Option<u32>)>,
-) -> Result<PathBuf, Box<dyn Error>> {
-    let root = dirs::app_dirs().screenshots_dir();
-    let now = Local::now();
-    let month_idx = now.month0() as usize;
-    let month_name = MONTH_NAMES.get(month_idx).copied().unwrap_or("Unknown");
-    let dir =
-        root.join(format!("{:04}", now.year()))
-            .join(format!("{:02}-{}", now.month(), month_name));
-    std::fs::create_dir_all(&dir)?;
-
-    let stamp = now.format("%Y-%m-%d_%H%M%S").to_string();
-    let title_part = song_info
-        .map(|(title, meter)| {
-            let title = sanitize_song_title(title);
-            match meter {
-                Some(m) if m > 0 => format!("__{m}__{title}"),
-                _ => format!("__{title}"),
-            }
-        })
-        .filter(|t| !t.is_empty())
-        .unwrap_or_default();
-
-    let mut path = dir.join(format!("{stamp}{title_part}.png"));
-    let mut suffix = 1_u32;
-    while path.exists() {
-        path = dir.join(format!("{stamp}{title_part}-{suffix:02}.png"));
-        suffix = suffix.saturating_add(1);
-        if suffix > 9_999 {
-            return Err(
-                std::io::Error::other("Failed to allocate unique screenshot filename").into(),
-            );
-        }
-    }
-
-    image.save_with_format(&path, image::ImageFormat::Png)?;
-    Ok(path)
-}
-
-#[inline(always)]
-fn set_opaque_alpha(image: &mut image::RgbaImage) {
-    for pixel in image.pixels_mut() {
-        pixel.0[3] = 255;
-    }
-}
-
 impl ShellState {
     #[inline(always)]
     fn screenshot_flash_alpha(&self, now: Instant) -> f32 {
@@ -201,10 +130,15 @@ impl App {
         match capture_result {
             Ok(mut image) => {
                 // Screen captures should be opaque to avoid viewer-side alpha compositing.
-                set_opaque_alpha(&mut image);
+                screenshot_data::set_opaque_alpha(&mut image);
                 let song_info = current_song_title(&self.state);
                 let song_info_ref = song_info.as_ref().map(|(t, m)| (t.as_str(), *m));
-                match save_screenshot_image(&image, song_info_ref) {
+                let screenshot_root = dirs::app_dirs().screenshots_dir();
+                match screenshot_data::save_screenshot_image(
+                    &screenshot_root,
+                    &image,
+                    song_info_ref,
+                ) {
                     Ok(path) => {
                         self.state.shell.screenshot_flash_started_at = Some(now);
 

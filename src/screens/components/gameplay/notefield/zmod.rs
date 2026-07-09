@@ -1,4 +1,4 @@
-use crate::game::GameplayCoreState as State;
+use crate::GameplayCoreState as State;
 use deadsync_gameplay::PlayerRuntime;
 use deadsync_notefield::{
     MiniIndicatorColorStyle, MiniIndicatorMode, MiniIndicatorProgress, MiniIndicatorScoreType,

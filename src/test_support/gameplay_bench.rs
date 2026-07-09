@@ -1,11 +1,11 @@
 use crate::assets::AssetManager;
-use crate::game::profile;
 use crate::screens::gameplay as gameplay_screen;
 use crate::test_support::{compose_scenarios, notefield_bench};
 use deadlib_present::actors::Actor;
 use deadlib_render::MeshVertex;
 use deadsync_gameplay::AutosyncMode;
 use deadsync_profile as profile_data;
+use deadsync_profile::compat as profile;
 use std::sync::Arc;
 
 pub const SCENARIO_NAME: &str = "gameplay";

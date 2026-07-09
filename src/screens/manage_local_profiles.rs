@@ -3,7 +3,6 @@ use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::visual_styles;
 use crate::assets::{FontRole, current_machine_font_key};
-use crate::game::{profile, scores};
 use crate::screens::components::shared::loading_bar;
 use crate::screens::components::shared::screen_bar::{
     self, ScreenBarPosition, ScreenBarTitlePlacement,
@@ -22,7 +21,9 @@ use deadsync_import::detect::{
 };
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
+use deadsync_profile::compat as profile;
 use deadsync_simfile::runtime_cache::get_song_cache;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

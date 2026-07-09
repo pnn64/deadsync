@@ -1,9 +1,9 @@
 use crate::act;
-use crate::game::profile;
 use deadlib_present::actors::Actor;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_online::lobbies;
 use deadsync_profile as profile_data;
+use deadsync_profile::compat as profile;
 use std::cmp::Ordering;
 
 const PANEL_WIDTH: f32 = 200.0;

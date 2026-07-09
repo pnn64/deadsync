@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use deadlib_platform::dirs;
+use deadsync_config::prelude as config;
 use log::{debug, info, warn};
 
 use crate::pad_config::{self, PadConfigProfile};
@@ -131,6 +132,32 @@ pub fn cache_logged_gs_score_for_id(
     );
 }
 
+pub fn cache_gs_score_from_leaderboard_import<F>(
+    profile_id: &str,
+    username: &str,
+    chart_hash: &str,
+    imported: deadsync_score::ImportedPlayerScore,
+    chart_stats: F,
+) where
+    F: FnOnce(&deadsync_score::ImportedPlayerScore) -> Option<deadsync_score::GsLampChartStats>,
+{
+    let stats = chart_stats(&imported);
+    let Some(cached) = deadsync_score::cached_score_from_leaderboard_import(
+        Some(imported),
+        cached_local_itg_score_for_id(profile_id, chart_hash),
+        stats,
+    ) else {
+        return;
+    };
+    cache_logged_gs_score_for_id(
+        profile_id,
+        chart_hash,
+        cached.score,
+        username,
+        cached.score_proves_nonquint_ex,
+    );
+}
+
 pub fn cached_ac_scores_for_id(
     profile_id: &str,
     chart_hash: &str,
@@ -154,6 +181,27 @@ pub fn cached_ac_chart_hashes_with_itg_for_id(profile_id: &str) -> HashSet<Strin
     deadsync_score::runtime_read_logged_ac_chart_hashes_with_itg_for_profile(
         profile_id,
         score_profile_paths_for_id,
+    )
+}
+
+pub fn collect_score_import_chart_hashes(
+    endpoint: deadsync_score::ScoreImportEndpoint,
+    song_cache: &[deadsync_chart::SongPack],
+    pack_groups_filter: &[String],
+    profile_id: &str,
+    only_missing_scores: bool,
+) -> Vec<(String, Vec<String>)> {
+    let existing_scores = match (endpoint, only_missing_scores) {
+        (deadsync_score::ScoreImportEndpoint::ArrowCloud, true) => {
+            cached_ac_chart_hashes_with_itg_for_id(profile_id)
+        }
+        (_, true) => cached_gs_chart_hashes_for_id(profile_id),
+        (_, false) => HashSet::new(),
+    };
+    deadsync_score::collect_chart_hashes_per_pack_for_import(
+        song_cache,
+        pack_groups_filter,
+        &existing_scores,
     )
 }
 
@@ -246,6 +294,10 @@ pub fn cached_local_pass_rate_for_id(profile_id: &str, chart_hash: &str) -> Opti
     )
 }
 
+pub fn cached_local_pass_rate_with_profile(chart_hash: &str, profile_id: &str) -> Option<u32> {
+    cached_local_pass_rate_for_id(profile_id, chart_hash)
+}
+
 pub fn cached_best_itg_score_for_id(
     profile_id: &str,
     chart_hash: &str,
@@ -255,6 +307,13 @@ pub fn cached_best_itg_score_for_id(
         chart_hash,
         score_profile_paths_for_id,
     )
+}
+
+pub fn cached_best_itg_score_with_profile(
+    chart_hash: &str,
+    profile_id: &str,
+) -> Option<deadsync_score::CachedScore> {
+    cached_best_itg_score_for_id(profile_id, chart_hash)
 }
 
 pub fn cached_best_itg_score_for_side(
@@ -553,6 +612,22 @@ pub fn set_cached_itl_file_for_id(profile_id: &str, data: deadsync_score::ItlFil
     deadsync_score::runtime_set_itl_score_file(profile_id, data);
 }
 
+pub fn save_itl_gameplay_players<L>(
+    players: impl IntoIterator<Item = deadsync_score::ItlGameplaySavePlayer>,
+    log_skip: L,
+) -> Vec<deadsync_score::ItlGameplaySaveProgress>
+where
+    L: FnMut(deadsync_score::ItlGameplaySaveSkip<'_>),
+{
+    deadsync_score::save_itl_gameplay_players(
+        players,
+        read_itl_file_for_id,
+        write_itl_file_for_id,
+        set_cached_itl_file_for_id,
+        log_skip,
+    )
+}
+
 pub fn ensure_itl_score_cache_loaded_for_id(profile_id: &str) {
     deadsync_score::runtime_ensure_itl_score_profile_loaded(profile_id, read_itl_file_for_id);
 }
@@ -594,6 +669,31 @@ pub fn cached_itl_score_for_song_assume_loaded(
     profile_id: Option<&str>,
 ) -> Option<deadsync_score::CachedItlScore> {
     deadsync_score::runtime_cached_itl_song_score_assume_loaded(song, profile_id)
+}
+
+fn cached_itl_chart_no_cmod_for_song(
+    profile_id: &str,
+    song_dir: Option<&str>,
+    group_name: Option<&str>,
+    chart_hash: &str,
+    subtitle: &str,
+) -> Option<bool> {
+    deadsync_score::cached_itl_chart_no_cmod_for_song(
+        profile_id, song_dir, group_name, chart_hash, subtitle,
+    )
+}
+
+pub fn should_warn_itl_cmod(
+    profile_id: Option<&str>,
+    song_dir: Option<&str>,
+    group_name: Option<&str>,
+    chart_hash: &str,
+    subtitle: &str,
+) -> bool {
+    let cached_no_cmod = profile_id.and_then(|profile_id| {
+        cached_itl_chart_no_cmod_for_song(profile_id, song_dir, group_name, chart_hash, subtitle)
+    });
+    deadsync_score::itl_should_warn_cmod_context(cached_no_cmod, group_name, subtitle)
 }
 
 pub fn ensure_itl_wheel_caches_loaded_for_id(profile_id: &str) {
@@ -682,6 +782,78 @@ pub fn cached_online_itl_self_score_for_side(chart_hash: &str, side: PlayerSide)
     let api_key = crate::runtime_groovestats_api_key_for_side(side);
     let profile_id = crate::runtime_active_local_profile_id_for_side(side);
     cached_online_itl_self_score_for_key(chart_hash, profile_id.as_deref(), &api_key)
+}
+
+pub struct ItlWheelSideCache {
+    profile_id: Option<Arc<str>>,
+    api_key: String,
+    leaderboard_snapshot: deadsync_score::GameplayScoreboxProfileSnapshot,
+}
+
+impl ItlWheelSideCache {
+    pub fn for_side(
+        side: PlayerSide,
+        profile_id: Option<Arc<str>>,
+        leaderboard_snapshot: deadsync_score::GameplayScoreboxProfileSnapshot,
+    ) -> Self {
+        Self {
+            profile_id,
+            api_key: crate::runtime_groovestats_api_key_for_side(side),
+            leaderboard_snapshot,
+        }
+    }
+
+    pub fn leaderboard_snapshot(&self) -> &deadsync_score::GameplayScoreboxProfileSnapshot {
+        &self.leaderboard_snapshot
+    }
+
+    pub fn cached_local_itl_score(
+        &self,
+        song: &deadsync_chart::SongData,
+    ) -> Option<deadsync_score::CachedItlScore> {
+        cached_itl_score_for_song_assume_loaded(song, self.profile_id.as_deref())
+    }
+
+    pub fn cached_self_ex_score(&self, chart_hash: &str) -> Option<u32> {
+        cached_online_itl_self_score_for_key_assume_loaded(
+            chart_hash,
+            self.profile_id.as_deref(),
+            &self.api_key,
+        )
+    }
+
+    pub fn cached_srpg_self_score(&self, chart_hash: &str) -> Option<u32> {
+        deadsync_score::runtime_cached_player_leaderboard_srpg_self_score(
+            chart_hash,
+            &self.leaderboard_snapshot,
+        )
+    }
+
+    pub fn cached_tournament_rank(&self, chart_hash: &str) -> Option<u32> {
+        deadsync_score::runtime_cached_player_leaderboard_itl_self_rank(
+            chart_hash,
+            &self.leaderboard_snapshot,
+        )
+        .or_else(|| {
+            cached_online_itl_self_rank_for_key_assume_loaded(
+                chart_hash,
+                self.profile_id.as_deref(),
+                &self.api_key,
+            )
+        })
+    }
+}
+
+pub fn cached_itl_tournament_rank_for_side(
+    chart_hash: &str,
+    side: PlayerSide,
+    leaderboard_snapshot: &deadsync_score::GameplayScoreboxProfileSnapshot,
+) -> Option<u32> {
+    deadsync_score::runtime_cached_player_leaderboard_itl_self_rank(
+        chart_hash,
+        leaderboard_snapshot,
+    )
+    .or_else(|| cached_online_itl_self_rank_for_side(chart_hash, side))
 }
 
 pub fn cached_itl_tournament_overall_ranks_for_side(
@@ -796,6 +968,30 @@ pub fn update_machine_default_noteskin(
     crate::runtime_update_guest_profile_noteskin(setting);
 }
 
+#[inline(always)]
+pub fn machine_default_noteskin_value() -> NoteSkin {
+    NoteSkin::new(&config::machine_default_noteskin())
+}
+
+/// Machine-default pad-light brightness used to seed a new profile, mirroring
+/// `machine_default_noteskin_value`. Players adjust their own value afterwards.
+#[inline(always)]
+pub fn machine_default_light_brightness() -> u8 {
+    config::get().smx_default_light_brightness
+}
+
+pub fn machine_default_noteskin() -> NoteSkin {
+    machine_default_noteskin_value()
+}
+
+pub fn update_machine_default_noteskin_from_config(setting: NoteSkin) {
+    update_machine_default_noteskin(
+        &config::machine_default_noteskin(),
+        setting,
+        config::update_machine_default_noteskin,
+    );
+}
+
 pub fn load_profile_for_side(
     side: PlayerSide,
     machine_default_noteskin: NoteSkin,
@@ -886,6 +1082,41 @@ pub fn load_profile_for_side(
     info!("Profile configuration files updated with default values for any missing fields.");
 }
 
+pub fn load_profiles(
+    default_profiles: [Option<String>; PLAYER_SLOTS],
+    update_default_profiles: impl FnOnce(Option<String>, Option<String>),
+    machine_default_noteskin: NoteSkin,
+    machine_default_light_brightness: u8,
+    save_profile_ini: fn(PlayerSide),
+    save_profile_stats: fn(PlayerSide),
+) {
+    crate::update::set_profile_update_persistence_callbacks(save_profile_ini, save_profile_stats);
+    migrate_local_profiles(default_profiles.clone(), update_default_profiles);
+    restore_default_profiles(default_profiles);
+    load_profile_for_side(
+        PlayerSide::P1,
+        machine_default_noteskin.clone(),
+        machine_default_light_brightness,
+    );
+    load_profile_for_side(
+        PlayerSide::P2,
+        machine_default_noteskin,
+        machine_default_light_brightness,
+    );
+}
+
+pub fn load_profiles_from_config() {
+    let (p1, p2) = config::default_profiles();
+    load_profiles(
+        [p1, p2],
+        config::update_default_profiles,
+        machine_default_noteskin_value(),
+        machine_default_light_brightness(),
+        save_profile_ini_for_side,
+        save_profile_stats_for_side,
+    );
+}
+
 pub fn scan_local_profiles() -> Vec<LocalProfileSummary> {
     crate::scan_local_profile_summaries(&profiles_root())
 }
@@ -895,6 +1126,13 @@ pub fn default_local_profile_options(
     pad_light_brightness: u8,
 ) -> (PlayerOptionsData, PlayerOptionsData) {
     crate::default_player_options_with_machine_settings(noteskin, pad_light_brightness)
+}
+
+pub fn default_local_profile_options_from_config() -> (PlayerOptionsData, PlayerOptionsData) {
+    default_local_profile_options(
+        machine_default_noteskin_value(),
+        machine_default_light_brightness(),
+    )
 }
 
 pub fn default_profile_for_side(
@@ -916,6 +1154,16 @@ pub fn default_local_profile_id_for_side(
     }
 }
 
+pub fn default_profile_for_side_from_config(side: PlayerSide) -> ActiveProfile {
+    let (p1, p2) = config::default_profiles();
+    default_profile_for_side([p1, p2], side)
+}
+
+pub fn default_local_profile_id_for_side_from_config(side: PlayerSide) -> Option<String> {
+    let (p1, p2) = config::default_profiles();
+    default_local_profile_id_for_side([p1, p2], side)
+}
+
 pub fn update_default_profile_for_side(
     default_profiles: [Option<String>; PLAYER_SLOTS],
     side: PlayerSide,
@@ -926,6 +1174,29 @@ pub fn update_default_profile_for_side(
         is_local_profile_id(id) && local_profile_dir(id).is_dir()
     });
     update_default_profiles(defaults[0].clone(), defaults[1].clone());
+}
+
+pub fn update_default_profile_for_side_from_config(side: PlayerSide, profile: ActiveProfile) {
+    let (p1, p2) = config::default_profiles();
+    update_default_profile_for_side([p1, p2], side, &profile, config::update_default_profiles);
+}
+
+#[inline(always)]
+pub fn gameplay_side_for_player(num_players: usize, player_idx: usize) -> PlayerSide {
+    crate::side_for_gameplay_player(
+        num_players,
+        player_idx,
+        crate::runtime_session_player_side(),
+    )
+}
+
+#[inline(always)]
+pub fn active_local_profile_id_for_gameplay_player(
+    num_players: usize,
+    player_idx: usize,
+) -> Option<(PlayerSide, String)> {
+    let side = gameplay_side_for_player(num_players, player_idx);
+    crate::runtime_active_local_profile_id_for_side(side).map(|profile_id| (side, profile_id))
 }
 
 pub fn update_default_profiles_from_selection(
@@ -942,6 +1213,45 @@ pub fn smx_gif_packs<T: Copy>(
     parse: impl FnMut(&str) -> T,
 ) -> ([T; PLAYER_SLOTS], [T; PLAYER_SLOTS]) {
     crate::runtime_smx_pack_names_for_profiles(machine_bg, machine_judge, parse)
+}
+
+pub fn smx_gif_packs_from_config(
+    machine_bg: config::SmxPackName,
+    machine_judge: config::SmxPackName,
+) -> (
+    [config::SmxPackName; PLAYER_SLOTS],
+    [config::SmxPackName; PLAYER_SLOTS],
+) {
+    smx_gif_packs(machine_bg, machine_judge, config::SmxPackName::parse)
+}
+
+pub fn scorebox_profile_snapshot_from_config(
+    player_profile: &Profile,
+    side_joined: bool,
+    persistent_profile_id: Option<String>,
+) -> deadsync_score::GameplayScoreboxProfileSnapshot {
+    let cfg = config::get();
+    crate::scorebox_profile_snapshot(
+        player_profile,
+        side_joined,
+        cfg.enable_groovestats,
+        cfg.enable_arrowcloud,
+        cfg.auto_populate_gs_scores,
+        persistent_profile_id,
+    )
+}
+
+pub fn is_groovestats_active_for_side_from_config(side: PlayerSide) -> bool {
+    crate::groovestats_side_active(
+        config::get().enable_groovestats,
+        crate::runtime_session_side_joined(side),
+        &crate::runtime_profile_for_side(side).groovestats_api_key,
+    )
+}
+
+#[inline(always)]
+pub fn groovestats_score_service_allowed() -> bool {
+    config::get().enable_groovestats
 }
 
 pub fn toggle_favorite(side: PlayerSide, chart_hash: &str) -> bool {
@@ -962,28 +1272,50 @@ pub fn toggle_pack_favorite(side: PlayerSide, pack_name: &str) -> bool {
     )
 }
 
-pub fn set_active_profile_for_side(
+pub fn set_active_profile_for_side_with_defaults(
     side: PlayerSide,
     profile: ActiveProfile,
-    mut load_side: impl FnMut(PlayerSide),
+    machine_default_noteskin: NoteSkin,
+    machine_default_light_brightness: u8,
 ) -> Profile {
     if !crate::runtime_set_active_profile_for_side(side, profile) {
         return crate::runtime_profile_for_side(side);
     }
-    load_side(side);
+    load_profile_for_side(
+        side,
+        machine_default_noteskin,
+        machine_default_light_brightness,
+    );
     crate::runtime_profile_for_side(side)
 }
 
-pub fn set_active_profiles(
+pub fn set_active_profile_for_side_from_config(
+    side: PlayerSide,
+    profile: ActiveProfile,
+) -> Profile {
+    set_active_profile_for_side_with_defaults(
+        side,
+        profile,
+        machine_default_noteskin_value(),
+        machine_default_light_brightness(),
+    )
+}
+
+pub fn set_active_profiles_with_defaults(
     profiles: [ActiveProfile; PLAYER_SLOTS],
     default_profiles: [Option<String>; PLAYER_SLOTS],
     update_default_profiles: impl FnOnce(Option<String>, Option<String>),
-    mut load_side: impl FnMut(PlayerSide),
+    machine_default_noteskin: NoteSkin,
+    machine_default_light_brightness: u8,
 ) -> [Profile; PLAYER_SLOTS] {
     let changed = crate::runtime_set_active_profiles(profiles);
     for side in [PlayerSide::P1, PlayerSide::P2] {
         if changed[player_side_index(side)] {
-            load_side(side);
+            load_profile_for_side(
+                side,
+                machine_default_noteskin.clone(),
+                machine_default_light_brightness,
+            );
         }
     }
     update_default_profiles_from_selection(default_profiles, update_default_profiles);
@@ -993,22 +1325,50 @@ pub fn set_active_profiles(
     ]
 }
 
-pub fn load_default_profiles_for_joined_sides(
+pub fn set_active_profiles_from_config(
+    p1: ActiveProfile,
+    p2: ActiveProfile,
+) -> [Profile; PLAYER_SLOTS] {
+    let (p1_default, p2_default) = config::default_profiles();
+    set_active_profiles_with_defaults(
+        [p1, p2],
+        [p1_default, p2_default],
+        config::update_default_profiles,
+        machine_default_noteskin_value(),
+        machine_default_light_brightness(),
+    )
+}
+
+pub fn load_default_profiles_for_joined_sides_with_defaults(
     default_profiles: [Option<String>; PLAYER_SLOTS],
-    mut load_side: impl FnMut(PlayerSide),
+    machine_default_noteskin: NoteSkin,
+    machine_default_light_brightness: u8,
 ) -> [Profile; PLAYER_SLOTS] {
     let changed = crate::runtime_restore_joined_default_profiles(&default_profiles, |id| {
         local_profile_dir(id).is_dir()
     });
     for side in [PlayerSide::P1, PlayerSide::P2] {
         if changed[player_side_index(side)] {
-            load_side(side);
+            load_profile_for_side(
+                side,
+                machine_default_noteskin.clone(),
+                machine_default_light_brightness,
+            );
         }
     }
     [
         crate::runtime_profile_for_side(PlayerSide::P1),
         crate::runtime_profile_for_side(PlayerSide::P2),
     ]
+}
+
+pub fn load_default_profiles_for_joined_sides_from_config() -> [Profile; PLAYER_SLOTS] {
+    let (p1, p2) = config::default_profiles();
+    load_default_profiles_for_joined_sides_with_defaults(
+        [p1, p2],
+        machine_default_noteskin_value(),
+        machine_default_light_brightness(),
+    )
 }
 
 pub fn create_local_profile(
@@ -1030,6 +1390,17 @@ pub fn create_local_profile(
         result.default_profiles[1].clone(),
     );
     Ok(result.id)
+}
+
+pub fn create_local_profile_from_config(display_name: &str) -> Result<String, std::io::Error> {
+    let (p1_default, p2_default) = config::default_profiles();
+    create_local_profile(
+        display_name,
+        machine_default_noteskin_value(),
+        machine_default_light_brightness(),
+        [p1_default, p2_default],
+        config::update_default_profiles,
+    )
 }
 
 pub fn create_local_profile_from_import(
@@ -1068,11 +1439,12 @@ pub fn rename_local_profile(id: &str, display_name: &str) -> Result<(), std::io:
     Ok(())
 }
 
-pub fn delete_local_profile(
+pub fn delete_local_profile_with_defaults(
     id: &str,
     default_profiles: [Option<String>; PLAYER_SLOTS],
     update_default_profiles: impl FnOnce(Option<String>, Option<String>),
-    mut load_side: impl FnMut(PlayerSide),
+    machine_default_noteskin: NoteSkin,
+    machine_default_light_brightness: u8,
 ) -> Result<(), std::io::Error> {
     let result = crate::runtime_delete_local_profile(&local_profile_dir(id), id, default_profiles)?;
     update_default_profiles(
@@ -1081,11 +1453,26 @@ pub fn delete_local_profile(
     );
     for side in [PlayerSide::P1, PlayerSide::P2] {
         if result.changed_sides[player_side_index(side)] {
-            load_side(side);
+            load_profile_for_side(
+                side,
+                machine_default_noteskin.clone(),
+                machine_default_light_brightness,
+            );
         }
     }
 
     Ok(())
+}
+
+pub fn delete_local_profile_from_config(id: &str) -> Result<(), std::io::Error> {
+    let (p1_default, p2_default) = config::default_profiles();
+    delete_local_profile_with_defaults(
+        id,
+        [p1_default, p2_default],
+        config::update_default_profiles,
+        machine_default_noteskin_value(),
+        machine_default_light_brightness(),
+    )
 }
 
 pub fn load_pad_configs(profile_id: &str) -> Vec<PadConfigProfile> {
@@ -1340,4 +1727,124 @@ pub fn mark_packs_known<'a>(profile_ids: &[String], pack_names: impl IntoIterato
 
 pub fn write_imported_favorites(profile_id: &str, hashes: &HashSet<String>) {
     crate::merge_imported_favorites_dir(&local_profile_dir(profile_id), hashes);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::mpsc;
+    use std::time::Instant;
+
+    #[test]
+    fn player_leaderboard_cache_exposes_srpg_self_score() {
+        let snapshot = deadsync_score::scorebox_snapshot(
+            true,
+            false,
+            true,
+            true,
+            false,
+            false,
+            "gs-key",
+            "",
+            "PerfectTaste",
+            Some("profile-1".to_string()),
+        );
+        let key =
+            deadsync_score::player_leaderboard_cache_key("deadbeef", &snapshot).expect("cache key");
+        deadsync_score::runtime_seed_player_leaderboard_entry(
+            key.clone(),
+            deadsync_score::PlayerLeaderboardCacheEntry {
+                value: deadsync_score::PlayerLeaderboardCacheValue::Ready(
+                    deadsync_score::PlayerLeaderboardData {
+                        panes: Vec::new(),
+                        srpg_self_score: Some(9_910),
+                        itl_self_score: None,
+                        itl_self_rank: None,
+                    },
+                ),
+                max_entries: 5,
+                refreshed_at: Instant::now(),
+                retry_after: None,
+            },
+        );
+
+        assert_eq!(
+            deadsync_score::runtime_cached_player_leaderboard_srpg_self_score(
+                "deadbeef", &snapshot
+            ),
+            Some(9_910)
+        );
+
+        deadsync_score::runtime_remove_player_leaderboard_entry(&key);
+    }
+
+    #[test]
+    fn wheel_score_read_does_not_deadlock_with_leaderboard_worker() {
+        let profile_id = "test-deadlock-wheel-profile";
+        let chart_hash = "feedface";
+        let seeded = deadsync_score::CachedScore {
+            grade: deadsync_score::Grade::Tier01,
+            score_percent: 0.9123,
+            lamp_index: Some(2),
+            lamp_judge_count: Some(7),
+        };
+        // Seed every cache the read path consults so it never hits disk and the
+        // `ensure_*_loaded` helpers become no-ops during the run.
+        seed_session_local_itg_score_for_id(profile_id, chart_hash, seeded);
+        seed_session_gs_score_for_id(profile_id, chart_hash, seeded);
+        ensure_score_caches_loaded_for_id(profile_id);
+
+        let stop = Arc::new(AtomicBool::new(false));
+
+        // Worker: reproduce the pre-fix lock order
+        // (leaderboard -> LOCAL -> GS -> AC). If the wheel read
+        // ever again held a score cache across the leaderboard lock, this
+        // ordering would close the cycle and deadlock.
+        let worker_stop = Arc::clone(&stop);
+        let worker = std::thread::spawn(move || {
+            while !worker_stop.load(Ordering::Relaxed) {
+                let lb = deadsync_score::runtime_lock_player_leaderboard_cache();
+                let caches = deadsync_score::runtime_lock_score_caches();
+                drop((caches, lb));
+            }
+        });
+
+        // Wheel: the fixed read path, hammered on a watchdog-guarded thread.
+        const ITERS: usize = 20_000;
+        let (done_tx, done_rx) = mpsc::channel();
+        let wheel_profile = profile_id.to_string();
+        let wheel_chart = chart_hash.to_string();
+        let wheel = std::thread::spawn(move || {
+            let mut last = None;
+            for _ in 0..ITERS {
+                last = cached_best_itg_score_with_profile(&wheel_chart, &wheel_profile);
+            }
+            let _ = done_tx.send(last);
+        });
+
+        let result = done_rx.recv_timeout(std::time::Duration::from_secs(30));
+        stop.store(true, Ordering::Relaxed);
+
+        match result {
+            Ok(last) => {
+                wheel.join().expect("wheel thread panicked");
+                worker.join().expect("worker thread panicked");
+                assert_eq!(
+                    last,
+                    Some(seeded),
+                    "wheel read returned an unexpected merged score"
+                );
+            }
+            Err(_) => {
+                // The wheel thread is blocked on a lock; joining would hang, so
+                // we deliberately leak it and fail loudly. This is the deadlock.
+                panic!(
+                    "song-wheel score read deadlocked against the leaderboard worker \
+                     no progress within 30s"
+                );
+            }
+        }
+    }
 }

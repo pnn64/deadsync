@@ -1134,7 +1134,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.4.2262"
+version = "0.4.2328"
 dependencies = [
  "bincode",
  "bitflags 2.13.0",
@@ -1225,11 +1225,13 @@ dependencies = [
 name = "deadsync-assets"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "deadlib-assets",
  "deadlib-platform",
  "deadlib-present",
  "deadlib-render",
  "deadlib-renderer",
+ "deadlib-video",
  "deadsync-audio-decode",
  "deadsync-audio-stream",
  "deadsync-config",
@@ -1345,6 +1347,7 @@ dependencies = [
  "deadsync-rules",
  "log",
  "twox-hash",
+ "winit",
 ]
 
 [[package]]
@@ -1394,6 +1397,11 @@ dependencies = [
 name = "deadsync-lights"
 version = "0.1.0"
 dependencies = [
+ "deadsync-chart",
+ "deadsync-core",
+ "deadsync-gameplay",
+ "deadsync-input",
+ "deadsync-rules",
  "hidapi",
  "libc",
  "log",
@@ -1436,13 +1444,18 @@ dependencies = [
 name = "deadsync-online"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "deadlib-platform",
+ "deadsync-chart",
  "deadsync-config",
  "deadsync-core",
+ "deadsync-gameplay",
  "deadsync-net",
  "deadsync-profile",
+ "deadsync-profile-gameplay",
  "deadsync-rules",
  "deadsync-score",
+ "deadsync-simfile",
  "deadsync-version",
  "log",
  "rand 0.10.1",
@@ -1461,6 +1474,7 @@ dependencies = [
  "chrono",
  "deadlib-platform",
  "deadsync-chart",
+ "deadsync-config",
  "deadsync-rules",
  "deadsync-score",
  "log",
@@ -1471,10 +1485,17 @@ dependencies = [
 name = "deadsync-profile-gameplay"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "deadsync-chart",
+ "deadsync-config",
+ "deadsync-core",
  "deadsync-gameplay",
  "deadsync-profile",
+ "deadsync-rules",
  "deadsync-score",
+ "deadsync-simfile",
+ "deadsync-song-lua",
+ "log",
 ]
 
 [[package]]
@@ -1523,8 +1544,12 @@ name = "deadsync-smx"
 version = "0.1.0"
 dependencies = [
  "deadlib-platform",
+ "deadsync-core",
+ "deadsync-gameplay",
  "deadsync-input",
  "deadsync-input-native",
+ "deadsync-rules",
+ "deadsync-score",
  "image",
  "log",
  "rustmaniax-sdk",
@@ -1575,7 +1600,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.4.2262"
+version = "0.4.2328"
 dependencies = [
  "log",
  "semver",

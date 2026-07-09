@@ -1,12 +1,14 @@
 use crate::act;
 use crate::assets::{FontRole, current_machine_font_key};
-use crate::game::profile;
 use crate::screens::select_music::MusicWheelEntry;
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
-use deadsync_chart::SongData;
-use std::sync::Arc;
+use deadsync_profile::compat as profile;
+use deadsync_simfile::song_search::{
+    SongSearchCandidate, SongSearchCatalogEntry, build_song_search_candidates,
+    song_search_difficulties_text,
+};
 
 use super::scroll_anim_dir;
 
@@ -32,12 +34,6 @@ const SONG_SEARCH_WHEEL_SLOTS: usize = 12;
 const SONG_SEARCH_WHEEL_FOCUS_SLOT: usize = SONG_SEARCH_WHEEL_SLOTS / 2 - 1;
 
 #[derive(Clone, Debug)]
-pub struct SongSearchCandidate {
-    pub pack_name: String,
-    pub song: Arc<SongData>,
-}
-
-#[derive(Clone, Debug)]
 pub struct SongSearchResultsState {
     pub search_text: String,
     pub candidates: Vec<SongSearchCandidate>,
@@ -61,14 +57,6 @@ pub enum SongSearchState {
     Results(SongSearchResultsState),
 }
 
-#[derive(Default)]
-struct SongSearchFilter {
-    pack_term: Option<String>,
-    song_term: Option<String>,
-    difficulty: Option<u8>,
-    bpm_tier: Option<i32>,
-}
-
 pub fn begin_song_search_prompt() -> SongSearchState {
     SongSearchState::TextEntry(SongSearchTextEntryState {
         query: String::new(),
@@ -84,7 +72,17 @@ pub fn begin_song_search_results(
     if trimmed.is_empty() {
         return SongSearchState::Hidden;
     }
-    let candidates = build_song_search_candidates(group_entries, &trimmed);
+    let chart_type = profile::get_session_play_style().chart_type();
+    let candidates = build_song_search_candidates(
+        group_entries.iter().map(|entry| match entry {
+            MusicWheelEntry::PackHeader { name, .. } => {
+                SongSearchCatalogEntry::PackHeader(name.as_str())
+            }
+            MusicWheelEntry::Song(song) => SongSearchCatalogEntry::Song(song),
+        }),
+        &trimmed,
+        chart_type,
+    );
     SongSearchState::Results(SongSearchResultsState {
         search_text: trimmed,
         candidates,
@@ -434,157 +432,12 @@ pub fn build_song_search_overlay(
     Some(actors)
 }
 
-#[inline(always)]
-fn song_search_bpm_tier(bpm: f64) -> i32 {
-    (((bpm + 0.5) / 10.0).floor() as i32) * 10
-}
-
-fn song_search_difficulties_text(song: &SongData, chart_type: &str) -> String {
-    const ORDER: [&str; 5] = ["beginner", "easy", "medium", "hard", "challenge"];
-    let mut out = String::new();
-    for diff in ORDER {
-        if let Some(chart) = song.charts.iter().find(|c| {
-            c.chart_type.eq_ignore_ascii_case(chart_type) && c.difficulty.eq_ignore_ascii_case(diff)
-        }) {
-            if !out.is_empty() {
-                out.push_str("   ");
-            }
-            out.push_str(&chart.meter.to_string());
-        }
-    }
-    if out.is_empty() { "-".to_string() } else { out }
-}
-
-fn parse_song_search_filter(input: &str) -> SongSearchFilter {
-    let lower = input.to_ascii_lowercase();
-    let chars: Vec<char> = lower.chars().collect();
-    let mut filter = SongSearchFilter::default();
-    let mut stripped = String::with_capacity(lower.len());
-    let mut i = 0usize;
-    while i < chars.len() {
-        if chars[i] == '[' {
-            let mut j = i + 1;
-            let mut value: u32 = 0;
-            let mut has_digit = false;
-            while j < chars.len() {
-                let Some(d) = chars[j].to_digit(10) else {
-                    break;
-                };
-                has_digit = true;
-                value = value.saturating_mul(10).saturating_add(d);
-                j += 1;
-            }
-            if has_digit && j < chars.len() && chars[j] == ']' {
-                if value <= 35 {
-                    filter.difficulty = Some(value as u8);
-                } else {
-                    filter.bpm_tier = Some(song_search_bpm_tier(value as f64));
-                }
-                i = j + 1;
-                continue;
-            }
-        }
-        stripped.push(chars[i]);
-        i += 1;
-    }
-
-    let stripped = stripped.trim();
-    if let Some((left, right)) = stripped.split_once('/') {
-        if !left.is_empty() {
-            filter.pack_term = Some(left.to_string());
-        }
-        if !right.is_empty() {
-            filter.song_term = Some(right.to_string());
-        }
-    } else if !stripped.is_empty() {
-        filter.song_term = Some(stripped.to_string());
-    }
-    filter
-}
-
-fn build_song_search_candidates(
-    group_entries: &[MusicWheelEntry],
-    search_text: &str,
-) -> Vec<SongSearchCandidate> {
-    let filter = parse_song_search_filter(search_text);
-    let chart_type = profile::get_session_play_style().chart_type();
-    let mut out = Vec::new();
-    let mut current_pack_name: Option<&str> = None;
-
-    for entry in group_entries {
-        match entry {
-            MusicWheelEntry::PackHeader { name, .. } => {
-                current_pack_name = Some(name.as_str());
-            }
-            MusicWheelEntry::Song(song) => {
-                if !song
-                    .charts
-                    .iter()
-                    .any(|c| c.chart_type.eq_ignore_ascii_case(chart_type))
-                {
-                    continue;
-                }
-
-                let pack_name = current_pack_name.unwrap_or_default();
-                if let Some(pack_term) = &filter.pack_term
-                    && !pack_name.to_ascii_lowercase().contains(pack_term)
-                {
-                    continue;
-                }
-
-                if let Some(song_term) = &filter.song_term {
-                    let display = song.display_full_title(false).to_ascii_lowercase();
-                    let translit = song.display_full_title(true).to_ascii_lowercase();
-                    if !display.contains(song_term) && !translit.contains(song_term) {
-                        continue;
-                    }
-                }
-
-                if let Some(diff) = filter.difficulty
-                    && !song.charts.iter().any(|c| {
-                        c.chart_type.eq_ignore_ascii_case(chart_type)
-                            && !c.difficulty.eq_ignore_ascii_case("edit")
-                            && c.meter == diff as u32
-                    })
-                {
-                    continue;
-                }
-
-                if let Some(want_tier) = filter.bpm_tier {
-                    let Some((bpm_lo, bpm_hi)) = song.display_bpm_range() else {
-                        continue;
-                    };
-                    let mut lo = song_search_bpm_tier(bpm_lo);
-                    let mut hi = song_search_bpm_tier(bpm_hi);
-                    if lo > hi {
-                        std::mem::swap(&mut lo, &mut hi);
-                    }
-                    if lo == hi {
-                        if want_tier != lo {
-                            continue;
-                        }
-                    } else if want_tier < lo || want_tier > hi {
-                        continue;
-                    }
-                }
-
-                out.push(SongSearchCandidate {
-                    pack_name: pack_name.to_string(),
-                    song: song.clone(),
-                });
-            }
-        }
-    }
-    out.sort_by_cached_key(|c| c.song.display_full_title(false).to_ascii_lowercase());
-
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadsync_chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
+    use deadsync_chart::SongData;
     use std::path::PathBuf;
+    use std::sync::Arc;
 
     fn test_song(title: &str, subtitle: &str) -> Arc<SongData> {
         Arc::new(SongData {
@@ -620,86 +473,11 @@ mod tests {
         })
     }
 
-    fn test_chart(chart_type: &str) -> ChartData {
-        ChartData {
-            chart_type: chart_type.to_string(),
-            difficulty: "Challenge".to_string(),
-            description: String::new(),
-            chart_name: String::new(),
-            meter: 12,
-            step_artist: String::new(),
-            music_path: None,
-            short_hash: format!("{chart_type}-hash"),
-            stats: ArrowStats::default(),
-            tech_counts: TechCounts::default(),
-            mines_nonfake: 0,
-            stamina_counts: StaminaCounts::default(),
-            total_streams: 0,
-            matrix_rating: 0.0,
-            max_nps: 0.0,
-            sn_detailed_breakdown: String::new(),
-            sn_partial_breakdown: String::new(),
-            sn_simple_breakdown: String::new(),
-            detailed_breakdown: String::new(),
-            partial_breakdown: String::new(),
-            simple_breakdown: String::new(),
-            total_measures: 0,
-            measure_nps_vec: Vec::new(),
-            measure_seconds_vec: Vec::new(),
-            first_second: 0.0,
-            has_note_data: true,
-            has_chart_attacks: false,
-            possible_grade_points: 0,
-            holds_total: 0,
-            rolls_total: 0,
-            mines_total: 0,
-            display_bpm: None,
-            min_bpm: 128.0,
-            max_bpm: 128.0,
-        }
-    }
-
-    fn test_song_with_bpm(
-        title: &str,
-        display_bpm: &str,
-        min_bpm: f64,
-        max_bpm: f64,
-    ) -> Arc<SongData> {
-        let mut song = (*test_song(title, "")).clone();
-        song.display_bpm = display_bpm.to_string();
-        song.min_bpm = min_bpm;
-        song.max_bpm = max_bpm;
-        song.charts = vec![test_chart("dance-single"), test_chart("dance-double")];
-        Arc::new(song)
-    }
-
     fn assert_close(actual: f32, expected: f32) {
         assert!(
             (actual - expected).abs() < 1e-6,
             "expected {expected}, got {actual}"
         );
-    }
-
-    #[test]
-    fn song_search_bpm_filter_uses_display_bpm_range() {
-        let slow = test_song_with_bpm("Slow", "128", 128.0, 128.0);
-        let range = test_song_with_bpm("Range", "120:180", 120.0, 180.0);
-        let entries = vec![
-            MusicWheelEntry::PackHeader {
-                name: "Pack".to_string(),
-                original_index: 0,
-                banner_path: None,
-                song_count: 2,
-                pack_key: Some("Pack".to_string()),
-            },
-            MusicWheelEntry::Song(slow),
-            MusicWheelEntry::Song(range),
-        ];
-
-        let candidates = build_song_search_candidates(&entries, "[180]");
-
-        assert_eq!(candidates.len(), 1);
-        assert_eq!(candidates[0].song.title, "Range");
     }
 
     #[test]

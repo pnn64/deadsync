@@ -5,8 +5,12 @@ edition = "2024"
 license = "GPL-3.0"
 
 [dependencies]
+deadsync-core = { path = "../deadsync-core" }
+deadsync-gameplay = { path = "../deadsync-gameplay" }
 deadsync-input = { path = "../deadsync-input" }
 deadsync-input-native = { path = "../deadsync-input-native" }
+deadsync-rules = { path = "../deadsync-rules" }
+deadsync-score = { path = "../deadsync-score" }
 deadlib-platform = { path = "../deadlib-platform" }
 image = { version = "0.25.10", default-features = false, features = ["gif"] }
 log = "0.4.33"

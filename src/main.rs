@@ -6,7 +6,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use deadlib_platform::logging::{self, StartupBuildInfo};
-use deadsync::{app, assets, config, game};
+use deadsync::{app, assets, config};
+use deadsync_profile::compat as profile;
 use std::backtrace::Backtrace;
 use std::panic::PanicHookInfo;
 
@@ -216,7 +217,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     #[cfg(windows)]
     let _windows_timing = deadlib_platform::windows_rt::boost_main_thread_timing();
-    game::profile::load();
+    profile::load();
     if let Err(e) = deadsync_audio_stream::init(deadsync_audio_stream::InitConfig {
         output_device_index: cfg.audio_output_device_index,
         output_mode: cfg.audio_output_mode,

@@ -1,4 +1,4 @@
-use crate::game::GameplayCoreState as State;
+use crate::GameplayCoreState as State;
 use deadlib_present::cache::{TextCache, cached_text};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{

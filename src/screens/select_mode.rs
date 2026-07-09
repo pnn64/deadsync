@@ -116,7 +116,7 @@ pub fn init() -> State {
 }
 
 pub fn on_enter(state: &mut State) {
-    state.selected_index = match crate::game::profile::get_session_play_mode() {
+    state.selected_index = match deadsync_profile::compat::get_session_play_mode() {
         profile_data::PlayMode::Regular => 0,
         profile_data::PlayMode::Marathon => 1,
     };
@@ -268,7 +268,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             state.exit_requested = true;
             state.exit_target = Some(Screen::ProfileLoad);
             let _ = exit_anim_t(true);
-            crate::game::profile::set_session_play_mode(choice_play_mode(choice_from_index(
+            deadsync_profile::compat::set_session_play_mode(choice_play_mode(choice_from_index(
                 state.selected_index,
             )));
             audio::play_sfx("assets/sounds/start.ogg");
@@ -350,8 +350,8 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
         right_avatar: None,
     }));
 
-    let p1_profile = crate::game::profile::get_for_side(profile_data::PlayerSide::P1);
-    let p2_profile = crate::game::profile::get_for_side(profile_data::PlayerSide::P2);
+    let p1_profile = deadsync_profile::compat::get_for_side(profile_data::PlayerSide::P1);
+    let p2_profile = deadsync_profile::compat::get_for_side(profile_data::PlayerSide::P2);
     let p1_avatar = p1_profile
         .avatar_texture_key
         .as_deref()
@@ -361,10 +361,10 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
         .as_deref()
         .map(|texture_key| AvatarParams { texture_key });
 
-    let p1_joined = crate::game::profile::is_session_side_joined(profile_data::PlayerSide::P1);
-    let p2_joined = crate::game::profile::is_session_side_joined(profile_data::PlayerSide::P2);
-    let p1_guest = crate::game::profile::is_session_side_guest(profile_data::PlayerSide::P1);
-    let p2_guest = crate::game::profile::is_session_side_guest(profile_data::PlayerSide::P2);
+    let p1_joined = deadsync_profile::compat::is_session_side_joined(profile_data::PlayerSide::P1);
+    let p2_joined = deadsync_profile::compat::is_session_side_joined(profile_data::PlayerSide::P2);
+    let p1_guest = deadsync_profile::compat::is_session_side_guest(profile_data::PlayerSide::P1);
+    let p2_guest = deadsync_profile::compat::is_session_side_guest(profile_data::PlayerSide::P2);
 
     let insert_card = tr("Common", "InsertCard");
     let press_start = tr("Common", "PressStart");

@@ -7,12 +7,17 @@ license = "GPL-3.0"
 [dependencies]
 deadlib-platform = { path = "../deadlib-platform" }
 deadsync-config = { path = "../deadsync-config" }
+deadsync-chart = { path = "../deadsync-chart" }
 deadsync-core = { path = "../deadsync-core" }
+deadsync-gameplay = { path = "../deadsync-gameplay" }
 deadsync-net = { path = "../deadsync-net" }
 deadsync-profile = { path = "../deadsync-profile" }
+deadsync-profile-gameplay = { path = "../deadsync-profile-gameplay" }
 deadsync-rules = { path = "../deadsync-rules" }
 deadsync-score = { path = "../deadsync-score" }
+deadsync-simfile = { path = "../deadsync-simfile" }
 deadsync-version = { path = "../deadsync-version" }
+chrono = "0.4.45"
 log = "0.4.33"
 rand = "0.10.1"
 serde = { version = "1.0.228", features = ["derive"] }

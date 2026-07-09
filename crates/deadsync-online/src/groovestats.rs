@@ -1,5 +1,6 @@
 use serde::de::Deserializer;
 use serde::{Deserialize, Serialize};
+use std::ops::Deref;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{LazyLock, Mutex};
@@ -7,21 +8,29 @@ use std::thread;
 use std::time::Instant;
 
 use crate::OnlineRequestError;
+use deadsync_core::input::MAX_PLAYERS;
+use deadsync_gameplay::GameplayProfileData;
 use deadsync_net::{self as network, NetworkError};
 use deadsync_profile as profile_data;
 use deadsync_profile::{Profile, RemoveMask, TimingWindowsOption};
+use deadsync_profile_gameplay::{
+    groovestats_eval_state_from_profile, groovestats_submit_invalid_reason_from_profile,
+    itl_current_score_hundredths_from_runtime,
+};
 use deadsync_rules::{judgment, note::Note, scroll::ScrollSpeedSetting, timing::WindowCounts};
 use deadsync_score::{
     EventProgress, GrooveStatsAutosubmitLog, GrooveStatsAutosubmitLogLevel,
     GrooveStatsAutosubmitPlayerAction, GrooveStatsAutosubmitPlayerInput,
-    GrooveStatsAutosubmitSessionDecision, GrooveStatsAutosubmitSessionInput,
-    GrooveStatsSubmitRecordBanner, GrooveStatsSubmitUiStatus, GsExEvidence, ImportedPlayerScore,
-    ItlEventProgress, LeaderboardEntry, LeaderboardPane, PlayerLeaderboardData,
-    PlayerScoreImportResult, RejectReason, SUBMIT_RETRY_MAX_ATTEMPTS, ScoreImportEndpoint,
-    SubmitAchievement, SubmitAchievementReward, SubmitEventProgressData, SubmitEventProgressInput,
-    SubmitProgress, SubmitQuest, SubmitQuestReward, SubmitRetryState, SubmitStatImprovement,
-    event_name_or_unknown, event_progress_from_submit, groovestats_autosubmit_player_decision,
-    groovestats_autosubmit_session_decision, groovestats_submit_record_banner,
+    GrooveStatsAutosubmitSessionDecision, GrooveStatsAutosubmitSessionInput, GrooveStatsEvalState,
+    GrooveStatsGameplayEvalInput, GrooveStatsSubmitRecordBanner, GrooveStatsSubmitUiStatus,
+    GsExEvidence, GsLampChartStats, ImportedPlayerScore, ItlEventProgress, LeaderboardEntry,
+    LeaderboardPane, PlayerLeaderboardData, PlayerScoreImportResult, RejectReason,
+    SUBMIT_RETRY_MAX_ATTEMPTS, ScoreImportEndpoint, SubmitAchievement, SubmitAchievementReward,
+    SubmitEventProgressData, SubmitEventProgressInput, SubmitProgress, SubmitQuest,
+    SubmitQuestReward, SubmitRetryState, SubmitStatImprovement,
+    cached_score_from_imported_player_score, event_name_or_unknown, event_progress_from_submit,
+    groovestats_autosubmit_player_decision, groovestats_autosubmit_session_decision,
+    groovestats_eval_state_from_gameplay_parts, groovestats_submit_record_banner,
     groovestats_submit_ui_status, leaderboard_nonzero_rank, leaderboard_pane,
     leaderboard_score_10000, leaderboard_username_matches, score_import_entry_matches_profile,
     validate_score_import_credentials,
@@ -1391,6 +1400,355 @@ pub fn submit_player_payload_from_gameplay_input(
     })
 }
 
+pub fn submit_player_payload_from_runtime<RuntimeProfile, OverlayActor, CapturedActor, StateDelta>(
+    gs: &deadsync_gameplay::GameplayRuntimeState<
+        RuntimeProfile,
+        OverlayActor,
+        CapturedActor,
+        StateDelta,
+    >,
+    player_idx: usize,
+) -> Option<GrooveStatsSubmitPlayerPayload>
+where
+    RuntimeProfile: Deref<Target = profile_data::Profile> + GameplayProfileData,
+{
+    if player_idx >= gs.num_players() {
+        return None;
+    }
+    let totals = gs.display_totals_for_player(player_idx);
+    let player = &gs.players()[player_idx];
+    let profile = gs.profiles()[player_idx].deref();
+    let (start, end) = gs.note_range_for_player(player_idx);
+    Some(submit_player_payload_from_gameplay_input(
+        GrooveStatsGameplayPayloadInput {
+            scoring_counts: &player.scoring_counts,
+            holds_held_for_score: player.holds_held_for_score,
+            rolls_held_for_score: player.rolls_held_for_score,
+            mines_hit_for_score: player.mines_hit_for_score,
+            possible_grade_points: totals.possible_grade_points,
+            music_rate: gs.music_rate(),
+            window_counts: gs.live_window_counts(player_idx),
+            total_steps: totals.total_steps,
+            holds_held: player.holds_held,
+            total_holds: totals.holds_total,
+            mines_hit: player.mines_hit,
+            total_mines: totals.mines_total,
+            rolls_held: player.rolls_held,
+            total_rolls: totals.rolls_total,
+            notes: &gs.notes()[start..end],
+            note_times: &gs.note_time_cache_ns()[start..end],
+            hold_end_times: &gs.hold_end_time_cache_ns()[start..end],
+            fail_time_ns: player
+                .fail_time
+                .map(deadsync_core::song_time::song_time_ns_from_seconds),
+            profile,
+        },
+    ))
+}
+
+fn manual_qr_url_from_runtime<RuntimeProfile, OverlayActor, CapturedActor, StateDelta>(
+    gs: &deadsync_gameplay::GameplayRuntimeState<
+        RuntimeProfile,
+        OverlayActor,
+        CapturedActor,
+        StateDelta,
+    >,
+    player_idx: usize,
+) -> Option<String>
+where
+    RuntimeProfile: Deref<Target = profile_data::Profile> + GameplayProfileData,
+{
+    if player_idx >= gs.num_players() {
+        return None;
+    }
+    let payload = submit_player_payload_from_runtime(gs, player_idx)?;
+    manual_qr_url(
+        qr_base_url(),
+        gs.charts()[player_idx].short_hash.as_str(),
+        &payload.judgment_counts,
+        &payload.rescore_counts,
+        payload.rate,
+        payload.used_cmod,
+    )
+}
+
+pub fn eval_state_from_runtime<RuntimeProfile, OverlayActor, CapturedActor, StateDelta>(
+    gs: &deadsync_gameplay::GameplayRuntimeState<
+        RuntimeProfile,
+        OverlayActor,
+        CapturedActor,
+        StateDelta,
+    >,
+    player_idx: usize,
+    lua_submit_allowed: impl Fn(&str) -> bool,
+    course_submit_allowed: bool,
+    fail_type_ok: bool,
+) -> GrooveStatsEvalState
+where
+    RuntimeProfile: Deref<Target = profile_data::Profile> + GameplayProfileData,
+{
+    if player_idx >= gs.num_players().min(MAX_PLAYERS) {
+        return GrooveStatsEvalState::default();
+    }
+    let chart = gs.charts()[player_idx].as_ref();
+    let profile = gs.profiles()[player_idx].deref();
+    let mut result = groovestats_eval_state_from_gameplay_parts(
+        groovestats_eval_state_from_profile(
+            chart,
+            profile,
+            gs.music_rate(),
+            gs.autoplay_used(),
+            gs.course_display_is_course_stage(),
+            course_submit_allowed,
+            fail_type_ok,
+        ),
+        GrooveStatsGameplayEvalInput {
+            song_has_lua: gs.song().has_lua,
+            lua_submit_allowed: lua_submit_allowed(chart.short_hash.as_str()),
+            song_completed_naturally: gs.song_completed_naturally(),
+            is_failing: gs.players()[player_idx].is_failing,
+            life: gs.players()[player_idx].life,
+            has_fail_time: gs.players()[player_idx].fail_time.is_some(),
+            course_stage_life_submit_eligible: gs.course_stage_life_submit_eligible(player_idx),
+        },
+    );
+    if result.should_set_manual_qr_url {
+        result.state.manual_qr_url = manual_qr_url_from_runtime(gs, player_idx);
+    }
+    result.state
+}
+
+pub fn gameplay_submit_player_from_runtime<
+    RuntimeProfile,
+    OverlayActor,
+    CapturedActor,
+    StateDelta,
+>(
+    gs: &deadsync_gameplay::GameplayRuntimeState<
+        RuntimeProfile,
+        OverlayActor,
+        CapturedActor,
+        StateDelta,
+    >,
+    player_idx: usize,
+    side: profile_data::PlayerSide,
+    profile_id: Option<String>,
+    itl_score_hundredths: Option<u32>,
+    lua_submit_allowed: impl Fn(&str) -> bool,
+    fail_type_ok: bool,
+) -> GrooveStatsGameplaySubmitPlayer
+where
+    RuntimeProfile: Deref<Target = profile_data::Profile> + GameplayProfileData,
+{
+    let profile = gs.profiles()[player_idx].deref();
+    let chart = gs.charts()[player_idx].as_ref();
+    let chart_hash = chart.short_hash.as_str();
+    GrooveStatsGameplaySubmitPlayer {
+        side,
+        slot: profile_data::player_side_index(side) as u8 + 1,
+        chart_hash: chart_hash.to_string(),
+        username: profile.groovestats_username.clone(),
+        profile_name: profile.display_name.clone(),
+        profile_id,
+        itl_score_hundredths,
+        show_ex_score: profile.show_ex_score,
+        api_key: profile.groovestats_api_key.clone(),
+        is_pad_player: profile.groovestats_is_pad_player,
+        invalid_reason: groovestats_submit_invalid_reason_from_profile(
+            chart,
+            gs.song().has_lua,
+            lua_submit_allowed(chart_hash),
+            profile,
+            gs.music_rate(),
+            fail_type_ok,
+        ),
+        song_completed_naturally: gs.song_completed_naturally(),
+        is_failing: gs.players()[player_idx].is_failing,
+        life: gs.players()[player_idx].life,
+        has_fail_time: gs.players()[player_idx].fail_time.is_some(),
+        course_stage_life_submit_eligible: gs.course_stage_life_submit_eligible(player_idx),
+        payload: submit_player_payload_from_runtime(gs, player_idx),
+    }
+}
+
+pub fn submit_gameplay_from_runtime<
+    RuntimeProfile,
+    OverlayActor,
+    CapturedActor,
+    StateDelta,
+    A,
+    I,
+    L,
+>(
+    gs: &deadsync_gameplay::GameplayRuntimeState<
+        RuntimeProfile,
+        OverlayActor,
+        CapturedActor,
+        StateDelta,
+    >,
+    input: GrooveStatsGameplaySubmitInput,
+    mut active_profile_id_for_side: A,
+    mut itl_score_hundredths_for_player: I,
+    lua_submit_allowed: L,
+    fail_type_ok: bool,
+    cache_success: fn(&GrooveStatsSubmitPlayerJob, &GrooveStatsSubmitApiPlayer),
+    after_player: fn(&GrooveStatsSubmitPlayerJob),
+) -> bool
+where
+    RuntimeProfile: Deref<Target = profile_data::Profile> + GameplayProfileData,
+    A: FnMut(profile_data::PlayerSide) -> Option<String>,
+    I: FnMut(usize) -> Option<u32>,
+    L: Fn(&str) -> bool,
+{
+    let players = (0..gs.num_players().min(MAX_PLAYERS)).map(|player_idx| {
+        let side =
+            profile_data::app_runtime::gameplay_side_for_player(gs.num_players(), player_idx);
+        gameplay_submit_player_from_runtime(
+            gs,
+            player_idx,
+            side,
+            active_profile_id_for_side(side),
+            itl_score_hundredths_for_player(player_idx),
+            &lua_submit_allowed,
+            fail_type_ok,
+        )
+    });
+
+    submit_gameplay_players(input, players, cache_success, after_player)
+}
+
+#[inline(always)]
+fn submit_fail_type_ok_from_app_runtime() -> bool {
+    matches!(
+        deadsync_config::runtime::get().default_fail_type,
+        deadsync_config::theme::DefaultFailType::Immediate
+            | deadsync_config::theme::DefaultFailType::ImmediateContinue
+    )
+}
+
+fn refresh_submit_leaderboards_from_app_runtime(player: &GrooveStatsSubmitPlayerJob) {
+    let runtime = crate::player_leaderboards::PlayerLeaderboardRuntime::from_app_runtime();
+    runtime.invalidate_for_side(player.chart_hash.as_str(), player.side);
+    runtime.get_or_fetch_for_side(
+        player.chart_hash.as_str(),
+        player.side,
+        GROOVESTATS_SUBMIT_MAX_ENTRIES,
+    );
+}
+
+fn cache_submit_success_from_app_runtime(
+    player: &GrooveStatsSubmitPlayerJob,
+    response: &GrooveStatsSubmitApiPlayer,
+) {
+    let cfg = deadsync_config::runtime::get();
+    let plan = submit_unlock_plan_from_response(
+        player,
+        response,
+        cfg.auto_download_unlocks,
+        cfg.separate_unlocks_by_player,
+    );
+    if let Some(profile_id) = player.profile_id.as_deref() {
+        for folders in &plan.itl_folder_groups {
+            deadsync_profile::app_runtime::update_itl_unlock_folders(
+                profile_id,
+                folders.as_slice(),
+            );
+        }
+    }
+    for download in &plan.downloads {
+        crate::runtime::queue_event_unlock_download(
+            download.url.as_str(),
+            download.download_name.as_str(),
+            download.pack_name.as_str(),
+        );
+    }
+    if let Some(update) = cache_update_from_submit_success(player, response, |imported| {
+        let song_cache = deadsync_simfile::runtime_cache::get_song_cache();
+        deadsync_score::imported_score_chart_stats(
+            imported,
+            &song_cache,
+            player.chart_hash.as_str(),
+        )
+    }) {
+        deadsync_profile::app_runtime::cache_logged_gs_score_for_id(
+            update.profile_id.as_str(),
+            update.chart_hash.as_str(),
+            update.score,
+            update.username.as_str(),
+            update.score_proves_nonquint_ex,
+        );
+    }
+}
+
+pub fn submit_gameplay_from_app_runtime<RuntimeProfile, OverlayActor, CapturedActor, StateDelta>(
+    gs: &deadsync_gameplay::GameplayRuntimeState<
+        RuntimeProfile,
+        OverlayActor,
+        CapturedActor,
+        StateDelta,
+    >,
+) -> bool
+where
+    RuntimeProfile: Deref<Target = profile_data::Profile> + GameplayProfileData,
+{
+    let cfg = deadsync_config::runtime::get();
+    let service = crate::runtime::active_groovestats_service();
+    submit_gameplay_from_runtime(
+        gs,
+        GrooveStatsGameplaySubmitInput {
+            enabled: cfg.enable_groovestats,
+            service,
+            service_name: service_name(service),
+            player_count: gs.num_players(),
+            autoplay_used: gs.autoplay_used(),
+            is_course_stage: gs.course_display_is_course_stage(),
+            autosubmit_course_scores_individually: cfg.autosubmit_course_scores_individually,
+        },
+        deadsync_profile::runtime_active_local_profile_id_for_side,
+        |player_idx| itl_current_score_hundredths_from_runtime(gs, player_idx),
+        deadsync_score::lua_chart_submit_allowed,
+        submit_fail_type_ok_from_app_runtime(),
+        cache_submit_success_from_app_runtime,
+        refresh_submit_leaderboards_from_app_runtime,
+    )
+}
+
+pub fn retry_submit_from_app_runtime(
+    chart_hash: &str,
+    side: profile_data::PlayerSide,
+    manual: bool,
+) -> bool {
+    let service = crate::runtime::active_groovestats_service();
+    retry_submit_if_enabled(
+        deadsync_config::runtime::get().enable_groovestats,
+        chart_hash,
+        side,
+        manual,
+        service,
+        service_name(service),
+        cache_submit_success_from_app_runtime,
+        refresh_submit_leaderboards_from_app_runtime,
+    )
+}
+
+pub fn retry_manual_submit_from_app_runtime(
+    chart_hash: &str,
+    side: profile_data::PlayerSide,
+) -> bool {
+    retry_submit_from_app_runtime(chart_hash, side, true)
+}
+
+pub fn tick_auto_submit_retries_from_app_runtime() -> bool {
+    let service = crate::runtime::active_groovestats_service();
+    tick_auto_submit_retries_if_enabled(
+        deadsync_config::runtime::get().enable_groovestats,
+        service,
+        service_name(service),
+        cache_submit_success_from_app_runtime,
+        refresh_submit_leaderboards_from_app_runtime,
+    )
+}
+
 #[derive(Debug, Clone)]
 pub struct GrooveStatsSubmitPlayerRequest {
     pub slot: u8,
@@ -2305,6 +2663,40 @@ pub fn imported_player_score_from_submit_response(
             Some(comment),
         ),
     }
+}
+
+pub struct GrooveStatsSubmitCacheUpdate {
+    pub profile_id: String,
+    pub chart_hash: String,
+    pub username: String,
+    pub score: deadsync_score::CachedScore,
+    pub score_proves_nonquint_ex: bool,
+}
+
+pub fn cache_update_from_submit_success<F>(
+    player: &GrooveStatsSubmitPlayerJob,
+    response: &GrooveStatsSubmitApiPlayer,
+    chart_stats: F,
+) -> Option<GrooveStatsSubmitCacheUpdate>
+where
+    F: FnOnce(&ImportedPlayerScore) -> Option<GsLampChartStats>,
+{
+    let profile_id = player.profile_id.as_deref()?;
+    let imported = imported_player_score_from_submit_response(
+        response,
+        player.username.as_str(),
+        f64::from(player.score_10000),
+        player.comment.as_str(),
+    );
+    let score_proves_nonquint_ex = imported.ex_evidence.proves_nonquint();
+    let stats = chart_stats(&imported);
+    Some(GrooveStatsSubmitCacheUpdate {
+        profile_id: profile_id.to_string(),
+        chart_hash: player.chart_hash.clone(),
+        username: player.username.clone(),
+        score: cached_score_from_imported_player_score(imported, stats),
+        score_proves_nonquint_ex,
+    })
 }
 
 pub fn event_progress_from_submit_response(

@@ -21,7 +21,9 @@ use crate::scan::{
 use crate::song::ParseSongOptions;
 use deadlib_platform::dirs;
 use deadsync_audio_decode as decode;
-use deadsync_chart::{GameplayChartData, SongData};
+use deadsync_chart::{
+    GameplayChartData, SongBackgroundChange, SongData, background::expand_random_background_changes,
+};
 use log::{debug, info, warn};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -276,6 +278,28 @@ pub fn random_movie_paths(song: &SongData, random_movies: bool) -> Vec<PathBuf> 
         return Vec::new();
     }
     random_movie_paths_for_song(song, &bgchange_asset_roots(RANDOM_MOVIES_DIR))
+}
+
+pub fn gameplay_background_changes(
+    song: &SongData,
+    gameplay_chart: &GameplayChartData,
+    random_movie_paths: Vec<PathBuf>,
+) -> Vec<SongBackgroundChange> {
+    if random_movie_paths.is_empty() {
+        return song.background_changes.clone();
+    }
+    let seed_text = song
+        .simfile_path
+        .parent()
+        .map(|path| path.to_string_lossy())
+        .unwrap_or_else(|| song.simfile_path.to_string_lossy());
+    expand_random_background_changes(
+        song,
+        &gameplay_chart.timing,
+        &gameplay_chart.timing_segments,
+        random_movie_paths,
+        seed_text.as_ref(),
+    )
 }
 
 fn parse_song_options() -> ParseSongOptions {

@@ -398,7 +398,7 @@ pub(super) fn resolve_p1_chart<'a>(
     song: &'a SongData,
     chart_steps_index: &[usize; PLAYER_SLOTS],
 ) -> Option<&'a ChartData> {
-    let target_chart_type = crate::game::profile::get_session_play_style().chart_type();
+    let target_chart_type = deadsync_profile::compat::get_session_play_style().chart_type();
     song.chart_for_steps_index(target_chart_type, chart_steps_index[0])
 }
 

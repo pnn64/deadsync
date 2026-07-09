@@ -1,10 +1,10 @@
 use crate::assets::AssetManager;
-use crate::game::profile;
 use crate::screens::evaluation::{self, ScoreInfo, State};
 use crate::test_support::{compose_scenarios, pane_stats_bench};
 use deadlib_present::actors::Actor;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_profile as profile_data;
+use deadsync_profile::compat as profile;
 use deadsync_rules::timing::{HistogramMs, ScatterPoint};
 use deadsync_score::LeaderboardEntry;
 

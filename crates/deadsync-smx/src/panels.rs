@@ -3,8 +3,8 @@
 //! Pure effect engine for the SMX 3x3 panels (`PanelFx`), the helper that maps a logical
 //! column to a pad/panel, and the 30Hz worker thread (`SmxPanelLights`) that owns the
 //! effect state and hands frames to the SDK. Building the RGB frame off the render thread
-//! keeps the colour math and timers out of the per-frame path. The app-side diff and
-//! palette live in `app::smx_panel_fx`.
+//! keeps the colour math and timers out of the per-frame path. The gameplay-state diff
+//! and palette live in `gameplay_driver`.
 //!
 //! `PanelFx` composites layers over black: an optional full-pad background
 //! animation (a preloaded GIF from `gifs::GifRegistry`, played realtime or locked

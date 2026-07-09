@@ -1,4 +1,6 @@
 use std::ops::{Deref, DerefMut};
+use std::path::PathBuf;
+use std::sync::Arc;
 
 #[derive(Clone, Debug)]
 pub struct GameplayProfile(pub deadsync_profile::Profile);
@@ -61,6 +63,67 @@ pub fn profile_side_from_gameplay(
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct GameplayPackData {
+    pub pack_group: Arc<str>,
+    pub pack_banner_path: Option<PathBuf>,
+    pub sync_pref: deadsync_chart::SyncPref,
+}
+
+pub fn song_pack_group(song: &deadsync_chart::SongData) -> Arc<str> {
+    Arc::from(
+        song.simfile_path
+            .parent()
+            .and_then(|p| p.parent())
+            .and_then(|p| p.file_name())
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_owned(),
+    )
+}
+
+pub fn gameplay_pack_data(
+    song: &deadsync_chart::SongData,
+    course_name: Option<&Arc<str>>,
+    course_banner_path: Option<&PathBuf>,
+) -> GameplayPackData {
+    let pack_group = song_pack_group(song);
+    let mut pack_banner_path = None;
+    let mut sync_pref = deadsync_chart::SyncPref::Default;
+    if !pack_group.is_empty()
+        && let Some(pack) = deadsync_simfile::runtime_cache::get_song_cache()
+            .iter()
+            .find(|pack| pack.group_name == pack_group.as_ref())
+    {
+        pack_banner_path = pack.banner_path.clone();
+        sync_pref = pack.sync_pref;
+    }
+    if let Some(course_name) = course_name {
+        pack_banner_path = course_banner_path.cloned();
+        return GameplayPackData {
+            pack_group: course_name.clone(),
+            pack_banner_path,
+            sync_pref,
+        };
+    }
+    GameplayPackData {
+        pack_group,
+        pack_banner_path,
+        sync_pref,
+    }
+}
+
+pub fn gameplay_runtime_profile_data(
+    player_profiles: &[deadsync_profile::Profile; deadsync_core::input::MAX_PLAYERS],
+    session: &deadsync_gameplay::GameplaySession,
+) -> [deadsync_profile::Profile; deadsync_core::input::MAX_PLAYERS] {
+    let mut runtime_profiles = (*player_profiles).clone();
+    if session.p2_runtime_player() {
+        runtime_profiles[0] = runtime_profiles[1].clone();
+    }
+    runtime_profiles
+}
+
 pub fn gameplay_tick_mode_from_profile(
     mode: deadsync_profile::TimingTickMode,
 ) -> deadsync_gameplay::GameplayTimingTickMode {
@@ -82,6 +145,36 @@ pub fn profile_tick_mode_from_gameplay(
             deadsync_profile::TimingTickMode::Assist
         }
         deadsync_gameplay::GameplayTimingTickMode::Hit => deadsync_profile::TimingTickMode::Hit,
+    }
+}
+
+pub fn gameplay_fail_type_from_config(
+    fail_type: deadsync_config::theme::DefaultFailType,
+) -> deadsync_gameplay::GameplayFailType {
+    match fail_type {
+        deadsync_config::theme::DefaultFailType::Immediate => {
+            deadsync_gameplay::GameplayFailType::Immediate
+        }
+        deadsync_config::theme::DefaultFailType::ImmediateContinue => {
+            deadsync_gameplay::GameplayFailType::ImmediateContinue
+        }
+    }
+}
+
+pub fn gameplay_config_from_config(
+    cfg: &deadsync_config::app_config::Config,
+) -> deadsync_gameplay::GameplayConfig {
+    deadsync_gameplay::GameplayConfig {
+        mine_hit_sound: cfg.mine_hit_sound,
+        default_fail_type: gameplay_fail_type_from_config(cfg.default_fail_type),
+        global_offset_seconds: cfg.global_offset_seconds,
+        visual_delay_seconds: cfg.visual_delay_seconds,
+        machine_pack_ini_offsets: cfg.machine_pack_ini_offsets,
+        machine_default_sync_pref: cfg.machine_default_sync_offset.sync_pref(),
+        machine_allow_per_player_global_offsets: cfg.machine_allow_per_player_global_offsets,
+        machine_enable_replays: cfg.machine_enable_replays,
+        center_1player_notefield: cfg.center_1player_notefield,
+        delayed_back: cfg.delayed_back,
     }
 }
 
@@ -190,6 +283,437 @@ pub fn blue_fantastic_window_ms_for_profile(
     })
 }
 
+pub type SongLuaRuntimeOverlayStateDelta =
+    deadsync_gameplay::SongLuaRuntimeOverlayStateDelta<deadsync_song_lua::SongLuaOverlayStateDelta>;
+
+pub fn song_lua_difficulty_from_chart(difficulty: &str) -> deadsync_song_lua::SongLuaDifficulty {
+    if difficulty.eq_ignore_ascii_case("beginner") {
+        deadsync_song_lua::SongLuaDifficulty::Beginner
+    } else if difficulty.eq_ignore_ascii_case("easy") || difficulty.eq_ignore_ascii_case("basic") {
+        deadsync_song_lua::SongLuaDifficulty::Easy
+    } else if difficulty.eq_ignore_ascii_case("medium")
+        || difficulty.eq_ignore_ascii_case("standard")
+    {
+        deadsync_song_lua::SongLuaDifficulty::Medium
+    } else if difficulty.eq_ignore_ascii_case("hard")
+        || difficulty.eq_ignore_ascii_case("difficult")
+    {
+        deadsync_song_lua::SongLuaDifficulty::Hard
+    } else if difficulty.eq_ignore_ascii_case("edit") {
+        deadsync_song_lua::SongLuaDifficulty::Edit
+    } else {
+        deadsync_song_lua::SongLuaDifficulty::Challenge
+    }
+}
+
+pub const fn song_lua_speedmod_from_setting(
+    speed: deadsync_rules::scroll::ScrollSpeedSetting,
+) -> deadsync_song_lua::SongLuaSpeedMod {
+    match speed {
+        deadsync_rules::scroll::ScrollSpeedSetting::XMod(value) => {
+            deadsync_song_lua::SongLuaSpeedMod::X(value)
+        }
+        deadsync_rules::scroll::ScrollSpeedSetting::CMod(value) => {
+            deadsync_song_lua::SongLuaSpeedMod::C(value)
+        }
+        deadsync_rules::scroll::ScrollSpeedSetting::MMod(value) => {
+            deadsync_song_lua::SongLuaSpeedMod::M(value)
+        }
+    }
+}
+
+pub const fn song_lua_compile_play_style(
+    play_style: deadsync_gameplay::GameplayInputPlayStyle,
+) -> deadsync_gameplay::SongLuaCompilePlayStyle {
+    match play_style {
+        deadsync_gameplay::GameplayInputPlayStyle::Single => {
+            deadsync_gameplay::SongLuaCompilePlayStyle::Single
+        }
+        deadsync_gameplay::GameplayInputPlayStyle::Versus => {
+            deadsync_gameplay::SongLuaCompilePlayStyle::Versus
+        }
+        deadsync_gameplay::GameplayInputPlayStyle::Double => {
+            deadsync_gameplay::SongLuaCompilePlayStyle::Double
+        }
+    }
+}
+
+pub const fn song_lua_runtime_time_unit(
+    unit: deadsync_song_lua::SongLuaTimeUnit,
+) -> deadsync_gameplay::SongLuaRuntimeTimeUnit {
+    match unit {
+        deadsync_song_lua::SongLuaTimeUnit::Beat => deadsync_gameplay::SongLuaRuntimeTimeUnit::Beat,
+        deadsync_song_lua::SongLuaTimeUnit::Second => {
+            deadsync_gameplay::SongLuaRuntimeTimeUnit::Second
+        }
+    }
+}
+
+pub const fn song_lua_runtime_span_mode(
+    span_mode: deadsync_song_lua::SongLuaSpanMode,
+) -> deadsync_gameplay::SongLuaRuntimeSpanMode {
+    match span_mode {
+        deadsync_song_lua::SongLuaSpanMode::Len => deadsync_gameplay::SongLuaRuntimeSpanMode::Len,
+        deadsync_song_lua::SongLuaSpanMode::End => deadsync_gameplay::SongLuaRuntimeSpanMode::End,
+    }
+}
+
+pub fn song_lua_runtime_ease_target(
+    target: &deadsync_song_lua::SongLuaEaseTarget,
+) -> deadsync_gameplay::SongLuaRuntimeEaseTargetOwned {
+    match target {
+        deadsync_song_lua::SongLuaEaseTarget::Mod(target_name) => {
+            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Mod(target_name.clone())
+        }
+        deadsync_song_lua::SongLuaEaseTarget::PlayerX => {
+            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Player(
+                deadsync_gameplay::SongLuaEaseMaskTarget::PlayerX,
+            )
+        }
+        deadsync_song_lua::SongLuaEaseTarget::PlayerY => {
+            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Player(
+                deadsync_gameplay::SongLuaEaseMaskTarget::PlayerY,
+            )
+        }
+        deadsync_song_lua::SongLuaEaseTarget::PlayerZ => {
+            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Player(
+                deadsync_gameplay::SongLuaEaseMaskTarget::PlayerZ,
+            )
+        }
+        deadsync_song_lua::SongLuaEaseTarget::PlayerRotationX => {
+            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Player(
+                deadsync_gameplay::SongLuaEaseMaskTarget::PlayerRotationX,
+            )
+        }
+        deadsync_song_lua::SongLuaEaseTarget::PlayerRotationY => {
+            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Player(
+                deadsync_gameplay::SongLuaEaseMaskTarget::PlayerRotationY,
+            )
+        }
+        deadsync_song_lua::SongLuaEaseTarget::PlayerRotationZ => {
+            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Player(
+                deadsync_gameplay::SongLuaEaseMaskTarget::PlayerRotationZ,
+            )
+        }
+        deadsync_song_lua::SongLuaEaseTarget::PlayerSkewX => {
+            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Player(
+                deadsync_gameplay::SongLuaEaseMaskTarget::PlayerSkewX,
+            )
+        }
+        deadsync_song_lua::SongLuaEaseTarget::PlayerSkewY => {
+            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Player(
+                deadsync_gameplay::SongLuaEaseMaskTarget::PlayerSkewY,
+            )
+        }
+        deadsync_song_lua::SongLuaEaseTarget::PlayerZoom => {
+            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Player(
+                deadsync_gameplay::SongLuaEaseMaskTarget::PlayerZoom,
+            )
+        }
+        deadsync_song_lua::SongLuaEaseTarget::PlayerZoomX => {
+            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Player(
+                deadsync_gameplay::SongLuaEaseMaskTarget::PlayerZoomX,
+            )
+        }
+        deadsync_song_lua::SongLuaEaseTarget::PlayerZoomY => {
+            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Player(
+                deadsync_gameplay::SongLuaEaseMaskTarget::PlayerZoomY,
+            )
+        }
+        deadsync_song_lua::SongLuaEaseTarget::PlayerZoomZ => {
+            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Player(
+                deadsync_gameplay::SongLuaEaseMaskTarget::PlayerZoomZ,
+            )
+        }
+        deadsync_song_lua::SongLuaEaseTarget::Function => {
+            deadsync_gameplay::SongLuaRuntimeEaseTargetOwned::Function
+        }
+    }
+}
+
+pub fn song_lua_runtime_mod_windows(
+    windows: &[deadsync_song_lua::SongLuaModWindow],
+) -> Vec<deadsync_gameplay::SongLuaRuntimeModWindow> {
+    windows
+        .iter()
+        .map(|window| deadsync_gameplay::SongLuaRuntimeModWindow {
+            player: window.player,
+            unit: song_lua_runtime_time_unit(window.unit),
+            start: window.start,
+            limit: window.limit,
+            span_mode: song_lua_runtime_span_mode(window.span_mode),
+            mods: window.mods.clone(),
+        })
+        .collect()
+}
+
+pub fn song_lua_runtime_ease_windows(
+    windows: &[deadsync_song_lua::SongLuaEaseWindow],
+) -> Vec<deadsync_gameplay::SongLuaRuntimeEaseWindow> {
+    windows
+        .iter()
+        .map(|window| deadsync_gameplay::SongLuaRuntimeEaseWindow {
+            player: window.player,
+            unit: song_lua_runtime_time_unit(window.unit),
+            start: window.start,
+            limit: window.limit,
+            span_mode: song_lua_runtime_span_mode(window.span_mode),
+            target: song_lua_runtime_ease_target(&window.target),
+            from: window.from,
+            to: window.to,
+            easing: window.easing.clone(),
+            sustain: window.sustain,
+            opt1: window.opt1,
+            opt2: window.opt2,
+        })
+        .collect()
+}
+
+pub fn song_lua_runtime_column_offset_windows(
+    windows: &[deadsync_song_lua::SongLuaColumnOffsetWindow],
+) -> Vec<deadsync_gameplay::SongLuaRuntimeColumnOffsetWindow> {
+    windows
+        .iter()
+        .map(
+            |window| deadsync_gameplay::SongLuaRuntimeColumnOffsetWindow {
+                player: window.player,
+                unit: song_lua_runtime_time_unit(window.unit),
+                start: window.start,
+                limit: window.limit,
+                span_mode: song_lua_runtime_span_mode(window.span_mode),
+                column: window.column,
+                from_y: window.from_y,
+                to_y: window.to_y,
+                easing: window.easing.clone(),
+                sustain: window.sustain,
+                opt1: window.opt1,
+                opt2: window.opt2,
+            },
+        )
+        .collect()
+}
+
+pub fn song_lua_overlay_delta_mask(
+    delta: &deadsync_song_lua::SongLuaOverlayStateDelta,
+) -> deadsync_gameplay::SongLuaOverlayDeltaMask {
+    let mut mask = 0u128;
+    let mut bit = 0u32;
+    macro_rules! field {
+        ($field:ident) => {{
+            if delta.$field.is_some() {
+                mask |= 1u128 << bit;
+            }
+            bit += 1;
+        }};
+    }
+
+    field!(x);
+    field!(y);
+    field!(z);
+    field!(z_bias);
+    field!(draw_order);
+    field!(draw_by_z_position);
+    field!(halign);
+    field!(valign);
+    field!(text_align);
+    field!(uppercase);
+    field!(shadow_len);
+    field!(shadow_color);
+    field!(glow);
+    field!(fov);
+    field!(vanishpoint);
+    field!(diffuse);
+    field!(vertex_colors);
+    field!(visible);
+    field!(cropleft);
+    field!(cropright);
+    field!(croptop);
+    field!(cropbottom);
+    field!(fadeleft);
+    field!(faderight);
+    field!(fadetop);
+    field!(fadebottom);
+    field!(mask_source);
+    field!(mask_dest);
+    field!(depth_test);
+    field!(zoom);
+    field!(zoom_x);
+    field!(zoom_y);
+    field!(zoom_z);
+    field!(basezoom);
+    field!(basezoom_x);
+    field!(basezoom_y);
+    field!(basezoom_z);
+    field!(rot_x_deg);
+    field!(rot_y_deg);
+    field!(rot_z_deg);
+    field!(skew_x);
+    field!(skew_y);
+    field!(blend);
+    field!(vibrate);
+    field!(effect_magnitude);
+    field!(effect_clock);
+    field!(effect_mode);
+    field!(effect_color1);
+    field!(effect_color2);
+    field!(effect_period);
+    field!(effect_offset);
+    field!(effect_timing);
+    field!(rainbow);
+    field!(rainbow_scroll);
+    field!(text_jitter);
+    field!(text_distortion);
+    field!(text_glow_mode);
+    field!(mult_attrs_with_diffuse);
+    field!(sprite_animate);
+    field!(sprite_loop);
+    field!(sprite_playback_rate);
+    field!(sprite_state_delay);
+    field!(sprite_state_index);
+    field!(vert_spacing);
+    field!(wrap_width_pixels);
+    field!(max_width);
+    field!(max_height);
+    field!(max_w_pre_zoom);
+    field!(max_h_pre_zoom);
+    field!(max_dimension_uses_zoom);
+    field!(texture_filtering);
+    field!(texture_wrapping);
+    field!(texcoord_offset);
+    field!(custom_texture_rect);
+    field!(texcoord_velocity);
+    field!(size);
+    field!(stretch_rect);
+    field!(sound_play);
+
+    let _ = bit;
+    mask
+}
+
+pub fn song_lua_runtime_overlay_state_delta(
+    delta: deadsync_song_lua::SongLuaOverlayStateDelta,
+) -> SongLuaRuntimeOverlayStateDelta {
+    SongLuaRuntimeOverlayStateDelta {
+        overlap_mask: song_lua_overlay_delta_mask(&delta),
+        delta,
+    }
+}
+
+pub fn song_lua_runtime_overlay_ease_window(
+    ease: &deadsync_song_lua::SongLuaOverlayEase,
+) -> deadsync_gameplay::SongLuaRuntimeOverlayEaseWindow<SongLuaRuntimeOverlayStateDelta> {
+    deadsync_gameplay::SongLuaRuntimeOverlayEaseWindow {
+        overlay_index: ease.overlay_index,
+        unit: song_lua_runtime_time_unit(ease.unit),
+        start: ease.start,
+        limit: ease.limit,
+        span_mode: song_lua_runtime_span_mode(ease.span_mode),
+        sustain: ease.sustain,
+        from: song_lua_runtime_overlay_state_delta(ease.from),
+        to: song_lua_runtime_overlay_state_delta(ease.to),
+        easing: ease.easing.clone(),
+        opt1: ease.opt1,
+        opt2: ease.opt2,
+    }
+}
+
+fn song_lua_compile_player_screen_x(
+    num_players: usize,
+    player_index: usize,
+    profile: &deadsync_profile::Profile,
+    viewport: deadsync_gameplay::GameplayViewport,
+    play_style: deadsync_gameplay::GameplayInputPlayStyle,
+    player_side: deadsync_gameplay::GameplayInputPlayerSide,
+    center_1player_notefield: bool,
+) -> f32 {
+    deadsync_gameplay::song_lua_compile_player_screen_x(
+        num_players,
+        player_index,
+        viewport,
+        song_lua_compile_play_style(play_style),
+        deadsync_gameplay::gameplay_is_single_p2_side(play_style, player_side),
+        profile.note_field_offset_x as f32,
+        center_1player_notefield,
+    )
+}
+
+pub fn song_lua_compile_context(
+    song: &deadsync_chart::SongData,
+    charts: &[Arc<deadsync_chart::ChartData>; deadsync_core::input::MAX_PLAYERS],
+    num_players: usize,
+    player_profiles: &[deadsync_profile::Profile; deadsync_core::input::MAX_PLAYERS],
+    scroll_speed: &[deadsync_rules::scroll::ScrollSpeedSetting; deadsync_core::input::MAX_PLAYERS],
+    music_rate: f32,
+    machine_global_offset_seconds: f32,
+    viewport: deadsync_gameplay::GameplayViewport,
+    session: &deadsync_gameplay::GameplaySession,
+    center_1player_notefield: bool,
+) -> deadsync_song_lua::SongLuaCompileContext {
+    let play_style = session.play_style;
+    let player_side = session.player_side;
+    let mut context = deadsync_song_lua::SongLuaCompileContext::new(
+        song.simfile_path
+            .parent()
+            .map(|path| path.to_path_buf())
+            .unwrap_or_default(),
+        song.title.clone(),
+    );
+    context.song_display_bpms =
+        song.display_bpm_pair_or(charts.first().map(|chart| chart.as_ref()), [60.0, 60.0]);
+    context.song_music_rate = if music_rate.is_finite() && music_rate > 0.0 {
+        music_rate
+    } else {
+        1.0
+    };
+    context.music_length_seconds = song.music_length_seconds.max(song.precise_last_second());
+    context.style_name = match play_style {
+        deadsync_gameplay::GameplayInputPlayStyle::Single => "single",
+        deadsync_gameplay::GameplayInputPlayStyle::Versus => "versus",
+        deadsync_gameplay::GameplayInputPlayStyle::Double => "double",
+    }
+    .to_string();
+    context.global_offset_seconds = machine_global_offset_seconds;
+    context.screen_width = viewport.width();
+    context.screen_height = viewport.height();
+    context.confusion_offset_available = true;
+    context.confusion_available = true;
+    context.amod_available = false;
+    context.players = std::array::from_fn(|player| deadsync_song_lua::SongLuaPlayerContext {
+        enabled: player < num_players,
+        difficulty: if player < num_players {
+            song_lua_difficulty_from_chart(&charts[player].difficulty)
+        } else {
+            deadsync_song_lua::SongLuaDifficulty::default_enabled()
+        },
+        display_bpms: if player < num_players {
+            song.display_bpm_pair_or(Some(charts[player].as_ref()), [60.0, 60.0])
+        } else {
+            [60.0, 60.0]
+        },
+        speedmod: if player < num_players {
+            song_lua_speedmod_from_setting(scroll_speed[player])
+        } else {
+            deadsync_song_lua::SongLuaSpeedMod::default()
+        },
+        noteskin_name: if player < num_players {
+            player_profiles[player].noteskin.to_string()
+        } else {
+            deadsync_profile::NoteSkin::default().to_string()
+        },
+        screen_x: song_lua_compile_player_screen_x(
+            num_players,
+            player,
+            &player_profiles[player],
+            viewport,
+            play_style,
+            player_side,
+            center_1player_notefield,
+        ),
+        screen_y: viewport.center_y(),
+    });
+    context
+}
+
 pub fn groovestats_eval_state_from_profile(
     chart: &deadsync_chart::ChartData,
     profile: &deadsync_profile::Profile,
@@ -237,6 +761,62 @@ pub fn groovestats_submit_invalid_reason_from_profile(
     .reason_lines
     .into_iter()
     .next()
+}
+
+#[inline(always)]
+fn groovestats_fail_type_ok_from_app_runtime() -> bool {
+    matches!(
+        deadsync_config::runtime::get().default_fail_type,
+        deadsync_config::theme::DefaultFailType::Immediate
+            | deadsync_config::theme::DefaultFailType::ImmediateContinue
+    )
+}
+
+pub fn groovestats_eval_state_from_app_runtime<
+    RuntimeProfile,
+    OverlayActor,
+    CapturedActor,
+    StateDelta,
+>(
+    gs: &deadsync_gameplay::GameplayRuntimeState<
+        RuntimeProfile,
+        OverlayActor,
+        CapturedActor,
+        StateDelta,
+    >,
+    player_idx: usize,
+) -> deadsync_score::GrooveStatsEvalState
+where
+    RuntimeProfile:
+        Deref<Target = deadsync_profile::Profile> + deadsync_gameplay::GameplayProfileData,
+{
+    if player_idx >= gs.num_players().min(deadsync_core::input::MAX_PLAYERS) {
+        return deadsync_score::GrooveStatsEvalState::default();
+    }
+
+    let chart = gs.charts()[player_idx].as_ref();
+    let profile = gs.profiles()[player_idx].deref();
+    let result = deadsync_score::groovestats_eval_state_from_gameplay_parts(
+        groovestats_eval_state_from_profile(
+            chart,
+            profile,
+            gs.music_rate(),
+            gs.autoplay_used(),
+            gs.course_display_is_course_stage(),
+            deadsync_config::runtime::get().autosubmit_course_scores_individually,
+            groovestats_fail_type_ok_from_app_runtime(),
+        ),
+        deadsync_score::GrooveStatsGameplayEvalInput {
+            song_has_lua: gs.song().has_lua,
+            lua_submit_allowed: deadsync_score::lua_chart_submit_allowed(chart.short_hash.as_str()),
+            song_completed_naturally: gs.song_completed_naturally(),
+            is_failing: gs.players()[player_idx].is_failing,
+            life: gs.players()[player_idx].life,
+            has_fail_time: gs.players()[player_idx].fail_time.is_some(),
+            course_stage_life_submit_eligible: gs.course_stage_life_submit_eligible(player_idx),
+        },
+    );
+    result.state
 }
 
 pub fn scroll_effects_from_option(
@@ -550,4 +1130,621 @@ impl deadsync_gameplay::GameplayProfileData for GameplayProfile {
     fn hide_early_dw_column_flash(&self) -> bool {
         self.hide_early_dw_column_flash
     }
+}
+
+pub fn itl_score_calc_input_from_runtime<RuntimeProfile, OverlayActor, CapturedActor, StateDelta>(
+    gs: &deadsync_gameplay::GameplayRuntimeState<
+        RuntimeProfile,
+        OverlayActor,
+        CapturedActor,
+        StateDelta,
+    >,
+    player_idx: usize,
+) -> deadsync_score::ItlScoreCalcInput<'_>
+where
+    RuntimeProfile: deadsync_gameplay::GameplayProfileData,
+{
+    let (start, end) = gs.note_range_for_player(player_idx);
+    let totals = gs.display_totals_for_player(player_idx);
+    deadsync_score::ItlScoreCalcInput {
+        notes: &gs.notes()[start..end],
+        note_times: &gs.note_time_cache_ns()[start..end],
+        hold_end_times: &gs.hold_end_time_cache_ns()[start..end],
+        total_steps: totals.total_steps,
+        holds_total: totals.holds_total,
+        rolls_total: totals.rolls_total,
+        mines_total: totals.mines_total,
+        fail_time: gs.players()[player_idx]
+            .fail_time
+            .map(deadsync_core::song_time::song_time_ns_from_seconds),
+    }
+}
+
+pub fn itl_current_score_hundredths_from_runtime<
+    RuntimeProfile,
+    OverlayActor,
+    CapturedActor,
+    StateDelta,
+>(
+    gs: &deadsync_gameplay::GameplayRuntimeState<
+        RuntimeProfile,
+        OverlayActor,
+        CapturedActor,
+        StateDelta,
+    >,
+    player_idx: usize,
+) -> Option<u32>
+where
+    RuntimeProfile:
+        Deref<Target = deadsync_profile::Profile> + deadsync_gameplay::GameplayProfileData,
+{
+    let disabled_windows = gs.profiles()[player_idx].timing_windows.disabled_windows();
+    deadsync_score::itl_current_score_hundredths_for_submit(
+        itl_score_calc_input_from_runtime(gs, player_idx),
+        disabled_windows.as_slice(),
+    )
+}
+
+pub fn itl_judgments_from_runtime<RuntimeProfile, OverlayActor, CapturedActor, StateDelta>(
+    gs: &deadsync_gameplay::GameplayRuntimeState<
+        RuntimeProfile,
+        OverlayActor,
+        CapturedActor,
+        StateDelta,
+    >,
+    player_idx: usize,
+) -> deadsync_score::ItlJudgments
+where
+    RuntimeProfile:
+        Deref<Target = deadsync_profile::Profile> + deadsync_gameplay::GameplayProfileData,
+{
+    let player = &gs.players()[player_idx];
+    let totals = gs.display_totals_for_player(player_idx);
+    let windows = gs.live_window_counts(player_idx);
+    let disabled = gs.profiles()[player_idx].timing_windows.disabled_windows();
+    deadsync_score::itl_judgments_from_counts(deadsync_score::ItlJudgmentCountsInput {
+        fantastic_plus: windows.w0,
+        fantastic: windows.w1,
+        excellent: windows.w2,
+        great: windows.w3,
+        decent: if disabled[3] { 0 } else { windows.w4 },
+        way_off: if disabled[4] { 0 } else { windows.w5 },
+        miss: windows.miss,
+        total_steps: totals.total_steps,
+        holds_held: player.holds_held,
+        total_holds: totals.holds_total,
+        mines_hit: player.mines_hit,
+        total_mines: totals.mines_total,
+        rolls_held: player.rolls_held,
+        total_rolls: totals.rolls_total,
+    })
+}
+
+pub fn itl_eval_state_from_runtime<RuntimeProfile, OverlayActor, CapturedActor, StateDelta>(
+    gs: &deadsync_gameplay::GameplayRuntimeState<
+        RuntimeProfile,
+        OverlayActor,
+        CapturedActor,
+        StateDelta,
+    >,
+    player_idx: usize,
+    data: &deadsync_score::ItlFileData,
+    song_dir: Option<&str>,
+    group_name: Option<&str>,
+    subtitle: &str,
+    groovestats_state: &deadsync_score::GrooveStatsEvalState,
+) -> deadsync_score::ItlEvalState
+where
+    RuntimeProfile:
+        Deref<Target = deadsync_profile::Profile> + deadsync_gameplay::GameplayProfileData,
+{
+    let profile = gs.profiles()[player_idx].deref();
+    let disabled_windows = profile.timing_windows.disabled_windows();
+    let passed = deadsync_score::gameplay_run_passed(
+        gs.song_completed_naturally(),
+        gs.players()[player_idx].is_failing,
+        gs.players()[player_idx].life,
+        gs.players()[player_idx].fail_time.is_some(),
+    );
+    deadsync_score::itl_eval_state_from_gameplay_context(deadsync_score::ItlGameplayEvalInput {
+        song_dir,
+        group_name,
+        data,
+        chart_hash: gs.charts()[player_idx].short_hash.as_str(),
+        subtitle,
+        used_cmod: deadsync_score::groovestats_used_cmod(profile.scroll_speed),
+        groovestats_valid: groovestats_state.valid,
+        groovestats_reason_lines: groovestats_state.reason_lines.as_slice(),
+        music_rate: gs.music_rate(),
+        remove_mask: profile.remove_active_mask.bits(),
+        disabled_windows: disabled_windows.as_slice(),
+        passed,
+    })
+}
+
+pub fn itl_eval_state_for_runtime_player<
+    RuntimeProfile,
+    OverlayActor,
+    CapturedActor,
+    StateDelta,
+    S,
+    A,
+    R,
+    G,
+>(
+    gs: &deadsync_gameplay::GameplayRuntimeState<
+        RuntimeProfile,
+        OverlayActor,
+        CapturedActor,
+        StateDelta,
+    >,
+    player_idx: usize,
+    song_dir: Option<&str>,
+    group_name: Option<&str>,
+    subtitle: &str,
+    mut side_for_player: S,
+    active_profile_id_for_side: A,
+    read_itl_file: R,
+    groovestats_state_for_player: G,
+) -> deadsync_score::ItlEvalState
+where
+    RuntimeProfile:
+        Deref<Target = deadsync_profile::Profile> + deadsync_gameplay::GameplayProfileData,
+    S: FnMut(usize, usize) -> deadsync_profile::PlayerSide,
+    A: FnOnce(deadsync_profile::PlayerSide) -> Option<String>,
+    R: FnOnce(&str) -> deadsync_score::ItlFileData,
+    G: FnOnce(usize) -> deadsync_score::GrooveStatsEvalState,
+{
+    if player_idx >= gs.num_players().min(deadsync_core::input::MAX_PLAYERS) {
+        return deadsync_score::ItlEvalState::default();
+    }
+    let side = side_for_player(gs.num_players(), player_idx);
+    let Some(profile_id) = active_profile_id_for_side(side) else {
+        return deadsync_score::ItlEvalState::default();
+    };
+    let data = read_itl_file(profile_id.as_str());
+    let groovestats_state = groovestats_state_for_player(player_idx);
+    itl_eval_state_from_runtime(
+        gs,
+        player_idx,
+        &data,
+        song_dir,
+        group_name,
+        subtitle,
+        &groovestats_state,
+    )
+}
+
+pub fn itl_eval_state_from_app_runtime<RuntimeProfile, OverlayActor, CapturedActor, StateDelta>(
+    gs: &deadsync_gameplay::GameplayRuntimeState<
+        RuntimeProfile,
+        OverlayActor,
+        CapturedActor,
+        StateDelta,
+    >,
+    player_idx: usize,
+) -> deadsync_score::ItlEvalState
+where
+    RuntimeProfile:
+        Deref<Target = deadsync_profile::Profile> + deadsync_gameplay::GameplayProfileData,
+{
+    let song = gs.song();
+    let song_dir = deadsync_score::itl_song_dir(song);
+    let group_name = deadsync_simfile::runtime_cache::song_pack_group_for_song(song);
+    itl_eval_state_for_runtime_player(
+        gs,
+        player_idx,
+        song_dir.as_deref(),
+        group_name.as_deref(),
+        song.display_subtitle(false),
+        deadsync_profile::app_runtime::gameplay_side_for_player,
+        deadsync_profile::runtime_active_local_profile_id_for_side,
+        deadsync_profile::app_runtime::read_itl_file_for_id,
+        |idx| groovestats_eval_state_from_app_runtime(gs, idx),
+    )
+}
+
+pub fn should_warn_itl_cmod_from_runtime<
+    RuntimeProfile,
+    OverlayActor,
+    CapturedActor,
+    StateDelta,
+    S,
+    A,
+    W,
+>(
+    gs: &deadsync_gameplay::GameplayRuntimeState<
+        RuntimeProfile,
+        OverlayActor,
+        CapturedActor,
+        StateDelta,
+    >,
+    player_idx: usize,
+    song_dir: Option<&str>,
+    group_name: Option<&str>,
+    subtitle: &str,
+    mut side_for_player: S,
+    active_profile_id_for_side: A,
+    should_warn: W,
+) -> bool
+where
+    RuntimeProfile:
+        Deref<Target = deadsync_profile::Profile> + deadsync_gameplay::GameplayProfileData,
+    S: FnMut(usize, usize) -> deadsync_profile::PlayerSide,
+    A: FnOnce(deadsync_profile::PlayerSide) -> Option<String>,
+    W: FnOnce(Option<&str>, Option<&str>, Option<&str>, &str, &str) -> bool,
+{
+    if player_idx >= gs.num_players().min(deadsync_core::input::MAX_PLAYERS)
+        || gs.course_display_is_course_stage()
+        || !deadsync_score::groovestats_used_cmod(gs.profiles()[player_idx].scroll_speed)
+    {
+        return false;
+    }
+
+    let side = side_for_player(gs.num_players(), player_idx);
+    let profile_id = active_profile_id_for_side(side);
+    should_warn(
+        profile_id.as_deref(),
+        song_dir,
+        group_name,
+        gs.charts()[player_idx].short_hash.as_str(),
+        subtitle,
+    )
+}
+
+pub fn should_warn_itl_cmod_from_app_runtime<
+    RuntimeProfile,
+    OverlayActor,
+    CapturedActor,
+    StateDelta,
+>(
+    gs: &deadsync_gameplay::GameplayRuntimeState<
+        RuntimeProfile,
+        OverlayActor,
+        CapturedActor,
+        StateDelta,
+    >,
+    player_idx: usize,
+) -> bool
+where
+    RuntimeProfile:
+        Deref<Target = deadsync_profile::Profile> + deadsync_gameplay::GameplayProfileData,
+{
+    let song = gs.song();
+    let song_dir = deadsync_score::itl_song_dir(song);
+    let group_name = deadsync_simfile::runtime_cache::song_pack_group_for_song(song);
+    should_warn_itl_cmod_from_runtime(
+        gs,
+        player_idx,
+        song_dir.as_deref(),
+        group_name.as_deref(),
+        song.display_subtitle(false),
+        deadsync_profile::app_runtime::gameplay_side_for_player,
+        deadsync_profile::runtime_active_local_profile_id_for_side,
+        deadsync_profile::app_runtime::should_warn_itl_cmod,
+    )
+}
+
+pub fn itl_save_player_from_runtime<RuntimeProfile, OverlayActor, CapturedActor, StateDelta>(
+    gs: &deadsync_gameplay::GameplayRuntimeState<
+        RuntimeProfile,
+        OverlayActor,
+        CapturedActor,
+        StateDelta,
+    >,
+    player_idx: usize,
+    profile_id: String,
+    song_dir: Option<String>,
+    group_name: Option<String>,
+    subtitle: String,
+    date: String,
+    groovestats_state: deadsync_score::GrooveStatsEvalState,
+) -> deadsync_score::ItlGameplaySavePlayer
+where
+    RuntimeProfile:
+        Deref<Target = deadsync_profile::Profile> + deadsync_gameplay::GameplayProfileData,
+{
+    let profile = gs.profiles()[player_idx].deref();
+    let chart = gs.charts()[player_idx].as_ref();
+    let disabled_windows = profile.timing_windows.disabled_windows();
+    let passed = deadsync_score::gameplay_run_passed(
+        gs.song_completed_naturally(),
+        gs.players()[player_idx].is_failing,
+        gs.players()[player_idx].life,
+        gs.players()[player_idx].fail_time.is_some(),
+    );
+    deadsync_score::ItlGameplaySavePlayer {
+        player_idx,
+        profile_id,
+        song_dir,
+        event_name: group_name,
+        chart_hash: chart.short_hash.clone(),
+        chart_name: chart.chart_name.clone(),
+        chart_type: chart.chart_type.clone(),
+        subtitle,
+        used_cmod: deadsync_score::groovestats_used_cmod(profile.scroll_speed),
+        groovestats_valid: groovestats_state.valid,
+        groovestats_reason_lines: groovestats_state.reason_lines,
+        music_rate: gs.music_rate(),
+        remove_mask: profile.remove_active_mask.bits(),
+        disabled_windows,
+        passed,
+        judgments: itl_judgments_from_runtime(gs, player_idx),
+        ex_percent: deadsync_score::itl_ex_score_percent(itl_score_calc_input_from_runtime(
+            gs, player_idx,
+        )),
+        date,
+    }
+}
+
+pub fn save_itl_data_from_runtime<
+    RuntimeProfile,
+    OverlayActor,
+    CapturedActor,
+    StateDelta,
+    A,
+    G,
+    S,
+    L,
+    B,
+>(
+    gs: &deadsync_gameplay::GameplayRuntimeState<
+        RuntimeProfile,
+        OverlayActor,
+        CapturedActor,
+        StateDelta,
+    >,
+    song_dir: Option<String>,
+    group_name: Option<String>,
+    subtitle: String,
+    date: String,
+    mut active_profile_id_for_player: A,
+    mut groovestats_state_for_player: G,
+    save_players: S,
+    log_skip: L,
+    log_autoplay_skip: B,
+) -> [Option<deadsync_score::ItlEventProgress>; deadsync_core::input::MAX_PLAYERS]
+where
+    RuntimeProfile:
+        Deref<Target = deadsync_profile::Profile> + deadsync_gameplay::GameplayProfileData,
+    A: FnMut(usize, usize) -> Option<String>,
+    G: FnMut(usize) -> deadsync_score::GrooveStatsEvalState,
+    S: FnOnce(
+        Vec<deadsync_score::ItlGameplaySavePlayer>,
+        L,
+    ) -> Vec<deadsync_score::ItlGameplaySaveProgress>,
+    L: for<'a> FnMut(deadsync_score::ItlGameplaySaveSkip<'a>),
+    B: FnOnce(),
+{
+    let mut progress: [Option<deadsync_score::ItlEventProgress>;
+        deadsync_core::input::MAX_PLAYERS] = std::array::from_fn(|_| None);
+    if gs.autoplay_used() {
+        log_autoplay_skip();
+        return progress;
+    }
+
+    let players = (0..gs.num_players().min(deadsync_core::input::MAX_PLAYERS))
+        .filter_map(|player_idx| {
+            let profile_id = active_profile_id_for_player(gs.num_players(), player_idx)?;
+            Some(itl_save_player_from_runtime(
+                gs,
+                player_idx,
+                profile_id,
+                song_dir.clone(),
+                group_name.clone(),
+                subtitle.clone(),
+                date.clone(),
+                groovestats_state_for_player(player_idx),
+            ))
+        })
+        .collect::<Vec<_>>();
+
+    for result in save_players(players, log_skip) {
+        progress[result.player_idx] = Some(result.progress);
+    }
+
+    progress
+}
+
+pub fn save_itl_data_from_app_runtime<RuntimeProfile, OverlayActor, CapturedActor, StateDelta>(
+    gs: &deadsync_gameplay::GameplayRuntimeState<
+        RuntimeProfile,
+        OverlayActor,
+        CapturedActor,
+        StateDelta,
+    >,
+) -> [Option<deadsync_score::ItlEventProgress>; deadsync_core::input::MAX_PLAYERS]
+where
+    RuntimeProfile:
+        Deref<Target = deadsync_profile::Profile> + deadsync_gameplay::GameplayProfileData,
+{
+    let date = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let song = gs.song();
+    let song_dir = deadsync_score::itl_song_dir(song);
+    let group_name = deadsync_simfile::runtime_cache::song_pack_group_for_song(song);
+    let subtitle = song.display_subtitle(false).to_string();
+    save_itl_data_from_runtime(
+        gs,
+        song_dir,
+        group_name,
+        subtitle,
+        date,
+        |num_players, player_idx| {
+            deadsync_profile::app_runtime::active_local_profile_id_for_gameplay_player(
+                num_players,
+                player_idx,
+            )
+            .map(|(_, profile_id)| profile_id)
+        },
+        |player_idx| groovestats_eval_state_from_app_runtime(gs, player_idx),
+        deadsync_profile::app_runtime::save_itl_gameplay_players,
+        |skip| {
+            let side = deadsync_profile::app_runtime::gameplay_side_for_player(
+                gs.num_players(),
+                skip.player_idx,
+            );
+            log::debug!(
+                "Skipping ITL save for {:?} ({}): {}",
+                side,
+                skip.chart_hash,
+                skip.reason_lines.join("; ")
+            );
+        },
+        || log::debug!("Skipping ITL save: autoplay or replay was used during this stage."),
+    )
+}
+
+pub fn local_score_player_from_runtime<RuntimeProfile, OverlayActor, CapturedActor, StateDelta>(
+    gs: &deadsync_gameplay::GameplayRuntimeState<
+        RuntimeProfile,
+        OverlayActor,
+        CapturedActor,
+        StateDelta,
+    >,
+    player_idx: usize,
+    profile_id: String,
+) -> deadsync_score::LocalScoreGameplayPlayer<'_>
+where
+    RuntimeProfile:
+        Deref<Target = deadsync_profile::Profile> + deadsync_gameplay::GameplayProfileData,
+{
+    let player = &gs.players()[player_idx];
+    let profile = gs.profiles()[player_idx].deref();
+    let chart = gs.charts()[player_idx].as_ref();
+    let totals = gs.display_totals_for_player(player_idx);
+    let invalid_reasons = if gs.score_valid_for_player(player_idx) {
+        Vec::new()
+    } else {
+        score_invalid_reason_lines_for_profile(chart, profile, gs.music_rate())
+    };
+    let (start, end) = gs.note_range_for_player(player_idx);
+    let replay = deadsync_score::local_replay_edges_for_player(
+        gs.recorded_replay_edges()
+            .iter()
+            .map(|edge| deadsync_score::LocalReplayEdgeInput {
+                event_music_time_ns: edge.event_music_time_ns,
+                lane_index: edge.lane_index,
+                pressed: edge.pressed,
+                source: edge.source,
+            }),
+        player_idx,
+        gs.num_players(),
+        gs.num_cols(),
+        gs.cols_per_player(),
+    );
+
+    deadsync_score::LocalScoreGameplayPlayer {
+        player_idx,
+        profile_id,
+        profile_initials: profile.player_initials.as_str(),
+        chart_hash: chart.short_hash.as_str(),
+        invalid_reasons,
+        score_valid: gs.score_valid_for_player(player_idx),
+        scoring_counts: &player.scoring_counts,
+        holds_held_for_score: player.holds_held_for_score,
+        rolls_held_for_score: player.rolls_held_for_score,
+        mines_hit_for_score: player.mines_hit_for_score,
+        possible_grade_points: totals.possible_grade_points,
+        song_completed_naturally: gs.song_completed_naturally(),
+        is_failing: player.is_failing,
+        life: player.life,
+        fail_time: player.fail_time,
+        notes: &gs.notes()[start..end],
+        note_times: &gs.note_time_cache_ns()[start..end],
+        hold_end_times: &gs.hold_end_time_cache_ns()[start..end],
+        total_steps: totals.total_steps,
+        holds_total: totals.holds_total,
+        rolls_total: totals.rolls_total,
+        mines_total: totals.mines_total,
+        counts: player.judgment_counts,
+        white_fantastics: Some(gs.live_window_counts(player_idx).w1),
+        holds_held: player.holds_held,
+        rolls_held: player.rolls_held,
+        mines_avoided: player.mines_avoided,
+        hands_achieved: player.hands_achieved,
+        beat0_time_ns: gs
+            .timing_for_player(player_idx)
+            .map(|timing| timing.get_time_for_beat_ns(0.0))
+            .unwrap_or(0),
+        replay,
+    }
+}
+
+pub fn save_local_scores_from_runtime<
+    RuntimeProfile,
+    OverlayActor,
+    CapturedActor,
+    StateDelta,
+    A,
+    W,
+    L,
+>(
+    gs: &deadsync_gameplay::GameplayRuntimeState<
+        RuntimeProfile,
+        OverlayActor,
+        CapturedActor,
+        StateDelta,
+    >,
+    mut active_profile_id_for_player: A,
+    write_score: W,
+    log_skip: L,
+) where
+    RuntimeProfile:
+        Deref<Target = deadsync_profile::Profile> + deadsync_gameplay::GameplayProfileData,
+    A: FnMut(usize, usize) -> Option<String>,
+    W: FnMut(&str, &str, &str, &mut deadsync_score::LocalScoreEntry) -> bool,
+    L: FnMut(deadsync_score::LocalScoreGameplaySaveSkip),
+{
+    let played_at_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+    let players = (0..gs.num_players()).filter_map(|player_idx| {
+        let profile_id = active_profile_id_for_player(gs.num_players(), player_idx)?;
+        Some(local_score_player_from_runtime(gs, player_idx, profile_id))
+    });
+    deadsync_score::save_local_gameplay_scores(
+        played_at_ms,
+        gs.music_rate(),
+        gs.autoplay_used(),
+        players,
+        write_score,
+        log_skip,
+    );
+}
+
+pub fn save_local_scores_from_app_runtime<RuntimeProfile, OverlayActor, CapturedActor, StateDelta>(
+    gs: &deadsync_gameplay::GameplayRuntimeState<
+        RuntimeProfile,
+        OverlayActor,
+        CapturedActor,
+        StateDelta,
+    >,
+) where
+    RuntimeProfile:
+        Deref<Target = deadsync_profile::Profile> + deadsync_gameplay::GameplayProfileData,
+{
+    save_local_scores_from_runtime(
+        gs,
+        |num_players, player_idx| {
+            deadsync_profile::app_runtime::active_local_profile_id_for_gameplay_player(
+                num_players,
+                player_idx,
+            )
+            .map(|(_, profile_id)| profile_id)
+        },
+        deadsync_profile::app_runtime::append_local_score_for_id,
+        |skip| match skip {
+            deadsync_score::LocalScoreGameplaySaveSkip::Autoplay => {
+                log::debug!("Skipping local score save: autoplay was used during this stage.");
+            }
+            deadsync_score::LocalScoreGameplaySaveSkip::Invalid { player_idx, detail } => {
+                log::debug!(
+                    "Skipping local score save for player {}: {}.",
+                    player_idx + 1,
+                    detail
+                );
+            }
+        },
+    );
 }

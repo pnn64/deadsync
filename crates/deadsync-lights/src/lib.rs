@@ -1,3 +1,6 @@
+pub mod cabinet_chart;
+pub mod gameplay;
+
 mod fusion;
 mod gpb;
 mod hid_blue_dot;
@@ -356,6 +359,67 @@ const DIRECTION_BUTTONS: [ButtonLight; 4] = [
     ButtonLight::Up,
     ButtonLight::Right,
 ];
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ButtonSource {
+    Pad(Player, ButtonLight),
+    Menu(Player, ButtonLight),
+}
+
+/// Full-saturation, full-value rainbow colour for a hue phase in `0.0..1.0`
+/// (wraps). Callers apply any separate luminance/brightness scale.
+pub fn rainbow_rgb(phase: f32) -> [u8; 3] {
+    let h = phase.rem_euclid(1.0) * 6.0;
+    let sector = h as u32 % 6;
+    let f = h - h.floor();
+    let up = (f * 255.0 + 0.5) as u8;
+    let down = ((1.0 - f) * 255.0 + 0.5) as u8;
+    match sector {
+        0 => [255, up, 0],
+        1 => [down, 255, 0],
+        2 => [0, 255, up],
+        3 => [0, down, 255],
+        4 => [up, 0, 255],
+        _ => [255, 0, down],
+    }
+}
+
+pub const fn button_source_from_action(
+    action: deadsync_input::VirtualAction,
+) -> Option<ButtonSource> {
+    use deadsync_input::VirtualAction;
+    match action {
+        VirtualAction::p1_left => Some(ButtonSource::Pad(Player::P1, ButtonLight::Left)),
+        VirtualAction::p1_down => Some(ButtonSource::Pad(Player::P1, ButtonLight::Down)),
+        VirtualAction::p1_up => Some(ButtonSource::Pad(Player::P1, ButtonLight::Up)),
+        VirtualAction::p1_right => Some(ButtonSource::Pad(Player::P1, ButtonLight::Right)),
+        VirtualAction::p1_menu_left => Some(ButtonSource::Menu(Player::P1, ButtonLight::Left)),
+        VirtualAction::p1_menu_down => Some(ButtonSource::Menu(Player::P1, ButtonLight::Down)),
+        VirtualAction::p1_menu_up => Some(ButtonSource::Menu(Player::P1, ButtonLight::Up)),
+        VirtualAction::p1_menu_right => Some(ButtonSource::Menu(Player::P1, ButtonLight::Right)),
+        VirtualAction::p1_start => Some(ButtonSource::Menu(Player::P1, ButtonLight::Start)),
+        VirtualAction::p1_select => Some(ButtonSource::Menu(Player::P1, ButtonLight::Select)),
+        VirtualAction::p2_left => Some(ButtonSource::Pad(Player::P2, ButtonLight::Left)),
+        VirtualAction::p2_down => Some(ButtonSource::Pad(Player::P2, ButtonLight::Down)),
+        VirtualAction::p2_up => Some(ButtonSource::Pad(Player::P2, ButtonLight::Up)),
+        VirtualAction::p2_right => Some(ButtonSource::Pad(Player::P2, ButtonLight::Right)),
+        VirtualAction::p2_menu_left => Some(ButtonSource::Menu(Player::P2, ButtonLight::Left)),
+        VirtualAction::p2_menu_down => Some(ButtonSource::Menu(Player::P2, ButtonLight::Down)),
+        VirtualAction::p2_menu_up => Some(ButtonSource::Menu(Player::P2, ButtonLight::Up)),
+        VirtualAction::p2_menu_right => Some(ButtonSource::Menu(Player::P2, ButtonLight::Right)),
+        VirtualAction::p2_start => Some(ButtonSource::Menu(Player::P2, ButtonLight::Start)),
+        VirtualAction::p2_select => Some(ButtonSource::Menu(Player::P2, ButtonLight::Select)),
+        _ => None,
+    }
+}
+
+#[inline(always)]
+pub const fn operator_menu_action(action: deadsync_input::VirtualAction) -> bool {
+    matches!(
+        action,
+        deadsync_input::VirtualAction::p1_operator | deadsync_input::VirtualAction::p2_operator
+    )
+}
 const TEST_BUTTON_LIGHTS: [(Player, ButtonLight); PLAYER_COUNT * BUTTON_COUNT] = [
     (Player::P1, ButtonLight::Left),
     (Player::P1, ButtonLight::Down),
@@ -922,6 +986,43 @@ mod tests {
             lights_gameplay_pad_from_choice(usize::MAX),
             GameplayPadLightMode::Input
         );
+    }
+
+    #[test]
+    fn rainbow_rgb_wraps_full_value_hues() {
+        assert_eq!(rainbow_rgb(0.0), [255, 0, 0]);
+        assert_eq!(rainbow_rgb(1.0), [255, 0, 0]);
+        assert_eq!(rainbow_rgb(-0.5), [0, 255, 255]);
+        assert_eq!(rainbow_rgb(0.5), [0, 255, 255]);
+    }
+
+    #[test]
+    fn button_sources_follow_virtual_actions() {
+        use deadsync_input::VirtualAction;
+
+        assert_eq!(
+            button_source_from_action(VirtualAction::p1_left),
+            Some(ButtonSource::Pad(Player::P1, ButtonLight::Left))
+        );
+        assert_eq!(
+            button_source_from_action(VirtualAction::p1_start),
+            Some(ButtonSource::Menu(Player::P1, ButtonLight::Start))
+        );
+        assert_eq!(
+            button_source_from_action(VirtualAction::p2_menu_right),
+            Some(ButtonSource::Menu(Player::P2, ButtonLight::Right))
+        );
+        assert_eq!(button_source_from_action(VirtualAction::p1_operator), None);
+    }
+
+    #[test]
+    fn operator_menu_actions_are_player_operator_buttons() {
+        use deadsync_input::VirtualAction;
+
+        assert!(operator_menu_action(VirtualAction::p1_operator));
+        assert!(operator_menu_action(VirtualAction::p2_operator));
+        assert!(!operator_menu_action(VirtualAction::p1_start));
+        assert!(!operator_menu_action(VirtualAction::p2_back));
     }
 
     #[test]

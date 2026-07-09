@@ -7,30 +7,27 @@ mod dynamic_media;
 mod graphics;
 mod input_backend;
 mod input_routing;
-pub(crate) mod media_cache;
-mod pad_config_sync;
 mod screen_nav;
 mod screenshot;
 mod smx_panel_fx;
 
 use self::commands::Command;
 use self::dynamic_media::DynamicMedia;
-use self::input_routing::{GameplayQueuedEvent, gameplay_raw_key_event};
 use self::screen_nav::TransitionState;
 use self::screenshot::{ScreenshotPreviewState, should_auto_screenshot_eval};
 use crate::act;
 use crate::assets::{AssetManager, PRESENT_TEXTURE_CONTEXT, TextureUploadBudget, visual_styles};
 use crate::config::{self, DisplayMode};
-use crate::game::{
-    GameplayCoreState, gameplay_play_style_from_profile, gameplay_player_side_from_profile,
-    gameplay_tick_mode_from_profile, profile, scores,
-};
 use crate::screens::{
     DensityGraphSlot, DensityGraphSource, Screen as CurrentScreen, ScreenAction,
     SongOffsetSyncChange, credits, evaluation, evaluation_summary, gameover, gameplay, init,
     initials, input as input_screen, manage_local_profiles, mappings, menu, options,
     overscan_adjustment, player_options, practice, profile_load, sandbox, select_color,
     select_course, select_mode, select_music, select_profile, select_style, test_lights,
+};
+use crate::{
+    GameplayCoreState, gameplay_config_from_config, gameplay_play_style_from_profile,
+    gameplay_player_side_from_profile, gameplay_tick_mode_from_profile,
 };
 use deadlib_platform::dirs;
 use deadlib_platform::display;
@@ -40,9 +37,13 @@ use deadlib_present::color;
 use deadlib_present::compose;
 use deadlib_present::space::{self as space, Metrics};
 use deadlib_render as renderer;
-use deadlib_render::{BackendType, PresentModePolicy, SamplerDesc, SamplerFilter, SamplerWrap};
+use deadlib_render::{BackendType, PresentModePolicy, SamplerDesc};
 use deadlib_renderer as renderer_backend;
-use deadsync_simfile::app_runtime as song_loading;
+use deadsync_assets::media_cache;
+use deadsync_online::score_compat as scores;
+use deadsync_profile::compat as profile;
+use deadsync_profile::pad_config_sync;
+use deadsync_simfile::{app_runtime as song_loading, sync_offset};
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalPosition,
@@ -57,7 +58,6 @@ use std::cmp;
 use std::collections::HashSet;
 use std::{
     error::Error,
-    ffi::OsString,
     path::{Path, PathBuf},
     sync::Arc,
     time::{Duration, Instant},
@@ -74,26 +74,28 @@ compile_error!(
 );
 
 use deadlib_present::actors::Actor;
+use deadsync_chart::STANDARD_DIFFICULTY_COUNT;
 use deadsync_chart::song::sync_pref_offset;
-use deadsync_chart::{STANDARD_DIFFICULTY_COUNT, STANDARD_DIFFICULTY_NAMES};
-use deadsync_core::note::NoteType;
-use deadsync_core::{input::MAX_PLAYERS, song_time::SongTimeNs, timing::ROWS_PER_BEAT};
+use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{
-    CourseDisplayTiming, CourseDisplayTotals, GameplayConfig, GameplayFailType, GameplaySession,
+    CourseDisplayTiming, CourseDisplayTotals, GameplayQueuedEvent, GameplaySession,
     GameplayViewport, LeadInTiming, ReplayInputEdge, ReplayOffsetSnapshot,
-    course_display_totals_for_chart,
+    course_display_totals_for_chart, gameplay_raw_key_event,
 };
 use deadsync_input as logical_input;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, PadEvent, VirtualAction};
 use deadsync_input_fsr as fsr_input;
 use deadsync_input_native::{GpSystemEvent, PadBackend};
-use deadsync_lights::{
-    self as lights, ButtonLight, CabinetLight, HideFlags, Mode as LightMode, Player as LightPlayer,
+use deadsync_lights::cabinet_chart::{
+    CabinetLightEvent, GameplayLightChartKey, cabinet_light_chart_from_loaded, cabinet_light_key,
+    cabinet_light_plan,
 };
+use deadsync_lights::{self as lights, HideFlags, Mode as LightMode};
+#[cfg(test)]
 use deadsync_rules::judgment as judgment_rules;
-use deadsync_rules::note::Note;
 use deadsync_rules::scroll::ScrollSpeedSetting;
+#[cfg(test)]
 use deadsync_rules::timing as timing_rules;
 
 /* -------------------- user events -------------------- */
@@ -132,14 +134,6 @@ const STUTTER_DIAG_DUMP_WINDOW_NS: u64 = 500_000_000;
 const STUTTER_DIAG_MIN_DUMP_GAP_NS: u64 = 250_000_000;
 const STUTTER_DIAG_FRAME_SAMPLE_COUNT: usize = 128;
 const FRAME_STATS_SAMPLE_COUNT: usize = 128;
-const LIGHTS_AHEAD_NS: SongTimeNs = 50_000_000;
-const LIGHTS_MAX_CATCHUP_NS: SongTimeNs = 500_000_000;
-const LIGHTS_QUARTER_ROWS: usize = ROWS_PER_BEAT as usize;
-const LIGHTS_CABINET_CHART_TYPE: &str = "lights-cabinet";
-const LIGHTS_PRIMARY_CHART_TYPE: &str = "dance-single";
-const LIGHTS_EXPLICIT_DIFFICULTY_INDEX: usize = 2; // Medium
-const LIGHTS_MARQUEE_DIFFICULTY_INDEX: usize = 3; // Hard
-const LIGHTS_BASS_DIFFICULTY_INDEX: usize = 2; // Medium
 const SERVICE_SWITCH_PRESSED: &str = "Service switch pressed";
 
 fn gameplay_viewport(metrics: Metrics) -> GameplayViewport {
@@ -160,312 +154,9 @@ fn gameplay_session() -> GameplaySession {
     }
 }
 
-fn gameplay_fail_type(fail_type: config::DefaultFailType) -> GameplayFailType {
-    match fail_type {
-        config::DefaultFailType::Immediate => GameplayFailType::Immediate,
-        config::DefaultFailType::ImmediateContinue => GameplayFailType::ImmediateContinue,
-    }
-}
-
-fn gameplay_config() -> GameplayConfig {
-    let cfg = config::get();
-    GameplayConfig {
-        mine_hit_sound: cfg.mine_hit_sound,
-        default_fail_type: gameplay_fail_type(cfg.default_fail_type),
-        global_offset_seconds: cfg.global_offset_seconds,
-        visual_delay_seconds: cfg.visual_delay_seconds,
-        machine_pack_ini_offsets: cfg.machine_pack_ini_offsets,
-        machine_default_sync_pref: cfg.machine_default_sync_offset.sync_pref(),
-        machine_allow_per_player_global_offsets: cfg.machine_allow_per_player_global_offsets,
-        machine_enable_replays: cfg.machine_enable_replays,
-        center_1player_notefield: cfg.center_1player_notefield,
-        delayed_back: cfg.delayed_back,
-    }
-}
-
-#[derive(Clone, Debug, Default)]
-struct GameplayLightTracker {
-    pad_notes_ptr: usize,
-    pad_notes_len: usize,
-    pad_cursor: usize,
-    pad_last_time_ns: SongTimeNs,
-    cabinet_key: Option<GameplayLightChartKey>,
-    cabinet_events: Vec<CabinetLightEvent>,
-    cabinet_cursor: usize,
-    cabinet_last_time_ns: SongTimeNs,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct GameplayLightChartKey {
-    simfile_path: PathBuf,
-    source_hashes: Vec<String>,
-    global_offset_us: i32,
-    pack_sync_offset_us: i32,
-}
-
-#[derive(Clone, Copy, Debug)]
-struct CabinetLightEvent {
-    time_ns: SongTimeNs,
-    row_index: usize,
-    light: CabinetLight,
-    simplify_bass_candidate: bool,
-}
-
-#[derive(Clone, Debug)]
-enum CabinetLightPlan {
-    Explicit {
-        chart_ix: usize,
-        chart_hash: String,
-    },
-    Generated {
-        marquee_ix: usize,
-        marquee_hash: String,
-        bass_ix: usize,
-        bass_hash: String,
-    },
-}
-
-impl GameplayLightTracker {
-    fn clear(&mut self) {
-        *self = Self::default();
-    }
-
-    fn cabinet_key_matches(&self, key: &GameplayLightChartKey) -> bool {
-        self.cabinet_key.as_ref() == Some(key)
-    }
-
-    fn restart_cabinet_chart(&mut self) {
-        self.cabinet_cursor = 0;
-        self.cabinet_last_time_ns = i64::MAX;
-    }
-
-    fn set_cabinet_chart(&mut self, key: GameplayLightChartKey, events: Vec<CabinetLightEvent>) {
-        self.cabinet_key = Some(key);
-        self.cabinet_events = events;
-        self.restart_cabinet_chart();
-    }
-
-    fn queue_blinks(
-        &mut self,
-        lights: &mut lights::Manager,
-        state: &GameplayCoreState,
-        simplify_bass: bool,
-    ) {
-        let now_ns = state
-            .current_music_time_ns()
-            .saturating_add(LIGHTS_AHEAD_NS);
-        self.queue_cabinet_blinks(lights, now_ns, simplify_bass);
-        self.queue_pad_blinks(lights, state, now_ns);
-    }
-
-    fn queue_cabinet_blinks(
-        &mut self,
-        lights: &mut lights::Manager,
-        now_ns: SongTimeNs,
-        simplify_bass: bool,
-    ) {
-        let reset = now_ns < self.cabinet_last_time_ns
-            || now_ns.saturating_sub(self.cabinet_last_time_ns) > LIGHTS_MAX_CATCHUP_NS;
-        if reset {
-            self.cabinet_cursor = self
-                .cabinet_events
-                .partition_point(|event| event.time_ns <= now_ns);
-            self.cabinet_last_time_ns = now_ns;
-            return;
-        }
-
-        while self.cabinet_cursor < self.cabinet_events.len()
-            && self.cabinet_events[self.cabinet_cursor].time_ns <= now_ns
-        {
-            let event = self.cabinet_events[self.cabinet_cursor];
-            if cabinet_light_event_enabled(event, simplify_bass) {
-                lights.blink_cabinet(event.light);
-            }
-            self.cabinet_cursor += 1;
-        }
-        self.cabinet_last_time_ns = now_ns;
-    }
-
-    fn queue_pad_blinks(
-        &mut self,
-        lights: &mut lights::Manager,
-        state: &GameplayCoreState,
-        now_ns: SongTimeNs,
-    ) {
-        let notes = state.notes();
-        let notes_ptr = notes.as_ptr() as usize;
-        let reset = self.pad_notes_ptr != notes_ptr
-            || self.pad_notes_len != notes.len()
-            || now_ns < self.pad_last_time_ns
-            || now_ns.saturating_sub(self.pad_last_time_ns) > LIGHTS_MAX_CATCHUP_NS;
-        if reset {
-            self.pad_notes_ptr = notes_ptr;
-            self.pad_notes_len = notes.len();
-            self.pad_cursor = state.note_time_cache_ns().partition_point(|&t| t <= now_ns);
-            self.pad_last_time_ns = now_ns;
-            return;
-        }
-
-        let note_time_cache_ns = state.note_time_cache_ns();
-        while self.pad_cursor < notes.len() && note_time_cache_ns[self.pad_cursor] <= now_ns {
-            let note = &notes[self.pad_cursor];
-            if gameplay_note_lights(note) {
-                blink_pad_lights(lights, state, note.column);
-            }
-            self.pad_cursor += 1;
-        }
-        self.pad_last_time_ns = now_ns;
-    }
-}
-
-fn cabinet_light_event_enabled(event: CabinetLightEvent, simplify_bass: bool) -> bool {
-    !simplify_bass || !event.simplify_bass_candidate || event.row_index % LIGHTS_QUARTER_ROWS == 0
-}
-
-fn gameplay_note_lights(note: &Note) -> bool {
-    note.can_be_judged
-        && !note.is_fake
-        && matches!(
-            note.note_type,
-            NoteType::Tap | NoteType::Hold | NoteType::Roll
-        )
-}
-
-fn blink_pad_lights(lights: &mut lights::Manager, state: &GameplayCoreState, column: usize) {
-    if let Some((player, button)) = pad_light_for_col(state, column) {
-        lights.blink_button(player, button);
-    }
-}
-
-impl CabinetLightPlan {
-    fn request_chart_ixs(&self) -> Vec<usize> {
-        match self {
-            Self::Explicit { chart_ix, .. } => vec![*chart_ix],
-            Self::Generated {
-                marquee_ix,
-                bass_ix,
-                ..
-            } if marquee_ix == bass_ix => vec![*marquee_ix],
-            Self::Generated {
-                marquee_ix,
-                bass_ix,
-                ..
-            } => vec![*marquee_ix, *bass_ix],
-        }
-    }
-
-    fn source_hashes(&self) -> Vec<String> {
-        match self {
-            Self::Explicit { chart_hash, .. } => vec![chart_hash.clone()],
-            Self::Generated {
-                marquee_hash,
-                bass_hash,
-                ..
-            } => vec![marquee_hash.clone(), bass_hash.clone()],
-        }
-    }
-}
-
-fn cabinet_light_plan(
-    song: &deadsync_chart::SongData,
-    fallback_chart_ix: usize,
-) -> Option<CabinetLightPlan> {
-    if let Some(chart_ix) = closest_standard_chart_ix(
-        song,
-        LIGHTS_CABINET_CHART_TYPE,
-        LIGHTS_EXPLICIT_DIFFICULTY_INDEX,
-    ) {
-        return Some(CabinetLightPlan::Explicit {
-            chart_ix,
-            chart_hash: song.charts[chart_ix].short_hash.clone(),
-        });
-    }
-
-    let fallback = song
-        .charts
-        .get(fallback_chart_ix)
-        .filter(|chart| chart.has_note_data)
-        .map(|chart| (fallback_chart_ix, chart.short_hash.clone()))?;
-    let (marquee_ix, marquee_hash) = closest_standard_chart_ix(
-        song,
-        LIGHTS_PRIMARY_CHART_TYPE,
-        LIGHTS_MARQUEE_DIFFICULTY_INDEX,
-    )
-    .map(|ix| (ix, song.charts[ix].short_hash.clone()))
-    .unwrap_or_else(|| fallback.clone());
-    let (bass_ix, bass_hash) = closest_standard_chart_ix(
-        song,
-        LIGHTS_PRIMARY_CHART_TYPE,
-        LIGHTS_BASS_DIFFICULTY_INDEX,
-    )
-    .map(|ix| (ix, song.charts[ix].short_hash.clone()))
-    .unwrap_or_else(|| fallback);
-
-    Some(CabinetLightPlan::Generated {
-        marquee_ix,
-        marquee_hash,
-        bass_ix,
-        bass_hash,
-    })
-}
-
-fn closest_standard_chart_ix(
-    song: &deadsync_chart::SongData,
-    chart_type: &str,
-    preferred_difficulty_index: usize,
-) -> Option<usize> {
-    let preferred = preferred_difficulty_index.min(STANDARD_DIFFICULTY_COUNT.saturating_sub(1));
-    let mut best = None;
-    let mut best_distance = usize::MAX;
-    for (chart_ix, chart) in song.charts.iter().enumerate() {
-        if !chart.has_note_data || !chart.chart_type.eq_ignore_ascii_case(chart_type) {
-            continue;
-        }
-        let Some(diff_ix) = STANDARD_DIFFICULTY_NAMES
-            .iter()
-            .position(|name| chart.difficulty.eq_ignore_ascii_case(name))
-        else {
-            continue;
-        };
-        let distance = diff_ix.abs_diff(preferred);
-        if distance < best_distance {
-            best = Some(chart_ix);
-            best_distance = distance;
-        }
-    }
-    best
-}
-
-fn cabinet_light_key(
-    song: &deadsync_chart::SongData,
-    plan: &CabinetLightPlan,
-    global_offset_seconds: f32,
-    pack_sync_offset_seconds: f32,
-) -> GameplayLightChartKey {
-    GameplayLightChartKey {
-        simfile_path: song.simfile_path.clone(),
-        source_hashes: plan.source_hashes(),
-        global_offset_us: offset_key_us(global_offset_seconds),
-        pack_sync_offset_us: offset_key_us(pack_sync_offset_seconds),
-    }
-}
-
-fn cabinet_light_chart_from_loaded(
-    song: &deadsync_chart::SongData,
-    plan: &CabinetLightPlan,
-    charts: &[deadsync_chart::GameplayChartData],
-    global_offset_seconds: f32,
-    pack_sync_offset_seconds: f32,
-) -> (GameplayLightChartKey, Vec<CabinetLightEvent>) {
-    (
-        cabinet_light_key(song, plan, global_offset_seconds, pack_sync_offset_seconds),
-        build_cabinet_light_events(plan, charts, pack_sync_offset_seconds),
-    )
-}
-
 fn load_cabinet_light_chart(
     song: &deadsync_chart::SongData,
-    plan: &CabinetLightPlan,
+    plan: &deadsync_lights::cabinet_chart::CabinetLightPlan,
     global_offset_seconds: f32,
     pack_sync_offset_seconds: f32,
 ) -> Result<(GameplayLightChartKey, Vec<CabinetLightEvent>), String> {
@@ -480,86 +171,12 @@ fn load_cabinet_light_chart(
     ))
 }
 
-fn offset_key_us(seconds: f32) -> i32 {
-    if seconds.is_finite() {
-        (seconds * 1_000_000.0).round() as i32
-    } else {
-        0
-    }
-}
-
-/// Full-saturation, full-value rainbow colour for a hue phase in `0.0..1.0`
-/// (wraps). Used for the Player Options pad-light brightness preview; luminance
-/// is applied separately via the per-slot brightness scale.
-fn rainbow_rgb(phase: f32) -> [u8; 3] {
-    let h = phase.rem_euclid(1.0) * 6.0;
-    let sector = h as u32 % 6;
-    let f = h - h.floor();
-    let up = (f * 255.0 + 0.5) as u8;
-    let down = ((1.0 - f) * 255.0 + 0.5) as u8;
-    match sector {
-        0 => [255, up, 0],
-        1 => [down, 255, 0],
-        2 => [0, 255, up],
-        3 => [0, down, 255],
-        4 => [up, 0, 255],
-        _ => [255, 0, down],
-    }
-}
-
-fn song_pack_group(song: &deadsync_chart::SongData) -> Option<&str> {
-    song.simfile_path
-        .parent()
-        .and_then(|p| p.parent())
-        .and_then(|p| p.file_name())
-        .and_then(|s| s.to_str())
-}
-
-fn itl_event_intro_name(pack_group: &str) -> Option<String> {
-    let name = pack_group.trim();
-    let lower = name.to_ascii_lowercase();
-    let itl_pack = lower.contains("itl online ")
-        || (lower.starts_with("itl ") && lower.chars().any(|c| c.is_ascii_digit()));
-    if !itl_pack {
-        return None;
-    }
-
-    // Personal ITL unlock packs are named "ITL Online <year> Unlocks - <username>".
-    // Cut everything from the " Unlocks" marker onward (including any trailing
-    // "- <username>") so the footer shows just the event name, e.g. "ITL Online 2026".
-    const UNLOCKS_MARKER: &str = " unlocks";
-    let name = match lower.find(UNLOCKS_MARKER) {
-        Some(idx) => &name[..idx],
-        None => name,
-    };
-    Some(name.trim().to_string())
-}
-
-fn event_intro_name_for_pack(pack_group: &str) -> Option<String> {
-    let name = pack_group.trim();
-    let lower = name.to_ascii_lowercase();
-    if lower.contains("stamina rpg 10") || lower.contains("srpg10") {
-        return Some("Stamina RPG 10".to_string());
-    }
-    if lower.contains("stamina rpg 9") || lower.contains("srpg9") {
-        return Some("Stamina RPG 9".to_string());
-    }
-    itl_event_intro_name(name)
-}
-
-fn gameplay_event_intro_text(song: &deadsync_chart::SongData) -> Arc<str> {
-    song_pack_group(song)
-        .and_then(event_intro_name_for_pack)
-        .map(Arc::from)
-        .unwrap_or_else(|| Arc::from("EVENT"))
-}
-
 fn gameplay_light_pack_sync_offset(song: &deadsync_chart::SongData) -> f32 {
     let config = config::get();
     if !config.machine_pack_ini_offsets {
         return 0.0;
     }
-    let Some(pack_group) = song_pack_group(song) else {
+    let Some(pack_group) = deadsync_simfile::event_intro::song_pack_group(song) else {
         return 0.0;
     };
     let pack_sync_pref = deadsync_simfile::runtime_cache::get_song_cache()
@@ -571,207 +188,6 @@ fn gameplay_light_pack_sync_offset(song: &deadsync_chart::SongData) -> f32 {
         pack_sync_pref,
         config.machine_default_sync_offset.sync_pref(),
     )
-}
-
-fn build_cabinet_light_events(
-    plan: &CabinetLightPlan,
-    charts: &[deadsync_chart::GameplayChartData],
-    pack_sync_offset_seconds: f32,
-) -> Vec<CabinetLightEvent> {
-    let mut events = Vec::new();
-    match plan {
-        CabinetLightPlan::Explicit { .. } => {
-            if let Some(chart) = charts.first() {
-                push_explicit_cabinet_events(&mut events, chart, pack_sync_offset_seconds);
-            }
-        }
-        CabinetLightPlan::Generated {
-            marquee_ix,
-            bass_ix,
-            ..
-        } => {
-            let Some(marquee) = charts.first() else {
-                return events;
-            };
-            let bass = if marquee_ix == bass_ix {
-                marquee
-            } else {
-                charts.get(1).unwrap_or(marquee)
-            };
-            push_generated_marquee_events(&mut events, marquee, pack_sync_offset_seconds);
-            push_generated_bass_events(
-                &mut events,
-                bass,
-                pack_sync_offset_seconds,
-                marquee_ix == bass_ix,
-            );
-        }
-    }
-    events.sort_by_key(|event| event.time_ns);
-    events
-}
-
-fn push_explicit_cabinet_events(
-    events: &mut Vec<CabinetLightEvent>,
-    chart: &deadsync_chart::GameplayChartData,
-    pack_sync_offset_seconds: f32,
-) {
-    let timing = light_timing(chart, pack_sync_offset_seconds);
-    for note in &chart.parsed_notes {
-        if !explicit_light_note(note.note_type) {
-            continue;
-        }
-        let Some(light) = explicit_cabinet_light_for_col(note.column) else {
-            continue;
-        };
-        if let Some(time_ns) = light_note_time_ns(&timing, note.row_index, false) {
-            events.push(CabinetLightEvent {
-                time_ns,
-                row_index: note.row_index,
-                light,
-                simplify_bass_candidate: false,
-            });
-        }
-    }
-}
-
-fn push_generated_marquee_events(
-    events: &mut Vec<CabinetLightEvent>,
-    chart: &deadsync_chart::GameplayChartData,
-    pack_sync_offset_seconds: f32,
-) {
-    let timing = light_timing(chart, pack_sync_offset_seconds);
-    for note in &chart.parsed_notes {
-        if !generated_light_note(note.note_type) {
-            continue;
-        }
-        let Some(light) = cabinet_light_for_col(note.column % 4) else {
-            continue;
-        };
-        if let Some(time_ns) = light_note_time_ns(&timing, note.row_index, true) {
-            events.push(CabinetLightEvent {
-                time_ns,
-                row_index: note.row_index,
-                light,
-                simplify_bass_candidate: false,
-            });
-        }
-    }
-}
-
-fn push_generated_bass_events(
-    events: &mut Vec<CabinetLightEvent>,
-    chart: &deadsync_chart::GameplayChartData,
-    pack_sync_offset_seconds: f32,
-    simplify_candidate: bool,
-) {
-    let timing = light_timing(chart, pack_sync_offset_seconds);
-    let mut last_row = usize::MAX;
-    for note in &chart.parsed_notes {
-        if note.row_index == last_row || !generated_light_note(note.note_type) {
-            continue;
-        }
-        let Some(time_ns) = light_note_time_ns(&timing, note.row_index, true) else {
-            continue;
-        };
-        for light in [CabinetLight::BassLeft, CabinetLight::BassRight] {
-            events.push(CabinetLightEvent {
-                time_ns,
-                row_index: note.row_index,
-                light,
-                simplify_bass_candidate: simplify_candidate,
-            });
-        }
-        last_row = note.row_index;
-    }
-}
-
-fn light_timing(
-    chart: &deadsync_chart::GameplayChartData,
-    pack_sync_offset_seconds: f32,
-) -> deadsync_rules::timing::TimingData {
-    let mut timing = chart.timing.clone();
-    timing.shift_song_offset_seconds(pack_sync_offset_seconds);
-    timing
-}
-
-fn light_note_time_ns(
-    timing: &deadsync_rules::timing::TimingData,
-    row_index: usize,
-    skip_fake_rows: bool,
-) -> Option<SongTimeNs> {
-    let beat = timing.get_beat_for_row(row_index)?;
-    if skip_fake_rows && (!timing.is_judgable_at_beat(beat) || timing.is_fake_at_beat(beat)) {
-        return None;
-    }
-    Some(timing.get_time_for_beat_ns(beat))
-}
-
-const fn generated_light_note(note_type: NoteType) -> bool {
-    matches!(note_type, NoteType::Tap | NoteType::Hold | NoteType::Roll)
-}
-
-const fn explicit_light_note(note_type: NoteType) -> bool {
-    !matches!(note_type, NoteType::Fake)
-}
-
-const fn explicit_cabinet_light_for_col(column: usize) -> Option<CabinetLight> {
-    match column {
-        0 => Some(CabinetLight::MarqueeUpperLeft),
-        1 => Some(CabinetLight::MarqueeUpperRight),
-        2 => Some(CabinetLight::MarqueeLowerLeft),
-        3 => Some(CabinetLight::MarqueeLowerRight),
-        4 => Some(CabinetLight::BassLeft),
-        5 => Some(CabinetLight::BassRight),
-        _ => None,
-    }
-}
-
-const fn cabinet_light_for_col(local_col: usize) -> Option<CabinetLight> {
-    match local_col {
-        0 => Some(CabinetLight::MarqueeUpperLeft),
-        1 => Some(CabinetLight::MarqueeUpperRight),
-        2 => Some(CabinetLight::MarqueeLowerLeft),
-        3 => Some(CabinetLight::MarqueeLowerRight),
-        _ => None,
-    }
-}
-
-fn pad_light_for_col(
-    state: &GameplayCoreState,
-    column: usize,
-) -> Option<(LightPlayer, ButtonLight)> {
-    if state.cols_per_player() == 0 {
-        return None;
-    }
-    let local = column % state.cols_per_player();
-    let (player, local_col) = if state.cols_per_player() >= 8 && state.num_players() == 1 {
-        let player = if local < 4 {
-            LightPlayer::P1
-        } else {
-            LightPlayer::P2
-        };
-        (player, local % 4)
-    } else {
-        let player_ix = column / state.cols_per_player();
-        let player = match player_ix {
-            0 => LightPlayer::P1,
-            1 => LightPlayer::P2,
-            _ => return None,
-        };
-        (player, local)
-    };
-    button_light_for_col(local_col).map(|button| (player, button))
-}
-
-const fn button_light_for_col(local_col: usize) -> Option<ButtonLight> {
-    match local_col {
-        0 => Some(ButtonLight::Left),
-        1 => Some(ButtonLight::Down),
-        2 => Some(ButtonLight::Up),
-        3 => Some(ButtonLight::Right),
-        _ => None,
-    }
 }
 
 /// Which named SMX background animation a screen shows (the role half of the
@@ -843,70 +259,6 @@ const fn light_mode_for_screen(screen: CurrentScreen) -> LightMode {
     }
 }
 
-const fn light_button_from_action(action: VirtualAction) -> Option<LightButtonSource> {
-    match action {
-        VirtualAction::p1_left => Some(LightButtonSource::Pad(LightPlayer::P1, ButtonLight::Left)),
-        VirtualAction::p1_down => Some(LightButtonSource::Pad(LightPlayer::P1, ButtonLight::Down)),
-        VirtualAction::p1_up => Some(LightButtonSource::Pad(LightPlayer::P1, ButtonLight::Up)),
-        VirtualAction::p1_right => {
-            Some(LightButtonSource::Pad(LightPlayer::P1, ButtonLight::Right))
-        }
-        VirtualAction::p1_menu_left => {
-            Some(LightButtonSource::Menu(LightPlayer::P1, ButtonLight::Left))
-        }
-        VirtualAction::p1_menu_down => {
-            Some(LightButtonSource::Menu(LightPlayer::P1, ButtonLight::Down))
-        }
-        VirtualAction::p1_menu_up => {
-            Some(LightButtonSource::Menu(LightPlayer::P1, ButtonLight::Up))
-        }
-        VirtualAction::p1_menu_right => {
-            Some(LightButtonSource::Menu(LightPlayer::P1, ButtonLight::Right))
-        }
-        VirtualAction::p1_start => {
-            Some(LightButtonSource::Menu(LightPlayer::P1, ButtonLight::Start))
-        }
-        VirtualAction::p1_select => Some(LightButtonSource::Menu(
-            LightPlayer::P1,
-            ButtonLight::Select,
-        )),
-        VirtualAction::p2_left => Some(LightButtonSource::Pad(LightPlayer::P2, ButtonLight::Left)),
-        VirtualAction::p2_down => Some(LightButtonSource::Pad(LightPlayer::P2, ButtonLight::Down)),
-        VirtualAction::p2_up => Some(LightButtonSource::Pad(LightPlayer::P2, ButtonLight::Up)),
-        VirtualAction::p2_right => {
-            Some(LightButtonSource::Pad(LightPlayer::P2, ButtonLight::Right))
-        }
-        VirtualAction::p2_menu_left => {
-            Some(LightButtonSource::Menu(LightPlayer::P2, ButtonLight::Left))
-        }
-        VirtualAction::p2_menu_down => {
-            Some(LightButtonSource::Menu(LightPlayer::P2, ButtonLight::Down))
-        }
-        VirtualAction::p2_menu_up => {
-            Some(LightButtonSource::Menu(LightPlayer::P2, ButtonLight::Up))
-        }
-        VirtualAction::p2_menu_right => {
-            Some(LightButtonSource::Menu(LightPlayer::P2, ButtonLight::Right))
-        }
-        VirtualAction::p2_start => {
-            Some(LightButtonSource::Menu(LightPlayer::P2, ButtonLight::Start))
-        }
-        VirtualAction::p2_select => Some(LightButtonSource::Menu(
-            LightPlayer::P2,
-            ButtonLight::Select,
-        )),
-        _ => None,
-    }
-}
-
-#[inline(always)]
-const fn is_operator_menu_action(action: VirtualAction) -> bool {
-    matches!(
-        action,
-        VirtualAction::p1_operator | VirtualAction::p2_operator
-    )
-}
-
 #[inline(always)]
 const fn allow_operator_menu_button(screen: CurrentScreen) -> bool {
     !matches!(
@@ -918,12 +270,6 @@ const fn allow_operator_menu_button(screen: CurrentScreen) -> bool {
             | CurrentScreen::OverscanAdjustment
             | CurrentScreen::SmxAssignPads
     )
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum LightButtonSource {
-    Pad(LightPlayer, ButtonLight),
-    Menu(LightPlayer, ButtonLight),
 }
 
 fn hide_flags_for_gameplay(state: &GameplayCoreState) -> [HideFlags; 2] {
@@ -1735,71 +1081,6 @@ pub struct ShellState {
     screenshot_preview: Option<ScreenshotPreviewState>,
 }
 
-/// Hold-Tab fast-forward / hold-` slow-down multipliers, ITGmania parity.
-///
-/// `Tab` alone → `TAB_FAST_MULTIPLIER`× engine update rate.
-/// `` ` `` alone → `1.0 / TAB_SLOW_DIVISOR`× rate.
-/// Both held → `0.0` (halt).
-///
-/// Always returns `1.0` on `CurrentScreen::Gameplay` (timing-sensitive,
-/// per issue #174) or when `enabled` is false.
-const TAB_FAST_MULTIPLIER: f32 = 4.0;
-const TAB_SLOW_DIVISOR: f32 = 4.0;
-/// Upper bound on the post-acceleration logic dt fed to screens.
-/// Prevents catastrophic spikes (e.g. the app stalled for several seconds
-/// and the user happens to be holding Tab) from injecting absurd dt values
-/// into per-screen `update(dt)` accumulators.
-const MAX_LOGIC_DT_PER_FRAME: f32 = 0.25;
-
-#[inline]
-fn apply_tab_acceleration(
-    wall_dt: f32,
-    screen: CurrentScreen,
-    fast: bool,
-    slow: bool,
-    enabled: bool,
-) -> f32 {
-    if !enabled || matches!(screen, CurrentScreen::Gameplay | CurrentScreen::Practice) {
-        return wall_dt;
-    }
-    let scaled = match (fast, slow) {
-        (true, true) => 0.0,
-        (true, false) => wall_dt * TAB_FAST_MULTIPLIER,
-        (false, true) => wall_dt / TAB_SLOW_DIVISOR,
-        (false, false) => wall_dt,
-    };
-    scaled.clamp(0.0, MAX_LOGIC_DT_PER_FRAME)
-}
-
-#[inline(always)]
-fn frame_interval_for_max_fps(max_fps: u16) -> Option<Duration> {
-    if max_fps == 0 {
-        None
-    } else {
-        Some(Duration::from_secs_f64(1.0 / f64::from(max_fps)))
-    }
-}
-
-#[inline(always)]
-fn advance_redraw_deadline(deadline: Instant, now: Instant, interval: Duration) -> Instant {
-    if deadline > now {
-        return deadline;
-    }
-    let step_ns = interval.as_nanos();
-    if step_ns == 0 {
-        return now;
-    }
-    let overdue_ns = now.duration_since(deadline).as_nanos();
-    let steps = overdue_ns / step_ns + 1;
-    if steps <= u128::from(u32::MAX)
-        && let Some(delta) = interval.checked_mul(steps as u32)
-        && let Some(next) = deadline.checked_add(delta)
-    {
-        return next;
-    }
-    now.checked_add(interval).unwrap_or(now)
-}
-
 /// Active screen data bundle.
 pub struct ScreensState {
     current_screen: CurrentScreen,
@@ -1891,7 +1172,7 @@ impl ShellState {
     fn new(cfg: &config::Config, overlay_mode: u8) -> Self {
         let metrics = space::metrics_for_window(cfg.display_width, cfg.display_height);
         let now = Instant::now();
-        let frame_interval = frame_interval_for_max_fps(cfg.max_fps);
+        let frame_interval = config::frame_interval_for_max_fps(cfg.max_fps);
         Self {
             frame_count: 0,
             last_title_update: now,
@@ -1971,7 +1252,7 @@ impl ShellState {
 
     #[inline(always)]
     fn set_max_fps(&mut self, max_fps: u16) {
-        self.frame_interval = frame_interval_for_max_fps(max_fps);
+        self.frame_interval = config::frame_interval_for_max_fps(max_fps);
         self.next_redraw_at = Instant::now();
         self.last_logged_frame_loop_mode = None;
     }
@@ -2474,278 +1755,27 @@ fn course_display_timing_for_run(course: &CourseRunState) -> CourseDisplayTiming
     }
 }
 
-#[inline(always)]
-fn merge_window_counts(
-    mut total: timing_rules::WindowCounts,
-    add: timing_rules::WindowCounts,
-) -> timing_rules::WindowCounts {
-    total.w0 = total.w0.saturating_add(add.w0);
-    total.w1 = total.w1.saturating_add(add.w1);
-    total.w2 = total.w2.saturating_add(add.w2);
-    total.w3 = total.w3.saturating_add(add.w3);
-    total.w4 = total.w4.saturating_add(add.w4);
-    total.w5 = total.w5.saturating_add(add.w5);
-    total.miss = total.miss.saturating_add(add.miss);
-    total
-}
-
-#[inline(always)]
-fn window_counts_total(counts: timing_rules::WindowCounts) -> u32 {
-    counts
-        .w0
-        .saturating_add(counts.w1)
-        .saturating_add(counts.w2)
-        .saturating_add(counts.w3)
-        .saturating_add(counts.w4)
-        .saturating_add(counts.w5)
-        .saturating_add(counts.miss)
-}
-
 fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::StageSummary> {
-    if course.stage_summaries.is_empty() {
-        return None;
-    }
-    let mut summary_song = (*course.song_stub).clone();
-    summary_song.simfile_path.clone_from(&course.path);
-    summary_song.title.clone_from(&course.name);
-    summary_song.translit_title.clone_from(&course.name);
-    summary_song.banner_path.clone_from(&course.banner_path);
-    let played_duration_seconds: f32 = course
-        .stage_summaries
-        .iter()
-        .map(|stage| stage.duration_seconds.max(0.0))
-        .sum();
-    let duration_seconds = course_total_seconds(course).max(played_duration_seconds);
-    summary_song.music_length_seconds = duration_seconds;
-    summary_song.total_length_seconds = duration_seconds.round() as i32;
-    let summary_song = Arc::new(summary_song);
-
-    let mut players: [Option<stage_stats::PlayerStageSummary>; MAX_PLAYERS] =
-        std::array::from_fn(|_| None);
-    for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
-        let idx = profile_data::player_side_index(side);
-        let course_totals = course.course_display_totals[idx];
-        let mut earned_grade_points = 0i32;
-        let mut possible_grade_points = course_totals.possible_grade_points;
-        let mut notes_hit: u32 = 0;
-        let mut played_total_steps: u32 = 0;
-        let mut played_possible_grade_points = 0i32;
-        let mut calories_burned = 0.0_f32;
-        let mut meter_sum = 0u32;
-        let mut meter_count = 0u32;
-        let mut any_failed = false;
-        let mut score_valid = true;
-        let mut disqualified = false;
-        let mut show_w0 = false;
-        let mut show_fa_plus_pane = false;
-        let mut show_ex = false;
-        let mut show_hard_ex = false;
-        let mut track_early_judgments = false;
-        let mut counts = timing_rules::WindowCounts::default();
-        let mut counts_10ms = timing_rules::WindowCounts::default();
-        let mut hands_achieved = 0u32;
-        let mut hands_total = 0u32;
-        let mut holds_held = 0u32;
-        let mut holds_held_for_score = 0u32;
-        let mut played_holds_total = 0u32;
-        let mut rolls_held = 0u32;
-        let mut rolls_held_for_score = 0u32;
-        let mut played_rolls_total = 0u32;
-        let mut mines_hit_for_score = 0u32;
-        let mut mines_avoided = 0u32;
-        let mut played_mines_total = 0u32;
-        let mut timing_offsets_ms = Vec::new();
-        let mut scatter = Vec::new();
-        let mut scatter_worst_window_ms = 0.0_f32;
-        let mut histograms = Vec::new();
-        let mut graph_first_second = 0.0_f32;
-        let mut graph_last_second = duration_seconds.max(0.001);
-        let mut life_history = Vec::new();
-        let mut fail_time = None;
-        let mut elapsed = 0.0_f32;
-        let mut first_player: Option<&stage_stats::PlayerStageSummary> = None;
-        for stage in &course.stage_summaries {
-            let stage_offset = elapsed;
-            let Some(player) = stage.players[idx].as_ref() else {
-                elapsed += stage.duration_seconds.max(0.0);
-                continue;
-            };
-            if first_player.is_none() {
-                first_player = Some(player);
-            }
-            earned_grade_points = earned_grade_points.saturating_add(player.earned_grade_points);
-            played_possible_grade_points =
-                played_possible_grade_points.saturating_add(player.possible_grade_points);
-            notes_hit = notes_hit.saturating_add(player.notes_hit);
-            played_total_steps =
-                played_total_steps.saturating_add(window_counts_total(player.window_counts));
-            calories_burned += player.calories_burned.max(0.0);
-            meter_sum = meter_sum.saturating_add(player.chart.meter);
-            meter_count = meter_count.saturating_add(1);
-            any_failed |= player.grade == score_data::Grade::Failed;
-            score_valid &= player.score_valid;
-            disqualified |= player.disqualified;
-            show_w0 |= player.show_w0;
-            show_fa_plus_pane |= player.show_fa_plus_pane;
-            show_ex |= player.show_ex_score;
-            show_hard_ex |= player.show_hard_ex_score;
-            track_early_judgments |= player.track_early_judgments;
-            counts = merge_window_counts(counts, player.window_counts);
-            counts_10ms = merge_window_counts(counts_10ms, player.window_counts_10ms);
-            hands_achieved = hands_achieved.saturating_add(player.hands_achieved);
-            hands_total = hands_total.saturating_add(player.hands_total);
-            holds_held = holds_held.saturating_add(player.holds_held);
-            holds_held_for_score = holds_held_for_score.saturating_add(player.holds_held_for_score);
-            played_holds_total = played_holds_total.saturating_add(player.holds_total);
-            rolls_held = rolls_held.saturating_add(player.rolls_held);
-            rolls_held_for_score = rolls_held_for_score.saturating_add(player.rolls_held_for_score);
-            played_rolls_total = played_rolls_total.saturating_add(player.rolls_total);
-            mines_hit_for_score = mines_hit_for_score.saturating_add(player.mines_hit_for_score);
-            mines_avoided = mines_avoided.saturating_add(player.mines_avoided);
-            played_mines_total = played_mines_total.saturating_add(player.mines_total);
-            scatter.reserve(player.scatter.len());
-            for point in &player.scatter {
-                let mut shifted = *point;
-                shifted.time_sec += stage_offset;
-                if let Some(offset_ms) = shifted.offset_ms {
-                    timing_offsets_ms.push(offset_ms);
-                }
-                scatter.push(shifted);
-            }
-            scatter_worst_window_ms = scatter_worst_window_ms.max(player.scatter_worst_window_ms);
-            histograms.push(player.histogram.clone());
-            graph_first_second = graph_first_second.min(player.graph_first_second + stage_offset);
-            graph_last_second = graph_last_second.max(player.graph_last_second + stage_offset);
-            life_history.reserve(player.life_history.len());
-            for &(time, life) in &player.life_history {
-                life_history.push((time + stage_offset, life));
-            }
-            if fail_time.is_none() {
-                fail_time = player.fail_time.map(|time| time + stage_offset);
-            }
-            elapsed += stage.duration_seconds.max(0.0);
-        }
-        let Some(first_player) = first_player else {
-            continue;
-        };
-        if possible_grade_points <= 0 {
-            possible_grade_points = played_possible_grade_points;
-        }
-        let total_steps = course_totals.total_steps.max(played_total_steps);
-        let holds_total = if course_totals.holds_total > 0 {
-            course_totals.holds_total
-        } else {
-            played_holds_total
-        };
-        let rolls_total = if course_totals.rolls_total > 0 {
-            course_totals.rolls_total
-        } else {
-            played_rolls_total
-        };
-        let mines_total = if course_totals.mines_total > 0 {
-            course_totals.mines_total
-        } else {
-            played_mines_total
-        };
-        let score_percent = judgment_rules::calculate_itg_score_percent_from_points(
-            earned_grade_points,
-            possible_grade_points,
-        );
-        let ex_data = judgment_rules::ExScoreData {
-            counts,
-            counts_10ms,
-            holds_held: holds_held_for_score,
-            holds_resolved: holds_held_for_score,
-            rolls_held: rolls_held_for_score,
-            rolls_resolved: rolls_held_for_score,
-            mines_hit: mines_hit_for_score,
-            total_steps,
-            holds_total,
-            rolls_total,
-            mines_total,
-        };
-        let ex_score_percent = judgment_rules::ex_score_percent(&ex_data);
-        let hard_ex_score_percent = judgment_rules::hard_ex_score_percent(&ex_data);
-        let mut grade = if any_failed {
-            score_data::Grade::Failed
-        } else {
-            score_data::score_to_grade(score_percent * 10000.0)
-        };
-        grade = score_data::promote_quint_grade(grade, ex_score_percent);
-        let mut summary_chart = (*first_player.chart).clone();
-        summary_chart.short_hash.clone_from(&course.score_hash);
-        summary_chart
-            .difficulty
-            .clone_from(&course.course_difficulty_name);
-        summary_chart.step_artist.clear();
-        summary_chart.description.clear();
-        summary_chart.chart_name.clear();
-        summary_chart.meter = course.course_meter.unwrap_or_else(|| {
-            if meter_count > 0 {
-                (meter_sum as f32 / meter_count as f32).round() as u32
-            } else {
-                summary_chart.meter
-            }
+    let totals = course
+        .course_display_totals
+        .map(|total| stage_stats::CourseSummaryTotals {
+            possible_grade_points: total.possible_grade_points,
+            total_steps: total.total_steps,
+            holds_total: total.holds_total,
+            rolls_total: total.rolls_total,
+            mines_total: total.mines_total,
         });
-        players[idx] = Some(stage_stats::PlayerStageSummary {
-            profile_name: first_player.profile_name.clone(),
-            chart: Arc::new(summary_chart),
-            score_valid,
-            disqualified,
-            groovestats: score_data::GrooveStatsEvalState {
-                valid: false,
-                reason_lines: vec!["GrooveStats QR is unavailable in course mode.".to_string()],
-                manual_qr_url: None,
-            },
-            itl: score_data::ItlEvalState::default(),
-            grade,
-            score_percent,
-            earned_grade_points,
-            possible_grade_points,
-            ex_score_percent,
-            hard_ex_score_percent,
-            hands_achieved,
-            hands_total,
-            holds_held,
-            holds_held_for_score,
-            holds_total,
-            rolls_held,
-            rolls_held_for_score,
-            rolls_total,
-            mines_hit_for_score,
-            mines_avoided,
-            mines_total,
-            notes_hit,
-            calories_burned,
-            window_counts: counts,
-            window_counts_10ms: counts_10ms,
-            timing: timing_rules::timing_stats_from_offsets(timing_offsets_ms),
-            arrow_timing: timing_rules::ArrowTimingStats::default(),
-            scatter,
-            scatter_worst_window_ms: scatter_worst_window_ms.max(45.0),
-            histogram: timing_rules::merge_histograms_ms(histograms.as_slice()),
-            graph_first_second,
-            graph_last_second,
-            life_history,
-            fail_time,
-            show_w0,
-            show_fa_plus_pane,
-            show_ex_score: show_ex,
-            show_hard_ex_score: show_hard_ex,
-            track_early_judgments,
-        });
-    }
-
-    let music_rate = course
-        .stage_summaries
-        .last()
-        .map(|s| s.music_rate)
-        .unwrap_or(1.0);
-    Some(stage_stats::StageSummary {
-        song: summary_song,
-        music_rate,
-        duration_seconds,
-        players,
+    stage_stats::build_course_summary_stage(stage_stats::CourseSummaryInput {
+        path: course.path.as_path(),
+        name: course.name.as_str(),
+        banner_path: course.banner_path.as_deref(),
+        score_hash: course.score_hash.as_str(),
+        difficulty_name: course.course_difficulty_name.as_str(),
+        meter: course.course_meter,
+        song_stub: course.song_stub.as_ref(),
+        course_total_seconds: course_total_seconds(course),
+        totals,
+        stage_summaries: course.stage_summaries.as_slice(),
     })
 }
 
@@ -3001,11 +2031,6 @@ fn build_course_summary_eval_state(
     state
 }
 
-#[inline(always)]
-const fn course_eval_is_final(next_stage_index: usize, stage_count: usize, failed: bool) -> bool {
-    failed || next_stage_index >= stage_count
-}
-
 fn gameplay_song_lua_video_paths(state: &gameplay::State) -> Vec<PathBuf> {
     let mut paths = Vec::new();
     let mut seen = HashSet::new();
@@ -3031,36 +2056,11 @@ fn gameplay_overlay_video_paths(state: &gameplay::State) -> Vec<PathBuf> {
     paths
 }
 
-fn model_texture_sampler(key: &str) -> SamplerDesc {
-    SamplerDesc {
-        wrap: SamplerWrap::Repeat,
-        ..crate::assets::parse_texture_hints(key).sampler_desc()
-    }
-}
-
 fn prewarm_gameplay_assets(
     assets: &mut AssetManager,
     backend: &mut renderer_backend::Backend,
     state: &gameplay::State,
 ) {
-    fn song_lua_overlay_sampler(
-        overlay: &deadsync_assets::song_lua::SongLuaOverlayActor,
-    ) -> SamplerDesc {
-        SamplerDesc {
-            filter: if deadsync_song_lua::overlay_actor_uses_nearest_sampler(overlay) {
-                SamplerFilter::Nearest
-            } else {
-                SamplerFilter::Linear
-            },
-            wrap: if deadsync_song_lua::overlay_actor_uses_repeat_sampler(overlay) {
-                SamplerWrap::Repeat
-            } else {
-                SamplerWrap::Clamp
-            },
-            ..SamplerDesc::default()
-        }
-    }
-
     fn gameplay_media_paths(state: &gameplay::State) -> Vec<&PathBuf> {
         fn push_bgchange_paths<'a>(
             paths: &mut Vec<&'a PathBuf>,
@@ -3107,7 +2107,11 @@ fn prewarm_gameplay_assets(
         if !seen_model_textures.insert(key.clone()) {
             return;
         }
-        assets.ensure_texture_for_key_with_sampler(backend, &key, model_texture_sampler(&key));
+        assets.ensure_texture_for_key_with_sampler(
+            backend,
+            &key,
+            deadsync_assets::textures::model_texture_sampler(&key),
+        );
         seen.insert(key);
     }
 
@@ -3214,7 +2218,7 @@ fn prewarm_gameplay_assets(
                     } => {
                         let key = texture_key.as_ref();
                         let first_seen = seen.insert(key.to_owned());
-                        let sampler = song_lua_overlay_sampler(overlay);
+                        let sampler = deadsync_assets::song_lua::overlay_sampler(overlay);
                         if sampler != SamplerDesc::default() {
                             match media_cache::load_banner_source_rgba(texture_path) {
                                 Ok(rgba) => {
@@ -3243,7 +2247,7 @@ fn prewarm_gameplay_assets(
                     } => {
                         let key = texture_key.as_ref();
                         let first_seen = seen.insert(key.to_owned());
-                        let sampler = song_lua_overlay_sampler(overlay);
+                        let sampler = deadsync_assets::song_lua::overlay_sampler(overlay);
                         if sampler != SamplerDesc::default() {
                             match media_cache::load_banner_source_rgba(texture_path) {
                                 Ok(rgba) => {
@@ -3309,20 +2313,15 @@ fn prewarm_gameplay_sfx(state: &gameplay::State) {
     deadsync_audio_stream::preload_sfx("assets/sounds/boom.ogg");
     deadsync_audio_stream::preload_sfx("assets/sounds/assist_tick.ogg");
 
+    let mut sound_paths = Vec::<PathBuf>::with_capacity(state.song_lua_sound_paths.len());
     let mut seen = HashSet::<String>::with_capacity(state.song_lua_sound_paths.len());
     let mut prewarm_sound_overlays =
         |overlays: &[deadsync_assets::song_lua::SongLuaOverlayActor]| {
-            for overlay in overlays {
-                let deadsync_assets::song_lua::SongLuaOverlayKind::Sound { sound_path } =
-                    &overlay.kind
-                else {
-                    continue;
-                };
-                let key = sound_path.to_string_lossy().into_owned();
-                if seen.insert(key.clone()) {
-                    deadsync_audio_stream::preload_sfx(&key);
-                }
-            }
+            deadsync_song_lua::push_song_lua_overlay_sound_paths(
+                overlays,
+                &mut seen,
+                &mut sound_paths,
+            );
         };
 
     let song_lua_visuals = state.song_lua_visuals();
@@ -3333,11 +2332,14 @@ fn prewarm_gameplay_sfx(state: &gameplay::State) {
     for layer in &song_lua_visuals.foreground_visual_layers {
         prewarm_sound_overlays(&layer.overlays);
     }
-    for sound_path in &state.song_lua_sound_paths {
-        let key = sound_path.to_string_lossy().into_owned();
-        if seen.insert(key.clone()) {
-            deadsync_audio_stream::preload_sfx(&key);
-        }
+    deadsync_song_lua::push_unique_song_lua_sound_paths(
+        &state.song_lua_sound_paths,
+        &mut seen,
+        &mut sound_paths,
+    );
+    for sound_path in sound_paths {
+        let key = sound_path.to_string_lossy();
+        deadsync_audio_stream::preload_sfx(key.as_ref());
     }
 }
 
@@ -3553,42 +2555,6 @@ fn stage_summary_from_eval(eval: &evaluation::State) -> Option<stage_stats::Stag
 }
 
 #[inline(always)]
-fn quantize_sync_offset_seconds(v: f32) -> f32 {
-    (v / 0.001_f32).round() * 0.001_f32
-}
-
-#[inline(always)]
-fn sync_offset_delta_seconds(start: f32, new: f32) -> Option<f32> {
-    let delta = quantize_sync_offset_seconds(new) - quantize_sync_offset_seconds(start);
-    (delta.abs() >= 0.000_1_f32).then_some(delta)
-}
-
-#[inline(always)]
-fn sync_offset_target_seconds(start: f32, new: f32) -> Option<f32> {
-    sync_offset_delta_seconds(start, new).map(|_| quantize_sync_offset_seconds(new))
-}
-
-#[inline(always)]
-fn sync_change_line(label: &str, start: f32, new: f32) -> Option<String> {
-    let start_q = quantize_sync_offset_seconds(start);
-    let new_q = quantize_sync_offset_seconds(new);
-    let delta_q = sync_offset_delta_seconds(start, new)?;
-    let direction = if delta_q > 0.0 { "earlier" } else { "later" };
-    Some(format!(
-        "{label} from {start_q:+.3} to {new_q:+.3} (notes {direction})"
-    ))
-}
-
-#[inline(always)]
-fn format_offset_tag_value(value: f32) -> String {
-    let mut v = quantize_sync_offset_seconds(value);
-    if v.abs() < 0.000_5_f32 {
-        v = 0.0;
-    }
-    format!("{v:.3}")
-}
-
-#[inline(always)]
 fn replace_song_arc_if_same_simfile(
     current_song: &mut Arc<deadsync_chart::SongData>,
     updated_song: &Arc<deadsync_chart::SongData>,
@@ -3636,101 +2602,6 @@ fn restart_payload_from_eval(
     }
 
     song.map(|song| (song, chart_hashes, music_rate.unwrap_or(1.0), scroll_speed))
-}
-
-fn rewrite_simfile_offset_tags(
-    simfile_bytes: &[u8],
-    delta: f32,
-) -> Result<(Vec<u8>, usize), String> {
-    const TAG: &[u8] = b"#OFFSET:";
-    let len = simfile_bytes.len();
-    let mut out: Vec<u8> = Vec::with_capacity(len.saturating_add(64));
-    let mut changed = 0usize;
-    let mut cursor = 0usize;
-    let mut i = 0usize;
-
-    while i + TAG.len() <= len {
-        if simfile_bytes[i..i + TAG.len()].eq_ignore_ascii_case(TAG) {
-            out.extend_from_slice(&simfile_bytes[cursor..i + TAG.len()]);
-            let mut value_start = i + TAG.len();
-            while value_start < len
-                && simfile_bytes[value_start].is_ascii_whitespace()
-                && simfile_bytes[value_start] != b';'
-            {
-                value_start += 1;
-            }
-            out.extend_from_slice(&simfile_bytes[i + TAG.len()..value_start]);
-
-            let mut value_end = value_start;
-            while value_end < len && simfile_bytes[value_end] != b';' {
-                value_end += 1;
-            }
-            if value_end >= len {
-                return Err("Malformed #OFFSET tag: missing ';' terminator".to_string());
-            }
-
-            let raw = &simfile_bytes[value_start..value_end];
-            let Some(trim_start) = raw.iter().position(|b| !b.is_ascii_whitespace()) else {
-                return Err("Malformed #OFFSET tag: empty value".to_string());
-            };
-            let Some(trim_end_inclusive) = raw.iter().rposition(|b| !b.is_ascii_whitespace())
-            else {
-                return Err("Malformed #OFFSET tag: empty value".to_string());
-            };
-            let trim_end = trim_end_inclusive + 1;
-            let value_bytes = &raw[trim_start..trim_end];
-            let value_str = std::str::from_utf8(value_bytes)
-                .map_err(|_| "Malformed #OFFSET tag: value is not valid UTF-8".to_string())?;
-            let parsed_value = value_str
-                .parse::<f32>()
-                .map_err(|_| format!("Malformed #OFFSET tag value: '{value_str}'"))?;
-            let new_value = parsed_value + delta;
-
-            out.extend_from_slice(&raw[..trim_start]);
-            out.extend_from_slice(format_offset_tag_value(new_value).as_bytes());
-            out.extend_from_slice(&raw[trim_end..]);
-            out.push(b';');
-
-            changed = changed.saturating_add(1);
-            i = value_end.saturating_add(1);
-            cursor = i;
-            continue;
-        }
-        i += 1;
-    }
-
-    out.extend_from_slice(&simfile_bytes[cursor..]);
-    Ok((out, changed))
-}
-
-#[inline(always)]
-fn simfile_backup_path(simfile_path: &Path) -> PathBuf {
-    let mut backup = OsString::from(simfile_path.as_os_str());
-    backup.push(".old");
-    PathBuf::from(backup)
-}
-
-fn save_song_offset_delta_to_simfile(simfile_path: &Path, delta: f32) -> Result<usize, String> {
-    let simfile_bytes = std::fs::read(simfile_path)
-        .map_err(|e| format!("Failed to read simfile '{}': {e}", simfile_path.display()))?;
-    let (rewritten, changed_tags) = rewrite_simfile_offset_tags(&simfile_bytes, delta)?;
-    if changed_tags == 0 {
-        return Err(format!(
-            "No #OFFSET tags found in simfile '{}'",
-            simfile_path.display()
-        ));
-    }
-
-    let backup_path = simfile_backup_path(simfile_path);
-    std::fs::copy(simfile_path, &backup_path).map_err(|e| {
-        format!(
-            "Failed to create backup '{}': {e}",
-            backup_path.to_string_lossy()
-        )
-    })?;
-    std::fs::write(simfile_path, rewritten)
-        .map_err(|e| format!("Failed to write simfile '{}': {e}", simfile_path.display()))?;
-    Ok(changed_tags)
 }
 
 impl ScreensState {
@@ -4098,7 +2969,7 @@ pub struct App {
     /// [`pad_config_sync`].
     pad_config_sync: pad_config_sync::PadConfigSync,
     lights: lights::Manager,
-    gameplay_lights: GameplayLightTracker,
+    gameplay_lights: lights::gameplay::GameplayLightTracker,
     smx_panels: smx_panel_fx::SmxPanelDriver,
     /// Last per-slot pad-light brightness pushed to the SMX crate (`[P1, P2]`),
     /// cached so the resolve-and-push only fires when the value actually changes.
@@ -4322,7 +3193,7 @@ impl App {
                     .pad_config_sync
                     .profiles_stale(pad, Some(pid), cursor_pad_type.as_deref())
             {
-                let list = crate::game::profile::load_pad_configs(pid)
+                let list = deadsync_profile::compat::load_pad_configs(pid)
                     .into_iter()
                     .filter(|c| {
                         pad_profile_data::config_matches(
@@ -4433,8 +3304,8 @@ impl App {
         pad_type: Option<&str>,
         serial: &str,
         preset: crate::config::SmxPadPreset,
-    ) -> (bool, crate::screens::select_music::AppliedPadConfig) {
-        use crate::screens::select_music::AppliedPadConfig;
+    ) -> (bool, pad_config_sync::AppliedPadConfig) {
+        use pad_config_sync::AppliedPadConfig;
         let preset_label = AppliedPadConfig {
             preset: true,
             name: preset.as_str().to_owned(),
@@ -4442,7 +3313,7 @@ impl App {
         let Some(id) = profile_id else {
             return (deadsync_smx::apply_preset(pad, preset), preset_label);
         };
-        let configs = crate::game::profile::load_pad_configs(id);
+        let configs = deadsync_profile::compat::load_pad_configs(id);
         match pad_profile_data::resolve(&configs, deadsync_smx::BACKEND_ID, pad_type, serial)
             .and_then(|c| {
                 deadsync_smx::PadConfigData::from_settings(&c.settings).map(|d| (c.name.clone(), d))
@@ -4645,7 +3516,7 @@ impl App {
 
         self.state.screens.smx_po_light_phase =
             (self.state.screens.smx_po_light_phase + dt / HUE_PERIOD_S).fract();
-        let rgb = rainbow_rgb(self.state.screens.smx_po_light_phase);
+        let rgb = lights::rainbow_rgb(self.state.screens.smx_po_light_phase);
         // Same hue on both pads; each scaled by its own side's live percent.
         let colors: [Option<[u8; 3]>; 2] = std::array::from_fn(|slot| preview[slot].map(|_| rgb));
         let brightness: [u8; 2] = std::array::from_fn(|slot| preview[slot].unwrap_or(0));
@@ -4654,7 +3525,7 @@ impl App {
     }
 
     fn apply_smx_managed_preset(&mut self) {
-        use pad_config_sync::Sig;
+        use pad_config_sync::PadConfigSignature;
 
         // Skip entirely on the gameplay hot path. Pad config can't change mid-song
         // (the UI that touches it isn't reachable here, so no intents queue up), and
@@ -4737,7 +3608,7 @@ impl App {
             self.pad_config_sync.applied[pad] = Some(label);
             if applied {
                 // Move (don't clone) the resolved inputs into the cached signature.
-                self.pad_config_sync.signature[pad] = Some(Sig {
+                self.pad_config_sync.signature[pad] = Some(PadConfigSignature {
                     preset: cfg.smx_default_pad_config,
                     serial: info.serial,
                     profile_id,
@@ -4829,14 +3700,14 @@ impl App {
     }
 
     fn sync_light_input(&mut self, ev: &InputEvent) {
-        let Some(source) = light_button_from_action(ev.action) else {
+        let Some(source) = lights::button_source_from_action(ev.action) else {
             return;
         };
         match source {
-            LightButtonSource::Pad(player, button) => {
+            lights::ButtonSource::Pad(player, button) => {
                 self.lights.set_button_pressed(player, button, ev.pressed);
             }
-            LightButtonSource::Menu(player, button) => {
+            lights::ButtonSource::Menu(player, button) => {
                 self.lights
                     .set_menu_button_pressed(player, button, ev.pressed);
             }
@@ -5017,7 +3888,7 @@ impl App {
                     // tests the exact order.
                     let grade_anim = if role == "results" {
                         eval_grade.and_then(|grade| {
-                            smx_panel_fx::results_role_candidates(grade, eval_difficulty)
+                            deadsync_smx::panel_fx::results_role_candidates(grade, eval_difficulty)
                                 .iter()
                                 .find_map(|r| try_role(r))
                         })
@@ -5056,9 +3927,9 @@ impl App {
                     let registry = self.smx_gif_registry().clone();
                     let judge_pack_str =
                         (!judge_packs[pad].is_empty()).then_some(judge_packs[pad].as_str());
-                    smx_panel_fx::JudgementGifs::resolve(&registry, judge_pack_str)
+                    deadsync_smx::panel_fx::JudgementGifs::resolve(&registry, judge_pack_str)
                 } else {
-                    smx_panel_fx::JudgementGifs::default()
+                    deadsync_smx::panel_fx::JudgementGifs::default()
                 };
                 self.smx_panels.set_judgement_gifs_for_pad(pad, gifs);
             }
@@ -5361,15 +4232,16 @@ impl App {
             .duration_since(self.state.shell.start_time)
             .as_secs_f32();
 
-        // Tab/`-acceleration: scale the dt fed to non-gameplay screens,
-        // actor tweens, and their fade transitions. Gameplay and Practice
-        // return wall-clock dt from `apply_tab_acceleration`, and the gameplay
-        // step that continues running under the FadingOut→Evaluation and
-        // FadingIn transitions below also stays on wall-clock `delta_time`.
-        // See `apply_tab_acceleration` and issue #174.
-        let logic_dt = apply_tab_acceleration(
-            delta_time,
+        // Tab acceleration scales non-gameplay screen dt. Gameplay, Practice,
+        // and gameplay steps under evaluation transitions stay on wall-clock
+        // `delta_time`. See issue #174.
+        let tab_acceleration_allowed = !matches!(
             self.state.screens.current_screen,
+            CurrentScreen::Gameplay | CurrentScreen::Practice
+        );
+        let logic_dt = config::apply_tab_acceleration(
+            delta_time,
+            tab_acceleration_allowed,
             self.state.shell.fast_forward_held,
             self.state.shell.slow_down_held,
             self.state.shell.tab_acceleration_enabled,
@@ -5831,7 +4703,7 @@ impl App {
             fsr_pads_active: false,
             pad_config_sync: pad_config_sync::PadConfigSync::default(),
             lights: lights::Manager::new(config.lights_driver, config.lights_com_port.as_str()),
-            gameplay_lights: GameplayLightTracker::default(),
+            gameplay_lights: lights::gameplay::GameplayLightTracker::default(),
             smx_panels: smx_panel_fx::SmxPanelDriver::default(),
             smx_light_brightness: [100, 100],
             smx_gifs: None,
@@ -6267,7 +5139,7 @@ impl App {
 
     #[inline(always)]
     fn gameplay_global_offset_changed(gs: &gameplay::State) -> bool {
-        sync_offset_delta_seconds(
+        sync_offset::sync_offset_delta_seconds(
             gs.initial_global_offset_seconds(),
             gs.global_offset_seconds(),
         )
@@ -6276,8 +5148,11 @@ impl App {
 
     #[inline(always)]
     fn gameplay_song_offset_changed(gs: &gameplay::State) -> bool {
-        sync_offset_delta_seconds(gs.initial_song_offset_seconds(), gs.song_offset_seconds())
-            .is_some()
+        sync_offset::sync_offset_delta_seconds(
+            gs.initial_song_offset_seconds(),
+            gs.song_offset_seconds(),
+        )
+        .is_some()
     }
 
     #[inline(always)]
@@ -6299,7 +5174,7 @@ impl App {
     fn gameplay_sync_prompt_text(gs: &gameplay::State) -> String {
         let mut text = String::with_capacity(320);
 
-        if let Some(line) = sync_change_line(
+        if let Some(line) = sync_offset::sync_change_line(
             "Global Offset",
             gs.initial_global_offset_seconds(),
             gs.global_offset_seconds(),
@@ -6308,7 +5183,7 @@ impl App {
             text.push_str("\n\n");
         }
 
-        if let Some(line) = sync_change_line(
+        if let Some(line) = sync_offset::sync_change_line(
             "Song offset",
             gs.initial_song_offset_seconds(),
             gs.song_offset_seconds(),
@@ -6350,7 +5225,7 @@ impl App {
                 }
                 continue;
             }
-            changed_tags_total += save_song_offset_delta_to_simfile(
+            changed_tags_total += sync_offset::save_song_offset_delta_to_simfile(
                 change.simfile_path.as_path(),
                 change.delta_seconds,
             )?;
@@ -6452,13 +5327,13 @@ impl App {
         if save_changes {
             let mut song_offset_change: Option<(PathBuf, f32)> = None;
             if let Some(gs) = self.state.screens.gameplay_state.as_ref() {
-                if let Some(global_offset) = sync_offset_target_seconds(
+                if let Some(global_offset) = sync_offset::sync_offset_target_seconds(
                     gs.initial_global_offset_seconds(),
                     gs.global_offset_seconds(),
                 ) {
                     config::update_global_offset(global_offset);
                 }
-                if let Some(delta) = sync_offset_delta_seconds(
+                if let Some(delta) = sync_offset::sync_offset_delta_seconds(
                     gs.initial_song_offset_seconds(),
                     gs.song_offset_seconds(),
                 ) && config::song_path_is_writable(gs.song().simfile_path.as_path())
@@ -7038,7 +5913,11 @@ impl App {
             .course_run
             .as_ref()
             .is_some_and(|course_run| {
-                course_eval_is_final(course_run.next_stage_index, course_run.stages.len(), failed)
+                stage_stats::course_eval_is_final(
+                    course_run.next_stage_index,
+                    course_run.stages.len(),
+                    failed,
+                )
             })
         {
             if let Some(course_run) = self.state.session.course_run.as_ref() {
@@ -7313,7 +6192,7 @@ impl App {
     }
 
     fn route_operator_menu_button(&mut self, ev: &InputEvent) -> bool {
-        if !ev.pressed || !is_operator_menu_action(ev.action) {
+        if !ev.pressed || !lights::operator_menu_action(ev.action) {
             return false;
         }
         if !allow_operator_menu_button(self.state.screens.current_screen) {
@@ -8295,8 +7174,8 @@ impl App {
     /// Two-player covers Versus/Double or any 2+ active notefields (both sides occupied).
     fn frame_stats_play_context(&self) -> (bool, bool, bool) {
         let in_gameplay = self.state.screens.current_screen == CurrentScreen::Gameplay;
-        let play_style = crate::game::profile::get_session_play_style();
-        let side = crate::game::profile::get_session_player_side();
+        let play_style = deadsync_profile::compat::get_session_play_style();
+        let side = deadsync_profile::compat::get_session_player_side();
         let num_players = self
             .state
             .screens
@@ -10118,7 +8997,7 @@ impl App {
                     gameplay_charts,
                     gameplay_viewport(self.state.shell.metrics),
                     gameplay_session(),
-                    gameplay_config(),
+                    gameplay_config_from_config(&config::get()),
                     po_state.active_color_index,
                     po_state.music_rate,
                     scroll_speeds,
@@ -10538,7 +9417,7 @@ impl App {
                             self.state.session.gameplay_restart_count
                         ))
                     } else {
-                        gameplay_event_intro_text(song_arc.as_ref())
+                        deadsync_simfile::event_intro::gameplay_event_intro_text(song_arc.as_ref())
                     };
                 let combo_carry = self.state.session.combo_carry;
                 let init_started = Instant::now();
@@ -10548,7 +9427,7 @@ impl App {
                     gameplay_charts,
                     gameplay_viewport(self.state.shell.metrics),
                     gameplay_session(),
-                    gameplay_config(),
+                    gameplay_config_from_config(&config::get()),
                     color_index,
                     po_state.music_rate,
                     scroll_speeds,
@@ -11335,7 +10214,7 @@ impl ApplicationHandler<UserEvent> for App {
             if now >= self.state.shell.next_redraw_at {
                 self.request_redraw_if_needed(&window, interval_state.reason.redraw_reason());
                 self.state.shell.next_redraw_at =
-                    advance_redraw_deadline(self.state.shell.next_redraw_at, now, interval);
+                    config::advance_redraw_deadline(self.state.shell.next_redraw_at, now, interval);
             }
             let deadline = self.state.shell.next_redraw_at;
             let time_until_deadline = deadline.saturating_duration_since(now);
@@ -11502,10 +10381,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadsync_chart::GameplayChartData;
-    use deadsync_chart::notes::ParsedNote;
     use deadsync_chart::{ArrowStats, ChartData, SongData, StaminaCounts, TechCounts};
-    use deadsync_rules::timing::{TimingData, TimingSegments};
 
     fn test_chart(hash: &str) -> ChartData {
         test_chart_with("dance-single", "Hard", hash)
@@ -11550,136 +10426,6 @@ mod tests {
         }
     }
 
-    fn parsed_note(row_index: usize, column: usize, note_type: NoteType) -> ParsedNote {
-        ParsedNote {
-            row_index,
-            column,
-            note_type,
-            tail_row_index: None,
-        }
-    }
-
-    fn test_gameplay_chart(parsed_notes: Vec<ParsedNote>) -> GameplayChartData {
-        let max_row = parsed_notes
-            .iter()
-            .map(|note| note.row_index)
-            .max()
-            .unwrap_or(0);
-        let row_to_beat = (0..=max_row)
-            .map(|row| row as f32 / ROWS_PER_BEAT as f32)
-            .collect::<Vec<_>>();
-        let timing_segments = TimingSegments::default();
-        let timing = TimingData::from_segments(0.0, 0.0, &timing_segments, &row_to_beat);
-        GameplayChartData {
-            notes: Vec::new(),
-            parsed_notes,
-            row_to_beat,
-            timing_segments,
-            timing,
-            chart_attacks: None,
-        }
-    }
-
-    #[test]
-    fn simplified_bass_light_events_only_use_quarter_rows() {
-        let quarter = CabinetLightEvent {
-            time_ns: 0,
-            row_index: LIGHTS_QUARTER_ROWS * 2,
-            light: CabinetLight::BassLeft,
-            simplify_bass_candidate: true,
-        };
-        let eighth = CabinetLightEvent {
-            time_ns: 0,
-            row_index: LIGHTS_QUARTER_ROWS * 2 + LIGHTS_QUARTER_ROWS / 2,
-            light: CabinetLight::BassLeft,
-            simplify_bass_candidate: true,
-        };
-        let explicit = CabinetLightEvent {
-            time_ns: 0,
-            row_index: LIGHTS_QUARTER_ROWS * 2 + LIGHTS_QUARTER_ROWS / 2,
-            light: CabinetLight::BassLeft,
-            simplify_bass_candidate: false,
-        };
-
-        assert!(cabinet_light_event_enabled(quarter, true));
-        assert!(!cabinet_light_event_enabled(eighth, true));
-        assert!(cabinet_light_event_enabled(eighth, false));
-        assert!(cabinet_light_event_enabled(explicit, true));
-    }
-
-    #[test]
-    fn cabinet_light_plan_prefers_explicit_lights() {
-        let mut song = test_song("Songs/Test/song.ssc", 0.0, ["hard", "medium"]);
-        song.charts
-            .push(test_chart_with("lights-cabinet", "Medium", "lights"));
-
-        let plan = cabinet_light_plan(&song, 0).expect("light plan");
-
-        match plan {
-            CabinetLightPlan::Explicit {
-                chart_ix,
-                chart_hash,
-            } => {
-                assert_eq!(chart_ix, 2);
-                assert_eq!(chart_hash, "lights");
-            }
-            CabinetLightPlan::Generated { .. } => panic!("expected explicit lights"),
-        }
-    }
-
-    #[test]
-    fn cabinet_light_plan_muxes_hard_marquee_and_medium_bass() {
-        let mut song = test_song("Songs/Test/song.ssc", 0.0, ["hard", "medium"]);
-        song.charts[0] = test_chart_with("dance-single", "Hard", "hard");
-        song.charts[1] = test_chart_with("dance-single", "Medium", "medium");
-
-        let plan = cabinet_light_plan(&song, 0).expect("light plan");
-
-        match plan {
-            CabinetLightPlan::Generated {
-                marquee_ix,
-                marquee_hash,
-                bass_ix,
-                bass_hash,
-            } => {
-                assert_eq!(marquee_ix, 0);
-                assert_eq!(marquee_hash, "hard");
-                assert_eq!(bass_ix, 1);
-                assert_eq!(bass_hash, "medium");
-            }
-            CabinetLightPlan::Explicit { .. } => panic!("expected generated lights"),
-        }
-    }
-
-    #[test]
-    fn generated_cabinet_events_take_bass_from_second_chart() {
-        let plan = CabinetLightPlan::Generated {
-            marquee_ix: 0,
-            marquee_hash: "hard".to_string(),
-            bass_ix: 1,
-            bass_hash: "medium".to_string(),
-        };
-        let hard = test_gameplay_chart(vec![parsed_note(ROWS_PER_BEAT as usize, 0, NoteType::Tap)]);
-        let medium = test_gameplay_chart(vec![parsed_note(
-            (ROWS_PER_BEAT * 2) as usize,
-            1,
-            NoteType::Tap,
-        )]);
-
-        let events = build_cabinet_light_events(&plan, &[hard, medium], 0.0);
-
-        assert!(events.iter().any(|event| {
-            event.row_index == ROWS_PER_BEAT as usize
-                && event.light == CabinetLight::MarqueeUpperLeft
-        }));
-        assert!(events.iter().any(|event| {
-            event.row_index == (ROWS_PER_BEAT * 2) as usize && event.light == CabinetLight::BassLeft
-        }));
-        assert!(!events.iter().any(|event| {
-            event.row_index == ROWS_PER_BEAT as usize && event.light == CabinetLight::BassLeft
-        }));
-    }
-
     fn test_song(path: &str, offset: f32, hashes: [&str; 2]) -> SongData {
         SongData {
             simfile_path: PathBuf::from(path),
@@ -11712,57 +10458,6 @@ mod tests {
             precise_last_second_seconds: 0.0,
             charts: vec![test_chart(hashes[0]), test_chart(hashes[1])],
         }
-    }
-
-    #[test]
-    fn gameplay_event_intro_uses_itl_pack_name() {
-        let song = test_song(
-            "Songs/ITL Online 2026/Example/song.ssc",
-            0.0,
-            ["hard", "medium"],
-        );
-
-        assert_eq!(gameplay_event_intro_text(&song).as_ref(), "ITL Online 2026");
-    }
-
-    #[test]
-    fn gameplay_event_intro_strips_itl_unlocks_suffix() {
-        let song = test_song(
-            "Songs/ITL Online 2026 Unlocks/Example/song.ssc",
-            0.0,
-            ["hard", "medium"],
-        );
-
-        assert_eq!(gameplay_event_intro_text(&song).as_ref(), "ITL Online 2026");
-    }
-
-    #[test]
-    fn gameplay_event_intro_strips_itl_unlocks_username_suffix() {
-        let song = test_song(
-            "Songs/ITL Online 2026 Unlocks - iamchris4life/Example/song.ssc",
-            0.0,
-            ["hard", "medium"],
-        );
-
-        assert_eq!(gameplay_event_intro_text(&song).as_ref(), "ITL Online 2026");
-    }
-
-    #[test]
-    fn gameplay_event_intro_uses_srpg_name() {
-        let song = test_song(
-            "Songs/Stamina RPG 9/Example/song.ssc",
-            0.0,
-            ["hard", "medium"],
-        );
-
-        assert_eq!(gameplay_event_intro_text(&song).as_ref(), "Stamina RPG 9");
-    }
-
-    #[test]
-    fn gameplay_event_intro_keeps_default_for_normal_pack() {
-        let song = test_song("Songs/Test/Example/song.ssc", 0.0, ["hard", "medium"]);
-
-        assert_eq!(gameplay_event_intro_text(&song).as_ref(), "EVENT");
     }
 
     #[test]
@@ -11815,39 +10510,6 @@ mod tests {
             gameplay_offset_prompt_choice_delta(VirtualAction::p1_right, false),
             Some(1)
         );
-    }
-
-    #[test]
-    fn sync_offset_change_uses_millisecond_quantization() {
-        assert_eq!(sync_offset_delta_seconds(-0.0421, -0.0424), None);
-        assert_eq!(sync_change_line("Global Offset", -0.0421, -0.0424), None);
-
-        let delta = sync_offset_delta_seconds(-0.0424, -0.0426).expect("changed by one ms");
-        assert!((delta + 0.001).abs() < f32::EPSILON);
-        assert_eq!(sync_offset_target_seconds(-0.0424, -0.0426), Some(-0.043));
-        assert_eq!(
-            sync_change_line("Global Offset", -0.0424, -0.0426).as_deref(),
-            Some("Global Offset from -0.042 to -0.043 (notes later)")
-        );
-    }
-
-    #[test]
-    fn model_texture_sampler_forces_repeat_for_plain_textures() {
-        let key = "noteskins/dance/custom/textures/Tap Note parts.png";
-        let sampler = model_texture_sampler(key);
-
-        assert_eq!(sampler.wrap, SamplerWrap::Repeat);
-        assert_eq!(sampler.filter, SamplerFilter::Linear);
-    }
-
-    #[test]
-    fn model_texture_sampler_preserves_texture_hints() {
-        let key = "noteskins/dance/custom/textures/Tap Note parts (nearest mipmaps).png";
-        let sampler = model_texture_sampler(key);
-
-        assert_eq!(sampler.wrap, SamplerWrap::Repeat);
-        assert_eq!(sampler.filter, SamplerFilter::Nearest);
-        assert!(sampler.mipmaps);
     }
 
     fn test_score_info(
@@ -12030,9 +10692,9 @@ mod tests {
 
     #[test]
     fn course_eval_final_on_completion_or_failure() {
-        assert!(!course_eval_is_final(1, 3, false));
-        assert!(course_eval_is_final(1, 3, true));
-        assert!(course_eval_is_final(3, 3, false));
+        assert!(!stage_stats::course_eval_is_final(1, 3, false));
+        assert!(stage_stats::course_eval_is_final(1, 3, true));
+        assert!(stage_stats::course_eval_is_final(3, 3, false));
     }
 
     #[test]
@@ -12238,14 +10900,6 @@ mod tests {
     }
 
     #[test]
-    fn operator_menu_actions_are_player_operator_buttons() {
-        assert!(is_operator_menu_action(VirtualAction::p1_operator));
-        assert!(is_operator_menu_action(VirtualAction::p2_operator));
-        assert!(!is_operator_menu_action(VirtualAction::p1_start));
-        assert!(!is_operator_menu_action(VirtualAction::p2_back));
-    }
-
-    #[test]
     fn replace_song_arc_if_same_simfile_swaps_in_reloaded_song() {
         let mut current = Arc::new(test_song("Songs/Test/song.ssc", 0.0, ["a", "b"]));
         let updated = Arc::new(test_song("Songs/Test/song.ssc", -0.003, ["a", "b"]));
@@ -12332,83 +10986,5 @@ mod tests {
             evaluation_summary_return_to(CurrentScreen::SelectCourse, true),
             CurrentScreen::Initials,
         );
-    }
-
-    // ---- Tab acceleration helper (issue #174) ----
-
-    const EPS: f32 = 1e-6;
-
-    #[test]
-    fn tab_accel_no_modifier_is_passthrough() {
-        let dt = 0.016_f32;
-        assert!(
-            (apply_tab_acceleration(dt, CurrentScreen::Menu, false, false, true) - dt).abs() < EPS
-        );
-    }
-
-    #[test]
-    fn tab_accel_fast_multiplies_by_four() {
-        let dt = 0.016_f32;
-        let out = apply_tab_acceleration(dt, CurrentScreen::Menu, true, false, true);
-        assert!((out - dt * 4.0).abs() < EPS, "got {out}");
-    }
-
-    #[test]
-    fn tab_accel_slow_divides_by_four() {
-        let dt = 0.016_f32;
-        let out = apply_tab_acceleration(dt, CurrentScreen::Menu, false, true, true);
-        assert!((out - dt / 4.0).abs() < EPS, "got {out}");
-    }
-
-    #[test]
-    fn tab_accel_both_held_halts() {
-        let dt = 0.016_f32;
-        let out = apply_tab_acceleration(dt, CurrentScreen::Menu, true, true, true);
-        assert_eq!(out, 0.0);
-    }
-
-    #[test]
-    fn tab_accel_gameplay_screen_never_scales() {
-        let dt = 0.016_f32;
-        for (fast, slow) in [(false, false), (true, false), (false, true), (true, true)] {
-            let out = apply_tab_acceleration(dt, CurrentScreen::Gameplay, fast, slow, true);
-            assert!(
-                (out - dt).abs() < EPS,
-                "Gameplay must passthrough; fast={fast} slow={slow} got={out}"
-            );
-        }
-    }
-
-    #[test]
-    fn tab_accel_disabled_never_scales() {
-        let dt = 0.016_f32;
-        for screen in [
-            CurrentScreen::Menu,
-            CurrentScreen::SelectMusic,
-            CurrentScreen::Evaluation,
-        ] {
-            for (fast, slow) in [(false, false), (true, false), (false, true), (true, true)] {
-                let out = apply_tab_acceleration(dt, screen, fast, slow, false);
-                assert!(
-                    (out - dt).abs() < EPS,
-                    "disabled must passthrough; screen={screen:?} fast={fast} slow={slow} got={out}"
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn tab_accel_clamps_to_max_logic_dt() {
-        // Big stall: 1s wall_dt with 4x fast-forward would yield 4s; must clamp to MAX.
-        let out = apply_tab_acceleration(1.0, CurrentScreen::Menu, true, false, true);
-        assert_eq!(out, MAX_LOGIC_DT_PER_FRAME);
-    }
-
-    #[test]
-    fn tab_accel_clamp_does_not_affect_normal_frames() {
-        let dt = 0.016_f32;
-        let out = apply_tab_acceleration(dt, CurrentScreen::Menu, true, false, true);
-        assert!(out < MAX_LOGIC_DT_PER_FRAME);
-        assert!((out - 4.0 * dt).abs() < EPS);
     }
 }

@@ -1,13 +1,13 @@
 use crate::act;
 use crate::assets::i18n::tr;
 use crate::assets::{FontRole, current_machine_font_key};
-use crate::game::profile;
 use crate::screens::components::shared::screen_bar::{
     self, AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use deadlib_present::actors::{Actor, SizeSpec};
 use deadlib_present::space::screen_center_x;
 use deadsync_profile as profile_data;
+use deadsync_profile::compat as profile;
 
 pub fn push(out: &mut Vec<Actor>, top_title: &str) {
     let p1_profile = profile::get_for_side(profile_data::PlayerSide::P1);

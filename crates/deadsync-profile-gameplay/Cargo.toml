@@ -5,10 +5,17 @@ edition = "2024"
 license = "GPL-3.0"
 
 [dependencies]
+chrono = "0.4.45"
+deadsync-config = { path = "../deadsync-config" }
 deadsync-chart = { path = "../deadsync-chart" }
+deadsync-core = { path = "../deadsync-core" }
 deadsync-gameplay = { path = "../deadsync-gameplay" }
 deadsync-profile = { path = "../deadsync-profile" }
+deadsync-rules = { path = "../deadsync-rules" }
 deadsync-score = { path = "../deadsync-score" }
+deadsync-simfile = { path = "../deadsync-simfile" }
+deadsync-song-lua = { path = "../deadsync-song-lua" }
+log = "0.4.33"
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

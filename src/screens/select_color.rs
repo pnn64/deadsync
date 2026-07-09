@@ -1,8 +1,8 @@
 use crate::act;
 use crate::assets::i18n::tr;
 use crate::assets::visual_styles;
-use crate::game::profile;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
+use deadsync_profile::compat as profile;
 // Screen navigation handled in app
 use crate::screens::components::shared::screen_bar::{
     AvatarParams, ScreenBarPosition, ScreenBarTitlePlacement,

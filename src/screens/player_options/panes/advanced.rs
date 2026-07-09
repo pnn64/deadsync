@@ -16,7 +16,7 @@ use super::super::state::{
     ScrollMask, step_statistics_choice_bits, step_statistics_mask_from_choice_bits,
 };
 use super::*;
-use crate::game::profile as gp;
+use deadsync_profile::compat as gp;
 use deadsync_profile::{
     ColumnFlashBrightness, ColumnFlashSize, ComboColors, ComboMode, ErrorBarMask, ErrorBarTrim,
     LifeMeterType, MeasureCounter, MeasureLines, MiniIndicator, MiniIndicatorColor,
@@ -1429,7 +1429,7 @@ pub(super) fn build_advanced_rows(return_screen: Screen) -> RowMap {
         tr("PlayerOptions", "GameplayExtrasLiveTimingStats").to_string(),
         tr("PlayerOptions", "GameplayExtrasColumnCountdown").to_string(),
     ];
-    if crate::game::scores::is_gs_get_scores_service_allowed() {
+    if deadsync_online::score_compat::is_gs_get_scores_service_allowed() {
         gameplay_extras_choices
             .push(tr("PlayerOptions", "GameplayExtrasDisplayScorebox").to_string());
     }

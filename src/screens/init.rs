@@ -9,7 +9,7 @@ use deadlib_present::color;
 use deadlib_present::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
-use deadsync_assets::noteskin;
+use deadsync_assets::{media_cache, noteskin};
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_simfile::app_runtime as song_loading;
 use deadsync_simfile::course as simfile_course;
@@ -386,8 +386,7 @@ fn start_loading_thread(state: &mut State) {
         );
 
         let (banner_paths, cdtitle_paths) = collect_artwork_cache_paths();
-        let artwork_total =
-            crate::app::media_cache::artwork_cache_jobs(&banner_paths, &cdtitle_paths);
+        let artwork_total = media_cache::artwork_cache_jobs(&banner_paths, &cdtitle_paths);
 
         let _ = tx.send(LoadingMsg::Phase(LoadingPhase::Artwork));
         info!(
@@ -405,7 +404,7 @@ fn start_loading_thread(state: &mut State) {
                 line3,
             });
         };
-        crate::app::media_cache::prewarm_artwork_cache_with_progress(
+        media_cache::prewarm_artwork_cache_with_progress(
             &banner_paths,
             &cdtitle_paths,
             &mut on_artwork,

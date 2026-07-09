@@ -7,8 +7,6 @@ use crate::config::{
     SyncGraphMode,
 };
 
-use crate::game::profile;
-use crate::game::scores;
 use crate::rgba_const;
 use crate::screens::components::{
     select_music::{
@@ -45,12 +43,27 @@ use deadsync_core::input::InputSource;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, Keymap, PadDir, PadEvent, VirtualAction, with_keymap};
 use deadsync_online::lobbies as lobby_data;
+use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
+use deadsync_profile::compat as profile;
+use deadsync_profile::favorites_view::{
+    FavoriteCatalogEntry, FavoriteCatalogHeader, FavoriteViewPlan,
+};
 use deadsync_profile::pad_config as pad_profile_data;
+use deadsync_profile::pad_config_sync::{AppliedPadConfig, PadConfigIntent};
 use deadsync_score as score_data;
 use deadsync_simfile::app_runtime as song_loading;
 use deadsync_simfile::bpm::{beat_at_sec_from_bpms, sec_at_beat_from_bpms};
+use deadsync_simfile::playlist::{
+    PlaylistEntry, PlaylistSongLookup, PlaylistSongSource,
+    normalize_song_path as normalize_lobby_song_path, song_pack_and_dir_name,
+};
 use deadsync_simfile::runtime_cache::get_song_cache;
+use deadsync_simfile::song_sort::{
+    GroupedSongs, SongSortGroup, alpha_group_char, artist_grouped_songs, bpm_grouped_songs,
+    genre_grouped_songs, length_grouped_songs, meter_grouped_songs, song_title_sort_key,
+    title_grouped_songs,
+};
 use image::{Rgba, RgbaImage};
 use log::{debug, warn};
 use null_or_die::{
@@ -58,7 +71,6 @@ use null_or_die::{
     KernelTarget,
 };
 use std::cell::RefCell;
-use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -1008,40 +1020,19 @@ struct PlaylistCacheEntry {
     entries: Vec<MusicWheelEntry>,
 }
 
-struct PlaylistSongLookup {
-    by_path: HashMap<String, Arc<SongData>>,
-    by_pack_song: HashMap<(String, String), Arc<SongData>>,
-    by_group: HashMap<String, Vec<Arc<SongData>>>,
-}
-
 /// What deadsync last applied to an SMX pad, so the UI can flag the active one.
 /// `preset` = a built-in preset (name is its label); otherwise a saved config.
-#[derive(Clone, PartialEq, Eq)]
-pub struct AppliedPadConfig {
-    pub preset: bool,
-    pub name: String,
-}
-
 /// A request from the Song Select UI to the App-owned pad-config controller
-/// (`app::pad_config_sync`). The UI can't reach the controller directly, so it
+/// (`deadsync_profile::pad_config_sync`). The UI can't reach the controller directly, so it
 /// queues these on `State::pad_config_intents` and the app drains them. `pad` is
 /// the pad slot (0/1) in every variant — the same key the resolver uses.
-pub enum PadConfigIntent {
-    /// A preset/config was manually applied to a pad → mark it the active config.
-    Override {
-        pad: usize,
-        applied: AppliedPadConfig,
-    },
-    /// Something the resolver's signature can't see changed for this pad (a
-    /// per-pad default edit, overwrite, delete, or a play-style switch) →
-    /// re-resolve + re-apply it.
-    Invalidate { pad: usize },
-    /// The saved-config *list* changed (new config saved, or a rename) but what's
-    /// applied to the pad did not → rebuild the cached list, but do NOT re-resolve
-    /// (that would rewrite the pad's just-captured live values).
-    RefreshList { pad: usize },
-}
-
+/// A preset/config was manually applied to a pad → mark it the active config.
+/// Something the resolver's signature can't see changed for this pad (a
+/// per-pad default edit, overwrite, delete, or a play-style switch) →
+/// re-resolve + re-apply it.
+/// The saved-config *list* changed (new config saved, or a rename) but what's
+/// applied to the pad did not → rebuild the cached list, but do NOT re-resolve
+/// (that would rewrite the pad's just-captured live values).
 pub struct State {
     pub entries: Vec<MusicWheelEntry>,
     pub selected_index: usize,
@@ -1081,7 +1072,7 @@ pub struct State {
     pub pad_config_overlay: pad_config::State,
     /// What deadsync last applied to each SMX pad (index = pad slot 0/1), so the
     /// menus can show which preset/config is currently active. Read-only mirror of
-    /// the App pad-config controller's active markers (`app::pad_config_sync`),
+    /// the App pad-config controller's active markers (`deadsync_profile::pad_config_sync`),
     /// pushed every frame; the authoritative state lives on the app, so screen
     /// rebuilds can't lose it.
     pub smx_applied: [Option<AppliedPadConfig>; 2],
@@ -1514,16 +1505,6 @@ fn group_name_for_song(
     None
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-struct FolderStatsSummary {
-    count_charts: u32,
-    passes: u32,
-    star_counts: [u32; FOLDER_STATS_STAR_BUCKETS],
-    best_grade: u8,
-}
-
-const FOLDER_STATS_STAR_BUCKETS: usize = 5;
-
 #[inline(always)]
 fn media_path_key_string(path: &Path) -> String {
     path.to_string_lossy().into_owned()
@@ -1558,45 +1539,6 @@ fn selected_group_header_for_folder_stats(state: &State) -> Option<(String, Opti
 }
 
 #[inline(always)]
-fn folder_stats_grade_bucket(grade: score_data::Grade) -> Option<usize> {
-    match grade {
-        score_data::Grade::Quint => Some(0),
-        score_data::Grade::Tier01 => Some(1),
-        score_data::Grade::Tier02 => Some(2),
-        score_data::Grade::Tier03 => Some(3),
-        score_data::Grade::Tier04 => Some(4),
-        _ => None,
-    }
-}
-
-#[inline(always)]
-fn folder_stats_best_grade(star_counts: &[u32; FOLDER_STATS_STAR_BUCKETS]) -> u8 {
-    star_counts
-        .iter()
-        .position(|count| *count > 0)
-        .map_or(0, |idx| (FOLDER_STATS_STAR_BUCKETS - idx) as u8)
-}
-
-#[inline(always)]
-fn folder_stats_difficulty_label(difficulty: &str) -> &str {
-    if difficulty.eq_ignore_ascii_case("Challenge") {
-        "Expert"
-    } else if difficulty.eq_ignore_ascii_case("Beginner") {
-        "Beginner"
-    } else if difficulty.eq_ignore_ascii_case("Easy") {
-        "Easy"
-    } else if difficulty.eq_ignore_ascii_case("Medium") {
-        "Medium"
-    } else if difficulty.eq_ignore_ascii_case("Hard") {
-        "Hard"
-    } else if difficulty.eq_ignore_ascii_case("Edit") {
-        "Edit"
-    } else {
-        difficulty
-    }
-}
-
-#[inline(always)]
 fn folder_stats_preferred_difficulty(preferred_idx: usize) -> &'static str {
     STANDARD_DIFFICULTY_NAMES[preferred_idx.min(NUM_STANDARD_DIFFICULTIES.saturating_sub(1))]
 }
@@ -1607,8 +1549,8 @@ fn build_folder_stats_summary(
     target_chart_type: &str,
     difficulty: &str,
     side: profile_data::PlayerSide,
-) -> FolderStatsSummary {
-    let mut summary = FolderStatsSummary::default();
+) -> score_data::FolderStatsSummary {
+    let mut songs = Vec::new();
     let mut in_group = false;
     for entry in &state.group_entries {
         match entry {
@@ -1619,93 +1561,36 @@ fn build_folder_stats_summary(
                 in_group = name == group_name;
             }
             MusicWheelEntry::Song(song) if in_group => {
-                for chart in &song.charts {
-                    if !chart.chart_type.eq_ignore_ascii_case(target_chart_type)
-                        || !chart.difficulty.eq_ignore_ascii_case(difficulty)
-                    {
-                        continue;
-                    }
-                    summary.count_charts = summary.count_charts.saturating_add(1);
-                    let Some(score) = scores::get_cached_score_for_side(&chart.short_hash, side)
-                    else {
-                        continue;
-                    };
-                    if score.grade == score_data::Grade::Failed {
-                        continue;
-                    }
-                    summary.passes = summary.passes.saturating_add(1);
-                    if let Some(bucket) = folder_stats_grade_bucket(score.grade) {
-                        summary.star_counts[bucket] = summary.star_counts[bucket].saturating_add(1);
-                    }
-                }
+                songs.push(song.as_ref());
             }
             MusicWheelEntry::Song(_) => {}
         }
     }
-    summary.best_grade = folder_stats_best_grade(&summary.star_counts);
-    summary
+    score_data::folder_stats_summary(songs, target_chart_type, difficulty, |hash| {
+        scores::get_cached_score_for_side(hash, side)
+    })
 }
 
 #[inline(always)]
-fn song_title_sort_key(song: &SongData) -> (String, String, String) {
-    let title = if song.translit_title.trim().is_empty() {
-        song.title.as_str()
-    } else {
-        song.translit_title.as_str()
-    };
-    let subtitle = if song.translit_subtitle.trim().is_empty() {
-        song.subtitle.as_str()
-    } else {
-        song.translit_subtitle.as_str()
-    };
-    (
-        title.to_ascii_lowercase(),
-        subtitle.to_ascii_lowercase(),
-        song.simfile_path.to_string_lossy().to_ascii_lowercase(),
-    )
-}
-
-#[inline(always)]
-fn alpha_group_bucket_from_text(text: &str) -> u8 {
-    let first = text.trim_start().chars().next();
-    match first {
-        Some(ch) if ch.is_ascii_digit() => 1,
-        Some(ch) if ch.is_ascii_alphabetic() => {
-            let c = ch.to_ascii_uppercase();
-            (c as u8).saturating_sub(b'A').saturating_add(2)
-        }
-        _ => 0,
-    }
-}
-
-#[inline(always)]
-fn alpha_group_meta_from_text(text: &str) -> (u8, String) {
-    let bucket = alpha_group_bucket_from_text(text);
-    let label = match bucket {
-        0 => tr("SelectMusic", "AlphaGroupOther").to_string(),
-        1 => tr("SelectMusic", "AlphaGroupDigits").to_string(),
-        b => ((b'A' + b.saturating_sub(2)) as char).to_string(),
-    };
-    (bucket, label)
-}
-
-#[inline(always)]
-fn title_group_bucket(song: &SongData) -> u8 {
-    let title = if song.translit_title.trim().is_empty() {
-        song.title.as_str()
-    } else {
-        song.translit_title.as_str()
-    };
-    alpha_group_bucket_from_text(title)
-}
-
-#[inline(always)]
-fn title_group_label(song: &SongData) -> String {
-    let bucket = title_group_bucket(song);
+fn alpha_group_label(bucket: u8) -> String {
     match bucket {
         0 => tr("SelectMusic", "AlphaGroupOther").to_string(),
         1 => tr("SelectMusic", "AlphaGroupDigits").to_string(),
-        b => ((b'A' + b.saturating_sub(2)) as char).to_string(),
+        b => alpha_group_char(b).unwrap_or('?').to_string(),
+    }
+}
+
+fn song_sort_group_label(group: &SongSortGroup) -> String {
+    match group {
+        SongSortGroup::Title(bucket) | SongSortGroup::Artist(bucket) => alpha_group_label(*bucket),
+        SongSortGroup::Genre(Some(genre)) => genre.clone(),
+        SongSortGroup::Genre(None) => tr("SelectMusic", "UnknownGenre").to_string(),
+        SongSortGroup::Bpm { lo, hi } => format!("{lo:03}-{hi:03}"),
+        SongSortGroup::Length { lo, hi } => {
+            format!("{}-{}", format_chart_length(*lo), format_chart_length(*hi))
+        }
+        SongSortGroup::Meter(Some(meter)) => format!("{:02}", (*meter).min(99)),
+        SongSortGroup::Meter(None) => tr("SelectMusic", "NotAvailable").to_string(),
     }
 }
 
@@ -1733,165 +1618,67 @@ fn write_header_song_count(
     }
 }
 
-fn build_title_grouped_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<MusicWheelEntry> {
-    let mut songs: Vec<Arc<SongData>> = grouped_entries
+fn songs_from_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<Arc<SongData>> {
+    grouped_entries
         .iter()
         .filter_map(|e| match e {
             MusicWheelEntry::Song(song) => Some(song.clone()),
             MusicWheelEntry::PackHeader { .. } => None,
         })
-        .collect();
+        .collect()
+}
 
-    songs.sort_by_cached_key(|song| {
-        (
-            title_group_bucket(song.as_ref()),
-            song_title_sort_key(song.as_ref()),
-            song.title.clone(),
-            song.subtitle.clone(),
-        )
+fn single_header_song_entries(
+    header: String,
+    songs: impl IntoIterator<Item = Arc<SongData>>,
+) -> Vec<MusicWheelEntry> {
+    let songs: Vec<Arc<SongData>> = songs.into_iter().collect();
+    let count = songs.len();
+    let mut entries = Vec::with_capacity(count.saturating_add(1));
+    entries.push(MusicWheelEntry::PackHeader {
+        name: header,
+        original_index: 0,
+        banner_path: None,
+        song_count: count,
+        pack_key: None,
     });
-
-    let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(songs.len().saturating_add(32));
-    let mut current_group: Option<String> = None;
-    let mut current_header_index: Option<usize> = None;
-    let mut current_count = 0usize;
-    let mut header_idx = 0usize;
-
-    for song in songs {
-        let group_name = title_group_label(song.as_ref());
-        if current_group.as_deref() != Some(group_name.as_str()) {
-            write_header_song_count(&mut entries, current_header_index, current_count);
-            entries.push(MusicWheelEntry::PackHeader {
-                name: group_name.clone(),
-                original_index: header_idx,
-                banner_path: None,
-                song_count: 0,
-                pack_key: None,
-            });
-            current_header_index = Some(entries.len() - 1);
-            current_group = Some(group_name.clone());
-            current_count = 0;
-            header_idx += 1;
-        }
-        current_count += 1;
-        entries.push(MusicWheelEntry::Song(song));
-    }
-
-    write_header_song_count(&mut entries, current_header_index, current_count);
+    entries.extend(songs.into_iter().map(MusicWheelEntry::Song));
     entries
 }
 
-#[inline(always)]
-fn song_artist_sort_key(song: &SongData) -> (String, String) {
-    (
-        song.artist.to_ascii_lowercase(),
-        song.simfile_path.to_string_lossy().to_ascii_lowercase(),
-    )
+fn grouped_song_entries(groups: Vec<GroupedSongs>) -> Vec<MusicWheelEntry> {
+    let mut entries = Vec::with_capacity(
+        groups
+            .iter()
+            .map(|group| group.songs.len().saturating_add(1))
+            .sum(),
+    );
+    for (header_idx, group) in groups.into_iter().enumerate() {
+        entries.push(MusicWheelEntry::PackHeader {
+            name: song_sort_group_label(&group.group),
+            original_index: header_idx,
+            banner_path: None,
+            song_count: group.songs.len(),
+            pack_key: None,
+        });
+        entries.extend(group.songs.into_iter().map(MusicWheelEntry::Song));
+    }
+    entries
+}
+
+fn build_title_grouped_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<MusicWheelEntry> {
+    grouped_song_entries(title_grouped_songs(songs_from_entries(grouped_entries)))
 }
 
 fn build_artist_grouped_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<MusicWheelEntry> {
-    let mut songs: Vec<Arc<SongData>> = grouped_entries
-        .iter()
-        .filter_map(|e| match e {
-            MusicWheelEntry::Song(song) => Some(song.clone()),
-            MusicWheelEntry::PackHeader { .. } => None,
-        })
-        .collect();
-
-    songs.sort_by_cached_key(|song| {
-        (
-            alpha_group_bucket_from_text(&song.artist),
-            song_artist_sort_key(song.as_ref()),
-            song_title_sort_key(song.as_ref()),
-        )
-    });
-
-    let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(songs.len().saturating_add(32));
-    let mut current_group: Option<String> = None;
-    let mut current_header_index: Option<usize> = None;
-    let mut current_count = 0usize;
-    let mut header_idx = 0usize;
-
-    for song in songs {
-        let (_, group_name) = alpha_group_meta_from_text(&song.artist);
-        if current_group.as_deref() != Some(group_name.as_str()) {
-            write_header_song_count(&mut entries, current_header_index, current_count);
-            entries.push(MusicWheelEntry::PackHeader {
-                name: group_name.clone(),
-                original_index: header_idx,
-                banner_path: None,
-                song_count: 0,
-                pack_key: None,
-            });
-            current_header_index = Some(entries.len() - 1);
-            current_group = Some(group_name.clone());
-            current_count = 0;
-            header_idx += 1;
-        }
-        current_count += 1;
-        entries.push(MusicWheelEntry::Song(song));
-    }
-
-    write_header_song_count(&mut entries, current_header_index, current_count);
-    entries
+    grouped_song_entries(artist_grouped_songs(songs_from_entries(grouped_entries)))
 }
 
 fn build_genre_grouped_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<MusicWheelEntry> {
-    let mut songs: Vec<Arc<SongData>> = grouped_entries
-        .iter()
-        .filter_map(|e| match e {
-            MusicWheelEntry::Song(song) => Some(song.clone()),
-            MusicWheelEntry::PackHeader { .. } => None,
-        })
-        .collect();
-
-    songs.sort_by_cached_key(|song| {
-        let genre = if song.genre.trim().is_empty() {
-            tr("SelectMusic", "UnknownGenre").to_ascii_lowercase()
-        } else {
-            song.genre.to_ascii_lowercase()
-        };
-        (genre, song_title_sort_key(song.as_ref()))
-    });
-
-    let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(songs.len().saturating_add(32));
-    let mut current_group: Option<String> = None;
-    let mut current_header_index: Option<usize> = None;
-    let mut current_count = 0usize;
-    let mut header_idx = 0usize;
-
-    for song in songs {
-        let group_name = if song.genre.trim().is_empty() {
-            tr("SelectMusic", "UnknownGenre").to_string()
-        } else {
-            song.genre.clone()
-        };
-        if current_group.as_deref() != Some(group_name.as_str()) {
-            write_header_song_count(&mut entries, current_header_index, current_count);
-            entries.push(MusicWheelEntry::PackHeader {
-                name: group_name.clone(),
-                original_index: header_idx,
-                banner_path: None,
-                song_count: 0,
-                pack_key: None,
-            });
-            current_header_index = Some(entries.len() - 1);
-            current_group = Some(group_name.clone());
-            current_count = 0;
-            header_idx += 1;
-        }
-        current_count += 1;
-        entries.push(MusicWheelEntry::Song(song));
-    }
-
-    write_header_song_count(&mut entries, current_header_index, current_count);
-    entries
-}
-
-#[inline(always)]
-fn song_bpm_for_sort(song: &SongData) -> i32 {
-    song.display_bpm_range()
-        .map_or(0, |(_lo, hi)| hi.max(0.0) as i32)
+    grouped_song_entries(genre_grouped_songs(
+        songs_from_entries(grouped_entries),
+        tr("SelectMusic", "UnknownGenre").as_ref(),
+    ))
 }
 
 const RANDOM_BPM_CYCLE_SPEED: f32 = 0.2;
@@ -1972,387 +1759,63 @@ fn chart_panel_stats(
     }
 }
 
-#[inline(always)]
-fn bpm_bucket_name(max_bpm: i32) -> String {
-    const SORT_BPM_DIVISION: i32 = 10;
-    let mut hi = max_bpm.max(0);
-    let rem = hi.rem_euclid(SORT_BPM_DIVISION);
-    hi += SORT_BPM_DIVISION - rem - 1;
-    let lo = hi - (SORT_BPM_DIVISION - 1);
-    format!("{lo:03}-{hi:03}")
-}
-
 fn build_bpm_grouped_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<MusicWheelEntry> {
-    let mut songs: Vec<Arc<SongData>> = grouped_entries
-        .iter()
-        .filter_map(|e| match e {
-            MusicWheelEntry::Song(song) => Some(song.clone()),
-            MusicWheelEntry::PackHeader { .. } => None,
-        })
-        .collect();
-
-    songs.sort_by_cached_key(|song| {
-        (
-            song_bpm_for_sort(song.as_ref()),
-            song_title_sort_key(song.as_ref()),
-        )
-    });
-
-    let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(songs.len().saturating_add(32));
-    let mut current_group: Option<String> = None;
-    let mut current_header_index: Option<usize> = None;
-    let mut current_count = 0usize;
-    let mut header_idx = 0usize;
-
-    for song in songs {
-        let group_name = bpm_bucket_name(song_bpm_for_sort(song.as_ref()));
-        if current_group.as_deref() != Some(group_name.as_str()) {
-            write_header_song_count(&mut entries, current_header_index, current_count);
-            entries.push(MusicWheelEntry::PackHeader {
-                name: group_name.clone(),
-                original_index: header_idx,
-                banner_path: None,
-                song_count: 0,
-                pack_key: None,
-            });
-            current_header_index = Some(entries.len() - 1);
-            current_group = Some(group_name.clone());
-            current_count = 0;
-            header_idx += 1;
-        }
-        current_count += 1;
-        entries.push(MusicWheelEntry::Song(song));
-    }
-
-    write_header_song_count(&mut entries, current_header_index, current_count);
-    entries
-}
-
-#[inline(always)]
-fn song_length_for_sort(song: &SongData) -> i32 {
-    if song.music_length_seconds.is_finite() && song.music_length_seconds > 0.0 {
-        song.music_length_seconds.max(0.0) as i32
-    } else {
-        song.total_length_seconds.max(0)
-    }
-}
-
-#[inline(always)]
-fn length_bucket_name(length_seconds: i32) -> String {
-    const SORT_LENGTH_DIVISION: i32 = 60;
-    let mut hi = length_seconds.max(0);
-    let rem = hi.rem_euclid(SORT_LENGTH_DIVISION);
-    hi += SORT_LENGTH_DIVISION - rem - 1;
-    let lo = hi - (SORT_LENGTH_DIVISION - 1);
-    format!("{}-{}", format_chart_length(lo), format_chart_length(hi))
+    grouped_song_entries(bpm_grouped_songs(songs_from_entries(grouped_entries)))
 }
 
 fn build_length_grouped_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<MusicWheelEntry> {
-    let mut songs: Vec<Arc<SongData>> = grouped_entries
-        .iter()
-        .filter_map(|e| match e {
-            MusicWheelEntry::Song(song) => Some(song.clone()),
-            MusicWheelEntry::PackHeader { .. } => None,
-        })
-        .collect();
-
-    songs.sort_by_cached_key(|song| {
-        (
-            song_length_for_sort(song.as_ref()),
-            song_title_sort_key(song.as_ref()),
-        )
-    });
-
-    let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(songs.len().saturating_add(32));
-    let mut current_group: Option<String> = None;
-    let mut current_header_index: Option<usize> = None;
-    let mut current_count = 0usize;
-    let mut header_idx = 0usize;
-
-    for song in songs {
-        let group_name = length_bucket_name(song_length_for_sort(song.as_ref()));
-        if current_group.as_deref() != Some(group_name.as_str()) {
-            write_header_song_count(&mut entries, current_header_index, current_count);
-            entries.push(MusicWheelEntry::PackHeader {
-                name: group_name.clone(),
-                original_index: header_idx,
-                banner_path: None,
-                song_count: 0,
-                pack_key: None,
-            });
-            current_header_index = Some(entries.len() - 1);
-            current_group = Some(group_name.clone());
-            current_count = 0;
-            header_idx += 1;
-        }
-        current_count += 1;
-        entries.push(MusicWheelEntry::Song(song));
-    }
-
-    write_header_song_count(&mut entries, current_header_index, current_count);
-    entries
-}
-
-/// Returns all unique meter values for a song, considering the given chart type.
-/// Non-edit charts are preferred; edit charts are only included if the song has
-/// no non-edit charts at all. A song with charts at levels 1, 4, 7 returns [1, 4, 7]
-/// so that it can appear in every corresponding meter bucket.
-fn song_meters_for_sort(song: &SongData, chart_type: &str) -> Vec<u32> {
-    let mut non_edit_meters: HashSet<u32> = HashSet::new();
-    let mut any_meters: HashSet<u32> = HashSet::new();
-    for chart in &song.charts {
-        if !chart.chart_type.eq_ignore_ascii_case(chart_type) || !chart.has_note_data {
-            continue;
-        }
-        any_meters.insert(chart.meter);
-        if !chart.difficulty.eq_ignore_ascii_case("edit") {
-            non_edit_meters.insert(chart.meter);
-        }
-    }
-    let meters = if !non_edit_meters.is_empty() {
-        non_edit_meters
-    } else {
-        any_meters
-    };
-    let mut result: Vec<u32> = meters.into_iter().collect();
-    result.sort_unstable();
-    result
-}
-
-#[inline(always)]
-fn meter_bucket_name(meter: Option<u32>) -> String {
-    meter.map_or_else(
-        || tr("SelectMusic", "NotAvailable").to_string(),
-        |m| format!("{:02}", m.min(99)),
-    )
+    grouped_song_entries(length_grouped_songs(songs_from_entries(grouped_entries)))
 }
 
 fn build_meter_grouped_entries(
     grouped_entries: &[MusicWheelEntry],
     chart_type: &str,
 ) -> Vec<MusicWheelEntry> {
-    let songs: Vec<Arc<SongData>> = grouped_entries
-        .iter()
-        .filter_map(|e| match e {
-            MusicWheelEntry::Song(song) => Some(song.clone()),
-            MusicWheelEntry::PackHeader { .. } => None,
-        })
-        .collect();
-
-    // Build a map from meter bucket -> songs in that bucket, preserving
-    // alphabetical order within each bucket. Songs with multiple charts at
-    // different levels appear in every applicable bucket.
-    let mut bucket_map: std::collections::BTreeMap<String, Vec<Arc<SongData>>> =
-        std::collections::BTreeMap::new();
-
-    let no_meter_name = meter_bucket_name(None);
-
-    for song in songs {
-        let meters = song_meters_for_sort(song.as_ref(), chart_type);
-        if meters.is_empty() {
-            bucket_map
-                .entry(no_meter_name.clone())
-                .or_default()
-                .push(song);
-        } else {
-            for meter in meters {
-                bucket_map
-                    .entry(meter_bucket_name(Some(meter)))
-                    .or_default()
-                    .push(song.clone());
-            }
-        }
-    }
-
-    // Sort songs within each bucket alphabetically.
-    for bucket_songs in bucket_map.values_mut() {
-        bucket_songs.sort_by_cached_key(|song| song_title_sort_key(song.as_ref()));
-    }
-
-    let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(
-        bucket_map
-            .values()
-            .map(|v| v.len() + 1)
-            .sum::<usize>()
-            .saturating_add(4),
-    );
-    let mut header_idx = 0usize;
-
-    for (group_name, bucket_songs) in &bucket_map {
-        let song_count = bucket_songs.len();
-        entries.push(MusicWheelEntry::PackHeader {
-            name: group_name.clone(),
-            original_index: header_idx,
-            banner_path: None,
-            song_count,
-            pack_key: None,
-        });
-        header_idx += 1;
-        for song in bucket_songs {
-            entries.push(MusicWheelEntry::Song(song.clone()));
-        }
-    }
-
-    entries
+    grouped_song_entries(meter_grouped_songs(
+        songs_from_entries(grouped_entries),
+        chart_type,
+    ))
 }
 
 fn build_popularity_grouped_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<MusicWheelEntry> {
-    let songs: Vec<Arc<SongData>> = grouped_entries
-        .iter()
-        .filter_map(|e| match e {
-            MusicWheelEntry::Song(song) => Some(song.clone()),
-            MusicWheelEntry::PackHeader { .. } => None,
-        })
-        .collect();
-    let mut hash_to_song_ix: HashMap<&str, usize> =
-        HashMap::with_capacity(songs.len().saturating_mul(8));
-    for (song_ix, song) in songs.iter().enumerate() {
-        for chart in &song.charts {
-            if !chart.has_note_data {
-                continue;
-            }
-            hash_to_song_ix
-                .entry(chart.short_hash.as_str())
-                .or_insert(song_ix);
-        }
-    }
-    let mut song_play_counts = vec![0u32; songs.len()];
-    for (chart_hash, chart_plays) in scores::played_chart_counts_for_machine() {
-        let Some(&song_ix) = hash_to_song_ix.get(chart_hash.as_str()) else {
-            continue;
-        };
-        song_play_counts[song_ix] = song_play_counts[song_ix].saturating_add(chart_plays);
-    }
-    let mut ranked: Vec<(Arc<SongData>, u32)> = songs
-        .into_iter()
-        .enumerate()
-        .map(|(song_ix, song)| (song, song_play_counts[song_ix]))
-        .collect();
-
-    ranked.sort_by_cached_key(|(song, play_count)| {
-        (Reverse(*play_count), song_title_sort_key(song.as_ref()))
-    });
-    ranked.truncate(POPULAR_SONGS_TO_SHOW.min(ranked.len()));
-
-    let count = ranked.len();
-    let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(count.saturating_add(1));
-    entries.push(MusicWheelEntry::PackHeader {
-        name: tr("SelectMusic", "MostPopular").to_string(),
-        original_index: 0,
-        banner_path: None,
-        song_count: count,
-        pack_key: None,
-    });
-    entries.extend(
-        ranked
-            .into_iter()
-            .map(|(song, _)| MusicWheelEntry::Song(song)),
+    let ranked = score_data::ranked_popular_songs(
+        songs_from_entries(grouped_entries),
+        scores::played_chart_counts_for_machine(),
+        POPULAR_SONGS_TO_SHOW,
+        true,
+        song_title_sort_key,
     );
-
-    entries
+    single_header_song_entries(
+        tr("SelectMusic", "MostPopular").to_string(),
+        ranked.into_iter().map(|(song, _)| song),
+    )
 }
 
 fn build_recent_grouped_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<MusicWheelEntry> {
-    let songs: Vec<Arc<SongData>> = grouped_entries
-        .iter()
-        .filter_map(|e| match e {
-            MusicWheelEntry::Song(song) => Some(song.clone()),
-            MusicWheelEntry::PackHeader { .. } => None,
-        })
-        .collect();
-
-    let mut hash_to_song_ix: HashMap<&str, usize> =
-        HashMap::with_capacity(songs.len().saturating_mul(8));
-    for (song_ix, song) in songs.iter().enumerate() {
-        for chart in &song.charts {
-            if !chart.has_note_data {
-                continue;
-            }
-            hash_to_song_ix
-                .entry(chart.short_hash.as_str())
-                .or_insert(song_ix);
-        }
-    }
-
-    let mut recent_song_ixs: Vec<usize> = Vec::with_capacity(RECENT_SONGS_TO_SHOW);
-    let mut seen_song_ix = vec![false; songs.len()];
-
-    for chart_hash in scores::recent_played_chart_hashes_for_machine() {
-        let Some(&song_ix) = hash_to_song_ix.get(chart_hash.as_str()) else {
-            continue;
-        };
-        if seen_song_ix[song_ix] {
-            continue;
-        }
-        seen_song_ix[song_ix] = true;
-        recent_song_ixs.push(song_ix);
-        if recent_song_ixs.len() >= RECENT_SONGS_TO_SHOW {
-            break;
-        }
-    }
-
-    let count = recent_song_ixs.len();
-    let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(count.saturating_add(1));
-    entries.push(MusicWheelEntry::PackHeader {
-        name: tr("SelectMusic", "RecentlyPlayed").to_string(),
-        original_index: 0,
-        banner_path: None,
-        song_count: count,
-        pack_key: None,
-    });
-    entries.extend(
-        recent_song_ixs
-            .into_iter()
-            .map(|song_ix| MusicWheelEntry::Song(songs[song_ix].clone())),
+    let songs = score_data::ranked_recent_songs(
+        songs_from_entries(grouped_entries),
+        scores::recent_played_chart_hashes_for_machine(),
+        RECENT_SONGS_TO_SHOW,
     );
-
-    entries
+    single_header_song_entries(tr("SelectMusic", "RecentlyPlayed").to_string(), songs)
 }
 
 fn build_top_grades_grouped_entries(
     grouped_entries: &[MusicWheelEntry],
     chart_type: &str,
 ) -> Vec<MusicWheelEntry> {
-    let songs: Vec<Arc<SongData>> = grouped_entries
-        .iter()
-        .filter_map(|e| match e {
-            MusicWheelEntry::Song(song) => Some(song.clone()),
-            MusicWheelEntry::PackHeader { .. } => None,
-        })
-        .collect();
-
-    let mut graded_songs: Vec<(Arc<SongData>, Option<score_data::Grade>)> =
-        Vec::with_capacity(songs.len());
-    for song in songs {
-        let mut best_grade: Option<score_data::Grade> = None;
-        for chart in &song.charts {
-            if !chart.chart_type.eq_ignore_ascii_case(chart_type) || !chart.has_note_data {
-                continue;
-            }
+    let graded_songs = score_data::ranked_top_grade_songs(
+        songs_from_entries(grouped_entries),
+        chart_type,
+        |chart_hash, out| {
             for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
-                let Some(score) = scores::get_cached_score_for_side(&chart.short_hash, side) else {
-                    continue;
-                };
-                if score.grade != score_data::Grade::Failed || score.score_percent > 0.0 {
-                    let grade = score.grade;
-                    if best_grade.is_none()
-                        || grade_sort_order(grade) < grade_sort_order(best_grade.unwrap())
-                    {
-                        best_grade = Some(grade);
-                    }
+                if let Some(score) = scores::get_cached_score_for_side(chart_hash, side) {
+                    out.push(score);
                 }
             }
-        }
-        graded_songs.push((song, best_grade));
-    }
-
-    graded_songs.sort_by_cached_key(|(song, best)| {
-        let grade_key = match best {
-            Some(g) => grade_sort_order(*g),
-            None => u8::MAX,
-        };
-        (grade_key, song_title_sort_key(song.as_ref()))
-    });
+        },
+        song_title_sort_key,
+    );
 
     let mut entries: Vec<MusicWheelEntry> =
         Vec::with_capacity(graded_songs.len().saturating_add(20));
@@ -2363,7 +1826,7 @@ fn build_top_grades_grouped_entries(
 
     for (song, best) in graded_songs {
         let group_name = match best {
-            Some(g) => grade_group_name(g),
+            Some(g) => score_data::grade_group_name(g).to_string(),
             None => tr("SelectMusic", "Unplayed").to_string(),
         };
         if current_group.as_deref() != Some(group_name.as_str()) {
@@ -2388,173 +1851,34 @@ fn build_top_grades_grouped_entries(
     entries
 }
 
-fn grade_sort_order(grade: score_data::Grade) -> u8 {
-    match grade {
-        score_data::Grade::Quint => 0,
-        score_data::Grade::Tier01 => 1,
-        score_data::Grade::Tier02 => 2,
-        score_data::Grade::Tier03 => 3,
-        score_data::Grade::Tier04 => 4,
-        score_data::Grade::Tier05 => 5,
-        score_data::Grade::Tier06 => 6,
-        score_data::Grade::Tier07 => 7,
-        score_data::Grade::Tier08 => 8,
-        score_data::Grade::Tier09 => 9,
-        score_data::Grade::Tier10 => 10,
-        score_data::Grade::Tier11 => 11,
-        score_data::Grade::Tier12 => 12,
-        score_data::Grade::Tier13 => 13,
-        score_data::Grade::Tier14 => 14,
-        score_data::Grade::Tier15 => 15,
-        score_data::Grade::Tier16 => 16,
-        score_data::Grade::Tier17 => 17,
-        score_data::Grade::Failed => 18,
-    }
-}
-
-fn grade_group_name(grade: score_data::Grade) -> String {
-    match grade {
-        score_data::Grade::Quint => "\u{2605}\u{2605}\u{2605}\u{2605}\u{2605}".to_string(),
-        score_data::Grade::Tier01 => "\u{2605}\u{2605}\u{2605}\u{2605}".to_string(),
-        score_data::Grade::Tier02 => "\u{2605}\u{2605}\u{2605}".to_string(),
-        score_data::Grade::Tier03 => "\u{2605}\u{2605}".to_string(),
-        score_data::Grade::Tier04 => "\u{2605}".to_string(),
-        score_data::Grade::Tier05 => "S+".to_string(),
-        score_data::Grade::Tier06 => "S".to_string(),
-        score_data::Grade::Tier07 => "S-".to_string(),
-        score_data::Grade::Tier08 => "A+".to_string(),
-        score_data::Grade::Tier09 => "A".to_string(),
-        score_data::Grade::Tier10 => "A-".to_string(),
-        score_data::Grade::Tier11 => "B+".to_string(),
-        score_data::Grade::Tier12 => "B".to_string(),
-        score_data::Grade::Tier13 => "B-".to_string(),
-        score_data::Grade::Tier14 => "C+".to_string(),
-        score_data::Grade::Tier15 => "C".to_string(),
-        score_data::Grade::Tier16 => "C-".to_string(),
-        score_data::Grade::Tier17 => "D".to_string(),
-        score_data::Grade::Failed => "Failed".to_string(),
-    }
-}
-
 fn build_popularity_grouped_entries_for_profile(
     grouped_entries: &[MusicWheelEntry],
     profile_id: &str,
 ) -> Vec<MusicWheelEntry> {
-    let songs: Vec<Arc<SongData>> = grouped_entries
-        .iter()
-        .filter_map(|e| match e {
-            MusicWheelEntry::Song(song) => Some(song.clone()),
-            MusicWheelEntry::PackHeader { .. } => None,
-        })
-        .collect();
-    let mut hash_to_song_ix: HashMap<&str, usize> =
-        HashMap::with_capacity(songs.len().saturating_mul(8));
-    for (song_ix, song) in songs.iter().enumerate() {
-        for chart in &song.charts {
-            if !chart.has_note_data {
-                continue;
-            }
-            hash_to_song_ix
-                .entry(chart.short_hash.as_str())
-                .or_insert(song_ix);
-        }
-    }
-    let mut song_play_counts = vec![0u32; songs.len()];
-    for (chart_hash, chart_plays) in scores::played_chart_counts_for_profile(profile_id) {
-        let Some(&song_ix) = hash_to_song_ix.get(chart_hash.as_str()) else {
-            continue;
-        };
-        song_play_counts[song_ix] = song_play_counts[song_ix].saturating_add(chart_plays);
-    }
-    let mut ranked: Vec<(Arc<SongData>, u32)> = songs
-        .into_iter()
-        .enumerate()
-        .filter(|(song_ix, _)| song_play_counts[*song_ix] > 0)
-        .map(|(song_ix, song)| (song, song_play_counts[song_ix]))
-        .collect();
-    ranked.sort_by_cached_key(|(song, play_count)| {
-        (Reverse(*play_count), song_title_sort_key(song.as_ref()))
-    });
-    ranked.truncate(POPULAR_SONGS_TO_SHOW);
-
-    let count = ranked.len();
     let header = format!("{} (Profile)", tr("SelectMusic", "MostPopular"));
-    let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(count.saturating_add(1));
-    entries.push(MusicWheelEntry::PackHeader {
-        name: header,
-        original_index: 0,
-        banner_path: None,
-        song_count: count,
-        pack_key: None,
-    });
-    entries.extend(
-        ranked
-            .into_iter()
-            .map(|(song, _)| MusicWheelEntry::Song(song)),
+    let ranked = score_data::ranked_popular_songs(
+        songs_from_entries(grouped_entries),
+        scores::played_chart_counts_for_profile(profile_id),
+        POPULAR_SONGS_TO_SHOW,
+        false,
+        song_title_sort_key,
     );
-
-    entries
+    single_header_song_entries(header, ranked.into_iter().map(|(song, _)| song))
 }
 
 fn build_recent_grouped_entries_for_profile(
     grouped_entries: &[MusicWheelEntry],
     profile_id: &str,
 ) -> Vec<MusicWheelEntry> {
-    let songs: Vec<Arc<SongData>> = grouped_entries
-        .iter()
-        .filter_map(|e| match e {
-            MusicWheelEntry::Song(song) => Some(song.clone()),
-            MusicWheelEntry::PackHeader { .. } => None,
-        })
-        .collect();
-
-    let mut hash_to_song_ix: HashMap<&str, usize> =
-        HashMap::with_capacity(songs.len().saturating_mul(8));
-    for (song_ix, song) in songs.iter().enumerate() {
-        for chart in &song.charts {
-            if !chart.has_note_data {
-                continue;
-            }
-            hash_to_song_ix
-                .entry(chart.short_hash.as_str())
-                .or_insert(song_ix);
-        }
-    }
-
-    let mut recent_song_ixs: Vec<usize> = Vec::with_capacity(RECENT_SONGS_TO_SHOW);
-    let mut seen_song_ix = vec![false; songs.len()];
-
-    for chart_hash in scores::recent_played_chart_hashes_for_profile(profile_id) {
-        let Some(&song_ix) = hash_to_song_ix.get(chart_hash.as_str()) else {
-            continue;
-        };
-        if seen_song_ix[song_ix] {
-            continue;
-        }
-        seen_song_ix[song_ix] = true;
-        recent_song_ixs.push(song_ix);
-        if recent_song_ixs.len() >= RECENT_SONGS_TO_SHOW {
-            break;
-        }
-    }
-
-    let count = recent_song_ixs.len();
     let header = format!("{} (Profile)", tr("SelectMusic", "RecentlyPlayed"));
-    let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(count.saturating_add(1));
-    entries.push(MusicWheelEntry::PackHeader {
-        name: header,
-        original_index: 0,
-        banner_path: None,
-        song_count: count,
-        pack_key: None,
-    });
-    entries.extend(
-        recent_song_ixs
-            .into_iter()
-            .map(|song_ix| MusicWheelEntry::Song(songs[song_ix].clone())),
-    );
-
-    entries
+    single_header_song_entries(
+        header,
+        score_data::ranked_recent_songs(
+            songs_from_entries(grouped_entries),
+            scores::recent_played_chart_hashes_for_profile(profile_id),
+            RECENT_SONGS_TO_SHOW,
+        ),
+    )
 }
 
 fn build_top_grades_grouped_entries_for_side(
@@ -2562,44 +1886,16 @@ fn build_top_grades_grouped_entries_for_side(
     chart_type: &str,
     side: profile_data::PlayerSide,
 ) -> Vec<MusicWheelEntry> {
-    let songs: Vec<Arc<SongData>> = grouped_entries
-        .iter()
-        .filter_map(|e| match e {
-            MusicWheelEntry::Song(song) => Some(song.clone()),
-            MusicWheelEntry::PackHeader { .. } => None,
-        })
-        .collect();
-
-    let mut graded_songs: Vec<(Arc<SongData>, Option<score_data::Grade>)> =
-        Vec::with_capacity(songs.len());
-    for song in songs {
-        let mut best_grade: Option<score_data::Grade> = None;
-        for chart in &song.charts {
-            if !chart.chart_type.eq_ignore_ascii_case(chart_type) || !chart.has_note_data {
-                continue;
+    let graded_songs = score_data::ranked_top_grade_songs(
+        songs_from_entries(grouped_entries),
+        chart_type,
+        |chart_hash, out| {
+            if let Some(score) = scores::get_cached_score_for_side(chart_hash, side) {
+                out.push(score);
             }
-            let Some(score) = scores::get_cached_score_for_side(&chart.short_hash, side) else {
-                continue;
-            };
-            if score.grade != score_data::Grade::Failed || score.score_percent > 0.0 {
-                let grade = score.grade;
-                if best_grade.is_none()
-                    || grade_sort_order(grade) < grade_sort_order(best_grade.unwrap())
-                {
-                    best_grade = Some(grade);
-                }
-            }
-        }
-        graded_songs.push((song, best_grade));
-    }
-
-    graded_songs.sort_by_cached_key(|(song, best)| {
-        let grade_key = match best {
-            Some(g) => grade_sort_order(*g),
-            None => u8::MAX,
-        };
-        (grade_key, song_title_sort_key(song.as_ref()))
-    });
+        },
+        song_title_sort_key,
+    );
 
     let mut entries: Vec<MusicWheelEntry> =
         Vec::with_capacity(graded_songs.len().saturating_add(20));
@@ -2610,7 +1906,7 @@ fn build_top_grades_grouped_entries_for_side(
 
     for (song, best) in graded_songs {
         let group_name = match best {
-            Some(g) => grade_group_name(g),
+            Some(g) => score_data::grade_group_name(g).to_string(),
             None => tr("SelectMusic", "Unplayed").to_string(),
         };
         if current_group.as_deref() != Some(group_name.as_str()) {
@@ -2652,104 +1948,90 @@ fn build_favorites_view_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<Musi
         })
     };
 
-    build_favorites_view_entries_with(grouped_entries, pack_is_favorited, song_is_favorited)
+    let favorites_label = tr("SelectMusic", "Favorites");
+    build_favorites_view_entries_with_label(
+        grouped_entries,
+        favorites_label.as_ref(),
+        pack_is_favorited,
+        song_is_favorited,
+    )
 }
 
+#[cfg(test)]
 fn build_favorites_view_entries_with(
     grouped_entries: &[MusicWheelEntry],
     mut pack_is_favorited: impl FnMut(&str) -> bool,
     mut song_is_favorited: impl FnMut(&SongData) -> bool,
 ) -> Vec<MusicWheelEntry> {
-    // Walk grouped_entries once: classify each pack as favorited-or-not, collect
-    // each pack's song-index range, and gather singular unpacked-song favorites that do NOT
-    // live in a favorited pack (de-dup step).
-    let mut current_header_idx: Option<usize> = None;
-    let mut current_pack_is_fav = false;
-    let mut favorited_pack_headers: Vec<(usize, usize, usize)> = Vec::new(); // (header_idx, song_start, song_end)
-    let mut song_start: usize = 0;
-    let mut unpacked_favorite_songs: Vec<Arc<SongData>> = Vec::new();
+    build_favorites_view_entries_with_label(
+        grouped_entries,
+        "Favorites",
+        |pack_key| pack_is_favorited(pack_key),
+        |song| song_is_favorited(song),
+    )
+}
 
-    let close_pack = |favorited_pack_headers: &mut Vec<(usize, usize, usize)>,
-                      current_header_idx: Option<usize>,
-                      current_pack_is_fav: bool,
-                      song_start: usize,
-                      end: usize| {
-        if let Some(header_idx) = current_header_idx {
-            if current_pack_is_fav {
-                favorited_pack_headers.push((header_idx, song_start, end));
-            }
-        }
-    };
-
-    for (i, entry) in grouped_entries.iter().enumerate() {
-        match entry {
-            MusicWheelEntry::PackHeader { pack_key, .. } => {
-                close_pack(
-                    &mut favorited_pack_headers,
-                    current_header_idx,
-                    current_pack_is_fav,
-                    song_start,
-                    i,
-                );
-                current_header_idx = Some(i);
-                current_pack_is_fav = if let Some(pack_key) = pack_key.as_deref() {
-                    pack_is_favorited(pack_key)
-                } else {
-                    false
-                };
-                song_start = i + 1;
-            }
-            MusicWheelEntry::Song(song) => {
-                if !current_pack_is_fav && song_is_favorited(song) {
-                    unpacked_favorite_songs.push(song.clone());
-                }
-            }
-        }
-    }
-    close_pack(
-        &mut favorited_pack_headers,
-        current_header_idx,
-        current_pack_is_fav,
-        song_start,
-        grouped_entries.len(),
+fn build_favorites_view_entries_with_label(
+    grouped_entries: &[MusicWheelEntry],
+    favorites_label: &str,
+    mut pack_is_favorited: impl FnMut(&str) -> bool,
+    mut song_is_favorited: impl FnMut(&SongData) -> bool,
+) -> Vec<MusicWheelEntry> {
+    let catalog_entries = favorite_catalog_entries(grouped_entries);
+    let plan = deadsync_profile::favorites_view::favorite_view_plan(
+        &catalog_entries,
+        |pack_key| pack_is_favorited(pack_key),
+        |song| song_is_favorited(song),
+        song_title_sort_key,
     );
+    favorite_music_entries(grouped_entries, favorites_label, plan)
+}
 
-    unpacked_favorite_songs.sort_by_cached_key(|song| song_title_sort_key(song.as_ref()));
+fn favorite_catalog_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<FavoriteCatalogEntry> {
+    grouped_entries
+        .iter()
+        .map(|entry| match entry {
+            MusicWheelEntry::PackHeader { name, pack_key, .. } => {
+                FavoriteCatalogEntry::Header(FavoriteCatalogHeader {
+                    name: name.clone(),
+                    pack_key: pack_key.clone(),
+                })
+            }
+            MusicWheelEntry::Song(song) => FavoriteCatalogEntry::Song(song.clone()),
+        })
+        .collect()
+}
 
-    favorited_pack_headers.sort_by_cached_key(|(header_idx, _, _)| {
-        match &grouped_entries[*header_idx] {
-            MusicWheelEntry::PackHeader { name, .. } => name.to_ascii_lowercase(),
-            _ => String::new(),
-        }
-    });
-
-    let total_capacity = unpacked_favorite_songs
+fn favorite_music_entries(
+    grouped_entries: &[MusicWheelEntry],
+    favorites_label: &str,
+    plan: FavoriteViewPlan,
+) -> Vec<MusicWheelEntry> {
+    let total_capacity = plan
+        .loose_songs
         .len()
-        .saturating_add(usize::from(!unpacked_favorite_songs.is_empty()))
-        + favorited_pack_headers
+        .saturating_add(usize::from(!plan.loose_songs.is_empty()))
+        + plan
+            .pack_ranges
             .iter()
-            .map(|(_, start, end)| 1 + end.saturating_sub(*start))
+            .map(|range| 1 + range.song_end.saturating_sub(range.song_start))
             .sum::<usize>();
     let mut entries: Vec<MusicWheelEntry> = Vec::with_capacity(total_capacity);
 
-    if !unpacked_favorite_songs.is_empty() {
+    if !plan.loose_songs.is_empty() {
         entries.push(MusicWheelEntry::PackHeader {
-            name: tr("SelectMusic", "Favorites").to_string(),
+            name: favorites_label.to_string(),
             original_index: 0,
             banner_path: None,
-            song_count: unpacked_favorite_songs.len(),
+            song_count: plan.loose_songs.len(),
             pack_key: None,
         });
-        entries.extend(
-            unpacked_favorite_songs
-                .into_iter()
-                .map(MusicWheelEntry::Song),
-        );
+        entries.extend(plan.loose_songs.into_iter().map(MusicWheelEntry::Song));
     }
 
-    for (header_idx, start, end) in favorited_pack_headers {
-        entries.push(grouped_entries[header_idx].clone());
-        for entry in &grouped_entries[start..end] {
+    for range in plan.pack_ranges {
+        entries.push(grouped_entries[range.header_index].clone());
+        for entry in &grouped_entries[range.song_start..range.song_end] {
             if matches!(entry, MusicWheelEntry::Song(_)) {
                 entries.push(entry.clone());
             }
@@ -2849,105 +2131,49 @@ fn playlist_display_name(path: &Path) -> Option<String> {
         .map(str::to_string)
 }
 
-fn build_playlist_song_lookup(grouped_entries: &[MusicWheelEntry]) -> PlaylistSongLookup {
-    let mut by_path = HashMap::new();
-    let mut by_pack_song = HashMap::new();
-    let mut by_group: HashMap<String, Vec<Arc<SongData>>> = HashMap::new();
-    let mut current_group: Option<String> = None;
+fn playlist_song_sources(grouped_entries: &[MusicWheelEntry]) -> Vec<PlaylistSongSource> {
+    let mut sources = Vec::new();
+    let mut current_group = None;
 
     for entry in grouped_entries {
         match entry {
             MusicWheelEntry::PackHeader { name, .. } => {
-                current_group = Some(name.trim().to_ascii_lowercase());
+                current_group = Some(name.clone());
             }
-            MusicWheelEntry::Song(song) => {
-                if let Some(path) = lobby_song_path(song.as_ref()) {
-                    by_path
-                        .entry(normalize_lobby_song_path(path.as_str()).to_ascii_lowercase())
-                        .or_insert_with(|| song.clone());
-                }
-
-                let pack_header_key = current_group.clone();
-                let pack_dir_key = song_pack_and_dir_name(song.as_ref())
-                    .map(|(pack_dir, _)| pack_dir.trim().to_ascii_lowercase());
-                let song_dir_key = song_pack_and_dir_name(song.as_ref())
-                    .map(|(_, song_dir)| song_dir.trim().to_ascii_lowercase());
-
-                if let Some(song_dir) = song_dir_key {
-                    if let Some(group_key) = pack_header_key.as_ref() {
-                        by_pack_song
-                            .entry((group_key.clone(), song_dir.clone()))
-                            .or_insert_with(|| song.clone());
-                    }
-                    if let Some(pack_dir) = pack_dir_key.as_ref() {
-                        by_pack_song
-                            .entry((pack_dir.clone(), song_dir))
-                            .or_insert_with(|| song.clone());
-                    }
-                }
-
-                if let Some(group_key) = pack_header_key {
-                    by_group.entry(group_key).or_default().push(song.clone());
-                }
-                if let Some(pack_dir) = pack_dir_key
-                    && current_group.as_deref() != Some(pack_dir.as_str())
-                {
-                    by_group.entry(pack_dir).or_default().push(song.clone());
-                }
-            }
+            MusicWheelEntry::Song(song) => sources.push(PlaylistSongSource {
+                group_name: current_group.clone(),
+                song: song.clone(),
+                lobby_path: lobby_song_path(song.as_ref()),
+            }),
         }
     }
 
-    PlaylistSongLookup {
-        by_path,
-        by_pack_song,
-        by_group,
-    }
+    sources
 }
 
-fn find_playlist_song(lookup: &PlaylistSongLookup, line: &str) -> Option<Arc<SongData>> {
-    let normalized = normalize_lobby_song_path(line).to_ascii_lowercase();
-    if normalized.is_empty() {
-        return None;
-    }
-    if let Some(song) = lookup.by_path.get(normalized.as_str()) {
-        return Some(song.clone());
-    }
-
-    let mut parts = normalized.split('/').filter(|part| !part.is_empty()).rev();
-    let song = parts.next()?;
-    let pack = parts.next()?;
-    lookup
-        .by_pack_song
-        .get(&(pack.to_string(), song.to_string()))
-        .cloned()
+fn build_playlist_song_lookup(grouped_entries: &[MusicWheelEntry]) -> PlaylistSongLookup {
+    deadsync_simfile::playlist::build_playlist_song_lookup(playlist_song_sources(grouped_entries))
 }
 
-fn push_playlist_section(
-    entries: &mut Vec<MusicWheelEntry>,
-    section_name: Option<&str>,
-    fallback_name: &str,
-    songs: &mut Vec<Arc<SongData>>,
-    header_idx: &mut usize,
-) {
-    if songs.is_empty() {
-        return;
-    }
-    let name = section_name
-        .map(str::trim)
-        .filter(|name| !name.is_empty())
-        .unwrap_or(fallback_name)
-        .to_string();
-    let song_count = songs.len();
-    entries.push(MusicWheelEntry::PackHeader {
-        name,
-        original_index: *header_idx,
-        banner_path: None,
-        song_count,
-        pack_key: None,
-    });
-    *header_idx += 1;
-    entries.extend(songs.drain(..).map(MusicWheelEntry::Song));
+fn playlist_music_entries(entries: Vec<PlaylistEntry>) -> Vec<MusicWheelEntry> {
+    let mut header_idx = 0usize;
+    entries
+        .into_iter()
+        .map(|entry| match entry {
+            PlaylistEntry::Header { name, song_count } => {
+                let original_index = header_idx;
+                header_idx += 1;
+                MusicWheelEntry::PackHeader {
+                    name,
+                    original_index,
+                    banner_path: None,
+                    song_count,
+                    pack_key: None,
+                }
+            }
+            PlaylistEntry::Song(song) => MusicWheelEntry::Song(song),
+        })
+        .collect()
 }
 
 fn build_playlist_entries_from_text(
@@ -2955,51 +2181,11 @@ fn build_playlist_entries_from_text(
     fallback_name: &str,
     lookup: &PlaylistSongLookup,
 ) -> Vec<MusicWheelEntry> {
-    let mut entries = Vec::new();
-    let mut current_section: Option<String> = None;
-    let mut current_songs = Vec::new();
-    let mut header_idx = 0usize;
-
-    for raw_line in text.lines() {
-        let line = raw_line.trim();
-        if line.is_empty() {
-            continue;
-        }
-        if let Some(section_name) = line.strip_prefix("---") {
-            push_playlist_section(
-                &mut entries,
-                current_section.as_deref(),
-                fallback_name,
-                &mut current_songs,
-                &mut header_idx,
-            );
-            current_section = Some(section_name.trim().to_string());
-            continue;
-        }
-        if let Some(group_name) = line.strip_suffix("/*").map(str::trim)
-            && !group_name.is_empty()
-        {
-            if let Some(songs) = lookup
-                .by_group
-                .get(group_name.to_ascii_lowercase().as_str())
-            {
-                current_songs.extend(songs.iter().cloned());
-            }
-            continue;
-        }
-        if let Some(song) = find_playlist_song(lookup, line) {
-            current_songs.push(song);
-        }
-    }
-
-    push_playlist_section(
-        &mut entries,
-        current_section.as_deref(),
+    playlist_music_entries(deadsync_simfile::playlist::playlist_entries_from_text(
+        text,
         fallback_name,
-        &mut current_songs,
-        &mut header_idx,
-    );
-    entries
+        lookup,
+    ))
 }
 
 fn build_playlist_library(grouped_entries: &[MusicWheelEntry]) -> Vec<PlaylistCacheEntry> {
@@ -3913,7 +3099,7 @@ fn sync_preview_song(
                 path,
                 cut,
                 loop_preview,
-                crate::game::profile::get_session_music_rate(),
+                deadsync_profile::compat::get_session_music_rate(),
             );
         } else {
             state.currently_playing_preview_start_sec = None;
@@ -6380,26 +5566,8 @@ fn set_selected_steps_index_for_sync(state: &mut State, steps_index: usize) {
     }
 }
 
-fn normalize_lobby_song_path(song_path: &str) -> String {
-    song_path
-        .trim()
-        .trim_matches('/')
-        .replace('\\', "/")
-        .split('/')
-        .filter(|segment| !segment.is_empty())
-        .collect::<Vec<_>>()
-        .join("/")
-}
-
 fn pack_and_song_name_from_lobby_path(song_path: &str) -> Option<(String, String)> {
-    let normalized = normalize_lobby_song_path(song_path);
-    let mut parts = normalized
-        .split('/')
-        .filter(|segment| !segment.is_empty())
-        .collect::<Vec<_>>();
-    let song = parts.pop()?.to_string();
-    let pack = parts.pop()?.to_string();
-    Some((pack, song))
+    deadsync_simfile::playlist::pack_and_song_name_from_path(song_path)
 }
 
 fn lobby_song_path(song: &SongData) -> Option<String> {
@@ -6421,17 +5589,6 @@ fn lobby_song_path(song: &SongData) -> Option<String> {
         .file_name()?
         .to_string_lossy();
     Some(format!("{group_dir}/{song_dir}"))
-}
-
-pub(crate) fn song_pack_and_dir_name(song: &SongData) -> Option<(&str, &str)> {
-    let song_dir = song.simfile_path.parent()?.file_name()?.to_str()?;
-    let pack_dir = song
-        .simfile_path
-        .parent()?
-        .parent()?
-        .file_name()?
-        .to_str()?;
-    Some((pack_dir, song_dir))
 }
 
 fn find_song_by_lobby_path(state: &State, song_path: &str) -> Option<Arc<SongData>> {
@@ -9844,7 +9001,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ScreenAct
     reset_exit_code_on_non_lr_press(state, ev);
     let only_dedicated_menu_buttons = config::get().only_dedicated_menu_buttons;
 
-    let play_style = crate::game::profile::get_session_play_style();
+    let play_style = deadsync_profile::compat::get_session_play_style();
     if play_style == profile_data::PlayStyle::Versus {
         return match ev.action {
             action if direct_lr_blocked_by_dedicated_menu(action, only_dedicated_menu_buttons) => {
@@ -9933,7 +9090,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ScreenAct
         };
     }
 
-    match crate::game::profile::get_session_player_side() {
+    match deadsync_profile::compat::get_session_player_side() {
         profile_data::PlayerSide::P2 => match ev.action {
             action if direct_lr_blocked_by_dedicated_menu(action, only_dedicated_menu_buttons) => {
                 ScreenAction::None
@@ -10838,7 +9995,7 @@ fn push_folder_stats_overlay(
 
     let total_text = Arc::<str>::from(format!(
         "Total {}: {}/{}",
-        folder_stats_difficulty_label(difficulty),
+        score_data::folder_stats_difficulty_label(difficulty),
         summary.passes,
         summary.count_charts
     ));
@@ -10864,12 +10021,13 @@ fn push_folder_stats_overlay(
         let icon_dx = if not_wide { -15.0 } else { -20.0 };
         let count_zoom = if not_wide { 1.05 } else { 1.4 } * scale;
         let icon_zoom = if not_wide { 0.38 } else { 0.5 } * scale;
-        for bucket in 0..FOLDER_STATS_STAR_BUCKETS {
-            let required_grade = (FOLDER_STATS_STAR_BUCKETS - bucket) as u8;
+        for bucket in 0..score_data::FOLDER_STATS_STAR_BUCKETS {
+            let required_grade = (score_data::FOLDER_STATS_STAR_BUCKETS - bucket) as u8;
             if summary.best_grade < required_grade {
                 continue;
             }
-            let column_ix = bucket as f32 - (FOLDER_STATS_STAR_BUCKETS as f32 - best_grade) + 0.5;
+            let column_ix =
+                bucket as f32 - (score_data::FOLDER_STATS_STAR_BUCKETS as f32 - best_grade) + 0.5;
             let base_x = -(column_w * best_grade * 0.5) + column_w * column_ix;
             children.push(act!(text:
                 font(font_key):
@@ -10923,8 +10081,8 @@ pub fn push_actors(
     stage_number: usize,
 ) {
     actors.reserve(256);
-    let side = crate::game::profile::get_session_player_side();
-    let play_style = crate::game::profile::get_session_play_style();
+    let side = deadsync_profile::compat::get_session_player_side();
+    let play_style = deadsync_profile::compat::get_session_play_style();
     let solo_side = solo_runtime_side(play_style, side);
     let is_p2_solo = solo_side == profile_data::PlayerSide::P2;
     let is_p2_single = profile_data::is_single_p2_side(play_style, side);
@@ -10987,8 +10145,8 @@ pub fn push_actors(
     let select_music_label = tr("ScreenTitles", "SelectMusic");
     screen_bars::push(&mut actors, select_music_label.as_ref());
 
-    let p1_profile = crate::game::profile::get_for_side(profile_data::PlayerSide::P1);
-    let p2_profile = crate::game::profile::get_for_side(profile_data::PlayerSide::P2);
+    let p1_profile = deadsync_profile::compat::get_for_side(profile_data::PlayerSide::P1);
+    let p2_profile = deadsync_profile::compat::get_for_side(profile_data::PlayerSide::P2);
 
     let scorebox_cycle_enabled = cfg.select_music_scorebox_cycle_itg
         || cfg.select_music_scorebox_cycle_ex
@@ -11087,7 +10245,7 @@ pub fn push_actors(
         actors.push(act!(sprite(cdtitle_key.clone()): align(0.5, 0.5): xy(cdtitle_x, cdtitle_y): zoom(cdtitle_zoom): rotationy(cdtitle_rot): setstate(cdtitle_frame): z(101)));
     }
 
-    let music_rate = crate::game::profile::get_session_music_rate();
+    let music_rate = deadsync_profile::compat::get_session_music_rate();
     if (music_rate - 1.0).abs() > 0.001 {
         let text = cached_music_rate_banner_text(music_rate);
         actors.push(act!(quad: align(0.5, 0.5): xy(banner_cx, banner_cy + 75.0 * banner_zoom): setsize(BANNER_NATIVE_WIDTH * banner_zoom, 14.0 * banner_zoom): z(52): diffuse(0.117, 0.156, 0.184, 0.8)));
@@ -12882,44 +12040,6 @@ mod tests {
         assert!(sibling_refresh_intent(0, true, None, "p", false).is_none());
         // Out-of-range editing slot is a no-op (and never underflows).
         assert!(sibling_refresh_intent(2, true, Some("p"), "p", false).is_none());
-    }
-
-    #[test]
-    fn folder_stats_buckets_match_arrow_cloud_top_grades() {
-        assert_eq!(
-            super::folder_stats_grade_bucket(score_data::Grade::Quint),
-            Some(0)
-        );
-        assert_eq!(
-            super::folder_stats_grade_bucket(score_data::Grade::Tier01),
-            Some(1)
-        );
-        assert_eq!(
-            super::folder_stats_grade_bucket(score_data::Grade::Tier04),
-            Some(4)
-        );
-        assert_eq!(
-            super::folder_stats_grade_bucket(score_data::Grade::Tier05),
-            None
-        );
-        assert_eq!(
-            super::folder_stats_grade_bucket(score_data::Grade::Failed),
-            None
-        );
-    }
-
-    #[test]
-    fn folder_stats_best_grade_matches_arrow_cloud_rank() {
-        assert_eq!(super::folder_stats_best_grade(&[0, 0, 0, 0, 0]), 0);
-        assert_eq!(super::folder_stats_best_grade(&[0, 0, 0, 0, 2]), 1);
-        assert_eq!(super::folder_stats_best_grade(&[0, 0, 3, 0, 2]), 3);
-        assert_eq!(super::folder_stats_best_grade(&[1, 0, 3, 0, 2]), 5);
-    }
-
-    #[test]
-    fn folder_stats_challenge_displays_as_expert() {
-        assert_eq!(super::folder_stats_difficulty_label("Challenge"), "Expert");
-        assert_eq!(super::folder_stats_difficulty_label("Hard"), "Hard");
     }
 
     #[test]

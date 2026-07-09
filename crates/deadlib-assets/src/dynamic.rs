@@ -532,6 +532,69 @@ pub fn dedupe_dynamic_keys(keys: Vec<String>) -> Vec<String> {
     out
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DynamicVideoTiming {
+    anchor_gameplay_sec: f32,
+    anchor_media_sec: f32,
+    rate: f32,
+}
+
+impl DynamicVideoTiming {
+    #[inline(always)]
+    pub fn new(gameplay_time_sec: f32, rate: f32) -> Self {
+        Self {
+            anchor_gameplay_sec: gameplay_time_sec.max(0.0),
+            anchor_media_sec: 0.0,
+            rate: normalize_video_rate(rate),
+        }
+    }
+
+    #[inline(always)]
+    pub fn rate(&self) -> f32 {
+        self.rate
+    }
+
+    #[inline(always)]
+    pub fn play_time(&self, gameplay_time_sec: f32) -> f32 {
+        dynamic_video_play_time(
+            gameplay_time_sec,
+            self.anchor_gameplay_sec,
+            self.anchor_media_sec,
+            self.rate,
+        )
+    }
+
+    #[inline(always)]
+    pub fn set_rate(&mut self, rate: f32, gameplay_time_sec: f32) {
+        let media_time = self.play_time(gameplay_time_sec);
+        self.anchor_gameplay_sec = gameplay_time_sec.max(0.0);
+        self.anchor_media_sec = media_time;
+        self.rate = normalize_video_rate(rate);
+    }
+
+    #[inline(always)]
+    pub fn restart(&mut self, gameplay_time_sec: f32) {
+        self.anchor_gameplay_sec = gameplay_time_sec.max(0.0);
+        self.anchor_media_sec = 0.0;
+    }
+}
+
+#[inline(always)]
+pub fn normalize_video_rate(rate: f32) -> f32 {
+    if rate.is_finite() { rate.max(0.0) } else { 1.0 }
+}
+
+#[inline(always)]
+pub fn dynamic_video_play_time(
+    gameplay_time_sec: f32,
+    anchor_gameplay_sec: f32,
+    anchor_media_sec: f32,
+    rate: f32,
+) -> f32 {
+    let elapsed = (gameplay_time_sec.max(0.0) - anchor_gameplay_sec.max(0.0)).max(0.0);
+    (anchor_media_sec.max(0.0) + elapsed * normalize_video_rate(rate)).max(0.0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -590,6 +653,26 @@ mod tests {
                 "bg.mp4".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn dynamic_video_play_time_uses_local_anchor() {
+        assert_eq!(dynamic_video_play_time(12.5, 10.0, 0.0, 1.0), 2.5);
+        assert_eq!(dynamic_video_play_time(9.0, 10.0, 0.0, 1.0), 0.0);
+        assert_eq!(dynamic_video_play_time(12.5, 10.0, 4.0, 0.5), 5.25);
+        assert_eq!(dynamic_video_play_time(20.0, 10.0, 3.0, 0.0), 3.0);
+    }
+
+    #[test]
+    fn dynamic_video_timing_rate_change_preserves_media_time() {
+        let mut timing = DynamicVideoTiming::new(10.0, 1.0);
+        assert_eq!(timing.play_time(12.0), 2.0);
+
+        timing.set_rate(0.0, 12.0);
+        assert_eq!(timing.play_time(20.0), 2.0);
+
+        timing.set_rate(2.0, 20.0);
+        assert_eq!(timing.play_time(21.5), 5.0);
     }
 
     #[test]

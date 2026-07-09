@@ -1,8 +1,8 @@
 use super::super::choice;
 use super::super::row::index_binding;
 use super::*;
-use crate::game::profile as gp;
 use deadsync_chart::{STANDARD_DIFFICULTY_COUNT, STANDARD_DIFFICULTY_NAMES};
+use deadsync_profile::compat as gp;
 use deadsync_profile::{
     BackgroundFilter, ComboFont, HeldMissGraphic, HoldJudgmentGraphic, JudgmentGraphic,
     MINI_PERCENT_MAX, MINI_PERCENT_MIN, NOTE_FIELD_OFFSET_X_MAX, NOTE_FIELD_OFFSET_X_MIN,
@@ -970,7 +970,7 @@ pub(super) fn build_main_rows(
         } else {
             // Build Stepchart choices from the song's charts for the current play style, ordered
             // Beginner..Challenge, then Edit charts.
-            let target_chart_type = crate::game::profile::get_session_play_style().chart_type();
+            let target_chart_type = deadsync_profile::compat::get_session_play_style().chart_type();
             let mut stepchart_choices: Vec<String> = Vec::with_capacity(STANDARD_DIFFICULTY_COUNT);
             let mut stepchart_choice_indices: Vec<usize> =
                 Vec::with_capacity(STANDARD_DIFFICULTY_COUNT);

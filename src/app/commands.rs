@@ -1,8 +1,9 @@
 use super::{App, CurrentScreen};
-use crate::game::{profile, scores};
 use crate::screens::{DensityGraphSlot, DensityGraphSource};
 use deadlib_present::density;
+use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
+use deadsync_profile::compat as profile;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use log::{debug, warn};
 use std::error::Error;
@@ -130,7 +131,7 @@ impl App {
                 profile::update_scroll_speed_for_side(side, setting);
             }
             Command::UpdateSessionMusicRate(rate) => {
-                crate::game::profile::set_session_music_rate(rate);
+                deadsync_profile::compat::set_session_music_rate(rate);
             }
             Command::UpdatePreferredDifficulty(idx) => {
                 self.state.session.preferred_difficulty_index = idx;

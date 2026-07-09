@@ -1,4 +1,4 @@
-use crate::assets::{AssetManager, open_image_fallback};
+use crate::{AssetManager, open_image_fallback};
 use deadlib_assets::dynamic;
 use deadlib_platform::dirs;
 use deadlib_renderer::Backend;
@@ -11,20 +11,20 @@ use std::{
 };
 
 #[inline(always)]
-pub(crate) fn banner_cache_options() -> dynamic::BannerCacheOptions {
+pub fn banner_cache_options() -> dynamic::BannerCacheOptions {
     dynamic::BannerCacheOptions {
-        enabled: crate::config::get().banner_cache,
+        enabled: deadsync_config::runtime::get().banner_cache,
     }
 }
 
 #[inline(always)]
-pub(crate) fn cdtitle_cache_options() -> dynamic::BannerCacheOptions {
+pub fn cdtitle_cache_options() -> dynamic::BannerCacheOptions {
     dynamic::BannerCacheOptions {
-        enabled: crate::config::get().cdtitle_cache,
+        enabled: deadsync_config::runtime::get().cdtitle_cache,
     }
 }
 
-pub(crate) fn load_banner_source_rgba(path: &Path) -> Result<RgbaImage, String> {
+pub fn load_banner_source_rgba(path: &Path) -> Result<RgbaImage, String> {
     let opts = banner_cache_options();
     if opts.enabled {
         return dynamic::load_or_build_cached_dynamic_image(
@@ -42,7 +42,7 @@ pub(crate) fn load_banner_source_rgba(path: &Path) -> Result<RgbaImage, String> 
         .map_err(|e| e.to_string())
 }
 
-pub(crate) fn load_cdtitle_source_rgba(path: &Path) -> Result<RgbaImage, String> {
+pub fn load_cdtitle_source_rgba(path: &Path) -> Result<RgbaImage, String> {
     let opts = cdtitle_cache_options();
     if opts.enabled {
         return dynamic::load_or_build_cached_dynamic_image(
@@ -57,7 +57,7 @@ pub(crate) fn load_cdtitle_source_rgba(path: &Path) -> Result<RgbaImage, String>
         .map_err(|e| e.to_string())
 }
 
-pub(crate) fn ensure_banner_texture(assets: &mut AssetManager, backend: &mut Backend, path: &Path) {
+pub fn ensure_banner_texture(assets: &mut AssetManager, backend: &mut Backend, path: &Path) {
     let key = path.to_string_lossy().into_owned();
     if assets.has_texture_key(&key) {
         return;
@@ -76,7 +76,7 @@ pub(crate) fn ensure_banner_texture(assets: &mut AssetManager, backend: &mut Bac
     }
 }
 
-pub(crate) fn artwork_cache_jobs(banner_paths: &[PathBuf], cdtitle_paths: &[PathBuf]) -> usize {
+pub fn artwork_cache_jobs(banner_paths: &[PathBuf], cdtitle_paths: &[PathBuf]) -> usize {
     let banner_opts = banner_cache_options();
     let cdtitle_opts = cdtitle_cache_options();
     let total_paths = banner_paths.len().saturating_add(cdtitle_paths.len());
@@ -104,7 +104,7 @@ pub(crate) fn artwork_cache_jobs(banner_paths: &[PathBuf], cdtitle_paths: &[Path
     unique.len()
 }
 
-pub(crate) fn prewarm_artwork_cache_with_progress<F>(
+pub fn prewarm_artwork_cache_with_progress<F>(
     banner_paths: &[PathBuf],
     cdtitle_paths: &[PathBuf],
     progress: &mut F,

@@ -706,6 +706,41 @@ pub struct JoinedLobby {
     pub song_info: Option<LobbySongInfo>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GameplayLobbyWaitStatus {
+    WaitingForSync,
+    WaitingForReadyUp,
+    Ready,
+}
+
+pub fn lobby_player_on_screen(player: &LobbyPlayer, screen_name: &str) -> bool {
+    player.screen_name.eq_ignore_ascii_case(screen_name)
+}
+
+pub fn gameplay_lobby_wait_required(joined: Option<&JoinedLobby>) -> bool {
+    joined.is_some()
+}
+
+pub fn gameplay_lobby_wait_status(
+    joined: &JoinedLobby,
+    gameplay_screen_name: &str,
+) -> GameplayLobbyWaitStatus {
+    let all_in_gameplay = !joined.players.is_empty()
+        && joined
+            .players
+            .iter()
+            .all(|player| lobby_player_on_screen(player, gameplay_screen_name));
+    let all_ready = !joined.players.is_empty() && joined.players.iter().all(|player| player.ready);
+    if all_in_gameplay && all_ready {
+        return GameplayLobbyWaitStatus::Ready;
+    }
+    if all_in_gameplay {
+        GameplayLobbyWaitStatus::WaitingForReadyUp
+    } else {
+        GameplayLobbyWaitStatus::WaitingForSync
+    }
+}
+
 pub fn joined_lobby_from_state(data: LobbyStateData) -> JoinedLobby {
     JoinedLobby {
         code: data.code,
@@ -1040,14 +1075,13 @@ static RUNTIME_LAST_MACHINE_STATE_SIG: LazyLock<Mutex<Option<String>>> =
     LazyLock::new(|| Mutex::new(None));
 static RUNTIME_RECONNECT_STATE: LazyLock<Mutex<ReconnectState>> =
     LazyLock::new(|| Mutex::new(ReconnectState::default()));
-#[cfg(test)]
 static RUNTIME_TEST_MUTEX: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
 pub fn runtime_snapshot() -> Snapshot {
     RUNTIME_SNAPSHOT.lock().unwrap().clone()
 }
 
-#[cfg(test)]
+#[doc(hidden)]
 pub fn runtime_with_snapshot_for_test<R>(snapshot: Snapshot, f: impl FnOnce() -> R) -> R {
     let _guard = RUNTIME_TEST_MUTEX.lock().unwrap();
     let prev = std::mem::replace(&mut *RUNTIME_SNAPSHOT.lock().unwrap(), snapshot);
@@ -2393,6 +2427,55 @@ mod tests {
                 .and_then(|song| song.chart_hash.as_deref()),
             Some("deadbeef")
         );
+    }
+
+    fn test_lobby_player(screen_name: &str, ready: bool) -> LobbyPlayer {
+        LobbyPlayer {
+            label: "Local".to_string(),
+            ready,
+            screen_name: screen_name.to_string(),
+            judgments: None,
+            score: None,
+            ex_score: None,
+        }
+    }
+
+    fn test_joined_lobby(players: Vec<LobbyPlayer>) -> JoinedLobby {
+        JoinedLobby {
+            code: "ROOM".to_string(),
+            players,
+            song_info: None,
+        }
+    }
+
+    #[test]
+    fn gameplay_lobby_wait_status_requires_gameplay_screen_and_ready_players() {
+        let waiting_for_sync =
+            test_joined_lobby(vec![test_lobby_player("ScreenSelectMusic", true)]);
+        assert_eq!(
+            gameplay_lobby_wait_status(&waiting_for_sync, "ScreenGameplay"),
+            GameplayLobbyWaitStatus::WaitingForSync
+        );
+
+        let waiting_for_ready = test_joined_lobby(vec![test_lobby_player("ScreenGameplay", false)]);
+        assert_eq!(
+            gameplay_lobby_wait_status(&waiting_for_ready, "ScreenGameplay"),
+            GameplayLobbyWaitStatus::WaitingForReadyUp
+        );
+
+        let ready = test_joined_lobby(vec![test_lobby_player("screengameplay", true)]);
+        assert_eq!(
+            gameplay_lobby_wait_status(&ready, "ScreenGameplay"),
+            GameplayLobbyWaitStatus::Ready
+        );
+    }
+
+    #[test]
+    fn gameplay_lobby_wait_required_tracks_joined_lobby_presence() {
+        let joined = test_joined_lobby(vec![test_lobby_player("ScreenGameplay", true)]);
+
+        assert!(gameplay_lobby_wait_required(Some(&joined)));
+        assert!(!gameplay_lobby_wait_required(None));
     }
 
     #[test]

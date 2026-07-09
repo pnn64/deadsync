@@ -3575,6 +3575,46 @@ pub fn song_lua_video_paths<NoteskinSlot, ModelVertex, TextAttribute>(
     paths
 }
 
+pub fn push_unique_song_lua_sound_paths(
+    source: &[PathBuf],
+    seen: &mut HashSet<String>,
+    paths: &mut Vec<PathBuf>,
+) {
+    for path in source {
+        if seen.insert(path.to_string_lossy().into_owned()) {
+            paths.push(path.clone());
+        }
+    }
+}
+
+pub fn push_song_lua_overlay_sound_paths<NoteskinSlot, ModelVertex, TextAttribute>(
+    overlays: &[SongLuaOverlayActor<
+        SongLuaOverlayKind<NoteskinSlot, ModelVertex, TextAttribute>,
+    >],
+    seen: &mut HashSet<String>,
+    paths: &mut Vec<PathBuf>,
+) {
+    for overlay in overlays {
+        let SongLuaOverlayKind::Sound { sound_path } = &overlay.kind else {
+            continue;
+        };
+        if seen.insert(sound_path.to_string_lossy().into_owned()) {
+            paths.push(sound_path.clone());
+        }
+    }
+}
+
+pub fn compiled_song_lua_sound_paths<'a, OverlayActor: 'a>(
+    compiled: impl IntoIterator<Item = &'a CompiledSongLua<OverlayActor>>,
+) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    let mut seen = HashSet::new();
+    for compiled in compiled {
+        push_unique_song_lua_sound_paths(&compiled.sound_paths, &mut seen, &mut paths);
+    }
+    paths
+}
+
 pub fn named_overlay_indices_by_name<'a>(
     len: usize,
     mut name_at: impl FnMut(usize) -> Option<&'a str>,
@@ -3925,7 +3965,7 @@ mod tests {
         capture_function_action_blocks, capture_indexed_actor_function_blocks,
         capture_overlay_function_eases, collect_indexed_actor_capture_blocks,
         column_offset_windows_from_samples, compile_song_lua_with_actors,
-        compile_song_runtime_values, create_debug_table,
+        compile_song_runtime_values, compiled_song_lua_sound_paths, create_debug_table,
         create_dummy_actor as create_lua_dummy_actor,
         create_named_child_actor as create_lua_named_child_actor, create_song_runtime_table,
         custom_multi_modifier_key, easiest_steps_difficulty, ensure_overlay_arrow_visual,
@@ -3938,14 +3978,14 @@ mod tests {
         note_hide_windows_from_flags, note_song_lua_side_effect, offset_texture_rect,
         overlay_eases_from_captures, overlay_state_axis_scale, overlay_state_z_scale,
         parse_overlay_blend_mode, parse_overlay_effect_clock, parse_overlay_effect_mode,
-        push_multitap_arrow_sample, push_overlay_sample_eases, push_song_lua_video_paths,
-        push_startup_message_if_listened, read_global_function_nested_tables,
-        read_graph_display_body_state, read_graph_display_line_state,
-        read_song_meter_display_state, read_update_function_nested_tables,
-        read_update_function_tables, record_song_lua_broadcast, reset_actor_capture,
-        reset_indexed_actor_capture_tables, runtime_static_overlay_index_by_path,
-        scale_to_rect_plan, set_compile_song_runtime_values, song_lua_arch_name,
-        song_lua_difficulty_from_value, song_lua_human_player_count,
+        push_multitap_arrow_sample, push_overlay_sample_eases, push_song_lua_overlay_sound_paths,
+        push_song_lua_video_paths, push_startup_message_if_listened,
+        read_global_function_nested_tables, read_graph_display_body_state,
+        read_graph_display_line_state, read_song_meter_display_state,
+        read_update_function_nested_tables, read_update_function_tables, record_song_lua_broadcast,
+        reset_actor_capture, reset_indexed_actor_capture_tables,
+        runtime_static_overlay_index_by_path, scale_to_rect_plan, set_compile_song_runtime_values,
+        song_lua_arch_name, song_lua_difficulty_from_value, song_lua_human_player_count,
         song_lua_steps_type_is_dance_single, song_lua_video_paths, sort_compiled_song_lua,
         sort_note_hide_windows, sprite_animation_state_at, sprite_animation_state_from,
         sprite_frame_count, sprite_image_frame_size, sprite_texture_rect,
@@ -3974,6 +4014,16 @@ mod tests {
                 decode_movie,
                 ..SongLuaOverlayState::default()
             },
+            message_commands: Vec::new(),
+        }
+    }
+
+    fn test_sound_overlay(path: PathBuf) -> TestOverlayActor {
+        TestOverlayActor {
+            kind: TestOverlayKind::Sound { sound_path: path },
+            name: None,
+            parent_index: None,
+            initial_state: SongLuaOverlayState::default(),
             message_commands: Vec::new(),
         }
     }
@@ -4028,6 +4078,39 @@ mod tests {
         push_song_lua_video_paths(&overlays, &mut seen, &mut paths);
 
         assert_eq!(paths, vec![movie]);
+    }
+
+    #[test]
+    fn push_song_lua_overlay_sound_paths_filters_and_dedupes_sounds() {
+        let sound = PathBuf::from("sound.ogg");
+        let overlays = vec![
+            test_sound_overlay(sound.clone()),
+            test_sound_overlay(sound.clone()),
+            test_sprite_overlay(PathBuf::from("movie.avi"), true),
+        ];
+        let mut paths = Vec::new();
+        let mut seen = HashSet::new();
+
+        push_song_lua_overlay_sound_paths(&overlays, &mut seen, &mut paths);
+
+        assert_eq!(paths, vec![sound]);
+    }
+
+    #[test]
+    fn compiled_song_lua_sound_paths_preserves_first_seen_order() {
+        let mut first = TestCompiledSongLua::default();
+        first.sound_paths = vec![PathBuf::from("a.ogg"), PathBuf::from("b.ogg")];
+        let mut second = TestCompiledSongLua::default();
+        second.sound_paths = vec![PathBuf::from("b.ogg"), PathBuf::from("c.ogg")];
+
+        assert_eq!(
+            compiled_song_lua_sound_paths([&first, &second]),
+            vec![
+                PathBuf::from("a.ogg"),
+                PathBuf::from("b.ogg"),
+                PathBuf::from("c.ogg")
+            ]
+        );
     }
 
     fn test_compile_song_lua(

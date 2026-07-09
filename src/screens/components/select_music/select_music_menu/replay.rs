@@ -1,10 +1,10 @@
 use crate::act;
 use crate::assets::{FontRole, current_machine_font_key};
-use crate::game::scores;
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_online::score_compat as scores;
 use deadsync_score as score_data;
 
 pub const REPLAY_FOCUS_TWEEN_SECONDS: f32 = 0.1;

@@ -1,11 +1,11 @@
 use crate::act;
 use crate::assets::i18n::tr;
 use crate::assets::{FontRole, current_machine_font_key};
-use crate::game::profile;
 use crate::screens::{Screen, ScreenAction};
 use deadlib_present::actors::Actor;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_profile as profile_data;
+use deadsync_profile::compat as profile;
 use std::sync::mpsc;
 
 // Simply Love: BGAnimations/ScreenProfileLoad overlay.lua
@@ -58,7 +58,7 @@ pub fn on_enter(state: &mut State) {
                 PreparedState::Course(crate::screens::select_course::init())
             }
             profile_data::PlayMode::Regular => {
-                crate::game::scores::prewarm_select_music_score_caches();
+                deadsync_online::score_compat::prewarm_select_music_score_caches();
                 PreparedState::Music(crate::screens::select_music::init())
             }
         };

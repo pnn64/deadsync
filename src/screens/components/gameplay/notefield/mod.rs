@@ -1,6 +1,6 @@
+use crate::GameplayCoreState as State;
 use crate::act;
 use crate::assets;
-use crate::game::GameplayCoreState as State;
 use crate::screens::components::shared::noteskin_model::{
     ModelMeshCache, noteskin_model_actor_from_draw_cached,
 };

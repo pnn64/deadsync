@@ -1,28 +1,12 @@
 use super::{App, CurrentScreen, TransitionState};
 use crate::config;
 use deadsync_gameplay::{
-    GameplayOffsetAdjustKey, GameplayRawKeyInput, GameplayRawModifierKey, RawKeyAction,
+    GameplayQueuedEvent, GameplayRawKeyEvent, RawKeyAction, gameplay_raw_key_input,
+    gameplay_raw_modifier_key,
 };
 use deadsync_input as logical_input;
-use deadsync_input::InputEvent;
-use deadsync_input::RawKeyboardEvent;
 use std::error::Error;
-use std::time::Instant;
 use winit::event_loop::ActiveEventLoop;
-use winit::keyboard::KeyCode;
-
-#[derive(Clone, Copy, Debug)]
-pub(super) struct GameplayRawKeyEvent {
-    pub(super) code: winit::keyboard::KeyCode,
-    pub(super) pressed: bool,
-    pub(super) timestamp: Instant,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub(super) enum GameplayQueuedEvent {
-    Input(InputEvent),
-    RawKey(GameplayRawKeyEvent),
-}
 
 #[inline(always)]
 pub(super) fn screen_accepts_queued_input(
@@ -32,53 +16,6 @@ pub(super) fn screen_accepts_queued_input(
     matches!(transition, TransitionState::Idle)
         || (screen == CurrentScreen::Gameplay
             && matches!(transition, TransitionState::FadingIn { .. }))
-}
-
-#[inline(always)]
-pub(super) fn gameplay_raw_key_event(raw_key: &RawKeyboardEvent) -> Option<GameplayQueuedEvent> {
-    if raw_key.repeat {
-        return None;
-    }
-    match raw_key.code {
-        KeyCode::ShiftLeft
-        | KeyCode::ShiftRight
-        | KeyCode::ControlLeft
-        | KeyCode::ControlRight
-        | KeyCode::KeyR
-        | KeyCode::F6
-        | KeyCode::F7
-        | KeyCode::F8
-        | KeyCode::F11
-        | KeyCode::F12 => {}
-        _ => return None,
-    }
-    Some(GameplayQueuedEvent::RawKey(GameplayRawKeyEvent {
-        code: raw_key.code,
-        pressed: raw_key.pressed,
-        timestamp: raw_key.timestamp,
-    }))
-}
-
-#[inline(always)]
-fn gameplay_raw_modifier_key(code: KeyCode) -> Option<GameplayRawModifierKey> {
-    match code {
-        KeyCode::ShiftLeft | KeyCode::ShiftRight => Some(GameplayRawModifierKey::Shift),
-        KeyCode::ControlLeft | KeyCode::ControlRight => Some(GameplayRawModifierKey::Ctrl),
-        _ => None,
-    }
-}
-
-#[inline(always)]
-fn gameplay_raw_key_input(code: KeyCode) -> GameplayRawKeyInput {
-    match code {
-        KeyCode::KeyR => GameplayRawKeyInput::Restart,
-        KeyCode::F6 => GameplayRawKeyInput::Autosync,
-        KeyCode::F7 => GameplayRawKeyInput::TimingTick,
-        KeyCode::F8 => GameplayRawKeyInput::Autoplay,
-        KeyCode::F11 => GameplayRawKeyInput::OffsetAdjust(GameplayOffsetAdjustKey::Decrease),
-        KeyCode::F12 => GameplayRawKeyInput::OffsetAdjust(GameplayOffsetAdjustKey::Increase),
-        _ => GameplayRawKeyInput::Other,
-    }
 }
 
 impl App {

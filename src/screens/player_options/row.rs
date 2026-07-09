@@ -200,7 +200,7 @@ pub struct ChoiceBinding<T: Copy + 'static> {
 
 /// # Adding a new mask row
 ///
-/// 1. Add the bitflags type to `state.rs` (or use one from `game::profile`)
+/// 1. Add the bitflags type to `state.rs` (or use one from `profile`)
 ///    and a field on `PlayerOptionMasks`.
 /// 2. Build the row in the appropriate pane's `build_*_rows` (or its row
 ///    catalogue) with `behavior: RowBehavior::Bitmask(MY_BINDING)`.

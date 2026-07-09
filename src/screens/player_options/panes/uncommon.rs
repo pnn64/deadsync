@@ -1,6 +1,6 @@
 use super::super::row::{index_binding, simple_bitmask_binding};
 use super::*;
-use crate::game::profile as gp;
+use deadsync_profile::compat as gp;
 use deadsync_profile::{
     AccelEffectsMask, AppearanceEffectsMask, AttackMode, HideLightType, HoldsMask, InsertMask,
     RemoveMask, VisualEffectsMask,

@@ -126,15 +126,15 @@ pub fn loaded_fixture() -> MusicWheelBenchFixture {
 
     const BENCH_ITL_API_KEY: &str = "bench-itl-api-key";
 
-    crate::game::profile::set_session_play_style(PlayStyle::Single);
-    crate::game::profile::set_session_joined(true, false);
-    crate::game::profile::set_groovestats_credentials_for_side(
+    deadsync_profile::compat::set_session_play_style(PlayStyle::Single);
+    deadsync_profile::compat::set_session_joined(true, false);
+    deadsync_profile::compat::set_groovestats_credentials_for_side(
         PlayerSide::P1,
         BENCH_ITL_API_KEY,
         "BenchPlayer",
     );
-    let profile_id =
-        crate::game::profile::active_local_profile_id_for_side(PlayerSide::P1).unwrap_or_default();
+    let profile_id = deadsync_profile::compat::active_local_profile_id_for_side(PlayerSide::P1)
+        .unwrap_or_default();
 
     let mut entries = Vec::with_capacity(48);
     let mut song_text_color_overrides = HashMap::with_capacity(12);
@@ -179,13 +179,13 @@ pub fn loaded_fixture() -> MusicWheelBenchFixture {
                 // Seed local + GrooveStats grades/lamps so the per-slot grade
                 // badge + lamp quad actors render (and the merge in
                 // get_cached_score_for_side picks a real entry).
-                crate::game::scores::seed_session_local_itg_score(
+                deadsync_online::score_compat::seed_session_local_itg_score(
                     &profile_id,
                     chart.short_hash.as_str(),
                     bench_cached_score(seed),
                 );
                 if chart_idx % 2 == 1 {
-                    crate::game::scores::seed_session_gs_score(
+                    deadsync_online::score_compat::seed_session_gs_score(
                         &profile_id,
                         chart.short_hash.as_str(),
                         bench_cached_score(seed + 3),
@@ -196,12 +196,12 @@ pub fn loaded_fixture() -> MusicWheelBenchFixture {
                 // rank (Header font) and wheel-score (Numbers font) text actors.
                 let ex_hundredths = 8800 + ((song_idx * 5 + chart_idx) as u32 * 53) % 1200;
                 let rank = 1 + ((pack_idx * 7 + song_idx) as u32 * 11 + chart_idx as u32) % 750;
-                crate::game::scores::seed_session_online_itl_self_score(
+                deadsync_online::score_compat::seed_session_online_itl_self_score(
                     BENCH_ITL_API_KEY,
                     chart.short_hash.as_str(),
                     ex_hundredths,
                 );
-                crate::game::scores::seed_session_online_itl_self_rank(
+                deadsync_online::score_compat::seed_session_online_itl_self_rank(
                     BENCH_ITL_API_KEY,
                     chart.short_hash.as_str(),
                     rank,
@@ -209,7 +209,7 @@ pub fn loaded_fixture() -> MusicWheelBenchFixture {
                 // Favorite roughly half the songs (P1) so the heart icon path
                 // runs with both hits and misses.
                 if song_idx % 2 == 0 {
-                    crate::game::profile::seed_session_favorite(
+                    deadsync_profile::compat::seed_session_favorite(
                         PlayerSide::P1,
                         chart.short_hash.as_str(),
                     );
@@ -227,7 +227,7 @@ pub fn loaded_fixture() -> MusicWheelBenchFixture {
         .map(|song_idx| song_base(0, song_idx))
         .collect();
     let unlock_refs: Vec<&str> = unlock_song_dirs.iter().map(String::as_str).collect();
-    crate::game::scores::seed_session_itl_unlock_folders(&profile_id, &unlock_refs);
+    deadsync_online::score_compat::seed_session_itl_unlock_folders(&profile_id, &unlock_refs);
 
     MusicWheelBenchFixture {
         entries,

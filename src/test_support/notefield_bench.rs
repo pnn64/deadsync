@@ -1,4 +1,3 @@
-use crate::game::profile;
 use crate::screens::components::gameplay::notefield;
 use crate::screens::components::shared::noteskin_model::{ModelMeshCache, ModelMeshCacheStats};
 use crate::screens::gameplay as gameplay_screen;
@@ -15,6 +14,7 @@ use deadsync_gameplay::{
 };
 use deadsync_notefield::{FieldPlacement, ProxyCaptureRequests, ViewOverride};
 use deadsync_profile as profile_data;
+use deadsync_profile::compat as profile;
 use deadsync_rules::judgment::{JudgeGrade, TimingWindow};
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::{TimingData, TimingSegments};
@@ -26,7 +26,7 @@ pub const SCENARIO_NAME: &str = "notefield";
 const VISIBLE_BEAT: f32 = 48.0;
 const WINDOW_BEATS_BEFORE: f32 = 8.0;
 const WINDOW_BEATS_AFTER: f32 = 24.0;
-pub use crate::game::GameplayCoreState;
+pub use crate::GameplayCoreState;
 
 pub struct NotefieldBenchFixture {
     state: GameplayCoreState,
@@ -134,8 +134,7 @@ pub fn fixture() -> NotefieldBenchFixture {
     player_profiles[0].measure_lines = profile_data::MeasureLines::Eighth;
 
     let session = GameplaySession::default();
-    let runtime_profiles =
-        gameplay_screen::gameplay_runtime_profile_data(&player_profiles, &session);
+    let runtime_profiles = crate::gameplay_runtime_profile_data(&player_profiles, &session);
     let noteskin_assets = gameplay_screen::gameplay_noteskin_assets(
         profile_data::PlayStyle::Single.cols_per_player(),
         profile_data::PlayStyle::Single.player_count(),
@@ -165,9 +164,7 @@ pub fn fixture() -> NotefieldBenchFixture {
             ScrollSpeedSetting::CMod(620.0),
             ScrollSpeedSetting::CMod(620.0),
         ],
-        player_profiles
-            .clone()
-            .map(crate::game::GameplayProfile::from),
+        player_profiles.clone().map(crate::GameplayProfile::from),
         None,
         None,
         None,

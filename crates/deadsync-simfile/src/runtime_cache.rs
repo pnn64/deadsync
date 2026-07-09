@@ -1,5 +1,5 @@
 use deadsync_chart::{SongData, SongPack};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -29,6 +29,25 @@ pub fn set_song_cache(packs: Vec<SongPack>) {
     let mut cache = SONG_CACHE.lock().unwrap();
     *cache = packs;
     SONG_CACHE_GENERATION.fetch_add(1, Ordering::Relaxed);
+}
+
+pub fn song_pack_group_for_simfile_path<'a>(
+    packs: &'a [SongPack],
+    simfile_path: &Path,
+) -> Option<&'a str> {
+    packs
+        .iter()
+        .find(|pack| {
+            pack.songs
+                .iter()
+                .any(|song| song.simfile_path == simfile_path)
+        })
+        .map(|pack| pack.group_name.as_str())
+}
+
+pub fn song_pack_group_for_song(song: &SongData) -> Option<String> {
+    let song_cache = get_song_cache();
+    song_pack_group_for_simfile_path(&song_cache, &song.simfile_path).map(str::to_string)
 }
 
 pub fn reload_song_in_cache_with<F>(

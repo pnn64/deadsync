@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use deadlib_present::actors::TextAttribute;
-use deadlib_render::TexturedMeshVertex;
+use deadlib_render::{SamplerDesc, SamplerFilter, SamplerWrap, TexturedMeshVertex};
 use deadsync_noteskin::{NUM_QUANTIZATIONS, Style};
 use deadsync_song_lua::{
     compile_song_lua_with_default_host, overlay_model_layers_from_slots,
@@ -29,6 +29,22 @@ pub type SongLuaOverlayKind = deadsync_song_lua::SongLuaOverlayKind<
 >;
 pub type SongLuaOverlayActor = deadsync_song_lua::SongLuaOverlayActor<SongLuaOverlayKind>;
 pub type CompiledSongLua = deadsync_song_lua::CompiledSongLua<SongLuaOverlayActor>;
+
+pub fn overlay_sampler(overlay: &SongLuaOverlayActor) -> SamplerDesc {
+    SamplerDesc {
+        filter: if deadsync_song_lua::overlay_actor_uses_nearest_sampler(overlay) {
+            SamplerFilter::Nearest
+        } else {
+            SamplerFilter::Linear
+        },
+        wrap: if deadsync_song_lua::overlay_actor_uses_repeat_sampler(overlay) {
+            SamplerWrap::Repeat
+        } else {
+            SamplerWrap::Clamp
+        },
+        ..SamplerDesc::default()
+    }
+}
 
 pub fn compile_song_lua(
     entry_path: &Path,

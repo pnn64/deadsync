@@ -15,7 +15,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::act;
 use crate::assets::i18n::{tr, tr_fmt};
-use crate::game::profile;
 use crate::screens::components::shared::qr_code;
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
@@ -23,6 +22,7 @@ use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, sc
 use deadsync_online::arrowcloud as ac_api;
 use deadsync_online::groovestats as gs_api;
 use deadsync_profile as profile_data;
+use deadsync_profile::compat as profile;
 
 const ALL_SIDES: [profile_data::PlayerSide; 2] =
     [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2];

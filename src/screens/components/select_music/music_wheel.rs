@@ -4,8 +4,6 @@ use crate::config::{
     self, DefaultSyncOffset, MachineBarColor, SelectMusicItlRankMode, SelectMusicItlWheelMode,
     SelectMusicSongSelectBgMode,
 };
-use crate::game::profile;
-use crate::game::scores;
 use crate::screens::components::shared::banner as shared_banner;
 use crate::screens::select_music::MusicWheelEntry;
 use deadlib_present::actors::Actor;
@@ -17,8 +15,11 @@ use deadsync_chart::song::resolve_sync_pref;
 use deadsync_chart::{
     ChartData, STANDARD_DIFFICULTY_COUNT, STANDARD_DIFFICULTY_NAMES, SongData, SyncPref,
 };
+use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
+use deadsync_profile::compat as profile;
 use deadsync_score as score_data;
+use deadsync_simfile::playlist::song_pack_and_dir_name;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -1387,7 +1388,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                         let both_joined = p1_joined && p2_joined;
                         if (p1_joined || p2_joined)
                             && let Some((pack_dir, song_dir)) =
-                                crate::screens::select_music::song_pack_and_dir_name(info.as_ref())
+                                song_pack_and_dir_name(info.as_ref())
                             && scores::is_itl_unlocks_pack(pack_dir)
                         {
                             let p1_id = local_profile_id(profile_data::PlayerSide::P1);

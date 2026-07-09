@@ -91,11 +91,11 @@ pub fn init(
     return_screen: Screen,
     fixed_stepchart: Option<FixedStepchart>,
 ) -> State {
-    let session_music_rate = crate::game::profile::get_session_music_rate();
+    let session_music_rate = deadsync_profile::compat::get_session_music_rate();
     let allow_per_player_global_offsets =
         crate::config::get().machine_allow_per_player_global_offsets;
-    let p1_profile = crate::game::profile::get_for_side(profile_data::PlayerSide::P1);
-    let p2_profile = crate::game::profile::get_for_side(profile_data::PlayerSide::P2);
+    let p1_profile = deadsync_profile::compat::get_for_side(profile_data::PlayerSide::P1);
+    let p2_profile = deadsync_profile::compat::get_for_side(profile_data::PlayerSide::P2);
 
     let speed_mod_p1 = SpeedMod::from(p1_profile.scroll_speed);
     let speed_mod_p2 = SpeedMod::from(p2_profile.scroll_speed);
@@ -211,7 +211,7 @@ pub fn init(
         &mut p2_masks,
     );
 
-    let cols_per_player = crate::game::profile::get_session_play_style().cols_per_player();
+    let cols_per_player = deadsync_profile::compat::get_session_play_style().cols_per_player();
     let mut initial_noteskin_names = vec![profile_data::NoteSkin::DEFAULT_NAME.to_string()];
     for profile in &player_profiles {
         push_noteskin_name_once(&mut initial_noteskin_names, &profile.noteskin);
@@ -346,7 +346,7 @@ pub fn pad_light_brightness_preview(state: &State) -> [Option<u8>; PLAYER_SLOTS]
     // to both (see `pad_light_brightness_for_pad`). Mirror the lone active side's
     // preview onto the other pad so both light up while the value is being tuned.
     if matches!(
-        crate::game::profile::get_session_play_style(),
+        deadsync_profile::compat::get_session_play_style(),
         profile_data::PlayStyle::Double
     ) && let Some(pct) = preview.iter().flatten().copied().next()
     {
@@ -357,11 +357,11 @@ pub fn pad_light_brightness_preview(state: &State) -> [Option<u8>; PLAYER_SLOTS]
 
 #[inline(always)]
 fn session_active_players() -> [bool; PLAYER_SLOTS] {
-    let play_style = crate::game::profile::get_session_play_style();
-    let side = crate::game::profile::get_session_player_side();
+    let play_style = deadsync_profile::compat::get_session_play_style();
+    let side = deadsync_profile::compat::get_session_player_side();
     let joined = [
-        crate::game::profile::is_session_side_joined(profile_data::PlayerSide::P1),
-        crate::game::profile::is_session_side_joined(profile_data::PlayerSide::P2),
+        deadsync_profile::compat::is_session_side_joined(profile_data::PlayerSide::P1),
+        deadsync_profile::compat::is_session_side_joined(profile_data::PlayerSide::P2),
     ];
     let joined_count = usize::from(joined[P1]) + usize::from(joined[P2]);
     match play_style {
@@ -397,8 +397,8 @@ const fn pane_uses_arcade_next_row(pane: OptionsPane) -> bool {
 
 #[inline(always)]
 fn session_persisted_player_idx() -> usize {
-    let play_style = crate::game::profile::get_session_play_style();
-    let side = crate::game::profile::get_session_player_side();
+    let play_style = deadsync_profile::compat::get_session_play_style();
+    let side = deadsync_profile::compat::get_session_player_side();
     match play_style {
         profile_data::PlayStyle::Versus => P1,
         profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => match side {

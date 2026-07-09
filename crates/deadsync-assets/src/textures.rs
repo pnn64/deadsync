@@ -5,7 +5,7 @@ use deadlib_assets::{
     initial_texture_decode_jobs,
 };
 use deadlib_platform::dirs;
-use deadlib_render::SamplerDesc;
+use deadlib_render::{SamplerDesc, SamplerWrap};
 use deadlib_renderer::Backend;
 use log::{debug, warn};
 use std::path::{Path, PathBuf};
@@ -40,6 +40,13 @@ pub fn canonical_texture_key<P: AsRef<Path>>(p: P) -> String {
         p.as_ref(),
         [dirs.data_dir.join("assets"), dirs.exe_dir.join("assets")],
     )
+}
+
+pub fn model_texture_sampler(key: &str) -> SamplerDesc {
+    SamplerDesc {
+        wrap: SamplerWrap::Repeat,
+        ..deadlib_assets::parse_texture_hints(key).sampler_desc()
+    }
 }
 
 impl AssetManager {
@@ -132,9 +139,29 @@ impl AssetManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use deadlib_render::{SamplerFilter, SamplerWrap};
 
     #[test]
     fn goldstar_uses_repeat_sampler() {
         assert!(needs_repeat_sampler("grades/goldstar (stretch).png"));
+    }
+
+    #[test]
+    fn model_sampler_forces_repeat_for_plain_textures() {
+        let key = "noteskins/dance/custom/textures/Tap Note parts.png";
+        let sampler = model_texture_sampler(key);
+
+        assert_eq!(sampler.wrap, SamplerWrap::Repeat);
+        assert_eq!(sampler.filter, SamplerFilter::Linear);
+    }
+
+    #[test]
+    fn model_sampler_preserves_texture_hints() {
+        let key = "noteskins/dance/custom/textures/Tap Note parts (nearest mipmaps).png";
+        let sampler = model_texture_sampler(key);
+
+        assert_eq!(sampler.wrap, SamplerWrap::Repeat);
+        assert_eq!(sampler.filter, SamplerFilter::Nearest);
+        assert!(sampler.mipmaps);
     }
 }

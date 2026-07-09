@@ -12,8 +12,11 @@ use std::str::FromStr;
 use std::sync::{LazyLock, Mutex, MutexGuard};
 
 pub mod app_runtime;
+pub mod compat;
+pub mod favorites_view;
 pub mod lock_wait;
 pub mod pad_config;
+pub mod pad_config_sync;
 pub mod update;
 
 pub const PLAYER_SLOTS: usize = 2;
@@ -3183,6 +3186,25 @@ pub enum PlayMode {
     #[default]
     Regular,
     Marathon,
+}
+
+pub const fn play_style_from_machine_preference(
+    style: deadsync_config::theme::MachinePreferredPlayStyle,
+) -> PlayStyle {
+    match style {
+        deadsync_config::theme::MachinePreferredPlayStyle::Single => PlayStyle::Single,
+        deadsync_config::theme::MachinePreferredPlayStyle::Versus => PlayStyle::Versus,
+        deadsync_config::theme::MachinePreferredPlayStyle::Double => PlayStyle::Double,
+    }
+}
+
+pub const fn play_mode_from_machine_preference(
+    mode: deadsync_config::theme::MachinePreferredPlayMode,
+) -> PlayMode {
+    match mode {
+        deadsync_config::theme::MachinePreferredPlayMode::Regular => PlayMode::Regular,
+        deadsync_config::theme::MachinePreferredPlayMode::Marathon => PlayMode::Marathon,
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
