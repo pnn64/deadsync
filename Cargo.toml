@@ -59,23 +59,7 @@ resolver = "3"
 # `version.workspace = true`, so `env!("CARGO_PKG_VERSION")` and
 # `deadsync_version::current()` always agree. Bump THIS line on release.
 [workspace.package]
-version = "0.4.2328"
-
-[[bin]]
-name = "compose_bench"
-path = "tests/compose/bench.rs"
-
-[[bin]]
-name = "draw_bench"
-path = "tests/draw/bench.rs"
-
-[[bin]]
-name = "input_bench"
-path = "tests/input/bench.rs"
-
-[[bin]]
-name = "input_e2e_bench"
-path = "tests/input_e2e/bench.rs"
+version = "0.4.2004"
 
 [[bin]]
 name = "generate_pseudo"

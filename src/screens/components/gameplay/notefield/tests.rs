@@ -8,8 +8,6 @@ use super::{
     tipsy_y_extra,
 };
 use crate::assets;
-use crate::test_support::notefield_bench;
-use deadlib_present::actors::Actor;
 use deadsync_assets::noteskin::load_itg_skin;
 use deadsync_core::note::NoteType;
 use deadsync_core::timing::beat_to_note_row;
@@ -329,54 +327,6 @@ fn hold_glow_draws_over_hold_body_like_itg_second_pass() {
 fn average_error_bar_draws_under_receptors() {
     assert!(i32::from(Z_ERROR_BAR_AVERAGE) < Z_RECEPTOR);
     assert!(i32::from(Z_ERROR_BAR_AVERAGE) < Z_TAP_NOTE);
-}
-
-#[test]
-fn default_gameplay_field_emits_receptors_and_notes() {
-    std::thread::Builder::new()
-        .stack_size(16 * 1024 * 1024)
-        .spawn(|| {
-            let fixture = notefield_bench::fixture();
-            let actors = fixture.build(false);
-
-            assert!(
-                count_visible_z(&actors, Z_RECEPTOR as i16) >= 4,
-                "default gameplay field should emit receptor actors"
-            );
-            assert!(
-                count_visible_z(&actors, Z_TAP_NOTE as i16) > 0,
-                "default gameplay field should emit tap note actors"
-            );
-        })
-        .expect("spawn diagnostic notefield test")
-        .join()
-        .expect("diagnostic notefield test should not panic");
-}
-
-fn count_visible_z(actors: &[Actor], wanted_z: i16) -> usize {
-    let mut count = 0;
-    let mut stack: Vec<&Actor> = actors.iter().collect();
-    while let Some(actor) = stack.pop() {
-        count += match actor {
-            Actor::Sprite { visible, z, .. }
-            | Actor::Mesh { visible, z, .. }
-            | Actor::TexturedMesh { visible, z, .. } => usize::from(*visible && *z == wanted_z),
-            Actor::Frame { children, .. } | Actor::Camera { children, .. } => {
-                stack.extend(children.iter());
-                0
-            }
-            Actor::SharedFrame { children, .. } => {
-                stack.extend(children.iter());
-                0
-            }
-            Actor::Shadow { child, .. } => {
-                stack.push(child);
-                0
-            }
-            Actor::Text { .. } | Actor::CameraPush { .. } | Actor::CameraPop => 0,
-        };
-    }
-    count
 }
 
 #[test]

@@ -57,11 +57,6 @@ impl ModelMeshCache {
     }
 
     #[inline(always)]
-    pub(crate) fn clear(&mut self) {
-        self.entries.clear();
-    }
-
-    #[inline(always)]
     pub(crate) const fn stats(&self) -> ModelMeshCacheStats {
         self.stats
     }

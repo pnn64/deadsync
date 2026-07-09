@@ -1,12 +1,20 @@
-use crate::assets::{AssetManager, open_image_fallback, register_texture_dims};
+use crate::assets::AssetManager;
 use deadlib_assets::dynamic;
-use deadlib_render::{SamplerDesc, TextureHandle};
+use deadlib_render::TextureHandle;
 use deadlib_renderer::{Backend, Texture as RendererTexture};
 use deadlib_video as video;
+use deadsync_assets::dynamic_media::{
+    BackgroundTextureError, BannerVideoPrepResult, DynamicBackgroundState,
+    DynamicImageTextureError, DynamicVideoState, GameplayBackgroundPrepResult,
+    SongLuaVideoPrepResult, create_cdtitle_texture, create_inserted_banner_texture,
+    path_texture_key, prepare_banner_video, prepare_gameplay_background, prepare_song_lua_video,
+    retire_dynamic_background_state, retire_dynamic_video_state, retire_video_player,
+    set_banner_texture_for_path, set_image_background_texture, set_video_background_poster_texture,
+    set_video_background_texture, start_background_video,
+};
 use deadsync_assets::media_cache;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
-use image::RgbaImage;
 use log::warn;
 use std::{
     borrow::Cow,
@@ -17,85 +25,9 @@ use std::{
     time::Instant,
 };
 
-struct DynamicVideoState {
-    player: video::Player,
-    started_at: Option<Instant>,
-    path: PathBuf,
-}
-
-struct PreparedBannerVideo {
-    key: String,
-    path: PathBuf,
-    poster: RgbaImage,
-    player: video::Player,
-}
-
-enum BannerVideoPrepResult {
-    Ready(PreparedBannerVideo),
-    Failed { path: PathBuf, msg: String },
-}
-
-struct PreparedGameplayBackground {
-    key: String,
-    path: PathBuf,
-    player: video::Player,
-}
-
-enum GameplayBackgroundPrepResult {
-    Ready(PreparedGameplayBackground),
-    Failed {
-        key: String,
-        path: PathBuf,
-        msg: String,
-    },
-}
-
 struct DynamicBannerState {
     key: String,
     path: PathBuf,
-}
-
-struct DynamicBackgroundState {
-    key: String,
-    path: PathBuf,
-    video: Option<video::Player>,
-    video_timing: dynamic::DynamicVideoTiming,
-}
-
-impl DynamicBackgroundState {
-    fn new(
-        key: String,
-        path: PathBuf,
-        video: Option<video::Player>,
-        gameplay_time_sec: f32,
-        video_rate: f32,
-    ) -> Self {
-        Self {
-            key,
-            path,
-            video,
-            video_timing: dynamic::DynamicVideoTiming::new(gameplay_time_sec, video_rate),
-        }
-    }
-
-    fn video_play_time(&self, gameplay_time_sec: f32) -> f32 {
-        self.video_timing.play_time(gameplay_time_sec)
-    }
-
-    fn set_video_rate(&mut self, video_rate: f32, gameplay_time_sec: f32) {
-        self.video_timing.set_rate(video_rate, gameplay_time_sec);
-    }
-
-    fn restart_video(&mut self, player: video::Player, gameplay_time_sec: f32) {
-        if let Some(old) = self.video.replace(player) {
-            retire_video_player(old);
-        }
-        self.video_timing.restart(gameplay_time_sec);
-    }
-
-    fn video_rate(&self) -> f32 {
-        self.video_timing.rate()
-    }
 }
 
 pub(crate) struct DynamicMedia {
@@ -233,27 +165,19 @@ impl DynamicMedia {
             }
 
             self.destroy_current_dynamic_cdtitle(assets, backend);
-            let rgba = match media_cache::load_cdtitle_source_rgba(&path) {
-                Ok(rgba) => rgba,
-                Err(e) => {
+            match create_cdtitle_texture(assets, backend, &path) {
+                Ok(key) => {
+                    self.current_dynamic_cdtitle = Some((key.clone(), path));
+                    Some(key)
+                }
+                Err(DynamicImageTextureError::Load(e)) => {
                     warn!(
                         "Failed to load CDTitle '{}': {e}. Skipping.",
                         path.display()
                     );
-                    return None;
+                    None
                 }
-            };
-
-            match backend.create_texture(&rgba, SamplerDesc::default()) {
-                Ok(texture) => {
-                    let path_key = path.to_string_lossy();
-                    let key = format!("__cdtitle::{path_key}");
-                    assets.insert_texture(key.clone(), texture, rgba.width(), rgba.height());
-                    register_texture_dims(&key, rgba.width(), rgba.height());
-                    self.current_dynamic_cdtitle = Some((key.clone(), path));
-                    Some(key)
-                }
-                Err(e) => {
+                Err(DynamicImageTextureError::Create(e)) => {
                     warn!(
                         "Failed to create GPU texture for CDTitle image {path:?}: {e}. Skipping."
                     );
@@ -282,7 +206,7 @@ impl DynamicMedia {
                 return;
             }
 
-            let key = path.to_string_lossy().into_owned();
+            let key = path_texture_key(&path);
             if banner_cache_opts.enabled
                 && self.dynamic_pack_banner_keys.contains(&key)
                 && assets.has_texture_key(&key)
@@ -298,27 +222,20 @@ impl DynamicMedia {
                 self.release_texture_key(assets, backend, old_key);
             }
 
-            let rgba = match media_cache::load_banner_source_rgba(&path) {
-                Ok(rgba) => rgba,
-                Err(e) => {
-                    warn!(
-                        "Failed to load pack banner '{}': {e}. Skipping.",
-                        path.display()
-                    );
-                    return;
-                }
-            };
-
-            match backend.create_texture(&rgba, SamplerDesc::default()) {
-                Ok(texture) => {
-                    assets.insert_texture(key.clone(), texture, rgba.width(), rgba.height());
-                    register_texture_dims(&key, rgba.width(), rgba.height());
+            match create_inserted_banner_texture(assets, backend, &path) {
+                Ok(key) => {
                     if banner_cache_opts.enabled {
                         self.dynamic_pack_banner_keys.insert(key.clone());
                     }
                     self.current_dynamic_pack_banner = Some((key, path));
                 }
-                Err(e) => {
+                Err(DynamicImageTextureError::Load(e)) => {
+                    warn!(
+                        "Failed to load pack banner '{}': {e}. Skipping.",
+                        path.display()
+                    );
+                }
+                Err(DynamicImageTextureError::Create(e)) => {
                     warn!("Failed to create GPU texture for pack banner {path:?}: {e}. Skipping.");
                 }
             }
@@ -365,7 +282,7 @@ impl DynamicMedia {
         const FALLBACK_KEY: &str = "banner1.png";
 
         if let Some(path) = path_opt {
-            let key = path.to_string_lossy().into_owned();
+            let key = path_texture_key(&path);
             if let Some(current) = self.current_dynamic_banner.as_ref()
                 && current.path == path
                 && assets.has_texture_key(&current.key)
@@ -373,34 +290,22 @@ impl DynamicMedia {
                 return current.key.clone();
             }
             self.destroy_current_dynamic_banner(assets, backend);
-            let rgba = match media_cache::load_banner_source_rgba(&path) {
-                Ok(rgba) => rgba,
-                Err(e) => {
-                    warn!(
-                        "Failed to load banner '{}': {e}. Using fallback.",
-                        path.display()
-                    );
-                    return FALLBACK_KEY.to_string();
-                }
-            };
-
-            match backend.create_texture(&rgba, SamplerDesc::default()) {
-                Ok(texture) => {
-                    assets.set_texture_for_key(
-                        backend,
-                        key.clone(),
-                        texture,
-                        rgba.width(),
-                        rgba.height(),
-                    );
-                    register_texture_dims(&key, rgba.width(), rgba.height());
+            match set_banner_texture_for_path(assets, backend, &path) {
+                Ok(key) => {
                     self.current_dynamic_banner = Some(DynamicBannerState {
                         key: key.clone(),
                         path,
                     });
                     key
                 }
-                Err(e) => {
+                Err(DynamicImageTextureError::Load(e)) => {
+                    warn!(
+                        "Failed to load banner '{}': {e}. Using fallback.",
+                        path.display()
+                    );
+                    FALLBACK_KEY.to_string()
+                }
+                Err(DynamicImageTextureError::Create(e)) => {
                     warn!(
                         "Failed to create GPU texture for banner '{}': {e}. Using fallback.",
                         key
@@ -524,7 +429,7 @@ impl DynamicMedia {
 
             if assets.has_texture_key(&key) {
                 let video = if wants_video {
-                    match video::open_player(&path, true) {
+                    match start_background_video(&path) {
                         Ok(player) => Some(player),
                         Err(e) => {
                             warn!(
@@ -549,116 +454,77 @@ impl DynamicMedia {
 
             if dynamic::is_dynamic_video_path(&path) {
                 if wants_video {
-                    match video::open(&path, true) {
-                        Ok(video) => match backend
-                            .create_texture(&video.poster, SamplerDesc::default())
-                        {
-                            Ok(texture) => {
-                                assets.set_texture_for_key(
-                                    backend,
-                                    key.clone(),
-                                    texture,
-                                    video.info.width,
-                                    video.info.height,
-                                );
-                                register_texture_dims(&key, video.info.width, video.info.height);
-                                self.current_dynamic_background =
-                                    Some(DynamicBackgroundState::new(
-                                        key.clone(),
-                                        path,
-                                        Some(video.player),
-                                        video_started_at_sec,
-                                        1.0,
-                                    ));
-                                return key;
-                            }
-                            Err(e) => {
-                                warn!(
-                                    "Failed to create GPU texture for video background {path:?}: {e}. Using fallback."
-                                );
-                                return FALLBACK_KEY.to_string();
-                            }
-                        },
-                        Err(e) => {
+                    match set_video_background_texture(
+                        assets,
+                        backend,
+                        &path,
+                        video_started_at_sec,
+                        1.0,
+                    ) {
+                        Ok((key, state)) => {
+                            self.current_dynamic_background = Some(state);
+                            return key;
+                        }
+                        Err(BackgroundTextureError::OpenVideo(e)) => {
                             warn!(
                                 "Failed to open video background '{}': {e}. Using fallback.",
                                 path.display()
                             );
                             return FALLBACK_KEY.to_string();
                         }
-                    }
-                }
-                match video::load_poster(&path) {
-                    Ok(rgba) => match backend.create_texture(&rgba, SamplerDesc::default()) {
-                        Ok(texture) => {
-                            assets.set_texture_for_key(
-                                backend,
-                                key.clone(),
-                                texture,
-                                rgba.width(),
-                                rgba.height(),
-                            );
-                            register_texture_dims(&key, rgba.width(), rgba.height());
-                            self.current_dynamic_background = Some(DynamicBackgroundState::new(
-                                key.clone(),
-                                path,
-                                None,
-                                video_started_at_sec,
-                                1.0,
-                            ));
-                            return key;
-                        }
-                        Err(e) => {
+                        Err(BackgroundTextureError::CreateVideo(e)) => {
                             warn!(
-                                "Failed to create GPU texture for video background poster {path:?}: {e}. Using fallback."
+                                "Failed to create GPU texture for video background {path:?}: {e}. Using fallback."
                             );
                             return FALLBACK_KEY.to_string();
                         }
-                    },
-                    Err(e) => {
+                        Err(_) => unreachable!("video background helper returned wrong error kind"),
+                    }
+                }
+                match set_video_background_poster_texture(
+                    assets,
+                    backend,
+                    &path,
+                    video_started_at_sec,
+                    1.0,
+                ) {
+                    Ok((key, state)) => {
+                        self.current_dynamic_background = Some(state);
+                        return key;
+                    }
+                    Err(BackgroundTextureError::LoadPoster(e)) => {
                         warn!(
                             "Failed to load video background poster '{}': {e}. Using fallback.",
                             path.display()
                         );
                         return FALLBACK_KEY.to_string();
                     }
+                    Err(BackgroundTextureError::CreatePoster(e)) => {
+                        warn!(
+                            "Failed to create GPU texture for video background poster {path:?}: {e}. Using fallback."
+                        );
+                        return FALLBACK_KEY.to_string();
+                    }
+                    Err(_) => unreachable!("video poster helper returned wrong error kind"),
                 }
             }
 
-            let rgba = match open_image_fallback(&path) {
-                Ok(img) => img.to_rgba8(),
-                Err(e) => {
-                    warn!("Failed to open background image {path:?}: {e}. Using fallback.");
-                    return FALLBACK_KEY.to_string();
-                }
-            };
-
-            match backend.create_texture(&rgba, SamplerDesc::default()) {
-                Ok(texture) => {
-                    let key = path.to_string_lossy().into_owned();
-                    assets.set_texture_for_key(
-                        backend,
-                        key.clone(),
-                        texture,
-                        rgba.width(),
-                        rgba.height(),
-                    );
-                    register_texture_dims(&key, rgba.width(), rgba.height());
-                    self.current_dynamic_background = Some(DynamicBackgroundState::new(
-                        key.clone(),
-                        path,
-                        None,
-                        video_started_at_sec,
-                        1.0,
-                    ));
+            match set_image_background_texture(assets, backend, &path, video_started_at_sec, 1.0) {
+                Ok((key, state)) => {
+                    self.current_dynamic_background = Some(state);
                     key
                 }
-                Err(e) => {
+                Err(BackgroundTextureError::OpenImage(e)) => {
+                    warn!("Failed to open background image {path:?}: {e}. Using fallback.");
+                    FALLBACK_KEY.to_string()
+                }
+                Err(BackgroundTextureError::CreateImage(e)) => {
                     warn!(
                         "Failed to create GPU texture for background {path:?}: {e}. Using fallback."
                     );
                     FALLBACK_KEY.to_string()
                 }
+                Err(_) => unreachable!("image background helper returned wrong error kind"),
             }
         } else {
             self.destroy_current_dynamic_background(assets, backend);
@@ -833,22 +699,24 @@ impl DynamicMedia {
             {
                 continue;
             }
-            match video::open_player(path, true) {
-                Ok(player) => {
-                    if !assets.has_texture_key(&key) {
-                        match video::load_poster(path) {
-                            Ok(poster) => assets.queue_texture_upload(key.clone(), poster),
-                            Err(e) => warn!(
-                                "Failed to load song lua video poster '{}': {e}",
-                                path.display()
-                            ),
+            match prepare_song_lua_video(path, !assets.has_texture_key(&key)) {
+                SongLuaVideoPrepResult::Ready(prepared) => {
+                    match prepared.poster {
+                        Ok(Some(poster)) => {
+                            assets.queue_texture_upload(prepared.key.clone(), poster)
                         }
+                        Ok(None) => {}
+                        Err(e) => warn!(
+                            "Failed to load song lua video poster '{}': {e}",
+                            path.display()
+                        ),
                     }
-                    self.active_song_lua_videos.insert(key, player);
+                    self.active_song_lua_videos
+                        .insert(prepared.key, prepared.player);
                 }
-                Err(e) => {
+                SongLuaVideoPrepResult::FailedOpen { key, msg } => {
                     warn!(
-                        "Failed to start song lua video '{}': {e}. Using prewarmed poster.",
+                        "Failed to start song lua video '{}': {msg}. Using prewarmed poster.",
                         path.display()
                     );
                     self.failed_song_lua_video_keys.insert(key);
@@ -1237,67 +1105,6 @@ impl DynamicMedia {
             self.release_texture_key(assets, backend, key);
         }
     }
-}
-
-fn prepare_banner_video(key: String, path: PathBuf) -> BannerVideoPrepResult {
-    if !media_cache::banner_cache_options().enabled {
-        return match video::open(&path, true) {
-            Ok(video) => BannerVideoPrepResult::Ready(PreparedBannerVideo {
-                key,
-                path,
-                poster: video.poster,
-                player: video.player,
-            }),
-            Err(msg) => BannerVideoPrepResult::Failed { path, msg },
-        };
-    }
-
-    let poster = match media_cache::load_banner_source_rgba(&path) {
-        Ok(rgba) => rgba,
-        Err(msg) => {
-            return BannerVideoPrepResult::Failed { path, msg };
-        }
-    };
-    let player = match video::open_player(&path, true) {
-        Ok(player) => player,
-        Err(msg) => {
-            return BannerVideoPrepResult::Failed { path, msg };
-        }
-    };
-    BannerVideoPrepResult::Ready(PreparedBannerVideo {
-        key,
-        path,
-        poster,
-        player,
-    })
-}
-
-fn prepare_gameplay_background(key: String, path: PathBuf) -> GameplayBackgroundPrepResult {
-    match video::open_player(&path, true) {
-        Ok(player) => {
-            GameplayBackgroundPrepResult::Ready(PreparedGameplayBackground { key, path, player })
-        }
-        Err(msg) => GameplayBackgroundPrepResult::Failed { key, path, msg },
-    }
-}
-
-fn retire_video_player(player: video::Player) {
-    player.retire_async();
-}
-
-fn retire_video_player_opt(player: Option<video::Player>) {
-    if let Some(player) = player {
-        retire_video_player(player);
-    }
-}
-
-fn retire_dynamic_video_state(state: DynamicVideoState) {
-    retire_video_player(state.player);
-}
-
-fn retire_dynamic_background_state(mut state: DynamicBackgroundState) -> String {
-    retire_video_player_opt(state.video.take());
-    state.key
 }
 
 impl Default for DynamicMedia {

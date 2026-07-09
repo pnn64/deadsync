@@ -43,7 +43,6 @@ const LOGICAL_INPUT_SCAN_DIRS: &[&str] = &[
     "src/config",
     "src/game",
     "src/screens",
-    "src/test_support",
     "tests",
 ];
 
@@ -63,7 +62,6 @@ const NATIVE_INPUT_SCAN_DIRS: &[&str] = &[
     "src/config",
     "src/game",
     "src/screens",
-    "src/test_support",
     "tests",
 ];
 
@@ -72,7 +70,6 @@ const INPUT_FSR_SCAN_DIRS: &[&str] = &[
     "src/config",
     "src/game",
     "src/screens",
-    "src/test_support",
     "tests",
 ];
 
@@ -82,7 +79,6 @@ const ENGINE_VIDEO_SCAN_DIRS: &[&str] = &[
     "src/config",
     "src/game",
     "src/screens",
-    "src/test_support",
     "tests",
 ];
 
@@ -121,7 +117,6 @@ const ENGINE_GFX_RENDER_SCAN_DIRS: &[&str] = &[
     "src/engine/present",
     "src/game",
     "src/screens",
-    "src/test_support",
     "tests",
 ];
 
@@ -132,7 +127,6 @@ const RENDER_BACKEND_IMPORT_SCAN_DIRS: &[&str] = &[
     "src/engine/present",
     "src/game",
     "src/screens",
-    "src/test_support",
     "tests",
     "crates/deadlib-present/src",
 ];
@@ -149,7 +143,6 @@ const LIGHTS_IMPORT_SCAN_DIRS: &[&str] = &[
     "src/config",
     "src/game",
     "src/screens",
-    "src/test_support",
     "tests",
 ];
 
@@ -159,7 +152,6 @@ const SMX_IMPORT_SCAN_DIRS: &[&str] = &[
     "src/engine",
     "src/game",
     "src/screens",
-    "src/test_support",
     "tests",
 ];
 
@@ -183,7 +175,6 @@ const PRESENT_SPACE_SCAN_DIRS: &[&str] = &[
     "src/config",
     "src/game",
     "src/screens",
-    "src/test_support",
     "tests",
 ];
 
@@ -301,7 +292,6 @@ const ENGINE_PLATFORM_SCAN_DIRS: &[&str] = &[
     "src/config",
     "src/game",
     "src/screens",
-    "src/test_support",
     "tests",
 ];
 
@@ -312,7 +302,6 @@ const GAME_RULE_FACADE_SCAN_DIRS: &[&str] = &[
     "src/config",
     "src/game",
     "src/screens",
-    "src/test_support",
     "tests",
 ];
 
@@ -461,7 +450,6 @@ const GAME_CHART_FACADE_SCAN_DIRS: &[&str] = &[
     "src/config",
     "src/game",
     "src/screens",
-    "src/test_support",
     "tests",
 ];
 
@@ -470,7 +458,6 @@ const GAME_PARSING_NOTES_FACADE_SCAN_DIRS: &[&str] = &[
     "src/config",
     "src/game",
     "src/screens",
-    "src/test_support",
     "tests",
 ];
 
@@ -490,7 +477,6 @@ const GAME_SONG_DATA_SCAN_DIRS: &[&str] = &[
     "src/config",
     "src/game",
     "src/screens",
-    "src/test_support",
     "tests",
 ];
 
@@ -614,7 +600,6 @@ const GAME_SCORE_DATA_SCAN_DIRS: &[&str] = &[
     "src/config",
     "src/game",
     "src/screens",
-    "src/test_support",
     "tests",
 ];
 
@@ -625,7 +610,6 @@ const GAMEPLAY_LIMIT_SCAN_DIRS: &[&str] = &[
     "src/config",
     "src/game",
     "src/screens",
-    "src/test_support",
     "tests",
 ];
 
@@ -638,7 +622,6 @@ const CORE_NOTE_SCAN_DIRS: &[&str] = &[
     "src/config",
     "src/game",
     "src/screens",
-    "src/test_support",
     "tests",
 ];
 
@@ -699,7 +682,6 @@ const ARROWCLOUD_PROTOCOL_SCAN_DIRS: &[&str] = &[
     "src/config",
     "src/game",
     "src/screens",
-    "src/test_support",
     "tests",
 ];
 
@@ -765,7 +747,6 @@ const GROOVESTATS_PROTOCOL_SCAN_DIRS: &[&str] = &[
     "src/config",
     "src/game",
     "src/screens",
-    "src/test_support",
     "tests",
 ];
 
@@ -837,7 +818,6 @@ const LOBBY_DATA_SCAN_DIRS: &[&str] = &[
     "src/config",
     "src/game",
     "src/screens",
-    "src/test_support",
     "tests",
 ];
 
@@ -858,7 +838,6 @@ const DOWNLOAD_PROTOCOL_SCAN_DIRS: &[&str] = &[
     "src/config",
     "src/game",
     "src/screens",
-    "src/test_support",
     "tests",
 ];
 
@@ -867,7 +846,6 @@ const NET_TRANSPORT_ERROR_SCAN_DIRS: &[&str] = &[
     "src/config",
     "src/game",
     "src/screens",
-    "src/test_support",
     "tests",
 ];
 
@@ -877,7 +855,6 @@ const NET_RESPONSE_BODY_SCAN_DIRS: &[&str] = &[
     "src/config",
     "src/game",
     "src/screens",
-    "src/test_support",
     "tests",
 ];
 
@@ -2418,7 +2395,6 @@ fn present_model_lives_in_present_crate() {
         "src/config",
         "src/game",
         "src/screens",
-        "src/test_support",
         "tests",
     ] {
         let path = root.join(dir);
@@ -2855,13 +2831,10 @@ fn app_helper_profile_data_imports_do_not_use_game_facade() {
     for file in rust_files(&root.join("src/app")) {
         scan_game_profile_data_file(&root, &file, &mut failures);
     }
-    for file in rust_files(&root.join("src/test_support")) {
-        scan_game_profile_data_file(&root, &file, &mut failures);
-    }
 
     assert!(
         failures.is_empty(),
-        "app helper and test-support profile data should be imported from deadsync_profile:\n{}",
+        "app helper profile data should be imported from deadsync_profile:\n{}",
         failures.join("\n")
     );
 }

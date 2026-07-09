@@ -150,3 +150,5 @@ include!("runtime_methods.rs");
 include!("runtime_update.rs");
 include!("effective.rs");
 include!("tests.rs");
+#[cfg(test)]
+include!("runtime_regression_tests.rs");

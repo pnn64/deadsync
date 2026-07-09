@@ -8,8 +8,11 @@ pub use crate::app_config::{Config, DisplayMode};
 pub use crate::defaults::*;
 pub use crate::folders::AdditionalSongFolder;
 pub use crate::frame_pacing::{
-    MAX_LOGIC_DT_PER_FRAME, TAB_FAST_MULTIPLIER, TAB_SLOW_DIVISOR, advance_redraw_deadline,
-    apply_tab_acceleration, frame_interval_for_max_fps,
+    FixedFrameStatsRing, FrameIntervalReason, FrameIntervalState, FrameLoopMode,
+    GameplayPacingTrace, MAX_LOGIC_DT_PER_FRAME, OverlayMode, TAB_FAST_MULTIPLIER,
+    TAB_SLOW_DIVISOR, advance_redraw_deadline, apply_tab_acceleration, elapsed_us_between,
+    elapsed_us_since, frame_interval_for_max_fps, seconds_to_us_u32, stutter_severity,
+    update_frame_stats_spike_hold,
 };
 pub use crate::ini::SimpleIni;
 pub use crate::keybinds::{

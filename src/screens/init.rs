@@ -179,32 +179,6 @@ pub fn init() -> State {
     }
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
-pub(crate) fn bench_loading_state() -> State {
-    let (_tx, rx) = mpsc::channel::<LoadingMsg>();
-    let mut loading = LoadingState::new(rx);
-    loading.phase = LoadingPhase::Artwork;
-    loading.line2 = Arc::<str>::from("ITL Online 2024");
-    loading.line3 = Arc::<str>::from("Deep Down");
-    loading.artwork_done = 4821;
-    loading.artwork_total = 9372;
-    refresh_loading_count_text(&mut loading);
-    State {
-        elapsed: 0.0,
-        phase: InitPhase::Loading,
-        loader_started: true,
-        loading: Some(loading),
-        active_color_index: color::DEFAULT_COLOR_INDEX,
-        bg: visual_style_bg::State::new(),
-    }
-}
-
-pub(crate) fn clear_render_cache(state: &State) {
-    if let Some(loading) = state.loading.as_ref() {
-        *loading.speed_text_cache.borrow_mut() = None;
-    }
-}
-
 fn collect_artwork_cache_paths() -> (Vec<PathBuf>, Vec<PathBuf>) {
     let mut banner = Vec::new();
     let mut cdtitle = Vec::new();
@@ -823,25 +797,6 @@ fn push_actors_with_elapsed_overrides(
             linear(0.0): visible(false)
         ));
     }
-}
-
-fn get_actors_with_elapsed_overrides(
-    state: &State,
-    loading_elapsed_override: Option<f32>,
-    bg_elapsed_override: Option<f32>,
-) -> Vec<Actor> {
-    let mut actors = Vec::with_capacity(32 + ARROW_COUNT);
-    push_actors_with_elapsed_overrides(
-        &mut actors,
-        state,
-        loading_elapsed_override,
-        bg_elapsed_override,
-    );
-    actors
-}
-
-pub(crate) fn get_actors_at_loading_elapsed(state: &State, loading_elapsed_s: f32) -> Vec<Actor> {
-    get_actors_with_elapsed_overrides(state, Some(loading_elapsed_s), Some(loading_elapsed_s))
 }
 
 pub fn push_actors(actors: &mut Vec<Actor>, state: &State) {

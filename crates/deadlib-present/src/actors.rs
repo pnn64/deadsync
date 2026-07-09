@@ -357,6 +357,83 @@ impl Actor {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ActorTreeStats {
+    pub total: u32,
+    pub sprites: u32,
+    pub texts: u32,
+    pub meshes: u32,
+    pub textured_meshes: u32,
+    pub frames: u32,
+    pub cameras: u32,
+    pub shadows: u32,
+    pub text_chars: u32,
+}
+
+#[inline(always)]
+const fn saturating_u32(value: usize) -> u32 {
+    if value > u32::MAX as usize {
+        u32::MAX
+    } else {
+        value as u32
+    }
+}
+
+pub fn actor_tree_stats(actors: &[Actor]) -> ActorTreeStats {
+    fn visit(stats: &mut ActorTreeStats, actor: &Actor) {
+        stats.total = stats.total.saturating_add(1);
+        match actor {
+            Actor::Sprite { .. } => {
+                stats.sprites = stats.sprites.saturating_add(1);
+            }
+            Actor::Text { content, .. } => {
+                stats.texts = stats.texts.saturating_add(1);
+                stats.text_chars = stats
+                    .text_chars
+                    .saturating_add(saturating_u32(content.len()));
+            }
+            Actor::Mesh { .. } => {
+                stats.meshes = stats.meshes.saturating_add(1);
+            }
+            Actor::TexturedMesh { .. } => {
+                stats.textured_meshes = stats.textured_meshes.saturating_add(1);
+            }
+            Actor::Frame { children, .. } => {
+                stats.frames = stats.frames.saturating_add(1);
+                for child in children {
+                    visit(stats, child);
+                }
+            }
+            Actor::SharedFrame { children, .. } => {
+                stats.frames = stats.frames.saturating_add(1);
+                for child in children.iter() {
+                    visit(stats, child);
+                }
+            }
+            Actor::Camera { children, .. } => {
+                stats.cameras = stats.cameras.saturating_add(1);
+                for child in children {
+                    visit(stats, child);
+                }
+            }
+            Actor::CameraPush { .. } => {
+                stats.cameras = stats.cameras.saturating_add(1);
+            }
+            Actor::CameraPop => {}
+            Actor::Shadow { child, .. } => {
+                stats.shadows = stats.shadows.saturating_add(1);
+                visit(stats, child);
+            }
+        }
+    }
+
+    let mut stats = ActorTreeStats::default();
+    for actor in actors {
+        visit(&mut stats, actor);
+    }
+    stats
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TextAttribute {
     pub start: usize,
@@ -536,5 +613,35 @@ mod tests {
         };
         assert!(!Arc::ptr_eq(&vertices, &original));
         approx_eq(vertices[0].color[3], 0.2);
+    }
+
+    #[test]
+    fn actor_tree_stats_counts_nested_actors() {
+        let actors = vec![
+            Actor::Frame {
+                align: [0.0, 0.0],
+                offset: [0.0, 0.0],
+                size: [SizeSpec::Px(0.0), SizeSpec::Px(0.0)],
+                children: vec![Actor::Shadow {
+                    len: [0.0, 0.0],
+                    color: [0.0, 0.0, 0.0, 0.5],
+                    child: Box::new(text([1.0, 1.0, 1.0, 1.0])),
+                }],
+                background: None,
+                z: 0,
+            },
+            Actor::CameraPush {
+                view_proj: Matrix4::IDENTITY,
+            },
+        ];
+
+        let stats = actor_tree_stats(&actors);
+
+        assert_eq!(stats.total, 4);
+        assert_eq!(stats.frames, 1);
+        assert_eq!(stats.shadows, 1);
+        assert_eq!(stats.texts, 1);
+        assert_eq!(stats.text_chars, 1);
+        assert_eq!(stats.cameras, 1);
     }
 }

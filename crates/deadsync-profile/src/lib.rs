@@ -9,7 +9,7 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::sync::{LazyLock, Mutex, MutexGuard};
+use std::sync::{Arc, LazyLock, Mutex, MutexGuard};
 
 pub mod app_runtime;
 pub mod compat;
@@ -5263,6 +5263,45 @@ pub fn tap_explosion_skin_hidden(noteskin: Option<&NoteSkin>) -> bool {
     noteskin.is_some_and(NoteSkin::is_none_choice)
 }
 
+pub fn evaluation_mods_text(profile: &Profile, speed_mod: ScrollSpeedSetting) -> Arc<str> {
+    let mut parts = vec![speed_mod.to_string()];
+    if profile.mini_percent != 0 {
+        parts.push(format!("{}% Mini", profile.mini_percent));
+    }
+    if profile.spacing_percent != 0 {
+        parts.push(format!("{}% Spacing", profile.spacing_percent));
+    }
+    let scroll = profile.scroll_option;
+    if scroll.contains(ScrollOption::Reverse) {
+        parts.push("Reverse".to_string());
+    }
+    if scroll.contains(ScrollOption::Split) {
+        parts.push("Split".to_string());
+    }
+    if scroll.contains(ScrollOption::Alternate) {
+        parts.push("Alternate".to_string());
+    }
+    if scroll.contains(ScrollOption::Cross) {
+        parts.push("Cross".to_string());
+    }
+    if scroll.contains(ScrollOption::Centered) {
+        parts.push("Centered".to_string());
+    }
+    parts.push(profile.perspective.to_string());
+    let disabled_windows = profile.timing_windows.disabled_windows();
+    if disabled_windows.iter().any(|disabled| *disabled) {
+        let windows = disabled_windows
+            .iter()
+            .enumerate()
+            .filter_map(|(i, disabled)| disabled.then(|| format!("W{}", i + 1)))
+            .collect::<Vec<_>>()
+            .join("/");
+        parts.push(format!("No {windows}"));
+    }
+    parts.push(profile.noteskin.to_string());
+    Arc::<str>::from(parts.join(", "))
+}
+
 #[inline(always)]
 pub fn resolve_tap_explosion_skin<'a>(
     noteskin: Option<&'a NoteSkin>,
@@ -9396,6 +9435,26 @@ mod tests {
         assert!(profile.set_scroll_option(ScrollOption::Normal));
         assert_eq!(profile.scroll_option, ScrollOption::Normal);
         assert!(!profile.reverse_scroll);
+    }
+
+    #[test]
+    fn evaluation_mods_text_formats_profile_options() {
+        let profile = Profile {
+            mini_percent: 35,
+            spacing_percent: -20,
+            scroll_option: ScrollOption::Reverse
+                .union(ScrollOption::Split)
+                .union(ScrollOption::Cross),
+            perspective: Perspective::Incoming,
+            timing_windows: TimingWindowsOption::DecentsAndWayOffs,
+            noteskin: NoteSkin::new("cyber"),
+            ..Profile::default()
+        };
+
+        assert_eq!(
+            evaluation_mods_text(&profile, ScrollSpeedSetting::XMod(2.5)).as_ref(),
+            "X2.50, 35% Mini, -20% Spacing, Reverse, Split, Cross, Incoming, No W4/W5, cyber"
+        );
     }
 
     #[test]

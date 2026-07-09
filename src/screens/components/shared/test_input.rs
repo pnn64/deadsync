@@ -872,27 +872,8 @@ pub fn build_select_music_overlay(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadsync_core::input::InputSource;
-    use deadsync_input::{InputEvent, PadCode, PadId};
+    use deadsync_input::{PadCode, PadId};
     use std::time::Duration;
-
-    fn input_event_from(action: VirtualAction, source: InputSource) -> InputEvent {
-        let now = Instant::now();
-        InputEvent {
-            action,
-            input_slot: 0,
-            pressed: true,
-            source,
-            timestamp: now,
-            timestamp_host_nanos: 0,
-            stored_at: now,
-            emitted_at: now,
-        }
-    }
-
-    fn input_event(action: VirtualAction) -> InputEvent {
-        input_event_from(action, InputSource::Keyboard)
-    }
 
     #[test]
     fn dedups_pad_events_from_the_same_report() {

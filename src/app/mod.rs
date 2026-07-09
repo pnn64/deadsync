@@ -17,7 +17,11 @@ use self::screen_nav::TransitionState;
 use self::screenshot::{ScreenshotPreviewState, should_auto_screenshot_eval};
 use crate::act;
 use crate::assets::{AssetManager, PRESENT_TEXTURE_CONTEXT, TextureUploadBudget, visual_styles};
-use crate::config::{self, DisplayMode};
+use crate::config::{
+    self, DisplayMode, FixedFrameStatsRing, FrameIntervalReason, FrameIntervalState, FrameLoopMode,
+    GameplayPacingTrace, OverlayMode, elapsed_us_between, elapsed_us_since, seconds_to_us_u32,
+    stutter_severity, update_frame_stats_spike_hold,
+};
 use crate::screens::{
     DensityGraphSlot, DensityGraphSource, Screen as CurrentScreen, ScreenAction,
     SongOffsetSyncChange, credits, evaluation, evaluation_summary, gameover, gameplay, init,
@@ -73,7 +77,7 @@ compile_error!(
     "deadsync control input requires a raw keyboard backend; only Windows, Linux, FreeBSD, and macOS are wired for full app input"
 );
 
-use deadlib_present::actors::Actor;
+use deadlib_present::actors::{Actor, actor_tree_stats};
 use deadsync_chart::STANDARD_DIFFICULTY_COUNT;
 use deadsync_chart::song::sync_pref_offset;
 use deadsync_core::input::MAX_PLAYERS;
@@ -433,138 +437,8 @@ const STUTTER_SAMPLE_COUNT: usize = 5;
 const STUTTER_SAMPLE_LIFETIME: f32 = 3.4;
 
 #[inline(always)]
-fn elapsed_us_since(started: Instant) -> u32 {
-    let elapsed = started.elapsed().as_micros();
-    if elapsed > u128::from(u32::MAX) {
-        u32::MAX
-    } else {
-        elapsed as u32
-    }
-}
-
-#[inline(always)]
-fn elapsed_us_between(later: Instant, earlier: Instant) -> u32 {
-    let elapsed = later
-        .checked_duration_since(earlier)
-        .unwrap_or(Duration::ZERO)
-        .as_micros();
-    if elapsed > u128::from(u32::MAX) {
-        u32::MAX
-    } else {
-        elapsed as u32
-    }
-}
-
-#[inline(always)]
-fn seconds_to_us_u32(seconds: f32) -> u32 {
-    let micros = (seconds * 1_000_000.0).max(0.0);
-    if micros > u32::MAX as f32 {
-        u32::MAX
-    } else {
-        micros as u32
-    }
-}
-
-/// Slow-decay "worst recent frame" hold for the overlay's max readout and graph scale.
-/// New highs latch instantly and hold for `SPIKE_HOLD_FRAMES`; afterwards the value eases
-/// down geometrically toward the current frame so it tracks recovery without snapping.
-#[inline(always)]
-fn update_frame_stats_spike_hold(spike_us: &mut u32, ttl: &mut u16, frame_us: u32) {
-    const SPIKE_HOLD_FRAMES: u16 = 90;
-    if frame_us >= *spike_us {
-        *spike_us = frame_us;
-        *ttl = SPIKE_HOLD_FRAMES;
-    } else if *ttl > 0 {
-        *ttl -= 1;
-    } else {
-        let decayed = (u64::from(*spike_us) * 31 / 32) as u32;
-        *spike_us = decayed.max(frame_us);
-    }
-}
-
-#[inline(always)]
-fn stutter_severity(frame_seconds: f32, expected_seconds: f32) -> u8 {
-    if expected_seconds <= 0.0 {
-        return 0;
-    }
-    let thresholds = [expected_seconds * 2.0, expected_seconds * 4.0, 0.1];
-    let mut severity: u8 = 0;
-    while usize::from(severity) < thresholds.len()
-        && frame_seconds > thresholds[usize::from(severity)]
-    {
-        severity = severity.saturating_add(1);
-    }
-    severity
-}
-
-#[inline(always)]
 fn stutter_diag_enabled() -> bool {
     log::log_enabled!(log::Level::Trace)
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum OverlayMode {
-    Off,
-    Fps,
-    FpsAndStutter,
-    FpsStutterTiming,
-}
-
-impl OverlayMode {
-    #[inline(always)]
-    const fn from_code(mode: u8) -> Self {
-        match mode {
-            1 => Self::Fps,
-            2 => Self::FpsAndStutter,
-            3 => Self::FpsStutterTiming,
-            _ => Self::Off,
-        }
-    }
-
-    #[inline(always)]
-    const fn next(self) -> Self {
-        match self {
-            Self::Off => Self::Fps,
-            Self::Fps => Self::FpsAndStutter,
-            Self::FpsAndStutter => Self::FpsStutterTiming,
-            Self::FpsStutterTiming => Self::Off,
-        }
-    }
-
-    #[inline(always)]
-    const fn shows_fps(self) -> bool {
-        !matches!(self, Self::Off)
-    }
-
-    #[inline(always)]
-    const fn shows_stutter(self) -> bool {
-        matches!(self, Self::FpsAndStutter | Self::FpsStutterTiming)
-    }
-
-    #[inline(always)]
-    const fn shows_timing(self) -> bool {
-        matches!(self, Self::FpsStutterTiming)
-    }
-
-    #[inline(always)]
-    const fn label(self) -> &'static str {
-        match self {
-            Self::Off => "OFF",
-            Self::Fps => "FPS",
-            Self::FpsAndStutter => "FPS+STUTTER",
-            Self::FpsStutterTiming => "FPS+STUTTER+TIMING",
-        }
-    }
-
-    #[inline(always)]
-    const fn code(self) -> u8 {
-        match self {
-            Self::Off => 0,
-            Self::Fps => 1,
-            Self::FpsAndStutter => 2,
-            Self::FpsStutterTiming => 3,
-        }
-    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -722,66 +596,7 @@ impl StutterDiagRecorder {
 }
 
 type FrameStatsSample = crate::screens::components::shared::frame_stats_overlay::FrameStatsSample;
-
-/// Fixed-size ring of per-phase frame timings feeding the live frame-stats overlay.
-/// `Copy` array, no heap; only written while the overlay is enabled.
-#[derive(Clone, Copy)]
-struct FrameStatsRing {
-    samples: [FrameStatsSample; FRAME_STATS_SAMPLE_COUNT],
-    cursor: usize,
-    len: usize,
-}
-
-impl FrameStatsRing {
-    #[inline(always)]
-    const fn new() -> Self {
-        Self {
-            samples: [FrameStatsSample::empty(); FRAME_STATS_SAMPLE_COUNT],
-            cursor: 0,
-            len: 0,
-        }
-    }
-
-    #[inline(always)]
-    fn clear(&mut self) {
-        self.samples = [FrameStatsSample::empty(); FRAME_STATS_SAMPLE_COUNT];
-        self.cursor = 0;
-        self.len = 0;
-    }
-
-    #[inline(always)]
-    fn push(&mut self, sample: FrameStatsSample) {
-        self.samples[self.cursor] = sample;
-        self.cursor = (self.cursor + 1) % FRAME_STATS_SAMPLE_COUNT;
-        self.len = self.len.saturating_add(1).min(FRAME_STATS_SAMPLE_COUNT);
-    }
-
-    /// Copy the ring into `out` in chronological (oldest-first) order.
-    fn snapshot(&self, out: &mut Vec<FrameStatsSample>) {
-        out.clear();
-        let start = self
-            .cursor
-            .saturating_add(FRAME_STATS_SAMPLE_COUNT)
-            .saturating_sub(self.len)
-            % FRAME_STATS_SAMPLE_COUNT;
-        for i in 0..self.len {
-            out.push(self.samples[(start + i) % FRAME_STATS_SAMPLE_COUNT]);
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-struct ActorTreeStats {
-    total: u32,
-    sprites: u32,
-    texts: u32,
-    meshes: u32,
-    textured_meshes: u32,
-    frames: u32,
-    cameras: u32,
-    shadows: u32,
-    text_chars: u32,
-}
+type FrameStatsRing = FixedFrameStatsRing<FrameStatsSample, FRAME_STATS_SAMPLE_COUNT>;
 
 #[derive(Clone, Copy, Debug, Default)]
 struct ComposeBreakdown {
@@ -802,97 +617,6 @@ const fn saturating_u32(value: usize) -> u32 {
     }
 }
 
-fn actor_tree_stats(actors: &[deadlib_present::actors::Actor]) -> ActorTreeStats {
-    fn visit(stats: &mut ActorTreeStats, actor: &deadlib_present::actors::Actor) {
-        stats.total = stats.total.saturating_add(1);
-        match actor {
-            deadlib_present::actors::Actor::Sprite { .. } => {
-                stats.sprites = stats.sprites.saturating_add(1);
-            }
-            deadlib_present::actors::Actor::Text { content, .. } => {
-                stats.texts = stats.texts.saturating_add(1);
-                stats.text_chars = stats
-                    .text_chars
-                    .saturating_add(saturating_u32(content.len()));
-            }
-            deadlib_present::actors::Actor::Mesh { .. } => {
-                stats.meshes = stats.meshes.saturating_add(1);
-            }
-            deadlib_present::actors::Actor::TexturedMesh { .. } => {
-                stats.textured_meshes = stats.textured_meshes.saturating_add(1);
-            }
-            deadlib_present::actors::Actor::Frame { children, .. } => {
-                stats.frames = stats.frames.saturating_add(1);
-                for child in children {
-                    visit(stats, child);
-                }
-            }
-            deadlib_present::actors::Actor::SharedFrame { children, .. } => {
-                stats.frames = stats.frames.saturating_add(1);
-                for child in children.iter() {
-                    visit(stats, child);
-                }
-            }
-            deadlib_present::actors::Actor::Camera { children, .. } => {
-                stats.cameras = stats.cameras.saturating_add(1);
-                for child in children {
-                    visit(stats, child);
-                }
-            }
-            deadlib_present::actors::Actor::CameraPush { .. } => {
-                stats.cameras = stats.cameras.saturating_add(1);
-            }
-            deadlib_present::actors::Actor::CameraPop => {}
-            deadlib_present::actors::Actor::Shadow { child, .. } => {
-                stats.shadows = stats.shadows.saturating_add(1);
-                visit(stats, child);
-            }
-        }
-    }
-
-    let mut stats = ActorTreeStats::default();
-    for actor in actors {
-        visit(&mut stats, actor);
-    }
-    stats
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum FrameIntervalReason {
-    None,
-    MaxFps,
-    Background,
-    MaxFpsBackground,
-}
-
-impl FrameIntervalReason {
-    #[inline(always)]
-    const fn as_str(self) -> &'static str {
-        match self {
-            Self::None => "none",
-            Self::MaxFps => "max_fps",
-            Self::Background => "background",
-            Self::MaxFpsBackground => "max_fps+background",
-        }
-    }
-
-    #[inline(always)]
-    const fn redraw_reason(self) -> &'static str {
-        match self {
-            Self::None => "scheduled",
-            Self::MaxFps => "scheduled_maxfps",
-            Self::Background => "scheduled_background",
-            Self::MaxFpsBackground => "scheduled_maxfps_background",
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct FrameIntervalState {
-    interval: Option<Duration>,
-    reason: FrameIntervalReason,
-}
-
 #[inline(always)]
 const fn should_background_throttle_unfocused(screen: CurrentScreen) -> bool {
     !matches!(screen, CurrentScreen::Gameplay | CurrentScreen::Practice)
@@ -901,118 +625,6 @@ const fn should_background_throttle_unfocused(screen: CurrentScreen) -> bool {
 #[inline(always)]
 const fn foreground_input_active(window_focused: bool, surface_active: bool) -> bool {
     window_focused && surface_active
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum FrameLoopMode {
-    Poll,
-    WaitPending,
-    Scheduled(FrameIntervalReason, Duration),
-}
-
-#[derive(Clone, Copy)]
-struct GameplayPacingTrace {
-    started_at: Instant,
-    frames: u32,
-    chain_frames: u32,
-    other_frames: u32,
-    dt_sum_us: u64,
-    dt_max_us: u32,
-    redraw_late_sum_us: u64,
-    redraw_late_max_us: u32,
-    redraw_delivery_sum_us: u64,
-    redraw_delivery_max_us: u32,
-    redraw_delivery_over_1ms: u32,
-    redraw_delivery_over_2ms: u32,
-    draw_sum_us: u64,
-    draw_max_us: u32,
-    present_sum_us: u64,
-    present_max_us: u32,
-    present_over_1ms: u32,
-    present_over_3ms: u32,
-    draw_setup_sum_us: u64,
-    draw_prepare_sum_us: u64,
-    draw_record_sum_us: u64,
-    display_error_abs_sum_us: u64,
-    display_error_abs_max_us: u32,
-    display_error_last_us: i32,
-    display_catching_up_frames: u32,
-    display_catching_up_last: bool,
-    present_last_mode: renderer::PresentModeTrace,
-    present_display_clock_last: renderer::ClockDomainTrace,
-    present_host_clock_last: renderer::ClockDomainTrace,
-    present_inflight_sum: u64,
-    present_inflight_max: u8,
-    present_image_wait_frames: u32,
-    present_back_pressure_frames: u32,
-    present_queue_idle_frames: u32,
-    present_suboptimal_frames: u32,
-    present_host_mapped_frames: u32,
-    present_calibration_error_sum_ns: u64,
-    present_calibration_error_max_ns: u64,
-    present_interval_sum_ns: u64,
-    present_interval_max_ns: u64,
-    present_interval_samples: u32,
-    present_margin_sum_ns: u64,
-    present_margin_max_ns: u64,
-    present_margin_samples: u32,
-}
-
-impl GameplayPacingTrace {
-    #[inline(always)]
-    fn new(now: Instant) -> Self {
-        Self {
-            started_at: now,
-            frames: 0,
-            chain_frames: 0,
-            other_frames: 0,
-            dt_sum_us: 0,
-            dt_max_us: 0,
-            redraw_late_sum_us: 0,
-            redraw_late_max_us: 0,
-            redraw_delivery_sum_us: 0,
-            redraw_delivery_max_us: 0,
-            redraw_delivery_over_1ms: 0,
-            redraw_delivery_over_2ms: 0,
-            draw_sum_us: 0,
-            draw_max_us: 0,
-            present_sum_us: 0,
-            present_max_us: 0,
-            present_over_1ms: 0,
-            present_over_3ms: 0,
-            draw_setup_sum_us: 0,
-            draw_prepare_sum_us: 0,
-            draw_record_sum_us: 0,
-            display_error_abs_sum_us: 0,
-            display_error_abs_max_us: 0,
-            display_error_last_us: 0,
-            display_catching_up_frames: 0,
-            display_catching_up_last: false,
-            present_last_mode: renderer::PresentModeTrace::Unknown,
-            present_display_clock_last: renderer::ClockDomainTrace::Unknown,
-            present_host_clock_last: renderer::ClockDomainTrace::Unknown,
-            present_inflight_sum: 0,
-            present_inflight_max: 0,
-            present_image_wait_frames: 0,
-            present_back_pressure_frames: 0,
-            present_queue_idle_frames: 0,
-            present_suboptimal_frames: 0,
-            present_host_mapped_frames: 0,
-            present_calibration_error_sum_ns: 0,
-            present_calibration_error_max_ns: 0,
-            present_interval_sum_ns: 0,
-            present_interval_max_ns: 0,
-            present_interval_samples: 0,
-            present_margin_sum_ns: 0,
-            present_margin_max_ns: 0,
-            present_margin_samples: 0,
-        }
-    }
-
-    #[inline(always)]
-    fn reset(&mut self, now: Instant) {
-        *self = Self::new(now);
-    }
 }
 
 /// Shell-level state: timing, window, renderer flags.
@@ -1199,7 +811,7 @@ impl ShellState {
             stutter_samples: [StutterSample::empty(); STUTTER_SAMPLE_COUNT],
             stutter_cursor: 0,
             stutter_diag: StutterDiagRecorder::new(),
-            frame_stats: FrameStatsRing::new(),
+            frame_stats: FrameStatsRing::new(FrameStatsSample::empty()),
             frame_stats_scratch: Vec::new(),
             frame_stats_long:
                 crate::screens::components::shared::frame_stats_overlay::FrameStatsLong::new(),
@@ -1835,7 +1447,10 @@ fn score_info_from_stage(
         possible_grade_points: player.possible_grade_points,
         grade: player.grade,
         speed_mod: profile::get_for_side(side).scroll_speed,
-        mods_text: fallback_eval_mods_text(side, profile::get_for_side(side).scroll_speed),
+        mods_text: {
+            let profile = profile::get_for_side(side);
+            profile_data::evaluation_mods_text(&profile, profile.scroll_speed)
+        },
         hands_achieved: player.hands_achieved,
         hands_total: player.hands_total,
         holds_held: player.holds_held,
@@ -1884,49 +1499,6 @@ fn score_info_from_stage(
         personal_record_highlight_rank,
         show_machine_personal_split: !earned_machine_record && earned_top2_personal,
     })
-}
-
-fn fallback_eval_mods_text(
-    side: profile_data::PlayerSide,
-    speed_mod: ScrollSpeedSetting,
-) -> Arc<str> {
-    let profile = profile::get_for_side(side);
-    let mut parts = vec![speed_mod.to_string()];
-    if profile.mini_percent != 0 {
-        parts.push(format!("{}% Mini", profile.mini_percent));
-    }
-    if profile.spacing_percent != 0 {
-        parts.push(format!("{}% Spacing", profile.spacing_percent));
-    }
-    let scroll = profile.scroll_option;
-    if scroll.contains(profile_data::ScrollOption::Reverse) {
-        parts.push("Reverse".to_string());
-    }
-    if scroll.contains(profile_data::ScrollOption::Split) {
-        parts.push("Split".to_string());
-    }
-    if scroll.contains(profile_data::ScrollOption::Alternate) {
-        parts.push("Alternate".to_string());
-    }
-    if scroll.contains(profile_data::ScrollOption::Cross) {
-        parts.push("Cross".to_string());
-    }
-    if scroll.contains(profile_data::ScrollOption::Centered) {
-        parts.push("Centered".to_string());
-    }
-    parts.push(profile.perspective.to_string());
-    let disabled_windows = profile.timing_windows.disabled_windows();
-    if disabled_windows.iter().any(|disabled| *disabled) {
-        let windows = disabled_windows
-            .iter()
-            .enumerate()
-            .filter_map(|(i, disabled)| disabled.then(|| format!("W{}", i + 1)))
-            .collect::<Vec<_>>()
-            .join("/");
-        parts.push(format!("No {windows}"));
-    }
-    parts.push(profile.noteskin.to_string());
-    Arc::<str>::from(parts.join(", "))
 }
 
 #[inline(always)]
@@ -7795,54 +7367,6 @@ impl App {
         }
     }
 
-    fn capture_compose_case_now(&mut self) {
-        let total_elapsed = Instant::now()
-            .duration_since(self.state.shell.start_time)
-            .as_secs_f32();
-        let screen_name = format!("{:?}", self.state.screens.current_screen);
-        let (actors, clear_color) = self.get_current_actors();
-        let Ok((case, output)) = crate::test_support::compose_case::capture_case(
-            &screen_name,
-            &actors,
-            clear_color,
-            &self.state.shell.metrics,
-            self.asset_manager.fonts(),
-            total_elapsed,
-        ) else {
-            warn!("Failed to capture compose case for {screen_name}");
-            return;
-        };
-
-        let (case_path, output_path) =
-            crate::test_support::compose_case::default_capture_paths(&screen_name);
-        if let Err(e) = crate::test_support::compose_case::write_case(&case_path, &case) {
-            warn!(
-                "Failed to write compose case '{}': {e}",
-                case_path.display()
-            );
-            return;
-        }
-        if let Err(e) =
-            crate::test_support::compose_case::write_render_snapshot(&output_path, &output)
-        {
-            warn!(
-                "Failed to write compose output snapshot '{}': {e}",
-                output_path.display()
-            );
-            return;
-        }
-
-        info!(
-            "Saved compose capture for {}: case='{}' output='{}' hash={} objects={} cameras={}",
-            screen_name,
-            case_path.display(),
-            output_path.display(),
-            case.expected.output_hash,
-            case.expected.objects,
-            case.expected.cameras
-        );
-    }
-
     /* -------------------- keyboard: map -> route -------------------- */
 
     #[inline(always)]
@@ -8118,15 +7642,6 @@ impl App {
             config::update_translated_titles(new_value);
             options::sync_translated_titles(&mut self.state.screens.options_state, new_value);
             deadsync_audio_stream::play_sfx("assets/sounds/change.ogg");
-        }
-        if raw_key.pressed
-            && !raw_key.repeat
-            && self.state.shell.ctrl_held
-            && self.state.shell.shift_held
-            && raw_key.code == KeyCode::F10
-        {
-            self.capture_compose_case_now();
-            return true;
         }
         // Screen-specific Escape handling resides in per-screen raw handlers now
 
@@ -10537,7 +10052,10 @@ mod tests {
             possible_grade_points: 0,
             grade: score_data::Grade::Tier01,
             speed_mod,
-            mods_text: fallback_eval_mods_text(side, speed_mod),
+            mods_text: {
+                let profile = profile::get_for_side(side);
+                profile_data::evaluation_mods_text(&profile, speed_mod)
+            },
             hands_achieved: 0,
             hands_total: 0,
             holds_held: 0,

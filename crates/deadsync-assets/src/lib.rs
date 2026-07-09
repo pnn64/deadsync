@@ -1,4 +1,5 @@
 pub mod audio_folder;
+pub mod dynamic_media;
 pub mod i18n;
 pub mod manager;
 pub mod media_cache;

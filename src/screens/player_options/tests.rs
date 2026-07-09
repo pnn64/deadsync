@@ -19,7 +19,8 @@ pub(super) mod tests {
     use crate::assets::AssetManager;
     use crate::assets::i18n::{LookupKey, lookup_key};
     use crate::screens::{Screen, ScreenAction};
-    use crate::test_support::{compose_scenarios, notefield_bench};
+    use deadlib_present::font::{Font, Glyph};
+    use deadsync_chart::{ChartData, SongData};
     use deadsync_profile::Profile;
     use deadsync_profile::compat as profile;
     use deadsync_profile::{
@@ -27,6 +28,9 @@ pub(super) mod tests {
         ScrollOption, StepStatisticsMask,
     };
     use deadsync_rules::scroll::ScrollSpeedSetting;
+    use std::collections::HashMap;
+    use std::path::PathBuf;
+    use std::sync::Arc;
     use std::time::Duration;
 
     fn ensure_i18n() {
@@ -80,6 +84,121 @@ pub(super) mod tests {
             map.insert(row);
         }
         map
+    }
+
+    fn test_song() -> Arc<SongData> {
+        Arc::new(SongData {
+            simfile_path: PathBuf::from("tests/player-options/test.ssc"),
+            title: "Test Song".to_string(),
+            subtitle: String::new(),
+            translit_title: String::new(),
+            translit_subtitle: String::new(),
+            artist: "Test Artist".to_string(),
+            genre: String::new(),
+            banner_path: None,
+            background_path: None,
+            background_changes: Vec::new(),
+            background_layer2_changes: Vec::new(),
+            foreground_changes: Vec::new(),
+            background_lua_changes: Vec::new(),
+            foreground_lua_changes: Vec::new(),
+            has_lua: false,
+            cdtitle_path: None,
+            music_path: None,
+            display_bpm: "120".to_string(),
+            offset: 0.0,
+            sample_start: None,
+            sample_length: None,
+            min_bpm: 120.0,
+            max_bpm: 120.0,
+            normalized_bpms: "120".to_string(),
+            music_length_seconds: 120.0,
+            first_second: 0.0,
+            total_length_seconds: 120,
+            precise_last_second_seconds: 120.0,
+            charts: vec![test_chart()],
+        })
+    }
+
+    fn test_chart() -> ChartData {
+        ChartData {
+            chart_type: "dance-single".to_string(),
+            difficulty: "Hard".to_string(),
+            description: String::new(),
+            chart_name: String::new(),
+            meter: 9,
+            step_artist: String::new(),
+            music_path: None,
+            short_hash: "player-options-test".to_string(),
+            stats: Default::default(),
+            tech_counts: Default::default(),
+            mines_nonfake: 0,
+            stamina_counts: Default::default(),
+            total_streams: 0,
+            matrix_rating: 0.0,
+            max_nps: 0.0,
+            sn_detailed_breakdown: String::new(),
+            sn_partial_breakdown: String::new(),
+            sn_simple_breakdown: String::new(),
+            detailed_breakdown: String::new(),
+            partial_breakdown: String::new(),
+            simple_breakdown: String::new(),
+            total_measures: 0,
+            measure_nps_vec: Vec::new(),
+            measure_seconds_vec: Vec::new(),
+            first_second: 0.0,
+            has_note_data: false,
+            has_chart_attacks: false,
+            possible_grade_points: 0,
+            holds_total: 0,
+            rolls_total: 0,
+            mines_total: 0,
+            display_bpm: None,
+            min_bpm: 120.0,
+            max_bpm: 120.0,
+        }
+    }
+
+    fn register_test_fonts(asset_manager: &mut AssetManager) {
+        for name in ["miso", "wendy", "wendy small", "game chars"] {
+            asset_manager.register_font(name, test_font());
+        }
+    }
+
+    fn test_font() -> Font {
+        let texture_key = Arc::<str>::from("test/font.png");
+        let glyph = Glyph {
+            texture_key,
+            stroke_texture_key: None,
+            tex_rect: [0.0, 0.0, 8.0, 16.0],
+            uv_scale: [1.0, 1.0],
+            uv_offset: [0.0, 0.0],
+            size: [8.0, 16.0],
+            offset: [0.0, 0.0],
+            advance: 8.0,
+            advance_i32: 8,
+        };
+        let mut glyph_map = HashMap::new();
+        for ch in 32u8..=126 {
+            glyph_map.insert(char::from(ch), glyph.clone());
+        }
+        let mut ascii_glyphs = Box::new(std::array::from_fn(|_| None));
+        for ch in 32u8..=126 {
+            ascii_glyphs[ch as usize] = Some(glyph.clone());
+        }
+        Font {
+            glyph_map,
+            ascii_glyphs,
+            default_glyph: Some(glyph),
+            line_spacing: 20,
+            height: 16,
+            fallback_font_name: None,
+            cache_tag: 0,
+            chain_key: 0,
+            default_stroke_color: [0.0, 0.0, 0.0, 1.0],
+            stroke_texture_map: HashMap::new(),
+            texture_hints_map: HashMap::new(),
+        }
     }
 
     fn hidden_child_f_pos(row_map: &RowMap) -> (f32, bool) {
@@ -1428,17 +1547,14 @@ pub(super) mod tests {
     #[test]
     fn held_arcade_start_keeps_advancing_rows() {
         ensure_i18n();
-        let base = notefield_bench::fixture();
-        let song = base.state().song_arc();
+        let song = test_song();
 
         profile::set_session_play_style(PlayStyle::Single);
         profile::set_session_player_side(PlayerSide::P1);
         profile::set_session_joined(true, false);
 
         let mut asset_manager = AssetManager::new();
-        for (name, font) in compose_scenarios::bench_fonts() {
-            asset_manager.register_font(name, font);
-        }
+        register_test_fonts(&mut asset_manager);
 
         let mut state = super::init(song, [0; 2], [0; 2], 1, Screen::SelectMusic, None);
         let active = session_active_players();
@@ -1464,17 +1580,14 @@ pub(super) mod tests {
     #[test]
     fn held_arcade_start_stops_at_exit_row() {
         ensure_i18n();
-        let base = notefield_bench::fixture();
-        let song = base.state().song_arc();
+        let song = test_song();
 
         profile::set_session_play_style(PlayStyle::Single);
         profile::set_session_player_side(PlayerSide::P1);
         profile::set_session_joined(true, false);
 
         let mut asset_manager = AssetManager::new();
-        for (name, font) in compose_scenarios::bench_fonts() {
-            asset_manager.register_font(name, font);
-        }
+        register_test_fonts(&mut asset_manager);
 
         let mut state = super::init(song, [0; 2], [0; 2], 1, Screen::SelectMusic, None);
         let active = session_active_players();
@@ -1497,29 +1610,23 @@ pub(super) mod tests {
     }
 
     fn setup_state() -> (super::State, AssetManager) {
-        let base = notefield_bench::fixture();
-        let song = base.state().song_arc();
+        let song = test_song();
         profile::set_session_play_style(PlayStyle::Single);
         profile::set_session_player_side(PlayerSide::P1);
         profile::set_session_joined(true, false);
         let mut asset_manager = AssetManager::new();
-        for (name, font) in compose_scenarios::bench_fonts() {
-            asset_manager.register_font(name, font);
-        }
+        register_test_fonts(&mut asset_manager);
         let state = super::init(song, [0; 2], [0; 2], 1, Screen::SelectMusic, None);
         (state, asset_manager)
     }
 
     fn setup_versus_state() -> (super::State, AssetManager) {
-        let base = notefield_bench::fixture();
-        let song = base.state().song_arc();
+        let song = test_song();
         profile::set_session_play_style(PlayStyle::Versus);
         profile::set_session_player_side(PlayerSide::P1);
         profile::set_session_joined(true, true);
         let mut asset_manager = AssetManager::new();
-        for (name, font) in compose_scenarios::bench_fonts() {
-            asset_manager.register_font(name, font);
-        }
+        register_test_fonts(&mut asset_manager);
         let state = super::init(song, [0; 2], [0; 2], 1, Screen::SelectMusic, None);
         (state, asset_manager)
     }
