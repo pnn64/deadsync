@@ -916,6 +916,15 @@ pub fn reenable_auto_lights() {
     }
 }
 
+/// Re-enable one pad slot's built-in automatic lighting, leaving the other pad
+/// under whatever lighting currently drives it. Used when a pad has nothing to
+/// show but its neighbour is still animating.
+pub fn reenable_auto_lights_for_pad(pad: usize) {
+    if let Some(s) = SHARED.get() {
+        s.manager.reenable_auto_lights_for_pad(pad);
+    }
+}
+
 /// Player-indicator colours: P1 = blue, P2 = red. Used by the pad-assignment
 /// screen so the user can see which physical pad is which without reading serials.
 pub const PLAYER1_LIGHT: [u8; 3] = [0, 80, 255];

@@ -38,8 +38,10 @@ pub struct SmxPanelDriver {
     lights: SmxPanelLights,
     /// Gameplay judgement effects are running (the original "active").
     gameplay_active: bool,
-    /// The worker owns the pad lights (gameplay effects or a background).
-    worker_active: bool,
+    /// Per-slot: the worker owns this pad's lights (gameplay effects or a background).
+    /// Tracked per pad so a pad with nothing to show returns to its firmware lighting
+    /// even while the other pad animates.
+    worker_active: [bool; PADS],
     /// Keep the worker active (pads held solid black) even with nothing to
     /// show, instead of releasing the pads to the firmware's built-in
     /// lighting. Mirrors the "Idle Pad Lights: Black" machine option.
@@ -67,7 +69,7 @@ impl Default for SmxPanelDriver {
         Self {
             lights: SmxPanelLights::new(),
             gameplay_active: false,
-            worker_active: false,
+            worker_active: [false; PADS],
             idle_black: false,
             backgrounds: std::array::from_fn(|_| None),
             judgement_gifs: std::array::from_fn(|_| JudgementGifs::default()),
@@ -312,7 +314,10 @@ impl SmxPanelDriver {
     /// contact and releases it on lift. No-op when the worker is idle or no press gif is
     /// configured; always safe to call regardless of current screen.
     pub fn on_raw_panel(&self, pad: usize, panel: usize, pressed: bool) {
-        if !self.worker_active {
+        // Gated on this pad's own ownership: a pad handed back to its firmware shows
+        // the firmware's step lighting, not our press gif, even while the other pad
+        // is ours.
+        if !self.worker_active.get(pad).copied().unwrap_or(false) {
             return;
         }
         if pressed {
@@ -358,24 +363,31 @@ impl SmxPanelDriver {
         self.prev_mine = [NO_EVENT; MAX_COLS];
         self.prev_pressed = [false; MAX_COLS];
         // Always (re)send: entering active clears stale panel effects worker-side even
-        // when the worker was already running for a background.
-        self.worker_active = true;
-        self.lights.set_active(true);
+        // when the worker was already running for a background. Gameplay owns both pads
+        // unconditionally, since a judgement effect can fire on either at any moment.
+        for pad in 0..PADS {
+            self.worker_active[pad] = true;
+            self.lights.set_active_for_pad(pad, true);
+        }
     }
 
-    /// Activate or release the worker from the gameplay, background, and idle-black
-    /// states. Releasing clears the worker (including its background copy) and restores
-    /// firmware lighting; `self.backgrounds` is already all `None` whenever that happens,
-    /// so the driver and worker stay in step. With `idle_black` set the worker stays
-    /// active regardless, holding the pads black (the keepalive in the worker makes a
-    /// static black frame nearly free on the wire).
+    /// Activate or release each pad from the gameplay, background, and idle-black states.
+    /// Releasing a pad clears it worker-side (including its background copy) and restores
+    /// that pad's firmware lighting; its `self.backgrounds` slot is already `None` whenever
+    /// that happens, so the driver and worker stay in step. With `idle_black` set a pad
+    /// stays owned regardless, held solid black (the keepalive in the worker makes a static
+    /// black frame nearly free on the wire).
+    ///
+    /// Decided per pad: a pad showing nothing goes back to its firmware even while the
+    /// other pad animates a background. Gameplay is the exception and claims both.
     fn sync_worker(&mut self) {
-        let want = self.gameplay_active
-            || self.idle_black
-            || self.backgrounds.iter().any(|b| b.is_some());
-        if want != self.worker_active {
-            self.worker_active = want;
-            self.lights.set_active(want);
+        for pad in 0..PADS {
+            let want =
+                self.gameplay_active || self.idle_black || self.backgrounds[pad].is_some();
+            if want != self.worker_active[pad] {
+                self.worker_active[pad] = want;
+                self.lights.set_active_for_pad(pad, want);
+            }
         }
     }
 }

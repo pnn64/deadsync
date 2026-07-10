@@ -775,6 +775,14 @@ lighting — the idle and step animations stored on the pad — while **Black**
 keeps ownership of the LEDs and holds the pads dark; panel press animations
 still play, since the game is still driving the panels.
 
+Ownership is decided **per pad**. Because each player can pick their own packs,
+one pad may resolve a background while the other resolves nothing: the first
+keeps animating and the second goes back to its firmware (or holds black),
+independently. A pad handed back to its firmware shows the firmware's own step
+lighting rather than the game's press animation, since the game no longer drives
+it. Frames for the two pads are still sent together, so pads that are both driven
+stay in step with each other.
+
 The table below lists **role names** (the internal key used for lookup). The
 corresponding filename is `{role}_{size}.gif` — for grade-tagged roles like
 `results@S+` the `@` suffix goes after the `_size` in the filename:
