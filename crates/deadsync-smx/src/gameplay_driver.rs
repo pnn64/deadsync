@@ -289,6 +289,9 @@ impl SmxPanelDriver {
     pub fn set_judgement_gifs_for_pad(&mut self, pad: usize, gifs: JudgementGifs) {
         if pad < PADS {
             self.judgement_gifs[pad] = gifs;
+            // Ownership depends on whether this pad has any judgement gif to draw, so a
+            // pack change during gameplay can claim or release the pad.
+            self.sync_worker();
         }
     }
 
@@ -362,13 +365,28 @@ impl SmxPanelDriver {
         self.prev_hold_judged = [NO_EVENT; MAX_COLS];
         self.prev_mine = [NO_EVENT; MAX_COLS];
         self.prev_pressed = [false; MAX_COLS];
-        // Always (re)send: entering active clears stale panel effects worker-side even
-        // when the worker was already running for a background. Gameplay owns both pads
-        // unconditionally, since a judgement effect can fire on either at any moment.
+        // Always (re)send for a pad we own: entering active clears stale panel effects
+        // worker-side even when the worker was already running for a background. A pad
+        // that can't draw anything is released instead of held black (see `wants_pad`).
         for pad in 0..PADS {
-            self.worker_active[pad] = true;
-            self.lights.set_active_for_pad(pad, true);
+            if self.wants_pad(pad) {
+                self.worker_active[pad] = true;
+                self.lights.set_active_for_pad(pad, true);
+            }
         }
+        self.sync_worker();
+    }
+
+    /// Whether the worker should own pad `pad`'s LEDs.
+    ///
+    /// A pad is owned when it has something to draw: a background, a gameplay judgement
+    /// set that can actually fire, or the idle-black option forcing it dark. A pad with
+    /// an empty judgement pack draws nothing all song, so gameplay does not claim it and
+    /// it keeps its firmware step lighting, same as on the menus.
+    fn wants_pad(&self, pad: usize) -> bool {
+        self.idle_black
+            || self.backgrounds[pad].is_some()
+            || (self.gameplay_active && self.judgement_gifs[pad].has_any())
     }
 
     /// Activate or release each pad from the gameplay, background, and idle-black states.
@@ -379,15 +397,64 @@ impl SmxPanelDriver {
     /// black frame nearly free on the wire).
     ///
     /// Decided per pad: a pad showing nothing goes back to its firmware even while the
-    /// other pad animates a background. Gameplay is the exception and claims both.
+    /// other pad animates a background.
     fn sync_worker(&mut self) {
         for pad in 0..PADS {
-            let want =
-                self.gameplay_active || self.idle_black || self.backgrounds[pad].is_some();
+            let want = self.wants_pad(pad);
             if want != self.worker_active[pad] {
                 self.worker_active[pad] = want;
                 self.lights.set_active_for_pad(pad, want);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::gifs::{PANEL_RGB_BYTES, PanelAnim};
+
+    fn any_panel_anim() -> Arc<PanelAnim> {
+        Arc::new(PanelAnim {
+            frames: vec![[0u8; PANEL_RGB_BYTES]],
+            durations: vec![0.1],
+            loop_frame: 0,
+            loop_end: 0,
+        })
+    }
+
+    /// An empty judgement pack can never draw a gameplay event, so gameplay must not
+    /// claim that pad: it keeps its firmware step lighting for the song, as on menus.
+    #[test]
+    fn gameplay_does_not_claim_a_pad_with_no_judgement_gifs() {
+        let mut driver = SmxPanelDriver::default();
+        driver.gameplay_active = true;
+        assert!(!driver.wants_pad(0));
+        assert!(!driver.wants_pad(1));
+    }
+
+    #[test]
+    fn gameplay_claims_a_pad_that_has_a_judgement_gif() {
+        let mut driver = SmxPanelDriver::default();
+        driver.gameplay_active = true;
+        driver.judgement_gifs[1].miss = Some(any_panel_anim());
+        assert!(!driver.wants_pad(0), "pad 0 still has nothing to draw");
+        assert!(driver.wants_pad(1));
+    }
+
+    /// Idle-black wins over everything: an empty pad is held dark rather than released.
+    #[test]
+    fn idle_black_claims_a_pad_with_nothing_to_draw() {
+        let mut driver = SmxPanelDriver::default();
+        driver.idle_black = true;
+        assert!(driver.wants_pad(0));
+    }
+
+    /// Outside gameplay a judgement pack alone is not enough; nothing can fire.
+    #[test]
+    fn judgement_gifs_alone_do_not_claim_a_pad_outside_gameplay() {
+        let mut driver = SmxPanelDriver::default();
+        driver.judgement_gifs[0].miss = Some(any_panel_anim());
+        assert!(!driver.wants_pad(0));
     }
 }
