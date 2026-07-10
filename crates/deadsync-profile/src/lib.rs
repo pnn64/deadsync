@@ -112,6 +112,41 @@ pub fn runtime_profile_for_side(side: PlayerSide) -> Profile {
     runtime_lock_profiles()[player_side_index(side)].clone()
 }
 
+pub fn profile_combo_carry(profiles: &[Profile; PLAYER_SLOTS]) -> [u32; PLAYER_SLOTS] {
+    std::array::from_fn(|idx| profiles[idx].current_combo)
+}
+
+pub fn preferred_difficulty_index(profile: &Profile, style: PlayStyle) -> usize {
+    profile
+        .last_played(style)
+        .difficulty_index
+        .min(deadsync_chart::STANDARD_DIFFICULTY_COUNT.saturating_sub(1))
+}
+
+pub fn preferred_difficulty_indices(
+    profiles: &[Profile; PLAYER_SLOTS],
+    style: PlayStyle,
+) -> [usize; PLAYER_SLOTS] {
+    std::array::from_fn(|idx| preferred_difficulty_index(&profiles[idx], style))
+}
+
+pub fn preferred_difficulty_index_for_side(
+    profiles: &[Profile; PLAYER_SLOTS],
+    side: PlayerSide,
+    style: PlayStyle,
+) -> usize {
+    preferred_difficulty_index(&profiles[player_side_index(side)], style)
+}
+
+pub fn runtime_profile_combo_carry() -> [u32; PLAYER_SLOTS] {
+    profile_combo_carry(&runtime_lock_profiles())
+}
+
+pub fn runtime_preferred_difficulty_index_for_side(side: PlayerSide, style: PlayStyle) -> usize {
+    let profiles = runtime_lock_profiles();
+    preferred_difficulty_index_for_side(&profiles, side, style)
+}
+
 pub fn runtime_current_profile() -> Profile {
     let side = runtime_lock_session().player_side();
     runtime_profile_for_side(side)
@@ -9298,6 +9333,35 @@ mod tests {
         );
         assert!(!p1.gs_active);
         assert_eq!(p1.persistent_profile_id(), Some("p1-profile"));
+    }
+
+    #[test]
+    fn profile_combo_carry_uses_loaded_profile_combos() {
+        let mut profiles = [Profile::default(), Profile::default()];
+        profiles[0].current_combo = 12;
+        profiles[1].current_combo = 34;
+
+        assert_eq!(profile_combo_carry(&profiles), [12, 34]);
+    }
+
+    #[test]
+    fn preferred_difficulty_indices_clamp_to_standard_range() {
+        let mut profiles = [Profile::default(), Profile::default()];
+        profiles[0]
+            .last_played_mut(PlayStyle::Single)
+            .difficulty_index = 2;
+        profiles[1]
+            .last_played_mut(PlayStyle::Single)
+            .difficulty_index = usize::MAX;
+
+        assert_eq!(
+            preferred_difficulty_indices(&profiles, PlayStyle::Single),
+            [2, deadsync_chart::STANDARD_DIFFICULTY_COUNT - 1],
+        );
+        assert_eq!(
+            preferred_difficulty_index_for_side(&profiles, PlayerSide::P2, PlayStyle::Single),
+            deadsync_chart::STANDARD_DIFFICULTY_COUNT - 1,
+        );
     }
 
     #[test]

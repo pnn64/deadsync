@@ -1,4 +1,4 @@
-﻿#[inline(always)]
+#[inline(always)]
 pub fn effective_visual_effects_for_player<Profile, OverlayActor, CapturedActor, StateDelta>(
     state: &GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>,
     player_idx: usize,
@@ -218,6 +218,27 @@ pub const fn gameplay_menu_input_plan(
 }
 
 #[inline(always)]
+pub const fn gameplay_offset_prompt_choice_delta(
+    action: VirtualAction,
+    dedicated_menu_only: bool,
+) -> Option<i8> {
+    if dedicated_menu_only && action.is_gameplay_arrow() {
+        return None;
+    }
+    match action {
+        VirtualAction::p1_left
+        | VirtualAction::p1_menu_left
+        | VirtualAction::p2_left
+        | VirtualAction::p2_menu_left => Some(-1),
+        VirtualAction::p1_right
+        | VirtualAction::p1_menu_right
+        | VirtualAction::p2_right
+        | VirtualAction::p2_menu_right => Some(1),
+        _ => None,
+    }
+}
+
+#[inline(always)]
 const fn hold_to_exit_input_plan(
     key: HoldToExitKey,
     pressed: bool,
@@ -240,4 +261,3 @@ const fn hold_to_exit_input_plan(
         GameplayMenuInputPlan::None
     }
 }
-

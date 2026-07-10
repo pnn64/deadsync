@@ -1,4 +1,4 @@
-﻿#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct CourseDisplayTotals {
     pub possible_grade_points: i32,
     pub total_steps: u32,
@@ -471,6 +471,35 @@ pub struct CourseDisplayTiming {
     pub total_seconds: f32,
 }
 
+pub fn course_display_timing_for_stages<T>(
+    stages: &[T],
+    next_stage_index: usize,
+    music_seconds: impl Fn(&T) -> f32,
+) -> CourseDisplayTiming {
+    let mut elapsed_seconds = 0.0;
+    let mut total_seconds = 0.0;
+    for (idx, stage) in stages.iter().enumerate() {
+        let seconds = sanitize_course_display_seconds(music_seconds(stage));
+        if idx < next_stage_index {
+            elapsed_seconds += seconds;
+        }
+        total_seconds += seconds;
+    }
+    CourseDisplayTiming {
+        elapsed_seconds,
+        total_seconds,
+    }
+}
+
+#[inline(always)]
+fn sanitize_course_display_seconds(seconds: f32) -> f32 {
+    if seconds.is_finite() {
+        seconds.max(0.0)
+    } else {
+        0.0
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 pub struct GameplayCourseDisplayState {
     carry: Option<[CourseDisplayCarry; MAX_PLAYERS]>,
@@ -517,4 +546,3 @@ impl GameplayCourseDisplayState {
         course_display_carry_for_player(self.carry(), player_idx)
     }
 }
-

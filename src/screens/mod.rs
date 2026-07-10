@@ -31,11 +31,11 @@ pub mod select_profile;
 pub mod select_style;
 pub mod smx_assign;
 pub mod test_lights;
-use std::path::PathBuf;
-
 use crate::config::DisplayMode;
 use deadlib_render::{BackendType, PresentModePolicy};
 use deadsync_profile::{ActiveProfile, PlayerSide};
+use deadsync_simfile::sync_offset::SongOffsetSyncChange;
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DensityGraphSlot {
@@ -50,12 +50,6 @@ pub struct DensityGraphSource {
     pub measure_seconds_vec: Vec<f32>,
     pub first_second: f32,
     pub last_second: f32,
-}
-
-#[derive(Debug, Clone)]
-pub struct SongOffsetSyncChange {
-    pub simfile_path: PathBuf,
-    pub delta_seconds: f32,
 }
 
 #[derive(Debug, Clone)]

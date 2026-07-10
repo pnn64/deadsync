@@ -11,6 +11,12 @@ use image::RgbaImage;
 use std::{error::Error, sync::Arc};
 use winit::window::Window;
 
+mod window_size;
+pub use window_size::{
+    render_size_for_physical, render_size_for_window, request_window_size,
+    with_requested_window_size,
+};
+
 // --- Public API Facade ---
 
 // A handle to a backend-specific texture resource.

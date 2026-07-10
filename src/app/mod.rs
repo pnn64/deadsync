@@ -5,7 +5,6 @@ use deadsync_score::stage_stats;
 mod commands;
 mod dynamic_media;
 mod graphics;
-mod input_backend;
 mod input_routing;
 mod screen_nav;
 mod screenshot;
@@ -14,20 +13,21 @@ mod smx_panel_fx;
 use self::commands::Command;
 use self::dynamic_media::DynamicMedia;
 use self::screen_nav::TransitionState;
-use self::screenshot::{ScreenshotPreviewState, should_auto_screenshot_eval};
+use self::screenshot::should_auto_screenshot_eval;
 use crate::act;
 use crate::assets::{AssetManager, PRESENT_TEXTURE_CONTEXT, TextureUploadBudget, visual_styles};
 use crate::config::{
-    self, DisplayMode, FixedFrameStatsRing, FrameIntervalReason, FrameIntervalState, FrameLoopMode,
-    GameplayPacingTrace, OverlayMode, elapsed_us_between, elapsed_us_since, seconds_to_us_u32,
-    stutter_severity, update_frame_stats_spike_hold,
+    self, DisplayMode, FixedFrameStatsRing, FrameIntervalState, FrameLoopMode,
+    FrameLoopModeTracker, GameplayEventBatchTrace, GameplayEventTrace, GameplayPacingTrace,
+    OverlayMode, RedrawRequestState, StutterSampleRing, elapsed_us_between, elapsed_us_since,
+    seconds_to_us_u32, stutter_severity, update_frame_stats_spike_hold,
 };
 use crate::screens::{
-    DensityGraphSlot, DensityGraphSource, Screen as CurrentScreen, ScreenAction,
-    SongOffsetSyncChange, credits, evaluation, evaluation_summary, gameover, gameplay, init,
-    initials, input as input_screen, manage_local_profiles, mappings, menu, options,
-    overscan_adjustment, player_options, practice, profile_load, sandbox, select_color,
-    select_course, select_mode, select_music, select_profile, select_style, test_lights,
+    DensityGraphSlot, DensityGraphSource, Screen as CurrentScreen, ScreenAction, credits,
+    evaluation, evaluation_summary, gameover, gameplay, init, initials, input as input_screen,
+    manage_local_profiles, mappings, menu, options, overscan_adjustment, player_options, practice,
+    profile_load, sandbox, select_color, select_course, select_mode, select_music, select_profile,
+    select_style, test_lights,
 };
 use crate::{
     GameplayCoreState, gameplay_config_from_config, gameplay_play_style_from_profile,
@@ -58,7 +58,6 @@ use winit::{
 
 use log::{debug, error, info, trace, warn};
 use std::borrow::Cow;
-use std::cmp;
 use std::collections::HashSet;
 use std::{
     error::Error,
@@ -78,13 +77,14 @@ compile_error!(
 );
 
 use deadlib_present::actors::{Actor, actor_tree_stats};
+use deadsync_assets::screenshot::ScreenshotRuntimeState;
 use deadsync_chart::STANDARD_DIFFICULTY_COUNT;
-use deadsync_chart::song::sync_pref_offset;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{
     CourseDisplayTiming, CourseDisplayTotals, GameplayQueuedEvent, GameplaySession,
     GameplayViewport, LeadInTiming, ReplayInputEdge, ReplayOffsetSnapshot,
-    course_display_totals_for_chart, gameplay_raw_key_event,
+    course_display_timing_for_stages, course_display_totals_for_chart,
+    gameplay_offset_prompt_choice_delta, gameplay_raw_key_event,
 };
 use deadsync_input as logical_input;
 use deadsync_input::RawKeyboardEvent;
@@ -95,7 +95,7 @@ use deadsync_lights::cabinet_chart::{
     CabinetLightEvent, GameplayLightChartKey, cabinet_light_chart_from_loaded, cabinet_light_key,
     cabinet_light_plan,
 };
-use deadsync_lights::{self as lights, HideFlags, Mode as LightMode};
+use deadsync_lights::{self as lights, HideFlags};
 #[cfg(test)]
 use deadsync_rules::judgment as judgment_rules;
 use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -120,7 +120,6 @@ const COURSE_MIN_SECONDS_TO_MUSIC_NEXT_SONG: f32 = 0.0;
 const GAMEPLAY_OFFSET_PROMPT_Z_BACKDROP: i16 = 31990;
 const GAMEPLAY_OFFSET_PROMPT_Z_CURSOR: i16 = 31991;
 const GAMEPLAY_OFFSET_PROMPT_Z_TEXT: i16 = 31993;
-const BACKGROUND_REDRAW_INTERVAL: Duration = Duration::from_millis(67);
 const GAMEPLAY_PACING_LOG_INTERVAL: Duration = Duration::from_secs(5);
 const SCHEDULED_REDRAW_POLL_GUARD: Duration = Duration::from_micros(1_000);
 const GAMEPLAY_REDRAW_DELIVERY_SLOW_US: u32 = 1_000;
@@ -175,40 +174,37 @@ fn load_cabinet_light_chart(
     ))
 }
 
-fn gameplay_light_pack_sync_offset(song: &deadsync_chart::SongData) -> f32 {
-    let config = config::get();
-    if !config.machine_pack_ini_offsets {
-        return 0.0;
-    }
-    let Some(pack_group) = deadsync_simfile::event_intro::song_pack_group(song) else {
-        return 0.0;
-    };
-    let pack_sync_pref = deadsync_simfile::runtime_cache::get_song_cache()
-        .iter()
-        .find(|p| p.group_name == pack_group)
-        .map(|p| p.sync_pref)
-        .unwrap_or(deadsync_chart::SyncPref::Default);
-    sync_pref_offset(
-        pack_sync_pref,
-        config.machine_default_sync_offset.sync_pref(),
-    )
-}
-
-/// Which named SMX background animation a screen shows (the role half of the
-/// `<role>_<size>.gif` asset name), or `None` where the pad lights are owned by
-/// something else. Precedence per the pad-gifs design: the pad-assignment screen
-/// drives whole-pad player colours itself and the lights test owns all lighting,
-/// then gameplay and song select get their own roles, then the operator default.
-const fn smx_background_role(screen: CurrentScreen) -> Option<&'static str> {
+const fn screen_light_context(screen: CurrentScreen) -> lights::ScreenLightContext {
     match screen {
-        CurrentScreen::SmxAssignPads | CurrentScreen::TestLights | CurrentScreen::Init => None,
-        CurrentScreen::Gameplay | CurrentScreen::Practice => Some("gameplay"),
-        CurrentScreen::SelectMusic | CurrentScreen::SelectCourse => Some("song_select"),
+        CurrentScreen::Init => lights::ScreenLightContext::Init,
+        CurrentScreen::Gameplay | CurrentScreen::Practice => lights::ScreenLightContext::Gameplay,
+        CurrentScreen::TestLights => lights::ScreenLightContext::TestLights,
+        CurrentScreen::OverscanAdjustment => lights::ScreenLightContext::OverscanAdjustment,
         CurrentScreen::Evaluation | CurrentScreen::EvaluationSummary | CurrentScreen::Initials => {
-            Some("results")
+            lights::ScreenLightContext::Results
         }
-        CurrentScreen::Options => Some("options"),
-        _ => Some("default"),
+        CurrentScreen::GameOver => lights::ScreenLightContext::GameOver,
+        CurrentScreen::Options => lights::ScreenLightContext::Options,
+        CurrentScreen::Mappings | CurrentScreen::Input => {
+            lights::ScreenLightContext::OperatorLocked
+        }
+        CurrentScreen::SmxAssignPads => lights::ScreenLightContext::SmxAssignPads,
+        CurrentScreen::SelectMusic | CurrentScreen::SelectCourse => {
+            lights::ScreenLightContext::SongSelect
+        }
+        CurrentScreen::Menu
+        | CurrentScreen::Credits
+        | CurrentScreen::ManageLocalProfiles
+        | CurrentScreen::SelectProfile
+        | CurrentScreen::ArrowCloudLogin
+        | CurrentScreen::GrooveStatsLogin
+        | CurrentScreen::SelectColor
+        | CurrentScreen::SelectStyle
+        | CurrentScreen::SelectPlayMode
+        | CurrentScreen::ProfileLoad
+        | CurrentScreen::Sandbox
+        | CurrentScreen::PlayerOptions
+        | CurrentScreen::ConfigurePads => lights::ScreenLightContext::Menu,
     }
 }
 
@@ -229,51 +225,6 @@ struct SmxBgKey {
     /// grade/difficulty-specific gif even when role and song are unchanged.
     eval_grade: Option<u32>,
     eval_difficulty: Option<&'static str>,
-}
-
-const fn light_mode_for_screen(screen: CurrentScreen) -> LightMode {
-    match screen {
-        CurrentScreen::Init => LightMode::Attract,
-        CurrentScreen::Gameplay | CurrentScreen::Practice => LightMode::Gameplay,
-        CurrentScreen::TestLights => LightMode::TestAutoCycle,
-        CurrentScreen::OverscanAdjustment => LightMode::MenuStartAndDirections,
-        CurrentScreen::Evaluation | CurrentScreen::EvaluationSummary | CurrentScreen::Initials => {
-            LightMode::Cleared
-        }
-        CurrentScreen::GameOver => LightMode::Stage,
-        CurrentScreen::Menu
-        | CurrentScreen::Options
-        | CurrentScreen::Credits
-        | CurrentScreen::ManageLocalProfiles
-        | CurrentScreen::Mappings
-        | CurrentScreen::Input
-        | CurrentScreen::SelectProfile
-        | CurrentScreen::ArrowCloudLogin
-        | CurrentScreen::GrooveStatsLogin
-        | CurrentScreen::SelectColor
-        | CurrentScreen::SelectStyle
-        | CurrentScreen::SelectPlayMode
-        | CurrentScreen::ProfileLoad
-        | CurrentScreen::SelectMusic
-        | CurrentScreen::SelectCourse
-        | CurrentScreen::Sandbox
-        | CurrentScreen::PlayerOptions
-        | CurrentScreen::ConfigurePads
-        | CurrentScreen::SmxAssignPads => LightMode::MenuStartAndDirections,
-    }
-}
-
-#[inline(always)]
-const fn allow_operator_menu_button(screen: CurrentScreen) -> bool {
-    !matches!(
-        screen,
-        CurrentScreen::Options
-            | CurrentScreen::Mappings
-            | CurrentScreen::Input
-            | CurrentScreen::TestLights
-            | CurrentScreen::OverscanAdjustment
-            | CurrentScreen::SmxAssignPads
-    )
 }
 
 fn hide_flags_for_gameplay(state: &GameplayCoreState) -> [HideFlags; 2] {
@@ -312,27 +263,6 @@ struct GameplayOffsetSavePrompt {
     active_choice: u8, // 0 = Yes, 1 = No
 }
 
-#[inline(always)]
-const fn gameplay_offset_prompt_choice_delta(
-    action: VirtualAction,
-    dedicated_menu_only: bool,
-) -> Option<i8> {
-    if dedicated_menu_only && action.is_gameplay_arrow() {
-        return None;
-    }
-    match action {
-        VirtualAction::p1_left
-        | VirtualAction::p1_menu_left
-        | VirtualAction::p2_left
-        | VirtualAction::p2_menu_left => Some(-1),
-        VirtualAction::p1_right
-        | VirtualAction::p1_menu_right
-        | VirtualAction::p2_right
-        | VirtualAction::p2_menu_right => Some(1),
-        _ => None,
-    }
-}
-
 #[derive(Clone)]
 struct CourseStageRuntime {
     song: Arc<deadsync_chart::SongData>,
@@ -357,108 +287,9 @@ struct CourseRunState {
     stage_eval_pages: Vec<evaluation::State>,
 }
 
-#[derive(Clone, Copy)]
-struct GameplayEventBatchTrace {
-    started_at: Instant,
-    gameplay_seen: bool,
-    key_events: u32,
-    key_repeat_events: u32,
-    pad_events: u32,
-    queued_events: u32,
-    app_handler_sum_us: u64,
-    app_handler_max_us: u32,
-}
-
-impl GameplayEventBatchTrace {
-    #[inline(always)]
-    fn new(now: Instant) -> Self {
-        Self {
-            started_at: now,
-            gameplay_seen: false,
-            key_events: 0,
-            key_repeat_events: 0,
-            pad_events: 0,
-            queued_events: 0,
-            app_handler_sum_us: 0,
-            app_handler_max_us: 0,
-        }
-    }
-
-    #[inline(always)]
-    fn reset(&mut self, now: Instant) {
-        *self = Self::new(now);
-    }
-}
-
-#[derive(Clone, Copy)]
-struct GameplayEventTrace {
-    started_at: Instant,
-    batches: u32,
-    key_events: u32,
-    key_repeat_events: u32,
-    pad_events: u32,
-    queued_events: u32,
-    batch_sum_us: u64,
-    batch_max_us: u32,
-    app_handler_sum_us: u64,
-    app_handler_max_us: u32,
-    dispatch_overhead_sum_us: u64,
-    dispatch_overhead_max_us: u32,
-    slow_batches: u32,
-}
-
-impl GameplayEventTrace {
-    #[inline(always)]
-    fn new(now: Instant) -> Self {
-        Self {
-            started_at: now,
-            batches: 0,
-            key_events: 0,
-            key_repeat_events: 0,
-            pad_events: 0,
-            queued_events: 0,
-            batch_sum_us: 0,
-            batch_max_us: 0,
-            app_handler_sum_us: 0,
-            app_handler_max_us: 0,
-            dispatch_overhead_sum_us: 0,
-            dispatch_overhead_max_us: 0,
-            slow_batches: 0,
-        }
-    }
-
-    #[inline(always)]
-    fn reset(&mut self, now: Instant) {
-        *self = Self::new(now);
-    }
-}
-
-const STUTTER_SAMPLE_COUNT: usize = 5;
-const STUTTER_SAMPLE_LIFETIME: f32 = 3.4;
-
 #[inline(always)]
 fn stutter_diag_enabled() -> bool {
     log::log_enabled!(log::Level::Trace)
-}
-
-#[derive(Clone, Copy, Debug)]
-struct StutterSample {
-    at_seconds: f32,
-    frame_seconds: f32,
-    expected_seconds: f32,
-    severity: u8,
-}
-
-impl StutterSample {
-    #[inline(always)]
-    const fn empty() -> Self {
-        Self {
-            at_seconds: -1.0,
-            frame_seconds: 0.0,
-            expected_seconds: 0.0,
-            severity: 0,
-        }
-    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -531,70 +362,7 @@ impl StutterDiagFrameSample {
     }
 }
 
-#[derive(Clone, Copy)]
-struct StutterDiagRecorder {
-    frames: [StutterDiagFrameSample; STUTTER_DIAG_FRAME_SAMPLE_COUNT],
-    frame_cursor: usize,
-    frame_len: usize,
-    last_audio_trigger_seq: u64,
-    last_display_trigger_seq: u64,
-    last_dump_host_nanos: u64,
-}
-
-impl StutterDiagRecorder {
-    #[inline(always)]
-    const fn new() -> Self {
-        Self {
-            frames: [StutterDiagFrameSample::empty(); STUTTER_DIAG_FRAME_SAMPLE_COUNT],
-            frame_cursor: 0,
-            frame_len: 0,
-            last_audio_trigger_seq: 0,
-            last_display_trigger_seq: 0,
-            last_dump_host_nanos: 0,
-        }
-    }
-
-    #[inline(always)]
-    fn reset(&mut self) {
-        self.frames = [StutterDiagFrameSample::empty(); STUTTER_DIAG_FRAME_SAMPLE_COUNT];
-        self.frame_cursor = 0;
-        self.frame_len = 0;
-        self.last_dump_host_nanos = 0;
-    }
-
-    #[inline(always)]
-    fn push_frame(&mut self, sample: StutterDiagFrameSample) {
-        self.frames[self.frame_cursor] = sample;
-        self.frame_cursor = (self.frame_cursor + 1) % STUTTER_DIAG_FRAME_SAMPLE_COUNT;
-        self.frame_len = self
-            .frame_len
-            .saturating_add(1)
-            .min(STUTTER_DIAG_FRAME_SAMPLE_COUNT);
-    }
-
-    fn collect_recent_frames(
-        &self,
-        now_host_nanos: u64,
-        window_ns: u64,
-        out: &mut Vec<StutterDiagFrameSample>,
-    ) {
-        let start = self
-            .frame_cursor
-            .saturating_add(STUTTER_DIAG_FRAME_SAMPLE_COUNT)
-            .saturating_sub(self.frame_len)
-            % STUTTER_DIAG_FRAME_SAMPLE_COUNT;
-        for i in 0..self.frame_len {
-            let sample = self.frames[(start + i) % STUTTER_DIAG_FRAME_SAMPLE_COUNT];
-            if sample.host_nanos == 0 {
-                continue;
-            }
-            if now_host_nanos.saturating_sub(sample.host_nanos) <= window_ns {
-                out.push(sample);
-            }
-        }
-    }
-}
-
+type StutterDiagRing = FixedFrameStatsRing<StutterDiagFrameSample, STUTTER_DIAG_FRAME_SAMPLE_COUNT>;
 type FrameStatsSample = crate::screens::components::shared::frame_stats_overlay::FrameStatsSample;
 type FrameStatsRing = FixedFrameStatsRing<FrameStatsSample, FRAME_STATS_SAMPLE_COUNT>;
 
@@ -622,11 +390,6 @@ const fn should_background_throttle_unfocused(screen: CurrentScreen) -> bool {
     !matches!(screen, CurrentScreen::Gameplay | CurrentScreen::Practice)
 }
 
-#[inline(always)]
-const fn foreground_input_active(window_focused: bool, surface_active: bool) -> bool {
-    window_focused && surface_active
-}
-
 /// Shell-level state: timing, window, renderer flags.
 pub struct ShellState {
     frame_count: u32,
@@ -638,9 +401,8 @@ pub struct ShellState {
     frame_interval: Option<Duration>,
     present_mode_policy: PresentModePolicy,
     next_redraw_at: Instant,
-    pending_redraw_request_at: Option<Instant>,
-    pending_redraw_request_reason: &'static str,
-    last_logged_frame_loop_mode: Option<FrameLoopMode>,
+    redraw_request: RedrawRequestState,
+    frame_loop_mode: FrameLoopModeTracker,
     gameplay_pacing_trace: GameplayPacingTrace,
     gameplay_event_batch_trace: GameplayEventBatchTrace,
     gameplay_event_trace: GameplayEventTrace,
@@ -652,9 +414,11 @@ pub struct ShellState {
     last_present_stats: renderer::PresentStats,
     current_frame_vpf: u32,
     overlay_mode: OverlayMode,
-    stutter_samples: [StutterSample; STUTTER_SAMPLE_COUNT],
-    stutter_cursor: usize,
-    stutter_diag: StutterDiagRecorder,
+    stutter_samples: StutterSampleRing,
+    stutter_diag_frames: StutterDiagRing,
+    stutter_diag_last_audio_trigger_seq: u64,
+    stutter_diag_last_display_trigger_seq: u64,
+    stutter_diag_last_dump_host_nanos: u64,
     frame_stats: FrameStatsRing,
     frame_stats_scratch: Vec<FrameStatsSample>,
     frame_stats_long: crate::screens::components::shared::frame_stats_overlay::FrameStatsLong,
@@ -687,10 +451,7 @@ pub struct ShellState {
     window_focused: bool,
     window_occluded: bool,
     surface_active: bool,
-    screenshot_pending: bool,
-    screenshot_request_side: Option<profile_data::PlayerSide>,
-    screenshot_flash_started_at: Option<Instant>,
-    screenshot_preview: Option<ScreenshotPreviewState>,
+    screenshot: ScreenshotRuntimeState<profile_data::PlayerSide>,
 }
 
 /// Active screen data bundle.
@@ -712,26 +473,8 @@ pub struct ScreensState {
     /// assignment screen is only opened once per conflict episode (cleared when
     /// the conflict resolves). See `App::maybe_autoprompt_smx_assign`.
     smx_autoprompt_latched: bool,
-    /// Latched while the StepManiaX options page is driving the pad indicator
-    /// lights, so auto-lighting is restored exactly once on leaving the page.
-    smx_options_lights_active: bool,
-    /// Last indicator colours pushed to the pads on the options page, so the
-    /// lights are only re-sent on change or to hold them, not every frame.
-    smx_options_last_lights: [Option<[u8; 3]>; 2],
-    /// Last machine-default brightness previewed on the options page, so an edit
-    /// re-sends the lights immediately (the colour itself doesn't change).
-    smx_options_last_brightness: u8,
-    /// Time since the last options-page light send, for the periodic hold.
-    smx_options_light_timer: f32,
-    /// Last underglow test state (underglow on, GRB order) previewed on the
-    /// options page, so toggling either row re-sends the strip test colour
-    /// immediately.
-    smx_options_last_strip: Option<(bool, bool)>,
-    /// Latched while the Player Options page is driving a pad's lights for the
-    /// Pad Light Brightness preview, so auto-lighting is restored on leaving.
-    smx_po_lights_active: bool,
-    /// Rainbow hue phase (0..1) for the Player Options brightness preview.
-    smx_po_light_phase: f32,
+    smx_options_light_preview: deadsync_smx::OptionsLightPreview,
+    smx_po_light_preview: deadsync_smx::PlayerOptionsLightPreview,
     player_options_state: Option<player_options::State>,
     init_state: init::State,
     select_profile_state: select_profile::State,
@@ -795,9 +538,8 @@ impl ShellState {
             frame_interval,
             present_mode_policy: cfg.present_mode_policy,
             next_redraw_at: now,
-            pending_redraw_request_at: None,
-            pending_redraw_request_reason: "none",
-            last_logged_frame_loop_mode: None,
+            redraw_request: RedrawRequestState::new(),
+            frame_loop_mode: FrameLoopModeTracker::new(),
             gameplay_pacing_trace: GameplayPacingTrace::new(now),
             gameplay_event_batch_trace: GameplayEventBatchTrace::new(now),
             gameplay_event_trace: GameplayEventTrace::new(now),
@@ -808,9 +550,11 @@ impl ShellState {
             last_present_stats: renderer::PresentStats::default(),
             current_frame_vpf: 0,
             overlay_mode: OverlayMode::from_code(overlay_mode),
-            stutter_samples: [StutterSample::empty(); STUTTER_SAMPLE_COUNT],
-            stutter_cursor: 0,
-            stutter_diag: StutterDiagRecorder::new(),
+            stutter_samples: StutterSampleRing::new(),
+            stutter_diag_frames: StutterDiagRing::new(StutterDiagFrameSample::empty()),
+            stutter_diag_last_audio_trigger_seq: 0,
+            stutter_diag_last_display_trigger_seq: 0,
+            stutter_diag_last_dump_host_nanos: 0,
             frame_stats: FrameStatsRing::new(FrameStatsSample::empty()),
             frame_stats_scratch: Vec::new(),
             frame_stats_long:
@@ -855,10 +599,7 @@ impl ShellState {
             window_focused: false,
             window_occluded: false,
             surface_active: cfg.display_width > 0 && cfg.display_height > 0,
-            screenshot_pending: false,
-            screenshot_request_side: None,
-            screenshot_flash_started_at: None,
-            screenshot_preview: None,
+            screenshot: ScreenshotRuntimeState::new(),
         }
     }
 
@@ -866,14 +607,14 @@ impl ShellState {
     fn set_max_fps(&mut self, max_fps: u16) {
         self.frame_interval = config::frame_interval_for_max_fps(max_fps);
         self.next_redraw_at = Instant::now();
-        self.last_logged_frame_loop_mode = None;
+        self.frame_loop_mode.reset();
     }
 
     #[inline(always)]
     fn set_present_mode_policy(&mut self, policy: PresentModePolicy) {
         self.present_mode_policy = policy;
         self.next_redraw_at = Instant::now();
-        self.last_logged_frame_loop_mode = None;
+        self.frame_loop_mode.reset();
     }
 
     #[inline(always)]
@@ -881,81 +622,46 @@ impl ShellState {
         self.last_frame_time = now;
         self.last_frame_end_time = now;
         self.next_redraw_at = now;
-        self.pending_redraw_request_at = None;
-        self.pending_redraw_request_reason = "none";
-        self.last_logged_frame_loop_mode = None;
+        self.redraw_request.reset();
+        self.frame_loop_mode.reset();
         self.gameplay_pacing_trace.reset(now);
         self.gameplay_event_batch_trace.reset(now);
         self.gameplay_event_trace.reset(now);
-        self.stutter_diag.reset();
+        self.stutter_diag_frames.clear();
+        self.stutter_diag_last_dump_host_nanos = 0;
     }
 
     #[inline(always)]
     fn note_redraw_requested(&mut self, now: Instant, reason: &'static str) {
-        if self.pending_redraw_request_at.is_none() {
-            self.pending_redraw_request_at = Some(now);
-            self.pending_redraw_request_reason = reason;
-        }
+        self.redraw_request.note_requested(now, reason);
     }
 
     #[inline(always)]
     fn take_redraw_request_timing(&mut self, now: Instant) -> (u32, &'static str) {
-        let requested_at = self.pending_redraw_request_at.take();
-        let reason = if requested_at.is_some() {
-            self.pending_redraw_request_reason
-        } else {
-            "external"
-        };
-        self.pending_redraw_request_reason = "none";
-        (
-            requested_at
-                .map(|at| elapsed_us_between(now, at))
-                .unwrap_or_default(),
-            reason,
-        )
+        let timing = self.redraw_request.take_timing(now);
+        (timing.request_to_redraw_us, timing.reason)
     }
 
     #[inline(always)]
     fn redraw_pending(&self) -> bool {
-        self.pending_redraw_request_at.is_some()
+        self.redraw_request.pending()
     }
 
     #[inline(always)]
     fn frame_interval_state(&self, screen: CurrentScreen) -> FrameIntervalState {
-        let base = (!self.vsync_enabled)
-            .then_some(self.frame_interval)
-            .flatten();
-        let background = (self.window_occluded
-            || !self.surface_active
-            || (!self.window_focused && should_background_throttle_unfocused(screen)))
-        .then_some(BACKGROUND_REDRAW_INTERVAL);
-        match (base, background) {
-            (Some(base), Some(background)) => FrameIntervalState {
-                interval: Some(cmp::max(base, background)),
-                reason: FrameIntervalReason::MaxFpsBackground,
-            },
-            (Some(interval), None) => FrameIntervalState {
-                interval: Some(interval),
-                reason: FrameIntervalReason::MaxFps,
-            },
-            (None, Some(interval)) => FrameIntervalState {
-                interval: Some(interval),
-                reason: FrameIntervalReason::Background,
-            },
-            (None, None) => FrameIntervalState {
-                interval: None,
-                reason: FrameIntervalReason::None,
-            },
-        }
+        config::window_frame_interval_state(
+            self.vsync_enabled,
+            self.frame_interval,
+            self.window_occluded,
+            self.surface_active,
+            self.window_focused,
+            should_background_throttle_unfocused(screen),
+        )
     }
 
     #[inline(always)]
     fn note_frame_loop_mode(&mut self, mode: FrameLoopMode) -> bool {
-        if self.last_logged_frame_loop_mode == Some(mode) {
-            return false;
-        }
-        self.last_logged_frame_loop_mode = Some(mode);
-        true
+        self.frame_loop_mode.note(mode)
     }
 
     #[inline(always)]
@@ -1115,7 +821,7 @@ impl ShellState {
 
     #[inline(always)]
     fn should_skip_compose_and_draw(&self) -> bool {
-        self.window_occluded || !self.surface_active
+        config::should_skip_compose_and_draw(self.window_occluded, self.surface_active)
     }
 
     #[inline(always)]
@@ -1181,19 +887,13 @@ impl ShellState {
         expected_seconds: f32,
         severity: u8,
     ) {
-        self.stutter_samples[self.stutter_cursor] = StutterSample {
-            at_seconds,
-            frame_seconds,
-            expected_seconds,
-            severity,
-        };
-        self.stutter_cursor = (self.stutter_cursor + 1) % STUTTER_SAMPLE_COUNT;
+        self.stutter_samples
+            .push(at_seconds, frame_seconds, expected_seconds, severity);
     }
 
     #[inline(always)]
     fn clear_stutter_samples(&mut self) {
-        self.stutter_samples = [StutterSample::empty(); STUTTER_SAMPLE_COUNT];
-        self.stutter_cursor = 0;
+        self.stutter_samples.clear();
     }
 
     fn update_gamepad_overlay(&mut self, now: Instant) {
@@ -1226,26 +926,6 @@ impl SessionState {
             last_course_wheel_difficulty_name: None,
         }
     }
-}
-
-#[inline(always)]
-fn combo_carry_from_profiles() -> [u32; MAX_PLAYERS] {
-    [
-        profile::get_for_side(profile_data::PlayerSide::P1).current_combo,
-        profile::get_for_side(profile_data::PlayerSide::P2).current_combo,
-    ]
-}
-
-#[inline(always)]
-fn preferred_difficulty_for_side(
-    side: profile_data::PlayerSide,
-    play_style: profile_data::PlayStyle,
-) -> usize {
-    let max_diff_index = STANDARD_DIFFICULTY_COUNT.saturating_sub(1);
-    profile::get_for_side(side)
-        .last_played(play_style)
-        .difficulty_index
-        .min(max_diff_index)
 }
 
 fn course_stage_runtime_from_plan(
@@ -1342,29 +1022,14 @@ fn course_stage_seconds(stage: &CourseStageRuntime) -> f32 {
     }
 }
 
-fn course_stage_music_seconds(stage: &CourseStageRuntime) -> f32 {
-    let seconds = stage.song.music_length_seconds;
-    if seconds.is_finite() {
-        seconds.max(0.0)
-    } else {
-        0.0
-    }
-}
-
 fn course_total_seconds(course: &CourseRunState) -> f32 {
     course.stages.iter().map(course_stage_seconds).sum()
 }
 
 fn course_display_timing_for_run(course: &CourseRunState) -> CourseDisplayTiming {
-    CourseDisplayTiming {
-        elapsed_seconds: course
-            .stages
-            .iter()
-            .take(course.next_stage_index)
-            .map(course_stage_music_seconds)
-            .sum(),
-        total_seconds: course.stages.iter().map(course_stage_music_seconds).sum(),
-    }
+    course_display_timing_for_stages(&course.stages, course.next_stage_index, |stage| {
+        stage.song.music_length_seconds
+    })
 }
 
 fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::StageSummary> {
@@ -1633,41 +1298,6 @@ fn prewarm_gameplay_assets(
     backend: &mut renderer_backend::Backend,
     state: &gameplay::State,
 ) {
-    fn gameplay_media_paths(state: &gameplay::State) -> Vec<&PathBuf> {
-        fn push_bgchange_paths<'a>(
-            paths: &mut Vec<&'a PathBuf>,
-            change: &'a deadsync_chart::SongBackgroundChange,
-        ) {
-            if let deadsync_chart::SongBackgroundChangeTarget::File(path) = &change.target {
-                paths.push(path);
-            }
-            if let Some(path) = change.file2.as_ref() {
-                paths.push(path);
-            }
-        }
-
-        let song = state.song();
-        let mut paths = Vec::with_capacity(
-            1usize
-                .saturating_add(state.background_changes.len())
-                .saturating_add(song.background_layer2_changes.len())
-                .saturating_add(song.foreground_changes.len()),
-        );
-        if let Some(path) = song.background_path.as_ref() {
-            paths.push(path);
-        }
-        for change in &state.background_changes {
-            push_bgchange_paths(&mut paths, change);
-        }
-        for change in &song.background_layer2_changes {
-            push_bgchange_paths(&mut paths, change);
-        }
-        for change in &song.foreground_changes {
-            paths.push(&change.path);
-        }
-        paths
-    }
-
     fn prewarm_model_texture_key(
         assets: &mut AssetManager,
         backend: &mut renderer_backend::Backend,
@@ -1757,7 +1387,19 @@ fn prewarm_gameplay_assets(
             noteskin,
         );
     }
-    for path in gameplay_media_paths(state) {
+    let song = state.song();
+    let mut media_paths = Vec::with_capacity(
+        deadsync_assets::dynamic_media::gameplay_media_paths_capacity(
+            song,
+            &state.background_changes,
+        ),
+    );
+    deadsync_assets::dynamic_media::push_gameplay_media_paths(
+        &mut media_paths,
+        song,
+        &state.background_changes,
+    );
+    for path in media_paths {
         let key = path.to_string_lossy().into_owned();
         if seen.insert(key) {
             media_cache::ensure_banner_texture(assets, backend, path);
@@ -1965,48 +1607,7 @@ fn prewarm_gameplay_text_layout_cache(
 }
 
 fn gameplay_media_keys(state: &gameplay::State) -> Vec<String> {
-    fn push_bgchange_keys(keys: &mut Vec<String>, change: &deadsync_chart::SongBackgroundChange) {
-        if let deadsync_chart::SongBackgroundChangeTarget::File(path) = &change.target {
-            keys.push(path.to_string_lossy().into_owned());
-        }
-        if let Some(path) = change.file2.as_ref() {
-            keys.push(path.to_string_lossy().into_owned());
-        }
-    }
-
-    let song = state.song();
-    let mut keys = Vec::with_capacity(
-        1usize
-            .saturating_add(state.background_changes.len())
-            .saturating_add(song.background_layer2_changes.len())
-            .saturating_add(song.foreground_changes.len()),
-    );
-    if let Some(path) = song.background_path.as_ref() {
-        keys.push(path.to_string_lossy().into_owned());
-    }
-    for change in &state.background_changes {
-        push_bgchange_keys(&mut keys, change);
-    }
-    for change in &song.background_layer2_changes {
-        push_bgchange_keys(&mut keys, change);
-    }
-    for change in &song.foreground_changes {
-        keys.push(change.path.to_string_lossy().into_owned());
-    }
-    keys
-}
-
-fn total_gameplay_elapsed(stages: &[stage_stats::StageSummary]) -> f32 {
-    let mut total = 0.0;
-    for stage in stages {
-        let sec = if stage.duration_seconds.is_finite() {
-            stage.duration_seconds.max(0.0)
-        } else {
-            0.0
-        };
-        total += sec;
-    }
-    total
+    deadsync_assets::dynamic_media::gameplay_media_keys(state.song(), &state.background_changes)
 }
 
 #[inline(always)]
@@ -2124,30 +1725,6 @@ fn stage_summary_from_eval(eval: &evaluation::State) -> Option<stage_stats::Stag
         duration_seconds: eval.stage_duration_seconds,
         players,
     })
-}
-
-#[inline(always)]
-fn replace_song_arc_if_same_simfile(
-    current_song: &mut Arc<deadsync_chart::SongData>,
-    updated_song: &Arc<deadsync_chart::SongData>,
-) -> bool {
-    if current_song.simfile_path != updated_song.simfile_path {
-        return false;
-    }
-    *current_song = updated_song.clone();
-    true
-}
-
-#[inline(always)]
-fn can_reuse_quick_restart_payload(
-    current_song: &deadsync_chart::SongData,
-    current_chart_hashes: [&str; 2],
-    next_song: &deadsync_chart::SongData,
-    next_chart_hashes: [&str; 2],
-) -> bool {
-    current_song.simfile_path == next_song.simfile_path
-        && (current_song.offset - next_song.offset).abs() < 0.000_001_f32
-        && current_chart_hashes == next_chart_hashes
 }
 
 fn restart_payload_from_eval(
@@ -2271,13 +1848,8 @@ impl ScreensState {
             overscan_adjustment_state,
             smx_assign_state,
             smx_autoprompt_latched: false,
-            smx_options_lights_active: false,
-            smx_options_last_lights: [None, None],
-            smx_options_last_strip: None,
-            smx_options_last_brightness: 100,
-            smx_options_light_timer: 0.0,
-            smx_po_lights_active: false,
-            smx_po_light_phase: 0.0,
+            smx_options_light_preview: deadsync_smx::OptionsLightPreview::default(),
+            smx_po_light_preview: deadsync_smx::PlayerOptionsLightPreview::default(),
             player_options_state: None,
             init_state,
             select_profile_state,
@@ -2408,13 +1980,10 @@ impl ScreensState {
                     self.select_music_state.selected_steps_index = preferred;
                     self.select_music_state.preferred_difficulty_index = preferred;
 
-                    let play_style = profile::get_session_play_style();
-                    let max_diff_index = STANDARD_DIFFICULTY_COUNT.saturating_sub(1);
-                    let p2_profile = profile::get_for_side(profile_data::PlayerSide::P2);
-                    let p2_pref = p2_profile
-                        .last_played(play_style)
-                        .difficulty_index
-                        .min(max_diff_index);
+                    let p2_pref = profile::preferred_difficulty_for_side(
+                        profile_data::PlayerSide::P2,
+                        profile::get_session_play_style(),
+                    );
                     self.select_music_state.p2_selected_steps_index = p2_pref;
                     self.select_music_state.p2_preferred_difficulty_index = p2_pref;
 
@@ -2439,7 +2008,7 @@ impl ScreensState {
                     self.evaluation_state.session_elapsed = now.duration_since(start).as_secs_f32();
                 }
                 self.evaluation_state.gameplay_elapsed =
-                    total_gameplay_elapsed(&session.played_stages);
+                    stage_stats::total_stage_duration_seconds(&session.played_stages);
                 evaluation::update(&mut self.evaluation_state, delta_time);
                 let action = if let Some(delay) = self.evaluation_state.auto_advance_seconds
                     && self.evaluation_state.screen_elapsed >= delay
@@ -2469,7 +2038,7 @@ impl ScreensState {
                         now.duration_since(start).as_secs_f32();
                 }
                 self.select_music_state.gameplay_elapsed =
-                    total_gameplay_elapsed(&session.played_stages);
+                    stage_stats::total_stage_duration_seconds(&session.played_stages);
                 (
                     Some(select_music::update(
                         &mut self.select_music_state,
@@ -2504,18 +2073,10 @@ impl AppState {
         color_index: i32,
     ) -> Self {
         let play_style = profile::get_session_play_style();
-        let max_diff_index = STANDARD_DIFFICULTY_COUNT.saturating_sub(1);
-        let preferred = if max_diff_index == 0 {
-            0
-        } else {
-            cmp::min(
-                profile_data.last_played(play_style).difficulty_index,
-                max_diff_index,
-            )
-        };
+        let preferred = deadsync_profile::preferred_difficulty_index(&profile_data, play_style);
 
         let shell = ShellState::new(&cfg, overlay_mode);
-        let session = SessionState::new(preferred, combo_carry_from_profiles());
+        let session = SessionState::new(preferred, profile::combo_carry());
         let screens = ScreensState::new(color_index, preferred);
 
         Self {
@@ -2618,7 +2179,7 @@ impl App {
 
     #[inline(always)]
     fn accepts_live_input(&self) -> bool {
-        foreground_input_active(
+        config::foreground_input_active(
             self.state.shell.window_focused,
             self.state.shell.surface_active,
         )
@@ -2996,54 +2557,22 @@ impl App {
     /// is taking the lights over. (Driven from the app loop so the lifecycle is
     /// in one place.)
     fn drive_smx_options_lights(&mut self, dt: f32) {
-        // Re-send at most this often to hold the colour (a one-shot set_lights
-        // lapses back to auto-lighting), plus immediately on any colour change so
-        // a live Swap shows at once. Avoids re-sending a full frame every tick.
-        const RESEND_INTERVAL: f32 = 0.25;
         let active = self.state.screens.current_screen == CurrentScreen::Options
             && config::get().smx_input
             && options::is_smx_config_view(&self.state.screens.options_state);
-        if active {
-            let colors = deadsync_smx::player_indicator_colors();
-            // Preview the machine-default light brightness the user is editing on
-            // this page: scale both indicator pads by it so changes show live.
-            // (config is updated on each adjust, so this tracks the edit.)
-            let brightness = config::get().smx_default_light_brightness;
-            // Underglow test colours: red while Theme Underglow is on (red shows
-            // green when the strip wants GRB, making a wrong order obvious), blue
-            // (the firmware default look) while off. Both track the GRB switch
-            // live, so flipping it recolours the strips at once.
-            let cfg = config::get();
-            let strip = (cfg.smx_underglow_theme, cfg.smx_underglow_grb);
-            self.state.screens.smx_options_light_timer += dt;
-            if colors != self.state.screens.smx_options_last_lights
-                || brightness != self.state.screens.smx_options_last_brightness
-                || Some(strip) != self.state.screens.smx_options_last_strip
-                || self.state.screens.smx_options_light_timer >= RESEND_INTERVAL
-            {
-                deadsync_smx::set_player_lights_with_brightness(colors, [brightness, brightness]);
-                deadsync_smx::set_platform_lights_grb(strip.1);
-                let test_rgb = if strip.0 { [255, 0, 0] } else { [0, 0, 255] };
-                deadsync_smx::set_platform_lights_solid([Some(test_rgb), Some(test_rgb)]);
-                self.state.screens.smx_options_last_lights = colors;
-                self.state.screens.smx_options_last_brightness = brightness;
-                self.state.screens.smx_options_last_strip = Some(strip);
-                self.state.screens.smx_options_light_timer = 0.0;
-            }
-            self.state.screens.smx_options_lights_active = true;
-        } else if self.state.screens.smx_options_lights_active {
-            self.state.screens.smx_options_lights_active = false;
-            self.state.screens.smx_options_light_timer = 0.0;
-            self.state.screens.smx_options_last_lights = [None, None];
-            self.state.screens.smx_options_last_brightness = 100;
-            self.state.screens.smx_options_last_strip = None;
-            // The assignment screen drives the pad lights itself, so don't restore
-            // auto-lighting when handing off to it (avoids a one-frame flicker).
-            if self.state.screens.current_screen != CurrentScreen::SmxAssignPads {
-                deadsync_smx::reenable_auto_lights();
-            }
-            // Put the strips back on the theme colour (no-op when underglow is
-            // off; auto-lighting above restores the firmware default there).
+
+        let cfg = config::get();
+        let restore_underglow = self.state.screens.smx_options_light_preview.update(
+            active,
+            dt,
+            deadsync_smx::player_indicator_colors(),
+            cfg.smx_default_light_brightness,
+            (cfg.smx_underglow_theme, cfg.smx_underglow_grb),
+            self.state.screens.current_screen == CurrentScreen::SmxAssignPads,
+        );
+        // Put the strips back on the theme colour (no-op when underglow is off;
+        // auto-lighting above restores the firmware default there).
+        if restore_underglow {
             config::send_smx_underglow_color();
         }
     }
@@ -3054,9 +2583,6 @@ impl App {
     /// once no side is previewing (or on leaving the page). Sent every frame; the
     /// SDK coalesces light writes to the pad's refresh rate.
     fn drive_smx_player_options_lights(&mut self, dt: f32) {
-        // Seconds per full hue cycle. Slow enough to read the colour, not strobe.
-        const HUE_PERIOD_S: f32 = 5.0;
-
         let preview = (self.state.screens.current_screen == CurrentScreen::PlayerOptions
             && config::get().smx_input)
             .then(|| {
@@ -3069,31 +2595,14 @@ impl App {
             .flatten()
             .filter(|p| p.iter().any(Option::is_some));
 
-        let Some(preview) = preview else {
-            // No side previewing: release the lights if we were holding them.
-            if self.state.screens.smx_po_lights_active {
-                self.state.screens.smx_po_lights_active = false;
-                self.state.screens.smx_po_light_phase = 0.0;
-                // Gameplay drives its own lights, so don't restore auto-lighting
-                // when handing off to it (avoids a one-frame flicker).
-                if !matches!(
-                    self.state.screens.current_screen,
-                    CurrentScreen::Gameplay | CurrentScreen::Practice
-                ) {
-                    deadsync_smx::reenable_auto_lights();
-                }
-            }
-            return;
-        };
-
-        self.state.screens.smx_po_light_phase =
-            (self.state.screens.smx_po_light_phase + dt / HUE_PERIOD_S).fract();
-        let rgb = lights::rainbow_rgb(self.state.screens.smx_po_light_phase);
-        // Same hue on both pads; each scaled by its own side's live percent.
-        let colors: [Option<[u8; 3]>; 2] = std::array::from_fn(|slot| preview[slot].map(|_| rgb));
-        let brightness: [u8; 2] = std::array::from_fn(|slot| preview[slot].unwrap_or(0));
-        deadsync_smx::set_player_lights_with_brightness(colors, brightness);
-        self.state.screens.smx_po_lights_active = true;
+        self.state.screens.smx_po_light_preview.update(
+            preview,
+            dt,
+            !matches!(
+                self.state.screens.current_screen,
+                CurrentScreen::Gameplay | CurrentScreen::Practice
+            ),
+        );
     }
 
     fn apply_smx_managed_preset(&mut self) {
@@ -3234,7 +2743,8 @@ impl App {
             .set_gameplay_pad_lights(config.lights_gameplay_pad_lights);
         let screen = self.state.screens.current_screen;
         if screen != CurrentScreen::TestLights {
-            self.lights.set_mode(light_mode_for_screen(screen));
+            self.lights
+                .set_mode(lights::screen_light_mode(screen_light_context(screen)));
         }
         self.lights.set_joined([
             profile::is_session_side_joined(profile_data::PlayerSide::P1),
@@ -3358,7 +2868,9 @@ impl App {
             && config::get().smx_input
             && options::is_smx_config_view(&self.state.screens.options_state);
         let role = if enabled && !assignment_preview {
-            smx_background_role(self.state.screens.current_screen)
+            lights::screen_smx_background_role(screen_light_context(
+                self.state.screens.current_screen,
+            ))
         } else {
             None
         };
@@ -3926,8 +3438,7 @@ impl App {
                         &self.state.screens.evaluation_state,
                         config::get().auto_screenshot_eval,
                     ) {
-                        self.state.shell.screenshot_pending = true;
-                        self.state.shell.screenshot_request_side = None;
+                        self.state.shell.screenshot.request(None);
                     }
                 }
             }
@@ -4139,7 +3650,7 @@ impl App {
         let apply_present_back_pressure = self.apply_present_back_pressure();
         let mut capture_screenshot = false;
         if let Some(backend) = &mut self.backend {
-            if self.state.shell.screenshot_pending {
+            if self.state.shell.screenshot.pending() {
                 backend.request_screenshot();
             }
             let draw_started = Instant::now();
@@ -4361,8 +3872,7 @@ impl App {
             ScreenAction::SelectProfiles { p1, p2 } => {
                 let fast_profile_switch = profile::take_fast_profile_switch_from_select_music();
                 let profile_data = profile::set_active_profiles(p1, p2);
-                self.state.session.combo_carry =
-                    [profile_data[0].current_combo, profile_data[1].current_combo];
+                self.state.session.combo_carry = profile::combo_carry_for_profiles(&profile_data);
                 if let Some(backend) = self.backend.as_mut() {
                     self.dynamic_media.set_profile_avatar_for_side(
                         &mut self.asset_manager,
@@ -4378,24 +3888,11 @@ impl App {
                     );
                 }
 
-                let max_diff_index = STANDARD_DIFFICULTY_COUNT.saturating_sub(1);
-                let play_style = profile::get_session_play_style();
-                let preferred_p1 = if max_diff_index == 0 {
-                    0
-                } else {
-                    cmp::min(
-                        profile_data[0].last_played(play_style).difficulty_index,
-                        max_diff_index,
-                    )
-                };
-                let preferred_p2 = if max_diff_index == 0 {
-                    0
-                } else {
-                    cmp::min(
-                        profile_data[1].last_played(play_style).difficulty_index,
-                        max_diff_index,
-                    )
-                };
+                let [preferred_p1, preferred_p2] =
+                    profile::preferred_difficulty_indices_for_profiles(
+                        &profile_data,
+                        profile::get_session_play_style(),
+                    );
                 let side = profile::get_session_player_side();
                 let preferred_active = match side {
                     profile_data::PlayerSide::P1 => preferred_p1,
@@ -4476,8 +3973,7 @@ impl App {
                 Vec::new()
             }
             ScreenAction::RequestScreenshot(side) => {
-                self.state.shell.screenshot_pending = true;
-                self.state.shell.screenshot_request_side = side;
+                self.state.shell.screenshot.request(side);
                 Vec::new()
             }
             ScreenAction::RequestBanner(path_opt) => vec![Command::SetBanner(path_opt)],
@@ -4711,20 +4207,15 @@ impl App {
 
     #[inline(always)]
     fn gameplay_global_offset_changed(gs: &gameplay::State) -> bool {
-        sync_offset::sync_offset_delta_seconds(
+        sync_offset::sync_offset_changed(
             gs.initial_global_offset_seconds(),
             gs.global_offset_seconds(),
         )
-        .is_some()
     }
 
     #[inline(always)]
     fn gameplay_song_offset_changed(gs: &gameplay::State) -> bool {
-        sync_offset::sync_offset_delta_seconds(
-            gs.initial_song_offset_seconds(),
-            gs.song_offset_seconds(),
-        )
-        .is_some()
+        sync_offset::sync_offset_changed(gs.initial_song_offset_seconds(), gs.song_offset_seconds())
     }
 
     #[inline(always)]
@@ -4733,86 +4224,50 @@ impl App {
     }
 
     #[inline(always)]
-    fn gameplay_song_offset_saveable(gs: &gameplay::State) -> bool {
-        Self::gameplay_song_offset_changed(gs)
-            && config::song_path_is_writable(gs.song().simfile_path.as_path())
-    }
-
-    #[inline(always)]
     fn gameplay_saveable_offset_changed(gs: &gameplay::State) -> bool {
-        Self::gameplay_global_offset_changed(gs) || Self::gameplay_song_offset_saveable(gs)
+        sync_offset::gameplay_sync_offset_saveable_changed(
+            gs.initial_global_offset_seconds(),
+            gs.global_offset_seconds(),
+            gs.initial_song_offset_seconds(),
+            gs.song_offset_seconds(),
+            config::song_path_is_writable(gs.song().simfile_path.as_path()),
+        )
     }
 
     fn gameplay_sync_prompt_text(gs: &gameplay::State) -> String {
-        let mut text = String::with_capacity(320);
-
-        if let Some(line) = sync_offset::sync_change_line(
-            "Global Offset",
-            gs.initial_global_offset_seconds(),
-            gs.global_offset_seconds(),
-        ) {
-            text.push_str(&line);
-            text.push_str("\n\n");
-        }
-
-        if let Some(line) = sync_offset::sync_change_line(
-            "Song offset",
-            gs.initial_song_offset_seconds(),
-            gs.song_offset_seconds(),
-        ) {
-            let song = gs.song();
-            if config::song_path_is_writable(song.simfile_path.as_path()) {
-                text.push_str("You have changed the timing of\n");
-                text.push_str(&song.display_full_title(false));
-                text.push_str(":\n\n");
-                text.push_str(&line);
-                text.push_str("\n\n");
-            } else {
-                text.push_str("Song offset changes for\n");
-                text.push_str(&song.display_full_title(false));
-                text.push_str("\nwill be discarded because the song folder is read-only.\n\n");
-            }
-        }
-
-        text.push_str("Would you like to save these changes?\n");
-        text.push_str("Choosing NO will discard your changes.");
-        text
+        let song = gs.song();
+        let title = song.display_full_title(false);
+        sync_offset::gameplay_sync_prompt_text(sync_offset::GameplaySyncPromptText {
+            song_title: title.as_str(),
+            song_writable: config::song_path_is_writable(song.simfile_path.as_path()),
+            initial_global_offset_seconds: gs.initial_global_offset_seconds(),
+            global_offset_seconds: gs.global_offset_seconds(),
+            initial_song_offset_seconds: gs.initial_song_offset_seconds(),
+            song_offset_seconds: gs.song_offset_seconds(),
+        })
     }
 
-    fn save_song_offset_changes(&mut self, changes: &[SongOffsetSyncChange]) -> Result<(), String> {
-        let mut saved_files = 0usize;
-        let mut skipped_read_only = 0usize;
-        let mut changed_tags_total = 0usize;
-        let mut first_saved_path: Option<&Path> = None;
-        let mut first_skipped_path: Option<&Path> = None;
-
-        for change in changes {
-            if change.delta_seconds.abs() < 0.000_001_f32 {
-                continue;
-            }
-            if !config::song_path_is_writable(change.simfile_path.as_path()) {
-                skipped_read_only = skipped_read_only.saturating_add(1);
-                if first_skipped_path.is_none() {
-                    first_skipped_path = Some(change.simfile_path.as_path());
+    fn save_song_offset_changes(
+        &mut self,
+        changes: &[sync_offset::SongOffsetSyncChange],
+    ) -> Result<(), String> {
+        let summary = sync_offset::save_song_offset_changes(
+            changes,
+            config::song_path_is_writable,
+            |simfile_path| {
+                let updated_song = song_loading::reload_song_in_cache(simfile_path)?;
+                if let Some(po_state) = self.state.screens.player_options_state.as_mut() {
+                    let _ = deadsync_simfile::runtime_cache::replace_song_arc_if_same_simfile(
+                        &mut po_state.song,
+                        &updated_song,
+                    );
                 }
-                continue;
-            }
-            changed_tags_total += sync_offset::save_song_offset_delta_to_simfile(
-                change.simfile_path.as_path(),
-                change.delta_seconds,
-            )?;
-            let updated_song = song_loading::reload_song_in_cache(change.simfile_path.as_path())?;
-            if let Some(po_state) = self.state.screens.player_options_state.as_mut() {
-                let _ = replace_song_arc_if_same_simfile(&mut po_state.song, &updated_song);
-            }
-            saved_files += 1;
-            if first_saved_path.is_none() {
-                first_saved_path = Some(change.simfile_path.as_path());
-            }
-        }
+                Ok(())
+            },
+        )?;
 
-        if saved_files == 0 {
-            if let Some(path) = first_skipped_path {
+        if summary.saved_files == 0 {
+            if let Some(path) = summary.first_skipped_path {
                 return Err(format!(
                     "Song offset sync changes target read-only AdditionalSongFoldersReadOnly path '{}'",
                     path.display()
@@ -4822,34 +4277,34 @@ impl App {
         }
 
         select_music::refresh_from_song_cache(&mut self.state.screens.select_music_state);
-        if skipped_read_only > 0
-            && let Some(path) = first_skipped_path
+        if summary.skipped_read_only > 0
+            && let Some(path) = summary.first_skipped_path.as_deref()
         {
             warn!(
                 "Skipped {} song offset sync change(s) under read-only AdditionalSongFoldersReadOnly roots; first skipped '{}'.",
-                skipped_read_only,
+                summary.skipped_read_only,
                 path.display()
             );
         }
-        if saved_files == 1 {
-            if let Some(path) = first_saved_path {
+        if summary.saved_files == 1 {
+            if let Some(path) = summary.first_saved_path.as_deref() {
                 info!(
                     "Saved song offset sync changes to '{}' (updated {} #OFFSET tags; refreshed song cache).",
                     path.display(),
-                    changed_tags_total
+                    summary.changed_tags_total
                 );
             }
         } else {
             info!(
                 "Saved pack sync changes to {} simfiles (updated {} #OFFSET tags; refreshed song cache).",
-                saved_files, changed_tags_total
+                summary.saved_files, summary.changed_tags_total
             );
         }
         Ok(())
     }
 
     fn save_gameplay_song_offset(&mut self, simfile_path: &Path, delta: f32) -> Result<(), String> {
-        self.save_song_offset_changes(&[SongOffsetSyncChange {
+        self.save_song_offset_changes(&[sync_offset::SongOffsetSyncChange {
             simfile_path: simfile_path.to_path_buf(),
             delta_seconds: delta,
         }])
@@ -5276,7 +4731,10 @@ impl App {
         }
 
         if let Some(po_state) = self.state.screens.player_options_state.as_mut() {
-            let _ = replace_song_arc_if_same_simfile(&mut po_state.song, &updated_song);
+            let _ = deadsync_simfile::runtime_cache::replace_song_arc_if_same_simfile(
+                &mut po_state.song,
+                &updated_song,
+            );
         }
         true
     }
@@ -5350,23 +4808,14 @@ impl App {
         };
         select_music::refresh_from_song_cache(&mut self.state.screens.select_music_state);
 
-        // Editing notes changes a chart's hash, so the old hash will not exist
-        // in the reloaded song. Resolve each slot by its stable difficulty steps
-        // index (derived from the pre-reload chart) and take the reloaded chart's
-        // new hash so the restart selects the same difficulty.
         let target_chart_type = profile::get_session_play_style().chart_type();
-        let new_hashes: [String; MAX_PLAYERS] = std::array::from_fn(|slot| {
-            let steps_index = old_song
-                .steps_index_for_chart_hash(target_chart_type, &old_hashes[slot])
-                .or_else(|| {
-                    deadsync_chart::song::standard_difficulty_index(&old_difficulties[slot])
-                })
-                .unwrap_or(0);
-            updated_song
-                .chart_for_steps_index(target_chart_type, steps_index)
-                .map(|chart| chart.short_hash.clone())
-                .unwrap_or_default()
-        });
+        let new_hashes = deadsync_simfile::runtime_cache::reloaded_chart_hashes_for_restart(
+            old_song.as_ref(),
+            updated_song.as_ref(),
+            target_chart_type,
+            [old_hashes[0].as_str(), old_hashes[1].as_str()],
+            [old_difficulties[0].as_str(), old_difficulties[1].as_str()],
+        );
 
         if !self.prepare_restart_player_options(
             updated_song,
@@ -5516,8 +4965,9 @@ impl App {
                     }
                     self.state.session.played_stages.push(course_stage.clone());
 
-                    let gameplay_elapsed =
-                        total_gameplay_elapsed(&self.state.session.played_stages);
+                    let gameplay_elapsed = stage_stats::total_stage_duration_seconds(
+                        &self.state.session.played_stages,
+                    );
                     let session_elapsed = self.state.screens.evaluation_state.session_elapsed;
                     let screen_elapsed = self.state.screens.evaluation_state.screen_elapsed;
                     let mut course_page = build_course_summary_eval_state(
@@ -5551,7 +5001,7 @@ impl App {
         }
 
         self.state.screens.evaluation_state.gameplay_elapsed =
-            total_gameplay_elapsed(&self.state.session.played_stages);
+            stage_stats::total_stage_duration_seconds(&self.state.session.played_stages);
     }
 
     fn post_select_display_stages(&self) -> Cow<'_, [stage_stats::StageSummary]> {
@@ -5598,17 +5048,10 @@ impl App {
 
     fn apply_select_music_join(&mut self, join_side: profile_data::PlayerSide) {
         let play_style = profile::get_session_play_style();
-        let max_diff_index = STANDARD_DIFFICULTY_COUNT.saturating_sub(1);
-        let p1_profile = profile::get_for_side(profile_data::PlayerSide::P1);
-        let p2_profile = profile::get_for_side(profile_data::PlayerSide::P2);
-        let p1_pref = p1_profile
-            .last_played(play_style)
-            .difficulty_index
-            .min(max_diff_index);
-        let p2_pref = p2_profile
-            .last_played(play_style)
-            .difficulty_index
-            .min(max_diff_index);
+        let p1_pref =
+            profile::preferred_difficulty_for_side(profile_data::PlayerSide::P1, play_style);
+        let p2_pref =
+            profile::preferred_difficulty_for_side(profile_data::PlayerSide::P2, play_style);
 
         let side = profile::get_session_player_side();
         let sm = &mut self.state.screens.select_music_state;
@@ -5758,8 +5201,9 @@ impl App {
         profile::set_session_timing_tick_mode(profile_data::TimingTickMode::Off);
         profile::set_fast_profile_switch_from_select_music(false);
 
-        let preferred = preferred_difficulty_for_side(profile_data::PlayerSide::P1, RESET_STYLE);
-        self.state.session = SessionState::new(preferred, combo_carry_from_profiles());
+        let preferred =
+            profile::preferred_difficulty_for_side(profile_data::PlayerSide::P1, RESET_STYLE);
+        self.state.session = SessionState::new(preferred, profile::combo_carry());
         self.state.gameplay_offset_save_prompt = None;
     }
 
@@ -5767,7 +5211,9 @@ impl App {
         if !ev.pressed || !lights::operator_menu_action(ev.action) {
             return false;
         }
-        if !allow_operator_menu_button(self.state.screens.current_screen) {
+        if !lights::screen_allows_operator_menu_button(screen_light_context(
+            self.state.screens.current_screen,
+        )) {
             return true;
         }
 
@@ -5819,12 +5265,12 @@ impl App {
                 VirtualAction::p1_select | VirtualAction::p2_select
             )
         {
-            self.state.shell.screenshot_pending = true;
-            self.state.shell.screenshot_request_side = match ev.action {
+            let side = match ev.action {
                 VirtualAction::p1_select => Some(profile_data::PlayerSide::P1),
                 VirtualAction::p2_select => Some(profile_data::PlayerSide::P2),
                 _ => None,
             };
+            self.state.shell.screenshot.request(side);
             return Ok(());
         }
         if ev.pressed
@@ -6512,33 +5958,21 @@ impl App {
         &self,
         now_seconds: f32,
     ) -> Vec<crate::screens::components::shared::stats_overlay::StutterEvent> {
-        let mut out = Vec::with_capacity(STUTTER_SAMPLE_COUNT);
-        let start = self.state.shell.stutter_cursor;
-        for i in 0..STUTTER_SAMPLE_COUNT {
-            let sample = self.state.shell.stutter_samples[(start + i) % STUTTER_SAMPLE_COUNT];
-            if sample.severity == 0 {
-                continue;
-            }
-            let age_seconds = now_seconds - sample.at_seconds;
-            if !(0.0..=STUTTER_SAMPLE_LIFETIME).contains(&age_seconds) {
-                continue;
-            }
-            let frame_multiple = if sample.expected_seconds > 0.0 {
-                sample.frame_seconds / sample.expected_seconds
-            } else {
-                0.0
-            };
-            out.push(
-                crate::screens::components::shared::stats_overlay::StutterEvent {
-                    timestamp_seconds: sample.at_seconds,
-                    frame_ms: sample.frame_seconds * 1000.0,
-                    frame_multiple,
+        self.state
+            .shell
+            .stutter_samples
+            .visible(now_seconds)
+            .into_iter()
+            .map(
+                |sample| crate::screens::components::shared::stats_overlay::StutterEvent {
+                    timestamp_seconds: sample.timestamp_seconds,
+                    frame_ms: sample.frame_ms,
+                    frame_multiple: sample.frame_multiple,
                     severity: sample.severity,
-                    age_seconds,
+                    age_seconds: sample.age_seconds,
                 },
-            );
-        }
-        out
+            )
+            .collect()
     }
 
     #[inline(always)]
@@ -6796,8 +6230,8 @@ impl App {
         let present_stats = draw_stats.present_stats;
         self.state
             .shell
-            .stutter_diag
-            .push_frame(StutterDiagFrameSample {
+            .stutter_diag_frames
+            .push(StutterDiagFrameSample {
                 host_nanos: frame_host_nanos,
                 screen,
                 redraw_request_reason,
@@ -6840,10 +6274,11 @@ impl App {
         display_triggered: bool,
     ) {
         let mut frames = Vec::with_capacity(STUTTER_DIAG_FRAME_SAMPLE_COUNT);
-        self.state.shell.stutter_diag.collect_recent_frames(
+        self.state.shell.stutter_diag_frames.collect_recent_by(
             now_host_nanos,
             STUTTER_DIAG_DUMP_WINDOW_NS,
             &mut frames,
+            |sample| sample.host_nanos,
         );
         let mut audio_events = Vec::with_capacity(32);
         deadsync_audio_stream::collect_stutter_diag_events(
@@ -6968,13 +6403,13 @@ impl App {
             .map(|gs| gs.display_clock_stutter_diag_trigger_seq())
             .unwrap_or(0);
         let audio_triggered =
-            audio_trigger_seq > self.state.shell.stutter_diag.last_audio_trigger_seq;
+            audio_trigger_seq > self.state.shell.stutter_diag_last_audio_trigger_seq;
         let display_triggered =
-            display_trigger_seq > self.state.shell.stutter_diag.last_display_trigger_seq;
+            display_trigger_seq > self.state.shell.stutter_diag_last_display_trigger_seq;
         if stutter_severity == 0 && !audio_triggered && !display_triggered {
             return;
         }
-        if now_host_nanos.saturating_sub(self.state.shell.stutter_diag.last_dump_host_nanos)
+        if now_host_nanos.saturating_sub(self.state.shell.stutter_diag_last_dump_host_nanos)
             < STUTTER_DIAG_MIN_DUMP_GAP_NS
         {
             return;
@@ -6987,9 +6422,9 @@ impl App {
             audio_triggered,
             display_triggered,
         );
-        self.state.shell.stutter_diag.last_audio_trigger_seq = audio_trigger_seq;
-        self.state.shell.stutter_diag.last_display_trigger_seq = display_trigger_seq;
-        self.state.shell.stutter_diag.last_dump_host_nanos = now_host_nanos;
+        self.state.shell.stutter_diag_last_audio_trigger_seq = audio_trigger_seq;
+        self.state.shell.stutter_diag_last_display_trigger_seq = display_trigger_seq;
+        self.state.shell.stutter_diag_last_dump_host_nanos = now_host_nanos;
     }
 
     #[inline(always)]
@@ -8032,14 +7467,12 @@ impl App {
         &mut self,
         profiles: &[profile_data::Profile; profile_data::PLAYER_SLOTS],
     ) {
-        self.state.session.combo_carry = [profiles[0].current_combo, profiles[1].current_combo];
+        self.state.session.combo_carry = profile::combo_carry_for_profiles(profiles);
         let play_style = profile::get_session_play_style();
         let active_side = profile::get_session_player_side();
         let active_ix = profile_data::player_side_index(active_side);
-        self.state.session.preferred_difficulty_index = profiles[active_ix]
-            .last_played(play_style)
-            .difficulty_index
-            .min(STANDARD_DIFFICULTY_COUNT.saturating_sub(1));
+        self.state.session.preferred_difficulty_index =
+            profile::preferred_difficulty_for_profile(&profiles[active_ix], play_style);
 
         if let Some(backend) = self.backend.as_mut() {
             self.dynamic_media.set_profile_avatar_for_side(
@@ -8070,7 +7503,7 @@ impl App {
             self.state.session.session_start_time = None;
             self.state.session.played_stages.clear();
             self.state.session.course_individual_stage_indices.clear();
-            self.state.session.combo_carry = combo_carry_from_profiles();
+            self.state.session.combo_carry = profile::combo_carry();
             self.clear_course_runtime();
             self.state.session.last_course_wheel_path = None;
             self.state.session.last_course_wheel_difficulty_name = None;
@@ -8433,8 +7866,13 @@ impl App {
                     }
                 };
 
-                let global_offset_seconds = config::get().global_offset_seconds;
-                let pack_sync_offset_seconds = gameplay_light_pack_sync_offset(song_arc.as_ref());
+                let cfg = config::get();
+                let global_offset_seconds = cfg.global_offset_seconds;
+                let pack_sync_offset_seconds =
+                    deadsync_simfile::runtime_cache::pack_sync_offset_for_song_config(
+                        song_arc.as_ref(),
+                        &cfg,
+                    );
                 let cabinet_light_plan = cabinet_light_plan(song_arc.as_ref(), chart_ixs[0]);
                 let mut requested_chart_ixs = chart_ixs.to_vec();
                 let light_payload_start = requested_chart_ixs.len();
@@ -8722,8 +8160,13 @@ impl App {
                 };
 
                 let gameplay_entry_started = Instant::now();
-                let global_offset_seconds = config::get().global_offset_seconds;
-                let pack_sync_offset_seconds = gameplay_light_pack_sync_offset(song_arc.as_ref());
+                let cfg = config::get();
+                let global_offset_seconds = cfg.global_offset_seconds;
+                let pack_sync_offset_seconds =
+                    deadsync_simfile::runtime_cache::pack_sync_offset_for_song_config(
+                        song_arc.as_ref(),
+                        &cfg,
+                    );
                 let cabinet_light_plan = cabinet_light_plan(song_arc.as_ref(), chart_ixs[0]);
                 let cabinet_light_key = cabinet_light_plan.as_ref().map(|plan| {
                     cabinet_light_key(
@@ -8740,7 +8183,7 @@ impl App {
                             .gameplay_state
                             .as_ref()
                             .filter(|current| {
-                                can_reuse_quick_restart_payload(
+                                deadsync_simfile::runtime_cache::can_reuse_quick_restart_payload(
                                     current.song(),
                                     [
                                         current.charts()[0].short_hash.as_str(),
@@ -9077,7 +8520,7 @@ impl App {
                     Instant::now().duration_since(start).as_secs_f32();
             }
             self.state.screens.evaluation_state.gameplay_elapsed =
-                total_gameplay_elapsed(&self.state.session.played_stages);
+                stage_stats::total_stage_duration_seconds(&self.state.session.played_stages);
             self.finalize_entered_evaluation();
         }
 
@@ -9278,13 +8721,10 @@ impl App {
                         .select_music_state
                         .preferred_difficulty_index = preferred;
 
-                    let play_style = profile::get_session_play_style();
-                    let max_diff_index = STANDARD_DIFFICULTY_COUNT.saturating_sub(1);
-                    let p2_profile = profile::get_for_side(profile_data::PlayerSide::P2);
-                    let p2_pref = p2_profile
-                        .last_played(play_style)
-                        .difficulty_index
-                        .min(max_diff_index);
+                    let p2_pref = profile::preferred_difficulty_for_side(
+                        profile_data::PlayerSide::P2,
+                        profile::get_session_play_style(),
+                    );
                     self.state
                         .screens
                         .select_music_state
@@ -9302,7 +8742,7 @@ impl App {
                 }
             }
             self.state.screens.select_music_state.gameplay_elapsed =
-                total_gameplay_elapsed(&self.state.session.played_stages);
+                stage_stats::total_stage_duration_seconds(&self.state.session.played_stages);
 
             // Prime the delayed panes (tech counts, breakdown, etc.) for the selected chart so they
             // render immediately on entry (no initial debounce delay).
@@ -9764,6 +9204,13 @@ impl ApplicationHandler<UserEvent> for App {
     }
 }
 
+#[inline(always)]
+fn native_input_host() -> deadsync_input_native::BackendHost {
+    deadsync_input_native::backend_host(config::pad_index_for_uuid, |vendor, product| {
+        deadsync_smx::native_smx_owns_device(vendor, product, config::get().smx_input)
+    })
+}
+
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let config = config::get();
     let backend_type = config.video_renderer;
@@ -9792,7 +9239,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         let proxy_pad = proxy.clone();
         let proxy_sys = proxy.clone();
         let proxy_key = proxy.clone();
-        let input_host = input_backend::host();
+        let input_host = native_input_host();
         std::thread::spawn(move || {
             deadsync_input_native::run_windows_backend(
                 win_pad_backend,
@@ -9814,7 +9261,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         let proxy_pad = proxy.clone();
         let proxy_sys = proxy.clone();
         let proxy_key = proxy.clone();
-        let input_host = input_backend::host();
+        let input_host = native_input_host();
         std::thread::spawn(move || {
             deadsync_input_native::run_linux_backend(
                 move |pe| {
@@ -9835,7 +9282,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         let proxy_pad = proxy.clone();
         let proxy_sys = proxy.clone();
         let proxy_key = proxy.clone();
-        let input_host = input_backend::host();
+        let input_host = native_input_host();
         std::thread::spawn(move || {
             deadsync_input_native::run_freebsd_backend(
                 move |pe| {
@@ -9856,7 +9303,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         let proxy_pad = proxy.clone();
         let proxy_sys = proxy.clone();
         let proxy_key = proxy.clone();
-        let input_host = input_backend::host();
+        let input_host = native_input_host();
         std::thread::spawn(move || {
             deadsync_input_native::run_macos_backend(
                 move |pe| {
@@ -9973,58 +9420,6 @@ mod tests {
             precise_last_second_seconds: 0.0,
             charts: vec![test_chart(hashes[0]), test_chart(hashes[1])],
         }
-    }
-
-    #[test]
-    fn gameplay_offset_prompt_ignores_pad_lr_in_dedicated_menu_mode() {
-        assert_eq!(
-            gameplay_offset_prompt_choice_delta(VirtualAction::p1_left, true),
-            None
-        );
-        assert_eq!(
-            gameplay_offset_prompt_choice_delta(VirtualAction::p1_right, true),
-            None
-        );
-        assert_eq!(
-            gameplay_offset_prompt_choice_delta(VirtualAction::p2_left, true),
-            None
-        );
-        assert_eq!(
-            gameplay_offset_prompt_choice_delta(VirtualAction::p2_right, true),
-            None
-        );
-    }
-
-    #[test]
-    fn gameplay_offset_prompt_keeps_menu_lr_in_dedicated_menu_mode() {
-        assert_eq!(
-            gameplay_offset_prompt_choice_delta(VirtualAction::p1_menu_left, true),
-            Some(-1)
-        );
-        assert_eq!(
-            gameplay_offset_prompt_choice_delta(VirtualAction::p1_menu_right, true),
-            Some(1)
-        );
-        assert_eq!(
-            gameplay_offset_prompt_choice_delta(VirtualAction::p2_menu_left, true),
-            Some(-1)
-        );
-        assert_eq!(
-            gameplay_offset_prompt_choice_delta(VirtualAction::p2_menu_right, true),
-            Some(1)
-        );
-    }
-
-    #[test]
-    fn gameplay_offset_prompt_allows_pad_lr_when_fallback_enabled() {
-        assert_eq!(
-            gameplay_offset_prompt_choice_delta(VirtualAction::p1_left, false),
-            Some(-1)
-        );
-        assert_eq!(
-            gameplay_offset_prompt_choice_delta(VirtualAction::p1_right, false),
-            Some(1)
-        );
     }
 
     fn test_score_info(
@@ -10189,14 +9584,6 @@ mod tests {
             show_fa_plus_pane: true,
             track_early_judgments: true,
         }
-    }
-
-    #[test]
-    fn foreground_input_requires_focus_and_surface() {
-        assert!(foreground_input_active(true, true));
-        assert!(!foreground_input_active(false, true));
-        assert!(!foreground_input_active(true, false));
-        assert!(!foreground_input_active(false, false));
     }
 
     #[test]
@@ -10399,68 +9786,6 @@ mod tests {
         assert_eq!(columns[2].w5, 6);
         assert_eq!(columns[2].early_w5, 3);
         assert_eq!(columns[2].early_total_w5, 4);
-    }
-
-    #[test]
-    fn operator_menu_button_matches_service_screen_gate() {
-        assert!(!allow_operator_menu_button(CurrentScreen::Options));
-        assert!(!allow_operator_menu_button(CurrentScreen::Mappings));
-        assert!(!allow_operator_menu_button(CurrentScreen::Input));
-        assert!(!allow_operator_menu_button(CurrentScreen::TestLights));
-
-        assert!(allow_operator_menu_button(CurrentScreen::Menu));
-        assert!(allow_operator_menu_button(CurrentScreen::Gameplay));
-        assert!(allow_operator_menu_button(CurrentScreen::SelectMusic));
-        assert!(allow_operator_menu_button(CurrentScreen::PlayerOptions));
-        assert!(allow_operator_menu_button(
-            CurrentScreen::ManageLocalProfiles
-        ));
-    }
-
-    #[test]
-    fn replace_song_arc_if_same_simfile_swaps_in_reloaded_song() {
-        let mut current = Arc::new(test_song("Songs/Test/song.ssc", 0.0, ["a", "b"]));
-        let updated = Arc::new(test_song("Songs/Test/song.ssc", -0.003, ["a", "b"]));
-
-        assert!(replace_song_arc_if_same_simfile(&mut current, &updated));
-        assert!(Arc::ptr_eq(&current, &updated));
-        assert!((current.offset + 0.003).abs() < 0.000_001_f32);
-    }
-
-    #[test]
-    fn replace_song_arc_if_same_simfile_ignores_other_song() {
-        let original = Arc::new(test_song("Songs/Test/a.ssc", 0.0, ["a", "b"]));
-        let mut current = original.clone();
-        let updated = Arc::new(test_song("Songs/Test/b.ssc", -0.003, ["a", "b"]));
-
-        assert!(!replace_song_arc_if_same_simfile(&mut current, &updated));
-        assert!(Arc::ptr_eq(&current, &original));
-    }
-
-    #[test]
-    fn quick_restart_payload_reuse_rejects_song_offset_mismatch() {
-        let current_song = test_song("Songs/Test/song.ssc", 0.0, ["a", "b"]);
-        let updated_song = test_song("Songs/Test/song.ssc", -0.003, ["a", "b"]);
-
-        assert!(!can_reuse_quick_restart_payload(
-            &current_song,
-            ["a", "b"],
-            &updated_song,
-            ["a", "b"],
-        ));
-    }
-
-    #[test]
-    fn quick_restart_payload_reuse_accepts_identical_song_and_charts() {
-        let current_song = test_song("Songs/Test/song.ssc", -0.003, ["a", "b"]);
-        let next_song = test_song("Songs/Test/song.ssc", -0.003, ["a", "b"]);
-
-        assert!(can_reuse_quick_restart_payload(
-            &current_song,
-            ["a", "b"],
-            &next_song,
-            ["a", "b"],
-        ));
     }
 
     #[test]

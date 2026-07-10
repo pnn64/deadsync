@@ -14,6 +14,10 @@ pub const TAB_SLOW_DIVISOR: f32 = 4.0;
 /// per-screen update accumulators when fast-forward is held.
 pub const MAX_LOGIC_DT_PER_FRAME: f32 = 0.25;
 
+/// Background redraw cap used while the window is occluded, inactive, or safely
+/// throttled while unfocused.
+pub const BACKGROUND_REDRAW_INTERVAL: Duration = Duration::from_millis(67);
+
 #[inline]
 pub fn apply_tab_acceleration(
     wall_dt: f32,
@@ -61,6 +65,58 @@ pub fn advance_redraw_deadline(deadline: Instant, now: Instant, interval: Durati
         return next;
     }
     now.checked_add(interval).unwrap_or(now)
+}
+
+#[inline(always)]
+pub fn window_frame_interval_state(
+    vsync_enabled: bool,
+    max_fps_interval: Option<Duration>,
+    window_occluded: bool,
+    surface_active: bool,
+    window_focused: bool,
+    throttle_unfocused: bool,
+) -> FrameIntervalState {
+    let base = (!vsync_enabled).then_some(max_fps_interval).flatten();
+    let background =
+        (window_occluded || !surface_active || (!window_focused && throttle_unfocused))
+            .then_some(BACKGROUND_REDRAW_INTERVAL);
+    match (base, background) {
+        (Some(base), Some(background)) => FrameIntervalState {
+            interval: Some(base.max(background)),
+            reason: FrameIntervalReason::MaxFpsBackground,
+        },
+        (Some(interval), None) => FrameIntervalState {
+            interval: Some(interval),
+            reason: FrameIntervalReason::MaxFps,
+        },
+        (None, Some(interval)) => FrameIntervalState {
+            interval: Some(interval),
+            reason: FrameIntervalReason::Background,
+        },
+        (None, None) => FrameIntervalState {
+            interval: None,
+            reason: FrameIntervalReason::None,
+        },
+    }
+}
+
+#[inline(always)]
+pub const fn foreground_input_active(window_focused: bool, surface_active: bool) -> bool {
+    window_focused && surface_active
+}
+
+#[inline(always)]
+pub const fn should_skip_compose_and_draw(window_occluded: bool, surface_active: bool) -> bool {
+    window_occluded || !surface_active
+}
+
+#[inline(always)]
+pub const fn queued_input_allowed(
+    screen_is_gameplay: bool,
+    transition_idle: bool,
+    transition_fading_in: bool,
+) -> bool {
+    transition_idle || (screen_is_gameplay && transition_fading_in)
 }
 
 #[inline(always)]
@@ -237,6 +293,268 @@ pub enum FrameLoopMode {
     Scheduled(FrameIntervalReason, Duration),
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct RedrawRequestTiming {
+    pub request_to_redraw_us: u32,
+    pub reason: &'static str,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct RedrawRequestState {
+    requested_at: Option<Instant>,
+    reason: &'static str,
+}
+
+impl RedrawRequestState {
+    #[inline(always)]
+    pub const fn new() -> Self {
+        Self {
+            requested_at: None,
+            reason: "none",
+        }
+    }
+
+    #[inline(always)]
+    pub fn reset(&mut self) {
+        *self = Self::new();
+    }
+
+    #[inline(always)]
+    pub fn note_requested(&mut self, now: Instant, reason: &'static str) {
+        if self.requested_at.is_none() {
+            self.requested_at = Some(now);
+            self.reason = reason;
+        }
+    }
+
+    #[inline(always)]
+    pub fn take_timing(&mut self, now: Instant) -> RedrawRequestTiming {
+        let requested_at = self.requested_at.take();
+        let reason = if requested_at.is_some() {
+            self.reason
+        } else {
+            "external"
+        };
+        self.reason = "none";
+        RedrawRequestTiming {
+            request_to_redraw_us: requested_at
+                .map(|at| elapsed_us_between(now, at))
+                .unwrap_or_default(),
+            reason,
+        }
+    }
+
+    #[inline(always)]
+    pub const fn pending(&self) -> bool {
+        self.requested_at.is_some()
+    }
+}
+
+impl Default for RedrawRequestState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct FrameLoopModeTracker {
+    last: Option<FrameLoopMode>,
+}
+
+impl FrameLoopModeTracker {
+    #[inline(always)]
+    pub const fn new() -> Self {
+        Self { last: None }
+    }
+
+    #[inline(always)]
+    pub fn reset(&mut self) {
+        self.last = None;
+    }
+
+    #[inline(always)]
+    pub fn note(&mut self, mode: FrameLoopMode) -> bool {
+        if self.last == Some(mode) {
+            return false;
+        }
+        self.last = Some(mode);
+        true
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct GameplayEventBatchTrace {
+    pub started_at: Instant,
+    pub gameplay_seen: bool,
+    pub key_events: u32,
+    pub key_repeat_events: u32,
+    pub pad_events: u32,
+    pub queued_events: u32,
+    pub app_handler_sum_us: u64,
+    pub app_handler_max_us: u32,
+}
+
+impl GameplayEventBatchTrace {
+    #[inline(always)]
+    pub fn new(now: Instant) -> Self {
+        Self {
+            started_at: now,
+            gameplay_seen: false,
+            key_events: 0,
+            key_repeat_events: 0,
+            pad_events: 0,
+            queued_events: 0,
+            app_handler_sum_us: 0,
+            app_handler_max_us: 0,
+        }
+    }
+
+    #[inline(always)]
+    pub fn reset(&mut self, now: Instant) {
+        *self = Self::new(now);
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct GameplayEventTrace {
+    pub started_at: Instant,
+    pub batches: u32,
+    pub key_events: u32,
+    pub key_repeat_events: u32,
+    pub pad_events: u32,
+    pub queued_events: u32,
+    pub batch_sum_us: u64,
+    pub batch_max_us: u32,
+    pub app_handler_sum_us: u64,
+    pub app_handler_max_us: u32,
+    pub dispatch_overhead_sum_us: u64,
+    pub dispatch_overhead_max_us: u32,
+    pub slow_batches: u32,
+}
+
+impl GameplayEventTrace {
+    #[inline(always)]
+    pub fn new(now: Instant) -> Self {
+        Self {
+            started_at: now,
+            batches: 0,
+            key_events: 0,
+            key_repeat_events: 0,
+            pad_events: 0,
+            queued_events: 0,
+            batch_sum_us: 0,
+            batch_max_us: 0,
+            app_handler_sum_us: 0,
+            app_handler_max_us: 0,
+            dispatch_overhead_sum_us: 0,
+            dispatch_overhead_max_us: 0,
+            slow_batches: 0,
+        }
+    }
+
+    #[inline(always)]
+    pub fn reset(&mut self, now: Instant) {
+        *self = Self::new(now);
+    }
+}
+
+pub const STUTTER_SAMPLE_COUNT: usize = 5;
+pub const STUTTER_SAMPLE_LIFETIME: f32 = 3.4;
+
+#[derive(Clone, Copy, Debug)]
+pub struct StutterSample {
+    pub at_seconds: f32,
+    pub frame_seconds: f32,
+    pub expected_seconds: f32,
+    pub severity: u8,
+}
+
+impl StutterSample {
+    #[inline(always)]
+    pub const fn empty() -> Self {
+        Self {
+            at_seconds: -1.0,
+            frame_seconds: 0.0,
+            expected_seconds: 0.0,
+            severity: 0,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct VisibleStutterSample {
+    pub timestamp_seconds: f32,
+    pub frame_ms: f32,
+    pub frame_multiple: f32,
+    pub severity: u8,
+    pub age_seconds: f32,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct StutterSampleRing {
+    samples: [StutterSample; STUTTER_SAMPLE_COUNT],
+    cursor: usize,
+}
+
+impl StutterSampleRing {
+    #[inline(always)]
+    pub const fn new() -> Self {
+        Self {
+            samples: [StutterSample::empty(); STUTTER_SAMPLE_COUNT],
+            cursor: 0,
+        }
+    }
+
+    #[inline(always)]
+    pub fn clear(&mut self) {
+        *self = Self::new();
+    }
+
+    #[inline(always)]
+    pub fn push(
+        &mut self,
+        at_seconds: f32,
+        frame_seconds: f32,
+        expected_seconds: f32,
+        severity: u8,
+    ) {
+        self.samples[self.cursor] = StutterSample {
+            at_seconds,
+            frame_seconds,
+            expected_seconds,
+            severity,
+        };
+        self.cursor = (self.cursor + 1) % STUTTER_SAMPLE_COUNT;
+    }
+
+    pub fn visible(self, now_seconds: f32) -> Vec<VisibleStutterSample> {
+        let mut out = Vec::with_capacity(STUTTER_SAMPLE_COUNT);
+        for i in 0..STUTTER_SAMPLE_COUNT {
+            let sample = self.samples[(self.cursor + i) % STUTTER_SAMPLE_COUNT];
+            if sample.severity == 0 {
+                continue;
+            }
+            let age_seconds = now_seconds - sample.at_seconds;
+            if !(0.0..=STUTTER_SAMPLE_LIFETIME).contains(&age_seconds) {
+                continue;
+            }
+            let frame_multiple = if sample.expected_seconds > 0.0 {
+                sample.frame_seconds / sample.expected_seconds
+            } else {
+                0.0
+            };
+            out.push(VisibleStutterSample {
+                timestamp_seconds: sample.at_seconds,
+                frame_ms: sample.frame_seconds * 1000.0,
+                frame_multiple,
+                severity: sample.severity,
+                age_seconds,
+            });
+        }
+        out
+    }
+}
+
 #[derive(Clone, Copy)]
 pub struct GameplayPacingTrace {
     pub started_at: Instant,
@@ -393,6 +711,28 @@ impl<T: Copy, const N: usize> FixedFrameStatsRing<T, N> {
             out.push(self.samples[(start + i) % N]);
         }
     }
+
+    /// Copy samples whose timestamp is inside `window_ns`, in chronological order.
+    pub fn collect_recent_by(
+        &self,
+        now_host_nanos: u64,
+        window_ns: u64,
+        out: &mut Vec<T>,
+        timestamp: impl Fn(T) -> u64,
+    ) {
+        out.clear();
+        if N == 0 {
+            return;
+        }
+        let start = self.cursor.saturating_add(N).saturating_sub(self.len) % N;
+        for i in 0..self.len {
+            let sample = self.samples[(start + i) % N];
+            let sample_time = timestamp(sample);
+            if sample_time != 0 && now_host_nanos.saturating_sub(sample_time) <= window_ns {
+                out.push(sample);
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -435,6 +775,67 @@ mod tests {
             let out = apply_tab_acceleration(dt, false, fast, slow, true);
             assert!((out - dt).abs() < EPS);
         }
+    }
+
+    #[test]
+    fn window_frame_interval_uses_background_when_occluded() {
+        let state = window_frame_interval_state(true, None, true, true, true, false);
+        assert_eq!(
+            state,
+            FrameIntervalState {
+                interval: Some(BACKGROUND_REDRAW_INTERVAL),
+                reason: FrameIntervalReason::Background,
+            }
+        );
+    }
+
+    #[test]
+    fn window_frame_interval_combines_max_fps_and_background() {
+        let max_fps = Some(Duration::from_millis(5));
+        let state = window_frame_interval_state(false, max_fps, false, true, false, true);
+        assert_eq!(
+            state,
+            FrameIntervalState {
+                interval: Some(BACKGROUND_REDRAW_INTERVAL),
+                reason: FrameIntervalReason::MaxFpsBackground,
+            }
+        );
+    }
+
+    #[test]
+    fn window_frame_interval_respects_unfocused_no_throttle() {
+        let max_fps = Some(Duration::from_millis(5));
+        let state = window_frame_interval_state(false, max_fps, false, true, false, false);
+        assert_eq!(
+            state,
+            FrameIntervalState {
+                interval: max_fps,
+                reason: FrameIntervalReason::MaxFps,
+            }
+        );
+    }
+
+    #[test]
+    fn foreground_input_requires_focus_and_surface() {
+        assert!(foreground_input_active(true, true));
+        assert!(!foreground_input_active(false, true));
+        assert!(!foreground_input_active(true, false));
+        assert!(!foreground_input_active(false, false));
+    }
+
+    #[test]
+    fn compose_draw_skips_occluded_or_inactive_surface() {
+        assert!(!should_skip_compose_and_draw(false, true));
+        assert!(should_skip_compose_and_draw(true, true));
+        assert!(should_skip_compose_and_draw(false, false));
+    }
+
+    #[test]
+    fn queued_input_dispatch_allows_gameplay_fade_in_only() {
+        assert!(queued_input_allowed(false, true, false));
+        assert!(queued_input_allowed(true, false, true));
+        assert!(!queued_input_allowed(false, false, true));
+        assert!(!queued_input_allowed(true, false, false));
     }
 
     #[test]
@@ -492,6 +893,42 @@ mod tests {
     }
 
     #[test]
+    fn redraw_request_state_latches_first_reason_until_taken() {
+        let now = Instant::now();
+        let mut state = RedrawRequestState::new();
+
+        state.note_requested(now, "input");
+        state.note_requested(now + Duration::from_micros(100), "chain");
+        assert!(state.pending());
+
+        let timing = state.take_timing(now + Duration::from_micros(250));
+
+        assert_eq!(timing.request_to_redraw_us, 250);
+        assert_eq!(timing.reason, "input");
+        assert!(!state.pending());
+    }
+
+    #[test]
+    fn redraw_request_state_marks_external_when_unrequested() {
+        let mut state = RedrawRequestState::new();
+        let timing = state.take_timing(Instant::now());
+
+        assert_eq!(timing.request_to_redraw_us, 0);
+        assert_eq!(timing.reason, "external");
+    }
+
+    #[test]
+    fn frame_loop_mode_tracker_reports_only_changes() {
+        let mut tracker = FrameLoopModeTracker::new();
+
+        assert!(tracker.note(FrameLoopMode::Poll));
+        assert!(!tracker.note(FrameLoopMode::Poll));
+        assert!(tracker.note(FrameLoopMode::WaitPending));
+        tracker.reset();
+        assert!(tracker.note(FrameLoopMode::WaitPending));
+    }
+
+    #[test]
     fn fixed_frame_stats_ring_snapshots_oldest_first() {
         let mut ring = FixedFrameStatsRing::<u8, 3>::new(0);
         let mut out = Vec::new();
@@ -506,5 +943,55 @@ mod tests {
         ring.clear();
         ring.snapshot(&mut out);
         assert!(out.is_empty());
+    }
+
+    #[test]
+    fn fixed_frame_stats_ring_collects_recent_samples() {
+        let mut ring = FixedFrameStatsRing::<u64, 4>::new(0);
+        let mut out = Vec::new();
+
+        ring.push(10);
+        ring.push(80);
+        ring.push(120);
+        ring.push(0);
+        ring.collect_recent_by(130, 50, &mut out, |sample| sample);
+
+        assert_eq!(out, vec![80, 120]);
+    }
+
+    #[test]
+    fn stutter_sample_ring_filters_visible_samples() {
+        let mut ring = StutterSampleRing::new();
+
+        ring.push(1.0, 0.050, 0.016, 2);
+        ring.push(2.0, 0.010, 0.016, 0);
+        ring.push(-10.0, 0.100, 0.016, 3);
+
+        let visible = ring.visible(3.0);
+
+        assert_eq!(visible.len(), 1);
+        assert!((visible[0].timestamp_seconds - 1.0).abs() < EPS);
+        assert!((visible[0].frame_ms - 50.0).abs() < EPS);
+        assert!((visible[0].frame_multiple - (0.050 / 0.016)).abs() < EPS);
+        assert_eq!(visible[0].severity, 2);
+        assert!((visible[0].age_seconds - 2.0).abs() < EPS);
+    }
+
+    #[test]
+    fn stutter_sample_ring_overwrites_oldest_sample() {
+        let mut ring = StutterSampleRing::new();
+
+        for i in 0..(STUTTER_SAMPLE_COUNT + 1) {
+            ring.push(i as f32 * 0.1, 0.040, 0.016, 1);
+        }
+
+        let visible = ring.visible(STUTTER_SAMPLE_COUNT as f32 * 0.1);
+
+        assert_eq!(visible.len(), STUTTER_SAMPLE_COUNT);
+        assert!((visible[0].timestamp_seconds - 0.1).abs() < EPS);
+        assert!(
+            (visible.last().unwrap().timestamp_seconds - STUTTER_SAMPLE_COUNT as f32 * 0.1).abs()
+                < EPS
+        );
     }
 }

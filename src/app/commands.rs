@@ -1,6 +1,9 @@
 use super::{App, CurrentScreen};
 use crate::screens::{DensityGraphSlot, DensityGraphSource};
 use deadlib_present::density;
+use deadsync_config::navigation::{
+    AppCommandKind, AppCommandTimingLog, app_command_label, app_command_timing_log,
+};
 use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
@@ -47,6 +50,29 @@ pub(super) enum Command {
     },
 }
 
+impl Command {
+    #[inline(always)]
+    const fn kind(&self) -> AppCommandKind {
+        match self {
+            Command::ExitNow => AppCommandKind::ExitNow,
+            Command::Shutdown => AppCommandKind::Shutdown,
+            Command::SetBanner(_) => AppCommandKind::SetBanner,
+            Command::SetCdTitle(_) => AppCommandKind::SetCdTitle,
+            Command::SetPackBanner(_) => AppCommandKind::SetPackBanner,
+            Command::SetWheelItemBackgrounds(_) => AppCommandKind::SetWheelItemBackgrounds,
+            Command::SetDensityGraph { .. } => AppCommandKind::SetDensityGraph,
+            Command::FetchOnlineGrade(_) => AppCommandKind::FetchOnlineGrade,
+            Command::PlayMusic { .. } => AppCommandKind::PlayMusic,
+            Command::StopMusic => AppCommandKind::StopMusic,
+            Command::SetDynamicBackground(_) => AppCommandKind::SetDynamicBackground,
+            Command::UpdateScrollSpeed { .. } => AppCommandKind::UpdateScrollSpeed,
+            Command::UpdateSessionMusicRate(_) => AppCommandKind::UpdateSessionMusicRate,
+            Command::UpdatePreferredDifficulty(_) => AppCommandKind::UpdatePreferredDifficulty,
+            Command::UpdateLastPlayed { .. } => AppCommandKind::UpdateLastPlayed,
+        }
+    }
+}
+
 impl App {
     pub(super) fn run_commands(
         &mut self,
@@ -59,48 +85,13 @@ impl App {
         Ok(())
     }
 
-    #[inline(always)]
-    const fn should_log_command_timing(command: &Command) -> bool {
-        matches!(
-            command,
-            Command::SetBanner(_)
-                | Command::SetCdTitle(_)
-                | Command::SetPackBanner(_)
-                | Command::SetWheelItemBackgrounds(_)
-                | Command::SetDensityGraph { .. }
-                | Command::SetDynamicBackground(_)
-                | Command::PlayMusic { .. }
-        )
-    }
-
-    #[inline(always)]
-    const fn command_label(command: &Command) -> &'static str {
-        match command {
-            Command::ExitNow => "ExitNow",
-            Command::Shutdown => "Shutdown",
-            Command::SetBanner(_) => "SetBanner",
-            Command::SetCdTitle(_) => "SetCdTitle",
-            Command::SetPackBanner(_) => "SetPackBanner",
-            Command::SetWheelItemBackgrounds(_) => "SetWheelItemBackgrounds",
-            Command::SetDensityGraph { .. } => "SetDensityGraph",
-            Command::FetchOnlineGrade(_) => "FetchOnlineGrade",
-            Command::PlayMusic { .. } => "PlayMusic",
-            Command::StopMusic => "StopMusic",
-            Command::SetDynamicBackground(_) => "SetDynamicBackground",
-            Command::UpdateScrollSpeed { .. } => "UpdateScrollSpeed",
-            Command::UpdateSessionMusicRate(_) => "UpdateSessionMusicRate",
-            Command::UpdatePreferredDifficulty(_) => "UpdatePreferredDifficulty",
-            Command::UpdateLastPlayed { .. } => "UpdateLastPlayed",
-        }
-    }
-
     fn execute_command(
         &mut self,
         command: Command,
         event_loop: &ActiveEventLoop,
     ) -> Result<(), Box<dyn Error>> {
-        let label = Self::command_label(&command);
-        let always_log_timing = Self::should_log_command_timing(&command);
+        let kind = command.kind();
+        let label = app_command_label(kind);
         let started = Instant::now();
         match command {
             Command::ExitNow => {
@@ -154,21 +145,26 @@ impl App {
         }
         let elapsed = started.elapsed();
         let elapsed_ms = elapsed.as_secs_f64() * 1000.0;
-        if elapsed_ms >= 100.0 {
-            warn!(
-                "Slow command: {} took {:.2}ms on screen {:?}",
-                label, elapsed_ms, self.state.screens.current_screen
-            );
-        } else if elapsed_ms >= 16.7 {
-            debug!(
-                "Frame-cost command: {} took {:.2}ms on screen {:?}",
-                label, elapsed_ms, self.state.screens.current_screen
-            );
-        } else if always_log_timing {
-            debug!(
-                "Command timing: {} took {:.2}ms on screen {:?}",
-                label, elapsed_ms, self.state.screens.current_screen
-            );
+        match app_command_timing_log(kind, elapsed_ms) {
+            AppCommandTimingLog::Slow => {
+                warn!(
+                    "Slow command: {} took {:.2}ms on screen {:?}",
+                    label, elapsed_ms, self.state.screens.current_screen
+                );
+            }
+            AppCommandTimingLog::FrameCost => {
+                debug!(
+                    "Frame-cost command: {} took {:.2}ms on screen {:?}",
+                    label, elapsed_ms, self.state.screens.current_screen
+                );
+            }
+            AppCommandTimingLog::CommandTiming => {
+                debug!(
+                    "Command timing: {} took {:.2}ms on screen {:?}",
+                    label, elapsed_ms, self.state.screens.current_screen
+                );
+            }
+            AppCommandTimingLog::None => {}
         }
         Ok(())
     }

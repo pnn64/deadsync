@@ -262,6 +262,68 @@ pub enum Mode {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ScreenLightContext {
+    Init,
+    Gameplay,
+    TestLights,
+    OverscanAdjustment,
+    Results,
+    GameOver,
+    Options,
+    OperatorLocked,
+    SmxAssignPads,
+    SongSelect,
+    Menu,
+}
+
+pub const fn screen_light_mode(context: ScreenLightContext) -> Mode {
+    match context {
+        ScreenLightContext::Init => Mode::Attract,
+        ScreenLightContext::Gameplay => Mode::Gameplay,
+        ScreenLightContext::TestLights => Mode::TestAutoCycle,
+        ScreenLightContext::Results => Mode::Cleared,
+        ScreenLightContext::GameOver => Mode::Stage,
+        ScreenLightContext::OverscanAdjustment
+        | ScreenLightContext::Options
+        | ScreenLightContext::OperatorLocked
+        | ScreenLightContext::SmxAssignPads
+        | ScreenLightContext::SongSelect
+        | ScreenLightContext::Menu => Mode::MenuStartAndDirections,
+    }
+}
+
+/// Which named SMX background animation a screen shows (the role half of the
+/// `<role>_<size>.gif` asset name), or `None` where pad lights are owned by
+/// something else.
+pub const fn screen_smx_background_role(context: ScreenLightContext) -> Option<&'static str> {
+    match context {
+        ScreenLightContext::Init
+        | ScreenLightContext::TestLights
+        | ScreenLightContext::SmxAssignPads => None,
+        ScreenLightContext::Gameplay => Some("gameplay"),
+        ScreenLightContext::SongSelect => Some("song_select"),
+        ScreenLightContext::Results => Some("results"),
+        ScreenLightContext::Options => Some("options"),
+        ScreenLightContext::OverscanAdjustment
+        | ScreenLightContext::GameOver
+        | ScreenLightContext::OperatorLocked
+        | ScreenLightContext::Menu => Some("default"),
+    }
+}
+
+#[inline(always)]
+pub const fn screen_allows_operator_menu_button(context: ScreenLightContext) -> bool {
+    !matches!(
+        context,
+        ScreenLightContext::Options
+            | ScreenLightContext::OperatorLocked
+            | ScreenLightContext::TestLights
+            | ScreenLightContext::OverscanAdjustment
+            | ScreenLightContext::SmxAssignPads
+    )
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Player {
     P1,
     P2,
@@ -1023,6 +1085,69 @@ mod tests {
         assert!(operator_menu_action(VirtualAction::p2_operator));
         assert!(!operator_menu_action(VirtualAction::p1_start));
         assert!(!operator_menu_action(VirtualAction::p2_back));
+    }
+
+    #[test]
+    fn screen_light_context_selects_mode_and_smx_role() {
+        assert_eq!(screen_light_mode(ScreenLightContext::Init), Mode::Attract);
+        assert_eq!(
+            screen_light_mode(ScreenLightContext::Gameplay),
+            Mode::Gameplay
+        );
+        assert_eq!(
+            screen_light_mode(ScreenLightContext::Results),
+            Mode::Cleared
+        );
+        assert_eq!(screen_light_mode(ScreenLightContext::GameOver), Mode::Stage);
+        assert_eq!(
+            screen_light_mode(ScreenLightContext::Menu),
+            Mode::MenuStartAndDirections
+        );
+
+        assert_eq!(
+            screen_smx_background_role(ScreenLightContext::Gameplay),
+            Some("gameplay")
+        );
+        assert_eq!(
+            screen_smx_background_role(ScreenLightContext::SongSelect),
+            Some("song_select")
+        );
+        assert_eq!(
+            screen_smx_background_role(ScreenLightContext::Results),
+            Some("results")
+        );
+        assert_eq!(
+            screen_smx_background_role(ScreenLightContext::Options),
+            Some("options")
+        );
+        assert_eq!(
+            screen_smx_background_role(ScreenLightContext::SmxAssignPads),
+            None
+        );
+    }
+
+    #[test]
+    fn screen_light_context_gates_operator_menu_button() {
+        assert!(!screen_allows_operator_menu_button(
+            ScreenLightContext::Options
+        ));
+        assert!(!screen_allows_operator_menu_button(
+            ScreenLightContext::OperatorLocked
+        ));
+        assert!(!screen_allows_operator_menu_button(
+            ScreenLightContext::TestLights
+        ));
+        assert!(!screen_allows_operator_menu_button(
+            ScreenLightContext::OverscanAdjustment
+        ));
+
+        assert!(screen_allows_operator_menu_button(ScreenLightContext::Menu));
+        assert!(screen_allows_operator_menu_button(
+            ScreenLightContext::Gameplay
+        ));
+        assert!(screen_allows_operator_menu_button(
+            ScreenLightContext::SongSelect
+        ));
     }
 
     #[test]

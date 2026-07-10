@@ -20,8 +20,7 @@ use crate::screens::components::{
 };
 use crate::screens::pad_config;
 use crate::screens::{
-    DensityGraphSlot, DensityGraphSource, Screen, ScreenAction, SongOffsetSyncChange,
-    input as screen_input,
+    DensityGraphSlot, DensityGraphSource, Screen, ScreenAction, input as screen_input,
 };
 use deadlib_platform::dirs;
 use deadlib_present::actors::{Actor, SizeSpec, SpriteSource};
@@ -64,6 +63,7 @@ use deadsync_simfile::song_sort::{
     genre_grouped_songs, length_grouped_songs, meter_grouped_songs, song_title_sort_key,
     title_grouped_songs,
 };
+use deadsync_simfile::sync_offset::SongOffsetSyncChange;
 use image::{Rgba, RgbaImage};
 use log::{debug, warn};
 use null_or_die::{
@@ -11823,7 +11823,6 @@ mod tests {
     use deadsync_input::{InputBinding, InputEvent, Keymap, PadDir, VirtualAction};
     use deadsync_online::lobbies as lobby_data;
     use deadsync_profile as profile_data;
-    use deadsync_score as score_data;
     use std::path::PathBuf;
     use std::sync::Arc;
     use std::time::{Duration, Instant};

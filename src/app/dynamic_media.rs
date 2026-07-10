@@ -7,7 +7,8 @@ use deadsync_assets::dynamic_media::{
     BackgroundTextureError, BannerVideoPrepResult, DynamicBackgroundState,
     DynamicImageTextureError, DynamicVideoState, GameplayBackgroundPrepResult,
     SongLuaVideoPrepResult, create_cdtitle_texture, create_inserted_banner_texture,
-    path_texture_key, prepare_banner_video, prepare_gameplay_background, prepare_song_lua_video,
+    dynamic_video_key_set, dynamic_video_path_in_set, path_texture_key, prepare_banner_video,
+    prepare_gameplay_background, prepare_song_lua_video, replace_texture_key_set,
     retire_dynamic_background_state, retire_dynamic_video_state, retire_video_player,
     set_banner_texture_for_path, set_image_background_texture, set_video_background_poster_texture,
     set_video_background_texture, start_background_video,
@@ -261,13 +262,7 @@ impl DynamicMedia {
             }
         }
 
-        let old = std::mem::replace(&mut self.wheel_item_background_keys, desired);
-        let mut release_keys = Vec::with_capacity(old.len());
-        for key in old {
-            if !self.wheel_item_background_keys.contains(&key) {
-                release_keys.push(key);
-            }
-        }
+        let release_keys = replace_texture_key_set(&mut self.wheel_item_background_keys, desired);
         for key in dynamic::dedupe_dynamic_keys(release_keys) {
             self.release_texture_key(assets, backend, key);
         }
@@ -362,11 +357,7 @@ impl DynamicMedia {
         let stale_keys = self
             .active_banner_videos
             .iter()
-            .filter(|(_, state)| {
-                !desired_paths.iter().any(|path| {
-                    dynamic::is_dynamic_video_path(path) && state.path.as_path() == path.as_path()
-                })
-            })
+            .filter(|(_, state)| !dynamic_video_path_in_set(&state.path, desired_paths))
             .map(|(key, _)| key.clone())
             .collect::<Vec<_>>();
         for key in stale_keys {
@@ -660,11 +651,7 @@ impl DynamicMedia {
         backend: &mut Backend,
         paths: &[PathBuf],
     ) {
-        let desired = paths
-            .iter()
-            .filter(|path| dynamic::is_dynamic_video_path(path))
-            .map(|path| path.to_string_lossy().into_owned())
-            .collect::<HashSet<_>>();
+        let desired = dynamic_video_key_set(paths);
         let stale_active = self
             .active_song_lua_videos
             .keys()
@@ -733,13 +720,10 @@ impl DynamicMedia {
     ) where
         I: IntoIterator<Item = String>,
     {
-        let next = keys.into_iter().collect::<HashSet<_>>();
-        let stale = self
-            .gameplay_background_keys
-            .difference(&next)
-            .cloned()
-            .collect::<Vec<_>>();
-        self.gameplay_background_keys = next;
+        let stale = replace_texture_key_set(
+            &mut self.gameplay_background_keys,
+            keys.into_iter().collect(),
+        );
         for key in stale {
             self.release_texture_key(assets, backend, key);
         }

@@ -1,6 +1,21 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
+#[derive(Debug, Clone)]
+pub struct SongOffsetSyncChange {
+    pub simfile_path: PathBuf,
+    pub delta_seconds: f32,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SongOffsetSaveSummary {
+    pub saved_files: usize,
+    pub skipped_read_only: usize,
+    pub changed_tags_total: usize,
+    pub first_saved_path: Option<PathBuf>,
+    pub first_skipped_path: Option<PathBuf>,
+}
+
 #[inline(always)]
 pub fn quantize_sync_offset_seconds(v: f32) -> f32 {
     (v / 0.001_f32).round() * 0.001_f32
@@ -26,6 +41,76 @@ pub fn sync_change_line(label: &str, start: f32, new: f32) -> Option<String> {
     Some(format!(
         "{label} from {start_q:+.3} to {new_q:+.3} (notes {direction})"
     ))
+}
+
+#[inline(always)]
+pub fn sync_offset_changed(start: f32, new: f32) -> bool {
+    sync_offset_target_seconds(start, new).is_some()
+}
+
+#[inline(always)]
+pub fn sync_offset_saveable_changed(start: f32, new: f32, writable: bool) -> bool {
+    sync_offset_changed(start, new) && writable
+}
+
+#[inline(always)]
+pub fn gameplay_sync_offset_saveable_changed(
+    initial_global_offset_seconds: f32,
+    global_offset_seconds: f32,
+    initial_song_offset_seconds: f32,
+    song_offset_seconds: f32,
+    song_writable: bool,
+) -> bool {
+    sync_offset_changed(initial_global_offset_seconds, global_offset_seconds)
+        || sync_offset_saveable_changed(
+            initial_song_offset_seconds,
+            song_offset_seconds,
+            song_writable,
+        )
+}
+
+pub struct GameplaySyncPromptText<'a> {
+    pub song_title: &'a str,
+    pub song_writable: bool,
+    pub initial_global_offset_seconds: f32,
+    pub global_offset_seconds: f32,
+    pub initial_song_offset_seconds: f32,
+    pub song_offset_seconds: f32,
+}
+
+pub fn gameplay_sync_prompt_text(input: GameplaySyncPromptText<'_>) -> String {
+    let mut text = String::with_capacity(320);
+
+    if let Some(line) = sync_change_line(
+        "Global Offset",
+        input.initial_global_offset_seconds,
+        input.global_offset_seconds,
+    ) {
+        text.push_str(&line);
+        text.push_str("\n\n");
+    }
+
+    if let Some(line) = sync_change_line(
+        "Song offset",
+        input.initial_song_offset_seconds,
+        input.song_offset_seconds,
+    ) {
+        if input.song_writable {
+            text.push_str("You have changed the timing of\n");
+            text.push_str(input.song_title);
+            text.push_str(":\n\n");
+            text.push_str(&line);
+            text.push_str("\n\n");
+        } else {
+            text.push_str("Song offset changes for\n");
+            text.push_str(input.song_title);
+            text.push_str("\nwill be discarded because the song folder is read-only.\n\n");
+        }
+    }
+
+    text.push_str("Would you like to save these changes?\n");
+    text.push_str("Choosing NO will discard your changes.");
+    text
 }
 
 #[inline(always)]
@@ -132,9 +217,48 @@ pub fn save_song_offset_delta_to_simfile(simfile_path: &Path, delta: f32) -> Res
     Ok(changed_tags)
 }
 
+pub fn save_song_offset_changes<W, A>(
+    changes: &[SongOffsetSyncChange],
+    mut is_writable: W,
+    mut after_save: A,
+) -> Result<SongOffsetSaveSummary, String>
+where
+    W: FnMut(&Path) -> bool,
+    A: FnMut(&Path) -> Result<(), String>,
+{
+    let mut summary = SongOffsetSaveSummary::default();
+
+    for change in changes {
+        if change.delta_seconds.abs() < 0.000_001_f32 {
+            continue;
+        }
+        let path = change.simfile_path.as_path();
+        if !is_writable(path) {
+            summary.skipped_read_only = summary.skipped_read_only.saturating_add(1);
+            if summary.first_skipped_path.is_none() {
+                summary.first_skipped_path = Some(path.to_path_buf());
+            }
+            continue;
+        }
+
+        summary.changed_tags_total +=
+            save_song_offset_delta_to_simfile(path, change.delta_seconds)?;
+        after_save(path)?;
+        summary.saved_files = summary.saved_files.saturating_add(1);
+        if summary.first_saved_path.is_none() {
+            summary.first_saved_path = Some(path.to_path_buf());
+        }
+    }
+
+    Ok(summary)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static TEST_ID: AtomicU64 = AtomicU64::new(0);
 
     #[test]
     fn sync_offset_change_uses_millisecond_quantization() {
@@ -148,6 +272,51 @@ mod tests {
             sync_change_line("Global Offset", -0.0424, -0.0426).as_deref(),
             Some("Global Offset from -0.042 to -0.043 (notes later)")
         );
+    }
+
+    #[test]
+    fn gameplay_sync_offset_saveable_change_ignores_readonly_song_only_edits() {
+        assert!(!gameplay_sync_offset_saveable_changed(
+            0.0, 0.0, -0.042, -0.043, false,
+        ));
+        assert!(gameplay_sync_offset_saveable_changed(
+            0.0, 0.001, -0.042, -0.043, false,
+        ));
+        assert!(gameplay_sync_offset_saveable_changed(
+            0.0, 0.0, -0.042, -0.043, true,
+        ));
+    }
+
+    #[test]
+    fn gameplay_sync_prompt_text_reports_writable_changes() {
+        let text = gameplay_sync_prompt_text(GameplaySyncPromptText {
+            song_title: "Test Song",
+            song_writable: true,
+            initial_global_offset_seconds: 0.0,
+            global_offset_seconds: 0.001,
+            initial_song_offset_seconds: -0.042,
+            song_offset_seconds: -0.043,
+        });
+
+        assert!(text.contains("Global Offset from +0.000 to +0.001"));
+        assert!(text.contains("You have changed the timing of\nTest Song"));
+        assert!(text.contains("Song offset from -0.042 to -0.043"));
+        assert!(text.contains("Would you like to save these changes?"));
+    }
+
+    #[test]
+    fn gameplay_sync_prompt_text_marks_readonly_song_changes_discarded() {
+        let text = gameplay_sync_prompt_text(GameplaySyncPromptText {
+            song_title: "Read Only Song",
+            song_writable: false,
+            initial_global_offset_seconds: 0.0,
+            global_offset_seconds: 0.0,
+            initial_song_offset_seconds: -0.042,
+            song_offset_seconds: -0.043,
+        });
+
+        assert!(text.contains("Song offset changes for\nRead Only Song"));
+        assert!(text.contains("will be discarded because the song folder is read-only"));
     }
 
     #[test]
@@ -165,5 +334,65 @@ mod tests {
     fn rewrite_simfile_offset_tags_rejects_missing_terminator() {
         let err = rewrite_simfile_offset_tags(b"#OFFSET:0.000", 0.001).expect_err("error");
         assert!(err.contains("missing ';'"));
+    }
+
+    #[test]
+    fn save_song_offset_changes_tracks_skips_and_writes() {
+        let id = TEST_ID.fetch_add(1, Ordering::Relaxed);
+        let root = std::env::temp_dir().join(format!(
+            "deadsync_sync_offset_test_{}_{}",
+            std::process::id(),
+            id
+        ));
+        std::fs::create_dir_all(&root).expect("create temp dir");
+        let writable = root.join("writable.ssc");
+        let read_only = root.join("read_only.ssc");
+        std::fs::write(&writable, b"#TITLE:test;\n#OFFSET:0.100;\n").expect("write simfile");
+        std::fs::write(&read_only, b"#TITLE:test;\n#OFFSET:0.200;\n").expect("write simfile");
+
+        let changes = vec![
+            SongOffsetSyncChange {
+                simfile_path: writable.clone(),
+                delta_seconds: 0.001,
+            },
+            SongOffsetSyncChange {
+                simfile_path: read_only.clone(),
+                delta_seconds: 0.001,
+            },
+            SongOffsetSyncChange {
+                simfile_path: writable.clone(),
+                delta_seconds: 0.000_000_1,
+            },
+        ];
+        let mut reloaded = Vec::new();
+        let summary = save_song_offset_changes(
+            &changes,
+            |path| path != read_only.as_path(),
+            |path| {
+                reloaded.push(path.to_path_buf());
+                Ok(())
+            },
+        )
+        .expect("save changes");
+
+        assert_eq!(summary.saved_files, 1);
+        assert_eq!(summary.skipped_read_only, 1);
+        assert_eq!(summary.changed_tags_total, 1);
+        assert_eq!(
+            summary.first_saved_path.as_deref(),
+            Some(writable.as_path())
+        );
+        assert_eq!(
+            summary.first_skipped_path.as_deref(),
+            Some(read_only.as_path())
+        );
+        assert_eq!(reloaded, vec![writable.clone()]);
+        let rewritten = std::fs::read_to_string(&writable).expect("read rewritten");
+        assert!(rewritten.contains("#OFFSET:0.101;"));
+
+        let _ = std::fs::remove_file(root.join("writable.ssc.old"));
+        let _ = std::fs::remove_file(writable);
+        let _ = std::fs::remove_file(read_only);
+        let _ = std::fs::remove_dir(root);
     }
 }

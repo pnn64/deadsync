@@ -528,5 +528,4 @@ return Def.ActorFrame{}
             .join()
             .expect("song-lua actor build regression thread should finish");
     }
-
 }

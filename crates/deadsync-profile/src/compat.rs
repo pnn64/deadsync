@@ -62,6 +62,11 @@ pub use crate::app_runtime::{
 };
 pub use crate::update::*;
 pub use crate::{
+    preferred_difficulty_index as preferred_difficulty_for_profile,
+    preferred_difficulty_indices as preferred_difficulty_indices_for_profiles,
+    profile_combo_carry as combo_carry_for_profiles,
+};
+pub use crate::{
     runtime_active_local_profile_id_for_side as active_local_profile_id_for_side,
     runtime_active_profile_for_side as get_active_profile_for_side, runtime_current_profile as get,
     runtime_fast_profile_switch_from_select_music as fast_profile_switch_from_select_music,
@@ -71,7 +76,9 @@ pub use crate::{
     runtime_known_pack_names_for_local_profile as known_pack_names_for_local_profile,
     runtime_local_profile_id_for_pad as active_local_profile_id_for_pad,
     runtime_pad_light_brightness_for_pad as pad_light_brightness_for_pad,
-    runtime_profile_for_side as get_for_side, runtime_profile_has_favorite_for_side as is_favorite,
+    runtime_preferred_difficulty_index_for_side as preferred_difficulty_for_side,
+    runtime_profile_combo_carry as combo_carry, runtime_profile_for_side as get_for_side,
+    runtime_profile_has_favorite_for_side as is_favorite,
     runtime_profile_has_favorited_pack_for_side as is_pack_favorite,
     runtime_seed_favorite_for_side as seed_session_favorite,
     runtime_seed_favorited_pack_for_side as seed_session_favorited_pack,

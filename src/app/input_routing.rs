@@ -13,9 +13,11 @@ pub(super) fn screen_accepts_queued_input(
     screen: CurrentScreen,
     transition: &TransitionState,
 ) -> bool {
-    matches!(transition, TransitionState::Idle)
-        || (screen == CurrentScreen::Gameplay
-            && matches!(transition, TransitionState::FadingIn { .. }))
+    config::queued_input_allowed(
+        screen == CurrentScreen::Gameplay,
+        matches!(transition, TransitionState::Idle),
+        matches!(transition, TransitionState::FadingIn { .. }),
+    )
 }
 
 impl App {

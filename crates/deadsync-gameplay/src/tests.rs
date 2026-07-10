@@ -835,6 +835,58 @@ mod tests {
     }
 
     #[test]
+    fn gameplay_offset_prompt_ignores_pad_lr_in_dedicated_menu_mode() {
+        assert_eq!(
+            gameplay_offset_prompt_choice_delta(VirtualAction::p1_left, true),
+            None
+        );
+        assert_eq!(
+            gameplay_offset_prompt_choice_delta(VirtualAction::p1_right, true),
+            None
+        );
+        assert_eq!(
+            gameplay_offset_prompt_choice_delta(VirtualAction::p2_left, true),
+            None
+        );
+        assert_eq!(
+            gameplay_offset_prompt_choice_delta(VirtualAction::p2_right, true),
+            None
+        );
+    }
+
+    #[test]
+    fn gameplay_offset_prompt_keeps_menu_lr_in_dedicated_menu_mode() {
+        assert_eq!(
+            gameplay_offset_prompt_choice_delta(VirtualAction::p1_menu_left, true),
+            Some(-1)
+        );
+        assert_eq!(
+            gameplay_offset_prompt_choice_delta(VirtualAction::p1_menu_right, true),
+            Some(1)
+        );
+        assert_eq!(
+            gameplay_offset_prompt_choice_delta(VirtualAction::p2_menu_left, true),
+            Some(-1)
+        );
+        assert_eq!(
+            gameplay_offset_prompt_choice_delta(VirtualAction::p2_menu_right, true),
+            Some(1)
+        );
+    }
+
+    #[test]
+    fn gameplay_offset_prompt_allows_pad_lr_when_fallback_enabled() {
+        assert_eq!(
+            gameplay_offset_prompt_choice_delta(VirtualAction::p1_left, false),
+            Some(-1)
+        );
+        assert_eq!(
+            gameplay_offset_prompt_choice_delta(VirtualAction::p1_right, false),
+            Some(1)
+        );
+    }
+
+    #[test]
     fn gameplay_exit_input_state_tracks_hold_exit_and_modifiers() {
         let mut state = GameplayExitInputState {
             shift_held: true,
@@ -9179,6 +9231,15 @@ mod tests {
         assert_eq!(state.totals().unwrap()[1].total_steps, 50);
         assert_near(state.timing().unwrap().elapsed_seconds, 12.5);
         assert_near(state.timing().unwrap().total_seconds, 90.0);
+    }
+
+    #[test]
+    fn course_display_timing_sums_sanitized_stage_music_lengths() {
+        let stages = [15.0, f32::NAN, -2.0, 45.0];
+        let timing = course_display_timing_for_stages(&stages, 3, |seconds| *seconds);
+
+        assert_near(timing.elapsed_seconds, 15.0);
+        assert_near(timing.total_seconds, 60.0);
     }
 
     #[test]

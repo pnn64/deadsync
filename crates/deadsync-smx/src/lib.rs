@@ -756,6 +756,127 @@ pub fn set_player_lights(colors: [Option<[u8; 3]>; 2]) {
     set_player_lights_with_brightness(colors, light_brightness());
 }
 
+pub struct OptionsLightPreview {
+    active: bool,
+    last_lights: [Option<[u8; 3]>; 2],
+    last_brightness: u8,
+    last_strip: Option<(bool, bool)>,
+    timer: f32,
+}
+
+impl Default for OptionsLightPreview {
+    fn default() -> Self {
+        Self {
+            active: false,
+            last_lights: [None, None],
+            last_brightness: 100,
+            last_strip: None,
+            timer: 0.0,
+        }
+    }
+}
+
+impl OptionsLightPreview {
+    const RESEND_INTERVAL: f32 = 0.25;
+
+    pub fn update(
+        &mut self,
+        active: bool,
+        dt: f32,
+        colors: [Option<[u8; 3]>; 2],
+        brightness: u8,
+        strip: (bool, bool),
+        handoff_to_assignment_screen: bool,
+    ) -> bool {
+        if active {
+            self.timer += dt.max(0.0);
+            if colors != self.last_lights
+                || brightness != self.last_brightness
+                || Some(strip) != self.last_strip
+                || self.timer >= Self::RESEND_INTERVAL
+            {
+                let brightness = brightness.min(100);
+                set_player_lights_with_brightness(colors, [brightness, brightness]);
+                set_platform_lights_grb(strip.1);
+                let test_rgb = if strip.0 { [255, 0, 0] } else { [0, 0, 255] };
+                set_platform_lights_solid([Some(test_rgb), Some(test_rgb)]);
+                self.last_lights = colors;
+                self.last_brightness = brightness;
+                self.last_strip = Some(strip);
+                self.timer = 0.0;
+            }
+            self.active = true;
+            return false;
+        }
+
+        if !self.active {
+            return false;
+        }
+        *self = Self::default();
+        if !handoff_to_assignment_screen {
+            reenable_auto_lights();
+        }
+        true
+    }
+}
+
+pub struct PlayerOptionsLightPreview {
+    active: bool,
+    phase: f32,
+}
+
+impl Default for PlayerOptionsLightPreview {
+    fn default() -> Self {
+        Self {
+            active: false,
+            phase: 0.0,
+        }
+    }
+}
+
+impl PlayerOptionsLightPreview {
+    const HUE_PERIOD_S: f32 = 5.0;
+
+    pub fn update(&mut self, preview: Option<[Option<u8>; 2]>, dt: f32, restore_auto_lights: bool) {
+        let Some(preview) = preview.filter(|p| p.iter().any(Option::is_some)) else {
+            if self.active {
+                self.active = false;
+                self.phase = 0.0;
+                if restore_auto_lights {
+                    reenable_auto_lights();
+                }
+            }
+            return;
+        };
+
+        self.phase = (self.phase + dt.max(0.0) / Self::HUE_PERIOD_S).fract();
+        let rgb = rainbow_rgb(self.phase);
+        let colors: [Option<[u8; 3]>; 2] = std::array::from_fn(|slot| preview[slot].map(|_| rgb));
+        let brightness: [u8; 2] = std::array::from_fn(|slot| preview[slot].unwrap_or(0).min(100));
+        set_player_lights_with_brightness(colors, brightness);
+        self.active = true;
+    }
+
+    #[cfg(test)]
+    fn phase(&self) -> f32 {
+        self.phase
+    }
+}
+
+fn rainbow_rgb(phase: f32) -> [u8; 3] {
+    let h = phase.rem_euclid(1.0) * 6.0;
+    let x = ((h % 2.0) - 1.0).abs();
+    let mid = ((1.0 - x) * 255.0 + 0.5) as u8;
+    match h as u8 {
+        0 => [255, mid, 0],
+        1 => [mid, 255, 0],
+        2 => [0, 255, mid],
+        3 => [0, mid, 255],
+        4 => [mid, 0, 255],
+        _ => [255, 0, mid],
+    }
+}
+
 /// Whether the platform strips consume GRB (WS2812 channel order) instead of
 /// RGB. Some strip hardware reads the platform-light payload in GRB, swapping
 /// red and green (purple lights cyan, green lights magenta, while yellow, the
@@ -1034,6 +1155,47 @@ mod tests {
             );
             prev = frame[0];
         }
+    }
+
+    #[test]
+    fn options_light_preview_requests_theme_restore_on_exit() {
+        let mut preview = super::OptionsLightPreview::default();
+
+        assert!(!preview.update(
+            true,
+            0.1,
+            [Some(PLAYER1_LIGHT), None],
+            80,
+            (true, false),
+            false
+        ));
+        assert!(preview.update(false, 0.0, [None, None], 100, (false, false), false));
+        assert!(!preview.update(false, 0.0, [None, None], 100, (false, false), false));
+    }
+
+    #[test]
+    fn options_light_preview_skips_auto_restore_on_assignment_handoff() {
+        let mut preview = super::OptionsLightPreview::default();
+
+        preview.update(
+            true,
+            0.1,
+            [Some(PLAYER1_LIGHT), None],
+            80,
+            (true, false),
+            false,
+        );
+        assert!(preview.update(false, 0.0, [None, None], 100, (false, false), true));
+    }
+
+    #[test]
+    fn player_options_light_preview_tracks_phase_and_resets_on_exit() {
+        let mut preview = super::PlayerOptionsLightPreview::default();
+
+        preview.update(Some([Some(50), None]), 2.5, true);
+        assert!((preview.phase() - 0.5).abs() < f32::EPSILON);
+        preview.update(None, 0.0, true);
+        assert_eq!(preview.phase(), 0.0);
     }
 
     #[test]

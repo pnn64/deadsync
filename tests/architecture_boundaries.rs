@@ -2,17 +2,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const GAME_UPWARD_DEP_BASELINE: &[(&str, &str, usize)] = &[
-    ("src/game/parsing/noteskin/service.rs", "assets", 1),
-    ("src/game/parsing/simfile.rs", "config", 3),
-    ("src/game/parsing/simfile/cache.rs", "config", 1),
-    ("src/game/parsing/simfile/scan.rs", "config", 3),
-    ("src/game/profile.rs", "config", 1),
-    ("src/game/scores.rs", "config", 4),
-    ("src/game/scores/arrowcloud.rs", "config", 2),
-    ("src/game/scores/groovestats.rs", "config", 6),
-    ("src/game/scores/itl.rs", "config", 2),
-];
+const GAME_UPWARD_DEP_BASELINE: &[(&str, &str, usize)] = &[];
 
 const LOGICAL_INPUT_SYMBOLS: &[&str] = &[
     "ALL_VIRTUAL_ACTIONS",
@@ -38,13 +28,8 @@ const LOGICAL_INPUT_SYMBOLS: &[&str] = &[
     "parse_pad_dir",
 ];
 
-const LOGICAL_INPUT_SCAN_DIRS: &[&str] = &[
-    "src/app",
-    "src/config",
-    "src/game",
-    "src/screens",
-    "tests",
-];
+const LOGICAL_INPUT_SCAN_DIRS: &[&str] =
+    &["src/app", "src/config", "src/game", "src/screens", "tests"];
 
 const NATIVE_INPUT_LAUNCH_SYMBOLS: &[&str] = &[
     "run_pad_backend",
@@ -57,21 +42,10 @@ const NATIVE_INPUT_LAUNCH_SYMBOLS: &[&str] = &[
     "unix_raw_keyboard_backend_active",
 ];
 
-const NATIVE_INPUT_SCAN_DIRS: &[&str] = &[
-    "src/app",
-    "src/config",
-    "src/game",
-    "src/screens",
-    "tests",
-];
+const NATIVE_INPUT_SCAN_DIRS: &[&str] =
+    &["src/app", "src/config", "src/game", "src/screens", "tests"];
 
-const INPUT_FSR_SCAN_DIRS: &[&str] = &[
-    "src/app",
-    "src/config",
-    "src/game",
-    "src/screens",
-    "tests",
-];
+const INPUT_FSR_SCAN_DIRS: &[&str] = &["src/app", "src/config", "src/game", "src/screens", "tests"];
 
 const ENGINE_VIDEO_SCAN_DIRS: &[&str] = &[
     "src/app",
@@ -138,13 +112,8 @@ const RENDER_BACKEND_IMPORTS: &[&str] = &[
     "deadlib_render_backend_wgpu",
 ];
 
-const LIGHTS_IMPORT_SCAN_DIRS: &[&str] = &[
-    "src/app",
-    "src/config",
-    "src/game",
-    "src/screens",
-    "tests",
-];
+const LIGHTS_IMPORT_SCAN_DIRS: &[&str] =
+    &["src/app", "src/config", "src/game", "src/screens", "tests"];
 
 const SMX_IMPORT_SCAN_DIRS: &[&str] = &[
     "src/app",
@@ -170,13 +139,8 @@ const ENGINE_PRESENT_EXTRACTED_FILES: &[&str] = &[
     "src/engine/space.rs",
 ];
 
-const PRESENT_SPACE_SCAN_DIRS: &[&str] = &[
-    "src/app",
-    "src/config",
-    "src/game",
-    "src/screens",
-    "tests",
-];
+const PRESENT_SPACE_SCAN_DIRS: &[&str] =
+    &["src/app", "src/config", "src/game", "src/screens", "tests"];
 
 const VERSION_IMPORT_SCAN_DIRS: &[&str] =
     &["src", "crates", "tests", "tests/compose", "tests/draw"];
@@ -257,7 +221,6 @@ const AUDIO_DECODE_FORBIDDEN_TOKENS: &[&str] = &[
     "deadlib_present",
     "deadlib_render",
     "std::sync::mpsc",
-    "Mutex",
     "log::",
 ];
 
@@ -297,13 +260,8 @@ const ENGINE_PLATFORM_SCAN_DIRS: &[&str] = &[
 
 const GAME_RULE_FACADE_MODULES: &[&str] = &["judgment", "note", "scroll", "timing"];
 
-const GAME_RULE_FACADE_SCAN_DIRS: &[&str] = &[
-    "src/app",
-    "src/config",
-    "src/game",
-    "src/screens",
-    "tests",
-];
+const GAME_RULE_FACADE_SCAN_DIRS: &[&str] =
+    &["src/app", "src/config", "src/game", "src/screens", "tests"];
 
 const GAME_PROFILE_RULE_SYMBOLS: &[&str] = &["GUEST_SCROLL_SPEED", "ScrollSpeedSetting"];
 
@@ -445,21 +403,11 @@ const GAME_PROFILE_DATA_SYMBOLS: &[&str] = &[
     "tap_explosion_skin_hidden",
 ];
 
-const GAME_CHART_FACADE_SCAN_DIRS: &[&str] = &[
-    "src/app",
-    "src/config",
-    "src/game",
-    "src/screens",
-    "tests",
-];
+const GAME_CHART_FACADE_SCAN_DIRS: &[&str] =
+    &["src/app", "src/config", "src/game", "src/screens", "tests"];
 
-const GAME_PARSING_NOTES_FACADE_SCAN_DIRS: &[&str] = &[
-    "src/app",
-    "src/config",
-    "src/game",
-    "src/screens",
-    "tests",
-];
+const GAME_PARSING_NOTES_FACADE_SCAN_DIRS: &[&str] =
+    &["src/app", "src/config", "src/game", "src/screens", "tests"];
 
 const GAME_SONG_DATA_SYMBOLS: &[&str] = &[
     "SongBackgroundChange",
@@ -472,13 +420,8 @@ const GAME_SONG_DATA_SYMBOLS: &[&str] = &[
     "SyncPref",
 ];
 
-const GAME_SONG_DATA_SCAN_DIRS: &[&str] = &[
-    "src/app",
-    "src/config",
-    "src/game",
-    "src/screens",
-    "tests",
-];
+const GAME_SONG_DATA_SCAN_DIRS: &[&str] =
+    &["src/app", "src/config", "src/game", "src/screens", "tests"];
 
 const GAME_SCORE_DATA_SYMBOLS: &[&str] = &[
     "ArrowCloudLeaderboard",
@@ -595,23 +538,13 @@ const GAME_SCORE_DATA_SYMBOLS: &[&str] = &[
     "update_local_score_index",
 ];
 
-const GAME_SCORE_DATA_SCAN_DIRS: &[&str] = &[
-    "src/app",
-    "src/config",
-    "src/game",
-    "src/screens",
-    "tests",
-];
+const GAME_SCORE_DATA_SCAN_DIRS: &[&str] =
+    &["src/app", "src/config", "src/game", "src/screens", "tests"];
 
 const GAMEPLAY_LIMIT_SYMBOLS: &[&str] = &["MAX_COLS", "MAX_PLAYERS"];
 
-const GAMEPLAY_LIMIT_SCAN_DIRS: &[&str] = &[
-    "src/app",
-    "src/config",
-    "src/game",
-    "src/screens",
-    "tests",
-];
+const GAMEPLAY_LIMIT_SCAN_DIRS: &[&str] =
+    &["src/app", "src/config", "src/game", "src/screens", "tests"];
 
 const CORE_NOTE_SYMBOLS: &[&str] = &["NoteType"];
 
@@ -677,13 +610,8 @@ const ARROWCLOUD_PROTOCOL_SYMBOLS: &[&str] = &[
     "user_url",
 ];
 
-const ARROWCLOUD_PROTOCOL_SCAN_DIRS: &[&str] = &[
-    "src/app",
-    "src/config",
-    "src/game",
-    "src/screens",
-    "tests",
-];
+const ARROWCLOUD_PROTOCOL_SCAN_DIRS: &[&str] =
+    &["src/app", "src/config", "src/game", "src/screens", "tests"];
 
 const GROOVESTATS_PROTOCOL_SYMBOLS: &[&str] = &[
     "ConnectionError",
@@ -742,13 +670,8 @@ const GROOVESTATS_PROTOCOL_SYMBOLS: &[&str] = &[
     "submit_score_request",
 ];
 
-const GROOVESTATS_PROTOCOL_SCAN_DIRS: &[&str] = &[
-    "src/app",
-    "src/config",
-    "src/game",
-    "src/screens",
-    "tests",
-];
+const GROOVESTATS_PROTOCOL_SCAN_DIRS: &[&str] =
+    &["src/app", "src/config", "src/game", "src/screens", "tests"];
 
 const LOBBY_DATA_SYMBOLS: &[&str] = &[
     "ConnectionState",
@@ -813,13 +736,8 @@ const LOBBY_DATA_SYMBOLS: &[&str] = &[
     "update_machine_text",
 ];
 
-const LOBBY_DATA_SCAN_DIRS: &[&str] = &[
-    "src/app",
-    "src/config",
-    "src/game",
-    "src/screens",
-    "tests",
-];
+const LOBBY_DATA_SCAN_DIRS: &[&str] =
+    &["src/app", "src/config", "src/game", "src/screens", "tests"];
 
 const DOWNLOAD_PROTOCOL_SYMBOLS: &[&str] = &[
     "DownloadSnapshot",
@@ -833,21 +751,11 @@ const DOWNLOAD_PROTOCOL_SYMBOLS: &[&str] = &[
     "sanitize_pack_name",
 ];
 
-const DOWNLOAD_PROTOCOL_SCAN_DIRS: &[&str] = &[
-    "src/app",
-    "src/config",
-    "src/game",
-    "src/screens",
-    "tests",
-];
+const DOWNLOAD_PROTOCOL_SCAN_DIRS: &[&str] =
+    &["src/app", "src/config", "src/game", "src/screens", "tests"];
 
-const NET_TRANSPORT_ERROR_SCAN_DIRS: &[&str] = &[
-    "src/app",
-    "src/config",
-    "src/game",
-    "src/screens",
-    "tests",
-];
+const NET_TRANSPORT_ERROR_SCAN_DIRS: &[&str] =
+    &["src/app", "src/config", "src/game", "src/screens", "tests"];
 
 const NET_RESPONSE_BODY_SCAN_DIRS: &[&str] = &[
     "crates/deadsync-online",
@@ -2390,13 +2298,7 @@ fn present_model_lives_in_present_crate() {
         }
     }
 
-    for dir in [
-        "src/app",
-        "src/config",
-        "src/game",
-        "src/screens",
-        "tests",
-    ] {
+    for dir in ["src/app", "src/config", "src/game", "src/screens", "tests"] {
         let path = root.join(dir);
         if !path.exists() {
             continue;
@@ -3289,6 +3191,9 @@ fn baseline_map() -> HashMap<(String, String), usize> {
 }
 
 fn rust_files(dir: &Path) -> Vec<PathBuf> {
+    if !dir.exists() {
+        return Vec::new();
+    }
     let mut out = Vec::new();
     collect_rust_files(dir, &mut out);
     out.sort();

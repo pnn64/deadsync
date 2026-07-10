@@ -13,6 +13,149 @@ pub enum MachineFlowScreen {
     GameOver,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AppTransitionScreen {
+    Menu,
+    Options,
+    SelectProfile,
+    SelectColor,
+    SelectStyle,
+    Mappings,
+    TestLights,
+    OverscanAdjustment,
+    SmxAssignPads,
+    ManageLocalProfiles,
+    Input,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AppCommandKind {
+    ExitNow,
+    Shutdown,
+    SetBanner,
+    SetCdTitle,
+    SetPackBanner,
+    SetWheelItemBackgrounds,
+    SetDensityGraph,
+    FetchOnlineGrade,
+    PlayMusic,
+    StopMusic,
+    SetDynamicBackground,
+    UpdateScrollSpeed,
+    UpdateSessionMusicRate,
+    UpdatePreferredDifficulty,
+    UpdateLastPlayed,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AppCommandTimingLog {
+    None,
+    CommandTiming,
+    FrameCost,
+    Slow,
+}
+
+pub const fn app_command_label(kind: AppCommandKind) -> &'static str {
+    match kind {
+        AppCommandKind::ExitNow => "ExitNow",
+        AppCommandKind::Shutdown => "Shutdown",
+        AppCommandKind::SetBanner => "SetBanner",
+        AppCommandKind::SetCdTitle => "SetCdTitle",
+        AppCommandKind::SetPackBanner => "SetPackBanner",
+        AppCommandKind::SetWheelItemBackgrounds => "SetWheelItemBackgrounds",
+        AppCommandKind::SetDensityGraph => "SetDensityGraph",
+        AppCommandKind::FetchOnlineGrade => "FetchOnlineGrade",
+        AppCommandKind::PlayMusic => "PlayMusic",
+        AppCommandKind::StopMusic => "StopMusic",
+        AppCommandKind::SetDynamicBackground => "SetDynamicBackground",
+        AppCommandKind::UpdateScrollSpeed => "UpdateScrollSpeed",
+        AppCommandKind::UpdateSessionMusicRate => "UpdateSessionMusicRate",
+        AppCommandKind::UpdatePreferredDifficulty => "UpdatePreferredDifficulty",
+        AppCommandKind::UpdateLastPlayed => "UpdateLastPlayed",
+    }
+}
+
+pub const fn app_command_logs_frame_cost(kind: AppCommandKind) -> bool {
+    matches!(
+        kind,
+        AppCommandKind::SetBanner
+            | AppCommandKind::SetCdTitle
+            | AppCommandKind::SetPackBanner
+            | AppCommandKind::SetWheelItemBackgrounds
+            | AppCommandKind::SetDensityGraph
+            | AppCommandKind::SetDynamicBackground
+            | AppCommandKind::PlayMusic
+    )
+}
+
+pub fn app_command_timing_log(kind: AppCommandKind, elapsed_ms: f64) -> AppCommandTimingLog {
+    if elapsed_ms >= 100.0 {
+        AppCommandTimingLog::Slow
+    } else if elapsed_ms >= 16.7 {
+        AppCommandTimingLog::FrameCost
+    } else if app_command_logs_frame_cost(kind) {
+        AppCommandTimingLog::CommandTiming
+    } else {
+        AppCommandTimingLog::None
+    }
+}
+
+pub const fn app_screen_actor_fades(screen: AppTransitionScreen) -> bool {
+    matches!(
+        screen,
+        AppTransitionScreen::Menu
+            | AppTransitionScreen::Options
+            | AppTransitionScreen::ManageLocalProfiles
+            | AppTransitionScreen::Mappings
+            | AppTransitionScreen::Input
+            | AppTransitionScreen::TestLights
+            | AppTransitionScreen::OverscanAdjustment
+            | AppTransitionScreen::SmxAssignPads
+            | AppTransitionScreen::SelectProfile
+            | AppTransitionScreen::SelectColor
+    )
+}
+
+pub const fn app_transition_actor_only(from: AppTransitionScreen, to: AppTransitionScreen) -> bool {
+    matches!(
+        (from, to),
+        (
+            AppTransitionScreen::Menu,
+            AppTransitionScreen::Options
+                | AppTransitionScreen::SelectProfile
+                | AppTransitionScreen::SelectColor
+        ) | (
+            AppTransitionScreen::Options
+                | AppTransitionScreen::SelectProfile
+                | AppTransitionScreen::SelectColor,
+            AppTransitionScreen::Menu
+        ) | (
+            AppTransitionScreen::SelectProfile,
+            AppTransitionScreen::SelectColor | AppTransitionScreen::SelectStyle
+        ) | (
+            AppTransitionScreen::SelectStyle,
+            AppTransitionScreen::SelectProfile | AppTransitionScreen::SelectColor
+        ) | (
+            AppTransitionScreen::SelectColor,
+            AppTransitionScreen::SelectStyle
+        ) | (
+            AppTransitionScreen::Options,
+            AppTransitionScreen::Mappings
+                | AppTransitionScreen::TestLights
+                | AppTransitionScreen::OverscanAdjustment
+                | AppTransitionScreen::SmxAssignPads
+                | AppTransitionScreen::ManageLocalProfiles
+        ) | (
+            AppTransitionScreen::Mappings
+                | AppTransitionScreen::TestLights
+                | AppTransitionScreen::OverscanAdjustment
+                | AppTransitionScreen::SmxAssignPads
+                | AppTransitionScreen::ManageLocalProfiles,
+            AppTransitionScreen::Options
+        )
+    )
+}
+
 pub const fn machine_startup_screen_enabled(cfg: &Config, screen: MachineFlowScreen) -> bool {
     match screen {
         MachineFlowScreen::SelectProfile => cfg.machine_show_select_profile,
@@ -87,6 +230,68 @@ pub const fn machine_resolve_post_select_target(
 mod tests {
     use super::*;
     use crate::app_config::Config;
+
+    #[test]
+    fn app_actor_fade_screen_set_matches_menu_shell_screens() {
+        assert!(app_screen_actor_fades(AppTransitionScreen::Menu));
+        assert!(app_screen_actor_fades(AppTransitionScreen::Options));
+        assert!(app_screen_actor_fades(AppTransitionScreen::SelectProfile));
+        assert!(app_screen_actor_fades(AppTransitionScreen::SelectColor));
+        assert!(app_screen_actor_fades(
+            AppTransitionScreen::ManageLocalProfiles
+        ));
+        assert!(!app_screen_actor_fades(AppTransitionScreen::SelectStyle));
+    }
+
+    #[test]
+    fn app_actor_only_transition_set_matches_menu_shell_paths() {
+        assert!(app_transition_actor_only(
+            AppTransitionScreen::Menu,
+            AppTransitionScreen::SelectProfile,
+        ));
+        assert!(app_transition_actor_only(
+            AppTransitionScreen::Options,
+            AppTransitionScreen::Mappings,
+        ));
+        assert!(app_transition_actor_only(
+            AppTransitionScreen::SmxAssignPads,
+            AppTransitionScreen::Options,
+        ));
+        assert!(app_transition_actor_only(
+            AppTransitionScreen::SelectStyle,
+            AppTransitionScreen::SelectColor,
+        ));
+        assert!(!app_transition_actor_only(
+            AppTransitionScreen::Menu,
+            AppTransitionScreen::SelectStyle,
+        ));
+    }
+
+    #[test]
+    fn app_command_policy_labels_and_selects_timing_logs() {
+        assert_eq!(app_command_label(AppCommandKind::SetBanner), "SetBanner");
+        assert!(app_command_logs_frame_cost(AppCommandKind::SetBanner));
+        assert!(app_command_logs_frame_cost(AppCommandKind::PlayMusic));
+        assert!(!app_command_logs_frame_cost(
+            AppCommandKind::UpdateLastPlayed
+        ));
+        assert_eq!(
+            app_command_timing_log(AppCommandKind::UpdateLastPlayed, 1.0),
+            AppCommandTimingLog::None,
+        );
+        assert_eq!(
+            app_command_timing_log(AppCommandKind::SetBanner, 1.0),
+            AppCommandTimingLog::CommandTiming,
+        );
+        assert_eq!(
+            app_command_timing_log(AppCommandKind::UpdateLastPlayed, 16.7),
+            AppCommandTimingLog::FrameCost,
+        );
+        assert_eq!(
+            app_command_timing_log(AppCommandKind::UpdateLastPlayed, 100.0),
+            AppCommandTimingLog::Slow,
+        );
+    }
 
     #[test]
     fn startup_target_skips_disabled_steps() {

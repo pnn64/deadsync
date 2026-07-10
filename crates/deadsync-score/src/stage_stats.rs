@@ -351,6 +351,20 @@ pub fn build_course_summary_stage(input: CourseSummaryInput<'_>) -> Option<Stage
     })
 }
 
+pub fn total_stage_duration_seconds(stages: &[StageSummary]) -> f32 {
+    stages
+        .iter()
+        .map(|stage| {
+            let seconds = stage.duration_seconds;
+            if seconds.is_finite() {
+                seconds.max(0.0)
+            } else {
+                0.0
+            }
+        })
+        .sum()
+}
+
 #[inline(always)]
 pub const fn course_eval_is_final(
     next_stage_index: usize,
@@ -585,5 +599,32 @@ mod tests {
         assert!(!course_eval_is_final(1, 3, false));
         assert!(course_eval_is_final(1, 3, true));
         assert!(course_eval_is_final(3, 3, false));
+    }
+
+    #[test]
+    fn total_stage_duration_ignores_invalid_negative_durations() {
+        let players: [Option<PlayerStageSummary>; MAX_PLAYERS] = std::array::from_fn(|_| None);
+        let stages = vec![
+            StageSummary {
+                song: test_song("Songs/Test/a.ssc", "a", 30.0),
+                music_rate: 1.0,
+                duration_seconds: 30.0,
+                players: players.clone(),
+            },
+            StageSummary {
+                song: test_song("Songs/Test/b.ssc", "b", -12.0),
+                music_rate: 1.0,
+                duration_seconds: -12.0,
+                players: players.clone(),
+            },
+            StageSummary {
+                song: test_song("Songs/Test/c.ssc", "c", f32::NAN),
+                music_rate: 1.0,
+                duration_seconds: f32::NAN,
+                players,
+            },
+        ];
+
+        assert!((total_stage_duration_seconds(&stages) - 30.0).abs() <= f32::EPSILON);
     }
 }

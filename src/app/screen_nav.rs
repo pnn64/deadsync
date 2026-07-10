@@ -68,20 +68,33 @@ const fn current_screen_from_machine_flow(screen: config::MachineFlowScreen) -> 
     }
 }
 
+#[inline(always)]
+const fn app_transition_screen(screen: CurrentScreen) -> Option<config::AppTransitionScreen> {
+    match screen {
+        CurrentScreen::Menu => Some(config::AppTransitionScreen::Menu),
+        CurrentScreen::Options => Some(config::AppTransitionScreen::Options),
+        CurrentScreen::SelectProfile => Some(config::AppTransitionScreen::SelectProfile),
+        CurrentScreen::SelectColor => Some(config::AppTransitionScreen::SelectColor),
+        CurrentScreen::SelectStyle => Some(config::AppTransitionScreen::SelectStyle),
+        CurrentScreen::Mappings => Some(config::AppTransitionScreen::Mappings),
+        CurrentScreen::Input => Some(config::AppTransitionScreen::Input),
+        CurrentScreen::TestLights => Some(config::AppTransitionScreen::TestLights),
+        CurrentScreen::OverscanAdjustment => Some(config::AppTransitionScreen::OverscanAdjustment),
+        CurrentScreen::SmxAssignPads => Some(config::AppTransitionScreen::SmxAssignPads),
+        CurrentScreen::ManageLocalProfiles => {
+            Some(config::AppTransitionScreen::ManageLocalProfiles)
+        }
+        _ => None,
+    }
+}
+
 impl App {
     #[inline(always)]
     pub(super) const fn is_actor_fade_screen(screen: CurrentScreen) -> bool {
-        matches!(
-            screen,
-            CurrentScreen::Menu
-                | CurrentScreen::Options
-                | CurrentScreen::ManageLocalProfiles
-                | CurrentScreen::Mappings
-                | CurrentScreen::Input
-                | CurrentScreen::TestLights
-                | CurrentScreen::OverscanAdjustment
-                | CurrentScreen::SmxAssignPads
-        )
+        match app_transition_screen(screen) {
+            Some(screen) => config::app_screen_actor_fades(screen),
+            None => false,
+        }
     }
 
     #[inline(always)]
@@ -386,29 +399,10 @@ impl App {
     }
 
     fn is_actor_only_fade(&self, from: CurrentScreen, to: CurrentScreen) -> bool {
-        (from == CurrentScreen::Menu
-            && (to == CurrentScreen::Options
-                || to == CurrentScreen::SelectProfile
-                || to == CurrentScreen::SelectColor))
-            || ((from == CurrentScreen::Options
-                || from == CurrentScreen::SelectProfile
-                || from == CurrentScreen::SelectColor)
-                && to == CurrentScreen::Menu)
-            || (from == CurrentScreen::SelectProfile && to == CurrentScreen::SelectColor)
-            || (from == CurrentScreen::SelectProfile && to == CurrentScreen::SelectStyle)
-            || (from == CurrentScreen::SelectStyle && to == CurrentScreen::SelectProfile)
-            || (from == CurrentScreen::SelectColor && to == CurrentScreen::SelectStyle)
-            || (from == CurrentScreen::SelectStyle && to == CurrentScreen::SelectColor)
-            || (from == CurrentScreen::Options && to == CurrentScreen::Mappings)
-            || (from == CurrentScreen::Mappings && to == CurrentScreen::Options)
-            || (from == CurrentScreen::Options && to == CurrentScreen::TestLights)
-            || (from == CurrentScreen::TestLights && to == CurrentScreen::Options)
-            || (from == CurrentScreen::Options && to == CurrentScreen::OverscanAdjustment)
-            || (from == CurrentScreen::OverscanAdjustment && to == CurrentScreen::Options)
-            || (from == CurrentScreen::Options && to == CurrentScreen::SmxAssignPads)
-            || (from == CurrentScreen::SmxAssignPads && to == CurrentScreen::Options)
-            || (from == CurrentScreen::Options && to == CurrentScreen::ManageLocalProfiles)
-            || (from == CurrentScreen::ManageLocalProfiles && to == CurrentScreen::Options)
+        match (app_transition_screen(from), app_transition_screen(to)) {
+            (Some(from), Some(to)) => config::app_transition_actor_only(from, to),
+            _ => false,
+        }
     }
 
     fn start_actor_fade(&mut self, from: CurrentScreen, target: CurrentScreen) {

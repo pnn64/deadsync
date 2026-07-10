@@ -647,6 +647,21 @@ pub const fn auto_screenshot_bit(idx: usize) -> u8 {
     }
 }
 
+pub const fn auto_screenshot_eval_matches(
+    mask: u8,
+    is_pb: bool,
+    is_fail: bool,
+    is_quad: bool,
+    is_quint: bool,
+) -> bool {
+    mask != 0
+        && (((mask & AUTO_SS_PBS) != 0 && is_pb)
+            || ((mask & AUTO_SS_FAILS) != 0 && is_fail)
+            || ((mask & AUTO_SS_CLEARS) != 0 && !is_fail)
+            || ((mask & AUTO_SS_QUADS) != 0 && is_quad)
+            || ((mask & AUTO_SS_QUINTS) != 0 && is_quint))
+}
+
 pub fn auto_screenshot_mask_to_str(mask: u8) -> String {
     if mask == 0 {
         return "Off".to_string();
@@ -1842,6 +1857,53 @@ MachineEvaluationStyle=Default\n\
             auto_screenshot_mask_from_str("PBs|unknown|Fails"),
             AUTO_SS_PBS | AUTO_SS_FAILS
         );
+    }
+
+    #[test]
+    fn auto_screenshot_eval_policy_matches_enabled_result_flags() {
+        assert!(!auto_screenshot_eval_matches(0, true, true, true, true));
+        assert!(auto_screenshot_eval_matches(
+            AUTO_SS_PBS,
+            true,
+            false,
+            false,
+            false
+        ));
+        assert!(auto_screenshot_eval_matches(
+            AUTO_SS_FAILS,
+            false,
+            true,
+            false,
+            false
+        ));
+        assert!(auto_screenshot_eval_matches(
+            AUTO_SS_CLEARS,
+            false,
+            false,
+            false,
+            false
+        ));
+        assert!(!auto_screenshot_eval_matches(
+            AUTO_SS_CLEARS,
+            false,
+            true,
+            false,
+            false
+        ));
+        assert!(auto_screenshot_eval_matches(
+            AUTO_SS_QUADS,
+            false,
+            false,
+            true,
+            false
+        ));
+        assert!(auto_screenshot_eval_matches(
+            AUTO_SS_QUINTS,
+            false,
+            false,
+            false,
+            true
+        ));
     }
 
     #[test]

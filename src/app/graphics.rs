@@ -5,7 +5,10 @@ use deadlib_platform::dirs;
 use deadlib_platform::display;
 use deadlib_present::space;
 use deadlib_render::BackendType;
-use deadlib_renderer::create_backend;
+use deadlib_renderer::{
+    create_backend, render_size_for_physical, render_size_for_window, request_window_size,
+    with_requested_window_size,
+};
 use log::{error, info};
 use std::error::Error;
 use std::sync::Arc;
@@ -14,90 +17,8 @@ use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
     event_loop::ActiveEventLoop,
     monitor::MonitorHandle,
-    window::{Icon, Window, WindowAttributes},
+    window::{Icon, Window},
 };
-
-#[cfg(target_os = "macos")]
-use winit::{dpi::LogicalSize, platform::macos::WindowAttributesExtMacOS};
-
-#[cfg(target_os = "macos")]
-fn macos_opengl_low_dpi(backend_type: BackendType) -> bool {
-    backend_type == BackendType::OpenGL && !config::get().high_dpi
-}
-
-#[cfg(not(target_os = "macos"))]
-const fn macos_opengl_low_dpi(_backend_type: BackendType) -> bool {
-    false
-}
-
-fn logical_px_for_physical(px: u32, scale: f64) -> u32 {
-    if px == 0 {
-        return 0;
-    }
-    ((f64::from(px) / scale.max(0.001)).round().max(1.0)) as u32
-}
-
-fn window_render_size(window: &Window, backend_type: BackendType) -> PhysicalSize<u32> {
-    render_size_for_physical(window, backend_type, window.inner_size())
-}
-
-fn render_size_for_physical(
-    window: &Window,
-    backend_type: BackendType,
-    size: PhysicalSize<u32>,
-) -> PhysicalSize<u32> {
-    if !macos_opengl_low_dpi(backend_type) {
-        return size;
-    }
-    let scale = window.scale_factor();
-    PhysicalSize::new(
-        logical_px_for_physical(size.width, scale),
-        logical_px_for_physical(size.height, scale),
-    )
-}
-
-#[cfg(target_os = "macos")]
-fn with_requested_window_size(
-    attrs: WindowAttributes,
-    backend_type: BackendType,
-    width: u32,
-    height: u32,
-) -> WindowAttributes {
-    if macos_opengl_low_dpi(backend_type) {
-        attrs.with_inner_size(LogicalSize::new(f64::from(width), f64::from(height)))
-    } else {
-        attrs.with_inner_size(PhysicalSize::new(width, height))
-    }
-}
-
-#[cfg(not(target_os = "macos"))]
-fn with_requested_window_size(
-    attrs: WindowAttributes,
-    _backend_type: BackendType,
-    width: u32,
-    height: u32,
-) -> WindowAttributes {
-    attrs.with_inner_size(PhysicalSize::new(width, height))
-}
-
-fn request_window_size(
-    window: &Window,
-    backend_type: BackendType,
-    width: u32,
-    height: u32,
-) -> Option<PhysicalSize<u32>> {
-    #[cfg(not(target_os = "macos"))]
-    let _ = backend_type;
-    #[cfg(target_os = "macos")]
-    {
-        if macos_opengl_low_dpi(backend_type) {
-            let size = LogicalSize::new(f64::from(width), f64::from(height));
-            return window.request_inner_size(size);
-        }
-    }
-    let size = PhysicalSize::new(width, height);
-    window.request_inner_size(size)
-}
 
 fn load_window_icon() -> Option<Icon> {
     const WINDOW_ICON_PATHS: [&str; 2] = [
@@ -200,6 +121,7 @@ impl App {
                 window_attributes = with_requested_window_size(
                     window_attributes,
                     self.backend_type,
+                    config::get().high_dpi,
                     window_width,
                     window_height,
                 );
@@ -216,6 +138,7 @@ impl App {
                 window_attributes = with_requested_window_size(
                     window_attributes,
                     self.backend_type,
+                    config::get().high_dpi,
                     window_width,
                     window_height,
                 );
@@ -234,7 +157,7 @@ impl App {
         window.set_transparent(false);
         window.set_cursor_visible(!config::get().hide_mouse_cursor);
         let high_dpi = config::get().high_dpi;
-        let sz = window_render_size(&window, self.backend_type);
+        let sz = render_size_for_window(&window, self.backend_type, high_dpi);
         self.state.shell.metrics = space::metrics_for_window(sz.width, sz.height);
         space::set_current_metrics(self.state.shell.metrics);
         let mut backend = create_backend(
@@ -304,7 +227,7 @@ impl App {
         }
         if let Some(window) = &self.window {
             if desired_size.is_none() {
-                let sz = window_render_size(window, self.backend_type);
+                let sz = render_size_for_window(window, self.backend_type, config::get().high_dpi);
                 self.state.shell.display_width = sz.width;
                 self.state.shell.display_height = sz.height;
             }
@@ -387,7 +310,7 @@ impl App {
 
     pub(super) fn sync_window_size(&mut self, size: PhysicalSize<u32>) {
         let size = self.window.as_ref().map_or(size, |window| {
-            render_size_for_physical(window, self.backend_type, size)
+            render_size_for_physical(window, self.backend_type, config::get().high_dpi, size)
         });
         if size.width > 0 && size.height > 0 {
             self.state.shell.metrics = space::metrics_for_window(size.width, size.height);
@@ -413,7 +336,7 @@ impl App {
 
         if let Some(window) = &self.window {
             if matches!(previous_mode, DisplayMode::Windowed) {
-                let sz = window_render_size(window, self.backend_type);
+                let sz = render_size_for_window(window, self.backend_type, config::get().high_dpi);
                 self.state.shell.display_width = sz.width;
                 self.state.shell.display_height = sz.height;
                 if let Ok(pos) = window.outer_position() {
@@ -427,6 +350,7 @@ impl App {
                     let immediate_size = request_window_size(
                         window,
                         self.backend_type,
+                        config::get().high_dpi,
                         self.state.shell.display_width,
                         self.state.shell.display_height,
                     );
@@ -454,6 +378,7 @@ impl App {
                     let immediate_size = request_window_size(
                         window,
                         self.backend_type,
+                        config::get().high_dpi,
                         self.state.shell.display_width,
                         self.state.shell.display_height,
                     );
@@ -515,9 +440,13 @@ impl App {
         if let Some(window) = &self.window {
             match self.state.shell.display_mode {
                 DisplayMode::Windowed => {
-                    if let Some(size) =
-                        request_window_size(window, self.backend_type, width, height)
-                    {
+                    if let Some(size) = request_window_size(
+                        window,
+                        self.backend_type,
+                        config::get().high_dpi,
+                        width,
+                        height,
+                    ) {
                         self.sync_window_size(size);
                     }
                 }
@@ -529,8 +458,13 @@ impl App {
                         monitor_handle,
                         event_loop,
                     );
-                    let immediate_size =
-                        request_window_size(window, self.backend_type, width, height);
+                    let immediate_size = request_window_size(
+                        window,
+                        self.backend_type,
+                        config::get().high_dpi,
+                        width,
+                        height,
+                    );
                     window.set_fullscreen(fullscreen);
                     if let Some(size) = immediate_size {
                         self.sync_window_size(size);
