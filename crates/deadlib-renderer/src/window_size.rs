@@ -5,12 +5,14 @@ use winit::{
 };
 
 #[cfg(target_os = "macos")]
-use winit::{dpi::LogicalSize, platform::macos::WindowAttributesExtMacOS};
+use winit::dpi::LogicalSize;
 
 #[cfg(target_os = "macos")]
 #[inline(always)]
 const fn macos_opengl_low_dpi(backend_type: BackendType, high_dpi: bool) -> bool {
-    backend_type == BackendType::OpenGL && !high_dpi
+    // `matches!` rather than `==`: `PartialEq::eq` is not callable in a `const fn`
+    // on stable, but pattern matching is.
+    matches!(backend_type, BackendType::OpenGL) && !high_dpi
 }
 
 #[cfg(not(target_os = "macos"))]
