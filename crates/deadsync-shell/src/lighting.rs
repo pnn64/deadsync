@@ -2,15 +2,20 @@
 
 use std::sync::Arc;
 
+use crate::smx_config::smx_options_light_preview_active;
 use deadsync_config::options::SmxPackName;
 use deadsync_gameplay::{GameplayProfileData, GameplayRuntimeState};
+use deadsync_input::VirtualAction;
 use deadsync_lights::cabinet_chart::{
     CabinetLightEvent, CabinetLightPlan, GameplayLightChartKey, cabinet_light_chart_from_loaded,
 };
-use deadsync_lights::{HideFlags, ScreenLightContext};
+use deadsync_lights::{ButtonLight, HideFlags, Player, ScreenLightContext};
 use deadsync_profile::compat as profile;
-use deadsync_profile::{HideLightType, physical_player_slot_for_chart_pad};
-use deadsync_screens::Screen;
+use deadsync_profile::{
+    HideLightType, PlayStyle, PlayerSide, physical_player_slot_for_chart_pad, player_side_index,
+};
+use deadsync_score::Grade;
+use deadsync_screens::{ScoreInfo, Screen};
 use deadsync_simfile::app_runtime as song_loading;
 use deadsync_smx::gameplay_driver as smx_driver;
 use deadsync_smx::gifs::FullPadAnim;
@@ -96,6 +101,206 @@ pub const fn hide_flags_from_profile(hide: HideLightType) -> HideFlags {
             marquee: false,
             bass: true,
         },
+    }
+}
+
+pub fn smx_background_role(
+    screen: Screen,
+    enabled: bool,
+    assignment_preview: bool,
+) -> Option<&'static str> {
+    if enabled && !assignment_preview {
+        deadsync_lights::screen_smx_background_role(screen_light_context(screen))
+    } else {
+        None
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SmxResultContext {
+    pub grade: Option<Grade>,
+    pub difficulty: Option<&'static str>,
+}
+
+impl SmxResultContext {
+    #[inline(always)]
+    pub fn grade_sprite_state(self) -> Option<u32> {
+        self.grade.map(|grade| grade.to_sprite_state())
+    }
+}
+
+pub fn smx_result_context(screen: Screen, score_info: &[Option<ScoreInfo>; 2]) -> SmxResultContext {
+    if !matches!(
+        screen,
+        Screen::Evaluation | Screen::EvaluationSummary | Screen::Initials
+    ) {
+        return SmxResultContext::default();
+    }
+    score_info
+        .iter()
+        .flatten()
+        .map(|score| SmxResultContext {
+            grade: Some(score.grade),
+            difficulty: Some(deadlib_present::color::difficulty_gif_tag(
+                &score.chart.difficulty,
+            )),
+        })
+        .min_by_key(|context| context.grade_sprite_state())
+        .unwrap_or_default()
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GameplayLightSyncTarget {
+    Gameplay,
+    Practice,
+    Clear,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LightingFramePlan {
+    pub screen_mode: Option<ScreenLightContext>,
+    pub smx_panels_enabled: bool,
+    pub smx_select_music_beat: bool,
+    pub gameplay_target: GameplayLightSyncTarget,
+}
+
+pub const fn lighting_frame_plan(
+    screen: Screen,
+    smx_input: bool,
+    smx_panel_lights: bool,
+) -> LightingFramePlan {
+    let smx_panels_enabled = smx_input && smx_panel_lights;
+    LightingFramePlan {
+        screen_mode: lighting_screen_mode(screen),
+        smx_panels_enabled,
+        smx_select_music_beat: matches!(screen, Screen::SelectMusic) && smx_panels_enabled,
+        gameplay_target: gameplay_light_sync_target(screen),
+    }
+}
+
+pub const fn lighting_screen_mode(screen: Screen) -> Option<ScreenLightContext> {
+    if matches!(screen, Screen::TestLights) {
+        None
+    } else {
+        Some(screen_light_context(screen))
+    }
+}
+
+pub const fn gameplay_light_sync_target(screen: Screen) -> GameplayLightSyncTarget {
+    match screen {
+        Screen::Gameplay => GameplayLightSyncTarget::Gameplay,
+        Screen::Practice => GameplayLightSyncTarget::Practice,
+        _ => GameplayLightSyncTarget::Clear,
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SmxPadGifFramePlan {
+    pub assignment_preview: bool,
+    pub role: Option<&'static str>,
+    pub current_song_needed: bool,
+    pub result_context: SmxResultContext,
+    pub beat_locked: bool,
+}
+
+pub fn smx_pad_gif_frame_plan(
+    screen: Screen,
+    enabled: bool,
+    smx_input: bool,
+    smx_config_view: bool,
+    score_info: &[Option<ScoreInfo>; 2],
+) -> SmxPadGifFramePlan {
+    let assignment_preview = smx_options_light_preview_active(screen, smx_input, smx_config_view);
+    let role = smx_background_role(screen, enabled, assignment_preview);
+    SmxPadGifFramePlan {
+        assignment_preview,
+        role,
+        current_song_needed: role.is_some(),
+        result_context: smx_result_context(screen, score_info),
+        beat_locked: enabled && matches!(screen, Screen::SelectMusic),
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OperatorMenuButtonRoute {
+    Ignore,
+    ConsumeLocked,
+    NavigateOptions,
+}
+
+pub const fn operator_menu_button_route(
+    screen: Screen,
+    pressed: bool,
+    action: VirtualAction,
+) -> OperatorMenuButtonRoute {
+    if !pressed || !deadsync_lights::operator_menu_action(action) {
+        return OperatorMenuButtonRoute::Ignore;
+    }
+    if deadsync_lights::screen_allows_operator_menu_button(screen_light_context(screen)) {
+        OperatorMenuButtonRoute::NavigateOptions
+    } else {
+        OperatorMenuButtonRoute::ConsumeLocked
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LightInputRoute {
+    Ignore,
+    Pad {
+        player: Player,
+        button: ButtonLight,
+        pressed: bool,
+    },
+    Menu {
+        player: Player,
+        button: ButtonLight,
+        pressed: bool,
+    },
+}
+
+pub const fn light_input_route(action: VirtualAction, pressed: bool) -> LightInputRoute {
+    match deadsync_lights::button_source_from_action(action) {
+        Some(deadsync_lights::ButtonSource::Pad(player, button)) => LightInputRoute::Pad {
+            player,
+            button,
+            pressed,
+        },
+        Some(deadsync_lights::ButtonSource::Menu(player, button)) => LightInputRoute::Menu {
+            player,
+            button,
+            pressed,
+        },
+        None => LightInputRoute::Ignore,
+    }
+}
+
+pub const fn smx_pad_blackout(
+    screen: Screen,
+    enabled: bool,
+    play_style: PlayStyle,
+    player_side: PlayerSide,
+) -> [bool; 2] {
+    let in_game = enabled
+        && !matches!(
+            screen,
+            Screen::Menu
+                | Screen::Init
+                | Screen::SmxAssignPads
+                | Screen::TestLights
+                | Screen::ManageLocalProfiles
+                | Screen::Credits
+                | Screen::OverscanAdjustment
+                | Screen::Mappings
+                | Screen::Options
+                | Screen::PlayerOptions
+                | Screen::ConfigurePads
+                | Screen::Input
+        );
+    if in_game && matches!(play_style, PlayStyle::Single) {
+        let used = player_side_index(player_side);
+        [used != 0, used != 1]
+    } else {
+        [false; 2]
     }
 }
 
@@ -265,5 +470,120 @@ mod tests {
             None,
         );
         assert!(base.packs_changed(changed));
+    }
+
+    #[test]
+    fn smx_role_respects_feature_and_assignment_preview() {
+        assert_eq!(
+            smx_background_role(Screen::SelectMusic, true, false),
+            Some("song_select")
+        );
+        assert_eq!(smx_background_role(Screen::SelectMusic, false, false), None);
+        assert_eq!(smx_background_role(Screen::Options, true, true), None);
+    }
+
+    #[test]
+    fn lighting_frame_plan_keeps_test_lights_in_control() {
+        let gameplay = lighting_frame_plan(Screen::Gameplay, true, true);
+        assert_eq!(gameplay.screen_mode, Some(ScreenLightContext::Gameplay));
+        assert_eq!(gameplay.gameplay_target, GameplayLightSyncTarget::Gameplay);
+        assert!(gameplay.smx_panels_enabled);
+        assert!(!gameplay.smx_select_music_beat);
+
+        let test_lights = lighting_frame_plan(Screen::TestLights, true, true);
+        assert_eq!(test_lights.screen_mode, None);
+        assert_eq!(test_lights.gameplay_target, GameplayLightSyncTarget::Clear);
+        assert!(test_lights.smx_panels_enabled);
+    }
+
+    #[test]
+    fn smx_pad_gif_plan_suppresses_assignment_preview_backgrounds() {
+        let score_info = [None, None];
+        let select = smx_pad_gif_frame_plan(Screen::SelectMusic, true, true, false, &score_info);
+        assert_eq!(select.role, Some("song_select"));
+        assert!(select.current_song_needed);
+        assert!(select.beat_locked);
+
+        let options = smx_pad_gif_frame_plan(Screen::Options, true, true, true, &score_info);
+        assert!(options.assignment_preview);
+        assert_eq!(options.role, None);
+        assert!(!options.current_song_needed);
+        assert!(!options.beat_locked);
+    }
+
+    #[test]
+    fn operator_menu_button_policy_consumes_locked_screens() {
+        assert_eq!(
+            operator_menu_button_route(Screen::Menu, true, VirtualAction::p1_operator),
+            OperatorMenuButtonRoute::NavigateOptions,
+        );
+        assert_eq!(
+            operator_menu_button_route(Screen::Mappings, true, VirtualAction::p1_operator),
+            OperatorMenuButtonRoute::ConsumeLocked,
+        );
+        assert_eq!(
+            operator_menu_button_route(Screen::Menu, false, VirtualAction::p1_operator),
+            OperatorMenuButtonRoute::Ignore,
+        );
+        assert_eq!(
+            operator_menu_button_route(Screen::Menu, true, VirtualAction::p1_start),
+            OperatorMenuButtonRoute::Ignore,
+        );
+    }
+
+    #[test]
+    fn light_input_route_preserves_source_and_pressed_state() {
+        assert_eq!(
+            light_input_route(VirtualAction::p1_left, true),
+            LightInputRoute::Pad {
+                player: Player::P1,
+                button: ButtonLight::Left,
+                pressed: true,
+            },
+        );
+        assert_eq!(
+            light_input_route(VirtualAction::p2_menu_right, false),
+            LightInputRoute::Menu {
+                player: Player::P2,
+                button: ButtonLight::Right,
+                pressed: false,
+            },
+        );
+        assert_eq!(
+            light_input_route(VirtualAction::system_fast_forward, true),
+            LightInputRoute::Ignore,
+        );
+    }
+
+    #[test]
+    fn single_play_blacks_out_only_the_unused_game_slot() {
+        assert_eq!(
+            smx_pad_blackout(Screen::Gameplay, true, PlayStyle::Single, PlayerSide::P1),
+            [false, true],
+        );
+        assert_eq!(
+            smx_pad_blackout(Screen::SelectMusic, true, PlayStyle::Single, PlayerSide::P2),
+            [true, false],
+        );
+        assert_eq!(
+            smx_pad_blackout(Screen::Gameplay, true, PlayStyle::Double, PlayerSide::P1),
+            [false, false],
+        );
+        assert_eq!(
+            smx_pad_blackout(Screen::Options, true, PlayStyle::Single, PlayerSide::P1),
+            [false, false],
+        );
+    }
+
+    #[test]
+    fn empty_result_context_has_no_grade_or_difficulty() {
+        assert_eq!(
+            smx_result_context(Screen::Evaluation, &[None, None]),
+            SmxResultContext::default(),
+        );
+        assert_eq!(
+            smx_result_context(Screen::Gameplay, &[None, None]),
+            SmxResultContext::default(),
+        );
     }
 }

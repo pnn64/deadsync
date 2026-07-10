@@ -13,6 +13,8 @@ use deadsync_assets::screenshot::{
 };
 use deadsync_assets::{AssetManager, register_texture_dims};
 use deadsync_profile::PlayerSide;
+use deadsync_score::Grade;
+use deadsync_screens::Screen;
 
 const SCREENSHOT_PREVIEW_TEXTURE_KEY: &str = "__screenshot_preview";
 const SCREENSHOT_PREVIEW_BORDER_PX: f32 = 4.0;
@@ -37,6 +39,97 @@ impl fmt::Display for ScreenshotFlowError {
 pub struct SavedScreenshot {
     pub image: image::RgbaImage,
     pub path: PathBuf,
+}
+
+pub enum PendingScreenshotResult {
+    NoRequest,
+    NoBackend,
+    Saved {
+        path: PathBuf,
+        preview_error: Option<ScreenshotFlowError>,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ScreenshotSongInfo {
+    pub title: String,
+    pub meter: Option<u32>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AutoScreenshotEvalResult {
+    pub personal_best: bool,
+    pub failed: bool,
+    pub grade: Grade,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AutoScreenshotFrameContext {
+    pub screen: Screen,
+    pub already_taken: bool,
+    pub ready: bool,
+    pub mask: u8,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AutoScreenshotFramePlan {
+    pub mark_taken: bool,
+    pub request_capture: bool,
+}
+
+#[inline(always)]
+pub const fn screenshot_preview_visible(screen: Screen) -> bool {
+    matches!(screen, Screen::Evaluation)
+}
+
+pub fn screenshot_song_info(
+    screen: Screen,
+    gameplay: Option<ScreenshotSongInfo>,
+    evaluation: Option<ScreenshotSongInfo>,
+) -> Option<ScreenshotSongInfo> {
+    let info = match screen {
+        Screen::Gameplay => gameplay,
+        Screen::Evaluation => evaluation,
+        _ => None,
+    }?;
+    (!info.title.is_empty()).then_some(info)
+}
+
+pub fn auto_screenshot_eval_matches_results<I>(mask: u8, results: I) -> bool
+where
+    I: IntoIterator<Item = AutoScreenshotEvalResult>,
+{
+    if mask == 0 {
+        return false;
+    }
+    results.into_iter().any(|result| {
+        deadsync_config::theme::auto_screenshot_eval_matches(
+            mask,
+            result.personal_best,
+            result.failed,
+            matches!(result.grade, Grade::Tier01),
+            matches!(result.grade, Grade::Quint),
+        )
+    })
+}
+
+pub fn auto_screenshot_frame_plan<I>(
+    context: AutoScreenshotFrameContext,
+    results: I,
+) -> AutoScreenshotFramePlan
+where
+    I: IntoIterator<Item = AutoScreenshotEvalResult>,
+{
+    if context.screen != Screen::Evaluation || context.already_taken || !context.ready {
+        return AutoScreenshotFramePlan {
+            mark_taken: false,
+            request_capture: false,
+        };
+    }
+    AutoScreenshotFramePlan {
+        mark_taken: true,
+        request_capture: auto_screenshot_eval_matches_results(context.mask, results),
+    }
 }
 
 /// Capture the current backend frame, force opaque alpha, and save it to the screenshot tree.
@@ -84,6 +177,48 @@ pub fn replace_screenshot_preview_texture(
         image.height(),
     );
     Ok(())
+}
+
+pub fn capture_pending_screenshot<F>(
+    state: &mut ScreenshotRuntimeState<PlayerSide>,
+    backend: Option<&mut Backend>,
+    asset_manager: &mut AssetManager,
+    song_info: Option<(&str, Option<u32>)>,
+    now: Instant,
+    show_preview: bool,
+    side_has_local_profile: F,
+) -> Result<PendingScreenshotResult, ScreenshotFlowError>
+where
+    F: FnOnce(PlayerSide) -> bool,
+{
+    let Some(request_side) = state.take_pending_request() else {
+        return Ok(PendingScreenshotResult::NoRequest);
+    };
+    let Some(backend) = backend else {
+        return Ok(PendingScreenshotResult::NoBackend);
+    };
+    let saved = capture_screenshot(backend, song_info)?;
+
+    state.mark_saved(now);
+    let mut preview_error = None;
+    if show_preview {
+        if let Err(error) = replace_screenshot_preview_texture(asset_manager, backend, &saved.image)
+        {
+            state.clear_preview();
+            preview_error = Some(error);
+        } else {
+            let side_has_local_profile = request_side.is_some_and(side_has_local_profile);
+            state.set_preview(
+                now,
+                screenshot_preview_target(request_side, side_has_local_profile),
+            );
+        }
+    }
+
+    Ok(PendingScreenshotResult::Saved {
+        path: saved.path,
+        preview_error,
+    })
 }
 
 /// Resolve where a captured evaluation screenshot should tween after its center preview.
@@ -221,5 +356,202 @@ mod tests {
             screenshot_preview_target(None, false),
             ScreenshotPreviewTarget::Machine
         );
+    }
+
+    #[test]
+    fn screenshot_song_info_uses_current_capture_screen() {
+        let gameplay = ScreenshotSongInfo {
+            title: "Gameplay Song".to_string(),
+            meter: Some(12),
+        };
+        let evaluation = ScreenshotSongInfo {
+            title: "Evaluation Song".to_string(),
+            meter: Some(10),
+        };
+        assert_eq!(
+            screenshot_song_info(
+                Screen::Gameplay,
+                Some(gameplay.clone()),
+                Some(evaluation.clone())
+            ),
+            Some(gameplay)
+        );
+        assert_eq!(
+            screenshot_song_info(Screen::Evaluation, None, Some(evaluation.clone())),
+            Some(evaluation)
+        );
+        assert_eq!(
+            screenshot_song_info(
+                Screen::Evaluation,
+                None,
+                Some(ScreenshotSongInfo {
+                    title: String::new(),
+                    meter: Some(1),
+                }),
+            ),
+            None
+        );
+        assert_eq!(
+            screenshot_song_info(
+                Screen::Menu,
+                Some(ScreenshotSongInfo {
+                    title: "Menu".to_string(),
+                    meter: None,
+                }),
+                None,
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn auto_screenshot_eval_matches_configured_result_flags() {
+        use deadsync_config::theme::{AUTO_SS_FAILS, AUTO_SS_PBS, AUTO_SS_QUADS, AUTO_SS_QUINTS};
+
+        let results = [
+            AutoScreenshotEvalResult {
+                personal_best: false,
+                failed: true,
+                grade: Grade::Failed,
+            },
+            AutoScreenshotEvalResult {
+                personal_best: true,
+                failed: false,
+                grade: Grade::Tier01,
+            },
+        ];
+
+        assert!(!auto_screenshot_eval_matches_results(0, results));
+        assert!(auto_screenshot_eval_matches_results(AUTO_SS_FAILS, results));
+        assert!(auto_screenshot_eval_matches_results(AUTO_SS_PBS, results));
+        assert!(auto_screenshot_eval_matches_results(AUTO_SS_QUADS, results));
+        assert!(!auto_screenshot_eval_matches_results(
+            AUTO_SS_QUINTS,
+            results
+        ));
+        assert!(auto_screenshot_eval_matches_results(
+            AUTO_SS_QUINTS,
+            [AutoScreenshotEvalResult {
+                personal_best: false,
+                failed: false,
+                grade: Grade::Quint,
+            }],
+        ));
+    }
+
+    #[test]
+    fn auto_screenshot_frame_waits_for_evaluation_readiness() {
+        use deadsync_config::theme::AUTO_SS_PBS;
+
+        let result = [AutoScreenshotEvalResult {
+            personal_best: true,
+            failed: false,
+            grade: Grade::Tier03,
+        }];
+        let ready_context = AutoScreenshotFrameContext {
+            screen: Screen::Evaluation,
+            already_taken: false,
+            ready: true,
+            mask: AUTO_SS_PBS,
+        };
+
+        assert_eq!(
+            auto_screenshot_frame_plan(ready_context, result),
+            AutoScreenshotFramePlan {
+                mark_taken: true,
+                request_capture: true,
+            }
+        );
+        assert_eq!(
+            auto_screenshot_frame_plan(
+                AutoScreenshotFrameContext {
+                    screen: Screen::Gameplay,
+                    ..ready_context
+                },
+                result
+            ),
+            AutoScreenshotFramePlan {
+                mark_taken: false,
+                request_capture: false,
+            }
+        );
+        assert_eq!(
+            auto_screenshot_frame_plan(
+                AutoScreenshotFrameContext {
+                    ready: false,
+                    ..ready_context
+                },
+                result
+            ),
+            AutoScreenshotFramePlan {
+                mark_taken: false,
+                request_capture: false,
+            }
+        );
+        assert_eq!(
+            auto_screenshot_frame_plan(
+                AutoScreenshotFrameContext {
+                    already_taken: true,
+                    ..ready_context
+                },
+                result
+            ),
+            AutoScreenshotFramePlan {
+                mark_taken: false,
+                request_capture: false,
+            }
+        );
+    }
+
+    #[test]
+    fn auto_screenshot_frame_marks_consumed_even_without_capture_match() {
+        let plan = auto_screenshot_frame_plan(
+            AutoScreenshotFrameContext {
+                screen: Screen::Evaluation,
+                already_taken: false,
+                ready: true,
+                mask: 0,
+            },
+            [AutoScreenshotEvalResult {
+                personal_best: true,
+                failed: false,
+                grade: Grade::Tier01,
+            }],
+        );
+
+        assert_eq!(
+            plan,
+            AutoScreenshotFramePlan {
+                mark_taken: true,
+                request_capture: false,
+            }
+        );
+    }
+
+    #[test]
+    fn pending_screenshot_without_request_or_backend_is_nonfatal() {
+        let mut state = ScreenshotRuntimeState::new();
+        let no_request = capture_pending_screenshot(
+            &mut state,
+            None,
+            &mut AssetManager::new(),
+            None,
+            Instant::now(),
+            false,
+            |_| false,
+        );
+        assert!(matches!(no_request, Ok(PendingScreenshotResult::NoRequest)));
+
+        state.request(Some(PlayerSide::P1));
+        let no_backend = capture_pending_screenshot(
+            &mut state,
+            None,
+            &mut AssetManager::new(),
+            None,
+            Instant::now(),
+            false,
+            |_| false,
+        );
+        assert!(matches!(no_backend, Ok(PendingScreenshotResult::NoBackend)));
     }
 }

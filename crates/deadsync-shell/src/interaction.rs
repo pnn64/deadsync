@@ -3,7 +3,13 @@
 use std::time::Instant;
 
 use deadsync_config::frame_pacing::apply_tab_acceleration;
+use deadsync_screens::Screen;
 use winit::keyboard::KeyCode;
+
+use crate::{
+    Command,
+    navigation::{TransitionState, menu_exit_uses_fade},
+};
 
 const MESSAGE_HOLD_SECONDS: f32 = 3.33;
 const MESSAGE_FADE_SECONDS: f32 = 0.25;
@@ -15,6 +21,17 @@ pub enum ExitIntent {
     None,
     Exit,
     Shutdown,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ProcessExitRequest {
+    Exit,
+    Shutdown,
+}
+
+pub enum ProcessExitPlan {
+    BeginFade,
+    Execute(Command),
 }
 
 /// Held modifier and non-gameplay time-control state.
@@ -140,14 +157,24 @@ impl ShellInteractionState {
         self.exit_intent = ExitIntent::None;
     }
 
-    #[inline(always)]
-    pub fn request_exit(&mut self) {
-        self.exit_intent = ExitIntent::Exit;
-    }
-
-    #[inline(always)]
-    pub fn request_shutdown(&mut self) {
-        self.exit_intent = ExitIntent::Shutdown;
+    pub fn plan_process_exit(
+        &mut self,
+        request: ProcessExitRequest,
+        screen: Screen,
+        transition: &TransitionState,
+    ) -> ProcessExitPlan {
+        if menu_exit_uses_fade(screen, transition) {
+            self.exit_intent = match request {
+                ProcessExitRequest::Exit => ExitIntent::Exit,
+                ProcessExitRequest::Shutdown => ExitIntent::Shutdown,
+            };
+            ProcessExitPlan::BeginFade
+        } else {
+            ProcessExitPlan::Execute(match request {
+                ProcessExitRequest::Exit => Command::ExitNow,
+                ProcessExitRequest::Shutdown => Command::Shutdown,
+            })
+        }
     }
 
     #[inline(always)]
@@ -185,13 +212,49 @@ mod tests {
     }
 
     #[test]
-    fn exit_intent_is_explicit_and_resettable() {
+    fn menu_exit_begins_fade_and_latches_intent() {
         let mut state = ShellInteractionState::new(false);
-        state.request_exit();
+        let plan = state.plan_process_exit(
+            ProcessExitRequest::Exit,
+            Screen::Menu,
+            &TransitionState::Idle,
+        );
+        assert!(matches!(plan, ProcessExitPlan::BeginFade));
         assert_eq!(state.exit_intent(), ExitIntent::Exit);
-        state.request_shutdown();
+
+        let plan = state.plan_process_exit(
+            ProcessExitRequest::Shutdown,
+            Screen::Menu,
+            &TransitionState::Idle,
+        );
+        assert!(matches!(plan, ProcessExitPlan::BeginFade));
         assert_eq!(state.exit_intent(), ExitIntent::Shutdown);
         state.clear_exit_intent();
+        assert_eq!(state.exit_intent(), ExitIntent::None);
+    }
+
+    #[test]
+    fn immediate_exit_requests_return_effect_commands() {
+        let mut state = ShellInteractionState::new(false);
+        let exit = state.plan_process_exit(
+            ProcessExitRequest::Exit,
+            Screen::Gameplay,
+            &TransitionState::Idle,
+        );
+        assert!(matches!(exit, ProcessExitPlan::Execute(Command::ExitNow)));
+
+        let shutdown = state.plan_process_exit(
+            ProcessExitRequest::Shutdown,
+            Screen::Menu,
+            &TransitionState::FadingIn {
+                elapsed: 0.0,
+                duration: 0.5,
+            },
+        );
+        assert!(matches!(
+            shutdown,
+            ProcessExitPlan::Execute(Command::Shutdown)
+        ));
         assert_eq!(state.exit_intent(), ExitIntent::None);
     }
 }

@@ -12,12 +12,14 @@ deadlib-render = { path = "../deadlib-render" }
 deadlib-renderer = { path = "../deadlib-renderer" }
 deadlib-video = { path = "../deadlib-video" }
 deadsync-assets = { path = "../deadsync-assets" }
+deadsync-audio = { path = "../deadsync-audio" }
 deadsync-audio-stream = { path = "../deadsync-audio-stream" }
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-config = { path = "../deadsync-config" }
 deadsync-core = { path = "../deadsync-core" }
 deadsync-gameplay = { path = "../deadsync-gameplay" }
 deadsync-input = { path = "../deadsync-input" }
+deadsync-input-fsr = { path = "../deadsync-input-fsr" }
 deadsync-input-native = { path = "../deadsync-input-native" }
 deadsync-lights = { path = "../deadsync-lights" }
 deadsync-online = { path = "../deadsync-online" }
@@ -27,6 +29,7 @@ deadsync-score = { path = "../deadsync-score" }
 deadsync-screens = { path = "../deadsync-screens" }
 deadsync-simfile = { path = "../deadsync-simfile" }
 deadsync-smx = { path = "../deadsync-smx" }
+deadsync-song-lua = { path = "../deadsync-song-lua" }
 image = "0.25.10"
 log = "0.4.33"
 smallvec = "1.15.2"

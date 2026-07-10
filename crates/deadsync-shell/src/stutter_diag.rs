@@ -1,5 +1,7 @@
 use deadlib_render::{ClockDomainTrace, DrawStats, PresentModeTrace};
+use deadsync_audio::StutterDiagAudioEvent;
 use deadsync_config::frame_pacing::{FixedFrameStatsRing, seconds_to_us_u32};
+use deadsync_gameplay::DisplayClockDiagEvent;
 use deadsync_screens::Screen;
 
 pub const STUTTER_DIAG_WINDOW_NS: u64 = 500_000_000;
@@ -37,6 +39,116 @@ pub struct StutterDiagFrameSample {
     pub applied_back_pressure: bool,
     pub queue_idle_waited: bool,
     pub suboptimal: bool,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct StutterDiagDumpContext {
+    pub now_host_nanos: u64,
+    pub total_elapsed: f32,
+    pub screen: Screen,
+    pub stutter_severity: u8,
+    pub audio_triggered: bool,
+    pub display_triggered: bool,
+}
+
+pub fn stutter_diag_dump_lines(
+    context: StutterDiagDumpContext,
+    frames: &[StutterDiagFrameSample],
+    display_events: &[DisplayClockDiagEvent],
+    audio_events: &[StutterDiagAudioEvent],
+) -> Vec<String> {
+    let mut lines = Vec::with_capacity(
+        1usize
+            .saturating_add(frames.len())
+            .saturating_add(display_events.len())
+            .saturating_add(audio_events.len()),
+    );
+    lines.push(format!(
+        "Stutter recorder dump t={:.3}s screen={:?} reason=[stutter:{} audio:{} display:{}] window_ms={:.1} frames={} audio_events={} display_events={}",
+        context.total_elapsed,
+        context.screen,
+        context.stutter_severity,
+        u8::from(context.audio_triggered),
+        u8::from(context.display_triggered),
+        STUTTER_DIAG_WINDOW_NS as f64 / 1_000_000.0,
+        frames.len(),
+        audio_events.len(),
+        display_events.len(),
+    ));
+    for sample in frames {
+        let age_ms = context.now_host_nanos.saturating_sub(sample.host_nanos) as f64 / 1_000_000.0;
+        let multiple = if sample.expected_us > 0 {
+            sample.frame_us as f64 / sample.expected_us as f64
+        } else {
+            0.0
+        };
+        lines.push(format!(
+            "Stutter recorder frame age_ms={:.3} screen={:?} dt_ms={:.3} expected_ms={:.3} x{:.2} req={} phases_ms=[pre:{:.3} rq:{:.3} in:{:.3} up:{:.3} comp:{:.3} upload:{:.3} draw:{:.3}] draw_ms=[acq:{:.3} sub:{:.3} present:{:.3} gpu_wait:{:.3} setup:{:.3} prep:{:.3} record:{:.3}] display=[err_ms:{:+.3} catch:{}] present=[mode:{} display:{} host:{} inflight:{} wait:{} back:{} idle:{} subopt:{}]",
+            age_ms,
+            sample.screen,
+            sample.frame_us as f64 / 1000.0,
+            sample.expected_us as f64 / 1000.0,
+            multiple,
+            sample.redraw_request_reason,
+            sample.pre_redraw_gap_us as f64 / 1000.0,
+            sample.request_to_redraw_us as f64 / 1000.0,
+            sample.input_us as f64 / 1000.0,
+            sample.update_us as f64 / 1000.0,
+            sample.compose_us as f64 / 1000.0,
+            sample.upload_us as f64 / 1000.0,
+            sample.draw_us as f64 / 1000.0,
+            sample.acquire_us as f64 / 1000.0,
+            sample.submit_us as f64 / 1000.0,
+            sample.present_us as f64 / 1000.0,
+            sample.gpu_wait_us as f64 / 1000.0,
+            sample.draw_setup_us as f64 / 1000.0,
+            sample.draw_prepare_us as f64 / 1000.0,
+            sample.draw_record_us as f64 / 1000.0,
+            sample.display_error_us as f64 / 1000.0,
+            u8::from(sample.display_catching_up),
+            sample.present_mode,
+            sample.present_display_clock,
+            sample.present_host_clock,
+            sample.in_flight_images,
+            u8::from(sample.waited_for_image),
+            u8::from(sample.applied_back_pressure),
+            u8::from(sample.queue_idle_waited),
+            u8::from(sample.suboptimal),
+        ));
+    }
+    for event in display_events {
+        let age_ms =
+            context.now_host_nanos.saturating_sub(event.at_host_nanos) as f64 / 1_000_000.0;
+        lines.push(format!(
+            "Stutter recorder display age_ms={:.3} kind={} target_ms={:.3} prev_ms={:.3} curr_ms={:.3} err_ms={:+.3} step_ms={:+.3} limit_ms={:.3}",
+            age_ms,
+            event.kind,
+            event.target_time_sec as f64 * 1000.0,
+            event.previous_time_sec as f64 * 1000.0,
+            event.current_time_sec as f64 * 1000.0,
+            event.error_seconds as f64 * 1000.0,
+            event.step_seconds as f64 * 1000.0,
+            event.limit_seconds as f64 * 1000.0,
+        ));
+    }
+    for event in audio_events {
+        let age_ms =
+            context.now_host_nanos.saturating_sub(event.at_host_nanos) as f64 / 1_000_000.0;
+        lines.push(format!(
+            "Stutter recorder audio age_ms={:.3} kind={} value_ms={:.3} rate={} buf={} pad={} q={} period_ms={:.3} out_ms={:.3} qual={}",
+            age_ms,
+            event.kind,
+            event.value_ns as f64 / 1_000_000.0,
+            event.sample_rate_hz,
+            event.buffer_frames,
+            event.padding_frames,
+            event.queued_frames,
+            event.device_period_ns as f64 / 1_000_000.0,
+            event.estimated_output_delay_ns as f64 / 1_000_000.0,
+            event.timing_quality,
+        ));
+    }
+    lines
 }
 
 impl StutterDiagFrameSample {
@@ -195,6 +307,8 @@ impl Default for StutterDiagRecorder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use deadsync_audio::{OutputTimingQuality, StutterDiagAudioEventKind};
+    use deadsync_gameplay::{DisplayClockDiagEventKind, DisplayClockStepEvent};
 
     #[test]
     fn recorder_keeps_recent_frames_and_throttles_dumps() {
@@ -225,5 +339,79 @@ mod tests {
             Some((false, false))
         );
         assert_eq!(recorder.take_dump_trigger(600_000_000, 1, 0, 0), None);
+    }
+
+    #[test]
+    fn dump_lines_preserve_frame_display_and_audio_diagnostics() {
+        let now = STUTTER_DIAG_WINDOW_NS;
+        let mut recorder = StutterDiagRecorder::new();
+        recorder.record_frame(
+            now - 2_000_000,
+            Screen::Gameplay,
+            0.024,
+            0.008,
+            100,
+            200,
+            "chain",
+            300,
+            400,
+            500,
+            600,
+            700,
+            DrawStats::default(),
+            -0.0015,
+            true,
+        );
+        let mut frames = Vec::new();
+        recorder.collect_recent(now, &mut frames);
+        let display = [DisplayClockDiagEvent::from_step_event(
+            now - 3_000_000,
+            DisplayClockStepEvent {
+                kind: DisplayClockDiagEventKind::ClampStep,
+                target_time_sec: 1.0,
+                previous_time_sec: 0.98,
+                current_time_sec: 0.99,
+                error_seconds: 0.01,
+                step_seconds: 0.01,
+                limit_seconds: 1.0 / 60.0,
+            },
+        )];
+        let audio = [StutterDiagAudioEvent {
+            at_host_nanos: now - 4_000_000,
+            kind: StutterDiagAudioEventKind::CallbackGap,
+            value_ns: 5_000_000,
+            sample_rate_hz: 48_000,
+            buffer_frames: 512,
+            padding_frames: 128,
+            queued_frames: 256,
+            device_period_ns: 1_000_000,
+            estimated_output_delay_ns: 4_000_000,
+            timing_quality: OutputTimingQuality::Trusted,
+        }];
+
+        let lines = stutter_diag_dump_lines(
+            StutterDiagDumpContext {
+                now_host_nanos: now,
+                total_elapsed: 12.5,
+                screen: Screen::Gameplay,
+                stutter_severity: 3,
+                audio_triggered: true,
+                display_triggered: true,
+            },
+            &frames,
+            &display,
+            &audio,
+        );
+
+        assert_eq!(lines.len(), 4);
+        assert!(lines[0].contains("t=12.500s screen=Gameplay"));
+        assert!(lines[0].contains("frames=1 audio_events=1 display_events=1"));
+        assert!(lines[1].contains("age_ms=2.000"));
+        assert!(lines[1].contains("dt_ms=24.000 expected_ms=8.000 x3.00"));
+        assert!(lines[1].contains("display=[err_ms:-1.500 catch:1]"));
+        assert!(lines[2].contains("kind=clamp_step"));
+        assert!(lines[2].contains("target_ms=1000.000"));
+        assert!(lines[3].contains("kind=callback_gap value_ms=5.000 rate=48000"));
+        assert!(lines[3].contains("period_ms=1.000 out_ms=4.000 qual=trusted"));
     }
 }

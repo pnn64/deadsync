@@ -1,13 +1,10 @@
-use super::{App, CurrentScreen};
+use super::App;
 use crate::config;
-use deadsync_gameplay::{
-    GameplayQueuedEvent, GameplayRawKeyEvent, RawKeyAction, gameplay_raw_key_input,
-    gameplay_raw_modifier_key,
-};
+use deadsync_gameplay::{GameplayQueuedEvent, GameplayRawKeyEvent, RawKeyAction};
 use deadsync_input as logical_input;
-pub(super) use deadsync_shell::screen_accepts_queued_input;
 use deadsync_shell::{
-    allowed_gameplay_raw_action, gameplay_dispatch_continues as dispatch_continues,
+    GameplayRawKeyRouteContext, QueuedInputBatchState, QueuedInputEventRoute,
+    allowed_gameplay_raw_action, gameplay_raw_key_route_plan, queued_input_flush_plan,
     raw_keyboard_capture_enabled,
 };
 use std::error::Error;
@@ -18,53 +15,43 @@ impl App {
         &mut self,
         event_loop: &ActiveEventLoop,
     ) -> Result<bool, Box<dyn Error>> {
-        if !screen_accepts_queued_input(
+        let Some(plan) = queued_input_flush_plan(
             self.state.screens.current_screen,
             &self.state.shell.transition,
-        ) {
+        ) else {
             logical_input::clear_debounce_state();
             self.lights.clear_button_pressed();
             return Ok(false);
-        }
-        let mut flushed = false;
+        };
         let mut err: Option<Box<dyn Error>> = None;
-        let gameplay_screen = self.state.screens.current_screen == CurrentScreen::Gameplay;
-        let start_screen = self.state.screens.current_screen;
-        let mut discard_gameplay_batch = false;
+        let mut batch = QueuedInputBatchState::new();
         logical_input::drain_debounced_input_events_with(|ev| {
-            flushed = true;
-            if gameplay_screen {
-                if discard_gameplay_batch || err.is_some() {
-                    return;
+            match plan.route_drained_event(&mut batch, err.is_some()) {
+                QueuedInputEventRoute::Skip => {}
+                QueuedInputEventRoute::Gameplay => {
+                    if let Err(e) =
+                        self.route_gameplay_event(event_loop, GameplayQueuedEvent::Input(ev))
+                    {
+                        err = Some(e);
+                        return;
+                    }
+                    plan.note_dispatched_event(
+                        &mut batch,
+                        self.state.screens.current_screen,
+                        &self.state.shell.transition,
+                    );
                 }
-                if let Err(e) =
-                    self.route_gameplay_event(event_loop, GameplayQueuedEvent::Input(ev))
-                {
-                    err = Some(e);
-                    return;
+                QueuedInputEventRoute::Screen => {
+                    if let Err(e) = self.route_input_event(event_loop, ev) {
+                        err = Some(e);
+                    }
                 }
-                if !self.gameplay_dispatch_continues(start_screen) {
-                    discard_gameplay_batch = true;
-                }
-            } else if err.is_none()
-                && let Err(e) = self.route_input_event(event_loop, ev)
-            {
-                err = Some(e);
             }
         });
         if let Some(e) = err {
             return Err(e);
         }
-        Ok(flushed)
-    }
-
-    #[inline(always)]
-    pub(super) fn gameplay_dispatch_continues(&self, start_screen: CurrentScreen) -> bool {
-        dispatch_continues(
-            start_screen,
-            self.state.screens.current_screen,
-            &self.state.shell.transition,
-        )
+        Ok(batch.flushed)
     }
 
     #[inline(always)]
@@ -88,26 +75,32 @@ impl App {
         event_loop: &ActiveEventLoop,
         ev: GameplayRawKeyEvent,
     ) {
-        if self.state.screens.current_screen != CurrentScreen::Gameplay {
-            return;
-        }
+        let plan = gameplay_raw_key_route_plan(
+            ev,
+            GameplayRawKeyRouteContext {
+                screen: self.state.screens.current_screen,
+                gameplay_state_active: self.state.screens.gameplay_state.is_some(),
+                offset_prompt_active: self.state.gameplay_offset_save_prompt.is_some(),
+                shift_held: self.state.shell.interaction.controls().shift(),
+                ctrl_held: self.state.shell.interaction.controls().ctrl(),
+            },
+        );
         let Some(gs) = self.state.screens.gameplay_state.as_mut() else {
             return;
         };
-        let allow_commands = self.state.gameplay_offset_save_prompt.is_none();
-        gs.set_raw_modifier_state(
-            self.state.shell.interaction.controls().shift(),
-            self.state.shell.interaction.controls().ctrl(),
-        );
+        let Some(plan) = plan else {
+            return;
+        };
+        gs.set_raw_modifier_state(plan.shift_held, plan.ctrl_held);
         let now_music_time =
             gs.music_time_from_audio_snapshot(crate::screens::gameplay::audio_snapshot());
         let action = gs.handle_queued_raw_key_input(
-            gameplay_raw_key_input(ev.code),
-            gameplay_raw_modifier_key(ev.code),
-            ev.pressed,
-            ev.timestamp,
+            plan.input,
+            plan.modifier_key,
+            plan.pressed,
+            plan.timestamp,
             now_music_time,
-            allow_commands,
+            plan.allow_commands,
         );
         crate::screens::gameplay::drain_audio_commands(gs);
         let keyboard_features = config::get().keyboard_features;

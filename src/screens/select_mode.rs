@@ -2,34 +2,27 @@ use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::tr;
 use crate::assets::{FontRole, current_machine_font_key};
+use crate::screens::ScreenAction;
 use crate::screens::components::shared::screen_bar::{
     AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use crate::screens::components::shared::{screen_bar, visual_style_bg};
-use crate::screens::{Screen, ScreenAction};
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::font;
 use deadlib_present::space::{screen_center_x, screen_center_y};
 use deadsync_audio_stream as audio;
-use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_input::InputEvent;
 use deadsync_profile as profile_data;
+use deadsync_screens::select_mode::{self as mode_flow, Choice, InputEffect, State as ModeFlow};
 
 /* ------------------------------ layout ------------------------------- */
 const ROOT_X_OFF: f32 = 90.0;
 const ROOT_ZOOM: f32 = 1.25;
 
 // Simply Love: Graphics/ScreenSelectPlayMode Icon.lua
-const CHOICE_ZOOM_FOCUSED: f32 = 0.75;
-const CHOICE_ZOOM_UNFOCUSED: f32 = 0.3;
-const CHOICE_ZOOM_TWEEN_DUR: f32 = 0.1;
-
-const CURSOR_H: f32 = 40.0;
 const CURSOR_MIN_W: f32 = 90.0;
 const CURSOR_MAX_W: f32 = 170.0;
-const CURSOR_TWEEN_DUR: f32 = 0.1;
-
-const EXIT_TOTAL_DUR: f32 = 0.9; // SL: out.lua sleeps 0.9 to allow OffCommands to complete.
 
 const TIME_PER_ARROW: f32 = 0.2;
 const ARROW_H: f32 = 20.0;
@@ -58,22 +51,6 @@ const PATTERN: [&str; 24] = [
     "left", "right", "down", "up", "down", "right", "left", "right", "up", "down", "up", "right",
 ];
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Choice {
-    Regular,
-    Marathon,
-}
-
-#[inline(always)]
-const fn choice_from_index(idx: usize) -> Choice {
-    match idx {
-        0 => Choice::Regular,
-        _ => Choice::Marathon,
-    }
-}
-
-const CHOICE_COUNT: usize = 2;
-
 #[inline(always)]
 const fn choice_cursor_label_width(choice: Choice) -> f32 {
     // Approximation of SM's `choice_actor:GetWidth()`, clamped after dividing by 1.4.
@@ -83,53 +60,24 @@ const fn choice_cursor_label_width(choice: Choice) -> f32 {
     }
 }
 
-#[inline(always)]
-const fn choice_play_mode(choice: Choice) -> profile_data::PlayMode {
-    match choice {
-        Choice::Regular => profile_data::PlayMode::Regular,
-        Choice::Marathon => profile_data::PlayMode::Marathon,
-    }
-}
-
 pub struct State {
     pub active_color_index: i32,
-    pub selected_index: usize,
-    cursor_y: f32,
-    choice_zooms: [f32; CHOICE_COUNT],
-    demo_time: f32,
-    exit_requested: bool,
-    exit_target: Option<Screen>,
+    flow: ModeFlow,
     bg: visual_style_bg::State,
 }
 
 pub fn init() -> State {
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
-        selected_index: 0,
-        cursor_y: -60.0,
-        choice_zooms: [CHOICE_ZOOM_UNFOCUSED; CHOICE_COUNT],
-        demo_time: 0.0,
-        exit_requested: false,
-        exit_target: None,
+        flow: ModeFlow::default(),
         bg: visual_style_bg::State::new(),
     }
 }
 
 pub fn on_enter(state: &mut State) {
-    state.selected_index = match deadsync_profile::compat::get_session_play_mode() {
-        profile_data::PlayMode::Regular => 0,
-        profile_data::PlayMode::Marathon => 1,
-    };
-    // Match SL behavior where switching mode requeues FirstLoopRegular/Marathon.
-    state.demo_time = 0.0;
-    state.cursor_y = -60.0 + CURSOR_H * (state.selected_index as f32);
-    for (i, z) in state.choice_zooms.iter_mut().enumerate() {
-        *z = if i == state.selected_index {
-            CHOICE_ZOOM_FOCUSED
-        } else {
-            CHOICE_ZOOM_UNFOCUSED
-        };
-    }
+    state
+        .flow
+        .reset(deadsync_profile::compat::get_session_play_mode());
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
@@ -148,7 +96,7 @@ fn exit_anim_t(exiting: bool) -> f32 {
         std::sync::OnceLock::new();
     crate::screens::components::shared::transitions::linear_elapsed(
         exiting,
-        EXIT_TOTAL_DUR,
+        mode_flow::EXIT_TOTAL_SECONDS,
         &STEPS,
         0x53504D4F44455849u64, // "SPMODEXI"
     )
@@ -177,110 +125,32 @@ fn cropleft_after(exit_t: f32, delay: f32, dur: f32) -> f32 {
 }
 
 pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
-    let dt = dt.max(0.0);
-    state.demo_time = (state.demo_time + dt).rem_euclid(60.0);
-
-    let target_y = -60.0 + CURSOR_H * (state.selected_index as f32);
-    let speed = CURSOR_H / CURSOR_TWEEN_DUR;
-    let max_step = speed * dt;
-    let dy = target_y - state.cursor_y;
-    if dy.abs() <= max_step {
-        state.cursor_y = target_y;
+    mode_flow::update(&mut state.flow, dt);
+    let exit_elapsed = if state.flow.exit_requested() {
+        exit_anim_t(true)
     } else {
-        state.cursor_y += dy.signum() * max_step;
-    }
-
-    // Choice zoom (GainFocus/LoseFocus linear(0.1) in SL).
-    let zoom_speed = (CHOICE_ZOOM_FOCUSED - CHOICE_ZOOM_UNFOCUSED) / CHOICE_ZOOM_TWEEN_DUR;
-    let zoom_max_step = zoom_speed * dt;
-    for (i, z) in state.choice_zooms.iter_mut().enumerate() {
-        let target = if i == state.selected_index {
-            CHOICE_ZOOM_FOCUSED
-        } else {
-            CHOICE_ZOOM_UNFOCUSED
-        };
-        let dz = target - *z;
-        if dz.abs() <= zoom_max_step {
-            *z = target;
-        } else {
-            *z += dz.signum() * zoom_max_step;
-        }
-    }
-
-    if state.exit_requested
-        && let Some(target) = state.exit_target
-        && exit_anim_t(true) >= EXIT_TOTAL_DUR
-    {
-        state.exit_target = None;
-        return Some(ScreenAction::Navigate(target));
-    }
-    None
+        0.0
+    };
+    mode_flow::finish_exit(&mut state.flow, exit_elapsed).map(ScreenAction::Navigate)
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
-    if !ev.pressed {
-        return ScreenAction::None;
-    }
-    if state.exit_requested {
-        return ScreenAction::None;
-    }
-
-    let nav = match ev.action {
-        VirtualAction::p1_left
-        | VirtualAction::p1_menu_left
-        | VirtualAction::p1_up
-        | VirtualAction::p1_menu_up
-        | VirtualAction::p2_left
-        | VirtualAction::p2_menu_left
-        | VirtualAction::p2_up
-        | VirtualAction::p2_menu_up => Some(-1),
-
-        VirtualAction::p1_right
-        | VirtualAction::p1_menu_right
-        | VirtualAction::p1_down
-        | VirtualAction::p1_menu_down
-        | VirtualAction::p2_right
-        | VirtualAction::p2_menu_right
-        | VirtualAction::p2_down
-        | VirtualAction::p2_menu_down => Some(1),
-
-        VirtualAction::p1_start | VirtualAction::p2_start => Some(0),
-
-        VirtualAction::p1_back | VirtualAction::p2_back => Some(9),
-
-        _ => None,
-    };
-
-    match nav {
-        Some(-1) => {
-            state.selected_index = (state.selected_index + CHOICE_COUNT - 1) % CHOICE_COUNT;
-            state.demo_time = 0.0;
+    match mode_flow::handle_input(&mut state.flow, ev) {
+        InputEffect::None => ScreenAction::None,
+        InputEffect::Move => {
             audio::play_sfx("assets/sounds/change.ogg");
             ScreenAction::None
         }
-        Some(1) => {
-            state.selected_index = (state.selected_index + 1) % CHOICE_COUNT;
-            state.demo_time = 0.0;
-            audio::play_sfx("assets/sounds/change.ogg");
-            ScreenAction::None
-        }
-        Some(0) => {
-            state.exit_requested = true;
-            state.exit_target = Some(Screen::ProfileLoad);
+        InputEffect::Confirm(play_mode) => {
             let _ = exit_anim_t(true);
-            deadsync_profile::compat::set_session_play_mode(choice_play_mode(choice_from_index(
-                state.selected_index,
-            )));
+            deadsync_profile::compat::set_session_play_mode(play_mode);
             audio::play_sfx("assets/sounds/start.ogg");
             ScreenAction::None
         }
-        Some(9) => {
-            state.exit_requested = true;
-            state.exit_target = Some(Screen::Menu);
+        InputEffect::Back => {
             let _ = exit_anim_t(true);
             ScreenAction::None
         }
-        _ => ScreenAction::None,
     }
 }
 
@@ -325,7 +195,7 @@ fn ease01(x: f32, f_ease: f32) -> f32 {
 
 pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &AssetManager) {
     actors.reserve(256);
-    let exit_t = exit_anim_t(state.exit_requested);
+    let exit_t = exit_anim_t(state.flow.exit_requested());
 
     state.bg.push(
         actors,
@@ -444,7 +314,8 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
     // Description text.
     let desc_alpha = fade_after(exit_t, 0.4, 0.2);
     let (dx, dy) = root_pt(-130.0, -60.0);
-    let choice = choice_from_index(state.selected_index);
+    let selected_index = state.flow.selected_index();
+    let choice = Choice::from_index(selected_index);
     actors.push(act!(text:
         font("miso"):
         settext(choice_description(choice)):
@@ -459,7 +330,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
     let cursor_crop = cropleft_after(exit_t, 0.4, 0.2);
     let cursor_alpha = 1.0;
     let labels = choice_labels();
-    let label = &labels[state.selected_index];
+    let label = &labels[selected_index];
     let measured_w = asset_manager.with_fonts(|all_fonts| {
         asset_manager
             .with_font(current_machine_font_key(FontRole::Header), |f| {
@@ -473,10 +344,10 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
         choice_cursor_label_width(choice)
     };
     let cursor_w = (base_w / 1.4).clamp(CURSOR_MIN_W, CURSOR_MAX_W);
-    let (cw, ch_outer) = root_sz(cursor_w, CURSOR_H + 2.0);
-    let (cw2, ch_inner) = root_sz(cursor_w, CURSOR_H);
-    let (cx_outer, cy_outer) = root_pt(-151.0, state.cursor_y);
-    let (cx_inner, cy_inner) = root_pt(-150.0, state.cursor_y);
+    let (cw, ch_outer) = root_sz(cursor_w, mode_flow::CURSOR_HEIGHT + 2.0);
+    let (cw2, ch_inner) = root_sz(cursor_w, mode_flow::CURSOR_HEIGHT);
+    let (cx_outer, cy_outer) = root_pt(-151.0, state.flow.cursor_y());
+    let (cx_inner, cy_inner) = root_pt(-150.0, state.flow.cursor_y());
     actors.push(act!(quad:
         align(1.0, 0.5): xy(cx_outer, cy_outer):
         zoomto(cw, ch_outer):
@@ -494,11 +365,12 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
     let label_alpha = fade_after(exit_t, 0.0, 0.2);
     let label_selected = color::simply_love_rgba(state.active_color_index);
     let label_unselected = color::rgba_hex("#888888");
-    let zoom_den = (CHOICE_ZOOM_FOCUSED - CHOICE_ZOOM_UNFOCUSED).max(f32::EPSILON);
+    let zoom_den =
+        (mode_flow::CHOICE_ZOOM_FOCUSED - mode_flow::CHOICE_ZOOM_UNFOCUSED).max(f32::EPSILON);
     for (i, label) in labels.iter().enumerate() {
-        let (x, y) = root_pt(-160.0, -60.0 + CURSOR_H * (i as f32));
-        let zoom = state.choice_zooms[i];
-        let t = ((zoom - CHOICE_ZOOM_UNFOCUSED) / zoom_den).clamp(0.0, 1.0);
+        let (x, y) = root_pt(-160.0, mode_flow::CURSOR_HEIGHT.mul_add(i as f32, -60.0));
+        let zoom = state.flow.choice_zoom(i);
+        let t = ((zoom - mode_flow::CHOICE_ZOOM_UNFOCUSED) / zoom_den).clamp(0.0, 1.0);
 
         let rgb = [
             label_unselected[0] + (label_selected[0] - label_unselected[0]) * t,
@@ -563,10 +435,10 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
 
     // Gameplay demo: faux playfield (dance).
     let field_alpha = fade_after(exit_t, 0.4, 0.2);
-    let marathon = state.selected_index == 1;
+    let marathon = selected_index == 1;
     let f_ease = if marathon { 75.0 } else { 0.0 };
     let cycle_dur = TIME_PER_ARROW * (PATTERN.len() as f32);
-    let base_t = state.demo_time;
+    let base_t = state.flow.demo_time();
 
     let (nfx, nfy) = root_pt(90.0, 15.0);
     // Use a mask source quad for SM-style MaskSource/MaskDest clipping.

@@ -6,6 +6,34 @@ use deadsync_config::frame_pacing::{
 use deadsync_screens::Screen;
 use std::time::{Duration, Instant};
 
+const SCHEDULED_REDRAW_POLL_GUARD: Duration = Duration::from_micros(1_000);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FrameWaitControl {
+    Poll,
+    Wait,
+    WaitUntil(Instant),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FrameWaitPlan {
+    pub mode: FrameLoopMode,
+    pub control: FrameWaitControl,
+    pub redraw_reason: Option<&'static str>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FrameScreenStepContext {
+    pub current_screen: Screen,
+    pub transition_step_screen: bool,
+    pub gameplay_offset_prompt_active: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FrameScreenStepPlan {
+    pub step_screen: bool,
+}
+
 pub struct FrameLoopState {
     frame_interval: Option<Duration>,
     next_redraw_at: Instant,
@@ -14,6 +42,15 @@ pub struct FrameLoopState {
     window_focused: bool,
     window_occluded: bool,
     surface_active: bool,
+}
+
+#[inline(always)]
+pub const fn frame_screen_step_plan(context: FrameScreenStepContext) -> FrameScreenStepPlan {
+    FrameScreenStepPlan {
+        step_screen: context.transition_step_screen
+            && !(matches!(context.current_screen, Screen::Gameplay)
+                && context.gameplay_offset_prompt_active),
+    }
 }
 
 impl FrameLoopState {
@@ -101,7 +138,7 @@ impl FrameLoopState {
         should_skip_compose_and_draw(self.window_occluded, self.surface_active)
     }
 
-    pub fn advance_if_due(&mut self, now: Instant, interval: Duration) -> bool {
+    fn advance_if_due(&mut self, now: Instant, interval: Duration) -> bool {
         if now < self.next_redraw_at {
             return false;
         }
@@ -109,9 +146,37 @@ impl FrameLoopState {
         true
     }
 
-    #[inline(always)]
-    pub const fn next_redraw_at(&self) -> Instant {
-        self.next_redraw_at
+    pub fn plan_wait(&mut self, now: Instant, interval_state: FrameIntervalState) -> FrameWaitPlan {
+        let Some(interval) = interval_state.interval else {
+            return if self.redraw_pending() {
+                FrameWaitPlan {
+                    mode: FrameLoopMode::WaitPending,
+                    control: FrameWaitControl::Wait,
+                    redraw_reason: None,
+                }
+            } else {
+                FrameWaitPlan {
+                    mode: FrameLoopMode::Poll,
+                    control: FrameWaitControl::Poll,
+                    redraw_reason: Some("poll"),
+                }
+            };
+        };
+
+        let redraw_reason = self
+            .advance_if_due(now, interval)
+            .then(|| interval_state.reason.redraw_reason());
+        let time_until_deadline = self.next_redraw_at.saturating_duration_since(now);
+        let control = if time_until_deadline <= SCHEDULED_REDRAW_POLL_GUARD {
+            FrameWaitControl::Poll
+        } else {
+            FrameWaitControl::WaitUntil(self.next_redraw_at - SCHEDULED_REDRAW_POLL_GUARD)
+        };
+        FrameWaitPlan {
+            mode: FrameLoopMode::Scheduled(interval_state.reason, interval),
+            control,
+            redraw_reason,
+        }
     }
 
     #[inline(always)]
@@ -138,6 +203,7 @@ impl FrameLoopState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use deadsync_config::frame_pacing::FrameIntervalReason;
 
     #[test]
     fn state_changes_and_redraw_deadlines_are_latched() {
@@ -149,6 +215,116 @@ mod tests {
         assert!(state.redraw_pending());
         assert_eq!(state.take_redraw_request_timing(now).1, "test");
         assert!(state.advance_if_due(now, Duration::from_millis(8)));
-        assert!(state.next_redraw_at() > now);
+        assert!(state.next_redraw_at > now);
+    }
+
+    #[test]
+    fn due_scheduled_frame_advances_and_requests_redraw() {
+        let now = Instant::now();
+        let interval = Duration::from_millis(16);
+        let mut state = FrameLoopState::new(0, true, now);
+
+        let plan = state.plan_wait(
+            now,
+            FrameIntervalState {
+                interval: Some(interval),
+                reason: FrameIntervalReason::MaxFps,
+            },
+        );
+
+        assert_eq!(
+            plan,
+            FrameWaitPlan {
+                mode: FrameLoopMode::Scheduled(FrameIntervalReason::MaxFps, interval),
+                control: FrameWaitControl::WaitUntil(now + interval - SCHEDULED_REDRAW_POLL_GUARD),
+                redraw_reason: Some("scheduled_maxfps"),
+            }
+        );
+    }
+
+    #[test]
+    fn scheduled_frame_polls_inside_deadline_guard_without_duplicate_redraw() {
+        let start = Instant::now();
+        let interval = Duration::from_millis(16);
+        let mut state = FrameLoopState::new(0, true, start);
+        let interval_state = FrameIntervalState {
+            interval: Some(interval),
+            reason: FrameIntervalReason::Background,
+        };
+        let _ = state.plan_wait(start, interval_state);
+
+        let plan = state.plan_wait(start + Duration::from_micros(15_500), interval_state);
+
+        assert_eq!(plan.control, FrameWaitControl::Poll);
+        assert_eq!(plan.redraw_reason, None);
+    }
+
+    #[test]
+    fn uncapped_loop_waits_for_pending_redraw_or_polls_for_a_new_one() {
+        let now = Instant::now();
+        let uncapped = FrameIntervalState {
+            interval: None,
+            reason: FrameIntervalReason::None,
+        };
+        let mut state = FrameLoopState::new(0, true, now);
+
+        assert_eq!(
+            state.plan_wait(now, uncapped),
+            FrameWaitPlan {
+                mode: FrameLoopMode::Poll,
+                control: FrameWaitControl::Poll,
+                redraw_reason: Some("poll"),
+            }
+        );
+
+        state.note_redraw_requested(now, "external");
+        assert_eq!(
+            state.plan_wait(now, uncapped),
+            FrameWaitPlan {
+                mode: FrameLoopMode::WaitPending,
+                control: FrameWaitControl::Wait,
+                redraw_reason: None,
+            }
+        );
+    }
+
+    #[test]
+    fn screen_step_follows_transition_gate() {
+        assert_eq!(
+            frame_screen_step_plan(FrameScreenStepContext {
+                current_screen: Screen::SelectMusic,
+                transition_step_screen: false,
+                gameplay_offset_prompt_active: false,
+            }),
+            FrameScreenStepPlan { step_screen: false }
+        );
+        assert_eq!(
+            frame_screen_step_plan(FrameScreenStepContext {
+                current_screen: Screen::SelectMusic,
+                transition_step_screen: true,
+                gameplay_offset_prompt_active: false,
+            }),
+            FrameScreenStepPlan { step_screen: true }
+        );
+    }
+
+    #[test]
+    fn gameplay_offset_prompt_blocks_only_gameplay_screen_step() {
+        assert_eq!(
+            frame_screen_step_plan(FrameScreenStepContext {
+                current_screen: Screen::Gameplay,
+                transition_step_screen: true,
+                gameplay_offset_prompt_active: true,
+            }),
+            FrameScreenStepPlan { step_screen: false }
+        );
+        assert_eq!(
+            frame_screen_step_plan(FrameScreenStepContext {
+                current_screen: Screen::Evaluation,
+                transition_step_screen: true,
+                gameplay_offset_prompt_active: true,
+            }),
+            FrameScreenStepPlan { step_screen: true }
+        );
     }
 }

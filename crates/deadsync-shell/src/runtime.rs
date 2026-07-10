@@ -1,13 +1,14 @@
 use crate::{
-    FrameLoopState, FrameStatsController, GameplayInputTrace, GameplayPacingTrace,
-    ShellInteractionState, StutterDiagRecorder, TransitionState,
+    FrameLoopState, FrameStatsController, FrameStatsSample, GameplayInputTrace,
+    GameplayPacingTrace, ShellInteractionState, StutterDiagRecorder, TransitionState,
 };
 use deadlib_present::space::{self, Metrics};
-use deadlib_render::{PresentModePolicy, PresentStats};
+use deadlib_render::{DrawStats, PresentModePolicy, PresentStats};
 use deadsync_assets::screenshot::ScreenshotRuntimeState;
 use deadsync_config::app_config::{Config, DisplayMode};
 use deadsync_config::frame_pacing::{
-    FrameIntervalState, FrameLoopMode, OverlayMode, StutterSampleRing,
+    FrameIntervalState, FrameLoopMode, OverlayMode, StutterSampleRing, seconds_to_us_u32,
+    stutter_severity,
 };
 use deadsync_profile::PlayerSide;
 use deadsync_screens::Screen;
@@ -205,6 +206,83 @@ impl ShellState {
     pub fn clear_stutter_samples(&mut self) {
         self.stutter_samples.clear();
     }
+
+    #[inline(always)]
+    pub fn expected_frame_seconds(&self, screen: Screen) -> f32 {
+        if self.last_fps > 0.0 {
+            return 1.0 / self.last_fps;
+        }
+        if let Some(interval) = self.background_frame_interval(screen) {
+            return interval.as_secs_f32();
+        }
+        if self.vsync_enabled {
+            return 1.0 / 60.0;
+        }
+        0.0
+    }
+
+    #[inline(always)]
+    pub fn update_stutter_samples(
+        &mut self,
+        screen: Screen,
+        frame_seconds: f32,
+        total_elapsed: f32,
+    ) {
+        if !self.overlay_mode.shows_stutter() {
+            return;
+        }
+        let expected = self.expected_frame_seconds(screen);
+        let severity = stutter_severity(frame_seconds, expected);
+        if severity != 0 {
+            self.push_stutter_sample(total_elapsed, frame_seconds, expected, severity);
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn record_frame_stats_sample(
+        &mut self,
+        frame_host_nanos: u64,
+        frame_seconds: f32,
+        input_us: u32,
+        update_us: u32,
+        compose_us: u32,
+        upload_us: u32,
+        draw_us: u32,
+        draw_stats: DrawStats,
+        display_error_seconds: f32,
+        display_catching_up: bool,
+    ) {
+        if !self.frame_stats.enabled() {
+            return;
+        }
+        let display_error_us = (f64::from(display_error_seconds) * 1_000_000.0)
+            .round()
+            .clamp(f64::from(i32::MIN), f64::from(i32::MAX)) as i32;
+        self.frame_stats.record(FrameStatsSample {
+            host_nanos: frame_host_nanos.max(1),
+            frame_us: seconds_to_us_u32(frame_seconds),
+            input_us,
+            update_us,
+            compose_us,
+            upload_us,
+            draw_us,
+            gpu_wait_us: draw_stats.gpu_wait_us,
+            display_error_us,
+            catching_up: display_catching_up,
+        });
+    }
+
+    #[inline(always)]
+    pub fn update_fps_stats(&mut self, now: Instant) {
+        self.frame_count += 1;
+        let elapsed = now.duration_since(self.last_title_update);
+        if elapsed.as_secs_f32() >= 1.0 {
+            self.last_fps = self.frame_count as f32 / elapsed.as_secs_f32();
+            self.last_vpf = self.current_frame_vpf;
+            self.frame_count = 0;
+            self.last_title_update = now;
+        }
+    }
 }
 
 #[cfg(test)]
@@ -241,5 +319,32 @@ mod tests {
 
         assert!(state.stutter_samples.visible(1.0).is_empty());
         assert_eq!(state.overlay_mode, OverlayMode::Fps);
+    }
+
+    #[test]
+    fn measured_fps_drives_expected_frame_time_and_stutter_sampling() {
+        let mut state = ShellState::new(&Config::default(), 2);
+        state.last_fps = 100.0;
+        assert!((state.expected_frame_seconds(Screen::Gameplay) - 0.01).abs() < f32::EPSILON);
+
+        state.update_stutter_samples(Screen::Gameplay, 0.03, 5.0);
+        let samples = state.stutter_samples.visible(5.0);
+        assert_eq!(samples.len(), 1);
+        assert!((samples[0].frame_multiple - 3.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn fps_stats_roll_over_after_one_second() {
+        let mut state = ShellState::new(&Config::default(), 0);
+        let now = state.last_title_update + Duration::from_secs(2);
+        state.frame_count = 119;
+        state.current_frame_vpf = 3;
+
+        state.update_fps_stats(now);
+
+        assert_eq!(state.last_fps, 60.0);
+        assert_eq!(state.last_vpf, 3);
+        assert_eq!(state.frame_count, 0);
+        assert_eq!(state.last_title_update, now);
     }
 }

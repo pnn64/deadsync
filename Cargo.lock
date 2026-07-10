@@ -1134,7 +1134,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.4.2403"
+version = "0.4.2472"
 dependencies = [
  "bincode",
  "bitflags 2.13.0",
@@ -1552,12 +1552,14 @@ dependencies = [
  "deadlib-renderer",
  "deadlib-video",
  "deadsync-assets",
+ "deadsync-audio",
  "deadsync-audio-stream",
  "deadsync-chart",
  "deadsync-config",
  "deadsync-core",
  "deadsync-gameplay",
  "deadsync-input",
+ "deadsync-input-fsr",
  "deadsync-input-native",
  "deadsync-lights",
  "deadsync-online",
@@ -1567,6 +1569,7 @@ dependencies = [
  "deadsync-screens",
  "deadsync-simfile",
  "deadsync-smx",
+ "deadsync-song-lua",
  "image",
  "log",
  "objc2 0.6.4",
@@ -1655,7 +1658,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.4.2403"
+version = "0.4.2472"
 dependencies = [
  "log",
  "semver",

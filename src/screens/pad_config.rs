@@ -22,6 +22,9 @@ use deadlib_present::space::{screen_center_x, screen_center_y, screen_height};
 use deadsync_core::input::InputSource;
 use deadsync_input::fsr::{ButtonView, PAD_BUTTON_COUNT, PadDeviceId, PadView, SensorView};
 use deadsync_input::{InputEvent, VirtualAction};
+pub use deadsync_screens::pad_config::{
+    EditResult, PadCommand, PadFilter, ProfileListEntry, SaveDraft,
+};
 
 /// Which of a load-cell button's two thresholds a Simple-view cursor stop
 /// edits. Pads without a separate release threshold only use `Press`.
@@ -88,87 +91,8 @@ struct Theme {
     fill_idle: [f32; 4],
 }
 
-/// A pending pad-config edit for the app loop to apply to hardware.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PadCommand {
-    /// Single-threshold edit (the backend derives its own release side).
-    /// `sensor: None` applies to every sensor in the button (Simple mode);
-    /// `Some(i)` targets one sensor (Advanced mode).
-    Threshold {
-        device: PadDeviceId,
-        button: usize,
-        sensor: Option<usize>,
-        value: u16,
-    },
-    /// Press+release pair edit for a load-cell button, applied as a single
-    /// config write so the pad can never observe an inverted intermediate
-    /// state (release >= press).
-    ThresholdPair {
-        device: PadDeviceId,
-        button: usize,
-        press: u16,
-        release: u16,
-    },
-    /// Enable/disable a single sensor (Advanced mode).
-    SensorEnabled {
-        device: PadDeviceId,
-        button: usize,
-        sensor: usize,
-        enabled: bool,
-    },
-    /// Toggle auto-recalibration for the whole pad (Extra Advanced).
-    AutoRecalibration { device: PadDeviceId, enabled: bool },
-    /// Set the per-panel debounce in microseconds (Extra Advanced).
-    Debounce { device: PadDeviceId, micros: u16 },
-}
-
-/// Outcome of an edit, so the screen / overlay caller knows when to leave.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum EditResult {
-    /// The event was handled within the screen (edit, nav, enter/leave Advanced).
-    Handled,
-    /// Back was pressed at the top (Simple) level — the caller should exit.
-    ExitToParent,
-    /// The user confirmed the save name box. The caller should `take_save` the
-    /// draft and either store a new capture or (when `rename_of` is set) rename.
-    SaveRequested,
-    /// Apply the saved config under the profiles-list cursor to the pad.
-    ApplyProfile,
-    /// Make the saved config under the profiles-list cursor the default.
-    SetDefaultProfile,
-}
-
-/// In-progress name-entry box (in-session overlay only). Used both for saving a
-/// new capture and for renaming an existing config (`rename_of` set).
-#[derive(Clone, Debug, Default)]
-pub struct SaveDraft {
-    pub name: String,
-    pub set_default: bool,
-    /// When set, confirming renames this existing config instead of capturing.
-    pub rename_of: Option<String>,
-}
-
-/// One row in the Configure Pads "Profiles" management list (pushed by the app).
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ProfileListEntry {
-    pub name: String,
-    pub is_default: bool,
-    /// Whether this config is the one currently applied to the pad.
-    pub is_active: bool,
-}
-
 /// Max length of a saved pad-config profile name.
 const MAX_PROFILE_NAME_LEN: usize = 24;
-
-/// Which pads to show, based on play context when opened.
-#[derive(Clone, Copy, Default)]
-pub enum PadFilter {
-    /// Show every connected pad (e.g. opened from Options).
-    #[default]
-    All,
-    /// Show only the pads for the given player sides (e.g. opened mid-play).
-    Sides { p1: bool, p2: bool },
-}
 
 #[derive(Default)]
 pub struct State {

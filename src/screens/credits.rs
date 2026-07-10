@@ -7,12 +7,10 @@ use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_height, screen_width};
 use deadsync_input::{InputEvent, VirtualAction};
 
-/* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
 const TRANSITION_OUT_DURATION: f32 = 0.4;
 
-/* ------------------------------ credits ------------------------------ */
-// Mirror _fallback ScreenCredits scroller pacing.
+// Mirror _fallback ScreenCredits scroller layout.
 const LINE_HEIGHT: f32 = 30.0;
 const ITEM_PADDING_START: f32 = 4.0;
 const ITEM_PADDING_END: f32 = 15.0;
@@ -49,21 +47,18 @@ const fn section(text: &'static str) -> CreditLine {
         text,
     }
 }
-
 const fn subsection(text: &'static str) -> CreditLine {
     CreditLine {
         kind: CreditLineKind::Subsection,
         text,
     }
 }
-
 const fn name(text: &'static str) -> CreditLine {
     CreditLine {
         kind: CreditLineKind::Name,
         text,
     }
 }
-
 const fn spacer() -> CreditLine {
     CreditLine {
         kind: CreditLineKind::Spacer,
@@ -116,7 +111,7 @@ const CREDITS: &[CreditLine] = &[
     name("Tom Jackson (ddrcoder)"),
     name("SamuelDev"),
     name("Sereni"),
-    name("Romain Roffé (rofferom)"),
+    name("Romain RoffÃ© (rofferom)"),
     name("Scott Brenner"),
     spacer(),
     spacer(),
@@ -186,13 +181,12 @@ pub fn init() -> State {
     }
 }
 
-pub fn update(state: &mut State, dt: f32) {
-    if dt <= 0.0 {
+pub fn update(state: &mut State, delta_time: f32) {
+    if delta_time <= 0.0 {
         return;
     }
-    state.enter_elapsed += dt;
-    let scroll_speed = 1.0 / SECONDS_PER_ITEM;
-    state.scroll_items = (state.scroll_items + dt * scroll_speed) % TOTAL_SCROLL_ITEMS;
+    state.enter_elapsed += delta_time;
+    state.scroll_items = (state.scroll_items + delta_time / SECONDS_PER_ITEM) % TOTAL_SCROLL_ITEMS;
 }
 
 #[inline(always)]
@@ -218,12 +212,11 @@ fn ease_out_cubic(t: f32) -> f32 {
     1.0 - u * u * u
 }
 
-pub fn handle_input(_state: &mut State, ev: &InputEvent) -> ScreenAction {
-    if !ev.pressed {
+pub fn handle_input(_state: &mut State, event: &InputEvent) -> ScreenAction {
+    if !event.pressed {
         return ScreenAction::None;
     }
-
-    match ev.action {
+    match event.action {
         VirtualAction::p1_start
         | VirtualAction::p2_start
         | VirtualAction::p1_back

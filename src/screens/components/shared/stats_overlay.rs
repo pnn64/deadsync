@@ -2,8 +2,8 @@ use crate::act;
 use deadlib_present::actors::Actor;
 use deadlib_present::cache::{TextCache, cached_text};
 use deadlib_present::space::{screen_height, screen_width};
-use deadlib_render::{BackendType, ClockDomainTrace, PresentModeTrace};
-use deadsync_audio::{OutputTelemetryBackend, OutputTelemetryClock, OutputTimingQuality};
+use deadlib_render::BackendType;
+use deadsync_shell::{TimingHealth, VisibleStutterSample};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -40,53 +40,6 @@ fn cached_stats_text(backend: BackendType, fps: f32, vpf: u32) -> Arc<str> {
     cached_text(&STATS_TEXT_CACHE, key, TEXT_CACHE_LIMIT, || {
         format!("{:.0} FPS\n{} VPF\n{}", fps.max(0.0), vpf, backend)
     })
-}
-
-pub struct StutterEvent {
-    pub timestamp_seconds: f32,
-    pub frame_ms: f32,
-    pub frame_multiple: f32,
-    pub severity: u8,
-    pub age_seconds: f32,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct AudioHealth {
-    pub backend: OutputTelemetryBackend,
-    pub requested_output_mode: crate::config::AudioOutputMode,
-    pub fallback_from_native: bool,
-    pub timing_clock: OutputTelemetryClock,
-    pub timing_quality: OutputTimingQuality,
-    pub sample_rate_hz: u32,
-    pub device_period_ns: u64,
-    pub stream_latency_ns: u64,
-    pub buffer_frames: u32,
-    pub padding_frames: u32,
-    pub queued_frames: u32,
-    pub estimated_output_delay_ns: u64,
-    pub clock_fallback_count: u64,
-    pub timing_sanity_failure_count: u64,
-    pub underrun_count: u64,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct TimingHealth {
-    pub interval_ns: u64,
-    pub display_error_ms: f32,
-    pub display_catching_up: bool,
-    pub present_mode: PresentModeTrace,
-    pub display_clock: ClockDomainTrace,
-    pub host_clock: ClockDomainTrace,
-    pub in_flight_images: u8,
-    pub waited_for_image: bool,
-    pub applied_back_pressure: bool,
-    pub queue_idle_waited: bool,
-    pub suboptimal: bool,
-    pub submitted_present_id: u32,
-    pub completed_present_id: u32,
-    pub calibration_error_ns: u64,
-    pub host_mapped: bool,
-    pub audio: Option<AudioHealth>,
 }
 
 #[inline(always)]
@@ -207,7 +160,7 @@ fn stutter_color(severity: u8, age_seconds: f32) -> [f32; 4] {
     [rgb[0], rgb[1], rgb[2], alpha]
 }
 
-pub fn build_stutter(events: &[StutterEvent]) -> Vec<Actor> {
+pub fn build_stutter(events: &[VisibleStutterSample]) -> Vec<Actor> {
     if events.is_empty() {
         return Vec::new();
     }

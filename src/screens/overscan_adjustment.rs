@@ -8,8 +8,10 @@ use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space;
 use deadlib_present::space::{screen_center_x, screen_height, screen_width};
-use deadsync_input::RawKeyboardEvent;
-use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_input::{InputEvent, RawKeyboardEvent};
+use deadsync_screens::overscan::{
+    Action as OverscanAction, Adjustment, Field, State as OverscanState, Values,
+};
 use winit::keyboard::KeyCode;
 
 const TRANSITION_IN_DURATION: f32 = 0.4;
@@ -19,14 +21,8 @@ const GUIDE_THICKNESS: f32 = 2.0;
 const RED: [f32; 3] = [0.92, 0.25, 0.25];
 const BLUE: [f32; 3] = [0.35, 0.6, 1.0];
 
-/// Working values, ordered to match the rows shown on the overscan screen.
-const FIELD_COUNT: usize = 4;
-const IDX_ADD_HEIGHT: usize = 0;
-const IDX_ADD_WIDTH: usize = 1;
-const IDX_TRANSLATE_X: usize = 2;
-const IDX_TRANSLATE_Y: usize = 3;
-
 struct FieldInfo {
+    field: Field,
     /// i18n key (under `[ScreenOverscanAdjustment]`) for the field's label.
     label_key: &'static str,
     /// Key that increases the value (shown first in the hint).
@@ -37,26 +33,30 @@ struct FieldInfo {
     color: [f32; 3],
 }
 
-const FIELDS: [FieldInfo; FIELD_COUNT] = [
+const FIELDS: [FieldInfo; deadsync_screens::overscan::FIELD_COUNT] = [
     FieldInfo {
+        field: Field::AddHeight,
         label_key: "AddHeight",
         inc_key: "w",
         dec_key: "s",
         color: RED,
     },
     FieldInfo {
+        field: Field::AddWidth,
         label_key: "AddWidth",
         inc_key: "d",
         dec_key: "a",
         color: BLUE,
     },
     FieldInfo {
+        field: Field::TranslateX,
         label_key: "TranslateX",
         inc_key: "l",
         dec_key: "j",
         color: BLUE,
     },
     FieldInfo {
+        field: Field::TranslateY,
         label_key: "TranslateY",
         inc_key: "k",
         dec_key: "i",
@@ -67,34 +67,27 @@ const FIELDS: [FieldInfo; FIELD_COUNT] = [
 pub struct State {
     pub active_color_index: i32,
     bg: visual_style_bg::State,
-    /// Live working values: [add_height, add_width, translate_x, translate_y].
-    values: [i32; FIELD_COUNT],
-    /// Values present on entry, restored when the user cancels.
-    initial: [i32; FIELD_COUNT],
-    selected: usize,
+    edit: OverscanState,
 }
 
 pub fn init() -> State {
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
         bg: visual_style_bg::State::new(),
-        values: [0; FIELD_COUNT],
-        initial: [0; FIELD_COUNT],
-        selected: 0,
+        edit: OverscanState::new(Values::default()),
     }
 }
 
 pub fn on_enter(state: &mut State) {
     let cfg = config::get();
-    state.values = [
-        cfg.center_image_add_height,
-        cfg.center_image_add_width,
-        cfg.center_image_translate_x,
-        cfg.center_image_translate_y,
-    ];
-    state.initial = state.values;
-    state.selected = 0;
-    apply_preview(state);
+    let values = Values {
+        add_height: cfg.center_image_add_height,
+        add_width: cfg.center_image_add_width,
+        translate_x: cfg.center_image_translate_x,
+        translate_y: cfg.center_image_translate_y,
+    };
+    state.edit.reset(values);
+    apply_preview(values);
 }
 
 pub fn update(_state: &mut State, _dt: f32) -> Option<ScreenAction> {
@@ -105,86 +98,46 @@ pub fn update(_state: &mut State, _dt: f32) -> Option<ScreenAction> {
 /// when the key was consumed so it does not also fire as a virtual menu action
 /// (W/A/S/D overlap the P1 pad directions).
 pub fn handle_raw_key_event(state: &mut State, ev: &RawKeyboardEvent) -> bool {
-    if !ev.pressed {
-        // Still consume key-up for our adjustment keys to keep behaviour tidy.
-        return matches!(
-            ev.code,
-            KeyCode::KeyW
-                | KeyCode::KeyS
-                | KeyCode::KeyD
-                | KeyCode::KeyA
-                | KeyCode::KeyL
-                | KeyCode::KeyJ
-                | KeyCode::KeyK
-                | KeyCode::KeyI
-        );
-    }
-    let (field, delta) = match ev.code {
-        KeyCode::KeyW => (IDX_ADD_HEIGHT, 1),
-        KeyCode::KeyS => (IDX_ADD_HEIGHT, -1),
-        KeyCode::KeyD => (IDX_ADD_WIDTH, 1),
-        KeyCode::KeyA => (IDX_ADD_WIDTH, -1),
-        KeyCode::KeyL => (IDX_TRANSLATE_X, 1),
-        KeyCode::KeyJ => (IDX_TRANSLATE_X, -1),
-        KeyCode::KeyK => (IDX_TRANSLATE_Y, 1),
-        KeyCode::KeyI => (IDX_TRANSLATE_Y, -1),
+    let adjustment = match ev.code {
+        KeyCode::KeyW => Adjustment::new(Field::AddHeight, 1),
+        KeyCode::KeyS => Adjustment::new(Field::AddHeight, -1),
+        KeyCode::KeyD => Adjustment::new(Field::AddWidth, 1),
+        KeyCode::KeyA => Adjustment::new(Field::AddWidth, -1),
+        KeyCode::KeyL => Adjustment::new(Field::TranslateX, 1),
+        KeyCode::KeyJ => Adjustment::new(Field::TranslateX, -1),
+        KeyCode::KeyK => Adjustment::new(Field::TranslateY, 1),
+        KeyCode::KeyI => Adjustment::new(Field::TranslateY, -1),
         _ => return false,
     };
-    state.selected = field;
-    adjust(state, field, delta);
+    if ev.pressed {
+        apply_preview(deadsync_screens::overscan::apply_adjustment(
+            &mut state.edit,
+            adjustment,
+        ));
+    }
     true
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
-    if !ev.pressed {
-        return ScreenAction::None;
-    }
-    match ev.action {
-        VirtualAction::p1_start | VirtualAction::p2_start => {
-            // Commit working values to config (persists + keeps live preview).
+    match deadsync_screens::overscan::handle_input(&mut state.edit, ev) {
+        OverscanAction::None => ScreenAction::None,
+        OverscanAction::Preview(values) => {
+            apply_preview(values);
+            ScreenAction::None
+        }
+        OverscanAction::Commit(values) => {
             config::update_overscan(
-                state.values[IDX_TRANSLATE_X],
-                state.values[IDX_TRANSLATE_Y],
-                state.values[IDX_ADD_WIDTH],
-                state.values[IDX_ADD_HEIGHT],
+                values.translate_x,
+                values.translate_y,
+                values.add_width,
+                values.add_height,
             );
             ScreenAction::Navigate(Screen::Options)
         }
-        VirtualAction::p1_back | VirtualAction::p2_back => {
-            // Cancel: restore the values present on entry.
-            state.values = state.initial;
-            apply_preview(state);
+        OverscanAction::Cancel(values) => {
+            apply_preview(values);
             ScreenAction::Navigate(Screen::Options)
         }
-        VirtualAction::p1_up
-        | VirtualAction::p1_menu_up
-        | VirtualAction::p2_up
-        | VirtualAction::p2_menu_up => {
-            state.selected = (state.selected + FIELD_COUNT - 1) % FIELD_COUNT;
-            ScreenAction::None
-        }
-        VirtualAction::p1_down
-        | VirtualAction::p1_menu_down
-        | VirtualAction::p2_down
-        | VirtualAction::p2_menu_down => {
-            state.selected = (state.selected + 1) % FIELD_COUNT;
-            ScreenAction::None
-        }
-        VirtualAction::p1_left
-        | VirtualAction::p1_menu_left
-        | VirtualAction::p2_left
-        | VirtualAction::p2_menu_left => {
-            adjust(state, state.selected, -1);
-            ScreenAction::None
-        }
-        VirtualAction::p1_right
-        | VirtualAction::p1_menu_right
-        | VirtualAction::p2_right
-        | VirtualAction::p2_menu_right => {
-            adjust(state, state.selected, 1);
-            ScreenAction::None
-        }
-        _ => ScreenAction::None,
     }
 }
 
@@ -235,7 +188,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_mul: f32) {
     const ROW_SPACING: f32 = 42.0;
     let base_y = screen_h * 0.5 - ROW_SPACING * 1.5;
     for (idx, field) in FIELDS.iter().enumerate() {
-        let selected = idx == state.selected;
+        let selected = field.field == state.edit.selected();
         let row_alpha = if selected { 1.0 } else { 0.7 } * alpha_mul;
         let prefix = if selected { "> " } else { "  " };
         let text = format!(
@@ -243,7 +196,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_mul: f32) {
             tr("ScreenOverscanAdjustment", field.label_key),
             field.inc_key,
             field.dec_key,
-            state.values[idx]
+            state.edit.values().get(field.field)
         );
         actors.push(act!(text:
             font("miso"):
@@ -315,17 +268,12 @@ fn push_guides(actors: &mut Vec<Actor>, screen_w: f32, screen_h: f32, alpha_mul:
     ));
 }
 
-fn adjust(state: &mut State, field: usize, delta: i32) {
-    state.values[field] = state.values[field].saturating_add(delta);
-    apply_preview(state);
-}
-
 /// Push the current working values to the live render mirror (no disk write).
-fn apply_preview(state: &State) {
+fn apply_preview(values: Values) {
     space::set_overscan(
-        state.values[IDX_TRANSLATE_X],
-        state.values[IDX_TRANSLATE_Y],
-        state.values[IDX_ADD_WIDTH],
-        state.values[IDX_ADD_HEIGHT],
+        values.translate_x,
+        values.translate_y,
+        values.add_width,
+        values.add_height,
     );
 }

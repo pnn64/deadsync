@@ -1,4 +1,7 @@
+use deadsync_audio::OutputTimingSnapshot;
 use deadsync_config::frame_pacing::{FixedFrameStatsRing, update_frame_stats_spike_hold};
+use deadsync_profile::PlayStyle;
+use std::time::Duration;
 
 /// Number of bins in the frame-interval (jitter) histogram.
 pub const HISTOGRAM_BINS: usize = 32;
@@ -226,6 +229,55 @@ pub struct FrameStatsSummary {
     pub over_budget_count: u32,
     /// Distinct display-clock catch-up events in the recent ring window.
     pub catch_up_count: u32,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct FrameStatsSummaryContext {
+    pub fps: f32,
+    pub display_error_seconds: f32,
+    pub display_catching_up: bool,
+    pub in_gameplay: bool,
+    pub audio: OutputTimingSnapshot,
+}
+
+pub fn frame_stats_summary(
+    metrics: FrameStatsMetrics,
+    context: FrameStatsSummaryContext,
+) -> FrameStatsSummary {
+    FrameStatsSummary {
+        avg_frame_us: metrics.avg_frame_us,
+        p99_frame_us: metrics.p99_frame_us,
+        max_frame_us: metrics.max_frame_us,
+        fps: context.fps,
+        display_error_ms: context.display_error_seconds * 1000.0,
+        display_error_p99_ms: metrics.display_error_p99_ms,
+        display_catching_up: context.display_catching_up,
+        in_gameplay: context.in_gameplay,
+        audio_callback_gap_ms: metrics.audio_callback_gap_ms,
+        audio_underruns: context.audio.underrun_count,
+        audio_output_delay_ms: context.audio.estimated_output_delay_ns as f32 / 1_000_000.0,
+        audio_queued_frames: context.audio.queued_frames,
+        frame_jitter_us: metrics.frame_jitter_us,
+        display_error_jitter_us: metrics.display_error_jitter_us,
+        spike_hold_us: metrics.spike_hold_us,
+        target_frame_us: metrics.target_frame_us,
+        cpu_work_us: metrics.cpu_work_us,
+        gpu_wait_us: metrics.gpu_wait_us,
+        over_budget_count: metrics.over_budget_count,
+        catch_up_count: metrics.catch_up_count,
+    }
+}
+
+pub fn frame_stats_target_us(refresh_ns: u64, fallback_interval: Option<Duration>) -> Option<u32> {
+    if refresh_ns != 0 {
+        return Some((refresh_ns / 1000) as u32);
+    }
+    fallback_interval.map(|interval| interval.as_micros().min(u128::from(u32::MAX)) as u32)
+}
+
+#[inline(always)]
+pub const fn frame_stats_two_player(play_style: PlayStyle, num_players: usize) -> bool {
+    matches!(play_style, PlayStyle::Versus | PlayStyle::Double) || num_players >= 2
 }
 
 /// Exponentially-decaying bucketed histogram with bounded, allocation-free storage.
@@ -690,6 +742,29 @@ impl FrameStatsController {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use deadsync_audio::{
+        AudioOutputMode, OutputTelemetryBackend, OutputTelemetryClock, OutputTimingQuality,
+    };
+
+    fn audio_snapshot() -> OutputTimingSnapshot {
+        OutputTimingSnapshot {
+            backend: OutputTelemetryBackend::Unknown,
+            requested_output_mode: AudioOutputMode::Auto,
+            fallback_from_native: false,
+            timing_clock: OutputTelemetryClock::Unknown,
+            timing_quality: OutputTimingQuality::Unknown,
+            sample_rate_hz: 0,
+            device_period_ns: 0,
+            stream_latency_ns: 0,
+            buffer_frames: 0,
+            padding_frames: 0,
+            queued_frames: 0,
+            estimated_output_delay_ns: 0,
+            clock_fallback_count: 0,
+            timing_sanity_failure_count: 0,
+            underrun_count: 0,
+        }
+    }
 
     fn sample(frame_us: u32) -> FrameStatsSample {
         FrameStatsSample {
@@ -697,6 +772,77 @@ mod tests {
             frame_us,
             ..FrameStatsSample::empty()
         }
+    }
+
+    #[test]
+    fn target_frame_prefers_refresh_and_bounds_duration_fallback() {
+        assert_eq!(
+            frame_stats_target_us(16_666_667, Some(Duration::from_millis(8))),
+            Some(16_666)
+        );
+        assert_eq!(
+            frame_stats_target_us(0, Some(Duration::from_micros(8_333))),
+            Some(8_333)
+        );
+        assert_eq!(frame_stats_target_us(0, None), None);
+        assert_eq!(
+            frame_stats_target_us(0, Some(Duration::from_secs(u64::MAX))),
+            Some(u32::MAX)
+        );
+    }
+
+    #[test]
+    fn summary_combines_metrics_with_live_display_and_audio_health() {
+        let summary = frame_stats_summary(
+            FrameStatsMetrics {
+                avg_frame_us: 8_000,
+                p99_frame_us: 12_000,
+                max_frame_us: 20_000,
+                display_error_p99_ms: 2.5,
+                frame_jitter_us: 300,
+                display_error_jitter_us: 400,
+                spike_hold_us: 20_000,
+                target_frame_us: 8_333,
+                cpu_work_us: 2_000,
+                gpu_wait_us: 1_000,
+                over_budget_count: 3,
+                catch_up_count: 2,
+                audio_callback_gap_ms: 4.5,
+            },
+            FrameStatsSummaryContext {
+                fps: 120.0,
+                display_error_seconds: -0.0015,
+                display_catching_up: true,
+                in_gameplay: true,
+                audio: OutputTimingSnapshot {
+                    underrun_count: 7,
+                    estimated_output_delay_ns: 6_500_000,
+                    queued_frames: 256,
+                    ..audio_snapshot()
+                },
+            },
+        );
+        assert_eq!(summary.avg_frame_us, 8_000);
+        assert_eq!(summary.p99_frame_us, 12_000);
+        assert_eq!(summary.max_frame_us, 20_000);
+        assert_eq!(summary.fps, 120.0);
+        assert_eq!(summary.display_error_ms, -1.5);
+        assert!(summary.display_catching_up && summary.in_gameplay);
+        assert_eq!(summary.audio_callback_gap_ms, 4.5);
+        assert_eq!(summary.audio_underruns, 7);
+        assert_eq!(summary.audio_output_delay_ms, 6.5);
+        assert_eq!(summary.audio_queued_frames, 256);
+        assert_eq!(summary.target_frame_us, 8_333);
+        assert_eq!(summary.over_budget_count, 3);
+        assert_eq!(summary.catch_up_count, 2);
+    }
+
+    #[test]
+    fn versus_double_and_multiple_fields_use_compact_anchor_cycle() {
+        assert!(!frame_stats_two_player(PlayStyle::Single, 1));
+        assert!(frame_stats_two_player(PlayStyle::Single, 2));
+        assert!(frame_stats_two_player(PlayStyle::Versus, 1));
+        assert!(frame_stats_two_player(PlayStyle::Double, 1));
     }
 
     #[test]

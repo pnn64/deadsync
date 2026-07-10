@@ -12,6 +12,11 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 pub mod input;
+pub mod overscan;
+pub mod pad_config;
+pub mod player_options;
+pub mod select_mode;
+pub mod select_style;
 
 #[derive(Clone, Debug)]
 pub struct CourseStagePlan {

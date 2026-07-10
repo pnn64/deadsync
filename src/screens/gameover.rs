@@ -16,8 +16,6 @@ use deadsync_score::stage_stats;
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
 const TRANSITION_OUT_DURATION: f32 = 0.4;
-
-// Simply Love: ScreenGameOver TimerSeconds = 23 (non-SRPG9)
 const GAMEOVER_SECONDS: f32 = 23.0;
 const SRPG10_GAMEOVER_SECONDS: f32 = 135.0;
 
@@ -63,20 +61,20 @@ fn session_stats_for_side(
     stages: &[stage_stats::StageSummary],
 ) -> SessionStats {
     let mut out = SessionStats::default();
-    for s in stages {
-        if is_course_summary_stage(s) {
+    for stage in stages {
+        if is_course_summary_stage(stage) {
             continue;
         }
-        let Some(p) = s
+        let Some(player) = stage
             .players
             .get(profile_data::player_side_index(side))
-            .and_then(|p| p.as_ref())
+            .and_then(Option::as_ref)
         else {
             continue;
         };
         out.songs_played = out.songs_played.saturating_add(1);
-        out.notes_hit = out.notes_hit.saturating_add(p.notes_hit);
-        out.duration_seconds += s.duration_seconds.max(0.0);
+        out.notes_hit = out.notes_hit.saturating_add(player.notes_hit);
+        out.duration_seconds += stage.duration_seconds.max(0.0);
     }
     out
 }
@@ -197,10 +195,7 @@ pub fn init_blank() -> State {
 
 pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
     state.elapsed = (state.elapsed + dt).max(0.0);
-    if state.elapsed >= gameover_seconds() {
-        return Some(ScreenAction::Navigate(Screen::Menu));
-    }
-    None
+    (state.elapsed >= gameover_seconds()).then_some(ScreenAction::Navigate(Screen::Menu))
 }
 
 #[inline(always)]
@@ -216,7 +211,6 @@ pub fn handle_input(_state: &mut State, ev: &InputEvent) -> ScreenAction {
     if !ev.pressed {
         return ScreenAction::None;
     }
-
     match ev.action {
         VirtualAction::p1_start
         | VirtualAction::p1_back

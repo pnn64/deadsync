@@ -10,16 +10,12 @@ use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, widescale};
 use deadsync_audio_stream as audio;
-use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_input::InputEvent;
 use deadsync_profile as profile_data;
+use deadsync_screens::select_style::{self as style_flow, Choice, InputEffect, State as StyleFlow};
 
 /* ------------------------------ layout ------------------------------- */
-const CHOICE_COUNT: usize = 3;
-const CHOICE_ZOOM_UNFOCUSED: f32 = 0.5;
-const CHOICE_ZOOM_FOCUSED: f32 = 1.0;
-const CHOICE_ZOOM_TWEEN_DURATION: f32 = 0.125;
 // Simply Love: ScreenSelectStyle underlay/choice.lua
-const CHOICE_CHOSEN_ZOOM_OUT_DURATION: f32 = 0.415;
 const CHOICE_NOT_CHOSEN_FADE_DELAY: f32 = 0.1;
 const CHOICE_NOT_CHOSEN_FADE_DURATION: f32 = 0.2;
 const PAD_TILE_NATIVE_SIZE: f32 = 64.0;
@@ -35,22 +31,6 @@ const CHOICE_Y_OFFSET_16_9: f32 = 10.0;
 const PAD_UNUSED_RGBA: [f32; 4] = [0.2, 0.2, 0.2, 1.0];
 const DANCE_PAD_LAYOUT: [bool; 9] = [false, true, false, true, false, true, false, true, false];
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Choice {
-    Single,
-    Versus,
-    Double,
-}
-
-#[inline(always)]
-const fn choice_from_index(idx: usize) -> Choice {
-    match idx {
-        0 => Choice::Single,
-        1 => Choice::Versus,
-        _ => Choice::Double,
-    }
-}
-
 #[inline(always)]
 fn choice_label(choice: Choice) -> String {
     let key = match choice {
@@ -61,35 +41,23 @@ fn choice_label(choice: Choice) -> String {
     tr("SelectStyle", key).to_string()
 }
 
-#[inline(always)]
-const fn choice_play_style(choice: Choice) -> profile_data::PlayStyle {
-    match choice {
-        Choice::Single => profile_data::PlayStyle::Single,
-        Choice::Versus => profile_data::PlayStyle::Versus,
-        Choice::Double => profile_data::PlayStyle::Double,
-    }
-}
-
 pub struct State {
     pub active_color_index: i32,
-    pub selected_index: usize,
-    choice_zooms: [f32; CHOICE_COUNT],
-    exit_requested: bool,
-    exit_chosen_anim: bool,
-    exit_target: Option<Screen>,
+    flow: StyleFlow,
     bg: visual_style_bg::State,
 }
 
 pub fn init() -> State {
     State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
-        selected_index: 0,
-        choice_zooms: [CHOICE_ZOOM_UNFOCUSED; CHOICE_COUNT],
-        exit_requested: false,
-        exit_chosen_anim: false,
-        exit_target: None,
+        flow: StyleFlow::default(),
         bg: visual_style_bg::State::new(),
     }
+}
+
+#[inline(always)]
+pub fn set_selected_index(state: &mut State, index: usize) {
+    state.flow.set_selected_index(index);
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
@@ -103,90 +71,28 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 }
 
 pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
-    if state.exit_requested {
-        if let Some(target) = state.exit_target
-            && exit_anim_t(state.exit_chosen_anim) >= CHOICE_CHOSEN_ZOOM_OUT_DURATION
-        {
-            state.exit_target = None;
-            return Some(ScreenAction::Navigate(target));
-        }
-        return None;
-    }
-    let speed = (CHOICE_ZOOM_FOCUSED - CHOICE_ZOOM_UNFOCUSED) / CHOICE_ZOOM_TWEEN_DURATION;
-    let max_step = speed * dt.max(0.0);
-
-    for i in 0..CHOICE_COUNT {
-        let target = if i == state.selected_index {
-            CHOICE_ZOOM_FOCUSED
-        } else {
-            CHOICE_ZOOM_UNFOCUSED
-        };
-        let z = &mut state.choice_zooms[i];
-        let delta = target - *z;
-        if delta.abs() <= max_step {
-            *z = target;
-        } else {
-            *z += delta.signum() * max_step;
-        }
-    }
-    None
+    let exit_elapsed = if state.flow.exit_chosen_anim() {
+        exit_anim_t(true)
+    } else {
+        0.0
+    };
+    style_flow::update(&mut state.flow, dt, exit_elapsed).map(ScreenAction::Navigate)
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
-    if !ev.pressed {
-        return ScreenAction::None;
-    }
-    if state.exit_requested {
-        return ScreenAction::None;
-    }
-
-    let nav = match ev.action {
-        VirtualAction::p1_left
-        | VirtualAction::p2_left
-        | VirtualAction::p1_menu_left
-        | VirtualAction::p2_menu_left => Some(-1),
-
-        VirtualAction::p1_right
-        | VirtualAction::p2_right
-        | VirtualAction::p1_menu_right
-        | VirtualAction::p2_menu_right => Some(1),
-
-        VirtualAction::p1_start | VirtualAction::p2_start => Some(0),
-
-        VirtualAction::p1_back | VirtualAction::p2_back => Some(9),
-
-        _ => None,
-    };
-
-    match nav {
-        Some(-1) => {
-            state.selected_index = (state.selected_index + CHOICE_COUNT - 1) % CHOICE_COUNT;
+    match style_flow::handle_input(&mut state.flow, ev) {
+        InputEffect::None => ScreenAction::None,
+        InputEffect::Move => {
             audio::play_sfx("assets/sounds/change.ogg");
             ScreenAction::None
         }
-        Some(1) => {
-            state.selected_index = (state.selected_index + 1) % CHOICE_COUNT;
-            audio::play_sfx("assets/sounds/change.ogg");
-            ScreenAction::None
-        }
-        Some(0) => {
-            state.exit_requested = true;
-            state.exit_chosen_anim = true;
-            state.exit_target = Some(Screen::SelectPlayMode);
+        InputEffect::Confirm(play_style) => {
             let _ = exit_anim_t(true);
-            deadsync_profile::compat::set_session_play_style(choice_play_style(choice_from_index(
-                state.selected_index,
-            )));
+            deadsync_profile::compat::set_session_play_style(play_style);
             audio::play_sfx("assets/sounds/start.ogg");
             ScreenAction::None
         }
-        Some(9) => {
-            state.exit_requested = true;
-            state.exit_chosen_anim = false;
-            state.exit_target = None;
-            ScreenAction::Navigate(Screen::Menu)
-        }
-        _ => ScreenAction::None,
+        InputEffect::Back => ScreenAction::Navigate(Screen::Menu),
     }
 }
 
@@ -211,7 +117,7 @@ fn exit_anim_t(exiting: bool) -> f32 {
         std::sync::OnceLock::new();
     crate::screens::components::shared::transitions::linear_elapsed(
         exiting,
-        CHOICE_CHOSEN_ZOOM_OUT_DURATION,
+        style_flow::CONFIRM_EXIT_SECONDS,
         &STEPS,
         0x5353544C45584954u64, // "SSTLEXIT"
     )
@@ -254,10 +160,11 @@ fn push_pad_tiles(
 
 pub fn push_actors(actors: &mut Vec<Actor>, state: &State) {
     actors.reserve(128);
-    let exit_t = exit_anim_t(state.exit_chosen_anim);
-    let (chosen_p, other_alpha) = if state.exit_chosen_anim {
+    let exit_chosen_anim = state.flow.exit_chosen_anim();
+    let exit_t = exit_anim_t(exit_chosen_anim);
+    let (chosen_p, other_alpha) = if exit_chosen_anim {
         (
-            deadlib_present::anim::bouncebegin_p(exit_t / CHOICE_CHOSEN_ZOOM_OUT_DURATION),
+            deadlib_present::anim::bouncebegin_p(exit_t / style_flow::CONFIRM_EXIT_SECONDS),
             not_chosen_alpha(exit_t),
         )
     } else {
@@ -348,21 +255,21 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State) {
     let choice_x_off = widescale(CHOICE_X_OFFSET_4_3, CHOICE_X_OFFSET_16_9);
     let dual_pad_off = widescale(PAD_DUAL_OFFSET_4_3, PAD_DUAL_OFFSET_16_9);
 
-    for i in 0..CHOICE_COUNT {
-        let choice = choice_from_index(i);
+    for i in 0..style_flow::CHOICE_COUNT {
+        let choice = Choice::from_index(i);
         let x = match choice {
             Choice::Single => cx - choice_x_off,
             Choice::Versus => cx,
             Choice::Double => cx + choice_x_off,
         };
-        let (zoom, alpha) = if state.exit_chosen_anim {
-            if i == state.selected_index {
-                (CHOICE_ZOOM_FOCUSED * (1.0 - chosen_p), 1.0)
+        let (zoom, alpha) = if exit_chosen_anim {
+            if i == state.flow.selected_index() {
+                (style_flow::CHOICE_ZOOM_FOCUSED * (1.0 - chosen_p), 1.0)
             } else {
-                (CHOICE_ZOOM_UNFOCUSED, other_alpha)
+                (style_flow::CHOICE_ZOOM_UNFOCUSED, other_alpha)
             }
         } else {
-            (state.choice_zooms[i], 1.0)
+            (state.flow.choice_zoom(i), 1.0)
         };
 
         match choice {
