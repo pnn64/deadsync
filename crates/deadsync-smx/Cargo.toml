@@ -14,7 +14,7 @@ deadsync-score = { path = "../deadsync-score" }
 deadlib-platform = { path = "../deadlib-platform" }
 image = { version = "0.25.10", default-features = false, features = ["gif"] }
 log = "0.4.33"
-rustmaniax-sdk = "2.1.0"
+rustmaniax-sdk = "2.1.1"
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }
