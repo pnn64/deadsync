@@ -1,76 +1,23 @@
 use super::App;
 use crate::config::{self, DisplayMode};
-use crate::screens::{DensityGraphSlot, options, select_music};
-use deadlib_platform::dirs;
+use crate::screens::{options, select_music};
 use deadlib_platform::display;
 use deadlib_present::space;
 use deadlib_render::BackendType;
-use deadlib_renderer::{
-    create_backend, render_size_for_physical, render_size_for_window, request_window_size,
-    with_requested_window_size,
+use deadlib_renderer::{create_backend, render_size_for_physical, render_size_for_window};
+use deadsync_screens::DensityGraphSlot;
+use deadsync_shell::{
+    AppWindowConfig, DisplayModeChange, ResolutionChange, apply_window_display_mode,
+    apply_window_resolution, create_app_window,
 };
 use log::{error, info};
 use std::error::Error;
-use std::sync::Arc;
 use std::time::Instant;
 use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
     event_loop::ActiveEventLoop,
     monitor::MonitorHandle,
-    window::{Icon, Window},
 };
-
-fn load_window_icon() -> Option<Icon> {
-    const WINDOW_ICON_PATHS: [&str; 2] = [
-        "assets/graphics/icon/icon-256.png",
-        "assets/graphics/icon/icon.png",
-    ];
-    let dirs = dirs::app_dirs();
-    for path in WINDOW_ICON_PATHS {
-        let resolved = dirs.resolve_asset_path(path);
-        let Ok(img) = image::open(&resolved) else {
-            continue;
-        };
-        let rgba = img.into_rgba8();
-        let (width, height) = rgba.dimensions();
-        if let Ok(icon) = Icon::from_rgba(rgba.into_raw(), width, height) {
-            return Some(icon);
-        }
-    }
-    None
-}
-
-#[cfg(target_os = "macos")]
-fn set_macos_app_icon() {
-    use objc2::{AnyThread, MainThreadMarker};
-    use objc2_app_kit::{NSApplication, NSImage};
-    use objc2_foundation::NSString;
-
-    const MACOS_APP_ICON_PATHS: [&str; 2] = [
-        "assets/graphics/icon/icon.icns",
-        "assets/graphics/icon/icon-512.png",
-    ];
-
-    let mtm = MainThreadMarker::new().expect("AppKit icon setup requires the main thread");
-    let app = NSApplication::sharedApplication(mtm);
-    let dirs = dirs::app_dirs();
-    for path in MACOS_APP_ICON_PATHS {
-        let resolved = dirs.resolve_asset_path(path);
-        let ns_path = NSString::from_str(&resolved.to_string_lossy());
-        let icon_image = NSImage::initWithContentsOfFile(NSImage::alloc(), &ns_path);
-        if let Some(icon_image) = icon_image {
-            // SAFETY: `app` and `icon_image` are valid AppKit objects on the main
-            // thread, which is the required calling context for this setter.
-            unsafe {
-                app.setApplicationIconImage(Some(&icon_image));
-            }
-            return;
-        }
-    }
-}
-
-#[cfg(not(target_os = "macos"))]
-fn set_macos_app_icon() {}
 
 impl App {
     pub(super) fn init_graphics(
@@ -80,83 +27,33 @@ impl App {
         // Collect monitors and update options immediately so the initial menu state is correct.
         self.update_options_monitor_specs(event_loop);
 
-        let mut window_attributes = Window::default_attributes()
-            .with_title("DeadSync")
-            .with_resizable(true)
-            .with_transparent(false)
-            // Keep the window hidden until startup assets are ready so the first
-            // visible frame starts Init animations at t=0.
-            .with_visible(false);
-        set_macos_app_icon();
-        if let Some(icon) = load_window_icon() {
-            window_attributes = window_attributes.with_window_icon(Some(icon));
-        }
-        #[cfg(target_os = "macos")]
-        if self.backend_type == BackendType::OpenGL {
-            window_attributes = window_attributes.with_disallow_hidpi(!config::get().high_dpi);
-        }
-
         let window_width = self.state.shell.display_width;
         let window_height = self.state.shell.display_height;
-        let (monitor_handle, monitor_count, monitor_idx) =
-            display::resolve_monitor(event_loop, self.state.shell.display_monitor);
-        self.state.shell.display_monitor = monitor_idx;
-        let fullscreen_type = match self.state.shell.display_mode {
-            DisplayMode::Fullscreen(ft) => ft,
-            DisplayMode::Windowed => config::get().fullscreen_type,
-        };
+        let runtime_config = config::get();
+        let setup = create_app_window(
+            event_loop,
+            AppWindowConfig {
+                backend_type: self.backend_type,
+                high_dpi: runtime_config.high_dpi,
+                width: window_width,
+                height: window_height,
+                monitor: self.state.shell.display_monitor,
+                display_mode: self.state.shell.display_mode,
+                fallback_fullscreen_type: runtime_config.fullscreen_type,
+                hide_cursor: runtime_config.hide_mouse_cursor,
+                pending_position: self.state.shell.pending_window_position.take(),
+            },
+        )?;
+        self.state.shell.display_monitor = setup.monitor;
         options::sync_display_mode(
             &mut self.state.screens.options_state,
             self.state.shell.display_mode,
-            fullscreen_type,
+            setup.fullscreen_type,
             self.state.shell.display_monitor,
-            monitor_count,
+            setup.monitor_count,
         );
-
-        match self.state.shell.display_mode {
-            DisplayMode::Fullscreen(fullscreen_type) => {
-                // Winit defaults new Linux windows to 800x600. In bare X11
-                // sessions fullscreen can be applied after the hidden window
-                // is shown, so seed the configured size before backend init.
-                window_attributes = with_requested_window_size(
-                    window_attributes,
-                    self.backend_type,
-                    config::get().high_dpi,
-                    window_width,
-                    window_height,
-                );
-                let fullscreen = display::fullscreen_mode(
-                    fullscreen_type,
-                    window_width,
-                    window_height,
-                    monitor_handle,
-                    event_loop,
-                );
-                window_attributes = window_attributes.with_fullscreen(fullscreen);
-            }
-            DisplayMode::Windowed => {
-                window_attributes = with_requested_window_size(
-                    window_attributes,
-                    self.backend_type,
-                    config::get().high_dpi,
-                    window_width,
-                    window_height,
-                );
-                if let Some(pos) = self.state.shell.pending_window_position.take() {
-                    window_attributes = window_attributes.with_position(pos);
-                } else if let Some(pos) =
-                    display::default_window_position(window_width, window_height, monitor_handle)
-                {
-                    window_attributes = window_attributes.with_position(pos);
-                }
-            }
-        }
-
-        let window = Arc::new(event_loop.create_window(window_attributes)?);
-        // Re-assert the opaque hint so compositors do not apply alpha-based blending.
-        window.set_transparent(false);
-        window.set_cursor_visible(!config::get().hide_mouse_cursor);
-        let high_dpi = config::get().high_dpi;
+        let window = setup.window;
+        let high_dpi = runtime_config.high_dpi;
         let sz = render_size_for_window(&window, self.backend_type, high_dpi);
         self.state.shell.metrics = space::metrics_for_window(sz.width, sz.height);
         space::set_current_metrics(self.state.shell.metrics);
@@ -327,100 +224,40 @@ impl App {
         monitor_override: Option<usize>,
         event_loop: &ActiveEventLoop,
     ) -> Result<(), Box<dyn Error>> {
-        let (monitor_handle, monitor_count, resolved_monitor) = display::resolve_monitor(
-            event_loop,
-            monitor_override.unwrap_or(self.state.shell.display_monitor),
-        );
-        self.state.shell.display_monitor = resolved_monitor;
         let previous_mode = self.state.shell.display_mode;
-
-        if let Some(window) = &self.window {
-            if matches!(previous_mode, DisplayMode::Windowed) {
-                let sz = render_size_for_window(window, self.backend_type, config::get().high_dpi);
-                self.state.shell.display_width = sz.width;
-                self.state.shell.display_height = sz.height;
-                if let Ok(pos) = window.outer_position() {
-                    self.state.shell.pending_window_position = Some(pos);
-                }
-            }
-
-            match mode {
-                DisplayMode::Windowed => {
-                    window.set_fullscreen(None);
-                    let immediate_size = request_window_size(
-                        window,
-                        self.backend_type,
-                        config::get().high_dpi,
-                        self.state.shell.display_width,
-                        self.state.shell.display_height,
-                    );
-                    if let Some(pos) = self.state.shell.pending_window_position.take() {
-                        window.set_outer_position(pos);
-                    } else if let Some(pos) = display::default_window_position(
-                        self.state.shell.display_width,
-                        self.state.shell.display_height,
-                        monitor_handle,
-                    ) {
-                        window.set_outer_position(pos);
-                    }
-                    if let Some(size) = immediate_size {
-                        self.sync_window_size(size);
-                    }
-                }
-                DisplayMode::Fullscreen(fullscreen_type) => {
-                    let fullscreen = display::fullscreen_mode(
-                        fullscreen_type,
-                        self.state.shell.display_width,
-                        self.state.shell.display_height,
-                        monitor_handle,
-                        event_loop,
-                    );
-                    let immediate_size = request_window_size(
-                        window,
-                        self.backend_type,
-                        config::get().high_dpi,
-                        self.state.shell.display_width,
-                        self.state.shell.display_height,
-                    );
-                    window.set_fullscreen(fullscreen);
-                    if let Some(size) = immediate_size {
-                        self.sync_window_size(size);
-                    }
-                    // Fullscreen transitions are asynchronous on common Linux
-                    // paths. Do not resize from window.inner_size() here; the
-                    // final surface size is handled by WindowEvent::Resized.
-                    self.state.shell.display_mode = mode;
-                    config::update_display_mode(mode);
-                    config::update_display_monitor(self.state.shell.display_monitor);
-                    options::sync_display_mode(
-                        &mut self.state.screens.options_state,
-                        mode,
-                        fullscreen_type,
-                        self.state.shell.display_monitor,
-                        monitor_count,
-                    );
-                    return Ok(());
-                }
-            }
-        }
-
-        self.state.shell.display_mode = mode;
-
-        let fullscreen_type = match mode {
-            DisplayMode::Fullscreen(ft) => ft,
-            DisplayMode::Windowed => match previous_mode {
-                DisplayMode::Fullscreen(ft) => ft,
-                DisplayMode::Windowed => config::get().fullscreen_type,
+        let runtime_config = config::get();
+        let result = apply_window_display_mode(
+            self.window.as_deref(),
+            event_loop,
+            DisplayModeChange {
+                backend_type: self.backend_type,
+                high_dpi: runtime_config.high_dpi,
+                width: self.state.shell.display_width,
+                height: self.state.shell.display_height,
+                monitor: self.state.shell.display_monitor,
+                monitor_override,
+                previous_mode,
+                mode,
+                fallback_fullscreen_type: runtime_config.fullscreen_type,
+                pending_position: self.state.shell.pending_window_position,
             },
-        };
+        );
+        self.state.shell.display_width = result.width;
+        self.state.shell.display_height = result.height;
+        self.state.shell.display_monitor = result.monitor;
+        self.state.shell.pending_window_position = result.pending_position;
+        if let Some(size) = result.immediate_size {
+            self.sync_window_size(size);
+        }
+        self.state.shell.display_mode = mode;
         config::update_display_mode(mode);
         config::update_display_monitor(self.state.shell.display_monitor);
         options::sync_display_mode(
             &mut self.state.screens.options_state,
             mode,
-            fullscreen_type,
+            result.fullscreen_type,
             self.state.shell.display_monitor,
-            monitor_count,
+            result.monitor_count,
         );
         Ok(())
     }
@@ -433,49 +270,22 @@ impl App {
     ) -> Result<(), Box<dyn Error>> {
         self.state.shell.display_width = width;
         self.state.shell.display_height = height;
-        let (monitor_handle, _, resolved_monitor) =
-            display::resolve_monitor(event_loop, self.state.shell.display_monitor);
-        self.state.shell.display_monitor = resolved_monitor;
-
-        if let Some(window) = &self.window {
-            match self.state.shell.display_mode {
-                DisplayMode::Windowed => {
-                    if let Some(size) = request_window_size(
-                        window,
-                        self.backend_type,
-                        config::get().high_dpi,
-                        width,
-                        height,
-                    ) {
-                        self.sync_window_size(size);
-                    }
-                }
-                DisplayMode::Fullscreen(fullscreen_type) => {
-                    let fullscreen = display::fullscreen_mode(
-                        fullscreen_type,
-                        width,
-                        height,
-                        monitor_handle,
-                        event_loop,
-                    );
-                    let immediate_size = request_window_size(
-                        window,
-                        self.backend_type,
-                        config::get().high_dpi,
-                        width,
-                        height,
-                    );
-                    window.set_fullscreen(fullscreen);
-                    if let Some(size) = immediate_size {
-                        self.sync_window_size(size);
-                    }
-                    // Wait for WindowEvent::Resized before trusting the final
-                    // fullscreen drawable size on X11/Wayland.
-                    return Ok(());
-                }
-            }
+        let result = apply_window_resolution(
+            self.window.as_deref(),
+            event_loop,
+            ResolutionChange {
+                backend_type: self.backend_type,
+                high_dpi: config::get().high_dpi,
+                width,
+                height,
+                monitor: self.state.shell.display_monitor,
+                display_mode: self.state.shell.display_mode,
+            },
+        );
+        self.state.shell.display_monitor = result.monitor;
+        if let Some(size) = result.immediate_size {
+            self.sync_window_size(size);
         }
-
         Ok(())
     }
 

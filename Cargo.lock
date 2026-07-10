@@ -1134,7 +1134,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.4.2375"
+version = "0.4.2403"
 dependencies = [
  "bincode",
  "bitflags 2.13.0",
@@ -1171,6 +1171,8 @@ dependencies = [
  "deadsync-profile-gameplay",
  "deadsync-rules",
  "deadsync-score",
+ "deadsync-screens",
+ "deadsync-shell",
  "deadsync-simfile",
  "deadsync-smx",
  "deadsync-song-lua",
@@ -1524,6 +1526,57 @@ dependencies = [
 ]
 
 [[package]]
+name = "deadsync-screens"
+version = "0.1.0"
+dependencies = [
+ "deadlib-render",
+ "deadsync-assets",
+ "deadsync-chart",
+ "deadsync-config",
+ "deadsync-core",
+ "deadsync-input",
+ "deadsync-profile",
+ "deadsync-rules",
+ "deadsync-score",
+ "deadsync-simfile",
+]
+
+[[package]]
+name = "deadsync-shell"
+version = "0.1.0"
+dependencies = [
+ "deadlib-assets",
+ "deadlib-platform",
+ "deadlib-present",
+ "deadlib-render",
+ "deadlib-renderer",
+ "deadlib-video",
+ "deadsync-assets",
+ "deadsync-audio-stream",
+ "deadsync-chart",
+ "deadsync-config",
+ "deadsync-core",
+ "deadsync-gameplay",
+ "deadsync-input",
+ "deadsync-input-native",
+ "deadsync-lights",
+ "deadsync-online",
+ "deadsync-profile",
+ "deadsync-rules",
+ "deadsync-score",
+ "deadsync-screens",
+ "deadsync-simfile",
+ "deadsync-smx",
+ "image",
+ "log",
+ "objc2 0.6.4",
+ "objc2-app-kit 0.3.2",
+ "objc2-foundation 0.3.2",
+ "smallvec",
+ "winit",
+]
+
+[[package]]
 name = "deadsync-simfile"
 version = "0.1.0"
 dependencies = [
@@ -1602,7 +1655,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.4.2375"
+version = "0.4.2403"
 dependencies = [
  "log",
  "semver",

@@ -1,77 +1,16 @@
-use super::{App, CurrentScreen};
-use crate::screens::{DensityGraphSlot, DensityGraphSource};
-use deadlib_present::density;
-use deadsync_config::navigation::{
-    AppCommandKind, AppCommandTimingLog, app_command_label, app_command_timing_log,
-};
-use deadsync_online::score_compat as scores;
-use deadsync_profile as profile_data;
+use super::App;
 use deadsync_profile::compat as profile;
-use deadsync_rules::scroll::ScrollSpeedSetting;
+use deadsync_screens::{DensityGraphSlot, DensityGraphSource};
+use deadsync_shell::{
+    BannerSlot, Command, CommandTimingLog, banner_slot, build_density_graph_mesh, command_label,
+    command_timing_log, fallback_banner_key, spawn_online_grade_fetch,
+};
 use log::{debug, warn};
 use std::error::Error;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 use winit::event_loop::ActiveEventLoop;
-
-/// Imperative effects to be executed by the shell.
-pub(super) enum Command {
-    ExitNow,
-    Shutdown,
-    SetBanner(Option<PathBuf>),
-    SetCdTitle(Option<PathBuf>),
-    SetPackBanner(Option<PathBuf>),
-    SetWheelItemBackgrounds(Vec<PathBuf>),
-    SetDensityGraph {
-        slot: DensityGraphSlot,
-        chart_opt: Option<DensityGraphSource>,
-    },
-    FetchOnlineGrade(String),
-    PlayMusic {
-        path: PathBuf,
-        looped: bool,
-        volume: f32,
-    },
-    StopMusic,
-    SetDynamicBackground(Option<PathBuf>),
-    UpdateScrollSpeed {
-        side: profile_data::PlayerSide,
-        setting: ScrollSpeedSetting,
-    },
-    UpdateSessionMusicRate(f32),
-    UpdatePreferredDifficulty(usize),
-    UpdateLastPlayed {
-        side: profile_data::PlayerSide,
-        play_style: profile_data::PlayStyle,
-        music_path: Option<PathBuf>,
-        chart_hash: Option<String>,
-        difficulty_index: usize,
-    },
-}
-
-impl Command {
-    #[inline(always)]
-    const fn kind(&self) -> AppCommandKind {
-        match self {
-            Command::ExitNow => AppCommandKind::ExitNow,
-            Command::Shutdown => AppCommandKind::Shutdown,
-            Command::SetBanner(_) => AppCommandKind::SetBanner,
-            Command::SetCdTitle(_) => AppCommandKind::SetCdTitle,
-            Command::SetPackBanner(_) => AppCommandKind::SetPackBanner,
-            Command::SetWheelItemBackgrounds(_) => AppCommandKind::SetWheelItemBackgrounds,
-            Command::SetDensityGraph { .. } => AppCommandKind::SetDensityGraph,
-            Command::FetchOnlineGrade(_) => AppCommandKind::FetchOnlineGrade,
-            Command::PlayMusic { .. } => AppCommandKind::PlayMusic,
-            Command::StopMusic => AppCommandKind::StopMusic,
-            Command::SetDynamicBackground(_) => AppCommandKind::SetDynamicBackground,
-            Command::UpdateScrollSpeed { .. } => AppCommandKind::UpdateScrollSpeed,
-            Command::UpdateSessionMusicRate(_) => AppCommandKind::UpdateSessionMusicRate,
-            Command::UpdatePreferredDifficulty(_) => AppCommandKind::UpdatePreferredDifficulty,
-            Command::UpdateLastPlayed { .. } => AppCommandKind::UpdateLastPlayed,
-        }
-    }
-}
 
 impl App {
     pub(super) fn run_commands(
@@ -91,7 +30,7 @@ impl App {
         event_loop: &ActiveEventLoop,
     ) -> Result<(), Box<dyn Error>> {
         let kind = command.kind();
-        let label = app_command_label(kind);
+        let label = command_label(kind);
         let started = Instant::now();
         match command {
             Command::ExitNow => {
@@ -110,7 +49,7 @@ impl App {
             Command::SetDensityGraph { slot, chart_opt } => {
                 self.apply_density_graph(slot, chart_opt)
             }
-            Command::FetchOnlineGrade(hash) => self.spawn_grade_fetch(hash),
+            Command::FetchOnlineGrade(hash) => spawn_online_grade_fetch(hash),
             Command::PlayMusic {
                 path,
                 looped,
@@ -145,60 +84,62 @@ impl App {
         }
         let elapsed = started.elapsed();
         let elapsed_ms = elapsed.as_secs_f64() * 1000.0;
-        match app_command_timing_log(kind, elapsed_ms) {
-            AppCommandTimingLog::Slow => {
+        match command_timing_log(kind, elapsed_ms) {
+            CommandTimingLog::Slow => {
                 warn!(
                     "Slow command: {} took {:.2}ms on screen {:?}",
                     label, elapsed_ms, self.state.screens.current_screen
                 );
             }
-            AppCommandTimingLog::FrameCost => {
+            CommandTimingLog::FrameCost => {
                 debug!(
                     "Frame-cost command: {} took {:.2}ms on screen {:?}",
                     label, elapsed_ms, self.state.screens.current_screen
                 );
             }
-            AppCommandTimingLog::CommandTiming => {
+            CommandTimingLog::CommandTiming => {
                 debug!(
                     "Command timing: {} took {:.2}ms on screen {:?}",
                     label, elapsed_ms, self.state.screens.current_screen
                 );
             }
-            AppCommandTimingLog::None => {}
+            CommandTimingLog::None => {}
         }
         Ok(())
     }
 
     pub(super) fn apply_banner(&mut self, path_opt: Option<PathBuf>) {
         if let Some(backend) = self.backend.as_mut() {
+            let slot = banner_slot(self.state.screens.current_screen);
             if let Some(path) = path_opt {
                 let key =
                     self.dynamic_media
                         .set_banner(&mut self.asset_manager, backend, Some(path));
-                match self.state.screens.current_screen {
-                    CurrentScreen::SelectCourse => {
+                match slot {
+                    BannerSlot::SelectCourse => {
                         self.state.screens.select_course_state.current_banner_key = key;
                     }
-                    _ => {
+                    BannerSlot::SelectMusic => {
                         self.state.screens.select_music_state.current_banner_key = key;
                     }
                 }
             } else {
                 self.dynamic_media
                     .destroy_banner(&mut self.asset_manager, backend);
-                let color_index = match self.state.screens.current_screen {
-                    CurrentScreen::SelectCourse => {
+                let color_index = match slot {
+                    BannerSlot::SelectCourse => {
                         self.state.screens.select_course_state.active_color_index
                     }
-                    _ => self.state.screens.select_music_state.active_color_index,
+                    BannerSlot::SelectMusic => {
+                        self.state.screens.select_music_state.active_color_index
+                    }
                 };
-                let banner_num = color_index.rem_euclid(12) + 1;
-                let key = format!("banner{banner_num}.png");
-                match self.state.screens.current_screen {
-                    CurrentScreen::SelectCourse => {
+                let key = fallback_banner_key(color_index);
+                match slot {
+                    BannerSlot::SelectCourse => {
                         self.state.screens.select_course_state.current_banner_key = key;
                     }
-                    _ => {
+                    BannerSlot::SelectMusic => {
                         self.state.screens.select_music_state.current_banner_key = key;
                     }
                 }
@@ -233,31 +174,7 @@ impl App {
         slot: DensityGraphSlot,
         chart_opt: Option<DensityGraphSource>,
     ) {
-        let (graph_w, graph_h) = if deadlib_present::space::is_wide() {
-            (286.0_f32, 64.0_f32)
-        } else {
-            (276.0_f32, 64.0_f32)
-        };
-        let mesh = chart_opt.and_then(|chart| {
-            let verts = density::build_density_histogram_mesh(
-                &chart.measure_nps_vec,
-                chart.max_nps,
-                &chart.measure_seconds_vec,
-                chart.first_second,
-                chart.last_second,
-                graph_w,
-                graph_h,
-                0.0,
-                graph_w,
-                None,
-                1.0,
-            );
-            if verts.is_empty() {
-                None
-            } else {
-                Some(Arc::from(verts.into_boxed_slice()))
-            }
-        });
+        let mesh = build_density_graph_mesh(chart_opt, deadlib_present::space::is_wide());
 
         match slot {
             DensityGraphSlot::SelectMusicP1 => {
@@ -268,36 +185,6 @@ impl App {
                 self.state.screens.select_music_state.current_graph_mesh_p2 = mesh;
                 self.state.screens.select_music_state.current_graph_key_p2 = "__white".to_string();
             }
-        }
-    }
-
-    fn spawn_grade_fetch(&self, hash: String) {
-        debug!("Fetching online grade for chart hash: {hash}");
-        let mut spawned = 0;
-        for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
-            if !profile::is_session_side_joined(side) {
-                continue;
-            }
-            let Some(profile_id) = profile::active_local_profile_id_for_side(side) else {
-                continue;
-            };
-            let profile = profile::get_for_side(side);
-            if profile.groovestats_api_key.is_empty() || profile.groovestats_username.is_empty() {
-                continue;
-            }
-
-            spawned += 1;
-            let hash = hash.clone();
-            std::thread::spawn(move || {
-                if let Err(e) = scores::fetch_and_store_grade(profile_id, profile, hash) {
-                    warn!("Failed to fetch online grade: {e}");
-                }
-            });
-        }
-        if spawned == 0 {
-            warn!(
-                "Skipping GrooveStats grade fetch: no joined local profile with GrooveStats configured"
-            );
         }
     }
 
@@ -332,15 +219,16 @@ impl App {
                     })
                 })
                 .unwrap_or(0.0);
+            let show_video_backgrounds = crate::config::get().show_video_backgrounds;
             let key = self.dynamic_media.set_background(
                 &mut self.asset_manager,
                 backend,
                 path_opt.clone(),
                 video_started_at_sec,
+                show_video_backgrounds,
             );
             let key = Arc::<str>::from(key);
             let path_key = path_opt.as_deref().map(crate::assets::media_path_key);
-            let show_video_backgrounds = crate::config::get().show_video_backgrounds;
             if let Some(gs) = &mut self.state.screens.gameplay_state {
                 let was_dirty = gs.background_path_dirty;
                 gs.current_background_path = path_opt.clone();

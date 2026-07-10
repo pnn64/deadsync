@@ -1,0 +1,43 @@
+[package]
+name = "deadsync-shell"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0"
+
+[dependencies]
+deadlib-assets = { path = "../deadlib-assets" }
+deadlib-platform = { path = "../deadlib-platform" }
+deadlib-present = { path = "../deadlib-present" }
+deadlib-render = { path = "../deadlib-render" }
+deadlib-renderer = { path = "../deadlib-renderer" }
+deadlib-video = { path = "../deadlib-video" }
+deadsync-assets = { path = "../deadsync-assets" }
+deadsync-audio-stream = { path = "../deadsync-audio-stream" }
+deadsync-chart = { path = "../deadsync-chart" }
+deadsync-config = { path = "../deadsync-config" }
+deadsync-core = { path = "../deadsync-core" }
+deadsync-gameplay = { path = "../deadsync-gameplay" }
+deadsync-input = { path = "../deadsync-input" }
+deadsync-input-native = { path = "../deadsync-input-native" }
+deadsync-lights = { path = "../deadsync-lights" }
+deadsync-online = { path = "../deadsync-online" }
+deadsync-profile = { path = "../deadsync-profile" }
+deadsync-rules = { path = "../deadsync-rules" }
+deadsync-score = { path = "../deadsync-score" }
+deadsync-screens = { path = "../deadsync-screens" }
+deadsync-simfile = { path = "../deadsync-simfile" }
+deadsync-smx = { path = "../deadsync-smx" }
+image = "0.25.10"
+log = "0.4.33"
+smallvec = "1.15.2"
+winit = "0.30.13"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = { version = "0.6.4", features = ["relax-sign-encoding"] }
+objc2-app-kit = "0.3.2"
+objc2-foundation = "0.3.2"
+
+[lints.clippy]
+perf = { level = "warn", priority = -1 }
+
+inline_always = "allow"

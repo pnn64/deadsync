@@ -1,8 +1,8 @@
-use crate::assets::AssetManager;
 use deadlib_assets::dynamic;
 use deadlib_render::TextureHandle;
 use deadlib_renderer::{Backend, Texture as RendererTexture};
 use deadlib_video as video;
+use deadsync_assets::AssetManager;
 use deadsync_assets::dynamic_media::{
     BackgroundTextureError, BannerVideoPrepResult, DynamicBackgroundState,
     DynamicImageTextureError, DynamicVideoState, GameplayBackgroundPrepResult,
@@ -31,7 +31,7 @@ struct DynamicBannerState {
     path: PathBuf,
 }
 
-pub(crate) struct DynamicMedia {
+pub struct DynamicMedia {
     current_dynamic_banner: Option<DynamicBannerState>,
     active_banner_videos: HashMap<String, DynamicVideoState>,
     pending_banner_video_preps: HashSet<PathBuf>,
@@ -54,7 +54,7 @@ pub(crate) struct DynamicMedia {
 }
 
 impl DynamicMedia {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         let (banner_video_prep_tx, banner_video_prep_rx) = mpsc::channel();
         let (gameplay_background_prep_tx, gameplay_background_prep_rx) = mpsc::channel();
         Self {
@@ -80,11 +80,7 @@ impl DynamicMedia {
         }
     }
 
-    pub(crate) fn preload_profile_avatars(
-        &mut self,
-        assets: &mut AssetManager,
-        backend: &mut Backend,
-    ) {
+    pub fn preload_profile_avatars(&mut self, assets: &mut AssetManager, backend: &mut Backend) {
         let profile = profile::get();
         for p in profile::scan_local_profiles() {
             if let Some(path) = p.avatar_path {
@@ -96,7 +92,7 @@ impl DynamicMedia {
         self.set_profile_avatar(assets, backend, profile.avatar_path);
     }
 
-    pub(crate) fn destroy_assets(&mut self, assets: &mut AssetManager, backend: &mut Backend) {
+    pub fn destroy_assets(&mut self, assets: &mut AssetManager, backend: &mut Backend) {
         let mut keys = Vec::with_capacity(
             self.active_banner_videos
                 .len()
@@ -147,11 +143,11 @@ impl DynamicMedia {
         }
     }
 
-    pub(crate) fn destroy_banner(&mut self, assets: &mut AssetManager, backend: &mut Backend) {
+    pub fn destroy_banner(&mut self, assets: &mut AssetManager, backend: &mut Backend) {
         self.destroy_current_dynamic_banner(assets, backend);
     }
 
-    pub(crate) fn set_cdtitle(
+    pub fn set_cdtitle(
         &mut self,
         assets: &mut AssetManager,
         backend: &mut Backend,
@@ -191,7 +187,7 @@ impl DynamicMedia {
         }
     }
 
-    pub(crate) fn set_pack_banner(
+    pub fn set_pack_banner(
         &mut self,
         assets: &mut AssetManager,
         backend: &mut Backend,
@@ -248,7 +244,7 @@ impl DynamicMedia {
         }
     }
 
-    pub(crate) fn set_wheel_item_backgrounds(
+    pub fn set_wheel_item_backgrounds(
         &mut self,
         assets: &mut AssetManager,
         backend: &mut Backend,
@@ -268,7 +264,7 @@ impl DynamicMedia {
         }
     }
 
-    pub(crate) fn set_banner(
+    pub fn set_banner(
         &mut self,
         assets: &mut AssetManager,
         backend: &mut Backend,
@@ -314,7 +310,7 @@ impl DynamicMedia {
         }
     }
 
-    pub(crate) fn sync_active_banner_video(
+    pub fn sync_active_banner_video(
         &mut self,
         assets: &mut AssetManager,
         backend: &mut Backend,
@@ -348,7 +344,7 @@ impl DynamicMedia {
         self.spawn_banner_video_prep(path);
     }
 
-    pub(crate) fn sync_active_banner_videos(
+    pub fn sync_active_banner_videos(
         &mut self,
         assets: &mut AssetManager,
         backend: &mut Backend,
@@ -383,12 +379,13 @@ impl DynamicMedia {
         }
     }
 
-    pub(crate) fn set_background(
+    pub fn set_background(
         &mut self,
         assets: &mut AssetManager,
         backend: &mut Backend,
         path_opt: Option<PathBuf>,
         video_started_at_sec: f32,
+        animate_video: bool,
     ) -> String {
         const FALLBACK_KEY: &str = "__black";
 
@@ -396,7 +393,6 @@ impl DynamicMedia {
         self.reset_pending_gameplay_background();
 
         if let Some(path) = path_opt {
-            let animate_video = crate::config::get().show_video_backgrounds;
             let key = path.to_string_lossy().into_owned();
             let wants_video = animate_video && dynamic::is_dynamic_video_path(&path);
             if self
@@ -523,7 +519,7 @@ impl DynamicMedia {
         }
     }
 
-    pub(crate) fn sync_gameplay_background(
+    pub fn sync_gameplay_background(
         &mut self,
         assets: &mut AssetManager,
         backend: &mut Backend,
@@ -645,7 +641,7 @@ impl DynamicMedia {
         None
     }
 
-    pub(crate) fn sync_active_song_lua_videos(
+    pub fn sync_active_song_lua_videos(
         &mut self,
         assets: &mut AssetManager,
         backend: &mut Backend,
@@ -712,7 +708,7 @@ impl DynamicMedia {
         }
     }
 
-    pub(crate) fn set_gameplay_background_keys<I>(
+    pub fn set_gameplay_background_keys<I>(
         &mut self,
         assets: &mut AssetManager,
         backend: &mut Backend,
@@ -729,11 +725,7 @@ impl DynamicMedia {
         }
     }
 
-    pub(crate) fn clear_gameplay_backgrounds(
-        &mut self,
-        assets: &mut AssetManager,
-        backend: &mut Backend,
-    ) {
+    pub fn clear_gameplay_backgrounds(&mut self, assets: &mut AssetManager, backend: &mut Backend) {
         self.destroy_current_dynamic_background(assets, backend);
         for (key, player) in std::mem::take(&mut self.active_song_lua_videos) {
             retire_video_player(player);
@@ -749,7 +741,7 @@ impl DynamicMedia {
         }
     }
 
-    pub(crate) fn set_profile_avatar(
+    pub fn set_profile_avatar(
         &mut self,
         assets: &mut AssetManager,
         backend: &mut Backend,
@@ -759,7 +751,7 @@ impl DynamicMedia {
         self.set_profile_avatar_for_side(assets, backend, side, path_opt);
     }
 
-    pub(crate) fn set_profile_avatar_for_side(
+    pub fn set_profile_avatar_for_side(
         &mut self,
         assets: &mut AssetManager,
         backend: &mut Backend,
@@ -790,7 +782,7 @@ impl DynamicMedia {
         }
     }
 
-    pub(crate) fn queue_video_frames(
+    pub fn queue_video_frames(
         &mut self,
         assets: &mut AssetManager,
         gameplay_time_sec: Option<f32>,

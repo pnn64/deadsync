@@ -26,15 +26,11 @@ use crate::assets::{
 use crate::screens::gameplay;
 use crate::screens::input as screen_input;
 use deadlib_present::font;
-use deadsync_assets::noteskin::Noteskin;
-use deadsync_chart::ChartData;
-use deadsync_chart::SongData;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{FantasticWindowOptions, blue_fantastic_window_ms};
 use deadsync_online::lobbies as lobby_data;
 use deadsync_online::score_compat as scores;
-use deadsync_rules::judgment::{self, JudgeGrade};
-use deadsync_rules::scroll::ScrollSpeedSetting;
+use deadsync_rules::judgment;
 use deadsync_rules::timing as timing_stats;
 use log::warn;
 use std::cell::RefCell;
@@ -50,6 +46,7 @@ use deadsync_online::runtime as online;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
 pub use deadsync_score::ColumnJudgments;
+pub use deadsync_screens::{CourseGraphStage, ScoreInfo};
 // Keyboard handling is centralized in app via virtual actions
 use chrono::Local;
 
@@ -570,99 +567,6 @@ fn cached_total_label_text(total: u32) -> Arc<str> {
 #[inline(always)]
 fn cached_str_ref(text: &str) -> Arc<str> {
     cached_shared_str(&STR_REF_CACHE, text, TEXT_CACHE_LIMIT)
-}
-
-// A struct to hold a snapshot of the final score data from the gameplay screen.
-#[derive(Clone)]
-pub struct ScoreInfo {
-    pub song: Arc<SongData>,
-    pub chart: Arc<ChartData>,
-    pub course_graph_stages: Vec<CourseGraphStage>,
-    pub side: profile_data::PlayerSide,
-    pub profile_name: String,
-    pub score_valid: bool,
-    pub disqualified: bool,
-    pub expected_groovestats_submit: bool,
-    pub expected_arrowcloud_submit: bool,
-    pub groovestats: score_data::GrooveStatsEvalState,
-    pub itl: score_data::ItlEvalState,
-    pub judgment_counts: judgment::JudgeCounts,
-    pub score_percent: f64,
-    pub earned_grade_points: i32,
-    pub possible_grade_points: i32,
-    pub grade: score_data::Grade,
-    pub speed_mod: ScrollSpeedSetting,
-    pub mods_text: Arc<str>,
-    pub hands_achieved: u32,
-    pub hands_total: u32,
-    pub holds_held: u32,
-    pub holds_held_for_score: u32,
-    pub holds_total: u32,
-    pub rolls_held: u32,
-    pub rolls_held_for_score: u32,
-    pub rolls_total: u32,
-    pub mines_hit_for_score: u32,
-    pub mines_avoided: u32,
-    pub mines_total: u32,
-    // Aggregate timing stats for non-miss tap judgments
-    pub timing: timing_stats::TimingStats,
-    // Per-arrow / per-foot timing breakdown for the Timing Arrows pane.
-    pub arrow_timing: timing_stats::ArrowTimingStats,
-    // Prepared scatter plot points (time, offset), like Simply Love
-    pub scatter: Vec<timing_stats::ScatterPoint>,
-    // Worst window used to scale scatter (at least W2), like Simply Love ScatterPlot.lua
-    pub scatter_worst_window_ms: f32,
-    // Prepared histogram in 1ms bins
-    pub histogram: timing_stats::HistogramMs,
-    // Time range used to scale scatter/NPS graph (FirstSecond..LastSecond)
-    pub graph_first_second: f32,
-    pub graph_last_second: f32,
-    pub music_rate: f32,
-    pub life_history: Vec<(f32, f32)>,
-    pub fail_time: Option<f32>,
-    // Per-window tap counts (including FA+ W0) for display purposes.
-    pub window_counts: timing_stats::WindowCounts,
-    // Like window_counts, but with the Fantastic split at 10ms (Arrow Cloud: "SmallerWhite").
-    pub window_counts_10ms: timing_stats::WindowCounts,
-    // FA+ style EX score percentage (0.00–100.00), using the same semantics
-    // as ScreenGameplay's EX HUD (Simply Love's CalculateExScore).
-    pub ex_score_percent: f64,
-    // Arrow Cloud style "H.EX" score percentage (0.00–100.00).
-    pub hard_ex_score_percent: f64,
-    pub calories_burned: f32,
-    // Per-column tap note judgment breakdown (Pane3 in Simply Love).
-    pub column_judgments: Vec<ColumnJudgments>,
-    // Noteskin used during gameplay, for Pane3 column previews.
-    pub noteskin: Option<Arc<Noteskin>>,
-    pub show_fa_plus_window: bool,
-    pub show_ex_score: bool,
-    pub show_hard_ex_score: bool,
-    pub show_fa_plus_pane: bool,
-    pub track_early_judgments: bool,
-    pub disabled_timing_windows: [bool; 5],
-    pub machine_records: Vec<score_data::LeaderboardEntry>,
-    pub machine_record_highlight_rank: Option<u32>,
-    pub personal_records: Vec<score_data::LeaderboardEntry>,
-    pub personal_record_highlight_rank: Option<u32>,
-    pub show_machine_personal_split: bool,
-}
-
-#[derive(Clone, Debug)]
-pub struct CourseGraphStage {
-    pub chart: Arc<ChartData>,
-    pub song_last_second: f32,
-}
-
-impl ScoreInfo {
-    #[inline(always)]
-    pub fn judgment_count(&self, grade: JudgeGrade) -> u32 {
-        self.judgment_counts[judgment::judge_grade_ix(grade)]
-    }
-
-    #[inline(always)]
-    fn is_course_summary(&self) -> bool {
-        !self.course_graph_stages.is_empty()
-    }
 }
 
 #[inline(always)]

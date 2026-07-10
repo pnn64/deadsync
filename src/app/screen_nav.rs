@@ -1,102 +1,24 @@
 use super::{
-    App, Command, CurrentScreen, FADE_OUT_DURATION, MENU_TO_SELECT_COLOR_OUT_DURATION, credits,
-    evaluation, evaluation_summary, gameover, gameplay, init, initials, input_screen,
-    manage_local_profiles, mappings, menu, options, overscan_adjustment, player_options,
-    profile_load, sandbox, select_color, select_course, select_mode, select_music, select_profile,
-    select_style, test_lights,
+    App, Command, CurrentScreen, credits, evaluation, evaluation_summary, gameover, gameplay, init,
+    initials, input_screen, manage_local_profiles, mappings, menu, options, overscan_adjustment,
+    player_options, profile_load, sandbox, select_color, select_course, select_mode, select_music,
+    select_profile, select_style, test_lights,
 };
 use crate::assets::visual_styles;
 use crate::config;
-use deadlib_platform::dirs;
 use deadlib_present::actors::Actor;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
+use deadsync_shell::{
+    TransitionMusicAction, TransitionState, actor_entry_transition, actor_fade_out_transition,
+    global_entry_transition, global_fade_out_transition, is_actor_only_transition,
+    machine_flow_screen, menu_exit_uses_fade, screen_from_machine_flow, transition_music_action,
+    write_current_screen_file,
+};
 use log::{debug, info};
 use winit::event_loop::ActiveEventLoop;
 
-/* -------------------- transition state machine -------------------- */
-#[derive(Debug)]
-pub(super) enum TransitionState {
-    Idle,
-    FadingOut {
-        elapsed: f32,
-        duration: f32,
-        target: CurrentScreen,
-    },
-    FadingIn {
-        elapsed: f32,
-        duration: f32,
-    },
-    ActorsFadeOut {
-        elapsed: f32,
-        duration: f32,
-        target: CurrentScreen,
-    },
-    ActorsFadeIn {
-        elapsed: f32,
-    },
-}
-
-#[inline(always)]
-const fn machine_flow_screen(screen: CurrentScreen) -> Option<config::MachineFlowScreen> {
-    match screen {
-        CurrentScreen::Menu => Some(config::MachineFlowScreen::Menu),
-        CurrentScreen::SelectProfile => Some(config::MachineFlowScreen::SelectProfile),
-        CurrentScreen::SelectColor => Some(config::MachineFlowScreen::SelectColor),
-        CurrentScreen::SelectStyle => Some(config::MachineFlowScreen::SelectStyle),
-        CurrentScreen::SelectPlayMode => Some(config::MachineFlowScreen::SelectPlayMode),
-        CurrentScreen::ProfileLoad => Some(config::MachineFlowScreen::ProfileLoad),
-        CurrentScreen::EvaluationSummary => Some(config::MachineFlowScreen::EvaluationSummary),
-        CurrentScreen::Initials => Some(config::MachineFlowScreen::Initials),
-        CurrentScreen::GameOver => Some(config::MachineFlowScreen::GameOver),
-        _ => None,
-    }
-}
-
-#[inline(always)]
-const fn current_screen_from_machine_flow(screen: config::MachineFlowScreen) -> CurrentScreen {
-    match screen {
-        config::MachineFlowScreen::Menu => CurrentScreen::Menu,
-        config::MachineFlowScreen::SelectProfile => CurrentScreen::SelectProfile,
-        config::MachineFlowScreen::SelectColor => CurrentScreen::SelectColor,
-        config::MachineFlowScreen::SelectStyle => CurrentScreen::SelectStyle,
-        config::MachineFlowScreen::SelectPlayMode => CurrentScreen::SelectPlayMode,
-        config::MachineFlowScreen::ProfileLoad => CurrentScreen::ProfileLoad,
-        config::MachineFlowScreen::EvaluationSummary => CurrentScreen::EvaluationSummary,
-        config::MachineFlowScreen::Initials => CurrentScreen::Initials,
-        config::MachineFlowScreen::GameOver => CurrentScreen::GameOver,
-    }
-}
-
-#[inline(always)]
-const fn app_transition_screen(screen: CurrentScreen) -> Option<config::AppTransitionScreen> {
-    match screen {
-        CurrentScreen::Menu => Some(config::AppTransitionScreen::Menu),
-        CurrentScreen::Options => Some(config::AppTransitionScreen::Options),
-        CurrentScreen::SelectProfile => Some(config::AppTransitionScreen::SelectProfile),
-        CurrentScreen::SelectColor => Some(config::AppTransitionScreen::SelectColor),
-        CurrentScreen::SelectStyle => Some(config::AppTransitionScreen::SelectStyle),
-        CurrentScreen::Mappings => Some(config::AppTransitionScreen::Mappings),
-        CurrentScreen::Input => Some(config::AppTransitionScreen::Input),
-        CurrentScreen::TestLights => Some(config::AppTransitionScreen::TestLights),
-        CurrentScreen::OverscanAdjustment => Some(config::AppTransitionScreen::OverscanAdjustment),
-        CurrentScreen::SmxAssignPads => Some(config::AppTransitionScreen::SmxAssignPads),
-        CurrentScreen::ManageLocalProfiles => {
-            Some(config::AppTransitionScreen::ManageLocalProfiles)
-        }
-        _ => None,
-    }
-}
-
 impl App {
-    #[inline(always)]
-    pub(super) const fn is_actor_fade_screen(screen: CurrentScreen) -> bool {
-        match app_transition_screen(screen) {
-            Some(screen) => config::app_screen_actor_fades(screen),
-            None => false,
-        }
-    }
-
     #[inline(always)]
     pub(super) fn commit_screen_change(&mut self, target: CurrentScreen) {
         let prev = self.state.screens.current_screen;
@@ -150,28 +72,14 @@ impl App {
             );
         }
 
-        let menu_music_enabled = config::get().menu_music;
-        let target_menu_music = menu_music_enabled
-            && matches!(
-                target_screen,
-                CurrentScreen::SelectColor | CurrentScreen::SelectStyle
-            );
-        let prev_menu_music = menu_music_enabled
-            && matches!(
-                prev,
-                CurrentScreen::SelectColor | CurrentScreen::SelectStyle
-            );
-        let target_srpg10_gameover_music =
-            target_screen == CurrentScreen::GameOver && visual_styles::srpg10_active();
-        let prev_srpg10_gameover_music =
-            prev == CurrentScreen::GameOver && visual_styles::srpg10_active();
-        let keep_preview = (prev == CurrentScreen::SelectMusic
-            && target_screen == CurrentScreen::PlayerOptions)
-            || (prev == CurrentScreen::PlayerOptions
-                && target_screen == CurrentScreen::SelectMusic);
-
-        if target_menu_music {
-            if !prev_menu_music {
+        match transition_music_action(
+            prev,
+            target_screen,
+            config::get().menu_music,
+            visual_styles::srpg10_active(),
+        ) {
+            TransitionMusicAction::Keep => {}
+            TransitionMusicAction::PlayMenu => {
                 deadsync_audio_stream::play_music(
                     visual_styles::menu_music_resolved_path(),
                     deadsync_audio_stream::Cut::default(),
@@ -179,8 +87,7 @@ impl App {
                     1.0,
                 );
             }
-        } else if target_srpg10_gameover_music {
-            if !prev_srpg10_gameover_music {
+            TransitionMusicAction::PlayGameOver => {
                 deadsync_audio_stream::play_music(
                     visual_styles::srpg10_gameover_music_path(),
                     deadsync_audio_stream::Cut::default(),
@@ -188,10 +95,7 @@ impl App {
                     1.0,
                 );
             }
-        } else if prev_menu_music {
-            deadsync_audio_stream::stop_music();
-        } else if !keep_preview {
-            deadsync_audio_stream::stop_music();
+            TransitionMusicAction::Stop => deadsync_audio_stream::stop_music(),
         }
 
         if target_screen == CurrentScreen::Menu {
@@ -270,11 +174,7 @@ impl App {
             self.update_options_monitor_specs(event_loop);
         }
 
-        self.state.shell.transition = if Self::is_actor_fade_screen(target_screen) {
-            TransitionState::ActorsFadeIn { elapsed: 0.0 }
-        } else {
-            TransitionState::Idle
-        };
+        self.state.shell.transition = actor_entry_transition(target_screen);
         deadlib_present::runtime::clear_all();
     }
 
@@ -296,8 +196,7 @@ impl App {
             && target == CurrentScreen::Menu
             && !self.state.session.played_stages.is_empty()
         {
-            target =
-                current_screen_from_machine_flow(config::machine_first_post_select_target(&cfg));
+            target = screen_from_machine_flow(config::machine_first_post_select_target(&cfg));
             self.state.session.pending_post_select_summary_exit =
                 target == CurrentScreen::EvaluationSummary;
         } else if target == CurrentScreen::EvaluationSummary {
@@ -321,15 +220,13 @@ impl App {
         );
         if startup_flow {
             if let Some(route) = machine_flow_screen(target) {
-                target = current_screen_from_machine_flow(config::machine_resolve_startup_target(
-                    &cfg, route,
-                ));
+                target =
+                    screen_from_machine_flow(config::machine_resolve_startup_target(&cfg, route));
             }
         }
         if let Some(route) = machine_flow_screen(target) {
-            target = current_screen_from_machine_flow(config::machine_resolve_post_select_target(
-                &cfg, route,
-            ));
+            target =
+                screen_from_machine_flow(config::machine_resolve_post_select_target(&cfg, route));
         }
         if startup_flow {
             if !cfg.machine_show_select_style
@@ -380,7 +277,7 @@ impl App {
         if from == CurrentScreen::Init && target == CurrentScreen::Menu {
             debug!("Instant navigation Init→Menu (out-transition handled by Init screen)");
             self.commit_screen_change(target);
-            self.state.shell.transition = TransitionState::ActorsFadeIn { elapsed: 0.0 };
+            self.state.shell.transition = actor_entry_transition(target);
             deadlib_present::runtime::clear_all();
             return;
         }
@@ -389,42 +286,22 @@ impl App {
             return;
         }
 
-        self.state.shell.pending_exit = false;
-        self.state.shell.pending_shutdown = false;
-        if self.is_actor_only_fade(from, target) {
+        self.state.shell.interaction.clear_exit_intent();
+        if is_actor_only_transition(from, target) {
             self.start_actor_fade(from, target);
         } else {
             self.start_global_fade(target);
         }
     }
 
-    fn is_actor_only_fade(&self, from: CurrentScreen, to: CurrentScreen) -> bool {
-        match (app_transition_screen(from), app_transition_screen(to)) {
-            (Some(from), Some(to)) => config::app_transition_actor_only(from, to),
-            _ => false,
-        }
-    }
-
     fn start_actor_fade(&mut self, from: CurrentScreen, target: CurrentScreen) {
         debug!("Starting actor-only fade out to screen: {target:?}");
-        let duration = if from == CurrentScreen::Menu
-            && (target == CurrentScreen::SelectProfile
-                || target == CurrentScreen::SelectColor
-                || target == CurrentScreen::Options)
-        {
-            MENU_TO_SELECT_COLOR_OUT_DURATION
-        } else if from == CurrentScreen::SelectColor {
-            select_color::exit_anim_duration()
-        } else if from == CurrentScreen::SelectProfile {
-            select_profile::exit_anim_duration()
-        } else {
-            FADE_OUT_DURATION
-        };
-        self.state.shell.transition = TransitionState::ActorsFadeOut {
-            elapsed: 0.0,
-            duration,
+        self.state.shell.transition = actor_fade_out_transition(
+            from,
             target,
-        };
+            select_color::exit_anim_duration(),
+            select_profile::exit_anim_duration(),
+        );
         self.sync_gameplay_input_capture();
     }
 
@@ -437,27 +314,21 @@ impl App {
         }
         let (_, out_duration) =
             self.get_out_transition_for_screen(self.state.screens.current_screen);
-        self.state.shell.transition = TransitionState::FadingOut {
-            elapsed: 0.0,
-            duration: out_duration,
-            target,
-        };
+        self.state.shell.transition = global_fade_out_transition(target, out_duration);
         self.sync_gameplay_input_capture();
     }
 
     pub(super) fn handle_exit_action(&mut self) -> Vec<Command> {
-        if self.state.screens.current_screen == CurrentScreen::Menu
-            && matches!(self.state.shell.transition, TransitionState::Idle)
-        {
+        if menu_exit_uses_fade(
+            self.state.screens.current_screen,
+            &self.state.shell.transition,
+        ) {
             info!("Exit requested from Menu; playing menu out-transition before shutdown.");
             let (_, out_duration) =
                 self.get_out_transition_for_screen(self.state.screens.current_screen);
-            self.state.shell.transition = TransitionState::FadingOut {
-                elapsed: 0.0,
-                duration: out_duration,
-                target: self.state.screens.current_screen,
-            };
-            self.state.shell.pending_exit = true;
+            self.state.shell.transition =
+                global_fade_out_transition(self.state.screens.current_screen, out_duration);
+            self.state.shell.interaction.request_exit();
             Vec::new()
         } else {
             info!("Exit action received. Shutting down.");
@@ -466,18 +337,16 @@ impl App {
     }
 
     pub(super) fn handle_shutdown_action(&mut self) -> Vec<Command> {
-        if self.state.screens.current_screen == CurrentScreen::Menu
-            && matches!(self.state.shell.transition, TransitionState::Idle)
-        {
+        if menu_exit_uses_fade(
+            self.state.screens.current_screen,
+            &self.state.shell.transition,
+        ) {
             info!("Host-shutdown requested from Menu; playing out-transition first.");
             let (_, out_duration) =
                 self.get_out_transition_for_screen(self.state.screens.current_screen);
-            self.state.shell.transition = TransitionState::FadingOut {
-                elapsed: 0.0,
-                duration: out_duration,
-                target: self.state.screens.current_screen,
-            };
-            self.state.shell.pending_shutdown = true;
+            self.state.shell.transition =
+                global_fade_out_transition(self.state.screens.current_screen, out_duration);
+            self.state.shell.interaction.request_shutdown();
             Vec::new()
         } else {
             info!("Host-shutdown action received. Powering off.");
@@ -486,7 +355,7 @@ impl App {
     }
 
     pub(super) fn on_fade_complete(&mut self, target: CurrentScreen, event_loop: &ActiveEventLoop) {
-        if self.state.shell.pending_shutdown {
+        if self.state.shell.interaction.exit_intent() == super::ExitIntent::Shutdown {
             info!("Fade-out complete; powering off host and exiting.");
             if let Err(e) = deadlib_platform::power::shutdown_host() {
                 log::warn!("host shutdown failed; exiting application only: {e}");
@@ -494,7 +363,7 @@ impl App {
             event_loop.exit();
             return;
         }
-        if self.state.shell.pending_exit {
+        if self.state.shell.interaction.exit_intent() == super::ExitIntent::Exit {
             info!("Fade-out complete; exiting application.");
             event_loop.exit();
             return;
@@ -534,20 +403,8 @@ impl App {
             self.update_options_monitor_specs(event_loop);
         }
 
-        let instant_options_credits_swap = matches!(
-            (prev, target),
-            (CurrentScreen::Options, CurrentScreen::Credits)
-                | (CurrentScreen::Credits, CurrentScreen::Options)
-        );
-        if instant_options_credits_swap {
-            self.state.shell.transition = TransitionState::Idle;
-        } else {
-            let (_, in_duration) = self.get_in_transition_for_screen(target);
-            self.state.shell.transition = TransitionState::FadingIn {
-                elapsed: 0.0,
-                duration: in_duration,
-            };
-        }
+        let (_, in_duration) = self.get_in_transition_for_screen(target);
+        self.state.shell.transition = global_entry_transition(prev, target, in_duration);
         self.sync_gameplay_input_capture();
         deadlib_present::runtime::clear_all();
         let _ = self.run_commands(commands, event_loop);
@@ -631,22 +488,5 @@ impl App {
             CurrentScreen::SmxAssignPads => crate::screens::smx_assign::in_transition(),
             CurrentScreen::Init => (vec![], 0.0),
         }
-    }
-}
-
-pub(super) fn write_current_screen_file(screen: CurrentScreen) {
-    if !config::get().write_current_screen {
-        return;
-    }
-    let path = dirs::app_dirs().current_screen_path();
-    if let Some(parent) = path.parent() {
-        if let Err(e) = std::fs::create_dir_all(parent) {
-            log::warn!("Failed to create current_screen.txt parent dir: {e}");
-            return;
-        }
-    }
-    let name = screen.current_screen_file_name();
-    if let Err(e) = std::fs::write(&path, name) {
-        log::warn!("Failed to write current_screen.txt: {e}");
     }
 }

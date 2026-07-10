@@ -1,31 +1,19 @@
-use super::{App, CurrentScreen, TransitionState};
+use super::{App, CurrentScreen};
 use crate::config;
 use deadsync_gameplay::{
     GameplayQueuedEvent, GameplayRawKeyEvent, RawKeyAction, gameplay_raw_key_input,
     gameplay_raw_modifier_key,
 };
 use deadsync_input as logical_input;
+pub(super) use deadsync_shell::screen_accepts_queued_input;
+use deadsync_shell::{
+    allowed_gameplay_raw_action, gameplay_dispatch_continues as dispatch_continues,
+    raw_keyboard_capture_enabled,
+};
 use std::error::Error;
 use winit::event_loop::ActiveEventLoop;
 
-#[inline(always)]
-pub(super) fn screen_accepts_queued_input(
-    screen: CurrentScreen,
-    transition: &TransitionState,
-) -> bool {
-    config::queued_input_allowed(
-        screen == CurrentScreen::Gameplay,
-        matches!(transition, TransitionState::Idle),
-        matches!(transition, TransitionState::FadingIn { .. }),
-    )
-}
-
 impl App {
-    #[inline(always)]
-    pub(super) const fn raw_keyboard_restart_screen(screen: CurrentScreen) -> bool {
-        matches!(screen, CurrentScreen::Gameplay | CurrentScreen::Evaluation)
-    }
-
     pub(super) fn flush_due_input_events(
         &mut self,
         event_loop: &ActiveEventLoop,
@@ -72,11 +60,11 @@ impl App {
 
     #[inline(always)]
     pub(super) fn gameplay_dispatch_continues(&self, start_screen: CurrentScreen) -> bool {
-        self.state.screens.current_screen == start_screen
-            && screen_accepts_queued_input(
-                self.state.screens.current_screen,
-                &self.state.shell.transition,
-            )
+        dispatch_continues(
+            start_screen,
+            self.state.screens.current_screen,
+            &self.state.shell.transition,
+        )
     }
 
     #[inline(always)]
@@ -85,7 +73,7 @@ impl App {
         event_loop: &ActiveEventLoop,
         ev: GameplayQueuedEvent,
     ) -> Result<(), Box<dyn Error>> {
-        self.state.shell.note_gameplay_queued_input();
+        self.state.shell.gameplay_input_trace.note_queued_input();
         match ev {
             GameplayQueuedEvent::Input(ev) => self.route_input_event(event_loop, ev),
             GameplayQueuedEvent::RawKey(ev) => {
@@ -107,7 +95,10 @@ impl App {
             return;
         };
         let allow_commands = self.state.gameplay_offset_save_prompt.is_none();
-        gs.set_raw_modifier_state(self.state.shell.shift_held, self.state.shell.ctrl_held);
+        gs.set_raw_modifier_state(
+            self.state.shell.interaction.controls().shift(),
+            self.state.shell.interaction.controls().ctrl(),
+        );
         let now_music_time =
             gs.music_time_from_audio_snapshot(crate::screens::gameplay::audio_snapshot());
         let action = gs.handle_queued_raw_key_input(
@@ -120,12 +111,15 @@ impl App {
         );
         crate::screens::gameplay::drain_audio_commands(gs);
         let keyboard_features = config::get().keyboard_features;
-        let non_course = self.state.session.course_run.is_none();
-        match action {
-            RawKeyAction::Restart if keyboard_features && non_course => {
+        match allowed_gameplay_raw_action(
+            action,
+            keyboard_features,
+            self.state.session.course_run.is_some(),
+        ) {
+            Some(RawKeyAction::Restart) => {
                 self.try_gameplay_restart(event_loop, "Ctrl+R");
             }
-            RawKeyAction::Reload if keyboard_features && non_course => {
+            Some(RawKeyAction::Reload) => {
                 self.try_gameplay_reload(event_loop, "Ctrl+Shift+R");
             }
             _ => {}
@@ -134,64 +128,17 @@ impl App {
 
     #[inline(always)]
     pub(super) fn sync_gameplay_input_capture(&self) {
-        let capture_enabled = self.accepts_live_input();
-        #[cfg(windows)]
-        let capture_enabled = capture_enabled
-            && Self::raw_keyboard_restart_screen(self.state.screens.current_screen)
-            && screen_accepts_queued_input(
-                self.state.screens.current_screen,
-                &self.state.shell.transition,
-            );
+        let capture_enabled = raw_keyboard_capture_enabled(
+            self.accepts_live_input(),
+            self.state.screens.current_screen,
+            &self.state.shell.transition,
+            cfg!(windows),
+        );
         deadsync_input_native::set_raw_keyboard_capture_enabled(capture_enabled);
     }
 
     #[inline(always)]
     pub(super) fn clear_gameplay_input_events(&self) {
         deadsync_input_native::set_raw_keyboard_capture_enabled(false);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn queued_input_routes_during_gameplay_fade_in() {
-        let transition = TransitionState::FadingIn {
-            elapsed: 0.0,
-            duration: 2.0,
-        };
-
-        assert!(screen_accepts_queued_input(
-            CurrentScreen::Gameplay,
-            &transition
-        ));
-    }
-
-    #[test]
-    fn queued_input_stays_blocked_for_non_gameplay_fades() {
-        let transition = TransitionState::FadingIn {
-            elapsed: 0.0,
-            duration: 1.0,
-        };
-
-        assert!(!screen_accepts_queued_input(
-            CurrentScreen::SelectMusic,
-            &transition
-        ));
-    }
-
-    #[test]
-    fn queued_input_stays_blocked_during_gameplay_fade_out() {
-        let transition = TransitionState::FadingOut {
-            elapsed: 0.0,
-            duration: 0.5,
-            target: CurrentScreen::Evaluation,
-        };
-
-        assert!(!screen_accepts_queued_input(
-            CurrentScreen::Gameplay,
-            &transition
-        ));
     }
 }

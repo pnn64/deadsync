@@ -25,6 +25,7 @@ use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
 use deadsync_score as score_data;
+pub use deadsync_screens::{CourseStagePlan, SelectedCoursePlan};
 use deadsync_simfile::course::{
     self, COURSE_RATING_ORDER, CourseEntry, CourseFile, CourseSong, CourseTotals, Difficulty,
     SongSort, StepsSpec, add_chart_totals, course_difficulty_from_meters, course_meter,
@@ -131,24 +132,6 @@ fn cached_score_percent_text(score_percent: f64) -> Arc<str> {
         TEXT_CACHE_LIMIT,
         || format!("{score:.2}%"),
     )
-}
-
-#[derive(Clone, Debug)]
-pub struct CourseStagePlan {
-    pub song: Arc<SongData>,
-    pub chart_hash: String,
-}
-
-#[derive(Clone, Debug)]
-pub struct SelectedCoursePlan {
-    pub path: PathBuf,
-    pub name: String,
-    pub banner_path: Option<PathBuf>,
-    pub song_stub: Arc<SongData>,
-    pub course_difficulty_name: String,
-    pub course_meter: Option<u32>,
-    pub course_stepchart_label: String,
-    pub stages: Vec<CourseStagePlan>,
 }
 
 #[derive(Clone, Debug)]
@@ -848,6 +831,7 @@ pub fn selected_course_plan(state: &State) -> Option<SelectedCoursePlan> {
         path: meta.path.clone(),
         name: meta.name.clone(),
         banner_path: meta.banner_path.clone(),
+        score_hash: course_score_hash(meta.path.as_path()),
         song_stub: Arc::new(make_course_song(&meta)),
         course_difficulty_name: rating.course_difficulty_name.clone(),
         course_meter: rating.course_meter,
