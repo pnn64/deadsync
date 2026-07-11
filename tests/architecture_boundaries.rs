@@ -4134,6 +4134,20 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
         "fn compose_mini_indicator",
         "fn compose_judgment_feedback",
         "fn compose_combo_feedback",
+        "fn compose_note",
+        "fn compose_hold",
+        "fn visible_note_window",
+        "fn hold_mesh",
+        "fn measure_line_step",
+        "deadlib_platform",
+        "host_time",
+        "std::time::Instant",
+        "Instant::now",
+        "fn arrow_effect_game_time_seconds",
+        "let player_idx = if state.num_players() == 1",
+        "let measure_line_extra",
+        "let actor_cap",
+        "let hud_cap",
         "let indicator_beat_push",
         "HOLD_JUDGMENT_INITIAL_ZOOM",
         "SPLIT_15_10MS_OVERLAY_ALPHA",
@@ -4144,12 +4158,24 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
         "COMBO_THOUSAND_MILESTONE_DURATION",
         "SHOW_COMBO_AT",
         "let combo_zoom_mod",
+        "let mut styles = [profile_data::ErrorBarStyle",
+        "ErrorBarStyle::Monochrome =>",
+        "let line_alpha",
+        "OFFSET_INDICATOR_DUR_S",
+        "ERROR_BAR_LONG_AVG_TICK_RGBA",
+        "ERROR_BAR_TEXT_EARLY_RGBA",
+        "let mut offset_y = screen_center_y()",
+        "if show_error_bar_text && let Some(text)",
     ] {
         assert!(
             !source.contains(token),
             "Simply Love reintroduced canonical notefield algorithm token {token}"
         );
     }
+    assert!(
+        source.contains("arrow_effect_time_s: f32"),
+        "Simply Love notefield adapter must receive arrow-effect time explicitly"
+    );
 
     for call in [
         "scroll_travel(ScrollTravelRequest",
@@ -4160,6 +4186,8 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
         "compose_mini_indicator(",
         "compose_judgment_feedback(",
         "compose_combo_feedback(",
+        "compose_error_bar(",
+        "notefield_frame_plan(NotefieldFramePlanRequest",
     ] {
         assert!(
             source.contains(call),
@@ -4201,8 +4229,20 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
             "pub fn compose_combo_feedback",
         ),
         (
+            "crates/deadsync-notefield/src/error_bar.rs",
+            "pub fn compose_error_bar(",
+        ),
+        (
+            "crates/deadsync-notefield/src/error_bar.rs",
+            "pub fn compose_error_bar_modes(",
+        ),
+        (
             "crates/deadsync-notefield/src/transforms.rs",
             "pub fn gameplay_visual_effect_params",
+        ),
+        (
+            "crates/deadsync-notefield/src/actor_builder.rs",
+            "pub fn notefield_frame_plan",
         ),
     ] {
         let owner =
@@ -4226,6 +4266,16 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
         .expect("Simply Love should preserve combo proxy capture completion");
     assert!(capture < adapter && adapter < capture_end);
 
+    let error_bar = source[capture_end..]
+        .find("compose_error_bar(")
+        .map(|index| capture_end + index)
+        .expect("Simply Love should compose the canonical error bar after combo capture");
+    let judgment_capture = source[error_bar..]
+        .find("let judgment_capture_start")
+        .map(|index| error_bar + index)
+        .expect("Simply Love should start judgment capture after the canonical error bar");
+    assert!(capture_end < error_bar && error_bar < judgment_capture);
+
     let theme_contract = fs::read_to_string(root.join("crates/deadsync-theme/src/lib.rs"))
         .expect("theme contract should be readable");
     assert!(theme_contract.contains("pub struct ComboFeedbackStyle"));
@@ -4233,6 +4283,179 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
         fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/notefield_style.rs"))
             .expect("Simply Love notefield style should be readable");
     assert!(simply_love_style.contains("combo_feedback: ComboFeedbackStyle"));
+
+    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell app should be readable");
+    assert!(shell.contains("fn arrow_effect_time_seconds(at: Instant) -> f32"));
+    assert!(shell.contains("host_time::instant_nanos(at)"));
+}
+
+#[test]
+fn simply_love_song_lua_player_transforms_use_canonical_notefield_owner() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let theme =
+        fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/screens/gameplay.rs"))
+            .expect("Simply Love gameplay bridge should be readable");
+    let canonical = fs::read_to_string(root.join("crates/deadsync-notefield/src/song_lua.rs"))
+        .expect("canonical Song Lua notefield transforms should be readable");
+
+    for definition in [
+        "pub fn song_lua_player_skew_x_matrix",
+        "pub fn song_lua_player_skew_y_matrix",
+        "fn song_lua_fold_x_around_pivot",
+        "pub fn song_lua_player_y_fold_actor",
+        "pub fn song_lua_player_transform_matrix",
+    ] {
+        assert!(
+            canonical.contains(definition),
+            "canonical Song Lua notefield owner is missing {definition}"
+        );
+    }
+
+    for forbidden_definition in [
+        "fn song_lua_player_skew_x_matrix",
+        "fn song_lua_player_skew_y_matrix",
+        "fn song_lua_fold_x_around_pivot",
+        "fn song_lua_player_y_fold_actor",
+        "fn song_lua_player_transform_matrix",
+    ] {
+        assert!(
+            !theme.contains(forbidden_definition),
+            "Simply Love reintroduced canonical Song Lua transform {forbidden_definition}"
+        );
+    }
+
+    for delegation in [
+        "song_lua_player_skew_x_matrix(skew_x)",
+        "song_lua_player_skew_y_matrix(skew_y)",
+        "song_lua_player_y_fold_actor(actor, playfield_center_x, rotation_y_deg)",
+        "song_lua_player_transform_matrix(SongLuaPlayerTransformRequest",
+    ] {
+        assert!(
+            theme.contains(delegation),
+            "Simply Love must delegate Song Lua notefield transforms through {delegation}"
+        );
+    }
+
+    for hidden_global in ["screen_width()", "screen_height()", "screen_center_y()"] {
+        assert!(
+            !canonical.contains(hidden_global),
+            "canonical Song Lua transforms must receive metrics instead of reading {hidden_global}"
+        );
+    }
+    for forbidden_asset_type in ["SpriteSlot", "ModelMeshCache"] {
+        assert!(
+            !canonical.contains(forbidden_asset_type),
+            "canonical Song Lua transforms must stay independent of {forbidden_asset_type}"
+        );
+    }
+}
+
+#[test]
+fn simply_love_hold_entries_use_canonical_notefield_plan() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let theme = fs::read_to_string(root.join(
+        "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/mod.rs",
+    ))
+    .expect("Simply Love notefield adapter should be readable");
+    let canonical = fs::read_to_string(root.join("crates/deadsync-notefield/src/holds.rs"))
+        .expect("canonical hold planner should be readable");
+
+    for definition in [
+        "pub struct HoldEntryPlanRequest",
+        "pub struct HoldEntryPlan",
+        "pub fn hold_entry_head_beat",
+        "pub fn hold_entry_plan",
+        "fn preferred_hold_visual",
+    ] {
+        assert!(
+            canonical.contains(definition),
+            "canonical hold owner is missing {definition}"
+        );
+    }
+    for forbidden in [
+        "deadsync_assets",
+        "SpriteSlot",
+        "ModelMeshCache",
+        "noteskin_model_actor_from_draw",
+    ] {
+        assert!(
+            !canonical.contains(forbidden),
+            "canonical hold planner must not own asset/model adapter token {forbidden}"
+        );
+    }
+
+    for delegation in [
+        "hold_entry_head_beat(",
+        "hold_entry_plan(HoldEntryPlanRequest",
+        "let body_slot = hold_plan.body_slot",
+        "let head_layers = hold_plan.head_layers",
+        "let head_slot = hold_plan.head_slot",
+    ] {
+        assert!(
+            theme.contains(delegation),
+            "Simply Love must delegate hold planning through {delegation}"
+        );
+    }
+    for old_algorithm in [
+        "let mut hold_start_y = if lane_reverse",
+        "let mut hold_end_y = if lane_reverse",
+        "let hold_color_scale = let_go_gray",
+        "std::mem::swap(&mut top_cap_slot",
+        "let head_layers = if use_active",
+        "let head_slot = if head_layers.is_none()",
+        "let Some(body_slot) = if use_active",
+    ] {
+        assert!(
+            !theme.contains(old_algorithm),
+            "Simply Love reintroduced canonical hold planning token {old_algorithm}"
+        );
+    }
+
+    let body = theme
+        .find("&& let Some(body_slot) = body_slot")
+        .expect("hold body emission gate should remain in Simply Love");
+    let top_cap = theme
+        .find("if draw_body_or_cap && let Some(cap_slot) = top_cap_slot")
+        .expect("top-cap emission should remain in Simply Love");
+    let bottom_cap = theme
+        .find("if draw_body_or_cap && let Some(cap_slot) = bottom_cap_slot")
+        .expect("bottom-cap emission should remain in Simply Love");
+    let head = theme
+        .find("let should_draw_hold_head = true")
+        .expect("hold-head emission should remain in Simply Love");
+    assert!(body < top_cap && top_cap < bottom_cap && bottom_cap < head);
+
+    for adapter_invariant in [
+        "let head_travel_offset = if is_head_dynamic",
+        "travel.raw_beat(head_beat)",
+        "travel.raw_note(note, false)",
+        "travel.raw_note(note, true)",
+        "let body_direction_invalid = y_tail <= y_head",
+        "&& !body_direction_invalid",
+        "&& body_bottom > body_top",
+    ] {
+        assert!(
+            theme.contains(adapter_invariant),
+            "Simply Love hold adapter lost invariant {adapter_invariant}"
+        );
+    }
+
+    let authored_head = theme
+        .find("let head_slot = head_slot.and_then(|slot|")
+        .expect("authored hold head filtering should remain in Simply Love");
+    let tap_layers = theme[authored_head..]
+        .find("} else if let Some(note_slots) = head_layers")
+        .map(|index| authored_head + index)
+        .expect("hold heads should fall through to authored or tap layers");
+    let tap_note = theme[tap_layers..]
+        .find("} else if let Some(note_slot) = ns.notes.get(note_idx)")
+        .map(|index| tap_layers + index)
+        .expect("hold heads should retain the final tap-note fallback");
+    assert!(authored_head < tap_layers && tap_layers < tap_note);
+    assert!(
+        theme.contains(".or_else(|| ns.note_layers.get(note_idx).map(|layers| layers.as_ref()))")
+    );
 }
 
 fn count_download_protocol_game_facade_refs(text: &str, symbol: &str) -> usize {

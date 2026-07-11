@@ -15,7 +15,6 @@ pub(crate) const TIPSY_TIMER_FREQUENCY: f32 = 1.2;
 pub(crate) const TIPSY_COLUMN_FREQUENCY: f32 = 1.8;
 pub(crate) const TIPSY_ARROW_MAGNITUDE: f32 = 0.4;
 pub(crate) const ARROW_EFFECT_PIXEL_SIZE: f32 = 64.0;
-pub(crate) const ERROR_BAR_SEG_ALPHA_BASE: f32 = 0.3;
 pub(crate) const BOOST_MOD_MIN_CLAMP: f32 = -400.0;
 pub(crate) const BOOST_MOD_MAX_CLAMP: f32 = 400.0;
 pub(crate) const BRAKE_MOD_MIN_CLAMP: f32 = -400.0;
@@ -31,13 +30,3 @@ pub(crate) const EXPAND_SPEED_SCALE_FROM_LOW: f32 = 0.0;
 pub(crate) const EXPAND_SPEED_SCALE_FROM_HIGH: f32 = 1.0;
 pub(crate) const EXPAND_SPEED_SCALE_TO_LOW: f32 = 1.0;
 pub(crate) const MAX_NOTES_AFTER: usize = 64;
-pub(crate) const FANTASTIC_BLUE_RGBA: [f32; 4] = rgba8_const(0x21, 0xcc, 0xe8);
-pub(crate) const EXCELLENT_RGBA: [f32; 4] = rgba8_const(0xe2, 0x9c, 0x18);
-pub(crate) const GREAT_RGBA: [f32; 4] = rgba8_const(0x66, 0xc9, 0x55);
-pub(crate) const DECENT_RGBA: [f32; 4] = rgba8_const(0xb4, 0x5c, 0xff);
-pub(crate) const WAY_OFF_RGBA: [f32; 4] = rgba8_const(0xc9, 0x85, 0x5e);
-pub(crate) const FA_PLUS_WHITE_RGBA: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
-
-const fn rgba8_const(r: u8, g: u8, b: u8) -> [f32; 4] {
-    [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, 1.0]
-}

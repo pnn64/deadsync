@@ -12,6 +12,7 @@ mod mini_indicator;
 mod notes;
 mod placement;
 mod receptors;
+mod song_lua;
 mod style;
 mod transforms;
 
@@ -29,6 +30,7 @@ pub use mini_indicator::*;
 pub use notes::*;
 pub use placement::*;
 pub use receptors::*;
+pub use song_lua::*;
 pub use transforms::*;
 
 #[cfg(test)]
@@ -107,7 +109,9 @@ mod tests {
     use deadsync_rules::scroll::ScrollSpeedSetting;
     use deadsync_rules::stream::StreamSegment;
     use deadsync_rules::timing::{self, TimeSignatureSegment};
-    use deadsync_theme::{ColumnCueStyle, ColumnFlashLayoutStyle, ColumnFlashStyle};
+    use deadsync_theme::{
+        ColumnCueStyle, ColumnFlashLayoutStyle, ColumnFlashStyle, ErrorBarPalette,
+    };
 
     fn cue_style() -> ColumnCueStyle {
         ColumnCueStyle {
@@ -1745,18 +1749,18 @@ mod tests {
 
     #[test]
     fn error_bar_flash_alpha_falls_back_to_base_alpha() {
-        assert!((error_bar_flash_alpha(1.0, None, 0.5) - 0.3).abs() <= 1e-6);
-        assert!((error_bar_flash_alpha(1.0, Some(1.2), 0.5) - 0.3).abs() <= 1e-6);
-        assert!((error_bar_flash_alpha(1.6, Some(1.0), 0.5) - 0.3).abs() <= 1e-6);
-        assert!((error_bar_flash_alpha(f32::NAN, Some(1.0), 0.5) - 0.3).abs() <= 1e-6);
-        assert!((error_bar_flash_alpha(1.0, Some(f32::NAN), 0.5) - 0.3).abs() <= 1e-6);
+        assert!((error_bar_flash_alpha(1.0, None, 0.5, 0.3) - 0.3).abs() <= 1e-6);
+        assert!((error_bar_flash_alpha(1.0, Some(1.2), 0.5, 0.3) - 0.3).abs() <= 1e-6);
+        assert!((error_bar_flash_alpha(1.6, Some(1.0), 0.5, 0.3) - 0.3).abs() <= 1e-6);
+        assert!((error_bar_flash_alpha(f32::NAN, Some(1.0), 0.5, 0.3) - 0.3).abs() <= 1e-6);
+        assert!((error_bar_flash_alpha(1.0, Some(f32::NAN), 0.5, 0.3) - 0.3).abs() <= 1e-6);
     }
 
     #[test]
     fn error_bar_flash_alpha_fades_from_full_to_base() {
-        assert!((error_bar_flash_alpha(1.0, Some(1.0), 0.5) - 1.0).abs() <= 1e-6);
-        assert!((error_bar_flash_alpha(1.25, Some(1.0), 0.5) - 0.65).abs() <= 1e-6);
-        assert!((error_bar_flash_alpha(1.49, Some(1.0), 0.5) - 0.314).abs() <= 1e-6);
+        assert!((error_bar_flash_alpha(1.0, Some(1.0), 0.5, 0.3) - 1.0).abs() <= 1e-6);
+        assert!((error_bar_flash_alpha(1.25, Some(1.0), 0.5, 0.3) - 0.65).abs() <= 1e-6);
+        assert!((error_bar_flash_alpha(1.49, Some(1.0), 0.5, 0.3) - 0.314).abs() <= 1e-6);
     }
 
     #[test]
@@ -2058,22 +2062,34 @@ mod tests {
 
     #[test]
     fn error_bar_colors_follow_judgment_palette() {
+        let palette = test_error_bar_palette();
         assert_eq!(
-            error_bar_color_for_window(TimingWindow::W0, true),
+            error_bar_color_for_window(palette, TimingWindow::W0, true),
             [33.0 / 255.0, 204.0 / 255.0, 232.0 / 255.0, 1.0]
         );
         assert_eq!(
-            error_bar_color_for_window(TimingWindow::W1, true),
+            error_bar_color_for_window(palette, TimingWindow::W1, true),
             [1.0, 1.0, 1.0, 1.0]
         );
         assert_eq!(
-            error_bar_color_for_window(TimingWindow::W1, false),
+            error_bar_color_for_window(palette, TimingWindow::W1, false),
             [33.0 / 255.0, 204.0 / 255.0, 232.0 / 255.0, 1.0]
         );
         assert_eq!(
-            error_bar_color_for_window(TimingWindow::W5, true),
+            error_bar_color_for_window(palette, TimingWindow::W5, true),
             [201.0 / 255.0, 133.0 / 255.0, 94.0 / 255.0, 1.0]
         );
+    }
+
+    fn test_error_bar_palette() -> ErrorBarPalette {
+        ErrorBarPalette {
+            fantastic_blue: [33.0 / 255.0, 204.0 / 255.0, 232.0 / 255.0, 1.0],
+            fa_plus_white: [1.0, 1.0, 1.0, 1.0],
+            excellent: [226.0 / 255.0, 156.0 / 255.0, 24.0 / 255.0, 1.0],
+            great: [102.0 / 255.0, 201.0 / 255.0, 85.0 / 255.0, 1.0],
+            decent: [180.0 / 255.0, 92.0 / 255.0, 1.0, 1.0],
+            way_off: [201.0 / 255.0, 133.0 / 255.0, 94.0 / 255.0, 1.0],
+        }
     }
 
     #[test]

@@ -330,6 +330,7 @@ fn prewarm_gameplay_text_layout_cache(
         state,
         assets,
         gameplay::ActorViewOverride::default(),
+        arrow_effect_time_seconds(started),
     );
     let _ = compose::build_screen_cached_with_texture_context(
         &actors,
@@ -354,6 +355,11 @@ fn prewarm_gameplay_text_layout_cache(
         stats.shared_aliases,
         started.elapsed().as_secs_f64() * 1000.0,
     );
+}
+
+#[inline(always)]
+fn arrow_effect_time_seconds(at: Instant) -> f32 {
+    deadlib_platform::host_time::instant_nanos(at) as f32 / 1_000_000_000.0
 }
 
 impl ScreensState {
@@ -1425,7 +1431,8 @@ impl App {
         self.sync_gameplay_background();
         self.sync_theme_background_video(total_elapsed);
         let actor_build_started = Instant::now();
-        let (mut actors, clear_color) = self.get_current_actors();
+        let arrow_effect_time_s = arrow_effect_time_seconds(actor_build_started);
+        let (mut actors, clear_color) = self.get_current_actors(arrow_effect_time_s);
         let actor_build_us = elapsed_us_since(actor_build_started);
         self.state.shell.update_fps_stats(redraw_started);
         let screens = &self.state.screens;
@@ -3145,7 +3152,7 @@ impl App {
         ));
     }
 
-    fn get_current_actors(&mut self) -> (Vec<Actor>, [f32; 4]) {
+    fn get_current_actors(&mut self, arrow_effect_time_s: f32) -> (Vec<Actor>, [f32; 4]) {
         const CLEAR: [f32; 4] = [0.03, 0.03, 0.03, 1.0];
         let mut screen_alpha_multiplier = 1.0;
 
@@ -3212,6 +3219,7 @@ impl App {
                             smx_overlay_alpha,
                             ..Default::default()
                         },
+                        arrow_effect_time_s,
                     );
                 }
             }
@@ -3220,7 +3228,12 @@ impl App {
                     screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(
                         &mut ps.gameplay,
                     );
-                    practice::push_actors(&mut actors, ps, &self.asset_manager);
+                    practice::push_actors(
+                        &mut actors,
+                        ps,
+                        &self.asset_manager,
+                        arrow_effect_time_s,
+                    );
                 }
             }
             CurrentScreen::Options => options::push_actors(

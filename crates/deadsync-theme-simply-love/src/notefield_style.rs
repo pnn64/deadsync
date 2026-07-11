@@ -1,10 +1,15 @@
 use deadsync_theme::{
     ColumnCueStyle, ColumnFlashLayoutStyle, ColumnFlashStyle, ComboFeedbackStyle, CounterHudStyle,
-    JudgmentFeedbackStyle, MiniIndicatorStyle, NotefieldStyle,
+    ErrorBarLayers, ErrorBarPalette, ErrorBarStyle, JudgmentFeedbackStyle, MiniIndicatorStyle,
+    NotefieldStyle,
 };
 
 const fn rgb8(r: u8, g: u8, b: u8) -> [f32; 3] {
     [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0]
+}
+
+const fn rgba8(r: u8, g: u8, b: u8) -> [f32; 4] {
+    [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, 1.0]
 }
 
 pub const SIMPLY_LOVE_NOTEFIELD_STYLE: NotefieldStyle = NotefieldStyle {
@@ -136,6 +141,82 @@ pub const SIMPLY_LOVE_NOTEFIELD_STYLE: NotefieldStyle = NotefieldStyle {
         thousand_start_alpha: 0.7,
         thousand_x_travel: 100.0,
     },
+    error_bar: ErrorBarStyle {
+        colorful_width: 160.0,
+        colorful_height: 10.0,
+        colorful_border_size: 4.0,
+        average_width: 325.0,
+        average_height: 7.0,
+        average_tick_padding: 4.0,
+        monochrome_width: 240.0,
+        monochrome_border_size: 2.0,
+        monochrome_center_width: 2.0,
+        monochrome_line_width: 1.0,
+        tick_width: 2.0,
+        colorful_tick_duration: 0.5,
+        monochrome_tick_duration: 0.75,
+        average_tick_extra_height: 75.0,
+        monochrome_background_alpha: 0.5,
+        line_alpha: 0.3,
+        lines_fade_start: 2.5,
+        lines_fade_duration: 0.5,
+        label_fade_duration: 0.5,
+        label_hold: 2.0,
+        label_x_ratio: 0.25,
+        label_zoom: 0.7,
+        center_tick_width: 1.0,
+        highlight_inactive_alpha: 0.3,
+        offset_indicator_duration: 0.5,
+        offset_indicator_gap: 6.0,
+        offset_indicator_zoom: 0.25,
+        offset_indicator_shadow_len: 1.0,
+        long_average_tick_duration: 0.5,
+        long_average_tick_extra_height: 65.0,
+        long_average_tick_width: 1.0,
+        text_duration: 0.5,
+        text_x_offset: 40.0,
+        text_zoom: 0.25,
+        text_shadow_len: 1.0,
+        background_color: [0.0, 0.0, 0.0, 1.0],
+        monochrome_center_color: [0.5, 0.5, 0.5, 1.0],
+        monochrome_line_color: [1.0, 1.0, 1.0, 1.0],
+        label_color: [1.0, 1.0, 1.0, 1.0],
+        colorful_tick_color: rgba8(0xb2, 0x00, 0x00),
+        average_center_tick_color: [1.0, 1.0, 1.0, 0.3],
+        long_average_tick_color: rgba8(0x00, 0x00, 0xff),
+        text_early_color: rgba8(0x06, 0x6a, 0xf4),
+        text_late_color: rgba8(0xff, 0x5a, 0x4e),
+        text_scaled_early_color: rgba8(0x00, 0x51, 0xdb),
+        text_scaled_late_color: rgba8(0xff, 0x16, 0x05),
+        palette: ErrorBarPalette {
+            fantastic_blue: rgba8(0x21, 0xcc, 0xe8),
+            fa_plus_white: [1.0, 1.0, 1.0, 1.0],
+            excellent: rgba8(0xe2, 0x9c, 0x18),
+            great: rgba8(0x66, 0xc9, 0x55),
+            decent: rgba8(0xb4, 0x5c, 0xff),
+            way_off: rgba8(0xc9, 0x85, 0x5e),
+        },
+        label_font: "game",
+        offset_indicator_font: "wendy",
+        text_font: "wendy",
+        early_label: "Early",
+        late_label: "Late",
+        front_layers: ErrorBarLayers {
+            background: 180,
+            band: 181,
+            line: 182,
+            tick: 183,
+            text: 184,
+        },
+        back_layers: ErrorBarLayers {
+            background: 86,
+            band: 87,
+            line: 88,
+            tick: 89,
+            text: 90,
+        },
+        average_z: 88,
+    },
 };
 
 pub const fn notefield_style() -> NotefieldStyle {
@@ -181,5 +262,28 @@ mod tests {
         assert_eq!(style.combo_feedback.milestone_z, 89);
         assert_eq!(style.combo_feedback.number_z, 90);
         assert_eq!(style.combo_feedback.thousand_x_travel, 100.0);
+        assert_eq!(style.error_bar.colorful_width, 160.0);
+        assert_eq!(style.error_bar.colorful_border_size, 4.0);
+        assert_eq!(style.error_bar.monochrome_width, 240.0);
+        assert_eq!(style.error_bar.monochrome_border_size, 2.0);
+        assert_eq!(style.error_bar.monochrome_center_width, 2.0);
+        assert_eq!(style.error_bar.monochrome_line_width, 1.0);
+        assert_eq!(style.error_bar.average_width, 325.0);
+        assert_eq!(style.error_bar.average_tick_padding, 4.0);
+        assert_eq!(style.error_bar.offset_indicator_gap, 6.0);
+        assert_eq!(style.error_bar.long_average_tick_extra_height, 65.0);
+        assert_eq!(
+            style.error_bar.long_average_tick_color,
+            super::rgba8(0x00, 0x00, 0xff)
+        );
+        assert_eq!(style.error_bar.text_x_offset, 40.0);
+        assert_eq!(style.error_bar.text_font, "wendy");
+        assert_eq!(
+            style.error_bar.palette.decent,
+            super::rgba8(0xb4, 0x5c, 0xff)
+        );
+        assert_eq!(style.error_bar.front_layers.text, 184);
+        assert_eq!(style.error_bar.back_layers.text, 90);
+        assert_eq!(style.error_bar.average_z, 88);
     }
 }

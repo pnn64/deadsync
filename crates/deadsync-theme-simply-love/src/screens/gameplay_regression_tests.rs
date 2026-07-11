@@ -519,6 +519,7 @@ return Def.ActorFrame{}
                                 &mut state,
                                 &assets,
                                 screen_gameplay::ActorViewOverride::default(),
+                                123.0,
                             );
                         }
                     },

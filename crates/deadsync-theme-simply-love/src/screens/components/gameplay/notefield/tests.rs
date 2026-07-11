@@ -1,15 +1,18 @@
 use super::{
-    TornadoBounds, Z_ERROR_BAR_AVERAGE, Z_HOLD_BODY, Z_HOLD_GLOW, Z_RECEPTOR, Z_RECEPTOR_GLOW,
-    Z_TAP_NOTE, confusion_rotation_deg, error_bar_boundaries_s, error_bar_text_scalable_zoom,
-    error_bar_trim_max_window_ix, hold_explosion_active, hold_explosion_enabled,
-    hold_head_render_flags, itg_actor_glow_alpha, judgment_frame_size, let_go_head_beat,
+    TornadoBounds, Z_HOLD_BODY, Z_HOLD_GLOW, Z_RECEPTOR, Z_RECEPTOR_GLOW, Z_TAP_NOTE,
+    confusion_rotation_deg, error_bar_trim_max_window_ix, hold_explosion_active,
+    hold_explosion_enabled, hold_head_render_flags, itg_actor_glow_alpha, judgment_frame_size,
     note_slot_base_size, note_world_z_for_bumpy, note_x_offset, offset_center, receptor_row_center,
 };
 use crate::assets;
+use crate::notefield_style::notefield_style;
 use deadsync_assets::noteskin::load_itg_skin;
 use deadsync_core::note::NoteType;
 use deadsync_gameplay::{ActiveHold, VisualEffects};
-use deadsync_notefield::{move_col_extra, tipsy_y_extra};
+use deadsync_notefield::{
+    error_bar_boundaries_s, error_bar_text_scalable_zoom, hold_entry_head_beat, move_col_extra,
+    tipsy_y_extra,
+};
 use deadsync_noteskin::{NUM_QUANTIZATIONS, Quantization, Style};
 use deadsync_profile as profile_data;
 use deadsync_rules::timing;
@@ -172,13 +175,13 @@ fn hold_head_render_flags_require_engaged_life_state() {
 
 #[test]
 fn let_go_head_beat_stays_at_receptor_until_visible_clock_catches_up() {
-    let beat = let_go_head_beat(100.0, 108.0, 102.0, 101.25);
+    let beat = hold_entry_head_beat(100.0, 108.0, 102.0, 101.25, true);
     assert!((beat - 101.25).abs() <= 1e-6);
 }
 
 #[test]
 fn let_go_head_beat_uses_last_held_once_visible_clock_has_caught_up() {
-    let beat = let_go_head_beat(100.0, 108.0, 102.0, 103.0);
+    let beat = hold_entry_head_beat(100.0, 108.0, 102.0, 103.0, true);
     assert!((beat - 102.0).abs() <= 1e-6);
 }
 
@@ -196,8 +199,9 @@ fn hold_glow_draws_over_hold_body_like_itg_second_pass() {
 
 #[test]
 fn average_error_bar_draws_under_receptors() {
-    assert!(i32::from(Z_ERROR_BAR_AVERAGE) < Z_RECEPTOR);
-    assert!(i32::from(Z_ERROR_BAR_AVERAGE) < Z_TAP_NOTE);
+    let z = notefield_style().error_bar.average_z;
+    assert!(i32::from(z) < Z_RECEPTOR);
+    assert!(i32::from(z) < Z_TAP_NOTE);
 }
 
 #[test]

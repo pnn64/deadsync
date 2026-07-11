@@ -58,7 +58,11 @@ use deadsync_gameplay::{
     song_lua_ease_factor, spacing_multiplier_for_percent, update_core,
 };
 use deadsync_input::{InputEvent, VirtualAction};
-use deadsync_notefield::{FieldPlacement, ProxyCaptureRequests, ViewOverride};
+use deadsync_notefield::{
+    FieldPlacement, ProxyCaptureRequests, SongLuaPlayerTransformRequest, ViewOverride,
+    song_lua_player_skew_x_matrix, song_lua_player_skew_y_matrix, song_lua_player_transform_matrix,
+    song_lua_player_y_fold_actor,
+};
 use deadsync_noteskin::{
     ModelDrawState, ReceptorGlowBehavior, ReceptorStepBehavior, Style, TweenType,
 };
@@ -8374,400 +8378,6 @@ fn song_lua_finalize_overlay_actor(
     out
 }
 
-fn song_lua_player_skew_x_matrix(amount: f32) -> Matrix4 {
-    Matrix4::from_cols_array(&[
-        1.0, 0.0, 0.0, 0.0, //
-        amount, 1.0, 0.0, 0.0, //
-        0.0, 0.0, 1.0, 0.0, //
-        0.0, 0.0, 0.0, 1.0,
-    ])
-}
-
-fn song_lua_player_skew_y_matrix(amount: f32) -> Matrix4 {
-    Matrix4::from_cols_array(&[
-        1.0, amount, 0.0, 0.0, //
-        0.0, 1.0, 0.0, 0.0, //
-        0.0, 0.0, 1.0, 0.0, //
-        0.0, 0.0, 0.0, 1.0,
-    ])
-}
-
-#[inline(always)]
-fn song_lua_fold_x_around_pivot(x: f32, pivot_x: f32, cos_y: f32) -> f32 {
-    pivot_x + (x - pivot_x) * cos_y
-}
-
-fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: f32) -> Actor {
-    if !pivot_x.is_finite() || !rotation_y_deg.is_finite() || rotation_y_deg.abs() <= f32::EPSILON {
-        return actor;
-    }
-    let cos_y = rotation_y_deg.to_radians().cos();
-    match actor {
-        Actor::Sprite {
-            align,
-            mut offset,
-            world_z,
-            size,
-            source,
-            tint,
-            glow,
-            z,
-            cell,
-            grid,
-            uv_rect,
-            visible,
-            flip_x,
-            flip_y,
-            cropleft,
-            cropright,
-            croptop,
-            cropbottom,
-            fadeleft,
-            faderight,
-            fadetop,
-            fadebottom,
-            blend,
-            mask_source,
-            mask_dest,
-            rot_x_deg,
-            rot_y_deg,
-            rot_z_deg,
-            local_offset,
-            local_offset_rot_sin_cos,
-            texcoordvelocity,
-            animate,
-            state_delay,
-            scale,
-            shadow_len,
-            shadow_color,
-            effect,
-        } => {
-            offset[0] = song_lua_fold_x_around_pivot(offset[0], pivot_x, cos_y);
-            Actor::Sprite {
-                align,
-                offset,
-                world_z,
-                size,
-                source,
-                tint,
-                glow,
-                z,
-                cell,
-                grid,
-                uv_rect,
-                visible,
-                flip_x,
-                flip_y,
-                cropleft,
-                cropright,
-                croptop,
-                cropbottom,
-                fadeleft,
-                faderight,
-                fadetop,
-                fadebottom,
-                blend,
-                mask_source,
-                mask_dest,
-                rot_x_deg,
-                rot_y_deg,
-                rot_z_deg,
-                local_offset,
-                local_offset_rot_sin_cos,
-                texcoordvelocity,
-                animate,
-                state_delay,
-                scale,
-                shadow_len,
-                shadow_color,
-                effect,
-            }
-        }
-        Actor::Text {
-            align,
-            mut offset,
-            local_transform,
-            color,
-            stroke_color,
-            glow,
-            font,
-            content,
-            attributes,
-            align_text,
-            z,
-            mut scale,
-            fit_width,
-            fit_height,
-            line_spacing,
-            wrap_width_pixels,
-            max_width,
-            max_height,
-            max_w_pre_zoom,
-            max_h_pre_zoom,
-            jitter,
-            distortion,
-            clip,
-            mask_dest,
-            blend,
-            shadow_len,
-            shadow_color,
-            effect,
-        } => {
-            offset[0] = song_lua_fold_x_around_pivot(offset[0], pivot_x, cos_y);
-            scale[0] *= cos_y;
-            Actor::Text {
-                align,
-                offset,
-                local_transform,
-                color,
-                stroke_color,
-                glow,
-                font,
-                content,
-                attributes,
-                align_text,
-                z,
-                scale,
-                fit_width,
-                fit_height,
-                line_spacing,
-                wrap_width_pixels,
-                max_width,
-                max_height,
-                max_w_pre_zoom,
-                max_h_pre_zoom,
-                jitter,
-                distortion,
-                clip,
-                mask_dest,
-                blend,
-                shadow_len,
-                shadow_color,
-                effect,
-            }
-        }
-        Actor::Mesh {
-            align,
-            mut offset,
-            size,
-            vertices,
-            visible,
-            blend,
-            z,
-        } => {
-            offset[0] = song_lua_fold_x_around_pivot(offset[0], pivot_x, cos_y);
-            Actor::Mesh {
-                align,
-                offset,
-                size,
-                vertices,
-                visible,
-                blend,
-                z,
-            }
-        }
-        Actor::TexturedMesh {
-            align,
-            mut offset,
-            world_z,
-            size,
-            local_transform,
-            texture,
-            tint,
-            glow,
-            vertices,
-            geom_cache_key,
-            uv_scale,
-            uv_offset,
-            uv_tex_shift,
-            depth_test,
-            visible,
-            blend,
-            z,
-        } => {
-            offset[0] = song_lua_fold_x_around_pivot(offset[0], pivot_x, cos_y);
-            Actor::TexturedMesh {
-                align,
-                offset,
-                world_z,
-                size,
-                local_transform,
-                texture,
-                tint,
-                glow,
-                vertices,
-                geom_cache_key,
-                uv_scale,
-                uv_offset,
-                uv_tex_shift,
-                depth_test,
-                visible,
-                blend,
-                z,
-            }
-        }
-        Actor::Frame {
-            mut offset,
-            children,
-            align,
-            size,
-            background,
-            z,
-        } => {
-            offset[0] = song_lua_fold_x_around_pivot(offset[0], pivot_x, cos_y);
-            Actor::Frame {
-                align,
-                offset,
-                size,
-                children: children
-                    .into_iter()
-                    .map(|child| song_lua_player_y_fold_actor(child, pivot_x, rotation_y_deg))
-                    .collect(),
-                background,
-                z,
-            }
-        }
-        Actor::SharedFrame {
-            mut offset,
-            children,
-            align,
-            size,
-            background,
-            z,
-            tint,
-            blend,
-        } => {
-            offset[0] = song_lua_fold_x_around_pivot(offset[0], pivot_x, cos_y);
-            Actor::SharedFrame {
-                align,
-                offset,
-                size,
-                children,
-                background,
-                z,
-                tint,
-                blend,
-            }
-        }
-        Actor::Camera {
-            view_proj,
-            children,
-        } => Actor::Camera {
-            view_proj,
-            children: children
-                .into_iter()
-                .map(|child| song_lua_player_y_fold_actor(child, pivot_x, rotation_y_deg))
-                .collect(),
-        },
-        Actor::CameraPush { view_proj } => Actor::CameraPush { view_proj },
-        Actor::CameraPop => Actor::CameraPop,
-        Actor::Shadow { len, color, child } => Actor::Shadow {
-            len,
-            color,
-            child: Box::new(song_lua_player_y_fold_actor(
-                *child,
-                pivot_x,
-                rotation_y_deg,
-            )),
-        },
-    }
-}
-
-fn song_lua_player_transform_matrix(
-    playfield_center_x: f32,
-    target_x: f32,
-    target_y: f32,
-    rotation_x_deg: f32,
-    rotation_z_deg: f32,
-    skew_x: f32,
-    skew_y: f32,
-    zoom_x: f32,
-    zoom_y: f32,
-    zoom_z: f32,
-) -> Option<Matrix4> {
-    if !playfield_center_x.is_finite()
-        || !target_x.is_finite()
-        || !target_y.is_finite()
-        || !rotation_x_deg.is_finite()
-        || !rotation_z_deg.is_finite()
-        || !skew_x.is_finite()
-        || !skew_y.is_finite()
-        || !zoom_x.is_finite()
-        || !zoom_y.is_finite()
-        || !zoom_z.is_finite()
-    {
-        return None;
-    }
-    let rotation_x_deg = if rotation_x_deg.abs() <= f32::EPSILON {
-        0.0
-    } else {
-        rotation_x_deg
-    };
-    let rotation_z_deg = if rotation_z_deg.abs() <= f32::EPSILON {
-        0.0
-    } else {
-        rotation_z_deg
-    };
-    let skew_x = if skew_x.abs() <= f32::EPSILON {
-        0.0
-    } else {
-        skew_x
-    };
-    let skew_y = if skew_y.abs() <= f32::EPSILON {
-        0.0
-    } else {
-        skew_y
-    };
-    let zoom_x = if (zoom_x - 1.0).abs() <= f32::EPSILON {
-        1.0
-    } else {
-        zoom_x
-    };
-    let zoom_y = if (zoom_y - 1.0).abs() <= f32::EPSILON {
-        1.0
-    } else {
-        zoom_y
-    };
-    let zoom_z = if (zoom_z - 1.0).abs() <= f32::EPSILON {
-        1.0
-    } else {
-        zoom_z
-    };
-    let translate_x = target_x - playfield_center_x;
-    let translate_y = screen_center_y() - target_y;
-    if rotation_x_deg.abs() <= f32::EPSILON
-        && rotation_z_deg.abs() <= f32::EPSILON
-        && skew_x.abs() <= f32::EPSILON
-        && skew_y.abs() <= f32::EPSILON
-        && (zoom_x - 1.0).abs() <= f32::EPSILON
-        && (zoom_y - 1.0).abs() <= f32::EPSILON
-        && (zoom_z - 1.0).abs() <= f32::EPSILON
-        && translate_x.abs() <= f32::EPSILON
-        && translate_y.abs() <= f32::EPSILON
-    {
-        return None;
-    }
-
-    let pivot_x = playfield_center_x - 0.5 * screen_width();
-    let pivot_y = 0.5 * screen_height() - screen_center_y();
-    // ITGmania actor transforms are authored in screen coordinates (Y down).
-    // This matrix is applied in DeadSync world space (Y up), so Z rotation and
-    // actor skews flip sign across the Y axis.
-    let rotation_z_deg = -rotation_z_deg;
-    let skew_x = -skew_x;
-    let skew_y = -skew_y;
-    Some(
-        Matrix4::from_translation(Vector3::new(translate_x, translate_y, 0.0))
-            * Matrix4::from_translation(Vector3::new(pivot_x, pivot_y, 0.0))
-            * Matrix4::from_rotation_x(rotation_x_deg.to_radians())
-            * Matrix4::from_rotation_z(rotation_z_deg.to_radians())
-            * song_lua_player_skew_x_matrix(skew_x)
-            * song_lua_player_skew_y_matrix(skew_y)
-            * Matrix4::from_scale(Vector3::new(zoom_x, zoom_y, zoom_z))
-            * Matrix4::from_translation(Vector3::new(-pivot_x, -pivot_y, 0.0)),
-    )
-}
-
 fn apply_song_lua_player_transform(
     field_actors: &mut Vec<Actor>,
     hud_actors: &mut Vec<Actor>,
@@ -8837,7 +8447,10 @@ fn apply_song_lua_player_transform(
         std::mem::swap(hud_actors, out);
     }
 
-    let Some(player_transform) = song_lua_player_transform_matrix(
+    let Some(player_transform) = song_lua_player_transform_matrix(SongLuaPlayerTransformRequest {
+        screen_width: screen_width(),
+        screen_height: screen_height(),
+        screen_center_y: screen_center_y(),
         playfield_center_x,
         target_x,
         target_y,
@@ -8848,7 +8461,7 @@ fn apply_song_lua_player_transform(
         zoom_x,
         zoom_y,
         zoom_z,
-    ) else {
+    }) else {
         out.reserve(field_actors.len().saturating_add(hud_actors.len()));
         for actor in hud_actors.drain(..) {
             push_actor_with_style(out, actor, [1.0; 4], None, z_shift);
@@ -9076,6 +8689,7 @@ pub fn push_actors(
     state: &mut State,
     asset_manager: &AssetManager,
     view: ActorViewOverride,
+    arrow_effect_time_s: f32,
 ) {
     let mut song_lua_overlay_order = std::mem::take(&mut state.song_lua_overlay_order);
     let mut song_lua_background_visual_layer_orders =
@@ -9448,6 +9062,7 @@ pub fn push_actors(
                 combo_actors,
             } = notefield::build_bundles(
                 state,
+                arrow_effect_time_s,
                 &state.noteskin_assets,
                 &state.notefield_model_cache,
                 profile,
@@ -11845,63 +11460,6 @@ mod tests {
             score: None,
             ex_score: None,
         }
-    }
-
-    #[test]
-    fn song_lua_player_rotation_z_matches_itg_screen_space() {
-        let matrix = song_lua_player_transform_matrix(
-            screen_center_x(),
-            screen_center_x(),
-            screen_center_y(),
-            0.0,
-            90.0,
-            0.0,
-            0.0,
-            1.0,
-            1.0,
-            1.0,
-        )
-        .expect("rotation should produce a player transform");
-        let point = test_transform_point(matrix, [10.0, 0.0]);
-        assert!(point[0].abs() <= 0.000_1);
-        assert!((point[1] + 10.0).abs() <= 0.000_1);
-    }
-
-    #[test]
-    fn song_lua_player_skews_match_itg_screen_space() {
-        let skew_x_matrix = song_lua_player_transform_matrix(
-            screen_center_x(),
-            screen_center_x(),
-            screen_center_y(),
-            0.0,
-            0.0,
-            0.5,
-            0.0,
-            1.0,
-            1.0,
-            1.0,
-        )
-        .expect("skewx should produce a player transform");
-        let point = test_transform_point(skew_x_matrix, [0.0, -20.0]);
-        assert!((point[0] - 10.0).abs() <= 0.000_1);
-        assert!((point[1] + 20.0).abs() <= 0.000_1);
-
-        let skew_y_matrix = song_lua_player_transform_matrix(
-            screen_center_x(),
-            screen_center_x(),
-            screen_center_y(),
-            0.0,
-            0.0,
-            0.0,
-            0.5,
-            1.0,
-            1.0,
-            1.0,
-        )
-        .expect("skewy should produce a player transform");
-        let point = test_transform_point(skew_y_matrix, [20.0, 0.0]);
-        assert!((point[0] - 20.0).abs() <= 0.000_1);
-        assert!((point[1] + 10.0).abs() <= 0.000_1);
     }
 
     #[test]

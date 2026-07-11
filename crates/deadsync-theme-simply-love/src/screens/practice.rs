@@ -637,10 +637,21 @@ pub fn handle_raw_key_event(state: &mut State, raw_key: &RawKeyboardEvent) -> (b
     }
 }
 
-pub fn push_actors(actors: &mut Vec<Actor>, state: &mut State, asset_manager: &AssetManager) {
+pub fn push_actors(
+    actors: &mut Vec<Actor>,
+    state: &mut State,
+    asset_manager: &AssetManager,
+    arrow_effect_time_s: f32,
+) {
     actors.reserve(128);
     let view = practice_view(state);
-    gameplay_screen::push_actors(actors, &mut state.gameplay, asset_manager, view);
+    gameplay_screen::push_actors(
+        actors,
+        &mut state.gameplay,
+        asset_manager,
+        view,
+        arrow_effect_time_s,
+    );
     if matches!(state.mode, Mode::Editing) {
         append_edit_markers(state, actors);
         append_edit_overlay(state, actors);
@@ -651,12 +662,6 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &mut State, asset_manager: &A
     // Render any active flash text regardless of mode so music-rate changes
     // (and other transient feedback) are visible during loop playback as well.
     append_flash_overlay(state, actors);
-}
-
-pub fn get_actors(state: &mut State, asset_manager: &AssetManager) -> Vec<Actor> {
-    let mut actors = Vec::with_capacity(128);
-    push_actors(&mut actors, state, asset_manager);
-    actors
 }
 
 fn practice_view(state: &State) -> gameplay_screen::ActorViewOverride {

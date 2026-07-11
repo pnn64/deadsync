@@ -17,39 +17,38 @@ use deadsync_gameplay::{
     AccelEffects, AppearanceEffects, FantasticWindowOptions, GameplayErrorBarTrim,
     TapExplosionOptions, VisualEffects, blue_fantastic_window_ms,
     gameplay_error_bar_trim_max_window_ix, hold_explosion_active,
-    hold_explosion_enabled_for_options, hold_head_render_flags, let_go_head_beat,
-    song_lua_column_y_offset, song_lua_note_hidden,
+    hold_explosion_enabled_for_options, hold_head_render_flags, song_lua_column_y_offset,
+    song_lua_note_hidden,
 };
 use deadsync_notefield::{
     AccelYParams, BuiltNotefield, ColumnFeedbackRequest, ComboFeedbackRequest,
-    ComboMilestoneAssets, CounterHudRequest, FieldLayoutRequest, HudLayoutOffsets, HudLayoutParams,
-    IndicatorSprite, JudgmentFeedbackRequest, JudgmentTiltParams, LayoutMiniIndicatorPosition,
+    ComboMilestoneAssets, CounterHudRequest, ErrorBarComposeRequest, ErrorBarModes, ErrorBarState,
+    FieldLayoutRequest, HoldEntryPlanRequest, HudLayoutOffsets, HudLayoutParams, IndicatorSprite,
+    JudgmentFeedbackRequest, JudgmentTiltParams, LayoutMiniIndicatorPosition,
     MeasureComposeRequest, MeasureLineMode, MiniIndicatorRequest, NoteAlphaParams, NoteXParams,
-    ScrollTravelRequest, TapJudgmentFeedback, TapJudgmentRowsParams, TapJudgmentSprite,
-    TornadoBounds, VisualEffectParams, ZmodLayoutParams, actor_with_world_z, appearance_needs_rows,
-    appearance_note_actor_alpha, appearance_note_glow, average_error_bar_mini_scale, beat_factor,
-    bottom_cap_uv_window, clipped_hold_body_bounds, compose_column_feedback,
-    compose_combo_feedback, compose_counter_hud, compose_judgment_feedback, compose_measure_lines,
-    compose_mini_indicator, compute_invert_distances, compute_tornado_bounds,
-    effective_mini_value as crate_effective_mini_value, error_bar_boundaries_s,
-    error_bar_color_for_window, error_bar_flash_alpha, error_bar_text_scalable_zoom,
-    error_bar_tick_alpha, field_effect_height as field_effect_height_for_screen, field_layout,
-    fill_lane_col_offsets, for_each_visible_hold_index, for_each_visible_note_index,
+    NotefieldFrameFeatures, NotefieldFramePlanRequest, ScrollTravelRequest, TapJudgmentFeedback,
+    TapJudgmentRowsParams, TapJudgmentSprite, TornadoBounds, VisualEffectParams, ZmodLayoutParams,
+    actor_with_world_z, appearance_needs_rows, appearance_note_actor_alpha, appearance_note_glow,
+    beat_factor, bottom_cap_uv_window, clipped_hold_body_bounds, compose_column_feedback,
+    compose_combo_feedback, compose_counter_hud, compose_error_bar, compose_judgment_feedback,
+    compose_measure_lines, compose_mini_indicator, compute_invert_distances,
+    compute_tornado_bounds, effective_mini_value as crate_effective_mini_value,
+    field_effect_height as field_effect_height_for_screen, field_layout, fill_lane_col_offsets,
+    for_each_visible_hold_index, for_each_visible_note_index,
     gameplay_visual_effect_params as visual_effect_params, hold_body_bottom_for_tail_cap,
-    hold_body_segment_budget, hold_draw_span, hold_glow_color, hold_overlaps_visible_window,
-    hold_parts_for_note_type, hold_segment_pose, hold_strip_actor, hold_strip_glow_actor,
-    hold_strip_quad, hold_strip_row_3d, hold_strip_row_from_positions, hold_tail_cap_bounds,
-    itg_actor_glow_alpha, judgment_actor_zoom,
+    hold_body_segment_budget, hold_entry_head_beat, hold_entry_plan, hold_glow_color,
+    hold_overlaps_visible_window, hold_parts_for_note_type, hold_segment_pose, hold_strip_actor,
+    hold_strip_glow_actor, hold_strip_quad, hold_strip_row_3d, hold_strip_row_from_positions,
+    hold_tail_cap_bounds, itg_actor_glow_alpha, judgment_actor_zoom,
     judgment_tilt_rotation_deg as crate_judgment_tilt_rotation_deg, maybe_flip_uv_vert,
     maybe_mirror_uv_horiz_for_reverse_flipped, mine_hides_after_resolution, mine_part,
-    note_world_z_for_bumpy, note_x_offset as crate_note_x_offset, notefield_view_proj,
-    offset_center, receptor_row_center as crate_receptor_row_center, scale_cap_to_arrow,
-    scale_effect_size, scale_sprite_to_arrow, scroll_travel, share_actor_range, smoothstep01,
+    note_world_z_for_bumpy, note_x_offset as crate_note_x_offset, notefield_frame_plan,
+    notefield_view_proj, offset_center, receptor_row_center as crate_receptor_row_center,
+    scale_cap_to_arrow, scale_effect_size, scale_sprite_to_arrow, scroll_travel, share_actor_range,
     song_time_ns_to_seconds, tap_judgment_rows as crate_tap_judgment_rows, tap_part_for_note_type,
-    tap_replacement_head, timing_window_from_num, top_cap_rotation_deg, translated_uv_rect,
-    visual_arrow_effect_zoom, visual_confusion_rotation_deg, visual_hold_body_needs_z_buffer,
-    visual_note_rotation_z, visual_pulse_zoom_for_y, visual_tiny_zoom,
-    visual_use_legacy_hold_sprites, zmod_broken_run_end,
+    tap_replacement_head, top_cap_rotation_deg, translated_uv_rect, visual_arrow_effect_zoom,
+    visual_confusion_rotation_deg, visual_hold_body_needs_z_buffer, visual_note_rotation_z,
+    visual_pulse_zoom_for_y, visual_tiny_zoom, visual_use_legacy_hold_sprites, zmod_broken_run_end,
 };
 use deadsync_notefield::{FieldPlacement, ProxyCaptureRequests, ViewOverride};
 use deadsync_noteskin::{ModelDrawState, NUM_QUANTIZATIONS};
@@ -60,7 +59,6 @@ use deadsync_theme::NotefieldStyle;
 use std::array::from_fn;
 use std::cell::RefCell;
 use std::sync::Arc;
-use std::time::Instant;
 
 mod prewarm;
 mod text;
@@ -104,23 +102,6 @@ const TRANSITION_IN_DURATION: f32 = 2.0;
 // Gameplay Layout & Feel
 const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0; // Dance lane width for hold bodies and square fallback visuals
 
-const ERROR_BAR_WIDTH_COLORFUL: f32 = 160.0;
-const ERROR_BAR_HEIGHT_COLORFUL: f32 = 10.0;
-const ERROR_BAR_WIDTH_AVERAGE: f32 = 325.0;
-const ERROR_BAR_HEIGHT_AVERAGE: f32 = 7.0;
-const ERROR_BAR_WIDTH_MONOCHROME: f32 = 240.0;
-const ERROR_BAR_TICK_WIDTH: f32 = 2.0;
-const ERROR_BAR_TICK_DUR_COLORFUL: f32 = 0.5;
-const ERROR_BAR_TICK_DUR_MONOCHROME: f32 = 0.75;
-const ERROR_BAR_AVERAGE_TICK_EXTRA_H: f32 = 75.0;
-const ERROR_BAR_MONO_BG_ALPHA: f32 = 0.5;
-const ERROR_BAR_LINE_ALPHA: f32 = 0.3;
-const ERROR_BAR_LINES_FADE_START_S: f32 = 2.5;
-const ERROR_BAR_LINES_FADE_DUR_S: f32 = 0.5;
-const ERROR_BAR_LABEL_FADE_DUR_S: f32 = 0.5;
-const ERROR_BAR_LABEL_HOLD_S: f32 = 2.0;
-const ERROR_BAR_CENTER_TICK_WIDTH: f32 = 1.0;
-const OFFSET_INDICATOR_DUR_S: f32 = 0.5;
 const DISPLAY_MODS_ZOOM: f32 = 0.8;
 const DISPLAY_MODS_WRAP_WIDTH_PX: f32 = 125.0;
 const DISPLAY_MODS_LINE_STEP: f32 = 15.0;
@@ -128,16 +109,6 @@ const DISPLAY_MODS_WARNING_W: f32 = 90.0;
 const DISPLAY_MODS_WARNING_H: f32 = 30.0;
 const DISPLAY_MODS_WARNING_ZOOM: f32 = 1.5;
 
-const ERROR_BAR_COLORFUL_TICK_RGBA: [f32; 4] = color::rgba_hex("#b20000");
-const ERROR_BAR_LONG_AVG_TICK_RGBA: [f32; 4] = color::rgba_hex("#0000ff");
-const ERROR_BAR_LONG_AVG_TICK_EXTRA_H: f32 = 65.0;
-const ERROR_BAR_LONG_AVG_TICK_WIDTH: f32 = 1.0; // SL Average.lua: LongAvgTick zoomto(1, ...)
-const ERROR_BAR_TEXT_EARLY_RGBA: [f32; 4] = color::rgba_hex("#066af4");
-const ERROR_BAR_TEXT_LATE_RGBA: [f32; 4] = color::rgba_hex("#ff5a4e");
-const ERROR_BAR_TEXT_10MS_FAST_RGBA: [f32; 4] = color::rgba_hex("#0051db");
-const ERROR_BAR_TEXT_10MS_SLOW_RGBA: [f32; 4] = color::rgba_hex("#ff1605");
-const ERROR_BAR_CENTER_TICK_RGBA: [f32; 4] = [1.0, 1.0, 1.0, 0.3];
-const ERROR_BAR_TEXT_ZOOM: f32 = 0.25;
 const TEXT_CACHE_LIMIT: usize = 8192;
 const COMBO_PREWARM_CAP: u32 = 2048;
 const MEASURE_PREWARM_CAP: i32 = 64;
@@ -171,20 +142,6 @@ const Z_RECEPTOR_GLOW: i32 = 105;
 const Z_MINE_EXPLOSION: i32 = 101;
 const Z_TAP_NOTE: i32 = 140;
 const MINE_CORE_SIZE_RATIO: f32 = 0.45;
-const Z_ERROR_BAR_BG_FRONT: i16 = 180;
-const Z_ERROR_BAR_BG_BACK: i16 = 86;
-const Z_ERROR_BAR_BAND_FRONT: i16 = 181;
-const Z_ERROR_BAR_BAND_BACK: i16 = 87;
-const Z_ERROR_BAR_LINE_FRONT: i16 = 182;
-const Z_ERROR_BAR_LINE_BACK: i16 = 88;
-const Z_ERROR_BAR_TICK_FRONT: i16 = 183;
-const Z_ERROR_BAR_TICK_BACK: i16 = 89;
-const Z_ERROR_BAR_TEXT_FRONT: i16 = 184;
-const Z_ERROR_BAR_TEXT_BACK: i16 = 90;
-// Arrow Cloud/zmod load Average.lua from ScreenGameplay underlay, below the
-// engine Player/NoteField. Keep it behind receptors even with front judgments.
-const Z_ERROR_BAR_AVERAGE: i16 = Z_ERROR_BAR_LINE_BACK;
-
 #[inline(always)]
 fn note_slot_base_size(slot: &SpriteSlot, scale: f32) -> [f32; 2] {
     if let Some(model) = slot.model.as_ref() {
@@ -221,11 +178,6 @@ fn accel_y_params(accel: AccelEffects) -> AccelYParams {
         boomerang: accel.boomerang,
         expand: accel.expand,
     }
-}
-
-#[inline(always)]
-fn arrow_effect_game_time_seconds() -> f32 {
-    deadlib_platform::host_time::instant_nanos(Instant::now()) as f32 / 1_000_000_000.0
 }
 
 #[inline(always)]
@@ -603,6 +555,7 @@ fn song_lua_hides_note(state: &State, player: usize, local_col: usize, beat: f32
 
 pub(crate) fn build_bundles(
     state: &State,
+    arrow_effect_time_s: f32,
     noteskin_assets: &GameplayNoteskinAssets,
     model_caches: &[RefCell<ModelMeshCache>; MAX_PLAYERS],
     profile: &profile_data::Profile,
@@ -620,20 +573,51 @@ pub(crate) fn build_bundles(
     let hold_judgment_texture = resolved_hold_judgment_texture(profile);
     let held_miss_texture = resolved_held_miss_texture(profile);
 
-    // --- Playfield Positioning (1:1 with Simply Love) ---
-    // In P2-only single-player, we still have a single player runtime (index 0),
-    // but need to place the notefield on the P2 side of the screen.
-    let player_idx = if state.num_players() == 1 {
-        0
+    let measure_line_mode = if view.edit_beat_bars {
+        MeasureLineMode::Edit
     } else {
-        match placement {
-            FieldPlacement::P1 => 0,
-            FieldPlacement::P2 => 1,
+        match profile.measure_lines {
+            profile_data::MeasureLines::Off => MeasureLineMode::Off,
+            profile_data::MeasureLines::Measure => MeasureLineMode::Measure,
+            profile_data::MeasureLines::Quarter => MeasureLineMode::Quarter,
+            profile_data::MeasureLines::Eighth => MeasureLineMode::Eighth,
         }
     };
-    if player_idx >= state.num_players() {
+    let error_bar_mask = {
+        let mut mask = profile.error_bar_active_mask;
+        if mask.is_empty() {
+            mask =
+                profile_data::error_bar_mask_from_style(profile.error_bar, profile.error_bar_text);
+        }
+        mask
+    };
+    let Some(frame_plan) = notefield_frame_plan(NotefieldFramePlanRequest {
+        placement,
+        num_players: state.num_players(),
+        cols_per_player: state.cols_per_player(),
+        total_cols: state.num_cols(),
+        features: NotefieldFrameFeatures {
+            measure_line_mode,
+            measure_cues: profile.measure_cues,
+            column_cues: profile.column_cues,
+            crossover_cues: profile.crossover_cues,
+            crossover_countdown: profile.column_countdown,
+            column_flash: profile.column_flash_on_miss,
+            error_bar: !error_bar_mask.is_empty(),
+            error_bar_text: error_bar_mask.contains(profile_data::ErrorBarMask::TEXT),
+            held_miss_asset: held_miss_texture.is_some(),
+            combo_visible: !profile.hide_combo && !view.hide_combo,
+        },
+    }) else {
         return BuiltNotefield::empty(screen_center_x());
-    }
+    };
+    let player_idx = frame_plan.player_idx;
+    let col_start = frame_plan.col_start;
+    let num_cols = frame_plan.num_cols;
+    let col_end = col_start + num_cols;
+    actors.reserve(frame_plan.field_actor_reserve);
+    hud_actors.reserve(frame_plan.hud_actor_reserve);
+
     // Use the cached field_zoom from gameplay state so visual layout and
     // scroll math share the exact same scaling as gameplay. Practice edit
     // mode overrides this to match ScreenEdit's half-scale edit field.
@@ -645,71 +629,6 @@ pub(crate) fn build_bundles(
     let scroll_speed = view
         .scroll_speed
         .unwrap_or_else(|| state.effective_scroll_speed_for_player(player_idx));
-    let col_start = player_idx * state.cols_per_player();
-    let col_end = (col_start + state.cols_per_player())
-        .min(state.num_cols())
-        .min(MAX_COLS);
-    let num_cols = col_end.saturating_sub(col_start);
-    if num_cols == 0 {
-        return BuiltNotefield::empty(screen_center_x());
-    }
-    let error_bar_mask = {
-        let mut mask = profile.error_bar_active_mask;
-        if mask.is_empty() {
-            mask =
-                profile_data::error_bar_mask_from_style(profile.error_bar, profile.error_bar_text);
-        }
-        mask
-    };
-    let measure_line_extra = if view.edit_beat_bars {
-        72
-    } else {
-        match profile.measure_lines {
-            profile_data::MeasureLines::Off => 0,
-            profile_data::MeasureLines::Measure => 18,
-            profile_data::MeasureLines::Quarter => 30,
-            profile_data::MeasureLines::Eighth => 42,
-        }
-    };
-    let actor_cap = (num_cols * 10).max(28)
-        + measure_line_extra
-        + if profile.measure_cues { 32 } else { 0 }
-        + if profile.column_cues { num_cols + 4 } else { 0 }
-        + if profile.crossover_cues {
-            num_cols + 4
-        } else {
-            0
-        }
-        + if profile.column_flash_on_miss {
-            num_cols
-        } else {
-            0
-        }
-        + if !error_bar_mask.is_empty() { 18 } else { 0 };
-    let hud_cap = 8
-        + if profile.column_cues { 1 } else { 0 }
-        + if profile.crossover_cues && profile.column_countdown {
-            1
-        } else {
-            0
-        }
-        + if held_miss_texture.is_some() {
-            num_cols
-        } else {
-            0
-        }
-        + if profile.hide_combo || view.hide_combo {
-            0
-        } else {
-            2
-        }
-        + if error_bar_mask.contains(profile_data::ErrorBarMask::TEXT) {
-            1
-        } else {
-            0
-        };
-    actors.reserve(actor_cap);
-    hud_actors.reserve(hud_cap);
     let p = &state.players()[player_idx];
     let mut model_cache = model_caches[player_idx].borrow_mut();
 
@@ -821,9 +740,6 @@ pub(crate) fn build_bundles(
     let error_bar_x = field.error_bar_x;
 
     let elapsed_screen = state.total_elapsed_in_screen();
-    // ITG's default ArrowEffects timer is RageTimer::GetTimeSinceStart, not
-    // music time or time since entering gameplay.
-    let arrow_effect_time = arrow_effect_game_time_seconds();
     let accel = effective_accel_effects_for_player(state, player_idx);
     let visual = effective_visual_effects_for_player(state, player_idx);
     let appearance = state.effective_appearance_effects_for_player(player_idx);
@@ -931,7 +847,7 @@ pub(crate) fn build_bundles(
             effect_height,
             screen_height: screen_height(),
             note_count_stats: state.note_count_stats(player_idx),
-            arrow_effect_time_s: arrow_effect_time,
+            arrow_effect_time_s,
             lane_tipsy: visual.tipsy,
             lane_move_y: &visual.move_y_cols,
         });
@@ -996,16 +912,6 @@ pub(crate) fn build_bundles(
                 visual.bumpy_offset,
                 visual.bumpy_period,
             )
-        };
-        let measure_line_mode = if view.edit_beat_bars {
-            MeasureLineMode::Edit
-        } else {
-            match profile.measure_lines {
-                profile_data::MeasureLines::Off => MeasureLineMode::Off,
-                profile_data::MeasureLines::Measure => MeasureLineMode::Measure,
-                profile_data::MeasureLines::Quarter => MeasureLineMode::Quarter,
-                profile_data::MeasureLines::Eighth => MeasureLineMode::Eighth,
-            }
         };
         let (time_signatures, bpms, stops, delays, scrolls) = state
             .gameplay_chart(player_idx)
@@ -1095,7 +1001,7 @@ pub(crate) fn build_bundles(
                 playfield_center_x,
                 i,
                 receptor_y_lane,
-                arrow_effect_time,
+                arrow_effect_time_s,
                 beat_push,
                 visual,
                 &col_offsets[..num_cols],
@@ -1402,7 +1308,7 @@ pub(crate) fn build_bundles(
                     playfield_center_x,
                     i,
                     receptor_y_lane,
-                    arrow_effect_time,
+                    arrow_effect_time_s,
                     beat_push,
                     visual,
                     &col_offsets[..num_cols],
@@ -1514,7 +1420,7 @@ pub(crate) fn build_bundles(
                 playfield_center_x,
                 i,
                 receptor_y_lane,
-                arrow_effect_time,
+                arrow_effect_time_s,
                 beat_push,
                 visual,
                 &col_offsets[..num_cols],
@@ -1615,16 +1521,17 @@ pub(crate) fn build_bundles(
                 return;
             }
 
-            // Prepare static/dynamic Y positions for the hold body
-            // Head Y: dynamic if actively held or let go, otherwise static cache
-            let mut head_beat = note.beat;
+            // Keep gameplay-state eligibility in the adapter while the canonical
+            // planner owns the resulting dynamic/static head beat.
             let is_head_dynamic = hold.let_go_started_at.is_some()
                 || matches!(hold.result, Some(HoldResult::LetGo | HoldResult::Missed));
-
-            if is_head_dynamic {
-                head_beat =
-                    let_go_head_beat(note.beat, hold.end_beat, hold.last_held_beat, current_beat);
-            }
+            let head_beat = hold_entry_head_beat(
+                note.beat,
+                hold.end_beat,
+                hold.last_held_beat,
+                current_beat,
+                is_head_dynamic,
+            );
 
             let col_dir = column_dirs[local_col];
             let dir = col_dir;
@@ -1633,7 +1540,7 @@ pub(crate) fn build_bundles(
                 playfield_center_x,
                 local_col,
                 lane_receptor_y,
-                arrow_effect_time,
+                arrow_effect_time_s,
                 beat_push,
                 visual,
                 &col_offsets[..num_cols],
@@ -1662,64 +1569,9 @@ pub(crate) fn build_bundles(
             // reaches the receptor row; only then does hold-active rendering clamp.
             let (engaged, use_active) =
                 hold_head_render_flags(active_state, current_beat, note.beat);
-            // ITG swaps hold start/end for reverse before applying hold-body offsets.
-            let mut hold_start_y = if lane_reverse { tail_y } else { head_y };
-            let mut hold_end_y = if lane_reverse { head_y } else { tail_y };
-            let mut hold_start_travel = if lane_reverse {
-                tail_travel_offset
-            } else {
-                head_travel_offset
-            };
-            let mut hold_end_travel = if lane_reverse {
-                head_travel_offset
-            } else {
-                tail_travel_offset
-            };
-            if engaged {
-                if lane_reverse {
-                    hold_end_y = receptor_draw_y;
-                    hold_end_travel = 0.0;
-                } else {
-                    hold_start_y = receptor_draw_y;
-                    hold_start_travel = 0.0;
-                }
-            }
-            // ITG swaps hold start/end offsets for reverse before applying
-            // noteskin hold-body offsets (NoteDisplay::DrawHold).
-            let body_flipped = lane_reverse && note_display.flip_hold_body_when_reverse;
-            let (y_head, y_tail) = if body_flipped {
-                (
-                    hold_start_y - note_display.stop_drawing_hold_body_offset_from_tail,
-                    hold_end_y - note_display.start_drawing_hold_body_offset_from_head,
-                )
-            } else {
-                (
-                    hold_start_y + note_display.start_drawing_hold_body_offset_from_head,
-                    hold_end_y + note_display.stop_drawing_hold_body_offset_from_tail,
-                )
-            };
-            let (top, bottom, draw_body_or_cap) = hold_draw_span(y_head, y_tail, screen_height())
-                .map_or((0.0, 0.0, false), |(top, bottom)| (top, bottom, true));
-            let let_go_gray = ns.hold_let_go_gray_percent.clamp(0.0, 1.0);
-            let hold_life = hold.life.clamp(0.0, 1.0);
-            let hold_color_scale = let_go_gray + (1.0 - let_go_gray) * hold_life;
-            let hold_diffuse = [hold_color_scale, hold_color_scale, hold_color_scale, 1.0];
-            // ITG places hold head actor using post-swap start/end offsets:
-            // DrawActor(..., bFlipHeadAndTail ? fEndYOffset : fStartYOffset, ...).
-            let flip_head_and_tail = lane_reverse && note_display.flip_head_and_tail_when_reverse;
-            let head_anchor_y = if flip_head_and_tail {
-                hold_end_y
-            } else {
-                hold_start_y
-            };
-            let head_anchor_travel = if flip_head_and_tail {
-                hold_end_travel
-            } else {
-                hold_start_travel
-            };
             let visuals =
                 ns.hold_visuals_for_col(local_col, matches!(note.note_type, NoteType::Roll));
-            let mut hold_parts = hold_parts_for_note_type(note.note_type);
+            let hold_parts = hold_parts_for_note_type(note.note_type);
             let hold_part_phase = ns.part_uv_phase(
                 hold_parts.head,
                 state.total_elapsed_in_screen(),
@@ -1732,45 +1584,60 @@ pub(crate) fn build_bundles(
                 current_beat,
                 note.beat,
             );
-            let mut hold_topcap_phase = ns.part_uv_phase(
+            let hold_topcap_phase = ns.part_uv_phase(
                 hold_parts.topcap,
                 state.total_elapsed_in_screen(),
                 current_beat,
                 note.beat,
             );
-            let mut hold_bottomcap_phase = ns.part_uv_phase(
+            let hold_bottomcap_phase = ns.part_uv_phase(
                 hold_parts.bottomcap,
                 state.total_elapsed_in_screen(),
                 current_beat,
                 note.beat,
             );
-            let mut top_cap_slot = if use_active {
-                visuals
-                    .topcap_active
-                    .as_ref()
-                    .or(visuals.topcap_inactive.as_ref())
-            } else {
-                visuals
-                    .topcap_inactive
-                    .as_ref()
-                    .or(visuals.topcap_active.as_ref())
-            };
-            let mut bottom_cap_slot = if use_active {
-                visuals
-                    .bottomcap_active
-                    .as_ref()
-                    .or(visuals.bottomcap_inactive.as_ref())
-            } else {
-                visuals
-                    .bottomcap_inactive
-                    .as_ref()
-                    .or(visuals.bottomcap_active.as_ref())
-            };
-            if body_flipped {
-                std::mem::swap(&mut top_cap_slot, &mut bottom_cap_slot);
-                std::mem::swap(&mut hold_parts.topcap, &mut hold_parts.bottomcap);
-                std::mem::swap(&mut hold_topcap_phase, &mut hold_bottomcap_phase);
-            }
+            let hold_plan = hold_entry_plan(HoldEntryPlanRequest {
+                note_type: note.note_type,
+                head_travel: head_travel_offset,
+                tail_travel: tail_travel_offset,
+                head_y,
+                tail_y,
+                receptor_y: receptor_draw_y,
+                screen_height: screen_height(),
+                lane_reverse,
+                engaged,
+                use_active,
+                flip_body_reverse: note_display.flip_hold_body_when_reverse,
+                flip_head_tail_reverse: note_display.flip_head_and_tail_when_reverse,
+                start_body_offset: note_display.start_drawing_hold_body_offset_from_head,
+                stop_body_offset: note_display.stop_drawing_hold_body_offset_from_tail,
+                let_go_gray: ns.hold_let_go_gray_percent,
+                life: hold.life,
+                head_phase: hold_part_phase,
+                body_phase: hold_body_phase,
+                top_cap_phase: hold_topcap_phase,
+                bottom_cap_phase: hold_bottomcap_phase,
+                visuals,
+            });
+            let body_flipped = hold_plan.body_flipped;
+            let y_head = hold_plan.y_head;
+            let y_tail = hold_plan.y_tail;
+            let (top, bottom, draw_body_or_cap) = hold_plan
+                .draw_span
+                .map_or((0.0, 0.0, false), |(top, bottom)| (top, bottom, true));
+            let hold_diffuse = hold_plan.diffuse;
+            let head_anchor_y = hold_plan.head_anchor_y;
+            let head_anchor_travel = hold_plan.head_anchor_travel;
+            let hold_parts = hold_plan.parts;
+            let hold_part_phase = hold_plan.head_phase;
+            let hold_body_phase = hold_plan.body_phase;
+            let hold_topcap_phase = hold_plan.top_cap_phase;
+            let hold_bottomcap_phase = hold_plan.bottom_cap_phase;
+            let top_cap_slot = hold_plan.top_cap_slot;
+            let bottom_cap_slot = hold_plan.bottom_cap_slot;
+            let body_slot = hold_plan.body_slot;
+            let head_layers = hold_plan.head_layers;
+            let head_slot = hold_plan.head_slot;
             // Prepare clipped body extents. ITG DrawHoldBodyInternal always
             // draws the bottom cap downward from y_tail, so we keep body clipping
             // anchored to that same tail-side join.
@@ -1815,17 +1682,7 @@ pub(crate) fn build_bundles(
             if draw_body_or_cap
                 && !body_direction_invalid
                 && body_bottom > body_top
-                && let Some(body_slot) = if use_active {
-                    visuals
-                        .body_active
-                        .as_ref()
-                        .or(visuals.body_inactive.as_ref())
-                } else {
-                    visuals
-                        .body_inactive
-                        .as_ref()
-                        .or(visuals.body_active.as_ref())
-                }
+                && let Some(body_slot) = body_slot
             {
                 let texture_size = body_slot.size();
                 let texture_width = texture_size[0].max(1) as f32;
@@ -2882,30 +2739,6 @@ pub(crate) fn build_bundles(
                 let head_center = [head_center_x, head_draw_y];
                 let head_world_z = world_z_for_raw_travel(local_col, head_anchor_travel);
                 let elapsed = state.total_elapsed_in_screen();
-                let head_layers = if use_active {
-                    visuals
-                        .head_active_layers
-                        .as_deref()
-                        .or(visuals.head_inactive_layers.as_deref())
-                } else {
-                    visuals
-                        .head_inactive_layers
-                        .as_deref()
-                        .or(visuals.head_active_layers.as_deref())
-                };
-                let head_slot = if head_layers.is_none() && use_active {
-                    visuals
-                        .head_active
-                        .as_ref()
-                        .or(visuals.head_inactive.as_ref())
-                } else if head_layers.is_none() {
-                    visuals
-                        .head_inactive
-                        .as_ref()
-                        .or(visuals.head_active.as_ref())
-                } else {
-                    None
-                };
                 let hold_head_translation =
                     ns.part_uv_translation(hold_parts.head, note.beat, false);
                 let head_slot = head_slot.and_then(|slot| {
@@ -4128,569 +3961,62 @@ pub(crate) fn build_bundles(
     if num_cols > 0 {
         average_bar_y /= num_cols as f32;
     }
-    let avg_error_bar_mini_scale = average_error_bar_mini_scale(mini);
-    let error_bar_bg_z = if profile.judgment_back {
-        Z_ERROR_BAR_BG_BACK
-    } else {
-        Z_ERROR_BAR_BG_FRONT
-    };
-    let error_bar_band_z = if profile.judgment_back {
-        Z_ERROR_BAR_BAND_BACK
-    } else {
-        Z_ERROR_BAR_BAND_FRONT
-    };
-    let error_bar_line_z = if profile.judgment_back {
-        Z_ERROR_BAR_LINE_BACK
-    } else {
-        Z_ERROR_BAR_LINE_FRONT
-    };
-    let error_bar_tick_z = if profile.judgment_back {
-        Z_ERROR_BAR_TICK_BACK
-    } else {
-        Z_ERROR_BAR_TICK_FRONT
-    };
-    let error_bar_text_z = if profile.judgment_back {
-        Z_ERROR_BAR_TEXT_BACK
-    } else {
-        Z_ERROR_BAR_TEXT_FRONT
-    };
-
-    // zmod ExtraAesthetics: offset indicator text (ErrorMSDisplay).
-    if !blind_active
-        && profile.error_ms_display
-        && let Some(text) = p.offset_indicator_text
-    {
-        let age = elapsed_screen - text.started_at;
-        if (0.0..OFFSET_INDICATOR_DUR_S).contains(&age) {
-            let mut offset_y = screen_center_y() + notefield_offset_y;
-            if show_error_bar {
-                let min_sep = error_bar_max_h * 0.5 + 6.0;
-                if (offset_y - error_bar_y).abs() < min_sep {
-                    offset_y = error_bar_y + min_sep;
-                }
-            }
-            let c = error_bar_color_for_window(text.window, profile.show_fa_plus_window);
-            hud_actors.push(act!(text:
-                font("wendy"): settext(cached_offset_ms(text.offset_ms)):
-                align(0.5, 0.5): xy(playfield_center_x, offset_y):
-                zoom(0.25): shadowlength(1.0):
-                diffuse(c[0], c[1], c[2], 1.0):
-                z(error_bar_text_z)
-            ));
-        }
-    }
-
-    // Error Bar (Simply Love parity)
-    if !blind_active && show_error_bar {
-        let mut styles = [profile_data::ErrorBarStyle::None; 4];
-        let mut style_count = 0usize;
-        if show_error_bar_colorful {
-            styles[style_count] = profile_data::ErrorBarStyle::Colorful;
-            style_count += 1;
-        }
-        if show_error_bar_monochrome {
-            styles[style_count] = profile_data::ErrorBarStyle::Monochrome;
-            style_count += 1;
-        }
-        if show_error_bar_highlight {
-            styles[style_count] = profile_data::ErrorBarStyle::Highlight;
-            style_count += 1;
-        }
-        if show_error_bar_average {
-            styles[style_count] = profile_data::ErrorBarStyle::Average;
-            style_count += 1;
-        }
-        let blue_fantastic_window_s = Some(player_blue_window_ms(state, player_idx) / 1000.0);
-
-        for style in styles.into_iter().take(style_count) {
-            match style {
-                profile_data::ErrorBarStyle::Monochrome => {
-                    let bar_h = error_bar_max_h;
-                    let max_window_ix = error_bar_trim_max_window_ix(profile.error_bar_trim);
-                    let max_offset_s = state.timing_profile_windows_s()[max_window_ix];
-                    let wscale = if max_offset_s.is_finite() && max_offset_s > 0.0 {
-                        (ERROR_BAR_WIDTH_MONOCHROME * 0.5) / max_offset_s
-                    } else {
-                        0.0
-                    };
-                    let (bounds_s, bounds_len) = error_bar_boundaries_s(
-                        state.timing_profile_windows_s(),
-                        blue_fantastic_window_s,
-                        profile.show_fa_plus_window,
-                        max_window_ix,
-                    );
-
-                    let bg_alpha = if profile.background_filter.is_off() {
-                        ERROR_BAR_MONO_BG_ALPHA
-                    } else {
-                        0.0
-                    };
-                    if bg_alpha > 0.0 {
-                        hud_actors.push(act!(quad:
-                            align(0.5, 0.5): xy(error_bar_x, error_bar_y):
-                            zoomto(ERROR_BAR_WIDTH_MONOCHROME + 2.0, bar_h + 2.0):
-                            diffuse(0.0, 0.0, 0.0, bg_alpha):
-                            z(error_bar_bg_z)
-                        ));
-                    }
-
-                    hud_actors.push(act!(quad:
-                        align(0.5, 0.5): xy(error_bar_x, error_bar_y):
-                        zoomto(2.0, bar_h):
-                        diffuse(0.5, 0.5, 0.5, 1.0):
-                        z(error_bar_band_z)
-                    ));
-
-                    let line_alpha = if elapsed_screen < ERROR_BAR_LINES_FADE_START_S {
-                        0.0
-                    } else if elapsed_screen
-                        < ERROR_BAR_LINES_FADE_START_S + ERROR_BAR_LINES_FADE_DUR_S
-                    {
-                        let t = (elapsed_screen - ERROR_BAR_LINES_FADE_START_S)
-                            / ERROR_BAR_LINES_FADE_DUR_S;
-                        ERROR_BAR_LINE_ALPHA * smoothstep01(t)
-                    } else {
-                        ERROR_BAR_LINE_ALPHA
-                    };
-                    if line_alpha > 0.0 && wscale.is_finite() && wscale > 0.0 {
-                        for &bound in bounds_s.iter().take(bounds_len) {
-                            let offset = bound * wscale;
-                            if !offset.is_finite() {
-                                continue;
-                            }
-                            for sx in [-1.0_f32, 1.0_f32] {
-                                hud_actors.push(act!(quad:
-                                    align(0.5, 0.5): xy(error_bar_x + sx * offset, error_bar_y):
-                                    zoomto(1.0, bar_h):
-                                    diffuse(1.0, 1.0, 1.0, line_alpha):
-                                    z(error_bar_line_z)
-                                ));
-                            }
-                        }
-                    }
-
-                    let label_fade_out_start_s =
-                        ERROR_BAR_LABEL_FADE_DUR_S + ERROR_BAR_LABEL_HOLD_S;
-                    let label_alpha = if elapsed_screen < ERROR_BAR_LABEL_FADE_DUR_S {
-                        smoothstep01(elapsed_screen / ERROR_BAR_LABEL_FADE_DUR_S)
-                    } else if elapsed_screen < label_fade_out_start_s {
-                        1.0
-                    } else if elapsed_screen < label_fade_out_start_s + ERROR_BAR_LABEL_FADE_DUR_S {
-                        1.0 - smoothstep01(
-                            (elapsed_screen - label_fade_out_start_s) / ERROR_BAR_LABEL_FADE_DUR_S,
-                        )
-                    } else {
-                        0.0
-                    };
-                    if label_alpha > 0.0 {
-                        let x_off = ERROR_BAR_WIDTH_MONOCHROME * 0.25;
-                        hud_actors.push(act!(text:
-                            font("game"): settext("Early"):
-                            align(0.5, 0.5): xy(error_bar_x - x_off, error_bar_y):
-                            zoom(0.7): diffuse(1.0, 1.0, 1.0, label_alpha):
-                            z(error_bar_text_z)
-                        ));
-                        hud_actors.push(act!(text:
-                            font("game"): settext("Late"):
-                            align(0.5, 0.5): xy(error_bar_x + x_off, error_bar_y):
-                            zoom(0.7): diffuse(1.0, 1.0, 1.0, label_alpha):
-                            z(error_bar_text_z)
-                        ));
-                    }
-
-                    if wscale.is_finite() && wscale > 0.0 {
-                        let multi_tick = profile.error_bar_multi_tick;
-                        for tick_opt in &p.error_bar_mono_ticks {
-                            let Some(tick) = tick_opt else {
-                                continue;
-                            };
-                            let alpha = error_bar_tick_alpha(
-                                elapsed_screen - tick.started_at,
-                                ERROR_BAR_TICK_DUR_MONOCHROME,
-                                multi_tick,
-                            );
-                            if alpha <= 0.0 {
-                                continue;
-                            }
-                            let x = tick.offset_s * wscale;
-                            if !x.is_finite() {
-                                continue;
-                            }
-                            let c = error_bar_color_for_window(
-                                tick.window,
-                                profile.show_fa_plus_window,
-                            );
-                            hud_actors.push(act!(quad:
-                                align(0.5, 0.5): xy(error_bar_x + x, error_bar_y):
-                                zoomto(ERROR_BAR_TICK_WIDTH, bar_h):
-                                diffuse(c[0], c[1], c[2], alpha):
-                                z(error_bar_tick_z)
-                            ));
-                        }
-                    }
-                }
-                profile_data::ErrorBarStyle::Colorful => {
-                    let max_window_ix = error_bar_trim_max_window_ix(profile.error_bar_trim);
-                    let max_offset_s = state.timing_profile_windows_s()[max_window_ix];
-                    let wscale = if max_offset_s.is_finite() && max_offset_s > 0.0 {
-                        (ERROR_BAR_WIDTH_COLORFUL * 0.5) / max_offset_s
-                    } else {
-                        0.0
-                    };
-                    let (bounds_s, bounds_len) = error_bar_boundaries_s(
-                        state.timing_profile_windows_s(),
-                        blue_fantastic_window_s,
-                        profile.show_fa_plus_window,
-                        max_window_ix,
-                    );
-
-                    let bar_visible = p
-                        .error_bar_color_bar_started_at
-                        .map(|t0| {
-                            let age = elapsed_screen - t0;
-                            (0.0..ERROR_BAR_TICK_DUR_COLORFUL).contains(&age)
-                        })
-                        .unwrap_or(false);
-
-                    if bar_visible && wscale.is_finite() && wscale > 0.0 {
-                        hud_actors.push(act!(quad:
-                            align(0.5, 0.5): xy(error_bar_x, error_bar_y):
-                            zoomto(ERROR_BAR_WIDTH_COLORFUL + 4.0, ERROR_BAR_HEIGHT_COLORFUL + 4.0):
-                            diffuse(0.0, 0.0, 0.0, 1.0):
-                            z(error_bar_bg_z)
-                        ));
-
-                        let base = if profile.show_fa_plus_window {
-                            0usize
-                        } else {
-                            1usize
-                        };
-                        let mut lastx = 0.0_f32;
-                        for (i, &bound) in bounds_s.iter().take(bounds_len).enumerate() {
-                            let x = bound * wscale;
-                            let width = x - lastx;
-                            if !x.is_finite() || !width.is_finite() || width <= 0.0 {
-                                lastx = x;
-                                continue;
-                            }
-                            let window = timing_window_from_num(base + i);
-                            let c = error_bar_color_for_window(window, profile.show_fa_plus_window);
-
-                            let cx_early = -0.5 * (lastx + x);
-                            let cx_late = 0.5 * (lastx + x);
-                            hud_actors.push(act!(quad:
-                                align(0.5, 0.5): xy(error_bar_x + cx_early, error_bar_y):
-                                zoomto(width, ERROR_BAR_HEIGHT_COLORFUL):
-                                diffuse(c[0], c[1], c[2], 1.0):
-                                z(error_bar_band_z)
-                            ));
-                            hud_actors.push(act!(quad:
-                                align(0.5, 0.5): xy(error_bar_x + cx_late, error_bar_y):
-                                zoomto(width, ERROR_BAR_HEIGHT_COLORFUL):
-                                diffuse(c[0], c[1], c[2], 1.0):
-                                z(error_bar_band_z)
-                            ));
-
-                            lastx = x;
-                        }
-                    }
-
-                    if wscale.is_finite() && wscale > 0.0 {
-                        let multi_tick = profile.error_bar_multi_tick;
-                        for tick_opt in &p.error_bar_color_ticks {
-                            let Some(tick) = tick_opt else {
-                                continue;
-                            };
-                            let alpha = error_bar_tick_alpha(
-                                elapsed_screen - tick.started_at,
-                                ERROR_BAR_TICK_DUR_COLORFUL,
-                                multi_tick,
-                            );
-                            if alpha <= 0.0 {
-                                continue;
-                            }
-                            let x = tick.offset_s * wscale;
-                            if !x.is_finite() {
-                                continue;
-                            }
-                            hud_actors.push(act!(quad:
-                            align(0.5, 0.5): xy(error_bar_x + x, error_bar_y):
-                            zoomto(ERROR_BAR_TICK_WIDTH, ERROR_BAR_HEIGHT_COLORFUL + 4.0):
-                            diffuse(ERROR_BAR_COLORFUL_TICK_RGBA[0], ERROR_BAR_COLORFUL_TICK_RGBA[1], ERROR_BAR_COLORFUL_TICK_RGBA[2], alpha):
-                            z(error_bar_line_z)
-                        ));
-                        }
-                    }
-                }
-                profile_data::ErrorBarStyle::Highlight => {
-                    let max_window_ix = error_bar_trim_max_window_ix(profile.error_bar_trim);
-                    let max_offset_s = state.timing_profile_windows_s()[max_window_ix];
-                    let wscale = if max_offset_s.is_finite() && max_offset_s > 0.0 {
-                        (ERROR_BAR_WIDTH_COLORFUL * 0.5) / max_offset_s
-                    } else {
-                        0.0
-                    };
-                    let (bounds_s, bounds_len) = error_bar_boundaries_s(
-                        state.timing_profile_windows_s(),
-                        blue_fantastic_window_s,
-                        profile.show_fa_plus_window,
-                        max_window_ix,
-                    );
-
-                    let bar_visible = p
-                        .error_bar_color_bar_started_at
-                        .map(|t0| {
-                            let age = elapsed_screen - t0;
-                            (0.0..ERROR_BAR_TICK_DUR_COLORFUL).contains(&age)
-                        })
-                        .unwrap_or(false);
-
-                    if bar_visible && wscale.is_finite() && wscale > 0.0 {
-                        hud_actors.push(act!(quad:
-                            align(0.5, 0.5): xy(error_bar_x, error_bar_y):
-                            zoomto(ERROR_BAR_WIDTH_COLORFUL + 4.0, ERROR_BAR_HEIGHT_COLORFUL + 4.0):
-                            diffuse(0.0, 0.0, 0.0, 1.0):
-                            z(error_bar_bg_z)
-                        ));
-
-                        let base = if profile.show_fa_plus_window {
-                            0usize
-                        } else {
-                            1usize
-                        };
-                        let mut lastx = 0.0_f32;
-                        for (i, &bound) in bounds_s.iter().take(bounds_len).enumerate() {
-                            let x = bound * wscale;
-                            let width = x - lastx;
-                            if !x.is_finite() || !width.is_finite() || width <= 0.0 {
-                                lastx = x;
-                                continue;
-                            }
-                            let window_num = base + i;
-                            let window = timing_window_from_num(window_num);
-                            let wi = window_num.min(5);
-                            let c = error_bar_color_for_window(window, profile.show_fa_plus_window);
-                            let early_a = error_bar_flash_alpha(
-                                elapsed_screen,
-                                p.error_bar_color_flash_early[wi],
-                                ERROR_BAR_TICK_DUR_COLORFUL,
-                            );
-                            let late_a = error_bar_flash_alpha(
-                                elapsed_screen,
-                                p.error_bar_color_flash_late[wi],
-                                ERROR_BAR_TICK_DUR_COLORFUL,
-                            );
-
-                            let cx_early = -0.5 * (lastx + x);
-                            let cx_late = 0.5 * (lastx + x);
-                            hud_actors.push(act!(quad:
-                                align(0.5, 0.5): xy(error_bar_x + cx_early, error_bar_y):
-                                zoomto(width, ERROR_BAR_HEIGHT_COLORFUL):
-                                diffuse(c[0], c[1], c[2], early_a):
-                                z(error_bar_band_z)
-                            ));
-                            hud_actors.push(act!(quad:
-                                align(0.5, 0.5): xy(error_bar_x + cx_late, error_bar_y):
-                                zoomto(width, ERROR_BAR_HEIGHT_COLORFUL):
-                                diffuse(c[0], c[1], c[2], late_a):
-                                z(error_bar_band_z)
-                            ));
-
-                            lastx = x;
-                        }
-                    }
-
-                    if wscale.is_finite() && wscale > 0.0 {
-                        let multi_tick = profile.error_bar_multi_tick;
-                        for tick_opt in &p.error_bar_color_ticks {
-                            let Some(tick) = tick_opt else {
-                                continue;
-                            };
-                            let alpha = error_bar_tick_alpha(
-                                elapsed_screen - tick.started_at,
-                                ERROR_BAR_TICK_DUR_COLORFUL,
-                                multi_tick,
-                            );
-                            if alpha <= 0.0 {
-                                continue;
-                            }
-                            let x = tick.offset_s * wscale;
-                            if !x.is_finite() {
-                                continue;
-                            }
-                            hud_actors.push(act!(quad:
-                            align(0.5, 0.5): xy(error_bar_x + x, error_bar_y):
-                            zoomto(ERROR_BAR_TICK_WIDTH, ERROR_BAR_HEIGHT_COLORFUL + 4.0):
-                            diffuse(ERROR_BAR_COLORFUL_TICK_RGBA[0], ERROR_BAR_COLORFUL_TICK_RGBA[1], ERROR_BAR_COLORFUL_TICK_RGBA[2], alpha):
-                            z(error_bar_line_z)
-                        ));
-                        }
-                    }
-                }
-                profile_data::ErrorBarStyle::Average => {
-                    let max_window_ix = error_bar_trim_max_window_ix(profile.error_bar_trim);
-                    let max_offset_s = state.timing_profile_windows_s()[max_window_ix];
-                    let wscale = if max_offset_s.is_finite() && max_offset_s > 0.0 {
-                        (ERROR_BAR_WIDTH_AVERAGE * 0.5 * avg_error_bar_mini_scale) / max_offset_s
-                    } else {
-                        0.0
-                    };
-                    let bar_visible = p
-                        .error_bar_avg_bar_started_at
-                        .map(|t0| {
-                            let age = elapsed_screen - t0;
-                            (0.0..ERROR_BAR_TICK_DUR_COLORFUL).contains(&age)
-                        })
-                        .unwrap_or(false);
-                    if profile.short_average_error_bar_enabled
-                        && bar_visible
-                        && wscale.is_finite()
-                        && wscale > 0.0
-                    {
-                        let tick_h =
-                            (ERROR_BAR_HEIGHT_AVERAGE + 4.0 + ERROR_BAR_AVERAGE_TICK_EXTRA_H)
-                                * avg_error_bar_mini_scale;
-
-                        if profile.center_tick {
-                            hud_actors.push(act!(quad:
-                            align(0.5, 0.5): xy(error_bar_x, average_bar_y):
-                            zoomto(ERROR_BAR_CENTER_TICK_WIDTH, tick_h):
-                            diffuse(ERROR_BAR_CENTER_TICK_RGBA[0], ERROR_BAR_CENTER_TICK_RGBA[1], ERROR_BAR_CENTER_TICK_RGBA[2], ERROR_BAR_CENTER_TICK_RGBA[3]):
-                            z(Z_ERROR_BAR_AVERAGE)
-                            ));
-                        }
-
-                        let multi_tick = profile.error_bar_multi_tick;
-                        for tick_opt in &p.error_bar_avg_ticks {
-                            let Some(tick) = tick_opt else {
-                                continue;
-                            };
-                            let alpha = error_bar_tick_alpha(
-                                elapsed_screen - tick.started_at,
-                                ERROR_BAR_TICK_DUR_COLORFUL,
-                                multi_tick,
-                            );
-                            if alpha <= 0.0 {
-                                continue;
-                            }
-                            // Intensity scaling, clamping and the single-sample
-                            // 0.75 correction are baked into tick.offset_s when
-                            // the tick is registered (see error_bar_register_tap).
-                            let x = tick.offset_s * wscale;
-                            if !x.is_finite() {
-                                continue;
-                            }
-                            hud_actors.push(act!(quad:
-                            align(0.5, 0.5): xy(error_bar_x + x, average_bar_y):
-                            zoomto(ERROR_BAR_TICK_WIDTH * avg_error_bar_mini_scale, tick_h):
-                            diffuse(ERROR_BAR_COLORFUL_TICK_RGBA[0], ERROR_BAR_COLORFUL_TICK_RGBA[1], ERROR_BAR_COLORFUL_TICK_RGBA[2], alpha):
-                            z(Z_ERROR_BAR_AVERAGE)
-                        ));
-                        }
-                    }
-                }
-                profile_data::ErrorBarStyle::Text => {}
-                profile_data::ErrorBarStyle::None => {}
-            }
-        }
-
-        if profile.long_error_bar_enabled
-            && p.error_bar_long_avg_visible
-            && let Some(long_tick) = p.error_bar_long_avg_tick
-        {
-            let max_window_ix = error_bar_trim_max_window_ix(profile.error_bar_trim);
-            let max_offset_s = state.timing_profile_windows_s()[max_window_ix];
-            let bar_width = if show_error_bar_average {
-                ERROR_BAR_WIDTH_AVERAGE
-            } else if show_error_bar_colorful {
-                ERROR_BAR_WIDTH_COLORFUL
-            } else {
-                ERROR_BAR_WIDTH_MONOCHROME
-            };
-            let long_mini_scale = if show_error_bar_average {
-                avg_error_bar_mini_scale
-            } else {
-                1.0
-            };
-            let wscale = if max_offset_s.is_finite() && max_offset_s > 0.0 {
-                (bar_width * 0.5 * long_mini_scale) / max_offset_s
-            } else {
-                0.0
-            };
-            let alpha = error_bar_tick_alpha(
-                elapsed_screen - long_tick.started_at,
-                ERROR_BAR_TICK_DUR_COLORFUL,
-                profile.error_bar_multi_tick,
-            );
-            if alpha > 0.0 && wscale.is_finite() && wscale > 0.0 {
-                let intensity =
-                    profile_data::clamp_long_error_bar_intensity(profile.long_error_bar_intensity);
-                let scaled_offset = if max_offset_s.is_finite() && max_offset_s > 0.0 {
-                    (long_tick.offset_s * intensity).clamp(-max_offset_s, max_offset_s)
-                } else {
-                    long_tick.offset_s * intensity
-                };
-                let x = scaled_offset * wscale;
-                if x.is_finite() {
-                    let long_tick_y = if show_error_bar_average {
-                        average_bar_y
-                    } else {
-                        error_bar_y
-                    };
-                    let long_tick_z = if show_error_bar_average {
-                        Z_ERROR_BAR_AVERAGE
-                    } else {
-                        error_bar_line_z
-                    };
-                    let long_tick_h =
-                        (ERROR_BAR_HEIGHT_AVERAGE + 4.0 + ERROR_BAR_LONG_AVG_TICK_EXTRA_H)
-                            * long_mini_scale;
-                    hud_actors.push(act!(quad:
-                        align(0.5, 0.5): xy(error_bar_x + x, long_tick_y):
-                        zoomto(ERROR_BAR_LONG_AVG_TICK_WIDTH, long_tick_h):
-                        diffuse(ERROR_BAR_LONG_AVG_TICK_RGBA[0], ERROR_BAR_LONG_AVG_TICK_RGBA[1], ERROR_BAR_LONG_AVG_TICK_RGBA[2], alpha):
-                        z(long_tick_z)
-                    ));
-                }
-            }
-        }
-        if show_error_bar_text && let Some(text) = p.error_bar_text {
-            let age = elapsed_screen - text.started_at;
-            if (0.0..ERROR_BAR_TICK_DUR_COLORFUL).contains(&age) {
-                let x = if text.early { -40.0 } else { 40.0 };
-                let label = cached_error_bar_text_label(text.early, text.scaled);
-                let zoom = if text.scaled {
-                    error_bar_text_scalable_zoom(
-                        text.offset_ms.abs(),
-                        text.scale_start_ms,
-                        state.timing_profile_windows_s()[0] * 1000.0,
-                    )
-                } else {
-                    ERROR_BAR_TEXT_ZOOM
-                };
-                let c = if text.early {
-                    if text.scaled {
-                        ERROR_BAR_TEXT_10MS_FAST_RGBA
-                    } else {
-                        ERROR_BAR_TEXT_EARLY_RGBA
-                    }
-                } else {
-                    if text.scaled {
-                        ERROR_BAR_TEXT_10MS_SLOW_RGBA
-                    } else {
-                        ERROR_BAR_TEXT_LATE_RGBA
-                    }
-                };
-                hud_actors.push(act!(text:
-                    font("wendy"): settext(label):
-                    align(0.5, 0.5): xy(error_bar_x + x, error_bar_y):
-                    zoom(zoom): shadowlength(1.0):
-                    diffuse(c[0], c[1], c[2], c[3]):
-                    z(error_bar_text_z)
-                ));
-            }
-        }
-    }
+    let error_bar_style = style.error_bar;
+    let timing_windows_s = state.timing_profile_windows_s();
+    let max_error_bar_window_ix = error_bar_trim_max_window_ix(profile.error_bar_trim);
+    let blue_fantastic_window_s = Some(player_blue_window_ms(state, player_idx) / 1000.0);
+    compose_error_bar(
+        &mut hud_actors,
+        ErrorBarComposeRequest {
+            style: error_bar_style,
+            modes: ErrorBarModes {
+                colorful: show_error_bar_colorful,
+                monochrome: show_error_bar_monochrome,
+                highlight: show_error_bar_highlight,
+                average: show_error_bar_average,
+            },
+            state: ErrorBarState {
+                mono_ticks: &p.error_bar_mono_ticks,
+                color_ticks: &p.error_bar_color_ticks,
+                average_ticks: &p.error_bar_avg_ticks,
+                color_bar_started_at: p.error_bar_color_bar_started_at,
+                average_bar_started_at: p.error_bar_avg_bar_started_at,
+                flash_early: &p.error_bar_color_flash_early,
+                flash_late: &p.error_bar_color_flash_late,
+            },
+            visible: !blind_active && show_error_bar,
+            elapsed_s: elapsed_screen,
+            position: [error_bar_x, error_bar_y],
+            average_y: average_bar_y,
+            max_height: error_bar_max_h,
+            mini,
+            timing_windows_s,
+            blue_fantastic_window_s,
+            max_window_ix: max_error_bar_window_ix,
+            show_fa_plus: profile.show_fa_plus_window,
+            judgment_back: profile.judgment_back,
+            monochrome_background: profile.background_filter.is_off(),
+            multi_tick: profile.error_bar_multi_tick,
+            short_average: profile.short_average_error_bar_enabled,
+            center_tick: profile.center_tick,
+            has_error_bar: show_error_bar,
+            offset_indicator: p.offset_indicator_text,
+            offset_indicator_visible: !blind_active && profile.error_ms_display,
+            offset_indicator_position: [playfield_center_x, screen_center_y() + notefield_offset_y],
+            offset_text: cached_offset_ms,
+            long_average_tick: p.error_bar_long_avg_tick,
+            long_average_visible: !blind_active
+                && show_error_bar
+                && profile.long_error_bar_enabled
+                && p.error_bar_long_avg_visible,
+            long_average_intensity: profile_data::clamp_long_error_bar_intensity(
+                profile.long_error_bar_intensity,
+            ),
+            text: p.error_bar_text,
+            text_visible: !blind_active && show_error_bar && show_error_bar_text,
+            text_label: cached_error_bar_text_label,
+        },
+    );
 
     if profile.measure_counter != profile_data::MeasureCounter::None {
         let display_beat = state.current_beat_display();
@@ -4803,7 +4129,7 @@ pub(crate) fn build_bundles(
             hold_judgments,
             hold_sprite,
             current_beat,
-            arrow_effect_time,
+            arrow_effect_time: arrow_effect_time_s,
             mini,
             visual,
             noteskin_column_xs: noteskin_assets.noteskin[player_idx]
