@@ -1,7 +1,7 @@
 use crate::act;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::screens::components::shared::{transitions, visual_style_bg};
-use crate::screens::{Screen, ScreenAction};
+use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
@@ -130,7 +130,7 @@ pub fn on_enter(state: &mut State) {
     state.manual_active = false;
 }
 
-pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
+pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
     if !state.manual_active {
         return None;
     }
@@ -140,36 +140,38 @@ pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
     }
     state.manual_elapsed = 0.0;
     state.manual_active = false;
-    Some(ScreenAction::TestLightsSetAuto)
+    Some(ThemeEffect::Runtime(
+        crate::SimplyLoveRuntimeRequest::TestLightsSetAuto,
+    ))
 }
 
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     if !ev.pressed {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
 
     match ev.action {
         VirtualAction::p1_start
         | VirtualAction::p2_start
         | VirtualAction::p1_back
-        | VirtualAction::p2_back => ScreenAction::Navigate(Screen::Options),
+        | VirtualAction::p2_back => ThemeEffect::Navigate(Screen::Options),
         VirtualAction::p1_left | VirtualAction::p1_menu_left => {
             set_manual(state);
-            ScreenAction::TestLightsStepCabinet(-1)
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::TestLightsStepCabinet(-1))
         }
         VirtualAction::p1_right | VirtualAction::p1_menu_right => {
             set_manual(state);
-            ScreenAction::TestLightsStepCabinet(1)
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::TestLightsStepCabinet(1))
         }
         VirtualAction::p2_left | VirtualAction::p2_menu_left => {
             set_manual(state);
-            ScreenAction::TestLightsStepButton(-1)
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::TestLightsStepButton(-1))
         }
         VirtualAction::p2_right | VirtualAction::p2_menu_right => {
             set_manual(state);
-            ScreenAction::TestLightsStepButton(1)
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::TestLightsStepButton(1))
         }
-        _ => ScreenAction::None,
+        _ => ThemeEffect::None,
     }
 }
 

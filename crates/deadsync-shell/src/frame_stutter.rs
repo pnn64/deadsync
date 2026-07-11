@@ -2,7 +2,7 @@ use deadlib_present::actors::{Actor, actor_tree_stats};
 use deadlib_present::compose::TextLayoutFrameStats;
 use deadlib_render::DrawStats;
 use deadsync_config::frame_pacing::stutter_severity;
-use deadsync_screens::Screen;
+use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ComposeBreakdown {

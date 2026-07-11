@@ -50,9 +50,9 @@ pub use course::{
     build_course_summary_score_info, build_course_summary_stage, course_display_timing_for_run,
     course_total_seconds, merge_course_score_columns, score_info_from_stage,
 };
-pub use deadsync_screens::diagnostics::{
-    FrameStatsSample, FrameStatsSummary, HISTOGRAM_BINS, OverlayAnchor, OverlayStyle, TimingHealth,
-    VisibleStutterSample, histogram,
+pub use deadsync_theme::views::{FrameStatsSample, FrameStatsSummary, OverlayAnchor, OverlayStyle};
+pub use deadsync_theme_simply_love::views::{
+    HISTOGRAM_BINS, TimingHealth, VisibleStutterSample, frame_histogram as histogram,
 };
 pub use diagnostics::timing_health;
 pub use dynamic_media::DynamicMedia;
@@ -132,9 +132,9 @@ pub use navigation::{
     apply_actor_entry_transition, apply_actor_fade_out_transition, apply_global_entry_transition,
     apply_global_fade_out_transition, fade_completion_exit_plan, fade_completion_plan,
     global_entry_transition, global_fade_out_transition, is_actor_fade_screen,
-    is_actor_only_transition, machine_flow_screen, navigation_transition_effect_plan,
-    navigation_transition_start, process_exit_navigation_plan, screen_change_plan,
-    screen_from_machine_flow, transition_audio_plan, write_current_screen_file,
+    is_actor_only_transition, navigation_transition_effect_plan, navigation_transition_start,
+    process_exit_navigation_plan, screen_change_plan, transition_audio_plan,
+    write_current_screen_file,
 };
 pub use offset_prompt::{
     GameplayOffsetSavePrompt, GameplayOffsetSaveTargets, GameplayOffsetSnapshot, OffsetPromptInput,
@@ -161,10 +161,10 @@ pub use restart::{
 pub use runtime::ShellState;
 pub use screen_flow::{
     LateJoinContext, NavigationRoutePlan, OnlineProfileLinkPlan, ProfileSelectionContext,
-    ProfileSelectionPlan, ScreenActionEffect, ScreenActionEffectPlan, ScreenActionRouteContext,
-    ScreenActionRoutePlan, SelectMusicJoinContext, SelectMusicJoinPlan,
+    ProfileSelectionPlan, SelectMusicJoinContext, SelectMusicJoinPlan, ThemeEffectExecution,
+    ThemeEffectExecutionPlan, ThemeEffectRouteContext, ThemeEffectRoutePlan,
     evaluation_summary_return_to, late_join_side, navigation_route_plan, profile_selection_plan,
-    screen_action_effect_plan, screen_action_route_plan, select_music_join_plan,
+    select_music_join_plan, theme_effect_execution_plan, theme_effect_route_plan,
 };
 pub use screenshot::{
     AutoScreenshotEvalResult, AutoScreenshotFrameContext, AutoScreenshotFramePlan,

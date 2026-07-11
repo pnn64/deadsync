@@ -1,8 +1,9 @@
 use crate::act;
-use deadlib_present::actors::Actor;
-use deadsync_screens::diagnostics::{
-    FrameStatsSample, FrameStatsSummary, HISTOGRAM_BINS, OverlayAnchor, OverlayStyle, histogram,
+use crate::views::{
+    FrameStatsSample, FrameStatsSummary, HISTOGRAM_BINS, OverlayAnchor, OverlayStyle,
+    frame_histogram as histogram,
 };
+use deadlib_present::actors::Actor;
 
 const DEBUG_OVERLAY_Z: i16 = 32030;
 

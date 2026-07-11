@@ -1,14 +1,231 @@
 use crate::screens::components::shared::{test_input, transitions, visual_style_bg};
-use crate::screens::{Screen, ScreenAction};
+use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadsync_core::input::InputSource;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, PadEvent, VirtualAction, with_keymap};
-pub use deadsync_screens::input::{
-    MenuLrChordTracker, ThreeKeyMenuAction, advance_hold_repeat, dedicated_blocks_arrow,
-    menu_lr_both_held, menu_lr_side, reset_hold_repeat, track_menu_lr_chord,
-};
+use deadsync_profile::PlayerSide;
+use std::time::{Duration, Instant};
+
+const MENU_LR_CHORD_WINDOW: Duration = Duration::from_millis(75);
+const MENU_LR_LEFT: u8 = 1 << 0;
+const MENU_LR_RIGHT: u8 = 1 << 1;
+
+#[inline(always)]
+pub fn reset_hold_repeat(
+    held_for: &mut Duration,
+    next_repeat_at: &mut Duration,
+    initial_delay: Duration,
+) {
+    *held_for = Duration::ZERO;
+    *next_repeat_at = initial_delay;
+}
+
+pub fn advance_hold_repeat(
+    held_for: &mut Duration,
+    next_repeat_at: &mut Duration,
+    repeat_interval: Duration,
+    dt: f32,
+) -> bool {
+    if dt <= 0.0 || !dt.is_finite() {
+        return false;
+    }
+    *held_for = held_for.saturating_add(Duration::from_secs_f32(dt));
+    if *held_for <= *next_repeat_at {
+        return false;
+    }
+    if repeat_interval == Duration::ZERO {
+        *next_repeat_at = *held_for;
+        return true;
+    }
+    while *next_repeat_at <= *held_for {
+        *next_repeat_at = next_repeat_at.saturating_add(repeat_interval);
+    }
+    true
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct MenuLrChordSideState {
+    held_mask: u8,
+    left_pressed_at: Option<Instant>,
+    right_pressed_at: Option<Instant>,
+    fired: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct MenuLrChordTracker {
+    p1: MenuLrChordSideState,
+    p2: MenuLrChordSideState,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ThreeKeyMenuAction {
+    Prev,
+    Next,
+    Confirm,
+    Cancel,
+}
+
+#[inline(always)]
+pub const fn dedicated_blocks_arrow(
+    action: VirtualAction,
+    only_dedicated_menu_buttons: bool,
+) -> bool {
+    only_dedicated_menu_buttons && action.is_gameplay_arrow()
+}
+
+#[inline(always)]
+pub const fn menu_lr_side(action: VirtualAction) -> Option<PlayerSide> {
+    match action {
+        VirtualAction::p1_left
+        | VirtualAction::p1_menu_left
+        | VirtualAction::p1_right
+        | VirtualAction::p1_menu_right => Some(PlayerSide::P1),
+        VirtualAction::p2_left
+        | VirtualAction::p2_menu_left
+        | VirtualAction::p2_right
+        | VirtualAction::p2_menu_right => Some(PlayerSide::P2),
+        _ => None,
+    }
+}
+
+#[inline(always)]
+const fn menu_lr_bit(action: VirtualAction) -> Option<u8> {
+    match action {
+        VirtualAction::p1_left
+        | VirtualAction::p1_menu_left
+        | VirtualAction::p2_left
+        | VirtualAction::p2_menu_left => Some(MENU_LR_LEFT),
+        VirtualAction::p1_right
+        | VirtualAction::p1_menu_right
+        | VirtualAction::p2_right
+        | VirtualAction::p2_menu_right => Some(MENU_LR_RIGHT),
+        _ => None,
+    }
+}
+
+#[inline(always)]
+fn menu_lr_times_are_simultaneous(a: Option<Instant>, b: Option<Instant>) -> bool {
+    let (Some(a), Some(b)) = (a, b) else {
+        return false;
+    };
+    if a >= b {
+        a.duration_since(b) <= MENU_LR_CHORD_WINDOW
+    } else {
+        b.duration_since(a) <= MENU_LR_CHORD_WINDOW
+    }
+}
+
+impl MenuLrChordTracker {
+    #[inline(always)]
+    fn side_state(&self, side: PlayerSide) -> &MenuLrChordSideState {
+        match side {
+            PlayerSide::P1 => &self.p1,
+            PlayerSide::P2 => &self.p2,
+        }
+    }
+
+    #[inline(always)]
+    fn side_state_mut(&mut self, side: PlayerSide) -> &mut MenuLrChordSideState {
+        match side {
+            PlayerSide::P1 => &mut self.p1,
+            PlayerSide::P2 => &mut self.p2,
+        }
+    }
+
+    pub fn update(&mut self, ev: &InputEvent) -> Option<PlayerSide> {
+        let Some(side) = menu_lr_side(ev.action) else {
+            return None;
+        };
+        let Some(bit) = menu_lr_bit(ev.action) else {
+            return None;
+        };
+        let side_state = self.side_state_mut(side);
+        if ev.pressed {
+            side_state.held_mask |= bit;
+            if bit == MENU_LR_LEFT {
+                side_state.left_pressed_at = Some(ev.timestamp);
+            } else {
+                side_state.right_pressed_at = Some(ev.timestamp);
+            }
+            if !side_state.fired
+                && side_state.held_mask == (MENU_LR_LEFT | MENU_LR_RIGHT)
+                && menu_lr_times_are_simultaneous(
+                    side_state.left_pressed_at,
+                    side_state.right_pressed_at,
+                )
+            {
+                side_state.fired = true;
+                return Some(side);
+            }
+        } else {
+            side_state.held_mask &= !bit;
+            if bit == MENU_LR_LEFT {
+                side_state.left_pressed_at = None;
+            } else {
+                side_state.right_pressed_at = None;
+            }
+            if side_state.held_mask != (MENU_LR_LEFT | MENU_LR_RIGHT) {
+                side_state.fired = false;
+            }
+        }
+        None
+    }
+
+    #[inline(always)]
+    pub fn track(&mut self, ev: &InputEvent) {
+        let _ = self.update(ev);
+    }
+
+    #[inline(always)]
+    pub fn both_held(&self, side: PlayerSide) -> bool {
+        self.side_state(side).held_mask == (MENU_LR_LEFT | MENU_LR_RIGHT)
+    }
+}
+
+fn three_key_menu_action_enabled(
+    chord: &mut MenuLrChordTracker,
+    ev: &InputEvent,
+    enabled: bool,
+) -> Option<(PlayerSide, ThreeKeyMenuAction)> {
+    if !enabled {
+        return None;
+    }
+    if let Some(side) = chord.update(ev) {
+        return Some((side, ThreeKeyMenuAction::Cancel));
+    }
+    if !ev.pressed {
+        return None;
+    }
+    match ev.action {
+        VirtualAction::p1_left | VirtualAction::p1_menu_left => {
+            Some((PlayerSide::P1, ThreeKeyMenuAction::Prev))
+        }
+        VirtualAction::p1_right | VirtualAction::p1_menu_right => {
+            Some((PlayerSide::P1, ThreeKeyMenuAction::Next))
+        }
+        VirtualAction::p1_start => Some((PlayerSide::P1, ThreeKeyMenuAction::Confirm)),
+        VirtualAction::p2_left | VirtualAction::p2_menu_left => {
+            Some((PlayerSide::P2, ThreeKeyMenuAction::Prev))
+        }
+        VirtualAction::p2_right | VirtualAction::p2_menu_right => {
+            Some((PlayerSide::P2, ThreeKeyMenuAction::Next))
+        }
+        VirtualAction::p2_start => Some((PlayerSide::P2, ThreeKeyMenuAction::Confirm)),
+        _ => None,
+    }
+}
+
+#[inline(always)]
+pub fn track_menu_lr_chord(chord: &mut MenuLrChordTracker, ev: &InputEvent) {
+    chord.track(ev);
+}
+
+#[inline(always)]
+pub fn menu_lr_both_held(chord: &MenuLrChordTracker, side: PlayerSide) -> bool {
+    chord.both_held(side)
+}
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
 const TRANSITION_OUT_DURATION: f32 = 0.4;
@@ -23,8 +240,8 @@ pub fn dedicated_three_key_nav_enabled() -> bool {
 pub fn three_key_menu_action(
     chord: &mut MenuLrChordTracker,
     ev: &InputEvent,
-) -> Option<(deadsync_profile::PlayerSide, ThreeKeyMenuAction)> {
-    deadsync_screens::input::three_key_menu_action(chord, ev, dedicated_three_key_nav_enabled())
+) -> Option<(PlayerSide, ThreeKeyMenuAction)> {
+    three_key_menu_action_enabled(chord, ev, dedicated_three_key_nav_enabled())
 }
 
 pub struct State {
@@ -47,7 +264,7 @@ pub fn init() -> State {
 
 /* ------------------------------- update ------------------------------- */
 
-pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
+pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
     if !state.back_hold_active {
         state.back_hold_secs = 0.0;
         return None;
@@ -58,7 +275,7 @@ pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
     }
     state.back_hold_active = false;
     state.back_hold_secs = 0.0;
-    Some(ScreenAction::Navigate(Screen::Options))
+    Some(ThemeEffect::Navigate(Screen::Options))
 }
 
 /* ----------------------------- transitions ----------------------------- */
@@ -73,21 +290,21 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 
 /* ------------------------------- input -------------------------------- */
 
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     if ev.pressed
         && ev.source == InputSource::Gamepad
         && matches!(ev.action, VirtualAction::p1_back | VirtualAction::p2_back)
     {
-        return ScreenAction::Navigate(Screen::Options);
+        return ThemeEffect::Navigate(Screen::Options);
     }
     test_input::apply_virtual_input(&mut state.test_input, ev);
-    ScreenAction::None
+    ThemeEffect::None
 }
 
-pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> ScreenAction {
+pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> ThemeEffect {
     test_input::apply_raw_key_event(&mut state.test_input, key_event);
     if key_event.pressed && key_event.repeat {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     let is_back = with_keymap(|km| {
         km.raw_key_event_has_action(key_event, |action| {
@@ -95,7 +312,7 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
         })
     });
     if !is_back {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     if key_event.pressed {
         if !state.back_hold_active {
@@ -106,7 +323,7 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
         state.back_hold_active = false;
         state.back_hold_secs = 0.0;
     }
-    ScreenAction::None
+    ThemeEffect::None
 }
 
 /// Raw pad events are used to approximate Simply Love's "unmapped" device list.

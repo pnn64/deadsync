@@ -1,9 +1,7 @@
 use deadsync_audio::OutputTimingSnapshot;
 use deadsync_config::frame_pacing::{FixedFrameStatsRing, update_frame_stats_spike_hold};
 use deadsync_profile::PlayStyle;
-use deadsync_screens::diagnostics::{
-    FrameStatsSample, FrameStatsSummary, OverlayAnchor, OverlayStyle,
-};
+use deadsync_theme::views::{FrameStatsSample, FrameStatsSummary, OverlayAnchor, OverlayStyle};
 use std::time::Duration;
 
 const FRAME_STATS_SAMPLE_COUNT: usize = 128;

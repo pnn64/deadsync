@@ -24,7 +24,7 @@ use crate::screens::options::qr_login::{
     self, QrLoginUiState, build_qr_login_overlay_actors, create_groovestats_login_ui,
     create_groovestats_login_ui_for_profile, poll_qr_login_ui,
 };
-use crate::screens::{Screen, ScreenAction};
+use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::Actor;
 use deadsync_audio_stream as audio;
 use deadsync_input::{InputEvent, VirtualAction};
@@ -101,9 +101,9 @@ pub fn update(state: &mut State, _dt: f32) {
 /// fall-through to `SelectColor` runs next.  This keeps the chain
 /// (`SelectProfile → GrooveStats → ArrowCloud → SelectColor`) terminating
 /// at SelectColor through the ArrowCloud screen's existing logic, even
-/// when ArrowCloud's pref is `Disabled` (the app's ScreenAction handler
+/// when ArrowCloud's pref is `Disabled` (the app's ThemeEffect handler
 /// already collapses that case to SelectColor directly).
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     let three_key = screen_input::three_key_menu_action(&mut state.menu_lr_chord, ev);
     let is_three_key_confirm = matches!(
         three_key,
@@ -139,7 +139,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         } else {
             Screen::SelectColor
         };
-        return ScreenAction::Navigate(next);
+        return ThemeEffect::Navigate(next);
     }
     if is_back {
         if let Some(ui) = state.ui.as_ref() {
@@ -154,9 +154,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             Screen::Menu
         };
         log::info!("GrooveStats QR login cancelled — returning to {next:?}.");
-        return ScreenAction::Navigate(next);
+        return ThemeEffect::Navigate(next);
     }
-    ScreenAction::None
+    ThemeEffect::None
 }
 
 pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_multiplier: f32) {

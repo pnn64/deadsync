@@ -5,7 +5,7 @@ use crate::command::{
     execute_command_resources, log_command_timing_for_screen,
 };
 use deadsync_config::prelude as config;
-use deadsync_screens::DensityGraphSlot;
+use deadsync_theme_simply_love::views::SimplyLoveDensityGraphSlot as DensityGraphSlot;
 use std::error::Error;
 use winit::event_loop::ActiveEventLoop;
 

@@ -1,6 +1,7 @@
 pub use deadlib_present::{rgba, rgba_const};
 pub use deadlib_render as render;
 
+pub mod effects;
 pub mod fonts;
 pub mod i18n;
 mod i18n_runtime;
@@ -9,7 +10,25 @@ mod resources;
 pub mod scorebox;
 pub mod step_stats;
 pub mod step_stats_gifs;
+pub mod views;
 pub mod visual_styles;
+
+pub use effects::{
+    SimplyLoveEffect, SimplyLoveEffectRouteContext, SimplyLoveEffectRoutePlan,
+    SimplyLoveRuntimeRequest, resolve_effect_route,
+};
+
+pub struct SimplyLoveTheme;
+
+impl deadsync_theme::Theme for SimplyLoveTheme {
+    type Screen = screens::SimplyLoveScreen;
+    type RuntimeRequest = SimplyLoveRuntimeRequest;
+
+    #[inline(always)]
+    fn screen_id(screen: Self::Screen) -> deadsync_theme::ThemeScreenId {
+        screen.id()
+    }
+}
 
 pub mod assets {
     pub use crate::fonts::{

@@ -47,7 +47,7 @@ pub(super) fn apply_submenu_choice_delta(
     asset_manager: &AssetManager,
     delta: isize,
     wrap: NavWrap,
-) -> Option<ScreenAction> {
+) -> Option<ThemeEffect> {
     if !matches!(state.submenu_transition, SubmenuTransition::None) {
         return None;
     }
@@ -261,7 +261,7 @@ pub(super) fn apply_submenu_choice_delta(
     if num_choices == 0 {
         return None;
     }
-    let mut action: Option<ScreenAction> = None;
+    let mut action: Option<ThemeEffect> = None;
     if row_index >= submenu_choice_indices(state, kind).len()
         || row_index >= submenu_cursor_indices(state, kind).len()
     {
@@ -341,15 +341,19 @@ pub(super) fn apply_submenu_choice_delta(
         }
         if row.id == SubRowId::ShowStats {
             let mode = new_index.min(3) as u8;
-            action = Some(ScreenAction::UpdateShowOverlay(mode));
+            action = Some(ThemeEffect::Runtime(
+                crate::SimplyLoveRuntimeRequest::UpdateShowOverlay(mode),
+            ));
         }
         if row.id == SubRowId::ValidationLayers {
             config::update_gfx_debug(yes_no_from_choice(new_index));
         }
         if row.id == SubRowId::HideMouseCursor {
-            action = Some(ScreenAction::UpdateMouseCursorHidden(yes_no_from_choice(
-                new_index,
-            )));
+            action = Some(ThemeEffect::Runtime(
+                crate::SimplyLoveRuntimeRequest::UpdateMouseCursorHidden(yes_no_from_choice(
+                    new_index,
+                )),
+            ));
         }
         if row.id == SubRowId::SoftwareRendererThreads {
             let threads = software_thread_from_choice(&state.software_thread_choices, new_index);
@@ -874,7 +878,7 @@ fn handle_dedicated_three_key_start_nav(
     kind: SubmenuKind,
     side: profile_data::PlayerSide,
     repeated: bool,
-) -> ScreenAction {
+) -> ThemeEffect {
     if screen_input::menu_lr_both_held(&state.menu_lr_chord, side) {
         move_submenu_selection_vertical(
             state,
@@ -883,18 +887,18 @@ fn handle_dedicated_three_key_start_nav(
             NavDirection::Up,
             NavWrap::Clamp,
         );
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     if submenu_visible_row_to_actual(state, kind, state.sub_selected).is_none() {
         if repeated {
-            return ScreenAction::None;
+            return ThemeEffect::None;
         }
         clear_navigation_holds(state);
         return activate_current_selection(state, asset_manager);
     }
     if selected_submenu_row_has_choices(state, kind) == Some(false) {
         if repeated {
-            return ScreenAction::None;
+            return ThemeEffect::None;
         }
         clear_navigation_holds(state);
         return activate_current_selection(state, asset_manager);
@@ -906,7 +910,7 @@ fn handle_dedicated_three_key_start_nav(
         NavDirection::Down,
         NavWrap::Clamp,
     );
-    ScreenAction::None
+    ThemeEffect::None
 }
 
 pub(super) fn repeat_held_dedicated_three_key_start(
@@ -914,7 +918,7 @@ pub(super) fn repeat_held_dedicated_three_key_start(
     asset_manager: &AssetManager,
     side: profile_data::PlayerSide,
     dt: f32,
-) -> Option<ScreenAction> {
+) -> Option<ThemeEffect> {
     let OptionsView::Submenu(kind) = state.view else {
         clear_start_hold(state, side);
         return None;
@@ -937,14 +941,14 @@ pub(super) fn repeat_held_dedicated_three_key_start(
         return None;
     }
     let action = handle_dedicated_three_key_start_nav(state, asset_manager, kind, side, true);
-    (!matches!(action, ScreenAction::None)).then_some(action)
+    (!matches!(action, ThemeEffect::None)).then_some(action)
 }
 
 pub(super) fn handle_dedicated_three_key_options_input(
     state: &mut State,
     asset_manager: &AssetManager,
     ev: &InputEvent,
-) -> ScreenAction {
+) -> ThemeEffect {
     if !ev.pressed {
         match ev.action {
             VirtualAction::p1_left
@@ -973,7 +977,7 @@ pub(super) fn handle_dedicated_three_key_options_input(
             VirtualAction::p2_start => clear_start_hold(state, profile_data::PlayerSide::P2),
             _ => {}
         }
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
 
     if dedicated_three_key_menu_nav(state.view) {
@@ -984,7 +988,7 @@ pub(super) fn handle_dedicated_three_key_options_input(
             | VirtualAction::p2_menu_left => {
                 move_options_selection_vertical(state, asset_manager, NavDirection::Up);
                 on_nav_press(state, NavDirection::Up);
-                ScreenAction::None
+                ThemeEffect::None
             }
             VirtualAction::p1_right
             | VirtualAction::p1_menu_right
@@ -992,13 +996,13 @@ pub(super) fn handle_dedicated_three_key_options_input(
             | VirtualAction::p2_menu_right => {
                 move_options_selection_vertical(state, asset_manager, NavDirection::Down);
                 on_nav_press(state, NavDirection::Down);
-                ScreenAction::None
+                ThemeEffect::None
             }
             VirtualAction::p1_start | VirtualAction::p2_start => {
                 clear_navigation_holds(state);
                 activate_current_selection(state, asset_manager)
             }
-            _ => ScreenAction::None,
+            _ => ThemeEffect::None,
         };
     }
 
@@ -1015,7 +1019,7 @@ pub(super) fn handle_dedicated_three_key_options_input(
                     return action;
                 }
                 on_lr_press(state, -1);
-                ScreenAction::None
+                ThemeEffect::None
             }
             VirtualAction::p1_right
             | VirtualAction::p1_menu_right
@@ -1028,18 +1032,18 @@ pub(super) fn handle_dedicated_three_key_options_input(
                     return action;
                 }
                 on_lr_press(state, 1);
-                ScreenAction::None
+                ThemeEffect::None
             }
             VirtualAction::p1_start | VirtualAction::p2_start => {
                 let Some(side) = start_side(ev.action) else {
-                    return ScreenAction::None;
+                    return ThemeEffect::None;
                 };
                 on_start_press(state, side);
                 handle_dedicated_three_key_start_nav(state, asset_manager, kind, side, false)
             }
-            _ => ScreenAction::None,
+            _ => ThemeEffect::None,
         },
-        OptionsView::Main => ScreenAction::None,
+        OptionsView::Main => ThemeEffect::None,
     }
 }
 
@@ -1060,9 +1064,9 @@ pub(super) fn submenu_parent_kind_of(kind: SubmenuKind) -> Option<SubmenuKind> {
     }
 }
 
-pub(super) fn cancel_current_view(state: &mut State) -> ScreenAction {
+pub(super) fn cancel_current_view(state: &mut State) -> ThemeEffect {
     match state.view {
-        OptionsView::Main => ScreenAction::Navigate(Screen::Menu),
+        OptionsView::Main => ThemeEffect::Navigate(Screen::Menu),
         OptionsView::Submenu(_) => {
             if let Some(parent_kind) = state.submenu_parent_kind {
                 state.pending_submenu_kind = Some(parent_kind);
@@ -1073,7 +1077,7 @@ pub(super) fn cancel_current_view(state: &mut State) -> ScreenAction {
                 state.submenu_transition = SubmenuTransition::FadeOutToMain;
             }
             state.submenu_fade_t = 0.0;
-            ScreenAction::None
+            ThemeEffect::None
         }
     }
 }
@@ -1125,13 +1129,13 @@ pub(super) fn undo_three_key_selection(state: &mut State, asset_manager: &AssetM
 pub(super) fn activate_current_selection(
     state: &mut State,
     asset_manager: &AssetManager,
-) -> ScreenAction {
+) -> ThemeEffect {
     match state.view {
         OptionsView::Main => {
             let visible = visible_items();
             let total = visible.len();
             if total == 0 {
-                return ScreenAction::None;
+                return ThemeEffect::None;
             }
             let sel = state.selected.min(total - 1);
             let item = visible[sel];
@@ -1219,7 +1223,7 @@ pub(super) fn activate_current_selection(
                 }
                 ItemId::ManageLocalProfiles => {
                     audio::play_sfx("assets/sounds/start.ogg");
-                    return ScreenAction::Navigate(Screen::ManageLocalProfiles);
+                    return ThemeEffect::Navigate(Screen::ManageLocalProfiles);
                 }
                 ItemId::ReloadSongsCourses => {
                     audio::play_sfx("assets/sounds/start.ogg");
@@ -1248,20 +1252,20 @@ pub(super) fn activate_current_selection(
                 }
                 ItemId::Credits => {
                     audio::play_sfx("assets/sounds/start.ogg");
-                    return ScreenAction::NavigateNoFade(Screen::Credits);
+                    return ThemeEffect::NavigateNoFade(Screen::Credits);
                 }
                 ItemId::Exit => {
                     audio::play_sfx("assets/sounds/start.ogg");
-                    return ScreenAction::Navigate(Screen::Menu);
+                    return ThemeEffect::Navigate(Screen::Menu);
                 }
                 _ => {}
             }
-            ScreenAction::None
+            ThemeEffect::None
         }
         OptionsView::Submenu(kind) => {
             let total = submenu_total_rows(state, kind);
             if total == 0 {
-                return ScreenAction::None;
+                return ThemeEffect::None;
             }
             let selected_row = state.sub_selected.min(total.saturating_sub(1));
             if matches!(kind, SubmenuKind::SelectMusic)
@@ -1276,7 +1280,7 @@ pub(super) fn activate_current_selection(
                         .unwrap_or(0)
                         .min(SELECT_MUSIC_SCOREBOX_CYCLE_NUM_CHOICES.saturating_sub(1));
                     toggle_select_music_scorebox_cycle_option(state, choice_idx);
-                    return ScreenAction::None;
+                    return ThemeEffect::None;
                 } else if row_id == Some(SubRowId::ChartInfo) {
                     let choice_idx = submenu_cursor_indices(state, kind)
                         .get(row_idx)
@@ -1284,7 +1288,7 @@ pub(super) fn activate_current_selection(
                         .unwrap_or(0)
                         .min(SELECT_MUSIC_CHART_INFO_NUM_CHOICES.saturating_sub(1));
                     toggle_select_music_chart_info_option(state, choice_idx);
-                    return ScreenAction::None;
+                    return ThemeEffect::None;
                 }
             }
             if matches!(kind, SubmenuKind::Gameplay)
@@ -1298,7 +1302,7 @@ pub(super) fn activate_current_selection(
                         .unwrap_or(0)
                         .min(config::AUTO_SS_NUM_FLAGS.saturating_sub(1));
                     toggle_auto_screenshot_option(state, choice_idx);
-                    return ScreenAction::None;
+                    return ThemeEffect::None;
                 }
             }
             if selected_row == total - 1 {
@@ -1312,26 +1316,26 @@ pub(super) fn activate_current_selection(
                     state.submenu_transition = SubmenuTransition::FadeOutToMain;
                 }
                 state.submenu_fade_t = 0.0;
-                return ScreenAction::None;
+                return ThemeEffect::None;
             }
             if matches!(kind, SubmenuKind::Input) {
                 let rows = submenu_rows(kind);
                 let Some(row_idx) = submenu_visible_row_to_actual(state, kind, selected_row) else {
-                    return ScreenAction::None;
+                    return ThemeEffect::None;
                 };
                 if let Some(row) = rows.get(row_idx) {
                     match row.id {
                         SubRowId::ConfigureMappings => {
                             audio::play_sfx("assets/sounds/start.ogg");
-                            return ScreenAction::Navigate(Screen::Mappings);
+                            return ThemeEffect::Navigate(Screen::Mappings);
                         }
                         SubRowId::TestInput => {
                             audio::play_sfx("assets/sounds/start.ogg");
-                            return ScreenAction::Navigate(Screen::Input);
+                            return ThemeEffect::Navigate(Screen::Input);
                         }
                         SubRowId::ConfigurePads => {
                             audio::play_sfx("assets/sounds/start.ogg");
-                            return ScreenAction::Navigate(Screen::ConfigurePads);
+                            return ThemeEffect::Navigate(Screen::ConfigurePads);
                         }
                         SubRowId::InputOptions => {
                             audio::play_sfx("assets/sounds/start.ogg");
@@ -1339,7 +1343,7 @@ pub(super) fn activate_current_selection(
                             state.pending_submenu_parent_kind = Some(SubmenuKind::Input);
                             state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                             state.submenu_fade_t = 0.0;
-                            return ScreenAction::None;
+                            return ThemeEffect::None;
                         }
                         _ => {}
                     }
@@ -1347,13 +1351,15 @@ pub(super) fn activate_current_selection(
             } else if matches!(kind, SubmenuKind::InputBackend) {
                 let rows = submenu_rows(kind);
                 let Some(row_idx) = submenu_visible_row_to_actual(state, kind, selected_row) else {
-                    return ScreenAction::None;
+                    return ThemeEffect::None;
                 };
                 if let Some(row) = rows.get(row_idx) {
                     match row.id {
                         SubRowId::DebugFsrDump => {
                             audio::play_sfx("assets/sounds/start.ogg");
-                            return ScreenAction::WriteFsrDump;
+                            return ThemeEffect::Runtime(
+                                crate::SimplyLoveRuntimeRequest::WriteFsrDump,
+                            );
                         }
                         SubRowId::SmxConfig => {
                             audio::play_sfx("assets/sounds/start.ogg");
@@ -1361,7 +1367,7 @@ pub(super) fn activate_current_selection(
                             state.pending_submenu_parent_kind = Some(SubmenuKind::InputBackend);
                             state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                             state.submenu_fade_t = 0.0;
-                            return ScreenAction::None;
+                            return ThemeEffect::None;
                         }
                         _ => {}
                     }
@@ -1369,14 +1375,14 @@ pub(super) fn activate_current_selection(
             } else if matches!(kind, SubmenuKind::SmxConfig) {
                 let rows = submenu_rows(kind);
                 let Some(row_idx) = submenu_visible_row_to_actual(state, kind, selected_row) else {
-                    return ScreenAction::None;
+                    return ThemeEffect::None;
                 };
                 if let Some(row) = rows.get(row_idx) {
                     match row.id {
                         SubRowId::SmxAssignPads => {
                             audio::play_sfx("assets/sounds/start.ogg");
                             crate::screens::smx_assign::set_pending_return(Screen::Options);
-                            return ScreenAction::Navigate(Screen::SmxAssignPads);
+                            return ThemeEffect::Navigate(Screen::SmxAssignPads);
                         }
                         SubRowId::SmxSwapPads => {
                             // Immediate action: swap P1/P2 and stay on the page so
@@ -1387,7 +1393,7 @@ pub(super) fn activate_current_selection(
                             } else {
                                 audio::play_sfx("assets/sounds/common_invalid.ogg");
                             }
-                            return ScreenAction::None;
+                            return ThemeEffect::None;
                         }
                         _ => {}
                     }
@@ -1395,41 +1401,41 @@ pub(super) fn activate_current_selection(
             } else if matches!(kind, SubmenuKind::Lights) {
                 let rows = submenu_rows(kind);
                 let Some(row_idx) = submenu_visible_row_to_actual(state, kind, selected_row) else {
-                    return ScreenAction::None;
+                    return ThemeEffect::None;
                 };
                 if let Some(row) = rows.get(row_idx)
                     && row.id == SubRowId::TestLights
                 {
                     audio::play_sfx("assets/sounds/start.ogg");
-                    return ScreenAction::Navigate(Screen::TestLights);
+                    return ThemeEffect::Navigate(Screen::TestLights);
                 }
             } else if matches!(kind, SubmenuKind::Graphics) {
                 let rows = submenu_rows(kind);
                 let Some(row_idx) = submenu_visible_row_to_actual(state, kind, selected_row) else {
-                    return ScreenAction::None;
+                    return ThemeEffect::None;
                 };
                 if let Some(row) = rows.get(row_idx)
                     && row.id == SubRowId::OverscanAdjustment
                 {
                     audio::play_sfx("assets/sounds/start.ogg");
-                    return ScreenAction::Navigate(Screen::OverscanAdjustment);
+                    return ThemeEffect::Navigate(Screen::OverscanAdjustment);
                 }
             } else if matches!(kind, SubmenuKind::Folders) {
                 let rows = submenu_rows(kind);
                 let Some(row_idx) = submenu_visible_row_to_actual(state, kind, selected_row) else {
-                    return ScreenAction::None;
+                    return ThemeEffect::None;
                 };
                 if let Some(row) = rows.get(row_idx)
                     && is_folder_row(row.id)
                 {
                     audio::play_sfx("assets/sounds/start.ogg");
                     open_folder_for_row(row.id);
-                    return ScreenAction::None;
+                    return ThemeEffect::None;
                 }
             } else if matches!(kind, SubmenuKind::OnlineScoring) {
                 let rows = submenu_rows(kind);
                 let Some(row_idx) = submenu_visible_row_to_actual(state, kind, selected_row) else {
-                    return ScreenAction::None;
+                    return ThemeEffect::None;
                 };
                 if let Some(row) = rows.get(row_idx) {
                     match row.id {
@@ -1439,7 +1445,7 @@ pub(super) fn activate_current_selection(
                             state.pending_submenu_parent_kind = Some(SubmenuKind::OnlineScoring);
                             state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                             state.submenu_fade_t = 0.0;
-                            return ScreenAction::None;
+                            return ThemeEffect::None;
                         }
                         SubRowId::ArrowCloudOptions => {
                             audio::play_sfx("assets/sounds/start.ogg");
@@ -1447,7 +1453,7 @@ pub(super) fn activate_current_selection(
                             state.pending_submenu_parent_kind = Some(SubmenuKind::OnlineScoring);
                             state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                             state.submenu_fade_t = 0.0;
-                            return ScreenAction::None;
+                            return ThemeEffect::None;
                         }
                         SubRowId::ScoreImport => {
                             audio::play_sfx("assets/sounds/start.ogg");
@@ -1456,7 +1462,7 @@ pub(super) fn activate_current_selection(
                             state.pending_submenu_parent_kind = Some(SubmenuKind::OnlineScoring);
                             state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                             state.submenu_fade_t = 0.0;
-                            return ScreenAction::None;
+                            return ThemeEffect::None;
                         }
                         _ => {}
                     }
@@ -1464,7 +1470,7 @@ pub(super) fn activate_current_selection(
             } else if matches!(kind, SubmenuKind::NullOrDie) {
                 let rows = submenu_rows(kind);
                 let Some(row_idx) = submenu_visible_row_to_actual(state, kind, selected_row) else {
-                    return ScreenAction::None;
+                    return ThemeEffect::None;
                 };
                 if let Some(row) = rows.get(row_idx) {
                     match row.id {
@@ -1474,7 +1480,7 @@ pub(super) fn activate_current_selection(
                             state.pending_submenu_parent_kind = Some(SubmenuKind::NullOrDie);
                             state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                             state.submenu_fade_t = 0.0;
-                            return ScreenAction::None;
+                            return ThemeEffect::None;
                         }
                         SubRowId::SyncPacks => {
                             audio::play_sfx("assets/sounds/start.ogg");
@@ -1483,7 +1489,7 @@ pub(super) fn activate_current_selection(
                             state.pending_submenu_parent_kind = Some(SubmenuKind::NullOrDie);
                             state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                             state.submenu_fade_t = 0.0;
-                            return ScreenAction::None;
+                            return ThemeEffect::None;
                         }
                         _ => {}
                     }
@@ -1491,7 +1497,7 @@ pub(super) fn activate_current_selection(
             } else if matches!(kind, SubmenuKind::ScoreImport) {
                 let rows = submenu_rows(kind);
                 let Some(row_idx) = submenu_visible_row_to_actual(state, kind, selected_row) else {
-                    return ScreenAction::None;
+                    return ThemeEffect::None;
                 };
                 if let Some(row) = rows.get(row_idx) {
                     match row.id {
@@ -1499,7 +1505,7 @@ pub(super) fn activate_current_selection(
                             audio::play_sfx("assets/sounds/start.ogg");
                             refresh_score_import_pack_options(state);
                             open_score_import_pack_picker(state);
-                            return ScreenAction::None;
+                            return ThemeEffect::None;
                         }
                         SubRowId::ScoreImportStart => {
                             audio::play_sfx("assets/sounds/start.ogg");
@@ -1518,7 +1524,7 @@ pub(super) fn activate_current_selection(
                                     "Score import start requested, but no eligible profile is selected."
                                 );
                             }
-                            return ScreenAction::None;
+                            return ThemeEffect::None;
                         }
                         _ => {}
                     }
@@ -1526,7 +1532,7 @@ pub(super) fn activate_current_selection(
             } else if matches!(kind, SubmenuKind::SyncPacks) {
                 let rows = submenu_rows(kind);
                 let Some(row_idx) = submenu_visible_row_to_actual(state, kind, selected_row) else {
-                    return ScreenAction::None;
+                    return ThemeEffect::None;
                 };
                 if let Some(row) = rows.get(row_idx)
                     && row.id == SubRowId::SyncPackStart
@@ -1542,7 +1548,7 @@ pub(super) fn activate_current_selection(
                     } else {
                         begin_pack_sync(state, selection);
                     }
-                    return ScreenAction::None;
+                    return ThemeEffect::None;
                 }
             }
             if screen_input::dedicated_three_key_nav_enabled()
@@ -1551,7 +1557,7 @@ pub(super) fn activate_current_selection(
             {
                 return action;
             }
-            ScreenAction::None
+            ThemeEffect::None
         }
     }
 }
@@ -1560,7 +1566,7 @@ pub fn handle_input(
     state: &mut State,
     asset_manager: &AssetManager,
     ev: &InputEvent,
-) -> ScreenAction {
+) -> ThemeEffect {
     use crate::screens::components::shared::{ffmpeg_overlay, update_overlay};
 
     let overlay_phase = deadsync_updater::action::current();
@@ -1568,16 +1574,16 @@ pub fn handle_input(
         && update_overlay::handle_input(&overlay_phase, ev)
             == update_overlay::InputOutcome::Consumed
     {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     let ffmpeg_phase = deadsync_updater::ffmpeg::current();
     if !matches!(ffmpeg_phase, deadsync_updater::ffmpeg::FfmpegPhase::Idle)
         && ffmpeg_overlay::handle_input(&ffmpeg_phase, ev) == update_overlay::InputOutcome::Consumed
     {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     if state.reload_ui.is_some() {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     let three_key_action = screen_input::three_key_menu_action(&mut state.menu_lr_chord, ev);
     if state.score_import_pack_picker.is_some() {
@@ -1601,7 +1607,7 @@ pub fn handle_input(
                     audio::play_sfx("assets/sounds/change.ogg");
                 }
             }
-            return ScreenAction::None;
+            return ThemeEffect::None;
         }
         if !ev.pressed {
             // Track release to disable hold-repeat.
@@ -1620,7 +1626,7 @@ pub fn handle_input(
                 }
                 _ => {}
             }
-            return ScreenAction::None;
+            return ThemeEffect::None;
         }
         match ev.action {
             VirtualAction::p1_up
@@ -1668,7 +1674,7 @@ pub fn handle_input(
             }
             _ => {}
         }
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     if let Some(score_import) = state.score_import_ui.as_ref() {
         // After completion, any Confirm or Cancel input dismisses the overlay
@@ -1694,7 +1700,7 @@ pub fn handle_input(
                 state.score_import_ui = None;
                 audio::play_sfx("assets/sounds/start.ogg");
             }
-            return ScreenAction::None;
+            return ThemeEffect::None;
         }
         let cancel_requested = matches!(
             three_key_action,
@@ -1708,7 +1714,7 @@ pub fn handle_input(
             audio::play_sfx("assets/sounds/change.ogg");
             log::warn!("Score import cancel requested by user.");
         }
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     if !matches!(
         state.pack_sync_overlay,
@@ -1748,10 +1754,10 @@ pub fn handle_input(
                     audio::play_sfx("assets/sounds/change.ogg");
                 }
             }
-            return ScreenAction::None;
+            return ThemeEffect::None;
         }
         if !ev.pressed {
-            return ScreenAction::None;
+            return ThemeEffect::None;
         }
         match ev.action {
             VirtualAction::p1_left
@@ -1793,7 +1799,7 @@ pub fn handle_input(
             }
             _ => {}
         }
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     if let Some(confirm) = state.sync_pack_confirm.as_mut() {
         if let Some((_, nav)) = three_key_action {
@@ -1826,10 +1832,10 @@ pub fn handle_input(
                     audio::play_sfx("assets/sounds/change.ogg");
                 }
             }
-            return ScreenAction::None;
+            return ThemeEffect::None;
         }
         if !ev.pressed {
-            return ScreenAction::None;
+            return ThemeEffect::None;
         }
         match ev.action {
             VirtualAction::p1_left
@@ -1870,11 +1876,11 @@ pub fn handle_input(
             }
             _ => {}
         }
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     // Ignore new navigation while a local submenu fade is in progress.
     if !matches!(state.submenu_transition, SubmenuTransition::None) {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     if screen_input::dedicated_three_key_nav_enabled()
         && matches!(state.view, OptionsView::Main | OptionsView::Submenu(_))
@@ -1888,13 +1894,13 @@ pub fn handle_input(
                 move_options_selection_vertical(state, asset_manager, NavDirection::Up);
                 on_nav_press(state, NavDirection::Up);
                 state.menu_lr_undo = 1;
-                ScreenAction::None
+                ThemeEffect::None
             }
             screen_input::ThreeKeyMenuAction::Next => {
                 move_options_selection_vertical(state, asset_manager, NavDirection::Down);
                 on_nav_press(state, NavDirection::Down);
                 state.menu_lr_undo = -1;
-                ScreenAction::None
+                ThemeEffect::None
             }
             screen_input::ThreeKeyMenuAction::Confirm => {
                 state.menu_lr_undo = 0;
@@ -1984,5 +1990,5 @@ pub fn handle_input(
         }
         _ => {}
     }
-    ScreenAction::None
+    ThemeEffect::None
 }

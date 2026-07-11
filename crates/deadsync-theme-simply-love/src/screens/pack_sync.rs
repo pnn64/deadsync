@@ -635,19 +635,19 @@ pub(crate) fn poll(state: &mut OverlayState) -> bool {
 pub(crate) fn handle_input(
     state: &mut OverlayState,
     ev: &InputEvent,
-) -> crate::screens::ScreenAction {
+) -> crate::screens::ThemeEffect {
     if screen_input::dedicated_blocks_arrow(ev.action, config::get().only_dedicated_menu_buttons) {
-        return crate::screens::ScreenAction::None;
+        return crate::screens::ThemeEffect::None;
     }
 
     let three_key_action = {
         let OverlayState::Visible(overlay) = state else {
-            return crate::screens::ScreenAction::None;
+            return crate::screens::ThemeEffect::None;
         };
         screen_input::three_key_menu_action(&mut overlay.menu_lr_chord, ev)
     };
     if !ev.pressed {
-        return crate::screens::ScreenAction::None;
+        return crate::screens::ThemeEffect::None;
     }
 
     let mut close_overlay = false;
@@ -657,7 +657,7 @@ pub(crate) fn handle_input(
 
     {
         let OverlayState::Visible(overlay) = state else {
-            return crate::screens::ScreenAction::None;
+            return crate::screens::ThemeEffect::None;
         };
         let page_delta = view_rows(overlay).saturating_sub(1).max(1) as isize;
         if screen_input::dedicated_three_key_nav_enabled()
@@ -820,9 +820,11 @@ pub(crate) fn handle_input(
     if let Some(changes) = apply_changes
         && !changes.is_empty()
     {
-        return crate::screens::ScreenAction::ApplySongOffsetSyncBatch { changes };
+        return crate::screens::ThemeEffect::Runtime(
+            crate::SimplyLoveRuntimeRequest::ApplySongOffsetSyncBatch { changes },
+        );
     }
-    crate::screens::ScreenAction::None
+    crate::screens::ThemeEffect::None
 }
 
 fn build_rows(targets: &[TargetSpec]) -> Vec<RowState> {

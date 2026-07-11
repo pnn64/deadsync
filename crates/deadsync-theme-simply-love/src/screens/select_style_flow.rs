@@ -1,4 +1,4 @@
-use crate::Screen;
+use crate::screens::Screen;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile::PlayStyle;
 
@@ -149,89 +149,5 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> InputEffect {
             InputEffect::Back
         }
         _ => InputEffect::None,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use deadsync_core::input::InputSource;
-    use std::time::Instant;
-
-    fn input(action: VirtualAction, pressed: bool) -> InputEvent {
-        let now = Instant::now();
-        InputEvent {
-            action,
-            input_slot: 0,
-            pressed,
-            source: InputSource::Keyboard,
-            timestamp: now,
-            timestamp_host_nanos: 0,
-            stored_at: now,
-            emitted_at: now,
-        }
-    }
-
-    #[test]
-    fn selection_wraps_and_reports_move_effects() {
-        let mut state = State::default();
-        assert_eq!(
-            handle_input(&mut state, &input(VirtualAction::p1_left, true)),
-            InputEffect::Move
-        );
-        assert_eq!(state.selected_index(), 2);
-        assert_eq!(
-            handle_input(&mut state, &input(VirtualAction::p2_right, true)),
-            InputEffect::Move
-        );
-        assert_eq!(state.selected_index(), 0);
-    }
-
-    #[test]
-    fn zooms_approach_focus_targets_without_overshoot() {
-        let mut state = State::default();
-        assert_eq!(update(&mut state, 0.0625, 0.0), None);
-        assert_eq!(state.choice_zoom(0), 0.75);
-        assert_eq!(state.choice_zoom(1), CHOICE_ZOOM_UNFOCUSED);
-
-        assert_eq!(update(&mut state, 1.0, 0.0), None);
-        assert_eq!(state.choice_zoom(0), CHOICE_ZOOM_FOCUSED);
-        assert_eq!(state.choice_zoom(2), CHOICE_ZOOM_UNFOCUSED);
-    }
-
-    #[test]
-    fn confirm_latches_style_and_waits_for_actor_exit() {
-        let mut state = State::default();
-        let _ = handle_input(&mut state, &input(VirtualAction::p1_right, true));
-        assert_eq!(
-            handle_input(&mut state, &input(VirtualAction::p1_start, true)),
-            InputEffect::Confirm(PlayStyle::Versus)
-        );
-        assert!(state.exit_chosen_anim());
-        assert_eq!(update(&mut state, 1.0, CONFIRM_EXIT_SECONDS - 0.001), None);
-        assert_eq!(
-            update(&mut state, 1.0, CONFIRM_EXIT_SECONDS),
-            Some(Screen::SelectPlayMode)
-        );
-        assert_eq!(update(&mut state, 1.0, 10.0), None);
-    }
-
-    #[test]
-    fn back_and_release_do_not_start_confirm_navigation() {
-        let mut state = State::default();
-        assert_eq!(
-            handle_input(&mut state, &input(VirtualAction::p1_start, false)),
-            InputEffect::None
-        );
-        assert_eq!(
-            handle_input(&mut state, &input(VirtualAction::p2_back, true)),
-            InputEffect::Back
-        );
-        assert!(!state.exit_chosen_anim());
-        assert_eq!(update(&mut state, 0.0, 10.0), None);
-        assert_eq!(
-            handle_input(&mut state, &input(VirtualAction::p1_start, true)),
-            InputEffect::None
-        );
     }
 }

@@ -1,5 +1,5 @@
 use crate::assets::AssetManager;
-use crate::screens::ScreenAction;
+use crate::screens::ThemeEffect;
 use crate::screens::components::shared::profile_boxes;
 use deadlib_present::actors::Actor;
 use deadsync_input::InputEvent;
@@ -43,7 +43,7 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 }
 
 #[inline(always)]
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     profile_boxes::handle_input(state, ev)
 }
 

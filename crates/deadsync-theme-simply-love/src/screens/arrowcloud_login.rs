@@ -18,7 +18,7 @@ use crate::screens::options::qr_login::{
     QrLoginUiState, build_qr_login_overlay_actors, create_arrowcloud_login_ui,
     create_arrowcloud_login_ui_for_profile, poll_qr_login_ui,
 };
-use crate::screens::{Screen, ScreenAction};
+use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::Actor;
 use deadsync_input::{InputEvent, VirtualAction};
 
@@ -96,7 +96,7 @@ pub fn update(state: &mut State, _dt: f32) {
 ///                          as Back on `SelectProfile`.
 ///
 /// Any other input is consumed.
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     let three_key = screen_input::three_key_menu_action(&mut state.menu_lr_chord, ev);
     let is_three_key_confirm = matches!(
         three_key,
@@ -130,7 +130,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         } else {
             Screen::SelectColor
         };
-        return ScreenAction::Navigate(next);
+        return ThemeEffect::Navigate(next);
     }
     if is_back {
         if let Some(ui) = state.ui.as_ref() {
@@ -145,9 +145,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             Screen::Menu
         };
         log::info!("ArrowCloud QR login cancelled — returning to {next:?}.");
-        return ScreenAction::Navigate(next);
+        return ThemeEffect::Navigate(next);
     }
-    ScreenAction::None
+    ThemeEffect::None
 }
 
 pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_multiplier: f32) {

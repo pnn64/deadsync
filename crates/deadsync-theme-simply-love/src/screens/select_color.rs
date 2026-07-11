@@ -11,7 +11,7 @@ use crate::screens::components::shared::{screen_bar, transitions, visual_style_b
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 // Keyboard handling is centralized in app via virtual actions
-use crate::screens::{Screen, ScreenAction};
+use crate::screens::{Screen, ThemeEffect};
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
 
@@ -536,12 +536,12 @@ fn scroll_by(state: &mut State, delta: i32) {
     state.bg_fade_t = 0.0;
 }
 
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     if !ev.pressed {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     if state.exit_requested {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     let nav = match ev.action {
         VirtualAction::p1_left
@@ -564,11 +564,11 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
     match nav {
         Some(Nav::Left) => {
             scroll_by(state, -1);
-            ScreenAction::None
+            ThemeEffect::None
         }
         Some(Nav::Right) => {
             scroll_by(state, 1);
-            ScreenAction::None
+            ThemeEffect::None
         }
         Some(Nav::Confirm) => {
             state.exit_requested = true;
@@ -576,15 +576,15 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             state.scroll_from = state.scroll;
             state.scroll_t = SCROLL_TWEEN_DURATION;
             deadsync_audio_stream::play_sfx("assets/sounds/start.ogg");
-            ScreenAction::Navigate(Screen::SelectStyle)
+            ThemeEffect::Navigate(Screen::SelectStyle)
         }
         Some(Nav::Back) => {
             state.exit_requested = true;
             state.scroll = state.scroll_to;
             state.scroll_from = state.scroll;
             state.scroll_t = SCROLL_TWEEN_DURATION;
-            ScreenAction::Navigate(Screen::Menu)
+            ThemeEffect::Navigate(Screen::Menu)
         }
-        _ => ScreenAction::None,
+        _ => ThemeEffect::None,
     }
 }

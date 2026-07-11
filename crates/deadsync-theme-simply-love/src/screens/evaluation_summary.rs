@@ -10,7 +10,7 @@ use crate::screens::components::shared::{
     banner as shared_banner, screen_bar, transitions, visual_style_bg,
 };
 use crate::screens::input as screen_input;
-use crate::screens::{Screen, ScreenAction};
+use crate::screens::{Screen, ThemeEffect};
 use chrono::Local;
 use deadlib_present::actors::{Actor, SizeSpec};
 use deadlib_present::color;
@@ -75,7 +75,7 @@ fn shift_page(state: &mut State, num_stages: usize, dir: i32) -> bool {
     state.page != old_page
 }
 
-pub fn handle_input(state: &mut State, num_stages: usize, ev: &InputEvent) -> ScreenAction {
+pub fn handle_input(state: &mut State, num_stages: usize, ev: &InputEvent) -> ThemeEffect {
     let chord_side = if crate::config::get().three_key_navigation {
         state.menu_lr_chord.update(ev)
     } else {
@@ -85,7 +85,7 @@ pub fn handle_input(state: &mut State, num_stages: usize, ev: &InputEvent) -> Sc
         if let Some(side) = screen_input::menu_lr_side(ev.action) {
             state.menu_lr_undo[profile_data::player_side_index(side)] = 0;
         }
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     if let Some(side) = chord_side {
         let undo = state.menu_lr_undo[profile_data::player_side_index(side)];
@@ -93,13 +93,15 @@ pub fn handle_input(state: &mut State, num_stages: usize, ev: &InputEvent) -> Sc
         if undo != 0 {
             let _ = shift_page(state, num_stages, i32::from(undo));
         }
-        return ScreenAction::RequestScreenshot(Some(side));
+        return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::RequestScreenshot(Some(
+            side,
+        )));
     }
     match ev.action {
         VirtualAction::p1_back
         | VirtualAction::p1_start
         | VirtualAction::p2_back
-        | VirtualAction::p2_start => ScreenAction::Navigate(state.return_to),
+        | VirtualAction::p2_start => ThemeEffect::Navigate(state.return_to),
 
         VirtualAction::p1_menu_left
         | VirtualAction::p1_left
@@ -118,7 +120,7 @@ pub fn handle_input(state: &mut State, num_stages: usize, ev: &InputEvent) -> Sc
             } else {
                 let _ = shift_page(state, num_stages, -1);
             }
-            ScreenAction::None
+            ThemeEffect::None
         }
 
         VirtualAction::p1_menu_right
@@ -138,10 +140,10 @@ pub fn handle_input(state: &mut State, num_stages: usize, ev: &InputEvent) -> Sc
             } else {
                 let _ = shift_page(state, num_stages, 1);
             }
-            ScreenAction::None
+            ThemeEffect::None
         }
 
-        _ => ScreenAction::None,
+        _ => ThemeEffect::None,
     }
 }
 

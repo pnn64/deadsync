@@ -1,20 +1,149 @@
-use deadlib_render::{ClockDomainTrace, PresentModeTrace};
-use deadsync_audio::OutputTimingSnapshot;
+//! Plain data prepared for concrete theme screens.
 
-pub use deadsync_config::frame_pacing::VisibleStutterSample;
+use deadsync_chart::{ChartData, SongData};
+use deadsync_rules::judgment::{self, JudgeGrade};
+use deadsync_rules::scroll::ScrollSpeedSetting;
+use deadsync_rules::timing::{
+    ArrowTimingStats, HistogramMs, ScatterPoint, TimingStats, WindowCounts,
+};
+use deadsync_score::{
+    ColumnJudgments, Grade, GrooveStatsEvalState, ItlEvalState, LeaderboardEntry,
+};
+use std::path::PathBuf;
+use std::sync::Arc;
 
-/// Number of bins in the frame-interval histogram rendered by the overlay.
-pub const HISTOGRAM_BINS: usize = 32;
+/// One resolved chart in a course selection.
+#[derive(Clone, Debug)]
+pub struct CourseStageView {
+    pub song: Arc<SongData>,
+    pub chart_hash: String,
+}
+
+/// A selected course prepared by a theme for runtime startup.
+#[derive(Clone, Debug)]
+pub struct SelectedCourseView {
+    pub path: PathBuf,
+    pub name: String,
+    pub banner_path: Option<PathBuf>,
+    pub score_hash: String,
+    pub song_stub: Arc<SongData>,
+    pub course_difficulty_name: String,
+    pub course_meter: Option<u32>,
+    pub course_stepchart_label: String,
+    pub stages: Vec<CourseStageView>,
+}
+
+/// Chart source and duration used by a course-summary density graph.
+#[derive(Clone, Debug)]
+pub struct CourseGraphStageView {
+    pub chart: Arc<ChartData>,
+    pub song_last_second: f32,
+}
+
+/// Final score snapshot consumed by evaluation screens and course summaries.
+///
+/// The concrete noteskin handle and player-side identity remain generic so
+/// this contract does not depend on an asset manager or profile runtime.
+#[derive(Clone)]
+pub struct EvaluationView<N, S> {
+    pub song: Arc<SongData>,
+    pub chart: Arc<ChartData>,
+    pub course_graph_stages: Vec<CourseGraphStageView>,
+    pub side: S,
+    pub profile_name: String,
+    pub score_valid: bool,
+    pub disqualified: bool,
+    pub expected_groovestats_submit: bool,
+    pub expected_arrowcloud_submit: bool,
+    pub groovestats: GrooveStatsEvalState,
+    pub itl: ItlEvalState,
+    pub judgment_counts: judgment::JudgeCounts,
+    pub score_percent: f64,
+    pub earned_grade_points: i32,
+    pub possible_grade_points: i32,
+    pub grade: Grade,
+    pub speed_mod: ScrollSpeedSetting,
+    pub mods_text: Arc<str>,
+    pub hands_achieved: u32,
+    pub hands_total: u32,
+    pub holds_held: u32,
+    pub holds_held_for_score: u32,
+    pub holds_total: u32,
+    pub rolls_held: u32,
+    pub rolls_held_for_score: u32,
+    pub rolls_total: u32,
+    pub mines_hit_for_score: u32,
+    pub mines_avoided: u32,
+    pub mines_total: u32,
+    pub timing: TimingStats,
+    pub arrow_timing: ArrowTimingStats,
+    pub scatter: Vec<ScatterPoint>,
+    pub scatter_worst_window_ms: f32,
+    pub histogram: HistogramMs,
+    pub graph_first_second: f32,
+    pub graph_last_second: f32,
+    pub music_rate: f32,
+    pub life_history: Vec<(f32, f32)>,
+    pub fail_time: Option<f32>,
+    pub window_counts: WindowCounts,
+    pub window_counts_10ms: WindowCounts,
+    pub ex_score_percent: f64,
+    pub hard_ex_score_percent: f64,
+    pub calories_burned: f32,
+    pub column_judgments: Vec<ColumnJudgments>,
+    pub noteskin: Option<N>,
+    pub show_fa_plus_window: bool,
+    pub show_ex_score: bool,
+    pub show_hard_ex_score: bool,
+    pub show_fa_plus_pane: bool,
+    pub track_early_judgments: bool,
+    pub disabled_timing_windows: [bool; 5],
+    pub machine_records: Vec<LeaderboardEntry>,
+    pub machine_record_highlight_rank: Option<u32>,
+    pub personal_records: Vec<LeaderboardEntry>,
+    pub personal_record_highlight_rank: Option<u32>,
+    pub show_machine_personal_split: bool,
+}
+
+impl<N, S> EvaluationView<N, S> {
+    #[inline(always)]
+    pub fn judgment_count(&self, grade: JudgeGrade) -> u32 {
+        self.judgment_counts[judgment::judge_grade_ix(grade)]
+    }
+
+    #[inline(always)]
+    pub fn is_course_summary(&self) -> bool {
+        !self.course_graph_stages.is_empty()
+    }
+}
+
+/// Density data requested by a theme for a chart preview.
+#[derive(Clone, Debug)]
+pub struct DensityGraphView {
+    pub max_nps: f64,
+    pub measure_nps_vec: Vec<f64>,
+    pub measure_seconds_vec: Vec<f32>,
+    pub first_second: f32,
+    pub last_second: f32,
+}
+
+/// One profile row displayed by a theme's pad-configuration UI.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PadProfileEntry {
+    pub name: String,
+    pub is_default: bool,
+    pub is_active: bool,
+}
 
 /// Presentation-facing timing health prepared by the process shell.
 #[derive(Clone, Copy, Debug)]
-pub struct TimingHealth {
+pub struct TimingHealthView<P, C, A> {
     pub interval_ns: u64,
     pub display_error_ms: f32,
     pub display_catching_up: bool,
-    pub present_mode: PresentModeTrace,
-    pub display_clock: ClockDomainTrace,
-    pub host_clock: ClockDomainTrace,
+    pub present_mode: P,
+    pub display_clock: C,
+    pub host_clock: C,
     pub in_flight_images: u8,
     pub waited_for_image: bool,
     pub applied_back_pressure: bool,
@@ -24,11 +153,11 @@ pub struct TimingHealth {
     pub completed_present_id: u32,
     pub calibration_error_ns: u64,
     pub host_mapped: bool,
-    pub audio: Option<OutputTimingSnapshot>,
+    pub audio: Option<A>,
 }
 
-/// Which screen corner or center seam the frame-statistics overlay uses.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+/// Which screen corner or center seam a frame-statistics overlay uses.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OverlayAnchor {
     TopLeft,
     TopRight,
@@ -39,9 +168,8 @@ pub enum OverlayAnchor {
 }
 
 impl OverlayAnchor {
-    /// Stable string key for persistence.
     #[inline(always)]
-    pub fn to_key(self) -> &'static str {
+    pub const fn to_key(self) -> &'static str {
         match self {
             Self::TopLeft => "top-left",
             Self::TopRight => "top-right",
@@ -52,7 +180,6 @@ impl OverlayAnchor {
         }
     }
 
-    /// Parse a persisted key. Unknown values leave placement automatic.
     #[inline(always)]
     pub fn from_key(key: &str) -> Option<Self> {
         match key.trim().to_ascii_lowercase().as_str() {
@@ -67,8 +194,8 @@ impl OverlayAnchor {
     }
 }
 
-/// Presentation detail shown by the frame-statistics overlay.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+/// Presentation detail shown by a frame-statistics overlay.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OverlayStyle {
     Detailed,
     Minimal,
@@ -110,7 +237,7 @@ impl OverlayStyle {
     }
 }
 
-/// One captured frame's per-phase timing plus sync state. `Copy`, no heap.
+/// One captured frame's per-phase timing plus sync state.
 #[derive(Clone, Copy, Debug)]
 pub struct FrameStatsSample {
     pub host_nanos: u64,
@@ -147,7 +274,6 @@ impl FrameStatsSample {
         self.host_nanos == 0
     }
 
-    /// Sum of the explicitly measured phases (everything that isn't idle headroom).
     #[inline(always)]
     pub const fn measured_us(&self) -> u32 {
         self.input_us
@@ -173,7 +299,7 @@ impl FrameStatsSample {
     }
 }
 
-/// Precomputed sync-health readouts supplied to the overlay renderer.
+/// Precomputed sync-health readouts supplied to an overlay renderer.
 #[derive(Clone, Copy, Debug)]
 pub struct FrameStatsSummary {
     pub avg_frame_us: u32,
@@ -198,22 +324,9 @@ pub struct FrameStatsSummary {
     pub catch_up_count: u32,
 }
 
-/// Fill `out` with a frame-interval histogram; the final bin absorbs overflow.
-pub fn histogram(samples: &[FrameStatsSample], out: &mut [u32; HISTOGRAM_BINS], bin_width_us: u32) {
-    *out = [0; HISTOGRAM_BINS];
-    let bin_width_us = bin_width_us.max(1);
-    for sample in samples {
-        if sample.is_empty() {
-            continue;
-        }
-        let idx = (sample.frame_us / bin_width_us).min(HISTOGRAM_BINS as u32 - 1) as usize;
-        out[idx] = out[idx].saturating_add(1);
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{FrameStatsSample, OverlayAnchor, OverlayStyle};
 
     #[test]
     fn frame_sample_preserves_phase_and_idle_math() {
@@ -235,38 +348,14 @@ mod tests {
     }
 
     #[test]
-    fn histogram_ignores_empty_samples_and_absorbs_overflow() {
-        let samples = [
-            FrameStatsSample::empty(),
-            FrameStatsSample {
-                host_nanos: 1,
-                frame_us: 1_500,
-                ..FrameStatsSample::empty()
-            },
-            FrameStatsSample {
-                host_nanos: 2,
-                frame_us: 100_000,
-                ..FrameStatsSample::empty()
-            },
-        ];
-        let mut bins = [0; HISTOGRAM_BINS];
-        histogram(&samples, &mut bins, 1_000);
-        assert_eq!(bins[1], 1);
-        assert_eq!(bins[HISTOGRAM_BINS - 1], 1);
-        assert_eq!(bins.iter().sum::<u32>(), 2);
-    }
-
-    #[test]
     fn overlay_keys_round_trip() {
-        use OverlayAnchor::*;
-
         for anchor in [
-            TopLeft,
-            TopRight,
-            BottomLeft,
-            BottomRight,
-            TopCenter,
-            BottomCenter,
+            OverlayAnchor::TopLeft,
+            OverlayAnchor::TopRight,
+            OverlayAnchor::BottomLeft,
+            OverlayAnchor::BottomRight,
+            OverlayAnchor::TopCenter,
+            OverlayAnchor::BottomCenter,
         ] {
             assert_eq!(OverlayAnchor::from_key(anchor.to_key()), Some(anchor));
         }

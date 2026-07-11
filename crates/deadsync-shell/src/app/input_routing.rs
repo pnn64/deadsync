@@ -7,8 +7,9 @@ use crate::input::{
 use deadsync_config::prelude as config;
 use deadsync_gameplay::{GameplayQueuedEvent, GameplayRawKeyEvent, RawKeyAction};
 use deadsync_input::{self as logical_input, InputEvent};
-use deadsync_screens::{Screen as CurrentScreen, ScreenAction};
+use deadsync_theme_simply_love::SimplyLoveEffect as ThemeEffect;
 use deadsync_theme_simply_love::screens;
+use deadsync_theme_simply_love::screens::SimplyLoveScreen as CurrentScreen;
 use std::error::Error;
 use winit::event_loop::ActiveEventLoop;
 
@@ -235,7 +236,7 @@ impl App {
                 if let Some(pos) = &mut self.state.screens.player_options_state {
                     screens::player_options::handle_input(pos, &self.asset_manager, &ev)
                 } else {
-                    ScreenAction::None
+                    ThemeEffect::None
                 }
             }
             CurrentScreen::Evaluation => {
@@ -265,18 +266,18 @@ impl App {
                 if let Some(gs) = &mut self.state.screens.gameplay_state {
                     screens::gameplay::handle_input(gs, &ev)
                 } else {
-                    ScreenAction::None
+                    ThemeEffect::None
                 }
             }
             CurrentScreen::Practice => {
                 if let Some(ps) = &mut self.state.screens.practice_state {
                     screens::practice::handle_input(ps, &ev)
                 } else {
-                    ScreenAction::None
+                    ThemeEffect::None
                 }
             }
         };
-        if matches!(action, ScreenAction::None) {
+        if matches!(action, ThemeEffect::None) {
             return Ok(());
         }
         self.handle_action(action, event_loop)

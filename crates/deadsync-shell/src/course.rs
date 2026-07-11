@@ -8,7 +8,9 @@ use deadsync_online::score_compat as scores;
 use deadsync_profile::compat as profile;
 use deadsync_profile::{self as profile_data, PlayStyle, PlayerSide};
 use deadsync_score::{self as score_data, ColumnJudgments, stage_stats};
-use deadsync_screens::{CourseGraphStage, CourseStagePlan, ScoreInfo, SelectedCoursePlan};
+use deadsync_theme_simply_love::views::{
+    CourseGraphStage, CourseStagePlan, ScoreInfo, SelectedCoursePlan,
+};
 use std::path::PathBuf;
 use std::sync::Arc;
 

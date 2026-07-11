@@ -2,7 +2,8 @@ use deadsync_chart::SongData;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_profile::{PlayStyle, PlayerSide, player_side_index};
 use deadsync_rules::scroll::ScrollSpeedSetting;
-use deadsync_screens::{ScoreInfo, Screen};
+use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
+use deadsync_theme_simply_love::views::ScoreInfo;
 use std::sync::Arc;
 
 pub struct RestartPayload {

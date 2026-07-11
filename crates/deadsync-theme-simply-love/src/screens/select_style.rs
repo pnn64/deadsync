@@ -5,14 +5,16 @@ use crate::screens::components::shared::screen_bar::{
     AvatarParams, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
 use crate::screens::components::shared::{screen_bar, visual_style_bg};
-use crate::screens::{Screen, ScreenAction};
+use crate::screens::select_style_flow::{
+    self as style_flow, Choice, InputEffect, State as StyleFlow,
+};
+use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, widescale};
 use deadsync_audio_stream as audio;
 use deadsync_input::InputEvent;
 use deadsync_profile as profile_data;
-use deadsync_screens::select_style::{self as style_flow, Choice, InputEffect, State as StyleFlow};
 
 /* ------------------------------ layout ------------------------------- */
 // Simply Love: ScreenSelectStyle underlay/choice.lua
@@ -70,29 +72,29 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
     (vec![], 0.0)
 }
 
-pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
+pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
     let exit_elapsed = if state.flow.exit_chosen_anim() {
         exit_anim_t(true)
     } else {
         0.0
     };
-    style_flow::update(&mut state.flow, dt, exit_elapsed).map(ScreenAction::Navigate)
+    style_flow::update(&mut state.flow, dt, exit_elapsed).map(ThemeEffect::Navigate)
 }
 
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     match style_flow::handle_input(&mut state.flow, ev) {
-        InputEffect::None => ScreenAction::None,
+        InputEffect::None => ThemeEffect::None,
         InputEffect::Move => {
             audio::play_sfx("assets/sounds/change.ogg");
-            ScreenAction::None
+            ThemeEffect::None
         }
         InputEffect::Confirm(play_style) => {
             let _ = exit_anim_t(true);
             deadsync_profile::compat::set_session_play_style(play_style);
             audio::play_sfx("assets/sounds/start.ogg");
-            ScreenAction::None
+            ThemeEffect::None
         }
-        InputEffect::Back => ScreenAction::Navigate(Screen::Menu),
+        InputEffect::Back => ThemeEffect::Navigate(Screen::Menu),
     }
 }
 

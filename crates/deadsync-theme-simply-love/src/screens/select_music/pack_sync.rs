@@ -26,7 +26,7 @@ pub(super) fn poll(state: &mut State) -> bool {
     shared_pack_sync::poll(&mut state.pack_sync_overlay)
 }
 
-pub(super) fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+pub(super) fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     shared_pack_sync::handle_input(&mut state.pack_sync_overlay, ev)
 }
 

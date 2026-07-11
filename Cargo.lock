@@ -1090,7 +1090,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.4.2505"
+version = "0.4.2506"
 dependencies = [
  "deadlib-platform",
  "deadlib-present",
@@ -1421,23 +1421,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "deadsync-screens"
-version = "0.1.0"
-dependencies = [
- "deadlib-render",
- "deadsync-assets",
- "deadsync-audio",
- "deadsync-chart",
- "deadsync-config",
- "deadsync-core",
- "deadsync-input",
- "deadsync-profile",
- "deadsync-rules",
- "deadsync-score",
- "deadsync-simfile",
-]
-
-[[package]]
 name = "deadsync-shell"
 version = "0.1.0"
 dependencies = [
@@ -1463,10 +1446,10 @@ dependencies = [
  "deadsync-profile-gameplay",
  "deadsync-rules",
  "deadsync-score",
- "deadsync-screens",
  "deadsync-simfile",
  "deadsync-smx",
  "deadsync-song-lua",
+ "deadsync-theme",
  "deadsync-theme-simply-love",
  "image",
  "log",
@@ -1529,11 +1512,14 @@ name = "deadsync-theme"
 version = "0.1.0"
 dependencies = [
  "deadlib-assets",
+ "deadsync-chart",
+ "deadsync-rules",
+ "deadsync-score",
 ]
 
 [[package]]
 name = "deadsync-theme-simply-love"
-version = "0.4.2505"
+version = "0.4.2506"
 dependencies = [
  "bitflags 2.13.0",
  "chrono",
@@ -1562,7 +1548,6 @@ dependencies = [
  "deadsync-profile-gameplay",
  "deadsync-rules",
  "deadsync-score",
- "deadsync-screens",
  "deadsync-simfile",
  "deadsync-smx",
  "deadsync-song-lua",
@@ -1604,7 +1589,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.4.2505"
+version = "0.4.2506"
 dependencies = [
  "log",
  "semver",

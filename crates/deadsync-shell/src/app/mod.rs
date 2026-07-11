@@ -59,9 +59,9 @@ use crate::restart::{
 };
 use crate::runtime::ShellState;
 use crate::screen_flow::{
-    LateJoinContext, ProfileSelectionContext, ScreenActionEffect, ScreenActionRouteContext,
-    SelectMusicJoinContext, evaluation_summary_return_to, late_join_side, profile_selection_plan,
-    screen_action_effect_plan, select_music_join_plan,
+    LateJoinContext, ProfileSelectionContext, SelectMusicJoinContext, ThemeEffectExecution,
+    ThemeEffectRouteContext, evaluation_summary_return_to, late_join_side, profile_selection_plan,
+    select_music_join_plan, theme_effect_execution_plan,
 };
 use crate::screenshot::{AutoScreenshotFrameContext, auto_screenshot_frame_plan};
 use crate::session::SessionState as ShellSessionState;
@@ -104,8 +104,8 @@ use deadsync_profile_gameplay::{
     gameplay_config_from_config, gameplay_play_style_from_profile,
     gameplay_player_side_from_profile, gameplay_tick_mode_from_profile,
 };
-use deadsync_screens::diagnostics::TimingHealth;
 use deadsync_simfile::{app_runtime as song_loading, sync_offset};
+use deadsync_theme_simply_love::views::TimingHealth;
 use deadsync_theme_simply_love::{
     screens::{
         self, credits, evaluation, evaluation_summary, gameover, gameplay, init, initials,
@@ -163,9 +163,10 @@ use deadsync_rules::judgment as judgment_rules;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 #[cfg(test)]
 use deadsync_rules::timing as timing_rules;
-use deadsync_screens::{
-    DensityGraphSlot, DensityGraphSource, Screen as CurrentScreen, ScreenAction,
-};
+use deadsync_theme::views::DensityGraphView as DensityGraphSource;
+use deadsync_theme_simply_love::screens::SimplyLoveScreen as CurrentScreen;
+use deadsync_theme_simply_love::views::SimplyLoveDensityGraphSlot as DensityGraphSlot;
+use deadsync_theme_simply_love::{SimplyLoveEffect as ThemeEffect, SimplyLoveRuntimeRequest};
 
 /// Imperative effects to be executed by the shell.
 /* -------------------- transition timing constants -------------------- */
@@ -484,7 +485,7 @@ impl ScreensState {
         now: Instant,
         session: &SessionState,
         asset_manager: &AssetManager,
-    ) -> (Option<ScreenAction>, bool) {
+    ) -> (Option<ThemeEffect>, bool) {
         match self.current_screen {
             CurrentScreen::Gameplay => self
                 .gameplay_state
@@ -571,7 +572,7 @@ impl ScreensState {
                 let action = profile_load::update(&mut self.profile_load_state, delta_time);
                 if matches!(
                     action,
-                    Some(ScreenAction::Navigate(CurrentScreen::SelectMusic))
+                    Some(ThemeEffect::Navigate(CurrentScreen::SelectMusic))
                 ) && let Some(sm) =
                     profile_load::take_prepared_select_music(&mut self.profile_load_state)
                 {
@@ -595,7 +596,7 @@ impl ScreensState {
                     select_music::trigger_immediate_refresh(&mut self.select_music_state);
                 } else if matches!(
                     action,
-                    Some(ScreenAction::Navigate(CurrentScreen::SelectCourse))
+                    Some(ThemeEffect::Navigate(CurrentScreen::SelectCourse))
                 ) && let Some(sc) =
                     profile_load::take_prepared_select_course(&mut self.profile_load_state)
                 {
@@ -617,7 +618,7 @@ impl ScreensState {
                     && self.evaluation_state.screen_elapsed >= delay
                     && self.player_options_state.is_some()
                 {
-                    Some(ScreenAction::Navigate(CurrentScreen::Gameplay))
+                    Some(ThemeEffect::Navigate(CurrentScreen::Gameplay))
                 } else {
                     None
                 };
@@ -1382,7 +1383,7 @@ impl App {
                     &self.asset_manager,
                 );
                 if let Some(action) = action
-                    && !matches!(action, ScreenAction::None)
+                    && !matches!(action, ThemeEffect::None)
                 {
                     let _ = self.handle_action(action, event_loop);
                 }
@@ -1806,7 +1807,7 @@ impl App {
 
     fn handle_action(
         &mut self,
-        action: ScreenAction,
+        action: ThemeEffect,
         event_loop: &ActiveEventLoop,
     ) -> Result<(), Box<dyn Error>> {
         let current_screen = self.state.screens.current_screen;
@@ -1817,12 +1818,12 @@ impl App {
             .course_run
             .as_ref()
             .is_some_and(|course| course.next_stage_index < course.stages.len());
-        let gameplay_failed = matches!(action, ScreenAction::Navigate(CurrentScreen::Evaluation))
+        let gameplay_failed = matches!(action, ThemeEffect::Navigate(CurrentScreen::Evaluation))
             && current_screen == CurrentScreen::Gameplay
             && self.current_gameplay_stage_failed();
-        let plan = screen_action_effect_plan(
+        let plan = theme_effect_execution_plan(
             action,
-            ScreenActionRouteContext {
+            ThemeEffectRouteContext {
                 current_screen,
                 restart_pending: self.state.session.restart_pending,
                 course_active,
@@ -1835,12 +1836,12 @@ impl App {
         }
 
         let commands = match plan.effect {
-            ScreenActionEffect::None => Vec::new(),
-            ScreenActionEffect::Navigate(screen) => {
+            ThemeEffectExecution::None => Vec::new(),
+            ThemeEffectExecution::Navigate(screen) => {
                 self.handle_navigation_action(screen);
                 Vec::new()
             }
-            ScreenActionEffect::NavigateNoFade(screen) => {
+            ThemeEffectExecution::NavigateNoFade(screen) => {
                 if self.maybe_begin_gameplay_offset_prompt(
                     self.state.screens.current_screen,
                     screen,
@@ -1855,13 +1856,13 @@ impl App {
                 }
                 return Ok(());
             }
-            ScreenActionEffect::ProcessExit(request) => self.handle_process_exit(request),
-            ScreenActionEffect::RequestScreenshot(side) => {
+            ThemeEffectExecution::ProcessExit(request) => self.handle_process_exit(request),
+            ThemeEffectExecution::RequestScreenshot(side) => {
                 self.state.shell.screenshot.request(side);
                 Vec::new()
             }
-            ScreenActionEffect::RunCommands(commands) => commands,
-            ScreenActionEffect::LinkOnlineProfile(link) => {
+            ThemeEffectExecution::RunCommands(commands) => commands,
+            ThemeEffectExecution::LinkOnlineProfile(link) => {
                 match link.target {
                     CurrentScreen::ArrowCloudLogin => {
                         self.state.screens.arrowcloud_login_state.active_color_index =
@@ -1888,7 +1889,7 @@ impl App {
                 self.handle_navigation_action(link.target);
                 Vec::new()
             }
-            ScreenActionEffect::WriteFsrDump { path } => {
+            ThemeEffectExecution::WriteFsrDump { path } => {
                 match self.fsr_monitor.write_debug_dump(&path) {
                     Ok(()) => {
                         info!("Wrote FSR debug dump to '{}'", path.display());
@@ -1907,8 +1908,8 @@ impl App {
                 }
                 Vec::new()
             }
-            ScreenActionEffect::Root(action) => match action {
-                ScreenAction::SelectProfiles { p1, p2 } => {
+            ThemeEffectExecution::Runtime(request) => match request {
+                SimplyLoveRuntimeRequest::SelectProfiles { p1, p2 } => {
                     let fast_profile_switch = profile::take_fast_profile_switch_from_select_music();
                     let profile_data = profile::set_active_profiles(p1, p2);
                     let (show_groovestats_login, show_arrowcloud_login) = if fast_profile_switch {
@@ -1981,7 +1982,7 @@ impl App {
                     }
                     Vec::new()
                 }
-                ScreenAction::ApplySongOffsetSync {
+                SimplyLoveRuntimeRequest::ApplySongOffsetSync {
                     simfile_path,
                     delta_seconds,
                 } => {
@@ -1992,13 +1993,13 @@ impl App {
                     }
                     Vec::new()
                 }
-                ScreenAction::ApplySongOffsetSyncBatch { changes } => {
+                SimplyLoveRuntimeRequest::ApplySongOffsetSyncBatch { changes } => {
                     if let Err(e) = self.save_song_offset_changes(&changes) {
                         warn!("Failed to save pack sync changes: {e}");
                     }
                     Vec::new()
                 }
-                ScreenAction::ChangeGraphics {
+                SimplyLoveRuntimeRequest::ChangeGraphics {
                     renderer,
                     display_mode,
                     resolution,
@@ -2021,13 +2022,13 @@ impl App {
                     )?;
                     Vec::new()
                 }
-                ScreenAction::UpdateShowOverlay(mode) => {
+                SimplyLoveRuntimeRequest::UpdateShowOverlay(mode) => {
                     self.state.shell.set_overlay_mode(mode);
                     config::update_show_stats_mode(mode);
                     options::sync_show_stats_mode(&mut self.state.screens.options_state, mode);
                     Vec::new()
                 }
-                ScreenAction::UpdateMouseCursorHidden(hidden) => {
+                SimplyLoveRuntimeRequest::UpdateMouseCursorHidden(hidden) => {
                     if let Some(window) = &self.window {
                         window.set_cursor_visible(!hidden);
                     }
@@ -2035,35 +2036,29 @@ impl App {
                     options::sync_hide_mouse_cursor(&mut self.state.screens.options_state, hidden);
                     Vec::new()
                 }
-                ScreenAction::TestLightsSetAuto => {
+                SimplyLoveRuntimeRequest::TestLightsSetAuto => {
                     test_lights::on_enter(&mut self.state.screens.test_lights_state);
                     self.lights.set_test_auto_cycle();
                     Vec::new()
                 }
-                ScreenAction::TestLightsStepCabinet(delta) => {
+                SimplyLoveRuntimeRequest::TestLightsStepCabinet(delta) => {
                     self.lights.step_test_cabinet(delta);
                     Vec::new()
                 }
-                ScreenAction::TestLightsStepButton(delta) => {
+                SimplyLoveRuntimeRequest::TestLightsStepButton(delta) => {
                     self.lights.step_test_button(delta);
                     Vec::new()
                 }
-                ScreenAction::None
-                | ScreenAction::ConsumeInput
-                | ScreenAction::Navigate(_)
-                | ScreenAction::NavigateNoFade(_)
-                | ScreenAction::Exit
-                | ScreenAction::Shutdown
-                | ScreenAction::LinkArrowCloud { .. }
-                | ScreenAction::LinkGrooveStats { .. }
-                | ScreenAction::RequestScreenshot(_)
-                | ScreenAction::RequestBanner(_)
-                | ScreenAction::RequestCdTitle(_)
-                | ScreenAction::RequestPackBanner(_)
-                | ScreenAction::RequestWheelItemBackgrounds(_)
-                | ScreenAction::RequestDensityGraph { .. }
-                | ScreenAction::FetchOnlineGrade(_)
-                | ScreenAction::WriteFsrDump => Vec::new(),
+                SimplyLoveRuntimeRequest::LinkArrowCloud { .. }
+                | SimplyLoveRuntimeRequest::LinkGrooveStats { .. }
+                | SimplyLoveRuntimeRequest::RequestScreenshot(_)
+                | SimplyLoveRuntimeRequest::RequestBanner(_)
+                | SimplyLoveRuntimeRequest::RequestCdTitle(_)
+                | SimplyLoveRuntimeRequest::RequestPackBanner(_)
+                | SimplyLoveRuntimeRequest::RequestWheelItemBackgrounds(_)
+                | SimplyLoveRuntimeRequest::RequestDensityGraph { .. }
+                | SimplyLoveRuntimeRequest::FetchOnlineGrade(_)
+                | SimplyLoveRuntimeRequest::WriteFsrDump => Vec::new(),
             },
         };
         self.run_commands(commands, event_loop)
@@ -2423,7 +2418,7 @@ impl App {
                 return true;
             }
             GameplayRestartRoute::Navigate(target) => {
-                if let Err(e) = self.handle_action(ScreenAction::Navigate(target), event_loop) {
+                if let Err(e) = self.handle_action(ThemeEffect::Navigate(target), event_loop) {
                     log::error!("Failed to restart Gameplay with {label}: {e}");
                 } else {
                     self.state.session.gameplay_restart_count =
@@ -2499,7 +2494,7 @@ impl App {
             return false;
         }
         if let Err(e) =
-            self.handle_action(ScreenAction::Navigate(CurrentScreen::Practice), event_loop)
+            self.handle_action(ThemeEffect::Navigate(CurrentScreen::Practice), event_loop)
         {
             log::error!("Failed to enter Practice with {label}: {e}");
             return false;
@@ -2578,7 +2573,7 @@ impl App {
             return false;
         }
         if let Err(e) =
-            self.handle_action(ScreenAction::Navigate(CurrentScreen::Practice), event_loop)
+            self.handle_action(ThemeEffect::Navigate(CurrentScreen::Practice), event_loop)
         {
             log::error!("Failed to reload Practice with {label}: {e}");
             return false;
@@ -3656,9 +3651,9 @@ impl App {
                 None,
                 Some(text),
             ),
-            RawKeyTextRoute::Ignore => ScreenAction::None,
+            RawKeyTextRoute::Ignore => ThemeEffect::None,
         };
-        if matches!(action, ScreenAction::None) {
+        if matches!(action, ThemeEffect::None) {
             return;
         }
         if let Err(e) = self.handle_action(action, event_loop) {
@@ -3719,7 +3714,7 @@ impl App {
                     &mut self.state.screens.sandbox_state,
                     &raw_key,
                 );
-                if !matches!(action, ScreenAction::None) {
+                if !matches!(action, ThemeEffect::None) {
                     if let Err(e) = self.handle_action(action, event_loop) {
                         log::error!("Failed to handle Sandbox raw key action: {e}");
                     }
@@ -3731,7 +3726,7 @@ impl App {
                     &mut self.state.screens.menu_state,
                     &raw_key,
                 );
-                if !matches!(action, ScreenAction::None) {
+                if !matches!(action, ThemeEffect::None) {
                     if let Err(e) = self.handle_action(action, event_loop) {
                         log::error!("Failed to handle Menu raw key action: {e}");
                     }
@@ -3743,7 +3738,7 @@ impl App {
                     &mut self.state.screens.mappings_state,
                     &raw_key,
                 );
-                if !matches!(action, ScreenAction::None)
+                if !matches!(action, ThemeEffect::None)
                     && let Err(e) = self.handle_action(action, event_loop)
                 {
                     log::error!("Failed to handle Mappings raw key action: {e}");
@@ -3758,7 +3753,7 @@ impl App {
                     Some(&raw_key),
                     None,
                 );
-                if !matches!(action, ScreenAction::None) {
+                if !matches!(action, ThemeEffect::None) {
                     if let Err(e) = self.handle_action(action, event_loop) {
                         log::error!("Failed to handle ManageLocalProfiles raw key action: {e}");
                     }
@@ -3781,7 +3776,7 @@ impl App {
                     &mut self.state.screens.input_state,
                     &raw_key,
                 );
-                if !matches!(action, ScreenAction::None) {
+                if !matches!(action, ThemeEffect::None) {
                     if let Err(e) = self.handle_action(action, event_loop) {
                         log::error!("Failed to handle Input raw key action: {e}");
                     }
@@ -3797,7 +3792,7 @@ impl App {
                     ctrl_held,
                     shift_held,
                 );
-                if !matches!(action, ScreenAction::None) {
+                if !matches!(action, ThemeEffect::None) {
                     if let Err(e) = self.handle_action(action, event_loop) {
                         log::error!("Failed to handle SelectMusic raw key action: {e}");
                     }
@@ -3818,7 +3813,7 @@ impl App {
                 }
                 if let Some(ps) = self.state.screens.practice_state.as_mut() {
                     let (consumed, action) = screens::practice::handle_raw_key_event(ps, &raw_key);
-                    if !matches!(action, ScreenAction::None) {
+                    if !matches!(action, ThemeEffect::None) {
                         if let Err(e) = self.handle_action(action, event_loop) {
                             log::error!("Failed to handle Practice raw key action: {e}");
                         }

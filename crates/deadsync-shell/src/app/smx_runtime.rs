@@ -11,7 +11,7 @@ use crate::smx_config::{
 };
 use deadsync_config::prelude as config;
 use deadsync_profile::{compat as profile, pad_config as pad_profile_data, pad_config_sync};
-use deadsync_screens::Screen as CurrentScreen;
+use deadsync_theme_simply_love::screens::SimplyLoveScreen as CurrentScreen;
 use deadsync_theme_simply_love::screens::{self, options, player_options};
 
 impl App {

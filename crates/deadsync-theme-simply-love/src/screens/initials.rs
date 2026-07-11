@@ -3,7 +3,7 @@ use crate::assets::AssetManager;
 use crate::assets::i18n::tr;
 use crate::assets::{FontRole, current_machine_font_key};
 use crate::screens::components::shared::{transitions, visual_style_bg};
-use crate::screens::{Screen, ScreenAction};
+use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::{Actor, SizeSpec};
 use deadlib_present::cache::{SharedStrCache, cached_shared_str};
 use deadlib_present::color;
@@ -631,7 +631,7 @@ fn start_finish(state: &mut State) {
     state.finish_hold_elapsed = Some(0.0);
 }
 
-pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
+pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
     state.elapsed = (state.elapsed + dt).max(0.0);
 
     for p in &mut state.players {
@@ -649,7 +649,7 @@ pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
     if let Some(t) = &mut state.finish_hold_elapsed {
         *t = (*t + dt).max(0.0);
         if *t >= WHEEL_HIDE_FADE_SECONDS {
-            return Some(ScreenAction::Navigate(Screen::GameOver));
+            return Some(ThemeEffect::Navigate(Screen::GameOver));
         }
         return None;
     }
@@ -703,9 +703,9 @@ fn handle_delete(p: &mut PlayerEntry) {
     }
 }
 
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     if state.finish_hold_elapsed.is_some() {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
 
     let mut handle_for = |side: profile_data::PlayerSide, f: fn(&mut PlayerEntry)| {
@@ -820,7 +820,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         start_finish(state);
     }
 
-    ScreenAction::None
+    ThemeEffect::None
 }
 
 fn stage_index_for(elapsed: f32, num_stages: usize) -> usize {

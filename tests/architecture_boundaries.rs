@@ -908,14 +908,36 @@ const NOTEFIELD_CRATE_FORBIDDEN_TOKENS: &[&str] = &[
 ];
 
 const CONTRACT_CRATE_FORBIDDEN_TOKENS: &[&str] = &[
+    "deadsync-assets",
+    "deadsync_assets",
+    "deadsync-audio",
+    "deadsync_audio",
+    "deadsync-config",
+    "deadsync_config",
+    "deadsync-gameplay",
+    "deadsync_gameplay",
+    "deadsync-notefield",
+    "deadsync_notefield",
+    "deadsync-online",
+    "deadsync_online",
+    "deadsync-profile",
+    "deadsync_profile",
+    "deadsync-simfile",
+    "deadsync_simfile",
     "deadsync-theme-simply-love",
     "deadsync_theme_simply_love",
     "deadsync-shell",
     "deadsync_shell",
+    "deadlib-present",
+    "deadlib_present",
+    "deadlib-render",
+    "deadlib_render",
     "deadlib-renderer",
     "deadlib_renderer",
     "deadlib-render-backend-",
     "deadlib_render_backend_",
+    "deadlib-video",
+    "deadlib_video",
     "deadsync-input-native",
     "deadsync_input_native",
     "deadsync-audio-stream",
@@ -932,19 +954,17 @@ const CONTRACT_CRATE_FORBIDDEN_TOKENS: &[&str] = &[
     "std::process",
 ];
 
-const SCREEN_THEME_SOURCE_DIRS: &[&str] = &[
-    "crates/deadsync-theme-simply-love/src/screens",
-    "crates/deadsync-screens/src",
+const THEME_SOURCE_DIRS: &[&str] = &[
     "crates/deadsync-theme/src",
     "crates/deadsync-theme-simply-love/src",
 ];
 
 #[test]
-fn screen_and_theme_sources_do_not_import_shell() {
+fn theme_sources_do_not_import_shell() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut failures = Vec::new();
 
-    for dir in SCREEN_THEME_SOURCE_DIRS {
+    for dir in THEME_SOURCE_DIRS {
         for file in rust_files(&root.join(dir)) {
             let text = fs::read_to_string(&file).expect("source file should be readable");
             if text.contains("deadsync_shell") {
@@ -955,7 +975,7 @@ fn screen_and_theme_sources_do_not_import_shell() {
 
     assert!(
         failures.is_empty(),
-        "screen and theme sources must consume lower-layer contracts, not deadsync-shell:\n{}",
+        "theme sources must consume lower-layer contracts, not deadsync-shell:\n{}",
         failures.join("\n")
     );
 }
@@ -1075,31 +1095,29 @@ fn notefield_crate_stays_independent_of_themes_and_runtime() {
 }
 
 #[test]
-fn generic_theme_and_screen_contracts_stay_runtime_independent() {
+fn generic_theme_contract_stays_runtime_independent() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let crate_dir = root.join("crates/deadsync-theme");
+    let mut files = rust_files(&crate_dir.join("src"));
+    files.push(crate_dir.join("Cargo.toml"));
     let mut failures = Vec::new();
 
-    for crate_name in ["deadsync-theme", "deadsync-screens"] {
-        let crate_dir = root.join("crates").join(crate_name);
-        let mut files = rust_files(&crate_dir.join("src"));
-        files.push(crate_dir.join("Cargo.toml"));
-        for file in files {
-            let text = fs::read_to_string(&file).expect("contract crate file should be readable");
-            let rel = rel_path(&root, &file);
-            for token in CONTRACT_CRATE_FORBIDDEN_TOKENS {
-                let count = text.match_indices(token).count();
-                if count != 0 {
-                    failures.push(format!(
-                        "{rel} references runtime or concrete-theme token {token} {count} times"
-                    ));
-                }
+    for file in files {
+        let text = fs::read_to_string(&file).expect("contract crate file should be readable");
+        let rel = rel_path(&root, &file);
+        for token in CONTRACT_CRATE_FORBIDDEN_TOKENS {
+            let count = text.match_indices(token).count();
+            if count != 0 {
+                failures.push(format!(
+                    "{rel} references runtime or concrete-theme token {token} {count} times"
+                ));
             }
         }
     }
 
     assert!(
         failures.is_empty(),
-        "generic theme and screen contracts must not depend on concrete themes or runtime backends:\n{}",
+        "the generic theme contract must not depend on concrete themes or runtime backends:\n{}",
         failures.join("\n")
     );
 }
@@ -1111,7 +1129,6 @@ fn presentation_crates_do_not_import_runtime_renderers() {
 
     for crate_name in [
         "deadsync-notefield",
-        "deadsync-screens",
         "deadsync-theme",
         "deadsync-theme-simply-love",
     ] {
@@ -3446,6 +3463,39 @@ fn rust_files(dir: &Path) -> Vec<PathBuf> {
     out
 }
 
+fn files_named(dir: &Path, name: &str) -> Vec<PathBuf> {
+    if !dir.exists() {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    collect_files_named(dir, name, &mut out);
+    out.sort();
+    out
+}
+
+fn collect_files_named(dir: &Path, name: &str, out: &mut Vec<PathBuf>) {
+    for entry in fs::read_dir(dir).expect("source directory should be readable") {
+        let path = entry.expect("source entry should be readable").path();
+        if path.is_dir() {
+            collect_files_named(&path, name, out);
+        } else if path.file_name().is_some_and(|file_name| file_name == name) {
+            out.push(path);
+        }
+    }
+}
+
+fn count_outside_notefield_forbidden_tokens(text: &str, token: &str) -> usize {
+    let start = text
+        .find("const NOTEFIELD_CRATE_FORBIDDEN_TOKENS")
+        .expect("notefield forbidden-token list should exist");
+    let end = start
+        + text[start..]
+            .find("];")
+            .expect("notefield forbidden-token list should end")
+        + 2;
+    text[..start].match_indices(token).count() + text[end..].match_indices(token).count()
+}
+
 fn collect_rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
     for entry in fs::read_dir(dir).expect("source directory should be readable") {
         let path = entry.expect("source entry should be readable").path();
@@ -4009,32 +4059,30 @@ fn count_lobby_data_game_facade_refs(text: &str, symbol: &str) -> usize {
 fn concrete_theme_resources_live_in_simply_love() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let generic_theme = root.join("crates/deadsync-theme");
-    let generic_files: Vec<_> = rust_files(&generic_theme.join("src"))
-        .into_iter()
-        .map(|path| rel_path(&generic_theme, &path))
-        .collect();
-    assert_eq!(
-        generic_files,
-        ["src/lib.rs"],
-        "generic theme must contain contracts only"
+    let generic_files = rust_files(&generic_theme.join("src"));
+    assert!(
+        !generic_files.is_empty(),
+        "generic theme must expose contract source files"
     );
-
-    let generic_source = fs::read_to_string(generic_theme.join("src/lib.rs"))
-        .expect("generic theme source should be readable");
-    for token in [
-        "MachineFont",
-        "VisualStyle",
-        "SrpgVariant",
-        "FONT_ASSETS",
-        "SRPG10_",
-        "pub mod i18n",
-        "scorebox",
-        "step_stats",
-    ] {
-        assert!(
-            !generic_source.contains(token),
-            "generic theme still owns concrete resource token {token}"
-        );
+    for file in generic_files {
+        let generic_source =
+            fs::read_to_string(&file).expect("generic theme source should be readable");
+        for token in [
+            "MachineFont",
+            "VisualStyle",
+            "SrpgVariant",
+            "FONT_ASSETS",
+            "SRPG10_",
+            "pub mod i18n",
+            "scorebox",
+            "step_stats",
+        ] {
+            assert!(
+                !generic_source.contains(token),
+                "{} still owns concrete resource token {token}",
+                rel_path(&root, &file)
+            );
+        }
     }
 
     let generic_manifest = fs::read_to_string(generic_theme.join("Cargo.toml"))
@@ -4857,6 +4905,90 @@ fn root_screen_tree_is_removed() {
     assert!(
         !root.join("src/screens").exists(),
         "Simply Love screens must remain owned by deadsync-theme-simply-love"
+    );
+}
+
+#[test]
+fn theme_screen_contract_has_explicit_owners() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let generic_screen = fs::read_to_string(root.join("crates/deadsync-theme/src/screen.rs"))
+        .expect("generic screen contract should be readable");
+    let generic_effect = fs::read_to_string(root.join("crates/deadsync-theme/src/effect.rs"))
+        .expect("generic effect contract should be readable");
+    let simply_love_flow =
+        fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/screens/flow.rs"))
+            .expect("Simply Love flow should be readable");
+    let shell_flow = fs::read_to_string(root.join("crates/deadsync-shell/src/screen_flow.rs"))
+        .expect("shell effect router should be readable");
+
+    for token in ["pub struct ThemeScreenId", "pub trait Theme"] {
+        assert!(
+            generic_screen.contains(token),
+            "deadsync-theme is missing generic screen contract token {token}"
+        );
+    }
+    for token in ["pub enum ThemeEffect", "pub enum ThemeFlowEvent"] {
+        assert!(
+            generic_effect.contains(token),
+            "deadsync-theme is missing generic effect contract token {token}"
+        );
+    }
+    for token in ["pub enum SimplyLoveScreen", "pub fn resolve_navigation"] {
+        assert!(
+            simply_love_flow.contains(token),
+            "Simply Love is missing concrete flow token {token}"
+        );
+    }
+    assert!(
+        shell_flow.contains("pub enum ThemeEffectExecution"),
+        "deadsync-shell must own ThemeEffect execution"
+    );
+}
+
+#[test]
+fn transitional_screen_contract_crate_is_removed() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let removed_crate_name = ["deadsync", "screens"].join("-");
+    assert!(
+        !root.join("crates").join(&removed_crate_name).exists(),
+        "the transitional screen contract crate must be removed"
+    );
+
+    let mut files = rust_files(&root.join("crates"));
+    files.extend(files_named(&root.join("crates"), "Cargo.toml"));
+    files.extend(rust_files(&root.join("tests")));
+    files.push(root.join("Cargo.toml"));
+    files.push(root.join("Cargo.lock"));
+    files.sort();
+    files.dedup();
+
+    let removed_tokens = [
+        ["deadsync", "screens"].join("-"),
+        ["deadsync", "screens"].join("_"),
+    ];
+    let boundary_test = "tests/architecture_boundaries.rs";
+    let mut failures = Vec::new();
+    for file in files {
+        let text = fs::read_to_string(&file).expect("workspace source should be readable");
+        let rel = rel_path(&root, &file);
+        for token in &removed_tokens {
+            let count = if rel == boundary_test {
+                count_outside_notefield_forbidden_tokens(&text, token)
+            } else {
+                text.match_indices(token).count()
+            };
+            if count != 0 {
+                failures.push(format!(
+                    "{rel} references removed crate token {token} {count} times"
+                ));
+            }
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "workspace source still references the removed screen contract crate:\n{}",
+        failures.join("\n")
     );
 }
 

@@ -15,12 +15,13 @@ use deadsync_profile::{
     HideLightType, PlayStyle, PlayerSide, physical_player_slot_for_chart_pad, player_side_index,
 };
 use deadsync_score::Grade;
-use deadsync_screens::{ScoreInfo, Screen};
 use deadsync_simfile::app_runtime as song_loading;
 use deadsync_smx::gameplay_driver as smx_driver;
 use deadsync_smx::gifs::FullPadAnim;
 use deadsync_smx::panel_fx::JudgementGifs;
 use deadsync_smx::panels::{Clock, PADS};
+use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
+use deadsync_theme_simply_love::views::ScoreInfo;
 
 /// Load and compile the cabinet-light chart requested by a gameplay plan.
 pub fn load_cabinet_light_chart(

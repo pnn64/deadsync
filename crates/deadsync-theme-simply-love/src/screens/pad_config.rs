@@ -15,16 +15,84 @@
 
 use crate::act;
 use crate::screens::components::shared::visual_style_bg;
-use crate::screens::{Screen, ScreenAction};
+use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height};
 use deadsync_core::input::InputSource;
 use deadsync_input::fsr::{ButtonView, PAD_BUTTON_COUNT, PadDeviceId, PadView, SensorView};
 use deadsync_input::{InputEvent, VirtualAction};
-pub use deadsync_screens::pad_config::{
-    EditResult, PadCommand, PadFilter, ProfileListEntry, SaveDraft,
-};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PadCommand {
+    Threshold {
+        device: PadDeviceId,
+        button: usize,
+        sensor: Option<usize>,
+        value: u16,
+    },
+    ThresholdPair {
+        device: PadDeviceId,
+        button: usize,
+        press: u16,
+        release: u16,
+    },
+    SensorEnabled {
+        device: PadDeviceId,
+        button: usize,
+        sensor: usize,
+        enabled: bool,
+    },
+    AutoRecalibration {
+        device: PadDeviceId,
+        enabled: bool,
+    },
+    Debounce {
+        device: PadDeviceId,
+        micros: u16,
+    },
+}
+
+impl PadCommand {
+    #[inline(always)]
+    pub const fn device(self) -> PadDeviceId {
+        match self {
+            Self::Threshold { device, .. }
+            | Self::ThresholdPair { device, .. }
+            | Self::SensorEnabled { device, .. }
+            | Self::AutoRecalibration { device, .. }
+            | Self::Debounce { device, .. } => device,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EditResult {
+    Handled,
+    ExitToParent,
+    SaveRequested,
+    ApplyProfile,
+    SetDefaultProfile,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct SaveDraft {
+    pub name: String,
+    pub set_default: bool,
+    pub rename_of: Option<String>,
+}
+
+pub type ProfileListEntry = deadsync_theme::views::PadProfileEntry;
+
+#[derive(Clone, Copy, Default)]
+pub enum PadFilter {
+    #[default]
+    All,
+    Sides {
+        p1: bool,
+        p2: bool,
+    },
+}
 
 /// Which of a load-cell button's two thresholds a Simple-view cursor stop
 /// edits. Pads without a separate release threshold only use `Press`.
@@ -198,7 +266,7 @@ pub fn take_commands(state: &mut State) -> Vec<PadCommand> {
     std::mem::take(&mut state.pending)
 }
 
-pub fn update(_state: &mut State, _dt: f32) -> Option<ScreenAction> {
+pub fn update(_state: &mut State, _dt: f32) -> Option<ThemeEffect> {
     None
 }
 
@@ -211,20 +279,20 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 }
 
 /// `fine` (Shift held) makes adjustments use the fine step instead of coarse.
-pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ScreenAction {
+pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ThemeEffect {
     // FSR support off → the screen shows a disabled message (see build_content), so
     // don't let directional input edit the (possibly stale) pad snapshot; only Back
     // exits. Without this, edits made here queue and then apply the next time FSRs
     // are re-enabled.
     if !crate::config::get().use_fsrs {
         if ev.pressed && is_back(ev.action) {
-            return ScreenAction::Navigate(state.return_screen.unwrap_or(Screen::Options));
+            return ThemeEffect::Navigate(state.return_screen.unwrap_or(Screen::Options));
         }
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     match apply_edit(state, ev, fine) {
         EditResult::ExitToParent => {
-            ScreenAction::Navigate(state.return_screen.unwrap_or(Screen::Options))
+            ThemeEffect::Navigate(state.return_screen.unwrap_or(Screen::Options))
         }
         // Saving and profile management are only reachable from the in-session
         // overlay; the standalone Options screen never enters them, so the
@@ -232,7 +300,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ScreenAct
         EditResult::Handled
         | EditResult::SaveRequested
         | EditResult::ApplyProfile
-        | EditResult::SetDefaultProfile => ScreenAction::None,
+        | EditResult::SetDefaultProfile => ThemeEffect::None,
     }
 }
 
@@ -3189,17 +3257,17 @@ mod tests {
         let mut s = with_pad();
         assert!(matches!(
             handle_input(&mut s, &ev(VirtualAction::p1_up), false),
-            ScreenAction::None
+            ThemeEffect::None
         ));
         assert!(matches!(
             handle_input(&mut s, &ev(VirtualAction::p1_right), false),
-            ScreenAction::None
+            ThemeEffect::None
         ));
         assert!(take_commands(&mut s).is_empty());
         // Back still exits to the parent screen.
         assert!(matches!(
             handle_input(&mut s, &ev(VirtualAction::p1_back), false),
-            ScreenAction::Navigate(_)
+            ThemeEffect::Navigate(_)
         ));
     }
 }

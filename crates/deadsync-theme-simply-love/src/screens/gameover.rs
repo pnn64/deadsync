@@ -3,7 +3,7 @@ use crate::assets::AssetManager;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::{FontRole, current_machine_font_key, visual_styles};
 use crate::screens::components::shared::{transitions, visual_style_bg};
-use crate::screens::{Screen, ScreenAction};
+use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
@@ -193,9 +193,9 @@ pub fn init_blank() -> State {
     init_inner(false)
 }
 
-pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
+pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
     state.elapsed = (state.elapsed + dt).max(0.0);
-    (state.elapsed >= gameover_seconds()).then_some(ScreenAction::Navigate(Screen::Menu))
+    (state.elapsed >= gameover_seconds()).then_some(ThemeEffect::Navigate(Screen::Menu))
 }
 
 #[inline(always)]
@@ -207,16 +207,16 @@ fn gameover_seconds() -> f32 {
     }
 }
 
-pub fn handle_input(_state: &mut State, ev: &InputEvent) -> ScreenAction {
+pub fn handle_input(_state: &mut State, ev: &InputEvent) -> ThemeEffect {
     if !ev.pressed {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     match ev.action {
         VirtualAction::p1_start
         | VirtualAction::p1_back
         | VirtualAction::p2_start
-        | VirtualAction::p2_back => ScreenAction::Navigate(Screen::Menu),
-        _ => ScreenAction::None,
+        | VirtualAction::p2_back => ThemeEffect::Navigate(Screen::Menu),
+        _ => ThemeEffect::None,
     }
 }
 

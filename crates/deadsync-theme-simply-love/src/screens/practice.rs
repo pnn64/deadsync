@@ -2,7 +2,7 @@ use crate::act;
 use crate::assets::i18n::{self, LookupKey, lookup_key};
 use crate::assets::{AssetManager, FontRole, current_machine_font_key};
 use crate::screens::gameplay as gameplay_screen;
-use crate::screens::{Screen, ScreenAction};
+use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{
@@ -212,7 +212,7 @@ struct MenuState {
     selected: usize,
 }
 
-type MenuAction = fn(&mut State) -> ScreenAction;
+type MenuAction = fn(&mut State) -> ThemeEffect;
 
 struct MenuRow {
     label: LookupKey,
@@ -405,7 +405,7 @@ pub fn on_enter(state: &mut State) {
     snap_display_to_cursor(state);
 }
 
-pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
+pub fn update(state: &mut State, delta_time: f32) -> ThemeEffect {
     if let Some((_, remaining)) = state.flash.as_mut() {
         *remaining -= delta_time;
         if *remaining <= 0.0 {
@@ -423,7 +423,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         update_cursor_hold(state, delta_time);
         update_page_hold(state, delta_time);
         update_display_scroll(state, delta_time);
-        return ScreenAction::None;
+        return ThemeEffect::None;
     };
 
     let action = update_core(
@@ -441,10 +441,10 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
     if current_time >= stop_time + LOOP_AFTER_SECONDS || !matches!(action, GameplayAction::None) {
         start_playback(state, start_beat, stop_beat);
     }
-    ScreenAction::None
+    ThemeEffect::None
 }
 
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     if state.menu.is_some() {
         return handle_menu_input(state, ev);
     }
@@ -454,72 +454,72 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             && let Some(dir) = edit_cursor_hold_dir_for_action(ev.action)
         {
             release_cursor_hold_input(state, dir);
-            return ScreenAction::None;
+            return ThemeEffect::None;
         }
         if matches!(state.mode, Mode::Playing { .. }) && ev.action.is_gameplay_arrow() {
             let _ = handle_core_input(&mut state.gameplay, ev);
         }
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
 
     match state.mode {
         Mode::Playing { .. } => match ev.action {
             VirtualAction::p1_back | VirtualAction::p2_back => {
                 stop_playback(state);
-                ScreenAction::None
+                ThemeEffect::None
             }
             _ => {
                 let _ = handle_core_input(&mut state.gameplay, ev);
-                ScreenAction::None
+                ThemeEffect::None
             }
         },
         Mode::Editing => handle_edit_input(state, ev),
     }
 }
 
-fn handle_edit_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+fn handle_edit_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     if let Some(dir) = edit_cursor_hold_dir_for_action(ev.action) {
         press_cursor_hold_input(state, dir);
         move_cursor_by_hold_dir(state, dir);
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     if let Some(delta) = edit_snap_delta_for_action(ev.action) {
         change_snap(state, delta);
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     match ev.action {
         VirtualAction::p1_start | VirtualAction::p2_start => {
             open_main_menu(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
         VirtualAction::p1_back | VirtualAction::p2_back => {
             open_main_menu(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
         VirtualAction::p1_select | VirtualAction::p2_select => {
             set_area_marker(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
-        _ => ScreenAction::None,
+        _ => ThemeEffect::None,
     }
 }
 
-pub fn handle_raw_key_event(state: &mut State, raw_key: &RawKeyboardEvent) -> (bool, ScreenAction) {
+pub fn handle_raw_key_event(state: &mut State, raw_key: &RawKeyboardEvent) -> (bool, ThemeEffect) {
     match raw_key.code {
         KeyCode::ShiftLeft | KeyCode::ShiftRight => {
             state.shift_held = raw_key.pressed;
             if !raw_key.pressed {
                 state.shift_anchor = None;
             }
-            return (true, ScreenAction::None);
+            return (true, ThemeEffect::None);
         }
         KeyCode::ControlLeft | KeyCode::ControlRight => {
             state.ctrl_held = raw_key.pressed;
-            return (true, ScreenAction::None);
+            return (true, ThemeEffect::None);
         }
         KeyCode::Tab => {
             state.tab_held = raw_key.pressed;
-            return (false, ScreenAction::None);
+            return (false, ThemeEffect::None);
         }
         _ => {}
     }
@@ -527,13 +527,13 @@ pub fn handle_raw_key_event(state: &mut State, raw_key: &RawKeyboardEvent) -> (b
     if !raw_key.pressed {
         if let Some(dir) = page_hold_dir_for_key(raw_key.code) {
             release_page_hold_input(state, dir);
-            return (true, ScreenAction::None);
+            return (true, ThemeEffect::None);
         }
         if let Some(dir) = music_rate_hold_dir_for_key(raw_key.code) {
             release_music_rate_hold_input(state, dir);
-            return (true, ScreenAction::None);
+            return (true, ThemeEffect::None);
         }
-        return (false, ScreenAction::None);
+        return (false, ThemeEffect::None);
     }
 
     // Music rate hotkeys are global within practice mode: they work whether
@@ -542,16 +542,16 @@ pub fn handle_raw_key_event(state: &mut State, raw_key: &RawKeyboardEvent) -> (b
         if !raw_key.repeat {
             press_music_rate_hold_input(state, dir);
         }
-        return (true, ScreenAction::None);
+        return (true, ThemeEffect::None);
     }
 
     if matches!(state.mode, Mode::Playing { .. }) {
         return match raw_key.code {
             KeyCode::Escape | KeyCode::Enter => {
                 stop_playback(state);
-                (true, ScreenAction::None)
+                (true, ThemeEffect::None)
             }
-            _ => (false, ScreenAction::None),
+            _ => (false, ThemeEffect::None),
         };
     }
 
@@ -559,81 +559,81 @@ pub fn handle_raw_key_event(state: &mut State, raw_key: &RawKeyboardEvent) -> (b
         return match raw_key.code {
             KeyCode::Escape => {
                 close_menu(state);
-                (true, ScreenAction::None)
+                (true, ThemeEffect::None)
             }
             KeyCode::Enter => (true, activate_menu_item(state)),
-            _ => (false, ScreenAction::None),
+            _ => (false, ThemeEffect::None),
         };
     }
 
     match raw_key.code {
         KeyCode::Escape | KeyCode::Enter => {
             open_main_menu(state);
-            (true, ScreenAction::None)
+            (true, ThemeEffect::None)
         }
         KeyCode::ArrowUp if state.ctrl_held => {
             change_edit_scroll_speed(state, 1);
-            (true, ScreenAction::None)
+            (true, ThemeEffect::None)
         }
         KeyCode::ArrowDown if state.ctrl_held => {
             change_edit_scroll_speed(state, -1);
-            (true, ScreenAction::None)
+            (true, ThemeEffect::None)
         }
         KeyCode::KeyP if state.ctrl_held => {
             start_playback(state, MIN_CURSOR_BEAT, max_play_beat(state));
-            (true, ScreenAction::None)
+            (true, ThemeEffect::None)
         }
         KeyCode::KeyP if state.shift_held => {
             start_playback(state, state.cursor_beat, max_play_beat(state));
-            (true, ScreenAction::None)
+            (true, ThemeEffect::None)
         }
         KeyCode::KeyP => {
             start_selection_like_itg(state);
-            (true, ScreenAction::None)
+            (true, ThemeEffect::None)
         }
         KeyCode::Space => {
             set_area_marker(state);
-            (true, ScreenAction::None)
+            (true, ThemeEffect::None)
         }
         KeyCode::Semicolon => {
             press_page_hold_input_for_key(state, PageHoldDir::Up, raw_key.repeat);
-            (true, ScreenAction::None)
+            (true, ThemeEffect::None)
         }
         KeyCode::PageUp => {
             press_page_hold_input_for_key(state, PageHoldDir::Up, raw_key.repeat);
-            (true, ScreenAction::None)
+            (true, ThemeEffect::None)
         }
         KeyCode::Quote => {
             press_page_hold_input_for_key(state, PageHoldDir::Down, raw_key.repeat);
-            (true, ScreenAction::None)
+            (true, ThemeEffect::None)
         }
         KeyCode::PageDown => {
             press_page_hold_input_for_key(state, PageHoldDir::Down, raw_key.repeat);
-            (true, ScreenAction::None)
+            (true, ThemeEffect::None)
         }
         KeyCode::Comma if !state.ctrl_held => {
             seek_chart_note(state, -1);
-            (true, ScreenAction::None)
+            (true, ThemeEffect::None)
         }
         KeyCode::Period if !state.ctrl_held => {
             seek_chart_note(state, 1);
-            (true, ScreenAction::None)
+            (true, ThemeEffect::None)
         }
         KeyCode::Home => {
             set_cursor(state, MIN_CURSOR_BEAT);
             audio::play_sfx(EDIT_LINE_SOUND);
-            (true, ScreenAction::None)
+            (true, ThemeEffect::None)
         }
         KeyCode::End => {
             set_cursor(state, max_play_beat(state));
             audio::play_sfx(EDIT_LINE_SOUND);
-            (true, ScreenAction::None)
+            (true, ThemeEffect::None)
         }
         KeyCode::F1 => {
             open_help_menu(state);
-            (true, ScreenAction::None)
+            (true, ThemeEffect::None)
         }
-        _ => (false, ScreenAction::None),
+        _ => (false, ThemeEffect::None),
     }
 }
 
@@ -706,13 +706,13 @@ fn practice_marker_bar_height() -> f32 {
     ScrollSpeedSetting::ARROW_SPACING * practice_edit_field_zoom()
 }
 
-fn handle_menu_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+fn handle_menu_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     if !ev.pressed {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     if let Some(delta) = menu_step_delta_for_action(ev.action) {
         step_menu(state, delta);
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     match ev.action {
         VirtualAction::p1_start
@@ -721,9 +721,9 @@ fn handle_menu_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         | VirtualAction::p2_select => activate_menu_item(state),
         VirtualAction::p1_back | VirtualAction::p2_back => {
             close_menu(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
-        _ => ScreenAction::None,
+        _ => ThemeEffect::None,
     }
 }
 
@@ -772,17 +772,17 @@ fn step_menu(state: &mut State, delta: isize) {
     audio::play_sfx("assets/sounds/change.ogg");
 }
 
-fn activate_menu_item(state: &mut State) -> ScreenAction {
+fn activate_menu_item(state: &mut State) -> ThemeEffect {
     let Some(menu) = state.menu else {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     };
     let Some(row) = menu.def.rows.get(menu.selected) else {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     };
     let Some(action) = row.action else {
         // Display-only row (e.g. Help): treat Enter as close.
         close_menu(state);
-        return ScreenAction::None;
+        return ThemeEffect::None;
     };
     state.menu = None;
     clear_cursor_hold_inputs(state);
@@ -791,38 +791,38 @@ fn activate_menu_item(state: &mut State) -> ScreenAction {
     action(state)
 }
 
-fn action_play_whole_song(state: &mut State) -> ScreenAction {
+fn action_play_whole_song(state: &mut State) -> ThemeEffect {
     start_playback(state, MIN_CURSOR_BEAT, max_play_beat(state));
-    ScreenAction::None
+    ThemeEffect::None
 }
 
-fn action_play_current_to_end(state: &mut State) -> ScreenAction {
+fn action_play_current_to_end(state: &mut State) -> ThemeEffect {
     let cursor = state.cursor_beat;
     start_playback(state, cursor, max_play_beat(state));
-    ScreenAction::None
+    ThemeEffect::None
 }
 
-fn action_play_selection(state: &mut State) -> ScreenAction {
+fn action_play_selection(state: &mut State) -> ThemeEffect {
     start_selection_like_itg(state);
-    ScreenAction::None
+    ThemeEffect::None
 }
 
-fn action_set_selection_start(state: &mut State) -> ScreenAction {
+fn action_set_selection_start(state: &mut State) -> ThemeEffect {
     set_selection_start(state);
-    ScreenAction::None
+    ThemeEffect::None
 }
 
-fn action_set_selection_end(state: &mut State) -> ScreenAction {
+fn action_set_selection_end(state: &mut State) -> ThemeEffect {
     set_selection_end(state);
-    ScreenAction::None
+    ThemeEffect::None
 }
 
-fn action_editor_options(_state: &mut State) -> ScreenAction {
-    ScreenAction::Navigate(Screen::PlayerOptions)
+fn action_editor_options(_state: &mut State) -> ThemeEffect {
+    ThemeEffect::Navigate(Screen::PlayerOptions)
 }
 
-fn action_exit_practice(_state: &mut State) -> ScreenAction {
-    ScreenAction::Navigate(Screen::SelectMusic)
+fn action_exit_practice(_state: &mut State) -> ThemeEffect {
+    ThemeEffect::Navigate(Screen::SelectMusic)
 }
 
 fn practice_nav_mode() -> PracticeNavMode {

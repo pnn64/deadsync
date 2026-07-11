@@ -1,7 +1,7 @@
 use deadsync_gameplay::gameplay_offset_prompt_choice_delta;
 use deadsync_input::VirtualAction;
-use deadsync_screens::Screen;
 use deadsync_simfile::sync_offset;
+use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
 
 #[derive(Clone, Copy, Debug)]
 pub struct GameplayOffsetSnapshot {

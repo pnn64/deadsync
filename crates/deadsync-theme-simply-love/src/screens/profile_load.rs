@@ -1,7 +1,7 @@
 use crate::act;
 use crate::assets::i18n::tr;
 use crate::assets::{FontRole, current_machine_font_key};
-use crate::screens::{Screen, ScreenAction};
+use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::Actor;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_profile as profile_data;
@@ -79,7 +79,7 @@ pub fn take_prepared_select_course(
     state.prepared_select_course.take()
 }
 
-pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
+pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
     state.elapsed += dt.max(0.0);
 
     if state.prepared_select_music.is_none()
@@ -117,13 +117,13 @@ pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
     if state.elapsed >= MIN_SHOW_SECS
         && (state.prepared_select_music.is_some() || state.prepared_select_course.is_some())
     {
-        return Some(ScreenAction::Navigate(state.next_screen));
+        return Some(ThemeEffect::Navigate(state.next_screen));
     }
     None
 }
 
-pub fn handle_input(_: &mut State, _: &deadsync_input::InputEvent) -> ScreenAction {
-    ScreenAction::None
+pub fn handle_input(_: &mut State, _: &deadsync_input::InputEvent) -> ThemeEffect {
+    ThemeEffect::None
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {

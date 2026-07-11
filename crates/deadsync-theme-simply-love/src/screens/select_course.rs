@@ -10,7 +10,8 @@ use crate::screens::components::{
     },
 };
 use crate::screens::input as screen_input;
-use crate::screens::{Screen, ScreenAction};
+use crate::screens::{Screen, ThemeEffect};
+pub use crate::views::{CourseStagePlan, SelectedCoursePlan};
 use deadlib_present::actors::{Actor, SizeSpec};
 use deadlib_present::cache::{TextCache, cached_text};
 use deadlib_present::color;
@@ -25,7 +26,6 @@ use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
 use deadsync_score as score_data;
-pub use deadsync_screens::{CourseStagePlan, SelectedCoursePlan};
 use deadsync_simfile::course::{
     self, COURSE_RATING_ORDER, CourseEntry, CourseFile, CourseSong, CourseTotals, Difficulty,
     SongSort, StepsSpec, add_chart_totals, course_difficulty_from_meters, course_meter,
@@ -964,11 +964,11 @@ fn music_wheel_update_hold_scroll(state: &mut State, dt: f32, dir: NavDirection)
     }
 }
 
-fn handle_wheel_dir(state: &mut State, dir: PadDir, pressed: bool, ts: Instant) -> ScreenAction {
+fn handle_wheel_dir(state: &mut State, dir: PadDir, pressed: bool, ts: Instant) -> ThemeEffect {
     match (dir, pressed) {
         (PadDir::Left, true) => {
             if state.nav_key_held_direction == Some(NavDirection::Left) {
-                return ScreenAction::None;
+                return ThemeEffect::None;
             }
             music_wheel_change(state, -1);
             state.nav_key_held_direction = Some(NavDirection::Left);
@@ -976,7 +976,7 @@ fn handle_wheel_dir(state: &mut State, dir: PadDir, pressed: bool, ts: Instant) 
         }
         (PadDir::Right, true) => {
             if state.nav_key_held_direction == Some(NavDirection::Right) {
-                return ScreenAction::None;
+                return ThemeEffect::None;
             }
             music_wheel_change(state, 1);
             state.nav_key_held_direction = Some(NavDirection::Right);
@@ -1012,7 +1012,7 @@ fn handle_wheel_dir(state: &mut State, dir: PadDir, pressed: bool, ts: Instant) 
         }
         _ => {}
     }
-    ScreenAction::None
+    ThemeEffect::None
 }
 
 fn handle_rating_dir(
@@ -1021,9 +1021,9 @@ fn handle_rating_dir(
     dir: PadDir,
     pressed: bool,
     timestamp: Instant,
-) -> ScreenAction {
+) -> ThemeEffect {
     if !pressed || !matches!(dir, PadDir::Up | PadDir::Down) {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     let (last_dir, last_time) = match side {
         profile_data::PlayerSide::P1 => (
@@ -1040,17 +1040,17 @@ fn handle_rating_dir(
     {
         *last_dir = Some(dir);
         *last_time = Some(timestamp);
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     *last_dir = None;
     *last_time = None;
 
     let Some(meta) = selected_course_meta(state) else {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     };
     let available = meta.ratings.iter().filter(|r| r.is_some()).count();
     if available <= 1 {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     let current = selected_course_rating_index(state, &meta);
     let next = match dir {
@@ -1068,7 +1068,7 @@ fn handle_rating_dir(
             "assets/sounds/harder.ogg"
         });
     }
-    ScreenAction::None
+    ThemeEffect::None
 }
 
 #[inline(always)]
@@ -1113,13 +1113,13 @@ fn shift_selected_course_rating(state: &mut State, delta: isize) -> bool {
     true
 }
 
-pub fn handle_confirm(state: &mut State) -> ScreenAction {
+pub fn handle_confirm(state: &mut State) -> ThemeEffect {
     if state.out_prompt != OutPromptState::None {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     if state.entries.is_empty() {
         audio::play_sfx("assets/sounds/expand.ogg");
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
@@ -1130,13 +1130,13 @@ pub fn handle_confirm(state: &mut State) -> ScreenAction {
         Some(MusicWheelEntry::Song(_)) => {
             audio::play_sfx("assets/sounds/start.ogg");
             state.out_prompt = OutPromptState::PressStartForOptions { elapsed: 0.0 };
-            ScreenAction::None
+            ThemeEffect::None
         }
-        _ => ScreenAction::None,
+        _ => ThemeEffect::None,
     }
 }
 
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     let three_key_action = screen_input::three_key_menu_action(&mut state.menu_lr_chord, ev);
     if screen_input::dedicated_three_key_nav_enabled()
         && matches!(state.three_key_focus, ThreeKeyFocus::Wheel)
@@ -1174,30 +1174,30 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                         ..
                     } = &mut state.exit_prompt
                     else {
-                        return ScreenAction::None;
+                        return ThemeEffect::None;
                     };
                     let prev = *active_choice;
                     *active_choice = 1 - prev;
                     *switch_from = Some(prev);
                     *switch_elapsed = 0.0;
                     audio::play_sfx("assets/sounds/change.ogg");
-                    ScreenAction::None
+                    ThemeEffect::None
                 }
                 screen_input::ThreeKeyMenuAction::Cancel => {
                     audio::play_sfx("assets/sounds/start.ogg");
                     state.exit_prompt = ExitPromptState::None;
-                    ScreenAction::None
+                    ThemeEffect::None
                 }
                 screen_input::ThreeKeyMenuAction::Confirm => {
                     let ExitPromptState::Active { active_choice, .. } = state.exit_prompt else {
-                        return ScreenAction::None;
+                        return ThemeEffect::None;
                     };
                     audio::play_sfx("assets/sounds/start.ogg");
                     state.exit_prompt = ExitPromptState::None;
                     if active_choice == 1 {
-                        ScreenAction::Navigate(Screen::Menu)
+                        ThemeEffect::Navigate(Screen::Menu)
                     } else {
-                        ScreenAction::None
+                        ThemeEffect::None
                     }
                 }
             };
@@ -1220,7 +1220,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             audio::play_sfx("assets/sounds/start.ogg");
             state.out_prompt = OutPromptState::EnteringOptions { elapsed: 0.0 };
         }
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
 
     if screen_input::dedicated_three_key_nav_enabled() {
@@ -1233,7 +1233,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                         } else {
                             0
                         };
-                        ScreenAction::None
+                        ThemeEffect::None
                     } else {
                         state.menu_lr_undo = 1;
                         handle_wheel_dir(state, PadDir::Left, true, ev.timestamp)
@@ -1246,7 +1246,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                         } else {
                             0
                         };
-                        ScreenAction::None
+                        ThemeEffect::None
                     } else {
                         state.menu_lr_undo = -1;
                         handle_wheel_dir(state, PadDir::Right, true, ev.timestamp)
@@ -1260,7 +1260,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                         clear_wheel_hold(state);
                         state.three_key_focus = ThreeKeyFocus::Rating;
                         audio::play_sfx("assets/sounds/start.ogg");
-                        ScreenAction::None
+                        ThemeEffect::None
                     } else {
                         state.three_key_focus = ThreeKeyFocus::Wheel;
                         handle_confirm(state)
@@ -1275,7 +1275,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                         }
                         state.three_key_focus = ThreeKeyFocus::Wheel;
                         audio::play_sfx("assets/sounds/change.ogg");
-                        ScreenAction::None
+                        ThemeEffect::None
                     } else {
                         if state.menu_lr_undo != 0 {
                             music_wheel_change(state, state.menu_lr_undo as isize);
@@ -1283,7 +1283,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                         }
                         clear_wheel_hold(state);
                         begin_exit_prompt(state);
-                        ScreenAction::None
+                        ThemeEffect::None
                     }
                 }
             };
@@ -1338,9 +1338,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             }
             VirtualAction::p1_back | VirtualAction::p2_back if ev.pressed => {
                 begin_exit_prompt(state);
-                ScreenAction::None
+                ThemeEffect::None
             }
-            _ => ScreenAction::None,
+            _ => ThemeEffect::None,
         };
     }
 
@@ -1369,9 +1369,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             VirtualAction::p1_start if ev.pressed => handle_confirm(state),
             VirtualAction::p1_back if ev.pressed => {
                 begin_exit_prompt(state);
-                ScreenAction::None
+                ThemeEffect::None
             }
-            _ => ScreenAction::None,
+            _ => ThemeEffect::None,
         },
         profile_data::PlayerSide::P2 => match ev.action {
             VirtualAction::p2_left | VirtualAction::p2_menu_left => {
@@ -1397,14 +1397,14 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             VirtualAction::p2_start if ev.pressed => handle_confirm(state),
             VirtualAction::p2_back if ev.pressed => {
                 begin_exit_prompt(state);
-                ScreenAction::None
+                ThemeEffect::None
             }
-            _ => ScreenAction::None,
+            _ => ThemeEffect::None,
         },
     }
 }
 
-pub fn update(state: &mut State, dt: f32) -> ScreenAction {
+pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
     let dt = dt.max(0.0);
 
     match state.out_prompt {
@@ -1412,19 +1412,19 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
             let elapsed = elapsed + dt;
             if elapsed >= SHOW_OPTIONS_MESSAGE_SECONDS {
                 state.out_prompt = OutPromptState::None;
-                return ScreenAction::NavigateNoFade(Screen::Gameplay);
+                return ThemeEffect::NavigateNoFade(Screen::Gameplay);
             }
             state.out_prompt = OutPromptState::PressStartForOptions { elapsed };
-            return ScreenAction::None;
+            return ThemeEffect::None;
         }
         OutPromptState::EnteringOptions { elapsed } => {
             let elapsed = elapsed + dt;
             if elapsed >= ENTERING_OPTIONS_TOTAL_SECONDS {
                 state.out_prompt = OutPromptState::None;
-                return ScreenAction::NavigateNoFade(Screen::PlayerOptions);
+                return ThemeEffect::NavigateNoFade(Screen::PlayerOptions);
             }
             state.out_prompt = OutPromptState::EnteringOptions { elapsed };
-            return ScreenAction::None;
+            return ThemeEffect::None;
         }
         OutPromptState::None => {}
     }
@@ -1485,7 +1485,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         if banner != state.last_requested_banner_path {
             state.last_requested_banner_path.clone_from(&banner);
             state.banner_high_quality_requested = false;
-            return ScreenAction::RequestBanner(banner);
+            return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::RequestBanner(banner));
         }
         if banner.is_some()
             && !state.banner_high_quality_requested
@@ -1493,11 +1493,11 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
             && state.wheel_offset_from_selection.abs() < 0.0001
         {
             state.banner_high_quality_requested = true;
-            return ScreenAction::RequestBanner(banner);
+            return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::RequestBanner(banner));
         }
     }
 
-    ScreenAction::None
+    ThemeEffect::None
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
@@ -2381,12 +2381,12 @@ fn push_exit_prompt_choice(
     ));
 }
 
-fn handle_exit_prompt_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+fn handle_exit_prompt_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     if !ev.pressed {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     let ExitPromptState::Active { active_choice, .. } = state.exit_prompt else {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     };
 
     match ev.action {
@@ -2405,14 +2405,14 @@ fn handle_exit_prompt_input(state: &mut State, ev: &InputEvent) -> ScreenAction 
                 ..
             } = &mut state.exit_prompt
             else {
-                return ScreenAction::None;
+                return ThemeEffect::None;
             };
             let prev = *active_choice;
             *active_choice = 1 - prev;
             *switch_from = Some(prev);
             *switch_elapsed = 0.0;
             audio::play_sfx("assets/sounds/change.ogg");
-            ScreenAction::None
+            ThemeEffect::None
         }
 
         VirtualAction::p1_back
@@ -2421,19 +2421,19 @@ fn handle_exit_prompt_input(state: &mut State, ev: &InputEvent) -> ScreenAction 
         | VirtualAction::p2_select => {
             audio::play_sfx("assets/sounds/start.ogg");
             state.exit_prompt = ExitPromptState::None;
-            ScreenAction::None
+            ThemeEffect::None
         }
 
         VirtualAction::p1_start | VirtualAction::p2_start => {
             audio::play_sfx("assets/sounds/start.ogg");
             state.exit_prompt = ExitPromptState::None;
             if active_choice == 1 {
-                ScreenAction::Navigate(Screen::Menu)
+                ThemeEffect::Navigate(Screen::Menu)
             } else {
-                ScreenAction::None
+                ThemeEffect::None
             }
         }
 
-        _ => ScreenAction::None,
+        _ => ThemeEffect::None,
     }
 }

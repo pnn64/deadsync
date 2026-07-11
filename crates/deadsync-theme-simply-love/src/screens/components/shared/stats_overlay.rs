@@ -1,9 +1,9 @@
 use crate::act;
+use crate::views::{TimingHealth, VisibleStutterSample};
 use deadlib_present::actors::Actor;
 use deadlib_present::cache::{TextCache, cached_text};
 use deadlib_present::space::{screen_height, screen_width};
 use deadlib_render::BackendType;
-use deadsync_screens::diagnostics::{TimingHealth, VisibleStutterSample};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;

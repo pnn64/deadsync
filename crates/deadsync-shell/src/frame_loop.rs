@@ -3,7 +3,7 @@ use deadsync_config::frame_pacing::{
     advance_redraw_deadline, frame_interval_for_max_fps, should_skip_compose_and_draw,
     window_frame_interval_state,
 };
-use deadsync_screens::Screen;
+use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
 use std::time::{Duration, Instant};
 
 const SCHEDULED_REDRAW_POLL_GUARD: Duration = Duration::from_micros(1_000);

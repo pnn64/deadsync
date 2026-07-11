@@ -1,7 +1,7 @@
 use crate::act;
 use crate::assets::i18n::tr;
 use crate::screens::components::shared::{transitions, visual_style_bg};
-use crate::screens::{Screen, ScreenAction};
+use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_height, screen_width};
@@ -212,16 +212,16 @@ fn ease_out_cubic(t: f32) -> f32 {
     1.0 - u * u * u
 }
 
-pub fn handle_input(_state: &mut State, event: &InputEvent) -> ScreenAction {
+pub fn handle_input(_state: &mut State, event: &InputEvent) -> ThemeEffect {
     if !event.pressed {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     match event.action {
         VirtualAction::p1_start
         | VirtualAction::p2_start
         | VirtualAction::p1_back
-        | VirtualAction::p2_back => ScreenAction::NavigateNoFade(Screen::Options),
-        _ => ScreenAction::None,
+        | VirtualAction::p2_back => ThemeEffect::NavigateNoFade(Screen::Options),
+        _ => ThemeEffect::None,
     }
 }
 

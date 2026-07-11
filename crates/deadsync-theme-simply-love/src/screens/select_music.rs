@@ -20,7 +20,7 @@ use crate::screens::components::{
 };
 use crate::screens::pad_config;
 use crate::screens::{
-    DensityGraphSlot, DensityGraphSource, Screen, ScreenAction, input as screen_input,
+    DensityGraphSlot, DensityGraphSource, Screen, ThemeEffect, input as screen_input,
 };
 use deadlib_platform::dirs;
 use deadlib_present::actors::{Actor, SizeSpec, SpriteSource};
@@ -5440,9 +5440,9 @@ fn show_replay_overlay(state: &mut State) {
     clear_preview(state);
 }
 
-fn handle_lobby_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+fn handle_lobby_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     if modal_blocks_arrow(ev.action) {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
 
     match lobby_overlay::handle_input(&mut state.lobby_overlay, ev) {
@@ -5474,14 +5474,14 @@ fn handle_lobby_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenActio
             deadsync_online::lobbies::runtime_leave_lobby_default();
         }
     }
-    ScreenAction::None
+    ThemeEffect::None
 }
 
 fn handle_lobby_overlay_raw_key(
     state: &mut State,
     key: Option<&RawKeyboardEvent>,
     text: Option<&str>,
-) -> ScreenAction {
+) -> ThemeEffect {
     match lobby_overlay::handle_raw_key(&mut state.lobby_overlay, key, text) {
         lobby_overlay::InputOutcome::None => {}
         lobby_overlay::InputOutcome::ChangedSelection => {
@@ -5511,7 +5511,7 @@ fn handle_lobby_overlay_raw_key(
             deadsync_online::lobbies::runtime_leave_lobby_default();
         }
     }
-    ScreenAction::None
+    ThemeEffect::None
 }
 
 #[inline(always)]
@@ -6991,7 +6991,7 @@ fn show_sync_pack_overlay(state: &mut State) {
     });
 }
 
-fn sync_overlay_apply_action(overlay: &ManualSyncOverlayData) -> Option<ScreenAction> {
+fn sync_overlay_apply_action(overlay: &ManualSyncOverlayData) -> Option<ThemeEffect> {
     if !overlay.yes_selected || !manual_sync_has_change(overlay) {
         return None;
     }
@@ -7005,14 +7005,16 @@ fn sync_overlay_apply_action(overlay: &ManualSyncOverlayData) -> Option<ScreenAc
                     delta_seconds,
                 })
                 .collect::<Vec<_>>();
-            (!changes.is_empty()).then_some(ScreenAction::ApplySongOffsetSyncBatch { changes })
+            (!changes.is_empty()).then_some(ThemeEffect::Runtime(
+                crate::SimplyLoveRuntimeRequest::ApplySongOffsetSyncBatch { changes },
+            ))
         }
     }
 }
 
-fn handle_manual_sync_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+fn handle_manual_sync_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     if !ev.pressed {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
 
     let mut close_overlay = false;
@@ -7022,7 +7024,7 @@ fn handle_manual_sync_overlay_input(state: &mut State, ev: &InputEvent) -> Scree
 
     {
         let SyncOverlayState::Manual(overlay) = &mut state.sync_overlay else {
-            return ScreenAction::None;
+            return ThemeEffect::None;
         };
         match ev.action {
             VirtualAction::p1_left
@@ -7082,10 +7084,10 @@ fn handle_manual_sync_overlay_input(state: &mut State, ev: &InputEvent) -> Scree
     if close_overlay {
         hide_sync_overlay(state);
     }
-    apply_action.unwrap_or(ScreenAction::None)
+    apply_action.unwrap_or(ThemeEffect::None)
 }
 
-fn handle_null_or_die_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+fn handle_null_or_die_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     let mut close_overlay = false;
     let mut apply_sync: Option<(PathBuf, f32)> = None;
     let mut play_change = false;
@@ -7094,7 +7096,7 @@ fn handle_null_or_die_overlay_input(state: &mut State, ev: &InputEvent) -> Scree
 
     {
         let SyncOverlayState::NullOrDie(overlay) = &mut state.sync_overlay else {
-            return ScreenAction::None;
+            return ThemeEffect::None;
         };
 
         if !ev.pressed {
@@ -7254,21 +7256,21 @@ fn handle_null_or_die_overlay_input(state: &mut State, ev: &InputEvent) -> Scree
         hide_sync_overlay(state);
     }
     if let Some((simfile_path, delta_seconds)) = apply_sync {
-        return ScreenAction::ApplySongOffsetSync {
+        return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::ApplySongOffsetSync {
             simfile_path,
             delta_seconds,
-        };
+        });
     }
-    ScreenAction::None
+    ThemeEffect::None
 }
 
-fn handle_sync_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+fn handle_sync_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     if modal_blocks_arrow(ev.action) {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
 
     match &state.sync_overlay {
-        SyncOverlayState::Hidden => ScreenAction::None,
+        SyncOverlayState::Hidden => ThemeEffect::None,
         SyncOverlayState::Manual(_) => handle_manual_sync_overlay_input(state, ev),
         SyncOverlayState::NullOrDie(_) => handle_null_or_die_overlay_input(state, ev),
     }
@@ -7305,9 +7307,9 @@ fn switch_single_player_style(state: &mut State, new_style: profile_data::PlaySt
     deadlib_present::runtime::clear_all();
 }
 
-fn handle_leaderboard_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+fn handle_leaderboard_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     if modal_blocks_arrow(ev.action) {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
 
     match select_music_menu::handle_leaderboard_input(&mut state.leaderboard, ev) {
@@ -7320,12 +7322,12 @@ fn handle_leaderboard_input(state: &mut State, ev: &InputEvent) -> ScreenAction 
         select_music_menu::LeaderboardInputOutcome::None => {}
     }
 
-    ScreenAction::None
+    ThemeEffect::None
 }
 
-fn handle_downloads_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+fn handle_downloads_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     if modal_blocks_arrow(ev.action) {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
 
     match select_music_menu::handle_downloads_input(&mut state.downloads_overlay, ev) {
@@ -7338,49 +7340,49 @@ fn handle_downloads_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenA
         select_music_menu::DownloadsInputOutcome::None => {}
     }
 
-    ScreenAction::None
+    ThemeEffect::None
 }
 
-fn handle_replay_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+fn handle_replay_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     if modal_blocks_arrow(ev.action) {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
 
     match select_music_menu::handle_replay_input(&mut state.replay_overlay, ev) {
         select_music_menu::ReplayInputOutcome::ChangedSelection => {
             audio::play_sfx("assets/sounds/change.ogg");
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::ReplayInputOutcome::Closed => {
             audio::play_sfx("assets/sounds/start.ogg");
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::ReplayInputOutcome::StartGameplay(payload) => {
             state.pending_replay = Some(payload);
             state.out_prompt = OutPromptState::None;
             audio::play_sfx("assets/sounds/start.ogg");
-            ScreenAction::Navigate(Screen::Gameplay)
+            ThemeEffect::Navigate(Screen::Gameplay)
         }
-        select_music_menu::ReplayInputOutcome::None => ScreenAction::None,
+        select_music_menu::ReplayInputOutcome::None => ThemeEffect::None,
     }
 }
 
-fn handle_profile_switch_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+fn handle_profile_switch_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     if modal_blocks_arrow(ev.action) {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
 
     let Some(overlay) = &mut state.profile_switch_overlay else {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     };
     match profile_boxes::handle_input(overlay, ev) {
-        ScreenAction::SelectProfiles { p1, p2 } => {
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::SelectProfiles { p1, p2 }) => {
             state.profile_switch_overlay = None;
             state.profile_switch_overlay_is_late_join = false;
             profile::set_fast_profile_switch_from_select_music(true);
-            ScreenAction::SelectProfiles { p1, p2 }
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::SelectProfiles { p1, p2 })
         }
-        ScreenAction::Navigate(_) => {
+        ThemeEffect::Navigate(_) => {
             let was_late_join = state.profile_switch_overlay_is_late_join;
             state.profile_switch_overlay = None;
             state.profile_switch_overlay_is_late_join = false;
@@ -7394,9 +7396,9 @@ fn handle_profile_switch_overlay_input(state: &mut State, ev: &InputEvent) -> Sc
             } else {
                 restore_select_music_menu_after_profile_overlay(state);
             }
-            ScreenAction::None
+            ThemeEffect::None
         }
-        _ => ScreenAction::None,
+        _ => ThemeEffect::None,
     }
 }
 
@@ -7411,7 +7413,7 @@ fn cancel_late_join_session() {
     profile::set_session_play_style(profile_data::PlayStyle::Single);
 }
 
-fn handle_test_input_overlay_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+fn handle_test_input_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     test_input::apply_virtual_input(&mut state.test_input_overlay, ev);
     let close_side = match ev.action {
         VirtualAction::p1_start | VirtualAction::p1_back => Some(profile_data::PlayerSide::P1),
@@ -7422,10 +7424,10 @@ fn handle_test_input_overlay_input(state: &mut State, ev: &InputEvent) -> Screen
         hide_test_input_overlay(state);
         audio::play_sfx("assets/sounds/start.ogg");
     }
-    ScreenAction::None
+    ThemeEffect::None
 }
 
-fn handle_pad_config_overlay_input(state: &mut State, ev: &InputEvent, fine: bool) -> ScreenAction {
+fn handle_pad_config_overlay_input(state: &mut State, ev: &InputEvent, fine: bool) -> ThemeEffect {
     // Start drills into Advanced and Back steps back out of it, all handled
     // inside pad_config. Only a Back at the top (simple) level closes the
     // overlay, and only from a joined side.
@@ -7457,7 +7459,7 @@ fn handle_pad_config_overlay_input(state: &mut State, ev: &InputEvent, fine: boo
             }
         }
     }
-    ScreenAction::None
+    ThemeEffect::None
 }
 
 /// Load the named saved config from `profile_id`, decode it, and write it to the
@@ -7746,25 +7748,25 @@ fn perform_pad_profile_delete(state: &mut State) {
     }
 }
 
-fn handle_select_music_menu_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+fn handle_select_music_menu_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     if modal_blocks_arrow(ev.action) {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
 
     let dir = overlay_nav_dir(ev.action);
     if let Some(dir) = dir {
         if !ev.pressed {
             release_overlay_nav_hold(state, dir);
-            return ScreenAction::None;
+            return ThemeEffect::None;
         }
     } else if !ev.pressed {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     } else {
         clear_overlay_nav_hold(state);
     }
 
     let select_music_menu::State::Visible(ref mut menu_state) = state.select_music_menu else {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     };
 
     let outcome = select_music_menu::handle_input(menu_state, ev);
@@ -7773,14 +7775,14 @@ fn handle_select_music_menu_input(state: &mut State, ev: &InputEvent) -> ScreenA
             if let Some(dir) = dir {
                 start_overlay_nav_hold(state, dir);
             }
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::InputOutcome::Moved => {
             audio::play_sfx("assets/sounds/change.ogg");
             if let Some(dir) = dir {
                 start_overlay_nav_hold(state, dir);
             }
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::InputOutcome::ToggleCategory(toggled_cat) => {
             let lists = build_select_music_menu(state);
@@ -7803,7 +7805,7 @@ fn handle_select_music_menu_input(state: &mut State, ev: &InputEvent) -> ScreenA
                 menu_state.focus_anim_elapsed = select_music_menu::FOCUS_TWEEN_SECONDS;
             }
             audio::play_sfx("assets/sounds/start.ogg");
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::InputOutcome::ActivateAction(action, side) => {
             audio::play_sfx("assets/sounds/start.ogg");
@@ -7812,7 +7814,7 @@ fn handle_select_music_menu_input(state: &mut State, ev: &InputEvent) -> ScreenA
         select_music_menu::InputOutcome::Close => {
             audio::play_sfx("assets/sounds/start.ogg");
             hide_select_music_menu(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
     }
 }
@@ -7821,91 +7823,91 @@ fn dispatch_menu_action(
     state: &mut State,
     action: select_music_menu::Action,
     side: profile_data::PlayerSide,
-) -> ScreenAction {
+) -> ThemeEffect {
     match action {
         select_music_menu::Action::BackToMain => {
             hide_select_music_menu(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::Action::SortByGroup => {
             apply_wheel_sort(state, WheelSortMode::Group);
             hide_select_music_menu(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::Action::SortByTitle => {
             apply_wheel_sort(state, WheelSortMode::Title);
             hide_select_music_menu(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::Action::SortByArtist => {
             apply_wheel_sort(state, WheelSortMode::Artist);
             hide_select_music_menu(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::Action::SortByBpm => {
             apply_wheel_sort(state, WheelSortMode::Bpm);
             hide_select_music_menu(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::Action::SortByLength => {
             apply_wheel_sort(state, WheelSortMode::Length);
             hide_select_music_menu(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::Action::SortByMeter => {
             apply_wheel_sort(state, WheelSortMode::Meter);
             hide_select_music_menu(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::Action::SortByPopularity => {
             apply_wheel_sort(state, WheelSortMode::Popularity);
             hide_select_music_menu(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::Action::SortByRecent => {
             apply_wheel_sort(state, WheelSortMode::Recent);
             hide_select_music_menu(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::Action::SortByGenre => {
             apply_wheel_sort(state, WheelSortMode::Genre);
             hide_select_music_menu(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::Action::SortByTopGrades => {
             apply_wheel_sort(state, WheelSortMode::TopGrades);
             hide_select_music_menu(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::Action::SortByPopularityP1 => {
             apply_wheel_sort(state, WheelSortMode::PopularityP1);
             hide_select_music_menu(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::Action::SortByPopularityP2 => {
             apply_wheel_sort(state, WheelSortMode::PopularityP2);
             hide_select_music_menu(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::Action::SortByRecentP1 => {
             apply_wheel_sort(state, WheelSortMode::RecentP1);
             hide_select_music_menu(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::Action::SortByRecentP2 => {
             apply_wheel_sort(state, WheelSortMode::RecentP2);
             hide_select_music_menu(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::Action::SortByTopGradesP1 => {
             apply_wheel_sort(state, WheelSortMode::TopGradesP1);
             hide_select_music_menu(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::Action::SortByTopGradesP2 => {
             apply_wheel_sort(state, WheelSortMode::TopGradesP2);
             hide_select_music_menu(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::Action::SortByPlaylist(id) => {
             state.active_playlist_id = Some(id);
@@ -7914,7 +7916,7 @@ fn dispatch_menu_action(
             }
             apply_wheel_sort(state, WheelSortMode::Playlist);
             hide_select_music_menu(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::Action::ToggleFavorite => {
             // Toggle favorite for the highlighted song chart or real pack header.
@@ -7949,30 +7951,30 @@ fn dispatch_menu_action(
                 None => {}
             }
             hide_select_music_menu(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::Action::SortByFavorites => {
             apply_wheel_sort(state, WheelSortMode::Favorites);
             hide_select_music_menu(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::Action::SwitchToSingle => {
             switch_single_player_style(state, profile_data::PlayStyle::Single);
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::Action::SwitchToDouble => {
             switch_single_player_style(state, profile_data::PlayStyle::Double);
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::Action::TestInput => {
             hide_select_music_menu(state);
             show_test_input_overlay(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::Action::ConfigurePads => {
             hide_select_music_menu(state);
             show_pad_config_overlay(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::Action::ApplyPadProfile {
             p2, preset, name, ..
@@ -7981,77 +7983,77 @@ fn dispatch_menu_action(
             if apply_pad_profile_recall(state, p2, preset, &name) {
                 audio::play_sfx("assets/sounds/start.ogg");
             }
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::Action::SongSearch => {
             hide_select_music_menu(state);
             start_song_search_prompt(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::Action::SwitchProfile => {
             show_profile_switch_overlay(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::Action::ReloadSongsCourses => {
             hide_select_music_menu(state);
             start_reload_songs_and_courses(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::Action::ShowLobbies => {
             hide_select_music_menu(state);
             show_lobby_overlay(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::Action::ViewDownloads => {
             hide_select_music_menu(state);
             show_downloads_overlay(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::Action::NullOrDiePack => {
             hide_select_music_menu(state);
             pack_sync::show_from_selected(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::Action::SyncSong => {
             hide_select_music_menu(state);
             show_sync_song_overlay(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::Action::SyncPack => {
             hide_select_music_menu(state);
             show_sync_pack_overlay(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::Action::PlayReplay => {
             hide_select_music_menu(state);
             show_replay_overlay(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::Action::PracticeMode => {
             hide_select_music_menu(state);
-            ScreenAction::Navigate(Screen::Practice)
+            ThemeEffect::Navigate(Screen::Practice)
         }
         select_music_menu::Action::ShowLeaderboard => {
             hide_select_music_menu(state);
             show_leaderboard_overlay(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
         select_music_menu::Action::ShowSetSummary => {
             hide_select_music_menu(state);
-            ScreenAction::Navigate(crate::screens::Screen::EvaluationSummary)
+            ThemeEffect::Navigate(crate::screens::Screen::EvaluationSummary)
         }
     }
 }
 
-fn handle_song_search_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+fn handle_song_search_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     if matches!(
         state.song_search,
         select_music_menu::SongSearchState::Hidden
     ) {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     if modal_blocks_arrow(ev.action) {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
 
     if matches!(
@@ -8059,10 +8061,10 @@ fn handle_song_search_input(state: &mut State, ev: &InputEvent) -> ScreenAction 
         select_music_menu::SongSearchState::TextEntry(_)
     ) {
         if ev.source == InputSource::Keyboard {
-            return ScreenAction::None;
+            return ThemeEffect::None;
         }
         if !ev.pressed {
-            return ScreenAction::None;
+            return ThemeEffect::None;
         }
 
         let mut prompt_start = None;
@@ -8087,19 +8089,19 @@ fn handle_song_search_input(state: &mut State, ev: &InputEvent) -> ScreenAction 
         } else if prompt_close {
             cancel_song_search(state);
         }
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
 
     if let Some(dir) = overlay_nav_dir(ev.action) {
         if !ev.pressed {
             release_overlay_nav_hold(state, dir);
-            return ScreenAction::None;
+            return ThemeEffect::None;
         }
 
         if let select_music_menu::SongSearchState::Results(results) = &state.song_search
             && results.input_lock > 0.0
         {
-            return ScreenAction::None;
+            return ThemeEffect::None;
         }
 
         start_overlay_nav_hold(state, dir);
@@ -8108,17 +8110,17 @@ fn handle_song_search_input(state: &mut State, ev: &InputEvent) -> ScreenAction 
         {
             let _ = select_music_menu::song_search_move(results, overlay_nav_delta(dir));
         }
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
 
     if !ev.pressed {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
 
     if let select_music_menu::SongSearchState::Results(results) = &state.song_search
         && results.input_lock > 0.0
     {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
 
     clear_overlay_nav_hold(state);
@@ -8145,7 +8147,7 @@ fn handle_song_search_input(state: &mut State, ev: &InputEvent) -> ScreenAction 
         }
         _ => {}
     }
-    ScreenAction::None
+    ThemeEffect::None
 }
 
 fn collapse_expanded_pack(state: &mut State, pack: String) {
@@ -8171,16 +8173,16 @@ pub fn handle_pad_dir(
     dir: PadDir,
     pressed: bool,
     timestamp: Instant,
-) -> ScreenAction {
+) -> ThemeEffect {
     let exit_code_entered =
         pressed && wheel_lr_dir(dir).is_some_and(|dir| state.exit_code.check(side, dir, timestamp));
 
     #[inline(always)]
-    fn finish(state: &mut State, exit_code_entered: bool) -> ScreenAction {
+    fn finish(state: &mut State, exit_code_entered: bool) -> ThemeEffect {
         if exit_code_entered {
             begin_exit_prompt(state);
         }
-        ScreenAction::None
+        ThemeEffect::None
     }
 
     if pressed {
@@ -8354,9 +8356,9 @@ fn handle_pad_dir_p2(
     dir: PadDir,
     pressed: bool,
     timestamp: Instant,
-) -> ScreenAction {
+) -> ThemeEffect {
     if !(matches!(dir, PadDir::Up | PadDir::Down)) {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     if pressed {
         let is_up = matches!(dir, PadDir::Up);
@@ -8448,17 +8450,17 @@ fn handle_pad_dir_p2(
             _ => {}
         }
     }
-    ScreenAction::None
+    ThemeEffect::None
 }
 
-pub fn handle_confirm(state: &mut State) -> ScreenAction {
+pub fn handle_confirm(state: &mut State) -> ThemeEffect {
     clear_nav_hold(state);
     if state.out_prompt != OutPromptState::None {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     if state.entries.is_empty() {
         audio::play_sfx("assets/sounds/expand.ogg");
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     match state.entries.get(state.selected_index).cloned() {
         Some(MusicWheelEntry::Song(song)) => {
@@ -8475,7 +8477,7 @@ pub fn handle_confirm(state: &mut State) -> ScreenAction {
                 );
             }
             state.out_prompt = OutPromptState::PressStartForOptions { elapsed: 0.0 };
-            ScreenAction::None
+            ThemeEffect::None
         }
         Some(MusicWheelEntry::PackHeader { name, .. }) => {
             audio::play_sfx("assets/sounds/expand.ogg");
@@ -8501,9 +8503,9 @@ pub fn handle_confirm(state: &mut State) -> ScreenAction {
             }
             state.prev_selected_index = state.selected_index;
             state.time_since_selection_change = 0.0;
-            ScreenAction::None
+            ThemeEffect::None
         }
-        None => ScreenAction::None,
+        None => ThemeEffect::None,
     }
 }
 
@@ -8564,7 +8566,7 @@ fn configurable_shortcut_action(
     None
 }
 
-fn handle_mute_hotkey(state: &mut State, key: Option<&RawKeyboardEvent>) -> Option<ScreenAction> {
+fn handle_mute_hotkey(state: &mut State, key: Option<&RawKeyboardEvent>) -> Option<ThemeEffect> {
     let key = key?;
     if key.pressed
         && key.code == KeyCode::KeyM
@@ -8573,7 +8575,7 @@ fn handle_mute_hotkey(state: &mut State, key: Option<&RawKeyboardEvent>) -> Opti
         && preview_hotkey_allowed(state)
     {
         toggle_preview_mute(state);
-        return Some(ScreenAction::ConsumeInput);
+        return Some(ThemeEffect::ConsumeInput);
     }
     None
 }
@@ -8601,7 +8603,7 @@ pub fn handle_raw_key_event(
     state: &mut State,
     key: Option<&RawKeyboardEvent>,
     text: Option<&str>,
-) -> ScreenAction {
+) -> ThemeEffect {
     handle_raw_key_event_impl(state, key, text, false, false)
 }
 
@@ -8611,7 +8613,7 @@ pub fn handle_raw_key_event_with_modifiers(
     text: Option<&str>,
     ctrl_held: bool,
     shift_held: bool,
-) -> ScreenAction {
+) -> ThemeEffect {
     handle_raw_key_event_impl(state, key, text, ctrl_held, shift_held)
 }
 
@@ -8621,9 +8623,9 @@ fn handle_raw_key_event_impl(
     text: Option<&str>,
     ctrl_held: bool,
     shift_held: bool,
-) -> ScreenAction {
+) -> ThemeEffect {
     if state.reload_ui.is_some() {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
 
     if !matches!(
@@ -8634,7 +8636,7 @@ fn handle_raw_key_event_impl(
             pack_sync::hide_overlay(state);
             state.song_search_ignore_next_back_select = true;
         }
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
 
     if !matches!(state.sync_overlay, SyncOverlayState::Hidden) {
@@ -8645,7 +8647,7 @@ fn handle_raw_key_event_impl(
             hide_sync_overlay(state);
             state.song_search_ignore_next_back_select = true;
         }
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
 
     if !matches!(
@@ -8655,9 +8657,9 @@ fn handle_raw_key_event_impl(
         if key.is_some_and(|key| key.pressed && key.code == KeyCode::Escape) {
             state.replay_overlay = select_music_menu::ReplayOverlayState::Hidden;
             state.song_search_ignore_next_back_select = true;
-            return ScreenAction::None;
+            return ThemeEffect::None;
         }
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     if state.pad_config_overlay_visible {
         // While the save name box is open, raw keys type the name (and keyboard
@@ -8692,7 +8694,7 @@ fn handle_raw_key_event_impl(
             }
             // Consume so this key isn't ALSO mapped to a virtual action and
             // re-processed (which would leak Enter/Back through to the pad UI).
-            return ScreenAction::ConsumeInput;
+            return ThemeEffect::ConsumeInput;
         }
         // Profiles management list: navigation / apply / set-default come through
         // virtual actions (handled in apply_edit); rename and delete are
@@ -8704,33 +8706,33 @@ fn handle_raw_key_event_impl(
                 match k.code {
                     KeyCode::KeyR => {
                         pad_config::begin_rename(&mut state.pad_config_overlay);
-                        return ScreenAction::ConsumeInput;
+                        return ThemeEffect::ConsumeInput;
                     }
                     KeyCode::Delete => {
                         if pad_config::delete_key(&mut state.pad_config_overlay) {
                             perform_pad_profile_delete(state);
                         }
-                        return ScreenAction::ConsumeInput;
+                        return ThemeEffect::ConsumeInput;
                     }
                     KeyCode::KeyO => {
                         perform_pad_profile_overwrite(state);
-                        return ScreenAction::ConsumeInput;
+                        return ThemeEffect::ConsumeInput;
                     }
                     _ => {}
                 }
             }
-            return ScreenAction::None;
+            return ThemeEffect::None;
         }
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     if state.test_input_overlay_visible {
         if let Some(key) = key {
             test_input::apply_raw_key_event(&mut state.test_input_overlay, key);
         }
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     if state.profile_switch_overlay.is_some() {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     if !matches!(state.lobby_overlay, lobby_overlay::OverlayState::Hidden) {
         return handle_lobby_overlay_raw_key(state, key, text);
@@ -8741,7 +8743,7 @@ fn handle_raw_key_event_impl(
     }
 
     if select_music_lobby_lock_text(state).is_some() {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
 
     if key.is_some_and(|key| key.pressed) {
@@ -8751,7 +8753,7 @@ fn handle_raw_key_event_impl(
         ) && key.is_some_and(|key| key.code == KeyCode::Escape)
         {
             cancel_song_search(state);
-            return ScreenAction::ConsumeInput;
+            return ThemeEffect::ConsumeInput;
         }
         let mut prompt_start: Option<String> = None;
         let mut prompt_close = false;
@@ -8765,7 +8767,7 @@ fn handle_raw_key_event_impl(
                 match code {
                     KeyCode::Backspace => {
                         select_music_menu::song_search_backspace(entry);
-                        return ScreenAction::ConsumeInput;
+                        return ThemeEffect::ConsumeInput;
                     }
                     KeyCode::Escape => {
                         prompt_close = true;
@@ -8787,36 +8789,36 @@ fn handle_raw_key_event_impl(
 
             if let Some(search_text) = prompt_start {
                 start_song_search_results(state, search_text);
-                return ScreenAction::ConsumeInput;
+                return ThemeEffect::ConsumeInput;
             }
             if prompt_close {
                 cancel_song_search(state);
-                return ScreenAction::ConsumeInput;
+                return ThemeEffect::ConsumeInput;
             }
-            return ScreenAction::None;
+            return ThemeEffect::None;
         }
     } else if key.is_none()
         && let Some(text) = text
     {
         if take_song_search_ignored_text(state) {
-            return ScreenAction::None;
+            return ThemeEffect::None;
         }
         if let select_music_menu::SongSearchState::TextEntry(entry) = &mut state.song_search {
             select_music_menu::song_search_add_text(entry, text);
-            return ScreenAction::None;
+            return ThemeEffect::None;
         }
     }
 
     if !key.is_some_and(|key| key.pressed) {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     if let Some(action) = configurable_shortcut_action(state, key) {
         let ignore_open_text = matches!(action, select_music_menu::Action::SongSearch);
         // Consume the key even when the dispatched action itself reports
-        // ScreenAction::None, so a successful raw shortcut stays single-action.
+        // ThemeEffect::None, so a successful raw shortcut stays single-action.
         let side = profile::get_session_player_side();
         let action = match dispatch_menu_action(state, action, side) {
-            ScreenAction::None => ScreenAction::ConsumeInput,
+            ThemeEffect::None => ThemeEffect::ConsumeInput,
             other => other,
         };
         if ignore_open_text
@@ -8839,7 +8841,7 @@ fn handle_raw_key_event_impl(
         && !key_bound_to_player_input(key)
         && reload_selected_song(state)
     {
-        return ScreenAction::ConsumeInput;
+        return ThemeEffect::ConsumeInput;
     }
     if let Some(key) = key
         && key.code == KeyCode::F7
@@ -8850,10 +8852,12 @@ fn handle_raw_key_event_impl(
             && let Some(chart) =
                 song.chart_for_steps_index(target_chart_type, state.selected_steps_index)
         {
-            return ScreenAction::FetchOnlineGrade(chart.short_hash.clone());
+            return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::FetchOnlineGrade(
+                chart.short_hash.clone(),
+            ));
         }
     }
-    ScreenAction::None
+    ThemeEffect::None
 }
 
 pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
@@ -8863,7 +8867,7 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
     test_input::apply_raw_pad_event(&mut state.test_input_overlay, pad_event);
 }
 
-pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ScreenAction {
+pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ThemeEffect {
     update_select_hold_state(state, ev);
 
     // The Configure Pads overlay is a focused modal: handle its input first, so
@@ -8874,7 +8878,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ScreenAct
     }
 
     if state.reload_ui.is_some() {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
 
     if state.out_prompt != OutPromptState::None {
@@ -8888,7 +8892,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ScreenAct
             audio::play_sfx("assets/sounds/start.ogg");
             state.out_prompt = OutPromptState::EnteringOptions { elapsed: 0.0 };
         }
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
 
     if matches!(
@@ -8905,7 +8909,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ScreenAct
         ) {
             state.song_search_ignore_next_back_select = false;
             if ev.pressed {
-                return ScreenAction::None;
+                return ThemeEffect::None;
             }
         } else if ev.pressed {
             state.song_search_ignore_next_back_select = false;
@@ -8973,7 +8977,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ScreenAct
             }
             _ => {}
         }
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
 
     if state.exit_prompt != ExitPromptState::None {
@@ -9005,7 +9009,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ScreenAct
     if play_style == profile_data::PlayStyle::Versus {
         return match ev.action {
             action if direct_lr_blocked_by_dedicated_menu(action, only_dedicated_menu_buttons) => {
-                ScreenAction::None
+                ThemeEffect::None
             }
             VirtualAction::p1_left | VirtualAction::p1_menu_left => handle_pad_dir(
                 state,
@@ -9041,14 +9045,14 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ScreenAct
                     state.p1_select_held,
                     ev.pressed,
                 ) {
-                    ScreenAction::None
+                    ThemeEffect::None
                 } else {
                     handle_confirm(state)
                 }
             }
             VirtualAction::p1_back if ev.pressed => {
                 begin_exit_prompt(state);
-                ScreenAction::None
+                ThemeEffect::None
             }
 
             VirtualAction::p2_left | VirtualAction::p2_menu_left => handle_pad_dir(
@@ -9077,23 +9081,23 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ScreenAct
                     state.p2_select_held,
                     ev.pressed,
                 ) {
-                    ScreenAction::None
+                    ThemeEffect::None
                 } else {
                     handle_confirm(state)
                 }
             }
             VirtualAction::p2_back if ev.pressed => {
                 begin_exit_prompt(state);
-                ScreenAction::None
+                ThemeEffect::None
             }
-            _ => ScreenAction::None,
+            _ => ThemeEffect::None,
         };
     }
 
     match deadsync_profile::compat::get_session_player_side() {
         profile_data::PlayerSide::P2 => match ev.action {
             action if direct_lr_blocked_by_dedicated_menu(action, only_dedicated_menu_buttons) => {
-                ScreenAction::None
+                ThemeEffect::None
             }
             VirtualAction::p2_left | VirtualAction::p2_menu_left => handle_pad_dir(
                 state,
@@ -9121,20 +9125,20 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ScreenAct
                     state.p2_select_held,
                     ev.pressed,
                 ) {
-                    ScreenAction::None
+                    ThemeEffect::None
                 } else {
                     handle_confirm(state)
                 }
             }
             VirtualAction::p2_back if ev.pressed => {
                 begin_exit_prompt(state);
-                ScreenAction::None
+                ThemeEffect::None
             }
-            _ => ScreenAction::None,
+            _ => ThemeEffect::None,
         },
         profile_data::PlayerSide::P1 => match ev.action {
             action if direct_lr_blocked_by_dedicated_menu(action, only_dedicated_menu_buttons) => {
-                ScreenAction::None
+                ThemeEffect::None
             }
             VirtualAction::p1_left | VirtualAction::p1_menu_left => handle_pad_dir(
                 state,
@@ -9170,21 +9174,21 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ScreenAct
                     state.p1_select_held,
                     ev.pressed,
                 ) {
-                    ScreenAction::None
+                    ThemeEffect::None
                 } else {
                     handle_confirm(state)
                 }
             }
             VirtualAction::p1_back if ev.pressed => {
                 begin_exit_prompt(state);
-                ScreenAction::None
+                ThemeEffect::None
             }
-            _ => ScreenAction::None,
+            _ => ThemeEffect::None,
         },
     }
 }
 
-pub fn update(state: &mut State, dt: f32) -> ScreenAction {
+pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
     deadsync_online::lobbies::runtime_poll_reconnect_default();
 
     let lobby_locked = select_music_lobby_lock_text(state).is_some();
@@ -9225,16 +9229,16 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
             state.reload_ui = None;
             refresh_after_reload(state);
         }
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
 
     if select_music_menu::update_song_search(&mut state.song_search, dt) {
         update_overlay_nav_hold(state);
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     lobby_overlay::update_overlay(&mut state.lobby_overlay, dt);
     if pack_sync::poll(state) {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     if let SyncOverlayState::NullOrDie(overlay) = &mut state.sync_overlay {
         poll_null_or_die_overlay(overlay);
@@ -9242,22 +9246,22 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         if outcome.play_hold_sfx {
             audio::play_sfx("assets/sounds/change.ogg");
         }
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     if matches!(state.sync_overlay, SyncOverlayState::Manual(_)) {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     if select_music_menu::update_replay_overlay(&mut state.replay_overlay, dt) {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     if let Some(overlay) = state.profile_switch_overlay.as_mut() {
         profile_boxes::update(overlay, dt);
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     let reload_dirs = deadsync_online::runtime::take_ready_song_reload_request();
     if !reload_dirs.is_empty() {
         start_reload_song_dirs(state, reload_dirs);
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
 
     match state.out_prompt {
@@ -9265,19 +9269,19 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
             let elapsed = elapsed + dt.max(0.0);
             if elapsed >= SHOW_OPTIONS_MESSAGE_SECONDS {
                 state.out_prompt = OutPromptState::None;
-                return ScreenAction::NavigateNoFade(Screen::Gameplay);
+                return ThemeEffect::NavigateNoFade(Screen::Gameplay);
             }
             state.out_prompt = OutPromptState::PressStartForOptions { elapsed };
-            return ScreenAction::None;
+            return ThemeEffect::None;
         }
         OutPromptState::EnteringOptions { elapsed } => {
             let elapsed = elapsed + dt.max(0.0);
             if elapsed >= ENTERING_OPTIONS_TOTAL_SECONDS {
                 state.out_prompt = OutPromptState::None;
-                return ScreenAction::NavigateNoFade(Screen::PlayerOptions);
+                return ThemeEffect::NavigateNoFade(Screen::PlayerOptions);
             }
             state.out_prompt = OutPromptState::EnteringOptions { elapsed };
-            return ScreenAction::None;
+            return ThemeEffect::None;
         }
         OutPromptState::None => {}
     }
@@ -9436,7 +9440,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
     if state.last_requested_banner_path != new_banner {
         state.last_requested_banner_path.clone_from(&new_banner);
         state.banner_high_quality_requested = false;
-        return ScreenAction::RequestBanner(new_banner);
+        return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::RequestBanner(new_banner));
     }
     if new_banner.is_some()
         && !state.banner_high_quality_requested
@@ -9444,7 +9448,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         && state.wheel_offset_from_selection.abs() < 0.0001
     {
         state.banner_high_quality_requested = true;
-        return ScreenAction::RequestBanner(new_banner);
+        return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::RequestBanner(new_banner));
     }
     if state.last_requested_cdtitle_path != new_cdtitle {
         if new_cdtitle.is_some() {
@@ -9452,23 +9456,27 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
             state.cdtitle_anim_elapsed = 0.0;
         }
         state.last_requested_cdtitle_path.clone_from(&new_cdtitle);
-        return ScreenAction::RequestCdTitle(new_cdtitle);
+        return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::RequestCdTitle(new_cdtitle));
     }
     if state.last_requested_folder_stats_banner_path != new_folder_stats_banner {
         state
             .last_requested_folder_stats_banner_path
             .clone_from(&new_folder_stats_banner);
-        return ScreenAction::RequestPackBanner(new_folder_stats_banner);
+        return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::RequestPackBanner(
+            new_folder_stats_banner,
+        ));
     }
     if state.last_requested_wheel_item_bg_paths != new_wheel_item_bg_paths {
         state
             .last_requested_wheel_item_bg_paths
             .clone_from(&new_wheel_item_bg_paths);
-        return ScreenAction::RequestWheelItemBackgrounds(new_wheel_item_bg_paths);
+        return ThemeEffect::Runtime(
+            crate::SimplyLoveRuntimeRequest::RequestWheelItemBackgrounds(new_wheel_item_bg_paths),
+        );
     }
 
     if overlays_block_delayed_updates {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
 
     // --- Delayed Updates ---
@@ -9518,19 +9526,21 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
 
             if state.last_requested_chart_hash.as_deref() != desired_hash_p1 {
                 state.last_requested_chart_hash = desired_hash_p1.map(str::to_string);
-                return ScreenAction::RequestDensityGraph {
-                    slot: DensityGraphSlot::SelectMusicP1,
-                    chart_opt: state.cached_chart_ix_p1.map(|ix| {
-                        let c = &song.charts[ix];
-                        DensityGraphSource {
-                            max_nps: c.max_nps,
-                            measure_nps_vec: c.measure_nps_vec.clone(),
-                            measure_seconds_vec: c.measure_seconds_vec.clone(),
-                            first_second: c.first_second,
-                            last_second: song.precise_last_second(),
-                        }
-                    }),
-                };
+                return ThemeEffect::Runtime(
+                    crate::SimplyLoveRuntimeRequest::RequestDensityGraph {
+                        slot: DensityGraphSlot::SelectMusicP1,
+                        chart_opt: state.cached_chart_ix_p1.map(|ix| {
+                            let c = &song.charts[ix];
+                            DensityGraphSource {
+                                max_nps: c.max_nps,
+                                measure_nps_vec: c.measure_nps_vec.clone(),
+                                measure_seconds_vec: c.measure_seconds_vec.clone(),
+                                first_second: c.first_second,
+                                last_second: song.precise_last_second(),
+                            }
+                        }),
+                    },
+                );
             }
 
             if is_versus {
@@ -9558,19 +9568,21 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
                 }
                 if state.last_requested_chart_hash_p2.as_deref() != desired_hash_p2 {
                     state.last_requested_chart_hash_p2 = desired_hash_p2.map(str::to_string);
-                    return ScreenAction::RequestDensityGraph {
-                        slot: DensityGraphSlot::SelectMusicP2,
-                        chart_opt: state.cached_chart_ix_p2.map(|ix| {
-                            let c = &song.charts[ix];
-                            DensityGraphSource {
-                                max_nps: c.max_nps,
-                                measure_nps_vec: c.measure_nps_vec.clone(),
-                                measure_seconds_vec: c.measure_seconds_vec.clone(),
-                                first_second: c.first_second,
-                                last_second: song.precise_last_second(),
-                            }
-                        }),
-                    };
+                    return ThemeEffect::Runtime(
+                        crate::SimplyLoveRuntimeRequest::RequestDensityGraph {
+                            slot: DensityGraphSlot::SelectMusicP2,
+                            chart_opt: state.cached_chart_ix_p2.map(|ix| {
+                                let c = &song.charts[ix];
+                                DensityGraphSource {
+                                    max_nps: c.max_nps,
+                                    measure_nps_vec: c.measure_nps_vec.clone(),
+                                    measure_seconds_vec: c.measure_seconds_vec.clone(),
+                                    first_second: c.first_second,
+                                    last_second: song.precise_last_second(),
+                                }
+                            }),
+                        },
+                    );
                 }
             } else {
                 state.displayed_chart_p2 = None;
@@ -9598,7 +9610,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
         }
     }
 
-    ScreenAction::None
+    ThemeEffect::None
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
@@ -11748,12 +11760,12 @@ fn push_exit_prompt_choice(
     ));
 }
 
-fn handle_exit_prompt_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+fn handle_exit_prompt_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     if !ev.pressed {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     let ExitPromptState::Active { active_choice, .. } = state.exit_prompt else {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     };
 
     match ev.action {
@@ -11772,14 +11784,14 @@ fn handle_exit_prompt_input(state: &mut State, ev: &InputEvent) -> ScreenAction 
                 ..
             } = &mut state.exit_prompt
             else {
-                return ScreenAction::None;
+                return ThemeEffect::None;
             };
             let prev = *active_choice;
             *active_choice = 1 - prev;
             *switch_from = Some(prev);
             *switch_elapsed = 0.0;
             audio::play_sfx("assets/sounds/change.ogg");
-            ScreenAction::None
+            ThemeEffect::None
         }
 
         VirtualAction::p1_back
@@ -11788,20 +11800,20 @@ fn handle_exit_prompt_input(state: &mut State, ev: &InputEvent) -> ScreenAction 
         | VirtualAction::p2_select => {
             audio::play_sfx("assets/sounds/start.ogg");
             state.exit_prompt = ExitPromptState::None;
-            ScreenAction::None
+            ThemeEffect::None
         }
 
         VirtualAction::p1_start | VirtualAction::p2_start => {
             audio::play_sfx("assets/sounds/start.ogg");
             state.exit_prompt = ExitPromptState::None;
             if active_choice == 1 {
-                ScreenAction::Navigate(Screen::Menu)
+                ThemeEffect::Navigate(Screen::Menu)
             } else {
-                ScreenAction::None
+                ThemeEffect::None
             }
         }
 
-        _ => ScreenAction::None,
+        _ => ThemeEffect::None,
     }
 }
 
@@ -11816,7 +11828,7 @@ mod tests {
         steps_index_for_side, sync_low_confidence_warning,
     };
     use crate::config::SelectMusicWheelStyle;
-    use crate::screens::ScreenAction;
+    use crate::screens::ThemeEffect;
     use deadsync_chart::SongData;
     use deadsync_core::input::InputSource;
     use deadsync_input::RawKeyboardEvent;
@@ -12095,7 +12107,10 @@ mod tests {
 
         let action = super::update(&mut state, 0.016);
 
-        assert!(matches!(action, ScreenAction::RequestBanner(Some(_))));
+        assert!(matches!(
+            action,
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::RequestBanner(Some(_)))
+        ));
         assert_eq!(state.currently_playing_preview_path, None);
         assert_eq!(state.currently_playing_preview_start_sec, None);
         assert_eq!(state.currently_playing_preview_length_sec, None);
@@ -12516,7 +12531,7 @@ mod tests {
         let action =
             handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyM, true, false)), None);
 
-        assert!(matches!(action, ScreenAction::ConsumeInput));
+        assert!(matches!(action, ThemeEffect::ConsumeInput));
         assert!(state.preview_music_muted);
         assert_eq!(state.currently_playing_preview_path, None);
         assert_eq!(state.currently_playing_preview_start_sec, None);
@@ -12525,7 +12540,7 @@ mod tests {
         let action =
             handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyM, true, false)), None);
 
-        assert!(matches!(action, ScreenAction::ConsumeInput));
+        assert!(matches!(action, ThemeEffect::ConsumeInput));
         assert!(!state.preview_music_muted);
         assert_eq!(state.time_since_selection_change, PREVIEW_DELAY_SECONDS);
     }
@@ -12561,7 +12576,7 @@ mod tests {
             let action =
                 handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyM, true, false)), None);
 
-            assert!(matches!(action, ScreenAction::ConsumeInput));
+            assert!(matches!(action, ThemeEffect::ConsumeInput));
             assert!(state.preview_music_muted);
             assert_eq!(state.currently_playing_preview_path, None);
             assert_eq!(state.currently_playing_preview_start_sec, None);
@@ -12574,20 +12589,20 @@ mod tests {
         let mut state = init_placeholder();
         let action =
             handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyM, true, true)), None);
-        assert!(matches!(action, ScreenAction::None));
+        assert!(matches!(action, ThemeEffect::None));
         assert!(!state.preview_music_muted);
 
         state.song_search = super::select_music_menu::begin_song_search_prompt();
         let action =
             handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyM, true, false)), None);
-        assert!(matches!(action, ScreenAction::None));
+        assert!(matches!(action, ThemeEffect::None));
         assert!(!state.preview_music_muted);
 
         let mut state = init_placeholder();
         state.lobby_overlay = super::lobby_overlay::show_overlay();
         let action =
             handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyM, true, false)), None);
-        assert!(matches!(action, ScreenAction::None));
+        assert!(matches!(action, ThemeEffect::None));
         assert!(!state.preview_music_muted);
 
         let mut state = init_placeholder();
@@ -12595,7 +12610,7 @@ mod tests {
             super::select_music_menu::State::Visible(super::select_music_menu::open());
         let action =
             handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyM, true, false)), None);
-        assert!(matches!(action, ScreenAction::None));
+        assert!(matches!(action, ThemeEffect::None));
         assert!(!state.preview_music_muted);
     }
 
@@ -12604,7 +12619,7 @@ mod tests {
         let mut state = init_placeholder();
         let action =
             handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyS, true, false)), None);
-        assert!(matches!(action, ScreenAction::ConsumeInput));
+        assert!(matches!(action, ThemeEffect::ConsumeInput));
         assert!(!matches!(
             state.song_search,
             super::select_music_menu::SongSearchState::Hidden
@@ -12616,14 +12631,14 @@ mod tests {
         let mut state = init_placeholder();
         let action =
             handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyS, true, false)), None);
-        assert!(matches!(action, ScreenAction::ConsumeInput));
+        assert!(matches!(action, ThemeEffect::ConsumeInput));
 
         let action = handle_raw_key_event(&mut state, None, Some("s"));
-        assert!(matches!(action, ScreenAction::None));
+        assert!(matches!(action, ThemeEffect::None));
         assert_eq!(song_search_query(&state), Some(""));
 
         let action = handle_raw_key_event(&mut state, None, Some("abc"));
-        assert!(matches!(action, ScreenAction::None));
+        assert!(matches!(action, ThemeEffect::None));
         assert_eq!(song_search_query(&state), Some("abc"));
     }
 
@@ -12633,7 +12648,7 @@ mod tests {
         state.song_search = super::select_music_menu::begin_song_search_prompt();
 
         let action = handle_raw_key_event(&mut state, None, Some("n"));
-        assert!(matches!(action, ScreenAction::None));
+        assert!(matches!(action, ThemeEffect::None));
         assert_eq!(song_search_query(&state), Some("n"));
 
         let action = super::handle_input(
@@ -12641,7 +12656,7 @@ mod tests {
             &input_event(VirtualAction::p2_start, InputSource::Keyboard, true),
             false,
         );
-        assert!(matches!(action, ScreenAction::None));
+        assert!(matches!(action, ThemeEffect::None));
         assert_eq!(song_search_query(&state), Some("n"));
     }
 
@@ -12651,7 +12666,7 @@ mod tests {
         state.song_search = super::select_music_menu::begin_song_search_prompt();
 
         let action = handle_raw_key_event(&mut state, None, Some("abc"));
-        assert!(matches!(action, ScreenAction::None));
+        assert!(matches!(action, ThemeEffect::None));
 
         for action in [VirtualAction::p1_back, VirtualAction::p2_select] {
             let screen_action = super::handle_input(
@@ -12659,7 +12674,7 @@ mod tests {
                 &input_event(action, InputSource::Keyboard, true),
                 false,
             );
-            assert!(matches!(screen_action, ScreenAction::None));
+            assert!(matches!(screen_action, ThemeEffect::None));
             assert_eq!(song_search_query(&state), Some("abc"));
         }
     }
@@ -12670,25 +12685,25 @@ mod tests {
         state.song_search = super::select_music_menu::begin_song_search_prompt();
 
         let action = handle_raw_key_event(&mut state, None, Some("song"));
-        assert!(matches!(action, ScreenAction::None));
+        assert!(matches!(action, ThemeEffect::None));
         let action = super::handle_input(
             &mut state,
             &input_event(VirtualAction::p1_start, InputSource::Gamepad, true),
             false,
         );
-        assert!(matches!(action, ScreenAction::None));
+        assert!(matches!(action, ThemeEffect::None));
         assert_eq!(song_search_results_text(&state), Some("song"));
 
         let mut state = init_placeholder();
         state.song_search = super::select_music_menu::begin_song_search_prompt();
         let action = handle_raw_key_event(&mut state, None, Some("song"));
-        assert!(matches!(action, ScreenAction::None));
+        assert!(matches!(action, ThemeEffect::None));
         let action = super::handle_input(
             &mut state,
             &input_event(VirtualAction::p2_back, InputSource::Gamepad, true),
             false,
         );
-        assert!(matches!(action, ScreenAction::None));
+        assert!(matches!(action, ThemeEffect::None));
         assert!(matches!(
             state.song_search,
             super::select_music_menu::SongSearchState::Hidden
@@ -12700,25 +12715,25 @@ mod tests {
         let mut state = init_placeholder();
         state.song_search = super::select_music_menu::begin_song_search_prompt();
         let action = handle_raw_key_event(&mut state, None, Some("song"));
-        assert!(matches!(action, ScreenAction::None));
+        assert!(matches!(action, ThemeEffect::None));
         let action = handle_raw_key_event(
             &mut state,
             Some(&raw_key(KeyCode::Enter, true, false)),
             None,
         );
-        assert!(matches!(action, ScreenAction::ConsumeInput));
+        assert!(matches!(action, ThemeEffect::ConsumeInput));
         assert_eq!(song_search_results_text(&state), Some("song"));
 
         let mut state = init_placeholder();
         state.song_search = super::select_music_menu::begin_song_search_prompt();
         let action = handle_raw_key_event(&mut state, None, Some("song"));
-        assert!(matches!(action, ScreenAction::None));
+        assert!(matches!(action, ThemeEffect::None));
         let action = handle_raw_key_event(
             &mut state,
             Some(&raw_key(KeyCode::Escape, true, false)),
             None,
         );
-        assert!(matches!(action, ScreenAction::ConsumeInput));
+        assert!(matches!(action, ThemeEffect::ConsumeInput));
         assert!(matches!(
             state.song_search,
             super::select_music_menu::SongSearchState::Hidden
@@ -12731,7 +12746,7 @@ mod tests {
             Some(&raw_key(KeyCode::Escape, true, false)),
             None,
         );
-        assert!(matches!(action, ScreenAction::ConsumeInput));
+        assert!(matches!(action, ThemeEffect::ConsumeInput));
         assert!(matches!(
             state.song_search,
             super::select_music_menu::SongSearchState::Hidden
@@ -12740,13 +12755,13 @@ mod tests {
         let mut state = init_placeholder();
         state.song_search = super::select_music_menu::begin_song_search_prompt();
         let action = handle_raw_key_event(&mut state, None, Some("ab"));
-        assert!(matches!(action, ScreenAction::None));
+        assert!(matches!(action, ThemeEffect::None));
         let action = handle_raw_key_event(
             &mut state,
             Some(&raw_key(KeyCode::Backspace, true, false)),
             None,
         );
-        assert!(matches!(action, ScreenAction::ConsumeInput));
+        assert!(matches!(action, ThemeEffect::ConsumeInput));
         assert_eq!(song_search_query(&state), Some("a"));
     }
 
@@ -12771,7 +12786,7 @@ mod tests {
         let mut state = init_placeholder();
         let action =
             handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyT, true, false)), None);
-        assert!(matches!(action, ScreenAction::ConsumeInput));
+        assert!(matches!(action, ThemeEffect::ConsumeInput));
         assert!(state.test_input_overlay_visible);
     }
 
@@ -12785,7 +12800,7 @@ mod tests {
             handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyP, true, false)), None);
         assert!(!matches!(
             action,
-            ScreenAction::Navigate(super::Screen::Practice)
+            ThemeEffect::Navigate(super::Screen::Practice)
         ));
 
         // With a song selected: the Practice shortcut navigates to Practice.
@@ -12796,7 +12811,7 @@ mod tests {
             handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyP, true, false)), None);
         assert!(matches!(
             action,
-            ScreenAction::Navigate(super::Screen::Practice)
+            ThemeEffect::Navigate(super::Screen::Practice)
         ));
     }
 
@@ -12806,7 +12821,7 @@ mod tests {
         let mut state = init_placeholder();
         let action =
             handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyS, true, true)), None);
-        assert!(matches!(action, ScreenAction::None));
+        assert!(matches!(action, ThemeEffect::None));
         assert!(matches!(
             state.song_search,
             super::select_music_menu::SongSearchState::Hidden
@@ -12822,7 +12837,7 @@ mod tests {
             state.song_search,
             super::select_music_menu::SongSearchState::Hidden
         ));
-        assert!(!matches!(action, ScreenAction::ConsumeInput));
+        assert!(!matches!(action, ThemeEffect::ConsumeInput));
 
         // The shortcut is suppressed while the exit prompt is showing.
         let mut state = init_placeholder();
@@ -12838,7 +12853,7 @@ mod tests {
             state.song_search,
             super::select_music_menu::SongSearchState::Hidden
         ));
-        assert!(!matches!(action, ScreenAction::ConsumeInput));
+        assert!(!matches!(action, ThemeEffect::ConsumeInput));
     }
 
     #[test]

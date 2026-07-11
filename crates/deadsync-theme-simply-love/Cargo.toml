@@ -33,7 +33,6 @@ deadsync-profile = { path = "../deadsync-profile" }
 deadsync-profile-gameplay = { path = "../deadsync-profile-gameplay" }
 deadsync-rules = { path = "../deadsync-rules" }
 deadsync-score = { path = "../deadsync-score" }
-deadsync-screens = { path = "../deadsync-screens" }
 deadsync-simfile = { path = "../deadsync-simfile" }
 deadsync-smx = { path = "../deadsync-smx" }
 deadsync-song-lua = { path = "../deadsync-song-lua" }

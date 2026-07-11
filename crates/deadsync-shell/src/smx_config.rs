@@ -1,8 +1,8 @@
 use deadsync_config::prelude::SmxPadPreset;
 use deadsync_profile::pad_config;
 use deadsync_profile::pad_config_sync::AppliedPadConfig;
-use deadsync_screens::Screen;
 use deadsync_smx::SmxInfo;
+use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SmxAssignmentSource {

@@ -3,15 +3,15 @@ use crate::assets::i18n::tr;
 use crate::assets::{FontRole, current_machine_font_key_for_text};
 use crate::config;
 use crate::screens::components::shared::{transitions, visual_style_bg};
-use crate::screens::{Screen, ScreenAction};
+use crate::screens::overscan::{
+    Action as OverscanAction, Adjustment, Field, State as OverscanState, Values,
+};
+use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space;
 use deadlib_present::space::{screen_center_x, screen_height, screen_width};
 use deadsync_input::{InputEvent, RawKeyboardEvent};
-use deadsync_screens::overscan::{
-    Action as OverscanAction, Adjustment, Field, State as OverscanState, Values,
-};
 use winit::keyboard::KeyCode;
 
 const TRANSITION_IN_DURATION: f32 = 0.4;
@@ -33,7 +33,7 @@ struct FieldInfo {
     color: [f32; 3],
 }
 
-const FIELDS: [FieldInfo; deadsync_screens::overscan::FIELD_COUNT] = [
+const FIELDS: [FieldInfo; crate::screens::overscan::FIELD_COUNT] = [
     FieldInfo {
         field: Field::AddHeight,
         label_key: "AddHeight",
@@ -90,7 +90,7 @@ pub fn on_enter(state: &mut State) {
     apply_preview(values);
 }
 
-pub fn update(_state: &mut State, _dt: f32) -> Option<ScreenAction> {
+pub fn update(_state: &mut State, _dt: f32) -> Option<ThemeEffect> {
     None
 }
 
@@ -110,7 +110,7 @@ pub fn handle_raw_key_event(state: &mut State, ev: &RawKeyboardEvent) -> bool {
         _ => return false,
     };
     if ev.pressed {
-        apply_preview(deadsync_screens::overscan::apply_adjustment(
+        apply_preview(crate::screens::overscan::apply_adjustment(
             &mut state.edit,
             adjustment,
         ));
@@ -118,12 +118,12 @@ pub fn handle_raw_key_event(state: &mut State, ev: &RawKeyboardEvent) -> bool {
     true
 }
 
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
-    match deadsync_screens::overscan::handle_input(&mut state.edit, ev) {
-        OverscanAction::None => ScreenAction::None,
+pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
+    match crate::screens::overscan::handle_input(&mut state.edit, ev) {
+        OverscanAction::None => ThemeEffect::None,
         OverscanAction::Preview(values) => {
             apply_preview(values);
-            ScreenAction::None
+            ThemeEffect::None
         }
         OverscanAction::Commit(values) => {
             config::update_overscan(
@@ -132,11 +132,11 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 values.add_width,
                 values.add_height,
             );
-            ScreenAction::Navigate(Screen::Options)
+            ThemeEffect::Navigate(Screen::Options)
         }
         OverscanAction::Cancel(values) => {
             apply_preview(values);
-            ScreenAction::Navigate(Screen::Options)
+            ThemeEffect::Navigate(Screen::Options)
         }
     }
 }

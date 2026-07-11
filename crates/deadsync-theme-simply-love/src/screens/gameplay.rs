@@ -8,7 +8,7 @@ use crate::screens::components::shared::banner as shared_banner;
 use crate::screens::components::shared::gs_scorebox;
 use crate::screens::components::shared::lobby_hud;
 use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenBarParams};
-use crate::screens::{Screen, ScreenAction};
+use crate::screens::{Screen, ThemeEffect};
 use crate::{
     GameplayProfile, SongLuaRuntimeOverlayStateDelta, gameplay_pack_data,
     gameplay_runtime_profile_data, profile_side_from_gameplay, profile_tick_mode_from_gameplay,
@@ -1744,11 +1744,11 @@ const fn screen_for_exit(exit: GameplayExit) -> Screen {
 }
 
 #[inline(always)]
-const fn map_gameplay_action(action: GameplayAction) -> ScreenAction {
+const fn map_gameplay_action(action: GameplayAction) -> ThemeEffect {
     match action {
-        GameplayAction::None => ScreenAction::None,
-        GameplayAction::Navigate(exit) => ScreenAction::Navigate(screen_for_exit(exit)),
-        GameplayAction::NavigateNoFade(exit) => ScreenAction::NavigateNoFade(screen_for_exit(exit)),
+        GameplayAction::None => ThemeEffect::None,
+        GameplayAction::Navigate(exit) => ThemeEffect::Navigate(screen_for_exit(exit)),
+        GameplayAction::NavigateNoFade(exit) => ThemeEffect::NavigateNoFade(screen_for_exit(exit)),
     }
 }
 
@@ -2319,7 +2319,7 @@ pub fn on_exit(state: &mut State) {
     state.smx_sensor_config = [None, None];
 }
 
-pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
+pub fn update(state: &mut State, delta_time: f32) -> ThemeEffect {
     deadsync_online::lobbies::runtime_poll_reconnect_default();
 
     if !state.lobby_music_started {
@@ -2333,7 +2333,7 @@ pub fn update(state: &mut State, delta_time: f32) -> ScreenAction {
         update_lobby_machine_state(state);
 
         if gameplay_lobby_wait_text(state).is_some() {
-            return ScreenAction::None;
+            return ThemeEffect::None;
         }
 
         clear_lobby_disconnect_holds(state);
@@ -2485,7 +2485,7 @@ fn refresh_smx_sensor_data(state: &mut State) {
     }
 }
 
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     if gameplay_lobby_wait_text(state).is_some() {
         match ev.action {
             VirtualAction::p1_start => {
@@ -2514,7 +2514,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             }
             _ => {}
         }
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     let action = handle_core_input(state, ev);
     drain_audio_commands(state);

@@ -1,7 +1,7 @@
 use crate::Command;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_profile::{PlayStyle, PlayerSide, player_side_index};
-use deadsync_screens::player_options::{SpeedMod, scroll_speed_for_mod};
+use deadsync_theme_simply_love::screens::player_options::{SpeedMod, scroll_speed_for_mod};
 
 pub struct PlayerOptionsPersistPlan {
     pub commands: Vec<Command>,
@@ -55,7 +55,7 @@ pub fn player_options_persist_plan(
 mod tests {
     use super::*;
     use deadsync_rules::scroll::ScrollSpeedSetting;
-    use deadsync_screens::player_options::SpeedModType;
+    use deadsync_theme_simply_love::screens::player_options::SpeedModType;
 
     fn speed_mod(mod_type: SpeedModType, value: f32) -> SpeedMod {
         SpeedMod { mod_type, value }

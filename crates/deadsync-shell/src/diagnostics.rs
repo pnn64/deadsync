@@ -1,6 +1,6 @@
 use deadlib_render::{ClockDomainTrace, PresentStats};
 use deadsync_audio::OutputTimingSnapshot;
-use deadsync_screens::diagnostics::TimingHealth;
+use deadsync_theme_simply_love::views::TimingHealth;
 
 pub fn timing_health(
     present: PresentStats,

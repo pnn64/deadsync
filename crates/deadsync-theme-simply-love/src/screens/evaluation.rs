@@ -38,7 +38,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::screens::ScreenAction;
+use crate::screens::ThemeEffect;
+pub use crate::views::{CourseGraphStage, ScoreInfo};
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, PadEvent, VirtualAction, pad_dir_from_action};
 use deadsync_online::groovestats as groovestats_api;
@@ -46,7 +47,6 @@ use deadsync_online::runtime as online;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
 pub use deadsync_score::ColumnJudgments;
-pub use deadsync_screens::{CourseGraphStage, ScoreInfo};
 // Keyboard handling is centralized in app via virtual actions
 use chrono::Local;
 
@@ -3443,7 +3443,7 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) {
     test_input::apply_raw_key_event(&mut state.test_input_state, key_event);
 }
 
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     // Feed virtual input through the test_input state so the highlight feedback on the
     // EvalPane::TestInput pad reflects MENU buttons / Start / Select while the pane is active.
     let _ = test_input::apply_virtual_input(&mut state.test_input_state, ev);
@@ -3456,7 +3456,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         && crate::config::get().only_dedicated_menu_buttons
         && test_input_pane_active(state)
     {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
 
     let chord_side = if crate::config::get().three_key_navigation {
@@ -3514,13 +3514,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             }
             _ => {}
         }
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     if !ev.pressed {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     if state.auto_advance_seconds.is_some() {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     if state.event_overlay_visible {
         let play_style = profile::get_session_play_style();
@@ -3551,7 +3551,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             if undo != 0 {
                 let _ = shift_event_page(side, i32::from(undo));
             }
-            return ScreenAction::RequestScreenshot(Some(side));
+            return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::RequestScreenshot(Some(
+                side,
+            )));
         }
         return match ev.action {
             VirtualAction::p1_back
@@ -3559,7 +3561,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             | VirtualAction::p2_back
             | VirtualAction::p2_start => {
                 state.event_overlay_visible = false;
-                ScreenAction::None
+                ThemeEffect::None
             }
             VirtualAction::p1_left | VirtualAction::p1_menu_left => {
                 state.menu_lr_undo[profile_data::player_side_index(profile_data::PlayerSide::P1)] =
@@ -3568,7 +3570,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                     } else {
                         0
                     };
-                ScreenAction::None
+                ThemeEffect::None
             }
             VirtualAction::p1_right | VirtualAction::p1_menu_right => {
                 state.menu_lr_undo[profile_data::player_side_index(profile_data::PlayerSide::P1)] =
@@ -3577,7 +3579,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                     } else {
                         0
                     };
-                ScreenAction::None
+                ThemeEffect::None
             }
             VirtualAction::p2_left | VirtualAction::p2_menu_left => {
                 state.menu_lr_undo[profile_data::player_side_index(profile_data::PlayerSide::P2)] =
@@ -3586,7 +3588,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                     } else {
                         0
                     };
-                ScreenAction::None
+                ThemeEffect::None
             }
             VirtualAction::p2_right | VirtualAction::p2_menu_right => {
                 state.menu_lr_undo[profile_data::player_side_index(profile_data::PlayerSide::P2)] =
@@ -3595,9 +3597,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                     } else {
                         0
                     };
-                ScreenAction::None
+                ThemeEffect::None
             }
-            _ => ScreenAction::None,
+            _ => ThemeEffect::None,
         };
     }
     let return_target = if state.return_to_course {
@@ -3692,7 +3694,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         if undo != 0 {
             let _ = shift_pane_for(side, i32::from(undo));
         }
-        return ScreenAction::RequestScreenshot(Some(side));
+        return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::RequestScreenshot(Some(
+            side,
+        )));
     }
 
     match ev.action {
@@ -3703,7 +3707,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             if return_target == Screen::SelectMusic {
                 deadsync_audio_stream::play_sfx("assets/sounds/start.ogg");
             }
-            ScreenAction::Navigate(return_target)
+            ThemeEffect::Navigate(return_target)
         }
         VirtualAction::p1_right | VirtualAction::p1_menu_right => {
             state.menu_lr_undo[profile_data::player_side_index(profile_data::PlayerSide::P1)] =
@@ -3712,7 +3716,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 } else {
                     0
                 };
-            ScreenAction::None
+            ThemeEffect::None
         }
         VirtualAction::p1_left | VirtualAction::p1_menu_left => {
             state.menu_lr_undo[profile_data::player_side_index(profile_data::PlayerSide::P1)] =
@@ -3721,15 +3725,15 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 } else {
                     0
                 };
-            ScreenAction::None
+            ThemeEffect::None
         }
         VirtualAction::p1_up | VirtualAction::p1_menu_up => {
             shift_graph_for(profile_data::PlayerSide::P1, -1);
-            ScreenAction::None
+            ThemeEffect::None
         }
         VirtualAction::p1_down | VirtualAction::p1_menu_down => {
             shift_graph_for(profile_data::PlayerSide::P1, 1);
-            ScreenAction::None
+            ThemeEffect::None
         }
         VirtualAction::p2_right | VirtualAction::p2_menu_right => {
             state.menu_lr_undo[profile_data::player_side_index(profile_data::PlayerSide::P2)] =
@@ -3738,7 +3742,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 } else {
                     0
                 };
-            ScreenAction::None
+            ThemeEffect::None
         }
         VirtualAction::p2_left | VirtualAction::p2_menu_left => {
             state.menu_lr_undo[profile_data::player_side_index(profile_data::PlayerSide::P2)] =
@@ -3747,17 +3751,17 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 } else {
                     0
                 };
-            ScreenAction::None
+            ThemeEffect::None
         }
         VirtualAction::p2_up | VirtualAction::p2_menu_up => {
             shift_graph_for(profile_data::PlayerSide::P2, -1);
-            ScreenAction::None
+            ThemeEffect::None
         }
         VirtualAction::p2_down | VirtualAction::p2_menu_down => {
             shift_graph_for(profile_data::PlayerSide::P2, 1);
-            ScreenAction::None
+            ThemeEffect::None
         }
-        _ => ScreenAction::None,
+        _ => ThemeEffect::None,
     }
 }
 

@@ -7,7 +7,7 @@ use crate::screens::components::menu::menu_list::{self};
 use crate::screens::components::menu::menu_splash;
 use crate::screens::components::shared::{screen_bar, transitions, visual_style_bg};
 use crate::screens::input as screen_input;
-use crate::screens::{Screen, ScreenAction};
+use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::{Actor, TextAlign};
 use deadlib_present::color;
 use deadsync_input::RawKeyboardEvent;
@@ -145,16 +145,16 @@ pub fn init() -> State {
 
 // Keyboard input is handled centrally via the virtual dispatcher in app
 // Screen-specific raw keyboard handling for Menu (e.g., F4 to Sandbox)
-pub fn handle_raw_key_event(_state: &mut State, key: &RawKeyboardEvent) -> ScreenAction {
+pub fn handle_raw_key_event(_state: &mut State, key: &RawKeyboardEvent) -> ThemeEffect {
     if !key.pressed {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     match key.code {
-        KeyCode::F4 => return ScreenAction::Navigate(Screen::Sandbox),
-        KeyCode::Escape => return ScreenAction::Exit,
+        KeyCode::F4 => return ThemeEffect::Navigate(Screen::Sandbox),
+        KeyCode::Escape => return ThemeEffect::Exit,
         _ => {}
     }
-    ScreenAction::None
+    ThemeEffect::None
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
@@ -590,17 +590,17 @@ fn move_selection(state: &mut State, delta: isize) {
 }
 
 #[inline(always)]
-fn start_selected(state: &mut State, started_by_p2: bool) -> ScreenAction {
+fn start_selected(state: &mut State, started_by_p2: bool) -> ThemeEffect {
     deadsync_audio_stream::play_sfx("assets/sounds/start.ogg");
     state.started_by_p2 = started_by_p2;
     if Some(state.selected_index) == shutdown_index() {
-        return ScreenAction::Shutdown;
+        return ThemeEffect::Shutdown;
     }
     match state.selected_index {
-        0 => ScreenAction::Navigate(Screen::SelectProfile),
-        1 => ScreenAction::Navigate(Screen::Options),
-        2 => ScreenAction::Exit,
-        _ => ScreenAction::None,
+        0 => ThemeEffect::Navigate(Screen::SelectProfile),
+        1 => ThemeEffect::Navigate(Screen::Options),
+        2 => ThemeEffect::Exit,
+        _ => ThemeEffect::None,
     }
 }
 
@@ -628,7 +628,7 @@ const fn menu_nav_delta(action: VirtualAction) -> Option<isize> {
 }
 
 // Event-driven virtual input handler
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     if let Some(side) = screen_input::menu_lr_side(ev.action)
         && !ev.pressed
     {
@@ -640,12 +640,12 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             screen_input::ThreeKeyMenuAction::Prev => {
                 move_selection(state, -1);
                 state.menu_lr_undo[side_ix] = 1;
-                ScreenAction::None
+                ThemeEffect::None
             }
             screen_input::ThreeKeyMenuAction::Next => {
                 move_selection(state, 1);
                 state.menu_lr_undo[side_ix] = -1;
-                ScreenAction::None
+                ThemeEffect::None
             }
             screen_input::ThreeKeyMenuAction::Confirm => {
                 state.menu_lr_undo[side_ix] = 0;
@@ -657,23 +657,23 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                     move_selection(state, undo as isize);
                     state.menu_lr_undo[side_ix] = 0;
                 }
-                ScreenAction::Exit
+                ThemeEffect::Exit
             }
         };
     }
     if !ev.pressed {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     if let Some(delta) = menu_nav_delta(ev.action) {
         move_selection(state, delta);
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     match ev.action {
         VirtualAction::p1_start | VirtualAction::p2_start => {
             start_selected(state, matches!(ev.action, VirtualAction::p2_start))
         }
-        VirtualAction::p1_back | VirtualAction::p2_back => ScreenAction::Exit,
-        _ => ScreenAction::None,
+        VirtualAction::p1_back | VirtualAction::p2_back => ThemeEffect::Exit,
+        _ => ThemeEffect::None,
     }
 }
 

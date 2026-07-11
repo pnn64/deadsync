@@ -2,7 +2,7 @@ use crate::act;
 use crate::assets::i18n::tr;
 use crate::assets::{FontRole, current_machine_font_key_for_text};
 use crate::screens::components::shared::{loading_bar, visual_style_bg};
-use crate::screens::{Screen, ScreenAction};
+use crate::screens::{Screen, ThemeEffect};
 use deadlib_platform::dirs;
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
@@ -478,9 +478,9 @@ fn poll_loading_state(loading: &mut LoadingState) {
 
 /* -------------------------- input -> nav ----------------------- */
 
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     if state.phase == InitPhase::Loading {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     if ev.pressed {
         match ev.action {
@@ -488,17 +488,17 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             | VirtualAction::p1_back
             | VirtualAction::p2_start
             | VirtualAction::p2_back => {
-                return ScreenAction::Navigate(Screen::Menu);
+                return ThemeEffect::Navigate(Screen::Menu);
             }
             _ => {}
         }
     }
-    ScreenAction::None
+    ThemeEffect::None
 }
 
 /* ---------------------------- update --------------------------- */
 
-pub fn update(state: &mut State, dt: f32) -> ScreenAction {
+pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
     if state.phase == InitPhase::Loading {
         if !state.loader_started {
             state.loader_started = true;
@@ -517,7 +517,7 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
             state.phase = InitPhase::Playing;
             state.elapsed = 0.0;
         }
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
 
     state.elapsed += dt.max(0.0);
@@ -530,10 +530,10 @@ pub fn update(state: &mut State, dt: f32) -> ScreenAction {
     if state.phase == InitPhase::FadingOut {
         let fade_elapsed = state.elapsed - arrows_finished_at();
         if fade_elapsed >= BAR_SQUISH_DURATION {
-            return ScreenAction::Navigate(Screen::Menu);
+            return ThemeEffect::Navigate(Screen::Menu);
         }
     }
-    ScreenAction::None
+    ThemeEffect::None
 }
 
 /* --------------------------- drawing helpers --------------------------- */

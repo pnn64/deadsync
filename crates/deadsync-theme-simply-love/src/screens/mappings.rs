@@ -4,7 +4,7 @@ use crate::assets::{FontRole, current_machine_font_key};
 use crate::screens::components::shared::screen_bar::{ScreenBarPosition, ScreenBarTitlePlacement};
 use crate::screens::components::shared::{screen_bar, transitions, visual_style_bg};
 use crate::screens::input as screen_input;
-use crate::screens::{Screen, ScreenAction};
+use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::font;
@@ -585,9 +585,9 @@ pub fn update(state: &mut State, dt: f32) {
 }
 
 /// Raw keyboard handler used only while capturing a new mapping.
-pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> ScreenAction {
+pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> ThemeEffect {
     if key_event.repeat {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
 
     let is_pressed = key_event.pressed;
@@ -602,18 +602,18 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
                 state.capture_keyboard_arming_key = None;
                 state.capture_ignore_until = Some(key_event.timestamp + capture_debounce_window());
             }
-            return ScreenAction::None;
+            return ThemeEffect::None;
         }
         if !is_pressed {
-            return ScreenAction::None;
+            return ThemeEffect::None;
         }
         if capture_debounce_active(state, key_event.timestamp) {
-            return ScreenAction::None;
+            return ThemeEffect::None;
         }
         // Match ITGmania's mapper behavior: function keys remain reserved,
         // but arrows, Enter, Escape, and other normal keys are valid bindings.
         if invalid_capture_key(code) {
-            return ScreenAction::None;
+            return ThemeEffect::None;
         }
 
         // Map the captured key into the appropriate binding slot based on
@@ -647,7 +647,7 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
         // Any captured key ends capture.
         cancel_capture(state);
 
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
 
     // Not capturing: only arrow keys, Enter, and Escape drive navigation.
@@ -689,7 +689,7 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
             if is_pressed {
                 if state.selected_row == NUM_MAPPING_ROWS {
                     audio::play_sfx("assets/sounds/start.ogg");
-                    return ScreenAction::Navigate(Screen::Options);
+                    return ThemeEffect::Navigate(Screen::Options);
                 }
                 if state.selected_row < NUM_MAPPING_ROWS {
                     begin_keyboard_capture(state, code, key_event.timestamp);
@@ -699,7 +699,7 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
         }
         KeyCode::Escape => {
             if is_pressed {
-                return ScreenAction::Navigate(Screen::Options);
+                return ThemeEffect::Navigate(Screen::Options);
             }
         }
         _ => {
@@ -714,7 +714,7 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
         }
     }
 
-    ScreenAction::None
+    ThemeEffect::None
 }
 
 /// Raw gamepad handler used only while capturing a new mapping.
@@ -800,7 +800,7 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) -> bool {
     true
 }
 
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     let three_key_action = screen_input::three_key_menu_action(&mut state.menu_lr_chord, ev);
     // While capturing, lock navigation and only allow backing out
     // of the screen; candidate keys are handled in handle_raw_key_event.
@@ -808,12 +808,12 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         if let Some((_, screen_input::ThreeKeyMenuAction::Cancel)) = three_key_action {
             cancel_capture(state);
             audio::play_sfx("assets/sounds/change.ogg");
-            return ScreenAction::None;
+            return ThemeEffect::None;
         }
         if ev.pressed && matches!(ev.action, VirtualAction::p1_back | VirtualAction::p2_back) {
-            return ScreenAction::Navigate(Screen::Options);
+            return ThemeEffect::Navigate(Screen::Options);
         }
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
 
     if screen_input::dedicated_three_key_nav_enabled() {
@@ -826,7 +826,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             {
                 state.menu_lr_undo_row = 0;
                 on_nav_release(state, NavDirection::Up);
-                return ScreenAction::None;
+                return ThemeEffect::None;
             }
             VirtualAction::p1_right
             | VirtualAction::p1_menu_right
@@ -836,7 +836,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             {
                 state.menu_lr_undo_row = 0;
                 on_nav_release(state, NavDirection::Down);
-                return ScreenAction::None;
+                return ThemeEffect::None;
             }
             _ => {}
         }
@@ -853,7 +853,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                         state.menu_lr_undo_slot = Some(prev_slot);
                         audio::play_sfx("assets/sounds/change_value.ogg");
                     }
-                    ScreenAction::None
+                    ThemeEffect::None
                 }
                 screen_input::ThreeKeyMenuAction::Next => {
                     if matches!(state.three_key_focus, ThreeKeyFocus::Row) {
@@ -866,26 +866,26 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                         state.menu_lr_undo_slot = Some(prev_slot);
                         audio::play_sfx("assets/sounds/change_value.ogg");
                     }
-                    ScreenAction::None
+                    ThemeEffect::None
                 }
                 screen_input::ThreeKeyMenuAction::Confirm => {
                     state.menu_lr_undo_row = 0;
                     if matches!(state.three_key_focus, ThreeKeyFocus::Row) {
                         if state.selected_row == NUM_MAPPING_ROWS {
                             audio::play_sfx("assets/sounds/start.ogg");
-                            ScreenAction::Navigate(Screen::Options)
+                            ThemeEffect::Navigate(Screen::Options)
                         } else {
                             state.three_key_focus = ThreeKeyFocus::Slot;
                             state.menu_lr_undo_slot = None;
                             audio::play_sfx("assets/sounds/start.ogg");
-                            ScreenAction::None
+                            ThemeEffect::None
                         }
                     } else if state.selected_row < NUM_MAPPING_ROWS {
                         begin_capture(state, ev.emitted_at);
                         audio::play_sfx("assets/sounds/change_value.ogg");
-                        ScreenAction::None
+                        ThemeEffect::None
                     } else {
-                        ScreenAction::None
+                        ThemeEffect::None
                     }
                 }
                 screen_input::ThreeKeyMenuAction::Cancel => {
@@ -895,7 +895,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                         }
                         state.three_key_focus = ThreeKeyFocus::Row;
                         audio::play_sfx("assets/sounds/change.ogg");
-                        ScreenAction::None
+                        ThemeEffect::None
                     } else {
                         match state.menu_lr_undo_row {
                             1 => move_selection(state, NavDirection::Down, NavWrap::Wrap),
@@ -903,7 +903,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                             _ => {}
                         }
                         state.menu_lr_undo_row = 0;
-                        ScreenAction::Navigate(Screen::Options)
+                        ThemeEffect::Navigate(Screen::Options)
                     }
                 }
             };
@@ -912,7 +912,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
 
     match ev.action {
         VirtualAction::p1_back | VirtualAction::p2_back if ev.pressed => {
-            return ScreenAction::Navigate(Screen::Options);
+            return ThemeEffect::Navigate(Screen::Options);
         }
         VirtualAction::p1_up
         | VirtualAction::p1_menu_up
@@ -962,7 +962,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         {
             if state.selected_row == NUM_MAPPING_ROWS {
                 audio::play_sfx("assets/sounds/start.ogg");
-                return ScreenAction::Navigate(Screen::Options);
+                return ThemeEffect::Navigate(Screen::Options);
             }
 
             // Begin capture on the currently focused slot in this row.
@@ -973,7 +973,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         }
         _ => {}
     }
-    ScreenAction::None
+    ThemeEffect::None
 }
 
 /* -------------------------------- drawing -------------------------------- */

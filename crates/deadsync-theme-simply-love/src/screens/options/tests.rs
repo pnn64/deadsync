@@ -21,7 +21,7 @@ fn input_event(action: VirtualAction, pressed: bool) -> InputEvent {
     }
 }
 
-fn press(state: &mut State, asset_manager: &AssetManager, action: VirtualAction) -> ScreenAction {
+fn press(state: &mut State, asset_manager: &AssetManager, action: VirtualAction) -> ThemeEffect {
     handle_input(state, asset_manager, &input_event(action, true))
 }
 
@@ -29,7 +29,7 @@ fn dedicated_press(
     state: &mut State,
     asset_manager: &AssetManager,
     action: VirtualAction,
-) -> ScreenAction {
+) -> ThemeEffect {
     handle_dedicated_three_key_options_input(state, asset_manager, &input_event(action, true))
 }
 

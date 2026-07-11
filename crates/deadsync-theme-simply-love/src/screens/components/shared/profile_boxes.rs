@@ -6,7 +6,7 @@ use crate::screens::components::shared::screen_bar::{
 };
 use crate::screens::components::shared::{screen_bar, visual_style_bg};
 use crate::screens::input as screen_input;
-use crate::screens::{Screen, ScreenAction};
+use crate::screens::{Screen, ThemeEffect};
 use deadsync_assets::noteskin::{self, Noteskin};
 use deadsync_online::score_compat as scores;
 use deadsync_profile::compat as profile;
@@ -686,58 +686,58 @@ fn shift_choice(
     true
 }
 
-fn handle_cancel(state: &mut State, side: profile_data::PlayerSide) -> ScreenAction {
+fn handle_cancel(state: &mut State, side: profile_data::PlayerSide) -> ThemeEffect {
     match side {
         profile_data::PlayerSide::P1 => {
             if state.p1_joined && state.p1_ready {
                 state.p1_ready = false;
                 audio::play_sfx("assets/sounds/unjoin.ogg");
-                return ScreenAction::None;
+                return ThemeEffect::None;
             }
             if state.p1_joined {
                 state.p1_joined = false;
                 state.p1_ready = false;
                 audio::play_sfx("assets/sounds/unjoin.ogg");
-                return ScreenAction::None;
+                return ThemeEffect::None;
             }
             if state.p2_joined {
-                return ScreenAction::None;
+                return ThemeEffect::None;
             }
             state.exit_anim = true;
             let _ = exit_anim_t(true);
             if profile::fast_profile_switch_from_select_music() {
                 profile::set_fast_profile_switch_from_select_music(false);
-                return ScreenAction::Navigate(Screen::SelectMusic);
+                return ThemeEffect::Navigate(Screen::SelectMusic);
             }
-            ScreenAction::Navigate(Screen::Menu)
+            ThemeEffect::Navigate(Screen::Menu)
         }
         profile_data::PlayerSide::P2 => {
             if state.p2_joined && state.p2_ready {
                 state.p2_ready = false;
                 audio::play_sfx("assets/sounds/unjoin.ogg");
-                return ScreenAction::None;
+                return ThemeEffect::None;
             }
             if state.p2_joined {
                 state.p2_joined = false;
                 state.p2_ready = false;
                 audio::play_sfx("assets/sounds/unjoin.ogg");
-                return ScreenAction::None;
+                return ThemeEffect::None;
             }
             if state.p1_joined {
-                return ScreenAction::None;
+                return ThemeEffect::None;
             }
             state.exit_anim = true;
             let _ = exit_anim_t(true);
             if profile::fast_profile_switch_from_select_music() {
                 profile::set_fast_profile_switch_from_select_music(false);
-                return ScreenAction::Navigate(Screen::SelectMusic);
+                return ThemeEffect::Navigate(Screen::SelectMusic);
             }
-            ScreenAction::Navigate(Screen::Menu)
+            ThemeEffect::Navigate(Screen::Menu)
         }
     }
 }
 
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     let chord_side = if crate::config::get().three_key_navigation {
         state.menu_lr_chord.update(ev)
     } else {
@@ -747,10 +747,10 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         if let Some(side) = screen_input::menu_lr_side(ev.action) {
             state.menu_lr_undo[profile_data::player_side_index(side)] = 0;
         }
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     if state.exit_anim {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     if let Some(side) = chord_side {
         let undo = state.menu_lr_undo[profile_data::player_side_index(side)];
@@ -772,7 +772,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 } else {
                     0
                 };
-            ScreenAction::None
+            ThemeEffect::None
         }
         VirtualAction::p1_down
         | VirtualAction::p1_menu_down
@@ -784,7 +784,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 } else {
                     0
                 };
-            ScreenAction::None
+            ThemeEffect::None
         }
         VirtualAction::p1_start => {
             if !state.p1_joined {
@@ -797,11 +797,11 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                     state.p1_selected_index,
                 );
                 audio::play_sfx("assets/sounds/start.ogg");
-                return ScreenAction::None;
+                return ThemeEffect::None;
             }
 
             if state.p1_ready {
-                return ScreenAction::None;
+                return ThemeEffect::None;
             }
 
             if state.p2_joined
@@ -815,7 +815,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 })
             {
                 trigger_invalid_choice(state, true);
-                return ScreenAction::None;
+                return ThemeEffect::None;
             }
 
             state.p1_ready = true;
@@ -825,9 +825,12 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 let _ = exit_anim_t(true);
                 commit_profile_box_session(state);
                 let (p1, p2) = active_choices(state);
-                return ScreenAction::SelectProfiles { p1, p2 };
+                return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::SelectProfiles {
+                    p1,
+                    p2,
+                });
             }
-            ScreenAction::None
+            ThemeEffect::None
         }
         VirtualAction::p1_back | VirtualAction::p1_select => {
             handle_cancel(state, profile_data::PlayerSide::P1)
@@ -842,7 +845,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 } else {
                     0
                 };
-            ScreenAction::None
+            ThemeEffect::None
         }
         VirtualAction::p2_down
         | VirtualAction::p2_menu_down
@@ -854,7 +857,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 } else {
                     0
                 };
-            ScreenAction::None
+            ThemeEffect::None
         }
         VirtualAction::p2_start => {
             if !state.p2_joined {
@@ -867,11 +870,11 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                     state.p2_selected_index,
                 );
                 audio::play_sfx("assets/sounds/start.ogg");
-                return ScreenAction::None;
+                return ThemeEffect::None;
             }
 
             if state.p2_ready {
-                return ScreenAction::None;
+                return ThemeEffect::None;
             }
 
             if state.p1_joined
@@ -885,7 +888,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 })
             {
                 trigger_invalid_choice(state, false);
-                return ScreenAction::None;
+                return ThemeEffect::None;
             }
 
             state.p2_ready = true;
@@ -895,14 +898,17 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 let _ = exit_anim_t(true);
                 commit_profile_box_session(state);
                 let (p1, p2) = active_choices(state);
-                return ScreenAction::SelectProfiles { p1, p2 };
+                return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::SelectProfiles {
+                    p1,
+                    p2,
+                });
             }
-            ScreenAction::None
+            ThemeEffect::None
         }
         VirtualAction::p2_back | VirtualAction::p2_select => {
             handle_cancel(state, profile_data::PlayerSide::P2)
         }
-        _ => ScreenAction::None,
+        _ => ThemeEffect::None,
     }
 }
 

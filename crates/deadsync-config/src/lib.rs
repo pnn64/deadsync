@@ -11,7 +11,6 @@ pub mod ini;
 pub mod keybinds;
 pub mod load;
 pub mod machine;
-pub mod navigation;
 pub mod null_or_die;
 pub mod numbers;
 pub mod options;

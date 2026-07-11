@@ -2,7 +2,7 @@ use deadlib_render::{ClockDomainTrace, DrawStats, PresentModeTrace};
 use deadsync_audio::StutterDiagAudioEvent;
 use deadsync_config::frame_pacing::{FixedFrameStatsRing, seconds_to_us_u32};
 use deadsync_gameplay::DisplayClockDiagEvent;
-use deadsync_screens::Screen;
+use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
 
 pub const STUTTER_DIAG_WINDOW_NS: u64 = 500_000_000;
 pub const STUTTER_DIAG_FRAME_CAPACITY: usize = 128;

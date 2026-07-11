@@ -1,6 +1,7 @@
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_profile::{PlayStyle, PlayerSide};
-use deadsync_screens::{Screen, player_options::SpeedMod};
+use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
+use deadsync_theme_simply_love::screens::player_options::SpeedMod;
 
 use crate::{Command, TransitionMusicPaths, player_options_persist_plan, transition_audio_plan};
 
@@ -81,7 +82,7 @@ mod tests {
     use std::path::PathBuf;
 
     use deadsync_rules::scroll::ScrollSpeedSetting;
-    use deadsync_screens::player_options::{SpeedMod, SpeedModType};
+    use deadsync_theme_simply_love::screens::player_options::{SpeedMod, SpeedModType};
 
     use super::*;
 

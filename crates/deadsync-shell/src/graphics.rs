@@ -8,7 +8,7 @@ use deadlib_render::{BackendType, PresentModePolicy};
 use deadlib_renderer::{Backend, create_backend, render_size_for_physical, render_size_for_window};
 use deadsync_assets::AssetManager;
 use deadsync_config::app_config::DisplayMode;
-use deadsync_screens::DensityGraphSlot;
+use deadsync_theme_simply_love::views::SimplyLoveDensityGraphSlot as DensityGraphSlot;
 use winit::dpi::{PhysicalPosition, PhysicalSize};
 use winit::event_loop::ActiveEventLoop;
 use winit::window::Window;

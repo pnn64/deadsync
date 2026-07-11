@@ -27,10 +27,10 @@ deadsync-profile = { path = "../deadsync-profile" }
 deadsync-profile-gameplay = { path = "../deadsync-profile-gameplay" }
 deadsync-rules = { path = "../deadsync-rules" }
 deadsync-score = { path = "../deadsync-score" }
-deadsync-screens = { path = "../deadsync-screens" }
 deadsync-simfile = { path = "../deadsync-simfile" }
 deadsync-smx = { path = "../deadsync-smx" }
 deadsync-song-lua = { path = "../deadsync-song-lua" }
+deadsync-theme = { path = "../deadsync-theme" }
 deadsync-theme-simply-love = { path = "../deadsync-theme-simply-love" }
 image = "0.25.10"
 log = "0.4.33"

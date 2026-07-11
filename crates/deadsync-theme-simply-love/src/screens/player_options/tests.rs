@@ -18,7 +18,7 @@ pub(super) mod tests {
     };
     use crate::assets::AssetManager;
     use crate::assets::i18n::{LookupKey, lookup_key};
-    use crate::screens::{Screen, ScreenAction};
+    use crate::screens::{Screen, ThemeEffect};
     use deadlib_present::font::{Font, Glyph};
     use deadsync_chart::{ChartData, SongData};
     use deadsync_profile::Profile;
@@ -2173,7 +2173,7 @@ pub(super) mod tests {
         let active = session_active_players();
         let action = handle_start_event(&mut state, &asset_manager, active, P2);
         assert!(
-            matches!(action, Some(ScreenAction::Navigate(Screen::Gameplay))),
+            matches!(action, Some(ThemeEffect::Navigate(Screen::Gameplay))),
             "once both players are on Exit, either player should be able to leave the screen"
         );
     }
@@ -2196,7 +2196,7 @@ pub(super) mod tests {
         let active = session_active_players();
         let action = handle_start_event(&mut state, &asset_manager, active, P1);
         assert!(
-            matches!(action, Some(ScreenAction::Navigate(Screen::Practice))),
+            matches!(action, Some(ThemeEffect::Navigate(Screen::Practice))),
             "practice-launched player options should start Practice, not Gameplay"
         );
     }
@@ -2225,7 +2225,7 @@ pub(super) mod tests {
         let active = session_active_players();
         let action = handle_start_event(&mut state, &asset_manager, active, P1);
         assert!(
-            matches!(action, Some(ScreenAction::Navigate(Screen::SelectMusic))),
+            matches!(action, Some(ThemeEffect::Navigate(Screen::SelectMusic))),
             "choose different song from practice options should return to the wheel"
         );
     }

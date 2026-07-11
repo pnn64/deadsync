@@ -4,6 +4,7 @@ pub mod credits;
 pub mod evaluation;
 pub mod evaluation_summary;
 pub(crate) mod favorite_code;
+mod flow;
 pub mod gameover;
 pub mod gameplay;
 #[cfg(test)]
@@ -16,6 +17,7 @@ pub mod manage_local_profiles;
 pub mod mappings;
 pub mod menu;
 pub mod options;
+mod overscan;
 pub mod overscan_adjustment;
 pub(crate) mod pack_sync;
 pub mod pad_config;
@@ -26,13 +28,23 @@ pub mod sandbox;
 pub mod select_color;
 pub mod select_course;
 pub mod select_mode;
+mod select_mode_flow;
 pub mod select_music;
 pub mod select_profile;
 pub mod select_style;
+mod select_style_flow;
 pub mod smx_assign;
 pub mod test_lights;
 
-pub use deadsync_screens::{DensityGraphSlot, DensityGraphSource, Screen, ScreenAction};
+pub use crate::SimplyLoveEffect as ThemeEffect;
+pub(crate) use crate::views::{DensityGraphSlot, DensityGraphSource};
+pub(crate) use flow::SimplyLoveScreen as Screen;
+pub use flow::{
+    LateJoinContext, ProfileSelectionContext, ProfileSelectionPlan, SelectMusicJoinContext,
+    SelectMusicJoinPlan, SimplyLoveNavigationPlan, SimplyLoveScreen, evaluation_summary_return_to,
+    late_join_side, profile_selection_plan, resolve_navigation, select_music_join_plan,
+    uses_actor_fade, uses_actor_only_transition,
+};
 
 #[inline(always)]
 pub(crate) fn progress_percent_tenths(done: usize, total: usize) -> u32 {

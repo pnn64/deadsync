@@ -1,7 +1,7 @@
 use super::*;
 use deadsync_profile as profile_data;
 
-pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Option<ScreenAction> {
+pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Option<ThemeEffect> {
     // Keep options-screen noteskin previews on a stable clock.
     // ITG/SL preview actors are not driven by selected chart BPM, so tying this to song BPM
     // makes beat-based skins (e.g. cel) appear too fast/slow depending on the selected chart.
@@ -10,7 +10,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
     state.preview_beat += dt * (PREVIEW_BPM / 60.0);
     let active = session_active_players();
     let arcade_style = crate::config::get().arcade_options_navigation;
-    let mut pending_action: Option<ScreenAction> = None;
+    let mut pending_action: Option<ThemeEffect> = None;
     sync_selected_rows_with_visibility(state, active);
 
     // Hold-to-scroll per player.
@@ -340,7 +340,7 @@ pub(super) fn finish_start_without_action(
     active: [bool; PLAYER_SLOTS],
     player_idx: usize,
     should_focus_exit: bool,
-) -> Option<ScreenAction> {
+) -> Option<ThemeEffect> {
     if should_focus_exit {
         focus_exit_row(state, active, player_idx);
     }
@@ -424,7 +424,7 @@ pub(super) fn handle_arcade_start_press(
     active: [bool; PLAYER_SLOTS],
     player_idx: usize,
     repeated: bool,
-) -> Option<ScreenAction> {
+) -> Option<ThemeEffect> {
     if screen_input::menu_lr_both_held(
         &state.menu_lr_chord,
         profile_data::player_side_for_index(player_idx),
@@ -449,7 +449,7 @@ pub(super) fn repeat_held_arcade_start(
     active: [bool; PLAYER_SLOTS],
     player_idx: usize,
     dt: f32,
-) -> Option<ScreenAction> {
+) -> Option<ThemeEffect> {
     if !active[player_idx] {
         clear_start_hold(state, player_idx);
         return None;
@@ -574,7 +574,7 @@ pub(super) fn handle_arcade_start_event(
     asset_manager: &AssetManager,
     active: [bool; PLAYER_SLOTS],
     player_idx: usize,
-) -> Option<ScreenAction> {
+) -> Option<ThemeEffect> {
     if !active[player_idx] {
         return None;
     }
@@ -612,7 +612,7 @@ pub(super) fn handle_start_event(
     asset_manager: &AssetManager,
     active: [bool; PLAYER_SLOTS],
     player_idx: usize,
-) -> Option<ScreenAction> {
+) -> Option<ThemeEffect> {
     if !active[player_idx] {
         return None;
     }
@@ -660,12 +660,12 @@ pub(super) fn handle_start_event(
             let choice_str = choice.as_str();
             if choice_str == gameplay.as_ref() {
                 audio::play_sfx("assets/sounds/start.ogg");
-                return Some(ScreenAction::Navigate(play_screen_for_return(
+                return Some(ThemeEffect::Navigate(play_screen_for_return(
                     state.return_screen,
                 )));
             } else if choice_str == choose_different {
                 audio::play_sfx("assets/sounds/start.ogg");
-                return Some(ScreenAction::Navigate(choose_different_screen(
+                return Some(ThemeEffect::Navigate(choose_different_screen(
                     state.return_screen,
                 )));
             } else if choice_str == display.as_ref() {
@@ -702,7 +702,7 @@ pub fn handle_input(
     state: &mut State,
     asset_manager: &AssetManager,
     ev: &InputEvent,
-) -> ScreenAction {
+) -> ThemeEffect {
     let active = session_active_players();
     let dedicated_three_key = screen_input::dedicated_three_key_nav_enabled();
     let arcade_style = crate::config::get().arcade_options_navigation;
@@ -716,23 +716,23 @@ pub fn handle_input(
         if let Some((side, screen_input::ThreeKeyMenuAction::Cancel)) = three_key_action {
             let player_idx = profile_data::player_side_index(side);
             if active[player_idx] {
-                return ScreenAction::Navigate(state.return_screen);
+                return ThemeEffect::Navigate(state.return_screen);
             }
         }
         return match ev.action {
             VirtualAction::p1_back if ev.pressed && active[P1] => {
-                ScreenAction::Navigate(state.return_screen)
+                ThemeEffect::Navigate(state.return_screen)
             }
             VirtualAction::p2_back if ev.pressed && active[P2] => {
-                ScreenAction::Navigate(state.return_screen)
+                ThemeEffect::Navigate(state.return_screen)
             }
-            _ => ScreenAction::None,
+            _ => ThemeEffect::None,
         };
     }
     if let Some((side, nav)) = three_key_action {
         let player_idx = profile_data::player_side_index(side);
         if !active[player_idx] {
-            return ScreenAction::None;
+            return ThemeEffect::None;
         }
         return match nav {
             screen_input::ThreeKeyMenuAction::Prev => {
@@ -744,7 +744,7 @@ pub fn handle_input(
                     NavDirection::Up,
                     true,
                 );
-                ScreenAction::None
+                ThemeEffect::None
             }
             screen_input::ThreeKeyMenuAction::Next => {
                 handle_nav_event(
@@ -755,27 +755,27 @@ pub fn handle_input(
                     NavDirection::Down,
                     true,
                 );
-                ScreenAction::None
+                ThemeEffect::None
             }
             screen_input::ThreeKeyMenuAction::Confirm => {
                 clear_nav_hold(state, player_idx);
                 if let Some(action) = handle_start_event(state, asset_manager, active, player_idx) {
                     return action;
                 }
-                ScreenAction::None
+                ThemeEffect::None
             }
             screen_input::ThreeKeyMenuAction::Cancel => {
                 clear_nav_hold(state, player_idx);
-                ScreenAction::Navigate(state.return_screen)
+                ThemeEffect::Navigate(state.return_screen)
             }
         };
     }
     match ev.action {
         VirtualAction::p1_back if ev.pressed && active[P1] => {
-            return ScreenAction::Navigate(state.return_screen);
+            return ThemeEffect::Navigate(state.return_screen);
         }
         VirtualAction::p2_back if ev.pressed && active[P2] => {
-            return ScreenAction::Navigate(state.return_screen);
+            return ThemeEffect::Navigate(state.return_screen);
         }
         VirtualAction::p1_up | VirtualAction::p1_menu_up => {
             handle_nav_event(
@@ -820,7 +820,7 @@ pub fn handle_input(
         VirtualAction::p1_start => {
             if !ev.pressed {
                 clear_start_hold(state, P1);
-                return ScreenAction::None;
+                return ThemeEffect::None;
             }
             if arcade_style {
                 on_start_press(state, P1);
@@ -829,7 +829,7 @@ pub fn handle_input(
                 {
                     return action;
                 }
-                return ScreenAction::None;
+                return ThemeEffect::None;
             }
             if let Some(action) = handle_start_event(state, asset_manager, active, P1) {
                 return action;
@@ -837,7 +837,7 @@ pub fn handle_input(
         }
         VirtualAction::p1_select if ev.pressed && arcade_style => {
             handle_arcade_prev_event(state, asset_manager, active, P1);
-            return ScreenAction::None;
+            return ThemeEffect::None;
         }
         VirtualAction::p2_up | VirtualAction::p2_menu_up => {
             handle_nav_event(
@@ -882,7 +882,7 @@ pub fn handle_input(
         VirtualAction::p2_start => {
             if !ev.pressed {
                 clear_start_hold(state, P2);
-                return ScreenAction::None;
+                return ThemeEffect::None;
             }
             if arcade_style {
                 on_start_press(state, P2);
@@ -891,7 +891,7 @@ pub fn handle_input(
                 {
                     return action;
                 }
-                return ScreenAction::None;
+                return ThemeEffect::None;
             }
             if let Some(action) = handle_start_event(state, asset_manager, active, P2) {
                 return action;
@@ -899,9 +899,9 @@ pub fn handle_input(
         }
         VirtualAction::p2_select if ev.pressed && arcade_style => {
             handle_arcade_prev_event(state, asset_manager, active, P2);
-            return ScreenAction::None;
+            return ThemeEffect::None;
         }
         _ => {}
     }
-    ScreenAction::None
+    ThemeEffect::None
 }

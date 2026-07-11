@@ -3,7 +3,7 @@
 use std::time::Instant;
 
 use deadsync_config::frame_pacing::apply_tab_acceleration;
-use deadsync_screens::Screen;
+use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
 use winit::keyboard::KeyCode;
 
 use crate::{

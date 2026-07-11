@@ -221,7 +221,7 @@ fn open_submenu_now(state: &mut State, kind: SubmenuKind) {
     clear_render_cache(state);
 }
 
-pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Option<ScreenAction> {
+pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Option<ThemeEffect> {
     if state.reload_ui.is_some() {
         let done = {
             let reload = state.reload_ui.as_mut().unwrap();
@@ -256,7 +256,7 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
         usize::from(deadsync_smx::get_info(1).connected),
     );
 
-    let mut pending_action: Option<ScreenAction> = None;
+    let mut pending_action: Option<ThemeEffect> = None;
     // ------------------------- local submenu fade ------------------------- //
     match state.submenu_transition {
         SubmenuTransition::None => {
@@ -430,16 +430,18 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                     || max_fps_change.is_some()
                     || high_dpi_change.is_some()
                 {
-                    pending_action = Some(ScreenAction::ChangeGraphics {
-                        renderer: renderer_change,
-                        display_mode: display_mode_change,
-                        monitor: monitor_change,
-                        resolution: resolution_change,
-                        vsync: vsync_change,
-                        present_mode_policy: present_mode_policy_change,
-                        max_fps: max_fps_change,
-                        high_dpi: high_dpi_change,
-                    });
+                    pending_action = Some(ThemeEffect::Runtime(
+                        crate::SimplyLoveRuntimeRequest::ChangeGraphics {
+                            renderer: renderer_change,
+                            display_mode: display_mode_change,
+                            monitor: monitor_change,
+                            resolution: resolution_change,
+                            vsync: vsync_change,
+                            present_mode_policy: present_mode_policy_change,
+                            max_fps: max_fps_change,
+                            high_dpi: high_dpi_change,
+                        },
+                    ));
                 }
             }
         }

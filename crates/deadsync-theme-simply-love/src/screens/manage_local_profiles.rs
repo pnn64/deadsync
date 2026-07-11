@@ -10,7 +10,7 @@ use crate::screens::components::shared::screen_bar::{
 use crate::screens::components::shared::transitions;
 use crate::screens::components::shared::visual_style_bg;
 use crate::screens::input as screen_input;
-use crate::screens::{Screen, ScreenAction};
+use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_height, screen_width};
@@ -544,7 +544,7 @@ fn update_name_entry_blink(state: &mut State, dt: f32) {
     entry.blink_t = (entry.blink_t + dt) % 1.0;
 }
 
-pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
+pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
     update_hold_scroll(state);
     update_name_entry_blink(state, dt);
     poll_import_job(state);
@@ -699,12 +699,12 @@ fn move_profile_menu_selected(state: &mut State, dir: NavDirection) {
     };
 }
 
-fn confirm_profile_menu(state: &mut State) -> ScreenAction {
+fn confirm_profile_menu(state: &mut State) -> ThemeEffect {
     let Some(menu) = state.profile_menu.clone() else {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     };
     let Some(action) = PROFILE_MENU_ACTIONS.get(menu.selected_action).copied() else {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     };
 
     match action {
@@ -718,7 +718,7 @@ fn confirm_profile_menu(state: &mut State) -> ScreenAction {
             refresh_rows(state);
             cancel_profile_menu(state);
             audio::play_sfx("assets/sounds/start.ogg");
-            ScreenAction::None
+            ThemeEffect::None
         }
         ProfileMenuAction::SetP2 => {
             profile::set_default_profile_for_side(
@@ -730,35 +730,35 @@ fn confirm_profile_menu(state: &mut State) -> ScreenAction {
             refresh_rows(state);
             cancel_profile_menu(state);
             audio::play_sfx("assets/sounds/start.ogg");
-            ScreenAction::None
+            ThemeEffect::None
         }
         ProfileMenuAction::LinkArrowCloud => {
             cancel_profile_menu(state);
             audio::play_sfx("assets/sounds/start.ogg");
-            ScreenAction::LinkArrowCloud {
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::LinkArrowCloud {
                 profile_id: menu.id.clone(),
                 display_name: menu.display_name.clone(),
-            }
+            })
         }
         ProfileMenuAction::LinkGrooveStats => {
             cancel_profile_menu(state);
             audio::play_sfx("assets/sounds/start.ogg");
-            ScreenAction::LinkGrooveStats {
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::LinkGrooveStats {
                 profile_id: menu.id.clone(),
                 display_name: menu.display_name.clone(),
-            }
+            })
         }
         ProfileMenuAction::Rename => {
             state.profile_menu = None;
             begin_name_entry_rename(state, &menu.id, &menu.display_name);
             audio::play_sfx("assets/sounds/start.ogg");
-            ScreenAction::None
+            ThemeEffect::None
         }
         ProfileMenuAction::Delete => {
             state.profile_menu = None;
             begin_delete_confirm(state, &menu.id, &menu.display_name);
             audio::play_sfx("assets/sounds/start.ogg");
-            ScreenAction::None
+            ThemeEffect::None
         }
     }
 }
@@ -1317,30 +1317,30 @@ fn handle_import_picker_input(state: &mut State, ev: &InputEvent) {
 }
 
 #[inline(always)]
-fn activate_selected_row(state: &mut State) -> ScreenAction {
+fn activate_selected_row(state: &mut State) -> ThemeEffect {
     let total = state.rows.len();
     if total == 0 {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     let sel = state.selected.min(total - 1);
     let start_row = state.rows[sel].kind.clone();
     match start_row {
         RowKind::CreateNew => {
             begin_name_entry_create(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
         RowKind::ImportItg => {
             begin_import_picker(state);
-            ScreenAction::None
+            ThemeEffect::None
         }
         RowKind::Exit => {
             audio::play_sfx("assets/sounds/start.ogg");
-            ScreenAction::Navigate(Screen::Options)
+            ThemeEffect::Navigate(Screen::Options)
         }
         RowKind::Profile { id, display_name } => {
             begin_profile_menu(state, &id, &display_name);
             audio::play_sfx("assets/sounds/start.ogg");
-            ScreenAction::None
+            ThemeEffect::None
         }
     }
 }
@@ -1363,17 +1363,17 @@ fn undo_profile_menu_move(state: &mut State, undo: i8) {
     }
 }
 
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     if state.import_job.is_some() {
         // While an import runs, the only interaction is Back to request a clean
         // cancel; everything else is swallowed so the modal stays put.
         if ev.pressed && matches!(ev.action, VirtualAction::p1_back | VirtualAction::p2_back) {
             request_import_cancel(state);
         }
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     if state.folder_pick.is_some() {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     if state.import_message.is_some() {
         if ev.pressed
@@ -1387,7 +1387,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         {
             dismiss_import_message(state);
         }
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
 
     let three_key_action = screen_input::three_key_menu_action(&mut state.menu_lr_chord, ev);
@@ -1401,7 +1401,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             {
                 state.menu_lr_undo = 0;
                 on_nav_release(state, NavDirection::Up);
-                return ScreenAction::None;
+                return ThemeEffect::None;
             }
             VirtualAction::p1_right
             | VirtualAction::p1_menu_right
@@ -1411,7 +1411,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             {
                 state.menu_lr_undo = 0;
                 on_nav_release(state, NavDirection::Down);
-                return ScreenAction::None;
+                return ThemeEffect::None;
             }
             _ => {}
         }
@@ -1429,7 +1429,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                     screen_input::ThreeKeyMenuAction::Confirm => confirm_import_picker(state),
                     screen_input::ThreeKeyMenuAction::Cancel => cancel_import_picker(state),
                 }
-                return ScreenAction::None;
+                return ThemeEffect::None;
             }
             if state.name_entry.is_some() {
                 match nav {
@@ -1437,7 +1437,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                     screen_input::ThreeKeyMenuAction::Cancel => cancel_name_entry(state),
                     _ => {}
                 }
-                return ScreenAction::None;
+                return ThemeEffect::None;
             }
             if state.delete_confirm.is_some() {
                 match nav {
@@ -1445,7 +1445,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                     screen_input::ThreeKeyMenuAction::Cancel => cancel_delete_confirm(state),
                     _ => {}
                 }
-                return ScreenAction::None;
+                return ThemeEffect::None;
             }
             if state.profile_menu.is_some() {
                 return match nav {
@@ -1454,28 +1454,28 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                         on_nav_press(state, NavDirection::Up);
                         state.menu_lr_undo = 1;
                         audio::play_sfx("assets/sounds/change.ogg");
-                        ScreenAction::None
+                        ThemeEffect::None
                     }
                     screen_input::ThreeKeyMenuAction::Next => {
                         move_profile_menu_selected(state, NavDirection::Down);
                         on_nav_press(state, NavDirection::Down);
                         state.menu_lr_undo = -1;
                         audio::play_sfx("assets/sounds/change.ogg");
-                        ScreenAction::None
+                        ThemeEffect::None
                     }
                     screen_input::ThreeKeyMenuAction::Confirm => {
                         state.menu_lr_undo = 0;
                         let action = confirm_profile_menu(state);
-                        if !matches!(action, ScreenAction::None) {
+                        if !matches!(action, ThemeEffect::None) {
                             return action;
                         }
-                        ScreenAction::None
+                        ThemeEffect::None
                     }
                     screen_input::ThreeKeyMenuAction::Cancel => {
                         undo_profile_menu_move(state, state.menu_lr_undo);
                         state.menu_lr_undo = 0;
                         cancel_profile_menu(state);
-                        ScreenAction::None
+                        ThemeEffect::None
                     }
                 };
             }
@@ -1484,13 +1484,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                     move_selected(state, NavDirection::Up, NavWrap::Wrap);
                     on_nav_press(state, NavDirection::Up);
                     state.menu_lr_undo = 1;
-                    ScreenAction::None
+                    ThemeEffect::None
                 }
                 screen_input::ThreeKeyMenuAction::Next => {
                     move_selected(state, NavDirection::Down, NavWrap::Wrap);
                     on_nav_press(state, NavDirection::Down);
                     state.menu_lr_undo = -1;
-                    ScreenAction::None
+                    ThemeEffect::None
                 }
                 screen_input::ThreeKeyMenuAction::Confirm => {
                     state.menu_lr_undo = 0;
@@ -1499,14 +1499,14 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
                 screen_input::ThreeKeyMenuAction::Cancel => {
                     undo_nav_move(state, state.menu_lr_undo);
                     state.menu_lr_undo = 0;
-                    ScreenAction::Navigate(Screen::Options)
+                    ThemeEffect::Navigate(Screen::Options)
                 }
             };
         }
     }
     if state.import_picker.is_some() {
         handle_import_picker_input(state, ev);
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     if state.name_entry.is_some() {
         match ev.action {
@@ -1518,7 +1518,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             }
             _ => {}
         }
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
 
     if state.delete_confirm.is_some() {
@@ -1531,7 +1531,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             }
             _ => {}
         }
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
 
     if state.profile_menu.is_some() {
@@ -1559,18 +1559,18 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
             }
             VirtualAction::p1_start | VirtualAction::p2_start if ev.pressed => {
                 let action = confirm_profile_menu(state);
-                if !matches!(action, ScreenAction::None) {
+                if !matches!(action, ThemeEffect::None) {
                     return action;
                 }
             }
             _ => {}
         }
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
 
     match ev.action {
         VirtualAction::p1_back | VirtualAction::p2_back if ev.pressed => {
-            return ScreenAction::Navigate(Screen::Options);
+            return ThemeEffect::Navigate(Screen::Options);
         }
         VirtualAction::p1_up
         | VirtualAction::p1_menu_up
@@ -1600,35 +1600,35 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
         _ => {}
     }
 
-    ScreenAction::None
+    ThemeEffect::None
 }
 
 pub fn handle_raw_key_event(
     state: &mut State,
     key_event: Option<&RawKeyboardEvent>,
     text: Option<&str>,
-) -> ScreenAction {
+) -> ThemeEffect {
     let Some(entry) = state.name_entry.as_mut() else {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     };
     if let Some(key_event) = key_event {
         if !key_event.pressed {
-            return ScreenAction::None;
+            return ThemeEffect::None;
         }
         let code = key_event.code;
         match code {
             KeyCode::Backspace => {
                 let _ = entry.value.pop();
                 entry.error = None;
-                return ScreenAction::None;
+                return ThemeEffect::None;
             }
-            KeyCode::Escape => return ScreenAction::None,
+            KeyCode::Escape => return ThemeEffect::None,
             _ => {}
         }
     }
 
     let Some(text) = text else {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     };
 
     let mut len = entry.value.chars().count();
@@ -1643,7 +1643,7 @@ pub fn handle_raw_key_event(
         len += 1;
     }
     entry.error = None;
-    ScreenAction::None
+    ThemeEffect::None
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
@@ -2923,7 +2923,7 @@ mod tests {
         }
     }
 
-    fn press(state: &mut State, action: VirtualAction) -> ScreenAction {
+    fn press(state: &mut State, action: VirtualAction) -> ThemeEffect {
         handle_input(state, &input_event(action, true))
     }
 
@@ -2960,7 +2960,7 @@ mod tests {
 
         assert!(matches!(
             press(&mut state, VirtualAction::p2_start),
-            ScreenAction::Navigate(Screen::Options)
+            ThemeEffect::Navigate(Screen::Options)
         ));
     }
 

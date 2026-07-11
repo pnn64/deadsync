@@ -1,7 +1,7 @@
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_profile::{PlayStyle, PlayerSide, player_side_index};
 use deadsync_score::stage_stats::{PlayerStageSummary, StageSummary};
-use deadsync_screens::ScoreInfo;
+use deadsync_theme_simply_love::views::ScoreInfo;
 use std::borrow::Cow;
 
 fn notes_hit(score: &ScoreInfo) -> u32 {

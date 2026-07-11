@@ -11,7 +11,7 @@ use crate::act;
 use crate::assets::i18n::tr;
 use crate::assets::{FontRole, current_machine_font_key_for_text};
 use crate::screens::components::shared::{transitions, visual_style_bg};
-use crate::screens::{Screen, ScreenAction};
+use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{self, screen_center_x, screen_height, screen_width};
@@ -90,7 +90,7 @@ pub fn on_enter(state: &mut State) {
     apply_lights(state);
 }
 
-pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
+pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
     let connected = connected_count();
     // Keep the phase consistent with how many pads are present (hot-plug safe).
     if connected < 2 && state.phase != Phase::NeedTwoPads {
@@ -144,27 +144,27 @@ pub fn update(state: &mut State, dt: f32) -> Option<ScreenAction> {
     None
 }
 
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> ScreenAction {
+pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     if !ev.pressed {
-        return ScreenAction::None;
+        return ThemeEffect::None;
     }
     match ev.action {
         VirtualAction::p1_back | VirtualAction::p2_back => exit(state),
         VirtualAction::p1_start | VirtualAction::p2_start if state.phase == Phase::Done => {
             exit(state)
         }
-        _ => ScreenAction::None,
+        _ => ThemeEffect::None,
     }
 }
 
 /// Leave the screen. The options StepManiaX page re-drives the pad lights itself,
 /// so only restore auto-lighting when returning somewhere that won't (e.g. the
 /// Menu), to avoid a one-frame flicker on the handoff.
-fn exit(state: &State) -> ScreenAction {
+fn exit(state: &State) -> ThemeEffect {
     if state.return_screen != Screen::Options {
         smx::reenable_auto_lights();
     }
-    ScreenAction::Navigate(state.return_screen)
+    ThemeEffect::Navigate(state.return_screen)
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {

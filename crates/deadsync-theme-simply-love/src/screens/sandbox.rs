@@ -1,7 +1,7 @@
 use crate::act;
 use crate::assets::{FontRole, current_machine_font_key};
 use crate::screens::components::shared::transitions;
-use crate::screens::{Screen, ScreenAction};
+use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::Actor;
 use deadlib_present::space::screen_center_x;
 use deadsync_input::RawKeyboardEvent;
@@ -50,12 +50,12 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
     transitions::fade_out_black(TRANSITION_OUT_DURATION, 1200)
 }
 
-pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> ScreenAction {
+pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> ThemeEffect {
     if key_event.pressed && !key_event.repeat {
         let code = key_event.code;
         // F4 or Escape navigates back to Menu
         if matches!(code, KeyCode::F4 | KeyCode::Escape) {
-            return ScreenAction::Navigate(Screen::Menu);
+            return ThemeEffect::Navigate(Screen::Menu);
         }
         let key_str = format!("Keyboard: KeyCode::{code:?}");
         state.last_inputs.push_front((key_str, Instant::now()));
@@ -63,7 +63,7 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
             state.last_inputs.pop_back();
         }
     }
-    ScreenAction::None
+    ThemeEffect::None
 }
 
 pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
@@ -198,9 +198,9 @@ pub fn get_actors(state: &State) -> Vec<Actor> {
     actors
 }
 
-pub fn handle_input(_state: &mut State, ev: &InputEvent) -> ScreenAction {
+pub fn handle_input(_state: &mut State, ev: &InputEvent) -> ThemeEffect {
     if ev.pressed && ev.action == VirtualAction::p1_back {
-        return ScreenAction::Navigate(Screen::Menu);
+        return ThemeEffect::Navigate(Screen::Menu);
     }
-    ScreenAction::None
+    ThemeEffect::None
 }

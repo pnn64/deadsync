@@ -2,10 +2,7 @@ use crate::Command;
 use crate::interaction::{ExitIntent, ProcessExitPlan, ProcessExitRequest, ShellInteractionState};
 use crate::runtime::ShellState;
 use deadlib_platform::dirs;
-use deadsync_config::navigation::{
-    AppTransitionScreen, MachineFlowScreen, app_screen_actor_fades, app_transition_actor_only,
-};
-use deadsync_screens::Screen;
+use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
 use std::path::PathBuf;
 
 const FADE_OUT_DURATION: f32 = 0.4;
@@ -516,68 +513,13 @@ pub const fn fade_completion_plan(intent: ExitIntent) -> FadeCompletionPlan {
 }
 
 #[inline(always)]
-pub const fn machine_flow_screen(screen: Screen) -> Option<MachineFlowScreen> {
-    match screen {
-        Screen::Menu => Some(MachineFlowScreen::Menu),
-        Screen::SelectProfile => Some(MachineFlowScreen::SelectProfile),
-        Screen::SelectColor => Some(MachineFlowScreen::SelectColor),
-        Screen::SelectStyle => Some(MachineFlowScreen::SelectStyle),
-        Screen::SelectPlayMode => Some(MachineFlowScreen::SelectPlayMode),
-        Screen::ProfileLoad => Some(MachineFlowScreen::ProfileLoad),
-        Screen::EvaluationSummary => Some(MachineFlowScreen::EvaluationSummary),
-        Screen::Initials => Some(MachineFlowScreen::Initials),
-        Screen::GameOver => Some(MachineFlowScreen::GameOver),
-        _ => None,
-    }
-}
-
-#[inline(always)]
-pub const fn screen_from_machine_flow(screen: MachineFlowScreen) -> Screen {
-    match screen {
-        MachineFlowScreen::Menu => Screen::Menu,
-        MachineFlowScreen::SelectProfile => Screen::SelectProfile,
-        MachineFlowScreen::SelectColor => Screen::SelectColor,
-        MachineFlowScreen::SelectStyle => Screen::SelectStyle,
-        MachineFlowScreen::SelectPlayMode => Screen::SelectPlayMode,
-        MachineFlowScreen::ProfileLoad => Screen::ProfileLoad,
-        MachineFlowScreen::EvaluationSummary => Screen::EvaluationSummary,
-        MachineFlowScreen::Initials => Screen::Initials,
-        MachineFlowScreen::GameOver => Screen::GameOver,
-    }
-}
-
-#[inline(always)]
-const fn app_transition_screen(screen: Screen) -> Option<AppTransitionScreen> {
-    match screen {
-        Screen::Menu => Some(AppTransitionScreen::Menu),
-        Screen::Options => Some(AppTransitionScreen::Options),
-        Screen::SelectProfile => Some(AppTransitionScreen::SelectProfile),
-        Screen::SelectColor => Some(AppTransitionScreen::SelectColor),
-        Screen::SelectStyle => Some(AppTransitionScreen::SelectStyle),
-        Screen::Mappings => Some(AppTransitionScreen::Mappings),
-        Screen::Input => Some(AppTransitionScreen::Input),
-        Screen::TestLights => Some(AppTransitionScreen::TestLights),
-        Screen::OverscanAdjustment => Some(AppTransitionScreen::OverscanAdjustment),
-        Screen::SmxAssignPads => Some(AppTransitionScreen::SmxAssignPads),
-        Screen::ManageLocalProfiles => Some(AppTransitionScreen::ManageLocalProfiles),
-        _ => None,
-    }
-}
-
-#[inline(always)]
 pub const fn is_actor_fade_screen(screen: Screen) -> bool {
-    match app_transition_screen(screen) {
-        Some(screen) => app_screen_actor_fades(screen),
-        None => false,
-    }
+    deadsync_theme_simply_love::screens::uses_actor_fade(screen)
 }
 
 #[inline(always)]
 pub const fn is_actor_only_transition(from: Screen, to: Screen) -> bool {
-    match (app_transition_screen(from), app_transition_screen(to)) {
-        (Some(from), Some(to)) => app_transition_actor_only(from, to),
-        _ => false,
-    }
+    deadsync_theme_simply_love::screens::uses_actor_only_transition(from, to)
 }
 
 pub fn write_current_screen_file(screen: Screen) {
@@ -599,27 +541,6 @@ pub fn write_current_screen_file(screen: Screen) {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn machine_flow_mapping_round_trips() {
-        for screen in [
-            Screen::Menu,
-            Screen::SelectProfile,
-            Screen::SelectColor,
-            Screen::SelectStyle,
-            Screen::SelectPlayMode,
-            Screen::ProfileLoad,
-            Screen::EvaluationSummary,
-            Screen::Initials,
-            Screen::GameOver,
-        ] {
-            assert_eq!(
-                screen_from_machine_flow(machine_flow_screen(screen).unwrap()),
-                screen
-            );
-        }
-        assert_eq!(machine_flow_screen(Screen::Gameplay), None);
-    }
 
     #[test]
     fn actor_fade_policy_uses_screen_contract() {

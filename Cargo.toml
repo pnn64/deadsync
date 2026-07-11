@@ -44,7 +44,6 @@ members = [
     "crates/deadlib-renderer",
     "crates/deadsync-rules",
     "crates/deadsync-score",
-    "crates/deadsync-screens",
     "crates/deadsync-shell",
     "crates/deadsync-simfile",
     "crates/deadsync-song-lua",
@@ -62,7 +61,7 @@ resolver = "3"
 # `version.workspace = true`, so `env!("CARGO_PKG_VERSION")` and
 # `deadsync_version::current()` always agree. Bump THIS line on release.
 [workspace.package]
-version = "0.4.2505"
+version = "0.4.2506"
 
 [[bin]]
 name = "generate_pseudo"
