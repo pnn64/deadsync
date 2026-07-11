@@ -862,8 +862,70 @@ const NOTESKIN_CRATE_FORBIDDEN_TOKENS: &[&str] = &[
 ];
 
 const NOTEFIELD_CRATE_FORBIDDEN_TOKENS: &[&str] = &[
+    "deadsync-assets",
+    "deadsync_assets",
     "deadsync_assets::noteskin",
     "deadsync::game::parsing::noteskin",
+    "deadsync-theme-simply-love",
+    "deadsync_theme_simply_love",
+    "deadsync-shell",
+    "deadsync_shell",
+    "deadsync-screens",
+    "deadsync_screens",
+    "deadsync-config",
+    "deadsync_config",
+    "deadsync-profile",
+    "deadsync_profile",
+    "deadsync-online",
+    "deadsync_online",
+    "deadsync-simfile",
+    "deadsync_simfile",
+    "deadlib-renderer",
+    "deadlib_renderer",
+    "deadlib-render-backend-",
+    "deadlib_render_backend_",
+    "deadlib-video",
+    "deadlib_video",
+    "deadsync-input-native",
+    "deadsync_input_native",
+    "deadsync-audio-stream",
+    "deadsync_audio_stream",
+    "deadlib-platform",
+    "deadlib_platform",
+    "deadsync-smx",
+    "deadsync_smx",
+    "deadsync-lights",
+    "deadsync_lights",
+    "winit",
+    "std::fs",
+    "std::net",
+    "std::process",
+    "Instant::now",
+];
+
+const CONTRACT_CRATE_FORBIDDEN_TOKENS: &[&str] = &[
+    "deadsync-theme-simply-love",
+    "deadsync_theme_simply_love",
+    "deadsync-shell",
+    "deadsync_shell",
+    "deadlib-renderer",
+    "deadlib_renderer",
+    "deadlib-render-backend-",
+    "deadlib_render_backend_",
+    "deadsync-input-native",
+    "deadsync_input_native",
+    "deadsync-audio-stream",
+    "deadsync_audio_stream",
+    "deadlib-platform",
+    "deadlib_platform",
+    "deadsync-smx",
+    "deadsync_smx",
+    "deadsync-lights",
+    "deadsync_lights",
+    "winit",
+    "std::fs",
+    "std::net",
+    "std::process",
 ];
 
 const SCREEN_THEME_SOURCE_DIRS: &[&str] = &[
@@ -981,11 +1043,14 @@ fn noteskin_crate_stays_renderer_and_app_independent() {
 }
 
 #[test]
-fn notefield_crate_does_not_import_root_noteskin_bridge() {
+fn notefield_crate_stays_independent_of_themes_and_runtime() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let crate_dir = root.join("crates/deadsync-notefield");
+    let mut files = rust_files(&crate_dir.join("src"));
+    files.push(crate_dir.join("Cargo.toml"));
     let mut failures = Vec::new();
 
-    for file in rust_files(&root.join("crates/deadsync-notefield/src")) {
+    for file in files {
         let text = fs::read_to_string(&file).expect("notefield crate file should be readable");
         let rel = rel_path(&root, &file);
         for token in NOTEFIELD_CRATE_FORBIDDEN_TOKENS {
@@ -1000,9 +1065,94 @@ fn notefield_crate_does_not_import_root_noteskin_bridge() {
 
     assert!(
         failures.is_empty(),
-        "deadsync-notefield should depend on crate DTOs, not the root noteskin bridge:\n{}",
+        "deadsync-notefield must consume lower-layer data and generic theme contracts only:\n{}",
         failures.join("\n")
     );
+}
+
+#[test]
+fn generic_theme_and_screen_contracts_stay_runtime_independent() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut failures = Vec::new();
+
+    for crate_name in ["deadsync-theme", "deadsync-screens"] {
+        let crate_dir = root.join("crates").join(crate_name);
+        let mut files = rust_files(&crate_dir.join("src"));
+        files.push(crate_dir.join("Cargo.toml"));
+        for file in files {
+            let text = fs::read_to_string(&file).expect("contract crate file should be readable");
+            let rel = rel_path(&root, &file);
+            for token in CONTRACT_CRATE_FORBIDDEN_TOKENS {
+                let count = text.match_indices(token).count();
+                if count != 0 {
+                    failures.push(format!(
+                        "{rel} references runtime or concrete-theme token {token} {count} times"
+                    ));
+                }
+            }
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "generic theme and screen contracts must not depend on concrete themes or runtime backends:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
+fn presentation_crates_do_not_import_runtime_renderers() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut failures = Vec::new();
+
+    for crate_name in [
+        "deadsync-notefield",
+        "deadsync-screens",
+        "deadsync-theme",
+        "deadsync-theme-simply-love",
+    ] {
+        let crate_dir = root.join("crates").join(crate_name);
+        let mut files = rust_files(&crate_dir.join("src"));
+        files.push(crate_dir.join("Cargo.toml"));
+        for file in files {
+            let text = fs::read_to_string(&file).expect("presentation file should be readable");
+            for token in [
+                "deadlib-renderer",
+                "deadlib_renderer",
+                "deadlib-render-backend-",
+                "deadlib_render_backend_",
+            ] {
+                if text.contains(token) {
+                    failures.push(format!("{}: {token}", rel_path(&root, &file)));
+                }
+            }
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "presentation crates must consume render contracts, not runtime renderers:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
+fn notefield_theme_dependency_points_toward_contracts() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let manifest = |name: &str| {
+        fs::read_to_string(root.join("crates").join(name).join("Cargo.toml"))
+            .expect("manifest should be readable")
+    };
+    let theme = manifest("deadsync-theme");
+    let notefield = manifest("deadsync-notefield");
+    let simply_love = manifest("deadsync-theme-simply-love");
+
+    assert!(notefield.contains("deadsync-theme ="));
+    assert!(!notefield.contains("deadsync-theme-simply-love"));
+    assert!(!theme.contains("deadsync-notefield ="));
+    assert!(!theme.contains("deadsync-theme-simply-love"));
+    assert!(simply_love.contains("deadsync-theme ="));
+    assert!(simply_love.contains("deadsync-notefield ="));
 }
 
 #[test]
@@ -3924,6 +4074,7 @@ fn concrete_theme_resources_live_in_simply_love() {
         "src/fonts.rs",
         "src/i18n.rs",
         "src/i18n_runtime.rs",
+        "src/notefield_style.rs",
         "src/resources.rs",
         "src/scorebox.rs",
         "src/step_stats.rs",
@@ -3937,12 +4088,151 @@ fn concrete_theme_resources_live_in_simply_love() {
     }
     let simply_love_manifest = fs::read_to_string(simply_love.join("Cargo.toml"))
         .expect("Simply Love manifest should be readable");
-    for dependency in ["deadsync-assets", "deadsync-theme"] {
+    for dependency in ["deadsync-assets", "deadsync-notefield", "deadsync-theme"] {
         assert!(
             simply_love_manifest.contains(dependency),
             "Simply Love must consume {dependency}"
         );
     }
+}
+
+#[test]
+fn simply_love_notefield_uses_canonical_composition_boundaries() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let source = fs::read_to_string(root.join(
+        "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/mod.rs",
+    ))
+    .expect("Simply Love notefield adapter should be readable");
+
+    for token in [
+        "fn scroll_travel",
+        "fn field_layout",
+        "fn compose_measure_lines",
+        "while iters < 2000",
+        "while iterations < 2000",
+        "Walk backward from current beat",
+        "CUE_SCROLL",
+        "fn append_group_lines",
+        "fn append_group_cues",
+        "fn measure_groups",
+        "fn candidate_for_unit",
+        "active_column_cue",
+        "column_flash_duration",
+        "COLUMN_CUE_BASE_ALPHA",
+        "Z_COLUMN_CUE",
+        "Z_COLUMN_FLASH",
+        "column_cue_reverse_top_y",
+        "column_flash_reverse_top_y",
+        "stream_segment_index_exclusive_end",
+        "zmod_measure_counter_text(",
+        "zmod_broken_run_counter_text",
+        "zmod_broken_run_segment",
+        "zmod_run_timer_index",
+        "fn visual_effect_params",
+        "fn compose_column_feedback",
+        "fn compose_counter_hud",
+        "fn compose_mini_indicator",
+        "fn compose_judgment_feedback",
+        "fn compose_combo_feedback",
+        "let indicator_beat_push",
+        "HOLD_JUDGMENT_INITIAL_ZOOM",
+        "SPLIT_15_10MS_OVERLAY_ALPHA",
+        "HELD_MISS_Y_OFFSET_FROM_CENTER",
+        "let linear_index",
+        "ComboMilestoneKind::Hundred",
+        "COMBO_HUNDRED_MILESTONE_DURATION",
+        "COMBO_THOUSAND_MILESTONE_DURATION",
+        "SHOW_COMBO_AT",
+        "let combo_zoom_mod",
+    ] {
+        assert!(
+            !source.contains(token),
+            "Simply Love reintroduced canonical notefield algorithm token {token}"
+        );
+    }
+
+    for call in [
+        "scroll_travel(ScrollTravelRequest",
+        "field_layout(FieldLayoutRequest",
+        "compose_measure_lines(",
+        "compose_column_feedback(",
+        "compose_counter_hud(",
+        "compose_mini_indicator(",
+        "compose_judgment_feedback(",
+        "compose_combo_feedback(",
+    ] {
+        assert!(
+            source.contains(call),
+            "Simply Love must delegate canonical notefield work through {call}"
+        );
+    }
+
+    for (path, definition) in [
+        (
+            "crates/deadsync-notefield/src/notes.rs",
+            "pub fn scroll_travel",
+        ),
+        (
+            "crates/deadsync-notefield/src/placement.rs",
+            "pub fn field_layout",
+        ),
+        (
+            "crates/deadsync-notefield/src/measure_lines.rs",
+            "pub fn compose_measure_lines",
+        ),
+        (
+            "crates/deadsync-notefield/src/feedback.rs",
+            "pub fn compose_column_feedback",
+        ),
+        (
+            "crates/deadsync-notefield/src/hud.rs",
+            "pub fn compose_counter_hud",
+        ),
+        (
+            "crates/deadsync-notefield/src/hud.rs",
+            "pub fn compose_mini_indicator",
+        ),
+        (
+            "crates/deadsync-notefield/src/judgment_feedback.rs",
+            "pub fn compose_judgment_feedback",
+        ),
+        (
+            "crates/deadsync-notefield/src/combo_feedback.rs",
+            "pub fn compose_combo_feedback",
+        ),
+        (
+            "crates/deadsync-notefield/src/transforms.rs",
+            "pub fn gameplay_visual_effect_params",
+        ),
+    ] {
+        let owner =
+            fs::read_to_string(root.join(path)).expect("canonical owner should be readable");
+        assert!(
+            owner.contains(definition),
+            "canonical notefield owner {path} is missing {definition}"
+        );
+    }
+
+    let capture = source
+        .find("let combo_capture_start")
+        .expect("Simply Love should preserve the combo proxy capture start");
+    let adapter = source[capture..]
+        .find("compose_combo_feedback(")
+        .map(|index| capture + index)
+        .expect("Simply Love should call canonical combo composition after capture start");
+    let capture_end = source[adapter..]
+        .find("share_actor_range(&mut hud_actors, combo_capture_start)")
+        .map(|index| adapter + index)
+        .expect("Simply Love should preserve combo proxy capture completion");
+    assert!(capture < adapter && adapter < capture_end);
+
+    let theme_contract = fs::read_to_string(root.join("crates/deadsync-theme/src/lib.rs"))
+        .expect("theme contract should be readable");
+    assert!(theme_contract.contains("pub struct ComboFeedbackStyle"));
+    let simply_love_style =
+        fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/notefield_style.rs"))
+            .expect("Simply Love notefield style should be readable");
+    assert!(simply_love_style.contains("combo_feedback: ComboFeedbackStyle"));
 }
 
 fn count_download_protocol_game_facade_refs(text: &str, symbol: &str) -> usize {

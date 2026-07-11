@@ -1,8 +1,11 @@
 mod actor_builder;
+mod combo_feedback;
 mod display_mods;
 mod error_bar;
 mod feedback;
 mod holds;
+mod hud;
+mod judgment_feedback;
 mod measure_actors;
 mod measure_lines;
 mod mini_indicator;
@@ -13,17 +16,19 @@ mod style;
 mod transforms;
 
 pub use actor_builder::*;
+pub use combo_feedback::*;
 pub use display_mods::*;
 pub use error_bar::*;
 pub use feedback::*;
 pub use holds::*;
+pub use hud::*;
+pub use judgment_feedback::*;
 pub use measure_actors::*;
 pub use measure_lines::*;
 pub use mini_indicator::*;
 pub use notes::*;
 pub use placement::*;
 pub use receptors::*;
-pub use style::COLUMN_CUE_Y_OFFSET;
 pub use transforms::*;
 
 #[cfg(test)]
@@ -43,11 +48,10 @@ mod tests {
     use std::sync::Arc;
 
     use super::{
-        AccelYParams, BuiltNotefield, COLUMN_CUE_Y_OFFSET, DISPLAY_TURN_MIRROR,
-        DISPLAY_TURN_RANDOM, DISPLAY_TURN_UD_MIRROR, GameplayModsAttackMode,
-        GameplayModsTextParams, HudLayoutOffsets, HudLayoutParams, JudgmentTiltParams,
-        LayoutMiniIndicatorPosition, MiniIndicatorColorStyle, MiniIndicatorMode,
-        MiniIndicatorProgress, MiniIndicatorScoreType, MiniIndicatorSize,
+        AccelYParams, BuiltNotefield, DISPLAY_TURN_MIRROR, DISPLAY_TURN_RANDOM,
+        DISPLAY_TURN_UD_MIRROR, GameplayModsAttackMode, GameplayModsTextParams, HudLayoutOffsets,
+        HudLayoutParams, JudgmentTiltParams, LayoutMiniIndicatorPosition, MiniIndicatorColorStyle,
+        MiniIndicatorMode, MiniIndicatorProgress, MiniIndicatorScoreType, MiniIndicatorSize,
         MiniIndicatorSubtractiveDisplay, NoteAlphaParams, NoteXParams, TapJudgmentRowsParams,
         TapReplacementHead, TornadoBounds, VisualEffectParams, ZmodComboColorParams,
         ZmodComboColorStyle, ZmodLayoutParams, ZmodMeasureCounterText, ZmodMiniIndicatorOutput,
@@ -103,6 +107,53 @@ mod tests {
     use deadsync_rules::scroll::ScrollSpeedSetting;
     use deadsync_rules::stream::StreamSegment;
     use deadsync_rules::timing::{self, TimeSignatureSegment};
+    use deadsync_theme::{ColumnCueStyle, ColumnFlashLayoutStyle, ColumnFlashStyle};
+
+    fn cue_style() -> ColumnCueStyle {
+        ColumnCueStyle {
+            top_y: 80.0,
+            reverse_anchor_y: 304.0,
+            crossover_height_trim: 270.0,
+            body_fade: 0.333,
+            base_alpha: 0.12,
+            normal_color: [0.3, 1.0, 1.0],
+            mine_color: [1.0, 0.0, 0.0],
+            countdown_normal_y: 160.0,
+            countdown_reverse_y: 340.0,
+            countdown_color: [1.0, 1.0, 1.0],
+            countdown_zoom: 0.5,
+            body_z: 90,
+            countdown_z: 200,
+        }
+    }
+
+    fn flash_style() -> ColumnFlashStyle {
+        ColumnFlashStyle {
+            default_layout: ColumnFlashLayoutStyle {
+                top_y: 80.0,
+                height_trim: 0.0,
+                reverse_trim: 0.0,
+                fade: 0.333,
+            },
+            compact_layout: ColumnFlashLayoutStyle {
+                top_y: 70.0,
+                height_trim: 270.0,
+                reverse_trim: 30.0,
+                fade: 0.2,
+            },
+            reverse_anchor_y: 304.0,
+            normal_alpha: 0.66,
+            dimmed_alpha: 0.3,
+            miss_color: [1.0, 0.0, 0.0],
+            decent_color: [0.70, 0.36, 1.0],
+            way_off_color: [0.788, 0.522, 0.369],
+            great_color: [0.4, 0.788, 0.333],
+            excellent_color: [0.886, 0.612, 0.094],
+            fantastic_color: [1.0, 1.0, 1.0],
+            fantastic_blue_color: [0.129, 0.8, 0.91],
+            z: 91,
+        }
+    }
 
     fn test_note_at_beat(beat: f32) -> Note {
         Note {
@@ -1168,6 +1219,53 @@ mod tests {
                 0.5,
             );
         assert!((x - expected).abs() <= 1e-6);
+
+        let mini_offsets = [-57.6, -19.2, 19.2, 57.6];
+        let base = NoteXParams {
+            screen_height: 480.0,
+            ..NoteXParams::default()
+        };
+        let left = hold_indicator_column_x(
+            123.0,
+            0,
+            0.0,
+            0.0,
+            &mini_offsets,
+            &invert,
+            &tornado,
+            &[0.0; 4],
+            base,
+            0.0,
+        );
+        let right = hold_indicator_column_x(
+            123.0,
+            3,
+            0.0,
+            0.0,
+            &mini_offsets,
+            &invert,
+            &tornado,
+            &[0.0; 4],
+            base,
+            0.0,
+        );
+        assert!((left - 65.4).abs() <= 1e-5);
+        assert!((right - 180.6).abs() <= 1e-5);
+
+        let flipped = NoteXParams { flip: 1.0, ..base };
+        let flipped_left = hold_indicator_column_x(
+            123.0,
+            0,
+            0.0,
+            0.0,
+            &mini_offsets,
+            &invert,
+            &tornado,
+            &[0.0; 4],
+            flipped,
+            0.0,
+        );
+        assert!((flipped_left - 180.6).abs() <= 1e-5);
     }
 
     #[test]
@@ -1228,15 +1326,16 @@ mod tests {
         let lane_width = 64.0;
         let screen_height = 480.0;
         let receptor_reverse_y = 145.0;
-        let cue_height = column_cue_height(screen_height);
-        let top = column_cue_reverse_top_y(lane_width, cue_height, 0.0, receptor_reverse_y);
+        let style = cue_style();
+        let cue_height = column_cue_height(style, screen_height);
+        let top = column_cue_reverse_top_y(style, lane_width, cue_height, 0.0, receptor_reverse_y);
         let bottom = top + cue_height;
 
         assert!((cue_height - 400.0).abs() <= 1e-6);
         assert!((top - 17.0).abs() <= 1e-6);
         assert!((bottom - 417.0).abs() <= 1e-6);
-        assert!((crossover_cue_height(screen_height) - 130.0).abs() <= 1e-6);
-        assert!((COLUMN_CUE_Y_OFFSET - 80.0).abs() <= 1e-6);
+        assert!((crossover_cue_height(style, screen_height) - 130.0).abs() <= 1e-6);
+        assert!((style.top_y - 80.0).abs() <= 1e-6);
     }
 
     #[test]
@@ -1244,12 +1343,14 @@ mod tests {
         let lane_width = 64.0;
         let screen_height = 480.0;
         let receptor_reverse_y = 145.0;
-        let layout = column_flash_layout(false);
+        let style = flash_style();
+        let layout = column_flash_layout(style, false);
         let height = column_flash_height(screen_height, layout);
-        let top = column_flash_reverse_top_y(layout, lane_width, height, 0.0, receptor_reverse_y);
+        let top =
+            column_flash_reverse_top_y(style, layout, lane_width, height, 0.0, receptor_reverse_y);
         let bottom = top + height;
 
-        assert!((layout.y_offset - 80.0).abs() <= 1e-6);
+        assert!((layout.top_y - 80.0).abs() <= 1e-6);
         assert!((layout.fade - 0.333).abs() <= 1e-6);
         assert!((height - 400.0).abs() <= 1e-6);
         assert!((top - 17.0).abs() <= 1e-6);
@@ -1261,12 +1362,14 @@ mod tests {
         let lane_width = 64.0;
         let screen_height = 480.0;
         let receptor_reverse_y = 145.0;
-        let layout = column_flash_layout(true);
+        let style = flash_style();
+        let layout = column_flash_layout(style, true);
         let height = column_flash_height(screen_height, layout);
-        let top = column_flash_reverse_top_y(layout, lane_width, height, 0.0, receptor_reverse_y);
+        let top =
+            column_flash_reverse_top_y(style, layout, lane_width, height, 0.0, receptor_reverse_y);
         let bottom = top + height;
 
-        assert!((layout.y_offset - 70.0).abs() <= 1e-6);
+        assert!((layout.top_y - 70.0).abs() <= 1e-6);
         assert!((layout.height_trim - 270.0).abs() <= 1e-6);
         assert!((layout.fade - 0.2).abs() <= 1e-6);
         assert!((height - 140.0).abs() <= 1e-6);
@@ -1291,8 +1394,9 @@ mod tests {
 
     #[test]
     fn column_flash_alpha_matches_brightness_options() {
-        let normal = column_flash_alpha(0.0, 0.0, 0.5, false);
-        let dimmed = column_flash_alpha(0.0, 0.0, 0.5, true);
+        let style = flash_style();
+        let normal = column_flash_alpha(style, 0.0, 0.0, 0.5, false);
+        let dimmed = column_flash_alpha(style, 0.0, 0.0, 0.5, true);
 
         assert!((normal - 0.66).abs() <= 1e-6);
         assert!((dimmed - 0.3).abs() <= 1e-6);
@@ -1301,15 +1405,15 @@ mod tests {
     #[test]
     fn column_flash_colors_match_reference_palette() {
         assert_eq!(
-            column_flash_color(JudgeGrade::Miss, false, 0.3),
+            column_flash_color(flash_style(), JudgeGrade::Miss, false, 0.3),
             [1.0, 0.0, 0.0, 0.3]
         );
         assert_eq!(
-            column_flash_color(JudgeGrade::Decent, false, 0.3),
+            column_flash_color(flash_style(), JudgeGrade::Decent, false, 0.3),
             [0.70, 0.36, 1.00, 0.3]
         );
         assert_eq!(
-            column_flash_color(JudgeGrade::Fantastic, false, 0.3),
+            column_flash_color(flash_style(), JudgeGrade::Fantastic, false, 0.3),
             [1.0, 1.0, 1.0, 0.3]
         );
     }

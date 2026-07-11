@@ -514,3 +514,364 @@ pub fn compose_measure_lines(actors: &mut Vec<Actor>, request: MeasureComposeReq
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{AccelYParams, ScrollTravelRequest, scroll_travel};
+    use deadlib_present::actors::{Actor, SizeSpec};
+    use deadsync_rules::timing::{TimingData, TimingSegments};
+    use deadsync_theme::{
+        ColumnCueStyle, ColumnFlashLayoutStyle, ColumnFlashStyle, ComboFeedbackStyle,
+        CounterHudStyle, JudgmentFeedbackStyle, MiniIndicatorStyle,
+    };
+
+    fn style() -> NotefieldStyle {
+        NotefieldStyle {
+            layout_width_min: 640.0,
+            layout_width_max: 854.0,
+            side_center_x_ratio: 0.25,
+            receptor_normal_y: -125.0,
+            receptor_reverse_y: 145.0,
+            judgment_normal_y: -30.0,
+            judgment_reverse_y: 30.0,
+            judgment_centered_y: 95.0,
+            combo_normal_y: 30.0,
+            combo_reverse_y: -30.0,
+            combo_centered_y: 155.0,
+            judgment_height: 40.0,
+            error_bar_offset_y: 25.0,
+            measure_line_overscan_y: 400.0,
+            measure_line_z: 80,
+            measure_cue_scroll_color: [0.824, 0.706, 0.549],
+            measure_cue_bpm_color: [1.0, 1.0, 0.0],
+            measure_cue_delay_color: [1.0, 0.45, 0.75],
+            measure_cue_stop_color: [1.0, 0.0, 0.0],
+            measure_cue_alpha: 0.7,
+            edit_measure_number_font: "edit-font",
+            column_cue: ColumnCueStyle {
+                top_y: 80.0,
+                reverse_anchor_y: 304.0,
+                crossover_height_trim: 270.0,
+                body_fade: 0.333,
+                base_alpha: 0.12,
+                normal_color: [0.3, 1.0, 1.0],
+                mine_color: [1.0, 0.0, 0.0],
+                countdown_normal_y: 160.0,
+                countdown_reverse_y: 340.0,
+                countdown_color: [1.0, 1.0, 1.0],
+                countdown_zoom: 0.5,
+                body_z: 90,
+                countdown_z: 200,
+            },
+            column_flash: ColumnFlashStyle {
+                default_layout: ColumnFlashLayoutStyle {
+                    top_y: 80.0,
+                    height_trim: 0.0,
+                    reverse_trim: 0.0,
+                    fade: 0.333,
+                },
+                compact_layout: ColumnFlashLayoutStyle {
+                    top_y: 70.0,
+                    height_trim: 270.0,
+                    reverse_trim: 30.0,
+                    fade: 0.2,
+                },
+                reverse_anchor_y: 304.0,
+                normal_alpha: 0.66,
+                dimmed_alpha: 0.3,
+                miss_color: [1.0, 0.0, 0.0],
+                decent_color: [0.70, 0.36, 1.0],
+                way_off_color: [0.788, 0.522, 0.369],
+                great_color: [0.4, 0.788, 0.333],
+                excellent_color: [0.886, 0.612, 0.094],
+                fantastic_color: [1.0, 1.0, 1.0],
+                fantastic_blue_color: [0.129, 0.8, 0.91],
+                z: 91,
+            },
+            counter_hud: CounterHudStyle {
+                text_z: 85,
+                shadow_len: 1.0,
+                base_zoom: 0.35,
+                lookahead_zoom_step: 0.05,
+                vertical_step_y: 20.0,
+                left_column_scale: 4.0 / 3.0,
+                horizontal_span: 2.0,
+                break_lookahead_color: [0.4, 0.4, 0.4, 1.0],
+                break_current_color: [0.5, 0.5, 0.5, 1.0],
+                stream_lookahead_color: [0.45, 0.45, 0.45, 1.0],
+                ratio_color: [1.0, 1.0, 1.0, 1.0],
+                total_color: [0.5, 0.5, 0.5, 1.0],
+                broken_y_offset: 15.0,
+                broken_vertical_y_offset: -15.0,
+                broken_vertical_x_scale: 4.0 / 3.0,
+                broken_color: [1.0, 1.0, 1.0, 0.7],
+                run_active_color: [1.0, 1.0, 1.0, 1.0],
+                run_inactive_color: [0.5, 0.5, 0.5, 1.0],
+            },
+            mini_indicator: MiniIndicatorStyle {
+                column_offset: 1.0,
+                under_up_x_offset: -45.0,
+                unanchored_x_offset: -12.0,
+                failed_color: [0.5, 0.5, 0.5],
+                shadow_len: 1.0,
+                text_z: 85,
+            },
+            judgment_feedback: JudgmentFeedbackStyle {
+                tap_front_z: 200,
+                tap_back_z: 95,
+                split_overlay_alpha: 0.5,
+                held_miss_normal_y: -50.0,
+                held_miss_reverse_y: 110.0,
+                held_miss_z: 196,
+                hold_normal_y: -90.0,
+                hold_reverse_y: 90.0,
+                hold_z: 195,
+                hold_initial_zoom: 25.6 / 140.0,
+                hold_final_zoom: 32.0 / 140.0,
+            },
+            combo_feedback: ComboFeedbackStyle {
+                threshold: 4,
+                milestone_z: 89,
+                number_z: 90,
+                number_zoom: 0.75,
+                shadow_len: 1.0,
+                miss_color: [1.0, 0.0, 0.0, 1.0],
+                burst_duration: 0.5,
+                burst_start_zoom: 2.0,
+                burst_end_zoom: 1.0,
+                burst_start_alpha: 0.5,
+                burst_rotation_deg: 90.0,
+                hundred_start_zoom: 0.25,
+                hundred_end_zoom: 2.0,
+                hundred_start_alpha: 0.6,
+                hundred_start_rotation_deg: 10.0,
+                mini_duration: 0.4,
+                mini_start_zoom: 0.25,
+                mini_end_zoom: 1.8,
+                mini_start_alpha: 1.0,
+                mini_start_rotation_deg: 10.0,
+                thousand_start_zoom: 0.25,
+                thousand_end_zoom: 3.0,
+                thousand_start_alpha: 0.7,
+                thousand_x_travel: 100.0,
+            },
+        }
+    }
+
+    fn timing() -> TimingData {
+        TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments {
+                bpms: vec![(0.0, 120.0)],
+                ..TimingSegments::default()
+            },
+            &[],
+        )
+    }
+
+    fn travel(timing: &TimingData, speed: ScrollSpeedSetting) -> ScrollTravel<'_> {
+        scroll_travel(ScrollTravelRequest {
+            timing,
+            accel: AccelYParams::default(),
+            scroll_speed: speed,
+            current_time_ns: timing.get_time_for_beat_ns(0.0),
+            visible_beat: 0.0,
+            search_beat: 0.0,
+            scroll_reference_bpm: 120.0,
+            music_rate: 1.0,
+            edit_beat_spacing: matches!(speed, ScrollSpeedSetting::XMod(3.0)),
+            draw_distance_after_targets: 400.0,
+            draw_distance_before_targets: 400.0,
+            field_zoom: 1.0,
+            elapsed_screen_s: 0.0,
+            effect_height: 640.0,
+            screen_height: 480.0,
+            note_count_stats: &[],
+            arrow_effect_time_s: 0.0,
+            lane_tipsy: 0.0,
+            lane_move_y: &[],
+        })
+    }
+
+    fn request<'a, 'travel>(
+        mode: MeasureLineMode,
+        travel: &'a ScrollTravel<'travel>,
+        column_dirs: &'a [f32],
+        column_receptor_ys: &'a [f32],
+    ) -> MeasureComposeRequest<'a, 'travel> {
+        static COLUMN_XS: [f32; 4] = [-96.0, -32.0, 32.0, 96.0];
+        MeasureComposeRequest {
+            mode,
+            show_cues: false,
+            style: style(),
+            column_xs: &COLUMN_XS,
+            column_dirs,
+            column_receptor_ys,
+            num_cols: 4,
+            spacing_multiplier: 1.0,
+            field_zoom: 1.0,
+            playfield_center_x: 320.0,
+            screen_height: 480.0,
+            current_beat: 0.0,
+            scroll_speed: ScrollSpeedSetting::XMod(1.0),
+            scroll_reference_bpm: 120.0,
+            music_rate: 1.0,
+            time_signatures: &[],
+            bpms: &[],
+            stops: &[],
+            delays: &[],
+            scrolls: &[],
+            travel,
+        }
+    }
+
+    fn sprite_parts(actor: &Actor) -> Option<([f32; 2], [f32; 2], [f32; 4], i16)> {
+        let Actor::Sprite {
+            offset,
+            size: [SizeSpec::Px(width), SizeSpec::Px(height)],
+            tint,
+            z,
+            ..
+        } = actor
+        else {
+            return None;
+        };
+        Some((*offset, [*width, *height], *tint, *z))
+    }
+
+    #[test]
+    fn compose_modes_keep_measure_quarter_and_eighth_fingerprints() {
+        let timing = timing();
+        let travel = travel(&timing, ScrollSpeedSetting::XMod(1.0));
+        let dirs = [1.0; 4];
+        let receptors = [100.0; 4];
+        let mut counts = Vec::new();
+
+        for (mode, expected_alpha) in [
+            (MeasureLineMode::Measure, 0.75),
+            (MeasureLineMode::Quarter, 0.75),
+            (MeasureLineMode::Eighth, 0.75),
+        ] {
+            let mut actors = Vec::new();
+            compose_measure_lines(&mut actors, request(mode, &travel, &dirs, &receptors));
+            counts.push(actors.len());
+            let current = actors
+                .iter()
+                .filter_map(sprite_parts)
+                .find(|(offset, _, _, _)| (offset[1] - 100.0).abs() <= 0.001)
+                .expect("current-beat measure line");
+            assert_eq!(current.0, [320.0, 100.0]);
+            assert_eq!(current.1, [256.0, 2.0]);
+            assert_eq!(current.2, [1.0, 1.0, 1.0, expected_alpha]);
+            assert_eq!(current.3, 80);
+        }
+
+        assert!(counts[0] < counts[1], "counts={counts:?}");
+        assert!(counts[1] < counts[2], "counts={counts:?}");
+    }
+
+    #[test]
+    fn compose_edit_mode_emits_dashes_and_theme_font_measure_numbers() {
+        let timing = timing();
+        let travel = travel(&timing, ScrollSpeedSetting::XMod(3.0));
+        let dirs = [1.0; 4];
+        let receptors = [100.0; 4];
+        let mut request = request(MeasureLineMode::Edit, &travel, &dirs, &receptors);
+        request.scroll_speed = ScrollSpeedSetting::XMod(3.0);
+        let mut actors = Vec::new();
+        compose_measure_lines(&mut actors, request);
+
+        assert!(actors.iter().any(|actor| matches!(
+            actor,
+            Actor::Sprite { align, .. } if *align == [0.0, 0.5]
+        )));
+        assert!(actors.iter().any(|actor| matches!(
+            actor,
+            Actor::Text { font, content, z, .. }
+                if *font == "edit-font" && content.as_str() == "0" && *z == 81
+        )));
+    }
+
+    #[test]
+    fn compose_measure_lines_splits_mixed_scroll_directions() {
+        let timing = timing();
+        let travel = travel(&timing, ScrollSpeedSetting::XMod(1.0));
+        let dirs = [1.0, 1.0, -1.0, -1.0];
+        let receptors = [100.0, 100.0, 380.0, 380.0];
+        let mut actors = Vec::new();
+        compose_measure_lines(
+            &mut actors,
+            request(MeasureLineMode::Measure, &travel, &dirs, &receptors),
+        );
+        let fingerprints: Vec<_> = actors.iter().filter_map(sprite_parts).collect();
+
+        assert!(
+            fingerprints
+                .iter()
+                .any(|(offset, size, tint, z)| *offset == [256.0, 100.0]
+                    && *size == [128.0, 2.0]
+                    && *tint == [1.0, 1.0, 1.0, 0.75]
+                    && *z == 80)
+        );
+        assert!(
+            fingerprints
+                .iter()
+                .any(|(offset, size, tint, z)| *offset == [384.0, 380.0]
+                    && *size == [128.0, 2.0]
+                    && *tint == [1.0, 1.0, 1.0, 0.75]
+                    && *z == 80)
+        );
+    }
+
+    #[test]
+    fn coincident_cues_keep_scroll_bpm_delay_stop_priority() {
+        let timing = timing();
+        let travel = travel(&timing, ScrollSpeedSetting::XMod(1.0));
+        let dirs = [1.0; 4];
+        let receptors = [100.0; 4];
+        let bpms = [(0.0, 120.0), (4.0, 180.0)];
+        let stops = [StopSegment {
+            beat: 4.0,
+            duration: 0.25,
+        }];
+        let delays = [DelaySegment {
+            beat: 4.0,
+            duration: 0.125,
+        }];
+        let scrolls = [
+            ScrollSegment {
+                beat: 0.0,
+                ratio: 1.0,
+            },
+            ScrollSegment {
+                beat: 4.0,
+                ratio: 0.5,
+            },
+        ];
+        let mut request = request(MeasureLineMode::Off, &travel, &dirs, &receptors);
+        request.show_cues = true;
+        request.bpms = &bpms;
+        request.stops = &stops;
+        request.delays = &delays;
+        request.scrolls = &scrolls;
+        let mut actors = Vec::new();
+        compose_measure_lines(&mut actors, request);
+
+        let tints: Vec<_> = actors
+            .iter()
+            .filter_map(sprite_parts)
+            .map(|(_, _, tint, _)| tint)
+            .collect();
+        assert_eq!(
+            tints,
+            [
+                [0.824, 0.706, 0.549, 0.7],
+                [1.0, 1.0, 0.0, 0.7],
+                [1.0, 0.45, 0.75, 0.7],
+                [1.0, 0.0, 0.0, 0.7],
+            ]
+        );
+    }
+}

@@ -2,9 +2,8 @@ use super::{
     TornadoBounds, Z_ERROR_BAR_AVERAGE, Z_HOLD_BODY, Z_HOLD_GLOW, Z_RECEPTOR, Z_RECEPTOR_GLOW,
     Z_TAP_NOTE, confusion_rotation_deg, error_bar_boundaries_s, error_bar_text_scalable_zoom,
     error_bar_trim_max_window_ix, hold_explosion_active, hold_explosion_enabled,
-    hold_head_render_flags, hold_indicator_column_x, itg_actor_glow_alpha, judgment_frame_size,
-    let_go_head_beat, note_slot_base_size, note_world_z_for_bumpy, note_x_offset, offset_center,
-    receptor_row_center,
+    hold_head_render_flags, itg_actor_glow_alpha, judgment_frame_size, let_go_head_beat,
+    note_slot_base_size, note_world_z_for_bumpy, note_x_offset, offset_center, receptor_row_center,
 };
 use crate::assets;
 use deadsync_assets::noteskin::load_itg_skin;
@@ -315,65 +314,6 @@ fn receptor_center_uses_tipsy_y_offset() {
         &tornado,
     );
     assert!((center[1] - (240.0 + tipsy_y_extra(2, 1.25, visual.tipsy))).abs() <= 1e-6);
-}
-
-#[test]
-fn hold_indicator_columns_use_receptor_lane_x() {
-    let playfield_center_x = 123.0;
-    let columns = [-96.0, -32.0, 32.0, 96.0];
-    let field_zoom_80_mini = 1.0 - 0.8 * 0.5;
-    let col_offsets = columns.map(|x| x * field_zoom_80_mini);
-    let invert_distances = [0.0; 4];
-    let tornado_bounds = [TornadoBounds::default(); 4];
-    const EPS: f32 = 1e-5;
-
-    assert!(
-        (hold_indicator_column_x(
-            playfield_center_x,
-            0,
-            0.0,
-            0.0,
-            VisualEffects::default(),
-            &col_offsets,
-            &invert_distances,
-            &tornado_bounds,
-        ) - (playfield_center_x - 57.6))
-            .abs()
-            <= EPS
-    );
-    assert!(
-        (hold_indicator_column_x(
-            playfield_center_x,
-            3,
-            0.0,
-            0.0,
-            VisualEffects::default(),
-            &col_offsets,
-            &invert_distances,
-            &tornado_bounds,
-        ) - (playfield_center_x + 57.6))
-            .abs()
-            <= EPS
-    );
-
-    let flipped = VisualEffects {
-        flip: 1.0,
-        ..VisualEffects::default()
-    };
-    assert!(
-        (hold_indicator_column_x(
-            playfield_center_x,
-            0,
-            0.0,
-            0.0,
-            flipped,
-            &col_offsets,
-            &invert_distances,
-            &tornado_bounds,
-        ) - (playfield_center_x + 57.6))
-            .abs()
-            <= EPS
-    );
 }
 
 #[test]

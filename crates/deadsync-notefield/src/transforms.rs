@@ -1,4 +1,5 @@
 use crate::style::*;
+use deadsync_gameplay::VisualEffects;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct TornadoBounds {
@@ -335,6 +336,33 @@ pub fn visual_effect_params_for_col(
         params.bumpy += v;
     }
     params
+}
+
+pub fn gameplay_visual_effect_params(
+    visual: &VisualEffects,
+    local_col: usize,
+) -> VisualEffectParams {
+    visual_effect_params_for_col(
+        VisualEffectParams {
+            tiny: visual.tiny,
+            pulse_inner: visual.pulse_inner,
+            pulse_outer: visual.pulse_outer,
+            pulse_offset: visual.pulse_offset,
+            pulse_period: visual.pulse_period,
+            confusion: visual.confusion,
+            confusion_offset: visual.confusion_offset,
+            dizzy: visual.dizzy,
+            bumpy: visual.bumpy,
+            bumpy_offset: visual.bumpy_offset,
+            bumpy_period: visual.bumpy_period,
+            rotate_z: 0.0,
+            beat: visual.beat,
+        },
+        local_col,
+        &visual.tiny_cols,
+        &visual.confusion_offset_cols,
+        &visual.bumpy_cols,
+    )
 }
 
 pub fn smoothstep01(t: f32) -> f32 {

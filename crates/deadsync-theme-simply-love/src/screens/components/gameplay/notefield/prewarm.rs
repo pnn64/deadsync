@@ -11,8 +11,9 @@ use super::text::{
     zmod_run_timer_fmt,
 };
 use super::{
-    COMBO_PREWARM_CAP, DISPLAY_MODS_WRAP_WIDTH_PX, MEASURE_PREWARM_CAP, RUN_TIMER_PREWARM_CAP_S,
-    zmod_broken_run_end, zmod_combo_font_name, zmod_indicator_mode, zmod_small_combo_font,
+    COLUMN_COUNTDOWN_PREWARM_CAP, COMBO_PREWARM_CAP, DISPLAY_MODS_WRAP_WIDTH_PX,
+    MEASURE_PREWARM_CAP, RUN_TIMER_PREWARM_CAP_S, zmod_broken_run_end, zmod_combo_font_name,
+    zmod_indicator_mode, zmod_small_combo_font,
 };
 
 pub fn prewarm_text_layout(
@@ -132,6 +133,32 @@ pub fn prewarm_text_layout(
                 prewarm_i32(cache, mc_font_name, value);
             }
             prewarm_i32(cache, mc_font_name, max_measure_len.max(16));
+        }
+        if profile.column_cues || (profile.crossover_cues && profile.column_countdown) {
+            let music_rate = state.music_rate();
+            let rate = if music_rate.is_finite() && music_rate > 0.0 {
+                music_rate
+            } else {
+                1.0
+            };
+            let mut countdown_max = 0;
+            if profile.column_cues {
+                for cue in state.column_cues(player) {
+                    countdown_max = countdown_max.max((cue.duration / rate).ceil() as i32);
+                }
+            }
+            if profile.crossover_cues && profile.column_countdown {
+                for cue in state.crossover_cues(player) {
+                    countdown_max = countdown_max.max((cue.duration / rate).ceil() as i32);
+                }
+            }
+            let capped = countdown_max.clamp(0, COLUMN_COUNTDOWN_PREWARM_CAP);
+            for value in 0..=capped {
+                prewarm_i32(cache, mc_font_name, value);
+            }
+            if countdown_max > capped {
+                prewarm_i32(cache, mc_font_name, countdown_max);
+            }
         }
         if zmod_indicator_mode(profile) != MiniIndicatorMode::None {
             for &value in &[0.0, 50.0, 89.0, 95.0, 100.0] {

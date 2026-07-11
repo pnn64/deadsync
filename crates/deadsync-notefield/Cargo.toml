@@ -8,6 +8,7 @@ license = "GPL-3.0"
 deadlib-present = { path = "../deadlib-present" }
 deadlib-render = { path = "../deadlib-render" }
 deadsync-core = { path = "../deadsync-core" }
+deadsync-gameplay = { path = "../deadsync-gameplay" }
 deadsync-noteskin = { path = "../deadsync-noteskin" }
 deadsync-rules = { path = "../deadsync-rules" }
 deadsync-theme = { path = "../deadsync-theme" }

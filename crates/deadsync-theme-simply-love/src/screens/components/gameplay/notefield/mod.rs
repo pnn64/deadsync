@@ -6,7 +6,7 @@ use crate::screens::components::shared::noteskin_model::{
     ModelMeshCache, noteskin_model_actor_from_draw_cached,
 };
 use crate::screens::gameplay::GameplayNoteskinAssets;
-use deadlib_present::actors::Actor;
+use deadlib_present::actors::{Actor, IntoTextureKey};
 use deadlib_present::color;
 use deadlib_present::space::*;
 use deadlib_render::{BlendMode, TexturedMeshVertex};
@@ -14,56 +14,48 @@ use deadsync_assets::noteskin::SpriteSlot;
 use deadsync_core::input::{MAX_COLS, MAX_PLAYERS};
 use deadsync_core::note::NoteType;
 use deadsync_gameplay::{
-    AccelEffects, AppearanceEffects, COMBO_HUNDRED_MILESTONE_DURATION,
-    COMBO_THOUSAND_MILESTONE_DURATION, ComboMilestoneKind, FantasticWindowOptions,
-    GameplayErrorBarTrim, HELD_MISS_TOTAL_DURATION, HOLD_JUDGMENT_TOTAL_DURATION,
-    TapExplosionOptions, VisualEffects, active_column_cue, blue_fantastic_window_ms,
-    column_flash_duration, gameplay_error_bar_trim_max_window_ix, hold_explosion_active,
+    AccelEffects, AppearanceEffects, FantasticWindowOptions, GameplayErrorBarTrim,
+    TapExplosionOptions, VisualEffects, blue_fantastic_window_ms,
+    gameplay_error_bar_trim_max_window_ix, hold_explosion_active,
     hold_explosion_enabled_for_options, hold_head_render_flags, let_go_head_beat,
     song_lua_column_y_offset, song_lua_note_hidden,
 };
 use deadsync_notefield::{
-    AccelYParams, BuiltNotefield, COLUMN_CUE_Y_OFFSET, FieldLayoutRequest, HudLayoutOffsets,
-    HudLayoutParams, JudgmentTiltParams, LayoutMiniIndicatorPosition, MeasureComposeRequest,
-    MeasureLineMode, NoteAlphaParams, NoteXParams, ScrollTravelRequest, TapJudgmentRowsParams,
-    TornadoBounds, VisualEffectParams, ZmodLayoutParams, ZmodMeasureCounterText,
-    actor_with_world_z, appearance_needs_rows, appearance_note_actor_alpha, appearance_note_glow,
-    average_error_bar_mini_scale, beat_factor, bottom_cap_uv_window, clipped_hold_body_bounds,
-    column_cue_alpha, column_cue_height, column_cue_reverse_top_y, column_flash_alpha,
-    column_flash_color, column_flash_height, column_flash_layout, column_flash_reverse_top_y,
-    combo_actor_zoom, compose_measure_lines, compute_invert_distances, compute_tornado_bounds,
-    crossover_cue_height, effective_mini_value as crate_effective_mini_value,
-    error_bar_boundaries_s, error_bar_color_for_window, error_bar_flash_alpha,
-    error_bar_text_scalable_zoom, error_bar_tick_alpha,
-    field_effect_height as field_effect_height_for_screen, field_layout, fill_lane_col_offsets,
-    for_each_visible_hold_index, for_each_visible_note_index, held_miss_zoom,
-    hold_body_bottom_for_tail_cap, hold_body_segment_budget, hold_draw_span, hold_glow_color,
-    hold_indicator_column_x as crate_hold_indicator_column_x, hold_overlaps_visible_window,
+    AccelYParams, BuiltNotefield, ColumnFeedbackRequest, ComboFeedbackRequest,
+    ComboMilestoneAssets, CounterHudRequest, FieldLayoutRequest, HudLayoutOffsets, HudLayoutParams,
+    IndicatorSprite, JudgmentFeedbackRequest, JudgmentTiltParams, LayoutMiniIndicatorPosition,
+    MeasureComposeRequest, MeasureLineMode, MiniIndicatorRequest, NoteAlphaParams, NoteXParams,
+    ScrollTravelRequest, TapJudgmentFeedback, TapJudgmentRowsParams, TapJudgmentSprite,
+    TornadoBounds, VisualEffectParams, ZmodLayoutParams, actor_with_world_z, appearance_needs_rows,
+    appearance_note_actor_alpha, appearance_note_glow, average_error_bar_mini_scale, beat_factor,
+    bottom_cap_uv_window, clipped_hold_body_bounds, compose_column_feedback,
+    compose_combo_feedback, compose_counter_hud, compose_judgment_feedback, compose_measure_lines,
+    compose_mini_indicator, compute_invert_distances, compute_tornado_bounds,
+    effective_mini_value as crate_effective_mini_value, error_bar_boundaries_s,
+    error_bar_color_for_window, error_bar_flash_alpha, error_bar_text_scalable_zoom,
+    error_bar_tick_alpha, field_effect_height as field_effect_height_for_screen, field_layout,
+    fill_lane_col_offsets, for_each_visible_hold_index, for_each_visible_note_index,
+    gameplay_visual_effect_params as visual_effect_params, hold_body_bottom_for_tail_cap,
+    hold_body_segment_budget, hold_draw_span, hold_glow_color, hold_overlaps_visible_window,
     hold_parts_for_note_type, hold_segment_pose, hold_strip_actor, hold_strip_glow_actor,
     hold_strip_quad, hold_strip_row_3d, hold_strip_row_from_positions, hold_tail_cap_bounds,
     itg_actor_glow_alpha, judgment_actor_zoom,
     judgment_tilt_rotation_deg as crate_judgment_tilt_rotation_deg, maybe_flip_uv_vert,
     maybe_mirror_uv_horiz_for_reverse_flipped, mine_hides_after_resolution, mine_part,
     note_world_z_for_bumpy, note_x_offset as crate_note_x_offset, notefield_view_proj,
-    offset_center, player_metric_y, receptor_row_center as crate_receptor_row_center,
-    scale_cap_to_arrow, scale_effect_size, scale_sprite_to_arrow, scroll_travel, share_actor_range,
-    smoothstep01, song_time_ns_to_seconds, stream_segment_index_exclusive_end,
-    tap_judgment_rows as crate_tap_judgment_rows, tap_part_for_note_type, tap_replacement_head,
-    timing_window_from_num, top_cap_rotation_deg, translated_uv_rect, visual_arrow_effect_zoom,
-    visual_confusion_rotation_deg,
-    visual_effect_params_for_col as crate_visual_effect_params_for_col,
-    visual_hold_body_needs_z_buffer, visual_note_rotation_z, visual_pulse_zoom_for_y,
-    visual_tiny_zoom, visual_use_legacy_hold_sprites, zmod_broken_run_counter_text,
-    zmod_broken_run_end, zmod_broken_run_segment,
-    zmod_measure_counter_text as crate_zmod_measure_counter_text, zmod_run_timer_index,
+    offset_center, receptor_row_center as crate_receptor_row_center, scale_cap_to_arrow,
+    scale_effect_size, scale_sprite_to_arrow, scroll_travel, share_actor_range, smoothstep01,
+    song_time_ns_to_seconds, tap_judgment_rows as crate_tap_judgment_rows, tap_part_for_note_type,
+    tap_replacement_head, timing_window_from_num, top_cap_rotation_deg, translated_uv_rect,
+    visual_arrow_effect_zoom, visual_confusion_rotation_deg, visual_hold_body_needs_z_buffer,
+    visual_note_rotation_z, visual_pulse_zoom_for_y, visual_tiny_zoom,
+    visual_use_legacy_hold_sprites, zmod_broken_run_end,
 };
 use deadsync_notefield::{FieldPlacement, ProxyCaptureRequests, ViewOverride};
 use deadsync_noteskin::{ModelDrawState, NUM_QUANTIZATIONS};
 use deadsync_profile as profile_data;
 use deadsync_rules::judgment::Judgment;
 use deadsync_rules::note::HoldResult;
-use deadsync_rules::scroll::ScrollSpeedSetting;
-use deadsync_rules::stream::StreamSegment;
 use deadsync_theme::NotefieldStyle;
 use std::array::from_fn;
 use std::cell::RefCell;
@@ -111,20 +103,6 @@ const TRANSITION_IN_DURATION: f32 = 2.0;
 
 // Gameplay Layout & Feel
 const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0; // Dance lane width for hold bodies and square fallback visuals
-const HOLD_JUDGMENT_Y_OFFSET_FROM_CENTER: f32 = -90.0; // Mirrors Simply Love metrics for hold judgments
-const HOLD_JUDGMENT_Y_REVERSE_OFFSET_FROM_CENTER: f32 = 90.0;
-const COLUMN_CUE_TEXT_NORMAL_Y: f32 = 80.0;
-const COLUMN_CUE_TEXT_REVERSE_Y: f32 = 260.0;
-const COLUMN_CUE_BASE_ALPHA: f32 = 0.12;
-const LOVE_HOLD_JUDGMENT_NATIVE_FRAME_HEIGHT: f32 = 140.0; // Each frame in Love 1x2 (doubleres).png is 140px tall
-const HOLD_JUDGMENT_FINAL_HEIGHT: f32 = 32.0; // Matches Simply Love's final on-screen size
-const HOLD_JUDGMENT_INITIAL_HEIGHT: f32 = HOLD_JUDGMENT_FINAL_HEIGHT * 0.8; // Mirrors 0.4->0.5 zoom ramp in metrics
-const HOLD_JUDGMENT_FINAL_ZOOM: f32 =
-    HOLD_JUDGMENT_FINAL_HEIGHT / LOVE_HOLD_JUDGMENT_NATIVE_FRAME_HEIGHT;
-const HOLD_JUDGMENT_INITIAL_ZOOM: f32 =
-    HOLD_JUDGMENT_INITIAL_HEIGHT / LOVE_HOLD_JUDGMENT_NATIVE_FRAME_HEIGHT;
-const HELD_MISS_Y_OFFSET_FROM_CENTER: f32 = -50.0;
-const HELD_MISS_Y_REVERSE_OFFSET_FROM_CENTER: f32 = 110.0;
 
 const ERROR_BAR_WIDTH_COLORFUL: f32 = 160.0;
 const ERROR_BAR_HEIGHT_COLORFUL: f32 = 10.0;
@@ -163,10 +141,8 @@ const ERROR_BAR_TEXT_ZOOM: f32 = 0.25;
 const TEXT_CACHE_LIMIT: usize = 8192;
 const COMBO_PREWARM_CAP: u32 = 2048;
 const MEASURE_PREWARM_CAP: i32 = 64;
+const COLUMN_COUNTDOWN_PREWARM_CAP: i32 = 64;
 const RUN_TIMER_PREWARM_CAP_S: i32 = 600;
-
-// Visual Feedback
-const SHOW_COMBO_AT: u32 = 4; // From Simply Love metrics
 
 #[inline(always)]
 fn judgment_tilt_rotation_deg(profile: &profile_data::Profile, judgment: &Judgment) -> f32 {
@@ -194,15 +170,10 @@ const Z_TAP_EXPLOSION: i32 = 150;
 const Z_RECEPTOR_GLOW: i32 = 105;
 const Z_MINE_EXPLOSION: i32 = 101;
 const Z_TAP_NOTE: i32 = 140;
-const Z_COLUMN_CUE: i32 = 90;
-const Z_COLUMN_FLASH: i32 = 91;
 const MINE_CORE_SIZE_RATIO: f32 = 0.45;
-const Z_JUDGMENT_FRONT: i16 = 200;
-const Z_JUDGMENT_BACK: i16 = 95;
 const Z_ERROR_BAR_BG_FRONT: i16 = 180;
 const Z_ERROR_BAR_BG_BACK: i16 = 86;
 const Z_ERROR_BAR_BAND_FRONT: i16 = 181;
-const SPLIT_15_10MS_OVERLAY_ALPHA: f32 = 0.5;
 const Z_ERROR_BAR_BAND_BACK: i16 = 87;
 const Z_ERROR_BAR_LINE_FRONT: i16 = 182;
 const Z_ERROR_BAR_LINE_BACK: i16 = 88;
@@ -355,63 +326,6 @@ fn receptor_row_center(
         },
         visual.tiny,
         visual.tipsy,
-    )
-}
-
-#[inline(always)]
-fn hold_indicator_column_x(
-    playfield_center_x: f32,
-    local_col: usize,
-    elapsed: f32,
-    beat_factor: f32,
-    visual: VisualEffects,
-    col_offsets: &[f32],
-    invert_distances: &[f32],
-    tornado_bounds: &[TornadoBounds],
-) -> f32 {
-    crate_hold_indicator_column_x(
-        playfield_center_x,
-        local_col,
-        elapsed,
-        beat_factor,
-        col_offsets,
-        invert_distances,
-        tornado_bounds,
-        &visual.move_x_cols,
-        NoteXParams {
-            screen_height: screen_height(),
-            tornado: visual.tornado,
-            drunk: visual.drunk,
-            flip: visual.flip,
-            invert: visual.invert,
-            beat: visual.beat,
-        },
-        visual.tiny,
-    )
-}
-
-#[inline(always)]
-fn visual_effect_params(visual: &VisualEffects, local_col: usize) -> VisualEffectParams {
-    crate_visual_effect_params_for_col(
-        VisualEffectParams {
-            tiny: visual.tiny,
-            pulse_inner: visual.pulse_inner,
-            pulse_outer: visual.pulse_outer,
-            pulse_offset: visual.pulse_offset,
-            pulse_period: visual.pulse_period,
-            confusion: visual.confusion,
-            confusion_offset: visual.confusion_offset,
-            dizzy: visual.dizzy,
-            bumpy: visual.bumpy,
-            bumpy_offset: visual.bumpy_offset,
-            bumpy_period: visual.bumpy_period,
-            rotate_z: 0.0,
-            beat: visual.beat,
-        },
-        local_col,
-        &visual.tiny_cols,
-        &visual.confusion_offset_cols,
-        &visual.bumpy_cols,
     )
 }
 
@@ -761,6 +675,11 @@ pub(crate) fn build_bundles(
         + measure_line_extra
         + if profile.measure_cues { 32 } else { 0 }
         + if profile.column_cues { num_cols + 4 } else { 0 }
+        + if profile.crossover_cues {
+            num_cols + 4
+        } else {
+            0
+        }
         + if profile.column_flash_on_miss {
             num_cols
         } else {
@@ -769,6 +688,11 @@ pub(crate) fn build_bundles(
         + if !error_bar_mask.is_empty() { 18 } else { 0 };
     let hud_cap = 8
         + if profile.column_cues { 1 } else { 0 }
+        + if profile.crossover_cues && profile.column_countdown {
+            1
+        } else {
+            0
+        }
         + if held_miss_texture.is_some() {
             num_cols
         } else {
@@ -915,7 +839,6 @@ pub(crate) fn build_bundles(
         perspective.tilt,
         perspective.skew,
     );
-    let combo_zoom_mod = combo_actor_zoom(mini);
     let effect_height = field_effect_height(perspective.tilt);
     let receptor_alpha = (1.0 - visibility.dark).clamp(0.0, 1.0);
     let blind_active = visibility.blind > f32::EPSILON;
@@ -1126,247 +1049,41 @@ pub(crate) fn build_bundles(
             },
         );
 
-        if profile.column_cues {
-            let gameplay_music_rate = state.music_rate();
-            let rate = if gameplay_music_rate.is_finite() && gameplay_music_rate > 0.0 {
-                gameplay_music_rate
-            } else {
-                1.0
-            };
-            if let Some(cue) = active_column_cue(state.column_cues(player_idx), current_time) {
-                let duration_real = cue.duration / rate;
-                let elapsed_real = (current_time - cue.start_time) / rate;
-                let alpha_mul = column_cue_alpha(elapsed_real, duration_real);
-                if alpha_mul > 0.0 {
-                    let lane_width = ScrollSpeedSetting::ARROW_SPACING * field_zoom;
-                    let cue_height = column_cue_height(screen_height());
-                    let mut countdown_text: Option<(f32, f32, i32)> = None;
-
-                    if duration_real >= 5.0 {
-                        let remaining = duration_real - elapsed_real;
-                        if remaining > 0.5
-                            && let Some(last_col) = cue.columns.last()
-                        {
-                            let local_col = last_col.column.saturating_sub(col_start);
-                            if local_col < num_cols {
-                                let x = playfield_center_x
-                                    + ns.column_xs[local_col] as f32 * spacing_mult * field_zoom;
-                                let y = if column_dirs[local_col] < 0.0 {
-                                    COLUMN_CUE_TEXT_REVERSE_Y
-                                        + COLUMN_CUE_Y_OFFSET
-                                        + notefield_offset_y
-                                } else {
-                                    COLUMN_CUE_TEXT_NORMAL_Y
-                                        + COLUMN_CUE_Y_OFFSET
-                                        + notefield_offset_y
-                                };
-                                countdown_text = Some((x, y, remaining.round() as i32));
-                            }
-                        }
-                    }
-
-                    for col_cue in &cue.columns {
-                        let local_col = col_cue.column.saturating_sub(col_start);
-                        if local_col >= num_cols {
-                            continue;
-                        }
-                        let x = playfield_center_x
-                            + ns.column_xs[local_col] as f32 * spacing_mult * field_zoom;
-                        let alpha = COLUMN_CUE_BASE_ALPHA * alpha_mul;
-                        let color = if col_cue.is_mine {
-                            [1.0, 0.0, 0.0, alpha]
-                        } else {
-                            [0.3, 1.0, 1.0, alpha]
-                        };
-                        if column_dirs[local_col] < 0.0 {
-                            let reverse_y = column_cue_reverse_top_y(
-                                lane_width,
-                                cue_height,
-                                notefield_offset_y,
-                                style.receptor_reverse_y,
-                            );
-                            actors.push(act!(quad:
-                                align(0.5, 0.0):
-                                xy(x, reverse_y):
-                                zoomto(lane_width, cue_height):
-                                fadetop(0.333):
-                                diffuse(color[0], color[1], color[2], color[3]):
-                                z(Z_COLUMN_CUE)
-                            ));
-                        } else {
-                            actors.push(act!(quad:
-                                align(0.5, 0.0):
-                                xy(x, COLUMN_CUE_Y_OFFSET + notefield_offset_y):
-                                zoomto(lane_width, cue_height):
-                                fadebottom(0.333):
-                                diffuse(color[0], color[1], color[2], color[3]):
-                                z(Z_COLUMN_CUE)
-                            ));
-                        }
-                    }
-
-                    if let Some((x, y, value)) = countdown_text {
-                        hud_actors.push(act!(text:
-                            font(mc_font_name):
-                            settext(cached_int_i32(value)):
-                            align(0.5, 0.5):
-                            xy(x, y):
-                            zoom(0.5):
-                            z(200):
-                            diffuse(1.0, 1.0, 1.0, alpha_mul)
-                        ));
-                    }
-                }
-            }
-        }
-
-        if profile.crossover_cues {
-            let gameplay_music_rate = state.music_rate();
-            let rate = if gameplay_music_rate.is_finite() && gameplay_music_rate > 0.0 {
-                gameplay_music_rate
-            } else {
-                1.0
-            };
-            if let Some(cue) = active_column_cue(state.crossover_cues(player_idx), current_time) {
-                let duration_real = cue.duration / rate;
-                let elapsed_real = (current_time - cue.start_time) / rate;
-                let alpha_mul = column_cue_alpha(elapsed_real, duration_real);
-                if alpha_mul > 0.0 {
-                    let lane_width = ScrollSpeedSetting::ARROW_SPACING * field_zoom;
-                    let cue_height = crossover_cue_height(screen_height());
-                    let mut countdown_text: Option<(f32, f32, i32)> = None;
-
-                    if profile.column_countdown && duration_real >= 5.0 {
-                        let remaining = duration_real - elapsed_real;
-                        if remaining > 0.5
-                            && let Some(last_col) = cue.columns.last()
-                        {
-                            let local_col = last_col.column.saturating_sub(col_start);
-                            if local_col < num_cols {
-                                let x = playfield_center_x
-                                    + ns.column_xs[local_col] as f32 * spacing_mult * field_zoom;
-                                let y = if column_dirs[local_col] < 0.0 {
-                                    COLUMN_CUE_TEXT_REVERSE_Y
-                                        + COLUMN_CUE_Y_OFFSET
-                                        + notefield_offset_y
-                                } else {
-                                    COLUMN_CUE_TEXT_NORMAL_Y
-                                        + COLUMN_CUE_Y_OFFSET
-                                        + notefield_offset_y
-                                };
-                                countdown_text = Some((x, y, remaining.round() as i32));
-                            }
-                        }
-                    }
-
-                    for col_cue in &cue.columns {
-                        let local_col = col_cue.column.saturating_sub(col_start);
-                        if local_col >= num_cols {
-                            continue;
-                        }
-                        let x = playfield_center_x
-                            + ns.column_xs[local_col] as f32 * spacing_mult * field_zoom;
-                        let alpha = COLUMN_CUE_BASE_ALPHA * alpha_mul;
-                        let color = if col_cue.is_mine {
-                            [1.0, 0.0, 0.0, alpha]
-                        } else {
-                            [0.3, 1.0, 1.0, alpha]
-                        };
-                        if column_dirs[local_col] < 0.0 {
-                            let reverse_y = column_cue_reverse_top_y(
-                                lane_width,
-                                cue_height,
-                                notefield_offset_y,
-                                style.receptor_reverse_y,
-                            );
-                            actors.push(act!(quad:
-                                align(0.5, 0.0):
-                                xy(x, reverse_y):
-                                zoomto(lane_width, cue_height):
-                                fadetop(0.333):
-                                diffuse(color[0], color[1], color[2], color[3]):
-                                z(Z_COLUMN_CUE)
-                            ));
-                        } else {
-                            actors.push(act!(quad:
-                                align(0.5, 0.0):
-                                xy(x, COLUMN_CUE_Y_OFFSET + notefield_offset_y):
-                                zoomto(lane_width, cue_height):
-                                fadebottom(0.333):
-                                diffuse(color[0], color[1], color[2], color[3]):
-                                z(Z_COLUMN_CUE)
-                            ));
-                        }
-                    }
-
-                    if let Some((x, y, value)) = countdown_text {
-                        hud_actors.push(act!(text:
-                            font(mc_font_name):
-                            settext(cached_int_i32(value)):
-                            align(0.5, 0.5):
-                            xy(x, y):
-                            zoom(0.5):
-                            z(200):
-                            diffuse(1.0, 1.0, 1.0, alpha_mul)
-                        ));
-                    }
-                }
-            }
-        }
-
-        if profile.column_flash_on_miss {
-            let lane_width = ScrollSpeedSetting::ARROW_SPACING * field_zoom;
-            let flash_layout = column_flash_layout(
-                profile.column_flash_size == profile_data::ColumnFlashSize::Compact,
-            );
-            let flash_height = column_flash_height(screen_height(), flash_layout);
-            for (i, flash_opt) in state
-                .column_flashes_for_columns(col_start, num_cols)
-                .iter()
-                .enumerate()
-            {
-                let Some(flash) = flash_opt else {
-                    continue;
-                };
-                let alpha = column_flash_alpha(
-                    flash.started_at_screen_s,
-                    elapsed_screen,
-                    column_flash_duration(flash.grade),
-                    column_flash_dimmed(profile.column_flash_brightness),
-                );
-                if alpha <= 0.0 {
-                    continue;
-                }
-                let x = playfield_center_x + ns.column_xs[i] as f32 * spacing_mult * field_zoom;
-                let color = column_flash_color(flash.grade, flash.blue_fantastic, alpha);
-                if column_dirs[i] < 0.0 {
-                    let reverse_y = column_flash_reverse_top_y(
-                        flash_layout,
-                        lane_width,
-                        flash_height,
-                        notefield_offset_y,
-                        style.receptor_reverse_y,
-                    );
-                    actors.push(act!(quad:
-                        align(0.5, 0.0):
-                        xy(x, reverse_y):
-                        zoomto(lane_width, flash_height):
-                        fadetop(flash_layout.fade):
-                        diffuse(color[0], color[1], color[2], color[3]):
-                        z(Z_COLUMN_FLASH)
-                    ));
-                } else {
-                    actors.push(act!(quad:
-                        align(0.5, 0.0):
-                        xy(x, flash_layout.y_offset + notefield_offset_y):
-                        zoomto(lane_width, flash_height):
-                        fadebottom(flash_layout.fade):
-                        diffuse(color[0], color[1], color[2], color[3]):
-                        z(Z_COLUMN_FLASH)
-                    ));
-                }
-            }
-        }
+        compose_column_feedback(
+            actors,
+            hud_actors,
+            ColumnFeedbackRequest {
+                style,
+                column_cues: profile.column_cues.then(|| state.column_cues(player_idx)),
+                crossover_cues: profile
+                    .crossover_cues
+                    .then(|| state.crossover_cues(player_idx)),
+                column_flashes: profile
+                    .column_flash_on_miss
+                    .then(|| state.column_flashes_for_columns(col_start, num_cols)),
+                // Preserve the existing regular-cue behavior: its countdown is
+                // independent of the crossover-only profile toggle.
+                regular_countdown: true,
+                crossover_countdown: profile.column_countdown,
+                current_music_time: current_time,
+                current_screen_time: elapsed_screen,
+                music_rate: state.music_rate(),
+                col_start,
+                num_cols,
+                column_xs: &measure_column_xs,
+                column_dirs: &column_dirs,
+                spacing_multiplier: spacing_mult,
+                field_zoom,
+                playfield_center_x,
+                field_center_y: notefield_offset_y,
+                screen_height: screen_height(),
+                compact_flashes: profile.column_flash_size
+                    == profile_data::ColumnFlashSize::Compact,
+                dim_flashes: column_flash_dimmed(profile.column_flash_brightness),
+                countdown_font: mc_font_name,
+                countdown_text: cached_int_i32,
+            },
+        );
 
         // Receptors + glow
         for (i, &receptor_y_lane) in column_receptor_ys.iter().take(num_cols).enumerate() {
@@ -4345,137 +4062,52 @@ pub(crate) fn build_bundles(
     }
 
     let combo_capture_start = hud_actors.len();
-    // Combo Milestone Explosions (100 / 1000 combo)
     let show_combo = !view.hide_combo && !blind_active && !profile.hide_combo;
-    if show_combo && !profile.hide_combo_explosions && !p.combo_milestones.is_empty() {
+    let milestone_assets = (show_combo
+        && !profile.hide_combo_explosions
+        && !p.combo_milestones.is_empty())
+    .then(|| {
         let combo_splode_tex = assets::visual_styles::combo_100milestone_splode_texture_key();
         let combo_minisplode_tex =
             assets::visual_styles::combo_100milestone_minisplode_texture_key();
         let combo_swoosh_tex = assets::visual_styles::combo_1000milestone_swoosh_texture_key();
-        let combo_splode_zoom_scale = assets::visual_styles::effect_zoom_scale(combo_splode_tex);
-        let combo_minisplode_zoom_scale =
-            assets::visual_styles::effect_zoom_scale(combo_minisplode_tex);
-        let combo_swoosh_zoom_scale = assets::visual_styles::effect_zoom_scale(combo_swoosh_tex);
-        let combo_center_x = playfield_center_x;
-        let combo_center_y = zmod_layout.combo_y;
-        let player_color = color::decorative_rgba(state.player_color_index());
-        let ease_out_quad = |t: f32| -> f32 {
-            let t = t.clamp(0.0, 1.0);
-            1.0 - (1.0 - t).powi(2)
-        };
-        for milestone in &p.combo_milestones {
-            match milestone.kind {
-                ComboMilestoneKind::Hundred => {
-                    let elapsed = milestone.elapsed;
-                    let explosion_duration = 0.5_f32;
-                    if elapsed <= explosion_duration {
-                        let progress = (elapsed / explosion_duration).clamp(0.0, 1.0);
-                        let zoom = (2.0 - progress) * combo_zoom_mod;
-                        let alpha = (0.5_f32 * (1.0_f32 - progress)).max(0.0_f32);
-                        for &direction in &[1.0_f32, -1.0_f32] {
-                            let rotation = 90.0 * direction * progress;
-                            hud_actors.push(act!(sprite("combo_explosion.png"):
-                                align(0.5, 0.5):
-                                xy(combo_center_x, combo_center_y):
-                                zoom(zoom):
-                                rotationz(rotation):
-                                diffuse(1.0, 1.0, 1.0, alpha):
-                                blend(add):
-                                z(89)
-                            ));
-                        }
-                    }
-                    if elapsed <= COMBO_HUNDRED_MILESTONE_DURATION {
-                        let progress = (elapsed / COMBO_HUNDRED_MILESTONE_DURATION).clamp(0.0, 1.0);
-                        let eased = ease_out_quad(progress);
-                        let zoom = (0.25 + (2.0 - 0.25) * eased)
-                            * combo_zoom_mod
-                            * combo_splode_zoom_scale;
-                        let alpha = (0.6 * (1.0 - eased)).max(0.0);
-                        let rotation = 10.0 + (0.0 - 10.0) * eased;
-                        hud_actors.push(act!(sprite(combo_splode_tex):
-                            align(0.5, 0.5):
-                            xy(combo_center_x, combo_center_y):
-                            zoom(zoom):
-                            rotationz(rotation):
-                            diffuse(player_color[0], player_color[1], player_color[2], alpha):
-                            blend(add):
-                            z(89)
-                        ));
-                        let mini_duration = 0.4_f32;
-                        if elapsed <= mini_duration {
-                            let mini_progress = (elapsed / mini_duration).clamp(0.0, 1.0);
-                            let mini_zoom = (0.25 + (1.8 - 0.25) * mini_progress)
-                                * combo_zoom_mod
-                                * combo_minisplode_zoom_scale;
-                            let mini_alpha = (1.0_f32 - mini_progress).max(0.0_f32);
-                            let mini_rotation = 10.0 + (0.0 - 10.0) * mini_progress;
-                            hud_actors.push(act!(sprite(combo_minisplode_tex):
-                                align(0.5, 0.5):
-                                xy(combo_center_x, combo_center_y):
-                                zoom(mini_zoom):
-                                rotationz(mini_rotation):
-                                diffuse(player_color[0], player_color[1], player_color[2], mini_alpha):
-                                blend(add):
-                                z(89)
-                            ));
-                        }
-                    }
-                }
-                ComboMilestoneKind::Thousand => {
-                    let elapsed = milestone.elapsed;
-                    if elapsed <= COMBO_THOUSAND_MILESTONE_DURATION {
-                        let progress =
-                            (elapsed / COMBO_THOUSAND_MILESTONE_DURATION).clamp(0.0, 1.0);
-                        let zoom = (0.25 + (3.0 - 0.25) * progress)
-                            * combo_zoom_mod
-                            * combo_swoosh_zoom_scale;
-                        let alpha = (0.7_f32 * (1.0_f32 - progress)).max(0.0_f32);
-                        let x_offset = 100.0 * progress * combo_zoom_mod;
-                        for &direction in &[1.0_f32, -1.0_f32] {
-                            let final_x = combo_center_x + x_offset * direction;
-                            hud_actors.push(act!(sprite(combo_swoosh_tex):
-                                align(0.5, 0.5):
-                                xy(final_x, combo_center_y):
-                                zoom(zoom):
-                                zoomx(zoom * direction):
-                                diffuse(player_color[0], player_color[1], player_color[2], alpha):
-                                blend(add):
-                                z(89)
-                            ));
-                        }
-                    }
-                }
-            }
+        ComboMilestoneAssets {
+            burst: "combo_explosion.png".into_sprite_source(),
+            hundred: combo_splode_tex.into_sprite_source(),
+            hundred_mini: combo_minisplode_tex.into_sprite_source(),
+            thousand: combo_swoosh_tex.into_sprite_source(),
+            hundred_zoom_scale: assets::visual_styles::effect_zoom_scale(combo_splode_tex),
+            hundred_mini_zoom_scale: assets::visual_styles::effect_zoom_scale(combo_minisplode_tex),
+            thousand_zoom_scale: assets::visual_styles::effect_zoom_scale(combo_swoosh_tex),
         }
-    }
-    // Combo
-    if show_combo {
-        let combo_y = zmod_layout.combo_y;
-        let combo_font_name = zmod_combo_font_name(profile.combo_font);
-        if p.miss_combo >= SHOW_COMBO_AT {
-            if let Some(font_name) = combo_font_name {
-                hud_actors.push(act!(text:
-                    font(font_name): settext(cached_int_u32(p.miss_combo)):
-                    align(0.5, 0.5): xy(combo_x, combo_y):
-                    zoom(0.75 * combo_zoom_mod): horizalign(center): shadowlength(1.0):
-                    diffuse(1.0, 0.0, 0.0, 1.0):
-                    z(90)
-                ));
-            }
-        } else if p.combo >= SHOW_COMBO_AT {
-            let final_color = zmod_resolved_combo_color(state, p, profile, player_idx);
-            if let Some(font_name) = combo_font_name {
-                hud_actors.push(act!(text:
-                    font(font_name): settext(cached_int_u32(p.combo)):
-                    align(0.5, 0.5): xy(combo_x, combo_y):
-                    zoom(0.75 * combo_zoom_mod): horizalign(center): shadowlength(1.0):
-                    diffuse(final_color[0], final_color[1], final_color[2], final_color[3]):
-                    z(90)
-                ));
-            }
-        }
-    }
+    });
+    let player_color = milestone_assets
+        .is_some()
+        .then(|| color::decorative_rgba(state.player_color_index()))
+        .unwrap_or([1.0; 4]);
+    let combo_color = (show_combo
+        && p.miss_combo < style.combo_feedback.threshold
+        && p.combo >= style.combo_feedback.threshold)
+        .then(|| zmod_resolved_combo_color(state, p, profile, player_idx))
+        .unwrap_or([1.0; 4]);
+    compose_combo_feedback(
+        &mut hud_actors,
+        ComboFeedbackRequest {
+            style: style.combo_feedback,
+            show: show_combo,
+            milestone_assets: milestone_assets.as_ref(),
+            milestones: &p.combo_milestones,
+            combo: p.combo,
+            miss_combo: p.miss_combo,
+            number_xy: [combo_x, zmod_layout.combo_y],
+            milestone_xy: [playfield_center_x, zmod_layout.combo_y],
+            mini,
+            player_color,
+            combo_color,
+            font: zmod_combo_font_name(profile.combo_font),
+            number_text: cached_int_u32,
+        },
+    );
     let combo_actors = capture_requests
         .combo
         .then(|| share_actor_range(&mut hud_actors, combo_capture_start))
@@ -4497,11 +4129,6 @@ pub(crate) fn build_bundles(
         average_bar_y /= num_cols as f32;
     }
     let avg_error_bar_mini_scale = average_error_bar_mini_scale(mini);
-    let judgment_z = if profile.judgment_back {
-        Z_JUDGMENT_BACK
-    } else {
-        Z_JUDGMENT_FRONT
-    };
     let error_bar_bg_z = if profile.judgment_back {
         Z_ERROR_BAR_BG_BACK
     } else {
@@ -5065,383 +4692,133 @@ pub(crate) fn build_bundles(
         }
     }
 
-    // Measure Counter / Measure Breakdown (Zmod parity)
     if profile.measure_counter != profile_data::MeasureCounter::None {
-        let segs: &[StreamSegment] = state.measure_counter_segments(player_idx);
-        if !segs.is_empty() {
-            let lookahead: u8 = profile.measure_counter_lookahead.min(4);
-            let multiplier = profile.measure_counter.multiplier();
-
-            let beat_floor = current_beat.floor();
-            let curr_measure = beat_floor / 4.0;
-            let base_index = stream_segment_index_exclusive_end(segs, curr_measure);
-
-            let mut column_width = ScrollSpeedSetting::ARROW_SPACING * field_zoom;
-            if profile.measure_counter_left {
-                column_width *= 4.0 / 3.0;
-            }
-
-            if let Some(measure_counter_y) = zmod_layout.measure_counter_y {
-                for j in (0..=lookahead).rev() {
-                    let seg_index_unshifted = base_index + j as usize;
-                    if seg_index_unshifted >= segs.len() {
-                        continue;
-                    }
-
-                    let is_lookahead = j != 0;
-                    let text = crate_zmod_measure_counter_text(
-                        beat_floor,
-                        curr_measure,
-                        segs,
-                        seg_index_unshifted,
-                        is_lookahead,
-                        lookahead.into(),
-                        multiplier,
-                    );
-                    let Some(text_kind) = text else { continue };
-                    let is_ratio = matches!(text_kind, ZmodMeasureCounterText::Ratio { .. });
-                    let text = cached_zmod_measure_counter_text(text_kind);
-
-                    let seg_unshifted = segs[seg_index_unshifted];
-                    let rgba = if seg_unshifted.is_break {
-                        if is_lookahead {
-                            [0.4, 0.4, 0.4, 1.0]
-                        } else {
-                            [0.5, 0.5, 0.5, 1.0]
-                        }
-                    } else if is_lookahead {
-                        [0.45, 0.45, 0.45, 1.0]
-                    } else if is_ratio {
-                        [1.0, 1.0, 1.0, 1.0]
-                    } else {
-                        [0.5, 0.5, 0.5, 1.0]
-                    };
-
-                    let zoom = 0.35 - 0.05 * (j as f32);
-                    let mut x = playfield_center_x;
-                    let mut y = measure_counter_y;
-
-                    if profile.measure_counter_vert {
-                        y += 20.0 * (j as f32);
-                    } else {
-                        let denom = if lookahead == 0 {
-                            1.0
-                        } else {
-                            lookahead as f32
-                        };
-                        x += (column_width / denom) * 2.0 * (j as f32);
-                    }
-                    if profile.measure_counter_left {
-                        x -= column_width;
-                    }
-
-                    hud_actors.push(act!(text:
-                        font(mc_font_name): settext(text):
-                        align(0.5, 0.5): xy(x, y):
-                        zoom(zoom): horizalign(center): shadowlength(1.0):
-                        diffuse(rgba[0], rgba[1], rgba[2], rgba[3]):
-                        z(85)
-                    ));
-                }
-
-                // Broken Run Total (Zmod BrokenRunCounter.lua)
-                if profile.broken_run
-                    && let Some((broken_index, broken_end, is_broken)) =
-                        zmod_broken_run_segment(segs, curr_measure)
-                {
-                    let seg0 = segs[broken_index];
-                    if !seg0.is_break && is_broken {
-                        let text_kind = zmod_broken_run_counter_text(
-                            curr_measure,
-                            segs,
-                            broken_index,
-                            broken_end,
-                        );
-                        if let Some(text_kind @ ZmodMeasureCounterText::Ratio { .. }) = text_kind {
-                            let text = cached_zmod_measure_counter_text(text_kind);
-                            let mut x = playfield_center_x;
-                            let mut y = measure_counter_y + 15.0;
-                            if profile.measure_counter_vert {
-                                y -= 15.0;
-                                x += column_width * (4.0 / 3.0);
-                            }
-                            if profile.measure_counter_left {
-                                x -= column_width;
-                            }
-
-                            hud_actors.push(act!(text:
-                                font(mc_font_name): settext(text):
-                                align(0.5, 0.5): xy(x, y):
-                                zoom(0.35): horizalign(center): shadowlength(1.0):
-                                diffuse(1.0, 1.0, 1.0, 0.7):
-                                z(85)
-                            ));
-                        }
-                    }
-                }
-            }
-
-            // Run Timer (Zmod RunTimer.lua: TimerMode=Time only)
-            if profile.run_timer
-                && let Some(stream_index) = zmod_run_timer_index(segs, curr_measure)
-            {
-                let seg = segs[stream_index];
-                if !seg.is_break {
-                    let cur_bps = state
-                        .timing()
-                        .get_bpm_for_beat(state.current_beat_display())
-                        / 60.0;
-                    let rate = state.music_rate();
-                    if cur_bps.is_finite() && cur_bps > 0.0 && rate.is_finite() && rate > 0.0 {
-                        let measure_seconds = 4.0 / (cur_bps * rate);
-                        let curr_time = state.current_beat_display() / (cur_bps * rate);
-
-                        let seg_len_s =
-                            (((seg.end - seg.start) as f32) * measure_seconds).ceil() as i32;
-                        let total = zmod_run_timer_fmt(seg_len_s, 60, false);
-
-                        let remaining_s =
-                            (((seg.end as f32) * measure_seconds) - curr_time).ceil() as i32;
-                        let remaining_s = remaining_s.max(0);
-
-                        let text = if remaining_s > seg_len_s {
-                            total
-                        } else if remaining_s < 1 {
-                            zmod_run_timer_fmt(0, 59, true)
-                        } else {
-                            zmod_run_timer_fmt(remaining_s, 59, true)
-                        };
-
-                        let active = text.contains(' ');
-                        let rgba = if active {
-                            [1.0, 1.0, 1.0, 1.0]
-                        } else {
-                            [0.5, 0.5, 0.5, 1.0]
-                        };
-
-                        let mut x = playfield_center_x;
-                        if profile.measure_counter_left {
-                            x -= column_width;
-                        }
-                        let y = zmod_layout.subtractive_scoring_y;
-
-                        hud_actors.push(act!(text:
-                            font(mc_font_name): settext(text):
-                            align(0.5, 0.5): xy(x, y):
-                            zoom(0.35): horizalign(center): shadowlength(1.0):
-                            diffuse(rgba[0], rgba[1], rgba[2], rgba[3]):
-                            z(85)
-                        ));
-                    }
-                }
-            }
-        }
+        let display_beat = state.current_beat_display();
+        compose_counter_hud(
+            hud_actors,
+            CounterHudRequest {
+                style: style.counter_hud,
+                segments: state.measure_counter_segments(player_idx),
+                current_beat,
+                current_display_beat: display_beat,
+                current_bpm: state.timing().get_bpm_for_beat(display_beat),
+                music_rate: state.music_rate(),
+                lookahead: profile.measure_counter_lookahead.min(4),
+                multiplier: profile.measure_counter.multiplier(),
+                vertical: profile.measure_counter_vert,
+                left: profile.measure_counter_left,
+                broken_run: profile.broken_run,
+                run_timer: profile.run_timer,
+                measure_counter_y: zmod_layout.measure_counter_y,
+                subtractive_scoring_y: zmod_layout.subtractive_scoring_y,
+                playfield_center_x,
+                field_zoom,
+                font: mc_font_name,
+                counter_text: cached_zmod_measure_counter_text,
+                timer_text: zmod_run_timer_fmt,
+            },
+        );
     }
 
-    // Mini Indicator (zmod SubtractiveScoring.lua parity).
-    if let Some((text, rgba)) = zmod_mini_indicator_text(state, p, profile, player_idx) {
-        // Grey out the mini indicator once the player has failed the song.
-        let rgba = if p.is_failing || p.life <= 0.0 {
-            [0.5, 0.5, 0.5, rgba[3]]
-        } else {
-            rgba
-        };
-        let column_width = ScrollSpeedSetting::ARROW_SPACING * field_zoom;
-        let mut x = match profile.mini_indicator_position {
-            profile_data::MiniIndicatorPosition::Default => playfield_center_x + column_width,
+    if let Some((text, color)) = zmod_mini_indicator_text(state, p, profile, player_idx) {
+        let position = match profile.mini_indicator_position {
+            profile_data::MiniIndicatorPosition::Default => LayoutMiniIndicatorPosition::Default,
             profile_data::MiniIndicatorPosition::UnderUpArrow => {
-                playfield_center_x + column_width - 45.0 + zmod_layout.subtractive_scoring_addx
+                LayoutMiniIndicatorPosition::UnderUpArrow
             }
         };
-        let mut h_align = 0.5;
-        let mini_indicator_zoom = zmod_mini_indicator_zoom(profile.mini_indicator_size);
-        if !profile.measure_counter_left {
-            h_align = 0.0;
-            x -= 12.0;
-        }
-
-        hud_actors.push(act!(text:
-            font(mc_font_name): settext(text):
-            align(h_align, 0.5): xy(x, zmod_layout.subtractive_scoring_y):
-            zoom(mini_indicator_zoom): shadowlength(1.0):
-            diffuse(rgba[0], rgba[1], rgba[2], rgba[3]):
-            z(85)
-        ));
+        compose_mini_indicator(
+            hud_actors,
+            MiniIndicatorRequest {
+                style: style.mini_indicator,
+                text,
+                color,
+                failed: p.is_failing || p.life <= 0.0,
+                position,
+                counter_left: profile.measure_counter_left,
+                playfield_center_x,
+                field_zoom,
+                layout_add_x: zmod_layout.subtractive_scoring_addx,
+                y: zmod_layout.subtractive_scoring_y,
+                zoom: zmod_mini_indicator_zoom(profile.mini_indicator_size),
+                font: mc_font_name,
+            },
+        );
     }
 
     let judgment_capture_start = hud_actors.len();
-    // Judgment Sprite (tap judgments)
-    if !blind_active && let Some(render_info) = &p.last_judgment {
-        if let Some(judgment_texture) = resolved_judgment_texture(profile) {
-            let (frame_cols, frame_rows) =
-                assets::parse_sprite_sheet_dims(judgment_texture.key.as_ref());
-            let judgment = &render_info.judgment;
-            let elapsed = (elapsed_screen - render_info.started_at_screen_s).max(0.0);
-            if elapsed < 0.9 {
-                let zoom = if elapsed < 0.1 {
-                    let t: f32 = elapsed / 0.1;
-                    let ease_t = 1.0 - (1.0 - t).powi(2);
-                    0.8 + (0.75 - 0.8) * ease_t
-                } else if elapsed < 0.7 {
-                    0.75
-                } else {
-                    let t: f32 = (elapsed - 0.7) / 0.2;
-                    let ease_t = t.powi(2);
-                    0.75 * (1.0 - ease_t)
-                } * judgment_zoom_mod;
-                let offset_sec = judgment.time_error_ms / 1000.0;
-                let (frame_row, overlay_row) =
-                    tap_judgment_rows(profile, judgment, frame_rows as usize);
-                let frame_offset = if offset_sec < 0.0 { 0 } else { 1 };
-                let columns = frame_cols.max(1) as usize;
-                let col_index = if columns > 1 { frame_offset } else { 0 };
-                let linear_index = (frame_row * columns + col_index) as u32;
-                let rot_deg = judgment_tilt_rotation_deg(profile, judgment);
-                let [judgment_w, judgment_h] = judgment_frame_size(judgment_texture.key.as_ref());
-                hud_actors.push(act!(sprite(judgment_texture.texture_key_handle()):
-                    align(0.5, 0.5): xy(judgment_x, judgment_y):
-                    z(judgment_z): rotationz(rot_deg): setsize(judgment_w, judgment_h): setstate(linear_index): zoom(zoom)
-                ));
-                if let Some(overlay_row) = overlay_row {
-                    let overlay_index = (overlay_row * columns + col_index) as u32;
-                    hud_actors.push(act!(sprite(judgment_texture.texture_key_handle()):
-                        align(0.5, 0.5): xy(judgment_x, judgment_y):
-                        z(judgment_z): rotationz(rot_deg): setsize(judgment_w, judgment_h): setstate(overlay_index): zoom(zoom):
-                        diffuse(1.0, 1.0, 1.0, SPLIT_15_10MS_OVERLAY_ALPHA)
-                    ));
-                }
-            }
-        }
-    }
-    let indicator_beat_push = beat_factor(current_beat);
-    let mut indicator_col_offsets = [0.0_f32; MAX_COLS];
-    fill_lane_col_offsets(
-        &mut indicator_col_offsets,
-        noteskin_assets.noteskin[player_idx]
-            .as_ref()
-            .map(|ns| ns.column_xs.as_slice()),
-        num_cols,
-        spacing_mult,
-        field_zoom,
-    );
-    let mut indicator_invert_distances = [0.0_f32; MAX_COLS];
-    compute_invert_distances(
-        &indicator_col_offsets[..num_cols],
-        &mut indicator_invert_distances[..num_cols],
-    );
-    let mut indicator_tornado_bounds = [TornadoBounds::default(); MAX_COLS];
-    compute_tornado_bounds(
-        &indicator_col_offsets[..num_cols],
-        &mut indicator_tornado_bounds[..num_cols],
-    );
-    if !blind_active && let Some(texture) = held_miss_texture {
-        let texture_scale = if assets::parse_texture_hints(texture.key.as_ref()).doubleres {
-            0.5
-        } else {
-            1.0
-        };
-        for (i, held_miss) in state
-            .held_miss_judgments_for_columns(col_start, num_cols)
-            .iter()
-            .enumerate()
-        {
-            let Some(render_info) = held_miss.as_ref() else {
-                continue;
-            };
-            let elapsed = (elapsed_screen - render_info.started_at_screen_s).max(0.0);
-            if elapsed >= HELD_MISS_TOTAL_DURATION {
-                continue;
-            }
-            let (zoom_x, zoom_y) = held_miss_zoom(elapsed, mini);
-            let zoom_x = zoom_x * texture_scale;
-            let zoom_y = zoom_y * texture_scale;
-            if zoom_x <= f32::EPSILON || zoom_y <= f32::EPSILON {
-                continue;
-            }
-            let y = player_metric_y(
-                screen_center_y(),
-                notefield_offset_y,
-                column_reverse_percent[i],
-                HELD_MISS_Y_OFFSET_FROM_CENTER,
-                HELD_MISS_Y_REVERSE_OFFSET_FROM_CENTER,
-            );
-            let x = hold_indicator_column_x(
-                playfield_center_x,
-                i,
-                arrow_effect_time,
-                indicator_beat_push,
-                visual,
-                &indicator_col_offsets[..num_cols],
-                &indicator_invert_distances[..num_cols],
-                &indicator_tornado_bounds[..num_cols],
-            );
-            hud_actors.push(act!(sprite(texture.texture_key_handle()):
-                align(0.5, 0.5):
-                xy(x, y):
-                z(196):
-                setstate(0):
-                zoomx(zoom_x):
-                zoomy(zoom_y):
-                diffusealpha(1.0)
-            ));
-        }
-    }
-    for (i, hold_judgment) in state
-        .hold_judgments_for_columns(col_start, num_cols)
-        .iter()
-        .enumerate()
+    let held_misses = state.held_miss_judgments_for_columns(col_start, num_cols);
+    let hold_judgments = state.hold_judgments_for_columns(col_start, num_cols);
+    let mut tap = None;
+    let mut tap_sprite = None;
+    if !blind_active
+        && let Some(render) = p.last_judgment.as_ref()
+        && let Some(texture) = resolved_judgment_texture(profile)
     {
-        if blind_active {
-            continue;
-        }
-        let Some(render_info) = hold_judgment.as_ref() else {
-            continue;
-        };
-        let elapsed = (elapsed_screen - render_info.started_at_screen_s).max(0.0);
-        if elapsed >= HOLD_JUDGMENT_TOTAL_DURATION {
-            continue;
-        }
-        let zoom = if elapsed < 0.3 {
-            let progress = (elapsed / 0.3).clamp(0.0, 1.0);
-            (HOLD_JUDGMENT_INITIAL_ZOOM
-                + progress * (HOLD_JUDGMENT_FINAL_ZOOM - HOLD_JUDGMENT_INITIAL_ZOOM))
-                * judgment_zoom_mod
-        } else {
-            HOLD_JUDGMENT_FINAL_ZOOM * judgment_zoom_mod
-        };
-        let frame_index = match render_info.result {
-            HoldResult::Held => 0,
-            HoldResult::LetGo => 1,
-            HoldResult::Missed => 1,
-        } as u32;
-        if let Some(texture) = hold_judgment_texture {
-            let hold_judgment_y = player_metric_y(
-                screen_center_y(),
-                notefield_offset_y,
-                column_reverse_percent[i],
-                HOLD_JUDGMENT_Y_OFFSET_FROM_CENTER,
-                HOLD_JUDGMENT_Y_REVERSE_OFFSET_FROM_CENTER,
-            );
-            let x = hold_indicator_column_x(
-                playfield_center_x,
-                i,
-                arrow_effect_time,
-                indicator_beat_push,
-                visual,
-                &indicator_col_offsets[..num_cols],
-                &indicator_invert_distances[..num_cols],
-                &indicator_tornado_bounds[..num_cols],
-            );
-            hud_actors.push(act!(sprite(texture.texture_key_handle()):
-                align(0.5, 0.5):
-                xy(x, hold_judgment_y):
-                z(195):
-                setstate(frame_index):
-                zoom(zoom):
-                diffusealpha(1.0)
-            ));
-        }
+        let (frame_cols, frame_rows) = assets::parse_sprite_sheet_dims(texture.key.as_ref());
+        let (frame_row, overlay_row) =
+            tap_judgment_rows(profile, &render.judgment, frame_rows as usize);
+        tap = Some(TapJudgmentFeedback {
+            render,
+            frame_row,
+            overlay_row,
+            rotation_deg: judgment_tilt_rotation_deg(profile, &render.judgment),
+        });
+        tap_sprite = Some(TapJudgmentSprite {
+            source: texture.texture_key_handle().into_sprite_source(),
+            frame_size: judgment_frame_size(texture.key.as_ref()),
+            frame_cols: frame_cols as usize,
+        });
     }
+    let held_miss_sprite = (!blind_active && held_misses.iter().any(Option::is_some))
+        .then(|| {
+            held_miss_texture.map(|texture| IndicatorSprite {
+                source: texture.texture_key_handle().into_sprite_source(),
+                scale: if assets::parse_texture_hints(texture.key.as_ref()).doubleres {
+                    0.5
+                } else {
+                    1.0
+                },
+            })
+        })
+        .flatten();
+    let hold_sprite = (!blind_active && hold_judgments.iter().any(Option::is_some))
+        .then(|| {
+            hold_judgment_texture.map(|texture| texture.texture_key_handle().into_sprite_source())
+        })
+        .flatten();
+    compose_judgment_feedback(
+        hud_actors,
+        JudgmentFeedbackRequest {
+            style: style.judgment_feedback,
+            blind: blind_active,
+            elapsed_screen,
+            tap,
+            tap_sprite,
+            tap_xy: [judgment_x, judgment_y],
+            judgment_back: profile.judgment_back,
+            judgment_zoom: judgment_zoom_mod,
+            held_misses,
+            held_miss_sprite,
+            hold_judgments,
+            hold_sprite,
+            current_beat,
+            arrow_effect_time,
+            mini,
+            visual,
+            noteskin_column_xs: noteskin_assets.noteskin[player_idx]
+                .as_ref()
+                .map(|noteskin| noteskin.column_xs.as_slice()),
+            num_cols,
+            spacing_multiplier: spacing_mult,
+            field_zoom,
+            playfield_center_x,
+            screen_center_y: screen_center_y(),
+            screen_height: screen_height(),
+            field_center_y: notefield_offset_y,
+            column_reverse_percent: &column_reverse_percent[..num_cols],
+        },
+    );
     let judgment_actors = capture_requests
         .judgment
         .then(|| share_actor_range(&mut hud_actors, judgment_capture_start))

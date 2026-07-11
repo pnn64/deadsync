@@ -1,4 +1,11 @@
-use deadsync_theme::NotefieldStyle;
+use deadsync_theme::{
+    ColumnCueStyle, ColumnFlashLayoutStyle, ColumnFlashStyle, ComboFeedbackStyle, CounterHudStyle,
+    JudgmentFeedbackStyle, MiniIndicatorStyle, NotefieldStyle,
+};
+
+const fn rgb8(r: u8, g: u8, b: u8) -> [f32; 3] {
+    [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0]
+}
 
 pub const SIMPLY_LOVE_NOTEFIELD_STYLE: NotefieldStyle = NotefieldStyle {
     layout_width_min: 640.0,
@@ -22,6 +29,113 @@ pub const SIMPLY_LOVE_NOTEFIELD_STYLE: NotefieldStyle = NotefieldStyle {
     measure_cue_stop_color: [1.0, 0.0, 0.0],
     measure_cue_alpha: 0.7,
     edit_measure_number_font: "miso",
+    column_cue: ColumnCueStyle {
+        top_y: 80.0,
+        reverse_anchor_y: 304.0,
+        crossover_height_trim: 270.0,
+        body_fade: 0.333,
+        base_alpha: 0.12,
+        normal_color: [0.3, 1.0, 1.0],
+        mine_color: [1.0, 0.0, 0.0],
+        countdown_normal_y: 160.0,
+        countdown_reverse_y: 340.0,
+        countdown_color: [1.0, 1.0, 1.0],
+        countdown_zoom: 0.5,
+        body_z: 90,
+        countdown_z: 200,
+    },
+    column_flash: ColumnFlashStyle {
+        default_layout: ColumnFlashLayoutStyle {
+            top_y: 80.0,
+            height_trim: 0.0,
+            reverse_trim: 0.0,
+            fade: 0.333,
+        },
+        compact_layout: ColumnFlashLayoutStyle {
+            top_y: 70.0,
+            height_trim: 270.0,
+            reverse_trim: 30.0,
+            fade: 0.2,
+        },
+        reverse_anchor_y: 304.0,
+        normal_alpha: 0.66,
+        dimmed_alpha: 0.3,
+        miss_color: [1.0, 0.0, 0.0],
+        decent_color: [0.70, 0.36, 1.0],
+        way_off_color: rgb8(0xc9, 0x85, 0x5e),
+        great_color: rgb8(0x66, 0xc9, 0x55),
+        excellent_color: rgb8(0xe2, 0x9c, 0x18),
+        fantastic_color: [1.0, 1.0, 1.0],
+        fantastic_blue_color: rgb8(0x21, 0xcc, 0xe8),
+        z: 91,
+    },
+    counter_hud: CounterHudStyle {
+        text_z: 85,
+        shadow_len: 1.0,
+        base_zoom: 0.35,
+        lookahead_zoom_step: 0.05,
+        vertical_step_y: 20.0,
+        left_column_scale: 4.0 / 3.0,
+        horizontal_span: 2.0,
+        break_lookahead_color: [0.4, 0.4, 0.4, 1.0],
+        break_current_color: [0.5, 0.5, 0.5, 1.0],
+        stream_lookahead_color: [0.45, 0.45, 0.45, 1.0],
+        ratio_color: [1.0, 1.0, 1.0, 1.0],
+        total_color: [0.5, 0.5, 0.5, 1.0],
+        broken_y_offset: 15.0,
+        broken_vertical_y_offset: -15.0,
+        broken_vertical_x_scale: 4.0 / 3.0,
+        broken_color: [1.0, 1.0, 1.0, 0.7],
+        run_active_color: [1.0, 1.0, 1.0, 1.0],
+        run_inactive_color: [0.5, 0.5, 0.5, 1.0],
+    },
+    mini_indicator: MiniIndicatorStyle {
+        column_offset: 1.0,
+        under_up_x_offset: -45.0,
+        unanchored_x_offset: -12.0,
+        failed_color: [0.5, 0.5, 0.5],
+        shadow_len: 1.0,
+        text_z: 85,
+    },
+    judgment_feedback: JudgmentFeedbackStyle {
+        tap_front_z: 200,
+        tap_back_z: 95,
+        split_overlay_alpha: 0.5,
+        held_miss_normal_y: -50.0,
+        held_miss_reverse_y: 110.0,
+        held_miss_z: 196,
+        hold_normal_y: -90.0,
+        hold_reverse_y: 90.0,
+        hold_z: 195,
+        hold_initial_zoom: 25.6 / 140.0,
+        hold_final_zoom: 32.0 / 140.0,
+    },
+    combo_feedback: ComboFeedbackStyle {
+        threshold: 4,
+        milestone_z: 89,
+        number_z: 90,
+        number_zoom: 0.75,
+        shadow_len: 1.0,
+        miss_color: [1.0, 0.0, 0.0, 1.0],
+        burst_duration: 0.5,
+        burst_start_zoom: 2.0,
+        burst_end_zoom: 1.0,
+        burst_start_alpha: 0.5,
+        burst_rotation_deg: 90.0,
+        hundred_start_zoom: 0.25,
+        hundred_end_zoom: 2.0,
+        hundred_start_alpha: 0.6,
+        hundred_start_rotation_deg: 10.0,
+        mini_duration: 0.4,
+        mini_start_zoom: 0.25,
+        mini_end_zoom: 1.8,
+        mini_start_alpha: 1.0,
+        mini_start_rotation_deg: 10.0,
+        thousand_start_zoom: 0.25,
+        thousand_end_zoom: 3.0,
+        thousand_start_alpha: 0.7,
+        thousand_x_travel: 100.0,
+    },
 };
 
 pub const fn notefield_style() -> NotefieldStyle {
@@ -42,5 +156,30 @@ mod tests {
         assert_eq!(style.combo_centered_y, 155.0);
         assert_eq!(style.measure_line_z, 80);
         assert_eq!(style.edit_measure_number_font, "miso");
+        assert_eq!(style.column_cue.top_y, 80.0);
+        assert_eq!(style.column_cue.reverse_anchor_y, 304.0);
+        assert_eq!(style.column_cue.crossover_height_trim, 270.0);
+        assert_eq!(style.column_cue.normal_color, [0.3, 1.0, 1.0]);
+        assert_eq!(style.column_cue.countdown_reverse_y, 340.0);
+        assert_eq!(style.column_cue.body_z, 90);
+        assert_eq!(style.column_flash.default_layout.top_y, 80.0);
+        assert_eq!(style.column_flash.compact_layout.height_trim, 270.0);
+        assert_eq!(style.column_flash.compact_layout.reverse_trim, 30.0);
+        assert_eq!(style.column_flash.normal_alpha, 0.66);
+        assert_eq!(style.column_flash.dimmed_alpha, 0.3);
+        assert_eq!(style.column_flash.z, 91);
+        assert_eq!(style.counter_hud.text_z, 85);
+        assert_eq!(style.counter_hud.left_column_scale, 4.0 / 3.0);
+        assert_eq!(style.counter_hud.broken_color[3], 0.7);
+        assert_eq!(style.mini_indicator.under_up_x_offset, -45.0);
+        assert_eq!(style.mini_indicator.unanchored_x_offset, -12.0);
+        assert_eq!(style.judgment_feedback.tap_front_z, 200);
+        assert_eq!(style.judgment_feedback.tap_back_z, 95);
+        assert_eq!(style.judgment_feedback.held_miss_reverse_y, 110.0);
+        assert_eq!(style.judgment_feedback.hold_final_zoom, 32.0 / 140.0);
+        assert_eq!(style.combo_feedback.threshold, 4);
+        assert_eq!(style.combo_feedback.milestone_z, 89);
+        assert_eq!(style.combo_feedback.number_z, 90);
+        assert_eq!(style.combo_feedback.thousand_x_travel, 100.0);
     }
 }
