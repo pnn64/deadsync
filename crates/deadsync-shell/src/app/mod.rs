@@ -163,6 +163,7 @@ use deadsync_rules::judgment as judgment_rules;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 #[cfg(test)]
 use deadsync_rules::timing as timing_rules;
+use deadsync_theme::AudioRequest;
 use deadsync_theme::views::DensityGraphView as DensityGraphSource;
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as CurrentScreen;
 use deadsync_theme_simply_love::views::SimplyLoveDensityGraphSlot as DensityGraphSlot;
@@ -1999,27 +2000,12 @@ impl App {
                     }
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::ChangeGraphics {
-                    renderer,
-                    display_mode,
-                    resolution,
-                    monitor,
-                    vsync,
-                    present_mode_policy,
-                    max_fps,
-                    high_dpi,
-                } => {
-                    self.handle_graphics_change(
-                        renderer,
-                        display_mode,
-                        resolution,
-                        monitor,
-                        vsync,
-                        present_mode_policy,
-                        max_fps,
-                        high_dpi,
-                        event_loop,
-                    )?;
+                SimplyLoveRuntimeRequest::Audio(AudioRequest::PlaySfx(path)) => {
+                    deadsync_audio_stream::play_sfx(&path);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Graphics(request) => {
+                    self.handle_graphics_change(request, event_loop)?;
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::UpdateShowOverlay(mode) => {

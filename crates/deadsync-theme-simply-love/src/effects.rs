@@ -1,9 +1,8 @@
 use crate::screens::SimplyLoveScreen;
 use crate::views::{DensityGraphView, SimplyLoveDensityGraphSlot};
-use deadlib_render::{BackendType, PresentModePolicy};
-use deadsync_config::app_config::DisplayMode;
 use deadsync_profile::{ActiveProfile, PlayerSide};
 use deadsync_simfile::sync_offset::SongOffsetSyncChange;
+use deadsync_theme::{AudioRequest, GraphicsRequest};
 use std::path::PathBuf;
 
 /// Runtime work requested by Simply Love after its concrete screen logic has
@@ -40,16 +39,8 @@ pub enum SimplyLoveRuntimeRequest {
     },
     FetchOnlineGrade(String),
     WriteFsrDump,
-    ChangeGraphics {
-        renderer: Option<BackendType>,
-        display_mode: Option<DisplayMode>,
-        monitor: Option<usize>,
-        resolution: Option<(u32, u32)>,
-        vsync: Option<bool>,
-        present_mode_policy: Option<PresentModePolicy>,
-        max_fps: Option<u16>,
-        high_dpi: Option<bool>,
-    },
+    Audio(AudioRequest),
+    Graphics(GraphicsRequest),
     UpdateShowOverlay(u8),
     UpdateMouseCursorHidden(bool),
     TestLightsSetAuto,

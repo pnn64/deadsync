@@ -13,27 +13,74 @@ use crate::graphics::{
     sync_renderer_window_size,
 };
 use deadlib_render::{BackendType, PresentModePolicy};
-use deadsync_config::prelude::{self as config, DisplayMode};
+use deadsync_config::prelude::{self as config, DisplayMode, FullscreenType};
+use deadsync_theme::{
+    DisplayModeChoice, FullscreenChoice, GraphicsRequest, PresentPolicyChoice, RendererChoice,
+};
 use deadsync_theme_simply_love::screens::{options, select_music};
 use log::{debug, error, info};
 use std::error::Error;
 use std::time::Instant;
 use winit::{dpi::PhysicalSize, event_loop::ActiveEventLoop};
 
+#[inline(always)]
+const fn runtime_backend_type(choice: RendererChoice) -> BackendType {
+    match choice {
+        #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+        RendererChoice::Vulkan => BackendType::Vulkan,
+        #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+        RendererChoice::VulkanWgpu => BackendType::VulkanWgpu,
+        #[cfg(target_os = "macos")]
+        RendererChoice::Metal => BackendType::Metal,
+        RendererChoice::OpenGl => BackendType::OpenGL,
+        RendererChoice::OpenGlWgpu => BackendType::OpenGLWgpu,
+        RendererChoice::Software => BackendType::Software,
+        #[cfg(target_os = "windows")]
+        RendererChoice::DirectX => BackendType::DirectX,
+    }
+}
+
+#[inline(always)]
+const fn runtime_display_mode(choice: DisplayModeChoice) -> DisplayMode {
+    match choice {
+        DisplayModeChoice::Windowed => DisplayMode::Windowed,
+        DisplayModeChoice::Fullscreen(FullscreenChoice::Exclusive) => {
+            DisplayMode::Fullscreen(FullscreenType::Exclusive)
+        }
+        DisplayModeChoice::Fullscreen(FullscreenChoice::Borderless) => {
+            DisplayMode::Fullscreen(FullscreenType::Borderless)
+        }
+    }
+}
+
+#[inline(always)]
+const fn runtime_present_mode_policy(choice: PresentPolicyChoice) -> PresentModePolicy {
+    match choice {
+        PresentPolicyChoice::Mailbox => PresentModePolicy::Mailbox,
+        PresentPolicyChoice::Immediate => PresentModePolicy::Immediate,
+    }
+}
+
 impl App {
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn handle_graphics_change(
         &mut self,
-        renderer: Option<BackendType>,
-        display_mode: Option<DisplayMode>,
-        resolution: Option<(u32, u32)>,
-        monitor: Option<usize>,
-        vsync: Option<bool>,
-        present_mode_policy: Option<PresentModePolicy>,
-        max_fps: Option<u16>,
-        high_dpi: Option<bool>,
+        request: GraphicsRequest,
         event_loop: &ActiveEventLoop,
     ) -> Result<(), Box<dyn Error>> {
+        let GraphicsRequest {
+            renderer,
+            display_mode,
+            resolution,
+            monitor,
+            vsync,
+            present_mode_policy,
+            max_fps,
+            high_dpi,
+        } = request;
+        let renderer = renderer.map(runtime_backend_type);
+        let display_mode = display_mode.map(runtime_display_mode);
+        let present_mode_policy = present_mode_policy.map(runtime_present_mode_policy);
+
         // Ensure options menu reflects current hardware state before processing changes.
         self.update_options_monitor_specs(event_loop);
 
@@ -390,6 +437,31 @@ impl App {
             sync.fullscreen_type,
             sync.monitor,
             sync.monitor_count,
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn neutral_graphics_choices_map_to_runtime_types() {
+        assert_eq!(
+            runtime_backend_type(RendererChoice::OpenGl),
+            BackendType::OpenGL
+        );
+        assert_eq!(
+            runtime_display_mode(DisplayModeChoice::Windowed),
+            DisplayMode::Windowed
+        );
+        assert_eq!(
+            runtime_display_mode(DisplayModeChoice::Fullscreen(FullscreenChoice::Borderless)),
+            DisplayMode::Fullscreen(FullscreenType::Borderless)
+        );
+        assert_eq!(
+            runtime_present_mode_policy(PresentPolicyChoice::Immediate),
+            PresentModePolicy::Immediate
         );
     }
 }

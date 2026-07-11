@@ -9,7 +9,7 @@ use deadlib_platform::logging::{self, StartupBuildInfo};
 use deadsync_config::prelude as config;
 use deadsync_profile::compat as profile;
 use deadsync_shell::app;
-use deadsync_theme_simply_love::assets;
+use deadsync_theme_simply_love::{i18n, visual_styles};
 use std::backtrace::Backtrace;
 use std::panic::PanicHookInfo;
 
@@ -214,8 +214,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Initialize localization after config (which provides the language preference)
     // and before profile/audio/screens which may use tr() for display strings.
-    let locale = assets::i18n::resolve_locale(cfg.language_flag);
-    assets::i18n::init(&locale);
+    let locale = i18n::resolve_locale(cfg.language_flag);
+    i18n::init(&locale);
 
     #[cfg(windows)]
     let _windows_timing = deadlib_platform::windows_rt::boost_main_thread_timing();
@@ -244,7 +244,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // the ReplayGain subsystem the prewarm workers depend on.
         if cfg.enable_replaygain {
             deadsync_audio_replaygain::prewarm_paths(
-                assets::visual_styles::bundled_music_paths(),
+                visual_styles::bundled_music_paths(),
                 deadsync_audio_replaygain::Priority::Background,
             );
         }

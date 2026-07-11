@@ -1,5 +1,5 @@
-pub use deadlib_present::{rgba, rgba_const};
-pub use deadlib_render as render;
+pub(crate) use deadlib_present::rgba_const;
+pub(crate) use deadlib_render as render;
 
 pub mod effects;
 pub mod fonts;
@@ -30,31 +30,17 @@ impl deadsync_theme::Theme for SimplyLoveTheme {
     }
 }
 
-pub mod assets {
-    pub use crate::fonts::{
-        FontRole, current_machine_font_key, current_machine_font_key_for_text, machine_font_key,
-        machine_font_key_for_text,
-    };
+pub(crate) mod assets {
+    pub use crate::fonts::{FontRole, current_machine_font_key, current_machine_font_key_for_text};
     pub use crate::{i18n, visual_styles};
     pub use deadsync_assets::*;
 }
-pub use deadsync_profile_gameplay::{
-    GameplayPackData, GameplayProfile, SongLuaRuntimeOverlayStateDelta, chart_effects_from_profile,
-    gameplay_attack_mode, gameplay_config_from_config, gameplay_fail_type_from_config,
-    gameplay_pack_data, gameplay_play_style_from_profile, gameplay_player_side_from_profile,
-    gameplay_runtime_profile_data, gameplay_tick_mode_from_profile, profile_side_from_gameplay,
-    profile_tick_mode_from_gameplay, score_display_mode_from_profile, scroll_effects_from_option,
-    song_lua_compile_context, song_lua_overlay_delta_mask, song_lua_runtime_column_offset_windows,
-    song_lua_runtime_ease_windows, song_lua_runtime_mod_windows,
-    song_lua_runtime_overlay_ease_window, tap_explosion_options_from_profile,
-};
-
-pub mod config {
+pub(crate) mod config {
     pub use deadsync_config::prelude::*;
 }
 
 pub type GameplayCoreState = deadsync_gameplay::GameplayRuntimeState<
-    GameplayProfile,
+    deadsync_profile_gameplay::GameplayProfile,
     deadsync_assets::song_lua::SongLuaOverlayActor,
     deadsync_song_lua::SongLuaCapturedActor,
     deadsync_gameplay::SongLuaRuntimeOverlayStateDelta<deadsync_song_lua::SongLuaOverlayStateDelta>,

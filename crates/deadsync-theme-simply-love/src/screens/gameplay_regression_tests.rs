@@ -9,7 +9,7 @@ use deadsync_gameplay::{
 };
 use deadsync_rules::scroll::ScrollSpeedSetting;
 
-use crate::GameplayProfile;
+use deadsync_profile_gameplay::GameplayProfile;
 
 type State = GameplayRuntimeState<
     GameplayProfile,

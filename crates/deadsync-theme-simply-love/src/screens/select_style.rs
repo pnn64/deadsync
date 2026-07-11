@@ -12,9 +12,9 @@ use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, widescale};
-use deadsync_audio_stream as audio;
 use deadsync_input::InputEvent;
 use deadsync_profile as profile_data;
+use deadsync_theme::AudioRequest;
 
 /* ------------------------------ layout ------------------------------- */
 // Simply Love: ScreenSelectStyle underlay/choice.lua
@@ -84,15 +84,15 @@ pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     match style_flow::handle_input(&mut state.flow, ev) {
         InputEffect::None => ThemeEffect::None,
-        InputEffect::Move => {
-            audio::play_sfx("assets/sounds/change.ogg");
-            ThemeEffect::None
-        }
+        InputEffect::Move => ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+            AudioRequest::PlaySfx("assets/sounds/change.ogg".to_owned()),
+        )),
         InputEffect::Confirm(play_style) => {
             let _ = exit_anim_t(true);
             deadsync_profile::compat::set_session_play_style(play_style);
-            audio::play_sfx("assets/sounds/start.ogg");
-            ThemeEffect::None
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                AudioRequest::PlaySfx("assets/sounds/start.ogg".to_owned()),
+            ))
         }
         InputEffect::Back => ThemeEffect::Navigate(Screen::Menu),
     }

@@ -1,5 +1,46 @@
 use super::*;
 use deadsync_profile as profile_data;
+use deadsync_theme::{
+    DisplayModeChoice, FullscreenChoice, GraphicsRequest, PresentPolicyChoice, RendererChoice,
+};
+
+#[inline(always)]
+const fn renderer_choice(renderer: BackendType) -> RendererChoice {
+    match renderer {
+        #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+        BackendType::Vulkan => RendererChoice::Vulkan,
+        #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+        BackendType::VulkanWgpu => RendererChoice::VulkanWgpu,
+        #[cfg(target_os = "macos")]
+        BackendType::Metal => RendererChoice::Metal,
+        BackendType::OpenGL => RendererChoice::OpenGl,
+        BackendType::OpenGLWgpu => RendererChoice::OpenGlWgpu,
+        BackendType::Software => RendererChoice::Software,
+        #[cfg(target_os = "windows")]
+        BackendType::DirectX => RendererChoice::DirectX,
+    }
+}
+
+#[inline(always)]
+const fn display_mode_choice(mode: DisplayMode) -> DisplayModeChoice {
+    match mode {
+        DisplayMode::Windowed => DisplayModeChoice::Windowed,
+        DisplayMode::Fullscreen(FullscreenType::Exclusive) => {
+            DisplayModeChoice::Fullscreen(FullscreenChoice::Exclusive)
+        }
+        DisplayMode::Fullscreen(FullscreenType::Borderless) => {
+            DisplayModeChoice::Fullscreen(FullscreenChoice::Borderless)
+        }
+    }
+}
+
+#[inline(always)]
+const fn present_policy_choice(policy: PresentModePolicy) -> PresentPolicyChoice {
+    match policy {
+        PresentModePolicy::Mailbox => PresentPolicyChoice::Mailbox,
+        PresentModePolicy::Immediate => PresentPolicyChoice::Immediate,
+    }
+}
 
 /// Refresh cached translated labels when the UI language changes.
 pub(super) fn sync_i18n_cache(state: &mut State) {
@@ -431,16 +472,17 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
                     || high_dpi_change.is_some()
                 {
                     pending_action = Some(ThemeEffect::Runtime(
-                        crate::SimplyLoveRuntimeRequest::ChangeGraphics {
-                            renderer: renderer_change,
-                            display_mode: display_mode_change,
+                        crate::SimplyLoveRuntimeRequest::Graphics(GraphicsRequest {
+                            renderer: renderer_change.map(renderer_choice),
+                            display_mode: display_mode_change.map(display_mode_choice),
                             monitor: monitor_change,
                             resolution: resolution_change,
                             vsync: vsync_change,
-                            present_mode_policy: present_mode_policy_change,
+                            present_mode_policy: present_mode_policy_change
+                                .map(present_policy_choice),
                             max_fps: max_fps_change,
                             high_dpi: high_dpi_change,
-                        },
+                        }),
                     ));
                 }
             }

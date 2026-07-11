@@ -393,6 +393,23 @@ mod tests {
     }
 
     #[test]
+    fn audio_request_reaches_runtime_execution() {
+        let plan = theme_effect_execution_plan(
+            ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Audio(
+                deadsync_theme::AudioRequest::PlaySfx("assets/sounds/start.ogg".to_owned()),
+            )),
+            action_context(),
+        );
+
+        assert!(matches!(
+            plan.effect,
+            ThemeEffectExecution::Runtime(SimplyLoveRuntimeRequest::Audio(
+                deadsync_theme::AudioRequest::PlaySfx(path)
+            )) if path == "assets/sounds/start.ogg"
+        ));
+    }
+
+    #[test]
     fn action_effect_plan_maps_media_requests_to_commands() {
         let plan = theme_effect_execution_plan(
             ThemeEffect::Runtime(SimplyLoveRuntimeRequest::RequestDensityGraph {

@@ -9,13 +9,6 @@ use crate::screens::components::shared::gs_scorebox;
 use crate::screens::components::shared::lobby_hud;
 use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenBarParams};
 use crate::screens::{Screen, ThemeEffect};
-use crate::{
-    GameplayProfile, SongLuaRuntimeOverlayStateDelta, gameplay_pack_data,
-    gameplay_runtime_profile_data, profile_side_from_gameplay, profile_tick_mode_from_gameplay,
-    score_display_mode_from_profile, scroll_effects_from_option, song_lua_compile_context,
-    song_lua_runtime_column_offset_windows, song_lua_runtime_ease_windows,
-    song_lua_runtime_mod_windows,
-};
 use deadlib_present::actors::{Actor, SizeSpec, SpriteSource, TextAttribute, TextContent};
 use deadlib_present::anim::EffectState;
 use deadlib_present::cache::{TextCache, cached_text};
@@ -69,6 +62,13 @@ use deadsync_online::lobbies as lobby_data;
 use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
+use deadsync_profile_gameplay::{
+    GameplayProfile, SongLuaRuntimeOverlayStateDelta, gameplay_pack_data,
+    gameplay_runtime_profile_data, profile_side_from_gameplay, profile_tick_mode_from_gameplay,
+    score_display_mode_from_profile, scroll_effects_from_option, song_lua_compile_context,
+    song_lua_runtime_column_offset_windows, song_lua_runtime_ease_windows,
+    song_lua_runtime_mod_windows,
+};
 use deadsync_rules::note::Note;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::TimingSegments;
@@ -11042,6 +11042,9 @@ mod tests {
     use super::*;
     use deadlib_present::actors::TextAttribute;
     use deadsync_chart::{ArrowStats, StaminaCounts, TechCounts};
+    use deadsync_profile_gameplay::{
+        gameplay_play_style_from_profile, gameplay_player_side_from_profile,
+    };
 
     fn workspace_root() -> std::path::PathBuf {
         let manifest = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -11141,8 +11144,8 @@ mod tests {
             player_profiles[1].show_ex_score = true;
             player_profiles[1].groovestats_username = "p2-user".to_string();
             let session = GameplaySession {
-                play_style: crate::gameplay_play_style_from_profile(play_style),
-                player_side: crate::gameplay_player_side_from_profile(profile_data::PlayerSide::P2),
+                play_style: gameplay_play_style_from_profile(play_style),
+                player_side: gameplay_player_side_from_profile(profile_data::PlayerSide::P2),
                 joined_sides: [false, true],
                 active_profile_ids: [None, Some("p2-profile".to_string())],
                 ..GameplaySession::default()

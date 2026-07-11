@@ -3,11 +3,89 @@ use crate::measure_lines::{beat_scroll_travel, edit_beat_scroll_travel};
 use crate::transforms::{
     AccelYParams, apply_accel_y, apply_accel_y_with_peak, move_col_extra, tipsy_y_extra,
 };
+use crate::{
+    ModelMeshCache, actor_with_world_z, itg_actor_glow_alpha, noteskin_model_actor_from_draw_cached,
+};
+use deadlib_present::actors::{Actor, SpriteSource};
+use deadlib_present::dsl::SpriteBuilder;
+use deadlib_render::BlendMode;
 use deadsync_core::song_time::SongTimeNs;
 use deadsync_core::timing::beat_to_note_row;
+use deadsync_noteskin::{ModelDrawState, NoteskinSlot};
 use deadsync_rules::note::{MineResult, Note, NoteCountStat};
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::TimingData;
+
+/// Canonical inputs for the white ITG Actor glow pass of a note layer.
+pub struct NoteGlowRequest<'a, S> {
+    pub slot: &'a S,
+    pub draw: ModelDrawState,
+    pub model_center: [f32; 2],
+    pub sprite_center: [f32; 2],
+    pub size: [f32; 2],
+    pub uv: [f32; 4],
+    pub rotation_y_deg: f32,
+    pub model_rotation_z_deg: f32,
+    pub sprite_rotation_z_deg: f32,
+    pub alpha: f32,
+    pub blend: BlendMode,
+    pub z: i16,
+    pub world_z: f32,
+    pub prefer_sprite: bool,
+}
+
+/// Appends one note layer's glow pass, preserving model fallback and actor order.
+pub fn compose_note_glow<S, F>(
+    actors: &mut Vec<Actor>,
+    model_cache: &mut ModelMeshCache,
+    request: NoteGlowRequest<'_, S>,
+    sprite_source: &F,
+) where
+    S: NoteskinSlot,
+    F: Fn(&S) -> SpriteSource,
+{
+    let glow_alpha = itg_actor_glow_alpha(request.alpha);
+    if glow_alpha <= f32::EPSILON {
+        return;
+    }
+    if !request.prefer_sprite
+        && let Some(mut actor) = noteskin_model_actor_from_draw_cached(
+            request.slot,
+            request.draw,
+            request.model_center,
+            request.size,
+            request.uv,
+            request.model_rotation_z_deg,
+            [1.0, 1.0, 1.0, 0.0],
+            request.blend,
+            request.z,
+            model_cache,
+        )
+    {
+        if let Actor::TexturedMesh { glow, .. } = &mut actor {
+            *glow = [1.0, 1.0, 1.0, glow_alpha];
+        }
+        actors.push(actor_with_world_z(actor, request.world_z));
+        return;
+    }
+
+    let mut actor = SpriteBuilder::with_source(sprite_source(request.slot));
+    actor.align(0.5, 0.5);
+    actor.xy(request.sprite_center[0], request.sprite_center[1]);
+    actor.size(request.size[0], request.size[1]);
+    actor.rotationy(request.rotation_y_deg);
+    actor.rotationz(request.sprite_rotation_z_deg);
+    actor.customtexturerect(request.uv);
+    actor.diffuse([1.0, 1.0, 1.0, 0.0]);
+    actor.glow([1.0, 1.0, 1.0, glow_alpha]);
+    actor.blend(if request.draw.blend_add {
+        BlendMode::Add
+    } else {
+        BlendMode::Alpha
+    });
+    actor.z(request.z);
+    actors.push(actor_with_world_z(actor.build(0), request.world_z));
+}
 
 #[derive(Clone, Copy, Debug)]
 pub struct ScrollTravelRequest<'a> {
@@ -422,17 +500,131 @@ use crate::style::MAX_NOTES_AFTER;
 #[cfg(test)]
 mod tests {
     use super::{
-        ScrollTravelRequest, for_each_visible_hold_index, for_each_visible_note_index,
-        hold_overlaps_visible_window, scroll_travel,
+        NoteGlowRequest, ScrollTravelRequest, compose_note_glow, for_each_visible_hold_index,
+        for_each_visible_note_index, hold_overlaps_visible_window, scroll_travel,
     };
-    use crate::{AccelYParams, apply_accel_y, move_col_extra, tipsy_y_extra};
+    use crate::{
+        AccelYParams, ModelMeshCache, ModelMeshCacheStats, apply_accel_y, move_col_extra,
+        tipsy_y_extra,
+    };
+    use deadlib_present::actors::{Actor, SizeSpec, SpriteSource};
+    use deadlib_render::BlendMode;
     use deadsync_core::note::NoteType;
     use deadsync_core::timing::beat_to_note_row;
+    use deadsync_noteskin::{
+        ModelDrawState, ModelMesh, ModelVertex, NoteskinSlot, SpriteDefinition,
+    };
     use deadsync_rules::note::{HoldData, Note};
     use deadsync_rules::scroll::ScrollSpeedSetting;
     use deadsync_rules::timing::{
         ScrollSegment, SpeedSegment, SpeedUnit, TimingData, TimingSegments,
     };
+    use std::cell::Cell;
+    use std::sync::Arc;
+
+    struct GlowSlot {
+        def: SpriteDefinition,
+        model: Option<ModelMesh>,
+        texture: Arc<str>,
+    }
+
+    impl GlowSlot {
+        fn sprite() -> Self {
+            Self {
+                def: SpriteDefinition {
+                    size: [64, 64],
+                    ..SpriteDefinition::default()
+                },
+                model: None,
+                texture: Arc::from("glow-slot"),
+            }
+        }
+
+        fn model() -> Self {
+            Self {
+                model: Some(ModelMesh {
+                    vertices: Arc::from([ModelVertex {
+                        pos: [0.0, 0.0, 0.0],
+                        uv: [0.0, 0.0],
+                        tex_matrix_scale: [1.0, 1.0],
+                    }]),
+                    bounds: [0.0, 0.0, 0.0, 64.0, 64.0, 0.0],
+                }),
+                ..Self::sprite()
+            }
+        }
+    }
+
+    impl NoteskinSlot for GlowSlot {
+        fn sprite_def(&self) -> &SpriteDefinition {
+            &self.def
+        }
+
+        fn source_size(&self) -> [i32; 2] {
+            [64, 64]
+        }
+
+        fn texture_key_shared(&self) -> Arc<str> {
+            self.texture.clone()
+        }
+
+        fn model(&self) -> Option<&ModelMesh> {
+            self.model.as_ref()
+        }
+
+        fn base_rot_sin_cos(&self) -> [f32; 2] {
+            [0.0, 1.0]
+        }
+
+        fn frame_index(&self, _time: f32, _beat: f32) -> usize {
+            0
+        }
+
+        fn frame_index_from_phase(&self, _phase: f32) -> usize {
+            0
+        }
+
+        fn uv_for_frame_at(&self, _frame_index: usize, _elapsed: f32) -> [f32; 4] {
+            [0.0, 0.0, 1.0, 1.0]
+        }
+
+        fn model_draw_at(&self, _time: f32, _beat: f32) -> ModelDrawState {
+            ModelDrawState::default()
+        }
+
+        fn model_glow_with_draw(
+            &self,
+            _draw: ModelDrawState,
+            _time: f32,
+            _beat: f32,
+            _diffuse_alpha: f32,
+        ) -> Option<[f32; 4]> {
+            None
+        }
+
+        fn model_uv_params(&self, uv: [f32; 4]) -> ([f32; 2], [f32; 2], [f32; 2]) {
+            ([uv[2] - uv[0], uv[3] - uv[1]], [uv[0], uv[1]], [0.0, 0.0])
+        }
+    }
+
+    fn glow_request(slot: &GlowSlot) -> NoteGlowRequest<'_, GlowSlot> {
+        NoteGlowRequest {
+            slot,
+            draw: ModelDrawState::default(),
+            model_center: [10.0, 20.0],
+            sprite_center: [30.0, 40.0],
+            size: [48.0, 56.0],
+            uv: [0.1, 0.2, 0.7, 0.8],
+            rotation_y_deg: 12.0,
+            model_rotation_z_deg: 23.0,
+            sprite_rotation_z_deg: 34.0,
+            alpha: 0.75,
+            blend: BlendMode::Add,
+            z: 140,
+            world_z: 9.0,
+            prefer_sprite: false,
+        }
+    }
 
     fn timing() -> TimingData {
         TimingData::from_segments(
@@ -479,6 +671,135 @@ mod tests {
             (actual - expected).abs() <= 0.001,
             "expected {expected}, got {actual}"
         );
+    }
+
+    #[test]
+    fn note_glow_skips_zero_alpha_before_resolving_sprite_source() {
+        let slot = GlowSlot::sprite();
+        let mut request = glow_request(&slot);
+        request.alpha = f32::NAN;
+        let mut actors = Vec::new();
+        let mut cache = ModelMeshCache::default();
+        let source_calls = Cell::new(0);
+
+        compose_note_glow(&mut actors, &mut cache, request, &|_| {
+            source_calls.set(source_calls.get() + 1);
+            SpriteSource::static_texture("unused")
+        });
+
+        assert!(actors.is_empty());
+        assert_eq!(source_calls.get(), 0);
+        assert_eq!(cache.stats(), ModelMeshCacheStats::default());
+    }
+
+    #[test]
+    fn note_glow_uses_cached_model_actor_and_preserves_layer_fields() {
+        let slot = GlowSlot::model();
+        let mut actors = Vec::new();
+        let mut cache = ModelMeshCache::with_capacity(1);
+
+        for _ in 0..2 {
+            compose_note_glow(&mut actors, &mut cache, glow_request(&slot), &|_| {
+                panic!("model glow must not resolve a sprite source")
+            });
+        }
+
+        assert_eq!(actors.len(), 2);
+        assert_eq!(
+            cache.stats(),
+            ModelMeshCacheStats {
+                hits: 1,
+                misses: 1,
+                saturated_misses: 0,
+            }
+        );
+        let Actor::TexturedMesh {
+            offset,
+            world_z,
+            tint,
+            glow,
+            blend,
+            z,
+            ..
+        } = &actors[0]
+        else {
+            panic!("model-backed glow should emit a textured mesh");
+        };
+        assert_eq!(*offset, [10.0, 20.0]);
+        assert_eq!(*world_z, 9.0);
+        assert_eq!(*tint, [1.0, 1.0, 1.0, 0.0]);
+        assert_eq!(*glow, [1.0, 1.0, 1.0, 0.75]);
+        assert_eq!(*blend, BlendMode::Add);
+        assert_eq!(*z, 140);
+    }
+
+    #[test]
+    fn note_glow_prefer_sprite_uses_supplied_source_and_sprite_transform() {
+        let slot = GlowSlot::model();
+        let mut request = glow_request(&slot);
+        request.prefer_sprite = true;
+        let mut actors = Vec::new();
+        let mut cache = ModelMeshCache::default();
+        let source_calls = Cell::new(0);
+
+        compose_note_glow(&mut actors, &mut cache, request, &|_| {
+            source_calls.set(source_calls.get() + 1);
+            SpriteSource::static_texture("fast-path")
+        });
+
+        assert_eq!(source_calls.get(), 1);
+        assert_eq!(cache.stats(), ModelMeshCacheStats::default());
+        let Actor::Sprite {
+            align,
+            offset,
+            world_z,
+            size,
+            source,
+            tint,
+            glow,
+            z,
+            uv_rect,
+            blend,
+            rot_y_deg,
+            rot_z_deg,
+            ..
+        } = &actors[0]
+        else {
+            panic!("preferred sprite glow should emit a sprite");
+        };
+        assert_eq!(*align, [0.5, 0.5]);
+        assert_eq!(*offset, [30.0, 40.0]);
+        assert_eq!(*world_z, 9.0);
+        assert!(matches!(size, [SizeSpec::Px(48.0), SizeSpec::Px(56.0)]));
+        assert_eq!(source.texture_key(), Some("fast-path"));
+        assert_eq!(*tint, [1.0, 1.0, 1.0, 0.0]);
+        assert_eq!(*glow, [1.0, 1.0, 1.0, 0.75]);
+        assert_eq!(*z, 140);
+        assert_eq!(*uv_rect, Some([0.1, 0.2, 0.7, 0.8]));
+        assert_eq!(*blend, BlendMode::Alpha);
+        assert_eq!(*rot_y_deg, 12.0);
+        assert_eq!(*rot_z_deg, 34.0);
+    }
+
+    #[test]
+    fn note_glow_sprite_uses_authored_additive_blend() {
+        let slot = GlowSlot::sprite();
+        let mut request = glow_request(&slot);
+        request.draw.blend_add = true;
+        let mut actors = Vec::new();
+        let mut cache = ModelMeshCache::default();
+
+        compose_note_glow(&mut actors, &mut cache, request, &|_| {
+            SpriteSource::static_texture("additive")
+        });
+
+        assert!(matches!(
+            actors.as_slice(),
+            [Actor::Sprite {
+                blend: BlendMode::Add,
+                ..
+            }]
+        ));
     }
 
     fn note(beat: f32) -> Note {
