@@ -571,6 +571,7 @@ mod tests {
     use deadsync_theme::{
         ColumnFlashLayoutStyle, ColumnFlashStyle, ComboFeedbackStyle, CounterHudStyle,
         ErrorBarLayers, ErrorBarPalette, ErrorBarStyle, JudgmentFeedbackStyle, MiniIndicatorStyle,
+        ReceptorStyle,
     };
 
     fn style() -> NotefieldStyle {
@@ -580,6 +581,11 @@ mod tests {
             side_center_x_ratio: 0.25,
             receptor_normal_y: -125.0,
             receptor_reverse_y: 145.0,
+            receptor: ReceptorStyle {
+                target_z: 100,
+                press_glow_z: 105,
+                hold_explosion_z: 145,
+            },
             judgment_normal_y: -30.0,
             judgment_reverse_y: 30.0,
             judgment_centered_y: 95.0,

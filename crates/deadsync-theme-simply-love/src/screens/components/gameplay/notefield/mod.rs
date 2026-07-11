@@ -2,9 +2,6 @@ use crate::GameplayCoreState as State;
 use crate::act;
 use crate::assets;
 use crate::notefield_style::notefield_style;
-use crate::screens::components::shared::noteskin_model::{
-    ModelMeshCache, noteskin_model_actor_from_draw_cached,
-};
 use crate::screens::gameplay::GameplayNoteskinAssets;
 use deadlib_present::actors::{Actor, IntoTextureKey};
 use deadlib_present::color;
@@ -25,14 +22,16 @@ use deadsync_notefield::{
     ComboMilestoneAssets, CounterHudRequest, ErrorBarComposeRequest, ErrorBarModes, ErrorBarState,
     FieldLayoutRequest, HoldEntryPlanRequest, HudLayoutOffsets, HudLayoutParams, IndicatorSprite,
     JudgmentFeedbackRequest, JudgmentTiltParams, LayoutMiniIndicatorPosition,
-    MeasureComposeRequest, MeasureLineMode, MiniIndicatorRequest, NoteAlphaParams, NoteXParams,
-    NotefieldFrameFeatures, NotefieldFramePlanRequest, ScrollTravelRequest, TapJudgmentFeedback,
-    TapJudgmentRowsParams, TapJudgmentSprite, TornadoBounds, VisualEffectParams, ZmodLayoutParams,
-    actor_with_world_z, appearance_needs_rows, appearance_note_actor_alpha, appearance_note_glow,
-    beat_factor, bottom_cap_uv_window, clipped_hold_body_bounds, compose_column_feedback,
+    MeasureComposeRequest, MeasureLineMode, MiniIndicatorRequest, ModelMeshCache, NoteAlphaParams,
+    NoteXParams, NotefieldFrameFeatures, NotefieldFramePlanRequest, ReceptorActorsRequest,
+    ReceptorPress, ScrollTravelRequest, TapJudgmentFeedback, TapJudgmentRowsParams,
+    TapJudgmentSprite, TornadoBounds, VisualEffectParams, ZmodLayoutParams, actor_with_world_z,
+    appearance_needs_rows, appearance_note_actor_alpha, appearance_note_glow, beat_factor,
+    bottom_cap_uv_window, clipped_hold_body_bounds, compose_column_feedback,
     compose_combo_feedback, compose_counter_hud, compose_error_bar, compose_judgment_feedback,
-    compose_measure_lines, compose_mini_indicator, compute_invert_distances,
-    compute_tornado_bounds, effective_mini_value as crate_effective_mini_value,
+    compose_measure_lines, compose_mini_indicator, compose_receptor_actors,
+    compute_invert_distances, compute_tornado_bounds,
+    effective_mini_value as crate_effective_mini_value,
     field_effect_height as field_effect_height_for_screen, field_layout, fill_lane_col_offsets,
     for_each_visible_hold_index, for_each_visible_note_index,
     gameplay_visual_effect_params as visual_effect_params, hold_body_bottom_for_tail_cap,
@@ -43,8 +42,9 @@ use deadsync_notefield::{
     judgment_tilt_rotation_deg as crate_judgment_tilt_rotation_deg, maybe_flip_uv_vert,
     maybe_mirror_uv_horiz_for_reverse_flipped, mine_hides_after_resolution, mine_part,
     note_world_z_for_bumpy, note_x_offset as crate_note_x_offset, notefield_frame_plan,
-    notefield_view_proj, offset_center, receptor_row_center as crate_receptor_row_center,
-    scale_cap_to_arrow, scale_effect_size, scale_sprite_to_arrow, scroll_travel, share_actor_range,
+    notefield_view_proj, noteskin_model_actor_from_draw_cached, offset_center,
+    receptor_row_center as crate_receptor_row_center, scale_cap_to_arrow, scale_effect_size,
+    scale_sprite_to_arrow, scroll_travel, share_actor_range, song_lua_note_model_draw,
     song_time_ns_to_seconds, tap_judgment_rows as crate_tap_judgment_rows, tap_part_for_note_type,
     tap_replacement_head, top_cap_rotation_deg, translated_uv_rect, visual_arrow_effect_zoom,
     visual_confusion_rotation_deg, visual_hold_body_needs_z_buffer, visual_note_rotation_z,
@@ -128,17 +128,11 @@ fn judgment_tilt_rotation_deg(profile: &profile_data::Profile, judgment: &Judgme
 }
 
 // Z-order layers for key gameplay visuals (higher draws on top)
-const Z_RECEPTOR: i32 = 100;
 const Z_HOLD_BODY: i32 = 110;
 const Z_HOLD_CAP: i32 = 110;
 const Z_HOLD_GLOW: i32 = 111;
-// ITG draws GhostArrowRow after columns; keep hold/roll ghost arrows above note lanes.
-const Z_HOLD_EXPLOSION: i32 = 145;
 // ITG's Explosion actor declares hold/roll children before tap judgments, so taps render on top.
 const Z_TAP_EXPLOSION: i32 = 150;
-// ITG NoteField draws ReceptorArrowRow before column renderers, so receptor
-// press glow must stay under hold bodies instead of cutting through them.
-const Z_RECEPTOR_GLOW: i32 = 105;
 const Z_MINE_EXPLOSION: i32 = 101;
 const Z_TAP_NOTE: i32 = 140;
 const MINE_CORE_SIZE_RATIO: f32 = 0.45;
@@ -152,16 +146,6 @@ fn note_slot_base_size(slot: &SpriteSlot, scale: f32) -> [f32; 2] {
     }
     let logical = slot.logical_size();
     [logical[0] * scale, logical[1] * scale]
-}
-
-#[inline(always)]
-fn slot_zoom_x(slot: &SpriteSlot, zoom: f32) -> f32 {
-    if slot.def.mirror_h { -zoom } else { zoom }
-}
-
-#[inline(always)]
-fn slot_zoom_y(slot: &SpriteSlot, zoom: f32) -> f32 {
-    if slot.def.mirror_v { -zoom } else { zoom }
 }
 
 #[inline(always)]
@@ -217,7 +201,7 @@ fn note_alpha_params(appearance: AppearanceEffects) -> NoteAlphaParams {
 fn note_x_offset(
     local_col: usize,
     y: f32,
-    elapsed: f32,
+    arrow_effect_time_s: f32,
     beat_factor: f32,
     visual: VisualEffects,
     col_offsets: &[f32],
@@ -227,8 +211,8 @@ fn note_x_offset(
     crate_note_x_offset(
         local_col,
         y,
-        elapsed,
         beat_factor,
+        arrow_effect_time_s,
         col_offsets,
         invert_distances,
         tornado_bounds,
@@ -250,7 +234,7 @@ fn receptor_row_center(
     playfield_center_x: f32,
     local_col: usize,
     receptor_y_lane: f32,
-    elapsed: f32,
+    arrow_effect_time_s: f32,
     beat_factor: f32,
     visual: VisualEffects,
     col_offsets: &[f32],
@@ -261,8 +245,8 @@ fn receptor_row_center(
         playfield_center_x,
         local_col,
         receptor_y_lane,
-        elapsed,
         beat_factor,
+        arrow_effect_time_s,
         col_offsets,
         invert_distances,
         tornado_bounds,
@@ -406,14 +390,6 @@ fn calc_note_rotation_z(
         is_hold_head,
         visual_effect_params(&visual, local_col),
     )
-}
-
-#[inline(always)]
-fn song_lua_note_model_draw(mut draw: ModelDrawState, rotation_y_deg: f32) -> ModelDrawState {
-    if rotation_y_deg.abs() > f32::EPSILON {
-        draw.rot[1] += rotation_y_deg;
-    }
-    draw
 }
 
 #[inline(always)]
@@ -795,12 +771,6 @@ pub(crate) fn build_bundles(
         let scale_explosion = |logical_size: [f32; 2], effect_zoom: f32| -> [f32; 2] {
             scale_effect_size(logical_size, field_zoom, effect_zoom)
         };
-        let scale_hold_explosion = |slot: &SpriteSlot, effect_zoom: f32| -> [f32; 2] {
-            // Match ITG ghost arrow behavior: hold/roll explosions use actor asset size
-            // (including double-res handling) instead of being normalized to arrow size.
-            let logical = logical_slot_size(slot);
-            scale_effect_size(logical, field_zoom, effect_zoom)
-        };
         // ITG's FindFirst/FindLastDisplayedBeat search from m_fSongBeat, while
         // ArrowEffects::GetYOffset uses m_fSongBeatVisible internally.
         let current_search_beat = timing.get_beat_for_time_ns(state.current_music_time_ns());
@@ -992,6 +962,8 @@ pub(crate) fn build_bundles(
         );
 
         // Receptors + glow
+        let receptor_sprite_source =
+            |slot: &SpriteSlot| slot.texture_key_handle().into_sprite_source();
         for (i, &receptor_y_lane) in column_receptor_ys.iter().take(num_cols).enumerate() {
             let col = col_start + i;
             let receptor_hidden_by_song_lua =
@@ -1010,77 +982,6 @@ pub(crate) fn build_bundles(
             );
             let bop_zoom = state.receptor_bop_zoom(col);
             let receptor_effect_zoom = arrow_effect_zoom(&visual, i, 0.0);
-            if !receptor_hidden_by_song_lua
-                && !profile.hide_targets
-                && receptor_alpha > f32::EPSILON
-            {
-                let receptor_slot = &receptor_ns.receptor_off[i];
-                let receptor_reverse = receptor_ns
-                    .receptor_off_reverse
-                    .get(i)
-                    .copied()
-                    .unwrap_or_default()
-                    .state(column_reverse_percent[i] > 0.5);
-                let receptor_rotation =
-                    receptor_slot.def.rotation_deg as f32 + receptor_reverse.base_rotation_z();
-                let receptor_frame =
-                    receptor_slot.frame_index(state.total_elapsed_in_screen(), current_beat);
-                let receptor_uv =
-                    receptor_slot.uv_for_frame_at(receptor_frame, state.total_elapsed_in_screen());
-                let receptor_draw =
-                    receptor_slot.model_draw_at(state.total_elapsed_in_screen(), current_beat);
-                // ITG Sprite::SetTexture uses source-frame dimensions for draw size,
-                // so receptor and overlay keep their authored ratio (e.g. 64 vs 74 in
-                // dance/default) instead of being normalized to arrow height.
-                let base_receptor_size =
-                    scale_explosion(logical_slot_size(receptor_slot), receptor_effect_zoom);
-                let receptor_size = [
-                    base_receptor_size[0] * receptor_draw.zoom[0],
-                    base_receptor_size[1] * receptor_draw.zoom[1],
-                ];
-                let receptor_color = receptor_ns.receptor_pulse.color_for_beat(current_beat);
-                let alpha = receptor_color[3] * receptor_draw.tint[3] * receptor_alpha;
-                if receptor_draw.visible
-                    && alpha > f32::EPSILON
-                    && receptor_size[0] > f32::EPSILON
-                    && receptor_size[1] > f32::EPSILON
-                {
-                    let [sin_r, cos_r] = receptor_slot.base_rot_sin_cos();
-                    let offset_scale = field_zoom * receptor_effect_zoom;
-                    let offset = [
-                        receptor_draw.pos[0] * offset_scale * cos_r
-                            - receptor_draw.pos[1] * offset_scale * sin_r,
-                        receptor_draw.pos[0] * offset_scale * sin_r
-                            + receptor_draw.pos[1] * offset_scale * cos_r,
-                    ];
-                    let center = [
-                        receptor_center[0] + offset[0],
-                        receptor_center[1] + offset[1],
-                    ];
-                    actors.push(act!(sprite(receptor_slot.texture_key_handle()):
-                        align(0.5, receptor_reverse.vert_align()):
-                        xy(center[0], center[1]):
-                        setsize(receptor_size[0], receptor_size[1]):
-                        zoomx(slot_zoom_x(receptor_slot, bop_zoom)):
-                        zoomy(slot_zoom_y(receptor_slot, bop_zoom)):
-                        diffuse(
-                            receptor_color[0] * receptor_draw.tint[0],
-                            receptor_color[1] * receptor_draw.tint[1],
-                            receptor_color[2] * receptor_draw.tint[2],
-                            alpha
-                        ):
-                        rotationy(note_rotation_y):
-                        rotationz(receptor_draw.rot[2] - receptor_rotation + confusion_receptor_rot):
-                        customtexturerect(
-                            receptor_uv[0],
-                            receptor_uv[1],
-                            receptor_uv[2],
-                            receptor_uv[3]
-                        ):
-                        z(Z_RECEPTOR)
-                    ));
-                }
-            }
             let hold_slot = if receptor_hidden_by_song_lua || !hold_explosion_enabled(profile) {
                 None
             } else {
@@ -1094,196 +995,51 @@ pub(crate) fn build_bundles(
                     })
                 })
             };
-            if let Some(hold_slot) = hold_slot {
-                let draw = song_lua_note_model_draw(
-                    hold_slot.model_draw_at(state.total_elapsed_in_screen(), current_beat),
-                    note_rotation_y,
-                );
-                let hold_frame =
-                    hold_slot.frame_index(state.total_elapsed_in_screen(), current_beat);
-                let hold_uv =
-                    hold_slot.uv_for_frame_at(hold_frame, state.total_elapsed_in_screen());
-                let base_size = scale_hold_explosion(hold_slot, receptor_effect_zoom);
-                let hold_size = [
-                    base_size[0] * draw.zoom[0].max(0.0),
-                    base_size[1] * draw.zoom[1].max(0.0),
-                ];
-                if hold_size[0] <= f32::EPSILON || hold_size[1] <= f32::EPSILON {
-                    continue;
-                }
-                let base_rotation = hold_slot.def.rotation_deg as f32;
-                let final_rotation = base_rotation - draw.rot[2] - confusion_receptor_rot;
-                let center = receptor_center;
-                let color = draw.tint;
-                let glow = hold_slot.model_glow_with_draw(
-                    draw,
-                    state.total_elapsed_in_screen(),
-                    current_beat,
-                    color[3],
-                );
-                let blend = if draw.blend_add {
-                    BlendMode::Add
-                } else {
-                    BlendMode::Alpha
-                };
-                if let Some(model_actor) = noteskin_model_actor_from_draw_cached(
-                    hold_slot,
-                    draw,
-                    center,
-                    hold_size,
-                    hold_uv,
-                    -final_rotation,
-                    color,
-                    blend,
-                    Z_HOLD_EXPLOSION as i16,
-                    &mut model_cache,
-                ) {
-                    actors.push(model_actor);
-                    if let Some(glow_color) = glow
-                        && let Some(glow_actor) = noteskin_model_actor_from_draw_cached(
-                            hold_slot,
-                            draw,
-                            center,
-                            hold_size,
-                            hold_uv,
-                            -final_rotation,
-                            glow_color,
-                            blend,
-                            Z_HOLD_EXPLOSION as i16,
-                            &mut model_cache,
-                        )
-                    {
-                        actors.push(glow_actor);
-                    }
-                } else if draw.blend_add {
-                    actors.push(act!(sprite(hold_slot.texture_key_handle()):
-                        align(0.5, 0.5):
-                        xy(center[0], center[1]):
-                        setsize(hold_size[0], hold_size[1]):
-                        rotationz(-final_rotation):
-                        customtexturerect(hold_uv[0], hold_uv[1], hold_uv[2], hold_uv[3]):
-                        diffuse(color[0], color[1], color[2], color[3]):
-                        blend(add):
-                        z(Z_HOLD_EXPLOSION)
-                    ));
-                    if let Some(glow_color) = glow {
-                        actors.push(act!(sprite(hold_slot.texture_key_handle()):
-                            align(0.5, 0.5):
-                            xy(center[0], center[1]):
-                            setsize(hold_size[0], hold_size[1]):
-                            rotationz(-final_rotation):
-                            customtexturerect(hold_uv[0], hold_uv[1], hold_uv[2], hold_uv[3]):
-                            diffuse(glow_color[0], glow_color[1], glow_color[2], glow_color[3]):
-                            blend(add):
-                            z(Z_HOLD_EXPLOSION)
-                        ));
-                    }
-                } else {
-                    actors.push(act!(sprite(hold_slot.texture_key_handle()):
-                        align(0.5, 0.5):
-                        xy(center[0], center[1]):
-                        setsize(hold_size[0], hold_size[1]):
-                        rotationz(-final_rotation):
-                        customtexturerect(hold_uv[0], hold_uv[1], hold_uv[2], hold_uv[3]):
-                        diffuse(color[0], color[1], color[2], color[3]):
-                        blend(normal):
-                        z(Z_HOLD_EXPLOSION)
-                    ));
-                    if let Some(glow_color) = glow {
-                        actors.push(act!(sprite(hold_slot.texture_key_handle()):
-                            align(0.5, 0.5):
-                            xy(center[0], center[1]):
-                            setsize(hold_size[0], hold_size[1]):
-                            rotationz(-final_rotation):
-                            customtexturerect(hold_uv[0], hold_uv[1], hold_uv[2], hold_uv[3]):
-                            diffuse(glow_color[0], glow_color[1], glow_color[2], glow_color[3]):
-                            blend(normal):
-                            z(Z_HOLD_EXPLOSION)
-                        ));
-                    }
-                }
-            }
-            if !receptor_hidden_by_song_lua
+            let targets_visible = !receptor_hidden_by_song_lua
                 && !profile.hide_targets
-                && receptor_alpha > f32::EPSILON
-                && let Some((alpha, zoom)) = state.receptor_glow_visual_for_col(col)
-                && let Some(glow_slot) = receptor_ns
+                && receptor_alpha > f32::EPSILON;
+            let target_slot = targets_visible.then(|| &receptor_ns.receptor_off[i]);
+            let target_reverse = targets_visible
+                .then(|| receptor_ns.receptor_off_reverse.get(i).copied())
+                .flatten();
+            let resolve_receptor_press = || {
+                let visual = state.receptor_glow_visual_for_col(col)?;
+                let slot = receptor_ns
                     .receptor_glow
                     .get(i)
-                    .and_then(|slot| slot.as_ref())
-            {
-                let alpha = alpha * receptor_alpha;
-                if alpha > f32::EPSILON {
-                    let glow_frame =
-                        glow_slot.frame_index(state.total_elapsed_in_screen(), current_beat);
-                    let glow_uv =
-                        glow_slot.uv_for_frame_at(glow_frame, state.total_elapsed_in_screen());
-                    let glow_draw =
-                        glow_slot.model_draw_at(state.total_elapsed_in_screen(), current_beat);
-                    let base_glow_size =
-                        scale_explosion(logical_slot_size(glow_slot), receptor_effect_zoom);
-                    let behavior = receptor_ns.receptor_glow_behavior;
-                    let glow_reverse = receptor_ns
-                        .receptor_glow_reverse
-                        .get(i)
-                        .copied()
-                        .unwrap_or_default()
-                        .state(column_reverse_percent[i] > 0.5);
-                    let glow_rotation =
-                        glow_slot.def.rotation_deg as f32 + glow_reverse.base_rotation_z();
-                    let width = base_glow_size[0] * zoom * glow_draw.zoom[0];
-                    let height = base_glow_size[1] * zoom * glow_draw.zoom[1];
-                    if glow_draw.visible && width > f32::EPSILON && height > f32::EPSILON {
-                        let [sin_r, cos_r] = glow_slot.base_rot_sin_cos();
-                        let offset_scale = field_zoom * receptor_effect_zoom;
-                        let offset = [
-                            glow_draw.pos[0] * offset_scale * cos_r
-                                - glow_draw.pos[1] * offset_scale * sin_r,
-                            glow_draw.pos[0] * offset_scale * sin_r
-                                + glow_draw.pos[1] * offset_scale * cos_r,
-                        ];
-                        let center = [
-                            receptor_center[0] + offset[0],
-                            receptor_center[1] + offset[1],
-                        ];
-                        let color = [
-                            glow_draw.tint[0],
-                            glow_draw.tint[1],
-                            glow_draw.tint[2],
-                            alpha * glow_draw.tint[3],
-                        ];
-                        if behavior.blend_add {
-                            actors.push(act!(sprite(glow_slot.texture_key_handle()):
-                                align(0.5, glow_reverse.vert_align()):
-                                xy(center[0], center[1]):
-                                setsize(width, height):
-                                zoomx(slot_zoom_x(glow_slot, bop_zoom)):
-                                zoomy(slot_zoom_y(glow_slot, bop_zoom)):
-                                rotationy(note_rotation_y):
-                                rotationz(glow_draw.rot[2] - glow_rotation + confusion_receptor_rot):
-                                customtexturerect(glow_uv[0], glow_uv[1], glow_uv[2], glow_uv[3]):
-                                diffuse(color[0], color[1], color[2], color[3]):
-                                blend(add):
-                                z(Z_RECEPTOR_GLOW)
-                            ));
-                        } else {
-                            actors.push(act!(sprite(glow_slot.texture_key_handle()):
-                                align(0.5, glow_reverse.vert_align()):
-                                xy(center[0], center[1]):
-                                setsize(width, height):
-                                zoomx(slot_zoom_x(glow_slot, bop_zoom)):
-                                zoomy(slot_zoom_y(glow_slot, bop_zoom)):
-                                rotationy(note_rotation_y):
-                                rotationz(glow_draw.rot[2] - glow_rotation + confusion_receptor_rot):
-                                customtexturerect(glow_uv[0], glow_uv[1], glow_uv[2], glow_uv[3]):
-                                diffuse(color[0], color[1], color[2], color[3]):
-                                blend(normal):
-                                z(Z_RECEPTOR_GLOW)
-                            ));
-                        }
-                    }
-                }
-            }
+                    .and_then(|slot| slot.as_ref())?;
+                Some(ReceptorPress {
+                    slot,
+                    reverse: receptor_ns.receptor_glow_reverse.get(i).copied(),
+                    visual,
+                })
+            };
+            compose_receptor_actors(
+                actors,
+                &mut model_cache,
+                ReceptorActorsRequest {
+                    target_slot,
+                    target_reverse,
+                    hold_slot,
+                    center: receptor_center,
+                    hidden: receptor_hidden_by_song_lua,
+                    hide_targets: profile.hide_targets,
+                    reverse: column_reverse_percent[i] > 0.5,
+                    bop_zoom,
+                    effect_zoom: receptor_effect_zoom,
+                    confusion_rotation_deg: confusion_receptor_rot,
+                    elapsed: state.total_elapsed_in_screen(),
+                    beat: current_beat,
+                    receptor_alpha,
+                    field_zoom,
+                    rotation_y_deg: note_rotation_y,
+                    pulse: &receptor_ns.receptor_pulse,
+                    press_behavior: receptor_ns.receptor_glow_behavior,
+                    style: style.receptor,
+                },
+                resolve_receptor_press,
+                &receptor_sprite_source,
+            );
         }
         // Tap explosions (receptor noteflash / GhostArrow) are independent of
         // the "Hide Combo Explosions" UI option, which only affects combo splodes.

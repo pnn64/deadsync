@@ -1,5 +1,14 @@
 use deadlib_present::actors::Actor;
+use deadsync_noteskin::ModelDrawState;
 use glam::{Mat4 as Matrix4, Vec3 as Vector3};
+
+#[inline(always)]
+pub fn song_lua_note_model_draw(mut draw: ModelDrawState, rotation_y_deg: f32) -> ModelDrawState {
+    if rotation_y_deg.abs() > f32::EPSILON {
+        draw.rot[1] += rotation_y_deg;
+    }
+    draw
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SongLuaPlayerTransformRequest {

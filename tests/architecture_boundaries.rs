@@ -4130,6 +4130,7 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
         "zmod_run_timer_index",
         "fn visual_effect_params",
         "fn compose_column_feedback",
+        "fn compose_receptor_actors",
         "fn compose_counter_hud",
         "fn compose_mini_indicator",
         "fn compose_judgment_feedback",
@@ -4182,6 +4183,7 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
         "field_layout(FieldLayoutRequest",
         "compose_measure_lines(",
         "compose_column_feedback(",
+        "compose_receptor_actors(",
         "compose_counter_hud(",
         "compose_mini_indicator(",
         "compose_judgment_feedback(",
@@ -4211,6 +4213,10 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
         (
             "crates/deadsync-notefield/src/feedback.rs",
             "pub fn compose_column_feedback",
+        ),
+        (
+            "crates/deadsync-notefield/src/receptors.rs",
+            "pub fn compose_receptor_actors",
         ),
         (
             "crates/deadsync-notefield/src/hud.rs",
@@ -4455,6 +4461,247 @@ fn simply_love_hold_entries_use_canonical_notefield_plan() {
     assert!(authored_head < tap_layers && tap_layers < tap_note);
     assert!(
         theme.contains(".or_else(|| ns.note_layers.get(note_idx).map(|layers| layers.as_ref()))")
+    );
+}
+
+#[test]
+fn noteskin_model_cache_and_actors_use_canonical_notefield_owner() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let canonical_path = root.join("crates/deadsync-notefield/src/noteskin_model.rs");
+    let canonical = fs::read_to_string(&canonical_path)
+        .expect("canonical noteskin model owner should be readable");
+    let notefield_lib = fs::read_to_string(root.join("crates/deadsync-notefield/src/lib.rs"))
+        .expect("notefield exports should be readable");
+    let notefield_manifest = fs::read_to_string(root.join("crates/deadsync-notefield/Cargo.toml"))
+        .expect("notefield manifest should be readable");
+    let old_theme_path = root
+        .join("crates/deadsync-theme-simply-love/src/screens/components/shared/noteskin_model.rs");
+    let shared_mod = fs::read_to_string(
+        root.join("crates/deadsync-theme-simply-love/src/screens/components/shared/mod.rs"),
+    )
+    .expect("Simply Love shared module should be readable");
+
+    assert!(canonical_path.is_file());
+    assert!(!old_theme_path.exists());
+    assert!(!shared_mod.contains("noteskin_model"));
+    assert!(notefield_lib.contains("mod noteskin_model;"));
+    assert!(notefield_lib.contains("pub use noteskin_model::*;"));
+    assert!(notefield_manifest.contains("twox-hash = \"2.1.2\""));
+    assert!(!notefield_manifest.contains("deadsync-assets"));
+
+    for definition in [
+        "pub struct ModelMeshCacheStats",
+        "pub struct ModelMeshCache",
+        "pub fn noteskin_model_actor_from_draw",
+        "pub fn noteskin_model_actor_from_draw_cached",
+        "pub fn noteskin_model_actor_from_draw_depth_sorted_affine_cached_geometry",
+        "pub fn noteskin_model_actor",
+    ] {
+        assert!(
+            canonical.contains(definition),
+            "canonical noteskin model owner is missing {definition}"
+        );
+    }
+    for forbidden in ["deadsync_assets", "SpriteSlot", "texture_key_handle()"] {
+        assert!(
+            !canonical.contains(forbidden),
+            "canonical noteskin model owner imports concrete asset token {forbidden}"
+        );
+    }
+
+    let call_sites = [
+        (
+            "crates/deadsync-theme-simply-love/src/screens/components/evaluation/pane_column.rs",
+            "noteskin_model_actor",
+        ),
+        (
+            "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/mod.rs",
+            "noteskin_model_actor_from_draw_cached",
+        ),
+        (
+            "crates/deadsync-theme-simply-love/src/screens/components/shared/profile_boxes.rs",
+            "noteskin_model_actor",
+        ),
+        (
+            "crates/deadsync-theme-simply-love/src/screens/components/shared/technique_bg.rs",
+            "noteskin_model_actor_from_draw_depth_sorted_affine_cached_geometry",
+        ),
+        (
+            "crates/deadsync-theme-simply-love/src/screens/gameplay.rs",
+            "noteskin_model_actor_from_draw",
+        ),
+        (
+            "crates/deadsync-theme-simply-love/src/screens/player_options/mod.rs",
+            "noteskin_model_actor",
+        ),
+    ];
+    for (path, symbol) in call_sites {
+        let source = fs::read_to_string(root.join(path)).expect("call site should be readable");
+        assert!(source.contains("deadsync_notefield"));
+        assert!(
+            source.contains(symbol),
+            "{path} must import canonical model API {symbol}"
+        );
+    }
+
+    let forbidden_definitions = [
+        "struct ModelMeshCacheKey",
+        "fn model_draw_transform",
+        "fn model_affine_transform",
+        "fn sm_rotation_xyz",
+        "fn actor_from_vertices",
+        "fn noteskin_model_actor",
+    ];
+    let theme_src = root.join("crates/deadsync-theme-simply-love/src");
+    for file in rust_files(&theme_src) {
+        let source = fs::read_to_string(&file).expect("theme source should be readable");
+        for definition in forbidden_definitions {
+            assert!(
+                !source.contains(definition),
+                "{} redefines canonical noteskin model token {definition}",
+                rel_path(&root, &file)
+            );
+        }
+    }
+}
+
+#[test]
+fn noteskin_slot_contract_stays_renderer_neutral_and_asset_backed() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let contract = fs::read_to_string(root.join("crates/deadsync-noteskin/src/sprite.rs"))
+        .expect("noteskin slot contract should be readable");
+    let assets = fs::read_to_string(root.join("crates/deadsync-assets/src/noteskin/texture.rs"))
+        .expect("asset-backed noteskin slots should be readable");
+    let canonical =
+        fs::read_to_string(root.join("crates/deadsync-notefield/src/noteskin_model.rs"))
+            .expect("canonical noteskin model owner should be readable");
+
+    for definition in [
+        "pub trait NoteskinSlot: Sized",
+        "fn sprite_def(&self)",
+        "fn source_size(&self)",
+        "fn size(&self)",
+        "fn logical_size(&self)",
+        "fn texture_key_shared(&self)",
+        "fn model(&self)",
+        "fn frame_index(&self",
+        "fn frame_index_from_phase(&self",
+        "fn uv_for_frame_at(&self",
+        "fn model_draw_at(&self",
+        "fn model_glow_with_draw(",
+        "fn model_uv_params(&self",
+        "pub fn model_vertex_for_sprite",
+    ] {
+        assert!(
+            contract.contains(definition),
+            "renderer-neutral noteskin contract is missing {definition}"
+        );
+    }
+
+    for implementation in [
+        "impl NoteskinSlot for SpriteSlot",
+        "SpriteSlot::texture_key_shared(self)",
+        "SpriteSlot::model_draw_at(self, time, beat)",
+        "pub fn texture_key_handle(&self)",
+        "model_vertex_for_sprite(&slot.def, vertex)",
+    ] {
+        assert!(
+            assets.contains(implementation),
+            "asset-backed noteskin slot lost {implementation}"
+        );
+    }
+    assert!(canonical.contains("S: NoteskinSlot"));
+    assert!(canonical.contains("model_vertex_for_sprite(slot.sprite_def(), vertex)"));
+}
+
+#[test]
+fn receptor_composition_stays_canonical_and_theme_styled() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let canonical = fs::read_to_string(root.join("crates/deadsync-notefield/src/receptors.rs"))
+        .expect("canonical receptor composition should be readable");
+    let song_lua = fs::read_to_string(root.join("crates/deadsync-notefield/src/song_lua.rs"))
+        .expect("canonical song Lua presentation should be readable");
+    let contract = fs::read_to_string(root.join("crates/deadsync-theme/src/lib.rs"))
+        .expect("generic theme contract should be readable");
+    let theme_style =
+        fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/notefield_style.rs"))
+            .expect("Simply Love notefield style should be readable");
+    let theme = fs::read_to_string(root.join(
+        "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/mod.rs",
+    ))
+    .expect("Simply Love notefield adapter should be readable");
+    let manifest = fs::read_to_string(root.join("crates/deadsync-notefield/Cargo.toml"))
+        .expect("canonical notefield manifest should be readable");
+
+    for token in [
+        "pub struct ReceptorActorsRequest",
+        "pub struct ReceptorPress",
+        "pub fn compose_receptor_actors",
+        "S: NoteskinSlot",
+        "F: Fn(&S) -> SpriteSource",
+        "P: FnOnce() -> Option<ReceptorPress",
+        "request.style.target_z",
+        "request.style.press_glow_z",
+        "request.style.hold_explosion_z",
+    ] {
+        assert!(
+            canonical.contains(token),
+            "canonical receptor owner is missing {token}"
+        );
+    }
+    for forbidden in [
+        "deadsync_assets",
+        "SpriteSlot",
+        "texture_key_handle",
+        "deadsync_theme_simply_love",
+        "deadsync_shell",
+    ] {
+        assert!(
+            !canonical.contains(forbidden),
+            "canonical receptor owner imports concrete/runtime token {forbidden}"
+        );
+    }
+    assert!(!manifest.contains("deadsync-theme-simply-love"));
+    assert!(song_lua.contains("pub fn song_lua_note_model_draw"));
+    assert!(!theme.contains("fn song_lua_note_model_draw"));
+
+    assert!(contract.contains("pub struct ReceptorStyle"));
+    assert!(contract.contains("pub receptor: ReceptorStyle"));
+    assert!(!contract.contains("SimplyLoveNotefieldStyle"));
+    for value in [
+        "target_z: 100",
+        "press_glow_z: 105",
+        "hold_explosion_z: 145",
+    ] {
+        assert!(
+            theme_style.contains(value),
+            "Simply Love receptor style lost {value}"
+        );
+    }
+
+    let start = theme
+        .find("// Receptors + glow")
+        .expect("theme should retain the receptor adapter boundary");
+    let end = theme[start..]
+        .find("// Tap explosions")
+        .map(|offset| start + offset)
+        .expect("theme should retain tap explosion composition after receptors");
+    let adapter = &theme[start..end];
+    for token in [
+        "compose_receptor_actors(",
+        "ReceptorActorsRequest {",
+        "ReceptorPress {",
+        "slot.texture_key_handle().into_sprite_source()",
+        "style: style.receptor",
+    ] {
+        assert!(
+            adapter.contains(token),
+            "Simply Love receptor adapter is missing {token}"
+        );
+    }
+    assert!(
+        !adapter.contains("actors.push"),
+        "Simply Love reintroduced canonical receptor actor composition"
     );
 }
 

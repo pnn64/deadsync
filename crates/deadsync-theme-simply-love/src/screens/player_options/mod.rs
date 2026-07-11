@@ -1,7 +1,6 @@
 use crate::act;
 use crate::assets::i18n::{LookupKey, lookup_key, tr, tr_fmt};
 use crate::assets::{self, AssetManager};
-use crate::screens::components::shared::noteskin_model::noteskin_model_actor;
 use crate::screens::components::shared::screen_bar::{
     self, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
@@ -18,6 +17,7 @@ use deadsync_assets::noteskin::{
 use deadsync_audio_stream as audio;
 use deadsync_chart::{ChartData, STANDARD_DIFFICULTY_COUNT, SongData};
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_notefield::noteskin_model_actor;
 use deadsync_profile as profile_data;
 use std::collections::HashMap;
 use std::sync::Arc;

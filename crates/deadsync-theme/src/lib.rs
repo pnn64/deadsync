@@ -214,6 +214,14 @@ pub struct ErrorBarStyle {
     pub average_z: i16,
 }
 
+/// Theme-selected draw layers consumed by canonical receptor composition.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ReceptorStyle {
+    pub target_z: i16,
+    pub press_glow_z: i16,
+    pub hold_explosion_z: i16,
+}
+
 /// Concrete-theme metrics consumed by the canonical notefield layout plan.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct NotefieldStyle {
@@ -222,6 +230,7 @@ pub struct NotefieldStyle {
     pub side_center_x_ratio: f32,
     pub receptor_normal_y: f32,
     pub receptor_reverse_y: f32,
+    pub receptor: ReceptorStyle,
     pub judgment_normal_y: f32,
     pub judgment_reverse_y: f32,
     pub judgment_centered_y: f32,
@@ -271,7 +280,7 @@ mod tests {
     use super::{
         ColumnCueStyle, ColumnFlashLayoutStyle, ColumnFlashStyle, ComboFeedbackStyle,
         CounterHudStyle, ErrorBarLayers, ErrorBarPalette, ErrorBarStyle, JudgmentFeedbackStyle,
-        MiniIndicatorStyle, NotefieldStyle,
+        MiniIndicatorStyle, NotefieldStyle, ReceptorStyle,
     };
 
     #[test]
@@ -282,6 +291,11 @@ mod tests {
             side_center_x_ratio: 0.25,
             receptor_normal_y: -125.0,
             receptor_reverse_y: 145.0,
+            receptor: ReceptorStyle {
+                target_z: 100,
+                press_glow_z: 105,
+                hold_explosion_z: 145,
+            },
             judgment_normal_y: -30.0,
             judgment_reverse_y: 30.0,
             judgment_centered_y: 95.0,

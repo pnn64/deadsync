@@ -7,8 +7,6 @@ use crate::screens::components::gameplay::{gameplay_stats, notefield, step_stats
 use crate::screens::components::shared::banner as shared_banner;
 use crate::screens::components::shared::gs_scorebox;
 use crate::screens::components::shared::lobby_hud;
-use crate::screens::components::shared::noteskin_model::noteskin_model_actor_from_draw;
-use crate::screens::components::shared::noteskin_model::{ModelMeshCache, ModelMeshCacheStats};
 use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenBarParams};
 use crate::screens::{Screen, ScreenAction};
 use crate::{
@@ -59,7 +57,8 @@ use deadsync_gameplay::{
 };
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_notefield::{
-    FieldPlacement, ProxyCaptureRequests, SongLuaPlayerTransformRequest, ViewOverride,
+    FieldPlacement, ModelMeshCache, ModelMeshCacheStats, ProxyCaptureRequests,
+    SongLuaPlayerTransformRequest, ViewOverride, noteskin_model_actor_from_draw,
     song_lua_player_skew_x_matrix, song_lua_player_skew_y_matrix, song_lua_player_transform_matrix,
     song_lua_player_y_fold_actor,
 };

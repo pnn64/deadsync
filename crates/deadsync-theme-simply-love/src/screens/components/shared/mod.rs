@@ -6,7 +6,6 @@ pub mod gs_scorebox;
 pub mod loading_bar;
 pub mod lobby_hud;
 pub mod mode_pads;
-pub mod noteskin_model;
 pub mod pad_display;
 pub mod profile_boxes;
 pub mod qr_code;

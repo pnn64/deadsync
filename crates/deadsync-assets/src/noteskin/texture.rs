@@ -13,12 +13,13 @@ use deadsync_noteskin::script::apply_sprite_animation_command_plans;
 use deadsync_noteskin::script::apply_sprite_animation_script_plans;
 use deadsync_noteskin::{
     AnimationRate, ModelAutoRotKey, ModelDrawState, ModelEffectState, ModelMesh, ModelTweenSegment,
-    SpriteDefinition, SpriteSlotPlan, SpriteSourcePlan, generated_animation_sprite_slot_plan,
-    itg_all_frames_sprite_slot_plan_from_path, itg_animation_sprite_slot_plan_from_path,
-    itg_frame_sprite_slot_plan_from_path, itg_sprite_animation_slot_plan,
-    itg_sprite_slot_plan_from_path, model_draw_at, model_glow_at, model_glow_with_draw,
-    neg_rot_sin_cos, sprite_animated_uv, sprite_atlas_uv, sprite_frame_index,
-    sprite_frame_index_from_phase, sprite_scrolled_uv, sprite_sheet_frame,
+    NoteskinSlot, SpriteDefinition, SpriteSlotPlan, SpriteSourcePlan,
+    generated_animation_sprite_slot_plan, itg_all_frames_sprite_slot_plan_from_path,
+    itg_animation_sprite_slot_plan_from_path, itg_frame_sprite_slot_plan_from_path,
+    itg_sprite_animation_slot_plan, itg_sprite_slot_plan_from_path, model_draw_at, model_glow_at,
+    model_glow_with_draw, model_vertex_for_sprite, neg_rot_sin_cos, sprite_animated_uv,
+    sprite_atlas_uv, sprite_frame_index, sprite_frame_index_from_phase, sprite_scrolled_uv,
+    sprite_sheet_frame,
 };
 use image::image_dimensions;
 use log::warn;
@@ -295,6 +296,69 @@ impl SpriteSlot {
     }
 }
 
+impl NoteskinSlot for SpriteSlot {
+    #[inline(always)]
+    fn sprite_def(&self) -> &SpriteDefinition {
+        &self.def
+    }
+
+    #[inline(always)]
+    fn source_size(&self) -> [i32; 2] {
+        self.source_size
+    }
+
+    #[inline(always)]
+    fn texture_key_shared(&self) -> Arc<str> {
+        SpriteSlot::texture_key_shared(self)
+    }
+
+    #[inline(always)]
+    fn model(&self) -> Option<&ModelMesh> {
+        self.model.as_deref()
+    }
+
+    #[inline(always)]
+    fn base_rot_sin_cos(&self) -> [f32; 2] {
+        SpriteSlot::base_rot_sin_cos(self)
+    }
+
+    #[inline(always)]
+    fn frame_index(&self, time: f32, beat: f32) -> usize {
+        SpriteSlot::frame_index(self, time, beat)
+    }
+
+    #[inline(always)]
+    fn frame_index_from_phase(&self, phase: f32) -> usize {
+        SpriteSlot::frame_index_from_phase(self, phase)
+    }
+
+    #[inline(always)]
+    fn uv_for_frame_at(&self, frame_index: usize, elapsed: f32) -> [f32; 4] {
+        SpriteSlot::uv_for_frame_at(self, frame_index, elapsed)
+    }
+
+    #[inline(always)]
+    fn model_draw_at(&self, time: f32, beat: f32) -> ModelDrawState {
+        SpriteSlot::model_draw_at(self, time, beat)
+    }
+
+    #[inline(always)]
+    fn model_glow_with_draw(
+        &self,
+        draw: ModelDrawState,
+        time: f32,
+        beat: f32,
+        diffuse_alpha: f32,
+    ) -> Option<[f32; 4]> {
+        SpriteSlot::model_glow_with_draw(self, draw, time, beat, diffuse_alpha)
+    }
+
+    #[inline(always)]
+    fn model_uv_params(&self, uv_rect: [f32; 4]) -> ([f32; 2], [f32; 2], [f32; 2]) {
+        SpriteSlot::model_uv_params(self, uv_rect)
+    }
+}
+
 #[inline(always)]
 pub fn build_model_geometry(slot: &SpriteSlot) -> Arc<[TexturedMeshVertex]> {
     let model = slot
@@ -302,29 +366,13 @@ pub fn build_model_geometry(slot: &SpriteSlot) -> Arc<[TexturedMeshVertex]> {
         .as_ref()
         .expect("model geometry requested for non-model noteskin slot");
     let mut vertices = Vec::with_capacity(model.vertices.len());
-    for v in model.vertices.iter() {
-        let mut pos = v.pos;
-        if slot.def.mirror_h {
-            pos[0] = -pos[0];
-        }
-        if slot.def.mirror_v {
-            pos[1] = -pos[1];
-        }
-        let u = if slot.def.mirror_h {
-            1.0 - v.uv[0]
-        } else {
-            v.uv[0]
-        };
-        let v_tex = if slot.def.mirror_v {
-            1.0 - v.uv[1]
-        } else {
-            v.uv[1]
-        };
+    for vertex in model.vertices.iter().copied() {
+        let vertex = model_vertex_for_sprite(&slot.def, vertex);
         vertices.push(TexturedMeshVertex {
-            pos,
-            uv: [u, v_tex],
+            pos: vertex.pos,
+            uv: vertex.uv,
             color: [1.0; 4],
-            tex_matrix_scale: v.tex_matrix_scale,
+            tex_matrix_scale: vertex.tex_matrix_scale,
         });
     }
     Arc::from(vertices)
@@ -767,4 +815,76 @@ fn build_mine_gradient_slot(colors: &[[f32; 4]]) -> SpriteSlot {
         AnimationRate::FramesPerBeat(1.0),
         false,
     ))
+}
+
+#[cfg(test)]
+mod contract_tests {
+    use super::*;
+
+    #[test]
+    fn noteskin_slot_contract_preserves_data_and_identity() {
+        let slot = test_model_slot();
+        let contract_def = <SpriteSlot as NoteskinSlot>::sprite_def(&slot);
+        let contract_key = <SpriteSlot as NoteskinSlot>::texture_key_shared(&slot);
+        let inherent_key = slot.texture_key_shared();
+        let contract_model =
+            <SpriteSlot as NoteskinSlot>::model(&slot).expect("test slot should retain its model");
+
+        assert!(std::ptr::eq(contract_def, &slot.def));
+        assert!(Arc::ptr_eq(&contract_key, &inherent_key));
+        assert!(std::ptr::eq(
+            contract_model,
+            slot.model.as_deref().expect("test model")
+        ));
+        assert_eq!(
+            <SpriteSlot as NoteskinSlot>::source_size(&slot),
+            slot.source_size
+        );
+        assert_eq!(<SpriteSlot as NoteskinSlot>::size(&slot), slot.size());
+        assert_eq!(
+            <SpriteSlot as NoteskinSlot>::logical_size(&slot),
+            slot.logical_size()
+        );
+        assert_eq!(
+            <SpriteSlot as NoteskinSlot>::base_rot_sin_cos(&slot),
+            slot.base_rot_sin_cos()
+        );
+        assert_eq!(
+            <SpriteSlot as NoteskinSlot>::frame_index(&slot, 0.25, 1.5),
+            slot.frame_index(0.25, 1.5)
+        );
+        assert_eq!(
+            <SpriteSlot as NoteskinSlot>::frame_index_from_phase(&slot, 0.75),
+            slot.frame_index_from_phase(0.75)
+        );
+        assert_eq!(
+            <SpriteSlot as NoteskinSlot>::uv_for_frame_at(&slot, 0, 0.5),
+            slot.uv_for_frame_at(0, 0.5)
+        );
+
+        let contract_draw = <SpriteSlot as NoteskinSlot>::model_draw_at(&slot, 0.25, 1.5);
+        let inherent_draw = slot.model_draw_at(0.25, 1.5);
+        assert_eq!(contract_draw.pos, inherent_draw.pos);
+        assert_eq!(contract_draw.rot, inherent_draw.rot);
+        assert_eq!(contract_draw.zoom, inherent_draw.zoom);
+        assert_eq!(contract_draw.tint, inherent_draw.tint);
+        assert_eq!(contract_draw.glow, inherent_draw.glow);
+        assert_eq!(contract_draw.vert_align, inherent_draw.vert_align);
+        assert_eq!(contract_draw.blend_add, inherent_draw.blend_add);
+        assert_eq!(contract_draw.visible, inherent_draw.visible);
+        assert_eq!(
+            <SpriteSlot as NoteskinSlot>::model_glow_with_draw(
+                &slot,
+                contract_draw,
+                0.25,
+                1.5,
+                0.8,
+            ),
+            slot.model_glow_with_draw(inherent_draw, 0.25, 1.5, 0.8)
+        );
+        assert_eq!(
+            <SpriteSlot as NoteskinSlot>::model_uv_params(&slot, [0.1, 0.2, 0.8, 0.9]),
+            slot.model_uv_params([0.1, 0.2, 0.8, 0.9])
+        );
+    }
 }

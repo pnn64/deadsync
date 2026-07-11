@@ -68,14 +68,15 @@ pub use runtime::{
 };
 pub use script::{ItgCommandEffect, model_draw_program};
 pub use sprite::{
-    AnimationRate, SpriteAnimationPlan, SpriteDefinition, SpriteFramePlan, SpriteSlotPlan,
-    SpriteSourcePlan, SpriteStatePropertiesAnimation, all_frames_sprite_slot_plan,
+    AnimationRate, NoteskinSlot, SpriteAnimationPlan, SpriteDefinition, SpriteFramePlan,
+    SpriteSlotPlan, SpriteSourcePlan, SpriteStatePropertiesAnimation, all_frames_sprite_slot_plan,
     all_state_delays_source_plan, animation_plan_to_slot_plan, animation_sprite_slot_plan,
     atlas_sprite_slot_plan, duration_frame_index, frame_duration_total, frame_sprite_slot_plan,
     generated_animation_sprite_slot_plan, itg_all_frames_sprite_slot_plan_from_path,
     itg_animation_sprite_slot_plan_from_path, itg_frame_sprite_slot_plan_from_path,
-    itg_sprite_animation_slot_plan, itg_sprite_slot_plan_from_path, neg_rot_sin_cos,
-    sprite_all_frames_animation_plan, sprite_animated_uv, sprite_animation_plan, sprite_atlas_uv,
-    sprite_frame_index, sprite_frame_index_from_phase, sprite_scrolled_uv, sprite_sheet_frame,
-    sprite_state_properties_animation, sprite_uv_scroll_clock, state_properties_source_plan,
+    itg_sprite_animation_slot_plan, itg_sprite_slot_plan_from_path, model_vertex_for_sprite,
+    neg_rot_sin_cos, sprite_all_frames_animation_plan, sprite_animated_uv, sprite_animation_plan,
+    sprite_atlas_uv, sprite_frame_index, sprite_frame_index_from_phase, sprite_scrolled_uv,
+    sprite_sheet_frame, sprite_state_properties_animation, sprite_uv_scroll_clock,
+    state_properties_source_plan,
 };

@@ -10,6 +10,7 @@ mod measure_actors;
 mod measure_lines;
 mod mini_indicator;
 mod notes;
+mod noteskin_model;
 mod placement;
 mod receptors;
 mod song_lua;
@@ -28,6 +29,7 @@ pub use measure_actors::*;
 pub use measure_lines::*;
 pub use mini_indicator::*;
 pub use notes::*;
+pub use noteskin_model::*;
 pub use placement::*;
 pub use receptors::*;
 pub use song_lua::*;
@@ -1157,8 +1159,8 @@ mod tests {
             320.0,
             2,
             240.0,
-            1.25,
-            0.0,
+            12.0,
+            0.37,
             &col_offsets,
             &invert,
             &tornado,
@@ -1172,8 +1174,8 @@ mod tests {
             + note_x_offset(
                 2,
                 0.0,
-                1.25,
-                0.0,
+                12.0,
+                0.37,
                 &col_offsets,
                 &invert,
                 &tornado,
@@ -1181,9 +1183,11 @@ mod tests {
                 params,
                 0.0,
             );
-        let expected_y = 240.0 + tipsy_y_extra(2, 1.25, 1.0) - 16.0;
+        let expected_y = 240.0 + tipsy_y_extra(2, 0.37, 1.0) - 16.0;
+        let beat_coupled_y = 240.0 + tipsy_y_extra(2, 12.0, 1.0) - 16.0;
         assert!((center[0] - expected_x).abs() <= 1e-6);
         assert!((center[1] - expected_y).abs() <= 1e-6);
+        assert!((center[1] - beat_coupled_y).abs() > 1e-3);
     }
 
     #[test]

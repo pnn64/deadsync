@@ -1,7 +1,7 @@
 use deadsync_theme::{
     ColumnCueStyle, ColumnFlashLayoutStyle, ColumnFlashStyle, ComboFeedbackStyle, CounterHudStyle,
     ErrorBarLayers, ErrorBarPalette, ErrorBarStyle, JudgmentFeedbackStyle, MiniIndicatorStyle,
-    NotefieldStyle,
+    NotefieldStyle, ReceptorStyle,
 };
 
 const fn rgb8(r: u8, g: u8, b: u8) -> [f32; 3] {
@@ -18,6 +18,11 @@ pub const SIMPLY_LOVE_NOTEFIELD_STYLE: NotefieldStyle = NotefieldStyle {
     side_center_x_ratio: 0.25,
     receptor_normal_y: -125.0,
     receptor_reverse_y: 145.0,
+    receptor: ReceptorStyle {
+        target_z: 100,
+        press_glow_z: 105,
+        hold_explosion_z: 145,
+    },
     judgment_normal_y: -30.0,
     judgment_reverse_y: 30.0,
     judgment_centered_y: 95.0,
@@ -233,6 +238,9 @@ mod tests {
 
         assert_eq!(style.receptor_normal_y, -125.0);
         assert_eq!(style.receptor_reverse_y, 145.0);
+        assert_eq!(style.receptor.target_z, 100);
+        assert_eq!(style.receptor.press_glow_z, 105);
+        assert_eq!(style.receptor.hold_explosion_z, 145);
         assert_eq!(style.judgment_centered_y, 95.0);
         assert_eq!(style.combo_centered_y, 155.0);
         assert_eq!(style.measure_line_z, 80);

@@ -1,5 +1,7 @@
+use crate::draw::{ModelDrawState, ModelMesh, ModelVertex};
 use crate::script::SpriteAnimationCommandPlan;
 use std::path::Path;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct SpriteDefinition {
@@ -67,6 +69,55 @@ pub struct SpriteSlotPlan {
     pub source_size: [i32; 2],
     pub source: SpriteSourcePlan,
     pub note_color_translate: bool,
+}
+
+/// Renderer-neutral slot data consumed by canonical noteskin presentation.
+///
+/// Implementations retain ownership of texture registration and cached render
+/// handles; consumers receive only stable keys and noteskin-owned draw data.
+pub trait NoteskinSlot: Sized {
+    fn sprite_def(&self) -> &SpriteDefinition;
+    fn source_size(&self) -> [i32; 2];
+
+    #[inline(always)]
+    fn size(&self) -> [i32; 2] {
+        self.sprite_def().size
+    }
+
+    #[inline(always)]
+    fn logical_size(&self) -> [f32; 2] {
+        let size = self.source_size();
+        [size[0].max(0) as f32, size[1].max(0) as f32]
+    }
+
+    fn texture_key_shared(&self) -> Arc<str>;
+    fn model(&self) -> Option<&ModelMesh>;
+    fn base_rot_sin_cos(&self) -> [f32; 2];
+    fn frame_index(&self, time: f32, beat: f32) -> usize;
+    fn frame_index_from_phase(&self, phase: f32) -> usize;
+    fn uv_for_frame_at(&self, frame_index: usize, elapsed: f32) -> [f32; 4];
+    fn model_draw_at(&self, time: f32, beat: f32) -> ModelDrawState;
+    fn model_glow_with_draw(
+        &self,
+        draw: ModelDrawState,
+        time: f32,
+        beat: f32,
+        diffuse_alpha: f32,
+    ) -> Option<[f32; 4]>;
+    fn model_uv_params(&self, uv_rect: [f32; 4]) -> ([f32; 2], [f32; 2], [f32; 2]);
+}
+
+#[inline]
+pub fn model_vertex_for_sprite(def: &SpriteDefinition, mut vertex: ModelVertex) -> ModelVertex {
+    if def.mirror_h {
+        vertex.pos[0] = -vertex.pos[0];
+        vertex.uv[0] = 1.0 - vertex.uv[0];
+    }
+    if def.mirror_v {
+        vertex.pos[1] = -vertex.pos[1];
+        vertex.uv[1] = 1.0 - vertex.uv[1];
+    }
+    vertex
 }
 
 #[inline(always)]
@@ -861,6 +912,7 @@ pub fn duration_frame_index(durations: &[f32], frames: usize, mut position: f32)
 mod tests {
     use std::path::Path;
 
+    use crate::draw::ModelVertex;
     use crate::script::{SpriteAnimationCommandPlan, SpriteStatePropertiesPlan};
 
     use super::{
@@ -869,10 +921,10 @@ mod tests {
         duration_frame_index, frame_duration_total, frame_sprite_slot_plan,
         generated_animation_sprite_slot_plan, itg_all_frames_sprite_slot_plan_from_path,
         itg_animation_sprite_slot_plan_from_path, itg_frame_sprite_slot_plan_from_path,
-        itg_sprite_animation_slot_plan, itg_sprite_slot_plan_from_path, neg_rot_sin_cos,
-        sprite_all_frames_animation_plan, sprite_animated_uv, sprite_animation_plan,
-        sprite_atlas_uv, sprite_frame_index, sprite_frame_index_from_phase, sprite_scrolled_uv,
-        sprite_sheet_frame, sprite_state_properties_animation,
+        itg_sprite_animation_slot_plan, itg_sprite_slot_plan_from_path, model_vertex_for_sprite,
+        neg_rot_sin_cos, sprite_all_frames_animation_plan, sprite_animated_uv,
+        sprite_animation_plan, sprite_atlas_uv, sprite_frame_index, sprite_frame_index_from_phase,
+        sprite_scrolled_uv, sprite_sheet_frame, sprite_state_properties_animation,
     };
 
     #[test]
@@ -882,6 +934,27 @@ mod tests {
         assert_eq!(neg_rot_sin_cos(180), [0.0, -1.0]);
         assert_eq!(neg_rot_sin_cos(270), [1.0, 0.0]);
         assert_eq!(neg_rot_sin_cos(-90), [1.0, 0.0]);
+    }
+
+    #[test]
+    fn model_vertex_mirroring_preserves_depth_and_texture_scale() {
+        let vertex = ModelVertex {
+            pos: [3.0, -5.0, 7.0],
+            uv: [0.2, 0.75],
+            tex_matrix_scale: [2.0, 4.0],
+        };
+        let mirrored = model_vertex_for_sprite(
+            &SpriteDefinition {
+                mirror_h: true,
+                mirror_v: true,
+                ..SpriteDefinition::default()
+            },
+            vertex,
+        );
+
+        assert_eq!(mirrored.pos, [-3.0, 5.0, 7.0]);
+        assert_eq!(mirrored.uv, [0.8, 0.25]);
+        assert_eq!(mirrored.tex_matrix_scale, [2.0, 4.0]);
     }
 
     #[test]

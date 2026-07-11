@@ -1,10 +1,10 @@
 use crate::act;
-use crate::screens::components::shared::noteskin_model::noteskin_model_actor_from_draw_depth_sorted_affine_cached_geometry;
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadlib_render::{TMeshCacheKey, TexturedMeshVertex};
 use deadsync_assets::noteskin::{self, build_model_geometry};
+use deadsync_notefield::noteskin_model_actor_from_draw_depth_sorted_affine_cached_geometry;
 use glam::{Mat4 as Matrix4, Vec3 as Vector3};
 use std::hash::{Hash, Hasher};
 use std::sync::{Arc, OnceLock};

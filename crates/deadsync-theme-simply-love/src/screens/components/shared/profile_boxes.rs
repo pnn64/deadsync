@@ -1,7 +1,6 @@
 use crate::act;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::{self, AssetManager, visual_styles};
-use crate::screens::components::shared::noteskin_model::noteskin_model_actor;
 use crate::screens::components::shared::screen_bar::{
     ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
 };
@@ -18,6 +17,7 @@ use deadlib_present::space::{screen_center_x, screen_center_y};
 use deadlib_render::BlendMode;
 use deadsync_audio_stream as audio;
 use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_notefield::noteskin_model_actor;
 use deadsync_noteskin::{NUM_QUANTIZATIONS, Quantization, Style};
 use deadsync_profile as profile_data;
 use deadsync_rules::scroll::{GUEST_SCROLL_SPEED, ScrollSpeedSetting};

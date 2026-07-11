@@ -254,8 +254,8 @@ fn indicator_x(
     hold_indicator_column_x(
         request.playfield_center_x,
         local_col,
-        request.arrow_effect_time,
         beat_push,
+        request.arrow_effect_time,
         col_offsets,
         invert,
         tornado,
@@ -492,5 +492,54 @@ mod tests {
         let mut actors = Vec::new();
         compose_judgment_feedback(&mut actors, request);
         assert!(actors.is_empty());
+    }
+
+    #[test]
+    fn hold_indicator_routes_beat_factor_before_arrow_time() {
+        let mut request = empty_request(&[], &[]);
+        request.arrow_effect_time = 0.37;
+        request.visual.beat = 1.0;
+        request.visual.drunk = 1.0;
+        let col_offsets = [-96.0, -32.0, 32.0, 96.0];
+        let invert = [0.0; 4];
+        let tornado = [TornadoBounds::default(); 4];
+        let beat_push = 12.0;
+
+        let actual = indicator_x(&request, 1, beat_push, &col_offsets, &invert, &tornado);
+        let params = NoteXParams {
+            screen_height: request.screen_height,
+            tornado: request.visual.tornado,
+            drunk: request.visual.drunk,
+            flip: request.visual.flip,
+            invert: request.visual.invert,
+            beat: request.visual.beat,
+        };
+        let expected = hold_indicator_column_x(
+            request.playfield_center_x,
+            1,
+            beat_push,
+            request.arrow_effect_time,
+            &col_offsets,
+            &invert,
+            &tornado,
+            &request.visual.move_x_cols,
+            params,
+            request.visual.tiny,
+        );
+        let swapped = hold_indicator_column_x(
+            request.playfield_center_x,
+            1,
+            request.arrow_effect_time,
+            beat_push,
+            &col_offsets,
+            &invert,
+            &tornado,
+            &request.visual.move_x_cols,
+            params,
+            request.visual.tiny,
+        );
+
+        assert!((actual - expected).abs() <= 1e-6);
+        assert!((actual - swapped).abs() > 1e-3);
     }
 }
