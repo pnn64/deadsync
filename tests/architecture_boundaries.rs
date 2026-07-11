@@ -886,6 +886,8 @@ const NOTEFIELD_CRATE_FORBIDDEN_TOKENS: &[&str] = &[
     "deadlib_render_backend_",
     "deadlib-video",
     "deadlib_video",
+    "deadsync-input-fsr",
+    "deadsync_input_fsr",
     "deadsync-input-native",
     "deadsync_input_native",
     "deadsync-input =",
@@ -1189,19 +1191,29 @@ fn deterministic_gameplay_crate_stays_runtime_independent() {
     if let Ok(manifest) = fs::read_to_string(crate_dir.join("Cargo.toml")) {
         for token in [
             "deadsync-audio",
+            "deadsync-audio-backend-",
             "deadsync-audio-stream",
+            "deadlib-platform",
             "deadsync-config",
+            "deadsync-input-fsr",
             "deadsync-input-native",
+            "deadsync-notefield",
+            "deadsync-noteskin",
             "deadsync-online",
             "deadlib-present",
             "deadsync-profile",
             "deadsync-simfile",
+            "deadsync-shell",
+            "deadsync-smx",
             "deadsync-song-lua",
+            "deadsync-theme",
             "deadlib-render",
+            "deadlib-render-backend-",
             "deadlib-renderer",
             "deadsync-score",
             "deadlib-video",
             "rssp",
+            "winit",
         ] {
             let count = manifest.match_indices(token).count();
             if count != 0 {
@@ -1224,20 +1236,33 @@ fn deterministic_gameplay_crate_stays_runtime_independent() {
                 "crate::game",
                 "crate::screens",
                 "deadsync_audio",
+                "deadsync_audio_backend_",
                 "deadsync_audio_stream",
+                "deadlib_platform",
+                "deadsync_config",
+                "deadsync_input_fsr",
                 "deadsync_input_native",
+                "deadsync_notefield",
+                "deadsync_noteskin",
                 "deadsync_online",
                 "deadlib_present",
                 "deadsync_profile",
                 "deadsync_simfile",
+                "deadsync_shell",
+                "deadsync_smx",
                 "deadsync_song_lua",
+                "deadsync_theme",
                 "deadlib_render",
+                "deadlib_render_backend_",
                 "deadlib_renderer",
                 "deadsync_score",
                 "deadlib_video",
                 "rssp::",
                 "std::fs",
                 "std::io",
+                "std::net",
+                "std::process",
+                "winit",
             ] {
                 let count = text.match_indices(token).count();
                 if count != 0 {
@@ -4946,16 +4971,17 @@ fn theme_screen_contract_has_explicit_owners() {
 }
 
 #[test]
-fn transitional_screen_contract_crate_is_removed() {
+fn theme_owned_screen_architecture_has_no_contract_crate() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let removed_crate_name = ["deadsync", "screens"].join("-");
     assert!(
         !root.join("crates").join(&removed_crate_name).exists(),
-        "the transitional screen contract crate must be removed"
+        "the retired screen contract crate must stay absent; screens and redirects are theme-owned"
     );
 
     let mut files = rust_files(&root.join("crates"));
     files.extend(files_named(&root.join("crates"), "Cargo.toml"));
+    files.extend(rust_files(&root.join("src")));
     files.extend(rust_files(&root.join("tests")));
     files.push(root.join("Cargo.toml"));
     files.push(root.join("Cargo.lock"));

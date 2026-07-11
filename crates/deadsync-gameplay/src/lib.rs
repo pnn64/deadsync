@@ -122,7 +122,6 @@ include!("input_slots.rs");
 include!("autosync.rs");
 include!("display_clock.rs");
 include!("controls.rs");
-include!("raw_keys.rs");
 include!("life.rs");
 include!("viewport.rs");
 include!("density_graph.rs");

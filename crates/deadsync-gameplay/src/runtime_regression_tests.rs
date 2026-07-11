@@ -11,7 +11,6 @@ mod runtime_regression_tests {
     use std::path::PathBuf;
     use std::sync::Arc;
     use std::time::Instant;
-    use winit::keyboard::KeyCode;
 
     #[derive(Clone)]
     struct TestProfile {
@@ -2454,8 +2453,8 @@ mod runtime_regression_tests {
 
         state.set_raw_modifier_state(true, false);
         let _ = state.handle_queued_raw_key_input(
-            gameplay_raw_key_input(KeyCode::F12),
-            gameplay_raw_modifier_key(KeyCode::F12),
+            GameplayRawKeyInput::OffsetAdjust(GameplayOffsetAdjustKey::Increase),
+            None,
             true,
             Instant::now(),
             0.0,
@@ -2474,8 +2473,8 @@ mod runtime_regression_tests {
         let mut state = regression_state();
 
         let action = state.handle_queued_raw_key_input(
-            gameplay_raw_key_input(KeyCode::F7),
-            gameplay_raw_modifier_key(KeyCode::F7),
+            GameplayRawKeyInput::TimingTick,
+            None,
             true,
             Instant::now(),
             0.0,

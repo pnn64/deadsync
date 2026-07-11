@@ -28,11 +28,12 @@ use crate::gameplay_prewarm::{
 };
 pub use crate::input::UserEvent;
 use crate::input::{
-    AppRawKeyShortcut, EvaluationRawKeyShortcut, QueuedInputBatchState, QueuedInputEventRoute,
-    RawKeyScreenRoute, RawKeyTextRoute, RawPadScreenRoute, app_raw_key_shortcut,
-    evaluation_raw_key_shortcut, gamepad_system_event_plan, gameplay_dispatch_continues,
-    practice_reload_shortcut, queued_input_flush_plan, raw_key_alt_f4_quit, raw_key_screen_route,
-    raw_key_text_route, raw_pad_screen_route, smx_panel_press_feedback_plan,
+    AppRawKeyShortcut, EvaluationRawKeyShortcut, GameplayQueuedEvent, QueuedInputBatchState,
+    QueuedInputEventRoute, RawKeyScreenRoute, RawKeyTextRoute, RawPadScreenRoute,
+    app_raw_key_shortcut, evaluation_raw_key_shortcut, gamepad_system_event_plan,
+    gameplay_dispatch_continues, gameplay_raw_key_event, practice_reload_shortcut,
+    queued_input_flush_plan, raw_key_alt_f4_quit, raw_key_screen_route, raw_key_text_route,
+    raw_pad_screen_route, smx_panel_press_feedback_plan,
 };
 use crate::input_backend::{InputBackendConfig, launch_input_backends};
 use crate::lighting::{
@@ -147,8 +148,7 @@ use deadsync_core::input::MAX_PLAYERS;
 #[cfg(test)]
 use deadsync_gameplay::CourseDisplayTotals;
 use deadsync_gameplay::{
-    GameplayQueuedEvent, GameplaySession, GameplayViewport, LeadInTiming, ReplayInputEdge,
-    ReplayOffsetSnapshot, gameplay_raw_key_event,
+    GameplaySession, GameplayViewport, LeadInTiming, ReplayInputEdge, ReplayOffsetSnapshot,
 };
 use deadsync_input as logical_input;
 use deadsync_input::RawKeyboardEvent;

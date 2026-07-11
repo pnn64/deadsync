@@ -1,7 +1,6 @@
 use crate::TransitionState;
 use deadsync_gameplay::{
-    GameplayRawKeyEvent, GameplayRawKeyInput, GameplayRawModifierKey, RawKeyAction,
-    gameplay_raw_key_input, gameplay_raw_modifier_key,
+    GameplayOffsetAdjustKey, GameplayRawKeyInput, GameplayRawModifierKey, RawKeyAction,
 };
 use deadsync_input::{PadEvent, RawKeyboardEvent, VirtualAction};
 use deadsync_input_native::{GpSystemEvent, PadBackend};
@@ -16,6 +15,66 @@ pub enum UserEvent {
     Pad(PadEvent),
     Key(RawKeyboardEvent),
     GamepadSystem(GpSystemEvent),
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct GameplayRawKeyEvent {
+    pub code: KeyCode,
+    pub pressed: bool,
+    pub timestamp: Instant,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum GameplayQueuedEvent {
+    Input(deadsync_input::InputEvent),
+    RawKey(GameplayRawKeyEvent),
+}
+
+#[inline(always)]
+pub fn gameplay_raw_key_event(raw_key: &RawKeyboardEvent) -> Option<GameplayQueuedEvent> {
+    if raw_key.repeat {
+        return None;
+    }
+    match raw_key.code {
+        KeyCode::ShiftLeft
+        | KeyCode::ShiftRight
+        | KeyCode::ControlLeft
+        | KeyCode::ControlRight
+        | KeyCode::KeyR
+        | KeyCode::F6
+        | KeyCode::F7
+        | KeyCode::F8
+        | KeyCode::F11
+        | KeyCode::F12 => {}
+        _ => return None,
+    }
+    Some(GameplayQueuedEvent::RawKey(GameplayRawKeyEvent {
+        code: raw_key.code,
+        pressed: raw_key.pressed,
+        timestamp: raw_key.timestamp,
+    }))
+}
+
+#[inline(always)]
+const fn gameplay_raw_modifier_key(code: KeyCode) -> Option<GameplayRawModifierKey> {
+    match code {
+        KeyCode::ShiftLeft | KeyCode::ShiftRight => Some(GameplayRawModifierKey::Shift),
+        KeyCode::ControlLeft | KeyCode::ControlRight => Some(GameplayRawModifierKey::Ctrl),
+        _ => None,
+    }
+}
+
+#[inline(always)]
+const fn gameplay_raw_key_input(code: KeyCode) -> GameplayRawKeyInput {
+    match code {
+        KeyCode::KeyR => GameplayRawKeyInput::Restart,
+        KeyCode::F6 => GameplayRawKeyInput::Autosync,
+        KeyCode::F7 => GameplayRawKeyInput::TimingTick,
+        KeyCode::F8 => GameplayRawKeyInput::Autoplay,
+        KeyCode::F11 => GameplayRawKeyInput::OffsetAdjust(GameplayOffsetAdjustKey::Decrease),
+        KeyCode::F12 => GameplayRawKeyInput::OffsetAdjust(GameplayOffsetAdjustKey::Increase),
+        _ => GameplayRawKeyInput::Other,
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -576,6 +635,57 @@ mod tests {
     use super::*;
     use deadsync_input::{PadCode, PadId};
     use winit::keyboard::KeyCode;
+
+    #[test]
+    fn gameplay_raw_key_event_ignores_repeats_and_unhandled_keys() {
+        let mut event = RawKeyboardEvent {
+            code: KeyCode::KeyA,
+            pressed: true,
+            repeat: false,
+            timestamp: Instant::now(),
+            host_nanos: 0,
+        };
+
+        assert!(gameplay_raw_key_event(&event).is_none());
+        event.code = KeyCode::KeyR;
+        event.repeat = true;
+        assert!(gameplay_raw_key_event(&event).is_none());
+    }
+
+    #[test]
+    fn gameplay_raw_key_event_accepts_gameplay_control_keys() {
+        let event = RawKeyboardEvent {
+            code: KeyCode::F12,
+            pressed: true,
+            repeat: false,
+            timestamp: Instant::now(),
+            host_nanos: 0,
+        };
+
+        match gameplay_raw_key_event(&event) {
+            Some(GameplayQueuedEvent::RawKey(ev)) => {
+                assert_eq!(ev.code, KeyCode::F12);
+                assert!(ev.pressed);
+            }
+            _ => panic!("expected raw gameplay key event"),
+        }
+    }
+
+    #[test]
+    fn gameplay_raw_key_mapping_preserves_offset_keys() {
+        assert_eq!(
+            gameplay_raw_key_input(KeyCode::F11),
+            GameplayRawKeyInput::OffsetAdjust(GameplayOffsetAdjustKey::Decrease)
+        );
+        assert_eq!(
+            gameplay_raw_key_input(KeyCode::F12),
+            GameplayRawKeyInput::OffsetAdjust(GameplayOffsetAdjustKey::Increase)
+        );
+        assert_eq!(
+            gameplay_raw_modifier_key(KeyCode::ControlLeft),
+            Some(GameplayRawModifierKey::Ctrl)
+        );
+    }
 
     #[test]
     fn queued_input_routes_during_gameplay_fade_in() {
