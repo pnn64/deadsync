@@ -205,7 +205,7 @@ fn play_preloaded_sfx_on_lane(path: &str, lane: SfxLane) {
 }
 
 fn play_sfx_on_lane(path: &str, lane: SfxLane) {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     if !is_initialized() {
         return;
     }

@@ -1,25 +1,6 @@
-use deadlib_render::{ClockDomainTrace, PresentModeTrace, PresentStats};
+use deadlib_render::{ClockDomainTrace, PresentStats};
 use deadsync_audio::OutputTimingSnapshot;
-
-#[derive(Clone, Copy, Debug)]
-pub struct TimingHealth {
-    pub interval_ns: u64,
-    pub display_error_ms: f32,
-    pub display_catching_up: bool,
-    pub present_mode: PresentModeTrace,
-    pub display_clock: ClockDomainTrace,
-    pub host_clock: ClockDomainTrace,
-    pub in_flight_images: u8,
-    pub waited_for_image: bool,
-    pub applied_back_pressure: bool,
-    pub queue_idle_waited: bool,
-    pub suboptimal: bool,
-    pub submitted_present_id: u32,
-    pub completed_present_id: u32,
-    pub calibration_error_ns: u64,
-    pub host_mapped: bool,
-    pub audio: Option<OutputTimingSnapshot>,
-}
+use deadsync_screens::diagnostics::TimingHealth;
 
 pub fn timing_health(
     present: PresentStats,

@@ -5,7 +5,7 @@
 //!
 //! Run with: `cargo test --test i18n_coverage`
 
-use deadsync::config::SimpleIni;
+use deadsync_config::prelude::SimpleIni;
 use std::collections::BTreeSet;
 use std::path::Path;
 

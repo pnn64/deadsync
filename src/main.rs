@@ -6,8 +6,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use deadlib_platform::logging::{self, StartupBuildInfo};
-use deadsync::{app, assets, config};
+use deadsync_config::prelude as config;
 use deadsync_profile::compat as profile;
+use deadsync_shell::app;
+use deadsync_theme_simply_love::assets;
 use std::backtrace::Backtrace;
 use std::panic::PanicHookInfo;
 

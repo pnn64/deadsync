@@ -1,5 +1,8 @@
+use deadsync_core::input::MAX_COLS;
 use deadsync_rules::scroll::ScrollSpeedSetting;
+use deadsync_theme::NotefieldStyle;
 use glam::{Mat4 as Matrix4, Vec3 as Vector3};
+use std::array::from_fn;
 
 use crate::transforms::sm_scale;
 
@@ -56,6 +59,54 @@ pub struct HudLayoutYs {
 pub enum FieldPlacement {
     P1,
     P2,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct FieldLayoutRequest {
+    pub style: NotefieldStyle,
+    pub placement: FieldPlacement,
+    pub num_players: usize,
+    pub single_style: bool,
+    pub double_style: bool,
+    pub center_one_player: bool,
+    pub screen_width: f32,
+    pub screen_center_x: f32,
+    pub screen_center_y: f32,
+    pub num_cols: usize,
+    pub field_zoom: f32,
+    pub notefield_offset_x: f32,
+    pub notefield_offset_y: f32,
+    pub receptor_y_override: Option<f32>,
+    pub center_receptors_y: bool,
+    pub centered_scroll: f32,
+    pub column_reverse_percent: [f32; MAX_COLS],
+    pub column_dirs: [f32; MAX_COLS],
+    pub song_lua_column_y_offsets: [f32; MAX_COLS],
+    pub judgment_offset_x: f32,
+    pub combo_offset_x: f32,
+    pub error_bar_offset_x: f32,
+    pub hud_offsets: HudLayoutOffsets,
+    pub hud_params: HudLayoutParams,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FieldLayout {
+    pub playfield_center_x: f32,
+    pub layout_center_x: f32,
+    pub notefield_offset_x: f32,
+    pub notefield_offset_y: f32,
+    pub receptor_y_normal: f32,
+    pub receptor_y_reverse: f32,
+    pub receptor_y_centered: f32,
+    pub centered_percent: f32,
+    pub column_reverse_percent: [f32; MAX_COLS],
+    pub column_dirs: [f32; MAX_COLS],
+    pub column_receptor_ys: [f32; MAX_COLS],
+    pub hud_reverse: bool,
+    pub judgment_x: f32,
+    pub combo_x: f32,
+    pub error_bar_x: f32,
+    pub hud_layout: HudLayoutYs,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -323,6 +374,137 @@ pub fn hud_layout_ys(
     }
 }
 
+fn field_receptor_y(
+    reverse_percent: f32,
+    centered_percent: f32,
+    normal_y: f32,
+    reverse_y: f32,
+    centered_y: f32,
+) -> f32 {
+    let reverse_y = normal_y + (reverse_y - normal_y) * reverse_percent.clamp(0.0, 1.0);
+    (centered_y - reverse_y).mul_add(centered_percent, reverse_y)
+}
+
+pub fn field_layout(request: FieldLayoutRequest) -> FieldLayout {
+    let style = request.style;
+    let clamped_width = request
+        .screen_width
+        .clamp(style.layout_width_min, style.layout_width_max);
+    let side_sign = match request.placement {
+        FieldPlacement::P1 => -1.0,
+        FieldPlacement::P2 => 1.0,
+    };
+    let centered_one_side =
+        request.num_players == 1 && request.single_style && request.center_one_player;
+    let centered_both_sides = request.num_players == 1 && request.double_style;
+    let base_playfield_center_x = if centered_both_sides || centered_one_side {
+        request.screen_center_x
+    } else {
+        request.screen_center_x + side_sign * clamped_width * style.side_center_x_ratio
+    };
+    let notefield_offset_x = side_sign * request.notefield_offset_x;
+    let playfield_center_x = base_playfield_center_x + notefield_offset_x;
+    let layout_center_x = if request.num_players == 1 && (centered_both_sides || centered_one_side)
+    {
+        request.screen_center_x
+    } else {
+        playfield_center_x
+    };
+
+    let receptor_y_override = request
+        .receptor_y_override
+        .map(|y| y + request.notefield_offset_y);
+    let receptor_y_centered =
+        receptor_y_override.unwrap_or(request.screen_center_y + request.notefield_offset_y);
+    let receptor_y_normal = receptor_y_override.unwrap_or_else(|| {
+        if request.center_receptors_y {
+            receptor_y_centered
+        } else {
+            request.screen_center_y + style.receptor_normal_y + request.notefield_offset_y
+        }
+    });
+    let receptor_y_reverse = receptor_y_override.unwrap_or_else(|| {
+        if request.center_receptors_y {
+            receptor_y_centered
+        } else {
+            request.screen_center_y + style.receptor_reverse_y + request.notefield_offset_y
+        }
+    });
+    let centered_percent = if request.receptor_y_override.is_some() || request.center_receptors_y {
+        1.0
+    } else {
+        request.centered_scroll
+    };
+    let column_reverse_percent = from_fn(|i| {
+        if i < request.num_cols {
+            request.column_reverse_percent[i]
+        } else {
+            0.0
+        }
+    });
+    let column_dirs = from_fn(|i| {
+        if i < request.num_cols {
+            request.column_dirs[i]
+        } else {
+            1.0
+        }
+    });
+    let column_receptor_ys = from_fn(|i| {
+        if i >= request.num_cols {
+            return receptor_y_normal;
+        }
+        field_receptor_y(
+            column_reverse_percent[i],
+            centered_percent,
+            receptor_y_normal,
+            receptor_y_reverse,
+            receptor_y_centered,
+        ) + request.song_lua_column_y_offsets[i] * request.field_zoom
+    });
+
+    let hud_reverse = column_reverse_percent[0] >= 0.999_9;
+    let judgment_y = hud_y(
+        request.screen_center_y + style.judgment_normal_y + request.notefield_offset_y,
+        request.screen_center_y + style.judgment_reverse_y + request.notefield_offset_y,
+        receptor_y_centered + style.judgment_centered_y,
+        hud_reverse,
+        centered_percent,
+    );
+    let combo_y = hud_y(
+        request.screen_center_y + style.combo_normal_y + request.notefield_offset_y,
+        request.screen_center_y + style.combo_reverse_y + request.notefield_offset_y,
+        receptor_y_centered + style.combo_centered_y,
+        hud_reverse,
+        centered_percent,
+    );
+    let hud_layout = hud_layout_ys(
+        judgment_y,
+        combo_y,
+        hud_reverse,
+        request.hud_offsets,
+        request.hud_params,
+    );
+
+    FieldLayout {
+        playfield_center_x,
+        layout_center_x,
+        notefield_offset_x,
+        notefield_offset_y: request.notefield_offset_y,
+        receptor_y_normal,
+        receptor_y_reverse,
+        receptor_y_centered,
+        centered_percent,
+        column_reverse_percent,
+        column_dirs,
+        column_receptor_ys,
+        hud_reverse,
+        judgment_x: playfield_center_x + request.judgment_offset_x,
+        combo_x: playfield_center_x + request.combo_offset_x,
+        error_bar_x: playfield_center_x + request.error_bar_offset_x,
+        hud_layout,
+    }
+}
+
 pub fn default_column_x(local_col: usize, num_cols: usize) -> f32 {
     (local_col as f32 - (num_cols.saturating_sub(1) as f32 * 0.5)) * 64.0
 }
@@ -355,5 +537,231 @@ pub fn fill_lane_col_offsets<T: Copy + LaneColumnX>(
             .and_then(|cols| cols.get(i).copied())
             .map_or_else(|| default_column_x(i, num_cols), LaneColumnX::to_f32);
         *dst = col_x * spacing * zoom;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        FieldLayoutRequest, FieldPlacement, HudLayoutOffsets, HudLayoutParams,
+        LayoutMiniIndicatorPosition, ZmodLayoutParams, field_layout,
+    };
+    use deadsync_core::input::MAX_COLS;
+    use deadsync_theme::NotefieldStyle;
+
+    fn style() -> NotefieldStyle {
+        NotefieldStyle {
+            layout_width_min: 640.0,
+            layout_width_max: 854.0,
+            side_center_x_ratio: 0.25,
+            receptor_normal_y: -125.0,
+            receptor_reverse_y: 145.0,
+            judgment_normal_y: -30.0,
+            judgment_reverse_y: 30.0,
+            judgment_centered_y: 95.0,
+            combo_normal_y: 30.0,
+            combo_reverse_y: -30.0,
+            combo_centered_y: 155.0,
+            judgment_height: 40.0,
+            error_bar_offset_y: 25.0,
+            measure_line_overscan_y: 400.0,
+            measure_line_z: 80,
+            measure_cue_scroll_color: [0.824, 0.706, 0.549],
+            measure_cue_bpm_color: [1.0, 1.0, 0.0],
+            measure_cue_delay_color: [1.0, 0.45, 0.75],
+            measure_cue_stop_color: [1.0, 0.0, 0.0],
+            measure_cue_alpha: 0.7,
+            edit_measure_number_font: "miso",
+        }
+    }
+
+    fn request() -> FieldLayoutRequest {
+        FieldLayoutRequest {
+            style: style(),
+            placement: FieldPlacement::P1,
+            num_players: 1,
+            single_style: true,
+            double_style: false,
+            center_one_player: false,
+            screen_width: 854.0,
+            screen_center_x: 427.0,
+            screen_center_y: 240.0,
+            num_cols: 4,
+            field_zoom: 1.0,
+            notefield_offset_x: 0.0,
+            notefield_offset_y: 0.0,
+            receptor_y_override: None,
+            center_receptors_y: false,
+            centered_scroll: 0.0,
+            column_reverse_percent: [0.0; MAX_COLS],
+            column_dirs: [1.0; MAX_COLS],
+            song_lua_column_y_offsets: [0.0; MAX_COLS],
+            judgment_offset_x: 0.0,
+            combo_offset_x: 0.0,
+            error_bar_offset_x: 0.0,
+            hud_offsets: HudLayoutOffsets::default(),
+            hud_params: HudLayoutParams {
+                zmod: ZmodLayoutParams {
+                    judgment_height: 40.0,
+                    has_error_bar: false,
+                    has_judgment_texture: false,
+                    error_bar_up: false,
+                    has_measure_counter: false,
+                    measure_counter_up: false,
+                    broken_run: false,
+                    mini_indicator_position: LayoutMiniIndicatorPosition::Default,
+                },
+                has_judgment_texture: false,
+                error_bar_up: false,
+                error_bar_offset: 25.0,
+            },
+        }
+    }
+
+    fn assert_near(actual: f32, expected: f32) {
+        assert!(
+            (actual - expected).abs() <= 0.001,
+            "expected {expected}, got {actual}"
+        );
+    }
+
+    #[test]
+    fn places_p1_and_p2_fields_with_signed_offsets() {
+        let mut p1_request = request();
+        p1_request.num_players = 2;
+        p1_request.notefield_offset_x = 20.0;
+        let p1 = field_layout(p1_request);
+        assert_near(p1.playfield_center_x, 193.5);
+        assert_near(p1.layout_center_x, 193.5);
+        assert_near(p1.notefield_offset_x, -20.0);
+
+        let mut p2_request = p1_request;
+        p2_request.placement = FieldPlacement::P2;
+        let p2 = field_layout(p2_request);
+        assert_near(p2.playfield_center_x, 660.5);
+        assert_near(p2.layout_center_x, 660.5);
+        assert_near(p2.notefield_offset_x, 20.0);
+    }
+
+    #[test]
+    fn centered_single_and_double_layouts_ignore_offset_for_layout_center() {
+        let mut single_request = request();
+        single_request.center_one_player = true;
+        single_request.notefield_offset_x = 20.0;
+        let single = field_layout(single_request);
+        assert_near(single.playfield_center_x, 407.0);
+        assert_near(single.layout_center_x, 427.0);
+
+        let mut non_single_request = single_request;
+        non_single_request.single_style = false;
+        let non_single = field_layout(non_single_request);
+        assert_near(non_single.playfield_center_x, 193.5);
+        assert_near(non_single.layout_center_x, 193.5);
+
+        let mut double_request = single_request;
+        double_request.single_style = false;
+        double_request.center_one_player = false;
+        double_request.double_style = true;
+        double_request.placement = FieldPlacement::P2;
+        let double = field_layout(double_request);
+        assert_near(double.playfield_center_x, 447.0);
+        assert_near(double.layout_center_x, 427.0);
+    }
+
+    #[test]
+    fn side_centers_clamp_logical_screen_width() {
+        let mut narrow_request = request();
+        narrow_request.screen_width = 500.0;
+        narrow_request.screen_center_x = 250.0;
+        assert_near(field_layout(narrow_request).playfield_center_x, 90.0);
+
+        let mut wide_request = request();
+        wide_request.screen_width = 1000.0;
+        wide_request.screen_center_x = 500.0;
+        wide_request.placement = FieldPlacement::P2;
+        assert_near(field_layout(wide_request).playfield_center_x, 713.5);
+    }
+
+    #[test]
+    fn lays_out_normal_reverse_centered_and_overridden_receptors() {
+        let mut request = request();
+        request.notefield_offset_y = 10.0;
+        request.column_reverse_percent[1] = 0.5;
+        request.column_reverse_percent[2] = 1.0;
+        let layout = field_layout(request);
+        assert_near(layout.receptor_y_normal, 125.0);
+        assert_near(layout.receptor_y_reverse, 395.0);
+        assert_near(layout.receptor_y_centered, 250.0);
+        assert_near(layout.column_receptor_ys[0], 125.0);
+        assert_near(layout.column_receptor_ys[1], 260.0);
+        assert_near(layout.column_receptor_ys[2], 395.0);
+
+        request.centered_scroll = 2.0;
+        let overshot = field_layout(request);
+        assert_near(overshot.column_receptor_ys[0], 375.0);
+        assert_near(overshot.hud_layout.judgment_y, 470.0);
+
+        request.centered_scroll = 0.0;
+        request.center_receptors_y = true;
+        let centered = field_layout(request);
+        assert_eq!(centered.centered_percent, 1.0);
+        assert!(
+            centered.column_receptor_ys[..4]
+                .iter()
+                .all(|y| (*y - 250.0).abs() <= 0.001)
+        );
+
+        request.center_receptors_y = false;
+        request.receptor_y_override = Some(100.0);
+        let overridden = field_layout(request);
+        assert_eq!(overridden.centered_percent, 1.0);
+        assert!(
+            overridden.column_receptor_ys[..4]
+                .iter()
+                .all(|y| (*y - 110.0).abs() <= 0.001)
+        );
+    }
+
+    #[test]
+    fn applies_song_lua_column_y_offsets_after_field_zoom() {
+        let mut request = request();
+        request.num_cols = 2;
+        request.field_zoom = 1.5;
+        request.column_dirs[0] = -1.0;
+        request.song_lua_column_y_offsets[0] = 8.0;
+        request.song_lua_column_y_offsets[2] = 100.0;
+        let layout = field_layout(request);
+
+        assert_near(layout.column_receptor_ys[0], 127.0);
+        assert_eq!(layout.column_dirs[0], -1.0);
+        assert_eq!(layout.column_dirs[2], 1.0);
+        assert_near(layout.column_receptor_ys[2], 115.0);
+    }
+
+    #[test]
+    fn applies_hud_and_error_bar_offsets_from_the_request() {
+        let mut request = request();
+        request.judgment_offset_x = 12.0;
+        request.combo_offset_x = -8.0;
+        request.error_bar_offset_x = 4.0;
+        request.hud_offsets = HudLayoutOffsets {
+            judgment_extra_y: 7.0,
+            combo_extra_y: -9.0,
+            error_bar_extra_y: 11.0,
+        };
+        let layout = field_layout(request);
+
+        assert_near(layout.judgment_x, 225.5);
+        assert_near(layout.combo_x, 205.5);
+        assert_near(layout.error_bar_x, 217.5);
+        assert_near(layout.hud_layout.judgment_y, 217.0);
+        assert_near(layout.hud_layout.zmod_layout.combo_y, 261.0);
+        assert_near(layout.hud_layout.error_bar_y, 221.0);
+
+        request.column_reverse_percent[0] = 1.0;
+        let reverse = field_layout(request);
+        assert!(reverse.hud_reverse);
+        assert_near(reverse.hud_layout.judgment_y, 277.0);
+        assert_near(reverse.hud_layout.zmod_layout.combo_y, 201.0);
     }
 }

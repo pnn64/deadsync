@@ -12,11 +12,6 @@ use std::path::{Path, PathBuf};
 
 static GRAPHIC_TEXTURE_CHOICES: GraphicTextureChoiceCache = GraphicTextureChoiceCache::new();
 
-#[inline(always)]
-fn needs_repeat_sampler(key: &str) -> bool {
-    deadsync_theme::texture_needs_repeat_sampler(key)
-}
-
 fn graphics_roots(folder: &str) -> Vec<PathBuf> {
     let dirs = dirs::app_dirs();
     graphic_texture_roots(folder, dirs.portable, &dirs.data_dir, &dirs.exe_dir)
@@ -50,14 +45,18 @@ pub fn model_texture_sampler(key: &str) -> SamplerDesc {
 }
 
 impl AssetManager {
-    pub fn load_initial_textures(
+    pub fn load_initial_textures<T>(
         &mut self,
         backend: &mut Backend,
-    ) -> Result<(), deadlib_assets::AssetError> {
+        texture_assets: T,
+    ) -> Result<(), deadlib_assets::AssetError>
+    where
+        T: IntoIterator<Item = deadlib_assets::TextureAssetSpec>,
+    {
         debug!("Loading initial textures...");
 
         let texture_jobs = initial_texture_decode_jobs(
-            deadsync_theme::initial_texture_assets(),
+            texture_assets,
             &dirs::app_dirs().noteskin_roots(),
             |path| canonical_texture_key(path),
             &INITIAL_GRAPHIC_TEXTURES,
@@ -65,9 +64,10 @@ impl AssetManager {
             |path| dirs::app_dirs().resolve_asset_path(path),
         );
 
+        let texture_needs_repeat_sampler = self.texture_needs_repeat_sampler;
         for loaded in self.store.load_initial_textures_with(
             texture_jobs,
-            needs_repeat_sampler,
+            texture_needs_repeat_sampler,
             |image, sampler| backend.create_texture(image, sampler),
         )? {
             let InitialTextureLoad {
@@ -108,13 +108,14 @@ impl AssetManager {
         sampler_override: Option<SamplerDesc>,
         force_reload: bool,
     ) {
+        let texture_needs_repeat_sampler = self.texture_needs_repeat_sampler;
         match self.store.load_texture_key_with(
             texture_key,
             sampler_override,
             force_reload,
             |key| canonical_texture_key(key),
             |path| dirs::app_dirs().resolve_asset_path(path),
-            needs_repeat_sampler,
+            texture_needs_repeat_sampler,
             |image, sampler| backend.create_texture(image, sampler),
         ) {
             TextureKeyStoreLoad::Skip => {}
@@ -140,11 +141,6 @@ impl AssetManager {
 mod tests {
     use super::*;
     use deadlib_render::{SamplerFilter, SamplerWrap};
-
-    #[test]
-    fn goldstar_uses_repeat_sampler() {
-        assert!(needs_repeat_sampler("grades/goldstar (stretch).png"));
-    }
 
     #[test]
     fn model_sampler_forces_repeat_for_plain_textures() {

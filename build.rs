@@ -8,14 +8,7 @@ use std::{
 
 fn main() -> Result<(), Box<dyn Error>> {
     println!("cargo:rerun-if-changed=assets");
-    println!("cargo:rerun-if-env-changed=CARGO_FEATURE_PIPEWIRE_AUDIO");
-    println!("cargo:rustc-check-cfg=cfg(has_jack_audio)");
-    println!("cargo:rustc-check-cfg=cfg(has_pipewire_audio)");
-    println!("cargo:rustc-check-cfg=cfg(has_pulse_audio)");
 
-    detect_jack_audio();
-    detect_pipewire_audio();
-    detect_pulse_audio();
     configure_windows_stack();
     emit_build_info();
 
@@ -25,31 +18,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     copy_assets(&target_dir)?;
 
     Ok(())
-}
-
-fn detect_jack_audio() {
-    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
-    if target_os == "linux" {
-        println!("cargo:rustc-cfg=has_jack_audio");
-    }
-}
-
-fn detect_pipewire_audio() {
-    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
-    if target_os != "linux" {
-        return;
-    }
-    if std::env::var_os("CARGO_FEATURE_PIPEWIRE_AUDIO").is_none() {
-        return;
-    }
-    println!("cargo:rustc-cfg=has_pipewire_audio");
-}
-
-fn detect_pulse_audio() {
-    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
-    if target_os == "linux" {
-        println!("cargo:rustc-cfg=has_pulse_audio");
-    }
 }
 
 fn configure_windows_stack() {

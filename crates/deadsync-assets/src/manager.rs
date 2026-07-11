@@ -7,8 +7,7 @@ use deadlib_platform::dirs;
 use deadlib_present::font::Font;
 use deadlib_render::{SamplerDesc, TextureHandle, TextureHandleMap};
 use deadlib_renderer::{Backend, Texture as RendererTexture};
-use deadsync_config::prelude::get;
-use deadsync_theme::{FontRole, machine_font_key, machine_font_key_for_text};
+use deadsync_theme::ThemeAssetManifest;
 use image::RgbaImage;
 use log::{debug, warn};
 use std::collections::HashMap;
@@ -16,12 +15,14 @@ use std::path::Path;
 
 pub struct AssetManager {
     pub(crate) store: AssetStore<RendererTexture>,
+    pub(crate) texture_needs_repeat_sampler: fn(&str) -> bool,
 }
 
 impl AssetManager {
     pub fn new() -> Self {
         Self {
             store: AssetStore::new(),
+            texture_needs_repeat_sampler: |_| false,
         }
     }
 
@@ -247,14 +248,13 @@ impl AssetManager {
     pub fn load_initial_fonts(
         &mut self,
         backend: &mut Backend,
+        fonts: &'static [deadlib_assets::FontAssetSpec],
     ) -> Result<(), deadlib_assets::AssetError> {
         let dirs = dirs::app_dirs();
         let asset_roots = font_texture_asset_roots(&dirs.data_dir, &dirs.exe_dir);
-        for asset in parse_font_asset_specs(
-            deadsync_theme::initial_font_assets().copied(),
-            &asset_roots,
-            |path| dirs.resolve_asset_path(path),
-        )? {
+        for asset in parse_font_asset_specs(fonts.iter().copied(), &asset_roots, |path| {
+            dirs.resolve_asset_path(path)
+        })? {
             if let Some(fallback) = asset.font.fallback_font_name {
                 debug!(
                     "Font '{}' configured to use '{}' as fallback.",
@@ -267,28 +267,24 @@ impl AssetManager {
         Ok(())
     }
 
-    pub fn load_initial_assets(
+    pub fn load_initial_assets<T>(
         &mut self,
         backend: &mut Backend,
-    ) -> Result<(), deadlib_assets::AssetError> {
-        self.load_initial_textures(backend)?;
-        self.load_initial_fonts(backend)?;
+        manifest: ThemeAssetManifest<T>,
+    ) -> Result<(), deadlib_assets::AssetError>
+    where
+        T: IntoIterator<Item = deadlib_assets::TextureAssetSpec>,
+    {
+        let ThemeAssetManifest {
+            fonts,
+            textures,
+            texture_needs_repeat_sampler,
+        } = manifest;
+        self.texture_needs_repeat_sampler = texture_needs_repeat_sampler;
+        self.load_initial_textures(backend, textures)?;
+        self.load_initial_fonts(backend, fonts)?;
         Ok(())
     }
-}
-
-/// Convenience wrapper that reads the active machine font from the global
-/// config and resolves the role.
-#[inline]
-pub fn current_machine_font_key(role: FontRole) -> &'static str {
-    machine_font_key(get().machine_font, role)
-}
-
-/// Convenience wrapper that reads the active machine font from the global
-/// config and applies the wholesale-fallback policy.
-#[inline]
-pub fn current_machine_font_key_for_text(role: FontRole, text: &str) -> &'static str {
-    machine_font_key_for_text(get().machine_font, role, text)
 }
 
 impl Default for AssetManager {
@@ -316,5 +312,12 @@ mod tests {
         assert!(assets.remove_texture("queued").is_none());
         assert!(!assets.has_texture_key("queued"));
         assert!(!assets.has_pending_texture_upload("queued"));
+    }
+
+    #[test]
+    fn new_manager_has_neutral_repeat_sampler_policy() {
+        let assets = AssetManager::new();
+
+        assert!(!(assets.texture_needs_repeat_sampler)("any-texture.png"));
     }
 }

@@ -321,10 +321,28 @@ mod tests {
     #[test]
     fn edit_measure_number_actor_respects_edit_mode_and_measure_index() {
         let mut actors = Vec::new();
-        append_edit_measure_number(&mut actors, false, Some(4), 12.0, 34.0, 1.0, 80);
-        append_edit_measure_number(&mut actors, true, Some(-1), 12.0, 34.0, 1.0, 80);
-        append_edit_measure_number(&mut actors, true, None, 12.0, 34.0, 1.0, 80);
-        append_edit_measure_number(&mut actors, true, Some(4), 12.0, 34.0, 0.5, 80);
+        append_edit_measure_number(
+            &mut actors,
+            false,
+            Some(4),
+            12.0,
+            34.0,
+            1.0,
+            80,
+            "edit-font",
+        );
+        append_edit_measure_number(
+            &mut actors,
+            true,
+            Some(-1),
+            12.0,
+            34.0,
+            1.0,
+            80,
+            "edit-font",
+        );
+        append_edit_measure_number(&mut actors, true, None, 12.0, 34.0, 1.0, 80, "edit-font");
+        append_edit_measure_number(&mut actors, true, Some(4), 12.0, 34.0, 0.5, 80, "edit-font");
 
         assert_eq!(actors.len(), 1);
         match &actors[0] {
@@ -341,7 +359,7 @@ mod tests {
             } => {
                 assert_eq!(*align, [1.0, 0.5]);
                 assert_eq!(*offset, [12.0, 34.0]);
-                assert_eq!(*font, "miso");
+                assert_eq!(*font, "edit-font");
                 assert_eq!(content.as_str(), "4");
                 assert_eq!(*align_text, TextAlign::Right);
                 assert_eq!(*z, 81);
@@ -355,7 +373,7 @@ mod tests {
     #[test]
     fn cue_bar_actor_keeps_color_and_measure_layer() {
         let mut actors = Vec::new();
-        append_cue_bar(&mut actors, 10.0, 20.0, 30.0, 4.0, (0.2, 0.4, 0.6), 0.8, 80);
+        append_cue_bar(&mut actors, 10.0, 20.0, 30.0, 4.0, [0.2, 0.4, 0.6], 0.8, 80);
 
         assert_eq!(actors.len(), 1);
         match &actors[0] {

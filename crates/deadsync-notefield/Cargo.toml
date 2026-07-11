@@ -10,6 +10,7 @@ deadlib-render = { path = "../deadlib-render" }
 deadsync-core = { path = "../deadsync-core" }
 deadsync-noteskin = { path = "../deadsync-noteskin" }
 deadsync-rules = { path = "../deadsync-rules" }
+deadsync-theme = { path = "../deadsync-theme" }
 glam = "0.33.1"
 
 [lints.clippy]

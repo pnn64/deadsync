@@ -28,8 +28,13 @@ const LOGICAL_INPUT_SYMBOLS: &[&str] = &[
     "parse_pad_dir",
 ];
 
-const LOGICAL_INPUT_SCAN_DIRS: &[&str] =
-    &["src/app", "src/config", "src/game", "src/screens", "tests"];
+const LOGICAL_INPUT_SCAN_DIRS: &[&str] = &[
+    "crates/deadsync-shell/src/app",
+    "src/config",
+    "src/game",
+    "crates/deadsync-theme-simply-love/src/screens",
+    "tests",
+];
 
 const NATIVE_INPUT_LAUNCH_SYMBOLS: &[&str] = &[
     "run_pad_backend",
@@ -42,17 +47,28 @@ const NATIVE_INPUT_LAUNCH_SYMBOLS: &[&str] = &[
     "unix_raw_keyboard_backend_active",
 ];
 
-const NATIVE_INPUT_SCAN_DIRS: &[&str] =
-    &["src/app", "src/config", "src/game", "src/screens", "tests"];
+const NATIVE_INPUT_SCAN_DIRS: &[&str] = &[
+    "crates/deadsync-shell/src/app",
+    "src/config",
+    "src/game",
+    "crates/deadsync-theme-simply-love/src/screens",
+    "tests",
+];
 
-const INPUT_FSR_SCAN_DIRS: &[&str] = &["src/app", "src/config", "src/game", "src/screens", "tests"];
+const INPUT_FSR_SCAN_DIRS: &[&str] = &[
+    "crates/deadsync-shell/src/app",
+    "src/config",
+    "src/game",
+    "crates/deadsync-theme-simply-love/src/screens",
+    "tests",
+];
 
 const ENGINE_VIDEO_SCAN_DIRS: &[&str] = &[
-    "src/app",
+    "crates/deadsync-shell/src/app",
     "src/assets",
     "src/config",
     "src/game",
-    "src/screens",
+    "crates/deadsync-theme-simply-love/src/screens",
     "tests",
 ];
 
@@ -85,22 +101,22 @@ const ENGINE_GFX_RENDER_SYMBOLS: &[&str] = &[
 ];
 
 const ENGINE_GFX_RENDER_SCAN_DIRS: &[&str] = &[
-    "src/app",
+    "crates/deadsync-shell/src/app",
     "src/assets",
     "src/config",
     "src/engine/present",
     "src/game",
-    "src/screens",
+    "crates/deadsync-theme-simply-love/src/screens",
     "tests",
 ];
 
 const RENDER_BACKEND_IMPORT_SCAN_DIRS: &[&str] = &[
-    "src/app",
+    "crates/deadsync-shell/src/app",
     "src/assets",
     "src/config",
     "src/engine/present",
     "src/game",
-    "src/screens",
+    "crates/deadsync-theme-simply-love/src/screens",
     "tests",
     "crates/deadlib-present/src",
 ];
@@ -112,15 +128,20 @@ const RENDER_BACKEND_IMPORTS: &[&str] = &[
     "deadlib_render_backend_wgpu",
 ];
 
-const LIGHTS_IMPORT_SCAN_DIRS: &[&str] =
-    &["src/app", "src/config", "src/game", "src/screens", "tests"];
+const LIGHTS_IMPORT_SCAN_DIRS: &[&str] = &[
+    "crates/deadsync-shell/src/app",
+    "src/config",
+    "src/game",
+    "crates/deadsync-theme-simply-love/src/screens",
+    "tests",
+];
 
 const SMX_IMPORT_SCAN_DIRS: &[&str] = &[
-    "src/app",
+    "crates/deadsync-shell/src/app",
     "src/config",
     "src/engine",
     "src/game",
-    "src/screens",
+    "crates/deadsync-theme-simply-love/src/screens",
     "tests",
 ];
 
@@ -139,8 +160,13 @@ const ENGINE_PRESENT_EXTRACTED_FILES: &[&str] = &[
     "src/engine/space.rs",
 ];
 
-const PRESENT_SPACE_SCAN_DIRS: &[&str] =
-    &["src/app", "src/config", "src/game", "src/screens", "tests"];
+const PRESENT_SPACE_SCAN_DIRS: &[&str] = &[
+    "crates/deadsync-shell/src/app",
+    "src/config",
+    "src/game",
+    "crates/deadsync-theme-simply-love/src/screens",
+    "tests",
+];
 
 const VERSION_IMPORT_SCAN_DIRS: &[&str] =
     &["src", "crates", "tests", "tests/compose", "tests/draw"];
@@ -250,18 +276,23 @@ const AUDIO_STREAM_FORBIDDEN_TOKENS: &[&str] = &[
 
 const ENGINE_PLATFORM_SCAN_DIRS: &[&str] = &[
     "src/engine",
-    "src/app",
+    "crates/deadsync-shell/src/app",
     "src/assets",
     "src/config",
     "src/game",
-    "src/screens",
+    "crates/deadsync-theme-simply-love/src/screens",
     "tests",
 ];
 
 const GAME_RULE_FACADE_MODULES: &[&str] = &["judgment", "note", "scroll", "timing"];
 
-const GAME_RULE_FACADE_SCAN_DIRS: &[&str] =
-    &["src/app", "src/config", "src/game", "src/screens", "tests"];
+const GAME_RULE_FACADE_SCAN_DIRS: &[&str] = &[
+    "crates/deadsync-shell/src/app",
+    "src/config",
+    "src/game",
+    "crates/deadsync-theme-simply-love/src/screens",
+    "tests",
+];
 
 const GAME_PROFILE_RULE_SYMBOLS: &[&str] = &["GUEST_SCROLL_SPEED", "ScrollSpeedSetting"];
 
@@ -403,11 +434,21 @@ const GAME_PROFILE_DATA_SYMBOLS: &[&str] = &[
     "tap_explosion_skin_hidden",
 ];
 
-const GAME_CHART_FACADE_SCAN_DIRS: &[&str] =
-    &["src/app", "src/config", "src/game", "src/screens", "tests"];
+const GAME_CHART_FACADE_SCAN_DIRS: &[&str] = &[
+    "crates/deadsync-shell/src/app",
+    "src/config",
+    "src/game",
+    "crates/deadsync-theme-simply-love/src/screens",
+    "tests",
+];
 
-const GAME_PARSING_NOTES_FACADE_SCAN_DIRS: &[&str] =
-    &["src/app", "src/config", "src/game", "src/screens", "tests"];
+const GAME_PARSING_NOTES_FACADE_SCAN_DIRS: &[&str] = &[
+    "crates/deadsync-shell/src/app",
+    "src/config",
+    "src/game",
+    "crates/deadsync-theme-simply-love/src/screens",
+    "tests",
+];
 
 const GAME_SONG_DATA_SYMBOLS: &[&str] = &[
     "SongBackgroundChange",
@@ -420,8 +461,13 @@ const GAME_SONG_DATA_SYMBOLS: &[&str] = &[
     "SyncPref",
 ];
 
-const GAME_SONG_DATA_SCAN_DIRS: &[&str] =
-    &["src/app", "src/config", "src/game", "src/screens", "tests"];
+const GAME_SONG_DATA_SCAN_DIRS: &[&str] = &[
+    "crates/deadsync-shell/src/app",
+    "src/config",
+    "src/game",
+    "crates/deadsync-theme-simply-love/src/screens",
+    "tests",
+];
 
 const GAME_SCORE_DATA_SYMBOLS: &[&str] = &[
     "ArrowCloudLeaderboard",
@@ -538,23 +584,33 @@ const GAME_SCORE_DATA_SYMBOLS: &[&str] = &[
     "update_local_score_index",
 ];
 
-const GAME_SCORE_DATA_SCAN_DIRS: &[&str] =
-    &["src/app", "src/config", "src/game", "src/screens", "tests"];
+const GAME_SCORE_DATA_SCAN_DIRS: &[&str] = &[
+    "crates/deadsync-shell/src/app",
+    "src/config",
+    "src/game",
+    "crates/deadsync-theme-simply-love/src/screens",
+    "tests",
+];
 
 const GAMEPLAY_LIMIT_SYMBOLS: &[&str] = &["MAX_COLS", "MAX_PLAYERS"];
 
-const GAMEPLAY_LIMIT_SCAN_DIRS: &[&str] =
-    &["src/app", "src/config", "src/game", "src/screens", "tests"];
+const GAMEPLAY_LIMIT_SCAN_DIRS: &[&str] = &[
+    "crates/deadsync-shell/src/app",
+    "src/config",
+    "src/game",
+    "crates/deadsync-theme-simply-love/src/screens",
+    "tests",
+];
 
 const CORE_NOTE_SYMBOLS: &[&str] = &["NoteType"];
 
 const CORE_NOTE_SCAN_DIRS: &[&str] = &[
     "crates/deadsync-chart",
     "crates/deadsync-simfile",
-    "src/app",
+    "crates/deadsync-shell/src/app",
     "src/config",
     "src/game",
-    "src/screens",
+    "crates/deadsync-theme-simply-love/src/screens",
     "tests",
 ];
 
@@ -610,8 +666,13 @@ const ARROWCLOUD_PROTOCOL_SYMBOLS: &[&str] = &[
     "user_url",
 ];
 
-const ARROWCLOUD_PROTOCOL_SCAN_DIRS: &[&str] =
-    &["src/app", "src/config", "src/game", "src/screens", "tests"];
+const ARROWCLOUD_PROTOCOL_SCAN_DIRS: &[&str] = &[
+    "crates/deadsync-shell/src/app",
+    "src/config",
+    "src/game",
+    "crates/deadsync-theme-simply-love/src/screens",
+    "tests",
+];
 
 const GROOVESTATS_PROTOCOL_SYMBOLS: &[&str] = &[
     "ConnectionError",
@@ -670,8 +731,13 @@ const GROOVESTATS_PROTOCOL_SYMBOLS: &[&str] = &[
     "submit_score_request",
 ];
 
-const GROOVESTATS_PROTOCOL_SCAN_DIRS: &[&str] =
-    &["src/app", "src/config", "src/game", "src/screens", "tests"];
+const GROOVESTATS_PROTOCOL_SCAN_DIRS: &[&str] = &[
+    "crates/deadsync-shell/src/app",
+    "src/config",
+    "src/game",
+    "crates/deadsync-theme-simply-love/src/screens",
+    "tests",
+];
 
 const LOBBY_DATA_SYMBOLS: &[&str] = &[
     "ConnectionState",
@@ -736,8 +802,13 @@ const LOBBY_DATA_SYMBOLS: &[&str] = &[
     "update_machine_text",
 ];
 
-const LOBBY_DATA_SCAN_DIRS: &[&str] =
-    &["src/app", "src/config", "src/game", "src/screens", "tests"];
+const LOBBY_DATA_SCAN_DIRS: &[&str] = &[
+    "crates/deadsync-shell/src/app",
+    "src/config",
+    "src/game",
+    "crates/deadsync-theme-simply-love/src/screens",
+    "tests",
+];
 
 const DOWNLOAD_PROTOCOL_SYMBOLS: &[&str] = &[
     "DownloadSnapshot",
@@ -751,18 +822,28 @@ const DOWNLOAD_PROTOCOL_SYMBOLS: &[&str] = &[
     "sanitize_pack_name",
 ];
 
-const DOWNLOAD_PROTOCOL_SCAN_DIRS: &[&str] =
-    &["src/app", "src/config", "src/game", "src/screens", "tests"];
+const DOWNLOAD_PROTOCOL_SCAN_DIRS: &[&str] = &[
+    "crates/deadsync-shell/src/app",
+    "src/config",
+    "src/game",
+    "crates/deadsync-theme-simply-love/src/screens",
+    "tests",
+];
 
-const NET_TRANSPORT_ERROR_SCAN_DIRS: &[&str] =
-    &["src/app", "src/config", "src/game", "src/screens", "tests"];
+const NET_TRANSPORT_ERROR_SCAN_DIRS: &[&str] = &[
+    "crates/deadsync-shell/src/app",
+    "src/config",
+    "src/game",
+    "crates/deadsync-theme-simply-love/src/screens",
+    "tests",
+];
 
 const NET_RESPONSE_BODY_SCAN_DIRS: &[&str] = &[
     "crates/deadsync-online",
-    "src/app",
+    "crates/deadsync-shell/src/app",
     "src/config",
     "src/game",
-    "src/screens",
+    "crates/deadsync-theme-simply-love/src/screens",
     "tests",
 ];
 
@@ -784,6 +865,34 @@ const NOTEFIELD_CRATE_FORBIDDEN_TOKENS: &[&str] = &[
     "deadsync_assets::noteskin",
     "deadsync::game::parsing::noteskin",
 ];
+
+const SCREEN_THEME_SOURCE_DIRS: &[&str] = &[
+    "crates/deadsync-theme-simply-love/src/screens",
+    "crates/deadsync-screens/src",
+    "crates/deadsync-theme/src",
+    "crates/deadsync-theme-simply-love/src",
+];
+
+#[test]
+fn screen_and_theme_sources_do_not_import_shell() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut failures = Vec::new();
+
+    for dir in SCREEN_THEME_SOURCE_DIRS {
+        for file in rust_files(&root.join(dir)) {
+            let text = fs::read_to_string(&file).expect("source file should be readable");
+            if text.contains("deadsync_shell") {
+                failures.push(rel_path(&root, &file));
+            }
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "screen and theme sources must consume lower-layer contracts, not deadsync-shell:\n{}",
+        failures.join("\n")
+    );
+}
 
 #[test]
 fn game_upward_dependencies_do_not_grow() {
@@ -2262,29 +2371,6 @@ fn present_model_lives_in_present_crate() {
         failures.push(format!("{} is missing", rel_path(&root, &asset_dsl)));
     }
 
-    let root_lib = root.join("src/lib.rs");
-    if let Ok(text) = fs::read_to_string(&root_lib) {
-        for token in [
-            "pub use deadsync_assets as assets;",
-            "::deadsync_assets::present_dsl::SpriteBuilder",
-            "::deadsync_assets::present_dsl::TextBuilder",
-            "::deadlib_present::__act_from_builder!",
-        ] {
-            if !text.contains(token) {
-                failures.push(format!(
-                    "{} should expose root asset facade or act! macro token {token}",
-                    rel_path(&root, &root_lib)
-                ));
-            }
-        }
-        if !text.contains("pub use deadlib_present::{rgba, rgba_const};") {
-            failures.push(format!(
-                "{} should re-export presentation color macros from deadlib-present",
-                rel_path(&root, &root_lib)
-            ));
-        }
-    }
-
     let asset_textures = root.join("crates/deadsync-assets/src/textures.rs");
     if let Ok(text) = fs::read_to_string(&asset_textures) {
         if !text.contains("GraphicTextureChoiceCache")
@@ -2298,7 +2384,13 @@ fn present_model_lives_in_present_crate() {
         }
     }
 
-    for dir in ["src/app", "src/config", "src/game", "src/screens", "tests"] {
+    for dir in [
+        "crates/deadsync-shell/src/app",
+        "src/config",
+        "src/game",
+        "crates/deadsync-theme-simply-love/src/screens",
+        "tests",
+    ] {
         let path = root.join(dir);
         if !path.exists() {
             continue;
@@ -2730,7 +2822,7 @@ fn app_helper_profile_data_imports_do_not_use_game_facade() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut failures = Vec::new();
 
-    for file in rust_files(&root.join("src/app")) {
+    for file in rust_files(&root.join("crates/deadsync-shell/src/app")) {
         scan_game_profile_data_file(&root, &file, &mut failures);
     }
 
@@ -2746,7 +2838,7 @@ fn screen_profile_data_imports_do_not_use_game_facade() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut failures = Vec::new();
 
-    for file in rust_files(&root.join("src/screens")) {
+    for file in rust_files(&root.join("crates/deadsync-theme-simply-love/src/screens")) {
         scan_game_profile_data_file(&root, &file, &mut failures);
     }
 
@@ -3759,6 +3851,100 @@ fn count_lobby_data_game_facade_refs(text: &str, symbol: &str) -> usize {
         }
 }
 
+#[test]
+fn concrete_theme_resources_live_in_simply_love() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let generic_theme = root.join("crates/deadsync-theme");
+    let generic_files: Vec<_> = rust_files(&generic_theme.join("src"))
+        .into_iter()
+        .map(|path| rel_path(&generic_theme, &path))
+        .collect();
+    assert_eq!(
+        generic_files,
+        ["src/lib.rs"],
+        "generic theme must contain contracts only"
+    );
+
+    let generic_source = fs::read_to_string(generic_theme.join("src/lib.rs"))
+        .expect("generic theme source should be readable");
+    for token in [
+        "MachineFont",
+        "VisualStyle",
+        "SrpgVariant",
+        "FONT_ASSETS",
+        "SRPG10_",
+        "pub mod i18n",
+        "scorebox",
+        "step_stats",
+    ] {
+        assert!(
+            !generic_source.contains(token),
+            "generic theme still owns concrete resource token {token}"
+        );
+    }
+
+    let generic_manifest = fs::read_to_string(generic_theme.join("Cargo.toml"))
+        .expect("generic theme manifest should be readable");
+    for dependency in ["deadsync-config", "deadsync-profile", "log =", "rand ="] {
+        assert!(
+            !generic_manifest.contains(dependency),
+            "generic theme still depends on concrete resource dependency {dependency}"
+        );
+    }
+
+    let assets = root.join("crates/deadsync-assets");
+    for removed in ["src/i18n.rs", "src/visual_styles.rs"] {
+        assert!(
+            !assets.join(removed).exists(),
+            "deadsync-assets still owns concrete theme module {removed}"
+        );
+    }
+    let assets_source =
+        fs::read_to_string(assets.join("src/lib.rs")).expect("asset facade should be readable");
+    for token in [
+        "pub mod i18n",
+        "pub mod visual_styles",
+        "FontRole",
+        "current_machine_font_key",
+    ] {
+        assert!(
+            !assets_source.contains(token),
+            "deadsync-assets still exports concrete theme token {token}"
+        );
+    }
+    let assets_manifest =
+        fs::read_to_string(assets.join("Cargo.toml")).expect("asset manifest should be readable");
+    assert!(
+        !assets_manifest.contains("deadsync-theme-simply-love"),
+        "deadsync-assets must not depend on the concrete theme"
+    );
+
+    let simply_love = root.join("crates/deadsync-theme-simply-love");
+    for owned in [
+        "src/fonts.rs",
+        "src/i18n.rs",
+        "src/i18n_runtime.rs",
+        "src/resources.rs",
+        "src/scorebox.rs",
+        "src/step_stats.rs",
+        "src/step_stats_gifs.rs",
+        "src/visual_styles.rs",
+    ] {
+        assert!(
+            simply_love.join(owned).is_file(),
+            "Simply Love resource module is missing: {owned}"
+        );
+    }
+    let simply_love_manifest = fs::read_to_string(simply_love.join("Cargo.toml"))
+        .expect("Simply Love manifest should be readable");
+    for dependency in ["deadsync-assets", "deadsync-theme"] {
+        assert!(
+            simply_love_manifest.contains(dependency),
+            "Simply Love must consume {dependency}"
+        );
+    }
+}
+
 fn count_download_protocol_game_facade_refs(text: &str, symbol: &str) -> usize {
     let module_alias = text.contains("use crate::game::online::downloads;")
         || text.contains("use deadsync::game::online::downloads;")
@@ -3777,4 +3963,81 @@ fn count_download_protocol_game_facade_refs(text: &str, symbol: &str) -> usize {
         } else {
             0
         }
+}
+
+#[test]
+fn shell_app_has_no_move_compatibility_facade() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let shell = root.join("crates/deadsync-shell/src");
+    let lib = fs::read_to_string(shell.join("lib.rs")).expect("shell facade should be readable");
+    for token in [
+        "extern crate self as deadsync_shell",
+        "pub use deadlib_render as render",
+        "pub(crate) use deadsync_profile_gameplay",
+        "pub(crate) use deadsync_theme_simply_love",
+        "pub(crate) mod config",
+        "mod act_macro",
+        "use act_macro::act",
+    ] {
+        assert!(
+            !lib.contains(token),
+            "deadsync-shell still carries app-move compatibility token {token}"
+        );
+    }
+
+    let forbidden_app_tokens = [
+        "deadsync_shell::",
+        "crate::assets::",
+        "crate::config::",
+        "crate::screens::",
+        "use crate::act;",
+        "act!",
+    ];
+    let mut failures = Vec::new();
+    for file in rust_files(&shell.join("app")) {
+        let text = fs::read_to_string(&file).expect("shell app source should be readable");
+        for token in forbidden_app_tokens {
+            if text.contains(token) {
+                failures.push(format!("{}: {token}", rel_path(&root, &file)));
+            }
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "shell app must import owning crates and modules directly:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
+fn root_screen_tree_is_removed() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    assert!(
+        !root.join("src/screens").exists(),
+        "Simply Love screens must remain owned by deadsync-theme-simply-love"
+    );
+}
+
+#[test]
+fn root_app_tree_is_removed() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    assert!(
+        !root.join("src/app").exists(),
+        "process runtime must remain owned by deadsync-shell"
+    );
+}
+
+#[test]
+fn root_source_is_binary_only() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let src = root.join("src");
+    let files: Vec<_> = rust_files(&src)
+        .into_iter()
+        .map(|path| rel_path(&root, &path))
+        .collect();
+    assert_eq!(
+        files,
+        ["src/main.rs"],
+        "the root package should remain a binary-only entry point"
+    );
 }

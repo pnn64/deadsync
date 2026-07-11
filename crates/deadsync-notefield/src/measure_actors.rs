@@ -9,6 +9,7 @@ pub fn append_edit_measure_number(
     y: f32,
     field_zoom: f32,
     z_measure_lines: i16,
+    font: &'static str,
 ) {
     let Some(measure) = measure_index else {
         return;
@@ -18,7 +19,7 @@ pub fn append_edit_measure_number(
     }
 
     let mut text = TextBuilder::new();
-    text.font("miso");
+    text.font(font);
     text.settext(measure.to_string().into());
     text.align(1.0, 0.5);
     text.horizalign(TextAlign::Right);
@@ -74,7 +75,7 @@ pub fn append_cue_bar(
     y: f32,
     width: f32,
     thickness: f32,
-    color: (f32, f32, f32),
+    color: [f32; 3],
     alpha: f32,
     z_measure_lines: i16,
 ) {
@@ -83,7 +84,7 @@ pub fn append_cue_bar(
         [0.5, 0.5],
         [x_center, y],
         [width, thickness],
-        [color.0, color.1, color.2, alpha],
+        [color[0], color[1], color[2], alpha],
         z_measure_lines,
     );
 }

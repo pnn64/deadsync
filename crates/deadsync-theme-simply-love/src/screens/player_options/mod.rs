@@ -1,0 +1,409 @@
+use crate::act;
+use crate::assets::i18n::{LookupKey, lookup_key, tr, tr_fmt};
+use crate::assets::{self, AssetManager};
+use crate::screens::components::shared::noteskin_model::noteskin_model_actor;
+use crate::screens::components::shared::screen_bar::{
+    self, ScreenBarParams, ScreenBarPosition, ScreenBarTitlePlacement,
+};
+use crate::screens::components::shared::{transitions, visual_style_bg};
+use crate::screens::input as screen_input;
+use crate::screens::{Screen, ScreenAction};
+use deadlib_present::actors::Actor;
+use deadlib_present::color;
+use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, widescale};
+use deadlib_render::BlendMode;
+use deadsync_assets::noteskin::{
+    self, NUM_QUANTIZATIONS, NoteAnimPart, Noteskin, Quantization, SpriteSlot,
+};
+use deadsync_audio_stream as audio;
+use deadsync_chart::{ChartData, STANDARD_DIFFICULTY_COUNT, SongData};
+use deadsync_input::{InputEvent, VirtualAction};
+use deadsync_profile as profile_data;
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::Duration;
+
+// --- Submodules ---
+mod choice;
+mod constants;
+mod inline_nav;
+mod input;
+mod layout;
+mod noteskins;
+mod pane;
+mod panes;
+mod profile;
+mod render;
+mod row;
+mod state;
+mod visibility;
+
+#[cfg(test)]
+mod tests;
+
+// Re-import every submodule so legacy code in this file resolves.
+#[allow(unused_imports)]
+use choice::*;
+#[allow(unused_imports)]
+use constants::*;
+#[allow(unused_imports)]
+use inline_nav::*;
+#[allow(unused_imports)]
+use input::*;
+#[allow(unused_imports)]
+use layout::*;
+#[allow(unused_imports)]
+use noteskins::*;
+#[allow(unused_imports)]
+use pane::*;
+#[allow(unused_imports)]
+use panes::*;
+#[allow(unused_imports)]
+use profile::*;
+#[allow(unused_imports)]
+use render::*;
+#[allow(unused_imports)]
+use row::*;
+#[allow(unused_imports)]
+use state::*;
+#[allow(unused_imports)]
+use visibility::*;
+
+// --- External API ---
+pub use input::{handle_input, update};
+pub use profile::{SpeedMod, SpeedModType, apply_no_cmod_alternative};
+pub use render::{get_actors, push_actors};
+pub use row::{FixedStepchart, RowId};
+pub use state::State;
+
+#[inline(always)]
+fn active_player_indices(active: [bool; PLAYER_SLOTS]) -> impl Iterator<Item = usize> {
+    [P1, P2]
+        .into_iter()
+        .filter(move |&player_idx| active[player_idx])
+}
+
+pub fn init(
+    song: Arc<SongData>,
+    chart_steps_index: [usize; PLAYER_SLOTS],
+    preferred_difficulty_index: [usize; PLAYER_SLOTS],
+    active_color_index: i32,
+    return_screen: Screen,
+    fixed_stepchart: Option<FixedStepchart>,
+) -> State {
+    let session_music_rate = deadsync_profile::compat::get_session_music_rate();
+    let allow_per_player_global_offsets =
+        crate::config::get().machine_allow_per_player_global_offsets;
+    let p1_profile = deadsync_profile::compat::get_for_side(profile_data::PlayerSide::P1);
+    let p2_profile = deadsync_profile::compat::get_for_side(profile_data::PlayerSide::P2);
+
+    let speed_mod_p1 = SpeedMod::from(p1_profile.scroll_speed);
+    let speed_mod_p2 = SpeedMod::from(p2_profile.scroll_speed);
+    let chart_difficulty_index: [usize; PLAYER_SLOTS] = std::array::from_fn(|player_idx| {
+        let steps_idx = chart_steps_index[player_idx];
+        let mut diff_idx =
+            preferred_difficulty_index[player_idx].min(STANDARD_DIFFICULTY_COUNT.saturating_sub(1));
+        if steps_idx < STANDARD_DIFFICULTY_COUNT {
+            diff_idx = steps_idx;
+        }
+        diff_idx
+    });
+
+    let noteskin_names = discover_noteskin_names();
+    let smx_bg_pack_names = discover_smx_pack_names("smx-pad-lights");
+    let smx_judge_pack_names = discover_smx_pack_names("smx-judge-lights");
+    let mut main_row_map = build_rows(
+        &song,
+        &speed_mod_p1,
+        chart_steps_index,
+        preferred_difficulty_index,
+        session_music_rate,
+        OptionsPane::Main,
+        &noteskin_names,
+        &smx_bg_pack_names,
+        &smx_judge_pack_names,
+        return_screen,
+        fixed_stepchart.as_ref(),
+    );
+    let mut display_row_map = build_rows(
+        &song,
+        &speed_mod_p1,
+        chart_steps_index,
+        preferred_difficulty_index,
+        session_music_rate,
+        OptionsPane::Display,
+        &noteskin_names,
+        &smx_bg_pack_names,
+        &smx_judge_pack_names,
+        return_screen,
+        fixed_stepchart.as_ref(),
+    );
+    let mut advanced_row_map = build_rows(
+        &song,
+        &speed_mod_p1,
+        chart_steps_index,
+        preferred_difficulty_index,
+        session_music_rate,
+        OptionsPane::Advanced,
+        &noteskin_names,
+        &smx_bg_pack_names,
+        &smx_judge_pack_names,
+        return_screen,
+        fixed_stepchart.as_ref(),
+    );
+    let mut uncommon_row_map = build_rows(
+        &song,
+        &speed_mod_p1,
+        chart_steps_index,
+        preferred_difficulty_index,
+        session_music_rate,
+        OptionsPane::Uncommon,
+        &noteskin_names,
+        &smx_bg_pack_names,
+        &smx_judge_pack_names,
+        return_screen,
+        fixed_stepchart.as_ref(),
+    );
+    let player_profiles = [p1_profile.clone(), p2_profile.clone()];
+    // Each `BitmaskBinding` lives on exactly one pane's row, and
+    // `apply_derived_masks` is a pure function of `profile`, so calling
+    // `apply_profile_defaults` once per (pane, player) with the same
+    // `&mut PlayerOptionMasks` accumulates writes safely without needing
+    // a per-pane merge step.
+    let mut p1_masks = PlayerOptionMasks::default();
+    let mut p2_masks = PlayerOptionMasks::default();
+    apply_profile_defaults(&mut main_row_map, &player_profiles[P1], P1, &mut p1_masks);
+    apply_profile_defaults(&mut main_row_map, &player_profiles[P2], P2, &mut p2_masks);
+    apply_profile_defaults(
+        &mut display_row_map,
+        &player_profiles[P1],
+        P1,
+        &mut p1_masks,
+    );
+    apply_profile_defaults(
+        &mut display_row_map,
+        &player_profiles[P2],
+        P2,
+        &mut p2_masks,
+    );
+    apply_profile_defaults(
+        &mut advanced_row_map,
+        &player_profiles[P1],
+        P1,
+        &mut p1_masks,
+    );
+    apply_profile_defaults(
+        &mut advanced_row_map,
+        &player_profiles[P2],
+        P2,
+        &mut p2_masks,
+    );
+    apply_profile_defaults(
+        &mut uncommon_row_map,
+        &player_profiles[P1],
+        P1,
+        &mut p1_masks,
+    );
+    apply_profile_defaults(
+        &mut uncommon_row_map,
+        &player_profiles[P2],
+        P2,
+        &mut p2_masks,
+    );
+
+    let cols_per_player = deadsync_profile::compat::get_session_play_style().cols_per_player();
+    let mut initial_noteskin_names = vec![profile_data::NoteSkin::DEFAULT_NAME.to_string()];
+    for profile in &player_profiles {
+        push_noteskin_name_once(&mut initial_noteskin_names, &profile.noteskin);
+        if let Some(skin) = profile.mine_noteskin.as_ref() {
+            push_noteskin_name_once(&mut initial_noteskin_names, skin);
+        }
+        if let Some(skin) = profile.receptor_noteskin.as_ref() {
+            push_noteskin_name_once(&mut initial_noteskin_names, skin);
+        }
+        if let Some(skin) = profile.tap_explosion_noteskin.as_ref() {
+            push_noteskin_name_once(&mut initial_noteskin_names, skin);
+        }
+    }
+    let mut noteskin_cache = build_noteskin_cache(cols_per_player, &initial_noteskin_names);
+    let noteskin_previews: [PlayerNoteskinPreviews; PLAYER_SLOTS] = std::array::from_fn(|i| {
+        let profile_noteskin = &player_profiles[i].noteskin;
+        PlayerNoteskinPreviews {
+            base: cached_or_load_noteskin(&mut noteskin_cache, profile_noteskin, cols_per_player),
+            mine: resolved_noteskin_override_preview(
+                &mut noteskin_cache,
+                profile_noteskin,
+                player_profiles[i].mine_noteskin.as_ref(),
+                cols_per_player,
+            ),
+            receptor: resolved_noteskin_override_preview(
+                &mut noteskin_cache,
+                profile_noteskin,
+                player_profiles[i].receptor_noteskin.as_ref(),
+                cols_per_player,
+            ),
+            tap_explosion: resolved_tap_explosion_preview(
+                &mut noteskin_cache,
+                profile_noteskin,
+                player_profiles[i].tap_explosion_noteskin.as_ref(),
+                cols_per_player,
+            ),
+        }
+    });
+    let noteskin = NoteskinState {
+        cache: noteskin_cache,
+        previews: noteskin_previews,
+    };
+    let active = session_active_players();
+    let main_row_tweens = init_row_tweens(
+        &main_row_map,
+        [0; PLAYER_SLOTS],
+        active,
+        [p1_masks, p2_masks],
+        allow_per_player_global_offsets,
+    );
+    let mut panes = [
+        PaneState::new(main_row_map),
+        PaneState::new(display_row_map),
+        PaneState::new(advanced_row_map),
+        PaneState::new(uncommon_row_map),
+    ];
+    panes[OptionsPane::Main.index()].row_tweens = main_row_tweens;
+    panes[OptionsPane::Main.index()].arcade_row_focus = [true; PLAYER_SLOTS];
+    let mut state = State {
+        song,
+        return_screen,
+        fixed_stepchart,
+        chart_steps_index,
+        chart_difficulty_index,
+        panes,
+        option_masks: [p1_masks, p2_masks],
+        active_color_index,
+        speed_mod: [speed_mod_p1, speed_mod_p2],
+        music_rate: session_music_rate,
+        current_pane: OptionsPane::Main,
+        bg: visual_style_bg::State::new(),
+        nav_input: [PlayerNavInput::default(); PLAYER_SLOTS],
+        start_input: [PlayerStartInput::default(); PLAYER_SLOTS],
+        allow_per_player_global_offsets,
+        player_profiles,
+        noteskin,
+        preview_time: 0.0,
+        preview_beat: 0.0,
+        help_anim_time: [0.0; PLAYER_SLOTS],
+        combo_preview_count: 0,
+        combo_preview_elapsed: 0.0,
+        pane_transition: PaneTransition::None,
+        menu_lr_chord: screen_input::MenuLrChordTracker::default(),
+    };
+    sync_speed_mod_type_rows(&mut state);
+    state
+}
+
+fn sync_speed_mod_type_row(row_map: &mut RowMap, speed_mod: &[SpeedMod; PLAYER_SLOTS]) {
+    let Some(row) = row_map.get_mut(RowId::TypeOfSpeedMod) else {
+        return;
+    };
+    for player_idx in 0..PLAYER_SLOTS {
+        row.selected_choice_index[player_idx] = speed_mod[player_idx]
+            .mod_type
+            .choice_index()
+            .min(row.choices.len().saturating_sub(1));
+    }
+}
+
+pub fn sync_speed_mod_type_rows(state: &mut State) {
+    let speed_mod = state.speed_mod.clone();
+    for pane in &mut state.panes {
+        sync_speed_mod_type_row(&mut pane.row_map, &speed_mod);
+    }
+}
+
+pub fn in_transition() -> (Vec<Actor>, f32) {
+    transitions::fade_in_black(TRANSITION_IN_DURATION, 1100)
+}
+
+pub fn out_transition() -> (Vec<Actor>, f32) {
+    transitions::fade_out_black(TRANSITION_OUT_DURATION, 1200)
+}
+
+/// Per-side live state for the Pad Light Brightness preview, indexed by player
+/// slot (0 = P1, 1 = P2): `Some(percent)` for an active player whose cursor is
+/// currently on the Pad Light Brightness row, else `None`. The app loop drives a
+/// rainbow preview on that side's pad while the value is being tuned. The row's
+/// choices are `0..=100%`, so the selected choice index is the percent.
+pub fn pad_light_brightness_preview(state: &State) -> [Option<u8>; PLAYER_SLOTS] {
+    let pane = state.pane();
+    let active = session_active_players();
+    let mut preview: [Option<u8>; PLAYER_SLOTS] = std::array::from_fn(|idx| {
+        if !active[idx] {
+            return None;
+        }
+        let row = pane.row_map.get_at(pane.selected_row[idx])?;
+        (row.id == RowId::PadLightBrightness).then(|| row.selected_choice_index[idx].min(100) as u8)
+    });
+    // In Doubles a single player owns BOTH pads, so the brightness value applies
+    // to both (see `pad_light_brightness_for_pad`). Mirror the lone active side's
+    // preview onto the other pad so both light up while the value is being tuned.
+    if matches!(
+        deadsync_profile::compat::get_session_play_style(),
+        profile_data::PlayStyle::Double
+    ) && let Some(pct) = preview.iter().flatten().copied().next()
+    {
+        preview = [Some(pct); PLAYER_SLOTS];
+    }
+    preview
+}
+
+#[inline(always)]
+fn session_active_players() -> [bool; PLAYER_SLOTS] {
+    let play_style = deadsync_profile::compat::get_session_play_style();
+    let side = deadsync_profile::compat::get_session_player_side();
+    let joined = [
+        deadsync_profile::compat::is_session_side_joined(profile_data::PlayerSide::P1),
+        deadsync_profile::compat::is_session_side_joined(profile_data::PlayerSide::P2),
+    ];
+    let joined_count = usize::from(joined[P1]) + usize::from(joined[P2]);
+    match play_style {
+        profile_data::PlayStyle::Versus => {
+            if joined_count > 0 {
+                joined
+            } else {
+                [true, true]
+            }
+        }
+        profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => {
+            if joined_count == 1 {
+                joined
+            } else {
+                match side {
+                    profile_data::PlayerSide::P1 => [true, false],
+                    profile_data::PlayerSide::P2 => [false, true],
+                }
+            }
+        }
+    }
+}
+
+#[inline(always)]
+fn arcade_options_navigation_active() -> bool {
+    crate::config::get().arcade_options_navigation
+}
+
+#[inline(always)]
+const fn pane_uses_arcade_next_row(pane: OptionsPane) -> bool {
+    !matches!(pane, OptionsPane::Main)
+}
+
+#[inline(always)]
+fn session_persisted_player_idx() -> usize {
+    let play_style = deadsync_profile::compat::get_session_play_style();
+    let side = deadsync_profile::compat::get_session_player_side();
+    match play_style {
+        profile_data::PlayStyle::Versus => P1,
+        profile_data::PlayStyle::Single | profile_data::PlayStyle::Double => match side {
+            profile_data::PlayerSide::P1 => P1,
+            profile_data::PlayerSide::P2 => P2,
+        },
+    }
+}

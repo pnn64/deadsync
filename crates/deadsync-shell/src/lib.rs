@@ -1,3 +1,5 @@
+pub mod app;
+
 mod command;
 mod course;
 mod diagnostics;
@@ -48,8 +50,11 @@ pub use course::{
     build_course_summary_score_info, build_course_summary_stage, course_display_timing_for_run,
     course_total_seconds, merge_course_score_columns, score_info_from_stage,
 };
-pub use deadsync_config::frame_pacing::VisibleStutterSample;
-pub use diagnostics::{TimingHealth, timing_health};
+pub use deadsync_screens::diagnostics::{
+    FrameStatsSample, FrameStatsSummary, HISTOGRAM_BINS, OverlayAnchor, OverlayStyle, TimingHealth,
+    VisibleStutterSample, histogram,
+};
+pub use diagnostics::timing_health;
 pub use dynamic_media::DynamicMedia;
 pub use frame_loop::{
     FrameLoopState, FrameScreenStepContext, FrameScreenStepPlan, FrameWaitControl, FrameWaitPlan,
@@ -58,10 +63,9 @@ pub use frame_loop::{
 pub use frame_pacing_trace::GameplayPacingTrace;
 pub use frame_stats::{
     DecayingHist, EWMA_ALPHA_MEAN, EWMA_ALPHA_VAR, EwmaStats, FrameStatsController, FrameStatsLong,
-    FrameStatsMetrics, FrameStatsSample, FrameStatsSummary, FrameStatsSummaryContext,
-    FrameStatsView, HISTOGRAM_BINS, OverlayAnchor, OverlayStyle, default_overlay_anchor,
-    frame_stats_summary, frame_stats_target_us, frame_stats_two_player, histogram,
-    next_overlay_anchor, percentile_us,
+    FrameStatsMetrics, FrameStatsSummaryContext, FrameStatsView, default_overlay_anchor,
+    frame_stats_summary, frame_stats_target_us, frame_stats_two_player, next_overlay_anchor,
+    percentile_us,
 };
 pub use frame_stutter::{ComposeBreakdown, trace_frame_stutter};
 pub use gameplay_entry::{

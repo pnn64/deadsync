@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0"
 
+[features]
+test-support = []
+
 [dependencies]
 deadsync-audio = { path = "../deadsync-audio" }
 deadsync-audio-backend-native = { path = "../deadsync-audio-backend-native" }

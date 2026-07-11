@@ -1,6 +1,5 @@
 pub mod audio_folder;
 pub mod dynamic_media;
-pub mod i18n;
 pub mod manager;
 pub mod media_cache;
 pub mod noteskin;
@@ -8,7 +7,6 @@ pub mod present_dsl;
 pub mod screenshot;
 pub mod song_lua;
 pub mod textures;
-pub mod visual_styles;
 
 pub use deadlib_assets::upload::TextureUploadBudget;
 pub use deadlib_assets::{
@@ -20,8 +18,7 @@ pub use deadlib_assets::{
     texture_dims, texture_handle, texture_registry_generation, texture_source_dims_from_real,
     texture_source_frame_dims_from_real,
 };
-pub use deadsync_theme::{FontRole, machine_font_key, machine_font_key_for_text};
-pub use manager::{AssetManager, current_machine_font_key, current_machine_font_key_for_text};
+pub use manager::AssetManager;
 pub use textures::{
     canonical_texture_key, held_miss_texture_choices, hold_judgment_texture_choices,
     judgment_texture_choices,

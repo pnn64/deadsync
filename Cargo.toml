@@ -50,6 +50,7 @@ members = [
     "crates/deadsync-song-lua",
     "crates/deadsync-smx",
     "crates/deadsync-theme",
+    "crates/deadsync-theme-simply-love",
     "crates/deadsync-updater",
     "crates/deadsync-version",
     "crates/deadlib-video",
@@ -61,7 +62,7 @@ resolver = "3"
 # `version.workspace = true`, so `env!("CARGO_PKG_VERSION")` and
 # `deadsync_version::current()` always agree. Bump THIS line on release.
 [workspace.package]
-version = "0.4.2472"
+version = "0.4.2487"
 
 [[bin]]
 name = "generate_pseudo"
@@ -74,170 +75,29 @@ path = "scripts/replaygain_bench.rs"
 
 [features]
 pipewire-audio = ["deadsync-audio-backend-native/pipewire-audio"]
-dhat-heap = ["dep:dhat"]
-dhat = ["dep:dhat"]
 
 [dependencies]
-deadsync-audio = { path = "crates/deadsync-audio" }
+deadlib-platform = { path = "crates/deadlib-platform" }
 deadsync-audio-analysis = { path = "crates/deadsync-audio-analysis" }
-deadsync-audio-backend-native = { path = "crates/deadsync-audio-backend-native" }
-deadsync-audio-decode = { path = "crates/deadsync-audio-decode" }
+deadsync-audio-backend-native = { path = "crates/deadsync-audio-backend-native", optional = true }
 deadsync-audio-replaygain = { path = "crates/deadsync-audio-replaygain" }
 deadsync-audio-stream = { path = "crates/deadsync-audio-stream" }
-deadsync-chart = { path = "crates/deadsync-chart" }
 deadsync-config = { path = "crates/deadsync-config" }
-deadsync-core = { path = "crates/deadsync-core" }
-deadsync-gameplay = { path = "crates/deadsync-gameplay" }
-deadsync-import = { path = "crates/deadsync-import" }
-deadsync-input = { path = "crates/deadsync-input" }
-deadsync-input-fsr = { path = "crates/deadsync-input-fsr" }
-deadsync-input-native = { path = "crates/deadsync-input-native" }
-deadsync-assets = { path = "crates/deadsync-assets" }
-deadsync-lights = { path = "crates/deadsync-lights" }
-deadsync-net = { path = "crates/deadsync-net" }
-deadsync-notefield = { path = "crates/deadsync-notefield" }
-deadsync-noteskin = { path = "crates/deadsync-noteskin" }
-deadsync-online = { path = "crates/deadsync-online" }
-deadlib-assets = { path = "crates/deadlib-assets" }
-deadlib-platform = { path = "crates/deadlib-platform" }
-deadlib-present = { path = "crates/deadlib-present" }
 deadsync-profile = { path = "crates/deadsync-profile" }
-deadsync-profile-gameplay = { path = "crates/deadsync-profile-gameplay" }
-deadlib-render = { path = "crates/deadlib-render" }
-deadlib-renderer = { path = "crates/deadlib-renderer" }
-deadsync-rules = { path = "crates/deadsync-rules" }
-deadsync-score = { path = "crates/deadsync-score" }
-deadsync-screens = { path = "crates/deadsync-screens" }
 deadsync-shell = { path = "crates/deadsync-shell" }
-deadsync-simfile = { path = "crates/deadsync-simfile" }
-deadsync-song-lua = { path = "crates/deadsync-song-lua" }
-deadsync-smx = { path = "crates/deadsync-smx" }
-deadsync-theme = { path = "crates/deadsync-theme" }
+deadsync-theme-simply-love = { path = "crates/deadsync-theme-simply-love" }
 deadsync-updater = { path = "crates/deadsync-updater" }
 deadsync-version = { path = "crates/deadsync-version" }
-deadlib-video = { path = "crates/deadlib-video" }
-winit = "0.30.13"
 log = "0.4.33"
-image = "0.25.10"
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.150"
-rand = "0.10.1"
-chrono = "0.4.45"
-qrcodegen = "1.8.0"
-mlua = { version = "0.11.6", features = ["lua54", "vendored"] }
-rustc-hash = "2.1.2"
-smallvec = "1.15.2"
-hashbrown = "0.17.1"
 
-# rssp and null-or-die
-rssp = { git = "https://github.com/pnn64/rssp", branch = "main" }
-null-or-die = { git = "https://github.com/pnn64/null-or-die", branch = "main" }
-
-# Math
-glam = "0.33.1"
-bytemuck = { version = "1.25.0", features = ["derive"] }
-
-pollster = "0.4.0"
-
-# Audio
-rubato = "0.16.2"
-
-tungstenite = "0.29.0"
-
-# Unlocks
-zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
-
-# Song cache
-bincode = "2.0.1"
-twox-hash = "2.1.2"
-
-# Native folder picker for choosing an ITGmania game directory during import.
-# Default backends: native Win32 / AppKit, GTK3 on Linux (synchronous API).
-rfd = "0.17.2"
-
-# Localization
-rust-ini = "0.21.3"
-sys-locale = "0.3.2"
-semver = "1.0.28"
-tokio = { version = "1.52.3", features = ["rt"] }
-bitflags = "2.13.0"
-dhat = { version = "0.3.3", optional = true }
-
-# DirectX + Input (Windows)
-[target.'cfg(windows)'.dependencies]
-gpu-allocator = { version = "0.28.0", default-features = false, features = ["std", "d3d12"] }
-windows-core = "0.62.2"
-windows-targets = "0.53.5"
-
-[target.'cfg(all(windows, target_vendor = "win7"))'.dependencies]
-windows = { version = "0.62.2", features = [
-    "Win32_Foundation",
-    "Win32_Media",
-    "Win32_Media_Audio",
-    "Win32_Media_KernelStreaming",
-    "Win32_Media_Multimedia",
-    "Win32_Devices_FunctionDiscovery",
-    "Win32_Graphics_Gdi",
-    "Win32_Devices_HumanInterfaceDevice",
-    "Win32_Devices_Display",
-    "Win32_System_Com",
-    "Win32_System_Com_StructuredStorage",
-    "Win32_System_Performance",
-    "Win32_UI_Input_KeyboardAndMouse",
-    "Win32_UI_Shell_PropertiesSystem",
-    "Win32_UI_WindowsAndMessaging",
-    "Win32_System_Threading",
-    "Win32_System_LibraryLoader",
-    "Win32_System_Variant",
-    "Win32_Storage_FileSystem",
-] }
-
-[target.'cfg(all(windows, not(target_vendor = "win7")))'.dependencies]
-windows = { version = "0.62.2", features = [
-    "Foundation",
-    "Foundation_Collections",
-    "Gaming",
-    "Gaming_Input",
-    "Win32_Foundation",
-    "Win32_Media",
-    "Win32_Media_Audio",
-    "Win32_Media_KernelStreaming",
-    "Win32_Media_Multimedia",
-    "Win32_Devices_FunctionDiscovery",
-    "Win32_Graphics_Gdi",
-    "Win32_Devices_HumanInterfaceDevice",
-    "Win32_Devices_Display",
-    "Win32_System_Com",
-    "Win32_System_Com_StructuredStorage",
-    "Win32_System_Performance",
-    "Win32_UI_Input_KeyboardAndMouse",
-    "Win32_UI_Shell_PropertiesSystem",
-    "Win32_UI_WindowsAndMessaging",
-    "Win32_System_Threading",
-    "Win32_System_LibraryLoader",
-    "Win32_System_Variant",
-    "Win32_System_WinRT",
-    "Win32_Storage_FileSystem",
-] }
-
-[target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
-libc = "0.2.186"
-xcb = { version = "1.7.0", features = ["dpms", "randr", "screensaver"] }
-smithay-client-toolkit = { version = "0.20.0", default-features = false }
-
-[target.'cfg(target_os = "freebsd")'.dependencies]
-hidparser = "1.0.3"
-
-[target.'cfg(target_os = "macos")'.dependencies]
-coreaudio = { package = "coreaudio-rs", version = "0.14.2" }
-libc = "0.2.186"
-mach2 = "0.6.0"
-objc2 = { version = "0.6.4", features = ["relax-sign-encoding"] }
-objc2-app-kit = "0.3.2"
-objc2-core-audio = "0.3.2"
-objc2-core-foundation = "0.3.2"
-objc2-core-graphics = "0.3.2"
-objc2-foundation = "0.3.2"
+[dev-dependencies]
+deadlib-present = { path = "crates/deadlib-present" }
+deadsync-assets = { path = "crates/deadsync-assets" }
+deadsync-chart = { path = "crates/deadsync-chart" }
+deadsync-core = { path = "crates/deadsync-core" }
+deadsync-rules = { path = "crates/deadsync-rules" }
+deadsync-score = { path = "crates/deadsync-score" }
+deadsync-simfile = { path = "crates/deadsync-simfile" }
 
 [patch.crates-io]
 # hidapi's windows-native backend imports GetOverlappedResultEx, which is

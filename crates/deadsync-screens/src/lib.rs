@@ -11,6 +11,7 @@ use deadsync_simfile::sync_offset::SongOffsetSyncChange;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+pub mod diagnostics;
 pub mod input;
 pub mod overscan;
 pub mod pad_config;

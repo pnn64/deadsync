@@ -167,7 +167,7 @@ pub fn initialize_renderer(
     if config.backend_type == BackendType::Software {
         backend.configure_software_threads(software_thread_count(config.software_renderer_threads));
     }
-    assets.load_initial_assets(&mut backend)?;
+    assets.load_initial_assets(&mut backend, deadsync_theme_simply_love::asset_manifest())?;
     dynamic_media.preload_profile_avatars(assets, &mut backend);
 
     Ok(RendererInitResult {
