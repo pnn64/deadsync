@@ -888,6 +888,10 @@ const NOTEFIELD_CRATE_FORBIDDEN_TOKENS: &[&str] = &[
     "deadlib_video",
     "deadsync-input-native",
     "deadsync_input_native",
+    "deadsync-input =",
+    "deadsync_input::",
+    "deadsync-audio",
+    "deadsync_audio",
     "deadsync-audio-stream",
     "deadsync_audio_stream",
     "deadlib-platform",
@@ -4179,8 +4183,7 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
     );
 
     for call in [
-        "scroll_travel(ScrollTravelRequest",
-        "field_layout(FieldLayoutRequest",
+        "prepare_notefield(&request)",
         "compose_measure_lines(",
         "compose_column_feedback(",
         "compose_receptor_actors(",
@@ -4189,7 +4192,6 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
         "compose_judgment_feedback(",
         "compose_combo_feedback(",
         "compose_error_bar(",
-        "notefield_frame_plan(NotefieldFramePlanRequest",
     ] {
         assert!(
             source.contains(call),
@@ -4198,6 +4200,14 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
     }
 
     for (path, definition) in [
+        (
+            "crates/deadsync-notefield/src/compose.rs",
+            "pub struct NotefieldComposeRequest",
+        ),
+        (
+            "crates/deadsync-notefield/src/compose.rs",
+            "pub fn prepare_notefield",
+        ),
         (
             "crates/deadsync-notefield/src/notes.rs",
             "pub fn scroll_travel",
@@ -4256,6 +4266,78 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
         assert!(
             owner.contains(definition),
             "canonical notefield owner {path} is missing {definition}"
+        );
+    }
+
+    let compose = fs::read_to_string(root.join("crates/deadsync-notefield/src/compose.rs"))
+        .expect("canonical notefield request should be readable");
+    for field in [
+        "pub placement: FieldPlacement",
+        "pub view: ViewOverride",
+        "pub geometry: NotefieldGeometry",
+        "pub visual: NotefieldVisualState",
+        "pub chart: NotefieldChartView",
+        "pub notes: &'a [Note]",
+        "pub noteskin: NotefieldNoteskinView",
+        "pub song_lua: NotefieldSongLuaView",
+        "pub options: NotefieldOptions",
+        "pub arrow_effect_time_s: f32",
+        "pub hold_explosion_enabled: bool",
+        "pub error_bar_modes: ErrorBarModes",
+        "pub measure_counter: Option<MeasureCounterOptions>",
+        "pub target_arrow_pixel_size: f32",
+    ] {
+        assert!(
+            compose.contains(field),
+            "canonical notefield request is missing {field}"
+        );
+    }
+
+    let prepared = source
+        .find("let Some(prepared) = prepare_notefield(&request)")
+        .expect("Simply Love should prepare the canonical request once");
+    let actor_emission = &source[prepared..];
+    for profile_field in [
+        "profile.hide_targets",
+        "profile.hide_combo",
+        "profile.hide_combo_explosions",
+        "profile.judgment_back",
+        "profile.measure_cues",
+        "profile.column_cues",
+        "profile.crossover_cues",
+        "profile.column_flash_on_miss",
+        "profile.column_countdown",
+        "profile.error_bar_trim",
+        "profile.error_bar_multi_tick",
+        "profile.short_average_error_bar_enabled",
+        "profile.center_tick",
+        "profile.error_ms_display",
+        "profile.long_error_bar_enabled",
+        "profile.long_error_bar_intensity",
+        "profile.measure_counter_lookahead",
+        "profile.measure_counter_vert",
+        "profile.measure_counter_left",
+        "profile.broken_run",
+        "profile.run_timer",
+        "profile.mini_indicator_position",
+        "profile.mini_indicator_size",
+    ] {
+        assert!(
+            !actor_emission.contains(profile_field),
+            "Simply Love actor emission bypasses NotefieldOptions via {profile_field}"
+        );
+    }
+    assert!(source.contains("target_arrow_pixel_size: TARGET_ARROW_PIXEL_SIZE"));
+    for concrete in [
+        "deadsync_profile",
+        "deadsync_assets",
+        "deadlib_platform",
+        "Instant::now",
+        "winit",
+    ] {
+        assert!(
+            !compose.contains(concrete),
+            "canonical notefield request imports concrete/runtime token {concrete}"
         );
     }
 

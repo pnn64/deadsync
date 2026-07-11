@@ -1,5 +1,6 @@
 mod actor_builder;
 mod combo_feedback;
+mod compose;
 mod display_mods;
 mod error_bar;
 mod feedback;
@@ -19,6 +20,7 @@ mod transforms;
 
 pub use actor_builder::*;
 pub use combo_feedback::*;
+pub use compose::*;
 pub use display_mods::*;
 pub use error_bar::*;
 pub use feedback::*;

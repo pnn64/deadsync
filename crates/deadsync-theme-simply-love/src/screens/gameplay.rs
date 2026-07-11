@@ -9061,6 +9061,7 @@ pub fn push_actors(
                 combo_actors,
             } = notefield::build_bundles(
                 state,
+                player_idx,
                 arrow_effect_time_s,
                 &state.noteskin_assets,
                 &state.notefield_model_cache,

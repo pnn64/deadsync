@@ -8,32 +8,28 @@ use deadlib_present::color;
 use deadlib_present::space::*;
 use deadlib_render::{BlendMode, TexturedMeshVertex};
 use deadsync_assets::noteskin::SpriteSlot;
-use deadsync_core::input::{MAX_COLS, MAX_PLAYERS};
+use deadsync_core::input::MAX_PLAYERS;
 use deadsync_core::note::NoteType;
 use deadsync_gameplay::{
-    AccelEffects, AppearanceEffects, FantasticWindowOptions, GameplayErrorBarTrim,
-    TapExplosionOptions, VisualEffects, blue_fantastic_window_ms,
-    gameplay_error_bar_trim_max_window_ix, hold_explosion_active,
-    hold_explosion_enabled_for_options, hold_head_render_flags, song_lua_column_y_offset,
+    AppearanceEffects, FantasticWindowOptions, GameplayErrorBarTrim, TapExplosionOptions,
+    VisualEffects, blue_fantastic_window_ms, gameplay_error_bar_trim_max_window_ix,
+    hold_explosion_active, hold_explosion_enabled_for_options, hold_head_render_flags,
     song_lua_note_hidden,
 };
 use deadsync_notefield::{
-    AccelYParams, BuiltNotefield, ColumnFeedbackRequest, ComboFeedbackRequest,
-    ComboMilestoneAssets, CounterHudRequest, ErrorBarComposeRequest, ErrorBarModes, ErrorBarState,
-    FieldLayoutRequest, HoldEntryPlanRequest, HudLayoutOffsets, HudLayoutParams, IndicatorSprite,
-    JudgmentFeedbackRequest, JudgmentTiltParams, LayoutMiniIndicatorPosition,
-    MeasureComposeRequest, MeasureLineMode, MiniIndicatorRequest, ModelMeshCache, NoteAlphaParams,
-    NoteXParams, NotefieldFrameFeatures, NotefieldFramePlanRequest, ReceptorActorsRequest,
-    ReceptorPress, ScrollTravelRequest, TapJudgmentFeedback, TapJudgmentRowsParams,
-    TapJudgmentSprite, TornadoBounds, VisualEffectParams, ZmodLayoutParams, actor_with_world_z,
-    appearance_needs_rows, appearance_note_actor_alpha, appearance_note_glow, beat_factor,
-    bottom_cap_uv_window, clipped_hold_body_bounds, compose_column_feedback,
-    compose_combo_feedback, compose_counter_hud, compose_error_bar, compose_judgment_feedback,
-    compose_measure_lines, compose_mini_indicator, compose_receptor_actors,
-    compute_invert_distances, compute_tornado_bounds,
-    effective_mini_value as crate_effective_mini_value,
-    field_effect_height as field_effect_height_for_screen, field_layout, fill_lane_col_offsets,
-    for_each_visible_hold_index, for_each_visible_note_index,
+    BuiltNotefield, ColumnFeedbackRequest, ComboFeedbackRequest, ComboMilestoneAssets,
+    CounterHudRequest, ErrorBarComposeRequest, ErrorBarModes, ErrorBarState, HoldEntryPlanRequest,
+    IndicatorSprite, JudgmentFeedbackRequest, JudgmentTiltParams, LayoutMiniIndicatorPosition,
+    MeasureComposeRequest, MeasureCounterOptions, MeasureLineMode, MiniIndicatorRequest,
+    ModelMeshCache, NoteAlphaParams, NoteXParams, NotefieldChartView, NotefieldComposeRequest,
+    NotefieldFrameFeatures, NotefieldGeometry, NotefieldNoteskinView, NotefieldOptions,
+    NotefieldSongLuaView, NotefieldVisualState, ReceptorActorsRequest, ReceptorPress,
+    TapJudgmentFeedback, TapJudgmentRowsParams, TapJudgmentSprite, TornadoBounds,
+    VisualEffectParams, ZmodLayoutParams, actor_with_world_z, appearance_needs_rows,
+    appearance_note_actor_alpha, appearance_note_glow, bottom_cap_uv_window,
+    clipped_hold_body_bounds, compose_column_feedback, compose_combo_feedback, compose_counter_hud,
+    compose_error_bar, compose_judgment_feedback, compose_measure_lines, compose_mini_indicator,
+    compose_receptor_actors, for_each_visible_hold_index, for_each_visible_note_index,
     gameplay_visual_effect_params as visual_effect_params, hold_body_bottom_for_tail_cap,
     hold_body_segment_budget, hold_entry_head_beat, hold_entry_plan, hold_glow_color,
     hold_overlaps_visible_window, hold_parts_for_note_type, hold_segment_pose, hold_strip_actor,
@@ -41,12 +37,12 @@ use deadsync_notefield::{
     hold_tail_cap_bounds, itg_actor_glow_alpha, judgment_actor_zoom,
     judgment_tilt_rotation_deg as crate_judgment_tilt_rotation_deg, maybe_flip_uv_vert,
     maybe_mirror_uv_horiz_for_reverse_flipped, mine_hides_after_resolution, mine_part,
-    note_world_z_for_bumpy, note_x_offset as crate_note_x_offset, notefield_frame_plan,
-    notefield_view_proj, noteskin_model_actor_from_draw_cached, offset_center,
+    note_world_z_for_bumpy, note_x_offset as crate_note_x_offset, notefield_view_proj,
+    noteskin_model_actor_from_draw_cached, offset_center, prepare_notefield,
     receptor_row_center as crate_receptor_row_center, scale_cap_to_arrow, scale_effect_size,
-    scale_sprite_to_arrow, scroll_travel, share_actor_range, song_lua_note_model_draw,
-    song_time_ns_to_seconds, tap_judgment_rows as crate_tap_judgment_rows, tap_part_for_note_type,
-    tap_replacement_head, top_cap_rotation_deg, translated_uv_rect, visual_arrow_effect_zoom,
+    scale_sprite_to_arrow, share_actor_range, song_lua_note_model_draw,
+    tap_judgment_rows as crate_tap_judgment_rows, tap_part_for_note_type, tap_replacement_head,
+    top_cap_rotation_deg, translated_uv_rect, visual_arrow_effect_zoom,
     visual_confusion_rotation_deg, visual_hold_body_needs_z_buffer, visual_note_rotation_z,
     visual_pulse_zoom_for_y, visual_tiny_zoom, visual_use_legacy_hold_sprites, zmod_broken_run_end,
 };
@@ -116,14 +112,14 @@ const COLUMN_COUNTDOWN_PREWARM_CAP: i32 = 64;
 const RUN_TIMER_PREWARM_CAP_S: i32 = 600;
 
 #[inline(always)]
-fn judgment_tilt_rotation_deg(profile: &profile_data::Profile, judgment: &Judgment) -> f32 {
+fn judgment_tilt_rotation_deg(options: &NotefieldOptions, judgment: &Judgment) -> f32 {
     crate_judgment_tilt_rotation_deg(JudgmentTiltParams {
-        enabled: profile.judgment_tilt,
+        enabled: options.judgment_tilt_enabled,
         grade: judgment.grade,
         time_error_ms: judgment.time_error_ms,
-        min_threshold_ms: profile.tilt_min_threshold_ms as f32,
-        max_threshold_ms: profile.tilt_max_threshold_ms as f32,
-        multiplier: profile.tilt_multiplier,
+        min_threshold_ms: options.judgment_tilt_min_ms,
+        max_threshold_ms: options.judgment_tilt_max_ms,
+        multiplier: options.judgment_tilt_multiplier,
     })
 }
 
@@ -146,22 +142,6 @@ fn note_slot_base_size(slot: &SpriteSlot, scale: f32) -> [f32; 2] {
     }
     let logical = slot.logical_size();
     [logical[0] * scale, logical[1] * scale]
-}
-
-#[inline(always)]
-fn field_effect_height(tilt: f32) -> f32 {
-    field_effect_height_for_screen(screen_height(), tilt)
-}
-
-#[inline(always)]
-fn accel_y_params(accel: AccelEffects) -> AccelYParams {
-    AccelYParams {
-        boost: accel.boost,
-        brake: accel.brake,
-        wave: accel.wave,
-        boomerang: accel.boomerang,
-        expand: accel.expand,
-    }
 }
 
 #[inline(always)]
@@ -393,15 +373,6 @@ fn calc_note_rotation_z(
 }
 
 #[inline(always)]
-fn effective_mini_value(
-    profile: &profile_data::Profile,
-    visual: VisualEffects,
-    mini_percent: f32,
-) -> f32 {
-    crate_effective_mini_value(mini_percent, profile.mini_percent as f32, visual.big)
-}
-
-#[inline(always)]
 fn column_flash_dimmed(brightness: profile_data::ColumnFlashBrightness) -> bool {
     matches!(brightness, profile_data::ColumnFlashBrightness::Dimmed)
 }
@@ -447,7 +418,7 @@ fn judgment_frame_size(texture_key: &str) -> [f32; 2] {
 
 #[inline(always)]
 fn tap_judgment_rows(
-    profile: &profile_data::Profile,
+    options: &NotefieldOptions,
     judgment: &Judgment,
     frame_rows: usize,
 ) -> (usize, Option<usize>) {
@@ -456,10 +427,10 @@ fn tap_judgment_rows(
         window: judgment.window,
         time_error_ms: judgment.time_error_ms,
         frame_rows,
-        show_fa_plus_window: profile.show_fa_plus_window,
-        fa_plus_10ms_blue_window: profile.fa_plus_10ms_blue_window,
-        split_15_10ms: profile.split_15_10ms,
-        custom_fantastic_window: profile.custom_fantastic_window,
+        show_fa_plus_window: options.show_fa_plus_window,
+        fa_plus_10ms_blue_window: options.fa_plus_10ms_blue_window,
+        split_15_10ms: options.split_15_10ms,
+        custom_fantastic_window: options.custom_fantastic_window,
     })
 }
 
@@ -479,7 +450,11 @@ fn error_bar_trim_max_window_ix(trim: profile_data::ErrorBarTrim) -> usize {
 }
 
 #[inline(always)]
-fn zmod_layout_params(profile: &profile_data::Profile, style: NotefieldStyle) -> ZmodLayoutParams {
+fn zmod_layout_params(
+    profile: &profile_data::Profile,
+    style: NotefieldStyle,
+    has_judgment_texture: bool,
+) -> ZmodLayoutParams {
     // Zmod SL-Layout.lua: hasErrorBar checks multiple flags.
     let mut error_bar_mask = profile.error_bar_active_mask;
     if error_bar_mask.is_empty() {
@@ -496,7 +471,7 @@ fn zmod_layout_params(profile: &profile_data::Profile, style: NotefieldStyle) ->
     ZmodLayoutParams {
         judgment_height: style.judgment_height,
         has_error_bar,
-        has_judgment_texture: resolved_judgment_texture(profile).is_some(),
+        has_judgment_texture,
         error_bar_up: profile.error_bar_up,
         has_measure_counter: profile.measure_counter != profile_data::MeasureCounter::None,
         measure_counter_up: profile.measure_counter_up,
@@ -520,17 +495,9 @@ fn hold_explosion_enabled(profile: &profile_data::Profile) -> bool {
     })
 }
 
-#[inline(always)]
-fn song_lua_hides_note(state: &State, player: usize, local_col: usize, beat: f32) -> bool {
-    song_lua_note_hidden(
-        &state.song_lua_visuals().note_hides[player],
-        local_col,
-        beat,
-    )
-}
-
 pub(crate) fn build_bundles(
     state: &State,
+    player_idx: usize,
     arrow_effect_time_s: f32,
     noteskin_assets: &GameplayNoteskinAssets,
     model_caches: &[RefCell<ModelMeshCache>; MAX_PLAYERS],
@@ -549,15 +516,11 @@ pub(crate) fn build_bundles(
     let hold_judgment_texture = resolved_hold_judgment_texture(profile);
     let held_miss_texture = resolved_held_miss_texture(profile);
 
-    let measure_line_mode = if view.edit_beat_bars {
-        MeasureLineMode::Edit
-    } else {
-        match profile.measure_lines {
-            profile_data::MeasureLines::Off => MeasureLineMode::Off,
-            profile_data::MeasureLines::Measure => MeasureLineMode::Measure,
-            profile_data::MeasureLines::Quarter => MeasureLineMode::Quarter,
-            profile_data::MeasureLines::Eighth => MeasureLineMode::Eighth,
-        }
+    let measure_line_mode = match profile.measure_lines {
+        profile_data::MeasureLines::Off => MeasureLineMode::Off,
+        profile_data::MeasureLines::Measure => MeasureLineMode::Measure,
+        profile_data::MeasureLines::Quarter => MeasureLineMode::Quarter,
+        profile_data::MeasureLines::Eighth => MeasureLineMode::Eighth,
     };
     let error_bar_mask = {
         let mut mask = profile.error_bar_active_mask;
@@ -567,44 +530,6 @@ pub(crate) fn build_bundles(
         }
         mask
     };
-    let Some(frame_plan) = notefield_frame_plan(NotefieldFramePlanRequest {
-        placement,
-        num_players: state.num_players(),
-        cols_per_player: state.cols_per_player(),
-        total_cols: state.num_cols(),
-        features: NotefieldFrameFeatures {
-            measure_line_mode,
-            measure_cues: profile.measure_cues,
-            column_cues: profile.column_cues,
-            crossover_cues: profile.crossover_cues,
-            crossover_countdown: profile.column_countdown,
-            column_flash: profile.column_flash_on_miss,
-            error_bar: !error_bar_mask.is_empty(),
-            error_bar_text: error_bar_mask.contains(profile_data::ErrorBarMask::TEXT),
-            held_miss_asset: held_miss_texture.is_some(),
-            combo_visible: !profile.hide_combo && !view.hide_combo,
-        },
-    }) else {
-        return BuiltNotefield::empty(screen_center_x());
-    };
-    let player_idx = frame_plan.player_idx;
-    let col_start = frame_plan.col_start;
-    let num_cols = frame_plan.num_cols;
-    let col_end = col_start + num_cols;
-    actors.reserve(frame_plan.field_actor_reserve);
-    hud_actors.reserve(frame_plan.hud_actor_reserve);
-
-    // Use the cached field_zoom from gameplay state so visual layout and
-    // scroll math share the exact same scaling as gameplay. Practice edit
-    // mode overrides this to match ScreenEdit's half-scale edit field.
-    let field_zoom = view
-        .field_zoom
-        .unwrap_or_else(|| state.field_zoom_for_player(player_idx));
-    let draw_distance_before_targets = state.notefield_draw_distance_before_targets(player_idx);
-    let draw_distance_after_targets = state.notefield_draw_distance_after_targets(player_idx);
-    let scroll_speed = view
-        .scroll_speed
-        .unwrap_or_else(|| state.effective_scroll_speed_for_player(player_idx));
     let p = &state.players()[player_idx];
     let mut model_cache = model_caches[player_idx].borrow_mut();
 
@@ -637,69 +562,216 @@ pub(crate) fn build_bundles(
         .error_bar_offset_y
         .clamp(profile_data::HUD_OFFSET_MIN, profile_data::HUD_OFFSET_MAX)
         as f32;
+    let judgment_texture = resolved_judgment_texture(profile);
+    let has_judgment_texture = judgment_texture.is_some();
+    let elapsed_screen = state.total_elapsed_in_screen();
+    let accel = effective_accel_effects_for_player(state, player_idx);
     let scroll = effective_scroll_effects_for_player(state, player_idx);
     let perspective = effective_perspective_effects_for_player(state, player_idx);
-    let column_reverse_percent: [f32; MAX_COLS] = from_fn(|i| {
-        if i >= num_cols {
-            return 0.0;
+    let visual = effective_visual_effects_for_player(state, player_idx);
+    let appearance = state.effective_appearance_effects_for_player(player_idx);
+    let visibility = state.effective_visibility_effects_for_player(player_idx);
+    let mini_percent = effective_mini_percent_for_player(state, player_idx);
+    let spacing_mult = effective_spacing_multiplier_for_player(state, player_idx);
+    let player_col_start = player_idx.saturating_mul(state.cols_per_player());
+    let column_dirs = from_fn(|local_col| {
+        let col = player_col_start + local_col;
+        if local_col >= state.cols_per_player() || col >= state.num_cols() {
+            1.0
+        } else {
+            state.notefield_column_scroll_dir(col)
         }
-        scroll.reverse_percent_for_column(i, num_cols)
     });
-    let column_dirs: [f32; MAX_COLS] = from_fn(|i| {
-        if i >= num_cols {
-            return 1.0;
-        }
-        state.notefield_column_scroll_dir(col_start + i)
-    });
-    let current_time_ns = state.visible_music_time_ns(player_idx);
-    let current_time = song_time_ns_to_seconds(current_time_ns);
-    let current_beat = state.visible_beat(player_idx);
-    let song_lua_column_y_offsets: [f32; MAX_COLS] = from_fn(|i| {
-        if i >= num_cols {
-            return 0.0;
-        }
-        song_lua_column_y_offset(
-            &state.song_lua_visuals().column_offsets[player_idx],
-            i,
-            current_time,
-        )
-    });
-    let has_judgment_texture = resolved_judgment_texture(profile).is_some();
-    let field = field_layout(FieldLayoutRequest {
+    let (time_signatures, bpms, stops, delays, scrolls) = state
+        .gameplay_chart(player_idx)
+        .map(|chart| {
+            let timing = &chart.timing_segments;
+            (
+                timing.time_signatures.as_slice(),
+                timing.bpms.as_slice(),
+                timing.stops.as_slice(),
+                timing.delays.as_slice(),
+                timing.scrolls.as_slice(),
+            )
+        })
+        .unwrap_or((&[], &[], &[], &[], &[]));
+    let base_noteskin = noteskin_assets.noteskin[player_idx].as_deref();
+    let tap_explosion_noteskin = if profile.tap_explosion_noteskin_hidden() {
+        None
+    } else {
+        noteskin_assets.tap_explosion_noteskin[player_idx]
+            .as_deref()
+            .or(base_noteskin)
+    };
+    let request = NotefieldComposeRequest {
         style,
         placement,
-        num_players: state.num_players(),
-        single_style: play_style == profile_data::PlayStyle::Single,
-        double_style: play_style == profile_data::PlayStyle::Double,
-        center_one_player: center_1player_notefield,
-        screen_width: screen_width(),
-        screen_center_x: screen_center_x(),
-        screen_center_y: screen_center_y(),
-        num_cols,
-        field_zoom,
-        notefield_offset_x,
-        notefield_offset_y,
-        receptor_y_override: view.receptor_y,
-        center_receptors_y: view.center_receptors_y,
-        centered_scroll: scroll.centered,
-        column_reverse_percent,
-        column_dirs,
-        song_lua_column_y_offsets,
-        judgment_offset_x,
-        combo_offset_x,
-        error_bar_offset_x,
-        hud_offsets: HudLayoutOffsets {
-            judgment_extra_y: judgment_offset_y,
-            combo_extra_y: combo_offset_y,
-            error_bar_extra_y: error_bar_offset_y,
+        view,
+        geometry: NotefieldGeometry {
+            player_idx,
+            num_players: state.num_players(),
+            cols_per_player: state.cols_per_player(),
+            total_cols: state.num_cols(),
+            single_style: play_style == profile_data::PlayStyle::Single,
+            double_style: play_style == profile_data::PlayStyle::Double,
+            center_one_player: center_1player_notefield,
+            screen_width: screen_width(),
+            screen_height: screen_height(),
+            screen_center_x: screen_center_x(),
+            screen_center_y: screen_center_y(),
+            target_arrow_pixel_size: TARGET_ARROW_PIXEL_SIZE,
+            field_zoom: state.field_zoom_for_player(player_idx),
+            scroll_speed: state.effective_scroll_speed_for_player(player_idx),
+            draw_distance_before_targets: state.notefield_draw_distance_before_targets(player_idx),
+            draw_distance_after_targets: state.notefield_draw_distance_after_targets(player_idx),
+            column_dirs,
+            reverse_scroll: state.notefield_reverse_scroll(player_idx),
         },
-        hud_params: HudLayoutParams {
-            zmod: zmod_layout_params(profile, style),
+        visual: NotefieldVisualState {
+            elapsed_screen_s: elapsed_screen,
+            current_display_beat: state.current_beat_display(),
+            accel,
+            scroll,
+            perspective,
+            visual,
+            appearance,
+            visibility,
+            mini_percent,
+            spacing_multiplier: spacing_mult,
+        },
+        chart: NotefieldChartView {
+            timing: state.timing_for_player(player_idx),
+            notes: state.notes(),
+            note_range: state.note_range_for_player(player_idx),
+            lane_note_row_indices: from_fn(|col| state.lane_note_row_indices(col)),
+            lane_hold_indices: from_fn(|col| state.lane_hold_indices(col)),
+            decaying_hold_indices: state.decaying_hold_indices(),
+            tap_row_hold_roll_flags: &state.chart_runtime.lane_indices.tap_row_hold_roll_flags,
+            current_music_time_ns: state.current_music_time_ns(),
+            visible_music_time_ns: state.visible_music_time_ns(player_idx),
+            visible_beat: state.visible_beat(player_idx),
+            scroll_reference_bpm: state.scroll_reference_bpm(),
+            music_rate: state.music_rate(),
+            note_count_stats: state.note_count_stats(player_idx),
+            time_signatures,
+            bpms,
+            stops,
+            delays,
+            scrolls,
+        },
+        noteskin: NotefieldNoteskinView {
+            base: base_noteskin,
+            mine: noteskin_assets.mine_noteskin[player_idx].as_deref(),
+            receptor: noteskin_assets.receptor_noteskin[player_idx].as_deref(),
+            tap_explosion: tap_explosion_noteskin,
+        },
+        song_lua: NotefieldSongLuaView {
+            note_hides: &state.song_lua_visuals().note_hides[player_idx],
+            column_offsets: &state.song_lua_visuals().column_offsets[player_idx],
+        },
+        options: NotefieldOptions {
+            frame_features: NotefieldFrameFeatures {
+                measure_line_mode,
+                measure_cues: profile.measure_cues,
+                column_cues: profile.column_cues,
+                crossover_cues: profile.crossover_cues,
+                crossover_countdown: profile.column_countdown,
+                column_flash: profile.column_flash_on_miss,
+                error_bar: !error_bar_mask.is_empty(),
+                error_bar_text: error_bar_mask.contains(profile_data::ErrorBarMask::TEXT),
+                held_miss_asset: held_miss_texture.is_some(),
+                combo_visible: !profile.hide_combo,
+            },
+            notefield_offset: [notefield_offset_x, notefield_offset_y],
+            judgment_offset: [judgment_offset_x, judgment_offset_y],
+            combo_offset: [combo_offset_x, combo_offset_y],
+            error_bar_offset: [error_bar_offset_x, error_bar_offset_y],
+            zmod_layout: zmod_layout_params(profile, style, has_judgment_texture),
             has_judgment_texture,
             error_bar_up: profile.error_bar_up,
-            error_bar_offset: style.error_bar_offset_y,
+            fallback_mini_percent: profile.mini_percent as f32,
+            column_flash_compact: profile.column_flash_size
+                == profile_data::ColumnFlashSize::Compact,
+            column_flash_dimmed: column_flash_dimmed(profile.column_flash_brightness),
+            hide_targets: profile.hide_targets,
+            hold_explosion_enabled: hold_explosion_enabled(profile),
+            hide_combo_explosions: profile.hide_combo_explosions,
+            judgment_back: profile.judgment_back,
+            show_fa_plus_window: profile.show_fa_plus_window,
+            fa_plus_10ms_blue_window: profile.fa_plus_10ms_blue_window,
+            split_15_10ms: profile.split_15_10ms,
+            custom_fantastic_window: profile.custom_fantastic_window,
+            judgment_tilt_enabled: profile.judgment_tilt,
+            judgment_tilt_min_ms: profile.tilt_min_threshold_ms as f32,
+            judgment_tilt_max_ms: profile.tilt_max_threshold_ms as f32,
+            judgment_tilt_multiplier: profile.tilt_multiplier,
+            blue_fantastic_window_s: player_blue_window_ms(state, player_idx) / 1000.0,
+            error_bar_modes: ErrorBarModes {
+                colorful: error_bar_mask.contains(profile_data::ErrorBarMask::COLORFUL),
+                monochrome: error_bar_mask.contains(profile_data::ErrorBarMask::MONOCHROME),
+                highlight: error_bar_mask.contains(profile_data::ErrorBarMask::HIGHLIGHT),
+                average: error_bar_mask.contains(profile_data::ErrorBarMask::AVERAGE),
+            },
+            error_bar_max_window_ix: error_bar_trim_max_window_ix(profile.error_bar_trim),
+            monochrome_background: profile.background_filter.is_off(),
+            error_bar_multi_tick: profile.error_bar_multi_tick,
+            short_average_error_bar: profile.short_average_error_bar_enabled,
+            center_tick: profile.center_tick,
+            error_ms_display: profile.error_ms_display,
+            long_error_bar_enabled: profile.long_error_bar_enabled,
+            long_error_bar_intensity: profile_data::clamp_long_error_bar_intensity(
+                profile.long_error_bar_intensity,
+            ),
+            measure_counter: (profile.measure_counter != profile_data::MeasureCounter::None)
+                .then_some(MeasureCounterOptions {
+                    lookahead: profile.measure_counter_lookahead.min(4),
+                    multiplier: profile.measure_counter.multiplier(),
+                    vertical: profile.measure_counter_vert,
+                    left: profile.measure_counter_left,
+                    broken_run: profile.broken_run,
+                    run_timer: profile.run_timer,
+                }),
+            mini_indicator_position: match profile.mini_indicator_position {
+                profile_data::MiniIndicatorPosition::Default => {
+                    LayoutMiniIndicatorPosition::Default
+                }
+                profile_data::MiniIndicatorPosition::UnderUpArrow => {
+                    LayoutMiniIndicatorPosition::UnderUpArrow
+                }
+            },
+            mini_indicator_zoom: zmod_mini_indicator_zoom(profile.mini_indicator_size),
+            counter_left: profile.measure_counter_left,
         },
-    });
+        capture_requests,
+        arrow_effect_time_s,
+    };
+    let Some(prepared) = prepare_notefield(&request) else {
+        return BuiltNotefield::empty(request.geometry.screen_center_x);
+    };
+    let options = &request.options;
+    let elapsed_screen = request.visual.elapsed_screen_s;
+    let perspective = request.visual.perspective;
+    let visual = request.visual.visual;
+    let appearance = request.visual.appearance;
+    let spacing_mult = request.visual.spacing_multiplier;
+    let frame_plan = prepared.frame_plan;
+    let col_start = frame_plan.col_start;
+    let num_cols = frame_plan.num_cols;
+    let col_end = col_start + num_cols;
+    actors.reserve(frame_plan.field_actor_reserve);
+    hud_actors.reserve(frame_plan.hud_actor_reserve);
+    let field_zoom = prepared.field_zoom;
+    let scroll_speed = prepared.scroll_speed;
+    let draw_distance_before_targets = request.geometry.draw_distance_before_targets;
+    let draw_distance_after_targets = request.geometry.draw_distance_after_targets;
+    let current_time = prepared.current_time_s;
+    let current_beat = prepared.current_beat;
+    let measure_line_mode = if request.view.edit_beat_bars {
+        MeasureLineMode::Edit
+    } else {
+        measure_line_mode
+    };
+    let field = prepared.field;
     let playfield_center_x = field.playfield_center_x;
     let layout_center_x = field.layout_center_x;
     let notefield_offset_y = field.notefield_offset_y;
@@ -715,44 +787,24 @@ pub(crate) fn build_bundles(
     let combo_x = field.combo_x;
     let error_bar_x = field.error_bar_x;
 
-    let elapsed_screen = state.total_elapsed_in_screen();
-    let accel = effective_accel_effects_for_player(state, player_idx);
-    let visual = effective_visual_effects_for_player(state, player_idx);
-    let appearance = state.effective_appearance_effects_for_player(player_idx);
-    let visibility = state.effective_visibility_effects_for_player(player_idx);
-    let mini_percent = effective_mini_percent_for_player(state, player_idx);
-    let mini = effective_mini_value(profile, visual, mini_percent);
-    let spacing_mult = effective_spacing_multiplier_for_player(state, player_idx);
-    let reverse_scroll = state.notefield_reverse_scroll(player_idx);
+    let mini = prepared.mini;
+    let reverse_scroll = request.geometry.reverse_scroll;
     let mc_font_name = zmod_small_combo_font(profile.combo_font);
     let judgment_zoom_mod = judgment_actor_zoom(
         mini,
-        profile.judgment_back,
+        options.judgment_back,
         perspective.tilt,
         perspective.skew,
     );
-    let effect_height = field_effect_height(perspective.tilt);
-    let receptor_alpha = (1.0 - visibility.dark).clamp(0.0, 1.0);
-    let blind_active = visibility.blind > f32::EPSILON;
+    let receptor_alpha = prepared.receptor_alpha;
+    let blind_active = prepared.blind_active;
 
-    if let Some(ns) = &noteskin_assets.noteskin[player_idx] {
-        let mine_ns = noteskin_assets.mine_noteskin[player_idx]
-            .as_deref()
-            .unwrap_or(ns);
-        let receptor_ns = noteskin_assets.receptor_noteskin[player_idx]
-            .as_deref()
-            .unwrap_or(ns);
-        let tap_explosion_ns = if profile.tap_explosion_noteskin_hidden() {
-            None
-        } else {
-            noteskin_assets.tap_explosion_noteskin[player_idx]
-                .as_deref()
-                .or_else(|| noteskin_assets.noteskin[player_idx].as_deref())
-        };
-        let Some(timing) = state.timing_for_player(player_idx) else {
-            return BuiltNotefield::empty(screen_center_x());
-        };
-        let target_arrow_px = TARGET_ARROW_PIXEL_SIZE * field_zoom;
+    if let Some(note_inputs) = prepared.notes.as_ref() {
+        let ns = note_inputs.base;
+        let mine_ns = note_inputs.mine;
+        let receptor_ns = note_inputs.receptor;
+        let tap_explosion_ns = note_inputs.tap_explosion;
+        let target_arrow_px = note_inputs.target_arrow_px;
         let scale_sprite =
             |size: [i32; 2]| -> [f32; 2] { scale_sprite_to_arrow(size, target_arrow_px) };
         let scale_mine_slot = |slot: &SpriteSlot| -> [f32; 2] {
@@ -771,9 +823,6 @@ pub(crate) fn build_bundles(
         let scale_explosion = |logical_size: [f32; 2], effect_zoom: f32| -> [f32; 2] {
             scale_effect_size(logical_size, field_zoom, effect_zoom)
         };
-        // ITG's FindFirst/FindLastDisplayedBeat search from m_fSongBeat, while
-        // ArrowEffects::GetYOffset uses m_fSongBeatVisible internally.
-        let current_search_beat = timing.get_beat_for_time_ns(state.current_music_time_ns());
         // The column swap for Step's hold-turn section is handled at the player bundle
         // level. Keep the actual note/receptor/ghost visuals on the normal noteskin
         // path here; applying an extra local Y turn breaks model-backed arrows and hit
@@ -781,48 +830,14 @@ pub(crate) fn build_bundles(
         let note_rotation_y = 0.0_f32;
         let prefer_sprite_note_path = false;
         let flat_tap_face_rotation_y = 0.0_f32;
-        let beat_push = beat_factor(current_beat);
-        let mut col_offsets = [0.0_f32; MAX_COLS];
-        fill_lane_col_offsets(
-            &mut col_offsets,
-            Some(ns.column_xs.as_slice()),
-            num_cols,
-            spacing_mult,
-            field_zoom,
-        );
-        let mut invert_distances = [0.0_f32; MAX_COLS];
-        compute_invert_distances(&col_offsets[..num_cols], &mut invert_distances[..num_cols]);
-        let mut tornado_bounds = [TornadoBounds::default(); MAX_COLS];
-        compute_tornado_bounds(&col_offsets[..num_cols], &mut tornado_bounds[..num_cols]);
-        // ITG NoteField currently advances NoteDisplay resources twice per frame for
-        // the master field (and once per additional field), so model/tween time in
-        // NoteDisplay actors runs faster than wall-clock elapsed.
-        let note_display_time_scale = state.num_players() as f32 + 1.0;
-        // PARITY[ITGmania ArrowEffects::GetYOffset]: project travel before
-        // applying the player speed/field scale, including ScreenEdit spacing.
-        let travel = scroll_travel(ScrollTravelRequest {
-            timing,
-            accel: accel_y_params(accel),
-            scroll_speed,
-            current_time_ns,
-            visible_beat: current_beat,
-            search_beat: current_search_beat,
-            scroll_reference_bpm: state.scroll_reference_bpm(),
-            music_rate: state.music_rate(),
-            edit_beat_spacing: view.edit_beat_bars,
-            draw_distance_after_targets,
-            draw_distance_before_targets,
-            field_zoom,
-            elapsed_screen_s: elapsed_screen,
-            effect_height,
-            screen_height: screen_height(),
-            note_count_stats: state.note_count_stats(player_idx),
-            arrow_effect_time_s,
-            lane_tipsy: visual.tipsy,
-            lane_move_y: &visual.move_y_cols,
-        });
+        let beat_push = note_inputs.beat_factor;
+        let col_offsets = note_inputs.col_offsets;
+        let invert_distances = note_inputs.invert_distances;
+        let tornado_bounds = note_inputs.tornado_bounds;
+        let note_display_time_scale = note_inputs.note_display_time_scale;
+        let travel = &note_inputs.travel;
         let visible_row_range = travel.visible_row_range();
-        let (note_start, note_end) = state.note_range_for_player(player_idx);
+        let (note_start, note_end) = request.chart.note_range;
         let lane_center_x_from_travel = |local_col: usize, travel_offset: f32| -> f32 {
             playfield_center_x
                 + note_x_offset(
@@ -883,26 +898,12 @@ pub(crate) fn build_bundles(
                 visual.bumpy_period,
             )
         };
-        let (time_signatures, bpms, stops, delays, scrolls) = state
-            .gameplay_chart(player_idx)
-            .map(|chart| {
-                let timing = &chart.timing_segments;
-                (
-                    timing.time_signatures.as_slice(),
-                    timing.bpms.as_slice(),
-                    timing.stops.as_slice(),
-                    timing.delays.as_slice(),
-                    timing.scrolls.as_slice(),
-                )
-            })
-            .unwrap_or((&[], &[], &[], &[], &[]));
-        let measure_column_xs: [f32; MAX_COLS] =
-            from_fn(|i| ns.column_xs.get(i).copied().unwrap_or_default() as f32);
+        let measure_column_xs = note_inputs.measure_column_xs;
         compose_measure_lines(
             actors,
             MeasureComposeRequest {
                 mode: measure_line_mode,
-                show_cues: profile.measure_cues,
+                show_cues: options.frame_features.measure_cues,
                 style,
                 column_xs: &measure_column_xs,
                 column_dirs: &column_dirs,
@@ -914,14 +915,14 @@ pub(crate) fn build_bundles(
                 screen_height: screen_height(),
                 current_beat,
                 scroll_speed,
-                scroll_reference_bpm: state.scroll_reference_bpm(),
-                music_rate: state.music_rate(),
-                time_signatures,
-                bpms,
-                stops,
-                delays,
-                scrolls,
-                travel: &travel,
+                scroll_reference_bpm: request.chart.scroll_reference_bpm,
+                music_rate: request.chart.music_rate,
+                time_signatures: request.chart.time_signatures,
+                bpms: request.chart.bpms,
+                stops: request.chart.stops,
+                delays: request.chart.delays,
+                scrolls: request.chart.scrolls,
+                travel,
             },
         );
 
@@ -930,20 +931,25 @@ pub(crate) fn build_bundles(
             hud_actors,
             ColumnFeedbackRequest {
                 style,
-                column_cues: profile.column_cues.then(|| state.column_cues(player_idx)),
-                crossover_cues: profile
+                column_cues: options
+                    .frame_features
+                    .column_cues
+                    .then(|| state.column_cues(player_idx)),
+                crossover_cues: options
+                    .frame_features
                     .crossover_cues
                     .then(|| state.crossover_cues(player_idx)),
-                column_flashes: profile
-                    .column_flash_on_miss
+                column_flashes: options
+                    .frame_features
+                    .column_flash
                     .then(|| state.column_flashes_for_columns(col_start, num_cols)),
                 // Preserve the existing regular-cue behavior: its countdown is
                 // independent of the crossover-only profile toggle.
                 regular_countdown: true,
-                crossover_countdown: profile.column_countdown,
+                crossover_countdown: options.frame_features.crossover_countdown,
                 current_music_time: current_time,
                 current_screen_time: elapsed_screen,
-                music_rate: state.music_rate(),
+                music_rate: request.chart.music_rate,
                 col_start,
                 num_cols,
                 column_xs: &measure_column_xs,
@@ -953,9 +959,8 @@ pub(crate) fn build_bundles(
                 playfield_center_x,
                 field_center_y: notefield_offset_y,
                 screen_height: screen_height(),
-                compact_flashes: profile.column_flash_size
-                    == profile_data::ColumnFlashSize::Compact,
-                dim_flashes: column_flash_dimmed(profile.column_flash_brightness),
+                compact_flashes: options.column_flash_compact,
+                dim_flashes: options.column_flash_dimmed,
                 countdown_font: mc_font_name,
                 countdown_text: cached_int_i32,
             },
@@ -967,13 +972,13 @@ pub(crate) fn build_bundles(
         for (i, &receptor_y_lane) in column_receptor_ys.iter().take(num_cols).enumerate() {
             let col = col_start + i;
             let receptor_hidden_by_song_lua =
-                song_lua_hides_note(state, player_idx, i, current_beat);
+                song_lua_note_hidden(request.song_lua.note_hides, i, current_beat);
             let confusion_receptor_rot = confusion_rotation_deg(current_beat, visual, i);
             let receptor_center = receptor_row_center(
                 playfield_center_x,
                 i,
                 receptor_y_lane,
-                arrow_effect_time_s,
+                request.arrow_effect_time_s,
                 beat_push,
                 visual,
                 &col_offsets[..num_cols],
@@ -982,11 +987,11 @@ pub(crate) fn build_bundles(
             );
             let bop_zoom = state.receptor_bop_zoom(col);
             let receptor_effect_zoom = arrow_effect_zoom(&visual, i, 0.0);
-            let hold_slot = if receptor_hidden_by_song_lua || !hold_explosion_enabled(profile) {
+            let hold_slot = if receptor_hidden_by_song_lua || !options.hold_explosion_enabled {
                 None
             } else {
                 state.active_hold(col).and_then(|active| {
-                    let note = state.notes().get(active.note_index)?;
+                    let note = request.chart.notes.get(active.note_index)?;
                     if !hold_explosion_active(Some(active), current_beat, note.beat) {
                         return None;
                     }
@@ -996,7 +1001,7 @@ pub(crate) fn build_bundles(
                 })
             };
             let targets_visible = !receptor_hidden_by_song_lua
-                && !profile.hide_targets
+                && !options.hide_targets
                 && receptor_alpha > f32::EPSILON;
             let target_slot = targets_visible.then(|| &receptor_ns.receptor_off[i]);
             let target_reverse = targets_visible
@@ -1023,12 +1028,12 @@ pub(crate) fn build_bundles(
                     hold_slot,
                     center: receptor_center,
                     hidden: receptor_hidden_by_song_lua,
-                    hide_targets: profile.hide_targets,
+                    hide_targets: options.hide_targets,
                     reverse: column_reverse_percent[i] > 0.5,
                     bop_zoom,
                     effect_zoom: receptor_effect_zoom,
                     confusion_rotation_deg: confusion_receptor_rot,
-                    elapsed: state.total_elapsed_in_screen(),
+                    elapsed: elapsed_screen,
                     beat: current_beat,
                     receptor_alpha,
                     field_zoom,
@@ -1048,7 +1053,7 @@ pub(crate) fn build_bundles(
             .iter()
             .enumerate()
         {
-            if song_lua_hides_note(state, player_idx, i, current_beat) {
+            if song_lua_note_hidden(request.song_lua.note_hides, i, current_beat) {
                 continue;
             }
             if let Some(active) = active_opt.as_ref()
@@ -1064,7 +1069,7 @@ pub(crate) fn build_bundles(
                     playfield_center_x,
                     i,
                     receptor_y_lane,
-                    arrow_effect_time_s,
+                    request.arrow_effect_time_s,
                     beat_push,
                     visual,
                     &col_offsets[..num_cols],
@@ -1077,12 +1082,12 @@ pub(crate) fn build_bundles(
                     let anim_time = active.elapsed;
                     let slot = &layer.slot;
                     let beat_for_anim = if slot.source.is_beat_based() {
-                        (state.current_beat_display() - active.start_beat).max(0.0)
+                        (request.visual.current_display_beat - active.start_beat).max(0.0)
                     } else {
-                        state.current_beat_display()
+                        request.visual.current_display_beat
                     };
                     let frame = slot.frame_index(anim_time, beat_for_anim);
-                    let uv = slot.uv_for_frame_at(frame, state.total_elapsed_in_screen());
+                    let uv = slot.uv_for_frame_at(frame, elapsed_screen);
                     let size = scale_explosion(logical_slot_size(slot), explosion_effect_zoom);
                     let explosion_visual = layer.animation.state_at(active.elapsed);
                     if !explosion_visual.visible {
@@ -1176,7 +1181,7 @@ pub(crate) fn build_bundles(
                 playfield_center_x,
                 i,
                 receptor_y_lane,
-                arrow_effect_time_s,
+                request.arrow_effect_time_s,
                 beat_push,
                 visual,
                 &col_offsets[..num_cols],
@@ -1191,7 +1196,7 @@ pub(crate) fn build_bundles(
                     continue;
                 }
                 let frame = slot.frame_index(active.elapsed, current_beat);
-                let uv = slot.uv_for_frame_at(frame, state.total_elapsed_in_screen());
+                let uv = slot.uv_for_frame_at(frame, elapsed_screen);
                 let size = scale_explosion(logical_slot_size(slot), explosion_effect_zoom);
                 let glow = explosion_visual.glow;
                 let glow_strength = glow[0].abs() + glow[1].abs() + glow[2].abs() + glow[3].abs();
@@ -1259,7 +1264,7 @@ pub(crate) fn build_bundles(
             }
         }
         let mut render_hold = |note_index: usize| {
-            let note = &state.notes()[note_index];
+            let note = &request.chart.notes[note_index];
             if note.column < col_start || note.column >= col_end {
                 return;
             }
@@ -1267,7 +1272,7 @@ pub(crate) fn build_bundles(
             if !matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
                 return;
             }
-            if song_lua_hides_note(state, player_idx, local_col, note.beat) {
+            if song_lua_note_hidden(request.song_lua.note_hides, local_col, note.beat) {
                 return;
             }
             let Some(hold) = &note.hold else {
@@ -1296,7 +1301,7 @@ pub(crate) fn build_bundles(
                 playfield_center_x,
                 local_col,
                 lane_receptor_y,
-                arrow_effect_time_s,
+                request.arrow_effect_time_s,
                 beat_push,
                 visual,
                 &col_offsets[..num_cols],
@@ -1328,27 +1333,15 @@ pub(crate) fn build_bundles(
             let visuals =
                 ns.hold_visuals_for_col(local_col, matches!(note.note_type, NoteType::Roll));
             let hold_parts = hold_parts_for_note_type(note.note_type);
-            let hold_part_phase = ns.part_uv_phase(
-                hold_parts.head,
-                state.total_elapsed_in_screen(),
-                current_beat,
-                note.beat,
-            );
-            let hold_body_phase = ns.part_uv_phase(
-                hold_parts.body,
-                state.total_elapsed_in_screen(),
-                current_beat,
-                note.beat,
-            );
-            let hold_topcap_phase = ns.part_uv_phase(
-                hold_parts.topcap,
-                state.total_elapsed_in_screen(),
-                current_beat,
-                note.beat,
-            );
+            let hold_part_phase =
+                ns.part_uv_phase(hold_parts.head, elapsed_screen, current_beat, note.beat);
+            let hold_body_phase =
+                ns.part_uv_phase(hold_parts.body, elapsed_screen, current_beat, note.beat);
+            let hold_topcap_phase =
+                ns.part_uv_phase(hold_parts.topcap, elapsed_screen, current_beat, note.beat);
             let hold_bottomcap_phase = ns.part_uv_phase(
                 hold_parts.bottomcap,
-                state.total_elapsed_in_screen(),
+                elapsed_screen,
                 current_beat,
                 note.beat,
             );
@@ -1451,7 +1444,7 @@ pub(crate) fn build_bundles(
                     let body_uv_elapsed = if body_slot.model.is_some() {
                         hold_body_phase
                     } else {
-                        state.total_elapsed_in_screen()
+                        elapsed_screen
                     };
                     let body_uv = maybe_flip_uv_vert(
                         translated_uv_rect(
@@ -1971,7 +1964,7 @@ pub(crate) fn build_bundles(
                     let cap_uv_elapsed = if cap_slot.model.is_some() {
                         hold_topcap_phase
                     } else {
-                        state.total_elapsed_in_screen()
+                        elapsed_screen
                     };
                     let cap_uv = maybe_flip_uv_vert(
                         translated_uv_rect(
@@ -2216,7 +2209,7 @@ pub(crate) fn build_bundles(
                     let cap_uv_elapsed = if cap_slot.model.is_some() {
                         hold_bottomcap_phase
                     } else {
-                        state.total_elapsed_in_screen()
+                        elapsed_screen
                     };
                     let cap_uv = maybe_flip_uv_vert(
                         translated_uv_rect(
@@ -2494,7 +2487,7 @@ pub(crate) fn build_bundles(
                 };
                 let head_center = [head_center_x, head_draw_y];
                 let head_world_z = world_z_for_raw_travel(local_col, head_anchor_travel);
-                let elapsed = state.total_elapsed_in_screen();
+                let elapsed = elapsed_screen;
                 let hold_head_translation =
                     ns.part_uv_translation(hold_parts.head, note.beat, false);
                 let head_slot = head_slot.and_then(|slot| {
@@ -2841,24 +2834,24 @@ pub(crate) fn build_bundles(
         for local_col in 0..num_cols {
             let col = col_start + local_col;
             for_each_visible_hold_index(
-                state.lane_hold_indices(col),
-                state.notes(),
+                request.chart.lane_hold_indices[col],
+                request.chart.notes,
                 visible_row_range,
                 |note_index| render_hold(note_index),
             );
         }
         let extra_hold_indices = state
             .active_hold_note_indices()
-            .chain(state.decaying_hold_indices().iter().copied())
+            .chain(request.chart.decaying_hold_indices.iter().copied())
             .filter(|&idx| {
                 idx >= note_start
                     && idx < note_end
-                    && !hold_overlaps_visible_window(idx, state.notes(), visible_row_range)
+                    && !hold_overlaps_visible_window(idx, request.chart.notes, visible_row_range)
             });
         for note_index in extra_hold_indices {
             render_hold(note_index);
         }
-        let elapsed = state.total_elapsed_in_screen();
+        let elapsed = elapsed_screen;
         let note_display_time = elapsed * note_display_time_scale;
         let mine_fill_phase = current_beat.rem_euclid(1.0);
         let draw_hold_same_row = ns.note_display_metrics.draw_hold_head_for_taps_on_same_row;
@@ -2867,7 +2860,7 @@ pub(crate) fn build_bundles(
         // Visible tap and mine notes
         for col_idx in 0..num_cols {
             let col = col_start + col_idx;
-            let column_note_indices = state.lane_note_row_indices(col);
+            let column_note_indices = request.chart.lane_note_row_indices[col];
             let dir = column_dirs[col_idx];
             let receptor_y_lane = column_receptor_ys[col_idx];
             let fill_slot = mine_ns.mines.get(col_idx).and_then(|slot| slot.as_ref());
@@ -2881,17 +2874,17 @@ pub(crate) fn build_bundles(
                 .and_then(|slot| slot.as_ref());
             for_each_visible_note_index(
                 column_note_indices,
-                state.notes(),
+                request.chart.notes,
                 // ITGmania gets tap candidates from a row-keyed TrackMap via
                 // GetTapNoteRangeInclusive, then NoteDisplay::IsOnScreen
                 // performs the exact ArrowEffects visibility check below.
                 visible_row_range,
                 |note_index| {
-                    let note = &state.notes()[note_index];
+                    let note = &request.chart.notes[note_index];
                     if matches!(note.note_type, NoteType::Hold | NoteType::Roll) {
                         return;
                     }
-                    if song_lua_hides_note(state, player_idx, col_idx, note.beat) {
+                    if song_lua_note_hidden(request.song_lua.note_hides, col_idx, note.beat) {
                         return;
                     }
                     if !note.is_fake {
@@ -3133,7 +3126,7 @@ pub(crate) fn build_bundles(
                         return;
                     }
                     let tap_note_part = tap_part_for_note_type(note.note_type);
-                    let tap_row_flags = state.tap_row_hold_roll_flags(note_index);
+                    let tap_row_flags = request.chart.tap_row_flags(note_index);
                     if let Some(replacement_head) = tap_replacement_head(
                         note.note_type,
                         tap_row_flags & 0b01 != 0,
@@ -3590,7 +3583,7 @@ pub(crate) fn build_bundles(
     // Simply Love: ScreenGameplay underlay/PerPlayer/NoteField/DisplayMods.lua
     // shows the current mod string for 5s, then decelerates out over 0.5s.
     // Arrow Cloud/zmod add a CMod warning below this block for ITL no-CMod charts.
-    if !view.hide_display_mods {
+    if !request.view.hide_display_mods {
         // Simply Love DisplayMods.lua uses sleep(5), but ScreenGameplay in/default.lua
         // keeps a full-screen intro cover up for 2.0s. Since deadsync's gameplay
         // in-transition cover is shorter, subtract the exact missing cover time so
@@ -3651,9 +3644,10 @@ pub(crate) fn build_bundles(
     }
 
     let combo_capture_start = hud_actors.len();
-    let show_combo = !view.hide_combo && !blind_active && !profile.hide_combo;
+    let show_combo =
+        !request.view.hide_combo && !blind_active && options.frame_features.combo_visible;
     let milestone_assets = (show_combo
-        && !profile.hide_combo_explosions
+        && !options.hide_combo_explosions
         && !p.combo_milestones.is_empty())
     .then(|| {
         let combo_splode_tex = assets::visual_styles::combo_100milestone_splode_texture_key();
@@ -3697,17 +3691,13 @@ pub(crate) fn build_bundles(
             number_text: cached_int_u32,
         },
     );
-    let combo_actors = capture_requests
+    let combo_actors = request
+        .capture_requests
         .combo
         .then(|| share_actor_range(&mut hud_actors, combo_capture_start))
         .flatten();
 
-    let show_error_bar_colorful = error_bar_mask.contains(profile_data::ErrorBarMask::COLORFUL);
-    let show_error_bar_monochrome = error_bar_mask.contains(profile_data::ErrorBarMask::MONOCHROME);
-    let show_error_bar_text = error_bar_mask.contains(profile_data::ErrorBarMask::TEXT);
-    let show_error_bar_highlight = error_bar_mask.contains(profile_data::ErrorBarMask::HIGHLIGHT);
-    let show_error_bar_average = error_bar_mask.contains(profile_data::ErrorBarMask::AVERAGE);
-    let show_error_bar = !error_bar_mask.is_empty();
+    let show_error_bar = options.frame_features.error_bar;
     let error_bar_y = hud_layout.error_bar_y;
     let error_bar_max_h = hud_layout.error_bar_max_h;
     let mut average_bar_y = 0.0_f32;
@@ -3719,18 +3709,11 @@ pub(crate) fn build_bundles(
     }
     let error_bar_style = style.error_bar;
     let timing_windows_s = state.timing_profile_windows_s();
-    let max_error_bar_window_ix = error_bar_trim_max_window_ix(profile.error_bar_trim);
-    let blue_fantastic_window_s = Some(player_blue_window_ms(state, player_idx) / 1000.0);
     compose_error_bar(
         &mut hud_actors,
         ErrorBarComposeRequest {
             style: error_bar_style,
-            modes: ErrorBarModes {
-                colorful: show_error_bar_colorful,
-                monochrome: show_error_bar_monochrome,
-                highlight: show_error_bar_highlight,
-                average: show_error_bar_average,
-            },
+            modes: options.error_bar_modes,
             state: ErrorBarState {
                 mono_ticks: &p.error_bar_mono_ticks,
                 color_ticks: &p.error_bar_color_ticks,
@@ -3747,35 +3730,33 @@ pub(crate) fn build_bundles(
             max_height: error_bar_max_h,
             mini,
             timing_windows_s,
-            blue_fantastic_window_s,
-            max_window_ix: max_error_bar_window_ix,
-            show_fa_plus: profile.show_fa_plus_window,
-            judgment_back: profile.judgment_back,
-            monochrome_background: profile.background_filter.is_off(),
-            multi_tick: profile.error_bar_multi_tick,
-            short_average: profile.short_average_error_bar_enabled,
-            center_tick: profile.center_tick,
+            blue_fantastic_window_s: Some(options.blue_fantastic_window_s),
+            max_window_ix: options.error_bar_max_window_ix,
+            show_fa_plus: options.show_fa_plus_window,
+            judgment_back: options.judgment_back,
+            monochrome_background: options.monochrome_background,
+            multi_tick: options.error_bar_multi_tick,
+            short_average: options.short_average_error_bar,
+            center_tick: options.center_tick,
             has_error_bar: show_error_bar,
             offset_indicator: p.offset_indicator_text,
-            offset_indicator_visible: !blind_active && profile.error_ms_display,
+            offset_indicator_visible: !blind_active && options.error_ms_display,
             offset_indicator_position: [playfield_center_x, screen_center_y() + notefield_offset_y],
             offset_text: cached_offset_ms,
             long_average_tick: p.error_bar_long_avg_tick,
             long_average_visible: !blind_active
                 && show_error_bar
-                && profile.long_error_bar_enabled
+                && options.long_error_bar_enabled
                 && p.error_bar_long_avg_visible,
-            long_average_intensity: profile_data::clamp_long_error_bar_intensity(
-                profile.long_error_bar_intensity,
-            ),
+            long_average_intensity: options.long_error_bar_intensity,
             text: p.error_bar_text,
-            text_visible: !blind_active && show_error_bar && show_error_bar_text,
+            text_visible: !blind_active && show_error_bar && options.frame_features.error_bar_text,
             text_label: cached_error_bar_text_label,
         },
     );
 
-    if profile.measure_counter != profile_data::MeasureCounter::None {
-        let display_beat = state.current_beat_display();
+    if let Some(counter) = options.measure_counter {
+        let display_beat = request.visual.current_display_beat;
         compose_counter_hud(
             hud_actors,
             CounterHudRequest {
@@ -3784,13 +3765,13 @@ pub(crate) fn build_bundles(
                 current_beat,
                 current_display_beat: display_beat,
                 current_bpm: state.timing().get_bpm_for_beat(display_beat),
-                music_rate: state.music_rate(),
-                lookahead: profile.measure_counter_lookahead.min(4),
-                multiplier: profile.measure_counter.multiplier(),
-                vertical: profile.measure_counter_vert,
-                left: profile.measure_counter_left,
-                broken_run: profile.broken_run,
-                run_timer: profile.run_timer,
+                music_rate: request.chart.music_rate,
+                lookahead: counter.lookahead,
+                multiplier: counter.multiplier,
+                vertical: counter.vertical,
+                left: counter.left,
+                broken_run: counter.broken_run,
+                run_timer: counter.run_timer,
                 measure_counter_y: zmod_layout.measure_counter_y,
                 subtractive_scoring_y: zmod_layout.subtractive_scoring_y,
                 playfield_center_x,
@@ -3803,12 +3784,6 @@ pub(crate) fn build_bundles(
     }
 
     if let Some((text, color)) = zmod_mini_indicator_text(state, p, profile, player_idx) {
-        let position = match profile.mini_indicator_position {
-            profile_data::MiniIndicatorPosition::Default => LayoutMiniIndicatorPosition::Default,
-            profile_data::MiniIndicatorPosition::UnderUpArrow => {
-                LayoutMiniIndicatorPosition::UnderUpArrow
-            }
-        };
         compose_mini_indicator(
             hud_actors,
             MiniIndicatorRequest {
@@ -3816,13 +3791,13 @@ pub(crate) fn build_bundles(
                 text,
                 color,
                 failed: p.is_failing || p.life <= 0.0,
-                position,
-                counter_left: profile.measure_counter_left,
+                position: options.mini_indicator_position,
+                counter_left: options.counter_left,
                 playfield_center_x,
                 field_zoom,
                 layout_add_x: zmod_layout.subtractive_scoring_addx,
                 y: zmod_layout.subtractive_scoring_y,
-                zoom: zmod_mini_indicator_zoom(profile.mini_indicator_size),
+                zoom: options.mini_indicator_zoom,
                 font: mc_font_name,
             },
         );
@@ -3835,16 +3810,16 @@ pub(crate) fn build_bundles(
     let mut tap_sprite = None;
     if !blind_active
         && let Some(render) = p.last_judgment.as_ref()
-        && let Some(texture) = resolved_judgment_texture(profile)
+        && let Some(texture) = judgment_texture
     {
         let (frame_cols, frame_rows) = assets::parse_sprite_sheet_dims(texture.key.as_ref());
         let (frame_row, overlay_row) =
-            tap_judgment_rows(profile, &render.judgment, frame_rows as usize);
+            tap_judgment_rows(options, &render.judgment, frame_rows as usize);
         tap = Some(TapJudgmentFeedback {
             render,
             frame_row,
             overlay_row,
-            rotation_deg: judgment_tilt_rotation_deg(profile, &render.judgment),
+            rotation_deg: judgment_tilt_rotation_deg(options, &render.judgment),
         });
         tap_sprite = Some(TapJudgmentSprite {
             source: texture.texture_key_handle().into_sprite_source(),
@@ -3878,14 +3853,14 @@ pub(crate) fn build_bundles(
             tap,
             tap_sprite,
             tap_xy: [judgment_x, judgment_y],
-            judgment_back: profile.judgment_back,
+            judgment_back: options.judgment_back,
             judgment_zoom: judgment_zoom_mod,
             held_misses,
             held_miss_sprite,
             hold_judgments,
             hold_sprite,
             current_beat,
-            arrow_effect_time: arrow_effect_time_s,
+            arrow_effect_time: request.arrow_effect_time_s,
             mini,
             visual,
             noteskin_column_xs: noteskin_assets.noteskin[player_idx]
@@ -3901,7 +3876,8 @@ pub(crate) fn build_bundles(
             column_reverse_percent: &column_reverse_percent[..num_cols],
         },
     );
-    let judgment_actors = capture_requests
+    let judgment_actors = request
+        .capture_requests
         .judgment
         .then(|| share_actor_range(&mut hud_actors, judgment_capture_start))
         .flatten();
@@ -3924,7 +3900,8 @@ pub(crate) fn build_bundles(
         }
     }
 
-    let field_actors = capture_requests
+    let field_actors = request
+        .capture_requests
         .note_field
         .then(|| share_actor_range(&mut actors, 0))
         .flatten()
