@@ -5,7 +5,7 @@ use deadsync_core::input::InputSource;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_lights::DriverKind as LightsDriverKind;
 use deadsync_profile as profile_data;
-use deadsync_theme::views::AudioOutputDeviceView;
+use deadsync_theme::views::{AudioOutputDeviceView, NoteskinCatalogView};
 use std::time::{Duration, Instant};
 
 fn init() -> State {
@@ -19,6 +19,9 @@ fn init_with_audio(audio_options: AudioOptionsView) -> State {
             ffmpeg_install: true,
         },
         audio_options,
+        NoteskinCatalogView {
+            names: vec![profile_data::NoteSkin::DEFAULT_NAME.to_owned()],
+        },
     )
 }
 

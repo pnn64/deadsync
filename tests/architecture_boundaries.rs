@@ -1305,6 +1305,56 @@ fn select_music_sync_analysis_execution_is_shell_owned() {
 }
 
 #[test]
+fn noteskin_discovery_is_shell_prepared_for_themes() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let theme = root.join("crates/deadsync-theme-simply-love/src");
+    let generic_views = fs::read_to_string(root.join("crates/deadsync-theme/src/views.rs"))
+        .expect("generic theme views should be readable");
+    let shell_manifest = fs::read_to_string(root.join("crates/deadsync-shell/Cargo.toml"))
+        .expect("shell manifest should be readable");
+    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell app should be readable");
+    let options = fs::read_to_string(theme.join("screens/options/state.rs"))
+        .expect("Simply Love options state should be readable");
+    let player_options = fs::read_to_string(theme.join("screens/player_options/mod.rs"))
+        .expect("Simply Love player options should be readable");
+
+    let mut failures = Vec::new();
+    for file in rust_files(&theme) {
+        let source = fs::read_to_string(&file).expect("theme source should be readable");
+        for token in ["noteskin_roots()", "itg::discover_skins"] {
+            if source.contains(token) {
+                failures.push(format!(
+                    "{} performs shell-owned noteskin discovery via {token}",
+                    rel_path(&root, &file)
+                ));
+            }
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "concrete themes must consume prepared noteskin names:\n{}",
+        failures.join("\n")
+    );
+    assert!(
+        generic_views.contains("pub struct NoteskinCatalogView")
+            && generic_views.contains("pub names: Vec<String>"),
+        "the generic theme contract must expose a renderer-neutral noteskin catalog"
+    );
+    assert!(
+        shell_manifest.contains("deadsync-noteskin =")
+            && shell.contains("fn noteskin_catalog_view() -> NoteskinCatalogView")
+            && shell.contains("deadsync_noteskin::itg::discover_skins"),
+        "shell must discover installed noteskins and prepare the theme view"
+    );
+    assert!(
+        options.contains("noteskin_catalog: NoteskinCatalogView")
+            && player_options.contains("noteskin_catalog: NoteskinCatalogView"),
+        "Simply Love options screens must receive the prepared noteskin catalog"
+    );
+}
+
+#[test]
 fn concrete_theme_does_not_execute_updater_or_native_dialog_services() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let theme = root.join("crates/deadsync-theme-simply-love");

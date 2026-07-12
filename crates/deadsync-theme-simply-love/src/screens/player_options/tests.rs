@@ -30,6 +30,7 @@ pub(super) mod tests {
     };
     use deadsync_rules::scroll::ScrollSpeedSetting;
     use deadsync_theme::AudioRequest;
+    use deadsync_theme::views::NoteskinCatalogView;
     use std::collections::HashMap;
     use std::path::PathBuf;
     use std::sync::Arc;
@@ -41,6 +42,12 @@ pub(super) mod tests {
         INIT.call_once(|| {
             crate::assets::i18n::init("en");
         });
+    }
+
+    fn test_noteskin_catalog() -> NoteskinCatalogView {
+        NoteskinCatalogView {
+            names: vec![deadsync_profile::NoteSkin::DEFAULT_NAME.to_owned()],
+        }
     }
 
     fn test_row(
@@ -1558,7 +1565,15 @@ pub(super) mod tests {
         let mut asset_manager = AssetManager::new();
         register_test_fonts(&mut asset_manager);
 
-        let mut state = super::init(song, [0; 2], [0; 2], 1, Screen::SelectMusic, None);
+        let mut state = super::init(
+            song,
+            [0; 2],
+            [0; 2],
+            1,
+            Screen::SelectMusic,
+            None,
+            test_noteskin_catalog(),
+        );
         let active = session_active_players();
         let first_row = state.pane().selected_row[P1];
         assert!(handle_arcade_start_event(&mut state, &asset_manager, active, P1).is_none());
@@ -1591,7 +1606,15 @@ pub(super) mod tests {
         let mut asset_manager = AssetManager::new();
         register_test_fonts(&mut asset_manager);
 
-        let mut state = super::init(song, [0; 2], [0; 2], 1, Screen::SelectMusic, None);
+        let mut state = super::init(
+            song,
+            [0; 2],
+            [0; 2],
+            1,
+            Screen::SelectMusic,
+            None,
+            test_noteskin_catalog(),
+        );
         let active = session_active_players();
         let last_row = state.pane().row_map.len().saturating_sub(1);
         state.pane_mut().selected_row[P1] = last_row;
@@ -1618,7 +1641,15 @@ pub(super) mod tests {
         profile::set_session_joined(true, false);
         let mut asset_manager = AssetManager::new();
         register_test_fonts(&mut asset_manager);
-        let state = super::init(song, [0; 2], [0; 2], 1, Screen::SelectMusic, None);
+        let state = super::init(
+            song,
+            [0; 2],
+            [0; 2],
+            1,
+            Screen::SelectMusic,
+            None,
+            test_noteskin_catalog(),
+        );
         (state, asset_manager)
     }
 
@@ -1629,7 +1660,15 @@ pub(super) mod tests {
         profile::set_session_joined(true, true);
         let mut asset_manager = AssetManager::new();
         register_test_fonts(&mut asset_manager);
-        let state = super::init(song, [0; 2], [0; 2], 1, Screen::SelectMusic, None);
+        let state = super::init(
+            song,
+            [0; 2],
+            [0; 2],
+            1,
+            Screen::SelectMusic,
+            None,
+            test_noteskin_catalog(),
+        );
         (state, asset_manager)
     }
 
@@ -2401,7 +2440,7 @@ pub(super) mod tests {
     }
 
     fn build_all_pane_row_maps(state: &super::State) -> Vec<(super::OptionsPane, RowMap)> {
-        let noteskin_names = super::discover_noteskin_names();
+        let noteskin_names = test_noteskin_catalog().names;
         [
             super::OptionsPane::Main,
             super::OptionsPane::Display,
@@ -2432,7 +2471,7 @@ pub(super) mod tests {
         state: &super::State,
         return_screen: Screen,
     ) -> Vec<String> {
-        let noteskin_names = super::discover_noteskin_names();
+        let noteskin_names = test_noteskin_catalog().names;
         let row_map = super::build_rows(
             &state.song,
             &state.speed_mod[P1],
@@ -2934,7 +2973,7 @@ pub(super) mod tests {
         p.global_offset_shift_ms = -45;
 
         let profile = state.player_profiles[P1].clone();
-        let noteskin_names = super::discover_noteskin_names();
+        let noteskin_names = test_noteskin_catalog().names;
         let mut main_row_map = super::build_rows(
             &state.song,
             &state.speed_mod[P1],
@@ -2990,7 +3029,7 @@ pub(super) mod tests {
         p.note_field_offset_y = -22;
 
         let profile = state.player_profiles[P1].clone();
-        let noteskin_names = super::discover_noteskin_names();
+        let noteskin_names = test_noteskin_catalog().names;
         let mut row_map = super::build_rows(
             &state.song,
             &state.speed_mod[P1],
@@ -3047,7 +3086,7 @@ pub(super) mod tests {
         p.spacing_percent = 100_000; // clamps to SPACING_PERCENT_MAX
 
         let profile = state.player_profiles[P1].clone();
-        let noteskin_names = super::discover_noteskin_names();
+        let noteskin_names = test_noteskin_catalog().names;
         let mut main_row_map = super::build_rows(
             &state.song,
             &state.speed_mod[P1],
@@ -3134,7 +3173,7 @@ pub(super) mod tests {
         p.average_error_bar_interval_ms = 700;
 
         let profile = state.player_profiles[P1].clone();
-        let noteskin_names = super::discover_noteskin_names();
+        let noteskin_names = test_noteskin_catalog().names;
         let mut row_map = super::build_rows(
             &state.song,
             &state.speed_mod[P1],

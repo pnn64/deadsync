@@ -24,6 +24,7 @@ deadsync-input = { path = "../deadsync-input" }
 deadsync-input-fsr = { path = "../deadsync-input-fsr" }
 deadsync-input-native = { path = "../deadsync-input-native" }
 deadsync-lights = { path = "../deadsync-lights" }
+deadsync-noteskin = { path = "../deadsync-noteskin" }
 deadsync-online = { path = "../deadsync-online" }
 deadsync-profile = { path = "../deadsync-profile" }
 deadsync-profile-gameplay = { path = "../deadsync-profile-gameplay" }

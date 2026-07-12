@@ -167,7 +167,7 @@ use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing as timing_rules;
 use deadsync_theme::views::{
     AudioOptionsView, AudioOutputDeviceView, AudioPlaybackView,
-    DensityGraphView as DensityGraphSource,
+    DensityGraphView as DensityGraphSource, NoteskinCatalogView,
 };
 use deadsync_theme::{AudioRequest, PlatformRequest, RevealPathKind};
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as CurrentScreen;
@@ -399,6 +399,13 @@ fn audio_options_view() -> AudioOptionsView {
     }
 }
 
+fn noteskin_catalog_view() -> NoteskinCatalogView {
+    let roots = deadlib_platform::dirs::app_dirs().noteskin_roots();
+    NoteskinCatalogView {
+        names: deadsync_noteskin::itg::discover_skins(&roots, "dance"),
+    }
+}
+
 impl ScreensState {
     fn new(color_index: i32, preferred_difficulty_index: usize) -> Self {
         let mut menu_state = menu::init();
@@ -436,7 +443,11 @@ impl ScreensState {
         let mut profile_load_state = profile_load::init();
         profile_load_state.active_color_index = color_index;
 
-        let mut options_state = options::init(updater::capabilities(), audio_options_view());
+        let mut options_state = options::init(
+            updater::capabilities(),
+            audio_options_view(),
+            noteskin_catalog_view(),
+        );
         options_state.active_color_index = color_index;
 
         let mut credits_state = credits::init();
@@ -1859,8 +1870,11 @@ impl App {
 
     fn reset_options_state_for_entry(&mut self, from: CurrentScreen) {
         let current_color_index = self.state.screens.options_state.active_color_index;
-        self.state.screens.options_state =
-            options::init(updater::capabilities(), audio_options_view());
+        self.state.screens.options_state = options::init(
+            updater::capabilities(),
+            audio_options_view(),
+            noteskin_catalog_view(),
+        );
         self.state.screens.options_state.active_color_index = current_color_index;
         if matches!(
             from,
@@ -2456,6 +2470,7 @@ impl App {
             Some(player_options::FixedStepchart {
                 label: course_run.course_stepchart_label.clone(),
             }),
+            noteskin_catalog_view(),
         ));
         true
     }
@@ -2489,6 +2504,7 @@ impl App {
             active_color_index,
             return_screen,
             None,
+            noteskin_catalog_view(),
         );
         po_state.music_rate = music_rate;
         po_state.speed_mod =
@@ -4630,6 +4646,7 @@ impl App {
                     color_index,
                     return_screen,
                     None,
+                    noteskin_catalog_view(),
                 ));
             }
         } else if target == CurrentScreen::Gameplay && prev == CurrentScreen::Gameplay {
@@ -4694,6 +4711,7 @@ impl App {
                     color_index,
                     CurrentScreen::SelectMusic,
                     None,
+                    noteskin_catalog_view(),
                 ));
             }
         }

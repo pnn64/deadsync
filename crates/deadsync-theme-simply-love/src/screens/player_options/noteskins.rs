@@ -10,11 +10,6 @@ pub(super) fn load_noteskin_cached(skin: &str, cols_per_player: usize) -> Option
     noteskin::load_itg_skin_cached(&style, skin).ok()
 }
 
-pub(super) fn discover_noteskin_names() -> Vec<String> {
-    let roots = deadlib_platform::dirs::app_dirs().noteskin_roots();
-    deadsync_noteskin::itg::discover_skins(&roots, "dance")
-}
-
 /// Sorted non-default SMX gif pack names found under `<assets>/<tree>/`.
 pub(super) fn discover_smx_pack_names(tree: &str) -> Vec<String> {
     let root = deadlib_platform::dirs::app_dirs().resolve_asset_path("assets");

@@ -33,6 +33,12 @@ pub struct AudioOptionsView {
     pub available_backend_names: Vec<String>,
 }
 
+/// Installed noteskin names discovered by the shell for theme option lists.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct NoteskinCatalogView {
+    pub names: Vec<String>,
+}
+
 /// One resolved chart in a course selection.
 #[derive(Clone, Debug)]
 pub struct CourseStageView {

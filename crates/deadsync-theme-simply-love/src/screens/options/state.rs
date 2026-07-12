@@ -254,9 +254,13 @@ pub struct State {
 pub fn init(
     updater_capabilities: SimplyLoveUpdaterCapabilities,
     audio_options: AudioOptionsView,
+    noteskin_catalog: NoteskinCatalogView,
 ) -> State {
     let cfg = config::get();
-    let system_noteskin_choices = discover_system_noteskin_choices();
+    let mut system_noteskin_choices = noteskin_catalog.names;
+    if system_noteskin_choices.is_empty() {
+        system_noteskin_choices.push(deadsync_profile::NoteSkin::DEFAULT_NAME.to_string());
+    }
     let smx_bg_pack_choices = discover_smx_pack_choices("smx-pad-lights");
     let smx_judge_pack_choices = discover_smx_pack_choices("smx-judge-lights");
     let software_thread_choices = build_software_thread_choices();
