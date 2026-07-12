@@ -5,7 +5,7 @@ use deadlib_render::BlendMode;
 use deadsync_noteskin::{NoteskinSlot, TapExplosionLayer};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum ExplosionRotation {
+pub(crate) enum ExplosionRotation {
     Tap {
         rotation_y_deg: f32,
         extra_z_deg: f32,
@@ -14,7 +14,7 @@ pub enum ExplosionRotation {
 }
 
 /// Canonical inputs for an ordered noteskin explosion layer sequence.
-pub struct ExplosionComposeRequest<'a, S> {
+pub(crate) struct ExplosionComposeRequest<'a, S> {
     pub layers: &'a [TapExplosionLayer<S>],
     pub elapsed_s: f32,
     pub current_frame_beat: f32,
@@ -30,7 +30,7 @@ pub struct ExplosionComposeRequest<'a, S> {
 /// Appends every visible explosion layer, preserving diffuse-before-glow order.
 /// Concrete asset owners inject sprite sources so cached texture handles remain
 /// outside the canonical notefield crate.
-pub fn compose_explosion_layers<S, F>(
+pub(crate) fn compose_explosion_layers<S, F>(
     actors: &mut Vec<Actor>,
     request: ExplosionComposeRequest<'_, S>,
     sprite_source: &F,

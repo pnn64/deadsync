@@ -15,9 +15,6 @@ use deadlib_present::actors::{self, Actor};
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y};
 use deadlib_render::BlendMode;
-// TODO(theme-audio): emit `AudioRequest::PlaySfx` once every profile-box
-// consumer can preserve audio alongside the intercepted profile-select effect.
-use deadsync_audio_stream as audio;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_notefield::noteskin_model_actor;
 use deadsync_noteskin::{NUM_QUANTIZATIONS, Quantization, Style};
@@ -606,26 +603,7 @@ fn active_choices(state: &State) -> (profile_data::ActiveProfile, profile_data::
     (p1, p2)
 }
 
-fn sync_play_style_for_joined(p1_joined: bool, p2_joined: bool) {
-    let style = profile_data::play_style_for_joined(
-        profile::get_session_play_style(),
-        p1_joined,
-        p2_joined,
-    );
-    profile::set_session_play_style(style);
-}
-
-fn commit_profile_box_session(state: &State) {
-    profile::set_session_player_side(if state.p1_joined {
-        profile_data::PlayerSide::P1
-    } else {
-        profile_data::PlayerSide::P2
-    });
-    profile::set_session_joined(state.p1_joined, state.p2_joined);
-    sync_play_style_for_joined(state.p1_joined, state.p2_joined);
-}
-
-fn trigger_invalid_choice(state: &mut State, is_p1: bool) {
+fn trigger_invalid_choice(state: &mut State, is_p1: bool) -> ThemeEffect {
     if is_p1 {
         state.p1_shake_t = 0.0;
         // Simply Love `InvalidChoiceMessageCommand` starts with `finishtweening()`,
@@ -635,15 +613,10 @@ fn trigger_invalid_choice(state: &mut State, is_p1: bool) {
         state.p2_shake_t = 0.0;
         state.p2_join_pulse_t = JOIN_PULSE_DURATION;
     }
-    audio::play_sfx("assets/sounds/boom.ogg");
+    crate::effects::sfx("assets/sounds/boom.ogg")
 }
 
-fn shift_choice(
-    state: &mut State,
-    side: profile_data::PlayerSide,
-    dir: i32,
-    play_sound: bool,
-) -> bool {
+fn shift_choice(state: &mut State, side: profile_data::PlayerSide, dir: i32) -> bool {
     let (joined, ready, selected_index, preview_slot) = match side {
         profile_data::PlayerSide::P1 => (
             state.p1_joined,
@@ -682,9 +655,6 @@ fn shift_choice(
         profile_data::PlayerSide::P1 => state.p1_scroll_anim += delta,
         profile_data::PlayerSide::P2 => state.p2_scroll_anim += delta,
     }
-    if play_sound {
-        audio::play_sfx("assets/sounds/expand.ogg");
-    }
     true
 }
 
@@ -693,14 +663,12 @@ fn handle_cancel(state: &mut State, side: profile_data::PlayerSide) -> ThemeEffe
         profile_data::PlayerSide::P1 => {
             if state.p1_joined && state.p1_ready {
                 state.p1_ready = false;
-                audio::play_sfx("assets/sounds/unjoin.ogg");
-                return ThemeEffect::None;
+                return crate::effects::sfx("assets/sounds/unjoin.ogg");
             }
             if state.p1_joined {
                 state.p1_joined = false;
                 state.p1_ready = false;
-                audio::play_sfx("assets/sounds/unjoin.ogg");
-                return ThemeEffect::None;
+                return crate::effects::sfx("assets/sounds/unjoin.ogg");
             }
             if state.p2_joined {
                 return ThemeEffect::None;
@@ -716,14 +684,12 @@ fn handle_cancel(state: &mut State, side: profile_data::PlayerSide) -> ThemeEffe
         profile_data::PlayerSide::P2 => {
             if state.p2_joined && state.p2_ready {
                 state.p2_ready = false;
-                audio::play_sfx("assets/sounds/unjoin.ogg");
-                return ThemeEffect::None;
+                return crate::effects::sfx("assets/sounds/unjoin.ogg");
             }
             if state.p2_joined {
                 state.p2_joined = false;
                 state.p2_ready = false;
-                audio::play_sfx("assets/sounds/unjoin.ogg");
-                return ThemeEffect::None;
+                return crate::effects::sfx("assets/sounds/unjoin.ogg");
             }
             if state.p1_joined {
                 return ThemeEffect::None;
@@ -758,7 +724,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         let undo = state.menu_lr_undo[profile_data::player_side_index(side)];
         state.menu_lr_undo[profile_data::player_side_index(side)] = 0;
         if undo != 0 {
-            let _ = shift_choice(state, side, i32::from(undo), false);
+            let _ = shift_choice(state, side, i32::from(undo));
         }
         return handle_cancel(state, side);
     }
@@ -768,25 +734,27 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         | VirtualAction::p1_menu_up
         | VirtualAction::p1_left
         | VirtualAction::p1_menu_left => {
+            let shifted = shift_choice(state, profile_data::PlayerSide::P1, -1);
             state.menu_lr_undo[profile_data::player_side_index(profile_data::PlayerSide::P1)] =
-                if shift_choice(state, profile_data::PlayerSide::P1, -1, true) {
-                    1
-                } else {
-                    0
-                };
-            ThemeEffect::None
+                if shifted { 1 } else { 0 };
+            if shifted {
+                crate::effects::sfx("assets/sounds/expand.ogg")
+            } else {
+                ThemeEffect::None
+            }
         }
         VirtualAction::p1_down
         | VirtualAction::p1_menu_down
         | VirtualAction::p1_right
         | VirtualAction::p1_menu_right => {
+            let shifted = shift_choice(state, profile_data::PlayerSide::P1, 1);
             state.menu_lr_undo[profile_data::player_side_index(profile_data::PlayerSide::P1)] =
-                if shift_choice(state, profile_data::PlayerSide::P1, 1, true) {
-                    -1
-                } else {
-                    0
-                };
-            ThemeEffect::None
+                if shifted { -1 } else { 0 };
+            if shifted {
+                crate::effects::sfx("assets/sounds/expand.ogg")
+            } else {
+                ThemeEffect::None
+            }
         }
         VirtualAction::p1_start => {
             if !state.p1_joined {
@@ -798,8 +766,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                     &state.choices,
                     state.p1_selected_index,
                 );
-                audio::play_sfx("assets/sounds/start.ogg");
-                return ThemeEffect::None;
+                return crate::effects::sfx("assets/sounds/start.ogg");
             }
 
             if state.p1_ready {
@@ -816,20 +783,25 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                             .is_some_and(|o| o.kind == c.kind)
                 })
             {
-                trigger_invalid_choice(state, true);
-                return ThemeEffect::None;
+                return trigger_invalid_choice(state, true);
             }
 
             state.p1_ready = true;
             if both_ready(state) {
-                audio::play_sfx("assets/sounds/start.ogg");
                 state.exit_anim = true;
                 let _ = exit_anim_t(true);
-                commit_profile_box_session(state);
                 let (p1, p2) = active_choices(state);
-                return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
-                    crate::SimplyLoveProfileRequest::Select { p1, p2 },
-                ));
+                return crate::effects::sfx_then(
+                    "assets/sounds/start.ogg",
+                    ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+                        crate::SimplyLoveProfileRequest::Select {
+                            p1,
+                            p2,
+                            p1_joined: state.p1_joined,
+                            p2_joined: state.p2_joined,
+                        },
+                    )),
+                );
             }
             ThemeEffect::None
         }
@@ -840,25 +812,27 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         | VirtualAction::p2_menu_up
         | VirtualAction::p2_left
         | VirtualAction::p2_menu_left => {
+            let shifted = shift_choice(state, profile_data::PlayerSide::P2, -1);
             state.menu_lr_undo[profile_data::player_side_index(profile_data::PlayerSide::P2)] =
-                if shift_choice(state, profile_data::PlayerSide::P2, -1, true) {
-                    1
-                } else {
-                    0
-                };
-            ThemeEffect::None
+                if shifted { 1 } else { 0 };
+            if shifted {
+                crate::effects::sfx("assets/sounds/expand.ogg")
+            } else {
+                ThemeEffect::None
+            }
         }
         VirtualAction::p2_down
         | VirtualAction::p2_menu_down
         | VirtualAction::p2_right
         | VirtualAction::p2_menu_right => {
+            let shifted = shift_choice(state, profile_data::PlayerSide::P2, 1);
             state.menu_lr_undo[profile_data::player_side_index(profile_data::PlayerSide::P2)] =
-                if shift_choice(state, profile_data::PlayerSide::P2, 1, true) {
-                    -1
-                } else {
-                    0
-                };
-            ThemeEffect::None
+                if shifted { -1 } else { 0 };
+            if shifted {
+                crate::effects::sfx("assets/sounds/expand.ogg")
+            } else {
+                ThemeEffect::None
+            }
         }
         VirtualAction::p2_start => {
             if !state.p2_joined {
@@ -870,8 +844,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                     &state.choices,
                     state.p2_selected_index,
                 );
-                audio::play_sfx("assets/sounds/start.ogg");
-                return ThemeEffect::None;
+                return crate::effects::sfx("assets/sounds/start.ogg");
             }
 
             if state.p2_ready {
@@ -888,20 +861,25 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                             .is_some_and(|o| o.kind == c.kind)
                 })
             {
-                trigger_invalid_choice(state, false);
-                return ThemeEffect::None;
+                return trigger_invalid_choice(state, false);
             }
 
             state.p2_ready = true;
             if both_ready(state) {
-                audio::play_sfx("assets/sounds/start.ogg");
                 state.exit_anim = true;
                 let _ = exit_anim_t(true);
-                commit_profile_box_session(state);
                 let (p1, p2) = active_choices(state);
-                return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
-                    crate::SimplyLoveProfileRequest::Select { p1, p2 },
-                ));
+                return crate::effects::sfx_then(
+                    "assets/sounds/start.ogg",
+                    ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+                        crate::SimplyLoveProfileRequest::Select {
+                            p1,
+                            p2,
+                            p1_joined: state.p1_joined,
+                            p2_joined: state.p2_joined,
+                        },
+                    )),
+                );
             }
             ThemeEffect::None
         }

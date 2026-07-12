@@ -1313,6 +1313,7 @@ fn simply_love_audio_flow_slices_use_ordered_theme_effects() {
     let screens = root.join("crates/deadsync-theme-simply-love/src/screens");
     for path in [
         "arrowcloud_login.rs",
+        "components/shared/profile_boxes.rs",
         "evaluation.rs",
         "groovestats_login.rs",
         "initials.rs",
@@ -1338,6 +1339,21 @@ fn simply_love_audio_flow_slices_use_ordered_theme_effects() {
     assert!(!select_color.contains("config::update_simply_love_color"));
     assert!(select_color.contains("SimplyLoveConfigRequest::PersistColor"));
 
+    let profile_boxes = fs::read_to_string(screens.join("components/shared/profile_boxes.rs"))
+        .expect("profile boxes should be readable");
+    assert!(profile_boxes.contains("p1_joined: state.p1_joined"));
+    assert!(profile_boxes.contains("p2_joined: state.p2_joined"));
+    for direct_session_write in [
+        "set_session_player_side",
+        "set_session_joined",
+        "set_session_play_style",
+    ] {
+        assert!(
+            !profile_boxes.contains(direct_session_write),
+            "profile boxes still execute session mutation {direct_session_write}"
+        );
+    }
+
     let generic = fs::read_to_string(root.join("crates/deadsync-theme/src/effect.rs"))
         .expect("generic theme effects should be readable");
     let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
@@ -1345,6 +1361,10 @@ fn simply_love_audio_flow_slices_use_ordered_theme_effects() {
     assert!(generic.contains("Batch(Vec<Self>)"));
     assert!(shell.contains("ThemeEffectExecution::Batch(effects)"));
     assert!(shell.contains("execute_effect_batch(effects"));
+    assert!(shell.contains("profile_selection_session_plan("));
+    assert!(shell.contains("profile::set_session_player_side(session.active_side)"));
+    assert!(shell.contains("profile::set_session_joined(session.p1_joined, session.p2_joined)"));
+    assert!(shell.contains("profile::set_session_play_style(session.play_style)"));
 }
 
 #[test]
@@ -4699,15 +4719,17 @@ fn simply_love_explosion_layers_use_canonical_notefield_owner() {
     .expect("Simply Love notefield adapter should be readable");
     let canonical = fs::read_to_string(root.join("crates/deadsync-notefield/src/explosions.rs"))
         .expect("canonical explosion composer should be readable");
+    let frame = fs::read_to_string(root.join("crates/deadsync-notefield/src/frame_feedback.rs"))
+        .expect("canonical feedback-frame composer should be readable");
     let contract = fs::read_to_string(root.join("crates/deadsync-noteskin/src/sprite.rs"))
         .expect("noteskin slot contract should be readable");
     let assets = fs::read_to_string(root.join("crates/deadsync-assets/src/noteskin/texture.rs"))
         .expect("asset-backed noteskin slot should be readable");
 
     for definition in [
-        "pub enum ExplosionRotation",
-        "pub struct ExplosionComposeRequest",
-        "pub fn compose_explosion_layers",
+        "pub(crate) enum ExplosionRotation",
+        "pub(crate) struct ExplosionComposeRequest",
+        "pub(crate) fn compose_explosion_layers",
     ] {
         assert!(
             canonical.contains(definition),
@@ -4721,8 +4743,20 @@ fn simply_love_explosion_layers_use_canonical_notefield_owner() {
         "compose_explosion_layers(",
     ] {
         assert!(
-            theme.contains(delegation),
-            "Simply Love must delegate explosion composition through {delegation}"
+            frame.contains(delegation),
+            "canonical feedback frame must delegate explosion composition through {delegation}"
+        );
+    }
+    assert!(theme.contains("NotefieldFeedbackFrameView {"));
+    assert!(theme.contains("compose_notefield_feedback("));
+    for low_level in [
+        "ExplosionComposeRequest",
+        "ExplosionRotation",
+        "compose_explosion_layers(",
+    ] {
+        assert!(
+            !theme.contains(low_level),
+            "Simply Love still imports low-level explosion API {low_level}"
         );
     }
     for old_emission in [
@@ -4739,7 +4773,7 @@ fn simply_love_explosion_layers_use_canonical_notefield_owner() {
     assert!(assets.contains("self.source.is_beat_based()"));
     for concrete in ["deadsync_assets", "TextureKeyHandle", "texture_key_handle"] {
         assert!(
-            !canonical.contains(concrete),
+            !canonical.contains(concrete) && !frame.contains(concrete),
             "canonical explosion composition imports concrete asset token {concrete}"
         );
     }
@@ -4805,6 +4839,7 @@ fn canonical_notefield_keeps_internal_composition_helpers_crate_private() {
     for (file, internal) in [
         ("actor_builder.rs", "struct NotefieldFramePlanRequest"),
         ("actor_builder.rs", "fn notefield_frame_plan"),
+        ("actor_builder.rs", "fn actor_with_world_z"),
         (
             "noteskin_model.rs",
             "fn noteskin_model_actor_from_draw_cached",
@@ -4814,6 +4849,15 @@ fn canonical_notefield_keeps_internal_composition_helpers_crate_private() {
         ("notes.rs", "struct ScrollTravelRequest"),
         ("notes.rs", "fn scroll_travel"),
         ("receptors.rs", "fn hold_indicator_column_x"),
+        ("receptors.rs", "struct ReceptorActorsRequest"),
+        ("receptors.rs", "struct ReceptorPress"),
+        ("receptors.rs", "fn compose_receptor_actors"),
+        ("feedback.rs", "struct ColumnFeedbackRequest"),
+        ("feedback.rs", "fn compose_column_feedback"),
+        ("feedback.rs", "const fn hold_glow_color"),
+        ("explosions.rs", "enum ExplosionRotation"),
+        ("explosions.rs", "struct ExplosionComposeRequest"),
+        ("explosions.rs", "fn compose_explosion_layers"),
         ("measure_actors.rs", "fn append_edit_measure_number"),
         ("measure_actors.rs", "fn append_beat_bar"),
         ("measure_actors.rs", "fn append_cue_bar"),
@@ -5101,6 +5145,8 @@ fn receptor_composition_stays_canonical_and_theme_styled() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let canonical = fs::read_to_string(root.join("crates/deadsync-notefield/src/receptors.rs"))
         .expect("canonical receptor composition should be readable");
+    let frame = fs::read_to_string(root.join("crates/deadsync-notefield/src/frame_feedback.rs"))
+        .expect("canonical feedback-frame composition should be readable");
     let song_lua = fs::read_to_string(root.join("crates/deadsync-notefield/src/song_lua.rs"))
         .expect("canonical song Lua presentation should be readable");
     let contract = fs::read_to_string(root.join("crates/deadsync-theme/src/lib.rs"))
@@ -5116,9 +5162,9 @@ fn receptor_composition_stays_canonical_and_theme_styled() {
         .expect("canonical notefield manifest should be readable");
 
     for token in [
-        "pub struct ReceptorActorsRequest",
-        "pub struct ReceptorPress",
-        "pub fn compose_receptor_actors",
+        "pub(crate) struct ReceptorActorsRequest",
+        "pub(crate) struct ReceptorPress",
+        "pub(crate) fn compose_receptor_actors",
         "S: NoteskinSlot",
         "F: Fn(&S) -> SpriteSource",
         "P: FnOnce() -> Option<ReceptorPress",
@@ -5139,7 +5185,7 @@ fn receptor_composition_stays_canonical_and_theme_styled() {
         "deadsync_shell",
     ] {
         assert!(
-            !canonical.contains(forbidden),
+            !canonical.contains(forbidden) && !frame.contains(forbidden),
             "canonical receptor owner imports concrete/runtime token {forbidden}"
         );
     }
@@ -5148,12 +5194,16 @@ fn receptor_composition_stays_canonical_and_theme_styled() {
     assert!(!theme.contains("fn song_lua_note_model_draw"));
 
     assert!(contract.contains("pub struct ReceptorStyle"));
+    assert!(contract.contains("pub struct NotefieldActorStyle"));
     assert!(contract.contains("pub receptor: ReceptorStyle"));
+    assert!(contract.contains("pub actors: NotefieldActorStyle"));
     assert!(!contract.contains("SimplyLoveNotefieldStyle"));
     for value in [
         "target_z: 100",
         "press_glow_z: 105",
         "hold_explosion_z: 145",
+        "tap_explosion_z: 150",
+        "mine_explosion_z: 101",
     ] {
         assert!(
             theme_style.contains(value),
@@ -5161,30 +5211,50 @@ fn receptor_composition_stays_canonical_and_theme_styled() {
         );
     }
 
-    let start = theme
-        .find("// Receptors + glow")
-        .expect("theme should retain the receptor adapter boundary");
-    let end = theme[start..]
-        .find("// Tap explosions")
-        .map(|offset| start + offset)
-        .expect("theme should retain tap explosion composition after receptors");
-    let adapter = &theme[start..end];
     for token in [
+        "pub struct NotefieldFeedbackFrameView",
+        "pub struct NotefieldLaneFeedback",
+        "pub fn compose_notefield_feedback",
         "compose_receptor_actors(",
         "ReceptorActorsRequest {",
         "ReceptorPress {",
-        "slot.texture_key_handle().into_sprite_source()",
-        "style: style.receptor",
+        "style: request.style.receptor",
     ] {
         assert!(
-            adapter.contains(token),
-            "Simply Love receptor adapter is missing {token}"
+            frame.contains(token),
+            "canonical feedback-frame owner is missing {token}"
         );
     }
-    assert!(
-        !adapter.contains("actors.push"),
-        "Simply Love reintroduced canonical receptor actor composition"
-    );
+    assert!(theme.contains("NotefieldFeedbackFrameView {"));
+    assert!(theme.contains("compose_notefield_feedback("));
+    assert!(theme.contains("slot.texture_key_handle().into_sprite_source()"));
+    assert!(frame.contains("visual.tiny"));
+    let ordered_markers = [
+        "compose_column_feedback(",
+        "compose_receptor_actors(",
+        "for (local_col, active) in frame.tap_explosions",
+        "for (local_col, active) in frame.mine_explosions",
+    ];
+    let mut previous = 0;
+    for marker in ordered_markers {
+        let position = frame[previous..]
+            .find(marker)
+            .map(|offset| previous + offset)
+            .unwrap_or_else(|| panic!("canonical feedback frame is missing {marker}"));
+        previous = position + marker.len();
+    }
+    for low_level in [
+        "compose_receptor_actors(",
+        "ReceptorActorsRequest {",
+        "ReceptorPress {",
+        "compose_column_feedback(",
+        "ColumnFeedbackRequest {",
+    ] {
+        assert!(
+            !theme.contains(low_level),
+            "Simply Love still imports low-level feedback API {low_level}"
+        );
+    }
 }
 
 fn count_download_protocol_game_facade_refs(text: &str, symbol: &str) -> usize {

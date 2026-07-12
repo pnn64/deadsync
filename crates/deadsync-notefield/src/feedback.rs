@@ -133,7 +133,7 @@ pub fn itg_actor_glow_alpha(alpha: f32) -> f32 {
     }
 }
 
-pub const fn hold_glow_color(alpha: f32) -> [f32; 4] {
+pub(crate) const fn hold_glow_color(alpha: f32) -> [f32; 4] {
     [1.0, 1.0, 1.0, alpha]
 }
 
@@ -178,7 +178,7 @@ pub(crate) fn column_cue_alpha(elapsed_real: f32, duration_real: f32) -> f32 {
 }
 
 #[derive(Clone, Copy)]
-pub struct ColumnFeedbackRequest<'a> {
+pub(crate) struct ColumnFeedbackRequest<'a> {
     pub style: NotefieldStyle,
     pub column_cues: Option<&'a [ColumnCue]>,
     pub crossover_cues: Option<&'a [ColumnCue]>,
@@ -212,7 +212,7 @@ enum ColumnCueKind {
 /// Compose canonical column cues, crossover cues, and miss flashes from
 /// gameplay snapshots. Concrete themes supply only style values and font/text
 /// resolution; the notefield owns placement, timing, fades, and actor shape.
-pub fn compose_column_feedback(
+pub(crate) fn compose_column_feedback(
     actors: &mut Vec<Actor>,
     hud_actors: &mut Vec<Actor>,
     request: ColumnFeedbackRequest<'_>,
@@ -542,7 +542,7 @@ mod tests {
     use deadsync_theme::{
         ColumnFlashLayoutStyle, ColumnFlashStyle, ComboFeedbackStyle, CounterHudStyle,
         ErrorBarLayers, ErrorBarPalette, ErrorBarStyle, JudgmentFeedbackStyle, MiniIndicatorStyle,
-        ReceptorStyle,
+        NotefieldActorStyle, ReceptorStyle,
     };
 
     fn style() -> NotefieldStyle {
@@ -556,6 +556,15 @@ mod tests {
                 target_z: 100,
                 press_glow_z: 105,
                 hold_explosion_z: 145,
+            },
+            actors: NotefieldActorStyle {
+                hold_body_z: 110,
+                hold_cap_z: 110,
+                hold_glow_z: 111,
+                tap_explosion_z: 150,
+                mine_explosion_z: 101,
+                note_z: 140,
+                mine_core_size_ratio: 0.45,
             },
             judgment_normal_y: -30.0,
             judgment_reverse_y: 30.0,

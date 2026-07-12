@@ -12,33 +12,30 @@ use deadsync_core::note::NoteType;
 use deadsync_gameplay::{
     AppearanceEffects, FantasticWindowOptions, GameplayErrorBarTrim, TapExplosionOptions,
     VisualEffects, blue_fantastic_window_ms, gameplay_error_bar_trim_max_window_ix,
-    hold_explosion_active, hold_explosion_enabled_for_options, hold_head_render_flags,
-    song_lua_note_hidden,
+    hold_explosion_enabled_for_options, hold_head_render_flags, song_lua_note_hidden,
 };
 use deadsync_notefield::{
-    BuiltNotefield, ColumnFeedbackRequest, ComboFeedbackRequest, ComboMilestoneAssets,
-    CounterHudRequest, ErrorBarComposeRequest, ErrorBarModes, ErrorBarState,
-    ExplosionComposeRequest, ExplosionRotation, HoldBodyCapRequest, HoldComposeControl,
+    BuiltNotefield, ComboFeedbackRequest, ComboMilestoneAssets, CounterHudRequest,
+    ErrorBarComposeRequest, ErrorBarModes, ErrorBarState, HoldBodyCapRequest, HoldComposeControl,
     HoldEntryPlanRequest, HoldPathSample, IndicatorSprite, JudgmentFeedbackRequest,
     JudgmentTiltParams, LayoutMiniIndicatorPosition, MeasureComposeRequest, MeasureCounterOptions,
     MeasureLineMode, MineLayerRequest, MiniIndicatorRequest, ModelMeshCache, NoteAlphaParams,
     NoteLayerRequest, NoteXParams, NotefieldChartView, NotefieldComposeRequest,
-    NotefieldFrameFeatures, NotefieldGeometry, NotefieldNoteskinView, NotefieldOptions,
-    NotefieldSongLuaView, NotefieldVisualState, ReceptorActorsRequest, ReceptorPress,
+    NotefieldFeedbackFrameView, NotefieldFrameFeatures, NotefieldGeometry, NotefieldLaneFeedback,
+    NotefieldNoteskinView, NotefieldOptions, NotefieldSongLuaView, NotefieldVisualState,
     TapJudgmentFeedback, TapJudgmentRowsParams, TapJudgmentSprite, TornadoBounds,
     VisualEffectParams, ZmodLayoutParams, appearance_note_actor_alpha, appearance_note_glow,
-    compose_column_feedback, compose_combo_feedback, compose_counter_hud, compose_error_bar,
-    compose_explosion_layers, compose_hold_body_caps, compose_judgment_feedback,
-    compose_measure_lines, compose_mine_layers, compose_mini_indicator, compose_note_layer,
-    compose_receptor_actors, for_each_visible_hold_index, for_each_visible_note_index,
-    gameplay_visual_effect_params as visual_effect_params, hold_entry_head_beat, hold_entry_plan,
-    hold_overlaps_visible_window, hold_parts_for_note_type, judgment_actor_zoom,
-    judgment_tilt_rotation_deg as crate_judgment_tilt_rotation_deg, mine_hides_after_resolution,
-    mine_part, note_world_z_for_bumpy, note_x_offset as crate_note_x_offset, notefield_view_proj,
-    offset_center, prepare_notefield, receptor_row_center as crate_receptor_row_center,
-    scale_sprite_to_arrow, share_actor_range, song_lua_note_model_draw,
-    tap_judgment_rows as crate_tap_judgment_rows, tap_part_for_note_type, tap_replacement_head,
-    translated_uv_rect, visual_arrow_effect_zoom, visual_confusion_rotation_deg,
+    compose_combo_feedback, compose_counter_hud, compose_error_bar, compose_hold_body_caps,
+    compose_judgment_feedback, compose_measure_lines, compose_mine_layers, compose_mini_indicator,
+    compose_note_layer, compose_notefield_feedback, for_each_visible_hold_index,
+    for_each_visible_note_index, gameplay_visual_effect_params as visual_effect_params,
+    hold_entry_head_beat, hold_entry_plan, hold_overlaps_visible_window, hold_parts_for_note_type,
+    judgment_actor_zoom, judgment_tilt_rotation_deg as crate_judgment_tilt_rotation_deg,
+    mine_hides_after_resolution, mine_part, note_world_z_for_bumpy,
+    note_x_offset as crate_note_x_offset, notefield_view_proj, offset_center, prepare_notefield,
+    receptor_row_center as crate_receptor_row_center, scale_sprite_to_arrow, share_actor_range,
+    song_lua_note_model_draw, tap_judgment_rows as crate_tap_judgment_rows, tap_part_for_note_type,
+    tap_replacement_head, translated_uv_rect, visual_arrow_effect_zoom,
     visual_hold_body_needs_z_buffer, visual_note_rotation_z, visual_pulse_zoom_for_y,
     visual_tiny_zoom, visual_use_legacy_hold_sprites, zmod_broken_run_end,
 };
@@ -118,15 +115,6 @@ fn judgment_tilt_rotation_deg(options: &NotefieldOptions, judgment: &Judgment) -
     })
 }
 
-// Z-order layers for key gameplay visuals (higher draws on top)
-const Z_HOLD_BODY: i32 = 110;
-const Z_HOLD_CAP: i32 = 110;
-const Z_HOLD_GLOW: i32 = 111;
-// ITG's Explosion actor declares hold/roll children before tap judgments, so taps render on top.
-const Z_TAP_EXPLOSION: i32 = 150;
-const Z_MINE_EXPLOSION: i32 = 101;
-const Z_TAP_NOTE: i32 = 140;
-const MINE_CORE_SIZE_RATIO: f32 = 0.45;
 #[inline(always)]
 fn note_slot_base_size(slot: &SpriteSlot, scale: f32) -> [f32; 2] {
     if let Some(model) = slot.model.as_ref() {
@@ -256,11 +244,6 @@ fn pulse_zoom_for_y(y: f32, visual: &VisualEffects) -> f32 {
 #[inline(always)]
 fn arrow_effect_zoom(visual: &VisualEffects, local_col: usize, y: f32) -> f32 {
     visual_arrow_effect_zoom(y, visual_effect_params(visual, local_col))
-}
-
-#[inline(always)]
-fn confusion_rotation_deg(song_beat: f32, visual: VisualEffects, local_col: usize) -> f32 {
-    visual_confusion_rotation_deg(song_beat, visual_effect_params(&visual, local_col))
 }
 
 #[inline(always)]
@@ -671,7 +654,6 @@ pub(crate) fn build_bundles(
     let scroll_speed = prepared.scroll_speed;
     let draw_distance_before_targets = request.geometry.draw_distance_before_targets;
     let draw_distance_after_targets = request.geometry.draw_distance_after_targets;
-    let current_time = prepared.current_time_s;
     let current_beat = prepared.current_beat;
     let measure_line_mode = if request.view.edit_beat_bars {
         MeasureLineMode::Edit
@@ -703,14 +685,11 @@ pub(crate) fn build_bundles(
         perspective.tilt,
         perspective.skew,
     );
-    let receptor_alpha = prepared.receptor_alpha;
     let blind_active = prepared.blind_active;
 
     if let Some(note_inputs) = prepared.notes.as_ref() {
         let ns = note_inputs.base;
         let mine_ns = note_inputs.mine;
-        let receptor_ns = note_inputs.receptor;
-        let tap_explosion_ns = note_inputs.tap_explosion;
         let target_arrow_px = note_inputs.target_arrow_px;
         let scale_sprite =
             |size: [i32; 2]| -> [f32; 2] { scale_sprite_to_arrow(size, target_arrow_px) };
@@ -829,223 +808,46 @@ pub(crate) fn build_bundles(
             },
         );
 
-        compose_column_feedback(
-            actors,
-            hud_actors,
-            ColumnFeedbackRequest {
-                style,
-                column_cues: options
-                    .frame_features
-                    .column_cues
-                    .then(|| state.column_cues(player_idx)),
-                crossover_cues: options
-                    .frame_features
-                    .crossover_cues
-                    .then(|| state.crossover_cues(player_idx)),
-                column_flashes: options
-                    .frame_features
-                    .column_flash
-                    .then(|| state.column_flashes_for_columns(col_start, num_cols)),
-                // Preserve the existing regular-cue behavior: its countdown is
-                // independent of the crossover-only profile toggle.
-                regular_countdown: true,
-                crossover_countdown: options.frame_features.crossover_countdown,
-                current_music_time: current_time,
-                current_screen_time: elapsed_screen,
-                music_rate: request.chart.music_rate,
-                col_start,
-                num_cols,
-                column_xs: &measure_column_xs,
-                column_dirs: &column_dirs,
-                spacing_multiplier: spacing_mult,
-                field_zoom,
-                playfield_center_x,
-                field_center_y: notefield_offset_y,
-                screen_height: screen_height(),
-                compact_flashes: options.column_flash_compact,
-                dim_flashes: options.column_flash_dimmed,
-                countdown_font: mc_font_name,
-                countdown_text: cached_int_i32,
-            },
-        );
-
-        // Receptors + glow
         let noteskin_sprite_source =
             |slot: &SpriteSlot| slot.texture_key_handle().into_sprite_source();
-        for (i, &receptor_y_lane) in column_receptor_ys.iter().take(num_cols).enumerate() {
-            let col = col_start + i;
-            let receptor_hidden_by_song_lua =
-                song_lua_note_hidden(request.song_lua.note_hides, i, current_beat);
-            let confusion_receptor_rot = confusion_rotation_deg(current_beat, visual, i);
-            let receptor_center = receptor_row_center(
-                playfield_center_x,
-                i,
-                receptor_y_lane,
-                request.arrow_effect_time_s,
-                beat_push,
-                visual,
-                &col_offsets[..num_cols],
-                &invert_distances[..num_cols],
-                &tornado_bounds[..num_cols],
-            );
-            let bop_zoom = state.receptor_bop_zoom(col);
-            let receptor_effect_zoom = arrow_effect_zoom(&visual, i, 0.0);
-            let hold_slot = if receptor_hidden_by_song_lua || !options.hold_explosion_enabled {
-                None
-            } else {
-                state.active_hold(col).and_then(|active| {
-                    let note = request.chart.notes.get(active.note_index)?;
-                    if !hold_explosion_active(Some(active), current_beat, note.beat) {
-                        return None;
-                    }
-                    tap_explosion_ns.and_then(|ns| {
-                        ns.hold_explosion_for_col(i, matches!(note.note_type, NoteType::Roll))
-                    })
-                })
-            };
-            let targets_visible = !receptor_hidden_by_song_lua
-                && !options.hide_targets
-                && receptor_alpha > f32::EPSILON;
-            let target_slot = targets_visible.then(|| &receptor_ns.receptor_off[i]);
-            let target_reverse = targets_visible
-                .then(|| receptor_ns.receptor_off_reverse.get(i).copied())
-                .flatten();
-            let resolve_receptor_press = || {
-                let visual = state.receptor_glow_visual_for_col(col)?;
-                let slot = receptor_ns
-                    .receptor_glow
-                    .get(i)
-                    .and_then(|slot| slot.as_ref())?;
-                Some(ReceptorPress {
-                    slot,
-                    reverse: receptor_ns.receptor_glow_reverse.get(i).copied(),
-                    visual,
-                })
-            };
-            compose_receptor_actors(
-                actors,
-                &mut model_cache,
-                ReceptorActorsRequest {
-                    target_slot,
-                    target_reverse,
-                    hold_slot,
-                    center: receptor_center,
-                    hidden: receptor_hidden_by_song_lua,
-                    hide_targets: options.hide_targets,
-                    reverse: column_reverse_percent[i] > 0.5,
-                    bop_zoom,
-                    effect_zoom: receptor_effect_zoom,
-                    confusion_rotation_deg: confusion_receptor_rot,
-                    elapsed: elapsed_screen,
-                    beat: current_beat,
-                    receptor_alpha,
-                    field_zoom,
-                    rotation_y_deg: note_rotation_y,
-                    pulse: &receptor_ns.receptor_pulse,
-                    press_behavior: receptor_ns.receptor_glow_behavior,
-                    style: style.receptor,
-                },
-                resolve_receptor_press,
-                &noteskin_sprite_source,
-            );
-        }
-        // Tap explosions (receptor noteflash / GhostArrow) are independent of
-        // the "Hide Combo Explosions" UI option, which only affects combo splodes.
-        for (i, active_opt) in state
-            .tap_explosions_for_columns(col_start, num_cols)
-            .iter()
-            .enumerate()
-        {
-            if song_lua_note_hidden(request.song_lua.note_hides, i, current_beat) {
-                continue;
-            }
-            if let Some(active) = active_opt.as_ref()
-                && let Some(tap_explosion_ns) = tap_explosion_ns
-                && let Some(explosion) = tap_explosion_ns.tap_explosion_for_col_with_bright(
-                    i,
-                    active.window,
-                    active.bright,
-                )
-            {
-                let receptor_y_lane = column_receptor_ys[i];
-                let receptor_center = receptor_row_center(
-                    playfield_center_x,
-                    i,
-                    receptor_y_lane,
-                    request.arrow_effect_time_s,
-                    beat_push,
-                    visual,
-                    &col_offsets[..num_cols],
-                    &invert_distances[..num_cols],
-                    &tornado_bounds[..num_cols],
-                );
-                let confusion_receptor_rot = confusion_rotation_deg(current_beat, visual, i);
-                let explosion_effect_zoom = arrow_effect_zoom(&visual, i, 0.0);
-                compose_explosion_layers(
-                    actors,
-                    ExplosionComposeRequest {
-                        layers: explosion.layers.as_ref(),
-                        elapsed_s: active.elapsed,
-                        current_frame_beat: request.visual.current_display_beat,
-                        relative_frame_beat: Some(
-                            (request.visual.current_display_beat - active.start_beat).max(0.0),
-                        ),
-                        uv_elapsed_s: elapsed_screen,
-                        center: receptor_center,
-                        field_zoom,
-                        effect_zoom: explosion_effect_zoom,
-                        rotation: ExplosionRotation::Tap {
-                            rotation_y_deg: flat_tap_face_rotation_y,
-                            extra_z_deg: confusion_receptor_rot,
-                        },
-                        z: Z_TAP_EXPLOSION as i16,
-                    },
-                    &noteskin_sprite_source,
-                );
-            }
-        }
-        // Mine explosions
-        for (i, active_opt) in state
-            .mine_explosions_for_columns(col_start, num_cols)
-            .iter()
-            .enumerate()
-        {
-            let Some(active) = active_opt.as_ref() else {
-                continue;
-            };
-            let Some(explosion) = mine_ns.mine_hit_explosion.as_ref() else {
-                continue;
-            };
-            let receptor_y_lane = column_receptor_ys[i];
-            let receptor_center = receptor_row_center(
-                playfield_center_x,
-                i,
-                receptor_y_lane,
-                request.arrow_effect_time_s,
-                beat_push,
-                visual,
-                &col_offsets[..num_cols],
-                &invert_distances[..num_cols],
-                &tornado_bounds[..num_cols],
-            );
-            let explosion_effect_zoom = arrow_effect_zoom(&visual, i, 0.0);
-            compose_explosion_layers(
-                actors,
-                ExplosionComposeRequest {
-                    layers: explosion.layers.as_ref(),
-                    elapsed_s: active.elapsed,
-                    current_frame_beat: current_beat,
-                    relative_frame_beat: None,
-                    uv_elapsed_s: elapsed_screen,
-                    center: receptor_center,
-                    field_zoom,
-                    effect_zoom: explosion_effect_zoom,
-                    rotation: ExplosionRotation::Mine,
-                    z: Z_MINE_EXPLOSION as i16,
-                },
-                &noteskin_sprite_source,
-            );
-        }
+        let feedback_frame = NotefieldFeedbackFrameView {
+            column_cues: options
+                .frame_features
+                .column_cues
+                .then(|| state.column_cues(player_idx)),
+            crossover_cues: options
+                .frame_features
+                .crossover_cues
+                .then(|| state.crossover_cues(player_idx)),
+            column_flashes: options
+                .frame_features
+                .column_flash
+                .then(|| state.column_flashes_for_columns(col_start, num_cols)),
+            tap_explosions: state.tap_explosions_for_columns(col_start, num_cols),
+            mine_explosions: state.mine_explosions_for_columns(col_start, num_cols),
+            lanes: from_fn(|local_col| {
+                if local_col >= num_cols {
+                    return NotefieldLaneFeedback::default();
+                }
+                let col = col_start + local_col;
+                NotefieldLaneFeedback {
+                    active_hold: state.active_hold(col),
+                    receptor_bop_zoom: state.receptor_bop_zoom(col),
+                    receptor_press_visual: state.receptor_glow_visual_for_col(col),
+                }
+            }),
+            countdown_font: mc_font_name,
+            countdown_text: cached_int_i32,
+        };
+        compose_notefield_feedback(
+            actors,
+            hud_actors,
+            &mut model_cache,
+            &request,
+            &prepared,
+            &feedback_frame,
+            &noteskin_sprite_source,
+        );
         let mut render_hold = |note_index: usize| {
             let note = &request.chart.notes[note_index];
             if note.column < col_start || note.column >= col_end {
@@ -1227,9 +1029,9 @@ pub(crate) fn build_bundles(
                     rotation_y_deg: note_rotation_y,
                     depth_test: hold_depth_test,
                     screen_height: screen_height(),
-                    body_z: Z_HOLD_BODY as i16,
-                    cap_z: Z_HOLD_CAP as i16,
-                    glow_z: Z_HOLD_GLOW as i16,
+                    body_z: style.actors.hold_body_z,
+                    cap_z: style.actors.hold_cap_z,
+                    glow_z: style.actors.hold_glow_z,
                 },
                 &sample_hold_path,
                 &noteskin_sprite_source,
@@ -1339,7 +1141,7 @@ pub(crate) fn build_bundles(
                             tint: color,
                             glow_alpha: head_glow,
                             blend,
-                            z: Z_TAP_NOTE as i16,
+                            z: style.actors.note_z,
                             world_z: head_world_z,
                             prefer_sprite: prefer_sprite_note_path,
                         },
@@ -1394,7 +1196,7 @@ pub(crate) fn build_bundles(
                             draw.tint[2] * hold_diffuse[2],
                             draw.tint[3] * hold_diffuse[3] * head_alpha,
                         ];
-                        let layer_z = Z_TAP_NOTE;
+                        let layer_z = i32::from(style.actors.note_z);
                         let blend = if draw.blend_add {
                             BlendMode::Add
                         } else {
@@ -1469,7 +1271,7 @@ pub(crate) fn build_bundles(
                             ],
                             glow_alpha: head_glow,
                             blend: BlendMode::Alpha,
-                            z: Z_TAP_NOTE as i16,
+                            z: style.actors.note_z,
                             world_z: head_world_z,
                             prefer_sprite: prefer_sprite_note_path,
                         },
@@ -1593,8 +1395,8 @@ pub(crate) fn build_bundles(
                                 gradient_slot: fill_gradient_slot,
                                 frame_slot,
                                 gradient_size: [
-                                    circle_reference[0] * MINE_CORE_SIZE_RATIO,
-                                    circle_reference[1] * MINE_CORE_SIZE_RATIO,
+                                    circle_reference[0] * style.actors.mine_core_size_ratio,
+                                    circle_reference[1] * style.actors.mine_core_size_ratio,
                                 ],
                                 center: [column_center_x, y_pos],
                                 mine_uv_phase,
@@ -1607,7 +1409,7 @@ pub(crate) fn build_bundles(
                                 note_rotation_z_deg: note_rot,
                                 alpha: note_alpha,
                                 glow_alpha: note_glow,
-                                note_z: Z_TAP_NOTE as i16,
+                                note_z: style.actors.note_z,
                                 world_z: note_world_z,
                                 prefer_sprite: prefer_sprite_note_path,
                             },
@@ -1711,7 +1513,7 @@ pub(crate) fn build_bundles(
                                         tint: color,
                                         glow_alpha: note_glow,
                                         blend,
-                                        z: Z_TAP_NOTE as i16,
+                                        z: style.actors.note_z,
                                         world_z: note_world_z,
                                         prefer_sprite: prefer_sprite_note_path,
                                     },
@@ -1764,7 +1566,7 @@ pub(crate) fn build_bundles(
                                     tint: [1.0, 1.0, 1.0, note_alpha],
                                     glow_alpha: note_glow,
                                     blend: BlendMode::Alpha,
-                                    z: Z_TAP_NOTE as i16,
+                                    z: style.actors.note_z,
                                     world_z: note_world_z,
                                     prefer_sprite: prefer_sprite_note_path,
                                 },
@@ -1826,7 +1628,7 @@ pub(crate) fn build_bundles(
                             if note_size[0] <= f32::EPSILON || note_size[1] <= f32::EPSILON {
                                 continue;
                             }
-                            let layer_z = Z_TAP_NOTE;
+                            let layer_z = i32::from(style.actors.note_z);
                             let blend = if draw.blend_add {
                                 BlendMode::Add
                             } else {
@@ -1905,7 +1707,7 @@ pub(crate) fn build_bundles(
                                 tint: [1.0, 1.0, 1.0, note_alpha],
                                 glow_alpha: note_glow,
                                 blend: BlendMode::Alpha,
-                                z: Z_TAP_NOTE as i16,
+                                z: style.actors.note_z,
                                 world_z: note_world_z,
                                 prefer_sprite: prefer_sprite_note_path,
                             },

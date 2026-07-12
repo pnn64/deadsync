@@ -1,18 +1,18 @@
 use super::{
-    TornadoBounds, Z_HOLD_BODY, Z_HOLD_GLOW, Z_TAP_NOTE, confusion_rotation_deg,
-    error_bar_trim_max_window_ix, hold_explosion_active, hold_explosion_enabled,
-    hold_head_render_flags, judgment_frame_size, note_slot_base_size, note_world_z_for_bumpy,
-    note_x_offset, offset_center, receptor_row_center,
+    TornadoBounds, error_bar_trim_max_window_ix, hold_explosion_enabled, hold_head_render_flags,
+    judgment_frame_size, note_slot_base_size, note_world_z_for_bumpy, note_x_offset, offset_center,
+    receptor_row_center,
 };
 use crate::assets;
 use crate::notefield_style::notefield_style;
 use deadsync_assets::noteskin::load_itg_skin;
 use deadsync_core::note::NoteType;
-use deadsync_gameplay::{ActiveHold, VisualEffects};
+use deadsync_gameplay::{ActiveHold, VisualEffects, hold_explosion_active};
 use deadsync_notefield::{
-    NoteXParams, error_bar_boundaries_s, error_bar_text_scalable_zoom, hold_entry_head_beat,
-    itg_actor_glow_alpha, move_col_extra, note_x_offset as canonical_note_x_offset,
-    receptor_row_center as canonical_receptor_row_center, tipsy_y_extra,
+    NoteXParams, error_bar_boundaries_s, error_bar_text_scalable_zoom,
+    gameplay_visual_effect_params, hold_entry_head_beat, itg_actor_glow_alpha, move_col_extra,
+    note_x_offset as canonical_note_x_offset, receptor_row_center as canonical_receptor_row_center,
+    tipsy_y_extra, visual_confusion_rotation_deg,
 };
 use deadsync_noteskin::{NUM_QUANTIZATIONS, Quantization, Style};
 use deadsync_profile as profile_data;
@@ -188,22 +188,23 @@ fn let_go_head_beat_uses_last_held_once_visible_clock_has_caught_up() {
 
 #[test]
 fn receptor_glow_draws_under_hold_body() {
-    let receptor = notefield_style().receptor;
-    assert!(i32::from(receptor.target_z) < Z_HOLD_BODY);
-    assert!(i32::from(receptor.press_glow_z) < Z_HOLD_BODY);
+    let style = notefield_style();
+    assert!(style.receptor.target_z < style.actors.hold_body_z);
+    assert!(style.receptor.press_glow_z < style.actors.hold_body_z);
 }
 
 #[test]
 fn hold_glow_draws_over_hold_body_like_itg_second_pass() {
-    assert!(Z_HOLD_BODY < Z_HOLD_GLOW);
-    assert!(Z_HOLD_GLOW < Z_TAP_NOTE);
+    let actors = notefield_style().actors;
+    assert!(actors.hold_body_z < actors.hold_glow_z);
+    assert!(actors.hold_glow_z < actors.note_z);
 }
 
 #[test]
 fn average_error_bar_draws_under_receptors() {
     let z = notefield_style().error_bar.average_z;
     assert!(z < notefield_style().receptor.target_z);
-    assert!(i32::from(z) < Z_TAP_NOTE);
+    assert!(z < notefield_style().actors.note_z);
 }
 
 #[test]
@@ -260,7 +261,11 @@ fn move_and_confusion_column_mods_match_itg_scaling() {
 
     assert_eq!(move_col_extra(&visual.move_x_cols, 1), 32.0);
     assert_eq!(move_col_extra(&visual.move_y_cols, 1), -16.0);
-    assert!((confusion_rotation_deg(0.0, visual, 1) + 90.0).abs() <= 1e-6);
+    assert!(
+        (visual_confusion_rotation_deg(0.0, gameplay_visual_effect_params(&visual, 1)) + 90.0)
+            .abs()
+            <= 1e-6
+    );
 }
 
 #[test]

@@ -51,7 +51,8 @@ use crate::offset_prompt::{
     gameplay_offset_saveable_changed, route_offset_prompt_input,
 };
 use crate::profile_session::{
-    persist_gameplay_combo_carry, record_last_played_course, reset_operator_profile_session,
+    persist_gameplay_combo_carry, profile_selection_session_plan, record_last_played_course,
+    reset_operator_profile_session,
 };
 use crate::restart::{
     GameplayReloadSource, GameplayRestartRoute, RestartPrepareSource, fast_gameplay_restart_plan,
@@ -1937,7 +1938,20 @@ impl App {
                 Vec::new()
             }
             ThemeEffectExecution::Runtime(request) => match request {
-                SimplyLoveRuntimeRequest::Profile(SimplyLoveProfileRequest::Select { p1, p2 }) => {
+                SimplyLoveRuntimeRequest::Profile(SimplyLoveProfileRequest::Select {
+                    p1,
+                    p2,
+                    p1_joined,
+                    p2_joined,
+                }) => {
+                    let session = profile_selection_session_plan(
+                        profile::get_session_play_style(),
+                        p1_joined,
+                        p2_joined,
+                    );
+                    profile::set_session_player_side(session.active_side);
+                    profile::set_session_joined(session.p1_joined, session.p2_joined);
+                    profile::set_session_play_style(session.play_style);
                     let fast_profile_switch = profile::take_fast_profile_switch_from_select_music();
                     let profile_data = profile::set_active_profiles(p1, p2);
                     let (show_groovestats_login, show_arrowcloud_login) = if fast_profile_switch {

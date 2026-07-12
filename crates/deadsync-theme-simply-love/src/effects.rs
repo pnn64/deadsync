@@ -23,6 +23,8 @@ pub enum SimplyLoveProfileRequest {
     Select {
         p1: ActiveProfile,
         p2: ActiveProfile,
+        p1_joined: bool,
+        p2_joined: bool,
     },
     PickImportFolder {
         title: String,

@@ -233,6 +233,19 @@ pub struct ReceptorStyle {
     pub hold_explosion_z: i16,
 }
 
+/// Theme-selected actor layers and ratios consumed by canonical note-field
+/// composition.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct NotefieldActorStyle {
+    pub hold_body_z: i16,
+    pub hold_cap_z: i16,
+    pub hold_glow_z: i16,
+    pub tap_explosion_z: i16,
+    pub mine_explosion_z: i16,
+    pub note_z: i16,
+    pub mine_core_size_ratio: f32,
+}
+
 /// Concrete-theme metrics consumed by the canonical notefield layout plan.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct NotefieldStyle {
@@ -242,6 +255,7 @@ pub struct NotefieldStyle {
     pub receptor_normal_y: f32,
     pub receptor_reverse_y: f32,
     pub receptor: ReceptorStyle,
+    pub actors: NotefieldActorStyle,
     pub judgment_normal_y: f32,
     pub judgment_reverse_y: f32,
     pub judgment_centered_y: f32,
@@ -291,7 +305,7 @@ mod tests {
     use super::{
         ColumnCueStyle, ColumnFlashLayoutStyle, ColumnFlashStyle, ComboFeedbackStyle,
         CounterHudStyle, ErrorBarLayers, ErrorBarPalette, ErrorBarStyle, JudgmentFeedbackStyle,
-        MiniIndicatorStyle, NotefieldStyle, ReceptorStyle,
+        MiniIndicatorStyle, NotefieldActorStyle, NotefieldStyle, ReceptorStyle,
     };
 
     #[test]
@@ -306,6 +320,15 @@ mod tests {
                 target_z: 100,
                 press_glow_z: 105,
                 hold_explosion_z: 145,
+            },
+            actors: NotefieldActorStyle {
+                hold_body_z: 110,
+                hold_cap_z: 110,
+                hold_glow_z: 111,
+                tap_explosion_z: 150,
+                mine_explosion_z: 101,
+                note_z: 140,
+                mine_core_size_ratio: 0.45,
             },
             judgment_normal_y: -30.0,
             judgment_reverse_y: 30.0,
@@ -510,5 +533,7 @@ mod tests {
 
         assert_eq!(style.layout_width_min, 640.0);
         assert_eq!(style.error_bar_offset_y, 25.0);
+        assert_eq!(style.actors.tap_explosion_z, 150);
+        assert_eq!(style.actors.mine_core_size_ratio, 0.45);
     }
 }

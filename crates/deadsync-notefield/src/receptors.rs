@@ -68,7 +68,7 @@ pub(crate) fn hold_indicator_column_x(
 }
 
 /// Per-lane canonical receptor inputs supplied by a concrete gameplay screen.
-pub struct ReceptorActorsRequest<'a, S> {
+pub(crate) struct ReceptorActorsRequest<'a, S> {
     /// Resolved lazily by the adapter so hidden targets preserve the old
     /// short-circuit behavior and never index the concrete noteskin slots.
     pub target_slot: Option<&'a S>,
@@ -92,7 +92,7 @@ pub struct ReceptorActorsRequest<'a, S> {
 }
 
 /// Lazily resolved press-glow inputs, read only after hold composition succeeds.
-pub struct ReceptorPress<'a, S> {
+pub(crate) struct ReceptorPress<'a, S> {
     pub slot: &'a S,
     pub reverse: Option<ReceptorReverseBehavior>,
     pub visual: (f32, f32),
@@ -112,7 +112,7 @@ struct ReceptorSpriteDraw {
 }
 
 /// Appends one lane's target, hold explosion, and press glow in canonical order.
-pub fn compose_receptor_actors<'a, S, F, P>(
+pub(crate) fn compose_receptor_actors<'a, S, F, P>(
     actors: &mut Vec<Actor>,
     model_cache: &mut ModelMeshCache,
     request: ReceptorActorsRequest<'a, S>,
