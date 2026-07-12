@@ -145,7 +145,10 @@ impl App {
             let color_index = self.state.screens.options_state.active_color_index;
             self.state.screens.smx_assign_state = screens::smx_assign::init();
             self.state.screens.smx_assign_state.active_color_index = color_index;
-            screens::smx_assign::on_enter(&mut self.state.screens.smx_assign_state);
+            screens::smx_assign::on_enter(
+                &mut self.state.screens.smx_assign_state,
+                &crate::smx_config::smx_assignment_view(),
+            );
         }
 
         if prev == CurrentScreen::SelectColor {

@@ -63,7 +63,7 @@ use deadsync_simfile::song_sort::{
     title_grouped_songs,
 };
 use deadsync_simfile::sync_offset::SongOffsetSyncChange;
-use deadsync_theme::views::AudioPlaybackView;
+use deadsync_theme::views::{AudioPlaybackView, SmxAssignmentPadView, SmxAssignmentView};
 use deadsync_theme::{AudioCut, AudioRequest};
 use image::{Rgba, RgbaImage};
 use log::{debug, warn};
@@ -1013,6 +1013,21 @@ struct PlaylistCacheEntry {
     entries: Vec<MusicWheelEntry>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SmxPadProfileEvent {
+    Applied {
+        pad: usize,
+        preset: bool,
+        name: String,
+    },
+    Captured {
+        pad: usize,
+        profile_id: String,
+        name: String,
+        overwrite: bool,
+    },
+}
+
 /// What deadsync last applied to an SMX pad, so the UI can flag the active one.
 /// `preset` = a built-in preset (name is its label); otherwise a saved config.
 /// A request from the Song Select UI to the App-owned pad-config controller
@@ -1069,6 +1084,8 @@ pub struct State {
     /// pushed every frame; the authoritative state lives on the app, so screen
     /// rebuilds can't lose it.
     pub smx_applied: [Option<AppliedPadConfig>; 2],
+    pub smx_pads: [SmxAssignmentPadView; 2],
+    pub smx_pad_profile_events: Vec<SmxPadProfileEvent>,
     /// Queued requests for the App pad-config controller (drained each frame).
     pub pad_config_intents: Vec<PadConfigIntent>,
     profile_switch_overlay: Option<profile_boxes::State>,
@@ -1105,6 +1122,7 @@ pub struct State {
     last_replaygain_prewarmed_pack: Option<String>,
     pending_audio: Vec<AudioRequest>,
     pending_sync: Vec<crate::SimplyLoveSyncRequest>,
+    pending_hardware: Vec<crate::SimplyLoveHardwareRequest>,
     bg: visual_style_bg::State,
     last_requested_banner_path: Option<PathBuf>,
     last_requested_cdtitle_path: Option<PathBuf>,
@@ -2674,6 +2692,8 @@ pub fn init() -> State {
         pad_config_overlay_visible: false,
         pad_config_overlay: pad_config::State::default(),
         smx_applied: [None, None],
+        smx_pads: std::array::from_fn(|_| SmxAssignmentPadView::default()),
+        smx_pad_profile_events: Vec::new(),
         pad_config_intents: Vec::new(),
         profile_switch_overlay: None,
         profile_switch_overlay_is_late_join: false,
@@ -2686,6 +2706,7 @@ pub fn init() -> State {
         last_replaygain_prewarmed_pack: None,
         pending_audio: Vec::new(),
         pending_sync: Vec::new(),
+        pending_hardware: Vec::new(),
         bg: visual_style_bg::State::new(),
         last_requested_banner_path: None,
         last_requested_cdtitle_path: None,
@@ -2871,6 +2892,8 @@ pub fn init_placeholder() -> State {
         pad_config_overlay_visible: false,
         pad_config_overlay: pad_config::State::default(),
         smx_applied: [None, None],
+        smx_pads: std::array::from_fn(|_| SmxAssignmentPadView::default()),
+        smx_pad_profile_events: Vec::new(),
         pad_config_intents: Vec::new(),
         profile_switch_overlay: None,
         profile_switch_overlay_is_late_join: false,
@@ -2883,6 +2906,7 @@ pub fn init_placeholder() -> State {
         last_replaygain_prewarmed_pack: None,
         pending_audio: Vec::new(),
         pending_sync: Vec::new(),
+        pending_hardware: Vec::new(),
         bg: visual_style_bg::State::new(),
         last_requested_banner_path: None,
         last_requested_cdtitle_path: None,
@@ -3100,6 +3124,11 @@ fn queue_sync(state: &mut State, request: crate::SimplyLoveSyncRequest) {
     state.pending_sync.push(request);
 }
 
+#[inline(always)]
+fn queue_hardware(state: &mut State, request: crate::SimplyLoveHardwareRequest) {
+    state.pending_hardware.push(request);
+}
+
 fn queue_lobby_sounds(state: &mut State) {
     let sounds = lobby_overlay::take_pending_sounds(&mut state.lobby_overlay);
     for sound in sounds {
@@ -3107,14 +3136,20 @@ fn queue_lobby_sounds(state: &mut State) {
     }
 }
 
-fn prepend_pending_audio(state: &mut State, effect: ThemeEffect) -> ThemeEffect {
-    let request_count = state.pending_audio.len() + state.pending_sync.len();
+fn prepend_pending_runtime(state: &mut State, effect: ThemeEffect) -> ThemeEffect {
+    let request_count =
+        state.pending_audio.len() + state.pending_sync.len() + state.pending_hardware.len();
     if request_count == 0 {
         return effect;
     }
 
     let has_effect = !matches!(effect, ThemeEffect::None);
     let mut effects = Vec::with_capacity(request_count + usize::from(has_effect));
+    effects.extend(
+        state.pending_hardware.drain(..).map(|request| {
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Hardware(request))
+        }),
+    );
     effects.extend(
         state
             .pending_audio
@@ -3131,7 +3166,9 @@ fn prepend_pending_audio(state: &mut State, effect: ThemeEffect) -> ThemeEffect 
         effects.push(effect);
     }
     if effects.len() == 1 {
-        effects.pop().expect("one queued SelectMusic audio effect")
+        effects
+            .pop()
+            .expect("one queued Select Music runtime effect")
     } else {
         ThemeEffect::Batch(effects)
     }
@@ -3532,8 +3569,7 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
     let style = profile::get_session_play_style();
     let mut pads: Vec<(bool, Option<String>, usize)> = Vec::new(); // (p2, profile_id?, slot)
     for slot in 0..2 {
-        let info = deadsync_smx::get_info(slot);
-        if !info.connected {
+        if !state.smx_pads[slot].connected {
             continue;
         }
         // Player side is the slot (the SDK orders slot 0 = P1, slot 1 = P2 per the
@@ -3587,18 +3623,17 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
         // gets presets only).
         let Some(pid) = pid else { continue };
         // Only the configs that match this pad's sensor type (FSR vs load cell).
-        let pad_type = deadsync_smx::pad_sensor_type(*slot).map(|t| t.as_str().to_owned());
-        let serial = deadsync_smx::get_info(*slot).serial;
+        let pad = &state.smx_pads[*slot];
         let configs: Vec<_> = profile::load_pad_configs(pid)
             .into_iter()
             .filter(|c| {
-                pad_profile_data::config_matches(c, deadsync_smx::BACKEND_ID, pad_type.as_deref())
+                pad_profile_data::config_matches(c, &pad.backend_id, pad.pad_type.as_deref())
             })
             .collect();
         for c in &configs {
             let active = applied.is_some_and(|a| !a.preset && a.name == c.name);
             let star = if active { "* " } else { "" };
-            let default = if pad_profile_data::is_default_for(c, &serial) {
+            let default = if pad_profile_data::is_default_for(c, &pad.serial) {
                 " (default)"
             } else {
                 ""
@@ -3925,7 +3960,7 @@ pub fn open_late_join_profile_overlay(
     profile_boxes::enter_late_join(&mut overlay, joining_side);
     state.profile_switch_overlay = Some(overlay);
     state.profile_switch_overlay_is_late_join = true;
-    prepend_pending_audio(state, ThemeEffect::None)
+    prepend_pending_runtime(state, ThemeEffect::None)
 }
 
 #[inline(always)]
@@ -7615,50 +7650,32 @@ fn handle_pad_config_overlay_input(state: &mut State, ev: &InputEvent, fine: boo
     ThemeEffect::None
 }
 
-/// Load the named saved config from `profile_id`, decode it, and write it to the
-/// SMX pad in `slot`. Returns whether it was applied — the shared core of quick
-/// recall and the overlay's Apply, so both resolve a saved config the same way.
-fn apply_saved_pad_config(profile_id: &str, slot: usize, name: &str) -> bool {
-    let configs = profile::load_pad_configs(profile_id);
-    let Some(c) = configs.iter().find(|c| c.name == name) else {
-        return false;
-    };
-    match deadsync_smx::PadConfigData::from_settings(&c.settings) {
-        Some(data) => deadsync_smx::apply_config_data(slot, &data),
-        None => false,
-    }
-}
-
-/// Apply a recalled pad preset/saved-config to the connected SMX pad for a side
-/// (quick recall from the Advanced menu). Returns whether it was applied.
-fn apply_pad_profile_recall(state: &mut State, p2: bool, preset: bool, name: &str) -> bool {
+/// Request a recalled preset/saved config for the connected SMX pad on a side.
+/// Shell reports successful hardware writes through `smx_pad_profile_events`.
+fn request_pad_profile_recall(state: &mut State, p2: bool, preset: bool, name: &str) -> bool {
     // Player side is the slot (the SDK orders slot 0 = P1, slot 1 = P2 per the
     // pad→player assignment): P1 -> slot 0, P2 -> slot 1.
     let slot = usize::from(p2);
-    if !deadsync_smx::get_info(slot).connected {
+    if !state.smx_pads[slot].connected {
         return false;
     }
-    let applied = if preset {
-        match <crate::config::SmxPadPreset as std::str::FromStr>::from_str(name) {
-            Ok(p) => deadsync_smx::apply_preset(slot, p),
-            Err(()) => false,
+    let request = if preset {
+        crate::SimplyLoveHardwareRequest::ApplySmxPadPreset {
+            pad: slot,
+            name: name.to_owned(),
         }
     } else {
         let Some(pid) = profile::active_local_profile_id_for_pad(p2) else {
             return false;
         };
-        apply_saved_pad_config(&pid, slot, name)
-    };
-    if applied {
-        state.pad_config_intents.push(PadConfigIntent::Override {
+        crate::SimplyLoveHardwareRequest::ApplySmxPadConfig {
             pad: slot,
-            applied: AppliedPadConfig {
-                preset,
-                name: name.to_owned(),
-            },
-        });
-    }
-    applied
+            profile_id: pid,
+            name: name.to_owned(),
+        }
+    };
+    queue_hardware(state, request);
+    true
 }
 
 /// Pure decision behind [`refresh_sibling_pad_list`]: given the edited `slot`, the
@@ -7702,12 +7719,11 @@ fn refresh_sibling_pad_list(state: &mut State, slot: usize, profile_id: &str, re
     // A disconnected sibling has no list to sync, and its profile read off stale
     // info would be meaningless; the pure helper folds both cases into `None`.
     let other = 1 - slot;
-    let other_info = deadsync_smx::get_info(other);
     // Sibling's player side is its slot, not the raw jumper bit.
     let sibling_profile = profile::active_local_profile_id_for_pad(other == 1);
     if let Some(intent) = sibling_refresh_intent(
         slot,
-        other_info.connected,
+        state.smx_pads[other].connected,
         sibling_profile.as_deref(),
         profile_id,
         reresolve,
@@ -7734,7 +7750,9 @@ fn perform_pad_profile_save(state: &mut State) {
         return;
     }
     let slot = device.index;
-    let info = deadsync_smx::get_info(slot);
+    let Some(serial) = state.smx_pads.get(slot).map(|pad| pad.serial.clone()) else {
+        return;
+    };
     // Player side is the slot, not the raw jumper bit (the serial below still
     // comes from whichever pad occupies this slot).
     let Some(profile_id) = profile::active_local_profile_id_for_pad(slot == 1) else {
@@ -7746,7 +7764,7 @@ fn perform_pad_profile_save(state: &mut State) {
         profile::rename_pad_config(&profile_id, &old, &name);
         let pad = slot;
         if draft.set_default {
-            profile::set_default_pad_config(&profile_id, &info.serial, &name);
+            profile::set_default_pad_config(&profile_id, &serial, &name);
             // New default → re-resolve (applies it) and rebuild the list.
             state
                 .pad_config_intents
@@ -7777,39 +7795,16 @@ fn perform_pad_profile_save(state: &mut State) {
         queue_sfx(state, "assets/sounds/start.ogg");
         return;
     }
-    // Save new: capture the pad's live tuning under the given name, tagged with
-    // the backend + sensor type so it only applies to a matching pad.
-    let Some(data) = deadsync_smx::capture_config(slot) else {
-        return;
-    };
-    let pad_type = deadsync_smx::pad_sensor_type(slot).map(|t| t.as_str().to_owned());
-    profile::upsert_pad_config(
-        &profile_id,
-        &name,
-        deadsync_smx::BACKEND_ID,
-        pad_type,
-        Some(info.serial),
-        draft.set_default,
-        data.to_settings(),
-    );
-    // A new config entered the list → rebuild it (but don't re-resolve: the pad is
-    // already running these captured values). Mark the new config active so its
-    // `*`/green shows immediately.
-    let pad = slot;
-    state
-        .pad_config_intents
-        .push(PadConfigIntent::RefreshList { pad });
-    state.pad_config_intents.push(PadConfigIntent::Override {
-        pad,
-        applied: AppliedPadConfig {
-            preset: false,
+    queue_hardware(
+        state,
+        crate::SimplyLoveHardwareRequest::CaptureSmxPadConfig {
+            pad: slot,
+            profile_id,
             name,
+            set_default: draft.set_default,
+            overwrite: false,
         },
-    });
-    // The sibling pad (same profile, e.g. Doubles) caches its own copy of the list;
-    // refresh it so the new config shows there too without another edit.
-    refresh_sibling_pad_list(state, slot, &profile_id, false);
-    queue_sfx(state, "assets/sounds/start.ogg");
+    );
 }
 
 /// Resolve the profiles-list cursor to `(profile_id, config_name, smx_slot)` for
@@ -7830,16 +7825,14 @@ fn perform_pad_profile_apply(state: &mut State) {
     let Some((profile_id, name, slot)) = pad_overlay_profile_target(state) else {
         return;
     };
-    if apply_saved_pad_config(&profile_id, slot, &name) {
-        state.pad_config_intents.push(PadConfigIntent::Override {
+    queue_hardware(
+        state,
+        crate::SimplyLoveHardwareRequest::ApplySmxPadConfig {
             pad: slot,
-            applied: AppliedPadConfig {
-                preset: false,
-                name: name.clone(),
-            },
-        });
-        queue_sfx(state, "assets/sounds/start.ogg");
-    }
+            profile_id,
+            name,
+        },
+    );
 }
 
 /// Overwrite the cursor config with the pad's current live tuning, keeping its
@@ -7849,34 +7842,25 @@ fn perform_pad_profile_overwrite(state: &mut State) {
     let Some((profile_id, name, slot)) = pad_overlay_profile_target(state) else {
         return;
     };
-    let info = deadsync_smx::get_info(slot);
-    // upsert preserves the config's existing default associations, so overwrite
-    // passes make_default=false (it only re-captures the threshold values).
-    let Some(data) = deadsync_smx::capture_config(slot) else {
-        return;
-    };
-    let pad_type = deadsync_smx::pad_sensor_type(slot).map(|t| t.as_str().to_owned());
-    profile::upsert_pad_config(
-        &profile_id,
-        &name,
-        deadsync_smx::BACKEND_ID,
-        pad_type,
-        Some(info.serial),
-        false,
-        data.to_settings(),
+    queue_hardware(
+        state,
+        crate::SimplyLoveHardwareRequest::CaptureSmxPadConfig {
+            pad: slot,
+            profile_id,
+            name,
+            set_default: false,
+            overwrite: true,
+        },
     );
-    // Re-apply if this config is the pad's active/default (its values changed).
-    state
-        .pad_config_intents
-        .push(PadConfigIntent::Invalidate { pad: slot });
-    queue_sfx(state, "assets/sounds/start.ogg");
 }
 
 fn perform_pad_profile_set_default(state: &mut State) {
     if let Some((profile_id, name, slot)) = pad_overlay_profile_target(state) {
         // Default is per pad: make this config the default for the cursor pad.
-        let info = deadsync_smx::get_info(slot);
-        profile::set_default_pad_config(&profile_id, &info.serial, &name);
+        let Some(serial) = state.smx_pads.get(slot).map(|pad| pad.serial.as_str()) else {
+            return;
+        };
+        profile::set_default_pad_config(&profile_id, serial, &name);
         // A default change doesn't move the resolve signature, so ask the
         // controller to re-resolve (applies the new default + refreshes marker).
         state
@@ -8139,9 +8123,7 @@ fn dispatch_menu_action(
             p2, preset, name, ..
         } => {
             hide_select_music_menu(state);
-            if apply_pad_profile_recall(state, p2, preset, &name) {
-                queue_sfx(state, "assets/sounds/start.ogg");
-            }
+            let _ = request_pad_profile_recall(state, p2, preset, &name);
             ThemeEffect::None
         }
         select_music_menu::Action::SongSearch => {
@@ -8334,7 +8316,7 @@ pub fn handle_pad_dir(
     timestamp: Instant,
 ) -> ThemeEffect {
     let effect = handle_pad_dir_impl(state, side, dir, pressed, timestamp);
-    prepend_pending_audio(state, effect)
+    prepend_pending_runtime(state, effect)
 }
 
 fn handle_pad_dir_impl(
@@ -8631,7 +8613,7 @@ fn handle_pad_dir_p2(
 
 pub fn handle_confirm(state: &mut State) -> ThemeEffect {
     let effect = handle_confirm_impl(state);
-    prepend_pending_audio(state, effect)
+    prepend_pending_runtime(state, effect)
 }
 
 fn handle_confirm_impl(state: &mut State) -> ThemeEffect {
@@ -8786,7 +8768,7 @@ pub fn handle_raw_key_event(
     text: Option<&str>,
 ) -> ThemeEffect {
     let effect = handle_raw_key_event_impl(state, key, text, false, false);
-    prepend_pending_audio(state, effect)
+    prepend_pending_runtime(state, effect)
 }
 
 pub fn handle_raw_key_event_with_modifiers(
@@ -8797,7 +8779,7 @@ pub fn handle_raw_key_event_with_modifiers(
     shift_held: bool,
 ) -> ThemeEffect {
     let effect = handle_raw_key_event_impl(state, key, text, ctrl_held, shift_held);
-    prepend_pending_audio(state, effect)
+    prepend_pending_runtime(state, effect)
 }
 
 fn handle_raw_key_event_impl(
@@ -9052,7 +9034,7 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
 
 pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ThemeEffect {
     let effect = handle_input_impl(state, ev, fine);
-    prepend_pending_audio(state, effect)
+    prepend_pending_runtime(state, effect)
 }
 
 fn handle_input_impl(state: &mut State, ev: &InputEvent, fine: bool) -> ThemeEffect {
@@ -9376,12 +9358,52 @@ fn handle_input_impl(state: &mut State, ev: &InputEvent, fine: bool) -> ThemeEff
     }
 }
 
-pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
-    let effect = update_impl(state, dt);
-    prepend_pending_audio(state, effect)
+fn process_smx_pad_profile_events(state: &mut State) {
+    for event in std::mem::take(&mut state.smx_pad_profile_events) {
+        match event {
+            SmxPadProfileEvent::Applied { pad, preset, name } => {
+                state.pad_config_intents.push(PadConfigIntent::Override {
+                    pad,
+                    applied: AppliedPadConfig { preset, name },
+                });
+            }
+            SmxPadProfileEvent::Captured {
+                pad,
+                profile_id,
+                name,
+                overwrite,
+            } => {
+                if overwrite {
+                    state
+                        .pad_config_intents
+                        .push(PadConfigIntent::Invalidate { pad });
+                } else {
+                    state
+                        .pad_config_intents
+                        .push(PadConfigIntent::RefreshList { pad });
+                    state.pad_config_intents.push(PadConfigIntent::Override {
+                        pad,
+                        applied: AppliedPadConfig {
+                            preset: false,
+                            name,
+                        },
+                    });
+                    refresh_sibling_pad_list(state, pad, &profile_id, false);
+                }
+            }
+        }
+        queue_sfx(state, "assets/sounds/start.ogg");
+    }
 }
 
-fn update_impl(state: &mut State, dt: f32) -> ThemeEffect {
+pub fn update(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffect {
+    let effect = update_impl(state, dt, smx);
+    prepend_pending_runtime(state, effect)
+}
+
+fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffect {
+    state.smx_pads.clone_from(&smx.pads);
+    process_smx_pad_profile_events(state);
     deadsync_online::lobbies::runtime_poll_reconnect_default();
 
     let lobby_locked = select_music_lobby_lock_text(state).is_some();
@@ -12416,7 +12438,7 @@ mod tests {
             crate::SimplyLoveMediaRequest::Banner(None),
         ));
 
-        let ThemeEffect::Batch(effects) = super::prepend_pending_audio(&mut state, later) else {
+        let ThemeEffect::Batch(effects) = super::prepend_pending_runtime(&mut state, later) else {
             panic!("queued audio and later work should be batched");
         };
         assert!(matches!(
@@ -12511,6 +12533,51 @@ mod tests {
     }
 
     #[test]
+    fn pad_profile_recall_emits_shell_hardware_request() {
+        let mut state = init_placeholder();
+        state.smx_pads[0] = deadsync_theme::views::SmxAssignmentPadView {
+            connected: true,
+            serial: "PAD1".to_owned(),
+            backend_id: "smx".to_owned(),
+            ..Default::default()
+        };
+
+        assert!(super::request_pad_profile_recall(
+            &mut state, false, true, "Medium"
+        ));
+        assert!(matches!(
+            state.pending_hardware.as_slice(),
+            [crate::SimplyLoveHardwareRequest::ApplySmxPadPreset { pad: 0, name }]
+                if name == "Medium"
+        ));
+    }
+
+    #[test]
+    fn successful_pad_profile_events_update_ui_markers_and_feedback() {
+        let mut state = init_placeholder();
+        state
+            .smx_pad_profile_events
+            .push(super::SmxPadProfileEvent::Applied {
+                pad: 1,
+                preset: false,
+                name: "Arcade".to_owned(),
+            });
+
+        super::process_smx_pad_profile_events(&mut state);
+
+        assert!(matches!(
+            state.pad_config_intents.as_slice(),
+            [super::PadConfigIntent::Override { pad: 1, applied }]
+                if !applied.preset && applied.name == "Arcade"
+        ));
+        assert!(matches!(
+            state.pending_audio.as_slice(),
+            [deadsync_theme::AudioRequest::PlaySfx(path)]
+                if path == "assets/sounds/start.ogg"
+        ));
+    }
+
+    #[test]
     fn preview_cut_keeps_tiny_sample_length_after_start_fallback() {
         let mut song = (*test_song("sync test")).clone();
         song.music_path = Some(PathBuf::from("sync test.ogg"));
@@ -12540,7 +12607,11 @@ mod tests {
         state.currently_playing_preview_start_sec = Some(1.0);
         state.currently_playing_preview_length_sec = Some(10.0);
 
-        let action = super::update(&mut state, 0.016);
+        let action = super::update(
+            &mut state,
+            0.016,
+            &deadsync_theme::views::SmxAssignmentView::default(),
+        );
 
         let ThemeEffect::Batch(effects) = action else {
             panic!("stale preview stop should precede the banner request");

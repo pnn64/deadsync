@@ -8,7 +8,7 @@ pub struct TornadoBounds {
 }
 
 #[derive(Clone, Copy, Debug, Default)]
-pub struct NoteAlphaParams {
+pub(crate) struct NoteAlphaParams {
     pub hidden: f32,
     pub hidden_offset: f32,
     pub sudden: f32,
@@ -19,10 +19,8 @@ pub struct NoteAlphaParams {
 }
 
 #[derive(Clone, Copy, Debug, Default)]
-pub struct VisualEffectParams {
+pub(crate) struct VisualEffectParams {
     pub bumpy: f32,
-    pub bumpy_offset: f32,
-    pub bumpy_period: f32,
     pub tiny: f32,
     pub pulse_inner: f32,
     pub pulse_outer: f32,
@@ -32,11 +30,10 @@ pub struct VisualEffectParams {
     pub confusion_offset: f32,
     pub dizzy: f32,
     pub rotate_z: f32,
-    pub beat: f32,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
-pub struct AccelYParams {
+pub(crate) struct AccelYParams {
     pub boost: f32,
     pub brake: f32,
     pub wave: f32,
@@ -45,7 +42,7 @@ pub struct AccelYParams {
 }
 
 #[derive(Clone, Copy, Debug, Default)]
-pub struct NoteXParams {
+pub(crate) struct NoteXParams {
     pub screen_height: f32,
     pub flip: f32,
     pub invert: f32,
@@ -54,7 +51,7 @@ pub struct NoteXParams {
     pub beat: f32,
 }
 
-pub fn sm_scale(v: f32, in0: f32, in1: f32, out0: f32, out1: f32) -> f32 {
+pub(crate) fn sm_scale(v: f32, in0: f32, in1: f32, out0: f32, out1: f32) -> f32 {
     let denom = in1 - in0;
     if denom.abs() < 1e-6 {
         return out1;
@@ -62,7 +59,7 @@ pub fn sm_scale(v: f32, in0: f32, in1: f32, out0: f32, out1: f32) -> f32 {
     ((v - in0) / denom).mul_add(out1 - out0, out0)
 }
 
-pub fn quantize_step(v: f32, step: f32) -> f32 {
+pub(crate) fn quantize_step(v: f32, step: f32) -> f32 {
     if !v.is_finite() || !step.is_finite() || step == 0.0 {
         0.0
     } else {
@@ -97,7 +94,7 @@ pub fn clamp_rounded_i16(value: f32) -> i16 {
     value.round().clamp(i16::MIN as f32, i16::MAX as f32) as i16
 }
 
-pub fn beat_factor(song_beat: f32) -> f32 {
+pub(crate) fn beat_factor(song_beat: f32) -> f32 {
     if !song_beat.is_finite() {
         return 0.0;
     }
@@ -127,7 +124,7 @@ pub fn beat_factor(song_beat: f32) -> f32 {
     factor * 20.0
 }
 
-pub fn mod_divisor(value: f32) -> f32 {
+pub(crate) fn mod_divisor(value: f32) -> f32 {
     if value.abs() > 0.001 {
         value
     } else if value.is_sign_negative() {
@@ -141,14 +138,14 @@ pub(crate) fn signed_effect_active(value: f32) -> bool {
     value.is_finite() && value.abs() > f32::EPSILON
 }
 
-pub fn bumpy_angle(y: f32, offset: f32, period: f32) -> f32 {
+pub(crate) fn bumpy_angle(y: f32, offset: f32, period: f32) -> f32 {
     let offset = if offset.is_finite() { offset } else { 0.0 };
     let period = if period.is_finite() { period } else { 0.0 };
     let divisor = mod_divisor(period.mul_add(BUMPY_Z_ANGLE_DIVISOR, BUMPY_Z_ANGLE_DIVISOR));
     (y + 100.0 * offset) / divisor
 }
 
-pub fn apply_accel_y_with_peak(
+pub(crate) fn apply_accel_y_with_peak(
     raw_y: f32,
     elapsed: f32,
     effect_height: f32,
@@ -201,7 +198,7 @@ pub fn apply_accel_y_with_peak(
     (y, before_boomerang_peak)
 }
 
-pub fn apply_accel_y(
+pub(crate) fn apply_accel_y(
     raw_y: f32,
     elapsed: f32,
     effect_height: f32,
@@ -211,22 +208,22 @@ pub fn apply_accel_y(
     apply_accel_y_with_peak(raw_y, elapsed, effect_height, screen_height, accel).0
 }
 
-pub fn note_world_z_for_bumpy(y: f32, bumpy: f32, offset: f32, period: f32) -> f32 {
+pub(crate) fn note_world_z_for_bumpy(y: f32, bumpy: f32, offset: f32, period: f32) -> f32 {
     if bumpy.abs() <= f32::EPSILON || !bumpy.is_finite() {
         return 0.0;
     }
     bumpy * BUMPY_Z_MAGNITUDE * bumpy_angle(y, offset, period).sin()
 }
 
-pub fn itg_actor_rotation_z(deg: f32) -> f32 {
+pub(crate) fn itg_actor_rotation_z(deg: f32) -> f32 {
     -deg
 }
 
-pub fn visual_hold_body_needs_z_buffer(params: VisualEffectParams) -> bool {
+pub(crate) fn visual_hold_body_needs_z_buffer(params: VisualEffectParams) -> bool {
     signed_effect_active(params.bumpy)
 }
 
-pub fn visual_use_legacy_hold_sprites(
+pub(crate) fn visual_use_legacy_hold_sprites(
     bumpy: f32,
     tiny: f32,
     pulse_outer: f32,
@@ -238,7 +235,7 @@ pub fn visual_use_legacy_hold_sprites(
         .all(|v| v.is_finite() && v.abs() <= f32::EPSILON)
 }
 
-pub fn visual_tiny_zoom(params: VisualEffectParams) -> f32 {
+pub(crate) fn visual_tiny_zoom(params: VisualEffectParams) -> f32 {
     if !params.tiny.is_finite() || params.tiny.abs() <= f32::EPSILON {
         1.0
     } else {
@@ -246,11 +243,11 @@ pub fn visual_tiny_zoom(params: VisualEffectParams) -> f32 {
     }
 }
 
-pub fn visual_pulse_active(params: VisualEffectParams) -> bool {
+pub(crate) fn visual_pulse_active(params: VisualEffectParams) -> bool {
     signed_effect_active(params.pulse_inner) || signed_effect_active(params.pulse_outer)
 }
 
-pub fn visual_pulse_inner_zoom(params: VisualEffectParams) -> f32 {
+pub(crate) fn visual_pulse_inner_zoom(params: VisualEffectParams) -> f32 {
     if !visual_pulse_active(params) {
         return 1.0;
     }
@@ -266,7 +263,7 @@ pub fn visual_pulse_inner_zoom(params: VisualEffectParams) -> f32 {
     }
 }
 
-pub fn visual_pulse_zoom_for_y(y: f32, params: VisualEffectParams) -> f32 {
+pub(crate) fn visual_pulse_zoom_for_y(y: f32, params: VisualEffectParams) -> f32 {
     if !visual_pulse_active(params) {
         return 1.0;
     }
@@ -291,16 +288,16 @@ pub fn visual_pulse_zoom_for_y(y: f32, params: VisualEffectParams) -> f32 {
         .mul_add(outer * 0.5, visual_pulse_inner_zoom(params))
 }
 
-pub fn visual_arrow_effect_zoom(y: f32, params: VisualEffectParams) -> f32 {
+pub(crate) fn visual_arrow_effect_zoom(y: f32, params: VisualEffectParams) -> f32 {
     visual_tiny_zoom(params) * visual_pulse_zoom_for_y(y, params)
 }
 
-pub fn visual_confusion_rotation_deg(song_beat: f32, params: VisualEffectParams) -> f32 {
+pub(crate) fn visual_confusion_rotation_deg(song_beat: f32, params: VisualEffectParams) -> f32 {
     (params.confusion_offset + song_beat * params.confusion).rem_euclid(std::f32::consts::TAU)
         * (-180.0 / std::f32::consts::PI)
 }
 
-pub fn visual_dizzy_rotation_deg(
+pub(crate) fn visual_dizzy_rotation_deg(
     note_beat: f32,
     song_beat: f32,
     params: VisualEffectParams,
@@ -309,7 +306,7 @@ pub fn visual_dizzy_rotation_deg(
         * (-180.0 / std::f32::consts::PI)
 }
 
-pub fn visual_note_rotation_z(
+pub(crate) fn visual_note_rotation_z(
     note_beat: f32,
     song_beat: f32,
     _is_hold_head: bool,
@@ -319,7 +316,7 @@ pub fn visual_note_rotation_z(
         + visual_dizzy_rotation_deg(note_beat, song_beat, params)
 }
 
-pub fn visual_effect_params_for_col(
+pub(crate) fn visual_effect_params_for_col(
     mut params: VisualEffectParams,
     col: usize,
     tiny: &[f32],
@@ -338,7 +335,7 @@ pub fn visual_effect_params_for_col(
     params
 }
 
-pub fn gameplay_visual_effect_params(
+pub(crate) fn gameplay_visual_effect_params(
     visual: &VisualEffects,
     local_col: usize,
 ) -> VisualEffectParams {
@@ -353,10 +350,7 @@ pub fn gameplay_visual_effect_params(
             confusion_offset: visual.confusion_offset,
             dizzy: visual.dizzy,
             bumpy: visual.bumpy,
-            bumpy_offset: visual.bumpy_offset,
-            bumpy_period: visual.bumpy_period,
             rotate_z: 0.0,
-            beat: visual.beat,
         },
         local_col,
         &visual.tiny_cols,
@@ -365,12 +359,12 @@ pub fn gameplay_visual_effect_params(
     )
 }
 
-pub fn smoothstep01(t: f32) -> f32 {
+pub(crate) fn smoothstep01(t: f32) -> f32 {
     let t = t.clamp(0.0, 1.0);
     t * t * (3.0 - 2.0 * t)
 }
 
-pub fn compute_invert_distances(col_offsets: &[f32], out: &mut [f32]) {
+pub(crate) fn compute_invert_distances(col_offsets: &[f32], out: &mut [f32]) {
     let num_cols = col_offsets.len();
     if num_cols == 0 {
         return;
@@ -406,7 +400,7 @@ pub fn compute_invert_distances(col_offsets: &[f32], out: &mut [f32]) {
     }
 }
 
-pub fn compute_tornado_bounds(col_offsets: &[f32], out: &mut [TornadoBounds]) {
+pub(crate) fn compute_tornado_bounds(col_offsets: &[f32], out: &mut [TornadoBounds]) {
     let num_cols = col_offsets.len();
     let width = if num_cols > 4 { 2 } else { 3 };
     for (i, bounds) in out.iter_mut().take(num_cols).enumerate() {
@@ -422,7 +416,7 @@ pub fn compute_tornado_bounds(col_offsets: &[f32], out: &mut [TornadoBounds]) {
     }
 }
 
-pub fn tipsy_y_extra(local_col: usize, elapsed: f32, tipsy: f32) -> f32 {
+pub(crate) fn tipsy_y_extra(local_col: usize, elapsed: f32, tipsy: f32) -> f32 {
     if !signed_effect_active(tipsy) {
         return 0.0;
     }
@@ -431,7 +425,7 @@ pub fn tipsy_y_extra(local_col: usize, elapsed: f32, tipsy: f32) -> f32 {
     tipsy * angle.cos() * ARROW_EFFECT_PIXEL_SIZE * TIPSY_ARROW_MAGNITUDE
 }
 
-pub fn beat_x_extra(y: f32, beat_factor: f32, beat: f32) -> f32 {
+pub(crate) fn beat_x_extra(y: f32, beat_factor: f32, beat: f32) -> f32 {
     if !signed_effect_active(beat) {
         return 0.0;
     }
@@ -440,7 +434,7 @@ pub fn beat_x_extra(y: f32, beat_factor: f32, beat: f32) -> f32 {
     beat * shift
 }
 
-pub fn drunk_x_extra(
+pub(crate) fn drunk_x_extra(
     local_col: usize,
     y: f32,
     elapsed: f32,
@@ -455,7 +449,7 @@ pub fn drunk_x_extra(
     drunk * angle.cos() * ARROW_EFFECT_PIXEL_SIZE * DRUNK_ARROW_MAGNITUDE
 }
 
-pub fn tornado_x_extra(
+pub(crate) fn tornado_x_extra(
     y: f32,
     base_x: f32,
     bounds: TornadoBounds,
@@ -471,7 +465,7 @@ pub fn tornado_x_extra(
     (adjusted - base_x) * tornado
 }
 
-pub fn note_x_extra(
+pub(crate) fn note_x_extra(
     local_col: usize,
     y: f32,
     beat_factor_value: f32,
@@ -516,7 +510,7 @@ pub fn note_x_extra(
     out
 }
 
-pub fn note_x_offset(
+pub(crate) fn note_x_offset(
     local_col: usize,
     y: f32,
     beat_factor_value: f32,
@@ -542,7 +536,12 @@ pub fn note_x_offset(
     base * tiny_spacing_scale(tiny_zoom) + move_col_extra(move_x, local_col)
 }
 
-pub fn appearance_note_alpha(y: f32, elapsed: f32, mini: f32, params: NoteAlphaParams) -> f32 {
+pub(crate) fn appearance_note_alpha(
+    y: f32,
+    elapsed: f32,
+    mini: f32,
+    params: NoteAlphaParams,
+) -> f32 {
     if y < 0.0 {
         return 1.0;
     }
@@ -586,12 +585,17 @@ pub fn appearance_note_alpha(y: f32, elapsed: f32, mini: f32, params: NoteAlphaP
     (1.0 + visible_adjust).clamp(0.0, 1.0)
 }
 
-pub fn appearance_note_glow(y: f32, elapsed: f32, mini: f32, params: NoteAlphaParams) -> f32 {
+pub(crate) fn appearance_note_glow(
+    y: f32,
+    elapsed: f32,
+    mini: f32,
+    params: NoteAlphaParams,
+) -> f32 {
     let percent_visible = appearance_note_alpha(y, elapsed, mini, params);
     sm_scale((percent_visible - 0.5).abs(), 0.0, 0.5, 1.3, 0.0).max(0.0)
 }
 
-pub fn appearance_note_actor_alpha(
+pub(crate) fn appearance_note_actor_alpha(
     y: f32,
     elapsed: f32,
     mini: f32,
@@ -604,13 +608,13 @@ pub fn appearance_note_actor_alpha(
     }
 }
 
-pub fn appearance_needs_rows(appearance: NoteAlphaParams) -> bool {
+pub(crate) fn appearance_needs_rows(appearance: NoteAlphaParams) -> bool {
     appearance.hidden > f32::EPSILON
         || appearance.sudden > f32::EPSILON
         || appearance.random_vanish > f32::EPSILON
 }
 
-pub fn tiny_spacing_scale(tiny: f32) -> f32 {
+pub(crate) fn tiny_spacing_scale(tiny: f32) -> f32 {
     if !tiny.is_finite() || tiny.abs() <= f32::EPSILON {
         1.0
     } else {
@@ -618,7 +622,7 @@ pub fn tiny_spacing_scale(tiny: f32) -> f32 {
     }
 }
 
-pub fn move_col_extra(values: &[f32], local_col: usize) -> f32 {
+pub(crate) fn move_col_extra(values: &[f32], local_col: usize) -> f32 {
     values
         .get(local_col)
         .copied()

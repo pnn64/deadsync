@@ -1,3 +1,4 @@
+use std::sync::OnceLock;
 use std::time::Instant;
 
 use deadsync_core::input::{InputSource, Lane};
@@ -29,6 +30,23 @@ pub use keymap::{
 pub const INPUT_SLOT_INVALID: u32 = u32::MAX;
 pub const INPUT_DEBOUNCE_MIN_SECONDS: f32 = 0.0;
 pub const INPUT_DEBOUNCE_MAX_SECONDS: f32 = 0.2;
+
+pub type ButtonLabeler = fn(usize, u32) -> Option<String>;
+static BUTTON_LABELER: OnceLock<ButtonLabeler> = OnceLock::new();
+
+/// Install the process input backend's friendly raw-button label provider.
+/// The shell calls this once during backend startup; themes only consume the
+/// backend-neutral lookup.
+pub fn set_button_labeler(labeler: ButtonLabeler) -> bool {
+    BUTTON_LABELER.set(labeler).is_ok()
+}
+
+#[inline(always)]
+pub fn raw_button_label(device: usize, code: u32) -> Option<String> {
+    BUTTON_LABELER
+        .get()
+        .and_then(|labeler| labeler(device, code))
+}
 
 #[cfg_attr(not(windows), allow(dead_code))]
 #[derive(Clone, Copy, Debug)]
@@ -667,7 +685,7 @@ mod tests {
         VirtualAction, action_from_ini_key_lower, action_to_ini_key, clamp_input_debounce_seconds,
         emit_normalized_actions, gamepad_code_binding_to_token, lane_from_action, lane_from_column,
         pad_dir_from_action, parse_gamepad_code_binding, parse_input_debounce_seconds,
-        parse_pad_dir, secondary_menu_mask,
+        parse_pad_dir, raw_button_label, secondary_menu_mask, set_button_labeler,
     };
     use std::time::Instant;
 
@@ -677,6 +695,16 @@ mod tests {
             out.push((action, pressed));
         });
         out
+    }
+
+    #[test]
+    fn backend_button_labeler_stays_behind_input_contract() {
+        fn label(device: usize, code: u32) -> Option<String> {
+            Some(format!("Pad {device} Button {code}"))
+        }
+
+        assert!(set_button_labeler(label));
+        assert_eq!(raw_button_label(2, 7).as_deref(), Some("Pad 2 Button 7"));
     }
 
     #[test]

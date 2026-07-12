@@ -52,7 +52,9 @@ use deadsync_online::score_compat as scores;
 use deadsync_profile::compat as profile;
 use deadsync_score as score_data;
 use deadsync_simfile::app_runtime as song_loading;
-use deadsync_theme::views::{AudioOptionsView, NoteskinCatalogView};
+use deadsync_theme::views::{
+    AudioOptionsView, NoteskinCatalogView, SmxAssignmentView, SmxGifCatalogView,
+};
 use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;

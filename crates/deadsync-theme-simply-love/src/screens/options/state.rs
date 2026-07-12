@@ -189,6 +189,8 @@ pub struct State {
     pub(super) system_noteskin_choices: Vec<String>,
     pub(super) smx_bg_pack_choices: Vec<String>,
     pub(super) smx_judge_pack_choices: Vec<String>,
+    pub(super) smx_assignment: SmxAssignmentView,
+    pub(super) smx_assignment_status: String,
     pub(super) score_import_profiles: Vec<ScoreImportProfileConfig>,
     pub(super) score_import_profile_choices: Vec<String>,
     pub(super) score_import_profile_ids: Vec<Option<String>>,
@@ -255,14 +257,16 @@ pub fn init(
     updater_capabilities: SimplyLoveUpdaterCapabilities,
     audio_options: AudioOptionsView,
     noteskin_catalog: NoteskinCatalogView,
+    smx_assignment: SmxAssignmentView,
+    smx_gif_catalog: SmxGifCatalogView,
 ) -> State {
     let cfg = config::get();
     let mut system_noteskin_choices = noteskin_catalog.names;
     if system_noteskin_choices.is_empty() {
         system_noteskin_choices.push(deadsync_profile::NoteSkin::DEFAULT_NAME.to_string());
     }
-    let smx_bg_pack_choices = discover_smx_pack_choices("smx-pad-lights");
-    let smx_judge_pack_choices = discover_smx_pack_choices("smx-judge-lights");
+    let smx_bg_pack_choices = smx_gif_catalog.background_packs;
+    let smx_judge_pack_choices = smx_gif_catalog.judgment_packs;
     let software_thread_choices = build_software_thread_choices();
     let software_thread_labels = software_thread_choice_labels(&software_thread_choices);
     let max_fps_choices = build_max_fps_choices();
@@ -270,6 +274,7 @@ pub fn init(
     #[cfg(target_os = "linux")]
     let linux_backend_choices = build_linux_backend_choices(&audio_options);
     let machine_noteskin = profile::machine_default_noteskin();
+    let smx_assignment_status = smx_assignment_status(&smx_assignment);
     let machine_noteskin_idx = system_noteskin_choices
         .iter()
         .position(|name| name.eq_ignore_ascii_case(machine_noteskin.as_str()))
@@ -319,6 +324,8 @@ pub fn init(
         system_noteskin_choices,
         smx_bg_pack_choices,
         smx_judge_pack_choices,
+        smx_assignment: smx_assignment.clone(),
+        smx_assignment_status,
         score_import_profiles: Vec::new(),
         score_import_profile_choices: vec![
             tr("OptionsScoreImport", "NoEligibleProfiles").to_string(),
@@ -585,7 +592,7 @@ pub fn init(
     // in (slot 1 = P2, index 1; slot 0 = P1, index 0). The slot already accounts for
     // both the saved serial assignment and the hardware jumper, so reading it covers
     // a pad placed on P2 by its jumper alone, which a serial-only comparison misses.
-    let single_pad_is_p2 = deadsync_smx::get_info(1).connected;
+    let single_pad_is_p2 = smx_assignment.pads[1].connected;
     set_choice_by_id(
         &mut state.sub[SubmenuKind::SmxConfig].choice_indices,
         SMX_CONFIG_OPTIONS_ROWS,

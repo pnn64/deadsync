@@ -181,8 +181,8 @@ pub use session::SessionState;
 pub use session_results::{post_select_display_stages, stage_summary_from_score_info};
 pub use smx_config::{
     SmxAssignmentPlan, SmxAssignmentSource, SmxAutopromptPlan, SmxLightBrightnessPlan,
-    resolve_smx_pad_config, smx_assignment_plan, smx_autoprompt_plan, smx_light_brightness_plan,
-    smx_light_preview_restore_auto, smx_options_light_preview_active,
+    resolve_smx_pad_config, smx_assignment_plan, smx_assignment_view, smx_autoprompt_plan,
+    smx_light_brightness_plan, smx_light_preview_restore_auto, smx_options_light_preview_active,
     smx_player_options_light_preview_allowed, smx_runtime_assignment_plan,
 };
 pub use stutter_diag::{

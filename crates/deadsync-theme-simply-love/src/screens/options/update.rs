@@ -263,9 +263,30 @@ fn open_submenu_now(state: &mut State, kind: SubmenuKind) {
     clear_render_cache(state);
 }
 
-pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Option<ThemeEffect> {
+pub fn update(
+    state: &mut State,
+    dt: f32,
+    asset_manager: &AssetManager,
+    smx_assignment: &SmxAssignmentView,
+) -> Option<ThemeEffect> {
+    sync_smx_assignment(state, smx_assignment);
     let effect = update_impl(state, dt, asset_manager);
     prepend_pending_sfx_opt(state, effect)
+}
+
+pub(super) fn sync_smx_assignment(state: &mut State, view: &SmxAssignmentView) {
+    if state.smx_assignment == *view {
+        return;
+    }
+    state.smx_assignment.clone_from(view);
+    state.smx_assignment_status = smx_assignment_status(view);
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::SmxConfig].choice_indices,
+        SMX_CONFIG_OPTIONS_ROWS,
+        SubRowId::SmxSinglePadPlayer,
+        usize::from(view.pads[1].connected),
+    );
+    clear_render_cache(state);
 }
 
 fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Option<ThemeEffect> {
@@ -300,7 +321,7 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
         &mut state.sub[SubmenuKind::SmxConfig].choice_indices,
         SMX_CONFIG_OPTIONS_ROWS,
         SubRowId::SmxSinglePadPlayer,
-        usize::from(deadsync_smx::get_info(1).connected),
+        usize::from(state.smx_assignment.pads[1].connected),
     );
 
     let mut pending_action: Option<ThemeEffect> = None;

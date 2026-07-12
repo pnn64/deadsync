@@ -1,11 +1,8 @@
 //! StepManiaX pad → player assignment screen.
 //!
 //! Walks the user through a press-a-panel flow: press a panel on the pad you
-//! want as P1, then the pad you want as P2. The pressed pad's serial is pinned to
-//! that player slot (see [`deadsync_smx::set_player_assignment`]), which
-//! decouples the assignment from the hardware P1/P2 jumper, the only way to fix
-//! two pads that share a jumper or are physically installed swapped. The pads are
-//! lit blue (P1) / red (P2) throughout so the user can see which is which.
+//! want as P1, then the pad you want as P2. The theme owns this interaction and
+//! emits shell requests that pin the selected serials and drive indicator lights.
 
 use crate::act;
 use crate::assets::i18n::tr;
@@ -16,7 +13,7 @@ use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{self, screen_center_x, screen_height, screen_width};
 use deadsync_input::{InputEvent, VirtualAction};
-use deadsync_smx as smx;
+use deadsync_theme::views::SmxAssignmentView;
 use std::sync::Mutex;
 
 /// Screen to return to when the assignment screen finishes/cancels. Set by the
@@ -60,7 +57,13 @@ pub struct State {
     prev_input: [u16; 2],
     p1_serial: Option<String>,
     p2_serial: Option<String>,
+    p1_label: Option<String>,
+    p2_label: Option<String>,
+    conflict_warning: bool,
+    conflict_rgb: [f32; 3],
+    player_rgb: [[u8; 3]; 2],
     light_timer: f32,
+    lights_pending: bool,
 }
 
 pub fn init() -> State {
@@ -72,64 +75,81 @@ pub fn init() -> State {
         prev_input: [0, 0],
         p1_serial: None,
         p2_serial: None,
+        p1_label: None,
+        p2_label: None,
+        conflict_warning: false,
+        conflict_rgb: [0.0; 3],
+        player_rgb: [[0; 3]; 2],
         light_timer: 0.0,
+        lights_pending: false,
     }
 }
 
-pub fn on_enter(state: &mut State) {
+pub fn on_enter(state: &mut State, view: &SmxAssignmentView) {
     state.return_screen = *PENDING_RETURN.lock().unwrap();
     state.p1_serial = None;
     state.p2_serial = None;
-    state.prev_input = current_input();
+    state.p1_label = None;
+    state.p2_label = None;
+    sync_view(state, view);
+    state.prev_input = current_input(view);
     state.light_timer = 0.0;
-    state.phase = if connected_count() >= 2 {
+    state.phase = if connected_count(view) >= 2 {
         Phase::AwaitP1
     } else {
         Phase::NeedTwoPads
     };
-    apply_lights(state);
+    state.lights_pending = true;
 }
 
-pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
-    let connected = connected_count();
+pub fn update(state: &mut State, dt: f32, view: &SmxAssignmentView) -> Option<ThemeEffect> {
+    sync_view(state, view);
+    let connected = connected_count(view);
+    let mut effects = Vec::with_capacity(2);
     // Keep the phase consistent with how many pads are present (hot-plug safe).
     if connected < 2 && state.phase != Phase::NeedTwoPads {
         state.phase = Phase::NeedTwoPads;
         state.p1_serial = None;
         state.p2_serial = None;
-        apply_lights(state);
+        state.p1_label = None;
+        state.p2_label = None;
+        state.lights_pending = true;
     } else if connected >= 2 && state.phase == Phase::NeedTwoPads {
         state.phase = Phase::AwaitP1;
-        state.prev_input = current_input();
-        apply_lights(state);
+        state.prev_input = current_input(view);
+        state.lights_pending = true;
     }
 
     // Rising-edge press detection per slot (raw bitmask, independent of keymap).
-    let input = current_input();
+    let input = current_input(view);
     let pressed = pressed_slot(state.prev_input, input);
     state.prev_input = input;
 
     match state.phase {
         Phase::AwaitP1 => {
-            if let Some(serial) = pressed.and_then(pad_serial) {
+            if let Some((serial, label)) = pressed.and_then(|slot| pad_identity(view, slot)) {
                 state.p1_serial = Some(serial);
+                state.p1_label = Some(label);
                 state.phase = Phase::AwaitP2;
-                apply_lights(state);
+                state.lights_pending = true;
             }
         }
         Phase::AwaitP2 => {
             // Accept only the *other* pad, not the one already chosen for P1.
-            if let Some(serial) =
-                accept_p2_serial(pressed.and_then(pad_serial), state.p1_serial.as_deref())
-            {
+            let identity = pressed.and_then(|slot| pad_identity(view, slot));
+            if let Some((serial, label)) = identity.filter(|(serial, _)| {
+                accept_p2_serial(Some(serial.clone()), state.p1_serial.as_deref()).is_some()
+            }) {
                 state.p2_serial = Some(serial);
+                state.p2_label = Some(label);
                 state.phase = Phase::Done;
-                // Apply now: the SDK re-orders the slots immediately.
-                crate::config::update_smx_pad_assignment(
-                    state.p1_serial.clone(),
-                    state.p2_serial.clone(),
-                );
-                apply_lights(state);
+                effects.push(hardware_effect(
+                    crate::SimplyLoveHardwareRequest::AssignSmxPads {
+                        p1_serial: state.p1_serial.clone(),
+                        p2_serial: state.p2_serial.clone(),
+                    },
+                ));
+                state.lights_pending = true;
             }
         }
         Phase::NeedTwoPads | Phase::Done => {}
@@ -139,9 +159,19 @@ pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
     state.light_timer += dt;
     if state.light_timer >= LIGHT_RESEND_INTERVAL {
         state.light_timer = 0.0;
-        apply_lights(state);
+        state.lights_pending = true;
     }
-    None
+    if state.lights_pending {
+        state.lights_pending = false;
+        effects.push(hardware_effect(
+            crate::SimplyLoveHardwareRequest::SetSmxPlayerLights(light_colors(state, view)),
+        ));
+    }
+    match effects.len() {
+        0 => None,
+        1 => effects.pop(),
+        _ => Some(ThemeEffect::Batch(effects)),
+    }
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
@@ -161,10 +191,15 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
 /// so only restore auto-lighting when returning somewhere that won't (e.g. the
 /// Menu), to avoid a one-frame flicker on the handoff.
 fn exit(state: &State) -> ThemeEffect {
-    if state.return_screen != Screen::Options {
-        smx::reenable_auto_lights();
+    let navigate = ThemeEffect::Navigate(state.return_screen);
+    if state.return_screen == Screen::Options {
+        navigate
+    } else {
+        ThemeEffect::Batch(vec![
+            hardware_effect(crate::SimplyLoveHardwareRequest::ReenableSmxAutoLights),
+            navigate,
+        ])
     }
-    ThemeEffect::Navigate(state.return_screen)
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
@@ -177,13 +212,22 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-fn connected_count() -> usize {
-    (0..2).filter(|&s| smx::get_info(s).connected).count()
+fn hardware_effect(request: crate::SimplyLoveHardwareRequest) -> ThemeEffect {
+    ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Hardware(request))
 }
 
-fn current_input() -> [u16; 2] {
-    let m = smx::manager();
-    std::array::from_fn(|s| m.map_or(0, |m| m.get_input_state(s)))
+fn sync_view(state: &mut State, view: &SmxAssignmentView) {
+    state.conflict_warning = view.conflict_warning;
+    state.conflict_rgb = view.conflict_rgb;
+    state.player_rgb = view.player_rgb;
+}
+
+fn connected_count(view: &SmxAssignmentView) -> usize {
+    view.pads.iter().filter(|pad| pad.connected).count()
+}
+
+fn current_input(view: &SmxAssignmentView) -> [u16; 2] {
+    std::array::from_fn(|slot| view.pads[slot].input_state)
 }
 
 /// Rising-edge press detection: the first slot whose raw input bitmask gained a
@@ -201,45 +245,45 @@ fn accept_p2_serial(pressed: Option<String>, p1: Option<&str>) -> Option<String>
     }
 }
 
-/// Serial of the pad at `slot`, if connected with a real serial.
-fn pad_serial(slot: usize) -> Option<String> {
-    let info = smx::get_info(slot);
-    (info.connected && !info.serial.is_empty()).then_some(info.serial)
+/// Serial and display label of the pad at `slot`, if it is assignable.
+fn pad_identity(view: &SmxAssignmentView, slot: usize) -> Option<(String, String)> {
+    let pad = view.pads.get(slot)?;
+    (pad.connected && !pad.serial.is_empty()).then(|| (pad.serial.clone(), pad.label.clone()))
 }
 
-/// Drive the pad indicator lights for the current phase.
-fn apply_lights(state: &State) {
+/// Indicator-light intent for the current phase.
+fn light_colors(state: &State, view: &SmxAssignmentView) -> [Option<[u8; 3]>; 2] {
     let mut colors: [Option<[u8; 3]>; 2] = [None, None];
     match state.phase {
         Phase::NeedTwoPads => {}
         Phase::AwaitP1 => {
             // Every connected pad glows blue; press the one you want as P1.
             for (s, c) in colors.iter_mut().enumerate() {
-                if smx::get_info(s).connected {
-                    *c = Some(smx::PLAYER1_LIGHT);
+                if view.pads[s].connected {
+                    *c = Some(state.player_rgb[0]);
                 }
             }
         }
         Phase::AwaitP2 => {
             // The chosen P1 pad stays blue; the other glows red.
             for (s, c) in colors.iter_mut().enumerate() {
-                let info = smx::get_info(s);
-                if !info.connected {
+                let pad = &view.pads[s];
+                if !pad.connected {
                     continue;
                 }
-                *c = if Some(&info.serial) == state.p1_serial.as_ref() {
-                    Some(smx::PLAYER1_LIGHT)
+                *c = if Some(&pad.serial) == state.p1_serial.as_ref() {
+                    Some(state.player_rgb[0])
                 } else {
-                    Some(smx::PLAYER2_LIGHT)
+                    Some(state.player_rgb[1])
                 };
             }
         }
         Phase::Done => {
             // Assignment applied: slot 0 = P1 (blue), slot 1 = P2 (red).
-            colors = [Some(smx::PLAYER1_LIGHT), Some(smx::PLAYER2_LIGHT)];
+            colors = [Some(state.player_rgb[0]), Some(state.player_rgb[1])];
         }
     }
-    smx::set_player_lights(colors);
+    colors
 }
 
 // ─── Rendering ───────────────────────────────────────────────────────────────
@@ -276,8 +320,8 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_mul: f32) {
 
     // When there's an unresolved same-jumper conflict (incl. the case that
     // auto-opened this screen), explain why the user is here.
-    if smx::conflict_warning_active() {
-        let amber = smx::CONFLICT_WARNING_RGB;
+    if state.conflict_warning {
+        let amber = state.conflict_rgb;
         actors.push(act!(text:
             font("miso"):
             settext(tr("ScreenSmxAssignPads", "ConflictExplanation")):
@@ -315,13 +359,10 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_mul: f32) {
     ));
 
     // Chosen-so-far lines (P1 blue, P2 red), with the pad's serial prefix.
-    let blue = smx::PLAYER1_LIGHT;
-    let red = smx::PLAYER2_LIGHT;
-    let line = |label: &str, serial: &Option<String>, rgb: [u8; 3]| -> (String, [f32; 3]) {
-        let val = serial.as_deref().map_or_else(
-            || "(none)".to_owned(),
-            |s| format!("SMX[{}]", smx::serial_prefix(s)),
-        );
+    let blue = state.player_rgb[0];
+    let red = state.player_rgb[1];
+    let line = |label: &str, pad_label: &Option<String>, rgb: [u8; 3]| -> (String, [f32; 3]) {
+        let val = pad_label.as_deref().unwrap_or("(none)");
         (
             format!("{label}: {val}"),
             [
@@ -332,12 +373,8 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_mul: f32) {
         )
     };
     let rows = [
-        line(
-            &tr("ScreenSmxAssignPads", "Player1"),
-            &state.p1_serial,
-            blue,
-        ),
-        line(&tr("ScreenSmxAssignPads", "Player2"), &state.p2_serial, red),
+        line(&tr("ScreenSmxAssignPads", "Player1"), &state.p1_label, blue),
+        line(&tr("ScreenSmxAssignPads", "Player2"), &state.p2_label, red),
     ];
     let base_y = screen_h * 0.56;
     for (i, (text, rgb)) in rows.into_iter().enumerate() {
@@ -382,7 +419,26 @@ pub fn get_actors(state: &State, alpha_mul: f32) -> Vec<Actor> {
 
 #[cfg(test)]
 mod tests {
-    use super::{accept_p2_serial, pressed_slot};
+    use super::{accept_p2_serial, exit, init, on_enter, pressed_slot, update};
+    use crate::screens::ThemeEffect;
+    use crate::{SimplyLoveHardwareRequest, SimplyLoveRuntimeRequest};
+    use deadsync_theme::views::{SmxAssignmentPadView, SmxAssignmentView};
+
+    fn assignment_view(input: [u16; 2]) -> SmxAssignmentView {
+        SmxAssignmentView {
+            pads: std::array::from_fn(|slot| SmxAssignmentPadView {
+                connected: true,
+                serial: format!("SERIAL{slot}"),
+                label: format!("SMX[S{slot}]"),
+                input_state: input[slot],
+                ..SmxAssignmentPadView::default()
+            }),
+            can_swap: true,
+            conflict_warning: true,
+            conflict_rgb: [1.0, 0.5, 0.0],
+            player_rgb: [[0, 0, 255], [255, 0, 0]],
+        }
+    }
 
     #[test]
     fn pressed_slot_detects_rising_edge_only() {
@@ -410,5 +466,68 @@ mod tests {
         );
         // No press: nothing to accept.
         assert_eq!(accept_p2_serial(None, Some("A")), None);
+    }
+
+    #[test]
+    fn assignment_uses_prepared_input_and_emits_shell_requests() {
+        let idle = assignment_view([0, 0]);
+        let mut state = init();
+        on_enter(&mut state, &idle);
+        assert!(matches!(
+            update(&mut state, 0.0, &idle),
+            Some(ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Hardware(
+                SimplyLoveHardwareRequest::SetSmxPlayerLights(_)
+            )))
+        ));
+
+        let p1 = assignment_view([1, 0]);
+        assert!(matches!(
+            update(&mut state, 0.0, &p1),
+            Some(ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Hardware(
+                SimplyLoveHardwareRequest::SetSmxPlayerLights(_)
+            )))
+        ));
+        let released = assignment_view([0, 0]);
+        assert!(update(&mut state, 0.0, &released).is_none());
+
+        let p2 = assignment_view([0, 1]);
+        let Some(ThemeEffect::Batch(effects)) = update(&mut state, 0.0, &p2) else {
+            panic!("P2 selection should assign pads and refresh lights");
+        };
+        assert!(matches!(
+            &effects[0],
+            ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Hardware(
+                SimplyLoveHardwareRequest::AssignSmxPads {
+                    p1_serial,
+                    p2_serial,
+                }
+            )) if p1_serial.as_deref() == Some("SERIAL0")
+                && p2_serial.as_deref() == Some("SERIAL1")
+        ));
+        assert!(matches!(
+            effects[1],
+            ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Hardware(
+                SimplyLoveHardwareRequest::SetSmxPlayerLights(_)
+            ))
+        ));
+    }
+
+    #[test]
+    fn non_options_exit_restores_shell_owned_auto_lights() {
+        let mut state = init();
+        state.return_screen = crate::screens::Screen::Menu;
+        let ThemeEffect::Batch(effects) = exit(&state) else {
+            panic!("menu return should restore lights before navigation");
+        };
+        assert!(matches!(
+            effects[0],
+            ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Hardware(
+                SimplyLoveHardwareRequest::ReenableSmxAutoLights
+            ))
+        ));
+        assert!(matches!(
+            effects[1],
+            ThemeEffect::Navigate(crate::screens::Screen::Menu)
+        ));
     }
 }

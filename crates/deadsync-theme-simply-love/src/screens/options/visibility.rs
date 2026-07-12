@@ -269,8 +269,12 @@ pub(super) fn submenu_visible_row_indices(
             // one pad gets a simple P1/P2 picker; two pads get the assign + swap
             // rows (which can separate same-jumper pads). With none connected, show
             // neither.
-            let pad_count = usize::from(deadsync_smx::get_info(0).connected)
-                + usize::from(deadsync_smx::get_info(1).connected);
+            let pad_count = state
+                .smx_assignment
+                .pads
+                .iter()
+                .filter(|pad| pad.connected)
+                .count();
             let panel_lights = config::get().smx_panel_lights;
             rows.iter()
                 .enumerate()

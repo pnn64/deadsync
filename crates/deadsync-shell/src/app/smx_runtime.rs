@@ -197,7 +197,7 @@ impl App {
                     .unwrap_or_default(),
             ),
         }
-        config::update_smx_pad_assignment(plan.p1_serial, plan.p2_serial);
+        crate::smx_config::set_smx_assignment(plan.p1_serial, plan.p2_serial);
     }
 
     /// From the main Menu, if two pads share a P1/P2 jumper and no assignment
@@ -251,7 +251,7 @@ impl App {
         // Put the strips back on the theme colour (no-op when underglow is off;
         // auto-lighting above restores the firmware default there).
         if restore_underglow {
-            config::send_smx_underglow_color();
+            crate::smx_config::apply_smx_underglow();
         }
     }
 

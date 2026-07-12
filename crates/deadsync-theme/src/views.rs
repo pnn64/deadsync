@@ -39,6 +39,34 @@ pub struct NoteskinCatalogView {
     pub names: Vec<String>,
 }
 
+/// Shell-observed SMX pad identity and input state for concrete theme flows.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SmxAssignmentPadView {
+    pub connected: bool,
+    pub serial: String,
+    pub label: String,
+    pub input_state: u16,
+    pub backend_id: String,
+    pub pad_type: Option<String>,
+}
+
+/// Backend-neutral SMX assignment state prepared by the shell.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct SmxAssignmentView {
+    pub pads: [SmxAssignmentPadView; 2],
+    pub can_swap: bool,
+    pub conflict_warning: bool,
+    pub conflict_rgb: [f32; 3],
+    pub player_rgb: [[u8; 3]; 2],
+}
+
+/// SMX GIF pack names discovered by the shell from runtime asset directories.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SmxGifCatalogView {
+    pub background_packs: Vec<String>,
+    pub judgment_packs: Vec<String>,
+}
+
 /// One resolved chart in a course selection.
 #[derive(Clone, Debug)]
 pub struct CourseStageView {

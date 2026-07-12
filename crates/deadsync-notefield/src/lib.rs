@@ -22,25 +22,96 @@ mod song_lua;
 mod style;
 mod transforms;
 
-pub use actor_builder::*;
-pub use combo_feedback::*;
-pub use compose::*;
-pub use display_mods::*;
-pub use error_bar::*;
-pub use feedback::*;
-pub use field_frame::*;
-pub use frame_feedback::*;
-pub use frame_hud::*;
-pub use holds::*;
-pub use judgment_feedback::*;
-pub use measure_lines::*;
-pub use mini_indicator::*;
-pub use notes::*;
-pub use noteskin_model::*;
-pub use placement::*;
-pub use receptors::*;
-pub use song_lua::*;
-pub use transforms::*;
+pub use actor_builder::{BuiltNotefield, NotefieldFrameFeatures, NotefieldFramePlan};
+pub use combo_feedback::ComboMilestoneAssets;
+pub use compose::{
+    MeasureCounterOptions, NotefieldChartView, NotefieldComposeRequest, NotefieldGeometry,
+    NotefieldNoteskinView, NotefieldOptions, NotefieldSongLuaView, NotefieldVisualState,
+    PreparedNotefield, PreparedNotefieldNotes, prepare_notefield,
+};
+pub use display_mods::{
+    DISPLAY_TURN_BLENDER, DISPLAY_TURN_LEFT, DISPLAY_TURN_LR_MIRROR, DISPLAY_TURN_MIRROR,
+    DISPLAY_TURN_RANDOM, DISPLAY_TURN_RIGHT, DISPLAY_TURN_SHUFFLE, DISPLAY_TURN_UD_MIRROR,
+    GameplayModsAttackMode, GameplayModsTextParams, gameplay_mods_text,
+};
+pub use error_bar::{ErrorBarModes, error_bar_boundaries_s};
+pub use field_frame::{NotefieldFieldFrameView, NotefieldFieldResult, compose_notefield_field};
+pub use frame_feedback::{NotefieldFeedbackFrameView, NotefieldLaneFeedback};
+pub use frame_hud::{
+    ComboHudFrame, CounterHudFrame, ErrorBarHudFrame, JudgmentHudFrame, MiniHudFrame,
+    NotefieldHudComposeResult, NotefieldHudFrameView, TapJudgmentHudFrame, compose_notefield_hud,
+};
+pub use holds::offset_center;
+pub use judgment_feedback::{IndicatorSprite, TapJudgmentSprite};
+pub use measure_lines::MeasureLineMode;
+pub use mini_indicator::{
+    MiniIndicatorColorStyle, MiniIndicatorMode, MiniIndicatorProgress, MiniIndicatorScoreType,
+    MiniIndicatorSize, MiniIndicatorSubtractiveDisplay, ZmodComboColorParams, ZmodComboColorStyle,
+    ZmodMeasureCounterText, ZmodMiniIndicatorOutput, ZmodMiniIndicatorParams,
+    ZmodMiniIndicatorText, zmod_broken_run_end, zmod_combo_quint_active,
+    zmod_mini_indicator_output, zmod_mini_indicator_zoom, zmod_percent_from_points,
+    zmod_resolved_combo_color, zmod_resolved_mini_indicator_mode, zmod_static_combo_color,
+    zmod_stream_prog_completion_for_beat,
+};
+pub use notes::ScrollTravel;
+pub use noteskin_model::{
+    ModelMeshCache, ModelMeshCacheStats, noteskin_model_actor, noteskin_model_actor_from_draw,
+    noteskin_model_actor_from_draw_depth_sorted_affine_cached_geometry,
+};
+pub use placement::{
+    FieldLayout, FieldPlacement, HudLayoutYs, LayoutMiniIndicatorPosition, ProxyCaptureRequests,
+    ViewOverride, ZmodLayoutParams, ZmodLayoutYs,
+};
+pub use song_lua::{
+    SongLuaPlayerTransformRequest, song_lua_note_model_draw, song_lua_player_skew_x_matrix,
+    song_lua_player_skew_y_matrix, song_lua_player_transform_matrix, song_lua_player_y_fold_actor,
+};
+pub use transforms::{
+    TornadoBounds, clamp_rounded_i16, mod_percent_key, quantize_centi_i32, quantize_centi_u32,
+};
+
+pub(crate) use actor_builder::{
+    NotefieldFramePlanRequest, actor_with_world_z, notefield_frame_plan, share_actor_range,
+};
+pub(crate) use feedback::{
+    ColumnFeedbackRequest, compose_column_feedback, field_effect_height, held_miss_zoom,
+    itg_actor_glow_alpha,
+};
+pub(crate) use frame_feedback::compose_notefield_feedback;
+pub(crate) use holds::{
+    HoldBodyCapRequest, HoldComposeControl, HoldEntryPlanRequest, HoldPathSample,
+    compose_hold_body_caps, hold_entry_head_beat, hold_entry_plan, hold_parts_for_note_type,
+    mine_part, scale_effect_size, scale_sprite_to_arrow, song_time_ns_to_seconds,
+    tap_part_for_note_type, tap_replacement_head, translated_uv_rect,
+};
+pub(crate) use measure_lines::{MeasureComposeRequest, compose_measure_lines};
+pub(crate) use mini_indicator::{
+    stream_segment_index_exclusive_end, zmod_broken_run_counter_text, zmod_broken_run_segment,
+    zmod_measure_counter_text, zmod_run_timer_index,
+};
+pub(crate) use notes::{
+    MineLayerRequest, NoteLayerRequest, ScrollTravelRequest, compose_mine_layers,
+    compose_note_layer, for_each_visible_hold_index, for_each_visible_note_index,
+    hold_overlaps_visible_window, mine_hides_after_resolution, scroll_travel,
+};
+pub(crate) use noteskin_model::noteskin_model_actor_from_draw_cached;
+pub(crate) use placement::{
+    FieldLayoutRequest, HudLayoutOffsets, HudLayoutParams, average_error_bar_mini_scale,
+    combo_actor_zoom, effective_mini_value, field_layout, fill_lane_col_offsets,
+    notefield_view_proj, player_metric_y,
+};
+pub(crate) use receptors::{
+    ReceptorActorsRequest, ReceptorPress, compose_receptor_actors, hold_indicator_column_x,
+    receptor_row_center,
+};
+pub(crate) use transforms::{
+    AccelYParams, NoteAlphaParams, NoteXParams, VisualEffectParams, appearance_note_actor_alpha,
+    appearance_note_glow, beat_factor, compute_invert_distances, compute_tornado_bounds,
+    gameplay_visual_effect_params, move_col_extra, note_world_z_for_bumpy, note_x_offset,
+    smoothstep01, tipsy_y_extra, visual_arrow_effect_zoom, visual_confusion_rotation_deg,
+    visual_hold_body_needs_z_buffer, visual_note_rotation_z, visual_pulse_zoom_for_y,
+    visual_tiny_zoom, visual_use_legacy_hold_sprites,
+};
 
 #[cfg(test)]
 use display_mods::{
@@ -48,17 +119,56 @@ use display_mods::{
     disabled_timing_windows_name, join_display_mod_parts, push_transform_parts,
 };
 #[cfg(test)]
-use holds::hold_head_part_for_roll;
+use error_bar::{
+    error_bar_color_for_window, error_bar_flash_alpha, error_bar_text_scalable_zoom,
+    error_bar_tick_alpha, timing_window_from_num,
+};
+#[cfg(test)]
+use feedback::{
+    JudgmentTiltParams, TapJudgmentRowsParams, column_cue_alpha, column_cue_height,
+    column_cue_reverse_top_y, column_flash_alpha, column_flash_alpha_at, column_flash_color,
+    column_flash_height, column_flash_layout, column_flash_reverse_top_y, crossover_cue_height,
+    hold_glow_color, judgment_actor_zoom, judgment_tilt_rotation_deg, tap_judgment_rows,
+};
+#[cfg(test)]
+use holds::{
+    TapReplacementHead, bottom_cap_uv_window, clipped_hold_body_bounds,
+    hold_body_bottom_for_tail_cap, hold_body_segment_budget, hold_draw_span,
+    hold_head_part_for_roll, hold_segment_pose, hold_strip_actor, hold_strip_glow_actor,
+    hold_strip_quad, hold_strip_row_3d, hold_tail_cap_bounds,
+    maybe_mirror_uv_horiz_for_reverse_flipped, scale_cap_to_arrow, song_time_ns_delta_seconds,
+    top_cap_rotation_deg,
+};
 #[cfg(test)]
 use measure_actors::{append_beat_bar, append_cue_bar, append_edit_measure_number};
 #[cfg(test)]
-use mini_indicator::rgba8;
+use measure_lines::{
+    beat_scroll_travel, edit_bar_candidate_step_rows, edit_bar_scroll_speed,
+    edit_beat_bar_info_for_row, edit_beat_scroll_travel,
+};
 #[cfg(test)]
-use transforms::signed_effect_active;
+use mini_indicator::{
+    rgba8, stream_segment_index_inclusive_end, zmod_combo_glow_color, zmod_combo_glow_pair,
+    zmod_combo_rainbow_color, zmod_combo_solid_color, zmod_indicator_default_color,
+    zmod_indicator_detailed_color, zmod_pacemaker_color, zmod_rival_color, zmod_stream_prog_color,
+    zmod_subtractive_counter_state, zmod_subtractive_points,
+};
+#[cfg(test)]
+use notes::{find_first_displayed_beat, find_last_displayed_beat, note_itg_row};
+#[cfg(test)]
+use placement::{default_column_x, hud_layout_ys, hud_y, zmod_layout_ys};
+#[cfg(test)]
+use transforms::{
+    appearance_needs_rows, appearance_note_alpha, apply_accel_y, apply_accel_y_with_peak,
+    beat_x_extra, bumpy_angle, drunk_x_extra, itg_actor_rotation_z, mod_divisor, note_x_extra,
+    quantize_step, signed_effect_active, sm_scale, tiny_spacing_scale, tornado_x_extra,
+    visual_effect_params_for_col, visual_pulse_inner_zoom,
+};
 #[cfg(test)]
 mod tests {
     use deadlib_present::actors::{Actor, SizeSpec, SpriteSource, TextAlign};
     use deadlib_render::BlendMode;
+    use deadsync_gameplay::VisualEffects;
     use deadsync_noteskin::NoteAnimPart;
     use std::sync::Arc;
 
@@ -86,12 +196,12 @@ mod tests {
         error_bar_flash_alpha, error_bar_text_scalable_zoom, error_bar_tick_alpha,
         field_effect_height, fill_lane_col_offsets, find_first_displayed_beat,
         find_last_displayed_beat, for_each_visible_hold_index, for_each_visible_note_index,
-        gameplay_mods_text, held_miss_zoom, hold_body_bottom_for_tail_cap,
-        hold_body_segment_budget, hold_draw_span, hold_glow_color, hold_head_part_for_roll,
-        hold_indicator_column_x, hold_overlaps_visible_window, hold_parts_for_note_type,
-        hold_segment_pose, hold_strip_actor, hold_strip_glow_actor, hold_strip_quad,
-        hold_strip_row_3d, hold_tail_cap_bounds, hud_layout_ys, hud_y, itg_actor_glow_alpha,
-        itg_actor_rotation_z, join_display_mod_parts, judgment_actor_zoom,
+        gameplay_mods_text, gameplay_visual_effect_params, held_miss_zoom,
+        hold_body_bottom_for_tail_cap, hold_body_segment_budget, hold_draw_span, hold_glow_color,
+        hold_head_part_for_roll, hold_indicator_column_x, hold_overlaps_visible_window,
+        hold_parts_for_note_type, hold_segment_pose, hold_strip_actor, hold_strip_glow_actor,
+        hold_strip_quad, hold_strip_row_3d, hold_tail_cap_bounds, hud_layout_ys, hud_y,
+        itg_actor_glow_alpha, itg_actor_rotation_z, join_display_mod_parts, judgment_actor_zoom,
         judgment_tilt_rotation_deg, maybe_mirror_uv_horiz_for_reverse_flipped,
         mine_hides_after_resolution, mine_part, mod_divisor, mod_percent_key, move_col_extra,
         note_itg_row, note_world_z_for_bumpy, note_x_extra, note_x_offset, notefield_view_proj,
@@ -1294,6 +1404,22 @@ mod tests {
             ..VisualEffectParams::default()
         };
         assert!((visual_confusion_rotation_deg(0.0, params) + 90.0).abs() <= 1e-6);
+    }
+
+    #[test]
+    fn gameplay_visual_effect_params_apply_column_mods() {
+        let mut visual = VisualEffects::default();
+        visual.move_x_cols[1] = 0.5;
+        visual.move_y_cols[1] = -0.25;
+        visual.confusion_offset_cols[1] = std::f32::consts::FRAC_PI_2;
+
+        assert_eq!(move_col_extra(&visual.move_x_cols, 1), 32.0);
+        assert_eq!(move_col_extra(&visual.move_y_cols, 1), -16.0);
+        assert!(
+            (visual_confusion_rotation_deg(0.0, gameplay_visual_effect_params(&visual, 1)) + 90.0)
+                .abs()
+                <= 1e-6
+        );
     }
 
     #[test]

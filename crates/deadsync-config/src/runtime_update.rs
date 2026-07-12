@@ -278,41 +278,28 @@ pub fn update_three_key_navigation(enabled: bool) {
     save_without_keymaps();
 }
 
-pub fn update_smx_underglow_theme(enabled: bool) {
+pub fn update_smx_underglow_theme(enabled: bool) -> bool {
     if !RUNTIME_CONFIG.update_smx_underglow_theme(enabled) {
-        return;
+        return false;
     }
     save_without_keymaps();
-    if enabled {
-        send_smx_underglow_color();
-    }
+    true
 }
 
-pub fn update_smx_underglow_grb(grb: bool) {
+pub fn update_smx_underglow_grb(grb: bool) -> bool {
     if !RUNTIME_CONFIG.update_smx_underglow_grb(grb) {
-        return;
+        return false;
     }
     save_without_keymaps();
-    deadsync_smx::set_platform_lights_grb(grb);
-    send_smx_underglow_color();
+    true
 }
 
-pub fn update_smx_pad_assignment(p1_serial: Option<String>, p2_serial: Option<String>) {
-    if !RUNTIME_CONFIG.set_smx_pad_assignment(p1_serial.clone(), p2_serial.clone()) {
-        return;
+pub fn update_smx_pad_assignment(p1_serial: Option<String>, p2_serial: Option<String>) -> bool {
+    if !RUNTIME_CONFIG.set_smx_pad_assignment(p1_serial, p2_serial) {
+        return false;
     }
-    deadsync_smx::set_player_assignment(p1_serial, p2_serial);
     save_without_keymaps();
-}
-
-pub fn swap_smx_pad_assignment() -> bool {
-    let [s0, s1] = deadsync_smx::connected_serials();
-    if let (Some(a), Some(b)) = (s0, s1) {
-        update_smx_pad_assignment(Some(b), Some(a));
-        true
-    } else {
-        false
-    }
+    true
 }
 
 pub fn update_only_dedicated_menu_buttons(enabled: bool) {
@@ -334,19 +321,12 @@ pub fn update_only_dedicated_menu_buttons(enabled: bool) {
     save_without_keymaps();
 }
 
-pub fn update_simply_love_color(index: i32) {
-    if RUNTIME_CONFIG.update_simply_love_color(index) {
-        send_smx_underglow_color();
-        save_without_keymaps();
+pub fn update_simply_love_color(index: i32) -> bool {
+    if !RUNTIME_CONFIG.update_simply_love_color(index) {
+        return false;
     }
-}
-
-pub fn send_smx_underglow_color() {
-    let lone_pad = deadsync_smx::get_info(0).connected ^ deadsync_smx::get_info(1).connected;
-    if let Some(plan) = RUNTIME_CONFIG.smx_underglow_colors(lone_pad) {
-        deadsync_smx::set_platform_lights_grb(plan.grb);
-        deadsync_smx::set_platform_lights_solid(plan.colors);
-    }
+    save_without_keymaps();
+    true
 }
 
 pub fn update_log_level(level: crate::theme::LogLevel) {

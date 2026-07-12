@@ -1,23 +1,16 @@
 use super::super::*;
 
-/// Sorted non-default pack names found under `<assets>/<tree>/`. The picker
-/// rows prepend their own "Default" entry, so index 0 in the row always means
-/// "use the built-in default".
-pub(in crate::screens::options) fn discover_smx_pack_choices(tree: &str) -> Vec<String> {
-    let root = deadlib_platform::dirs::app_dirs().resolve_asset_path("assets");
-    deadsync_smx::gifs::discover_packs(&root.join(tree))
-}
-
 /// Live help text for the Assign Pads row: which pad is currently P1 (blue) vs
 /// P2 (red) by slot, plus a same-jumper warning when the pads are ambiguous and
 /// not yet assigned.
-fn smx_assignment_status() -> std::borrow::Cow<'static, str> {
+pub(in crate::screens::options) fn smx_assignment_status(
+    view: &deadsync_theme::views::SmxAssignmentView,
+) -> String {
     use crate::assets::i18n::{tr, tr_fmt};
-    use deadsync_smx as smx;
     let label = |slot: usize| -> String {
-        let info = smx::get_info(slot);
-        if info.connected && !info.serial.is_empty() {
-            format!("SMX[{}]", smx::serial_prefix(&info.serial))
+        let pad = &view.pads[slot];
+        if pad.connected && !pad.label.is_empty() {
+            pad.label.clone()
         } else {
             tr("OptionsInput", "SmxAssignStatusNone").to_string()
         }
@@ -28,11 +21,11 @@ fn smx_assignment_status() -> std::borrow::Cow<'static, str> {
         &[("p1", &label(0)), ("p2", &label(1))],
     )
     .to_string();
-    if smx::conflict_warning_active() {
+    if view.conflict_warning {
         s.push_str("\n\n");
         s.push_str(&tr("OptionsInput", "SmxAssignStatusConflict"));
     }
-    std::borrow::Cow::Owned(s)
+    s
 }
 
 pub(in crate::screens::options) const INPUT_OPTIONS_ROWS: &[SubRow] = &[
@@ -409,7 +402,7 @@ pub(in crate::screens::options) const SMX_CONFIG_OPTIONS_ITEMS: &[Item] = &[
         name: lookup_key("OptionsInput", "SmxSinglePadPlayer"),
         help: &[
             HelpEntry::Paragraph(lookup_key("OptionsInputHelp", "SmxSinglePadPlayerHelp")),
-            HelpEntry::Dynamic(smx_assignment_status),
+            HelpEntry::SmxAssignmentStatus,
         ],
     },
     Item {
@@ -441,7 +434,7 @@ pub(in crate::screens::options) const SMX_CONFIG_OPTIONS_ITEMS: &[Item] = &[
         name: lookup_key("OptionsInput", "SmxAssignPads"),
         help: &[
             HelpEntry::Paragraph(lookup_key("OptionsInputHelp", "SmxAssignPadsHelp")),
-            HelpEntry::Dynamic(smx_assignment_status),
+            HelpEntry::SmxAssignmentStatus,
         ],
     },
     Item {

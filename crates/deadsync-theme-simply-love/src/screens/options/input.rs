@@ -392,10 +392,20 @@ pub(super) fn apply_submenu_choice_delta(
             config::update_smx_panel_lights(yes_no_from_choice(new_index));
         }
         if row.id == SubRowId::SmxUnderglowTheme {
-            config::update_smx_underglow_theme(yes_no_from_choice(new_index));
+            action = Some(ThemeEffect::Runtime(
+                crate::SimplyLoveRuntimeRequest::Hardware(
+                    crate::SimplyLoveHardwareRequest::SetSmxUnderglowTheme(yes_no_from_choice(
+                        new_index,
+                    )),
+                ),
+            ));
         }
         if row.id == SubRowId::SmxUnderglowGrb {
-            config::update_smx_underglow_grb(new_index == 1);
+            action = Some(ThemeEffect::Runtime(
+                crate::SimplyLoveRuntimeRequest::Hardware(
+                    crate::SimplyLoveHardwareRequest::SetSmxUnderglowGrb(new_index == 1),
+                ),
+            ));
         }
         if row.id == SubRowId::SmxManagesPadConfig {
             config::update_smx_manages_pad_config(yes_no_from_choice(new_index));
@@ -433,13 +443,10 @@ pub(super) fn apply_submenu_choice_delta(
             // Pin the lone connected pad's serial to the chosen side (index 0 = P1,
             // 1 = P2). The SDK then relocates it to that slot. Row is only shown
             // with exactly one pad connected, so just take whichever slot has one.
-            let serials = deadsync_smx::connected_serials();
-            if let Some(serial) = serials[0].clone().or_else(|| serials[1].clone()) {
-                if new_index == 1 {
-                    config::update_smx_pad_assignment(None, Some(serial));
-                } else {
-                    config::update_smx_pad_assignment(Some(serial), None);
-                }
+            if let Some(request) = single_pad_assignment_request(&state.smx_assignment, new_index) {
+                action = Some(ThemeEffect::Runtime(
+                    crate::SimplyLoveRuntimeRequest::Hardware(request),
+                ));
             }
         }
     } else if matches!(kind, SubmenuKind::Lights) {
@@ -461,7 +468,11 @@ pub(super) fn apply_submenu_choice_delta(
             SubRowId::SelectColor => config::update_machine_show_select_color(enabled),
             SubRowId::PreferredColor => {
                 state.active_color_index = new_index as i32;
-                config::update_simply_love_color(state.active_color_index);
+                action = Some(ThemeEffect::Runtime(
+                    crate::SimplyLoveRuntimeRequest::Config(
+                        crate::SimplyLoveConfigRequest::PersistColor(state.active_color_index),
+                    ),
+                ));
             }
             SubRowId::SelectStyle => config::update_machine_show_select_style(enabled),
             SubRowId::PreferredStyle => config::update_machine_preferred_style(
@@ -767,6 +778,27 @@ pub(super) fn apply_submenu_choice_delta(
     }
     clear_render_cache(state);
     action
+}
+
+pub(super) fn single_pad_assignment_request(
+    view: &SmxAssignmentView,
+    player_index: usize,
+) -> Option<crate::SimplyLoveHardwareRequest> {
+    let serial = view
+        .pads
+        .iter()
+        .find(|pad| pad.connected && !pad.serial.is_empty())?
+        .serial
+        .clone();
+    let (p1_serial, p2_serial) = if player_index == 1 {
+        (None, Some(serial))
+    } else {
+        (Some(serial), None)
+    };
+    Some(crate::SimplyLoveHardwareRequest::AssignSmxPads {
+        p1_serial,
+        p2_serial,
+    })
 }
 
 fn move_main_selection(state: &mut State, dir: NavDirection) {
@@ -1391,8 +1423,13 @@ pub(super) fn activate_current_selection(
                             // Immediate action: swap P1/P2 and stay on the page so
                             // the user can watch the pad colours swap. Needs both
                             // pads; otherwise it is a no-op, so signal that.
-                            if config::swap_smx_pad_assignment() {
+                            if state.smx_assignment.can_swap {
                                 queue_sfx(state, "assets/sounds/start.ogg");
+                                return ThemeEffect::Runtime(
+                                    crate::SimplyLoveRuntimeRequest::Hardware(
+                                        crate::SimplyLoveHardwareRequest::SwapSmxPads,
+                                    ),
+                                );
                             } else {
                                 queue_sfx(state, "assets/sounds/common_invalid.ogg");
                             }

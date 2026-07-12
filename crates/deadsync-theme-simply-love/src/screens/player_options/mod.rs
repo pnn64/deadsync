@@ -19,7 +19,7 @@ use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_notefield::noteskin_model_actor;
 use deadsync_profile as profile_data;
 use deadsync_theme::AudioRequest;
-use deadsync_theme::views::NoteskinCatalogView;
+use deadsync_theme::views::{NoteskinCatalogView, SmxGifCatalogView};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -134,6 +134,7 @@ pub fn init(
     return_screen: Screen,
     fixed_stepchart: Option<FixedStepchart>,
     noteskin_catalog: NoteskinCatalogView,
+    smx_gif_catalog: SmxGifCatalogView,
 ) -> State {
     let session_music_rate = deadsync_profile::compat::get_session_music_rate();
     let allow_per_player_global_offsets =
@@ -154,8 +155,8 @@ pub fn init(
     });
 
     let noteskin_names = noteskin_catalog.names;
-    let smx_bg_pack_names = discover_smx_pack_names("smx-pad-lights");
-    let smx_judge_pack_names = discover_smx_pack_names("smx-judge-lights");
+    let smx_bg_pack_names = smx_gif_catalog.background_packs;
+    let smx_judge_pack_names = smx_gif_catalog.judgment_packs;
     let mut main_row_map = build_rows(
         &song,
         &speed_mod_p1,

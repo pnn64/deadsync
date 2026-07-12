@@ -113,11 +113,36 @@ pub enum SimplyLoveConfigRequest {
     PersistColor(i32),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SimplyLoveHardwareRequest {
     TestLightsAuto,
     StepTestCabinet(i8),
     StepTestButton(i8),
+    AssignSmxPads {
+        p1_serial: Option<String>,
+        p2_serial: Option<String>,
+    },
+    SwapSmxPads,
+    SetSmxUnderglowTheme(bool),
+    SetSmxUnderglowGrb(bool),
+    ApplySmxPadPreset {
+        pad: usize,
+        name: String,
+    },
+    ApplySmxPadConfig {
+        pad: usize,
+        profile_id: String,
+        name: String,
+    },
+    CaptureSmxPadConfig {
+        pad: usize,
+        profile_id: String,
+        name: String,
+        set_default: bool,
+        overwrite: bool,
+    },
+    SetSmxPlayerLights([Option<[u8; 3]>; 2]),
+    ReenableSmxAutoLights,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

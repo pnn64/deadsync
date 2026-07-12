@@ -5,7 +5,10 @@ use deadsync_core::input::InputSource;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_lights::DriverKind as LightsDriverKind;
 use deadsync_profile as profile_data;
-use deadsync_theme::views::{AudioOutputDeviceView, NoteskinCatalogView};
+use deadsync_theme::views::{
+    AudioOutputDeviceView, NoteskinCatalogView, SmxAssignmentPadView, SmxAssignmentView,
+    SmxGifCatalogView,
+};
 use std::time::{Duration, Instant};
 
 fn init() -> State {
@@ -22,11 +25,58 @@ fn init_with_audio(audio_options: AudioOptionsView) -> State {
         NoteskinCatalogView {
             names: vec![profile_data::NoteSkin::DEFAULT_NAME.to_owned()],
         },
+        deadsync_theme::views::SmxAssignmentView::default(),
+        deadsync_theme::views::SmxGifCatalogView::default(),
     )
 }
 
 fn updater_view() -> SimplyLoveUpdaterView {
     SimplyLoveUpdaterView::default()
+}
+
+#[test]
+fn smx_gif_choices_come_from_shell_catalog() {
+    let state = super::init(
+        SimplyLoveUpdaterCapabilities::default(),
+        AudioOptionsView::default(),
+        NoteskinCatalogView::default(),
+        SmxAssignmentView::default(),
+        SmxGifCatalogView {
+            background_packs: vec!["Background Pack".to_owned()],
+            judgment_packs: vec!["Judgment Pack".to_owned()],
+        },
+    );
+
+    assert_eq!(state.smx_bg_pack_choices, ["Background Pack"]);
+    assert_eq!(state.smx_judge_pack_choices, ["Judgment Pack"]);
+}
+
+#[test]
+fn smx_underglow_choice_emits_shell_hardware_request() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::SmxConfig);
+    let row = select_visible_row(
+        &mut state,
+        SubmenuKind::SmxConfig,
+        SubRowId::SmxUnderglowTheme,
+    );
+    let before = state.sub[SubmenuKind::SmxConfig].cursor_indices[row];
+
+    let effect = apply_submenu_choice_delta(&mut state, &asset_manager, 1, NavWrap::Wrap)
+        .expect("underglow choice should emit shell work");
+    let enabled = state.sub[SubmenuKind::SmxConfig].cursor_indices[row] == 1;
+
+    assert_ne!(
+        state.sub[SubmenuKind::SmxConfig].cursor_indices[row],
+        before
+    );
+    assert!(matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Hardware(
+            crate::SimplyLoveHardwareRequest::SetSmxUnderglowTheme(value)
+        )) if value == enabled
+    ));
 }
 
 fn input_event(action: VirtualAction, pressed: bool) -> InputEvent {
@@ -41,6 +91,78 @@ fn input_event(action: VirtualAction, pressed: bool) -> InputEvent {
         stored_at: now,
         emitted_at: now,
     }
+}
+
+fn smx_view(pads: [(bool, &str, &str); 2], can_swap: bool) -> SmxAssignmentView {
+    SmxAssignmentView {
+        pads: std::array::from_fn(|slot| SmxAssignmentPadView {
+            connected: pads[slot].0,
+            serial: pads[slot].1.to_owned(),
+            label: pads[slot].2.to_owned(),
+            input_state: 0,
+            ..SmxAssignmentPadView::default()
+        }),
+        can_swap,
+        conflict_warning: false,
+        conflict_rgb: [1.0, 0.5, 0.0],
+        player_rgb: [[0, 0, 255], [255, 0, 0]],
+    }
+}
+
+#[test]
+fn prepared_smx_view_drives_single_pad_state_and_request() {
+    let mut state = init();
+    let view = smx_view([(false, "", ""), (true, "PAD2", "SMX[P2]")], false);
+    sync_smx_assignment(&mut state, &view);
+
+    assert_eq!(state.smx_assignment, view);
+    assert!(state.smx_assignment_status.contains("SMX[P2]"));
+    let row_index = SMX_CONFIG_OPTIONS_ROWS
+        .iter()
+        .position(|row| row.id == SubRowId::SmxSinglePadPlayer)
+        .unwrap();
+    assert_eq!(
+        state.sub[SubmenuKind::SmxConfig].choice_indices[row_index],
+        1
+    );
+    assert!(matches!(
+        single_pad_assignment_request(&state.smx_assignment, 0),
+        Some(crate::SimplyLoveHardwareRequest::AssignSmxPads {
+            p1_serial: Some(serial),
+            p2_serial: None,
+        }) if serial == "PAD2"
+    ));
+}
+
+#[test]
+fn prepared_smx_view_controls_assignment_row_visibility() {
+    let mut state = init();
+    let one = smx_view([(true, "PAD1", "SMX[P1]"), (false, "", "")], false);
+    sync_smx_assignment(&mut state, &one);
+    let visible =
+        submenu_visible_row_indices(&state, SubmenuKind::SmxConfig, SMX_CONFIG_OPTIONS_ROWS);
+    assert!(
+        visible
+            .iter()
+            .any(|&index| { SMX_CONFIG_OPTIONS_ROWS[index].id == SubRowId::SmxSinglePadPlayer })
+    );
+    assert!(!visible.iter().any(|&index| {
+        matches!(
+            SMX_CONFIG_OPTIONS_ROWS[index].id,
+            SubRowId::SmxAssignPads | SubRowId::SmxSwapPads
+        )
+    }));
+
+    let two = smx_view([(true, "PAD1", "SMX[P1]"), (true, "PAD2", "SMX[P2]")], true);
+    sync_smx_assignment(&mut state, &two);
+    let visible =
+        submenu_visible_row_indices(&state, SubmenuKind::SmxConfig, SMX_CONFIG_OPTIONS_ROWS);
+    assert!(visible.iter().any(|&index| {
+        matches!(
+            SMX_CONFIG_OPTIONS_ROWS[index].id,
+            SubRowId::SmxAssignPads | SubRowId::SmxSwapPads
+        )
+    }));
 }
 
 fn press(state: &mut State, asset_manager: &AssetManager, action: VirtualAction) -> ThemeEffect {
@@ -314,8 +436,18 @@ fn p2_can_navigate_and_change_system_options() {
 
     assert_eq!(state.selected, 0);
     press(&mut state, &asset_manager, VirtualAction::p2_start);
-    update(&mut state, 1.0, &asset_manager);
-    update(&mut state, 1.0, &asset_manager);
+    update(
+        &mut state,
+        1.0,
+        &asset_manager,
+        &SmxAssignmentView::default(),
+    );
+    update(
+        &mut state,
+        1.0,
+        &asset_manager,
+        &SmxAssignmentView::default(),
+    );
     assert!(matches!(
         state.view,
         OptionsView::Submenu(SubmenuKind::System)
@@ -467,7 +599,12 @@ fn service_child_three_key_lr_repeat_uses_update_dt() {
     dedicated_press(&mut state, &asset_manager, VirtualAction::p1_right);
     let after_press = state.sub[SubmenuKind::Graphics].cursor_indices[row];
 
-    update(&mut state, 0.0, &asset_manager);
+    update(
+        &mut state,
+        0.0,
+        &asset_manager,
+        &SmxAssignmentView::default(),
+    );
     assert_eq!(
         state.sub[SubmenuKind::Graphics].cursor_indices[row],
         after_press
@@ -477,6 +614,7 @@ fn service_child_three_key_lr_repeat_uses_update_dt() {
         &mut state,
         (NAV_INITIAL_HOLD_DELAY + Duration::from_millis(1)).as_secs_f32(),
         &asset_manager,
+        &SmxAssignmentView::default(),
     );
     assert_ne!(
         state.sub[SubmenuKind::Graphics].cursor_indices[row],
@@ -916,7 +1054,12 @@ fn settle_submenu(state: &mut State, asset_manager: &AssetManager) {
         if matches!(state.submenu_transition, SubmenuTransition::None) {
             return;
         }
-        update(state, SUBMENU_FADE_DURATION + 0.001, asset_manager);
+        update(
+            state,
+            SUBMENU_FADE_DURATION + 0.001,
+            asset_manager,
+            &SmxAssignmentView::default(),
+        );
     }
     panic!("submenu transition did not settle");
 }

@@ -257,7 +257,7 @@ impl UnmappedTracker {
             let line = match *k {
                 UnmappedKey::Dir { dev, dir } => format!("Gamepad {dev}: Dir::{dir:?}"),
                 UnmappedKey::RawButton { dev, code_u32 } => {
-                    deadsync_smx::trigger_label(dev, code_u32)
+                    deadsync_input::raw_button_label(dev, code_u32)
                         .unwrap_or_else(|| format!("Gamepad {dev}: RawButton [0x{code_u32:08X}]"))
                 }
                 UnmappedKey::RawAxis { dev, code_u32 } => {

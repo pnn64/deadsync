@@ -119,6 +119,7 @@ pub fn launch_input_backends(proxy: EventLoopProxy<UserEvent>, config: InputBack
             p2_serial: config.smx_p2_serial,
         })
     {
+        let _ = deadsync_input::set_button_labeler(deadsync_smx::trigger_label);
         let proxy_pad = proxy.clone();
         deadsync_smx::add_input_listener(Box::new(move |event| {
             let _ = proxy_pad.send_event(UserEvent::Pad(event));

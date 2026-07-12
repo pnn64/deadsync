@@ -7,7 +7,7 @@ use deadsync_noteskin::{
 };
 use deadsync_theme::ReceptorStyle;
 
-pub fn receptor_row_center(
+pub(crate) fn receptor_row_center(
     field_center_x: f32,
     local_col: usize,
     receptor_y: f32,

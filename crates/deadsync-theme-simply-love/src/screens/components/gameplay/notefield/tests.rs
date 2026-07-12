@@ -3,12 +3,8 @@ use crate::assets;
 use crate::notefield_style::notefield_style;
 use deadsync_assets::noteskin::load_itg_skin;
 use deadsync_core::note::NoteType;
-use deadsync_gameplay::{ActiveHold, VisualEffects, hold_explosion_active, hold_head_render_flags};
-use deadsync_notefield::{
-    error_bar_boundaries_s, error_bar_text_scalable_zoom, gameplay_visual_effect_params,
-    hold_entry_head_beat, itg_actor_glow_alpha, move_col_extra, note_world_z_for_bumpy,
-    offset_center, visual_confusion_rotation_deg,
-};
+use deadsync_gameplay::{ActiveHold, hold_explosion_active, hold_head_render_flags};
+use deadsync_notefield::{error_bar_boundaries_s, offset_center};
 use deadsync_noteskin::{NUM_QUANTIZATIONS, NoteskinSlot, Quantization, Style};
 use deadsync_profile as profile_data;
 use deadsync_rules::timing;
@@ -181,18 +177,6 @@ fn hold_head_render_flags_require_engaged_life_state() {
 }
 
 #[test]
-fn let_go_head_beat_stays_at_receptor_until_visible_clock_catches_up() {
-    let beat = hold_entry_head_beat(100.0, 108.0, 102.0, 101.25, true);
-    assert!((beat - 101.25).abs() <= 1e-6);
-}
-
-#[test]
-fn let_go_head_beat_uses_last_held_once_visible_clock_has_caught_up() {
-    let beat = hold_entry_head_beat(100.0, 108.0, 102.0, 103.0, true);
-    assert!((beat - 102.0).abs() <= 1e-6);
-}
-
-#[test]
 fn receptor_glow_draws_under_hold_body() {
     let style = notefield_style();
     assert!(style.receptor.target_z < style.actors.hold_body_z);
@@ -211,67 +195,6 @@ fn average_error_bar_draws_under_receptors() {
     let z = notefield_style().error_bar.average_z;
     assert!(z < notefield_style().receptor.target_z);
     assert!(z < notefield_style().actors.note_z);
-}
-
-#[test]
-fn text_error_bar_scalable_zoom_matches_sl_fork_curve_at_default_threshold() {
-    fn assert_close(actual: f32, expected: f32) {
-        assert!(
-            (actual - expected).abs() <= 0.0001,
-            "{actual} != {expected}"
-        );
-    }
-
-    let w2_ms = timing::TimingProfile::default_itg_with_fa_plus().windows_s[0] * 1000.0;
-    let smaller_white_ms = timing::FA_PLUS_W010_MS;
-    let w1_ms = timing::FA_PLUS_W0_MS;
-    let inner_mid_ms = (smaller_white_ms + w1_ms) * 0.5;
-    let fantastic_mid_ms = (w1_ms + w2_ms) * 0.5;
-
-    assert_close(
-        error_bar_text_scalable_zoom(inner_mid_ms, 10.0, w2_ms),
-        0.35,
-    );
-    assert_close(
-        error_bar_text_scalable_zoom(fantastic_mid_ms, 10.0, w2_ms),
-        0.4,
-    );
-    assert_close(error_bar_text_scalable_zoom(w2_ms + 1.0, 10.0, w2_ms), 0.45);
-}
-
-#[test]
-fn note_actor_glow_clamps_like_itg_vertex_color() {
-    assert_eq!(itg_actor_glow_alpha(1.3), 1.0);
-    assert_eq!(itg_actor_glow_alpha(0.65), 0.65);
-    assert_eq!(itg_actor_glow_alpha(f32::NAN), 0.0);
-}
-
-#[test]
-fn bumpy_world_z_matches_itg_default_wave() {
-    let z = note_world_z_for_bumpy(8.0 * std::f32::consts::PI, 1.0, 0.0, 0.0);
-    assert!((z - 40.0).abs() <= 1e-4);
-}
-
-#[test]
-fn bumpy_period_changes_wave_length_like_itg() {
-    let z = note_world_z_for_bumpy(-2.0 * std::f32::consts::PI, 1.0, 0.0, -1.25);
-    assert!((z - 40.0).abs() <= 1e-4);
-}
-
-#[test]
-fn move_and_confusion_column_mods_match_itg_scaling() {
-    let mut visual = VisualEffects::default();
-    visual.move_x_cols[1] = 0.5;
-    visual.move_y_cols[1] = -0.25;
-    visual.confusion_offset_cols[1] = std::f32::consts::FRAC_PI_2;
-
-    assert_eq!(move_col_extra(&visual.move_x_cols, 1), 32.0);
-    assert_eq!(move_col_extra(&visual.move_y_cols, 1), -16.0);
-    assert!(
-        (visual_confusion_rotation_deg(0.0, gameplay_visual_effect_params(&visual, 1)) + 90.0)
-            .abs()
-            <= 1e-6
-    );
 }
 
 #[test]

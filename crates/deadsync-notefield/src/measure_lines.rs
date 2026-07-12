@@ -62,7 +62,7 @@ struct MeasureLinePlan {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct EditBeatBarInfo {
+pub(crate) struct EditBeatBarInfo {
     pub frame: u32,
     pub measure_index: Option<i64>,
 }
@@ -132,7 +132,7 @@ fn sig_index_at_row(segments: &[TimeSignatureSegment], row: i32) -> usize {
     idx
 }
 
-pub fn edit_beat_bar_info_for_row(
+pub(crate) fn edit_beat_bar_info_for_row(
     row: i32,
     segments: &[TimeSignatureSegment],
 ) -> Option<EditBeatBarInfo> {
@@ -184,7 +184,7 @@ fn gcd(a: i32, b: i32) -> i32 {
     a.clamp(1, i64::from(i32::MAX)) as i32
 }
 
-pub fn edit_bar_candidate_step_rows(segments: &[TimeSignatureSegment]) -> i32 {
+pub(crate) fn edit_bar_candidate_step_rows(segments: &[TimeSignatureSegment]) -> i32 {
     let mut out = bar_step_rows(sig_at(segments, 0));
     for i in 0..sig_count(segments) {
         let sig = sig_at(segments, i);
@@ -194,7 +194,11 @@ pub fn edit_bar_candidate_step_rows(segments: &[TimeSignatureSegment]) -> i32 {
     out.max(1)
 }
 
-pub fn edit_bar_scroll_speed(speed: ScrollSpeedSetting, current_bpm: f32, music_rate: f32) -> f32 {
+pub(crate) fn edit_bar_scroll_speed(
+    speed: ScrollSpeedSetting,
+    current_bpm: f32,
+    music_rate: f32,
+) -> f32 {
     match speed {
         ScrollSpeedSetting::XMod(multiplier) => multiplier,
         ScrollSpeedSetting::MMod(_) => speed.beat_multiplier(current_bpm, music_rate),
@@ -203,15 +207,15 @@ pub fn edit_bar_scroll_speed(speed: ScrollSpeedSetting, current_bpm: f32, music_
     .max(0.0)
 }
 
-pub fn beat_scroll_travel(note_beat: f32, current_beat: f32, scroll_speed: f32) -> f32 {
+pub(crate) fn beat_scroll_travel(note_beat: f32, current_beat: f32, scroll_speed: f32) -> f32 {
     (note_beat - current_beat) * ScrollSpeedSetting::ARROW_SPACING * scroll_speed
 }
 
-pub fn edit_beat_scroll_travel(note_beat: f32, current_beat: f32) -> f32 {
+pub(crate) fn edit_beat_scroll_travel(note_beat: f32, current_beat: f32) -> f32 {
     beat_scroll_travel(note_beat, current_beat, 1.0)
 }
 
-pub fn scaled_edit_bar_alpha(scroll_speed: f32, visible_at: f32, full_at: f32) -> f32 {
+pub(crate) fn scaled_edit_bar_alpha(scroll_speed: f32, visible_at: f32, full_at: f32) -> f32 {
     ((scroll_speed - visible_at) / (full_at - visible_at)).clamp(0.0, 1.0)
 }
 

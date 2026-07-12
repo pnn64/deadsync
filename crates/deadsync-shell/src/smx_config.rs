@@ -2,6 +2,7 @@ use deadsync_config::prelude::SmxPadPreset;
 use deadsync_profile::pad_config;
 use deadsync_profile::pad_config_sync::AppliedPadConfig;
 use deadsync_smx::SmxInfo;
+use deadsync_theme::views::{SmxAssignmentPadView, SmxAssignmentView, SmxGifCatalogView};
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -29,6 +30,132 @@ pub struct SmxAutopromptPlan {
 pub struct SmxLightBrightnessPlan {
     pub resolved: [u8; 2],
     pub apply: bool,
+}
+
+pub fn smx_assignment_view() -> SmxAssignmentView {
+    let manager = deadsync_smx::manager();
+    let (saved_p1, saved_p2) = deadsync_config::prelude::smx_pad_assignment();
+    SmxAssignmentView {
+        pads: std::array::from_fn(|slot| {
+            let info = deadsync_smx::get_info(slot);
+            let label = if info.connected && !info.serial.is_empty() {
+                format!("SMX[{}]", deadsync_smx::serial_prefix(info.serial.as_str()))
+            } else {
+                String::new()
+            };
+            SmxAssignmentPadView {
+                connected: info.connected,
+                serial: info.serial,
+                label,
+                input_state: manager.map_or(0, |manager| manager.get_input_state(slot)),
+                backend_id: deadsync_smx::BACKEND_ID.to_owned(),
+                pad_type: deadsync_smx::pad_sensor_type(slot)
+                    .map(|pad_type| pad_type.as_str().to_owned()),
+            }
+        }),
+        can_swap: saved_p1.is_some() && saved_p2.is_some(),
+        conflict_warning: deadsync_smx::conflict_warning_active(),
+        conflict_rgb: deadsync_smx::CONFLICT_WARNING_RGB,
+        player_rgb: [deadsync_smx::PLAYER1_LIGHT, deadsync_smx::PLAYER2_LIGHT],
+    }
+}
+
+pub fn smx_gif_catalog_view() -> SmxGifCatalogView {
+    let root = deadlib_platform::dirs::app_dirs().resolve_asset_path("assets");
+    SmxGifCatalogView {
+        background_packs: deadsync_smx::gifs::discover_packs(&root.join("smx-pad-lights")),
+        judgment_packs: deadsync_smx::gifs::discover_packs(&root.join("smx-judge-lights")),
+    }
+}
+
+pub fn apply_smx_underglow() {
+    let lone_pad = deadsync_smx::get_info(0).connected ^ deadsync_smx::get_info(1).connected;
+    if let Some(plan) = deadsync_config::runtime_state::smx_underglow_colors_from_config(
+        &deadsync_config::prelude::get(),
+        lone_pad,
+    ) {
+        deadsync_smx::set_platform_lights_grb(plan.grb);
+        deadsync_smx::set_platform_lights_solid(plan.colors);
+    }
+}
+
+pub fn set_smx_underglow_theme(enabled: bool) {
+    if deadsync_config::prelude::update_smx_underglow_theme(enabled) && enabled {
+        apply_smx_underglow();
+    }
+}
+
+pub fn set_smx_underglow_grb(grb: bool) {
+    if !deadsync_config::prelude::update_smx_underglow_grb(grb) {
+        return;
+    }
+    deadsync_smx::set_platform_lights_grb(grb);
+    apply_smx_underglow();
+}
+
+pub fn set_theme_color(index: i32) {
+    if deadsync_config::prelude::update_simply_love_color(index) {
+        apply_smx_underglow();
+    }
+}
+
+pub fn set_smx_assignment(p1_serial: Option<String>, p2_serial: Option<String>) {
+    if deadsync_config::prelude::update_smx_pad_assignment(p1_serial.clone(), p2_serial.clone()) {
+        deadsync_smx::set_player_assignment(p1_serial, p2_serial);
+    }
+}
+
+pub fn swap_smx_assignment() -> bool {
+    let [slot0, slot1] = deadsync_smx::connected_serials();
+    let (Some(p1), Some(p2)) = (slot0, slot1) else {
+        return false;
+    };
+    set_smx_assignment(Some(p2), Some(p1));
+    true
+}
+
+pub fn apply_smx_pad_preset(pad: usize, name: &str) -> bool {
+    if pad >= 2 || !deadsync_smx::get_info(pad).connected {
+        return false;
+    }
+    name.parse::<SmxPadPreset>()
+        .is_ok_and(|preset| deadsync_smx::apply_preset(pad, preset))
+}
+
+pub fn apply_smx_saved_pad_config(pad: usize, profile_id: &str, name: &str) -> bool {
+    if pad >= 2 || !deadsync_smx::get_info(pad).connected {
+        return false;
+    }
+    let configs = deadsync_profile::compat::load_pad_configs(profile_id);
+    configs
+        .iter()
+        .find(|config| config.name == name)
+        .and_then(|config| deadsync_smx::PadConfigData::from_settings(&config.settings))
+        .is_some_and(|data| deadsync_smx::apply_config_data(pad, &data))
+}
+
+pub fn capture_smx_pad_config(pad: usize, profile_id: &str, name: &str, set_default: bool) -> bool {
+    if pad >= 2 {
+        return false;
+    }
+    let info = deadsync_smx::get_info(pad);
+    if !info.connected {
+        return false;
+    }
+    let Some(data) = deadsync_smx::capture_config(pad) else {
+        return false;
+    };
+    let pad_type = deadsync_smx::pad_sensor_type(pad).map(|kind| kind.as_str().to_owned());
+    deadsync_profile::compat::upsert_pad_config(
+        profile_id,
+        name,
+        deadsync_smx::BACKEND_ID,
+        pad_type,
+        Some(info.serial),
+        set_default,
+        data.to_settings(),
+    );
+    true
 }
 
 pub fn smx_assignment_plan(

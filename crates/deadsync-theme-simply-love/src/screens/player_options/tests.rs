@@ -1573,6 +1573,7 @@ pub(super) mod tests {
             Screen::SelectMusic,
             None,
             test_noteskin_catalog(),
+            deadsync_theme::views::SmxGifCatalogView::default(),
         );
         let active = session_active_players();
         let first_row = state.pane().selected_row[P1];
@@ -1614,6 +1615,7 @@ pub(super) mod tests {
             Screen::SelectMusic,
             None,
             test_noteskin_catalog(),
+            deadsync_theme::views::SmxGifCatalogView::default(),
         );
         let active = session_active_players();
         let last_row = state.pane().row_map.len().saturating_sub(1);
@@ -1649,6 +1651,7 @@ pub(super) mod tests {
             Screen::SelectMusic,
             None,
             test_noteskin_catalog(),
+            deadsync_theme::views::SmxGifCatalogView::default(),
         );
         (state, asset_manager)
     }
@@ -1668,6 +1671,7 @@ pub(super) mod tests {
             Screen::SelectMusic,
             None,
             test_noteskin_catalog(),
+            deadsync_theme::views::SmxGifCatalogView::default(),
         );
         (state, asset_manager)
     }

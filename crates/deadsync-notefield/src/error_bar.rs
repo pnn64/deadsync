@@ -664,7 +664,7 @@ pub(crate) const fn error_bar_color_for_window(
     }
 }
 
-pub fn error_bar_text_scalable_zoom(abs_ms: f32, scale_start_ms: f32, w2_ms: f32) -> f32 {
+pub(crate) fn error_bar_text_scalable_zoom(abs_ms: f32, scale_start_ms: f32, w2_ms: f32) -> f32 {
     let ms = if abs_ms.is_finite() {
         abs_ms
     } else {

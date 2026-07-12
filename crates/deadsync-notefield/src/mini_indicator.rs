@@ -137,14 +137,20 @@ pub const fn zmod_resolved_mini_indicator_mode(
     }
 }
 
-pub fn stream_segment_index_exclusive_end(segs: &[StreamSegment], curr_measure: f32) -> usize {
+pub(crate) fn stream_segment_index_exclusive_end(
+    segs: &[StreamSegment],
+    curr_measure: f32,
+) -> usize {
     if curr_measure.is_nan() {
         return segs.len();
     }
     segs.partition_point(|s| curr_measure >= s.end as f32)
 }
 
-pub fn stream_segment_index_inclusive_end(segs: &[StreamSegment], curr_measure: f32) -> usize {
+pub(crate) fn stream_segment_index_inclusive_end(
+    segs: &[StreamSegment],
+    curr_measure: f32,
+) -> usize {
     if curr_measure.is_nan() {
         return segs.len();
     }
@@ -185,7 +191,7 @@ pub fn zmod_broken_run_end(segs: &[StreamSegment], start_index: usize) -> (i32, 
     (end as i32, broken)
 }
 
-pub fn zmod_broken_run_segment(
+pub(crate) fn zmod_broken_run_segment(
     segs: &[StreamSegment],
     curr_measure: f32,
 ) -> Option<(usize, i32, bool)> {
@@ -204,7 +210,7 @@ pub fn zmod_broken_run_segment(
     None
 }
 
-pub fn zmod_run_timer_index(segs: &[StreamSegment], curr_measure: f32) -> Option<usize> {
+pub(crate) fn zmod_run_timer_index(segs: &[StreamSegment], curr_measure: f32) -> Option<usize> {
     let index = stream_segment_index_inclusive_end(segs, curr_measure);
     if index < segs.len() {
         Some(index)
@@ -213,7 +219,7 @@ pub fn zmod_run_timer_index(segs: &[StreamSegment], curr_measure: f32) -> Option
     }
 }
 
-pub fn zmod_measure_counter_text(
+pub(crate) fn zmod_measure_counter_text(
     curr_beat_floor: f32,
     curr_measure: f32,
     segs: &[StreamSegment],
@@ -275,7 +281,7 @@ pub fn zmod_measure_counter_text(
     }
 }
 
-pub fn zmod_broken_run_counter_text(
+pub(crate) fn zmod_broken_run_counter_text(
     curr_measure: f32,
     segs: &[StreamSegment],
     start_index: usize,
@@ -315,7 +321,7 @@ pub fn zmod_percent_from_points(points: i32, total: i32) -> f64 {
     ((points as f64 / total as f64) * 10000.0).floor() / 100.0
 }
 
-pub fn zmod_subtractive_counter_state(
+pub(crate) fn zmod_subtractive_counter_state(
     progress: &MiniIndicatorProgress,
     score_type: MiniIndicatorScoreType,
 ) -> (u32, bool) {
@@ -338,7 +344,7 @@ pub fn zmod_subtractive_counter_state(
     }
 }
 
-pub fn zmod_subtractive_points(
+pub(crate) fn zmod_subtractive_points(
     progress: &MiniIndicatorProgress,
     score_type: MiniIndicatorScoreType,
 ) -> u32 {
@@ -383,14 +389,14 @@ pub const fn zmod_mini_indicator_zoom(size: MiniIndicatorSize) -> f32 {
     }
 }
 
-pub fn zmod_rival_color(pace: f64, rival_pace: f64) -> [f32; 4] {
+pub(crate) fn zmod_rival_color(pace: f64, rival_pace: f64) -> [f32; 4] {
     let r = (1.0 - (pace - rival_pace)).clamp(0.0, 1.0) as f32;
     let g = (0.5 - (rival_pace - pace)).clamp(0.0, 1.0) as f32;
     let b = (1.0 - (rival_pace - pace)).clamp(0.0, 1.0) as f32;
     [r, g, b, 1.0]
 }
 
-pub fn zmod_pacemaker_color(pace: f64, rival_pace: f64) -> [f32; 4] {
+pub(crate) fn zmod_pacemaker_color(pace: f64, rival_pace: f64) -> [f32; 4] {
     let r = (1.0 - (pace - rival_pace) / 100.0).clamp(0.0, 1.0) as f32;
     let g = (0.5 - (rival_pace - pace) / 100.0).clamp(0.0, 1.0) as f32;
     let b = (1.0 - (rival_pace - pace) / 100.0).clamp(0.0, 1.0) as f32;
@@ -419,7 +425,7 @@ fn zmod_mini_indicator_score_color(
     }
 }
 
-pub fn zmod_stream_prog_color(completion: f64) -> [f32; 4] {
+pub(crate) fn zmod_stream_prog_color(completion: f64) -> [f32; 4] {
     if completion >= 0.9 {
         [
             0.0,
@@ -542,7 +548,7 @@ pub fn zmod_mini_indicator_output(
     }
 }
 
-pub fn zmod_combo_glow_color(color1: [f32; 4], color2: [f32; 4], elapsed: f32) -> [f32; 4] {
+pub(crate) fn zmod_combo_glow_color(color1: [f32; 4], color2: [f32; 4], elapsed: f32) -> [f32; 4] {
     let effect_period = 0.8_f32;
     let through = (elapsed / effect_period).fract();
     let t = ((through * std::f32::consts::TAU).sin() + 1.0) * 0.5;
@@ -554,7 +560,7 @@ pub fn zmod_combo_glow_color(color1: [f32; 4], color2: [f32; 4], elapsed: f32) -
     ]
 }
 
-pub fn zmod_combo_glow_pair(grade: JudgeGrade, quint: bool) -> ([f32; 4], [f32; 4]) {
+pub(crate) fn zmod_combo_glow_pair(grade: JudgeGrade, quint: bool) -> ([f32; 4], [f32; 4]) {
     if quint && grade == JudgeGrade::Fantastic {
         return (rgba8(247, 192, 254), rgba8(233, 40, 255));
     }
@@ -566,7 +572,7 @@ pub fn zmod_combo_glow_pair(grade: JudgeGrade, quint: bool) -> ([f32; 4], [f32; 
     }
 }
 
-pub fn zmod_combo_solid_color(grade: JudgeGrade, quint: bool) -> [f32; 4] {
+pub(crate) fn zmod_combo_solid_color(grade: JudgeGrade, quint: bool) -> [f32; 4] {
     if quint && grade == JudgeGrade::Fantastic {
         return rgba8(233, 40, 255);
     }
@@ -578,7 +584,7 @@ pub fn zmod_combo_solid_color(grade: JudgeGrade, quint: bool) -> [f32; 4] {
     }
 }
 
-pub fn zmod_indicator_default_color(score_percent: f64) -> [f32; 4] {
+pub(crate) fn zmod_indicator_default_color(score_percent: f64) -> [f32; 4] {
     if score_percent >= 96.0 {
         rgba8(33, 204, 232)
     } else if score_percent >= 89.0 {
@@ -592,7 +598,7 @@ pub fn zmod_indicator_default_color(score_percent: f64) -> [f32; 4] {
     }
 }
 
-pub fn zmod_indicator_detailed_color(score_percent: f64) -> [f32; 4] {
+pub(crate) fn zmod_indicator_detailed_color(score_percent: f64) -> [f32; 4] {
     if score_percent >= 99.0 {
         [1.0, 0.0, 1.0, 1.0]
     } else if score_percent >= 98.0 {
@@ -610,7 +616,7 @@ pub fn zmod_indicator_detailed_color(score_percent: f64) -> [f32; 4] {
     }
 }
 
-pub fn zmod_combo_rainbow_color(elapsed: f32, scroll: bool, combo: u32) -> [f32; 4] {
+pub(crate) fn zmod_combo_rainbow_color(elapsed: f32, scroll: bool, combo: u32) -> [f32; 4] {
     let speed = if scroll { 0.45 } else { 0.35 };
     let offset = if scroll { combo as f32 * 0.013 } else { 0.0 };
     let hue = (elapsed * speed + offset).fract();

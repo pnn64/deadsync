@@ -1355,6 +1355,271 @@ fn noteskin_discovery_is_shell_prepared_for_themes() {
 }
 
 #[test]
+fn simply_love_smx_assignment_uses_shell_prepared_hardware_state() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let theme_screen = fs::read_to_string(
+        root.join("crates/deadsync-theme-simply-love/src/screens/smx_assign.rs"),
+    )
+    .expect("Simply Love SMX assignment screen should be readable");
+    let effects = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+        .expect("Simply Love effects should be readable");
+    let generic_views = fs::read_to_string(root.join("crates/deadsync-theme/src/views.rs"))
+        .expect("generic theme views should be readable");
+    let shell_smx = fs::read_to_string(root.join("crates/deadsync-shell/src/smx_config.rs"))
+        .expect("shell SMX service should be readable");
+    let shell_app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell runtime executor should be readable");
+
+    for forbidden in [
+        "deadsync_smx",
+        "smx::manager",
+        "smx::get_info",
+        "smx::set_player_lights",
+        "smx::reenable_auto_lights",
+        "update_smx_pad_assignment",
+    ] {
+        assert!(
+            !theme_screen.contains(forbidden),
+            "SMX assignment theme screen still executes hardware token {forbidden}"
+        );
+    }
+    assert!(
+        generic_views.contains("pub struct SmxAssignmentPadView")
+            && generic_views.contains("pub struct SmxAssignmentView"),
+        "generic theme views must expose prepared SMX assignment state"
+    );
+    for request in [
+        "AssignSmxPads",
+        "SetSmxPlayerLights",
+        "ReenableSmxAutoLights",
+    ] {
+        assert!(
+            effects.contains(request),
+            "Simply Love hardware requests are missing {request}"
+        );
+        assert!(
+            shell_app.contains(&format!("SimplyLoveHardwareRequest::{request}")),
+            "shell runtime executor is missing {request}"
+        );
+    }
+    assert!(
+        shell_smx.contains("pub fn smx_assignment_view() -> SmxAssignmentView")
+            && shell_smx.contains("deadsync_smx::manager()")
+            && shell_smx.contains("deadsync_smx::get_info(slot)"),
+        "shell must prepare the SMX assignment hardware snapshot"
+    );
+}
+
+#[test]
+fn simply_love_options_smx_assignment_uses_prepared_hardware_state() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let options = root.join("crates/deadsync-theme-simply-love/src/screens/options");
+    let mut options_source = String::new();
+    for path in [
+        "input.rs",
+        "mod.rs",
+        "state.rs",
+        "update.rs",
+        "visibility.rs",
+        "submenus/input_dev.rs",
+    ] {
+        options_source
+            .push_str(&fs::read_to_string(options.join(path)).unwrap_or_else(|_| {
+                panic!("Simply Love Options source {path} should be readable")
+            }));
+    }
+    let effects = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+        .expect("Simply Love effects should be readable");
+    let shell_app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell runtime executor should be readable");
+
+    for forbidden in [
+        "deadsync_smx::get_info",
+        "deadsync_smx::connected_serials",
+        "deadsync_smx::conflict_warning_active",
+        "update_smx_pad_assignment",
+        "swap_smx_pad_assignment",
+    ] {
+        assert!(
+            !options_source.contains(forbidden),
+            "Simply Love Options still executes SMX assignment token {forbidden}"
+        );
+    }
+    assert!(
+        options_source.contains("smx_assignment: SmxAssignmentView")
+            && options_source.contains("smx_assignment: &SmxAssignmentView"),
+        "Simply Love Options must store and refresh shell-prepared SMX assignment state"
+    );
+    for request in ["AssignSmxPads", "SwapSmxPads"] {
+        assert!(
+            effects.contains(request) && options_source.contains(request),
+            "Simply Love Options is missing hardware request {request}"
+        );
+        assert!(
+            shell_app.contains(&format!("SimplyLoveHardwareRequest::{request}")),
+            "shell runtime executor is missing Options hardware request {request}"
+        );
+    }
+}
+
+#[test]
+fn select_music_smx_pad_profile_hardware_is_shell_owned() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let select_music = fs::read_to_string(
+        root.join("crates/deadsync-theme-simply-love/src/screens/select_music.rs"),
+    )
+    .expect("Simply Love Select Music source should be readable");
+    let effects = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+        .expect("Simply Love effects should be readable");
+    let generic_views = fs::read_to_string(root.join("crates/deadsync-theme/src/views.rs"))
+        .expect("generic theme views should be readable");
+    let shell_smx = fs::read_to_string(root.join("crates/deadsync-shell/src/smx_config.rs"))
+        .expect("shell SMX service should be readable");
+    let shell_app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell runtime executor should be readable");
+
+    assert!(
+        !select_music.contains("deadsync_smx"),
+        "Simply Love Select Music must not read, capture, or write SMX hardware directly"
+    );
+    assert!(
+        generic_views.contains("pub backend_id: String")
+            && generic_views.contains("pub pad_type: Option<String>"),
+        "the prepared SMX pad view must include backend-neutral profile identity"
+    );
+    assert!(
+        select_music.contains("smx_pads: [SmxAssignmentPadView; 2]")
+            && select_music.contains("smx_pad_profile_events: Vec<SmxPadProfileEvent>"),
+        "Select Music must consume prepared pad identity and shell result events"
+    );
+    for request in [
+        "ApplySmxPadPreset",
+        "ApplySmxPadConfig",
+        "CaptureSmxPadConfig",
+    ] {
+        assert!(
+            effects.contains(request) && select_music.contains(request),
+            "Simply Love is missing SMX pad-profile request {request}"
+        );
+        assert!(
+            shell_app.contains(&format!("SimplyLoveHardwareRequest::{request}")),
+            "shell runtime executor is missing SMX pad-profile request {request}"
+        );
+    }
+    for owner in [
+        "pub fn apply_smx_pad_preset",
+        "pub fn apply_smx_saved_pad_config",
+        "pub fn capture_smx_pad_config",
+    ] {
+        assert!(
+            shell_smx.contains(owner),
+            "shell SMX service is missing pad-profile owner {owner}"
+        );
+    }
+}
+
+#[test]
+fn simply_love_has_no_direct_smx_backend_dependency() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let theme = root.join("crates/deadsync-theme-simply-love");
+    let manifest = fs::read_to_string(theme.join("Cargo.toml"))
+        .expect("Simply Love manifest should be readable");
+    let generic_views = fs::read_to_string(root.join("crates/deadsync-theme/src/views.rs"))
+        .expect("generic theme views should be readable");
+    let input_contract = fs::read_to_string(root.join("crates/deadsync-input/src/lib.rs"))
+        .expect("input contract should be readable");
+    let input_backend = fs::read_to_string(root.join("crates/deadsync-shell/src/input_backend.rs"))
+        .expect("shell input backend should be readable");
+    let shell_smx = fs::read_to_string(root.join("crates/deadsync-shell/src/smx_config.rs"))
+        .expect("shell SMX service should be readable");
+
+    assert!(
+        !manifest.contains("deadsync-smx"),
+        "Simply Love must not depend directly on the SMX backend"
+    );
+    let mut failures = Vec::new();
+    for file in rust_files(&theme.join("src")) {
+        let source = fs::read_to_string(&file).expect("theme source should be readable");
+        if source.contains("deadsync_smx") {
+            failures.push(rel_path(&root, &file));
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "Simply Love still imports the SMX backend:\n{}",
+        failures.join("\n")
+    );
+    assert!(
+        generic_views.contains("pub struct SmxGifCatalogView")
+            && generic_views.contains("pub background_packs: Vec<String>")
+            && generic_views.contains("pub judgment_packs: Vec<String>"),
+        "generic theme views must expose the shell-prepared SMX GIF catalog"
+    );
+    assert!(
+        shell_smx.contains("pub fn smx_gif_catalog_view() -> SmxGifCatalogView")
+            && shell_smx.contains("deadsync_smx::gifs::discover_packs"),
+        "shell must discover SMX GIF packs"
+    );
+    assert!(
+        input_contract.contains("pub fn raw_button_label")
+            && input_backend
+                .contains("deadsync_input::set_button_labeler(deadsync_smx::trigger_label)",),
+        "shell must register SMX labels behind the backend-neutral input contract"
+    );
+}
+
+#[test]
+fn smx_hardware_side_effects_are_shell_owned_not_config_owned() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let config_update =
+        fs::read_to_string(root.join("crates/deadsync-config/src/runtime_update.rs"))
+            .expect("config runtime updates should be readable");
+    let shell_smx = fs::read_to_string(root.join("crates/deadsync-shell/src/smx_config.rs"))
+        .expect("shell SMX service should be readable");
+    let shell_app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell runtime executor should be readable");
+    let effects = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+        .expect("Simply Love effects should be readable");
+
+    for forbidden in [
+        "deadsync_smx::set_platform_lights_grb",
+        "deadsync_smx::set_platform_lights_solid",
+        "deadsync_smx::set_player_assignment",
+        "deadsync_smx::connected_serials",
+        "deadsync_smx::get_info",
+    ] {
+        assert!(
+            !config_update.contains(forbidden),
+            "config runtime update still executes SMX hardware token {forbidden}"
+        );
+        assert!(
+            shell_smx.contains(forbidden),
+            "shell SMX service is missing hardware token {forbidden}"
+        );
+    }
+    for request in ["SetSmxUnderglowTheme", "SetSmxUnderglowGrb"] {
+        assert!(
+            effects.contains(request),
+            "Simply Love hardware requests are missing {request}"
+        );
+        assert!(
+            shell_app.contains(&format!("SimplyLoveHardwareRequest::{request}")),
+            "shell runtime executor is missing {request}"
+        );
+    }
+    for owner in [
+        "pub fn apply_smx_underglow",
+        "pub fn set_smx_assignment",
+        "pub fn swap_smx_assignment",
+    ] {
+        assert!(
+            shell_smx.contains(owner),
+            "shell SMX service is missing runtime owner {owner}"
+        );
+    }
+}
+
+#[test]
 fn concrete_theme_does_not_execute_updater_or_native_dialog_services() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let theme = root.join("crates/deadsync-theme-simply-love");
@@ -5472,6 +5737,207 @@ fn simply_love_hold_body_caps_use_canonical_notefield_owner() {
 }
 
 #[test]
+fn canonical_notefield_crate_root_facade_is_explicit() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let source = fs::read_to_string(root.join("crates/deadsync-notefield/src/lib.rs"))
+        .expect("canonical notefield crate root should be readable");
+    let glob_exports = source
+        .lines()
+        .filter(|line| {
+            let line = line.trim_start();
+            (line.starts_with("pub use ") || line.starts_with("pub(crate) use "))
+                && line.contains("::*")
+        })
+        .collect::<Vec<_>>();
+
+    assert!(
+        glob_exports.is_empty(),
+        "canonical notefield crate root must list its facade explicitly: {glob_exports:?}"
+    );
+    for facade in [
+        "pub use actor_builder::{",
+        "pub use compose::{",
+        "pub use field_frame::{",
+        "pub use frame_hud::{",
+        "pub use measure_lines::MeasureLineMode;",
+        "pub use noteskin_model::{",
+        "pub use placement::{",
+    ] {
+        assert!(
+            source.contains(facade),
+            "canonical notefield crate root is missing explicit facade group {facade}"
+        );
+    }
+    assert!(
+        !source.contains("pub mod "),
+        "canonical notefield implementation modules must stay private"
+    );
+}
+
+#[test]
+fn canonical_notefield_public_symbols_match_allowlist() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let source = fs::read_to_string(root.join("crates/deadsync-notefield/src/lib.rs"))
+        .expect("canonical notefield crate root should be readable");
+    let mut statements = Vec::new();
+    let mut statement = String::new();
+
+    for line in source.lines().map(str::trim) {
+        if statement.is_empty() {
+            if !line.starts_with("pub use ") {
+                continue;
+            }
+        } else {
+            statement.push(' ');
+        }
+        statement.push_str(line);
+        if line.ends_with(';') {
+            statements.push(std::mem::take(&mut statement));
+        }
+    }
+    assert!(statement.is_empty(), "unterminated public use statement");
+
+    let mut actual = Vec::new();
+    for statement in statements {
+        let body = statement
+            .strip_prefix("pub use ")
+            .and_then(|body| body.strip_suffix(';'))
+            .expect("collected statement should be a public use");
+        if let Some(open) = body.find("::{") {
+            let items = body[open + 3..]
+                .strip_suffix('}')
+                .expect("grouped public use should close its item list");
+            actual.extend(
+                items
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|item| !item.is_empty())
+                    .map(str::to_owned),
+            );
+        } else {
+            actual.push(
+                body.rsplit("::")
+                    .next()
+                    .expect("public use should contain a symbol")
+                    .trim()
+                    .to_owned(),
+            );
+        }
+    }
+
+    let mut expected = [
+        "BuiltNotefield",
+        "clamp_rounded_i16",
+        "ComboHudFrame",
+        "ComboMilestoneAssets",
+        "compose_notefield_field",
+        "compose_notefield_hud",
+        "CounterHudFrame",
+        "DISPLAY_TURN_BLENDER",
+        "DISPLAY_TURN_LEFT",
+        "DISPLAY_TURN_LR_MIRROR",
+        "DISPLAY_TURN_MIRROR",
+        "DISPLAY_TURN_RANDOM",
+        "DISPLAY_TURN_RIGHT",
+        "DISPLAY_TURN_SHUFFLE",
+        "DISPLAY_TURN_UD_MIRROR",
+        "error_bar_boundaries_s",
+        "ErrorBarHudFrame",
+        "ErrorBarModes",
+        "FieldLayout",
+        "FieldPlacement",
+        "gameplay_mods_text",
+        "GameplayModsAttackMode",
+        "GameplayModsTextParams",
+        "HudLayoutYs",
+        "IndicatorSprite",
+        "JudgmentHudFrame",
+        "LayoutMiniIndicatorPosition",
+        "MeasureCounterOptions",
+        "MeasureLineMode",
+        "MiniHudFrame",
+        "MiniIndicatorColorStyle",
+        "MiniIndicatorMode",
+        "MiniIndicatorProgress",
+        "MiniIndicatorScoreType",
+        "MiniIndicatorSize",
+        "MiniIndicatorSubtractiveDisplay",
+        "mod_percent_key",
+        "ModelMeshCache",
+        "ModelMeshCacheStats",
+        "NotefieldChartView",
+        "NotefieldComposeRequest",
+        "NotefieldFeedbackFrameView",
+        "NotefieldFieldFrameView",
+        "NotefieldFieldResult",
+        "NotefieldFrameFeatures",
+        "NotefieldFramePlan",
+        "NotefieldGeometry",
+        "NotefieldHudComposeResult",
+        "NotefieldHudFrameView",
+        "NotefieldLaneFeedback",
+        "NotefieldNoteskinView",
+        "NotefieldOptions",
+        "NotefieldSongLuaView",
+        "NotefieldVisualState",
+        "noteskin_model_actor",
+        "noteskin_model_actor_from_draw",
+        "noteskin_model_actor_from_draw_depth_sorted_affine_cached_geometry",
+        "offset_center",
+        "prepare_notefield",
+        "PreparedNotefield",
+        "PreparedNotefieldNotes",
+        "ProxyCaptureRequests",
+        "quantize_centi_i32",
+        "quantize_centi_u32",
+        "ScrollTravel",
+        "song_lua_note_model_draw",
+        "song_lua_player_skew_x_matrix",
+        "song_lua_player_skew_y_matrix",
+        "song_lua_player_transform_matrix",
+        "song_lua_player_y_fold_actor",
+        "SongLuaPlayerTransformRequest",
+        "TapJudgmentHudFrame",
+        "TapJudgmentSprite",
+        "TornadoBounds",
+        "ViewOverride",
+        "zmod_broken_run_end",
+        "zmod_combo_quint_active",
+        "zmod_mini_indicator_output",
+        "zmod_mini_indicator_zoom",
+        "zmod_percent_from_points",
+        "zmod_resolved_combo_color",
+        "zmod_resolved_mini_indicator_mode",
+        "zmod_static_combo_color",
+        "zmod_stream_prog_completion_for_beat",
+        "ZmodComboColorParams",
+        "ZmodComboColorStyle",
+        "ZmodLayoutParams",
+        "ZmodLayoutYs",
+        "ZmodMeasureCounterText",
+        "ZmodMiniIndicatorOutput",
+        "ZmodMiniIndicatorParams",
+        "ZmodMiniIndicatorText",
+    ]
+    .map(str::to_owned)
+    .to_vec();
+
+    let actual_len = actual.len();
+    actual.sort_unstable();
+    actual.dedup();
+    assert_eq!(
+        actual.len(),
+        actual_len,
+        "canonical notefield public facade contains duplicate symbols"
+    );
+    expected.sort_unstable();
+    assert_eq!(
+        actual, expected,
+        "canonical notefield public facade changed"
+    );
+}
+
+#[test]
 fn canonical_notefield_keeps_internal_composition_helpers_crate_private() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     for (file, internal) in [
@@ -5484,14 +5950,72 @@ fn canonical_notefield_keeps_internal_composition_helpers_crate_private() {
         ),
         ("placement.rs", "struct FieldLayoutRequest"),
         ("placement.rs", "fn field_layout"),
+        ("placement.rs", "fn player_metric_y"),
+        ("placement.rs", "fn notefield_view_proj"),
+        ("placement.rs", "fn combo_actor_zoom"),
+        ("placement.rs", "fn effective_mini_value"),
+        ("placement.rs", "fn average_error_bar_mini_scale"),
+        ("placement.rs", "fn hud_y"),
+        ("placement.rs", "fn zmod_layout_ys"),
+        ("placement.rs", "fn default_column_x"),
+        ("placement.rs", "trait LaneColumnX"),
+        ("placement.rs", "fn fill_lane_col_offsets"),
+        ("transforms.rs", "struct NoteAlphaParams"),
+        ("transforms.rs", "struct AccelYParams"),
+        ("transforms.rs", "struct NoteXParams"),
+        ("transforms.rs", "struct VisualEffectParams"),
+        ("transforms.rs", "fn sm_scale"),
+        ("transforms.rs", "fn quantize_step"),
+        ("transforms.rs", "fn beat_factor"),
+        ("transforms.rs", "fn mod_divisor"),
+        ("transforms.rs", "fn bumpy_angle"),
+        ("transforms.rs", "fn apply_accel_y_with_peak"),
+        ("transforms.rs", "fn apply_accel_y"),
+        ("transforms.rs", "fn itg_actor_rotation_z"),
+        ("transforms.rs", "fn visual_hold_body_needs_z_buffer"),
+        ("transforms.rs", "fn visual_use_legacy_hold_sprites"),
+        ("transforms.rs", "fn visual_tiny_zoom"),
+        ("transforms.rs", "fn visual_pulse_active"),
+        ("transforms.rs", "fn visual_pulse_inner_zoom"),
+        ("transforms.rs", "fn visual_pulse_zoom_for_y"),
+        ("transforms.rs", "fn visual_arrow_effect_zoom"),
+        ("transforms.rs", "fn visual_dizzy_rotation_deg"),
+        ("transforms.rs", "fn visual_note_rotation_z"),
+        ("transforms.rs", "fn visual_effect_params_for_col"),
+        ("transforms.rs", "fn smoothstep01"),
+        ("transforms.rs", "fn compute_invert_distances"),
+        ("transforms.rs", "fn compute_tornado_bounds"),
+        ("transforms.rs", "fn tipsy_y_extra"),
+        ("transforms.rs", "fn beat_x_extra"),
+        ("transforms.rs", "fn drunk_x_extra"),
+        ("transforms.rs", "fn tornado_x_extra"),
+        ("transforms.rs", "fn note_x_extra"),
+        ("transforms.rs", "fn note_x_offset"),
+        ("transforms.rs", "fn appearance_note_alpha"),
+        ("transforms.rs", "fn appearance_note_glow"),
+        ("transforms.rs", "fn appearance_note_actor_alpha"),
+        ("transforms.rs", "fn appearance_needs_rows"),
+        ("transforms.rs", "fn tiny_spacing_scale"),
+        ("transforms.rs", "fn note_world_z_for_bumpy"),
+        ("transforms.rs", "fn visual_confusion_rotation_deg"),
+        ("transforms.rs", "fn gameplay_visual_effect_params"),
+        ("transforms.rs", "fn move_col_extra"),
         ("notes.rs", "struct ScrollTravelRequest"),
         ("notes.rs", "fn scroll_travel"),
+        ("notes.rs", "const fn mine_hides_after_resolution"),
         ("receptors.rs", "fn hold_indicator_column_x"),
         ("receptors.rs", "struct ReceptorActorsRequest"),
         ("receptors.rs", "struct ReceptorPress"),
         ("receptors.rs", "fn compose_receptor_actors"),
+        ("receptors.rs", "fn receptor_row_center"),
         ("feedback.rs", "struct ColumnFeedbackRequest"),
+        ("feedback.rs", "struct JudgmentTiltParams"),
+        ("feedback.rs", "struct TapJudgmentRowsParams"),
         ("feedback.rs", "fn compose_column_feedback"),
+        ("feedback.rs", "fn judgment_tilt_rotation_deg"),
+        ("feedback.rs", "fn judgment_actor_zoom"),
+        ("feedback.rs", "fn tap_judgment_rows"),
+        ("feedback.rs", "fn itg_actor_glow_alpha"),
         ("feedback.rs", "const fn hold_glow_color"),
         ("explosions.rs", "enum ExplosionRotation"),
         ("explosions.rs", "struct ExplosionComposeRequest"),
@@ -5499,10 +6023,39 @@ fn canonical_notefield_keeps_internal_composition_helpers_crate_private() {
         ("measure_actors.rs", "fn append_edit_measure_number"),
         ("measure_actors.rs", "fn append_beat_bar"),
         ("measure_actors.rs", "fn append_cue_bar"),
+        ("measure_lines.rs", "struct EditBeatBarInfo"),
+        ("measure_lines.rs", "fn edit_beat_bar_info_for_row"),
+        ("measure_lines.rs", "fn edit_bar_candidate_step_rows"),
+        ("measure_lines.rs", "fn edit_bar_scroll_speed"),
+        ("measure_lines.rs", "fn beat_scroll_travel"),
+        ("measure_lines.rs", "fn edit_beat_scroll_travel"),
+        ("measure_lines.rs", "fn scaled_edit_bar_alpha"),
+        ("mini_indicator.rs", "fn stream_segment_index_exclusive_end"),
+        ("mini_indicator.rs", "fn stream_segment_index_inclusive_end"),
+        ("mini_indicator.rs", "fn zmod_broken_run_segment"),
+        ("mini_indicator.rs", "fn zmod_run_timer_index"),
+        ("mini_indicator.rs", "fn zmod_measure_counter_text"),
+        ("mini_indicator.rs", "fn zmod_broken_run_counter_text"),
+        ("mini_indicator.rs", "fn zmod_subtractive_counter_state"),
+        ("mini_indicator.rs", "fn zmod_subtractive_points"),
+        ("mini_indicator.rs", "fn zmod_rival_color"),
+        ("mini_indicator.rs", "fn zmod_pacemaker_color"),
+        ("mini_indicator.rs", "fn zmod_stream_prog_color"),
+        ("mini_indicator.rs", "fn zmod_combo_glow_color"),
+        ("mini_indicator.rs", "fn zmod_combo_glow_pair"),
+        ("mini_indicator.rs", "fn zmod_combo_solid_color"),
+        ("mini_indicator.rs", "fn zmod_indicator_default_color"),
+        ("mini_indicator.rs", "fn zmod_indicator_detailed_color"),
+        ("mini_indicator.rs", "fn zmod_combo_rainbow_color"),
         ("holds.rs", "fn scale_effect_size"),
+        ("holds.rs", "fn hold_entry_head_beat"),
+        ("holds.rs", "fn translated_uv_rect"),
+        ("holds.rs", "fn scale_sprite_to_arrow"),
+        ("holds.rs", "fn song_time_ns_to_seconds"),
         ("holds.rs", "fn hold_strip_actor"),
         ("holds.rs", "fn bottom_cap_uv_window"),
         ("holds.rs", "fn song_time_ns_delta_seconds"),
+        ("error_bar.rs", "fn error_bar_text_scalable_zoom"),
     ] {
         let source = fs::read_to_string(root.join("crates/deadsync-notefield/src").join(file))
             .unwrap_or_else(|_| panic!("canonical notefield source {file} should be readable"));
@@ -5665,7 +6218,7 @@ fn noteskin_model_cache_and_actors_use_canonical_notefield_owner() {
     assert!(!old_theme_path.exists());
     assert!(!shared_mod.contains("noteskin_model"));
     assert!(notefield_lib.contains("mod noteskin_model;"));
-    assert!(notefield_lib.contains("pub use noteskin_model::*;"));
+    assert!(notefield_lib.contains("pub use noteskin_model::{"));
     assert!(notefield_manifest.contains("twox-hash = \"2.1.2\""));
     assert!(!notefield_manifest.contains("deadsync-assets"));
 

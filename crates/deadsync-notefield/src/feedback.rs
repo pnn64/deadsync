@@ -10,7 +10,7 @@ use std::sync::Arc;
 const COLUMN_CUE_FADE_TIME: f32 = 0.15;
 
 #[derive(Clone, Copy, Debug)]
-pub struct JudgmentTiltParams {
+pub(crate) struct JudgmentTiltParams {
     pub enabled: bool,
     pub grade: JudgeGrade,
     pub time_error_ms: f32,
@@ -20,7 +20,7 @@ pub struct JudgmentTiltParams {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct TapJudgmentRowsParams {
+pub(crate) struct TapJudgmentRowsParams {
     pub grade: JudgeGrade,
     pub window: Option<TimingWindow>,
     pub time_error_ms: f32,
@@ -125,7 +125,7 @@ pub(crate) fn field_effect_height(screen_height: f32, tilt: f32) -> f32 {
     screen_height + tilt.abs() * 200.0
 }
 
-pub fn itg_actor_glow_alpha(alpha: f32) -> f32 {
+pub(crate) fn itg_actor_glow_alpha(alpha: f32) -> f32 {
     if alpha.is_finite() {
         alpha.clamp(0.0, 1.0)
     } else {
@@ -439,7 +439,7 @@ fn append_column_quad(
     actors.push(quad.build(0));
 }
 
-pub fn judgment_tilt_rotation_deg(params: JudgmentTiltParams) -> f32 {
+pub(crate) fn judgment_tilt_rotation_deg(params: JudgmentTiltParams) -> f32 {
     if !params.enabled || params.grade == JudgeGrade::Miss {
         return 0.0;
     }
@@ -460,7 +460,7 @@ pub fn judgment_tilt_rotation_deg(params: JudgmentTiltParams) -> f32 {
     dir * active_ms * 0.3 * params.multiplier
 }
 
-pub fn judgment_actor_zoom(mini: f32, judgment_back: bool, _tilt: f32, _skew: f32) -> f32 {
+pub(crate) fn judgment_actor_zoom(mini: f32, judgment_back: bool, _tilt: f32, _skew: f32) -> f32 {
     if !judgment_back {
         return combo_actor_zoom(mini);
     }
@@ -471,7 +471,7 @@ pub fn judgment_actor_zoom(mini: f32, judgment_back: bool, _tilt: f32, _skew: f3
     }
 }
 
-pub fn tap_judgment_rows(params: TapJudgmentRowsParams) -> (usize, Option<usize>) {
+pub(crate) fn tap_judgment_rows(params: TapJudgmentRowsParams) -> (usize, Option<usize>) {
     if params.frame_rows < 7 {
         let base = match params.grade {
             JudgeGrade::Fantastic => 0,

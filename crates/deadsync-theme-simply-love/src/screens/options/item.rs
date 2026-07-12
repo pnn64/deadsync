@@ -255,6 +255,8 @@ pub enum HelpEntry {
     /// previously-rendered text is reused. Use this for content that depends
     /// on host state (resolved file paths, current directories, etc.).
     Dynamic(fn() -> std::borrow::Cow<'static, str>),
+    /// Shell-prepared live SMX assignment status stored on the Options state.
+    SmxAssignmentStatus,
 }
 
 /// A simple item model with help text for the description box.

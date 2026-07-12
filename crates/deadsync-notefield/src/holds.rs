@@ -133,7 +133,7 @@ struct RenderedHoldBody {
 
 /// Resolve the beat used by a hold head without exposing gameplay hold state to
 /// the canonical notefield planner.
-pub fn hold_entry_head_beat(
+pub(crate) fn hold_entry_head_beat(
     note_beat: f32,
     end_beat: f32,
     last_held_beat: f32,
@@ -1273,7 +1273,7 @@ fn preferred_hold_visual<'a, T: ?Sized>(
     }
 }
 
-pub fn translated_uv_rect(mut uv: [f32; 4], translate: [f32; 2]) -> [f32; 4] {
+pub(crate) fn translated_uv_rect(mut uv: [f32; 4], translate: [f32; 2]) -> [f32; 4] {
     uv[0] += translate[0];
     uv[2] += translate[0];
     uv[1] += translate[1];
@@ -1320,7 +1320,7 @@ pub(crate) fn scale_effect_size(
     ]
 }
 
-pub fn scale_sprite_to_arrow(size: [i32; 2], target_arrow_px: f32) -> [f32; 2] {
+pub(crate) fn scale_sprite_to_arrow(size: [i32; 2], target_arrow_px: f32) -> [f32; 2] {
     let width = size[0].max(0) as f32;
     let height = size[1].max(0) as f32;
     if height <= 0.0 || target_arrow_px <= 0.0 {
@@ -1623,7 +1623,7 @@ pub(crate) fn hold_segment_pose(top: [f32; 2], bottom: [f32; 2]) -> ([f32; 2], f
     (center, len, rot)
 }
 
-pub fn song_time_ns_to_seconds(time_ns: SongTimeNs) -> f32 {
+pub(crate) fn song_time_ns_to_seconds(time_ns: SongTimeNs) -> f32 {
     (time_ns as f64 * 1.0e-9) as f32
 }
 

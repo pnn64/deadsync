@@ -756,7 +756,7 @@ pub(crate) fn find_last_displayed_beat<F: FnMut(f32) -> (f32, bool)>(
     Some(last)
 }
 
-pub const fn mine_hides_after_resolution(mine_result: Option<MineResult>) -> bool {
+pub(crate) const fn mine_hides_after_resolution(mine_result: Option<MineResult>) -> bool {
     mine_result.is_some()
 }
 

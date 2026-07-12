@@ -128,7 +128,7 @@ pub struct ProxyCaptureRequests {
     pub combo: bool,
 }
 
-pub fn player_metric_y(
+pub(crate) fn player_metric_y(
     center_y: f32,
     offset_y: f32,
     reverse: f32,
@@ -159,7 +159,7 @@ fn rage_frustum(l: f32, r: f32, b: f32, t: f32, zn: f32, zf: f32) -> Matrix4 {
     ])
 }
 
-pub fn notefield_view_proj(
+pub(crate) fn notefield_view_proj(
     screen_w: f32,
     screen_h: f32,
     playfield_center_x: f32,
@@ -235,7 +235,7 @@ pub fn notefield_view_proj(
     Some((proj * view) * world_to_screen * field)
 }
 
-pub fn combo_actor_zoom(mini: f32) -> f32 {
+pub(crate) fn combo_actor_zoom(mini: f32) -> f32 {
     if !mini.is_finite() || mini <= 0.0 {
         1.0
     } else {
@@ -243,7 +243,11 @@ pub fn combo_actor_zoom(mini: f32) -> f32 {
     }
 }
 
-pub fn effective_mini_value(mini_percent: f32, fallback_mini_percent: f32, big_effect: f32) -> f32 {
+pub(crate) fn effective_mini_value(
+    mini_percent: f32,
+    fallback_mini_percent: f32,
+    big_effect: f32,
+) -> f32 {
     let mut mini_percent = if mini_percent.is_finite() {
         mini_percent
     } else {
@@ -255,11 +259,11 @@ pub fn effective_mini_value(mini_percent: f32, fallback_mini_percent: f32, big_e
     mini_percent.clamp(-100.0, 150.0) / 100.0
 }
 
-pub fn average_error_bar_mini_scale(mini: f32) -> f32 {
+pub(crate) fn average_error_bar_mini_scale(mini: f32) -> f32 {
     (1.1 - 0.545 * mini).max(0.0)
 }
 
-pub fn hud_y(
+pub(crate) fn hud_y(
     normal_y: f32,
     reverse_y: f32,
     centered_y: f32,
@@ -273,7 +277,7 @@ pub fn hud_y(
     }
 }
 
-pub fn zmod_layout_ys(
+pub(crate) fn zmod_layout_ys(
     judgment_y: f32,
     combo_y: f32,
     reverse: bool,
@@ -505,11 +509,11 @@ pub(crate) fn field_layout(request: FieldLayoutRequest) -> FieldLayout {
     }
 }
 
-pub fn default_column_x(local_col: usize, num_cols: usize) -> f32 {
+pub(crate) fn default_column_x(local_col: usize, num_cols: usize) -> f32 {
     (local_col as f32 - (num_cols.saturating_sub(1) as f32 * 0.5)) * 64.0
 }
 
-pub trait LaneColumnX {
+pub(crate) trait LaneColumnX {
     fn to_f32(self) -> f32;
 }
 
@@ -525,7 +529,7 @@ impl LaneColumnX for i32 {
     }
 }
 
-pub fn fill_lane_col_offsets<T: Copy + LaneColumnX>(
+pub(crate) fn fill_lane_col_offsets<T: Copy + LaneColumnX>(
     out: &mut [f32],
     noteskin_cols: Option<&[T]>,
     num_cols: usize,

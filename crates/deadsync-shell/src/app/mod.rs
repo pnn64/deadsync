@@ -167,7 +167,7 @@ use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing as timing_rules;
 use deadsync_theme::views::{
     AudioOptionsView, AudioOutputDeviceView, AudioPlaybackView,
-    DensityGraphView as DensityGraphSource, NoteskinCatalogView,
+    DensityGraphView as DensityGraphSource, NoteskinCatalogView, SmxAssignmentView,
 };
 use deadsync_theme::{AudioRequest, PlatformRequest, RevealPathKind};
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as CurrentScreen;
@@ -447,6 +447,8 @@ impl ScreensState {
             updater::capabilities(),
             audio_options_view(),
             noteskin_catalog_view(),
+            crate::smx_config::smx_assignment_view(),
+            crate::smx_config::smx_gif_catalog_view(),
         );
         options_state.active_color_index = color_index;
 
@@ -532,6 +534,7 @@ impl ScreensState {
         now: Instant,
         session: &SessionState,
         asset_manager: &AssetManager,
+        smx_assignment: &SmxAssignmentView,
     ) -> (Option<ThemeEffect>, bool) {
         match self.current_screen {
             CurrentScreen::Gameplay => self
@@ -546,7 +549,12 @@ impl ScreensState {
                 .map_or((None, false), |action| (Some(action), false)),
             CurrentScreen::Init => (Some(init::update(&mut self.init_state, delta_time)), false),
             CurrentScreen::Options => (
-                options::update(&mut self.options_state, delta_time, asset_manager),
+                options::update(
+                    &mut self.options_state,
+                    delta_time,
+                    asset_manager,
+                    smx_assignment,
+                ),
                 false,
             ),
             CurrentScreen::Credits => {
@@ -578,7 +586,7 @@ impl ScreensState {
                 false,
             ),
             CurrentScreen::SmxAssignPads => (
-                screens::smx_assign::update(&mut self.smx_assign_state, delta_time),
+                screens::smx_assign::update(&mut self.smx_assign_state, delta_time, smx_assignment),
                 false,
             ),
             CurrentScreen::PlayerOptions => (
@@ -694,6 +702,7 @@ impl ScreensState {
                     Some(select_music::update(
                         &mut self.select_music_state,
                         delta_time,
+                        smx_assignment,
                     )),
                     false,
                 )
@@ -1499,11 +1508,13 @@ impl App {
         });
         if transition_plan.step_screen {
             if step_plan.step_screen {
+                let smx_assignment = crate::smx_config::smx_assignment_view();
                 let (action, _) = self.state.screens.step_idle(
                     logic_dt,
                     redraw_started,
                     &self.state.session,
                     &self.asset_manager,
+                    &smx_assignment,
                 );
                 if let Some(action) = action
                     && !matches!(action, ThemeEffect::None)
@@ -1874,6 +1885,8 @@ impl App {
             updater::capabilities(),
             audio_options_view(),
             noteskin_catalog_view(),
+            crate::smx_config::smx_assignment_view(),
+            crate::smx_config::smx_gif_catalog_view(),
         );
         self.state.screens.options_state.active_color_index = current_color_index;
         if matches!(
@@ -2236,7 +2249,7 @@ impl App {
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::PersistColor(index)) => {
-                    config::update_simply_love_color(index);
+                    crate::smx_config::set_theme_color(index);
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Hardware(SimplyLoveHardwareRequest::TestLightsAuto) => {
@@ -2254,6 +2267,105 @@ impl App {
                     delta,
                 )) => {
                     self.lights.step_test_button(delta);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Hardware(SimplyLoveHardwareRequest::AssignSmxPads {
+                    p1_serial,
+                    p2_serial,
+                }) => {
+                    crate::smx_config::set_smx_assignment(p1_serial, p2_serial);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Hardware(SimplyLoveHardwareRequest::SwapSmxPads) => {
+                    let _ = crate::smx_config::swap_smx_assignment();
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Hardware(
+                    SimplyLoveHardwareRequest::SetSmxUnderglowTheme(enabled),
+                ) => {
+                    crate::smx_config::set_smx_underglow_theme(enabled);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Hardware(
+                    SimplyLoveHardwareRequest::SetSmxUnderglowGrb(grb),
+                ) => {
+                    crate::smx_config::set_smx_underglow_grb(grb);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Hardware(
+                    SimplyLoveHardwareRequest::ApplySmxPadPreset { pad, name },
+                ) => {
+                    if crate::smx_config::apply_smx_pad_preset(pad, &name) {
+                        self.state
+                            .screens
+                            .select_music_state
+                            .smx_pad_profile_events
+                            .push(select_music::SmxPadProfileEvent::Applied {
+                                pad,
+                                preset: true,
+                                name,
+                            });
+                    }
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Hardware(
+                    SimplyLoveHardwareRequest::ApplySmxPadConfig {
+                        pad,
+                        profile_id,
+                        name,
+                    },
+                ) => {
+                    if crate::smx_config::apply_smx_saved_pad_config(pad, &profile_id, &name) {
+                        self.state
+                            .screens
+                            .select_music_state
+                            .smx_pad_profile_events
+                            .push(select_music::SmxPadProfileEvent::Applied {
+                                pad,
+                                preset: false,
+                                name,
+                            });
+                    }
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Hardware(
+                    SimplyLoveHardwareRequest::CaptureSmxPadConfig {
+                        pad,
+                        profile_id,
+                        name,
+                        set_default,
+                        overwrite,
+                    },
+                ) => {
+                    if crate::smx_config::capture_smx_pad_config(
+                        pad,
+                        &profile_id,
+                        &name,
+                        set_default,
+                    ) {
+                        self.state
+                            .screens
+                            .select_music_state
+                            .smx_pad_profile_events
+                            .push(select_music::SmxPadProfileEvent::Captured {
+                                pad,
+                                profile_id,
+                                name,
+                                overwrite,
+                            });
+                    }
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Hardware(
+                    SimplyLoveHardwareRequest::SetSmxPlayerLights(colors),
+                ) => {
+                    deadsync_smx::set_player_lights(colors);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Hardware(
+                    SimplyLoveHardwareRequest::ReenableSmxAutoLights,
+                ) => {
+                    deadsync_smx::reenable_auto_lights();
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Platform(request) => {
@@ -2471,6 +2583,7 @@ impl App {
                 label: course_run.course_stepchart_label.clone(),
             }),
             noteskin_catalog_view(),
+            crate::smx_config::smx_gif_catalog_view(),
         ));
         true
     }
@@ -2505,6 +2618,7 @@ impl App {
             return_screen,
             None,
             noteskin_catalog_view(),
+            crate::smx_config::smx_gif_catalog_view(),
         );
         po_state.music_rate = music_rate;
         po_state.speed_mod =
@@ -4520,7 +4634,10 @@ impl App {
             let color_index = self.state.screens.options_state.active_color_index;
             self.state.screens.smx_assign_state = screens::smx_assign::init();
             self.state.screens.smx_assign_state.active_color_index = color_index;
-            screens::smx_assign::on_enter(&mut self.state.screens.smx_assign_state);
+            screens::smx_assign::on_enter(
+                &mut self.state.screens.smx_assign_state,
+                &crate::smx_config::smx_assignment_view(),
+            );
         } else if target == CurrentScreen::SelectProfile {
             let current_color_index = self.state.screens.select_profile_state.active_color_index;
             self.state.screens.select_profile_state = select_profile::init();
@@ -4647,6 +4764,7 @@ impl App {
                     return_screen,
                     None,
                     noteskin_catalog_view(),
+                    crate::smx_config::smx_gif_catalog_view(),
                 ));
             }
         } else if target == CurrentScreen::Gameplay && prev == CurrentScreen::Gameplay {
@@ -4712,6 +4830,7 @@ impl App {
                     CurrentScreen::SelectMusic,
                     None,
                     noteskin_catalog_view(),
+                    crate::smx_config::smx_gif_catalog_view(),
                 ));
             }
         }
@@ -5823,7 +5942,7 @@ impl ApplicationHandler<UserEvent> for App {
                     debug!("{message}");
                 }
                 if plan.refresh_smx_underglow {
-                    config::send_smx_underglow_color();
+                    crate::smx_config::apply_smx_underglow();
                 }
                 if let Some(message) = plan.user_message {
                     self.state
