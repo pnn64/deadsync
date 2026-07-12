@@ -2047,6 +2047,13 @@ impl App {
                     deadsync_audio_stream::play_sfx(&path);
                     Vec::new()
                 }
+                SimplyLoveRuntimeRequest::Audio(AudioRequest::PrewarmReplayGain(paths)) => {
+                    deadsync_audio_replaygain::prewarm_paths(
+                        paths,
+                        deadsync_audio_replaygain::Priority::Background,
+                    );
+                    Vec::new()
+                }
                 SimplyLoveRuntimeRequest::Graphics(request) => {
                     self.handle_graphics_change(request, event_loop)?;
                     Vec::new()

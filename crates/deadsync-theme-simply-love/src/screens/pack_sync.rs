@@ -8,7 +8,6 @@ use crate::screens::input as screen_input;
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, widescale};
-use deadsync_audio_stream as audio;
 use deadsync_chart::ChartData;
 use deadsync_chart::SongData;
 use deadsync_input::{InputEvent, VirtualAction};
@@ -808,11 +807,12 @@ pub(crate) fn handle_input(
         }
     }
 
+    let mut effects = Vec::with_capacity(3);
     if play_change {
-        audio::play_sfx("assets/sounds/change.ogg");
+        effects.push(crate::effects::sfx("assets/sounds/change.ogg"));
     }
     if play_start {
-        audio::play_sfx("assets/sounds/start.ogg");
+        effects.push(crate::effects::sfx("assets/sounds/start.ogg"));
     }
     if close_overlay {
         hide(state);
@@ -820,11 +820,17 @@ pub(crate) fn handle_input(
     if let Some(changes) = apply_changes
         && !changes.is_empty()
     {
-        return crate::screens::ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Sync(
-            crate::SimplyLoveSyncRequest::ApplySongOffsetBatch { changes },
+        effects.push(crate::screens::ThemeEffect::Runtime(
+            crate::SimplyLoveRuntimeRequest::Sync(
+                crate::SimplyLoveSyncRequest::ApplySongOffsetBatch { changes },
+            ),
         ));
     }
-    crate::screens::ThemeEffect::None
+    match effects.len() {
+        0 => crate::screens::ThemeEffect::None,
+        1 => effects.remove(0),
+        _ => crate::screens::ThemeEffect::Batch(effects),
+    }
 }
 
 fn build_rows(targets: &[TargetSpec]) -> Vec<RowState> {

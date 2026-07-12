@@ -337,7 +337,7 @@ pub fn noteskin_model_actor_from_draw<S: NoteskinSlot>(
 }
 
 #[inline(always)]
-pub fn noteskin_model_actor_from_draw_cached<S: NoteskinSlot>(
+pub(crate) fn noteskin_model_actor_from_draw_cached<S: NoteskinSlot>(
     slot: &S,
     draw: ModelDrawState,
     xy: [f32; 2],

@@ -8,7 +8,6 @@ use deadlib_present::actors::{Actor, SizeSpec};
 use deadlib_present::cache::{SharedStrCache, cached_shared_str};
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height};
-use deadsync_audio_stream as audio;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
@@ -557,27 +556,27 @@ fn on_nav_release(p: &mut PlayerEntry, dir: NavDirection) {
     }
 }
 
-fn update_hold_scroll(p: &mut PlayerEntry) {
+fn update_hold_scroll(p: &mut PlayerEntry) -> bool {
     if !(p.joined && p.can_enter) || p.done {
         reset_nav_hold(p);
-        return;
+        return false;
     }
     let Some(dir) = p.nav_key_held_direction else {
-        return;
+        return false;
     };
     let Some(held_since) = p.nav_key_held_since else {
-        return;
+        return false;
     };
     let Some(last_at) = p.nav_key_last_scrolled_at else {
-        return;
+        return false;
     };
 
     let now = Instant::now();
     if now.duration_since(held_since) < NAV_INITIAL_HOLD_DELAY {
-        return;
+        return false;
     }
     if now.duration_since(last_at) < NAV_REPEAT_SCROLL_INTERVAL {
-        return;
+        return false;
     }
 
     let dist = match dir {
@@ -585,8 +584,8 @@ fn update_hold_scroll(p: &mut PlayerEntry) {
         NavDirection::Right => 1,
     };
     p.wheel.scroll_by(dist);
-    audio::play_sfx("assets/sounds/change.ogg");
     p.nav_key_last_scrolled_at = Some(now);
+    true
 }
 
 pub fn init() -> State {
@@ -633,10 +632,11 @@ fn start_finish(state: &mut State) {
 
 pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
     state.elapsed = (state.elapsed + dt).max(0.0);
+    let mut effects = Vec::with_capacity(2);
 
     for p in &mut state.players {
-        if state.finish_hold_elapsed.is_none() {
-            update_hold_scroll(p);
+        if state.finish_hold_elapsed.is_none() && update_hold_scroll(p) {
+            effects.push(crate::effects::sfx("assets/sounds/change.ogg"));
         }
         if p.can_enter {
             p.wheel.update(dt);
@@ -654,14 +654,18 @@ pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
         return None;
     }
 
-    None
+    match effects.len() {
+        0 => None,
+        1 => effects.pop(),
+        _ => Some(ThemeEffect::Batch(effects)),
+    }
 }
 
 fn remove_last_char(p: &mut PlayerEntry) -> bool {
     p.name.pop().is_some()
 }
 
-fn handle_start(p: &mut PlayerEntry) {
+fn handle_start(p: &mut PlayerEntry) -> &'static str {
     let selected = POSSIBLE_CHARS
         .get(p.wheel.focused_info_index())
         .copied()
@@ -670,37 +674,66 @@ fn handle_start(p: &mut PlayerEntry) {
         "&OK;" => {
             p.done = true;
             p.hide_elapsed = 0.0;
-            audio::play_sfx("assets/sounds/start.ogg");
+            "assets/sounds/start.ogg"
         }
         "&BACK;" => {
             if remove_last_char(p) {
-                audio::play_sfx("assets/sounds/change_value.ogg");
+                "assets/sounds/change_value.ogg"
             } else {
-                audio::play_sfx("assets/sounds/boom.ogg");
+                "assets/sounds/boom.ogg"
             }
         }
         ch => {
-            if p.name.len() < CHARACTER_LIMIT {
+            let sound = if p.name.len() < CHARACTER_LIMIT {
                 p.name.push_str(ch);
-                audio::play_sfx("assets/sounds/start.ogg");
+                "assets/sounds/start.ogg"
             } else {
-                audio::play_sfx("assets/sounds/boom.ogg");
-            }
+                "assets/sounds/boom.ogg"
+            };
 
             if p.name.len() >= CHARACTER_LIMIT {
                 // Simply Love: auto scroll focus to "&OK;" when limit reached.
                 p.wheel.scroll_to_pos(2);
             }
+            sound
         }
     }
 }
 
-fn handle_delete(p: &mut PlayerEntry) {
+fn handle_delete(p: &mut PlayerEntry) -> &'static str {
     if remove_last_char(p) {
-        audio::play_sfx("assets/sounds/change_value.ogg");
+        "assets/sounds/change_value.ogg"
     } else {
-        audio::play_sfx("assets/sounds/boom.ogg");
+        "assets/sounds/boom.ogg"
     }
+}
+
+fn handle_nav(p: &mut PlayerEntry, pressed: bool, dir: NavDirection, distance: i32) -> ThemeEffect {
+    if !(p.joined && p.can_enter) || p.done {
+        return ThemeEffect::None;
+    }
+    if !pressed {
+        on_nav_release(p, dir);
+        return ThemeEffect::None;
+    }
+    if p.nav_key_held_direction == Some(dir) {
+        return ThemeEffect::None;
+    }
+    p.wheel.scroll_by(distance);
+    on_nav_press(p, dir);
+    crate::effects::sfx("assets/sounds/change.ogg")
+}
+
+fn handle_player(
+    state: &mut State,
+    side: profile_data::PlayerSide,
+    action: fn(&mut PlayerEntry) -> &'static str,
+) -> ThemeEffect {
+    let p = &mut state.players[profile_data::player_side_index(side)];
+    if !(p.joined && p.can_enter) || p.done {
+        return ThemeEffect::None;
+    }
+    crate::effects::sfx(action(p))
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
@@ -708,119 +741,81 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         return ThemeEffect::None;
     }
 
-    let mut handle_for = |side: profile_data::PlayerSide, f: fn(&mut PlayerEntry)| {
-        let ix = profile_data::player_side_index(side);
-        let p = &mut state.players[ix];
-        if !(p.joined && p.can_enter) || p.done {
-            return;
-        }
-        f(p);
-        if all_done(state) {}
-    };
-
-    match ev.action {
+    let effect = match ev.action {
         VirtualAction::p1_menu_left
         | VirtualAction::p1_left
         | VirtualAction::p1_menu_up
-        | VirtualAction::p1_up => {
-            let ix = profile_data::player_side_index(profile_data::PlayerSide::P1);
-            let p = &mut state.players[ix];
-            if p.joined && p.can_enter && !p.done {
-                if ev.pressed {
-                    if p.nav_key_held_direction != Some(NavDirection::Left) {
-                        p.wheel.scroll_by(-1);
-                        audio::play_sfx("assets/sounds/change.ogg");
-                        on_nav_press(p, NavDirection::Left);
-                    }
-                } else {
-                    on_nav_release(p, NavDirection::Left);
-                }
-            }
-        }
+        | VirtualAction::p1_up => handle_nav(
+            &mut state.players[profile_data::player_side_index(profile_data::PlayerSide::P1)],
+            ev.pressed,
+            NavDirection::Left,
+            -1,
+        ),
         VirtualAction::p1_menu_right
         | VirtualAction::p1_right
         | VirtualAction::p1_menu_down
-        | VirtualAction::p1_down => {
-            let ix = profile_data::player_side_index(profile_data::PlayerSide::P1);
-            let p = &mut state.players[ix];
-            if p.joined && p.can_enter && !p.done {
-                if ev.pressed {
-                    if p.nav_key_held_direction != Some(NavDirection::Right) {
-                        p.wheel.scroll_by(1);
-                        audio::play_sfx("assets/sounds/change.ogg");
-                        on_nav_press(p, NavDirection::Right);
-                    }
-                } else {
-                    on_nav_release(p, NavDirection::Right);
-                }
-            }
-        }
+        | VirtualAction::p1_down => handle_nav(
+            &mut state.players[profile_data::player_side_index(profile_data::PlayerSide::P1)],
+            ev.pressed,
+            NavDirection::Right,
+            1,
+        ),
         VirtualAction::p1_start => {
             if ev.pressed {
-                handle_for(profile_data::PlayerSide::P1, handle_start);
+                handle_player(state, profile_data::PlayerSide::P1, handle_start)
+            } else {
+                ThemeEffect::None
             }
         }
         VirtualAction::p1_select => {
             if ev.pressed {
-                handle_for(profile_data::PlayerSide::P1, handle_delete);
+                handle_player(state, profile_data::PlayerSide::P1, handle_delete)
+            } else {
+                ThemeEffect::None
             }
         }
 
         VirtualAction::p2_menu_left
         | VirtualAction::p2_left
         | VirtualAction::p2_menu_up
-        | VirtualAction::p2_up => {
-            let ix = profile_data::player_side_index(profile_data::PlayerSide::P2);
-            let p = &mut state.players[ix];
-            if p.joined && p.can_enter && !p.done {
-                if ev.pressed {
-                    if p.nav_key_held_direction != Some(NavDirection::Left) {
-                        p.wheel.scroll_by(-1);
-                        audio::play_sfx("assets/sounds/change.ogg");
-                        on_nav_press(p, NavDirection::Left);
-                    }
-                } else {
-                    on_nav_release(p, NavDirection::Left);
-                }
-            }
-        }
+        | VirtualAction::p2_up => handle_nav(
+            &mut state.players[profile_data::player_side_index(profile_data::PlayerSide::P2)],
+            ev.pressed,
+            NavDirection::Left,
+            -1,
+        ),
         VirtualAction::p2_menu_right
         | VirtualAction::p2_right
         | VirtualAction::p2_menu_down
-        | VirtualAction::p2_down => {
-            let ix = profile_data::player_side_index(profile_data::PlayerSide::P2);
-            let p = &mut state.players[ix];
-            if p.joined && p.can_enter && !p.done {
-                if ev.pressed {
-                    if p.nav_key_held_direction != Some(NavDirection::Right) {
-                        p.wheel.scroll_by(1);
-                        audio::play_sfx("assets/sounds/change.ogg");
-                        on_nav_press(p, NavDirection::Right);
-                    }
-                } else {
-                    on_nav_release(p, NavDirection::Right);
-                }
-            }
-        }
+        | VirtualAction::p2_down => handle_nav(
+            &mut state.players[profile_data::player_side_index(profile_data::PlayerSide::P2)],
+            ev.pressed,
+            NavDirection::Right,
+            1,
+        ),
         VirtualAction::p2_start => {
             if ev.pressed {
-                handle_for(profile_data::PlayerSide::P2, handle_start);
+                handle_player(state, profile_data::PlayerSide::P2, handle_start)
+            } else {
+                ThemeEffect::None
             }
         }
         VirtualAction::p2_select => {
             if ev.pressed {
-                handle_for(profile_data::PlayerSide::P2, handle_delete);
+                handle_player(state, profile_data::PlayerSide::P2, handle_delete)
+            } else {
+                ThemeEffect::None
             }
         }
 
-        _ => {}
-    }
+        _ => ThemeEffect::None,
+    };
 
     if all_done(state) {
         start_finish(state);
     }
 
-    ThemeEffect::None
+    effect
 }
 
 fn stage_index_for(elapsed: f32, num_stages: usize) -> usize {
@@ -1219,4 +1214,39 @@ pub fn in_transition() -> (Vec<Actor>, f32) {
 
 pub fn out_transition() -> (Vec<Actor>, f32) {
     transitions::fade_out_black(TRANSITION_OUT_DURATION, 1100)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn player(focus_char_index1: i32, name: &str) -> PlayerEntry {
+        PlayerEntry {
+            joined: true,
+            can_enter: true,
+            done: false,
+            hide_elapsed: 0.0,
+            name: name.to_string(),
+            wheel: Wheel::new(focus_char_index1),
+            nav_key_held_direction: None,
+            nav_key_held_since: None,
+            nav_key_last_scrolled_at: None,
+        }
+    }
+
+    #[test]
+    fn name_entry_actions_keep_simply_love_sound_keys() {
+        let mut ok = player(2, "ABC");
+        assert_eq!(handle_start(&mut ok), "assets/sounds/start.ogg");
+        assert!(ok.done);
+
+        let mut back = player(1, "A");
+        assert_eq!(handle_start(&mut back), "assets/sounds/change_value.ogg");
+        assert!(back.name.is_empty());
+        assert_eq!(handle_delete(&mut back), "assets/sounds/boom.ogg");
+
+        let mut letter = player(3, "");
+        assert_eq!(handle_start(&mut letter), "assets/sounds/start.ogg");
+        assert_eq!(letter.name, "A");
+    }
 }

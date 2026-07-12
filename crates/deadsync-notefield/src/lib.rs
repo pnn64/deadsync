@@ -3,6 +3,7 @@ mod combo_feedback;
 mod compose;
 mod display_mods;
 mod error_bar;
+mod explosions;
 mod feedback;
 mod holds;
 mod hud;
@@ -23,11 +24,11 @@ pub use combo_feedback::*;
 pub use compose::*;
 pub use display_mods::*;
 pub use error_bar::*;
+pub use explosions::*;
 pub use feedback::*;
 pub use holds::*;
 pub use hud::*;
 pub use judgment_feedback::*;
-pub use measure_actors::*;
 pub use measure_lines::*;
 pub use mini_indicator::*;
 pub use notes::*;
@@ -45,7 +46,11 @@ use display_mods::{
 #[cfg(test)]
 use holds::hold_head_part_for_roll;
 #[cfg(test)]
+use measure_actors::{append_beat_bar, append_cue_bar, append_edit_measure_number};
+#[cfg(test)]
 use mini_indicator::rgba8;
+#[cfg(test)]
+use transforms::signed_effect_active;
 #[cfg(test)]
 mod tests {
     use deadlib_present::actors::{Actor, SizeSpec, SpriteSource, TextAlign};

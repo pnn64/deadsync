@@ -328,6 +328,11 @@ impl NoteskinSlot for SpriteSlot {
     }
 
     #[inline(always)]
+    fn animation_is_beat_based(&self) -> bool {
+        self.source.is_beat_based()
+    }
+
+    #[inline(always)]
     fn frame_index(&self, time: f32, beat: f32) -> usize {
         SpriteSlot::frame_index(self, time, beat)
     }
@@ -855,6 +860,10 @@ mod contract_tests {
             slot.base_rot_sin_cos()
         );
         assert_eq!(
+            <SpriteSlot as NoteskinSlot>::animation_is_beat_based(&slot),
+            slot.source.is_beat_based()
+        );
+        assert_eq!(
             <SpriteSlot as NoteskinSlot>::frame_index(&slot, 0.25, 1.5),
             slot.frame_index(0.25, 1.5)
         );
@@ -891,5 +900,33 @@ mod contract_tests {
             <SpriteSlot as NoteskinSlot>::model_uv_params(&slot, [0.1, 0.2, 0.8, 0.9]),
             slot.model_uv_params([0.1, 0.2, 0.8, 0.9])
         );
+    }
+
+    #[test]
+    fn noteskin_slot_contract_reports_animation_clock_and_frame_count() {
+        let beat_slot = slot_from_plan(generated_animation_sprite_slot_plan(
+            "beat-test".to_string(),
+            (4, 1),
+            [1, 1],
+            4,
+            AnimationRate::FramesPerBeat(1.0),
+            false,
+        ));
+        assert!(<SpriteSlot as NoteskinSlot>::animation_is_beat_based(
+            &beat_slot
+        ));
+        assert_eq!(<SpriteSlot as NoteskinSlot>::frame_count(&beat_slot), 4);
+
+        let time_slot = slot_from_plan(generated_animation_sprite_slot_plan(
+            "time-test".to_string(),
+            (4, 1),
+            [1, 1],
+            4,
+            AnimationRate::FramesPerSecond(30.0),
+            false,
+        ));
+        assert!(!<SpriteSlot as NoteskinSlot>::animation_is_beat_based(
+            &time_slot
+        ));
     }
 }

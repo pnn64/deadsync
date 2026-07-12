@@ -25,14 +25,14 @@ pub struct ZmodLayoutParams {
 }
 
 #[derive(Clone, Copy, Debug, Default)]
-pub struct HudLayoutOffsets {
+pub(crate) struct HudLayoutOffsets {
     pub judgment_extra_y: f32,
     pub combo_extra_y: f32,
     pub error_bar_extra_y: f32,
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct HudLayoutParams {
+pub(crate) struct HudLayoutParams {
     pub zmod: ZmodLayoutParams,
     pub has_judgment_texture: bool,
     pub error_bar_up: bool,
@@ -62,7 +62,7 @@ pub enum FieldPlacement {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct FieldLayoutRequest {
+pub(crate) struct FieldLayoutRequest {
     pub style: NotefieldStyle,
     pub placement: FieldPlacement,
     pub num_players: usize,
@@ -343,7 +343,7 @@ pub fn zmod_layout_ys(
     }
 }
 
-pub fn hud_layout_ys(
+pub(crate) fn hud_layout_ys(
     judgment_y: f32,
     combo_y: f32,
     reverse: bool,
@@ -385,7 +385,7 @@ fn field_receptor_y(
     (centered_y - reverse_y).mul_add(centered_percent, reverse_y)
 }
 
-pub fn field_layout(request: FieldLayoutRequest) -> FieldLayout {
+pub(crate) fn field_layout(request: FieldLayoutRequest) -> FieldLayout {
     let style = request.style;
     let clamped_width = request
         .screen_width

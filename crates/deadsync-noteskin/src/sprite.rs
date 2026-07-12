@@ -99,6 +99,11 @@ pub trait NoteskinSlot: Sized {
         1
     }
 
+    #[inline(always)]
+    fn animation_is_beat_based(&self) -> bool {
+        false
+    }
+
     fn frame_index(&self, time: f32, beat: f32) -> usize;
     fn frame_index_from_phase(&self, phase: f32) -> usize;
     fn uv_for_frame_at(&self, frame_index: usize, elapsed: f32) -> [f32; 4];

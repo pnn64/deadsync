@@ -1149,6 +1149,7 @@ fn generic_runtime_requests_stay_backend_neutral() {
 
     for definition in [
         "pub enum AudioRequest",
+        "PrewarmReplayGain(Vec<PathBuf>)",
         "pub enum PlatformRequest",
         "pub enum RevealPathKind",
         "pub struct GraphicsRequest",
@@ -1216,6 +1217,10 @@ fn generic_runtime_requests_stay_backend_neutral() {
     assert!(
         shell.contains("SimplyLoveRuntimeRequest::Audio(AudioRequest::PlaySfx(path))")
             && shell.contains("deadsync_audio_stream::play_sfx(&path)")
+            && shell.contains(
+                "SimplyLoveRuntimeRequest::Audio(AudioRequest::PrewarmReplayGain(paths))"
+            )
+            && shell.contains("deadsync_audio_replaygain::prewarm_paths(")
             && shell.contains("SimplyLoveRuntimeRequest::Graphics(request)")
             && shell.contains("self.handle_graphics_change(request, event_loop)")
             && shell.contains("SimplyLoveRuntimeRequest::Platform(request)")
@@ -1223,6 +1228,35 @@ fn generic_runtime_requests_stay_backend_neutral() {
             && shell.contains("SimplyLoveRuntimeRequest::Updater(request)")
             && shell.contains("updater::execute(request)"),
         "shell must execute generic and grouped runtime requests"
+    );
+}
+
+#[test]
+fn replaygain_prewarm_execution_is_shell_owned() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let theme = root.join("crates/deadsync-theme-simply-love");
+    let select_music = fs::read_to_string(theme.join("src/screens/select_music.rs"))
+        .expect("SelectMusic source should be readable");
+    let theme_manifest =
+        fs::read_to_string(theme.join("Cargo.toml")).expect("theme manifest should be readable");
+    let shell_manifest = fs::read_to_string(root.join("crates/deadsync-shell/Cargo.toml"))
+        .expect("shell manifest should be readable");
+    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell runtime executor should be readable");
+
+    assert!(
+        !select_music.contains("deadsync_audio_replaygain"),
+        "SelectMusic must emit a neutral prewarm request instead of executing ReplayGain"
+    );
+    assert!(
+        !theme_manifest.contains("deadsync-audio-replaygain ="),
+        "the concrete theme must not depend on the ReplayGain runtime service"
+    );
+    assert!(
+        shell_manifest.contains("deadsync-audio-replaygain =")
+            && shell.contains("AudioRequest::PrewarmReplayGain(paths)")
+            && shell.contains("deadsync_audio_replaygain::Priority::Background"),
+        "shell must own background ReplayGain prewarm execution"
     );
 }
 
@@ -1274,10 +1308,19 @@ fn concrete_theme_does_not_execute_updater_or_native_dialog_services() {
 }
 
 #[test]
-fn simply_love_audio_flow_slice_uses_ordered_theme_effects() {
+fn simply_love_audio_flow_slices_use_ordered_theme_effects() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let screens = root.join("crates/deadsync-theme-simply-love/src/screens");
-    for path in ["arrowcloud_login.rs", "menu.rs", "select_color.rs"] {
+    for path in [
+        "arrowcloud_login.rs",
+        "evaluation.rs",
+        "groovestats_login.rs",
+        "initials.rs",
+        "manage_local_profiles.rs",
+        "menu.rs",
+        "pack_sync.rs",
+        "select_color.rs",
+    ] {
         let source =
             fs::read_to_string(screens.join(path)).expect("theme screen should be readable");
         assert!(
@@ -4648,6 +4691,151 @@ fn simply_love_mine_layers_use_canonical_notefield_owner() {
 }
 
 #[test]
+fn simply_love_explosion_layers_use_canonical_notefield_owner() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let theme = fs::read_to_string(root.join(
+        "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/mod.rs",
+    ))
+    .expect("Simply Love notefield adapter should be readable");
+    let canonical = fs::read_to_string(root.join("crates/deadsync-notefield/src/explosions.rs"))
+        .expect("canonical explosion composer should be readable");
+    let contract = fs::read_to_string(root.join("crates/deadsync-noteskin/src/sprite.rs"))
+        .expect("noteskin slot contract should be readable");
+    let assets = fs::read_to_string(root.join("crates/deadsync-assets/src/noteskin/texture.rs"))
+        .expect("asset-backed noteskin slot should be readable");
+
+    for definition in [
+        "pub enum ExplosionRotation",
+        "pub struct ExplosionComposeRequest",
+        "pub fn compose_explosion_layers",
+    ] {
+        assert!(
+            canonical.contains(definition),
+            "canonical explosion owner is missing {definition}"
+        );
+    }
+    for delegation in [
+        "ExplosionComposeRequest {",
+        "ExplosionRotation::Tap",
+        "ExplosionRotation::Mine",
+        "compose_explosion_layers(",
+    ] {
+        assert!(
+            theme.contains(delegation),
+            "Simply Love must delegate explosion composition through {delegation}"
+        );
+    }
+    for old_emission in [
+        "layer.animation.state_at",
+        "glow_strength",
+        ".source.is_beat_based()",
+    ] {
+        assert!(
+            !theme.contains(old_emission),
+            "Simply Love reintroduced explosion actor logic {old_emission}"
+        );
+    }
+    assert!(contract.contains("fn animation_is_beat_based(&self) -> bool"));
+    assert!(assets.contains("self.source.is_beat_based()"));
+    for concrete in ["deadsync_assets", "TextureKeyHandle", "texture_key_handle"] {
+        assert!(
+            !canonical.contains(concrete),
+            "canonical explosion composition imports concrete asset token {concrete}"
+        );
+    }
+}
+
+#[test]
+fn simply_love_hold_body_caps_use_canonical_notefield_owner() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let theme = fs::read_to_string(root.join(
+        "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/mod.rs",
+    ))
+    .expect("Simply Love notefield adapter should be readable");
+    let canonical = fs::read_to_string(root.join("crates/deadsync-notefield/src/holds.rs"))
+        .expect("canonical hold composer should be readable");
+
+    for definition in [
+        "pub struct HoldPathSample",
+        "pub struct HoldBodyCapRequest",
+        "pub enum HoldComposeControl",
+        "pub fn compose_hold_body_caps",
+    ] {
+        assert!(
+            canonical.contains(definition),
+            "canonical hold body/cap owner is missing {definition}"
+        );
+    }
+    for delegation in [
+        "HoldPathSample {",
+        "HoldBodyCapRequest {",
+        "compose_hold_body_caps(",
+        "HoldComposeControl::AbortHold",
+    ] {
+        assert!(
+            theme.contains(delegation),
+            "Simply Love must delegate hold body/cap composition through {delegation}"
+        );
+    }
+    for old_emission in [
+        "actors.push(act!(sprite(",
+        "actors.push(hold_strip_actor(",
+        "actors.push(hold_strip_glow_actor(",
+        "clipped_hold_body_bounds(",
+        "hold_strip_row_3d(",
+        "hold_tail_cap_bounds(",
+        "bottom_cap_uv_window(",
+    ] {
+        assert!(
+            !theme.contains(old_emission),
+            "Simply Love reintroduced hold actor logic {old_emission}"
+        );
+    }
+    for concrete in ["deadsync_assets", "TextureKeyHandle", "texture_key_handle"] {
+        assert!(
+            !canonical.contains(concrete),
+            "canonical hold composition imports concrete asset token {concrete}"
+        );
+    }
+}
+
+#[test]
+fn canonical_notefield_keeps_internal_composition_helpers_crate_private() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    for (file, internal) in [
+        ("actor_builder.rs", "struct NotefieldFramePlanRequest"),
+        ("actor_builder.rs", "fn notefield_frame_plan"),
+        (
+            "noteskin_model.rs",
+            "fn noteskin_model_actor_from_draw_cached",
+        ),
+        ("placement.rs", "struct FieldLayoutRequest"),
+        ("placement.rs", "fn field_layout"),
+        ("notes.rs", "struct ScrollTravelRequest"),
+        ("notes.rs", "fn scroll_travel"),
+        ("receptors.rs", "fn hold_indicator_column_x"),
+        ("measure_actors.rs", "fn append_edit_measure_number"),
+        ("measure_actors.rs", "fn append_beat_bar"),
+        ("measure_actors.rs", "fn append_cue_bar"),
+        ("holds.rs", "fn scale_effect_size"),
+        ("holds.rs", "fn hold_strip_actor"),
+        ("holds.rs", "fn bottom_cap_uv_window"),
+        ("holds.rs", "fn song_time_ns_delta_seconds"),
+    ] {
+        let source = fs::read_to_string(root.join("crates/deadsync-notefield/src").join(file))
+            .unwrap_or_else(|_| panic!("canonical notefield source {file} should be readable"));
+        assert!(
+            source.contains(&format!("pub(crate) {internal}")),
+            "canonical helper {internal} in {file} should stay crate-private"
+        );
+        assert!(
+            !source.contains(&format!("pub {internal}")),
+            "canonical helper {internal} in {file} leaked into the theme API"
+        );
+    }
+}
+
+#[test]
 fn simply_love_song_lua_player_transforms_use_canonical_notefield_owner() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let theme =
@@ -4787,7 +4975,6 @@ fn noteskin_model_cache_and_actors_use_canonical_notefield_owner() {
         "pub struct ModelMeshCacheStats",
         "pub struct ModelMeshCache",
         "pub fn noteskin_model_actor_from_draw",
-        "pub fn noteskin_model_actor_from_draw_cached",
         "pub fn noteskin_model_actor_from_draw_depth_sorted_affine_cached_geometry",
         "pub fn noteskin_model_actor",
     ] {
@@ -4796,6 +4983,8 @@ fn noteskin_model_cache_and_actors_use_canonical_notefield_owner() {
             "canonical noteskin model owner is missing {definition}"
         );
     }
+    assert!(canonical.contains("pub(crate) fn noteskin_model_actor_from_draw_cached"));
+    assert!(!canonical.contains("pub fn noteskin_model_actor_from_draw_cached"));
     let note_composer = fs::read_to_string(root.join("crates/deadsync-notefield/src/notes.rs"))
         .expect("canonical note composer should be readable");
     assert!(note_composer.contains("noteskin_model_actor_from_draw_cached"));

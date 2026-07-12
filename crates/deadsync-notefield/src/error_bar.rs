@@ -69,7 +69,10 @@ pub fn compose_error_bar(actors: &mut Vec<Actor>, request: ErrorBarComposeReques
 
 /// Compose the four canonical graphical error-bar modes in their established
 /// insertion order. Theme code supplies only resolved options and visual data.
-pub fn compose_error_bar_modes(actors: &mut Vec<Actor>, request: ErrorBarComposeRequest<'_>) {
+pub(crate) fn compose_error_bar_modes(
+    actors: &mut Vec<Actor>,
+    request: ErrorBarComposeRequest<'_>,
+) {
     if !request.visible {
         return;
     }
@@ -572,7 +575,7 @@ const fn with_alpha(mut color: [f32; 4], alpha: f32) -> [f32; 4] {
     color
 }
 
-pub fn error_bar_tick_alpha(age: f32, dur: f32, multi_tick: bool) -> f32 {
+pub(crate) fn error_bar_tick_alpha(age: f32, dur: f32, multi_tick: bool) -> f32 {
     if !age.is_finite() || age < 0.0 {
         return 0.0;
     }
@@ -591,7 +594,7 @@ pub fn error_bar_tick_alpha(age: f32, dur: f32, multi_tick: bool) -> f32 {
     }
 }
 
-pub fn error_bar_flash_alpha(
+pub(crate) fn error_bar_flash_alpha(
     now: f32,
     started_at: Option<f32>,
     dur: f32,
@@ -629,7 +632,7 @@ pub fn error_bar_boundaries_s(
     (out, len)
 }
 
-pub const fn timing_window_from_num(n: usize) -> TimingWindow {
+pub(crate) const fn timing_window_from_num(n: usize) -> TimingWindow {
     match n {
         0 => TimingWindow::W0,
         1 => TimingWindow::W1,
@@ -640,7 +643,7 @@ pub const fn timing_window_from_num(n: usize) -> TimingWindow {
     }
 }
 
-pub const fn error_bar_color_for_window(
+pub(crate) const fn error_bar_color_for_window(
     palette: ErrorBarPalette,
     window: TimingWindow,
     white_w0: bool,

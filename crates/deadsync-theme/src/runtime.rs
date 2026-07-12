@@ -4,6 +4,9 @@ use std::path::PathBuf;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AudioRequest {
     PlaySfx(String),
+    /// Warm loudness metadata for theme-selected preview media without
+    /// exposing the analysis service or its scheduling policy to the theme.
+    PrewarmReplayGain(Vec<PathBuf>),
 }
 
 /// Platform work requested by a concrete theme and executed by the shell.
@@ -100,6 +103,15 @@ mod tests {
         assert_eq!(
             request,
             AudioRequest::PlaySfx("assets/sounds/start.ogg".to_owned())
+        );
+    }
+
+    #[test]
+    fn replaygain_prewarm_request_owns_media_paths() {
+        let paths = vec![PathBuf::from("Pack/Song A/music.ogg")];
+        assert_eq!(
+            AudioRequest::PrewarmReplayGain(paths.clone()),
+            AudioRequest::PrewarmReplayGain(paths)
         );
     }
 

@@ -14,7 +14,6 @@ use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_height, screen_width};
-use deadsync_audio_stream as audio;
 use deadsync_import::app_runtime::{ImportSummary, import_itg_profile_dir};
 use deadsync_import::detect::{
     ItgProfileCandidate, detect_itg_local_profiles, detect_itg_profiles_from_game_dir,
@@ -547,9 +546,15 @@ fn update_name_entry_blink(state: &mut State, dt: f32) {
 pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
     update_hold_scroll(state);
     update_name_entry_blink(state, dt);
-    poll_import_job(state);
-    poll_folder_pick(state);
-    None
+    let effects = [poll_import_job(state), poll_folder_pick(state)]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
+    match effects.len() {
+        0 => None,
+        1 => effects.into_iter().next(),
+        _ => Some(ThemeEffect::Batch(effects)),
+    }
 }
 
 fn name_conflicts(state: &State, name: &str, skip_profile_id: Option<&str>) -> bool {
@@ -610,14 +615,13 @@ fn try_submit_name_entry(state: &mut State, entry: &NameEntryState) -> Result<St
     }
 }
 
-fn confirm_name_entry(state: &mut State) {
+fn confirm_name_entry(state: &mut State) -> ThemeEffect {
     let Some(entry) = state.name_entry.take() else {
-        return;
+        return ThemeEffect::None;
     };
 
     match try_submit_name_entry(state, &entry) {
         Ok(id) => {
-            audio::play_sfx("assets/sounds/start.ogg");
             refresh_rows(state);
             reset_nav_hold(state);
             if let Some(pos) = state.rows.iter().position(|r| match &r.kind {
@@ -627,6 +631,7 @@ fn confirm_name_entry(state: &mut State) {
                 state.selected = pos;
                 state.prev_selected = pos;
             }
+            crate::effects::sfx("assets/sounds/start.ogg")
         }
         Err(e) => {
             state.name_entry = Some(NameEntryState {
@@ -635,6 +640,7 @@ fn confirm_name_entry(state: &mut State) {
                 error: Some(e),
                 blink_t: entry.blink_t,
             });
+            ThemeEffect::None
         }
     }
 }
@@ -717,8 +723,7 @@ fn confirm_profile_menu(state: &mut State) -> ThemeEffect {
             );
             refresh_rows(state);
             cancel_profile_menu(state);
-            audio::play_sfx("assets/sounds/start.ogg");
-            ThemeEffect::None
+            crate::effects::sfx("assets/sounds/start.ogg")
         }
         ProfileMenuAction::SetP2 => {
             profile::set_default_profile_for_side(
@@ -729,40 +734,41 @@ fn confirm_profile_menu(state: &mut State) -> ThemeEffect {
             );
             refresh_rows(state);
             cancel_profile_menu(state);
-            audio::play_sfx("assets/sounds/start.ogg");
-            ThemeEffect::None
+            crate::effects::sfx("assets/sounds/start.ogg")
         }
         ProfileMenuAction::LinkArrowCloud => {
             cancel_profile_menu(state);
-            audio::play_sfx("assets/sounds/start.ogg");
-            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Online(
-                crate::SimplyLoveOnlineRequest::LinkArrowCloud {
-                    profile_id: menu.id.clone(),
-                    display_name: menu.display_name.clone(),
-                },
-            ))
+            crate::effects::sfx_then(
+                "assets/sounds/start.ogg",
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Online(
+                    crate::SimplyLoveOnlineRequest::LinkArrowCloud {
+                        profile_id: menu.id.clone(),
+                        display_name: menu.display_name.clone(),
+                    },
+                )),
+            )
         }
         ProfileMenuAction::LinkGrooveStats => {
             cancel_profile_menu(state);
-            audio::play_sfx("assets/sounds/start.ogg");
-            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Online(
-                crate::SimplyLoveOnlineRequest::LinkGrooveStats {
-                    profile_id: menu.id.clone(),
-                    display_name: menu.display_name.clone(),
-                },
-            ))
+            crate::effects::sfx_then(
+                "assets/sounds/start.ogg",
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Online(
+                    crate::SimplyLoveOnlineRequest::LinkGrooveStats {
+                        profile_id: menu.id.clone(),
+                        display_name: menu.display_name.clone(),
+                    },
+                )),
+            )
         }
         ProfileMenuAction::Rename => {
             state.profile_menu = None;
             begin_name_entry_rename(state, &menu.id, &menu.display_name);
-            audio::play_sfx("assets/sounds/start.ogg");
-            ThemeEffect::None
+            crate::effects::sfx("assets/sounds/start.ogg")
         }
         ProfileMenuAction::Delete => {
             state.profile_menu = None;
             begin_delete_confirm(state, &menu.id, &menu.display_name);
-            audio::play_sfx("assets/sounds/start.ogg");
-            ThemeEffect::None
+            crate::effects::sfx("assets/sounds/start.ogg")
         }
     }
 }
@@ -789,20 +795,20 @@ fn selected_after_delete(selected_before: usize, total_after: usize) -> usize {
     selected
 }
 
-fn confirm_delete(state: &mut State) {
+fn confirm_delete(state: &mut State) -> ThemeEffect {
     let Some(confirm) = state.delete_confirm.take() else {
-        return;
+        return ThemeEffect::None;
     };
 
     let selected_before = state.selected;
     match profile::delete_local_profile(&confirm.id) {
         Ok(()) => {
-            audio::play_sfx("assets/sounds/start.ogg");
             refresh_rows(state);
             reset_nav_hold(state);
             let selected = selected_after_delete(selected_before, state.rows.len());
             state.selected = selected;
             state.prev_selected = selected;
+            crate::effects::sfx("assets/sounds/start.ogg")
         }
         Err(_) => {
             state.delete_confirm = Some(DeleteConfirmState {
@@ -810,6 +816,7 @@ fn confirm_delete(state: &mut State) {
                 display_name: confirm.display_name,
                 error: Some(tr("Profiles", "DeleteFailed")),
             });
+            ThemeEffect::None
         }
     }
 }
@@ -821,9 +828,8 @@ fn cancel_delete_confirm(state: &mut State) {
 
 /* ----------------------------- ITGmania import ---------------------------- */
 
-fn begin_import_picker(state: &mut State) {
+fn begin_import_picker(state: &mut State) -> ThemeEffect {
     reset_nav_hold(state);
-    audio::play_sfx("assets/sounds/start.ogg");
     let candidates = detect_itg_local_profiles();
     // Always open the picker — even with nothing auto-detected — so the
     // "Browse for game directory…" row is available (no dead end).
@@ -839,6 +845,7 @@ fn begin_import_picker(state: &mut State) {
         selected: 0,
         info,
     });
+    crate::effects::sfx("assets/sounds/start.ogg")
 }
 
 fn cancel_import_picker(state: &mut State) {
@@ -887,8 +894,7 @@ fn confirm_import_picker(state: &mut State) -> ThemeEffect {
         let sel = picker.selected;
         if let Some(name) = picker.imported_as_at(sel).cloned() {
             picker.info = Some(tr_fmt("Profiles", "ImportAlreadyInfo", &[("name", &name)]));
-            audio::play_sfx("assets/sounds/boom.ogg");
-            return ThemeEffect::None;
+            return crate::effects::sfx("assets/sounds/boom.ogg");
         }
     }
 
@@ -899,7 +905,6 @@ fn confirm_import_picker(state: &mut State) -> ThemeEffect {
         return ThemeEffect::None;
     };
     let dir = candidate.dir.clone();
-    audio::play_sfx("assets/sounds/start.ogg");
     reset_nav_hold(state);
 
     let (tx, rx) = std::sync::mpsc::channel();
@@ -930,7 +935,7 @@ fn confirm_import_picker(state: &mut State) -> ThemeEffect {
         save_anchor: None,
         cancel,
     });
-    ThemeEffect::None
+    crate::effects::sfx("assets/sounds/start.ogg")
 }
 
 /// Attach the shell-owned native folder picker result to this screen's modal
@@ -967,23 +972,23 @@ fn merge_import_candidates(
     added
 }
 
-fn poll_folder_pick(state: &mut State) {
+fn poll_folder_pick(state: &mut State) -> Option<ThemeEffect> {
     let Some(job) = state.folder_pick.as_ref() else {
-        return;
+        return None;
     };
     let picked = match job.rx.try_recv() {
         Ok(picked) => picked,
-        Err(TryRecvError::Empty) => return,
+        Err(TryRecvError::Empty) => return None,
         Err(TryRecvError::Disconnected) => {
             state.folder_pick = None;
-            return;
+            return None;
         }
     };
     state.folder_pick = None;
 
     let Some(dir) = picked else {
         // User cancelled the dialog — leave the picker as-is.
-        return;
+        return None;
     };
 
     let found = detect_itg_profiles_from_game_dir(&dir);
@@ -1002,7 +1007,7 @@ fn poll_folder_pick(state: &mut State) {
             "ImportBrowseNoneFoundBody",
             &[("dir", &dir.display().to_string())],
         ));
-        return;
+        return None;
     }
     let added = merge_import_candidates(picker, found);
     picker.info = Some(tr_fmt(
@@ -1012,12 +1017,12 @@ fn poll_folder_pick(state: &mut State) {
     ));
     // Move the cursor to the first profile so Start imports immediately.
     picker.selected = 0;
-    audio::play_sfx("assets/sounds/change.ogg");
+    Some(crate::effects::sfx("assets/sounds/change.ogg"))
 }
 
-fn poll_import_job(state: &mut State) {
+fn poll_import_job(state: &mut State) -> Option<ThemeEffect> {
     let Some(job) = state.import_job.as_mut() else {
-        return;
+        return None;
     };
     // Drain all pending messages this frame: update the progress snapshot, and
     // finalize when the Done message arrives.
@@ -1032,7 +1037,7 @@ fn poll_import_job(state: &mut State) {
                 job.progress = Some((done, total, Arc::from(label.as_str())));
             }
             Ok(ImportMsg::Done(o)) => break o,
-            Err(TryRecvError::Empty) => return,
+            Err(TryRecvError::Empty) => return None,
             Err(TryRecvError::Disconnected) => {
                 state.import_job = None;
                 state.import_message = Some(ImportMessageState {
@@ -1041,7 +1046,7 @@ fn poll_import_job(state: &mut State) {
                         tr("Profiles", "ImportFailedBody").to_string(),
                     )],
                 });
-                return;
+                return None;
             }
         }
     };
@@ -1051,19 +1056,19 @@ fn poll_import_job(state: &mut State) {
             if let Some(existing) = &summary.already_imported_as {
                 // Engine refused a duplicate (matched by derived GUID). Nothing
                 // was created; just tell the user where it already lives.
-                audio::play_sfx("assets/sounds/boom.ogg");
                 state.import_message = Some(import_already_message(existing));
+                Some(crate::effects::sfx("assets/sounds/boom.ogg"))
             } else if summary.canceled {
                 // Clean abort: the worker deleted the partial profile, so there's
                 // no row to select — just acknowledge the cancellation.
-                audio::play_sfx("assets/sounds/change.ogg");
                 refresh_rows(state);
                 state.import_message = Some(import_canceled_message());
+                Some(crate::effects::sfx("assets/sounds/change.ogg"))
             } else {
-                audio::play_sfx("assets/sounds/start.ogg");
                 refresh_rows(state);
                 select_profile_row(state, &summary.profile_id);
                 state.import_message = Some(import_summary_message(&summary));
+                Some(crate::effects::sfx("assets/sounds/start.ogg"))
             }
         }
         ImportOutcome::Err(e) => {
@@ -1071,6 +1076,7 @@ fn poll_import_job(state: &mut State) {
                 title: tr("Profiles", "ImportFailedTitle"),
                 lines: vec![MessageLine::plain(e)],
             });
+            None
         }
     }
 }
@@ -1265,23 +1271,24 @@ fn import_already_message(existing: &str) -> ImportMessageState {
     }
 }
 
-fn dismiss_import_message(state: &mut State) {
+fn dismiss_import_message(state: &mut State) -> ThemeEffect {
     state.import_message = None;
     reset_nav_hold(state);
-    audio::play_sfx("assets/sounds/start.ogg");
+    crate::effects::sfx("assets/sounds/start.ogg")
 }
 
 /// Requests a clean cancel of the running import. The worker polls this flag,
 /// stops writing scores, deletes the partially-created profile, and reports a
 /// canceled summary. Idempotent — repeated presses are harmless.
-fn request_import_cancel(state: &mut State) {
+fn request_import_cancel(state: &mut State) -> ThemeEffect {
     let Some(job) = state.import_job.as_ref() else {
-        return;
+        return ThemeEffect::None;
     };
     if !job.cancel.swap(true, Ordering::Relaxed) {
-        audio::play_sfx("assets/sounds/change.ogg");
         log::warn!("ITGmania import cancel requested by user.");
+        return crate::effects::sfx("assets/sounds/change.ogg");
     }
+    ThemeEffect::None
 }
 
 fn handle_import_picker_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
@@ -1298,16 +1305,14 @@ fn handle_import_picker_input(state: &mut State, ev: &InputEvent) -> ThemeEffect
         | VirtualAction::p2_up
         | VirtualAction::p2_menu_up => {
             move_import_picker_selected(state, NavDirection::Up);
-            audio::play_sfx("assets/sounds/change.ogg");
-            ThemeEffect::None
+            crate::effects::sfx("assets/sounds/change.ogg")
         }
         VirtualAction::p1_down
         | VirtualAction::p1_menu_down
         | VirtualAction::p2_down
         | VirtualAction::p2_menu_down => {
             move_import_picker_selected(state, NavDirection::Down);
-            audio::play_sfx("assets/sounds/change.ogg");
-            ThemeEffect::None
+            crate::effects::sfx("assets/sounds/change.ogg")
         }
         VirtualAction::p1_start | VirtualAction::p2_start => confirm_import_picker(state),
         _ => ThemeEffect::None,
@@ -1327,18 +1332,14 @@ fn activate_selected_row(state: &mut State) -> ThemeEffect {
             begin_name_entry_create(state);
             ThemeEffect::None
         }
-        RowKind::ImportItg => {
-            begin_import_picker(state);
-            ThemeEffect::None
-        }
-        RowKind::Exit => {
-            audio::play_sfx("assets/sounds/start.ogg");
-            ThemeEffect::Navigate(Screen::Options)
-        }
+        RowKind::ImportItg => begin_import_picker(state),
+        RowKind::Exit => crate::effects::sfx_then(
+            "assets/sounds/start.ogg",
+            ThemeEffect::Navigate(Screen::Options),
+        ),
         RowKind::Profile { id, display_name } => {
             begin_profile_menu(state, &id, &display_name);
-            audio::play_sfx("assets/sounds/start.ogg");
-            ThemeEffect::None
+            crate::effects::sfx("assets/sounds/start.ogg")
         }
     }
 }
@@ -1366,7 +1367,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         // While an import runs, the only interaction is Back to request a clean
         // cancel; everything else is swallowed so the modal stays put.
         if ev.pressed && matches!(ev.action, VirtualAction::p1_back | VirtualAction::p2_back) {
-            request_import_cancel(state);
+            return request_import_cancel(state);
         }
         return ThemeEffect::None;
     }
@@ -1383,7 +1384,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                     | VirtualAction::p2_back
             )
         {
-            dismiss_import_message(state);
+            return dismiss_import_message(state);
         }
         return ThemeEffect::None;
     }
@@ -1418,13 +1419,11 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                 return match nav {
                     screen_input::ThreeKeyMenuAction::Prev => {
                         move_import_picker_selected(state, NavDirection::Up);
-                        audio::play_sfx("assets/sounds/change.ogg");
-                        ThemeEffect::None
+                        crate::effects::sfx("assets/sounds/change.ogg")
                     }
                     screen_input::ThreeKeyMenuAction::Next => {
                         move_import_picker_selected(state, NavDirection::Down);
-                        audio::play_sfx("assets/sounds/change.ogg");
-                        ThemeEffect::None
+                        crate::effects::sfx("assets/sounds/change.ogg")
                     }
                     screen_input::ThreeKeyMenuAction::Confirm => confirm_import_picker(state),
                     screen_input::ThreeKeyMenuAction::Cancel => {
@@ -1434,20 +1433,24 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                 };
             }
             if state.name_entry.is_some() {
-                match nav {
+                return match nav {
                     screen_input::ThreeKeyMenuAction::Confirm => confirm_name_entry(state),
-                    screen_input::ThreeKeyMenuAction::Cancel => cancel_name_entry(state),
-                    _ => {}
-                }
-                return ThemeEffect::None;
+                    screen_input::ThreeKeyMenuAction::Cancel => {
+                        cancel_name_entry(state);
+                        ThemeEffect::None
+                    }
+                    _ => ThemeEffect::None,
+                };
             }
             if state.delete_confirm.is_some() {
-                match nav {
+                return match nav {
                     screen_input::ThreeKeyMenuAction::Confirm => confirm_delete(state),
-                    screen_input::ThreeKeyMenuAction::Cancel => cancel_delete_confirm(state),
-                    _ => {}
-                }
-                return ThemeEffect::None;
+                    screen_input::ThreeKeyMenuAction::Cancel => {
+                        cancel_delete_confirm(state);
+                        ThemeEffect::None
+                    }
+                    _ => ThemeEffect::None,
+                };
             }
             if state.profile_menu.is_some() {
                 return match nav {
@@ -1455,23 +1458,17 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                         move_profile_menu_selected(state, NavDirection::Up);
                         on_nav_press(state, NavDirection::Up);
                         state.menu_lr_undo = 1;
-                        audio::play_sfx("assets/sounds/change.ogg");
-                        ThemeEffect::None
+                        crate::effects::sfx("assets/sounds/change.ogg")
                     }
                     screen_input::ThreeKeyMenuAction::Next => {
                         move_profile_menu_selected(state, NavDirection::Down);
                         on_nav_press(state, NavDirection::Down);
                         state.menu_lr_undo = -1;
-                        audio::play_sfx("assets/sounds/change.ogg");
-                        ThemeEffect::None
+                        crate::effects::sfx("assets/sounds/change.ogg")
                     }
                     screen_input::ThreeKeyMenuAction::Confirm => {
                         state.menu_lr_undo = 0;
-                        let action = confirm_profile_menu(state);
-                        if !matches!(action, ThemeEffect::None) {
-                            return action;
-                        }
-                        ThemeEffect::None
+                        confirm_profile_menu(state)
                     }
                     screen_input::ThreeKeyMenuAction::Cancel => {
                         undo_profile_menu_move(state, state.menu_lr_undo);
@@ -1510,35 +1507,36 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         return handle_import_picker_input(state, ev);
     }
     if state.name_entry.is_some() {
-        match ev.action {
+        return match ev.action {
             VirtualAction::p1_start | VirtualAction::p2_start if ev.pressed => {
                 confirm_name_entry(state)
             }
             VirtualAction::p1_back | VirtualAction::p2_back if ev.pressed => {
-                cancel_name_entry(state)
+                cancel_name_entry(state);
+                ThemeEffect::None
             }
-            _ => {}
-        }
-        return ThemeEffect::None;
+            _ => ThemeEffect::None,
+        };
     }
 
     if state.delete_confirm.is_some() {
-        match ev.action {
+        return match ev.action {
             VirtualAction::p1_start | VirtualAction::p2_start if ev.pressed => {
                 confirm_delete(state)
             }
             VirtualAction::p1_back | VirtualAction::p2_back if ev.pressed => {
-                cancel_delete_confirm(state)
+                cancel_delete_confirm(state);
+                ThemeEffect::None
             }
-            _ => {}
-        }
-        return ThemeEffect::None;
+            _ => ThemeEffect::None,
+        };
     }
 
     if state.profile_menu.is_some() {
-        match ev.action {
+        return match ev.action {
             VirtualAction::p1_back | VirtualAction::p2_back if ev.pressed => {
-                cancel_profile_menu(state)
+                cancel_profile_menu(state);
+                ThemeEffect::None
             }
             VirtualAction::p1_up
             | VirtualAction::p1_menu_up
@@ -1547,7 +1545,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                 if ev.pressed =>
             {
                 move_profile_menu_selected(state, NavDirection::Up);
-                audio::play_sfx("assets/sounds/change.ogg");
+                crate::effects::sfx("assets/sounds/change.ogg")
             }
             VirtualAction::p1_down
             | VirtualAction::p1_menu_down
@@ -1556,17 +1554,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                 if ev.pressed =>
             {
                 move_profile_menu_selected(state, NavDirection::Down);
-                audio::play_sfx("assets/sounds/change.ogg");
+                crate::effects::sfx("assets/sounds/change.ogg")
             }
             VirtualAction::p1_start | VirtualAction::p2_start if ev.pressed => {
-                let action = confirm_profile_menu(state);
-                if !matches!(action, ThemeEffect::None) {
-                    return action;
-                }
+                confirm_profile_menu(state)
             }
-            _ => {}
-        }
-        return ThemeEffect::None;
+            _ => ThemeEffect::None,
+        };
     }
 
     match ev.action {
@@ -2959,10 +2953,16 @@ mod tests {
         press(&mut state, VirtualAction::p2_down);
         assert_eq!(state.selected, 2);
 
+        let ThemeEffect::Batch(effects) = press(&mut state, VirtualAction::p2_start) else {
+            panic!("expected audio and navigation batch");
+        };
         assert!(matches!(
-            press(&mut state, VirtualAction::p2_start),
-            ThemeEffect::Navigate(Screen::Options)
+            &effects[0],
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                deadsync_theme::AudioRequest::PlaySfx(path)
+            )) if path == "assets/sounds/start.ogg"
         ));
+        assert!(matches!(effects[1], ThemeEffect::Navigate(Screen::Options)));
     }
 
     #[test]

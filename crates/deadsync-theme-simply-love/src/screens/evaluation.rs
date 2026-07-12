@@ -3443,6 +3443,97 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) {
     test_input::apply_raw_key_event(&mut state.test_input_state, key_event);
 }
 
+#[inline]
+fn prepend_sfx(path_opt: Option<&str>, effect: ThemeEffect) -> ThemeEffect {
+    let Some(path) = path_opt else {
+        return effect;
+    };
+    if matches!(effect, ThemeEffect::None) {
+        crate::effects::sfx(path)
+    } else {
+        crate::effects::sfx_then(path, effect)
+    }
+}
+
+#[cfg(test)]
+mod input_audio_effect_tests {
+    use super::{Screen, ThemeEffect, prepend_sfx};
+    use deadsync_theme::AudioRequest;
+
+    fn assert_sfx_then(effect: ThemeEffect, expected_path: &str, expected_next: Screen) {
+        let ThemeEffect::Batch(effects) = effect else {
+            panic!("sound followed by navigation should be an ordered batch");
+        };
+
+        assert_eq!(effects.len(), 2);
+        assert!(matches!(
+            &effects[0],
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                AudioRequest::PlaySfx(path)
+            )) if path == expected_path
+        ));
+        assert!(matches!(effects[1], ThemeEffect::Navigate(screen) if screen == expected_next));
+    }
+
+    #[test]
+    fn favorite_sfx_keys_precede_following_effect() {
+        for path in ["assets/sounds/favorite.ogg", "assets/sounds/unfavorite.ogg"] {
+            assert_sfx_then(
+                prepend_sfx(Some(path), ThemeEffect::Navigate(Screen::SelectCourse)),
+                path,
+                Screen::SelectCourse,
+            );
+        }
+    }
+
+    #[test]
+    fn standalone_sfx_has_no_empty_trailing_effect() {
+        let effect = prepend_sfx(Some("assets/sounds/favorite.ogg"), ThemeEffect::None);
+
+        assert!(matches!(
+            effect,
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                AudioRequest::PlaySfx(path)
+            )) if path == "assets/sounds/favorite.ogg"
+        ));
+    }
+
+    #[test]
+    fn absent_sfx_leaves_effect_unchanged() {
+        let effect = prepend_sfx(None, ThemeEffect::Navigate(Screen::SelectCourse));
+
+        assert!(matches!(
+            effect,
+            ThemeEffect::Navigate(Screen::SelectCourse)
+        ));
+    }
+
+    #[test]
+    fn favorite_sfx_precedes_navigation_start_sfx() {
+        let navigation = prepend_sfx(
+            Some("assets/sounds/start.ogg"),
+            ThemeEffect::Navigate(Screen::SelectMusic),
+        );
+        let effect = prepend_sfx(Some("assets/sounds/unfavorite.ogg"), navigation);
+        let ThemeEffect::Batch(effects) = effect else {
+            panic!("favorite and navigation sounds should remain ordered");
+        };
+
+        assert_eq!(effects.len(), 2);
+        assert!(matches!(
+            &effects[0],
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                AudioRequest::PlaySfx(path)
+            )) if path == "assets/sounds/unfavorite.ogg"
+        ));
+        assert_sfx_then(
+            effects[1].clone(),
+            "assets/sounds/start.ogg",
+            Screen::SelectMusic,
+        );
+    }
+}
+
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     // Feed virtual input through the test_input state so the highlight feedback on the
     // EvalPane::TestInput pad reflects MENU buttons / Start / Select while the pane is active.
@@ -3470,6 +3561,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         state.menu_lr_undo[profile_data::player_side_index(side)] = 0;
     }
     // Track favorite pad code on arrow presses (not menu buttons)
+    let mut favorite_sfx = None;
     if ev.pressed {
         if let Some(dir) = pad_dir_from_action(ev.action) {
             if let Some(side) = state.favorite_code.check(dir, ev.timestamp) {
@@ -3477,10 +3569,10 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                 for si in state.score_info.iter().flatten() {
                     if si.side == side {
                         let is_now_fav = profile::toggle_favorite(side, &si.chart.short_hash);
-                        deadsync_audio_stream::play_sfx(if is_now_fav {
-                            "assets/sounds/start.ogg"
+                        favorite_sfx = Some(if is_now_fav {
+                            "assets/sounds/favorite.ogg"
                         } else {
-                            "assets/sounds/start.ogg"
+                            "assets/sounds/unfavorite.ogg"
                         });
                         break;
                     }
@@ -3514,13 +3606,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
             }
             _ => {}
         }
-        return ThemeEffect::None;
+        return prepend_sfx(favorite_sfx, ThemeEffect::None);
     }
     if !ev.pressed {
-        return ThemeEffect::None;
+        return prepend_sfx(favorite_sfx, ThemeEffect::None);
     }
     if state.auto_advance_seconds.is_some() {
-        return ThemeEffect::None;
+        return prepend_sfx(favorite_sfx, ThemeEffect::None);
     }
     if state.event_overlay_visible {
         let play_style = profile::get_session_play_style();
@@ -3551,56 +3643,66 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
             if undo != 0 {
                 let _ = shift_event_page(side, i32::from(undo));
             }
-            return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
-                crate::SimplyLoveMediaRequest::Screenshot(Some(side)),
-            ));
+            return prepend_sfx(
+                favorite_sfx,
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
+                    crate::SimplyLoveMediaRequest::Screenshot(Some(side)),
+                )),
+            );
         }
-        return match ev.action {
-            VirtualAction::p1_back
-            | VirtualAction::p1_start
-            | VirtualAction::p2_back
-            | VirtualAction::p2_start => {
-                state.event_overlay_visible = false;
-                ThemeEffect::None
-            }
-            VirtualAction::p1_left | VirtualAction::p1_menu_left => {
-                state.menu_lr_undo[profile_data::player_side_index(profile_data::PlayerSide::P1)] =
-                    if shift_event_page(profile_data::PlayerSide::P1, -1) {
-                        1
-                    } else {
-                        0
-                    };
-                ThemeEffect::None
-            }
-            VirtualAction::p1_right | VirtualAction::p1_menu_right => {
-                state.menu_lr_undo[profile_data::player_side_index(profile_data::PlayerSide::P1)] =
-                    if shift_event_page(profile_data::PlayerSide::P1, 1) {
-                        -1
-                    } else {
-                        0
-                    };
-                ThemeEffect::None
-            }
-            VirtualAction::p2_left | VirtualAction::p2_menu_left => {
-                state.menu_lr_undo[profile_data::player_side_index(profile_data::PlayerSide::P2)] =
-                    if shift_event_page(profile_data::PlayerSide::P2, -1) {
-                        1
-                    } else {
-                        0
-                    };
-                ThemeEffect::None
-            }
-            VirtualAction::p2_right | VirtualAction::p2_menu_right => {
-                state.menu_lr_undo[profile_data::player_side_index(profile_data::PlayerSide::P2)] =
-                    if shift_event_page(profile_data::PlayerSide::P2, 1) {
-                        -1
-                    } else {
-                        0
-                    };
-                ThemeEffect::None
-            }
-            _ => ThemeEffect::None,
-        };
+        return prepend_sfx(
+            favorite_sfx,
+            match ev.action {
+                VirtualAction::p1_back
+                | VirtualAction::p1_start
+                | VirtualAction::p2_back
+                | VirtualAction::p2_start => {
+                    state.event_overlay_visible = false;
+                    ThemeEffect::None
+                }
+                VirtualAction::p1_left | VirtualAction::p1_menu_left => {
+                    state.menu_lr_undo
+                        [profile_data::player_side_index(profile_data::PlayerSide::P1)] =
+                        if shift_event_page(profile_data::PlayerSide::P1, -1) {
+                            1
+                        } else {
+                            0
+                        };
+                    ThemeEffect::None
+                }
+                VirtualAction::p1_right | VirtualAction::p1_menu_right => {
+                    state.menu_lr_undo
+                        [profile_data::player_side_index(profile_data::PlayerSide::P1)] =
+                        if shift_event_page(profile_data::PlayerSide::P1, 1) {
+                            -1
+                        } else {
+                            0
+                        };
+                    ThemeEffect::None
+                }
+                VirtualAction::p2_left | VirtualAction::p2_menu_left => {
+                    state.menu_lr_undo
+                        [profile_data::player_side_index(profile_data::PlayerSide::P2)] =
+                        if shift_event_page(profile_data::PlayerSide::P2, -1) {
+                            1
+                        } else {
+                            0
+                        };
+                    ThemeEffect::None
+                }
+                VirtualAction::p2_right | VirtualAction::p2_menu_right => {
+                    state.menu_lr_undo
+                        [profile_data::player_side_index(profile_data::PlayerSide::P2)] =
+                        if shift_event_page(profile_data::PlayerSide::P2, 1) {
+                            -1
+                        } else {
+                            0
+                        };
+                    ThemeEffect::None
+                }
+                _ => ThemeEffect::None,
+            },
+        );
     }
     let return_target = if state.return_to_course {
         Screen::SelectCourse
@@ -3694,21 +3796,22 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         if undo != 0 {
             let _ = shift_pane_for(side, i32::from(undo));
         }
-        return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
-            crate::SimplyLoveMediaRequest::Screenshot(Some(side)),
-        ));
+        return prepend_sfx(
+            favorite_sfx,
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
+                crate::SimplyLoveMediaRequest::Screenshot(Some(side)),
+            )),
+        );
     }
 
-    match ev.action {
+    let effect = match ev.action {
         VirtualAction::p1_back
         | VirtualAction::p1_start
         | VirtualAction::p2_back
-        | VirtualAction::p2_start => {
-            if return_target == Screen::SelectMusic {
-                deadsync_audio_stream::play_sfx("assets/sounds/start.ogg");
-            }
-            ThemeEffect::Navigate(return_target)
-        }
+        | VirtualAction::p2_start => prepend_sfx(
+            (return_target == Screen::SelectMusic).then_some("assets/sounds/start.ogg"),
+            ThemeEffect::Navigate(return_target),
+        ),
         VirtualAction::p1_right | VirtualAction::p1_menu_right => {
             state.menu_lr_undo[profile_data::player_side_index(profile_data::PlayerSide::P1)] =
                 if shift_pane_for(profile_data::PlayerSide::P1, 1) {
@@ -3762,7 +3865,8 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
             ThemeEffect::None
         }
         _ => ThemeEffect::None,
-    }
+    };
+    prepend_sfx(favorite_sfx, effect)
 }
 
 pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &AssetManager) {

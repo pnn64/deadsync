@@ -18,7 +18,7 @@ pub struct NotefieldFrameFeatures {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct NotefieldFramePlanRequest {
+pub(crate) struct NotefieldFramePlanRequest {
     pub placement: FieldPlacement,
     pub num_players: usize,
     pub cols_per_player: usize,
@@ -37,7 +37,9 @@ pub struct NotefieldFramePlan {
 
 /// Resolve the runtime player/column span and preserve the notefield's bounded
 /// actor reserve policy without exposing profile or theme state.
-pub fn notefield_frame_plan(request: NotefieldFramePlanRequest) -> Option<NotefieldFramePlan> {
+pub(crate) fn notefield_frame_plan(
+    request: NotefieldFramePlanRequest,
+) -> Option<NotefieldFramePlan> {
     let player_idx = if request.num_players == 1 {
         0
     } else {

@@ -13,6 +13,7 @@ deadlib-renderer = { path = "../deadlib-renderer" }
 deadlib-video = { path = "../deadlib-video" }
 deadsync-assets = { path = "../deadsync-assets" }
 deadsync-audio = { path = "../deadsync-audio" }
+deadsync-audio-replaygain = { path = "../deadsync-audio-replaygain" }
 deadsync-audio-stream = { path = "../deadsync-audio-stream" }
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-config = { path = "../deadsync-config" }

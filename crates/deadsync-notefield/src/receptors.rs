@@ -40,7 +40,7 @@ pub fn receptor_row_center(
     [x, y]
 }
 
-pub fn hold_indicator_column_x(
+pub(crate) fn hold_indicator_column_x(
     field_center_x: f32,
     local_col: usize,
     beat_factor_value: f32,

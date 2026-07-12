@@ -15,6 +15,8 @@ use deadlib_present::actors::{self, Actor};
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y};
 use deadlib_render::BlendMode;
+// TODO(theme-audio): emit `AudioRequest::PlaySfx` once every profile-box
+// consumer can preserve audio alongside the intercepted profile-select effect.
 use deadsync_audio_stream as audio;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_notefield::noteskin_model_actor;

@@ -137,7 +137,7 @@ pub fn mod_divisor(value: f32) -> f32 {
     }
 }
 
-fn signed_effect_active(value: f32) -> bool {
+pub(crate) fn signed_effect_active(value: f32) -> bool {
     value.is_finite() && value.abs() > f32::EPSILON
 }
 

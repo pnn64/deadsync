@@ -1,7 +1,7 @@
 use deadlib_present::actors::{Actor, TextAlign};
 use deadlib_present::dsl::{SpriteBuilder, TextBuilder};
 
-pub fn append_edit_measure_number(
+pub(crate) fn append_edit_measure_number(
     actors: &mut Vec<Actor>,
     edit_beat_bars: bool,
     measure_index: Option<i64>,
@@ -31,7 +31,7 @@ pub fn append_edit_measure_number(
     actors.push(text.build(0));
 }
 
-pub fn append_beat_bar(
+pub(crate) fn append_beat_bar(
     actors: &mut Vec<Actor>,
     edit_beat_bars: bool,
     edit_bar_frame: u32,
@@ -69,7 +69,7 @@ pub fn append_beat_bar(
 
 /// Colored measure cue line marking timing events such as BPM changes, stops,
 /// delays, and scrolls.
-pub fn append_cue_bar(
+pub(crate) fn append_cue_bar(
     actors: &mut Vec<Actor>,
     x_center: f32,
     y: f32,

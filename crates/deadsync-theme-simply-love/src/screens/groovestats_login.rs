@@ -26,7 +26,6 @@ use crate::screens::options::qr_login::{
 };
 use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::Actor;
-use deadsync_audio_stream as audio;
 use deadsync_input::{InputEvent, VirtualAction};
 
 const TRANSITION_IN_DURATION: f32 = 0.3;
@@ -131,7 +130,6 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         }
         state.ui = None;
         state.target_profile = None;
-        audio::play_sfx("assets/sounds/start.ogg");
         let next = if from_profile_menu {
             Screen::ManageLocalProfiles
         } else if qr_login::should_auto_show(config::get().arrowcloud_qr_login_when) {
@@ -139,7 +137,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         } else {
             Screen::SelectColor
         };
-        return ThemeEffect::Navigate(next);
+        return crate::effects::sfx_then("assets/sounds/start.ogg", ThemeEffect::Navigate(next));
     }
     if is_back {
         if let Some(ui) = state.ui.as_ref() {
@@ -147,14 +145,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         }
         state.ui = None;
         state.target_profile = None;
-        audio::play_sfx("assets/sounds/change.ogg");
         let next = if from_profile_menu {
             Screen::ManageLocalProfiles
         } else {
             Screen::Menu
         };
         log::info!("GrooveStats QR login cancelled — returning to {next:?}.");
-        return ThemeEffect::Navigate(next);
+        return crate::effects::sfx_then("assets/sounds/change.ogg", ThemeEffect::Navigate(next));
     }
     ThemeEffect::None
 }

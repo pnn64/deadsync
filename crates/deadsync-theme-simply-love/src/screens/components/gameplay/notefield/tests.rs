@@ -1,8 +1,8 @@
 use super::{
     TornadoBounds, Z_HOLD_BODY, Z_HOLD_GLOW, Z_TAP_NOTE, confusion_rotation_deg,
     error_bar_trim_max_window_ix, hold_explosion_active, hold_explosion_enabled,
-    hold_head_render_flags, itg_actor_glow_alpha, judgment_frame_size, note_slot_base_size,
-    note_world_z_for_bumpy, note_x_offset, offset_center, receptor_row_center,
+    hold_head_render_flags, judgment_frame_size, note_slot_base_size, note_world_z_for_bumpy,
+    note_x_offset, offset_center, receptor_row_center,
 };
 use crate::assets;
 use crate::notefield_style::notefield_style;
@@ -11,7 +11,7 @@ use deadsync_core::note::NoteType;
 use deadsync_gameplay::{ActiveHold, VisualEffects};
 use deadsync_notefield::{
     NoteXParams, error_bar_boundaries_s, error_bar_text_scalable_zoom, hold_entry_head_beat,
-    move_col_extra, note_x_offset as canonical_note_x_offset,
+    itg_actor_glow_alpha, move_col_extra, note_x_offset as canonical_note_x_offset,
     receptor_row_center as canonical_receptor_row_center, tipsy_y_extra,
 };
 use deadsync_noteskin::{NUM_QUANTIZATIONS, Quantization, Style};

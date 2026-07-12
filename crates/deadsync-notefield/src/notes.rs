@@ -353,7 +353,7 @@ fn compose_note_glow<S, F>(
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct ScrollTravelRequest<'a> {
+pub(crate) struct ScrollTravelRequest<'a> {
     pub timing: &'a TimingData,
     pub accel: AccelYParams,
     pub scroll_speed: ScrollSpeedSetting,
@@ -399,7 +399,7 @@ pub struct ScrollTravel<'a> {
     post_accel_scale: f32,
 }
 
-pub fn scroll_travel<'a>(request: ScrollTravelRequest<'a>) -> ScrollTravel<'a> {
+pub(crate) fn scroll_travel<'a>(request: ScrollTravelRequest<'a>) -> ScrollTravel<'a> {
     let displayed_speed_percent = request
         .timing
         .get_speed_multiplier_ns(request.visible_beat, request.current_time_ns);
@@ -577,11 +577,11 @@ impl ScrollTravel<'_> {
     }
 }
 
-pub fn note_itg_row(note: &Note) -> i32 {
+pub(crate) fn note_itg_row(note: &Note) -> i32 {
     beat_to_note_row(note.beat)
 }
 
-pub fn lane_window_bounds_by_note_row(
+pub(crate) fn lane_window_bounds_by_note_row(
     notes: &[Note],
     indices: &[usize],
     range: Option<(i32, i32)>,
@@ -597,7 +597,7 @@ pub fn lane_window_bounds_by_note_row(
     ))
 }
 
-pub fn lane_hold_window_bounds_by_note_row(
+pub(crate) fn lane_hold_window_bounds_by_note_row(
     notes: &[Note],
     indices: &[usize],
     range: Option<(i32, i32)>,
@@ -700,7 +700,7 @@ fn note_count_range(stats: &[NoteCountStat], low: f32, high: f32) -> usize {
     high.notes_upper.saturating_sub(low.notes_lower)
 }
 
-pub fn find_first_displayed_beat<F: FnMut(f32) -> f32>(
+pub(crate) fn find_first_displayed_beat<F: FnMut(f32) -> f32>(
     current_beat: f32,
     draw_distance: f32,
     stats: &[NoteCountStat],
@@ -727,7 +727,7 @@ pub fn find_first_displayed_beat<F: FnMut(f32) -> f32>(
     Some(first)
 }
 
-pub fn find_last_displayed_beat<F: FnMut(f32) -> (f32, bool)>(
+pub(crate) fn find_last_displayed_beat<F: FnMut(f32) -> (f32, bool)>(
     current_beat: f32,
     draw_distance: f32,
     displayed_speed_percent: f32,

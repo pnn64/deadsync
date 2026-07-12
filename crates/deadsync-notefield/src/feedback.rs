@@ -31,7 +31,10 @@ pub struct TapJudgmentRowsParams {
     pub custom_fantastic_window: bool,
 }
 
-pub const fn column_flash_layout(style: ColumnFlashStyle, compact: bool) -> ColumnFlashLayoutStyle {
+pub(crate) const fn column_flash_layout(
+    style: ColumnFlashStyle,
+    compact: bool,
+) -> ColumnFlashLayoutStyle {
     if compact {
         style.compact_layout
     } else {
@@ -39,29 +42,11 @@ pub const fn column_flash_layout(style: ColumnFlashStyle, compact: bool) -> Colu
     }
 }
 
-pub fn column_flash_height(screen_height: f32, layout: ColumnFlashLayoutStyle) -> f32 {
+pub(crate) fn column_flash_height(screen_height: f32, layout: ColumnFlashLayoutStyle) -> f32 {
     (screen_height - layout.top_y - layout.height_trim).max(0.0)
 }
 
-pub fn column_flash_reverse_bottom_y(
-    style: ColumnFlashStyle,
-    layout: ColumnFlashLayoutStyle,
-    lane_width: f32,
-    height: f32,
-    center_y: f32,
-    receptor_reverse_y: f32,
-) -> f32 {
-    column_flash_reverse_top_y(
-        style,
-        layout,
-        lane_width,
-        height,
-        center_y,
-        receptor_reverse_y,
-    ) + height
-}
-
-pub fn column_flash_reverse_top_y(
+pub(crate) fn column_flash_reverse_top_y(
     style: ColumnFlashStyle,
     layout: ColumnFlashLayoutStyle,
     lane_width: f32,
@@ -73,7 +58,7 @@ pub fn column_flash_reverse_top_y(
         - layout.reverse_trim
 }
 
-pub fn column_flash_alpha_at(
+pub(crate) fn column_flash_alpha_at(
     started_at: f32,
     current_time: f32,
     duration: f32,
@@ -90,7 +75,7 @@ pub fn column_flash_alpha_at(
     }
 }
 
-pub const fn column_flash_base_alpha(style: ColumnFlashStyle, dimmed: bool) -> f32 {
+pub(crate) const fn column_flash_base_alpha(style: ColumnFlashStyle, dimmed: bool) -> f32 {
     if dimmed {
         style.dimmed_alpha
     } else {
@@ -98,7 +83,7 @@ pub const fn column_flash_base_alpha(style: ColumnFlashStyle, dimmed: bool) -> f
     }
 }
 
-pub fn column_flash_alpha(
+pub(crate) fn column_flash_alpha(
     style: ColumnFlashStyle,
     started_at: f32,
     current_time: f32,
@@ -113,7 +98,7 @@ pub fn column_flash_alpha(
     )
 }
 
-pub fn column_flash_color(
+pub(crate) fn column_flash_color(
     style: ColumnFlashStyle,
     grade: JudgeGrade,
     blue_fantastic: bool,
@@ -136,12 +121,8 @@ pub fn column_flash_color(
     [rgb[0], rgb[1], rgb[2], alpha]
 }
 
-pub fn field_effect_height(screen_height: f32, tilt: f32) -> f32 {
+pub(crate) fn field_effect_height(screen_height: f32, tilt: f32) -> f32 {
     screen_height + tilt.abs() * 200.0
-}
-
-pub fn signed_effect_active(value: f32) -> bool {
-    value.is_finite() && value.abs() > f32::EPSILON
 }
 
 pub fn itg_actor_glow_alpha(alpha: f32) -> f32 {
@@ -156,25 +137,15 @@ pub const fn hold_glow_color(alpha: f32) -> [f32; 4] {
     [1.0, 1.0, 1.0, alpha]
 }
 
-pub fn column_cue_height(style: ColumnCueStyle, screen_height: f32) -> f32 {
+pub(crate) fn column_cue_height(style: ColumnCueStyle, screen_height: f32) -> f32 {
     (screen_height - style.top_y).max(0.0)
 }
 
-pub fn crossover_cue_height(style: ColumnCueStyle, screen_height: f32) -> f32 {
+pub(crate) fn crossover_cue_height(style: ColumnCueStyle, screen_height: f32) -> f32 {
     (column_cue_height(style, screen_height) - style.crossover_height_trim).max(0.0)
 }
 
-pub fn column_cue_reverse_bottom_y(
-    style: ColumnCueStyle,
-    lane_width: f32,
-    height: f32,
-    center_y: f32,
-    receptor_reverse_y: f32,
-) -> f32 {
-    column_cue_reverse_top_y(style, lane_width, height, center_y, receptor_reverse_y) + height
-}
-
-pub fn column_cue_reverse_top_y(
+pub(crate) fn column_cue_reverse_top_y(
     style: ColumnCueStyle,
     lane_width: f32,
     height: f32,
@@ -184,7 +155,7 @@ pub fn column_cue_reverse_top_y(
     center_y + receptor_reverse_y - lane_width * 0.5 - height + style.reverse_anchor_y
 }
 
-pub fn column_cue_alpha(elapsed_real: f32, duration_real: f32) -> f32 {
+pub(crate) fn column_cue_alpha(elapsed_real: f32, duration_real: f32) -> f32 {
     if !elapsed_real.is_finite() || !duration_real.is_finite() {
         return 0.0;
     }
@@ -547,7 +518,7 @@ pub fn tap_judgment_rows(params: TapJudgmentRowsParams) -> (usize, Option<usize>
     (base, overlay.then_some(1))
 }
 
-pub fn held_miss_zoom(elapsed: f32, mini: f32) -> (f32, f32) {
+pub(crate) fn held_miss_zoom(elapsed: f32, mini: f32) -> (f32, f32) {
     let mini_scale = (1.0 - mini * 0.5).max(0.0);
     if elapsed < 0.1 {
         let t = (elapsed / 0.1).clamp(0.0, 1.0);

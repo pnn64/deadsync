@@ -3034,21 +3034,24 @@ fn clear_preview(state: &mut State) {
     audio::stop_music();
 }
 
-/// Enqueues ReplayGain analysis for every song in the currently-expanded
-/// pack as soon as the pack changes. Runs at background priority so the
-/// foreground preview always jumps ahead of any pack-warm backlog. The
+/// Requests ReplayGain analysis for every song in the currently-expanded
+/// pack as soon as the pack changes. The shell runs it at background priority
+/// so the foreground preview always jumps ahead of any pack-warm backlog. The
 /// `last_replaygain_prewarmed_pack` guard prevents re-enqueueing every
 /// frame while the same pack stays expanded.
-fn maybe_prewarm_replaygain_for_pack(state: &mut State) {
-    if !config::get().enable_replaygain {
-        return;
+fn maybe_prewarm_replaygain_for_pack(
+    state: &mut State,
+    replaygain_enabled: bool,
+) -> Option<ThemeEffect> {
+    if !replaygain_enabled {
+        return None;
     }
     let Some(pack) = state.expanded_pack_name.clone() else {
         state.last_replaygain_prewarmed_pack = None;
-        return;
+        return None;
     };
     if state.last_replaygain_prewarmed_pack.as_deref() == Some(pack.as_str()) {
-        return;
+        return None;
     }
     let mut current_pack_name: Option<&str> = None;
     let mut paths: Vec<PathBuf> = Vec::new();
@@ -3067,12 +3070,21 @@ fn maybe_prewarm_replaygain_for_pack(state: &mut State) {
     }
     state.last_replaygain_prewarmed_pack = Some(pack);
     if paths.is_empty() {
-        return;
+        return None;
     }
-    deadsync_audio_replaygain::prewarm_paths(
-        paths,
-        deadsync_audio_replaygain::Priority::Background,
-    );
+    Some(ThemeEffect::Runtime(
+        crate::SimplyLoveRuntimeRequest::Audio(deadsync_theme::AudioRequest::PrewarmReplayGain(
+            paths,
+        )),
+    ))
+}
+
+#[inline(always)]
+fn prepend_pending_effect(pending: Option<ThemeEffect>, next: ThemeEffect) -> ThemeEffect {
+    match pending {
+        Some(pending) => ThemeEffect::Batch(vec![pending, next]),
+        None => next,
+    }
 }
 
 #[inline(always)]
@@ -9508,7 +9520,7 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
         clear_preview(state);
     }
 
-    maybe_prewarm_replaygain_for_pack(state);
+    let prewarm_effect = maybe_prewarm_replaygain_for_pack(state, cfg.enable_replaygain);
 
     if allow_gs_fetch_for_selection(state) {
         let play_style = profile::get_session_play_style();
@@ -9540,21 +9552,24 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
 
             if state.last_requested_chart_hash.as_deref() != desired_hash_p1 {
                 state.last_requested_chart_hash = desired_hash_p1.map(str::to_string);
-                return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
-                    crate::SimplyLoveMediaRequest::DensityGraph {
-                        slot: DensityGraphSlot::SelectMusicP1,
-                        chart_opt: state.cached_chart_ix_p1.map(|ix| {
-                            let c = &song.charts[ix];
-                            DensityGraphSource {
-                                max_nps: c.max_nps,
-                                measure_nps_vec: c.measure_nps_vec.clone(),
-                                measure_seconds_vec: c.measure_seconds_vec.clone(),
-                                first_second: c.first_second,
-                                last_second: song.precise_last_second(),
-                            }
-                        }),
-                    },
-                ));
+                return prepend_pending_effect(
+                    prewarm_effect,
+                    ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
+                        crate::SimplyLoveMediaRequest::DensityGraph {
+                            slot: DensityGraphSlot::SelectMusicP1,
+                            chart_opt: state.cached_chart_ix_p1.map(|ix| {
+                                let c = &song.charts[ix];
+                                DensityGraphSource {
+                                    max_nps: c.max_nps,
+                                    measure_nps_vec: c.measure_nps_vec.clone(),
+                                    measure_seconds_vec: c.measure_seconds_vec.clone(),
+                                    first_second: c.first_second,
+                                    last_second: song.precise_last_second(),
+                                }
+                            }),
+                        },
+                    )),
+                );
             }
 
             if is_versus {
@@ -9582,21 +9597,24 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
                 }
                 if state.last_requested_chart_hash_p2.as_deref() != desired_hash_p2 {
                     state.last_requested_chart_hash_p2 = desired_hash_p2.map(str::to_string);
-                    return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
-                        crate::SimplyLoveMediaRequest::DensityGraph {
-                            slot: DensityGraphSlot::SelectMusicP2,
-                            chart_opt: state.cached_chart_ix_p2.map(|ix| {
-                                let c = &song.charts[ix];
-                                DensityGraphSource {
-                                    max_nps: c.max_nps,
-                                    measure_nps_vec: c.measure_nps_vec.clone(),
-                                    measure_seconds_vec: c.measure_seconds_vec.clone(),
-                                    first_second: c.first_second,
-                                    last_second: song.precise_last_second(),
-                                }
-                            }),
-                        },
-                    ));
+                    return prepend_pending_effect(
+                        prewarm_effect,
+                        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
+                            crate::SimplyLoveMediaRequest::DensityGraph {
+                                slot: DensityGraphSlot::SelectMusicP2,
+                                chart_opt: state.cached_chart_ix_p2.map(|ix| {
+                                    let c = &song.charts[ix];
+                                    DensityGraphSource {
+                                        max_nps: c.max_nps,
+                                        measure_nps_vec: c.measure_nps_vec.clone(),
+                                        measure_seconds_vec: c.measure_seconds_vec.clone(),
+                                        first_second: c.first_second,
+                                        last_second: song.precise_last_second(),
+                                    }
+                                }),
+                            },
+                        )),
+                    );
                 }
             } else {
                 state.displayed_chart_p2 = None;
@@ -9624,7 +9642,7 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
         }
     }
 
-    ThemeEffect::None
+    prewarm_effect.unwrap_or(ThemeEffect::None)
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
@@ -11837,9 +11855,10 @@ mod tests {
         PREVIEW_DELAY_SECONDS, WheelSortMode, build_displayed_entries,
         build_playlist_entries_from_text, build_playlist_song_lookup,
         delayed_selection_updates_blocked, first_song_entry_index, handle_raw_key_event,
-        init_placeholder, keymap_has_player_input, reset_preview_after_gameplay,
-        select_music_lobby_lock_text, select_music_lobby_lock_text_for, solo_runtime_side,
-        steps_index_for_side, sync_low_confidence_warning,
+        init_placeholder, keymap_has_player_input, maybe_prewarm_replaygain_for_pack,
+        prepend_pending_effect, reset_preview_after_gameplay, select_music_lobby_lock_text,
+        select_music_lobby_lock_text_for, solo_runtime_side, steps_index_for_side,
+        sync_low_confidence_warning,
     };
     use crate::config::SelectMusicWheelStyle;
     use crate::screens::ThemeEffect;
@@ -12054,6 +12073,47 @@ mod tests {
             precise_last_second_seconds: 0.0,
             charts: Vec::new(),
         })
+    }
+
+    #[test]
+    fn replaygain_prewarm_emits_once_and_precedes_later_media() {
+        let mut song_a = (*test_song("Song A1")).clone();
+        song_a.music_path = Some(PathBuf::from("Pack A/Song A1/music.ogg"));
+        let mut song_b = (*test_song("Song A2")).clone();
+        song_b.music_path = Some(PathBuf::from("Pack A/Song A2/music.ogg"));
+
+        let mut state = init_placeholder();
+        state.expanded_pack_name = Some("Pack A".to_string());
+        state.group_entries = vec![
+            header("Pack A", 0, 2, Some("Pack A")),
+            super::MusicWheelEntry::Song(Arc::new(song_a)),
+            super::MusicWheelEntry::Song(Arc::new(song_b)),
+        ];
+
+        let prewarm = maybe_prewarm_replaygain_for_pack(&mut state, true)
+            .expect("expanded pack should request ReplayGain prewarming");
+        let later = ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
+            crate::SimplyLoveMediaRequest::Banner(None),
+        ));
+        let ThemeEffect::Batch(effects) = prepend_pending_effect(Some(prewarm), later) else {
+            panic!("prewarm and later media work should be batched");
+        };
+        assert!(matches!(
+            &effects[0],
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                deadsync_theme::AudioRequest::PrewarmReplayGain(paths)
+            )) if paths == &[
+                PathBuf::from("Pack A/Song A1/music.ogg"),
+                PathBuf::from("Pack A/Song A2/music.ogg"),
+            ]
+        ));
+        assert!(matches!(
+            effects[1],
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
+                crate::SimplyLoveMediaRequest::Banner(None)
+            ))
+        ));
+        assert!(maybe_prewarm_replaygain_for_pack(&mut state, true).is_none());
     }
 
     #[test]
