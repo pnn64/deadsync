@@ -12,7 +12,6 @@ deadlib-assets = { path = "../deadlib-assets" }
 deadlib-platform = { path = "../deadlib-platform" }
 deadlib-present = { path = "../deadlib-present" }
 deadlib-render = { path = "../deadlib-render" }
-deadlib-video = { path = "../deadlib-video" }
 deadsync-assets = { path = "../deadsync-assets" }
 deadsync-audio = { path = "../deadsync-audio" }
 deadsync-audio-decode = { path = "../deadsync-audio-decode" }
@@ -37,7 +36,6 @@ deadsync-simfile = { path = "../deadsync-simfile" }
 deadsync-smx = { path = "../deadsync-smx" }
 deadsync-song-lua = { path = "../deadsync-song-lua" }
 deadsync-theme = { path = "../deadsync-theme" }
-deadsync-updater = { path = "../deadsync-updater" }
 deadsync-version = { path = "../deadsync-version" }
 bitflags = "2.13.0"
 chrono = "0.4.45"
@@ -47,9 +45,7 @@ log = "0.4.33"
 null-or-die = { git = "https://github.com/pnn64/null-or-die", branch = "main" }
 qrcodegen = "1.8.0"
 rand = "0.10.1"
-rfd = "0.17.2"
 rssp = { git = "https://github.com/pnn64/rssp", branch = "main" }
-semver = "1.0.28"
 smallvec = "1.15.2"
 twox-hash = "2.1.2"
 winit = "0.30.13"

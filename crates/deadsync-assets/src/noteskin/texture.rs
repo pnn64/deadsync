@@ -323,6 +323,11 @@ impl NoteskinSlot for SpriteSlot {
     }
 
     #[inline(always)]
+    fn frame_count(&self) -> usize {
+        self.source.frame_count()
+    }
+
+    #[inline(always)]
     fn frame_index(&self, time: f32, beat: f32) -> usize {
         SpriteSlot::frame_index(self, time, beat)
     }

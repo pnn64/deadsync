@@ -93,9 +93,9 @@ pub fn handle_input(state: &mut State, num_stages: usize, ev: &InputEvent) -> Th
         if undo != 0 {
             let _ = shift_page(state, num_stages, i32::from(undo));
         }
-        return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::RequestScreenshot(Some(
-            side,
-        )));
+        return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
+            crate::SimplyLoveMediaRequest::Screenshot(Some(side)),
+        ));
     }
     match ev.action {
         VirtualAction::p1_back

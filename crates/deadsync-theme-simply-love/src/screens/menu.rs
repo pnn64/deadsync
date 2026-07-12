@@ -190,8 +190,8 @@ fn sync_i18n_cache(state: &State) {
 }
 
 #[inline(always)]
-fn menu_info_text(state: &State) -> Arc<str> {
-    let banner_tag = update_banner_tag();
+fn menu_info_text(state: &State, update_banner_tag: Option<&str>) -> Arc<str> {
+    let banner_tag = update_banner_tag.map(str::to_owned);
     if let Some((cached_tag, text)) = state.info_text_cache.borrow().as_ref()
         && cached_tag == &banner_tag
     {
@@ -220,13 +220,6 @@ fn menu_info_text(state: &State) -> Arc<str> {
     let text = Arc::<str>::from(format!("{version_line}\n{summary}"));
     *state.info_text_cache.borrow_mut() = Some((banner_tag, text.clone()));
     text
-}
-
-fn update_banner_tag() -> Option<String> {
-    match deadsync_updater::state::snapshot()? {
-        deadsync_updater::UpdateState::Available(info) => Some(info.tag),
-        _ => None,
-    }
 }
 
 #[inline(always)]
@@ -398,7 +391,12 @@ fn status_text_actor(
     actor
 }
 
-pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_multiplier: f32) {
+pub fn push_actors(
+    actors: &mut Vec<Actor>,
+    state: &State,
+    update_banner_tag: Option<&str>,
+    alpha_multiplier: f32,
+) {
     sync_i18n_cache(state);
     let lp = LogoParams::default();
     actors.reserve(96);
@@ -442,7 +440,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_multiplier: f32
 
     actors.push(act!(text:
         align(0.5, 0.0): xy(screen_center_x(), info1_y_tl): zoom(0.8):
-        font("miso"): settext(menu_info_text(state)): horizalign(center):
+        font("miso"): settext(menu_info_text(state, update_banner_tag)): horizalign(center):
         diffuse(info_color[0], info_color[1], info_color[2], info_color[3])
     ));
 
@@ -575,9 +573,13 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, alpha_multiplier: f32
 }
 
 // Signature changed to accept the alpha_multiplier
-pub fn get_actors(state: &State, alpha_multiplier: f32) -> Vec<Actor> {
+pub fn get_actors(
+    state: &State,
+    update_banner_tag: Option<&str>,
+    alpha_multiplier: f32,
+) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(96);
-    push_actors(&mut actors, state, alpha_multiplier);
+    push_actors(&mut actors, state, update_banner_tag, alpha_multiplier);
     actors
 }
 
@@ -586,22 +588,22 @@ fn move_selection(state: &mut State, delta: isize) {
     let n = option_count() as isize;
     let cur = state.selected_index as isize;
     state.selected_index = (cur + delta).rem_euclid(n) as usize;
-    deadsync_audio_stream::play_sfx("assets/sounds/change.ogg");
 }
 
 #[inline(always)]
 fn start_selected(state: &mut State, started_by_p2: bool) -> ThemeEffect {
-    deadsync_audio_stream::play_sfx("assets/sounds/start.ogg");
     state.started_by_p2 = started_by_p2;
-    if Some(state.selected_index) == shutdown_index() {
-        return ThemeEffect::Shutdown;
-    }
-    match state.selected_index {
-        0 => ThemeEffect::Navigate(Screen::SelectProfile),
-        1 => ThemeEffect::Navigate(Screen::Options),
-        2 => ThemeEffect::Exit,
-        _ => ThemeEffect::None,
-    }
+    let effect = if Some(state.selected_index) == shutdown_index() {
+        ThemeEffect::Shutdown
+    } else {
+        match state.selected_index {
+            0 => ThemeEffect::Navigate(Screen::SelectProfile),
+            1 => ThemeEffect::Navigate(Screen::Options),
+            2 => ThemeEffect::Exit,
+            _ => ThemeEffect::None,
+        }
+    };
+    crate::effects::sfx_then("assets/sounds/start.ogg", effect)
 }
 
 #[inline(always)]
@@ -640,12 +642,12 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
             screen_input::ThreeKeyMenuAction::Prev => {
                 move_selection(state, -1);
                 state.menu_lr_undo[side_ix] = 1;
-                ThemeEffect::None
+                crate::effects::sfx("assets/sounds/change.ogg")
             }
             screen_input::ThreeKeyMenuAction::Next => {
                 move_selection(state, 1);
                 state.menu_lr_undo[side_ix] = -1;
-                ThemeEffect::None
+                crate::effects::sfx("assets/sounds/change.ogg")
             }
             screen_input::ThreeKeyMenuAction::Confirm => {
                 state.menu_lr_undo[side_ix] = 0;
@@ -656,8 +658,10 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                 if undo != 0 {
                     move_selection(state, undo as isize);
                     state.menu_lr_undo[side_ix] = 0;
+                    crate::effects::sfx_then("assets/sounds/change.ogg", ThemeEffect::Exit)
+                } else {
+                    ThemeEffect::Exit
                 }
-                ThemeEffect::Exit
             }
         };
     }
@@ -666,7 +670,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     }
     if let Some(delta) = menu_nav_delta(ev.action) {
         move_selection(state, delta);
-        return ThemeEffect::None;
+        return crate::effects::sfx("assets/sounds/change.ogg");
     }
     match ev.action {
         VirtualAction::p1_start | VirtualAction::p2_start => {
@@ -679,8 +683,23 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
 
 #[cfg(test)]
 mod tests {
-    use super::menu_nav_delta;
-    use deadsync_input::VirtualAction;
+    use super::*;
+    use deadsync_core::input::InputSource;
+    use std::time::Instant;
+
+    fn input(action: VirtualAction) -> InputEvent {
+        let now = Instant::now();
+        InputEvent {
+            action,
+            input_slot: 0,
+            pressed: true,
+            source: InputSource::Keyboard,
+            timestamp: now,
+            timestamp_host_nanos: 0,
+            stored_at: now,
+            emitted_at: now,
+        }
+    }
 
     #[test]
     fn title_menu_left_and_up_move_previous() {
@@ -704,5 +723,40 @@ mod tests {
         assert_eq!(menu_nav_delta(VirtualAction::p2_menu_right), Some(1));
         assert_eq!(menu_nav_delta(VirtualAction::p2_down), Some(1));
         assert_eq!(menu_nav_delta(VirtualAction::p2_menu_down), Some(1));
+    }
+
+    #[test]
+    fn movement_emits_change_sfx() {
+        let mut state = init();
+        let effect = handle_input(&mut state, &input(VirtualAction::p1_right));
+
+        assert_eq!(state.selected_index, 1);
+        assert!(matches!(
+            effect,
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                deadsync_theme::AudioRequest::PlaySfx(path)
+            )) if path == "assets/sounds/change.ogg"
+        ));
+    }
+
+    #[test]
+    fn start_emits_audio_before_navigation() {
+        let mut state = init();
+        let effect = handle_input(&mut state, &input(VirtualAction::p2_start));
+        let ThemeEffect::Batch(effects) = effect else {
+            panic!("expected batched start effect");
+        };
+
+        assert!(state.started_by_p2);
+        assert!(matches!(
+            &effects[0],
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                deadsync_theme::AudioRequest::PlaySfx(path)
+            )) if path == "assets/sounds/start.ogg"
+        ));
+        assert!(matches!(
+            effects[1],
+            ThemeEffect::Navigate(Screen::SelectProfile)
+        ));
     }
 }

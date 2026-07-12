@@ -868,10 +868,10 @@ const NOTEFIELD_CRATE_FORBIDDEN_TOKENS: &[&str] = &[
     "deadsync::game::parsing::noteskin",
     "deadsync-theme-simply-love",
     "deadsync_theme_simply_love",
+    "deadsync-theme-",
+    "deadsync_theme_",
     "deadsync-shell",
     "deadsync_shell",
-    "deadsync-screens",
-    "deadsync_screens",
     "deadsync-config",
     "deadsync_config",
     "deadsync-profile",
@@ -931,6 +931,8 @@ const CONTRACT_CRATE_FORBIDDEN_TOKENS: &[&str] = &[
     "deadsync_simfile",
     "deadsync-theme-simply-love",
     "deadsync_theme_simply_love",
+    "deadsync-theme-",
+    "deadsync_theme_",
     "deadsync-shell",
     "deadsync_shell",
     "deadlib-renderer",
@@ -1147,6 +1149,8 @@ fn generic_runtime_requests_stay_backend_neutral() {
 
     for definition in [
         "pub enum AudioRequest",
+        "pub enum PlatformRequest",
+        "pub enum RevealPathKind",
         "pub struct GraphicsRequest",
         "pub enum RendererChoice",
         "pub enum DisplayModeChoice",
@@ -1162,6 +1166,7 @@ fn generic_runtime_requests_stay_backend_neutral() {
         "deadlib_render",
         "deadsync_config",
         "deadsync_audio_stream",
+        "deadlib_platform",
         "BackendType",
         "PresentModePolicy",
         "app_config::DisplayMode",
@@ -1171,7 +1176,19 @@ fn generic_runtime_requests_stay_backend_neutral() {
             "generic runtime-request contract exposes runtime type {runtime_type}"
         );
     }
-    for wrapper in ["Audio(AudioRequest)", "Graphics(GraphicsRequest)"] {
+    for wrapper in [
+        "Audio(AudioRequest)",
+        "Media(SimplyLoveMediaRequest)",
+        "Profile(SimplyLoveProfileRequest)",
+        "Online(SimplyLoveOnlineRequest)",
+        "Graphics(GraphicsRequest)",
+        "Platform(PlatformRequest)",
+        "Sync(SimplyLoveSyncRequest)",
+        "Config(SimplyLoveConfigRequest)",
+        "Hardware(SimplyLoveHardwareRequest)",
+        "Debug(SimplyLoveDebugRequest)",
+        "Updater(SimplyLoveUpdaterRequest)",
+    ] {
         assert!(
             concrete.contains(wrapper),
             "Simply Love runtime request is missing generic wrapper {wrapper}"
@@ -1187,13 +1204,104 @@ fn generic_runtime_requests_stay_backend_neutral() {
             "Simply Love runtime request still exposes concrete graphics type {concrete_type}"
         );
     }
+    for category in [
+        "Audio", "Media", "Profile", "Online", "Graphics", "Platform", "Sync", "Config",
+        "Hardware", "Debug", "Updater",
+    ] {
+        assert!(
+            shell.contains(&format!("SimplyLoveRuntimeRequest::{category}(")),
+            "shell runtime executor is missing the {category} request category"
+        );
+    }
     assert!(
         shell.contains("SimplyLoveRuntimeRequest::Audio(AudioRequest::PlaySfx(path))")
             && shell.contains("deadsync_audio_stream::play_sfx(&path)")
             && shell.contains("SimplyLoveRuntimeRequest::Graphics(request)")
-            && shell.contains("self.handle_graphics_change(request, event_loop)"),
-        "shell must execute generic audio and graphics requests"
+            && shell.contains("self.handle_graphics_change(request, event_loop)")
+            && shell.contains("SimplyLoveRuntimeRequest::Platform(request)")
+            && shell.contains("execute_platform_request(request)")
+            && shell.contains("SimplyLoveRuntimeRequest::Updater(request)")
+            && shell.contains("updater::execute(request)"),
+        "shell must execute generic and grouped runtime requests"
     );
+}
+
+#[test]
+fn concrete_theme_does_not_execute_updater_or_native_dialog_services() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let theme = root.join("crates/deadsync-theme-simply-love");
+    let manifest = fs::read_to_string(theme.join("Cargo.toml"))
+        .expect("Simply Love manifest should be readable");
+    for dependency in ["deadsync-updater", "deadlib-video", "rfd =", "semver ="] {
+        assert!(
+            !manifest.contains(dependency),
+            "Simply Love still owns runtime dependency {dependency}"
+        );
+    }
+
+    let mut failures = Vec::new();
+    for file in rust_files(&theme.join("src/screens")) {
+        let source = fs::read_to_string(&file).expect("theme screen should be readable");
+        for token in [
+            "deadsync_updater",
+            "deadlib_video",
+            "rfd::FileDialog",
+            "open_path::reveal",
+            "std::fs::create_dir_all",
+        ] {
+            if source.contains(token) {
+                failures.push(format!(
+                    "{} executes runtime token {token}",
+                    rel_path(&root, &file)
+                ));
+            }
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "Simply Love screens must emit shell requests instead of executing services:\n{}",
+        failures.join("\n")
+    );
+
+    let shell_manifest = fs::read_to_string(root.join("crates/deadsync-shell/Cargo.toml"))
+        .expect("shell manifest should be readable");
+    for dependency in ["deadsync-updater", "deadlib-video", "rfd ="] {
+        assert!(
+            shell_manifest.contains(dependency),
+            "shell is missing runtime dependency {dependency}"
+        );
+    }
+}
+
+#[test]
+fn simply_love_audio_flow_slice_uses_ordered_theme_effects() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let screens = root.join("crates/deadsync-theme-simply-love/src/screens");
+    for path in ["arrowcloud_login.rs", "menu.rs", "select_color.rs"] {
+        let source =
+            fs::read_to_string(screens.join(path)).expect("theme screen should be readable");
+        assert!(
+            !source.contains("deadsync_audio_stream"),
+            "{path} still executes audio directly"
+        );
+        assert!(
+            source.contains("crate::effects::sfx"),
+            "{path} must emit a typed audio effect"
+        );
+    }
+
+    let select_color = fs::read_to_string(screens.join("select_color.rs"))
+        .expect("SelectColor should be readable");
+    assert!(!select_color.contains("config::update_simply_love_color"));
+    assert!(select_color.contains("SimplyLoveConfigRequest::PersistColor"));
+
+    let generic = fs::read_to_string(root.join("crates/deadsync-theme/src/effect.rs"))
+        .expect("generic theme effects should be readable");
+    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell app should be readable");
+    assert!(generic.contains("Batch(Vec<Self>)"));
+    assert!(shell.contains("ThemeEffectExecution::Batch(effects)"));
+    assert!(shell.contains("execute_effect_batch(effects"));
 }
 
 #[test]
@@ -3587,18 +3695,6 @@ fn collect_files_named(dir: &Path, name: &str, out: &mut Vec<PathBuf>) {
     }
 }
 
-fn count_outside_notefield_forbidden_tokens(text: &str, token: &str) -> usize {
-    let start = text
-        .find("const NOTEFIELD_CRATE_FORBIDDEN_TOKENS")
-        .expect("notefield forbidden-token list should exist");
-    let end = start
-        + text[start..]
-            .find("];")
-            .expect("notefield forbidden-token list should end")
-        + 2;
-    text[..start].match_indices(token).count() + text[end..].match_indices(token).count()
-}
-
 fn collect_rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
     for entry in fs::read_dir(dir).expect("source directory should be readable") {
         let path = entry.expect("source entry should be readable").path();
@@ -4259,6 +4355,7 @@ fn concrete_theme_facade_does_not_reexport_runtime_crates() {
 
     for public_facade in [
         "pub use deadsync_profile_gameplay",
+        "pub type GameplayCoreState",
         "pub mod config",
         "pub use deadlib_render as render",
     ] {
@@ -4464,7 +4561,7 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
 }
 
 #[test]
-fn simply_love_note_glow_uses_canonical_notefield_owner() {
+fn simply_love_note_layers_use_canonical_notefield_owner() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let theme = fs::read_to_string(root.join(
         "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/mod.rs",
@@ -4473,28 +4570,79 @@ fn simply_love_note_glow_uses_canonical_notefield_owner() {
     let canonical = fs::read_to_string(root.join("crates/deadsync-notefield/src/notes.rs"))
         .expect("canonical note composer should be readable");
 
-    for definition in ["pub struct NoteGlowRequest", "pub fn compose_note_glow"] {
+    for definition in ["pub struct NoteLayerRequest", "pub fn compose_note_layer"] {
         assert!(
             canonical.contains(definition),
-            "canonical note-glow owner is missing {definition}"
+            "canonical note-layer owner is missing {definition}"
         );
     }
-    for delegation in ["NoteGlowRequest {", "compose_note_glow("] {
+    for delegation in ["NoteLayerRequest {", "compose_note_layer("] {
         assert!(
             theme.contains(delegation),
-            "Simply Love must delegate note-glow composition through {delegation}"
+            "Simply Love must delegate note-layer composition through {delegation}"
         );
     }
-    for old_definition in ["struct NoteGlowDraw", "fn push_note_glow_actor"] {
+    for retired_public_seam in ["pub struct NoteGlowRequest", "pub fn compose_note_glow"] {
+        assert!(
+            !canonical.contains(retired_public_seam),
+            "canonical notefield still exports transitional seam {retired_public_seam}"
+        );
+    }
+    for old_definition in [
+        "struct NoteGlowDraw",
+        "fn push_note_glow_actor",
+        "compose_note_glow(",
+        "noteskin_model_actor_from_draw_cached",
+    ] {
         assert!(
             !theme.contains(old_definition),
-            "Simply Love reintroduced canonical note-glow definition {old_definition}"
+            "Simply Love reintroduced canonical note-layer emission {old_definition}"
         );
     }
     for concrete in ["deadsync_assets", "TextureKeyHandle", "texture_key_handle"] {
         assert!(
             !canonical.contains(concrete),
-            "canonical note-glow composition imports concrete asset token {concrete}"
+            "canonical note-layer composition imports concrete asset token {concrete}"
+        );
+    }
+}
+
+#[test]
+fn simply_love_mine_layers_use_canonical_notefield_owner() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let theme = fs::read_to_string(root.join(
+        "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/mod.rs",
+    ))
+    .expect("Simply Love notefield adapter should be readable");
+    let canonical = fs::read_to_string(root.join("crates/deadsync-notefield/src/notes.rs"))
+        .expect("canonical note composer should be readable");
+    let contract = fs::read_to_string(root.join("crates/deadsync-noteskin/src/sprite.rs"))
+        .expect("noteskin slot contract should be readable");
+    let assets = fs::read_to_string(root.join("crates/deadsync-assets/src/noteskin/texture.rs"))
+        .expect("asset-backed noteskin slot should be readable");
+
+    for definition in ["pub struct MineLayerRequest", "pub fn compose_mine_layers"] {
+        assert!(
+            canonical.contains(definition),
+            "canonical mine-layer owner is missing {definition}"
+        );
+    }
+    for delegation in ["MineLayerRequest {", "compose_mine_layers("] {
+        assert!(
+            theme.contains(delegation),
+            "Simply Love must delegate mine-layer composition through {delegation}"
+        );
+    }
+    assert!(
+        !theme.contains(".source.frame_count()"),
+        "Simply Love must not inspect concrete mine sprite sources"
+    );
+    assert!(contract.contains("fn frame_count(&self) -> usize"));
+    assert!(assets.contains("self.source.frame_count()"));
+    for concrete in ["deadsync_assets", "TextureKeyHandle", "texture_key_handle"] {
+        assert!(
+            !canonical.contains(concrete),
+            "canonical mine-layer composition imports concrete asset token {concrete}"
         );
     }
 }
@@ -4648,6 +4796,9 @@ fn noteskin_model_cache_and_actors_use_canonical_notefield_owner() {
             "canonical noteskin model owner is missing {definition}"
         );
     }
+    let note_composer = fs::read_to_string(root.join("crates/deadsync-notefield/src/notes.rs"))
+        .expect("canonical note composer should be readable");
+    assert!(note_composer.contains("noteskin_model_actor_from_draw_cached"));
     for forbidden in ["deadsync_assets", "SpriteSlot", "texture_key_handle()"] {
         assert!(
             !canonical.contains(forbidden),
@@ -4659,10 +4810,6 @@ fn noteskin_model_cache_and_actors_use_canonical_notefield_owner() {
         (
             "crates/deadsync-theme-simply-love/src/screens/components/evaluation/pane_column.rs",
             "noteskin_model_actor",
-        ),
-        (
-            "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/mod.rs",
-            "noteskin_model_actor_from_draw_cached",
         ),
         (
             "crates/deadsync-theme-simply-love/src/screens/components/shared/profile_boxes.rs",
@@ -4943,7 +5090,11 @@ fn theme_screen_contract_has_explicit_owners() {
             "deadsync-theme is missing generic screen contract token {token}"
         );
     }
-    for token in ["pub enum ThemeEffect", "pub enum ThemeFlowEvent"] {
+    for token in [
+        "pub enum ThemeEffect",
+        "Batch(Vec<Self>)",
+        "pub enum ThemeFlowEvent",
+    ] {
         assert!(
             generic_effect.contains(token),
             "deadsync-theme is missing generic effect contract token {token}"
@@ -4956,8 +5107,9 @@ fn theme_screen_contract_has_explicit_owners() {
         );
     }
     assert!(
-        shell_flow.contains("pub enum ThemeEffectExecution"),
-        "deadsync-shell must own ThemeEffect execution"
+        shell_flow.contains("pub enum ThemeEffectExecution")
+            && shell_flow.contains("Batch(Vec<ThemeEffect>)"),
+        "deadsync-shell must own ordered ThemeEffect execution"
     );
 }
 
@@ -4984,17 +5136,12 @@ fn theme_owned_screen_architecture_has_no_contract_crate() {
         ["deadsync", "screens"].join("-"),
         ["deadsync", "screens"].join("_"),
     ];
-    let boundary_test = "tests/architecture_boundaries.rs";
     let mut failures = Vec::new();
     for file in files {
         let text = fs::read_to_string(&file).expect("workspace source should be readable");
         let rel = rel_path(&root, &file);
         for token in &removed_tokens {
-            let count = if rel == boundary_test {
-                count_outside_notefield_forbidden_tokens(&text, token)
-            } else {
-                text.match_indices(token).count()
-            };
+            let count = text.match_indices(token).count();
             if count != 0 {
                 failures.push(format!(
                     "{rel} references removed crate token {token} {count} times"

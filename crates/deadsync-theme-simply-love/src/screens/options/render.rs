@@ -401,6 +401,7 @@ pub fn push_actors(
     actors: &mut Vec<Actor>,
     state: &State,
     asset_manager: &AssetManager,
+    updater: &SimplyLoveUpdaterView,
     alpha_multiplier: f32,
 ) {
     actors.reserve(320);
@@ -537,7 +538,7 @@ pub fn push_actors(
             let col_active_text =
                 color::simply_love_rgba(state.active_color_index + state.selected as i32);
 
-            let visible = visible_items();
+            let visible = visible_items(state);
             let total_items = visible.len();
             let row_h = ROW_H * s;
             for (item_idx, _) in visible.iter().enumerate() {
@@ -1306,11 +1307,11 @@ pub fn push_actors(
     }
 
     actors.extend(crate::screens::components::shared::update_overlay::build(
-        &deadsync_updater::action::current(),
+        &updater.update,
         state.active_color_index,
     ));
     actors.extend(crate::screens::components::shared::ffmpeg_overlay::build(
-        &deadsync_updater::ffmpeg::current(),
+        &updater.ffmpeg,
         state.active_color_index,
     ));
 }
@@ -1318,9 +1319,10 @@ pub fn push_actors(
 pub fn get_actors(
     state: &State,
     asset_manager: &AssetManager,
+    updater: &SimplyLoveUpdaterView,
     alpha_multiplier: f32,
 ) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(320);
-    push_actors(&mut actors, state, asset_manager, alpha_multiplier);
+    push_actors(&mut actors, state, asset_manager, updater, alpha_multiplier);
     actors
 }

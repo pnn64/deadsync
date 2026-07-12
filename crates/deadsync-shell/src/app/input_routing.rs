@@ -191,11 +191,15 @@ impl App {
             CurrentScreen::ProfileLoad => {
                 screens::profile_load::handle_input(&mut self.state.screens.profile_load_state, &ev)
             }
-            CurrentScreen::Options => screens::options::handle_input(
-                &mut self.state.screens.options_state,
-                &self.asset_manager,
-                &ev,
-            ),
+            CurrentScreen::Options => {
+                let updater = super::updater::view();
+                screens::options::handle_input(
+                    &mut self.state.screens.options_state,
+                    &self.asset_manager,
+                    &updater,
+                    &ev,
+                )
+            }
             CurrentScreen::Credits => {
                 screens::credits::handle_input(&mut self.state.screens.credits_state, &ev)
             }

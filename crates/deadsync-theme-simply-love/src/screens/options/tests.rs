@@ -7,6 +7,17 @@ use deadsync_lights::DriverKind as LightsDriverKind;
 use deadsync_profile as profile_data;
 use std::time::{Duration, Instant};
 
+fn init() -> State {
+    super::init(SimplyLoveUpdaterCapabilities {
+        app_update: true,
+        ffmpeg_install: true,
+    })
+}
+
+fn updater_view() -> SimplyLoveUpdaterView {
+    SimplyLoveUpdaterView::default()
+}
+
 fn input_event(action: VirtualAction, pressed: bool) -> InputEvent {
     let now = Instant::now();
     InputEvent {
@@ -22,7 +33,12 @@ fn input_event(action: VirtualAction, pressed: bool) -> InputEvent {
 }
 
 fn press(state: &mut State, asset_manager: &AssetManager, action: VirtualAction) -> ThemeEffect {
-    handle_input(state, asset_manager, &input_event(action, true))
+    handle_input(
+        state,
+        asset_manager,
+        &updater_view(),
+        &input_event(action, true),
+    )
 }
 
 fn dedicated_press(
@@ -264,7 +280,7 @@ fn main_options_left_right_move_rows_like_up_down() {
     press(&mut state, &asset_manager, VirtualAction::p1_left);
     assert_eq!(state.selected, 0);
     press(&mut state, &asset_manager, VirtualAction::p2_left);
-    assert_eq!(state.selected, visible_items().len() - 1);
+    assert_eq!(state.selected, visible_items(&state).len() - 1);
     press(&mut state, &asset_manager, VirtualAction::p2_right);
     assert_eq!(state.selected, 0);
 }
@@ -313,6 +329,7 @@ fn link_row_lr_release_clears_the_nav_hold() {
     handle_input(
         &mut state,
         &asset_manager,
+        &updater_view(),
         &input_event(VirtualAction::p1_right, false),
     );
     assert_eq!(state.nav_key_held_direction, None);
@@ -679,7 +696,7 @@ fn folders_submenu_is_registered() {
 fn folders_top_level_item_opens_folders_submenu() {
     let asset_manager = AssetManager::new();
     let mut state = init();
-    let item_pos = visible_items()
+    let item_pos = visible_items(&state)
         .iter()
         .position(|item| item.id == ItemId::FoldersOptions)
         .expect("FoldersOptions should be visible on the main Options screen");
@@ -695,20 +712,52 @@ fn folders_top_level_item_opens_folders_submenu() {
 }
 
 #[test]
-fn folder_path_for_row_resolves_each_folder_row() {
+fn folder_rows_build_typed_reveal_requests() {
     use deadlib_platform::dirs::app_dirs;
     let dirs = app_dirs();
-    let expectations: &[(SubRowId, std::path::PathBuf)] = &[
-        (SubRowId::FoldersDataDir, dirs.data_dir.clone()),
-        (SubRowId::FoldersCacheDir, dirs.cache_dir.clone()),
-        (SubRowId::FoldersSongs, dirs.songs_dir()),
-        (SubRowId::FoldersCourses, dirs.courses_dir()),
-        (SubRowId::FoldersProfiles, dirs.profiles_root()),
-        (SubRowId::FoldersScreenshots, dirs.screenshots_dir()),
-        (SubRowId::FoldersLogFile, dirs.log_path()),
-        (SubRowId::FoldersConfigFile, dirs.config_path()),
+    let expectations: &[(SubRowId, std::path::PathBuf, deadsync_theme::RevealPathKind)] = &[
+        (
+            SubRowId::FoldersDataDir,
+            dirs.data_dir.clone(),
+            deadsync_theme::RevealPathKind::Directory,
+        ),
+        (
+            SubRowId::FoldersCacheDir,
+            dirs.cache_dir.clone(),
+            deadsync_theme::RevealPathKind::Directory,
+        ),
+        (
+            SubRowId::FoldersSongs,
+            dirs.songs_dir(),
+            deadsync_theme::RevealPathKind::Directory,
+        ),
+        (
+            SubRowId::FoldersCourses,
+            dirs.courses_dir(),
+            deadsync_theme::RevealPathKind::Directory,
+        ),
+        (
+            SubRowId::FoldersProfiles,
+            dirs.profiles_root(),
+            deadsync_theme::RevealPathKind::Directory,
+        ),
+        (
+            SubRowId::FoldersScreenshots,
+            dirs.screenshots_dir(),
+            deadsync_theme::RevealPathKind::Directory,
+        ),
+        (
+            SubRowId::FoldersLogFile,
+            dirs.log_path(),
+            deadsync_theme::RevealPathKind::File,
+        ),
+        (
+            SubRowId::FoldersConfigFile,
+            dirs.config_path(),
+            deadsync_theme::RevealPathKind::File,
+        ),
     ];
-    for (id, expected) in expectations {
+    for (id, expected, kind) in expectations {
         assert_eq!(
             folder_path_for_row(*id).as_ref(),
             Some(expected),
@@ -716,11 +765,44 @@ fn folder_path_for_row_resolves_each_folder_row() {
             id,
             expected.display()
         );
-        assert!(is_folder_row(*id));
+        assert_eq!(
+            folder_reveal_request(*id),
+            Some(deadsync_theme::PlatformRequest::RevealPath {
+                path: expected.clone(),
+                kind: *kind,
+            })
+        );
     }
 
     assert!(folder_path_for_row(SubRowId::Game).is_none());
-    assert!(!is_folder_row(SubRowId::Game));
+    assert!(folder_reveal_request(SubRowId::Game).is_none());
+}
+
+#[test]
+fn folder_activation_requests_audio_before_platform_reveal() {
+    let asset_manager = AssetManager::new();
+    let mut state = init();
+    state.view = OptionsView::Submenu(SubmenuKind::Folders);
+    select_visible_row(&mut state, SubmenuKind::Folders, SubRowId::FoldersDataDir);
+
+    let effect = activate_current_selection(&mut state, &asset_manager);
+    let ThemeEffect::Batch(effects) = effect else {
+        panic!("expected batched folder effect");
+    };
+    assert_eq!(effects.len(), 2);
+    assert!(matches!(
+        &effects[0],
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+            deadsync_theme::AudioRequest::PlaySfx(path)
+        )) if path == "assets/sounds/start.ogg"
+    ));
+    assert!(matches!(
+        &effects[1],
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Platform(
+            deadsync_theme::PlatformRequest::RevealPath { path, kind }
+        )) if path == &deadlib_platform::dirs::app_dirs().data_dir
+            && *kind == deadsync_theme::RevealPathKind::Directory
+    ));
 }
 
 /// Run pending submenu fades to completion (cap iterations so a stuck transition

@@ -650,32 +650,19 @@ pub(super) fn handle_start_event(
         && let Some(what_comes_next_row) = state.pane().row_map.get(RowId::WhatComesNext)
     {
         let choice_idx = what_comes_next_row.selected_choice_index[player_idx];
-        if let Some(choice) = what_comes_next_row.choices.get(choice_idx) {
-            let gameplay = tr("PlayerOptions", "WhatComesNextGameplay");
-            let display = tr("PlayerOptions", "WhatComesNextDisplayModifiers");
-            let advanced = tr("PlayerOptions", "WhatComesNextAdvancedModifiers");
-            let uncommon = tr("PlayerOptions", "WhatComesNextUncommonModifiers");
-            let main_mods = tr("PlayerOptions", "WhatComesNextMainModifiers");
-            let choose_different = choose_different_screen_label(state.return_screen);
-            let choice_str = choice.as_str();
-            if choice_str == gameplay.as_ref() {
+        if choice_idx < what_comes_next_row.choices.len() {
+            if choice_idx == 0 {
                 audio::play_sfx("assets/sounds/start.ogg");
                 return Some(ThemeEffect::Navigate(play_screen_for_return(
                     state.return_screen,
                 )));
-            } else if choice_str == choose_different {
+            } else if choice_idx == 1 {
                 audio::play_sfx("assets/sounds/start.ogg");
                 return Some(ThemeEffect::Navigate(choose_different_screen(
                     state.return_screen,
                 )));
-            } else if choice_str == display.as_ref() {
-                switch_to_pane(state, OptionsPane::Display);
-            } else if choice_str == advanced.as_ref() {
-                switch_to_pane(state, OptionsPane::Advanced);
-            } else if choice_str == uncommon.as_ref() {
-                switch_to_pane(state, OptionsPane::Uncommon);
-            } else if choice_str == main_mods.as_ref() {
-                switch_to_pane(state, OptionsPane::Main);
+            } else if let Some(pane) = what_comes_next_pane(state.current_pane, choice_idx) {
+                switch_to_pane(state, pane);
             }
         }
     }
@@ -695,6 +682,25 @@ const fn choose_different_screen(return_screen: Screen) -> Screen {
         Screen::SelectMusic
     } else {
         return_screen
+    }
+}
+
+pub(super) const fn what_comes_next_pane(
+    current: OptionsPane,
+    choice_idx: usize,
+) -> Option<OptionsPane> {
+    match (current, choice_idx) {
+        (OptionsPane::Main, 2) => Some(OptionsPane::Display),
+        (OptionsPane::Main | OptionsPane::Display | OptionsPane::Advanced, 4) => {
+            Some(OptionsPane::Uncommon)
+        }
+        (OptionsPane::Display | OptionsPane::Advanced | OptionsPane::Uncommon, 2) => {
+            Some(OptionsPane::Main)
+        }
+        (OptionsPane::Main | OptionsPane::Display, 3) => Some(OptionsPane::Advanced),
+        (OptionsPane::Advanced | OptionsPane::Uncommon, 3) => Some(OptionsPane::Display),
+        (OptionsPane::Uncommon, 4) => Some(OptionsPane::Advanced),
+        _ => None,
     }
 }
 

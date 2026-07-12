@@ -28,6 +28,132 @@ pub enum SimplyLoveDensityGraphSlot {
 /// Simply Love compatibility name used inside its concrete screen modules.
 pub(crate) type DensityGraphSlot = SimplyLoveDensityGraphSlot;
 
+/// Runtime capabilities used to decide which concrete Simply Love options
+/// rows are available on the current host.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SimplyLoveUpdaterCapabilities {
+    pub app_update: bool,
+    pub ffmpeg_install: bool,
+}
+
+/// Coarse updater failure category used by Simply Love's localized overlays.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SimplyLoveUpdateErrorKind {
+    Network,
+    RateLimited,
+    HttpStatus,
+    Parse,
+    NoAssetForHost,
+    Checksum,
+    Io,
+}
+
+/// Release metadata needed by Simply Love's updater presentation.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SimplyLoveReleaseView {
+    pub tag: String,
+    pub html_url: String,
+    pub published_at: Option<String>,
+}
+
+/// Release-asset metadata shown by Simply Love before a download begins.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SimplyLoveReleaseAssetView {
+    pub size: u64,
+    pub digest: Option<String>,
+}
+
+/// Prepared app-update state rendered by Simply Love.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SimplyLoveUpdatePhase {
+    Idle,
+    Checking,
+    ConfirmDownload {
+        info: SimplyLoveReleaseView,
+        asset: SimplyLoveReleaseAssetView,
+    },
+    UpToDate {
+        tag: String,
+    },
+    RollbackChecking,
+    RollbackPick {
+        candidates: Vec<SimplyLoveReleaseView>,
+        selected: usize,
+    },
+    RollbackEmpty,
+    AvailableNoInstall {
+        info: SimplyLoveReleaseView,
+    },
+    Downloading {
+        info: SimplyLoveReleaseView,
+        written: u64,
+        total: Option<u64>,
+        eta_secs: Option<u64>,
+    },
+    Ready {
+        info: SimplyLoveReleaseView,
+    },
+    Applying {
+        info: SimplyLoveReleaseView,
+    },
+    AppliedRestartRequired {
+        info: SimplyLoveReleaseView,
+        detail: String,
+    },
+    Error {
+        kind: SimplyLoveUpdateErrorKind,
+        detail: String,
+    },
+}
+
+/// Prepared FFmpeg-install state rendered by Simply Love.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SimplyLoveFfmpegPhase {
+    Idle,
+    Checking,
+    Confirm {
+        version: String,
+        origin: String,
+        total: Option<u64>,
+        already_available: bool,
+    },
+    Downloading {
+        version: String,
+        written: u64,
+        total: Option<u64>,
+        eta_secs: Option<u64>,
+        speed_bps: Option<u64>,
+    },
+    Extracting {
+        version: String,
+    },
+    Installed {
+        version: String,
+    },
+    Unsupported,
+    AlreadyAvailable,
+    Error {
+        kind: SimplyLoveUpdateErrorKind,
+        detail: String,
+    },
+}
+
+/// One shell-prepared snapshot of the updater services used by Options.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SimplyLoveUpdaterView {
+    pub update: SimplyLoveUpdatePhase,
+    pub ffmpeg: SimplyLoveFfmpegPhase,
+}
+
+impl Default for SimplyLoveUpdaterView {
+    fn default() -> Self {
+        Self {
+            update: SimplyLoveUpdatePhase::Idle,
+            ffmpeg: SimplyLoveFfmpegPhase::Idle,
+        }
+    }
+}
+
 /// Number of bins in Simply Love's frame-interval histogram.
 pub const HISTOGRAM_BINS: usize = 32;
 

@@ -9,7 +9,10 @@ pub use deadsync_theme_simply_love::screens::{
     evaluation_summary_return_to, late_join_side, profile_selection_plan,
     resolve_navigation as navigation_route_plan, select_music_join_plan,
 };
-use deadsync_theme_simply_love::{SimplyLoveEffect as ThemeEffect, SimplyLoveRuntimeRequest};
+use deadsync_theme_simply_love::{
+    SimplyLoveDebugRequest, SimplyLoveEffect as ThemeEffect, SimplyLoveMediaRequest,
+    SimplyLoveOnlineRequest, SimplyLoveRuntimeRequest,
+};
 pub use deadsync_theme_simply_love::{
     SimplyLoveEffectRouteContext as ThemeEffectRouteContext,
     SimplyLoveEffectRoutePlan as ThemeEffectRoutePlan,
@@ -25,6 +28,7 @@ pub struct OnlineProfileLinkPlan {
 
 pub enum ThemeEffectExecution {
     None,
+    Batch(Vec<ThemeEffect>),
     Navigate(Screen),
     NavigateNoFade(Screen),
     ProcessExit(ProcessExitRequest),
@@ -38,6 +42,16 @@ pub enum ThemeEffectExecution {
 pub struct ThemeEffectExecutionPlan {
     pub effect: ThemeEffectExecution,
     pub clear_restart_pending: bool,
+}
+
+pub(crate) fn execute_effect_batch<E>(
+    effects: Vec<ThemeEffect>,
+    mut execute: impl FnMut(ThemeEffect) -> Result<(), E>,
+) -> Result<(), E> {
+    for effect in effects {
+        execute(effect)?;
+    }
+    Ok(())
 }
 
 pub fn theme_effect_execution_plan(
@@ -56,54 +70,58 @@ pub fn theme_effect_execution_plan(
 
     let effect = match route.action {
         ThemeEffect::None | ThemeEffect::ConsumeInput => ThemeEffectExecution::None,
+        ThemeEffect::Batch(effects) => ThemeEffectExecution::Batch(effects),
         ThemeEffect::Navigate(screen) => ThemeEffectExecution::Navigate(screen),
         ThemeEffect::NavigateNoFade(screen) => ThemeEffectExecution::NavigateNoFade(screen),
         ThemeEffect::Exit => ThemeEffectExecution::ProcessExit(ProcessExitRequest::Exit),
         ThemeEffect::Shutdown => ThemeEffectExecution::ProcessExit(ProcessExitRequest::Shutdown),
         ThemeEffect::Runtime(request) => match request {
-            SimplyLoveRuntimeRequest::LinkArrowCloud {
+            SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::LinkArrowCloud {
                 profile_id,
                 display_name,
-            } => ThemeEffectExecution::LinkOnlineProfile(OnlineProfileLinkPlan {
+            }) => ThemeEffectExecution::LinkOnlineProfile(OnlineProfileLinkPlan {
                 target: Screen::ArrowCloudLogin,
                 profile_id,
                 display_name,
             }),
-            SimplyLoveRuntimeRequest::LinkGrooveStats {
+            SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::LinkGrooveStats {
                 profile_id,
                 display_name,
-            } => ThemeEffectExecution::LinkOnlineProfile(OnlineProfileLinkPlan {
+            }) => ThemeEffectExecution::LinkOnlineProfile(OnlineProfileLinkPlan {
                 target: Screen::GrooveStatsLogin,
                 profile_id,
                 display_name,
             }),
-            SimplyLoveRuntimeRequest::RequestScreenshot(side) => {
+            SimplyLoveRuntimeRequest::Media(SimplyLoveMediaRequest::Screenshot(side)) => {
                 ThemeEffectExecution::RequestScreenshot(side)
             }
-            SimplyLoveRuntimeRequest::RequestBanner(path_opt) => {
+            SimplyLoveRuntimeRequest::Media(SimplyLoveMediaRequest::Banner(path_opt)) => {
                 ThemeEffectExecution::RunCommands(vec![Command::SetBanner(path_opt)])
             }
-            SimplyLoveRuntimeRequest::RequestCdTitle(path_opt) => {
+            SimplyLoveRuntimeRequest::Media(SimplyLoveMediaRequest::CdTitle(path_opt)) => {
                 ThemeEffectExecution::RunCommands(vec![Command::SetCdTitle(path_opt)])
             }
-            SimplyLoveRuntimeRequest::RequestPackBanner(path_opt) => {
+            SimplyLoveRuntimeRequest::Media(SimplyLoveMediaRequest::PackBanner(path_opt)) => {
                 ThemeEffectExecution::RunCommands(vec![Command::SetPackBanner(path_opt)])
             }
-            SimplyLoveRuntimeRequest::RequestWheelItemBackgrounds(paths) => {
-                ThemeEffectExecution::RunCommands(vec![Command::SetWheelItemBackgrounds(paths)])
-            }
-            SimplyLoveRuntimeRequest::RequestDensityGraph { slot, chart_opt } => {
-                ThemeEffectExecution::RunCommands(vec![Command::SetDensityGraph {
-                    slot,
-                    chart_opt,
-                }])
-            }
-            SimplyLoveRuntimeRequest::FetchOnlineGrade(hash) => {
+            SimplyLoveRuntimeRequest::Media(SimplyLoveMediaRequest::WheelItemBackgrounds(
+                paths,
+            )) => ThemeEffectExecution::RunCommands(vec![Command::SetWheelItemBackgrounds(paths)]),
+            SimplyLoveRuntimeRequest::Media(SimplyLoveMediaRequest::DensityGraph {
+                slot,
+                chart_opt,
+            }) => ThemeEffectExecution::RunCommands(vec![Command::SetDensityGraph {
+                slot,
+                chart_opt,
+            }]),
+            SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::FetchGrade(hash)) => {
                 ThemeEffectExecution::RunCommands(vec![Command::FetchOnlineGrade(hash)])
             }
-            SimplyLoveRuntimeRequest::WriteFsrDump => ThemeEffectExecution::WriteFsrDump {
-                path: dirs::app_dirs().data_dir.join("fsrdump.txt"),
-            },
+            SimplyLoveRuntimeRequest::Debug(SimplyLoveDebugRequest::WriteFsrDump) => {
+                ThemeEffectExecution::WriteFsrDump {
+                    path: dirs::app_dirs().data_dir.join("fsrdump.txt"),
+                }
+            }
             request => ThemeEffectExecution::Runtime(request),
         },
     };
@@ -381,9 +399,9 @@ mod tests {
         ));
 
         let shot = theme_effect_execution_plan(
-            ThemeEffect::Runtime(SimplyLoveRuntimeRequest::RequestScreenshot(Some(
-                PlayerSide::P2,
-            ))),
+            ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Media(
+                SimplyLoveMediaRequest::Screenshot(Some(PlayerSide::P2)),
+            )),
             action_context(),
         );
         assert!(matches!(
@@ -410,12 +428,64 @@ mod tests {
     }
 
     #[test]
+    fn batch_executes_in_order_and_routes_each_nested_effect() {
+        let plan = theme_effect_execution_plan(
+            ThemeEffect::Batch(vec![
+                ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Audio(
+                    deadsync_theme::AudioRequest::PlaySfx("assets/sounds/start.ogg".to_owned()),
+                )),
+                ThemeEffect::NavigateNoFade(Screen::SelectMusic),
+            ]),
+            ThemeEffectRouteContext {
+                restart_pending: true,
+                ..action_context()
+            },
+        );
+        assert!(!plan.clear_restart_pending);
+        let ThemeEffectExecution::Batch(effects) = plan.effect else {
+            panic!("expected batch effect");
+        };
+
+        let mut steps = Vec::new();
+        execute_effect_batch(effects, |effect| {
+            let nested = theme_effect_execution_plan(
+                effect,
+                ThemeEffectRouteContext {
+                    restart_pending: true,
+                    ..action_context()
+                },
+            );
+            match nested.effect {
+                ThemeEffectExecution::Runtime(SimplyLoveRuntimeRequest::Audio(
+                    deadsync_theme::AudioRequest::PlaySfx(path),
+                )) => {
+                    assert_eq!(path, "assets/sounds/start.ogg");
+                    assert!(!nested.clear_restart_pending);
+                    steps.push("audio");
+                }
+                ThemeEffectExecution::NavigateNoFade(Screen::Gameplay) => {
+                    assert!(nested.clear_restart_pending);
+                    steps.push("redirect");
+                }
+                _ => panic!("unexpected nested effect"),
+            }
+            Ok::<(), ()>(())
+        })
+        .expect("batch execution should succeed");
+
+        assert_eq!(steps, ["audio", "redirect"]);
+    }
+
+    #[test]
     fn action_effect_plan_maps_media_requests_to_commands() {
         let plan = theme_effect_execution_plan(
-            ThemeEffect::Runtime(SimplyLoveRuntimeRequest::RequestDensityGraph {
-                slot: deadsync_theme_simply_love::views::SimplyLoveDensityGraphSlot::SelectMusicP1,
-                chart_opt: None,
-            }),
+            ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Media(
+                SimplyLoveMediaRequest::DensityGraph {
+                    slot:
+                        deadsync_theme_simply_love::views::SimplyLoveDensityGraphSlot::SelectMusicP1,
+                    chart_opt: None,
+                },
+            )),
             action_context(),
         );
 
@@ -435,10 +505,12 @@ mod tests {
     #[test]
     fn action_effect_plan_resolves_online_profile_targets() {
         let plan = theme_effect_execution_plan(
-            ThemeEffect::Runtime(SimplyLoveRuntimeRequest::LinkGrooveStats {
-                profile_id: "profile".to_string(),
-                display_name: "Player".to_string(),
-            }),
+            ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Online(
+                SimplyLoveOnlineRequest::LinkGrooveStats {
+                    profile_id: "profile".to_string(),
+                    display_name: "Player".to_string(),
+                },
+            )),
             action_context(),
         );
 

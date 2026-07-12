@@ -124,13 +124,12 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         }
         state.ui = None;
         state.target_profile = None;
-        deadsync_audio_stream::play_sfx("assets/sounds/start.ogg");
         let next = if from_profile_menu {
             Screen::ManageLocalProfiles
         } else {
             Screen::SelectColor
         };
-        return ThemeEffect::Navigate(next);
+        return crate::effects::sfx_then("assets/sounds/start.ogg", ThemeEffect::Navigate(next));
     }
     if is_back {
         if let Some(ui) = state.ui.as_ref() {
@@ -138,14 +137,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         }
         state.ui = None;
         state.target_profile = None;
-        deadsync_audio_stream::play_sfx("assets/sounds/change.ogg");
         let next = if from_profile_menu {
             Screen::ManageLocalProfiles
         } else {
             Screen::Menu
         };
         log::info!("ArrowCloud QR login cancelled — returning to {next:?}.");
-        return ThemeEffect::Navigate(next);
+        return crate::effects::sfx_then("assets/sounds/change.ogg", ThemeEffect::Navigate(next));
     }
     ThemeEffect::None
 }

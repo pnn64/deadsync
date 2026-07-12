@@ -6,8 +6,8 @@ pub mod views;
 pub use deadlib_assets::{FontAssetSpec, TextureAssetSpec, texture_asset};
 pub use effect::{ThemeEffect, ThemeFlowEvent};
 pub use runtime::{
-    AudioRequest, DisplayModeChoice, FullscreenChoice, GraphicsRequest, PresentPolicyChoice,
-    RendererChoice,
+    AudioRequest, DisplayModeChoice, FullscreenChoice, GraphicsRequest, PlatformRequest,
+    PresentPolicyChoice, RendererChoice, RevealPathKind,
 };
 pub use screen::{Theme, ThemeScreenId};
 

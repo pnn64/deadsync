@@ -31,6 +31,7 @@ use crate::screens::input as screen_input;
 use crate::screens::pack_sync as shared_pack_sync;
 use crate::screens::select_music;
 use crate::screens::{Screen, ThemeEffect};
+use crate::views::{SimplyLoveUpdaterCapabilities, SimplyLoveUpdaterView};
 use deadlib_platform::display::{
     self, MonitorSpec, fullscreen_type_choice_index, fullscreen_type_from_choice,
 };

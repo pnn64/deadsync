@@ -1,4 +1,4 @@
-//! Modal overlay that visualises [`deadsync_updater::action::ActionPhase`].
+//! Modal overlay that visualises a shell-prepared app-update phase.
 //!
 //! The overlay renders only when the action state is non-Idle.  It owns
 //! no state of its own — every frame the screen passes the current
@@ -19,11 +19,14 @@
 
 use crate::act;
 use crate::assets::i18n::{tr, tr_fmt};
+use crate::effects::SimplyLoveUpdaterRequest;
+use crate::views::{
+    SimplyLoveUpdateErrorKind as ActionErrorKind, SimplyLoveUpdatePhase as ActionPhase,
+};
 use deadlib_present::actors::{Actor, TextAlign};
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_input::{InputEvent, VirtualAction};
-use deadsync_updater::action::{self, ActionErrorKind, ActionPhase};
 
 use super::loading_bar;
 
@@ -58,6 +61,15 @@ pub enum InputOutcome {
     /// The overlay handled the event; the caller should treat it as
     /// consumed (do not navigate, do not exit).
     Consumed,
+    /// The overlay handled the event and requested shell-owned updater work.
+    Request(SimplyLoveUpdaterRequest),
+}
+
+impl InputOutcome {
+    #[inline(always)]
+    pub const fn is_consumed(self) -> bool {
+        !matches!(self, Self::Passthrough)
+    }
 }
 
 /// Pre-computed text/layout content for one modal panel.  Decouples the
@@ -340,7 +352,7 @@ pub fn phase_strings(phase: &ActionPhase) -> (String, Vec<String>, String, Optio
                 )
                 .to_string(),
             );
-            for (i, (info, _asset)) in candidates.iter().enumerate() {
+            for (i, info) in candidates.iter().enumerate() {
                 let key = if i == *selected {
                     "BodyRollbackRowSelected"
                 } else {
@@ -438,11 +450,7 @@ pub fn phase_strings(phase: &ActionPhase) -> (String, Vec<String>, String, Optio
                 progress.or(Some(0.0)),
             )
         }
-        ActionPhase::Ready {
-            info: _info,
-            path: _path,
-            ..
-        } => (
+        ActionPhase::Ready { info: _info } => (
             tr("Updater", "TitleReady").to_string(),
             vec![tr("Updater", "BodyReadyShort").to_string()],
             tr("Updater", "FooterInstall").to_string(),
@@ -491,8 +499,6 @@ fn error_kind_key(kind: ActionErrorKind) -> &'static str {
 }
 
 /// Dispatch a virtual input event against the current overlay state.
-/// Mutates the global action state via [`action::request_download`] /
-/// [`action::dismiss`] as appropriate.
 pub fn handle_input(phase: &ActionPhase, ev: &InputEvent) -> InputOutcome {
     if matches!(phase, ActionPhase::Idle) {
         return InputOutcome::Passthrough;
@@ -503,23 +509,19 @@ pub fn handle_input(phase: &ActionPhase, ev: &InputEvent) -> InputOutcome {
     match phase {
         ActionPhase::ConfirmDownload { .. } => match ev.action {
             VirtualAction::p1_start | VirtualAction::p2_start => {
-                action::request_download();
-                InputOutcome::Consumed
+                InputOutcome::Request(SimplyLoveUpdaterRequest::DownloadUpdate)
             }
             VirtualAction::p1_back | VirtualAction::p2_back => {
-                action::dismiss();
-                InputOutcome::Consumed
+                InputOutcome::Request(SimplyLoveUpdaterRequest::DismissUpdate)
             }
             _ => InputOutcome::Consumed,
         },
         ActionPhase::Ready { .. } => match ev.action {
             VirtualAction::p1_start | VirtualAction::p2_start => {
-                action::request_apply();
-                InputOutcome::Consumed
+                InputOutcome::Request(SimplyLoveUpdaterRequest::ApplyUpdate)
             }
             VirtualAction::p1_back | VirtualAction::p2_back => {
-                action::dismiss();
-                InputOutcome::Consumed
+                InputOutcome::Request(SimplyLoveUpdaterRequest::DismissUpdate)
             }
             _ => InputOutcome::Consumed,
         },
@@ -532,8 +534,7 @@ pub fn handle_input(phase: &ActionPhase, ev: &InputEvent) -> InputOutcome {
             | VirtualAction::p2_start
             | VirtualAction::p1_back
             | VirtualAction::p2_back => {
-                action::dismiss();
-                InputOutcome::Consumed
+                InputOutcome::Request(SimplyLoveUpdaterRequest::DismissUpdate)
             }
             _ => InputOutcome::Consumed,
         },
@@ -544,23 +545,19 @@ pub fn handle_input(phase: &ActionPhase, ev: &InputEvent) -> InputOutcome {
             | VirtualAction::p1_menu_up
             | VirtualAction::p2_up
             | VirtualAction::p2_menu_up => {
-                action::rollback_move(-1);
-                InputOutcome::Consumed
+                InputOutcome::Request(SimplyLoveUpdaterRequest::MoveRollback(-1))
             }
             VirtualAction::p1_down
             | VirtualAction::p1_menu_down
             | VirtualAction::p2_down
             | VirtualAction::p2_menu_down => {
-                action::rollback_move(1);
-                InputOutcome::Consumed
+                InputOutcome::Request(SimplyLoveUpdaterRequest::MoveRollback(1))
             }
             VirtualAction::p1_start | VirtualAction::p2_start => {
-                action::request_rollback_confirm();
-                InputOutcome::Consumed
+                InputOutcome::Request(SimplyLoveUpdaterRequest::ConfirmRollback)
             }
             VirtualAction::p1_back | VirtualAction::p2_back => {
-                action::dismiss();
-                InputOutcome::Consumed
+                InputOutcome::Request(SimplyLoveUpdaterRequest::DismissUpdate)
             }
             _ => InputOutcome::Consumed,
         },
@@ -572,8 +569,7 @@ pub fn handle_input(phase: &ActionPhase, ev: &InputEvent) -> InputOutcome {
         ActionPhase::Checking | ActionPhase::Downloading { .. } | ActionPhase::RollbackChecking => {
             match ev.action {
                 VirtualAction::p1_back | VirtualAction::p2_back => {
-                    action::request_cancel();
-                    InputOutcome::Consumed
+                    InputOutcome::Request(SimplyLoveUpdaterRequest::CancelUpdate)
                 }
                 _ => InputOutcome::Consumed,
             }
@@ -668,23 +664,19 @@ fn format_sha256_short(raw: Option<&str>) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadsync_updater::{ReleaseAsset, ReleaseInfo};
-    use semver::Version;
-    use std::path::PathBuf;
 
-    fn sample_release() -> ReleaseInfo {
-        ReleaseInfo {
+    fn sample_release() -> crate::views::SimplyLoveReleaseView {
+        crate::views::SimplyLoveReleaseView {
             tag: "v9.9.9".to_owned(),
-            version: Version::new(9, 9, 9),
             html_url: "https://example/v9.9.9".to_owned(),
-            body: "first release note line\nsecond line\n".to_owned(),
             published_at: None,
-            assets: vec![ReleaseAsset {
-                name: "deadsync-v9.9.9-x86_64-linux.tar.gz".to_owned(),
-                browser_download_url: "https://example/asset".to_owned(),
-                size: 12 * 1024 * 1024,
-                digest: None,
-            }],
+        }
+    }
+
+    fn sample_asset() -> crate::views::SimplyLoveReleaseAssetView {
+        crate::views::SimplyLoveReleaseAssetView {
+            size: 12 * 1024 * 1024,
+            digest: None,
         }
     }
 
@@ -704,10 +696,8 @@ mod tests {
         use deadlib_present::actors::SizeSpec;
 
         let r = sample_release();
-        let asset = r.assets[0].clone();
         let phase = ActionPhase::Downloading {
             info: r,
-            asset,
             written: 6 * 1024 * 1024,
             total: Some(12 * 1024 * 1024),
             eta_secs: None,
@@ -763,10 +753,10 @@ mod tests {
     fn phase_strings_confirm_includes_version_and_size() {
         let mut r = sample_release();
         r.published_at = Some("2026-04-30T04:17:40Z".to_owned());
-        r.assets[0].digest = Some(
+        let mut asset = sample_asset();
+        asset.digest = Some(
             "sha256:c154351dd3874a4a4630b16dbe673eb81b549342ac374ebf547d6fc3ac2e2b68".to_owned(),
         );
-        let asset = r.assets[0].clone();
         let phase = ActionPhase::ConfirmDownload { info: r, asset };
         let (_t, body, _f, progress) = phase_strings(&phase);
         assert!(progress.is_none());
@@ -805,8 +795,7 @@ mod tests {
     fn phase_strings_confirm_omits_optional_lines_when_missing() {
         let mut r = sample_release();
         r.published_at = None;
-        r.assets[0].digest = None;
-        let asset = r.assets[0].clone();
+        let asset = sample_asset();
         let phase = ActionPhase::ConfirmDownload { info: r, asset };
         let (_t, body, _f, _p) = phase_strings(&phase);
         // Current + Latest + Size remain even when date/digest are absent.
@@ -837,10 +826,8 @@ mod tests {
     #[test]
     fn phase_strings_downloading_reports_progress_fraction() {
         let r = sample_release();
-        let asset = r.assets[0].clone();
         let phase = ActionPhase::Downloading {
             info: r,
-            asset,
             written: 6 * 1024 * 1024,
             total: Some(12 * 1024 * 1024),
             eta_secs: None,
@@ -852,10 +839,8 @@ mod tests {
     #[test]
     fn phase_strings_downloading_without_total_still_renders_bar() {
         let r = sample_release();
-        let asset = r.assets[0].clone();
         let phase = ActionPhase::Downloading {
             info: r,
-            asset,
             written: 1024,
             total: None,
             eta_secs: None,
@@ -868,10 +853,8 @@ mod tests {
     #[test]
     fn phase_strings_downloading_appends_eta_line_when_known() {
         let r = sample_release();
-        let asset = r.assets[0].clone();
         let phase = ActionPhase::Downloading {
             info: r,
-            asset,
             written: 6 * 1024 * 1024,
             total: Some(12 * 1024 * 1024),
             eta_secs: Some(75),
@@ -884,11 +867,7 @@ mod tests {
     #[test]
     fn phase_strings_ready_shows_install_hint() {
         let r = sample_release();
-        let phase = ActionPhase::Ready {
-            info: r,
-            path: PathBuf::from("/tmp/deadsync-v9.9.9-x86_64-linux.tar.gz"),
-            sha256: [0u8; 32],
-        };
+        let phase = ActionPhase::Ready { info: r };
         let (_t, body, footer, _p) = phase_strings(&phase);
         assert_eq!(phase_version_tag(&phase).as_deref(), Some("v9.9.9"));
         let joined = body.join("\n");
@@ -949,27 +928,20 @@ mod tests {
             detail: String::new(),
         };
         let ev = press(VirtualAction::p1_start);
-        assert_eq!(handle_input(&phase, &ev), InputOutcome::Consumed);
+        assert_eq!(
+            handle_input(&phase, &ev),
+            InputOutcome::Request(SimplyLoveUpdaterRequest::DismissUpdate)
+        );
     }
 
     fn rollback_pick(selected: usize) -> ActionPhase {
         let mk = |maj, min, pat| {
             let tag = format!("v{maj}.{min}.{pat}");
-            let info = ReleaseInfo {
+            crate::views::SimplyLoveReleaseView {
                 tag: tag.clone(),
-                version: Version::new(maj, min, pat),
                 html_url: format!("https://example/{tag}"),
-                body: String::new(),
                 published_at: Some(format!("2026-04-{pat:02}T04:17:40Z")),
-                assets: vec![ReleaseAsset {
-                    name: format!("deadsync-{tag}.tar.gz"),
-                    browser_download_url: format!("https://example/{tag}/a"),
-                    size: 1024,
-                    digest: None,
-                }],
-            };
-            let asset = info.assets[0].clone();
-            (info, asset)
+            }
         };
         ActionPhase::RollbackPick {
             candidates: vec![mk(0, 3, 10), mk(0, 3, 9), mk(0, 3, 8)],
@@ -1029,7 +1001,7 @@ mod tests {
         let ev = press(VirtualAction::p1_back);
         assert_eq!(
             handle_input(&ActionPhase::RollbackChecking, &ev),
-            InputOutcome::Consumed
+            InputOutcome::Request(SimplyLoveUpdaterRequest::CancelUpdate)
         );
         // Non-back input is swallowed without acting.
         let ev = press(VirtualAction::p1_up);
@@ -1049,11 +1021,7 @@ mod tests {
             VirtualAction::p1_back,
         ] {
             let ev = press(action);
-            assert_eq!(
-                handle_input(&phase, &ev),
-                InputOutcome::Consumed,
-                "action {action:?}",
-            );
+            assert!(handle_input(&phase, &ev).is_consumed(), "action {action:?}");
         }
     }
 
@@ -1062,7 +1030,7 @@ mod tests {
         let ev = press(VirtualAction::p1_start);
         assert_eq!(
             handle_input(&ActionPhase::RollbackEmpty, &ev),
-            InputOutcome::Consumed
+            InputOutcome::Request(SimplyLoveUpdaterRequest::DismissUpdate)
         );
     }
 
@@ -1090,7 +1058,6 @@ mod tests {
             ActionPhase::Checking,
             ActionPhase::Downloading {
                 info: sample_release(),
-                asset: sample_release().assets[0].clone(),
                 written: 0,
                 total: Some(100),
                 eta_secs: None,
@@ -1103,9 +1070,8 @@ mod tests {
                 VirtualAction::p1_up,
             ] {
                 let ev = press(action);
-                assert_eq!(
-                    handle_input(&phase, &ev),
-                    InputOutcome::Consumed,
+                assert!(
+                    handle_input(&phase, &ev).is_consumed(),
                     "phase {phase:?} action {action:?}",
                 );
             }

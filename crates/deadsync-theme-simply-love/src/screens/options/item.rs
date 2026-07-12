@@ -286,15 +286,17 @@ pub(super) fn submenu_inline_widths_fit(widths: &[f32], spacing: f32) -> bool {
 }
 
 /// Returns the top-level rows that should be shown for this host/config.
-pub(super) fn visible_items() -> Vec<&'static Item> {
-    ITEMS.iter().filter(|item| item_visible(item.id)).collect()
+pub(super) fn visible_items(state: &State) -> Vec<&'static Item> {
+    ITEMS
+        .iter()
+        .filter(|item| item_visible(item.id, state.updater_capabilities))
+        .collect()
 }
 
-fn item_visible(id: ItemId) -> bool {
+fn item_visible(id: ItemId, capabilities: SimplyLoveUpdaterCapabilities) -> bool {
     match id {
-        ItemId::CheckForUpdates => deadsync_updater::apply_supported_for_host(),
-        ItemId::RollBackVersion => deadsync_updater::apply_supported_for_host(),
-        ItemId::DownloadVideoSupport => deadsync_updater::ffmpeg::install_supported_for_host(),
+        ItemId::CheckForUpdates | ItemId::RollBackVersion => capabilities.app_update,
+        ItemId::DownloadVideoSupport => capabilities.ffmpeg_install,
         _ => true,
     }
 }

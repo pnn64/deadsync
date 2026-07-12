@@ -9,6 +9,9 @@ pub enum ThemeEffect<S, R> {
     None,
     /// Consume the current input edge without scheduling shell work.
     ConsumeInput,
+    /// Execute multiple effects in order. Runtime owners must route each
+    /// nested effect normally so redirects observe the current state.
+    Batch(Vec<Self>),
     Navigate(S),
     /// Navigate immediately without the current screen's out-transition.
     NavigateNoFade(S),
@@ -35,7 +38,7 @@ impl<S: Copy, R> ThemeEffect<S, R> {
             Self::NavigateNoFade(screen) => Some(ThemeFlowEvent::NavigateNoFade(*screen)),
             Self::Exit => Some(ThemeFlowEvent::Exit),
             Self::Shutdown => Some(ThemeFlowEvent::Shutdown),
-            Self::None | Self::ConsumeInput | Self::Runtime(_) => None,
+            Self::None | Self::ConsumeInput | Self::Batch(_) | Self::Runtime(_) => None,
         }
     }
 }
@@ -57,6 +60,28 @@ mod tests {
         assert_eq!(
             ThemeEffect::<ThemeScreenId, ()>::ConsumeInput.flow_event(),
             None
+        );
+        assert_eq!(
+            ThemeEffect::<ThemeScreenId, ()>::Batch(vec![ThemeEffect::Navigate(MENU)]).flow_event(),
+            None
+        );
+    }
+
+    #[test]
+    fn batch_preserves_effect_order() {
+        let batch = ThemeEffect::<ThemeScreenId, u8>::Batch(vec![
+            ThemeEffect::Runtime(1),
+            ThemeEffect::Navigate(MENU),
+            ThemeEffect::Runtime(2),
+        ]);
+
+        assert_eq!(
+            batch,
+            ThemeEffect::Batch(vec![
+                ThemeEffect::Runtime(1),
+                ThemeEffect::Navigate(MENU),
+                ThemeEffect::Runtime(2),
+            ])
         );
     }
 }

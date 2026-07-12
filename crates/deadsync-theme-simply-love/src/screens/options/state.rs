@@ -151,6 +151,7 @@ pub(super) enum SubmenuTransition {
 }
 
 pub struct State {
+    pub(super) updater_capabilities: SimplyLoveUpdaterCapabilities,
     pub selected: usize,
     pub(super) prev_selected: usize,
     pub active_color_index: i32, // <-- ADDED
@@ -247,7 +248,7 @@ pub struct State {
     pub(super) i18n_revision: u64,
 }
 
-pub fn init() -> State {
+pub fn init(updater_capabilities: SimplyLoveUpdaterCapabilities) -> State {
     let cfg = config::get();
     let system_noteskin_choices = discover_system_noteskin_choices();
     let smx_bg_pack_choices = discover_smx_pack_choices("smx-pad-lights");
@@ -264,6 +265,7 @@ pub fn init() -> State {
         .position(|name| name.eq_ignore_ascii_case(machine_noteskin.as_str()))
         .unwrap_or(0);
     let mut state = State {
+        updater_capabilities,
         selected: 0,
         prev_selected: 0,
         active_color_index: cfg.simply_love_color,

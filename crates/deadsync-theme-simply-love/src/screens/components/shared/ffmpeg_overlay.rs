@@ -1,4 +1,4 @@
-//! Modal overlay that visualises [`deadsync_updater::ffmpeg::FfmpegPhase`].
+//! Modal overlay that visualises a shell-prepared FFmpeg install phase.
 //!
 //! Mirrors [`super::update_overlay`] but for the ffmpeg install flow. It
 //! owns no state: each frame the screen passes in the current
@@ -6,10 +6,12 @@
 //! decides whether to consume the input or pass it to the menu.
 
 use crate::assets::i18n::{tr, tr_fmt};
+use crate::effects::SimplyLoveUpdaterRequest;
+use crate::views::{
+    SimplyLoveFfmpegPhase as FfmpegPhase, SimplyLoveUpdateErrorKind as ActionErrorKind,
+};
 use deadlib_present::actors::Actor;
 use deadsync_input::{InputEvent, VirtualAction};
-use deadsync_updater::action::ActionErrorKind;
-use deadsync_updater::ffmpeg::{self, FfmpegPhase};
 
 use super::update_overlay::{
     InputOutcome, PanelContent, format_eta, format_size, format_speed, render_panel,
@@ -168,8 +170,6 @@ fn error_kind_key(kind: ActionErrorKind) -> &'static str {
 }
 
 /// Dispatch a virtual input event against the current overlay state.
-/// Mutates the global ffmpeg state via [`ffmpeg::request_confirm`] /
-/// [`ffmpeg::request_cancel`] / [`ffmpeg::dismiss`] as appropriate.
 pub fn handle_input(phase: &FfmpegPhase, ev: &InputEvent) -> InputOutcome {
     if matches!(phase, FfmpegPhase::Idle) {
         return InputOutcome::Passthrough;
@@ -183,19 +183,16 @@ pub fn handle_input(phase: &FfmpegPhase, ev: &InputEvent) -> InputOutcome {
         // Unsupported on its own when it finishes.
         FfmpegPhase::Checking => match ev.action {
             VirtualAction::p1_back | VirtualAction::p2_back => {
-                ffmpeg::cancel_check();
-                InputOutcome::Consumed
+                InputOutcome::Request(SimplyLoveUpdaterRequest::CancelFfmpegCheck)
             }
             _ => InputOutcome::Consumed,
         },
         FfmpegPhase::Confirm { .. } => match ev.action {
             VirtualAction::p1_start | VirtualAction::p2_start => {
-                ffmpeg::request_confirm();
-                InputOutcome::Consumed
+                InputOutcome::Request(SimplyLoveUpdaterRequest::ConfirmFfmpegInstall)
             }
             VirtualAction::p1_back | VirtualAction::p2_back => {
-                ffmpeg::dismiss();
-                InputOutcome::Consumed
+                InputOutcome::Request(SimplyLoveUpdaterRequest::DismissFfmpeg)
             }
             _ => InputOutcome::Consumed,
         },
@@ -203,8 +200,7 @@ pub fn handle_input(phase: &FfmpegPhase, ev: &InputEvent) -> InputOutcome {
         // committing partial state.
         FfmpegPhase::Downloading { .. } => match ev.action {
             VirtualAction::p1_back | VirtualAction::p2_back => {
-                ffmpeg::request_cancel();
-                InputOutcome::Consumed
+                InputOutcome::Request(SimplyLoveUpdaterRequest::CancelFfmpegDownload)
             }
             _ => InputOutcome::Consumed,
         },
@@ -218,8 +214,7 @@ pub fn handle_input(phase: &FfmpegPhase, ev: &InputEvent) -> InputOutcome {
             | VirtualAction::p2_start
             | VirtualAction::p1_back
             | VirtualAction::p2_back => {
-                ffmpeg::dismiss();
-                InputOutcome::Consumed
+                InputOutcome::Request(SimplyLoveUpdaterRequest::DismissFfmpeg)
             }
             _ => InputOutcome::Consumed,
         },
@@ -301,7 +296,7 @@ mod tests {
         let ev = press(VirtualAction::p1_start);
         assert_eq!(
             handle_input(&FfmpegPhase::Unsupported, &ev),
-            InputOutcome::Consumed
+            InputOutcome::Request(SimplyLoveUpdaterRequest::DismissFfmpeg)
         );
     }
 
@@ -311,7 +306,7 @@ mod tests {
         let ev = press(VirtualAction::p1_start);
         assert_eq!(
             handle_input(&FfmpegPhase::AlreadyAvailable, &ev),
-            InputOutcome::Consumed
+            InputOutcome::Request(SimplyLoveUpdaterRequest::DismissFfmpeg)
         );
     }
 

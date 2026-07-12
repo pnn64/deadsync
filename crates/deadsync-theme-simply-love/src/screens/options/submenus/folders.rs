@@ -1,12 +1,11 @@
 use super::super::*;
 use deadlib_platform::dirs::app_dirs;
-use deadlib_platform::open_path;
+use deadsync_theme::{PlatformRequest, RevealPathKind};
 use std::borrow::Cow;
 use std::path::PathBuf;
 
 /// Each folder row shows a single "Open" choice in the value column. Selecting
-/// the row triggers `open_folder_for_row`, which reveals the resolved path in
-/// the OS file explorer.
+/// the row asks the shell to reveal the resolved path in the OS file explorer.
 const OPEN_CHOICE: &[Choice] = &[localized_choice("Common", "Open")];
 
 pub(in crate::screens::options) const FOLDERS_OPTIONS_ROWS: &[SubRow] = &[
@@ -153,35 +152,14 @@ pub(in crate::screens::options) fn folder_path_for_row(id: SubRowId) -> Option<P
     Some(path)
 }
 
-/// Returns `true` if the given row id belongs to the Folders submenu.
-#[inline]
-pub(in crate::screens::options) fn is_folder_row(id: SubRowId) -> bool {
-    folder_path_for_row(id).is_some()
-}
-
-/// Reveals the folder corresponding to `id` in the OS file explorer. For
-/// directory rows the directory itself is opened; for file rows the parent
-/// directory is opened and the file is highlighted on platforms that support
-/// it. Missing directories are created lazily so we never point the user at
-/// a nonexistent path.
-pub(in crate::screens::options) fn open_folder_for_row(id: SubRowId) {
-    let Some(path) = folder_path_for_row(id) else {
-        return;
+pub(in crate::screens::options) fn folder_reveal_request(id: SubRowId) -> Option<PlatformRequest> {
+    let path = folder_path_for_row(id)?;
+    let kind = if matches!(id, SubRowId::FoldersLogFile | SubRowId::FoldersConfigFile) {
+        RevealPathKind::File
+    } else {
+        RevealPathKind::Directory
     };
-    deadlib_platform::dirs::ensure_dirs_exist();
-    let is_file_row = matches!(id, SubRowId::FoldersLogFile | SubRowId::FoldersConfigFile);
-    if !is_file_row
-        && !path.exists()
-        && let Err(e) = std::fs::create_dir_all(&path)
-    {
-        log::warn!(
-            "Failed to create folder before opening '{}': {e}",
-            path.display()
-        );
-    }
-    if let Err(e) = open_path::reveal(&path) {
-        log::warn!("Failed to open '{}' in file explorer: {e}", path.display());
-    }
+    Some(PlatformRequest::RevealPath { path, kind })
 }
 
 fn data_dir_path() -> Cow<'static, str> {

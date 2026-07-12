@@ -825,10 +825,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                 let _ = exit_anim_t(true);
                 commit_profile_box_session(state);
                 let (p1, p2) = active_choices(state);
-                return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::SelectProfiles {
-                    p1,
-                    p2,
-                });
+                return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+                    crate::SimplyLoveProfileRequest::Select { p1, p2 },
+                ));
             }
             ThemeEffect::None
         }
@@ -898,10 +897,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                 let _ = exit_anim_t(true);
                 commit_profile_box_session(state);
                 let (p1, p2) = active_choices(state);
-                return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::SelectProfiles {
-                    p1,
-                    p2,
-                });
+                return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+                    crate::SimplyLoveProfileRequest::Select { p1, p2 },
+                ));
             }
             ThemeEffect::None
         }

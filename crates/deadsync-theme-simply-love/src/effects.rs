@@ -2,17 +2,35 @@ use crate::screens::SimplyLoveScreen;
 use crate::views::{DensityGraphView, SimplyLoveDensityGraphSlot};
 use deadsync_profile::{ActiveProfile, PlayerSide};
 use deadsync_simfile::sync_offset::SongOffsetSyncChange;
-use deadsync_theme::{AudioRequest, GraphicsRequest};
+use deadsync_theme::{AudioRequest, GraphicsRequest, PlatformRequest};
 use std::path::PathBuf;
 
-/// Runtime work requested by Simply Love after its concrete screen logic has
-/// produced a generic theme effect.
 #[derive(Clone, Debug)]
-pub enum SimplyLoveRuntimeRequest {
-    SelectProfiles {
+pub enum SimplyLoveMediaRequest {
+    Screenshot(Option<PlayerSide>),
+    Banner(Option<PathBuf>),
+    CdTitle(Option<PathBuf>),
+    PackBanner(Option<PathBuf>),
+    WheelItemBackgrounds(Vec<PathBuf>),
+    DensityGraph {
+        slot: SimplyLoveDensityGraphSlot,
+        chart_opt: Option<DensityGraphView>,
+    },
+}
+
+#[derive(Clone, Debug)]
+pub enum SimplyLoveProfileRequest {
+    Select {
         p1: ActiveProfile,
         p2: ActiveProfile,
     },
+    PickImportFolder {
+        title: String,
+    },
+}
+
+#[derive(Clone, Debug)]
+pub enum SimplyLoveOnlineRequest {
     LinkArrowCloud {
         profile_id: String,
         display_name: String,
@@ -21,34 +39,85 @@ pub enum SimplyLoveRuntimeRequest {
         profile_id: String,
         display_name: String,
     },
-    RequestScreenshot(Option<PlayerSide>),
-    RequestBanner(Option<PathBuf>),
-    RequestCdTitle(Option<PathBuf>),
-    RequestPackBanner(Option<PathBuf>),
-    RequestWheelItemBackgrounds(Vec<PathBuf>),
-    RequestDensityGraph {
-        slot: SimplyLoveDensityGraphSlot,
-        chart_opt: Option<DensityGraphView>,
-    },
-    ApplySongOffsetSync {
+    FetchGrade(String),
+}
+
+#[derive(Clone, Debug)]
+pub enum SimplyLoveSyncRequest {
+    ApplySongOffset {
         simfile_path: PathBuf,
         delta_seconds: f32,
     },
-    ApplySongOffsetSyncBatch {
+    ApplySongOffsetBatch {
         changes: Vec<SongOffsetSyncChange>,
     },
-    FetchOnlineGrade(String),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SimplyLoveConfigRequest {
+    ShowOverlay(u8),
+    MouseCursorHidden(bool),
+    PersistColor(i32),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SimplyLoveHardwareRequest {
+    TestLightsAuto,
+    StepTestCabinet(i8),
+    StepTestButton(i8),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SimplyLoveDebugRequest {
     WriteFsrDump,
+}
+
+/// Updater work requested by Simply Love and executed by the process shell.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SimplyLoveUpdaterRequest {
+    CheckForUpdates,
+    CheckForRollback,
+    DownloadUpdate,
+    ApplyUpdate,
+    DismissUpdate,
+    CancelUpdate,
+    MoveRollback(i32),
+    ConfirmRollback,
+    CheckFfmpegAvailability,
+    ConfirmFfmpegInstall,
+    DismissFfmpeg,
+    CancelFfmpegCheck,
+    CancelFfmpegDownload,
+}
+
+/// Runtime work requested by Simply Love after its concrete screen logic has
+/// produced a generic theme effect.
+#[derive(Clone, Debug)]
+pub enum SimplyLoveRuntimeRequest {
     Audio(AudioRequest),
+    Media(SimplyLoveMediaRequest),
+    Profile(SimplyLoveProfileRequest),
+    Online(SimplyLoveOnlineRequest),
     Graphics(GraphicsRequest),
-    UpdateShowOverlay(u8),
-    UpdateMouseCursorHidden(bool),
-    TestLightsSetAuto,
-    TestLightsStepCabinet(i8),
-    TestLightsStepButton(i8),
+    Platform(PlatformRequest),
+    Sync(SimplyLoveSyncRequest),
+    Config(SimplyLoveConfigRequest),
+    Hardware(SimplyLoveHardwareRequest),
+    Debug(SimplyLoveDebugRequest),
+    Updater(SimplyLoveUpdaterRequest),
 }
 
 pub type SimplyLoveEffect = deadsync_theme::ThemeEffect<SimplyLoveScreen, SimplyLoveRuntimeRequest>;
+
+pub(crate) fn sfx(path: &str) -> SimplyLoveEffect {
+    SimplyLoveEffect::Runtime(SimplyLoveRuntimeRequest::Audio(AudioRequest::PlaySfx(
+        path.to_owned(),
+    )))
+}
+
+pub(crate) fn sfx_then(path: &str, effect: SimplyLoveEffect) -> SimplyLoveEffect {
+    SimplyLoveEffect::Batch(vec![sfx(path), effect])
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SimplyLoveEffectRouteContext {
@@ -151,6 +220,28 @@ mod tests {
         assert!(matches!(
             course.action,
             SimplyLoveEffect::Navigate(SimplyLoveScreen::SelectCourse)
+        ));
+    }
+
+    #[test]
+    fn sfx_then_preserves_audio_before_follow_up_effect() {
+        let effect = sfx_then(
+            "assets/sounds/start.ogg",
+            SimplyLoveEffect::Navigate(SimplyLoveScreen::SelectStyle),
+        );
+        let SimplyLoveEffect::Batch(effects) = effect else {
+            panic!("expected batch effect");
+        };
+        assert_eq!(effects.len(), 2);
+        assert!(matches!(
+            &effects[0],
+            SimplyLoveEffect::Runtime(SimplyLoveRuntimeRequest::Audio(
+                AudioRequest::PlaySfx(path)
+            )) if path == "assets/sounds/start.ogg"
+        ));
+        assert!(matches!(
+            effects[1],
+            SimplyLoveEffect::Navigate(SimplyLoveScreen::SelectStyle)
         ));
     }
 }

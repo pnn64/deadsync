@@ -3551,9 +3551,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
             if undo != 0 {
                 let _ = shift_event_page(side, i32::from(undo));
             }
-            return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::RequestScreenshot(Some(
-                side,
-            )));
+            return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
+                crate::SimplyLoveMediaRequest::Screenshot(Some(side)),
+            ));
         }
         return match ev.action {
             VirtualAction::p1_back
@@ -3694,9 +3694,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         if undo != 0 {
             let _ = shift_pane_for(side, i32::from(undo));
         }
-        return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::RequestScreenshot(Some(
-            side,
-        )));
+        return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
+            crate::SimplyLoveMediaRequest::Screenshot(Some(side)),
+        ));
     }
 
     match ev.action {

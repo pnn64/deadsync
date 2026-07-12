@@ -7006,7 +7006,9 @@ fn sync_overlay_apply_action(overlay: &ManualSyncOverlayData) -> Option<ThemeEff
                 })
                 .collect::<Vec<_>>();
             (!changes.is_empty()).then_some(ThemeEffect::Runtime(
-                crate::SimplyLoveRuntimeRequest::ApplySongOffsetSyncBatch { changes },
+                crate::SimplyLoveRuntimeRequest::Sync(
+                    crate::SimplyLoveSyncRequest::ApplySongOffsetBatch { changes },
+                ),
             ))
         }
     }
@@ -7256,10 +7258,12 @@ fn handle_null_or_die_overlay_input(state: &mut State, ev: &InputEvent) -> Theme
         hide_sync_overlay(state);
     }
     if let Some((simfile_path, delta_seconds)) = apply_sync {
-        return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::ApplySongOffsetSync {
-            simfile_path,
-            delta_seconds,
-        });
+        return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Sync(
+            crate::SimplyLoveSyncRequest::ApplySongOffset {
+                simfile_path,
+                delta_seconds,
+            },
+        ));
     }
     ThemeEffect::None
 }
@@ -7376,11 +7380,15 @@ fn handle_profile_switch_overlay_input(state: &mut State, ev: &InputEvent) -> Th
         return ThemeEffect::None;
     };
     match profile_boxes::handle_input(overlay, ev) {
-        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::SelectProfiles { p1, p2 }) => {
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+            crate::SimplyLoveProfileRequest::Select { p1, p2 },
+        )) => {
             state.profile_switch_overlay = None;
             state.profile_switch_overlay_is_late_join = false;
             profile::set_fast_profile_switch_from_select_music(true);
-            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::SelectProfiles { p1, p2 })
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+                crate::SimplyLoveProfileRequest::Select { p1, p2 },
+            ))
         }
         ThemeEffect::Navigate(_) => {
             let was_late_join = state.profile_switch_overlay_is_late_join;
@@ -8852,8 +8860,8 @@ fn handle_raw_key_event_impl(
             && let Some(chart) =
                 song.chart_for_steps_index(target_chart_type, state.selected_steps_index)
         {
-            return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::FetchOnlineGrade(
-                chart.short_hash.clone(),
+            return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Online(
+                crate::SimplyLoveOnlineRequest::FetchGrade(chart.short_hash.clone()),
             ));
         }
     }
@@ -9440,7 +9448,9 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
     if state.last_requested_banner_path != new_banner {
         state.last_requested_banner_path.clone_from(&new_banner);
         state.banner_high_quality_requested = false;
-        return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::RequestBanner(new_banner));
+        return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
+            crate::SimplyLoveMediaRequest::Banner(new_banner),
+        ));
     }
     if new_banner.is_some()
         && !state.banner_high_quality_requested
@@ -9448,7 +9458,9 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
         && state.wheel_offset_from_selection.abs() < 0.0001
     {
         state.banner_high_quality_requested = true;
-        return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::RequestBanner(new_banner));
+        return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
+            crate::SimplyLoveMediaRequest::Banner(new_banner),
+        ));
     }
     if state.last_requested_cdtitle_path != new_cdtitle {
         if new_cdtitle.is_some() {
@@ -9456,23 +9468,25 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
             state.cdtitle_anim_elapsed = 0.0;
         }
         state.last_requested_cdtitle_path.clone_from(&new_cdtitle);
-        return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::RequestCdTitle(new_cdtitle));
+        return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
+            crate::SimplyLoveMediaRequest::CdTitle(new_cdtitle),
+        ));
     }
     if state.last_requested_folder_stats_banner_path != new_folder_stats_banner {
         state
             .last_requested_folder_stats_banner_path
             .clone_from(&new_folder_stats_banner);
-        return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::RequestPackBanner(
-            new_folder_stats_banner,
+        return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
+            crate::SimplyLoveMediaRequest::PackBanner(new_folder_stats_banner),
         ));
     }
     if state.last_requested_wheel_item_bg_paths != new_wheel_item_bg_paths {
         state
             .last_requested_wheel_item_bg_paths
             .clone_from(&new_wheel_item_bg_paths);
-        return ThemeEffect::Runtime(
-            crate::SimplyLoveRuntimeRequest::RequestWheelItemBackgrounds(new_wheel_item_bg_paths),
-        );
+        return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
+            crate::SimplyLoveMediaRequest::WheelItemBackgrounds(new_wheel_item_bg_paths),
+        ));
     }
 
     if overlays_block_delayed_updates {
@@ -9526,8 +9540,8 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
 
             if state.last_requested_chart_hash.as_deref() != desired_hash_p1 {
                 state.last_requested_chart_hash = desired_hash_p1.map(str::to_string);
-                return ThemeEffect::Runtime(
-                    crate::SimplyLoveRuntimeRequest::RequestDensityGraph {
+                return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
+                    crate::SimplyLoveMediaRequest::DensityGraph {
                         slot: DensityGraphSlot::SelectMusicP1,
                         chart_opt: state.cached_chart_ix_p1.map(|ix| {
                             let c = &song.charts[ix];
@@ -9540,7 +9554,7 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
                             }
                         }),
                     },
-                );
+                ));
             }
 
             if is_versus {
@@ -9568,8 +9582,8 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
                 }
                 if state.last_requested_chart_hash_p2.as_deref() != desired_hash_p2 {
                     state.last_requested_chart_hash_p2 = desired_hash_p2.map(str::to_string);
-                    return ThemeEffect::Runtime(
-                        crate::SimplyLoveRuntimeRequest::RequestDensityGraph {
+                    return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
+                        crate::SimplyLoveMediaRequest::DensityGraph {
                             slot: DensityGraphSlot::SelectMusicP2,
                             chart_opt: state.cached_chart_ix_p2.map(|ix| {
                                 let c = &song.charts[ix];
@@ -9582,7 +9596,7 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
                                 }
                             }),
                         },
-                    );
+                    ));
                 }
             } else {
                 state.displayed_chart_p2 = None;
@@ -12109,7 +12123,9 @@ mod tests {
 
         assert!(matches!(
             action,
-            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::RequestBanner(Some(_)))
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
+                crate::SimplyLoveMediaRequest::Banner(Some(_))
+            ))
         ));
         assert_eq!(state.currently_playing_preview_path, None);
         assert_eq!(state.currently_playing_preview_start_sec, None);

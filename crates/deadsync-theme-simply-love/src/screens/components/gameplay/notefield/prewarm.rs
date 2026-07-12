@@ -1,4 +1,4 @@
-use crate::GameplayCoreState as State;
+use crate::screens::gameplay::GameplayCoreState as State;
 use deadlib_present::compose::TextLayoutCache;
 use deadlib_present::font;
 use deadsync_notefield::MiniIndicatorMode;

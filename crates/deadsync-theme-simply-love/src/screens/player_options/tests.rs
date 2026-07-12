@@ -2,15 +2,16 @@ use super::*;
 
 #[cfg(test)]
 pub(super) mod tests {
+    use super::super::input::what_comes_next_pane;
     use super::super::panes;
     use super::{
         BitMapping, BitmaskBinding, BitmaskInit, BitmaskWriteback, ChoiceBinding, CursorInit,
         CycleInit, ErrorBarMask, FaPlusMask, GameplayExtrasMask, GameplayExtrasMoreMask,
         HUD_OFFSET_MAX, HUD_OFFSET_MIN, HUD_OFFSET_ZERO_INDEX, HideMask, NAV_INITIAL_HOLD_DELAY,
-        NavDirection, NumericBinding, NumericInit, P1, P2, PlayerOptionMasks, Row, RowBehavior,
-        RowId, RowMap, ScrollMask, SpeedMod, SpeedModType, compute_row_window, count_visible_rows,
-        effective_scroll_speed_with_alt, handle_arcade_start_event, handle_nav_event,
-        handle_start_event, hud_offset_choices, init_cycle_row_from_binding,
+        NavDirection, NumericBinding, NumericInit, OptionsPane, P1, P2, PlayerOptionMasks, Row,
+        RowBehavior, RowId, RowMap, ScrollMask, SpeedMod, SpeedModType, compute_row_window,
+        count_visible_rows, effective_scroll_speed_with_alt, handle_arcade_start_event,
+        handle_nav_event, handle_start_event, hud_offset_choices, init_cycle_row_from_binding,
         init_numeric_row_from_binding, is_row_visible, judgment_tilt_options_visible,
         on_start_press, player_option_column_x, repeat_held_arcade_start, row_f_pos_for_index,
         row_visibility, session_active_players, sync_profile_scroll_speed, sync_speed_mod_type_row,
@@ -2193,7 +2194,7 @@ pub(super) mod tests {
             .expect("Exit should be in Main pane");
         state.pane_mut().selected_row[P1] = exit_row;
 
-        let active = session_active_players();
+        let active = [true, false];
         let action = handle_start_event(&mut state, &asset_manager, active, P1);
         assert!(
             matches!(action, Some(ThemeEffect::Navigate(Screen::Practice))),
@@ -2222,12 +2223,35 @@ pub(super) mod tests {
             .unwrap()
             .selected_choice_index[P1] = 1;
 
-        let active = session_active_players();
+        let active = [true, false];
         let action = handle_start_event(&mut state, &asset_manager, active, P1);
         assert!(
             matches!(action, Some(ThemeEffect::Navigate(Screen::SelectMusic))),
             "choose different song from practice options should return to the wheel"
         );
+    }
+
+    #[test]
+    fn what_comes_next_indices_route_without_localized_text() {
+        for (current, choice, target) in [
+            (OptionsPane::Main, 2, OptionsPane::Display),
+            (OptionsPane::Main, 3, OptionsPane::Advanced),
+            (OptionsPane::Main, 4, OptionsPane::Uncommon),
+            (OptionsPane::Display, 2, OptionsPane::Main),
+            (OptionsPane::Display, 3, OptionsPane::Advanced),
+            (OptionsPane::Display, 4, OptionsPane::Uncommon),
+            (OptionsPane::Advanced, 2, OptionsPane::Main),
+            (OptionsPane::Advanced, 3, OptionsPane::Display),
+            (OptionsPane::Advanced, 4, OptionsPane::Uncommon),
+            (OptionsPane::Uncommon, 2, OptionsPane::Main),
+            (OptionsPane::Uncommon, 3, OptionsPane::Display),
+            (OptionsPane::Uncommon, 4, OptionsPane::Advanced),
+        ] {
+            assert_eq!(what_comes_next_pane(current, choice), Some(target));
+        }
+        assert_eq!(what_comes_next_pane(OptionsPane::Main, 0), None);
+        assert_eq!(what_comes_next_pane(OptionsPane::Main, 1), None);
+        assert_eq!(what_comes_next_pane(OptionsPane::Main, 5), None);
     }
 
     #[test]

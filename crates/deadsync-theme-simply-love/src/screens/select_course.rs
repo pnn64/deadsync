@@ -1485,7 +1485,9 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
         if banner != state.last_requested_banner_path {
             state.last_requested_banner_path.clone_from(&banner);
             state.banner_high_quality_requested = false;
-            return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::RequestBanner(banner));
+            return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
+                crate::SimplyLoveMediaRequest::Banner(banner),
+            ));
         }
         if banner.is_some()
             && !state.banner_high_quality_requested
@@ -1493,7 +1495,9 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
             && state.wheel_offset_from_selection.abs() < 0.0001
         {
             state.banner_high_quality_requested = true;
-            return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::RequestBanner(banner));
+            return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
+                crate::SimplyLoveMediaRequest::Banner(banner),
+            ));
         }
     }
 

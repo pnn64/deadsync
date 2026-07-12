@@ -342,7 +342,9 @@ pub(super) fn apply_submenu_choice_delta(
         if row.id == SubRowId::ShowStats {
             let mode = new_index.min(3) as u8;
             action = Some(ThemeEffect::Runtime(
-                crate::SimplyLoveRuntimeRequest::UpdateShowOverlay(mode),
+                crate::SimplyLoveRuntimeRequest::Config(
+                    crate::SimplyLoveConfigRequest::ShowOverlay(mode),
+                ),
             ));
         }
         if row.id == SubRowId::ValidationLayers {
@@ -350,9 +352,11 @@ pub(super) fn apply_submenu_choice_delta(
         }
         if row.id == SubRowId::HideMouseCursor {
             action = Some(ThemeEffect::Runtime(
-                crate::SimplyLoveRuntimeRequest::UpdateMouseCursorHidden(yes_no_from_choice(
-                    new_index,
-                )),
+                crate::SimplyLoveRuntimeRequest::Config(
+                    crate::SimplyLoveConfigRequest::MouseCursorHidden(yes_no_from_choice(
+                        new_index,
+                    )),
+                ),
             ));
         }
         if row.id == SubRowId::SoftwareRendererThreads {
@@ -766,7 +770,7 @@ pub(super) fn apply_submenu_choice_delta(
 }
 
 fn move_main_selection(state: &mut State, dir: NavDirection) {
-    let total = visible_items().len();
+    let total = visible_items(state).len();
     if total == 0 {
         return;
     }
@@ -1086,7 +1090,7 @@ pub(super) fn undo_three_key_selection(state: &mut State, asset_manager: &AssetM
     match state.menu_lr_undo {
         1 => match state.view {
             OptionsView::Main => {
-                let total = visible_items().len();
+                let total = visible_items(state).len();
                 if total > 0 {
                     state.selected = (state.selected + 1) % total;
                 }
@@ -1103,7 +1107,7 @@ pub(super) fn undo_three_key_selection(state: &mut State, asset_manager: &AssetM
         },
         -1 => match state.view {
             OptionsView::Main => {
-                let total = visible_items().len();
+                let total = visible_items(state).len();
                 if total > 0 {
                     state.selected = if state.selected == 0 {
                         total - 1
@@ -1132,7 +1136,7 @@ pub(super) fn activate_current_selection(
 ) -> ThemeEffect {
     match state.view {
         OptionsView::Main => {
-            let visible = visible_items();
+            let visible = visible_items(state);
             let total = visible.len();
             if total == 0 {
                 return ThemeEffect::None;
@@ -1231,24 +1235,23 @@ pub(super) fn activate_current_selection(
                 }
                 ItemId::CheckForUpdates => {
                     audio::play_sfx("assets/sounds/start.ogg");
-                    deadsync_updater::action::request_check_now();
+                    return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Updater(
+                        crate::SimplyLoveUpdaterRequest::CheckForUpdates,
+                    ));
                 }
                 ItemId::RollBackVersion => {
                     audio::play_sfx("assets/sounds/start.ogg");
-                    deadsync_updater::action::request_rollback_check();
+                    return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Updater(
+                        crate::SimplyLoveUpdaterRequest::CheckForRollback,
+                    ));
                 }
                 ItemId::DownloadVideoSupport => {
                     audio::play_sfx("assets/sounds/start.ogg");
                     // Probe ffmpeg/ffprobe on a worker thread — the lookup
                     // spawns subprocesses and would stutter the UI thread.
-                    if let Some(generation) = deadsync_updater::ffmpeg::begin_availability_check() {
-                        std::thread::spawn(move || {
-                            let available = deadlib_video::ffmpeg_available();
-                            deadsync_updater::ffmpeg::resolve_availability_check(
-                                generation, available,
-                            );
-                        });
-                    }
+                    return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Updater(
+                        crate::SimplyLoveUpdaterRequest::CheckFfmpegAvailability,
+                    ));
                 }
                 ItemId::Credits => {
                     audio::play_sfx("assets/sounds/start.ogg");
@@ -1357,9 +1360,9 @@ pub(super) fn activate_current_selection(
                     match row.id {
                         SubRowId::DebugFsrDump => {
                             audio::play_sfx("assets/sounds/start.ogg");
-                            return ThemeEffect::Runtime(
-                                crate::SimplyLoveRuntimeRequest::WriteFsrDump,
-                            );
+                            return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Debug(
+                                crate::SimplyLoveDebugRequest::WriteFsrDump,
+                            ));
                         }
                         SubRowId::SmxConfig => {
                             audio::play_sfx("assets/sounds/start.ogg");
@@ -1425,12 +1428,14 @@ pub(super) fn activate_current_selection(
                 let Some(row_idx) = submenu_visible_row_to_actual(state, kind, selected_row) else {
                     return ThemeEffect::None;
                 };
-                if let Some(row) = rows.get(row_idx)
-                    && is_folder_row(row.id)
+                if let Some(request) = rows
+                    .get(row_idx)
+                    .and_then(|row| folder_reveal_request(row.id))
                 {
-                    audio::play_sfx("assets/sounds/start.ogg");
-                    open_folder_for_row(row.id);
-                    return ThemeEffect::None;
+                    return crate::effects::sfx_then(
+                        "assets/sounds/start.ogg",
+                        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Platform(request)),
+                    );
                 }
             } else if matches!(kind, SubmenuKind::OnlineScoring) {
                 let rows = submenu_rows(kind);
@@ -1565,22 +1570,24 @@ pub(super) fn activate_current_selection(
 pub fn handle_input(
     state: &mut State,
     asset_manager: &AssetManager,
+    updater: &SimplyLoveUpdaterView,
     ev: &InputEvent,
 ) -> ThemeEffect {
     use crate::screens::components::shared::{ffmpeg_overlay, update_overlay};
 
-    let overlay_phase = deadsync_updater::action::current();
-    if !matches!(overlay_phase, deadsync_updater::action::ActionPhase::Idle)
-        && update_overlay::handle_input(&overlay_phase, ev)
-            == update_overlay::InputOutcome::Consumed
-    {
-        return ThemeEffect::None;
+    match update_overlay::handle_input(&updater.update, ev) {
+        update_overlay::InputOutcome::Passthrough => {}
+        update_overlay::InputOutcome::Consumed => return ThemeEffect::None,
+        update_overlay::InputOutcome::Request(request) => {
+            return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Updater(request));
+        }
     }
-    let ffmpeg_phase = deadsync_updater::ffmpeg::current();
-    if !matches!(ffmpeg_phase, deadsync_updater::ffmpeg::FfmpegPhase::Idle)
-        && ffmpeg_overlay::handle_input(&ffmpeg_phase, ev) == update_overlay::InputOutcome::Consumed
-    {
-        return ThemeEffect::None;
+    match ffmpeg_overlay::handle_input(&updater.ffmpeg, ev) {
+        update_overlay::InputOutcome::Passthrough => {}
+        update_overlay::InputOutcome::Consumed => return ThemeEffect::None,
+        update_overlay::InputOutcome::Request(request) => {
+            return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Updater(request));
+        }
     }
     if state.reload_ui.is_some() {
         return ThemeEffect::None;

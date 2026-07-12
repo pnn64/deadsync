@@ -735,18 +735,22 @@ fn confirm_profile_menu(state: &mut State) -> ThemeEffect {
         ProfileMenuAction::LinkArrowCloud => {
             cancel_profile_menu(state);
             audio::play_sfx("assets/sounds/start.ogg");
-            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::LinkArrowCloud {
-                profile_id: menu.id.clone(),
-                display_name: menu.display_name.clone(),
-            })
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Online(
+                crate::SimplyLoveOnlineRequest::LinkArrowCloud {
+                    profile_id: menu.id.clone(),
+                    display_name: menu.display_name.clone(),
+                },
+            ))
         }
         ProfileMenuAction::LinkGrooveStats => {
             cancel_profile_menu(state);
             audio::play_sfx("assets/sounds/start.ogg");
-            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::LinkGrooveStats {
-                profile_id: menu.id.clone(),
-                display_name: menu.display_name.clone(),
-            })
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Online(
+                crate::SimplyLoveOnlineRequest::LinkGrooveStats {
+                    profile_id: menu.id.clone(),
+                    display_name: menu.display_name.clone(),
+                },
+            ))
         }
         ProfileMenuAction::Rename => {
             state.profile_menu = None;
@@ -860,15 +864,22 @@ fn move_import_picker_selected(state: &mut State, dir: NavDirection) {
     };
 }
 
-fn confirm_import_picker(state: &mut State) {
+fn confirm_import_picker(state: &mut State) -> ThemeEffect {
     // The "Browse…" row opens a native folder picker; keep the picker open.
     if state
         .import_picker
         .as_ref()
         .is_some_and(ImportPickerState::browse_selected)
     {
-        begin_folder_pick(state);
-        return;
+        reset_nav_hold(state);
+        return crate::effects::sfx_then(
+            "assets/sounds/start.ogg",
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+                crate::SimplyLoveProfileRequest::PickImportFolder {
+                    title: tr("Profiles", "ImportBrowsePrompt").to_string(),
+                },
+            )),
+        );
     }
 
     // Refuse already-imported profiles: keep the picker open and explain why.
@@ -877,15 +888,15 @@ fn confirm_import_picker(state: &mut State) {
         if let Some(name) = picker.imported_as_at(sel).cloned() {
             picker.info = Some(tr_fmt("Profiles", "ImportAlreadyInfo", &[("name", &name)]));
             audio::play_sfx("assets/sounds/boom.ogg");
-            return;
+            return ThemeEffect::None;
         }
     }
 
     let Some(picker) = state.import_picker.take() else {
-        return;
+        return ThemeEffect::None;
     };
     let Some(candidate) = picker.candidates.get(picker.selected) else {
-        return;
+        return ThemeEffect::None;
     };
     let dir = candidate.dir.clone();
     audio::play_sfx("assets/sounds/start.ogg");
@@ -919,30 +930,12 @@ fn confirm_import_picker(state: &mut State) {
         save_anchor: None,
         cancel,
     });
+    ThemeEffect::None
 }
 
-/// Spawns the native folder picker on a worker thread. The chosen directory (or
-/// `None` if cancelled) is delivered over a channel polled in [`poll_folder_pick`],
-/// so the render loop never blocks on the modal dialog.
-///
-/// The dialog is intentionally not parented to the game window: the winit
-/// `Window` lives in the app shell and isn't threaded down to the screen layer,
-/// and a parent handle can't be sent to this worker thread safely/portably.
-/// Unparented is fine for windowed/borderless modes; over *exclusive* fullscreen
-/// the dialog may surface behind the game. Wiring a parent handle is a possible
-/// future hardening if exclusive fullscreen becomes common.
-fn begin_folder_pick(state: &mut State) {
-    if state.folder_pick.is_some() {
-        return;
-    }
-    audio::play_sfx("assets/sounds/start.ogg");
-    reset_nav_hold(state);
-    let title = tr("Profiles", "ImportBrowsePrompt").to_string();
-    let (tx, rx) = std::sync::mpsc::channel();
-    thread::spawn(move || {
-        let picked = rfd::FileDialog::new().set_title(title).pick_folder();
-        let _ = tx.send(picked);
-    });
+/// Attach the shell-owned native folder picker result to this screen's modal
+/// state. The screen polls the receiver without blocking the render loop.
+pub fn attach_import_folder_picker(state: &mut State, rx: Receiver<Option<PathBuf>>) {
     state.folder_pick = Some(FolderPickJob { rx });
 }
 
@@ -1291,18 +1284,22 @@ fn request_import_cancel(state: &mut State) {
     }
 }
 
-fn handle_import_picker_input(state: &mut State, ev: &InputEvent) {
+fn handle_import_picker_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     if !ev.pressed {
-        return;
+        return ThemeEffect::None;
     }
     match ev.action {
-        VirtualAction::p1_back | VirtualAction::p2_back => cancel_import_picker(state),
+        VirtualAction::p1_back | VirtualAction::p2_back => {
+            cancel_import_picker(state);
+            ThemeEffect::None
+        }
         VirtualAction::p1_up
         | VirtualAction::p1_menu_up
         | VirtualAction::p2_up
         | VirtualAction::p2_menu_up => {
             move_import_picker_selected(state, NavDirection::Up);
             audio::play_sfx("assets/sounds/change.ogg");
+            ThemeEffect::None
         }
         VirtualAction::p1_down
         | VirtualAction::p1_menu_down
@@ -1310,9 +1307,10 @@ fn handle_import_picker_input(state: &mut State, ev: &InputEvent) {
         | VirtualAction::p2_menu_down => {
             move_import_picker_selected(state, NavDirection::Down);
             audio::play_sfx("assets/sounds/change.ogg");
+            ThemeEffect::None
         }
         VirtualAction::p1_start | VirtualAction::p2_start => confirm_import_picker(state),
-        _ => {}
+        _ => ThemeEffect::None,
     }
 }
 
@@ -1417,19 +1415,23 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         }
         if let Some((_, nav)) = three_key_action {
             if state.import_picker.is_some() {
-                match nav {
+                return match nav {
                     screen_input::ThreeKeyMenuAction::Prev => {
                         move_import_picker_selected(state, NavDirection::Up);
                         audio::play_sfx("assets/sounds/change.ogg");
+                        ThemeEffect::None
                     }
                     screen_input::ThreeKeyMenuAction::Next => {
                         move_import_picker_selected(state, NavDirection::Down);
                         audio::play_sfx("assets/sounds/change.ogg");
+                        ThemeEffect::None
                     }
                     screen_input::ThreeKeyMenuAction::Confirm => confirm_import_picker(state),
-                    screen_input::ThreeKeyMenuAction::Cancel => cancel_import_picker(state),
-                }
-                return ThemeEffect::None;
+                    screen_input::ThreeKeyMenuAction::Cancel => {
+                        cancel_import_picker(state);
+                        ThemeEffect::None
+                    }
+                };
             }
             if state.name_entry.is_some() {
                 match nav {
@@ -1505,8 +1507,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         }
     }
     if state.import_picker.is_some() {
-        handle_import_picker_input(state, ev);
-        return ThemeEffect::None;
+        return handle_import_picker_input(state, ev);
     }
     if state.name_entry.is_some() {
         match ev.action {
@@ -2983,5 +2984,44 @@ mod tests {
 
         press(&mut state, VirtualAction::p2_back);
         assert!(state.profile_menu.is_none());
+    }
+
+    #[test]
+    fn browse_requests_shell_picker_and_keeps_modal_open() {
+        let mut state = init();
+        state.import_picker = Some(ImportPickerState {
+            candidates: Vec::new(),
+            imported_as: Vec::new(),
+            selected: 0,
+            info: None,
+        });
+
+        let effect = confirm_import_picker(&mut state);
+        let ThemeEffect::Batch(effects) = effect else {
+            panic!("expected batched picker effect");
+        };
+        assert_eq!(effects.len(), 2);
+        assert!(matches!(
+            &effects[0],
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                deadsync_theme::AudioRequest::PlaySfx(path)
+            )) if path == "assets/sounds/start.ogg"
+        ));
+        assert!(matches!(
+            &effects[1],
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+                crate::SimplyLoveProfileRequest::PickImportFolder { title }
+            )) if !title.is_empty()
+        ));
+        assert!(state.import_picker.is_some());
+
+        let (_tx, rx) = std::sync::mpsc::channel();
+        attach_import_folder_picker(&mut state, rx);
+        assert!(state.folder_pick.is_some());
+        assert!(matches!(
+            press(&mut state, VirtualAction::p1_back),
+            ThemeEffect::None
+        ));
+        assert!(state.import_picker.is_some());
     }
 }

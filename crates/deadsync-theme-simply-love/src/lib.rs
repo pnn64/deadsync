@@ -14,8 +14,11 @@ pub mod views;
 pub mod visual_styles;
 
 pub use effects::{
-    SimplyLoveEffect, SimplyLoveEffectRouteContext, SimplyLoveEffectRoutePlan,
-    SimplyLoveRuntimeRequest, resolve_effect_route,
+    SimplyLoveConfigRequest, SimplyLoveDebugRequest, SimplyLoveEffect,
+    SimplyLoveEffectRouteContext, SimplyLoveEffectRoutePlan, SimplyLoveHardwareRequest,
+    SimplyLoveMediaRequest, SimplyLoveOnlineRequest, SimplyLoveProfileRequest,
+    SimplyLoveRuntimeRequest, SimplyLoveSyncRequest, SimplyLoveUpdaterRequest,
+    resolve_effect_route,
 };
 
 pub struct SimplyLoveTheme;
@@ -38,13 +41,6 @@ pub(crate) mod assets {
 pub(crate) mod config {
     pub use deadsync_config::prelude::*;
 }
-
-pub type GameplayCoreState = deadsync_gameplay::GameplayRuntimeState<
-    deadsync_profile_gameplay::GameplayProfile,
-    deadsync_assets::song_lua::SongLuaOverlayActor,
-    deadsync_song_lua::SongLuaCapturedActor,
-    deadsync_gameplay::SongLuaRuntimeOverlayStateDelta<deadsync_song_lua::SongLuaOverlayStateDelta>,
->;
 
 mod act_macro {
     macro_rules! act {

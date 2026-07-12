@@ -93,6 +93,12 @@ pub trait NoteskinSlot: Sized {
     fn texture_key_shared(&self) -> Arc<str>;
     fn model(&self) -> Option<&ModelMesh>;
     fn base_rot_sin_cos(&self) -> [f32; 2];
+
+    #[inline(always)]
+    fn frame_count(&self) -> usize {
+        1
+    }
+
     fn frame_index(&self, time: f32, beat: f32) -> usize;
     fn frame_index_from_phase(&self, phase: f32) -> usize;
     fn uv_for_frame_at(&self, frame_index: usize, elapsed: f32) -> [f32; 4];

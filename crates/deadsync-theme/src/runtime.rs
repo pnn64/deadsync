@@ -1,7 +1,23 @@
+use std::path::PathBuf;
+
 /// Audio work requested by a concrete theme and executed by the shell.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AudioRequest {
     PlaySfx(String),
+}
+
+/// Platform work requested by a concrete theme and executed by the shell.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PlatformRequest {
+    /// Reveal a file or directory in the host's file explorer.
+    RevealPath { path: PathBuf, kind: RevealPathKind },
+}
+
+/// How the shell should prepare a path before revealing it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RevealPathKind {
+    File,
+    Directory,
 }
 
 /// Renderer selected by a concrete theme without exposing a renderer backend
@@ -84,6 +100,21 @@ mod tests {
         assert_eq!(
             request,
             AudioRequest::PlaySfx("assets/sounds/start.ogg".to_owned())
+        );
+    }
+
+    #[test]
+    fn platform_request_carries_path_and_preparation_kind() {
+        let path = PathBuf::from("save/screenshots");
+        assert_eq!(
+            PlatformRequest::RevealPath {
+                path: path.clone(),
+                kind: RevealPathKind::Directory,
+            },
+            PlatformRequest::RevealPath {
+                path,
+                kind: RevealPathKind::Directory,
+            }
         );
     }
 }

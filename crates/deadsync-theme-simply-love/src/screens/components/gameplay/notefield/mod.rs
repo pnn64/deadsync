@@ -1,8 +1,7 @@
-use crate::GameplayCoreState as State;
 use crate::act;
 use crate::assets;
 use crate::notefield_style::notefield_style;
-use crate::screens::gameplay::GameplayNoteskinAssets;
+use crate::screens::gameplay::{GameplayCoreState as State, GameplayNoteskinAssets};
 use deadlib_present::actors::{Actor, IntoTextureKey};
 use deadlib_present::color;
 use deadlib_present::space::*;
@@ -20,29 +19,29 @@ use deadsync_notefield::{
     BuiltNotefield, ColumnFeedbackRequest, ComboFeedbackRequest, ComboMilestoneAssets,
     CounterHudRequest, ErrorBarComposeRequest, ErrorBarModes, ErrorBarState, HoldEntryPlanRequest,
     IndicatorSprite, JudgmentFeedbackRequest, JudgmentTiltParams, LayoutMiniIndicatorPosition,
-    MeasureComposeRequest, MeasureCounterOptions, MeasureLineMode, MiniIndicatorRequest,
-    ModelMeshCache, NoteAlphaParams, NoteGlowRequest, NoteXParams, NotefieldChartView,
-    NotefieldComposeRequest, NotefieldFrameFeatures, NotefieldGeometry, NotefieldNoteskinView,
-    NotefieldOptions, NotefieldSongLuaView, NotefieldVisualState, ReceptorActorsRequest,
-    ReceptorPress, TapJudgmentFeedback, TapJudgmentRowsParams, TapJudgmentSprite, TornadoBounds,
-    VisualEffectParams, ZmodLayoutParams, actor_with_world_z, appearance_needs_rows,
-    appearance_note_actor_alpha, appearance_note_glow, bottom_cap_uv_window,
+    MeasureComposeRequest, MeasureCounterOptions, MeasureLineMode, MineLayerRequest,
+    MiniIndicatorRequest, ModelMeshCache, NoteAlphaParams, NoteLayerRequest, NoteXParams,
+    NotefieldChartView, NotefieldComposeRequest, NotefieldFrameFeatures, NotefieldGeometry,
+    NotefieldNoteskinView, NotefieldOptions, NotefieldSongLuaView, NotefieldVisualState,
+    ReceptorActorsRequest, ReceptorPress, TapJudgmentFeedback, TapJudgmentRowsParams,
+    TapJudgmentSprite, TornadoBounds, VisualEffectParams, ZmodLayoutParams, actor_with_world_z,
+    appearance_needs_rows, appearance_note_actor_alpha, appearance_note_glow, bottom_cap_uv_window,
     clipped_hold_body_bounds, compose_column_feedback, compose_combo_feedback, compose_counter_hud,
-    compose_error_bar, compose_judgment_feedback, compose_measure_lines, compose_mini_indicator,
-    compose_note_glow, compose_receptor_actors, for_each_visible_hold_index,
-    for_each_visible_note_index, gameplay_visual_effect_params as visual_effect_params,
-    hold_body_bottom_for_tail_cap, hold_body_segment_budget, hold_entry_head_beat, hold_entry_plan,
-    hold_glow_color, hold_overlaps_visible_window, hold_parts_for_note_type, hold_segment_pose,
-    hold_strip_actor, hold_strip_glow_actor, hold_strip_quad, hold_strip_row_3d,
-    hold_strip_row_from_positions, hold_tail_cap_bounds, itg_actor_glow_alpha, judgment_actor_zoom,
+    compose_error_bar, compose_judgment_feedback, compose_measure_lines, compose_mine_layers,
+    compose_mini_indicator, compose_note_layer, compose_receptor_actors,
+    for_each_visible_hold_index, for_each_visible_note_index,
+    gameplay_visual_effect_params as visual_effect_params, hold_body_bottom_for_tail_cap,
+    hold_body_segment_budget, hold_entry_head_beat, hold_entry_plan, hold_glow_color,
+    hold_overlaps_visible_window, hold_parts_for_note_type, hold_segment_pose, hold_strip_actor,
+    hold_strip_glow_actor, hold_strip_quad, hold_strip_row_3d, hold_strip_row_from_positions,
+    hold_tail_cap_bounds, itg_actor_glow_alpha, judgment_actor_zoom,
     judgment_tilt_rotation_deg as crate_judgment_tilt_rotation_deg, maybe_flip_uv_vert,
     maybe_mirror_uv_horiz_for_reverse_flipped, mine_hides_after_resolution, mine_part,
     note_world_z_for_bumpy, note_x_offset as crate_note_x_offset, notefield_view_proj,
-    noteskin_model_actor_from_draw_cached, offset_center, prepare_notefield,
-    receptor_row_center as crate_receptor_row_center, scale_cap_to_arrow, scale_effect_size,
-    scale_sprite_to_arrow, share_actor_range, song_lua_note_model_draw,
-    tap_judgment_rows as crate_tap_judgment_rows, tap_part_for_note_type, tap_replacement_head,
-    top_cap_rotation_deg, translated_uv_rect, visual_arrow_effect_zoom,
+    offset_center, prepare_notefield, receptor_row_center as crate_receptor_row_center,
+    scale_cap_to_arrow, scale_effect_size, scale_sprite_to_arrow, share_actor_range,
+    song_lua_note_model_draw, tap_judgment_rows as crate_tap_judgment_rows, tap_part_for_note_type,
+    tap_replacement_head, top_cap_rotation_deg, translated_uv_rect, visual_arrow_effect_zoom,
     visual_confusion_rotation_deg, visual_hold_body_needs_z_buffer, visual_note_rotation_z,
     visual_pulse_zoom_for_y, visual_tiny_zoom, visual_use_legacy_hold_sprites, zmod_broken_run_end,
 };
@@ -2462,60 +2461,10 @@ pub(crate) fn build_bundles(
                     } else {
                         BlendMode::Alpha
                     };
-                    if !prefer_sprite_note_path
-                        && let Some(model_actor) = noteskin_model_actor_from_draw_cached(
-                            head_slot,
-                            draw,
-                            model_center,
-                            size,
-                            uv,
-                            -head_slot.def.rotation_deg as f32 + hold_head_rot,
-                            color,
-                            blend,
-                            Z_TAP_NOTE as i16,
-                            &mut model_cache,
-                        )
-                    {
-                        actors.push(actor_with_world_z(model_actor, head_world_z));
-                    } else if draw.blend_add {
-                        let sprite_center =
-                            offset_center(head_center, local_offset, local_offset_rot_sin_cos);
-                        actors.push(actor_with_world_z(
-                            act!(sprite(head_slot.texture_key_handle()):
-                                align(0.5, 0.5):
-                                xy(sprite_center[0], sprite_center[1]):
-                                setsize(size[0], size[1]):
-                                rotationy(flat_tap_face_rotation_y):
-                                rotationz(draw.rot[2] - head_slot.def.rotation_deg as f32 + hold_head_rot):
-                                customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                                diffuse(color[0], color[1], color[2], color[3]):
-                                blend(add):
-                                z(Z_TAP_NOTE)
-                            ),
-                            head_world_z,
-                        ));
-                    } else {
-                        let sprite_center =
-                            offset_center(head_center, local_offset, local_offset_rot_sin_cos);
-                        actors.push(actor_with_world_z(
-                            act!(sprite(head_slot.texture_key_handle()):
-                                align(0.5, 0.5):
-                                xy(sprite_center[0], sprite_center[1]):
-                                setsize(size[0], size[1]):
-                                rotationy(flat_tap_face_rotation_y):
-                                rotationz(draw.rot[2] - head_slot.def.rotation_deg as f32 + hold_head_rot):
-                                customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                                diffuse(color[0], color[1], color[2], color[3]):
-                                blend(normal):
-                                z(Z_TAP_NOTE)
-                            ),
-                            head_world_z,
-                        ));
-                    }
-                    compose_note_glow(
+                    compose_note_layer(
                         &mut actors,
                         &mut model_cache,
-                        NoteGlowRequest {
+                        NoteLayerRequest {
                             slot: head_slot,
                             draw,
                             model_center,
@@ -2531,7 +2480,8 @@ pub(crate) fn build_bundles(
                                 + hold_head_rot,
                             sprite_rotation_z_deg: draw.rot[2] - head_slot.def.rotation_deg as f32
                                 + hold_head_rot,
-                            alpha: head_glow,
+                            tint: color,
+                            glow_alpha: head_glow,
                             blend,
                             z: Z_TAP_NOTE as i16,
                             world_z: head_world_z,
@@ -2594,60 +2544,10 @@ pub(crate) fn build_bundles(
                         } else {
                             BlendMode::Alpha
                         };
-                        if !prefer_sprite_note_path
-                            && let Some(model_actor) = noteskin_model_actor_from_draw_cached(
-                                note_slot,
-                                draw,
-                                model_center,
-                                size,
-                                uv,
-                                -note_slot.def.rotation_deg as f32 + hold_head_rot,
-                                color,
-                                blend,
-                                layer_z as i16,
-                                &mut model_cache,
-                            )
-                        {
-                            actors.push(actor_with_world_z(model_actor, head_world_z));
-                        } else if draw.blend_add {
-                            let sprite_center =
-                                offset_center(head_center, local_offset, local_offset_rot_sin_cos);
-                            actors.push(actor_with_world_z(
-                                act!(sprite(note_slot.texture_key_handle()):
-                                    align(0.5, 0.5):
-                                    xy(sprite_center[0], sprite_center[1]):
-                                    setsize(size[0], size[1]):
-                                    rotationy(flat_tap_face_rotation_y):
-                                    rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32 + hold_head_rot):
-                                    customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                                    diffuse(color[0], color[1], color[2], color[3]):
-                                    blend(add):
-                                    z(layer_z)
-                                ),
-                                head_world_z,
-                            ));
-                        } else {
-                            let sprite_center =
-                                offset_center(head_center, local_offset, local_offset_rot_sin_cos);
-                            actors.push(actor_with_world_z(
-                                act!(sprite(note_slot.texture_key_handle()):
-                                    align(0.5, 0.5):
-                                    xy(sprite_center[0], sprite_center[1]):
-                                    setsize(size[0], size[1]):
-                                    rotationy(flat_tap_face_rotation_y):
-                                    rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32 + hold_head_rot):
-                                    customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                                    diffuse(color[0], color[1], color[2], color[3]):
-                                    blend(normal):
-                                    z(layer_z)
-                                ),
-                                head_world_z,
-                            ));
-                        }
-                        compose_note_glow(
+                        compose_note_layer(
                             &mut actors,
                             &mut model_cache,
-                            NoteGlowRequest {
+                            NoteLayerRequest {
                                 slot: note_slot,
                                 draw,
                                 model_center,
@@ -2664,7 +2564,8 @@ pub(crate) fn build_bundles(
                                 sprite_rotation_z_deg: draw.rot[2]
                                     - note_slot.def.rotation_deg as f32
                                     + hold_head_rot,
-                                alpha: head_glow,
+                                tint: color,
+                                glow_alpha: head_glow,
                                 blend,
                                 z: layer_z as i16,
                                 world_z: head_world_z,
@@ -2689,50 +2590,10 @@ pub(crate) fn build_bundles(
                         note_slot.model_draw_at(elapsed, current_beat),
                         note_rotation_y,
                     );
-                    if !prefer_sprite_note_path
-                        && let Some(model_actor) = noteskin_model_actor_from_draw_cached(
-                            note_slot,
-                            draw,
-                            head_center,
-                            size,
-                            uv,
-                            -note_slot.def.rotation_deg as f32 + hold_head_rot,
-                            [
-                                hold_diffuse[0],
-                                hold_diffuse[1],
-                                hold_diffuse[2],
-                                hold_diffuse[3] * head_alpha,
-                            ],
-                            BlendMode::Alpha,
-                            Z_TAP_NOTE as i16,
-                            &mut model_cache,
-                        )
-                    {
-                        actors.push(actor_with_world_z(model_actor, head_world_z));
-                    } else {
-                        actors.push(actor_with_world_z(
-                            act!(sprite(note_slot.texture_key_handle()):
-                                align(0.5, 0.5):
-                                xy(head_center[0], head_center[1]):
-                                setsize(size[0], size[1]):
-                                rotationy(flat_tap_face_rotation_y):
-                                rotationz(-note_slot.def.rotation_deg as f32 + hold_head_rot):
-                                customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                                diffuse(
-                                    hold_diffuse[0],
-                                    hold_diffuse[1],
-                                    hold_diffuse[2],
-                                    hold_diffuse[3] * head_alpha
-                                ):
-                                z(Z_TAP_NOTE)
-                            ),
-                            head_world_z,
-                        ));
-                    }
-                    compose_note_glow(
+                    compose_note_layer(
                         &mut actors,
                         &mut model_cache,
-                        NoteGlowRequest {
+                        NoteLayerRequest {
                             slot: note_slot,
                             draw,
                             model_center: head_center,
@@ -2744,7 +2605,13 @@ pub(crate) fn build_bundles(
                                 + hold_head_rot,
                             sprite_rotation_z_deg: -note_slot.def.rotation_deg as f32
                                 + hold_head_rot,
-                            alpha: head_glow,
+                            tint: [
+                                hold_diffuse[0],
+                                hold_diffuse[1],
+                                hold_diffuse[2],
+                                hold_diffuse[3] * head_alpha,
+                            ],
+                            glow_alpha: head_glow,
                             blend: BlendMode::Alpha,
                             z: Z_TAP_NOTE as i16,
                             world_z: head_world_z,
@@ -2862,193 +2729,35 @@ pub(crate) fn build_bundles(
                                 TARGET_ARROW_PIXEL_SIZE * col_note_scale,
                                 TARGET_ARROW_PIXEL_SIZE * col_note_scale,
                             ]);
-                        if let Some(slot) = fill_slot {
-                            if frame_slot.is_some()
-                                && slot.model.is_none()
-                                && slot.source.frame_count() <= 1
-                                && let Some(gradient_slot) = fill_gradient_slot
-                            {
-                                let width = circle_reference[0] * MINE_CORE_SIZE_RATIO;
-                                let height = circle_reference[1] * MINE_CORE_SIZE_RATIO;
-                                if width > 0.0 && height > 0.0 {
-                                    let frame =
-                                        gradient_slot.frame_index_from_phase(mine_fill_phase);
-                                    let uv = gradient_slot.uv_for_frame_at(frame, elapsed);
-                                    actors.push(actor_with_world_z(
-                                        act!(sprite(gradient_slot.texture_key_handle()):
-                                            align(0.5, 0.5):
-                                            xy(column_center_x, y_pos):
-                                            setsize(width, height):
-                                            customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                                            diffuse(1.0, 1.0, 1.0, note_alpha):
-                                            z(Z_TAP_NOTE - 2)
-                                        ),
-                                        note_world_z,
-                                    ));
-                                    let glow_alpha = itg_actor_glow_alpha(note_glow);
-                                    if glow_alpha > f32::EPSILON {
-                                        actors.push(actor_with_world_z(
-                                            act!(sprite(gradient_slot.texture_key_handle()):
-                                                align(0.5, 0.5):
-                                                xy(column_center_x, y_pos):
-                                                setsize(width, height):
-                                                customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                                                diffuse(1.0, 1.0, 1.0, 0.0):
-                                                glow(1.0, 1.0, 1.0, glow_alpha):
-                                                z(Z_TAP_NOTE - 2)
-                                            ),
-                                            note_world_z,
-                                        ));
-                                    }
-                                }
-                            } else {
-                                let draw = song_lua_note_model_draw(
-                                    slot.model_draw_at(note_display_time, current_beat),
-                                    note_rotation_y,
-                                );
-                                if draw.visible {
-                                    let frame = slot.frame_index_from_phase(mine_uv_phase);
-                                    let uv_elapsed = if slot.model.is_some() {
-                                        mine_uv_phase
-                                    } else {
-                                        elapsed
-                                    };
-                                    let uv = translated_uv_rect(
-                                        slot.uv_for_frame_at(frame, uv_elapsed),
-                                        mine_translation,
-                                    );
-                                    let size = scale_mine_slot_for_note(slot);
-                                    let width = size[0];
-                                    let height = size[1];
-                                    let base_rotation = -slot.def.rotation_deg as f32;
-                                    // ITG only rotates mines when the actor/model declares it.
-                                    let sprite_rotation = base_rotation + draw.rot[2] + note_rot;
-                                    let center = [column_center_x, y_pos];
-                                    if let Some(model_actor) = noteskin_model_actor_from_draw_cached(
-                                        slot,
-                                        draw,
-                                        center,
-                                        [width, height],
-                                        uv,
-                                        base_rotation + note_rot,
-                                        [1.0, 1.0, 1.0, 0.9 * note_alpha],
-                                        BlendMode::Alpha,
-                                        (Z_TAP_NOTE - 1) as i16,
-                                        &mut model_cache,
-                                    ) {
-                                        actors.push(actor_with_world_z(model_actor, note_world_z));
-                                    } else {
-                                        actors.push(actor_with_world_z(
-                                            act!(sprite(slot.texture_key_handle()):
-                                                align(0.5, 0.5):
-                                                xy(center[0], center[1]):
-                                                setsize(width, height):
-                                                rotationy(note_rotation_y):
-                                                rotationz(sprite_rotation):
-                                                customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                                                diffuse(1.0, 1.0, 1.0, 0.9 * note_alpha):
-                                                z(Z_TAP_NOTE - 1)
-                                            ),
-                                            note_world_z,
-                                        ));
-                                    }
-                                    compose_note_glow(
-                                        &mut actors,
-                                        &mut model_cache,
-                                        NoteGlowRequest {
-                                            slot,
-                                            draw,
-                                            model_center: center,
-                                            sprite_center: center,
-                                            size: [width, height],
-                                            uv,
-                                            rotation_y_deg: note_rotation_y,
-                                            model_rotation_z_deg: base_rotation + note_rot,
-                                            sprite_rotation_z_deg: sprite_rotation,
-                                            alpha: note_glow,
-                                            blend: BlendMode::Alpha,
-                                            z: (Z_TAP_NOTE - 1) as i16,
-                                            world_z: note_world_z,
-                                            prefer_sprite: prefer_sprite_note_path,
-                                        },
-                                        &noteskin_sprite_source,
-                                    );
-                                }
-                            }
-                        }
-                        if let Some(slot) = frame_slot {
-                            let draw = song_lua_note_model_draw(
-                                slot.model_draw_at(note_display_time, current_beat),
-                                note_rotation_y,
-                            );
-                            if !draw.visible {
-                                return;
-                            }
-                            let frame = slot.frame_index_from_phase(mine_uv_phase);
-                            let uv_elapsed = if slot.model.is_some() {
-                                mine_uv_phase
-                            } else {
-                                elapsed
-                            };
-                            let uv = translated_uv_rect(
-                                slot.uv_for_frame_at(frame, uv_elapsed),
-                                mine_translation,
-                            );
-                            let size = scale_mine_slot_for_note(slot);
-                            let base_rotation = -slot.def.rotation_deg as f32;
-                            // ITG only rotates mines when the actor/model declares it.
-                            let sprite_rotation = base_rotation + draw.rot[2] + note_rot;
-                            let center = [column_center_x, y_pos];
-                            if let Some(model_actor) = noteskin_model_actor_from_draw_cached(
-                                slot,
-                                draw,
-                                center,
-                                size,
-                                uv,
-                                base_rotation + note_rot,
-                                [1.0, 1.0, 1.0, note_alpha],
-                                BlendMode::Alpha,
-                                Z_TAP_NOTE as i16,
-                                &mut model_cache,
-                            ) {
-                                actors.push(actor_with_world_z(model_actor, note_world_z));
-                            } else {
-                                actors.push(actor_with_world_z(
-                                    act!(sprite(slot.texture_key_handle()):
-                                        align(0.5, 0.5):
-                                        xy(center[0], center[1]):
-                                        setsize(size[0], size[1]):
-                                        rotationy(note_rotation_y):
-                                        rotationz(sprite_rotation):
-                                        customtexturerect(uv[0], uv[1], uv[2], uv[3]):
-                                        diffuse(1.0, 1.0, 1.0, note_alpha):
-                                        z(Z_TAP_NOTE)
-                                    ),
-                                    note_world_z,
-                                ));
-                            }
-                            compose_note_glow(
-                                &mut actors,
-                                &mut model_cache,
-                                NoteGlowRequest {
-                                    slot,
-                                    draw,
-                                    model_center: center,
-                                    sprite_center: center,
-                                    size,
-                                    uv,
-                                    rotation_y_deg: note_rotation_y,
-                                    model_rotation_z_deg: base_rotation + note_rot,
-                                    sprite_rotation_z_deg: sprite_rotation,
-                                    alpha: note_glow,
-                                    blend: BlendMode::Alpha,
-                                    z: Z_TAP_NOTE as i16,
-                                    world_z: note_world_z,
-                                    prefer_sprite: prefer_sprite_note_path,
-                                },
-                                &noteskin_sprite_source,
-                            );
-                        }
+                        compose_mine_layers(
+                            &mut actors,
+                            &mut model_cache,
+                            MineLayerRequest {
+                                fill_slot,
+                                gradient_slot: fill_gradient_slot,
+                                frame_slot,
+                                gradient_size: [
+                                    circle_reference[0] * MINE_CORE_SIZE_RATIO,
+                                    circle_reference[1] * MINE_CORE_SIZE_RATIO,
+                                ],
+                                center: [column_center_x, y_pos],
+                                mine_uv_phase,
+                                mine_fill_phase,
+                                elapsed_s: elapsed,
+                                display_time_s: note_display_time,
+                                current_beat,
+                                uv_translation: mine_translation,
+                                rotation_y_deg: note_rotation_y,
+                                note_rotation_z_deg: note_rot,
+                                alpha: note_alpha,
+                                glow_alpha: note_glow,
+                                note_z: Z_TAP_NOTE as i16,
+                                world_z: note_world_z,
+                                prefer_sprite: prefer_sprite_note_path,
+                            },
+                            &scale_mine_slot_for_note,
+                            &noteskin_sprite_source,
+                        );
                         return;
                     }
                     let tap_note_part = tap_part_for_note_type(note.note_type);
@@ -3123,63 +2832,10 @@ pub(crate) fn build_bundles(
                                     draw.tint[2],
                                     draw.tint[3] * note_alpha,
                                 ];
-                                if !prefer_sprite_note_path
-                                    && let Some(model_actor) = noteskin_model_actor_from_draw_cached(
-                                        head_slot,
-                                        draw,
-                                        model_center,
-                                        note_size,
-                                        note_uv,
-                                        -head_slot.def.rotation_deg as f32 + note_rot,
-                                        color,
-                                        blend,
-                                        Z_TAP_NOTE as i16,
-                                        &mut model_cache,
-                                    )
-                                {
-                                    actors.push(actor_with_world_z(model_actor, note_world_z));
-                                } else {
-                                    let sprite_center = offset_center(
-                                        center,
-                                        local_offset,
-                                        local_offset_rot_sin_cos,
-                                    );
-                                    if draw.blend_add {
-                                        actors.push(actor_with_world_z(
-                                            act!(sprite(head_slot.texture_key_handle()):
-                                                align(0.5, 0.5):
-                                                xy(sprite_center[0], sprite_center[1]):
-                                                setsize(note_size[0], note_size[1]):
-                                                rotationy(flat_tap_face_rotation_y):
-                                                rotationz(draw.rot[2] - head_slot.def.rotation_deg as f32 + note_rot):
-                                                customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):
-                                                diffuse(color[0], color[1], color[2], color[3]):
-                                                blend(add):
-                                                z(Z_TAP_NOTE)
-                                            ),
-                                            note_world_z,
-                                        ));
-                                    } else {
-                                        actors.push(actor_with_world_z(
-                                            act!(sprite(head_slot.texture_key_handle()):
-                                                align(0.5, 0.5):
-                                                xy(sprite_center[0], sprite_center[1]):
-                                                setsize(note_size[0], note_size[1]):
-                                                rotationy(flat_tap_face_rotation_y):
-                                                rotationz(draw.rot[2] - head_slot.def.rotation_deg as f32 + note_rot):
-                                                customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):
-                                                diffuse(color[0], color[1], color[2], color[3]):
-                                                blend(normal):
-                                                z(Z_TAP_NOTE)
-                                            ),
-                                            note_world_z,
-                                        ));
-                                    }
-                                }
-                                compose_note_glow(
+                                compose_note_layer(
                                     &mut actors,
                                     &mut model_cache,
-                                    NoteGlowRequest {
+                                    NoteLayerRequest {
                                         slot: head_slot,
                                         draw,
                                         model_center,
@@ -3196,7 +2852,8 @@ pub(crate) fn build_bundles(
                                         sprite_rotation_z_deg: draw.rot[2]
                                             - head_slot.def.rotation_deg as f32
                                             + note_rot,
-                                        alpha: note_glow,
+                                        tint: color,
+                                        glow_alpha: note_glow,
                                         blend,
                                         z: Z_TAP_NOTE as i16,
                                         world_z: note_world_z,
@@ -3233,40 +2890,10 @@ pub(crate) fn build_bundles(
                                 head_slot.model_draw_at(elapsed, current_beat),
                                 note_rotation_y,
                             );
-                            if !prefer_sprite_note_path
-                                && let Some(model_actor) = noteskin_model_actor_from_draw_cached(
-                                    head_slot,
-                                    draw,
-                                    center,
-                                    note_size,
-                                    note_uv,
-                                    -head_slot.def.rotation_deg as f32 + note_rot,
-                                    [1.0, 1.0, 1.0, note_alpha],
-                                    BlendMode::Alpha,
-                                    Z_TAP_NOTE as i16,
-                                    &mut model_cache,
-                                )
-                            {
-                                actors.push(actor_with_world_z(model_actor, note_world_z));
-                            } else {
-                                actors.push(actor_with_world_z(
-                                act!(sprite(head_slot.texture_key_handle()):
-                                    align(0.5, 0.5):
-                                    xy(center[0], center[1]):
-                                    setsize(note_size[0], note_size[1]):
-                                    rotationy(flat_tap_face_rotation_y):
-                                    rotationz(-head_slot.def.rotation_deg as f32 + note_rot):
-                                    customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):
-                                    diffuse(1.0, 1.0, 1.0, note_alpha):
-                                    z(Z_TAP_NOTE)
-                                ),
-                                note_world_z,
-                            ));
-                            }
-                            compose_note_glow(
+                            compose_note_layer(
                                 &mut actors,
                                 &mut model_cache,
-                                NoteGlowRequest {
+                                NoteLayerRequest {
                                     slot: head_slot,
                                     draw,
                                     model_center: center,
@@ -3278,7 +2905,8 @@ pub(crate) fn build_bundles(
                                         + note_rot,
                                     sprite_rotation_z_deg: -head_slot.def.rotation_deg as f32
                                         + note_rot,
-                                    alpha: note_glow,
+                                    tint: [1.0, 1.0, 1.0, note_alpha],
+                                    glow_alpha: note_glow,
                                     blend: BlendMode::Alpha,
                                     z: Z_TAP_NOTE as i16,
                                     world_z: note_world_z,
@@ -3354,63 +2982,10 @@ pub(crate) fn build_bundles(
                                 draw.tint[2],
                                 draw.tint[3] * note_alpha,
                             ];
-                            if !prefer_sprite_note_path
-                                && let Some(model_actor) = noteskin_model_actor_from_draw_cached(
-                                    note_slot,
-                                    draw,
-                                    model_center,
-                                    note_size,
-                                    note_uv,
-                                    -note_slot.def.rotation_deg as f32 + note_rot,
-                                    color,
-                                    blend,
-                                    layer_z as i16,
-                                    &mut model_cache,
-                                )
-                            {
-                                actors.push(actor_with_world_z(model_actor, note_world_z));
-                            } else {
-                                let sprite_center = offset_center(
-                                    note_center,
-                                    local_offset,
-                                    local_offset_rot_sin_cos,
-                                );
-                                if draw.blend_add {
-                                    actors.push(actor_with_world_z(
-                                    act!(sprite(note_slot.texture_key_handle()):
-                                        align(0.5, 0.5):
-                                        xy(sprite_center[0], sprite_center[1]):
-                                        setsize(note_size[0], note_size[1]):
-                                        rotationy(flat_tap_face_rotation_y):
-                                        rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32 + note_rot):
-                                        customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):
-                                        diffuse(color[0], color[1], color[2], color[3]):
-                                        blend(add):
-                                        z(layer_z)
-                                    ),
-                                    note_world_z,
-                                ));
-                                } else {
-                                    actors.push(actor_with_world_z(
-                                    act!(sprite(note_slot.texture_key_handle()):
-                                        align(0.5, 0.5):
-                                        xy(sprite_center[0], sprite_center[1]):
-                                        setsize(note_size[0], note_size[1]):
-                                        rotationy(flat_tap_face_rotation_y):
-                                        rotationz(draw.rot[2] - note_slot.def.rotation_deg as f32 + note_rot):
-                                        customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):
-                                        diffuse(color[0], color[1], color[2], color[3]):
-                                        blend(normal):
-                                        z(layer_z)
-                                    ),
-                                    note_world_z,
-                                ));
-                                }
-                            }
-                            compose_note_glow(
+                            compose_note_layer(
                                 &mut actors,
                                 &mut model_cache,
-                                NoteGlowRequest {
+                                NoteLayerRequest {
                                     slot: note_slot,
                                     draw,
                                     model_center,
@@ -3427,7 +3002,8 @@ pub(crate) fn build_bundles(
                                     sprite_rotation_z_deg: draw.rot[2]
                                         - note_slot.def.rotation_deg as f32
                                         + note_rot,
-                                    alpha: note_glow,
+                                    tint: color,
+                                    glow_alpha: note_glow,
                                     blend,
                                     z: layer_z as i16,
                                     world_z: note_world_z,
@@ -3456,40 +3032,10 @@ pub(crate) fn build_bundles(
                             note_slot.model_draw_at(elapsed, current_beat),
                             note_rotation_y,
                         );
-                        if !prefer_sprite_note_path
-                            && let Some(model_actor) = noteskin_model_actor_from_draw_cached(
-                                note_slot,
-                                draw,
-                                center,
-                                note_size,
-                                note_uv,
-                                -note_slot.def.rotation_deg as f32 + note_rot,
-                                [1.0, 1.0, 1.0, note_alpha],
-                                BlendMode::Alpha,
-                                Z_TAP_NOTE as i16,
-                                &mut model_cache,
-                            )
-                        {
-                            actors.push(actor_with_world_z(model_actor, note_world_z));
-                        } else {
-                            actors.push(actor_with_world_z(
-                            act!(sprite(note_slot.texture_key_handle()):
-                                align(0.5, 0.5):
-                                xy(center[0], center[1]):
-                                setsize(note_size[0], note_size[1]):
-                                rotationy(flat_tap_face_rotation_y):
-                                rotationz(-note_slot.def.rotation_deg as f32 + note_rot):
-                                customtexturerect(note_uv[0], note_uv[1], note_uv[2], note_uv[3]):
-                                diffuse(1.0, 1.0, 1.0, note_alpha):
-                                z(Z_TAP_NOTE)
-                            ),
-                            note_world_z,
-                        ));
-                        }
-                        compose_note_glow(
+                        compose_note_layer(
                             &mut actors,
                             &mut model_cache,
-                            NoteGlowRequest {
+                            NoteLayerRequest {
                                 slot: note_slot,
                                 draw,
                                 model_center: center,
@@ -3500,7 +3046,8 @@ pub(crate) fn build_bundles(
                                 model_rotation_z_deg: -note_slot.def.rotation_deg as f32 + note_rot,
                                 sprite_rotation_z_deg: -note_slot.def.rotation_deg as f32
                                     + note_rot,
-                                alpha: note_glow,
+                                tint: [1.0, 1.0, 1.0, note_alpha],
+                                glow_alpha: note_glow,
                                 blend: BlendMode::Alpha,
                                 z: Z_TAP_NOTE as i16,
                                 world_z: note_world_z,

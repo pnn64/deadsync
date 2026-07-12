@@ -141,7 +141,7 @@ pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
     state.manual_elapsed = 0.0;
     state.manual_active = false;
     Some(ThemeEffect::Runtime(
-        crate::SimplyLoveRuntimeRequest::TestLightsSetAuto,
+        crate::SimplyLoveRuntimeRequest::Hardware(crate::SimplyLoveHardwareRequest::TestLightsAuto),
     ))
 }
 
@@ -157,19 +157,27 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         | VirtualAction::p2_back => ThemeEffect::Navigate(Screen::Options),
         VirtualAction::p1_left | VirtualAction::p1_menu_left => {
             set_manual(state);
-            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::TestLightsStepCabinet(-1))
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Hardware(
+                crate::SimplyLoveHardwareRequest::StepTestCabinet(-1),
+            ))
         }
         VirtualAction::p1_right | VirtualAction::p1_menu_right => {
             set_manual(state);
-            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::TestLightsStepCabinet(1))
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Hardware(
+                crate::SimplyLoveHardwareRequest::StepTestCabinet(1),
+            ))
         }
         VirtualAction::p2_left | VirtualAction::p2_menu_left => {
             set_manual(state);
-            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::TestLightsStepButton(-1))
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Hardware(
+                crate::SimplyLoveHardwareRequest::StepTestButton(-1),
+            ))
         }
         VirtualAction::p2_right | VirtualAction::p2_menu_right => {
             set_manual(state);
-            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::TestLightsStepButton(1))
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Hardware(
+                crate::SimplyLoveHardwareRequest::StepTestButton(1),
+            ))
         }
         _ => ThemeEffect::None,
     }

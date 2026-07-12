@@ -83,7 +83,12 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 
-pub use crate::GameplayCoreState;
+pub type GameplayCoreState = deadsync_gameplay::GameplayRuntimeState<
+    deadsync_profile_gameplay::GameplayProfile,
+    deadsync_assets::song_lua::SongLuaOverlayActor,
+    deadsync_song_lua::SongLuaCapturedActor,
+    deadsync_gameplay::SongLuaRuntimeOverlayStateDelta<deadsync_song_lua::SongLuaOverlayStateDelta>,
+>;
 
 const TEXT_CACHE_LIMIT: usize = 8192;
 type SongLuaOverlayEaseWindowRuntime =

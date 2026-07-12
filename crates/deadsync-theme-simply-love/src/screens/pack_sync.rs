@@ -820,9 +820,9 @@ pub(crate) fn handle_input(
     if let Some(changes) = apply_changes
         && !changes.is_empty()
     {
-        return crate::screens::ThemeEffect::Runtime(
-            crate::SimplyLoveRuntimeRequest::ApplySongOffsetSyncBatch { changes },
-        );
+        return crate::screens::ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Sync(
+            crate::SimplyLoveSyncRequest::ApplySongOffsetBatch { changes },
+        ));
     }
     crate::screens::ThemeEffect::None
 }

@@ -521,7 +521,7 @@ fn current_visible_bg_index(state: &State) -> i32 {
     }
 }
 
-fn scroll_by(state: &mut State, delta: i32) {
+fn scroll_by(state: &mut State, delta: i32) -> ThemeEffect {
     let num_colors = color::DECORATIVE_RGBA.len() as i32;
     // Mimic SM's `finishtweening()` before starting a new scroll.
     state.scroll = state.scroll_to;
@@ -529,11 +529,16 @@ fn scroll_by(state: &mut State, delta: i32) {
     state.active_color_index += delta;
     state.scroll_to = state.active_color_index as f32;
     state.scroll_t = 0.0;
-    deadsync_audio_stream::play_sfx("assets/sounds/expand.ogg");
-    crate::config::update_simply_love_color(state.active_color_index.rem_euclid(num_colors));
+    let color_index = state.active_color_index.rem_euclid(num_colors);
     state.bg_from_index = current_visible_bg_index(state);
     state.bg_to_index = state.active_color_index;
     state.bg_fade_t = 0.0;
+    crate::effects::sfx_then(
+        "assets/sounds/expand.ogg",
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+            crate::SimplyLoveConfigRequest::PersistColor(color_index),
+        )),
+    )
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
@@ -562,21 +567,17 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     };
 
     match nav {
-        Some(Nav::Left) => {
-            scroll_by(state, -1);
-            ThemeEffect::None
-        }
-        Some(Nav::Right) => {
-            scroll_by(state, 1);
-            ThemeEffect::None
-        }
+        Some(Nav::Left) => scroll_by(state, -1),
+        Some(Nav::Right) => scroll_by(state, 1),
         Some(Nav::Confirm) => {
             state.exit_requested = true;
             state.scroll = state.scroll_to;
             state.scroll_from = state.scroll;
             state.scroll_t = SCROLL_TWEEN_DURATION;
-            deadsync_audio_stream::play_sfx("assets/sounds/start.ogg");
-            ThemeEffect::Navigate(Screen::SelectStyle)
+            crate::effects::sfx_then(
+                "assets/sounds/start.ogg",
+                ThemeEffect::Navigate(Screen::SelectStyle),
+            )
         }
         Some(Nav::Back) => {
             state.exit_requested = true;
@@ -586,5 +587,73 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
             ThemeEffect::Navigate(Screen::Menu)
         }
         _ => ThemeEffect::None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use deadsync_core::input::InputSource;
+    use std::time::Instant;
+
+    fn input(action: VirtualAction) -> InputEvent {
+        let now = Instant::now();
+        InputEvent {
+            action,
+            input_slot: 0,
+            pressed: true,
+            source: InputSource::Keyboard,
+            timestamp: now,
+            timestamp_host_nanos: 0,
+            stored_at: now,
+            emitted_at: now,
+        }
+    }
+
+    #[test]
+    fn scroll_requests_audio_before_color_persistence() {
+        let mut state = init();
+        let effect = scroll_by(&mut state, 1);
+        let expected = state
+            .active_color_index
+            .rem_euclid(color::DECORATIVE_RGBA.len() as i32);
+        let ThemeEffect::Batch(effects) = effect else {
+            panic!("expected batched scroll effect");
+        };
+
+        assert_eq!(effects.len(), 2);
+        assert!(matches!(
+            &effects[0],
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                deadsync_theme::AudioRequest::PlaySfx(path)
+            )) if path == "assets/sounds/expand.ogg"
+        ));
+        assert!(matches!(
+            effects[1],
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+                crate::SimplyLoveConfigRequest::PersistColor(index)
+            )) if index == expected
+        ));
+    }
+
+    #[test]
+    fn confirm_requests_audio_before_navigation() {
+        let mut state = init();
+        let effect = handle_input(&mut state, &input(VirtualAction::p1_start));
+        let ThemeEffect::Batch(effects) = effect else {
+            panic!("expected batched confirm effect");
+        };
+
+        assert!(state.exit_requested);
+        assert!(matches!(
+            &effects[0],
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                deadsync_theme::AudioRequest::PlaySfx(path)
+            )) if path == "assets/sounds/start.ogg"
+        ));
+        assert!(matches!(
+            effects[1],
+            ThemeEffect::Navigate(Screen::SelectStyle)
+        ));
     }
 }

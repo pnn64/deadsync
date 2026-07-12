@@ -8,6 +8,7 @@ mod input_routing;
 mod screen_nav;
 mod screenshot;
 mod smx_runtime;
+mod updater;
 
 use self::screenshot::auto_screenshot_eval_results;
 use crate::command::Command;
@@ -61,8 +62,8 @@ use crate::restart::{
 use crate::runtime::ShellState;
 use crate::screen_flow::{
     LateJoinContext, ProfileSelectionContext, SelectMusicJoinContext, ThemeEffectExecution,
-    ThemeEffectRouteContext, evaluation_summary_return_to, late_join_side, profile_selection_plan,
-    select_music_join_plan, theme_effect_execution_plan,
+    ThemeEffectRouteContext, evaluation_summary_return_to, execute_effect_batch, late_join_side,
+    profile_selection_plan, select_music_join_plan, theme_effect_execution_plan,
 };
 use crate::screenshot::{AutoScreenshotFrameContext, auto_screenshot_frame_plan};
 use crate::session::SessionState as ShellSessionState;
@@ -163,11 +164,14 @@ use deadsync_rules::judgment as judgment_rules;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 #[cfg(test)]
 use deadsync_rules::timing as timing_rules;
-use deadsync_theme::AudioRequest;
 use deadsync_theme::views::DensityGraphView as DensityGraphSource;
+use deadsync_theme::{AudioRequest, PlatformRequest, RevealPathKind};
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as CurrentScreen;
 use deadsync_theme_simply_love::views::SimplyLoveDensityGraphSlot as DensityGraphSlot;
-use deadsync_theme_simply_love::{SimplyLoveEffect as ThemeEffect, SimplyLoveRuntimeRequest};
+use deadsync_theme_simply_love::{
+    SimplyLoveConfigRequest, SimplyLoveEffect as ThemeEffect, SimplyLoveHardwareRequest,
+    SimplyLoveProfileRequest, SimplyLoveRuntimeRequest, SimplyLoveSyncRequest,
+};
 
 /// Imperative effects to be executed by the shell.
 /* -------------------- transition timing constants -------------------- */
@@ -401,7 +405,7 @@ impl ScreensState {
         let mut profile_load_state = profile_load::init();
         profile_load_state.active_color_index = color_index;
 
-        let mut options_state = options::init();
+        let mut options_state = options::init(updater::capabilities());
         options_state.active_color_index = color_index;
 
         let mut credits_state = credits::init();
@@ -753,6 +757,25 @@ pub struct App {
     state: AppState,
     software_renderer_threads: u8,
     gfx_debug_enabled: bool,
+}
+
+fn execute_platform_request(request: PlatformRequest) {
+    match request {
+        PlatformRequest::RevealPath { path, kind } => {
+            dirs::ensure_dirs_exist();
+            if matches!(kind, RevealPathKind::Directory) && !path.exists() {
+                if let Err(e) = std::fs::create_dir_all(&path) {
+                    warn!(
+                        "Failed to create folder before opening '{}': {e}",
+                        path.display()
+                    );
+                }
+            }
+            if let Err(e) = deadlib_platform::open_path::reveal(&path) {
+                warn!("Failed to open '{}' in file explorer: {e}", path.display());
+            }
+        }
+    }
 }
 
 impl App {
@@ -1747,7 +1770,7 @@ impl App {
 
     fn reset_options_state_for_entry(&mut self, from: CurrentScreen) {
         let current_color_index = self.state.screens.options_state.active_color_index;
-        self.state.screens.options_state = options::init();
+        self.state.screens.options_state = options::init(updater::capabilities());
         self.state.screens.options_state.active_color_index = current_color_index;
         if matches!(
             from,
@@ -1838,6 +1861,10 @@ impl App {
 
         let commands = match plan.effect {
             ThemeEffectExecution::None => Vec::new(),
+            ThemeEffectExecution::Batch(effects) => {
+                execute_effect_batch(effects, |effect| self.handle_action(effect, event_loop))?;
+                return Ok(());
+            }
             ThemeEffectExecution::Navigate(screen) => {
                 self.handle_navigation_action(screen);
                 Vec::new()
@@ -1910,7 +1937,7 @@ impl App {
                 Vec::new()
             }
             ThemeEffectExecution::Runtime(request) => match request {
-                SimplyLoveRuntimeRequest::SelectProfiles { p1, p2 } => {
+                SimplyLoveRuntimeRequest::Profile(SimplyLoveProfileRequest::Select { p1, p2 }) => {
                     let fast_profile_switch = profile::take_fast_profile_switch_from_select_music();
                     let profile_data = profile::set_active_profiles(p1, p2);
                     let (show_groovestats_login, show_arrowcloud_login) = if fast_profile_switch {
@@ -1983,10 +2010,24 @@ impl App {
                     }
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::ApplySongOffsetSync {
+                SimplyLoveRuntimeRequest::Profile(SimplyLoveProfileRequest::PickImportFolder {
+                    title,
+                }) => {
+                    let (tx, rx) = std::sync::mpsc::channel();
+                    std::thread::spawn(move || {
+                        let picked = rfd::FileDialog::new().set_title(title).pick_folder();
+                        let _ = tx.send(picked);
+                    });
+                    manage_local_profiles::attach_import_folder_picker(
+                        &mut self.state.screens.manage_local_profiles_state,
+                        rx,
+                    );
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Sync(SimplyLoveSyncRequest::ApplySongOffset {
                     simfile_path,
                     delta_seconds,
-                } => {
+                }) => {
                     if let Err(e) =
                         self.save_gameplay_song_offset(simfile_path.as_path(), delta_seconds)
                     {
@@ -1994,7 +2035,9 @@ impl App {
                     }
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::ApplySongOffsetSyncBatch { changes } => {
+                SimplyLoveRuntimeRequest::Sync(SimplyLoveSyncRequest::ApplySongOffsetBatch {
+                    changes,
+                }) => {
                     if let Err(e) = self.save_song_offset_changes(&changes) {
                         warn!("Failed to save pack sync changes: {e}");
                     }
@@ -2008,13 +2051,19 @@ impl App {
                     self.handle_graphics_change(request, event_loop)?;
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::UpdateShowOverlay(mode) => {
+                SimplyLoveRuntimeRequest::Updater(request) => {
+                    updater::execute(request);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::ShowOverlay(mode)) => {
                     self.state.shell.set_overlay_mode(mode);
                     config::update_show_stats_mode(mode);
                     options::sync_show_stats_mode(&mut self.state.screens.options_state, mode);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::UpdateMouseCursorHidden(hidden) => {
+                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::MouseCursorHidden(
+                    hidden,
+                )) => {
                     if let Some(window) = &self.window {
                         window.set_cursor_visible(!hidden);
                     }
@@ -2022,29 +2071,34 @@ impl App {
                     options::sync_hide_mouse_cursor(&mut self.state.screens.options_state, hidden);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::TestLightsSetAuto => {
+                SimplyLoveRuntimeRequest::Config(SimplyLoveConfigRequest::PersistColor(index)) => {
+                    config::update_simply_love_color(index);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Hardware(SimplyLoveHardwareRequest::TestLightsAuto) => {
                     test_lights::on_enter(&mut self.state.screens.test_lights_state);
                     self.lights.set_test_auto_cycle();
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::TestLightsStepCabinet(delta) => {
+                SimplyLoveRuntimeRequest::Hardware(SimplyLoveHardwareRequest::StepTestCabinet(
+                    delta,
+                )) => {
                     self.lights.step_test_cabinet(delta);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::TestLightsStepButton(delta) => {
+                SimplyLoveRuntimeRequest::Hardware(SimplyLoveHardwareRequest::StepTestButton(
+                    delta,
+                )) => {
                     self.lights.step_test_button(delta);
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::LinkArrowCloud { .. }
-                | SimplyLoveRuntimeRequest::LinkGrooveStats { .. }
-                | SimplyLoveRuntimeRequest::RequestScreenshot(_)
-                | SimplyLoveRuntimeRequest::RequestBanner(_)
-                | SimplyLoveRuntimeRequest::RequestCdTitle(_)
-                | SimplyLoveRuntimeRequest::RequestPackBanner(_)
-                | SimplyLoveRuntimeRequest::RequestWheelItemBackgrounds(_)
-                | SimplyLoveRuntimeRequest::RequestDensityGraph { .. }
-                | SimplyLoveRuntimeRequest::FetchOnlineGrade(_)
-                | SimplyLoveRuntimeRequest::WriteFsrDump => Vec::new(),
+                SimplyLoveRuntimeRequest::Platform(request) => {
+                    execute_platform_request(request);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Media(_)
+                | SimplyLoveRuntimeRequest::Online(_)
+                | SimplyLoveRuntimeRequest::Debug(_) => Vec::new(),
             },
         };
         self.run_commands(commands, event_loop)
@@ -3158,9 +3212,11 @@ impl App {
 
         match self.state.screens.current_screen {
             CurrentScreen::Menu => {
+                let update_tag = updater::available_update_tag();
                 menu::push_actors(
                     &mut actors,
                     &self.state.screens.menu_state,
+                    update_tag.as_deref(),
                     screen_alpha_multiplier,
                 );
             }
@@ -3217,12 +3273,16 @@ impl App {
                     );
                 }
             }
-            CurrentScreen::Options => options::push_actors(
-                &mut actors,
-                &self.state.screens.options_state,
-                &self.asset_manager,
-                screen_alpha_multiplier,
-            ),
+            CurrentScreen::Options => {
+                let updater = updater::view();
+                options::push_actors(
+                    &mut actors,
+                    &self.state.screens.options_state,
+                    &self.asset_manager,
+                    &updater,
+                    screen_alpha_multiplier,
+                );
+            }
             CurrentScreen::Credits => {
                 credits::push_actors(&mut actors, &self.state.screens.credits_state)
             }

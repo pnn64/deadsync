@@ -32,8 +32,10 @@ deadsync-smx = { path = "../deadsync-smx" }
 deadsync-song-lua = { path = "../deadsync-song-lua" }
 deadsync-theme = { path = "../deadsync-theme" }
 deadsync-theme-simply-love = { path = "../deadsync-theme-simply-love" }
+deadsync-updater = { path = "../deadsync-updater" }
 image = "0.25.10"
 log = "0.4.33"
+rfd = "0.17.2"
 smallvec = "1.15.2"
 winit = "0.30.13"
 
