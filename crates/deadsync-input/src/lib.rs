@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use deadsync_core::input::{InputSource, Lane};
 use deadsync_core::song_time::SongTimeNs;
-use winit::keyboard::KeyCode;
+pub use winit::keyboard::KeyCode;
 
 pub mod bindings;
 pub mod debounce;

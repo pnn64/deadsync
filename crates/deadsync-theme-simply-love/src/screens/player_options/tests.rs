@@ -13,9 +13,9 @@ pub(super) mod tests {
         count_visible_rows, effective_scroll_speed_with_alt, handle_arcade_start_event,
         handle_nav_event, handle_start_event, hud_offset_choices, init_cycle_row_from_binding,
         init_numeric_row_from_binding, is_row_visible, judgment_tilt_options_visible,
-        on_start_press, player_option_column_x, repeat_held_arcade_start, row_f_pos_for_index,
-        row_visibility, session_active_players, sync_profile_scroll_speed, sync_speed_mod_type_row,
-        update,
+        on_start_press, player_option_column_x, prepend_pending_audio, queue_audio, queue_sfx,
+        repeat_held_arcade_start, row_f_pos_for_index, row_visibility, session_active_players,
+        sync_profile_scroll_speed, sync_speed_mod_type_row, update,
     };
     use crate::assets::AssetManager;
     use crate::assets::i18n::{LookupKey, lookup_key};
@@ -29,6 +29,7 @@ pub(super) mod tests {
         ScrollOption, StepStatisticsMask,
     };
     use deadsync_rules::scroll::ScrollSpeedSetting;
+    use deadsync_theme::AudioRequest;
     use std::collections::HashMap;
     use std::path::PathBuf;
     use std::sync::Arc;
@@ -1632,6 +1633,81 @@ pub(super) mod tests {
         (state, asset_manager)
     }
 
+    fn assert_sfx(effect: &ThemeEffect, expected_path: &str) {
+        assert!(matches!(
+            effect,
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                AudioRequest::PlaySfx(path)
+            )) if path == expected_path
+        ));
+    }
+
+    #[test]
+    fn queued_audio_requests_precede_navigation() {
+        ensure_i18n();
+        let (mut state, _) = setup_state();
+        queue_audio(&mut state, AudioRequest::SetMusicRate(1.25));
+        queue_sfx(&mut state, "assets/sounds/change_value.ogg");
+        queue_sfx(&mut state, "assets/sounds/start.ogg");
+
+        let effect = prepend_pending_audio(&mut state, ThemeEffect::Navigate(Screen::Gameplay));
+        let ThemeEffect::Batch(effects) = effect else {
+            panic!("queued Player Options audio should precede navigation");
+        };
+        assert_eq!(effects.len(), 4);
+        assert!(matches!(
+            effects[0],
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                AudioRequest::SetMusicRate(rate)
+            )) if rate == 1.25
+        ));
+        assert_sfx(&effects[1], "assets/sounds/change_value.ogg");
+        assert_sfx(&effects[2], "assets/sounds/start.ogg");
+        assert!(matches!(
+            effects[3],
+            ThemeEffect::Navigate(Screen::Gameplay)
+        ));
+        assert!(state.pending_audio.is_empty());
+    }
+
+    #[test]
+    fn music_rate_request_precedes_change_sfx() {
+        ensure_i18n();
+        let (mut state, asset_manager) = setup_state();
+        let rate_row = state
+            .pane()
+            .row_map
+            .display_order()
+            .iter()
+            .position(|&id| id == RowId::MusicRate)
+            .expect("Music Rate should be in Main pane");
+        state.pane_mut().selected_row[P1] = rate_row;
+        state.pane_mut().prev_selected_row[P1] = rate_row;
+        let before = state.music_rate;
+
+        handle_nav_event(
+            &mut state,
+            &asset_manager,
+            session_active_players(),
+            P1,
+            NavDirection::Right,
+            true,
+        );
+        let effect = update(&mut state, 0.0, &asset_manager)
+            .expect("music-rate change should emit ordered audio work");
+        let ThemeEffect::Batch(effects) = effect else {
+            panic!("rate update and change cue should be batched");
+        };
+        assert_eq!(effects.len(), 2);
+        assert!(matches!(
+            effects[0],
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                AudioRequest::SetMusicRate(rate)
+            )) if rate == state.music_rate && rate > before
+        ));
+        assert_sfx(&effects[1], "assets/sounds/change_value.ogg");
+    }
+
     #[test]
     fn held_speed_mod_repeat_uses_update_dt() {
         ensure_i18n();
@@ -1659,14 +1735,18 @@ pub(super) mod tests {
         let after_press = state.speed_mod[P1].value;
         assert!(after_press > before);
 
-        update(&mut state, 0.0, &asset_manager);
+        let press_effect = update(&mut state, 0.0, &asset_manager)
+            .expect("initial choice change should emit its queued sound");
+        assert_sfx(&press_effect, "assets/sounds/change_value.ogg");
         assert_eq!(state.speed_mod[P1].value, after_press);
 
-        update(
+        let repeat_effect = update(
             &mut state,
             (NAV_INITIAL_HOLD_DELAY + Duration::from_millis(1)).as_secs_f32(),
             &asset_manager,
-        );
+        )
+        .expect("held choice repeat should emit its queued sound");
+        assert_sfx(&repeat_effect, "assets/sounds/change_value.ogg");
         assert!(state.speed_mod[P1].value > after_press);
     }
 

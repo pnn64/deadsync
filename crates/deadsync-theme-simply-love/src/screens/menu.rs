@@ -8,19 +8,17 @@ use crate::screens::components::menu::menu_splash;
 use crate::screens::components::shared::{screen_bar, transitions, visual_style_bg};
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ThemeEffect};
+use crate::views::{
+    MainMenuArrowCloudError, MainMenuArrowCloudStatus, MainMenuGrooveError, MainMenuGrooveStatus,
+    MainMenuRuntimeView,
+};
 use deadlib_present::actors::{Actor, TextAlign};
 use deadlib_present::color;
+use deadsync_input::KeyCode;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, VirtualAction};
-use deadsync_online::arrowcloud::{
-    ConnectionError as ArrowCloudError, ConnectionStatus as ArrowCloudConnectionStatus,
-};
-use deadsync_online::groovestats::{ConnectionError as GrooveStatsError, ConnectionStatus};
-use deadsync_simfile::runtime_cache::get_course_cache;
-use deadsync_simfile::runtime_cache::get_song_cache;
 use std::cell::{Cell, RefCell};
 use std::sync::Arc;
-use winit::keyboard::KeyCode;
 
 use deadlib_present::space::screen_center_x;
 
@@ -33,8 +31,8 @@ const NORMAL_COLOR_HEX: &str = "#888888";
 pub const OPTION_COUNT: usize = 3;
 
 #[inline]
-fn option_count() -> usize {
-    if crate::config::get().allow_shutdown_host {
+fn option_count(state: &State) -> usize {
+    if state.runtime_view.allow_shutdown_host {
         OPTION_COUNT + 1
     } else {
         OPTION_COUNT
@@ -42,8 +40,9 @@ fn option_count() -> usize {
 }
 
 #[inline]
-fn shutdown_index() -> Option<usize> {
-    crate::config::get()
+fn shutdown_index(state: &State) -> Option<usize> {
+    state
+        .runtime_view
         .allow_shutdown_host
         .then_some(OPTION_COUNT)
 }
@@ -72,45 +71,31 @@ struct StatusTextCache<K, const N: usize> {
     line_count: usize,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum GrooveStatusKey {
-    Pending {
-        boogie: bool,
-    },
-    Error {
-        boogie: bool,
-        kind: GrooveStatsError,
-    },
-    Connected {
-        boogie: bool,
-        disabled_mask: u8,
-    },
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum ArrowCloudStatusKey {
-    Pending,
-    Connected,
-    Error(ArrowCloudError),
-}
-
-fn groove_error_text(kind: GrooveStatsError) -> Arc<str> {
+fn groove_error_text(kind: MainMenuGrooveError) -> Arc<str> {
     match kind {
-        GrooveStatsError::Disabled => tr("Menu", "Disabled"),
-        GrooveStatsError::MachineOffline => tr("Menu", "MachineOffline"),
-        GrooveStatsError::CannotConnect => tr("Menu", "CannotConnect"),
-        GrooveStatsError::TimedOut => tr("Menu", "TimedOut"),
-        GrooveStatsError::InvalidResponse => tr("Menu", "FailedToLoad"),
+        MainMenuGrooveError::Disabled => tr("Menu", "Disabled"),
+        MainMenuGrooveError::MachineOffline => tr("Menu", "MachineOffline"),
+        MainMenuGrooveError::CannotConnect => tr("Menu", "CannotConnect"),
+        MainMenuGrooveError::TimedOut => tr("Menu", "TimedOut"),
+        MainMenuGrooveError::InvalidResponse => tr("Menu", "FailedToLoad"),
     }
 }
 
-fn arrowcloud_error_text(kind: ArrowCloudError) -> Arc<str> {
+fn arrowcloud_error_text(kind: MainMenuArrowCloudError) -> Arc<str> {
     match kind {
-        ArrowCloudError::Disabled => tr("Menu", "Disabled"),
-        ArrowCloudError::TimedOut => tr("Menu", "TimedOut"),
-        ArrowCloudError::HostBlocked => tr("Menu", "HostBlocked"),
-        ArrowCloudError::CannotConnect => tr("Menu", "CannotConnect"),
+        MainMenuArrowCloudError::Disabled => tr("Menu", "Disabled"),
+        MainMenuArrowCloudError::TimedOut => tr("Menu", "TimedOut"),
+        MainMenuArrowCloudError::HostBlocked => tr("Menu", "HostBlocked"),
+        MainMenuArrowCloudError::CannotConnect => tr("Menu", "CannotConnect"),
     }
+}
+
+#[derive(Clone, PartialEq, Eq)]
+struct InfoTextKey {
+    banner_tag: Option<String>,
+    song_count: usize,
+    pack_count: usize,
+    course_count: usize,
 }
 
 pub struct State {
@@ -118,11 +103,12 @@ pub struct State {
     pub active_color_index: i32,
     pub rainbow_mode: bool,
     pub started_by_p2: bool,
+    runtime_view: MainMenuRuntimeView,
     bg: visual_style_bg::State,
     i18n_revision: Cell<u64>,
-    info_text_cache: RefCell<Option<(Option<String>, Arc<str>)>>,
-    groovestats_text_cache: RefCell<Option<StatusTextCache<GrooveStatusKey, 3>>>,
-    arrowcloud_text_cache: RefCell<Option<StatusTextCache<ArrowCloudStatusKey, 1>>>,
+    info_text_cache: RefCell<Option<(InfoTextKey, Arc<str>)>>,
+    groovestats_text_cache: RefCell<Option<StatusTextCache<MainMenuGrooveStatus, 3>>>,
+    arrowcloud_text_cache: RefCell<Option<StatusTextCache<MainMenuArrowCloudStatus, 1>>>,
     menu_lr_chord: screen_input::MenuLrChordTracker,
     menu_lr_undo: [i8; 2],
 }
@@ -133,6 +119,7 @@ pub fn init() -> State {
         active_color_index: color::DEFAULT_COLOR_INDEX, // was 0
         rainbow_mode: false,
         started_by_p2: false,
+        runtime_view: MainMenuRuntimeView::default(),
         bg: visual_style_bg::State::new(),
         i18n_revision: Cell::new(i18n::revision()),
         info_text_cache: RefCell::new(None),
@@ -141,6 +128,13 @@ pub fn init() -> State {
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         menu_lr_undo: [0; 2],
     }
+}
+
+pub fn sync_runtime_view(state: &mut State, view: MainMenuRuntimeView) {
+    state.runtime_view = view;
+    state.selected_index = state
+        .selected_index
+        .min(option_count(state).saturating_sub(1));
 }
 
 // Keyboard input is handled centrally via the virtual dispatcher in app
@@ -191,34 +185,35 @@ fn sync_i18n_cache(state: &State) {
 
 #[inline(always)]
 fn menu_info_text(state: &State, update_banner_tag: Option<&str>) -> Arc<str> {
-    let banner_tag = update_banner_tag.map(str::to_owned);
-    if let Some((cached_tag, text)) = state.info_text_cache.borrow().as_ref()
-        && cached_tag == &banner_tag
+    let key = InfoTextKey {
+        banner_tag: update_banner_tag.map(str::to_owned),
+        song_count: state.runtime_view.song_count,
+        pack_count: state.runtime_view.pack_count,
+        course_count: state.runtime_view.course_count,
+    };
+    if let Some((cached_key, text)) = state.info_text_cache.borrow().as_ref()
+        && cached_key == &key
     {
         return text.clone();
     }
 
     let version = deadsync_version::current().to_string();
-    let song_cache = get_song_cache();
-    let num_packs = song_cache.len();
-    let num_songs: usize = song_cache.iter().map(|pack| pack.songs.len()).sum();
-    let num_courses = get_course_cache().len();
     let mut version_line = tr_fmt("Menu", "VersionLine", &[("version", &version)]).to_string();
-    if let Some(tag) = banner_tag.as_deref() {
+    if let Some(tag) = key.banner_tag.as_deref() {
         let suffix = tr_fmt("Menu", "UpdateAvailableSuffix", &[("version", tag)]);
         version_line.push(' ');
         version_line.push_str(&suffix);
     }
-    let songs = num_songs.to_string();
-    let packs = num_packs.to_string();
-    let courses = num_courses.to_string();
+    let songs = key.song_count.to_string();
+    let packs = key.pack_count.to_string();
+    let courses = key.course_count.to_string();
     let summary = tr_fmt(
         "Menu",
         "SongSummary",
         &[("songs", &songs), ("packs", &packs), ("courses", &courses)],
     );
     let text = Arc::<str>::from(format!("{version_line}\n{summary}"));
-    *state.info_text_cache.borrow_mut() = Some((banner_tag, text.clone()));
+    *state.info_text_cache.borrow_mut() = Some((key, text.clone()));
     text
 }
 
@@ -231,34 +226,19 @@ fn groove_service_name(boogie: bool) -> Arc<str> {
     }
 }
 
-#[inline(always)]
-fn groove_status_key() -> GrooveStatusKey {
-    let boogie = deadsync_online::runtime::is_boogiestats_active();
-    match deadsync_online::groovestats::runtime_get_status() {
-        ConnectionStatus::Pending => GrooveStatusKey::Pending { boogie },
-        ConnectionStatus::Error(kind) => GrooveStatusKey::Error { boogie, kind },
-        ConnectionStatus::Connected(services) => GrooveStatusKey::Connected {
-            boogie,
-            disabled_mask: (!services.get_scores) as u8
-                | (((!services.leaderboard) as u8) << 1)
-                | (((!services.auto_submit) as u8) << 2),
-        },
-    }
-}
-
-fn build_groovestats_text(key: GrooveStatusKey) -> StatusTextCache<GrooveStatusKey, 3> {
+fn build_groovestats_text(key: MainMenuGrooveStatus) -> StatusTextCache<MainMenuGrooveStatus, 3> {
     let mut lines = [None, None, None];
     let (main, line_count) = match key {
-        GrooveStatusKey::Pending { boogie } => {
+        MainMenuGrooveStatus::Pending { boogie } => {
             let service = groove_service_name(boogie);
             (
                 tr_fmt("Menu", "ServicePending", &[("service", service.as_ref())]),
                 0,
             )
         }
-        GrooveStatusKey::Error { boogie, kind } => {
+        MainMenuGrooveStatus::Error { boogie, kind } => {
             lines[0] = Some(groove_error_text(kind));
-            if kind == GrooveStatsError::Disabled {
+            if kind == MainMenuGrooveError::Disabled {
                 (tr("Menu", "GrooveStatsDisabled"), 1)
             } else {
                 let service = groove_service_name(boogie);
@@ -272,10 +252,14 @@ fn build_groovestats_text(key: GrooveStatusKey) -> StatusTextCache<GrooveStatusK
                 )
             }
         }
-        GrooveStatusKey::Connected {
+        MainMenuGrooveStatus::Connected {
             boogie,
-            disabled_mask,
+            get_scores,
+            leaderboard,
+            auto_submit,
         } => {
+            let disabled_mask =
+                (!get_scores) as u8 | (((!leaderboard) as u8) << 1) | (((!auto_submit) as u8) << 2);
             if disabled_mask == 0 {
                 let service = groove_service_name(boogie);
                 (
@@ -310,8 +294,8 @@ fn build_groovestats_text(key: GrooveStatusKey) -> StatusTextCache<GrooveStatusK
     }
 }
 
-fn groovestats_text(state: &State) -> StatusTextCache<GrooveStatusKey, 3> {
-    let key = groove_status_key();
+fn groovestats_text(state: &State) -> StatusTextCache<MainMenuGrooveStatus, 3> {
+    let key = state.runtime_view.groovestats;
     if let Some(cache) = state.groovestats_text_cache.borrow().as_ref()
         && cache.key == key
     {
@@ -322,21 +306,14 @@ fn groovestats_text(state: &State) -> StatusTextCache<GrooveStatusKey, 3> {
     cache
 }
 
-#[inline(always)]
-fn arrowcloud_status_key() -> ArrowCloudStatusKey {
-    match deadsync_online::arrowcloud::runtime_get_status() {
-        ArrowCloudConnectionStatus::Pending => ArrowCloudStatusKey::Pending,
-        ArrowCloudConnectionStatus::Connected => ArrowCloudStatusKey::Connected,
-        ArrowCloudConnectionStatus::Error(kind) => ArrowCloudStatusKey::Error(kind),
-    }
-}
-
-fn build_arrowcloud_text(key: ArrowCloudStatusKey) -> StatusTextCache<ArrowCloudStatusKey, 1> {
+fn build_arrowcloud_text(
+    key: MainMenuArrowCloudStatus,
+) -> StatusTextCache<MainMenuArrowCloudStatus, 1> {
     let mut lines = [None];
     let (main, line_count) = match key {
-        ArrowCloudStatusKey::Pending => (tr("Menu", "ArrowCloudPending"), 0),
-        ArrowCloudStatusKey::Connected => (tr("Menu", "ArrowCloudConnected"), 0),
-        ArrowCloudStatusKey::Error(kind) => {
+        MainMenuArrowCloudStatus::Pending => (tr("Menu", "ArrowCloudPending"), 0),
+        MainMenuArrowCloudStatus::Connected => (tr("Menu", "ArrowCloudConnected"), 0),
+        MainMenuArrowCloudStatus::Error(kind) => {
             lines[0] = Some(arrowcloud_error_text(kind));
             (tr("Menu", "ArrowCloudDisabled"), 1)
         }
@@ -349,8 +326,8 @@ fn build_arrowcloud_text(key: ArrowCloudStatusKey) -> StatusTextCache<ArrowCloud
     }
 }
 
-fn arrowcloud_text(state: &State) -> StatusTextCache<ArrowCloudStatusKey, 1> {
-    let key = arrowcloud_status_key();
+fn arrowcloud_text(state: &State) -> StatusTextCache<MainMenuArrowCloudStatus, 1> {
+    let key = state.runtime_view.arrowcloud;
     if let Some(cache) = state.arrowcloud_text_cache.borrow().as_ref()
         && cache.key == key
     {
@@ -455,7 +432,7 @@ pub fn push_actors(
     menu_labels.push(tr("Menu", "Gameplay"));
     menu_labels.push(tr("Menu", "Options"));
     menu_labels.push(tr("Menu", "Exit"));
-    if crate::config::get().allow_shutdown_host {
+    if state.runtime_view.allow_shutdown_host {
         menu_labels.push(tr("Menu", "Shutdown"));
     }
 
@@ -544,7 +521,7 @@ pub fn push_actors(
 
     // --- StepManiaX pad warning (only when two pads share a P1/P2 jumper and no
     // assignment resolves them, so the user knows to assign their pads). ---
-    if crate::config::get().smx_input && deadsync_smx::conflict_warning_active() {
+    if let Some(conflict) = state.runtime_view.smx_conflict {
         let smx_base_y = (STATUS_LINE_HEIGHT * (ac_text.line_count as f32 + 1.0))
             .mul_add(STATUS_ZOOM, ac_base_y + STATUS_BLOCK_GAP);
         // Two short lines (kept compact for the main screen).
@@ -565,7 +542,7 @@ pub fn push_actors(
             );
             if let Actor::Text { color, .. } = &mut actor {
                 // Amber warning (alpha already applied by status_text_actor).
-                color[..3].copy_from_slice(&deadsync_smx::CONFLICT_WARNING_RGB);
+                color[..3].copy_from_slice(&conflict.color_rgb);
             }
             actors.push(actor);
         }
@@ -585,7 +562,7 @@ pub fn get_actors(
 
 #[inline(always)]
 fn move_selection(state: &mut State, delta: isize) {
-    let n = option_count() as isize;
+    let n = option_count(state) as isize;
     let cur = state.selected_index as isize;
     state.selected_index = (cur + delta).rem_euclid(n) as usize;
 }
@@ -593,7 +570,7 @@ fn move_selection(state: &mut State, delta: isize) {
 #[inline(always)]
 fn start_selected(state: &mut State, started_by_p2: bool) -> ThemeEffect {
     state.started_by_p2 = started_by_p2;
-    let effect = if Some(state.selected_index) == shutdown_index() {
+    let effect = if Some(state.selected_index) == shutdown_index(state) {
         ThemeEffect::Shutdown
     } else {
         match state.selected_index {
@@ -758,5 +735,32 @@ mod tests {
             effects[1],
             ThemeEffect::Navigate(Screen::SelectProfile)
         ));
+    }
+
+    #[test]
+    fn prepared_shutdown_capability_adds_shutdown_action() {
+        let mut state = init();
+        sync_runtime_view(
+            &mut state,
+            MainMenuRuntimeView {
+                allow_shutdown_host: true,
+                ..MainMenuRuntimeView::default()
+            },
+        );
+        state.selected_index = OPTION_COUNT;
+
+        let ThemeEffect::Batch(effects) = handle_input(&mut state, &input(VirtualAction::p1_start))
+        else {
+            panic!("expected batched shutdown effect");
+        };
+        assert!(matches!(effects[1], ThemeEffect::Shutdown));
+    }
+
+    #[test]
+    fn removing_shutdown_capability_clamps_selection() {
+        let mut state = init();
+        state.selected_index = OPTION_COUNT;
+        sync_runtime_view(&mut state, MainMenuRuntimeView::default());
+        assert_eq!(state.selected_index, OPTION_COUNT - 1);
     }
 }

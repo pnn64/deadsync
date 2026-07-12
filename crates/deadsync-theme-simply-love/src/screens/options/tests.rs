@@ -5,13 +5,21 @@ use deadsync_core::input::InputSource;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_lights::DriverKind as LightsDriverKind;
 use deadsync_profile as profile_data;
+use deadsync_theme::views::AudioOutputDeviceView;
 use std::time::{Duration, Instant};
 
 fn init() -> State {
-    super::init(SimplyLoveUpdaterCapabilities {
-        app_update: true,
-        ffmpeg_install: true,
-    })
+    init_with_audio(AudioOptionsView::default())
+}
+
+fn init_with_audio(audio_options: AudioOptionsView) -> State {
+    super::init(
+        SimplyLoveUpdaterCapabilities {
+            app_update: true,
+            ffmpeg_install: true,
+        },
+        audio_options,
+    )
 }
 
 fn updater_view() -> SimplyLoveUpdaterView {
@@ -47,6 +55,57 @@ fn dedicated_press(
     action: VirtualAction,
 ) -> ThemeEffect {
     handle_dedicated_three_key_options_input(state, asset_manager, &input_event(action, true))
+}
+
+#[test]
+fn audio_options_view_builds_and_rebuilds_localized_device_labels() {
+    let audio_options = AudioOptionsView {
+        output_devices: vec![
+            AudioOutputDeviceView {
+                name: "Primary Device".to_owned(),
+                is_default: true,
+                sample_rates_hz: vec![44_100, 48_000],
+            },
+            AudioOutputDeviceView {
+                name: "Secondary Device".to_owned(),
+                is_default: false,
+                sample_rates_hz: vec![48_000],
+            },
+        ],
+        available_backend_names: vec!["Auto".to_owned(), "ALSA".to_owned()],
+    };
+    let mut state = init_with_audio(audio_options.clone());
+
+    assert_eq!(state.audio_options, audio_options);
+    assert_eq!(state.sound_device_options.len(), 3);
+    assert_eq!(state.sound_device_options[0].config_index, None);
+    assert_eq!(
+        state.sound_device_options[0].sample_rates_hz,
+        [44_100, 48_000]
+    );
+    assert!(
+        state.sound_device_options[1]
+            .label
+            .starts_with("Primary Device")
+    );
+    assert_eq!(state.sound_device_options[1].config_index, Some(0));
+    assert_eq!(state.sound_device_options[2].label, "Secondary Device");
+    assert_eq!(state.sound_device_options[2].config_index, Some(1));
+
+    state.sound_device_options.clear();
+    state.i18n_revision = u64::MAX;
+    sync_i18n_cache(&mut state);
+    assert_eq!(state.sound_device_options.len(), 3);
+    assert!(
+        state.sound_device_options[1]
+            .label
+            .starts_with("Primary Device")
+    );
+    #[cfg(target_os = "linux")]
+    assert_eq!(
+        state.linux_backend_choices,
+        [tr("Common", "Auto").to_string(), "ALSA".to_owned()]
+    );
 }
 
 fn age_start_hold(state: &mut State, side: profile_data::PlayerSide) {
@@ -803,6 +862,48 @@ fn folder_activation_requests_audio_before_platform_reveal() {
         )) if path == &deadlib_platform::dirs::app_dirs().data_dir
             && *kind == deadsync_theme::RevealPathKind::Directory
     ));
+}
+
+#[test]
+fn queued_sfx_precede_follow_up_runtime_work() {
+    let mut state = init();
+    queue_sfx(&mut state, "assets/sounds/change_value.ogg");
+    let effect = ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+        crate::SimplyLoveConfigRequest::ShowOverlay(2),
+    ));
+
+    let ThemeEffect::Batch(effects) = prepend_pending_sfx(&mut state, effect) else {
+        panic!("queued sound and config work should be batched");
+    };
+    assert!(matches!(
+        &effects[0],
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+            deadsync_theme::AudioRequest::PlaySfx(path)
+        )) if path == "assets/sounds/change_value.ogg"
+    ));
+    assert!(matches!(
+        effects[1],
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Config(
+            crate::SimplyLoveConfigRequest::ShowOverlay(2)
+        ))
+    ));
+    assert!(state.pending_sfx.is_empty());
+}
+
+#[test]
+fn update_drain_emits_a_queued_sound_without_follow_up_work() {
+    let mut state = init();
+    queue_sfx(&mut state, "assets/sounds/change.ogg");
+
+    let effect = prepend_pending_sfx_opt(&mut state, None)
+        .expect("queued update sound should become an effect");
+    assert!(matches!(
+        effect,
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+            deadsync_theme::AudioRequest::PlaySfx(path)
+        )) if path == "assets/sounds/change.ogg"
+    ));
+    assert!(state.pending_sfx.is_empty());
 }
 
 /// Run pending submenu fades to completion (cap iterations so a stuck transition

@@ -15,7 +15,7 @@ pub struct ErrorBarModes {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct ErrorBarState<'a> {
+pub(crate) struct ErrorBarState<'a> {
     pub mono_ticks: &'a [Option<ErrorBarTick>],
     pub color_ticks: &'a [Option<ErrorBarTick>],
     pub average_ticks: &'a [Option<ErrorBarTick>],
@@ -26,7 +26,7 @@ pub struct ErrorBarState<'a> {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct ErrorBarComposeRequest<'a> {
+pub(crate) struct ErrorBarComposeRequest<'a> {
     pub style: ErrorBarStyle,
     pub modes: ErrorBarModes,
     pub state: ErrorBarState<'a>,
@@ -60,7 +60,7 @@ pub struct ErrorBarComposeRequest<'a> {
 
 /// Compose the complete canonical error-bar actor sequence: offset indicator,
 /// graphical modes, long-average marker, then textual feedback.
-pub fn compose_error_bar(actors: &mut Vec<Actor>, request: ErrorBarComposeRequest<'_>) {
+pub(crate) fn compose_error_bar(actors: &mut Vec<Actor>, request: ErrorBarComposeRequest<'_>) {
     append_offset_indicator(actors, &request);
     compose_error_bar_modes(actors, request);
     append_long_average(actors, &request);

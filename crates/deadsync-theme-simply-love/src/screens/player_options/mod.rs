@@ -14,11 +14,11 @@ use deadlib_render::BlendMode;
 use deadsync_assets::noteskin::{
     self, NUM_QUANTIZATIONS, NoteAnimPart, Noteskin, Quantization, SpriteSlot,
 };
-use deadsync_audio_stream as audio;
 use deadsync_chart::{ChartData, STANDARD_DIFFICULTY_COUNT, SongData};
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_notefield::noteskin_model_actor;
 use deadsync_profile as profile_data;
+use deadsync_theme::AudioRequest;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -78,6 +78,45 @@ pub use profile::{
 pub use render::{get_actors, push_actors};
 pub use row::{FixedStepchart, RowId};
 pub use state::State;
+
+const CHANGE_VALUE_SFX: &str = "assets/sounds/change_value.ogg";
+const NEXT_ROW_SFX: &str = "assets/sounds/next_row.ogg";
+const PREV_ROW_SFX: &str = "assets/sounds/prev_row.ogg";
+const START_SFX: &str = "assets/sounds/start.ogg";
+
+#[inline(always)]
+fn queue_audio(state: &mut State, request: AudioRequest) {
+    state.pending_audio.push(request);
+}
+
+#[inline(always)]
+fn queue_sfx(state: &mut State, path: &'static str) {
+    queue_audio(state, AudioRequest::PlaySfx(path.to_owned()));
+}
+
+fn prepend_pending_audio(state: &mut State, effect: ThemeEffect) -> ThemeEffect {
+    let request_count = state.pending_audio.len();
+    if request_count == 0 {
+        return effect;
+    }
+
+    let has_effect = !matches!(effect, ThemeEffect::None);
+    let mut effects = Vec::with_capacity(request_count + usize::from(has_effect));
+    effects.extend(
+        state
+            .pending_audio
+            .drain(..)
+            .map(|request| ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(request))),
+    );
+    if has_effect {
+        effects.push(effect);
+    }
+    if effects.len() == 1 {
+        effects.pop().expect("one queued PlayerOptions effect")
+    } else {
+        ThemeEffect::Batch(effects)
+    }
+}
 
 #[inline(always)]
 fn active_player_indices(active: [bool; PLAYER_SLOTS]) -> impl Iterator<Item = usize> {
@@ -298,6 +337,7 @@ pub fn init(
         combo_preview_elapsed: 0.0,
         pane_transition: PaneTransition::None,
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
+        pending_audio: Vec::with_capacity(4),
     };
     sync_speed_mod_type_rows(&mut state);
     state

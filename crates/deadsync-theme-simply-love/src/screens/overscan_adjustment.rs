@@ -11,8 +11,8 @@ use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space;
 use deadlib_present::space::{screen_center_x, screen_height, screen_width};
+use deadsync_input::KeyCode;
 use deadsync_input::{InputEvent, RawKeyboardEvent};
-use winit::keyboard::KeyCode;
 
 const TRANSITION_IN_DURATION: f32 = 0.4;
 const TRANSITION_OUT_DURATION: f32 = 0.4;

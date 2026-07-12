@@ -42,7 +42,6 @@ use deadlib_render::{
     present_mode_policy_choice_index, present_mode_policy_from_choice,
     software_thread_choice_index, software_thread_from_choice,
 };
-use deadsync_audio_stream as audio;
 use deadsync_input::{InputEvent, VirtualAction};
 #[cfg(target_os = "windows")]
 use deadsync_input_native::{
@@ -53,6 +52,7 @@ use deadsync_online::score_compat as scores;
 use deadsync_profile::compat as profile;
 use deadsync_score as score_data;
 use deadsync_simfile::app_runtime as song_loading;
+use deadsync_theme::views::AudioOptionsView;
 use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
@@ -115,6 +115,40 @@ pub use update::{
     sync_high_dpi, sync_max_fps, sync_present_mode_policy, sync_show_stats_mode,
     sync_translated_titles, sync_video_renderer, sync_vsync, update,
 };
+
+#[inline(always)]
+fn queue_sfx(state: &mut State, path: &'static str) {
+    state.pending_sfx.push(path);
+}
+
+fn prepend_pending_sfx(state: &mut State, effect: ThemeEffect) -> ThemeEffect {
+    let sound_count = state.pending_sfx.len();
+    if sound_count == 0 {
+        return effect;
+    }
+
+    let has_effect = !matches!(effect, ThemeEffect::None);
+    let mut effects = Vec::with_capacity(sound_count + usize::from(has_effect));
+    effects.extend(state.pending_sfx.drain(..).map(crate::effects::sfx));
+    if has_effect {
+        effects.push(effect);
+    }
+    if effects.len() == 1 {
+        effects.pop().expect("one queued Options effect")
+    } else {
+        ThemeEffect::Batch(effects)
+    }
+}
+
+fn prepend_pending_sfx_opt(state: &mut State, effect: Option<ThemeEffect>) -> Option<ThemeEffect> {
+    if state.pending_sfx.is_empty() {
+        return effect;
+    }
+    Some(prepend_pending_sfx(
+        state,
+        effect.unwrap_or(ThemeEffect::None),
+    ))
+}
 
 #[cfg(test)]
 mod tests;

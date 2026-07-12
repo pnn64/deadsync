@@ -26,14 +26,14 @@ pub struct IndicatorSprite {
 }
 
 #[derive(Clone, Copy)]
-pub struct TapJudgmentFeedback<'a> {
+pub(crate) struct TapJudgmentFeedback<'a> {
     pub render: &'a JudgmentRenderInfo,
     pub frame_row: usize,
     pub overlay_row: Option<usize>,
     pub rotation_deg: f32,
 }
 
-pub struct JudgmentFeedbackRequest<'a> {
+pub(crate) struct JudgmentFeedbackRequest<'a> {
     pub style: JudgmentFeedbackStyle,
     pub blind: bool,
     pub elapsed_screen: f32,
@@ -63,7 +63,10 @@ pub struct JudgmentFeedbackRequest<'a> {
 
 /// Compose tap judgments, held-miss indicators, and hold-result indicators
 /// from renderer-neutral sprite sources and gameplay snapshots.
-pub fn compose_judgment_feedback(actors: &mut Vec<Actor>, request: JudgmentFeedbackRequest<'_>) {
+pub(crate) fn compose_judgment_feedback(
+    actors: &mut Vec<Actor>,
+    request: JudgmentFeedbackRequest<'_>,
+) {
     if request.blind {
         return;
     }

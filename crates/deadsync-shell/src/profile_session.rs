@@ -134,8 +134,6 @@ pub fn reset_operator_profile_session<EvaluationPage>() -> SessionState<Evaluati
     profile::set_session_joined(false, false);
     profile::set_session_music_rate(1.0);
     profile::set_session_timing_tick_mode(TimingTickMode::Off);
-    profile::set_fast_profile_switch_from_select_music(false);
-
     let preferred = profile::preferred_difficulty_for_side(PlayerSide::P1, OPERATOR_RESET_STYLE);
     SessionState::new(preferred, profile::combo_carry())
 }

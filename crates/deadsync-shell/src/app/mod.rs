@@ -165,7 +165,10 @@ use deadsync_rules::judgment as judgment_rules;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 #[cfg(test)]
 use deadsync_rules::timing as timing_rules;
-use deadsync_theme::views::DensityGraphView as DensityGraphSource;
+use deadsync_theme::views::{
+    AudioOptionsView, AudioOutputDeviceView, AudioPlaybackView,
+    DensityGraphView as DensityGraphSource,
+};
 use deadsync_theme::{AudioRequest, PlatformRequest, RevealPathKind};
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as CurrentScreen;
 use deadsync_theme_simply_love::views::SimplyLoveDensityGraphSlot as DensityGraphSlot;
@@ -369,6 +372,33 @@ fn arrow_effect_time_seconds(at: Instant) -> f32 {
     deadlib_platform::host_time::instant_nanos(at) as f32 / 1_000_000_000.0
 }
 
+fn audio_options_view() -> AudioOptionsView {
+    let output_devices = if deadsync_audio_stream::is_initialized() {
+        deadsync_audio_stream::startup_output_devices()
+            .into_iter()
+            .map(|device| AudioOutputDeviceView {
+                name: device.name,
+                is_default: device.is_default,
+                sample_rates_hz: device.sample_rates_hz,
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+    #[cfg(target_os = "linux")]
+    let available_backend_names = deadsync_audio_stream::available_linux_backends()
+        .into_iter()
+        .map(|backend| backend.as_str().to_owned())
+        .collect();
+    #[cfg(not(target_os = "linux"))]
+    let available_backend_names = Vec::new();
+
+    AudioOptionsView {
+        output_devices,
+        available_backend_names,
+    }
+}
+
 impl ScreensState {
     fn new(color_index: i32, preferred_difficulty_index: usize) -> Self {
         let mut menu_state = menu::init();
@@ -406,7 +436,7 @@ impl ScreensState {
         let mut profile_load_state = profile_load::init();
         profile_load_state.active_color_index = color_index;
 
-        let mut options_state = options::init(updater::capabilities());
+        let mut options_state = options::init(updater::capabilities(), audio_options_view());
         options_state.active_color_index = color_index;
 
         let mut credits_state = credits::init();
@@ -496,12 +526,12 @@ impl ScreensState {
             CurrentScreen::Gameplay => self
                 .gameplay_state
                 .as_mut()
-                .map(|gs| gameplay::update(gs, delta_time))
+                .map(|gs| crate::gameplay_runtime::update(gs, delta_time))
                 .map_or((None, false), |action| (Some(action), false)),
             CurrentScreen::Practice => self
                 .practice_state
                 .as_mut()
-                .map(|ps| practice::update(ps, delta_time))
+                .map(|ps| crate::gameplay_runtime::update_practice(ps, delta_time))
                 .map_or((None, false), |action| (Some(action), false)),
             CurrentScreen::Init => (Some(init::update(&mut self.init_state, delta_time)), false),
             CurrentScreen::Options => (
@@ -516,10 +546,10 @@ impl ScreensState {
                 manage_local_profiles::update(&mut self.manage_local_profiles_state, delta_time),
                 false,
             ),
-            CurrentScreen::Mappings => {
-                mappings::update(&mut self.mappings_state, delta_time);
-                (None, false)
-            }
+            CurrentScreen::Mappings => (
+                Some(mappings::update(&mut self.mappings_state, delta_time)),
+                false,
+            ),
             CurrentScreen::Input => (
                 input_screen::update(&mut self.input_state, delta_time),
                 false,
@@ -892,6 +922,28 @@ impl App {
                 ));
         }
         self.lights.tick(delta_time, elapsed_seconds);
+    }
+
+    fn sync_audio_playback_view(&mut self) {
+        if self.state.screens.current_screen != CurrentScreen::SelectMusic {
+            return;
+        }
+        let music_stream_position_seconds = if deadsync_audio_stream::is_initialized() {
+            f64::from(deadsync_audio_stream::get_music_stream_position_seconds())
+        } else {
+            0.0
+        };
+        select_music::sync_audio_playback_view(
+            &mut self.state.screens.select_music_state,
+            AudioPlaybackView {
+                music_stream_position_seconds,
+            },
+        );
+    }
+
+    fn sync_main_menu_runtime_view(&mut self) {
+        let view = crate::main_menu::runtime_view();
+        menu::sync_runtime_view(&mut self.state.screens.menu_state, view);
     }
 
     fn sync_light_input(&mut self, ev: &InputEvent) {
@@ -1392,7 +1444,7 @@ impl App {
         {
             // Keep gameplay stepping under evaluation fades so late judgments
             // and HUD animations settle while transition input remains blocked.
-            let _ = gameplay::update(gs, delta_time);
+            let _ = crate::gameplay_runtime::update(gs, delta_time);
         }
         let step_plan = frame_screen_step_plan(FrameScreenStepContext {
             current_screen: self.state.screens.current_screen,
@@ -1441,6 +1493,7 @@ impl App {
             }
             None => {}
         }
+        self.sync_audio_playback_view();
         let update_us: u32 = elapsed_us_since(update_started);
         self.sync_lights(delta_time, total_elapsed);
 
@@ -1771,7 +1824,8 @@ impl App {
 
     fn reset_options_state_for_entry(&mut self, from: CurrentScreen) {
         let current_color_index = self.state.screens.options_state.active_color_index;
-        self.state.screens.options_state = options::init(updater::capabilities());
+        self.state.screens.options_state =
+            options::init(updater::capabilities(), audio_options_view());
         self.state.screens.options_state.active_color_index = current_color_index;
         if matches!(
             from,
@@ -1943,6 +1997,7 @@ impl App {
                     p2,
                     p1_joined,
                     p2_joined,
+                    fast_switch,
                 }) => {
                     let session = profile_selection_session_plan(
                         profile::get_session_play_style(),
@@ -1952,9 +2007,8 @@ impl App {
                     profile::set_session_player_side(session.active_side);
                     profile::set_session_joined(session.p1_joined, session.p2_joined);
                     profile::set_session_play_style(session.play_style);
-                    let fast_profile_switch = profile::take_fast_profile_switch_from_select_music();
                     let profile_data = profile::set_active_profiles(p1, p2);
-                    let (show_groovestats_login, show_arrowcloud_login) = if fast_profile_switch {
+                    let (show_groovestats_login, show_arrowcloud_login) = if fast_switch {
                         (false, false)
                     } else {
                         let cfg = config::get();
@@ -1970,7 +2024,7 @@ impl App {
                         ProfileSelectionContext {
                             play_style: profile::get_session_play_style(),
                             active_side: profile::get_session_player_side(),
-                            fast_switch: fast_profile_switch,
+                            fast_switch,
                             current_screen: self.state.screens.current_screen,
                             show_groovestats_login,
                             show_arrowcloud_login,
@@ -2059,6 +2113,33 @@ impl App {
                 }
                 SimplyLoveRuntimeRequest::Audio(AudioRequest::PlaySfx(path)) => {
                     deadsync_audio_stream::play_sfx(&path);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Audio(AudioRequest::PlayMusic {
+                    path,
+                    cut,
+                    looping,
+                    rate,
+                }) => {
+                    deadsync_audio_stream::play_music(
+                        path,
+                        deadsync_audio_stream::Cut {
+                            start_sec: cut.start_sec,
+                            length_sec: cut.length_sec,
+                            fade_in_sec: cut.fade_in_sec,
+                            fade_out_sec: cut.fade_out_sec,
+                        },
+                        looping,
+                        rate,
+                    );
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Audio(AudioRequest::StopMusic) => {
+                    deadsync_audio_stream::stop_music();
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Audio(AudioRequest::SetMusicRate(rate)) => {
+                    deadsync_audio_stream::set_music_rate(rate);
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Audio(AudioRequest::PrewarmReplayGain(paths)) => {
@@ -2466,7 +2547,7 @@ impl App {
                 if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
                     let already_exiting = gs.exit_transition_active();
                     gs.begin_restart_exit();
-                    screens::gameplay::drain_audio_commands(gs);
+                    crate::gameplay_runtime::drain(gs);
                     if let Some(plan) = fast_gameplay_restart_plan(
                         self.state.session.gameplay_restart_count,
                         already_exiting,
@@ -2854,7 +2935,7 @@ impl App {
         select_music::prime_displayed_chart_data(sm);
     }
 
-    fn try_handle_late_join(&mut self, ev: &InputEvent) -> bool {
+    fn try_handle_late_join(&mut self, ev: &InputEvent) -> Option<ThemeEffect> {
         let screen = self.state.screens.current_screen;
         let screen_allows_join = match screen {
             CurrentScreen::SelectMusic => {
@@ -2882,7 +2963,7 @@ impl App {
                 joined,
             },
         ) else {
-            return false;
+            return None;
         };
 
         profile::set_session_joined(true, true);
@@ -2908,21 +2989,27 @@ impl App {
         if screen == CurrentScreen::SelectStyle {
             select_style::set_selected_index(&mut self.state.screens.select_style_state, 1);
         }
+        let mut pending = ThemeEffect::None;
         if screen == CurrentScreen::SelectMusic {
             self.apply_select_music_join(join_side);
             // Per Simply-Love-SM5#741: when the Select Profile screen is on,
             // prompt the late-joining player with the profile-select widget
             // instead of silently leaving them as Guest.
             if show_select_profile {
-                screens::select_music::open_late_join_profile_overlay(
+                pending = screens::select_music::open_late_join_profile_overlay(
                     &mut self.state.screens.select_music_state,
                     join_side,
                 );
             }
         }
 
-        deadsync_audio_stream::play_sfx("assets/sounds/start.ogg");
-        true
+        let start = ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Audio(AudioRequest::PlaySfx(
+            "assets/sounds/start.ogg".to_owned(),
+        )));
+        Some(match pending {
+            ThemeEffect::None => start,
+            pending => ThemeEffect::Batch(vec![pending, start]),
+        })
     }
 
     fn route_operator_menu_button(&mut self, ev: &InputEvent) -> bool {
@@ -3233,6 +3320,7 @@ impl App {
 
         match self.state.screens.current_screen {
             CurrentScreen::Menu => {
+                self.sync_main_menu_runtime_view();
                 let update_tag = updater::available_update_tag();
                 menu::push_actors(
                     &mut actors,
@@ -3789,6 +3877,7 @@ impl App {
                 }
             }
             RawKeyScreenRoute::Menu => {
+                self.sync_main_menu_runtime_view();
                 let action = screens::menu::handle_raw_key_event(
                     &mut self.state.screens.menu_state,
                     &raw_key,
@@ -3879,7 +3968,8 @@ impl App {
                     return true;
                 }
                 if let Some(ps) = self.state.screens.practice_state.as_mut() {
-                    let (consumed, action) = screens::practice::handle_raw_key_event(ps, &raw_key);
+                    let (consumed, action) =
+                        crate::gameplay_runtime::handle_practice_raw_key(ps, &raw_key);
                     if !matches!(action, ThemeEffect::None) {
                         if let Err(e) = self.handle_action(action, event_loop) {
                             log::error!("Failed to handle Practice raw key action: {e}");
@@ -4371,10 +4461,13 @@ impl App {
             let current_color_index = self.state.screens.select_profile_state.active_color_index;
             self.state.screens.select_profile_state = select_profile::init();
             self.state.screens.select_profile_state.active_color_index = current_color_index;
+            select_profile::set_fast_switch(
+                &mut self.state.screens.select_profile_state,
+                prev == CurrentScreen::SelectMusic,
+            );
             if prev == CurrentScreen::Menu {
                 let p2 = self.state.screens.menu_state.started_by_p2;
                 select_profile::set_joined(&mut self.state.screens.select_profile_state, !p2, p2);
-                profile::set_fast_profile_switch_from_select_music(false);
             } else if prev == CurrentScreen::SelectMusic {
                 let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
                 let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
@@ -4383,8 +4476,6 @@ impl App {
                     p1_joined,
                     p2_joined,
                 );
-            } else {
-                profile::set_fast_profile_switch_from_select_music(false);
             }
         } else if target == CurrentScreen::SelectStyle {
             let current_color_index = self.state.screens.select_style_state.active_color_index;
@@ -4807,7 +4898,7 @@ impl App {
                 }
                 self.state.screens.practice_state = Some(practice_state);
                 if let Some(ps) = self.state.screens.practice_state.as_mut() {
-                    screens::practice::on_enter(ps);
+                    crate::gameplay_runtime::enter_practice(ps);
                 }
             } else {
                 panic!("Navigating to Practice without PlayerOptions state!");
@@ -4834,7 +4925,7 @@ impl App {
                 .map(course_display_timing_for_run);
             if prev == CurrentScreen::Gameplay && self.state.session.course_run.is_some() {
                 if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
-                    screens::gameplay::on_exit(gs);
+                    crate::gameplay_runtime::exit(gs);
                 }
             }
             if prev == CurrentScreen::Gameplay
@@ -5197,7 +5288,7 @@ impl App {
                 commands.push(Command::SetDynamicBackground(background_path));
                 self.state.screens.gameplay_state = Some(gs);
                 if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
-                    screens::gameplay::on_enter(gs);
+                    crate::gameplay_runtime::enter(gs);
                 }
                 // Song Start / Restart SFX (zmod parity, issue #375). At this
                 // point `gameplay_restart_count` has already been zeroed for
@@ -5224,7 +5315,7 @@ impl App {
 
         if target == CurrentScreen::Evaluation {
             if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
-                screens::gameplay::on_exit(gs);
+                crate::gameplay_runtime::exit(gs);
             }
             let gameplay_results = self.state.screens.gameplay_state.take();
             if let Some(gs) = gameplay_results.as_ref() {
@@ -5690,10 +5781,16 @@ impl ApplicationHandler<UserEvent> for App {
                         );
                     }
                     RawPadScreenRoute::Mappings => {
-                        raw_pad_consumed = screens::mappings::handle_raw_pad_event(
+                        let (consumed, action) = screens::mappings::handle_raw_pad_event(
                             &mut self.state.screens.mappings_state,
                             &ev,
                         );
+                        raw_pad_consumed = consumed;
+                        if !matches!(action, ThemeEffect::None)
+                            && let Err(e) = self.handle_action(action, event_loop)
+                        {
+                            log::error!("Failed to handle Mappings raw pad action: {e}");
+                        }
                     }
                     RawPadScreenRoute::Input => {
                         screens::input::handle_raw_pad_event(

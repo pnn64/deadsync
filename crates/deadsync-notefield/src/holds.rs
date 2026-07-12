@@ -15,7 +15,7 @@ use glam::Mat4 as Matrix4;
 use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct HoldAnimParts {
+pub(crate) struct HoldAnimParts {
     pub head: NoteAnimPart,
     pub body: NoteAnimPart,
     pub topcap: NoteAnimPart,
@@ -23,13 +23,13 @@ pub struct HoldAnimParts {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct TapReplacementHead {
+pub(crate) struct TapReplacementHead {
     pub is_roll: bool,
     pub part: NoteAnimPart,
 }
 
 #[derive(Debug)]
-pub struct HoldEntryPlanRequest<'a, T> {
+pub(crate) struct HoldEntryPlanRequest<'a, T> {
     pub note_type: NoteType,
     pub head_travel: f32,
     pub tail_travel: f32,
@@ -54,7 +54,7 @@ pub struct HoldEntryPlanRequest<'a, T> {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct HoldEntryPlan<'a, T> {
+pub(crate) struct HoldEntryPlan<'a, T> {
     pub body_flipped: bool,
     pub y_head: f32,
     pub y_tail: f32,
@@ -76,7 +76,7 @@ pub struct HoldEntryPlan<'a, T> {
 
 /// Renderer-neutral geometry sampled along one hold's transformed path.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct HoldPathSample {
+pub(crate) struct HoldPathSample {
     pub adjusted_travel: f32,
     pub center_x: f32,
     pub world_z: f32,
@@ -85,7 +85,7 @@ pub struct HoldPathSample {
 
 /// Canonical body and cap inputs after concrete noteskin/state resolution.
 #[derive(Clone, Copy, Debug)]
-pub struct HoldBodyCapRequest<'a, S> {
+pub(crate) struct HoldBodyCapRequest<'a, S> {
     pub body_slot: Option<&'a S>,
     pub top_cap_slot: Option<&'a S>,
     pub bottom_cap_slot: Option<&'a S>,
@@ -118,7 +118,7 @@ pub struct HoldBodyCapRequest<'a, S> {
 
 /// Whether body/cap composition reached the hold-head stage.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum HoldComposeControl {
+pub(crate) enum HoldComposeControl {
     Continue,
     AbortHold,
 }
@@ -152,7 +152,7 @@ pub fn hold_entry_head_beat(
 /// `hold_parts_for_note_type(note_type)` at the original note beat; keeping
 /// those eligibility and noteskin calls outside preserves their existing
 /// runtime ownership.
-pub fn hold_entry_plan<T>(request: HoldEntryPlanRequest<'_, T>) -> HoldEntryPlan<'_, T> {
+pub(crate) fn hold_entry_plan<T>(request: HoldEntryPlanRequest<'_, T>) -> HoldEntryPlan<'_, T> {
     let mut hold_start_y = if request.lane_reverse {
         request.tail_y
     } else {
@@ -270,7 +270,7 @@ pub fn hold_entry_plan<T>(request: HoldEntryPlanRequest<'_, T>) -> HoldEntryPlan
 /// Concrete asset owners inject sprite sources and a path sampler. The sampler
 /// keeps theme/profile state outside this crate while canonical hold geometry,
 /// UV clipping, actor ordering, and glow passes remain shared by every theme.
-pub fn compose_hold_body_caps<S, F, P>(
+pub(crate) fn compose_hold_body_caps<S, F, P>(
     actors: &mut Vec<Actor>,
     request: HoldBodyCapRequest<'_, S>,
     sample_path: &P,
@@ -1530,7 +1530,7 @@ pub(crate) fn hold_strip_glow_actor(
     }
 }
 
-pub const fn tap_part_for_note_type(note_type: NoteType) -> NoteAnimPart {
+pub(crate) const fn tap_part_for_note_type(note_type: NoteType) -> NoteAnimPart {
     match note_type {
         NoteType::Lift => NoteAnimPart::Lift,
         NoteType::Fake => NoteAnimPart::Fake,
@@ -1538,11 +1538,11 @@ pub const fn tap_part_for_note_type(note_type: NoteType) -> NoteAnimPart {
     }
 }
 
-pub const fn mine_part() -> NoteAnimPart {
+pub(crate) const fn mine_part() -> NoteAnimPart {
     NoteAnimPart::Mine
 }
 
-pub const fn hold_parts_for_note_type(note_type: NoteType) -> HoldAnimParts {
+pub(crate) const fn hold_parts_for_note_type(note_type: NoteType) -> HoldAnimParts {
     match note_type {
         NoteType::Roll => HoldAnimParts {
             head: NoteAnimPart::RollHead,
@@ -1568,7 +1568,7 @@ pub(crate) const fn hold_head_part_for_roll(is_roll: bool) -> NoteAnimPart {
     }
 }
 
-pub const fn tap_replacement_head(
+pub(crate) const fn tap_replacement_head(
     note_type: NoteType,
     has_hold: bool,
     has_roll: bool,

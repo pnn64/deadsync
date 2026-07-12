@@ -38,7 +38,7 @@ impl App {
         if plan.exit_gameplay
             && let Some(gs) = self.state.screens.gameplay_state.as_mut()
         {
-            screens::gameplay::on_exit(gs);
+            crate::gameplay_runtime::exit(gs);
         }
         self.state.screens.current_screen = target;
         self.sync_gameplay_input_capture();
@@ -105,6 +105,10 @@ impl App {
             let current_color_index = self.state.screens.select_profile_state.active_color_index;
             self.state.screens.select_profile_state = select_profile::init();
             self.state.screens.select_profile_state.active_color_index = current_color_index;
+            select_profile::set_fast_switch(
+                &mut self.state.screens.select_profile_state,
+                prev == CurrentScreen::SelectMusic,
+            );
             if prev == CurrentScreen::Menu {
                 let p2 = self.state.screens.menu_state.started_by_p2;
                 select_profile::set_joined(&mut self.state.screens.select_profile_state, !p2, p2);
@@ -202,7 +206,6 @@ impl App {
                 profile_data::PlayerSide::P1
             });
             profile::set_session_joined(!p2_started, p2_started);
-            profile::set_fast_profile_switch_from_select_music(false);
         }
 
         if allow_offset_prompt && self.maybe_begin_gameplay_offset_prompt(from, target, false) {

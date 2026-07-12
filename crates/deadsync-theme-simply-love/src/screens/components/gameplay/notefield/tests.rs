@@ -1,22 +1,28 @@
-use super::{
-    TornadoBounds, error_bar_trim_max_window_ix, hold_explosion_enabled, hold_head_render_flags,
-    judgment_frame_size, note_slot_base_size, note_world_z_for_bumpy, note_x_offset, offset_center,
-    receptor_row_center,
-};
+use super::{error_bar_trim_max_window_ix, hold_explosion_enabled, judgment_frame_size};
 use crate::assets;
 use crate::notefield_style::notefield_style;
 use deadsync_assets::noteskin::load_itg_skin;
 use deadsync_core::note::NoteType;
-use deadsync_gameplay::{ActiveHold, VisualEffects, hold_explosion_active};
+use deadsync_gameplay::{ActiveHold, VisualEffects, hold_explosion_active, hold_head_render_flags};
 use deadsync_notefield::{
-    NoteXParams, error_bar_boundaries_s, error_bar_text_scalable_zoom,
-    gameplay_visual_effect_params, hold_entry_head_beat, itg_actor_glow_alpha, move_col_extra,
-    note_x_offset as canonical_note_x_offset, receptor_row_center as canonical_receptor_row_center,
-    tipsy_y_extra, visual_confusion_rotation_deg,
+    error_bar_boundaries_s, error_bar_text_scalable_zoom, gameplay_visual_effect_params,
+    hold_entry_head_beat, itg_actor_glow_alpha, move_col_extra, note_world_z_for_bumpy,
+    offset_center, visual_confusion_rotation_deg,
 };
-use deadsync_noteskin::{NUM_QUANTIZATIONS, Quantization, Style};
+use deadsync_noteskin::{NUM_QUANTIZATIONS, NoteskinSlot, Quantization, Style};
 use deadsync_profile as profile_data;
 use deadsync_rules::timing;
+
+fn note_slot_base_size<S: NoteskinSlot>(slot: &S, scale: f32) -> [f32; 2] {
+    if let Some(model) = slot.model() {
+        let size = model.size();
+        if size[0] > f32::EPSILON && size[1] > f32::EPSILON {
+            return [size[0] * scale, size[1] * scale];
+        }
+    }
+    let logical = slot.logical_size();
+    [logical[0] * scale, logical[1] * scale]
+}
 
 #[test]
 fn hold_head_render_flags_keep_early_hit_inactive_before_receptor() {
@@ -266,136 +272,6 @@ fn move_and_confusion_column_mods_match_itg_scaling() {
             .abs()
             <= 1e-6
     );
-}
-
-#[test]
-fn receptor_center_uses_zero_travel_x_effects() {
-    let col_offsets = [-96.0, -32.0, 32.0, 96.0];
-    let invert = [0.0; 4];
-    let tornado = [TornadoBounds::default(); 4];
-    let center = receptor_row_center(
-        320.0,
-        1,
-        240.0,
-        1.0,
-        0.0,
-        VisualEffects {
-            drunk: 1.0,
-            ..VisualEffects::default()
-        },
-        &col_offsets,
-        &invert,
-        &tornado,
-    );
-    let expected_x = 320.0
-        + note_x_offset(
-            1,
-            0.0,
-            1.0,
-            0.0,
-            VisualEffects {
-                drunk: 1.0,
-                ..VisualEffects::default()
-            },
-            &col_offsets,
-            &invert,
-            &tornado,
-        );
-    assert!((center[0] - expected_x).abs() <= 1e-6);
-}
-
-#[test]
-fn note_x_adapter_routes_beat_factor_before_arrow_time() {
-    let col_offsets = [-96.0, -32.0, 32.0, 96.0];
-    let invert = [0.0; 4];
-    let tornado = [TornadoBounds::default(); 4];
-    let visual = VisualEffects {
-        beat: 1.0,
-        drunk: 1.0,
-        ..VisualEffects::default()
-    };
-    let params = NoteXParams {
-        screen_height: deadlib_present::space::screen_height(),
-        beat: visual.beat,
-        drunk: visual.drunk,
-        ..NoteXParams::default()
-    };
-
-    let actual = note_x_offset(1, 0.0, 0.37, 12.0, visual, &col_offsets, &invert, &tornado);
-    let expected = canonical_note_x_offset(
-        1,
-        0.0,
-        12.0,
-        0.37,
-        &col_offsets,
-        &invert,
-        &tornado,
-        &visual.move_x_cols,
-        params,
-        visual.tiny,
-    );
-    let swapped = canonical_note_x_offset(
-        1,
-        0.0,
-        0.37,
-        12.0,
-        &col_offsets,
-        &invert,
-        &tornado,
-        &visual.move_x_cols,
-        params,
-        visual.tiny,
-    );
-
-    assert!((actual - expected).abs() <= 1e-6);
-    assert!((actual - swapped).abs() > 1e-3);
-}
-
-#[test]
-fn receptor_center_uses_tipsy_y_offset() {
-    let col_offsets = [-96.0, -32.0, 32.0, 96.0];
-    let invert = [0.0; 4];
-    let tornado = [TornadoBounds::default(); 4];
-    let visual = VisualEffects {
-        beat: 1.0,
-        drunk: 1.0,
-        tipsy: 1.0,
-        ..VisualEffects::default()
-    };
-    let center = receptor_row_center(
-        320.0,
-        2,
-        240.0,
-        0.37,
-        12.0,
-        visual,
-        &col_offsets,
-        &invert,
-        &tornado,
-    );
-    let expected = canonical_receptor_row_center(
-        320.0,
-        2,
-        240.0,
-        12.0,
-        0.37,
-        &col_offsets,
-        &invert,
-        &tornado,
-        &visual.move_x_cols,
-        &visual.move_y_cols,
-        NoteXParams {
-            screen_height: deadlib_present::space::screen_height(),
-            beat: visual.beat,
-            drunk: visual.drunk,
-            ..NoteXParams::default()
-        },
-        visual.tiny,
-        visual.tipsy,
-    );
-    assert!((center[0] - expected[0]).abs() <= 1e-6);
-    assert!((center[1] - expected[1]).abs() <= 1e-6);
-    assert!((center[1] - (240.0 + tipsy_y_extra(2, 0.37, visual.tipsy))).abs() <= 1e-6);
 }
 
 #[test]

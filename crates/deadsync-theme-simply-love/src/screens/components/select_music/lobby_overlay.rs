@@ -3,7 +3,6 @@ use crate::assets::{FontRole, current_machine_font_key};
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
-use deadsync_audio_stream as audio;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_online::lobbies;
@@ -231,6 +230,7 @@ pub struct OverlayStateData {
     password_prompt: Option<PasswordPromptState>,
     notice_text: Option<String>,
     notice_time_left: f32,
+    pending_sounds: Vec<SoundCue>,
 }
 
 #[derive(Clone, Debug)]
@@ -251,6 +251,26 @@ pub enum InputOutcome {
     LeaveRequested,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SoundCue {
+    Change,
+    ChangeValue,
+    Start,
+    Boom,
+}
+
+impl SoundCue {
+    #[inline(always)]
+    pub const fn asset_path(self) -> &'static str {
+        match self {
+            Self::Change => "assets/sounds/change.ogg",
+            Self::ChangeValue => "assets/sounds/change_value.ogg",
+            Self::Start => "assets/sounds/start.ogg",
+            Self::Boom => "assets/sounds/boom.ogg",
+        }
+    }
+}
+
 #[inline(always)]
 pub fn show_overlay() -> OverlayState {
     OverlayState::Visible(OverlayStateData {
@@ -260,12 +280,20 @@ pub fn show_overlay() -> OverlayState {
         password_prompt: None,
         notice_text: None,
         notice_time_left: 0.0,
+        pending_sounds: Vec::new(),
     })
 }
 
 #[inline(always)]
 pub fn hide_overlay(state: &mut OverlayState) {
     *state = OverlayState::Hidden;
+}
+
+pub fn take_pending_sounds(state: &mut OverlayState) -> Vec<SoundCue> {
+    let OverlayState::Visible(overlay) = state else {
+        return Vec::new();
+    };
+    std::mem::take(&mut overlay.pending_sounds)
 }
 
 pub fn update_overlay(state: &mut OverlayState, dt: f32) {
@@ -287,7 +315,9 @@ pub fn update_overlay(state: &mut OverlayState, dt: f32) {
     }
 
     if let Some(prompt) = overlay.password_prompt.as_mut() {
-        update_password_prompt_hold(prompt);
+        if update_password_prompt_hold(prompt) {
+            overlay.pending_sounds.push(SoundCue::Change);
+        }
         prompt.wheel.update(dt);
     }
 
@@ -1153,6 +1183,11 @@ fn set_notice(overlay: &mut OverlayStateData, text: &str) {
 }
 
 #[inline(always)]
+fn queue_sound(overlay: &mut OverlayStateData, sound: SoundCue) {
+    overlay.pending_sounds.push(sound);
+}
+
+#[inline(always)]
 fn begin_password_prompt_create() -> PasswordPromptState {
     PasswordPromptState {
         mode: PasswordPromptMode::CreateLobby,
@@ -1197,23 +1232,23 @@ fn on_nav_release(prompt: &mut PasswordPromptState, dir: NavDirection) {
     }
 }
 
-fn update_password_prompt_hold(prompt: &mut PasswordPromptState) {
+fn update_password_prompt_hold(prompt: &mut PasswordPromptState) -> bool {
     let Some(dir) = prompt.nav_key_held_direction else {
-        return;
+        return false;
     };
     let Some(held_since) = prompt.nav_key_held_since else {
-        return;
+        return false;
     };
     let Some(last_at) = prompt.nav_key_last_scrolled_at else {
-        return;
+        return false;
     };
 
     let now = Instant::now();
     if now.duration_since(held_since) < NAV_INITIAL_HOLD_DELAY {
-        return;
+        return false;
     }
     if now.duration_since(last_at) < NAV_REPEAT_SCROLL_INTERVAL {
-        return;
+        return false;
     }
 
     let dist = match dir {
@@ -1222,7 +1257,7 @@ fn update_password_prompt_hold(prompt: &mut PasswordPromptState) {
     };
     prompt.wheel.scroll_by(dist);
     prompt.nav_key_last_scrolled_at = Some(now);
-    audio::play_sfx("assets/sounds/change.ogg");
+    true
 }
 
 fn handle_password_prompt_input(overlay: &mut OverlayStateData, ev: &InputEvent) -> InputOutcome {
@@ -1245,7 +1280,7 @@ fn handle_password_prompt_input(overlay: &mut OverlayStateData, ev: &InputEvent)
                 if prompt.nav_key_held_direction != Some(NavDirection::Left) {
                     prompt.wheel.scroll_by(-1);
                     on_nav_press(prompt, NavDirection::Left);
-                    audio::play_sfx("assets/sounds/change.ogg");
+                    queue_sound(overlay, SoundCue::Change);
                 }
             } else {
                 on_nav_release(prompt, NavDirection::Left);
@@ -1270,7 +1305,7 @@ fn handle_password_prompt_input(overlay: &mut OverlayStateData, ev: &InputEvent)
                 if prompt.nav_key_held_direction != Some(NavDirection::Right) {
                     prompt.wheel.scroll_by(1);
                     on_nav_press(prompt, NavDirection::Right);
-                    audio::play_sfx("assets/sounds/change.ogg");
+                    queue_sound(overlay, SoundCue::Change);
                 }
             } else {
                 on_nav_release(prompt, NavDirection::Right);
@@ -1291,9 +1326,9 @@ fn handle_password_prompt_input(overlay: &mut OverlayStateData, ev: &InputEvent)
                         return InputOutcome::None;
                     };
                     if password_prompt_backspace(prompt) {
-                        audio::play_sfx("assets/sounds/change_value.ogg");
+                        queue_sound(overlay, SoundCue::ChangeValue);
                     } else {
-                        audio::play_sfx("assets/sounds/boom.ogg");
+                        queue_sound(overlay, SoundCue::Boom);
                     }
                     InputOutcome::None
                 }
@@ -1302,9 +1337,9 @@ fn handle_password_prompt_input(overlay: &mut OverlayStateData, ev: &InputEvent)
                         return InputOutcome::None;
                     };
                     if password_prompt_add_char(prompt, ch) {
-                        audio::play_sfx("assets/sounds/start.ogg");
+                        queue_sound(overlay, SoundCue::Start);
                     } else {
-                        audio::play_sfx("assets/sounds/boom.ogg");
+                        queue_sound(overlay, SoundCue::Boom);
                     }
                     InputOutcome::None
                 }
@@ -1316,16 +1351,16 @@ fn handle_password_prompt_input(overlay: &mut OverlayStateData, ev: &InputEvent)
                 return InputOutcome::None;
             };
             if password_prompt_backspace(prompt) {
-                audio::play_sfx("assets/sounds/change_value.ogg");
+                queue_sound(overlay, SoundCue::ChangeValue);
             } else {
-                audio::play_sfx("assets/sounds/boom.ogg");
+                queue_sound(overlay, SoundCue::Boom);
             }
             InputOutcome::None
         }
         VirtualAction::p1_back | VirtualAction::p2_back if ev.pressed => {
             clear_notice(overlay);
             overlay.password_prompt = None;
-            audio::play_sfx("assets/sounds/change_value.ogg");
+            queue_sound(overlay, SoundCue::ChangeValue);
             InputOutcome::None
         }
         _ => InputOutcome::None,
@@ -1349,7 +1384,7 @@ fn submit_password_prompt(overlay: &mut OverlayStateData) -> InputOutcome {
                     nav_key_last_scrolled_at: None,
                 });
                 set_notice(overlay, "Enter the lobby password.");
-                audio::play_sfx("assets/sounds/boom.ogg");
+                queue_sound(overlay, SoundCue::Boom);
                 InputOutcome::None
             } else {
                 InputOutcome::JoinRequested {
@@ -1399,4 +1434,27 @@ fn password_prompt_hint(_prompt: &PasswordPromptState) -> &'static str {
 
 fn password_prompt_value(prompt: &PasswordPromptState) -> String {
     prompt.value.clone()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn password_sounds_leave_the_component_as_ordered_cues() {
+        let mut state = show_overlay();
+        let OverlayState::Visible(overlay) = &mut state else {
+            panic!("overlay should be visible");
+        };
+        queue_sound(overlay, SoundCue::Change);
+        queue_sound(overlay, SoundCue::Boom);
+
+        assert_eq!(
+            take_pending_sounds(&mut state),
+            vec![SoundCue::Change, SoundCue::Boom]
+        );
+        assert!(take_pending_sounds(&mut state).is_empty());
+        assert_eq!(SoundCue::Change.asset_path(), "assets/sounds/change.ogg");
+        assert_eq!(SoundCue::Boom.asset_path(), "assets/sounds/boom.ogg");
+    }
 }

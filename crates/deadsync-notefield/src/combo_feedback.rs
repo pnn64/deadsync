@@ -20,7 +20,7 @@ pub struct ComboMilestoneAssets {
     pub thousand_zoom_scale: f32,
 }
 
-pub struct ComboFeedbackRequest<'a> {
+pub(crate) struct ComboFeedbackRequest<'a> {
     pub style: ComboFeedbackStyle,
     pub show: bool,
     pub milestone_assets: Option<&'a ComboMilestoneAssets>,
@@ -39,7 +39,7 @@ pub struct ComboFeedbackRequest<'a> {
 /// Compose canonical combo numbers and hundred/thousand milestone feedback.
 /// The caller supplies theme-selected sprite sources, colors, and font while
 /// the notefield owns timing, ordering, and actor transforms.
-pub fn compose_combo_feedback(actors: &mut Vec<Actor>, request: ComboFeedbackRequest<'_>) {
+pub(crate) fn compose_combo_feedback(actors: &mut Vec<Actor>, request: ComboFeedbackRequest<'_>) {
     if !request.show {
         return;
     }

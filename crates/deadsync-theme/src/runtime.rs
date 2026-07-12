@@ -1,9 +1,37 @@
 use std::path::PathBuf;
 
+/// Audio-backend-neutral music segment selected by a concrete theme.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct AudioCut {
+    pub start_sec: f64,
+    pub length_sec: f64,
+    pub fade_in_sec: f64,
+    pub fade_out_sec: f64,
+}
+
+impl Default for AudioCut {
+    fn default() -> Self {
+        Self {
+            start_sec: 0.0,
+            length_sec: f64::INFINITY,
+            fade_in_sec: 0.0,
+            fade_out_sec: 0.0,
+        }
+    }
+}
+
 /// Audio work requested by a concrete theme and executed by the shell.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum AudioRequest {
     PlaySfx(String),
+    PlayMusic {
+        path: PathBuf,
+        cut: AudioCut,
+        looping: bool,
+        rate: f32,
+    },
+    StopMusic,
+    SetMusicRate(f32),
     /// Warm loudness metadata for theme-selected preview media without
     /// exposing the analysis service or its scheduling policy to the theme.
     PrewarmReplayGain(Vec<PathBuf>),
@@ -103,6 +131,31 @@ mod tests {
         assert_eq!(
             request,
             AudioRequest::PlaySfx("assets/sounds/start.ogg".to_owned())
+        );
+    }
+
+    #[test]
+    fn music_request_is_backend_neutral() {
+        let path = PathBuf::from("Pack/Song/music.ogg");
+        let cut = AudioCut {
+            start_sec: 12.0,
+            length_sec: 15.0,
+            fade_in_sec: 0.5,
+            fade_out_sec: 1.0,
+        };
+        assert_eq!(
+            AudioRequest::PlayMusic {
+                path: path.clone(),
+                cut,
+                looping: true,
+                rate: 1.25,
+            },
+            AudioRequest::PlayMusic {
+                path,
+                cut,
+                looping: true,
+                rate: 1.25,
+            }
         );
     }
 

@@ -9,15 +9,14 @@ use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::font;
 use deadlib_present::space::{screen_height, screen_width, widescale};
-use deadsync_audio_stream as audio;
 use deadsync_core::input::InputSource;
+use deadsync_input::KeyCode;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{
     GamepadCodeBinding, InputBinding, InputEvent, Keymap, PadEvent, VirtualAction,
     any_player_has_dedicated_menu_buttons_for_mode, clamp_input_debounce_seconds, with_keymap,
 };
 use std::time::{Duration, Instant};
-use winit::keyboard::KeyCode;
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;
@@ -26,6 +25,10 @@ const TRANSITION_OUT_DURATION: f32 = 0.4;
 /* -------------------------- hold-to-scroll timing ------------------------- */
 const NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(300);
 const NAV_REPEAT_SCROLL_INTERVAL: Duration = Duration::from_millis(50);
+
+const CHANGE_SFX: &str = "assets/sounds/change.ogg";
+const CHANGE_VALUE_SFX: &str = "assets/sounds/change_value.ogg";
+const START_SFX: &str = "assets/sounds/start.ogg";
 
 /* --------------------------- layout constants ---------------------------- */
 /// Bars in `screen_bar.rs` use 32.0 px height.
@@ -291,10 +294,10 @@ const fn total_rows() -> usize {
     NUM_MAPPING_ROWS + 1 // + Exit row
 }
 
-fn move_selection(state: &mut State, dir: NavDirection, wrap: NavWrap) {
+fn move_selection(state: &mut State, dir: NavDirection, wrap: NavWrap) -> ThemeEffect {
     let total = total_rows();
     if total == 0 {
-        return;
+        return ThemeEffect::None;
     }
     let old = state.selected_row;
     let last = total - 1;
@@ -327,8 +330,9 @@ fn move_selection(state: &mut State, dir: NavDirection, wrap: NavWrap) {
         // Reset row tween; update() will compute from_y based on layout.
         state.cursor_row_anim_t = 0.0;
         state.cursor_row_anim_from_row = Some(old);
-        audio::play_sfx("assets/sounds/change.ogg");
+        return crate::effects::sfx(CHANGE_SFX);
     }
+    ThemeEffect::None
 }
 
 #[inline(always)]
@@ -480,21 +484,27 @@ fn input_event_from_raw(action: VirtualAction, key_event: &RawKeyboardEvent) -> 
     }
 }
 
-pub fn update(state: &mut State, dt: f32) {
-    // Hold-to-scroll for Up/Down.
-    if let (Some(direction), Some(held_since), Some(last_scrolled_at)) = (
+fn repeat_navigation(state: &mut State, now: Instant) -> ThemeEffect {
+    let (Some(direction), Some(held_since), Some(last_scrolled_at)) = (
         state.nav_key_held_direction,
         state.nav_key_held_since,
         state.nav_key_last_scrolled_at,
-    ) {
-        let now = Instant::now();
-        if now.duration_since(held_since) > NAV_INITIAL_HOLD_DELAY
-            && now.duration_since(last_scrolled_at) >= NAV_REPEAT_SCROLL_INTERVAL
-        {
-            move_selection(state, direction, NavWrap::Clamp);
-            state.nav_key_last_scrolled_at = Some(now);
-        }
+    ) else {
+        return ThemeEffect::None;
+    };
+    if now.duration_since(held_since) <= NAV_INITIAL_HOLD_DELAY
+        || now.duration_since(last_scrolled_at) < NAV_REPEAT_SCROLL_INTERVAL
+    {
+        return ThemeEffect::None;
     }
+    let effect = move_selection(state, direction, NavWrap::Clamp);
+    state.nav_key_last_scrolled_at = Some(now);
+    effect
+}
+
+pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
+    // Hold-to-scroll for Up/Down.
+    let effect = repeat_navigation(state, Instant::now());
     // Start vertical cursor tween when the selected row changes.
     if state.selected_row != state.prev_selected_row {
         // Duplicate layout math needed to compute row centers (mirrors get_actors()).
@@ -582,6 +592,7 @@ pub fn update(state: &mut State, dt: f32) {
     } else {
         state.capture_pulse_t = 0.0;
     }
+    effect
 }
 
 /// Raw keyboard handler used only while capturing a new mapping.
@@ -619,6 +630,7 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
         // Map the captured key into the appropriate binding slot based on
         // the active row and slot, then persist to deadsync.ini with unique
         // keyboard bindings across all P1/P2 actions.
+        let mut effect = ThemeEffect::None;
         if let (Some(row_idx), Some(slot)) = (state.capture_row, state.capture_slot) {
             let (p1_act_opt, p2_act_opt) = row_actions(row_idx);
             let action_opt = match slot {
@@ -632,7 +644,7 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
                     ActiveSlot::P1Secondary | ActiveSlot::P2Secondary => 2,
                 };
                 crate::config::update_keymap_binding_unique_keyboard(action, index, code);
-                audio::play_sfx("assets/sounds/change_value.ogg");
+                effect = crate::effects::sfx(CHANGE_VALUE_SFX);
 
                 if crate::config::get().only_dedicated_menu_buttons
                     && !any_player_has_dedicated_menu_buttons_for_mode(
@@ -647,23 +659,25 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
         // Any captured key ends capture.
         cancel_capture(state);
 
-        return ThemeEffect::None;
+        return effect;
     }
 
     // Not capturing: only arrow keys, Enter, and Escape drive navigation.
     match code {
         KeyCode::ArrowUp => {
             if is_pressed {
-                move_selection(state, NavDirection::Up, NavWrap::Wrap);
+                let effect = move_selection(state, NavDirection::Up, NavWrap::Wrap);
                 on_nav_press(state, NavDirection::Up);
+                return effect;
             } else {
                 on_nav_release(state, NavDirection::Up);
             }
         }
         KeyCode::ArrowDown => {
             if is_pressed {
-                move_selection(state, NavDirection::Down, NavWrap::Wrap);
+                let effect = move_selection(state, NavDirection::Down, NavWrap::Wrap);
                 on_nav_press(state, NavDirection::Down);
+                return effect;
             } else {
                 on_nav_release(state, NavDirection::Down);
             }
@@ -671,29 +685,31 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
         KeyCode::ArrowLeft => {
             if is_pressed && state.selected_row < NUM_MAPPING_ROWS {
                 set_active_slot(state, active_slot_prev(state.active_slot));
-                audio::play_sfx("assets/sounds/change_value.ogg");
+                return crate::effects::sfx(CHANGE_VALUE_SFX);
             }
         }
         KeyCode::ArrowRight => {
             if is_pressed && state.selected_row < NUM_MAPPING_ROWS {
                 set_active_slot(state, active_slot_next(state.active_slot));
-                audio::play_sfx("assets/sounds/change_value.ogg");
+                return crate::effects::sfx(CHANGE_VALUE_SFX);
             }
         }
         KeyCode::Delete | KeyCode::Backspace => {
             if is_pressed && clear_focused_binding(state) {
-                audio::play_sfx("assets/sounds/change.ogg");
+                return crate::effects::sfx(CHANGE_SFX);
             }
         }
         KeyCode::Enter => {
             if is_pressed {
                 if state.selected_row == NUM_MAPPING_ROWS {
-                    audio::play_sfx("assets/sounds/start.ogg");
-                    return ThemeEffect::Navigate(Screen::Options);
+                    return crate::effects::sfx_then(
+                        START_SFX,
+                        ThemeEffect::Navigate(Screen::Options),
+                    );
                 }
                 if state.selected_row < NUM_MAPPING_ROWS {
                     begin_keyboard_capture(state, code, key_event.timestamp);
-                    audio::play_sfx("assets/sounds/change_value.ogg");
+                    return crate::effects::sfx(CHANGE_VALUE_SFX);
                 }
             }
         }
@@ -718,10 +734,10 @@ pub fn handle_raw_key_event(state: &mut State, key_event: &RawKeyboardEvent) -> 
 }
 
 /// Raw gamepad handler used only while capturing a new mapping.
-/// Returns `true` when the raw press was consumed as the new binding.
-pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) -> bool {
+/// Returns whether the raw press was consumed and any runtime work it emitted.
+pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) -> (bool, ThemeEffect) {
     if !state.capture_active {
-        return false;
+        return (false, ThemeEffect::None);
     }
 
     // Only react to press edges; releases and pure axis motion are ignored.
@@ -734,7 +750,7 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) -> bool {
             ..
         } => {
             if !pressed {
-                return false;
+                return (false, ThemeEffect::None);
             }
             let dev = usize::from(id);
             let code_u32 = code.into_u32();
@@ -755,7 +771,7 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) -> bool {
             ..
         } => {
             if !pressed {
-                return false;
+                return (false, ThemeEffect::None);
             }
             let dev = usize::from(id);
             Some((InputBinding::PadDirOn { device: dev, dir }, timestamp))
@@ -764,12 +780,13 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) -> bool {
     };
 
     let Some((binding, timestamp)) = binding_opt else {
-        return false;
+        return (false, ThemeEffect::None);
     };
     if capture_debounce_active(state, timestamp) {
-        return false;
+        return (false, ThemeEffect::None);
     }
 
+    let mut effect = ThemeEffect::None;
     if let (Some(row_idx), Some(slot)) = (state.capture_row, state.capture_slot) {
         let (p1_act_opt, p2_act_opt) = row_actions(row_idx);
         let action_opt = match slot {
@@ -783,7 +800,7 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) -> bool {
                 ActiveSlot::P1Secondary | ActiveSlot::P2Secondary => 2,
             };
             crate::config::update_keymap_binding_unique_gamepad(action, index, binding);
-            audio::play_sfx("assets/sounds/change_value.ogg");
+            effect = crate::effects::sfx(CHANGE_VALUE_SFX);
 
             if crate::config::get().only_dedicated_menu_buttons
                 && !any_player_has_dedicated_menu_buttons_for_mode(
@@ -797,7 +814,7 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) -> bool {
 
     // Any captured pad input ends capture.
     cancel_capture(state);
-    true
+    (true, effect)
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
@@ -807,8 +824,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     if state.capture_active {
         if let Some((_, screen_input::ThreeKeyMenuAction::Cancel)) = three_key_action {
             cancel_capture(state);
-            audio::play_sfx("assets/sounds/change.ogg");
-            return ThemeEffect::None;
+            return crate::effects::sfx(CHANGE_SFX);
         }
         if ev.pressed && matches!(ev.action, VirtualAction::p1_back | VirtualAction::p2_back) {
             return ThemeEffect::Navigate(Screen::Options);
@@ -844,46 +860,50 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
             return match nav {
                 screen_input::ThreeKeyMenuAction::Prev => {
                     if matches!(state.three_key_focus, ThreeKeyFocus::Row) {
-                        move_selection(state, NavDirection::Up, NavWrap::Wrap);
+                        let effect = move_selection(state, NavDirection::Up, NavWrap::Wrap);
                         on_nav_press(state, NavDirection::Up);
                         state.menu_lr_undo_row = 1;
+                        effect
                     } else if state.selected_row < NUM_MAPPING_ROWS {
                         let prev_slot = state.active_slot;
                         set_active_slot(state, active_slot_prev(state.active_slot));
                         state.menu_lr_undo_slot = Some(prev_slot);
-                        audio::play_sfx("assets/sounds/change_value.ogg");
+                        crate::effects::sfx(CHANGE_VALUE_SFX)
+                    } else {
+                        ThemeEffect::None
                     }
-                    ThemeEffect::None
                 }
                 screen_input::ThreeKeyMenuAction::Next => {
                     if matches!(state.three_key_focus, ThreeKeyFocus::Row) {
-                        move_selection(state, NavDirection::Down, NavWrap::Wrap);
+                        let effect = move_selection(state, NavDirection::Down, NavWrap::Wrap);
                         on_nav_press(state, NavDirection::Down);
                         state.menu_lr_undo_row = -1;
+                        effect
                     } else if state.selected_row < NUM_MAPPING_ROWS {
                         let prev_slot = state.active_slot;
                         set_active_slot(state, active_slot_next(state.active_slot));
                         state.menu_lr_undo_slot = Some(prev_slot);
-                        audio::play_sfx("assets/sounds/change_value.ogg");
+                        crate::effects::sfx(CHANGE_VALUE_SFX)
+                    } else {
+                        ThemeEffect::None
                     }
-                    ThemeEffect::None
                 }
                 screen_input::ThreeKeyMenuAction::Confirm => {
                     state.menu_lr_undo_row = 0;
                     if matches!(state.three_key_focus, ThreeKeyFocus::Row) {
                         if state.selected_row == NUM_MAPPING_ROWS {
-                            audio::play_sfx("assets/sounds/start.ogg");
-                            ThemeEffect::Navigate(Screen::Options)
+                            crate::effects::sfx_then(
+                                START_SFX,
+                                ThemeEffect::Navigate(Screen::Options),
+                            )
                         } else {
                             state.three_key_focus = ThreeKeyFocus::Slot;
                             state.menu_lr_undo_slot = None;
-                            audio::play_sfx("assets/sounds/start.ogg");
-                            ThemeEffect::None
+                            crate::effects::sfx(START_SFX)
                         }
                     } else if state.selected_row < NUM_MAPPING_ROWS {
                         begin_capture(state, ev.emitted_at);
-                        audio::play_sfx("assets/sounds/change_value.ogg");
-                        ThemeEffect::None
+                        crate::effects::sfx(CHANGE_VALUE_SFX)
                     } else {
                         ThemeEffect::None
                     }
@@ -894,16 +914,19 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                             set_active_slot(state, prev_slot);
                         }
                         state.three_key_focus = ThreeKeyFocus::Row;
-                        audio::play_sfx("assets/sounds/change.ogg");
-                        ThemeEffect::None
+                        crate::effects::sfx(CHANGE_SFX)
                     } else {
-                        match state.menu_lr_undo_row {
+                        let move_effect = match state.menu_lr_undo_row {
                             1 => move_selection(state, NavDirection::Down, NavWrap::Wrap),
                             -1 => move_selection(state, NavDirection::Up, NavWrap::Wrap),
-                            _ => {}
-                        }
+                            _ => ThemeEffect::None,
+                        };
                         state.menu_lr_undo_row = 0;
-                        ThemeEffect::Navigate(Screen::Options)
+                        let navigate = ThemeEffect::Navigate(Screen::Options);
+                        match move_effect {
+                            ThemeEffect::None => navigate,
+                            effect => ThemeEffect::Batch(vec![effect, navigate]),
+                        }
                     }
                 }
             };
@@ -919,8 +942,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         | VirtualAction::p2_up
         | VirtualAction::p2_menu_up => {
             if ev.pressed {
-                move_selection(state, NavDirection::Up, NavWrap::Wrap);
+                let effect = move_selection(state, NavDirection::Up, NavWrap::Wrap);
                 on_nav_press(state, NavDirection::Up);
+                return effect;
             } else {
                 on_nav_release(state, NavDirection::Up);
             }
@@ -930,8 +954,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         | VirtualAction::p2_down
         | VirtualAction::p2_menu_down => {
             if ev.pressed {
-                move_selection(state, NavDirection::Down, NavWrap::Wrap);
+                let effect = move_selection(state, NavDirection::Down, NavWrap::Wrap);
                 on_nav_press(state, NavDirection::Down);
+                return effect;
             } else {
                 on_nav_release(state, NavDirection::Down);
             }
@@ -942,7 +967,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         | VirtualAction::p2_menu_left => {
             if ev.pressed && state.selected_row < NUM_MAPPING_ROWS {
                 set_active_slot(state, active_slot_prev(state.active_slot));
-                audio::play_sfx("assets/sounds/change_value.ogg");
+                return crate::effects::sfx(CHANGE_VALUE_SFX);
             }
         }
         VirtualAction::p1_right
@@ -951,7 +976,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         | VirtualAction::p2_menu_right => {
             if ev.pressed && state.selected_row < NUM_MAPPING_ROWS {
                 set_active_slot(state, active_slot_next(state.active_slot));
-                audio::play_sfx("assets/sounds/change_value.ogg");
+                return crate::effects::sfx(CHANGE_VALUE_SFX);
             }
         }
         VirtualAction::p1_start
@@ -961,14 +986,13 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
             if ev.pressed =>
         {
             if state.selected_row == NUM_MAPPING_ROWS {
-                audio::play_sfx("assets/sounds/start.ogg");
-                return ThemeEffect::Navigate(Screen::Options);
+                return crate::effects::sfx_then(START_SFX, ThemeEffect::Navigate(Screen::Options));
             }
 
             // Begin capture on the currently focused slot in this row.
             if state.selected_row < NUM_MAPPING_ROWS {
                 begin_capture(state, ev.emitted_at);
-                audio::play_sfx("assets/sounds/change_value.ogg");
+                return crate::effects::sfx(CHANGE_VALUE_SFX);
             }
         }
         _ => {}
@@ -1782,16 +1806,20 @@ pub fn get_actors(
 #[cfg(test)]
 mod tests {
     use super::{
-        ActiveSlot, begin_capture, handle_input, handle_raw_key_event, handle_raw_pad_event, init,
-        invalid_capture_key, keymap_raw_nav_action,
+        ActiveSlot, NAV_INITIAL_HOLD_DELAY, NAV_REPEAT_SCROLL_INTERVAL, NUM_MAPPING_ROWS,
+        NavDirection, begin_capture, handle_input, handle_raw_key_event, handle_raw_pad_event,
+        init, invalid_capture_key, keymap_raw_nav_action, repeat_navigation,
     };
+    use crate::effects::{SimplyLoveEffect, SimplyLoveRuntimeRequest};
+    use crate::screens::Screen;
     use deadsync_core::input::InputSource;
+    use deadsync_input::KeyCode;
     use deadsync_input::RawKeyboardEvent;
     use deadsync_input::{
         InputBinding, InputEvent, Keymap, PadCode, PadEvent, PadId, VirtualAction,
     };
+    use deadsync_theme::AudioRequest;
     use std::time::{Duration, Instant};
-    use winit::keyboard::KeyCode;
 
     fn input_event(action: VirtualAction, pressed: bool, source: InputSource) -> InputEvent {
         let now = Instant::now();
@@ -1817,6 +1845,15 @@ mod tests {
         }
     }
 
+    fn assert_sfx(effect: &SimplyLoveEffect, expected_path: &str) {
+        assert!(matches!(
+            effect,
+            SimplyLoveEffect::Runtime(SimplyLoveRuntimeRequest::Audio(
+                AudioRequest::PlaySfx(path)
+            )) if path == expected_path
+        ));
+    }
+
     #[test]
     fn capture_allows_default_menu_keys() {
         assert!(!invalid_capture_key(KeyCode::ArrowLeft));
@@ -1838,25 +1875,75 @@ mod tests {
     fn p2_gamepad_can_navigate_and_begin_capture() {
         let mut state = init();
 
-        handle_input(
+        let move_effect = handle_input(
             &mut state,
             &input_event(VirtualAction::p2_down, true, InputSource::Gamepad),
         );
         assert_eq!(state.selected_row, 1);
+        assert_sfx(&move_effect, "assets/sounds/change.ogg");
 
-        handle_input(
+        let slot_effect = handle_input(
             &mut state,
             &input_event(VirtualAction::p2_right, true, InputSource::Gamepad),
         );
         assert_eq!(state.active_slot, ActiveSlot::P1Secondary);
+        assert_sfx(&slot_effect, "assets/sounds/change_value.ogg");
 
-        handle_input(
+        let capture_effect = handle_input(
             &mut state,
             &input_event(VirtualAction::p2_start, true, InputSource::Gamepad),
         );
         assert!(state.capture_active);
         assert_eq!(state.capture_row, Some(1));
         assert_eq!(state.capture_slot, Some(ActiveSlot::P1Secondary));
+        assert_sfx(&capture_effect, "assets/sounds/change_value.ogg");
+    }
+
+    #[test]
+    fn exit_sfx_precedes_navigation() {
+        let mut state = init();
+        state.selected_row = NUM_MAPPING_ROWS;
+
+        let effect =
+            handle_raw_key_event(&mut state, &raw_key(KeyCode::Enter, true, Instant::now()));
+        let SimplyLoveEffect::Batch(effects) = effect else {
+            panic!("expected ordered SFX and navigation effects");
+        };
+        assert_eq!(effects.len(), 2);
+        assert_sfx(&effects[0], "assets/sounds/start.ogg");
+        assert!(matches!(
+            effects[1],
+            SimplyLoveEffect::Navigate(Screen::Options)
+        ));
+    }
+
+    #[test]
+    fn held_navigation_emits_one_sfx_per_repeat_interval() {
+        let mut state = init();
+        let started = Instant::now();
+        state.nav_key_held_direction = Some(NavDirection::Down);
+        state.nav_key_held_since = Some(started);
+        state.nav_key_last_scrolled_at = Some(started);
+
+        let initial_boundary = repeat_navigation(&mut state, started + NAV_INITIAL_HOLD_DELAY);
+        assert_eq!(state.selected_row, 0);
+        assert!(matches!(initial_boundary, SimplyLoveEffect::None));
+
+        let first_at = started + NAV_INITIAL_HOLD_DELAY + Duration::from_millis(1);
+        let first = repeat_navigation(&mut state, first_at);
+        assert_eq!(state.selected_row, 1);
+        assert_sfx(&first, "assets/sounds/change.ogg");
+
+        let before_repeat = repeat_navigation(
+            &mut state,
+            first_at + NAV_REPEAT_SCROLL_INTERVAL - Duration::from_millis(1),
+        );
+        assert_eq!(state.selected_row, 1);
+        assert!(matches!(before_repeat, SimplyLoveEffect::None));
+
+        let second = repeat_navigation(&mut state, first_at + NAV_REPEAT_SCROLL_INTERVAL);
+        assert_eq!(state.selected_row, 2);
+        assert_sfx(&second, "assets/sounds/change.ogg");
     }
 
     #[test]
@@ -1906,7 +1993,9 @@ mod tests {
             pressed: true,
         };
 
-        assert!(handle_raw_pad_event(&mut state, &event));
+        let (consumed, effect) = handle_raw_pad_event(&mut state, &event);
+        assert!(consumed);
+        assert!(matches!(effect, SimplyLoveEffect::None));
         assert!(!state.capture_active);
     }
 

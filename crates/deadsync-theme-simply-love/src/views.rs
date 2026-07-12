@@ -36,6 +36,71 @@ pub struct SimplyLoveUpdaterCapabilities {
     pub ffmpeg_install: bool,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MainMenuGrooveError {
+    Disabled,
+    MachineOffline,
+    CannotConnect,
+    TimedOut,
+    InvalidResponse,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MainMenuGrooveStatus {
+    Pending {
+        boogie: bool,
+    },
+    Error {
+        boogie: bool,
+        kind: MainMenuGrooveError,
+    },
+    Connected {
+        boogie: bool,
+        get_scores: bool,
+        leaderboard: bool,
+        auto_submit: bool,
+    },
+}
+
+impl Default for MainMenuGrooveStatus {
+    fn default() -> Self {
+        Self::Pending { boogie: false }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MainMenuArrowCloudError {
+    Disabled,
+    TimedOut,
+    HostBlocked,
+    CannotConnect,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum MainMenuArrowCloudStatus {
+    #[default]
+    Pending,
+    Connected,
+    Error(MainMenuArrowCloudError),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct MainMenuSmxConflictView {
+    pub color_rgb: [f32; 3],
+}
+
+/// Shell-prepared runtime data consumed by Simply Love's concrete main menu.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct MainMenuRuntimeView {
+    pub allow_shutdown_host: bool,
+    pub song_count: usize,
+    pub pack_count: usize,
+    pub course_count: usize,
+    pub groovestats: MainMenuGrooveStatus,
+    pub arrowcloud: MainMenuArrowCloudStatus,
+    pub smx_conflict: Option<MainMenuSmxConflictView>,
+}
+
 /// Coarse updater failure category used by Simply Love's localized overlays.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SimplyLoveUpdateErrorKind {

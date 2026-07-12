@@ -69,7 +69,6 @@ pub use crate::{
 pub use crate::{
     runtime_active_local_profile_id_for_side as active_local_profile_id_for_side,
     runtime_active_profile_for_side as get_active_profile_for_side, runtime_current_profile as get,
-    runtime_fast_profile_switch_from_select_music as fast_profile_switch_from_select_music,
     runtime_footer_fields_for_side as footer_fields_for_side,
     runtime_gameplay_hud_snapshot as gameplay_hud_snapshot,
     runtime_groovestats_api_key_for_side as groovestats_api_key_for_side,
@@ -90,12 +89,10 @@ pub use crate::{
     runtime_session_side_joined as is_session_side_joined,
     runtime_session_timing_tick_mode as get_session_timing_tick_mode,
     runtime_set_avatar_texture_key_for_side as set_avatar_texture_key_for_side,
-    runtime_set_fast_profile_switch_from_select_music as set_fast_profile_switch_from_select_music,
     runtime_set_session_joined as set_session_joined,
     runtime_set_session_music_rate as set_session_music_rate,
     runtime_set_session_play_mode as set_session_play_mode,
     runtime_set_session_play_style as set_session_play_style,
     runtime_set_session_player_side as set_session_player_side,
     runtime_set_session_timing_tick_mode as set_session_timing_tick_mode,
-    runtime_take_fast_profile_switch_from_select_music as take_fast_profile_switch_from_select_music,
 };

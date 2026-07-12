@@ -8,9 +8,9 @@ use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, PadEvent, VirtualAction};
 use deadsync_input_native::GpSystemEvent;
 // Keyboard input is handled centrally via the virtual dispatcher in app
+use deadsync_input::KeyCode;
 use std::collections::VecDeque;
 use std::time::Instant;
-use winit::keyboard::KeyCode;
 
 /* ---------------------------- constants ---------------------------- */
 

@@ -318,6 +318,8 @@ pub struct State {
     pub(super) combo_preview_elapsed: f32,
     pub(super) pane_transition: PaneTransition,
     pub(super) menu_lr_chord: screen_input::MenuLrChordTracker,
+    /// Ordered audio work awaiting emission at the input/update boundary.
+    pub(super) pending_audio: Vec<AudioRequest>,
 }
 
 /// Per-pane state. Each pane keeps its own row map, cursor, and tween state so

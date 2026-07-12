@@ -96,7 +96,7 @@ impl App {
             return;
         };
         gs.set_raw_modifier_state(plan.shift_held, plan.ctrl_held);
-        let now_music_time = gs.music_time_from_audio_snapshot(screens::gameplay::audio_snapshot());
+        let now_music_time = gs.music_time_from_audio_snapshot(crate::gameplay_runtime::snapshot());
         let action = gs.handle_queued_raw_key_input(
             plan.input,
             plan.modifier_key,
@@ -105,7 +105,7 @@ impl App {
             now_music_time,
             plan.allow_commands,
         );
-        screens::gameplay::drain_audio_commands(gs);
+        crate::gameplay_runtime::drain(gs);
         let keyboard_features = config::get().keyboard_features;
         match allowed_gameplay_raw_action(
             action,
@@ -134,7 +134,8 @@ impl App {
         if self.route_gameplay_offset_prompt_input(event_loop, &ev) {
             return Ok(());
         }
-        if self.try_handle_late_join(&ev) {
+        if let Some(action) = self.try_handle_late_join(&ev) {
+            self.handle_action(action, event_loop)?;
             return Ok(());
         }
         let current_screen = self.state.screens.current_screen;
@@ -164,6 +165,7 @@ impl App {
         }
         let action = match self.state.screens.current_screen {
             CurrentScreen::Menu => {
+                self.sync_main_menu_runtime_view();
                 screens::menu::handle_input(&mut self.state.screens.menu_state, &ev)
             }
             CurrentScreen::SelectProfile => screens::select_profile::handle_input(
@@ -269,14 +271,14 @@ impl App {
             }
             CurrentScreen::Gameplay => {
                 if let Some(gs) = &mut self.state.screens.gameplay_state {
-                    screens::gameplay::handle_input(gs, &ev)
+                    crate::gameplay_runtime::handle_input(gs, &ev)
                 } else {
                     ThemeEffect::None
                 }
             }
             CurrentScreen::Practice => {
                 if let Some(ps) = &mut self.state.screens.practice_state {
-                    screens::practice::handle_input(ps, &ev)
+                    crate::gameplay_runtime::handle_practice_input(ps, &ev)
                 } else {
                     ThemeEffect::None
                 }

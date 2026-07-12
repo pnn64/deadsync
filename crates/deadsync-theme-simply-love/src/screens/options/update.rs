@@ -51,6 +51,7 @@ pub(super) fn sync_i18n_cache(state: &mut State) {
     state.i18n_revision = rev;
     state.display_mode_choices = build_display_mode_choices(&state.monitor_specs);
     state.software_thread_labels = software_thread_choice_labels(&state.software_thread_choices);
+    state.sound_device_options = build_sound_device_options(&state.audio_options);
     state.score_import_pack_options = score_import_pack_options();
     let new_groups_lc: HashSet<String> = state
         .score_import_pack_options
@@ -65,7 +66,7 @@ pub(super) fn sync_i18n_cache(state: &mut State) {
     state.sync_pack_filters = sp_filters;
     #[cfg(target_os = "linux")]
     {
-        state.linux_backend_choices = build_linux_backend_choices();
+        state.linux_backend_choices = build_linux_backend_choices(&state.audio_options);
     }
     clear_render_cache(state);
 }
@@ -263,6 +264,11 @@ fn open_submenu_now(state: &mut State, kind: SubmenuKind) {
 }
 
 pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Option<ThemeEffect> {
+    let effect = update_impl(state, dt, asset_manager);
+    prepend_pending_sfx_opt(state, effect)
+}
+
+fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Option<ThemeEffect> {
     if state.reload_ui.is_some() {
         let done = {
             let reload = state.reload_ui.as_mut().unwrap();
@@ -592,14 +598,20 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
     match state.view {
         OptionsView::Main => {
             if state.selected != state.prev_selected {
-                audio::play_sfx("assets/sounds/change.ogg");
                 state.prev_selected = state.selected;
+                pending_action = Some(match pending_action.take() {
+                    Some(next) => crate::effects::sfx_then("assets/sounds/change.ogg", next),
+                    None => crate::effects::sfx("assets/sounds/change.ogg"),
+                });
             }
         }
         OptionsView::Submenu(_) => {
             if state.sub_selected != state.sub_prev_selected {
-                audio::play_sfx("assets/sounds/change.ogg");
                 state.sub_prev_selected = state.sub_selected;
+                pending_action = Some(match pending_action.take() {
+                    Some(next) => crate::effects::sfx_then("assets/sounds/change.ogg", next),
+                    None => crate::effects::sfx("assets/sounds/change.ogg"),
+                });
             }
         }
     }

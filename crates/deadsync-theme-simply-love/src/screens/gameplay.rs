@@ -37,16 +37,15 @@ use deadsync_core::song_time::song_time_ns_to_seconds;
 use deadsync_gameplay::{
     AUTOSYNC_OFFSET_SAMPLE_COUNT, AutosyncMode, CourseDisplayCarry, CourseDisplayTiming,
     CourseDisplayTotals, CrossoverRow, ExitTransitionKind, FantasticWindowOptions, GameplayAction,
-    GameplayAudioCommand, GameplayAudioSnapshot, GameplayConfig, GameplayExit,
-    GameplayMiniIndicatorData, GameplayMusicCut, GameplayNoteskinData, GameplayNoteskinEffects,
-    GameplayReceptorGlowBehavior, GameplayReceptorStepBehavior, GameplaySession,
-    GameplaySessionCommand, GameplayStreamClockSnapshot, GameplayTween, GameplayViewport,
-    HoldToExitKey, LeadInTiming, MINE_EXPLOSION_DURATION, RECEPTOR_STEP_WINDOWS,
-    RECEPTOR_Y_OFFSET_FROM_CENTER, RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, ReplayInputEdge,
-    ReplayOffsetSnapshot, SongLuaOverlayMessageRuntime, TAP_EXPLOSION_WINDOWS,
-    autosync_mode_status_line, blue_fantastic_window_ms, build_crossover_rows,
-    exit_transition_alpha, gameplay_runtime_charts, handle_core_input, scroll_receptor_y,
-    song_lua_ease_factor, spacing_multiplier_for_percent, update_core,
+    GameplayAudioSnapshot, GameplayConfig, GameplayExit, GameplayMiniIndicatorData,
+    GameplayNoteskinData, GameplayNoteskinEffects, GameplayReceptorGlowBehavior,
+    GameplayReceptorStepBehavior, GameplaySession, GameplayTween, GameplayViewport, HoldToExitKey,
+    LeadInTiming, MINE_EXPLOSION_DURATION, RECEPTOR_STEP_WINDOWS, RECEPTOR_Y_OFFSET_FROM_CENTER,
+    RECEPTOR_Y_OFFSET_FROM_CENTER_REVERSE, ReplayInputEdge, ReplayOffsetSnapshot,
+    SongLuaOverlayMessageRuntime, TAP_EXPLOSION_WINDOWS, autosync_mode_status_line,
+    blue_fantastic_window_ms, build_crossover_rows, exit_transition_alpha, gameplay_runtime_charts,
+    handle_core_input, scroll_receptor_y, song_lua_ease_factor, spacing_multiplier_for_percent,
+    update_core,
 };
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_notefield::{
@@ -64,16 +63,14 @@ use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
 use deadsync_profile_gameplay::{
     GameplayProfile, SongLuaRuntimeOverlayStateDelta, gameplay_pack_data,
-    gameplay_runtime_profile_data, profile_side_from_gameplay, profile_tick_mode_from_gameplay,
-    score_display_mode_from_profile, scroll_effects_from_option, song_lua_compile_context,
-    song_lua_runtime_column_offset_windows, song_lua_runtime_ease_windows,
-    song_lua_runtime_mod_windows,
+    gameplay_runtime_profile_data, profile_side_from_gameplay, score_display_mode_from_profile,
+    scroll_effects_from_option, song_lua_compile_context, song_lua_runtime_column_offset_windows,
+    song_lua_runtime_ease_windows, song_lua_runtime_mod_windows,
 };
 use deadsync_rules::note::Note;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::TimingSegments;
 use deadsync_score as score_data;
-use deadsync_smx::{self, SensorTestMode};
 use glam::{Mat4 as Matrix4, Vec3 as Vector3, Vec4 as Vector4};
 use smallvec::SmallVec;
 use std::cell::RefCell;
@@ -506,6 +503,25 @@ fn song_lua_overlay_order_cache_from(
     }
 }
 
+pub const SMX_SENSOR_PANEL_COUNT: usize = 9;
+
+/// Renderer-neutral sensor values prepared by the shell for one SMX panel.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SmxSensorPanelView {
+    pub threshold: u16,
+    pub value: Option<u16>,
+}
+
+/// Renderer-neutral sensor snapshot prepared by the shell for one SMX pad.
+///
+/// `fsr` is retained so the shell can interpret later SDK samples without
+/// retaining backend config types in the concrete theme state.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SmxSensorPadView {
+    pub fsr: bool,
+    pub panels: [SmxSensorPanelView; SMX_SENSOR_PANEL_COUNT],
+}
+
 pub struct State {
     pub gameplay: GameplayCoreState,
     pub noteskin_assets: GameplayNoteskinAssets,
@@ -538,10 +554,9 @@ pub struct State {
     pub background_transition: String,
     pub background_transition_start_time: f32,
     pub song_lua_sound_paths: Vec<PathBuf>,
-    smx_sensor_data: [Option<deadsync_smx::SensorTestData>; 2],
-    smx_sensor_config: [Option<deadsync_smx::SmxConfig>; 2],
-    // Time banked toward the next throttled sensor refresh (see
-    // `maybe_refresh_smx_sensor_data`). Seeded to fire on the first frame.
+    smx_sensor_views: [Option<SmxSensorPadView>; 2],
+    // Time banked toward the next shell-owned sensor refresh. Seeded to fire on
+    // the first frame.
     smx_sensor_refresh_accum: f32,
     song_lua_overlay_order: SongLuaOverlayOrderCache,
     song_lua_background_visual_layer_orders: Vec<SongLuaOverlayOrderCache>,
@@ -658,8 +673,7 @@ impl State {
             background_transition: String::new(),
             background_transition_start_time,
             song_lua_sound_paths,
-            smx_sensor_data: [None, None],
-            smx_sensor_config: [None, None],
+            smx_sensor_views: [None, None],
             smx_sensor_refresh_accum: SMX_SENSOR_REFRESH_INTERVAL,
             song_lua_overlay_order,
             song_lua_background_visual_layer_orders,
@@ -2161,83 +2175,6 @@ fn gameplay_lobby_hud_status_text(state: &State) -> Option<String> {
 }
 
 #[inline(always)]
-fn audio_cut(cut: GameplayMusicCut) -> deadsync_audio_stream::Cut {
-    deadsync_audio_stream::Cut {
-        start_sec: cut.start_sec,
-        length_sec: cut.length_sec,
-        fade_in_sec: cut.fade_in_sec,
-        fade_out_sec: cut.fade_out_sec,
-    }
-}
-
-pub fn audio_snapshot() -> GameplayAudioSnapshot {
-    let stream_clock = deadsync_audio_stream::get_music_stream_clock_snapshot();
-    let output_timing = deadsync_audio_stream::get_output_timing_snapshot();
-    GameplayAudioSnapshot {
-        stream_clock: GameplayStreamClockSnapshot {
-            stream_seconds: stream_clock.stream_seconds,
-            music_nanos: stream_clock.music_nanos,
-            music_seconds_per_second: stream_clock.music_seconds_per_second,
-            has_music_mapping: stream_clock.has_music_mapping,
-            valid_at: stream_clock.valid_at,
-            valid_at_host_nanos: stream_clock.valid_at_host_nanos,
-        },
-        assist_sfx_generation: deadsync_audio_stream::assist_sfx_generation(),
-        output_delay_seconds: output_timing.estimated_output_delay_ns as f32 * 1e-9,
-        timing_diag_enabled: deadsync_audio_stream::timing_diag_enabled(),
-        timing_diag_callback_gap_ns: deadsync_audio_stream::timing_diag_last_callback_gap_ns(),
-    }
-}
-
-pub fn drain_core_audio_commands(state: &mut GameplayCoreState) {
-    for command in state.drain_audio_commands() {
-        match command {
-            GameplayAudioCommand::StopMusic => {
-                if deadsync_audio_stream::is_initialized() {
-                    deadsync_audio_stream::stop_music();
-                }
-            }
-            GameplayAudioCommand::PlayMusic {
-                path,
-                cut,
-                looping,
-                rate,
-            } => deadsync_audio_stream::play_music(path, audio_cut(cut), looping, rate),
-            GameplayAudioCommand::PlayPreloadedSfx(path) => {
-                deadsync_audio_stream::play_preloaded_sfx(path);
-            }
-            GameplayAudioCommand::PlayPreloadedAssistTick(path) => {
-                deadsync_audio_stream::play_preloaded_assist_tick(path);
-            }
-            GameplayAudioCommand::PlayAssistTickAtMusicTime {
-                path,
-                music_seconds,
-            } => {
-                if let Some(frame) =
-                    deadsync_audio_stream::assist_tick_stream_frame_for_music_seconds(music_seconds)
-                {
-                    deadsync_audio_stream::play_scheduled_assist_tick(path, frame);
-                } else {
-                    deadsync_audio_stream::play_preloaded_assist_tick(path);
-                }
-            }
-        }
-    }
-}
-
-pub fn drain_core_session_commands(state: &mut GameplayCoreState) {
-    for command in state.drain_session_commands() {
-        match command {
-            GameplaySessionCommand::SetTimingTickMode(mode) => {
-                deadsync_profile::compat::set_session_timing_tick_mode(
-                    profile_tick_mode_from_gameplay(mode),
-                );
-            }
-        }
-    }
-}
-
-#[inline(always)]
 pub fn scorebox_snapshot_for_side(
     state: &State,
     side: profile_data::PlayerSide,
@@ -2283,24 +2220,10 @@ pub fn refresh_scorebox_snapshots(state: &mut State) {
     }
 }
 
-pub fn drain_core_commands(state: &mut GameplayCoreState) {
-    drain_core_audio_commands(state);
-    drain_core_session_commands(state);
-}
-
-pub fn drain_audio_commands(state: &mut State) {
-    drain_core_commands(&mut state.gameplay);
-}
-
 pub fn on_enter(state: &mut State) {
     state.lobby_music_started = false;
     set_all_local_lobby_players_ready(state, false);
     clear_lobby_disconnect_holds(state);
-
-    for (store_idx, sdk_pad) in smx_fsr_display_pads(state).into_iter().flatten() {
-        deadsync_smx::set_test_mode(sdk_pad, SensorTestMode::CalibratedValues);
-        state.smx_sensor_config[store_idx] = deadsync_smx::get_config(sdk_pad);
-    }
 
     if gameplay_requires_lobby_wait() {
         return;
@@ -2308,23 +2231,19 @@ pub fn on_enter(state: &mut State) {
 
     set_all_local_lobby_players_ready(state, true);
     state.start_stage_music();
-    drain_audio_commands(state);
     state.lobby_music_started = true;
 }
 
 pub fn on_exit(state: &mut State) {
-    // Always clear test mode for both pads, even ones we never cached a config
-    // for on enter (e.g. get_config returned None). A pad left in test mode keeps
-    // streaming sensor data over the wire on later screens like the song wheel.
-    // set_test_mode is a no-op when SMX is uninitialized or the pad is absent.
-    for pad in 0..2usize {
-        deadsync_smx::set_test_mode(pad, SensorTestMode::Off);
-    }
-    state.smx_sensor_data = [None, None];
-    state.smx_sensor_config = [None, None];
+    state.smx_sensor_views = [None, None];
 }
 
-pub fn update(state: &mut State, delta_time: f32) -> ThemeEffect {
+/// Runs concrete-theme work that must happen before the deterministic gameplay
+/// update. Returns `false` while an online lobby is still waiting for players.
+///
+/// Starting stage music only queues a gameplay audio command. The shell drains
+/// that command before it samples the stream clock for [`update`].
+pub fn prepare_update(state: &mut State) -> bool {
     deadsync_online::lobbies::runtime_poll_reconnect_default();
 
     if !state.lobby_music_started {
@@ -2338,31 +2257,30 @@ pub fn update(state: &mut State, delta_time: f32) -> ThemeEffect {
         update_lobby_machine_state(state);
 
         if gameplay_lobby_wait_text(state).is_some() {
-            return ThemeEffect::None;
+            return false;
         }
 
         clear_lobby_disconnect_holds(state);
         set_all_local_lobby_players_ready(state, true);
         state.start_stage_music();
-        drain_audio_commands(state);
         state.lobby_music_started = true;
     }
     update_lobby_machine_state(state);
-    maybe_refresh_smx_sensor_data(state, delta_time);
-    smx_profile::maybe_report();
-    let previous_song_lua_time = state.current_music_time_display();
-    let action = update_core(state, delta_time, audio_snapshot(), || {
-        deadlib_platform::host_time::instant_nanos(Instant::now())
-    });
+    true
+}
+
+/// Advances deterministic gameplay using the shell-prepared audio snapshot.
+/// Runtime audio commands remain queued until the shell executes them.
+pub fn update(
+    state: &mut State,
+    delta_time: f32,
+    audio_snapshot: GameplayAudioSnapshot,
+    fallback_host_nanos: impl FnOnce() -> u64,
+) -> ThemeEffect {
+    let action = update_core(state, delta_time, audio_snapshot, fallback_host_nanos);
     if matches!(action, GameplayAction::None) {
         refresh_scorebox_snapshots(state);
     }
-    drain_audio_commands(state);
-    play_song_lua_sound_events(
-        state,
-        previous_song_lua_time,
-        state.current_music_time_display(),
-    );
     map_gameplay_action(action)
 }
 
@@ -2374,30 +2292,52 @@ fn song_lua_sound_time_crossed(previous: f32, now: f32, event_second: f32) -> bo
     (event_second > previous || starts_at_zero) && event_second <= now
 }
 
-fn play_song_lua_sound_events(state: &State, previous: f32, now: f32) {
+/// Visits concrete Song-Lua sound events crossed by this gameplay update.
+/// Sound identity and scheduling remain theme-owned; playback is supplied by
+/// the shell so this screen never reaches into the audio stream runtime.
+pub fn for_each_song_lua_sound_event(
+    state: &State,
+    previous: f32,
+    now: f32,
+    mut visit: impl FnMut(&Path),
+) {
     if !previous.is_finite() || !now.is_finite() || now < previous {
         return;
     }
     let song_lua_visuals = state.song_lua_visuals();
-    play_song_lua_sound_events_for(
+    for_each_song_lua_sound_event_in(
         &song_lua_visuals.overlays,
         &song_lua_visuals.overlay_events,
         previous,
         now,
+        &mut visit,
     );
     for layer in &song_lua_visuals.background_visual_layers {
-        play_song_lua_sound_events_for(&layer.overlays, &layer.overlay_events, previous, now);
+        for_each_song_lua_sound_event_in(
+            &layer.overlays,
+            &layer.overlay_events,
+            previous,
+            now,
+            &mut visit,
+        );
     }
     for layer in &song_lua_visuals.foreground_visual_layers {
-        play_song_lua_sound_events_for(&layer.overlays, &layer.overlay_events, previous, now);
+        for_each_song_lua_sound_event_in(
+            &layer.overlays,
+            &layer.overlay_events,
+            previous,
+            now,
+            &mut visit,
+        );
     }
 }
 
-fn play_song_lua_sound_events_for(
+fn for_each_song_lua_sound_event_in(
     overlays: &[SongLuaOverlayActor],
     overlay_events: &[Vec<SongLuaOverlayMessageRuntime>],
     previous: f32,
     now: f32,
+    visit: &mut impl FnMut(&Path),
 ) {
     for (overlay_index, overlay) in overlays.iter().enumerate() {
         let SongLuaOverlayKind::Sound { sound_path } = &overlay.kind else {
@@ -2416,8 +2356,7 @@ fn play_song_lua_sound_events_for(
                 }
                 let play_second = event.event_second + block.start;
                 if song_lua_sound_time_crossed(previous, now, play_second) {
-                    let key = sound_path.to_string_lossy();
-                    deadsync_audio_stream::play_preloaded_sfx(key.as_ref());
+                    visit(sound_path);
                 }
             }
         }
@@ -2430,12 +2369,12 @@ fn play_song_lua_sound_events_for(
 /// skipped. Returns all-`None` cheaply (before any config/session lookup) when no
 /// player wants the display or SMX input is off, so the per-frame caller does no
 /// further work.
-fn smx_fsr_display_pads(state: &State) -> [Option<(usize, usize)>; 2] {
+pub fn smx_sensor_pad_plan(state: &State, smx_input: bool) -> [Option<(usize, usize)>; 2] {
     let mut out = [None, None];
     if !state.profiles()[0].smx_fsr_display && !state.profiles()[1].smx_fsr_display {
         return out;
     }
-    if !crate::config::get().smx_input {
+    if !smx_input {
         return out;
     }
     if profile::get_session_play_style() == profile_data::PlayStyle::Double {
@@ -2469,25 +2408,42 @@ fn smx_fsr_display_pads(state: &State) -> [Option<(usize, usize)>; 2] {
 const SMX_SENSOR_REFRESH_HZ: f32 = 60.0;
 const SMX_SENSOR_REFRESH_INTERVAL: f32 = 1.0 / SMX_SENSOR_REFRESH_HZ;
 
-fn maybe_refresh_smx_sensor_data(state: &mut State, delta_time: f32) {
+pub fn smx_sensor_refresh_due(state: &mut State, delta_time: f32) -> bool {
     state.smx_sensor_refresh_accum += delta_time;
     if state.smx_sensor_refresh_accum < SMX_SENSOR_REFRESH_INTERVAL {
-        return;
+        return false;
     }
     // Keep the leftover so cadence stays steady, but cap it so a long stall
     // (load spike, alt-tab) can't bank up a burst of catch-up refreshes.
     state.smx_sensor_refresh_accum = (state.smx_sensor_refresh_accum - SMX_SENSOR_REFRESH_INTERVAL)
         .min(SMX_SENSOR_REFRESH_INTERVAL);
-    smx_profile::time_read(|| refresh_smx_sensor_data(state));
+    true
 }
 
-fn refresh_smx_sensor_data(state: &mut State) {
-    for (store_idx, sdk_pad) in smx_fsr_display_pads(state).into_iter().flatten() {
-        state.smx_sensor_data[store_idx] = deadsync_smx::get_test_data(sdk_pad);
-        if state.smx_sensor_config[store_idx].is_none() {
-            state.smx_sensor_config[store_idx] = deadsync_smx::get_config(sdk_pad);
-        }
+pub fn smx_sensor_pad_view(state: &State, store_idx: usize) -> Option<SmxSensorPadView> {
+    state.smx_sensor_views.get(store_idx).copied().flatten()
+}
+
+pub fn set_smx_sensor_pad_view(
+    state: &mut State,
+    store_idx: usize,
+    view: Option<SmxSensorPadView>,
+) {
+    if let Some(slot) = state.smx_sensor_views.get_mut(store_idx) {
+        *slot = view;
     }
+}
+
+pub fn smx_sensor_profile_enabled() -> bool {
+    smx_profile::enabled()
+}
+
+pub fn record_smx_sensor_read_ns(elapsed_ns: u64) {
+    smx_profile::record_read(elapsed_ns);
+}
+
+pub fn report_smx_sensor_profile() {
+    smx_profile::maybe_report();
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
@@ -2522,7 +2478,6 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         return ThemeEffect::None;
     }
     let action = handle_core_input(state, ev);
-    drain_audio_commands(state);
     map_gameplay_action(action)
 }
 
@@ -10507,7 +10462,7 @@ mod smx_profile {
     static READ: Bucket = Bucket::new();
     static DRAW: Bucket = Bucket::new();
 
-    fn enabled() -> bool {
+    pub(super) fn enabled() -> bool {
         static ENABLED: OnceLock<bool> = OnceLock::new();
         *ENABLED.get_or_init(|| {
             std::env::var("DEADSYNC_SMX_PROFILE").is_ok_and(|v| !v.is_empty() && v != "0")
@@ -10524,8 +10479,10 @@ mod smx_profile {
         out
     }
 
-    pub fn time_read<T>(f: impl FnOnce() -> T) -> T {
-        time(&READ, f)
+    pub(super) fn record_read(elapsed_ns: u64) {
+        if enabled() {
+            READ.record(elapsed_ns);
+        }
     }
 
     pub fn time_draw<T>(f: impl FnOnce() -> T) -> T {
@@ -10751,11 +10708,9 @@ fn draw_smx_fsr_group(
     group_top: f32,
     scale: f32,
 ) {
-    let Some(config) = state.smx_sensor_config[idx].as_ref() else {
+    let Some(view) = state.smx_sensor_views[idx].as_ref() else {
         return;
     };
-    let sensor_data = state.smx_sensor_data[idx].as_ref();
-    let fsr = deadsync_smx::is_fsr(config);
 
     let bar_w = SMX_SENSOR_BAR_W * scale;
     let bar_h = SMX_SENSOR_BAR_H * scale;
@@ -10780,42 +10735,15 @@ fn draw_smx_fsr_group(
 
         // Panel high threshold (max across sensors for FSR), computed once and
         // used for both the active check and the threshold line.
-        let threshold = if fsr {
-            config.panel_settings[panel]
-                .fsr_high_threshold
-                .iter()
-                .map(|&t| u16::from(t))
-                .max()
-                .unwrap_or(0)
-        } else {
-            u16::from(config.panel_settings[panel].load_cell_high_threshold)
-        };
+        let panel_view = view.panels[panel];
+        let threshold = panel_view.threshold;
         let threshold_norm = (threshold as f32 / SMX_SENSOR_VALUE_SCALE).clamp(0.0, 1.0);
 
-        let (value_norm, active, raw_value) = if let Some(data) = sensor_data {
-            if data.have_data_from_panel[panel] {
-                let max_val = if fsr {
-                    data.sensor_level[panel]
-                        .iter()
-                        .map(|&v| if v <= 0 { 0u16 } else { (v >> 2) as u16 })
-                        .max()
-                        .unwrap_or(0)
-                } else {
-                    // Load-cell: no >>2 shift, clamp to 0-500 then scale to 250.
-                    data.sensor_level[panel]
-                        .iter()
-                        .map(|&v| v.max(0).min(500) as u16)
-                        .max()
-                        .unwrap_or(0)
-                };
-                let norm = (max_val as f32 / SMX_SENSOR_VALUE_SCALE).clamp(0.0, 1.0);
-                (norm, max_val >= threshold && threshold > 0, Some(max_val))
-            } else {
-                (0.0, false, None)
-            }
-        } else {
-            (0.0, false, None)
-        };
+        let raw_value = panel_view.value;
+        let value_norm = raw_value
+            .map_or(0.0, |value| value as f32 / SMX_SENSOR_VALUE_SCALE)
+            .clamp(0.0, 1.0);
+        let active = raw_value.is_some_and(|value| value >= threshold && threshold > 0);
 
         // Track background.
         push_smx_quad(
@@ -11086,6 +11014,14 @@ mod tests {
         assert_eq!(song_meter_progress(2.0, 2.0, 12.0), 0.0);
         assert!((song_meter_progress(7.0, 2.0, 12.0) - 0.5).abs() <= 1e-6);
         assert_eq!(song_meter_progress(12.0, 2.0, 12.0), 1.0);
+    }
+
+    #[test]
+    fn song_lua_sound_crossing_keeps_zero_and_forward_edge_semantics() {
+        assert!(song_lua_sound_time_crossed(0.0, 0.0, 0.0));
+        assert!(song_lua_sound_time_crossed(1.0, 2.0, 2.0));
+        assert!(!song_lua_sound_time_crossed(1.0, 2.0, 1.0));
+        assert!(!song_lua_sound_time_crossed(1.0, 2.0, f32::NAN));
     }
 
     fn ensure_i18n() {

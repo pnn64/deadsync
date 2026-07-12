@@ -18,7 +18,7 @@ pub enum MeasureLineMode {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct MeasureComposeRequest<'a, 'travel> {
+pub(crate) struct MeasureComposeRequest<'a, 'travel> {
     pub mode: MeasureLineMode,
     pub show_cues: bool,
     pub style: NotefieldStyle,
@@ -497,7 +497,10 @@ fn append_group_cues(
     }
 }
 
-pub fn compose_measure_lines(actors: &mut Vec<Actor>, request: MeasureComposeRequest<'_, '_>) {
+pub(crate) fn compose_measure_lines(
+    actors: &mut Vec<Actor>,
+    request: MeasureComposeRequest<'_, '_>,
+) {
     if request.mode == MeasureLineMode::Off && !request.show_cues {
         return;
     }

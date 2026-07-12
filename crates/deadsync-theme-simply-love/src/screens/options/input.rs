@@ -79,7 +79,7 @@ pub(super) fn apply_submenu_choice_delta(
                         VOLUME_MAX_PERCENT,
                     ) {
                         config::update_master_volume(state.master_volume_pct as u8);
-                        audio::play_sfx("assets/sounds/change_value.ogg");
+                        queue_sfx(state, "assets/sounds/change_value.ogg");
                         clear_render_cache(state);
                     }
                     return None;
@@ -92,7 +92,7 @@ pub(super) fn apply_submenu_choice_delta(
                         VOLUME_MAX_PERCENT,
                     ) {
                         config::update_sfx_volume(state.sfx_volume_pct as u8);
-                        audio::play_sfx("assets/sounds/change_value.ogg");
+                        queue_sfx(state, "assets/sounds/change_value.ogg");
                         clear_render_cache(state);
                     }
                     return None;
@@ -105,7 +105,7 @@ pub(super) fn apply_submenu_choice_delta(
                         VOLUME_MAX_PERCENT,
                     ) {
                         config::update_assist_tick_volume(state.assist_tick_volume_pct as u8);
-                        audio::play_sfx("assets/sounds/change_value.ogg");
+                        queue_sfx(state, "assets/sounds/change_value.ogg");
                         clear_render_cache(state);
                     }
                     return None;
@@ -118,7 +118,7 @@ pub(super) fn apply_submenu_choice_delta(
                         VOLUME_MAX_PERCENT,
                     ) {
                         config::update_music_volume(state.music_volume_pct as u8);
-                        audio::play_sfx("assets/sounds/change_value.ogg");
+                        queue_sfx(state, "assets/sounds/change_value.ogg");
                         clear_render_cache(state);
                     }
                     return None;
@@ -134,7 +134,7 @@ pub(super) fn apply_submenu_choice_delta(
                 GLOBAL_OFFSET_MAX_MS,
             ) {
                 config::update_global_offset(state.global_offset_ms as f32 / 1000.0);
-                audio::play_sfx("assets/sounds/change_value.ogg");
+                queue_sfx(state, "assets/sounds/change_value.ogg");
                 clear_render_cache(state);
             }
             return None;
@@ -151,14 +151,14 @@ pub(super) fn apply_submenu_choice_delta(
                 config::update_smx_default_light_brightness(
                     state.smx_default_light_brightness_pct as u8,
                 );
-                audio::play_sfx("assets/sounds/change_value.ogg");
+                queue_sfx(state, "assets/sounds/change_value.ogg");
                 clear_render_cache(state);
             }
             return None;
         }
         if matches!(kind, SubmenuKind::Graphics) && row.id == SubRowId::MaxFpsValue {
             if adjust_max_fps_value_choice(state, delta, wrap) {
-                audio::play_sfx("assets/sounds/change_value.ogg");
+                queue_sfx(state, "assets/sounds/change_value.ogg");
                 clear_render_cache(state);
             }
             return None;
@@ -171,7 +171,7 @@ pub(super) fn apply_submenu_choice_delta(
                 VISUAL_DELAY_MAX_MS,
             ) {
                 config::update_visual_delay_seconds(state.visual_delay_ms as f32 / 1000.0);
-                audio::play_sfx("assets/sounds/change_value.ogg");
+                queue_sfx(state, "assets/sounds/change_value.ogg");
                 clear_render_cache(state);
             }
             return None;
@@ -184,7 +184,7 @@ pub(super) fn apply_submenu_choice_delta(
                 INPUT_DEBOUNCE_MAX_MS,
             ) {
                 config::update_input_debounce_seconds(state.input_debounce_ms as f32 / 1000.0);
-                audio::play_sfx("assets/sounds/change_value.ogg");
+                queue_sfx(state, "assets/sounds/change_value.ogg");
                 clear_render_cache(state);
             }
             return None;
@@ -201,7 +201,7 @@ pub(super) fn apply_submenu_choice_delta(
                         config::update_null_or_die_fingerprint_ms(f64_from_tenths(
                             state.null_or_die_fingerprint_tenths,
                         ));
-                        audio::play_sfx("assets/sounds/change_value.ogg");
+                        queue_sfx(state, "assets/sounds/change_value.ogg");
                         clear_render_cache(state);
                     }
                     return None;
@@ -216,7 +216,7 @@ pub(super) fn apply_submenu_choice_delta(
                         config::update_null_or_die_window_ms(f64_from_tenths(
                             state.null_or_die_window_tenths,
                         ));
-                        audio::play_sfx("assets/sounds/change_value.ogg");
+                        queue_sfx(state, "assets/sounds/change_value.ogg");
                         clear_render_cache(state);
                     }
                     return None;
@@ -231,7 +231,7 @@ pub(super) fn apply_submenu_choice_delta(
                         config::update_null_or_die_step_ms(f64_from_tenths(
                             state.null_or_die_step_tenths,
                         ));
-                        audio::play_sfx("assets/sounds/change_value.ogg");
+                        queue_sfx(state, "assets/sounds/change_value.ogg");
                         clear_render_cache(state);
                     }
                     return None;
@@ -246,7 +246,7 @@ pub(super) fn apply_submenu_choice_delta(
                         config::update_null_or_die_magic_offset_ms(f64_from_tenths(
                             state.null_or_die_magic_offset_tenths,
                         ));
-                        audio::play_sfx("assets/sounds/change_value.ogg");
+                        queue_sfx(state, "assets/sounds/change_value.ogg");
                         clear_render_cache(state);
                     }
                     return None;
@@ -295,7 +295,7 @@ pub(super) fn apply_submenu_choice_delta(
     {
         state.sub_inline_x = x;
     }
-    audio::play_sfx("assets/sounds/change_value.ogg");
+    queue_sfx(state, "assets/sounds/change_value.ogg");
 
     if matches!(kind, SubmenuKind::System) {
         let row = &rows[row_index];
@@ -1147,106 +1147,106 @@ pub(super) fn activate_current_selection(
 
             match item.id {
                 ItemId::SystemOptions => {
-                    audio::play_sfx("assets/sounds/start.ogg");
+                    queue_sfx(state, "assets/sounds/start.ogg");
                     state.pending_submenu_kind = Some(SubmenuKind::System);
                     state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                     state.submenu_fade_t = 0.0;
                 }
                 ItemId::GraphicsOptions => {
-                    audio::play_sfx("assets/sounds/start.ogg");
+                    queue_sfx(state, "assets/sounds/start.ogg");
                     state.pending_submenu_kind = Some(SubmenuKind::Graphics);
                     state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                     state.submenu_fade_t = 0.0;
                 }
                 ItemId::InputOptions => {
-                    audio::play_sfx("assets/sounds/start.ogg");
+                    queue_sfx(state, "assets/sounds/start.ogg");
                     state.pending_submenu_kind = Some(SubmenuKind::Input);
                     state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                     state.submenu_fade_t = 0.0;
                 }
                 ItemId::LightsOptions => {
-                    audio::play_sfx("assets/sounds/start.ogg");
+                    queue_sfx(state, "assets/sounds/start.ogg");
                     state.pending_submenu_kind = Some(SubmenuKind::Lights);
                     state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                     state.submenu_fade_t = 0.0;
                 }
                 ItemId::MachineOptions => {
-                    audio::play_sfx("assets/sounds/start.ogg");
+                    queue_sfx(state, "assets/sounds/start.ogg");
                     state.pending_submenu_kind = Some(SubmenuKind::Machine);
                     state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                     state.submenu_fade_t = 0.0;
                 }
                 ItemId::AdvancedOptions => {
-                    audio::play_sfx("assets/sounds/start.ogg");
+                    queue_sfx(state, "assets/sounds/start.ogg");
                     state.pending_submenu_kind = Some(SubmenuKind::Advanced);
                     state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                     state.submenu_fade_t = 0.0;
                 }
                 ItemId::CourseOptions => {
-                    audio::play_sfx("assets/sounds/start.ogg");
+                    queue_sfx(state, "assets/sounds/start.ogg");
                     state.pending_submenu_kind = Some(SubmenuKind::Course);
                     state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                     state.submenu_fade_t = 0.0;
                 }
                 ItemId::GameplayOptions => {
-                    audio::play_sfx("assets/sounds/start.ogg");
+                    queue_sfx(state, "assets/sounds/start.ogg");
                     state.pending_submenu_kind = Some(SubmenuKind::Gameplay);
                     state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                     state.submenu_fade_t = 0.0;
                 }
                 ItemId::SoundOptions => {
-                    audio::play_sfx("assets/sounds/start.ogg");
+                    queue_sfx(state, "assets/sounds/start.ogg");
                     state.pending_submenu_kind = Some(SubmenuKind::Sound);
                     state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                     state.submenu_fade_t = 0.0;
                 }
                 ItemId::SelectMusicOptions => {
-                    audio::play_sfx("assets/sounds/start.ogg");
+                    queue_sfx(state, "assets/sounds/start.ogg");
                     state.pending_submenu_kind = Some(SubmenuKind::SelectMusic);
                     state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                     state.submenu_fade_t = 0.0;
                 }
                 ItemId::OnlineScoreServices => {
-                    audio::play_sfx("assets/sounds/start.ogg");
+                    queue_sfx(state, "assets/sounds/start.ogg");
                     state.pending_submenu_kind = Some(SubmenuKind::OnlineScoring);
                     state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                     state.submenu_fade_t = 0.0;
                 }
                 ItemId::NullOrDieOptions => {
-                    audio::play_sfx("assets/sounds/start.ogg");
+                    queue_sfx(state, "assets/sounds/start.ogg");
                     refresh_null_or_die_options(state);
                     state.pending_submenu_kind = Some(SubmenuKind::NullOrDie);
                     state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                     state.submenu_fade_t = 0.0;
                 }
                 ItemId::FoldersOptions => {
-                    audio::play_sfx("assets/sounds/start.ogg");
+                    queue_sfx(state, "assets/sounds/start.ogg");
                     state.pending_submenu_kind = Some(SubmenuKind::Folders);
                     state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                     state.submenu_fade_t = 0.0;
                 }
                 ItemId::ManageLocalProfiles => {
-                    audio::play_sfx("assets/sounds/start.ogg");
+                    queue_sfx(state, "assets/sounds/start.ogg");
                     return ThemeEffect::Navigate(Screen::ManageLocalProfiles);
                 }
                 ItemId::ReloadSongsCourses => {
-                    audio::play_sfx("assets/sounds/start.ogg");
+                    queue_sfx(state, "assets/sounds/start.ogg");
                     start_reload_songs_and_courses(state);
                 }
                 ItemId::CheckForUpdates => {
-                    audio::play_sfx("assets/sounds/start.ogg");
+                    queue_sfx(state, "assets/sounds/start.ogg");
                     return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Updater(
                         crate::SimplyLoveUpdaterRequest::CheckForUpdates,
                     ));
                 }
                 ItemId::RollBackVersion => {
-                    audio::play_sfx("assets/sounds/start.ogg");
+                    queue_sfx(state, "assets/sounds/start.ogg");
                     return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Updater(
                         crate::SimplyLoveUpdaterRequest::CheckForRollback,
                     ));
                 }
                 ItemId::DownloadVideoSupport => {
-                    audio::play_sfx("assets/sounds/start.ogg");
+                    queue_sfx(state, "assets/sounds/start.ogg");
                     // Probe ffmpeg/ffprobe on a worker thread — the lookup
                     // spawns subprocesses and would stutter the UI thread.
                     return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Updater(
@@ -1254,11 +1254,11 @@ pub(super) fn activate_current_selection(
                     ));
                 }
                 ItemId::Credits => {
-                    audio::play_sfx("assets/sounds/start.ogg");
+                    queue_sfx(state, "assets/sounds/start.ogg");
                     return ThemeEffect::NavigateNoFade(Screen::Credits);
                 }
                 ItemId::Exit => {
-                    audio::play_sfx("assets/sounds/start.ogg");
+                    queue_sfx(state, "assets/sounds/start.ogg");
                     return ThemeEffect::Navigate(Screen::Menu);
                 }
                 _ => {}
@@ -1309,7 +1309,7 @@ pub(super) fn activate_current_selection(
                 }
             }
             if selected_row == total - 1 {
-                audio::play_sfx("assets/sounds/start.ogg");
+                queue_sfx(state, "assets/sounds/start.ogg");
                 if let Some(parent_kind) = state.submenu_parent_kind {
                     state.pending_submenu_kind = Some(parent_kind);
                     // Restore the parent's own parent so a further Back keeps climbing.
@@ -1329,19 +1329,19 @@ pub(super) fn activate_current_selection(
                 if let Some(row) = rows.get(row_idx) {
                     match row.id {
                         SubRowId::ConfigureMappings => {
-                            audio::play_sfx("assets/sounds/start.ogg");
+                            queue_sfx(state, "assets/sounds/start.ogg");
                             return ThemeEffect::Navigate(Screen::Mappings);
                         }
                         SubRowId::TestInput => {
-                            audio::play_sfx("assets/sounds/start.ogg");
+                            queue_sfx(state, "assets/sounds/start.ogg");
                             return ThemeEffect::Navigate(Screen::Input);
                         }
                         SubRowId::ConfigurePads => {
-                            audio::play_sfx("assets/sounds/start.ogg");
+                            queue_sfx(state, "assets/sounds/start.ogg");
                             return ThemeEffect::Navigate(Screen::ConfigurePads);
                         }
                         SubRowId::InputOptions => {
-                            audio::play_sfx("assets/sounds/start.ogg");
+                            queue_sfx(state, "assets/sounds/start.ogg");
                             state.pending_submenu_kind = Some(SubmenuKind::InputBackend);
                             state.pending_submenu_parent_kind = Some(SubmenuKind::Input);
                             state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
@@ -1359,13 +1359,13 @@ pub(super) fn activate_current_selection(
                 if let Some(row) = rows.get(row_idx) {
                     match row.id {
                         SubRowId::DebugFsrDump => {
-                            audio::play_sfx("assets/sounds/start.ogg");
+                            queue_sfx(state, "assets/sounds/start.ogg");
                             return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Debug(
                                 crate::SimplyLoveDebugRequest::WriteFsrDump,
                             ));
                         }
                         SubRowId::SmxConfig => {
-                            audio::play_sfx("assets/sounds/start.ogg");
+                            queue_sfx(state, "assets/sounds/start.ogg");
                             state.pending_submenu_kind = Some(SubmenuKind::SmxConfig);
                             state.pending_submenu_parent_kind = Some(SubmenuKind::InputBackend);
                             state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
@@ -1383,7 +1383,7 @@ pub(super) fn activate_current_selection(
                 if let Some(row) = rows.get(row_idx) {
                     match row.id {
                         SubRowId::SmxAssignPads => {
-                            audio::play_sfx("assets/sounds/start.ogg");
+                            queue_sfx(state, "assets/sounds/start.ogg");
                             crate::screens::smx_assign::set_pending_return(Screen::Options);
                             return ThemeEffect::Navigate(Screen::SmxAssignPads);
                         }
@@ -1392,9 +1392,9 @@ pub(super) fn activate_current_selection(
                             // the user can watch the pad colours swap. Needs both
                             // pads; otherwise it is a no-op, so signal that.
                             if config::swap_smx_pad_assignment() {
-                                audio::play_sfx("assets/sounds/start.ogg");
+                                queue_sfx(state, "assets/sounds/start.ogg");
                             } else {
-                                audio::play_sfx("assets/sounds/common_invalid.ogg");
+                                queue_sfx(state, "assets/sounds/common_invalid.ogg");
                             }
                             return ThemeEffect::None;
                         }
@@ -1409,7 +1409,7 @@ pub(super) fn activate_current_selection(
                 if let Some(row) = rows.get(row_idx)
                     && row.id == SubRowId::TestLights
                 {
-                    audio::play_sfx("assets/sounds/start.ogg");
+                    queue_sfx(state, "assets/sounds/start.ogg");
                     return ThemeEffect::Navigate(Screen::TestLights);
                 }
             } else if matches!(kind, SubmenuKind::Graphics) {
@@ -1420,7 +1420,7 @@ pub(super) fn activate_current_selection(
                 if let Some(row) = rows.get(row_idx)
                     && row.id == SubRowId::OverscanAdjustment
                 {
-                    audio::play_sfx("assets/sounds/start.ogg");
+                    queue_sfx(state, "assets/sounds/start.ogg");
                     return ThemeEffect::Navigate(Screen::OverscanAdjustment);
                 }
             } else if matches!(kind, SubmenuKind::Folders) {
@@ -1445,7 +1445,7 @@ pub(super) fn activate_current_selection(
                 if let Some(row) = rows.get(row_idx) {
                     match row.id {
                         SubRowId::GsBsOptions => {
-                            audio::play_sfx("assets/sounds/start.ogg");
+                            queue_sfx(state, "assets/sounds/start.ogg");
                             state.pending_submenu_kind = Some(SubmenuKind::GrooveStats);
                             state.pending_submenu_parent_kind = Some(SubmenuKind::OnlineScoring);
                             state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
@@ -1453,7 +1453,7 @@ pub(super) fn activate_current_selection(
                             return ThemeEffect::None;
                         }
                         SubRowId::ArrowCloudOptions => {
-                            audio::play_sfx("assets/sounds/start.ogg");
+                            queue_sfx(state, "assets/sounds/start.ogg");
                             state.pending_submenu_kind = Some(SubmenuKind::ArrowCloud);
                             state.pending_submenu_parent_kind = Some(SubmenuKind::OnlineScoring);
                             state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
@@ -1461,7 +1461,7 @@ pub(super) fn activate_current_selection(
                             return ThemeEffect::None;
                         }
                         SubRowId::ScoreImport => {
-                            audio::play_sfx("assets/sounds/start.ogg");
+                            queue_sfx(state, "assets/sounds/start.ogg");
                             refresh_score_import_options(state);
                             state.pending_submenu_kind = Some(SubmenuKind::ScoreImport);
                             state.pending_submenu_parent_kind = Some(SubmenuKind::OnlineScoring);
@@ -1480,7 +1480,7 @@ pub(super) fn activate_current_selection(
                 if let Some(row) = rows.get(row_idx) {
                     match row.id {
                         SubRowId::NullOrDieOptions => {
-                            audio::play_sfx("assets/sounds/start.ogg");
+                            queue_sfx(state, "assets/sounds/start.ogg");
                             state.pending_submenu_kind = Some(SubmenuKind::NullOrDieOptions);
                             state.pending_submenu_parent_kind = Some(SubmenuKind::NullOrDie);
                             state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
@@ -1488,7 +1488,7 @@ pub(super) fn activate_current_selection(
                             return ThemeEffect::None;
                         }
                         SubRowId::SyncPacks => {
-                            audio::play_sfx("assets/sounds/start.ogg");
+                            queue_sfx(state, "assets/sounds/start.ogg");
                             refresh_sync_pack_options(state);
                             state.pending_submenu_kind = Some(SubmenuKind::SyncPacks);
                             state.pending_submenu_parent_kind = Some(SubmenuKind::NullOrDie);
@@ -1507,13 +1507,13 @@ pub(super) fn activate_current_selection(
                 if let Some(row) = rows.get(row_idx) {
                     match row.id {
                         SubRowId::ScoreImportPack => {
-                            audio::play_sfx("assets/sounds/start.ogg");
+                            queue_sfx(state, "assets/sounds/start.ogg");
                             refresh_score_import_pack_options(state);
                             open_score_import_pack_picker(state);
                             return ThemeEffect::None;
                         }
                         SubRowId::ScoreImportStart => {
-                            audio::play_sfx("assets/sounds/start.ogg");
+                            queue_sfx(state, "assets/sounds/start.ogg");
                             if let Some(selection) = selected_score_import_selection(state) {
                                 if selection.pack_groups.is_empty() {
                                     clear_navigation_holds(state);
@@ -1542,7 +1542,7 @@ pub(super) fn activate_current_selection(
                 if let Some(row) = rows.get(row_idx)
                     && row.id == SubRowId::SyncPackStart
                 {
-                    audio::play_sfx("assets/sounds/start.ogg");
+                    queue_sfx(state, "assets/sounds/start.ogg");
                     let selection = selected_sync_pack_selection(state);
                     if selection.pack_group.is_none() {
                         clear_navigation_holds(state);
@@ -1573,6 +1573,16 @@ pub fn handle_input(
     updater: &SimplyLoveUpdaterView,
     ev: &InputEvent,
 ) -> ThemeEffect {
+    let effect = handle_input_impl(state, asset_manager, updater, ev);
+    prepend_pending_sfx(state, effect)
+}
+
+fn handle_input_impl(
+    state: &mut State,
+    asset_manager: &AssetManager,
+    updater: &SimplyLoveUpdaterView,
+    ev: &InputEvent,
+) -> ThemeEffect {
     use crate::screens::components::shared::{ffmpeg_overlay, update_overlay};
 
     match update_overlay::handle_input(&updater.update, ev) {
@@ -1598,20 +1608,20 @@ pub fn handle_input(
             match nav {
                 screen_input::ThreeKeyMenuAction::Prev => {
                     pack_picker_step(state, -1);
-                    audio::play_sfx("assets/sounds/change.ogg");
+                    queue_sfx(state, "assets/sounds/change.ogg");
                 }
                 screen_input::ThreeKeyMenuAction::Next => {
                     pack_picker_step(state, 1);
-                    audio::play_sfx("assets/sounds/change.ogg");
+                    queue_sfx(state, "assets/sounds/change.ogg");
                 }
                 screen_input::ThreeKeyMenuAction::Confirm => {
                     if pack_picker_toggle_current(state) {
-                        audio::play_sfx("assets/sounds/start.ogg");
+                        queue_sfx(state, "assets/sounds/start.ogg");
                     }
                 }
                 screen_input::ThreeKeyMenuAction::Cancel => {
                     close_score_import_pack_picker(state);
-                    audio::play_sfx("assets/sounds/change.ogg");
+                    queue_sfx(state, "assets/sounds/change.ogg");
                 }
             }
             return ThemeEffect::None;
@@ -1642,7 +1652,7 @@ pub fn handle_input(
             | VirtualAction::p2_menu_up => {
                 pack_picker_step(state, -1);
                 on_nav_press(state, NavDirection::Up);
-                audio::play_sfx("assets/sounds/change.ogg");
+                queue_sfx(state, "assets/sounds/change.ogg");
             }
             VirtualAction::p1_down
             | VirtualAction::p1_menu_down
@@ -1650,34 +1660,34 @@ pub fn handle_input(
             | VirtualAction::p2_menu_down => {
                 pack_picker_step(state, 1);
                 on_nav_press(state, NavDirection::Down);
-                audio::play_sfx("assets/sounds/change.ogg");
+                queue_sfx(state, "assets/sounds/change.ogg");
             }
             VirtualAction::p1_left
             | VirtualAction::p1_menu_left
             | VirtualAction::p2_left
             | VirtualAction::p2_menu_left => {
                 pack_picker_page(state, -1);
-                audio::play_sfx("assets/sounds/change.ogg");
+                queue_sfx(state, "assets/sounds/change.ogg");
             }
             VirtualAction::p1_right
             | VirtualAction::p1_menu_right
             | VirtualAction::p2_right
             | VirtualAction::p2_menu_right => {
                 pack_picker_page(state, 1);
-                audio::play_sfx("assets/sounds/change.ogg");
+                queue_sfx(state, "assets/sounds/change.ogg");
             }
             VirtualAction::p1_start | VirtualAction::p2_start => {
                 if pack_picker_toggle_current(state) {
-                    audio::play_sfx("assets/sounds/start.ogg");
+                    queue_sfx(state, "assets/sounds/start.ogg");
                 }
             }
             VirtualAction::p1_select | VirtualAction::p2_select => {
                 toggle_all_score_import_packs(state);
-                audio::play_sfx("assets/sounds/start.ogg");
+                queue_sfx(state, "assets/sounds/start.ogg");
             }
             VirtualAction::p1_back | VirtualAction::p2_back => {
                 close_score_import_pack_picker(state);
-                audio::play_sfx("assets/sounds/change.ogg");
+                queue_sfx(state, "assets/sounds/change.ogg");
             }
             _ => {}
         }
@@ -1705,7 +1715,7 @@ pub fn handle_input(
             if dismiss {
                 clear_navigation_holds(state);
                 state.score_import_ui = None;
-                audio::play_sfx("assets/sounds/start.ogg");
+                queue_sfx(state, "assets/sounds/start.ogg");
             }
             return ThemeEffect::None;
         }
@@ -1718,7 +1728,7 @@ pub fn handle_input(
             score_import.cancel_requested.store(true, Ordering::Relaxed);
             clear_navigation_holds(state);
             state.score_import_ui = None;
-            audio::play_sfx("assets/sounds/change.ogg");
+            queue_sfx(state, "assets/sounds/change.ogg");
             log::warn!("Score import cancel requested by user.");
         }
         return ThemeEffect::None;
@@ -1735,18 +1745,18 @@ pub fn handle_input(
                 screen_input::ThreeKeyMenuAction::Prev => {
                     if confirm.active_choice > 0 {
                         confirm.active_choice -= 1;
-                        audio::play_sfx("assets/sounds/change.ogg");
+                        queue_sfx(state, "assets/sounds/change.ogg");
                     }
                 }
                 screen_input::ThreeKeyMenuAction::Next => {
                     if confirm.active_choice < 1 {
                         confirm.active_choice += 1;
-                        audio::play_sfx("assets/sounds/change.ogg");
+                        queue_sfx(state, "assets/sounds/change.ogg");
                     }
                 }
                 screen_input::ThreeKeyMenuAction::Confirm => {
                     let should_start = confirm.active_choice == 0;
-                    audio::play_sfx("assets/sounds/start.ogg");
+                    queue_sfx(state, "assets/sounds/start.ogg");
                     if should_start {
                         clear_navigation_holds(state);
                         begin_score_import_from_confirm(state);
@@ -1758,7 +1768,7 @@ pub fn handle_input(
                 screen_input::ThreeKeyMenuAction::Cancel => {
                     clear_navigation_holds(state);
                     state.score_import_confirm = None;
-                    audio::play_sfx("assets/sounds/change.ogg");
+                    queue_sfx(state, "assets/sounds/change.ogg");
                 }
             }
             return ThemeEffect::None;
@@ -1773,7 +1783,7 @@ pub fn handle_input(
             | VirtualAction::p2_menu_left => {
                 if confirm.active_choice > 0 {
                     confirm.active_choice -= 1;
-                    audio::play_sfx("assets/sounds/change.ogg");
+                    queue_sfx(state, "assets/sounds/change.ogg");
                 }
             }
             VirtualAction::p1_right
@@ -1782,7 +1792,7 @@ pub fn handle_input(
             | VirtualAction::p2_menu_right => {
                 if confirm.active_choice < 1 {
                     confirm.active_choice += 1;
-                    audio::play_sfx("assets/sounds/change.ogg");
+                    queue_sfx(state, "assets/sounds/change.ogg");
                 }
             }
             VirtualAction::p1_start
@@ -1790,7 +1800,7 @@ pub fn handle_input(
             | VirtualAction::p2_start
             | VirtualAction::p2_select => {
                 let should_start = confirm.active_choice == 0;
-                audio::play_sfx("assets/sounds/start.ogg");
+                queue_sfx(state, "assets/sounds/start.ogg");
                 if should_start {
                     clear_navigation_holds(state);
                     begin_score_import_from_confirm(state);
@@ -1802,7 +1812,7 @@ pub fn handle_input(
             VirtualAction::p1_back | VirtualAction::p2_back => {
                 clear_navigation_holds(state);
                 state.score_import_confirm = None;
-                audio::play_sfx("assets/sounds/change.ogg");
+                queue_sfx(state, "assets/sounds/change.ogg");
             }
             _ => {}
         }
@@ -1814,18 +1824,18 @@ pub fn handle_input(
                 screen_input::ThreeKeyMenuAction::Prev => {
                     if confirm.active_choice > 0 {
                         confirm.active_choice -= 1;
-                        audio::play_sfx("assets/sounds/change.ogg");
+                        queue_sfx(state, "assets/sounds/change.ogg");
                     }
                 }
                 screen_input::ThreeKeyMenuAction::Next => {
                     if confirm.active_choice < 1 {
                         confirm.active_choice += 1;
-                        audio::play_sfx("assets/sounds/change.ogg");
+                        queue_sfx(state, "assets/sounds/change.ogg");
                     }
                 }
                 screen_input::ThreeKeyMenuAction::Confirm => {
                     let should_start = confirm.active_choice == 0;
-                    audio::play_sfx("assets/sounds/start.ogg");
+                    queue_sfx(state, "assets/sounds/start.ogg");
                     clear_navigation_holds(state);
                     if should_start {
                         begin_pack_sync_from_confirm(state);
@@ -1836,7 +1846,7 @@ pub fn handle_input(
                 screen_input::ThreeKeyMenuAction::Cancel => {
                     clear_navigation_holds(state);
                     state.sync_pack_confirm = None;
-                    audio::play_sfx("assets/sounds/change.ogg");
+                    queue_sfx(state, "assets/sounds/change.ogg");
                 }
             }
             return ThemeEffect::None;
@@ -1851,7 +1861,7 @@ pub fn handle_input(
             | VirtualAction::p2_menu_left => {
                 if confirm.active_choice > 0 {
                     confirm.active_choice -= 1;
-                    audio::play_sfx("assets/sounds/change.ogg");
+                    queue_sfx(state, "assets/sounds/change.ogg");
                 }
             }
             VirtualAction::p1_right
@@ -1860,7 +1870,7 @@ pub fn handle_input(
             | VirtualAction::p2_menu_right => {
                 if confirm.active_choice < 1 {
                     confirm.active_choice += 1;
-                    audio::play_sfx("assets/sounds/change.ogg");
+                    queue_sfx(state, "assets/sounds/change.ogg");
                 }
             }
             VirtualAction::p1_start
@@ -1868,7 +1878,7 @@ pub fn handle_input(
             | VirtualAction::p2_start
             | VirtualAction::p2_select => {
                 let should_start = confirm.active_choice == 0;
-                audio::play_sfx("assets/sounds/start.ogg");
+                queue_sfx(state, "assets/sounds/start.ogg");
                 clear_navigation_holds(state);
                 if should_start {
                     begin_pack_sync_from_confirm(state);
@@ -1879,7 +1889,7 @@ pub fn handle_input(
             VirtualAction::p1_back | VirtualAction::p2_back => {
                 clear_navigation_holds(state);
                 state.sync_pack_confirm = None;
-                audio::play_sfx("assets/sounds/change.ogg");
+                queue_sfx(state, "assets/sounds/change.ogg");
             }
             _ => {}
         }

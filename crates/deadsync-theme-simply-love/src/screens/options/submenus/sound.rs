@@ -237,24 +237,22 @@ pub(in crate::screens::options) struct SoundDeviceOption {
 pub(in crate::screens::options) const SOUND_LINUX_BACKEND_CHOICES: &[Choice] =
     &[localized_choice("Common", "Auto")];
 
-pub(in crate::screens::options) fn build_sound_device_options() -> Vec<SoundDeviceOption> {
-    let discovered = if audio::is_initialized() {
-        audio::startup_output_devices()
-    } else {
-        Vec::new()
-    };
-    let default_rates = discovered
+pub(in crate::screens::options) fn build_sound_device_options(
+    audio_options: &AudioOptionsView,
+) -> Vec<SoundDeviceOption> {
+    let default_rates = audio_options
+        .output_devices
         .iter()
         .find(|dev| dev.is_default)
         .map(|dev| dev.sample_rates_hz.clone())
         .unwrap_or_default();
-    let mut options = Vec::with_capacity(discovered.len() + 1);
+    let mut options = Vec::with_capacity(audio_options.output_devices.len() + 1);
     options.push(SoundDeviceOption {
         label: tr("Common", "Auto").to_string(),
         config_index: None,
         sample_rates_hz: default_rates,
     });
-    for (idx, dev) in discovered.into_iter().enumerate() {
+    for (idx, dev) in audio_options.output_devices.iter().enumerate() {
         let mut label = dev.name.clone();
         if dev.is_default {
             label.push_str(&tr("OptionsSound", "DefaultSuffix"));
@@ -262,7 +260,7 @@ pub(in crate::screens::options) fn build_sound_device_options() -> Vec<SoundDevi
         options.push(SoundDeviceOption {
             label,
             config_index: Some(idx as u16),
-            sample_rates_hz: dev.sample_rates_hz,
+            sample_rates_hz: dev.sample_rates_hz.clone(),
         });
     }
     options
@@ -273,20 +271,27 @@ pub(in crate::screens::options) fn build_sound_device_options() -> Vec<SoundDevi
 pub(in crate::screens::options) fn linux_backend_label(
     backend: config::LinuxAudioBackend,
 ) -> std::sync::Arc<str> {
-    match backend {
-        config::LinuxAudioBackend::Auto => tr("Common", "Auto"),
-        config::LinuxAudioBackend::PipeWire => std::sync::Arc::from("PipeWire"),
-        config::LinuxAudioBackend::PulseAudio => std::sync::Arc::from("PulseAudio"),
-        config::LinuxAudioBackend::Jack => std::sync::Arc::from("JACK"),
-        config::LinuxAudioBackend::Alsa => std::sync::Arc::from("ALSA"),
+    linux_backend_name_label(backend.as_str())
+}
+
+#[cfg(target_os = "linux")]
+#[inline(always)]
+fn linux_backend_name_label(name: &str) -> std::sync::Arc<str> {
+    if name.eq_ignore_ascii_case("auto") {
+        tr("Common", "Auto")
+    } else {
+        std::sync::Arc::from(name)
     }
 }
 
 #[cfg(target_os = "linux")]
-pub(in crate::screens::options) fn build_linux_backend_choices() -> Vec<String> {
-    audio::available_linux_backends()
-        .into_iter()
-        .map(|backend| linux_backend_label(backend).to_string())
+pub(in crate::screens::options) fn build_linux_backend_choices(
+    audio_options: &AudioOptionsView,
+) -> Vec<String> {
+    audio_options
+        .available_backend_names
+        .iter()
+        .map(|backend| linux_backend_name_label(backend).to_string())
         .collect()
 }
 

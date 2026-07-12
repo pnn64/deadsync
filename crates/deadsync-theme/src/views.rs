@@ -12,6 +12,27 @@ use deadsync_score::{
 use std::path::PathBuf;
 use std::sync::Arc;
 
+/// Shell-prepared audio clock values used by theme preview presentation.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct AudioPlaybackView {
+    pub music_stream_position_seconds: f64,
+}
+
+/// One shell-discovered audio output exposed without backend runtime types.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AudioOutputDeviceView {
+    pub name: String,
+    pub is_default: bool,
+    pub sample_rates_hz: Vec<u32>,
+}
+
+/// Startup audio choices prepared by the shell for a theme options screen.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct AudioOptionsView {
+    pub output_devices: Vec<AudioOutputDeviceView>,
+    pub available_backend_names: Vec<String>,
+}
+
 /// One resolved chart in a course selection.
 #[derive(Clone, Debug)]
 pub struct CourseStageView {
@@ -326,7 +347,25 @@ pub struct FrameStatsSummary {
 
 #[cfg(test)]
 mod tests {
-    use super::{FrameStatsSample, OverlayAnchor, OverlayStyle};
+    use super::{
+        AudioOptionsView, AudioOutputDeviceView, FrameStatsSample, OverlayAnchor, OverlayStyle,
+    };
+
+    #[test]
+    fn audio_options_view_preserves_plain_device_data() {
+        let view = AudioOptionsView {
+            output_devices: vec![AudioOutputDeviceView {
+                name: "Primary".to_owned(),
+                is_default: true,
+                sample_rates_hz: vec![44_100, 48_000],
+            }],
+            available_backend_names: vec!["Auto".to_owned(), "ALSA".to_owned()],
+        };
+
+        assert_eq!(view.output_devices[0].name, "Primary");
+        assert_eq!(view.output_devices[0].sample_rates_hz, [44_100, 48_000]);
+        assert_eq!(view.available_backend_names, ["Auto", "ALSA"]);
+    }
 
     #[test]
     fn frame_sample_preserves_phase_and_idle_math() {

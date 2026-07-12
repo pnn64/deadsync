@@ -106,6 +106,7 @@ struct Choice {
 
 pub struct State {
     pub active_color_index: i32,
+    fast_switch: bool,
     p1_joined: bool,
     p2_joined: bool,
     p1_ready: bool,
@@ -420,6 +421,7 @@ fn init_with_profiles(
 
     let mut state = State {
         active_color_index,
+        fast_switch: false,
         p1_joined: true,
         p2_joined: false,
         p1_ready: false,
@@ -508,6 +510,11 @@ pub fn set_joined(state: &mut State, p1_joined: bool, p2_joined: bool) {
         &state.choices,
         state.p2_selected_index,
     );
+}
+
+#[inline(always)]
+pub fn set_fast_switch(state: &mut State, enabled: bool) {
+    state.fast_switch = enabled;
 }
 
 /// Configure the overlay for a late-join scenario: the existing player is
@@ -675,8 +682,7 @@ fn handle_cancel(state: &mut State, side: profile_data::PlayerSide) -> ThemeEffe
             }
             state.exit_anim = true;
             let _ = exit_anim_t(true);
-            if profile::fast_profile_switch_from_select_music() {
-                profile::set_fast_profile_switch_from_select_music(false);
+            if state.fast_switch {
                 return ThemeEffect::Navigate(Screen::SelectMusic);
             }
             ThemeEffect::Navigate(Screen::Menu)
@@ -696,8 +702,7 @@ fn handle_cancel(state: &mut State, side: profile_data::PlayerSide) -> ThemeEffe
             }
             state.exit_anim = true;
             let _ = exit_anim_t(true);
-            if profile::fast_profile_switch_from_select_music() {
-                profile::set_fast_profile_switch_from_select_music(false);
+            if state.fast_switch {
                 return ThemeEffect::Navigate(Screen::SelectMusic);
             }
             ThemeEffect::Navigate(Screen::Menu)
@@ -799,6 +804,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                             p2,
                             p1_joined: state.p1_joined,
                             p2_joined: state.p2_joined,
+                            fast_switch: state.fast_switch,
                         },
                     )),
                 );
@@ -877,6 +883,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                             p2,
                             p1_joined: state.p1_joined,
                             p2_joined: state.p2_joined,
+                            fast_switch: state.fast_switch,
                         },
                     )),
                 );

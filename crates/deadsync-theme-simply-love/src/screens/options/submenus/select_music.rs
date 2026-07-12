@@ -558,7 +558,7 @@ pub(in crate::screens::options) fn toggle_select_music_scorebox_cycle_option(
     ) {
         *slot = clamped;
     }
-    audio::play_sfx("assets/sounds/change_value.ogg");
+    queue_sfx(state, "assets/sounds/change_value.ogg");
 }
 
 #[inline(always)]
@@ -600,7 +600,7 @@ pub(in crate::screens::options) fn toggle_auto_screenshot_option(
         SubRowId::AutoScreenshot,
         clamped,
     );
-    audio::play_sfx("assets/sounds/change_value.ogg");
+    queue_sfx(state, "assets/sounds/change_value.ogg");
 }
 
 #[inline(always)]
@@ -655,7 +655,7 @@ pub(in crate::screens::options) fn toggle_select_music_chart_info_option(
     ) {
         *slot = clamped;
     }
-    audio::play_sfx("assets/sounds/change_value.ogg");
+    queue_sfx(state, "assets/sounds/change_value.ogg");
 }
 
 #[inline(always)]

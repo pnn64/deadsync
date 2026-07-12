@@ -1,4 +1,4 @@
-﻿impl<Profile, OverlayActor, CapturedActor, StateDelta>
+impl<Profile, OverlayActor, CapturedActor, StateDelta>
     GameplayRuntimeState<Profile, OverlayActor, CapturedActor, StateDelta>
 where
     Profile: GameplayProfileData,
@@ -723,11 +723,15 @@ where
     }
 
     #[inline(always)]
-    pub fn row_hides_completed_note(&self, player: usize, row_index: usize) -> bool {
-        completed_row_hides_note(
+    pub fn completed_row_visibility(&self, player: usize) -> CompletedRowVisibility<'_> {
+        CompletedRowVisibility::new(
             &self.chart_runtime.row_entries,
-            &self.chart_runtime.row_indices.row_map_cache[player],
-            row_index,
+            self.chart_runtime
+                .row_indices
+                .row_map_cache
+                .get(player)
+                .map(Vec::as_slice)
+                .unwrap_or_default(),
         )
     }
 
@@ -3068,4 +3072,3 @@ where
         snapshot
     }
 }
-

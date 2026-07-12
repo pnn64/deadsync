@@ -1,7 +1,7 @@
 use crate::screens::gameplay::GameplayCoreState as State;
 use deadlib_present::compose::TextLayoutCache;
 use deadlib_present::font;
-use deadsync_notefield::MiniIndicatorMode;
+use deadsync_notefield::{MiniIndicatorMode, zmod_broken_run_end};
 use deadsync_profile as profile_data;
 use std::collections::HashMap;
 
@@ -12,8 +12,8 @@ use super::text::{
 };
 use super::{
     COLUMN_COUNTDOWN_PREWARM_CAP, COMBO_PREWARM_CAP, DISPLAY_MODS_WRAP_WIDTH_PX,
-    MEASURE_PREWARM_CAP, RUN_TIMER_PREWARM_CAP_S, zmod_broken_run_end, zmod_combo_font_name,
-    zmod_indicator_mode, zmod_small_combo_font,
+    MEASURE_PREWARM_CAP, RUN_TIMER_PREWARM_CAP_S, zmod_combo_font_name, zmod_indicator_mode,
+    zmod_small_combo_font,
 };
 
 pub fn prewarm_text_layout(

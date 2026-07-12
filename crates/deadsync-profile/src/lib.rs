@@ -678,18 +678,6 @@ pub fn runtime_set_session_joined(p1: bool, p2: bool) {
     runtime_lock_session().set_joined_sides(p1, p2);
 }
 
-pub fn runtime_set_fast_profile_switch_from_select_music(enabled: bool) {
-    runtime_lock_session().set_fast_profile_switch_from_select_music(enabled);
-}
-
-pub fn runtime_fast_profile_switch_from_select_music() -> bool {
-    runtime_lock_session().fast_profile_switch_from_select_music()
-}
-
-pub fn runtime_take_fast_profile_switch_from_select_music() -> bool {
-    runtime_lock_session().take_fast_profile_switch_from_select_music()
-}
-
 pub fn runtime_invalidate_profile_dir_cache() {
     *RUNTIME_PROFILE_DIR_CACHE.lock().unwrap() = None;
 }
@@ -3375,7 +3363,6 @@ pub struct SessionState {
     pub play_style: PlayStyle,
     pub play_mode: PlayMode,
     pub player_side: PlayerSide,
-    pub fast_profile_switch_from_select_music: bool,
 }
 
 impl Default for SessionState {
@@ -3388,7 +3375,6 @@ impl Default for SessionState {
             play_style: PlayStyle::Single,
             play_mode: PlayMode::Regular,
             player_side: PlayerSide::P1,
-            fast_profile_switch_from_select_music: false,
         }
     }
 }
@@ -3513,23 +3499,6 @@ impl SessionState {
     #[inline(always)]
     pub fn set_joined_sides(&mut self, p1: bool, p2: bool) {
         self.joined_mask = joined_player_mask(p1, p2);
-    }
-
-    #[inline(always)]
-    pub const fn fast_profile_switch_from_select_music(&self) -> bool {
-        self.fast_profile_switch_from_select_music
-    }
-
-    #[inline(always)]
-    pub fn set_fast_profile_switch_from_select_music(&mut self, enabled: bool) {
-        self.fast_profile_switch_from_select_music = enabled;
-    }
-
-    #[inline(always)]
-    pub fn take_fast_profile_switch_from_select_music(&mut self) -> bool {
-        let was_set = self.fast_profile_switch_from_select_music;
-        self.fast_profile_switch_from_select_music = false;
-        was_set
     }
 }
 
@@ -9979,7 +9948,7 @@ mod tests {
     }
 
     #[test]
-    fn session_state_tracks_joined_sides_and_fast_switch() {
+    fn session_state_tracks_joined_sides() {
         let mut session = SessionState::default();
         assert!(session.side_joined(PlayerSide::P1));
         assert!(!session.side_joined(PlayerSide::P2));
@@ -9987,13 +9956,6 @@ mod tests {
         session.set_joined_sides(false, true);
         assert!(!session.side_joined(PlayerSide::P1));
         assert!(session.side_joined(PlayerSide::P2));
-
-        assert!(!session.fast_profile_switch_from_select_music());
-        session.set_fast_profile_switch_from_select_music(true);
-        assert!(session.fast_profile_switch_from_select_music());
-        assert!(session.take_fast_profile_switch_from_select_music());
-        assert!(!session.fast_profile_switch_from_select_music());
-        assert!(!session.take_fast_profile_switch_from_select_music());
     }
 
     #[test]

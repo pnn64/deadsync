@@ -1,5 +1,4 @@
 use super::*;
-use deadsync_audio_stream as audio;
 use deadsync_profile::compat as gp;
 use deadsync_profile::{PlayStyle, PlayerSide};
 
@@ -86,8 +85,8 @@ pub(super) fn cycle_choice_index(
 }
 
 /// L/R input dispatcher. Looks up the focused row's `RowBehavior` and routes the
-/// delta. Plays the change-value SFX and syncs visibility based on the
-/// returned `Outcome`.
+/// delta. Queues the change-value SFX request and syncs visibility based on
+/// the returned `Outcome`.
 pub(super) fn dispatch_behavior_delta(
     state: &mut State,
     asset_manager: &AssetManager,
@@ -132,7 +131,7 @@ pub(super) fn dispatch_behavior_delta(
 
     if outcome.persisted {
         super::sync_inline_intent_from_row(state, asset_manager, player_idx, row_index);
-        audio::play_sfx("assets/sounds/change_value.ogg");
+        queue_sfx(state, CHANGE_VALUE_SFX);
     }
     if outcome.changed_visibility {
         super::sync_selected_rows_with_visibility(state, super::session_active_players());
@@ -156,7 +155,7 @@ pub(super) fn dispatch_behavior_toggle(state: &mut State, player_idx: usize, id:
 /// `init.get_active`/`init.set_active`, projects the resulting bits onto
 /// the in-memory profile via `writeback.project_to_profile`, and
 /// (conditionally) persists them for the active side via
-/// `writeback.persist_for_side`. Plays the change-value SFX on success.
+/// `writeback.persist_for_side`. Queues the change-value SFX on success.
 ///
 /// Returns `true` when a toggle was applied; `false` when the row was not
 /// focused, the binding was not `Generic`, or the choice index produced
@@ -206,7 +205,7 @@ pub(super) fn toggle_bitmask_row_generic(state: &mut State, player_idx: usize, i
         sync_selected_rows_with_visibility(state, session_active_players());
     }
 
-    audio::play_sfx("assets/sounds/change_value.ogg");
+    queue_sfx(state, CHANGE_VALUE_SFX);
     true
 }
 
@@ -292,7 +291,7 @@ pub fn apply_choice_delta(
             return;
         }
         if move_inline_focus(state, asset_manager, idx, delta, wrap) {
-            audio::play_sfx("assets/sounds/change_value.ogg");
+            queue_sfx(state, CHANGE_VALUE_SFX);
         }
         return;
     }
@@ -344,7 +343,7 @@ pub(super) fn switch_to_pane(state: &mut State, pane: OptionsPane) {
     if state.current_pane == pane {
         return;
     }
-    audio::play_sfx("assets/sounds/start.ogg");
+    queue_sfx(state, START_SFX);
 
     state.nav_input = [PlayerNavInput::default(); PLAYER_SLOTS];
     state.start_input = [PlayerStartInput::default(); PLAYER_SLOTS];

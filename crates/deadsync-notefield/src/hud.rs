@@ -11,7 +11,7 @@ use deadsync_theme::{CounterHudStyle, MiniIndicatorStyle};
 use std::sync::Arc;
 
 #[derive(Clone, Copy)]
-pub struct CounterHudRequest<'a> {
+pub(crate) struct CounterHudRequest<'a> {
     pub style: CounterHudStyle,
     pub segments: &'a [StreamSegment],
     pub current_beat: f32,
@@ -36,7 +36,7 @@ pub struct CounterHudRequest<'a> {
 /// Compose the canonical measure counter, broken-run counter, and run timer.
 /// The caller supplies resolved gameplay values, theme metrics, and cached text
 /// formatters; placement and actor construction stay inside the notefield.
-pub fn compose_counter_hud(actors: &mut Vec<Actor>, request: CounterHudRequest<'_>) {
+pub(crate) fn compose_counter_hud(actors: &mut Vec<Actor>, request: CounterHudRequest<'_>) {
     let segments = request.segments;
     if segments.is_empty() {
         return;
@@ -263,7 +263,7 @@ fn append_hud_text(
     actors.push(text.build(0));
 }
 
-pub struct MiniIndicatorRequest {
+pub(crate) struct MiniIndicatorRequest {
     pub style: MiniIndicatorStyle,
     pub text: Arc<str>,
     pub color: [f32; 4],
@@ -279,7 +279,7 @@ pub struct MiniIndicatorRequest {
 }
 
 /// Compose the canonical gameplay mini score indicator.
-pub fn compose_mini_indicator(actors: &mut Vec<Actor>, request: MiniIndicatorRequest) {
+pub(crate) fn compose_mini_indicator(actors: &mut Vec<Actor>, request: MiniIndicatorRequest) {
     let color = if request.failed {
         [
             request.style.failed_color[0],

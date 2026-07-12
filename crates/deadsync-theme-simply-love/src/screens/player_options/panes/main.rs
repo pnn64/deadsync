@@ -386,8 +386,12 @@ const MUSIC_RATE: CustomBinding = CustomBinding {
                 row.selected_choice_index[slot] = 0;
             }
         }
-        gp::set_session_music_rate(state.music_rate);
-        deadsync_audio_stream::set_music_rate(state.music_rate);
+        let music_rate = state.music_rate;
+        gp::set_session_music_rate(music_rate);
+        super::super::queue_audio(
+            state,
+            deadsync_theme::AudioRequest::SetMusicRate(music_rate),
+        );
         Outcome::persisted()
     },
 };

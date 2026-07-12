@@ -18,6 +18,7 @@ use deadsync_import::app_runtime::{ImportSummary, import_itg_profile_dir};
 use deadsync_import::detect::{
     ItgProfileCandidate, detect_itg_local_profiles, detect_itg_profiles_from_game_dir,
 };
+use deadsync_input::KeyCode;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_online::score_compat as scores;
@@ -30,7 +31,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, TryRecvError};
 use std::thread;
 use std::time::{Duration, Instant};
-use winit::keyboard::KeyCode;
 
 /* ---------------------------- transitions ---------------------------- */
 const TRANSITION_IN_DURATION: f32 = 0.4;

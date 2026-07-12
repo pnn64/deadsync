@@ -118,7 +118,10 @@ pub(crate) fn actor_with_world_z(mut actor: Actor, world_z: f32) -> Actor {
     actor
 }
 
-pub fn share_actor_range(actors: &mut Vec<Actor>, start: usize) -> Option<Vec<Arc<[Actor]>>> {
+pub(crate) fn share_actor_range(
+    actors: &mut Vec<Actor>,
+    start: usize,
+) -> Option<Vec<Arc<[Actor]>>> {
     if start >= actors.len() {
         return None;
     }

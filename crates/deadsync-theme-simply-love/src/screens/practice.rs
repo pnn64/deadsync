@@ -8,18 +8,19 @@ use deadlib_present::color;
 use deadlib_present::space::{
     screen_center_x, screen_center_y, screen_height, screen_width, widescale,
 };
-use deadsync_audio_stream as audio;
 use deadsync_gameplay::{
-    GameplayAction, handle_core_input, spacing_multiplier_for_percent, update_core,
+    GameplayAction, GameplayAudioCommand, GameplayAudioSnapshot, handle_core_input,
+    spacing_multiplier_for_percent, update_core,
 };
+use deadsync_input::KeyCode;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
 use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::timing::{SpeedSegment, SpeedUnit, TimingSegments};
+use std::path::Path;
 use std::sync::Arc;
-use winit::keyboard::KeyCode;
 
 const LEAD_IN_SECONDS: f32 = 1.0;
 const LOOP_AFTER_SECONDS: f32 = 1.0;
@@ -67,6 +68,8 @@ const MUSIC_RATE_REPEAT_DELAY_SECONDS: f32 = 0.375;
 const MUSIC_RATE_REPEAT_INTERVAL_SECONDS: f32 = 0.05;
 const MAX_MUSIC_RATE_REPEATS_PER_FRAME: usize = 64;
 const FLASH_DURATION_SECS: f32 = 0.75;
+
+pub type MusicStartSnap = fn(&Path, f64) -> f64;
 
 #[derive(Clone, Copy)]
 struct TimingLabelStyle {
@@ -195,6 +198,7 @@ pub struct State {
     music_rate_hold_delay_left: f32,
     music_rate_hold_repeat_left: f32,
     flash: Option<(String, f32)>,
+    pending_sfx: Vec<&'static str>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -212,7 +216,7 @@ struct MenuState {
     selected: usize,
 }
 
-type MenuAction = fn(&mut State) -> ThemeEffect;
+type MenuAction = fn(&mut State, MusicStartSnap) -> ThemeEffect;
 
 struct MenuRow {
     label: LookupKey,
@@ -358,10 +362,35 @@ pub fn init(mut gameplay: gameplay_screen::State) -> State {
         music_rate_hold_delay_left: 0.0,
         music_rate_hold_repeat_left: MUSIC_RATE_REPEAT_INTERVAL_SECONDS,
         flash: None,
+        pending_sfx: Vec::with_capacity(8),
     };
     set_cursor(&mut state, MIN_CURSOR_BEAT);
     snap_display_to_cursor(&mut state);
     state
+}
+
+#[inline(always)]
+fn queue_sfx(state: &mut State, path: &'static str) {
+    state.pending_sfx.push(path);
+}
+
+fn prepend_pending_sfx(pending_sfx: &mut Vec<&'static str>, effect: ThemeEffect) -> ThemeEffect {
+    let sound_count = pending_sfx.len();
+    if sound_count == 0 {
+        return effect;
+    }
+
+    let has_effect = !matches!(effect, ThemeEffect::None);
+    let mut effects = Vec::with_capacity(sound_count + usize::from(has_effect));
+    effects.extend(pending_sfx.drain(..).map(crate::effects::sfx));
+    if has_effect {
+        effects.push(effect);
+    }
+    if effects.len() == 1 {
+        effects.pop().expect("one queued Practice effect")
+    } else {
+        ThemeEffect::Batch(effects)
+    }
 }
 
 pub fn edit_snapshot(state: &State) -> EditSnapshot {
@@ -400,12 +429,37 @@ pub fn restore_edit_snapshot(state: &mut State, snapshot: EditSnapshot) {
 }
 
 pub fn on_enter(state: &mut State) {
-    audio::stop_music();
+    state
+        .gameplay
+        .push_audio_command(GameplayAudioCommand::StopMusic);
     set_cursor(state, state.cursor_beat);
     snap_display_to_cursor(state);
 }
 
-pub fn update(state: &mut State, delta_time: f32) -> ThemeEffect {
+pub fn update(
+    state: &mut State,
+    delta_time: f32,
+    audio_snapshot: GameplayAudioSnapshot,
+    fallback_host_nanos: impl FnOnce() -> u64,
+    snap_music_start: MusicStartSnap,
+) -> ThemeEffect {
+    let effect = update_inner(
+        state,
+        delta_time,
+        audio_snapshot,
+        fallback_host_nanos,
+        snap_music_start,
+    );
+    prepend_pending_sfx(&mut state.pending_sfx, effect)
+}
+
+fn update_inner(
+    state: &mut State,
+    delta_time: f32,
+    audio_snapshot: GameplayAudioSnapshot,
+    fallback_host_nanos: impl FnOnce() -> u64,
+    snap_music_start: MusicStartSnap,
+) -> ThemeEffect {
     if let Some((_, remaining)) = state.flash.as_mut() {
         *remaining -= delta_time;
         if *remaining <= 0.0 {
@@ -429,24 +483,36 @@ pub fn update(state: &mut State, delta_time: f32) -> ThemeEffect {
     let action = update_core(
         &mut state.gameplay,
         delta_time,
-        gameplay_screen::audio_snapshot(),
-        || deadlib_platform::host_time::instant_nanos(std::time::Instant::now()),
+        audio_snapshot,
+        fallback_host_nanos,
     );
     if matches!(action, GameplayAction::None) {
         gameplay_screen::refresh_scorebox_snapshots(&mut state.gameplay);
     }
-    gameplay_screen::drain_core_commands(&mut state.gameplay);
     let current_time = state.gameplay.current_music_time_seconds();
     let stop_time = state.gameplay.music_time_for_beat(stop_beat);
     if current_time >= stop_time + LOOP_AFTER_SECONDS || !matches!(action, GameplayAction::None) {
-        start_playback(state, start_beat, stop_beat);
+        start_playback(state, start_beat, stop_beat, snap_music_start);
     }
     ThemeEffect::None
 }
 
-pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
+pub fn handle_input(
+    state: &mut State,
+    ev: &InputEvent,
+    snap_music_start: MusicStartSnap,
+) -> ThemeEffect {
+    let effect = handle_input_inner(state, ev, snap_music_start);
+    prepend_pending_sfx(&mut state.pending_sfx, effect)
+}
+
+fn handle_input_inner(
+    state: &mut State,
+    ev: &InputEvent,
+    snap_music_start: MusicStartSnap,
+) -> ThemeEffect {
     if state.menu.is_some() {
-        return handle_menu_input(state, ev);
+        return handle_menu_input(state, ev, snap_music_start);
     }
 
     if !ev.pressed {
@@ -504,7 +570,23 @@ fn handle_edit_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     }
 }
 
-pub fn handle_raw_key_event(state: &mut State, raw_key: &RawKeyboardEvent) -> (bool, ThemeEffect) {
+pub fn handle_raw_key_event(
+    state: &mut State,
+    raw_key: &RawKeyboardEvent,
+    snap_music_start: MusicStartSnap,
+) -> (bool, ThemeEffect) {
+    let (consumed, effect) = handle_raw_key_event_inner(state, raw_key, snap_music_start);
+    (
+        consumed,
+        prepend_pending_sfx(&mut state.pending_sfx, effect),
+    )
+}
+
+fn handle_raw_key_event_inner(
+    state: &mut State,
+    raw_key: &RawKeyboardEvent,
+    snap_music_start: MusicStartSnap,
+) -> (bool, ThemeEffect) {
     match raw_key.code {
         KeyCode::ShiftLeft | KeyCode::ShiftRight => {
             state.shift_held = raw_key.pressed;
@@ -561,7 +643,7 @@ pub fn handle_raw_key_event(state: &mut State, raw_key: &RawKeyboardEvent) -> (b
                 close_menu(state);
                 (true, ThemeEffect::None)
             }
-            KeyCode::Enter => (true, activate_menu_item(state)),
+            KeyCode::Enter => (true, activate_menu_item(state, snap_music_start)),
             _ => (false, ThemeEffect::None),
         };
     }
@@ -580,15 +662,25 @@ pub fn handle_raw_key_event(state: &mut State, raw_key: &RawKeyboardEvent) -> (b
             (true, ThemeEffect::None)
         }
         KeyCode::KeyP if state.ctrl_held => {
-            start_playback(state, MIN_CURSOR_BEAT, max_play_beat(state));
+            start_playback(
+                state,
+                MIN_CURSOR_BEAT,
+                max_play_beat(state),
+                snap_music_start,
+            );
             (true, ThemeEffect::None)
         }
         KeyCode::KeyP if state.shift_held => {
-            start_playback(state, state.cursor_beat, max_play_beat(state));
+            start_playback(
+                state,
+                state.cursor_beat,
+                max_play_beat(state),
+                snap_music_start,
+            );
             (true, ThemeEffect::None)
         }
         KeyCode::KeyP => {
-            start_selection_like_itg(state);
+            start_selection_like_itg(state, snap_music_start);
             (true, ThemeEffect::None)
         }
         KeyCode::Space => {
@@ -621,12 +713,12 @@ pub fn handle_raw_key_event(state: &mut State, raw_key: &RawKeyboardEvent) -> (b
         }
         KeyCode::Home => {
             set_cursor(state, MIN_CURSOR_BEAT);
-            audio::play_sfx(EDIT_LINE_SOUND);
+            queue_sfx(state, EDIT_LINE_SOUND);
             (true, ThemeEffect::None)
         }
         KeyCode::End => {
             set_cursor(state, max_play_beat(state));
-            audio::play_sfx(EDIT_LINE_SOUND);
+            queue_sfx(state, EDIT_LINE_SOUND);
             (true, ThemeEffect::None)
         }
         KeyCode::F1 => {
@@ -706,7 +798,11 @@ fn practice_marker_bar_height() -> f32 {
     ScrollSpeedSetting::ARROW_SPACING * practice_edit_field_zoom()
 }
 
-fn handle_menu_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
+fn handle_menu_input(
+    state: &mut State,
+    ev: &InputEvent,
+    snap_music_start: MusicStartSnap,
+) -> ThemeEffect {
     if !ev.pressed {
         return ThemeEffect::None;
     }
@@ -718,7 +814,7 @@ fn handle_menu_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         VirtualAction::p1_start
         | VirtualAction::p2_start
         | VirtualAction::p1_select
-        | VirtualAction::p2_select => activate_menu_item(state),
+        | VirtualAction::p2_select => activate_menu_item(state, snap_music_start),
         VirtualAction::p1_back | VirtualAction::p2_back => {
             close_menu(state);
             ThemeEffect::None
@@ -731,7 +827,7 @@ fn open_main_menu(state: &mut State) {
     clear_cursor_hold_inputs(state);
     clear_page_hold_inputs(state);
     if state.menu.is_none() {
-        audio::play_sfx("assets/sounds/start.ogg");
+        queue_sfx(state, "assets/sounds/start.ogg");
     }
     state.menu = Some(MenuState {
         def: &MAIN_MENU,
@@ -743,7 +839,7 @@ fn open_help_menu(state: &mut State) {
     clear_cursor_hold_inputs(state);
     clear_page_hold_inputs(state);
     if state.menu.is_none() {
-        audio::play_sfx("assets/sounds/start.ogg");
+        queue_sfx(state, "assets/sounds/start.ogg");
     }
     state.menu = Some(MenuState {
         def: &HELP_MENU,
@@ -753,7 +849,7 @@ fn open_help_menu(state: &mut State) {
 
 fn close_menu(state: &mut State) {
     state.menu = None;
-    audio::play_sfx("assets/sounds/start.ogg");
+    queue_sfx(state, "assets/sounds/start.ogg");
 }
 
 fn step_menu(state: &mut State, delta: isize) {
@@ -769,10 +865,10 @@ fn step_menu(state: &mut State, delta: isize) {
         def: menu.def,
         selected,
     });
-    audio::play_sfx("assets/sounds/change.ogg");
+    queue_sfx(state, "assets/sounds/change.ogg");
 }
 
-fn activate_menu_item(state: &mut State) -> ThemeEffect {
+fn activate_menu_item(state: &mut State, snap_music_start: MusicStartSnap) -> ThemeEffect {
     let Some(menu) = state.menu else {
         return ThemeEffect::None;
     };
@@ -787,41 +883,46 @@ fn activate_menu_item(state: &mut State) -> ThemeEffect {
     state.menu = None;
     clear_cursor_hold_inputs(state);
     clear_page_hold_inputs(state);
-    audio::play_sfx("assets/sounds/start.ogg");
-    action(state)
+    queue_sfx(state, "assets/sounds/start.ogg");
+    action(state, snap_music_start)
 }
 
-fn action_play_whole_song(state: &mut State) -> ThemeEffect {
-    start_playback(state, MIN_CURSOR_BEAT, max_play_beat(state));
+fn action_play_whole_song(state: &mut State, snap_music_start: MusicStartSnap) -> ThemeEffect {
+    start_playback(
+        state,
+        MIN_CURSOR_BEAT,
+        max_play_beat(state),
+        snap_music_start,
+    );
     ThemeEffect::None
 }
 
-fn action_play_current_to_end(state: &mut State) -> ThemeEffect {
+fn action_play_current_to_end(state: &mut State, snap_music_start: MusicStartSnap) -> ThemeEffect {
     let cursor = state.cursor_beat;
-    start_playback(state, cursor, max_play_beat(state));
+    start_playback(state, cursor, max_play_beat(state), snap_music_start);
     ThemeEffect::None
 }
 
-fn action_play_selection(state: &mut State) -> ThemeEffect {
-    start_selection_like_itg(state);
+fn action_play_selection(state: &mut State, snap_music_start: MusicStartSnap) -> ThemeEffect {
+    start_selection_like_itg(state, snap_music_start);
     ThemeEffect::None
 }
 
-fn action_set_selection_start(state: &mut State) -> ThemeEffect {
+fn action_set_selection_start(state: &mut State, _snap_music_start: MusicStartSnap) -> ThemeEffect {
     set_selection_start(state);
     ThemeEffect::None
 }
 
-fn action_set_selection_end(state: &mut State) -> ThemeEffect {
+fn action_set_selection_end(state: &mut State, _snap_music_start: MusicStartSnap) -> ThemeEffect {
     set_selection_end(state);
     ThemeEffect::None
 }
 
-fn action_editor_options(_state: &mut State) -> ThemeEffect {
+fn action_editor_options(_state: &mut State, _snap_music_start: MusicStartSnap) -> ThemeEffect {
     ThemeEffect::Navigate(Screen::PlayerOptions)
 }
 
-fn action_exit_practice(_state: &mut State) -> ThemeEffect {
+fn action_exit_practice(_state: &mut State, _snap_music_start: MusicStartSnap) -> ThemeEffect {
     ThemeEffect::Navigate(Screen::SelectMusic)
 }
 
@@ -938,7 +1039,7 @@ const fn menu_step_delta_for_action_in_mode(
     }
 }
 
-fn start_selection_like_itg(state: &mut State) {
+fn start_selection_like_itg(state: &mut State, snap_music_start: MusicStartSnap) {
     let (start_beat, stop_beat) = selection_range(state)
         .filter(|(start, stop)| stop > start)
         .or_else(|| {
@@ -951,25 +1052,35 @@ fn start_selection_like_itg(state: &mut State) {
         state,
         start_beat,
         stop_beat.max(start_beat + SNAP_BEATS[state.snap_index]),
+        snap_music_start,
     );
 }
 
-fn snapped_playback_music_time(state: &State, playback_music_time: f32) -> f32 {
+fn snapped_playback_music_time(
+    state: &State,
+    playback_music_time: f32,
+    snap_music_start: MusicStartSnap,
+) -> f32 {
     let Some(music_path) = state.gameplay.charts()[0].music_path.as_ref() else {
         return playback_music_time;
     };
-    audio::snap_music_start_sec(music_path, f64::from(playback_music_time)) as f32
+    snap_music_start(music_path, f64::from(playback_music_time)) as f32
 }
 
-fn start_playback(state: &mut State, start_beat: f32, stop_beat: f32) {
+fn start_playback(
+    state: &mut State,
+    start_beat: f32,
+    stop_beat: f32,
+    snap_music_start: MusicStartSnap,
+) {
     clear_cursor_hold_inputs(state);
     clear_page_hold_inputs(state);
     let start_time = state.gameplay.music_time_for_beat(start_beat);
-    let playback_time = snapped_playback_music_time(state, start_time - LEAD_IN_SECONDS);
+    let playback_time =
+        snapped_playback_music_time(state, start_time - LEAD_IN_SECONDS, snap_music_start);
     state
         .gameplay
         .start_practice_music_at(playback_time, start_time);
-    crate::screens::gameplay::drain_core_commands(&mut state.gameplay);
     state.mode = Mode::Playing {
         start_beat,
         stop_beat,
@@ -980,7 +1091,9 @@ fn start_playback(state: &mut State, start_beat: f32, stop_beat: f32) {
 fn stop_playback(state: &mut State) {
     clear_cursor_hold_inputs(state);
     clear_page_hold_inputs(state);
-    audio::stop_music();
+    state
+        .gameplay
+        .push_audio_command(GameplayAudioCommand::StopMusic);
     let current_beat = state.gameplay.current_beat().max(MIN_CURSOR_BEAT);
     let current_time = state.gameplay.music_time_for_beat(current_beat);
     // Practice hits mutate note results, which the edit notefield uses for hide logic.
@@ -1369,7 +1482,7 @@ fn move_cursor(state: &mut State, delta_beats: f32) {
         state.shift_anchor = None;
     }
     if !same_beat(old_beat, state.cursor_beat) {
-        audio::play_sfx(EDIT_LINE_SOUND);
+        queue_sfx(state, EDIT_LINE_SOUND);
     }
 }
 
@@ -1434,7 +1547,7 @@ fn change_snap(state: &mut State, delta: isize) {
     state.snap_index = next as usize;
     let quantized = quantize_beat(state.cursor_beat, SNAP_BEATS[state.snap_index]);
     set_cursor(state, quantized);
-    audio::play_sfx(EDIT_SNAP_SOUND);
+    queue_sfx(state, EDIT_SNAP_SOUND);
 }
 
 fn change_edit_scroll_speed(state: &mut State, delta: isize) {
@@ -1445,7 +1558,7 @@ fn change_edit_scroll_speed(state: &mut State, delta: isize) {
     }
     state.edit_scroll_speed_index = next;
     set_flash_tr(state, "FlashZoomChanged");
-    audio::play_sfx(EDIT_MARKER_SOUND);
+    queue_sfx(state, EDIT_MARKER_SOUND);
 }
 
 fn quantized_music_rate(current: f32, delta: f32) -> f32 {
@@ -1460,16 +1573,18 @@ fn change_music_rate(state: &mut State, delta: f32) -> bool {
     let current = state.gameplay.music_rate();
     let new_rate = quantized_music_rate(current, delta);
     if (new_rate - current).abs() <= f32::EPSILON {
-        audio::play_sfx(EDIT_INVALID_SOUND);
+        queue_sfx(state, EDIT_INVALID_SOUND);
         set_music_rate_flash(state, "FlashMusicRateLimit", current);
         return false;
     }
     let changed = state.gameplay.set_music_rate(new_rate);
     profile::set_session_music_rate(new_rate);
-    audio::set_music_rate(new_rate);
+    state
+        .gameplay
+        .push_audio_command(GameplayAudioCommand::SetMusicRate(new_rate));
     if changed {
         set_music_rate_flash(state, "FlashMusicRate", new_rate);
-        audio::play_sfx(EDIT_LINE_SOUND);
+        queue_sfx(state, EDIT_LINE_SOUND);
     }
     changed
 }
@@ -1548,14 +1663,14 @@ fn seek_chart_note(state: &mut State, dir: i32) {
     };
     if let Some(beat) = target {
         set_cursor(state, beat);
-        audio::play_sfx(EDIT_LINE_SOUND);
+        queue_sfx(state, EDIT_LINE_SOUND);
     } else {
-        audio::play_sfx(EDIT_INVALID_SOUND);
+        queue_sfx(state, EDIT_INVALID_SOUND);
     }
 }
 
 fn set_area_marker(state: &mut State) {
-    audio::play_sfx(EDIT_MARKER_SOUND);
+    queue_sfx(state, EDIT_MARKER_SOUND);
     match (state.selection_anchor, state.selection_end) {
         (None, None) => {
             state.selection_anchor = Some(state.cursor_beat);
@@ -1584,12 +1699,12 @@ fn set_selection_start(state: &mut State) {
         .is_some_and(|end| state.cursor_beat >= end)
     {
         set_flash_tr(state, "FlashInvalidSelectionStart");
-        audio::play_sfx(EDIT_INVALID_SOUND);
+        queue_sfx(state, EDIT_INVALID_SOUND);
         return;
     }
     state.selection_anchor = Some(state.cursor_beat);
     set_flash_tr(state, "FlashSelectionStartSet");
-    audio::play_sfx(EDIT_MARKER_SOUND);
+    queue_sfx(state, EDIT_MARKER_SOUND);
 }
 
 fn set_selection_end(state: &mut State) {
@@ -1598,12 +1713,12 @@ fn set_selection_end(state: &mut State) {
         .is_some_and(|start| state.cursor_beat <= start)
     {
         set_flash_tr(state, "FlashInvalidSelectionEnd");
-        audio::play_sfx(EDIT_INVALID_SOUND);
+        queue_sfx(state, EDIT_INVALID_SOUND);
         return;
     }
     state.selection_end = Some(state.cursor_beat);
     set_flash_tr(state, "FlashSelectionEndSet");
-    audio::play_sfx(EDIT_MARKER_SOUND);
+    queue_sfx(state, EDIT_MARKER_SOUND);
 }
 
 fn clear_selection(state: &mut State) {
@@ -2386,14 +2501,17 @@ mod tests {
         edit_snap_delta_for_action_in_mode, fmt_itg_float, fmt_music_rate,
         menu_step_delta_for_action_in_mode, music_rate_delta_for_dir, music_rate_hold_dir_for_key,
         next_display_beat, page_hold_dir_for_key, practice_edit_beat_travel,
-        practice_nav_mode_from_config, quantized_music_rate, timing_label_glow_alpha,
-        timing_label_x, timing_speed_label,
+        practice_nav_mode_from_config, prepend_pending_sfx, quantized_music_rate,
+        timing_label_glow_alpha, timing_label_x, timing_speed_label,
     };
+    use crate::SimplyLoveRuntimeRequest;
     use crate::assets::i18n;
+    use crate::screens::{Screen, ThemeEffect};
+    use deadsync_input::KeyCode;
     use deadsync_input::VirtualAction;
     use deadsync_rules::scroll::ScrollSpeedSetting;
     use deadsync_rules::timing::{SpeedSegment, SpeedUnit};
-    use winit::keyboard::KeyCode;
+    use deadsync_theme::AudioRequest;
 
     /// Every i18n key the practice screen looks up at runtime, outside of the
     /// menu definitions (which already have their own coverage tests). Keep
@@ -2537,6 +2655,33 @@ mod tests {
                 .abs()
                 < 1e-5
         );
+    }
+
+    #[test]
+    fn pending_practice_sfx_keep_order_before_navigation() {
+        let mut pending = vec!["assets/sounds/change.ogg", "assets/sounds/start.ogg"];
+        let effect =
+            prepend_pending_sfx(&mut pending, ThemeEffect::Navigate(Screen::PlayerOptions));
+
+        let ThemeEffect::Batch(effects) = effect else {
+            panic!("multiple Practice effects should be batched");
+        };
+        let [first, second, ThemeEffect::Navigate(Screen::PlayerOptions)] = effects.as_slice()
+        else {
+            panic!("Practice SFX should precede navigation");
+        };
+        for (effect, expected) in [
+            (first, "assets/sounds/change.ogg"),
+            (second, "assets/sounds/start.ogg"),
+        ] {
+            let ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Audio(AudioRequest::PlaySfx(path))) =
+                effect
+            else {
+                panic!("queued Practice sound should become an audio request");
+            };
+            assert_eq!(path, expected);
+        }
+        assert!(pending.is_empty());
     }
 
     #[test]

@@ -15,7 +15,6 @@ deadlib-render = { path = "../deadlib-render" }
 deadsync-assets = { path = "../deadsync-assets" }
 deadsync-audio = { path = "../deadsync-audio" }
 deadsync-audio-decode = { path = "../deadsync-audio-decode" }
-deadsync-audio-stream = { path = "../deadsync-audio-stream" }
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-config = { path = "../deadsync-config" }
 deadsync-core = { path = "../deadsync-core" }
@@ -47,11 +46,6 @@ rand = "0.10.1"
 rssp = { git = "https://github.com/pnn64/rssp", branch = "main" }
 smallvec = "1.15.2"
 twox-hash = "2.1.2"
-winit = "0.30.13"
-
-[dev-dependencies]
-deadsync-audio-stream = { path = "../deadsync-audio-stream", features = ["test-support"] }
-
 [lints.clippy]
 perf = { level = "warn", priority = -1 }
 

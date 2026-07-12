@@ -152,6 +152,7 @@ pub(super) enum SubmenuTransition {
 
 pub struct State {
     pub(super) updater_capabilities: SimplyLoveUpdaterCapabilities,
+    pub(super) audio_options: AudioOptionsView,
     pub selected: usize,
     pub(super) prev_selected: usize,
     pub active_color_index: i32, // <-- ADDED
@@ -178,6 +179,7 @@ pub struct State {
     pub(super) menu_lr_undo: i8,
     pub(super) start_input: [OptionsStartInput; 2],
     pub(super) pending_dedicated_menu_buttons: Option<bool>,
+    pub(super) pending_sfx: Vec<&'static str>,
     // Submenu state
     pub(super) sub_selected: usize,
     pub(super) sub_prev_selected: usize,
@@ -248,7 +250,10 @@ pub struct State {
     pub(super) i18n_revision: u64,
 }
 
-pub fn init(updater_capabilities: SimplyLoveUpdaterCapabilities) -> State {
+pub fn init(
+    updater_capabilities: SimplyLoveUpdaterCapabilities,
+    audio_options: AudioOptionsView,
+) -> State {
     let cfg = config::get();
     let system_noteskin_choices = discover_system_noteskin_choices();
     let smx_bg_pack_choices = discover_smx_pack_choices("smx-pad-lights");
@@ -256,9 +261,9 @@ pub fn init(updater_capabilities: SimplyLoveUpdaterCapabilities) -> State {
     let software_thread_choices = build_software_thread_choices();
     let software_thread_labels = software_thread_choice_labels(&software_thread_choices);
     let max_fps_choices = build_max_fps_choices();
-    let sound_device_options = build_sound_device_options();
+    let sound_device_options = build_sound_device_options(&audio_options);
     #[cfg(target_os = "linux")]
-    let linux_backend_choices = build_linux_backend_choices();
+    let linux_backend_choices = build_linux_backend_choices(&audio_options);
     let machine_noteskin = profile::machine_default_noteskin();
     let machine_noteskin_idx = system_noteskin_choices
         .iter()
@@ -266,6 +271,7 @@ pub fn init(updater_capabilities: SimplyLoveUpdaterCapabilities) -> State {
         .unwrap_or(0);
     let mut state = State {
         updater_capabilities,
+        audio_options,
         selected: 0,
         prev_selected: 0,
         active_color_index: cfg.simply_love_color,
@@ -292,6 +298,7 @@ pub fn init(updater_capabilities: SimplyLoveUpdaterCapabilities) -> State {
         menu_lr_undo: 0,
         start_input: [OptionsStartInput::default(); 2],
         pending_dedicated_menu_buttons: None,
+        pending_sfx: Vec::new(),
         view: OptionsView::Main,
         sub_selected: 0,
         sub_prev_selected: 0,

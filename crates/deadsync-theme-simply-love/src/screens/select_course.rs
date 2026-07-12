@@ -2,6 +2,7 @@ use crate::act;
 use crate::assets::AssetManager;
 use crate::assets::i18n::tr;
 use crate::assets::{FontRole, current_machine_font_key};
+use crate::effects::{sfx, sfx_then};
 use crate::rgba_const;
 use crate::screens::components::{
     select_music::{music_wheel, screen_bars, select_pane, step_artist_bar},
@@ -18,7 +19,6 @@ use deadlib_present::color;
 use deadlib_present::space::{
     is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
 };
-use deadsync_audio_stream as audio;
 use deadsync_chart::song::standard_difficulty_index;
 use deadsync_chart::{ChartData, SongData};
 use deadsync_input::{InputEvent, PadDir, VirtualAction};
@@ -1062,7 +1062,7 @@ fn handle_rating_dir(
     };
     if let Some(next) = next {
         set_selected_course_rating_index(state, &meta, next);
-        audio::play_sfx(if matches!(dir, PadDir::Up) {
+        return sfx(if matches!(dir, PadDir::Up) {
             "assets/sounds/easier.ogg"
         } else {
             "assets/sounds/harder.ogg"
@@ -1084,16 +1084,16 @@ fn selected_course_has_multiple_ratings(state: &State) -> bool {
         .unwrap_or(false)
 }
 
-fn shift_selected_course_rating(state: &mut State, delta: isize) -> bool {
+fn shift_selected_course_rating(state: &mut State, delta: isize) -> Option<&'static str> {
     if delta == 0 {
-        return false;
+        return None;
     }
     let Some(meta) = selected_course_meta(state) else {
-        return false;
+        return None;
     };
     let available = meta.ratings.iter().filter(|r| r.is_some()).count();
     if available <= 1 {
-        return false;
+        return None;
     }
     let current = selected_course_rating_index(state, &meta);
     let next = if delta < 0 {
@@ -1102,15 +1102,14 @@ fn shift_selected_course_rating(state: &mut State, delta: isize) -> bool {
         ((current + 1)..meta.ratings.len()).find(|&idx| meta.ratings[idx].is_some())
     };
     let Some(next) = next else {
-        return false;
+        return None;
     };
     set_selected_course_rating_index(state, &meta, next);
-    audio::play_sfx(if delta < 0 {
+    Some(if delta < 0 {
         "assets/sounds/easier.ogg"
     } else {
         "assets/sounds/harder.ogg"
-    });
-    true
+    })
 }
 
 pub fn handle_confirm(state: &mut State) -> ThemeEffect {
@@ -1118,8 +1117,7 @@ pub fn handle_confirm(state: &mut State) -> ThemeEffect {
         return ThemeEffect::None;
     }
     if state.entries.is_empty() {
-        audio::play_sfx("assets/sounds/expand.ogg");
-        return ThemeEffect::None;
+        return sfx("assets/sounds/expand.ogg");
     }
     state.nav_key_held_direction = None;
     state.nav_key_held_since = None;
@@ -1128,9 +1126,8 @@ pub fn handle_confirm(state: &mut State) -> ThemeEffect {
 
     match state.entries.get(state.selected_index) {
         Some(MusicWheelEntry::Song(_)) => {
-            audio::play_sfx("assets/sounds/start.ogg");
             state.out_prompt = OutPromptState::PressStartForOptions { elapsed: 0.0 };
-            ThemeEffect::None
+            sfx("assets/sounds/start.ogg")
         }
         _ => ThemeEffect::None,
     }
@@ -1180,24 +1177,24 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                     *active_choice = 1 - prev;
                     *switch_from = Some(prev);
                     *switch_elapsed = 0.0;
-                    audio::play_sfx("assets/sounds/change.ogg");
-                    ThemeEffect::None
+                    sfx("assets/sounds/change.ogg")
                 }
                 screen_input::ThreeKeyMenuAction::Cancel => {
-                    audio::play_sfx("assets/sounds/start.ogg");
                     state.exit_prompt = ExitPromptState::None;
-                    ThemeEffect::None
+                    sfx("assets/sounds/start.ogg")
                 }
                 screen_input::ThreeKeyMenuAction::Confirm => {
                     let ExitPromptState::Active { active_choice, .. } = state.exit_prompt else {
                         return ThemeEffect::None;
                     };
-                    audio::play_sfx("assets/sounds/start.ogg");
                     state.exit_prompt = ExitPromptState::None;
                     if active_choice == 1 {
-                        ThemeEffect::Navigate(Screen::Menu)
+                        sfx_then(
+                            "assets/sounds/start.ogg",
+                            ThemeEffect::Navigate(Screen::Menu),
+                        )
                     } else {
-                        ThemeEffect::None
+                        sfx("assets/sounds/start.ogg")
                     }
                 }
             };
@@ -1217,8 +1214,8 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                 OutPromptState::PressStartForOptions { .. }
             )
         {
-            audio::play_sfx("assets/sounds/start.ogg");
             state.out_prompt = OutPromptState::EnteringOptions { elapsed: 0.0 };
+            return sfx("assets/sounds/start.ogg");
         }
         return ThemeEffect::None;
     }
@@ -1228,12 +1225,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
             return match nav {
                 screen_input::ThreeKeyMenuAction::Prev => {
                     if matches!(state.three_key_focus, ThreeKeyFocus::Rating) {
-                        state.menu_lr_undo = if shift_selected_course_rating(state, -1) {
-                            1
-                        } else {
-                            0
-                        };
-                        ThemeEffect::None
+                        let sound = shift_selected_course_rating(state, -1);
+                        state.menu_lr_undo = if sound.is_some() { 1 } else { 0 };
+                        sound.map(sfx).unwrap_or(ThemeEffect::None)
                     } else {
                         state.menu_lr_undo = 1;
                         handle_wheel_dir(state, PadDir::Left, true, ev.timestamp)
@@ -1241,12 +1235,9 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                 }
                 screen_input::ThreeKeyMenuAction::Next => {
                     if matches!(state.three_key_focus, ThreeKeyFocus::Rating) {
-                        state.menu_lr_undo = if shift_selected_course_rating(state, 1) {
-                            -1
-                        } else {
-                            0
-                        };
-                        ThemeEffect::None
+                        let sound = shift_selected_course_rating(state, 1);
+                        state.menu_lr_undo = if sound.is_some() { -1 } else { 0 };
+                        sound.map(sfx).unwrap_or(ThemeEffect::None)
                     } else {
                         state.menu_lr_undo = -1;
                         handle_wheel_dir(state, PadDir::Right, true, ev.timestamp)
@@ -1259,8 +1250,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                     {
                         clear_wheel_hold(state);
                         state.three_key_focus = ThreeKeyFocus::Rating;
-                        audio::play_sfx("assets/sounds/start.ogg");
-                        ThemeEffect::None
+                        sfx("assets/sounds/start.ogg")
                     } else {
                         state.three_key_focus = ThreeKeyFocus::Wheel;
                         handle_confirm(state)
@@ -1268,14 +1258,20 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
                 }
                 screen_input::ThreeKeyMenuAction::Cancel => {
                     if matches!(state.three_key_focus, ThreeKeyFocus::Rating) {
+                        let undo_sound = if state.menu_lr_undo != 0 {
+                            shift_selected_course_rating(state, -(state.menu_lr_undo as isize))
+                        } else {
+                            None
+                        };
                         if state.menu_lr_undo != 0 {
-                            let _ =
-                                shift_selected_course_rating(state, -(state.menu_lr_undo as isize));
                             state.menu_lr_undo = 0;
                         }
                         state.three_key_focus = ThreeKeyFocus::Wheel;
-                        audio::play_sfx("assets/sounds/change.ogg");
-                        ThemeEffect::None
+                        if let Some(path) = undo_sound {
+                            ThemeEffect::Batch(vec![sfx(path), sfx("assets/sounds/change.ogg")])
+                        } else {
+                            sfx("assets/sounds/change.ogg")
+                        }
                     } else {
                         if state.menu_lr_undo != 0 {
                             music_wheel_change(state, state.menu_lr_undo as isize);
@@ -1462,7 +1458,8 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
         music_wheel_settle_offset(state, dt);
     }
 
-    if state.selected_index != state.prev_selected_index {
+    let selection_changed = state.selected_index != state.prev_selected_index;
+    if selection_changed {
         state.prev_selected_index = state.selected_index;
         state.time_since_selection_change = 0.0;
         state.menu_lr_undo = 0;
@@ -1477,7 +1474,6 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
                 .selected_rating_index_by_path
                 .insert(meta.path.clone(), idx);
         }
-        audio::play_sfx("assets/sounds/change.ogg");
     }
 
     if state.time_since_selection_change >= BANNER_UPDATE_DELAY_SECONDS {
@@ -1485,9 +1481,14 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
         if banner != state.last_requested_banner_path {
             state.last_requested_banner_path.clone_from(&banner);
             state.banner_high_quality_requested = false;
-            return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
+            let effect = ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
                 crate::SimplyLoveMediaRequest::Banner(banner),
             ));
+            return if selection_changed {
+                sfx_then("assets/sounds/change.ogg", effect)
+            } else {
+                effect
+            };
         }
         if banner.is_some()
             && !state.banner_high_quality_requested
@@ -1495,13 +1496,22 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
             && state.wheel_offset_from_selection.abs() < 0.0001
         {
             state.banner_high_quality_requested = true;
-            return ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
+            let effect = ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
                 crate::SimplyLoveMediaRequest::Banner(banner),
             ));
+            return if selection_changed {
+                sfx_then("assets/sounds/change.ogg", effect)
+            } else {
+                effect
+            };
         }
     }
 
-    ThemeEffect::None
+    if selection_changed {
+        sfx("assets/sounds/change.ogg")
+    } else {
+        ThemeEffect::None
+    }
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
@@ -2415,26 +2425,26 @@ fn handle_exit_prompt_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
             *active_choice = 1 - prev;
             *switch_from = Some(prev);
             *switch_elapsed = 0.0;
-            audio::play_sfx("assets/sounds/change.ogg");
-            ThemeEffect::None
+            sfx("assets/sounds/change.ogg")
         }
 
         VirtualAction::p1_back
         | VirtualAction::p2_back
         | VirtualAction::p1_select
         | VirtualAction::p2_select => {
-            audio::play_sfx("assets/sounds/start.ogg");
             state.exit_prompt = ExitPromptState::None;
-            ThemeEffect::None
+            sfx("assets/sounds/start.ogg")
         }
 
         VirtualAction::p1_start | VirtualAction::p2_start => {
-            audio::play_sfx("assets/sounds/start.ogg");
             state.exit_prompt = ExitPromptState::None;
             if active_choice == 1 {
-                ThemeEffect::Navigate(Screen::Menu)
+                sfx_then(
+                    "assets/sounds/start.ogg",
+                    ThemeEffect::Navigate(Screen::Menu),
+                )
             } else {
-                ThemeEffect::None
+                sfx("assets/sounds/start.ogg")
             }
         }
 

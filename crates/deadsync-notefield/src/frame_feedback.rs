@@ -47,7 +47,7 @@ pub struct NotefieldFeedbackFrameView<'a> {
 
 /// Compose cues/flashes, receptor targets and feedback, then tap and mine
 /// explosions in the canonical field ordering.
-pub fn compose_notefield_feedback<S, F>(
+pub(crate) fn compose_notefield_feedback<S, F>(
     actors: &mut Vec<Actor>,
     hud_actors: &mut Vec<Actor>,
     model_cache: &mut ModelMeshCache,

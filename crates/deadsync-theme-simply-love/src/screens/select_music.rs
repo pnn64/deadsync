@@ -32,15 +32,15 @@ use deadlib_present::space::{
     widescale,
 };
 use deadlib_render::{BlendMode, MeshVertex, SamplerDesc, SamplerFilter};
-use deadsync_audio_stream as audio;
 use deadsync_chart::song::{chart_ix_for_steps_index, format_display_bpm_range};
 use deadsync_chart::{
     ChartData, ChartDisplayBpm, STANDARD_DIFFICULTY_COUNT, STANDARD_DIFFICULTY_NAMES, SongData,
     SyncPref,
 };
 use deadsync_core::input::InputSource;
-use deadsync_input::RawKeyboardEvent;
-use deadsync_input::{InputEvent, Keymap, PadDir, PadEvent, VirtualAction, with_keymap};
+use deadsync_input::{
+    InputEvent, KeyCode, Keymap, PadDir, PadEvent, RawKeyboardEvent, VirtualAction, with_keymap,
+};
 use deadsync_online::lobbies as lobby_data;
 use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
@@ -64,6 +64,8 @@ use deadsync_simfile::song_sort::{
     title_grouped_songs,
 };
 use deadsync_simfile::sync_offset::SongOffsetSyncChange;
+use deadsync_theme::views::AudioPlaybackView;
+use deadsync_theme::{AudioCut, AudioRequest};
 use image::{Rgba, RgbaImage};
 use log::{debug, warn};
 use null_or_die::{
@@ -77,7 +79,6 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
-use winit::keyboard::KeyCode;
 
 #[path = "select_music/pack_sync.rs"]
 mod pack_sync;
@@ -510,23 +511,23 @@ fn beat_at_sec(song: &SongData, target_sec: f64) -> f64 {
 
 #[inline(always)]
 fn preview_song_sec(state: &State) -> Option<f64> {
-    let start_sec = state.currently_playing_preview_start_sec?;
-    let length_sec = state.currently_playing_preview_length_sec?;
-    let stream_sec = audio::get_music_stream_position_seconds();
+    let start_sec = f64::from(state.currently_playing_preview_start_sec?);
+    let length_sec = f64::from(state.currently_playing_preview_length_sec?);
+    let stream_sec = state.audio_playback.music_stream_position_seconds;
     if !stream_sec.is_finite() || stream_sec < 0.0 {
         return None;
     }
     let rate = profile::get_session_music_rate();
-    let rate = if rate.is_finite() && rate > 0.0 {
+    let rate = f64::from(if rate.is_finite() && rate > 0.0 {
         rate
     } else {
         1.0
-    };
+    });
     let mut rel_song_sec = stream_sec * rate;
     if length_sec.is_finite() && length_sec > 0.0 {
         rel_song_sec = rel_song_sec.rem_euclid(length_sec);
     }
-    Some((start_sec + rel_song_sec) as f64)
+    Some(start_sec + rel_song_sec)
 }
 
 #[inline(always)]
@@ -615,6 +616,11 @@ pub fn selection_anim_beat(state: &State) -> f32 {
 }
 
 #[inline(always)]
+pub fn sync_audio_playback_view(state: &mut State, view: AudioPlaybackView) {
+    state.audio_playback = view;
+}
+
+#[inline(always)]
 fn sl_arrow_bounce01(entry_opt: Option<&MusicWheelEntry>, state: &State) -> f32 {
     let beat = sl_selection_anim_beat(entry_opt, state);
     let effect_offset = -10.0 * crate::config::get().global_offset_seconds;
@@ -638,7 +644,7 @@ fn default_preview_start(song: &SongData, total_len: f64) -> f64 {
     sec_at_beat(song, i_beat)
 }
 
-fn compute_preview_cut(song: &SongData) -> Option<(std::path::PathBuf, audio::Cut)> {
+fn compute_preview_cut(song: &SongData) -> Option<(std::path::PathBuf, AudioCut)> {
     let path = song.music_path.clone()?;
     let mut start = song.sample_start.unwrap_or(0.0) as f64;
     let mut length = song.sample_length.unwrap_or(0.0) as f64;
@@ -664,7 +670,7 @@ fn compute_preview_cut(song: &SongData) -> Option<(std::path::PathBuf, audio::Cu
 
     Some((
         path,
-        audio::Cut {
+        AudioCut {
             start_sec: start,
             length_sec: length,
             fade_out_sec: PREVIEW_FADE_OUT_SECONDS,
@@ -1110,6 +1116,7 @@ pub struct State {
     /// Last pack name for which we enqueued ReplayGain prewarm jobs. Guards
     /// against re-enqueueing every frame while the same pack is expanded.
     last_replaygain_prewarmed_pack: Option<String>,
+    pending_audio: Vec<AudioRequest>,
     bg: visual_style_bg::State,
     last_requested_banner_path: Option<PathBuf>,
     last_requested_cdtitle_path: Option<PathBuf>,
@@ -1147,6 +1154,7 @@ pub struct State {
     currently_playing_preview_path: Option<PathBuf>,
     currently_playing_preview_start_sec: Option<f32>,
     currently_playing_preview_length_sec: Option<f32>,
+    audio_playback: AudioPlaybackView,
     preview_music_muted: bool,
     music_wheel_moved: bool,
     prev_selected_index: usize,
@@ -1456,7 +1464,7 @@ fn reload_selected_song(state: &mut State) -> bool {
     match song_loading::reload_song_in_cache(&simfile_path) {
         Ok(_) => {
             refresh_from_song_cache(state);
-            audio::play_sfx("assets/sounds/change.ogg");
+            queue_sfx(state, "assets/sounds/change.ogg");
             debug!("Force-reloaded song from disk: {}", simfile_path.display());
             true
         }
@@ -2688,6 +2696,7 @@ pub fn init() -> State {
         sort_mode: WheelSortMode::Group,
         expanded_pack_name: initial_expanded_pack_name,
         last_replaygain_prewarmed_pack: None,
+        pending_audio: Vec::new(),
         bg: visual_style_bg::State::new(),
         last_requested_banner_path: None,
         last_requested_cdtitle_path: None,
@@ -2733,6 +2742,7 @@ pub fn init() -> State {
         currently_playing_preview_path: None,
         currently_playing_preview_start_sec: None,
         currently_playing_preview_length_sec: None,
+        audio_playback: AudioPlaybackView::default(),
         preview_music_muted: false,
         music_wheel_moved: false,
         session_elapsed: 0.0,
@@ -2882,6 +2892,7 @@ pub fn init_placeholder() -> State {
         sort_mode: WheelSortMode::Group,
         expanded_pack_name: None,
         last_replaygain_prewarmed_pack: None,
+        pending_audio: Vec::new(),
         bg: visual_style_bg::State::new(),
         last_requested_banner_path: None,
         last_requested_cdtitle_path: None,
@@ -2927,6 +2938,7 @@ pub fn init_placeholder() -> State {
         currently_playing_preview_path: None,
         currently_playing_preview_start_sec: None,
         currently_playing_preview_length_sec: None,
+        audio_playback: AudioPlaybackView::default(),
         preview_music_muted: false,
         music_wheel_moved: false,
         session_elapsed: 0.0,
@@ -3027,11 +3039,7 @@ fn clear_preview(state: &mut State) {
     state.currently_playing_preview_path = None;
     state.currently_playing_preview_start_sec = None;
     state.currently_playing_preview_length_sec = None;
-    #[cfg(test)]
-    if !audio::is_initialized() {
-        return;
-    }
-    audio::stop_music();
+    queue_audio(state, AudioRequest::StopMusic);
 }
 
 /// Requests ReplayGain analysis for every song in the currently-expanded
@@ -3088,6 +3096,47 @@ fn prepend_pending_effect(pending: Option<ThemeEffect>, next: ThemeEffect) -> Th
 }
 
 #[inline(always)]
+fn queue_audio(state: &mut State, request: AudioRequest) {
+    state.pending_audio.push(request);
+}
+
+#[inline(always)]
+fn queue_sfx(state: &mut State, path: &'static str) {
+    queue_audio(state, AudioRequest::PlaySfx(path.to_owned()));
+}
+
+fn queue_lobby_sounds(state: &mut State) {
+    let sounds = lobby_overlay::take_pending_sounds(&mut state.lobby_overlay);
+    for sound in sounds {
+        queue_sfx(state, sound.asset_path());
+    }
+}
+
+fn prepend_pending_audio(state: &mut State, effect: ThemeEffect) -> ThemeEffect {
+    let request_count = state.pending_audio.len();
+    if request_count == 0 {
+        return effect;
+    }
+
+    let has_effect = !matches!(effect, ThemeEffect::None);
+    let mut effects = Vec::with_capacity(request_count + usize::from(has_effect));
+    effects.extend(
+        state
+            .pending_audio
+            .drain(..)
+            .map(|request| ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(request))),
+    );
+    if has_effect {
+        effects.push(effect);
+    }
+    if effects.len() == 1 {
+        effects.pop().expect("one queued SelectMusic audio effect")
+    } else {
+        ThemeEffect::Batch(effects)
+    }
+}
+
+#[inline(always)]
 fn sync_preview_song(
     state: &mut State,
     selected_song: Option<&Arc<SongData>>,
@@ -3107,21 +3156,24 @@ fn sync_preview_song(
         if let Some((path, cut)) = compute_preview_cut(song) {
             state.currently_playing_preview_start_sec = Some(cut.start_sec as f32);
             state.currently_playing_preview_length_sec = Some(cut.length_sec as f32);
-            audio::play_music(
-                path,
-                cut,
-                loop_preview,
-                deadsync_profile::compat::get_session_music_rate(),
+            queue_audio(
+                state,
+                AudioRequest::PlayMusic {
+                    path,
+                    cut,
+                    looping: loop_preview,
+                    rate: deadsync_profile::compat::get_session_music_rate(),
+                },
             );
         } else {
             state.currently_playing_preview_start_sec = None;
             state.currently_playing_preview_length_sec = None;
-            audio::stop_music();
+            queue_audio(state, AudioRequest::StopMusic);
         }
     } else {
         state.currently_playing_preview_start_sec = None;
         state.currently_playing_preview_length_sec = None;
-        audio::stop_music();
+        queue_audio(state, AudioRequest::StopMusic);
     }
 }
 
@@ -3217,11 +3269,14 @@ fn toggle_favorite_for_selected_entry(state: &mut State, side: profile_data::Pla
             {
                 let is_now_fav = profile::toggle_favorite(side, &chart.short_hash);
                 state.favorites_entries = build_favorites_view_entries(&state.group_entries);
-                audio::play_sfx(if is_now_fav {
-                    "assets/sounds/start.ogg"
-                } else {
-                    "assets/sounds/start.ogg"
-                });
+                queue_sfx(
+                    state,
+                    if is_now_fav {
+                        "assets/sounds/start.ogg"
+                    } else {
+                        "assets/sounds/start.ogg"
+                    },
+                );
             }
         }
         Some(entry @ MusicWheelEntry::PackHeader { .. }) => {
@@ -3230,11 +3285,14 @@ fn toggle_favorite_for_selected_entry(state: &mut State, side: profile_data::Pla
             };
             let is_now_fav = profile::toggle_pack_favorite(side, pack_key);
             state.favorites_entries = build_favorites_view_entries(&state.group_entries);
-            audio::play_sfx(if is_now_fav {
-                "assets/sounds/start.ogg"
-            } else {
-                "assets/sounds/start.ogg"
-            });
+            queue_sfx(
+                state,
+                if is_now_fav {
+                    "assets/sounds/start.ogg"
+                } else {
+                    "assets/sounds/start.ogg"
+                },
+            );
         }
         None => {}
     }
@@ -3403,7 +3461,7 @@ fn show_select_music_menu(state: &mut State) {
     clear_nav_hold(state);
     state.exit_code = ExitCodeTracker::default();
     clear_preview(state);
-    audio::play_sfx("assets/sounds/start.ogg");
+    queue_sfx(state, "assets/sounds/start.ogg");
 }
 
 #[inline(always)]
@@ -3799,7 +3857,6 @@ fn start_song_search_prompt(state: &mut State) {
 }
 
 fn show_profile_switch_overlay(state: &mut State) {
-    profile::set_fast_profile_switch_from_select_music(false);
     clear_preview(state);
     state.select_music_menu = select_music_menu::State::Hidden;
     state.song_search = select_music_menu::SongSearchState::Hidden;
@@ -3822,6 +3879,7 @@ fn show_profile_switch_overlay(state: &mut State) {
 
     let mut overlay = profile_boxes::init_active();
     overlay.active_color_index = state.active_color_index;
+    profile_boxes::set_fast_switch(&mut overlay, true);
     profile_boxes::set_joined(
         &mut overlay,
         profile::is_session_side_joined(profile_data::PlayerSide::P1),
@@ -3836,8 +3894,10 @@ fn show_profile_switch_overlay(state: &mut State) {
 /// current profile; only `joining_side` needs to pick a profile. If the
 /// joining player cancels, `handle_profile_switch_overlay_input` will revert
 /// the late-join via `cancel_late_join_profile_overlay`.
-pub fn open_late_join_profile_overlay(state: &mut State, joining_side: profile_data::PlayerSide) {
-    profile::set_fast_profile_switch_from_select_music(false);
+pub fn open_late_join_profile_overlay(
+    state: &mut State,
+    joining_side: profile_data::PlayerSide,
+) -> ThemeEffect {
     clear_preview(state);
     state.select_music_menu = select_music_menu::State::Hidden;
     state.song_search = select_music_menu::SongSearchState::Hidden;
@@ -3860,9 +3920,11 @@ pub fn open_late_join_profile_overlay(state: &mut State, joining_side: profile_d
 
     let mut overlay = profile_boxes::init_late_join(joining_side);
     overlay.active_color_index = state.active_color_index;
+    profile_boxes::set_fast_switch(&mut overlay, true);
     profile_boxes::enter_late_join(&mut overlay, joining_side);
     state.profile_switch_overlay = Some(overlay);
     state.profile_switch_overlay_is_late_join = true;
+    prepend_pending_audio(state, ThemeEffect::None)
 }
 
 #[inline(always)]
@@ -5151,12 +5213,16 @@ fn refresh_after_reload(state: &mut State) {
     let old_steps_index_p2 = state.p2_selected_steps_index;
     let preferred_difficulty_index = state.preferred_difficulty_index;
     let p2_preferred_difficulty_index = state.p2_preferred_difficulty_index;
+    let pending_audio = std::mem::take(&mut state.pending_audio);
+    let audio_playback = state.audio_playback;
 
     let mut refreshed = init();
     refreshed.active_color_index = active_color_index;
     refreshed.preferred_difficulty_index = preferred_difficulty_index;
     refreshed.p2_preferred_difficulty_index = p2_preferred_difficulty_index;
     refreshed.active_playlist_id = active_playlist_id;
+    refreshed.pending_audio = pending_audio;
+    refreshed.audio_playback = audio_playback;
 
     if sort_mode != WheelSortMode::Group {
         apply_wheel_sort(&mut refreshed, sort_mode);
@@ -5270,12 +5336,16 @@ fn refresh_after_style_switch(state: &mut State) {
     let active_color_index = state.active_color_index;
     let session_elapsed = state.session_elapsed;
     let gameplay_elapsed = state.gameplay_elapsed;
+    let pending_audio = std::mem::take(&mut state.pending_audio);
+    let audio_playback = state.audio_playback;
 
     let mut refreshed = init();
     refreshed.active_color_index = active_color_index;
     refreshed.active_playlist_id = active_playlist_id;
     refreshed.session_elapsed = session_elapsed;
     refreshed.gameplay_elapsed = gameplay_elapsed;
+    refreshed.pending_audio = pending_audio;
+    refreshed.audio_playback = audio_playback;
 
     if sort_mode != WheelSortMode::Group {
         apply_wheel_sort(&mut refreshed, sort_mode);
@@ -5289,7 +5359,7 @@ fn select_music_menu_move(state: &mut State, delta: isize) -> bool {
     if !move_select_music_menu(state, delta) {
         return false;
     }
-    audio::play_sfx("assets/sounds/change.ogg");
+    queue_sfx(state, "assets/sounds/change.ogg");
     true
 }
 
@@ -5457,32 +5527,34 @@ fn handle_lobby_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEffect
         return ThemeEffect::None;
     }
 
-    match lobby_overlay::handle_input(&mut state.lobby_overlay, ev) {
+    let outcome = lobby_overlay::handle_input(&mut state.lobby_overlay, ev);
+    queue_lobby_sounds(state);
+    match outcome {
         lobby_overlay::InputOutcome::None => {}
         lobby_overlay::InputOutcome::ChangedSelection => {
-            audio::play_sfx("assets/sounds/change.ogg");
+            queue_sfx(state, "assets/sounds/change.ogg");
         }
         lobby_overlay::InputOutcome::Closed => {
-            audio::play_sfx("assets/sounds/start.ogg");
+            queue_sfx(state, "assets/sounds/start.ogg");
         }
         lobby_overlay::InputOutcome::ConnectRequested
         | lobby_overlay::InputOutcome::SearchRequested => {
-            audio::play_sfx("assets/sounds/start.ogg");
+            queue_sfx(state, "assets/sounds/start.ogg");
             deadsync_online::lobbies::runtime_search_lobbies_default();
         }
         lobby_overlay::InputOutcome::CreateRequested(password) => {
-            audio::play_sfx("assets/sounds/start.ogg");
+            queue_sfx(state, "assets/sounds/start.ogg");
             deadsync_online::lobbies::runtime_create_lobby_with_password_default(password.as_str());
         }
         lobby_overlay::InputOutcome::JoinRequested { code, password } => {
-            audio::play_sfx("assets/sounds/start.ogg");
+            queue_sfx(state, "assets/sounds/start.ogg");
             deadsync_online::lobbies::runtime_join_lobby_with_password_default(
                 code.as_str(),
                 password.as_str(),
             );
         }
         lobby_overlay::InputOutcome::LeaveRequested => {
-            audio::play_sfx("assets/sounds/start.ogg");
+            queue_sfx(state, "assets/sounds/start.ogg");
             deadsync_online::lobbies::runtime_leave_lobby_default();
         }
     }
@@ -5494,32 +5566,34 @@ fn handle_lobby_overlay_raw_key(
     key: Option<&RawKeyboardEvent>,
     text: Option<&str>,
 ) -> ThemeEffect {
-    match lobby_overlay::handle_raw_key(&mut state.lobby_overlay, key, text) {
+    let outcome = lobby_overlay::handle_raw_key(&mut state.lobby_overlay, key, text);
+    queue_lobby_sounds(state);
+    match outcome {
         lobby_overlay::InputOutcome::None => {}
         lobby_overlay::InputOutcome::ChangedSelection => {
-            audio::play_sfx("assets/sounds/change.ogg");
+            queue_sfx(state, "assets/sounds/change.ogg");
         }
         lobby_overlay::InputOutcome::Closed => {
-            audio::play_sfx("assets/sounds/start.ogg");
+            queue_sfx(state, "assets/sounds/start.ogg");
         }
         lobby_overlay::InputOutcome::ConnectRequested
         | lobby_overlay::InputOutcome::SearchRequested => {
-            audio::play_sfx("assets/sounds/start.ogg");
+            queue_sfx(state, "assets/sounds/start.ogg");
             deadsync_online::lobbies::runtime_search_lobbies_default();
         }
         lobby_overlay::InputOutcome::CreateRequested(password) => {
-            audio::play_sfx("assets/sounds/start.ogg");
+            queue_sfx(state, "assets/sounds/start.ogg");
             deadsync_online::lobbies::runtime_create_lobby_with_password_default(password.as_str());
         }
         lobby_overlay::InputOutcome::JoinRequested { code, password } => {
-            audio::play_sfx("assets/sounds/start.ogg");
+            queue_sfx(state, "assets/sounds/start.ogg");
             deadsync_online::lobbies::runtime_join_lobby_with_password_default(
                 code.as_str(),
                 password.as_str(),
             );
         }
         lobby_overlay::InputOutcome::LeaveRequested => {
-            audio::play_sfx("assets/sounds/start.ogg");
+            queue_sfx(state, "assets/sounds/start.ogg");
             deadsync_online::lobbies::runtime_leave_lobby_default();
         }
     }
@@ -7090,10 +7164,10 @@ fn handle_manual_sync_overlay_input(state: &mut State, ev: &InputEvent) -> Theme
     }
 
     if play_change {
-        audio::play_sfx("assets/sounds/change.ogg");
+        queue_sfx(state, "assets/sounds/change.ogg");
     }
     if play_start {
-        audio::play_sfx("assets/sounds/start.ogg");
+        queue_sfx(state, "assets/sounds/start.ogg");
     }
     if close_overlay {
         hide_sync_overlay(state);
@@ -7258,13 +7332,13 @@ fn handle_null_or_die_overlay_input(state: &mut State, ev: &InputEvent) -> Theme
     }
 
     if play_change {
-        audio::play_sfx("assets/sounds/change.ogg");
+        queue_sfx(state, "assets/sounds/change.ogg");
     }
     if play_start {
-        audio::play_sfx("assets/sounds/start.ogg");
+        queue_sfx(state, "assets/sounds/start.ogg");
     }
     if play_unjoin {
-        audio::play_sfx("assets/sounds/unjoin.ogg");
+        queue_sfx(state, "assets/sounds/unjoin.ogg");
     }
     if close_overlay {
         hide_sync_overlay(state);
@@ -7330,10 +7404,10 @@ fn handle_leaderboard_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
 
     match select_music_menu::handle_leaderboard_input(&mut state.leaderboard, ev) {
         select_music_menu::LeaderboardInputOutcome::ChangedPane => {
-            audio::play_sfx("assets/sounds/change.ogg");
+            queue_sfx(state, "assets/sounds/change.ogg");
         }
         select_music_menu::LeaderboardInputOutcome::Closed => {
-            audio::play_sfx("assets/sounds/start.ogg");
+            queue_sfx(state, "assets/sounds/start.ogg");
         }
         select_music_menu::LeaderboardInputOutcome::None => {}
     }
@@ -7348,10 +7422,10 @@ fn handle_downloads_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEf
 
     match select_music_menu::handle_downloads_input(&mut state.downloads_overlay, ev) {
         select_music_menu::DownloadsInputOutcome::ChangedSelection => {
-            audio::play_sfx("assets/sounds/change.ogg");
+            queue_sfx(state, "assets/sounds/change.ogg");
         }
         select_music_menu::DownloadsInputOutcome::Closed => {
-            audio::play_sfx("assets/sounds/start.ogg");
+            queue_sfx(state, "assets/sounds/start.ogg");
         }
         select_music_menu::DownloadsInputOutcome::None => {}
     }
@@ -7366,17 +7440,17 @@ fn handle_replay_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEffec
 
     match select_music_menu::handle_replay_input(&mut state.replay_overlay, ev) {
         select_music_menu::ReplayInputOutcome::ChangedSelection => {
-            audio::play_sfx("assets/sounds/change.ogg");
+            queue_sfx(state, "assets/sounds/change.ogg");
             ThemeEffect::None
         }
         select_music_menu::ReplayInputOutcome::Closed => {
-            audio::play_sfx("assets/sounds/start.ogg");
+            queue_sfx(state, "assets/sounds/start.ogg");
             ThemeEffect::None
         }
         select_music_menu::ReplayInputOutcome::StartGameplay(payload) => {
             state.pending_replay = Some(payload);
             state.out_prompt = OutPromptState::None;
-            audio::play_sfx("assets/sounds/start.ogg");
+            queue_sfx(state, "assets/sounds/start.ogg");
             ThemeEffect::Navigate(Screen::Gameplay)
         }
         select_music_menu::ReplayInputOutcome::None => ThemeEffect::None,
@@ -7449,7 +7523,6 @@ fn handle_profile_switch_overlay_input(state: &mut State, ev: &InputEvent) -> Th
         ProfileBoxEffectOutcome::Selected => {
             state.profile_switch_overlay = None;
             state.profile_switch_overlay_is_late_join = false;
-            profile::set_fast_profile_switch_from_select_music(true);
             effect
         }
         ProfileBoxEffectOutcome::Cancelled => {
@@ -7462,7 +7535,7 @@ fn handle_profile_switch_overlay_input(state: &mut State, ev: &InputEvent) -> Th
                 // to restore — the overlay was opened directly from a Start
                 // press, not from the quick menu.
                 cancel_late_join_session();
-                audio::play_sfx("assets/sounds/unjoin.ogg");
+                queue_sfx(state, "assets/sounds/unjoin.ogg");
             } else {
                 restore_select_music_menu_after_profile_overlay(state);
             }
@@ -7492,7 +7565,7 @@ fn handle_test_input_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeE
     };
     if ev.pressed && close_side.is_some_and(profile::is_session_side_joined) {
         hide_test_input_overlay(state);
-        audio::play_sfx("assets/sounds/start.ogg");
+        queue_sfx(state, "assets/sounds/start.ogg");
     }
     ThemeEffect::None
 }
@@ -7510,7 +7583,7 @@ fn handle_pad_config_overlay_input(state: &mut State, ev: &InputEvent, fine: boo
             };
             if close_side.is_some_and(profile::is_session_side_joined) {
                 hide_pad_config_overlay(state);
-                audio::play_sfx("assets/sounds/start.ogg");
+                queue_sfx(state, "assets/sounds/start.ogg");
             }
         }
         pad_config::EditResult::SaveRequested => perform_pad_profile_save(state),
@@ -7691,7 +7764,7 @@ fn perform_pad_profile_save(state: &mut State) {
         // The rename changed a name the sibling pad (same profile, e.g. Doubles)
         // also lists; refresh its cached copy so it doesn't show the stale name.
         refresh_sibling_pad_list(state, slot, &profile_id, false);
-        audio::play_sfx("assets/sounds/start.ogg");
+        queue_sfx(state, "assets/sounds/start.ogg");
         return;
     }
     // Save new: capture the pad's live tuning under the given name, tagged with
@@ -7726,7 +7799,7 @@ fn perform_pad_profile_save(state: &mut State) {
     // The sibling pad (same profile, e.g. Doubles) caches its own copy of the list;
     // refresh it so the new config shows there too without another edit.
     refresh_sibling_pad_list(state, slot, &profile_id, false);
-    audio::play_sfx("assets/sounds/start.ogg");
+    queue_sfx(state, "assets/sounds/start.ogg");
 }
 
 /// Resolve the profiles-list cursor to `(profile_id, config_name, smx_slot)` for
@@ -7755,7 +7828,7 @@ fn perform_pad_profile_apply(state: &mut State) {
                 name: name.clone(),
             },
         });
-        audio::play_sfx("assets/sounds/start.ogg");
+        queue_sfx(state, "assets/sounds/start.ogg");
     }
 }
 
@@ -7786,7 +7859,7 @@ fn perform_pad_profile_overwrite(state: &mut State) {
     state
         .pad_config_intents
         .push(PadConfigIntent::Invalidate { pad: slot });
-    audio::play_sfx("assets/sounds/start.ogg");
+    queue_sfx(state, "assets/sounds/start.ogg");
 }
 
 fn perform_pad_profile_set_default(state: &mut State) {
@@ -7799,7 +7872,7 @@ fn perform_pad_profile_set_default(state: &mut State) {
         state
             .pad_config_intents
             .push(PadConfigIntent::Invalidate { pad: slot });
-        audio::play_sfx("assets/sounds/start.ogg");
+        queue_sfx(state, "assets/sounds/start.ogg");
     }
 }
 
@@ -7814,7 +7887,7 @@ fn perform_pad_profile_delete(state: &mut State) {
         // The delete removes the config for every pad sharing this profile; the
         // sibling (e.g. Doubles) re-resolves too in case it was that pad's default.
         refresh_sibling_pad_list(state, slot, &profile_id, true);
-        audio::play_sfx("assets/sounds/start.ogg");
+        queue_sfx(state, "assets/sounds/start.ogg");
     }
 }
 
@@ -7848,7 +7921,7 @@ fn handle_select_music_menu_input(state: &mut State, ev: &InputEvent) -> ThemeEf
             ThemeEffect::None
         }
         select_music_menu::InputOutcome::Moved => {
-            audio::play_sfx("assets/sounds/change.ogg");
+            queue_sfx(state, "assets/sounds/change.ogg");
             if let Some(dir) = dir {
                 start_overlay_nav_hold(state, dir);
             }
@@ -7874,15 +7947,15 @@ fn handle_select_music_menu_input(state: &mut State, ev: &InputEvent) -> ThemeEf
                 menu_state.last_move_dir = 0;
                 menu_state.focus_anim_elapsed = select_music_menu::FOCUS_TWEEN_SECONDS;
             }
-            audio::play_sfx("assets/sounds/start.ogg");
+            queue_sfx(state, "assets/sounds/start.ogg");
             ThemeEffect::None
         }
         select_music_menu::InputOutcome::ActivateAction(action, side) => {
-            audio::play_sfx("assets/sounds/start.ogg");
+            queue_sfx(state, "assets/sounds/start.ogg");
             dispatch_menu_action(state, action, side)
         }
         select_music_menu::InputOutcome::Close => {
-            audio::play_sfx("assets/sounds/start.ogg");
+            queue_sfx(state, "assets/sounds/start.ogg");
             hide_select_music_menu(state);
             ThemeEffect::None
         }
@@ -7999,11 +8072,14 @@ fn dispatch_menu_action(
                         let is_now_fav = profile::toggle_favorite(side, &chart.short_hash);
                         state.favorites_entries =
                             build_favorites_view_entries(&state.group_entries);
-                        audio::play_sfx(if is_now_fav {
-                            "assets/sounds/start.ogg"
-                        } else {
-                            "assets/sounds/start.ogg"
-                        });
+                        queue_sfx(
+                            state,
+                            if is_now_fav {
+                                "assets/sounds/start.ogg"
+                            } else {
+                                "assets/sounds/start.ogg"
+                            },
+                        );
                     }
                 }
                 Some(entry @ MusicWheelEntry::PackHeader { .. }) => {
@@ -8011,11 +8087,14 @@ fn dispatch_menu_action(
                         let is_now_fav = profile::toggle_pack_favorite(side, pack_key);
                         state.favorites_entries =
                             build_favorites_view_entries(&state.group_entries);
-                        audio::play_sfx(if is_now_fav {
-                            "assets/sounds/start.ogg"
-                        } else {
-                            "assets/sounds/start.ogg"
-                        });
+                        queue_sfx(
+                            state,
+                            if is_now_fav {
+                                "assets/sounds/start.ogg"
+                            } else {
+                                "assets/sounds/start.ogg"
+                            },
+                        );
                     }
                 }
                 None => {}
@@ -8051,7 +8130,7 @@ fn dispatch_menu_action(
         } => {
             hide_select_music_menu(state);
             if apply_pad_profile_recall(state, p2, preset, &name) {
-                audio::play_sfx("assets/sounds/start.ogg");
+                queue_sfx(state, "assets/sounds/start.ogg");
             }
             ThemeEffect::None
         }
@@ -8244,6 +8323,17 @@ pub fn handle_pad_dir(
     pressed: bool,
     timestamp: Instant,
 ) -> ThemeEffect {
+    let effect = handle_pad_dir_impl(state, side, dir, pressed, timestamp);
+    prepend_pending_audio(state, effect)
+}
+
+fn handle_pad_dir_impl(
+    state: &mut State,
+    side: profile_data::PlayerSide,
+    dir: PadDir,
+    pressed: bool,
+    timestamp: Instant,
+) -> ThemeEffect {
     let exit_code_entered =
         pressed && wheel_lr_dir(dir).is_some_and(|dir| state.exit_code.check(side, dir, timestamp));
 
@@ -8341,11 +8431,14 @@ pub fn handle_pad_dir(
                             if new_idx < STANDARD_DIFFICULTY_COUNT {
                                 state.preferred_difficulty_index = new_idx;
                             }
-                            audio::play_sfx(if is_up {
-                                "assets/sounds/easier.ogg"
-                            } else {
-                                "assets/sounds/harder.ogg"
-                            });
+                            queue_sfx(
+                                state,
+                                if is_up {
+                                    "assets/sounds/easier.ogg"
+                                } else {
+                                    "assets/sounds/harder.ogg"
+                                },
+                            );
                         }
 
                         state.last_steps_nav_dir_p1 = None;
@@ -8476,11 +8569,14 @@ fn handle_pad_dir_p2(
                         new_idx,
                     );
                     state.step_artist_cycle_base = state.session_elapsed;
-                    audio::play_sfx(if is_up {
-                        "assets/sounds/easier.ogg"
-                    } else {
-                        "assets/sounds/harder.ogg"
-                    });
+                    queue_sfx(
+                        state,
+                        if is_up {
+                            "assets/sounds/easier.ogg"
+                        } else {
+                            "assets/sounds/harder.ogg"
+                        },
+                    );
                 }
 
                 state.last_steps_nav_dir_p2 = None;
@@ -8524,18 +8620,23 @@ fn handle_pad_dir_p2(
 }
 
 pub fn handle_confirm(state: &mut State) -> ThemeEffect {
+    let effect = handle_confirm_impl(state);
+    prepend_pending_audio(state, effect)
+}
+
+fn handle_confirm_impl(state: &mut State) -> ThemeEffect {
     clear_nav_hold(state);
     if state.out_prompt != OutPromptState::None {
         return ThemeEffect::None;
     }
     if state.entries.is_empty() {
-        audio::play_sfx("assets/sounds/expand.ogg");
+        queue_sfx(state, "assets/sounds/expand.ogg");
         return ThemeEffect::None;
     }
     match state.entries.get(state.selected_index).cloned() {
         Some(MusicWheelEntry::Song(song)) => {
             publish_lobby_confirmed_song_selection(state);
-            audio::play_sfx("assets/sounds/start.ogg");
+            queue_sfx(state, "assets/sounds/start.ogg");
             // ITGmania parity: force sample preview to start on selection finalize.
             let cfg = config::get();
             if cfg.show_select_music_previews && !state.preview_music_muted {
@@ -8550,7 +8651,7 @@ pub fn handle_confirm(state: &mut State) -> ThemeEffect {
             ThemeEffect::None
         }
         Some(MusicWheelEntry::PackHeader { name, .. }) => {
-            audio::play_sfx("assets/sounds/expand.ogg");
+            queue_sfx(state, "assets/sounds/expand.ogg");
             let target = name.clone();
             if config::get().select_music_new_pack_mode == NewPackMode::OpenPack
                 && state.new_pack_names.remove(&target)
@@ -8674,7 +8775,8 @@ pub fn handle_raw_key_event(
     key: Option<&RawKeyboardEvent>,
     text: Option<&str>,
 ) -> ThemeEffect {
-    handle_raw_key_event_impl(state, key, text, false, false)
+    let effect = handle_raw_key_event_impl(state, key, text, false, false);
+    prepend_pending_audio(state, effect)
 }
 
 pub fn handle_raw_key_event_with_modifiers(
@@ -8684,7 +8786,8 @@ pub fn handle_raw_key_event_with_modifiers(
     ctrl_held: bool,
     shift_held: bool,
 ) -> ThemeEffect {
-    handle_raw_key_event_impl(state, key, text, ctrl_held, shift_held)
+    let effect = handle_raw_key_event_impl(state, key, text, ctrl_held, shift_held);
+    prepend_pending_audio(state, effect)
 }
 
 fn handle_raw_key_event_impl(
@@ -8938,6 +9041,11 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
 }
 
 pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ThemeEffect {
+    let effect = handle_input_impl(state, ev, fine);
+    prepend_pending_audio(state, effect)
+}
+
+fn handle_input_impl(state: &mut State, ev: &InputEvent, fine: bool) -> ThemeEffect {
     update_select_hold_state(state, ev);
 
     // The Configure Pads overlay is a focused modal: handle its input first, so
@@ -8959,7 +9067,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ThemeEffe
                 OutPromptState::PressStartForOptions { .. }
             )
         {
-            audio::play_sfx("assets/sounds/start.ogg");
+            queue_sfx(state, "assets/sounds/start.ogg");
             state.out_prompt = OutPromptState::EnteringOptions { elapsed: 0.0 };
         }
         return ThemeEffect::None;
@@ -9259,6 +9367,11 @@ pub fn handle_input(state: &mut State, ev: &InputEvent, fine: bool) -> ThemeEffe
 }
 
 pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
+    let effect = update_impl(state, dt);
+    prepend_pending_audio(state, effect)
+}
+
+fn update_impl(state: &mut State, dt: f32) -> ThemeEffect {
     deadsync_online::lobbies::runtime_poll_reconnect_default();
 
     let lobby_locked = select_music_lobby_lock_text(state).is_some();
@@ -9307,6 +9420,7 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
         return ThemeEffect::None;
     }
     lobby_overlay::update_overlay(&mut state.lobby_overlay, dt);
+    queue_lobby_sounds(state);
     if pack_sync::poll(state) {
         return ThemeEffect::None;
     }
@@ -9314,7 +9428,7 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
         poll_null_or_die_overlay(overlay);
         let outcome = tick_sync_song_hold(overlay);
         if outcome.play_hold_sfx {
-            audio::play_sfx("assets/sounds/change.ogg");
+            queue_sfx(state, "assets/sounds/change.ogg");
         }
         return ThemeEffect::None;
     }
@@ -9407,7 +9521,7 @@ pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
     }
 
     if state.selected_index != state.prev_selected_index {
-        audio::play_sfx("assets/sounds/change.ogg");
+        queue_sfx(state, "assets/sounds/change.ogg");
         state.prev_selected_index = state.selected_index;
         state.time_since_selection_change = 0.0;
         state.step_artist_cycle_base = state.session_elapsed;
@@ -11872,7 +11986,7 @@ fn handle_exit_prompt_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
             *active_choice = 1 - prev;
             *switch_from = Some(prev);
             *switch_elapsed = 0.0;
-            audio::play_sfx("assets/sounds/change.ogg");
+            queue_sfx(state, "assets/sounds/change.ogg");
             ThemeEffect::None
         }
 
@@ -11880,13 +11994,13 @@ fn handle_exit_prompt_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         | VirtualAction::p2_back
         | VirtualAction::p1_select
         | VirtualAction::p2_select => {
-            audio::play_sfx("assets/sounds/start.ogg");
+            queue_sfx(state, "assets/sounds/start.ogg");
             state.exit_prompt = ExitPromptState::None;
             ThemeEffect::None
         }
 
         VirtualAction::p1_start | VirtualAction::p2_start => {
-            audio::play_sfx("assets/sounds/start.ogg");
+            queue_sfx(state, "assets/sounds/start.ogg");
             state.exit_prompt = ExitPromptState::None;
             if active_choice == 1 {
                 ThemeEffect::Navigate(Screen::Menu)
@@ -11906,22 +12020,22 @@ mod tests {
         build_playlist_entries_from_text, build_playlist_song_lookup,
         delayed_selection_updates_blocked, first_song_entry_index, handle_raw_key_event,
         init_placeholder, keymap_has_player_input, maybe_prewarm_replaygain_for_pack,
-        prepend_pending_effect, reset_preview_after_gameplay, route_profile_box_effect,
-        select_music_lobby_lock_text, select_music_lobby_lock_text_for, solo_runtime_side,
-        steps_index_for_side, sync_low_confidence_warning,
+        prepend_pending_effect, profile_boxes, reset_preview_after_gameplay,
+        route_profile_box_effect, select_music_lobby_lock_text, select_music_lobby_lock_text_for,
+        solo_runtime_side, steps_index_for_side, sync_low_confidence_warning,
     };
     use crate::config::SelectMusicWheelStyle;
     use crate::screens::ThemeEffect;
     use deadsync_chart::SongData;
     use deadsync_core::input::InputSource;
-    use deadsync_input::RawKeyboardEvent;
-    use deadsync_input::{InputBinding, InputEvent, Keymap, PadDir, VirtualAction};
+    use deadsync_input::{
+        InputBinding, InputEvent, KeyCode, Keymap, PadDir, RawKeyboardEvent, VirtualAction,
+    };
     use deadsync_online::lobbies as lobby_data;
     use deadsync_profile as profile_data;
     use std::path::PathBuf;
     use std::sync::Arc;
     use std::time::{Duration, Instant};
-    use winit::keyboard::KeyCode;
 
     struct JoinedSidesGuard {
         p1: bool,
@@ -12017,6 +12131,21 @@ mod tests {
         }
     }
 
+    fn assert_stop_then_consume(effect: ThemeEffect) {
+        let ThemeEffect::Batch(effects) = effect else {
+            panic!("expected stop-music request before consumed input");
+        };
+        assert!(matches!(
+            effects.as_slice(),
+            [
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                    deadsync_theme::AudioRequest::StopMusic
+                )),
+                ThemeEffect::ConsumeInput,
+            ]
+        ));
+    }
+
     #[test]
     fn embedded_profile_consumer_preserves_sound_before_selection() {
         let effect = ThemeEffect::Batch(vec![
@@ -12027,6 +12156,7 @@ mod tests {
                     p2: profile_data::ActiveProfile::Guest,
                     p1_joined: true,
                     p2_joined: false,
+                    fast_switch: true,
                 },
             )),
         ]);
@@ -12045,7 +12175,10 @@ mod tests {
         assert!(matches!(
             &effects[1],
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
-                crate::SimplyLoveProfileRequest::Select { .. }
+                crate::SimplyLoveProfileRequest::Select {
+                    fast_switch: true,
+                    ..
+                }
             ))
         ));
     }
@@ -12062,6 +12195,52 @@ mod tests {
                 deadsync_theme::AudioRequest::PlaySfx(path)
             )) if path == "assets/sounds/expand.ogg"
         ));
+    }
+
+    #[test]
+    fn late_join_profile_selection_emits_fast_request() {
+        let joining_side = profile_data::PlayerSide::P2;
+        let mut overlay = profile_boxes::init_late_join(joining_side);
+        profile_boxes::set_fast_switch(&mut overlay, true);
+        profile_boxes::enter_late_join(&mut overlay, joining_side);
+
+        let (outcome, ThemeEffect::Batch(effects)) =
+            route_profile_box_effect(profile_boxes::handle_input(
+                &mut overlay,
+                &input_event(VirtualAction::p2_start, InputSource::Keyboard, true),
+            ))
+        else {
+            panic!("late-join confirmation should remain an ordered effect batch");
+        };
+        assert_eq!(outcome, ProfileBoxEffectOutcome::Selected);
+        assert!(matches!(
+            &effects[1],
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+                crate::SimplyLoveProfileRequest::Select {
+                    p1_joined: true,
+                    p2_joined: true,
+                    fast_switch: true,
+                    ..
+                }
+            ))
+        ));
+    }
+
+    #[test]
+    fn opening_late_join_returns_its_preview_stop_request() {
+        let mut state = init_placeholder();
+
+        let effect =
+            super::open_late_join_profile_overlay(&mut state, profile_data::PlayerSide::P2);
+
+        assert!(matches!(
+            effect,
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                deadsync_theme::AudioRequest::StopMusic
+            ))
+        ));
+        assert!(state.pending_audio.is_empty());
+        assert!(state.profile_switch_overlay.is_some());
     }
 
     fn test_song(title: &str) -> Arc<SongData> {
@@ -12214,6 +12393,83 @@ mod tests {
     }
 
     #[test]
+    fn queued_audio_preserves_sfx_play_stop_and_follow_up_order() {
+        let mut state = init_placeholder();
+        super::queue_sfx(&mut state, "assets/sounds/change.ogg");
+        let mut song = (*test_song("Preview Song")).clone();
+        song.music_path = Some(PathBuf::from("Pack/Preview Song/music.ogg"));
+        song.sample_start = Some(3.0);
+        song.sample_length = Some(12.0);
+        song.music_length_seconds = 60.0;
+        let song = Arc::new(song);
+        super::sync_preview_song(&mut state, Some(&song), true, true);
+        super::clear_preview(&mut state);
+        let later = ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
+            crate::SimplyLoveMediaRequest::Banner(None),
+        ));
+
+        let ThemeEffect::Batch(effects) = super::prepend_pending_audio(&mut state, later) else {
+            panic!("queued audio and later work should be batched");
+        };
+        assert!(matches!(
+            &effects[0],
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                deadsync_theme::AudioRequest::PlaySfx(path)
+            )) if path == "assets/sounds/change.ogg"
+        ));
+        assert!(matches!(
+            &effects[1],
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                deadsync_theme::AudioRequest::PlayMusic {
+                    path,
+                    cut,
+                    looping: true,
+                    rate,
+                }
+            )) if path == &PathBuf::from("Pack/Preview Song/music.ogg")
+                && (cut.start_sec - 3.0).abs() <= f64::EPSILON
+                && (cut.length_sec - 12.0).abs() <= f64::EPSILON
+                && rate.is_finite()
+                && *rate > 0.0
+        ));
+        assert!(matches!(
+            effects[2],
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                deadsync_theme::AudioRequest::StopMusic
+            ))
+        ));
+        assert!(matches!(
+            effects[3],
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
+                crate::SimplyLoveMediaRequest::Banner(None)
+            ))
+        ));
+        assert!(state.pending_audio.is_empty());
+    }
+
+    #[test]
+    fn preview_time_uses_the_shell_prepared_audio_view() {
+        let mut state = init_placeholder();
+        state.currently_playing_preview_start_sec = Some(10.0);
+        state.currently_playing_preview_length_sec = Some(8.0);
+        super::sync_audio_playback_view(
+            &mut state,
+            deadsync_theme::views::AudioPlaybackView {
+                music_stream_position_seconds: 2.5,
+            },
+        );
+        let rate = deadsync_profile::compat::get_session_music_rate();
+        let rate = f64::from(if rate.is_finite() && rate > 0.0 {
+            rate
+        } else {
+            1.0
+        });
+
+        let expected = 10.0 + (2.5 * rate).rem_euclid(8.0);
+        assert_eq!(super::preview_song_sec(&state), Some(expected));
+    }
+
+    #[test]
     fn sibling_refresh_intent_targets_other_slot_when_profile_matches() {
         use super::{PadConfigIntent, sibling_refresh_intent};
         // Same profile + connected sibling: save/rename (reresolve=false) refreshes
@@ -12278,11 +12534,19 @@ mod tests {
 
         let action = super::update(&mut state, 0.016);
 
+        let ThemeEffect::Batch(effects) = action else {
+            panic!("stale preview stop should precede the banner request");
+        };
         assert!(matches!(
-            action,
-            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
-                crate::SimplyLoveMediaRequest::Banner(Some(_))
-            ))
+            effects.as_slice(),
+            [
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                    deadsync_theme::AudioRequest::StopMusic
+                )),
+                ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
+                    crate::SimplyLoveMediaRequest::Banner(Some(_))
+                )),
+            ]
         ));
         assert_eq!(state.currently_playing_preview_path, None);
         assert_eq!(state.currently_playing_preview_start_sec, None);
@@ -12704,7 +12968,7 @@ mod tests {
         let action =
             handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyM, true, false)), None);
 
-        assert!(matches!(action, ThemeEffect::ConsumeInput));
+        assert_stop_then_consume(action);
         assert!(state.preview_music_muted);
         assert_eq!(state.currently_playing_preview_path, None);
         assert_eq!(state.currently_playing_preview_start_sec, None);
@@ -12749,7 +13013,7 @@ mod tests {
             let action =
                 handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyM, true, false)), None);
 
-            assert!(matches!(action, ThemeEffect::ConsumeInput));
+            assert_stop_then_consume(action);
             assert!(state.preview_music_muted);
             assert_eq!(state.currently_playing_preview_path, None);
             assert_eq!(state.currently_playing_preview_start_sec, None);
@@ -12792,7 +13056,7 @@ mod tests {
         let mut state = init_placeholder();
         let action =
             handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyS, true, false)), None);
-        assert!(matches!(action, ThemeEffect::ConsumeInput));
+        assert_stop_then_consume(action);
         assert!(!matches!(
             state.song_search,
             super::select_music_menu::SongSearchState::Hidden
@@ -12804,7 +13068,7 @@ mod tests {
         let mut state = init_placeholder();
         let action =
             handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyS, true, false)), None);
-        assert!(matches!(action, ThemeEffect::ConsumeInput));
+        assert_stop_then_consume(action);
 
         let action = handle_raw_key_event(&mut state, None, Some("s"));
         assert!(matches!(action, ThemeEffect::None));
@@ -12959,7 +13223,7 @@ mod tests {
         let mut state = init_placeholder();
         let action =
             handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyT, true, false)), None);
-        assert!(matches!(action, ThemeEffect::ConsumeInput));
+        assert_stop_then_consume(action);
         assert!(state.test_input_overlay_visible);
     }
 

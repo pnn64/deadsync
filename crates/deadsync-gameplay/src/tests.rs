@@ -2981,6 +2981,10 @@ mod tests {
             GameplayAudioCommand::StopMusic
         );
         assert_eq!(
+            GameplayAudioCommand::SetMusicRate(1.5),
+            GameplayAudioCommand::SetMusicRate(1.5)
+        );
+        assert_eq!(
             GameplayAudioCommand::PlayPreloadedAssistTick("assets/sounds/assist_tick.ogg"),
             GameplayAudioCommand::PlayPreloadedAssistTick("assets/sounds/assist_tick.ogg")
         );
@@ -2988,8 +2992,9 @@ mod tests {
 
     #[test]
     fn gameplay_command_queue_drains_audio_and_session_commands() {
-        let mut queue = GameplayCommandQueue::with_capacity(2, 1);
+        let mut queue = GameplayCommandQueue::with_capacity(3, 1);
         queue.push_audio(GameplayAudioCommand::StopMusic);
+        queue.push_audio(GameplayAudioCommand::SetMusicRate(1.25));
         queue.push_audio(GameplayAudioCommand::PlayPreloadedAssistTick(
             "assets/sounds/assist_tick.ogg",
         ));
@@ -3001,6 +3006,7 @@ mod tests {
             queue.drain_audio().collect::<Vec<_>>(),
             vec![
                 GameplayAudioCommand::StopMusic,
+                GameplayAudioCommand::SetMusicRate(1.25),
                 GameplayAudioCommand::PlayPreloadedAssistTick("assets/sounds/assist_tick.ogg"),
             ]
         );
@@ -13916,6 +13922,8 @@ mod tests {
             final_grade: JudgeGrade::Great,
         });
         assert!(completed_row_hides_note(&row_entries, &row_map_cache, 48));
+        let visibility = CompletedRowVisibility::new(&row_entries, &row_map_cache);
+        assert!(visibility.hides_note(48));
 
         row_entries[0].final_outcome = Some(FinalizedRowOutcome {
             final_grade: JudgeGrade::Decent,

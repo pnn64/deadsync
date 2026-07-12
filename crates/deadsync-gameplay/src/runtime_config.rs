@@ -887,6 +887,7 @@ impl Default for GameplayMusicCut {
 #[derive(Clone, Debug, PartialEq)]
 pub enum GameplayAudioCommand {
     StopMusic,
+    SetMusicRate(f32),
     PlayMusic {
         path: PathBuf,
         cut: GameplayMusicCut,
@@ -941,4 +942,3 @@ impl GameplayCommandQueue {
         self.session.drain(..)
     }
 }
-

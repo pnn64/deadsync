@@ -37,7 +37,7 @@ struct NoteGlowRequest<'a, S> {
 
 /// Canonical inputs for one complete noteskin layer, including its diffuse and
 /// white ITG Actor glow passes.
-pub struct NoteLayerRequest<'a, S> {
+pub(crate) struct NoteLayerRequest<'a, S> {
     pub slot: &'a S,
     pub draw: ModelDrawState,
     pub model_center: [f32; 2],
@@ -57,7 +57,7 @@ pub struct NoteLayerRequest<'a, S> {
 
 /// Renderer-neutral inputs for one mine's fill-gradient/core/frame sequence.
 /// Slot lookup and size calculation remain owned by the concrete theme adapter.
-pub struct MineLayerRequest<'a, S> {
+pub(crate) struct MineLayerRequest<'a, S> {
     pub fill_slot: Option<&'a S>,
     pub gradient_slot: Option<&'a S>,
     pub frame_slot: Option<&'a S>,
@@ -85,7 +85,7 @@ struct MineSlotPass<'a, S> {
 }
 
 /// Appends a mine's gradient-or-fill actors followed by its frame actors.
-pub fn compose_mine_layers<S, F, Z>(
+pub(crate) fn compose_mine_layers<S, F, Z>(
     actors: &mut Vec<Actor>,
     model_cache: &mut ModelMeshCache,
     request: MineLayerRequest<'_, S>,
@@ -238,7 +238,7 @@ fn compose_mine_slot<S, F, Z>(
 /// Appends one note layer's diffuse pass followed by its optional glow pass.
 /// Concrete asset owners inject the sprite source so cached texture handles
 /// remain outside the canonical notefield crate.
-pub fn compose_note_layer<S, F>(
+pub(crate) fn compose_note_layer<S, F>(
     actors: &mut Vec<Actor>,
     model_cache: &mut ModelMeshCache,
     request: NoteLayerRequest<'_, S>,
@@ -621,7 +621,7 @@ pub(crate) fn lane_hold_window_bounds_by_note_row(
     Some((start, end))
 }
 
-pub fn for_each_visible_note_index<F: FnMut(usize)>(
+pub(crate) fn for_each_visible_note_index<F: FnMut(usize)>(
     indices: &[usize],
     notes: &[Note],
     range: Option<(i32, i32)>,
@@ -642,7 +642,7 @@ pub fn for_each_visible_note_index<F: FnMut(usize)>(
     }
 }
 
-pub fn for_each_visible_hold_index<F: FnMut(usize)>(
+pub(crate) fn for_each_visible_hold_index<F: FnMut(usize)>(
     indices: &[usize],
     notes: &[Note],
     range: Option<(i32, i32)>,
@@ -663,7 +663,7 @@ pub fn for_each_visible_hold_index<F: FnMut(usize)>(
     }
 }
 
-pub fn hold_overlaps_visible_window(
+pub(crate) fn hold_overlaps_visible_window(
     note_index: usize,
     notes: &[Note],
     range: Option<(i32, i32)>,

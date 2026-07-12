@@ -2,11 +2,11 @@ use crate::act;
 use crate::assets::{FontRole, current_machine_font_key};
 use deadlib_present::actors::Actor;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
+use deadsync_input::KeyCode;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, PadDir, PadEvent, VirtualAction, with_keymap};
 use std::collections::{HashMap, VecDeque};
 use std::time::Instant;
-use winit::keyboard::KeyCode;
 
 const UNMAPPED_AXIS_HELD_THRESHOLD: f32 = 0.5;
 const SORT_MENU_DIM_ALPHA: f32 = 0.875;

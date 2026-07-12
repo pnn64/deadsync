@@ -1,4 +1,4 @@
-﻿#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FinalizedRowOutcome {
     pub final_grade: JudgeGrade,
 }
@@ -315,13 +315,39 @@ pub fn finalized_row_outcome_for_cached_row(
 }
 
 #[inline(always)]
-pub fn completed_row_hides_note(
+pub(crate) fn completed_row_hides_note(
     row_entries: &[RowEntry],
     row_map_cache: &[u32],
     row_index: usize,
 ) -> bool {
     finalized_row_outcome_for_cached_row(row_entries, row_map_cache, row_index)
         .is_some_and(|outcome| row_final_grade_hides_note(outcome.final_grade))
+}
+
+/// Allocation-free read view of one player's finalized chart rows.
+///
+/// Presentation code uses this snapshot to decide whether a resolved tap note
+/// remains visible without depending on `GameplayRuntime` or copying a
+/// per-frame row mask.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CompletedRowVisibility<'a> {
+    row_entries: &'a [RowEntry],
+    row_map_cache: &'a [u32],
+}
+
+impl<'a> CompletedRowVisibility<'a> {
+    #[inline(always)]
+    pub const fn new(row_entries: &'a [RowEntry], row_map_cache: &'a [u32]) -> Self {
+        Self {
+            row_entries,
+            row_map_cache,
+        }
+    }
+
+    #[inline(always)]
+    pub fn hides_note(self, row_index: usize) -> bool {
+        completed_row_hides_note(self.row_entries, self.row_map_cache, row_index)
+    }
 }
 
 #[inline(always)]
@@ -791,4 +817,3 @@ fn note_counts_for_simultaneous_limit(note: &Note) -> bool {
         NoteType::Mine | NoteType::Fake => false,
     }
 }
-

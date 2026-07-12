@@ -23,6 +23,11 @@ pub fn set_joined(state: &mut State, p1_joined: bool, p2_joined: bool) {
 }
 
 #[inline(always)]
+pub fn set_fast_switch(state: &mut State, enabled: bool) {
+    profile_boxes::set_fast_switch(state, enabled);
+}
+
+#[inline(always)]
 pub fn enter_late_join(state: &mut State, joining_side: profile_data::PlayerSide) {
     profile_boxes::enter_late_join(state, joining_side);
 }
@@ -110,9 +115,47 @@ mod tests {
                 SimplyLoveProfileRequest::Select {
                     p1_joined: true,
                     p2_joined: false,
+                    fast_switch: false,
                     ..
                 }
             ))
+        ));
+    }
+
+    #[test]
+    fn fast_switch_is_explicit_in_selection_and_cancel_effects() {
+        let mut state = init();
+        set_fast_switch(&mut state, true);
+        set_joined(&mut state, true, false);
+
+        let ThemeEffect::Batch(effects) =
+            handle_input(&mut state, &press(deadsync_input::VirtualAction::p1_start))
+        else {
+            panic!("profile confirmation should return an ordered effect batch");
+        };
+        assert!(matches!(
+            &effects[1],
+            ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Profile(
+                SimplyLoveProfileRequest::Select {
+                    fast_switch: true,
+                    ..
+                }
+            ))
+        ));
+
+        let mut state = init();
+        set_fast_switch(&mut state, true);
+        set_joined(&mut state, false, false);
+        assert!(matches!(
+            handle_input(&mut state, &press(deadsync_input::VirtualAction::p1_back)),
+            ThemeEffect::Navigate(crate::screens::Screen::SelectMusic)
+        ));
+
+        let mut state = init();
+        set_joined(&mut state, false, false);
+        assert!(matches!(
+            handle_input(&mut state, &press(deadsync_input::VirtualAction::p1_back)),
+            ThemeEffect::Navigate(crate::screens::Screen::Menu)
         ));
     }
 }

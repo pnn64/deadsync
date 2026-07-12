@@ -25,6 +25,7 @@ pub enum SimplyLoveProfileRequest {
         p2: ActiveProfile,
         p1_joined: bool,
         p2_joined: bool,
+        fast_switch: bool,
     },
     PickImportFolder {
         title: String,

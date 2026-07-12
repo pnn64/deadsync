@@ -226,11 +226,11 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
         if state.pane().selected_row[player_idx] == state.pane().prev_selected_row[player_idx] {
             continue;
         }
-        match state.nav_input[player_idx].held_direction {
-            Some(NavDirection::Up) => audio::play_sfx("assets/sounds/prev_row.ogg"),
-            Some(NavDirection::Down) => audio::play_sfx("assets/sounds/next_row.ogg"),
-            _ => audio::play_sfx("assets/sounds/next_row.ogg"),
-        }
+        let sound = match state.nav_input[player_idx].held_direction {
+            Some(NavDirection::Up) => PREV_ROW_SFX,
+            _ => NEXT_ROW_SFX,
+        };
+        queue_sfx(state, sound);
 
         state.help_anim_time[player_idx] = 0.0;
         state.pane_mut().prev_selected_row[player_idx] = state.pane().selected_row[player_idx];
@@ -284,7 +284,10 @@ pub fn update(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Optio
         }
     }
 
-    pending_action
+    match prepend_pending_audio(state, pending_action.unwrap_or(ThemeEffect::None)) {
+        ThemeEffect::None => None,
+        effect => Some(effect),
+    }
 }
 
 pub fn on_nav_press(state: &mut State, player_idx: usize, dir: NavDirection) {
@@ -514,7 +517,7 @@ pub(super) fn move_arcade_horizontal_focus(
         }
         state.pane_mut().arcade_row_focus[idx] = false;
         if current_choice == 0 {
-            audio::play_sfx("assets/sounds/change_value.ogg");
+            queue_sfx(state, CHANGE_VALUE_SFX);
         } else {
             change_choice_for_player(
                 state,
@@ -529,7 +532,7 @@ pub(super) fn move_arcade_horizontal_focus(
     if delta < 0 {
         if current_choice == 0 {
             state.pane_mut().arcade_row_focus[idx] = true;
-            audio::play_sfx("assets/sounds/change_value.ogg");
+            queue_sfx(state, CHANGE_VALUE_SFX);
             return true;
         }
         change_choice_for_player(state, asset_manager, idx, -1, NavWrap::Wrap);
@@ -563,7 +566,7 @@ pub(super) fn handle_arcade_prev_event(
         NavWrap::Wrap,
     );
     if state.pane().selected_row[idx] != prev_row {
-        audio::play_sfx("assets/sounds/prev_row.ogg");
+        queue_sfx(state, PREV_ROW_SFX);
         state.help_anim_time[idx] = 0.0;
         state.pane_mut().prev_selected_row[idx] = state.pane().selected_row[idx];
     }
@@ -652,12 +655,12 @@ pub(super) fn handle_start_event(
         let choice_idx = what_comes_next_row.selected_choice_index[player_idx];
         if choice_idx < what_comes_next_row.choices.len() {
             if choice_idx == 0 {
-                audio::play_sfx("assets/sounds/start.ogg");
+                queue_sfx(state, START_SFX);
                 return Some(ThemeEffect::Navigate(play_screen_for_return(
                     state.return_screen,
                 )));
             } else if choice_idx == 1 {
-                audio::play_sfx("assets/sounds/start.ogg");
+                queue_sfx(state, START_SFX);
                 return Some(ThemeEffect::Navigate(choose_different_screen(
                     state.return_screen,
                 )));
@@ -704,7 +707,7 @@ pub(super) const fn what_comes_next_pane(
     }
 }
 
-pub fn handle_input(
+fn handle_input_inner(
     state: &mut State,
     asset_manager: &AssetManager,
     ev: &InputEvent,
@@ -910,4 +913,13 @@ pub fn handle_input(
         _ => {}
     }
     ThemeEffect::None
+}
+
+pub fn handle_input(
+    state: &mut State,
+    asset_manager: &AssetManager,
+    ev: &InputEvent,
+) -> ThemeEffect {
+    let effect = handle_input_inner(state, asset_manager, ev);
+    prepend_pending_audio(state, effect)
 }
