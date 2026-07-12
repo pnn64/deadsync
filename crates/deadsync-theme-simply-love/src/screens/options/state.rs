@@ -180,6 +180,7 @@ pub struct State {
     pub(super) start_input: [OptionsStartInput; 2],
     pub(super) pending_dedicated_menu_buttons: Option<bool>,
     pub(super) pending_sfx: Vec<&'static str>,
+    pub(super) pending_sync: Vec<crate::SimplyLoveSyncRequest>,
     // Submenu state
     pub(super) sub_selected: usize,
     pub(super) sub_prev_selected: usize,
@@ -299,6 +300,7 @@ pub fn init(
         start_input: [OptionsStartInput::default(); 2],
         pending_dedicated_menu_buttons: None,
         pending_sfx: Vec::new(),
+        pending_sync: Vec::new(),
         view: OptionsView::Main,
         sub_selected: 0,
         sub_prev_selected: 0,

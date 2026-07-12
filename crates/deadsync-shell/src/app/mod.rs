@@ -174,7 +174,7 @@ use deadsync_theme_simply_love::screens::SimplyLoveScreen as CurrentScreen;
 use deadsync_theme_simply_love::views::SimplyLoveDensityGraphSlot as DensityGraphSlot;
 use deadsync_theme_simply_love::{
     SimplyLoveConfigRequest, SimplyLoveEffect as ThemeEffect, SimplyLoveHardwareRequest,
-    SimplyLoveProfileRequest, SimplyLoveRuntimeRequest, SimplyLoveSyncRequest,
+    SimplyLoveProfileRequest, SimplyLoveRuntimeRequest, SimplyLoveSyncOwner, SimplyLoveSyncRequest,
 };
 
 /// Imperative effects to be executed by the shell.
@@ -780,6 +780,7 @@ pub struct App {
     >,
     asset_manager: AssetManager,
     dynamic_media: DynamicMedia,
+    sync_analysis: crate::sync_analysis::Service,
     ui_text_layout_cache: compose::TextLayoutCache,
     gameplay_text_layout_cache: compose::TextLayoutCache,
     ui_compose_scratch: compose::ComposeScratch,
@@ -810,6 +811,39 @@ fn execute_platform_request(request: PlatformRequest) {
 }
 
 impl App {
+    fn poll_sync_analysis(&mut self) {
+        let mut song_events = Vec::new();
+        let mut select_pack_events = Vec::new();
+        let mut options_pack_events = Vec::new();
+        for (owner, event) in self.sync_analysis.poll() {
+            match owner {
+                SimplyLoveSyncOwner::SelectMusicSong => song_events.push(event),
+                SimplyLoveSyncOwner::SelectMusicPack => select_pack_events.push(event),
+                SimplyLoveSyncOwner::OptionsPack => options_pack_events.push(event),
+            }
+        }
+        if !song_events.is_empty() {
+            select_music::apply_sync_analysis_events(
+                &mut self.state.screens.select_music_state,
+                SimplyLoveSyncOwner::SelectMusicSong,
+                song_events,
+            );
+        }
+        if !select_pack_events.is_empty() {
+            select_music::apply_sync_analysis_events(
+                &mut self.state.screens.select_music_state,
+                SimplyLoveSyncOwner::SelectMusicPack,
+                select_pack_events,
+            );
+        }
+        if !options_pack_events.is_empty() {
+            options::apply_sync_analysis_events(
+                &mut self.state.screens.options_state,
+                options_pack_events,
+            );
+        }
+    }
+
     #[inline(always)]
     fn redraw_interval_state(&self, _window: &Window) -> FrameIntervalState {
         self.state
@@ -1421,6 +1455,7 @@ impl App {
         self.apply_smx_managed_preset();
         self.drive_smx_light_brightness();
         self.state.shell.interaction.update_message(redraw_started);
+        self.poll_sync_analysis();
 
         let mut upload_us: u32 = 0;
         let mut draw_us: u32 = 0;
@@ -1869,6 +1904,7 @@ impl App {
             smx_difficulty_tint_cache: std::collections::HashMap::new(),
             asset_manager: AssetManager::new(),
             dynamic_media: DynamicMedia::new(),
+            sync_analysis: crate::sync_analysis::Service::default(),
             // Screen transitions clear the UI cache, so misses stop inserting
             // once the cache reaches its fixed footprint.
             ui_text_layout_cache: compose::TextLayoutCache::new(UI_TEXT_LAYOUT_CACHE_LIMIT),
@@ -2101,6 +2137,18 @@ impl App {
                     {
                         warn!("Failed to save song offset sync changes: {e}");
                     }
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Sync(SimplyLoveSyncRequest::StartAnalysis {
+                    owner,
+                    targets,
+                    emit_freq_delta,
+                }) => {
+                    self.sync_analysis.start(owner, targets, emit_freq_delta);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Sync(SimplyLoveSyncRequest::CancelAnalysis(owner)) => {
+                    self.sync_analysis.cancel(owner);
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Sync(SimplyLoveSyncRequest::ApplySongOffsetBatch {

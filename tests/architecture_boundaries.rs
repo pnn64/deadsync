@@ -1261,6 +1261,50 @@ fn replaygain_prewarm_execution_is_shell_owned() {
 }
 
 #[test]
+fn select_music_sync_analysis_execution_is_shell_owned() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let theme = root.join("crates/deadsync-theme-simply-love");
+    let theme_manifest = fs::read_to_string(theme.join("Cargo.toml"))
+        .expect("Simply Love manifest should be readable");
+    let theme_sync = theme.join("src/screens/components/select_music/sync_analysis.rs");
+    let pack_sync = fs::read_to_string(theme.join("src/screens/pack_sync.rs"))
+        .expect("Pack Sync UI should be readable");
+    let effects = fs::read_to_string(theme.join("src/effects.rs"))
+        .expect("Simply Love runtime requests should be readable");
+    let shell_manifest = fs::read_to_string(root.join("crates/deadsync-shell/Cargo.toml"))
+        .expect("shell manifest should be readable");
+    let shell_sync = fs::read_to_string(root.join("crates/deadsync-shell/src/sync_analysis.rs"))
+        .expect("shell sync-analysis service should be readable");
+
+    assert!(
+        !theme_manifest.contains("deadsync-audio-decode"),
+        "Simply Love must not depend on audio decode; sync analysis is shell-owned"
+    );
+    assert!(
+        !theme_sync.exists(),
+        "the retired theme-side sync-analysis executor must be deleted"
+    );
+    assert!(
+        !pack_sync.contains("std::thread::spawn")
+            && !pack_sync.contains("deadsync_audio_decode")
+            && !pack_sync.contains("analyze_song_chart_stream"),
+        "Pack Sync must retain UI state without owning analysis workers or decoding"
+    );
+    assert!(
+        effects.contains("StartAnalysis") && effects.contains("CancelAnalysis"),
+        "Simply Love must express sync-analysis start and cancel as runtime intent"
+    );
+    assert!(
+        shell_manifest.contains("deadsync-audio-decode")
+            && shell_sync.contains("use deadsync_audio_decode as decode")
+            && shell_sync.contains("fn analyze_song_chart_stream")
+            && shell_sync.contains("std::thread::spawn")
+            && shell_sync.contains("pub(crate) struct Service"),
+        "shell must own sync-analysis decoding, execution, workers, and polling"
+    );
+}
+
+#[test]
 fn concrete_theme_does_not_execute_updater_or_native_dialog_services() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let theme = root.join("crates/deadsync-theme-simply-love");

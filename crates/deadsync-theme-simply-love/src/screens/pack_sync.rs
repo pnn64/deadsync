@@ -2,7 +2,6 @@ use crate::act;
 use crate::assets::i18n::{tr, tr_fmt};
 use crate::assets::{FontRole, current_machine_font_key};
 use crate::config;
-use crate::screens::components::select_music::sync_analysis;
 use crate::screens::components::shared::loading_bar;
 use crate::screens::input as screen_input;
 use deadlib_present::actors::Actor;
@@ -12,51 +11,19 @@ use deadsync_chart::ChartData;
 use deadsync_chart::SongData;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_simfile::sync_offset::SongOffsetSyncChange;
-use null_or_die::{BiasStreamCfg, BiasStreamEvent, GraphOrientation};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, mpsc};
-use std::time::{Duration, Instant};
+use std::sync::Arc;
 
 const OVERLAY_Z: i16 = 1496;
 const VIEW_ROWS_RUNNING: usize = 7;
 const VIEW_ROWS_REVIEW: usize = 5;
 const ROW_STEP: f32 = 43.0;
-const PROGRESS_STEP_BEATS: usize = 4;
-const MAX_MSGS_PER_FRAME: usize = 64;
-const POLL_BUDGET: Duration = Duration::from_millis(2);
 pub(crate) struct TargetSpec {
     pub song: Arc<SongData>,
     pub simfile_path: PathBuf,
     pub song_title: String,
     pub chart_label: String,
     pub chart_ix: usize,
-}
-
-enum WorkerMsg {
-    RowStarted {
-        index: usize,
-    },
-    RowInit {
-        index: usize,
-        total_beats: usize,
-    },
-    RowBeat {
-        index: usize,
-        beats_processed: usize,
-        total_beats: usize,
-    },
-    RowFinished {
-        index: usize,
-        result: Result<AnalysisResult, String>,
-    },
-    Finished,
-}
-
-#[derive(Clone, Copy, Debug)]
-struct AnalysisResult {
-    bias_ms: f64,
-    confidence: f64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -103,9 +70,8 @@ pub(crate) struct OverlayStateData {
     yes_selected: bool,
     phase: OverlayPhase,
     min_confidence: f64,
-    cancel: Arc<AtomicBool>,
+    owner: crate::SimplyLoveSyncOwner,
     current_row: Option<usize>,
-    rx: mpsc::Receiver<WorkerMsg>,
     menu_lr_chord: screen_input::MenuLrChordTracker,
 }
 
@@ -145,22 +111,6 @@ fn confidence_threshold() -> f64 {
 #[inline(always)]
 fn confidence_percent(confidence: Option<f64>) -> u32 {
     (confidence.unwrap_or(0.0).clamp(0.0, 1.0) * 100.0).round() as u32
-}
-
-#[inline(always)]
-fn pack_sync_worker_count(target_count: usize) -> usize {
-    if target_count == 0 {
-        return 0;
-    }
-    let avail_threads = std::thread::available_parallelism()
-        .map(std::num::NonZero::get)
-        .unwrap_or(1);
-    let configured_threads = match config::get().null_or_die_pack_sync_threads {
-        0 => avail_threads,
-        1 => 1,
-        n => (n as usize).min(avail_threads).max(1),
-    };
-    configured_threads.min(target_count).max(1)
 }
 
 pub(crate) fn build_overlay(state: &OverlayState, active_color_index: i32) -> Option<Vec<Actor>> {
@@ -504,108 +454,36 @@ pub(crate) fn build_overlay(state: &OverlayState, active_color_index: i32) -> Op
     Some(actors)
 }
 
-pub(crate) fn hide(state: &mut OverlayState) {
-    if let OverlayState::Visible(overlay) = state {
-        overlay.cancel.store(true, Ordering::Relaxed);
-    }
+pub(crate) fn hide(state: &mut OverlayState) -> Option<crate::SimplyLoveSyncRequest> {
+    let request = match state {
+        OverlayState::Visible(overlay) if overlay.phase == OverlayPhase::Running => {
+            Some(crate::SimplyLoveSyncRequest::CancelAnalysis(overlay.owner))
+        }
+        OverlayState::Hidden | OverlayState::Visible(_) => None,
+    };
     *state = OverlayState::Hidden;
+    request
 }
 
-pub(crate) fn begin(state: &mut OverlayState, pack_name: String, targets: Vec<TargetSpec>) -> bool {
+pub(crate) fn begin(
+    state: &mut OverlayState,
+    owner: crate::SimplyLoveSyncOwner,
+    pack_name: String,
+    targets: Vec<TargetSpec>,
+) -> Option<crate::SimplyLoveSyncRequest> {
     if targets.is_empty() {
-        return false;
+        return None;
     }
 
     let min_confidence = confidence_threshold();
-    let worker_count = pack_sync_worker_count(targets.len());
-    let cancel = Arc::new(AtomicBool::new(false));
-    let cancel_thread = Arc::clone(&cancel);
-    let (tx, rx) = mpsc::channel::<WorkerMsg>();
     let rows = build_rows(&targets);
-
-    std::thread::spawn(move || {
-        let cfg = Arc::new(config::null_or_die_bias_cfg());
-        let stream_cfg = BiasStreamCfg {
-            emit_freq_delta: false,
-            orientation: GraphOrientation::Horizontal,
-        };
-        let (job_tx, job_rx) = mpsc::channel::<(usize, TargetSpec)>();
-        let job_rx = Arc::new(Mutex::new(job_rx));
-        let mut workers = Vec::with_capacity(worker_count);
-
-        for _ in 0..worker_count {
-            let cancel_thread = Arc::clone(&cancel_thread);
-            let cfg = Arc::clone(&cfg);
-            let job_rx = Arc::clone(&job_rx);
-            let tx = tx.clone();
-            workers.push(std::thread::spawn(move || {
-                loop {
-                    if cancel_thread.load(Ordering::Relaxed) {
-                        return;
-                    }
-
-                    let job = {
-                        let Ok(rx) = job_rx.lock() else { return };
-                        rx.recv()
-                    };
-                    let Ok((index, target)) = job else { return };
-                    if cancel_thread.load(Ordering::Relaxed) {
-                        return;
-                    }
-
-                    let _ = tx.send(WorkerMsg::RowStarted { index });
-                    let mut total_beats = 0usize;
-                    let mut last_sent = 0usize;
-                    let result = sync_analysis::analyze_song_chart_stream(
-                        target.song.as_ref(),
-                        target.chart_ix,
-                        cfg.as_ref(),
-                        stream_cfg,
-                        |event| match event {
-                            BiasStreamEvent::Init(init) => {
-                                total_beats = init.planned_beats;
-                                let _ = tx.send(WorkerMsg::RowInit { index, total_beats });
-                            }
-                            BiasStreamEvent::Beat(beat) => {
-                                let beats_processed = beat.beat_seq.saturating_add(1);
-                                let is_last = total_beats > 0 && beats_processed >= total_beats;
-                                if beats_processed == 1
-                                    || is_last
-                                    || beats_processed.saturating_sub(last_sent)
-                                        >= PROGRESS_STEP_BEATS
-                                {
-                                    last_sent = beats_processed;
-                                    let _ = tx.send(WorkerMsg::RowBeat {
-                                        index,
-                                        beats_processed,
-                                        total_beats,
-                                    });
-                                }
-                            }
-                            BiasStreamEvent::Convolution(_) | BiasStreamEvent::Done(_) => {}
-                        },
-                    )
-                    .map(|result| AnalysisResult {
-                        bias_ms: result.estimate.bias_ms,
-                        confidence: result.estimate.confidence,
-                    });
-                    let _ = tx.send(WorkerMsg::RowFinished { index, result });
-                }
-            }));
-        }
-
-        for (index, target) in targets.into_iter().enumerate() {
-            if job_tx.send((index, target)).is_err() {
-                break;
-            }
-        }
-        drop(job_tx);
-        for worker in workers {
-            let _ = worker.join();
-        }
-
-        let _ = tx.send(WorkerMsg::Finished);
-    });
+    let request_targets = targets
+        .into_iter()
+        .map(|target| crate::SimplyLoveSyncTarget {
+            song: target.song,
+            chart_ix: target.chart_ix,
+        })
+        .collect();
 
     *state = OverlayState::Visible(OverlayStateData {
         pack_name,
@@ -615,20 +493,19 @@ pub(crate) fn begin(state: &mut OverlayState, pack_name: String, targets: Vec<Ta
         yes_selected: true,
         phase: OverlayPhase::Running,
         min_confidence,
-        cancel,
+        owner,
         current_row: None,
-        rx,
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
     });
-    true
+    Some(crate::SimplyLoveSyncRequest::StartAnalysis {
+        owner,
+        targets: request_targets,
+        emit_freq_delta: false,
+    })
 }
 
 pub(crate) fn poll(state: &mut OverlayState) -> bool {
-    let OverlayState::Visible(overlay) = state else {
-        return false;
-    };
-    poll_overlay(overlay);
-    true
+    matches!(state, OverlayState::Visible(_))
 }
 
 pub(crate) fn handle_input(
@@ -814,8 +691,10 @@ pub(crate) fn handle_input(
     if play_start {
         effects.push(crate::effects::sfx("assets/sounds/start.ogg"));
     }
-    if close_overlay {
-        hide(state);
+    if close_overlay && let Some(request) = hide(state) {
+        effects.push(crate::screens::ThemeEffect::Runtime(
+            crate::SimplyLoveRuntimeRequest::Sync(request),
+        ));
     }
     if let Some(changes) = apply_changes
         && !changes.is_empty()
@@ -1103,83 +982,77 @@ fn shift(overlay: &mut OverlayStateData, delta: isize) -> bool {
     true
 }
 
-fn poll_overlay(overlay: &mut OverlayStateData) {
-    let started = Instant::now();
-    let mut handled = 0usize;
-
-    loop {
-        if handled >= MAX_MSGS_PER_FRAME || started.elapsed() >= POLL_BUDGET {
-            break;
-        }
-        match overlay.rx.try_recv() {
-            Ok(WorkerMsg::RowStarted { index }) => {
-                if let Some(row) = overlay.rows.get_mut(index) {
-                    row.total_beats = 0;
-                    row.beats_processed = 0;
-                    row.final_bias_ms = None;
-                    row.final_confidence = None;
-                    row.phase = RowPhase::Running;
-                    row.error_text = None;
-                    overlay.current_row = Some(index);
-                    if overlay.auto_follow {
-                        follow_row(overlay, index);
-                    }
+pub(crate) fn apply_event(state: &mut OverlayState, event: crate::SimplyLoveSyncEvent) {
+    let OverlayState::Visible(overlay) = state else {
+        return;
+    };
+    match event {
+        crate::SimplyLoveSyncEvent::RowStarted { index } => {
+            if let Some(row) = overlay.rows.get_mut(index) {
+                row.total_beats = 0;
+                row.beats_processed = 0;
+                row.final_bias_ms = None;
+                row.final_confidence = None;
+                row.phase = RowPhase::Running;
+                row.error_text = None;
+                overlay.current_row = Some(index);
+                if overlay.auto_follow {
+                    follow_row(overlay, index);
                 }
-            }
-            Ok(WorkerMsg::RowInit { index, total_beats }) => {
-                if let Some(row) = overlay.rows.get_mut(index) {
-                    row.total_beats = total_beats;
-                    if overlay.auto_follow && overlay.current_row == Some(index) {
-                        follow_row(overlay, index);
-                    }
-                }
-            }
-            Ok(WorkerMsg::RowBeat {
-                index,
-                beats_processed,
-                total_beats,
-            }) => {
-                if let Some(row) = overlay.rows.get_mut(index) {
-                    row.phase = RowPhase::Running;
-                    row.total_beats = row.total_beats.max(total_beats);
-                    row.beats_processed = row.beats_processed.max(beats_processed);
-                    if overlay.auto_follow && overlay.current_row == Some(index) {
-                        follow_row(overlay, index);
-                    }
-                }
-            }
-            Ok(WorkerMsg::RowFinished { index, result }) => {
-                if let Some(row) = overlay.rows.get_mut(index) {
-                    if overlay.current_row == Some(index) {
-                        overlay.current_row = None;
-                    }
-                    match result {
-                        Ok(result) => {
-                            row.phase = RowPhase::Ready;
-                            row.final_bias_ms = Some(result.bias_ms);
-                            row.final_confidence = Some(result.confidence);
-                            row.beats_processed = row.beats_processed.max(row.total_beats);
-                        }
-                        Err(err) => {
-                            row.phase = RowPhase::Failed;
-                            row.error_text = Some(err);
-                        }
-                    }
-                }
-            }
-            Ok(WorkerMsg::Finished) => {
-                overlay.phase = OverlayPhase::Review;
-                overlay.current_row = None;
-                break;
-            }
-            Err(mpsc::TryRecvError::Empty) => break,
-            Err(mpsc::TryRecvError::Disconnected) => {
-                overlay.phase = OverlayPhase::Review;
-                overlay.current_row = None;
-                break;
             }
         }
-        handled += 1;
+        crate::SimplyLoveSyncEvent::RowInit { index, total_beats } => {
+            if let Some(row) = overlay.rows.get_mut(index) {
+                row.total_beats = total_beats;
+                if overlay.auto_follow && overlay.current_row == Some(index) {
+                    follow_row(overlay, index);
+                }
+            }
+        }
+        crate::SimplyLoveSyncEvent::RowBeat {
+            index,
+            beats_processed,
+            total_beats,
+        } => {
+            if let Some(row) = overlay.rows.get_mut(index) {
+                row.phase = RowPhase::Running;
+                row.total_beats = row.total_beats.max(total_beats);
+                row.beats_processed = row.beats_processed.max(beats_processed);
+                if overlay.auto_follow && overlay.current_row == Some(index) {
+                    follow_row(overlay, index);
+                }
+            }
+        }
+        crate::SimplyLoveSyncEvent::RowFinished { index, result } => {
+            if let Some(row) = overlay.rows.get_mut(index) {
+                if overlay.current_row == Some(index) {
+                    overlay.current_row = None;
+                }
+                match result {
+                    Ok(result) => {
+                        row.phase = RowPhase::Ready;
+                        row.final_bias_ms = Some(result.bias_ms);
+                        row.final_confidence = Some(result.confidence);
+                        row.beats_processed = row.beats_processed.max(row.total_beats);
+                    }
+                    Err(err) => {
+                        row.phase = RowPhase::Failed;
+                        row.error_text = Some(err);
+                    }
+                }
+            }
+        }
+        crate::SimplyLoveSyncEvent::Finished => {
+            overlay.phase = OverlayPhase::Review;
+            overlay.current_row = None;
+        }
+        crate::SimplyLoveSyncEvent::Disconnected => {
+            overlay.phase = OverlayPhase::Review;
+            overlay.current_row = None;
+        }
+        crate::SimplyLoveSyncEvent::SongStream(_) | crate::SimplyLoveSyncEvent::SongFinished(_) => {
+            return;
+        }
     }
 
     overlay.scroll_index = overlay

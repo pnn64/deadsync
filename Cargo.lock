@@ -1090,7 +1090,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.4.2512"
+version = "0.4.2507"
 dependencies = [
  "deadlib-platform",
  "deadlib-present",
@@ -1431,6 +1431,7 @@ dependencies = [
  "deadlib-video",
  "deadsync-assets",
  "deadsync-audio",
+ "deadsync-audio-decode",
  "deadsync-audio-replaygain",
  "deadsync-audio-stream",
  "deadsync-chart",
@@ -1454,6 +1455,7 @@ dependencies = [
  "deadsync-updater",
  "image",
  "log",
+ "null-or-die",
  "objc2 0.6.4",
  "objc2-app-kit 0.3.2",
  "objc2-foundation 0.3.2",
@@ -1521,7 +1523,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-theme-simply-love"
-version = "0.4.2512"
+version = "0.4.2507"
 dependencies = [
  "bitflags 2.13.0",
  "chrono",
@@ -1531,7 +1533,6 @@ dependencies = [
  "deadlib-render",
  "deadsync-assets",
  "deadsync-audio",
- "deadsync-audio-decode",
  "deadsync-chart",
  "deadsync-config",
  "deadsync-core",
@@ -1584,7 +1585,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.4.2512"
+version = "0.4.2507"
 dependencies = [
  "log",
  "semver",

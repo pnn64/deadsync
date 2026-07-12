@@ -11,7 +11,6 @@ use crate::rgba_const;
 use crate::screens::components::{
     select_music::{
         lobby_overlay, music_wheel, screen_bars, select_music_menu, select_pane, step_artist_bar,
-        sync_analysis,
     },
     shared::{
         banner as shared_banner, gs_scorebox, lobby_hud, mode_pads, profile_boxes, test_input,
@@ -68,10 +67,7 @@ use deadsync_theme::views::AudioPlaybackView;
 use deadsync_theme::{AudioCut, AudioRequest};
 use image::{Rgba, RgbaImage};
 use log::{debug, warn};
-use null_or_die::{
-    BiasEstimateWithPlot, BiasKernel, BiasStreamCfg, BiasStreamEvent, GraphOrientation,
-    KernelTarget,
-};
+use null_or_die::{BiasEstimateWithPlot, BiasKernel, BiasStreamEvent, KernelTarget};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -92,9 +88,6 @@ const SYNC_HEAT_TEXTURE_KEY: &str = "__generated/sync-overlay-heat";
 const SYNC_HEAT_ALPHA: f32 = 1.0;
 const SYNC_READY_TEXT_ZOOM: f32 = 0.95;
 const SYNC_READY_LINE_STEP: f32 = 24.0 * SYNC_READY_TEXT_ZOOM;
-const SYNC_OVERLAY_MAX_PENDING_MSGS: usize = 32;
-const SYNC_OVERLAY_MAX_MSGS_PER_FRAME: usize = 32;
-const SYNC_OVERLAY_POLL_BUDGET: Duration = Duration::from_millis(3);
 const SYNC_ADJUST_STEP_SECONDS: f32 = 0.001;
 // Sync Song overlay only: per-tap step is 1 ms. Holding LEFT/RIGHT keeps
 // stepping by exactly 1 ms (unit-aligned with the displayed value) and ramps
@@ -886,11 +879,6 @@ impl ReloadUiState {
     }
 }
 
-enum NullOrDieWorkerMsg {
-    Event(BiasStreamEvent),
-    Finished(Result<BiasEstimateWithPlot, String>),
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum NullOrDieOverlayPhase {
     Running,
@@ -932,7 +920,6 @@ struct NullOrDieOverlayData {
     nav_last_tick_at: Option<Instant>,
     nav_last_sfx_at: Option<Instant>,
     confirm_selection: Option<ConfirmAction>,
-    rx: Option<mpsc::Receiver<NullOrDieWorkerMsg>>,
 }
 
 enum ManualSyncTarget {
@@ -1117,6 +1104,7 @@ pub struct State {
     /// against re-enqueueing every frame while the same pack is expanded.
     last_replaygain_prewarmed_pack: Option<String>,
     pending_audio: Vec<AudioRequest>,
+    pending_sync: Vec<crate::SimplyLoveSyncRequest>,
     bg: visual_style_bg::State,
     last_requested_banner_path: Option<PathBuf>,
     last_requested_cdtitle_path: Option<PathBuf>,
@@ -2697,6 +2685,7 @@ pub fn init() -> State {
         expanded_pack_name: initial_expanded_pack_name,
         last_replaygain_prewarmed_pack: None,
         pending_audio: Vec::new(),
+        pending_sync: Vec::new(),
         bg: visual_style_bg::State::new(),
         last_requested_banner_path: None,
         last_requested_cdtitle_path: None,
@@ -2893,6 +2882,7 @@ pub fn init_placeholder() -> State {
         expanded_pack_name: None,
         last_replaygain_prewarmed_pack: None,
         pending_audio: Vec::new(),
+        pending_sync: Vec::new(),
         bg: visual_style_bg::State::new(),
         last_requested_banner_path: None,
         last_requested_cdtitle_path: None,
@@ -3105,6 +3095,11 @@ fn queue_sfx(state: &mut State, path: &'static str) {
     queue_audio(state, AudioRequest::PlaySfx(path.to_owned()));
 }
 
+#[inline(always)]
+fn queue_sync(state: &mut State, request: crate::SimplyLoveSyncRequest) {
+    state.pending_sync.push(request);
+}
+
 fn queue_lobby_sounds(state: &mut State) {
     let sounds = lobby_overlay::take_pending_sounds(&mut state.lobby_overlay);
     for sound in sounds {
@@ -3113,7 +3108,7 @@ fn queue_lobby_sounds(state: &mut State) {
 }
 
 fn prepend_pending_audio(state: &mut State, effect: ThemeEffect) -> ThemeEffect {
-    let request_count = state.pending_audio.len();
+    let request_count = state.pending_audio.len() + state.pending_sync.len();
     if request_count == 0 {
         return effect;
     }
@@ -3125,6 +3120,12 @@ fn prepend_pending_audio(state: &mut State, effect: ThemeEffect) -> ThemeEffect 
             .pending_audio
             .drain(..)
             .map(|request| ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(request))),
+    );
+    effects.extend(
+        state
+            .pending_sync
+            .drain(..)
+            .map(|request| ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Sync(request))),
     );
     if has_effect {
         effects.push(effect);
@@ -5602,6 +5603,20 @@ fn handle_lobby_overlay_raw_key(
 
 #[inline(always)]
 fn hide_sync_overlay(state: &mut State) {
+    if matches!(
+        &state.sync_overlay,
+        SyncOverlayState::NullOrDie(NullOrDieOverlayData {
+            phase: NullOrDieOverlayPhase::Running,
+            ..
+        })
+    ) {
+        queue_sync(
+            state,
+            crate::SimplyLoveSyncRequest::CancelAnalysis(
+                crate::SimplyLoveSyncOwner::SelectMusicSong,
+            ),
+        );
+    }
     state.sync_overlay = SyncOverlayState::Hidden;
 }
 
@@ -6788,11 +6803,6 @@ fn prepare_sync_overlay(state: &mut State) {
     state.last_steps_nav_time_p2 = None;
 }
 
-#[inline(always)]
-fn sync_overlay_poll_exhausted(started: Instant, handled: usize) -> bool {
-    handled >= SYNC_OVERLAY_MAX_MSGS_PER_FRAME || started.elapsed() >= SYNC_OVERLAY_POLL_BUDGET
-}
-
 fn sync_overlay_apply_beat(
     overlay: &mut NullOrDieOverlayData,
     beat_seq: usize,
@@ -6932,45 +6942,54 @@ fn sync_overlay_apply_result(
     }
 }
 
-fn poll_null_or_die_overlay(overlay: &mut NullOrDieOverlayData) {
-    if overlay.rx.is_none() {
-        return;
-    }
-
-    let started = Instant::now();
-    let mut handled = 0usize;
+fn apply_song_sync_events(
+    overlay: &mut NullOrDieOverlayData,
+    events: Vec<crate::SimplyLoveSyncEvent>,
+) {
     let mut refresh = NullOrDieOverlayRefresh::default();
-
-    loop {
-        if sync_overlay_poll_exhausted(started, handled) {
-            break;
-        }
-        let recv = match overlay.rx.as_ref() {
-            Some(rx) => rx.try_recv(),
-            None => break,
-        };
-        match recv {
-            Ok(NullOrDieWorkerMsg::Event(event)) => {
+    for event in events {
+        match event {
+            crate::SimplyLoveSyncEvent::SongStream(event) => {
                 sync_overlay_apply_event(overlay, event, &mut refresh);
-                handled += 1;
             }
-            Ok(NullOrDieWorkerMsg::Finished(result)) => {
+            crate::SimplyLoveSyncEvent::SongFinished(result) => {
                 sync_overlay_apply_result(overlay, result, &mut refresh);
-                handled += 1;
             }
-            Err(mpsc::TryRecvError::Empty) => break,
-            Err(mpsc::TryRecvError::Disconnected) => {
+            crate::SimplyLoveSyncEvent::RowStarted { .. }
+            | crate::SimplyLoveSyncEvent::RowInit { .. }
+            | crate::SimplyLoveSyncEvent::RowBeat { .. }
+            | crate::SimplyLoveSyncEvent::RowFinished { .. }
+            | crate::SimplyLoveSyncEvent::Finished => {}
+            crate::SimplyLoveSyncEvent::Disconnected => {
                 if overlay.phase == NullOrDieOverlayPhase::Running {
                     set_sync_overlay_phase(overlay, NullOrDieOverlayPhase::Failed);
                     overlay.error_text =
                         Some(tr("SelectMusic", "SyncWorkerDisconnected").to_string());
                 }
-                break;
             }
         }
     }
-
     refresh.flush(overlay);
+}
+
+pub fn apply_sync_analysis_events(
+    state: &mut State,
+    owner: crate::SimplyLoveSyncOwner,
+    events: Vec<crate::SimplyLoveSyncEvent>,
+) {
+    match owner {
+        crate::SimplyLoveSyncOwner::SelectMusicSong => {
+            if let SyncOverlayState::NullOrDie(overlay) = &mut state.sync_overlay {
+                apply_song_sync_events(overlay, events);
+            }
+        }
+        crate::SimplyLoveSyncOwner::SelectMusicPack => {
+            for event in events {
+                crate::screens::pack_sync::apply_event(&mut state.pack_sync_overlay, event);
+            }
+        }
+        crate::SimplyLoveSyncOwner::OptionsPack => {}
+    }
 }
 
 fn show_sync_song_overlay(state: &mut State) {
@@ -6994,29 +7013,21 @@ fn show_sync_song_overlay(state: &mut State) {
     let simfile_path = song.simfile_path.clone();
     let song_title = song.display_full_title(false);
 
-    let (phase, rx) = if let (Some(chart_ix), Some(_)) = (chart_ix, chart) {
-        let stream_cfg = BiasStreamCfg {
-            emit_freq_delta: matches!(graph_mode, SyncGraphMode::Frequency),
-            orientation: GraphOrientation::Horizontal,
-        };
-        let song_thread = song.clone();
-        let (tx, rx) = mpsc::sync_channel::<NullOrDieWorkerMsg>(SYNC_OVERLAY_MAX_PENDING_MSGS);
-        std::thread::spawn(move || {
-            let tx_done = tx.clone();
-            let result = sync_analysis::analyze_song_chart_stream(
-                song_thread.as_ref(),
-                chart_ix,
-                &cfg,
-                stream_cfg,
-                |event| {
-                    let _ = tx.send(NullOrDieWorkerMsg::Event(event));
-                },
-            );
-            let _ = tx_done.send(NullOrDieWorkerMsg::Finished(result));
-        });
-        (NullOrDieOverlayPhase::Running, Some(rx))
+    let phase = if let (Some(chart_ix), Some(_)) = (chart_ix, chart) {
+        queue_sync(
+            state,
+            crate::SimplyLoveSyncRequest::StartAnalysis {
+                owner: crate::SimplyLoveSyncOwner::SelectMusicSong,
+                targets: vec![crate::SimplyLoveSyncTarget {
+                    song: song.clone(),
+                    chart_ix,
+                }],
+                emit_freq_delta: matches!(graph_mode, SyncGraphMode::Frequency),
+            },
+        );
+        NullOrDieOverlayPhase::Running
     } else {
-        (NullOrDieOverlayPhase::AnalysisUnavailable, None)
+        NullOrDieOverlayPhase::AnalysisUnavailable
     };
 
     state.sync_overlay = SyncOverlayState::NullOrDie(NullOrDieOverlayData {
@@ -7052,7 +7063,6 @@ fn show_sync_song_overlay(state: &mut State) {
         nav_last_tick_at: None,
         nav_last_sfx_at: None,
         confirm_selection: None,
-        rx,
     });
 }
 
@@ -9425,7 +9435,6 @@ fn update_impl(state: &mut State, dt: f32) -> ThemeEffect {
         return ThemeEffect::None;
     }
     if let SyncOverlayState::NullOrDie(overlay) = &mut state.sync_overlay {
-        poll_null_or_die_overlay(overlay);
         let outcome = tick_sync_song_hold(overlay);
         if outcome.play_hold_sfx {
             queue_sfx(state, "assets/sounds/change.ogg");
@@ -12313,7 +12322,6 @@ mod tests {
             nav_last_tick_at: None,
             nav_last_sfx_at: None,
             confirm_selection: None,
-            rx: None,
         }
     }
 

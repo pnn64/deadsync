@@ -17,8 +17,8 @@ pub use effects::{
     SimplyLoveConfigRequest, SimplyLoveDebugRequest, SimplyLoveEffect,
     SimplyLoveEffectRouteContext, SimplyLoveEffectRoutePlan, SimplyLoveHardwareRequest,
     SimplyLoveMediaRequest, SimplyLoveOnlineRequest, SimplyLoveProfileRequest,
-    SimplyLoveRuntimeRequest, SimplyLoveSyncRequest, SimplyLoveUpdaterRequest,
-    resolve_effect_route,
+    SimplyLoveRuntimeRequest, SimplyLoveSyncEvent, SimplyLoveSyncOwner, SimplyLoveSyncRequest,
+    SimplyLoveSyncResult, SimplyLoveSyncTarget, SimplyLoveUpdaterRequest, resolve_effect_route,
 };
 
 pub struct SimplyLoveTheme;

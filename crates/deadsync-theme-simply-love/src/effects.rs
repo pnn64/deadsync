@@ -3,7 +3,9 @@ use crate::views::{DensityGraphView, SimplyLoveDensityGraphSlot};
 use deadsync_profile::{ActiveProfile, PlayerSide};
 use deadsync_simfile::sync_offset::SongOffsetSyncChange;
 use deadsync_theme::{AudioRequest, GraphicsRequest, PlatformRequest};
+use null_or_die::{BiasEstimateWithPlot, BiasStreamEvent};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 #[derive(Clone, Debug)]
 pub enum SimplyLoveMediaRequest {
@@ -47,6 +49,12 @@ pub enum SimplyLoveOnlineRequest {
 
 #[derive(Clone, Debug)]
 pub enum SimplyLoveSyncRequest {
+    StartAnalysis {
+        owner: SimplyLoveSyncOwner,
+        targets: Vec<SimplyLoveSyncTarget>,
+        emit_freq_delta: bool,
+    },
+    CancelAnalysis(SimplyLoveSyncOwner),
     ApplySongOffset {
         simfile_path: PathBuf,
         delta_seconds: f32,
@@ -54,6 +62,48 @@ pub enum SimplyLoveSyncRequest {
     ApplySongOffsetBatch {
         changes: Vec<SongOffsetSyncChange>,
     },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SimplyLoveSyncOwner {
+    SelectMusicSong,
+    SelectMusicPack,
+    OptionsPack,
+}
+
+#[derive(Clone, Debug)]
+pub struct SimplyLoveSyncTarget {
+    pub song: Arc<deadsync_chart::SongData>,
+    pub chart_ix: usize,
+}
+
+pub enum SimplyLoveSyncEvent {
+    SongStream(BiasStreamEvent),
+    SongFinished(Result<BiasEstimateWithPlot, String>),
+    RowStarted {
+        index: usize,
+    },
+    RowInit {
+        index: usize,
+        total_beats: usize,
+    },
+    RowBeat {
+        index: usize,
+        beats_processed: usize,
+        total_beats: usize,
+    },
+    RowFinished {
+        index: usize,
+        result: Result<SimplyLoveSyncResult, String>,
+    },
+    Finished,
+    Disconnected,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct SimplyLoveSyncResult {
+    pub bias_ms: f64,
+    pub confidence: f64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

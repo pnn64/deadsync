@@ -121,15 +121,25 @@ fn queue_sfx(state: &mut State, path: &'static str) {
     state.pending_sfx.push(path);
 }
 
+fn queue_sync(state: &mut State, request: crate::SimplyLoveSyncRequest) {
+    state.pending_sync.push(request);
+}
+
 fn prepend_pending_sfx(state: &mut State, effect: ThemeEffect) -> ThemeEffect {
-    let sound_count = state.pending_sfx.len();
-    if sound_count == 0 {
+    let request_count = state.pending_sfx.len() + state.pending_sync.len();
+    if request_count == 0 {
         return effect;
     }
 
     let has_effect = !matches!(effect, ThemeEffect::None);
-    let mut effects = Vec::with_capacity(sound_count + usize::from(has_effect));
+    let mut effects = Vec::with_capacity(request_count + usize::from(has_effect));
     effects.extend(state.pending_sfx.drain(..).map(crate::effects::sfx));
+    effects.extend(
+        state
+            .pending_sync
+            .drain(..)
+            .map(|request| ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Sync(request))),
+    );
     if has_effect {
         effects.push(effect);
     }
@@ -140,8 +150,14 @@ fn prepend_pending_sfx(state: &mut State, effect: ThemeEffect) -> ThemeEffect {
     }
 }
 
+pub fn apply_sync_analysis_events(state: &mut State, events: Vec<crate::SimplyLoveSyncEvent>) {
+    for event in events {
+        shared_pack_sync::apply_event(&mut state.pack_sync_overlay, event);
+    }
+}
+
 fn prepend_pending_sfx_opt(state: &mut State, effect: Option<ThemeEffect>) -> Option<ThemeEffect> {
-    if state.pending_sfx.is_empty() {
+    if state.pending_sfx.is_empty() && state.pending_sync.is_empty() {
         return effect;
     }
     Some(prepend_pending_sfx(

@@ -13,6 +13,7 @@ deadlib-renderer = { path = "../deadlib-renderer" }
 deadlib-video = { path = "../deadlib-video" }
 deadsync-assets = { path = "../deadsync-assets" }
 deadsync-audio = { path = "../deadsync-audio" }
+deadsync-audio-decode = { path = "../deadsync-audio-decode" }
 deadsync-audio-replaygain = { path = "../deadsync-audio-replaygain" }
 deadsync-audio-stream = { path = "../deadsync-audio-stream" }
 deadsync-chart = { path = "../deadsync-chart" }
@@ -36,6 +37,7 @@ deadsync-theme-simply-love = { path = "../deadsync-theme-simply-love" }
 deadsync-updater = { path = "../deadsync-updater" }
 image = "0.25.10"
 log = "0.4.33"
+null-or-die = { git = "https://github.com/pnn64/null-or-die", branch = "main" }
 rfd = "0.17.2"
 smallvec = "1.15.2"
 winit = "0.30.13"

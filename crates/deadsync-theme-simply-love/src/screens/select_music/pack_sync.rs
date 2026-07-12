@@ -10,7 +10,9 @@ pub(super) fn build_overlay(
 }
 
 pub(super) fn hide_overlay(state: &mut State) {
-    shared_pack_sync::hide(&mut state.pack_sync_overlay);
+    if let Some(request) = shared_pack_sync::hide(&mut state.pack_sync_overlay) {
+        queue_sync(state, request);
+    }
 }
 
 pub(super) fn show_from_selected(state: &mut State) {
@@ -65,11 +67,18 @@ fn show_for_group(state: &mut State, pack_group: &str) -> bool {
     state.last_steps_nav_dir_p2 = None;
     state.last_steps_nav_time_p2 = None;
 
-    shared_pack_sync::begin(
+    let request = shared_pack_sync::begin(
         &mut state.pack_sync_overlay,
+        crate::SimplyLoveSyncOwner::SelectMusicPack,
         pack_group.to_string(),
         targets,
-    )
+    );
+    if let Some(request) = request {
+        queue_sync(state, request);
+        true
+    } else {
+        false
+    }
 }
 
 fn pack_sync_targets_for_group(

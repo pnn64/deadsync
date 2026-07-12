@@ -93,16 +93,19 @@ pub(super) fn begin_pack_sync(state: &mut State, selection: SyncPackSelection) {
     }
     drop(song_cache);
 
-    if !shared_pack_sync::begin(
+    let Some(request) = shared_pack_sync::begin(
         &mut state.pack_sync_overlay,
+        crate::SimplyLoveSyncOwner::OptionsPack,
         selection.pack_label.clone(),
         targets,
-    ) {
+    ) else {
         log::warn!(
             "Failed to start pack sync for {:?}: no matching charts were found.",
             selection.pack_group
         );
-    }
+        return;
+    };
+    queue_sync(state, request);
 }
 
 pub(super) fn begin_pack_sync_from_confirm(state: &mut State) {

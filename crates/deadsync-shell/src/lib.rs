@@ -31,6 +31,7 @@ mod session;
 mod session_results;
 mod smx_config;
 mod stutter_diag;
+mod sync_analysis;
 mod transition_effects;
 mod window;
 mod window_state;

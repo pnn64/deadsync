@@ -14,7 +14,6 @@ deadlib-present = { path = "../deadlib-present" }
 deadlib-render = { path = "../deadlib-render" }
 deadsync-assets = { path = "../deadsync-assets" }
 deadsync-audio = { path = "../deadsync-audio" }
-deadsync-audio-decode = { path = "../deadsync-audio-decode" }
 deadsync-chart = { path = "../deadsync-chart" }
 deadsync-config = { path = "../deadsync-config" }
 deadsync-core = { path = "../deadsync-core" }
