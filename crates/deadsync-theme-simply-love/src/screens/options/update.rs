@@ -270,7 +270,7 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
         return None;
     }
     if let Some(score_import) = state.score_import_ui.as_mut() {
-        poll_score_import_ui(score_import, dt);
+        update_score_import_ui(score_import, dt);
         // No auto-dismiss: once `done`, the overlay sits until the user
         // confirms via input (handled in input.rs).
         return None;

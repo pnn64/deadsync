@@ -1059,6 +1059,87 @@ fn queued_sfx_precede_follow_up_runtime_work() {
 }
 
 #[test]
+fn queued_sfx_precede_score_import_runtime_work() {
+    let mut state = init();
+    queue_sfx(&mut state, "assets/sounds/start.ogg");
+    queue_online(
+        &mut state,
+        crate::SimplyLoveOnlineRequest::CancelScoreImport,
+    );
+
+    let ThemeEffect::Batch(effects) = prepend_pending_sfx(&mut state, ThemeEffect::None) else {
+        panic!("queued sound and score-import work should be batched");
+    };
+    assert!(matches!(
+        &effects[0],
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+            deadsync_theme::AudioRequest::PlaySfx(path)
+        )) if path == "assets/sounds/start.ogg"
+    ));
+    assert!(matches!(
+        effects[1],
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Online(
+            crate::SimplyLoveOnlineRequest::CancelScoreImport
+        ))
+    ));
+    assert!(state.pending_sfx.is_empty());
+    assert!(state.pending_online.is_empty());
+}
+
+#[test]
+fn score_import_events_update_the_theme_overlay() {
+    let mut state = init();
+    state.score_import_ui = Some(ScoreImportUiState::new(
+        score_data::ScoreImportEndpoint::GrooveStats,
+        "Player".to_owned(),
+        "All Packs".to_owned(),
+    ));
+    apply_score_import_events(
+        &mut state,
+        vec![
+            crate::SimplyLoveScoreImportEvent::Progress(crate::SimplyLoveScoreImportProgress {
+                processed_charts: 4,
+                total_charts: 10,
+                imported_scores: 3,
+                missing_scores: 1,
+                failed_requests: 0,
+                detail: "Checking chart".to_owned(),
+            }),
+            crate::SimplyLoveScoreImportEvent::Finished(Ok(crate::SimplyLoveScoreImportSummary {
+                requested_charts: 10,
+                imported_scores: 7,
+                missing_scores: 2,
+                failed_requests: 1,
+                rate_limit_per_second: 3,
+                elapsed_seconds: 5.0,
+                canceled: false,
+            })),
+        ],
+    );
+
+    let overlay = state.score_import_ui.expect("score-import overlay");
+    assert_eq!(overlay.processed_charts, 4);
+    assert_eq!(overlay.detail_line, "Checking chart");
+    assert!(overlay.done);
+    assert!(overlay.done_message.contains("imported=7"));
+}
+
+#[test]
+fn score_import_profile_debug_redacts_api_keys() {
+    let profile = crate::SimplyLoveScoreImportProfile {
+        id: "profile".to_owned(),
+        display_name: "Player".to_owned(),
+        groovestats_api_key: "gs-secret".to_owned(),
+        groovestats_username: "username".to_owned(),
+        arrowcloud_api_key: "ac-secret".to_owned(),
+    };
+    let debug = format!("{profile:?}");
+    assert!(!debug.contains("gs-secret"));
+    assert!(!debug.contains("ac-secret"));
+    assert!(debug.contains("<redacted>"));
+}
+
+#[test]
 fn update_drain_emits_a_queued_sound_without_follow_up_work() {
     let mut state = init();
     queue_sfx(&mut state, "assets/sounds/change.ogg");

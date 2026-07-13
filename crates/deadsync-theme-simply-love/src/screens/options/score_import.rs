@@ -1,15 +1,6 @@
 use super::*;
 
 #[derive(Clone, Debug)]
-pub(super) struct ScoreImportProfileConfig {
-    pub(super) id: String,
-    pub(super) display_name: String,
-    pub(super) gs_api_key: String,
-    pub(super) gs_username: String,
-    pub(super) ac_api_key: String,
-}
-
-#[derive(Clone, Debug)]
 pub(super) struct ScoreImportPackOption {
     pub(super) label: String,
     pub(super) group: String,
@@ -23,16 +14,10 @@ pub(super) struct ScoreImportPackPicker {
 #[derive(Clone, Debug)]
 pub(super) struct ScoreImportSelection {
     pub(super) endpoint: score_data::ScoreImportEndpoint,
-    pub(super) profile: ScoreImportProfileConfig,
+    pub(super) profile: crate::SimplyLoveScoreImportProfile,
     pub(super) pack_groups: Vec<String>,
     pub(super) pack_label: String,
     pub(super) only_missing_gs_scores: bool,
-}
-
-#[derive(Debug)]
-pub(super) enum ScoreImportMsg {
-    Progress(score_data::ScoreImportProgress),
-    Done(Result<score_data::ScoreBulkImportSummary, String>),
 }
 
 pub(super) struct ScoreImportUiState {
@@ -53,8 +38,6 @@ pub(super) struct ScoreImportUiState {
     pub(super) done_message: String,
     pub(super) done_since: Option<Instant>,
     pub(super) started_at: Instant,
-    pub(super) cancel_requested: Arc<AtomicBool>,
-    pub(super) rx: std::sync::mpsc::Receiver<ScoreImportMsg>,
 }
 
 impl ScoreImportUiState {
@@ -62,8 +45,6 @@ impl ScoreImportUiState {
         endpoint: score_data::ScoreImportEndpoint,
         profile_name: String,
         pack_label: String,
-        cancel_requested: Arc<AtomicBool>,
-        rx: std::sync::mpsc::Receiver<ScoreImportMsg>,
     ) -> Self {
         Self {
             endpoint,
@@ -80,8 +61,6 @@ impl ScoreImportUiState {
             done_message: String::new(),
             done_since: None,
             started_at: Instant::now(),
-            cancel_requested,
-            rx,
         }
     }
 }
@@ -399,7 +378,7 @@ pub(super) fn sync_pack_options(state: &State) -> (Vec<String>, Vec<Option<Strin
     installed_pack_options(state, &tr("OptionsSyncPack", "AllPacks"))
 }
 
-pub(super) fn load_score_import_profiles() -> Vec<ScoreImportProfileConfig> {
+pub(super) fn load_score_import_profiles() -> Vec<crate::SimplyLoveScoreImportProfile> {
     let mut profiles = Vec::new();
     for summary in profile::scan_local_profiles() {
         let profile_dir = profile::local_profile_dir_for_id(summary.id.as_str());
@@ -423,12 +402,12 @@ pub(super) fn load_score_import_profiles() -> Vec<ScoreImportProfileConfig> {
         } else {
             String::new()
         };
-        profiles.push(ScoreImportProfileConfig {
+        profiles.push(crate::SimplyLoveScoreImportProfile {
             id: summary.id,
             display_name: summary.display_name.trim().to_string(),
-            gs_api_key,
-            gs_username,
-            ac_api_key,
+            groovestats_api_key: gs_api_key,
+            groovestats_username: gs_username,
+            arrowcloud_api_key: ac_api_key,
         });
     }
     profiles.sort_by(|a, b| {
@@ -441,14 +420,15 @@ pub(super) fn load_score_import_profiles() -> Vec<ScoreImportProfileConfig> {
 
 pub(super) fn score_import_profile_eligible(
     endpoint: score_data::ScoreImportEndpoint,
-    profile_cfg: &ScoreImportProfileConfig,
+    profile_cfg: &crate::SimplyLoveScoreImportProfile,
 ) -> bool {
     match endpoint {
         score_data::ScoreImportEndpoint::GrooveStats
         | score_data::ScoreImportEndpoint::BoogieStats => {
-            !profile_cfg.gs_api_key.is_empty() && !profile_cfg.gs_username.is_empty()
+            !profile_cfg.groovestats_api_key.is_empty()
+                && !profile_cfg.groovestats_username.is_empty()
         }
-        score_data::ScoreImportEndpoint::ArrowCloud => !profile_cfg.ac_api_key.is_empty(),
+        score_data::ScoreImportEndpoint::ArrowCloud => !profile_cfg.arrowcloud_api_key.is_empty(),
     }
 }
 
@@ -804,7 +784,9 @@ pub(super) fn build_score_import_pack_picker_actors(
     out
 }
 
-pub(super) fn selected_score_import_profile(state: &State) -> Option<ScoreImportProfileConfig> {
+pub(super) fn selected_score_import_profile(
+    state: &State,
+) -> Option<crate::SimplyLoveScoreImportProfile> {
     let profile_idx = state.sub[SubmenuKind::ScoreImport]
         .choice_indices
         .get(SCORE_IMPORT_ROW_PROFILE_INDEX)
@@ -856,71 +838,23 @@ pub(super) fn begin_score_import(state: &mut State, selection: ScoreImportSelect
         return;
     }
     clear_navigation_holds(state);
-    let mut profile_cfg = deadsync_profile::Profile::default();
-    profile_cfg
-        .display_name
-        .clone_from(&selection.profile.display_name);
-    profile_cfg
-        .groovestats_api_key
-        .clone_from(&selection.profile.gs_api_key);
-    profile_cfg
-        .groovestats_username
-        .clone_from(&selection.profile.gs_username);
-    profile_cfg
-        .arrowcloud_api_key
-        .clone_from(&selection.profile.ac_api_key);
-
     let endpoint = selection.endpoint;
-    let profile_id = selection.profile.id.clone();
     let profile_name = if selection.profile.display_name.is_empty() {
         selection.profile.id.clone()
     } else {
         selection.profile.display_name.clone()
     };
-    let pack_groups = selection.pack_groups.clone();
     let pack_label = selection.pack_label.clone();
-    let only_missing_gs_scores = selection.only_missing_gs_scores;
-
-    log::warn!(
-        "{} score import starting for '{}' (pack: {}, only_missing_gs={}). {}",
-        endpoint.display_name(),
-        profile_name,
-        pack_label,
-        if only_missing_gs_scores { "yes" } else { "no" },
-        match endpoint {
-            score_data::ScoreImportEndpoint::ArrowCloud =>
-                "Bulk-imported per pack at 3 requests/sec (up to 1000 charts per request).",
-            _ =>
-                "Hard-limited to 3 requests/sec. For many charts this can take more than one hour.",
-        }
-    );
-
-    let cancel_requested = Arc::new(AtomicBool::new(false));
-    let cancel_for_thread = Arc::clone(&cancel_requested);
-    let (tx, rx) = std::sync::mpsc::channel::<ScoreImportMsg>();
-    state.score_import_ui = Some(ScoreImportUiState::new(
-        endpoint,
-        profile_name.clone(),
-        pack_label,
-        cancel_requested,
-        rx,
-    ));
-
-    std::thread::spawn(move || {
-        let result = scores::import_scores_for_profile(
+    state.score_import_ui = Some(ScoreImportUiState::new(endpoint, profile_name, pack_label));
+    queue_online(
+        state,
+        crate::SimplyLoveOnlineRequest::StartScoreImport(crate::SimplyLoveScoreImportRequest {
             endpoint,
-            profile_id,
-            profile_cfg,
-            pack_groups,
-            only_missing_gs_scores,
-            |progress| {
-                let _ = tx.send(ScoreImportMsg::Progress(progress));
-            },
-            || cancel_for_thread.load(Ordering::Relaxed),
-        );
-        let done_msg = result.map_err(|e| e.to_string());
-        let _ = tx.send(ScoreImportMsg::Done(done_msg));
-    });
+            profile: selection.profile,
+            pack_groups: selection.pack_groups,
+            only_missing_groovestats_scores: selection.only_missing_gs_scores,
+        }),
+    );
 }
 
 pub(super) fn begin_score_import_from_confirm(state: &mut State) {
@@ -930,54 +864,57 @@ pub(super) fn begin_score_import_from_confirm(state: &mut State) {
     begin_score_import(state, confirm.selection);
 }
 
-pub(super) fn poll_score_import_ui(score_import: &mut ScoreImportUiState, dt: f32) {
-    while let Ok(msg) = score_import.rx.try_recv() {
-        match msg {
-            ScoreImportMsg::Progress(progress) => {
-                score_import.total_charts = progress.total_charts;
-                score_import.processed_charts = progress.processed_charts;
-                score_import.imported_scores = progress.imported_scores;
-                score_import.missing_scores = progress.missing_scores;
-                score_import.failed_requests = progress.failed_requests;
-                score_import.detail_line = progress.detail;
-            }
-            ScoreImportMsg::Done(result) => {
-                score_import.done = true;
-                score_import.done_since = Some(Instant::now());
-                score_import.done_message = match result {
-                    Ok(summary) => {
-                        if summary.canceled {
-                            format!(
-                                "Canceled: requested={}, imported={}, missing={}, failed={} (elapsed {:.1}s)",
-                                summary.requested_charts,
-                                summary.imported_scores,
-                                summary.missing_scores,
-                                summary.failed_requests,
-                                summary.elapsed_seconds
-                            )
-                        } else {
-                            format!(
-                                "Complete: requested={}, imported={}, missing={}, failed={}, rate={} req/s (elapsed {:.1}s)",
-                                summary.requested_charts,
-                                summary.imported_scores,
-                                summary.missing_scores,
-                                summary.failed_requests,
-                                summary.rate_limit_per_second,
-                                summary.elapsed_seconds
-                            )
-                        }
+pub(super) fn apply_score_import_event(
+    state: &mut State,
+    event: crate::SimplyLoveScoreImportEvent,
+) {
+    let Some(score_import) = state.score_import_ui.as_mut() else {
+        return;
+    };
+    match event {
+        crate::SimplyLoveScoreImportEvent::Progress(progress) => {
+            score_import.total_charts = progress.total_charts;
+            score_import.processed_charts = progress.processed_charts;
+            score_import.imported_scores = progress.imported_scores;
+            score_import.missing_scores = progress.missing_scores;
+            score_import.failed_requests = progress.failed_requests;
+            score_import.detail_line = progress.detail;
+        }
+        crate::SimplyLoveScoreImportEvent::Finished(result) => {
+            score_import.done = true;
+            score_import.done_since = Some(Instant::now());
+            score_import.done_message = match result {
+                Ok(summary) => {
+                    if summary.canceled {
+                        format!(
+                            "Canceled: requested={}, imported={}, missing={}, failed={} (elapsed {:.1}s)",
+                            summary.requested_charts,
+                            summary.imported_scores,
+                            summary.missing_scores,
+                            summary.failed_requests,
+                            summary.elapsed_seconds
+                        )
+                    } else {
+                        format!(
+                            "Complete: requested={}, imported={}, missing={}, failed={}, rate={} req/s (elapsed {:.1}s)",
+                            summary.requested_charts,
+                            summary.imported_scores,
+                            summary.missing_scores,
+                            summary.failed_requests,
+                            summary.rate_limit_per_second,
+                            summary.elapsed_seconds
+                        )
                     }
-                    Err(e) => tr_fmt(
-                        "OptionsScoreImport",
-                        "ImportFailed",
-                        &[("error", &e.to_string())],
-                    )
-                    .to_string(),
-                };
-            }
+                }
+                Err(error) => {
+                    tr_fmt("OptionsScoreImport", "ImportFailed", &[("error", &error)]).to_string()
+                }
+            };
         }
     }
+}
 
+pub(super) fn update_score_import_ui(score_import: &mut ScoreImportUiState, dt: f32) {
     // Ease the displayed progress toward the latest integer target. On `done`
     // we snap so the bar fills completely and the final speed readout matches
     // the summary's rate exactly.

@@ -18,10 +18,12 @@ pub use effects::{
     SimplyLoveEffectRouteContext, SimplyLoveEffectRoutePlan, SimplyLoveHardwareRequest,
     SimplyLoveItgImportSummary, SimplyLoveItgProfileCandidate, SimplyLoveMediaRequest,
     SimplyLoveOnlineRequest, SimplyLoveProfileImportEvent, SimplyLoveProfileRequest,
-    SimplyLoveRuntimeRequest, SimplyLoveSyncEvent, SimplyLoveSyncKernel,
-    SimplyLoveSyncKernelTarget, SimplyLoveSyncOwner, SimplyLoveSyncPlotView, SimplyLoveSyncRequest,
-    SimplyLoveSyncResult, SimplyLoveSyncSongResult, SimplyLoveSyncStreamEvent,
-    SimplyLoveSyncTarget, SimplyLoveUpdaterRequest, resolve_effect_route,
+    SimplyLoveRuntimeRequest, SimplyLoveScoreImportEvent, SimplyLoveScoreImportProfile,
+    SimplyLoveScoreImportProgress, SimplyLoveScoreImportRequest, SimplyLoveScoreImportSummary,
+    SimplyLoveSyncEvent, SimplyLoveSyncKernel, SimplyLoveSyncKernelTarget, SimplyLoveSyncOwner,
+    SimplyLoveSyncPlotView, SimplyLoveSyncRequest, SimplyLoveSyncResult, SimplyLoveSyncSongResult,
+    SimplyLoveSyncStreamEvent, SimplyLoveSyncTarget, SimplyLoveUpdaterRequest,
+    resolve_effect_route,
 };
 
 pub struct SimplyLoveTheme;

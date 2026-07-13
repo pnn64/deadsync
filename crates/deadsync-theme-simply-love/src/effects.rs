@@ -90,6 +90,8 @@ pub enum SimplyLoveProfileImportEvent {
 pub enum SimplyLoveOnlineRequest {
     Reinitialize,
     RefreshArrowCloudStatus,
+    StartScoreImport(SimplyLoveScoreImportRequest),
+    CancelScoreImport,
     LinkArrowCloud {
         profile_id: String,
         display_name: String,
@@ -99,6 +101,63 @@ pub enum SimplyLoveOnlineRequest {
         display_name: String,
     },
     FetchGrade(String),
+}
+
+#[derive(Clone)]
+pub struct SimplyLoveScoreImportProfile {
+    pub id: String,
+    pub display_name: String,
+    pub groovestats_api_key: String,
+    pub groovestats_username: String,
+    pub arrowcloud_api_key: String,
+}
+
+impl std::fmt::Debug for SimplyLoveScoreImportProfile {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("SimplyLoveScoreImportProfile")
+            .field("id", &self.id)
+            .field("display_name", &self.display_name)
+            .field("groovestats_api_key", &"<redacted>")
+            .field("groovestats_username", &self.groovestats_username)
+            .field("arrowcloud_api_key", &"<redacted>")
+            .finish()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SimplyLoveScoreImportRequest {
+    pub endpoint: deadsync_score::ScoreImportEndpoint,
+    pub profile: SimplyLoveScoreImportProfile,
+    pub pack_groups: Vec<String>,
+    pub only_missing_groovestats_scores: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SimplyLoveScoreImportProgress {
+    pub processed_charts: usize,
+    pub total_charts: usize,
+    pub imported_scores: usize,
+    pub missing_scores: usize,
+    pub failed_requests: usize,
+    pub detail: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SimplyLoveScoreImportSummary {
+    pub requested_charts: usize,
+    pub imported_scores: usize,
+    pub missing_scores: usize,
+    pub failed_requests: usize,
+    pub rate_limit_per_second: u32,
+    pub elapsed_seconds: f32,
+    pub canceled: bool,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum SimplyLoveScoreImportEvent {
+    Progress(SimplyLoveScoreImportProgress),
+    Finished(Result<SimplyLoveScoreImportSummary, String>),
 }
 
 #[derive(Clone, Debug)]

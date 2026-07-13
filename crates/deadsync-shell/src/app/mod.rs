@@ -841,6 +841,7 @@ pub struct App {
     dynamic_media: DynamicMedia,
     options_song_pack_generation: u64,
     profile_import: crate::profile_import::Service,
+    score_import: crate::score_import::Service,
     sync_analysis: crate::sync_analysis::Service,
     ui_text_layout_cache: compose::TextLayoutCache,
     gameplay_text_layout_cache: compose::TextLayoutCache,
@@ -894,6 +895,13 @@ impl App {
                 &mut self.state.screens.manage_local_profiles_state,
                 events,
             );
+        }
+    }
+
+    fn poll_score_import(&mut self) {
+        let events = self.score_import.poll();
+        if !events.is_empty() {
+            options::apply_score_import_events(&mut self.state.screens.options_state, events);
         }
     }
 
@@ -1566,6 +1574,7 @@ impl App {
         self.state.shell.interaction.update_message(redraw_started);
         self.sync_options_song_packs();
         self.poll_profile_import();
+        self.poll_score_import();
         self.poll_sync_analysis();
 
         let mut upload_us: u32 = 0;
@@ -2029,6 +2038,7 @@ impl App {
             dynamic_media: DynamicMedia::new(),
             options_song_pack_generation: deadsync_simfile::runtime_cache::song_cache_generation(),
             profile_import: crate::profile_import::Service::default(),
+            score_import: crate::score_import::Service::default(),
             sync_analysis: crate::sync_analysis::Service::default(),
             // Screen transitions clear the UI cache, so misses stop inserting
             // once the cache reaches its fixed footprint.
@@ -2488,6 +2498,16 @@ impl App {
                     SimplyLoveOnlineRequest::RefreshArrowCloudStatus,
                 ) => {
                     deadsync_online::runtime::refresh_arrowcloud_status();
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::StartScoreImport(
+                    request,
+                )) => {
+                    self.score_import.start(request);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::CancelScoreImport) => {
+                    self.score_import.cancel();
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Media(_)

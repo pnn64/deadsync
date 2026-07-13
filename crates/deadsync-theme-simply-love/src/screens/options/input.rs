@@ -1767,11 +1767,10 @@ fn handle_input_impl(
         ) || (ev.pressed
             && matches!(ev.action, VirtualAction::p1_back | VirtualAction::p2_back));
         if cancel_requested {
-            score_import.cancel_requested.store(true, Ordering::Relaxed);
             clear_navigation_holds(state);
             state.score_import_ui = None;
+            queue_online(state, crate::SimplyLoveOnlineRequest::CancelScoreImport);
             queue_sfx(state, "assets/sounds/change.ogg");
-            log::warn!("Score import cancel requested by user.");
         }
         return ThemeEffect::None;
     }

@@ -39,7 +39,6 @@ use crate::views::{OptionsSongPackView, SimplyLoveUpdaterCapabilities, SimplyLov
 use deadlib_present::space::{is_wide, screen_height, screen_width, widescale};
 use deadlib_render::{software_thread_choice_index, software_thread_from_choice};
 use deadsync_input::{InputEvent, VirtualAction};
-use deadsync_online::score_compat as scores;
 use deadsync_profile::compat as profile;
 use deadsync_score as score_data;
 use deadsync_simfile::app_runtime as song_loading;
@@ -52,7 +51,6 @@ use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use crate::assets::i18n::{LookupKey, lookup_key, tr, tr_fmt};
@@ -120,8 +118,13 @@ fn queue_sync(state: &mut State, request: crate::SimplyLoveSyncRequest) {
     state.pending_sync.push(request);
 }
 
+fn queue_online(state: &mut State, request: crate::SimplyLoveOnlineRequest) {
+    state.pending_online.push(request);
+}
+
 fn prepend_pending_sfx(state: &mut State, effect: ThemeEffect) -> ThemeEffect {
-    let request_count = state.pending_sfx.len() + state.pending_sync.len();
+    let request_count =
+        state.pending_sfx.len() + state.pending_sync.len() + state.pending_online.len();
     if request_count == 0 {
         return effect;
     }
@@ -134,6 +137,12 @@ fn prepend_pending_sfx(state: &mut State, effect: ThemeEffect) -> ThemeEffect {
             .pending_sync
             .drain(..)
             .map(|request| ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Sync(request))),
+    );
+    effects.extend(
+        state
+            .pending_online
+            .drain(..)
+            .map(|request| ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Online(request))),
     );
     if has_effect {
         effects.push(effect);
@@ -151,8 +160,20 @@ pub fn apply_sync_analysis_events(state: &mut State, events: Vec<crate::SimplyLo
     }
 }
 
+pub fn apply_score_import_events(
+    state: &mut State,
+    events: Vec<crate::SimplyLoveScoreImportEvent>,
+) {
+    for event in events {
+        apply_score_import_event(state, event);
+    }
+}
+
 fn prepend_pending_sfx_opt(state: &mut State, effect: Option<ThemeEffect>) -> Option<ThemeEffect> {
-    if state.pending_sfx.is_empty() && state.pending_sync.is_empty() {
+    if state.pending_sfx.is_empty()
+        && state.pending_sync.is_empty()
+        && state.pending_online.is_empty()
+    {
         return effect;
     }
     Some(prepend_pending_sfx(

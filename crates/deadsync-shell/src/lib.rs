@@ -26,6 +26,7 @@ mod profile_import;
 mod profile_session;
 mod restart;
 mod runtime;
+mod score_import;
 mod screen_flow;
 mod screenshot;
 mod select_music;

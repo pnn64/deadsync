@@ -1388,6 +1388,62 @@ fn manage_local_profiles_import_execution_is_shell_owned() {
 }
 
 #[test]
+fn options_score_import_execution_is_shell_owned() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let theme = root.join("crates/deadsync-theme-simply-love");
+    let score_import = fs::read_to_string(theme.join("src/screens/options/score_import.rs"))
+        .expect("Simply Love score-import UI should be readable");
+    let effects = fs::read_to_string(theme.join("src/effects.rs"))
+        .expect("Simply Love requests should be readable");
+    let shell_service = fs::read_to_string(root.join("crates/deadsync-shell/src/score_import.rs"))
+        .expect("shell score-import service should be readable");
+    let shell_app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell app should be readable");
+
+    for runtime in [
+        "import_scores_for_profile",
+        "ScoreImportProgress",
+        "ScoreBulkImportSummary",
+        "std::thread::spawn",
+        "std::sync::mpsc",
+        "AtomicBool",
+    ] {
+        assert!(
+            !score_import.contains(runtime),
+            "Simply Love score-import UI still owns runtime token {runtime}"
+        );
+    }
+    for contract in [
+        "pub struct SimplyLoveScoreImportProfile",
+        "pub struct SimplyLoveScoreImportRequest",
+        "pub struct SimplyLoveScoreImportProgress",
+        "pub struct SimplyLoveScoreImportSummary",
+        "pub enum SimplyLoveScoreImportEvent",
+        "StartScoreImport",
+        "CancelScoreImport",
+    ] {
+        assert!(
+            effects.contains(contract),
+            "Simply Love score-import boundary is missing {contract}"
+        );
+    }
+    assert!(
+        score_import.contains("apply_score_import_event")
+            && score_import.contains("StartScoreImport")
+            && shell_service.contains("pub(crate) struct Service")
+            && shell_service.contains("scores::import_scores_for_profile")
+            && shell_service.contains("std::thread::spawn")
+            && shell_service.contains("mpsc::sync_channel")
+            && shell_service.contains("AtomicBool")
+            && shell_app.contains("self.score_import.poll()")
+            && shell_app.contains("options::apply_score_import_events")
+            && shell_app.contains("SimplyLoveOnlineRequest::StartScoreImport")
+            && shell_app.contains("SimplyLoveOnlineRequest::CancelScoreImport"),
+        "shell must own score-import execution, cancellation, conversion, and event polling"
+    );
+}
+
+#[test]
 fn options_song_pack_catalog_is_shell_prepared() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let options = root.join("crates/deadsync-theme-simply-love/src/screens/options");
