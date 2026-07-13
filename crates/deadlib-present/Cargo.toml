@@ -5,6 +5,7 @@ edition = "2024"
 license = "GPL-3.0"
 
 [dependencies]
+bytemuck = "1.25.0"
 deadlib-render = { path = "../deadlib-render" }
 glam = "0.33.1"
 image = "0.25.10"
@@ -12,6 +13,10 @@ log = "0.4.33"
 smallvec = "1.15.2"
 twox-hash = "2.1.2"
 rustc-hash = "2.1.2"
+
+[[bench]]
+name = "compiled_scene"
+harness = false
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

@@ -313,6 +313,8 @@ struct SandboxCacheStats {
     fallbacks: u64,
     prewarm_uploads: u64,
     prewarm_vertices: u64,
+    runtime_miss_frames: u64,
+    runtime_misses: u64,
 }
 
 /// One-entry retained frame for the quiet, idle Sandbox canary.
@@ -325,9 +327,13 @@ struct SandboxCacheStats {
 /// frame unchanged. Eviction/replacement occurs on key/resource changes or
 /// renderer recreation; destruction is therefore outside gameplay on the
 /// owner thread. Rebuild/fallback/prewarm totals are logged, while successful
-/// submissions are counted in `DrawStats`. Warm hits perform revision checks
-/// only; they do no actor build, composition, draw prep, allocation, cache
-/// pruning, upload, or resource destruction.
+/// submissions are counted in `DrawStats`. A backend cached-geometry miss
+/// disables direct submission for the current key/resource epoch after that
+/// submission, avoiding an incomplete-frame rebuild loop. A screen exit,
+/// renderer recreation, key change, or texture-generation change permits a new
+/// prewarm attempt. Warm hits perform revision checks only; they do no actor
+/// build, composition, draw prep, allocation, cache pruning, upload, or resource
+/// destruction.
 #[derive(Default)]
 pub struct SandboxDirectCache {
     entry: Option<SandboxEntry>,
@@ -383,7 +389,7 @@ impl SandboxDirectCache {
             0,
         )
         .compile(actors, COMPILE_CLEAR, CompileOptions::IMMUTABLE)
-        .map(|scene| scene.compile_draw_frame());
+        .and_then(|scene| scene.compile_draw_frame());
         let frame = match compiled {
             Ok(frame) => frame,
             Err(error) => {
@@ -441,6 +447,31 @@ impl SandboxDirectCache {
     pub fn invalidate(&mut self) {
         self.entry = None;
         self.failed = None;
+    }
+
+    /// Fails closed for the current key/resource epoch after the backend skipped
+    /// retained geometry. The submitted frame cannot safely be replayed, and an
+    /// immediate retry could repeat the same incomplete output every frame.
+    pub fn disable_after_cached_tmesh_miss<T: TextureContext + ?Sized>(
+        &mut self,
+        key: SandboxDirectKey,
+        textures: &T,
+        misses: u32,
+    ) {
+        if misses == 0 {
+            return;
+        }
+
+        self.entry = None;
+        self.failed = Some((key, textures.texture_registry_generation()));
+        self.stats.runtime_miss_frames = self.stats.runtime_miss_frames.saturating_add(1);
+        self.stats.runtime_misses = self.stats.runtime_misses.saturating_add(u64::from(misses));
+        if self.stats.runtime_miss_frames.is_power_of_two() {
+            warn!(
+                "Sandbox direct frame missed cached textured meshes; disabling it for the current resource epoch: miss_frames={} misses={}",
+                self.stats.runtime_miss_frames, self.stats.runtime_misses,
+            );
+        }
     }
 
     #[inline]
@@ -946,6 +977,73 @@ mod tests {
         ));
         assert!(cache.frame(key, &textures).is_none());
         assert_eq!(cache.stats.fallbacks, 1);
+    }
+
+    #[test]
+    fn sandbox_direct_cache_fails_closed_after_runtime_geometry_miss() {
+        let metrics = metrics();
+        space::set_current_metrics(metrics);
+        let textures = TestTextures {
+            generation: Cell::new(35),
+            handle_calls: Cell::new(0),
+            background_key: visual_styles::shared_background_texture_key(),
+        };
+        let actors = visual_style_bg::build_tiled_at_elapsed(params(), 0.0);
+        let fonts = HashMap::new();
+        let mut text_cache = TextLayoutCache::default();
+        let mut cache = SandboxDirectCache::default();
+        let key = sandbox_key(&metrics);
+
+        assert!(cache.prepare(
+            key,
+            &actors,
+            &metrics,
+            &fonts,
+            &mut text_cache,
+            &textures,
+            |_| Ok::<_, &'static str>(TMeshPrewarmStats::default()),
+        ));
+        cache.disable_after_cached_tmesh_miss(key, &textures, 0);
+        assert!(cache.frame(key, &textures).is_some());
+
+        cache.disable_after_cached_tmesh_miss(key, &textures, 2);
+        assert!(cache.frame(key, &textures).is_none());
+        assert_eq!(cache.stats.runtime_miss_frames, 1);
+        assert_eq!(cache.stats.runtime_misses, 2);
+
+        let mut prewarm_called = false;
+        assert!(!cache.prepare(
+            key,
+            &actors,
+            &metrics,
+            &fonts,
+            &mut text_cache,
+            &textures,
+            |_| {
+                prewarm_called = true;
+                Ok::<_, &'static str>(TMeshPrewarmStats::default())
+            },
+        ));
+        assert!(!prewarm_called);
+        assert!(cache.frame(key, &textures).is_none());
+        assert_eq!(cache.stats.rebuilds, 1);
+
+        textures.generation.set(36);
+        assert!(cache.prepare(
+            key,
+            &actors,
+            &metrics,
+            &fonts,
+            &mut text_cache,
+            &textures,
+            |_| {
+                prewarm_called = true;
+                Ok::<_, &'static str>(TMeshPrewarmStats::default())
+            },
+        ));
+        assert!(prewarm_called);
+        assert!(cache.frame(key, &textures).is_some());
+        assert_eq!(cache.stats.rebuilds, 2);
     }
 
     #[test]

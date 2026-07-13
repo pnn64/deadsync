@@ -7,7 +7,11 @@ pub use draw_prep::{
 
 use glam::Mat4 as Matrix4;
 use std::ops::Deref;
-use std::{collections::HashMap, hash::BuildHasherDefault, sync::Arc};
+use std::{
+    collections::HashMap,
+    hash::{BuildHasherDefault, Hasher},
+    sync::Arc,
+};
 use twox_hash::XxHash64;
 
 // --- Public Data Contract ---
@@ -16,6 +20,18 @@ pub const INVALID_TEXTURE_HANDLE: TextureHandle = 0;
 pub type FastU64Map<V> = HashMap<u64, V, BuildHasherDefault<XxHash64>>;
 pub type TMeshCacheKey = u64;
 pub const INVALID_TMESH_CACHE_KEY: TMeshCacheKey = 0;
+
+/// Deterministically identifies the exact immutable textured-mesh payload.
+///
+/// `TexturedMeshVertex` is `Pod`, so its byte representation contains no
+/// uninitialized padding. Hashing that representation distinguishes every bit
+/// sent to the GPU, including floating-point bit patterns.
+#[inline]
+pub fn tmesh_fingerprint(vertices: &[TexturedMeshVertex]) -> u64 {
+    let mut hasher = XxHash64::with_seed(0);
+    hasher.write(bytemuck::cast_slice(vertices));
+    hasher.finish()
+}
 
 pub struct TextureHandleMap<V> {
     slots: Vec<Option<V>>,

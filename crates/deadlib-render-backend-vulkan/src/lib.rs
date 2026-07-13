@@ -14,6 +14,7 @@ use deadlib_render::{
         self, CachedTMeshGeometry, DrawOp, DrawScratch, TMeshCacheResult, TMeshPrewarmStats,
         TexturedMeshSource,
     },
+    tmesh_fingerprint,
 };
 use glam::Mat4 as Matrix4;
 use image::RgbaImage;
@@ -110,6 +111,7 @@ struct RetiredTexture {
 struct CachedTMeshGeom {
     buffer: BufferResource,
     vertex_count: u32,
+    fingerprint: u64,
 }
 
 struct SwapchainResources {
@@ -1500,6 +1502,7 @@ pub fn draw(
                 cached_tmesh,
                 cached_tmesh_bytes,
                 cache_key,
+                None,
                 vertices,
             ) {
                 Ok(cached) => cached,
@@ -2961,17 +2964,23 @@ fn ensure_cached_tmesh(
     cached_tmesh: &mut FastU64Map<CachedTMeshGeom>,
     cached_tmesh_bytes: &mut usize,
     cache_key: TMeshCacheKey,
+    expected_fingerprint: Option<u64>,
     vertices: &[deadlib_render::TexturedMeshVertex],
 ) -> Result<TMeshCacheResult, Box<dyn Error>> {
     if cache_key == INVALID_TMESH_CACHE_KEY || vertices.is_empty() {
         return Ok(TMeshCacheResult::Unavailable);
     }
     if let Some(entry) = cached_tmesh.get(&cache_key) {
-        return Ok(if entry.vertex_count == vertices.len() as u32 {
-            TMeshCacheResult::Resident
-        } else {
-            TMeshCacheResult::Unavailable
-        });
+        let identity_matches = expected_fingerprint
+            .map(|fingerprint| entry.fingerprint == fingerprint)
+            .unwrap_or(true);
+        return Ok(
+            if entry.vertex_count == vertices.len() as u32 && identity_matches {
+                TMeshCacheResult::Resident
+            } else {
+                TMeshCacheResult::Unavailable
+            },
+        );
     }
 
     let bytes = std::mem::size_of_val(vertices);
@@ -3010,11 +3019,16 @@ fn ensure_cached_tmesh(
         device.unmap_memory(memory);
     }
 
+    // Legacy RenderList submissions do not carry a cold-path fingerprint. Hash
+    // only a new upload so resident legacy geometry stays hash-free per frame,
+    // while a later compiled-frame prewarm can still validate this entry.
+    let fingerprint = expected_fingerprint.unwrap_or_else(|| tmesh_fingerprint(vertices));
     cached_tmesh.insert(
         cache_key,
         CachedTMeshGeom {
             buffer: BufferResource { buffer, memory },
             vertex_count: vertices.len() as u32,
+            fingerprint,
         },
     );
     *cached_tmesh_bytes = cached_tmesh_bytes.saturating_add(bytes);
@@ -3045,6 +3059,7 @@ pub fn prewarm_textured_meshes(
             &mut state.cached_tmesh,
             &mut state.cached_tmesh_bytes,
             geometry.cache_key,
+            Some(geometry.fingerprint),
             &geometry.vertices,
         ) {
             Ok(result) => result,

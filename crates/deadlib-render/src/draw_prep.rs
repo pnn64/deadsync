@@ -66,9 +66,12 @@ pub enum TMeshCacheResult {
 /// submitting draw ops that reference `cache_key`; frame submission performs
 /// no geometry lookup, allocation, eviction, or destruction through this
 /// value. Backend cache capacity and eviction remain backend-owned concerns.
+/// `fingerprint` identifies the exact vertex byte payload and must match an
+/// existing backend entry before it may be treated as resident.
 #[derive(Clone, Debug)]
 pub struct CachedTMeshGeometry {
     pub cache_key: TMeshCacheKey,
+    pub fingerprint: u64,
     pub vertices: Arc<[TexturedMeshVertex]>,
 }
 

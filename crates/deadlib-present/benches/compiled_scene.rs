@@ -16,7 +16,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 // Run with:
-// cargo run --release -p deadlib-present --example compiled_scene_bench
+// cargo bench -p deadlib-present --bench compiled_scene
 
 const SPRITES: usize = 4_096;
 const ITERS: usize = 1_000;
@@ -255,7 +255,9 @@ fn main() {
         black_box(frame.sprite_instances.as_slice());
         compiled_scratch.recycle_render_list(&mut frame);
     });
-    let mut direct = scene.compile_draw_frame();
+    let mut direct = scene
+        .compile_draw_frame()
+        .expect("benchmark geometry keys are consistent");
     let mut direct_uv_frame = 0u32;
     let (direct_time, direct_alloc) = measure(|| {
         let patches = std::array::from_fn::<_, 10, _>(|index| SpriteUvPatch {

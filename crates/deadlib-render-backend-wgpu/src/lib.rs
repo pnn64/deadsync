@@ -6,6 +6,7 @@ use deadlib_render::{
         self, CachedTMeshGeometry, DrawOp, DrawScratch, TMeshCacheResult, TMeshPrewarmStats,
         TexturedMeshSource,
     },
+    tmesh_fingerprint,
 };
 use glam::Mat4 as Matrix4;
 use image::RgbaImage;
@@ -172,6 +173,7 @@ pub trait TextureLookup {
 struct CachedTMeshGeom {
     buffer: Arc<wgpu::Buffer>,
     vertex_count: u32,
+    fingerprint: u64,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -899,13 +901,17 @@ fn ensure_cached_tmesh(
     cached_tmesh: &mut FastU64Map<CachedTMeshGeom>,
     cached_tmesh_bytes: &mut usize,
     cache_key: TMeshCacheKey,
+    expected_fingerprint: Option<u64>,
     vertices: &[deadlib_render::TexturedMeshVertex],
 ) -> TMeshCacheResult {
     if cache_key == INVALID_TMESH_CACHE_KEY || vertices.is_empty() {
         return TMeshCacheResult::Unavailable;
     }
     if let Some(entry) = cached_tmesh.get(&cache_key) {
-        return if entry.vertex_count == vertices.len() as u32 {
+        let identity_matches = expected_fingerprint
+            .map(|fingerprint| entry.fingerprint == fingerprint)
+            .unwrap_or(true);
+        return if entry.vertex_count == vertices.len() as u32 && identity_matches {
             TMeshCacheResult::Resident
         } else {
             TMeshCacheResult::Unavailable
@@ -926,11 +932,16 @@ fn ensure_cached_tmesh(
             usage: wgpu::BufferUsages::VERTEX,
         }),
     );
+    // Legacy RenderList submissions do not carry a cold-path fingerprint. Hash
+    // only a new upload so resident legacy geometry stays hash-free per frame,
+    // while a later compiled-frame prewarm can still validate this entry.
+    let fingerprint = expected_fingerprint.unwrap_or_else(|| tmesh_fingerprint(vertices));
     cached_tmesh.insert(
         cache_key,
         CachedTMeshGeom {
             buffer,
             vertex_count: vertices.len() as u32,
+            fingerprint,
         },
     );
     *cached_tmesh_bytes = cached_tmesh_bytes.saturating_add(bytes);
@@ -952,6 +963,7 @@ pub fn prewarm_textured_meshes(
             &mut state.cached_tmesh,
             &mut state.cached_tmesh_bytes,
             geometry.cache_key,
+            Some(geometry.fingerprint),
             &geometry.vertices,
         );
         stats.record(result, geometry.vertices.len());
@@ -1011,6 +1023,7 @@ pub fn draw(
                 cached_tmesh,
                 cached_tmesh_bytes,
                 cache_key,
+                None,
                 vertices,
             );
             if result.upload_attempted() {

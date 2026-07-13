@@ -17,8 +17,9 @@ use deadlib_render::{
     CachedTMeshGeometry, DrawFrame as RenderDrawFrame, FastU64Map,
     FrameCapacity as DrawFrameCapacity, FramePrepareStats, INVALID_TEXTURE_HANDLE,
     INVALID_TMESH_CACHE_KEY, ObjectType, RenderList, RenderObject, SpriteInstanceRaw,
-    TexturedMeshVertices,
+    TMeshCacheKey, TexturedMeshVertices,
     draw_prep::{DrawScratch, prepare_render_list},
+    tmesh_fingerprint,
 };
 use glam::Mat4;
 use std::collections::HashMap;
@@ -269,6 +270,9 @@ pub enum CompileError {
         count: usize,
         max: usize,
     },
+    ConflictingGeometryKey {
+        cache_key: TMeshCacheKey,
+    },
 }
 
 impl fmt::Display for CompileError {
@@ -293,6 +297,10 @@ impl fmt::Display for CompileError {
             Self::TooManyCameras { count, max } => {
                 write!(f, "compiled scene has {count} cameras; maximum is {max}")
             }
+            Self::ConflictingGeometryKey { cache_key } => write!(
+                f,
+                "textured-mesh cache key {cache_key:#x} refers to conflicting geometry"
+            ),
         }
     }
 }
@@ -531,11 +539,13 @@ impl CompiledScene {
     /// Mesh transforms and draw-run construction happen here on the cold path.
     /// The returned frame can be submitted directly by hardware backends every
     /// frame without actor composition, RenderList emission, or draw prep.
-    pub fn compile_draw_frame(&self) -> CompiledDrawFrame {
+    /// Conflicting nonzero geometry keys are rejected before draw prep so no
+    /// draw op can address a differently sized or shaped retained buffer.
+    pub fn compile_draw_frame(&self) -> Result<CompiledDrawFrame, CompileError> {
         let mut emit_scratch = CompiledSceneScratch::default();
         emit_scratch.reserve(self.capacity());
         let render = self.emit(&mut emit_scratch);
-        let geometries = collect_cached_tmesh_geometries(&render);
+        let geometries = collect_cached_tmesh_geometries(&render)?;
         let mut draw_scratch = DrawScratch::default();
         let (view, _) = prepare_render_list(&render, &mut draw_scratch, |_, _| true);
         let mut frame = RenderDrawFrame::with_capacity(DrawFrameCapacity {
@@ -559,18 +569,20 @@ impl CompiledScene {
             .extend_from_slice(view.tmesh_instances);
         frame.ops.extend_from_slice(view.ops);
 
-        CompiledDrawFrame {
+        Ok(CompiledDrawFrame {
             frame,
             geometries,
             stamp: self.stamp,
             scene_id: self.scene_id,
-        }
+        })
     }
 }
 
-fn collect_cached_tmesh_geometries(render: &RenderList) -> Vec<CachedTMeshGeometry> {
+fn collect_cached_tmesh_geometries(
+    render: &RenderList,
+) -> Result<Vec<CachedTMeshGeometry>, CompileError> {
     let mut indices = FastU64Map::<usize>::default();
-    let mut geometries = Vec::new();
+    let mut geometries = Vec::<CachedTMeshGeometry>::new();
     for object in &render.objects {
         let ObjectType::TexturedMesh {
             vertices,
@@ -580,7 +592,22 @@ fn collect_cached_tmesh_geometries(render: &RenderList) -> Vec<CachedTMeshGeomet
         else {
             continue;
         };
-        if *geom_cache_key == INVALID_TMESH_CACHE_KEY || indices.contains_key(geom_cache_key) {
+        if *geom_cache_key == INVALID_TMESH_CACHE_KEY {
+            continue;
+        }
+
+        let fingerprint = tmesh_fingerprint(vertices.as_ref());
+        if let Some(index) = indices.get(geom_cache_key).copied() {
+            let retained = &geometries[index];
+            if retained.vertices.len() != vertices.len()
+                || retained.fingerprint != fingerprint
+                || bytemuck::cast_slice::<_, u8>(retained.vertices.as_ref())
+                    != bytemuck::cast_slice::<_, u8>(vertices.as_ref())
+            {
+                return Err(CompileError::ConflictingGeometryKey {
+                    cache_key: *geom_cache_key,
+                });
+            }
             continue;
         }
 
@@ -591,10 +618,11 @@ fn collect_cached_tmesh_geometries(render: &RenderList) -> Vec<CachedTMeshGeomet
         indices.insert(*geom_cache_key, geometries.len());
         geometries.push(CachedTMeshGeometry {
             cache_key: *geom_cache_key,
+            fingerprint,
             vertices: retained,
         });
     }
-    geometries
+    Ok(geometries)
 }
 
 impl CompiledRootPrefix {
@@ -2079,7 +2107,9 @@ mod tests {
         let scene = compile(&actors, &fonts, &textures).expect("fixture compiles");
         let mut emit_scratch = CompiledSceneScratch::default();
         let render = scene.emit(&mut emit_scratch);
-        let direct = scene.compile_draw_frame();
+        let direct = scene
+            .compile_draw_frame()
+            .expect("fixture geometry keys are consistent");
         let mut expected_scratch = DrawScratch::default();
         let (expected, _) = prepare_render_list(&render, &mut expected_scratch, |key, vertices| {
             let geometry = direct
@@ -2160,6 +2190,62 @@ mod tests {
     }
 
     #[test]
+    fn retained_geometry_deduplicates_identical_keys() {
+        let fonts = fonts();
+        let textures = textures();
+        let scene = compile(&[textured_mesh(), textured_mesh()], &fonts, &textures)
+            .expect("identical keyed meshes compile");
+        let direct = scene
+            .compile_draw_frame()
+            .expect("identical keyed meshes freeze");
+
+        assert_eq!(direct.geometries().len(), 1);
+        assert_eq!(direct.geometries()[0].cache_key, 44);
+        assert_eq!(
+            direct.geometries()[0].fingerprint,
+            tmesh_fingerprint(direct.geometries()[0].vertices.as_ref())
+        );
+    }
+
+    #[test]
+    fn retained_geometry_rejects_key_with_different_count() {
+        let mut conflicting = textured_mesh();
+        let Actor::TexturedMesh { vertices, .. } = &mut conflicting else {
+            unreachable!()
+        };
+        *vertices = Arc::from([TexturedMeshVertex::default(); 2]);
+        let fonts = fonts();
+        let textures = textures();
+        let scene = compile(&[textured_mesh(), conflicting], &fonts, &textures)
+            .expect("actor snapshot compiles before retained geometry validation");
+
+        assert_eq!(
+            scene.compile_draw_frame().err(),
+            Some(CompileError::ConflictingGeometryKey { cache_key: 44 })
+        );
+    }
+
+    #[test]
+    fn retained_geometry_rejects_key_with_different_data() {
+        let mut conflicting = textured_mesh();
+        let Actor::TexturedMesh { vertices, .. } = &mut conflicting else {
+            unreachable!()
+        };
+        let mut changed = vertices.to_vec();
+        changed[0].pos[0] = 99.0;
+        *vertices = Arc::from(changed);
+        let fonts = fonts();
+        let textures = textures();
+        let scene = compile(&[textured_mesh(), conflicting], &fonts, &textures)
+            .expect("actor snapshot compiles before retained geometry validation");
+
+        assert_eq!(
+            scene.compile_draw_frame().err(),
+            Some(CompileError::ConflictingGeometryKey { cache_key: 44 })
+        );
+    }
+
+    #[test]
     fn retained_draw_frame_uv_updates_allocate_nothing() {
         let fonts = fonts();
         let textures = textures();
@@ -2171,7 +2257,9 @@ mod tests {
         *z = -2;
         let scene = compile(&[actor, textured_mesh()], &fonts, &textures).expect("scene compiles");
         let slot = scene.sprite_uv_slot(NodeId(0)).expect("sprite slot");
-        let mut direct = scene.compile_draw_frame();
+        let mut direct = scene
+            .compile_draw_frame()
+            .expect("fixture geometry keys are consistent");
         assert_eq!(direct.geometries().len(), 1);
         assert!(direct.frame().tmesh_vertices.is_empty());
 
@@ -2228,7 +2316,9 @@ mod tests {
             second.emit_with_uv_patches(&mut scratch, &[patch]).err(),
             Some(PatchError::WrongScene(NodeId(0)))
         );
-        let mut direct = second.compile_draw_frame();
+        let mut direct = second
+            .compile_draw_frame()
+            .expect("fixture geometry keys are consistent");
         assert_eq!(
             direct.apply_uv_patches(&[patch]),
             Err(PatchError::WrongScene(NodeId(0)))

@@ -2686,6 +2686,13 @@ impl App {
                     self.state.shell.last_present_stats = stats.present_stats;
                     draw_us = elapsed_us_since(draw_started);
                     capture_screenshot = true;
+                    if sandbox_direct && stats.cached_tmesh_misses > 0 {
+                        self.sandbox_direct_cache.disable_after_cached_tmesh_miss(
+                            sandbox_direct_key.expect("direct Sandbox frame requires a cache key"),
+                            &PRESENT_TEXTURE_CONTEXT,
+                            stats.cached_tmesh_misses,
+                        );
+                    }
                 }
                 Err(e) => {
                     error!("Failed to draw frame: {e}");
