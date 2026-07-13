@@ -229,7 +229,7 @@ pub fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: 
             tint,
             glow,
             vertices,
-            geom_cache_key,
+            geometry_id,
             uv_scale,
             uv_offset,
             uv_tex_shift,
@@ -249,7 +249,7 @@ pub fn song_lua_player_y_fold_actor(actor: Actor, pivot_x: f32, rotation_y_deg: 
                 tint,
                 glow,
                 vertices,
-                geom_cache_key,
+                geometry_id,
                 uv_scale,
                 uv_offset,
                 uv_tex_shift,
@@ -675,6 +675,7 @@ mod tests {
             color: [0.9, 0.8, 0.7, 0.6],
             tex_matrix_scale: [1.25, 0.75],
         }]);
+        let geometry_id = deadlib_render::TMeshGeometryId::new(73, textured_vertices.as_ref());
         let textured_mesh = Actor::TexturedMesh {
             align: [0.1, 0.9],
             offset: [140.0, 23.0],
@@ -685,7 +686,7 @@ mod tests {
             tint: [0.11, 0.22, 0.33, 0.44],
             glow: [0.55, 0.66, 0.77, 0.88],
             vertices: Arc::clone(&textured_vertices),
-            geom_cache_key: 73,
+            geometry_id,
             uv_scale: [1.5, 2.5],
             uv_offset: [0.15, 0.25],
             uv_tex_shift: [0.35, 0.45],
@@ -704,7 +705,7 @@ mod tests {
             tint,
             glow,
             vertices,
-            geom_cache_key,
+            geometry_id: folded_geometry_id,
             uv_scale,
             uv_offset,
             uv_tex_shift,
@@ -727,7 +728,7 @@ mod tests {
         assert_eq!(tint, [0.11, 0.22, 0.33, 0.44]);
         assert_eq!(glow, [0.55, 0.66, 0.77, 0.88]);
         assert!(Arc::ptr_eq(&vertices, &textured_vertices));
-        assert_eq!(geom_cache_key, 73);
+        assert_eq!(folded_geometry_id, geometry_id);
         assert_eq!(uv_scale, [1.5, 2.5]);
         assert_eq!(uv_offset, [0.15, 0.25]);
         assert_eq!(uv_tex_shift, [0.35, 0.45]);

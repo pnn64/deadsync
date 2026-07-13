@@ -151,12 +151,14 @@ impl Backend {
     /// The render thread exclusively owns each backend's 16 MiB cache for the
     /// backend lifetime. Call this at screen/song warmup; it attempts every
     /// supplied entry, records hits/uploads/failures, and never prunes. A full
-    /// cache saturates and reports entries unavailable. Cached resources are
-    /// destroyed during backend cleanup (or backend drop for wgpu). A direct
-    /// frame miss skips that run instead of uploading during gameplay. Work is
-    /// bounded by this slice and the byte cap, with one lookup and at most one
-    /// upload per entry. Callers should require [`TMeshPrewarmStats::ready`]
-    /// before selecting direct submission.
+    /// cache reports capacity exhaustion separately from identity mismatch or
+    /// upload failure. Entries are keyed by the complete logical-key/fingerprint
+    /// identity, so safe revisions can coexist. Cached resources are destroyed
+    /// during backend cleanup (or backend drop for wgpu). A direct frame miss
+    /// skips that run instead of uploading during gameplay. Work is bounded by
+    /// this slice and the byte cap, with one lookup and at most one upload per
+    /// entry. Callers should require [`TMeshPrewarmStats::ready`] before
+    /// selecting direct submission.
     pub fn prewarm_textured_meshes(
         &mut self,
         geometries: &[CachedTMeshGeometry],

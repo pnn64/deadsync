@@ -2,7 +2,7 @@ use crate::act;
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
-use deadlib_render::{TMeshCacheKey, TexturedMeshVertex};
+use deadlib_render::{TMeshGeometryId, TexturedMeshVertex};
 use deadsync_assets::noteskin::{self, build_model_geometry};
 use deadsync_notefield::noteskin_model_actor_from_draw_depth_sorted_affine_cached_geometry;
 use glam::{Mat4 as Matrix4, Vec3 as Vector3};
@@ -28,7 +28,7 @@ struct TechniqueLayer {
     slot: noteskin::SpriteSlot,
     size: [f32; 2],
     vertices: Arc<[TexturedMeshVertex]>,
-    geom_cache_key: TMeshCacheKey,
+    geometry_id: Option<TMeshGeometryId>,
 }
 
 #[derive(Clone)]
@@ -216,12 +216,15 @@ fn load_layers(path: &str) -> Result<Arc<[TechniqueLayer]>, String> {
                 .as_ref()
                 .map(|_| build_model_geometry(&slot))
                 .unwrap_or_else(|| Arc::from([]));
-            let geom_cache_key = technique_geom_cache_key(path, index, &slot, vertices.len());
+            let geometry_id = TMeshGeometryId::new(
+                technique_geom_logical_key(path, index, &slot),
+                vertices.as_ref(),
+            );
             TechniqueLayer {
                 slot,
                 size,
                 vertices,
-                geom_cache_key,
+                geometry_id,
             }
         })
         .collect::<Vec<_>>();
@@ -258,7 +261,7 @@ fn push_layers(
             deadlib_render::BlendMode::Alpha,
             MODEL_Z,
             Arc::clone(&layer.vertices),
-            layer.geom_cache_key,
+            layer.geometry_id,
         ) {
             if let Actor::TexturedMesh { depth_test, .. } = &mut actor {
                 *depth_test = false;
@@ -268,18 +271,12 @@ fn push_layers(
     }
 }
 
-fn technique_geom_cache_key(
-    path: &str,
-    index: usize,
-    slot: &noteskin::SpriteSlot,
-    vertex_count: usize,
-) -> TMeshCacheKey {
+fn technique_geom_logical_key(path: &str, index: usize, slot: &noteskin::SpriteSlot) -> u64 {
     let mut hasher = XxHash64::default();
-    "deadsync-technique-bg-v1".hash(&mut hasher);
+    "deadsync-technique-bg-v2".hash(&mut hasher);
     path.hash(&mut hasher);
     index.hash(&mut hasher);
     slot.texture_key().hash(&mut hasher);
-    vertex_count.hash(&mut hasher);
     hasher.finish().max(1)
 }
 
@@ -375,7 +372,7 @@ mod tests {
     }
 
     #[test]
-    fn technique_layers_use_stable_cached_mesh_keys() {
+    fn technique_layers_use_stable_cached_mesh_identity() {
         let state = State::new();
         let mut actors = Vec::new();
         assert!(state.push_at_elapsed(&mut actors, 3, [0.0, 0.0, 0.0, 1.0], 1.0, 1_000_000.0,));
@@ -389,16 +386,34 @@ mod tests {
         let mut cached_meshes = 0usize;
         for child in children {
             if let Actor::TexturedMesh {
-                geom_cache_key,
+                geometry_id,
                 vertices,
                 ..
             } = child
             {
-                assert_ne!(*geom_cache_key, deadlib_render::INVALID_TMESH_CACHE_KEY);
+                assert!(geometry_id.is_some());
                 assert!(!vertices.is_empty());
                 cached_meshes += 1;
             }
         }
         assert!(cached_meshes > 0);
+    }
+
+    #[test]
+    fn technique_identity_versions_changed_asset_content() {
+        let slot = noteskin::test_model_slot();
+        let logical_key = technique_geom_logical_key(CIRCLE_FRAG_PATH, 0, &slot);
+        let vertices_a = [TexturedMeshVertex::default()];
+        let vertices_b = [TexturedMeshVertex {
+            pos: [1.0, 0.0, 0.0],
+            ..TexturedMeshVertex::default()
+        }];
+        let id_a = TMeshGeometryId::new(logical_key, &vertices_a)
+            .expect("nonempty technique geometry should have identity");
+        let id_b = TMeshGeometryId::new(logical_key, &vertices_b)
+            .expect("changed technique geometry should have identity");
+
+        assert_eq!(id_a.logical_key(), id_b.logical_key());
+        assert_ne!(id_a, id_b);
     }
 }

@@ -611,7 +611,7 @@ struct CachedLine {
 #[derive(Clone)]
 struct CachedTextMeshBatch {
     texture_key: *const str,
-    geom_cache_key: renderer::TMeshCacheKey,
+    geometry_id: renderer::TMeshGeometryId,
     vertices: Arc<[renderer::TexturedMeshVertex]>,
 }
 
@@ -1209,13 +1209,13 @@ fn text_layout_mesh_seed(key: TextLayoutKey, text: &str) -> u64 {
 #[inline(always)]
 fn text_batch_cache_key(
     layout_seed: u64,
-    texture_key: *const str,
+    texture_key: &str,
     stroke: bool,
     align: actors::TextAlign,
 ) -> u64 {
     let mut hasher = rustc_hash::FxHasher::default();
     layout_seed.hash(&mut hasher);
-    (texture_key as *const () as usize).hash(&mut hasher);
+    texture_key.hash(&mut hasher);
     stroke.hash(&mut hasher);
     match align {
         actors::TextAlign::Left => 0u8,
@@ -1223,12 +1223,7 @@ fn text_batch_cache_key(
         actors::TextAlign::Right => 2u8,
     }
     .hash(&mut hasher);
-    let key = hasher.finish();
-    if key == renderer::INVALID_TMESH_CACHE_KEY {
-        layout_seed ^ 1
-    } else {
-        key
-    }
+    hasher.finish().max(1)
 }
 
 #[inline(always)]
@@ -1703,10 +1698,17 @@ fn finish_text_mesh_batches(
         if builder.vertices.is_empty() {
             continue;
         }
+        // SAFETY: the pointer comes from immutable font storage retained for
+        // the complete lifetime of this cached text layout.
+        let texture_key = unsafe { str_from_cached_ptr(builder.texture_key) };
+        let vertices: Arc<[renderer::TexturedMeshVertex]> = Arc::from(builder.vertices);
+        let logical_key = text_batch_cache_key(layout_seed, texture_key, stroke, align);
+        let geometry_id = renderer::TMeshGeometryId::new(logical_key, vertices.as_ref())
+            .expect("nonempty cached text geometry has a valid logical key");
         out.push(CachedTextMeshBatch {
             texture_key: builder.texture_key,
-            geom_cache_key: text_batch_cache_key(layout_seed, builder.texture_key, stroke, align),
-            vertices: Arc::from(builder.vertices),
+            geometry_id,
+            vertices,
         });
     }
     out
@@ -2740,7 +2742,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
             tint,
             glow,
             vertices,
-            geom_cache_key,
+            geometry_id,
             uv_scale,
             uv_offset,
             uv_tex_shift,
@@ -2777,7 +2779,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                         false,
                     ),
                     vertices: renderer::TexturedMeshVertices::Shared(Arc::clone(vertices)),
-                    geom_cache_key: *geom_cache_key,
+                    geometry_id: *geometry_id,
                     depth_test: *depth_test,
                 },
                 texture_handle,
@@ -2809,7 +2811,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                             true,
                         ),
                         vertices: renderer::TexturedMeshVertices::Shared(Arc::clone(vertices)),
-                        geom_cache_key: *geom_cache_key,
+                        geometry_id: *geometry_id,
                         depth_test: *depth_test,
                     },
                     texture_handle,
@@ -3874,7 +3876,7 @@ fn push_text_mesh_batches<T: TextureContext + ?Sized>(
                     false,
                 ),
                 vertices: renderer::TexturedMeshVertices::Shared(Arc::clone(&batch.vertices)),
-                geom_cache_key: batch.geom_cache_key,
+                geometry_id: Some(batch.geometry_id),
                 depth_test: false,
             },
             texture_handle: texture_cache.texture_handle(
@@ -3930,7 +3932,7 @@ fn push_transient_text_mesh_builders<T: TextureContext + ?Sized>(
                     false,
                 ),
                 vertices: renderer::TexturedMeshVertices::Transient(builder.vertices),
-                geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
+                geometry_id: None,
                 depth_test: false,
             },
             texture_handle: texture_cache.texture_handle(
@@ -4642,7 +4644,7 @@ fn clip_textured_mesh_to_world_rect(
                 texture_mask,
             ),
             vertices: renderer::TexturedMeshVertices::Transient(out),
-            geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
+            geometry_id: None,
             depth_test: false,
         },
         sprite: None,
@@ -4719,7 +4721,7 @@ fn clip_rotated_sprite_to_world_rect(
                 texture_mask,
             ),
             vertices: renderer::TexturedMeshVertices::Transient(out.into_vec()),
-            geom_cache_key: renderer::INVALID_TMESH_CACHE_KEY,
+            geometry_id: None,
             depth_test: false,
         },
         sprite: None,
@@ -4740,8 +4742,8 @@ mod tests {
     use crate::font::{Font, Glyph};
     use crate::space::Metrics;
     use deadlib_render::{
-        BlendMode, INVALID_TMESH_CACHE_KEY, MeshVertex, ObjectType, RenderObject,
-        SpriteInstanceRaw, TMeshCacheKey, TexturedMeshInstanceRaw, TexturedMeshVertex,
+        BlendMode, MeshVertex, ObjectType, RenderObject, SpriteInstanceRaw, TMeshGeometryId,
+        TexturedMeshInstanceRaw, TexturedMeshVertex,
     };
     use glam::Mat4 as Matrix4;
     use std::collections::HashMap;
@@ -5567,7 +5569,7 @@ mod tests {
                         TexturedMeshVertex::default();
                         6
                     ]),
-                    geom_cache_key: INVALID_TMESH_CACHE_KEY,
+                    geometry_id: None,
                     depth_test: false,
                 },
                 texture_handle: 9,
@@ -5668,14 +5670,16 @@ mod tests {
     }
 
     #[test]
-    fn shadowed_textured_mesh_keeps_geom_cache_key() {
-        const CACHE_KEY: TMeshCacheKey = 77;
+    fn shadowed_textured_mesh_keeps_geometry_id() {
+        const CACHE_KEY: u64 = 77;
         let metrics = Metrics {
             left: 0.0,
             right: 100.0,
             top: 100.0,
             bottom: 0.0,
         };
+        let vertices: Arc<[TexturedMeshVertex]> = Arc::from(vec![TexturedMeshVertex::default(); 3]);
+        let geometry_id = TMeshGeometryId::new(CACHE_KEY, vertices.as_ref());
         let mesh = Actor::TexturedMesh {
             align: [0.0, 0.0],
             offset: [10.0, 20.0],
@@ -5685,8 +5689,8 @@ mod tests {
             texture: Arc::from("mesh"),
             tint: [0.25, 0.5, 0.75, 0.8],
             glow: [1.0, 1.0, 1.0, 0.0],
-            vertices: Arc::from(vec![TexturedMeshVertex::default(); 3]),
-            geom_cache_key: CACHE_KEY,
+            vertices,
+            geometry_id,
             uv_scale: [1.0, 1.0],
             uv_offset: [0.0, 0.0],
             uv_tex_shift: [0.0, 0.0],
@@ -5720,17 +5724,17 @@ mod tests {
             (
                 deadlib_render::ObjectType::TexturedMesh {
                     instance: shadow_instance,
-                    geom_cache_key: shadow_key,
+                    geometry_id: shadow_id,
                     ..
                 },
                 deadlib_render::ObjectType::TexturedMesh {
                     instance: original_instance,
-                    geom_cache_key: original_key,
+                    geometry_id: original_id,
                     ..
                 },
             ) => {
-                assert_eq!(*shadow_key, CACHE_KEY);
-                assert_eq!(*original_key, CACHE_KEY);
+                assert_eq!(*shadow_id, geometry_id);
+                assert_eq!(*original_id, geometry_id);
                 assert_eq!(original_instance.tint, [0.25, 0.5, 0.75, 0.8]);
                 assert_eq!(shadow_instance.tint, [0.125, 0.125, 0.5625, 0.4]);
             }
@@ -5795,7 +5799,7 @@ mod tests {
             tint: [0.8, 0.6, 0.4, 0.5],
             glow: [0.5, 0.25, 1.0, 0.4],
             vertices: Arc::from(vec![TexturedMeshVertex::default(); 3]),
-            geom_cache_key: INVALID_TMESH_CACHE_KEY,
+            geometry_id: None,
             uv_scale: [1.0, 1.0],
             uv_offset: [0.0, 0.0],
             uv_tex_shift: [0.0, 0.0],
@@ -5944,12 +5948,12 @@ mod tests {
             ObjectType::TexturedMesh {
                 instance,
                 vertices,
-                geom_cache_key,
+                geometry_id,
                 ..
             } => {
                 assert_eq!(instance.tint, [0.5, 0.75, 1.0, 1.0]);
                 assert_eq!(vertices.len(), 12);
-                assert_ne!(*geom_cache_key, INVALID_TMESH_CACHE_KEY);
+                assert!(geometry_id.is_some());
             }
             _ => panic!("expected batched text to use textured mesh"),
         }
@@ -6000,11 +6004,11 @@ mod tests {
         match &render.objects[0].object_type {
             ObjectType::TexturedMesh {
                 vertices,
-                geom_cache_key,
+                geometry_id,
                 ..
             } => {
                 assert!(!vertices.is_empty());
-                assert_eq!(*geom_cache_key, INVALID_TMESH_CACHE_KEY);
+                assert!(geometry_id.is_none());
             }
             _ => panic!("expected clipped batched text to remain textured mesh"),
         }
@@ -6053,8 +6057,8 @@ mod tests {
 
         assert_eq!(render.objects.len(), 1);
         match &render.objects[0].object_type {
-            ObjectType::TexturedMesh { geom_cache_key, .. } => {
-                assert_ne!(*geom_cache_key, INVALID_TMESH_CACHE_KEY);
+            ObjectType::TexturedMesh { geometry_id, .. } => {
+                assert!(geometry_id.is_some());
             }
             _ => panic!("expected fully inside clipped text to keep cached textured mesh"),
         }
@@ -6105,11 +6109,11 @@ mod tests {
         match &render.objects[0].object_type {
             ObjectType::TexturedMesh {
                 vertices,
-                geom_cache_key,
+                geometry_id,
                 ..
             } => {
                 assert_eq!(vertices.len(), 12);
-                assert_ne!(*geom_cache_key, INVALID_TMESH_CACHE_KEY);
+                assert!(geometry_id.is_some());
             }
             _ => panic!("expected centered text to use batched textured mesh"),
         }
@@ -6166,11 +6170,11 @@ mod tests {
         match &render.objects[0].object_type {
             ObjectType::TexturedMesh {
                 vertices,
-                geom_cache_key,
+                geometry_id,
                 ..
             } => {
                 assert_eq!(vertices.len(), 12);
-                assert_eq!(*geom_cache_key, INVALID_TMESH_CACHE_KEY);
+                assert!(geometry_id.is_none());
                 assert_eq!(vertices[0].color, [1.0; 4]);
                 assert_eq!(vertices[6].color, [0.0, 1.0, 0.0, 1.0]);
             }
@@ -6297,13 +6301,13 @@ mod tests {
         };
         let ObjectType::TexturedMesh {
             vertices: jittered_vertices,
-            geom_cache_key,
+            geometry_id,
             ..
         } = &jittered.objects[0].object_type
         else {
             panic!("expected jittered text mesh");
         };
-        assert_eq!(*geom_cache_key, INVALID_TMESH_CACHE_KEY);
+        assert!(geometry_id.is_none());
         assert_ne!(jittered_vertices[0].pos, base_vertices[0].pos);
     }
 
@@ -6362,13 +6366,13 @@ mod tests {
         };
         let ObjectType::TexturedMesh {
             vertices: distorted_vertices,
-            geom_cache_key,
+            geometry_id,
             ..
         } = &distorted.objects[0].object_type
         else {
             panic!("expected distorted text mesh");
         };
-        assert_eq!(*geom_cache_key, INVALID_TMESH_CACHE_KEY);
+        assert!(geometry_id.is_none());
         assert!(
             base_vertices
                 .iter()
@@ -6432,17 +6436,17 @@ mod tests {
             (
                 ObjectType::TexturedMesh {
                     vertices: first_vertices,
-                    geom_cache_key: first_key,
+                    geometry_id: first_id,
                     ..
                 },
                 ObjectType::TexturedMesh {
                     vertices: second_vertices,
-                    geom_cache_key: second_key,
+                    geometry_id: second_id,
                     ..
                 },
             ) => {
-                assert_eq!(*first_key, INVALID_TMESH_CACHE_KEY);
-                assert_eq!(*second_key, INVALID_TMESH_CACHE_KEY);
+                assert!(first_id.is_none());
+                assert!(second_id.is_none());
                 assert_eq!(first_vertices[0].color, [1.0; 4]);
                 assert_eq!(second_vertices[0].color, [0.0, 1.0, 0.0, 1.0]);
             }

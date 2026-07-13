@@ -404,11 +404,13 @@ impl SandboxDirectCache {
             Ok(stats) if stats.ready() => stats,
             Ok(stats) => {
                 warn!(
-                    "Sandbox direct-frame geometry prewarm saturated; using legacy actors: requested={} resident={} uploaded={} unavailable={} failed={}",
+                    "Sandbox direct-frame geometry prewarm incomplete; using legacy actors: requested={} resident={} uploaded={} unavailable={} capacity_exceeded={} identity_mismatch={} upload_failed={}",
                     stats.requested,
                     stats.resident,
                     stats.uploaded,
                     stats.unavailable,
+                    stats.capacity_exceeded,
+                    stats.identity_mismatch,
                     stats.upload_failed,
                 );
                 self.entry = None;
@@ -972,6 +974,7 @@ mod tests {
             |_| Ok::<_, &'static str>(TMeshPrewarmStats {
                 requested: 1,
                 unavailable: 1,
+                capacity_exceeded: 1,
                 ..TMeshPrewarmStats::default()
             }),
         ));
@@ -1122,7 +1125,9 @@ mod tests {
         );
         let mut draw_scratch = DrawScratch::default();
         let (legacy, _) =
-            deadlib_render::draw_prep::prepare_render_list(&legacy, &mut draw_scratch, |_, _| true);
+            deadlib_render::draw_prep::prepare_render_list(&legacy, &mut draw_scratch, |_, _| {
+                deadlib_render::draw_prep::TMeshCacheResult::Resident
+            });
         let direct = direct.frame();
         assert_eq!(direct.clear_color, legacy.clear_color);
         assert_eq!(direct.cameras, legacy.cameras);

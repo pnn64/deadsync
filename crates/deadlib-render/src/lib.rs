@@ -10,6 +10,7 @@ use std::ops::Deref;
 use std::{
     collections::HashMap,
     hash::{BuildHasherDefault, Hasher},
+    num::NonZeroU64,
     sync::Arc,
 };
 use twox_hash::XxHash64;
@@ -18,8 +19,66 @@ use twox_hash::XxHash64;
 pub type TextureHandle = u64;
 pub const INVALID_TEXTURE_HANDLE: TextureHandle = 0;
 pub type FastU64Map<V> = HashMap<u64, V, BuildHasherDefault<XxHash64>>;
+pub type FastTMeshMap<V> = HashMap<TMeshGeometryId, V, BuildHasherDefault<XxHash64>>;
 pub type TMeshCacheKey = u64;
 pub const INVALID_TMESH_CACHE_KEY: TMeshCacheKey = 0;
+
+/// Stable identity for one immutable textured-mesh geometry payload.
+///
+/// The logical key names the resource while the fingerprint identifies its
+/// exact vertex bytes. Keeping both in draw ops lets multiple revisions of a
+/// logical resource coexist in a backend cache without relying on allocation
+/// addresses or hashing vertices on live frames.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct TMeshGeometryId {
+    logical_key: NonZeroU64,
+    fingerprint: u64,
+}
+
+impl TMeshGeometryId {
+    /// Builds an identity once, when immutable geometry is created.
+    ///
+    /// Invalid logical keys and empty payloads have no cache identity and stay
+    /// on the transient/no-draw paths respectively.
+    #[inline]
+    pub fn new(logical_key: TMeshCacheKey, vertices: &[TexturedMeshVertex]) -> Option<Self> {
+        if vertices.is_empty() {
+            return None;
+        }
+        let logical_key = NonZeroU64::new(logical_key)?;
+        Some(Self {
+            logical_key,
+            fingerprint: tmesh_fingerprint(vertices),
+        })
+    }
+
+    /// Builds an identity for geometry with no separate stable asset key.
+    ///
+    /// The logical key and fingerprint use independent hash seeds. Hashing is
+    /// still performed only once at immutable-resource creation.
+    #[inline]
+    pub fn from_content(vertices: &[TexturedMeshVertex]) -> Option<Self> {
+        if vertices.is_empty() {
+            return None;
+        }
+        let logical_key =
+            NonZeroU64::new(tmesh_hash(vertices, 0x9e37_79b9_7f4a_7c15)).unwrap_or(NonZeroU64::MIN);
+        Some(Self {
+            logical_key,
+            fingerprint: tmesh_fingerprint(vertices),
+        })
+    }
+
+    #[inline(always)]
+    pub const fn logical_key(self) -> TMeshCacheKey {
+        self.logical_key.get()
+    }
+
+    #[inline(always)]
+    pub const fn fingerprint(self) -> u64 {
+        self.fingerprint
+    }
+}
 
 /// Deterministically identifies the exact immutable textured-mesh payload.
 ///
@@ -28,7 +87,12 @@ pub const INVALID_TMESH_CACHE_KEY: TMeshCacheKey = 0;
 /// sent to the GPU, including floating-point bit patterns.
 #[inline]
 pub fn tmesh_fingerprint(vertices: &[TexturedMeshVertex]) -> u64 {
-    let mut hasher = XxHash64::with_seed(0);
+    tmesh_hash(vertices, 0)
+}
+
+#[inline]
+fn tmesh_hash(vertices: &[TexturedMeshVertex], seed: u64) -> u64 {
+    let mut hasher = XxHash64::with_seed(seed);
     hasher.write(bytemuck::cast_slice(vertices));
     hasher.finish()
 }
@@ -329,7 +393,7 @@ pub enum ObjectType {
     TexturedMesh {
         instance: TexturedMeshInstanceRaw,
         vertices: TexturedMeshVertices,
-        geom_cache_key: TMeshCacheKey,
+        geometry_id: Option<TMeshGeometryId>,
         depth_test: bool,
     },
 }

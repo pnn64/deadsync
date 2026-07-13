@@ -1,12 +1,11 @@
 use deadlib_render::{
-    BlendMode, ClockDomainTrace, DrawFrame, DrawFrameView, DrawStats, FastU64Map,
-    INVALID_TMESH_CACHE_KEY, PresentModePolicy, PresentModeTrace, PresentStats, RenderList,
-    SamplerDesc, SamplerFilter, SamplerWrap, TMeshCacheKey, TextureHandle, TexturedMeshVertex,
+    BlendMode, ClockDomainTrace, DrawFrame, DrawFrameView, DrawStats, FastTMeshMap,
+    PresentModePolicy, PresentModeTrace, PresentStats, RenderList, SamplerDesc, SamplerFilter,
+    SamplerWrap, TMeshGeometryId, TextureHandle, TexturedMeshVertex,
     draw_prep::{
         self, CachedTMeshGeometry, DrawOp, DrawScratch, TMeshCacheResult, TMeshPrewarmStats,
         TexturedMeshSource,
     },
-    tmesh_fingerprint,
 };
 use glam::Mat4 as Matrix4;
 use image::RgbaImage;
@@ -173,7 +172,6 @@ pub trait TextureLookup {
 struct CachedTMeshGeom {
     buffer: Arc<wgpu::Buffer>,
     vertex_count: u32,
-    fingerprint: u64,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -232,7 +230,7 @@ pub struct State {
     instance_buffer: wgpu::Buffer,
     instance_capacity: usize,
     prep: DrawScratch,
-    cached_tmesh: FastU64Map<CachedTMeshGeom>,
+    cached_tmesh: FastTMeshMap<CachedTMeshGeom>,
     cached_tmesh_bytes: usize,
     mesh_vertex_buffer: wgpu::Buffer,
     mesh_vertex_capacity: usize,
@@ -543,7 +541,7 @@ fn init(
             tmesh_instance_capacity,
             64,
         ),
-        cached_tmesh: FastU64Map::default(),
+        cached_tmesh: FastTMeshMap::default(),
         cached_tmesh_bytes: 0,
         mesh_vertex_buffer,
         mesh_vertex_capacity,
@@ -898,23 +896,19 @@ pub fn update_texture(
 
 fn ensure_cached_tmesh(
     device: &wgpu::Device,
-    cached_tmesh: &mut FastU64Map<CachedTMeshGeom>,
+    cached_tmesh: &mut FastTMeshMap<CachedTMeshGeom>,
     cached_tmesh_bytes: &mut usize,
-    cache_key: TMeshCacheKey,
-    expected_fingerprint: Option<u64>,
+    geometry_id: TMeshGeometryId,
     vertices: &[deadlib_render::TexturedMeshVertex],
 ) -> TMeshCacheResult {
-    if cache_key == INVALID_TMESH_CACHE_KEY || vertices.is_empty() {
-        return TMeshCacheResult::Unavailable;
+    if vertices.is_empty() {
+        return TMeshCacheResult::IdentityMismatch;
     }
-    if let Some(entry) = cached_tmesh.get(&cache_key) {
-        let identity_matches = expected_fingerprint
-            .map(|fingerprint| entry.fingerprint == fingerprint)
-            .unwrap_or(true);
-        return if entry.vertex_count == vertices.len() as u32 && identity_matches {
+    if let Some(entry) = cached_tmesh.get(&geometry_id) {
+        return if entry.vertex_count == vertices.len() as u32 {
             TMeshCacheResult::Resident
         } else {
-            TMeshCacheResult::Unavailable
+            TMeshCacheResult::IdentityMismatch
         };
     }
 
@@ -922,7 +916,7 @@ fn ensure_cached_tmesh(
     if bytes > WGPU_TMESH_CACHE_MAX_BYTES
         || cached_tmesh_bytes.saturating_add(bytes) > WGPU_TMESH_CACHE_MAX_BYTES
     {
-        return TMeshCacheResult::Unavailable;
+        return TMeshCacheResult::CapacityExceeded;
     }
 
     let buffer = Arc::new(
@@ -932,16 +926,11 @@ fn ensure_cached_tmesh(
             usage: wgpu::BufferUsages::VERTEX,
         }),
     );
-    // Legacy RenderList submissions do not carry a cold-path fingerprint. Hash
-    // only a new upload so resident legacy geometry stays hash-free per frame,
-    // while a later compiled-frame prewarm can still validate this entry.
-    let fingerprint = expected_fingerprint.unwrap_or_else(|| tmesh_fingerprint(vertices));
     cached_tmesh.insert(
-        cache_key,
+        geometry_id,
         CachedTMeshGeom {
             buffer,
             vertex_count: vertices.len() as u32,
-            fingerprint,
         },
     );
     *cached_tmesh_bytes = cached_tmesh_bytes.saturating_add(bytes);
@@ -958,15 +947,15 @@ pub fn prewarm_textured_meshes(
 ) -> TMeshPrewarmStats {
     let mut stats = TMeshPrewarmStats::default();
     for geometry in geometries {
+        let vertices = geometry.vertices();
         let result = ensure_cached_tmesh(
             &state.device,
             &mut state.cached_tmesh,
             &mut state.cached_tmesh_bytes,
-            geometry.cache_key,
-            Some(geometry.fingerprint),
-            &geometry.vertices,
+            geometry.id(),
+            vertices,
         );
-        stats.record(result, geometry.vertices.len());
+        stats.record(result, vertices.len());
     }
     stats
 }
@@ -1016,14 +1005,13 @@ pub fn draw(
         let device = &state.device;
         let cached_tmesh = &mut state.cached_tmesh;
         let cached_tmesh_bytes = &mut state.cached_tmesh_bytes;
-        draw_prep::prepare_render_list(render_list, &mut prep, |cache_key, vertices| {
+        draw_prep::prepare_render_list(render_list, &mut prep, |geometry_id, vertices| {
             let upload_started = Instant::now();
             let result = ensure_cached_tmesh(
                 device,
                 cached_tmesh,
                 cached_tmesh_bytes,
-                cache_key,
-                None,
+                geometry_id,
                 vertices,
             );
             if result.upload_attempted() {
@@ -1346,8 +1334,8 @@ fn draw_frame_view(
                             TexturedMeshSource::Transient { .. } => {
                                 pass.set_vertex_buffer(0, state.tmesh_vertex_buffer.slice(..));
                             }
-                            TexturedMeshSource::Cached { cache_key, .. } => {
-                                let Some(entry) = state.cached_tmesh.get(&cache_key) else {
+                            TexturedMeshSource::Cached { geometry_id, .. } => {
+                                let Some(entry) = state.cached_tmesh.get(&geometry_id) else {
                                     stats.cached_tmesh_misses =
                                         stats.cached_tmesh_misses.saturating_add(1);
                                     continue;

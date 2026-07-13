@@ -1,5 +1,5 @@
 use crate::anim;
-use deadlib_render::{BlendMode, MeshVertex, TMeshCacheKey, TextureHandle, TexturedMeshVertex};
+use deadlib_render::{BlendMode, MeshVertex, TMeshGeometryId, TextureHandle, TexturedMeshVertex};
 use glam::Mat4 as Matrix4;
 use std::sync::Arc;
 
@@ -232,7 +232,7 @@ pub enum Actor {
         tint: [f32; 4],
         glow: [f32; 4],
         vertices: Arc<[TexturedMeshVertex]>,
-        geom_cache_key: TMeshCacheKey,
+        geometry_id: Option<TMeshGeometryId>,
         uv_scale: [f32; 2],
         uv_offset: [f32; 2],
         uv_tex_shift: [f32; 2],

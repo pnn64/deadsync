@@ -14,12 +14,10 @@ use crate::font::{self, Font};
 use crate::space::Metrics;
 use crate::texture::TextureContext;
 use deadlib_render::{
-    CachedTMeshGeometry, DrawFrame as RenderDrawFrame, FastU64Map,
-    FrameCapacity as DrawFrameCapacity, FramePrepareStats, INVALID_TEXTURE_HANDLE,
-    INVALID_TMESH_CACHE_KEY, ObjectType, RenderList, RenderObject, SpriteInstanceRaw,
-    TMeshCacheKey, TexturedMeshVertices,
+    CachedTMeshGeometry, DrawFrame as RenderDrawFrame, FastTMeshMap,
+    FrameCapacity as DrawFrameCapacity, FramePrepareStats, INVALID_TEXTURE_HANDLE, ObjectType,
+    RenderList, RenderObject, SpriteInstanceRaw, TMeshGeometryId, TexturedMeshVertices,
     draw_prep::{DrawScratch, prepare_render_list},
-    tmesh_fingerprint,
 };
 use glam::Mat4;
 use std::collections::HashMap;
@@ -270,8 +268,8 @@ pub enum CompileError {
         count: usize,
         max: usize,
     },
-    ConflictingGeometryKey {
-        cache_key: TMeshCacheKey,
+    ConflictingGeometryId {
+        geometry_id: TMeshGeometryId,
     },
 }
 
@@ -297,9 +295,11 @@ impl fmt::Display for CompileError {
             Self::TooManyCameras { count, max } => {
                 write!(f, "compiled scene has {count} cameras; maximum is {max}")
             }
-            Self::ConflictingGeometryKey { cache_key } => write!(
+            Self::ConflictingGeometryId { geometry_id } => write!(
                 f,
-                "textured-mesh cache key {cache_key:#x} refers to conflicting geometry"
+                "textured-mesh identity ({:#x}, {:#x}) refers to conflicting geometry",
+                geometry_id.logical_key(),
+                geometry_id.fingerprint(),
             ),
         }
     }
@@ -539,15 +539,17 @@ impl CompiledScene {
     /// Mesh transforms and draw-run construction happen here on the cold path.
     /// The returned frame can be submitted directly by hardware backends every
     /// frame without actor composition, RenderList emission, or draw prep.
-    /// Conflicting nonzero geometry keys are rejected before draw prep so no
-    /// draw op can address a differently sized or shaped retained buffer.
+    /// An exact geometry identity paired with incompatible bytes is rejected
+    /// before draw prep so no op can address the wrong retained buffer.
     pub fn compile_draw_frame(&self) -> Result<CompiledDrawFrame, CompileError> {
         let mut emit_scratch = CompiledSceneScratch::default();
         emit_scratch.reserve(self.capacity());
         let render = self.emit(&mut emit_scratch);
         let geometries = collect_cached_tmesh_geometries(&render)?;
         let mut draw_scratch = DrawScratch::default();
-        let (view, _) = prepare_render_list(&render, &mut draw_scratch, |_, _| true);
+        let (view, _) = prepare_render_list(&render, &mut draw_scratch, |_, _| {
+            deadlib_render::draw_prep::TMeshCacheResult::Resident
+        });
         let mut frame = RenderDrawFrame::with_capacity(DrawFrameCapacity {
             cameras: view.cameras.len(),
             sprite_instances: view.sprite_instances.len(),
@@ -581,31 +583,40 @@ impl CompiledScene {
 fn collect_cached_tmesh_geometries(
     render: &RenderList,
 ) -> Result<Vec<CachedTMeshGeometry>, CompileError> {
-    let mut indices = FastU64Map::<usize>::default();
+    let mut indices = FastTMeshMap::<usize>::default();
     let mut geometries = Vec::<CachedTMeshGeometry>::new();
     for object in &render.objects {
         let ObjectType::TexturedMesh {
             vertices,
-            geom_cache_key,
+            geometry_id,
             ..
         } = &object.object_type
         else {
             continue;
         };
-        if *geom_cache_key == INVALID_TMESH_CACHE_KEY {
+        let Some(geometry_id) = geometry_id else {
+            continue;
+        };
+        if vertices.is_empty() {
             continue;
         }
 
-        let fingerprint = tmesh_fingerprint(vertices.as_ref());
-        if let Some(index) = indices.get(geom_cache_key).copied() {
+        let logical_key = geometry_id.logical_key();
+        if let Some(index) = indices.get(geometry_id).copied() {
             let retained = &geometries[index];
-            if retained.vertices.len() != vertices.len()
-                || retained.fingerprint != fingerprint
-                || bytemuck::cast_slice::<_, u8>(retained.vertices.as_ref())
-                    != bytemuck::cast_slice::<_, u8>(vertices.as_ref())
+            if retained.vertices().len() != vertices.len() {
+                return Err(CompileError::ConflictingGeometryId {
+                    geometry_id: *geometry_id,
+                });
+            }
+            if retained.vertices().as_ptr() == vertices.as_ref().as_ptr() {
+                continue;
+            }
+            if bytemuck::cast_slice::<_, u8>(retained.vertices())
+                != bytemuck::cast_slice::<_, u8>(vertices.as_ref())
             {
-                return Err(CompileError::ConflictingGeometryKey {
-                    cache_key: *geom_cache_key,
+                return Err(CompileError::ConflictingGeometryId {
+                    geometry_id: *geometry_id,
                 });
             }
             continue;
@@ -615,12 +626,15 @@ fn collect_cached_tmesh_geometries(
             TexturedMeshVertices::Shared(vertices) => Arc::clone(vertices),
             TexturedMeshVertices::Transient(vertices) => Arc::from(vertices.clone()),
         };
-        indices.insert(*geom_cache_key, geometries.len());
-        geometries.push(CachedTMeshGeometry {
-            cache_key: *geom_cache_key,
-            fingerprint,
-            vertices: retained,
-        });
+        let retained = CachedTMeshGeometry::new(logical_key, retained)
+            .expect("nonempty geometry with a valid identity must be retainable");
+        if retained.id() != *geometry_id {
+            return Err(CompileError::ConflictingGeometryId {
+                geometry_id: *geometry_id,
+            });
+        }
+        indices.insert(*geometry_id, geometries.len());
+        geometries.push(retained);
     }
     Ok(geometries)
 }
@@ -1532,6 +1546,18 @@ mod tests {
     }
 
     fn textured_mesh() -> Actor {
+        let vertices: Arc<[TexturedMeshVertex]> = Arc::from([
+            TexturedMeshVertex::default(),
+            TexturedMeshVertex {
+                pos: [1.0, 0.0, 0.0],
+                ..TexturedMeshVertex::default()
+            },
+            TexturedMeshVertex {
+                pos: [0.0, 1.0, 0.0],
+                ..TexturedMeshVertex::default()
+            },
+        ]);
+        let geometry_id = TMeshGeometryId::new(44, vertices.as_ref());
         Actor::TexturedMesh {
             align: [0.0, 0.0],
             offset: [8.0, 9.0],
@@ -1541,18 +1567,8 @@ mod tests {
             texture: Arc::from("mesh_tex"),
             tint: [0.4, 0.5, 0.6, 0.7],
             glow: [0.0; 4],
-            vertices: Arc::from([
-                TexturedMeshVertex::default(),
-                TexturedMeshVertex {
-                    pos: [1.0, 0.0, 0.0],
-                    ..TexturedMeshVertex::default()
-                },
-                TexturedMeshVertex {
-                    pos: [0.0, 1.0, 0.0],
-                    ..TexturedMeshVertex::default()
-                },
-            ]),
-            geom_cache_key: 44,
+            vertices,
+            geometry_id,
             uv_scale: [0.5, 0.75],
             uv_offset: [0.1, 0.2],
             uv_tex_shift: [0.3, 0.4],
@@ -1561,6 +1577,13 @@ mod tests {
             blend: BlendMode::Alpha,
             z: -1,
         }
+    }
+
+    fn textured_mesh_id() -> TMeshGeometryId {
+        let Actor::TexturedMesh { geometry_id, .. } = textured_mesh() else {
+            unreachable!()
+        };
+        geometry_id.expect("textured-mesh fixture is retained")
     }
 
     fn fixture() -> Vec<Actor> {
@@ -1691,18 +1714,18 @@ mod tests {
                     ObjectType::TexturedMesh {
                         instance: expected_instance,
                         vertices: expected_vertices,
-                        geom_cache_key: expected_key,
+                        geometry_id: expected_id,
                         depth_test: expected_depth,
                     },
                     ObjectType::TexturedMesh {
                         instance: actual_instance,
                         vertices: actual_vertices,
-                        geom_cache_key: actual_key,
+                        geometry_id: actual_id,
                         depth_test: actual_depth,
                     },
                 ) => {
                     assert_eq!(expected_instance, actual_instance);
-                    assert_eq!(expected_key, actual_key);
+                    assert_eq!(expected_id, actual_id);
                     assert_eq!(expected_depth, actual_depth);
                     assert_eq!(expected_vertices.len(), actual_vertices.len());
                     for (expected, actual) in expected_vertices.iter().zip(actual_vertices.iter()) {
@@ -2095,10 +2118,10 @@ mod tests {
     #[test]
     fn retained_draw_frame_matches_legacy_draw_preparation() {
         let mut invalid_key = textured_mesh();
-        let Actor::TexturedMesh { geom_cache_key, .. } = &mut invalid_key else {
+        let Actor::TexturedMesh { geometry_id, .. } = &mut invalid_key else {
             unreachable!()
         };
-        *geom_cache_key = INVALID_TMESH_CACHE_KEY;
+        *geometry_id = None;
         let mut actors = fixture();
         actors.push(textured_mesh());
         actors.push(invalid_key);
@@ -2111,13 +2134,13 @@ mod tests {
             .compile_draw_frame()
             .expect("fixture geometry keys are consistent");
         let mut expected_scratch = DrawScratch::default();
-        let (expected, _) = prepare_render_list(&render, &mut expected_scratch, |key, vertices| {
+        let (expected, _) = prepare_render_list(&render, &mut expected_scratch, |id, vertices| {
             let geometry = direct
                 .geometries()
                 .iter()
-                .find(|geometry| geometry.cache_key == key)
+                .find(|geometry| geometry.id() == id)
                 .expect("every cached run has retained geometry");
-            assert_tmesh_vertices_eq(geometry.vertices.as_ref(), vertices);
+            assert_tmesh_vertices_eq(geometry.vertices(), vertices);
             TMeshCacheResult::Resident
         });
         let actual = direct.frame().view();
@@ -2150,7 +2173,7 @@ mod tests {
             .filter_map(|object| match &object.object_type {
                 ObjectType::TexturedMesh {
                     vertices,
-                    geom_cache_key: INVALID_TMESH_CACHE_KEY,
+                    geometry_id: None,
                     ..
                 } => Some(vertices.len()),
                 ObjectType::Sprite(_)
@@ -2167,7 +2190,7 @@ mod tests {
             direct
                 .geometries()
                 .iter()
-                .filter(|geometry| geometry.cache_key == 44)
+                .filter(|geometry| geometry.id().logical_key() == 44)
                 .count(),
             1,
             "duplicate keyed actors retain one upload payload"
@@ -2176,7 +2199,7 @@ mod tests {
             direct
                 .geometries()
                 .iter()
-                .any(|geometry| geometry.cache_key != 44),
+                .any(|geometry| geometry.id().logical_key() != 44),
             "static text geometry is retained"
         );
         assert!(actual.ops.iter().any(|op| matches!(
@@ -2200,15 +2223,15 @@ mod tests {
             .expect("identical keyed meshes freeze");
 
         assert_eq!(direct.geometries().len(), 1);
-        assert_eq!(direct.geometries()[0].cache_key, 44);
+        assert_eq!(direct.geometries()[0].id().logical_key(), 44);
         assert_eq!(
-            direct.geometries()[0].fingerprint,
-            tmesh_fingerprint(direct.geometries()[0].vertices.as_ref())
+            direct.geometries()[0].id().fingerprint(),
+            deadlib_render::tmesh_fingerprint(direct.geometries()[0].vertices())
         );
     }
 
     #[test]
-    fn retained_geometry_rejects_key_with_different_count() {
+    fn retained_geometry_rejects_id_with_different_count() {
         let mut conflicting = textured_mesh();
         let Actor::TexturedMesh { vertices, .. } = &mut conflicting else {
             unreachable!()
@@ -2221,12 +2244,14 @@ mod tests {
 
         assert_eq!(
             scene.compile_draw_frame().err(),
-            Some(CompileError::ConflictingGeometryKey { cache_key: 44 })
+            Some(CompileError::ConflictingGeometryId {
+                geometry_id: textured_mesh_id()
+            })
         );
     }
 
     #[test]
-    fn retained_geometry_rejects_key_with_different_data() {
+    fn retained_geometry_rejects_id_with_different_data() {
         let mut conflicting = textured_mesh();
         let Actor::TexturedMesh { vertices, .. } = &mut conflicting else {
             unreachable!()
@@ -2241,8 +2266,64 @@ mod tests {
 
         assert_eq!(
             scene.compile_draw_frame().err(),
-            Some(CompileError::ConflictingGeometryKey { cache_key: 44 })
+            Some(CompileError::ConflictingGeometryId {
+                geometry_id: textured_mesh_id()
+            })
         );
+    }
+
+    #[test]
+    fn retained_geometry_allows_revisions_of_one_logical_key() {
+        let mut revised = textured_mesh();
+        let Actor::TexturedMesh {
+            vertices,
+            geometry_id,
+            ..
+        } = &mut revised
+        else {
+            unreachable!()
+        };
+        let mut changed = vertices.to_vec();
+        changed[0].pos[0] = 99.0;
+        *vertices = Arc::from(changed);
+        *geometry_id = TMeshGeometryId::new(44, vertices.as_ref());
+        let fonts = fonts();
+        let textures = textures();
+        let scene = compile(&[textured_mesh(), revised], &fonts, &textures)
+            .expect("geometry revisions compile");
+        let direct = scene
+            .compile_draw_frame()
+            .expect("composite geometry identities coexist");
+
+        assert_eq!(direct.geometries().len(), 2);
+        assert!(
+            direct
+                .geometries()
+                .iter()
+                .all(|geometry| geometry.id().logical_key() == 44)
+        );
+        assert_ne!(
+            direct.geometries()[0].id().fingerprint(),
+            direct.geometries()[1].id().fingerprint()
+        );
+    }
+
+    #[test]
+    fn retained_geometry_skips_empty_keyed_mesh() {
+        let mut empty = textured_mesh();
+        let Actor::TexturedMesh { vertices, .. } = &mut empty else {
+            unreachable!()
+        };
+        *vertices = Arc::from([]);
+        let fonts = fonts();
+        let textures = textures();
+        let scene = compile(&[empty], &fonts, &textures).expect("empty mesh compiles");
+        let direct = scene
+            .compile_draw_frame()
+            .expect("empty mesh does not require prewarm");
+
+        assert!(direct.geometries().is_empty());
+        assert!(direct.frame().ops.is_empty());
     }
 
     #[test]

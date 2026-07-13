@@ -1,6 +1,6 @@
 use crate::{
-    BlendMode, FastU64Map, INVALID_TEXTURE_HANDLE, INVALID_TMESH_CACHE_KEY, MeshVertex, ObjectType,
-    RenderList, SpriteInstanceRaw, TMeshCacheKey, TextureHandle, TexturedMeshInstanceRaw,
+    BlendMode, FastTMeshMap, INVALID_TEXTURE_HANDLE, MeshVertex, ObjectType, RenderList,
+    SpriteInstanceRaw, TMeshCacheKey, TMeshGeometryId, TextureHandle, TexturedMeshInstanceRaw,
     TexturedMeshVertex, TexturedMeshVertices,
 };
 use glam::{Mat4 as Matrix4, Vec4 as Vector4};
@@ -14,6 +14,7 @@ use twox_hash::XxHash64;
 
 type TMeshHasher = BuildHasherDefault<XxHash64>;
 type TMeshGeomMap = HashMap<TMeshGeomKey, FrameTMeshGeom, TMeshHasher>;
+type CachedTMeshMap = FastTMeshMap<bool>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SpriteRun {
@@ -40,7 +41,7 @@ pub enum TexturedMeshSource {
         geom_key: u64,
     },
     Cached {
-        cache_key: TMeshCacheKey,
+        geometry_id: TMeshGeometryId,
         vertex_count: u32,
     },
 }
@@ -49,13 +50,15 @@ pub enum TexturedMeshSource {
 ///
 /// `Resident` and `Uploaded` both allow the prepared run to reference the
 /// backend cache. Only `Uploaded` contributes to `cached_upload_vertices`;
-/// `UploadFailed` remains unavailable but retains attempted-upload timing.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+/// `CapacityExceeded` and `IdentityMismatch` distinguish bounded saturation
+/// from a violated cache contract. `UploadFailed` remains unavailable but
+/// retains attempted-upload timing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TMeshCacheResult {
-    #[default]
-    Unavailable,
     Resident,
     Uploaded,
+    CapacityExceeded,
+    IdentityMismatch,
     UploadFailed,
 }
 
@@ -63,16 +66,32 @@ pub enum TMeshCacheResult {
 ///
 /// Compiled presentation owns these values on the render thread for a screen
 /// or song lifetime. Backends consume them during transition prewarm, before
-/// submitting draw ops that reference `cache_key`; frame submission performs
+/// submitting draw ops that reference `id`; frame submission performs
 /// no geometry lookup, allocation, eviction, or destruction through this
 /// value. Backend cache capacity and eviction remain backend-owned concerns.
-/// `fingerprint` identifies the exact vertex byte payload and must match an
-/// existing backend entry before it may be treated as resident.
 #[derive(Clone, Debug)]
 pub struct CachedTMeshGeometry {
-    pub cache_key: TMeshCacheKey,
-    pub fingerprint: u64,
-    pub vertices: Arc<[TexturedMeshVertex]>,
+    id: TMeshGeometryId,
+    vertices: Arc<[TexturedMeshVertex]>,
+}
+
+impl CachedTMeshGeometry {
+    /// Creates a self-consistent retained upload payload.
+    #[inline]
+    pub fn new(logical_key: TMeshCacheKey, vertices: Arc<[TexturedMeshVertex]>) -> Option<Self> {
+        let id = TMeshGeometryId::new(logical_key, vertices.as_ref())?;
+        Some(Self { id, vertices })
+    }
+
+    #[inline(always)]
+    pub const fn id(&self) -> TMeshGeometryId {
+        self.id
+    }
+
+    #[inline(always)]
+    pub fn vertices(&self) -> &[TexturedMeshVertex] {
+        self.vertices.as_ref()
+    }
 }
 
 /// Outcome counters for one bounded retained-geometry prewarm pass.
@@ -82,6 +101,8 @@ pub struct TMeshPrewarmStats {
     pub resident: u32,
     pub uploaded: u32,
     pub unavailable: u32,
+    pub capacity_exceeded: u32,
+    pub identity_mismatch: u32,
     pub upload_failed: u32,
     pub uploaded_vertices: u64,
 }
@@ -96,8 +117,13 @@ impl TMeshPrewarmStats {
     pub fn record(&mut self, result: TMeshCacheResult, vertex_count: usize) {
         self.requested = self.requested.saturating_add(1);
         match result {
-            TMeshCacheResult::Unavailable => {
+            TMeshCacheResult::CapacityExceeded => {
                 self.unavailable = self.unavailable.saturating_add(1);
+                self.capacity_exceeded = self.capacity_exceeded.saturating_add(1);
+            }
+            TMeshCacheResult::IdentityMismatch => {
+                self.unavailable = self.unavailable.saturating_add(1);
+                self.identity_mismatch = self.identity_mismatch.saturating_add(1);
             }
             TMeshCacheResult::Resident => {
                 self.resident = self.resident.saturating_add(1);
@@ -127,17 +153,6 @@ impl TMeshCacheResult {
     #[inline(always)]
     pub const fn upload_attempted(self) -> bool {
         matches!(self, Self::Uploaded | Self::UploadFailed)
-    }
-}
-
-impl From<bool> for TMeshCacheResult {
-    #[inline(always)]
-    fn from(available: bool) -> Self {
-        if available {
-            Self::Resident
-        } else {
-            Self::Unavailable
-        }
     }
 }
 
@@ -339,7 +354,7 @@ pub struct DrawFrameView<'a> {
 pub struct DrawScratch {
     frame: DrawFrame,
     shared_tmesh_geom: TMeshGeomMap,
-    cached_tmesh: FastU64Map<bool>,
+    cached_tmesh: CachedTMeshMap,
 }
 
 impl Deref for DrawScratch {
@@ -447,7 +462,10 @@ impl DrawScratch {
                 ops,
                 BuildHasherDefault::default(),
             ),
-            cached_tmesh: FastU64Map::with_capacity_and_hasher(ops, BuildHasherDefault::default()),
+            cached_tmesh: CachedTMeshMap::with_capacity_and_hasher(
+                ops,
+                BuildHasherDefault::default(),
+            ),
         }
     }
 }
@@ -517,14 +535,13 @@ fn shared_tmesh_source(
     }
 }
 
-pub fn prepare<EnsureCached, CacheResult>(
+pub fn prepare<EnsureCached>(
     render_list: &RenderList,
     scratch: &mut DrawScratch,
     mut ensure_cached_tmesh: EnsureCached,
 ) -> PrepareStats
 where
-    EnsureCached: FnMut(TMeshCacheKey, &[TexturedMeshVertex]) -> CacheResult,
-    CacheResult: Into<TMeshCacheResult>,
+    EnsureCached: FnMut(TMeshGeometryId, &[TexturedMeshVertex]) -> TMeshCacheResult,
 {
     let objects_len = render_list.objects.len();
     let capacity_before = DrawScratchCapacity::capture(scratch);
@@ -644,7 +661,7 @@ where
             ObjectType::TexturedMesh {
                 instance,
                 vertices,
-                geom_cache_key,
+                geometry_id,
                 depth_test,
                 ..
             } => {
@@ -657,17 +674,17 @@ where
                     i += 1;
                     continue;
                 }
-                let source = if *geom_cache_key != INVALID_TMESH_CACHE_KEY {
+                let source = if let Some(geometry_id) = geometry_id {
                     if !cached_tmesh_cleared {
                         scratch.cached_tmesh.clear();
                         cached_tmesh_cleared = true;
                     }
-                    let cached = if let Some(cached) = scratch.cached_tmesh.get(geom_cache_key) {
+                    let cached = if let Some(cached) = scratch.cached_tmesh.get(geometry_id) {
                         *cached
                     } else {
-                        let result = ensure_cached_tmesh(*geom_cache_key, vertices.as_ref()).into();
+                        let result = ensure_cached_tmesh(*geometry_id, vertices.as_ref());
                         let cached = result.is_available();
-                        scratch.cached_tmesh.insert(*geom_cache_key, cached);
+                        scratch.cached_tmesh.insert(*geometry_id, cached);
                         if result.was_uploaded() {
                             stats.cached_upload_vertices = stats
                                 .cached_upload_vertices
@@ -677,7 +694,7 @@ where
                     };
                     if cached {
                         TexturedMeshSource::Cached {
-                            cache_key: *geom_cache_key,
+                            geometry_id: *geometry_id,
                             vertex_count: vertices.len() as u32,
                         }
                     } else {
@@ -761,14 +778,13 @@ where
 /// transformed geometry/run buffers from `scratch`. Its structure is therefore
 /// identical to [`DrawFrame::view`] while preserving the legacy path's current
 /// ownership and allocation behavior.
-pub fn prepare_render_list<'a, EnsureCached, CacheResult>(
+pub fn prepare_render_list<'a, EnsureCached>(
     render_list: &'a RenderList,
     scratch: &'a mut DrawScratch,
     ensure_cached_tmesh: EnsureCached,
 ) -> (DrawFrameView<'a>, PrepareStats)
 where
-    EnsureCached: FnMut(TMeshCacheKey, &[TexturedMeshVertex]) -> CacheResult,
-    CacheResult: Into<TMeshCacheResult>,
+    EnsureCached: FnMut(TMeshGeometryId, &[TexturedMeshVertex]) -> TMeshCacheResult,
 {
     let stats = prepare(render_list, scratch, ensure_cached_tmesh);
     let view = DrawFrameView {
@@ -825,7 +841,9 @@ mod tests {
         };
         let mut scratch = DrawScratch::with_capacity(0, 0, 0, 100);
 
-        prepare(&render_list, &mut scratch, |_, _| false);
+        prepare(&render_list, &mut scratch, |_, _| {
+            TMeshCacheResult::CapacityExceeded
+        });
 
         assert!(scratch.ops.capacity() >= render_list.objects.len());
     }
@@ -840,16 +858,19 @@ mod tests {
         assert!(stats.ready());
         assert_eq!(stats.uploaded_vertices, 7);
 
-        stats.record(TMeshCacheResult::Unavailable, 11);
+        stats.record(TMeshCacheResult::CapacityExceeded, 11);
+        stats.record(TMeshCacheResult::IdentityMismatch, 11);
         stats.record(TMeshCacheResult::UploadFailed, 13);
         assert!(!stats.ready());
         assert_eq!(
             stats,
             TMeshPrewarmStats {
-                requested: 4,
+                requested: 5,
                 resident: 1,
                 uploaded: 1,
-                unavailable: 1,
+                unavailable: 2,
+                capacity_exceeded: 1,
+                identity_mismatch: 1,
                 upload_failed: 1,
                 uploaded_vertices: 7,
             }
