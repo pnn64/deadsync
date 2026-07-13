@@ -5,16 +5,22 @@ use ash::{
     vk,
 };
 use deadlib_render::{
-    BlendMode, ClockDomainTrace, DrawStats, FastU64Map, MeshVertex, PresentModePolicy,
-    PresentModeTrace, PresentStats, RenderList, SamplerDesc, SamplerFilter, SamplerWrap,
-    SpriteInstanceRaw as InstanceData, TMeshCacheKey, TextureHandle,
+    BlendMode, ClockDomainTrace, DrawFrame, DrawFrameView, DrawStats, FastU64Map, MeshVertex,
+    PresentModePolicy, PresentModeTrace, PresentStats, RenderList, SamplerDesc, SamplerFilter,
+    SamplerWrap, SpriteInstanceRaw as InstanceData, TMeshCacheKey, TextureHandle,
     TexturedMeshInstanceRaw as TexturedMeshInstanceGpu, TexturedMeshVertex,
-    draw_prep::{self, DrawOp, DrawScratch, TexturedMeshSource},
+    draw_prep::{self, DrawOp, DrawScratch, TMeshCacheResult, TexturedMeshSource},
 };
 use glam::Mat4 as Matrix4;
 use image::RgbaImage;
 use log::{debug, error, info, warn};
-use std::{collections::HashMap, error::Error, ffi, mem, sync::Arc, time::Instant};
+use std::{
+    collections::HashMap,
+    error::Error,
+    ffi, mem,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 #[cfg(windows)]
 use windows::Win32::System::Performance;
 use winit::{
@@ -1447,64 +1453,122 @@ pub fn capture_frame(state: &mut State) -> Result<RgbaImage, Box<dyn Error>> {
         .ok_or_else(|| std::io::Error::other("No captured screenshot frame available").into())
 }
 
+#[inline(always)]
+fn duration_us(elapsed: Duration) -> u32 {
+    let elapsed = elapsed.as_micros();
+    if elapsed > u128::from(u32::MAX) {
+        u32::MAX
+    } else {
+        elapsed as u32
+    }
+}
+
+#[inline(always)]
+fn elapsed_us_since(started: Instant) -> u32 {
+    duration_us(started.elapsed())
+}
+
 pub fn draw(
     state: &mut State,
     render_list: &RenderList,
     textures: &impl TextureLookup,
     apply_present_back_pressure: bool,
 ) -> Result<DrawStats, Box<dyn Error>> {
-    #[inline(always)]
-    fn elapsed_us_since(started: Instant) -> u32 {
-        let elapsed = started.elapsed().as_micros();
-        if elapsed > u128::from(u32::MAX) {
-            u32::MAX
-        } else {
-            elapsed as u32
-        }
-    }
-
-    let mut stats = DrawStats::default();
-
     if !state.swapchain_valid || state.window_size.width == 0 || state.window_size.height == 0 {
-        return Ok(stats);
+        return Ok(DrawStats::default());
     }
-    stats.present_stats.mode = vk_present_mode_trace(state.swapchain_resources.present_mode);
-    stats.present_stats.refresh_ns = state.present_telemetry.refresh_ns;
 
-    {
-        let prep = &mut state.prep;
+    let mut prep = mem::take(&mut state.prep);
+    let draw_prep_started = Instant::now();
+    let mut cache_upload_time = Duration::ZERO;
+    let (frame, frame_prepare) = {
         let instance = &state.instance;
         let device = Arc::clone(state.device.as_ref().unwrap());
         let pdevice = state.pdevice;
         let cached_tmesh = &mut state.cached_tmesh;
         let cached_tmesh_bytes = &mut state.cached_tmesh_bytes;
-        let _prep_stats =
-            draw_prep::prepare(
-                render_list,
-                prep,
-                |cache_key, vertices| match ensure_cached_tmesh(
-                    instance,
-                    device.as_ref(),
-                    pdevice,
-                    cached_tmesh,
-                    cached_tmesh_bytes,
-                    cache_key,
-                    vertices,
-                ) {
-                    Ok(cached) => cached,
-                    Err(e) => {
-                        warn!("Failed to cache Vulkan textured mesh {cache_key:#x}: {e}");
-                        false
-                    }
-                },
-            );
+        draw_prep::prepare_render_list(render_list, &mut prep, |cache_key, vertices| {
+            let upload_started = Instant::now();
+            let result = match ensure_cached_tmesh(
+                instance,
+                device.as_ref(),
+                pdevice,
+                cached_tmesh,
+                cached_tmesh_bytes,
+                cache_key,
+                vertices,
+            ) {
+                Ok(cached) => cached,
+                Err(e) => {
+                    warn!("Failed to cache Vulkan textured mesh {cache_key:#x}: {e}");
+                    TMeshCacheResult::UploadFailed
+                }
+            };
+            if result.upload_attempted() {
+                cache_upload_time = cache_upload_time.saturating_add(upload_started.elapsed());
+            }
+            result
+        })
+    };
+    let draw_prep_time = draw_prep_started.elapsed();
+    let mut stats = DrawStats {
+        draw_prep_us: duration_us(draw_prep_time.saturating_sub(cache_upload_time)),
+        backend_upload_us: duration_us(cache_upload_time),
+        frame_prepare,
+        ..DrawStats::default()
+    };
+    let result = draw_frame_view(
+        state,
+        frame,
+        textures,
+        apply_present_back_pressure,
+        &mut stats,
+        false,
+    );
+    state.prep = prep;
+    result
+}
+
+pub fn draw_frame(
+    state: &mut State,
+    frame: &DrawFrame,
+    textures: &impl TextureLookup,
+    apply_present_back_pressure: bool,
+) -> Result<DrawStats, Box<dyn Error>> {
+    let mut stats = DrawStats {
+        frame_prepare: frame.prepare_stats(),
+        ..DrawStats::default()
+    };
+    draw_frame_view(
+        state,
+        frame.view(),
+        textures,
+        apply_present_back_pressure,
+        &mut stats,
+        true,
+    )
+}
+
+fn draw_frame_view(
+    state: &mut State,
+    frame: DrawFrameView<'_>,
+    textures: &impl TextureLookup,
+    apply_present_back_pressure: bool,
+    stats: &mut DrawStats,
+    collect_run_stats: bool,
+) -> Result<DrawStats, Box<dyn Error>> {
+    if !state.swapchain_valid || state.window_size.width == 0 || state.window_size.height == 0 {
+        return Ok(*stats);
     }
+    stats.present_stats.mode = vk_present_mode_trace(state.swapchain_resources.present_mode);
+    stats.present_stats.refresh_ns = state.present_telemetry.refresh_ns;
 
-    let needed_instances = render_list.sprite_instances.len();
-    let needed_mesh_vertices = state.prep.mesh_vertices.len();
-    let needed_tmesh_vertices = state.prep.tmesh_vertices.len();
-    let needed_tmesh_instances = state.prep.tmesh_instances.len();
+    let needed_instances = frame.sprite_instances.len();
+    let needed_mesh_vertices = frame.mesh_vertices.len();
+    let needed_tmesh_vertices = frame.tmesh_vertices.len();
+    let needed_tmesh_instances = frame.tmesh_instances.len();
 
+    let backend_upload_started = Instant::now();
     let base_first_instance = if needed_instances > 0 {
         Some(ensure_instance_ring_capacity(state, needed_instances)?)
     } else {
@@ -1528,6 +1592,9 @@ pub fn draw(
     } else {
         None
     };
+    stats.backend_upload_us = stats
+        .backend_upload_us
+        .saturating_add(elapsed_us_since(backend_upload_started));
 
     // SAFETY: We wait on the current frame fence before reusing its command buffer or writing into
     // this frame's ring-buffer slice, so the GPU is done reading prior submissions. All Vulkan
@@ -1561,7 +1628,7 @@ pub fn draw(
             Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
                 stats.acquire_us = elapsed_us_since(acquire_started);
                 recreate_swapchain_and_dependents(state)?;
-                return Ok(stats);
+                return Ok(*stats);
             }
             Err(e) => return Err(e.into()),
         };
@@ -1590,7 +1657,7 @@ pub fn draw(
         )?;
         stats.backend_setup_us = elapsed_us_since(backend_setup_started);
 
-        let backend_prepare_started = Instant::now();
+        let backend_upload_started = Instant::now();
         let inst_base_ptr = base_first_instance.map_or(std::ptr::null_mut(), |b| {
             state.instance_ring_ptr.add(b as usize)
         });
@@ -1606,7 +1673,7 @@ pub fn draw(
         if needed_instances > 0 {
             debug_assert!(!inst_base_ptr.is_null(), "instance ring missing");
             std::ptr::copy_nonoverlapping(
-                render_list.sprite_instances.as_ptr(),
+                frame.sprite_instances.as_ptr(),
                 inst_base_ptr,
                 needed_instances,
             );
@@ -1614,7 +1681,7 @@ pub fn draw(
         if needed_mesh_vertices > 0 {
             debug_assert!(!mesh_base_ptr.is_null(), "mesh ring missing");
             std::ptr::copy_nonoverlapping(
-                state.prep.mesh_vertices.as_ptr(),
+                frame.mesh_vertices.as_ptr(),
                 mesh_base_ptr,
                 needed_mesh_vertices,
             );
@@ -1622,7 +1689,7 @@ pub fn draw(
         if needed_tmesh_vertices > 0 {
             debug_assert!(!tmesh_base_ptr.is_null(), "textured mesh ring missing");
             std::ptr::copy_nonoverlapping(
-                state.prep.tmesh_vertices.as_ptr(),
+                frame.tmesh_vertices.as_ptr(),
                 tmesh_base_ptr,
                 needed_tmesh_vertices,
             );
@@ -1633,15 +1700,17 @@ pub fn draw(
                 "textured mesh instance ring missing"
             );
             std::ptr::copy_nonoverlapping(
-                state.prep.tmesh_instances.as_ptr(),
+                frame.tmesh_instances.as_ptr(),
                 tmesh_instance_base_ptr,
                 needed_tmesh_instances,
             );
         }
-        stats.backend_prepare_us = elapsed_us_since(backend_prepare_started);
+        stats.backend_upload_us = stats
+            .backend_upload_us
+            .saturating_add(elapsed_us_since(backend_upload_started));
 
         let backend_record_started = Instant::now();
-        let c = render_list.clear_color;
+        let c = frame.clear_color;
         let clear_value = vk::ClearValue {
             color: vk::ClearColorValue {
                 float32: [c[0], c[1], c[2], c[3]],
@@ -1683,9 +1752,13 @@ pub fn draw(
         let mut last_camera: Option<u8> = None;
         let mut last_tmesh_source: Option<TexturedMeshSource> = None;
         let mut vertices_drawn: u32 = 0;
-        for op in &state.prep.ops {
+        for op in frame.ops {
             match op {
                 DrawOp::Sprite(run) => {
+                    if collect_run_stats {
+                        stats.frame_prepare.sprite_runs =
+                            stats.frame_prepare.sprite_runs.saturating_add(1);
+                    }
                     let Some(set) = textures
                         .vulkan_texture(run.texture_handle)
                         .map(|texture| texture.descriptor_set)
@@ -1710,7 +1783,7 @@ pub fn draw(
                     }
 
                     if last_camera != Some(run.camera) {
-                        let vp = render_list
+                        let vp = frame
                             .cameras
                             .get(run.camera as usize)
                             .copied()
@@ -1745,6 +1818,10 @@ pub fn draw(
                     vertices_drawn = vertices_drawn.saturating_add(4 * run.instance_count);
                 }
                 DrawOp::Mesh(draw) => {
+                    if collect_run_stats {
+                        stats.frame_prepare.mesh_runs =
+                            stats.frame_prepare.mesh_runs.saturating_add(1);
+                    }
                     if !matches!(bound, Bound::Mesh) {
                         device.cmd_bind_pipeline(
                             cmd,
@@ -1759,7 +1836,7 @@ pub fn draw(
                     }
 
                     if last_camera != Some(draw.camera) {
-                        let vp = render_list
+                        let vp = frame
                             .cameras
                             .get(draw.camera as usize)
                             .copied()
@@ -1782,6 +1859,10 @@ pub fn draw(
                     vertices_drawn = vertices_drawn.saturating_add(draw.vertex_count);
                 }
                 DrawOp::TexturedMesh(draw) => {
+                    if collect_run_stats {
+                        stats.frame_prepare.tmesh_runs =
+                            stats.frame_prepare.tmesh_runs.saturating_add(1);
+                    }
                     let Some(set) = textures
                         .vulkan_texture(draw.texture_handle)
                         .map(|texture| texture.descriptor_set_repeat)
@@ -1813,6 +1894,8 @@ pub fn draw(
                             }
                             TexturedMeshSource::Cached { cache_key, .. } => {
                                 let Some(entry) = state.cached_tmesh.get(&cache_key) else {
+                                    stats.cached_tmesh_misses =
+                                        stats.cached_tmesh_misses.saturating_add(1);
                                     continue;
                                 };
                                 entry.buffer.buffer
@@ -1823,7 +1906,7 @@ pub fn draw(
                     }
 
                     if last_camera != Some(draw.camera) {
-                        let vp = render_list
+                        let vp = frame
                             .cameras
                             .get(draw.camera as usize)
                             .copied()
@@ -2098,7 +2181,7 @@ pub fn draw(
         stats.present_stats.queue_idle_waited = queue_idle_waited;
         state.current_frame = (state.current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
         stats.vertices = vertices_drawn;
-        Ok(stats)
+        Ok(*stats)
     }
 }
 
@@ -2875,16 +2958,20 @@ fn ensure_cached_tmesh(
     cached_tmesh_bytes: &mut usize,
     cache_key: TMeshCacheKey,
     vertices: &[deadlib_render::TexturedMeshVertex],
-) -> Result<bool, Box<dyn Error>> {
+) -> Result<TMeshCacheResult, Box<dyn Error>> {
     if let Some(entry) = cached_tmesh.get(&cache_key) {
-        return Ok(entry.vertex_count == vertices.len() as u32);
+        return Ok(if entry.vertex_count == vertices.len() as u32 {
+            TMeshCacheResult::Resident
+        } else {
+            TMeshCacheResult::Unavailable
+        });
     }
 
-    let bytes = vertices.len() * std::mem::size_of::<TexturedMeshVertex>();
+    let bytes = std::mem::size_of_val(vertices);
     if bytes > VULKAN_TMESH_CACHE_MAX_BYTES
         || cached_tmesh_bytes.saturating_add(bytes) > VULKAN_TMESH_CACHE_MAX_BYTES
     {
-        return Ok(false);
+        return Ok(TMeshCacheResult::Unavailable);
     }
 
     let size = bytes as vk::DeviceSize;
@@ -2914,7 +3001,7 @@ fn ensure_cached_tmesh(
         },
     );
     *cached_tmesh_bytes = cached_tmesh_bytes.saturating_add(bytes);
-    Ok(true)
+    Ok(TMeshCacheResult::Uploaded)
 }
 
 fn find_memory_type(

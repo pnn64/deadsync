@@ -3,6 +3,7 @@ use deadsync_profile as profile_data;
 use deadsync_score as score_data;
 use deadsync_score::stage_stats;
 mod commands;
+mod compiled_present;
 mod graphics;
 mod input_routing;
 mod screen_nav;
@@ -10,6 +11,7 @@ mod screenshot;
 mod smx_runtime;
 mod updater;
 
+use self::compiled_present::SelectMusicBgCache;
 use self::screenshot::auto_screenshot_eval_results;
 use crate::command::Command;
 use crate::course::{
@@ -367,6 +369,8 @@ fn prewarm_gameplay_text_layout_cache(
     assets: &AssetManager,
     metrics: &Metrics,
     cache: &mut compose::TextLayoutCache,
+    actors: &mut Vec<Actor>,
+    compose_scratch: &mut compose::ComposeScratch,
     state: &mut gameplay::State,
 ) {
     let started = Instant::now();
@@ -378,23 +382,26 @@ fn prewarm_gameplay_text_layout_cache(
 
     let fonts = assets.fonts();
     screens::components::gameplay::gameplay_stats::refresh_density_graph_meshes(state);
-    let mut actors = Vec::with_capacity(256);
+    actors.clear();
     gameplay::push_actors(
-        &mut actors,
+        actors,
         state,
         assets,
         gameplay::ActorViewOverride::default(),
         arrow_effect_time_seconds(started),
     );
-    let _ = compose::build_screen_cached_with_texture_context(
-        &actors,
+    let mut render = compose::build_screen_cached_with_scratch_and_texture_context(
+        actors,
         [0.0, 0.0, 0.0, 1.0],
         metrics,
         fonts,
         0.0,
         cache,
+        compose_scratch,
         &PRESENT_TEXTURE_CONTEXT,
     );
+    compose_scratch.recycle_render_list(&mut render);
+    actors.clear();
     gameplay::prewarm_text_layout(cache, fonts, state);
     screens::components::gameplay::gameplay_stats::prewarm_text_layout(cache, fonts, assets, state);
     screens::components::gameplay::notefield::prewarm_text_layout(cache, fonts, state);
@@ -404,9 +411,12 @@ fn prewarm_gameplay_text_layout_cache(
 
     let stats = cache.frame_stats();
     debug!(
-        "Gameplay text cache prewarm: entries={} shared={} elapsed_ms={:.3}",
+        "Gameplay presentation prewarm: entries={} shared={} scratch_growth={} objects={} sprites={} elapsed_ms={:.3}",
         stats.owned_entries,
         stats.shared_aliases,
+        compose_scratch.frame_stats().scratch_growth_events,
+        compose_scratch.frame_stats().render_objects,
+        compose_scratch.frame_stats().sprite_instances,
         started.elapsed().as_secs_f64() * 1000.0,
     );
 }
@@ -888,6 +898,7 @@ pub struct App {
     gameplay_text_layout_cache: compose::TextLayoutCache,
     ui_compose_scratch: compose::ComposeScratch,
     gameplay_compose_scratch: compose::ComposeScratch,
+    select_music_bg_cache: SelectMusicBgCache,
     actor_scratch: Vec<Actor>,
     state: AppState,
     software_renderer_threads: u8,
@@ -2279,7 +2290,21 @@ impl App {
         self.sync_theme_background_video(total_elapsed);
         let actor_build_started = Instant::now();
         let arrow_effect_time_s = arrow_effect_time_seconds(actor_build_started);
-        let (mut actors, clear_color) = self.get_current_actors(arrow_effect_time_s);
+        let compiled_select_music_bg =
+            if self.state.screens.current_screen == CurrentScreen::SelectMusic {
+                let params = select_music::visual_bg_params(&self.state.screens.select_music_state);
+                self.select_music_bg_cache.prepare(
+                    params,
+                    &self.state.shell.metrics,
+                    self.asset_manager.fonts(),
+                    &mut self.ui_text_layout_cache,
+                    &PRESENT_TEXTURE_CONTEXT,
+                )
+            } else {
+                false
+            };
+        let (mut actors, clear_color) =
+            self.get_current_actors(arrow_effect_time_s, compiled_select_music_bg);
         let actor_build_us = elapsed_us_since(actor_build_started);
         self.state.shell.update_fps_stats(redraw_started);
         let screens = &self.state.screens;
@@ -2414,27 +2439,85 @@ impl App {
         }
         let fonts = self.asset_manager.fonts();
         let build_screen_started = Instant::now();
-        let (mut screen, text_layout) =
-            if self.state.screens.current_screen == CurrentScreen::Gameplay {
-                let text_layout_cache = &mut self.gameplay_text_layout_cache;
-                let compose_scratch = &mut self.gameplay_compose_scratch;
-                text_layout_cache.begin_frame_stats();
-                let screen = compose::build_screen_cached_with_scratch_and_texture_context(
-                    &actors,
-                    clear_color,
-                    &self.state.shell.metrics,
-                    fonts,
-                    total_elapsed,
-                    text_layout_cache,
-                    compose_scratch,
-                    &PRESENT_TEXTURE_CONTEXT,
-                );
-                (screen, text_layout_cache.frame_stats())
+        let (mut screen, text_layout, compose_frame) = if self.state.screens.current_screen
+            == CurrentScreen::Gameplay
+        {
+            let text_layout_cache = &mut self.gameplay_text_layout_cache;
+            let compose_scratch = &mut self.gameplay_compose_scratch;
+            text_layout_cache.begin_frame_stats();
+            let screen = compose::build_screen_cached_with_scratch_and_texture_context(
+                &actors,
+                clear_color,
+                &self.state.shell.metrics,
+                fonts,
+                total_elapsed,
+                text_layout_cache,
+                compose_scratch,
+                &PRESENT_TEXTURE_CONTEXT,
+            );
+            (
+                screen,
+                text_layout_cache.frame_stats(),
+                compose_scratch.frame_stats(),
+            )
+        } else {
+            let text_layout_cache = &mut self.ui_text_layout_cache;
+            let compose_scratch = &mut self.ui_compose_scratch;
+            text_layout_cache.begin_frame_stats();
+            let screen = if compiled_select_music_bg {
+                let compiled = self.select_music_bg_cache.frame().map(|frame| {
+                    compose::build_screen_cached_with_scratch_and_texture_context_and_root_prefix(
+                        &actors,
+                        clear_color,
+                        &self.state.shell.metrics,
+                        fonts,
+                        total_elapsed,
+                        text_layout_cache,
+                        compose_scratch,
+                        &PRESENT_TEXTURE_CONTEXT,
+                        frame.prefix,
+                        &frame.patches,
+                    )
+                });
+                match compiled {
+                    Some(Ok(screen)) => screen,
+                    Some(Err(error)) => {
+                        self.select_music_bg_cache
+                            .invalidate_after_compose_error(&error);
+                        compiled_present::prepend_legacy_tiled_background(
+                            &mut actors,
+                            select_music::visual_bg_params(&self.state.screens.select_music_state),
+                        );
+                        compose::build_screen_cached_with_scratch_and_texture_context(
+                            &actors,
+                            clear_color,
+                            &self.state.shell.metrics,
+                            fonts,
+                            total_elapsed,
+                            text_layout_cache,
+                            compose_scratch,
+                            &PRESENT_TEXTURE_CONTEXT,
+                        )
+                    }
+                    None => {
+                        compiled_present::prepend_legacy_tiled_background(
+                            &mut actors,
+                            select_music::visual_bg_params(&self.state.screens.select_music_state),
+                        );
+                        compose::build_screen_cached_with_scratch_and_texture_context(
+                            &actors,
+                            clear_color,
+                            &self.state.shell.metrics,
+                            fonts,
+                            total_elapsed,
+                            text_layout_cache,
+                            compose_scratch,
+                            &PRESENT_TEXTURE_CONTEXT,
+                        )
+                    }
+                }
             } else {
-                let text_layout_cache = &mut self.ui_text_layout_cache;
-                let compose_scratch = &mut self.ui_compose_scratch;
-                text_layout_cache.begin_frame_stats();
-                let screen = compose::build_screen_cached_with_scratch_and_texture_context(
+                compose::build_screen_cached_with_scratch_and_texture_context(
                     &actors,
                     clear_color,
                     &self.state.shell.metrics,
@@ -2443,9 +2526,14 @@ impl App {
                     text_layout_cache,
                     compose_scratch,
                     &PRESENT_TEXTURE_CONTEXT,
-                );
-                (screen, text_layout_cache.frame_stats())
+                )
             };
+            (
+                screen,
+                text_layout_cache.frame_stats(),
+                compose_scratch.frame_stats(),
+            )
+        };
         let build_screen_us = elapsed_us_since(build_screen_started);
         let resolve_textures_us = 0;
         let compose_us: u32 = actor_build_us
@@ -2458,6 +2546,7 @@ impl App {
             render_objects: saturating_u32(screen.objects.len()),
             render_cameras: saturating_u32(screen.cameras.len()),
             text_layout,
+            compose: compose_frame,
         };
 
         let apply_present_back_pressure = self.apply_present_back_pressure();
@@ -2660,6 +2749,7 @@ impl App {
             ),
             ui_compose_scratch: compose::ComposeScratch::default(),
             gameplay_compose_scratch: compose::ComposeScratch::default(),
+            select_music_bg_cache: SelectMusicBgCache::default(),
             actor_scratch: Vec::with_capacity(256),
             state,
             software_renderer_threads,
@@ -4295,7 +4385,11 @@ impl App {
         ));
     }
 
-    fn get_current_actors(&mut self, arrow_effect_time_s: f32) -> (Vec<Actor>, [f32; 4]) {
+    fn get_current_actors(
+        &mut self,
+        arrow_effect_time_s: f32,
+        compiled_select_music_bg: bool,
+    ) -> (Vec<Actor>, [f32; 4]) {
         const CLEAR: [f32; 4] = [0.03, 0.03, 0.03, 1.0];
         let mut screen_alpha_multiplier = 1.0;
 
@@ -4467,12 +4561,18 @@ impl App {
                 profile_load::push_actors(&mut actors, &self.state.screens.profile_load_state);
             }
             CurrentScreen::SelectMusic => {
-                select_music::push_actors(
-                    &mut actors,
-                    &self.state.screens.select_music_state,
-                    &self.asset_manager,
-                    self.state.session.played_stages.len() + 1,
-                );
+                let state = &self.state.screens.select_music_state;
+                let stage = self.state.session.played_stages.len() + 1;
+                if compiled_select_music_bg {
+                    select_music::push_actors_without_visual_bg(
+                        &mut actors,
+                        state,
+                        &self.asset_manager,
+                        stage,
+                    );
+                } else {
+                    select_music::push_actors(&mut actors, state, &self.asset_manager, stage);
+                }
             }
             CurrentScreen::SelectCourse => select_course::push_actors(
                 &mut actors,
@@ -5893,6 +5993,8 @@ impl App {
                     &self.asset_manager,
                     &self.state.shell.metrics,
                     &mut self.gameplay_text_layout_cache,
+                    &mut self.actor_scratch,
+                    &mut self.gameplay_compose_scratch,
                     &mut gs,
                 );
                 let text_prewarm_ms = text_prewarm_started.elapsed().as_secs_f64() * 1000.0;
@@ -6269,6 +6371,8 @@ impl App {
                     &self.asset_manager,
                     &self.state.shell.metrics,
                     &mut self.gameplay_text_layout_cache,
+                    &mut self.actor_scratch,
+                    &mut self.gameplay_compose_scratch,
                     &mut gs,
                 );
                 let text_prewarm_ms = text_prewarm_started.elapsed().as_secs_f64() * 1000.0;

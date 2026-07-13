@@ -1,8 +1,8 @@
 use deadlib_render::{
-    BlendMode, ClockDomainTrace, DrawStats, FastU64Map, PresentModePolicy, PresentModeTrace,
-    PresentStats, RenderList, SamplerDesc, SamplerFilter, SamplerWrap, TMeshCacheKey,
-    TextureHandle, TexturedMeshVertex,
-    draw_prep::{self, DrawOp, DrawScratch, TexturedMeshSource},
+    BlendMode, ClockDomainTrace, DrawFrame, DrawFrameView, DrawStats, FastU64Map,
+    PresentModePolicy, PresentModeTrace, PresentStats, RenderList, SamplerDesc, SamplerFilter,
+    SamplerWrap, TMeshCacheKey, TextureHandle, TexturedMeshVertex,
+    draw_prep::{self, DrawOp, DrawScratch, TMeshCacheResult, TexturedMeshSource},
 };
 use glam::Mat4 as Matrix4;
 use image::RgbaImage;
@@ -16,7 +16,7 @@ use std::{
     error::Error,
     mem,
     sync::{Arc, mpsc},
-    time::Instant,
+    time::{Duration, Instant},
 };
 use wgpu::util::DeviceExt;
 use winit::window::Window;
@@ -897,16 +897,20 @@ fn ensure_cached_tmesh(
     cached_tmesh_bytes: &mut usize,
     cache_key: TMeshCacheKey,
     vertices: &[deadlib_render::TexturedMeshVertex],
-) -> bool {
+) -> TMeshCacheResult {
     if let Some(entry) = cached_tmesh.get(&cache_key) {
-        return entry.vertex_count == vertices.len() as u32;
+        return if entry.vertex_count == vertices.len() as u32 {
+            TMeshCacheResult::Resident
+        } else {
+            TMeshCacheResult::Unavailable
+        };
     }
 
-    let bytes = vertices.len() * std::mem::size_of::<TexturedMeshVertex>();
+    let bytes = std::mem::size_of_val(vertices);
     if bytes > WGPU_TMESH_CACHE_MAX_BYTES
         || cached_tmesh_bytes.saturating_add(bytes) > WGPU_TMESH_CACHE_MAX_BYTES
     {
-        return false;
+        return TMeshCacheResult::Unavailable;
     }
 
     let buffer = Arc::new(
@@ -924,7 +928,7 @@ fn ensure_cached_tmesh(
         },
     );
     *cached_tmesh_bytes = cached_tmesh_bytes.saturating_add(bytes);
-    true
+    TMeshCacheResult::Uploaded
 }
 
 #[inline(always)]
@@ -939,101 +943,168 @@ pub fn capture_frame(state: &mut State) -> Result<RgbaImage, Box<dyn Error>> {
         .ok_or_else(|| std::io::Error::other("No captured screenshot frame available").into())
 }
 
+#[inline(always)]
+fn duration_us(elapsed: Duration) -> u32 {
+    let elapsed = elapsed.as_micros();
+    if elapsed > u128::from(u32::MAX) {
+        u32::MAX
+    } else {
+        elapsed as u32
+    }
+}
+
+#[inline(always)]
+fn elapsed_us_since(started: Instant) -> u32 {
+    duration_us(started.elapsed())
+}
+
 pub fn draw(
     state: &mut State,
     render_list: &RenderList,
     textures: &impl TextureLookup,
     apply_present_back_pressure: bool,
 ) -> Result<DrawStats, Box<dyn Error>> {
-    #[inline(always)]
-    fn elapsed_us_since(started: Instant) -> u32 {
-        let elapsed = started.elapsed().as_micros();
-        if elapsed > u128::from(u32::MAX) {
-            u32::MAX
-        } else {
-            elapsed as u32
-        }
-    }
-
-    let mut stats = DrawStats::default();
     let (width, height) = state.window_size;
     if width == 0 || height == 0 {
-        return Ok(stats);
+        return Ok(DrawStats::default());
     }
 
-    {
-        let prep = &mut state.prep;
+    let mut prep = mem::take(&mut state.prep);
+    let draw_prep_started = Instant::now();
+    let mut cache_upload_time = Duration::ZERO;
+    let (frame, frame_prepare) = {
         let device = &state.device;
         let cached_tmesh = &mut state.cached_tmesh;
         let cached_tmesh_bytes = &mut state.cached_tmesh_bytes;
-        let _prep_stats = draw_prep::prepare(render_list, prep, |cache_key, vertices| {
-            ensure_cached_tmesh(
+        draw_prep::prepare_render_list(render_list, &mut prep, |cache_key, vertices| {
+            let upload_started = Instant::now();
+            let result = ensure_cached_tmesh(
                 device,
                 cached_tmesh,
                 cached_tmesh_bytes,
                 cache_key,
                 vertices,
-            )
-        });
+            );
+            if result.upload_attempted() {
+                cache_upload_time = cache_upload_time.saturating_add(upload_started.elapsed());
+            }
+            result
+        })
+    };
+    let draw_prep_time = draw_prep_started.elapsed();
+    let mut stats = DrawStats {
+        draw_prep_us: duration_us(draw_prep_time.saturating_sub(cache_upload_time)),
+        backend_upload_us: duration_us(cache_upload_time),
+        frame_prepare,
+        ..DrawStats::default()
+    };
+    let result = draw_frame_view(
+        state,
+        frame,
+        textures,
+        apply_present_back_pressure,
+        &mut stats,
+        false,
+    );
+    state.prep = prep;
+    result
+}
+
+pub fn draw_frame(
+    state: &mut State,
+    frame: &DrawFrame,
+    textures: &impl TextureLookup,
+    apply_present_back_pressure: bool,
+) -> Result<DrawStats, Box<dyn Error>> {
+    let mut stats = DrawStats {
+        frame_prepare: frame.prepare_stats(),
+        ..DrawStats::default()
+    };
+    draw_frame_view(
+        state,
+        frame.view(),
+        textures,
+        apply_present_back_pressure,
+        &mut stats,
+        true,
+    )
+}
+
+fn draw_frame_view(
+    state: &mut State,
+    frame: DrawFrameView<'_>,
+    textures: &impl TextureLookup,
+    apply_present_back_pressure: bool,
+    stats: &mut DrawStats,
+    collect_run_stats: bool,
+) -> Result<DrawStats, Box<dyn Error>> {
+    let (width, height) = state.window_size;
+    if width == 0 || height == 0 {
+        return Ok(*stats);
     }
 
-    let instance_len = render_list.sprite_instances.len();
+    let backend_upload_started = Instant::now();
+    let instance_len = frame.sprite_instances.len();
     ensure_instance_capacity(state, instance_len);
     if instance_len > 0 {
         state.queue.write_buffer(
             &state.instance_buffer,
             0,
-            cast_slice(render_list.sprite_instances.as_slice()),
+            cast_slice(frame.sprite_instances),
         );
     }
-    let mesh_len = state.prep.mesh_vertices.len();
+    let mesh_len = frame.mesh_vertices.len();
     ensure_mesh_vertex_capacity(state, mesh_len);
     if mesh_len > 0 {
         state.queue.write_buffer(
             &state.mesh_vertex_buffer,
             0,
-            cast_slice(state.prep.mesh_vertices.as_slice()),
+            cast_slice(frame.mesh_vertices),
         );
     }
-    let tmesh_len = state.prep.tmesh_vertices.len();
+    let tmesh_len = frame.tmesh_vertices.len();
     ensure_tmesh_vertex_capacity(state, tmesh_len);
     if tmesh_len > 0 {
         state.queue.write_buffer(
             &state.tmesh_vertex_buffer,
             0,
-            cast_slice(state.prep.tmesh_vertices.as_slice()),
+            cast_slice(frame.tmesh_vertices),
         );
     }
-    let tmesh_instance_len = state.prep.tmesh_instances.len();
+    let tmesh_instance_len = frame.tmesh_instances.len();
     ensure_tmesh_instance_capacity(state, tmesh_instance_len);
     if tmesh_instance_len > 0 {
         state.queue.write_buffer(
             &state.tmesh_instance_buffer,
             0,
-            cast_slice(state.prep.tmesh_instances.as_slice()),
+            cast_slice(frame.tmesh_instances),
         );
     }
-    upload_projections(state, &render_list.cameras);
+    upload_projections(state, frame.cameras);
+    stats.backend_upload_us = stats
+        .backend_upload_us
+        .saturating_add(elapsed_us_since(backend_upload_started));
 
     let acquire_started = Instant::now();
-    let (frame, suboptimal) = match state.surface.get_current_texture() {
-        wgpu::CurrentSurfaceTexture::Success(frame) => (frame, false),
-        wgpu::CurrentSurfaceTexture::Suboptimal(frame) => (frame, true),
+    let (surface_frame, suboptimal) = match state.surface.get_current_texture() {
+        wgpu::CurrentSurfaceTexture::Success(surface_frame) => (surface_frame, false),
+        wgpu::CurrentSurfaceTexture::Suboptimal(surface_frame) => (surface_frame, true),
         wgpu::CurrentSurfaceTexture::Lost | wgpu::CurrentSurfaceTexture::Outdated => {
             stats.acquire_us = elapsed_us_since(acquire_started);
             reconfigure_surface(state);
-            return Ok(stats);
+            return Ok(*stats);
         }
         wgpu::CurrentSurfaceTexture::Timeout
         | wgpu::CurrentSurfaceTexture::Occluded
         | wgpu::CurrentSurfaceTexture::Validation => {
             stats.acquire_us = elapsed_us_since(acquire_started);
-            return Ok(stats);
+            return Ok(*stats);
         }
     };
     stats.acquire_us = elapsed_us_since(acquire_started);
     let waited_for_image = stats.acquire_us >= WGPU_IMAGE_WAIT_THRESHOLD_US;
-    let view = frame
+    let backend_setup_started = Instant::now();
+    let surface_view = surface_frame
         .texture
         .create_view(&wgpu::TextureViewDescriptor::default());
     let mut encoder = state
@@ -1041,19 +1112,22 @@ pub fn draw(
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("wgpu encoder"),
         });
+    stats.backend_setup_us = elapsed_us_since(backend_setup_started);
 
+    let backend_record_started = Instant::now();
+    let mut tmesh_vpf = 0u32;
     {
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("wgpu render pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &view,
+                view: &surface_view,
                 depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: f64::from(render_list.clear_color[0]),
-                        g: f64::from(render_list.clear_color[1]),
-                        b: f64::from(render_list.clear_color[2]),
+                        r: f64::from(frame.clear_color[0]),
+                        g: f64::from(frame.clear_color[1]),
+                        b: f64::from(frame.clear_color[2]),
                         a: 1.0,
                     }),
                     store: wgpu::StoreOp::Store,
@@ -1072,7 +1146,7 @@ pub fn draw(
             multiview_mask: None,
         });
 
-        let camera_count = render_list.cameras.len();
+        let camera_count = frame.cameras.len();
         let texture_group = match state.proj {
             ProjState::Immediates => 0,
             ProjState::Uniform { .. } => 1,
@@ -1084,9 +1158,13 @@ pub fn draw(
         let mut last_camera: Option<u8> = None;
         let mut last_tmesh_source: Option<TexturedMeshSource> = None;
         let mut last_tmesh_depth_test: Option<bool> = None;
-        for op in &state.prep.ops {
+        for op in frame.ops {
             match op {
                 DrawOp::Sprite(run) => {
+                    if collect_run_stats {
+                        stats.frame_prepare.sprite_runs =
+                            stats.frame_prepare.sprite_runs.saturating_add(1);
+                    }
                     let Some(tex) = textures.wgpu_texture(run.texture_handle) else {
                         continue;
                     };
@@ -1115,7 +1193,7 @@ pub fn draw(
                             &state.proj,
                             run.camera,
                             camera_count,
-                            &render_list.cameras,
+                            frame.cameras,
                             state.projection,
                         );
                         last_camera = Some(run.camera);
@@ -1131,6 +1209,10 @@ pub fn draw(
                     );
                 }
                 DrawOp::Mesh(run) => {
+                    if collect_run_stats {
+                        stats.frame_prepare.mesh_runs =
+                            stats.frame_prepare.mesh_runs.saturating_add(1);
+                    }
                     if run.vertex_count == 0 {
                         continue;
                     }
@@ -1153,7 +1235,7 @@ pub fn draw(
                             &state.proj,
                             run.camera,
                             camera_count,
-                            &render_list.cameras,
+                            frame.cameras,
                             state.projection,
                         );
                         last_camera = Some(run.camera);
@@ -1164,6 +1246,13 @@ pub fn draw(
                     );
                 }
                 DrawOp::TexturedMesh(run) => {
+                    if collect_run_stats {
+                        stats.frame_prepare.tmesh_runs =
+                            stats.frame_prepare.tmesh_runs.saturating_add(1);
+                    }
+                    let tri_count = run.source.vertex_count() / 3;
+                    tmesh_vpf =
+                        tmesh_vpf.saturating_add(tri_count.saturating_mul(run.instance_count));
                     if run.source.vertex_count() == 0 || run.instance_count == 0 {
                         continue;
                     }
@@ -1197,7 +1286,7 @@ pub fn draw(
                             &state.proj,
                             run.camera,
                             camera_count,
-                            &render_list.cameras,
+                            frame.cameras,
                             state.projection,
                         );
                         last_camera = Some(run.camera);
@@ -1218,6 +1307,8 @@ pub fn draw(
                             }
                             TexturedMeshSource::Cached { cache_key, .. } => {
                                 let Some(entry) = state.cached_tmesh.get(&cache_key) else {
+                                    stats.cached_tmesh_misses =
+                                        stats.cached_tmesh_misses.saturating_add(1);
                                     continue;
                                 };
                                 pass.set_vertex_buffer(0, entry.buffer.slice(..));
@@ -1259,7 +1350,7 @@ pub fn draw(
             });
             encoder.copy_texture_to_buffer(
                 wgpu::TexelCopyTextureInfo {
-                    texture: &frame.texture,
+                    texture: &surface_frame.texture,
                     mip_level: 0,
                     origin: wgpu::Origin3d::ZERO,
                     aspect: wgpu::TextureAspect::All,
@@ -1296,6 +1387,7 @@ pub fn draw(
     } else {
         None
     };
+    stats.backend_record_us = elapsed_us_since(backend_record_started);
 
     let submitted_present_id = next_present_id(state);
     let submit_started = Instant::now();
@@ -1310,7 +1402,7 @@ pub fn draw(
         });
     });
     let present_started = Instant::now();
-    frame.present();
+    surface_frame.present();
     stats.present_us = elapsed_us_since(present_started);
     let mut back_pressure_waited = false;
     if apply_present_back_pressure && screenshot_readback.is_none() {
@@ -1413,15 +1505,8 @@ pub fn draw(
         reconfigure_surface(state);
     }
 
-    let mut tmesh_vpf = 0u32;
-    for op in &state.prep.ops {
-        if let DrawOp::TexturedMesh(run) = op {
-            let tri_count = run.source.vertex_count() / 3;
-            tmesh_vpf = tmesh_vpf.saturating_add(tri_count.saturating_mul(run.instance_count));
-        }
-    }
     stats.vertices = (instance_len as u32) * 4 + mesh_len as u32 + tmesh_vpf;
-    Ok(stats)
+    Ok(*stats)
 }
 
 #[inline(always)]

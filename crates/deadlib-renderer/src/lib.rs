@@ -1,5 +1,5 @@
 use deadlib_render::{
-    BackendType, DrawStats, PresentModePolicy, RenderList, SamplerDesc, TextureHandle,
+    BackendType, DrawFrame, DrawStats, PresentModePolicy, RenderList, SamplerDesc, TextureHandle,
     TextureHandleMap,
 };
 use deadlib_render_backend_gl as opengl;
@@ -179,6 +179,78 @@ impl Backend {
             BackendImpl::DirectX(state) => wgpu_core::draw(
                 state,
                 render_list,
+                &WgpuTextureLookup {
+                    textures,
+                    kind: WgpuTextureKind::DirectX,
+                },
+                apply_present_back_pressure,
+            ),
+        }
+    }
+
+    /// Submits an already prepared flat frame without rebuilding draw runs.
+    ///
+    /// Hardware backends consume the frame's slices directly. The software
+    /// renderer still requires the legacy `RenderList` representation. Cached
+    /// textured-mesh sources must already be resident in the selected hardware
+    /// backend; a missing cache entry is skipped without a gameplay-time upload.
+    pub fn draw_frame(
+        &mut self,
+        frame: &DrawFrame,
+        textures: &TextureHandleMap<Texture>,
+        apply_present_back_pressure: bool,
+    ) -> Result<DrawStats, Box<dyn Error>> {
+        match &mut self.0 {
+            #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+            BackendImpl::Vulkan(state) => vulkan::draw_frame(
+                state,
+                frame,
+                &VulkanTextureLookup(textures),
+                apply_present_back_pressure,
+            ),
+            #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+            BackendImpl::VulkanWgpu(state) => wgpu_core::draw_frame(
+                state,
+                frame,
+                &WgpuTextureLookup {
+                    textures,
+                    kind: WgpuTextureKind::Vulkan,
+                },
+                apply_present_back_pressure,
+            ),
+            #[cfg(target_os = "macos")]
+            BackendImpl::Metal(state) => wgpu_core::draw_frame(
+                state,
+                frame,
+                &WgpuTextureLookup {
+                    textures,
+                    kind: WgpuTextureKind::Metal,
+                },
+                apply_present_back_pressure,
+            ),
+            BackendImpl::OpenGL(state) => opengl::draw_frame(
+                state,
+                frame,
+                &OpenGlTextureLookup(textures),
+                apply_present_back_pressure,
+            ),
+            BackendImpl::OpenGLWgpu(state) => wgpu_core::draw_frame(
+                state,
+                frame,
+                &WgpuTextureLookup {
+                    textures,
+                    kind: WgpuTextureKind::OpenGL,
+                },
+                apply_present_back_pressure,
+            ),
+            BackendImpl::Software(_) => Err(std::io::Error::other(
+                "Direct DrawFrame submission is not supported by the software renderer",
+            )
+            .into()),
+            #[cfg(target_os = "windows")]
+            BackendImpl::DirectX(state) => wgpu_core::draw_frame(
+                state,
+                frame,
                 &WgpuTextureLookup {
                     textures,
                     kind: WgpuTextureKind::DirectX,

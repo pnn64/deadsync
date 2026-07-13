@@ -27,8 +27,11 @@ pub struct StutterDiagFrameSample {
     pub present_us: u32,
     pub gpu_wait_us: u32,
     pub draw_setup_us: u32,
+    pub draw_prep_us: u32,
+    pub draw_upload_us: u32,
     pub draw_prepare_us: u32,
     pub draw_record_us: u32,
+    pub cached_tmesh_misses: u32,
     pub display_error_us: i32,
     pub display_catching_up: bool,
     pub present_mode: PresentModeTrace,
@@ -83,7 +86,7 @@ pub fn stutter_diag_dump_lines(
             0.0
         };
         lines.push(format!(
-            "Stutter recorder frame age_ms={:.3} screen={:?} dt_ms={:.3} expected_ms={:.3} x{:.2} req={} phases_ms=[pre:{:.3} rq:{:.3} in:{:.3} up:{:.3} comp:{:.3} upload:{:.3} draw:{:.3}] draw_ms=[acq:{:.3} sub:{:.3} present:{:.3} gpu_wait:{:.3} setup:{:.3} prep:{:.3} record:{:.3}] display=[err_ms:{:+.3} catch:{}] present=[mode:{} display:{} host:{} inflight:{} wait:{} back:{} idle:{} subopt:{}]",
+            "Stutter recorder frame age_ms={:.3} screen={:?} dt_ms={:.3} expected_ms={:.3} x{:.2} req={} phases_ms=[pre:{:.3} rq:{:.3} in:{:.3} up:{:.3} comp:{:.3} upload:{:.3} draw:{:.3}] draw_ms=[acq:{:.3} sub:{:.3} present:{:.3} gpu_wait:{:.3} setup:{:.3} draw_prep:{:.3} upload:{:.3} prepare:{:.3} record:{:.3}] draw_dbg=[cached_miss:{}] display=[err_ms:{:+.3} catch:{}] present=[mode:{} display:{} host:{} inflight:{} wait:{} back:{} idle:{} subopt:{}]",
             age_ms,
             sample.screen,
             sample.frame_us as f64 / 1000.0,
@@ -102,8 +105,11 @@ pub fn stutter_diag_dump_lines(
             sample.present_us as f64 / 1000.0,
             sample.gpu_wait_us as f64 / 1000.0,
             sample.draw_setup_us as f64 / 1000.0,
+            sample.draw_prep_us as f64 / 1000.0,
+            sample.draw_upload_us as f64 / 1000.0,
             sample.draw_prepare_us as f64 / 1000.0,
             sample.draw_record_us as f64 / 1000.0,
+            sample.cached_tmesh_misses,
             sample.display_error_us as f64 / 1000.0,
             u8::from(sample.display_catching_up),
             sample.present_mode,
@@ -171,8 +177,11 @@ impl StutterDiagFrameSample {
             present_us: 0,
             gpu_wait_us: 0,
             draw_setup_us: 0,
+            draw_prep_us: 0,
+            draw_upload_us: 0,
             draw_prepare_us: 0,
             draw_record_us: 0,
+            cached_tmesh_misses: 0,
             display_error_us: 0,
             display_catching_up: false,
             present_mode: PresentModeTrace::Unknown,
@@ -251,8 +260,11 @@ impl StutterDiagRecorder {
             present_us: draw_stats.present_us,
             gpu_wait_us: draw_stats.gpu_wait_us,
             draw_setup_us: draw_stats.backend_setup_us,
+            draw_prep_us: draw_stats.draw_prep_us,
+            draw_upload_us: draw_stats.backend_upload_us,
             draw_prepare_us: draw_stats.backend_prepare_us,
             draw_record_us: draw_stats.backend_record_us,
+            cached_tmesh_misses: draw_stats.cached_tmesh_misses,
             display_error_us,
             display_catching_up,
             present_mode: present.mode,
@@ -358,7 +370,10 @@ mod tests {
             500,
             600,
             700,
-            DrawStats::default(),
+            DrawStats {
+                cached_tmesh_misses: 3,
+                ..DrawStats::default()
+            },
             -0.0015,
             true,
         );
@@ -408,6 +423,7 @@ mod tests {
         assert!(lines[0].contains("frames=1 audio_events=1 display_events=1"));
         assert!(lines[1].contains("age_ms=2.000"));
         assert!(lines[1].contains("dt_ms=24.000 expected_ms=8.000 x3.00"));
+        assert!(lines[1].contains("draw_dbg=[cached_miss:3]"));
         assert!(lines[1].contains("display=[err_ms:-1.500 catch:1]"));
         assert!(lines[2].contains("kind=clamp_step"));
         assert!(lines[2].contains("target_ms=1000.000"));

@@ -27,6 +27,8 @@ pub struct GameplayPacingTrace {
     present_over_1ms: u32,
     present_over_3ms: u32,
     draw_setup_sum_us: u64,
+    draw_prep_sum_us: u64,
+    draw_upload_sum_us: u64,
     draw_prepare_sum_us: u64,
     draw_record_sum_us: u64,
     display_error_abs_sum_us: u64,
@@ -76,6 +78,8 @@ impl GameplayPacingTrace {
             present_over_1ms: 0,
             present_over_3ms: 0,
             draw_setup_sum_us: 0,
+            draw_prep_sum_us: 0,
+            draw_upload_sum_us: 0,
             draw_prepare_sum_us: 0,
             draw_record_sum_us: 0,
             display_error_abs_sum_us: 0,
@@ -166,6 +170,12 @@ impl GameplayPacingTrace {
         self.draw_setup_sum_us = self
             .draw_setup_sum_us
             .saturating_add(u64::from(draw_stats.backend_setup_us));
+        self.draw_prep_sum_us = self
+            .draw_prep_sum_us
+            .saturating_add(u64::from(draw_stats.draw_prep_us));
+        self.draw_upload_sum_us = self
+            .draw_upload_sum_us
+            .saturating_add(u64::from(draw_stats.backend_upload_us));
         self.draw_prepare_sum_us = self
             .draw_prepare_sum_us
             .saturating_add(u64::from(draw_stats.backend_prepare_us));
@@ -230,7 +240,7 @@ impl GameplayPacingTrace {
         let margin_samples = self.present_margin_samples.max(1);
         let audio = deadsync_audio_stream::get_output_timing_snapshot();
         log::trace!(
-            "Gameplay frame pacing: frames={} req=[chain:{} other:{}] dt_ms=[avg:{:.3} max:{:.3}] redraw_ms=[late_avg:{:.3} late_max:{:.3} deliver_avg:{:.3} deliver_max:{:.3} >=1ms:{} >=2ms:{}] draw_ms=[avg:{:.3} max:{:.3}] present_ms=[avg:{:.3} max:{:.3} >=1ms:{} >=3ms:{}] draw_cpu_ms=[setup_avg:{:.3} prep_avg:{:.3} record_avg:{:.3}] display_dbg=[err_last_ms:{:+.3} abs_avg_ms:{:.3} abs_max_ms:{:.3} catch:{} catch_last:{}] present_dbg=[mode:{} display:{} host:{} mapped:{} inflight_avg:{:.2} inflight_max:{} image_wait:{} back_pressure:{} queue_idle:{} subopt:{} interval_ms_avg:{:.3} interval_ms_max:{:.3} margin_ms_avg:{:.3} margin_ms_max:{:.3} cal_ms_avg:{:.3} cal_ms_max:{:.3}] audio_dbg=[path:{} req:{} fallback:{} clock:{} qual:{} sf:{} cf:{} rate:{} buf:{} pad:{} q:{} tick_ms:{:.3} span_ms:{:.3} out_ms:{:.3} underruns:{}]",
+            "Gameplay frame pacing: frames={} req=[chain:{} other:{}] dt_ms=[avg:{:.3} max:{:.3}] redraw_ms=[late_avg:{:.3} late_max:{:.3} deliver_avg:{:.3} deliver_max:{:.3} >=1ms:{} >=2ms:{}] draw_ms=[avg:{:.3} max:{:.3}] present_ms=[avg:{:.3} max:{:.3} >=1ms:{} >=3ms:{}] draw_cpu_ms=[setup_avg:{:.3} draw_prep_avg:{:.3} upload_avg:{:.3} prepare_avg:{:.3} record_avg:{:.3}] display_dbg=[err_last_ms:{:+.3} abs_avg_ms:{:.3} abs_max_ms:{:.3} catch:{} catch_last:{}] present_dbg=[mode:{} display:{} host:{} mapped:{} inflight_avg:{:.2} inflight_max:{} image_wait:{} back_pressure:{} queue_idle:{} subopt:{} interval_ms_avg:{:.3} interval_ms_max:{:.3} margin_ms_avg:{:.3} margin_ms_max:{:.3} cal_ms_avg:{:.3} cal_ms_max:{:.3}] audio_dbg=[path:{} req:{} fallback:{} clock:{} qual:{} sf:{} cf:{} rate:{} buf:{} pad:{} q:{} tick_ms:{:.3} span_ms:{:.3} out_ms:{:.3} underruns:{}]",
             frames,
             self.chain_frames,
             self.other_frames,
@@ -249,6 +259,8 @@ impl GameplayPacingTrace {
             self.present_over_1ms,
             self.present_over_3ms,
             ms(self.draw_setup_sum_us),
+            ms(self.draw_prep_sum_us),
+            ms(self.draw_upload_sum_us),
             ms(self.draw_prepare_sum_us),
             ms(self.draw_record_sum_us),
             self.display_error_last_us as f64 / 1000.0,

@@ -1,10 +1,14 @@
 use crate::{
     BlendMode, FastU64Map, INVALID_TEXTURE_HANDLE, INVALID_TMESH_CACHE_KEY, MeshVertex, ObjectType,
-    RenderList, TMeshCacheKey, TextureHandle, TexturedMeshInstanceRaw, TexturedMeshVertex,
-    TexturedMeshVertices,
+    RenderList, SpriteInstanceRaw, TMeshCacheKey, TextureHandle, TexturedMeshInstanceRaw,
+    TexturedMeshVertex, TexturedMeshVertices,
 };
-use glam::Vec4 as Vector4;
-use std::{collections::HashMap, hash::BuildHasherDefault};
+use glam::{Mat4 as Matrix4, Vec4 as Vector4};
+use std::{
+    collections::HashMap,
+    hash::BuildHasherDefault,
+    ops::{Deref, DerefMut},
+};
 use twox_hash::XxHash64;
 
 type TMeshHasher = BuildHasherDefault<XxHash64>;
@@ -38,6 +42,48 @@ pub enum TexturedMeshSource {
         cache_key: TMeshCacheKey,
         vertex_count: u32,
     },
+}
+
+/// Result of asking a backend to retain immutable textured-mesh geometry.
+///
+/// `Resident` and `Uploaded` both allow the prepared run to reference the
+/// backend cache. Only `Uploaded` contributes to `cached_upload_vertices`;
+/// `UploadFailed` remains unavailable but retains attempted-upload timing.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum TMeshCacheResult {
+    #[default]
+    Unavailable,
+    Resident,
+    Uploaded,
+    UploadFailed,
+}
+
+impl TMeshCacheResult {
+    #[inline(always)]
+    pub const fn is_available(self) -> bool {
+        matches!(self, Self::Resident | Self::Uploaded)
+    }
+
+    #[inline(always)]
+    pub const fn was_uploaded(self) -> bool {
+        matches!(self, Self::Uploaded)
+    }
+
+    #[inline(always)]
+    pub const fn upload_attempted(self) -> bool {
+        matches!(self, Self::Uploaded | Self::UploadFailed)
+    }
+}
+
+impl From<bool> for TMeshCacheResult {
+    #[inline(always)]
+    fn from(available: bool) -> Self {
+        if available {
+            Self::Resident
+        } else {
+            Self::Unavailable
+        }
+    }
 }
 
 impl TexturedMeshSource {
@@ -77,21 +123,211 @@ pub enum DrawOp {
     TexturedMesh(TexturedMeshRun),
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct FrameCapacity {
+    pub cameras: usize,
+    pub sprite_instances: usize,
+    pub mesh_vertices: usize,
+    pub tmesh_vertices: usize,
+    pub tmesh_instances: usize,
+    pub ops: usize,
+}
+
+impl FrameCapacity {
+    #[inline]
+    pub fn growth_events(self, after: Self) -> u32 {
+        [
+            after.cameras > self.cameras,
+            after.sprite_instances > self.sprite_instances,
+            after.mesh_vertices > self.mesh_vertices,
+            after.tmesh_vertices > self.tmesh_vertices,
+            after.tmesh_instances > self.tmesh_instances,
+            after.ops > self.ops,
+        ]
+        .into_iter()
+        .map(u32::from)
+        .sum()
+    }
+}
+
+/// Persistent, renderer-owned storage for one flat frame.
+///
+/// The render/logic thread owns this value for a screen or song and calls
+/// [`DrawFrame::begin`] before each emission. Buffers retain capacity across
+/// frames; callers reserve their measured worst case during transition warmup.
+/// Emission itself is single-threaded and performs linear appends. This type
+/// does no lookup, eviction, pruning, or resource destruction.
 #[derive(Debug, Default)]
-pub struct DrawScratch {
+pub struct DrawFrame {
+    pub clear_color: [f32; 4],
+    /// Semantic primitives emitted before adjacent runs were batched.
+    pub render_objects: u32,
+    pub cameras: Vec<Matrix4>,
+    pub sprite_instances: Vec<SpriteInstanceRaw>,
     pub mesh_vertices: Vec<MeshVertex>,
     pub tmesh_vertices: Vec<TexturedMeshVertex>,
     pub tmesh_instances: Vec<TexturedMeshInstanceRaw>,
     pub ops: Vec<DrawOp>,
+}
+
+impl DrawFrame {
+    pub fn with_capacity(capacity: FrameCapacity) -> Self {
+        Self {
+            clear_color: [0.0; 4],
+            render_objects: 0,
+            cameras: Vec::with_capacity(capacity.cameras),
+            sprite_instances: Vec::with_capacity(capacity.sprite_instances),
+            mesh_vertices: Vec::with_capacity(capacity.mesh_vertices),
+            tmesh_vertices: Vec::with_capacity(capacity.tmesh_vertices),
+            tmesh_instances: Vec::with_capacity(capacity.tmesh_instances),
+            ops: Vec::with_capacity(capacity.ops),
+        }
+    }
+
+    #[inline]
+    pub fn begin(&mut self, clear_color: [f32; 4]) {
+        self.clear_color = clear_color;
+        self.render_objects = 0;
+        self.cameras.clear();
+        self.sprite_instances.clear();
+        self.mesh_vertices.clear();
+        self.tmesh_vertices.clear();
+        self.tmesh_instances.clear();
+        self.ops.clear();
+    }
+
+    pub fn reserve(&mut self, capacity: FrameCapacity) {
+        reserve_to(&mut self.cameras, capacity.cameras);
+        reserve_to(&mut self.sprite_instances, capacity.sprite_instances);
+        reserve_to(&mut self.mesh_vertices, capacity.mesh_vertices);
+        reserve_to(&mut self.tmesh_vertices, capacity.tmesh_vertices);
+        reserve_to(&mut self.tmesh_instances, capacity.tmesh_instances);
+        reserve_to(&mut self.ops, capacity.ops);
+    }
+
+    #[inline]
+    pub fn capacity(&self) -> FrameCapacity {
+        FrameCapacity {
+            cameras: self.cameras.capacity(),
+            sprite_instances: self.sprite_instances.capacity(),
+            mesh_vertices: self.mesh_vertices.capacity(),
+            tmesh_vertices: self.tmesh_vertices.capacity(),
+            tmesh_instances: self.tmesh_instances.capacity(),
+            ops: self.ops.capacity(),
+        }
+    }
+
+    /// Describes an already-flat direct frame without traversing its draw ops.
+    /// Backends add per-kind run counts while recording the existing op loop.
+    #[inline]
+    pub fn prepare_stats(&self) -> FramePrepareStats {
+        FramePrepareStats {
+            dynamic_upload_vertices: self.tmesh_vertices.len() as u64,
+            render_objects: self.render_objects,
+            sprite_instances: saturating_u32(self.sprite_instances.len()),
+            mesh_vertices: saturating_u32(self.mesh_vertices.len()),
+            tmesh_vertices: saturating_u32(self.tmesh_vertices.len()),
+            tmesh_instances: saturating_u32(self.tmesh_instances.len()),
+            draw_ops: saturating_u32(self.ops.len()),
+            mesh_vertex_capacity: self.mesh_vertices.capacity(),
+            tmesh_vertex_capacity: self.tmesh_vertices.capacity(),
+            tmesh_instance_capacity: self.tmesh_instances.capacity(),
+            op_capacity: self.ops.capacity(),
+            ..FramePrepareStats::default()
+        }
+    }
+
+    #[inline]
+    pub fn view(&self) -> DrawFrameView<'_> {
+        DrawFrameView {
+            clear_color: self.clear_color,
+            cameras: self.cameras.as_slice(),
+            sprite_instances: self.sprite_instances.as_slice(),
+            mesh_vertices: self.mesh_vertices.as_slice(),
+            tmesh_vertices: self.tmesh_vertices.as_slice(),
+            tmesh_instances: self.tmesh_instances.as_slice(),
+            ops: self.ops.as_slice(),
+        }
+    }
+}
+
+#[inline]
+fn reserve_to<T>(values: &mut Vec<T>, capacity: usize) {
+    if values.capacity() < capacity {
+        values.reserve(capacity - values.len());
+    }
+}
+
+/// Borrowed backend input shared by direct frames and legacy `RenderList`
+/// preparation. Every run in `ops` indexes the corresponding slices here.
+#[derive(Clone, Copy, Debug)]
+pub struct DrawFrameView<'a> {
+    pub clear_color: [f32; 4],
+    pub cameras: &'a [Matrix4],
+    pub sprite_instances: &'a [SpriteInstanceRaw],
+    pub mesh_vertices: &'a [MeshVertex],
+    pub tmesh_vertices: &'a [TexturedMeshVertex],
+    pub tmesh_instances: &'a [TexturedMeshInstanceRaw],
+    pub ops: &'a [DrawOp],
+}
+
+/// Persistent adapter scratch for the legacy `RenderList` path.
+///
+/// A backend owns one value on its render thread for the backend lifetime.
+/// `with_capacity` is its warmup point; vectors and hash-table buckets are
+/// retained thereafter. A miss transforms/copies dynamic geometry or invokes
+/// the caller's bounded static-geometry upload hook. Frame-local map entries
+/// are cleared without releasing buckets, and all storage is destroyed with
+/// the backend. [`FramePrepareStats`] reports exact output and growth counts;
+/// worst-case preparation is linear in render objects plus emitted vertices.
+#[derive(Debug, Default)]
+pub struct DrawScratch {
+    frame: DrawFrame,
     shared_tmesh_geom: TMeshGeomMap,
     cached_tmesh: FastU64Map<bool>,
 }
 
+impl Deref for DrawScratch {
+    type Target = DrawFrame;
+
+    #[inline(always)]
+    fn deref(&self) -> &Self::Target {
+        &self.frame
+    }
+}
+
+impl DerefMut for DrawScratch {
+    #[inline(always)]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.frame
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct PrepareStats {
+#[serde(default)]
+pub struct FramePrepareStats {
     pub dynamic_upload_vertices: u64,
     pub cached_upload_vertices: u64,
+    pub render_objects: u32,
+    pub sprite_instances: u32,
+    pub mesh_vertices: u32,
+    pub tmesh_vertices: u32,
+    pub tmesh_instances: u32,
+    pub draw_ops: u32,
+    pub sprite_runs: u32,
+    pub mesh_runs: u32,
+    pub tmesh_runs: u32,
+    pub scratch_growth_events: u32,
+    pub mesh_vertex_capacity: usize,
+    pub tmesh_vertex_capacity: usize,
+    pub tmesh_instance_capacity: usize,
+    pub op_capacity: usize,
+    pub shared_tmesh_capacity: usize,
+    pub cached_tmesh_capacity: usize,
 }
+
+/// Backwards-compatible name retained for existing backend callers.
+pub type PrepareStats = FramePrepareStats;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 struct TMeshGeomKey {
@@ -106,6 +342,36 @@ struct FrameTMeshGeom {
     geom_key: u64,
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+struct DrawScratchCapacity {
+    frame: FrameCapacity,
+    shared_tmesh: usize,
+    cached_tmesh: usize,
+}
+
+impl DrawScratchCapacity {
+    #[inline]
+    fn capture(scratch: &DrawScratch) -> Self {
+        Self {
+            frame: scratch.frame.capacity(),
+            shared_tmesh: scratch.shared_tmesh_geom.capacity(),
+            cached_tmesh: scratch.cached_tmesh.capacity(),
+        }
+    }
+
+    #[inline]
+    fn growth_events(self, after: Self) -> u32 {
+        self.frame.growth_events(after.frame)
+            + u32::from(after.shared_tmesh > self.shared_tmesh)
+            + u32::from(after.cached_tmesh > self.cached_tmesh)
+    }
+}
+
+#[inline]
+fn saturating_u32(value: usize) -> u32 {
+    u32::try_from(value).unwrap_or(u32::MAX)
+}
+
 impl DrawScratch {
     #[inline(always)]
     pub fn with_capacity(
@@ -115,10 +381,13 @@ impl DrawScratch {
         ops: usize,
     ) -> Self {
         Self {
-            mesh_vertices: Vec::with_capacity(mesh_vertices),
-            tmesh_vertices: Vec::with_capacity(tmesh_vertices),
-            tmesh_instances: Vec::with_capacity(tmesh_instances),
-            ops: Vec::with_capacity(ops),
+            frame: DrawFrame::with_capacity(FrameCapacity {
+                mesh_vertices,
+                tmesh_vertices,
+                tmesh_instances,
+                ops,
+                ..FrameCapacity::default()
+            }),
             shared_tmesh_geom: HashMap::with_capacity_and_hasher(
                 ops,
                 BuildHasherDefault::default(),
@@ -193,15 +462,17 @@ fn shared_tmesh_source(
     }
 }
 
-pub fn prepare<EnsureCached>(
+pub fn prepare<EnsureCached, CacheResult>(
     render_list: &RenderList,
     scratch: &mut DrawScratch,
     mut ensure_cached_tmesh: EnsureCached,
 ) -> PrepareStats
 where
-    EnsureCached: FnMut(TMeshCacheKey, &[TexturedMeshVertex]) -> bool,
+    EnsureCached: FnMut(TMeshCacheKey, &[TexturedMeshVertex]) -> CacheResult,
+    CacheResult: Into<TMeshCacheResult>,
 {
     let objects_len = render_list.objects.len();
+    let capacity_before = DrawScratchCapacity::capture(scratch);
 
     scratch.mesh_vertices.clear();
     scratch.tmesh_vertices.clear();
@@ -209,11 +480,16 @@ where
 
     scratch.ops.clear();
     if scratch.ops.capacity() < objects_len {
-        scratch.ops.reserve(objects_len - scratch.ops.len());
+        let additional = objects_len - scratch.ops.len();
+        scratch.ops.reserve(additional);
     }
     debug_assert!(scratch.ops.capacity() >= objects_len);
 
-    let mut stats = PrepareStats::default();
+    let mut stats = FramePrepareStats {
+        render_objects: saturating_u32(objects_len),
+        sprite_instances: saturating_u32(render_list.sprite_instances.len()),
+        ..FramePrepareStats::default()
+    };
     let mut shared_tmesh_geom_cleared = false;
     let mut cached_tmesh_cleared = false;
     let mut i = 0usize;
@@ -238,6 +514,7 @@ where
                         } else {
                             if let Some(run) = sprite_run.take() {
                                 scratch.ops.push(DrawOp::Sprite(run));
+                                stats.sprite_runs = stats.sprite_runs.saturating_add(1);
                             }
                             sprite_run = Some(SpriteRun {
                                 instance_start,
@@ -262,6 +539,7 @@ where
 
                 if let Some(run) = sprite_run {
                     scratch.ops.push(DrawOp::Sprite(run));
+                    stats.sprite_runs = stats.sprite_runs.saturating_add(1);
                 }
             }
             ObjectType::Mesh {
@@ -305,6 +583,7 @@ where
                     blend: obj.blend,
                     camera: obj.camera,
                 }));
+                stats.mesh_runs = stats.mesh_runs.saturating_add(1);
                 i += 1;
             }
             ObjectType::TexturedMesh {
@@ -331,9 +610,10 @@ where
                     let cached = if let Some(cached) = scratch.cached_tmesh.get(geom_cache_key) {
                         *cached
                     } else {
-                        let cached = ensure_cached_tmesh(*geom_cache_key, vertices.as_ref());
+                        let result = ensure_cached_tmesh(*geom_cache_key, vertices.as_ref()).into();
+                        let cached = result.is_available();
                         scratch.cached_tmesh.insert(*geom_cache_key, cached);
-                        if cached {
+                        if result.was_uploaded() {
                             stats.cached_upload_vertices = stats
                                 .cached_upload_vertices
                                 .saturating_add(vertices.len() as u64);
@@ -397,12 +677,55 @@ where
                     camera: obj.camera,
                     depth_test: *depth_test,
                 }));
+                stats.tmesh_runs = stats.tmesh_runs.saturating_add(1);
                 i += 1;
             }
         }
     }
 
+    let capacity_after = DrawScratchCapacity::capture(scratch);
+    stats.mesh_vertices = saturating_u32(scratch.mesh_vertices.len());
+    stats.tmesh_vertices = saturating_u32(scratch.tmesh_vertices.len());
+    stats.tmesh_instances = saturating_u32(scratch.tmesh_instances.len());
+    stats.draw_ops = saturating_u32(scratch.ops.len());
+    stats.scratch_growth_events = capacity_before.growth_events(capacity_after);
+    stats.mesh_vertex_capacity = capacity_after.frame.mesh_vertices;
+    stats.tmesh_vertex_capacity = capacity_after.frame.tmesh_vertices;
+    stats.tmesh_instance_capacity = capacity_after.frame.tmesh_instances;
+    stats.op_capacity = capacity_after.frame.ops;
+    stats.shared_tmesh_capacity = capacity_after.shared_tmesh;
+    stats.cached_tmesh_capacity = capacity_after.cached_tmesh;
+
     stats
+}
+
+/// Prepares a legacy [`RenderList`] and exposes it through the direct-frame
+/// backend contract without copying cameras or sprite instances.
+///
+/// The returned view borrows stable input slices from `render_list` and the
+/// transformed geometry/run buffers from `scratch`. Its structure is therefore
+/// identical to [`DrawFrame::view`] while preserving the legacy path's current
+/// ownership and allocation behavior.
+pub fn prepare_render_list<'a, EnsureCached, CacheResult>(
+    render_list: &'a RenderList,
+    scratch: &'a mut DrawScratch,
+    ensure_cached_tmesh: EnsureCached,
+) -> (DrawFrameView<'a>, PrepareStats)
+where
+    EnsureCached: FnMut(TMeshCacheKey, &[TexturedMeshVertex]) -> CacheResult,
+    CacheResult: Into<TMeshCacheResult>,
+{
+    let stats = prepare(render_list, scratch, ensure_cached_tmesh);
+    let view = DrawFrameView {
+        clear_color: render_list.clear_color,
+        cameras: render_list.cameras.as_slice(),
+        sprite_instances: render_list.sprite_instances.as_slice(),
+        mesh_vertices: scratch.frame.mesh_vertices.as_slice(),
+        tmesh_vertices: scratch.frame.tmesh_vertices.as_slice(),
+        tmesh_instances: scratch.frame.tmesh_instances.as_slice(),
+        ops: scratch.frame.ops.as_slice(),
+    };
+    (view, stats)
 }
 
 #[cfg(test)]

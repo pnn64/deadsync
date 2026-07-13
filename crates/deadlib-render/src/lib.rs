@@ -1,5 +1,7 @@
 pub mod draw_prep;
 
+pub use draw_prep::{DrawFrame, DrawFrameView, FrameCapacity, FramePrepareStats};
+
 use glam::Mat4 as Matrix4;
 use std::ops::Deref;
 use std::{collections::HashMap, hash::BuildHasherDefault, sync::Arc};
@@ -587,12 +589,21 @@ pub struct PresentStats {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DrawStats {
     pub vertices: u32,
+    /// CPU time spent converting a legacy `RenderList` into flat draw runs.
+    /// Direct `DrawFrame` submissions leave this at zero.
+    pub draw_prep_us: u32,
+    /// Counts and capacity telemetry produced while preparing this frame.
+    pub frame_prepare: FramePrepareStats,
+    /// Cached textured-mesh runs skipped because backend geometry was absent.
+    pub cached_tmesh_misses: u32,
     pub acquire_us: u32,
     pub submit_us: u32,
     pub present_us: u32,
     pub present_stats: PresentStats,
     pub gpu_wait_us: u32,
     pub backend_setup_us: u32,
+    /// CPU time spent growing/filling backend upload buffers after draw prep.
+    pub backend_upload_us: u32,
     pub backend_prepare_us: u32,
     pub backend_record_us: u32,
 }
