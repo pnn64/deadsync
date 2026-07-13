@@ -173,7 +173,9 @@ use deadsync_theme::views::{
 use deadsync_theme::{AudioRequest, PlatformRequest, RevealPathKind};
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as CurrentScreen;
 use deadsync_theme_simply_love::views::{
-    SelectMusicPolicyView, SelectMusicRuntimeView, SimplyLoveDensityGraphSlot as DensityGraphSlot,
+    EvaluationInitPlayerView, EvaluationInitView, EvaluationRuntimeView, EvaluationSubmissionView,
+    SelectMusicDownloadView, SelectMusicPolicyView, SelectMusicRuntimeView,
+    SimplyLoveDensityGraphSlot as DensityGraphSlot, SimplyLoveGrooveStatsService,
     SimplyLoveLobbyRuntimeView,
 };
 use deadsync_theme_simply_love::{
@@ -194,7 +196,40 @@ const UI_TEXT_LAYOUT_CACHE_LIMIT: usize = 4_096;
 const GAMEPLAY_TEXT_LAYOUT_CACHE_LIMIT: usize = 131_072;
 const LIVE_TEXTURE_UPLOAD_MAX_OPS: usize = 2;
 const LIVE_TEXTURE_UPLOAD_MAX_BYTES: usize = 8 * 1024 * 1024;
+const EVALUATION_LEADERBOARD_ROWS: usize = 10;
 const SERVICE_SWITCH_PRESSED: &str = "Service switch pressed";
+
+fn sequence_effects(first: ThemeEffect, second: ThemeEffect) -> ThemeEffect {
+    match (first, second) {
+        (ThemeEffect::None, second) => second,
+        (first, ThemeEffect::None) => first,
+        (ThemeEffect::Batch(mut effects), second) => {
+            effects.push(second);
+            ThemeEffect::Batch(effects)
+        }
+        (first, second) => ThemeEffect::Batch(vec![first, second]),
+    }
+}
+
+fn lobby_effect_only(effect: ThemeEffect) -> Option<ThemeEffect> {
+    match effect {
+        effect @ ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Online(
+            SimplyLoveOnlineRequest::Lobby(_),
+        )) => Some(effect),
+        ThemeEffect::Batch(effects) => {
+            let mut lobby_effects = effects
+                .into_iter()
+                .filter_map(lobby_effect_only)
+                .collect::<Vec<_>>();
+            match lobby_effects.len() {
+                0 => None,
+                1 => lobby_effects.pop(),
+                _ => Some(ThemeEffect::Batch(lobby_effects)),
+            }
+        }
+        _ => None,
+    }
+}
 
 fn gameplay_viewport(metrics: Metrics) -> GameplayViewport {
     GameplayViewport::new(metrics.right - metrics.left, metrics.top - metrics.bottom)
@@ -516,7 +551,7 @@ impl ScreensState {
         let mut init_state = init::init();
         init_state.active_color_index = color_index;
 
-        let mut evaluation_state = evaluation::init(None);
+        let mut evaluation_state = evaluation::init(None, EvaluationInitView::default());
         evaluation_state.active_color_index = color_index;
 
         let mut evaluation_summary_state = evaluation_summary::init();
@@ -708,16 +743,16 @@ impl ScreensState {
                 }
                 self.evaluation_state.gameplay_elapsed =
                     stage_stats::total_stage_duration_seconds(&session.played_stages);
-                evaluation::update(&mut self.evaluation_state, delta_time);
-                let action = if let Some(delay) = self.evaluation_state.auto_advance_seconds
+                let update_effect = evaluation::update(&mut self.evaluation_state, delta_time);
+                let navigation = if let Some(delay) = self.evaluation_state.auto_advance_seconds
                     && self.evaluation_state.screen_elapsed >= delay
                     && self.player_options_state.is_some()
                 {
-                    Some(ThemeEffect::Navigate(CurrentScreen::Gameplay))
+                    ThemeEffect::Navigate(CurrentScreen::Gameplay)
                 } else {
-                    None
+                    ThemeEffect::None
                 };
-                (action, false)
+                (Some(sequence_effects(update_effect, navigation)), false)
             }
             CurrentScreen::EvaluationSummary => {
                 evaluation_summary::update(&mut self.evaluation_summary_state, delta_time);
@@ -1077,11 +1112,164 @@ impl App {
         self.lights.tick(delta_time, elapsed_seconds);
     }
 
+    fn lobby_runtime_view() -> SimplyLoveLobbyRuntimeView {
+        SimplyLoveLobbyRuntimeView {
+            snapshot: deadsync_online::lobbies::runtime_snapshot(),
+            reconnect_status_text: deadsync_online::lobbies::runtime_reconnect_status_text(),
+            disconnect_hold_seconds: deadsync_online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS,
+        }
+    }
+
+    fn refresh_lobby_runtime_view() -> SimplyLoveLobbyRuntimeView {
+        deadsync_online::lobbies::runtime_poll_reconnect_default();
+        Self::lobby_runtime_view()
+    }
+
+    fn groovestats_service_view() -> SimplyLoveGrooveStatsService {
+        match deadsync_online::runtime::active_groovestats_service() {
+            deadsync_online::groovestats::Service::GrooveStats => {
+                SimplyLoveGrooveStatsService::GrooveStats
+            }
+            deadsync_online::groovestats::Service::BoogieStats => {
+                SimplyLoveGrooveStatsService::BoogieStats
+            }
+        }
+    }
+
+    fn evaluation_submission_view(
+        score_info: Option<&evaluation::ScoreInfo>,
+    ) -> EvaluationSubmissionView {
+        let Some(score_info) = score_info else {
+            return EvaluationSubmissionView::default();
+        };
+        let chart_hash = score_info.chart.short_hash.as_str();
+        let side = score_info.side;
+        EvaluationSubmissionView {
+            groovestats_status: scores::get_groovestats_submit_ui_status_for_side(chart_hash, side),
+            arrowcloud_status: scores::get_arrowcloud_submit_ui_status_for_side(chart_hash, side),
+            event_progress: scores::get_groovestats_submit_event_progress_for_side(
+                chart_hash, side,
+            ),
+            record_banner: scores::get_groovestats_submit_record_banner_for_side(chart_hash, side),
+            groovestats_next_retry_secs: scores::groovestats_next_retry_remaining_secs(
+                chart_hash, side,
+            ),
+            arrowcloud_next_retry_secs: scores::arrowcloud_next_retry_remaining_secs(
+                chart_hash, side,
+            ),
+            groovestats_next_retry_is_auto: scores::groovestats_next_retry_is_auto(
+                chart_hash, side,
+            ),
+            arrowcloud_next_retry_is_auto: scores::arrowcloud_next_retry_is_auto(chart_hash, side),
+        }
+    }
+
+    fn evaluation_init_view(gameplay: &gameplay::State) -> EvaluationInitView {
+        EvaluationInitView {
+            players: std::array::from_fn(|player_idx| {
+                if player_idx >= gameplay.num_players().min(MAX_PLAYERS) {
+                    return EvaluationInitPlayerView::default();
+                }
+                let side = if gameplay.num_players() >= 2 {
+                    profile_data::player_side_for_index(player_idx)
+                } else {
+                    profile::get_session_player_side()
+                };
+                let chart_hash = gameplay.charts()[player_idx].short_hash.as_str();
+                EvaluationInitPlayerView {
+                    machine_records: scores::get_machine_leaderboard_local(chart_hash, usize::MAX),
+                    personal_records: scores::get_personal_leaderboard_local_for_side(
+                        chart_hash,
+                        side,
+                        usize::MAX,
+                    ),
+                    groovestats: scores::groovestats_eval_state_from_gameplay(gameplay, player_idx),
+                    itl: scores::itl_eval_state_from_gameplay(gameplay, player_idx),
+                }
+            }),
+        }
+    }
+
+    fn evaluation_runtime_view(state: &evaluation::State) -> EvaluationRuntimeView {
+        let leaderboard_requests = evaluation::leaderboard_requests(state);
+        EvaluationRuntimeView {
+            lobby: Self::refresh_lobby_runtime_view(),
+            groovestats_service: Self::groovestats_service_view(),
+            submissions: std::array::from_fn(|player_idx| {
+                Self::evaluation_submission_view(
+                    state.score_info.get(player_idx).and_then(Option::as_ref),
+                )
+            }),
+            leaderboards: std::array::from_fn(|player_idx| {
+                if !state.allow_online_panes || !leaderboard_requests[player_idx] {
+                    return None;
+                }
+                let score_info = state.score_info.get(player_idx)?.as_ref()?;
+                scores::get_or_fetch_player_leaderboards_for_side(
+                    score_info.chart.short_hash.as_str(),
+                    score_info.side,
+                    EVALUATION_LEADERBOARD_ROWS,
+                )
+            }),
+        }
+    }
+
+    fn execute_evaluation_score_runtime(gameplay: &gameplay::State) {
+        // Persist one score file per play, including fails and replay lane input,
+        // unless the gameplay runtime marked the run as disqualified.
+        scores::save_local_scores_from_gameplay(gameplay);
+        let _ = scores::save_itl_data_from_gameplay(gameplay);
+        scores::submit_groovestats_payloads_from_gameplay(gameplay);
+        scores::submit_arrowcloud_payloads_from_gameplay(gameplay, gameplay.pack_group.as_ref());
+    }
+
+    fn retry_evaluation_submissions(state: &evaluation::State) -> bool {
+        let mut retried = false;
+        for score_info in state.score_info.iter().flatten() {
+            let chart_hash = score_info.chart.short_hash.as_str();
+            retried |= scores::retry_groovestats_submit(chart_hash, score_info.side);
+            retried |= scores::retry_arrowcloud_submit(chart_hash, score_info.side);
+        }
+        retried
+    }
+
+    fn sync_active_online_runtime_view(&mut self) {
+        match self.state.screens.current_screen {
+            CurrentScreen::Gameplay => {
+                if let Some(state) = self.state.screens.gameplay_state.as_mut() {
+                    gameplay::sync_lobby_runtime_view(state, Self::refresh_lobby_runtime_view());
+                }
+            }
+            CurrentScreen::Evaluation => {
+                scores::tick_groovestats_auto_retries();
+                scores::tick_arrowcloud_auto_retries();
+                let view = Self::evaluation_runtime_view(&self.state.screens.evaluation_state);
+                evaluation::sync_runtime_view(&mut self.state.screens.evaluation_state, view);
+            }
+            _ => {}
+        }
+    }
+
     fn sync_select_music_runtime_view(&mut self) {
         if self.state.screens.current_screen != CurrentScreen::SelectMusic {
             return;
         }
-        deadsync_online::lobbies::runtime_poll_reconnect_default();
+        let lobby = Self::refresh_lobby_runtime_view();
+        let downloads =
+            if select_music::downloads_overlay_visible(&self.state.screens.select_music_state) {
+                deadsync_online::runtime::unlock_download_snapshots()
+                    .into_iter()
+                    .map(|snapshot| SelectMusicDownloadView {
+                        name: snapshot.name,
+                        current_bytes: snapshot.current_bytes,
+                        total_bytes: snapshot.total_bytes,
+                        complete: snapshot.complete,
+                        error_message: snapshot.error_message,
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            };
         let music_stream_position_seconds = if deadsync_audio_stream::is_initialized() {
             f64::from(deadsync_audio_stream::get_music_stream_position_seconds())
         } else {
@@ -1108,13 +1296,8 @@ impl App {
                 audio_playback: AudioPlaybackView {
                     music_stream_position_seconds,
                 },
-                lobby: SimplyLoveLobbyRuntimeView {
-                    snapshot: deadsync_online::lobbies::runtime_snapshot(),
-                    reconnect_status_text: deadsync_online::lobbies::runtime_reconnect_status_text(
-                    ),
-                    disconnect_hold_seconds:
-                        deadsync_online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS,
-                },
+                lobby,
+                downloads,
                 arrow_bounce_offset,
                 policy,
                 unlock_downloads_available: deadsync_online::runtime::unlock_downloads_available(),
@@ -1610,6 +1793,7 @@ impl App {
         self.poll_qr_login();
         self.poll_score_import();
         self.poll_sync_analysis();
+        self.sync_active_online_runtime_view();
 
         let mut upload_us: u32 = 0;
         let mut draw_us: u32 = 0;
@@ -1628,12 +1812,17 @@ impl App {
             self.state.screens.current_screen,
             MENU_ACTORS_FADE_DURATION,
         );
-        if transition_plan.tick_gameplay
+        let transition_lobby_effect = if transition_plan.tick_gameplay
             && let Some(gs) = self.state.screens.gameplay_state.as_mut()
         {
             // Keep gameplay stepping under evaluation fades so late judgments
             // and HUD animations settle while transition input remains blocked.
-            let _ = crate::gameplay_runtime::update(gs, delta_time);
+            lobby_effect_only(crate::gameplay_runtime::update(gs, delta_time))
+        } else {
+            None
+        };
+        if let Some(effect) = transition_lobby_effect {
+            let _ = self.handle_action(effect, event_loop);
         }
         let step_plan = frame_screen_step_plan(FrameScreenStepContext {
             current_screen: self.state.screens.current_screen,
@@ -2558,6 +2747,21 @@ impl App {
                                 ready,
                             );
                         }
+                        SimplyLoveLobbyRequest::UpdateMachineStats {
+                            screen_name,
+                            p1_ready,
+                            p2_ready,
+                            p1_stats,
+                            p2_stats,
+                        } => {
+                            deadsync_online::lobbies::runtime_update_machine_state_sides_with_stats_default(
+                                screen_name,
+                                p1_ready,
+                                p2_ready,
+                                p1_stats,
+                                p2_stats,
+                            );
+                        }
                         SimplyLoveLobbyRequest::Disconnect => {
                             deadsync_online::lobbies::runtime_disconnect();
                         }
@@ -3271,6 +3475,8 @@ impl App {
         page.return_to_course = true;
         page.auto_advance_seconds = None;
         self.state.screens.evaluation_state = page;
+        let view = Self::evaluation_runtime_view(&self.state.screens.evaluation_state);
+        evaluation::sync_runtime_view(&mut self.state.screens.evaluation_state, view);
         deadsync_audio_stream::play_sfx("assets/sounds/change.ogg");
     }
 
@@ -4385,7 +4591,9 @@ impl App {
                     shift_held,
                     config::get().keyboard_features,
                     self.state.session.course_run.is_some(),
-                    screens::evaluation::retry_submissions(&self.state.screens.evaluation_state),
+                    screens::evaluation::submission_retry_available(
+                        &self.state.screens.evaluation_state,
+                    ),
                     !self.state.session.course_eval_pages.is_empty(),
                 );
                 match shortcut {
@@ -4402,7 +4610,10 @@ impl App {
                             return true;
                         }
                     }
-                    Some(EvaluationRawKeyShortcut::RetrySubmissions) => return true,
+                    Some(EvaluationRawKeyShortcut::RetrySubmissions) => {
+                        Self::retry_evaluation_submissions(&self.state.screens.evaluation_state);
+                        return true;
+                    }
                     Some(EvaluationRawKeyShortcut::StepCourseEvalPage(delta)) => {
                         self.step_course_eval_page(delta);
                         return true;
@@ -5336,7 +5547,9 @@ impl App {
                 self.update_combo_carry_from_gameplay(&gameplay_results);
                 course_display_carry = Some(gameplay_results.course_display_carry());
                 let color_idx = gameplay_results.active_color_index();
-                let mut eval_state = evaluation::init(Some(gameplay_results));
+                Self::execute_evaluation_score_runtime(&gameplay_results);
+                let init_view = Self::evaluation_init_view(&gameplay_results);
+                let mut eval_state = evaluation::init(Some(gameplay_results), init_view);
                 eval_state.active_color_index = color_idx;
                 let _ = self.append_stage_results_from_eval(&eval_state);
             }
@@ -5689,6 +5902,7 @@ impl App {
                 commands.push(Command::SetDynamicBackground(background_path));
                 self.state.screens.gameplay_state = Some(gs);
                 if let Some(gs) = self.state.screens.gameplay_state.as_mut() {
+                    gameplay::sync_lobby_runtime_view(gs, Self::refresh_lobby_runtime_view());
                     crate::gameplay_runtime::enter(gs);
                 }
                 // Song Start / Restart SFX (zmod parity, issue #375). At this
@@ -5731,9 +5945,14 @@ impl App {
                 self.state.screens.evaluation_state.active_color_index,
                 |gs| gs.gameplay.active_color_index(),
             );
-            self.state.screens.evaluation_state = gameplay_results
-                .map(|gs| evaluation::init(Some(gs)))
-                .unwrap_or_else(|| evaluation::init(None));
+            if let Some(gameplay) = gameplay_results.as_ref() {
+                Self::execute_evaluation_score_runtime(gameplay);
+            }
+            let init_view = gameplay_results
+                .as_ref()
+                .map(Self::evaluation_init_view)
+                .unwrap_or_default();
+            self.state.screens.evaluation_state = evaluation::init(gameplay_results, init_view);
             self.state.screens.evaluation_state.active_color_index = color_idx;
             self.state.screens.evaluation_state.return_to_course =
                 self.state.session.course_run.is_some();
@@ -5745,6 +5964,8 @@ impl App {
             self.state.screens.evaluation_state.gameplay_elapsed =
                 stage_stats::total_stage_duration_seconds(&self.state.session.played_stages);
             self.finalize_entered_evaluation();
+            let view = Self::evaluation_runtime_view(&self.state.screens.evaluation_state);
+            evaluation::sync_runtime_view(&mut self.state.screens.evaluation_state, view);
         }
 
         if target == CurrentScreen::EvaluationSummary {
@@ -6436,6 +6657,23 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 mod tests {
     use super::*;
     use deadsync_chart::{ArrowStats, ChartData, SongData, StaminaCounts, TechCounts};
+
+    #[test]
+    fn transition_gameplay_keeps_only_lobby_runtime_effects() {
+        let effect = ThemeEffect::Batch(vec![
+            ThemeEffect::Navigate(CurrentScreen::Evaluation),
+            ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Online(
+                SimplyLoveOnlineRequest::Lobby(SimplyLoveLobbyRequest::Disconnect),
+            )),
+        ]);
+
+        assert!(matches!(
+            lobby_effect_only(effect),
+            Some(ThemeEffect::Runtime(SimplyLoveRuntimeRequest::Online(
+                SimplyLoveOnlineRequest::Lobby(SimplyLoveLobbyRequest::Disconnect)
+            )))
+        ));
+    }
 
     fn test_chart(hash: &str) -> ChartData {
         test_chart_with("dance-single", "Hard", hash)

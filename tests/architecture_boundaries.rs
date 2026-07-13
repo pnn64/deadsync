@@ -2173,7 +2173,7 @@ fn simply_love_test_lights_uses_shell_prepared_state() {
 }
 
 #[test]
-fn select_music_unlock_availability_is_shell_prepared() {
+fn select_music_unlock_runtime_is_shell_prepared() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let screen = fs::read_to_string(
         root.join("crates/deadsync-theme-simply-love/src/screens/select_music.rs"),
@@ -2183,14 +2183,36 @@ fn select_music_unlock_availability_is_shell_prepared() {
     assert!(!screen.contains("deadsync_online::runtime::take_ready_song_reload_request"));
     assert!(screen.contains("pub fn sync_runtime_view"));
     assert!(screen.contains("state.unlock_downloads_available"));
+    assert!(screen.contains("state.downloads = view.downloads"));
+
+    let downloads = fs::read_to_string(root.join(
+        "crates/deadsync-theme-simply-love/src/screens/components/select_music/select_music_menu/downloads.rs",
+    ))
+    .expect("Select Music downloads source should be readable");
+    for runtime_read in [
+        "deadsync_online::runtime",
+        "unlock_download_snapshots",
+        "unlock_download_completion_counts",
+    ] {
+        assert!(
+            !downloads.contains(runtime_read),
+            "downloads presentation still reads runtime data through {runtime_read}"
+        );
+    }
+    assert!(downloads.contains("snapshots: &[SelectMusicDownloadView]"));
 
     let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
         .expect("Simply Love views should be readable");
-    assert!(views.contains("pub struct SelectMusicRuntimeView"));
+    assert!(
+        views.contains("pub struct SelectMusicRuntimeView")
+            && views.contains("pub struct SelectMusicDownloadView")
+            && views.contains("pub downloads: Vec<SelectMusicDownloadView>")
+    );
     let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
     assert!(shell.contains("fn sync_select_music_runtime_view"));
     assert!(shell.contains("deadsync_online::runtime::unlock_downloads_available()"));
+    assert!(shell.contains("deadsync_online::runtime::unlock_download_snapshots()"));
     assert!(shell.contains("deadsync_online::runtime::take_ready_song_reload_request()"));
 }
 
@@ -2421,6 +2443,201 @@ fn select_music_lobby_runtime_is_shell_owned() {
         assert!(
             shell.contains(shell_owner),
             "shell must own Select Music lobby operation {shell_owner}"
+        );
+    }
+}
+
+#[test]
+fn gameplay_and_evaluation_lobby_runtime_is_shell_owned() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let theme = root.join("crates/deadsync-theme-simply-love/src");
+    let gameplay = fs::read_to_string(theme.join("screens/gameplay.rs"))
+        .expect("Simply Love Gameplay source should be readable");
+    let evaluation = fs::read_to_string(theme.join("screens/evaluation.rs"))
+        .expect("Simply Love Evaluation source should be readable");
+    for runtime_call in [
+        "runtime_snapshot",
+        "runtime_reconnect_status_text",
+        "runtime_can_update_machine_state",
+        "runtime_update_machine_state",
+        "runtime_poll_reconnect",
+        "runtime_disconnect",
+    ] {
+        assert!(
+            !gameplay.contains(runtime_call) && !evaluation.contains(runtime_call),
+            "Gameplay or Evaluation still executes lobby runtime call {runtime_call}"
+        );
+    }
+    assert!(
+        gameplay.contains("lobby_view: SimplyLoveLobbyRuntimeView")
+            && gameplay.contains("pub fn sync_lobby_runtime_view")
+            && gameplay.contains("SimplyLoveLobbyRequest::UpdateMachineStats")
+    );
+    assert!(
+        evaluation.contains("lobby_view: SimplyLoveLobbyRuntimeView")
+            && evaluation.contains("pub fn sync_runtime_view")
+            && evaluation.contains("EvaluationRuntimeView")
+            && evaluation.contains("SimplyLoveLobbyRequest::UpdateMachineStats")
+    );
+
+    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell app should be readable");
+    for shell_owner in [
+        "fn sync_active_online_runtime_view",
+        "gameplay::sync_lobby_runtime_view",
+        "evaluation::sync_runtime_view",
+        "SimplyLoveLobbyRequest::UpdateMachineStats",
+        "runtime_update_machine_state_sides_with_stats_default",
+    ] {
+        assert!(
+            shell.contains(shell_owner),
+            "shell must own Gameplay/Evaluation lobby operation {shell_owner}"
+        );
+    }
+}
+
+#[test]
+fn evaluation_score_service_is_shell_prepared() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let evaluation = fs::read_to_string(
+        root.join("crates/deadsync-theme-simply-love/src/screens/evaluation.rs"),
+    )
+    .expect("Simply Love Evaluation source should be readable");
+    for runtime_read in [
+        "deadsync_online::runtime",
+        "online::is_boogiestats_active",
+        "online::active_groovestats_service",
+    ] {
+        assert!(
+            !evaluation.contains(runtime_read),
+            "Evaluation still reads the active score service through {runtime_read}"
+        );
+    }
+    assert!(
+        evaluation.contains("groovestats_service: SimplyLoveGrooveStatsService")
+            && evaluation.contains("view.groovestats_service")
+    );
+
+    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+        .expect("Simply Love views should be readable");
+    assert!(
+        views.contains("pub struct EvaluationRuntimeView")
+            && views.contains("pub enum SimplyLoveGrooveStatsService")
+    );
+
+    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell app should be readable");
+    assert!(
+        shell.contains("deadsync_online::runtime::active_groovestats_service()")
+            && shell.contains("fn evaluation_runtime_view(state: &evaluation::State)")
+    );
+}
+
+#[test]
+fn evaluation_submission_runtime_is_shell_owned() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let evaluation = fs::read_to_string(
+        root.join("crates/deadsync-theme-simply-love/src/screens/evaluation.rs"),
+    )
+    .expect("Simply Love Evaluation source should be readable");
+    for runtime_call in [
+        "scores::save_local_scores_from_gameplay",
+        "scores::save_itl_data_from_gameplay",
+        "scores::submit_groovestats_payloads_from_gameplay",
+        "scores::submit_arrowcloud_payloads_from_gameplay",
+        "scores::tick_groovestats_auto_retries",
+        "scores::tick_arrowcloud_auto_retries",
+        "scores::retry_groovestats_submit",
+        "scores::retry_arrowcloud_submit",
+        "scores::get_groovestats_submit_ui_status_for_side",
+        "scores::get_arrowcloud_submit_ui_status_for_side",
+        "scores::get_groovestats_submit_event_progress_for_side",
+        "scores::get_groovestats_submit_record_banner_for_side",
+        "scores::groovestats_next_retry_remaining_secs",
+        "scores::arrowcloud_next_retry_remaining_secs",
+    ] {
+        assert!(
+            !evaluation.contains(runtime_call),
+            "Evaluation still executes score-submission runtime call {runtime_call}"
+        );
+    }
+    assert!(
+        evaluation.contains("submission_retry_available")
+            && evaluation.contains("state.submissions = view.submissions")
+    );
+
+    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+        .expect("Simply Love views should be readable");
+    assert!(
+        views.contains("pub struct EvaluationSubmissionView")
+            && views.contains("pub submissions: [EvaluationSubmissionView; 2]")
+    );
+
+    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell app should be readable");
+    for shell_owner in [
+        "fn evaluation_submission_view",
+        "fn execute_evaluation_score_runtime",
+        "fn retry_evaluation_submissions",
+        "scores::save_local_scores_from_gameplay",
+        "scores::submit_groovestats_payloads_from_gameplay",
+        "scores::tick_groovestats_auto_retries",
+        "scores::retry_groovestats_submit",
+    ] {
+        assert!(
+            shell.contains(shell_owner),
+            "shell must own Evaluation submission operation {shell_owner}"
+        );
+    }
+}
+
+#[test]
+fn evaluation_leaderboards_are_shell_prepared() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let evaluation = fs::read_to_string(
+        root.join("crates/deadsync-theme-simply-love/src/screens/evaluation.rs"),
+    )
+    .expect("Simply Love Evaluation source should be readable");
+    for runtime_access in [
+        "deadsync_online::score_compat",
+        "scores::get_or_fetch_player_leaderboards_for_side",
+        "scores::get_machine_leaderboard_local",
+        "scores::get_personal_leaderboard_local_for_side",
+        "scores::groovestats_eval_state_from_gameplay",
+        "scores::itl_eval_state_from_gameplay",
+    ] {
+        assert!(
+            !evaluation.contains(runtime_access),
+            "Evaluation still accesses leaderboard runtime/cache through {runtime_access}"
+        );
+    }
+    assert!(
+        evaluation.contains("pub const fn leaderboard_requests")
+            && evaluation.contains("state.leaderboards = view.leaderboards")
+            && evaluation.contains("state.leaderboards[player_idx].as_ref()")
+    );
+
+    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+        .expect("Simply Love views should be readable");
+    assert!(
+        views.contains("pub struct EvaluationInitPlayerView")
+            && views.contains("pub struct EvaluationInitView")
+            && views.contains("pub leaderboards:")
+    );
+
+    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell app should be readable");
+    for shell_owner in [
+        "fn evaluation_init_view",
+        "scores::get_machine_leaderboard_local",
+        "scores::get_personal_leaderboard_local_for_side",
+        "scores::groovestats_eval_state_from_gameplay",
+        "scores::get_or_fetch_player_leaderboards_for_side",
+        "evaluation::leaderboard_requests",
+    ] {
+        assert!(
+            shell.contains(shell_owner),
+            "shell must own Evaluation leaderboard operation {shell_owner}"
         );
     }
 }

@@ -25,11 +25,11 @@ use crate::assets::{
 };
 use crate::screens::gameplay;
 use crate::screens::input as screen_input;
+use crate::views::SimplyLoveLobbyRuntimeView;
 use deadlib_present::font;
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{FantasticWindowOptions, blue_fantastic_window_ms};
 use deadsync_online::lobbies as lobby_data;
-use deadsync_online::score_compat as scores;
 use deadsync_rules::judgment;
 use deadsync_rules::timing as timing_stats;
 use log::warn;
@@ -40,10 +40,12 @@ use std::time::Instant;
 
 use crate::screens::ThemeEffect;
 pub use crate::views::{CourseGraphStage, ScoreInfo};
+use crate::views::{
+    EvaluationInitView, EvaluationRuntimeView, EvaluationSubmissionView,
+    SimplyLoveGrooveStatsService,
+};
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, PadEvent, VirtualAction, pad_dir_from_action};
-use deadsync_online::groovestats as groovestats_api;
-use deadsync_online::runtime as online;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
 pub use deadsync_score::ColumnJudgments;
@@ -111,7 +113,6 @@ const SUBMIT_FOOTER_TINT_MANUAL_RETRY: [f32; 4] = color::JUDGMENT_RGBA[4]; // Wa
 const SUBMIT_FOOTER_TINT_ERROR: [f32; 4] = color::JUDGMENT_RGBA[5]; // Miss (red)
 const SUBMIT_FOOTER_TINT_NEUTRAL: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 const MACHINE_RECORD_ROWS: usize = 10;
-const GS_RECORD_ROWS: usize = 10;
 const ENABLE_GS_QR_PANE: bool = true;
 const TEXT_CACHE_LIMIT: usize = 8192;
 const BANNER_FALLBACK_KEYS: [&str; 12] = [
@@ -245,9 +246,15 @@ fn submit_record_text(banner: score_data::GrooveStatsSubmitRecordBanner) -> Arc<
     }
 }
 
+#[cfg(test)]
 #[inline(always)]
 fn submit_footer_gs_label() -> Arc<str> {
-    if online::is_boogiestats_active() {
+    submit_footer_gs_label_for(SimplyLoveGrooveStatsService::GrooveStats)
+}
+
+#[inline(always)]
+fn submit_footer_gs_label_for(service: SimplyLoveGrooveStatsService) -> Arc<str> {
+    if service == SimplyLoveGrooveStatsService::BoogieStats {
         tr("SubmitStatus", "BSLabel")
     } else {
         tr("SubmitStatus", "GSLabel")
@@ -255,8 +262,11 @@ fn submit_footer_gs_label() -> Arc<str> {
 }
 
 #[inline(always)]
-fn active_groovestats_service_name() -> &'static str {
-    groovestats_api::service_name(online::active_groovestats_service())
+const fn active_groovestats_service_name(service: SimplyLoveGrooveStatsService) -> &'static str {
+    match service {
+        SimplyLoveGrooveStatsService::GrooveStats => "GrooveStats",
+        SimplyLoveGrooveStatsService::BoogieStats => "BoogieStats",
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -502,7 +512,8 @@ fn measure_footer_text_width(asset_manager: &AssetManager, text: &str, zoom: f32
     measure_text_width(asset_manager, "miso", text, zoom)
 }
 
-fn submit_footer_lines(
+fn submit_footer_lines_for_service(
+    service: SimplyLoveGrooveStatsService,
     expected_groovestats_submit: bool,
     expected_arrowcloud_submit: bool,
     groovestats_status: Option<score_data::GrooveStatsSubmitUiStatus>,
@@ -523,7 +534,10 @@ fn submit_footer_lines(
                 )
             })
             .unwrap_or(SubmitFooterStatus::Submitting);
-        cells.push(submit_footer_cell(submit_footer_gs_label(), status));
+        cells.push(submit_footer_cell(
+            submit_footer_gs_label_for(service),
+            status,
+        ));
     }
     if expected_arrowcloud_submit {
         let status = arrowcloud_status
@@ -538,6 +552,30 @@ fn submit_footer_lines(
         cells.push(submit_footer_cell(tr("SubmitStatus", "ACLabel"), status));
     }
     cells
+}
+
+#[cfg(test)]
+fn submit_footer_lines(
+    expected_groovestats_submit: bool,
+    expected_arrowcloud_submit: bool,
+    groovestats_status: Option<score_data::GrooveStatsSubmitUiStatus>,
+    arrowcloud_status: Option<score_data::ArrowCloudSubmitUiStatus>,
+    groovestats_next_retry_remaining_secs: Option<u32>,
+    arrowcloud_next_retry_remaining_secs: Option<u32>,
+    groovestats_next_retry_is_auto: bool,
+    arrowcloud_next_retry_is_auto: bool,
+) -> Vec<SubmitFooterCell> {
+    submit_footer_lines_for_service(
+        SimplyLoveGrooveStatsService::GrooveStats,
+        expected_groovestats_submit,
+        expected_arrowcloud_submit,
+        groovestats_status,
+        arrowcloud_status,
+        groovestats_next_retry_remaining_secs,
+        arrowcloud_next_retry_remaining_secs,
+        groovestats_next_retry_is_auto,
+        arrowcloud_next_retry_is_auto,
+    )
 }
 
 #[inline(always)]
@@ -774,16 +812,59 @@ fn course_graph_stripe_actors(
 #[cfg(test)]
 mod tests {
     use super::{
-        CellIcon, CourseGraphStage, EvalPane, Nice69Buf, SUBMIT_FOOTER_F5_LABEL, SubmitFooterCell,
+        CellIcon, CourseGraphStage, EvalPane, Nice69Buf, SUBMIT_FOOTER_F5_LABEL,
+        SimplyLoveGrooveStatsService, SubmitFooterCell, active_groovestats_service_name,
         course_graph_stage_spans, course_graph_stripe_actors, eval_grade_for_result,
-        eval_pane_cycle, eval_pane_shift, eval_pane_skip_duplicate, stage_in_stinger_texture_key,
-        submit_footer_gs_label, submit_footer_lines,
+        eval_pane_cycle, eval_pane_shift, eval_pane_skip_duplicate, leaderboard_requests,
+        stage_in_stinger_texture_key, submission_retry_available, submit_footer_gs_label,
+        submit_footer_gs_label_for, submit_footer_lines,
     };
     use crate::assets::i18n;
     use deadlib_present::actors::Actor;
     use deadsync_chart::{ArrowStats, ChartData, StaminaCounts, TechCounts};
     use deadsync_score as score_data;
     use std::sync::Arc;
+
+    #[test]
+    fn prepared_score_service_selects_boogiestats_labels() {
+        i18n::init_for_tests();
+
+        assert_eq!(
+            submit_footer_gs_label_for(SimplyLoveGrooveStatsService::BoogieStats),
+            crate::assets::i18n::tr("SubmitStatus", "BSLabel")
+        );
+        assert_eq!(
+            active_groovestats_service_name(SimplyLoveGrooveStatsService::BoogieStats),
+            "BoogieStats"
+        );
+    }
+
+    #[test]
+    fn retry_availability_uses_prepared_submission_status() {
+        let mut state = super::init(None, Default::default());
+        assert!(!submission_retry_available(&state));
+
+        state.submissions[0].groovestats_status =
+            Some(score_data::GrooveStatsSubmitUiStatus::NetworkError);
+        assert!(submission_retry_available(&state));
+
+        state.submissions[0].groovestats_status =
+            Some(score_data::GrooveStatsSubmitUiStatus::Submitted);
+        assert!(!submission_retry_available(&state));
+
+        state.submissions[1].arrowcloud_status =
+            Some(score_data::ArrowCloudSubmitUiStatus::TimedOut);
+        assert!(submission_retry_available(&state));
+    }
+
+    #[test]
+    fn leaderboard_requests_are_plain_screen_state() {
+        let mut state = super::init(None, Default::default());
+        assert_eq!(leaderboard_requests(&state), [false, false]);
+
+        state.leaderboards_requested[1] = true;
+        assert_eq!(leaderboard_requests(&state), [false, true]);
+    }
 
     #[test]
     fn nice69_buf_matches_string_contains_semantics() {
@@ -1627,17 +1708,6 @@ fn eval_pane_skip_duplicate(
     next
 }
 
-#[inline(always)]
-fn warm_eval_leaderboards(
-    has_online_panes: bool,
-    chart_hash: &str,
-    side: profile_data::PlayerSide,
-) {
-    if has_online_panes {
-        let _ = scores::get_or_fetch_player_leaderboards_for_side(chart_hash, side, GS_RECORD_ROWS);
-    }
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum EvalGraphPane {
     Itg,
@@ -1744,6 +1814,11 @@ pub struct State {
     nice_sfx_played: bool,
     submit_groovestats_fallback: [Option<score_data::GrooveStatsSubmitUiStatus>; MAX_PLAYERS],
     submit_arrowcloud_fallback: [Option<score_data::ArrowCloudSubmitUiStatus>; MAX_PLAYERS],
+    submissions: [EvaluationSubmissionView; MAX_PLAYERS],
+    leaderboards_requested: [bool; MAX_PLAYERS],
+    leaderboards: [Option<score_data::CachedPlayerLeaderboardData>; MAX_PLAYERS],
+    groovestats_service: SimplyLoveGrooveStatsService,
+    lobby_view: SimplyLoveLobbyRuntimeView,
     lobby_disconnect_hold_p1: Option<Instant>,
     lobby_disconnect_hold_p2: Option<Instant>,
     event_overlay_page: [usize; MAX_PLAYERS],
@@ -1798,6 +1873,11 @@ impl Clone for State {
             nice_sfx_played: self.nice_sfx_played,
             submit_groovestats_fallback: self.submit_groovestats_fallback,
             submit_arrowcloud_fallback: self.submit_arrowcloud_fallback,
+            submissions: self.submissions.clone(),
+            leaderboards_requested: self.leaderboards_requested,
+            leaderboards: self.leaderboards.clone(),
+            groovestats_service: self.groovestats_service,
+            lobby_view: self.lobby_view.clone(),
             lobby_disconnect_hold_p1: self.lobby_disconnect_hold_p1,
             lobby_disconnect_hold_p2: self.lobby_disconnect_hold_p2,
             event_overlay_page: self.event_overlay_page,
@@ -1817,7 +1897,7 @@ impl Clone for State {
     }
 }
 
-pub fn init(gameplay_results: Option<gameplay::State>) -> State {
+pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInitView) -> State {
     let mut score_info: [Option<ScoreInfo>; MAX_PLAYERS] = std::array::from_fn(|_| None);
     let mut density_graph_mesh: [Option<Arc<[MeshVertex]>>; MAX_PLAYERS] =
         std::array::from_fn(|_| None);
@@ -1846,19 +1926,9 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
     let mut active_pane: [EvalPane; MAX_PLAYERS] = [EvalPane::Standard; MAX_PLAYERS];
     let mut active_graph: [EvalGraphPane; MAX_PLAYERS] = [EvalGraphPane::Itg; MAX_PLAYERS];
     let mut stage_duration_seconds: f32 = 0.0;
-    let mut machine_records_by_hash: HashMap<String, Vec<score_data::LeaderboardEntry>> =
-        HashMap::new();
-
     if let Some(mut gs) = gameplay_results {
         let cfg = crate::config::get();
         stage_duration_seconds = gs.total_elapsed_in_screen();
-
-        // Persist one score file per play (per local profile), including fails and replay lane
-        // input, unless the run was disqualified (autoplay/replay).
-        scores::save_local_scores_from_gameplay(&gs);
-        let _ = scores::save_itl_data_from_gameplay(&gs);
-        scores::submit_groovestats_payloads_from_gameplay(&gs);
-        scores::submit_arrowcloud_payloads_from_gameplay(&gs, gs.pack_group.as_ref());
 
         let cols_per_player = gs.cols_per_player();
         for (player_idx, score_info_slot) in score_info
@@ -2000,26 +2070,11 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             } else {
                 profile::get_session_player_side()
             };
-            let machine_records = if let Some(records) =
-                machine_records_by_hash.get(&gs.charts()[player_idx].short_hash)
-            {
-                records.clone()
-            } else {
-                let records = scores::get_machine_leaderboard_local(
-                    &gs.charts()[player_idx].short_hash,
-                    usize::MAX,
-                );
-                machine_records_by_hash
-                    .insert(gs.charts()[player_idx].short_hash.clone(), records.clone());
-                records
-            };
+            let player_init = &init_view.players[player_idx];
+            let machine_records = player_init.machine_records.clone();
             let machine_record_highlight_rank =
                 score_data::leaderboard_rank_for_score(machine_records.as_slice(), score_percent);
-            let personal_records = scores::get_personal_leaderboard_local_for_side(
-                &gs.charts()[player_idx].short_hash,
-                side,
-                usize::MAX,
-            );
+            let personal_records = player_init.personal_records.clone();
             let personal_record_highlight_rank =
                 score_data::leaderboard_rank_for_score(personal_records.as_slice(), score_percent);
             let score_valid = gs.score_valid_for_player(player_idx) && !gs.autoplay_used();
@@ -2027,8 +2082,8 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
             // not by our broader local ranking-validity heuristics.
             let disqualified = gs.autoplay_used();
             let local_score_valid = score_valid && !disqualified;
-            let groovestats = scores::groovestats_eval_state_from_gameplay(&gs, player_idx);
-            let itl = scores::itl_eval_state_from_gameplay(&gs, player_idx);
+            let groovestats = player_init.groovestats.clone();
+            let itl = player_init.itl.clone();
             let failed = score_data::gameplay_run_failed(p.is_failing, p.fail_time.is_some());
             let passed = score_data::gameplay_run_passed(
                 gs.song_completed_naturally(),
@@ -2399,6 +2454,11 @@ pub fn init(gameplay_results: Option<gameplay::State>) -> State {
         nice_sfx_played: false,
         submit_groovestats_fallback: std::array::from_fn(|_| None),
         submit_arrowcloud_fallback: std::array::from_fn(|_| None),
+        submissions: std::array::from_fn(|_| Default::default()),
+        leaderboards_requested: [false; MAX_PLAYERS],
+        leaderboards: std::array::from_fn(|_| None),
+        groovestats_service: Default::default(),
+        lobby_view: Default::default(),
         lobby_disconnect_hold_p1: None,
         lobby_disconnect_hold_p2: None,
         event_overlay_page: [0; MAX_PLAYERS],
@@ -2554,6 +2614,11 @@ pub fn init_from_score_info(
         nice_sfx_played: false,
         submit_groovestats_fallback: std::array::from_fn(|_| None),
         submit_arrowcloud_fallback: std::array::from_fn(|_| None),
+        submissions: std::array::from_fn(|_| Default::default()),
+        leaderboards_requested: [false; MAX_PLAYERS],
+        leaderboards: std::array::from_fn(|_| None),
+        groovestats_service: Default::default(),
+        lobby_view: Default::default(),
         lobby_disconnect_hold_p1: None,
         lobby_disconnect_hold_p2: None,
         event_overlay_page: [0; MAX_PLAYERS],
@@ -2596,13 +2661,10 @@ fn event_progress_page(
 fn sync_submit_event_progress(state: &mut State) {
     let mut found_new = false;
     for player_idx in 0..MAX_PLAYERS {
-        let Some(si) = state.score_info[player_idx].as_ref() else {
+        if state.score_info[player_idx].is_none() {
             continue;
-        };
-        let progress = scores::get_groovestats_submit_event_progress_for_side(
-            si.chart.short_hash.as_str(),
-            si.side,
-        );
+        }
+        let progress = &state.submissions[player_idx].event_progress;
         if progress.is_empty() {
             continue;
         }
@@ -2613,7 +2675,7 @@ fn sync_submit_event_progress(state: &mut State) {
         } else if state.event_overlay_page[player_idx] >= page_count {
             state.event_overlay_page[player_idx] = page_count - 1;
         }
-        state.event_progress[player_idx] = progress;
+        state.event_progress[player_idx].clone_from(progress);
     }
     if found_new && !state.event_overlay_shown {
         state.event_overlay_visible = true;
@@ -2631,13 +2693,10 @@ fn sync_submit_record_sfx(state: &mut State) {
     }
     let mut best: Option<score_data::GrooveStatsSubmitRecordBanner> = None;
     for player_idx in 0..MAX_PLAYERS {
-        let Some(si) = state.score_info[player_idx].as_ref() else {
+        if state.score_info[player_idx].is_none() {
             continue;
-        };
-        let Some(banner) = scores::get_groovestats_submit_record_banner_for_side(
-            si.chart.short_hash.as_str(),
-            si.side,
-        ) else {
+        }
+        let Some(banner) = state.submissions[player_idx].record_banner else {
             continue;
         };
         // WorldRecord{,Ex} beats PersonalBest if any joined player earned it.
@@ -2777,7 +2836,7 @@ fn sync_missing_submit_status_fallbacks(state: &mut State) {
         let chart_hash = si.chart.short_hash.as_str();
 
         if si.expected_groovestats_submit
-            && scores::get_groovestats_submit_ui_status_for_side(chart_hash, si.side).is_none()
+            && state.submissions[player_idx].groovestats_status.is_none()
             && state.submit_groovestats_fallback[player_idx].is_none()
         {
             state.submit_groovestats_fallback[player_idx] =
@@ -2786,14 +2845,14 @@ fn sync_missing_submit_status_fallbacks(state: &mut State) {
                 });
             warn!(
                 "Missing {} submit status for {:?} ({}); rendering evaluation footer as failed.",
-                active_groovestats_service_name(),
+                active_groovestats_service_name(state.groovestats_service),
                 si.side,
                 chart_hash,
             );
         }
 
         if si.expected_arrowcloud_submit
-            && scores::get_arrowcloud_submit_ui_status_for_side(chart_hash, si.side).is_none()
+            && state.submissions[player_idx].arrowcloud_status.is_none()
             && state.submit_arrowcloud_fallback[player_idx].is_none()
         {
             state.submit_arrowcloud_fallback[player_idx] =
@@ -2808,25 +2867,49 @@ fn sync_missing_submit_status_fallbacks(state: &mut State) {
     }
 }
 
-pub fn update(state: &mut State, dt: f32) {
+#[inline(always)]
+pub fn sync_runtime_view(state: &mut State, view: EvaluationRuntimeView) {
+    state.lobby_view = view.lobby;
+    state.groovestats_service = view.groovestats_service;
+    state.submissions = view.submissions;
+    state.leaderboards = view.leaderboards;
+}
+
+#[inline(always)]
+pub const fn leaderboard_requests(state: &State) -> [bool; MAX_PLAYERS] {
+    state.leaderboards_requested
+}
+
+fn evaluation_lobby_machine_state(state: &State) -> ThemeEffect {
+    if !lobby_data::can_update_machine_state(&state.lobby_view.snapshot) {
+        return ThemeEffect::None;
+    }
+    crate::effects::lobby(crate::SimplyLoveLobbyRequest::UpdateMachineStats {
+        screen_name: "ScreenEvaluationStage",
+        p1_ready: true,
+        p2_ready: true,
+        p1_stats: evaluation_lobby_player_stats(state, profile_data::PlayerSide::P1),
+        p2_stats: evaluation_lobby_player_stats(state, profile_data::PlayerSide::P2),
+    })
+}
+
+pub fn update(state: &mut State, dt: f32) -> ThemeEffect {
     if dt > 0.0 {
         state.screen_elapsed += dt;
     }
 
-    deadsync_online::lobbies::runtime_poll_reconnect_default();
-    deadsync_online::lobbies::runtime_update_machine_state_sides_with_stats_default(
-        "ScreenEvaluationStage",
-        true,
-        true,
-        evaluation_lobby_player_stats(state, profile_data::PlayerSide::P1),
-        evaluation_lobby_player_stats(state, profile_data::PlayerSide::P2),
-    );
-    if evaluation_lobby_lock_text().is_some() {
-        if lobby_disconnect_hold_elapsed(state).is_some_and(|elapsed| {
-            elapsed >= deadsync_online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS
-        }) {
+    let mut effect = evaluation_lobby_machine_state(state);
+    if evaluation_lobby_lock_text(state).is_some() {
+        if lobby_disconnect_hold_elapsed(state)
+            .is_some_and(|elapsed| elapsed >= state.lobby_view.disconnect_hold_seconds)
+        {
             clear_lobby_disconnect_holds(state);
-            deadsync_online::lobbies::runtime_disconnect();
+            effect = crate::effects::sequence(
+                effect,
+                crate::effects::lobby(crate::SimplyLoveLobbyRequest::Disconnect),
+            );
+            lobby_data::apply_local_lobby_disconnect(&mut state.lobby_view.snapshot);
+            state.lobby_view.reconnect_status_text = None;
         }
     } else {
         clear_lobby_disconnect_holds(state);
@@ -2835,8 +2918,6 @@ pub fn update(state: &mut State, dt: f32) {
     sync_missing_submit_status_fallbacks(state);
     sync_submit_record_sfx(state);
     sync_nice_sfx(state);
-    scores::tick_groovestats_auto_retries();
-    scores::tick_arrowcloud_auto_retries();
     let play_style = profile::get_session_play_style();
     for controller_idx in 0..MAX_PLAYERS {
         if state.active_pane[controller_idx] != EvalPane::QrCode {
@@ -2853,14 +2934,13 @@ pub fn update(state: &mut State, dt: f32) {
             controller_idx,
         );
         if matches!(
-            scores::get_groovestats_submit_ui_status_for_side(
-                si.chart.short_hash.as_str(),
-                si.side,
-            )
-            .or(state.submit_groovestats_fallback[player_idx]),
+            state.submissions[player_idx]
+                .groovestats_status
+                .or(state.submit_groovestats_fallback[player_idx]),
             Some(score_data::GrooveStatsSubmitUiStatus::Submitted)
         ) {
             state.active_pane[controller_idx] = EvalPane::GrooveStats;
+            state.leaderboards_requested[player_idx] = true;
             if play_style != profile_data::PlayStyle::Versus {
                 let panes = eval_pane_cycle(
                     si.show_hard_ex_score,
@@ -2881,6 +2961,7 @@ pub fn update(state: &mut State, dt: f32) {
             }
         }
     }
+    effect
 }
 
 fn local_lobby_player_count() -> usize {
@@ -2975,14 +3056,13 @@ fn lobby_disconnect_hold_elapsed(state: &State) -> Option<f32> {
     .max_by(f32::total_cmp)
 }
 
-fn evaluation_lobby_lock_text() -> Option<String> {
-    let snapshot = deadsync_online::lobbies::runtime_snapshot();
-    let joined = snapshot.joined_lobby.as_ref()?;
+fn evaluation_lobby_lock_text(state: &State) -> Option<String> {
+    let joined = state.lobby_view.snapshot.joined_lobby.as_ref()?;
     if joined.players.len() <= local_lobby_player_count() {
         return None;
     }
-    if let Some(text) = deadsync_online::lobbies::runtime_reconnect_status_text() {
-        return Some(text);
+    if let Some(text) = state.lobby_view.reconnect_status_text.as_ref() {
+        return Some(text.clone());
     }
     joined
         .players
@@ -2992,10 +3072,9 @@ fn evaluation_lobby_lock_text() -> Option<String> {
 }
 
 fn evaluation_lobby_status_text(state: &State) -> Option<String> {
-    let mut text = evaluation_lobby_lock_text()?;
+    let mut text = evaluation_lobby_lock_text(state)?;
     let prompt = if let Some(elapsed) = lobby_disconnect_hold_elapsed(state) {
-        let remaining =
-            (deadsync_online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS - elapsed).ceil() as i32;
+        let remaining = (state.lobby_view.disconnect_hold_seconds - elapsed).ceil() as i32;
         let remaining = remaining.max(0);
         format!(
             "Continue holding &START; for {remaining} more second{} to disconnect...",
@@ -3009,13 +3088,15 @@ fn evaluation_lobby_status_text(state: &State) -> Option<String> {
     Some(text)
 }
 
-pub fn retry_submissions(state: &State) -> bool {
-    let mut retried = false;
-    for si in state.score_info.iter().flatten() {
-        retried |= scores::retry_groovestats_submit(si.chart.short_hash.as_str(), si.side);
-        retried |= scores::retry_arrowcloud_submit(si.chart.short_hash.as_str(), si.side);
-    }
-    retried
+pub fn submission_retry_available(state: &State) -> bool {
+    state.submissions.iter().any(|submission| {
+        submission
+            .groovestats_status
+            .is_some_and(score_data::GrooveStatsSubmitUiStatus::can_retry)
+            || submission
+                .arrowcloud_status
+                .is_some_and(score_data::ArrowCloudSubmitUiStatus::can_retry)
+    })
 }
 
 /// Returns true if any controller currently has the TestInput pane active.
@@ -3299,20 +3380,13 @@ fn waiting_for_groovestats_submit(state: &State) -> bool {
         if !state.event_progress[player_idx].is_empty() {
             continue;
         }
-        let status = scores::get_groovestats_submit_ui_status_for_side(
-            si.chart.short_hash.as_str(),
-            si.side,
-        )
-        .or(state.submit_groovestats_fallback[player_idx]);
+        let status = state.submissions[player_idx]
+            .groovestats_status
+            .or(state.submit_groovestats_fallback[player_idx]);
         match status {
             None | Some(score_data::GrooveStatsSubmitUiStatus::Submitting) => return true,
             Some(score_data::GrooveStatsSubmitUiStatus::Submitted) => {
-                if !scores::get_groovestats_submit_event_progress_for_side(
-                    si.chart.short_hash.as_str(),
-                    si.side,
-                )
-                .is_empty()
-                {
+                if !state.submissions[player_idx].event_progress.is_empty() {
                     return true;
                 }
             }
@@ -3580,7 +3654,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
             }
         }
     }
-    if evaluation_lobby_lock_text().is_some() {
+    if evaluation_lobby_lock_text(state).is_some() {
         match ev.action {
             VirtualAction::p1_start => {
                 if ev.pressed {
@@ -3732,15 +3806,15 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         } else {
             profile::get_session_player_side()
         };
-        warm_eval_leaderboards(has_online_panes, &si.chart.short_hash, gs_side);
+        if has_online_panes {
+            state.leaderboards_requested[player_idx] = true;
+        }
         let has_gs = eval_has_gs_pane(has_online_panes);
         let has_qr = has_gs
             && !matches!(
-                scores::get_groovestats_submit_ui_status_for_side(
-                    si.chart.short_hash.as_str(),
-                    si.side,
-                )
-                .or(state.submit_groovestats_fallback[player_idx]),
+                state.submissions[player_idx]
+                    .groovestats_status
+                    .or(state.submit_groovestats_fallback[player_idx]),
                 Some(score_data::GrooveStatsSubmitUiStatus::Submitted)
             );
         let has_itl = eval_has_itl_pane(has_online_panes, si);
@@ -4608,45 +4682,25 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
                     controller,
                     gs_side,
                     Some(si.chart.short_hash.as_str()),
-                    scores::get_or_fetch_player_leaderboards_for_side(
-                        &si.chart.short_hash,
-                        gs_side,
-                        GS_RECORD_ROWS,
-                    )
-                    .as_ref(),
+                    state.leaderboards[player_idx].as_ref(),
                 )),
                 EvalPane::GrooveStatsEx => actors.extend(eval_panes::build_gs_ex_records_pane(
                     controller,
                     gs_side,
                     Some(si.chart.short_hash.as_str()),
-                    scores::get_or_fetch_player_leaderboards_for_side(
-                        &si.chart.short_hash,
-                        gs_side,
-                        GS_RECORD_ROWS,
-                    )
-                    .as_ref(),
+                    state.leaderboards[player_idx].as_ref(),
                 )),
                 EvalPane::Itl => actors.extend(eval_panes::build_itl_records_pane(
                     controller,
                     gs_side,
                     Some(si.chart.short_hash.as_str()),
-                    scores::get_or_fetch_player_leaderboards_for_side(
-                        &si.chart.short_hash,
-                        gs_side,
-                        GS_RECORD_ROWS,
-                    )
-                    .as_ref(),
+                    state.leaderboards[player_idx].as_ref(),
                 )),
                 EvalPane::ArrowCloud => actors.extend(eval_panes::build_arrowcloud_records_pane(
                     controller,
                     gs_side,
                     Some(si.chart.short_hash.as_str()),
-                    scores::get_or_fetch_player_leaderboards_for_side(
-                        &si.chart.short_hash,
-                        gs_side,
-                        GS_RECORD_ROWS,
-                    )
-                    .as_ref(),
+                    state.leaderboards[player_idx].as_ref(),
                 )),
                 EvalPane::MachineRecords => actors.extend(eval_panes::build_machine_records_pane(
                     si,
@@ -5229,10 +5283,8 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
             let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
                 continue;
             };
-            if let Some(banner) = scores::get_groovestats_submit_record_banner_for_side(
-                si.chart.short_hash.as_str(),
-                side,
-            ) {
+            let submission = &state.submissions[player_idx];
+            if let Some(banner) = submission.record_banner {
                 let x = if side == profile_data::PlayerSide::P1 {
                     screen_center_x() - 225.0
                 } else {
@@ -5266,33 +5318,22 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
                     effectperiod(AUTO_SUBMIT_RECORD_TEXT_PERIOD)
                 ));
             }
-            let groovestats_status = scores::get_groovestats_submit_ui_status_for_side(
-                si.chart.short_hash.as_str(),
-                side,
-            )
-            .or(state.submit_groovestats_fallback[player_idx]);
-            let arrowcloud_status = scores::get_arrowcloud_submit_ui_status_for_side(
-                si.chart.short_hash.as_str(),
-                side,
-            )
-            .or(state.submit_arrowcloud_fallback[player_idx]);
-            let groovestats_next_retry =
-                scores::groovestats_next_retry_remaining_secs(si.chart.short_hash.as_str(), side);
-            let arrowcloud_next_retry =
-                scores::arrowcloud_next_retry_remaining_secs(si.chart.short_hash.as_str(), side);
-            let groovestats_next_retry_is_auto =
-                scores::groovestats_next_retry_is_auto(si.chart.short_hash.as_str(), side);
-            let arrowcloud_next_retry_is_auto =
-                scores::arrowcloud_next_retry_is_auto(si.chart.short_hash.as_str(), side);
-            let lines = submit_footer_lines(
+            let groovestats_status = submission
+                .groovestats_status
+                .or(state.submit_groovestats_fallback[player_idx]);
+            let arrowcloud_status = submission
+                .arrowcloud_status
+                .or(state.submit_arrowcloud_fallback[player_idx]);
+            let lines = submit_footer_lines_for_service(
+                state.groovestats_service,
                 si.expected_groovestats_submit,
                 si.expected_arrowcloud_submit,
                 groovestats_status,
                 arrowcloud_status,
-                groovestats_next_retry,
-                arrowcloud_next_retry,
-                groovestats_next_retry_is_auto,
-                arrowcloud_next_retry_is_auto,
+                submission.groovestats_next_retry_secs,
+                submission.arrowcloud_next_retry_secs,
+                submission.groovestats_next_retry_is_auto,
+                submission.arrowcloud_next_retry_is_auto,
             );
             if lines.is_empty() {
                 continue;
@@ -5504,8 +5545,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
         z(121) // a bit above the screen bar (z=120)
     ));
 
-    let lobby_snapshot = deadsync_online::lobbies::runtime_snapshot();
-    if let Some(joined) = lobby_snapshot.joined_lobby.as_ref() {
+    if let Some(joined) = state.lobby_view.snapshot.joined_lobby.as_ref() {
         actors.extend(lobby_hud::build_panel(lobby_hud::RenderParams {
             screen_name: "ScreenEvaluationStage",
             joined,

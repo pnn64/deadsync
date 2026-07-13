@@ -202,9 +202,22 @@ pub(crate) fn enter(state: &mut gameplay::State) {
     drain(state);
 }
 
+fn sequence_effects(first: ThemeEffect, second: ThemeEffect) -> ThemeEffect {
+    match (first, second) {
+        (ThemeEffect::None, second) => second,
+        (first, ThemeEffect::None) => first,
+        (ThemeEffect::Batch(mut effects), second) => {
+            effects.push(second);
+            ThemeEffect::Batch(effects)
+        }
+        (first, second) => ThemeEffect::Batch(vec![first, second]),
+    }
+}
+
 pub(crate) fn update(state: &mut gameplay::State, delta_time: f32) -> ThemeEffect {
-    if !gameplay::prepare_update(state) {
-        return ThemeEffect::None;
+    let (run_core, lobby_effect) = gameplay::prepare_update(state);
+    if !run_core {
+        return lobby_effect;
     }
 
     refresh_smx_sensors(state, delta_time);
@@ -224,7 +237,7 @@ pub(crate) fn update(state: &mut gameplay::State, delta_time: f32) -> ThemeEffec
         state.current_music_time_display(),
         play_song_lua_sfx,
     );
-    effect
+    sequence_effects(lobby_effect, effect)
 }
 
 pub(crate) fn handle_input(state: &mut gameplay::State, ev: &InputEvent) -> ThemeEffect {

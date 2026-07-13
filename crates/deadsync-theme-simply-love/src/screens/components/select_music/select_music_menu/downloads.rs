@@ -1,11 +1,11 @@
 use crate::act;
 use crate::assets::{FontRole, current_machine_font_key};
 use crate::screens::components::shared::loading_bar;
+use crate::views::SelectMusicDownloadView;
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_input::{InputEvent, VirtualAction};
-use deadsync_online::runtime as online;
 
 const DOWNLOADS_Z: i16 = 1480;
 const DOWNLOADS_PANEL_W: f32 = 520.0;
@@ -55,18 +55,16 @@ pub fn hide_downloads_overlay(state: &mut DownloadsOverlayState) {
     *state = DownloadsOverlayState::Hidden;
 }
 
-pub fn update_downloads_overlay(state: &mut DownloadsOverlayState, _dt: f32) {
+pub fn update_downloads_overlay(state: &mut DownloadsOverlayState, total: usize) {
     let DownloadsOverlayState::Visible(overlay) = state else {
         return;
     };
-    overlay.scroll_index = overlay.scroll_index.min(downloads_scroll_limit(
-        online::unlock_download_snapshots().len(),
-    ));
+    overlay.scroll_index = overlay.scroll_index.min(downloads_scroll_limit(total));
 }
 
 #[inline(always)]
-fn downloads_shift(overlay: &mut DownloadsOverlayStateData, delta: isize) -> bool {
-    let limit = downloads_scroll_limit(online::unlock_download_snapshots().len());
+fn downloads_shift(overlay: &mut DownloadsOverlayStateData, delta: isize, total: usize) -> bool {
+    let limit = downloads_scroll_limit(total);
     let next = (overlay.scroll_index as isize + delta).clamp(0, limit as isize) as usize;
     if next == overlay.scroll_index {
         return false;
@@ -78,6 +76,7 @@ fn downloads_shift(overlay: &mut DownloadsOverlayStateData, delta: isize) -> boo
 pub fn handle_downloads_input(
     state: &mut DownloadsOverlayState,
     ev: &InputEvent,
+    total: usize,
 ) -> DownloadsInputOutcome {
     if !ev.pressed {
         return DownloadsInputOutcome::None;
@@ -95,7 +94,7 @@ pub fn handle_downloads_input(
         | VirtualAction::p2_left
         | VirtualAction::p2_menu_up
         | VirtualAction::p2_menu_left => {
-            if downloads_shift(overlay, -1) {
+            if downloads_shift(overlay, -1, total) {
                 return DownloadsInputOutcome::ChangedSelection;
             }
         }
@@ -107,7 +106,7 @@ pub fn handle_downloads_input(
         | VirtualAction::p2_right
         | VirtualAction::p2_menu_down
         | VirtualAction::p2_menu_right => {
-            if downloads_shift(overlay, 1) {
+            if downloads_shift(overlay, 1, total) {
                 return DownloadsInputOutcome::ChangedSelection;
             }
         }
@@ -158,12 +157,16 @@ fn download_size(bytes: u64) -> (&'static str, u64) {
 pub fn build_downloads_overlay(
     state: &DownloadsOverlayState,
     active_color_index: i32,
+    snapshots: &[SelectMusicDownloadView],
 ) -> Option<Vec<Actor>> {
     let DownloadsOverlayState::Visible(overlay) = state else {
         return None;
     };
-    let snapshots = online::unlock_download_snapshots();
-    let (finished, total) = online::unlock_download_completion_counts();
+    let finished = snapshots
+        .iter()
+        .filter(|snapshot| snapshot.complete)
+        .count();
+    let total = snapshots.len();
     let mut actors = Vec::new();
     let center_x = screen_center_x();
     let center_y = screen_center_y();
@@ -301,4 +304,33 @@ pub fn build_downloads_overlay(
     }
 
     Some(actors)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn scroll_uses_prepared_download_count() {
+        let mut overlay = DownloadsOverlayStateData { scroll_index: 0 };
+
+        assert!(downloads_shift(&mut overlay, 1, DOWNLOADS_VIEW_ROWS + 2));
+        assert_eq!(overlay.scroll_index, 1);
+        assert!(downloads_shift(&mut overlay, 1, DOWNLOADS_VIEW_ROWS + 2));
+        assert_eq!(overlay.scroll_index, 2);
+        assert!(!downloads_shift(&mut overlay, 1, DOWNLOADS_VIEW_ROWS + 2));
+    }
+
+    #[test]
+    fn update_clamps_scroll_after_prepared_rows_shrink() {
+        let mut state =
+            DownloadsOverlayState::Visible(DownloadsOverlayStateData { scroll_index: 3 });
+
+        update_downloads_overlay(&mut state, 2);
+
+        let DownloadsOverlayState::Visible(overlay) = state else {
+            panic!("downloads overlay should stay visible");
+        };
+        assert_eq!(overlay.scroll_index, 0);
+    }
 }

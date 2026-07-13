@@ -121,6 +121,13 @@ pub enum SimplyLoveLobbyRequest {
         screen_name: &'static str,
         ready: bool,
     },
+    UpdateMachineStats {
+        screen_name: &'static str,
+        p1_ready: bool,
+        p2_ready: bool,
+        p1_stats: Option<deadsync_online::lobbies::MachinePlayerStats>,
+        p2_stats: Option<deadsync_online::lobbies::MachinePlayerStats>,
+    },
     Disconnect,
 }
 
@@ -445,6 +452,24 @@ pub(crate) fn sfx_then(path: &str, effect: SimplyLoveEffect) -> SimplyLoveEffect
     SimplyLoveEffect::Batch(vec![sfx(path), effect])
 }
 
+pub(crate) fn lobby(request: SimplyLoveLobbyRequest) -> SimplyLoveEffect {
+    SimplyLoveEffect::Runtime(SimplyLoveRuntimeRequest::Online(
+        SimplyLoveOnlineRequest::Lobby(request),
+    ))
+}
+
+pub(crate) fn sequence(first: SimplyLoveEffect, second: SimplyLoveEffect) -> SimplyLoveEffect {
+    match (first, second) {
+        (SimplyLoveEffect::None, second) => second,
+        (first, SimplyLoveEffect::None) => first,
+        (SimplyLoveEffect::Batch(mut effects), second) => {
+            effects.push(second);
+            SimplyLoveEffect::Batch(effects)
+        }
+        (first, second) => SimplyLoveEffect::Batch(vec![first, second]),
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SimplyLoveEffectRouteContext {
     pub current_screen: SimplyLoveScreen,
@@ -568,6 +593,31 @@ mod tests {
         assert!(matches!(
             effects[1],
             SimplyLoveEffect::Navigate(SimplyLoveScreen::SelectStyle)
+        ));
+    }
+
+    #[test]
+    fn single_lobby_request_stays_unbatched() {
+        let effect = sequence(
+            SimplyLoveEffect::None,
+            lobby(SimplyLoveLobbyRequest::UpdateMachineStats {
+                screen_name: "ScreenGameplay",
+                p1_ready: true,
+                p2_ready: false,
+                p1_stats: None,
+                p2_stats: None,
+            }),
+        );
+        assert!(matches!(
+            effect,
+            SimplyLoveEffect::Runtime(SimplyLoveRuntimeRequest::Online(
+                SimplyLoveOnlineRequest::Lobby(SimplyLoveLobbyRequest::UpdateMachineStats {
+                    screen_name: "ScreenGameplay",
+                    p1_ready: true,
+                    p2_ready: false,
+                    ..
+                })
+            ))
         ));
     }
 }

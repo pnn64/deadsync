@@ -9,6 +9,7 @@ use crate::screens::components::shared::gs_scorebox;
 use crate::screens::components::shared::lobby_hud;
 use crate::screens::components::shared::screen_bar::{self, AvatarParams, ScreenBarParams};
 use crate::screens::{Screen, ThemeEffect};
+use crate::views::SimplyLoveLobbyRuntimeView;
 use deadlib_present::actors::{Actor, SizeSpec, SpriteSource, TextAttribute, TextContent};
 use deadlib_present::anim::EffectState;
 use deadlib_present::cache::{TextCache, cached_text};
@@ -535,6 +536,7 @@ pub struct State {
     pub pack_banner_path: Option<PathBuf>,
     pub scorebox_profile_snapshot: [score_data::GameplayScoreboxProfileSnapshot; MAX_PLAYERS],
     pub scorebox_side_snapshot: [Option<score_data::CachedPlayerLeaderboardData>; MAX_PLAYERS],
+    lobby_view: SimplyLoveLobbyRuntimeView,
     pub lobby_music_started: bool,
     pub lobby_ready_p1: bool,
     pub lobby_ready_p2: bool,
@@ -654,6 +656,7 @@ impl State {
             pack_banner_path,
             scorebox_profile_snapshot: scorebox_data.profile_snapshot,
             scorebox_side_snapshot: scorebox_data.side_snapshot,
+            lobby_view: Default::default(),
             lobby_music_started: false,
             lobby_ready_p1: false,
             lobby_ready_p2: false,
@@ -1994,19 +1997,19 @@ fn gameplay_lobby_player_stats(
     })
 }
 
-fn update_lobby_machine_state(state: &State) {
-    if !deadsync_online::lobbies::runtime_can_update_machine_state() {
-        return;
+fn update_lobby_machine_state(state: &State) -> ThemeEffect {
+    if !lobby_data::can_update_machine_state(&state.lobby_view.snapshot) {
+        return ThemeEffect::None;
     }
 
     let (p1_ready, p2_ready) = local_lobby_ready_tuple(state);
-    deadsync_online::lobbies::runtime_update_machine_state_sides_with_stats_default(
-        "ScreenGameplay",
+    crate::effects::lobby(crate::SimplyLoveLobbyRequest::UpdateMachineStats {
+        screen_name: "ScreenGameplay",
         p1_ready,
         p2_ready,
-        gameplay_lobby_player_stats(state, profile_data::PlayerSide::P1),
-        gameplay_lobby_player_stats(state, profile_data::PlayerSide::P2),
-    );
+        p1_stats: gameplay_lobby_player_stats(state, profile_data::PlayerSide::P1),
+        p2_stats: gameplay_lobby_player_stats(state, profile_data::PlayerSide::P2),
+    })
 }
 
 fn local_lobby_ready_tuple(state: &State) -> (bool, bool) {
@@ -2088,9 +2091,8 @@ fn lobby_disconnect_hold_elapsed(state: &State) -> Option<f32> {
     .max_by(f32::total_cmp)
 }
 
-fn gameplay_requires_lobby_wait() -> bool {
-    let snapshot = deadsync_online::lobbies::runtime_snapshot();
-    lobby_data::gameplay_lobby_wait_required(snapshot.joined_lobby.as_ref())
+fn gameplay_requires_lobby_wait(state: &State) -> bool {
+    lobby_data::gameplay_lobby_wait_required(state.lobby_view.snapshot.joined_lobby.as_ref())
 }
 
 fn gameplay_lobby_wait_text_for(
@@ -2123,13 +2125,11 @@ fn gameplay_lobby_wait_text(state: &State) -> Option<String> {
         return None;
     }
 
-    let snapshot = deadsync_online::lobbies::runtime_snapshot();
-    let joined = snapshot.joined_lobby.as_ref()?;
-    let reconnect_status_text = deadsync_online::lobbies::runtime_reconnect_status_text();
+    let joined = state.lobby_view.snapshot.joined_lobby.as_ref()?;
     gameplay_lobby_wait_text_for(
         joined,
         local_lobby_players_ready(state),
-        reconnect_status_text.as_deref(),
+        state.lobby_view.reconnect_status_text.as_deref(),
     )
 }
 
@@ -2138,8 +2138,7 @@ fn gameplay_lobby_disconnect_prompt(state: &State) -> Option<String> {
     let Some(elapsed) = lobby_disconnect_hold_elapsed(state) else {
         return Some(tr("Lobby", "DisconnectBasicPrompt").to_string());
     };
-    let remaining =
-        (deadsync_online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS - elapsed).ceil() as i32;
+    let remaining = (state.lobby_view.disconnect_hold_seconds - elapsed).ceil() as i32;
     let remaining = remaining.max(0);
     Some(
         tr_fmt(
@@ -2214,7 +2213,7 @@ pub fn on_enter(state: &mut State) {
     set_all_local_lobby_players_ready(state, false);
     clear_lobby_disconnect_holds(state);
 
-    if gameplay_requires_lobby_wait() {
+    if gameplay_requires_lobby_wait(state) {
         return;
     }
 
@@ -2227,26 +2226,32 @@ pub fn on_exit(state: &mut State) {
     state.smx_sensor_views = [None, None];
 }
 
+#[inline(always)]
+pub fn sync_lobby_runtime_view(state: &mut State, view: SimplyLoveLobbyRuntimeView) {
+    state.lobby_view = view;
+}
+
 /// Runs concrete-theme work that must happen before the deterministic gameplay
 /// update. Returns `false` while an online lobby is still waiting for players.
 ///
 /// Starting stage music only queues a gameplay audio command. The shell drains
 /// that command before it samples the stream clock for [`update`].
-pub fn prepare_update(state: &mut State) -> bool {
-    deadsync_online::lobbies::runtime_poll_reconnect_default();
-
+pub fn prepare_update(state: &mut State) -> (bool, ThemeEffect) {
+    let mut effect = ThemeEffect::None;
     if !state.lobby_music_started {
-        if lobby_disconnect_hold_elapsed(state).is_some_and(|elapsed| {
-            elapsed >= deadsync_online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS
-        }) {
+        if lobby_disconnect_hold_elapsed(state)
+            .is_some_and(|elapsed| elapsed >= state.lobby_view.disconnect_hold_seconds)
+        {
             clear_lobby_disconnect_holds(state);
-            deadsync_online::lobbies::runtime_disconnect();
+            effect = crate::effects::lobby(crate::SimplyLoveLobbyRequest::Disconnect);
+            lobby_data::apply_local_lobby_disconnect(&mut state.lobby_view.snapshot);
+            state.lobby_view.reconnect_status_text = None;
         }
 
-        update_lobby_machine_state(state);
+        effect = crate::effects::sequence(effect, update_lobby_machine_state(state));
 
         if gameplay_lobby_wait_text(state).is_some() {
-            return false;
+            return (false, effect);
         }
 
         clear_lobby_disconnect_holds(state);
@@ -2254,8 +2259,8 @@ pub fn prepare_update(state: &mut State) -> bool {
         state.start_stage_music();
         state.lobby_music_started = true;
     }
-    update_lobby_machine_state(state);
-    true
+    effect = crate::effects::sequence(effect, update_lobby_machine_state(state));
+    (true, effect)
 }
 
 /// Advances deterministic gameplay using the shell-prepared audio snapshot.
@@ -8925,8 +8930,7 @@ pub fn push_actors(
 
     if !hide_gameplay_hud {
         let overlay_start = actors.len();
-        let lobby_snapshot = deadsync_online::lobbies::runtime_snapshot();
-        if let Some(joined) = lobby_snapshot.joined_lobby.as_ref() {
+        if let Some(joined) = state.lobby_view.snapshot.joined_lobby.as_ref() {
             actors.extend(lobby_hud::build_panel(lobby_hud::RenderParams {
                 screen_name: "ScreenGameplay",
                 joined,

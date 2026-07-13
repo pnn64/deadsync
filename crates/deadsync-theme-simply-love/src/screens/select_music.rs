@@ -22,8 +22,8 @@ use crate::screens::{
     DensityGraphSlot, DensityGraphSource, Screen, ThemeEffect, input as screen_input,
 };
 use crate::views::{
-    SelectMusicInitView, SelectMusicPlaylistView, SelectMusicPolicyView, SelectMusicRuntimeView,
-    SimplyLoveLobbyRuntimeView,
+    SelectMusicDownloadView, SelectMusicInitView, SelectMusicPlaylistView, SelectMusicPolicyView,
+    SelectMusicRuntimeView, SimplyLoveLobbyRuntimeView,
 };
 use deadlib_present::actors::{Actor, SizeSpec, SpriteSource};
 use deadlib_present::cache::{SharedStrCache, TextCache, cached_shared_str, cached_text};
@@ -613,6 +613,7 @@ pub fn selection_anim_beat(state: &State) -> f32 {
 pub fn sync_runtime_view(state: &mut State, view: SelectMusicRuntimeView) {
     state.audio_playback = view.audio_playback;
     state.lobby_view = view.lobby;
+    state.downloads = view.downloads;
     state.arrow_bounce_offset = view.arrow_bounce_offset;
     state.policy = view.policy;
     state.unlock_downloads_available = view.unlock_downloads_available;
@@ -621,6 +622,14 @@ pub fn sync_runtime_view(state: &mut State, view: SelectMusicRuntimeView) {
         .extend(view.ready_song_reload_dirs);
     state.sync_graph_mode = view.sync_graph_mode;
     state.sync_confidence_percent = view.sync_confidence_percent.min(100);
+}
+
+#[inline(always)]
+pub fn downloads_overlay_visible(state: &State) -> bool {
+    matches!(
+        state.downloads_overlay,
+        select_music_menu::DownloadsOverlayState::Visible(_)
+    )
 }
 
 #[inline(always)]
@@ -1176,6 +1185,7 @@ pub struct State {
     lobby_view: SimplyLoveLobbyRuntimeView,
     arrow_bounce_offset: f32,
     policy: SelectMusicPolicyView,
+    downloads: Vec<SelectMusicDownloadView>,
     unlock_downloads_available: bool,
     ready_song_reload_dirs: Vec<PathBuf>,
     sync_graph_mode: SyncGraphMode,
@@ -2647,6 +2657,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         lobby_view: SimplyLoveLobbyRuntimeView::default(),
         arrow_bounce_offset: 0.0,
         policy: SelectMusicPolicyView::default(),
+        downloads: Vec::new(),
         unlock_downloads_available: false,
         ready_song_reload_dirs: Vec::new(),
         sync_graph_mode: SyncGraphMode::PostKernelFingerprint,
@@ -2858,6 +2869,7 @@ pub fn init_placeholder() -> State {
         lobby_view: SimplyLoveLobbyRuntimeView::default(),
         arrow_bounce_offset: 0.0,
         policy: SelectMusicPolicyView::default(),
+        downloads: Vec::new(),
         unlock_downloads_available: false,
         ready_song_reload_dirs: Vec::new(),
         sync_graph_mode: SyncGraphMode::PostKernelFingerprint,
@@ -7421,7 +7433,8 @@ fn handle_downloads_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEf
         return ThemeEffect::None;
     }
 
-    match select_music_menu::handle_downloads_input(&mut state.downloads_overlay, ev) {
+    let total = state.downloads.len();
+    match select_music_menu::handle_downloads_input(&mut state.downloads_overlay, ev, total) {
         select_music_menu::DownloadsInputOutcome::ChangedSelection => {
             queue_sfx(state, "assets/sounds/change.ogg");
         }
@@ -9477,7 +9490,8 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
     }
 
     select_music_menu::update_leaderboard_overlay(&mut state.leaderboard, dt);
-    select_music_menu::update_downloads_overlay(&mut state.downloads_overlay, dt);
+    let download_count = state.downloads.len();
+    select_music_menu::update_downloads_overlay(&mut state.downloads_overlay, download_count);
 
     state.time_since_selection_change += dt;
     if dt > 0.0 {
@@ -11723,6 +11737,7 @@ pub fn push_actors(
     if let Some(downloads_overlay) = select_music_menu::build_downloads_overlay(
         &state.downloads_overlay,
         state.active_color_index,
+        &state.downloads,
     ) {
         actors.extend(downloads_overlay);
     }
@@ -12473,6 +12488,13 @@ mod tests {
                     music_stream_position_seconds: 2.5,
                 },
                 lobby: Default::default(),
+                downloads: vec![crate::views::SelectMusicDownloadView {
+                    name: "Unlock Pack".to_string(),
+                    current_bytes: 512,
+                    total_bytes: 1024,
+                    complete: false,
+                    error_message: None,
+                }],
                 arrow_bounce_offset: -0.25,
                 policy: crate::views::SelectMusicPolicyView::default(),
                 unlock_downloads_available: true,
@@ -12482,6 +12504,7 @@ mod tests {
             },
         );
         assert!(state.unlock_downloads_available);
+        assert_eq!(state.downloads.len(), 1);
         assert_eq!(state.ready_song_reload_dirs.len(), 1);
         assert_eq!(
             state.sync_graph_mode,

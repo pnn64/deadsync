@@ -19,11 +19,27 @@ pub type SelectedCoursePlan = SelectedCourseView;
 pub type DensityGraphSource = DensityGraphView;
 pub type TimingHealth = TimingHealthView<PresentModeTrace, ClockDomainTrace, AudioTimingView>;
 
+/// One player's shell-prepared local records and online eligibility state used
+/// while constructing an Evaluation screen.
+#[derive(Clone, Debug, Default)]
+pub struct EvaluationInitPlayerView {
+    pub machine_records: Vec<deadsync_score::LeaderboardEntry>,
+    pub personal_records: Vec<deadsync_score::LeaderboardEntry>,
+    pub groovestats: deadsync_score::GrooveStatsEvalState,
+    pub itl: deadsync_score::ItlEvalState,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct EvaluationInitView {
+    pub players: [EvaluationInitPlayerView; 2],
+}
+
 /// Shell-prepared runtime data consumed by Simply Love's Select Music screen.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SelectMusicRuntimeView {
     pub audio_playback: deadsync_theme::views::AudioPlaybackView,
     pub lobby: SimplyLoveLobbyRuntimeView,
+    pub downloads: Vec<SelectMusicDownloadView>,
     /// Beat offset applied to the selection arrow bounce animation.
     pub arrow_bounce_offset: f32,
     pub policy: SelectMusicPolicyView,
@@ -38,6 +54,7 @@ impl Default for SelectMusicRuntimeView {
         Self {
             audio_playback: Default::default(),
             lobby: Default::default(),
+            downloads: Vec::new(),
             arrow_bounce_offset: 0.0,
             policy: Default::default(),
             unlock_downloads_available: false,
@@ -48,7 +65,17 @@ impl Default for SelectMusicRuntimeView {
     }
 }
 
-/// Shell-prepared online lobby state consumed by Select Music and its overlay.
+/// One shell-prepared unlock download row rendered by Select Music.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SelectMusicDownloadView {
+    pub name: String,
+    pub current_bytes: u64,
+    pub total_bytes: u64,
+    pub complete: bool,
+    pub error_message: Option<String>,
+}
+
+/// Shell-prepared online lobby state consumed by Simply Love lobby-aware screens.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SimplyLoveLobbyRuntimeView {
     pub snapshot: deadsync_online::lobbies::Snapshot,
@@ -64,6 +91,35 @@ impl Default for SimplyLoveLobbyRuntimeView {
             disconnect_hold_seconds: 5.0,
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SimplyLoveGrooveStatsService {
+    #[default]
+    GrooveStats,
+    BoogieStats,
+}
+
+/// One player's shell-prepared score-submission state for Evaluation.
+#[derive(Clone, Debug, Default)]
+pub struct EvaluationSubmissionView {
+    pub groovestats_status: Option<deadsync_score::GrooveStatsSubmitUiStatus>,
+    pub arrowcloud_status: Option<deadsync_score::ArrowCloudSubmitUiStatus>,
+    pub event_progress: Vec<deadsync_score::EventProgress>,
+    pub record_banner: Option<deadsync_score::GrooveStatsSubmitRecordBanner>,
+    pub groovestats_next_retry_secs: Option<u32>,
+    pub arrowcloud_next_retry_secs: Option<u32>,
+    pub groovestats_next_retry_is_auto: bool,
+    pub arrowcloud_next_retry_is_auto: bool,
+}
+
+/// Shell-prepared runtime data consumed by Simply Love's Evaluation screen.
+#[derive(Clone, Debug, Default)]
+pub struct EvaluationRuntimeView {
+    pub lobby: SimplyLoveLobbyRuntimeView,
+    pub groovestats_service: SimplyLoveGrooveStatsService,
+    pub submissions: [EvaluationSubmissionView; 2],
+    pub leaderboards: [Option<deadsync_score::CachedPlayerLeaderboardData>; 2],
 }
 
 /// One playlist file loaded by the shell for Simply Love's playlist wheel.
