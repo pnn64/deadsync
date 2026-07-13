@@ -11,7 +11,9 @@ mod screenshot;
 mod smx_runtime;
 mod updater;
 
-use self::compiled_present::SelectMusicBgCache;
+use self::compiled_present::{
+    SandboxDirectCache, SandboxDirectEligibility, SandboxDirectKey, SelectMusicBgCache,
+};
 use self::screenshot::auto_screenshot_eval_results;
 use crate::command::Command;
 use crate::course::{
@@ -899,6 +901,7 @@ pub struct App {
     ui_compose_scratch: compose::ComposeScratch,
     gameplay_compose_scratch: compose::ComposeScratch,
     select_music_bg_cache: SelectMusicBgCache,
+    sandbox_direct_cache: SandboxDirectCache,
     actor_scratch: Vec<Actor>,
     state: AppState,
     software_renderer_threads: u8,
@@ -2288,6 +2291,33 @@ impl App {
 
         self.sync_gameplay_background();
         self.sync_theme_background_video(total_elapsed);
+        if self.state.screens.current_screen != CurrentScreen::Sandbox {
+            self.sandbox_direct_cache.invalidate();
+        }
+        let sandbox_screen = self.state.screens.current_screen == CurrentScreen::Sandbox;
+        let sandbox_direct_key = sandbox_screen.then(|| {
+            let config = config::get();
+            SandboxDirectKey::new(&self.state.shell.metrics, &config)
+        });
+        let sandbox_direct_eligibility = SandboxDirectEligibility {
+            sandbox_screen,
+            idle_transition: matches!(self.state.shell.transition, TransitionState::Idle),
+            empty_input_log: self.state.screens.sandbox_state.last_inputs.is_empty(),
+            hardware_backend: self
+                .backend
+                .as_ref()
+                .is_some_and(renderer_backend::Backend::supports_direct_frame),
+            debug_overlays_hidden: !self.state.shell.overlay_mode.shows_fps()
+                && !self.state.shell.frame_stats.enabled(),
+            interaction_hidden: self.state.shell.interaction.message().is_none(),
+            screenshot_hidden: self.state.shell.screenshot.flash_alpha(redraw_started) <= 0.0,
+        };
+        let mut sandbox_direct = sandbox_direct_eligibility.ready()
+            && sandbox_direct_key.is_some_and(|key| {
+                self.sandbox_direct_cache
+                    .frame(key, &PRESENT_TEXTURE_CONTEXT)
+                    .is_some()
+            });
         let actor_build_started = Instant::now();
         let arrow_effect_time_s = arrow_effect_time_seconds(actor_build_started);
         let compiled_select_music_bg =
@@ -2303,9 +2333,14 @@ impl App {
             } else {
                 false
             };
-        let (mut actors, clear_color) =
-            self.get_current_actors(arrow_effect_time_s, compiled_select_music_bg);
-        let actor_build_us = elapsed_us_since(actor_build_started);
+        let (mut actors, mut clear_color) = if sandbox_direct {
+            let mut actors = std::mem::take(&mut self.actor_scratch);
+            actors.clear();
+            (actors, [0.03, 0.03, 0.03, 1.0])
+        } else {
+            self.get_current_actors(arrow_effect_time_s, compiled_select_music_bg)
+        };
+        let mut actor_build_us = elapsed_us_since(actor_build_started);
         self.state.shell.update_fps_stats(redraw_started);
         let screens = &self.state.screens;
         let current_screen = screens.current_screen;
@@ -2437,9 +2472,28 @@ impl App {
             );
             upload_us = elapsed_us_since(upload_started);
         }
+        if sandbox_direct
+            && self
+                .sandbox_direct_cache
+                .frame(
+                    sandbox_direct_key.expect("direct Sandbox frame requires a cache key"),
+                    &PRESENT_TEXTURE_CONTEXT,
+                )
+                .is_none()
+        {
+            sandbox_direct = false;
+            actors.clear();
+            self.actor_scratch = actors;
+            let actor_build_started = Instant::now();
+            (actors, clear_color) = self.get_current_actors(arrow_effect_time_s, false);
+            actor_build_us = elapsed_us_since(actor_build_started);
+        }
         let fonts = self.asset_manager.fonts();
         let build_screen_started = Instant::now();
-        let (mut screen, text_layout, compose_frame) = if self.state.screens.current_screen
+        let (mut screen, text_layout, compose_frame, direct_prepare) = if self
+            .state
+            .screens
+            .current_screen
             == CurrentScreen::Gameplay
         {
             let text_layout_cache = &mut self.gameplay_text_layout_cache;
@@ -2459,12 +2513,44 @@ impl App {
                 screen,
                 text_layout_cache.frame_stats(),
                 compose_scratch.frame_stats(),
+                None,
             )
         } else {
             let text_layout_cache = &mut self.ui_text_layout_cache;
             let compose_scratch = &mut self.ui_compose_scratch;
             text_layout_cache.begin_frame_stats();
-            let screen = if compiled_select_music_bg {
+            if sandbox_direct_eligibility.ready() && !sandbox_direct {
+                let key = sandbox_direct_key
+                    .expect("eligible Sandbox frame must have a direct cache key");
+                sandbox_direct = self.backend.as_mut().is_some_and(|backend| {
+                    self.sandbox_direct_cache.prepare(
+                        key,
+                        &actors,
+                        &self.state.shell.metrics,
+                        fonts,
+                        text_layout_cache,
+                        &PRESENT_TEXTURE_CONTEXT,
+                        |geometries| backend.prewarm_textured_meshes(geometries),
+                    )
+                });
+            }
+            let direct_prepare = sandbox_direct.then(|| {
+                self.sandbox_direct_cache
+                    .frame(
+                        sandbox_direct_key.expect("direct Sandbox frame requires a cache key"),
+                        &PRESENT_TEXTURE_CONTEXT,
+                    )
+                    .expect("eligible prepared Sandbox frame must remain current")
+                    .prepare_stats()
+            });
+            let screen = if sandbox_direct {
+                renderer::RenderList {
+                    clear_color,
+                    cameras: Vec::new(),
+                    sprite_instances: Vec::new(),
+                    objects: Vec::new(),
+                }
+            } else if compiled_select_music_bg {
                 let compiled = self.select_music_bg_cache.frame().map(|frame| {
                     compose::build_screen_cached_with_scratch_and_texture_context_and_root_prefix(
                         &actors,
@@ -2531,7 +2617,12 @@ impl App {
             (
                 screen,
                 text_layout_cache.frame_stats(),
-                compose_scratch.frame_stats(),
+                if sandbox_direct {
+                    compose::ComposeFrameStats::default()
+                } else {
+                    compose_scratch.frame_stats()
+                },
+                direct_prepare,
             )
         };
         let build_screen_us = elapsed_us_since(build_screen_started);
@@ -2543,8 +2634,20 @@ impl App {
             actor_build_us,
             build_screen_us,
             resolve_textures_us,
-            render_objects: saturating_u32(screen.objects.len()),
-            render_cameras: saturating_u32(screen.cameras.len()),
+            render_objects: direct_prepare.map_or_else(
+                || saturating_u32(screen.objects.len()),
+                |stats| stats.render_objects,
+            ),
+            render_cameras: if sandbox_direct {
+                self.sandbox_direct_cache
+                    .frame(
+                        sandbox_direct_key.expect("direct Sandbox frame requires a cache key"),
+                        &PRESENT_TEXTURE_CONTEXT,
+                    )
+                    .map_or(0, |frame| saturating_u32(frame.frame().cameras.len()))
+            } else {
+                saturating_u32(screen.cameras.len())
+            },
             text_layout,
             compose: compose_frame,
         };
@@ -2556,11 +2659,27 @@ impl App {
                 backend.request_screenshot();
             }
             let draw_started = Instant::now();
-            match backend.draw(
-                &screen,
-                self.asset_manager.textures(),
-                apply_present_back_pressure,
-            ) {
+            let draw_result = if sandbox_direct {
+                let frame = self
+                    .sandbox_direct_cache
+                    .frame(
+                        sandbox_direct_key.expect("direct Sandbox frame requires a cache key"),
+                        &PRESENT_TEXTURE_CONTEXT,
+                    )
+                    .expect("eligible prepared Sandbox frame must remain current");
+                backend.draw_frame(
+                    frame.frame(),
+                    self.asset_manager.textures(),
+                    apply_present_back_pressure,
+                )
+            } else {
+                backend.draw(
+                    &screen,
+                    self.asset_manager.textures(),
+                    apply_present_back_pressure,
+                )
+            };
+            match draw_result {
                 Ok(stats) => {
                     draw_stats = stats;
                     self.state.shell.current_frame_vpf = stats.vertices;
@@ -2574,11 +2693,13 @@ impl App {
                     return;
                 }
             }
-            if self.state.screens.current_screen == CurrentScreen::Gameplay {
-                self.gameplay_compose_scratch
-                    .recycle_render_list(&mut screen);
-            } else {
-                self.ui_compose_scratch.recycle_render_list(&mut screen);
+            if !sandbox_direct {
+                if self.state.screens.current_screen == CurrentScreen::Gameplay {
+                    self.gameplay_compose_scratch
+                        .recycle_render_list(&mut screen);
+                } else {
+                    self.ui_compose_scratch.recycle_render_list(&mut screen);
+                }
             }
         }
         if capture_screenshot {
@@ -2750,6 +2871,7 @@ impl App {
             ui_compose_scratch: compose::ComposeScratch::default(),
             gameplay_compose_scratch: compose::ComposeScratch::default(),
             select_music_bg_cache: SelectMusicBgCache::default(),
+            sandbox_direct_cache: SandboxDirectCache::default(),
             actor_scratch: Vec::with_capacity(256),
             state,
             software_renderer_threads,

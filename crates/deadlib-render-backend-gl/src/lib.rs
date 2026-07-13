@@ -1,8 +1,11 @@
 use deadlib_render::{
-    BlendMode, DrawFrame, DrawFrameView, DrawStats, FastU64Map, RenderList, SamplerDesc,
-    SamplerFilter, SamplerWrap, SpriteInstanceRaw, TMeshCacheKey, TextureHandle,
-    TexturedMeshInstanceRaw, TexturedMeshVertex,
-    draw_prep::{self, DrawOp, DrawScratch, TMeshCacheResult, TexturedMeshSource},
+    BlendMode, DrawFrame, DrawFrameView, DrawStats, FastU64Map, INVALID_TMESH_CACHE_KEY,
+    RenderList, SamplerDesc, SamplerFilter, SamplerWrap, SpriteInstanceRaw, TMeshCacheKey,
+    TextureHandle, TexturedMeshInstanceRaw, TexturedMeshVertex,
+    draw_prep::{
+        self, CachedTMeshGeometry, DrawOp, DrawScratch, TMeshCacheResult, TMeshPrewarmStats,
+        TexturedMeshSource,
+    },
 };
 use glam::Mat4 as Matrix4;
 use glow::{HasContext, PixelPackData, PixelUnpackData, UniformLocation};
@@ -875,6 +878,9 @@ fn ensure_cached_tmesh(
     cache_key: TMeshCacheKey,
     vertices: &[deadlib_render::TexturedMeshVertex],
 ) -> TMeshCacheResult {
+    if cache_key == INVALID_TMESH_CACHE_KEY || vertices.is_empty() {
+        return TMeshCacheResult::Unavailable;
+    }
     if let Some(entry) = cached_tmesh.get(&cache_key) {
         return if entry.vertex_count == vertices.len() as u32 {
             TMeshCacheResult::Resident
@@ -915,6 +921,28 @@ fn ensure_cached_tmesh(
     );
     *cached_tmesh_bytes = cached_tmesh_bytes.saturating_add(bytes);
     TMeshCacheResult::Uploaded
+}
+
+/// Uploads immutable textured-mesh geometry before direct frame submission.
+///
+/// The renderer thread owns the cache. It is byte-capped and saturates when
+/// full; prewarming never scans, prunes, or destroys resident geometry.
+pub fn prewarm_textured_meshes(
+    state: &mut State,
+    geometries: &[CachedTMeshGeometry],
+) -> TMeshPrewarmStats {
+    let mut stats = TMeshPrewarmStats::default();
+    for geometry in geometries {
+        let result = ensure_cached_tmesh(
+            &state.gl,
+            &mut state.cached_tmesh,
+            &mut state.cached_tmesh_bytes,
+            geometry.cache_key,
+            &geometry.vertices,
+        );
+        stats.record(result, geometry.vertices.len());
+    }
+    stats
 }
 
 #[inline(always)]

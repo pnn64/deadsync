@@ -1,6 +1,9 @@
 pub mod draw_prep;
 
-pub use draw_prep::{DrawFrame, DrawFrameView, FrameCapacity, FramePrepareStats};
+pub use draw_prep::{
+    CachedTMeshGeometry, DrawFrame, DrawFrameView, FrameCapacity, FramePrepareStats,
+    TMeshPrewarmStats,
+};
 
 use glam::Mat4 as Matrix4;
 use std::ops::Deref;
@@ -589,6 +592,12 @@ pub struct PresentStats {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DrawStats {
     pub vertices: u32,
+    /// Number of legacy `RenderList` submissions represented by these stats.
+    pub render_list_submissions: u32,
+    /// Number of prepared `DrawFrame` submissions represented by these stats.
+    pub direct_frame_submissions: u32,
+    /// True when submission consumed a prepared frame and skipped draw prep.
+    pub draw_prep_bypassed: bool,
     /// CPU time spent converting a legacy `RenderList` into flat draw runs.
     /// Direct `DrawFrame` submissions leave this at zero.
     pub draw_prep_us: u32,

@@ -5,11 +5,15 @@ use ash::{
     vk,
 };
 use deadlib_render::{
-    BlendMode, ClockDomainTrace, DrawFrame, DrawFrameView, DrawStats, FastU64Map, MeshVertex,
-    PresentModePolicy, PresentModeTrace, PresentStats, RenderList, SamplerDesc, SamplerFilter,
-    SamplerWrap, SpriteInstanceRaw as InstanceData, TMeshCacheKey, TextureHandle,
-    TexturedMeshInstanceRaw as TexturedMeshInstanceGpu, TexturedMeshVertex,
-    draw_prep::{self, DrawOp, DrawScratch, TMeshCacheResult, TexturedMeshSource},
+    BlendMode, ClockDomainTrace, DrawFrame, DrawFrameView, DrawStats, FastU64Map,
+    INVALID_TMESH_CACHE_KEY, MeshVertex, PresentModePolicy, PresentModeTrace, PresentStats,
+    RenderList, SamplerDesc, SamplerFilter, SamplerWrap, SpriteInstanceRaw as InstanceData,
+    TMeshCacheKey, TextureHandle, TexturedMeshInstanceRaw as TexturedMeshInstanceGpu,
+    TexturedMeshVertex,
+    draw_prep::{
+        self, CachedTMeshGeometry, DrawOp, DrawScratch, TMeshCacheResult, TMeshPrewarmStats,
+        TexturedMeshSource,
+    },
 };
 use glam::Mat4 as Matrix4;
 use image::RgbaImage;
@@ -2959,6 +2963,9 @@ fn ensure_cached_tmesh(
     cache_key: TMeshCacheKey,
     vertices: &[deadlib_render::TexturedMeshVertex],
 ) -> Result<TMeshCacheResult, Box<dyn Error>> {
+    if cache_key == INVALID_TMESH_CACHE_KEY || vertices.is_empty() {
+        return Ok(TMeshCacheResult::Unavailable);
+    }
     if let Some(entry) = cached_tmesh.get(&cache_key) {
         return Ok(if entry.vertex_count == vertices.len() as u32 {
             TMeshCacheResult::Resident
@@ -2984,10 +2991,20 @@ fn ensure_cached_tmesh(
         vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
     )?;
 
-    // SAFETY: `memory` is a HOST_VISIBLE allocation created on this device and the
-    // mapped range is fully written with initialized vertex data before unmapping.
+    // SAFETY: `memory` is a HOST_VISIBLE allocation created on this device and
+    // `size` is the allocation's requested range.
+    let mapped = unsafe { device.map_memory(memory, 0, size, vk::MemoryMapFlags::empty()) };
+    let mapped = match mapped {
+        Ok(mapped) => mapped,
+        Err(error) => {
+            destroy_buffer(device, &BufferResource { buffer, memory });
+            return Err(error.into());
+        }
+    };
+    // SAFETY: the successful mapping covers the complete vertex payload. The
+    // source and destination do not overlap, and the allocation remains mapped
+    // until after the initialized data has been copied.
     unsafe {
-        let mapped = device.map_memory(memory, 0, size, vk::MemoryMapFlags::empty())?;
         let dst = mapped.cast::<TexturedMeshVertex>();
         std::ptr::copy_nonoverlapping(vertices.as_ptr(), dst, vertices.len());
         device.unmap_memory(memory);
@@ -3002,6 +3019,46 @@ fn ensure_cached_tmesh(
     );
     *cached_tmesh_bytes = cached_tmesh_bytes.saturating_add(bytes);
     Ok(TMeshCacheResult::Uploaded)
+}
+
+/// Uploads immutable textured-mesh geometry before direct frame submission.
+///
+/// The renderer thread owns the cache. It is byte-capped and saturates when
+/// full; prewarming never scans, prunes, or destroys resident geometry.
+pub fn prewarm_textured_meshes(
+    state: &mut State,
+    geometries: &[CachedTMeshGeometry],
+) -> TMeshPrewarmStats {
+    let mut stats = TMeshPrewarmStats::default();
+    let Some(device) = state.device.as_ref().map(Arc::clone) else {
+        for geometry in geometries {
+            stats.record(TMeshCacheResult::UploadFailed, geometry.vertices.len());
+        }
+        return stats;
+    };
+
+    for geometry in geometries {
+        let result = match ensure_cached_tmesh(
+            &state.instance,
+            device.as_ref(),
+            state.pdevice,
+            &mut state.cached_tmesh,
+            &mut state.cached_tmesh_bytes,
+            geometry.cache_key,
+            &geometry.vertices,
+        ) {
+            Ok(result) => result,
+            Err(error) => {
+                warn!(
+                    "Failed to prewarm Vulkan textured mesh {:#x}: {error}",
+                    geometry.cache_key
+                );
+                TMeshCacheResult::UploadFailed
+            }
+        };
+        stats.record(result, geometry.vertices.len());
+    }
+    stats
 }
 
 fn find_memory_type(

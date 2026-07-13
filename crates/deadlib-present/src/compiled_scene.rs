@@ -14,8 +14,9 @@ use crate::font::{self, Font};
 use crate::space::Metrics;
 use crate::texture::TextureContext;
 use deadlib_render::{
-    DrawFrame as RenderDrawFrame, FrameCapacity as DrawFrameCapacity, FramePrepareStats,
-    INVALID_TEXTURE_HANDLE, ObjectType, RenderList, RenderObject, SpriteInstanceRaw,
+    CachedTMeshGeometry, DrawFrame as RenderDrawFrame, FastU64Map,
+    FrameCapacity as DrawFrameCapacity, FramePrepareStats, INVALID_TEXTURE_HANDLE,
+    INVALID_TMESH_CACHE_KEY, ObjectType, RenderList, RenderObject, SpriteInstanceRaw,
     TexturedMeshVertices,
     draw_prep::{DrawScratch, prepare_render_list},
 };
@@ -534,8 +535,9 @@ impl CompiledScene {
         let mut emit_scratch = CompiledSceneScratch::default();
         emit_scratch.reserve(self.capacity());
         let render = self.emit(&mut emit_scratch);
+        let geometries = collect_cached_tmesh_geometries(&render);
         let mut draw_scratch = DrawScratch::default();
-        let (view, _) = prepare_render_list(&render, &mut draw_scratch, |_, _| false);
+        let (view, _) = prepare_render_list(&render, &mut draw_scratch, |_, _| true);
         let mut frame = RenderDrawFrame::with_capacity(DrawFrameCapacity {
             cameras: view.cameras.len(),
             sprite_instances: view.sprite_instances.len(),
@@ -559,10 +561,40 @@ impl CompiledScene {
 
         CompiledDrawFrame {
             frame,
+            geometries,
             stamp: self.stamp,
             scene_id: self.scene_id,
         }
     }
+}
+
+fn collect_cached_tmesh_geometries(render: &RenderList) -> Vec<CachedTMeshGeometry> {
+    let mut indices = FastU64Map::<usize>::default();
+    let mut geometries = Vec::new();
+    for object in &render.objects {
+        let ObjectType::TexturedMesh {
+            vertices,
+            geom_cache_key,
+            ..
+        } = &object.object_type
+        else {
+            continue;
+        };
+        if *geom_cache_key == INVALID_TMESH_CACHE_KEY || indices.contains_key(geom_cache_key) {
+            continue;
+        }
+
+        let retained = match vertices {
+            TexturedMeshVertices::Shared(vertices) => Arc::clone(vertices),
+            TexturedMeshVertices::Transient(vertices) => Arc::from(vertices.clone()),
+        };
+        indices.insert(*geom_cache_key, geometries.len());
+        geometries.push(CachedTMeshGeometry {
+            cache_key: *geom_cache_key,
+            vertices: retained,
+        });
+    }
+    geometries
 }
 
 impl CompiledRootPrefix {
@@ -637,12 +669,13 @@ impl CompiledRootPrefix {
 /// capacity-sized at transition time, never grows or evicts on submission,
 /// performs no lookup or resource destruction during a frame, and is freed at
 /// the owning transition. Its compile stamp must be checked after external
-/// metric, font, or texture-registry changes. Textured-mesh geometry is
-/// flattened into transient vertices so correctness does not depend on a
-/// backend cache being resident; those vertices are therefore uploaded by the
-/// backend on each submission.
+/// metric, font, or texture-registry changes. Keyed immutable textured meshes
+/// are retained once in `geometries` and must be prewarmed before submitting
+/// their cached draw ops. Invalid-key geometry remains in the frame's transient
+/// vertex buffer and is uploaded on each submission.
 pub struct CompiledDrawFrame {
     frame: RenderDrawFrame,
+    geometries: Vec<CachedTMeshGeometry>,
     stamp: CompileStamp,
     scene_id: u64,
 }
@@ -651,6 +684,11 @@ impl CompiledDrawFrame {
     #[inline(always)]
     pub const fn frame(&self) -> &RenderDrawFrame {
         &self.frame
+    }
+
+    #[inline(always)]
+    pub fn geometries(&self) -> &[CachedTMeshGeometry] {
+        self.geometries.as_slice()
     }
 
     #[inline(always)]
@@ -1186,7 +1224,7 @@ mod tests {
     use crate::texture::TextureMeta;
     use deadlib_render::{
         BlendMode, MeshVertex, TexturedMeshInstanceRaw, TexturedMeshVertex,
-        draw_prep::{DrawOp, TexturedMeshSource},
+        draw_prep::{DrawOp, TMeshCacheResult, TexturedMeshSource},
     };
     use glam::{Mat4, Vec3};
     use std::alloc::{GlobalAlloc, Layout, System};
@@ -1568,6 +1606,16 @@ mod tests {
             mesh(),
             Actor::CameraPop,
         ]
+    }
+
+    fn assert_tmesh_vertices_eq(actual: &[TexturedMeshVertex], expected: &[TexturedMeshVertex]) {
+        assert_eq!(actual.len(), expected.len());
+        for (actual, expected) in actual.iter().zip(expected) {
+            assert_eq!(actual.pos, expected.pos);
+            assert_eq!(actual.uv, expected.uv);
+            assert_eq!(actual.color, expected.color);
+            assert_eq!(actual.tex_matrix_scale, expected.tex_matrix_scale);
+        }
     }
 
     fn assert_render_eq(expected: &RenderList, actual: &RenderList) {
@@ -2018,15 +2066,30 @@ mod tests {
 
     #[test]
     fn retained_draw_frame_matches_legacy_draw_preparation() {
-        let actors = fixture();
+        let mut invalid_key = textured_mesh();
+        let Actor::TexturedMesh { geom_cache_key, .. } = &mut invalid_key else {
+            unreachable!()
+        };
+        *geom_cache_key = INVALID_TMESH_CACHE_KEY;
+        let mut actors = fixture();
+        actors.push(textured_mesh());
+        actors.push(invalid_key);
         let fonts = fonts();
         let textures = textures();
         let scene = compile(&actors, &fonts, &textures).expect("fixture compiles");
         let mut emit_scratch = CompiledSceneScratch::default();
         let render = scene.emit(&mut emit_scratch);
-        let mut expected_scratch = DrawScratch::default();
-        let (expected, _) = prepare_render_list(&render, &mut expected_scratch, |_, _| false);
         let direct = scene.compile_draw_frame();
+        let mut expected_scratch = DrawScratch::default();
+        let (expected, _) = prepare_render_list(&render, &mut expected_scratch, |key, vertices| {
+            let geometry = direct
+                .geometries()
+                .iter()
+                .find(|geometry| geometry.cache_key == key)
+                .expect("every cached run has retained geometry");
+            assert_tmesh_vertices_eq(geometry.vertices.as_ref(), vertices);
+            TMeshCacheResult::Resident
+        });
         let actual = direct.frame().view();
 
         assert_eq!(actual.clear_color, expected.clear_color);
@@ -2051,12 +2114,49 @@ mod tests {
         assert!(direct.is_current(7, 8, &textures));
         assert!(!direct.is_current(6, 8, &textures));
         assert!(!direct.is_current(7, 9, &textures));
-        assert!(actual.ops.iter().all(|op| match op {
-            DrawOp::TexturedMesh(run) => {
-                matches!(run.source, TexturedMeshSource::Transient { .. })
-            }
-            DrawOp::Sprite(_) | DrawOp::Mesh(_) => true,
-        }));
+        let invalid_vertex_count = render
+            .objects
+            .iter()
+            .filter_map(|object| match &object.object_type {
+                ObjectType::TexturedMesh {
+                    vertices,
+                    geom_cache_key: INVALID_TMESH_CACHE_KEY,
+                    ..
+                } => Some(vertices.len()),
+                ObjectType::Sprite(_)
+                | ObjectType::Mesh { .. }
+                | ObjectType::TexturedMesh { .. } => None,
+            })
+            .sum::<usize>();
+        assert_eq!(actual.tmesh_vertices.len(), invalid_vertex_count);
+        assert_eq!(
+            direct.prepare_stats().dynamic_upload_vertices,
+            invalid_vertex_count as u64
+        );
+        assert_eq!(
+            direct
+                .geometries()
+                .iter()
+                .filter(|geometry| geometry.cache_key == 44)
+                .count(),
+            1,
+            "duplicate keyed actors retain one upload payload"
+        );
+        assert!(
+            direct
+                .geometries()
+                .iter()
+                .any(|geometry| geometry.cache_key != 44),
+            "static text geometry is retained"
+        );
+        assert!(actual.ops.iter().any(|op| matches!(
+            op,
+            DrawOp::TexturedMesh(run) if matches!(run.source, TexturedMeshSource::Cached { .. })
+        )));
+        assert!(actual.ops.iter().any(|op| matches!(
+            op,
+            DrawOp::TexturedMesh(run) if matches!(run.source, TexturedMeshSource::Transient { .. })
+        )));
     }
 
     #[test]
@@ -2064,13 +2164,16 @@ mod tests {
         let fonts = fonts();
         let textures = textures();
         let mut actor = sprite(SpriteSource::TextureStatic("plain"));
-        let Actor::Sprite { glow, .. } = &mut actor else {
+        let Actor::Sprite { glow, z, .. } = &mut actor else {
             unreachable!()
         };
         *glow = [0.0; 4];
-        let scene = compile(&[actor], &fonts, &textures).expect("sprite compiles");
+        *z = -2;
+        let scene = compile(&[actor, textured_mesh()], &fonts, &textures).expect("scene compiles");
         let slot = scene.sprite_uv_slot(NodeId(0)).expect("sprite slot");
         let mut direct = scene.compile_draw_frame();
+        assert_eq!(direct.geometries().len(), 1);
+        assert!(direct.frame().tmesh_vertices.is_empty());
 
         let allocations = count_allocs(|| {
             for frame in 0..64 {

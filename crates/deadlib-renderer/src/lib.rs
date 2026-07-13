@@ -1,6 +1,6 @@
 use deadlib_render::{
-    BackendType, DrawFrame, DrawStats, PresentModePolicy, RenderList, SamplerDesc, TextureHandle,
-    TextureHandleMap,
+    BackendType, CachedTMeshGeometry, DrawFrame, DrawStats, PresentModePolicy, RenderList,
+    SamplerDesc, TMeshPrewarmStats, TextureHandle, TextureHandleMap,
 };
 use deadlib_render_backend_gl as opengl;
 use deadlib_render_backend_software as software;
@@ -119,14 +119,79 @@ enum BackendImpl {
 /// This hides platform-specific variants from the rest of the application.
 pub struct Backend(BackendImpl);
 
+#[derive(Clone, Copy)]
+enum SubmissionKind {
+    RenderList,
+    DirectFrame,
+}
+
+fn record_submission(mut stats: DrawStats, kind: SubmissionKind) -> DrawStats {
+    match kind {
+        SubmissionKind::RenderList => {
+            stats.render_list_submissions = stats.render_list_submissions.saturating_add(1);
+            stats.draw_prep_bypassed = false;
+        }
+        SubmissionKind::DirectFrame => {
+            stats.direct_frame_submissions = stats.direct_frame_submissions.saturating_add(1);
+            stats.draw_prep_bypassed = true;
+        }
+    }
+    stats
+}
+
 impl Backend {
+    /// Whether this backend can consume a prepared [`DrawFrame`] directly.
+    #[inline(always)]
+    pub fn supports_direct_frame(&self) -> bool {
+        !matches!(self.0, BackendImpl::Software(_))
+    }
+
+    /// Makes immutable textured-mesh geometry resident before live rendering.
+    ///
+    /// The render thread exclusively owns each backend's 16 MiB cache for the
+    /// backend lifetime. Call this at screen/song warmup; it attempts every
+    /// supplied entry, records hits/uploads/failures, and never prunes. A full
+    /// cache saturates and reports entries unavailable. Cached resources are
+    /// destroyed during backend cleanup (or backend drop for wgpu). A direct
+    /// frame miss skips that run instead of uploading during gameplay. Work is
+    /// bounded by this slice and the byte cap, with one lookup and at most one
+    /// upload per entry. Callers should require [`TMeshPrewarmStats::ready`]
+    /// before selecting direct submission.
+    pub fn prewarm_textured_meshes(
+        &mut self,
+        geometries: &[CachedTMeshGeometry],
+    ) -> Result<TMeshPrewarmStats, Box<dyn Error>> {
+        match &mut self.0 {
+            #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+            BackendImpl::Vulkan(state) => Ok(vulkan::prewarm_textured_meshes(state, geometries)),
+            #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+            BackendImpl::VulkanWgpu(state) => {
+                Ok(wgpu_core::prewarm_textured_meshes(state, geometries))
+            }
+            #[cfg(target_os = "macos")]
+            BackendImpl::Metal(state) => Ok(wgpu_core::prewarm_textured_meshes(state, geometries)),
+            BackendImpl::OpenGL(state) => Ok(opengl::prewarm_textured_meshes(state, geometries)),
+            BackendImpl::OpenGLWgpu(state) => {
+                Ok(wgpu_core::prewarm_textured_meshes(state, geometries))
+            }
+            BackendImpl::Software(_) => Err(std::io::Error::other(
+                "Textured-mesh prewarming is not supported by the software renderer",
+            )
+            .into()),
+            #[cfg(target_os = "windows")]
+            BackendImpl::DirectX(state) => {
+                Ok(wgpu_core::prewarm_textured_meshes(state, geometries))
+            }
+        }
+    }
+
     pub fn draw(
         &mut self,
         render_list: &RenderList,
         textures: &TextureHandleMap<Texture>,
         apply_present_back_pressure: bool,
     ) -> Result<DrawStats, Box<dyn Error>> {
-        match &mut self.0 {
+        let stats = match &mut self.0 {
             #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
             BackendImpl::Vulkan(state) => vulkan::draw(
                 state,
@@ -185,7 +250,8 @@ impl Backend {
                 },
                 apply_present_back_pressure,
             ),
-        }
+        }?;
+        Ok(record_submission(stats, SubmissionKind::RenderList))
     }
 
     /// Submits an already prepared flat frame without rebuilding draw runs.
@@ -200,7 +266,7 @@ impl Backend {
         textures: &TextureHandleMap<Texture>,
         apply_present_back_pressure: bool,
     ) -> Result<DrawStats, Box<dyn Error>> {
-        match &mut self.0 {
+        let stats = match &mut self.0 {
             #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
             BackendImpl::Vulkan(state) => vulkan::draw_frame(
                 state,
@@ -257,7 +323,8 @@ impl Backend {
                 },
                 apply_present_back_pressure,
             ),
-        }
+        }?;
+        Ok(record_submission(stats, SubmissionKind::DirectFrame))
     }
 
     pub fn request_screenshot(&mut self) {
@@ -508,6 +575,46 @@ impl Backend {
             #[cfg(target_os = "windows")]
             BackendImpl::DirectX(state) => wgpu_core::wait_for_idle(state),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn render_list_submission_records_draw_prep_path() {
+        let stats = record_submission(
+            DrawStats {
+                vertices: 42,
+                draw_prep_us: 7,
+                ..DrawStats::default()
+            },
+            SubmissionKind::RenderList,
+        );
+
+        assert_eq!(stats.vertices, 42);
+        assert_eq!(stats.render_list_submissions, 1);
+        assert_eq!(stats.direct_frame_submissions, 0);
+        assert!(!stats.draw_prep_bypassed);
+        assert_eq!(stats.draw_prep_us, 7);
+    }
+
+    #[test]
+    fn direct_submission_records_draw_prep_bypass() {
+        let stats = record_submission(
+            DrawStats {
+                vertices: 42,
+                ..DrawStats::default()
+            },
+            SubmissionKind::DirectFrame,
+        );
+
+        assert_eq!(stats.vertices, 42);
+        assert_eq!(stats.render_list_submissions, 0);
+        assert_eq!(stats.direct_frame_submissions, 1);
+        assert!(stats.draw_prep_bypassed);
+        assert_eq!(stats.draw_prep_us, 0);
     }
 }
 

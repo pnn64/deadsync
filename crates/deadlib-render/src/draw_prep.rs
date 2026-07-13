@@ -8,6 +8,7 @@ use std::{
     collections::HashMap,
     hash::BuildHasherDefault,
     ops::{Deref, DerefMut},
+    sync::Arc,
 };
 use twox_hash::XxHash64;
 
@@ -56,6 +57,57 @@ pub enum TMeshCacheResult {
     Resident,
     Uploaded,
     UploadFailed,
+}
+
+/// Immutable upload payload for one retained textured-mesh cache entry.
+///
+/// Compiled presentation owns these values on the render thread for a screen
+/// or song lifetime. Backends consume them during transition prewarm, before
+/// submitting draw ops that reference `cache_key`; frame submission performs
+/// no geometry lookup, allocation, eviction, or destruction through this
+/// value. Backend cache capacity and eviction remain backend-owned concerns.
+#[derive(Clone, Debug)]
+pub struct CachedTMeshGeometry {
+    pub cache_key: TMeshCacheKey,
+    pub vertices: Arc<[TexturedMeshVertex]>,
+}
+
+/// Outcome counters for one bounded retained-geometry prewarm pass.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct TMeshPrewarmStats {
+    pub requested: u32,
+    pub resident: u32,
+    pub uploaded: u32,
+    pub unavailable: u32,
+    pub upload_failed: u32,
+    pub uploaded_vertices: u64,
+}
+
+impl TMeshPrewarmStats {
+    #[inline(always)]
+    pub const fn ready(self) -> bool {
+        self.requested == self.resident.saturating_add(self.uploaded)
+    }
+
+    #[inline]
+    pub fn record(&mut self, result: TMeshCacheResult, vertex_count: usize) {
+        self.requested = self.requested.saturating_add(1);
+        match result {
+            TMeshCacheResult::Unavailable => {
+                self.unavailable = self.unavailable.saturating_add(1);
+            }
+            TMeshCacheResult::Resident => {
+                self.resident = self.resident.saturating_add(1);
+            }
+            TMeshCacheResult::Uploaded => {
+                self.uploaded = self.uploaded.saturating_add(1);
+                self.uploaded_vertices = self.uploaded_vertices.saturating_add(vertex_count as u64);
+            }
+            TMeshCacheResult::UploadFailed => {
+                self.upload_failed = self.upload_failed.saturating_add(1);
+            }
+        }
+    }
 }
 
 impl TMeshCacheResult {
@@ -730,7 +782,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{DrawScratch, prepare};
+    use super::{DrawScratch, TMeshCacheResult, TMeshPrewarmStats, prepare};
     use crate::{
         BlendMode, INVALID_TEXTURE_HANDLE, ObjectType, RenderList, RenderObject, SpriteInstanceRaw,
     };
@@ -773,5 +825,31 @@ mod tests {
         prepare(&render_list, &mut scratch, |_, _| false);
 
         assert!(scratch.ops.capacity() >= render_list.objects.len());
+    }
+
+    #[test]
+    fn tmesh_prewarm_stats_track_ready_and_failed_geometry() {
+        let mut stats = TMeshPrewarmStats::default();
+        assert!(stats.ready());
+
+        stats.record(TMeshCacheResult::Resident, 3);
+        stats.record(TMeshCacheResult::Uploaded, 7);
+        assert!(stats.ready());
+        assert_eq!(stats.uploaded_vertices, 7);
+
+        stats.record(TMeshCacheResult::Unavailable, 11);
+        stats.record(TMeshCacheResult::UploadFailed, 13);
+        assert!(!stats.ready());
+        assert_eq!(
+            stats,
+            TMeshPrewarmStats {
+                requested: 4,
+                resident: 1,
+                uploaded: 1,
+                unavailable: 1,
+                upload_failed: 1,
+                uploaded_vertices: 7,
+            }
+        );
     }
 }

@@ -1,14 +1,21 @@
 use deadlib_assets::WHITE_TEXTURE_KEY;
 use deadlib_present::actors::Actor;
 use deadlib_present::compiled_scene::{
-    CompileError, CompileOptions, CompiledRootPrefix, NodeId, PatchError, RootPrefixError,
-    SceneCompiler, SpriteUvRectPatch, SpriteUvSlot,
+    CompileError, CompileOptions, CompiledDrawFrame, CompiledRootPrefix, NodeId, PatchError,
+    RootPrefixError, SceneCompiler, SpriteUvRectPatch, SpriteUvSlot,
 };
 use deadlib_present::compose::TextLayoutCache;
 use deadlib_present::font::Font;
 use deadlib_present::space::Metrics;
 use deadlib_present::texture::{TextureContext, TextureMeta};
-use deadlib_render::{INVALID_TEXTURE_HANDLE, TextureHandle};
+use deadlib_render::{
+    INVALID_TEXTURE_HANDLE, TextureHandle,
+    draw_prep::{CachedTMeshGeometry, TMeshPrewarmStats},
+};
+use deadsync_config::{
+    app_config::Config,
+    theme::{LogLevel, MachineFont, VersionOverlaySide},
+};
 use deadsync_theme_simply_love::screens::components::shared::visual_style_bg::{
     self, Params, TILED_SPRITE_COUNT,
 };
@@ -46,6 +53,56 @@ impl MetricsKey {
             .fold(0xcbf2_9ce4_8422_2325, |hash, bits| {
                 (hash ^ u64::from(bits)).wrapping_mul(0x0000_0100_0000_01b3)
             })
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SandboxDirectKey {
+    metrics: MetricsKey,
+    overscan: (i32, i32, i32, i32),
+    window_px: (u32, u32),
+    show_version_overlay: bool,
+    version_overlay_side: VersionOverlaySide,
+    log_level: LogLevel,
+    machine_font: MachineFont,
+}
+
+impl SandboxDirectKey {
+    pub fn new(metrics: &Metrics, config: &Config) -> Self {
+        Self {
+            metrics: metrics.into(),
+            overscan: deadlib_present::space::overscan(),
+            window_px: deadlib_present::space::current_window_px(),
+            show_version_overlay: config.show_version_overlay,
+            version_overlay_side: config.version_overlay_side,
+            log_level: config.log_level,
+            machine_font: config.machine_font,
+        }
+    }
+}
+
+/// Pure gate for the quiet Sandbox direct-frame canary.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SandboxDirectEligibility {
+    pub sandbox_screen: bool,
+    pub idle_transition: bool,
+    pub empty_input_log: bool,
+    pub hardware_backend: bool,
+    pub debug_overlays_hidden: bool,
+    pub interaction_hidden: bool,
+    pub screenshot_hidden: bool,
+}
+
+impl SandboxDirectEligibility {
+    #[inline(always)]
+    pub const fn ready(self) -> bool {
+        self.sandbox_screen
+            && self.idle_transition
+            && self.empty_input_log
+            && self.hardware_backend
+            && self.debug_overlays_hidden
+            && self.interaction_hidden
+            && self.screenshot_hidden
     }
 }
 
@@ -245,6 +302,163 @@ impl SelectMusicBgCache {
     }
 }
 
+struct SandboxEntry {
+    key: SandboxDirectKey,
+    frame: CompiledDrawFrame,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct SandboxCacheStats {
+    rebuilds: u64,
+    fallbacks: u64,
+    prewarm_uploads: u64,
+    prewarm_vertices: u64,
+}
+
+/// One-entry retained frame for the quiet, idle Sandbox canary.
+///
+/// Owner/thread model: shell render thread only. Lifetime/capacity: one whole
+/// frame for the current Sandbox visit; all frame and geometry storage is
+/// exact-sized during its first eligible menu frame. Warmup: after live asset
+/// uploads and before the first direct submission. Misses, unsupported actors,
+/// software rendering, overlays, and incomplete backend prewarm use the legacy
+/// frame unchanged. Eviction/replacement occurs on key/resource changes or
+/// renderer recreation; destruction is therefore outside gameplay on the
+/// owner thread. Rebuild/fallback/prewarm totals are logged, while successful
+/// submissions are counted in `DrawStats`. Warm hits perform revision checks
+/// only; they do no actor build, composition, draw prep, allocation, cache
+/// pruning, upload, or resource destruction.
+#[derive(Default)]
+pub struct SandboxDirectCache {
+    entry: Option<SandboxEntry>,
+    failed: Option<(SandboxDirectKey, u64)>,
+    stats: SandboxCacheStats,
+}
+
+impl SandboxDirectCache {
+    pub fn frame<T: TextureContext + ?Sized>(
+        &self,
+        key: SandboxDirectKey,
+        textures: &T,
+    ) -> Option<&CompiledDrawFrame> {
+        let entry = self.entry.as_ref()?;
+        (entry.key == key
+            && entry
+                .frame
+                .is_current(key.metrics.fingerprint(), 0, textures))
+        .then_some(&entry.frame)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn prepare<T, F, E>(
+        &mut self,
+        key: SandboxDirectKey,
+        actors: &[Actor],
+        metrics: &Metrics,
+        fonts: &HashMap<&'static str, Font>,
+        text_cache: &mut TextLayoutCache,
+        textures: &T,
+        prewarm: F,
+    ) -> bool
+    where
+        T: TextureContext + ?Sized,
+        F: FnOnce(&[CachedTMeshGeometry]) -> Result<TMeshPrewarmStats, E>,
+        E: fmt::Display,
+    {
+        if self.frame(key, textures).is_some() {
+            return true;
+        }
+
+        let texture_generation = textures.texture_registry_generation();
+        if self.failed == Some((key, texture_generation)) {
+            return self.fallback();
+        }
+
+        let compiled = SceneCompiler::new(
+            metrics,
+            fonts,
+            textures,
+            text_cache,
+            key.metrics.fingerprint(),
+            0,
+        )
+        .compile(actors, COMPILE_CLEAR, CompileOptions::IMMUTABLE)
+        .map(|scene| scene.compile_draw_frame());
+        let frame = match compiled {
+            Ok(frame) => frame,
+            Err(error) => {
+                warn!("Sandbox direct frame unavailable; using legacy actors: {error}");
+                self.entry = None;
+                self.failed = Some((key, texture_generation));
+                return self.fallback();
+            }
+        };
+
+        let prewarm_stats = match prewarm(frame.geometries()) {
+            Ok(stats) if stats.ready() => stats,
+            Ok(stats) => {
+                warn!(
+                    "Sandbox direct-frame geometry prewarm saturated; using legacy actors: requested={} resident={} uploaded={} unavailable={} failed={}",
+                    stats.requested,
+                    stats.resident,
+                    stats.uploaded,
+                    stats.unavailable,
+                    stats.upload_failed,
+                );
+                self.entry = None;
+                self.failed = Some((key, texture_generation));
+                return self.fallback();
+            }
+            Err(error) => {
+                warn!("Sandbox direct-frame geometry prewarm failed; using legacy actors: {error}");
+                self.entry = None;
+                self.failed = Some((key, texture_generation));
+                return self.fallback();
+            }
+        };
+
+        self.stats.rebuilds = self.stats.rebuilds.saturating_add(1);
+        self.stats.prewarm_uploads = self
+            .stats
+            .prewarm_uploads
+            .saturating_add(u64::from(prewarm_stats.uploaded));
+        self.stats.prewarm_vertices = self
+            .stats
+            .prewarm_vertices
+            .saturating_add(prewarm_stats.uploaded_vertices);
+        debug!(
+            "Compiled quiet Sandbox direct frame (rebuilds={}, geometries={}, uploaded={}, vertices={})",
+            self.stats.rebuilds,
+            prewarm_stats.requested,
+            prewarm_stats.uploaded,
+            prewarm_stats.uploaded_vertices,
+        );
+        self.entry = Some(SandboxEntry { key, frame });
+        self.failed = None;
+        true
+    }
+
+    pub fn invalidate(&mut self) {
+        self.entry = None;
+        self.failed = None;
+    }
+
+    #[inline]
+    fn fallback(&mut self) -> bool {
+        self.stats.fallbacks = self.stats.fallbacks.saturating_add(1);
+        if self.stats.fallbacks.is_power_of_two() {
+            trace!(
+                "Sandbox direct-frame fallbacks={} rebuilds={} prewarm_uploads={} prewarm_vertices={}",
+                self.stats.fallbacks,
+                self.stats.rebuilds,
+                self.stats.prewarm_uploads,
+                self.stats.prewarm_vertices,
+            );
+        }
+        false
+    }
+}
+
 fn resource_signature<T: TextureContext + ?Sized>(
     background_key: &str,
     textures: &T,
@@ -383,9 +597,13 @@ mod tests {
         ComposeScratch, build_screen_cached_with_scratch_and_texture_context,
         build_screen_cached_with_scratch_and_texture_context_and_root_prefix,
     };
+    use deadlib_present::font::Glyph;
     use deadlib_present::space;
-    use deadlib_render::ObjectType;
-    use std::cell::Cell;
+    use deadlib_render::{ObjectType, draw_prep::DrawScratch};
+    use deadsync_theme_simply_love::screens::{
+        components::shared::version_overlay, sandbox as sandbox_screen,
+    };
+    use std::{cell::Cell, sync::Arc};
 
     struct TestTextures {
         generation: Cell<u64>,
@@ -432,6 +650,41 @@ mod tests {
             top: 240.0,
             bottom: -240.0,
         }
+    }
+
+    fn full_text_font(texture_key: &str, cache_tag: u64) -> Font {
+        let glyph = Glyph {
+            texture_key: Arc::from(texture_key),
+            stroke_texture_key: None,
+            tex_rect: [0.0, 0.0, 8.0, 8.0],
+            uv_scale: [1.0, 1.0],
+            uv_offset: [0.0, 0.0],
+            size: [8.0, 8.0],
+            offset: [0.0, 0.0],
+            advance: 8.0,
+            advance_i32: 8,
+        };
+        Font {
+            glyph_map: HashMap::new(),
+            ascii_glyphs: Box::new(std::array::from_fn(|_| Some(glyph.clone()))),
+            default_glyph: Some(glyph),
+            line_spacing: 10,
+            height: 10,
+            fallback_font_name: None,
+            cache_tag,
+            chain_key: cache_tag,
+            default_stroke_color: [0.0; 4],
+            stroke_texture_map: HashMap::new(),
+            texture_hints_map: HashMap::new(),
+        }
+    }
+
+    fn sandbox_fonts(texture_key: &str) -> HashMap<&'static str, Font> {
+        HashMap::from([
+            ("miso", full_text_font(texture_key, 1)),
+            ("wendy", full_text_font(texture_key, 2)),
+            ("mega_alpha", full_text_font(texture_key, 3)),
+        ])
     }
 
     fn assert_sprite_render_eq(
@@ -534,5 +787,253 @@ mod tests {
             cache.entry.as_ref().unwrap().accepted_texture_generation,
             11
         );
+    }
+
+    #[test]
+    fn sandbox_direct_gate_requires_every_stability_condition() {
+        let ready = SandboxDirectEligibility {
+            sandbox_screen: true,
+            idle_transition: true,
+            empty_input_log: true,
+            hardware_backend: true,
+            debug_overlays_hidden: true,
+            interaction_hidden: true,
+            screenshot_hidden: true,
+        };
+        assert!(ready.ready());
+
+        for blocked in [
+            SandboxDirectEligibility {
+                sandbox_screen: false,
+                ..ready
+            },
+            SandboxDirectEligibility {
+                idle_transition: false,
+                ..ready
+            },
+            SandboxDirectEligibility {
+                empty_input_log: false,
+                ..ready
+            },
+            SandboxDirectEligibility {
+                hardware_backend: false,
+                ..ready
+            },
+            SandboxDirectEligibility {
+                debug_overlays_hidden: false,
+                ..ready
+            },
+            SandboxDirectEligibility {
+                interaction_hidden: false,
+                ..ready
+            },
+            SandboxDirectEligibility {
+                screenshot_hidden: false,
+                ..ready
+            },
+        ] {
+            assert!(!blocked.ready());
+        }
+    }
+
+    fn sandbox_key(metrics: &Metrics) -> SandboxDirectKey {
+        SandboxDirectKey {
+            metrics: metrics.into(),
+            overscan: space::overscan(),
+            window_px: space::current_window_px(),
+            show_version_overlay: false,
+            version_overlay_side: VersionOverlaySide::Right,
+            log_level: LogLevel::Info,
+            machine_font: MachineFont::Wendy,
+        }
+    }
+
+    #[test]
+    fn sandbox_direct_cache_rebuilds_before_reusing_stale_resources() {
+        let metrics = metrics();
+        space::set_current_metrics(metrics);
+        let textures = TestTextures {
+            generation: Cell::new(20),
+            handle_calls: Cell::new(0),
+            background_key: visual_styles::shared_background_texture_key(),
+        };
+        let actors = visual_style_bg::build_tiled_at_elapsed(params(), 0.0);
+        let fonts = HashMap::new();
+        let mut text_cache = TextLayoutCache::default();
+        let mut cache = SandboxDirectCache::default();
+        let key = sandbox_key(&metrics);
+
+        assert!(cache.prepare(
+            key,
+            &actors,
+            &metrics,
+            &fonts,
+            &mut text_cache,
+            &textures,
+            |_| Ok::<_, &'static str>(TMeshPrewarmStats::default()),
+        ));
+        assert!(cache.frame(key, &textures).is_some());
+        assert_eq!(cache.stats.rebuilds, 1);
+        assert!(
+            cache
+                .frame(
+                    SandboxDirectKey {
+                        overscan: (
+                            key.overscan.0.wrapping_add(1),
+                            key.overscan.1,
+                            key.overscan.2,
+                            key.overscan.3,
+                        ),
+                        ..key
+                    },
+                    &textures,
+                )
+                .is_none()
+        );
+        assert!(
+            cache
+                .frame(
+                    SandboxDirectKey {
+                        window_px: (key.window_px.0.wrapping_add(1), key.window_px.1),
+                        ..key
+                    },
+                    &textures,
+                )
+                .is_none()
+        );
+
+        textures.generation.set(21);
+        assert!(cache.frame(key, &textures).is_none());
+        assert!(cache.prepare(
+            key,
+            &actors,
+            &metrics,
+            &fonts,
+            &mut text_cache,
+            &textures,
+            |_| Ok::<_, &'static str>(TMeshPrewarmStats::default()),
+        ));
+        assert_eq!(cache.stats.rebuilds, 2);
+    }
+
+    #[test]
+    fn sandbox_direct_cache_falls_back_when_prewarm_is_incomplete() {
+        let metrics = metrics();
+        space::set_current_metrics(metrics);
+        let textures = TestTextures {
+            generation: Cell::new(30),
+            handle_calls: Cell::new(0),
+            background_key: visual_styles::shared_background_texture_key(),
+        };
+        let actors = visual_style_bg::build_tiled_at_elapsed(params(), 0.0);
+        let fonts = HashMap::new();
+        let mut text_cache = TextLayoutCache::default();
+        let mut cache = SandboxDirectCache::default();
+        let key = sandbox_key(&metrics);
+
+        assert!(!cache.prepare(
+            key,
+            &actors,
+            &metrics,
+            &fonts,
+            &mut text_cache,
+            &textures,
+            |_| Ok::<_, &'static str>(TMeshPrewarmStats {
+                requested: 1,
+                unavailable: 1,
+                ..TMeshPrewarmStats::default()
+            }),
+        ));
+        assert!(cache.frame(key, &textures).is_none());
+        assert_eq!(cache.stats.fallbacks, 1);
+    }
+
+    #[test]
+    fn quiet_sandbox_direct_frame_matches_legacy_preparation() {
+        let metrics = metrics();
+        space::set_current_metrics(metrics);
+        let texture_key = "sandbox_font_page";
+        let textures = TestTextures {
+            generation: Cell::new(40),
+            handle_calls: Cell::new(0),
+            background_key: texture_key,
+        };
+        let fonts = sandbox_fonts(texture_key);
+        let mut actors = Vec::new();
+        sandbox_screen::push_actors(&mut actors, &sandbox_screen::init());
+        actors.extend(version_overlay::build(
+            VersionOverlaySide::Right,
+            LogLevel::Info,
+            "test",
+            Some("1234567"),
+        ));
+        let key = SandboxDirectKey {
+            metrics: (&metrics).into(),
+            overscan: space::overscan(),
+            window_px: space::current_window_px(),
+            show_version_overlay: true,
+            version_overlay_side: VersionOverlaySide::Right,
+            log_level: LogLevel::Info,
+            machine_font: MachineFont::Wendy,
+        };
+
+        let mut compile_cache = TextLayoutCache::default();
+        SceneCompiler::new(
+            &metrics,
+            &fonts,
+            &textures,
+            &mut compile_cache,
+            key.metrics.fingerprint(),
+            0,
+        )
+        .compile(&actors, COMPILE_CLEAR, CompileOptions::IMMUTABLE)
+        .expect("quiet Sandbox snapshot must remain in the immutable subset");
+
+        let mut text_cache = TextLayoutCache::default();
+        let mut cache = SandboxDirectCache::default();
+        assert!(cache.prepare(
+            key,
+            &actors,
+            &metrics,
+            &fonts,
+            &mut text_cache,
+            &textures,
+            |geometries| {
+                Ok::<_, &'static str>(TMeshPrewarmStats {
+                    requested: geometries.len() as u32,
+                    resident: geometries.len() as u32,
+                    ..TMeshPrewarmStats::default()
+                })
+            },
+        ));
+        let direct = cache
+            .frame(key, &textures)
+            .expect("prepared direct frame remains current");
+        assert!(!direct.geometries().is_empty());
+
+        let mut compose_scratch = ComposeScratch::default();
+        let legacy = build_screen_cached_with_scratch_and_texture_context(
+            &actors,
+            COMPILE_CLEAR,
+            &metrics,
+            &fonts,
+            0.0,
+            &mut text_cache,
+            &mut compose_scratch,
+            &textures,
+        );
+        let mut draw_scratch = DrawScratch::default();
+        let (legacy, _) =
+            deadlib_render::draw_prep::prepare_render_list(&legacy, &mut draw_scratch, |_, _| true);
+        let direct = direct.frame();
+        assert_eq!(direct.clear_color, legacy.clear_color);
+        assert_eq!(direct.cameras, legacy.cameras);
+        assert_eq!(direct.sprite_instances, legacy.sprite_instances);
+        assert!(direct.mesh_vertices.is_empty());
+        assert!(legacy.mesh_vertices.is_empty());
+        assert!(direct.tmesh_vertices.is_empty());
+        assert!(legacy.tmesh_vertices.is_empty());
+        assert_eq!(direct.tmesh_instances, legacy.tmesh_instances);
+        assert_eq!(direct.ops, legacy.ops);
     }
 }
