@@ -63,6 +63,14 @@ pub struct SelectMusicInitView {
     pub playlists: Vec<SelectMusicPlaylistView>,
 }
 
+/// Shell-prepared song packs used by Simply Love's Options import/sync UI.
+#[derive(Clone, Debug)]
+pub struct OptionsSongPackView {
+    pub group_name: String,
+    pub display_name: String,
+    pub songs: Vec<Arc<deadsync_chart::SongData>>,
+}
+
 /// Runtime/config policy used to expose Select Music features and input paths.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct SelectMusicPolicyView {

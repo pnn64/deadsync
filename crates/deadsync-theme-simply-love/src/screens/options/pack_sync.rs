@@ -59,10 +59,9 @@ pub(super) fn begin_pack_sync(state: &mut State, selection: SyncPackSelection) {
     let target_chart_type = profile::get_session_play_style().chart_type();
     let preferred_difficulty_index = sync_pack_preferred_difficulty_index();
     let pack_group = selection.pack_group.as_deref();
-    let song_cache = deadsync_simfile::runtime_cache::get_song_cache();
     let mut targets = Vec::new();
 
-    for pack in song_cache.iter() {
+    for pack in &state.song_packs {
         if pack_group.is_some() && Some(pack.group_name.as_str()) != pack_group {
             continue;
         }
@@ -91,8 +90,6 @@ pub(super) fn begin_pack_sync(state: &mut State, selection: SyncPackSelection) {
             });
         }
     }
-    drop(song_cache);
-
     let Some(request) = shared_pack_sync::begin(
         &mut state.pack_sync_overlay,
         crate::SimplyLoveSyncOwner::OptionsPack,

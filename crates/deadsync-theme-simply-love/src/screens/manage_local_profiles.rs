@@ -14,22 +14,12 @@ use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_height, screen_width};
-use deadsync_import::app_runtime::{ImportSummary, import_itg_profile_dir};
-use deadsync_import::detect::{
-    ItgProfileCandidate, detect_itg_local_profiles, detect_itg_profiles_from_game_dir,
-};
 use deadsync_input::KeyCode;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, VirtualAction};
-use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
-use deadsync_simfile::runtime_cache::get_song_cache;
-use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{Receiver, TryRecvError};
-use std::thread;
 use std::time::{Duration, Instant};
 
 /* ---------------------------- transitions ---------------------------- */
@@ -163,10 +153,7 @@ struct DeleteConfirmState {
 /// import. A trailing synthetic "Browse for game directory…" row (selectable
 /// index `candidates.len()`) lets the user point at a portable install.
 struct ImportPickerState {
-    candidates: Vec<ItgProfileCandidate>,
-    /// Parallel to `candidates`: `Some(name)` when that profile is already
-    /// imported (the existing DeadSync profile's display name), else `None`.
-    imported_as: Vec<Option<Arc<str>>>,
+    candidates: Vec<crate::SimplyLoveItgProfileCandidate>,
     selected: usize,
     /// Transient notice shown under the list (e.g. after a browse found nothing).
     info: Option<Arc<str>>,
@@ -184,108 +171,21 @@ impl ImportPickerState {
     }
 
     /// The existing-profile name if the candidate at `idx` is already imported.
-    fn imported_as_at(&self, idx: usize) -> Option<&Arc<str>> {
-        self.imported_as.get(idx).and_then(Option::as_ref)
+    fn imported_as_at(&self, idx: usize) -> Option<&str> {
+        self.candidates
+            .get(idx)
+            .and_then(|candidate| candidate.imported_as.as_deref())
     }
 }
 
-/// Computes, for each candidate, the display name of an existing DeadSync profile
-/// that already came from the same ITGmania profile (matched by the GUID derived
-/// from the source `Guid`). `None` when not yet imported or the source has no GUID.
-fn compute_imported_as(candidates: &[ItgProfileCandidate]) -> Vec<Option<Arc<str>>> {
-    let existing: std::collections::HashMap<String, String> = profile::scan_local_profiles()
-        .into_iter()
-        .map(|p| (p.id, p.display_name))
-        .collect();
-    candidates
-        .iter()
-        .map(|c| {
-            c.source_guid
-                .as_deref()
-                .and_then(profile_data::profile_guid_from_itgmania_guid)
-                .and_then(|guid| existing.get(&guid).cloned())
-                .map(Arc::from)
-        })
-        .collect()
-}
-
-fn import_itg_profile_for_screen<F, C>(
-    dir: &Path,
-    mut on_progress: F,
-    should_cancel: C,
-) -> Result<ImportSummary, deadsync_import::itg::ItgReadError>
-where
-    F: FnMut(usize, usize, &str),
-    C: Fn() -> bool,
-{
-    let (base_singles, base_doubles) = profile::default_local_profile_options();
-    let packs = get_song_cache();
-    import_itg_profile_dir(
-        dir,
-        &base_singles,
-        &base_doubles,
-        &packs,
-        |profile_guid| {
-            profile::scan_local_profiles()
-                .into_iter()
-                .find(|profile| profile.id == profile_guid)
-                .map(|profile| profile.display_name)
-        },
-        profile::create_local_profile_from_import,
-        |profile_id, initials, mut entries| {
-            scores::import_local_scores(
-                profile_id,
-                initials,
-                &mut entries,
-                |done, total| on_progress(done, total, ""),
-                &should_cancel,
-            )
-        },
-        |profile_id| {
-            if let Err(error) = profile::delete_local_profile(profile_id) {
-                log::warn!("Failed to delete canceled import profile {profile_id}: {error}");
-            }
-        },
-        profile::write_imported_favorites,
-        profile::write_imported_profile_stats,
-        scores::import_itl_json,
-    )
-}
-
-/// A running import on a worker thread. The screen polls `rx` each frame and
-/// keeps the latest per-song progress snapshot for the progress bar.
+/// Theme-owned presentation state for a shell-owned import worker.
 struct ImportJob {
-    rx: Receiver<ImportMsg>,
     /// Latest `(done, total, song label)` reported by the worker, if any.
     progress: Option<(usize, usize, Arc<str>)>,
     /// `(instant, done)` captured at the first determinate progress tick, used
     /// as the baseline for the score-write rate and ETA estimate.
     save_anchor: Option<(Instant, usize)>,
-    /// Set when the user requests cancellation; the worker polls this and aborts
-    /// the import cleanly (deleting the partially-created profile).
-    cancel: Arc<AtomicBool>,
-}
-
-/// Messages sent from the import worker thread to the screen.
-enum ImportMsg {
-    /// Per-song progress: `done` of `total` songs processed, current song label.
-    Progress {
-        done: usize,
-        total: usize,
-        label: String,
-    },
-    /// The import finished (success or failure).
-    Done(ImportOutcome),
-}
-
-/// A pending native folder-picker dialog running on a worker thread.
-struct FolderPickJob {
-    rx: Receiver<Option<PathBuf>>,
-}
-
-enum ImportOutcome {
-    Ok(Box<ImportSummary>),
-    Err(String),
+    cancel_requested: bool,
 }
 
 /// Outcome of one import section, mapped to a status icon and color in the
@@ -383,8 +283,9 @@ pub struct State {
     delete_confirm: Option<DeleteConfirmState>,
     import_picker: Option<ImportPickerState>,
     import_job: Option<ImportJob>,
-    folder_pick: Option<FolderPickJob>,
+    import_browse_pending: bool,
     import_message: Option<ImportMessageState>,
+    pending_effects: Vec<ThemeEffect>,
     menu_lr_chord: screen_input::MenuLrChordTracker,
     menu_lr_undo: i8,
 }
@@ -405,8 +306,9 @@ pub fn init() -> State {
         delete_confirm: None,
         import_picker: None,
         import_job: None,
-        folder_pick: None,
+        import_browse_pending: false,
         import_message: None,
+        pending_effects: Vec::new(),
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
         menu_lr_undo: 0,
     }
@@ -546,10 +448,7 @@ fn update_name_entry_blink(state: &mut State, dt: f32) {
 pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
     update_hold_scroll(state);
     update_name_entry_blink(state, dt);
-    let effects = [poll_import_job(state), poll_folder_pick(state)]
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>();
+    let effects = std::mem::take(&mut state.pending_effects);
     match effects.len() {
         0 => None,
         1 => effects.into_iter().next(),
@@ -830,22 +729,21 @@ fn cancel_delete_confirm(state: &mut State) {
 
 fn begin_import_picker(state: &mut State) -> ThemeEffect {
     reset_nav_hold(state);
-    let candidates = detect_itg_local_profiles();
+    let candidates = Vec::new();
     // Always open the picker — even with nothing auto-detected — so the
     // "Browse for game directory…" row is available (no dead end).
-    let info = if candidates.is_empty() {
-        Some(tr("Profiles", "ImportNoneFoundBody"))
-    } else {
-        None
-    };
-    let imported_as = compute_imported_as(&candidates);
+    let info = None;
     state.import_picker = Some(ImportPickerState {
         candidates,
-        imported_as,
         selected: 0,
         info,
     });
-    crate::effects::sfx("assets/sounds/start.ogg")
+    crate::effects::sfx_then(
+        "assets/sounds/start.ogg",
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+            crate::SimplyLoveProfileRequest::DiscoverItgProfiles,
+        )),
+    )
 }
 
 fn cancel_import_picker(state: &mut State) {
@@ -879,10 +777,11 @@ fn confirm_import_picker(state: &mut State) -> ThemeEffect {
         .is_some_and(ImportPickerState::browse_selected)
     {
         reset_nav_hold(state);
+        state.import_browse_pending = true;
         return crate::effects::sfx_then(
             "assets/sounds/start.ogg",
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
-                crate::SimplyLoveProfileRequest::PickImportFolder {
+                crate::SimplyLoveProfileRequest::BrowseItgProfiles {
                     title: tr("Profiles", "ImportBrowsePrompt").to_string(),
                 },
             )),
@@ -892,7 +791,7 @@ fn confirm_import_picker(state: &mut State) -> ThemeEffect {
     // Refuse already-imported profiles: keep the picker open and explain why.
     if let Some(picker) = state.import_picker.as_mut() {
         let sel = picker.selected;
-        if let Some(name) = picker.imported_as_at(sel).cloned() {
+        if let Some(name) = picker.imported_as_at(sel).map(str::to_owned) {
             picker.info = Some(tr_fmt("Profiles", "ImportAlreadyInfo", &[("name", &name)]));
             return crate::effects::sfx("assets/sounds/boom.ogg");
         }
@@ -907,41 +806,17 @@ fn confirm_import_picker(state: &mut State) -> ThemeEffect {
     let dir = candidate.dir.clone();
     reset_nav_hold(state);
 
-    let (tx, rx) = std::sync::mpsc::channel();
-    let progress_tx = tx.clone();
-    let cancel = Arc::new(AtomicBool::new(false));
-    let cancel_for_thread = Arc::clone(&cancel);
-    thread::spawn(move || {
-        let result = import_itg_profile_for_screen(
-            &dir,
-            |done, total, label| {
-                let _ = progress_tx.send(ImportMsg::Progress {
-                    done,
-                    total,
-                    label: label.to_string(),
-                });
-            },
-            || cancel_for_thread.load(Ordering::Relaxed),
-        );
-        let outcome = match result {
-            Ok(summary) => ImportOutcome::Ok(Box::new(summary)),
-            Err(e) => ImportOutcome::Err(e.to_string()),
-        };
-        let _ = tx.send(ImportMsg::Done(outcome));
-    });
     state.import_job = Some(ImportJob {
-        rx,
         progress: None,
         save_anchor: None,
-        cancel,
+        cancel_requested: false,
     });
-    crate::effects::sfx("assets/sounds/start.ogg")
-}
-
-/// Attach the shell-owned native folder picker result to this screen's modal
-/// state. The screen polls the receiver without blocking the render loop.
-pub fn attach_import_folder_picker(state: &mut State, rx: Receiver<Option<PathBuf>>) {
-    state.folder_pick = Some(FolderPickJob { rx });
+    crate::effects::sfx_then(
+        "assets/sounds/start.ogg",
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+            crate::SimplyLoveProfileRequest::StartItgProfileImport { dir },
+        )),
+    )
 }
 
 /// Merges newly-found candidates into the picker, de-duplicating by canonical
@@ -949,14 +824,16 @@ pub fn attach_import_folder_picker(state: &mut State, rx: Receiver<Option<PathBu
 /// added.
 fn merge_import_candidates(
     picker: &mut ImportPickerState,
-    found: Vec<ItgProfileCandidate>,
+    found: Vec<crate::SimplyLoveItgProfileCandidate>,
 ) -> usize {
-    let canon = |p: &std::path::Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
-    let mut seen: std::collections::HashSet<PathBuf> =
-        picker.candidates.iter().map(|c| canon(&c.dir)).collect();
+    let mut seen: std::collections::HashSet<_> = picker
+        .candidates
+        .iter()
+        .map(|candidate| candidate.dir.clone())
+        .collect();
     let mut added = 0;
     for cand in found {
-        if seen.insert(canon(&cand.dir)) {
+        if seen.insert(cand.dir.clone()) {
             picker.candidates.push(cand);
             added += 1;
         }
@@ -966,117 +843,100 @@ fn merge_import_candidates(
             .to_lowercase()
             .cmp(&b.display_name.to_lowercase())
     });
-    // Candidates were reordered and possibly extended; rebuild the parallel
-    // already-imported flags so they stay aligned by index.
-    picker.imported_as = compute_imported_as(&picker.candidates);
     added
 }
 
-fn poll_folder_pick(state: &mut State) -> Option<ThemeEffect> {
-    let Some(job) = state.folder_pick.as_ref() else {
-        return None;
-    };
-    let picked = match job.rx.try_recv() {
-        Ok(picked) => picked,
-        Err(TryRecvError::Empty) => return None,
-        Err(TryRecvError::Disconnected) => {
-            state.folder_pick = None;
-            return None;
-        }
-    };
-    state.folder_pick = None;
-
-    let Some(dir) = picked else {
-        // User cancelled the dialog — leave the picker as-is.
-        return None;
-    };
-
-    let found = detect_itg_profiles_from_game_dir(&dir);
-    // Ensure the picker is open (it may have been opened from the menu already).
-    let picker = state
-        .import_picker
-        .get_or_insert_with(|| ImportPickerState {
-            candidates: Vec::new(),
-            imported_as: Vec::new(),
-            selected: 0,
-            info: None,
-        });
-    if found.is_empty() {
-        picker.info = Some(tr_fmt(
-            "Profiles",
-            "ImportBrowseNoneFoundBody",
-            &[("dir", &dir.display().to_string())],
-        ));
-        return None;
-    }
-    let added = merge_import_candidates(picker, found);
-    picker.info = Some(tr_fmt(
-        "Profiles",
-        "ImportBrowseFoundBody",
-        &[("count", &added.to_string())],
-    ));
-    // Move the cursor to the first profile so Start imports immediately.
-    picker.selected = 0;
-    Some(crate::effects::sfx("assets/sounds/change.ogg"))
-}
-
-fn poll_import_job(state: &mut State) -> Option<ThemeEffect> {
-    let Some(job) = state.import_job.as_mut() else {
-        return None;
-    };
-    // Drain all pending messages this frame: update the progress snapshot, and
-    // finalize when the Done message arrives.
-    let outcome = loop {
-        match job.rx.try_recv() {
-            Ok(ImportMsg::Progress { done, total, label }) => {
-                // Anchor the rate/ETA estimate at the first determinate tick so
-                // the writes-per-second figure measures the disk-write phase.
+pub fn apply_import_events(state: &mut State, events: Vec<crate::SimplyLoveProfileImportEvent>) {
+    for event in events {
+        match event {
+            crate::SimplyLoveProfileImportEvent::Candidates {
+                candidates,
+                browsed_dir,
+            } => apply_import_candidates(state, candidates, browsed_dir.as_deref()),
+            crate::SimplyLoveProfileImportEvent::BrowseCanceled => {
+                state.import_browse_pending = false;
+            }
+            crate::SimplyLoveProfileImportEvent::Progress { done, total, label } => {
+                let Some(job) = state.import_job.as_mut() else {
+                    continue;
+                };
                 if job.save_anchor.is_none() {
                     job.save_anchor = Some((Instant::now(), done.saturating_sub(1)));
                 }
-                job.progress = Some((done, total, Arc::from(label.as_str())));
+                job.progress = Some((done, total, Arc::from(label)));
             }
-            Ok(ImportMsg::Done(o)) => break o,
-            Err(TryRecvError::Empty) => return None,
-            Err(TryRecvError::Disconnected) => {
-                state.import_job = None;
-                state.import_message = Some(ImportMessageState {
-                    title: tr("Profiles", "ImportFailedTitle"),
-                    lines: vec![MessageLine::plain(
-                        tr("Profiles", "ImportFailedBody").to_string(),
-                    )],
-                });
-                return None;
+            crate::SimplyLoveProfileImportEvent::Finished(outcome) => {
+                finish_import(state, outcome);
             }
         }
+    }
+}
+
+fn apply_import_candidates(
+    state: &mut State,
+    candidates: Vec<crate::SimplyLoveItgProfileCandidate>,
+    browsed_dir: Option<&std::path::Path>,
+) {
+    if browsed_dir.is_some() {
+        state.import_browse_pending = false;
+    }
+    let Some(picker) = state.import_picker.as_mut() else {
+        return;
     };
+    if candidates.is_empty() {
+        picker.info = Some(match browsed_dir {
+            Some(dir) => tr_fmt(
+                "Profiles",
+                "ImportBrowseNoneFoundBody",
+                &[("dir", &dir.display().to_string())],
+            ),
+            None => tr("Profiles", "ImportNoneFoundBody"),
+        });
+        return;
+    }
+    let added = merge_import_candidates(picker, candidates);
+    if browsed_dir.is_some() {
+        picker.info = Some(tr_fmt(
+            "Profiles",
+            "ImportBrowseFoundBody",
+            &[("count", &added.to_string())],
+        ));
+        picker.selected = 0;
+        state
+            .pending_effects
+            .push(crate::effects::sfx("assets/sounds/change.ogg"));
+    }
+}
+
+fn finish_import(state: &mut State, outcome: Result<crate::SimplyLoveItgImportSummary, String>) {
     state.import_job = None;
     match outcome {
-        ImportOutcome::Ok(summary) => {
+        Ok(summary) => {
             if let Some(existing) = &summary.already_imported_as {
-                // Engine refused a duplicate (matched by derived GUID). Nothing
-                // was created; just tell the user where it already lives.
                 state.import_message = Some(import_already_message(existing));
-                Some(crate::effects::sfx("assets/sounds/boom.ogg"))
+                state
+                    .pending_effects
+                    .push(crate::effects::sfx("assets/sounds/boom.ogg"));
             } else if summary.canceled {
-                // Clean abort: the worker deleted the partial profile, so there's
-                // no row to select — just acknowledge the cancellation.
                 refresh_rows(state);
                 state.import_message = Some(import_canceled_message());
-                Some(crate::effects::sfx("assets/sounds/change.ogg"))
+                state
+                    .pending_effects
+                    .push(crate::effects::sfx("assets/sounds/change.ogg"));
             } else {
                 refresh_rows(state);
                 select_profile_row(state, &summary.profile_id);
                 state.import_message = Some(import_summary_message(&summary));
-                Some(crate::effects::sfx("assets/sounds/start.ogg"))
+                state
+                    .pending_effects
+                    .push(crate::effects::sfx("assets/sounds/start.ogg"));
             }
         }
-        ImportOutcome::Err(e) => {
+        Err(error) => {
             state.import_message = Some(ImportMessageState {
                 title: tr("Profiles", "ImportFailedTitle"),
-                lines: vec![MessageLine::plain(e)],
+                lines: vec![MessageLine::plain(error)],
             });
-            None
         }
     }
 }
@@ -1092,7 +952,7 @@ fn select_profile_row(state: &mut State, profile_id: &str) {
     }
 }
 
-fn import_summary_message(summary: &ImportSummary) -> ImportMessageState {
+fn import_summary_message(summary: &crate::SimplyLoveItgImportSummary) -> ImportMessageState {
     let mut lines = Vec::new();
     lines.push(MessageLine::plain(
         tr_fmt(
@@ -1281,12 +1141,18 @@ fn dismiss_import_message(state: &mut State) -> ThemeEffect {
 /// stops writing scores, deletes the partially-created profile, and reports a
 /// canceled summary. Idempotent — repeated presses are harmless.
 fn request_import_cancel(state: &mut State) -> ThemeEffect {
-    let Some(job) = state.import_job.as_ref() else {
+    let Some(job) = state.import_job.as_mut() else {
         return ThemeEffect::None;
     };
-    if !job.cancel.swap(true, Ordering::Relaxed) {
+    if !job.cancel_requested {
+        job.cancel_requested = true;
         log::warn!("ITGmania import cancel requested by user.");
-        return crate::effects::sfx("assets/sounds/change.ogg");
+        return crate::effects::sfx_then(
+            "assets/sounds/change.ogg",
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+                crate::SimplyLoveProfileRequest::CancelItgProfileImport,
+            )),
+        );
     }
     ThemeEffect::None
 }
@@ -1371,7 +1237,7 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         }
         return ThemeEffect::None;
     }
-    if state.folder_pick.is_some() {
+    if state.import_browse_pending {
         return ThemeEffect::None;
     }
     if state.import_message.is_some() {
@@ -2243,7 +2109,7 @@ fn push_import_progress_overlay(ui: &mut Vec<Actor>, state: &State) {
     let Some(job) = state.import_job.as_ref() else {
         return;
     };
-    let canceling = job.cancel.load(Ordering::Relaxed);
+    let canceling = job.cancel_requested;
     let w = screen_width();
     let h = screen_height();
     let box_w = 560.0_f32.min(w * 0.92);
@@ -2991,7 +2857,6 @@ mod tests {
         let mut state = init();
         state.import_picker = Some(ImportPickerState {
             candidates: Vec::new(),
-            imported_as: Vec::new(),
             selected: 0,
             info: None,
         });
@@ -3010,18 +2875,21 @@ mod tests {
         assert!(matches!(
             &effects[1],
             ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
-                crate::SimplyLoveProfileRequest::PickImportFolder { title }
+                crate::SimplyLoveProfileRequest::BrowseItgProfiles { title }
             )) if !title.is_empty()
         ));
         assert!(state.import_picker.is_some());
-
-        let (_tx, rx) = std::sync::mpsc::channel();
-        attach_import_folder_picker(&mut state, rx);
-        assert!(state.folder_pick.is_some());
+        assert!(state.import_browse_pending);
         assert!(matches!(
             press(&mut state, VirtualAction::p1_back),
             ThemeEffect::None
         ));
         assert!(state.import_picker.is_some());
+
+        apply_import_events(
+            &mut state,
+            vec![crate::SimplyLoveProfileImportEvent::BrowseCanceled],
+        );
+        assert!(!state.import_browse_pending);
     }
 }

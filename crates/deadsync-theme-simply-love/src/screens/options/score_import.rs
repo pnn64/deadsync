@@ -342,12 +342,11 @@ pub(super) fn score_import_selected_endpoint(state: &State) -> score_data::Score
     score_data::score_import_endpoint_from_choice_index(idx)
 }
 
-fn installed_pack_entries() -> Vec<(String, String)> {
-    let cache = deadsync_simfile::runtime_cache::get_song_cache();
-    let mut packs: Vec<(String, String)> = Vec::with_capacity(cache.len());
-    let mut seen_groups: HashSet<String> = HashSet::with_capacity(cache.len());
+fn installed_pack_entries(state: &State) -> Vec<(String, String)> {
+    let mut packs: Vec<(String, String)> = Vec::with_capacity(state.song_packs.len());
+    let mut seen_groups: HashSet<String> = HashSet::with_capacity(state.song_packs.len());
 
-    for pack in cache.iter() {
+    for pack in &state.song_packs {
         let group_name = pack.group_name.trim();
         if group_name.is_empty() {
             continue;
@@ -356,10 +355,10 @@ fn installed_pack_entries() -> Vec<(String, String)> {
         if !seen_groups.insert(group_key) {
             continue;
         }
-        let display_name = if pack.name.trim().is_empty() {
+        let display_name = if pack.display_name.trim().is_empty() {
             group_name.to_string()
         } else {
-            pack.name.trim().to_string()
+            pack.display_name.trim().to_string()
         };
         packs.push((display_name, group_name.to_string()));
     }
@@ -373,15 +372,18 @@ fn installed_pack_entries() -> Vec<(String, String)> {
     packs
 }
 
-pub(super) fn score_import_pack_options() -> Vec<ScoreImportPackOption> {
-    installed_pack_entries()
+pub(super) fn score_import_pack_options(state: &State) -> Vec<ScoreImportPackOption> {
+    installed_pack_entries(state)
         .into_iter()
         .map(|(label, group)| ScoreImportPackOption { label, group })
         .collect()
 }
 
-pub(super) fn installed_pack_options(all_label: &str) -> (Vec<String>, Vec<Option<String>>) {
-    let packs = installed_pack_entries();
+pub(super) fn installed_pack_options(
+    state: &State,
+    all_label: &str,
+) -> (Vec<String>, Vec<Option<String>>) {
+    let packs = installed_pack_entries(state);
     let mut choices = Vec::with_capacity(packs.len() + 1);
     let mut filters = Vec::with_capacity(packs.len() + 1);
     choices.push(all_label.to_string());
@@ -393,8 +395,8 @@ pub(super) fn installed_pack_options(all_label: &str) -> (Vec<String>, Vec<Optio
     (choices, filters)
 }
 
-pub(super) fn sync_pack_options() -> (Vec<String>, Vec<Option<String>>) {
-    installed_pack_options(&tr("OptionsSyncPack", "AllPacks"))
+pub(super) fn sync_pack_options(state: &State) -> (Vec<String>, Vec<Option<String>>) {
+    installed_pack_options(state, &tr("OptionsSyncPack", "AllPacks"))
 }
 
 pub(super) fn load_score_import_profiles() -> Vec<ScoreImportProfileConfig> {
@@ -492,7 +494,7 @@ pub(super) fn refresh_score_import_profile_options(state: &mut State) {
 }
 
 pub(super) fn refresh_score_import_pack_options(state: &mut State) {
-    state.score_import_pack_options = score_import_pack_options();
+    state.score_import_pack_options = score_import_pack_options(state);
     let valid_groups: HashSet<String> = state
         .score_import_pack_options
         .iter()
@@ -523,7 +525,7 @@ pub(super) fn refresh_score_import_pack_options(state: &mut State) {
 }
 
 pub(super) fn refresh_sync_pack_options(state: &mut State) {
-    let (choices, filters) = sync_pack_options();
+    let (choices, filters) = sync_pack_options(state);
     state.sync_pack_choices = choices;
     state.sync_pack_filters = filters;
     let max_idx = state.sync_pack_choices.len().saturating_sub(1);

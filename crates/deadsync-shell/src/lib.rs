@@ -22,6 +22,7 @@ mod navigation;
 mod offset_prompt;
 mod pad_config;
 mod player_options;
+mod profile_import;
 mod profile_session;
 mod restart;
 mod runtime;

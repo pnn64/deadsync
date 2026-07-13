@@ -16,7 +16,8 @@ pub mod visual_styles;
 pub use effects::{
     SimplyLoveConfigRequest, SimplyLoveDebugRequest, SimplyLoveEffect,
     SimplyLoveEffectRouteContext, SimplyLoveEffectRoutePlan, SimplyLoveHardwareRequest,
-    SimplyLoveMediaRequest, SimplyLoveOnlineRequest, SimplyLoveProfileRequest,
+    SimplyLoveItgImportSummary, SimplyLoveItgProfileCandidate, SimplyLoveMediaRequest,
+    SimplyLoveOnlineRequest, SimplyLoveProfileImportEvent, SimplyLoveProfileRequest,
     SimplyLoveRuntimeRequest, SimplyLoveSyncEvent, SimplyLoveSyncKernel,
     SimplyLoveSyncKernelTarget, SimplyLoveSyncOwner, SimplyLoveSyncPlotView, SimplyLoveSyncRequest,
     SimplyLoveSyncResult, SimplyLoveSyncSongResult, SimplyLoveSyncStreamEvent,

@@ -12,7 +12,7 @@ pub(super) fn sync_i18n_cache(state: &mut State) {
     state.display_mode_choices = build_display_mode_choices(&state.monitor_specs);
     state.software_thread_labels = software_thread_choice_labels(&state.software_thread_choices);
     state.sound_device_options = build_sound_device_options(&state.audio_options);
-    state.score_import_pack_options = score_import_pack_options();
+    state.score_import_pack_options = score_import_pack_options(state);
     let new_groups_lc: HashSet<String> = state
         .score_import_pack_options
         .iter()
@@ -21,7 +21,7 @@ pub(super) fn sync_i18n_cache(state: &mut State) {
     state
         .score_import_pack_selected
         .retain(|key| new_groups_lc.contains(&key.to_ascii_lowercase()));
-    let (sp_packs, sp_filters) = sync_pack_options();
+    let (sp_packs, sp_filters) = sync_pack_options(state);
     state.sync_pack_choices = sp_packs;
     state.sync_pack_filters = sp_filters;
     #[cfg(target_os = "linux")]
@@ -45,6 +45,13 @@ pub(super) fn clear_navigation_holds(state: &mut State) {
         NAV_INITIAL_HOLD_DELAY,
     );
     state.start_input = [OptionsStartInput::default(); 2];
+}
+
+pub fn sync_song_packs(state: &mut State, song_packs: Vec<OptionsSongPackView>) {
+    state.song_packs = song_packs;
+    refresh_score_import_pack_options(state);
+    refresh_sync_pack_options(state);
+    clear_render_cache(state);
 }
 
 pub fn sync_video_renderer(state: &mut State, renderer: RendererChoice) {

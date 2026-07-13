@@ -17,7 +17,6 @@ deadsync-chart = { path = "../deadsync-chart" }
 deadsync-config = { path = "../deadsync-config" }
 deadsync-core = { path = "../deadsync-core" }
 deadsync-gameplay = { path = "../deadsync-gameplay" }
-deadsync-import = { path = "../deadsync-import" }
 deadsync-input = { path = "../deadsync-input" }
 deadsync-notefield = { path = "../deadsync-notefield" }
 deadsync-noteskin = { path = "../deadsync-noteskin" }

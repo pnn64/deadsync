@@ -35,7 +35,7 @@ use crate::screens::input as screen_input;
 use crate::screens::pack_sync as shared_pack_sync;
 use crate::screens::select_music;
 use crate::screens::{Screen, ThemeEffect};
-use crate::views::{SimplyLoveUpdaterCapabilities, SimplyLoveUpdaterView};
+use crate::views::{OptionsSongPackView, SimplyLoveUpdaterCapabilities, SimplyLoveUpdaterView};
 use deadlib_present::space::{is_wide, screen_height, screen_width, widescale};
 use deadlib_render::{software_thread_choice_index, software_thread_from_choice};
 use deadsync_input::{InputEvent, VirtualAction};
@@ -107,7 +107,7 @@ pub use transitions::{in_transition, out_transition};
 pub use update::{
     is_smx_config_view, open_graphics_submenu, open_input_submenu, open_lights_submenu,
     open_smx_config_submenu, sync_display_mode, sync_display_resolution, sync_hide_mouse_cursor,
-    sync_high_dpi, sync_max_fps, sync_present_mode_policy, sync_show_stats_mode,
+    sync_high_dpi, sync_max_fps, sync_present_mode_policy, sync_show_stats_mode, sync_song_packs,
     sync_translated_titles, sync_video_renderer, sync_vsync, update,
 };
 

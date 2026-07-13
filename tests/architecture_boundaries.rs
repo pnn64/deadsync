@@ -1326,6 +1326,101 @@ fn select_music_sync_analysis_execution_is_shell_owned() {
 }
 
 #[test]
+fn manage_local_profiles_import_execution_is_shell_owned() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let theme = root.join("crates/deadsync-theme-simply-love");
+    let theme_manifest = fs::read_to_string(theme.join("Cargo.toml"))
+        .expect("Simply Love manifest should be readable");
+    let screen = fs::read_to_string(theme.join("src/screens/manage_local_profiles.rs"))
+        .expect("Manage Local Profiles should be readable");
+    let effects = fs::read_to_string(theme.join("src/effects.rs"))
+        .expect("Simply Love requests should be readable");
+    let shell_manifest = fs::read_to_string(root.join("crates/deadsync-shell/Cargo.toml"))
+        .expect("shell manifest should be readable");
+    let shell_service =
+        fs::read_to_string(root.join("crates/deadsync-shell/src/profile_import.rs"))
+            .expect("shell profile-import service should be readable");
+    let shell_app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell app should be readable");
+
+    assert!(
+        !theme_manifest.contains("deadsync-import =") && !screen.contains("deadsync_import"),
+        "Simply Love must consume neutral import DTOs instead of deadsync-import types"
+    );
+    for runtime in [
+        "detect_itg_local_profiles",
+        "detect_itg_profiles_from_game_dir",
+        "import_itg_profile_dir",
+        "std::thread::spawn",
+        "std::fs::canonicalize",
+        "rfd::FileDialog",
+    ] {
+        assert!(
+            !screen.contains(runtime),
+            "Manage Local Profiles still executes shell runtime token {runtime}"
+        );
+    }
+    for contract in [
+        "pub struct SimplyLoveItgProfileCandidate",
+        "pub struct SimplyLoveItgImportSummary",
+        "pub enum SimplyLoveProfileImportEvent",
+        "DiscoverItgProfiles",
+        "BrowseItgProfiles",
+        "StartItgProfileImport",
+        "CancelItgProfileImport",
+    ] {
+        assert!(
+            effects.contains(contract),
+            "Simply Love profile-import boundary is missing {contract}"
+        );
+    }
+    assert!(
+        shell_manifest.contains("deadsync-import =")
+            && shell_service.contains("pub(crate) struct Service")
+            && shell_service.contains("detect_itg_local_profiles")
+            && shell_service.contains("detect_itg_profiles_from_game_dir")
+            && shell_service.contains("import_itg_profile_dir")
+            && shell_service.contains("rfd::FileDialog")
+            && shell_app.contains("self.profile_import.poll()")
+            && shell_app.contains("manage_local_profiles::apply_import_events"),
+        "shell must own profile discovery, import workers, native browsing, and event polling"
+    );
+}
+
+#[test]
+fn options_song_pack_catalog_is_shell_prepared() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let options = root.join("crates/deadsync-theme-simply-love/src/screens/options");
+    let mut source = String::new();
+    for file in rust_files(&options) {
+        source.push_str(&fs::read_to_string(file).expect("Options source should be readable"));
+    }
+    assert!(
+        !source.contains("runtime_cache::get_song_cache") && !source.contains("get_song_cache()"),
+        "Simply Love Options must consume the shell-prepared song-pack catalog"
+    );
+    assert!(
+        source.contains("song_packs: Vec<OptionsSongPackView>")
+            && source.contains("for pack in &state.song_packs"),
+        "Options must retain the prepared catalog for score-import and Pack Sync UI"
+    );
+
+    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+        .expect("Simply Love views should be readable");
+    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell app should be readable");
+    assert!(
+        views.contains("pub struct OptionsSongPackView")
+            && shell.contains("fn options_song_pack_view() -> Vec<OptionsSongPackView>")
+            && shell.contains("deadsync_simfile::runtime_cache::get_song_cache()")
+            && shell.contains("fn sync_options_song_packs(&mut self)")
+            && shell.contains("deadsync_simfile::runtime_cache::song_cache_generation()")
+            && source.contains("pub fn sync_song_packs"),
+        "shell must prepare Options song-pack data from the runtime cache"
+    );
+}
+
+#[test]
 fn simply_love_options_graphics_uses_theme_graphics_contract() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let options = root.join("crates/deadsync-theme-simply-love/src/screens/options");

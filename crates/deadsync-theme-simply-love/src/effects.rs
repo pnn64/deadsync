@@ -28,9 +28,62 @@ pub enum SimplyLoveProfileRequest {
         p2_joined: bool,
         fast_switch: bool,
     },
-    PickImportFolder {
+    DiscoverItgProfiles,
+    BrowseItgProfiles {
         title: String,
     },
+    StartItgProfileImport {
+        dir: PathBuf,
+    },
+    CancelItgProfileImport,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SimplyLoveItgProfileCandidate {
+    pub dir: PathBuf,
+    pub display_name: String,
+    pub imported_as: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SimplyLoveItgImportSummary {
+    pub profile_id: String,
+    pub display_name: String,
+    pub scores_total: usize,
+    pub scores_imported: usize,
+    pub charts_song_not_found: usize,
+    pub charts_chart_not_found: usize,
+    pub scores_unmapped: usize,
+    pub favorites_total: usize,
+    pub favorites_imported: usize,
+    pub itl_entries_imported: usize,
+    pub simply_love_options_imported: bool,
+    pub groovestats_imported: bool,
+    pub arrowcloud_imported: bool,
+    pub avatar_imported: bool,
+    pub canceled: bool,
+    pub already_imported_as: Option<String>,
+}
+
+impl SimplyLoveItgImportSummary {
+    pub const fn online_keys_imported(&self) -> bool {
+        self.groovestats_imported || self.arrowcloud_imported
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SimplyLoveProfileImportEvent {
+    Candidates {
+        candidates: Vec<SimplyLoveItgProfileCandidate>,
+        browsed_dir: Option<PathBuf>,
+    },
+    BrowseCanceled,
+    Progress {
+        done: usize,
+        total: usize,
+        label: String,
+    },
+    Finished(Result<SimplyLoveItgImportSummary, String>),
 }
 
 #[derive(Clone, Debug)]

@@ -44,6 +44,7 @@ fn init_with_audio(audio_options: AudioOptionsView) -> State {
             software_thread_choices: vec![0, 1, 2],
             ..GraphicsOptionsView::default()
         },
+        Vec::new(),
         NoteskinCatalogView {
             names: vec![profile_data::NoteSkin::DEFAULT_NAME.to_owned()],
         },
@@ -63,6 +64,7 @@ fn smx_gif_choices_come_from_shell_catalog() {
         test_app_paths(),
         AudioOptionsView::default(),
         GraphicsOptionsView::default(),
+        Vec::new(),
         NoteskinCatalogView::default(),
         SmxAssignmentView::default(),
         SmxGifCatalogView {

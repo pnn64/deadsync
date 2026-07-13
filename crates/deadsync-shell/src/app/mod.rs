@@ -109,7 +109,7 @@ use deadsync_profile_gameplay::{
     gameplay_player_side_from_profile, gameplay_tick_mode_from_profile,
 };
 use deadsync_simfile::{app_runtime as song_loading, sync_offset};
-use deadsync_theme_simply_love::views::TimingHealth;
+use deadsync_theme_simply_love::views::{OptionsSongPackView, TimingHealth};
 use deadsync_theme_simply_love::{
     screens::{
         self, credits, evaluation, evaluation_summary, gameover, gameplay, init, initials,
@@ -424,6 +424,17 @@ fn app_paths_view() -> AppPathsView {
     }
 }
 
+fn options_song_pack_view() -> Vec<OptionsSongPackView> {
+    deadsync_simfile::runtime_cache::get_song_cache()
+        .iter()
+        .map(|pack| OptionsSongPackView {
+            group_name: pack.group_name.clone(),
+            display_name: pack.name.clone(),
+            songs: pack.songs.clone(),
+        })
+        .collect()
+}
+
 fn noteskin_catalog_view() -> NoteskinCatalogView {
     let roots = deadlib_platform::dirs::app_dirs().noteskin_roots();
     NoteskinCatalogView {
@@ -473,6 +484,7 @@ impl ScreensState {
             app_paths_view(),
             audio_options_view(),
             graphics::options_graphics_view(),
+            options_song_pack_view(),
             noteskin_catalog_view(),
             crate::smx_config::smx_assignment_view(),
             crate::smx_config::smx_gif_catalog_view(),
@@ -827,6 +839,8 @@ pub struct App {
     >,
     asset_manager: AssetManager,
     dynamic_media: DynamicMedia,
+    options_song_pack_generation: u64,
+    profile_import: crate::profile_import::Service,
     sync_analysis: crate::sync_analysis::Service,
     ui_text_layout_cache: compose::TextLayoutCache,
     gameplay_text_layout_cache: compose::TextLayoutCache,
@@ -858,6 +872,31 @@ fn execute_platform_request(request: PlatformRequest) {
 }
 
 impl App {
+    fn sync_options_song_packs(&mut self) {
+        if self.state.screens.current_screen != CurrentScreen::Options {
+            return;
+        }
+        let generation = deadsync_simfile::runtime_cache::song_cache_generation();
+        if generation == self.options_song_pack_generation {
+            return;
+        }
+        options::sync_song_packs(
+            &mut self.state.screens.options_state,
+            options_song_pack_view(),
+        );
+        self.options_song_pack_generation = generation;
+    }
+
+    fn poll_profile_import(&mut self) {
+        let events = self.profile_import.poll();
+        if !events.is_empty() {
+            manage_local_profiles::apply_import_events(
+                &mut self.state.screens.manage_local_profiles_state,
+                events,
+            );
+        }
+    }
+
     fn poll_sync_analysis(&mut self) {
         let mut song_events = Vec::new();
         let mut select_pack_events = Vec::new();
@@ -1525,6 +1564,8 @@ impl App {
         self.apply_smx_managed_preset();
         self.drive_smx_light_brightness();
         self.state.shell.interaction.update_message(redraw_started);
+        self.sync_options_song_packs();
+        self.poll_profile_import();
         self.poll_sync_analysis();
 
         let mut upload_us: u32 = 0;
@@ -1936,11 +1977,14 @@ impl App {
             app_paths_view(),
             audio_options_view(),
             graphics::options_graphics_view(),
+            options_song_pack_view(),
             noteskin_catalog_view(),
             crate::smx_config::smx_assignment_view(),
             crate::smx_config::smx_gif_catalog_view(),
         );
         self.state.screens.options_state.active_color_index = current_color_index;
+        self.options_song_pack_generation =
+            deadsync_simfile::runtime_cache::song_cache_generation();
         if matches!(
             from,
             CurrentScreen::Mappings | CurrentScreen::Input | CurrentScreen::ConfigurePads
@@ -1983,6 +2027,8 @@ impl App {
             smx_difficulty_tint_cache: std::collections::HashMap::new(),
             asset_manager: AssetManager::new(),
             dynamic_media: DynamicMedia::new(),
+            options_song_pack_generation: deadsync_simfile::runtime_cache::song_cache_generation(),
+            profile_import: crate::profile_import::Service::default(),
             sync_analysis: crate::sync_analysis::Service::default(),
             // Screen transitions clear the UI cache, so misses stop inserting
             // once the cache reaches its fixed footprint.
@@ -2193,18 +2239,28 @@ impl App {
                     }
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Profile(SimplyLoveProfileRequest::PickImportFolder {
-                    title,
-                }) => {
-                    let (tx, rx) = std::sync::mpsc::channel();
-                    std::thread::spawn(move || {
-                        let picked = rfd::FileDialog::new().set_title(title).pick_folder();
-                        let _ = tx.send(picked);
-                    });
-                    manage_local_profiles::attach_import_folder_picker(
-                        &mut self.state.screens.manage_local_profiles_state,
-                        rx,
-                    );
+                SimplyLoveRuntimeRequest::Profile(
+                    SimplyLoveProfileRequest::DiscoverItgProfiles,
+                ) => {
+                    self.profile_import.discover();
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Profile(
+                    SimplyLoveProfileRequest::BrowseItgProfiles { title },
+                ) => {
+                    self.profile_import.browse(title);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Profile(
+                    SimplyLoveProfileRequest::StartItgProfileImport { dir },
+                ) => {
+                    self.profile_import.start(dir);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Profile(
+                    SimplyLoveProfileRequest::CancelItgProfileImport,
+                ) => {
+                    self.profile_import.cancel();
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Sync(SimplyLoveSyncRequest::ApplySongOffset {

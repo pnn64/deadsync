@@ -154,6 +154,7 @@ pub struct State {
     pub(super) updater_capabilities: SimplyLoveUpdaterCapabilities,
     pub(super) app_paths: AppPathsView,
     pub(super) audio_options: AudioOptionsView,
+    pub(super) song_packs: Vec<OptionsSongPackView>,
     pub selected: usize,
     pub(super) prev_selected: usize,
     pub active_color_index: i32, // <-- ADDED
@@ -259,6 +260,7 @@ pub fn init(
     app_paths: AppPathsView,
     audio_options: AudioOptionsView,
     graphics_options: GraphicsOptionsView,
+    song_packs: Vec<OptionsSongPackView>,
     noteskin_catalog: NoteskinCatalogView,
     smx_assignment: SmxAssignmentView,
     smx_gif_catalog: SmxGifCatalogView,
@@ -286,6 +288,7 @@ pub fn init(
         updater_capabilities,
         app_paths,
         audio_options,
+        song_packs,
         selected: 0,
         prev_selected: 0,
         active_color_index: cfg.simply_love_color,
