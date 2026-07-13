@@ -2362,22 +2362,134 @@ fn select_music_uses_shell_prepared_paths_and_playlists() {
 }
 
 #[test]
-fn arrowcloud_status_refresh_is_shell_owned() {
+fn select_music_lobby_runtime_is_shell_owned() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let theme = root.join("crates/deadsync-theme-simply-love/src");
+    let select_music = fs::read_to_string(theme.join("screens/select_music.rs"))
+        .expect("Select Music source should be readable");
+    let overlay =
+        fs::read_to_string(theme.join("screens/components/select_music/lobby_overlay.rs"))
+            .expect("lobby overlay source should be readable");
+    for runtime_call in [
+        "runtime_snapshot",
+        "runtime_reconnect_status_text",
+        "runtime_search_lobbies",
+        "runtime_create_lobby",
+        "runtime_join_lobby",
+        "runtime_leave_lobby",
+        "runtime_select_song",
+        "runtime_update_machine_state",
+        "runtime_poll_reconnect",
+        "runtime_disconnect",
+    ] {
+        assert!(
+            !select_music.contains(runtime_call) && !overlay.contains(runtime_call),
+            "Select Music still executes lobby runtime call {runtime_call}"
+        );
+    }
+    assert!(
+        select_music.contains("lobby_view: SimplyLoveLobbyRuntimeView")
+            && select_music.contains("SimplyLoveOnlineRequest::Lobby")
+            && overlay.contains("snapshot: &lobby_data::Snapshot")
+    );
+
+    let views =
+        fs::read_to_string(theme.join("views.rs")).expect("Simply Love views should be readable");
+    let effects = fs::read_to_string(theme.join("effects.rs"))
+        .expect("Simply Love effects should be readable");
+    assert!(
+        views.contains("pub struct SimplyLoveLobbyRuntimeView")
+            && views.contains("pub snapshot: deadsync_online::lobbies::Snapshot")
+            && effects.contains("pub enum SimplyLoveLobbyRequest")
+    );
+
+    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell app should be readable");
+    for shell_owner in [
+        "deadsync_online::lobbies::runtime_snapshot",
+        "deadsync_online::lobbies::runtime_reconnect_status_text",
+        "SimplyLoveOnlineRequest::Lobby(request)",
+        "runtime_search_lobbies_default()",
+        "runtime_create_lobby_with_password_default",
+        "runtime_join_lobby_with_password_default",
+        "runtime_leave_lobby_default()",
+        "runtime_select_song_default(song)",
+        "runtime_update_machine_state_default",
+        "runtime_poll_reconnect_default()",
+        "runtime_disconnect()",
+    ] {
+        assert!(
+            shell.contains(shell_owner),
+            "shell must own Select Music lobby operation {shell_owner}"
+        );
+    }
+}
+
+#[test]
+fn qr_login_workers_and_persistence_are_shell_owned() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let qr = fs::read_to_string(
         root.join("crates/deadsync-theme-simply-love/src/screens/options/qr_login.rs"),
     )
     .expect("QR login source should be readable");
-    assert!(!qr.contains("deadsync_online::runtime::refresh_arrowcloud_status"));
-    assert!(qr.contains("poll_qr_login_ui(ui: &mut QrLoginUiState) -> bool"));
+    for runtime_detail in [
+        "deadsync_online",
+        "std::thread::spawn",
+        "std::sync::mpsc",
+        "AtomicBool",
+        "profile::set_",
+        "profile::get_",
+        "api_key",
+    ] {
+        assert!(
+            !qr.contains(runtime_detail),
+            "Simply Love QR presentation still owns runtime detail {runtime_detail}"
+        );
+    }
+    assert!(
+        qr.contains("create_login_ui(request: &crate::SimplyLoveQrLoginRequest)")
+            && qr.contains("pub(crate) fn apply_events")
+            && qr.contains("SimplyLoveQrLoginEvent::Started")
+            && qr.contains("SimplyLoveQrLoginEvent::Succeeded")
+            && qr.contains("SimplyLoveQrLoginEvent::Failed")
+    );
 
     let effects = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
         .expect("Simply Love effects should be readable");
-    assert!(effects.contains("RefreshArrowCloudStatus"));
-    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+    assert!(
+        effects.contains("pub struct SimplyLoveQrLoginRequest")
+            && effects.contains("pub enum SimplyLoveQrLoginEvent")
+            && effects.contains("StartQrLogin(SimplyLoveQrLoginRequest)")
+            && effects.contains("CancelQrLogin(SimplyLoveQrLoginService)")
+            && !effects.contains("RefreshArrowCloudStatus")
+    );
+
+    let shell_service = fs::read_to_string(root.join("crates/deadsync-shell/src/qr_login.rs"))
+        .expect("shell QR-login service should be readable");
+    for shell_owner in [
+        "arrowcloud::run_device_login_session",
+        "groovestats::run_qr_login_session",
+        "std::thread::spawn",
+        "persist_credentials",
+        "profile::set_arrowcloud_api_key",
+        "profile::set_groovestats_credentials",
+        "deadsync_online::runtime::refresh_arrowcloud_status()",
+    ] {
+        assert!(
+            shell_service.contains(shell_owner),
+            "shell QR-login service must own {shell_owner}"
+        );
+    }
+
+    let shell_app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
-    assert!(shell.contains("SimplyLoveOnlineRequest::RefreshArrowCloudStatus"));
-    assert!(shell.contains("deadsync_online::runtime::refresh_arrowcloud_status()"));
+    assert!(
+        shell_app.contains("self.qr_login.poll()")
+            && shell_app.contains("SimplyLoveOnlineRequest::StartQrLogin")
+            && shell_app.contains("SimplyLoveOnlineRequest::CancelQrLogin")
+            && shell_app.contains("screens::arrowcloud_login::apply_events")
+            && shell_app.contains("screens::groovestats_login::apply_events")
+    );
 }
 
 #[test]

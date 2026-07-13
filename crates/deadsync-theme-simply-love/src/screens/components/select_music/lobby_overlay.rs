@@ -5,7 +5,6 @@ use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, VirtualAction};
-use deadsync_online::lobbies;
 use deadsync_online::lobbies as lobby_data;
 use std::time::{Duration, Instant};
 
@@ -296,21 +295,20 @@ pub fn take_pending_sounds(state: &mut OverlayState) -> Vec<SoundCue> {
     std::mem::take(&mut overlay.pending_sounds)
 }
 
-pub fn update_overlay(state: &mut OverlayState, dt: f32) {
+pub fn update_overlay(state: &mut OverlayState, dt: f32, snapshot: &lobby_data::Snapshot) {
     let OverlayState::Visible(overlay) = state else {
         return;
     };
 
-    let snapshot = lobbies::runtime_snapshot();
     match snapshot.joined_lobby.as_ref() {
         Some(_) => {
             overlay.joined_action_index = overlay.joined_action_index.min(1);
             overlay.password_prompt = None;
         }
         None => {
-            let len = browse_item_count(&snapshot).saturating_sub(1);
+            let len = browse_item_count(snapshot).saturating_sub(1);
             overlay.browse_index = overlay.browse_index.min(len);
-            clamp_browse_scroll(overlay, &snapshot);
+            clamp_browse_scroll(overlay, snapshot);
         }
     }
 
@@ -329,7 +327,11 @@ pub fn update_overlay(state: &mut OverlayState, dt: f32) {
     }
 }
 
-pub fn handle_input(state: &mut OverlayState, ev: &InputEvent) -> InputOutcome {
+pub fn handle_input(
+    state: &mut OverlayState,
+    ev: &InputEvent,
+    snapshot: &lobby_data::Snapshot,
+) -> InputOutcome {
     let OverlayState::Visible(overlay) = state else {
         return InputOutcome::None;
     };
@@ -341,7 +343,6 @@ pub fn handle_input(state: &mut OverlayState, ev: &InputEvent) -> InputOutcome {
         return InputOutcome::None;
     }
 
-    let snapshot = lobbies::runtime_snapshot();
     if snapshot.joined_lobby.is_some() {
         match ev.action {
             VirtualAction::p1_left
@@ -433,7 +434,7 @@ pub fn handle_input(state: &mut OverlayState, ev: &InputEvent) -> InputOutcome {
             if next != overlay.browse_index {
                 overlay.browse_index = next;
                 clear_notice(overlay);
-                clamp_browse_scroll(overlay, &snapshot);
+                clamp_browse_scroll(overlay, snapshot);
                 return InputOutcome::ChangedSelection;
             }
         }
@@ -445,18 +446,18 @@ pub fn handle_input(state: &mut OverlayState, ev: &InputEvent) -> InputOutcome {
         | VirtualAction::p2_down
         | VirtualAction::p2_menu_right
         | VirtualAction::p2_menu_down => {
-            let limit = browse_item_count(&snapshot).saturating_sub(1);
+            let limit = browse_item_count(snapshot).saturating_sub(1);
             let next = (overlay.browse_index + 1).min(limit);
             if next != overlay.browse_index {
                 overlay.browse_index = next;
                 clear_notice(overlay);
-                clamp_browse_scroll(overlay, &snapshot);
+                clamp_browse_scroll(overlay, snapshot);
                 return InputOutcome::ChangedSelection;
             }
         }
         VirtualAction::p1_start | VirtualAction::p2_start => {
             clear_notice(overlay);
-            return match resolve_browse_action(&snapshot, overlay.browse_index) {
+            return match resolve_browse_action(snapshot, overlay.browse_index) {
                 BrowseAction::Lobby(lobby) => {
                     if lobby.is_password_protected {
                         overlay.password_prompt =
@@ -508,12 +509,16 @@ pub fn handle_raw_key(
     InputOutcome::None
 }
 
-pub fn build_overlay(state: &OverlayState, active_color_index: i32) -> Option<Vec<Actor>> {
+pub fn build_overlay(
+    state: &OverlayState,
+    active_color_index: i32,
+    snapshot: &lobby_data::Snapshot,
+    reconnect_status_text: Option<&str>,
+) -> Option<Vec<Actor>> {
     let OverlayState::Visible(overlay) = state else {
         return None;
     };
 
-    let snapshot = lobbies::runtime_snapshot();
     let center_x = screen_center_x();
     let center_y = screen_center_y();
     let fill = color::decorative_rgba(active_color_index);
@@ -549,7 +554,7 @@ pub fn build_overlay(state: &OverlayState, active_color_index: i32) -> Option<Ve
     ));
     actors.push(act!(text:
         font("miso"):
-        settext(status_text(overlay, &snapshot)):
+        settext(status_text(overlay, snapshot, reconnect_status_text)):
         align(0.5, 0.5):
         xy(center_x, center_y + STATUS_Y):
         zoom(0.8):
@@ -559,7 +564,7 @@ pub fn build_overlay(state: &OverlayState, active_color_index: i32) -> Option<Ve
     ));
     actors.push(act!(text:
         font("miso"):
-        settext(close_hint(overlay, &snapshot)):
+        settext(close_hint(overlay, snapshot)):
         align(0.5, 0.5):
         xy(center_x, center_y + FOOTER_Y):
         zoom(0.9):
@@ -613,7 +618,7 @@ pub fn build_overlay(state: &OverlayState, active_color_index: i32) -> Option<Ve
         center_x,
         center_y,
         overlay,
-        &snapshot,
+        snapshot,
         &select_color,
     ));
     if let Some(prompt) = overlay.password_prompt.as_ref() {
@@ -1079,7 +1084,11 @@ fn close_hint(overlay: &OverlayStateData, snapshot: &lobby_data::Snapshot) -> &'
     }
 }
 
-fn status_text(overlay: &OverlayStateData, snapshot: &lobby_data::Snapshot) -> String {
+fn status_text(
+    overlay: &OverlayStateData,
+    snapshot: &lobby_data::Snapshot,
+    reconnect_status_text: Option<&str>,
+) -> String {
     if let Some(text) = overlay.notice_text.as_ref() {
         return text.clone();
     }
@@ -1099,8 +1108,8 @@ fn status_text(overlay: &OverlayStateData, snapshot: &lobby_data::Snapshot) -> S
             }
         };
     }
-    if let Some(text) = lobbies::runtime_reconnect_status_text() {
-        return text;
+    if let Some(text) = reconnect_status_text {
+        return text.to_owned();
     }
     if let Some(status) = snapshot.last_status.as_ref()
         && let Some(message) = status.message.as_ref()

@@ -11,18 +11,13 @@
 //! ArrowCloudLogin → SelectColor`), matching SL's GrooveStats-first
 //! Branch.AfterSelectProfile ordering.
 //!
-//! The visual state machine + per-side worker is shared with the
-//! ArrowCloud variant; both render the same overlay actors via
-//! [`build_qr_login_overlay_actors`].
+//! The visual state machine consumes shell-prepared slots and events; shell
+//! owns workers, cancellation, and credential persistence.
 
-use std::sync::atomic::Ordering;
-
-use crate::config;
 use crate::screens::components::shared::{transitions, visual_style_bg};
 use crate::screens::input as screen_input;
 use crate::screens::options::qr_login::{
-    self, QrLoginUiState, build_qr_login_overlay_actors, create_groovestats_login_ui,
-    create_groovestats_login_ui_for_profile, poll_qr_login_ui,
+    QrLoginUiState, apply_events as apply_qr_events, build_qr_login_overlay_actors, create_login_ui,
 };
 use crate::screens::{Screen, ThemeEffect};
 use deadlib_present::actors::Actor;
@@ -42,6 +37,8 @@ pub struct ProfileTarget {
 pub struct State {
     pub active_color_index: i32,
     pub(crate) ui: Option<QrLoginUiState>,
+    pending_start: Option<crate::SimplyLoveQrLoginRequest>,
+    show_arrowcloud_next: bool,
     /// `Some` when entered via Manage Local Profiles → Link GrooveStats,
     /// scoping the screen to a single profile (rather than P1/P2 sides).
     /// Cleared on dismiss so subsequent post-Select-Profile auto-flows
@@ -53,8 +50,10 @@ pub struct State {
 
 pub fn init() -> State {
     State {
-        active_color_index: config::get().simply_love_color,
+        active_color_index: crate::config::get().simply_love_color,
         ui: None,
+        pending_start: None,
+        show_arrowcloud_next: false,
         target_profile: None,
         bg: visual_style_bg::State::new(),
         menu_lr_chord: screen_input::MenuLrChordTracker::default(),
@@ -64,13 +63,14 @@ pub fn init() -> State {
 /// Called every time the app enters this screen.  Spawns a fresh login
 /// UI — single-profile when `target_profile` is `Some`, multi-side
 /// otherwise — and discards any previous instance.
-pub fn on_enter(state: &mut State) {
-    state.ui = Some(match state.target_profile.as_ref() {
-        Some(target) => {
-            create_groovestats_login_ui_for_profile(target.id.clone(), target.display_name.clone())
-        }
-        None => create_groovestats_login_ui(),
-    });
+pub fn on_enter(
+    state: &mut State,
+    request: crate::SimplyLoveQrLoginRequest,
+    show_arrowcloud_next: bool,
+) {
+    state.ui = Some(create_login_ui(&request));
+    state.pending_start = Some(request);
+    state.show_arrowcloud_next = show_arrowcloud_next;
     state.menu_lr_chord = screen_input::MenuLrChordTracker::default();
 }
 
@@ -83,21 +83,23 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
 }
 
 pub fn update(state: &mut State, _dt: f32) -> Option<ThemeEffect> {
-    state
-        .ui
-        .as_mut()
-        .is_some_and(poll_qr_login_ui)
-        .then_some(ThemeEffect::Runtime(
-            crate::SimplyLoveRuntimeRequest::Online(
-                crate::SimplyLoveOnlineRequest::RefreshArrowCloudStatus,
-            ),
+    state.pending_start.take().map(|request| {
+        ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Online(
+            crate::SimplyLoveOnlineRequest::StartQrLogin(request),
         ))
+    })
+}
+
+pub fn apply_events(state: &mut State, events: Vec<crate::SimplyLoveQrLoginEvent>) {
+    if let Some(ui) = state.ui.as_mut() {
+        apply_qr_events(ui, events);
+    }
 }
 
 /// Input mirrors the ArrowCloud screen:
-///   * Start (or SELECT) → cancel ws worker, advance to the next stop
+///   * Start (or SELECT) → request cancellation, advance to the next stop
 ///                          in the post-SelectProfile chain.
-///   * Back  (or L+R chord on three-key cabinets) → cancel ws worker and
+///   * Back  (or L+R chord on three-key cabinets) → request cancellation and
 ///                          return all the way to the title menu, same
 ///                          as Back on `SelectProfile`.
 ///
@@ -131,25 +133,29 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
         || (ev.pressed && matches!(ev.action, VirtualAction::p1_back | VirtualAction::p2_back));
     let from_profile_menu = state.target_profile.is_some();
     if is_start {
-        if let Some(ui) = state.ui.as_ref() {
-            ui.cancel.store(true, Ordering::Relaxed);
-        }
         state.ui = None;
+        state.pending_start = None;
         state.target_profile = None;
         let next = if from_profile_menu {
             Screen::ManageLocalProfiles
-        } else if qr_login::should_auto_show(config::get().arrowcloud_qr_login_when) {
+        } else if state.show_arrowcloud_next {
             Screen::ArrowCloudLogin
         } else {
             Screen::SelectColor
         };
-        return crate::effects::sfx_then("assets/sounds/start.ogg", ThemeEffect::Navigate(next));
+        return ThemeEffect::Batch(vec![
+            crate::effects::sfx("assets/sounds/start.ogg"),
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Online(
+                crate::SimplyLoveOnlineRequest::CancelQrLogin(
+                    crate::SimplyLoveQrLoginService::GrooveStats,
+                ),
+            )),
+            ThemeEffect::Navigate(next),
+        ]);
     }
     if is_back {
-        if let Some(ui) = state.ui.as_ref() {
-            ui.cancel.store(true, Ordering::Relaxed);
-        }
         state.ui = None;
+        state.pending_start = None;
         state.target_profile = None;
         let next = if from_profile_menu {
             Screen::ManageLocalProfiles
@@ -157,7 +163,15 @@ pub fn handle_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
             Screen::Menu
         };
         log::info!("GrooveStats QR login cancelled — returning to {next:?}.");
-        return crate::effects::sfx_then("assets/sounds/change.ogg", ThemeEffect::Navigate(next));
+        return ThemeEffect::Batch(vec![
+            crate::effects::sfx("assets/sounds/change.ogg"),
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Online(
+                crate::SimplyLoveOnlineRequest::CancelQrLogin(
+                    crate::SimplyLoveQrLoginService::GrooveStats,
+                ),
+            )),
+            ThemeEffect::Navigate(next),
+        ]);
     }
     ThemeEffect::None
 }

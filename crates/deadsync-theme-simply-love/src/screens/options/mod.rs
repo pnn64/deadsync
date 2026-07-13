@@ -84,7 +84,6 @@ use score_import::*;
 mod pack_sync;
 pub(crate) mod qr_login;
 use pack_sync::*;
-pub use qr_login::{should_auto_show, should_auto_show_groovestats};
 mod layout;
 mod transitions;
 use layout::*;

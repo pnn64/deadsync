@@ -3,15 +3,11 @@
 //! Mirrors Simply Love's `ScreenGrooveStatsLogin` design: one QR code
 //! per joined player, shown side by side
 //! (`BGAnimations/ScreenGrooveStatsLogin underlay/default.lua:117-165`).
-//! The state machine, panel renderer, slot bookkeeping, and cancellation
-//! plumbing are all backend-agnostic; the per-service worker that drives
-//! the channel and the per-service persistence/QR-URL choice are selected
-//! via [`BackendKind`].  ArrowCloud's `device-login` API is poll-based;
-//! GrooveStats's flow is WebSocket-driven.  Both live in this module
-//! and dispatch through the same `BackendKind` match arms.
+//! The state machine, panel renderer, and slot bookkeeping consume plain
+//! events prepared by the shell. Network workers, cancellation, and
+//! credential persistence stay outside the concrete theme.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::act;
 use crate::assets::i18n::{tr, tr_fmt};
@@ -19,73 +15,10 @@ use crate::screens::components::shared::qr_code;
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
-use deadsync_online::arrowcloud as ac_api;
-use deadsync_online::groovestats as gs_api;
 use deadsync_profile as profile_data;
-use deadsync_profile::compat as profile;
 
 const ALL_SIDES: [profile_data::PlayerSide; 2] =
     [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2];
-
-/// Returns `true` when the ArrowCloud QR-login screen should be
-/// auto-shown after Select Profile, given the current pref and live
-/// session state.  Mirrors Simply Love's `Branch.AfterSelectProfile`
-/// rule (`SL-Branches.lua:78-80`):
-///
-/// * `Always`    — always show, regardless of saved keys.
-/// * `Sometimes` — show iff at least one joined Local side has an empty
-///                 `arrowcloud_api_key`.  Guests and unjoined sides
-///                 don't count toward the "needs key" check (matches
-///                 SL's `for player in ivalues(GAMESTATE:GetHumanPlayers())`).
-/// * `Disabled`  — never auto-show.
-pub fn should_auto_show(when: crate::config::ArrowCloudQrLoginWhen) -> bool {
-    should_auto_show_with(when, any_joined_local_side_missing_key)
-}
-
-fn should_auto_show_with<F: FnOnce() -> bool>(
-    when: crate::config::ArrowCloudQrLoginWhen,
-    missing_key_probe: F,
-) -> bool {
-    use crate::config::ArrowCloudQrLoginWhen;
-    match when {
-        ArrowCloudQrLoginWhen::Disabled => false,
-        ArrowCloudQrLoginWhen::Always => true,
-        ArrowCloudQrLoginWhen::Sometimes => missing_key_probe(),
-    }
-}
-
-/// GrooveStats counterpart of [`should_auto_show`].  Same three-branch
-/// rule, reading the GrooveStats per-side key for the `Sometimes` probe.
-pub fn should_auto_show_groovestats(when: crate::config::GrooveStatsQrLoginWhen) -> bool {
-    should_auto_show_groovestats_with(when, any_joined_local_side_missing_gs_key)
-}
-
-fn should_auto_show_groovestats_with<F: FnOnce() -> bool>(
-    when: crate::config::GrooveStatsQrLoginWhen,
-    missing_key_probe: F,
-) -> bool {
-    use crate::config::GrooveStatsQrLoginWhen;
-    match when {
-        GrooveStatsQrLoginWhen::Disabled => false,
-        GrooveStatsQrLoginWhen::Always => true,
-        GrooveStatsQrLoginWhen::Sometimes => missing_key_probe(),
-    }
-}
-
-fn any_joined_local_side_missing_key() -> bool {
-    ALL_SIDES.iter().any(|side| {
-        if !profile::is_session_side_joined(*side) {
-            return false;
-        }
-        if profile::is_session_side_guest(*side) {
-            return false;
-        }
-        profile::get_for_side(*side)
-            .arrowcloud_api_key
-            .trim()
-            .is_empty()
-    })
-}
 
 #[inline]
 fn side_label(kind: BackendKind, side: profile_data::PlayerSide) -> Arc<str> {
@@ -115,37 +48,8 @@ fn ui_section(ui: &QrLoginUiState) -> &'static str {
     i18n_section(ui.slots[0].kind)
 }
 
-#[derive(Debug, Clone)]
-pub(crate) enum LoginMsg {
-    Started {
-        short_code: String,
-        verification_url: String,
-    },
-    StatusUpdate,
-    Consumed {
-        api_key: String,
-        /// Optional username delivered alongside the key.  ArrowCloud's
-        /// device-login doesn't return one (always `None`); GrooveStats's
-        /// QR-login WebSocket does and the GrooveStats backend forwards
-        /// it for `[GrooveStats] Username=` persistence (SL parity).
-        username: Option<String>,
-    },
-    Failed {
-        reason: String,
-    },
-}
-
-/// Which online service this overlay is talking to.  Used to dispatch
-/// `Consumed` to the right `profile::set_*` helper, the per-service QR
-/// URL builder, and the panel header label.  We keep this as a plain
-/// enum rather than a backend trait — every per-service branch is
-/// reached via `match` on this kind.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum BackendKind {
-    ArrowCloud,
-    /// GrooveStats QR-login (WebSocket-driven).
-    GrooveStats,
-}
+/// Which online service this overlay is presenting.
+type BackendKind = crate::SimplyLoveQrLoginService;
 
 #[derive(Debug, Clone)]
 pub(crate) enum SlotState {
@@ -153,14 +57,14 @@ pub(crate) enum SlotState {
     NotJoined,
     /// Side is joined but has no Local profile loaded — login is refused.
     Guest,
-    /// Worker has been spawned, awaiting the `device-login/start` response.
+    /// Shell request has started, awaiting the first display event.
     Starting,
     /// Worker has the short code + verification URL and is polling.
     Pending {
         short_code: String,
         verification_url: String,
     },
-    /// Server returned `consumed` and the API key was persisted.
+    /// Shell persisted the credential and reported completion.
     Success,
     /// Terminal failure for this side (network, expired, cancelled, etc.).
     Failed { reason: String },
@@ -182,255 +86,65 @@ impl SlotState {
 pub(crate) struct LoginSlot {
     pub(crate) side: profile_data::PlayerSide,
     pub(crate) state: SlotState,
-    /// Which online service this slot is talking to.  Drives backend
-    /// dispatch in [`apply_login_msg`].
+    /// Which online service this slot is presenting.
     pub(crate) kind: BackendKind,
     /// Profile display name for this side (e.g. "Player 1", "Alice").
     /// Shown as the panel header so the user sees exactly which profile
     /// the key will land in.
     pub(crate) display_name: String,
-    /// True iff this side already had a non-empty arrowcloud_api_key when
-    /// the overlay was opened.  Used to render a "Currently signed in"
-    /// badge so the user knows scanning will overwrite an existing key.
+    /// True iff this side already had a saved service credential when the
+    /// overlay opened. Used to warn that scanning replaces that credential.
     pub(crate) had_existing_key: bool,
-    /// Profile-scoped override.  When `Some`, `Consumed` writes the key
-    /// via `profile::set_arrowcloud_api_key_for_id` instead of the
-    /// session-side helper.  Used by the Manage Local Profiles "Link
-    /// ArrowCloud" entry, where the target profile is identified by id
-    /// and may not be loaded on any session side.
-    pub(crate) target_profile_id: Option<String>,
-    pub(crate) rx: Option<std::sync::mpsc::Receiver<LoginMsg>>,
 }
 
 pub(crate) struct QrLoginUiState {
     pub(crate) slots: [LoginSlot; 2],
-    pub(crate) cancel: Arc<AtomicBool>,
 }
 
-impl Drop for QrLoginUiState {
-    fn drop(&mut self) {
-        // Defensive: if the overlay is torn down without going through
-        // a cancel path, still signal workers to stop.
-        self.cancel.store(true, Ordering::Relaxed);
-    }
-}
-
-/// Spawn ArrowCloud device-login workers — one per joined Local side —
-/// and return a fresh UI state ready to be rendered.
-pub fn create_arrowcloud_login_ui() -> QrLoginUiState {
-    let cancel = Arc::new(AtomicBool::new(false));
-    let slots = build_initial_slots(&cancel, BackendKind::ArrowCloud, |_side, tx| {
-        let cancel_for_thread = Arc::clone(&cancel);
-        std::thread::spawn(move || {
-            run_arrowcloud_login_worker(tx, cancel_for_thread);
-        });
-    });
-    QrLoginUiState { slots, cancel }
-}
-
-/// Build a single-slot UI scoped to a specific profile (identified by
-/// id + display name) rather than the active session sides.  Used by
-/// the Manage Local Profiles "Link ArrowCloud" entry.
-pub fn create_arrowcloud_login_ui_for_profile(
-    profile_id: String,
-    display_name: String,
-) -> QrLoginUiState {
-    let cancel = Arc::new(AtomicBool::new(false));
-    let had_existing_key = !profile::get_arrowcloud_api_key_for_id(&profile_id)
-        .trim()
-        .is_empty();
-    let (tx, rx) = std::sync::mpsc::channel::<LoginMsg>();
-    let cancel_for_thread = Arc::clone(&cancel);
-    std::thread::spawn(move || {
-        run_arrowcloud_login_worker(tx, cancel_for_thread);
-    });
-    let p1_slot = LoginSlot {
-        side: profile_data::PlayerSide::P1,
-        state: SlotState::Starting,
-        kind: BackendKind::ArrowCloud,
-        display_name,
-        had_existing_key,
-        target_profile_id: Some(profile_id),
-        rx: Some(rx),
-    };
-    let p2_slot = LoginSlot {
-        side: profile_data::PlayerSide::P2,
-        state: SlotState::NotJoined,
-        kind: BackendKind::ArrowCloud,
-        display_name: String::new(),
-        had_existing_key: false,
-        target_profile_id: None,
-        rx: None,
-    };
+/// Build theme-owned display state from the shell-prepared login request.
+pub(crate) fn create_login_ui(request: &crate::SimplyLoveQrLoginRequest) -> QrLoginUiState {
     QrLoginUiState {
-        slots: [p1_slot, p2_slot],
-        cancel,
+        slots: request.slots.clone().map(|slot| LoginSlot {
+            side: slot.side,
+            state: match slot.availability {
+                crate::SimplyLoveQrLoginSlotAvailability::NotJoined => SlotState::NotJoined,
+                crate::SimplyLoveQrLoginSlotAvailability::Guest => SlotState::Guest,
+                crate::SimplyLoveQrLoginSlotAvailability::Ready => SlotState::Starting,
+            },
+            kind: request.service,
+            display_name: slot.display_name,
+            had_existing_key: slot.had_existing_key,
+        }),
     }
 }
 
-/// Decide which sides need a worker and build the slot array. `spawn`
-/// callback is invoked once per side that should start polling; tests
-/// inject a no-op or mock spawner.
-fn build_initial_slots<F>(
-    _cancel: &Arc<AtomicBool>,
-    kind: BackendKind,
-    mut spawn: F,
-) -> [LoginSlot; 2]
-where
-    F: FnMut(profile_data::PlayerSide, std::sync::mpsc::Sender<LoginMsg>),
-{
-    let p1 = build_one_slot(profile_data::PlayerSide::P1, kind, &mut spawn);
-    let p2 = build_one_slot(profile_data::PlayerSide::P2, kind, &mut spawn);
-    [p1, p2]
-}
-
-fn build_one_slot<F>(side: profile_data::PlayerSide, kind: BackendKind, spawn: &mut F) -> LoginSlot
-where
-    F: FnMut(profile_data::PlayerSide, std::sync::mpsc::Sender<LoginMsg>),
-{
-    if !profile::is_session_side_joined(side) {
-        return LoginSlot {
-            side,
-            state: SlotState::NotJoined,
-            kind,
-            display_name: String::new(),
-            had_existing_key: false,
-            target_profile_id: None,
-            rx: None,
+/// Apply credential-free progress events prepared by the shell.
+pub(crate) fn apply_events(
+    ui: &mut QrLoginUiState,
+    events: impl IntoIterator<Item = crate::SimplyLoveQrLoginEvent>,
+) {
+    for event in events {
+        let side = match &event {
+            crate::SimplyLoveQrLoginEvent::Started { side, .. }
+            | crate::SimplyLoveQrLoginEvent::Succeeded { side, .. }
+            | crate::SimplyLoveQrLoginEvent::Failed { side, .. } => *side,
         };
-    }
-    if profile::is_session_side_guest(side) {
-        return LoginSlot {
-            side,
-            state: SlotState::Guest,
-            kind,
-            display_name: String::new(),
-            had_existing_key: false,
-            target_profile_id: None,
-            rx: None,
-        };
-    }
-    let p = profile::get_for_side(side);
-    let had_existing_key = match kind {
-        BackendKind::ArrowCloud => !p.arrowcloud_api_key.trim().is_empty(),
-        BackendKind::GrooveStats => !p.groovestats_api_key.trim().is_empty(),
-    };
-
-    let (tx, rx) = std::sync::mpsc::channel::<LoginMsg>();
-    spawn(side, tx);
-    LoginSlot {
-        side,
-        state: SlotState::Starting,
-        kind,
-        display_name: p.display_name,
-        had_existing_key,
-        target_profile_id: None,
-        rx: Some(rx),
-    }
-}
-
-fn run_arrowcloud_login_worker(tx: std::sync::mpsc::Sender<LoginMsg>, cancel: Arc<AtomicBool>) {
-    ac_api::run_device_login_session(cancel, |event| {
-        tx.send(login_msg_from_arrowcloud_event(event)).is_ok()
-    });
-}
-
-fn login_msg_from_arrowcloud_event(event: ac_api::DeviceLoginEvent) -> LoginMsg {
-    match event {
-        ac_api::DeviceLoginEvent::Started {
-            short_code,
-            verification_url,
-        } => LoginMsg::Started {
-            short_code,
-            verification_url,
-        },
-        ac_api::DeviceLoginEvent::StatusUpdate => LoginMsg::StatusUpdate,
-        ac_api::DeviceLoginEvent::Consumed { api_key } => LoginMsg::Consumed {
-            api_key,
-            username: None,
-        },
-        ac_api::DeviceLoginEvent::Failed { reason } => LoginMsg::Failed { reason },
-    }
-}
-
-/// Drain pending channel messages for every slot, updating slot state
-/// and (on success) persisting api keys into per-side profiles.
-pub(crate) fn poll_qr_login_ui(ui: &mut QrLoginUiState) -> bool {
-    let mut refresh_arrowcloud_status = false;
-    for slot in &mut ui.slots {
-        let mut msgs: Vec<LoginMsg> = Vec::new();
-        if let Some(rx) = slot.rx.as_ref() {
-            while let Ok(msg) = rx.try_recv() {
-                msgs.push(msg);
-            }
-        }
-        for msg in msgs {
-            refresh_arrowcloud_status |= apply_login_msg(slot, msg);
-        }
-    }
-    refresh_arrowcloud_status
-}
-
-fn apply_login_msg(slot: &mut LoginSlot, msg: LoginMsg) -> bool {
-    match msg {
-        LoginMsg::Started {
-            short_code,
-            verification_url,
-        } => {
-            slot.state = SlotState::Pending {
+        let slot = &mut ui.slots[profile_data::player_side_index(side)];
+        slot.state = match event {
+            crate::SimplyLoveQrLoginEvent::Started {
                 short_code,
                 verification_url,
-            };
-            false
-        }
-        LoginMsg::StatusUpdate => {
-            // Approved-but-not-consumed renders identically to Pending —
-            // we only flip to Success once the key has been delivered.
-            false
-        }
-        LoginMsg::Consumed { api_key, username } => {
-            let refresh_arrowcloud_status =
-                persist_consumed_key(slot, &api_key, username.as_deref());
-            slot.state = SlotState::Success;
-            slot.rx = None;
-            refresh_arrowcloud_status
-        }
-        LoginMsg::Failed { reason } => {
-            slot.state = SlotState::Failed { reason };
-            slot.rx = None;
-            false
-        }
-    }
-}
-
-/// Dispatch the new key (and optional username) to the right per-service
-/// `profile::set_*` helper, then refresh any service-status caches that
-/// depend on the key.  This is the only place the `BackendKind` switch
-/// is observed by the persistence layer.
-fn persist_consumed_key(slot: &mut LoginSlot, api_key: &str, username: Option<&str>) -> bool {
-    match slot.kind {
-        BackendKind::ArrowCloud => {
-            if let Some(profile_id) = slot.target_profile_id.as_ref() {
-                profile::set_arrowcloud_api_key_for_id(profile_id, api_key);
-            } else {
-                profile::set_arrowcloud_api_key_for_side(slot.side, api_key);
-                // Refresh display_name in case profile state changed.
-                slot.display_name = profile::get_for_side(slot.side).display_name;
+                ..
+            } => SlotState::Pending {
+                short_code,
+                verification_url,
+            },
+            crate::SimplyLoveQrLoginEvent::Succeeded { display_name, .. } => {
+                slot.display_name = display_name;
+                SlotState::Success
             }
-            let _ = username; // ArrowCloud's device-login never returns one.
-            true
-        }
-        BackendKind::GrooveStats => {
-            let username = username.unwrap_or_default();
-            if let Some(profile_id) = slot.target_profile_id.as_ref() {
-                profile::set_groovestats_credentials_for_id(profile_id, api_key, username);
-            } else {
-                profile::set_groovestats_credentials_for_side(slot.side, api_key, username);
-                // Refresh display_name in case profile state changed.
-                slot.display_name = profile::get_for_side(slot.side).display_name;
-            }
-            false
-        }
+            crate::SimplyLoveQrLoginEvent::Failed { reason, .. } => SlotState::Failed { reason },
+        };
     }
 }
 
@@ -728,151 +442,13 @@ fn push_status_badge(out: &mut Vec<Actor>, slot: &LoginSlot, panel_cx: f32, badg
     ));
 }
 
-/* -------------------- GrooveStats backend -------------------- */
-//
-// GrooveStats's QR-login flow is not poll-based like ArrowCloud — it
-// hangs a single WebSocket on `ws://qrlogin.groovestats.com:3000`, sends
-// the session UUID once, and listens for `apiKey` events keyed by side
-// (1 = P1, 2 = P2).  One websocket handles both sides for the whole
-// screen; the worker just routes each `apiKey` push to the matching
-// per-slot sender.  Mirrors Simply Love's
-// `ScreenGrooveStatsLogin underlay/default.lua`.
-
-fn run_groovestats_login_worker(
-    uuid: String,
-    p1_tx: Option<std::sync::mpsc::Sender<LoginMsg>>,
-    p2_tx: Option<std::sync::mpsc::Sender<LoginMsg>>,
-    cancel: Arc<AtomicBool>,
-) {
-    gs_api::run_qr_login_session(uuid, cancel, |event| match event {
-        gs_api::GrooveStatsQrLoginEvent::Failed { reason } => {
-            if let Some(tx) = &p1_tx {
-                let _ = tx.send(LoginMsg::Failed {
-                    reason: reason.clone(),
-                });
-            }
-            if let Some(tx) = &p2_tx {
-                let _ = tx.send(LoginMsg::Failed { reason });
-            }
-        }
-        gs_api::GrooveStatsQrLoginEvent::Consumed {
-            side,
-            api_key,
-            username,
-        } => {
-            let tx = match side {
-                1 => p1_tx.as_ref(),
-                2 => p2_tx.as_ref(),
-                _ => None,
-            };
-            if let Some(tx) = tx {
-                let _ = tx.send(LoginMsg::Consumed {
-                    api_key,
-                    username: Some(username),
-                });
-            }
-        }
-    });
-}
-
-/// Spawn GrooveStats QR-login workers for every joined Local side
-/// (single shared WebSocket) and return a fresh UI ready to be rendered.
-#[allow(dead_code)]
-pub fn create_groovestats_login_ui() -> QrLoginUiState {
-    let cancel = Arc::new(AtomicBool::new(false));
-    let uuid = gs_api::generate_qr_login_uuid();
-    let mut p1_tx: Option<std::sync::mpsc::Sender<LoginMsg>> = None;
-    let mut p2_tx: Option<std::sync::mpsc::Sender<LoginMsg>> = None;
-    let slots = build_initial_slots(&cancel, BackendKind::GrooveStats, |side, tx| {
-        // SL's GrooveStats flow doesn't roundtrip a `start` request — the
-        // QR URL is fully known up front — so push the slot straight to
-        // Pending with the per-side URL embedded.
-        let _ = tx.send(LoginMsg::Started {
-            short_code: String::new(),
-            verification_url: gs_api::qr_login_url(&uuid, profile_data::player_side_number(side)),
-        });
-        match side {
-            profile_data::PlayerSide::P1 => p1_tx = Some(tx),
-            profile_data::PlayerSide::P2 => p2_tx = Some(tx),
-        }
-    });
-    if p1_tx.is_some() || p2_tx.is_some() {
-        let cancel_for_thread = Arc::clone(&cancel);
-        std::thread::spawn(move || {
-            run_groovestats_login_worker(uuid, p1_tx, p2_tx, cancel_for_thread);
-        });
-    }
-    QrLoginUiState { slots, cancel }
-}
-
-/// Single-slot GrooveStats QR-login UI scoped to a specific profile
-/// (Manage Local Profiles "Link GrooveStats" entry).
-#[allow(dead_code)]
-pub fn create_groovestats_login_ui_for_profile(
-    profile_id: String,
-    display_name: String,
-) -> QrLoginUiState {
-    let cancel = Arc::new(AtomicBool::new(false));
-    let uuid = gs_api::generate_qr_login_uuid();
-    let had_existing_key = profile::get_groovestats_api_key_for_id(&profile_id).is_some();
-    let (tx, rx) = std::sync::mpsc::channel::<LoginMsg>();
-    // Push the QR URL straight away — no server roundtrip required.
-    let _ = tx.send(LoginMsg::Started {
-        short_code: String::new(),
-        verification_url: gs_api::qr_login_url(&uuid, 1),
-    });
-    let cancel_for_thread = Arc::clone(&cancel);
-    let tx_for_thread = tx.clone();
-    std::thread::spawn(move || {
-        run_groovestats_login_worker(uuid, Some(tx_for_thread), None, cancel_for_thread);
-    });
-    drop(tx);
-    let p1_slot = LoginSlot {
-        side: profile_data::PlayerSide::P1,
-        state: SlotState::Starting,
-        kind: BackendKind::GrooveStats,
-        display_name,
-        had_existing_key,
-        target_profile_id: Some(profile_id),
-        rx: Some(rx),
-    };
-    let p2_slot = LoginSlot {
-        side: profile_data::PlayerSide::P2,
-        state: SlotState::NotJoined,
-        kind: BackendKind::GrooveStats,
-        display_name: String::new(),
-        had_existing_key: false,
-        target_profile_id: None,
-        rx: None,
-    };
-    QrLoginUiState {
-        slots: [p1_slot, p2_slot],
-        cancel,
-    }
-}
-
-/// Probe for `should_auto_show_groovestats(Sometimes)`.  Mirrors
-/// `any_joined_local_side_missing_key` but reads the GrooveStats key
-/// off each side's loaded profile.
-fn any_joined_local_side_missing_gs_key() -> bool {
-    ALL_SIDES.iter().any(|side| {
-        if !profile::is_session_side_joined(*side) {
-            return false;
-        }
-        if profile::is_session_side_guest(*side) {
-            return false;
-        }
-        profile::get_for_side(*side)
-            .groovestats_api_key
-            .trim()
-            .is_empty()
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::mpsc;
+    use crate::{
+        SimplyLoveQrLoginEvent, SimplyLoveQrLoginRequest, SimplyLoveQrLoginService,
+        SimplyLoveQrLoginSlot, SimplyLoveQrLoginSlotAvailability,
+    };
 
     fn slot(side: profile_data::PlayerSide, state: SlotState) -> LoginSlot {
         LoginSlot {
@@ -881,96 +457,96 @@ mod tests {
             kind: BackendKind::ArrowCloud,
             display_name: String::new(),
             had_existing_key: false,
-            target_profile_id: None,
-            rx: None,
+        }
+    }
+
+    fn request() -> SimplyLoveQrLoginRequest {
+        SimplyLoveQrLoginRequest {
+            service: SimplyLoveQrLoginService::ArrowCloud,
+            slots: [
+                SimplyLoveQrLoginSlot {
+                    side: profile_data::PlayerSide::P1,
+                    availability: SimplyLoveQrLoginSlotAvailability::Ready,
+                    display_name: "Alice".into(),
+                    had_existing_key: false,
+                    target_profile_id: Some("alice".into()),
+                },
+                SimplyLoveQrLoginSlot {
+                    side: profile_data::PlayerSide::P2,
+                    availability: SimplyLoveQrLoginSlotAvailability::NotJoined,
+                    display_name: String::new(),
+                    had_existing_key: false,
+                    target_profile_id: None,
+                },
+            ],
         }
     }
 
     #[test]
-    fn login_overlay_is_terminal_true_when_all_slots_workless() {
-        let ui = QrLoginUiState {
-            cancel: Arc::new(AtomicBool::new(false)),
+    fn prepared_request_creates_theme_only_slot_state() {
+        let ui = create_login_ui(&request());
+        assert!(matches!(ui.slots[0].state, SlotState::Starting));
+        assert!(matches!(ui.slots[1].state, SlotState::NotJoined));
+        assert_eq!(ui.slots[0].display_name, "Alice");
+    }
+
+    #[test]
+    fn login_overlay_terminal_state_tracks_visible_work() {
+        let mut ui = QrLoginUiState {
             slots: [
                 slot(profile_data::PlayerSide::P1, SlotState::Success),
                 slot(profile_data::PlayerSide::P2, SlotState::NotJoined),
             ],
         };
         assert!(login_overlay_is_terminal(&ui));
-    }
-
-    #[test]
-    fn login_overlay_is_terminal_false_when_any_slot_pending() {
-        let ui = QrLoginUiState {
-            cancel: Arc::new(AtomicBool::new(false)),
-            slots: [
-                slot(profile_data::PlayerSide::P1, SlotState::Success),
-                slot(
-                    profile_data::PlayerSide::P2,
-                    SlotState::Pending {
-                        short_code: "X".into(),
-                        verification_url: "u".into(),
-                    },
-                ),
-            ],
-        };
+        ui.slots[1].state = SlotState::Starting;
         assert!(!login_overlay_is_terminal(&ui));
     }
 
     #[test]
-    fn apply_started_message_moves_slot_to_pending() {
-        let mut s = slot(profile_data::PlayerSide::P1, SlotState::Starting);
-        apply_login_msg(
-            &mut s,
-            LoginMsg::Started {
+    fn plain_events_update_slot_state_and_name() {
+        let mut ui = create_login_ui(&request());
+        apply_events(
+            &mut ui,
+            [SimplyLoveQrLoginEvent::Started {
+                service: SimplyLoveQrLoginService::ArrowCloud,
+                side: profile_data::PlayerSide::P1,
                 short_code: "XYZ".into(),
                 verification_url: "https://example".into(),
-            },
+            }],
         );
         assert!(matches!(
-            s.state,
+            ui.slots[0].state,
             SlotState::Pending { ref short_code, .. } if short_code == "XYZ"
         ));
-    }
 
-    #[test]
-    fn apply_failed_message_clears_rx_and_records_reason() {
-        let (_tx, rx) = mpsc::channel::<LoginMsg>();
-        let mut s = LoginSlot {
-            side: profile_data::PlayerSide::P2,
-            state: SlotState::Pending {
-                short_code: "X".into(),
-                verification_url: "u".into(),
-            },
-            kind: BackendKind::ArrowCloud,
-            display_name: String::new(),
-            had_existing_key: false,
-            target_profile_id: None,
-            rx: Some(rx),
-        };
-        apply_login_msg(
-            &mut s,
-            LoginMsg::Failed {
-                reason: "boom".into(),
-            },
+        apply_events(
+            &mut ui,
+            [SimplyLoveQrLoginEvent::Succeeded {
+                service: SimplyLoveQrLoginService::ArrowCloud,
+                side: profile_data::PlayerSide::P1,
+                display_name: "Alice Updated".into(),
+            }],
         );
-        assert!(matches!(s.state, SlotState::Failed { ref reason } if reason == "boom"));
-        assert!(s.rx.is_none());
+        assert!(matches!(ui.slots[0].state, SlotState::Success));
+        assert_eq!(ui.slots[0].display_name, "Alice Updated");
     }
 
     #[test]
-    fn drop_signals_cancel() {
-        let cancel = Arc::new(AtomicBool::new(false));
-        {
-            let _ui = QrLoginUiState {
-                cancel: Arc::clone(&cancel),
-                slots: [
-                    slot(profile_data::PlayerSide::P1, SlotState::Starting),
-                    slot(profile_data::PlayerSide::P2, SlotState::NotJoined),
-                ],
-            };
-            assert!(!cancel.load(Ordering::Relaxed));
-        }
-        assert!(cancel.load(Ordering::Relaxed));
+    fn failed_event_records_reason() {
+        let mut ui = create_login_ui(&request());
+        apply_events(
+            &mut ui,
+            [SimplyLoveQrLoginEvent::Failed {
+                service: SimplyLoveQrLoginService::ArrowCloud,
+                side: profile_data::PlayerSide::P1,
+                reason: "boom".into(),
+            }],
+        );
+        assert!(matches!(
+            ui.slots[0].state,
+            SlotState::Failed { ref reason } if reason == "boom"
+        ));
     }
 
     #[test]
@@ -987,101 +563,5 @@ mod tests {
             }
             .is_workless()
         );
-    }
-
-    use crate::config::ArrowCloudQrLoginWhen;
-    use crate::config::GrooveStatsQrLoginWhen;
-
-    #[test]
-    fn should_auto_show_disabled_is_always_false() {
-        assert!(!should_auto_show_with(
-            ArrowCloudQrLoginWhen::Disabled,
-            || true
-        ));
-        assert!(!should_auto_show_with(
-            ArrowCloudQrLoginWhen::Disabled,
-            || false
-        ));
-    }
-
-    #[test]
-    fn should_auto_show_always_is_always_true() {
-        assert!(should_auto_show_with(ArrowCloudQrLoginWhen::Always, || {
-            true
-        }));
-        assert!(should_auto_show_with(ArrowCloudQrLoginWhen::Always, || {
-            false
-        }));
-    }
-
-    #[test]
-    fn should_auto_show_sometimes_follows_missing_key_probe() {
-        assert!(should_auto_show_with(
-            ArrowCloudQrLoginWhen::Sometimes,
-            || true
-        ));
-        assert!(!should_auto_show_with(
-            ArrowCloudQrLoginWhen::Sometimes,
-            || false
-        ));
-    }
-
-    #[test]
-    fn should_auto_show_groovestats_disabled_is_always_false() {
-        assert!(!should_auto_show_groovestats_with(
-            GrooveStatsQrLoginWhen::Disabled,
-            || true
-        ));
-    }
-
-    #[test]
-    fn should_auto_show_groovestats_always_is_always_true() {
-        assert!(should_auto_show_groovestats_with(
-            GrooveStatsQrLoginWhen::Always,
-            || false
-        ));
-    }
-
-    #[test]
-    fn should_auto_show_groovestats_sometimes_follows_probe() {
-        assert!(should_auto_show_groovestats_with(
-            GrooveStatsQrLoginWhen::Sometimes,
-            || true
-        ));
-        assert!(!should_auto_show_groovestats_with(
-            GrooveStatsQrLoginWhen::Sometimes,
-            || false
-        ));
-    }
-
-    /* -------------------- GrooveStats backend -------------------- */
-
-    #[test]
-    fn apply_consumed_with_username_passes_through_for_groovestats_slot() {
-        // We can't actually persist (no profile storage in tests), but
-        // apply_login_msg should at least transition state and clear rx
-        // without panicking, regardless of slot.kind.
-        let (_tx, rx) = mpsc::channel::<LoginMsg>();
-        let mut s = LoginSlot {
-            side: profile_data::PlayerSide::P1,
-            state: SlotState::Pending {
-                short_code: String::new(),
-                verification_url: "u".into(),
-            },
-            kind: BackendKind::GrooveStats,
-            display_name: "Alice".into(),
-            had_existing_key: false,
-            target_profile_id: Some("alice-id".into()),
-            rx: Some(rx),
-        };
-        apply_login_msg(
-            &mut s,
-            LoginMsg::Consumed {
-                api_key: "GS-KEY".into(),
-                username: Some("alice".into()),
-            },
-        );
-        assert!(matches!(s.state, SlotState::Success));
-        assert!(s.rx.is_none());
     }
 }

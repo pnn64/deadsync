@@ -89,9 +89,11 @@ pub enum SimplyLoveProfileImportEvent {
 #[derive(Clone, Debug)]
 pub enum SimplyLoveOnlineRequest {
     Reinitialize,
-    RefreshArrowCloudStatus,
+    Lobby(SimplyLoveLobbyRequest),
     StartScoreImport(SimplyLoveScoreImportRequest),
     CancelScoreImport,
+    StartQrLogin(SimplyLoveQrLoginRequest),
+    CancelQrLogin(SimplyLoveQrLoginService),
     LinkArrowCloud {
         profile_id: String,
         display_name: String,
@@ -101,6 +103,83 @@ pub enum SimplyLoveOnlineRequest {
         display_name: String,
     },
     FetchGrade(String),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum SimplyLoveLobbyRequest {
+    Search,
+    Create {
+        password: String,
+    },
+    Join {
+        code: String,
+        password: String,
+    },
+    Leave,
+    SelectSong(deadsync_online::lobbies::LobbySongInfo),
+    UpdateMachineState {
+        screen_name: &'static str,
+        ready: bool,
+    },
+    Disconnect,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SimplyLoveQrLoginService {
+    ArrowCloud,
+    GrooveStats,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SimplyLoveQrLoginSlotAvailability {
+    NotJoined,
+    Guest,
+    Ready,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SimplyLoveQrLoginSlot {
+    pub side: PlayerSide,
+    pub availability: SimplyLoveQrLoginSlotAvailability,
+    pub display_name: String,
+    pub had_existing_key: bool,
+    pub target_profile_id: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SimplyLoveQrLoginRequest {
+    pub service: SimplyLoveQrLoginService,
+    pub slots: [SimplyLoveQrLoginSlot; 2],
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SimplyLoveQrLoginEvent {
+    Started {
+        service: SimplyLoveQrLoginService,
+        side: PlayerSide,
+        short_code: String,
+        verification_url: String,
+    },
+    Succeeded {
+        service: SimplyLoveQrLoginService,
+        side: PlayerSide,
+        display_name: String,
+    },
+    Failed {
+        service: SimplyLoveQrLoginService,
+        side: PlayerSide,
+        reason: String,
+    },
+}
+
+impl SimplyLoveQrLoginEvent {
+    pub const fn service(&self) -> SimplyLoveQrLoginService {
+        match self {
+            Self::Started { service, .. }
+            | Self::Succeeded { service, .. }
+            | Self::Failed { service, .. } => *service,
+        }
+    }
 }
 
 #[derive(Clone)]

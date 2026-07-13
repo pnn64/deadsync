@@ -23,6 +23,7 @@ pub type TimingHealth = TimingHealthView<PresentModeTrace, ClockDomainTrace, Aud
 #[derive(Clone, Debug, PartialEq)]
 pub struct SelectMusicRuntimeView {
     pub audio_playback: deadsync_theme::views::AudioPlaybackView,
+    pub lobby: SimplyLoveLobbyRuntimeView,
     /// Beat offset applied to the selection arrow bounce animation.
     pub arrow_bounce_offset: f32,
     pub policy: SelectMusicPolicyView,
@@ -36,12 +37,31 @@ impl Default for SelectMusicRuntimeView {
     fn default() -> Self {
         Self {
             audio_playback: Default::default(),
+            lobby: Default::default(),
             arrow_bounce_offset: 0.0,
             policy: Default::default(),
             unlock_downloads_available: false,
             ready_song_reload_dirs: Vec::new(),
             sync_graph_mode: deadsync_config::prelude::SyncGraphMode::PostKernelFingerprint,
             sync_confidence_percent: 80,
+        }
+    }
+}
+
+/// Shell-prepared online lobby state consumed by Select Music and its overlay.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SimplyLoveLobbyRuntimeView {
+    pub snapshot: deadsync_online::lobbies::Snapshot,
+    pub reconnect_status_text: Option<String>,
+    pub disconnect_hold_seconds: f32,
+}
+
+impl Default for SimplyLoveLobbyRuntimeView {
+    fn default() -> Self {
+        Self {
+            snapshot: Default::default(),
+            reconnect_status_text: None,
+            disconnect_hold_seconds: 5.0,
         }
     }
 }

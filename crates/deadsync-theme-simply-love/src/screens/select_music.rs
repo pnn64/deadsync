@@ -23,6 +23,7 @@ use crate::screens::{
 };
 use crate::views::{
     SelectMusicInitView, SelectMusicPlaylistView, SelectMusicPolicyView, SelectMusicRuntimeView,
+    SimplyLoveLobbyRuntimeView,
 };
 use deadlib_present::actors::{Actor, SizeSpec, SpriteSource};
 use deadlib_present::cache::{SharedStrCache, TextCache, cached_shared_str, cached_text};
@@ -611,6 +612,7 @@ pub fn selection_anim_beat(state: &State) -> f32 {
 #[inline(always)]
 pub fn sync_runtime_view(state: &mut State, view: SelectMusicRuntimeView) {
     state.audio_playback = view.audio_playback;
+    state.lobby_view = view.lobby;
     state.arrow_bounce_offset = view.arrow_bounce_offset;
     state.policy = view.policy;
     state.unlock_downloads_available = view.unlock_downloads_available;
@@ -1132,6 +1134,7 @@ pub struct State {
     pending_audio: Vec<AudioRequest>,
     pending_sync: Vec<crate::SimplyLoveSyncRequest>,
     pending_hardware: Vec<crate::SimplyLoveHardwareRequest>,
+    pending_online: Vec<crate::SimplyLoveOnlineRequest>,
     bg: visual_style_bg::State,
     last_requested_banner_path: Option<PathBuf>,
     last_requested_cdtitle_path: Option<PathBuf>,
@@ -1170,6 +1173,7 @@ pub struct State {
     currently_playing_preview_start_sec: Option<f32>,
     currently_playing_preview_length_sec: Option<f32>,
     audio_playback: AudioPlaybackView,
+    lobby_view: SimplyLoveLobbyRuntimeView,
     arrow_bounce_offset: f32,
     policy: SelectMusicPolicyView,
     unlock_downloads_available: bool,
@@ -2593,6 +2597,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         pending_audio: Vec::new(),
         pending_sync: Vec::new(),
         pending_hardware: Vec::new(),
+        pending_online: Vec::new(),
         bg: visual_style_bg::State::new(),
         last_requested_banner_path: None,
         last_requested_cdtitle_path: None,
@@ -2639,6 +2644,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         currently_playing_preview_start_sec: None,
         currently_playing_preview_length_sec: None,
         audio_playback: AudioPlaybackView::default(),
+        lobby_view: SimplyLoveLobbyRuntimeView::default(),
         arrow_bounce_offset: 0.0,
         policy: SelectMusicPolicyView::default(),
         unlock_downloads_available: false,
@@ -2802,6 +2808,7 @@ pub fn init_placeholder() -> State {
         pending_audio: Vec::new(),
         pending_sync: Vec::new(),
         pending_hardware: Vec::new(),
+        pending_online: Vec::new(),
         bg: visual_style_bg::State::new(),
         last_requested_banner_path: None,
         last_requested_cdtitle_path: None,
@@ -2848,6 +2855,7 @@ pub fn init_placeholder() -> State {
         currently_playing_preview_start_sec: None,
         currently_playing_preview_length_sec: None,
         audio_playback: AudioPlaybackView::default(),
+        lobby_view: SimplyLoveLobbyRuntimeView::default(),
         arrow_bounce_offset: 0.0,
         policy: SelectMusicPolicyView::default(),
         unlock_downloads_available: false,
@@ -3032,6 +3040,11 @@ fn queue_hardware(state: &mut State, request: crate::SimplyLoveHardwareRequest) 
     state.pending_hardware.push(request);
 }
 
+#[inline(always)]
+fn queue_online(state: &mut State, request: crate::SimplyLoveOnlineRequest) {
+    state.pending_online.push(request);
+}
+
 fn queue_lobby_sounds(state: &mut State) {
     let sounds = lobby_overlay::take_pending_sounds(&mut state.lobby_overlay);
     for sound in sounds {
@@ -3040,8 +3053,10 @@ fn queue_lobby_sounds(state: &mut State) {
 }
 
 fn prepend_pending_runtime(state: &mut State, effect: ThemeEffect) -> ThemeEffect {
-    let request_count =
-        state.pending_audio.len() + state.pending_sync.len() + state.pending_hardware.len();
+    let request_count = state.pending_audio.len()
+        + state.pending_sync.len()
+        + state.pending_hardware.len()
+        + state.pending_online.len();
     if request_count == 0 {
         return effect;
     }
@@ -3064,6 +3079,12 @@ fn prepend_pending_runtime(state: &mut State, effect: ThemeEffect) -> ThemeEffec
             .pending_sync
             .drain(..)
             .map(|request| ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Sync(request))),
+    );
+    effects.extend(
+        state
+            .pending_online
+            .drain(..)
+            .map(|request| ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Online(request))),
     );
     if has_effect {
         effects.push(effect);
@@ -3773,7 +3794,10 @@ fn show_lobby_overlay(state: &mut State) {
     clear_overlay_nav_hold(state);
     clear_nav_hold(state);
     state.lobby_overlay = lobby_overlay::show_overlay();
-    deadsync_online::lobbies::runtime_search_lobbies_default();
+    queue_online(
+        state,
+        crate::SimplyLoveOnlineRequest::Lobby(crate::SimplyLoveLobbyRequest::Search),
+    );
     clear_preview(state);
 }
 
@@ -5487,38 +5511,9 @@ fn handle_lobby_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEffect
         return ThemeEffect::None;
     }
 
-    let outcome = lobby_overlay::handle_input(&mut state.lobby_overlay, ev);
-    queue_lobby_sounds(state);
-    match outcome {
-        lobby_overlay::InputOutcome::None => {}
-        lobby_overlay::InputOutcome::ChangedSelection => {
-            queue_sfx(state, "assets/sounds/change.ogg");
-        }
-        lobby_overlay::InputOutcome::Closed => {
-            queue_sfx(state, "assets/sounds/start.ogg");
-        }
-        lobby_overlay::InputOutcome::ConnectRequested
-        | lobby_overlay::InputOutcome::SearchRequested => {
-            queue_sfx(state, "assets/sounds/start.ogg");
-            deadsync_online::lobbies::runtime_search_lobbies_default();
-        }
-        lobby_overlay::InputOutcome::CreateRequested(password) => {
-            queue_sfx(state, "assets/sounds/start.ogg");
-            deadsync_online::lobbies::runtime_create_lobby_with_password_default(password.as_str());
-        }
-        lobby_overlay::InputOutcome::JoinRequested { code, password } => {
-            queue_sfx(state, "assets/sounds/start.ogg");
-            deadsync_online::lobbies::runtime_join_lobby_with_password_default(
-                code.as_str(),
-                password.as_str(),
-            );
-        }
-        lobby_overlay::InputOutcome::LeaveRequested => {
-            queue_sfx(state, "assets/sounds/start.ogg");
-            deadsync_online::lobbies::runtime_leave_lobby_default();
-        }
-    }
-    ThemeEffect::None
+    let outcome =
+        lobby_overlay::handle_input(&mut state.lobby_overlay, ev, &state.lobby_view.snapshot);
+    apply_lobby_input_outcome(state, outcome)
 }
 
 fn handle_lobby_overlay_raw_key(
@@ -5527,6 +5522,13 @@ fn handle_lobby_overlay_raw_key(
     text: Option<&str>,
 ) -> ThemeEffect {
     let outcome = lobby_overlay::handle_raw_key(&mut state.lobby_overlay, key, text);
+    apply_lobby_input_outcome(state, outcome)
+}
+
+fn apply_lobby_input_outcome(
+    state: &mut State,
+    outcome: lobby_overlay::InputOutcome,
+) -> ThemeEffect {
     queue_lobby_sounds(state);
     match outcome {
         lobby_overlay::InputOutcome::None => {}
@@ -5539,22 +5541,36 @@ fn handle_lobby_overlay_raw_key(
         lobby_overlay::InputOutcome::ConnectRequested
         | lobby_overlay::InputOutcome::SearchRequested => {
             queue_sfx(state, "assets/sounds/start.ogg");
-            deadsync_online::lobbies::runtime_search_lobbies_default();
+            queue_online(
+                state,
+                crate::SimplyLoveOnlineRequest::Lobby(crate::SimplyLoveLobbyRequest::Search),
+            );
         }
         lobby_overlay::InputOutcome::CreateRequested(password) => {
             queue_sfx(state, "assets/sounds/start.ogg");
-            deadsync_online::lobbies::runtime_create_lobby_with_password_default(password.as_str());
+            queue_online(
+                state,
+                crate::SimplyLoveOnlineRequest::Lobby(crate::SimplyLoveLobbyRequest::Create {
+                    password,
+                }),
+            );
         }
         lobby_overlay::InputOutcome::JoinRequested { code, password } => {
             queue_sfx(state, "assets/sounds/start.ogg");
-            deadsync_online::lobbies::runtime_join_lobby_with_password_default(
-                code.as_str(),
-                password.as_str(),
+            queue_online(
+                state,
+                crate::SimplyLoveOnlineRequest::Lobby(crate::SimplyLoveLobbyRequest::Join {
+                    code,
+                    password,
+                }),
             );
         }
         lobby_overlay::InputOutcome::LeaveRequested => {
             queue_sfx(state, "assets/sounds/start.ogg");
-            deadsync_online::lobbies::runtime_leave_lobby_default();
+            queue_online(
+                state,
+                crate::SimplyLoveOnlineRequest::Lobby(crate::SimplyLoveLobbyRequest::Leave),
+            );
         }
     }
     ThemeEffect::None
@@ -6024,7 +6040,7 @@ fn apply_remote_lobby_song_selection(
 }
 
 fn publish_lobby_confirmed_song_selection(state: &mut State) {
-    let snapshot = deadsync_online::lobbies::runtime_snapshot();
+    let snapshot = &state.lobby_view.snapshot;
     let Some(joined) = snapshot.joined_lobby.as_ref() else {
         return;
     };
@@ -6048,12 +6064,20 @@ fn publish_lobby_confirmed_song_selection(state: &mut State) {
         return;
     }
 
-    deadsync_online::lobbies::runtime_select_song_default(song_info);
+    queue_online(
+        state,
+        crate::SimplyLoveOnlineRequest::Lobby(crate::SimplyLoveLobbyRequest::SelectSong(song_info)),
+    );
     state.lobby_last_published_song_sig = Some(local_sig);
 }
 
 fn sync_lobby_select_music(state: &mut State) {
-    let snapshot = deadsync_online::lobbies::runtime_snapshot();
+    let snapshot = std::mem::take(&mut state.lobby_view.snapshot);
+    sync_lobby_select_music_with(state, &snapshot);
+    state.lobby_view.snapshot = snapshot;
+}
+
+fn sync_lobby_select_music_with(state: &mut State, snapshot: &lobby_data::Snapshot) {
     let Some(joined) = snapshot.joined_lobby.as_ref() else {
         state.lobby_last_joined_code = None;
         state.lobby_last_published_machine_sig = None;
@@ -6085,7 +6109,13 @@ fn sync_lobby_select_music(state: &mut State) {
     // identical machine-state payloads, and SelectMusic can be re-entered multiple
     // times during a session while this screen state persists locally.
     let machine_sig = local_lobby_machine_signature();
-    deadsync_online::lobbies::runtime_update_machine_state_default("ScreenSelectMusic", true);
+    queue_online(
+        state,
+        crate::SimplyLoveOnlineRequest::Lobby(crate::SimplyLoveLobbyRequest::UpdateMachineState {
+            screen_name: "ScreenSelectMusic",
+            ready: true,
+        }),
+    );
     state.lobby_last_published_machine_sig = Some(machine_sig);
 
     if let Some(song_info) = joined.song_info.as_ref() {
@@ -6143,15 +6173,14 @@ fn sync_lobby_select_music(state: &mut State) {
 }
 
 fn select_music_lobby_lock_text(state: &State) -> Option<String> {
-    let snapshot = deadsync_online::lobbies::runtime_snapshot();
+    let snapshot = &state.lobby_view.snapshot;
     let joined = snapshot.joined_lobby.as_ref()?;
     let local_song_info = build_local_lobby_song_info(state);
-    let reconnect_status_text = deadsync_online::lobbies::runtime_reconnect_status_text();
     select_music_lobby_lock_text_for(
         joined,
         local_lobby_player_count(),
         local_song_info.as_ref(),
-        reconnect_status_text.as_deref(),
+        state.lobby_view.reconnect_status_text.as_deref(),
     )
 }
 
@@ -6161,8 +6190,7 @@ fn select_music_lobby_status_text(state: &State) -> Option<String> {
     }
     let mut text = select_music_lobby_lock_text(state)?;
     let prompt = if let Some(elapsed) = lobby_disconnect_hold_elapsed(state) {
-        let remaining =
-            (deadsync_online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS - elapsed).ceil() as i32;
+        let remaining = (state.lobby_view.disconnect_hold_seconds - elapsed).ceil() as i32;
         let remaining = remaining.max(0);
         tr_fmt(
             "Lobby",
@@ -9332,8 +9360,6 @@ pub fn update(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffec
 fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffect {
     state.smx_pads.clone_from(&smx.pads);
     process_smx_pad_profile_events(state);
-    deadsync_online::lobbies::runtime_poll_reconnect_default();
-
     let lobby_locked = select_music_lobby_lock_text(state).is_some();
     if state.lobby_notice_time_left > 0.0 {
         state.lobby_notice_time_left = (state.lobby_notice_time_left - dt.max(0.0)).max(0.0);
@@ -9351,11 +9377,14 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
         state.last_steps_nav_time_p1 = None;
         state.last_steps_nav_dir_p2 = None;
         state.last_steps_nav_time_p2 = None;
-        if lobby_disconnect_hold_elapsed(state).is_some_and(|elapsed| {
-            elapsed >= deadsync_online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS
-        }) {
+        if lobby_disconnect_hold_elapsed(state)
+            .is_some_and(|elapsed| elapsed >= state.lobby_view.disconnect_hold_seconds)
+        {
             clear_lobby_disconnect_holds(state);
-            deadsync_online::lobbies::runtime_disconnect();
+            queue_online(
+                state,
+                crate::SimplyLoveOnlineRequest::Lobby(crate::SimplyLoveLobbyRequest::Disconnect),
+            );
             set_lobby_notice(state, "Disconnected from lobby.");
         }
     } else {
@@ -9379,7 +9408,7 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
         update_overlay_nav_hold(state);
         return ThemeEffect::None;
     }
-    lobby_overlay::update_overlay(&mut state.lobby_overlay, dt);
+    lobby_overlay::update_overlay(&mut state.lobby_overlay, dt, &state.lobby_view.snapshot);
     queue_lobby_sounds(state);
     if pack_sync::poll(state) {
         return ThemeEffect::None;
@@ -11653,15 +11682,17 @@ pub fn push_actors(
         ));
         return;
     }
-    if let Some(lobby_overlay) =
-        lobby_overlay::build_overlay(&state.lobby_overlay, state.active_color_index)
-    {
+    if let Some(lobby_overlay) = lobby_overlay::build_overlay(
+        &state.lobby_overlay,
+        state.active_color_index,
+        &state.lobby_view.snapshot,
+        state.lobby_view.reconnect_status_text.as_deref(),
+    ) {
         actors.extend(lobby_overlay);
         return;
     }
 
-    let lobby_snapshot = deadsync_online::lobbies::runtime_snapshot();
-    if let Some(joined) = lobby_snapshot.joined_lobby.as_ref() {
+    if let Some(joined) = state.lobby_view.snapshot.joined_lobby.as_ref() {
         actors.extend(lobby_hud::build_panel(lobby_hud::RenderParams {
             screen_name: "ScreenSelectMusic",
             joined,
@@ -12407,6 +12438,30 @@ mod tests {
     }
 
     #[test]
+    fn lobby_action_emits_sound_before_shell_request() {
+        let mut state = init_placeholder();
+        let effect = super::apply_lobby_input_outcome(
+            &mut state,
+            super::lobby_overlay::InputOutcome::SearchRequested,
+        );
+        let ThemeEffect::Batch(effects) = super::prepend_pending_runtime(&mut state, effect) else {
+            panic!("lobby sound and shell request should be batched");
+        };
+        assert!(matches!(
+            &effects[0],
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Audio(
+                deadsync_theme::AudioRequest::PlaySfx(path)
+            )) if path == "assets/sounds/start.ogg"
+        ));
+        assert!(matches!(
+            effects[1],
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Online(
+                crate::SimplyLoveOnlineRequest::Lobby(crate::SimplyLoveLobbyRequest::Search)
+            ))
+        ));
+    }
+
+    #[test]
     fn preview_time_uses_the_shell_prepared_audio_view() {
         let mut state = init_placeholder();
         state.currently_playing_preview_start_sec = Some(10.0);
@@ -12417,6 +12472,7 @@ mod tests {
                 audio_playback: deadsync_theme::views::AudioPlaybackView {
                     music_stream_position_seconds: 2.5,
                 },
+                lobby: Default::default(),
                 arrow_bounce_offset: -0.25,
                 policy: crate::views::SelectMusicPolicyView::default(),
                 unlock_downloads_available: true,
@@ -13027,21 +13083,20 @@ mod tests {
             last_status: None,
         };
 
-        deadsync_online::lobbies::runtime_with_snapshot_for_test(snapshot, || {
-            assert_eq!(
-                select_music_lobby_lock_text(&state).as_deref(),
-                Some("Waiting for players to finish evaluation...")
-            );
+        state.lobby_view.snapshot = snapshot;
+        assert_eq!(
+            select_music_lobby_lock_text(&state).as_deref(),
+            Some("Waiting for players to finish evaluation...")
+        );
 
-            let action =
-                handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyM, true, false)), None);
+        let action =
+            handle_raw_key_event(&mut state, Some(&raw_key(KeyCode::KeyM, true, false)), None);
 
-            assert_stop_then_consume(action);
-            assert!(state.preview_music_muted);
-            assert_eq!(state.currently_playing_preview_path, None);
-            assert_eq!(state.currently_playing_preview_start_sec, None);
-            assert_eq!(state.currently_playing_preview_length_sec, None);
-        });
+        assert_stop_then_consume(action);
+        assert!(state.preview_music_muted);
+        assert_eq!(state.currently_playing_preview_path, None);
+        assert_eq!(state.currently_playing_preview_start_sec, None);
+        assert_eq!(state.currently_playing_preview_length_sec, None);
     }
 
     #[test]

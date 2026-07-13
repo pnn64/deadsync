@@ -24,6 +24,7 @@ mod pad_config;
 mod player_options;
 mod profile_import;
 mod profile_session;
+mod qr_login;
 mod restart;
 mod runtime;
 mod score_import;

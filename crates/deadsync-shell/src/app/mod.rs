@@ -174,11 +174,12 @@ use deadsync_theme::{AudioRequest, PlatformRequest, RevealPathKind};
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as CurrentScreen;
 use deadsync_theme_simply_love::views::{
     SelectMusicPolicyView, SelectMusicRuntimeView, SimplyLoveDensityGraphSlot as DensityGraphSlot,
+    SimplyLoveLobbyRuntimeView,
 };
 use deadsync_theme_simply_love::{
     SimplyLoveConfigRequest, SimplyLoveEffect as ThemeEffect, SimplyLoveHardwareRequest,
-    SimplyLoveOnlineRequest, SimplyLoveProfileRequest, SimplyLoveRuntimeRequest,
-    SimplyLoveSyncOwner, SimplyLoveSyncRequest,
+    SimplyLoveLobbyRequest, SimplyLoveOnlineRequest, SimplyLoveProfileRequest,
+    SimplyLoveQrLoginService, SimplyLoveRuntimeRequest, SimplyLoveSyncOwner, SimplyLoveSyncRequest,
 };
 
 /// Imperative effects to be executed by the shell.
@@ -841,6 +842,7 @@ pub struct App {
     dynamic_media: DynamicMedia,
     options_song_pack_generation: u64,
     profile_import: crate::profile_import::Service,
+    qr_login: crate::qr_login::Service,
     score_import: crate::score_import::Service,
     sync_analysis: crate::sync_analysis::Service,
     ui_text_layout_cache: compose::TextLayoutCache,
@@ -902,6 +904,29 @@ impl App {
         let events = self.score_import.poll();
         if !events.is_empty() {
             options::apply_score_import_events(&mut self.state.screens.options_state, events);
+        }
+    }
+
+    fn poll_qr_login(&mut self) {
+        let mut arrowcloud = Vec::new();
+        let mut groovestats = Vec::new();
+        for event in self.qr_login.poll() {
+            match event.service() {
+                SimplyLoveQrLoginService::ArrowCloud => arrowcloud.push(event),
+                SimplyLoveQrLoginService::GrooveStats => groovestats.push(event),
+            }
+        }
+        if !arrowcloud.is_empty() {
+            screens::arrowcloud_login::apply_events(
+                &mut self.state.screens.arrowcloud_login_state,
+                arrowcloud,
+            );
+        }
+        if !groovestats.is_empty() {
+            screens::groovestats_login::apply_events(
+                &mut self.state.screens.groovestats_login_state,
+                groovestats,
+            );
         }
     }
 
@@ -1056,6 +1081,7 @@ impl App {
         if self.state.screens.current_screen != CurrentScreen::SelectMusic {
             return;
         }
+        deadsync_online::lobbies::runtime_poll_reconnect_default();
         let music_stream_position_seconds = if deadsync_audio_stream::is_initialized() {
             f64::from(deadsync_audio_stream::get_music_stream_position_seconds())
         } else {
@@ -1081,6 +1107,13 @@ impl App {
             SelectMusicRuntimeView {
                 audio_playback: AudioPlaybackView {
                     music_stream_position_seconds,
+                },
+                lobby: SimplyLoveLobbyRuntimeView {
+                    snapshot: deadsync_online::lobbies::runtime_snapshot(),
+                    reconnect_status_text: deadsync_online::lobbies::runtime_reconnect_status_text(
+                    ),
+                    disconnect_hold_seconds:
+                        deadsync_online::lobbies::LOBBY_DISCONNECT_HOLD_SECONDS,
                 },
                 arrow_bounce_offset,
                 policy,
@@ -1574,6 +1607,7 @@ impl App {
         self.state.shell.interaction.update_message(redraw_started);
         self.sync_options_song_packs();
         self.poll_profile_import();
+        self.poll_qr_login();
         self.poll_score_import();
         self.poll_sync_analysis();
 
@@ -2038,6 +2072,7 @@ impl App {
             dynamic_media: DynamicMedia::new(),
             options_song_pack_generation: deadsync_simfile::runtime_cache::song_cache_generation(),
             profile_import: crate::profile_import::Service::default(),
+            qr_login: crate::qr_login::Service::default(),
             score_import: crate::score_import::Service::default(),
             sync_analysis: crate::sync_analysis::Service::default(),
             // Screen transitions clear the UI cache, so misses stop inserting
@@ -2184,10 +2219,12 @@ impl App {
                     } else {
                         let cfg = config::get();
                         (
-                            screens::options::should_auto_show_groovestats(
+                            crate::qr_login::should_auto_show_groovestats(
                                 cfg.groovestats_qr_login_when,
                             ),
-                            screens::options::should_auto_show(cfg.arrowcloud_qr_login_when),
+                            crate::qr_login::should_auto_show_arrowcloud(
+                                cfg.arrowcloud_qr_login_when,
+                            ),
                         )
                     };
                     let plan = profile_selection_plan(
@@ -2494,10 +2531,49 @@ impl App {
                     deadsync_online::runtime::init();
                     Vec::new()
                 }
-                SimplyLoveRuntimeRequest::Online(
-                    SimplyLoveOnlineRequest::RefreshArrowCloudStatus,
-                ) => {
-                    deadsync_online::runtime::refresh_arrowcloud_status();
+                SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::Lobby(request)) => {
+                    match request {
+                        SimplyLoveLobbyRequest::Search => {
+                            deadsync_online::lobbies::runtime_search_lobbies_default();
+                        }
+                        SimplyLoveLobbyRequest::Create { password } => {
+                            deadsync_online::lobbies::runtime_create_lobby_with_password_default(
+                                &password,
+                            );
+                        }
+                        SimplyLoveLobbyRequest::Join { code, password } => {
+                            deadsync_online::lobbies::runtime_join_lobby_with_password_default(
+                                &code, &password,
+                            );
+                        }
+                        SimplyLoveLobbyRequest::Leave => {
+                            deadsync_online::lobbies::runtime_leave_lobby_default();
+                        }
+                        SimplyLoveLobbyRequest::SelectSong(song) => {
+                            deadsync_online::lobbies::runtime_select_song_default(song);
+                        }
+                        SimplyLoveLobbyRequest::UpdateMachineState { screen_name, ready } => {
+                            deadsync_online::lobbies::runtime_update_machine_state_default(
+                                screen_name,
+                                ready,
+                            );
+                        }
+                        SimplyLoveLobbyRequest::Disconnect => {
+                            deadsync_online::lobbies::runtime_disconnect();
+                        }
+                    }
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::StartQrLogin(
+                    request,
+                )) => {
+                    self.qr_login.start(request);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::CancelQrLogin(
+                    service,
+                )) => {
+                    self.qr_login.cancel(service);
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::StartScoreImport(

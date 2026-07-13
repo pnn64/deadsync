@@ -17,15 +17,49 @@ use deadlib_present::actors::Actor;
 use deadsync_config::prelude as config;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
-use deadsync_theme_simply_love::{screens, visual_styles};
+use deadsync_theme_simply_love::{SimplyLoveQrLoginService, screens, visual_styles};
 use log::{debug, info};
 use winit::event_loop::ActiveEventLoop;
 
 impl App {
+    fn enter_arrowcloud_login(&mut self) {
+        let color_index = self.state.screens.menu_state.active_color_index;
+        let state = &mut self.state.screens.arrowcloud_login_state;
+        state.active_color_index = color_index;
+        let target = state
+            .target_profile
+            .as_ref()
+            .map(|target| (target.id.clone(), target.display_name.clone()));
+        let request = crate::qr_login::request(SimplyLoveQrLoginService::ArrowCloud, target);
+        screens::arrowcloud_login::on_enter(state, request);
+    }
+
+    fn enter_groovestats_login(&mut self) {
+        let color_index = self.state.screens.menu_state.active_color_index;
+        let state = &mut self.state.screens.groovestats_login_state;
+        state.active_color_index = color_index;
+        let target = state
+            .target_profile
+            .as_ref()
+            .map(|target| (target.id.clone(), target.display_name.clone()));
+        let show_arrowcloud_next = target.is_none()
+            && crate::qr_login::should_auto_show_arrowcloud(config::get().arrowcloud_qr_login_when);
+        let request = crate::qr_login::request(SimplyLoveQrLoginService::GrooveStats, target);
+        screens::groovestats_login::on_enter(state, request, show_arrowcloud_next);
+    }
+
     #[inline(always)]
     pub(super) fn commit_screen_change(&mut self, target: CurrentScreen) {
         let prev = self.state.screens.current_screen;
         let plan = screen_change_plan(prev, target);
+        if prev != target
+            && matches!(
+                prev,
+                CurrentScreen::ArrowCloudLogin | CurrentScreen::GrooveStatsLogin
+            )
+        {
+            self.qr_login.cancel_any();
+        }
         if plan.leave_lobby {
             deadsync_online::lobbies::runtime_leave_lobby_default();
         }
@@ -59,16 +93,10 @@ impl App {
             select_color::on_enter(&mut self.state.screens.select_color_state);
         }
         if target_screen == CurrentScreen::ArrowCloudLogin {
-            self.state.screens.arrowcloud_login_state.active_color_index =
-                self.state.screens.menu_state.active_color_index;
-            screens::arrowcloud_login::on_enter(&mut self.state.screens.arrowcloud_login_state);
+            self.enter_arrowcloud_login();
         }
         if target_screen == CurrentScreen::GrooveStatsLogin {
-            self.state
-                .screens
-                .groovestats_login_state
-                .active_color_index = self.state.screens.menu_state.active_color_index;
-            screens::groovestats_login::on_enter(&mut self.state.screens.groovestats_login_state);
+            self.enter_groovestats_login();
         }
 
         let commands = actor_transition_music_commands(
@@ -319,16 +347,10 @@ impl App {
             select_color::on_enter(&mut self.state.screens.select_color_state);
         }
         if target == CurrentScreen::ArrowCloudLogin {
-            self.state.screens.arrowcloud_login_state.active_color_index =
-                self.state.screens.menu_state.active_color_index;
-            screens::arrowcloud_login::on_enter(&mut self.state.screens.arrowcloud_login_state);
+            self.enter_arrowcloud_login();
         }
         if target == CurrentScreen::GrooveStatsLogin {
-            self.state
-                .screens
-                .groovestats_login_state
-                .active_color_index = self.state.screens.menu_state.active_color_index;
-            screens::groovestats_login::on_enter(&mut self.state.screens.groovestats_login_state);
+            self.enter_groovestats_login();
         }
 
         let mut commands: Vec<Command> = Vec::new();
