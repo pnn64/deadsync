@@ -6,13 +6,30 @@ use deadsync_core::input::InputSource;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
 use deadsync_theme::views::{
-    AudioOutputDeviceView, NoteskinCatalogView, SmxAssignmentPadView, SmxAssignmentView,
-    SmxGifCatalogView,
+    AppPathView, AppPathsView, AudioOutputDeviceView, NoteskinCatalogView, SmxAssignmentPadView,
+    SmxAssignmentView, SmxGifCatalogView,
 };
 use std::time::{Duration, Instant};
 
 fn init() -> State {
     init_with_audio(AudioOptionsView::default())
+}
+
+fn test_app_paths() -> AppPathsView {
+    let view = |path: &str| AppPathView {
+        path: path.into(),
+        display: path.to_owned(),
+    };
+    AppPathsView {
+        data: view("/data"),
+        cache: view("/cache"),
+        songs: view("/data/songs"),
+        courses: view("/data/courses"),
+        profiles: view("/data/save/profiles"),
+        screenshots: view("/data/save/screenshots"),
+        log_file: view("/data/deadsync.log"),
+        config_file: view("/data/deadsync.ini"),
+    }
 }
 
 fn init_with_audio(audio_options: AudioOptionsView) -> State {
@@ -21,6 +38,7 @@ fn init_with_audio(audio_options: AudioOptionsView) -> State {
             app_update: true,
             ffmpeg_install: true,
         },
+        test_app_paths(),
         audio_options,
         NoteskinCatalogView {
             names: vec![profile_data::NoteSkin::DEFAULT_NAME.to_owned()],
@@ -38,6 +56,7 @@ fn updater_view() -> SimplyLoveUpdaterView {
 fn smx_gif_choices_come_from_shell_catalog() {
     let state = super::init(
         SimplyLoveUpdaterCapabilities::default(),
+        test_app_paths(),
         AudioOptionsView::default(),
         NoteskinCatalogView::default(),
         SmxAssignmentView::default(),
@@ -913,75 +932,76 @@ fn folders_top_level_item_opens_folders_submenu() {
 
 #[test]
 fn folder_rows_build_typed_reveal_requests() {
-    use deadlib_platform::dirs::app_dirs;
-    let dirs = app_dirs();
-    let expectations: &[(SubRowId, std::path::PathBuf, deadsync_theme::RevealPathKind)] = &[
+    let paths = test_app_paths();
+    let expectations = [
         (
             SubRowId::FoldersDataDir,
-            dirs.data_dir.clone(),
+            deadsync_theme::views::AppPathKind::Data,
             deadsync_theme::RevealPathKind::Directory,
         ),
         (
             SubRowId::FoldersCacheDir,
-            dirs.cache_dir.clone(),
+            deadsync_theme::views::AppPathKind::Cache,
             deadsync_theme::RevealPathKind::Directory,
         ),
         (
             SubRowId::FoldersSongs,
-            dirs.songs_dir(),
+            deadsync_theme::views::AppPathKind::Songs,
             deadsync_theme::RevealPathKind::Directory,
         ),
         (
             SubRowId::FoldersCourses,
-            dirs.courses_dir(),
+            deadsync_theme::views::AppPathKind::Courses,
             deadsync_theme::RevealPathKind::Directory,
         ),
         (
             SubRowId::FoldersProfiles,
-            dirs.profiles_root(),
+            deadsync_theme::views::AppPathKind::Profiles,
             deadsync_theme::RevealPathKind::Directory,
         ),
         (
             SubRowId::FoldersScreenshots,
-            dirs.screenshots_dir(),
+            deadsync_theme::views::AppPathKind::Screenshots,
             deadsync_theme::RevealPathKind::Directory,
         ),
         (
             SubRowId::FoldersLogFile,
-            dirs.log_path(),
+            deadsync_theme::views::AppPathKind::LogFile,
             deadsync_theme::RevealPathKind::File,
         ),
         (
             SubRowId::FoldersConfigFile,
-            dirs.config_path(),
+            deadsync_theme::views::AppPathKind::ConfigFile,
             deadsync_theme::RevealPathKind::File,
         ),
     ];
-    for (id, expected, kind) in expectations {
+    for (id, path_kind, kind) in expectations {
+        let expected = &paths.get(path_kind).path;
         assert_eq!(
-            folder_path_for_row(*id).as_ref(),
-            Some(expected),
+            folder_path_for_row(&paths, id),
+            Some(expected.as_path()),
             "row {:?} should resolve to {}",
             id,
             expected.display()
         );
         assert_eq!(
-            folder_reveal_request(*id),
+            folder_reveal_request(&paths, id),
             Some(deadsync_theme::PlatformRequest::RevealPath {
                 path: expected.clone(),
-                kind: *kind,
+                kind,
             })
         );
     }
 
-    assert!(folder_path_for_row(SubRowId::Game).is_none());
-    assert!(folder_reveal_request(SubRowId::Game).is_none());
+    assert!(folder_path_for_row(&paths, SubRowId::Game).is_none());
+    assert!(folder_reveal_request(&paths, SubRowId::Game).is_none());
 }
 
 #[test]
 fn folder_activation_requests_audio_before_platform_reveal() {
     let asset_manager = AssetManager::new();
     let mut state = init();
+    let expected_path = state.app_paths.data.path.clone();
     state.view = OptionsView::Submenu(SubmenuKind::Folders);
     select_visible_row(&mut state, SubmenuKind::Folders, SubRowId::FoldersDataDir);
 
@@ -1000,7 +1020,7 @@ fn folder_activation_requests_audio_before_platform_reveal() {
         &effects[1],
         ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Platform(
             deadsync_theme::PlatformRequest::RevealPath { path, kind }
-        )) if path == &deadlib_platform::dirs::app_dirs().data_dir
+        )) if path == &expected_path
             && *kind == deadsync_theme::RevealPathKind::Directory
     ));
 }

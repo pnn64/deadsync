@@ -1849,6 +1849,26 @@ fn simply_love_audio_flow_slices_use_ordered_theme_effects() {
 }
 
 #[test]
+fn simply_love_crossover_parity_stays_behind_simfile() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let theme = root.join("crates/deadsync-theme-simply-love");
+    let manifest = fs::read_to_string(theme.join("Cargo.toml"))
+        .expect("Simply Love manifest should be readable");
+    let gameplay = fs::read_to_string(theme.join("src/screens/gameplay.rs"))
+        .expect("Simply Love gameplay should be readable");
+    let timing = fs::read_to_string(root.join("crates/deadsync-simfile/src/timing.rs"))
+        .expect("simfile timing adapter should be readable");
+
+    assert!(!manifest.contains("\nrssp ="));
+    assert!(!gameplay.contains("rssp::"));
+    assert!(gameplay.contains("deadsync_simfile::timing::crossover_annotations::<4>"));
+    assert!(gameplay.contains("deadsync_simfile::timing::crossover_annotations::<8>"));
+    assert!(timing.contains("pub fn crossover_annotations<const LANES: usize>"));
+    assert!(timing.contains("rssp::step_parity::annotate_timing_rows"));
+    assert!(!timing.contains("pub fn rssp_timing_segments_from_deadsync"));
+}
+
+#[test]
 fn concrete_theme_uses_the_input_key_contract_instead_of_winit() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let theme = root.join("crates/deadsync-theme-simply-love");
@@ -1950,6 +1970,67 @@ fn select_music_unlock_availability_is_shell_prepared() {
 }
 
 #[test]
+fn select_music_arrow_offset_is_shell_prepared() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let screen = fs::read_to_string(
+        root.join("crates/deadsync-theme-simply-love/src/screens/select_music.rs"),
+    )
+    .expect("Select Music source should be readable");
+    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+        .expect("Simply Love views should be readable");
+    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell app should be readable");
+
+    assert!(!screen.contains("crate::config::get().global_offset_seconds"));
+    assert!(screen.contains("state.arrow_bounce_offset"));
+    assert!(views.contains("pub arrow_bounce_offset: f32"));
+    assert!(shell.contains("-10.0 * config.global_offset_seconds"));
+    assert!(shell.contains("arrow_bounce_offset,"));
+}
+
+#[test]
+fn select_music_feature_policy_is_shell_prepared() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let screen = fs::read_to_string(
+        root.join("crates/deadsync-theme-simply-love/src/screens/select_music.rs"),
+    )
+    .expect("Select Music source should be readable");
+    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+        .expect("Simply Love views should be readable");
+    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell app should be readable");
+
+    for direct_read in [
+        "config::get().only_dedicated_menu_buttons",
+        "config::get().use_fsrs",
+        "config::get().machine_enable_replays",
+        "config::get().allow_switch_profile_in_menu",
+        "config::get().keyboard_features",
+    ] {
+        assert!(!screen.contains(direct_read));
+    }
+    assert!(views.contains("pub struct SelectMusicPolicyView"));
+    for field in [
+        "pub dedicated_menu_only: bool",
+        "pub fsr_profiles: bool",
+        "pub replays: bool",
+        "pub profile_switch: bool",
+        "pub keyboard_features: bool",
+    ] {
+        assert!(views.contains(field));
+    }
+    for field in [
+        "config.only_dedicated_menu_buttons",
+        "config.use_fsrs",
+        "config.machine_enable_replays",
+        "config.allow_switch_profile_in_menu",
+        "config.keyboard_features",
+    ] {
+        assert!(shell.contains(field));
+    }
+}
+
+#[test]
 fn options_online_reinitialization_is_shell_owned() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let input = fs::read_to_string(
@@ -1972,6 +2053,32 @@ fn options_online_reinitialization_is_shell_owned() {
         .expect("shell app should be readable");
     assert!(shell.contains("SimplyLoveOnlineRequest::Reinitialize"));
     assert!(shell.contains("deadsync_online::runtime::init()"));
+}
+
+#[test]
+fn options_folder_paths_are_shell_prepared() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let theme = root.join("crates/deadsync-theme-simply-love/src/screens/options");
+    let folders = fs::read_to_string(theme.join("submenus/folders.rs"))
+        .expect("Options folders source should be readable");
+    let state =
+        fs::read_to_string(theme.join("state.rs")).expect("Options state should be readable");
+    let views = fs::read_to_string(root.join("crates/deadsync-theme/src/views.rs"))
+        .expect("generic theme views should be readable");
+    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell app should be readable");
+
+    for direct_read in ["deadlib_platform::dirs", "app_dirs()", "std::env::var_os"] {
+        assert!(!folders.contains(direct_read));
+    }
+    assert!(folders.contains("HelpEntry::AppPath(AppPathKind::Data)"));
+    assert!(folders.contains("folder_reveal_request("));
+    assert!(state.contains("pub(super) app_paths: AppPathsView"));
+    assert!(views.contains("pub struct AppPathView"));
+    assert!(views.contains("pub struct AppPathsView"));
+    assert!(shell.contains("fn app_paths_view() -> AppPathsView"));
+    assert!(shell.contains("deadlib_platform::dirs::app_dirs()"));
+    assert!(shell.contains("deadlib_platform::dirs::path_shorthand(&path)"));
 }
 
 #[test]
@@ -5183,6 +5290,11 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
         "crates/deadsync-theme-simply-love/src/screens/components/gameplay/notefield/mod.rs",
     ))
     .expect("Simply Love notefield adapter should be readable");
+    let display_mods =
+        fs::read_to_string(root.join(
+            "crates/deadsync-theme-simply-love/src/screens/components/gameplay/display_mods.rs",
+        ))
+        .expect("Simply Love DisplayMods component should be readable");
     let field_frame = fs::read_to_string(root.join("crates/deadsync-notefield/src/field_frame.rs"))
         .expect("canonical field-frame composer should be readable");
     let hud_frame = fs::read_to_string(root.join("crates/deadsync-notefield/src/frame_hud.rs"))
@@ -5266,6 +5378,13 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
         source.contains("arrow_effect_time_s: f32"),
         "Simply Love notefield adapter must receive arrow-effect time explicitly"
     );
+    assert!(source.contains("pub(crate) fn compose_frame("));
+    assert!(
+        !source.contains("act!("),
+        "Simply Love's notefield adapter must assemble canonical DTOs, not actors"
+    );
+    assert!(display_mods.contains("pub(super) fn compose("));
+    assert!(display_mods.contains("actors.push(act!("));
 
     assert!(
         source.contains("NotefieldComposeRequest {")
@@ -5505,15 +5624,15 @@ fn simply_love_notefield_uses_canonical_composition_boundaries() {
     let field_call = source
         .find("let field_result = compose_notefield_field(")
         .expect("Simply Love must compose the canonical field pass");
-    let display_mods = source[field_call..]
-        .find("if !request.view.hide_display_mods {")
+    let display_mods_call = source[field_call..]
+        .find("display_mods::compose(")
         .map(|offset| field_call + offset)
         .expect("Simply Love must retain its concrete DisplayMods insertion point");
-    let hud_call = source[display_mods..]
+    let hud_call = source[display_mods_call..]
         .find("let hud_result = compose_notefield_hud(")
-        .map(|offset| display_mods + offset)
+        .map(|offset| display_mods_call + offset)
         .expect("Simply Love must compose the canonical post-chrome HUD pass");
-    assert!(field_call < display_mods && display_mods < hud_call);
+    assert!(field_call < display_mods_call && display_mods_call < hud_call);
 
     for (path, definition) in [
         (

@@ -152,6 +152,7 @@ pub(super) enum SubmenuTransition {
 
 pub struct State {
     pub(super) updater_capabilities: SimplyLoveUpdaterCapabilities,
+    pub(super) app_paths: AppPathsView,
     pub(super) audio_options: AudioOptionsView,
     pub selected: usize,
     pub(super) prev_selected: usize,
@@ -255,6 +256,7 @@ pub struct State {
 
 pub fn init(
     updater_capabilities: SimplyLoveUpdaterCapabilities,
+    app_paths: AppPathsView,
     audio_options: AudioOptionsView,
     noteskin_catalog: NoteskinCatalogView,
     smx_assignment: SmxAssignmentView,
@@ -281,6 +283,7 @@ pub fn init(
         .unwrap_or(0);
     let mut state = State {
         updater_capabilities,
+        app_paths,
         audio_options,
         selected: 0,
         prev_selected: 0,

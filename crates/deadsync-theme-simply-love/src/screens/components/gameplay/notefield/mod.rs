@@ -1,4 +1,3 @@
-use crate::act;
 use crate::assets;
 use crate::notefield_style::notefield_style;
 use crate::screens::gameplay::{GameplayCoreState as State, GameplayNoteskinAssets};
@@ -26,6 +25,8 @@ use deadsync_profile as profile_data;
 use deadsync_theme::NotefieldStyle;
 use std::array::from_fn;
 use std::cell::RefCell;
+
+use super::display_mods::{self, DisplayModsFrame};
 
 mod prewarm;
 mod text;
@@ -63,18 +64,8 @@ fn player_blue_window_ms(state: &State, player_idx: usize) -> f32 {
 
 // --- CONSTANTS ---
 
-// Simply Love ScreenGameplay in/default.lua keeps intro cover actors alive for 2.0s.
-const TRANSITION_IN_DURATION: f32 = 2.0;
-
 // Gameplay Layout & Feel
 const TARGET_ARROW_PIXEL_SIZE: f32 = 64.0; // Dance lane width for hold bodies and square fallback visuals
-
-const DISPLAY_MODS_ZOOM: f32 = 0.8;
-const DISPLAY_MODS_WRAP_WIDTH_PX: f32 = 125.0;
-const DISPLAY_MODS_LINE_STEP: f32 = 15.0;
-const DISPLAY_MODS_WARNING_W: f32 = 90.0;
-const DISPLAY_MODS_WARNING_H: f32 = 30.0;
-const DISPLAY_MODS_WARNING_ZOOM: f32 = 1.5;
 
 const TEXT_CACHE_LIMIT: usize = 8192;
 const COMBO_PREWARM_CAP: u32 = 2048;
@@ -187,7 +178,7 @@ fn hold_explosion_enabled(profile: &profile_data::Profile) -> bool {
     })
 }
 
-pub(crate) fn build_bundles(
+pub(crate) fn compose_frame(
     state: &State,
     player_idx: usize,
     arrow_effect_time_s: f32,
@@ -495,68 +486,18 @@ pub(crate) fn build_bundles(
         &field_frame,
         &noteskin_sprite_source,
     );
-    // Simply Love: ScreenGameplay underlay/PerPlayer/NoteField/DisplayMods.lua
-    // shows the current mod string for 5s, then decelerates out over 0.5s.
-    // Arrow Cloud/zmod add a CMod warning below this block for ITL no-CMod charts.
-    if !request.view.hide_display_mods {
-        // Simply Love DisplayMods.lua uses sleep(5), but ScreenGameplay in/default.lua
-        // keeps a full-screen intro cover up for 2.0s. Since deadsync's gameplay
-        // in-transition cover is shorter, subtract the exact missing cover time so
-        // the *visible* mods duration matches ITG/SL.
-        const SL_DISPLAY_MODS_HOLD_S: f32 = 5.0;
-        const SL_GAMEPLAY_IN_COVER_S: f32 = 2.0;
-        const MODS_FADE_S: f32 = 0.5;
-        let hold_adjust = (SL_GAMEPLAY_IN_COVER_S - TRANSITION_IN_DURATION).max(0.0);
-        let mods_hold_s = (SL_DISPLAY_MODS_HOLD_S - hold_adjust).max(0.0);
-
-        let alpha = if elapsed_screen <= mods_hold_s {
-            1.0
-        } else if elapsed_screen < mods_hold_s + MODS_FADE_S {
-            let t = ((elapsed_screen - mods_hold_s) / MODS_FADE_S).clamp(0.0, 1.0);
-            let decelerate = 1.0 - (1.0 - t) * (1.0 - t);
-            1.0 - decelerate
-        } else {
-            0.0
-        };
-
-        if alpha > 0.0 {
-            let mods_text = gameplay_mods_text(state, player_idx);
-            let mods_line_y = screen_height() * 0.25 * 1.3 + notefield_offset_y;
-            let mods_line_count = mods_text
-                .split(", ")
-                .filter(|part| !part.is_empty())
-                .count()
-                .max(1) as f32;
-            if !mods_text.is_empty() {
-                hud_actors.push(act!(text:
-                    font("miso"): settext(mods_text):
-                    align(0.5, 0.0): xy(playfield_center_x, mods_line_y):
-                    zoom(DISPLAY_MODS_ZOOM): wrapwidthpixels(DISPLAY_MODS_WRAP_WIDTH_PX): horizalign(center):
-                    shadowcolor(0.0, 0.0, 0.0, 1.0):
-                    shadowlength(1.0):
-                    diffuse(1.0, 1.0, 1.0, alpha):
-                    z(84)
-                ));
-            }
-            if warn_cmod_for_itl_chart {
-                let warning_y = mods_line_y + DISPLAY_MODS_LINE_STEP * mods_line_count;
-                hud_actors.push(act!(quad:
-                    align(0.5, 0.5):
-                    xy(playfield_center_x, warning_y):
-                    setsize(DISPLAY_MODS_WARNING_W, DISPLAY_MODS_WARNING_H):
-                    diffuse(0.0, 0.0, 0.0, 0.8 * alpha):
-                    z(84)
-                ));
-                hud_actors.push(act!(text:
-                    font("miso"): settext("CMod On"):
-                    align(0.5, 0.5): xy(playfield_center_x, warning_y):
-                    zoom(DISPLAY_MODS_WARNING_ZOOM):
-                    diffuse(1.0, 0.0, 0.0, alpha):
-                    z(85)
-                ));
-            }
-        }
-    }
+    display_mods::compose(
+        hud_actors,
+        state,
+        player_idx,
+        DisplayModsFrame {
+            hidden: request.view.hide_display_mods,
+            warn_cmod_for_itl_chart,
+            elapsed_screen_s: elapsed_screen,
+            playfield_center_x,
+            notefield_offset_y,
+        },
+    );
 
     let show_combo =
         !request.view.hide_combo && !blind_active && options.frame_features.combo_visible;

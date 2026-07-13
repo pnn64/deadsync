@@ -1472,7 +1472,7 @@ pub(super) fn activate_current_selection(
                 };
                 if let Some(request) = rows
                     .get(row_idx)
-                    .and_then(|row| folder_reveal_request(row.id))
+                    .and_then(|row| folder_reveal_request(&state.app_paths, row.id))
                 {
                     return crate::effects::sfx_then(
                         "assets/sounds/start.ogg",

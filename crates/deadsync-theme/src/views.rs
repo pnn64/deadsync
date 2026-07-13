@@ -18,6 +18,55 @@ pub struct AudioPlaybackView {
     pub music_stream_position_seconds: f64,
 }
 
+/// One shell-resolved application path and its platform-friendly label.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct AppPathView {
+    pub path: PathBuf,
+    pub display: String,
+}
+
+/// Stable identifiers for application paths exposed to theme UI.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AppPathKind {
+    Data,
+    Cache,
+    Songs,
+    Courses,
+    Profiles,
+    Screenshots,
+    LogFile,
+    ConfigFile,
+}
+
+/// Shell-prepared application paths used by generic folder UIs.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct AppPathsView {
+    pub data: AppPathView,
+    pub cache: AppPathView,
+    pub songs: AppPathView,
+    pub courses: AppPathView,
+    pub profiles: AppPathView,
+    pub screenshots: AppPathView,
+    pub log_file: AppPathView,
+    pub config_file: AppPathView,
+}
+
+impl AppPathsView {
+    #[inline(always)]
+    pub const fn get(&self, kind: AppPathKind) -> &AppPathView {
+        match kind {
+            AppPathKind::Data => &self.data,
+            AppPathKind::Cache => &self.cache,
+            AppPathKind::Songs => &self.songs,
+            AppPathKind::Courses => &self.courses,
+            AppPathKind::Profiles => &self.profiles,
+            AppPathKind::Screenshots => &self.screenshots,
+            AppPathKind::LogFile => &self.log_file,
+            AppPathKind::ConfigFile => &self.config_file,
+        }
+    }
+}
+
 /// One shell-discovered audio output exposed without backend runtime types.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AudioOutputDeviceView {

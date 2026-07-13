@@ -38,7 +38,6 @@ log = "0.4.33"
 null-or-die = { git = "https://github.com/pnn64/null-or-die", branch = "main" }
 qrcodegen = "1.8.0"
 rand = "0.10.1"
-rssp = { git = "https://github.com/pnn64/rssp", branch = "main" }
 smallvec = "1.15.2"
 twox-hash = "2.1.2"
 [lints.clippy]

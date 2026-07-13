@@ -167,13 +167,13 @@ use deadsync_rules::scroll::ScrollSpeedSetting;
 #[cfg(test)]
 use deadsync_rules::timing as timing_rules;
 use deadsync_theme::views::{
-    AudioOptionsView, AudioOutputDeviceView, AudioPlaybackView,
+    AppPathView, AppPathsView, AudioOptionsView, AudioOutputDeviceView, AudioPlaybackView,
     DensityGraphView as DensityGraphSource, NoteskinCatalogView, SmxAssignmentView,
 };
 use deadsync_theme::{AudioRequest, PlatformRequest, RevealPathKind};
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as CurrentScreen;
 use deadsync_theme_simply_love::views::{
-    SelectMusicRuntimeView, SimplyLoveDensityGraphSlot as DensityGraphSlot,
+    SelectMusicPolicyView, SelectMusicRuntimeView, SimplyLoveDensityGraphSlot as DensityGraphSlot,
 };
 use deadsync_theme_simply_love::{
     SimplyLoveConfigRequest, SimplyLoveEffect as ThemeEffect, SimplyLoveHardwareRequest,
@@ -403,6 +403,27 @@ fn audio_options_view() -> AudioOptionsView {
     }
 }
 
+fn app_path_view(path: PathBuf) -> AppPathView {
+    AppPathView {
+        display: deadlib_platform::dirs::path_shorthand(&path),
+        path,
+    }
+}
+
+fn app_paths_view() -> AppPathsView {
+    let dirs = deadlib_platform::dirs::app_dirs();
+    AppPathsView {
+        data: app_path_view(dirs.data_dir.clone()),
+        cache: app_path_view(dirs.cache_dir.clone()),
+        songs: app_path_view(dirs.songs_dir()),
+        courses: app_path_view(dirs.courses_dir()),
+        profiles: app_path_view(dirs.profiles_root()),
+        screenshots: app_path_view(dirs.screenshots_dir()),
+        log_file: app_path_view(dirs.log_path()),
+        config_file: app_path_view(dirs.config_path()),
+    }
+}
+
 fn noteskin_catalog_view() -> NoteskinCatalogView {
     let roots = deadlib_platform::dirs::app_dirs().noteskin_roots();
     NoteskinCatalogView {
@@ -449,6 +470,7 @@ impl ScreensState {
 
         let mut options_state = options::init(
             updater::capabilities(),
+            app_paths_view(),
             audio_options_view(),
             noteskin_catalog_view(),
             crate::smx_config::smx_assignment_view(),
@@ -991,12 +1013,27 @@ impl App {
         } else {
             0.0
         };
+        let (arrow_bounce_offset, policy) = {
+            let config = config::get();
+            (
+                -10.0 * config.global_offset_seconds,
+                SelectMusicPolicyView {
+                    dedicated_menu_only: config.only_dedicated_menu_buttons,
+                    fsr_profiles: config.use_fsrs,
+                    replays: config.machine_enable_replays,
+                    profile_switch: config.allow_switch_profile_in_menu,
+                    keyboard_features: config.keyboard_features,
+                },
+            )
+        };
         select_music::sync_runtime_view(
             &mut self.state.screens.select_music_state,
             SelectMusicRuntimeView {
                 audio_playback: AudioPlaybackView {
                     music_stream_position_seconds,
                 },
+                arrow_bounce_offset,
+                policy,
                 unlock_downloads_available: deadsync_online::runtime::unlock_downloads_available(),
                 ready_song_reload_dirs: deadsync_online::runtime::take_ready_song_reload_request(),
             },
@@ -1891,6 +1928,7 @@ impl App {
         let current_color_index = self.state.screens.options_state.active_color_index;
         self.state.screens.options_state = options::init(
             updater::capabilities(),
+            app_paths_view(),
             audio_options_view(),
             noteskin_catalog_view(),
             crate::smx_config::smx_assignment_view(),

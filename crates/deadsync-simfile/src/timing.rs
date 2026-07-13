@@ -5,6 +5,14 @@ use deadsync_rules::timing::{
 };
 use rssp::timing as rssp_timing;
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CrossoverAnnotation {
+    pub beat: f32,
+    pub column_mask: u8,
+    pub crossover: bool,
+    pub bracket: bool,
+}
+
 pub fn parse_time_signatures(tag: Option<&str>) -> Vec<TimeSignatureSegment> {
     let Some(s) = tag.map(str::trim).filter(|s| !s.is_empty()) else {
         return default_time_signatures();
@@ -117,9 +125,7 @@ pub fn timing_segments_from_rssp(segments: &rssp_timing::TimingSegments) -> Timi
 /// into the `rssp` timing-segment form so the parity/annotation engine can be
 /// driven from deadsync chart data. Offsets are intentionally not encoded here;
 /// callers that need absolute times use deadsync's own `TimingData` instead.
-pub fn rssp_timing_segments_from_deadsync(
-    segments: &TimingSegments,
-) -> rssp_timing::TimingSegments {
+fn rssp_timing_segments_from_deadsync(segments: &TimingSegments) -> rssp_timing::TimingSegments {
     rssp_timing::TimingSegments {
         beat0_offset_adjust: segments.beat0_offset_adjust,
         bpms: segments.bpms.clone(),
@@ -154,10 +160,32 @@ pub fn rssp_timing_segments_from_deadsync(
     }
 }
 
+pub fn crossover_annotations<const LANES: usize>(
+    rows: &[[u8; LANES]],
+    row_to_beat: &[f32],
+    segments: &TimingSegments,
+) -> Vec<CrossoverAnnotation> {
+    let rssp_segments = rssp_timing_segments_from_deadsync(segments);
+    let timing = rssp_timing::timing_data_from_segments(0.0, 0.0, &rssp_segments);
+    let Some(mut scratch) = rssp::step_parity::timing_rows_scratch::<LANES>() else {
+        return Vec::new();
+    };
+    rssp::step_parity::annotate_timing_rows(rows, row_to_beat, &timing, &mut scratch)
+        .into_iter()
+        .map(|annotation| CrossoverAnnotation {
+            beat: annotation.beat,
+            column_mask: annotation.column_mask,
+            crossover: annotation.row_tech.crossovers > 0,
+            bracket: annotation.foot_count() > 1,
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        parse_time_signatures, rssp_timing_segments_from_deadsync, timing_segments_from_rssp,
+        crossover_annotations, parse_time_signatures, rssp_timing_segments_from_deadsync,
+        timing_segments_from_rssp,
     };
     use deadsync_rules::timing::{SpeedUnit, default_time_signature};
     use rssp::timing as rssp_timing;
@@ -252,5 +280,25 @@ mod tests {
             assert_eq!(got.2, want.2);
             assert_eq!(got.3, want.3);
         }
+    }
+
+    #[test]
+    fn crossover_annotations_hide_rssp_rows_behind_domain_data() {
+        let rows = [[b'1', b'0', b'0', b'0'], [b'0', b'1', b'0', b'0']];
+        let beats = [0.0, 1.0];
+        let segments = deadsync_rules::timing::TimingSegments {
+            bpms: vec![(0.0, 120.0)],
+            ..deadsync_rules::timing::TimingSegments::default()
+        };
+
+        let annotations = crossover_annotations(&rows, &beats, &segments);
+
+        assert_eq!(annotations.len(), 2);
+        assert_eq!(annotations[0].beat, 0.0);
+        assert_eq!(annotations[0].column_mask, 0b0001);
+        assert!(!annotations[0].bracket);
+        assert_eq!(annotations[1].beat, 1.0);
+        assert_eq!(annotations[1].column_mask, 0b0010);
+        assert!(!annotations[1].bracket);
     }
 }

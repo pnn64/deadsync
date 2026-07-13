@@ -23,8 +23,21 @@ pub type TimingHealth = TimingHealthView<PresentModeTrace, ClockDomainTrace, Aud
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SelectMusicRuntimeView {
     pub audio_playback: deadsync_theme::views::AudioPlaybackView,
+    /// Beat offset applied to the selection arrow bounce animation.
+    pub arrow_bounce_offset: f32,
+    pub policy: SelectMusicPolicyView,
     pub unlock_downloads_available: bool,
     pub ready_song_reload_dirs: Vec<PathBuf>,
+}
+
+/// Runtime/config policy used to expose Select Music features and input paths.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SelectMusicPolicyView {
+    pub dedicated_menu_only: bool,
+    pub fsr_profiles: bool,
+    pub replays: bool,
+    pub profile_switch: bool,
+    pub keyboard_features: bool,
 }
 
 /// Simply Love's two density-graph texture targets.

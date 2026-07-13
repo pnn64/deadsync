@@ -829,32 +829,21 @@ pub(crate) fn gameplay_crossover_annotations_for_player(
     if start >= end {
         return Vec::new();
     }
-    let rssp_segments =
-        deadsync_simfile::timing::rssp_timing_segments_from_deadsync(timing_segments);
-    let rssp_timing = rssp::timing::timing_data_from_segments(0.0, 0.0, &rssp_segments);
     let annotations = match cols_per_player {
         4 => {
             let (rows, row_to_beat) = build_crossover_rows::<4>(notes, note_range, col_start);
-            let Some(mut scratch) = rssp::step_parity::timing_rows_scratch::<4>() else {
-                return Vec::new();
-            };
-            rssp::step_parity::annotate_timing_rows::<4>(
+            deadsync_simfile::timing::crossover_annotations::<4>(
                 &rows,
                 &row_to_beat,
-                &rssp_timing,
-                &mut scratch,
+                timing_segments,
             )
         }
         8 => {
             let (rows, row_to_beat) = build_crossover_rows::<8>(notes, note_range, col_start);
-            let Some(mut scratch) = rssp::step_parity::timing_rows_scratch::<8>() else {
-                return Vec::new();
-            };
-            rssp::step_parity::annotate_timing_rows::<8>(
+            deadsync_simfile::timing::crossover_annotations::<8>(
                 &rows,
                 &row_to_beat,
-                &rssp_timing,
-                &mut scratch,
+                timing_segments,
             )
         }
         _ => return Vec::new(),
@@ -864,8 +853,8 @@ pub(crate) fn gameplay_crossover_annotations_for_player(
         .map(|annotation| CrossoverRow {
             beat: annotation.beat,
             column_mask: annotation.column_mask,
-            crossover: annotation.row_tech.crossovers > 0,
-            bracket: annotation.foot_count() > 1,
+            crossover: annotation.crossover,
+            bracket: annotation.bracket,
         })
         .collect()
 }
@@ -9019,7 +9008,7 @@ pub fn push_actors(
                 field_actors,
                 judgment_actors,
                 combo_actors,
-            } = notefield::build_bundles(
+            } = notefield::compose_frame(
                 state,
                 player_idx,
                 arrow_effect_time_s,

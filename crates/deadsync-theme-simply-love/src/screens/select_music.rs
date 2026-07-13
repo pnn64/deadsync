@@ -21,7 +21,7 @@ use crate::screens::pad_config;
 use crate::screens::{
     DensityGraphSlot, DensityGraphSource, Screen, ThemeEffect, input as screen_input,
 };
-use crate::views::SelectMusicRuntimeView;
+use crate::views::{SelectMusicPolicyView, SelectMusicRuntimeView};
 use deadlib_platform::dirs;
 use deadlib_present::actors::{Actor, SizeSpec, SpriteSource};
 use deadlib_present::cache::{SharedStrCache, TextCache, cached_shared_str, cached_text};
@@ -612,6 +612,8 @@ pub fn selection_anim_beat(state: &State) -> f32 {
 #[inline(always)]
 pub fn sync_runtime_view(state: &mut State, view: SelectMusicRuntimeView) {
     state.audio_playback = view.audio_playback;
+    state.arrow_bounce_offset = view.arrow_bounce_offset;
+    state.policy = view.policy;
     state.unlock_downloads_available = view.unlock_downloads_available;
     state
         .ready_song_reload_dirs
@@ -621,8 +623,7 @@ pub fn sync_runtime_view(state: &mut State, view: SelectMusicRuntimeView) {
 #[inline(always)]
 fn sl_arrow_bounce01(entry_opt: Option<&MusicWheelEntry>, state: &State) -> f32 {
     let beat = sl_selection_anim_beat(entry_opt, state);
-    let effect_offset = -10.0 * crate::config::get().global_offset_seconds;
-    let t = (beat + effect_offset).rem_euclid(1.0);
+    let t = (beat + state.arrow_bounce_offset).rem_euclid(1.0);
     (t * std::f32::consts::PI).sin().clamp(0.0, 1.0)
 }
 
@@ -1166,6 +1167,8 @@ pub struct State {
     currently_playing_preview_start_sec: Option<f32>,
     currently_playing_preview_length_sec: Option<f32>,
     audio_playback: AudioPlaybackView,
+    arrow_bounce_offset: f32,
+    policy: SelectMusicPolicyView,
     unlock_downloads_available: bool,
     ready_song_reload_dirs: Vec<PathBuf>,
     preview_music_muted: bool,
@@ -2760,6 +2763,8 @@ pub fn init() -> State {
         currently_playing_preview_start_sec: None,
         currently_playing_preview_length_sec: None,
         audio_playback: AudioPlaybackView::default(),
+        arrow_bounce_offset: 0.0,
+        policy: SelectMusicPolicyView::default(),
         unlock_downloads_available: false,
         ready_song_reload_dirs: Vec::new(),
         preview_music_muted: false,
@@ -2962,6 +2967,8 @@ pub fn init_placeholder() -> State {
         currently_playing_preview_start_sec: None,
         currently_playing_preview_length_sec: None,
         audio_playback: AudioPlaybackView::default(),
+        arrow_bounce_offset: 0.0,
+        policy: SelectMusicPolicyView::default(),
         unlock_downloads_available: false,
         ready_song_reload_dirs: Vec::new(),
         preview_music_muted: false,
@@ -3497,8 +3504,8 @@ const fn direct_lr_blocked_by_dedicated_menu(
 }
 
 #[inline(always)]
-fn modal_blocks_arrow(action: VirtualAction) -> bool {
-    screen_input::dedicated_blocks_arrow(action, config::get().only_dedicated_menu_buttons)
+fn modal_blocks_arrow(state: &State, action: VirtualAction) -> bool {
+    screen_input::dedicated_blocks_arrow(action, state.policy.dedicated_menu_only)
 }
 
 #[inline(always)]
@@ -3574,7 +3581,7 @@ fn update_select_hold_state(state: &mut State, ev: &InputEvent) {
 /// sensitivity for the session. Selecting one applies it to that physical pad.
 /// `None` hides the category.
 fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::Item>> {
-    if !config::get().use_fsrs {
+    if !state.policy.fsr_profiles {
         return None;
     }
     let style = profile::get_session_play_style();
@@ -3663,7 +3670,7 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
 }
 
 fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
-    let replays_enabled = config::get().machine_enable_replays;
+    let replays_enabled = state.policy.replays;
     let downloads_enabled = state.unlock_downloads_available;
     let has_song_selected = matches!(
         state.entries.get(state.selected_index),
@@ -3680,7 +3687,7 @@ fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
 
     let mut standalone = Vec::with_capacity(8);
     standalone.push(select_music_menu::ITEM_GO_BACK);
-    if config::get().allow_switch_profile_in_menu {
+    if state.policy.profile_switch {
         standalone.push(select_music_menu::ITEM_SWITCH_PROFILE);
     }
     standalone.push(select_music_menu::ITEM_SONG_SEARCH);
@@ -3727,7 +3734,7 @@ fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
 
     let mut advanced = Vec::with_capacity(10);
     advanced.push(select_music_menu::ITEM_TEST_INPUT);
-    if config::get().use_fsrs {
+    if state.policy.fsr_profiles {
         advanced.push(select_music_menu::ITEM_CONFIGURE_PADS);
     }
     advanced.push(select_music_menu::ITEM_RELOAD_SONGS_COURSES);
@@ -5262,6 +5269,8 @@ fn refresh_after_reload(state: &mut State) {
     let p2_preferred_difficulty_index = state.p2_preferred_difficulty_index;
     let pending_audio = std::mem::take(&mut state.pending_audio);
     let audio_playback = state.audio_playback;
+    let arrow_bounce_offset = state.arrow_bounce_offset;
+    let policy = state.policy;
     let unlock_downloads_available = state.unlock_downloads_available;
     let ready_song_reload_dirs = std::mem::take(&mut state.ready_song_reload_dirs);
 
@@ -5272,6 +5281,8 @@ fn refresh_after_reload(state: &mut State) {
     refreshed.active_playlist_id = active_playlist_id;
     refreshed.pending_audio = pending_audio;
     refreshed.audio_playback = audio_playback;
+    refreshed.arrow_bounce_offset = arrow_bounce_offset;
+    refreshed.policy = policy;
     refreshed.unlock_downloads_available = unlock_downloads_available;
     refreshed.ready_song_reload_dirs = ready_song_reload_dirs;
 
@@ -5389,6 +5400,8 @@ fn refresh_after_style_switch(state: &mut State) {
     let gameplay_elapsed = state.gameplay_elapsed;
     let pending_audio = std::mem::take(&mut state.pending_audio);
     let audio_playback = state.audio_playback;
+    let arrow_bounce_offset = state.arrow_bounce_offset;
+    let policy = state.policy;
     let unlock_downloads_available = state.unlock_downloads_available;
     let ready_song_reload_dirs = std::mem::take(&mut state.ready_song_reload_dirs);
 
@@ -5399,6 +5412,8 @@ fn refresh_after_style_switch(state: &mut State) {
     refreshed.gameplay_elapsed = gameplay_elapsed;
     refreshed.pending_audio = pending_audio;
     refreshed.audio_playback = audio_playback;
+    refreshed.arrow_bounce_offset = arrow_bounce_offset;
+    refreshed.policy = policy;
     refreshed.unlock_downloads_available = unlock_downloads_available;
     refreshed.ready_song_reload_dirs = ready_song_reload_dirs;
 
@@ -5552,7 +5567,7 @@ fn show_downloads_overlay(state: &mut State) {
 }
 
 fn show_replay_overlay(state: &mut State) {
-    if !config::get().machine_enable_replays {
+    if !state.policy.replays {
         return;
     }
     let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) else {
@@ -5578,7 +5593,7 @@ fn show_replay_overlay(state: &mut State) {
 }
 
 fn handle_lobby_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
-    if modal_blocks_arrow(ev.action) {
+    if modal_blocks_arrow(state, ev.action) {
         return ThemeEffect::None;
     }
 
@@ -7419,7 +7434,7 @@ fn handle_null_or_die_overlay_input(state: &mut State, ev: &InputEvent) -> Theme
 }
 
 fn handle_sync_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
-    if modal_blocks_arrow(ev.action) {
+    if modal_blocks_arrow(state, ev.action) {
         return ThemeEffect::None;
     }
 
@@ -7462,7 +7477,7 @@ fn switch_single_player_style(state: &mut State, new_style: profile_data::PlaySt
 }
 
 fn handle_leaderboard_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
-    if modal_blocks_arrow(ev.action) {
+    if modal_blocks_arrow(state, ev.action) {
         return ThemeEffect::None;
     }
 
@@ -7480,7 +7495,7 @@ fn handle_leaderboard_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
 }
 
 fn handle_downloads_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
-    if modal_blocks_arrow(ev.action) {
+    if modal_blocks_arrow(state, ev.action) {
         return ThemeEffect::None;
     }
 
@@ -7498,7 +7513,7 @@ fn handle_downloads_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEf
 }
 
 fn handle_replay_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
-    if modal_blocks_arrow(ev.action) {
+    if modal_blocks_arrow(state, ev.action) {
         return ThemeEffect::None;
     }
 
@@ -7575,7 +7590,7 @@ fn route_profile_box_effect(effect: ThemeEffect) -> (ProfileBoxEffectOutcome, Th
 }
 
 fn handle_profile_switch_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
-    if modal_blocks_arrow(ev.action) {
+    if modal_blocks_arrow(state, ev.action) {
         return ThemeEffect::None;
     }
 
@@ -7905,7 +7920,7 @@ fn perform_pad_profile_delete(state: &mut State) {
 }
 
 fn handle_select_music_menu_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
-    if modal_blocks_arrow(ev.action) {
+    if modal_blocks_arrow(state, ev.action) {
         return ThemeEffect::None;
     }
 
@@ -8212,7 +8227,7 @@ fn handle_song_search_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
     ) {
         return ThemeEffect::None;
     }
-    if modal_blocks_arrow(ev.action) {
+    if modal_blocks_arrow(state, ev.action) {
         return ThemeEffect::None;
     }
 
@@ -9021,7 +9036,7 @@ fn handle_raw_key_event_impl(
         && key.code == KeyCode::KeyR
         && key.pressed
         && !key.repeat
-        && config::get().keyboard_features
+        && state.policy.keyboard_features
         && !key_bound_to_player_input(key)
         && reload_selected_song(state)
     {
@@ -9192,7 +9207,7 @@ fn handle_input_impl(state: &mut State, ev: &InputEvent, fine: bool) -> ThemeEff
     }
 
     reset_exit_code_on_non_lr_press(state, ev);
-    let only_dedicated_menu_buttons = config::get().only_dedicated_menu_buttons;
+    let only_dedicated_menu_buttons = state.policy.dedicated_menu_only;
 
     let play_style = deadsync_profile::compat::get_session_play_style();
     if play_style == profile_data::PlayStyle::Versus {
@@ -12507,6 +12522,8 @@ mod tests {
                 audio_playback: deadsync_theme::views::AudioPlaybackView {
                     music_stream_position_seconds: 2.5,
                 },
+                arrow_bounce_offset: -0.25,
+                policy: crate::views::SelectMusicPolicyView::default(),
                 unlock_downloads_available: true,
                 ready_song_reload_dirs: vec![std::path::PathBuf::from("Songs/Unlocks")],
             },

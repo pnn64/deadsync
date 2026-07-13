@@ -250,11 +250,8 @@ pub enum HelpEntry {
     Paragraph(LookupKey),
     /// Bullet point item (rendered with "•" prefix).
     Bullet(LookupKey),
-    /// Runtime-resolved paragraph. The function is invoked every time the
-    /// description layout cache is rebuilt for this item; on cache hit the
-    /// previously-rendered text is reused. Use this for content that depends
-    /// on host state (resolved file paths, current directories, etc.).
-    Dynamic(fn() -> std::borrow::Cow<'static, str>),
+    /// Shell-prepared application path rendered as a paragraph.
+    AppPath(AppPathKind),
     /// Shell-prepared live SMX assignment status stored on the Options state.
     SmxAssignmentStatus,
 }

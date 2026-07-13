@@ -166,6 +166,7 @@ pub(super) fn build_description_layout(
     key: DescriptionCacheKey,
     item: &Item,
     s: f32,
+    app_paths: &AppPathsView,
     smx_assignment_status: &str,
 ) -> DescriptionLayout {
     let title_side_pad = DESC_TITLE_SIDE_PAD_PX * s;
@@ -229,9 +230,8 @@ pub(super) fn build_description_layout(
                         text: Arc::from(wrapped),
                     });
                 }
-                HelpEntry::Dynamic(resolver) => {
-                    let resolved = resolver();
-                    let trimmed = resolved.trim();
+                HelpEntry::AppPath(kind) => {
+                    let trimmed = app_paths.get(*kind).display.trim();
                     if trimmed.is_empty() {
                         continue;
                     }
@@ -286,6 +286,7 @@ pub(super) fn description_layout(
         key,
         item,
         s,
+        &state.app_paths,
         state.smx_assignment_status.as_str(),
     );
     *state.description_layout_cache.borrow_mut() = Some(layout.clone());
