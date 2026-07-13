@@ -7,9 +7,87 @@ use crate::defaults::{
 };
 use crate::ini::SimpleIni;
 use crate::writer::{push_bool, push_line};
+use deadsync_audio::AudioOutputMode;
 
 pub const AUDIO_VOLUME_MAX: u8 = 100;
 pub const MUSIC_WHEEL_SWITCH_SPEED_MIN: u8 = 1;
+const SOUND_VOLUME_LEVELS: [u8; 6] = [0, 10, 25, 50, 75, 100];
+
+pub const fn audio_output_mode_choice_index(mode: AudioOutputMode) -> usize {
+    match mode {
+        AudioOutputMode::Auto => 0,
+        AudioOutputMode::Shared | AudioOutputMode::Exclusive => 1,
+    }
+}
+
+pub const fn audio_output_mode_from_choice(idx: usize) -> AudioOutputMode {
+    match idx {
+        1 => AudioOutputMode::Shared,
+        _ => AudioOutputMode::Auto,
+    }
+}
+
+pub const fn alsa_exclusive_choice_index(mode: AudioOutputMode) -> usize {
+    if matches!(mode, AudioOutputMode::Exclusive) {
+        1
+    } else {
+        0
+    }
+}
+
+pub const fn audio_output_mode_from_alsa_choice(
+    selected_mode: AudioOutputMode,
+    idx: usize,
+) -> AudioOutputMode {
+    match idx {
+        1 => AudioOutputMode::Exclusive,
+        _ => selected_mode,
+    }
+}
+
+pub fn audio_volume_choice_index(volume: u8) -> usize {
+    let mut best_idx = 0usize;
+    let mut best_diff = u8::MAX;
+    for (idx, level) in SOUND_VOLUME_LEVELS.iter().enumerate() {
+        let diff = volume.abs_diff(*level);
+        if diff < best_diff {
+            best_diff = diff;
+            best_idx = idx;
+        }
+    }
+    best_idx
+}
+
+pub fn audio_volume_from_choice(idx: usize) -> u8 {
+    SOUND_VOLUME_LEVELS
+        .get(idx)
+        .copied()
+        .unwrap_or_else(|| *SOUND_VOLUME_LEVELS.last().unwrap_or(&100))
+}
+
+pub fn audio_sample_rate_choices(sample_rates_hz: &[u32]) -> Vec<Option<u32>> {
+    let mut choices = Vec::with_capacity(sample_rates_hz.len() + 1);
+    choices.push(None);
+    for &hz in sample_rates_hz {
+        let rate = Some(hz);
+        if !choices.contains(&rate) {
+            choices.push(rate);
+        }
+    }
+    if choices.len() == 1 {
+        choices.push(Some(44_100));
+        choices.push(Some(48_000));
+    }
+    choices
+}
+
+pub fn audio_sample_rate_choice_index(values: &[Option<u32>], rate: Option<u32>) -> usize {
+    values.iter().position(|&value| value == rate).unwrap_or(0)
+}
+
+pub fn audio_sample_rate_from_choice(values: &[Option<u32>], idx: usize) -> Option<u32> {
+    values.get(idx).copied().flatten()
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AudioOptions {
@@ -270,6 +348,68 @@ mod tests {
             write_current_screen: false,
             tab_acceleration: true,
         }
+    }
+
+    #[test]
+    fn audio_output_mode_choice_collapses_exclusive() {
+        assert_eq!(audio_output_mode_choice_index(AudioOutputMode::Auto), 0);
+        assert_eq!(audio_output_mode_choice_index(AudioOutputMode::Shared), 1);
+        assert_eq!(
+            audio_output_mode_choice_index(AudioOutputMode::Exclusive),
+            1
+        );
+        assert_eq!(audio_output_mode_from_choice(0), AudioOutputMode::Auto);
+        assert_eq!(audio_output_mode_from_choice(1), AudioOutputMode::Shared);
+        assert_eq!(audio_output_mode_from_choice(99), AudioOutputMode::Auto);
+    }
+
+    #[test]
+    fn alsa_exclusive_choice_preserves_selected_mode_when_off() {
+        assert_eq!(alsa_exclusive_choice_index(AudioOutputMode::Auto), 0);
+        assert_eq!(alsa_exclusive_choice_index(AudioOutputMode::Shared), 0);
+        assert_eq!(alsa_exclusive_choice_index(AudioOutputMode::Exclusive), 1);
+        assert_eq!(
+            audio_output_mode_from_alsa_choice(AudioOutputMode::Shared, 0),
+            AudioOutputMode::Shared
+        );
+        assert_eq!(
+            audio_output_mode_from_alsa_choice(AudioOutputMode::Auto, 1),
+            AudioOutputMode::Exclusive
+        );
+    }
+
+    #[test]
+    fn audio_volume_choices_use_nearest_level() {
+        assert_eq!(audio_volume_choice_index(0), 0);
+        assert_eq!(audio_volume_choice_index(9), 1);
+        assert_eq!(audio_volume_choice_index(24), 2);
+        assert_eq!(audio_volume_choice_index(87), 4);
+        assert_eq!(audio_volume_choice_index(88), 5);
+        assert_eq!(audio_volume_choice_index(99), 5);
+        assert_eq!(audio_volume_from_choice(3), 50);
+        assert_eq!(audio_volume_from_choice(99), 100);
+    }
+
+    #[test]
+    fn audio_sample_rate_choices_preserve_device_order() {
+        assert_eq!(
+            audio_sample_rate_choices(&[48_000, 44_100, 48_000]),
+            vec![None, Some(48_000), Some(44_100)]
+        );
+        assert_eq!(
+            audio_sample_rate_choices(&[]),
+            vec![None, Some(44_100), Some(48_000)]
+        );
+    }
+
+    #[test]
+    fn audio_sample_rate_choice_helpers_fallback_to_auto() {
+        let choices = [None, Some(44_100), Some(48_000)];
+        assert_eq!(audio_sample_rate_choice_index(&choices, None), 0);
+        assert_eq!(audio_sample_rate_choice_index(&choices, Some(48_000)), 2);
+        assert_eq!(audio_sample_rate_choice_index(&choices, Some(96_000)), 0);
+        assert_eq!(audio_sample_rate_from_choice(&choices, 1), Some(44_100));
+        assert_eq!(audio_sample_rate_from_choice(&choices, 99), None);
     }
 
     fn parse_letter_token(raw: &str) -> Option<char> {

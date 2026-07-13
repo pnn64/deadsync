@@ -33,6 +33,54 @@ pub struct AudioOptionsView {
     pub available_backend_names: Vec<String>,
 }
 
+/// Audio timing telemetry translated by the shell for theme diagnostics.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AudioTimingView {
+    pub backend: &'static str,
+    pub requested_output_mode: &'static str,
+    pub fallback_from_native: bool,
+    pub timing_clock: &'static str,
+    pub timing_quality: &'static str,
+    pub sample_rate_hz: u32,
+    pub device_period_ns: u64,
+    pub stream_latency_ns: u64,
+    pub buffer_frames: u32,
+    pub padding_frames: u32,
+    pub queued_frames: u32,
+    pub estimated_output_delay_ns: u64,
+    pub clock_fallback_count: u64,
+    pub timing_sanity_failure_count: u64,
+    pub underrun_count: u64,
+}
+
+/// Native gamepad lifecycle data translated by the shell for theme display.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum GamepadSystemView {
+    Connected {
+        name: String,
+        id: usize,
+        vendor_id: Option<u16>,
+        product_id: Option<u16>,
+        backend: &'static str,
+        initial: bool,
+    },
+    Disconnected {
+        name: String,
+        id: usize,
+        backend: &'static str,
+        initial: bool,
+    },
+    StartupComplete,
+}
+
+/// Cabinet and pad light state prepared by the shell for a test-light screen.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct LightsTestView {
+    pub cabinet: [bool; 6],
+    pub buttons: [[bool; 6]; 2],
+    pub manual_cycle: bool,
+}
+
 /// Installed noteskin names discovered by the shell for theme option lists.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct NoteskinCatalogView {

@@ -82,10 +82,16 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
     transitions::fade_out_black(TRANSITION_OUT_DURATION, 1200)
 }
 
-pub fn update(state: &mut State, _dt: f32) {
-    if let Some(ui) = state.ui.as_mut() {
-        poll_qr_login_ui(ui);
-    }
+pub fn update(state: &mut State, _dt: f32) -> Option<ThemeEffect> {
+    state
+        .ui
+        .as_mut()
+        .is_some_and(poll_qr_login_ui)
+        .then_some(ThemeEffect::Runtime(
+            crate::SimplyLoveRuntimeRequest::Online(
+                crate::SimplyLoveOnlineRequest::RefreshArrowCloudStatus,
+            ),
+        ))
 }
 
 /// Input mirrors the ArrowCloud screen:

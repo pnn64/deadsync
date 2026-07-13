@@ -83,7 +83,7 @@ fn timing_text(timing: TimingHealth) -> String {
             "\nAudio {} {}Hz req {} fb:{}\nClk {} {} sf:{} cf:{} out {} xr {}\nBuf {} pad {} q {} tick {} span {}",
             audio.backend,
             audio.sample_rate_hz,
-            audio.requested_output_mode.as_str(),
+            audio.requested_output_mode,
             flag(audio.fallback_from_native),
             audio.timing_clock,
             audio.timing_quality,

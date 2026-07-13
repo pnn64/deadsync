@@ -1,10 +1,10 @@
 use super::super::*;
 
 #[cfg(target_os = "linux")]
-pub(in crate::screens::options) use deadsync_audio::{
+pub(in crate::screens::options) use crate::config::{
     alsa_exclusive_choice_index, audio_output_mode_from_alsa_choice,
 };
-pub(in crate::screens::options) use deadsync_audio::{
+pub(in crate::screens::options) use crate::config::{
     audio_output_mode_choice_index, audio_output_mode_from_choice, audio_sample_rate_choice_index,
     audio_sample_rate_choices, audio_sample_rate_from_choice,
     audio_volume_choice_index as master_volume_choice_index,

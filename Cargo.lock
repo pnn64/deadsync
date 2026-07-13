@@ -1090,7 +1090,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.4.2526"
+version = "0.4.2534"
 dependencies = [
  "deadlib-platform",
  "deadlib-present",
@@ -1524,7 +1524,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-theme-simply-love"
-version = "0.4.2526"
+version = "0.4.2534"
 dependencies = [
  "bitflags 2.13.0",
  "chrono",
@@ -1533,15 +1533,12 @@ dependencies = [
  "deadlib-present",
  "deadlib-render",
  "deadsync-assets",
- "deadsync-audio",
  "deadsync-chart",
  "deadsync-config",
  "deadsync-core",
  "deadsync-gameplay",
  "deadsync-import",
  "deadsync-input",
- "deadsync-input-native",
- "deadsync-lights",
  "deadsync-notefield",
  "deadsync-noteskin",
  "deadsync-online",
@@ -1585,7 +1582,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.4.2526"
+version = "0.4.2534"
 dependencies = [
  "log",
  "semver",

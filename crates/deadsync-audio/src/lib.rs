@@ -13,12 +13,8 @@ pub use mixer::{
 };
 pub use output::{
     AudioMixLevels, AudioOutputMode, Cut, InitConfig, LinuxAudioBackend, OutputBackendReady,
-    OutputDeviceInfo, OutputTimingSnapshot, SOUND_VOLUME_LEVELS, alsa_exclusive_choice_index,
-    audio_mix_level_gains, audio_mix_levels, audio_output_mode_choice_index,
-    audio_output_mode_from_alsa_choice, audio_output_mode_from_choice,
-    audio_sample_rate_choice_index, audio_sample_rate_choices, audio_sample_rate_from_choice,
-    audio_volume_choice_index, audio_volume_from_choice, mix_level_gains, pack_audio_mix_levels,
-    set_audio_mix_levels, unpack_audio_mix_levels,
+    OutputDeviceInfo, OutputTimingSnapshot, audio_mix_level_gains, audio_mix_levels,
+    mix_level_gains, pack_audio_mix_levels, set_audio_mix_levels, unpack_audio_mix_levels,
 };
 pub use position::{
     CallbackClockSource, CallbackClockWindow, MUSIC_POS_MAP_BACKLOG_FRAMES,

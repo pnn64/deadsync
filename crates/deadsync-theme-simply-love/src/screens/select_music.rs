@@ -21,6 +21,7 @@ use crate::screens::pad_config;
 use crate::screens::{
     DensityGraphSlot, DensityGraphSource, Screen, ThemeEffect, input as screen_input,
 };
+use crate::views::SelectMusicRuntimeView;
 use deadlib_platform::dirs;
 use deadlib_present::actors::{Actor, SizeSpec, SpriteSource};
 use deadlib_present::cache::{SharedStrCache, TextCache, cached_shared_str, cached_text};
@@ -609,8 +610,12 @@ pub fn selection_anim_beat(state: &State) -> f32 {
 }
 
 #[inline(always)]
-pub fn sync_audio_playback_view(state: &mut State, view: AudioPlaybackView) {
-    state.audio_playback = view;
+pub fn sync_runtime_view(state: &mut State, view: SelectMusicRuntimeView) {
+    state.audio_playback = view.audio_playback;
+    state.unlock_downloads_available = view.unlock_downloads_available;
+    state
+        .ready_song_reload_dirs
+        .extend(view.ready_song_reload_dirs);
 }
 
 #[inline(always)]
@@ -1161,6 +1166,8 @@ pub struct State {
     currently_playing_preview_start_sec: Option<f32>,
     currently_playing_preview_length_sec: Option<f32>,
     audio_playback: AudioPlaybackView,
+    unlock_downloads_available: bool,
+    ready_song_reload_dirs: Vec<PathBuf>,
     preview_music_muted: bool,
     music_wheel_moved: bool,
     prev_selected_index: usize,
@@ -2753,6 +2760,8 @@ pub fn init() -> State {
         currently_playing_preview_start_sec: None,
         currently_playing_preview_length_sec: None,
         audio_playback: AudioPlaybackView::default(),
+        unlock_downloads_available: false,
+        ready_song_reload_dirs: Vec::new(),
         preview_music_muted: false,
         music_wheel_moved: false,
         session_elapsed: 0.0,
@@ -2953,6 +2962,8 @@ pub fn init_placeholder() -> State {
         currently_playing_preview_start_sec: None,
         currently_playing_preview_length_sec: None,
         audio_playback: AudioPlaybackView::default(),
+        unlock_downloads_available: false,
+        ready_song_reload_dirs: Vec::new(),
         preview_music_muted: false,
         music_wheel_moved: false,
         session_elapsed: 0.0,
@@ -3653,7 +3664,7 @@ fn build_pad_profile_menu_items(state: &State) -> Option<Vec<select_music_menu::
 
 fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
     let replays_enabled = config::get().machine_enable_replays;
-    let downloads_enabled = deadsync_online::runtime::unlock_downloads_available();
+    let downloads_enabled = state.unlock_downloads_available;
     let has_song_selected = matches!(
         state.entries.get(state.selected_index),
         Some(MusicWheelEntry::Song(_))
@@ -5251,6 +5262,8 @@ fn refresh_after_reload(state: &mut State) {
     let p2_preferred_difficulty_index = state.p2_preferred_difficulty_index;
     let pending_audio = std::mem::take(&mut state.pending_audio);
     let audio_playback = state.audio_playback;
+    let unlock_downloads_available = state.unlock_downloads_available;
+    let ready_song_reload_dirs = std::mem::take(&mut state.ready_song_reload_dirs);
 
     let mut refreshed = init();
     refreshed.active_color_index = active_color_index;
@@ -5259,6 +5272,8 @@ fn refresh_after_reload(state: &mut State) {
     refreshed.active_playlist_id = active_playlist_id;
     refreshed.pending_audio = pending_audio;
     refreshed.audio_playback = audio_playback;
+    refreshed.unlock_downloads_available = unlock_downloads_available;
+    refreshed.ready_song_reload_dirs = ready_song_reload_dirs;
 
     if sort_mode != WheelSortMode::Group {
         apply_wheel_sort(&mut refreshed, sort_mode);
@@ -5374,6 +5389,8 @@ fn refresh_after_style_switch(state: &mut State) {
     let gameplay_elapsed = state.gameplay_elapsed;
     let pending_audio = std::mem::take(&mut state.pending_audio);
     let audio_playback = state.audio_playback;
+    let unlock_downloads_available = state.unlock_downloads_available;
+    let ready_song_reload_dirs = std::mem::take(&mut state.ready_song_reload_dirs);
 
     let mut refreshed = init();
     refreshed.active_color_index = active_color_index;
@@ -5382,6 +5399,8 @@ fn refresh_after_style_switch(state: &mut State) {
     refreshed.gameplay_elapsed = gameplay_elapsed;
     refreshed.pending_audio = pending_audio;
     refreshed.audio_playback = audio_playback;
+    refreshed.unlock_downloads_available = unlock_downloads_available;
+    refreshed.ready_song_reload_dirs = ready_song_reload_dirs;
 
     if sort_mode != WheelSortMode::Group {
         apply_wheel_sort(&mut refreshed, sort_mode);
@@ -9473,7 +9492,7 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
         profile_boxes::update(overlay, dt);
         return ThemeEffect::None;
     }
-    let reload_dirs = deadsync_online::runtime::take_ready_song_reload_request();
+    let reload_dirs = std::mem::take(&mut state.ready_song_reload_dirs);
     if !reload_dirs.is_empty() {
         start_reload_song_dirs(state, reload_dirs);
         return ThemeEffect::None;
@@ -12482,12 +12501,18 @@ mod tests {
         let mut state = init_placeholder();
         state.currently_playing_preview_start_sec = Some(10.0);
         state.currently_playing_preview_length_sec = Some(8.0);
-        super::sync_audio_playback_view(
+        super::sync_runtime_view(
             &mut state,
-            deadsync_theme::views::AudioPlaybackView {
-                music_stream_position_seconds: 2.5,
+            crate::views::SelectMusicRuntimeView {
+                audio_playback: deadsync_theme::views::AudioPlaybackView {
+                    music_stream_position_seconds: 2.5,
+                },
+                unlock_downloads_available: true,
+                ready_song_reload_dirs: vec![std::path::PathBuf::from("Songs/Unlocks")],
             },
         );
+        assert!(state.unlock_downloads_available);
+        assert_eq!(state.ready_song_reload_dirs.len(), 1);
         let rate = deadsync_profile::compat::get_session_music_rate();
         let rate = f64::from(if rate.is_finite() && rate > 0.0 {
             rate

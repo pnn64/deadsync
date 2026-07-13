@@ -2,9 +2,18 @@ pub use deadlib_platform::display::FullscreenType;
 pub use deadlib_present::color::Color;
 pub use deadsync_audio::{AudioMixLevels, AudioOutputMode, LinuxAudioBackend};
 pub use deadsync_input_native::PadOrderBackend;
+#[cfg(windows)]
+pub use deadsync_input_native::WindowsPadBackend;
+pub use deadsync_lights::{DriverKind as LightsDriverKind, GameplayPadLightMode};
 pub use deadsync_smx::SmxPadPreset;
 
 pub use crate::app_config::{Config, DisplayMode};
+pub use crate::audio::{
+    alsa_exclusive_choice_index, audio_output_mode_choice_index,
+    audio_output_mode_from_alsa_choice, audio_output_mode_from_choice,
+    audio_sample_rate_choice_index, audio_sample_rate_choices, audio_sample_rate_from_choice,
+    audio_volume_choice_index, audio_volume_from_choice,
+};
 pub use crate::defaults::*;
 pub use crate::folders::AdditionalSongFolder;
 pub use crate::frame_pacing::{
@@ -46,31 +55,34 @@ pub use crate::options::{
     default_fail_type_from_choice, default_sync_offset_choice_index,
     default_sync_offset_from_choice, groovestats_qr_login_when_choice_index,
     groovestats_qr_login_when_from_choice, language_choice_index, language_flag_from_choice,
-    log_level_choice_index, log_level_from_choice, machine_bar_color_choice_index,
-    machine_bar_color_from_choice, machine_evaluation_style_choice_index,
-    machine_evaluation_style_from_choice, machine_font_choice_index, machine_font_from_choice,
-    machine_preferred_play_mode_choice_index, machine_preferred_play_mode_from_choice,
-    machine_preferred_play_style_choice_index, machine_preferred_play_style_from_choice,
-    max_fps_choice_index, max_fps_from_choice, max_fps_hold_delta,
-    music_wheel_scroll_speed_choice_index, music_wheel_scroll_speed_from_choice,
-    random_background_mode_choice_index, random_background_mode_from_choice,
-    scorebox_cycle_bit_from_choice, scorebox_cycle_cursor_index, scorebox_cycle_mask,
-    select_music_chart_info_bit_from_choice, select_music_chart_info_cursor_index,
-    select_music_chart_info_enabled_mask, select_music_chart_info_mask,
-    select_music_itl_rank_mode_choice_index, select_music_itl_rank_mode_from_choice,
-    select_music_itl_wheel_mode_choice_index, select_music_itl_wheel_mode_from_choice,
-    select_music_new_pack_mode_choice_index, select_music_new_pack_mode_from_choice,
-    select_music_pattern_info_mode_choice_index, select_music_pattern_info_mode_from_choice,
-    select_music_scorebox_placement_choice_index, select_music_scorebox_placement_from_choice,
-    select_music_song_select_bg_mode_choice_index, select_music_song_select_bg_mode_from_choice,
-    select_music_step_artist_box_mode_choice_index, select_music_step_artist_box_mode_from_choice,
-    select_music_wheel_style_choice_index, select_music_wheel_style_from_choice,
-    srpg_variant_choice_index, srpg_variant_from_choice, sync_confidence_choice_index,
-    sync_confidence_from_choice, sync_graph_mode_choice_index, sync_graph_mode_from_choice,
-    translated_titles_choice_index, translated_titles_from_choice,
+    lights_driver_choice_index, lights_driver_from_choice, lights_gameplay_pad_choice_index,
+    lights_gameplay_pad_from_choice, log_level_choice_index, log_level_from_choice,
+    machine_bar_color_choice_index, machine_bar_color_from_choice,
+    machine_evaluation_style_choice_index, machine_evaluation_style_from_choice,
+    machine_font_choice_index, machine_font_from_choice, machine_preferred_play_mode_choice_index,
+    machine_preferred_play_mode_from_choice, machine_preferred_play_style_choice_index,
+    machine_preferred_play_style_from_choice, max_fps_choice_index, max_fps_from_choice,
+    max_fps_hold_delta, music_wheel_scroll_speed_choice_index,
+    music_wheel_scroll_speed_from_choice, random_background_mode_choice_index,
+    random_background_mode_from_choice, scorebox_cycle_bit_from_choice,
+    scorebox_cycle_cursor_index, scorebox_cycle_mask, select_music_chart_info_bit_from_choice,
+    select_music_chart_info_cursor_index, select_music_chart_info_enabled_mask,
+    select_music_chart_info_mask, select_music_itl_rank_mode_choice_index,
+    select_music_itl_rank_mode_from_choice, select_music_itl_wheel_mode_choice_index,
+    select_music_itl_wheel_mode_from_choice, select_music_new_pack_mode_choice_index,
+    select_music_new_pack_mode_from_choice, select_music_pattern_info_mode_choice_index,
+    select_music_pattern_info_mode_from_choice, select_music_scorebox_placement_choice_index,
+    select_music_scorebox_placement_from_choice, select_music_song_select_bg_mode_choice_index,
+    select_music_song_select_bg_mode_from_choice, select_music_step_artist_box_mode_choice_index,
+    select_music_step_artist_box_mode_from_choice, select_music_wheel_style_choice_index,
+    select_music_wheel_style_from_choice, srpg_variant_choice_index, srpg_variant_from_choice,
+    sync_confidence_choice_index, sync_confidence_from_choice, sync_graph_mode_choice_index,
+    sync_graph_mode_from_choice, translated_titles_choice_index, translated_titles_from_choice,
     version_overlay_side_choice_index, version_overlay_side_from_choice, visual_style_choice_index,
     visual_style_from_choice,
 };
+#[cfg(windows)]
+pub use crate::options::{windows_pad_backend_choice_index, windows_pad_backend_from_choice};
 pub use crate::pad_order::pad_index_for_uuid_saved as pad_index_for_uuid;
 pub use crate::runtime::{
     additional_song_folder_roots, audio_mix_levels, default_profiles, flush_pending_saves, get,

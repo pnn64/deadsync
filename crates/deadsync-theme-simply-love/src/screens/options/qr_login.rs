@@ -355,7 +355,8 @@ fn login_msg_from_arrowcloud_event(event: ac_api::DeviceLoginEvent) -> LoginMsg 
 
 /// Drain pending channel messages for every slot, updating slot state
 /// and (on success) persisting api keys into per-side profiles.
-pub(crate) fn poll_qr_login_ui(ui: &mut QrLoginUiState) {
+pub(crate) fn poll_qr_login_ui(ui: &mut QrLoginUiState) -> bool {
+    let mut refresh_arrowcloud_status = false;
     for slot in &mut ui.slots {
         let mut msgs: Vec<LoginMsg> = Vec::new();
         if let Some(rx) = slot.rx.as_ref() {
@@ -364,12 +365,13 @@ pub(crate) fn poll_qr_login_ui(ui: &mut QrLoginUiState) {
             }
         }
         for msg in msgs {
-            apply_login_msg(slot, msg);
+            refresh_arrowcloud_status |= apply_login_msg(slot, msg);
         }
     }
+    refresh_arrowcloud_status
 }
 
-fn apply_login_msg(slot: &mut LoginSlot, msg: LoginMsg) {
+fn apply_login_msg(slot: &mut LoginSlot, msg: LoginMsg) -> bool {
     match msg {
         LoginMsg::Started {
             short_code,
@@ -379,19 +381,24 @@ fn apply_login_msg(slot: &mut LoginSlot, msg: LoginMsg) {
                 short_code,
                 verification_url,
             };
+            false
         }
         LoginMsg::StatusUpdate => {
             // Approved-but-not-consumed renders identically to Pending —
             // we only flip to Success once the key has been delivered.
+            false
         }
         LoginMsg::Consumed { api_key, username } => {
-            persist_consumed_key(slot, &api_key, username.as_deref());
+            let refresh_arrowcloud_status =
+                persist_consumed_key(slot, &api_key, username.as_deref());
             slot.state = SlotState::Success;
             slot.rx = None;
+            refresh_arrowcloud_status
         }
         LoginMsg::Failed { reason } => {
             slot.state = SlotState::Failed { reason };
             slot.rx = None;
+            false
         }
     }
 }
@@ -400,7 +407,7 @@ fn apply_login_msg(slot: &mut LoginSlot, msg: LoginMsg) {
 /// `profile::set_*` helper, then refresh any service-status caches that
 /// depend on the key.  This is the only place the `BackendKind` switch
 /// is observed by the persistence layer.
-fn persist_consumed_key(slot: &mut LoginSlot, api_key: &str, username: Option<&str>) {
+fn persist_consumed_key(slot: &mut LoginSlot, api_key: &str, username: Option<&str>) -> bool {
     match slot.kind {
         BackendKind::ArrowCloud => {
             if let Some(profile_id) = slot.target_profile_id.as_ref() {
@@ -410,8 +417,8 @@ fn persist_consumed_key(slot: &mut LoginSlot, api_key: &str, username: Option<&s
                 // Refresh display_name in case profile state changed.
                 slot.display_name = profile::get_for_side(slot.side).display_name;
             }
-            deadsync_online::runtime::refresh_arrowcloud_status();
             let _ = username; // ArrowCloud's device-login never returns one.
+            true
         }
         BackendKind::GrooveStats => {
             let username = username.unwrap_or_default();
@@ -422,6 +429,7 @@ fn persist_consumed_key(slot: &mut LoginSlot, api_key: &str, username: Option<&s
                 // Refresh display_name in case profile state changed.
                 slot.display_name = profile::get_for_side(slot.side).display_name;
             }
+            false
         }
     }
 }

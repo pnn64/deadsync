@@ -6,7 +6,7 @@ use deadlib_present::actors::Actor;
 use deadlib_present::space::screen_center_x;
 use deadsync_input::RawKeyboardEvent;
 use deadsync_input::{InputEvent, PadEvent, VirtualAction};
-use deadsync_input_native::GpSystemEvent;
+use deadsync_theme::views::GamepadSystemView;
 // Keyboard input is handled centrally via the virtual dispatcher in app
 use deadsync_input::KeyCode;
 use std::collections::VecDeque;
@@ -124,11 +124,11 @@ pub fn handle_raw_pad_event(state: &mut State, pad_event: &PadEvent) {
     }
 }
 
-pub fn handle_gamepad_system_event(state: &mut State, ev: &GpSystemEvent) {
+pub fn handle_gamepad_system_event(state: &mut State, ev: &GamepadSystemView) {
     let now = Instant::now();
     let msg = match ev {
-        GpSystemEvent::StartupComplete => "[SYS] Gamepad startup complete".to_string(),
-        GpSystemEvent::Connected {
+        GamepadSystemView::StartupComplete => "[SYS] Gamepad startup complete".to_string(),
+        GamepadSystemView::Connected {
             name,
             id,
             vendor_id,
@@ -136,7 +136,7 @@ pub fn handle_gamepad_system_event(state: &mut State, ev: &GpSystemEvent) {
             backend,
             initial,
         } => {
-            let dev = usize::from(*id);
+            let dev = *id;
             let vid = vendor_id
                 .map(|v| format!("0x{v:04X}"))
                 .unwrap_or_else(|| "n/a".to_string());
@@ -144,13 +144,13 @@ pub fn handle_gamepad_system_event(state: &mut State, ev: &GpSystemEvent) {
                 .map(|p| format!("0x{p:04X}"))
                 .unwrap_or_else(|| "n/a".to_string());
             format!(
-                "[SYS] Gamepad {dev} CONNECTED: \"{name}\" vid={vid} pid={pid} backend={backend:?} initial={initial}",
+                "[SYS] Gamepad {dev} CONNECTED: \"{name}\" vid={vid} pid={pid} backend={backend} initial={initial}",
             )
         }
-        GpSystemEvent::Disconnected {
+        GamepadSystemView::Disconnected {
             name, id, initial, ..
         } => {
-            let dev = usize::from(*id);
+            let dev = *id;
             format!("[SYS] Gamepad {dev} DISCONNECTED: \"{name}\" initial={initial}")
         }
     };

@@ -88,21 +88,6 @@ pub enum DriverKind {
     MinimaidHid,
 }
 
-pub const DRIVER_KIND_CHOICES: [DriverKind; 12] = [
-    DriverKind::Off,
-    DriverKind::Snek,
-    DriverKind::Litboard,
-    DriverKind::Win32Serial,
-    DriverKind::Fusion,
-    DriverKind::Gpb,
-    DriverKind::PacDrive,
-    DriverKind::PiuioLeds,
-    DriverKind::Itgio,
-    DriverKind::HidBlueDot,
-    DriverKind::Stac2,
-    DriverKind::MinimaidHid,
-];
-
 impl DriverKind {
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -119,40 +104,6 @@ impl DriverKind {
             Self::Stac2 => "STAC2",
             Self::MinimaidHid => "MinimaidHID",
         }
-    }
-}
-
-pub const fn lights_driver_choice_index(driver: DriverKind) -> usize {
-    match driver {
-        DriverKind::Off => 0,
-        DriverKind::Snek => 1,
-        DriverKind::Litboard => 2,
-        DriverKind::Win32Serial => 3,
-        DriverKind::Fusion => 4,
-        DriverKind::Gpb => 5,
-        DriverKind::PacDrive => 6,
-        DriverKind::PiuioLeds => 7,
-        DriverKind::Itgio => 8,
-        DriverKind::HidBlueDot => 9,
-        DriverKind::Stac2 => 10,
-        DriverKind::MinimaidHid => 11,
-    }
-}
-
-pub const fn lights_driver_from_choice(idx: usize) -> DriverKind {
-    match idx {
-        1 => DriverKind::Snek,
-        2 => DriverKind::Litboard,
-        3 => DriverKind::Win32Serial,
-        4 => DriverKind::Fusion,
-        5 => DriverKind::Gpb,
-        6 => DriverKind::PacDrive,
-        7 => DriverKind::PiuioLeds,
-        8 => DriverKind::Itgio,
-        9 => DriverKind::HidBlueDot,
-        10 => DriverKind::Stac2,
-        11 => DriverKind::MinimaidHid,
-        _ => DriverKind::Off,
     }
 }
 
@@ -199,29 +150,12 @@ pub enum GameplayPadLightMode {
     Chart,
 }
 
-pub const GAMEPLAY_PAD_LIGHT_MODE_CHOICES: [GameplayPadLightMode; 2] =
-    [GameplayPadLightMode::Input, GameplayPadLightMode::Chart];
-
 impl GameplayPadLightMode {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Input => "Input",
             Self::Chart => "Chart",
         }
-    }
-}
-
-pub const fn lights_gameplay_pad_choice_index(mode: GameplayPadLightMode) -> usize {
-    match mode {
-        GameplayPadLightMode::Input => 0,
-        GameplayPadLightMode::Chart => 1,
-    }
-}
-
-pub const fn lights_gameplay_pad_from_choice(idx: usize) -> GameplayPadLightMode {
-    match idx {
-        1 => GameplayPadLightMode::Chart,
-        _ => GameplayPadLightMode::Input,
     }
 }
 
@@ -1017,15 +951,6 @@ mod tests {
     }
 
     #[test]
-    fn driver_choices_roundtrip() {
-        for (idx, driver) in DRIVER_KIND_CHOICES.into_iter().enumerate() {
-            assert_eq!(lights_driver_choice_index(driver), idx);
-            assert_eq!(lights_driver_from_choice(idx), driver);
-        }
-        assert_eq!(lights_driver_from_choice(usize::MAX), DriverKind::Off);
-    }
-
-    #[test]
     fn parses_gameplay_pad_light_modes() {
         assert_eq!(GameplayPadLightMode::default().as_str(), "Input");
         assert_eq!(
@@ -1035,18 +960,6 @@ mod tests {
         assert_eq!(
             GameplayPadLightMode::from_str("Chart").unwrap(),
             GameplayPadLightMode::Chart
-        );
-    }
-
-    #[test]
-    fn gameplay_pad_light_choices_roundtrip() {
-        for (idx, mode) in GAMEPLAY_PAD_LIGHT_MODE_CHOICES.into_iter().enumerate() {
-            assert_eq!(lights_gameplay_pad_choice_index(mode), idx);
-            assert_eq!(lights_gameplay_pad_from_choice(idx), mode);
-        }
-        assert_eq!(
-            lights_gameplay_pad_from_choice(usize::MAX),
-            GameplayPadLightMode::Input
         );
     }
 

@@ -36,6 +36,8 @@ pub enum SimplyLoveProfileRequest {
 
 #[derive(Clone, Debug)]
 pub enum SimplyLoveOnlineRequest {
+    Reinitialize,
+    RefreshArrowCloudStatus,
     LinkArrowCloud {
         profile_id: String,
         display_name: String,

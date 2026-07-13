@@ -85,31 +85,6 @@ impl std::str::FromStr for WindowsPadBackend {
     }
 }
 
-#[cfg(windows)]
-pub const fn windows_pad_backend_choice_index(backend: WindowsPadBackend) -> usize {
-    match backend {
-        WindowsPadBackend::Auto | WindowsPadBackend::RawInput => 0,
-        #[cfg(target_vendor = "win7")]
-        WindowsPadBackend::Wgi => 0,
-        #[cfg(not(target_vendor = "win7"))]
-        WindowsPadBackend::Wgi => 1,
-    }
-}
-
-#[cfg(windows)]
-pub const fn windows_pad_backend_from_choice(idx: usize) -> WindowsPadBackend {
-    #[cfg(target_vendor = "win7")]
-    {
-        let _ = idx;
-        WindowsPadBackend::RawInput
-    }
-    #[cfg(not(target_vendor = "win7"))]
-    match idx {
-        0 => WindowsPadBackend::RawInput,
-        _ => WindowsPadBackend::Wgi,
-    }
-}
-
 /// Input backends that persist a stable pad order. SMX is intentionally
 /// excluded because it has its own serial-based assignment.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -398,34 +373,5 @@ mod tests {
             [true, false, true, false],
         );
         assert!(events.is_empty());
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn windows_pad_backend_choices_match_options_order() {
-        assert_eq!(windows_pad_backend_choice_index(WindowsPadBackend::Auto), 0);
-        assert_eq!(
-            windows_pad_backend_choice_index(WindowsPadBackend::RawInput),
-            0
-        );
-        assert_eq!(
-            windows_pad_backend_from_choice(0),
-            WindowsPadBackend::RawInput
-        );
-
-        #[cfg(target_vendor = "win7")]
-        {
-            assert_eq!(windows_pad_backend_choice_index(WindowsPadBackend::Wgi), 0);
-            assert_eq!(
-                windows_pad_backend_from_choice(99),
-                WindowsPadBackend::RawInput
-            );
-        }
-        #[cfg(not(target_vendor = "win7"))]
-        {
-            assert_eq!(windows_pad_backend_choice_index(WindowsPadBackend::Wgi), 1);
-            assert_eq!(windows_pad_backend_from_choice(1), WindowsPadBackend::Wgi);
-            assert_eq!(windows_pad_backend_from_choice(99), WindowsPadBackend::Wgi);
-        }
     }
 }

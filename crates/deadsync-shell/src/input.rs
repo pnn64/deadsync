@@ -5,6 +5,7 @@ use deadsync_gameplay::{
 use deadsync_input::{PadEvent, RawKeyboardEvent, VirtualAction};
 use deadsync_input_native::{GpSystemEvent, PadBackend};
 use deadsync_profile::PlayerSide;
+use deadsync_theme::views::GamepadSystemView;
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
 use std::time::Instant;
 use winit::keyboard::KeyCode;
@@ -210,6 +211,56 @@ pub fn gamepad_system_event_plan(screen: Screen, ev: &GpSystemEvent) -> GamepadS
                 user_message: (!*initial).then_some(message),
             }
         }
+    }
+}
+
+const fn pad_backend_name(backend: PadBackend) -> &'static str {
+    match backend {
+        #[cfg(windows)]
+        PadBackend::WindowsRawInput => "Windows Raw Input",
+        #[cfg(windows)]
+        PadBackend::WindowsWgi => "Windows Gaming Input",
+        #[cfg(target_os = "linux")]
+        PadBackend::LinuxEvdev => "Linux evdev",
+        #[cfg(target_os = "freebsd")]
+        PadBackend::FreeBsdHidraw => "FreeBSD hidraw",
+        #[cfg(target_os = "freebsd")]
+        PadBackend::FreeBsdEvdev => "FreeBSD evdev",
+        #[cfg(target_os = "macos")]
+        PadBackend::MacOsIohid => "macOS IOHID",
+        PadBackend::Smx => "StepManiaX",
+    }
+}
+
+pub fn gamepad_system_view(ev: &GpSystemEvent) -> GamepadSystemView {
+    match ev {
+        GpSystemEvent::Connected {
+            name,
+            id,
+            vendor_id,
+            product_id,
+            backend,
+            initial,
+        } => GamepadSystemView::Connected {
+            name: name.clone(),
+            id: usize::from(*id),
+            vendor_id: *vendor_id,
+            product_id: *product_id,
+            backend: pad_backend_name(*backend),
+            initial: *initial,
+        },
+        GpSystemEvent::Disconnected {
+            name,
+            id,
+            backend,
+            initial,
+        } => GamepadSystemView::Disconnected {
+            name: name.clone(),
+            id: usize::from(*id),
+            backend: pad_backend_name(*backend),
+            initial: *initial,
+        },
+        GpSystemEvent::StartupComplete => GamepadSystemView::StartupComplete,
     }
 }
 

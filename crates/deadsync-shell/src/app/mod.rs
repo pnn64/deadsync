@@ -32,15 +32,16 @@ use crate::input::{
     AppRawKeyShortcut, EvaluationRawKeyShortcut, GameplayQueuedEvent, QueuedInputBatchState,
     QueuedInputEventRoute, RawKeyScreenRoute, RawKeyTextRoute, RawPadScreenRoute,
     app_raw_key_shortcut, evaluation_raw_key_shortcut, gamepad_system_event_plan,
-    gameplay_dispatch_continues, gameplay_raw_key_event, practice_reload_shortcut,
-    queued_input_flush_plan, raw_key_alt_f4_quit, raw_key_screen_route, raw_key_text_route,
-    raw_pad_screen_route, smx_panel_press_feedback_plan,
+    gamepad_system_view, gameplay_dispatch_continues, gameplay_raw_key_event,
+    practice_reload_shortcut, queued_input_flush_plan, raw_key_alt_f4_quit, raw_key_screen_route,
+    raw_key_text_route, raw_pad_screen_route, smx_panel_press_feedback_plan,
 };
 use crate::input_backend::{InputBackendConfig, launch_input_backends};
 use crate::lighting::{
     GameplayLightSyncTarget, LightInputRoute, OperatorMenuButtonRoute, SmxAnimationSyncKey,
     SmxPanelDriver, hide_flags_for_profiles, light_input_route, lighting_frame_plan,
-    load_cabinet_light_chart, operator_menu_button_route, smx_pad_blackout, smx_pad_gif_frame_plan,
+    lights_test_view, load_cabinet_light_chart, operator_menu_button_route, smx_pad_blackout,
+    smx_pad_gif_frame_plan,
 };
 use crate::navigation::{
     TransitionCompletion, TransitionMusicPaths, TransitionState, is_actor_fade_screen,
@@ -171,10 +172,13 @@ use deadsync_theme::views::{
 };
 use deadsync_theme::{AudioRequest, PlatformRequest, RevealPathKind};
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as CurrentScreen;
-use deadsync_theme_simply_love::views::SimplyLoveDensityGraphSlot as DensityGraphSlot;
+use deadsync_theme_simply_love::views::{
+    SelectMusicRuntimeView, SimplyLoveDensityGraphSlot as DensityGraphSlot,
+};
 use deadsync_theme_simply_love::{
     SimplyLoveConfigRequest, SimplyLoveEffect as ThemeEffect, SimplyLoveHardwareRequest,
-    SimplyLoveProfileRequest, SimplyLoveRuntimeRequest, SimplyLoveSyncOwner, SimplyLoveSyncRequest,
+    SimplyLoveOnlineRequest, SimplyLoveProfileRequest, SimplyLoveRuntimeRequest,
+    SimplyLoveSyncOwner, SimplyLoveSyncRequest,
 };
 
 /// Imperative effects to be executed by the shell.
@@ -607,14 +611,14 @@ impl ScreensState {
                 select_color::update(&mut self.select_color_state, delta_time);
                 (None, false)
             }
-            CurrentScreen::ArrowCloudLogin => {
-                screens::arrowcloud_login::update(&mut self.arrowcloud_login_state, delta_time);
-                (None, false)
-            }
-            CurrentScreen::GrooveStatsLogin => {
-                screens::groovestats_login::update(&mut self.groovestats_login_state, delta_time);
-                (None, false)
-            }
+            CurrentScreen::ArrowCloudLogin => (
+                screens::arrowcloud_login::update(&mut self.arrowcloud_login_state, delta_time),
+                false,
+            ),
+            CurrentScreen::GrooveStatsLogin => (
+                screens::groovestats_login::update(&mut self.groovestats_login_state, delta_time),
+                false,
+            ),
             CurrentScreen::SelectStyle => (
                 select_style::update(&mut self.select_style_state, delta_time),
                 false,
@@ -978,7 +982,7 @@ impl App {
         self.lights.tick(delta_time, elapsed_seconds);
     }
 
-    fn sync_audio_playback_view(&mut self) {
+    fn sync_select_music_runtime_view(&mut self) {
         if self.state.screens.current_screen != CurrentScreen::SelectMusic {
             return;
         }
@@ -987,10 +991,14 @@ impl App {
         } else {
             0.0
         };
-        select_music::sync_audio_playback_view(
+        select_music::sync_runtime_view(
             &mut self.state.screens.select_music_state,
-            AudioPlaybackView {
-                music_stream_position_seconds,
+            SelectMusicRuntimeView {
+                audio_playback: AudioPlaybackView {
+                    music_stream_position_seconds,
+                },
+                unlock_downloads_available: deadsync_online::runtime::unlock_downloads_available(),
+                ready_song_reload_dirs: deadsync_online::runtime::take_ready_song_reload_request(),
             },
         );
     }
@@ -1550,7 +1558,7 @@ impl App {
             }
             None => {}
         }
-        self.sync_audio_playback_view();
+        self.sync_select_music_runtime_view();
         let update_us: u32 = elapsed_us_since(update_started);
         self.sync_lights(delta_time, total_elapsed);
 
@@ -2370,6 +2378,16 @@ impl App {
                 }
                 SimplyLoveRuntimeRequest::Platform(request) => {
                     execute_platform_request(request);
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::Reinitialize) => {
+                    deadsync_online::runtime::init();
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Online(
+                    SimplyLoveOnlineRequest::RefreshArrowCloudStatus,
+                ) => {
+                    deadsync_online::runtime::refresh_arrowcloud_status();
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Media(_)
@@ -3594,8 +3612,7 @@ impl App {
             CurrentScreen::TestLights => test_lights::push_actors(
                 &mut actors,
                 &self.state.screens.test_lights_state,
-                self.lights.state_snapshot(),
-                self.lights.mode(),
+                lights_test_view(self.lights.state_snapshot(), self.lights.mode()),
                 screen_alpha_multiplier,
             ),
             CurrentScreen::OverscanAdjustment => overscan_adjustment::push_actors(
@@ -5933,9 +5950,10 @@ impl ApplicationHandler<UserEvent> for App {
             UserEvent::GamepadSystem(ev) => {
                 let plan = gamepad_system_event_plan(self.state.screens.current_screen, &ev);
                 if plan.forward_to_sandbox {
+                    let view = gamepad_system_view(&ev);
                     screens::sandbox::handle_gamepad_system_event(
                         &mut self.state.screens.sandbox_state,
-                        &ev,
+                        &view,
                     );
                 }
                 if let Some(message) = plan.log_message {

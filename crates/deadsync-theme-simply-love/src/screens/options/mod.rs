@@ -27,6 +27,11 @@ use crate::config::{
     sync_graph_mode_from_choice, version_overlay_side_choice_index,
     version_overlay_side_from_choice, visual_style_choice_index, visual_style_from_choice,
 };
+#[cfg(target_os = "windows")]
+use crate::config::{
+    windows_pad_backend_choice_index as windows_backend_choice_index,
+    windows_pad_backend_from_choice as windows_backend_from_choice,
+};
 use crate::screens::input as screen_input;
 use crate::screens::pack_sync as shared_pack_sync;
 use crate::screens::select_music;
@@ -43,11 +48,6 @@ use deadlib_render::{
     software_thread_choice_index, software_thread_from_choice,
 };
 use deadsync_input::{InputEvent, VirtualAction};
-#[cfg(target_os = "windows")]
-use deadsync_input_native::{
-    windows_pad_backend_choice_index as windows_backend_choice_index,
-    windows_pad_backend_from_choice as windows_backend_from_choice,
-};
 use deadsync_online::score_compat as scores;
 use deadsync_profile::compat as profile;
 use deadsync_score as score_data;

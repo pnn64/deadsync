@@ -6,9 +6,7 @@ use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_input::{InputEvent, VirtualAction};
-use deadsync_lights::{
-    ButtonLight, CabinetLight, Mode as LightMode, Player as LightPlayer, State as LightState,
-};
+use deadsync_theme::views::LightsTestView;
 
 const TRANSITION_IN_DURATION: f32 = 0.4;
 const TRANSITION_OUT_DURATION: f32 = 0.4;
@@ -24,6 +22,67 @@ const P2_PAD_X: f32 = 135.0;
 const CABINET_TEX: &str = "test_lights/cabinet ITG2.png";
 const PAD_TEX: &str = "test_lights/dance.png";
 const PANEL_HIGHLIGHT_TEX: &str = "test_lights/highlight.png";
+
+#[derive(Clone, Copy)]
+enum LightPlayer {
+    P1,
+    P2,
+}
+
+impl LightPlayer {
+    const fn ix(self) -> usize {
+        match self {
+            Self::P1 => 0,
+            Self::P2 => 1,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum CabinetLight {
+    MarqueeUpperLeft,
+    MarqueeUpperRight,
+    MarqueeLowerLeft,
+    MarqueeLowerRight,
+    BassLeft,
+    BassRight,
+}
+
+impl CabinetLight {
+    const fn ix(self) -> usize {
+        match self {
+            Self::MarqueeUpperLeft => 0,
+            Self::MarqueeUpperRight => 1,
+            Self::MarqueeLowerLeft => 2,
+            Self::MarqueeLowerRight => 3,
+            Self::BassLeft => 4,
+            Self::BassRight => 5,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum ButtonLight {
+    Left,
+    Down,
+    Up,
+    Right,
+    Start,
+    Select,
+}
+
+impl ButtonLight {
+    const fn ix(self) -> usize {
+        match self {
+            Self::Left => 0,
+            Self::Down => 1,
+            Self::Up => 2,
+            Self::Right => 3,
+            Self::Start => 4,
+            Self::Select => 5,
+        }
+    }
+}
 
 #[derive(Clone, Copy)]
 struct CabinetHighlight {
@@ -191,13 +250,7 @@ pub fn out_transition() -> (Vec<Actor>, f32) {
     transitions::fade_out_black(TRANSITION_OUT_DURATION, 1200)
 }
 
-pub fn push_actors(
-    actors: &mut Vec<Actor>,
-    state: &State,
-    lights: LightState,
-    mode: LightMode,
-    alpha_mul: f32,
-) {
+pub fn push_actors(actors: &mut Vec<Actor>, state: &State, lights: LightsTestView, alpha_mul: f32) {
     actors.reserve(44);
     let screen_w = screen_width();
     let screen_h = screen_height();
@@ -222,7 +275,7 @@ pub fn push_actors(
     ));
 
     for highlight in CABINET_HIGHLIGHTS {
-        if !lights.cabinet(highlight.light) {
+        if !lights.cabinet[highlight.light.ix()] {
             continue;
         }
         actors.push(act!(sprite(highlight.texture):
@@ -239,7 +292,7 @@ pub fn push_actors(
 
     push_pad(actors, lights, LightPlayer::P1, root_x, root_y, alpha_mul);
     push_pad(actors, lights, LightPlayer::P2, root_x, root_y, alpha_mul);
-    push_labels(actors, lights, mode, state.active_color_index, alpha_mul);
+    push_labels(actors, lights, state.active_color_index, alpha_mul);
 
     actors.push(act!(quad:
         align(0.0, 1.0):
@@ -261,14 +314,9 @@ pub fn push_actors(
     ));
 }
 
-pub fn get_actors(
-    state: &State,
-    lights: LightState,
-    mode: LightMode,
-    alpha_mul: f32,
-) -> Vec<Actor> {
+pub fn get_actors(state: &State, lights: LightsTestView, alpha_mul: f32) -> Vec<Actor> {
     let mut actors = Vec::with_capacity(44);
-    push_actors(&mut actors, state, lights, mode, alpha_mul);
+    push_actors(&mut actors, state, lights, alpha_mul);
     actors
 }
 
@@ -279,7 +327,7 @@ fn set_manual(state: &mut State) {
 
 fn push_pad(
     actors: &mut Vec<Actor>,
-    lights: LightState,
+    lights: LightsTestView,
     player: LightPlayer,
     root_x: f32,
     root_y: f32,
@@ -301,7 +349,7 @@ fn push_pad(
     ));
 
     for highlight in PANEL_HIGHLIGHTS {
-        if !lights.button(player, highlight.button) {
+        if !lights.buttons[player.ix()][highlight.button.ix()] {
             continue;
         }
         actors.push(act!(sprite(PANEL_HIGHLIGHT_TEX):
@@ -316,7 +364,7 @@ fn push_pad(
         ));
     }
 
-    let start_on = lights.button(player, ButtonLight::Start);
+    let start_on = lights.buttons[player.ix()][ButtonLight::Start.ix()];
     let start_alpha = if start_on { 0.96 } else { 0.28 } * alpha_mul;
     let label = match player {
         LightPlayer::P1 => "P1 START",
@@ -338,17 +386,17 @@ fn push_pad(
 
 fn push_labels(
     actors: &mut Vec<Actor>,
-    lights: LightState,
-    mode: LightMode,
+    lights: LightsTestView,
     active_color_index: i32,
     alpha_mul: f32,
 ) {
     let screen_w = screen_width();
     let accent = color::DECORATIVE_RGBA
         [active_color_index.rem_euclid(color::DECORATIVE_RGBA.len() as i32) as usize];
-    let mode_text = match mode {
-        LightMode::TestManualCycle => tr("ScreenTestLights", "ManualCycle"),
-        _ => tr("ScreenTestLights", "AutoCycle"),
+    let mode_text = if lights.manual_cycle {
+        tr("ScreenTestLights", "ManualCycle")
+    } else {
+        tr("ScreenTestLights", "AutoCycle")
     };
     let cabinet = tr("ScreenTestLights", cabinet_name(lights).unwrap_or("None"));
     let pad = active_button_text(lights);
@@ -398,7 +446,7 @@ fn push_labels(
     }
 }
 
-fn cabinet_name(lights: LightState) -> Option<&'static str> {
+fn cabinet_name(lights: LightsTestView) -> Option<&'static str> {
     for light in [
         CabinetLight::MarqueeUpperLeft,
         CabinetLight::MarqueeUpperRight,
@@ -407,7 +455,7 @@ fn cabinet_name(lights: LightState) -> Option<&'static str> {
         CabinetLight::BassLeft,
         CabinetLight::BassRight,
     ] {
-        if lights.cabinet(light) {
+        if lights.cabinet[light.ix()] {
             return Some(match light {
                 CabinetLight::MarqueeUpperLeft => "MarqueeUpLeft",
                 CabinetLight::MarqueeUpperRight => "MarqueeUpRight",
@@ -421,7 +469,7 @@ fn cabinet_name(lights: LightState) -> Option<&'static str> {
     None
 }
 
-fn active_button_text(lights: LightState) -> String {
+fn active_button_text(lights: LightsTestView) -> String {
     for player in [LightPlayer::P1, LightPlayer::P2] {
         for button in [
             ButtonLight::Left,
@@ -431,7 +479,7 @@ fn active_button_text(lights: LightState) -> String {
             ButtonLight::Start,
             ButtonLight::Select,
         ] {
-            if lights.button(player, button) {
+            if lights.buttons[player.ix()][button.ix()] {
                 return format!("{} {}", player_name(player), button_name(button));
             }
         }

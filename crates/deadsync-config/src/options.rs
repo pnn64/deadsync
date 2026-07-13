@@ -47,6 +47,9 @@ use crate::theme::{
     auto_screenshot_mask_to_str,
 };
 use crate::writer::{push_bool, push_line};
+#[cfg(windows)]
+use deadsync_input_native::WindowsPadBackend;
+use deadsync_lights::{DriverKind as LightsDriverKind, GameplayPadLightMode};
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -61,6 +64,79 @@ pub const MAX_FPS_DEFAULT: u16 = 60;
 pub const MAX_FPS_HOLD_FAST_AFTER: Duration = Duration::from_millis(700);
 pub const MAX_FPS_HOLD_FASTER_AFTER: Duration = Duration::from_millis(1200);
 pub const MAX_FPS_HOLD_FASTEST_AFTER: Duration = Duration::from_millis(1800);
+
+pub const fn lights_driver_choice_index(driver: LightsDriverKind) -> usize {
+    match driver {
+        LightsDriverKind::Off => 0,
+        LightsDriverKind::Snek => 1,
+        LightsDriverKind::Litboard => 2,
+        LightsDriverKind::Win32Serial => 3,
+        LightsDriverKind::Fusion => 4,
+        LightsDriverKind::Gpb => 5,
+        LightsDriverKind::PacDrive => 6,
+        LightsDriverKind::PiuioLeds => 7,
+        LightsDriverKind::Itgio => 8,
+        LightsDriverKind::HidBlueDot => 9,
+        LightsDriverKind::Stac2 => 10,
+        LightsDriverKind::MinimaidHid => 11,
+    }
+}
+
+pub const fn lights_driver_from_choice(idx: usize) -> LightsDriverKind {
+    match idx {
+        1 => LightsDriverKind::Snek,
+        2 => LightsDriverKind::Litboard,
+        3 => LightsDriverKind::Win32Serial,
+        4 => LightsDriverKind::Fusion,
+        5 => LightsDriverKind::Gpb,
+        6 => LightsDriverKind::PacDrive,
+        7 => LightsDriverKind::PiuioLeds,
+        8 => LightsDriverKind::Itgio,
+        9 => LightsDriverKind::HidBlueDot,
+        10 => LightsDriverKind::Stac2,
+        11 => LightsDriverKind::MinimaidHid,
+        _ => LightsDriverKind::Off,
+    }
+}
+
+pub const fn lights_gameplay_pad_choice_index(mode: GameplayPadLightMode) -> usize {
+    match mode {
+        GameplayPadLightMode::Input => 0,
+        GameplayPadLightMode::Chart => 1,
+    }
+}
+
+pub const fn lights_gameplay_pad_from_choice(idx: usize) -> GameplayPadLightMode {
+    match idx {
+        1 => GameplayPadLightMode::Chart,
+        _ => GameplayPadLightMode::Input,
+    }
+}
+
+#[cfg(windows)]
+pub const fn windows_pad_backend_choice_index(backend: WindowsPadBackend) -> usize {
+    match backend {
+        WindowsPadBackend::Auto | WindowsPadBackend::RawInput => 0,
+        #[cfg(target_vendor = "win7")]
+        WindowsPadBackend::Wgi => 0,
+        #[cfg(not(target_vendor = "win7"))]
+        WindowsPadBackend::Wgi => 1,
+    }
+}
+
+#[cfg(windows)]
+pub const fn windows_pad_backend_from_choice(idx: usize) -> WindowsPadBackend {
+    #[cfg(target_vendor = "win7")]
+    {
+        let _ = idx;
+        WindowsPadBackend::RawInput
+    }
+    #[cfg(not(target_vendor = "win7"))]
+    match idx {
+        0 => WindowsPadBackend::RawInput,
+        _ => WindowsPadBackend::Wgi,
+    }
+}
 
 pub fn bg_brightness_choice_index(brightness: f32) -> usize {
     ((clamp_bg_brightness(brightness) * 10.0).round() as i32).clamp(0, 10) as usize
@@ -2047,6 +2123,63 @@ pub const fn groovestats_qr_login_when_from_choice(idx: usize) -> GrooveStatsQrL
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn light_choices_match_config_order() {
+        let drivers = [
+            LightsDriverKind::Off,
+            LightsDriverKind::Snek,
+            LightsDriverKind::Litboard,
+            LightsDriverKind::Win32Serial,
+            LightsDriverKind::Fusion,
+            LightsDriverKind::Gpb,
+            LightsDriverKind::PacDrive,
+            LightsDriverKind::PiuioLeds,
+            LightsDriverKind::Itgio,
+            LightsDriverKind::HidBlueDot,
+            LightsDriverKind::Stac2,
+            LightsDriverKind::MinimaidHid,
+        ];
+        for (idx, driver) in drivers.into_iter().enumerate() {
+            assert_eq!(lights_driver_choice_index(driver), idx);
+            assert_eq!(lights_driver_from_choice(idx), driver);
+        }
+        assert_eq!(
+            lights_gameplay_pad_from_choice(lights_gameplay_pad_choice_index(
+                GameplayPadLightMode::Chart
+            )),
+            GameplayPadLightMode::Chart
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_pad_backend_choices_match_options_order() {
+        assert_eq!(windows_pad_backend_choice_index(WindowsPadBackend::Auto), 0);
+        assert_eq!(
+            windows_pad_backend_choice_index(WindowsPadBackend::RawInput),
+            0
+        );
+        assert_eq!(
+            windows_pad_backend_from_choice(0),
+            WindowsPadBackend::RawInput
+        );
+
+        #[cfg(target_vendor = "win7")]
+        {
+            assert_eq!(windows_pad_backend_choice_index(WindowsPadBackend::Wgi), 0);
+            assert_eq!(
+                windows_pad_backend_from_choice(99),
+                WindowsPadBackend::RawInput
+            );
+        }
+        #[cfg(not(target_vendor = "win7"))]
+        {
+            assert_eq!(windows_pad_backend_choice_index(WindowsPadBackend::Wgi), 1);
+            assert_eq!(windows_pad_backend_from_choice(1), WindowsPadBackend::Wgi);
+            assert_eq!(windows_pad_backend_from_choice(99), WindowsPadBackend::Wgi);
+        }
+    }
 
     fn ini(content: &str) -> SimpleIni {
         let mut conf = SimpleIni::new();

@@ -1,13 +1,14 @@
 use deadlib_render::{ClockDomainTrace, PresentModeTrace};
 use deadsync_assets::noteskin::Noteskin;
-use deadsync_audio::OutputTimingSnapshot;
 use deadsync_profile::PlayerSide;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 pub use deadsync_config::frame_pacing::VisibleStutterSample;
 pub use deadsync_theme::views::{
-    CourseGraphStageView, CourseStageView, DensityGraphView, EvaluationView, FrameStatsSample,
-    FrameStatsSummary, OverlayAnchor, OverlayStyle, SelectedCourseView, TimingHealthView,
+    AudioTimingView, CourseGraphStageView, CourseStageView, DensityGraphView, EvaluationView,
+    FrameStatsSample, FrameStatsSummary, OverlayAnchor, OverlayStyle, SelectedCourseView,
+    TimingHealthView,
 };
 
 /// Concrete evaluation view used by the Simply Love screens.
@@ -16,7 +17,15 @@ pub type CourseGraphStage = CourseGraphStageView;
 pub type CourseStagePlan = CourseStageView;
 pub type SelectedCoursePlan = SelectedCourseView;
 pub type DensityGraphSource = DensityGraphView;
-pub type TimingHealth = TimingHealthView<PresentModeTrace, ClockDomainTrace, OutputTimingSnapshot>;
+pub type TimingHealth = TimingHealthView<PresentModeTrace, ClockDomainTrace, AudioTimingView>;
+
+/// Shell-prepared runtime data consumed by Simply Love's Select Music screen.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct SelectMusicRuntimeView {
+    pub audio_playback: deadsync_theme::views::AudioPlaybackView,
+    pub unlock_downloads_available: bool,
+    pub ready_song_reload_dirs: Vec<PathBuf>,
+}
 
 /// Simply Love's two density-graph texture targets.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -1700,10 +1700,15 @@ fn simply_love_audio_flow_slices_use_ordered_theme_effects() {
         !manifest.contains("deadsync-audio-stream"),
         "Simply Love must not depend on the audio execution runtime"
     );
+    assert!(
+        !manifest.contains("deadsync-audio ="),
+        "Simply Love must consume shell-prepared audio views, not audio runtime types"
+    );
     let mut direct_audio = Vec::new();
     for file in rust_files(&theme.join("src")) {
         let source = fs::read_to_string(&file).expect("theme source should be readable");
         for token in [
+            "deadsync_audio",
             "deadsync_audio_stream",
             "audio::play_sfx(",
             "audio::play_music(",
@@ -1742,6 +1747,7 @@ fn simply_love_audio_flow_slices_use_ordered_theme_effects() {
         "pub struct AudioPlaybackView",
         "pub struct AudioOutputDeviceView",
         "pub struct AudioOptionsView",
+        "pub struct AudioTimingView",
     ] {
         assert!(
             generic_views.contains(view),
@@ -1852,17 +1858,23 @@ fn concrete_theme_uses_the_input_key_contract_instead_of_winit() {
         !manifest.contains("winit ="),
         "Simply Love should consume keyboard codes through deadsync-input"
     );
+    assert!(
+        !manifest.contains("deadsync-input-native"),
+        "Simply Love should consume shell-prepared native input views"
+    );
 
     let mut failures = Vec::new();
     for file in rust_files(&theme.join("src")) {
         let source = fs::read_to_string(&file).expect("theme source should be readable");
-        if source.contains("winit::") {
-            failures.push(rel_path(&root, &file));
+        for token in ["winit::", "deadsync_input_native"] {
+            if source.contains(token) {
+                failures.push(format!("{}: {token}", rel_path(&root, &file)));
+            }
         }
     }
     assert!(
         failures.is_empty(),
-        "Simply Love still imports winit directly:\n{}",
+        "Simply Love still imports native input runtime types:\n{}",
         failures.join("\n")
     );
 
@@ -1875,6 +1887,110 @@ fn concrete_theme_uses_the_input_key_contract_instead_of_winit() {
             || input.contains("pub type KeyCode"),
         "deadsync-input must expose its keyboard-code contract"
     );
+    let views = fs::read_to_string(root.join("crates/deadsync-theme/src/views.rs"))
+        .expect("theme views should be readable");
+    assert!(views.contains("pub enum GamepadSystemView"));
+    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/input.rs"))
+        .expect("shell input owner should be readable");
+    assert!(shell.contains("pub fn gamepad_system_view"));
+}
+
+#[test]
+fn simply_love_test_lights_uses_shell_prepared_state() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let theme = root.join("crates/deadsync-theme-simply-love");
+    let manifest = fs::read_to_string(theme.join("Cargo.toml"))
+        .expect("Simply Love manifest should be readable");
+    assert!(!manifest.contains("deadsync-lights"));
+
+    let mut failures = Vec::new();
+    for file in rust_files(&theme.join("src")) {
+        let source = fs::read_to_string(&file).expect("theme source should be readable");
+        if source.contains("deadsync_lights") {
+            failures.push(rel_path(&root, &file));
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "Simply Love still imports the lights runtime:\n{}",
+        failures.join("\n")
+    );
+
+    let views = fs::read_to_string(root.join("crates/deadsync-theme/src/views.rs"))
+        .expect("theme views should be readable");
+    assert!(views.contains("pub struct LightsTestView"));
+    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/lighting.rs"))
+        .expect("shell lighting owner should be readable");
+    assert!(shell.contains("pub fn lights_test_view"));
+    let screen = fs::read_to_string(theme.join("src/screens/test_lights.rs"))
+        .expect("test-lights screen should be readable");
+    assert!(screen.contains("lights: LightsTestView"));
+}
+
+#[test]
+fn select_music_unlock_availability_is_shell_prepared() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let screen = fs::read_to_string(
+        root.join("crates/deadsync-theme-simply-love/src/screens/select_music.rs"),
+    )
+    .expect("Select Music source should be readable");
+    assert!(!screen.contains("deadsync_online::runtime::unlock_downloads_available"));
+    assert!(!screen.contains("deadsync_online::runtime::take_ready_song_reload_request"));
+    assert!(screen.contains("pub fn sync_runtime_view"));
+    assert!(screen.contains("state.unlock_downloads_available"));
+
+    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+        .expect("Simply Love views should be readable");
+    assert!(views.contains("pub struct SelectMusicRuntimeView"));
+    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell app should be readable");
+    assert!(shell.contains("fn sync_select_music_runtime_view"));
+    assert!(shell.contains("deadsync_online::runtime::unlock_downloads_available()"));
+    assert!(shell.contains("deadsync_online::runtime::take_ready_song_reload_request()"));
+}
+
+#[test]
+fn options_online_reinitialization_is_shell_owned() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let input = fs::read_to_string(
+        root.join("crates/deadsync-theme-simply-love/src/screens/options/input.rs"),
+    )
+    .expect("Simply Love Options input should be readable");
+    assert!(!input.contains("deadsync_online::runtime::init"));
+    assert_eq!(
+        input
+            .matches("action = Some(online_reinitialize_effect())")
+            .count(),
+        3
+    );
+
+    let effects = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+        .expect("Simply Love effects should be readable");
+    assert!(effects.contains("pub enum SimplyLoveOnlineRequest"));
+    assert!(effects.contains("Reinitialize,"));
+    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell app should be readable");
+    assert!(shell.contains("SimplyLoveOnlineRequest::Reinitialize"));
+    assert!(shell.contains("deadsync_online::runtime::init()"));
+}
+
+#[test]
+fn arrowcloud_status_refresh_is_shell_owned() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let qr = fs::read_to_string(
+        root.join("crates/deadsync-theme-simply-love/src/screens/options/qr_login.rs"),
+    )
+    .expect("QR login source should be readable");
+    assert!(!qr.contains("deadsync_online::runtime::refresh_arrowcloud_status"));
+    assert!(qr.contains("poll_qr_login_ui(ui: &mut QrLoginUiState) -> bool"));
+
+    let effects = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+        .expect("Simply Love effects should be readable");
+    assert!(effects.contains("RefreshArrowCloudStatus"));
+    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell app should be readable");
+    assert!(shell.contains("SimplyLoveOnlineRequest::RefreshArrowCloudStatus"));
+    assert!(shell.contains("deadsync_online::runtime::refresh_arrowcloud_status()"));
 }
 
 #[test]

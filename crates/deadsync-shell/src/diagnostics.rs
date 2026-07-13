@@ -1,6 +1,27 @@
 use deadlib_render::{ClockDomainTrace, PresentStats};
 use deadsync_audio::OutputTimingSnapshot;
+use deadsync_theme::views::AudioTimingView;
 use deadsync_theme_simply_love::views::TimingHealth;
+
+fn audio_timing_view(audio: OutputTimingSnapshot) -> AudioTimingView {
+    AudioTimingView {
+        backend: audio.backend.as_str(),
+        requested_output_mode: audio.requested_output_mode.as_str(),
+        fallback_from_native: audio.fallback_from_native,
+        timing_clock: audio.timing_clock.as_str(),
+        timing_quality: audio.timing_quality.as_str(),
+        sample_rate_hz: audio.sample_rate_hz,
+        device_period_ns: audio.device_period_ns,
+        stream_latency_ns: audio.stream_latency_ns,
+        buffer_frames: audio.buffer_frames,
+        padding_frames: audio.padding_frames,
+        queued_frames: audio.queued_frames,
+        estimated_output_delay_ns: audio.estimated_output_delay_ns,
+        clock_fallback_count: audio.clock_fallback_count,
+        timing_sanity_failure_count: audio.timing_sanity_failure_count,
+        underrun_count: audio.underrun_count,
+    }
+}
 
 pub fn timing_health(
     present: PresentStats,
@@ -31,7 +52,7 @@ pub fn timing_health(
         host_mapped: present.host_present_ns != 0
             && present.display_clock != ClockDomainTrace::Unknown
             && present.host_clock != ClockDomainTrace::Unknown,
-        audio: audio.has_measurement().then_some(audio),
+        audio: audio.has_measurement().then(|| audio_timing_view(audio)),
     }
 }
 
