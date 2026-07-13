@@ -1,13 +1,14 @@
 use crate::act;
 use crate::assets::{FontRole, current_machine_font_key};
 use crate::screens::components::shared::gs_scorebox::entries_with_local_self_state;
+use crate::views::{
+    ScoreboxSideView, SelectMusicLeaderboardRequest, SelectMusicLeaderboardSideView,
+    SelectMusicLeaderboardView,
+};
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_input::{InputEvent, VirtualAction};
-use deadsync_online::score_compat as scores;
-use deadsync_profile as profile_data;
-use deadsync_profile::compat as profile;
 use deadsync_score as score_data;
 
 const GS_LEADERBOARD_NUM_ENTRIES: usize = 13;
@@ -42,6 +43,7 @@ pub struct LeaderboardSideState {
     error_text: Option<String>,
     machine_pane: Option<score_data::LeaderboardPane>,
     chart_hash: Option<String>,
+    scorebox: ScoreboxSideView,
 }
 
 #[derive(Debug)]
@@ -64,10 +66,7 @@ pub enum LeaderboardInputOutcome {
     Closed,
 }
 
-fn gs_machine_pane(chart_hash: Option<&str>) -> score_data::LeaderboardPane {
-    let entries = chart_hash
-        .map(|h| scores::get_machine_leaderboard_local_with_names(h, GS_LEADERBOARD_NUM_ENTRIES))
-        .unwrap_or_default();
+fn gs_machine_pane(entries: Vec<score_data::LeaderboardEntry>) -> score_data::LeaderboardPane {
     score_data::LeaderboardPane {
         name: GS_LEADERBOARD_MACHINE_BEST.to_string(),
         entries,
@@ -160,25 +159,22 @@ fn apply_leaderboard_side_snapshot(
     side.panes = panes;
 }
 
-fn refresh_leaderboard_side_from_cache(
+fn apply_leaderboard_side_view(
     side: &mut LeaderboardSideState,
-    player: profile_data::PlayerSide,
+    view: SelectMusicLeaderboardSideView,
 ) {
-    let Some(chart_hash) = side.chart_hash.as_deref() else {
+    if side.chart_hash != view.chart_hash {
         return;
-    };
-    let Some(snapshot) = scores::get_or_fetch_player_leaderboards_for_side(
-        chart_hash,
-        player,
-        GS_LEADERBOARD_NUM_ENTRIES,
-    ) else {
+    }
+
+    let machine = gs_machine_pane(view.machine_entries);
+    side.machine_pane = Some(machine.clone());
+    let Some(snapshot) = view.leaderboards else {
         side.loading = false;
         side.error_text = None;
-        if side.panes.is_empty()
-            && let Some(machine) = side.machine_pane.clone()
-        {
-            side.panes.push(machine);
-        }
+        side.panes.clear();
+        side.panes.push(machine);
+        side.pane_index = 0;
         side.show_icons = false;
         return;
     };
@@ -186,55 +182,53 @@ fn refresh_leaderboard_side_from_cache(
 }
 
 fn overlay_display_entries(
-    side: profile_data::PlayerSide,
-    chart_hash: Option<&str>,
+    runtime: &ScoreboxSideView,
     pane: &score_data::LeaderboardPane,
 ) -> Vec<score_data::LeaderboardEntry> {
-    let entries = entries_with_local_self_state(side, chart_hash, pane);
+    let entries = entries_with_local_self_state(runtime, pane);
     score_data::prioritized_leaderboard_entries(entries.as_slice(), GS_LEADERBOARD_NUM_ENTRIES)
 }
 
 pub fn show_leaderboard_overlay(
     chart_hash_p1: Option<String>,
     chart_hash_p2: Option<String>,
+    scoreboxes: [ScoreboxSideView; 2],
 ) -> Option<LeaderboardOverlayState> {
-    let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
-    let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
+    let [scorebox_p1, scorebox_p2] = scoreboxes;
+    let p1_joined = scorebox_p1.joined;
+    let p2_joined = scorebox_p2.joined;
     if !p1_joined && !p2_joined {
         return None;
     }
 
     let mut p1 = LeaderboardSideState {
         joined: p1_joined,
-        machine_pane: Some(gs_machine_pane(chart_hash_p1.as_deref())),
+        loading: p1_joined && chart_hash_p1.is_some() && scorebox_p1.groovestats_active,
+        machine_pane: Some(gs_machine_pane(Vec::new())),
+        chart_hash: chart_hash_p1,
+        scorebox: scorebox_p1,
         ..Default::default()
     };
     let mut p2 = LeaderboardSideState {
         joined: p2_joined,
-        machine_pane: Some(gs_machine_pane(chart_hash_p2.as_deref())),
+        loading: p2_joined && chart_hash_p2.is_some() && scorebox_p2.groovestats_active,
+        machine_pane: Some(gs_machine_pane(Vec::new())),
+        chart_hash: chart_hash_p2,
+        scorebox: scorebox_p2,
         ..Default::default()
     };
 
-    if p1_joined {
-        let profile = profile::get_for_side(profile_data::PlayerSide::P1);
-        if !profile.groovestats_api_key.is_empty() && chart_hash_p1.is_some() {
-            p1.chart_hash = chart_hash_p1;
-            refresh_leaderboard_side_from_cache(&mut p1, profile_data::PlayerSide::P1);
-        } else if let Some(machine) = p1.machine_pane.clone() {
-            p1.panes.push(machine);
-            p1.show_icons = false;
-        }
+    if p1_joined
+        && !p1.loading
+        && let Some(machine) = p1.machine_pane.clone()
+    {
+        p1.panes.push(machine);
     }
-
-    if p2_joined {
-        let profile = profile::get_for_side(profile_data::PlayerSide::P2);
-        if !profile.groovestats_api_key.is_empty() && chart_hash_p2.is_some() {
-            p2.chart_hash = chart_hash_p2;
-            refresh_leaderboard_side_from_cache(&mut p2, profile_data::PlayerSide::P2);
-        } else if let Some(machine) = p2.machine_pane.clone() {
-            p2.panes.push(machine);
-            p2.show_icons = false;
-        }
+    if p2_joined
+        && !p2.loading
+        && let Some(machine) = p2.machine_pane.clone()
+    {
+        p2.panes.push(machine);
     }
 
     Some(LeaderboardOverlayState::Visible(
@@ -244,6 +238,34 @@ pub fn show_leaderboard_overlay(
             p2,
         },
     ))
+}
+
+pub fn leaderboard_runtime_request(
+    state: &LeaderboardOverlayState,
+) -> Option<SelectMusicLeaderboardRequest> {
+    let LeaderboardOverlayState::Visible(overlay) = state else {
+        return None;
+    };
+    Some(SelectMusicLeaderboardRequest {
+        chart_hashes: [overlay.p1.chart_hash.clone(), overlay.p2.chart_hash.clone()],
+        max_entries: GS_LEADERBOARD_NUM_ENTRIES,
+    })
+}
+
+pub fn sync_leaderboard_overlay(
+    state: &mut LeaderboardOverlayState,
+    view: SelectMusicLeaderboardView,
+) {
+    let LeaderboardOverlayState::Visible(overlay) = state else {
+        return;
+    };
+    let [p1, p2] = view.sides;
+    if overlay.p1.joined {
+        apply_leaderboard_side_view(&mut overlay.p1, p1);
+    }
+    if overlay.p2.joined {
+        apply_leaderboard_side_view(&mut overlay.p2, p2);
+    }
 }
 
 #[inline(always)]
@@ -256,12 +278,6 @@ pub fn update_leaderboard_overlay(state: &mut LeaderboardOverlayState, dt: f32) 
         return;
     };
     overlay.elapsed += dt.max(0.0);
-    if overlay.p1.joined && overlay.p1.chart_hash.is_some() {
-        refresh_leaderboard_side_from_cache(&mut overlay.p1, profile_data::PlayerSide::P1);
-    }
-    if overlay.p2.joined && overlay.p2.chart_hash.is_some() {
-        refresh_leaderboard_side_from_cache(&mut overlay.p2, profile_data::PlayerSide::P2);
-    }
 }
 
 #[inline(always)]
@@ -369,14 +385,11 @@ pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<
         horizalign(center)
     ));
 
-    let mut draw_panel = |side: &LeaderboardSideState,
-                          center_x: f32,
-                          player: profile_data::PlayerSide| {
+    let mut draw_panel = |side: &LeaderboardSideState, center_x: f32| {
         let pane = side
             .panes
             .get(side.pane_index.min(side.panes.len().saturating_sub(1)));
-        let display_entries =
-            pane.map(|pane| overlay_display_entries(player, side.chart_hash.as_deref(), pane));
+        let display_entries = pane.map(|pane| overlay_display_entries(&side.scorebox, pane));
         let header_text = if side.loading {
             "GrooveStats".to_string()
         } else if let Some(p) = pane {
@@ -651,20 +664,18 @@ pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<
 
     if joined_count <= 1 {
         if overlay.p1.joined {
-            draw_panel(&overlay.p1, screen_center_x(), profile_data::PlayerSide::P1);
+            draw_panel(&overlay.p1, screen_center_x());
         } else if overlay.p2.joined {
-            draw_panel(&overlay.p2, screen_center_x(), profile_data::PlayerSide::P2);
+            draw_panel(&overlay.p2, screen_center_x());
         }
     } else {
         draw_panel(
             &overlay.p1,
             screen_center_x() - GS_LEADERBOARD_PANE_SIDE_OFFSET,
-            profile_data::PlayerSide::P1,
         );
         draw_panel(
             &overlay.p2,
             screen_center_x() + GS_LEADERBOARD_PANE_SIDE_OFFSET,
-            profile_data::PlayerSide::P2,
         );
     }
 
@@ -674,6 +685,19 @@ pub fn build_leaderboard_overlay(state: &LeaderboardOverlayState) -> Option<Vec<
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn entry(rank: u32, name: &str) -> score_data::LeaderboardEntry {
+        score_data::LeaderboardEntry {
+            rank,
+            name: name.to_string(),
+            machine_tag: None,
+            score: 9876.0,
+            date: String::new(),
+            is_rival: false,
+            is_self: false,
+            is_fail: false,
+        }
+    }
 
     #[test]
     fn empty_arrowcloud_hard_ex_pane_is_still_shown() {
@@ -687,5 +711,48 @@ mod tests {
         };
 
         assert!(should_show_overlay_pane(&pane));
+    }
+
+    #[test]
+    fn visible_overlay_requests_and_applies_shell_prepared_data() {
+        let mut overlay = show_leaderboard_overlay(
+            Some("chart-p1".to_string()),
+            None,
+            [
+                ScoreboxSideView {
+                    joined: true,
+                    groovestats_active: true,
+                    ..Default::default()
+                },
+                Default::default(),
+            ],
+        )
+        .expect("joined player should open the overlay");
+
+        let request = leaderboard_runtime_request(&overlay)
+            .expect("visible overlay should request prepared leaderboard data");
+        assert_eq!(request.chart_hashes[0].as_deref(), Some("chart-p1"));
+        assert_eq!(request.max_entries, GS_LEADERBOARD_NUM_ENTRIES);
+
+        sync_leaderboard_overlay(
+            &mut overlay,
+            SelectMusicLeaderboardView {
+                sides: [
+                    SelectMusicLeaderboardSideView {
+                        chart_hash: Some("chart-p1".to_string()),
+                        machine_entries: vec![entry(1, "AAA")],
+                        leaderboards: None,
+                    },
+                    Default::default(),
+                ],
+            },
+        );
+
+        let LeaderboardOverlayState::Visible(data) = overlay else {
+            panic!("overlay should remain visible");
+        };
+        assert!(!data.p1.loading);
+        assert_eq!(data.p1.panes.len(), 1);
+        assert_eq!(data.p1.panes[0].entries[0].name, "AAA");
     }
 }

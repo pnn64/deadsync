@@ -2278,6 +2278,277 @@ fn select_music_feature_policy_is_shell_prepared() {
 }
 
 #[test]
+fn select_music_leaderboard_refresh_is_shell_owned() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let screen = fs::read_to_string(
+        root.join("crates/deadsync-theme-simply-love/src/screens/select_music.rs"),
+    )
+    .expect("Select Music source should be readable");
+    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+        .expect("Simply Love views should be readable");
+    let effects = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/effects.rs"))
+        .expect("Simply Love effects should be readable");
+    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell app should be readable");
+
+    assert!(!screen.contains("scores::is_gs_active_for_side"));
+    assert!(!screen.contains("scores::refresh_player_leaderboards_for_side"));
+    assert!(screen.contains("state.scoreboxes"));
+    assert!(screen.contains("SimplyLoveOnlineRequest::RefreshPlayerLeaderboard"));
+    assert!(
+        views.contains("pub struct ScoreboxSideView")
+            && views.contains("pub groovestats_active: bool")
+            && views.contains("pub scoreboxes: [ScoreboxSideView; 2]")
+    );
+    assert!(effects.contains("RefreshPlayerLeaderboard {"));
+    assert!(shell.contains("scores::is_gs_active_for_side"));
+    assert!(shell.contains("SimplyLoveOnlineRequest::RefreshPlayerLeaderboard"));
+    assert!(shell.contains("scores::refresh_player_leaderboards_for_side"));
+}
+
+#[test]
+fn simply_love_scorebox_uses_shell_prepared_runtime_data() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let scorebox = fs::read_to_string(
+        root.join("crates/deadsync-theme-simply-love/src/screens/components/shared/gs_scorebox.rs"),
+    )
+    .expect("Simply Love scorebox source should be readable");
+    for runtime_access in [
+        "deadsync_online::score_compat",
+        "scores::",
+        "profile::get_for_side",
+        "get_or_fetch_player_leaderboards_for_side",
+        "get_cached_local_score_for_side",
+        "get_cached_local_ex_score_for_side",
+        "get_cached_local_hard_ex_score_for_side",
+        "get_cached_itl_score_for_side",
+        "get_machine_record_local",
+    ] {
+        assert!(
+            !scorebox.contains(runtime_access),
+            "scorebox presentation still accesses runtime data through {runtime_access}"
+        );
+    }
+    assert!(scorebox.contains("runtime: &ScoreboxSideView"));
+    assert!(scorebox.contains("runtime.leaderboards.as_ref()"));
+
+    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+        .expect("Simply Love views should be readable");
+    for contract in [
+        "pub struct ScoreboxLocalView",
+        "pub struct ScoreboxMachineView",
+        "pub struct ScoreboxSideView",
+        "pub struct SelectMusicScoreboxRequest",
+    ] {
+        assert!(views.contains(contract));
+    }
+
+    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell app should be readable");
+    assert!(shell.contains("fn scorebox_side_view"));
+    for runtime_owner in [
+        "scores::get_cached_local_score_for_side",
+        "scores::get_cached_local_ex_score_for_side",
+        "scores::get_cached_local_hard_ex_score_for_side",
+        "scores::get_cached_itl_score_for_side",
+        "scores::get_machine_record_local",
+        "scores::get_or_fetch_player_leaderboards_for_side",
+    ] {
+        assert!(shell.contains(runtime_owner));
+    }
+}
+
+#[test]
+fn select_music_leaderboard_overlay_runtime_is_shell_prepared() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let overlay = fs::read_to_string(root.join(
+        "crates/deadsync-theme-simply-love/src/screens/components/select_music/select_music_menu/leaderboard.rs",
+    ))
+    .expect("Select Music leaderboard overlay should be readable");
+    for runtime_access in [
+        "deadsync_online::score_compat",
+        "deadsync_profile::compat",
+        "scores::",
+        "profile::get_for_side",
+        "profile::is_session_side_joined",
+        "get_machine_leaderboard_local_with_names",
+        "get_or_fetch_player_leaderboards_for_side",
+    ] {
+        assert!(
+            !overlay.contains(runtime_access),
+            "leaderboard overlay still accesses runtime data through {runtime_access}"
+        );
+    }
+    assert!(overlay.contains("leaderboard_runtime_request"));
+    assert!(overlay.contains("sync_leaderboard_overlay"));
+    assert!(overlay.contains("SelectMusicLeaderboardView"));
+
+    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+        .expect("Simply Love views should be readable");
+    for contract in [
+        "pub struct SelectMusicLeaderboardRequest",
+        "pub struct SelectMusicLeaderboardSideView",
+        "pub struct SelectMusicLeaderboardView",
+        "pub leaderboard: SelectMusicLeaderboardView",
+    ] {
+        assert!(views.contains(contract));
+    }
+
+    let screen = fs::read_to_string(
+        root.join("crates/deadsync-theme-simply-love/src/screens/select_music.rs"),
+    )
+    .expect("Select Music source should be readable");
+    assert!(screen.contains("pub fn leaderboard_runtime_request"));
+    assert!(screen.contains("sync_leaderboard_overlay"));
+
+    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell app should be readable");
+    assert!(shell.contains("select_music::leaderboard_runtime_request"));
+    assert!(shell.contains("SelectMusicLeaderboardSideView"));
+    assert!(shell.contains("scores::get_machine_leaderboard_local_with_names"));
+    assert!(shell.contains("scores::get_or_fetch_player_leaderboards_for_side"));
+}
+
+#[test]
+fn music_wheel_runtime_data_is_shell_prepared() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let wheel = fs::read_to_string(root.join(
+        "crates/deadsync-theme-simply-love/src/screens/components/select_music/music_wheel.rs",
+    ))
+    .expect("music wheel source should be readable");
+    for runtime_work in [
+        "deadsync_online::score_compat",
+        "deadsync_profile::compat",
+        "profile::",
+        "scores::",
+        "scores::ensure_score_caches_loaded",
+        "scores::ensure_itl_wheel_caches_loaded",
+        "scores::get_or_fetch_itl_self_score_for_side",
+        "scores::get_or_fetch_itl_tournament_rank_for_side",
+        ".get_or_fetch_srpg_self_score",
+    ] {
+        assert!(
+            !wheel.contains(runtime_work),
+            "music wheel composition still executes runtime work through {runtime_work}"
+        );
+    }
+    assert!(wheel.contains("pub(crate) fn runtime_slot_requests"));
+    assert!(wheel.contains("p.runtime.slots[i_slot]"));
+    assert!(wheel.contains("runtime_for_side(side).score"));
+
+    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+        .expect("Simply Love views should be readable");
+    for contract in [
+        "pub const MUSIC_WHEEL_SLOT_COUNT: usize = 19",
+        "pub enum MusicWheelSlotRuntimeRequest",
+        "pub struct MusicWheelRuntimeRequest",
+        "pub struct MusicWheelSideRuntimeView",
+        "pub struct MusicWheelSlotRuntimeView",
+        "pub struct MusicWheelRuntimeView",
+        "pub slots: [MusicWheelSlotRuntimeView; MUSIC_WHEEL_SLOT_COUNT]",
+        "pub music_wheel: MusicWheelRuntimeView",
+    ] {
+        assert!(
+            views.contains(contract),
+            "missing wheel contract {contract}"
+        );
+    }
+
+    let select_music = fs::read_to_string(
+        root.join("crates/deadsync-theme-simply-love/src/screens/select_music.rs"),
+    )
+    .expect("Select Music source should be readable");
+    let select_course = fs::read_to_string(
+        root.join("crates/deadsync-theme-simply-love/src/screens/select_course.rs"),
+    )
+    .expect("Select Course source should be readable");
+    assert!(select_music.contains("pub fn music_wheel_runtime_request"));
+    assert!(select_course.contains("pub fn music_wheel_runtime_request"));
+    assert!(select_course.contains("pub fn sync_runtime_view"));
+
+    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell app should be readable");
+    for shell_owner in [
+        "fn prepare_music_wheel_runtime",
+        "fn sync_select_course_runtime_view",
+        "scores::ensure_score_caches_loaded",
+        "scores::ensure_itl_wheel_caches_loaded",
+        "scores::get_cached_score_with_profile",
+        "scores::get_cached_local_pass_rate_with_profile",
+        "context.cached_local_itl_score(song)",
+        "context.cached_self_ex_score(chart_hash)",
+        "scores::is_itl_song_folder_unlocked_with_profile",
+        "profile::is_favorite",
+        "profile::is_pack_favorite",
+        "scores::get_or_fetch_itl_self_score_for_side",
+        "scores::get_or_fetch_itl_tournament_rank_for_side",
+        ".get_or_fetch_srpg_self_score",
+        "select_music::music_wheel_runtime_request",
+        "select_course::music_wheel_runtime_request",
+    ] {
+        assert!(
+            shell.contains(shell_owner),
+            "shell must own music-wheel operation {shell_owner}"
+        );
+    }
+}
+
+#[test]
+fn select_course_score_pane_is_shell_prepared() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let screen = fs::read_to_string(
+        root.join("crates/deadsync-theme-simply-love/src/screens/select_course.rs"),
+    )
+    .expect("Select Course source should be readable");
+    let (_, composition) = screen
+        .split_once("pub fn push_actors")
+        .expect("Select Course should keep an actor-composition entry point");
+    for runtime_access in [
+        "scores::get_cached_local_score_for_side",
+        "scores::get_machine_record_local",
+        "score_data::Grade",
+        "profile::get_for_side",
+    ] {
+        assert!(
+            !composition.contains(runtime_access),
+            "Select Course composition still reads score/profile runtime through {runtime_access}"
+        );
+    }
+    assert!(screen.contains("scores::played_chart_counts_for_machine"));
+    assert!(screen.contains("pub fn score_runtime_request"));
+    assert!(screen.contains("state.score_view"));
+
+    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+        .expect("Simply Love views should be readable");
+    for contract in [
+        "pub struct SelectCourseScoreRequest",
+        "pub struct SelectCourseScoreView",
+        "pub struct SelectCourseRuntimeView",
+        "pub score: SelectCourseScoreView",
+    ] {
+        assert!(
+            views.contains(contract),
+            "missing course score contract {contract}"
+        );
+    }
+
+    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell app should be readable");
+    for runtime_owner in [
+        "fn prepare_select_course_score",
+        "select_course::score_runtime_request",
+        "scores::get_cached_local_score_for_side",
+        "scores::get_machine_record_local",
+        "SelectCourseRuntimeView { music_wheel, score }",
+    ] {
+        assert!(
+            shell.contains(runtime_owner),
+            "shell must own Select Course score operation {runtime_owner}"
+        );
+    }
+}
+
+#[test]
 fn options_online_reinitialization_is_shell_owned() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let input = fs::read_to_string(
@@ -2613,8 +2884,8 @@ fn evaluation_leaderboards_are_shell_prepared() {
     }
     assert!(
         evaluation.contains("pub const fn leaderboard_requests")
-            && evaluation.contains("state.leaderboards = view.leaderboards")
-            && evaluation.contains("state.leaderboards[player_idx].as_ref()")
+            && evaluation.contains("state.scoreboxes = view.scoreboxes")
+            && evaluation.contains("&state.scoreboxes[player_idx]")
     );
 
     let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
@@ -2622,7 +2893,7 @@ fn evaluation_leaderboards_are_shell_prepared() {
     assert!(
         views.contains("pub struct EvaluationInitPlayerView")
             && views.contains("pub struct EvaluationInitView")
-            && views.contains("pub leaderboards:")
+            && views.contains("pub scoreboxes: [ScoreboxSideView; 2]")
     );
 
     let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))

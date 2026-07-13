@@ -22,8 +22,11 @@ use crate::screens::{
     DensityGraphSlot, DensityGraphSource, Screen, ThemeEffect, input as screen_input,
 };
 use crate::views::{
-    SelectMusicDownloadView, SelectMusicInitView, SelectMusicPlaylistView, SelectMusicPolicyView,
-    SelectMusicRuntimeView, SimplyLoveLobbyRuntimeView,
+    MUSIC_WHEEL_SLOT_COUNT, MusicWheelRankSource, MusicWheelRuntimeRequest, MusicWheelRuntimeView,
+    MusicWheelSideRuntimeRequest, MusicWheelSlotRuntimeRequest, ScoreboxSideView,
+    SelectMusicDownloadView, SelectMusicInitView, SelectMusicLeaderboardRequest,
+    SelectMusicPlaylistView, SelectMusicPolicyView, SelectMusicRuntimeView,
+    SelectMusicScoreboxRequest, SimplyLoveLobbyRuntimeView,
 };
 use deadlib_present::actors::{Actor, SizeSpec, SpriteSource};
 use deadlib_present::cache::{SharedStrCache, TextCache, cached_shared_str, cached_text};
@@ -73,8 +76,8 @@ use log::{debug, warn};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::sync::mpsc;
-use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
 #[path = "select_music/pack_sync.rs"]
@@ -219,7 +222,6 @@ thread_local! {
     static TECH_STREAM_CACHE: RefCell<TextCache<(u32, usize, u32)>> = RefCell::new(HashMap::with_capacity(512));
     static TOTAL_LABEL_CACHE: RefCell<TextCache<u32>> = RefCell::new(HashMap::with_capacity(512));
     static STR_REF_CACHE: RefCell<SharedStrCache> = RefCell::new(HashMap::with_capacity(4096));
-    static SCORE_PERCENT_CACHE: RefCell<TextCache<u64>> = RefCell::new(HashMap::with_capacity(2048));
 }
 
 #[inline(always)]
@@ -249,29 +251,6 @@ fn cached_total_label_text(total: u32) -> Arc<str> {
 #[inline(always)]
 fn cached_str_ref(text: &str) -> Arc<str> {
     cached_shared_str(&STR_REF_CACHE, text, TEXT_CACHE_LIMIT)
-}
-
-#[inline(always)]
-fn placeholder_score_percent() -> Arc<str> {
-    static PLACEHOLDER: OnceLock<Arc<str>> = OnceLock::new();
-    PLACEHOLDER
-        .get_or_init(|| Arc::<str>::from("??.??%"))
-        .clone()
-}
-
-#[inline(always)]
-fn cached_score_percent_text(score_percent: f64) -> Arc<str> {
-    let score = if score_percent.is_finite() {
-        score_percent.clamp(0.0, 1.0) * 100.0
-    } else {
-        0.0
-    };
-    cached_text(
-        &SCORE_PERCENT_CACHE,
-        score.to_bits(),
-        TEXT_CACHE_LIMIT,
-        || format!("{score:.2}%"),
-    )
 }
 
 #[inline(always)]
@@ -616,6 +595,9 @@ pub fn sync_runtime_view(state: &mut State, view: SelectMusicRuntimeView) {
     state.downloads = view.downloads;
     state.arrow_bounce_offset = view.arrow_bounce_offset;
     state.policy = view.policy;
+    state.music_wheel = view.music_wheel;
+    state.scoreboxes = view.scoreboxes;
+    select_music_menu::sync_leaderboard_overlay(&mut state.leaderboard, view.leaderboard);
     state.unlock_downloads_available = view.unlock_downloads_available;
     state
         .ready_song_reload_dirs
@@ -1185,7 +1167,9 @@ pub struct State {
     lobby_view: SimplyLoveLobbyRuntimeView,
     arrow_bounce_offset: f32,
     policy: SelectMusicPolicyView,
+    music_wheel: MusicWheelRuntimeView,
     downloads: Vec<SelectMusicDownloadView>,
+    scoreboxes: [ScoreboxSideView; 2],
     unlock_downloads_available: bool,
     ready_song_reload_dirs: Vec<PathBuf>,
     sync_graph_mode: SyncGraphMode,
@@ -2657,7 +2641,9 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         lobby_view: SimplyLoveLobbyRuntimeView::default(),
         arrow_bounce_offset: 0.0,
         policy: SelectMusicPolicyView::default(),
+        music_wheel: MusicWheelRuntimeView::default(),
         downloads: Vec::new(),
+        scoreboxes: Default::default(),
         unlock_downloads_available: false,
         ready_song_reload_dirs: Vec::new(),
         sync_graph_mode: SyncGraphMode::PostKernelFingerprint,
@@ -2869,7 +2855,9 @@ pub fn init_placeholder() -> State {
         lobby_view: SimplyLoveLobbyRuntimeView::default(),
         arrow_bounce_offset: 0.0,
         policy: SelectMusicPolicyView::default(),
+        music_wheel: MusicWheelRuntimeView::default(),
         downloads: Vec::new(),
+        scoreboxes: Default::default(),
         unlock_downloads_available: false,
         ready_song_reload_dirs: Vec::new(),
         sync_graph_mode: SyncGraphMode::PostKernelFingerprint,
@@ -5187,6 +5175,7 @@ fn refresh_after_reload(state: &mut State) {
     let audio_playback = state.audio_playback;
     let arrow_bounce_offset = state.arrow_bounce_offset;
     let policy = state.policy;
+    let scoreboxes = state.scoreboxes.clone();
     let unlock_downloads_available = state.unlock_downloads_available;
     let ready_song_reload_dirs = std::mem::take(&mut state.ready_song_reload_dirs);
     let init_view = SelectMusicInitView {
@@ -5204,6 +5193,7 @@ fn refresh_after_reload(state: &mut State) {
     refreshed.audio_playback = audio_playback;
     refreshed.arrow_bounce_offset = arrow_bounce_offset;
     refreshed.policy = policy;
+    refreshed.scoreboxes = scoreboxes;
     refreshed.unlock_downloads_available = unlock_downloads_available;
     refreshed.ready_song_reload_dirs = ready_song_reload_dirs;
 
@@ -5323,6 +5313,7 @@ fn refresh_after_style_switch(state: &mut State) {
     let audio_playback = state.audio_playback;
     let arrow_bounce_offset = state.arrow_bounce_offset;
     let policy = state.policy;
+    let scoreboxes = state.scoreboxes.clone();
     let unlock_downloads_available = state.unlock_downloads_available;
     let ready_song_reload_dirs = std::mem::take(&mut state.ready_song_reload_dirs);
     let init_view = SelectMusicInitView {
@@ -5340,6 +5331,7 @@ fn refresh_after_style_switch(state: &mut State) {
     refreshed.audio_playback = audio_playback;
     refreshed.arrow_bounce_offset = arrow_bounce_offset;
     refreshed.policy = policy;
+    refreshed.scoreboxes = scoreboxes;
     refreshed.unlock_downloads_available = unlock_downloads_available;
     refreshed.ready_song_reload_dirs = ready_song_reload_dirs;
 
@@ -5466,8 +5458,11 @@ fn show_leaderboard_overlay(state: &mut State) {
 
     let chart_hash_p1 = selected_chart_hash_for_side(state, song, profile_data::PlayerSide::P1);
     let chart_hash_p2 = selected_chart_hash_for_side(state, song, profile_data::PlayerSide::P2);
-    if let Some(overlay) = select_music_menu::show_leaderboard_overlay(chart_hash_p1, chart_hash_p2)
-    {
+    if let Some(overlay) = select_music_menu::show_leaderboard_overlay(
+        chart_hash_p1,
+        chart_hash_p2,
+        state.scoreboxes.clone(),
+    ) {
         state.replay_overlay = select_music_menu::ReplayOverlayState::Hidden;
         state.downloads_overlay = select_music_menu::DownloadsOverlayState::Hidden;
         state.lobby_overlay = lobby_overlay::OverlayState::Hidden;
@@ -9686,7 +9681,7 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
         clear_preview(state);
     }
 
-    let prewarm_effect = maybe_prewarm_replaygain_for_pack(state, cfg.enable_replaygain);
+    let mut pending_effect = maybe_prewarm_replaygain_for_pack(state, cfg.enable_replaygain);
 
     if allow_gs_fetch_for_selection(state) {
         let play_style = profile::get_session_play_style();
@@ -9719,7 +9714,7 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
             if state.last_requested_chart_hash.as_deref() != desired_hash_p1 {
                 state.last_requested_chart_hash = desired_hash_p1.map(str::to_string);
                 return prepend_pending_effect(
-                    prewarm_effect,
+                    pending_effect,
                     ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
                         crate::SimplyLoveMediaRequest::DensityGraph {
                             slot: DensityGraphSlot::SelectMusicP1,
@@ -9755,16 +9750,23 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
                     .map(|ix| song.charts[ix].short_hash.as_str());
 
                 if show_select_music_leaderboards {
-                    maybe_refresh_select_music_leaderboard(
+                    let gs_active = state.scoreboxes
+                        [profile_data::player_side_index(profile_data::PlayerSide::P2)]
+                    .groovestats_active;
+                    if let Some(effect) = maybe_refresh_select_music_leaderboard(
                         &mut state.last_refreshed_leaderboard_hash_p2,
                         profile_data::PlayerSide::P2,
                         desired_hash_p2,
-                    );
+                        gs_active,
+                    ) {
+                        pending_effect =
+                            Some(prepend_pending_effect(pending_effect.take(), effect));
+                    }
                 }
                 if state.last_requested_chart_hash_p2.as_deref() != desired_hash_p2 {
                     state.last_requested_chart_hash_p2 = desired_hash_p2.map(str::to_string);
                     return prepend_pending_effect(
-                        prewarm_effect,
+                        pending_effect,
                         ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Media(
                             crate::SimplyLoveMediaRequest::DensityGraph {
                                 slot: DensityGraphSlot::SelectMusicP2,
@@ -9791,11 +9793,16 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
                 } else {
                     profile::get_session_player_side()
                 };
-                maybe_refresh_select_music_leaderboard(
+                let gs_active = state.scoreboxes[profile_data::player_side_index(primary_side)]
+                    .groovestats_active;
+                if let Some(effect) = maybe_refresh_select_music_leaderboard(
                     &mut state.last_refreshed_leaderboard_hash,
                     primary_side,
                     desired_hash_p1,
-                );
+                    gs_active,
+                ) {
+                    pending_effect = Some(prepend_pending_effect(pending_effect.take(), effect));
+                }
             }
         } else {
             state.displayed_chart_p1 = None;
@@ -9808,7 +9815,7 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
         }
     }
 
-    prewarm_effect.unwrap_or(ThemeEffect::None)
+    pending_effect.unwrap_or(ThemeEffect::None)
 }
 
 pub fn in_transition() -> (Vec<Actor>, f32) {
@@ -9982,19 +9989,24 @@ fn maybe_refresh_select_music_leaderboard(
     last_refreshed_hash: &mut Option<String>,
     side: profile_data::PlayerSide,
     chart_hash: Option<&str>,
-) {
+    groovestats_active: bool,
+) -> Option<ThemeEffect> {
     let Some(chart_hash) = chart_hash else {
-        return;
+        return None;
     };
-    if last_refreshed_hash.as_deref() == Some(chart_hash) || !scores::is_gs_active_for_side(side) {
-        return;
+    if last_refreshed_hash.as_deref() == Some(chart_hash) || !groovestats_active {
+        return None;
     }
-    let _ = scores::refresh_player_leaderboards_for_side(
-        chart_hash,
-        side,
-        SELECT_MUSIC_LEADERBOARD_NUM_ENTRIES,
-    );
     *last_refreshed_hash = Some(chart_hash.to_string());
+    Some(ThemeEffect::Runtime(
+        crate::SimplyLoveRuntimeRequest::Online(
+            crate::SimplyLoveOnlineRequest::RefreshPlayerLeaderboard {
+                chart_hash: chart_hash.to_string(),
+                side,
+                max_entries: SELECT_MUSIC_LEADERBOARD_NUM_ENTRIES,
+            },
+        ),
+    ))
 }
 
 fn step_artist_values(chart: &ChartData) -> ([&str; 3], usize) {
@@ -10284,6 +10296,98 @@ fn solo_runtime_side(
     }
 }
 
+fn immediate_selected_charts(
+    state: &State,
+    play_style: profile_data::PlayStyle,
+) -> [Option<&ChartData>; 2] {
+    let Some(MusicWheelEntry::Song(song)) = state.entries.get(state.selected_index) else {
+        return [None, None];
+    };
+    let cache_matches = state
+        .cached_song
+        .as_ref()
+        .is_some_and(|cached_song| Arc::ptr_eq(cached_song, song))
+        && state.cached_chart_type == play_style.chart_type();
+    if !cache_matches {
+        return [None, None];
+    }
+    let p1 = state
+        .cached_chart_ix_p1
+        .and_then(|chart_ix| song.charts.get(chart_ix));
+    let p2 = (play_style == profile_data::PlayStyle::Versus)
+        .then(|| {
+            state
+                .cached_chart_ix_p2
+                .and_then(|chart_ix| song.charts.get(chart_ix))
+        })
+        .flatten();
+    [p1, p2]
+}
+
+pub fn scorebox_runtime_request(state: &State) -> SelectMusicScoreboxRequest {
+    let charts = immediate_selected_charts(state, profile::get_session_play_style());
+    SelectMusicScoreboxRequest {
+        chart_hashes: charts.map(|chart| chart.map(|chart| chart.short_hash.clone())),
+        leaderboards_allowed: allow_gs_fetch_for_selection(state),
+        max_entries: SELECT_MUSIC_LEADERBOARD_NUM_ENTRIES,
+    }
+}
+
+pub fn leaderboard_runtime_request(state: &State) -> Option<SelectMusicLeaderboardRequest> {
+    select_music_menu::leaderboard_runtime_request(&state.leaderboard)
+}
+
+pub fn music_wheel_runtime_request(state: &State) -> MusicWheelRuntimeRequest<'_> {
+    let cfg = config::get();
+    let play_style = profile::get_session_play_style();
+    let charts = immediate_selected_charts(state, play_style);
+    let slots = music_wheel::runtime_slot_requests(
+        &state.entries,
+        state.selected_index,
+        charts,
+        [
+            state.preferred_difficulty_index,
+            state.p2_preferred_difficulty_index,
+        ],
+        play_style,
+    );
+    let (selected_chart_hashes, selected_is_srpg) = match slots[MUSIC_WHEEL_SLOT_COUNT / 2] {
+        MusicWheelSlotRuntimeRequest::Song {
+            chart_hashes,
+            is_srpg_event,
+            ..
+        } => (chart_hashes, is_srpg_event),
+        _ => ([None, None], false),
+    };
+    let (fetch_itl_rank, fetch_itl_score, fetch_srpg_score) = music_wheel::itl_fetch_flags(
+        allow_gs_fetch_for_selection(state),
+        cfg.select_music_itl_rank_mode,
+        cfg.select_music_itl_wheel_mode,
+        selected_is_srpg,
+    );
+    let sides = std::array::from_fn(|side_idx| MusicWheelSideRuntimeRequest {
+        chart_hash: selected_chart_hashes[side_idx],
+        fetch_itl_rank,
+        fetch_itl_score,
+        fetch_srpg_score,
+    });
+    let rank_source = match cfg.select_music_itl_rank_mode {
+        crate::config::SelectMusicItlRankMode::None => MusicWheelRankSource::None,
+        crate::config::SelectMusicItlRankMode::Chart => MusicWheelRankSource::Chart,
+        crate::config::SelectMusicItlRankMode::Overall => MusicWheelRankSource::Overall,
+    };
+    MusicWheelRuntimeRequest {
+        read_scores: cfg.show_music_wheel_grades || cfg.show_music_wheel_lamps,
+        rank_source,
+        read_itl_scores: !matches!(
+            cfg.select_music_itl_wheel_mode,
+            crate::config::SelectMusicItlWheelMode::Off
+        ),
+        sides,
+        slots,
+    }
+}
+
 pub fn push_actors(
     mut actors: &mut Vec<Actor>,
     state: &State,
@@ -10299,42 +10403,7 @@ pub fn push_actors(
     let is_versus = play_style == profile_data::PlayStyle::Versus;
     let target_chart_type = play_style.chart_type();
     let selected_entry = state.entries.get(state.selected_index);
-    let selected_song = match selected_entry {
-        Some(MusicWheelEntry::Song(song)) => Some(song),
-        _ => None,
-    };
-    let selected_chart_cache_matches = match selected_song {
-        Some(song) => {
-            state
-                .cached_song
-                .as_ref()
-                .is_some_and(|cached_song| Arc::ptr_eq(cached_song, song))
-                && state.cached_chart_type == target_chart_type
-        }
-        None => false,
-    };
-    let immediate_chart_p1 = if selected_chart_cache_matches {
-        selected_song.and_then(|song| {
-            state
-                .cached_chart_ix_p1
-                .and_then(|chart_ix| song.charts.get(chart_ix))
-        })
-    } else {
-        None
-    };
-    let immediate_chart_p2 = if is_versus {
-        if selected_chart_cache_matches {
-            selected_song.and_then(|song| {
-                state
-                    .cached_chart_ix_p2
-                    .and_then(|chart_ix| song.charts.get(chart_ix))
-            })
-        } else {
-            None
-        }
-    } else {
-        None
-    };
+    let [immediate_chart_p1, immediate_chart_p2] = immediate_selected_charts(state, play_style);
     let selected_chart_hashes = [
         immediate_chart_p1.map(|chart| chart.short_hash.as_str()),
         immediate_chart_p2.map(|chart| chart.short_hash.as_str()),
@@ -10865,7 +10934,6 @@ pub fn push_actors(
                      pane_cx: f32,
                      sel_col: [f32; 4],
                      side: profile_data::PlayerSide,
-                     player_initials: &str,
                      steps: Arc<str>,
                      mines: Arc<str>,
                      jumps: Arc<str>,
@@ -10874,15 +10942,17 @@ pub fn push_actors(
                      rolls: Arc<str>,
                      meter: Arc<str>,
                      chart: Option<&ChartData>| {
-        let gs_active = scores::is_gs_active_for_side(side);
+        let scorebox_runtime = &state.scoreboxes[profile_data::player_side_index(side)];
+        let gs_active = scorebox_runtime.groovestats_active;
         let show_rivals = gs_active && cfg.show_select_music_scorebox && scorebox_cycle_enabled;
-        let show_ex_score = profile::get_for_side(side).show_ex_score;
+        let show_ex_score = scorebox_runtime.show_ex_score;
 
-        let chart_hash = if allow_gs_fetch && show_rivals {
-            chart.map(|c| c.short_hash.as_str())
-        } else {
-            None
-        };
+        let chart_hash = chart.map(|c| c.short_hash.as_str());
+        let gs_view = gs_scorebox::select_music_scorebox_view(
+            scorebox_runtime,
+            chart_hash,
+            allow_gs_fetch && show_rivals,
+        );
         select_pane::push_base(
             out,
             select_pane::StatsPaneParams {
@@ -10901,17 +10971,6 @@ pub fn push_actors(
         );
 
         if show_rivals {
-            let placeholder = (
-                "----".to_string(),
-                gs_scorebox::unknown_score_percent_text(),
-            );
-            let gs_view = gs_scorebox::select_music_scorebox_view(
-                side,
-                chart_hash,
-                placeholder.clone(),
-                placeholder,
-            );
-
             // Simply Love PaneDisplay order: Machine/World first, then Player.
             let lines = [
                 (gs_view.machine_name.clone(), gs_view.machine_score.clone()),
@@ -10934,26 +10993,10 @@ pub fn push_actors(
                 }
             }
         } else {
-            let mut player_name = cached_str_ref("----");
-            let mut player_score = placeholder_score_percent();
-            if let Some(c) = chart
-                && let Some(sc) = scores::get_cached_local_score_for_side(&c.short_hash, side)
-                && (sc.grade != score_data::Grade::Failed || sc.score_percent > 0.0)
-            {
-                player_name = cached_str_ref(player_initials);
-                player_score = cached_score_percent_text(sc.score_percent);
-            }
-
-            let mut machine_name = cached_str_ref("----");
-            let mut machine_score = placeholder_score_percent();
-            if let Some(c) = chart
-                && let Some((initials, sc)) = scores::get_machine_record_local(&c.short_hash)
-                && (sc.grade != score_data::Grade::Failed || sc.score_percent > 0.0)
-            {
-                machine_name = cached_str_ref(initials.as_str());
-                machine_score = cached_score_percent_text(sc.score_percent);
-            }
-            let lines = [(machine_name, machine_score), (player_name, player_score)];
+            let lines = [
+                (gs_view.machine_name, gs_view.machine_score),
+                (gs_view.player_name, gs_view.player_score),
+            ];
             for (i, (name, score)) in lines.into_iter().enumerate() {
                 out.push(act!(text: font("miso"): settext(name): align(0.5, 0.5): xy(pane_cx + cols[2] - 50.0 * tz, pane_top + rows[i]): maxwidth(30.0): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
                 out.push(act!(text: font("miso"): settext(score): align(1.0, 0.5): xy(pane_cx + cols[2] + 25.0 * tz, pane_top + rows[i]): zoom(tz): z(121): diffuse(0.0, 0.0, 0.0, 1.0)));
@@ -10968,7 +11011,6 @@ pub fn push_actors(
             screen_width() * 0.25 - 5.0,
             sel_col_p1,
             profile_data::PlayerSide::P1,
-            p1_profile.player_initials.as_str(),
             steps,
             mines,
             jumps,
@@ -10983,7 +11025,6 @@ pub fn push_actors(
             screen_width() * 0.75 + 5.0,
             sel_col_p2,
             profile_data::PlayerSide::P2,
-            p2_profile.player_initials.as_str(),
             steps_p2,
             mines_p2,
             jumps_p2,
@@ -11004,11 +11045,6 @@ pub fn push_actors(
             pane_cx,
             sel_col_p1,
             solo_side,
-            if is_p2_solo {
-                p2_profile.player_initials.as_str()
-            } else {
-                p1_profile.player_initials.as_str()
-            },
             steps,
             mines,
             jumps,
@@ -11418,13 +11454,13 @@ pub fn push_actors(
             itl_wheel_mode: cfg.select_music_itl_wheel_mode,
             song_select_bg_mode: cfg.select_music_song_select_bg_mode,
             expanded_pack_name: state.expanded_pack_name.as_deref(),
-            allow_online_fetch: allow_gs_fetch,
             new_pack_names: (state.sort_mode == WheelSortMode::Group)
                 .then_some(&state.new_pack_names),
             pack_sync_prefs: cfg
                 .machine_pack_ini_offsets
                 .then_some(&state.pack_sync_prefs),
             default_sync_offset: cfg.machine_default_sync_offset,
+            runtime: &state.music_wheel,
         },
     );
     actors.extend(sl_select_music_wheel_cascade_mask());
@@ -11443,8 +11479,10 @@ pub fn push_actors(
         let pane_to_tech_gap = pane_layout.pane_top - tech_box_bottom_y;
         let scorebox_center_y_above_pane =
             pane_layout.pane_top - (40.0 * scorebox_zoom) - pane_to_tech_gap;
-        let p1_gs = scores::is_gs_active_for_side(profile_data::PlayerSide::P1);
-        let p2_gs = scores::is_gs_active_for_side(profile_data::PlayerSide::P2);
+        let p1_gs = state.scoreboxes[profile_data::player_side_index(profile_data::PlayerSide::P1)]
+            .groovestats_active;
+        let p2_gs = state.scoreboxes[profile_data::player_side_index(profile_data::PlayerSide::P2)]
+            .groovestats_active;
         let both_gs_versus = is_versus && p1_gs && p2_gs;
         let force_step_pane =
             cfg.select_music_scorebox_placement == SelectMusicScoreboxPlacement::StepPane;
@@ -11460,8 +11498,9 @@ pub fn push_actors(
                 } else {
                     None
                 };
+            let runtime = &state.scoreboxes[profile_data::player_side_index(side)];
             let scorebox = gs_scorebox::select_music_scorebox_actors(
-                side,
+                runtime,
                 chart_hash,
                 cfg.show_select_music_scorebox && scorebox_cycle_enabled,
                 center_x,
@@ -12025,9 +12064,10 @@ mod tests {
         build_playlist_entries_from_text, build_playlist_song_lookup,
         delayed_selection_updates_blocked, first_song_entry_index, handle_raw_key_event,
         init_placeholder, keymap_has_player_input, maybe_prewarm_replaygain_for_pack,
-        prepend_pending_effect, profile_boxes, reset_preview_after_gameplay,
-        route_profile_box_effect, select_music_lobby_lock_text, select_music_lobby_lock_text_for,
-        solo_runtime_side, steps_index_for_side, sync_low_confidence_warning,
+        maybe_refresh_select_music_leaderboard, prepend_pending_effect, profile_boxes,
+        reset_preview_after_gameplay, route_profile_box_effect, select_music_lobby_lock_text,
+        select_music_lobby_lock_text_for, solo_runtime_side, steps_index_for_side,
+        sync_low_confidence_warning,
     };
     use crate::config::SelectMusicWheelStyle;
     use crate::screens::ThemeEffect;
@@ -12398,6 +12438,49 @@ mod tests {
     }
 
     #[test]
+    fn leaderboard_refresh_emits_once_when_groovestats_is_active() {
+        let mut last_hash = None;
+        assert!(
+            maybe_refresh_select_music_leaderboard(
+                &mut last_hash,
+                profile_data::PlayerSide::P1,
+                Some("inactive"),
+                false,
+            )
+            .is_none()
+        );
+        assert!(last_hash.is_none());
+
+        let effect = maybe_refresh_select_music_leaderboard(
+            &mut last_hash,
+            profile_data::PlayerSide::P1,
+            Some("chart"),
+            true,
+        )
+        .expect("active GrooveStats should request a leaderboard refresh");
+        assert!(matches!(
+            effect,
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Online(
+                crate::SimplyLoveOnlineRequest::RefreshPlayerLeaderboard {
+                    chart_hash,
+                    side: profile_data::PlayerSide::P1,
+                    max_entries: 13,
+                }
+            )) if chart_hash == "chart"
+        ));
+        assert_eq!(last_hash.as_deref(), Some("chart"));
+        assert!(
+            maybe_refresh_select_music_leaderboard(
+                &mut last_hash,
+                profile_data::PlayerSide::P1,
+                Some("chart"),
+                true,
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
     fn queued_audio_preserves_sfx_play_stop_and_follow_up_order() {
         let mut state = init_placeholder();
         super::queue_sfx(&mut state, "assets/sounds/change.ogg");
@@ -12497,12 +12580,23 @@ mod tests {
                 }],
                 arrow_bounce_offset: -0.25,
                 policy: crate::views::SelectMusicPolicyView::default(),
+                music_wheel: Default::default(),
+                scoreboxes: [
+                    crate::views::ScoreboxSideView {
+                        groovestats_active: true,
+                        ..Default::default()
+                    },
+                    Default::default(),
+                ],
+                leaderboard: Default::default(),
                 unlock_downloads_available: true,
                 ready_song_reload_dirs: vec![std::path::PathBuf::from("Songs/Unlocks")],
                 sync_graph_mode: crate::config::SyncGraphMode::Frequency,
                 sync_confidence_percent: 75,
             },
         );
+        assert!(state.scoreboxes[0].groovestats_active);
+        assert!(!state.scoreboxes[1].groovestats_active);
         assert!(state.unlock_downloads_available);
         assert_eq!(state.downloads.len(), 1);
         assert_eq!(state.ready_song_reload_dirs.len(), 1);

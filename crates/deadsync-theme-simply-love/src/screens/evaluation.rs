@@ -41,7 +41,7 @@ use std::time::Instant;
 use crate::screens::ThemeEffect;
 pub use crate::views::{CourseGraphStage, ScoreInfo};
 use crate::views::{
-    EvaluationInitView, EvaluationRuntimeView, EvaluationSubmissionView,
+    EvaluationInitView, EvaluationRuntimeView, EvaluationSubmissionView, ScoreboxSideView,
     SimplyLoveGrooveStatsService,
 };
 use deadsync_input::RawKeyboardEvent;
@@ -1816,7 +1816,7 @@ pub struct State {
     submit_arrowcloud_fallback: [Option<score_data::ArrowCloudSubmitUiStatus>; MAX_PLAYERS],
     submissions: [EvaluationSubmissionView; MAX_PLAYERS],
     leaderboards_requested: [bool; MAX_PLAYERS],
-    leaderboards: [Option<score_data::CachedPlayerLeaderboardData>; MAX_PLAYERS],
+    scoreboxes: [ScoreboxSideView; MAX_PLAYERS],
     groovestats_service: SimplyLoveGrooveStatsService,
     lobby_view: SimplyLoveLobbyRuntimeView,
     lobby_disconnect_hold_p1: Option<Instant>,
@@ -1875,7 +1875,7 @@ impl Clone for State {
             submit_arrowcloud_fallback: self.submit_arrowcloud_fallback,
             submissions: self.submissions.clone(),
             leaderboards_requested: self.leaderboards_requested,
-            leaderboards: self.leaderboards.clone(),
+            scoreboxes: self.scoreboxes.clone(),
             groovestats_service: self.groovestats_service,
             lobby_view: self.lobby_view.clone(),
             lobby_disconnect_hold_p1: self.lobby_disconnect_hold_p1,
@@ -2456,7 +2456,7 @@ pub fn init(gameplay_results: Option<gameplay::State>, init_view: EvaluationInit
         submit_arrowcloud_fallback: std::array::from_fn(|_| None),
         submissions: std::array::from_fn(|_| Default::default()),
         leaderboards_requested: [false; MAX_PLAYERS],
-        leaderboards: std::array::from_fn(|_| None),
+        scoreboxes: Default::default(),
         groovestats_service: Default::default(),
         lobby_view: Default::default(),
         lobby_disconnect_hold_p1: None,
@@ -2616,7 +2616,7 @@ pub fn init_from_score_info(
         submit_arrowcloud_fallback: std::array::from_fn(|_| None),
         submissions: std::array::from_fn(|_| Default::default()),
         leaderboards_requested: [false; MAX_PLAYERS],
-        leaderboards: std::array::from_fn(|_| None),
+        scoreboxes: Default::default(),
         groovestats_service: Default::default(),
         lobby_view: Default::default(),
         lobby_disconnect_hold_p1: None,
@@ -2872,7 +2872,7 @@ pub fn sync_runtime_view(state: &mut State, view: EvaluationRuntimeView) {
     state.lobby_view = view.lobby;
     state.groovestats_service = view.groovestats_service;
     state.submissions = view.submissions;
-    state.leaderboards = view.leaderboards;
+    state.scoreboxes = view.scoreboxes;
 }
 
 #[inline(always)]
@@ -4637,8 +4637,6 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
             let Some(si) = state.score_info.get(player_idx).and_then(|s| s.as_ref()) else {
                 continue;
             };
-            let gs_side =
-                profile_data::runtime_player_side(play_style, player_side, controller_idx);
             let pane = if ENABLE_GS_QR_PANE {
                 state.active_pane[controller_idx]
             } else if state.active_pane[controller_idx] == EvalPane::QrCode {
@@ -4680,27 +4678,19 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, asset_manager: &Asset
                 EvalPane::QrCode => actors.extend(eval_panes::build_gs_qr_pane(si, controller)),
                 EvalPane::GrooveStats => actors.extend(eval_panes::build_gs_records_pane(
                     controller,
-                    gs_side,
-                    Some(si.chart.short_hash.as_str()),
-                    state.leaderboards[player_idx].as_ref(),
+                    &state.scoreboxes[player_idx],
                 )),
                 EvalPane::GrooveStatsEx => actors.extend(eval_panes::build_gs_ex_records_pane(
                     controller,
-                    gs_side,
-                    Some(si.chart.short_hash.as_str()),
-                    state.leaderboards[player_idx].as_ref(),
+                    &state.scoreboxes[player_idx],
                 )),
                 EvalPane::Itl => actors.extend(eval_panes::build_itl_records_pane(
                     controller,
-                    gs_side,
-                    Some(si.chart.short_hash.as_str()),
-                    state.leaderboards[player_idx].as_ref(),
+                    &state.scoreboxes[player_idx],
                 )),
                 EvalPane::ArrowCloud => actors.extend(eval_panes::build_arrowcloud_records_pane(
                     controller,
-                    gs_side,
-                    Some(si.chart.short_hash.as_str()),
-                    state.leaderboards[player_idx].as_ref(),
+                    &state.scoreboxes[player_idx],
                 )),
                 EvalPane::MachineRecords => actors.extend(eval_panes::build_machine_records_pane(
                     si,

@@ -6,19 +6,16 @@ use crate::scorebox::{
     SCOREBOX_BORDER, SCOREBOX_H, SCOREBOX_W, ScoreboxCycleState, color_with_alpha, lerp_color,
     logo_alpha, scorebox_cycle_state,
 };
+use crate::views::ScoreboxSideView;
 use deadlib_present::actors::Actor;
 use deadlib_present::cache::{TextCache, cached_text};
 use deadlib_present::color;
-use deadsync_online::score_compat as scores;
-use deadsync_profile as profile_data;
-use deadsync_profile::compat as profile;
 use deadsync_score as score_data;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 
 pub(crate) const SCOREBOX_NUM_ENTRIES: usize = 5;
-const SCOREBOX_FETCH_NUM_ENTRIES: usize = 13;
 const SCOREBOX_GS_BLUE: [f32; 4] = color::rgba_hex("#007b85");
 const SCOREBOX_SRPG_YELLOW: [f32; 4] = [1.0, 0.972, 0.792, 1.0];
 const SCOREBOX_ITL_PINK: [f32; 4] = [1.0, 0.2, 0.406, 1.0];
@@ -163,9 +160,8 @@ fn owned_text(text: &str) -> Arc<str> {
     Arc::<str>::from(text)
 }
 
-fn local_self_machine_tag(side: profile_data::PlayerSide) -> Option<String> {
-    let initials = profile::get_for_side(side).player_initials;
-    let initials = initials.trim();
+fn local_self_machine_tag(view: &ScoreboxSideView) -> Option<String> {
+    let initials = view.player_initials.trim();
     if initials.is_empty() {
         None
     } else {
@@ -173,75 +169,56 @@ fn local_self_machine_tag(side: profile_data::PlayerSide) -> Option<String> {
     }
 }
 
-fn local_self_scorebox_name(side: profile_data::PlayerSide) -> String {
-    let profile = profile::get_for_side(side);
+fn local_self_scorebox_name(view: &ScoreboxSideView) -> String {
     let fallback = [
-        profile.display_name.as_str(),
-        profile.groovestats_username.as_str(),
-        profile.player_initials.as_str(),
+        view.display_name.as_str(),
+        view.groovestats_username.as_str(),
+        view.player_initials.as_str(),
     ]
     .into_iter()
     .map(str::trim)
     .find(|value| !value.is_empty())
     .unwrap_or("----");
-    let tag = local_self_machine_tag(side);
+    let tag = local_self_machine_tag(view);
     score_data::scorebox_machine_tag(tag.as_deref(), fallback)
 }
 
 fn leaderboard_entry_matches_local_self(
-    side: profile_data::PlayerSide,
+    view: &ScoreboxSideView,
     entry: &score_data::LeaderboardEntry,
 ) -> bool {
-    let profile = profile::get_for_side(side);
     let name = entry.name.trim();
     if name.is_empty() {
         return false;
     }
     [
-        profile.groovestats_username.as_str(),
-        profile.display_name.as_str(),
-        profile.player_initials.as_str(),
+        view.groovestats_username.as_str(),
+        view.display_name.as_str(),
+        view.player_initials.as_str(),
     ]
     .into_iter()
     .map(str::trim)
     .any(|candidate| !candidate.is_empty() && candidate.eq_ignore_ascii_case(name))
 }
 
-fn local_self_score_10000(
-    side: profile_data::PlayerSide,
-    chart_hash: &str,
-    kind: PaneKind,
-) -> Option<(f64, bool)> {
-    match kind {
-        PaneKind::Gs => {
-            let score = scores::get_cached_local_score_for_side(chart_hash, side)?;
-            Some((
-                score.score_percent * 10000.0,
-                score.grade == score_data::Grade::Failed,
-            ))
-        }
-        PaneKind::Ex => {
-            let score = scores::get_cached_local_ex_score_for_side(chart_hash, side)?;
-            Some((score.percent * 100.0, score.is_fail))
-        }
-        PaneKind::HardEx => {
-            let score = scores::get_cached_local_hard_ex_score_for_side(chart_hash, side)?;
-            Some((score.percent * 100.0, score.is_fail))
-        }
-        PaneKind::Itl => scores::get_cached_itl_score_for_side(chart_hash, side)
-            .map(|score| (f64::from(score.ex_hundredths), false)),
+fn local_self_score_10000(view: &ScoreboxSideView, kind: PaneKind) -> Option<(f64, bool)> {
+    let score = match kind {
+        PaneKind::Gs => view.local_itg,
+        PaneKind::Ex => view.local_ex,
+        PaneKind::HardEx => view.local_hard_ex,
+        PaneKind::Itl => view.local_itl,
         PaneKind::Srpg | PaneKind::Other => None,
-    }
+    }?;
+    Some((score.score_10000, score.failed))
 }
 
 pub(crate) fn entries_with_local_self_state(
-    side: profile_data::PlayerSide,
-    chart_hash: Option<&str>,
+    view: &ScoreboxSideView,
     pane: &score_data::LeaderboardPane,
 ) -> Vec<score_data::LeaderboardEntry> {
     let kind = score_data::scorebox_pane_kind(pane);
     let mut entries = pane.entries.clone();
-    let local_self = chart_hash.and_then(|hash| local_self_score_10000(side, hash, kind));
+    let local_self = local_self_score_10000(view, kind);
 
     if let Some(entry) = entries.iter_mut().find(|entry| entry.is_self) {
         if let Some((local_score_10000, local_is_fail)) = local_self
@@ -250,7 +227,7 @@ pub(crate) fn entries_with_local_self_state(
         {
             entry.is_fail = true;
             if entry.machine_tag.is_none() {
-                entry.machine_tag = local_self_machine_tag(side);
+                entry.machine_tag = local_self_machine_tag(view);
             }
         }
         return entries;
@@ -258,11 +235,11 @@ pub(crate) fn entries_with_local_self_state(
 
     if let Some(entry) = entries
         .iter_mut()
-        .find(|entry| leaderboard_entry_matches_local_self(side, entry))
+        .find(|entry| leaderboard_entry_matches_local_self(view, entry))
     {
         entry.is_self = true;
         if entry.machine_tag.is_none() {
-            entry.machine_tag = local_self_machine_tag(side);
+            entry.machine_tag = local_self_machine_tag(view);
         }
         if let Some((local_score_10000, local_is_fail)) = local_self
             && local_is_fail
@@ -277,18 +254,36 @@ pub(crate) fn entries_with_local_self_state(
 }
 
 #[inline(always)]
-fn default_mode_text_for_side(side: profile_data::PlayerSide) -> &'static str {
-    score_data::default_scorebox_mode_text(profile::get_for_side(side).show_ex_score)
-}
-
 pub fn select_music_scorebox_view(
-    side: profile_data::PlayerSide,
+    runtime: &ScoreboxSideView,
     chart_hash: Option<&str>,
-    fallback_machine: (String, Arc<str>),
-    fallback_player: (String, Arc<str>),
+    show_rivals: bool,
 ) -> SelectMusicScoreboxView {
+    let chart_matches = runtime.chart_hash.as_deref() == chart_hash;
+    let fallback_player = chart_matches
+        .then_some(runtime.local_itg)
+        .flatten()
+        .filter(|score| !score.failed || score.score_10000 > 0.0)
+        .map(|score| {
+            (
+                runtime.player_initials.clone(),
+                score_text_with_percent(score.score_10000),
+            )
+        })
+        .unwrap_or_else(|| ("----".to_string(), unknown_score_percent_text()));
+    let fallback_machine = chart_matches
+        .then_some(runtime.machine_itg.as_ref())
+        .flatten()
+        .filter(|score| !score.failed || score.score_10000 > 0.0)
+        .map(|score| {
+            (
+                score.name.clone(),
+                score_text_with_percent(score.score_10000),
+            )
+        })
+        .unwrap_or_else(|| ("----".to_string(), unknown_score_percent_text()));
     let mut view = SelectMusicScoreboxView {
-        mode_text: default_mode_text_for_side(side).to_string(),
+        mode_text: score_data::default_scorebox_mode_text(runtime.show_ex_score).to_string(),
         machine_name: fallback_machine.0,
         machine_score: fallback_machine.1,
         player_name: fallback_player.0,
@@ -298,7 +293,7 @@ pub fn select_music_scorebox_view(
         loading_text: None,
     };
 
-    if !scores::is_gs_active_for_side(side) {
+    if !show_rivals || !runtime.groovestats_active || !chart_matches {
         return view;
     }
     let filter = select_music_pane_filter();
@@ -311,12 +306,10 @@ pub fn select_music_scorebox_view(
     view.player_score = unknown_score_percent_text();
     view.show_rivals = true;
 
-    let Some(hash) = chart_hash else {
+    if chart_hash.is_none() {
         return view;
-    };
-    let Some(snapshot) =
-        scores::get_or_fetch_player_leaderboards_for_side(hash, side, SCOREBOX_FETCH_NUM_ENTRIES)
-    else {
+    }
+    let Some(snapshot) = runtime.leaderboards.as_ref() else {
         return view;
     };
 
@@ -329,8 +322,8 @@ pub fn select_music_scorebox_view(
         return view;
     }
 
-    let show_ex = profile::get_for_side(side).show_ex_score;
-    let Some(data) = snapshot.data else {
+    let show_ex = runtime.show_ex_score;
+    let Some(data) = snapshot.data.as_ref() else {
         return view;
     };
     let filtered_panes =
@@ -343,7 +336,7 @@ pub fn select_music_scorebox_view(
     };
 
     let kind = score_data::scorebox_pane_kind(pane);
-    let entries = entries_with_local_self_state(side, Some(hash), pane);
+    let entries = entries_with_local_self_state(runtime, pane);
     view.mode_text = score_data::scorebox_pane_mode_text(kind, pane).to_string();
     if entries.is_empty() {
         view.loading_text = Some("No Scores".to_string());
@@ -365,8 +358,8 @@ pub fn select_music_scorebox_view(
             &player_entry.name,
         );
         view.player_score = score_text_with_percent(player_entry.score);
-    } else if let Some((local_score_10000, _)) = local_self_score_10000(side, hash, kind) {
-        view.player_name = local_self_scorebox_name(side);
+    } else if let Some((local_score_10000, _)) = local_self_score_10000(runtime, kind) {
+        view.player_name = local_self_scorebox_name(runtime);
         view.player_score = score_text_with_percent(local_score_10000);
     }
     for (idx, rival) in entries
@@ -383,14 +376,8 @@ pub fn select_music_scorebox_view(
     view
 }
 
-pub fn select_music_mode_text(side: profile_data::PlayerSide, chart_hash: Option<&str>) -> String {
-    select_music_scorebox_view(
-        side,
-        chart_hash,
-        ("----".to_string(), unknown_score_percent_text()),
-        ("----".to_string(), unknown_score_percent_text()),
-    )
-    .mode_text
+pub fn select_music_mode_text(show_ex_score: bool) -> String {
+    score_data::default_scorebox_mode_text(show_ex_score).to_string()
 }
 
 #[inline(always)]
@@ -436,13 +423,6 @@ fn gameplay_status_pane(show_ex_score: bool, text: &str) -> GameplayScoreboxPane
         border_color: SCOREBOX_GS_BLUE,
         rows,
     }
-}
-
-fn gameplay_status_pane_for_side(
-    side: profile_data::PlayerSide,
-    text: &str,
-) -> GameplayScoreboxPane {
-    gameplay_status_pane(profile::get_for_side(side).show_ex_score, text)
 }
 
 fn gameplay_row_from_entry(
@@ -571,18 +551,17 @@ fn gameplay_panes_from_snapshot(
 
 fn select_music_panes_from_snapshot(
     snapshot: &score_data::CachedPlayerLeaderboardData,
-    side: profile_data::PlayerSide,
-    chart_hash: Option<&str>,
+    runtime: &ScoreboxSideView,
 ) -> Vec<GameplayScoreboxPane> {
     if snapshot.loading {
-        return vec![gameplay_status_pane_for_side(side, "Loading ...")];
+        return vec![gameplay_status_pane(runtime.show_ex_score, "Loading ...")];
     }
     if let Some(error) = snapshot.error.as_deref() {
         let text = error_text(error);
-        return vec![gameplay_status_pane_for_side(side, text)];
+        return vec![gameplay_status_pane(runtime.show_ex_score, text)];
     }
     let Some(data) = snapshot.data.as_ref() else {
-        return vec![gameplay_status_pane_for_side(side, "No Scores")];
+        return vec![gameplay_status_pane(runtime.show_ex_score, "No Scores")];
     };
     let filter = select_music_pane_filter();
     if !score_data::select_music_scorebox_filter_has_any(filter) {
@@ -591,11 +570,11 @@ fn select_music_panes_from_snapshot(
 
     let filtered = score_data::select_music_scorebox_filtered_panes(data.panes.as_slice(), filter);
     if filtered.is_empty() {
-        return vec![gameplay_status_pane_for_side(side, "No Scores")];
+        return vec![gameplay_status_pane(runtime.show_ex_score, "No Scores")];
     }
     let mut panes = Vec::with_capacity(filtered.len());
     for pane in filtered {
-        let entries = entries_with_local_self_state(side, chart_hash, pane);
+        let entries = entries_with_local_self_state(runtime, pane);
         panes.push(gameplay_pane_from_leaderboard(pane, entries.as_slice()));
     }
     panes
@@ -1023,7 +1002,7 @@ fn push_rows(
 }
 
 pub fn select_music_scorebox_actors(
-    side: profile_data::PlayerSide,
+    runtime: &ScoreboxSideView,
     chart_hash: Option<&str>,
     show_scorebox: bool,
     center_x: f32,
@@ -1031,18 +1010,17 @@ pub fn select_music_scorebox_actors(
     zoom: f32,
     elapsed_seconds: f32,
 ) -> Vec<Actor> {
-    if !show_scorebox || !scores::is_gs_active_for_side(side) {
+    if !show_scorebox || !runtime.groovestats_active || runtime.chart_hash.as_deref() != chart_hash
+    {
         return Vec::new();
     }
-    let Some(hash) = chart_hash else {
+    if chart_hash.is_none() {
+        return Vec::new();
+    }
+    let Some(snapshot) = runtime.leaderboards.as_ref() else {
         return Vec::new();
     };
-    let Some(snapshot) =
-        scores::get_or_fetch_player_leaderboards_for_side(hash, side, SCOREBOX_FETCH_NUM_ENTRIES)
-    else {
-        return Vec::new();
-    };
-    let panes = select_music_panes_from_snapshot(&snapshot, side, Some(hash));
+    let panes = select_music_panes_from_snapshot(snapshot, runtime);
     gameplay_scorebox_actors_from_panes(&panes, center_x, center_y, zoom, elapsed_seconds)
 }
 
@@ -1186,10 +1164,9 @@ mod tests {
     }
 
     fn scorebox_profile(show_ex_score: bool) -> score_data::GameplayScoreboxProfileSnapshot {
-        let mut player_profile = profile_data::Profile::default();
-        player_profile.show_ex_score = show_ex_score;
-        player_profile.display_scorebox = true;
-        scores::scorebox_profile_snapshot(&player_profile, true, None)
+        let mut snapshot = score_data::GameplayScoreboxProfileSnapshot::default();
+        snapshot.show_ex_score = show_ex_score;
+        snapshot
     }
 
     #[test]
@@ -1235,23 +1212,18 @@ mod tests {
 
     #[test]
     fn entries_with_local_self_state_marks_matching_online_name_as_self() {
-        let side = profile_data::PlayerSide::P1;
-        let profile = profile::get_for_side(side);
-        let name = [
-            profile.groovestats_username.trim(),
-            profile.display_name.trim(),
-            profile.player_initials.trim(),
-        ]
-        .into_iter()
-        .find(|candidate| !candidate.is_empty())
-        .unwrap_or("self");
-        let pane = pane("GrooveStats", vec![entry(7, name, false, false)]);
+        let runtime = ScoreboxSideView {
+            display_name: "Self Player".to_string(),
+            player_initials: "SELF".to_string(),
+            ..Default::default()
+        };
+        let pane = pane("GrooveStats", vec![entry(7, "Self Player", false, false)]);
 
-        let entries = entries_with_local_self_state(side, None, &pane);
+        let entries = entries_with_local_self_state(&runtime, &pane);
 
         assert_eq!(entries.len(), 1);
         assert!(entries[0].is_self);
-        assert_eq!(entries[0].machine_tag, local_self_machine_tag(side));
+        assert_eq!(entries[0].machine_tag, local_self_machine_tag(&runtime));
     }
 
     #[test]
@@ -1264,10 +1236,40 @@ mod tests {
             ],
         );
 
-        let entries = entries_with_local_self_state(profile_data::PlayerSide::P1, None, &pane);
+        let entries = entries_with_local_self_state(&ScoreboxSideView::default(), &pane);
 
         assert_eq!(entries.len(), 2);
         assert!(!entries.iter().any(|entry| entry.is_self));
+    }
+
+    #[test]
+    fn select_music_view_uses_prepared_local_records() {
+        let runtime = ScoreboxSideView {
+            chart_hash: Some("chart".to_string()),
+            player_initials: "P1".to_string(),
+            local_itg: Some(crate::views::ScoreboxLocalView {
+                score_10000: 9876.0,
+                failed: false,
+            }),
+            machine_itg: Some(crate::views::ScoreboxMachineView {
+                name: "AAA".to_string(),
+                score_10000: 9999.0,
+                failed: false,
+            }),
+            ..Default::default()
+        };
+
+        let view = select_music_scorebox_view(&runtime, Some("chart"), false);
+
+        assert_eq!(view.player_name, "P1");
+        assert_eq!(view.player_score.as_ref(), "98.76%");
+        assert_eq!(view.machine_name, "AAA");
+        assert_eq!(view.machine_score.as_ref(), "99.99%");
+        assert!(!view.show_rivals);
+
+        let stale = select_music_scorebox_view(&runtime, Some("other"), false);
+        assert_eq!(stale.player_name, "----");
+        assert_eq!(stale.machine_name, "----");
     }
 
     #[test]

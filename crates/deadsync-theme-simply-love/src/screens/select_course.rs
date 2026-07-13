@@ -13,6 +13,10 @@ use crate::screens::components::{
 use crate::screens::input as screen_input;
 use crate::screens::{Screen, ThemeEffect};
 pub use crate::views::{CourseStagePlan, SelectedCoursePlan};
+use crate::views::{
+    MusicWheelRankSource, MusicWheelRuntimeRequest, MusicWheelRuntimeView, SelectCourseRuntimeView,
+    SelectCourseScoreRequest, SelectCourseScoreView,
+};
 use deadlib_present::actors::{Actor, SizeSpec};
 use deadlib_present::cache::{TextCache, cached_text};
 use deadlib_present::color;
@@ -25,7 +29,6 @@ use deadsync_input::{InputEvent, PadDir, VirtualAction};
 use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
 use deadsync_profile::compat as profile;
-use deadsync_score as score_data;
 use deadsync_simfile::course::{
     self, COURSE_RATING_ORDER, CourseEntry, CourseFile, CourseSong, CourseTotals, Difficulty,
     SongSort, StepsSpec, add_chart_totals, course_difficulty_from_meters, course_meter,
@@ -145,6 +148,7 @@ struct CourseSongEntry {
 #[derive(Clone, Debug)]
 struct CourseMeta {
     path: PathBuf,
+    score_hash: String,
     name: String,
     scripter: String,
     description: String,
@@ -219,6 +223,8 @@ pub struct State {
     pub wheel_offset_from_selection: f32,
     pub current_banner_key: String,
     pub session_elapsed: f32,
+    music_wheel: MusicWheelRuntimeView,
+    score_view: SelectCourseScoreView,
 
     all_entries: Vec<MusicWheelEntry>,
     course_meta_by_path: HashMap<PathBuf, Arc<CourseMeta>>,
@@ -642,6 +648,7 @@ fn build_init_data() -> InitData {
             .unwrap_or((min_bpm, max_bpm, total_seconds.max(0)));
         let meta = Arc::new(CourseMeta {
             path: path.clone(),
+            score_hash: course_score_hash(path),
             name: course_name(path, course),
             scripter: course.scripter.clone(),
             description: course.description.clone(),
@@ -831,7 +838,7 @@ pub fn selected_course_plan(state: &State) -> Option<SelectedCoursePlan> {
         path: meta.path.clone(),
         name: meta.name.clone(),
         banner_path: meta.banner_path.clone(),
-        score_hash: course_score_hash(meta.path.as_path()),
+        score_hash: meta.score_hash.clone(),
         song_stub: Arc::new(make_course_song(&meta)),
         course_difficulty_name: rating.course_difficulty_name.clone(),
         course_meter: rating.course_meter,
@@ -872,6 +879,8 @@ pub fn init() -> State {
         wheel_offset_from_selection: 0.0,
         current_banner_key: "banner1.png".to_string(),
         session_elapsed: 0.0,
+        music_wheel: MusicWheelRuntimeView::default(),
+        score_view: SelectCourseScoreView::default(),
         all_entries: init.all_entries,
         course_meta_by_path: init.course_meta_by_path,
         course_text_color_overrides: init.course_text_color_overrides,
@@ -1662,6 +1671,44 @@ fn sl_select_music_bg_flash() -> Actor {
     )
 }
 
+pub fn music_wheel_runtime_request(state: &State) -> MusicWheelRuntimeRequest<'_> {
+    let play_style = profile::get_session_play_style();
+    MusicWheelRuntimeRequest {
+        read_scores: true,
+        rank_source: MusicWheelRankSource::None,
+        read_itl_scores: false,
+        sides: Default::default(),
+        slots: music_wheel::runtime_slot_requests(
+            &state.entries,
+            state.selected_index,
+            [None, None],
+            [0, 0],
+            play_style,
+        ),
+    }
+}
+
+#[inline(always)]
+pub fn score_runtime_request(state: &State) -> SelectCourseScoreRequest<'_> {
+    let course_hash = state
+        .entries
+        .get(state.selected_index)
+        .and_then(|entry| match entry {
+            MusicWheelEntry::Song(song) => state
+                .course_meta_by_path
+                .get(song.simfile_path.as_path())
+                .map(|meta| meta.score_hash.as_str()),
+            MusicWheelEntry::PackHeader { .. } => None,
+        });
+    SelectCourseScoreRequest { course_hash }
+}
+
+#[inline(always)]
+pub fn sync_runtime_view(state: &mut State, view: SelectCourseRuntimeView) {
+    state.music_wheel = view.music_wheel;
+    state.score_view = view.score;
+}
+
 pub fn push_actors(actors: &mut Vec<Actor>, state: &State, _asset_manager: &AssetManager) {
     actors.reserve(256);
     let side = profile::get_session_player_side();
@@ -1697,7 +1744,7 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, _asset_manager: &Asse
         state.session_elapsed,
     )));
 
-    let mode_text = gs_scorebox::select_music_mode_text(profile_data::PlayerSide::P1, None);
+    let mode_text = gs_scorebox::select_music_mode_text(state.score_view.mode_show_ex_score);
     actors.push(mode_pads::build_label(mode_text));
     actors.extend(mode_pads::build());
 
@@ -1796,42 +1843,32 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, _asset_manager: &Asse
 
     let pane_sel_col =
         selected_diff_col.unwrap_or_else(|| color::simply_love_rgba(state.active_color_index));
-    let pane_side = if is_p2_single {
-        profile_data::PlayerSide::P2
-    } else {
-        profile_data::PlayerSide::P1
-    };
-    let pane_profile = profile::get_for_side(pane_side);
     let pane_cx = if is_p2_single {
         screen_width() * 0.75 + 5.0
     } else {
         screen_width() * 0.25 - 5.0
     };
     let placeholder = ("----".to_string(), placeholder_score_percent());
-    let selected_course_hash = selected_meta
-        .as_ref()
-        .map(|meta| course_score_hash(meta.path.as_path()));
-    let fallback_player = if let Some(hash) = selected_course_hash.as_deref()
-        && let Some(sc) = scores::get_cached_local_score_for_side(hash, pane_side)
-        && (sc.grade != score_data::Grade::Failed || sc.score_percent > 0.0)
-    {
-        (
-            pane_profile.player_initials.clone(),
-            cached_score_percent_text(sc.score_percent),
-        )
-    } else {
-        placeholder.clone()
-    };
-    let fallback_machine = if let Some(hash) = selected_course_hash.as_deref()
-        && let Some((initials, sc)) = scores::get_machine_record_local(hash)
-        && (sc.grade != score_data::Grade::Failed || sc.score_percent > 0.0)
-    {
-        (initials, cached_score_percent_text(sc.score_percent))
-    } else {
-        placeholder
+    let fallback_player = state.score_view.player_score_percent.map_or_else(
+        || placeholder.clone(),
+        |score_percent| {
+            (
+                state.score_view.player_initials.clone(),
+                cached_score_percent_text(score_percent),
+            )
+        },
+    );
+    let fallback_machine = match (
+        state.score_view.machine_initials.as_ref(),
+        state.score_view.machine_score_percent,
+    ) {
+        (Some(initials), Some(score_percent)) => {
+            (initials.clone(), cached_score_percent_text(score_percent))
+        }
+        _ => placeholder,
     };
     let gs_view = gs_scorebox::SelectMusicScoreboxView {
-        mode_text: gs_scorebox::select_music_mode_text(pane_side, None),
+        mode_text: gs_scorebox::select_music_mode_text(state.score_view.pane_show_ex_score),
         machine_name: fallback_machine.0,
         machine_score: fallback_machine.1,
         player_name: fallback_player.0,
@@ -2171,10 +2208,10 @@ pub fn push_actors(actors: &mut Vec<Actor>, state: &State, _asset_manager: &Asse
             itl_wheel_mode: crate::config::SelectMusicItlWheelMode::Off,
             song_select_bg_mode: crate::config::SelectMusicSongSelectBgMode::Off,
             expanded_pack_name: None,
-            allow_online_fetch: false,
             new_pack_names: None,
             pack_sync_prefs: None,
             default_sync_offset: crate::config::DefaultSyncOffset::Null,
+            runtime: &state.music_wheel,
         },
     );
 

@@ -6,6 +6,7 @@ use crate::config::{
 };
 use crate::screens::components::shared::banner as shared_banner;
 use crate::screens::select_music::MusicWheelEntry;
+use crate::views::{MUSIC_WHEEL_SLOT_COUNT, MusicWheelRuntimeView, MusicWheelSlotRuntimeRequest};
 use deadlib_present::actors::Actor;
 use deadlib_present::cache::{SharedStrCache, cached_shared_str};
 use deadlib_present::color;
@@ -15,11 +16,8 @@ use deadsync_chart::song::resolve_sync_pref;
 use deadsync_chart::{
     ChartData, STANDARD_DIFFICULTY_COUNT, STANDARD_DIFFICULTY_NAMES, SongData, SyncPref,
 };
-use deadsync_online::score_compat as scores;
 use deadsync_profile as profile_data;
-use deadsync_profile::compat as profile;
 use deadsync_score as score_data;
-use deadsync_simfile::playlist::song_pack_and_dir_name;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -41,7 +39,7 @@ fn col_pack_header_box() -> [f32; 4] {
 // extra off-screen items can slide in during scroll and avoid exposing gaps.
 const NUM_WHEEL_ITEMS_TO_DRAW: usize = 17;
 const NUM_VISIBLE_WHEEL_ITEMS: usize = NUM_WHEEL_ITEMS_TO_DRAW - 2; // 17 -> 15 visible on-screen
-const NUM_WHEEL_SLOTS: usize = NUM_WHEEL_ITEMS_TO_DRAW + 2; // 17 -> 19 internal
+const NUM_WHEEL_SLOTS: usize = MUSIC_WHEEL_SLOT_COUNT; // 17 -> 19 internal
 const CENTER_WHEEL_SLOT_INDEX: usize = NUM_WHEEL_SLOTS / 2;
 // Upper bound on actors emitted per wheel slot with every feature enabled and
 // both player sides joined (box + art + title + BG art, plus per-side grades,
@@ -107,7 +105,7 @@ fn is_srpg_event_group(group: &str) -> bool {
         && (lower.contains("stamina rpg") || lower.contains("srpg"))
 }
 
-fn is_srpg_event_song(song: &SongData) -> bool {
+pub(crate) fn is_srpg_event_song(song: &SongData) -> bool {
     song_pack_group(song).is_some_and(is_srpg_event_group)
 }
 
@@ -391,8 +389,20 @@ const fn itl_wheel_mode_for_sides(
 }
 
 #[inline(always)]
-const fn should_fetch_online_itl_score(is_selected_slot: bool, allow_online_fetch: bool) -> bool {
-    is_selected_slot && allow_online_fetch
+pub(crate) const fn itl_fetch_flags(
+    allow_online_fetch: bool,
+    rank_mode: SelectMusicItlRankMode,
+    wheel_mode: SelectMusicItlWheelMode,
+    is_srpg_event: bool,
+) -> (bool, bool, bool) {
+    if !allow_online_fetch {
+        return (false, false, false);
+    }
+    let fetch_rank = matches!(rank_mode, SelectMusicItlRankMode::Chart);
+    let fetch_score = matches!(rank_mode, SelectMusicItlRankMode::Overall)
+        || (!matches!(wheel_mode, SelectMusicItlWheelMode::Off) && !is_srpg_event);
+    let fetch_srpg = !matches!(wheel_mode, SelectMusicItlWheelMode::Off) && is_srpg_event;
+    (fetch_rank, fetch_score, fetch_srpg)
 }
 
 #[inline(always)]
@@ -477,6 +487,71 @@ fn chart_for_preferred_or_nearest_standard<'a>(
     best_chart
 }
 
+/// Build the fixed borrowed slot request shared by Select Music and Select
+/// Course. Slot-to-entry and side-to-chart mapping intentionally mirrors the
+/// composer so shell-prepared data stays aligned while the wheel animates.
+pub(crate) fn runtime_slot_requests<'a>(
+    entries: &'a [MusicWheelEntry],
+    selected_index: usize,
+    selected_charts: [Option<&'a ChartData>; profile_data::PLAYER_SLOTS],
+    preferred_difficulty_index: [usize; profile_data::PLAYER_SLOTS],
+    play_style: profile_data::PlayStyle,
+) -> [MusicWheelSlotRuntimeRequest<'a>; MUSIC_WHEEL_SLOT_COUNT] {
+    if entries.is_empty() {
+        return [MusicWheelSlotRuntimeRequest::Empty; MUSIC_WHEEL_SLOT_COUNT];
+    }
+    let target_chart_type = play_style.chart_type();
+    std::array::from_fn(|slot| {
+        let offset = slot as isize - CENTER_WHEEL_SLOT_INDEX as isize;
+        let list_index =
+            ((selected_index as isize + offset + entries.len() as isize) as usize) % entries.len();
+        match &entries[list_index] {
+            MusicWheelEntry::PackHeader { pack_key, .. } => MusicWheelSlotRuntimeRequest::Pack {
+                key: pack_key.as_deref(),
+            },
+            MusicWheelEntry::Song(song) => {
+                let charts = if slot == CENTER_WHEEL_SLOT_INDEX {
+                    selected_charts
+                } else if preferred_difficulty_index[0] == preferred_difficulty_index[1] {
+                    let chart = chart_for_preferred_or_nearest_standard(
+                        song,
+                        target_chart_type,
+                        preferred_difficulty_index[0],
+                    );
+                    [chart, chart]
+                } else {
+                    [
+                        chart_for_preferred_or_nearest_standard(
+                            song,
+                            target_chart_type,
+                            preferred_difficulty_index[0],
+                        ),
+                        chart_for_preferred_or_nearest_standard(
+                            song,
+                            target_chart_type,
+                            preferred_difficulty_index[1],
+                        ),
+                    ]
+                };
+                let chart_hashes = std::array::from_fn(|side_index| {
+                    let side = if side_index == 0 {
+                        profile_data::PlayerSide::P1
+                    } else {
+                        profile_data::PlayerSide::P2
+                    };
+                    charts[profile_data::runtime_player_index(play_style, side)]
+                        .map(|chart| chart.short_hash.as_str())
+                });
+                MusicWheelSlotRuntimeRequest::Song {
+                    song,
+                    chart_hashes,
+                    is_srpg_event: is_srpg_event_song(song),
+                }
+            }
+        }
+    })
+}
+
 pub struct MusicWheelParams<'a> {
     pub entries: &'a [MusicWheelEntry],
     pub selected_index: usize,
@@ -496,10 +571,10 @@ pub struct MusicWheelParams<'a> {
     pub itl_wheel_mode: SelectMusicItlWheelMode,
     pub song_select_bg_mode: SelectMusicSongSelectBgMode,
     pub expanded_pack_name: Option<&'a str>,
-    pub allow_online_fetch: bool,
     pub new_pack_names: Option<&'a HashSet<String>>,
     pub pack_sync_prefs: Option<&'a HashMap<String, SyncPref>>,
     pub default_sync_offset: DefaultSyncOffset,
+    pub runtime: &'a MusicWheelRuntimeView,
 }
 
 pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
@@ -518,10 +593,9 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
     } else {
         1.0
     };
-    let play_style = profile::get_session_play_style();
+    let play_style = p.runtime.play_style;
     let target_chart_type = play_style.chart_type();
-    let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
-    let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
+    let [p1_joined, p2_joined] = p.runtime.joined;
     let side_joined = |side: profile_data::PlayerSide| match side {
         profile_data::PlayerSide::P1 => p1_joined,
         profile_data::PlayerSide::P2 => p2_joined,
@@ -583,111 +657,10 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
     let joined_sides = usize::from(p1_joined) + usize::from(p2_joined);
     let itl_wheel_mode = itl_wheel_mode_for_sides(p.itl_wheel_mode, joined_sides);
     let is_double_style = matches!(play_style, profile_data::PlayStyle::Double);
-    let selected_chart_hash_for_side = |side: profile_data::PlayerSide| {
-        let Some(MusicWheelEntry::Song(_)) = p.entries.get(p.selected_index) else {
-            return None;
-        };
-        let ix = profile_data::runtime_player_index(play_style, side);
-        p.selected_charts[ix].map(|chart| chart.short_hash.as_str())
-    };
-    if matches!(p.itl_rank_mode, SelectMusicItlRankMode::Overall) && p.allow_online_fetch {
-        for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
-            if !side_joined(side) {
-                continue;
-            }
-            if let Some(chart_hash) = selected_chart_hash_for_side(side) {
-                let _ = scores::get_or_fetch_itl_self_score_for_side(chart_hash, side);
-            }
-        }
-    }
-    let overall_itl_ranks_p1 =
-        if matches!(p.itl_rank_mode, SelectMusicItlRankMode::Overall) && p1_joined {
-            Some(scores::get_cached_itl_tournament_overall_ranks_for_side(
-                profile_data::PlayerSide::P1,
-            ))
-        } else {
-            None
-        };
-    let overall_itl_ranks_p2 =
-        if matches!(p.itl_rank_mode, SelectMusicItlRankMode::Overall) && p2_joined {
-            Some(scores::get_cached_itl_tournament_overall_ranks_for_side(
-                profile_data::PlayerSide::P2,
-            ))
-        } else {
-            None
-        };
 
     let header_font = current_machine_font_key(FontRole::Header);
     let numbers_font = current_machine_font_key(FontRole::Numbers);
     let screen_eval_font = current_machine_font_key(FontRole::ScreenEval);
-
-    let p1_joined = profile::is_session_side_joined(profile_data::PlayerSide::P1);
-    let p2_joined = profile::is_session_side_joined(profile_data::PlayerSide::P2);
-    let itl_lookups_active = !matches!(p.itl_rank_mode, SelectMusicItlRankMode::None)
-        || !matches!(itl_wheel_mode, SelectMusicItlWheelMode::Off);
-    let score_lookups_active = p.show_music_wheel_grades || p.show_music_wheel_lamps;
-
-    let local_profile_p1: std::cell::OnceCell<Option<Arc<str>>> = std::cell::OnceCell::new();
-    let local_profile_p2: std::cell::OnceCell<Option<Arc<str>>> = std::cell::OnceCell::new();
-    let local_profile_id = |side: profile_data::PlayerSide| -> Option<Arc<str>> {
-        let (cell, joined) = match side {
-            profile_data::PlayerSide::P1 => (&local_profile_p1, p1_joined),
-            profile_data::PlayerSide::P2 => (&local_profile_p2, p2_joined),
-        };
-        cell.get_or_init(|| {
-            joined
-                .then(|| profile::active_local_profile_id_for_side(side))
-                .flatten()
-                .map(Arc::from)
-        })
-        .clone()
-    };
-
-    let itl_ctx_p1 = (itl_lookups_active && p1_joined).then(|| {
-        scores::ItlWheelSideContext::for_side(
-            profile_data::PlayerSide::P1,
-            local_profile_id(profile_data::PlayerSide::P1),
-        )
-    });
-    let itl_ctx_p2 = (itl_lookups_active && p2_joined).then(|| {
-        scores::ItlWheelSideContext::for_side(
-            profile_data::PlayerSide::P2,
-            local_profile_id(profile_data::PlayerSide::P2),
-        )
-    });
-    let itl_ctx_for_side = |side: profile_data::PlayerSide| match side {
-        profile_data::PlayerSide::P1 => itl_ctx_p1.as_ref(),
-        profile_data::PlayerSide::P2 => itl_ctx_p2.as_ref(),
-    };
-
-    let score_profile_p1: Option<Arc<str>> = score_lookups_active
-        .then(|| local_profile_id(profile_data::PlayerSide::P1))
-        .flatten();
-    let score_profile_p2: Option<Arc<str>> = score_lookups_active
-        .then(|| local_profile_id(profile_data::PlayerSide::P2))
-        .flatten();
-    let score_profile_for_side = |side: profile_data::PlayerSide| match side {
-        profile_data::PlayerSide::P1 => score_profile_p1.as_deref(),
-        profile_data::PlayerSide::P2 => score_profile_p2.as_deref(),
-    };
-
-    if let Some(pid) = score_profile_p1.as_deref() {
-        scores::ensure_score_caches_loaded(pid);
-    }
-    if let Some(pid) = score_profile_p2.as_deref() {
-        scores::ensure_score_caches_loaded(pid);
-    }
-
-    if itl_ctx_p1.is_some()
-        && let Some(pid) = local_profile_id(profile_data::PlayerSide::P1)
-    {
-        scores::ensure_itl_wheel_caches_loaded(&pid);
-    }
-    if itl_ctx_p2.is_some()
-        && let Some(pid) = local_profile_id(profile_data::PlayerSide::P2)
-    {
-        scores::ensure_itl_wheel_caches_loaded(&pid);
-    }
 
     let num_entries = p.entries.len();
 
@@ -709,6 +682,10 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
 
             let Some(entry) = p.entries.get(list_index) else {
                 continue;
+            };
+            let runtime_slot = &p.runtime.slots[i_slot];
+            let runtime_for_side = |side: profile_data::PlayerSide| {
+                &runtime_slot.sides[profile_data::player_side_index(side)]
             };
 
             match entry {
@@ -806,11 +783,11 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                     // Favorite heart icon on favorited pack headers — mirrors
                     // the song-row heart so the player can spot favorited packs
                     // while scrolling Group sort.
-                    if let Some(pack_key) = pack_key.as_deref() {
-                        let p1_fav = p1_joined
-                            && profile::is_pack_favorite(profile_data::PlayerSide::P1, pack_key);
-                        let p2_fav = p2_joined
-                            && profile::is_pack_favorite(profile_data::PlayerSide::P2, pack_key);
+                    if pack_key.is_some() {
+                        let p1_fav =
+                            p1_joined && runtime_for_side(profile_data::PlayerSide::P1).favorite;
+                        let p2_fav =
+                            p2_joined && runtime_for_side(profile_data::PlayerSide::P2).favorite;
                         let both_joined = p1_joined && p2_joined;
                         let heart_x = -23.0_f32;
                         let heart_pulse_t = {
@@ -1024,16 +1001,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                             if !side_joined(side) {
                                 continue;
                             }
-                            let Some(chart) = wheel_chart_for_side(side) else {
-                                continue;
-                            };
-                            let Some(profile_id) = score_profile_for_side(side) else {
-                                continue;
-                            };
-                            let Some(cached_score) = scores::get_cached_score_with_profile(
-                                &chart.short_hash,
-                                profile_id,
-                            ) else {
+                            let Some(cached_score) = runtime_for_side(side).score else {
                                 continue;
                             };
                             let has_score = cached_score.grade != score_data::Grade::Failed
@@ -1114,9 +1082,6 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                         }
                     }
 
-                    let should_fetch_online_itl =
-                        should_fetch_online_itl_score(is_selected_slot, p.allow_online_fetch);
-
                     if !matches!(p.itl_rank_mode, SelectMusicItlRankMode::None) && joined_sides == 1
                     {
                         for (side, rank_x) in [
@@ -1130,34 +1095,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                             if !side_joined {
                                 continue;
                             }
-                            let Some(side_chart) = wheel_chart_for_side(side) else {
-                                continue;
-                            };
-                            let rank = match p.itl_rank_mode {
-                                SelectMusicItlRankMode::None => None,
-                                SelectMusicItlRankMode::Chart => {
-                                    let chart_hash = side_chart.short_hash.as_str();
-                                    if should_fetch_online_itl {
-                                        scores::get_or_fetch_itl_tournament_rank_for_side(
-                                            chart_hash, side,
-                                        )
-                                    } else {
-                                        itl_ctx_for_side(side)
-                                            .and_then(|ctx| ctx.cached_tournament_rank(chart_hash))
-                                    }
-                                }
-                                SelectMusicItlRankMode::Overall => match side {
-                                    profile_data::PlayerSide::P2 => overall_itl_ranks_p2
-                                        .as_ref()
-                                        .and_then(|ranks| ranks.get(side_chart.short_hash.as_str()))
-                                        .copied(),
-                                    _ => overall_itl_ranks_p1
-                                        .as_ref()
-                                        .and_then(|ranks| ranks.get(side_chart.short_hash.as_str()))
-                                        .copied(),
-                                },
-                            };
-                            let Some(rank) = rank else {
+                            let Some(rank) = runtime_for_side(side).itl_rank else {
                                 continue;
                             };
                             let rank_color = itl_rank_color(rank, is_double_style);
@@ -1187,17 +1125,8 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                             if !side_joined {
                                 continue;
                             }
-                            let Some(side_chart) = wheel_chart_for_side(side) else {
-                                continue;
-                            };
-                            let Some(profile_id) = local_profile_id(side) else {
-                                continue;
-                            };
                             let Some(rate_hundredths) =
-                                scores::get_cached_local_pass_rate_with_profile(
-                                    side_chart.short_hash.as_str(),
-                                    profile_id.as_ref(),
-                                )
+                                runtime_for_side(side).srpg_pass_rate_hundredths
                             else {
                                 continue;
                             };
@@ -1220,19 +1149,9 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                             continue;
                         }
                         if is_srpg_event {
-                            let Some(side_chart) = wheel_chart_for_side(side) else {
-                                continue;
-                            };
-                            let Some(itl_ctx) = itl_ctx_for_side(side) else {
-                                continue;
-                            };
-                            let chart_hash = side_chart.short_hash.as_str();
-                            let score_hundredths = if should_fetch_online_itl {
-                                itl_ctx.get_or_fetch_srpg_self_score(chart_hash)
-                            } else {
-                                itl_ctx.cached_srpg_self_score(chart_hash)
-                            };
-                            let Some(score_hundredths) = score_hundredths else {
+                            let Some(score_hundredths) =
+                                runtime_for_side(side).srpg_itl_ex_hundredths
+                            else {
                                 continue;
                             };
                             actors.push(act!(text:
@@ -1247,26 +1166,12 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                             ));
                             continue;
                         }
-                        let Some(itl_ctx) = itl_ctx_for_side(side) else {
-                            continue;
-                        };
-                        let side_chart = wheel_chart_for_side(side);
-                        let side_chart_hash = side_chart.map(|chart| chart.short_hash.as_str());
-                        let local_itl = itl_ctx.cached_local_itl_score(info);
-                        let online_ex_hundredths = side_chart_hash.and_then(|chart_hash| {
-                            if should_fetch_online_itl {
-                                scores::get_or_fetch_itl_self_score_for_side(chart_hash, side)
-                            } else {
-                                itl_ctx.cached_self_ex_score(chart_hash)
-                            }
-                        });
-                        let online_points = online_ex_hundredths.and_then(|online_ex| {
-                            side_chart
-                                .and_then(|chart| scores::itl_points_for_chart(chart, online_ex))
-                        });
-                        let Some((ex_hundredths, points)) =
-                            choose_itl_wheel_score(local_itl, online_ex_hundredths, online_points)
-                        else {
+                        let runtime = runtime_for_side(side);
+                        let Some((ex_hundredths, points)) = choose_itl_wheel_score(
+                            runtime.local_itl,
+                            runtime.online_itl_ex_hundredths,
+                            runtime.online_itl_points,
+                        ) else {
                             continue;
                         };
                         match itl_wheel_mode {
@@ -1329,14 +1234,10 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
 
                     // Favorite heart icon
                     {
-                        let p1_fav = p1_joined
-                            && info.charts.iter().any(|c| {
-                                profile::is_favorite(profile_data::PlayerSide::P1, &c.short_hash)
-                            });
-                        let p2_fav = p2_joined
-                            && info.charts.iter().any(|c| {
-                                profile::is_favorite(profile_data::PlayerSide::P2, &c.short_hash)
-                            });
+                        let p1_fav =
+                            p1_joined && runtime_for_side(profile_data::PlayerSide::P1).favorite;
+                        let p2_fav =
+                            p2_joined && runtime_for_side(profile_data::PlayerSide::P2).favorite;
                         let both_joined = p1_joined && p2_joined;
                         let heart_x = -23.0_f32;
                         let heart_pulse_t = {
@@ -1381,28 +1282,12 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
 
                     // ITL unlocks lock icon (per-player)
                     {
-                        let p1_joined =
-                            profile::is_session_side_joined(profile_data::PlayerSide::P1);
-                        let p2_joined =
-                            profile::is_session_side_joined(profile_data::PlayerSide::P2);
                         let both_joined = p1_joined && p2_joined;
-                        if (p1_joined || p2_joined)
-                            && let Some((pack_dir, song_dir)) =
-                                song_pack_and_dir_name(info.as_ref())
-                            && scores::is_itl_unlocks_pack(pack_dir)
-                        {
-                            let p1_id = local_profile_id(profile_data::PlayerSide::P1);
-                            let p2_id = local_profile_id(profile_data::PlayerSide::P2);
-                            let p1_locked = p1_joined
-                                && !scores::is_itl_song_folder_unlocked_with_profile(
-                                    song_dir,
-                                    p1_id.as_deref(),
-                                );
-                            let p2_locked = p2_joined
-                                && !scores::is_itl_song_folder_unlocked_with_profile(
-                                    song_dir,
-                                    p2_id.as_deref(),
-                                );
+                        if p1_joined || p2_joined {
+                            let p1_locked =
+                                p1_joined && runtime_for_side(profile_data::PlayerSide::P1).locked;
+                            let p2_locked =
+                                p2_joined && runtime_for_side(profile_data::PlayerSide::P2).locked;
                             let lock_x = -12.0_f32;
                             if p1_locked {
                                 let lock_y = if both_joined { -8.0 } else { 0.0 };
@@ -1492,17 +1377,9 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
     }
 
     // Selection highlight overlay (Simply Love: Graphics/MusicWheel highlight.lua + [MusicWheel] HighlightOnCommand)
-    let selected_is_favorite = match p.entries.get(p.selected_index) {
-        Some(MusicWheelEntry::Song(info)) => info.charts.iter().any(|c| {
-            (p1_joined && profile::is_favorite(profile_data::PlayerSide::P1, &c.short_hash))
-                || (p2_joined && profile::is_favorite(profile_data::PlayerSide::P2, &c.short_hash))
-        }),
-        Some(entry @ MusicWheelEntry::PackHeader { .. }) => entry.pack_key().is_some_and(|key| {
-            (p1_joined && profile::is_pack_favorite(profile_data::PlayerSide::P1, key))
-                || (p2_joined && profile::is_pack_favorite(profile_data::PlayerSide::P2, key))
-        }),
-        None => false,
-    };
+    let selected_runtime = &p.runtime.slots[CENTER_WHEEL_SLOT_INDEX];
+    let selected_is_favorite = (p1_joined && selected_runtime.sides[0].favorite)
+        || (p2_joined && selected_runtime.sides[1].favorite);
     let highlight_c1: [f32; 4] = if selected_is_favorite {
         [1.0, 0.75, 0.80, 0.20] // pink tint
     } else {
@@ -1532,12 +1409,15 @@ pub fn build(p: MusicWheelParams) -> Vec<Actor> {
 #[cfg(test)]
 mod tests {
     use super::{
-        choose_itl_wheel_score, is_srpg_event_group, itl_rank_color, itl_wheel_mode_for_sides,
-        should_fetch_online_itl_score, song_select_bg_path, srpg_rate_color,
+        choose_itl_wheel_score, is_srpg_event_group, itl_fetch_flags, itl_rank_color,
+        itl_wheel_mode_for_sides, runtime_slot_requests, song_select_bg_path, srpg_rate_color,
         visible_song_select_bg_paths,
     };
-    use crate::config::{SelectMusicItlWheelMode, SelectMusicSongSelectBgMode};
+    use crate::config::{
+        SelectMusicItlRankMode, SelectMusicItlWheelMode, SelectMusicSongSelectBgMode,
+    };
     use crate::screens::select_music::MusicWheelEntry;
+    use crate::views::{MUSIC_WHEEL_SLOT_COUNT, MusicWheelSlotRuntimeRequest};
     use deadlib_present::color;
     use deadsync_chart::SongData;
     use deadsync_profile as profile_data;
@@ -1663,14 +1543,93 @@ mod tests {
     }
 
     #[test]
-    fn online_itl_fetch_requires_selected_slot() {
-        assert!(!should_fetch_online_itl_score(false, true));
+    fn runtime_slot_requests_keep_fixed_wheel_alignment() {
+        let song = song_with_art(None, None);
+        let entries = vec![
+            MusicWheelEntry::PackHeader {
+                name: "Before".to_string(),
+                original_index: 0,
+                banner_path: None,
+                song_count: 1,
+                pack_key: Some("Before".to_string()),
+            },
+            MusicWheelEntry::Song(song.clone()),
+            MusicWheelEntry::PackHeader {
+                name: "After".to_string(),
+                original_index: 1,
+                banner_path: None,
+                song_count: 1,
+                pack_key: Some("After".to_string()),
+            },
+        ];
+        let slots = runtime_slot_requests(
+            &entries,
+            1,
+            [None, None],
+            [0, 0],
+            profile_data::PlayStyle::Single,
+        );
+
+        assert_eq!(slots.len(), MUSIC_WHEEL_SLOT_COUNT);
+        let center = MUSIC_WHEEL_SLOT_COUNT / 2;
+        assert!(matches!(
+            slots[center],
+            MusicWheelSlotRuntimeRequest::Song {
+                song: prepared,
+                chart_hashes: [None, None],
+                ..
+            } if std::ptr::eq(prepared, song.as_ref())
+        ));
+        assert!(matches!(
+            slots[center - 1],
+            MusicWheelSlotRuntimeRequest::Pack {
+                key: Some("Before")
+            }
+        ));
+        assert!(matches!(
+            slots[center + 1],
+            MusicWheelSlotRuntimeRequest::Pack { key: Some("After") }
+        ));
     }
 
     #[test]
-    fn online_itl_fetch_requires_settled_selection() {
-        assert!(!should_fetch_online_itl_score(true, false));
-        assert!(should_fetch_online_itl_score(true, true));
+    fn online_itl_fetch_flags_follow_mode_and_settle_state() {
+        assert_eq!(
+            itl_fetch_flags(
+                false,
+                SelectMusicItlRankMode::Chart,
+                SelectMusicItlWheelMode::Score,
+                false,
+            ),
+            (false, false, false)
+        );
+        assert_eq!(
+            itl_fetch_flags(
+                true,
+                SelectMusicItlRankMode::Chart,
+                SelectMusicItlWheelMode::Off,
+                false,
+            ),
+            (true, false, false)
+        );
+        assert_eq!(
+            itl_fetch_flags(
+                true,
+                SelectMusicItlRankMode::Overall,
+                SelectMusicItlWheelMode::Score,
+                false,
+            ),
+            (false, true, false)
+        );
+        assert_eq!(
+            itl_fetch_flags(
+                true,
+                SelectMusicItlRankMode::None,
+                SelectMusicItlWheelMode::Score,
+                true,
+            ),
+            (false, false, true)
+        );
     }
 
     #[test]

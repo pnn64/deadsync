@@ -102,6 +102,11 @@ pub enum SimplyLoveOnlineRequest {
         profile_id: String,
         display_name: String,
     },
+    RefreshPlayerLeaderboard {
+        chart_hash: String,
+        side: PlayerSide,
+        max_entries: usize,
+    },
     FetchGrade(String),
 }
 

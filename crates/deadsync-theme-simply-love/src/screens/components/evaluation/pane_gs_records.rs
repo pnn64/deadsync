@@ -1,5 +1,6 @@
 use crate::act;
 use crate::screens::components::shared::gs_scorebox::entries_with_local_self_state;
+use crate::views::ScoreboxSideView;
 use deadlib_present::actors::{Actor, SizeSpec};
 use deadlib_present::color;
 use deadsync_profile as profile_data;
@@ -86,19 +87,16 @@ fn gs_player_name(entry: &score_data::LeaderboardEntry) -> String {
 }
 
 fn pane_display_entries(
-    score_side: profile_data::PlayerSide,
-    chart_hash: Option<&str>,
+    runtime: &ScoreboxSideView,
     pane: &score_data::LeaderboardPane,
 ) -> Vec<score_data::LeaderboardEntry> {
-    let entries = entries_with_local_self_state(score_side, chart_hash, pane);
+    let entries = entries_with_local_self_state(runtime, pane);
     score_data::prioritized_leaderboard_entries(entries.as_slice(), GS_RECORD_ROWS)
 }
 
 fn build_records_pane(
     controller: profile_data::PlayerSide,
-    score_side: profile_data::PlayerSide,
-    chart_hash: Option<&str>,
-    snapshot: Option<&score_data::CachedPlayerLeaderboardData>,
+    runtime: &ScoreboxSideView,
     kind: RecordsPaneKind,
 ) -> Vec<Actor> {
     let pane_origin_x = pane_origin_x(controller);
@@ -117,7 +115,7 @@ fn build_records_pane(
     let mut rows: Vec<(String, String, String, String, [f32; 4], [f32; 4])> =
         Vec::with_capacity(GS_RECORD_ROWS);
 
-    match snapshot {
+    match runtime.leaderboards.as_ref() {
         None => {
             rows.push((
                 String::new(),
@@ -154,7 +152,7 @@ fn build_records_pane(
                 .as_ref()
                 .and_then(|data| data.panes.iter().find(|pane| kind.matches(pane)));
             if let Some(pane) = records_pane {
-                let display_entries = pane_display_entries(score_side, chart_hash, pane);
+                let display_entries = pane_display_entries(runtime, pane);
                 if display_entries.is_empty() {
                     rows.push((
                         String::new(),
@@ -283,62 +281,30 @@ fn build_records_pane(
 
 pub fn build_gs_records_pane(
     controller: profile_data::PlayerSide,
-    score_side: profile_data::PlayerSide,
-    chart_hash: Option<&str>,
-    snapshot: Option<&score_data::CachedPlayerLeaderboardData>,
+    runtime: &ScoreboxSideView,
 ) -> Vec<Actor> {
-    build_records_pane(
-        controller,
-        score_side,
-        chart_hash,
-        snapshot,
-        RecordsPaneKind::GrooveStatsItg,
-    )
+    build_records_pane(controller, runtime, RecordsPaneKind::GrooveStatsItg)
 }
 
 pub fn build_gs_ex_records_pane(
     controller: profile_data::PlayerSide,
-    score_side: profile_data::PlayerSide,
-    chart_hash: Option<&str>,
-    snapshot: Option<&score_data::CachedPlayerLeaderboardData>,
+    runtime: &ScoreboxSideView,
 ) -> Vec<Actor> {
-    build_records_pane(
-        controller,
-        score_side,
-        chart_hash,
-        snapshot,
-        RecordsPaneKind::GrooveStatsEx,
-    )
+    build_records_pane(controller, runtime, RecordsPaneKind::GrooveStatsEx)
 }
 
 pub fn build_itl_records_pane(
     controller: profile_data::PlayerSide,
-    score_side: profile_data::PlayerSide,
-    chart_hash: Option<&str>,
-    snapshot: Option<&score_data::CachedPlayerLeaderboardData>,
+    runtime: &ScoreboxSideView,
 ) -> Vec<Actor> {
-    build_records_pane(
-        controller,
-        score_side,
-        chart_hash,
-        snapshot,
-        RecordsPaneKind::ItlEx,
-    )
+    build_records_pane(controller, runtime, RecordsPaneKind::ItlEx)
 }
 
 pub fn build_arrowcloud_records_pane(
     controller: profile_data::PlayerSide,
-    score_side: profile_data::PlayerSide,
-    chart_hash: Option<&str>,
-    snapshot: Option<&score_data::CachedPlayerLeaderboardData>,
+    runtime: &ScoreboxSideView,
 ) -> Vec<Actor> {
-    build_records_pane(
-        controller,
-        score_side,
-        chart_hash,
-        snapshot,
-        RecordsPaneKind::ArrowCloudHardEx,
-    )
+    build_records_pane(controller, runtime, RecordsPaneKind::ArrowCloudHardEx)
 }
 
 #[cfg(test)]

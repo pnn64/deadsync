@@ -34,8 +34,165 @@ pub struct EvaluationInitView {
     pub players: [EvaluationInitPlayerView; 2],
 }
 
+/// One normalized local score used by Simply Love's selected-chart scorebox.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ScoreboxLocalView {
+    pub score_10000: f64,
+    pub failed: bool,
+}
+
+/// One normalized machine record used by Simply Love's selected-chart pane.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ScoreboxMachineView {
+    pub name: String,
+    pub score_10000: f64,
+    pub failed: bool,
+}
+
+/// Shell-prepared score and leaderboard data for one Select Music side.
+#[derive(Clone, Debug, Default)]
+pub struct ScoreboxSideView {
+    pub joined: bool,
+    pub chart_hash: Option<String>,
+    pub groovestats_active: bool,
+    pub show_ex_score: bool,
+    pub display_name: String,
+    pub groovestats_username: String,
+    pub player_initials: String,
+    pub local_itg: Option<ScoreboxLocalView>,
+    pub local_ex: Option<ScoreboxLocalView>,
+    pub local_hard_ex: Option<ScoreboxLocalView>,
+    pub local_itl: Option<ScoreboxLocalView>,
+    pub machine_itg: Option<ScoreboxMachineView>,
+    pub leaderboards: Option<deadsync_score::CachedPlayerLeaderboardData>,
+}
+
+/// Selected player-slot charts whose scorebox data shell should prepare.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SelectMusicScoreboxRequest {
+    pub chart_hashes: [Option<String>; 2],
+    pub leaderboards_allowed: bool,
+    pub max_entries: usize,
+}
+
+/// On-demand chart selection whose full leaderboard overlay shell should
+/// prepare. Hidden overlays return no request and perform no leaderboard work.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SelectMusicLeaderboardRequest {
+    pub chart_hashes: [Option<String>; 2],
+    pub max_entries: usize,
+}
+
+/// Shell-prepared runtime data for one side of the Select Music leaderboard
+/// overlay. Simply Love retains pane filtering, labels, cycling, and layout.
+#[derive(Clone, Debug, Default)]
+pub struct SelectMusicLeaderboardSideView {
+    pub chart_hash: Option<String>,
+    pub machine_entries: Vec<deadsync_score::LeaderboardEntry>,
+    pub leaderboards: Option<deadsync_score::CachedPlayerLeaderboardData>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct SelectMusicLeaderboardView {
+    pub sides: [SelectMusicLeaderboardSideView; 2],
+}
+
+pub const MUSIC_WHEEL_SLOT_COUNT: usize = 19;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum MusicWheelRankSource {
+    #[default]
+    None,
+    Chart,
+    Overall,
+}
+
+/// One borrowed wheel entry whose runtime data shell should prepare. Requests
+/// live only for the pre-compose handoff and do not clone song or chart data.
+#[derive(Clone, Copy, Debug, Default)]
+pub enum MusicWheelSlotRuntimeRequest<'a> {
+    #[default]
+    Empty,
+    Pack {
+        key: Option<&'a str>,
+    },
+    Song {
+        song: &'a deadsync_chart::SongData,
+        chart_hashes: [Option<&'a str>; 2],
+        is_srpg_event: bool,
+    },
+}
+
+/// Selected-chart fetch work required before preparing a music wheel view.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct MusicWheelSideRuntimeRequest<'a> {
+    pub chart_hash: Option<&'a str>,
+    pub fetch_itl_rank: bool,
+    pub fetch_itl_score: bool,
+    pub fetch_srpg_score: bool,
+}
+
+/// Borrowed pre-compose request emitted by a concrete Simply Love wheel.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct MusicWheelRuntimeRequest<'a> {
+    pub read_scores: bool,
+    pub rank_source: MusicWheelRankSource,
+    pub read_itl_scores: bool,
+    pub sides: [MusicWheelSideRuntimeRequest<'a>; 2],
+    pub slots: [MusicWheelSlotRuntimeRequest<'a>; MUSIC_WHEEL_SLOT_COUNT],
+}
+
+/// Shell-prepared runtime presentation data for one player side in one slot.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct MusicWheelSideRuntimeView {
+    pub score: Option<deadsync_score::CachedScore>,
+    pub itl_rank: Option<u32>,
+    pub srpg_pass_rate_hundredths: Option<u32>,
+    pub local_itl: Option<deadsync_score::CachedItlScore>,
+    pub online_itl_ex_hundredths: Option<u32>,
+    pub online_itl_points: Option<u32>,
+    pub srpg_itl_ex_hundredths: Option<u32>,
+    pub favorite: bool,
+    pub locked: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct MusicWheelSlotRuntimeView {
+    pub sides: [MusicWheelSideRuntimeView; 2],
+}
+
+/// Fixed-size shell-prepared snapshot consumed by shared wheel composition.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct MusicWheelRuntimeView {
+    pub joined: [bool; 2],
+    pub play_style: deadsync_profile::PlayStyle,
+    pub slots: [MusicWheelSlotRuntimeView; MUSIC_WHEEL_SLOT_COUNT],
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SelectCourseScoreRequest<'a> {
+    pub course_hash: Option<&'a str>,
+}
+
+/// Shell-prepared local record data used by the Select Course score pane.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct SelectCourseScoreView {
+    pub mode_show_ex_score: bool,
+    pub pane_show_ex_score: bool,
+    pub player_initials: String,
+    pub player_score_percent: Option<f64>,
+    pub machine_initials: Option<String>,
+    pub machine_score_percent: Option<f64>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct SelectCourseRuntimeView {
+    pub music_wheel: MusicWheelRuntimeView,
+    pub score: SelectCourseScoreView,
+}
+
 /// Shell-prepared runtime data consumed by Simply Love's Select Music screen.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct SelectMusicRuntimeView {
     pub audio_playback: deadsync_theme::views::AudioPlaybackView,
     pub lobby: SimplyLoveLobbyRuntimeView,
@@ -43,6 +200,9 @@ pub struct SelectMusicRuntimeView {
     /// Beat offset applied to the selection arrow bounce animation.
     pub arrow_bounce_offset: f32,
     pub policy: SelectMusicPolicyView,
+    pub music_wheel: MusicWheelRuntimeView,
+    pub scoreboxes: [ScoreboxSideView; 2],
+    pub leaderboard: SelectMusicLeaderboardView,
     pub unlock_downloads_available: bool,
     pub ready_song_reload_dirs: Vec<PathBuf>,
     pub sync_graph_mode: deadsync_config::prelude::SyncGraphMode,
@@ -57,6 +217,9 @@ impl Default for SelectMusicRuntimeView {
             downloads: Vec::new(),
             arrow_bounce_offset: 0.0,
             policy: Default::default(),
+            music_wheel: Default::default(),
+            scoreboxes: Default::default(),
+            leaderboard: Default::default(),
             unlock_downloads_available: false,
             ready_song_reload_dirs: Vec::new(),
             sync_graph_mode: deadsync_config::prelude::SyncGraphMode::PostKernelFingerprint,
@@ -119,7 +282,7 @@ pub struct EvaluationRuntimeView {
     pub lobby: SimplyLoveLobbyRuntimeView,
     pub groovestats_service: SimplyLoveGrooveStatsService,
     pub submissions: [EvaluationSubmissionView; 2],
-    pub leaderboards: [Option<deadsync_score::CachedPlayerLeaderboardData>; 2],
+    pub scoreboxes: [ScoreboxSideView; 2],
 }
 
 /// One playlist file loaded by the shell for Simply Love's playlist wheel.

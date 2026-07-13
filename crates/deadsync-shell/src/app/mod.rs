@@ -174,7 +174,11 @@ use deadsync_theme::{AudioRequest, PlatformRequest, RevealPathKind};
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as CurrentScreen;
 use deadsync_theme_simply_love::views::{
     EvaluationInitPlayerView, EvaluationInitView, EvaluationRuntimeView, EvaluationSubmissionView,
-    SelectMusicDownloadView, SelectMusicPolicyView, SelectMusicRuntimeView,
+    MusicWheelRankSource, MusicWheelRuntimeRequest, MusicWheelRuntimeView,
+    MusicWheelSlotRuntimeRequest, MusicWheelSlotRuntimeView, ScoreboxLocalView,
+    ScoreboxMachineView, ScoreboxSideView, SelectCourseRuntimeView, SelectCourseScoreRequest,
+    SelectCourseScoreView, SelectMusicDownloadView, SelectMusicLeaderboardSideView,
+    SelectMusicLeaderboardView, SelectMusicPolicyView, SelectMusicRuntimeView,
     SimplyLoveDensityGraphSlot as DensityGraphSlot, SimplyLoveGrooveStatsService,
     SimplyLoveLobbyRuntimeView,
 };
@@ -1192,15 +1196,8 @@ impl App {
 
     fn evaluation_runtime_view(state: &evaluation::State) -> EvaluationRuntimeView {
         let leaderboard_requests = evaluation::leaderboard_requests(state);
-        EvaluationRuntimeView {
-            lobby: Self::refresh_lobby_runtime_view(),
-            groovestats_service: Self::groovestats_service_view(),
-            submissions: std::array::from_fn(|player_idx| {
-                Self::evaluation_submission_view(
-                    state.score_info.get(player_idx).and_then(Option::as_ref),
-                )
-            }),
-            leaderboards: std::array::from_fn(|player_idx| {
+        let leaderboards: [Option<deadsync_score::CachedPlayerLeaderboardData>; MAX_PLAYERS] =
+            std::array::from_fn(|player_idx| {
                 if !state.allow_online_panes || !leaderboard_requests[player_idx] {
                     return None;
                 }
@@ -1209,6 +1206,25 @@ impl App {
                     score_info.chart.short_hash.as_str(),
                     score_info.side,
                     EVALUATION_LEADERBOARD_ROWS,
+                )
+            });
+        EvaluationRuntimeView {
+            lobby: Self::refresh_lobby_runtime_view(),
+            groovestats_service: Self::groovestats_service_view(),
+            submissions: std::array::from_fn(|player_idx| {
+                Self::evaluation_submission_view(
+                    state.score_info.get(player_idx).and_then(Option::as_ref),
+                )
+            }),
+            scoreboxes: std::array::from_fn(|player_idx| {
+                let Some(score_info) = state.score_info.get(player_idx).and_then(Option::as_ref)
+                else {
+                    return ScoreboxSideView::default();
+                };
+                Self::scorebox_side_view(
+                    score_info.side,
+                    Some(score_info.chart.short_hash.clone()),
+                    leaderboards[player_idx].clone(),
                 )
             }),
         }
@@ -1254,6 +1270,9 @@ impl App {
         if self.state.screens.current_screen != CurrentScreen::SelectMusic {
             return;
         }
+        let music_wheel = Self::prepare_music_wheel_runtime(
+            select_music::music_wheel_runtime_request(&self.state.screens.select_music_state),
+        );
         let lobby = Self::refresh_lobby_runtime_view();
         let downloads =
             if select_music::downloads_overlay_visible(&self.state.screens.select_music_state) {
@@ -1275,7 +1294,31 @@ impl App {
         } else {
             0.0
         };
-        let (arrow_bounce_offset, policy, sync_graph_mode, sync_confidence_percent) = {
+        let scorebox_request =
+            select_music::scorebox_runtime_request(&self.state.screens.select_music_state);
+        let leaderboard_request =
+            select_music::leaderboard_runtime_request(&self.state.screens.select_music_state);
+        let play_style = profile::get_session_play_style();
+        let session_side = profile::get_session_player_side();
+        let mut scorebox_hashes: [Option<String>; 2] = Default::default();
+        if play_style == profile_data::PlayStyle::Versus {
+            scorebox_hashes = scorebox_request.chart_hashes;
+        } else {
+            let side = if profile_data::runtime_player_is_p2(play_style, session_side) {
+                profile_data::PlayerSide::P2
+            } else {
+                profile_data::PlayerSide::P1
+            };
+            scorebox_hashes[profile_data::player_side_index(side)] =
+                scorebox_request.chart_hashes[0].clone();
+        }
+        let (
+            arrow_bounce_offset,
+            policy,
+            sync_graph_mode,
+            sync_confidence_percent,
+            scorebox_enabled,
+        ) = {
             let config = config::get();
             (
                 -10.0 * config.global_offset_seconds,
@@ -1288,8 +1331,83 @@ impl App {
                 },
                 config.null_or_die_sync_graph,
                 config.null_or_die_confidence_percent,
+                config.show_select_music_scorebox
+                    && (config.select_music_scorebox_cycle_itg
+                        || config.select_music_scorebox_cycle_ex
+                        || config.select_music_scorebox_cycle_hard_ex
+                        || config.select_music_scorebox_cycle_tournaments),
             )
         };
+        let prepare_scorebox = |side, chart_hash: Option<String>| {
+            let leaderboards = (scorebox_request.leaderboards_allowed && scorebox_enabled)
+                .then(|| {
+                    chart_hash.as_deref().and_then(|hash| {
+                        scores::get_or_fetch_player_leaderboards_for_side(
+                            hash,
+                            side,
+                            scorebox_request.max_entries,
+                        )
+                    })
+                })
+                .flatten();
+            Self::scorebox_side_view(side, chart_hash, leaderboards)
+        };
+        let scoreboxes = [
+            prepare_scorebox(
+                profile_data::PlayerSide::P1,
+                scorebox_hashes[profile_data::player_side_index(profile_data::PlayerSide::P1)]
+                    .clone(),
+            ),
+            prepare_scorebox(
+                profile_data::PlayerSide::P2,
+                scorebox_hashes[profile_data::player_side_index(profile_data::PlayerSide::P2)]
+                    .clone(),
+            ),
+        ];
+        let leaderboard =
+            leaderboard_request.map_or_else(SelectMusicLeaderboardView::default, |request| {
+                SelectMusicLeaderboardView {
+                    sides: std::array::from_fn(|side_idx| {
+                        let side = if side_idx == 0 {
+                            profile_data::PlayerSide::P1
+                        } else {
+                            profile_data::PlayerSide::P2
+                        };
+                        let chart_hash = request.chart_hashes[side_idx].clone();
+                        let joined = profile::is_session_side_joined(side);
+                        let player = profile::get_for_side(side);
+                        let machine_entries = if joined {
+                            chart_hash
+                                .as_deref()
+                                .map(|hash| {
+                                    scores::get_machine_leaderboard_local_with_names(
+                                        hash,
+                                        request.max_entries,
+                                    )
+                                })
+                                .unwrap_or_default()
+                        } else {
+                            Vec::new()
+                        };
+                        let leaderboards = if joined && !player.groovestats_api_key.is_empty() {
+                            chart_hash.as_deref().and_then(|hash| {
+                                scores::get_or_fetch_player_leaderboards_for_side(
+                                    hash,
+                                    side,
+                                    request.max_entries,
+                                )
+                            })
+                        } else {
+                            None
+                        };
+                        SelectMusicLeaderboardSideView {
+                            chart_hash,
+                            machine_entries,
+                            leaderboards,
+                        }
+                    }),
+                }
+            });
         select_music::sync_runtime_view(
             &mut self.state.screens.select_music_state,
             SelectMusicRuntimeView {
@@ -1300,11 +1418,280 @@ impl App {
                 downloads,
                 arrow_bounce_offset,
                 policy,
+                music_wheel,
+                scoreboxes,
+                leaderboard,
                 unlock_downloads_available: deadsync_online::runtime::unlock_downloads_available(),
                 ready_song_reload_dirs: deadsync_online::runtime::take_ready_song_reload_request(),
                 sync_graph_mode,
                 sync_confidence_percent,
             },
+        );
+    }
+
+    fn scorebox_side_view(
+        side: profile_data::PlayerSide,
+        chart_hash: Option<String>,
+        leaderboards: Option<deadsync_score::CachedPlayerLeaderboardData>,
+    ) -> ScoreboxSideView {
+        let player = profile::get_for_side(side);
+        let groovestats_active = scores::is_gs_active_for_side(side);
+        let local_itg = chart_hash.as_deref().and_then(|hash| {
+            scores::get_cached_local_score_for_side(hash, side).map(|score| ScoreboxLocalView {
+                score_10000: score.score_percent * 10000.0,
+                failed: score.grade == deadsync_score::Grade::Failed,
+            })
+        });
+        let local_ex = chart_hash.as_deref().and_then(|hash| {
+            scores::get_cached_local_ex_score_for_side(hash, side).map(|score| ScoreboxLocalView {
+                score_10000: score.percent * 100.0,
+                failed: score.is_fail,
+            })
+        });
+        let local_hard_ex = chart_hash.as_deref().and_then(|hash| {
+            scores::get_cached_local_hard_ex_score_for_side(hash, side).map(|score| {
+                ScoreboxLocalView {
+                    score_10000: score.percent * 100.0,
+                    failed: score.is_fail,
+                }
+            })
+        });
+        let local_itl = chart_hash.as_deref().and_then(|hash| {
+            scores::get_cached_itl_score_for_side(hash, side).map(|score| ScoreboxLocalView {
+                score_10000: f64::from(score.ex_hundredths),
+                failed: false,
+            })
+        });
+        let machine_itg = chart_hash.as_deref().and_then(|hash| {
+            scores::get_machine_record_local(hash).map(|(name, score)| ScoreboxMachineView {
+                name,
+                score_10000: score.score_percent * 10000.0,
+                failed: score.grade == deadsync_score::Grade::Failed,
+            })
+        });
+        ScoreboxSideView {
+            joined: profile::is_session_side_joined(side),
+            chart_hash,
+            groovestats_active,
+            show_ex_score: player.show_ex_score,
+            display_name: player.display_name,
+            groovestats_username: player.groovestats_username,
+            player_initials: player.player_initials,
+            local_itg,
+            local_ex,
+            local_hard_ex,
+            local_itl,
+            machine_itg,
+            leaderboards,
+        }
+    }
+
+    /// Translate the complete fixed wheel request in one pass so profiles,
+    /// caches, and online snapshots are captured once per frame. The large
+    /// entry match is intentionally kept here because splitting it would pass
+    /// the same runtime context through several single-use wrappers.
+    fn prepare_music_wheel_runtime(request: MusicWheelRuntimeRequest<'_>) -> MusicWheelRuntimeView {
+        let play_style = profile::get_session_play_style();
+        let sides = [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2];
+        let joined =
+            std::array::from_fn(|side_idx| profile::is_session_side_joined(sides[side_idx]));
+        let profile_ids: [Option<String>; 2] = std::array::from_fn(|side_idx| {
+            joined[side_idx]
+                .then(|| profile::active_local_profile_id_for_side(sides[side_idx]))
+                .flatten()
+        });
+        for side_idx in 0..2 {
+            let Some(profile_id) = profile_ids[side_idx].as_deref() else {
+                continue;
+            };
+            if request.read_scores {
+                scores::ensure_score_caches_loaded(profile_id);
+            }
+            if request.rank_source != MusicWheelRankSource::None || request.read_itl_scores {
+                scores::ensure_itl_wheel_caches_loaded(profile_id);
+            }
+        }
+        let itl_contexts: [Option<scores::ItlWheelSideContext>; 2] =
+            std::array::from_fn(|side_idx| {
+                (joined[side_idx]
+                    && (request.rank_source != MusicWheelRankSource::None
+                        || request.read_itl_scores))
+                    .then(|| {
+                        scores::ItlWheelSideContext::for_side(
+                            sides[side_idx],
+                            profile_ids[side_idx].as_deref().map(Arc::from),
+                        )
+                    })
+            });
+        for (side_idx, side_request) in request.sides.into_iter().enumerate() {
+            if !joined[side_idx] {
+                continue;
+            }
+            let side = sides[side_idx];
+            let Some(chart_hash) = side_request.chart_hash else {
+                continue;
+            };
+            if side_request.fetch_itl_rank {
+                let _ = scores::get_or_fetch_itl_tournament_rank_for_side(chart_hash, side);
+            }
+            if side_request.fetch_itl_score {
+                let _ = scores::get_or_fetch_itl_self_score_for_side(chart_hash, side);
+            }
+            if side_request.fetch_srpg_score
+                && let Some(context) = itl_contexts[side_idx].as_ref()
+            {
+                let _ = context.get_or_fetch_srpg_self_score(chart_hash);
+            }
+        }
+        let overall_ranks: [Option<Arc<std::collections::HashMap<String, u32>>>; 2] =
+            std::array::from_fn(|side_idx| {
+                (joined[side_idx] && request.rank_source == MusicWheelRankSource::Overall).then(
+                    || scores::get_cached_itl_tournament_overall_ranks_for_side(sides[side_idx]),
+                )
+            });
+        let slots = std::array::from_fn(|slot_idx| {
+            let mut view = MusicWheelSlotRuntimeView::default();
+            match request.slots[slot_idx] {
+                MusicWheelSlotRuntimeRequest::Empty => {}
+                MusicWheelSlotRuntimeRequest::Pack { key } => {
+                    for side_idx in 0..2 {
+                        view.sides[side_idx].favorite = joined[side_idx]
+                            && key
+                                .is_some_and(|key| profile::is_pack_favorite(sides[side_idx], key));
+                    }
+                }
+                MusicWheelSlotRuntimeRequest::Song {
+                    song,
+                    chart_hashes,
+                    is_srpg_event,
+                } => {
+                    let unlock_song_dir = deadsync_simfile::playlist::song_pack_and_dir_name(song)
+                        .and_then(|(pack_dir, song_dir)| {
+                            scores::is_itl_unlocks_pack(pack_dir).then_some(song_dir)
+                        });
+                    for side_idx in 0..2 {
+                        if !joined[side_idx] {
+                            continue;
+                        }
+                        let side = sides[side_idx];
+                        let chart_hash = chart_hashes[side_idx];
+                        let profile_id = profile_ids[side_idx].as_deref();
+                        let context = itl_contexts[side_idx].as_ref();
+                        let side_view = &mut view.sides[side_idx];
+                        side_view.favorite = song
+                            .charts
+                            .iter()
+                            .any(|chart| profile::is_favorite(side, &chart.short_hash));
+                        side_view.locked = unlock_song_dir.is_some_and(|song_dir| {
+                            !scores::is_itl_song_folder_unlocked_with_profile(song_dir, profile_id)
+                        });
+                        if let Some(chart_hash) = chart_hash {
+                            side_view.score = request
+                                .read_scores
+                                .then(|| {
+                                    profile_id.and_then(|id| {
+                                        scores::get_cached_score_with_profile(chart_hash, id)
+                                    })
+                                })
+                                .flatten();
+                            side_view.itl_rank = match request.rank_source {
+                                MusicWheelRankSource::None => None,
+                                MusicWheelRankSource::Chart => context
+                                    .and_then(|context| context.cached_tournament_rank(chart_hash)),
+                                MusicWheelRankSource::Overall => overall_ranks[side_idx]
+                                    .as_ref()
+                                    .and_then(|ranks| ranks.get(chart_hash))
+                                    .copied(),
+                            };
+                            if is_srpg_event {
+                                side_view.srpg_pass_rate_hundredths = profile_id.and_then(|id| {
+                                    scores::get_cached_local_pass_rate_with_profile(chart_hash, id)
+                                });
+                                side_view.srpg_itl_ex_hundredths = request
+                                    .read_itl_scores
+                                    .then(|| {
+                                        context.and_then(|context| {
+                                            context.cached_srpg_self_score(chart_hash)
+                                        })
+                                    })
+                                    .flatten();
+                            } else if request.read_itl_scores {
+                                side_view.local_itl = context
+                                    .and_then(|context| context.cached_local_itl_score(song));
+                                side_view.online_itl_ex_hundredths = context
+                                    .and_then(|context| context.cached_self_ex_score(chart_hash));
+                                side_view.online_itl_points =
+                                    side_view.online_itl_ex_hundredths.and_then(|online_ex| {
+                                        song.charts
+                                            .iter()
+                                            .find(|chart| chart.short_hash == chart_hash)
+                                            .and_then(|chart| {
+                                                scores::itl_points_for_chart(chart, online_ex)
+                                            })
+                                    });
+                            }
+                        }
+                    }
+                }
+            }
+            view
+        });
+        MusicWheelRuntimeView {
+            joined,
+            play_style,
+            slots,
+        }
+    }
+
+    fn prepare_select_course_score(request: SelectCourseScoreRequest<'_>) -> SelectCourseScoreView {
+        let play_style = profile::get_session_play_style();
+        let session_side = profile::get_session_player_side();
+        let pane_side = if profile_data::is_single_p2_side(play_style, session_side) {
+            profile_data::PlayerSide::P2
+        } else {
+            profile_data::PlayerSide::P1
+        };
+        let mode_show_ex_score = profile::get_for_side(profile_data::PlayerSide::P1).show_ex_score;
+        let pane_profile = profile::get_for_side(pane_side);
+        let player_score_percent = request
+            .course_hash
+            .and_then(|hash| scores::get_cached_local_score_for_side(hash, pane_side))
+            .filter(|score| {
+                score.grade != deadsync_score::Grade::Failed || score.score_percent > 0.0
+            })
+            .map(|score| score.score_percent);
+        let (machine_initials, machine_score_percent) = request
+            .course_hash
+            .and_then(scores::get_machine_record_local)
+            .filter(|(_, score)| {
+                score.grade != deadsync_score::Grade::Failed || score.score_percent > 0.0
+            })
+            .map_or((None, None), |(initials, score)| {
+                (Some(initials), Some(score.score_percent))
+            });
+        SelectCourseScoreView {
+            mode_show_ex_score,
+            pane_show_ex_score: pane_profile.show_ex_score,
+            player_initials: pane_profile.player_initials,
+            player_score_percent,
+            machine_initials,
+            machine_score_percent,
+        }
+    }
+
+    fn sync_select_course_runtime_view(&mut self) {
+        if self.state.screens.current_screen != CurrentScreen::SelectCourse {
+            return;
+        }
+        let music_wheel = Self::prepare_music_wheel_runtime(
+            select_course::music_wheel_runtime_request(&self.state.screens.select_course_state),
+        );
+        let score = Self::prepare_select_course_score(select_course::score_runtime_request(
+            &self.state.screens.select_course_state,
+        ));
+        select_course::sync_runtime_view(
+            &mut self.state.screens.select_course_state,
+            SelectCourseRuntimeView { music_wheel, score },
         );
     }
 
@@ -1874,6 +2261,7 @@ impl App {
             None => {}
         }
         self.sync_select_music_runtime_view();
+        self.sync_select_course_runtime_view();
         let update_us: u32 = elapsed_us_since(update_started);
         self.sync_lights(delta_time, total_elapsed);
 
@@ -2788,6 +3176,20 @@ impl App {
                 }
                 SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::CancelScoreImport) => {
                     self.score_import.cancel();
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Online(
+                    SimplyLoveOnlineRequest::RefreshPlayerLeaderboard {
+                        chart_hash,
+                        side,
+                        max_entries,
+                    },
+                ) => {
+                    let _ = scores::refresh_player_leaderboards_for_side(
+                        &chart_hash,
+                        side,
+                        max_entries,
+                    );
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Media(_)
