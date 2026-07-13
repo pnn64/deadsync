@@ -14,6 +14,7 @@ use crate::graphics::{
 };
 use deadlib_render::{BackendType, PresentModePolicy};
 use deadsync_config::prelude::{self as config, DisplayMode, FullscreenType};
+use deadsync_theme::views::{GraphicsMonitorView, GraphicsOptionsView, GraphicsVideoModeView};
 use deadsync_theme::{
     DisplayModeChoice, FullscreenChoice, GraphicsRequest, PresentPolicyChoice, RendererChoice,
 };
@@ -59,6 +60,84 @@ const fn runtime_present_mode_policy(choice: PresentPolicyChoice) -> PresentMode
         PresentPolicyChoice::Mailbox => PresentModePolicy::Mailbox,
         PresentPolicyChoice::Immediate => PresentModePolicy::Immediate,
     }
+}
+
+#[inline(always)]
+const fn theme_renderer_choice(backend: BackendType) -> RendererChoice {
+    match backend {
+        #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+        BackendType::Vulkan => RendererChoice::Vulkan,
+        #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
+        BackendType::VulkanWgpu => RendererChoice::VulkanWgpu,
+        #[cfg(target_os = "macos")]
+        BackendType::Metal => RendererChoice::Metal,
+        BackendType::OpenGL => RendererChoice::OpenGl,
+        BackendType::OpenGLWgpu => RendererChoice::OpenGlWgpu,
+        BackendType::Software => RendererChoice::Software,
+        #[cfg(target_os = "windows")]
+        BackendType::DirectX => RendererChoice::DirectX,
+    }
+}
+
+#[inline(always)]
+const fn theme_fullscreen_choice(fullscreen: FullscreenType) -> FullscreenChoice {
+    match fullscreen {
+        FullscreenType::Exclusive => FullscreenChoice::Exclusive,
+        FullscreenType::Borderless => FullscreenChoice::Borderless,
+    }
+}
+
+#[inline(always)]
+const fn theme_display_mode(mode: DisplayMode) -> DisplayModeChoice {
+    match mode {
+        DisplayMode::Windowed => DisplayModeChoice::Windowed,
+        DisplayMode::Fullscreen(fullscreen) => {
+            DisplayModeChoice::Fullscreen(theme_fullscreen_choice(fullscreen))
+        }
+    }
+}
+
+#[inline(always)]
+const fn theme_present_policy(policy: PresentModePolicy) -> PresentPolicyChoice {
+    match policy {
+        PresentModePolicy::Mailbox => PresentPolicyChoice::Mailbox,
+        PresentModePolicy::Immediate => PresentPolicyChoice::Immediate,
+    }
+}
+
+pub(super) fn options_graphics_view() -> GraphicsOptionsView {
+    let cfg = config::get();
+    GraphicsOptionsView {
+        renderer: theme_renderer_choice(cfg.video_renderer),
+        display_mode: theme_display_mode(cfg.display_mode()),
+        fullscreen: theme_fullscreen_choice(cfg.fullscreen_type),
+        monitor: cfg.display_monitor,
+        width: cfg.display_width,
+        height: cfg.display_height,
+        max_fps: cfg.max_fps,
+        vsync: cfg.vsync,
+        present_policy: theme_present_policy(cfg.present_mode_policy),
+        high_dpi: cfg.high_dpi,
+        software_thread_choices: deadlib_render::build_software_thread_choices(),
+    }
+}
+
+fn theme_monitor_views(event_loop: &ActiveEventLoop) -> Vec<GraphicsMonitorView> {
+    available_monitor_specs(event_loop)
+        .into_iter()
+        .map(|monitor| GraphicsMonitorView {
+            name: monitor.name,
+            modes: monitor
+                .modes
+                .into_iter()
+                .map(|mode| GraphicsVideoModeView {
+                    width: mode.width,
+                    height: mode.height,
+                    refresh_rate_millihertz: mode.refresh_rate_millihertz,
+                })
+                .collect(),
+        })
+        .collect()
 }
 
 impl App {
@@ -246,7 +325,7 @@ impl App {
                 if success.sync_options_renderer {
                     options::sync_video_renderer(
                         &mut self.state.screens.options_state,
-                        success.target,
+                        theme_renderer_choice(success.target),
                     );
                 }
                 if success.clear_present_runtime {
@@ -279,7 +358,7 @@ impl App {
                 if failure.sync_options_renderer {
                     options::sync_video_renderer(
                         &mut self.state.screens.options_state,
-                        failure.previous,
+                        theme_renderer_choice(failure.previous),
                     );
                 }
                 if failure.restore_display {
@@ -372,7 +451,7 @@ impl App {
     pub(super) fn update_options_monitor_specs(&mut self, event_loop: &ActiveEventLoop) {
         options::update_monitor_specs(
             &mut self.state.screens.options_state,
-            available_monitor_specs(event_loop),
+            theme_monitor_views(event_loop),
         );
     }
 
@@ -408,7 +487,7 @@ impl App {
                     config::update_present_mode_policy(policy);
                     options::sync_present_mode_policy(
                         &mut self.state.screens.options_state,
-                        policy,
+                        theme_present_policy(policy),
                     );
                 }
                 RuntimeUpdate::HighDpi(enabled) => {
@@ -433,8 +512,8 @@ impl App {
         }
         options::sync_display_mode(
             &mut self.state.screens.options_state,
-            sync.mode,
-            sync.fullscreen_type,
+            theme_display_mode(sync.mode),
+            theme_fullscreen_choice(sync.fullscreen_type),
             sync.monitor,
             sync.monitor_count,
         );

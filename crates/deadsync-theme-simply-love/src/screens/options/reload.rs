@@ -1,5 +1,4 @@
 use super::*;
-use deadlib_platform::dirs;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum ReloadPhase {
@@ -65,6 +64,8 @@ pub(super) fn start_reload_songs_and_courses(state: &mut State) {
 
     let (tx, rx) = std::sync::mpsc::channel::<ReloadMsg>();
     state.reload_ui = Some(ReloadUiState::new(rx));
+    let songs_root = state.app_paths.songs.path.clone();
+    let courses_root = state.app_paths.courses.path.clone();
 
     std::thread::spawn(move || {
         let _ = tx.send(ReloadMsg::Phase(ReloadPhase::Songs));
@@ -77,10 +78,7 @@ pub(super) fn start_reload_songs_and_courses(state: &mut State) {
                 song: song.to_owned(),
             });
         };
-        song_loading::scan_and_load_songs_with_progress_counts(
-            &dirs::app_dirs().songs_dir(),
-            &mut on_song,
-        );
+        song_loading::scan_and_load_songs_with_progress_counts(&songs_root, &mut on_song);
 
         let _ = tx.send(ReloadMsg::Phase(ReloadPhase::Courses));
 
@@ -92,10 +90,9 @@ pub(super) fn start_reload_songs_and_courses(state: &mut State) {
                 course: course.to_owned(),
             });
         };
-        let dirs = dirs::app_dirs();
         song_loading::scan_and_load_courses_with_progress_counts(
-            &dirs.courses_dir(),
-            &dirs.songs_dir(),
+            &courses_root,
+            &songs_root,
             &mut on_course,
         );
 

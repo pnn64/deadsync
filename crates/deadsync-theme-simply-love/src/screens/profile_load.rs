@@ -21,6 +21,7 @@ pub struct State {
     rx: Option<mpsc::Receiver<PreparedState>>,
     prepared_select_music: Option<crate::screens::select_music::State>,
     prepared_select_course: Option<crate::screens::select_course::State>,
+    select_music_init: crate::views::SelectMusicInitView,
     next_screen: Screen,
 }
 
@@ -36,15 +37,17 @@ pub fn init() -> State {
         rx: None,
         prepared_select_music: None,
         prepared_select_course: None,
+        select_music_init: crate::views::SelectMusicInitView::default(),
         next_screen: Screen::SelectMusic,
     }
 }
 
-pub fn on_enter(state: &mut State) {
+pub fn on_enter(state: &mut State, select_music_init: crate::views::SelectMusicInitView) {
     state.elapsed = 0.0;
     state.prepared_select_music = None;
     state.prepared_select_course = None;
     state.rx = None;
+    state.select_music_init = select_music_init;
     state.next_screen = match profile::get_session_play_mode() {
         profile_data::PlayMode::Marathon => Screen::SelectCourse,
         profile_data::PlayMode::Regular => Screen::SelectMusic,
@@ -52,6 +55,7 @@ pub fn on_enter(state: &mut State) {
 
     let (tx, rx) = mpsc::channel();
     let play_mode = profile::get_session_play_mode();
+    let select_music_init = state.select_music_init.clone();
     std::thread::spawn(move || {
         let prepared = match play_mode {
             profile_data::PlayMode::Marathon => {
@@ -59,7 +63,7 @@ pub fn on_enter(state: &mut State) {
             }
             profile_data::PlayMode::Regular => {
                 deadsync_online::score_compat::prewarm_select_music_score_caches();
-                PreparedState::Music(crate::screens::select_music::init())
+                PreparedState::Music(crate::screens::select_music::init(select_music_init))
             }
         };
         let _ = tx.send(prepared);
@@ -105,7 +109,9 @@ pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
                         state.prepared_select_course = Some(crate::screens::select_course::init());
                     }
                     _ => {
-                        state.prepared_select_music = Some(crate::screens::select_music::init());
+                        state.prepared_select_music = Some(crate::screens::select_music::init(
+                            state.select_music_init.clone(),
+                        ));
                         state.next_screen = Screen::SelectMusic;
                     }
                 }

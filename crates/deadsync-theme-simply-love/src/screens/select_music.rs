@@ -21,8 +21,9 @@ use crate::screens::pad_config;
 use crate::screens::{
     DensityGraphSlot, DensityGraphSource, Screen, ThemeEffect, input as screen_input,
 };
-use crate::views::{SelectMusicPolicyView, SelectMusicRuntimeView};
-use deadlib_platform::dirs;
+use crate::views::{
+    SelectMusicInitView, SelectMusicPlaylistView, SelectMusicPolicyView, SelectMusicRuntimeView,
+};
 use deadlib_present::actors::{Actor, SizeSpec, SpriteSource};
 use deadlib_present::cache::{SharedStrCache, TextCache, cached_shared_str, cached_text};
 use deadlib_present::color;
@@ -68,10 +69,8 @@ use deadsync_theme::views::{AudioPlaybackView, SmxAssignmentPadView, SmxAssignme
 use deadsync_theme::{AudioCut, AudioRequest};
 use image::{Rgba, RgbaImage};
 use log::{debug, warn};
-use null_or_die::{BiasEstimateWithPlot, BiasKernel, BiasStreamEvent, KernelTarget};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::sync::{Arc, OnceLock};
@@ -618,6 +617,8 @@ pub fn sync_runtime_view(state: &mut State, view: SelectMusicRuntimeView) {
     state
         .ready_song_reload_dirs
         .extend(view.ready_song_reload_dirs);
+    state.sync_graph_mode = view.sync_graph_mode;
+    state.sync_confidence_percent = view.sync_confidence_percent.min(100);
 }
 
 #[inline(always)]
@@ -897,9 +898,10 @@ struct NullOrDieOverlayData {
     simfile_path: PathBuf,
     song_title: String,
     chart_label: String,
-    kernel_target: KernelTarget,
-    kernel_type: BiasKernel,
+    kernel_target: crate::SimplyLoveSyncKernelTarget,
+    kernel_type: crate::SimplyLoveSyncKernel,
     graph_mode: SyncGraphMode,
+    confidence_threshold: f64,
     cols: usize,
     freq_rows: usize,
     total_beats: usize,
@@ -1121,6 +1123,7 @@ pub struct State {
     favorites_entries: Vec<MusicWheelEntry>,
     playlist_entries: Vec<MusicWheelEntry>,
     playlist_library: Vec<PlaylistCacheEntry>,
+    playlist_views: Vec<SelectMusicPlaylistView>,
     active_playlist_id: Option<String>,
     expanded_pack_name: Option<String>,
     /// Last pack name for which we enqueued ReplayGain prewarm jobs. Guards
@@ -1171,6 +1174,10 @@ pub struct State {
     policy: SelectMusicPolicyView,
     unlock_downloads_available: bool,
     ready_song_reload_dirs: Vec<PathBuf>,
+    sync_graph_mode: SyncGraphMode,
+    sync_confidence_percent: u8,
+    songs_root: PathBuf,
+    courses_root: PathBuf,
     preview_music_muted: bool,
     music_wheel_moved: bool,
     prev_selected_index: usize,
@@ -2065,97 +2072,10 @@ fn favorite_music_entries(
     entries
 }
 
-#[inline(always)]
-fn path_ci_key(path: &Path) -> String {
-    let mut key = path.to_string_lossy().into_owned();
-    if cfg!(windows) {
-        key.make_ascii_lowercase();
-    }
-    key
-}
-
-fn find_child_dir_ci(root: &Path, name: &str) -> Option<PathBuf> {
-    let exact = root.join(name);
-    if exact.is_dir() {
-        return Some(exact);
-    }
-    let want = name.trim();
-    if want.is_empty() {
-        return None;
-    }
-    let Ok(entries) = fs::read_dir(root) else {
-        return None;
-    };
-    entries.flatten().find_map(|entry| {
-        let path = entry.path();
-        if !path.is_dir() {
-            return None;
-        }
-        entry
-            .file_name()
-            .to_str()
-            .filter(|got| got.eq_ignore_ascii_case(want))
-            .map(|_| path)
-    })
-}
-
-fn push_unique_playlist_dir(paths: &mut Vec<PathBuf>, seen: &mut HashSet<String>, path: PathBuf) {
-    let key = path_ci_key(path.as_path());
-    if seen.insert(key) {
-        paths.push(path);
-    }
-}
-
-fn machine_playlist_dirs() -> Vec<PathBuf> {
-    let app_dirs = dirs::app_dirs();
-    let mut paths = Vec::with_capacity(2);
-    let mut seen = HashSet::with_capacity(2);
-
-    if let Some(dir) = find_child_dir_ci(app_dirs.data_dir.as_path(), "playlists") {
-        push_unique_playlist_dir(&mut paths, &mut seen, dir);
-    }
-    if !app_dirs.portable
-        && let Some(dir) = find_child_dir_ci(app_dirs.exe_dir.as_path(), "playlists")
-    {
-        push_unique_playlist_dir(&mut paths, &mut seen, dir);
-    }
-
-    paths
-}
-
-fn playlist_txt_files(dir: &Path) -> Vec<PathBuf> {
-    let Ok(read_dir) = fs::read_dir(dir) else {
-        return Vec::new();
-    };
-    let mut files: Vec<PathBuf> = read_dir
-        .flatten()
-        .map(|entry| entry.path())
-        .filter(|path| {
-            path.is_file()
-                && path
-                    .extension()
-                    .and_then(|ext| ext.to_str())
-                    .is_some_and(|ext| ext.eq_ignore_ascii_case("txt"))
-        })
-        .collect();
-    files.sort_by_cached_key(|path| {
-        path.file_name()
-            .and_then(|name| name.to_str())
-            .map(|name| name.to_ascii_lowercase())
-            .unwrap_or_else(|| path.to_string_lossy().to_ascii_lowercase())
-    });
-    files
-}
-
-fn playlist_display_name(path: &Path) -> Option<String> {
-    path.file_stem()
-        .and_then(|name| name.to_str())
-        .map(str::trim)
-        .filter(|name| !name.is_empty())
-        .map(str::to_string)
-}
-
-fn playlist_song_sources(grouped_entries: &[MusicWheelEntry]) -> Vec<PlaylistSongSource> {
+fn playlist_song_sources(
+    grouped_entries: &[MusicWheelEntry],
+    songs_root: &Path,
+) -> Vec<PlaylistSongSource> {
     let mut sources = Vec::new();
     let mut current_group = None;
 
@@ -2167,7 +2087,7 @@ fn playlist_song_sources(grouped_entries: &[MusicWheelEntry]) -> Vec<PlaylistSon
             MusicWheelEntry::Song(song) => sources.push(PlaylistSongSource {
                 group_name: current_group.clone(),
                 song: song.clone(),
-                lobby_path: lobby_song_path(song.as_ref()),
+                lobby_path: lobby_song_path(song.as_ref(), songs_root),
             }),
         }
     }
@@ -2175,8 +2095,14 @@ fn playlist_song_sources(grouped_entries: &[MusicWheelEntry]) -> Vec<PlaylistSon
     sources
 }
 
-fn build_playlist_song_lookup(grouped_entries: &[MusicWheelEntry]) -> PlaylistSongLookup {
-    deadsync_simfile::playlist::build_playlist_song_lookup(playlist_song_sources(grouped_entries))
+fn build_playlist_song_lookup(
+    grouped_entries: &[MusicWheelEntry],
+    songs_root: &Path,
+) -> PlaylistSongLookup {
+    deadsync_simfile::playlist::build_playlist_song_lookup(playlist_song_sources(
+        grouped_entries,
+        songs_root,
+    ))
 }
 
 fn playlist_music_entries(entries: Vec<PlaylistEntry>) -> Vec<MusicWheelEntry> {
@@ -2212,78 +2138,26 @@ fn build_playlist_entries_from_text(
     ))
 }
 
-fn build_playlist_library(grouped_entries: &[MusicWheelEntry]) -> Vec<PlaylistCacheEntry> {
-    let lookup = build_playlist_song_lookup(grouped_entries);
-    let mut playlists = Vec::new();
-    let mut seen_machine_names = HashSet::new();
-
-    for dir in machine_playlist_dirs() {
-        for path in playlist_txt_files(dir.as_path()) {
-            let Some(bottom_label) = playlist_display_name(path.as_path()) else {
-                continue;
-            };
-            if !seen_machine_names.insert(bottom_label.to_ascii_lowercase()) {
-                continue;
-            }
-            match fs::read_to_string(path.as_path()) {
-                Ok(text) => {
-                    let entries = build_playlist_entries_from_text(&text, &bottom_label, &lookup);
-                    playlists.push(PlaylistCacheEntry {
-                        menu_entry: PlaylistMenuEntry {
-                            id: path_ci_key(path.as_path()),
-                            top_label: "Machine Playlist".to_string(),
-                            bottom_label,
-                        },
-                        entries,
-                    });
-                }
-                Err(err) => warn!("Failed to read playlist '{}': {err}", path.display()),
-            }
-        }
-    }
-
-    let mut seen_profiles = HashSet::new();
-    for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
-        let Some(profile_id) = profile::active_local_profile_id_for_side(side) else {
-            continue;
-        };
-        if !seen_profiles.insert(profile_id.clone()) {
-            continue;
-        }
-        let playlist_dir = find_child_dir_ci(
-            profile::local_profile_dir_for_id(&profile_id).as_path(),
-            "playlists",
-        );
-        let Some(playlist_dir) = playlist_dir else {
-            continue;
-        };
-        let owner = profile::get_for_side(side).display_name;
-        let owner = if owner.trim().is_empty() {
-            profile_id.as_str()
-        } else {
-            owner.as_str()
-        };
-        let top_label = format!("{owner} Playlist");
-        for path in playlist_txt_files(playlist_dir.as_path()) {
-            let Some(bottom_label) = playlist_display_name(path.as_path()) else {
-                continue;
-            };
-            match fs::read_to_string(path.as_path()) {
-                Ok(text) => {
-                    let entries = build_playlist_entries_from_text(&text, &bottom_label, &lookup);
-                    playlists.push(PlaylistCacheEntry {
-                        menu_entry: PlaylistMenuEntry {
-                            id: path_ci_key(path.as_path()),
-                            top_label: top_label.clone(),
-                            bottom_label,
-                        },
-                        entries,
-                    });
-                }
-                Err(err) => warn!("Failed to read playlist '{}': {err}", path.display()),
-            }
-        }
-    }
+fn build_playlist_library(
+    grouped_entries: &[MusicWheelEntry],
+    playlist_views: &[SelectMusicPlaylistView],
+    songs_root: &Path,
+) -> Vec<PlaylistCacheEntry> {
+    let lookup = build_playlist_song_lookup(grouped_entries, songs_root);
+    let mut playlists: Vec<PlaylistCacheEntry> = playlist_views
+        .iter()
+        .map(|playlist| PlaylistCacheEntry {
+            menu_entry: PlaylistMenuEntry {
+                id: playlist.id.clone(),
+                top_label: playlist.owner.as_ref().map_or_else(
+                    || "Machine Playlist".to_string(),
+                    |owner| format!("{owner} Playlist"),
+                ),
+                bottom_label: playlist.name.clone(),
+            },
+            entries: build_playlist_entries_from_text(&playlist.text, &playlist.name, &lookup),
+        })
+        .collect();
 
     playlists.sort_by_cached_key(|playlist| {
         (
@@ -2486,7 +2360,7 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
     state.cached_standard_chart_ixs = [None; NUM_STANDARD_DIFFICULTIES];
 }
 
-pub fn init() -> State {
+pub fn init(init_view: SelectMusicInitView) -> State {
     let started = Instant::now();
     debug!("Preparing SelectMusic state...");
     let lock_started = Instant::now();
@@ -2645,7 +2519,8 @@ pub fn init() -> State {
         profile_data::PlayerSide::P2,
     );
     let favorites_entries = build_favorites_view_entries(&all_entries);
-    let playlist_library = build_playlist_library(&all_entries);
+    let playlist_library =
+        build_playlist_library(&all_entries, &init_view.playlists, &init_view.songs_root);
 
     let new_pack_names = sync_new_pack_names(
         &joined_profile_ids,
@@ -2677,6 +2552,7 @@ pub fn init() -> State {
         favorites_entries,
         playlist_entries: Vec::new(),
         playlist_library,
+        playlist_views: init_view.playlists,
         active_playlist_id: None,
         entries: Vec::new(),
         selected_index: 0,
@@ -2767,6 +2643,10 @@ pub fn init() -> State {
         policy: SelectMusicPolicyView::default(),
         unlock_downloads_available: false,
         ready_song_reload_dirs: Vec::new(),
+        sync_graph_mode: SyncGraphMode::PostKernelFingerprint,
+        sync_confidence_percent: 80,
+        songs_root: init_view.songs_root,
+        courses_root: init_view.courses_root,
         preview_music_muted: false,
         music_wheel_moved: false,
         session_elapsed: 0.0,
@@ -2881,6 +2761,7 @@ pub fn init_placeholder() -> State {
         favorites_entries: Vec::new(),
         playlist_entries: Vec::new(),
         playlist_library: Vec::new(),
+        playlist_views: Vec::new(),
         active_playlist_id: None,
         entries: Vec::new(),
         selected_index: 0,
@@ -2971,6 +2852,10 @@ pub fn init_placeholder() -> State {
         policy: SelectMusicPolicyView::default(),
         unlock_downloads_available: false,
         ready_song_reload_dirs: Vec::new(),
+        sync_graph_mode: SyncGraphMode::PostKernelFingerprint,
+        sync_confidence_percent: 80,
+        songs_root: PathBuf::new(),
+        courses_root: PathBuf::new(),
         preview_music_muted: false,
         music_wheel_moved: false,
         session_elapsed: 0.0,
@@ -4104,6 +3989,8 @@ fn start_reload_songs_and_courses(state: &mut State) {
     let Some(tx) = begin_reload_ui(state) else {
         return;
     };
+    let songs_root = state.songs_root.clone();
+    let courses_root = state.courses_root.clone();
 
     std::thread::spawn(move || {
         let _ = tx.send(ReloadMsg::Phase(ReloadPhase::Songs));
@@ -4116,10 +4003,7 @@ fn start_reload_songs_and_courses(state: &mut State) {
                 song: song.to_owned(),
             });
         };
-        song_loading::scan_and_load_songs_with_progress_counts(
-            &dirs::app_dirs().songs_dir(),
-            &mut on_song,
-        );
+        song_loading::scan_and_load_songs_with_progress_counts(&songs_root, &mut on_song);
 
         let _ = tx.send(ReloadMsg::Phase(ReloadPhase::Courses));
 
@@ -4131,10 +4015,9 @@ fn start_reload_songs_and_courses(state: &mut State) {
                 course: course.to_owned(),
             });
         };
-        let dirs = dirs::app_dirs();
         song_loading::scan_and_load_courses_with_progress_counts(
-            &dirs.courses_dir(),
-            &dirs.songs_dir(),
+            &courses_root,
+            &songs_root,
             &mut on_course,
         );
 
@@ -4146,6 +4029,7 @@ fn start_reload_song_dirs(state: &mut State, pack_dirs: Vec<PathBuf>) {
     let Some(tx) = begin_reload_ui(state) else {
         return;
     };
+    let songs_root = state.songs_root.clone();
 
     std::thread::spawn(move || {
         let _ = tx.send(ReloadMsg::Phase(ReloadPhase::Songs));
@@ -4158,11 +4042,7 @@ fn start_reload_song_dirs(state: &mut State, pack_dirs: Vec<PathBuf>) {
                 song: song.to_owned(),
             });
         };
-        song_loading::reload_song_dirs_with_progress_counts(
-            &dirs::app_dirs().songs_dir(),
-            &pack_dirs,
-            &mut on_song,
-        );
+        song_loading::reload_song_dirs_with_progress_counts(&songs_root, &pack_dirs, &mut on_song);
 
         let _ = tx.send(ReloadMsg::Done);
     });
@@ -4969,7 +4849,7 @@ fn build_null_or_die_overlay(
 
     if matches!(overlay.phase, NullOrDieOverlayPhase::Ready)
         && let Some(warning) =
-            sync_low_confidence_warning(overlay.final_confidence, sync_confidence_threshold())
+            sync_low_confidence_warning(overlay.final_confidence, overlay.confidence_threshold)
     {
         let warning_y = status_y + SYNC_READY_LINE_STEP * (status_lines.len() as f32 - 1.0 + 1.2);
         actors.push(act!(text:
@@ -5273,8 +5153,13 @@ fn refresh_after_reload(state: &mut State) {
     let policy = state.policy;
     let unlock_downloads_available = state.unlock_downloads_available;
     let ready_song_reload_dirs = std::mem::take(&mut state.ready_song_reload_dirs);
+    let init_view = SelectMusicInitView {
+        songs_root: state.songs_root.clone(),
+        courses_root: state.courses_root.clone(),
+        playlists: state.playlist_views.clone(),
+    };
 
-    let mut refreshed = init();
+    let mut refreshed = init(init_view);
     refreshed.active_color_index = active_color_index;
     refreshed.preferred_difficulty_index = preferred_difficulty_index;
     refreshed.p2_preferred_difficulty_index = p2_preferred_difficulty_index;
@@ -5404,8 +5289,13 @@ fn refresh_after_style_switch(state: &mut State) {
     let policy = state.policy;
     let unlock_downloads_available = state.unlock_downloads_available;
     let ready_song_reload_dirs = std::mem::take(&mut state.ready_song_reload_dirs);
+    let init_view = SelectMusicInitView {
+        songs_root: state.songs_root.clone(),
+        courses_root: state.courses_root.clone(),
+        playlists: state.playlist_views.clone(),
+    };
 
-    let mut refreshed = init();
+    let mut refreshed = init(init_view);
     refreshed.active_color_index = active_color_index;
     refreshed.active_playlist_id = active_playlist_id;
     refreshed.session_elapsed = session_elapsed;
@@ -5740,9 +5630,9 @@ fn pack_and_song_name_from_lobby_path(song_path: &str) -> Option<(String, String
     deadsync_simfile::playlist::pack_and_song_name_from_path(song_path)
 }
 
-fn lobby_song_path(song: &SongData) -> Option<String> {
+fn lobby_song_path(song: &SongData, songs_root: &Path) -> Option<String> {
     let song_dir = song.simfile_path.parent()?;
-    for root in song_loading::collect_song_scan_roots(dirs::app_dirs().songs_dir().as_path()) {
+    for root in song_loading::collect_song_scan_roots(songs_root) {
         if let Ok(relative) = song_dir.strip_prefix(root.as_path()) {
             let normalized = normalize_lobby_song_path(relative.to_string_lossy().as_ref());
             if !normalized.is_empty() {
@@ -5766,7 +5656,7 @@ fn find_song_by_lobby_path(state: &State, song_path: &str) -> Option<Arc<SongDat
     let needle_leaf = needle.rsplit('/').next().unwrap_or(needle.as_str());
     let needle_pack_and_song = pack_and_song_name_from_lobby_path(song_path);
     if let Some(song) = state.group_entries.iter().find_map(|entry| match entry {
-        MusicWheelEntry::Song(song) => lobby_song_path(song.as_ref())
+        MusicWheelEntry::Song(song) => lobby_song_path(song.as_ref(), &state.songs_root)
             .filter(|path| path.eq_ignore_ascii_case(needle.as_str()))
             .map(|_| song.clone()),
         _ => None,
@@ -5778,7 +5668,7 @@ fn find_song_by_lobby_path(state: &State, song_path: &str) -> Option<Arc<SongDat
     let mut leaf_match = None;
     for pack in song_cache.iter() {
         for song in &pack.songs {
-            let Some(path) = lobby_song_path(song.as_ref()) else {
+            let Some(path) = lobby_song_path(song.as_ref(), &state.songs_root) else {
                 continue;
             };
             if path.eq_ignore_ascii_case(needle.as_str()) {
@@ -5925,7 +5815,7 @@ pub(crate) fn selected_chart_ix_for_sync(
 
 fn build_local_lobby_song_info(state: &State) -> Option<lobby_data::LobbySongInfo> {
     let song = selected_song_arc(state)?;
-    let song_path = lobby_song_path(song.as_ref())?;
+    let song_path = lobby_song_path(song.as_ref(), &state.songs_root)?;
     let chart_type = profile::get_session_play_style().chart_type();
     let chart = song.chart_for_steps_index(chart_type, selected_steps_index_for_sync(state))?;
     Some(lobby_data::LobbySongInfo {
@@ -6080,7 +5970,8 @@ fn apply_remote_lobby_song_selection(
         return false;
     };
 
-    let old_song_path = selected_song_arc(state).and_then(|song| lobby_song_path(song.as_ref()));
+    let old_song_path =
+        selected_song_arc(state).and_then(|song| lobby_song_path(song.as_ref(), &state.songs_root));
     let old_rate = profile::get_session_music_rate();
     focus_song_from_search(state, &target_song);
 
@@ -6125,7 +6016,7 @@ fn apply_remote_lobby_song_selection(
     state.last_requested_chart_hash = None;
     state.last_requested_chart_hash_p2 = None;
 
-    if rate_changed || old_song_path != lobby_song_path(target_song.as_ref()) {
+    if rate_changed || old_song_path != lobby_song_path(target_song.as_ref(), &state.songs_root) {
         clear_preview(state);
     }
 
@@ -6209,7 +6100,7 @@ fn sync_lobby_select_music(state: &mut State) {
                 != Some(remote_sig.as_str())
             {
                 let matched_path = find_song_by_lobby_path(state, song_info.song_path.as_str())
-                    .and_then(|song| lobby_song_path(song.as_ref()));
+                    .and_then(|song| lobby_song_path(song.as_ref(), &state.songs_root));
                 let player_screens = joined
                     .players
                     .iter()
@@ -6291,15 +6182,18 @@ fn select_music_lobby_status_text(state: &State) -> Option<String> {
 }
 
 #[inline(always)]
-fn sync_kernel_row(kind: BiasKernel) -> [f64; 5] {
-    if kind == BiasKernel::Loudest {
+fn sync_kernel_row(kind: crate::SimplyLoveSyncKernel) -> [f64; 5] {
+    if kind == crate::SimplyLoveSyncKernel::Loudest {
         [1.0, 3.0, 10.0, 3.0, 1.0]
     } else {
         [1.0, 1.0, 0.0, -1.0, -1.0]
     }
 }
 
-fn sync_convolution_from_digest_sums(col_sums: &[f64], kind: BiasKernel) -> Vec<f64> {
+fn sync_convolution_from_digest_sums(
+    col_sums: &[f64],
+    kind: crate::SimplyLoveSyncKernel,
+) -> Vec<f64> {
     let cols = col_sums.len();
     if cols == 0 {
         return Vec::new();
@@ -6708,16 +6602,6 @@ fn build_sync_status_lines(overlay: &NullOrDieOverlayData) -> Vec<SyncStatusLine
 }
 
 #[inline(always)]
-fn sync_confidence_threshold_percent() -> u8 {
-    config::get().null_or_die_confidence_percent.min(100)
-}
-
-#[inline(always)]
-fn sync_confidence_threshold() -> f64 {
-    f64::from(sync_confidence_threshold_percent()) / 100.0
-}
-
-#[inline(always)]
 fn sync_confidence_percent(confidence: Option<f64>) -> u32 {
     (confidence.unwrap_or(0.0).clamp(0.0, 1.0) * 100.0).round() as u32
 }
@@ -6895,7 +6779,7 @@ fn sync_overlay_apply_beat(
     }
 
     if overlay.phase != NullOrDieOverlayPhase::Running
-        || overlay.kernel_target != KernelTarget::Digest
+        || overlay.kernel_target != crate::SimplyLoveSyncKernelTarget::Digest
         || overlay.cols == 0
         || row.len() != overlay.cols
     {
@@ -6920,20 +6804,28 @@ fn sync_overlay_apply_beat(
 
 fn sync_overlay_apply_event(
     overlay: &mut NullOrDieOverlayData,
-    event: BiasStreamEvent,
+    event: crate::SimplyLoveSyncStreamEvent,
     refresh: &mut NullOrDieOverlayRefresh,
 ) {
     match event {
-        BiasStreamEvent::Init(init) => {
-            overlay.cols = init.cols;
-            overlay.freq_rows = init.freq_rows;
-            overlay.total_beats = init.planned_beats;
+        crate::SimplyLoveSyncStreamEvent::Init {
+            cols,
+            freq_rows,
+            planned_beats,
+            kernel_target,
+            kernel,
+            times_ms,
+        } => {
+            overlay.cols = cols;
+            overlay.freq_rows = freq_rows;
+            overlay.total_beats = planned_beats;
             overlay.digest_rows = 0;
-            overlay.times_ms = init.times_ms;
+            overlay.times_ms = times_ms;
             overlay.freq_domain.clear();
             overlay.beat_digest.clear();
-            overlay.kernel_target = init.kernel_target;
-            overlay.digest_col_sums = vec![0.0; init.cols];
+            overlay.kernel_target = kernel_target;
+            overlay.kernel_type = kernel;
+            overlay.digest_col_sums = vec![0.0; cols];
             overlay.post_rows = 0;
             overlay.post_kernel.clear();
             overlay.convolution.clear();
@@ -6941,18 +6833,21 @@ fn sync_overlay_apply_event(
             overlay.beats_processed = 0;
             overlay.preview_bias_ms = None;
         }
-        BiasStreamEvent::Beat(beat) => sync_overlay_apply_beat(
-            overlay,
-            beat.beat_seq,
-            beat.digest_row,
-            beat.freq_delta,
-            refresh,
-        ),
-        BiasStreamEvent::Convolution(conv) => {
-            overlay.post_rows = conv.rows;
-            overlay.post_kernel = conv.post_kernel;
-            overlay.convolution = conv.convolution;
-            overlay.edge_discard = conv.edge_discard;
+        crate::SimplyLoveSyncStreamEvent::Beat {
+            beat_seq,
+            digest_row,
+            freq_delta,
+        } => sync_overlay_apply_beat(overlay, beat_seq, digest_row, freq_delta, refresh),
+        crate::SimplyLoveSyncStreamEvent::Convolution {
+            rows,
+            post_kernel,
+            convolution,
+            edge_discard,
+        } => {
+            overlay.post_rows = rows;
+            overlay.post_kernel = post_kernel;
+            overlay.convolution = convolution;
+            overlay.edge_discard = edge_discard;
             overlay.preview_bias_ms = sync_peak_bias_ms(
                 &overlay.convolution,
                 &overlay.times_ms,
@@ -6960,7 +6855,7 @@ fn sync_overlay_apply_event(
             );
             refresh.meshes();
         }
-        BiasStreamEvent::Done(estimate) => {
+        crate::SimplyLoveSyncStreamEvent::Done(estimate) => {
             overlay.final_bias_ms = Some(estimate.bias_ms);
             overlay.final_confidence = Some(estimate.confidence);
         }
@@ -6969,7 +6864,7 @@ fn sync_overlay_apply_event(
 
 fn sync_overlay_apply_result(
     overlay: &mut NullOrDieOverlayData,
-    result: Result<BiasEstimateWithPlot, String>,
+    result: Result<crate::SimplyLoveSyncSongResult, String>,
     refresh: &mut NullOrDieOverlayRefresh,
 ) {
     match result {
@@ -7074,10 +6969,8 @@ fn show_sync_song_overlay(state: &mut State) {
 
     prepare_sync_overlay(state);
 
-    let cfg = config::null_or_die_bias_cfg();
-    let kernel_target = cfg.kernel_target;
-    let kernel_type = cfg.kernel_type;
-    let graph_mode = config::get().null_or_die_sync_graph;
+    let graph_mode = state.sync_graph_mode;
+    let confidence_threshold = f64::from(state.sync_confidence_percent) / 100.0;
 
     let simfile_path = song.simfile_path.clone();
     let song_title = song.display_full_title(false);
@@ -7103,9 +6996,10 @@ fn show_sync_song_overlay(state: &mut State) {
         simfile_path,
         song_title,
         chart_label,
-        kernel_target,
-        kernel_type,
+        kernel_target: crate::SimplyLoveSyncKernelTarget::Digest,
+        kernel_type: crate::SimplyLoveSyncKernel::Rising,
         graph_mode,
+        confidence_threshold,
         cols: 0,
         freq_rows: 0,
         total_beats: 0,
@@ -12098,7 +11992,7 @@ mod tests {
     };
     use deadsync_online::lobbies as lobby_data;
     use deadsync_profile as profile_data;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
     use std::sync::Arc;
     use std::time::{Duration, Instant};
 
@@ -12349,9 +12243,10 @@ mod tests {
             simfile_path: PathBuf::from("song.ssc"),
             song_title: "Sync Test".to_string(),
             chart_label: "Hard".to_string(),
-            kernel_target: null_or_die::KernelTarget::Digest,
-            kernel_type: null_or_die::BiasKernel::Rising,
+            kernel_target: crate::SimplyLoveSyncKernelTarget::Digest,
+            kernel_type: crate::SimplyLoveSyncKernel::Rising,
             graph_mode: crate::config::SyncGraphMode::PostKernelFingerprint,
+            confidence_threshold: 0.8,
             cols,
             freq_rows: 0,
             total_beats: digest_rows,
@@ -12526,10 +12421,17 @@ mod tests {
                 policy: crate::views::SelectMusicPolicyView::default(),
                 unlock_downloads_available: true,
                 ready_song_reload_dirs: vec![std::path::PathBuf::from("Songs/Unlocks")],
+                sync_graph_mode: crate::config::SyncGraphMode::Frequency,
+                sync_confidence_percent: 75,
             },
         );
         assert!(state.unlock_downloads_available);
         assert_eq!(state.ready_song_reload_dirs.len(), 1);
+        assert_eq!(
+            state.sync_graph_mode,
+            crate::config::SyncGraphMode::Frequency
+        );
+        assert_eq!(state.sync_confidence_percent, 75);
         let rate = deadsync_profile::compat::get_session_music_rate();
         let rate = f64::from(if rate.is_finite() && rate > 0.0 {
             rate
@@ -13551,7 +13453,7 @@ mod tests {
     #[test]
     fn playlist_parser_supports_sections_and_pack_wildcards() {
         let entries = test_playlist_entries();
-        let lookup = build_playlist_song_lookup(&entries);
+        let lookup = build_playlist_song_lookup(&entries, Path::new("Songs"));
         let playlist_entries = build_playlist_entries_from_text(
             "---Warmup\nPack A/*\n---Finale\nPack B/Song B1\n",
             "Night Shift",
@@ -13583,7 +13485,7 @@ mod tests {
     #[test]
     fn playlist_parser_uses_playlist_name_when_no_header_exists() {
         let entries = test_playlist_entries();
-        let lookup = build_playlist_song_lookup(&entries);
+        let lookup = build_playlist_song_lookup(&entries, Path::new("Songs"));
         let playlist_entries = build_playlist_entries_from_text(
             "Pack A/Song A2\nPack B/Song B1\n",
             "Night Shift",

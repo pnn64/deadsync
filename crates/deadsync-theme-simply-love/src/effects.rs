@@ -3,7 +3,6 @@ use crate::views::{DensityGraphView, SimplyLoveDensityGraphSlot};
 use deadsync_profile::{ActiveProfile, PlayerSide};
 use deadsync_simfile::sync_offset::SongOffsetSyncChange;
 use deadsync_theme::{AudioRequest, GraphicsRequest, PlatformRequest};
-use null_or_die::{BiasEstimateWithPlot, BiasStreamEvent};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -79,9 +78,65 @@ pub struct SimplyLoveSyncTarget {
     pub chart_ix: usize,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SimplyLoveSyncKernelTarget {
+    Digest,
+    Accumulator,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SimplyLoveSyncKernel {
+    Rising,
+    Loudest,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum SimplyLoveSyncStreamEvent {
+    Init {
+        cols: usize,
+        freq_rows: usize,
+        planned_beats: usize,
+        kernel_target: SimplyLoveSyncKernelTarget,
+        kernel: SimplyLoveSyncKernel,
+        times_ms: Vec<f64>,
+    },
+    Beat {
+        beat_seq: usize,
+        digest_row: Vec<f64>,
+        freq_delta: Option<Vec<f64>>,
+    },
+    Convolution {
+        rows: usize,
+        post_kernel: Vec<f64>,
+        convolution: Vec<f64>,
+        edge_discard: usize,
+    },
+    Done(SimplyLoveSyncResult),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct SimplyLoveSyncPlotView {
+    pub freq_rows: usize,
+    pub digest_rows: usize,
+    pub cols: usize,
+    pub post_rows: usize,
+    pub freq_domain: Vec<f64>,
+    pub beat_digest: Vec<f64>,
+    pub post_kernel: Vec<f64>,
+    pub convolution: Vec<f64>,
+    pub times_ms: Vec<f64>,
+    pub edge_discard: usize,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct SimplyLoveSyncSongResult {
+    pub estimate: SimplyLoveSyncResult,
+    pub plot: SimplyLoveSyncPlotView,
+}
+
 pub enum SimplyLoveSyncEvent {
-    SongStream(BiasStreamEvent),
-    SongFinished(Result<BiasEstimateWithPlot, String>),
+    SongStream(SimplyLoveSyncStreamEvent),
+    SongFinished(Result<SimplyLoveSyncSongResult, String>),
     RowStarted {
         index: usize,
     },
@@ -102,7 +157,7 @@ pub enum SimplyLoveSyncEvent {
     Disconnected,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SimplyLoveSyncResult {
     pub bias_ms: f64,
     pub confidence: f64,

@@ -356,8 +356,116 @@ pub(in crate::screens::options) const DISPLAY_ASPECT_RATIO_CHOICES: &[Choice] = 
     literal_choice("1:1"),
 ];
 
+const DISPLAY_ASPECT_RATIO_LABELS: [&str; 4] = ["16:9", "16:10", "4:3", "1:1"];
+const DEFAULT_RESOLUTIONS: &[(u32, u32)] = &[
+    (1920, 1080),
+    (1600, 900),
+    (1280, 720),
+    (1024, 768),
+    (800, 600),
+];
+
+fn display_aspect_label_from_choice(index: usize) -> &'static str {
+    DISPLAY_ASPECT_RATIO_LABELS
+        .get(index)
+        .copied()
+        .unwrap_or("16:9")
+}
+
+pub(in crate::screens::options) fn display_aspect_choice_index(width: u32, height: u32) -> usize {
+    if height == 0 {
+        return 0;
+    }
+    if let Some(index) = DISPLAY_ASPECT_RATIO_LABELS
+        .iter()
+        .position(|label| aspect_matches(width, height, label))
+    {
+        return index;
+    }
+    let ratio = width as f32 / height as f32;
+    DISPLAY_ASPECT_RATIO_LABELS
+        .iter()
+        .enumerate()
+        .min_by(|(_, lhs), (_, rhs)| {
+            let delta = |label: &&str| match *label {
+                "16:9" => (ratio - 16.0 / 9.0).abs(),
+                "16:10" => (ratio - 16.0 / 10.0).abs(),
+                "4:3" => (ratio - 4.0 / 3.0).abs(),
+                "1:1" => (ratio - 1.0).abs(),
+                _ => f32::INFINITY,
+            };
+            delta(lhs).total_cmp(&delta(rhs))
+        })
+        .map_or(0, |(index, _)| index)
+}
+
+fn aspect_matches(width: u32, height: u32, label: &str) -> bool {
+    if height == 0 {
+        return false;
+    }
+    let ratio = width as f32 / height as f32;
+    match label {
+        "16:9" => (ratio - 1.7777).abs() < 0.05,
+        "16:10" => (ratio - 1.6).abs() < 0.05,
+        "4:3" => (ratio - 1.3333).abs() < 0.05,
+        "1:1" => (ratio - 1.0).abs() < 0.05,
+        _ => true,
+    }
+}
+
+fn preset_resolutions_for_aspect(label: &str) -> Vec<(u32, u32)> {
+    match label {
+        "16:9" => vec![(1280, 720), (1600, 900), (1920, 1080)],
+        "16:10" => vec![(1280, 800), (1440, 900), (1680, 1050), (1920, 1200)],
+        "4:3" => vec![
+            (640, 480),
+            (800, 600),
+            (1024, 768),
+            (1280, 960),
+            (1600, 1200),
+        ],
+        "1:1" => vec![(342, 342), (456, 456), (608, 608), (810, 810), (1080, 1080)],
+        _ => DEFAULT_RESOLUTIONS.to_vec(),
+    }
+}
+
+fn push_unique_resolution(target: &mut Vec<(u32, u32)>, width: u32, height: u32) {
+    if !target.contains(&(width, height)) {
+        target.push((width, height));
+    }
+}
+
+fn supported_resolutions(spec: Option<&GraphicsMonitorView>) -> Vec<(u32, u32)> {
+    let mut values = spec.map_or_else(Vec::new, |spec| {
+        spec.modes
+            .iter()
+            .map(|mode| (mode.width, mode.height))
+            .collect()
+    });
+    values.sort_unstable();
+    values.dedup();
+    values
+}
+
+fn supported_refresh_rates(
+    spec: Option<&GraphicsMonitorView>,
+    width: u32,
+    height: u32,
+) -> Vec<u32> {
+    let mut values = spec.map_or_else(Vec::new, |spec| {
+        spec.modes
+            .iter()
+            .filter(|mode| mode.width == width && mode.height == height)
+            .map(|mode| mode.refresh_rate_millihertz)
+            .collect()
+    });
+    values.sort_unstable();
+    values.dedup();
+    values
+}
+
 pub(in crate::screens::options) fn build_display_mode_choices(
-    monitor_specs: &[MonitorSpec],
+    monitor_specs: &[GraphicsMonitorView],
 ) -> Vec<String> {
     if monitor_specs.is_empty() {
         return vec![
@@ -373,14 +481,14 @@ pub(in crate::screens::options) fn build_display_mode_choices(
     out
 }
 
-pub(in crate::screens::options) fn selected_video_renderer(state: &State) -> BackendType {
+pub(in crate::screens::options) fn selected_video_renderer(state: &State) -> RendererChoice {
     let choice_idx = get_choice_by_id(
         &state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
         SubRowId::VideoRenderer,
     )
     .unwrap_or(0);
-    renderer_choice_index_to_backend(choice_idx)
+    RendererChoice::from_choice(choice_idx)
 }
 
 pub(in crate::screens::options) fn software_thread_choice_labels(values: &[u8]) -> Vec<String> {
@@ -455,7 +563,7 @@ pub(in crate::screens::options) fn on_max_fps_value_row(state: &State) -> bool {
 
 pub(in crate::screens::options) fn selected_present_mode_policy(
     state: &State,
-) -> PresentModePolicy {
+) -> PresentPolicyChoice {
     get_choice_by_id(
         &state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
@@ -463,7 +571,7 @@ pub(in crate::screens::options) fn selected_present_mode_policy(
     )
     .map_or(
         state.present_mode_policy_at_load,
-        present_mode_policy_from_choice,
+        PresentPolicyChoice::from_choice,
     )
 }
 
@@ -521,7 +629,7 @@ pub(in crate::screens::options) fn set_max_fps_value_choice_index(state: &mut St
 
 #[inline(always)]
 pub(in crate::screens::options) fn graphics_show_software_threads(state: &State) -> bool {
-    selected_video_renderer(state) == BackendType::Software
+    selected_video_renderer(state) == RendererChoice::Software
 }
 
 #[inline(always)]
@@ -556,19 +664,19 @@ pub(in crate::screens::options) fn graphics_show_max_fps_value(state: &State) ->
 
 #[inline(always)]
 pub(in crate::screens::options) fn graphics_show_high_dpi(state: &State) -> bool {
-    cfg!(target_os = "macos") && selected_video_renderer(state) == BackendType::OpenGL
+    cfg!(target_os = "macos") && selected_video_renderer(state) == RendererChoice::OpenGl
 }
 
-pub(in crate::screens::options) fn selected_fullscreen_type(state: &State) -> FullscreenType {
+pub(in crate::screens::options) fn selected_fullscreen_type(state: &State) -> FullscreenChoice {
     get_choice_by_id(
         &state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
         SubRowId::FullscreenType,
     )
-    .map_or(FullscreenType::Exclusive, fullscreen_type_from_choice)
+    .map_or(FullscreenChoice::Exclusive, FullscreenChoice::from_choice)
 }
 
-pub(in crate::screens::options) fn selected_display_mode(state: &State) -> DisplayMode {
+pub(in crate::screens::options) fn selected_display_mode(state: &State) -> DisplayModeChoice {
     let display_choice = get_choice_by_id(
         &state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
@@ -577,9 +685,9 @@ pub(in crate::screens::options) fn selected_display_mode(state: &State) -> Displ
     .unwrap_or(0);
     let windowed_idx = state.display_mode_choices.len().saturating_sub(1);
     if windowed_idx == 0 || display_choice >= windowed_idx {
-        DisplayMode::Windowed
+        DisplayModeChoice::Windowed
     } else {
-        DisplayMode::Fullscreen(selected_fullscreen_type(state))
+        DisplayModeChoice::Fullscreen(selected_fullscreen_type(state))
     }
 }
 
@@ -617,9 +725,12 @@ pub(in crate::screens::options) fn max_fps_seed_value(state: &State, max_fps: u1
     let refresh_mhz = if selected_refresh_mhz != 0 {
         selected_refresh_mhz
     } else if let Some(spec) = state.monitor_specs.get(selected_display_monitor(state)) {
-        if matches!(selected_display_mode(state), DisplayMode::Fullscreen(_)) {
+        if matches!(
+            selected_display_mode(state),
+            DisplayModeChoice::Fullscreen(_)
+        ) {
             let (width, height) = selected_resolution(state);
-            display::supported_refresh_rates(Some(spec), width, height)
+            supported_refresh_rates(Some(spec), width, height)
                 .into_iter()
                 .max()
                 .or_else(|| {
@@ -689,7 +800,7 @@ pub(in crate::screens::options) fn ensure_display_mode_choices(state: &mut State
     rebuild_resolution_choices(state, current_res.0, current_res.1);
 }
 
-pub fn update_monitor_specs(state: &mut State, specs: Vec<MonitorSpec>) {
+pub fn update_monitor_specs(state: &mut State, specs: Vec<GraphicsMonitorView>) {
     state.monitor_specs = specs;
     ensure_display_mode_choices(state);
     // Keep the Display Mode row aligned with the actual current mode after monitors refresh.
@@ -708,15 +819,15 @@ pub fn update_monitor_specs(state: &mut State, specs: Vec<MonitorSpec>) {
 pub(in crate::screens::options) fn set_display_mode_row_selection(
     state: &mut State,
     _monitor_count: usize, // Ignored, we use stored monitor_specs now
-    mode: DisplayMode,
+    mode: DisplayModeChoice,
     monitor: usize,
 ) {
     // Ensure choices are up to date.
     ensure_display_mode_choices(state);
     let windowed_idx = state.display_mode_choices.len().saturating_sub(1);
     let idx = match mode {
-        DisplayMode::Windowed => windowed_idx,
-        DisplayMode::Fullscreen(_) => {
+        DisplayModeChoice::Windowed => windowed_idx,
+        DisplayModeChoice::Fullscreen(_) => {
             let max_idx = windowed_idx.saturating_sub(1);
             if max_idx == 0 {
                 0
@@ -751,7 +862,7 @@ pub(in crate::screens::options) fn selected_aspect_label(state: &State) -> &'sta
         SubRowId::DisplayAspectRatio,
     )
     .unwrap_or(0);
-    display::display_aspect_label_from_choice(idx)
+    display_aspect_label_from_choice(idx)
 }
 
 pub(in crate::screens::options) fn sync_display_aspect_ratio(
@@ -759,7 +870,7 @@ pub(in crate::screens::options) fn sync_display_aspect_ratio(
     width: u32,
     height: u32,
 ) {
-    let idx = display::display_aspect_choice_index(width, height);
+    let idx = display_aspect_choice_index(width, height);
     if let Some(slot) = get_choice_by_id_mut(
         &mut state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
@@ -792,7 +903,7 @@ pub(in crate::screens::options) fn selected_resolution(state: &State) -> (u32, u
 }
 
 pub(in crate::screens::options) fn rebuild_refresh_rate_choices(state: &mut State) {
-    if matches!(selected_display_mode(state), DisplayMode::Windowed) {
+    if matches!(selected_display_mode(state), DisplayModeChoice::Windowed) {
         state.refresh_rate_choices = vec![0];
         if let Some(slot) = get_choice_by_id_mut(
             &mut state.sub[SubmenuKind::Graphics].choice_indices,
@@ -818,8 +929,7 @@ pub(in crate::screens::options) fn rebuild_refresh_rate_choices(state: &mut Stat
     // Default choice is always available (0).
     rates.push(0);
 
-    let supported_rates =
-        display::supported_refresh_rates(state.monitor_specs.get(mon_idx), width, height);
+    let supported_rates = supported_refresh_rates(state.monitor_specs.get(mon_idx), width, height);
     rates.extend(supported_rates);
 
     // Add common fallback rates if list is empty (besides Default)
@@ -872,20 +982,19 @@ pub(in crate::screens::options) fn rebuild_resolution_choices(
     let aspect_label = selected_aspect_label(state);
     let mon_idx = selected_display_monitor(state);
 
-    let mut list: Vec<(u32, u32)> =
-        display::supported_resolutions(state.monitor_specs.get(mon_idx))
-            .into_iter()
-            .filter(|(w, h)| display::aspect_matches(*w, *h, aspect_label))
-            .collect();
+    let mut list: Vec<(u32, u32)> = supported_resolutions(state.monitor_specs.get(mon_idx))
+        .into_iter()
+        .filter(|(w, h)| aspect_matches(*w, *h, aspect_label))
+        .collect();
 
     // 2. If list is empty (e.g. no monitor data or Aspect filter too strict), use presets.
     if list.is_empty() {
-        list = display::preset_resolutions_for_aspect(aspect_label);
+        list = preset_resolutions_for_aspect(aspect_label);
     }
 
     // 3. Keep the current resolution only if it matches the selected aspect.
-    if display::aspect_matches(width, height, aspect_label) {
-        display::push_unique_resolution(&mut list, width, height);
+    if aspect_matches(width, height, aspect_label) {
+        push_unique_resolution(&mut list, width, height);
     }
 
     // Sort descending by width then height (typical UI preference).

@@ -80,6 +80,7 @@ pub enum NavigationTransitionStart {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg(test)]
 pub enum FadeCompletionExitPlan {
     Continue,
     Exit,
@@ -487,6 +488,7 @@ pub fn process_exit_navigation_plan(
     }
 }
 
+#[cfg(test)]
 pub const fn fade_completion_exit_plan(intent: crate::ExitIntent) -> FadeCompletionExitPlan {
     match intent {
         crate::ExitIntent::None => FadeCompletionExitPlan::Continue,

@@ -1,46 +1,6 @@
 use super::*;
 use deadsync_profile as profile_data;
-use deadsync_theme::{
-    DisplayModeChoice, FullscreenChoice, GraphicsRequest, PresentPolicyChoice, RendererChoice,
-};
-
-#[inline(always)]
-const fn renderer_choice(renderer: BackendType) -> RendererChoice {
-    match renderer {
-        #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
-        BackendType::Vulkan => RendererChoice::Vulkan,
-        #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
-        BackendType::VulkanWgpu => RendererChoice::VulkanWgpu,
-        #[cfg(target_os = "macos")]
-        BackendType::Metal => RendererChoice::Metal,
-        BackendType::OpenGL => RendererChoice::OpenGl,
-        BackendType::OpenGLWgpu => RendererChoice::OpenGlWgpu,
-        BackendType::Software => RendererChoice::Software,
-        #[cfg(target_os = "windows")]
-        BackendType::DirectX => RendererChoice::DirectX,
-    }
-}
-
-#[inline(always)]
-const fn display_mode_choice(mode: DisplayMode) -> DisplayModeChoice {
-    match mode {
-        DisplayMode::Windowed => DisplayModeChoice::Windowed,
-        DisplayMode::Fullscreen(FullscreenType::Exclusive) => {
-            DisplayModeChoice::Fullscreen(FullscreenChoice::Exclusive)
-        }
-        DisplayMode::Fullscreen(FullscreenType::Borderless) => {
-            DisplayModeChoice::Fullscreen(FullscreenChoice::Borderless)
-        }
-    }
-}
-
-#[inline(always)]
-const fn present_policy_choice(policy: PresentModePolicy) -> PresentPolicyChoice {
-    match policy {
-        PresentModePolicy::Mailbox => PresentPolicyChoice::Mailbox,
-        PresentModePolicy::Immediate => PresentPolicyChoice::Immediate,
-    }
-}
+use deadsync_theme::GraphicsRequest;
 
 /// Refresh cached translated labels when the UI language changes.
 pub(super) fn sync_i18n_cache(state: &mut State) {
@@ -87,14 +47,14 @@ pub(super) fn clear_navigation_holds(state: &mut State) {
     state.start_input = [OptionsStartInput::default(); 2];
 }
 
-pub fn sync_video_renderer(state: &mut State, renderer: BackendType) {
+pub fn sync_video_renderer(state: &mut State, renderer: RendererChoice) {
     state.video_renderer_at_load = renderer;
     if let Some(slot) = get_choice_by_id_mut(
         &mut state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
         SubRowId::VideoRenderer,
     ) {
-        *slot = backend_to_renderer_choice_index(renderer);
+        *slot = renderer.choice_index();
     }
     sync_submenu_cursor_indices(state);
     clear_render_cache(state);
@@ -102,8 +62,8 @@ pub fn sync_video_renderer(state: &mut State, renderer: BackendType) {
 
 pub fn sync_display_mode(
     state: &mut State,
-    mode: DisplayMode,
-    fullscreen_type: FullscreenType,
+    mode: DisplayModeChoice,
+    fullscreen_type: FullscreenChoice,
     monitor: usize,
     monitor_count: usize,
 ) {
@@ -111,15 +71,15 @@ pub fn sync_display_mode(
     state.display_monitor_at_load = monitor;
     set_display_mode_row_selection(state, monitor_count, mode, monitor);
     let target_type = match mode {
-        DisplayMode::Fullscreen(ft) => ft,
-        DisplayMode::Windowed => fullscreen_type,
+        DisplayModeChoice::Fullscreen(fullscreen) => fullscreen,
+        DisplayModeChoice::Windowed => fullscreen_type,
     };
     if let Some(slot) = get_choice_by_id_mut(
         &mut state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
         SubRowId::FullscreenType,
     ) {
-        *slot = fullscreen_type_choice_index(target_type);
+        *slot = target_type.choice_index();
     }
     sync_submenu_cursor_indices(state);
     clear_render_cache(state);
@@ -203,14 +163,14 @@ pub fn sync_hide_mouse_cursor(state: &mut State, enabled: bool) {
     clear_render_cache(state);
 }
 
-pub fn sync_present_mode_policy(state: &mut State, mode: PresentModePolicy) {
+pub fn sync_present_mode_policy(state: &mut State, mode: PresentPolicyChoice) {
     state.present_mode_policy_at_load = mode;
     if let Some(slot) = get_choice_by_id_mut(
         &mut state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
         SubRowId::PresentMode,
     ) {
-        *slot = present_mode_policy_choice_index(mode);
+        *slot = mode.choice_index();
     }
     sync_submenu_cursor_indices(state);
     clear_render_cache(state);
@@ -436,12 +396,12 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
                 state.submenu_fade_t = 0.0;
                 state.content_alpha = 0.0;
 
-                let mut renderer_change: Option<BackendType> = None;
-                let mut display_mode_change: Option<DisplayMode> = None;
+                let mut renderer_change: Option<RendererChoice> = None;
+                let mut display_mode_change: Option<DisplayModeChoice> = None;
                 let mut resolution_change: Option<(u32, u32)> = None;
                 let mut monitor_change: Option<usize> = None;
                 let mut vsync_change: Option<bool> = None;
-                let mut present_mode_policy_change: Option<PresentModePolicy> = None;
+                let mut present_mode_policy_change: Option<PresentPolicyChoice> = None;
                 let mut max_fps_change: Option<u16> = None;
                 let mut high_dpi_change: Option<bool> = None;
 
@@ -500,13 +460,12 @@ fn update_impl(state: &mut State, dt: f32, asset_manager: &AssetManager) -> Opti
                 {
                     pending_action = Some(ThemeEffect::Runtime(
                         crate::SimplyLoveRuntimeRequest::Graphics(GraphicsRequest {
-                            renderer: renderer_change.map(renderer_choice),
-                            display_mode: display_mode_change.map(display_mode_choice),
+                            renderer: renderer_change,
+                            display_mode: display_mode_change,
                             monitor: monitor_change,
                             resolution: resolution_change,
                             vsync: vsync_change,
-                            present_mode_policy: present_mode_policy_change
-                                .map(present_policy_choice),
+                            present_mode_policy: present_mode_policy_change,
                             max_fps: max_fps_change,
                             high_dpi: high_dpi_change,
                         }),

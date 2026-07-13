@@ -20,7 +20,7 @@ pub type DensityGraphSource = DensityGraphView;
 pub type TimingHealth = TimingHealthView<PresentModeTrace, ClockDomainTrace, AudioTimingView>;
 
 /// Shell-prepared runtime data consumed by Simply Love's Select Music screen.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct SelectMusicRuntimeView {
     pub audio_playback: deadsync_theme::views::AudioPlaybackView,
     /// Beat offset applied to the selection arrow bounce animation.
@@ -28,6 +28,39 @@ pub struct SelectMusicRuntimeView {
     pub policy: SelectMusicPolicyView,
     pub unlock_downloads_available: bool,
     pub ready_song_reload_dirs: Vec<PathBuf>,
+    pub sync_graph_mode: deadsync_config::prelude::SyncGraphMode,
+    pub sync_confidence_percent: u8,
+}
+
+impl Default for SelectMusicRuntimeView {
+    fn default() -> Self {
+        Self {
+            audio_playback: Default::default(),
+            arrow_bounce_offset: 0.0,
+            policy: Default::default(),
+            unlock_downloads_available: false,
+            ready_song_reload_dirs: Vec::new(),
+            sync_graph_mode: deadsync_config::prelude::SyncGraphMode::PostKernelFingerprint,
+            sync_confidence_percent: 80,
+        }
+    }
+}
+
+/// One playlist file loaded by the shell for Simply Love's playlist wheel.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SelectMusicPlaylistView {
+    pub id: String,
+    pub owner: Option<String>,
+    pub name: String,
+    pub text: String,
+}
+
+/// Filesystem-derived data prepared once when Select Music is entered.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SelectMusicInitView {
+    pub songs_root: PathBuf,
+    pub courses_root: PathBuf,
+    pub playlists: Vec<SelectMusicPlaylistView>,
 }
 
 /// Runtime/config policy used to expose Select Music features and input paths.

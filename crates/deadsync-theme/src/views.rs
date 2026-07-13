@@ -1,5 +1,6 @@
 //! Plain data prepared for concrete theme screens.
 
+use crate::{DisplayModeChoice, FullscreenChoice, PresentPolicyChoice, RendererChoice};
 use deadsync_chart::{ChartData, SongData};
 use deadsync_rules::judgment::{self, JudgeGrade};
 use deadsync_rules::scroll::ScrollSpeedSetting;
@@ -80,6 +81,38 @@ pub struct AudioOutputDeviceView {
 pub struct AudioOptionsView {
     pub output_devices: Vec<AudioOutputDeviceView>,
     pub available_backend_names: Vec<String>,
+}
+
+/// One renderer-neutral video mode advertised by a host monitor.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GraphicsVideoModeView {
+    pub width: u32,
+    pub height: u32,
+    pub refresh_rate_millihertz: u32,
+}
+
+/// Host monitor capabilities prepared by the shell for theme option UIs.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct GraphicsMonitorView {
+    pub name: String,
+    pub modes: Vec<GraphicsVideoModeView>,
+}
+
+/// Current graphics configuration and host-dependent choices exposed without
+/// renderer, windowing, or platform implementation types.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct GraphicsOptionsView {
+    pub renderer: RendererChoice,
+    pub display_mode: DisplayModeChoice,
+    pub fullscreen: FullscreenChoice,
+    pub monitor: usize,
+    pub width: u32,
+    pub height: u32,
+    pub max_fps: u16,
+    pub vsync: bool,
+    pub present_policy: PresentPolicyChoice,
+    pub high_dpi: bool,
+    pub software_thread_choices: Vec<u8>,
 }
 
 /// Audio timing telemetry translated by the shell for theme diagnostics.

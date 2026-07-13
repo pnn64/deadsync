@@ -68,11 +68,103 @@ pub enum RendererChoice {
     DirectX,
 }
 
+impl RendererChoice {
+    #[cfg(all(
+        target_os = "windows",
+        not(target_vendor = "win7"),
+        not(target_pointer_width = "32")
+    ))]
+    pub const ALL: &'static [Self] = &[
+        Self::OpenGl,
+        Self::Vulkan,
+        Self::DirectX,
+        Self::OpenGlWgpu,
+        Self::VulkanWgpu,
+        Self::Software,
+    ];
+    #[cfg(all(
+        target_os = "windows",
+        any(target_vendor = "win7", target_pointer_width = "32")
+    ))]
+    pub const ALL: &'static [Self] = &[
+        Self::OpenGl,
+        Self::DirectX,
+        Self::OpenGlWgpu,
+        Self::Software,
+    ];
+    #[cfg(all(target_os = "macos", not(target_pointer_width = "32")))]
+    pub const ALL: &'static [Self] = &[
+        Self::OpenGl,
+        Self::Vulkan,
+        Self::Metal,
+        Self::OpenGlWgpu,
+        Self::VulkanWgpu,
+        Self::Software,
+    ];
+    #[cfg(all(
+        not(any(target_os = "windows", target_os = "macos")),
+        not(target_pointer_width = "32")
+    ))]
+    pub const ALL: &'static [Self] = &[
+        Self::OpenGl,
+        Self::Vulkan,
+        Self::OpenGlWgpu,
+        Self::VulkanWgpu,
+        Self::Software,
+    ];
+    #[cfg(all(not(target_os = "windows"), target_pointer_width = "32"))]
+    pub const ALL: &'static [Self] = &[Self::OpenGl, Self::OpenGlWgpu, Self::Software];
+
+    #[inline(always)]
+    pub fn choice_index(self) -> usize {
+        Self::ALL
+            .iter()
+            .position(|choice| *choice == self)
+            .unwrap_or(0)
+    }
+
+    #[inline(always)]
+    pub fn from_choice(index: usize) -> Self {
+        Self::ALL.get(index).copied().unwrap_or(Self::OpenGl)
+    }
+}
+
+impl Default for RendererChoice {
+    fn default() -> Self {
+        Self::OpenGl
+    }
+}
+
 /// Fullscreen policy selected by a concrete theme.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FullscreenChoice {
     Exclusive,
     Borderless,
+}
+
+impl FullscreenChoice {
+    #[inline(always)]
+    pub const fn choice_index(self) -> usize {
+        match self {
+            Self::Exclusive => 0,
+            Self::Borderless => 1,
+        }
+    }
+
+    #[inline(always)]
+    pub const fn from_choice(index: usize) -> Self {
+        if index == 1 {
+            Self::Borderless
+        } else {
+            Self::Exclusive
+        }
+    }
+}
+
+impl Default for FullscreenChoice {
+    fn default() -> Self {
+        Self::Exclusive
+    }
 }
 
 /// Window mode selected by a concrete theme.
@@ -82,11 +174,42 @@ pub enum DisplayModeChoice {
     Fullscreen(FullscreenChoice),
 }
 
+impl Default for DisplayModeChoice {
+    fn default() -> Self {
+        Self::Windowed
+    }
+}
+
 /// Presentation policy selected by a concrete theme.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PresentPolicyChoice {
     Mailbox,
     Immediate,
+}
+
+impl PresentPolicyChoice {
+    #[inline(always)]
+    pub const fn choice_index(self) -> usize {
+        match self {
+            Self::Mailbox => 0,
+            Self::Immediate => 1,
+        }
+    }
+
+    #[inline(always)]
+    pub const fn from_choice(index: usize) -> Self {
+        if index == 1 {
+            Self::Immediate
+        } else {
+            Self::Mailbox
+        }
+    }
+}
+
+impl Default for PresentPolicyChoice {
+    fn default() -> Self {
+        Self::Mailbox
+    }
 }
 
 /// Renderer-independent graphics changes requested by a concrete theme.

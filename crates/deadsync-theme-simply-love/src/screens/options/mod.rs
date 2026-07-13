@@ -2,29 +2,28 @@ use crate::act;
 use crate::assets::{self, AssetManager, visual_styles};
 use crate::assets::{FontRole, current_machine_font_key};
 use crate::config::{
-    self, DisplayMode, FullscreenType, SimpleIni, arrowcloud_qr_login_when_choice_index,
-    arrowcloud_qr_login_when_from_choice, breakdown_style_choice_index,
-    breakdown_style_from_choice, default_fail_type_choice_index, default_fail_type_from_choice,
-    default_sync_offset_choice_index, default_sync_offset_from_choice,
-    groovestats_qr_login_when_choice_index, groovestats_qr_login_when_from_choice,
-    log_level_choice_index, log_level_from_choice, machine_bar_color_choice_index,
-    machine_bar_color_from_choice, machine_evaluation_style_choice_index,
-    machine_evaluation_style_from_choice, machine_font_choice_index, machine_font_from_choice,
-    machine_preferred_play_mode_choice_index, machine_preferred_play_mode_from_choice,
-    machine_preferred_play_style_choice_index, machine_preferred_play_style_from_choice,
-    null_or_die_kernel_target_choice_index, null_or_die_kernel_target_from_choice,
-    null_or_die_kernel_type_choice_index, null_or_die_kernel_type_from_choice,
-    random_background_mode_choice_index, random_background_mode_from_choice,
-    select_music_itl_rank_mode_choice_index, select_music_itl_rank_mode_from_choice,
-    select_music_itl_wheel_mode_choice_index, select_music_itl_wheel_mode_from_choice,
-    select_music_new_pack_mode_choice_index, select_music_new_pack_mode_from_choice,
-    select_music_pattern_info_mode_choice_index, select_music_pattern_info_mode_from_choice,
-    select_music_scorebox_placement_choice_index, select_music_scorebox_placement_from_choice,
-    select_music_song_select_bg_mode_choice_index, select_music_song_select_bg_mode_from_choice,
-    select_music_step_artist_box_mode_choice_index, select_music_step_artist_box_mode_from_choice,
-    select_music_wheel_style_choice_index, select_music_wheel_style_from_choice,
-    srpg_variant_choice_index, srpg_variant_from_choice, sync_graph_mode_choice_index,
-    sync_graph_mode_from_choice, version_overlay_side_choice_index,
+    self, SimpleIni, arrowcloud_qr_login_when_choice_index, arrowcloud_qr_login_when_from_choice,
+    breakdown_style_choice_index, breakdown_style_from_choice, default_fail_type_choice_index,
+    default_fail_type_from_choice, default_sync_offset_choice_index,
+    default_sync_offset_from_choice, groovestats_qr_login_when_choice_index,
+    groovestats_qr_login_when_from_choice, log_level_choice_index, log_level_from_choice,
+    machine_bar_color_choice_index, machine_bar_color_from_choice,
+    machine_evaluation_style_choice_index, machine_evaluation_style_from_choice,
+    machine_font_choice_index, machine_font_from_choice, machine_preferred_play_mode_choice_index,
+    machine_preferred_play_mode_from_choice, machine_preferred_play_style_choice_index,
+    machine_preferred_play_style_from_choice, null_or_die_kernel_target_choice_index,
+    null_or_die_kernel_target_from_choice, null_or_die_kernel_type_choice_index,
+    null_or_die_kernel_type_from_choice, random_background_mode_choice_index,
+    random_background_mode_from_choice, select_music_itl_rank_mode_choice_index,
+    select_music_itl_rank_mode_from_choice, select_music_itl_wheel_mode_choice_index,
+    select_music_itl_wheel_mode_from_choice, select_music_new_pack_mode_choice_index,
+    select_music_new_pack_mode_from_choice, select_music_pattern_info_mode_choice_index,
+    select_music_pattern_info_mode_from_choice, select_music_scorebox_placement_choice_index,
+    select_music_scorebox_placement_from_choice, select_music_song_select_bg_mode_choice_index,
+    select_music_song_select_bg_mode_from_choice, select_music_step_artist_box_mode_choice_index,
+    select_music_step_artist_box_mode_from_choice, select_music_wheel_style_choice_index,
+    select_music_wheel_style_from_choice, srpg_variant_choice_index, srpg_variant_from_choice,
+    sync_graph_mode_choice_index, sync_graph_mode_from_choice, version_overlay_side_choice_index,
     version_overlay_side_from_choice, visual_style_choice_index, visual_style_from_choice,
 };
 #[cfg(target_os = "windows")]
@@ -37,25 +36,18 @@ use crate::screens::pack_sync as shared_pack_sync;
 use crate::screens::select_music;
 use crate::screens::{Screen, ThemeEffect};
 use crate::views::{SimplyLoveUpdaterCapabilities, SimplyLoveUpdaterView};
-use deadlib_platform::display::{
-    self, MonitorSpec, fullscreen_type_choice_index, fullscreen_type_from_choice,
-};
 use deadlib_present::space::{is_wide, screen_height, screen_width, widescale};
-use deadlib_render::{
-    BackendType, PresentModePolicy, backend_type_choice_index as backend_to_renderer_choice_index,
-    backend_type_from_choice as renderer_choice_index_to_backend, build_software_thread_choices,
-    present_mode_policy_choice_index, present_mode_policy_from_choice,
-    software_thread_choice_index, software_thread_from_choice,
-};
+use deadlib_render::{software_thread_choice_index, software_thread_from_choice};
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_online::score_compat as scores;
 use deadsync_profile::compat as profile;
 use deadsync_score as score_data;
 use deadsync_simfile::app_runtime as song_loading;
 use deadsync_theme::views::{
-    AppPathKind, AppPathsView, AudioOptionsView, NoteskinCatalogView, SmxAssignmentView,
-    SmxGifCatalogView,
+    AppPathKind, AppPathsView, AudioOptionsView, GraphicsMonitorView, GraphicsOptionsView,
+    NoteskinCatalogView, SmxAssignmentView, SmxGifCatalogView,
 };
+use deadsync_theme::{DisplayModeChoice, FullscreenChoice, PresentPolicyChoice, RendererChoice};
 use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;

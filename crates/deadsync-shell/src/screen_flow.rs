@@ -2,18 +2,19 @@ use crate::Command;
 use crate::interaction::ProcessExitRequest;
 use deadlib_platform::dirs;
 use deadsync_profile::PlayerSide;
+#[cfg(test)]
+use deadsync_theme_simply_love::screens::SelectMusicJoinPlan;
 use deadsync_theme_simply_love::screens::SimplyLoveScreen as Screen;
-pub use deadsync_theme_simply_love::screens::{
-    LateJoinContext, ProfileSelectionContext, ProfileSelectionPlan, SelectMusicJoinContext,
-    SelectMusicJoinPlan, SimplyLoveNavigationPlan as NavigationRoutePlan,
-    evaluation_summary_return_to, late_join_side, profile_selection_plan,
-    resolve_navigation as navigation_route_plan, select_music_join_plan,
+pub(crate) use deadsync_theme_simply_love::screens::{
+    LateJoinContext, ProfileSelectionContext, SelectMusicJoinContext, evaluation_summary_return_to,
+    late_join_side, profile_selection_plan, resolve_navigation as navigation_route_plan,
+    select_music_join_plan,
 };
-use deadsync_theme_simply_love::{
+pub(crate) use deadsync_theme_simply_love::{
     SimplyLoveDebugRequest, SimplyLoveEffect as ThemeEffect, SimplyLoveMediaRequest,
     SimplyLoveOnlineRequest, SimplyLoveRuntimeRequest,
 };
-pub use deadsync_theme_simply_love::{
+pub(crate) use deadsync_theme_simply_love::{
     SimplyLoveEffectRouteContext as ThemeEffectRouteContext,
     SimplyLoveEffectRoutePlan as ThemeEffectRoutePlan,
     resolve_effect_route as theme_effect_route_plan,

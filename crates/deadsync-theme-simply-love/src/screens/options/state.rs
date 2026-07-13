@@ -215,14 +215,14 @@ pub struct State {
     pub(super) null_or_die_window_tenths: i32,
     pub(super) null_or_die_step_tenths: i32,
     pub(super) null_or_die_magic_offset_tenths: i32,
-    pub(super) video_renderer_at_load: BackendType,
-    pub(super) display_mode_at_load: DisplayMode,
+    pub(super) video_renderer_at_load: RendererChoice,
+    pub(super) display_mode_at_load: DisplayModeChoice,
     pub(super) display_monitor_at_load: usize,
     pub(super) display_width_at_load: u32,
     pub(super) display_height_at_load: u32,
     pub(super) max_fps_at_load: u16,
     pub(super) vsync_at_load: bool,
-    pub(super) present_mode_policy_at_load: PresentModePolicy,
+    pub(super) present_mode_policy_at_load: PresentPolicyChoice,
     pub(super) high_dpi_at_load: bool,
     pub(super) display_mode_choices: Vec<String>,
     pub(super) software_thread_choices: Vec<u8>,
@@ -231,7 +231,7 @@ pub struct State {
     pub(super) resolution_choices: Vec<(u32, u32)>,
     pub(super) refresh_rate_choices: Vec<u32>, // New: stored in millihertz
     // Hardware info
-    pub monitor_specs: Vec<MonitorSpec>,
+    pub monitor_specs: Vec<GraphicsMonitorView>,
     // Cursor ring tween (StopTweening/BeginTweening parity with ITGmania ScreenOptions::TweenCursor).
     pub(super) cursor_initialized: bool,
     pub(super) cursor_from_x: f32,
@@ -258,6 +258,7 @@ pub fn init(
     updater_capabilities: SimplyLoveUpdaterCapabilities,
     app_paths: AppPathsView,
     audio_options: AudioOptionsView,
+    graphics_options: GraphicsOptionsView,
     noteskin_catalog: NoteskinCatalogView,
     smx_assignment: SmxAssignmentView,
     smx_gif_catalog: SmxGifCatalogView,
@@ -269,7 +270,7 @@ pub fn init(
     }
     let smx_bg_pack_choices = smx_gif_catalog.background_packs;
     let smx_judge_pack_choices = smx_gif_catalog.judgment_packs;
-    let software_thread_choices = build_software_thread_choices();
+    let software_thread_choices = graphics_options.software_thread_choices.clone();
     let software_thread_labels = software_thread_choice_labels(&software_thread_choices);
     let max_fps_choices = build_max_fps_choices();
     let sound_device_options = build_sound_device_options(&audio_options);
@@ -375,15 +376,15 @@ pub fn init(
             NULL_OR_DIE_MAGIC_OFFSET_MIN_TENTHS,
             NULL_OR_DIE_MAGIC_OFFSET_MAX_TENTHS,
         ),
-        video_renderer_at_load: cfg.video_renderer,
-        display_mode_at_load: cfg.display_mode(),
-        display_monitor_at_load: cfg.display_monitor,
-        display_width_at_load: cfg.display_width,
-        display_height_at_load: cfg.display_height,
-        max_fps_at_load: cfg.max_fps,
-        vsync_at_load: cfg.vsync,
-        present_mode_policy_at_load: cfg.present_mode_policy,
-        high_dpi_at_load: cfg.high_dpi,
+        video_renderer_at_load: graphics_options.renderer,
+        display_mode_at_load: graphics_options.display_mode,
+        display_monitor_at_load: graphics_options.monitor,
+        display_width_at_load: graphics_options.width,
+        display_height_at_load: graphics_options.height,
+        max_fps_at_load: graphics_options.max_fps,
+        vsync_at_load: graphics_options.vsync,
+        present_mode_policy_at_load: graphics_options.present_policy,
+        high_dpi_at_load: graphics_options.high_dpi,
         display_mode_choices: build_display_mode_choices(&[]),
         software_thread_choices,
         software_thread_labels,
@@ -411,15 +412,15 @@ pub fn init(
         i18n_revision: crate::assets::i18n::revision(),
     };
 
-    sync_video_renderer(&mut state, cfg.video_renderer);
+    sync_video_renderer(&mut state, graphics_options.renderer);
     sync_display_mode(
         &mut state,
-        cfg.display_mode(),
-        cfg.fullscreen_type,
-        cfg.display_monitor,
+        graphics_options.display_mode,
+        graphics_options.fullscreen,
+        graphics_options.monitor,
         1,
     );
-    sync_display_resolution(&mut state, cfg.display_width, cfg.display_height);
+    sync_display_resolution(&mut state, graphics_options.width, graphics_options.height);
 
     set_choice_by_id(
         &mut state.sub[SubmenuKind::System].choice_indices,
@@ -465,15 +466,15 @@ pub fn init(
         &mut state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
         SubRowId::VSync,
-        yes_no_choice_index(cfg.vsync),
+        yes_no_choice_index(graphics_options.vsync),
     );
     set_choice_by_id(
         &mut state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
         SubRowId::PresentMode,
-        present_mode_policy_choice_index(cfg.present_mode_policy),
+        graphics_options.present_policy.choice_index(),
     );
-    sync_max_fps(&mut state, cfg.max_fps);
+    sync_max_fps(&mut state, graphics_options.max_fps);
     set_choice_by_id(
         &mut state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
@@ -490,7 +491,7 @@ pub fn init(
         &mut state.sub[SubmenuKind::Graphics].choice_indices,
         GRAPHICS_OPTIONS_ROWS,
         SubRowId::HighDpi,
-        yes_no_choice_index(cfg.high_dpi),
+        yes_no_choice_index(graphics_options.high_dpi),
     );
     set_choice_by_id(
         &mut state.sub[SubmenuKind::Graphics].choice_indices,

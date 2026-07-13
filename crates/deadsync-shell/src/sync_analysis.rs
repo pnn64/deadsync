@@ -3,11 +3,13 @@ use deadsync_chart::SongData;
 use deadsync_config::prelude as config;
 use deadsync_simfile::app_runtime as song_loading;
 use deadsync_theme_simply_love::{
-    SimplyLoveSyncEvent, SimplyLoveSyncOwner, SimplyLoveSyncResult, SimplyLoveSyncTarget,
+    SimplyLoveSyncEvent, SimplyLoveSyncKernel, SimplyLoveSyncKernelTarget, SimplyLoveSyncOwner,
+    SimplyLoveSyncPlotView, SimplyLoveSyncResult, SimplyLoveSyncSongResult,
+    SimplyLoveSyncStreamEvent, SimplyLoveSyncTarget,
 };
 use null_or_die::{
-    BiasCfg, BiasEstimateWithPlot, BiasRuntime, BiasStreamCfg, BiasStreamEvent, GraphOrientation,
-    estimate_bias_with_beat_fn_stream_reuse,
+    BiasCfg, BiasEstimateWithPlot, BiasKernel, BiasRuntime, BiasStreamCfg, BiasStreamEvent,
+    GraphOrientation, KernelTarget, estimate_bias_with_beat_fn_stream_reuse,
 };
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -122,6 +124,7 @@ fn run_song(
         emit_freq_delta,
         orientation: GraphOrientation::Horizontal,
     };
+    let kernel = cfg.kernel_type;
     let result = analyze_song_chart_stream(
         target.song.as_ref(),
         target.chart_ix,
@@ -129,12 +132,79 @@ fn run_song(
         stream_cfg,
         |event| {
             if !cancel.load(Ordering::Relaxed) {
+                let event = sync_stream_event(event, kernel);
                 let _ = tx.send(SimplyLoveSyncEvent::SongStream(event));
             }
         },
-    );
+    )
+    .map(sync_song_result);
     if !cancel.load(Ordering::Relaxed) {
         let _ = tx.send(SimplyLoveSyncEvent::SongFinished(result));
+    }
+}
+
+#[inline(always)]
+const fn sync_kernel_target(target: KernelTarget) -> SimplyLoveSyncKernelTarget {
+    match target {
+        KernelTarget::Digest => SimplyLoveSyncKernelTarget::Digest,
+        KernelTarget::Accumulator => SimplyLoveSyncKernelTarget::Accumulator,
+    }
+}
+
+#[inline(always)]
+const fn sync_kernel(kernel: BiasKernel) -> SimplyLoveSyncKernel {
+    match kernel {
+        BiasKernel::Rising => SimplyLoveSyncKernel::Rising,
+        BiasKernel::Loudest => SimplyLoveSyncKernel::Loudest,
+    }
+}
+
+fn sync_stream_event(event: BiasStreamEvent, kernel: BiasKernel) -> SimplyLoveSyncStreamEvent {
+    match event {
+        BiasStreamEvent::Init(init) => SimplyLoveSyncStreamEvent::Init {
+            cols: init.cols,
+            freq_rows: init.freq_rows,
+            planned_beats: init.planned_beats,
+            kernel_target: sync_kernel_target(init.kernel_target),
+            kernel: sync_kernel(kernel),
+            times_ms: init.times_ms,
+        },
+        BiasStreamEvent::Beat(beat) => SimplyLoveSyncStreamEvent::Beat {
+            beat_seq: beat.beat_seq,
+            digest_row: beat.digest_row,
+            freq_delta: beat.freq_delta,
+        },
+        BiasStreamEvent::Convolution(conv) => SimplyLoveSyncStreamEvent::Convolution {
+            rows: conv.rows,
+            post_kernel: conv.post_kernel,
+            convolution: conv.convolution,
+            edge_discard: conv.edge_discard,
+        },
+        BiasStreamEvent::Done(estimate) => SimplyLoveSyncStreamEvent::Done(SimplyLoveSyncResult {
+            bias_ms: estimate.bias_ms,
+            confidence: estimate.confidence,
+        }),
+    }
+}
+
+fn sync_song_result(result: BiasEstimateWithPlot) -> SimplyLoveSyncSongResult {
+    SimplyLoveSyncSongResult {
+        estimate: SimplyLoveSyncResult {
+            bias_ms: result.estimate.bias_ms,
+            confidence: result.estimate.confidence,
+        },
+        plot: SimplyLoveSyncPlotView {
+            freq_rows: result.plot.freq_rows,
+            digest_rows: result.plot.digest_rows,
+            cols: result.plot.cols,
+            post_rows: result.plot.post_rows,
+            freq_domain: result.plot.freq_domain,
+            beat_digest: result.plot.beat_digest,
+            post_kernel: result.plot.post_kernel,
+            convolution: result.plot.convolution,
+            times_ms: result.plot.times_ms,
+            edge_discard: result.plot.edge_discard,
+        },
     }
 }
 

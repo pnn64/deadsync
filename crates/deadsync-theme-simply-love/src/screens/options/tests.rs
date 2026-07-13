@@ -6,8 +6,8 @@ use deadsync_core::input::InputSource;
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_profile as profile_data;
 use deadsync_theme::views::{
-    AppPathView, AppPathsView, AudioOutputDeviceView, NoteskinCatalogView, SmxAssignmentPadView,
-    SmxAssignmentView, SmxGifCatalogView,
+    AppPathView, AppPathsView, AudioOutputDeviceView, GraphicsOptionsView, NoteskinCatalogView,
+    SmxAssignmentPadView, SmxAssignmentView, SmxGifCatalogView,
 };
 use std::time::{Duration, Instant};
 
@@ -40,6 +40,10 @@ fn init_with_audio(audio_options: AudioOptionsView) -> State {
         },
         test_app_paths(),
         audio_options,
+        GraphicsOptionsView {
+            software_thread_choices: vec![0, 1, 2],
+            ..GraphicsOptionsView::default()
+        },
         NoteskinCatalogView {
             names: vec![profile_data::NoteSkin::DEFAULT_NAME.to_owned()],
         },
@@ -58,6 +62,7 @@ fn smx_gif_choices_come_from_shell_catalog() {
         SimplyLoveUpdaterCapabilities::default(),
         test_app_paths(),
         AudioOptionsView::default(),
+        GraphicsOptionsView::default(),
         NoteskinCatalogView::default(),
         SmxAssignmentView::default(),
         SmxGifCatalogView {
@@ -276,7 +281,7 @@ fn select_visible_row(state: &mut State, kind: SubmenuKind, row_id: SubRowId) ->
 
 #[test]
 fn inferred_aspect_choice_maps_1024x768_to_4_3() {
-    let idx = display::display_aspect_choice_index(1024, 768);
+    let idx = display_aspect_choice_index(1024, 768);
     assert!(matches!(
         DISPLAY_ASPECT_RATIO_CHOICES[idx],
         Choice::Literal("4:3")

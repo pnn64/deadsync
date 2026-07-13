@@ -152,6 +152,7 @@ impl DecayingHist {
 
     /// Effective sample count represented by the decaying histogram.
     #[inline(always)]
+    #[cfg(test)]
     pub fn effective_n(&self) -> u32 {
         self.total.round().max(0.0) as u32
     }
@@ -322,6 +323,7 @@ impl FrameStatsLong {
     }
 
     #[inline(always)]
+    #[cfg(test)]
     pub fn effective_n(&self) -> u32 {
         self.frame_hist.effective_n()
     }
@@ -334,6 +336,7 @@ impl Default for FrameStatsLong {
 }
 
 /// Single-pass bucketed percentile of `frame_us` across `samples`, in microseconds.
+#[cfg(test)]
 pub fn percentile_us(samples: &[FrameStatsSample], pct: f32, bucket_us: u32) -> u32 {
     const BUCKETS: usize = 256;
     let bucket_us = bucket_us.max(1);

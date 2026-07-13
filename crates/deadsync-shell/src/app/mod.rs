@@ -472,6 +472,7 @@ impl ScreensState {
             updater::capabilities(),
             app_paths_view(),
             audio_options_view(),
+            graphics::options_graphics_view(),
             noteskin_catalog_view(),
             crate::smx_config::smx_assignment_view(),
             crate::smx_config::smx_gif_catalog_view(),
@@ -1013,7 +1014,7 @@ impl App {
         } else {
             0.0
         };
-        let (arrow_bounce_offset, policy) = {
+        let (arrow_bounce_offset, policy, sync_graph_mode, sync_confidence_percent) = {
             let config = config::get();
             (
                 -10.0 * config.global_offset_seconds,
@@ -1024,6 +1025,8 @@ impl App {
                     profile_switch: config.allow_switch_profile_in_menu,
                     keyboard_features: config.keyboard_features,
                 },
+                config.null_or_die_sync_graph,
+                config.null_or_die_confidence_percent,
             )
         };
         select_music::sync_runtime_view(
@@ -1036,6 +1039,8 @@ impl App {
                 policy,
                 unlock_downloads_available: deadsync_online::runtime::unlock_downloads_available(),
                 ready_song_reload_dirs: deadsync_online::runtime::take_ready_song_reload_request(),
+                sync_graph_mode,
+                sync_confidence_percent,
             },
         );
     }
@@ -1930,6 +1935,7 @@ impl App {
             updater::capabilities(),
             app_paths_view(),
             audio_options_view(),
+            graphics::options_graphics_view(),
             noteskin_catalog_view(),
             crate::smx_config::smx_assignment_view(),
             crate::smx_config::smx_gif_catalog_view(),
@@ -4765,7 +4771,10 @@ impl App {
             self.state.screens.profile_load_state.active_color_index = current_color_index;
             let profiles = profile::load_default_profiles_for_joined_sides();
             self.sync_profile_load_state(&profiles);
-            profile_load::on_enter(&mut self.state.screens.profile_load_state);
+            profile_load::on_enter(
+                &mut self.state.screens.profile_load_state,
+                crate::select_music::init_view(),
+            );
         } else if target == CurrentScreen::PlayerOptions {
             if prev == CurrentScreen::SelectCourse {
                 if !self.start_course_run_from_selected() {
@@ -5774,7 +5783,8 @@ impl App {
                 _ => {
                     let current_color_index =
                         self.state.screens.select_music_state.active_color_index;
-                    self.state.screens.select_music_state = select_music::init();
+                    self.state.screens.select_music_state =
+                        select_music::init(crate::select_music::init_view());
                     self.state.screens.select_music_state.active_color_index = current_color_index;
                     let preferred = self.state.session.preferred_difficulty_index;
                     self.state.screens.select_music_state.selected_steps_index = preferred;

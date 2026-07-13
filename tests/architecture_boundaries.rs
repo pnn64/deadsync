@@ -1281,6 +1281,23 @@ fn select_music_sync_analysis_execution_is_shell_owned() {
         "Simply Love must not depend on audio decode; sync analysis is shell-owned"
     );
     assert!(
+        !theme_manifest.contains("null-or-die")
+            && !effects.contains("null_or_die::")
+            && !effects.contains("BiasStreamEvent")
+            && !effects.contains("BiasEstimateWithPlot"),
+        "Simply Love sync events must expose plain theme-owned DTOs"
+    );
+    for dto in [
+        "pub enum SimplyLoveSyncStreamEvent",
+        "pub struct SimplyLoveSyncSongResult",
+        "pub struct SimplyLoveSyncPlotView",
+    ] {
+        assert!(
+            effects.contains(dto),
+            "Simply Love sync boundary is missing neutral DTO {dto}"
+        );
+    }
+    assert!(
         !theme_sync.exists(),
         "the retired theme-side sync-analysis executor must be deleted"
     );
@@ -1296,11 +1313,62 @@ fn select_music_sync_analysis_execution_is_shell_owned() {
     );
     assert!(
         shell_manifest.contains("deadsync-audio-decode")
+            && shell_manifest.contains("null-or-die")
             && shell_sync.contains("use deadsync_audio_decode as decode")
+            && shell_sync.contains("use null_or_die::")
+            && shell_sync.contains("fn sync_stream_event")
+            && shell_sync.contains("fn sync_song_result")
             && shell_sync.contains("fn analyze_song_chart_stream")
             && shell_sync.contains("std::thread::spawn")
             && shell_sync.contains("pub(crate) struct Service"),
         "shell must own sync-analysis decoding, execution, workers, and polling"
+    );
+}
+
+#[test]
+fn simply_love_options_graphics_uses_theme_graphics_contract() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let options = root.join("crates/deadsync-theme-simply-love/src/screens/options");
+    let mut source = String::new();
+    for file in rust_files(&options) {
+        source.push_str(&fs::read_to_string(file).expect("Options source should be readable"));
+    }
+    for forbidden in [
+        "BackendType",
+        "PresentModePolicy",
+        "deadlib_platform::display",
+    ] {
+        assert!(
+            !source.contains(forbidden),
+            "Simply Love Options still exposes runtime graphics type {forbidden}"
+        );
+    }
+    for contract in [
+        "GraphicsOptionsView",
+        "RendererChoice",
+        "DisplayModeChoice",
+        "PresentPolicyChoice",
+        "GraphicsRequest",
+    ] {
+        assert!(
+            source.contains(contract),
+            "Simply Love Options is missing semantic graphics contract {contract}"
+        );
+    }
+
+    let views = fs::read_to_string(root.join("crates/deadsync-theme/src/views.rs"))
+        .expect("generic theme views should be readable");
+    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/graphics.rs"))
+        .expect("shell graphics adapter should be readable");
+    assert!(
+        views.contains("pub struct GraphicsOptionsView")
+            && views.contains("pub struct GraphicsMonitorView")
+            && shell.contains("fn runtime_backend_type")
+            && shell.contains("fn runtime_present_mode_policy")
+            && shell.contains("fn theme_renderer_choice")
+            && shell.contains("fn theme_present_policy")
+            && shell.contains("pub(super) fn options_graphics_view()"),
+        "shell must map semantic graphics choices to and from runtime types"
     );
 }
 
@@ -1625,7 +1693,13 @@ fn concrete_theme_does_not_execute_updater_or_native_dialog_services() {
     let theme = root.join("crates/deadsync-theme-simply-love");
     let manifest = fs::read_to_string(theme.join("Cargo.toml"))
         .expect("Simply Love manifest should be readable");
-    for dependency in ["deadsync-updater", "deadlib-video", "rfd =", "semver ="] {
+    for dependency in [
+        "deadsync-updater",
+        "deadlib-video",
+        "null-or-die",
+        "rfd =",
+        "semver =",
+    ] {
         assert!(
             !manifest.contains(dependency),
             "Simply Love still owns runtime dependency {dependency}"
@@ -2067,6 +2141,8 @@ fn options_folder_paths_are_shell_prepared() {
         .expect("generic theme views should be readable");
     let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
         .expect("shell app should be readable");
+    let reload = fs::read_to_string(theme.join("reload.rs"))
+        .expect("Options reload source should be readable");
 
     for direct_read in ["deadlib_platform::dirs", "app_dirs()", "std::env::var_os"] {
         assert!(!folders.contains(direct_read));
@@ -2074,11 +2150,64 @@ fn options_folder_paths_are_shell_prepared() {
     assert!(folders.contains("HelpEntry::AppPath(AppPathKind::Data)"));
     assert!(folders.contains("folder_reveal_request("));
     assert!(state.contains("pub(super) app_paths: AppPathsView"));
+    assert!(!reload.contains("deadlib_platform::dirs"));
+    assert!(reload.contains("state.app_paths.songs.path.clone()"));
+    assert!(reload.contains("state.app_paths.courses.path.clone()"));
     assert!(views.contains("pub struct AppPathView"));
     assert!(views.contains("pub struct AppPathsView"));
     assert!(shell.contains("fn app_paths_view() -> AppPathsView"));
     assert!(shell.contains("deadlib_platform::dirs::app_dirs()"));
     assert!(shell.contains("deadlib_platform::dirs::path_shorthand(&path)"));
+}
+
+#[test]
+fn select_music_uses_shell_prepared_paths_and_playlists() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let select_music = fs::read_to_string(
+        root.join("crates/deadsync-theme-simply-love/src/screens/select_music.rs"),
+    )
+    .expect("Select Music source should be readable");
+    for forbidden in [
+        "deadlib_platform::dirs",
+        "std::fs",
+        "fs::read_dir",
+        "fs::read_to_string",
+        "config::get().null_or_die_confidence_percent",
+        "config::get().null_or_die_sync_graph",
+    ] {
+        assert!(
+            !select_music.contains(forbidden),
+            "Select Music still performs shell-owned filesystem work via {forbidden}"
+        );
+    }
+    assert!(
+        select_music.contains("pub fn init(init_view: SelectMusicInitView)")
+            && select_music.contains("init_view.songs_root")
+            && select_music.contains("init_view.courses_root")
+            && select_music.contains("init_view.playlists"),
+        "Select Music must initialize from a shell-prepared path and playlist view"
+    );
+
+    let views = fs::read_to_string(root.join("crates/deadsync-theme-simply-love/src/views.rs"))
+        .expect("Simply Love views should be readable");
+    let shell = fs::read_to_string(root.join("crates/deadsync-shell/src/select_music.rs"))
+        .expect("shell Select Music adapter should be readable");
+    let app = fs::read_to_string(root.join("crates/deadsync-shell/src/app/mod.rs"))
+        .expect("shell app should be readable");
+    assert!(
+        views.contains("pub struct SelectMusicInitView")
+            && views.contains("pub struct SelectMusicPlaylistView")
+            && views.contains("pub sync_graph_mode:")
+            && views.contains("pub sync_confidence_percent: u8")
+            && shell.contains("deadlib_platform::dirs::app_dirs()")
+            && shell.contains("std::fs::read_dir")
+            && shell.contains("std::fs::read_to_string")
+            && shell.contains("pub(crate) fn init_view() -> SelectMusicInitView")
+            && app.contains("config.null_or_die_sync_graph")
+            && app.contains("config.null_or_die_confidence_percent")
+            && app.contains("select_music::init(crate::select_music::init_view())"),
+        "shell must resolve Select Music paths and load playlist files"
+    );
 }
 
 #[test]
@@ -6765,6 +6894,23 @@ fn shell_app_has_no_move_compatibility_facade() {
         failures.is_empty(),
         "shell app must import owning crates and modules directly:\n{}",
         failures.join("\n")
+    );
+}
+
+#[test]
+fn shell_public_facade_does_not_grow_accidentally() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let lib = fs::read_to_string(root.join("crates/deadsync-shell/src/lib.rs"))
+        .expect("shell facade should be readable");
+    let public_lines: Vec<_> = lib
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.starts_with("pub "))
+        .collect();
+    assert_eq!(
+        public_lines,
+        ["pub mod app;"],
+        "only the startup module belongs on the shell's public facade"
     );
 }
 

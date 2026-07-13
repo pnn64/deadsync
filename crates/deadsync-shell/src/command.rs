@@ -123,6 +123,7 @@ pub struct DeferredCommandApplyPlan {
 }
 
 pub struct CommandTimingResult {
+    #[cfg(test)]
     pub kind: CommandKind,
     pub label: &'static str,
     pub elapsed_ms: f64,
@@ -610,6 +611,7 @@ pub fn command_timing_log(kind: CommandKind, elapsed_ms: f64) -> CommandTimingLo
 
 pub fn command_timing_result(kind: CommandKind, elapsed_ms: f64) -> CommandTimingResult {
     CommandTimingResult {
+        #[cfg(test)]
         kind,
         label: command_label(kind),
         elapsed_ms,
