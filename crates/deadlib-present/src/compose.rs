@@ -611,8 +611,7 @@ struct CachedLine {
 #[derive(Clone)]
 struct CachedTextMeshBatch {
     texture_key: *const str,
-    geometry_id: renderer::TMeshGeometryId,
-    vertices: Arc<[renderer::TexturedMeshVertex]>,
+    geometry: Arc<renderer::RetainedTMeshGeometry>,
 }
 
 #[derive(Default)]
@@ -1703,12 +1702,11 @@ fn finish_text_mesh_batches(
         let texture_key = unsafe { str_from_cached_ptr(builder.texture_key) };
         let vertices: Arc<[renderer::TexturedMeshVertex]> = Arc::from(builder.vertices);
         let logical_key = text_batch_cache_key(layout_seed, texture_key, stroke, align);
-        let geometry_id = renderer::TMeshGeometryId::new(logical_key, vertices.as_ref())
+        let geometry = renderer::RetainedTMeshGeometry::new(logical_key, vertices)
             .expect("nonempty cached text geometry has a valid logical key");
         out.push(CachedTextMeshBatch {
             texture_key: builder.texture_key,
-            geometry_id,
-            vertices,
+            geometry: Arc::new(geometry),
         });
     }
     out
@@ -2742,7 +2740,6 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
             tint,
             glow,
             vertices,
-            geometry_id,
             uv_scale,
             uv_offset,
             uv_tex_shift,
@@ -2778,8 +2775,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                         *uv_tex_shift,
                         false,
                     ),
-                    vertices: renderer::TexturedMeshVertices::Shared(Arc::clone(vertices)),
-                    geometry_id: *geometry_id,
+                    vertices: vertices.clone(),
                     depth_test: *depth_test,
                 },
                 texture_handle,
@@ -2810,8 +2806,7 @@ fn build_actor_recursive<'a, T: TextureContext + ?Sized>(
                             *uv_tex_shift,
                             true,
                         ),
-                        vertices: renderer::TexturedMeshVertices::Shared(Arc::clone(vertices)),
-                        geometry_id: *geometry_id,
+                        vertices: vertices.clone(),
                         depth_test: *depth_test,
                     },
                     texture_handle,
@@ -3875,8 +3870,7 @@ fn push_text_mesh_batches<T: TextureContext + ?Sized>(
                     [0.0, 0.0],
                     false,
                 ),
-                vertices: renderer::TexturedMeshVertices::Shared(Arc::clone(&batch.vertices)),
-                geometry_id: Some(batch.geometry_id),
+                vertices: renderer::TexturedMeshVertices::Retained(Arc::clone(&batch.geometry)),
                 depth_test: false,
             },
             texture_handle: texture_cache.texture_handle(
@@ -3932,7 +3926,6 @@ fn push_transient_text_mesh_builders<T: TextureContext + ?Sized>(
                     false,
                 ),
                 vertices: renderer::TexturedMeshVertices::Transient(builder.vertices),
-                geometry_id: None,
                 depth_test: false,
             },
             texture_handle: texture_cache.texture_handle(
@@ -4644,7 +4637,6 @@ fn clip_textured_mesh_to_world_rect(
                 texture_mask,
             ),
             vertices: renderer::TexturedMeshVertices::Transient(out),
-            geometry_id: None,
             depth_test: false,
         },
         sprite: None,
@@ -4721,7 +4713,6 @@ fn clip_rotated_sprite_to_world_rect(
                 texture_mask,
             ),
             vertices: renderer::TexturedMeshVertices::Transient(out.into_vec()),
-            geometry_id: None,
             depth_test: false,
         },
         sprite: None,
@@ -4742,8 +4733,8 @@ mod tests {
     use crate::font::{Font, Glyph};
     use crate::space::Metrics;
     use deadlib_render::{
-        BlendMode, MeshVertex, ObjectType, RenderObject, SpriteInstanceRaw, TMeshGeometryId,
-        TexturedMeshInstanceRaw, TexturedMeshVertex,
+        BlendMode, MeshVertex, ObjectType, RenderObject, RetainedTMeshGeometry, SpriteInstanceRaw,
+        TexturedMeshInstanceRaw, TexturedMeshVertex, TexturedMeshVertices,
     };
     use glam::Mat4 as Matrix4;
     use std::collections::HashMap;
@@ -5569,7 +5560,6 @@ mod tests {
                         TexturedMeshVertex::default();
                         6
                     ]),
-                    geometry_id: None,
                     depth_test: false,
                 },
                 texture_handle: 9,
@@ -5679,7 +5669,9 @@ mod tests {
             bottom: 0.0,
         };
         let vertices: Arc<[TexturedMeshVertex]> = Arc::from(vec![TexturedMeshVertex::default(); 3]);
-        let geometry_id = TMeshGeometryId::new(CACHE_KEY, vertices.as_ref());
+        let geometry = RetainedTMeshGeometry::new(CACHE_KEY, vertices)
+            .expect("shadow fixture geometry is valid");
+        let geometry_id = geometry.id();
         let mesh = Actor::TexturedMesh {
             align: [0.0, 0.0],
             offset: [10.0, 20.0],
@@ -5689,8 +5681,7 @@ mod tests {
             texture: Arc::from("mesh"),
             tint: [0.25, 0.5, 0.75, 0.8],
             glow: [1.0, 1.0, 1.0, 0.0],
-            vertices,
-            geometry_id,
+            vertices: TexturedMeshVertices::Retained(Arc::new(geometry)),
             uv_scale: [1.0, 1.0],
             uv_offset: [0.0, 0.0],
             uv_tex_shift: [0.0, 0.0],
@@ -5724,17 +5715,17 @@ mod tests {
             (
                 deadlib_render::ObjectType::TexturedMesh {
                     instance: shadow_instance,
-                    geometry_id: shadow_id,
+                    vertices: shadow_vertices,
                     ..
                 },
                 deadlib_render::ObjectType::TexturedMesh {
                     instance: original_instance,
-                    geometry_id: original_id,
+                    vertices: original_vertices,
                     ..
                 },
             ) => {
-                assert_eq!(*shadow_id, geometry_id);
-                assert_eq!(*original_id, geometry_id);
+                assert_eq!(shadow_vertices.geometry_id(), Some(geometry_id));
+                assert_eq!(original_vertices.geometry_id(), Some(geometry_id));
                 assert_eq!(original_instance.tint, [0.25, 0.5, 0.75, 0.8]);
                 assert_eq!(shadow_instance.tint, [0.125, 0.125, 0.5625, 0.4]);
             }
@@ -5798,8 +5789,10 @@ mod tests {
             texture: Arc::from("mesh"),
             tint: [0.8, 0.6, 0.4, 0.5],
             glow: [0.5, 0.25, 1.0, 0.4],
-            vertices: Arc::from(vec![TexturedMeshVertex::default(); 3]),
-            geometry_id: None,
+            vertices: TexturedMeshVertices::Shared(Arc::from(vec![
+                TexturedMeshVertex::default();
+                3
+            ])),
             uv_scale: [1.0, 1.0],
             uv_offset: [0.0, 0.0],
             uv_tex_shift: [0.0, 0.0],
@@ -5946,14 +5939,11 @@ mod tests {
         assert_eq!(render.objects.len(), 1);
         match &render.objects[0].object_type {
             ObjectType::TexturedMesh {
-                instance,
-                vertices,
-                geometry_id,
-                ..
+                instance, vertices, ..
             } => {
                 assert_eq!(instance.tint, [0.5, 0.75, 1.0, 1.0]);
                 assert_eq!(vertices.len(), 12);
-                assert!(geometry_id.is_some());
+                assert!(vertices.retained().is_some());
             }
             _ => panic!("expected batched text to use textured mesh"),
         }
@@ -6002,13 +5992,9 @@ mod tests {
 
         assert_eq!(render.objects.len(), 1);
         match &render.objects[0].object_type {
-            ObjectType::TexturedMesh {
-                vertices,
-                geometry_id,
-                ..
-            } => {
+            ObjectType::TexturedMesh { vertices, .. } => {
                 assert!(!vertices.is_empty());
-                assert!(geometry_id.is_none());
+                assert!(vertices.retained().is_none());
             }
             _ => panic!("expected clipped batched text to remain textured mesh"),
         }
@@ -6057,8 +6043,8 @@ mod tests {
 
         assert_eq!(render.objects.len(), 1);
         match &render.objects[0].object_type {
-            ObjectType::TexturedMesh { geometry_id, .. } => {
-                assert!(geometry_id.is_some());
+            ObjectType::TexturedMesh { vertices, .. } => {
+                assert!(vertices.retained().is_some());
             }
             _ => panic!("expected fully inside clipped text to keep cached textured mesh"),
         }
@@ -6107,13 +6093,9 @@ mod tests {
 
         assert_eq!(render.objects.len(), 1);
         match &render.objects[0].object_type {
-            ObjectType::TexturedMesh {
-                vertices,
-                geometry_id,
-                ..
-            } => {
+            ObjectType::TexturedMesh { vertices, .. } => {
                 assert_eq!(vertices.len(), 12);
-                assert!(geometry_id.is_some());
+                assert!(vertices.retained().is_some());
             }
             _ => panic!("expected centered text to use batched textured mesh"),
         }
@@ -6168,13 +6150,9 @@ mod tests {
 
         assert_eq!(render.objects.len(), 1);
         match &render.objects[0].object_type {
-            ObjectType::TexturedMesh {
-                vertices,
-                geometry_id,
-                ..
-            } => {
+            ObjectType::TexturedMesh { vertices, .. } => {
                 assert_eq!(vertices.len(), 12);
-                assert!(geometry_id.is_none());
+                assert!(vertices.retained().is_none());
                 assert_eq!(vertices[0].color, [1.0; 4]);
                 assert_eq!(vertices[6].color, [0.0, 1.0, 0.0, 1.0]);
             }
@@ -6301,13 +6279,12 @@ mod tests {
         };
         let ObjectType::TexturedMesh {
             vertices: jittered_vertices,
-            geometry_id,
             ..
         } = &jittered.objects[0].object_type
         else {
             panic!("expected jittered text mesh");
         };
-        assert!(geometry_id.is_none());
+        assert!(jittered_vertices.retained().is_none());
         assert_ne!(jittered_vertices[0].pos, base_vertices[0].pos);
     }
 
@@ -6366,13 +6343,12 @@ mod tests {
         };
         let ObjectType::TexturedMesh {
             vertices: distorted_vertices,
-            geometry_id,
             ..
         } = &distorted.objects[0].object_type
         else {
             panic!("expected distorted text mesh");
         };
-        assert!(geometry_id.is_none());
+        assert!(distorted_vertices.retained().is_none());
         assert!(
             base_vertices
                 .iter()
@@ -6436,17 +6412,15 @@ mod tests {
             (
                 ObjectType::TexturedMesh {
                     vertices: first_vertices,
-                    geometry_id: first_id,
                     ..
                 },
                 ObjectType::TexturedMesh {
                     vertices: second_vertices,
-                    geometry_id: second_id,
                     ..
                 },
             ) => {
-                assert!(first_id.is_none());
-                assert!(second_id.is_none());
+                assert!(first_vertices.retained().is_none());
+                assert!(second_vertices.retained().is_none());
                 assert_eq!(first_vertices[0].color, [1.0; 4]);
                 assert_eq!(second_vertices[0].color, [0.0, 1.0, 0.0, 1.0]);
             }

@@ -1,5 +1,5 @@
 use deadlib_present::actors::{Actor, SizeSpec};
-use deadlib_render::{BlendMode, TMeshGeometryId, TexturedMeshVertex};
+use deadlib_render::{BlendMode, RetainedTMeshGeometry, TexturedMeshVertex, TexturedMeshVertices};
 use deadsync_noteskin::{
     ModelDrawState, ModelMesh, ModelVertex, NoteskinSlot, model_vertex_for_sprite,
 };
@@ -17,8 +17,7 @@ struct ModelMeshCacheKey {
 }
 
 struct ModelMeshCacheEntry {
-    geometry_id: TMeshGeometryId,
-    vertices: Arc<[TexturedMeshVertex]>,
+    geometry: Arc<RetainedTMeshGeometry>,
     source_vertices: Arc<[ModelVertex]>,
     mirror: [bool; 2],
 }
@@ -98,20 +97,13 @@ impl ModelMeshCache {
     }
 
     #[inline(always)]
-    fn get_or_insert_slot<S: NoteskinSlot>(
-        &mut self,
-        slot: &S,
-    ) -> Option<(Option<TMeshGeometryId>, Arc<[TexturedMeshVertex]>)> {
+    fn get_or_insert_slot<S: NoteskinSlot>(&mut self, slot: &S) -> Option<TexturedMeshVertices> {
         slot.model()
             .map(|_| self.get_or_insert_with(slot, || build_model_geometry(slot)))
     }
 
     #[inline(always)]
-    fn get_or_insert_with<S, F>(
-        &mut self,
-        slot: &S,
-        build: F,
-    ) -> (Option<TMeshGeometryId>, Arc<[TexturedMeshVertex]>)
+    fn get_or_insert_with<S, F>(&mut self, slot: &S, build: F) -> TexturedMeshVertices
     where
         S: NoteskinSlot,
         F: FnOnce() -> Arc<[TexturedMeshVertex]>,
@@ -121,7 +113,7 @@ impl ModelMeshCache {
             && entry.matches(slot)
         {
             self.stats.hits = self.stats.hits.saturating_add(1);
-            return (Some(entry.geometry_id), Arc::clone(&entry.vertices));
+            return TexturedMeshVertices::Retained(Arc::clone(&entry.geometry));
         }
         self.stats.misses = self.stats.misses.saturating_add(1);
         let vertices = build();
@@ -130,24 +122,27 @@ impl ModelMeshCache {
             self.stats.saturated_misses = self.stats.saturated_misses.saturating_add(1);
             // Saturation deliberately bypasses backend retention too: without
             // a CPU entry there is nowhere to retain a hash-free identity.
-            return (None, vertices);
+            return TexturedMeshVertices::Shared(vertices);
         }
-        if let Some(geometry_id) = TMeshGeometryId::from_content(vertices.as_ref()) {
+        if !vertices.is_empty() {
+            let geometry = Arc::new(
+                RetainedTMeshGeometry::from_content(vertices)
+                    .expect("nonempty model geometry must be retainable"),
+            );
             let model = slot
                 .model()
                 .expect("model geometry cache requested for non-model slot");
             self.entries.insert(
                 key,
                 ModelMeshCacheEntry {
-                    geometry_id,
-                    vertices: Arc::clone(&vertices),
+                    geometry: Arc::clone(&geometry),
                     source_vertices: Arc::clone(&model.vertices),
                     mirror: [slot.sprite_def().mirror_h, slot.sprite_def().mirror_v],
                 },
             );
-            return (Some(geometry_id), vertices);
+            return TexturedMeshVertices::Retained(geometry);
         }
-        (None, vertices)
+        TexturedMeshVertices::Shared(vertices)
     }
 }
 
@@ -284,8 +279,7 @@ fn actor_from_vertices<S: NoteskinSlot>(
     slot: &S,
     xy: [f32; 2],
     tint: [f32; 4],
-    vertices: Arc<[TexturedMeshVertex]>,
-    geometry_id: Option<TMeshGeometryId>,
+    vertices: TexturedMeshVertices,
     local_transform: Matrix4,
     uv_scale: [f32; 2],
     uv_offset: [f32; 2],
@@ -304,7 +298,6 @@ fn actor_from_vertices<S: NoteskinSlot>(
         tint,
         glow: [1.0, 1.0, 1.0, 0.0],
         vertices,
-        geometry_id,
         uv_scale,
         uv_offset,
         uv_tex_shift,
@@ -342,8 +335,7 @@ fn actor_from_draw<S: NoteskinSlot>(
         slot,
         xy,
         tint,
-        vertices,
-        None,
+        TexturedMeshVertices::Shared(vertices),
         local_transform,
         uv_scale,
         uv_offset,
@@ -390,14 +382,13 @@ pub(crate) fn noteskin_model_actor_from_draw_cached<S: NoteskinSlot>(
     let tint = model_tint(color, draw);
     let affine = model_affine_transform(model, size, rotation_deg, draw);
     let local_transform = model_draw_transform(model.size(), affine);
-    let (geometry_id, vertices) = cache.get_or_insert_slot(slot)?;
+    let vertices = cache.get_or_insert_slot(slot)?;
     let (uv_scale, uv_offset, uv_tex_shift) = slot.model_uv_params(uv_rect);
     Some(actor_from_vertices(
         slot,
         xy,
         tint,
         vertices,
-        geometry_id,
         local_transform,
         uv_scale,
         uv_offset,
@@ -418,11 +409,10 @@ pub fn noteskin_model_actor_from_draw_depth_sorted_affine_cached_geometry<S: Not
     color: [f32; 4],
     blend: BlendMode,
     z: i16,
-    vertices: Arc<[TexturedMeshVertex]>,
-    geometry_id: Option<TMeshGeometryId>,
+    geometry: Arc<RetainedTMeshGeometry>,
 ) -> Option<Actor> {
     let model = slot.model()?;
-    if !draw.visible || model.vertices.is_empty() || vertices.is_empty() {
+    if !draw.visible || model.vertices.is_empty() || geometry.vertices().is_empty() {
         return None;
     }
 
@@ -435,8 +425,7 @@ pub fn noteskin_model_actor_from_draw_depth_sorted_affine_cached_geometry<S: Not
         slot,
         xy,
         tint,
-        vertices,
-        geometry_id,
+        TexturedMeshVertices::Retained(geometry),
         local_transform,
         uv_scale,
         uv_offset,
@@ -601,19 +590,26 @@ mod tests {
         let mut cache = ModelMeshCache::default();
         let mut builds = 0usize;
 
-        let (id_a, verts_a) = cache.get_or_insert_with(&slot, || {
+        let vertices_a = cache.get_or_insert_with(&slot, || {
             builds += 1;
             Arc::from(vec![TexturedMeshVertex::default()])
         });
-        let (id_b, verts_b) = cache.get_or_insert_with(&slot, || {
+        let vertices_b = cache.get_or_insert_with(&slot, || {
             builds += 1;
             Arc::from(vec![TexturedMeshVertex::default()])
         });
 
         assert_eq!(builds, 1);
-        assert!(id_a.is_some());
-        assert_eq!(id_a, id_b);
-        assert!(Arc::ptr_eq(&verts_a, &verts_b));
+        assert!(vertices_a.geometry_id().is_some());
+        assert_eq!(vertices_a.geometry_id(), vertices_b.geometry_id());
+        let (
+            TexturedMeshVertices::Retained(geometry_a),
+            TexturedMeshVertices::Retained(geometry_b),
+        ) = (vertices_a, vertices_b)
+        else {
+            panic!("cached model geometry must be retained");
+        };
+        assert!(Arc::ptr_eq(&geometry_a, &geometry_b));
         assert_eq!(
             cache.stats(),
             ModelMeshCacheStats {
@@ -631,10 +627,10 @@ mod tests {
         let mut cache_a = ModelMeshCache::default();
         let mut cache_b = ModelMeshCache::default();
 
-        let (id_a, _) = cache_a
+        let vertices_a = cache_a
             .get_or_insert_slot(slot_a.as_ref())
             .expect("first model slot should cache");
-        let (id_b, _) = cache_b
+        let vertices_b = cache_b
             .get_or_insert_slot(slot_b.as_ref())
             .expect("second model slot should cache");
 
@@ -642,14 +638,14 @@ mod tests {
             slot_a.as_ref() as *const TestSlot,
             slot_b.as_ref() as *const TestSlot
         );
-        assert_eq!(id_a, id_b);
+        assert_eq!(vertices_a.geometry_id(), vertices_b.geometry_id());
     }
 
     #[test]
     fn cache_rebuilds_same_address_after_model_replacement() {
         let mut slot = TestSlot::model();
         let mut cache = ModelMeshCache::default();
-        let (id_a, vertices_a) = cache
+        let vertices_a = cache
             .get_or_insert_slot(&slot)
             .expect("initial model slot should cache");
 
@@ -661,11 +657,11 @@ mod tests {
             }]),
             bounds: [0.0, 0.0, 0.0, 64.0, 64.0, 4.0],
         });
-        let (id_b, vertices_b) = cache
+        let vertices_b = cache
             .get_or_insert_slot(&slot)
             .expect("replacement model slot should cache");
 
-        assert_ne!(id_a, id_b);
+        assert_ne!(vertices_a.geometry_id(), vertices_b.geometry_id());
         assert_eq!(vertices_a.len(), vertices_b.len());
         assert_eq!(vertices_a[0].pos, [2.0, 3.0, 4.0]);
         assert_eq!(vertices_b[0].pos, [9.0, 3.0, 4.0]);
@@ -692,11 +688,11 @@ mod tests {
             ..ModelDrawState::default()
         };
 
-        let (_, verts_a) = cache.get_or_insert_with(&slot, || {
+        let vertices_a = cache.get_or_insert_with(&slot, || {
             builds += 1;
             Arc::from(vec![TexturedMeshVertex::default()])
         });
-        let (_, verts_b) = cache.get_or_insert_with(&slot, || {
+        let vertices_b = cache.get_or_insert_with(&slot, || {
             builds += 1;
             Arc::from(vec![TexturedMeshVertex {
                 pos: [draw.pos[0], draw.pos[1], draw.pos[2]],
@@ -705,7 +701,14 @@ mod tests {
         });
 
         assert_eq!(builds, 1);
-        assert!(Arc::ptr_eq(&verts_a, &verts_b));
+        let (
+            TexturedMeshVertices::Retained(geometry_a),
+            TexturedMeshVertices::Retained(geometry_b),
+        ) = (vertices_a, vertices_b)
+        else {
+            panic!("cached model geometry must be retained");
+        };
+        assert!(Arc::ptr_eq(&geometry_a, &geometry_b));
     }
 
     #[test]
@@ -736,12 +739,11 @@ mod tests {
         cache.get_or_insert_with(slots[0].as_ref(), || {
             panic!("retained geometry must remain cached after saturation")
         });
-        let (saturated_id, _) =
-            cache.get_or_insert_with(slots[MODEL_MESH_CACHE_LIMIT].as_ref(), || {
-                builds += 1;
-                Arc::from([TexturedMeshVertex::default()])
-            });
-        assert!(saturated_id.is_none());
+        let saturated = cache.get_or_insert_with(slots[MODEL_MESH_CACHE_LIMIT].as_ref(), || {
+            builds += 1;
+            Arc::from([TexturedMeshVertex::default()])
+        });
+        assert!(saturated.retained().is_none());
         assert_eq!(builds, MODEL_MESH_CACHE_LIMIT + 2);
         assert_eq!(cache.entries.len(), MODEL_MESH_CACHE_LIMIT);
         assert_eq!(
@@ -851,7 +853,6 @@ mod tests {
             tint,
             glow,
             vertices,
-            geometry_id,
             uv_scale,
             uv_offset,
             uv_tex_shift,
@@ -894,7 +895,7 @@ mod tests {
         assert_eq!(tint, [0.4, 0.1, 0.2, 0.375]);
         assert_eq!(glow, [1.0, 1.0, 1.0, 0.0]);
         assert_eq!(vertices.len(), 1);
-        assert!(geometry_id.is_none());
+        assert!(vertices.retained().is_none());
         assert_eq!(uv_scale, [0.7, 0.7]);
         assert_eq!(uv_offset, [0.1, 0.2]);
         assert_eq!(uv_tex_shift, [0.125, 0.25]);
@@ -937,21 +938,26 @@ mod tests {
         let (
             Actor::TexturedMesh {
                 vertices: vertices_a,
-                geometry_id: id_a,
                 ..
             },
             Actor::TexturedMesh {
                 vertices: vertices_b,
-                geometry_id: id_b,
                 ..
             },
         ) = (actor_a, actor_b)
         else {
             panic!("expected cached textured mesh actors");
         };
-        assert!(id_a.is_some());
-        assert_eq!(id_a, id_b);
-        assert!(Arc::ptr_eq(&vertices_a, &vertices_b));
+        assert!(vertices_a.geometry_id().is_some());
+        assert_eq!(vertices_a.geometry_id(), vertices_b.geometry_id());
+        let (
+            TexturedMeshVertices::Retained(geometry_a),
+            TexturedMeshVertices::Retained(geometry_b),
+        ) = (vertices_a, vertices_b)
+        else {
+            panic!("cached actors must carry retained geometry");
+        };
+        assert!(Arc::ptr_eq(&geometry_a, &geometry_b));
         assert_eq!(
             cache.stats(),
             ModelMeshCacheStats {
@@ -970,7 +976,11 @@ mod tests {
             ..ModelDrawState::default()
         };
         let vertices: Arc<[TexturedMeshVertex]> = Arc::from([TexturedMeshVertex::default()]);
-        let geometry_id = TMeshGeometryId::new(77, vertices.as_ref());
+        let geometry = Arc::new(
+            RetainedTMeshGeometry::new(77, Arc::clone(&vertices))
+                .expect("depth-sorted fixture geometry is valid"),
+        );
+        let geometry_id = geometry.id();
         let actor = noteskin_model_actor_from_draw_depth_sorted_affine_cached_geometry(
             &slot,
             draw,
@@ -981,15 +991,13 @@ mod tests {
             [1.0; 4],
             BlendMode::Alpha,
             -9,
-            vertices.clone(),
-            geometry_id,
+            Arc::clone(&geometry),
         )
         .expect("depth-sorted actor should build");
 
         let Actor::TexturedMesh {
             local_transform,
             vertices: actual_vertices,
-            geometry_id: actual_geometry_id,
             depth_test,
             blend,
             z,
@@ -1008,8 +1016,11 @@ mod tests {
             local_transform,
             affine * Matrix4::from_scale(Vector3::new(1.0, -1.0, 1.0)),
         );
-        assert!(Arc::ptr_eq(&actual_vertices, &vertices));
-        assert_eq!(actual_geometry_id, geometry_id);
+        let TexturedMeshVertices::Retained(actual_geometry) = actual_vertices else {
+            panic!("depth-sorted actor must carry retained geometry");
+        };
+        assert!(Arc::ptr_eq(&actual_geometry, &geometry));
+        assert_eq!(actual_geometry.id(), geometry_id);
         assert!(depth_test);
         assert_eq!(blend, BlendMode::Alpha);
         assert_eq!(z, -9);
@@ -1075,22 +1086,6 @@ mod tests {
             .is_none()
         );
 
-        let depth_sorted = TestSlot::model();
-        assert!(
-            noteskin_model_actor_from_draw_depth_sorted_affine_cached_geometry(
-                &depth_sorted,
-                ModelDrawState::default(),
-                [0.0; 2],
-                [64.0; 2],
-                [0.0, 0.0, 1.0, 1.0],
-                0.0,
-                [1.0; 4],
-                BlendMode::Alpha,
-                0,
-                Arc::<[TexturedMeshVertex]>::from([]),
-                None,
-            )
-            .is_none()
-        );
+        assert!(RetainedTMeshGeometry::new(1, Arc::<[TexturedMeshVertex]>::from([])).is_none());
     }
 }

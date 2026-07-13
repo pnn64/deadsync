@@ -1,8 +1,7 @@
 pub mod draw_prep;
 
 pub use draw_prep::{
-    CachedTMeshGeometry, DrawFrame, DrawFrameView, FrameCapacity, FramePrepareStats,
-    TMeshPrewarmStats,
+    DrawFrame, DrawFrameView, FrameCapacity, FramePrepareStats, TMeshPrewarmStats,
 };
 
 use glam::Mat4 as Matrix4;
@@ -77,6 +76,41 @@ impl TMeshGeometryId {
     #[inline(always)]
     pub const fn fingerprint(self) -> u64 {
         self.fingerprint
+    }
+}
+
+/// Immutable textured-mesh bytes bound to their complete cache identity.
+///
+/// Construction hashes the bytes once, at resource creation. The private
+/// fields make it impossible for safe code to pair an identity with unrelated
+/// geometry later in the presentation or render pipeline.
+#[derive(Clone, Debug)]
+pub struct RetainedTMeshGeometry {
+    id: TMeshGeometryId,
+    vertices: Arc<[TexturedMeshVertex]>,
+}
+
+impl RetainedTMeshGeometry {
+    #[inline]
+    pub fn new(logical_key: TMeshCacheKey, vertices: Arc<[TexturedMeshVertex]>) -> Option<Self> {
+        let id = TMeshGeometryId::new(logical_key, vertices.as_ref())?;
+        Some(Self { id, vertices })
+    }
+
+    #[inline]
+    pub fn from_content(vertices: Arc<[TexturedMeshVertex]>) -> Option<Self> {
+        let id = TMeshGeometryId::from_content(vertices.as_ref())?;
+        Some(Self { id, vertices })
+    }
+
+    #[inline(always)]
+    pub const fn id(&self) -> TMeshGeometryId {
+        self.id
+    }
+
+    #[inline(always)]
+    pub fn vertices(&self) -> &[TexturedMeshVertex] {
+        self.vertices.as_ref()
     }
 }
 
@@ -216,16 +250,33 @@ impl Default for TexturedMeshVertex {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum TexturedMeshVertices {
+    Retained(Arc<RetainedTMeshGeometry>),
     Shared(Arc<[TexturedMeshVertex]>),
     Transient(Vec<TexturedMeshVertex>),
+}
+
+impl TexturedMeshVertices {
+    #[inline(always)]
+    pub fn retained(&self) -> Option<&RetainedTMeshGeometry> {
+        match self {
+            Self::Retained(geometry) => Some(geometry.as_ref()),
+            Self::Shared(_) | Self::Transient(_) => None,
+        }
+    }
+
+    #[inline(always)]
+    pub fn geometry_id(&self) -> Option<TMeshGeometryId> {
+        self.retained().map(RetainedTMeshGeometry::id)
+    }
 }
 
 impl AsRef<[TexturedMeshVertex]> for TexturedMeshVertices {
     #[inline(always)]
     fn as_ref(&self) -> &[TexturedMeshVertex] {
         match self {
+            Self::Retained(geometry) => geometry.vertices(),
             Self::Shared(vertices) => vertices.as_ref(),
             Self::Transient(vertices) => vertices.as_slice(),
         }
@@ -393,7 +444,6 @@ pub enum ObjectType {
     TexturedMesh {
         instance: TexturedMeshInstanceRaw,
         vertices: TexturedMeshVertices,
-        geometry_id: Option<TMeshGeometryId>,
         depth_test: bool,
     },
 }

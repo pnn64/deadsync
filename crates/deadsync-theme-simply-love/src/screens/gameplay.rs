@@ -21,7 +21,7 @@ use deadlib_present::space::widescale;
 use deadlib_present::space::{
     is_wide, screen_center_x, screen_center_y, screen_height, screen_width,
 };
-use deadlib_render::{BlendMode, MeshVertex, TexturedMeshVertex};
+use deadlib_render::{BlendMode, MeshVertex, TexturedMeshVertex, TexturedMeshVertices};
 use deadsync_assets::noteskin::{self, Noteskin, SpriteSlot};
 use deadsync_assets::song_lua::{
     CompiledSongLua, SongLuaCapturedActor, SongLuaOverlayActor, SongLuaOverlayBlendMode,
@@ -4850,7 +4850,6 @@ fn song_lua_proxy_local_actor(actor: Actor) -> Actor {
             tint,
             glow,
             vertices,
-            geometry_id,
             uv_scale,
             uv_offset,
             uv_tex_shift,
@@ -4868,7 +4867,6 @@ fn song_lua_proxy_local_actor(actor: Actor) -> Actor {
             tint,
             glow,
             vertices,
-            geometry_id,
             uv_scale,
             uv_offset,
             uv_tex_shift,
@@ -5578,7 +5576,6 @@ fn song_lua_style_capture_actor(
             tint: actor_tint,
             glow,
             vertices,
-            geometry_id,
             uv_scale,
             uv_offset,
             uv_tex_shift,
@@ -5596,7 +5593,6 @@ fn song_lua_style_capture_actor(
             tint: song_lua_capture_tint(actor_tint, capture_tint),
             glow: song_lua_capture_tint(glow, capture_tint),
             vertices,
-            geometry_id,
             uv_scale,
             uv_offset,
             uv_tex_shift,
@@ -6328,8 +6324,7 @@ fn song_lua_model_actor(
             texture: Arc::clone(&layer.texture_key),
             tint: song_lua_capture_tint(layer.draw.tint, tint),
             glow: [1.0, 1.0, 1.0, 0.0],
-            vertices: Arc::clone(&layer.vertices),
-            geometry_id: None,
+            vertices: TexturedMeshVertices::Shared(Arc::clone(&layer.vertices)),
             uv_scale: layer.uv_scale,
             uv_offset,
             uv_tex_shift,
@@ -7217,8 +7212,7 @@ fn song_lua_flat_skewed_overlay_actor(
         texture,
         tint,
         glow: [1.0, 1.0, 1.0, 0.0],
-        vertices: Arc::from(vertices.into_boxed_slice()),
-        geometry_id: None,
+        vertices: TexturedMeshVertices::Shared(Arc::from(vertices.into_boxed_slice())),
         uv_scale: [1.0, 1.0],
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],
@@ -7302,8 +7296,7 @@ fn song_lua_projected_overlay_actor(
         texture,
         tint,
         glow: [1.0, 1.0, 1.0, 0.0],
-        vertices: Arc::from(vertices.into_boxed_slice()),
-        geometry_id: None,
+        vertices: TexturedMeshVertices::Shared(Arc::from(vertices.into_boxed_slice())),
         uv_scale: [1.0, 1.0],
         uv_offset: [0.0, 0.0],
         uv_tex_shift: [0.0, 0.0],
@@ -7710,8 +7703,7 @@ fn build_song_lua_overlay_actor(
                         texture: Arc::clone(texture_key),
                         tint,
                         glow: [1.0, 1.0, 1.0, 0.0],
-                        vertices: mesh,
-                        geometry_id: None,
+                        vertices: TexturedMeshVertices::Shared(mesh),
                         uv_scale: [1.0, 1.0],
                         uv_offset: [0.0, 0.0],
                         uv_tex_shift: [0.0, 0.0],
@@ -8299,8 +8291,7 @@ fn song_lua_overlay_glow_actor(
                 texture: texture.clone(),
                 tint: [1.0, 1.0, 1.0, 0.0],
                 glow,
-                vertices: Arc::from(glow_vertices.into_boxed_slice()),
-                geometry_id: None,
+                vertices: TexturedMeshVertices::Shared(Arc::from(glow_vertices.into_boxed_slice())),
                 uv_scale: *uv_scale,
                 uv_offset: *uv_offset,
                 uv_tex_shift: *uv_tex_shift,
@@ -11954,8 +11945,10 @@ mod tests {
             texture: Arc::from("mesh"),
             tint: [0.8, 0.6, 0.4, 0.5],
             glow: [0.5, 0.25, 1.0, 0.4],
-            vertices: Arc::from(vec![TexturedMeshVertex::default(); 3]),
-            geometry_id: None,
+            vertices: TexturedMeshVertices::Shared(Arc::from(vec![
+                TexturedMeshVertex::default();
+                3
+            ])),
             uv_scale: [1.0, 1.0],
             uv_offset: [0.0, 0.0],
             uv_tex_shift: [0.0, 0.0],

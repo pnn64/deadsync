@@ -1,10 +1,9 @@
 use deadlib_render::{
     BlendMode, ClockDomainTrace, DrawFrame, DrawFrameView, DrawStats, FastTMeshMap,
-    PresentModePolicy, PresentModeTrace, PresentStats, RenderList, SamplerDesc, SamplerFilter,
-    SamplerWrap, TMeshGeometryId, TextureHandle, TexturedMeshVertex,
+    PresentModePolicy, PresentModeTrace, PresentStats, RenderList, RetainedTMeshGeometry,
+    SamplerDesc, SamplerFilter, SamplerWrap, TMeshGeometryId, TextureHandle, TexturedMeshVertex,
     draw_prep::{
-        self, CachedTMeshGeometry, DrawOp, DrawScratch, TMeshCacheResult, TMeshPrewarmStats,
-        TexturedMeshSource,
+        self, DrawOp, DrawScratch, TMeshCacheResult, TMeshPrewarmStats, TexturedMeshSource,
     },
 };
 use glam::Mat4 as Matrix4;
@@ -172,6 +171,19 @@ pub trait TextureLookup {
 struct CachedTMeshGeom {
     buffer: Arc<wgpu::Buffer>,
     vertex_count: u32,
+}
+
+#[inline]
+fn cached_tmesh_count_ok(
+    resident_vertex_count: u32,
+    draw_vertex_count: u32,
+    stats: &mut DrawStats,
+) -> bool {
+    if resident_vertex_count == draw_vertex_count {
+        return true;
+    }
+    stats.cached_tmesh_misses = stats.cached_tmesh_misses.saturating_add(1);
+    false
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -943,7 +955,7 @@ fn ensure_cached_tmesh(
 /// full; prewarming never scans, prunes, or destroys resident geometry.
 pub fn prewarm_textured_meshes(
     state: &mut State,
-    geometries: &[CachedTMeshGeometry],
+    geometries: &[RetainedTMeshGeometry],
 ) -> TMeshPrewarmStats {
     let mut stats = TMeshPrewarmStats::default();
     for geometry in geometries {
@@ -1334,12 +1346,18 @@ fn draw_frame_view(
                             TexturedMeshSource::Transient { .. } => {
                                 pass.set_vertex_buffer(0, state.tmesh_vertex_buffer.slice(..));
                             }
-                            TexturedMeshSource::Cached { geometry_id, .. } => {
+                            TexturedMeshSource::Cached {
+                                geometry_id,
+                                vertex_count,
+                            } => {
                                 let Some(entry) = state.cached_tmesh.get(&geometry_id) else {
                                     stats.cached_tmesh_misses =
                                         stats.cached_tmesh_misses.saturating_add(1);
                                     continue;
                                 };
+                                if !cached_tmesh_count_ok(entry.vertex_count, vertex_count, stats) {
+                                    continue;
+                                }
                                 pass.set_vertex_buffer(0, entry.buffer.slice(..));
                             }
                         }
@@ -2444,3 +2462,18 @@ const TMESH_SHADER_IMM: &str = include_str!("shaders/wgpu_tmesh.wgsl");
 const SHADER_UBO: &str = include_str!("shaders/wgpu_sprite_ubo.wgsl");
 const MESH_SHADER_UBO: &str = include_str!("shaders/wgpu_mesh_ubo.wgsl");
 const TMESH_SHADER_UBO: &str = include_str!("shaders/wgpu_tmesh_ubo.wgsl");
+
+#[cfg(test)]
+mod tests {
+    use super::{DrawStats, cached_tmesh_count_ok};
+
+    #[test]
+    fn cached_tmesh_draw_count_mismatch_is_reported_and_skipped() {
+        let mut stats = DrawStats::default();
+        assert!(cached_tmesh_count_ok(6, 6, &mut stats));
+        assert_eq!(stats.cached_tmesh_misses, 0);
+
+        assert!(!cached_tmesh_count_ok(6, 9, &mut stats));
+        assert_eq!(stats.cached_tmesh_misses, 1);
+    }
+}

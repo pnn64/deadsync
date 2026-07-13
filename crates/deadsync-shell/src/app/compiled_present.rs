@@ -9,8 +9,7 @@ use deadlib_present::font::Font;
 use deadlib_present::space::Metrics;
 use deadlib_present::texture::{TextureContext, TextureMeta};
 use deadlib_render::{
-    INVALID_TEXTURE_HANDLE, TextureHandle,
-    draw_prep::{CachedTMeshGeometry, TMeshPrewarmStats},
+    INVALID_TEXTURE_HANDLE, RetainedTMeshGeometry, TextureHandle, draw_prep::TMeshPrewarmStats,
 };
 use deadsync_config::{
     app_config::Config,
@@ -368,7 +367,7 @@ impl SandboxDirectCache {
     ) -> bool
     where
         T: TextureContext + ?Sized,
-        F: FnOnce(&[CachedTMeshGeometry]) -> Result<TMeshPrewarmStats, E>,
+        F: FnOnce(&[RetainedTMeshGeometry]) -> Result<TMeshPrewarmStats, E>,
         E: fmt::Display,
     {
         if self.frame(key, textures).is_some() {

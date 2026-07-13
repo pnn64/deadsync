@@ -1,14 +1,13 @@
 use crate::{
     BlendMode, FastTMeshMap, INVALID_TEXTURE_HANDLE, MeshVertex, ObjectType, RenderList,
-    SpriteInstanceRaw, TMeshCacheKey, TMeshGeometryId, TextureHandle, TexturedMeshInstanceRaw,
-    TexturedMeshVertex, TexturedMeshVertices,
+    SpriteInstanceRaw, TMeshGeometryId, TextureHandle, TexturedMeshInstanceRaw, TexturedMeshVertex,
+    TexturedMeshVertices,
 };
 use glam::{Mat4 as Matrix4, Vec4 as Vector4};
 use std::{
     collections::HashMap,
     hash::BuildHasherDefault,
     ops::{Deref, DerefMut},
-    sync::Arc,
 };
 use twox_hash::XxHash64;
 
@@ -60,38 +59,6 @@ pub enum TMeshCacheResult {
     CapacityExceeded,
     IdentityMismatch,
     UploadFailed,
-}
-
-/// Immutable upload payload for one retained textured-mesh cache entry.
-///
-/// Compiled presentation owns these values on the render thread for a screen
-/// or song lifetime. Backends consume them during transition prewarm, before
-/// submitting draw ops that reference `id`; frame submission performs
-/// no geometry lookup, allocation, eviction, or destruction through this
-/// value. Backend cache capacity and eviction remain backend-owned concerns.
-#[derive(Clone, Debug)]
-pub struct CachedTMeshGeometry {
-    id: TMeshGeometryId,
-    vertices: Arc<[TexturedMeshVertex]>,
-}
-
-impl CachedTMeshGeometry {
-    /// Creates a self-consistent retained upload payload.
-    #[inline]
-    pub fn new(logical_key: TMeshCacheKey, vertices: Arc<[TexturedMeshVertex]>) -> Option<Self> {
-        let id = TMeshGeometryId::new(logical_key, vertices.as_ref())?;
-        Some(Self { id, vertices })
-    }
-
-    #[inline(always)]
-    pub const fn id(&self) -> TMeshGeometryId {
-        self.id
-    }
-
-    #[inline(always)]
-    pub fn vertices(&self) -> &[TexturedMeshVertex] {
-        self.vertices.as_ref()
-    }
 }
 
 /// Outcome counters for one bounded retained-geometry prewarm pass.
@@ -661,7 +628,6 @@ where
             ObjectType::TexturedMesh {
                 instance,
                 vertices,
-                geometry_id,
                 depth_test,
                 ..
             } => {
@@ -674,54 +640,50 @@ where
                     i += 1;
                     continue;
                 }
-                let source = if let Some(geometry_id) = geometry_id {
-                    if !cached_tmesh_cleared {
-                        scratch.cached_tmesh.clear();
-                        cached_tmesh_cleared = true;
-                    }
-                    let cached = if let Some(cached) = scratch.cached_tmesh.get(geometry_id) {
-                        *cached
-                    } else {
-                        let result = ensure_cached_tmesh(*geometry_id, vertices.as_ref());
-                        let cached = result.is_available();
-                        scratch.cached_tmesh.insert(*geometry_id, cached);
-                        if result.was_uploaded() {
-                            stats.cached_upload_vertices = stats
-                                .cached_upload_vertices
-                                .saturating_add(vertices.len() as u64);
+                let source = match vertices {
+                    TexturedMeshVertices::Retained(geometry) => {
+                        let geometry = geometry.as_ref();
+                        let geometry_id = geometry.id();
+                        if !cached_tmesh_cleared {
+                            scratch.cached_tmesh.clear();
+                            cached_tmesh_cleared = true;
                         }
-                        cached
-                    };
-                    if cached {
-                        TexturedMeshSource::Cached {
-                            geometry_id: *geometry_id,
-                            vertex_count: vertices.len() as u32,
-                        }
-                    } else {
-                        match vertices {
-                            TexturedMeshVertices::Transient(vertices) => {
-                                transient_tmesh_source(scratch, vertices.as_slice(), &mut stats)
+                        let cached = if let Some(cached) = scratch.cached_tmesh.get(&geometry_id) {
+                            *cached
+                        } else {
+                            let result = ensure_cached_tmesh(geometry_id, geometry.vertices());
+                            let cached = result.is_available();
+                            scratch.cached_tmesh.insert(geometry_id, cached);
+                            if result.was_uploaded() {
+                                stats.cached_upload_vertices = stats
+                                    .cached_upload_vertices
+                                    .saturating_add(geometry.vertices().len() as u64);
                             }
-                            TexturedMeshVertices::Shared(vertices) => shared_tmesh_source(
+                            cached
+                        };
+                        if cached {
+                            TexturedMeshSource::Cached {
+                                geometry_id,
+                                vertex_count: geometry.vertices().len() as u32,
+                            }
+                        } else {
+                            shared_tmesh_source(
                                 scratch,
-                                vertices.as_ref(),
+                                geometry.vertices(),
                                 &mut stats,
                                 &mut shared_tmesh_geom_cleared,
-                            ),
+                            )
                         }
                     }
-                } else {
-                    match vertices {
-                        TexturedMeshVertices::Transient(vertices) => {
-                            transient_tmesh_source(scratch, vertices.as_slice(), &mut stats)
-                        }
-                        TexturedMeshVertices::Shared(vertices) => shared_tmesh_source(
-                            scratch,
-                            vertices.as_ref(),
-                            &mut stats,
-                            &mut shared_tmesh_geom_cleared,
-                        ),
+                    TexturedMeshVertices::Transient(vertices) => {
+                        transient_tmesh_source(scratch, vertices.as_slice(), &mut stats)
                     }
+                    TexturedMeshVertices::Shared(vertices) => shared_tmesh_source(
+                        scratch,
+                        vertices.as_ref(),
+                        &mut stats,
+                        &mut shared_tmesh_geom_cleared,
+                    ),
                 };
 
                 let instance_start = scratch.tmesh_instances.len() as u32;

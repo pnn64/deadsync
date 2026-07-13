@@ -14,7 +14,7 @@ use deadsync_profile::compat as profile;
 use deadlib_present::actors::{self, Actor};
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y};
-use deadlib_render::BlendMode;
+use deadlib_render::{BlendMode, TexturedMeshVertices};
 use deadsync_input::{InputEvent, VirtualAction};
 use deadsync_notefield::noteskin_model_actor;
 use deadsync_noteskin::{NUM_QUANTIZATIONS, Quantization, Style};
@@ -1020,7 +1020,7 @@ fn apply_zoom_to_actor(actor: &mut Actor, pivot: [f32; 2], zoom: f32) {
                     color: v.color,
                 });
             }
-            *vertices = std::sync::Arc::from(out);
+            *vertices = TexturedMeshVertices::Shared(std::sync::Arc::from(out));
         }
         Actor::Text {
             offset,

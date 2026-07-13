@@ -1,5 +1,5 @@
 use deadlib_render::{
-    BlendMode, CachedTMeshGeometry, MeshVertex, ObjectType, RenderList, RenderObject,
+    BlendMode, MeshVertex, ObjectType, RenderList, RenderObject, RetainedTMeshGeometry,
     SpriteInstanceRaw, TMeshGeometryId, TexturedMeshInstanceRaw, TexturedMeshVertex,
     TexturedMeshVertices,
     draw_prep::{
@@ -183,7 +183,6 @@ fn render_fixture() -> RenderList {
                 object_type: ObjectType::TexturedMesh {
                     instance: tmesh_instance(5.0),
                     vertices: TexturedMeshVertices::Shared(Arc::clone(&tmesh)),
-                    geometry_id: None,
                     depth_test: true,
                 },
                 texture_handle: 9,
@@ -196,7 +195,6 @@ fn render_fixture() -> RenderList {
                 object_type: ObjectType::TexturedMesh {
                     instance: tmesh_instance(6.0),
                     vertices: TexturedMeshVertices::Shared(tmesh),
-                    geometry_id: None,
                     depth_test: true,
                 },
                 texture_handle: 9,
@@ -212,13 +210,16 @@ fn render_fixture() -> RenderList {
 fn cached_render_fixture() -> RenderList {
     let mut render = render_fixture();
     for object in &mut render.objects {
-        if let ObjectType::TexturedMesh {
-            vertices,
-            geometry_id,
-            ..
-        } = &mut object.object_type
-        {
-            *geometry_id = TMeshGeometryId::new(41, vertices.as_ref());
+        if let ObjectType::TexturedMesh { vertices, .. } = &mut object.object_type {
+            let previous = std::mem::replace(vertices, TexturedMeshVertices::Transient(Vec::new()));
+            let shared = match previous {
+                TexturedMeshVertices::Shared(vertices) => vertices,
+                TexturedMeshVertices::Transient(vertices) => Arc::from(vertices),
+                TexturedMeshVertices::Retained(geometry) => Arc::from(geometry.vertices().to_vec()),
+            };
+            let retained = RetainedTMeshGeometry::new(41, shared)
+                .expect("fixture geometry must be retainable");
+            *vertices = TexturedMeshVertices::Retained(Arc::new(retained));
         }
     }
     render
@@ -444,13 +445,13 @@ fn geometry_identity_rejects_invalid_or_empty_payloads() {
     assert!(TMeshGeometryId::new(0, &[vertex]).is_none());
     assert!(TMeshGeometryId::new(41, &[]).is_none());
     assert!(TMeshGeometryId::from_content(&[]).is_none());
-    assert!(CachedTMeshGeometry::new(0, Arc::from([vertex])).is_none());
-    assert!(CachedTMeshGeometry::new(41, Arc::from([])).is_none());
+    assert!(RetainedTMeshGeometry::new(0, Arc::from([vertex])).is_none());
+    assert!(RetainedTMeshGeometry::new(41, Arc::from([])).is_none());
 
     let semantic = TMeshGeometryId::new(41, &[vertex]).expect("valid geometry identity");
     let content = TMeshGeometryId::from_content(&[vertex]).expect("content geometry identity");
-    let retained =
-        CachedTMeshGeometry::new(41, Arc::from([vertex])).expect("valid retained geometry payload");
+    let retained = RetainedTMeshGeometry::new(41, Arc::from([vertex]))
+        .expect("valid retained geometry payload");
     assert_eq!(semantic.logical_key(), 41);
     assert_ne!(content.logical_key(), 0);
     assert_eq!(semantic.fingerprint(), content.fingerprint());
@@ -464,24 +465,39 @@ fn geometry_identity_rejects_invalid_or_empty_payloads() {
 }
 
 #[test]
+fn retained_geometry_keeps_identity_bound_to_its_bytes() {
+    let vertices_a: Arc<[TexturedMeshVertex]> = Arc::from([TexturedMeshVertex::default()]);
+    let vertices_b: Arc<[TexturedMeshVertex]> = Arc::from([TexturedMeshVertex {
+        pos: [1.0, 0.0, 0.0],
+        ..TexturedMeshVertex::default()
+    }]);
+    let retained_a = RetainedTMeshGeometry::new(41, vertices_a).expect("valid first geometry");
+    let retained_b = RetainedTMeshGeometry::new(41, vertices_b).expect("valid second geometry");
+    let id_a = retained_a.id();
+    let vertices = TexturedMeshVertices::Retained(Arc::new(retained_b));
+
+    assert_ne!(vertices.geometry_id(), Some(id_a));
+    assert_eq!(
+        vertices.geometry_id(),
+        TMeshGeometryId::new(41, vertices.as_ref())
+    );
+}
+
+#[test]
 fn legacy_prep_keeps_revisions_of_one_logical_geometry_distinct() {
     let mut render = render_fixture();
     let mut cached = 0usize;
     for object in &mut render.objects {
-        let ObjectType::TexturedMesh {
-            vertices,
-            geometry_id,
-            ..
-        } = &mut object.object_type
-        else {
+        let ObjectType::TexturedMesh { vertices, .. } = &mut object.object_type else {
             continue;
         };
+        let mut revised = vertices.as_ref().to_vec();
         if cached == 1 {
-            let mut revised = vertices.as_ref().to_vec();
             revised[0].pos[0] = 12.0;
-            *vertices = TexturedMeshVertices::Shared(Arc::from(revised));
         }
-        *geometry_id = TMeshGeometryId::new(41, vertices.as_ref());
+        let retained = RetainedTMeshGeometry::new(41, Arc::from(revised))
+            .expect("fixture geometry must be retainable");
+        *vertices = TexturedMeshVertices::Retained(Arc::new(retained));
         cached += 1;
     }
 

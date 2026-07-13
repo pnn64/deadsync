@@ -2,7 +2,7 @@ use crate::act;
 use deadlib_present::actors::Actor;
 use deadlib_present::color;
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
-use deadlib_render::{TMeshGeometryId, TexturedMeshVertex};
+use deadlib_render::RetainedTMeshGeometry;
 use deadsync_assets::noteskin::{self, build_model_geometry};
 use deadsync_notefield::noteskin_model_actor_from_draw_depth_sorted_affine_cached_geometry;
 use glam::{Mat4 as Matrix4, Vec3 as Vector3};
@@ -27,8 +27,7 @@ const MODEL_Z: i16 = -96;
 struct TechniqueLayer {
     slot: noteskin::SpriteSlot,
     size: [f32; 2],
-    vertices: Arc<[TexturedMeshVertex]>,
-    geometry_id: Option<TMeshGeometryId>,
+    geometry: Option<Arc<RetainedTMeshGeometry>>,
 }
 
 #[derive(Clone)]
@@ -216,15 +215,15 @@ fn load_layers(path: &str) -> Result<Arc<[TechniqueLayer]>, String> {
                 .as_ref()
                 .map(|_| build_model_geometry(&slot))
                 .unwrap_or_else(|| Arc::from([]));
-            let geometry_id = TMeshGeometryId::new(
+            let geometry = RetainedTMeshGeometry::new(
                 technique_geom_logical_key(path, index, &slot),
-                vertices.as_ref(),
-            );
+                vertices,
+            )
+            .map(Arc::new);
             TechniqueLayer {
                 slot,
                 size,
-                vertices,
-                geometry_id,
+                geometry,
             }
         })
         .collect::<Vec<_>>();
@@ -243,6 +242,9 @@ fn push_layers(
 ) {
     let model_elapsed_s = bounded_model_elapsed(elapsed_s);
     for layer in layers {
+        let Some(geometry) = &layer.geometry else {
+            continue;
+        };
         let mut draw = layer.slot.model_draw_at(model_elapsed_s, 0.0);
         draw.rot[0] += base_rot[0];
         draw.rot[1] += base_rot[1];
@@ -260,8 +262,7 @@ fn push_layers(
             color,
             deadlib_render::BlendMode::Alpha,
             MODEL_Z,
-            Arc::clone(&layer.vertices),
-            layer.geometry_id,
+            Arc::clone(geometry),
         ) {
             if let Actor::TexturedMesh { depth_test, .. } = &mut actor {
                 *depth_test = false;
@@ -347,6 +348,7 @@ fn scale_alpha(mut color: [f32; 4], alpha: f32) -> [f32; 4] {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use deadlib_render::TexturedMeshVertex;
 
     #[test]
     fn technique_fractional_color_offsets_fall_back_to_white() {
@@ -385,13 +387,8 @@ mod tests {
         };
         let mut cached_meshes = 0usize;
         for child in children {
-            if let Actor::TexturedMesh {
-                geometry_id,
-                vertices,
-                ..
-            } = child
-            {
-                assert!(geometry_id.is_some());
+            if let Actor::TexturedMesh { vertices, .. } = child {
+                assert!(vertices.retained().is_some());
                 assert!(!vertices.is_empty());
                 cached_meshes += 1;
             }
@@ -408,10 +405,12 @@ mod tests {
             pos: [1.0, 0.0, 0.0],
             ..TexturedMeshVertex::default()
         }];
-        let id_a = TMeshGeometryId::new(logical_key, &vertices_a)
-            .expect("nonempty technique geometry should have identity");
-        let id_b = TMeshGeometryId::new(logical_key, &vertices_b)
-            .expect("changed technique geometry should have identity");
+        let id_a = RetainedTMeshGeometry::new(logical_key, Arc::from(vertices_a))
+            .expect("nonempty technique geometry should have identity")
+            .id();
+        let id_b = RetainedTMeshGeometry::new(logical_key, Arc::from(vertices_b))
+            .expect("changed technique geometry should have identity")
+            .id();
 
         assert_eq!(id_a.logical_key(), id_b.logical_key());
         assert_ne!(id_a, id_b);

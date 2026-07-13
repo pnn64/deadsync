@@ -1,5 +1,5 @@
 use deadlib_render::{
-    BackendType, CachedTMeshGeometry, DrawFrame, DrawStats, PresentModePolicy, RenderList,
+    BackendType, DrawFrame, DrawStats, PresentModePolicy, RenderList, RetainedTMeshGeometry,
     SamplerDesc, TMeshPrewarmStats, TextureHandle, TextureHandleMap,
 };
 use deadlib_render_backend_gl as opengl;
@@ -161,7 +161,7 @@ impl Backend {
     /// selecting direct submission.
     pub fn prewarm_textured_meshes(
         &mut self,
-        geometries: &[CachedTMeshGeometry],
+        geometries: &[RetainedTMeshGeometry],
     ) -> Result<TMeshPrewarmStats, Box<dyn Error>> {
         match &mut self.0 {
             #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]

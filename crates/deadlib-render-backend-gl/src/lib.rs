@@ -1,10 +1,9 @@
 use deadlib_render::{
-    BlendMode, DrawFrame, DrawFrameView, DrawStats, FastTMeshMap, RenderList, SamplerDesc,
-    SamplerFilter, SamplerWrap, SpriteInstanceRaw, TMeshGeometryId, TextureHandle,
-    TexturedMeshInstanceRaw, TexturedMeshVertex,
+    BlendMode, DrawFrame, DrawFrameView, DrawStats, FastTMeshMap, RenderList,
+    RetainedTMeshGeometry, SamplerDesc, SamplerFilter, SamplerWrap, SpriteInstanceRaw,
+    TMeshGeometryId, TextureHandle, TexturedMeshInstanceRaw, TexturedMeshVertex,
     draw_prep::{
-        self, CachedTMeshGeometry, DrawOp, DrawScratch, TMeshCacheResult, TMeshPrewarmStats,
-        TexturedMeshSource,
+        self, DrawOp, DrawScratch, TMeshCacheResult, TMeshPrewarmStats, TexturedMeshSource,
     },
 };
 use glam::Mat4 as Matrix4;
@@ -210,6 +209,19 @@ pub trait TextureLookup {
 struct CachedTMeshGeom {
     vbo: glow::Buffer,
     vertex_count: u32,
+}
+
+#[inline]
+fn cached_tmesh_count_ok(
+    resident_vertex_count: u32,
+    draw_vertex_count: u32,
+    stats: &mut DrawStats,
+) -> bool {
+    if resident_vertex_count == draw_vertex_count {
+        return true;
+    }
+    stats.cached_tmesh_misses = stats.cached_tmesh_misses.saturating_add(1);
+    false
 }
 
 #[derive(Clone, Copy)]
@@ -929,7 +941,7 @@ fn ensure_cached_tmesh(
 /// full; prewarming never scans, prunes, or destroys resident geometry.
 pub fn prewarm_textured_meshes(
     state: &mut State,
-    geometries: &[CachedTMeshGeometry],
+    geometries: &[RetainedTMeshGeometry],
 ) -> TMeshPrewarmStats {
     let mut stats = TMeshPrewarmStats::default();
     for geometry in geometries {
@@ -1381,16 +1393,26 @@ fn draw_frame_view(
                             let stride = std::mem::size_of::<TexturedMeshVertex>() as i32;
                             let Some(vertex_buffer) = (match run.source {
                                 TexturedMeshSource::Transient { .. } => Some(state.tmesh_vbo),
-                                TexturedMeshSource::Cached { geometry_id, .. } => {
-                                    match state.cached_tmesh.get(&geometry_id) {
-                                        Some(entry) => Some(entry.vbo),
-                                        None => {
-                                            stats.cached_tmesh_misses =
-                                                stats.cached_tmesh_misses.saturating_add(1);
-                                            None
-                                        }
+                                TexturedMeshSource::Cached {
+                                    geometry_id,
+                                    vertex_count,
+                                } => match state.cached_tmesh.get(&geometry_id) {
+                                    Some(entry)
+                                        if cached_tmesh_count_ok(
+                                            entry.vertex_count,
+                                            vertex_count,
+                                            stats,
+                                        ) =>
+                                    {
+                                        Some(entry.vbo)
                                     }
-                                }
+                                    Some(_) => None,
+                                    None => {
+                                        stats.cached_tmesh_misses =
+                                            stats.cached_tmesh_misses.saturating_add(1);
+                                        None
+                                    }
+                                },
                             }) else {
                                 continue;
                             };
@@ -1753,16 +1775,26 @@ fn draw_frame_view(
                             let stride = std::mem::size_of::<TexturedMeshVertex>() as i32;
                             let Some(vertex_buffer) = (match run.source {
                                 TexturedMeshSource::Transient { .. } => Some(state.tmesh_vbo),
-                                TexturedMeshSource::Cached { geometry_id, .. } => {
-                                    match state.cached_tmesh.get(&geometry_id) {
-                                        Some(entry) => Some(entry.vbo),
-                                        None => {
-                                            stats.cached_tmesh_misses =
-                                                stats.cached_tmesh_misses.saturating_add(1);
-                                            None
-                                        }
+                                TexturedMeshSource::Cached {
+                                    geometry_id,
+                                    vertex_count,
+                                } => match state.cached_tmesh.get(&geometry_id) {
+                                    Some(entry)
+                                        if cached_tmesh_count_ok(
+                                            entry.vertex_count,
+                                            vertex_count,
+                                            stats,
+                                        ) =>
+                                    {
+                                        Some(entry.vbo)
                                     }
-                                }
+                                    Some(_) => None,
+                                    None => {
+                                        stats.cached_tmesh_misses =
+                                            stats.cached_tmesh_misses.saturating_add(1);
+                                        None
+                                    }
+                                },
                             }) else {
                                 continue;
                             };
@@ -2519,7 +2551,17 @@ fn surface_extent(width: u32, height: u32) -> (NonZeroU32, NonZeroU32) {
 
 #[cfg(test)]
 mod tests {
-    use super::{GlVersion, parse_gl_version, surface_extent};
+    use super::{DrawStats, GlVersion, cached_tmesh_count_ok, parse_gl_version, surface_extent};
+
+    #[test]
+    fn cached_tmesh_draw_count_mismatch_is_reported_and_skipped() {
+        let mut stats = DrawStats::default();
+        assert!(cached_tmesh_count_ok(6, 6, &mut stats));
+        assert_eq!(stats.cached_tmesh_misses, 0);
+
+        assert!(!cached_tmesh_count_ok(6, 9, &mut stats));
+        assert_eq!(stats.cached_tmesh_misses, 1);
+    }
 
     #[test]
     fn surface_extent_clamps_zero_dims() {
