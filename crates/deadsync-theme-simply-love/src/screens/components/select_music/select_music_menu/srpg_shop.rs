@@ -18,6 +18,9 @@ const LIST_Y: f32 = -96.0;
 const ROW_H: f32 = 37.0;
 const VIEW_ROWS: usize = 7;
 const SHOP_IMAGE_H: f32 = PANEL_W * 9.0 / 16.0;
+const HEADER_H: f32 = 54.0;
+const HEADER_Y: f32 = -PANEL_H * 0.5 + HEADER_H * 0.5;
+const LIST_MARGIN: f32 = 11.5;
 
 #[derive(Clone, Copy)]
 struct ShopMeta {
@@ -164,6 +167,34 @@ pub fn move_srpg_shop_selection(
         return false;
     };
     move_item(overlay, snapshot, delta) == SrpgShopInputOutcome::ChangedSelection
+}
+
+pub fn page_srpg_shop_selection(
+    state: &mut SrpgShopOverlayState,
+    snapshot: &SrpgShopSnapshot,
+    direction: isize,
+) -> bool {
+    if snapshot.phase != SrpgShopPhase::Ready {
+        return false;
+    }
+    let SrpgShopOverlayState::Visible(overlay) = state else {
+        return false;
+    };
+    let Some(shop) = active_shop(overlay, snapshot) else {
+        return false;
+    };
+    let selected = &mut overlay.item_indices[overlay.shop_index];
+    let next = if direction < 0 {
+        selected.saturating_sub(VIEW_ROWS)
+    } else {
+        selected.saturating_add(VIEW_ROWS).min(shop.items.len())
+    };
+    if next == *selected {
+        return false;
+    }
+    *selected = next;
+    overlay.local_message = None;
+    true
 }
 
 pub fn handle_srpg_shop_input(
@@ -411,13 +442,13 @@ pub fn build_srpg_shop_overlay(
         diffuse(0.0, 0.0, 0.0, 0.38): z(Z + 3)
     ));
     actors.push(act!(quad:
-        align(0.5, 0.5): xy(cx, cy - PANEL_H * 0.5 + 25.0): zoomto(PANEL_W, 50.0):
+        align(0.5, 0.5): xy(cx, cy + HEADER_Y): zoomto(PANEL_W, HEADER_H):
         diffuse(0.0, 0.0, 0.0, 0.86): z(Z + 4)
     ));
     actors.push(act!(text:
         font(current_machine_font_key(FontRole::Header)): settext("SRPG SHOP"):
-        align(0.0, 0.5): xy(cx - PANEL_W * 0.5 + 14.0, cy - PANEL_H * 0.5 + 18.0):
-        zoom(0.42): diffuse(1.0, 1.0, 1.0, 1.0): z(Z + 5): horizalign(left)
+        align(0.5, 0.5): xy(cx - 143.0, cy + HEADER_Y): maxwidth(250.0):
+        zoom(0.42): diffuse(1.0, 1.0, 1.0, 1.0): z(Z + 5): horizalign(center)
     ));
 
     push_tabs(&mut actors, overlay.shop_index, cx, cy);
@@ -455,18 +486,18 @@ pub fn build_srpg_shop_overlay(
 }
 
 fn push_tabs(actors: &mut Vec<Actor>, selected: usize, cx: f32, cy: f32) {
-    let start_x = cx + 40.0;
+    let start_x = cx + 53.0;
     for (index, shop) in SHOPS.into_iter().enumerate() {
         let x = start_x + index as f32 * 64.0;
         let active = index == selected;
         actors.push(act!(quad:
-            align(0.5, 0.5): xy(x, cy - PANEL_H * 0.5 + 29.0): zoomto(58.0, 28.0):
+            align(0.5, 0.5): xy(x, cy + HEADER_Y): zoomto(58.0, 30.0):
             diffuse(shop.tint[0], shop.tint[1], shop.tint[2], if active { 0.92 } else { 0.30 }):
             z(Z + 5)
         ));
         actors.push(act!(text:
             font(current_machine_font_key(FontRole::Bold)): settext(shop.short_name):
-            align(0.5, 0.5): xy(x, cy - PANEL_H * 0.5 + 29.0): zoom(0.25):
+            align(0.5, 0.5): xy(x, cy + HEADER_Y): zoom(0.25):
             diffuse(1.0, 1.0, 1.0, if active { 1.0 } else { 0.65 }): z(Z + 6):
             horizalign(center)
         ));
@@ -528,8 +559,11 @@ fn push_catalog(
     let start = selected
         .saturating_sub(VIEW_ROWS / 2)
         .min(row_count.saturating_sub(VIEW_ROWS));
+    let visible_rows = row_count.min(VIEW_ROWS);
+    let list_h = (visible_rows - 1) as f32 * ROW_H + (ROW_H - 3.0) + LIST_MARGIN * 2.0;
+    let list_y = LIST_Y + (visible_rows - 1) as f32 * ROW_H * 0.5;
     actors.push(act!(quad:
-        align(0.5, 0.5): xy(cx + LIST_X, cy + 19.0): zoomto(LIST_W, 287.0):
+        align(0.5, 0.5): xy(cx + LIST_X, cy + list_y): zoomto(LIST_W, list_h):
         diffuse(0.0, 0.0, 0.0, 0.78): z(Z + 4)
     ));
     for (slot, row_index) in (start..row_count.min(start + VIEW_ROWS)).enumerate() {
@@ -984,5 +1018,16 @@ mod tests {
             panic!("shop should remain visible");
         };
         assert_eq!(overlay.item_indices[0], 1);
+    }
+
+    #[test]
+    fn page_navigation_clamps_at_the_first_and_last_rows() {
+        let mut state = show_srpg_shop_overlay(PlayerSide::P1);
+        let snapshot = snapshot(false, false);
+
+        assert!(page_srpg_shop_selection(&mut state, &snapshot, 1));
+        assert!(!page_srpg_shop_selection(&mut state, &snapshot, 1));
+        assert!(page_srpg_shop_selection(&mut state, &snapshot, -1));
+        assert!(!page_srpg_shop_selection(&mut state, &snapshot, -1));
     }
 }

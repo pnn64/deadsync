@@ -1,9 +1,13 @@
-use crate::downloads::cache_has_success;
+use crate::downloads::cache_has_destination;
 use deadsync_config::prelude::SrpgShopFolder;
 use deadsync_net::{self as network, AgentConfig, HttpAgent};
 use serde::Deserialize;
 use serde_json::{Map, Value};
+use std::collections::{HashMap, HashSet};
 use std::fmt::{self, Display, Formatter};
+use std::fs::{self, File};
+use std::io::{BufRead, BufReader};
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock, Mutex};
 use std::thread;
 
@@ -117,14 +121,16 @@ pub fn runtime_snapshot() -> Arc<SrpgShopSnapshot> {
     if snapshot.shops.is_empty() {
         return snapshot;
     }
+    let folder = deadsync_config::runtime::get().srpg_shop_folder;
     let cache = crate::runtime::unlock_cache_snapshot();
     let mut annotated = (*snapshot).clone();
     for shop in &mut annotated.shops {
+        let destination = download_folder(shop.id, folder);
         for item in &mut shop.items {
-            item.downloaded = item
+            item.downloaded |= item
                 .download_url
                 .as_deref()
-                .is_some_and(|url| cache_has_success(&cache, url));
+                .is_some_and(|url| cache_has_destination(&cache, url, destination));
         }
     }
     Arc::new(annotated)
@@ -296,11 +302,13 @@ fn fetch_snapshot(
             .position(|id| id == &shop.id)
             .unwrap_or(usize::MAX)
     });
-    Ok(SrpgShopSnapshot {
+    let mut snapshot = SrpgShopSnapshot {
         phase: SrpgShopPhase::Ready,
         shops,
         message: None,
-    })
+    };
+    annotate_installed_songs(&mut snapshot);
+    Ok(snapshot)
 }
 
 fn fetch_shop(
@@ -351,6 +359,7 @@ fn fetch_shop(
     let mut items = parse_catalog(&catalog, shop_id, lifetime_balance)?;
     merge_downloads(&mut items, parse_downloads(&downloads)?);
     retain_song_unlocks(&mut items);
+    order_shop_items(&mut items);
     Ok(SrpgShop {
         id: shop_id,
         balance,
@@ -360,6 +369,84 @@ fn fetch_shop(
 
 fn retain_song_unlocks(items: &mut Vec<SrpgShopItem>) {
     items.retain(|item| item.kind == SrpgShopItemKind::Song);
+}
+
+fn order_shop_items(items: &mut [SrpgShopItem]) {
+    items.sort_by_key(|item| item.owned);
+}
+
+fn annotate_installed_songs(snapshot: &mut SrpgShopSnapshot) {
+    let folder = deadsync_config::runtime::get().srpg_shop_folder;
+    let mut installed = HashMap::<&str, HashSet<String>>::new();
+    for shop in &mut snapshot.shops {
+        let destination = download_folder(shop.id, folder);
+        let keys = installed.entry(destination).or_insert_with(|| {
+            installed_song_keys(&crate::runtime::installed_pack_paths(destination))
+        });
+        for item in &mut shop.items {
+            item.downloaded = keys.contains(&song_key(&item.name));
+        }
+    }
+}
+
+fn installed_song_keys(pack_paths: &[PathBuf]) -> HashSet<String> {
+    let mut keys = HashSet::new();
+    for pack_path in pack_paths {
+        let Ok(entries) = fs::read_dir(pack_path) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let song_dir = entry.path();
+            if !song_dir.is_dir() {
+                continue;
+            }
+            keys.insert(song_key(&entry.file_name().to_string_lossy()));
+            collect_simfile_titles(&song_dir, &mut keys);
+        }
+    }
+    keys.remove("");
+    keys
+}
+
+fn collect_simfile_titles(song_dir: &Path, keys: &mut HashSet<String>) {
+    let Ok(entries) = fs::read_dir(song_dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let is_simfile = path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("sm") || ext.eq_ignore_ascii_case("ssc"));
+        if !is_simfile {
+            continue;
+        }
+        let Ok(file) = File::open(path) else {
+            continue;
+        };
+        for line in BufReader::new(file).lines().take(64).map_while(Result::ok) {
+            let Some(title) = line.trim_start().strip_prefix("#TITLE:") else {
+                continue;
+            };
+            keys.insert(song_key(title.trim_end_matches(';')));
+            break;
+        }
+    }
+}
+
+fn song_key(raw: &str) -> String {
+    let mut text = raw.trim();
+    while let Some(rest) = text.strip_prefix('[') {
+        let Some(end) = rest.find(']') else {
+            break;
+        };
+        text = rest[end + 1..].trim_start();
+    }
+    let text = text.split_once(" (").map_or(text, |(base, _)| base);
+    text.chars()
+        .filter(|ch| ch.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
 }
 
 struct PurchaseDownload {
@@ -529,10 +616,31 @@ fn parse_catalog(
         _ => None,
     }
     .ok_or_else(|| SrpgShopError::InvalidResponse("SRPG10 catalog has no rows".to_string()))?;
+    let mut rows = rows.iter().collect::<Vec<_>>();
+    rows.sort_by_key(|row| catalog_row_key(row));
     Ok(rows
-        .iter()
+        .into_iter()
         .filter_map(|row| catalog_item(row, shop_id, lifetime_balance))
         .collect())
+}
+
+fn catalog_row_key(row: &Value) -> (u64, u64, u64, u64, u64) {
+    (
+        catalog_cell_number(row, 11),
+        catalog_cell_number(row, 8),
+        catalog_cell_number(row, 12),
+        catalog_cell_number(row, 13),
+        catalog_cell_number(row, 7),
+    )
+}
+
+fn catalog_cell_number(row: &Value, index: usize) -> u64 {
+    row.as_array()
+        .and_then(|cells| cells.get(index))
+        .map(value_text)
+        .map(|value| value.replace(',', ""))
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(u64::MAX)
 }
 
 fn catalog_item(row: &Value, shop_id: u32, lifetime_balance: u64) -> Option<SrpgShopItem> {
@@ -778,22 +886,22 @@ mod tests {
         let body = r#"{"data":[["7","chart.png","Fast Song","Purchase to unlock","Difficulty: 14|Speed Tier: 180 BPM","2","0","1234","0","0","0","1","14","180","0"],["2","axe.png","Stone Axe","Useful","Lv. 1 EP","0","0","294","0","0","0","0","---","---","---"]]}"#;
         let items = parse_catalog(body, 0, 0).expect("catalog");
         assert_eq!(items.len(), 2);
-        assert_eq!(items[0].kind, SrpgShopItemKind::Song);
-        assert_eq!(items[0].difficulty, Some(14));
-        assert_eq!(items[0].bpm, Some(180));
-        assert_eq!(items[1].kind, SrpgShopItemKind::Relic);
-        assert_eq!(items[1].cost, Some(294));
+        assert_eq!(items[0].kind, SrpgShopItemKind::Relic);
+        assert_eq!(items[0].cost, Some(294));
+        assert_eq!(items[1].kind, SrpgShopItemKind::Song);
+        assert_eq!(items[1].difficulty, Some(14));
+        assert_eq!(items[1].bpm, Some(180));
     }
 
     #[test]
     fn shop_catalog_omits_relics_and_preserves_website_order() {
-        let body = r#"{"data":[["7","chart.png","Zeta Song","Purchase to unlock","Difficulty: 14|Speed Tier: 180 BPM","2","0","1234","0","0","0","1","14","180","0"],["2","axe.png","Stone Axe","Useful","Lv. 1 EP","0","0","294","0","0","0","0","---","---","---"],["8","chart.png","Alpha Song","Purchase to unlock","Difficulty: 15|Speed Tier: 190 BPM","2","0","1235","0","0","0","1","15","190","0"]]}"#;
+        let body = r#"{"data":[["7","chart.png","Astral Apocalypse","Purchase to unlock","Difficulty: 27|Speed Tier: 260 BPM","2","0","1037","0","0","0","1","27","260","0"],["2","axe.png","Stone Axe","Useful","Lv. 1 EP","0","0","294","0","0","0","0","---","---","---"],["8","chart.png","Postlude Evangelist","Purchase to unlock","Difficulty: 20|Speed Tier: 200 BPM","2","0","640","0","0","0","1","20","200","0"]]}"#;
         let mut items = parse_catalog(body, 0, 0).expect("catalog");
         retain_song_unlocks(&mut items);
         assert_eq!(items.len(), 2);
         assert_eq!(items[0].kind, SrpgShopItemKind::Song);
-        assert_eq!(items[0].name, "Zeta Song");
-        assert_eq!(items[1].name, "Alpha Song");
+        assert_eq!(items[0].name, "Postlude Evangelist");
+        assert_eq!(items[1].name, "Astral Apocalypse");
     }
 
     #[test]
@@ -830,6 +938,66 @@ mod tests {
             Some("https://example.test/song.zip")
         );
         assert_eq!(items[0].effect, "Difficulty: 14  •  Speed Tier: 180 BPM");
+    }
+
+    #[test]
+    fn purchasable_songs_stay_before_owned_songs() {
+        let mut items = vec![
+            SrpgShopItem {
+                item_id: "1".to_string(),
+                kind: SrpgShopItemKind::Song,
+                name: "Owned".to_string(),
+                description: String::new(),
+                effect: String::new(),
+                cost: None,
+                difficulty: Some(11),
+                bpm: Some(120),
+                type_id: 1,
+                owned: true,
+                site_downloaded: false,
+                downloaded: false,
+                download_url: Some("https://example.test/owned.zip".to_string()),
+            },
+            SrpgShopItem {
+                item_id: "2".to_string(),
+                kind: SrpgShopItemKind::Song,
+                name: "Purchasable".to_string(),
+                description: String::new(),
+                effect: String::new(),
+                cost: Some(100),
+                difficulty: Some(12),
+                bpm: Some(130),
+                type_id: 1,
+                owned: false,
+                site_downloaded: false,
+                downloaded: false,
+                download_url: None,
+            },
+        ];
+        order_shop_items(&mut items);
+        assert_eq!(items[0].name, "Purchasable");
+        assert_eq!(items[1].name, "Owned");
+    }
+
+    #[test]
+    fn installed_pack_titles_match_shop_song_names() {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("deadsync-srpg-shop-{unique}"));
+        let pack = root.join("Stamina RPG 10 - Shops");
+        let song = pack.join("[15] Lost Reqiuem");
+        fs::create_dir_all(&song).expect("song directory");
+        fs::write(
+            song.join("Lost Requiem.sm"),
+            "#TITLE:[15] [240] Lost Requiem (Medium);\n#SUBTITLE:(CMOD);\n",
+        )
+        .expect("simfile");
+
+        let keys = installed_song_keys(&[pack]);
+        assert!(keys.contains(&song_key("Lost Requiem (Medium) (CMOD)")));
+        fs::remove_dir_all(root).expect("cleanup");
     }
 
     #[test]

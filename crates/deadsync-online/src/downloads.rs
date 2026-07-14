@@ -657,12 +657,6 @@ pub fn cache_has_destination(cache: &UnlockCache, url: &str, destination: &str) 
         .unwrap_or(false)
 }
 
-pub fn cache_has_success(cache: &UnlockCache, url: &str) -> bool {
-    cache
-        .get(url)
-        .is_some_and(|packs| packs.values().any(|success| *success))
-}
-
 pub fn choose_unlock_root(destination: &str, roots: &[impl AsRef<Path>]) -> Option<usize> {
     let mut best: Option<(usize, usize)> = None;
     for (idx, root) in roots.iter().enumerate() {
@@ -859,11 +853,6 @@ mod tests {
             &cache,
             "https://example.com/unlock.zip",
             "Other Pack"
-        ));
-        assert!(cache_has_success(&cache, "https://example.com/unlock.zip"));
-        assert!(!cache_has_success(
-            &cache,
-            "https://example.com/missing.zip"
         ));
     }
 

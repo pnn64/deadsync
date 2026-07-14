@@ -78,6 +78,17 @@ fn unlock_destination_roots() -> Vec<PathBuf> {
     )
 }
 
+pub(crate) fn installed_pack_paths(pack_name: &str) -> Vec<PathBuf> {
+    let mut roots = vec![dirs::app_dirs().songs_dir()];
+    for folder in deadsync_config::runtime::additional_song_folder_roots() {
+        let root = PathBuf::from(folder.path);
+        if !roots.contains(&root) {
+            roots.push(root);
+        }
+    }
+    roots.into_iter().map(|root| root.join(pack_name)).collect()
+}
+
 fn load_unlock_cache() -> UnlockCache {
     let path = dirs::app_dirs().unlock_cache_path();
     match read_unlock_cache_file(&path) {

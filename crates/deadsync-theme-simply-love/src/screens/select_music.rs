@@ -174,6 +174,7 @@ const NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(250);
 // 0.375s before repeating, then 8 repeats/sec.
 const OVERLAY_NAV_INITIAL_HOLD_DELAY: Duration = Duration::from_millis(375);
 const OVERLAY_NAV_REPEAT_SCROLL_INTERVAL: Duration = Duration::from_millis(125);
+const SRPG_TAB_SCROLL_DIVISOR: u32 = 4;
 const DOUBLE_TAP_WINDOW: Duration = Duration::from_millis(300);
 // Simply Love [ScreenSelectMusic] CodeTogglePatternInfo="Select,Select".
 // ITGmania InputQueueCode gives a two-press code (presses - 1) * 0.6s.
@@ -1218,6 +1219,7 @@ pub struct State {
     overlay_nav_held_direction: Option<NavDirection>,
     overlay_nav_held_since: Option<Instant>,
     overlay_nav_last_scrolled_at: Option<Instant>,
+    srpg_tab_held: bool,
     currently_playing_preview_path: Option<PathBuf>,
     currently_playing_preview_start_sec: Option<f32>,
     currently_playing_preview_length_sec: Option<f32>,
@@ -2948,6 +2950,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         overlay_nav_held_direction: None,
         overlay_nav_held_since: None,
         overlay_nav_last_scrolled_at: None,
+        srpg_tab_held: false,
         currently_playing_preview_path: None,
         currently_playing_preview_start_sec: None,
         currently_playing_preview_length_sec: None,
@@ -3167,6 +3170,7 @@ pub fn init_placeholder() -> State {
         overlay_nav_held_direction: None,
         overlay_nav_held_since: None,
         overlay_nav_last_scrolled_at: None,
+        srpg_tab_held: false,
         currently_playing_preview_path: None,
         currently_playing_preview_start_sec: None,
         currently_playing_preview_length_sec: None,
@@ -5730,6 +5734,18 @@ fn srpg_shop_move(state: &mut State, delta: isize) -> bool {
     true
 }
 
+fn srpg_shop_page(state: &mut State, direction: isize) -> bool {
+    if !select_music_menu::page_srpg_shop_selection(
+        &mut state.srpg_shop_overlay,
+        &state.srpg_shop_snapshot,
+        direction,
+    ) {
+        return false;
+    }
+    queue_sfx(state, "assets/sounds/change.ogg");
+    true
+}
+
 fn update_overlay_nav_hold(state: &mut State) {
     let Some(dir) = state.overlay_nav_held_direction else {
         return;
@@ -5754,9 +5770,19 @@ fn update_overlay_nav_hold(state: &mut State) {
         return;
     }
 
+    let accelerated = state.srpg_tab_held && srpg_shop_overlay_visible(state);
+    let hold_delay = if accelerated {
+        OVERLAY_NAV_INITIAL_HOLD_DELAY / SRPG_TAB_SCROLL_DIVISOR
+    } else {
+        OVERLAY_NAV_INITIAL_HOLD_DELAY
+    };
+    let repeat_interval = if accelerated {
+        OVERLAY_NAV_REPEAT_SCROLL_INTERVAL / SRPG_TAB_SCROLL_DIVISOR
+    } else {
+        OVERLAY_NAV_REPEAT_SCROLL_INTERVAL
+    };
     let now = Instant::now();
-    if now.duration_since(held_since) < OVERLAY_NAV_INITIAL_HOLD_DELAY
-        || now.duration_since(last_at) < OVERLAY_NAV_REPEAT_SCROLL_INTERVAL
+    if now.duration_since(held_since) < hold_delay || now.duration_since(last_at) < repeat_interval
     {
         return;
     }
@@ -5879,6 +5905,7 @@ fn show_srpg_shop_overlay(state: &mut State, side: profile_data::PlayerSide) {
     pack_sync::hide_overlay(state);
     state.profile_switch_overlay = None;
     hide_test_input_overlay(state);
+    state.srpg_tab_held = false;
     state.srpg_shop_overlay = select_music_menu::show_srpg_shop_overlay(side);
     queue_online(
         state,
@@ -7871,6 +7898,7 @@ fn handle_srpg_shop_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEf
             }
         }
         select_music_menu::SrpgShopInputOutcome::Closed => {
+            state.srpg_tab_held = false;
             queue_sfx(state, "assets/sounds/start.ogg");
         }
         select_music_menu::SrpgShopInputOutcome::Refresh(side) => {
@@ -9300,6 +9328,31 @@ pub fn handle_raw_key_event_with_modifiers(
     prepend_pending_runtime(state, effect)
 }
 
+fn handle_srpg_shop_raw_key(
+    state: &mut State,
+    key: Option<&RawKeyboardEvent>,
+) -> Option<ThemeEffect> {
+    if !srpg_shop_overlay_visible(state) {
+        state.srpg_tab_held = false;
+        return None;
+    }
+    let key = key?;
+    match key.code {
+        KeyCode::Tab => {
+            state.srpg_tab_held = key.pressed;
+            Some(ThemeEffect::ConsumeInput)
+        }
+        KeyCode::PageUp | KeyCode::PageDown => {
+            if key.pressed && !key.repeat {
+                let direction = if key.code == KeyCode::PageUp { -1 } else { 1 };
+                srpg_shop_page(state, direction);
+            }
+            Some(ThemeEffect::ConsumeInput)
+        }
+        _ => None,
+    }
+}
+
 fn handle_raw_key_event_impl(
     state: &mut State,
     key: Option<&RawKeyboardEvent>,
@@ -9307,6 +9360,9 @@ fn handle_raw_key_event_impl(
     ctrl_held: bool,
     shift_held: bool,
 ) -> ThemeEffect {
+    if let Some(effect) = handle_srpg_shop_raw_key(state, key) {
+        return effect;
+    }
     if state.reload_ui.is_some() {
         return ThemeEffect::None;
     }
@@ -9937,6 +9993,14 @@ fn process_smx_pad_profile_events(state: &mut State) {
     }
 }
 
+fn take_ready_song_reload_dirs(state: &mut State) -> Vec<PathBuf> {
+    if srpg_shop_overlay_visible(state) {
+        Vec::new()
+    } else {
+        std::mem::take(&mut state.ready_song_reload_dirs)
+    }
+}
+
 pub fn update(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffect {
     let effect = update_impl(state, dt, smx);
     prepend_pending_runtime(state, effect)
@@ -10015,7 +10079,7 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
         profile_boxes::update(overlay, dt);
         return ThemeEffect::None;
     }
-    let reload_dirs = std::mem::take(&mut state.ready_song_reload_dirs);
+    let reload_dirs = take_ready_song_reload_dirs(state);
     if !reload_dirs.is_empty() {
         start_reload_song_dirs(state, reload_dirs);
         return ThemeEffect::None;
@@ -13704,6 +13768,37 @@ mod tests {
         );
         assert_eq!(super::overlay_ud_dir(VirtualAction::p1_left), None);
         assert_eq!(super::overlay_ud_dir(VirtualAction::p2_menu_right), None);
+    }
+
+    #[test]
+    fn tab_acceleration_tracks_press_and_release_while_shop_is_open() {
+        let mut state = init_placeholder();
+        state.srpg_shop_overlay =
+            super::select_music_menu::show_srpg_shop_overlay(profile_data::PlayerSide::P1);
+
+        super::handle_srpg_shop_raw_key(&mut state, Some(&raw_key(KeyCode::Tab, true, false)));
+        assert!(state.srpg_tab_held);
+
+        super::handle_srpg_shop_raw_key(&mut state, Some(&raw_key(KeyCode::Tab, false, false)));
+        assert!(!state.srpg_tab_held);
+    }
+
+    #[test]
+    fn shop_defers_song_reload_until_the_overlay_closes() {
+        let mut state = init_placeholder();
+        state.ready_song_reload_dirs = vec![PathBuf::from("Stamina RPG 10 - Shops")];
+        state.srpg_shop_overlay =
+            super::select_music_menu::show_srpg_shop_overlay(profile_data::PlayerSide::P1);
+
+        assert!(super::take_ready_song_reload_dirs(&mut state).is_empty());
+        assert_eq!(state.ready_song_reload_dirs.len(), 1);
+
+        super::select_music_menu::hide_srpg_shop_overlay(&mut state.srpg_shop_overlay);
+        assert_eq!(
+            super::take_ready_song_reload_dirs(&mut state),
+            vec![PathBuf::from("Stamina RPG 10 - Shops")]
+        );
+        assert!(state.ready_song_reload_dirs.is_empty());
     }
 
     #[test]
