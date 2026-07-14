@@ -589,6 +589,26 @@ pub fn set_cached_online_itl_self_rank(
     );
 }
 
+pub fn set_cached_online_srpg_self_score(
+    profile_id: Option<&str>,
+    api_key: &str,
+    chart_hash: &str,
+    score: Option<u32>,
+) {
+    let api_key = api_key.trim();
+    let chart_hash = chart_hash.trim();
+    if api_key.is_empty() || chart_hash.is_empty() {
+        return;
+    }
+    deadsync_score::runtime_set_online_srpg_self_score_for_profile_dirs(
+        profile_id,
+        api_key,
+        chart_hash,
+        score,
+        local_profile_dir_for_id,
+    );
+}
+
 pub fn invalidate_player_leaderboard_chart_for_side(
     chart_hash: &str,
     side: PlayerSide,
@@ -607,6 +627,7 @@ pub fn invalidate_player_leaderboard_chart_for_side(
     let profile_id = crate::runtime_active_local_profile_id_for_side(side);
     set_cached_online_itl_self_score(profile_id.as_deref(), api_key, chart_hash, None);
     set_cached_online_itl_self_rank(profile_id.as_deref(), api_key, chart_hash, None);
+    set_cached_online_srpg_self_score(profile_id.as_deref(), api_key, chart_hash, None);
     deadsync_score::runtime_invalidate_player_leaderboard_chart_for_api(
         api_key,
         chart_hash,
@@ -791,6 +812,29 @@ pub fn cached_online_itl_self_score_for_key_assume_loaded(
     )
 }
 
+pub fn cached_online_srpg_self_score_for_key(
+    chart_hash: &str,
+    profile_id: Option<&str>,
+    api_key: &str,
+) -> Option<u32> {
+    deadsync_score::runtime_cached_online_srpg_self_score_for_profile_dirs(
+        chart_hash,
+        profile_id,
+        api_key,
+        local_profile_dir_for_id,
+    )
+}
+
+pub fn cached_online_srpg_self_score_for_key_assume_loaded(
+    chart_hash: &str,
+    profile_id: Option<&str>,
+    api_key: &str,
+) -> Option<u32> {
+    deadsync_score::runtime_cached_online_srpg_self_score_assume_loaded(
+        chart_hash, profile_id, api_key,
+    )
+}
+
 pub struct ItlWheelSideCache<'a> {
     leaderboard_snapshot: &'a deadsync_score::GameplayScoreboxProfileSnapshot,
 }
@@ -831,6 +875,13 @@ impl<'a> ItlWheelSideCache<'a> {
             chart_hash,
             &self.leaderboard_snapshot,
         )
+        .or_else(|| {
+            cached_online_srpg_self_score_for_key_assume_loaded(
+                chart_hash,
+                self.leaderboard_snapshot.persistent_profile_id(),
+                self.leaderboard_snapshot.api_key(),
+            )
+        })
     }
 
     pub fn cached_tournament_rank(&self, chart_hash: &str) -> Option<u32> {
@@ -1763,6 +1814,45 @@ mod tests {
         );
 
         deadsync_score::runtime_remove_player_leaderboard_entry(&key);
+    }
+
+    #[test]
+    fn wheel_cache_exposes_profile_backed_srpg_self_score() {
+        let profile_id = "profile-backed-srpg-wheel";
+        let api_key = "profile-backed-srpg-key";
+        let chart_hash = "profile-backed-srpg-chart";
+        let snapshot = deadsync_score::scorebox_snapshot(
+            true,
+            false,
+            true,
+            true,
+            false,
+            false,
+            api_key,
+            "",
+            "PerfectTaste",
+            Some(profile_id.to_string()),
+        );
+        assert_eq!(
+            deadsync_score::runtime_cached_online_srpg_self_score(
+                chart_hash,
+                Some(profile_id),
+                api_key,
+                |_| {
+                    HashMap::from([(
+                        deadsync_score::OnlineItlSelfScoreKey {
+                            chart_hash: chart_hash.to_string(),
+                            api_key: api_key.to_string(),
+                        },
+                        9_876,
+                    )])
+                },
+            ),
+            Some(9_876)
+        );
+
+        let cache = ItlWheelSideCache::new(&snapshot);
+        assert_eq!(cache.cached_srpg_self_score(chart_hash), Some(9_876));
     }
 
     #[test]

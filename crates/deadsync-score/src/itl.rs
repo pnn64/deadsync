@@ -55,6 +55,8 @@ static ONLINE_ITL_SELF_SCORE_CACHE: LazyLock<Mutex<OnlineItlSelfCacheState>> =
 static ONLINE_ITL_SELF_SCORE_GENERATION: AtomicU64 = AtomicU64::new(1);
 static ONLINE_ITL_SELF_RANK_CACHE: LazyLock<Mutex<OnlineItlSelfCacheState>> =
     LazyLock::new(|| Mutex::new(OnlineItlSelfCacheState::default()));
+static ONLINE_SRPG_SELF_SCORE_CACHE: LazyLock<Mutex<OnlineItlSelfCacheState>> =
+    LazyLock::new(|| Mutex::new(OnlineItlSelfCacheState::default()));
 static ONLINE_ITL_OVERALL_RANK_CACHE: LazyLock<Mutex<OnlineItlOverallRankCacheState>> =
     LazyLock::new(|| Mutex::new(OnlineItlOverallRankCacheState::default()));
 static EMPTY_ONLINE_ITL_OVERALL_RANKS: LazyLock<Arc<HashMap<String, u32>>> =
@@ -346,6 +348,78 @@ pub fn get_online_itl_self_rank(
         .get_value(chart_hash, profile_id, api_key)
 }
 
+pub fn online_srpg_self_score_profile_loaded(profile_id: &str) -> bool {
+    ONLINE_SRPG_SELF_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .profile_loaded(profile_id)
+}
+
+pub fn insert_online_srpg_self_score_profile(profile_id: &str, by_key: OnlineItlSelfIndexMap) {
+    ONLINE_SRPG_SELF_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .insert_loaded_profile(profile_id, by_key);
+}
+
+pub fn runtime_ensure_online_srpg_self_score_profile_loaded<L>(
+    profile_id: &str,
+    mut load_profile: L,
+) where
+    L: FnMut(&str) -> OnlineItlSelfIndexMap,
+{
+    let profile_id = profile_id.trim();
+    if profile_id.is_empty() || online_srpg_self_score_profile_loaded(profile_id) {
+        return;
+    }
+    insert_online_srpg_self_score_profile(profile_id, load_profile(profile_id));
+}
+
+pub fn set_online_srpg_self_score(
+    profile_id: Option<&str>,
+    api_key: &str,
+    chart_hash: &str,
+    score: Option<u32>,
+) -> OnlineItlSelfCacheUpdate {
+    ONLINE_SRPG_SELF_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .set_value(profile_id, api_key, chart_hash, score)
+}
+
+pub fn runtime_set_online_srpg_self_score<L, S>(
+    profile_id: Option<&str>,
+    api_key: &str,
+    chart_hash: &str,
+    score: Option<u32>,
+    mut load_profile: L,
+    mut save_profile: S,
+) where
+    L: FnMut(&str) -> OnlineItlSelfIndexMap,
+    S: FnMut(&str, &OnlineItlSelfCacheMap),
+{
+    let profile_id = profile_id.map(str::trim).filter(|id| !id.is_empty());
+    if let Some(profile_id) = profile_id {
+        runtime_ensure_online_srpg_self_score_profile_loaded(profile_id, &mut load_profile);
+    }
+
+    let update = set_online_srpg_self_score(profile_id, api_key, chart_hash, score);
+    if let Some((profile_id, by_key)) = update.profile_snapshot {
+        save_profile(profile_id.as_str(), &by_key);
+    }
+}
+
+pub fn get_online_srpg_self_score(
+    chart_hash: &str,
+    profile_id: Option<&str>,
+    api_key: &str,
+) -> Option<u32> {
+    ONLINE_SRPG_SELF_SCORE_CACHE
+        .lock()
+        .unwrap()
+        .get_value(chart_hash, profile_id, api_key)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OnlineItlOverallRankCacheKey {
     pub api_key: String,
@@ -492,12 +566,14 @@ pub fn load_online_itl_self_index_file(path: &Path) -> Option<OnlineItlSelfIndex
 pub enum OnlineItlSelfIndexKind {
     Score,
     Rank,
+    SrpgScore,
 }
 
 pub fn online_itl_self_index_path(profile_dir: &Path, kind: OnlineItlSelfIndexKind) -> PathBuf {
     let file_name = match kind {
         OnlineItlSelfIndexKind::Score => "itl_self.bin",
         OnlineItlSelfIndexKind::Rank => "itl_rank.bin",
+        OnlineItlSelfIndexKind::SrpgScore => "srpg_self.bin",
     };
     profile_dir.join("scores").join("gs").join(file_name)
 }
@@ -543,7 +619,7 @@ pub fn runtime_save_online_itl_self_index_for_profile<P>(
     let profile_dir = profile_dir_for_id(profile_id);
     if let Err(error) = save_online_itl_self_index_for_profile_dir(&profile_dir, kind, by_key) {
         let path = online_itl_self_index_path(&profile_dir, kind);
-        warn!("Failed to save ITL self-score cache {path:?}: {error:?}");
+        warn!("Failed to save online score index {path:?}: {error:?}");
     }
 }
 
@@ -604,6 +680,38 @@ pub fn runtime_set_online_itl_self_rank_for_profile_dirs<P>(
             runtime_save_online_itl_self_index_for_profile(
                 id,
                 OnlineItlSelfIndexKind::Rank,
+                by_key,
+                profile_dir_for_id,
+            );
+        },
+    );
+}
+
+pub fn runtime_set_online_srpg_self_score_for_profile_dirs<P>(
+    profile_id: Option<&str>,
+    api_key: &str,
+    chart_hash: &str,
+    score: Option<u32>,
+    profile_dir_for_id: P,
+) where
+    P: Fn(&str) -> PathBuf + Copy,
+{
+    runtime_set_online_srpg_self_score(
+        profile_id,
+        api_key,
+        chart_hash,
+        score,
+        |id| {
+            runtime_load_online_itl_self_index_for_profile(
+                id,
+                OnlineItlSelfIndexKind::SrpgScore,
+                profile_dir_for_id,
+            )
+        },
+        |id, by_key| {
+            runtime_save_online_itl_self_index_for_profile(
+                id,
+                OnlineItlSelfIndexKind::SrpgScore,
                 by_key,
                 profile_dir_for_id,
             );
@@ -992,19 +1100,69 @@ pub fn runtime_cached_online_itl_self_rank_assume_loaded(
     get_online_itl_self_rank(chart_hash, profile_id, api_key)
 }
 
-pub fn runtime_ensure_itl_wheel_caches_loaded<I, S, R>(
+pub fn runtime_cached_online_srpg_self_score<L>(
+    chart_hash: &str,
+    profile_id: Option<&str>,
+    api_key: &str,
+    mut load_profile: L,
+) -> Option<u32>
+where
+    L: FnMut(&str) -> OnlineItlSelfIndexMap,
+{
+    let profile_id = profile_id.map(str::trim).filter(|id| !id.is_empty());
+    if let Some(profile_id) = profile_id {
+        runtime_ensure_online_srpg_self_score_profile_loaded(profile_id, &mut load_profile);
+    }
+    runtime_cached_online_srpg_self_score_assume_loaded(chart_hash, profile_id, api_key)
+}
+
+pub fn runtime_cached_online_srpg_self_score_for_profile_dirs<P>(
+    chart_hash: &str,
+    profile_id: Option<&str>,
+    api_key: &str,
+    profile_dir_for_id: P,
+) -> Option<u32>
+where
+    P: Fn(&str) -> PathBuf + Copy,
+{
+    runtime_cached_online_srpg_self_score(chart_hash, profile_id, api_key, |id| {
+        runtime_load_online_itl_self_index_for_profile(
+            id,
+            OnlineItlSelfIndexKind::SrpgScore,
+            profile_dir_for_id,
+        )
+    })
+}
+
+pub fn runtime_cached_online_srpg_self_score_assume_loaded(
+    chart_hash: &str,
+    profile_id: Option<&str>,
+    api_key: &str,
+) -> Option<u32> {
+    let chart_hash = chart_hash.trim();
+    let api_key = api_key.trim();
+    if chart_hash.is_empty() || api_key.is_empty() {
+        return None;
+    }
+    get_online_srpg_self_score(chart_hash, profile_id, api_key)
+}
+
+pub fn runtime_ensure_itl_wheel_caches_loaded<I, S, R, E>(
     profile_id: &str,
     load_itl_profile: I,
     load_self_score_profile: S,
     load_self_rank_profile: R,
+    load_srpg_score_profile: E,
 ) where
     I: FnMut(&str) -> ItlFileData,
     S: FnMut(&str) -> OnlineItlSelfIndexMap,
     R: FnMut(&str) -> OnlineItlSelfIndexMap,
+    E: FnMut(&str) -> OnlineItlSelfIndexMap,
 {
     runtime_ensure_itl_score_profile_loaded(profile_id, load_itl_profile);
     runtime_ensure_online_itl_self_score_profile_loaded(profile_id, load_self_score_profile);
     runtime_ensure_online_itl_self_rank_profile_loaded(profile_id, load_self_rank_profile);
+    runtime_ensure_online_srpg_self_score_profile_loaded(profile_id, load_srpg_score_profile);
 }
 
 pub fn runtime_ensure_itl_wheel_caches_loaded_for_profile_dirs<P>(
@@ -1027,6 +1185,13 @@ pub fn runtime_ensure_itl_wheel_caches_loaded_for_profile_dirs<P>(
             runtime_load_online_itl_self_index_for_profile(
                 id,
                 OnlineItlSelfIndexKind::Rank,
+                profile_dir_for_id,
+            )
+        },
+        |id| {
+            runtime_load_online_itl_self_index_for_profile(
+                id,
+                OnlineItlSelfIndexKind::SrpgScore,
                 profile_dir_for_id,
             )
         },
@@ -2254,6 +2419,10 @@ mod tests {
             online_itl_self_index_path(&profile_dir, OnlineItlSelfIndexKind::Rank),
             profile_dir.join("scores").join("gs").join("itl_rank.bin")
         );
+        assert_eq!(
+            online_itl_self_index_path(&profile_dir, OnlineItlSelfIndexKind::SrpgScore),
+            profile_dir.join("scores").join("gs").join("srpg_self.bin")
+        );
     }
 
     #[test]
@@ -2280,6 +2449,41 @@ mod tests {
             load_online_itl_self_index_for_profile_dir(&dir, OnlineItlSelfIndexKind::Rank)
                 .get(&key),
             Some(&1234)
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn runtime_srpg_self_score_profile_dir_round_trips() {
+        let dir = temp_test_dir("srpg-self-profile-dir");
+        let profile_id = "runtime-srpg-profile-dir";
+        let api_key = "runtime-srpg-profile-api";
+        let chart_hash = "runtime-srpg-profile-chart";
+        let profile_dir_for_id = |id: &str| {
+            assert_eq!(id, profile_id);
+            dir.clone()
+        };
+
+        runtime_set_online_srpg_self_score_for_profile_dirs(
+            Some(profile_id),
+            api_key,
+            chart_hash,
+            Some(9_876),
+            profile_dir_for_id,
+        );
+
+        let persisted = runtime_load_online_itl_self_index_for_profile(
+            profile_id,
+            OnlineItlSelfIndexKind::SrpgScore,
+            profile_dir_for_id,
+        );
+        assert_eq!(
+            persisted.get(&OnlineItlSelfScoreKey {
+                chart_hash: chart_hash.to_string(),
+                api_key: api_key.to_string(),
+            }),
+            Some(&9_876)
         );
 
         let _ = std::fs::remove_dir_all(&dir);
@@ -2464,6 +2668,43 @@ mod tests {
         assert_eq!(
             get_online_itl_self_rank(chart_hash, Some(profile_id), api_key),
             Some(7)
+        );
+    }
+
+    #[test]
+    fn runtime_sets_online_srpg_self_score_and_saves_snapshot() {
+        let profile_id = "runtime-set-srpg-self-score-profile";
+        let api_key = "runtime-set-srpg-self-score-api";
+        let chart_hash = "runtime-set-srpg-self-score-chart";
+        let mut loads = 0;
+        let mut saved = None;
+
+        runtime_set_online_srpg_self_score(
+            Some(profile_id),
+            api_key,
+            chart_hash,
+            Some(9910),
+            |loaded_profile| {
+                assert_eq!(loaded_profile, profile_id);
+                loads += 1;
+                HashMap::new()
+            },
+            |saved_profile, by_key| {
+                assert_eq!(saved_profile, profile_id);
+                saved = by_key
+                    .get(&OnlineItlSelfScoreKey {
+                        chart_hash: chart_hash.to_string(),
+                        api_key: api_key.to_string(),
+                    })
+                    .copied();
+            },
+        );
+
+        assert_eq!(loads, 1);
+        assert_eq!(saved, Some(9910));
+        assert_eq!(
+            get_online_srpg_self_score(chart_hash, Some(profile_id), api_key),
+            Some(9910)
         );
     }
 

@@ -18,6 +18,7 @@ const ITL_WHEEL_FETCH_ENTRIES: usize = 5;
 #[derive(Clone, Copy)]
 pub struct PlayerLeaderboardFetchHandlers {
     pub cache_itl_self: fn(Option<String>, String, String, Option<u32>, Option<u32>),
+    pub cache_srpg_self_score: fn(Option<String>, String, String, u32),
     pub cache_imported_score: fn(String, String, String, ImportedPlayerScore),
 }
 
@@ -93,6 +94,14 @@ pub fn spawn_player_leaderboard_fetch(
                 itl_self_rank,
             );
         }
+        if let Some(srpg_self_score) = result.completion.fetched_srpg_self_score {
+            (handlers.cache_srpg_self_score)(
+                result.persistent_profile_id.clone(),
+                result.key.api_key.clone(),
+                result.key.chart_hash.clone(),
+                srpg_self_score,
+            );
+        }
         if let Some(imported_score) = result.completion.fetched_imported_score
             && let Some(profile_id) = result.auto_profile_id.as_deref()
         {
@@ -156,6 +165,7 @@ impl PlayerLeaderboardRuntime {
             service: crate::runtime::active_groovestats_service(),
             handlers: PlayerLeaderboardFetchHandlers {
                 cache_itl_self,
+                cache_srpg_self_score,
                 cache_imported_score,
             },
             profile_snapshot_for_side,
@@ -242,6 +252,20 @@ fn cache_itl_self(
         api_key.as_str(),
         chart_hash.as_str(),
         itl_self_rank,
+    );
+}
+
+fn cache_srpg_self_score(
+    profile_id: Option<String>,
+    api_key: String,
+    chart_hash: String,
+    score: u32,
+) {
+    deadsync_profile::app_runtime::set_cached_online_srpg_self_score(
+        profile_id.as_deref(),
+        api_key.as_str(),
+        chart_hash.as_str(),
+        Some(score),
     );
 }
 

@@ -656,6 +656,7 @@ pub struct QueuedPlayerLeaderboardFetch {
 
 pub struct PlayerLeaderboardFetchCompletion<T> {
     pub fetched_itl_self: Option<(Option<u32>, Option<u32>)>,
+    pub fetched_srpg_self_score: Option<u32>,
     pub fetched_imported_score: Option<T>,
     pub queued_fetch: Option<QueuedPlayerLeaderboardFetch>,
 }
@@ -754,6 +755,7 @@ impl PlayerLeaderboardCacheState {
         );
 
         let mut fetched_itl_self = None;
+        let mut fetched_srpg_self_score = None;
         let mut fetched_imported_score = None;
         if !request_invalidated {
             match fetched {
@@ -770,6 +772,7 @@ impl PlayerLeaderboardCacheState {
                         if itl_self_found {
                             fetched_itl_self = Some((data.itl_self_score, data.itl_self_rank));
                         }
+                        fetched_srpg_self_score = data.srpg_self_score;
                         if should_auto_populate && auto_profile_id_exists {
                             fetched_imported_score = imported_score;
                         }
@@ -823,6 +826,7 @@ impl PlayerLeaderboardCacheState {
 
         PlayerLeaderboardFetchCompletion {
             fetched_itl_self,
+            fetched_srpg_self_score,
             fetched_imported_score,
             queued_fetch,
         }
@@ -1758,6 +1762,7 @@ mod tests {
             result.completion.fetched_itl_self,
             Some((Some(9900), Some(7)))
         );
+        assert_eq!(result.completion.fetched_srpg_self_score, Some(9910));
         assert_eq!(result.completion.fetched_imported_score, Some("score"));
 
         let mut cache = runtime_lock_player_leaderboard_cache();
@@ -1856,6 +1861,7 @@ mod tests {
         );
 
         assert_eq!(completion.fetched_itl_self, Some((Some(9900), Some(7))));
+        assert_eq!(completion.fetched_srpg_self_score, Some(9910));
         assert_eq!(completion.fetched_imported_score, Some("score"));
         assert!(completion.queued_fetch.is_none());
         assert!(cache.in_flight.is_empty());
