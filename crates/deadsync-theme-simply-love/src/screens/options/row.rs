@@ -155,6 +155,8 @@ pub enum SubRowId {
     FastLoad,
     // GrooveStats Options
     EnableGrooveStats,
+    ShowSrpgShop,
+    SrpgShopFolder,
     EnableBoogieStats,
     AutoPopulateScores,
     AutoDownloadUnlocks,

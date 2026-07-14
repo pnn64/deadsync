@@ -11,6 +11,25 @@ pub(in crate::screens::options) const GROOVESTATS_OPTIONS_ROWS: &[SubRow] = &[
         inline: true,
     },
     SubRow {
+        id: SubRowId::ShowSrpgShop,
+        label: lookup_key("OptionsGrooveStats", "ShowSRPGShop"),
+        choices: &[
+            localized_choice("Common", "No"),
+            localized_choice("Common", "Yes"),
+        ],
+        inline: true,
+    },
+    SubRow {
+        id: SubRowId::SrpgShopFolder,
+        label: lookup_key("OptionsGrooveStats", "SRPGShopFolder"),
+        choices: &[
+            localized_choice("OptionsGrooveStats", "SRPGShopFolderUnlocks"),
+            localized_choice("OptionsGrooveStats", "SRPGShopFolderShops"),
+            localized_choice("OptionsGrooveStats", "SRPGShopFolderFaction"),
+        ],
+        inline: true,
+    },
+    SubRow {
         id: SubRowId::EnableBoogieStats,
         label: lookup_key("OptionsGrooveStats", "EnableBoogieStats"),
         choices: &[
@@ -117,6 +136,22 @@ pub(in crate::screens::options) const GROOVESTATS_OPTIONS_ITEMS: &[Item] = &[
         help: &[HelpEntry::Paragraph(lookup_key(
             "OptionsGrooveStatsHelp",
             "EnableGrooveStatsHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::GsShowSrpgShop,
+        name: lookup_key("OptionsGrooveStats", "ShowSRPGShop"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGrooveStatsHelp",
+            "ShowSRPGShopHelp",
+        ))],
+    },
+    Item {
+        id: ItemId::GsSrpgShopFolder,
+        name: lookup_key("OptionsGrooveStats", "SRPGShopFolder"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsGrooveStatsHelp",
+            "SRPGShopFolderHelp",
         ))],
     },
     Item {

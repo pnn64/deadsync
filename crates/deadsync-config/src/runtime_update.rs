@@ -7,8 +7,8 @@ use crate::theme::{
     MachineEvaluationStyle, MachineFont, MachinePreferredPlayMode, MachinePreferredPlayStyle,
     NewPackMode, RandomBackgroundMode, SelectMusicItlRankMode, SelectMusicItlWheelMode,
     SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SelectMusicSongSelectBgMode,
-    SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SrpgVariant, SyncGraphMode, ThemeFlag,
-    VersionOverlaySide, VisualStyle,
+    SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SrpgShopFolder, SrpgVariant,
+    SyncGraphMode, ThemeFlag, VersionOverlaySide, VisualStyle,
 };
 use deadlib_platform::logging;
 use deadlib_render::{BackendType, PresentModePolicy};
@@ -135,6 +135,8 @@ update_config_fn!(pub fn update_machine_allow_per_player_global_offsets(enabled:
 update_config_fn!(pub fn update_machine_pack_ini_offsets(enabled: bool) => set_machine_pack_ini_offsets);
 update_config_fn!(pub fn update_machine_default_sync_offset(offset: DefaultSyncOffset) => set_machine_default_sync_offset);
 update_config_fn!(pub fn update_enable_groovestats(enabled: bool) => set_enable_groovestats);
+update_config_fn!(pub fn update_show_srpg_shop(enabled: bool) => set_show_srpg_shop);
+update_config_fn!(pub fn update_srpg_shop_folder(folder: SrpgShopFolder) => set_srpg_shop_folder);
 update_config_fn!(pub fn update_enable_boogiestats(enabled: bool) => set_enable_boogiestats);
 update_config_fn!(pub fn update_enable_arrowcloud(enabled: bool) => set_enable_arrowcloud);
 update_config_fn!(pub fn update_submit_arrowcloud_fails(enabled: bool) => set_submit_arrowcloud_fails);

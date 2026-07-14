@@ -14,7 +14,7 @@ const PANEL_W: f32 = 620.0;
 const PANEL_H: f32 = 430.0;
 const LIST_W: f32 = 286.0;
 const LIST_X: f32 = 157.0;
-const LIST_Y: f32 = -112.0;
+const LIST_Y: f32 = -96.0;
 const ROW_H: f32 = 37.0;
 const VIEW_ROWS: usize = 7;
 
@@ -90,14 +90,25 @@ pub enum SrpgShopInputOutcome {
     Closed,
     Refresh(PlayerSide),
     Download {
+        shop_id: u32,
         name: String,
         url: String,
+    },
+    DownloadAll {
+        shop_id: u32,
+        downloads: Vec<SrpgShopDownload>,
     },
     Purchase {
         shop_id: u32,
         item_id: String,
         type_id: u8,
     },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SrpgShopDownload {
+    pub name: String,
+    pub url: String,
 }
 
 pub fn show_srpg_shop_overlay(side: PlayerSide) -> SrpgShopOverlayState {
@@ -125,7 +136,7 @@ pub fn update_srpg_shop_overlay(state: &mut SrpgShopOverlayState, snapshot: &Srp
             .iter()
             .find(|shop| shop.id == shop_id)
             .map_or(0, |shop| shop.items.len());
-        overlay.item_indices[index] = overlay.item_indices[index].min(len.saturating_sub(1));
+        overlay.item_indices[index] = overlay.item_indices[index].min(len);
     }
     if snapshot.phase != SrpgShopPhase::Ready {
         overlay.confirm = None;
@@ -243,7 +254,7 @@ fn move_item(
     let Some(shop) = active_shop(overlay, snapshot) else {
         return SrpgShopInputOutcome::None;
     };
-    let len = shop.items.len();
+    let len = shop.items.len() + 1;
     if len <= 1 {
         return SrpgShopInputOutcome::None;
     }
@@ -264,17 +275,25 @@ fn activate_item(
     let Some(shop) = active_shop(overlay, snapshot) else {
         return SrpgShopInputOutcome::Refresh(overlay.side);
     };
-    let Some(item) = shop.items.get(overlay.item_indices[overlay.shop_index]) else {
+    let selected = overlay.item_indices[overlay.shop_index];
+    if selected == 0 {
+        return download_all(overlay, shop);
+    }
+    let Some(item) = shop.items.get(selected - 1) else {
         return SrpgShopInputOutcome::None;
     };
+    if item.downloaded {
+        overlay.local_message = Some("This song is already downloaded here.".to_string());
+        return SrpgShopInputOutcome::ChangedSelection;
+    }
     if let Some(url) = item.download_url.as_ref() {
-        let queue_key = format!("{}:{}", shop.id, item.item_id);
-        if !overlay.queued.insert(queue_key) {
+        if !overlay.queued.insert(queue_key(shop.id, item)) {
             overlay.local_message = Some("This unlock is already queued.".to_string());
             return SrpgShopInputOutcome::ChangedSelection;
         }
         overlay.local_message = Some(format!("Queued {} for download.", item.name));
         return SrpgShopInputOutcome::Download {
+            shop_id: shop.id,
             name: item.name.clone(),
             url: url.clone(),
         };
@@ -299,6 +318,37 @@ fn activate_item(
         cost,
     });
     SrpgShopInputOutcome::ChangedSelection
+}
+
+fn download_all(overlay: &mut SrpgShopOverlayStateData, shop: &SrpgShop) -> SrpgShopInputOutcome {
+    let downloads = shop
+        .items
+        .iter()
+        .filter(|item| !item.downloaded)
+        .filter_map(|item| {
+            let url = item.download_url.as_ref()?;
+            overlay
+                .queued
+                .insert(queue_key(shop.id, item))
+                .then(|| SrpgShopDownload {
+                    name: item.name.clone(),
+                    url: url.clone(),
+                })
+        })
+        .collect::<Vec<_>>();
+    if downloads.is_empty() {
+        overlay.local_message = Some("All owned songs are downloaded or queued.".to_string());
+        return SrpgShopInputOutcome::ChangedSelection;
+    }
+    overlay.local_message = Some(format!("Queued {} songs for download.", downloads.len()));
+    SrpgShopInputOutcome::DownloadAll {
+        shop_id: shop.id,
+        downloads,
+    }
+}
+
+fn queue_key(shop_id: u32, item: &SrpgShopItem) -> String {
+    format!("{shop_id}:{}", item.item_id)
 }
 
 fn active_shop<'a>(
@@ -450,37 +500,110 @@ fn push_catalog(
         );
         return;
     }
-    let selected = overlay.item_indices[overlay.shop_index].min(shop.items.len() - 1);
+    let row_count = shop.items.len() + 1;
+    let selected = overlay.item_indices[overlay.shop_index].min(row_count - 1);
     let start = selected
         .saturating_sub(VIEW_ROWS / 2)
-        .min(shop.items.len().saturating_sub(VIEW_ROWS));
+        .min(row_count.saturating_sub(VIEW_ROWS));
     actors.push(act!(quad:
         align(0.5, 0.5): xy(cx + LIST_X, cy + 19.0): zoomto(LIST_W, 287.0):
         diffuse(0.0, 0.0, 0.0, 0.78): z(Z + 4)
     ));
-    for (slot, item_index) in (start..shop.items.len().min(start + VIEW_ROWS)).enumerate() {
-        let item = &shop.items[item_index];
+    for (slot, row_index) in (start..row_count.min(start + VIEW_ROWS)).enumerate() {
         let y = cy + LIST_Y + slot as f32 * ROW_H;
-        let active = item_index == selected;
+        let active = row_index == selected;
+        let (name, detail) = if row_index == 0 {
+            (
+                "DOWNLOAD ALL SONGS".to_string(),
+                bulk_row_detail(overlay, shop),
+            )
+        } else {
+            let item = &shop.items[row_index - 1];
+            (
+                item.name.clone(),
+                item_row_detail(
+                    item,
+                    meta.currency,
+                    overlay.queued.contains(&queue_key(shop.id, item)),
+                ),
+            )
+        };
         actors.push(act!(quad:
             align(0.5, 0.5): xy(cx + LIST_X, y): zoomto(LIST_W - 8.0, ROW_H - 3.0):
             diffuse(meta.tint[0], meta.tint[1], meta.tint[2], if active { 0.82 } else { 0.12 }):
             z(Z + 5)
         ));
         actors.push(act!(text:
-            font(current_machine_font_key(FontRole::Bold)): settext(item.name.clone()):
+            font(current_machine_font_key(FontRole::Bold)): settext(name):
             align(0.0, 0.5): xy(cx + LIST_X - LIST_W * 0.5 + 9.0, y - 5.0): zoom(0.25):
             maxwidth(205.0): diffuse(1.0, 1.0, 1.0, if active { 1.0 } else { 0.76 }):
             z(Z + 6): horizalign(left)
         ));
         actors.push(act!(text:
-            font("miso"): settext(item_row_detail(item, meta.currency)):
+            font("miso"): settext(detail):
             align(0.0, 0.5): xy(cx + LIST_X - LIST_W * 0.5 + 9.0, y + 8.0): zoom(0.67):
             maxwidth(255.0): diffuse(0.88, 0.88, 0.88, if active { 1.0 } else { 0.62 }):
             z(Z + 6): horizalign(left)
         ));
     }
-    push_item_detail(actors, overlay, shop, &shop.items[selected], meta, cx, cy);
+    if selected == 0 {
+        push_bulk_detail(actors, overlay, shop, meta, cx, cy);
+    } else {
+        push_item_detail(
+            actors,
+            overlay,
+            shop,
+            &shop.items[selected - 1],
+            meta,
+            cx,
+            cy,
+        );
+    }
+}
+
+fn push_bulk_detail(
+    actors: &mut Vec<Actor>,
+    overlay: &SrpgShopOverlayStateData,
+    shop: &SrpgShop,
+    meta: ShopMeta,
+    cx: f32,
+    cy: f32,
+) {
+    let x = cx - PANEL_W * 0.5 + 15.0;
+    let ready = ready_count(overlay, shop);
+    let downloaded = shop.items.iter().filter(|item| item.downloaded).count();
+    let message = overlay.local_message.clone().unwrap_or_else(|| {
+        if ready == 0 {
+            "All owned songs are downloaded or queued.".to_string()
+        } else {
+            format!("Press START to download all {ready} ready songs.")
+        }
+    });
+    actors.push(act!(quad:
+        align(0.0, 0.0): xy(x - 5.0, cy - 115.0): zoomto(286.0, 250.0):
+        diffuse(0.0, 0.0, 0.0, 0.72): z(Z + 4)
+    ));
+    actors.push(act!(text:
+        font(current_machine_font_key(FontRole::Bold)): settext("DOWNLOAD ALL SONGS"):
+        align(0.0, 0.5): xy(x + 4.0, cy - 99.0): zoom(0.34): maxwidth(260.0):
+        diffuse(1.0, 1.0, 1.0, 1.0): z(Z + 6): horizalign(left)
+    ));
+    actors.push(act!(text:
+        font("miso"): settext(format!("{ready} READY  •  {downloaded} DOWNLOADED")):
+        align(0.0, 0.0): xy(x + 4.0, cy - 78.0): zoom(0.72): maxwidth(260.0):
+        diffuse(meta.tint[0], meta.tint[1], meta.tint[2], 1.0): z(Z + 6): horizalign(left)
+    ));
+    actors.push(act!(text:
+        font("miso"): settext("Queue every owned song in this shop that is not already present in the selected shop folder."):
+        align(0.0, 0.0): xy(x + 4.0, cy - 35.0): zoom(0.66):
+        wrapwidthpixels(395.0): maxwidth(260.0):
+        diffuse(0.92, 0.92, 0.92, 1.0): z(Z + 6): horizalign(left)
+    ));
+    actors.push(act!(text:
+        font(current_machine_font_key(FontRole::Bold)): settext(message):
+        align(0.0, 1.0): xy(x + 4.0, cy + 123.0): zoom(0.25): maxwidth(264.0):
+        diffuse(meta.tint[0], meta.tint[1], meta.tint[2], 1.0): z(Z + 6): horizalign(left)
+    ));
 }
 
 fn push_item_detail(
@@ -512,10 +635,14 @@ fn push_item_detail(
         xy(x + 4.0, cy - 35.0): zoom(0.66): wrapwidthpixels(395.0): maxwidth(260.0):
         diffuse(0.92, 0.92, 0.92, 1.0): z(Z + 6): horizalign(left)
     ));
-    let message = overlay
-        .local_message
-        .clone()
-        .or_else(|| active_message(item, shop.balance, meta.currency));
+    let message = overlay.local_message.clone().or_else(|| {
+        active_message(
+            item,
+            shop.balance,
+            meta.currency,
+            overlay.queued.contains(&queue_key(shop.id, item)),
+        )
+    });
     actors.push(act!(text:
         font(current_machine_font_key(FontRole::Bold)): settext(message.unwrap_or_default()):
         align(0.0, 1.0): xy(x + 4.0, cy + 123.0): zoom(0.25): maxwidth(264.0):
@@ -590,7 +717,30 @@ fn push_confirmation(
     ));
 }
 
-fn item_row_detail(item: &SrpgShopItem, currency: &str) -> String {
+fn bulk_row_detail(overlay: &SrpgShopOverlayStateData, shop: &SrpgShop) -> String {
+    let ready = ready_count(overlay, shop);
+    let downloaded = shop.items.iter().filter(|item| item.downloaded).count();
+    format!("{ready} READY  •  {downloaded} DOWNLOADED")
+}
+
+fn ready_count(overlay: &SrpgShopOverlayStateData, shop: &SrpgShop) -> usize {
+    shop.items
+        .iter()
+        .filter(|item| {
+            item.download_url.is_some()
+                && !item.downloaded
+                && !overlay.queued.contains(&queue_key(shop.id, item))
+        })
+        .count()
+}
+
+fn item_row_detail(item: &SrpgShopItem, currency: &str, queued: bool) -> String {
+    if item.downloaded {
+        return "DOWNLOADED".to_string();
+    }
+    if queued {
+        return "DOWNLOAD QUEUED".to_string();
+    }
     if item.owned {
         let new = if item.site_downloaded {
             ""
@@ -611,7 +761,18 @@ fn item_row_detail(item: &SrpgShopItem, currency: &str) -> String {
     })
 }
 
-fn active_message(item: &SrpgShopItem, balance: u64, currency: &str) -> Option<String> {
+fn active_message(
+    item: &SrpgShopItem,
+    balance: u64,
+    currency: &str,
+    queued: bool,
+) -> Option<String> {
+    if item.downloaded {
+        return Some("This song is already downloaded here.".to_string());
+    }
+    if queued {
+        return Some("This song is queued for download.".to_string());
+    }
     if item.download_url.is_some() {
         return Some("Press START to download this owned unlock.".to_string());
     }
@@ -656,7 +817,7 @@ mod tests {
         }
     }
 
-    fn snapshot(owned: bool) -> SrpgShopSnapshot {
+    fn snapshot(owned: bool, downloaded: bool) -> SrpgShopSnapshot {
         SrpgShopSnapshot {
             phase: SrpgShopPhase::Ready,
             shops: vec![SrpgShop {
@@ -674,6 +835,7 @@ mod tests {
                     type_id: 1,
                     owned,
                     site_downloaded: false,
+                    downloaded,
                     download_url: owned.then(|| "https://example.test/song.zip".to_string()),
                 }],
             }],
@@ -687,8 +849,8 @@ mod tests {
         assert_eq!(
             handle_srpg_shop_input(
                 &mut state,
-                &input(VirtualAction::p1_start),
-                &snapshot(false)
+                &input(VirtualAction::p1_down),
+                &snapshot(false, false)
             ),
             SrpgShopInputOutcome::ChangedSelection
         );
@@ -696,7 +858,15 @@ mod tests {
             handle_srpg_shop_input(
                 &mut state,
                 &input(VirtualAction::p1_start),
-                &snapshot(false)
+                &snapshot(false, false)
+            ),
+            SrpgShopInputOutcome::ChangedSelection
+        );
+        assert_eq!(
+            handle_srpg_shop_input(
+                &mut state,
+                &input(VirtualAction::p1_start),
+                &snapshot(false, false)
             ),
             SrpgShopInputOutcome::Purchase {
                 shop_id: 0,
@@ -709,12 +879,54 @@ mod tests {
     #[test]
     fn owned_song_queues_download_immediately() {
         let mut state = show_srpg_shop_overlay(PlayerSide::P1);
+        handle_srpg_shop_input(
+            &mut state,
+            &input(VirtualAction::p1_down),
+            &snapshot(true, false),
+        );
         assert_eq!(
-            handle_srpg_shop_input(&mut state, &input(VirtualAction::p1_start), &snapshot(true)),
+            handle_srpg_shop_input(
+                &mut state,
+                &input(VirtualAction::p1_start),
+                &snapshot(true, false)
+            ),
             SrpgShopInputOutcome::Download {
+                shop_id: 0,
                 name: "Fast Song".to_string(),
                 url: "https://example.test/song.zip".to_string(),
             }
+        );
+    }
+
+    #[test]
+    fn download_all_queues_every_ready_song() {
+        let mut state = show_srpg_shop_overlay(PlayerSide::P1);
+        assert_eq!(
+            handle_srpg_shop_input(
+                &mut state,
+                &input(VirtualAction::p1_start),
+                &snapshot(true, false)
+            ),
+            SrpgShopInputOutcome::DownloadAll {
+                shop_id: 0,
+                downloads: vec![SrpgShopDownload {
+                    name: "Fast Song".to_string(),
+                    url: "https://example.test/song.zip".to_string(),
+                }],
+            }
+        );
+    }
+
+    #[test]
+    fn downloaded_song_is_not_queued_again() {
+        let mut state = show_srpg_shop_overlay(PlayerSide::P1);
+        assert_eq!(
+            handle_srpg_shop_input(
+                &mut state,
+                &input(VirtualAction::p1_start),
+                &snapshot(true, true)
+            ),
+            SrpgShopInputOutcome::ChangedSelection
         );
     }
 

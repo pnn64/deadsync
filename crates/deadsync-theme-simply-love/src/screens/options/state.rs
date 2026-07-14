@@ -1205,6 +1205,18 @@ pub fn init(
     set_choice_by_id(
         &mut state.sub[SubmenuKind::GrooveStats].choice_indices,
         GROOVESTATS_OPTIONS_ROWS,
+        SubRowId::ShowSrpgShop,
+        yes_no_choice_index(cfg.show_srpg_shop),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::GrooveStats].choice_indices,
+        GROOVESTATS_OPTIONS_ROWS,
+        SubRowId::SrpgShopFolder,
+        srpg_shop_folder_choice_index(cfg.srpg_shop_folder),
+    );
+    set_choice_by_id(
+        &mut state.sub[SubmenuKind::GrooveStats].choice_indices,
+        GROOVESTATS_OPTIONS_ROWS,
         SubRowId::EnableBoogieStats,
         yes_no_choice_index(cfg.enable_boogiestats),
     );

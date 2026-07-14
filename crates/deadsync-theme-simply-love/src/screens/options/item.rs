@@ -190,6 +190,8 @@ pub enum ItemId {
 
     // GrooveStats Options submenu
     GsEnable,
+    GsShowSrpgShop,
+    GsSrpgShopFolder,
     GsEnableBoogie,
     GsAutoPopulate,
     GsAutoDownloadUnlocks,

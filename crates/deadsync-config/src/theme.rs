@@ -893,6 +893,41 @@ impl FromStr for GrooveStatsQrLoginWhen {
     }
 }
 
+/// Destination layout for songs downloaded from the SRPG10 shops.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SrpgShopFolder {
+    /// Put every shop unlock in one `SRPG10 Unlocks` pack.
+    #[default]
+    Unlocks,
+    /// Put every shop unlock in one `SRPG10 - Shops` pack.
+    Shops,
+    /// Split unlocks into one pack per SRPG10 faction.
+    Faction,
+}
+
+impl SrpgShopFolder {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Unlocks => "Unlocks",
+            Self::Shops => "Shops",
+            Self::Faction => "Faction",
+        }
+    }
+}
+
+impl FromStr for SrpgShopFolder {
+    type Err = ();
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "unlocks" | "srpg10 unlocks" => Ok(Self::Unlocks),
+            "shops" | "srpg10 - shops" => Ok(Self::Shops),
+            "faction" | "factions" | "by faction" => Ok(Self::Faction),
+            _ => Err(()),
+        }
+    }
+}
+
 /// Machine-wide font preference, ported from Simply Love's `ThemeFont` pref.
 ///
 /// Controls which font is used for the Bold / Header / Footer / numbers /

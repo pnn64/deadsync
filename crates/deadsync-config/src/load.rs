@@ -241,6 +241,8 @@ fn apply_system_opts(loaded: SystemOptions, cfg: &mut Config) {
     cfg.auto_populate_gs_scores = loaded.auto_populate_gs_scores;
     cfg.updater_install_enabled = loaded.updater_install_enabled;
     cfg.enable_groovestats = loaded.enable_groovestats;
+    cfg.show_srpg_shop = loaded.show_srpg_shop;
+    cfg.srpg_shop_folder = loaded.srpg_shop_folder;
     cfg.enable_arrowcloud = loaded.enable_arrowcloud;
     cfg.enable_boogiestats = loaded.enable_boogiestats;
     cfg.submit_arrowcloud_fails = loaded.submit_arrowcloud_fails;

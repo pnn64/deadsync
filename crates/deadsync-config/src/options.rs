@@ -21,10 +21,10 @@ use crate::defaults::{
     DEFAULT_SHOW_SELECT_MUSIC_CDTITLES, DEFAULT_SHOW_SELECT_MUSIC_FOLDER_STATS,
     DEFAULT_SHOW_SELECT_MUSIC_PREVIEW_MARKER, DEFAULT_SHOW_SELECT_MUSIC_PREVIEWS,
     DEFAULT_SHOW_SELECT_MUSIC_SCOREBOX, DEFAULT_SHOW_SELECT_MUSIC_STAGE_DISPLAY,
-    DEFAULT_SHOW_SELECT_MUSIC_VIDEO_BANNERS, DEFAULT_SHOW_STATS_MODE, DEFAULT_SHOW_VERSION_OVERLAY,
-    DEFAULT_SMOOTH_HISTOGRAM, DEFAULT_SMX_INPUT, DEFAULT_SMX_MANAGES_PAD_CONFIG,
-    DEFAULT_SMX_PANEL_LIGHTS, DEFAULT_SMX_UNDERGLOW_GRB, DEFAULT_SMX_UNDERGLOW_THEME,
-    DEFAULT_SOFTWARE_RENDERER_THREADS, DEFAULT_SONG_PARSING_THREADS,
+    DEFAULT_SHOW_SELECT_MUSIC_VIDEO_BANNERS, DEFAULT_SHOW_SRPG_SHOP, DEFAULT_SHOW_STATS_MODE,
+    DEFAULT_SHOW_VERSION_OVERLAY, DEFAULT_SMOOTH_HISTOGRAM, DEFAULT_SMX_INPUT,
+    DEFAULT_SMX_MANAGES_PAD_CONFIG, DEFAULT_SMX_PANEL_LIGHTS, DEFAULT_SMX_UNDERGLOW_GRB,
+    DEFAULT_SMX_UNDERGLOW_THEME, DEFAULT_SOFTWARE_RENDERER_THREADS, DEFAULT_SONG_PARSING_THREADS,
     DEFAULT_SORT_MUSIC_WHEEL_BY_SERIES, DEFAULT_SUBMIT_ARROWCLOUD_FAILS,
     DEFAULT_THREE_KEY_NAVIGATION, DEFAULT_TRANSLATED_TITLES, DEFAULT_UPDATER_INSTALL_ENABLED,
     DEFAULT_USE_FSRS,
@@ -43,9 +43,9 @@ use crate::theme::{
     MachineFont, MachinePreferredPlayMode, MachinePreferredPlayStyle, NewPackMode,
     RandomBackgroundMode, SelectMusicItlRankMode, SelectMusicItlWheelMode,
     SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SelectMusicSongSelectBgMode,
-    SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SrpgVariant, SyncGraphMode, ThemeFlag,
-    VersionOverlaySide, VisualStyle, auto_screenshot_bit, auto_screenshot_mask_from_str,
-    auto_screenshot_mask_to_str,
+    SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SrpgShopFolder, SrpgVariant,
+    SyncGraphMode, ThemeFlag, VersionOverlaySide, VisualStyle, auto_screenshot_bit,
+    auto_screenshot_mask_from_str, auto_screenshot_mask_to_str,
 };
 use crate::writer::{push_bool, push_line};
 #[cfg(windows)]
@@ -222,6 +222,8 @@ pub struct SystemOptions {
     pub auto_populate_gs_scores: bool,
     pub updater_install_enabled: bool,
     pub enable_groovestats: bool,
+    pub show_srpg_shop: bool,
+    pub srpg_shop_folder: SrpgShopFolder,
     pub enable_arrowcloud: bool,
     pub enable_boogiestats: bool,
     pub submit_arrowcloud_fails: bool,
@@ -278,6 +280,8 @@ impl Default for SystemOptions {
             auto_populate_gs_scores: DEFAULT_AUTO_POPULATE_GS_SCORES,
             updater_install_enabled: DEFAULT_UPDATER_INSTALL_ENABLED,
             enable_groovestats: DEFAULT_ENABLE_GROOVESTATS,
+            show_srpg_shop: DEFAULT_SHOW_SRPG_SHOP,
+            srpg_shop_folder: SrpgShopFolder::default(),
             enable_arrowcloud: DEFAULT_ENABLE_ARROWCLOUD,
             enable_boogiestats: DEFAULT_ENABLE_BOOGIESTATS,
             submit_arrowcloud_fails: DEFAULT_SUBMIT_ARROWCLOUD_FAILS,
@@ -562,6 +566,14 @@ pub fn load_system_options(conf: &SimpleIni, default: SystemOptions) -> SystemOp
             conf.get("Options", "EnableGrooveStats").as_deref(),
             default.enable_groovestats,
         ),
+        show_srpg_shop: parse_u8_bool_or_default(
+            conf.get("Options", "ShowSrpgShop").as_deref(),
+            default.show_srpg_shop,
+        ),
+        srpg_shop_folder: conf
+            .get("Options", "SrpgShopFolder")
+            .and_then(|value| SrpgShopFolder::from_str(&value).ok())
+            .unwrap_or(default.srpg_shop_folder),
         enable_arrowcloud: parse_u8_bool_or_default(
             conf.get("Options", "EnableArrowCloud").as_deref(),
             default.enable_arrowcloud,
@@ -816,6 +828,8 @@ pub fn push_system_online_option_lines(content: &mut String, options: SystemOpti
     push_bool(content, "EnableArrowCloud", options.enable_arrowcloud);
     push_bool(content, "EnableBoogieStats", options.enable_boogiestats);
     push_bool(content, "EnableGrooveStats", options.enable_groovestats);
+    push_bool(content, "ShowSrpgShop", options.show_srpg_shop);
+    push_line(content, "SrpgShopFolder", options.srpg_shop_folder.as_str());
     push_bool(
         content,
         "SubmitArrowCloudFails",
@@ -2132,6 +2146,22 @@ pub const fn groovestats_qr_login_when_from_choice(idx: usize) -> GrooveStatsQrL
     }
 }
 
+pub const fn srpg_shop_folder_choice_index(folder: SrpgShopFolder) -> usize {
+    match folder {
+        SrpgShopFolder::Unlocks => 0,
+        SrpgShopFolder::Shops => 1,
+        SrpgShopFolder::Faction => 2,
+    }
+}
+
+pub const fn srpg_shop_folder_from_choice(idx: usize) -> SrpgShopFolder {
+    match idx {
+        1 => SrpgShopFolder::Shops,
+        2 => SrpgShopFolder::Faction,
+        _ => SrpgShopFolder::Unlocks,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2244,6 +2274,8 @@ mod tests {
             auto_populate_gs_scores: false,
             updater_install_enabled: true,
             enable_groovestats: false,
+            show_srpg_shop: true,
+            srpg_shop_folder: SrpgShopFolder::Unlocks,
             enable_arrowcloud: false,
             enable_boogiestats: false,
             submit_arrowcloud_fails: false,
@@ -2523,6 +2555,8 @@ mod tests {
             AutoPopulateGrooveStatsScores=1
             UpdaterInstallEnabled=0
             EnableGrooveStats=1
+            ShowSrpgShop=0
+            SrpgShopFolder=Faction
             EnableArrowCloud=1
             EnableBoogieStats=1
             SubmitArrowCloudFails=1
@@ -2573,6 +2607,8 @@ mod tests {
         assert!(loaded.auto_populate_gs_scores);
         assert!(!loaded.updater_install_enabled);
         assert!(loaded.enable_groovestats);
+        assert!(!loaded.show_srpg_shop);
+        assert_eq!(loaded.srpg_shop_folder, SrpgShopFolder::Faction);
         assert!(loaded.enable_arrowcloud);
         assert!(loaded.enable_boogiestats);
         assert!(loaded.submit_arrowcloud_fails);
@@ -2714,6 +2750,8 @@ mod tests {
                 "EnableArrowCloud=1\n",
                 "EnableBoogieStats=0\n",
                 "EnableGrooveStats=1\n",
+                "ShowSrpgShop=1\n",
+                "SrpgShopFolder=Unlocks\n",
                 "SubmitArrowCloudFails=1\n",
                 "ArrowCloudQrLoginWhen=Always\n",
                 "GrooveStatsQrLoginWhen=Disabled\n",
@@ -3645,5 +3683,10 @@ mod tests {
             groovestats_qr_login_when_from_choice(99),
             GrooveStatsQrLoginWhen::Sometimes
         );
+
+        assert_eq!(srpg_shop_folder_choice_index(SrpgShopFolder::Unlocks), 0);
+        assert_eq!(srpg_shop_folder_from_choice(1), SrpgShopFolder::Shops);
+        assert_eq!(srpg_shop_folder_from_choice(2), SrpgShopFolder::Faction);
+        assert_eq!(srpg_shop_folder_from_choice(99), SrpgShopFolder::Unlocks);
     }
 }

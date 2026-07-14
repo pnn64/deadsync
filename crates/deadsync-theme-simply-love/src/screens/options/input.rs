@@ -745,6 +745,10 @@ pub(super) fn apply_submenu_choice_delta(
             let enabled = yes_no_from_choice(new_index);
             config::update_enable_groovestats(enabled);
             action = Some(online_reinitialize_effect());
+        } else if row.id == SubRowId::ShowSrpgShop {
+            config::update_show_srpg_shop(yes_no_from_choice(new_index));
+        } else if row.id == SubRowId::SrpgShopFolder {
+            config::update_srpg_shop_folder(srpg_shop_folder_from_choice(new_index));
         } else if row.id == SubRowId::EnableBoogieStats {
             config::update_enable_boogiestats(yes_no_from_choice(new_index));
             action = Some(online_reinitialize_effect());

@@ -22,7 +22,8 @@ use crate::config::{
     select_music_scorebox_placement_from_choice, select_music_song_select_bg_mode_choice_index,
     select_music_song_select_bg_mode_from_choice, select_music_step_artist_box_mode_choice_index,
     select_music_step_artist_box_mode_from_choice, select_music_wheel_style_choice_index,
-    select_music_wheel_style_from_choice, srpg_variant_choice_index, srpg_variant_from_choice,
+    select_music_wheel_style_from_choice, srpg_shop_folder_choice_index,
+    srpg_shop_folder_from_choice, srpg_variant_choice_index, srpg_variant_from_choice,
     sync_graph_mode_choice_index, sync_graph_mode_from_choice, version_overlay_side_choice_index,
     version_overlay_side_from_choice, visual_style_choice_index, visual_style_from_choice,
 };

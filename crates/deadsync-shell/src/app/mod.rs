@@ -3275,12 +3275,13 @@ impl App {
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Online(
-                    SimplyLoveOnlineRequest::DownloadSrpgShopUnlock { name, url },
+                    SimplyLoveOnlineRequest::DownloadSrpgShopUnlock { shop_id, name, url },
                 ) => {
+                    let folder = deadsync_config::runtime::get().srpg_shop_folder;
                     deadsync_online::runtime::queue_event_unlock_download(
                         &url,
                         &name,
-                        "Stamina RPG 10 Unlocks",
+                        deadsync_online::srpg_shop::download_folder(shop_id, folder),
                     );
                     Vec::new()
                 }

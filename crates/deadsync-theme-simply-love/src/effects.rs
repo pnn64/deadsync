@@ -111,6 +111,7 @@ pub enum SimplyLoveOnlineRequest {
         side: PlayerSide,
     },
     DownloadSrpgShopUnlock {
+        shop_id: u32,
         name: String,
         url: String,
     },

@@ -100,6 +100,7 @@ pub const DEFAULT_ENABLE_REPLAYGAIN: bool = false;
 pub const DEFAULT_ENABLE_ARROWCLOUD: bool = false;
 pub const DEFAULT_ENABLE_BOOGIESTATS: bool = false;
 pub const DEFAULT_ENABLE_GROOVESTATS: bool = false;
+pub const DEFAULT_SHOW_SRPG_SHOP: bool = true;
 pub const DEFAULT_SUBMIT_ARROWCLOUD_FAILS: bool = false;
 pub const DEFAULT_SEPARATE_UNLOCKS_BY_PLAYER: bool = false;
 pub const DEFAULT_FASTLOAD: bool = true;

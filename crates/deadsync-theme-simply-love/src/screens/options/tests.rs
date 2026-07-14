@@ -191,6 +191,25 @@ fn prepared_smx_view_controls_assignment_row_visibility() {
     }));
 }
 
+#[test]
+fn srpg_shop_folder_is_hidden_when_shop_is_disabled() {
+    let mut state = init();
+    let show_index =
+        row_position(GROOVESTATS_OPTIONS_ROWS, SubRowId::ShowSrpgShop).expect("show shop row");
+    let folder_index =
+        row_position(GROOVESTATS_OPTIONS_ROWS, SubRowId::SrpgShopFolder).expect("shop folder row");
+
+    state.sub[SubmenuKind::GrooveStats].choice_indices[show_index] = yes_no_choice_index(false);
+    let hidden =
+        submenu_visible_row_indices(&state, SubmenuKind::GrooveStats, GROOVESTATS_OPTIONS_ROWS);
+    assert!(!hidden.contains(&folder_index));
+
+    state.sub[SubmenuKind::GrooveStats].choice_indices[show_index] = yes_no_choice_index(true);
+    let visible =
+        submenu_visible_row_indices(&state, SubmenuKind::GrooveStats, GROOVESTATS_OPTIONS_ROWS);
+    assert!(visible.contains(&folder_index));
+}
+
 fn press(state: &mut State, asset_manager: &AssetManager, action: VirtualAction) -> ThemeEffect {
     handle_input(
         state,

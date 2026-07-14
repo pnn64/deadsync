@@ -1,3 +1,5 @@
+use crate::downloads::cache_has_success;
+use deadsync_config::prelude::SrpgShopFolder;
 use deadsync_net::{self as network, AgentConfig, HttpAgent};
 use serde::Deserialize;
 use serde_json::{Map, Value};
@@ -12,7 +14,6 @@ const CATALOG_API: &str = "https://srpg10.groovestats.com/api/gen-shop-list-upda
 const DOWNLOADS_API: &str = "https://srpg10.groovestats.com/api/gen-shop-downloads.php";
 const PURCHASE_API: &str = "https://srpg10.groovestats.com/api/gen-shop-buy-sell.php";
 const USER_AGENT: &str = "DeadSync SRPG10 Shop/1.0";
-const UNLOCK_PACK_NAME: &str = "Stamina RPG 10 Unlocks";
 pub const SRPG_SHOP_IDS: [u32; 4] = [0, 2, 3, 4];
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -44,6 +45,7 @@ pub struct SrpgShopItem {
     pub type_id: u8,
     pub owned: bool,
     pub site_downloaded: bool,
+    pub downloaded: bool,
     pub download_url: Option<String>,
 }
 
@@ -111,7 +113,35 @@ static RUNTIME: LazyLock<Mutex<RuntimeState>> =
     LazyLock::new(|| Mutex::new(RuntimeState::default()));
 
 pub fn runtime_snapshot() -> Arc<SrpgShopSnapshot> {
-    Arc::clone(&RUNTIME.lock().unwrap().snapshot)
+    let snapshot = Arc::clone(&RUNTIME.lock().unwrap().snapshot);
+    if snapshot.shops.is_empty() {
+        return snapshot;
+    }
+    let cache = crate::runtime::unlock_cache_snapshot();
+    let mut annotated = (*snapshot).clone();
+    for shop in &mut annotated.shops {
+        for item in &mut shop.items {
+            item.downloaded = item
+                .download_url
+                .as_deref()
+                .is_some_and(|url| cache_has_success(&cache, url));
+        }
+    }
+    Arc::new(annotated)
+}
+
+pub const fn download_folder(shop_id: u32, folder: SrpgShopFolder) -> &'static str {
+    match folder {
+        SrpgShopFolder::Unlocks => "SRPG10 Unlocks",
+        SrpgShopFolder::Shops => "SRPG10 - Shops",
+        SrpgShopFolder::Faction => match shop_id {
+            0 => "SRPG10 - DPRT",
+            2 => "SRPG10 - Footspeed Empire",
+            3 => "SRPG10 - Stamina Nation",
+            4 => "SRPG10 - Nomads",
+            _ => "SRPG10 - Shops",
+        },
+    }
 }
 
 pub fn runtime_refresh(username: String, password: String) {
@@ -168,6 +198,7 @@ pub fn runtime_refresh(username: String, password: String) {
 }
 
 pub fn runtime_purchase(shop_id: u32, item_id: String, type_id: u8) {
+    let destination = download_folder(shop_id, deadsync_config::runtime::get().srpg_shop_folder);
     let (generation, session, mut previous) = {
         let mut runtime = RUNTIME.lock().unwrap();
         let Some(session) = runtime.session.clone() else {
@@ -194,7 +225,7 @@ pub fn runtime_purchase(shop_id: u32, item_id: String, type_id: u8) {
                     crate::runtime::queue_event_unlock_download(
                         &download.url,
                         &download.name,
-                        UNLOCK_PACK_NAME,
+                        destination,
                     );
                 }
                 let notice = result.download.map_or_else(
@@ -295,6 +326,9 @@ fn fetch_shop(
     let balance = find_number_after_key(&page, "var currentcurrency")
         .and_then(|value| value.parse().ok())
         .unwrap_or(0);
+    let lifetime_balance = find_number_after_key(&page, "var lifecurrency")
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(balance);
     let common = [
         ("entrantid", session.entrant_id.clone()),
         ("shop", shop_id.to_string()),
@@ -310,7 +344,7 @@ fn fetch_shop(
     catalog_params.push(("type", "buy".to_string()));
     let referer = shop_url(shop_id);
     let catalog = match get_form(&session.agent, CATALOG_API, &catalog_params, &referer, true) {
-        Ok(body) if parse_catalog(&body).is_ok() => body,
+        Ok(body) if parse_catalog(&body, shop_id, lifetime_balance).is_ok() => body,
         _ => post_form(&session.agent, CATALOG_API, &catalog_params, &referer, true)?,
     };
     let mut download_params = common.to_vec();
@@ -322,8 +356,9 @@ fn fetch_shop(
         &referer,
         true,
     )?;
-    let mut items = parse_catalog(&catalog)?;
+    let mut items = parse_catalog(&catalog, shop_id, lifetime_balance)?;
     merge_downloads(&mut items, parse_downloads(&downloads)?);
+    retain_song_unlocks(&mut items);
     items.sort_by(|a, b| {
         b.owned.cmp(&a.owned).then_with(|| {
             a.name
@@ -336,6 +371,10 @@ fn fetch_shop(
         balance,
         items,
     })
+}
+
+fn retain_song_unlocks(items: &mut Vec<SrpgShopItem>) {
+    items.retain(|item| item.kind == SrpgShopItemKind::Song);
 }
 
 struct PurchaseDownload {
@@ -445,15 +484,6 @@ fn parse_downloads(body: &str) -> Result<Vec<ParsedDownload>, SrpgShopError> {
 
 fn merge_downloads(items: &mut Vec<SrpgShopItem>, downloads: Vec<ParsedDownload>) {
     for download in downloads {
-        if let Some(item) = items
-            .iter_mut()
-            .find(|item| item.item_id == download.item_id)
-        {
-            item.owned = true;
-            item.site_downloaded = download.site_downloaded;
-            item.download_url = Some(download.url);
-            continue;
-        }
         let (difficulty, bpm) = {
             let mut numbers = download
                 .details
@@ -461,24 +491,53 @@ fn merge_downloads(items: &mut Vec<SrpgShopItem>, downloads: Vec<ParsedDownload>
                 .filter_map(|part| part.parse::<u32>().ok());
             (numbers.next(), numbers.next())
         };
+        let effect = song_stats_text(difficulty, bpm);
+        if let Some(item) = items
+            .iter_mut()
+            .find(|item| item.item_id == download.item_id)
+        {
+            item.owned = true;
+            item.site_downloaded = download.site_downloaded;
+            item.download_url = Some(download.url);
+            item.difficulty = difficulty.or(item.difficulty);
+            item.bpm = bpm.or(item.bpm);
+            item.effect = effect;
+            continue;
+        }
         items.push(SrpgShopItem {
             item_id: download.item_id,
             kind: SrpgShopItemKind::Song,
             name: download.name,
             description: "Purchased song unlock".to_string(),
-            effect: download.details,
+            effect,
             cost: None,
             difficulty,
             bpm,
             type_id: 1,
             owned: true,
             site_downloaded: download.site_downloaded,
+            downloaded: false,
             download_url: Some(download.url),
         });
     }
 }
 
-fn parse_catalog(body: &str) -> Result<Vec<SrpgShopItem>, SrpgShopError> {
+fn song_stats_text(difficulty: Option<u32>, bpm: Option<u32>) -> String {
+    match (difficulty, bpm) {
+        (Some(difficulty), Some(bpm)) => {
+            format!("Difficulty: {difficulty}  •  Speed Tier: {bpm} BPM")
+        }
+        (Some(difficulty), None) => format!("Difficulty: {difficulty}"),
+        (None, Some(bpm)) => format!("Speed Tier: {bpm} BPM"),
+        (None, None) => "Purchased song unlock".to_string(),
+    }
+}
+
+fn parse_catalog(
+    body: &str,
+    shop_id: u32,
+    lifetime_balance: u64,
+) -> Result<Vec<SrpgShopItem>, SrpgShopError> {
     let value: Value = serde_json::from_str(body)
         .map_err(|error| SrpgShopError::InvalidResponse(error.to_string()))?;
     let rows = match &value {
@@ -487,10 +546,13 @@ fn parse_catalog(body: &str) -> Result<Vec<SrpgShopItem>, SrpgShopError> {
         _ => None,
     }
     .ok_or_else(|| SrpgShopError::InvalidResponse("SRPG10 catalog has no rows".to_string()))?;
-    Ok(rows.iter().filter_map(catalog_item).collect())
+    Ok(rows
+        .iter()
+        .filter_map(|row| catalog_item(row, shop_id, lifetime_balance))
+        .collect())
 }
 
-fn catalog_item(row: &Value) -> Option<SrpgShopItem> {
+fn catalog_item(row: &Value, shop_id: u32, lifetime_balance: u64) -> Option<SrpgShopItem> {
     let cells = row.as_array()?;
     let cell = |index: usize| cells.get(index).map(value_text).unwrap_or_default();
     let type_id = cell(11).parse().unwrap_or(0);
@@ -499,22 +561,37 @@ fn catalog_item(row: &Value) -> Option<SrpgShopItem> {
     } else {
         SrpgShopItemKind::Relic
     };
+    let cost = cell(7).replace(',', "").parse().ok();
+    let censor = shop_id == 2 && cost.is_some_and(|cost| cost > lifetime_balance);
     Some(SrpgShopItem {
         item_id: cell(0),
         kind,
-        name: clean_cell(&cell(2)),
-        description: clean_cell(&cell(3)),
-        effect: clean_cell(&cell(4)).replace('|', "  •  "),
-        cost: cell(7).replace(',', "").parse().ok(),
-        difficulty: (kind == SrpgShopItemKind::Song)
+        name: if censor {
+            "???".to_string()
+        } else {
+            clean_cell(&cell(2))
+        },
+        description: if censor {
+            "Reach the required lifetime Jej total to reveal this song.".to_string()
+        } else {
+            clean_cell(&cell(3))
+        },
+        effect: if censor {
+            "Difficulty: ???  •  Speed Tier: ???".to_string()
+        } else {
+            clean_cell(&cell(4)).replace('|', "  •  ")
+        },
+        cost,
+        difficulty: (kind == SrpgShopItemKind::Song && !censor)
             .then(|| cell(12).parse().ok())
             .flatten(),
-        bpm: (kind == SrpgShopItemKind::Song)
+        bpm: (kind == SrpgShopItemKind::Song && !censor)
             .then(|| cell(13).parse().ok())
             .flatten(),
         type_id,
         owned: false,
         site_downloaded: false,
+        downloaded: false,
         download_url: None,
     })
 }
@@ -716,13 +793,22 @@ mod tests {
     #[test]
     fn parses_catalog_song_and_relic_rows() {
         let body = r#"{"data":[["7","chart.png","Fast Song","Purchase to unlock","Difficulty: 14|Speed Tier: 180 BPM","2","0","1234","0","0","0","1","14","180","0"],["2","axe.png","Stone Axe","Useful","Lv. 1 EP","0","0","294","0","0","0","0","---","---","---"]]}"#;
-        let items = parse_catalog(body).expect("catalog");
+        let items = parse_catalog(body, 0, 0).expect("catalog");
         assert_eq!(items.len(), 2);
         assert_eq!(items[0].kind, SrpgShopItemKind::Song);
         assert_eq!(items[0].difficulty, Some(14));
         assert_eq!(items[0].bpm, Some(180));
         assert_eq!(items[1].kind, SrpgShopItemKind::Relic);
         assert_eq!(items[1].cost, Some(294));
+    }
+
+    #[test]
+    fn shop_catalog_omits_relics() {
+        let body = r#"{"data":[["7","chart.png","Fast Song","Purchase to unlock","Difficulty: 14|Speed Tier: 180 BPM","2","0","1234","0","0","0","1","14","180","0"],["2","axe.png","Stone Axe","Useful","Lv. 1 EP","0","0","294","0","0","0","0","---","---","---"]]}"#;
+        let mut items = parse_catalog(body, 0, 0).expect("catalog");
+        retain_song_unlocks(&mut items);
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].kind, SrpgShopItemKind::Song);
     }
 
     #[test]
@@ -739,6 +825,7 @@ mod tests {
             type_id: 1,
             owned: false,
             site_downloaded: false,
+            downloaded: false,
             download_url: None,
         }];
         merge_downloads(
@@ -756,6 +843,34 @@ mod tests {
         assert_eq!(
             items[0].download_url.as_deref(),
             Some("https://example.test/song.zip")
+        );
+        assert_eq!(items[0].effect, "Difficulty: 14  •  Speed Tier: 180 BPM");
+    }
+
+    #[test]
+    fn censors_unrevealed_jej_song_metadata() {
+        let body = r#"{"data":[["7","chart.png","Secret Song","Purchase to unlock","Difficulty: 33|Speed Tier: 370 BPM","2","0","1234","0","0","0","1","33","370","0"]]}"#;
+        let hidden = parse_catalog(body, 2, 1_000).expect("catalog");
+        assert_eq!(hidden[0].name, "???");
+        assert_eq!(hidden[0].effect, "Difficulty: ???  •  Speed Tier: ???");
+        assert_eq!(hidden[0].difficulty, None);
+
+        let revealed = parse_catalog(body, 2, 1_234).expect("catalog");
+        assert_eq!(revealed[0].name, "Secret Song");
+        assert_eq!(revealed[0].difficulty, Some(33));
+    }
+
+    #[test]
+    fn maps_shop_folder_policies_to_pack_names() {
+        assert_eq!(
+            download_folder(0, SrpgShopFolder::Unlocks),
+            "SRPG10 Unlocks"
+        );
+        assert_eq!(download_folder(2, SrpgShopFolder::Shops), "SRPG10 - Shops");
+        assert_eq!(download_folder(0, SrpgShopFolder::Faction), "SRPG10 - DPRT");
+        assert_eq!(
+            download_folder(3, SrpgShopFolder::Faction),
+            "SRPG10 - Stamina Nation"
         );
     }
 

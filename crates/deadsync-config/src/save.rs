@@ -442,6 +442,8 @@ fn system_options(cfg: &Config) -> SystemOptions {
         auto_populate_gs_scores: cfg.auto_populate_gs_scores,
         updater_install_enabled: cfg.updater_install_enabled,
         enable_groovestats: cfg.enable_groovestats,
+        show_srpg_shop: cfg.show_srpg_shop,
+        srpg_shop_folder: cfg.srpg_shop_folder,
         enable_arrowcloud: cfg.enable_arrowcloud,
         enable_boogiestats: cfg.enable_boogiestats,
         submit_arrowcloud_fails: cfg.submit_arrowcloud_fails,

@@ -3968,7 +3968,7 @@ fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
     if downloads_enabled {
         advanced.push(select_music_menu::ITEM_VIEW_DOWNLOADS);
     }
-    if crate::visual_styles::srpg10_active() {
+    if crate::visual_styles::srpg10_active() && config::get().show_srpg_shop {
         advanced.push(select_music_menu::ITEM_SRPG_SHOP);
     }
     advanced.push(select_music_menu::ITEM_SET_SUMMARY);
@@ -7837,12 +7837,25 @@ fn handle_srpg_shop_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEf
                 crate::SimplyLoveOnlineRequest::RefreshSrpgShop { side },
             );
         }
-        select_music_menu::SrpgShopInputOutcome::Download { name, url } => {
+        select_music_menu::SrpgShopInputOutcome::Download { shop_id, name, url } => {
             queue_sfx(state, "assets/sounds/start.ogg");
             queue_online(
                 state,
-                crate::SimplyLoveOnlineRequest::DownloadSrpgShopUnlock { name, url },
+                crate::SimplyLoveOnlineRequest::DownloadSrpgShopUnlock { shop_id, name, url },
             );
+        }
+        select_music_menu::SrpgShopInputOutcome::DownloadAll { shop_id, downloads } => {
+            queue_sfx(state, "assets/sounds/start.ogg");
+            for download in downloads {
+                queue_online(
+                    state,
+                    crate::SimplyLoveOnlineRequest::DownloadSrpgShopUnlock {
+                        shop_id,
+                        name: download.name,
+                        url: download.url,
+                    },
+                );
+            }
         }
         select_music_menu::SrpgShopInputOutcome::Purchase {
             shop_id,

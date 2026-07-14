@@ -4,7 +4,7 @@ use crate::downloads::{
     unlock_downloads_available as downloads_available, write_unlock_cache_file,
 };
 pub use crate::downloads::{
-    runtime_completion_counts as unlock_download_completion_counts,
+    runtime_cache_snapshot, runtime_completion_counts as unlock_download_completion_counts,
     runtime_snapshots as unlock_download_snapshots,
     runtime_take_ready_song_reload_request as take_ready_song_reload_request,
 };
@@ -59,6 +59,10 @@ pub fn unlock_downloads_available() -> bool {
 
 pub fn queue_event_unlock_download(url: &str, unlock_name: &str, pack_name: &str) {
     runtime_queue_event_unlock_download(DOWNLOAD_RUNTIME_HOOKS, url, unlock_name, pack_name);
+}
+
+pub fn unlock_cache_snapshot() -> UnlockCache {
+    runtime_cache_snapshot(DOWNLOAD_RUNTIME_HOOKS)
 }
 
 fn downloads_dir() -> PathBuf {

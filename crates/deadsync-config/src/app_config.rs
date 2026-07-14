@@ -8,8 +8,9 @@ use crate::theme::{
     MachineEvaluationStyle, MachineFlowOptions, MachineFont, MachinePreferredPlayMode,
     MachinePreferredPlayStyle, NewPackMode, RandomBackgroundMode, SelectMusicItlRankMode,
     SelectMusicItlWheelMode, SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement,
-    SelectMusicSongSelectBgMode, SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SrpgVariant,
-    SyncGraphMode, ThemeFlag, ThemePresentationOptions, VersionOverlaySide, VisualStyle,
+    SelectMusicSongSelectBgMode, SelectMusicStepArtistBoxMode, SelectMusicWheelStyle,
+    SrpgShopFolder, SrpgVariant, SyncGraphMode, ThemeFlag, ThemePresentationOptions,
+    VersionOverlaySide, VisualStyle,
 };
 use deadlib_platform::display::FullscreenType;
 use deadlib_present::color::Color;
@@ -293,6 +294,8 @@ pub struct Config {
     pub enable_arrowcloud: bool,
     pub enable_boogiestats: bool,
     pub enable_groovestats: bool,
+    pub show_srpg_shop: bool,
+    pub srpg_shop_folder: SrpgShopFolder,
     pub submit_arrowcloud_fails: bool,
     /// When to auto-show the ArrowCloud QR-login screen after Select
     /// Profile.  Mirrors Simply Love's `QRLogin` theme pref.
@@ -493,6 +496,8 @@ impl Default for Config {
             enable_arrowcloud: system.enable_arrowcloud,
             enable_boogiestats: system.enable_boogiestats,
             enable_groovestats: system.enable_groovestats,
+            show_srpg_shop: system.show_srpg_shop,
+            srpg_shop_folder: system.srpg_shop_folder,
             submit_arrowcloud_fails: system.submit_arrowcloud_fails,
             arrowcloud_qr_login_when: system.arrowcloud_qr_login_when,
             groovestats_qr_login_when: system.groovestats_qr_login_when,

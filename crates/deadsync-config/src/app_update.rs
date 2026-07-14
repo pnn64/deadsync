@@ -12,8 +12,8 @@ use crate::theme::{
     MachineEvaluationStyle, MachineFont, MachinePreferredPlayMode, MachinePreferredPlayStyle,
     NewPackMode, RandomBackgroundMode, SelectMusicItlRankMode, SelectMusicItlWheelMode,
     SelectMusicPatternInfoMode, SelectMusicScoreboxPlacement, SelectMusicSongSelectBgMode,
-    SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SrpgVariant, SyncGraphMode, ThemeFlag,
-    VersionOverlaySide, VisualStyle,
+    SelectMusicStepArtistBoxMode, SelectMusicWheelStyle, SrpgShopFolder, SrpgVariant,
+    SyncGraphMode, ThemeFlag, VersionOverlaySide, VisualStyle,
 };
 use deadlib_render::{BackendType, PresentModePolicy};
 use deadsync_audio::{AudioOutputMode, LinuxAudioBackend};
@@ -332,6 +332,14 @@ pub fn set_machine_pack_ini_offsets(cfg: &mut Config, enabled: bool) -> bool {
 
 pub fn set_enable_groovestats(cfg: &mut Config, enabled: bool) -> bool {
     set_if_changed(&mut cfg.enable_groovestats, enabled)
+}
+
+pub fn set_show_srpg_shop(cfg: &mut Config, enabled: bool) -> bool {
+    set_if_changed(&mut cfg.show_srpg_shop, enabled)
+}
+
+pub fn set_srpg_shop_folder(cfg: &mut Config, folder: SrpgShopFolder) -> bool {
+    set_if_changed(&mut cfg.srpg_shop_folder, folder)
 }
 
 pub fn set_enable_boogiestats(cfg: &mut Config, enabled: bool) -> bool {

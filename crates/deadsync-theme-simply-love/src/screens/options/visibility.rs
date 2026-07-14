@@ -140,6 +140,20 @@ pub(super) fn submenu_visible_row_indices(
                 })
                 .collect()
         }
+        SubmenuKind::GrooveStats => {
+            let show_shop = get_choice_by_id(
+                &state.sub[SubmenuKind::GrooveStats].choice_indices,
+                GROOVESTATS_OPTIONS_ROWS,
+                SubRowId::ShowSrpgShop,
+            )
+            .is_some_and(yes_no_from_choice);
+            rows.iter()
+                .enumerate()
+                .filter_map(|(idx, row)| {
+                    (row.id != SubRowId::SrpgShopFolder || show_shop).then_some(idx)
+                })
+                .collect()
+        }
         SubmenuKind::Advanced => rows.iter().enumerate().map(|(idx, _)| idx).collect(),
         SubmenuKind::SelectMusic => {
             let show_banners = get_choice_by_id(
