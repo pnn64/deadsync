@@ -56,6 +56,18 @@ const LAMP_PULSE_LERP_TO_WHITE: f32 = 0.70;
 const NEW_BADGE_PULSE_PERIOD: f32 = 1.2;
 const NEW_BADGE_COLOR: [f32; 4] = [0.3, 1.0, 0.3, 1.0];
 const NEW_BADGE_COLOR_PEAK: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
+const SERIES_FOLDER_COLLAPSED: [[f32; 4]; 3] = [
+    color::rgba_hex("#5c6972"),
+    color::rgba_hex("#74818b"),
+    color::rgba_hex("#8495a1"),
+];
+const SERIES_FOLDER_EXPANDED: [[f32; 4]; 3] = [
+    color::rgba_hex("#516777"),
+    color::rgba_hex("#677f91"),
+    color::rgba_hex("#7793a7"),
+];
+const FOLDER_NATIVE_WIDTH: f32 = 128.0;
+const FOLDER_ZOOM: f32 = 0.175;
 const HEART_PULSE_PERIOD: f32 = 0.8;
 const HEART_COLOR_P1: [f32; 4] = [0.3, 0.5, 1.0, 1.0]; // blue
 const HEART_COLOR_P2: [f32; 4] = [1.0, 0.47, 0.47, 1.0]; // pink (#ff7777)
@@ -553,6 +565,7 @@ pub struct MusicWheelParams<'a> {
     pub itl_rank_mode: SelectMusicItlRankMode,
     pub itl_wheel_mode: SelectMusicItlWheelMode,
     pub song_select_bg_mode: SelectMusicSongSelectBgMode,
+    pub expanded_series_name: Option<&'a str>,
     pub expanded_pack_name: Option<&'a str>,
     pub new_pack_names: Option<&'a HashSet<String>>,
     pub pack_sync_prefs: Option<&'a HashMap<String, SyncPref>>,
@@ -601,8 +614,11 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
     let title_x_local: f32 = widescale(75.0, 111.0) - sl_shift;
     let title_max_w_local: f32 = widescale(245.0, 350.0);
 
-    // Pack name: visually centered in the column
-    let pack_center_x_local: f32 = half_highlight - sl_shift + widescale(9.0, 10.0);
+    // Simply Love [MusicWheelItem] section metrics. Child pack sections are
+    // indented 10px from their parent Series sections.
+    let section_x_local: f32 = widescale(35.0, 74.0) - sl_shift;
+    let child_section_x_local: f32 = widescale(45.0, 84.0) - sl_shift;
+    let empty_center_x_local: f32 = half_highlight - sl_shift + widescale(9.0, 10.0);
     let pack_name_max_w: f32 = widescale(240.0, 310.0);
 
     // Pack count
@@ -678,7 +694,10 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                     banner_path,
                     song_count,
                     pack_key,
+                    parent_series,
                 } => {
+                    let is_series_header = pack_key.is_none() && parent_series.is_some();
+                    let is_child_pack = pack_key.is_some() && parent_series.is_some();
                     let mut bg_col = col_pack_header_box();
                     bg_col[3] *= section_bg_alpha;
                     let header_color = if p.color_pack_headers {
@@ -686,7 +705,8 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                     } else {
                         [1.0, 1.0, 1.0, 1.0]
                     };
-                    let show_new_badge = p.color_pack_headers
+                    let show_new_badge = pack_key.is_some()
+                        && p.color_pack_headers
                         && p.new_pack_names
                             .is_some_and(|new_packs| new_packs.contains(name.as_str()));
                     actors.push(act!(quad:
@@ -706,14 +726,14 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                     if p.song_select_bg_mode != SelectMusicSongSelectBgMode::Off
                         && let Some(path) = banner_path.as_ref()
                     {
-                        let alpha = if p
-                            .expanded_pack_name
-                            .is_some_and(|expanded| expanded == name.as_str())
-                        {
-                            0.5
+                        let active = if is_series_header {
+                            p.expanded_series_name
+                                .is_some_and(|expanded| expanded == name.as_str())
                         } else {
-                            0.1
+                            p.expanded_pack_name
+                                .is_some_and(|expanded| expanded == name.as_str())
                         };
+                        let alpha = if active { 0.5 } else { 0.1 };
                         actors.push(song_select_bg_sprite(
                             path,
                             highlight_left_world + half_highlight,
@@ -724,11 +744,50 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                             0.1,
                         ));
                     }
+                    let folder_frame_x = if is_child_pack { 8.0 } else { -3.0 };
+                    let folder_mid_x =
+                        highlight_left_world + folder_frame_x + FOLDER_NATIVE_WIDTH * FOLDER_ZOOM
+                            - 8.0;
+                    if is_series_header {
+                        let expanded = p
+                            .expanded_series_name
+                            .is_some_and(|expanded| expanded == name.as_str());
+                        let [back, mid, front] = if expanded {
+                            SERIES_FOLDER_EXPANDED
+                        } else {
+                            SERIES_FOLDER_COLLAPSED
+                        };
+                        for (x, y, tint) in [
+                            (folder_mid_x - 4.0, 0.0, back),
+                            (folder_mid_x, 1.0, mid),
+                            (folder_mid_x + 4.0, 2.0, front),
+                        ] {
+                            actors.push(act!(sprite("folder-solid.png"):
+                                align(0.0, 0.5):
+                                xy(x, y_center_item + y):
+                                zoom(FOLDER_ZOOM):
+                                diffuse(tint[0], tint[1], tint[2], tint[3]):
+                                z(53)
+                            ));
+                        }
+                    } else {
+                        actors.push(act!(sprite("folder-solid.png"):
+                            align(0.0, 0.5):
+                            xy(folder_mid_x, y_center_item + 1.0):
+                            zoom(FOLDER_ZOOM):
+                            diffuse(header_color[0], header_color[1], header_color[2], header_color[3]):
+                            z(53)
+                        ));
+                    }
                     actors.push(act!(text:
                         font("miso"):
                         settext(cached_str_ref(name.as_str())):
-                        align(0.5, 0.5):
-                        xy(highlight_left_world + pack_center_x_local, y_center_item):
+                        align(0.0, 0.5):
+                        xy(
+                            highlight_left_world
+                                + if is_child_pack { child_section_x_local } else { section_x_local },
+                            y_center_item
+                        ):
                         maxwidth(pack_name_max_w):
                         zoom(1.0):
                         diffuse(header_color[0], header_color[1], header_color[2], 1.0):
@@ -1350,7 +1409,7 @@ pub fn push(actors: &mut Vec<Actor>, p: MusicWheelParams) {
                 font("miso"):
                 settext(empty_text):
                 align(0.5, 0.5):
-                xy(highlight_left_world + pack_center_x_local, y_center_item):
+                xy(highlight_left_world + empty_center_x_local, y_center_item):
                 maxwidth(pack_name_max_w):
                 zoom(1.0):
                 diffuse(text_color[0], text_color[1], text_color[2], text_color[3]):
@@ -1534,6 +1593,7 @@ mod tests {
                 banner_path: None,
                 song_count: 1,
                 pack_key: Some("Before".to_string()),
+                parent_series: None,
             },
             MusicWheelEntry::Song(song.clone()),
             MusicWheelEntry::PackHeader {
@@ -1542,6 +1602,7 @@ mod tests {
                 banner_path: None,
                 song_count: 1,
                 pack_key: Some("After".to_string()),
+                parent_series: None,
             },
         ];
         let slots = runtime_slot_requests(
@@ -1692,6 +1753,7 @@ mod tests {
                 banner_path: Some(PathBuf::from("pack.png")),
                 song_count: 1,
                 pack_key: Some("Pack".to_string()),
+                parent_series: None,
             },
             MusicWheelEntry::Song(song_with_art(Some("song.png"), Some("background.png"))),
         ];

@@ -40,6 +40,7 @@ pub const DEFAULT_SHOW_SELECT_MUSIC_BREAKDOWN: bool = true;
 pub const DEFAULT_SHOW_SELECT_MUSIC_CDTITLES: bool = true;
 pub const DEFAULT_SHOW_MUSIC_WHEEL_GRADES: bool = true;
 pub const DEFAULT_SHOW_MUSIC_WHEEL_LAMPS: bool = true;
+pub const DEFAULT_SORT_MUSIC_WHEEL_BY_SERIES: bool = true;
 pub const DEFAULT_SHOW_SELECT_MUSIC_FOLDER_STATS: bool = false;
 pub const DEFAULT_SHOW_SELECT_MUSIC_PREVIEWS: bool = true;
 pub const DEFAULT_SHOW_SELECT_MUSIC_PREVIEW_MARKER: bool = false;

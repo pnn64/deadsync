@@ -143,6 +143,8 @@ pub struct Config {
     pub show_select_music_cdtitles: bool,
     pub show_music_wheel_grades: bool,
     pub show_music_wheel_lamps: bool,
+    /// Start Select Music in the nested Series sort instead of Group sort.
+    pub sort_music_wheel_by_series: bool,
     pub select_music_itl_rank_mode: SelectMusicItlRankMode,
     pub select_music_itl_wheel_mode: SelectMusicItlWheelMode,
     /// Simply Love MusicWheelStyle parity: IIDX only shows the active pack when expanded.
@@ -398,6 +400,7 @@ impl Default for Config {
             show_select_music_cdtitles: select_music.show_cdtitles,
             show_music_wheel_grades: select_music.show_wheel_grades,
             show_music_wheel_lamps: select_music.show_wheel_lamps,
+            sort_music_wheel_by_series: select_music.sort_wheel_by_series,
             select_music_itl_rank_mode: select_music.itl_rank_mode,
             select_music_itl_wheel_mode: select_music.itl_wheel_mode,
             select_music_wheel_style: select_music.wheel_style,

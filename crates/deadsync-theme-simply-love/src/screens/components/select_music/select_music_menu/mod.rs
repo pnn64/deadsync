@@ -20,6 +20,7 @@ use std::sync::Arc;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Action {
     BackToMain,
+    SortBySeries,
     SortByGroup,
     SortByTitle,
     SortByArtist,
@@ -78,6 +79,11 @@ const ITEM_SORT_BY_GROUP: Item = Item {
     top_label: TextContent::Static("Sort By"),
     bottom_label: TextContent::Static("Group"),
     action: Action::SortByGroup,
+};
+const ITEM_SORT_BY_SERIES: Item = Item {
+    top_label: TextContent::Static("Sort By"),
+    bottom_label: TextContent::Static("Series"),
+    action: Action::SortBySeries,
 };
 const ITEM_SORT_BY_TITLE: Item = Item {
     top_label: TextContent::Static("Sort By"),
@@ -283,7 +289,8 @@ pub fn pad_profile_item(
     }
 }
 
-pub const SORT_ITEMS: [Item; 10] = [
+pub const SORT_ITEMS: [Item; 11] = [
+    ITEM_SORT_BY_SERIES,
     ITEM_SORT_BY_GROUP,
     ITEM_SORT_BY_TITLE,
     ITEM_SORT_BY_ARTIST,

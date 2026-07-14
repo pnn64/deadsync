@@ -526,6 +526,10 @@ pub fn set_show_music_wheel_lamps(cfg: &mut Config, enabled: bool) -> bool {
     set_if_changed(&mut cfg.show_music_wheel_lamps, enabled)
 }
 
+pub fn set_sort_music_wheel_by_series(cfg: &mut Config, enabled: bool) -> bool {
+    set_if_changed(&mut cfg.sort_music_wheel_by_series, enabled)
+}
+
 pub fn set_show_select_music_folder_stats(cfg: &mut Config, enabled: bool) -> bool {
     set_if_changed(&mut cfg.show_select_music_folder_stats, enabled)
 }

@@ -684,6 +684,8 @@ pub(super) fn apply_submenu_choice_delta(
             config::update_select_music_wheel_style(select_music_wheel_style_from_choice(
                 new_index,
             ));
+        } else if row.id == SubRowId::SeriesSort {
+            config::update_sort_music_wheel_by_series(yes_no_from_choice(new_index));
         } else if row.id == SubRowId::SongSelectBg {
             config::update_select_music_song_select_bg_mode(
                 select_music_song_select_bg_mode_from_choice(new_index),

@@ -160,6 +160,7 @@ update_config_fn!(pub fn update_show_select_music_video_banners(enabled: bool) =
 update_config_fn!(pub fn update_show_select_music_cdtitles(enabled: bool) => set_show_select_music_cdtitles);
 update_config_fn!(pub fn update_show_music_wheel_grades(enabled: bool) => set_show_music_wheel_grades);
 update_config_fn!(pub fn update_show_music_wheel_lamps(enabled: bool) => set_show_music_wheel_lamps);
+update_config_fn!(pub fn update_sort_music_wheel_by_series(enabled: bool) => set_sort_music_wheel_by_series);
 update_config_fn!(pub fn update_select_music_itl_rank_mode(mode: SelectMusicItlRankMode) => set_select_music_itl_rank_mode);
 update_config_fn!(pub fn update_select_music_itl_wheel_mode(mode: SelectMusicItlWheelMode) => set_select_music_itl_wheel_mode);
 update_config_fn!(pub fn update_select_music_wheel_style(style: SelectMusicWheelStyle) => set_select_music_wheel_style);

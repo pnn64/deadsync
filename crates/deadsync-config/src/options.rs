@@ -25,8 +25,9 @@ use crate::defaults::{
     DEFAULT_SMOOTH_HISTOGRAM, DEFAULT_SMX_INPUT, DEFAULT_SMX_MANAGES_PAD_CONFIG,
     DEFAULT_SMX_PANEL_LIGHTS, DEFAULT_SMX_UNDERGLOW_GRB, DEFAULT_SMX_UNDERGLOW_THEME,
     DEFAULT_SOFTWARE_RENDERER_THREADS, DEFAULT_SONG_PARSING_THREADS,
-    DEFAULT_SUBMIT_ARROWCLOUD_FAILS, DEFAULT_THREE_KEY_NAVIGATION, DEFAULT_TRANSLATED_TITLES,
-    DEFAULT_UPDATER_INSTALL_ENABLED, DEFAULT_USE_FSRS,
+    DEFAULT_SORT_MUSIC_WHEEL_BY_SERIES, DEFAULT_SUBMIT_ARROWCLOUD_FAILS,
+    DEFAULT_THREE_KEY_NAVIGATION, DEFAULT_TRANSLATED_TITLES, DEFAULT_UPDATER_INSTALL_ENABLED,
+    DEFAULT_USE_FSRS,
 };
 use crate::ini::SimpleIni;
 use crate::machine::{
@@ -995,6 +996,7 @@ pub struct SelectMusicOptions {
     pub show_cdtitles: bool,
     pub show_wheel_grades: bool,
     pub show_wheel_lamps: bool,
+    pub sort_wheel_by_series: bool,
     pub itl_rank_mode: SelectMusicItlRankMode,
     pub itl_wheel_mode: SelectMusicItlWheelMode,
     pub wheel_style: SelectMusicWheelStyle,
@@ -1032,6 +1034,7 @@ impl Default for SelectMusicOptions {
             show_cdtitles: DEFAULT_SHOW_SELECT_MUSIC_CDTITLES,
             show_wheel_grades: DEFAULT_SHOW_MUSIC_WHEEL_GRADES,
             show_wheel_lamps: DEFAULT_SHOW_MUSIC_WHEEL_LAMPS,
+            sort_wheel_by_series: DEFAULT_SORT_MUSIC_WHEEL_BY_SERIES,
             itl_rank_mode: SelectMusicItlRankMode::None,
             itl_wheel_mode: SelectMusicItlWheelMode::Score,
             wheel_style: SelectMusicWheelStyle::Itg,
@@ -1108,6 +1111,10 @@ pub fn load_select_music_options(
         show_wheel_lamps: parse_u8_bool_or_default(
             conf.get("Options", "SelectMusicWheelLamps").as_deref(),
             default.show_wheel_lamps,
+        ),
+        sort_wheel_by_series: parse_u8_bool_or_default(
+            conf.get("Options", "SelectMusicSortBySeries").as_deref(),
+            default.sort_wheel_by_series,
         ),
         itl_rank_mode: parse_select_music_itl_rank_mode(
             itl_rank_mode.as_deref(),
@@ -1243,6 +1250,11 @@ pub fn push_select_music_option_lines(content: &mut String, options: SelectMusic
     push_bool(content, "SelectMusicShowCDTitles", select.show_cdtitles);
     push_bool(content, "SelectMusicWheelGrades", select.show_wheel_grades);
     push_bool(content, "SelectMusicWheelLamps", select.show_wheel_lamps);
+    push_bool(
+        content,
+        "SelectMusicSortBySeries",
+        select.sort_wheel_by_series,
+    );
     push_line(
         content,
         "SelectMusicWheelITLRank",
@@ -2199,6 +2211,7 @@ mod tests {
             show_cdtitles: true,
             show_wheel_grades: true,
             show_wheel_lamps: false,
+            sort_wheel_by_series: true,
             itl_rank_mode: SelectMusicItlRankMode::None,
             itl_wheel_mode: SelectMusicItlWheelMode::Off,
             wheel_style: SelectMusicWheelStyle::Itg,
@@ -3014,6 +3027,7 @@ mod tests {
             SelectMusicShowCDTitles=0
             SelectMusicWheelGrades=0
             SelectMusicWheelLamps=1
+            SelectMusicSortBySeries=0
             SelectMusicWheelITLRank=Overall
             SelectMusicWheelITL=Points
             SelectMusicWheelStyle=IIDX
@@ -3051,6 +3065,7 @@ mod tests {
         assert!(!loaded.show_cdtitles);
         assert!(!loaded.show_wheel_grades);
         assert!(loaded.show_wheel_lamps);
+        assert!(!loaded.sort_wheel_by_series);
         assert_eq!(loaded.itl_rank_mode, SelectMusicItlRankMode::Overall);
         assert_eq!(
             loaded.itl_wheel_mode,
@@ -3113,6 +3128,7 @@ mod tests {
                 "SelectMusicShowCDTitles=1\n",
                 "SelectMusicWheelGrades=1\n",
                 "SelectMusicWheelLamps=0\n",
+                "SelectMusicSortBySeries=1\n",
                 "SelectMusicWheelITLRank=None\n",
                 "SelectMusicWheelITL=Off\n",
                 "SelectMusicWheelStyle=ITG\n",

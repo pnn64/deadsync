@@ -40,7 +40,7 @@ use deadlib_render::{BlendMode, MeshVertex, SamplerDesc, SamplerFilter};
 use deadsync_chart::song::{chart_ix_for_steps_index, format_display_bpm_range};
 use deadsync_chart::{
     ChartData, ChartDisplayBpm, STANDARD_DIFFICULTY_COUNT, STANDARD_DIFFICULTY_NAMES, SongData,
-    SyncPref,
+    SongPack, SyncPref,
 };
 use deadsync_core::input::InputSource;
 use deadsync_input::{
@@ -944,6 +944,7 @@ enum SyncOverlayState {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum WheelSortMode {
+    Series,
     Group,
     Title,
     Artist,
@@ -972,6 +973,9 @@ pub enum MusicWheelEntry {
         banner_path: Option<PathBuf>,
         song_count: usize,
         pack_key: Option<String>,
+        /// Set on both a series header and its child pack headers. A series
+        /// header is distinguished by its absent `pack_key`.
+        parent_series: Option<String>,
     },
     Song(Arc<SongData>),
 }
@@ -985,6 +989,18 @@ impl MusicWheelEntry {
             } => Some(key.as_str()),
             _ => None,
         }
+    }
+
+    #[inline(always)]
+    pub fn is_series_header(&self) -> bool {
+        matches!(
+            self,
+            MusicWheelEntry::PackHeader {
+                pack_key: None,
+                parent_series: Some(_),
+                ..
+            }
+        )
     }
 }
 
@@ -1097,6 +1113,7 @@ pub struct State {
     downloads_overlay: select_music_menu::DownloadsOverlayState,
     sort_mode: WheelSortMode,
     all_entries: Vec<MusicWheelEntry>,
+    series_entries: Vec<MusicWheelEntry>,
     group_entries: Vec<MusicWheelEntry>,
     title_entries: Vec<MusicWheelEntry>,
     artist_entries: Vec<MusicWheelEntry>,
@@ -1118,6 +1135,7 @@ pub struct State {
     playlist_library: Vec<PlaylistCacheEntry>,
     playlist_views: Vec<SelectMusicPlaylistView>,
     active_playlist_id: Option<String>,
+    expanded_series_name: Option<String>,
     expanded_pack_name: Option<String>,
     /// Last pack name for which we enqueued ReplayGain prewarm jobs. Guards
     /// against re-enqueueing every frame while the same pack is expanded.
@@ -1264,7 +1282,10 @@ fn sync_new_pack_names(
 
 fn maybe_clear_selected_pack_on_score(state: &mut State, mode: NewPackMode) {
     if mode != NewPackMode::HasScore
-        || state.sort_mode != WheelSortMode::Group
+        || !matches!(
+            state.sort_mode,
+            WheelSortMode::Series | WheelSortMode::Group
+        )
         || state.new_pack_names.is_empty()
     {
         return;
@@ -1423,6 +1444,7 @@ fn apply_initial_steps_for_song(
 fn rebuild_displayed_entries(state: &mut State) {
     state.entries = build_displayed_entries(
         &state.all_entries,
+        state.expanded_series_name.as_deref(),
         state.expanded_pack_name.as_deref(),
         config::get().select_music_wheel_style,
     );
@@ -1433,6 +1455,7 @@ fn rebuild_displayed_entries(state: &mut State) {
 
 fn build_displayed_entries(
     all_entries: &[MusicWheelEntry],
+    expanded_series_name: Option<&str>,
     expanded_pack_name: Option<&str>,
     wheel_style: crate::config::SelectMusicWheelStyle,
 ) -> Vec<MusicWheelEntry> {
@@ -1451,16 +1474,36 @@ fn build_displayed_entries(
 
     let mut new_entries = Vec::with_capacity(all_entries.len());
     let mut current_pack_name: Option<&str> = None;
+    let mut current_pack_visible = false;
     for entry in all_entries {
         match entry {
-            MusicWheelEntry::PackHeader { name, .. } => {
+            MusicWheelEntry::PackHeader {
+                name,
+                pack_key,
+                parent_series,
+                ..
+            } if pack_key.is_none() && parent_series.is_some() => {
+                current_pack_name = None;
+                current_pack_visible = false;
+                new_entries.push(entry.clone());
+            }
+            MusicWheelEntry::PackHeader {
+                name,
+                parent_series,
+                ..
+            } => {
                 current_pack_name = Some(name.as_str());
-                if !hide_non_active_packs || expanded_pack_name == Some(name.as_str()) {
+                let parent_is_open = parent_series
+                    .as_deref()
+                    .is_none_or(|parent| expanded_series_name == Some(parent));
+                current_pack_visible = parent_is_open
+                    && (!hide_non_active_packs || expanded_pack_name == Some(name.as_str()));
+                if current_pack_visible {
                     new_entries.push(entry.clone());
                 }
             }
             MusicWheelEntry::Song(_) => {
-                if expanded_pack_name == current_pack_name {
+                if current_pack_visible && expanded_pack_name == current_pack_name {
                     new_entries.push(entry.clone());
                 }
             }
@@ -1521,6 +1564,11 @@ fn group_name_for_song(
     let mut current_pack_name: Option<&str> = None;
     for entry in grouped_entries {
         match entry {
+            MusicWheelEntry::PackHeader {
+                pack_key: None,
+                parent_series: Some(_),
+                ..
+            } => {}
             MusicWheelEntry::PackHeader { name, .. } => {
                 current_pack_name = Some(name.as_str());
             }
@@ -1534,19 +1582,64 @@ fn group_name_for_song(
     None
 }
 
+fn series_name_for_song(
+    series_entries: &[MusicWheelEntry],
+    target_song: &Arc<SongData>,
+) -> Option<String> {
+    let mut current_series: Option<&str> = None;
+    for entry in series_entries {
+        match entry {
+            MusicWheelEntry::PackHeader {
+                pack_key: Some(_),
+                parent_series,
+                ..
+            } => current_series = parent_series.as_deref(),
+            MusicWheelEntry::PackHeader {
+                parent_series: None,
+                ..
+            } => current_series = None,
+            MusicWheelEntry::PackHeader { .. } => {}
+            MusicWheelEntry::Song(song) if Arc::ptr_eq(song, target_song) => {
+                return current_series.map(str::to_string);
+            }
+            MusicWheelEntry::Song(_) => {}
+        }
+    }
+    None
+}
+
+fn series_name_for_pack(series_entries: &[MusicWheelEntry], pack_name: &str) -> Option<String> {
+    series_entries.iter().find_map(|entry| match entry {
+        MusicWheelEntry::PackHeader {
+            name,
+            pack_key: Some(_),
+            parent_series,
+            ..
+        } if name == pack_name => parent_series.clone(),
+        _ => None,
+    })
+}
+
 #[inline(always)]
 fn media_path_key_string(path: &Path) -> String {
     path.to_string_lossy().into_owned()
 }
 
 fn selected_group_header_for_folder_stats(state: &State) -> Option<(String, Option<PathBuf>)> {
-    if state.sort_mode != WheelSortMode::Group {
+    if !matches!(
+        state.sort_mode,
+        WheelSortMode::Series | WheelSortMode::Group
+    ) {
         return None;
     }
     match state.entries.get(state.selected_index) {
         Some(MusicWheelEntry::PackHeader {
-            name, banner_path, ..
+            name,
+            banner_path,
+            pack_key: Some(_),
+            ..
         }) => Some((name.clone(), banner_path.clone())),
+        Some(MusicWheelEntry::PackHeader { .. }) => None,
         Some(MusicWheelEntry::Song(target_song)) => {
             let mut current: Option<(&str, Option<&PathBuf>)> = None;
             for entry in &state.group_entries {
@@ -1625,12 +1718,14 @@ fn song_sort_group_label(group: &SongSortGroup) -> String {
 
 #[inline(always)]
 fn first_header_name(entries: &[MusicWheelEntry]) -> Option<String> {
-    entries.iter().find_map(|e| {
-        if let MusicWheelEntry::PackHeader { name, .. } = e {
-            Some(name.clone())
-        } else {
-            None
-        }
+    entries.iter().find_map(|e| match e {
+        MusicWheelEntry::PackHeader {
+            pack_key: None,
+            parent_series: Some(_),
+            ..
+        } => None,
+        MusicWheelEntry::PackHeader { name, .. } => Some(name.clone()),
+        MusicWheelEntry::Song(_) => None,
     })
 }
 
@@ -1657,6 +1752,136 @@ fn songs_from_entries(grouped_entries: &[MusicWheelEntry]) -> Vec<Arc<SongData>>
         .collect()
 }
 
+struct SeriesPackEntries {
+    sort_key: String,
+    series: Option<String>,
+    entries: Vec<MusicWheelEntry>,
+}
+
+enum SeriesTopLevel {
+    Pack(SeriesPackEntries),
+    Series {
+        name: String,
+        packs: Vec<SeriesPackEntries>,
+    },
+}
+
+fn series_pack_entries(
+    group_entries: &[MusicWheelEntry],
+    packs: &[SongPack],
+) -> Vec<SeriesPackEntries> {
+    let starts: Vec<usize> = group_entries
+        .iter()
+        .enumerate()
+        .filter_map(|(index, entry)| {
+            matches!(entry, MusicWheelEntry::PackHeader { .. }).then_some(index)
+        })
+        .collect();
+    starts
+        .iter()
+        .enumerate()
+        .filter_map(|(index, start)| {
+            let end = starts
+                .get(index + 1)
+                .copied()
+                .unwrap_or(group_entries.len());
+            let MusicWheelEntry::PackHeader {
+                original_index,
+                name,
+                ..
+            } = &group_entries[*start]
+            else {
+                return None;
+            };
+            let pack = packs.get(*original_index)?;
+            let sort_title = pack.sort_title.trim();
+            let sort_key = if sort_title.is_empty() {
+                name
+            } else {
+                sort_title
+            };
+            let series = (!pack.series.trim().is_empty()).then(|| pack.series.trim().to_string());
+            Some(SeriesPackEntries {
+                sort_key: sort_key.to_ascii_lowercase(),
+                series,
+                entries: group_entries[*start..end].to_vec(),
+            })
+        })
+        .collect()
+}
+
+fn push_series_pack(
+    entries: &mut Vec<MusicWheelEntry>,
+    mut pack: SeriesPackEntries,
+    parent_series: Option<&str>,
+) {
+    if let Some(MusicWheelEntry::PackHeader {
+        parent_series: parent,
+        ..
+    }) = pack.entries.first_mut()
+    {
+        *parent = parent_series.map(str::to_string);
+    }
+    entries.extend(pack.entries);
+}
+
+fn build_series_grouped_entries(
+    group_entries: &[MusicWheelEntry],
+    packs: &[SongPack],
+) -> Vec<MusicWheelEntry> {
+    let mut series = HashMap::<String, Vec<SeriesPackEntries>>::new();
+    let mut top_level = Vec::new();
+    for pack in series_pack_entries(group_entries, packs) {
+        if let Some(name) = pack.series.clone() {
+            series.entry(name).or_default().push(pack);
+        } else {
+            top_level.push(SeriesTopLevel::Pack(pack));
+        }
+    }
+    top_level.extend(series.into_iter().map(|(name, mut packs)| {
+        packs.sort_by(|a, b| a.sort_key.cmp(&b.sort_key));
+        SeriesTopLevel::Series { name, packs }
+    }));
+    top_level.sort_by_cached_key(|entry| match entry {
+        SeriesTopLevel::Pack(pack) => pack.sort_key.clone(),
+        SeriesTopLevel::Series { name, .. } => name.to_ascii_lowercase(),
+    });
+
+    let mut entries = Vec::with_capacity(group_entries.len().saturating_add(top_level.len()));
+    let mut series_color_index = 0;
+    for entry in top_level {
+        match entry {
+            SeriesTopLevel::Pack(pack) => push_series_pack(&mut entries, pack, None),
+            SeriesTopLevel::Series { name, packs } => {
+                let banner_path = packs.first().and_then(|pack| match pack.entries.first() {
+                    Some(MusicWheelEntry::PackHeader { banner_path, .. }) => banner_path.clone(),
+                    _ => None,
+                });
+                let song_count = packs
+                    .iter()
+                    .flat_map(|pack| pack.entries.iter())
+                    .filter(|entry| matches!(entry, MusicWheelEntry::Song(_)))
+                    .count();
+                entries.push(MusicWheelEntry::PackHeader {
+                    name: name.clone(),
+                    // ITGmania assigns parent sections their own rotating
+                    // section color, independent of their child pack colors.
+                    original_index: series_color_index,
+                    banner_path,
+                    song_count,
+                    pack_key: None,
+                    parent_series: Some(name.clone()),
+                });
+                series_color_index += 1;
+                for pack in packs {
+                    push_series_pack(&mut entries, pack, Some(&name));
+                }
+            }
+        }
+    }
+    entries
+}
+
 fn single_header_song_entries(
     header: String,
     songs: impl IntoIterator<Item = Arc<SongData>>,
@@ -1670,6 +1895,7 @@ fn single_header_song_entries(
         banner_path: None,
         song_count: count,
         pack_key: None,
+        parent_series: None,
     });
     entries.extend(songs.into_iter().map(MusicWheelEntry::Song));
     entries
@@ -1689,6 +1915,7 @@ fn grouped_song_entries(groups: Vec<GroupedSongs>) -> Vec<MusicWheelEntry> {
             banner_path: None,
             song_count: group.songs.len(),
             pack_key: None,
+            parent_series: None,
         });
         entries.extend(group.songs.into_iter().map(MusicWheelEntry::Song));
     }
@@ -1866,6 +2093,7 @@ fn build_top_grades_grouped_entries(
                 banner_path: None,
                 song_count: 0,
                 pack_key: None,
+                parent_series: None,
             });
             current_header_index = Some(entries.len() - 1);
             current_group = Some(group_name.clone());
@@ -1946,6 +2174,7 @@ fn build_top_grades_grouped_entries_for_side(
                 banner_path: None,
                 song_count: 0,
                 pack_key: None,
+                parent_series: None,
             });
             current_header_index = Some(entries.len() - 1);
             current_group = Some(group_name.clone());
@@ -2054,6 +2283,7 @@ fn favorite_music_entries(
             banner_path: None,
             song_count: plan.loose_songs.len(),
             pack_key: None,
+            parent_series: None,
         });
         entries.extend(plan.loose_songs.into_iter().map(MusicWheelEntry::Song));
     }
@@ -2117,6 +2347,7 @@ fn playlist_music_entries(entries: Vec<PlaylistEntry>) -> Vec<MusicWheelEntry> {
                     banner_path: None,
                     song_count,
                     pack_key: None,
+                    parent_series: None,
                 }
             }
             PlaylistEntry::Song(song) => MusicWheelEntry::Song(song),
@@ -2189,8 +2420,27 @@ fn apply_wheel_sort(state: &mut State, sort_mode: WheelSortMode) {
 
     let selected_song = selected_song_arc(state);
     let mut effective_sort_mode = sort_mode;
+    if sort_mode != WheelSortMode::Series {
+        state.expanded_series_name = None;
+    }
 
     match sort_mode {
+        WheelSortMode::Series => {
+            state.all_entries = state.series_entries.clone();
+            state.expanded_pack_name = selected_song
+                .as_ref()
+                .and_then(|song| group_name_for_song(&state.series_entries, song))
+                .or_else(|| first_header_name(&state.series_entries));
+            state.expanded_series_name = selected_song
+                .as_ref()
+                .and_then(|song| series_name_for_song(&state.series_entries, song))
+                .or_else(|| {
+                    state
+                        .expanded_pack_name
+                        .as_deref()
+                        .and_then(|pack| series_name_for_pack(&state.series_entries, pack))
+                });
+        }
         WheelSortMode::Group => {
             state.all_entries = state.group_entries.clone();
             state.expanded_pack_name = selected_song
@@ -2436,6 +2686,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
                     banner_path: pack.banner_path.clone(),
                     song_count: 0,
                     pack_key: Some(name.clone()),
+                    parent_series: None,
                 });
                 pack_header_index = Some(all_entries.len() - 1);
                 name
@@ -2476,6 +2727,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         }
     }
 
+    let series_entries = build_series_grouped_entries(&all_entries, song_cache.as_slice());
     let title_entries = build_title_grouped_entries(&all_entries);
     let artist_entries = build_artist_grouped_entries(&all_entries);
     let genre_entries = build_genre_grouped_entries(&all_entries);
@@ -2528,9 +2780,23 @@ pub fn init(init_view: SelectMusicInitView) -> State {
     );
     // ITGmania falls back to the first selectable song and opens its group.
     let initial_expanded_pack_name = last_pack_name.or_else(|| first_header_name(&all_entries));
+    let use_series_sort = cfg.sort_music_wheel_by_series;
+    let initial_expanded_series_name = use_series_sort
+        .then(|| {
+            initial_expanded_pack_name
+                .as_deref()
+                .and_then(|pack| series_name_for_pack(&series_entries, pack))
+        })
+        .flatten();
+    let initial_entries = if use_series_sort {
+        series_entries.clone()
+    } else {
+        all_entries.clone()
+    };
 
     let mut state = State {
-        all_entries: all_entries.clone(),
+        all_entries: initial_entries,
+        series_entries,
         group_entries: all_entries,
         title_entries,
         artist_entries,
@@ -2585,7 +2851,12 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         select_music_menu: select_music_menu::State::Hidden,
         leaderboard: select_music_menu::LeaderboardOverlayState::Hidden,
         downloads_overlay: select_music_menu::DownloadsOverlayState::Hidden,
-        sort_mode: WheelSortMode::Group,
+        sort_mode: if use_series_sort {
+            WheelSortMode::Series
+        } else {
+            WheelSortMode::Group
+        },
+        expanded_series_name: initial_expanded_series_name,
         expanded_pack_name: initial_expanded_pack_name,
         last_replaygain_prewarmed_pack: None,
         pending_audio: Vec::new(),
@@ -2745,6 +3016,7 @@ pub fn init_placeholder() -> State {
 
     State {
         all_entries: Vec::new(),
+        series_entries: Vec::new(),
         group_entries: Vec::new(),
         title_entries: Vec::new(),
         artist_entries: Vec::new(),
@@ -2800,6 +3072,7 @@ pub fn init_placeholder() -> State {
         leaderboard: select_music_menu::LeaderboardOverlayState::Hidden,
         downloads_overlay: select_music_menu::DownloadsOverlayState::Hidden,
         sort_mode: WheelSortMode::Group,
+        expanded_series_name: None,
         expanded_pack_name: None,
         last_replaygain_prewarmed_pack: None,
         pending_audio: Vec::new(),
@@ -3936,6 +4209,7 @@ fn focus_song_from_search(state: &mut State, song: &Arc<SongData>) {
     }
 
     if let Some(group_name) = group_name_for_song(&state.all_entries, song) {
+        state.expanded_series_name = series_name_for_song(&state.all_entries, song);
         state.expanded_pack_name = Some(group_name);
         rebuild_displayed_entries(state);
         if let Some(index) = song_entry_index(&state.entries, song) {
@@ -5147,7 +5421,11 @@ fn refresh_after_reload(state: &mut State) {
         group_name_for_song(&state.entries, song)
     } else {
         match state.entries.get(state.selected_index) {
-            Some(MusicWheelEntry::PackHeader { name, .. }) => Some(name.clone()),
+            Some(MusicWheelEntry::PackHeader {
+                name,
+                pack_key: Some(_),
+                ..
+            }) => Some(name.clone()),
             _ => None,
         }
     };
@@ -5165,6 +5443,7 @@ fn refresh_after_reload(state: &mut State) {
 
     let sort_mode = state.sort_mode;
     let active_playlist_id = state.active_playlist_id.clone();
+    let expanded_series_name = state.expanded_series_name.clone();
     let expanded_pack_name = state.expanded_pack_name.clone();
     let active_color_index = state.active_color_index;
     let old_steps_index_p1 = state.selected_steps_index;
@@ -5197,13 +5476,30 @@ fn refresh_after_reload(state: &mut State) {
     refreshed.unlock_downloads_available = unlock_downloads_available;
     refreshed.ready_song_reload_dirs = ready_song_reload_dirs;
 
-    if sort_mode != WheelSortMode::Group {
+    if sort_mode != refreshed.sort_mode {
         apply_wheel_sort(&mut refreshed, sort_mode);
+    }
+
+    if let Some(expanded) = expanded_series_name
+        && refreshed.all_entries.iter().any(|entry| {
+            matches!(
+                entry,
+                MusicWheelEntry::PackHeader {
+                    name,
+                    pack_key: None,
+                    parent_series: Some(_),
+                    ..
+                } if name == &expanded
+            )
+        })
+    {
+        refreshed.expanded_series_name = Some(expanded);
+        rebuild_displayed_entries(&mut refreshed);
     }
 
     if let Some(expanded) = expanded_pack_name
         && refreshed.all_entries.iter().any(
-            |entry| matches!(entry, MusicWheelEntry::PackHeader { name, .. } if name == &expanded),
+            |entry| matches!(entry, MusicWheelEntry::PackHeader { name, pack_key: Some(_), .. } if name == &expanded),
         )
     {
         refreshed.expanded_pack_name = Some(expanded);
@@ -5222,7 +5518,7 @@ fn refresh_after_reload(state: &mut State) {
             && refreshed
                 .all_entries
                 .iter()
-                .any(|entry| matches!(entry, MusicWheelEntry::PackHeader { name, .. } if name == pack_name))
+                .any(|entry| matches!(entry, MusicWheelEntry::PackHeader { name, pack_key: Some(_), .. } if name == pack_name))
         {
             refreshed.expanded_pack_name = Some(pack_name.clone());
             rebuild_displayed_entries(&mut refreshed);
@@ -5238,7 +5534,7 @@ fn refresh_after_reload(state: &mut State) {
     if !restored
         && let Some(pack_name) = selected_pack_name
         && let Some(index) = refreshed.entries.iter().position(
-            |entry| matches!(entry, MusicWheelEntry::PackHeader { name, .. } if name == &pack_name),
+            |entry| matches!(entry, MusicWheelEntry::PackHeader { name, pack_key: Some(_), .. } if name == &pack_name),
         )
     {
         refreshed.selected_index = index;
@@ -5335,7 +5631,7 @@ fn refresh_after_style_switch(state: &mut State) {
     refreshed.unlock_downloads_available = unlock_downloads_available;
     refreshed.ready_song_reload_dirs = ready_song_reload_dirs;
 
-    if sort_mode != WheelSortMode::Group {
+    if sort_mode != refreshed.sort_mode {
         apply_wheel_sort(&mut refreshed, sort_mode);
     }
 
@@ -7929,6 +8225,11 @@ fn dispatch_menu_action(
             hide_select_music_menu(state);
             ThemeEffect::None
         }
+        select_music_menu::Action::SortBySeries => {
+            apply_wheel_sort(state, WheelSortMode::Series);
+            hide_select_music_menu(state);
+            ThemeEffect::None
+        }
         select_music_menu::Action::SortByGroup => {
             apply_wheel_sort(state, WheelSortMode::Group);
             hide_select_music_menu(state);
@@ -8271,6 +8572,35 @@ fn collapse_expanded_pack(state: &mut State, pack: String) {
     }
 }
 
+fn close_open_section_one_level(state: &mut State) {
+    if let Some(pack) = state.expanded_pack_name.take() {
+        collapse_expanded_pack(state, pack);
+        return;
+    }
+    let Some(series) = state.expanded_series_name.take() else {
+        return;
+    };
+    debug!("Up+Down combo: Collapsing series '{}'.", series);
+    rebuild_displayed_entries(state);
+    if let Some(new_sel) = state.entries.iter().position(|entry| {
+        matches!(
+            entry,
+            MusicWheelEntry::PackHeader {
+                name,
+                pack_key: None,
+                parent_series: Some(_),
+                ..
+            } if name == &series
+        )
+    }) {
+        state.selected_index = new_sel;
+        state.prev_selected_index = new_sel;
+        state.time_since_selection_change = 0.0;
+        state.displayed_chart_p1 = None;
+        state.displayed_chart_p2 = None;
+    }
+}
+
 pub fn handle_pad_dir(
     state: &mut State,
     side: profile_data::PlayerSide,
@@ -8416,9 +8746,8 @@ fn handle_pad_dir_impl(
                         state.p1_chord_up_pressed_at,
                         state.p1_chord_down_pressed_at,
                     )
-                    && let Some(pack) = state.expanded_pack_name.take()
                 {
-                    collapse_expanded_pack(state, pack);
+                    close_open_section_one_level(state);
                 }
             }
         }
@@ -8554,9 +8883,8 @@ fn handle_pad_dir_p2(
                 state.p2_chord_up_pressed_at,
                 state.p2_chord_down_pressed_at,
             )
-            && let Some(pack) = state.expanded_pack_name.take()
         {
-            collapse_expanded_pack(state, pack);
+            close_open_section_one_level(state);
         }
     } else {
         match dir {
@@ -8603,6 +8931,37 @@ fn handle_confirm_impl(state: &mut State) -> ThemeEffect {
                 );
             }
             state.out_prompt = OutPromptState::PressStartForOptions { elapsed: 0.0 };
+            ThemeEffect::None
+        }
+        Some(entry @ MusicWheelEntry::PackHeader { .. }) if entry.is_series_header() => {
+            let MusicWheelEntry::PackHeader { name, .. } = entry else {
+                unreachable!();
+            };
+            queue_sfx(state, "assets/sounds/expand.ogg");
+            if state.expanded_series_name.as_ref() == Some(&name) {
+                state.expanded_series_name = None;
+            } else {
+                state.expanded_series_name = Some(name.clone());
+            }
+            state.expanded_pack_name = None;
+            rebuild_displayed_entries(state);
+            state.selected_index = state
+                .entries
+                .iter()
+                .position(|entry| {
+                    matches!(
+                        entry,
+                        MusicWheelEntry::PackHeader {
+                            name: header_name,
+                            pack_key: None,
+                            parent_series: Some(_),
+                            ..
+                        } if header_name == &name
+                    )
+                })
+                .unwrap_or(0);
+            state.prev_selected_index = state.selected_index;
+            state.time_since_selection_change = 0.0;
             ThemeEffect::None
         }
         Some(MusicWheelEntry::PackHeader { name, .. }) => {
@@ -10591,6 +10950,9 @@ pub fn push_actors(
                 format_chart_length(((s.total_length_seconds.max(0) as f32) / music_rate) as i32),
             )
         }
+        Some(entry @ MusicWheelEntry::PackHeader { .. }) if entry.is_series_header() => {
+            (cached_str_ref(""), cached_str_ref(""), cached_str_ref(""))
+        }
         Some(MusicWheelEntry::PackHeader { original_index, .. }) => {
             let total_sec = state
                 .pack_total_seconds_by_index
@@ -11437,7 +11799,10 @@ pub fn push_actors(
             position_offset_from_selection: state.wheel_offset_from_selection,
             selection_animation_timer: state.selection_animation_timer,
             selection_animation_beat,
-            color_pack_headers: state.sort_mode == WheelSortMode::Group,
+            color_pack_headers: matches!(
+                state.sort_mode,
+                WheelSortMode::Series | WheelSortMode::Group
+            ),
             selected_charts: [immediate_chart_p1, immediate_chart_p2],
             preferred_difficulty_index: [
                 state.preferred_difficulty_index,
@@ -11452,9 +11817,13 @@ pub fn push_actors(
             itl_rank_mode: cfg.select_music_itl_rank_mode,
             itl_wheel_mode: cfg.select_music_itl_wheel_mode,
             song_select_bg_mode: cfg.select_music_song_select_bg_mode,
+            expanded_series_name: state.expanded_series_name.as_deref(),
             expanded_pack_name: state.expanded_pack_name.as_deref(),
-            new_pack_names: (state.sort_mode == WheelSortMode::Group)
-                .then_some(&state.new_pack_names),
+            new_pack_names: matches!(
+                state.sort_mode,
+                WheelSortMode::Series | WheelSortMode::Group
+            )
+            .then_some(&state.new_pack_names),
             pack_sync_prefs: cfg
                 .machine_pack_ini_offsets
                 .then_some(&state.pack_sync_prefs),
@@ -12070,7 +12439,7 @@ mod tests {
     };
     use crate::config::SelectMusicWheelStyle;
     use crate::screens::ThemeEffect;
-    use deadsync_chart::SongData;
+    use deadsync_chart::{SongData, SongPack, SyncPref};
     use deadsync_core::input::InputSource;
     use deadsync_input::{
         InputBinding, InputEvent, KeyCode, Keymap, PadDir, RawKeyboardEvent, VirtualAction,
@@ -12756,6 +13125,7 @@ mod tests {
                 banner_path: None,
                 song_count: 2,
                 pack_key: Some("Pack A".to_string()),
+                parent_series: None,
             },
             super::MusicWheelEntry::Song(test_song("Song A1")),
             super::MusicWheelEntry::Song(test_song("Song A2")),
@@ -12765,9 +13135,25 @@ mod tests {
                 banner_path: None,
                 song_count: 1,
                 pack_key: Some("Pack B".to_string()),
+                parent_series: None,
             },
             super::MusicWheelEntry::Song(test_song("Song B1")),
         ]
+    }
+
+    fn test_pack(name: &str, series: &str) -> SongPack {
+        SongPack {
+            group_name: name.to_string(),
+            name: name.to_string(),
+            sort_title: name.to_string(),
+            translit_title: String::new(),
+            series: series.to_string(),
+            year: 0,
+            sync_pref: SyncPref::Default,
+            directory: PathBuf::from(name),
+            banner_path: None,
+            songs: Vec::new(),
+        }
     }
 
     fn test_playlist_entries() -> Vec<super::MusicWheelEntry> {
@@ -12778,6 +13164,7 @@ mod tests {
                 banner_path: None,
                 song_count: 2,
                 pack_key: Some("Pack A".to_string()),
+                parent_series: None,
             },
             super::MusicWheelEntry::Song(test_song_in_pack("Pack A", "Song A1", "Alpha")),
             super::MusicWheelEntry::Song(test_song_in_pack("Pack A", "Song A2", "Beta")),
@@ -12787,6 +13174,7 @@ mod tests {
                 banner_path: None,
                 song_count: 1,
                 pack_key: Some("Pack B".to_string()),
+                parent_series: None,
             },
             super::MusicWheelEntry::Song(test_song_in_pack("Pack B", "Song B1", "Gamma")),
         ]
@@ -12804,6 +13192,7 @@ mod tests {
             banner_path: None,
             song_count,
             pack_key: pack_key.map(str::to_string),
+            parent_series: None,
         }
     }
 
@@ -13077,6 +13466,7 @@ mod tests {
         state.all_entries = test_entries();
         state.entries = build_displayed_entries(
             &state.all_entries,
+            None,
             Some("Pack A"),
             SelectMusicWheelStyle::Itg,
         );
@@ -13512,8 +13902,12 @@ mod tests {
 
     #[test]
     fn itg_wheel_style_keeps_other_pack_headers_visible() {
-        let entries =
-            build_displayed_entries(&test_entries(), Some("Pack A"), SelectMusicWheelStyle::Itg);
+        let entries = build_displayed_entries(
+            &test_entries(),
+            None,
+            Some("Pack A"),
+            SelectMusicWheelStyle::Itg,
+        );
 
         assert_eq!(entries.len(), 4);
         assert!(matches!(
@@ -13527,9 +13921,149 @@ mod tests {
     }
 
     #[test]
+    fn series_sort_nests_packs_from_pack_metadata() {
+        let packs = [
+            test_pack("Pack A", "ITG Series"),
+            test_pack("Pack B", "ITG Series"),
+        ];
+        let entries = super::build_series_grouped_entries(&test_entries(), &packs);
+
+        assert!(matches!(
+            entries[0],
+            super::MusicWheelEntry::PackHeader {
+                ref name,
+                song_count: 3,
+                pack_key: None,
+                parent_series: Some(ref parent),
+                ..
+            } if name == "ITG Series" && parent == "ITG Series"
+        ));
+        assert!(matches!(
+            entries[1],
+            super::MusicWheelEntry::PackHeader {
+                ref name,
+                pack_key: Some(_),
+                parent_series: Some(ref parent),
+                ..
+            } if name == "Pack A" && parent == "ITG Series"
+        ));
+        assert!(matches!(
+            entries[4],
+            super::MusicWheelEntry::PackHeader {
+                ref name,
+                pack_key: Some(_),
+                parent_series: Some(ref parent),
+                ..
+            } if name == "Pack B" && parent == "ITG Series"
+        ));
+    }
+
+    #[test]
+    fn series_parent_uses_its_own_palette_index() {
+        let packs = [test_pack("Pack A", ""), test_pack("Pack B", "ITG Series")];
+        let entries = super::build_series_grouped_entries(&test_entries(), &packs);
+        let series = entries.iter().find(|entry| entry.is_series_header());
+
+        assert!(matches!(
+            series,
+            Some(super::MusicWheelEntry::PackHeader {
+                original_index: 0,
+                song_count: 1,
+                ..
+            })
+        ));
+        assert!(matches!(
+            entries.iter().find(|entry| {
+                matches!(entry, super::MusicWheelEntry::PackHeader { name, .. } if name == "Pack B")
+            }),
+            Some(super::MusicWheelEntry::PackHeader {
+                original_index: 1,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn series_sort_keeps_untagged_pack_at_top_level() {
+        let packs = [test_pack("Pack A", "ITG Series"), test_pack("Pack B", "")];
+        let entries = super::build_series_grouped_entries(&test_entries(), &packs);
+        let pack_b = entries.iter().find(|entry| {
+            matches!(entry, super::MusicWheelEntry::PackHeader { name, .. } if name == "Pack B")
+        });
+
+        assert!(matches!(
+            pack_b,
+            Some(super::MusicWheelEntry::PackHeader {
+                pack_key: Some(_),
+                parent_series: None,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn series_display_opens_parent_then_pack() {
+        let packs = [
+            test_pack("Pack A", "ITG Series"),
+            test_pack("Pack B", "ITG Series"),
+        ];
+        let entries = super::build_series_grouped_entries(&test_entries(), &packs);
+
+        let collapsed = build_displayed_entries(&entries, None, None, SelectMusicWheelStyle::Itg);
+        assert_eq!(collapsed.len(), 1);
+        assert!(collapsed[0].is_series_header());
+
+        let series_open = build_displayed_entries(
+            &entries,
+            Some("ITG Series"),
+            None,
+            SelectMusicWheelStyle::Itg,
+        );
+        assert_eq!(series_open.len(), 3);
+
+        let pack_open = build_displayed_entries(
+            &entries,
+            Some("ITG Series"),
+            Some("Pack A"),
+            SelectMusicWheelStyle::Iidx,
+        );
+        assert_eq!(pack_open.len(), 4);
+        assert!(matches!(pack_open[3], super::MusicWheelEntry::Song(_)));
+    }
+
+    #[test]
+    fn series_back_navigation_closes_one_level() {
+        let packs = [
+            test_pack("Pack A", "ITG Series"),
+            test_pack("Pack B", "ITG Series"),
+        ];
+        let mut state = init_placeholder();
+        state.all_entries = super::build_series_grouped_entries(&test_entries(), &packs);
+        state.expanded_series_name = Some("ITG Series".to_string());
+        state.expanded_pack_name = Some("Pack A".to_string());
+        super::rebuild_displayed_entries(&mut state);
+
+        super::close_open_section_one_level(&mut state);
+        assert_eq!(state.expanded_series_name.as_deref(), Some("ITG Series"));
+        assert_eq!(state.expanded_pack_name, None);
+        assert!(matches!(
+            state.entries.get(state.selected_index),
+            Some(super::MusicWheelEntry::PackHeader { name, .. }) if name == "Pack A"
+        ));
+
+        super::close_open_section_one_level(&mut state);
+        assert_eq!(state.expanded_series_name, None);
+        assert!(state.entries[state.selected_index].is_series_header());
+    }
+
+    #[test]
     fn iidx_wheel_style_only_shows_active_pack_and_header() {
-        let entries =
-            build_displayed_entries(&test_entries(), Some("Pack A"), SelectMusicWheelStyle::Iidx);
+        let entries = build_displayed_entries(
+            &test_entries(),
+            None,
+            Some("Pack A"),
+            SelectMusicWheelStyle::Iidx,
+        );
 
         assert_eq!(entries.len(), 3);
         assert!(matches!(
@@ -13546,8 +14080,12 @@ mod tests {
 
     #[test]
     fn fallback_selection_uses_first_song_not_pack_header() {
-        let entries =
-            build_displayed_entries(&test_entries(), Some("Pack A"), SelectMusicWheelStyle::Iidx);
+        let entries = build_displayed_entries(
+            &test_entries(),
+            None,
+            Some("Pack A"),
+            SelectMusicWheelStyle::Iidx,
+        );
 
         assert_eq!(first_song_entry_index(&entries), Some(1));
         assert!(matches!(entries[1], super::MusicWheelEntry::Song(_)));
