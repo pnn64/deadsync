@@ -10,6 +10,7 @@ pub const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
 // Match Simply Love / ITGmania's GrooveStats request timeout (60s).
 pub const GROOVESTATS_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
+pub type HttpAgent = ureq::Agent;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AgentConfig {

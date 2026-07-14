@@ -6,6 +6,7 @@ pub mod player_leaderboards;
 pub mod runtime;
 pub mod score_compat;
 pub mod score_import;
+pub mod srpg_shop;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OnlineRequestError {

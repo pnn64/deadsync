@@ -3,6 +3,7 @@ pub mod leaderboard;
 mod menu;
 pub mod replay;
 pub mod song_search;
+pub mod srpg_shop;
 
 pub use downloads::*;
 pub use leaderboard::*;
@@ -12,6 +13,7 @@ pub use menu::{
 };
 pub use replay::*;
 pub use song_search::*;
+pub use srpg_shop::*;
 
 use deadlib_present::actors::Actor;
 use deadlib_present::actors::TextContent;
@@ -59,6 +61,7 @@ pub enum Action {
     ReloadSongsCourses,
     ShowLobbies,
     ViewDownloads,
+    SrpgShop,
     NullOrDiePack,
     SyncSong,
     SyncPack,
@@ -204,6 +207,11 @@ pub const ITEM_VIEW_DOWNLOADS: Item = Item {
     top_label: TextContent::Static("Need More RAM"),
     bottom_label: TextContent::Static("View Downloads"),
     action: Action::ViewDownloads,
+};
+pub const ITEM_SRPG_SHOP: Item = Item {
+    top_label: TextContent::Static("Spend Your Spoils"),
+    bottom_label: TextContent::Static("SRPG SHOP"),
+    action: Action::SrpgShop,
 };
 pub const ITEM_NULL_OR_DIE_PACK: Item = Item {
     top_label: TextContent::Static("Sync pack with"),

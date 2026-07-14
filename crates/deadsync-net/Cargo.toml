@@ -6,7 +6,7 @@ license = "GPL-3.0"
 
 [dependencies]
 serde = { version = "1.0.228", features = ["derive"] }
-ureq = { version = "3.3.0", features = ["json", "rustls"] }
+ureq = { version = "3.3.0", features = ["cookies", "json", "rustls"] }
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

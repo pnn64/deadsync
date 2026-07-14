@@ -107,6 +107,18 @@ pub enum SimplyLoveOnlineRequest {
         side: PlayerSide,
         max_entries: usize,
     },
+    RefreshSrpgShop {
+        side: PlayerSide,
+    },
+    DownloadSrpgShopUnlock {
+        name: String,
+        url: String,
+    },
+    PurchaseSrpgShopItem {
+        shop_id: u32,
+        item_id: String,
+        type_id: u8,
+    },
     FetchGrade(String),
 }
 

@@ -11,6 +11,25 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::{Arc, LazyLock, Mutex, MutexGuard};
 
+#[derive(Clone, Default, PartialEq, Eq)]
+pub struct SecretString(String);
+
+impl SecretString {
+    pub fn new(value: impl Into<String>) -> Self {
+        Self(value.into())
+    }
+
+    pub fn expose(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+impl std::fmt::Debug for SecretString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("[REDACTED]")
+    }
+}
+
 pub mod app_runtime;
 pub mod compat;
 pub mod favorites_view;
@@ -1022,6 +1041,7 @@ pub fn runtime_save_groovestats_credentials_for_side(
         &profile.groovestats_api_key,
         profile.groovestats_is_pad_player,
         &profile.groovestats_username,
+        profile.groovestats_password.expose(),
     )
     .err()
     .map(|error| RuntimeProfileSidecarWriteError {
@@ -1128,7 +1148,8 @@ pub fn runtime_set_groovestats_credentials_for_id(
     }
 
     let dir = runtime_profile_dir_for_profile_id(root, profile_id, duplicate);
-    write_groovestats_credentials_dir(&dir, api_key, true, username)
+    let password = read_groovestats_password_dir(&dir);
+    write_groovestats_credentials_dir(&dir, api_key, true, username, password.expose())
         .err()
         .map(|error| RuntimeProfileSidecarWriteError {
             path: groovestats_ini_path(&dir),
@@ -2648,6 +2669,9 @@ pub fn apply_loaded_profile_data(
         );
         profile.groovestats_username = groovestats_get("GrooveStats", "Username")
             .unwrap_or_else(|| default_profile.groovestats_username.clone());
+        profile.groovestats_password = groovestats_get("GrooveStats", "Password")
+            .map(SecretString::new)
+            .unwrap_or_else(|| default_profile.groovestats_password.clone());
     }
 
     if arrowcloud_ini_loaded {
@@ -2876,7 +2900,7 @@ pub fn create_local_profile_dir(
     )?;
     fs::write(
         groovestats_ini_path(&dir),
-        render_groovestats_ini_content("", false, ""),
+        render_groovestats_ini_content("", false, "", ""),
     )?;
     fs::write(arrowcloud_ini_path(&dir), render_arrowcloud_ini_content(""))?;
     Ok(id)
@@ -2956,6 +2980,7 @@ pub fn create_local_profile_from_import_dir(
             data.groovestats_api_key,
             data.groovestats_is_pad_player,
             data.groovestats_username,
+            "",
         ),
     )?;
     fs::write(
@@ -7705,12 +7730,14 @@ pub fn render_groovestats_ini_content(
     api_key: &str,
     is_pad_player: bool,
     username: &str,
+    password: &str,
 ) -> String {
     let mut content = String::new();
     content.push_str("[GrooveStats]\n");
     content.push_str(&format!("ApiKey={api_key}\n"));
     content.push_str(&format!("IsPadPlayer={}\n", i32::from(is_pad_player)));
     content.push_str(&format!("Username={username}\n"));
+    content.push_str(&format!("Password={password}\n"));
     content.push('\n');
     content
 }
@@ -7728,10 +7755,11 @@ pub fn write_groovestats_ini_file(
     api_key: &str,
     is_pad_player: bool,
     username: &str,
+    password: &str,
 ) -> std::io::Result<()> {
     fs::write(
         path,
-        render_groovestats_ini_content(api_key, is_pad_player, username),
+        render_groovestats_ini_content(api_key, is_pad_player, username, password),
     )
 }
 
@@ -7758,7 +7786,7 @@ pub fn ensure_local_profile_files_dir(
     }
     let groovestats_ini = groovestats_ini_path(dir);
     if !groovestats_ini.exists() {
-        write_groovestats_ini_file(&groovestats_ini, "", false, "")?;
+        write_groovestats_ini_file(&groovestats_ini, "", false, "", "")?;
     }
     let arrowcloud_ini = arrowcloud_ini_path(dir);
     if !arrowcloud_ini.exists() {
@@ -7772,8 +7800,15 @@ pub fn write_groovestats_credentials_dir(
     api_key: &str,
     is_pad_player: bool,
     username: &str,
+    password: &str,
 ) -> std::io::Result<()> {
-    write_groovestats_ini_file(&groovestats_ini_path(dir), api_key, is_pad_player, username)
+    write_groovestats_ini_file(
+        &groovestats_ini_path(dir),
+        api_key,
+        is_pad_player,
+        username,
+        password,
+    )
 }
 
 pub fn write_arrowcloud_api_key_dir(dir: &Path, api_key: &str) -> std::io::Result<()> {
@@ -7802,6 +7837,19 @@ pub fn read_groovestats_api_key_dir(dir: &Path) -> Option<String> {
     read_groovestats_api_key_file(&groovestats_ini_path(dir))
 }
 
+pub fn read_groovestats_password_dir(dir: &Path) -> SecretString {
+    fs::read_to_string(groovestats_ini_path(dir))
+        .ok()
+        .and_then(|text| groovestats_password_from_ini_text(&text))
+        .unwrap_or_default()
+}
+
+pub fn groovestats_password_from_ini_text(text: &str) -> Option<SecretString> {
+    ProfileIni::parse(text)
+        .get("GrooveStats", "Password")
+        .map(SecretString::new)
+}
+
 pub fn api_key_from_ini_text(text: &str) -> Option<String> {
     for line in text.lines() {
         let line = line.trim();
@@ -7828,6 +7876,7 @@ pub struct Profile {
     pub groovestats_api_key: String,
     pub groovestats_is_pad_player: bool,
     pub groovestats_username: String,
+    pub groovestats_password: SecretString,
     pub arrowcloud_api_key: String,
     // Style-scoped player options are stored per chart family below.
     // These top-level fields hold the snapshot currently applied for the
@@ -8041,6 +8090,7 @@ impl Default for Profile {
             groovestats_api_key: String::new(),
             groovestats_is_pad_player: false,
             groovestats_username: String::new(),
+            groovestats_password: SecretString::default(),
             arrowcloud_api_key: String::new(),
             background_filter: player_options.background_filter,
             hold_judgment_graphic: player_options.hold_judgment_graphic.clone(),
@@ -10665,7 +10715,7 @@ mod tests {
 
         assert_eq!(
             fs::read_to_string(groovestats_ini_path(&dir)).unwrap(),
-            "[GrooveStats]\nApiKey=\nIsPadPlayer=0\nUsername=\n\n"
+            "[GrooveStats]\nApiKey=\nIsPadPlayer=0\nUsername=\nPassword=\n\n"
         );
         assert_eq!(
             fs::read_to_string(arrowcloud_ini_path(&dir)).unwrap(),
@@ -10811,7 +10861,7 @@ mod tests {
 
         assert_eq!(
             fs::read_to_string(groovestats_ini_path(&dir)).unwrap(),
-            "[GrooveStats]\nApiKey=gs-key\nIsPadPlayer=1\nUsername=gs-user\n\n"
+            "[GrooveStats]\nApiKey=gs-key\nIsPadPlayer=1\nUsername=gs-user\nPassword=\n\n"
         );
         assert_eq!(
             fs::read_to_string(arrowcloud_ini_path(&dir)).unwrap(),
@@ -11697,8 +11747,8 @@ mod tests {
         );
 
         assert_eq!(
-            render_groovestats_ini_content("gs-key", true, "player"),
-            "[GrooveStats]\nApiKey=gs-key\nIsPadPlayer=1\nUsername=player\n\n"
+            render_groovestats_ini_content("gs-key", true, "player", "secret"),
+            "[GrooveStats]\nApiKey=gs-key\nIsPadPlayer=1\nUsername=player\nPassword=secret\n\n"
         );
         assert_eq!(
             render_arrowcloud_ini_content("ac-key"),
@@ -11710,18 +11760,19 @@ mod tests {
     fn profile_credential_files_round_trip_api_keys() {
         let dir = temp_profile_dir("credentials");
 
-        write_groovestats_credentials_dir(&dir, "gs-key", true, "player")
+        write_groovestats_credentials_dir(&dir, "gs-key", true, "player", "secret")
             .expect("GrooveStats credentials should write");
         write_arrowcloud_api_key_dir(&dir, "ac-key").expect("ArrowCloud credentials should write");
 
         assert_eq!(
             fs::read_to_string(groovestats_ini_path(&dir)).unwrap(),
-            "[GrooveStats]\nApiKey=gs-key\nIsPadPlayer=1\nUsername=player\n\n"
+            "[GrooveStats]\nApiKey=gs-key\nIsPadPlayer=1\nUsername=player\nPassword=secret\n\n"
         );
         assert_eq!(
             read_groovestats_api_key_dir(&dir).as_deref(),
             Some("gs-key")
         );
+        assert_eq!(read_groovestats_password_dir(&dir).expose(), "secret");
         assert_eq!(read_arrowcloud_api_key_dir(&dir), "ac-key");
 
         let _ = fs::remove_dir_all(dir);
@@ -11965,6 +12016,7 @@ ApiKey = gs-key
             (("GrooveStats", "ApiKey"), "gs-key".to_string()),
             (("GrooveStats", "IsPadPlayer"), "1".to_string()),
             (("GrooveStats", "Username"), "player".to_string()),
+            (("GrooveStats", "Password"), "secret".to_string()),
         ]);
         let ac_values = HashMap::from([(("ArrowCloud", "ApiKey"), "ac-key".to_string())]);
 
@@ -12001,6 +12053,8 @@ ApiKey = gs-key
         assert_eq!(profile.groovestats_api_key, "gs-key");
         assert!(profile.groovestats_is_pad_player);
         assert_eq!(profile.groovestats_username, "player");
+        assert_eq!(profile.groovestats_password.expose(), "secret");
+        assert!(!format!("{profile:?}").contains("secret"));
         assert_eq!(profile.arrowcloud_api_key, "ac-key");
     }
 

@@ -182,6 +182,10 @@ pub const BASE_TEXTURE_ASSETS: &[TextureAssetSpec] = &[
     texture_asset("srpg9_logo_alt.png"),
     texture_asset("srpg10_logo_alt.png"),
     texture_asset(SRPG10_TITLE_LOGO),
+    texture_asset("srpg10_shop/janus5kshopd.jpg"),
+    texture_asset("srpg10_shop/levitasshopc.jpg"),
+    texture_asset("srpg10_shop/remsshopc.jpg"),
+    texture_asset("srpg10_shop/tevshopc.jpg"),
     texture_asset("combo_explosion.png"),
     TextureAssetSpec {
         key: "banner1.png",

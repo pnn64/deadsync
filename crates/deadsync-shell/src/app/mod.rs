@@ -1305,6 +1305,12 @@ impl App {
             } else {
                 Vec::new()
             };
+        let srpg_shop =
+            if select_music::srpg_shop_overlay_visible(&self.state.screens.select_music_state) {
+                deadsync_online::srpg_shop::runtime_snapshot()
+            } else {
+                Default::default()
+            };
         let music_stream_position_seconds = if deadsync_audio_stream::is_initialized() {
             f64::from(deadsync_audio_stream::get_music_stream_position_seconds())
         } else {
@@ -1423,6 +1429,7 @@ impl App {
                 },
                 lobby,
                 downloads,
+                srpg_shop,
                 arrow_bounce_offset,
                 policy,
                 music_wheel,
@@ -3254,6 +3261,37 @@ impl App {
                         side,
                         max_entries,
                     );
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Online(SimplyLoveOnlineRequest::RefreshSrpgShop {
+                    side,
+                }) => {
+                    let profile = deadsync_profile::runtime_profile_for_side(side);
+                    let password = profile.groovestats_password.expose().to_owned();
+                    deadsync_online::srpg_shop::runtime_refresh(
+                        profile.groovestats_username,
+                        password,
+                    );
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Online(
+                    SimplyLoveOnlineRequest::DownloadSrpgShopUnlock { name, url },
+                ) => {
+                    deadsync_online::runtime::queue_event_unlock_download(
+                        &url,
+                        &name,
+                        "Stamina RPG 10 Unlocks",
+                    );
+                    Vec::new()
+                }
+                SimplyLoveRuntimeRequest::Online(
+                    SimplyLoveOnlineRequest::PurchaseSrpgShopItem {
+                        shop_id,
+                        item_id,
+                        type_id,
+                    },
+                ) => {
+                    deadsync_online::srpg_shop::runtime_purchase(shop_id, item_id, type_id);
                     Vec::new()
                 }
                 SimplyLoveRuntimeRequest::Media(_)

@@ -596,6 +596,7 @@ pub fn sync_runtime_view(state: &mut State, view: SelectMusicRuntimeView) {
     state.audio_playback = view.audio_playback;
     state.lobby_view = view.lobby;
     state.downloads = view.downloads;
+    state.srpg_shop_snapshot = view.srpg_shop;
     state.arrow_bounce_offset = view.arrow_bounce_offset;
     state.policy = view.policy;
     state.music_wheel = view.music_wheel;
@@ -614,6 +615,14 @@ pub fn downloads_overlay_visible(state: &State) -> bool {
     matches!(
         state.downloads_overlay,
         select_music_menu::DownloadsOverlayState::Visible(_)
+    )
+}
+
+#[inline(always)]
+pub fn srpg_shop_overlay_visible(state: &State) -> bool {
+    matches!(
+        state.srpg_shop_overlay,
+        select_music_menu::SrpgShopOverlayState::Visible(_)
     )
 }
 
@@ -1140,6 +1149,7 @@ pub struct State {
     select_music_menu: select_music_menu::State,
     leaderboard: select_music_menu::LeaderboardOverlayState,
     downloads_overlay: select_music_menu::DownloadsOverlayState,
+    srpg_shop_overlay: select_music_menu::SrpgShopOverlayState,
     sort_mode: WheelSortMode,
     all_entries: Vec<MusicWheelEntry>,
     series_entries: Vec<MusicWheelEntry>,
@@ -1217,6 +1227,7 @@ pub struct State {
     policy: SelectMusicPolicyView,
     music_wheel: MusicWheelRuntimeView,
     downloads: Vec<SelectMusicDownloadView>,
+    srpg_shop_snapshot: Arc<deadsync_online::srpg_shop::SrpgShopSnapshot>,
     scoreboxes: [ScoreboxSideView; 2],
     unlock_downloads_available: bool,
     ready_song_reload_dirs: Vec<PathBuf>,
@@ -2881,6 +2892,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         select_music_menu: select_music_menu::State::Hidden,
         leaderboard: select_music_menu::LeaderboardOverlayState::Hidden,
         downloads_overlay: select_music_menu::DownloadsOverlayState::Hidden,
+        srpg_shop_overlay: select_music_menu::SrpgShopOverlayState::Hidden,
         sort_mode: if use_series_sort {
             WheelSortMode::Series
         } else {
@@ -2945,6 +2957,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         policy: SelectMusicPolicyView::default(),
         music_wheel: MusicWheelRuntimeView::default(),
         downloads: Vec::new(),
+        srpg_shop_snapshot: Default::default(),
         scoreboxes: Default::default(),
         unlock_downloads_available: false,
         ready_song_reload_dirs: Vec::new(),
@@ -3102,6 +3115,7 @@ pub fn init_placeholder() -> State {
         select_music_menu: select_music_menu::State::Hidden,
         leaderboard: select_music_menu::LeaderboardOverlayState::Hidden,
         downloads_overlay: select_music_menu::DownloadsOverlayState::Hidden,
+        srpg_shop_overlay: select_music_menu::SrpgShopOverlayState::Hidden,
         sort_mode: WheelSortMode::Group,
         expanded_series_name: None,
         expanded_pack_name: None,
@@ -3162,6 +3176,7 @@ pub fn init_placeholder() -> State {
         policy: SelectMusicPolicyView::default(),
         music_wheel: MusicWheelRuntimeView::default(),
         downloads: Vec::new(),
+        srpg_shop_snapshot: Default::default(),
         scoreboxes: Default::default(),
         unlock_downloads_available: false,
         ready_song_reload_dirs: Vec::new(),
@@ -3953,6 +3968,9 @@ fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
     if downloads_enabled {
         advanced.push(select_music_menu::ITEM_VIEW_DOWNLOADS);
     }
+    if crate::visual_styles::srpg10_active() {
+        advanced.push(select_music_menu::ITEM_SRPG_SHOP);
+    }
     advanced.push(select_music_menu::ITEM_SET_SUMMARY);
     if has_pack_selected {
         advanced.push(select_music_menu::ITEM_NULL_OR_DIE_PACK);
@@ -4025,6 +4043,7 @@ fn show_test_input_overlay(state: &mut State) {
     state.song_search = select_music_menu::SongSearchState::Hidden;
     state.leaderboard = select_music_menu::LeaderboardOverlayState::Hidden;
     state.downloads_overlay = select_music_menu::DownloadsOverlayState::Hidden;
+    state.srpg_shop_overlay = select_music_menu::SrpgShopOverlayState::Hidden;
     state.replay_overlay = select_music_menu::ReplayOverlayState::Hidden;
     state.lobby_overlay = lobby_overlay::OverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
@@ -4047,6 +4066,7 @@ fn show_pad_config_overlay(state: &mut State) {
     state.song_search = select_music_menu::SongSearchState::Hidden;
     state.leaderboard = select_music_menu::LeaderboardOverlayState::Hidden;
     state.downloads_overlay = select_music_menu::DownloadsOverlayState::Hidden;
+    state.srpg_shop_overlay = select_music_menu::SrpgShopOverlayState::Hidden;
     state.replay_overlay = select_music_menu::ReplayOverlayState::Hidden;
     state.lobby_overlay = lobby_overlay::OverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
@@ -4090,6 +4110,7 @@ fn hide_pad_config_overlay(state: &mut State) {
 fn show_lobby_overlay(state: &mut State) {
     state.leaderboard = select_music_menu::LeaderboardOverlayState::Hidden;
     state.downloads_overlay = select_music_menu::DownloadsOverlayState::Hidden;
+    state.srpg_shop_overlay = select_music_menu::SrpgShopOverlayState::Hidden;
     state.replay_overlay = select_music_menu::ReplayOverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
     pack_sync::hide_overlay(state);
@@ -4111,6 +4132,7 @@ fn start_song_search_prompt(state: &mut State) {
     state.select_music_menu = select_music_menu::State::Hidden;
     state.leaderboard = select_music_menu::LeaderboardOverlayState::Hidden;
     state.downloads_overlay = select_music_menu::DownloadsOverlayState::Hidden;
+    state.srpg_shop_overlay = select_music_menu::SrpgShopOverlayState::Hidden;
     state.replay_overlay = select_music_menu::ReplayOverlayState::Hidden;
     state.lobby_overlay = lobby_overlay::OverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
@@ -4130,6 +4152,7 @@ fn show_profile_switch_overlay(state: &mut State) {
     state.song_search = select_music_menu::SongSearchState::Hidden;
     state.leaderboard = select_music_menu::LeaderboardOverlayState::Hidden;
     state.downloads_overlay = select_music_menu::DownloadsOverlayState::Hidden;
+    state.srpg_shop_overlay = select_music_menu::SrpgShopOverlayState::Hidden;
     state.replay_overlay = select_music_menu::ReplayOverlayState::Hidden;
     state.lobby_overlay = lobby_overlay::OverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
@@ -4171,6 +4194,7 @@ pub fn open_late_join_profile_overlay(
     state.song_search = select_music_menu::SongSearchState::Hidden;
     state.leaderboard = select_music_menu::LeaderboardOverlayState::Hidden;
     state.downloads_overlay = select_music_menu::DownloadsOverlayState::Hidden;
+    state.srpg_shop_overlay = select_music_menu::SrpgShopOverlayState::Hidden;
     state.replay_overlay = select_music_menu::ReplayOverlayState::Hidden;
     state.lobby_overlay = lobby_overlay::OverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
@@ -5793,6 +5817,7 @@ fn show_leaderboard_overlay(state: &mut State) {
     ) {
         state.replay_overlay = select_music_menu::ReplayOverlayState::Hidden;
         state.downloads_overlay = select_music_menu::DownloadsOverlayState::Hidden;
+        state.srpg_shop_overlay = select_music_menu::SrpgShopOverlayState::Hidden;
         state.lobby_overlay = lobby_overlay::OverlayState::Hidden;
         state.sync_overlay = SyncOverlayState::Hidden;
         pack_sync::hide_overlay(state);
@@ -5812,6 +5837,24 @@ fn show_downloads_overlay(state: &mut State) {
     state.profile_switch_overlay = None;
     hide_test_input_overlay(state);
     state.downloads_overlay = select_music_menu::show_downloads_overlay();
+    state.srpg_shop_overlay = select_music_menu::SrpgShopOverlayState::Hidden;
+    clear_preview(state);
+}
+
+fn show_srpg_shop_overlay(state: &mut State, side: profile_data::PlayerSide) {
+    state.leaderboard = select_music_menu::LeaderboardOverlayState::Hidden;
+    state.replay_overlay = select_music_menu::ReplayOverlayState::Hidden;
+    state.downloads_overlay = select_music_menu::DownloadsOverlayState::Hidden;
+    state.lobby_overlay = lobby_overlay::OverlayState::Hidden;
+    state.sync_overlay = SyncOverlayState::Hidden;
+    pack_sync::hide_overlay(state);
+    state.profile_switch_overlay = None;
+    hide_test_input_overlay(state);
+    state.srpg_shop_overlay = select_music_menu::show_srpg_shop_overlay(side);
+    queue_online(
+        state,
+        crate::SimplyLoveOnlineRequest::RefreshSrpgShop { side },
+    );
     clear_preview(state);
 }
 
@@ -5832,6 +5875,7 @@ fn show_replay_overlay(state: &mut State) {
     }
     state.leaderboard = select_music_menu::LeaderboardOverlayState::Hidden;
     state.downloads_overlay = select_music_menu::DownloadsOverlayState::Hidden;
+    state.srpg_shop_overlay = select_music_menu::SrpgShopOverlayState::Hidden;
     state.lobby_overlay = lobby_overlay::OverlayState::Hidden;
     state.sync_overlay = SyncOverlayState::Hidden;
     pack_sync::hide_overlay(state);
@@ -7103,6 +7147,7 @@ fn prepare_sync_overlay(state: &mut State) {
     state.song_search = select_music_menu::SongSearchState::Hidden;
     state.leaderboard = select_music_menu::LeaderboardOverlayState::Hidden;
     state.downloads_overlay = select_music_menu::DownloadsOverlayState::Hidden;
+    state.srpg_shop_overlay = select_music_menu::SrpgShopOverlayState::Hidden;
     state.replay_overlay = select_music_menu::ReplayOverlayState::Hidden;
     pack_sync::hide_overlay(state);
     state.profile_switch_overlay = None;
@@ -7766,6 +7811,56 @@ fn handle_downloads_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEf
         select_music_menu::DownloadsInputOutcome::None => {}
     }
 
+    ThemeEffect::None
+}
+
+fn handle_srpg_shop_overlay_input(state: &mut State, ev: &InputEvent) -> ThemeEffect {
+    if modal_blocks_arrow(state, ev.action) {
+        return ThemeEffect::None;
+    }
+    let outcome = select_music_menu::handle_srpg_shop_input(
+        &mut state.srpg_shop_overlay,
+        ev,
+        &state.srpg_shop_snapshot,
+    );
+    match outcome {
+        select_music_menu::SrpgShopInputOutcome::ChangedSelection => {
+            queue_sfx(state, "assets/sounds/change.ogg");
+        }
+        select_music_menu::SrpgShopInputOutcome::Closed => {
+            queue_sfx(state, "assets/sounds/start.ogg");
+        }
+        select_music_menu::SrpgShopInputOutcome::Refresh(side) => {
+            queue_sfx(state, "assets/sounds/start.ogg");
+            queue_online(
+                state,
+                crate::SimplyLoveOnlineRequest::RefreshSrpgShop { side },
+            );
+        }
+        select_music_menu::SrpgShopInputOutcome::Download { name, url } => {
+            queue_sfx(state, "assets/sounds/start.ogg");
+            queue_online(
+                state,
+                crate::SimplyLoveOnlineRequest::DownloadSrpgShopUnlock { name, url },
+            );
+        }
+        select_music_menu::SrpgShopInputOutcome::Purchase {
+            shop_id,
+            item_id,
+            type_id,
+        } => {
+            queue_sfx(state, "assets/sounds/start.ogg");
+            queue_online(
+                state,
+                crate::SimplyLoveOnlineRequest::PurchaseSrpgShopItem {
+                    shop_id,
+                    item_id,
+                    type_id,
+                },
+            );
+        }
+        select_music_menu::SrpgShopInputOutcome::None => {}
+    }
     ThemeEffect::None
 }
 
@@ -8446,6 +8541,11 @@ fn dispatch_menu_action(
             show_downloads_overlay(state);
             ThemeEffect::None
         }
+        select_music_menu::Action::SrpgShop => {
+            hide_select_music_menu(state);
+            show_srpg_shop_overlay(state, side);
+            ThemeEffect::None
+        }
         select_music_menu::Action::NullOrDiePack => {
             hide_select_music_menu(state);
             pack_sync::show_from_selected(state);
@@ -9053,6 +9153,10 @@ fn configurable_shortcut_action(
             state.downloads_overlay,
             select_music_menu::DownloadsOverlayState::Hidden
         )
+        || !matches!(
+            state.srpg_shop_overlay,
+            select_music_menu::SrpgShopOverlayState::Hidden
+        )
         || !preview_mute_allowed(state)
     {
         return None;
@@ -9522,6 +9626,13 @@ fn handle_input_impl(state: &mut State, ev: &InputEvent, fine: bool) -> ThemeEff
         return handle_downloads_overlay_input(state, ev);
     }
 
+    if !matches!(
+        state.srpg_shop_overlay,
+        select_music_menu::SrpgShopOverlayState::Hidden
+    ) {
+        return handle_srpg_shop_overlay_input(state, ev);
+    }
+
     if state.select_music_menu.is_visible() {
         return handle_select_music_menu_input(state, ev);
     }
@@ -9893,6 +10004,10 @@ fn update_impl(state: &mut State, dt: f32, smx: &SmxAssignmentView) -> ThemeEffe
     select_music_menu::update_leaderboard_overlay(&mut state.leaderboard, dt);
     let download_count = state.downloads.len();
     select_music_menu::update_downloads_overlay(&mut state.downloads_overlay, download_count);
+    select_music_menu::update_srpg_shop_overlay(
+        &mut state.srpg_shop_overlay,
+        &state.srpg_shop_snapshot,
+    );
 
     state.time_since_selection_change += dt;
     if dt > 0.0 {
@@ -10374,6 +10489,10 @@ fn delayed_selection_updates_blocked(state: &State) -> bool {
         || !matches!(
             state.downloads_overlay,
             select_music_menu::DownloadsOverlayState::Hidden
+        )
+        || !matches!(
+            state.srpg_shop_overlay,
+            select_music_menu::SrpgShopOverlayState::Hidden
         )
         || !matches!(state.lobby_overlay, lobby_overlay::OverlayState::Hidden)
         || !matches!(
@@ -12230,6 +12349,12 @@ pub fn push_actors(
     ) {
         actors.extend(downloads_overlay);
     }
+    if let Some(shop_overlay) = select_music_menu::build_srpg_shop_overlay(
+        &state.srpg_shop_overlay,
+        &state.srpg_shop_snapshot,
+    ) {
+        actors.extend(shop_overlay);
+    }
 
     let lobby_status_text = select_music_lobby_status_text(state);
     if let Some(text) = lobby_status_text {
@@ -13081,6 +13206,7 @@ mod tests {
                     complete: false,
                     error_message: None,
                 }],
+                srpg_shop: Default::default(),
                 arrow_bounce_offset: -0.25,
                 policy: crate::views::SelectMusicPolicyView::default(),
                 music_wheel: Default::default(),

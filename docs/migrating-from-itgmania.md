@@ -179,9 +179,13 @@ profile folder:
   ApiKey      = <your 64-character key>
   IsPadPlayer = 1
   Username    = <your GrooveStats username>
+  Password    = <your GrooveStats password>
   ```
 
 Use `IsPadPlayer = 1` for pad, `0` for keyboard.
+`Password` is only required for the authenticated SRPG Shop. It is stored in
+plain text in this local profile file, matching the credentials required by the
+SRPG10 website, and is redacted from DeadSync debug output.
 
 You have two ways to populate this:
 
@@ -190,7 +194,8 @@ You have two ways to populate this:
   `groovestats.ini`. Same section, same keys, done.
 - **QR-code login.** **Options → Manage Local Profiles → (select profile) →
   Link GrooveStats**. DeadSync writes the resulting key into
-  `groovestats.ini` for you.
+  `groovestats.ini` for you and preserves any existing `Password` value. Add the
+  password manually before using the SRPG Shop.
 
 ### 5. ArrowCloud API key
 
